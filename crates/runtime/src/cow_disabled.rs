@@ -57,7 +57,7 @@ impl MemoryImageSlot {
         unreachable!();
     }
 
-    pub(crate) fn clear_and_remain_ready(&mut self) -> Result<()> {
+    pub(crate) fn clear_and_remain_ready(&mut self, _keep_resident: usize) -> Result<()> {
         unreachable!();
     }
 

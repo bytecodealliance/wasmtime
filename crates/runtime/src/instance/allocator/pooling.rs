@@ -126,6 +126,8 @@ struct InstancePool {
     index_allocator: Mutex<PoolingAllocationState>,
     memories: MemoryPool,
     tables: TablePool,
+    linear_memory_keep_resident: usize,
+    table_keep_resident: usize,
 }
 
 impl InstancePool {
@@ -156,6 +158,8 @@ impl InstancePool {
             )),
             memories: MemoryPool::new(&config.limits, tunables)?,
             tables: TablePool::new(&config.limits)?,
+            linear_memory_keep_resident: config.linear_memory_keep_resident,
+            table_keep_resident: config.table_keep_resident,
         };
 
         Ok(pool)
@@ -373,7 +377,10 @@ impl InstancePool {
                 // image, just drop it here, and let the drop handler for the
                 // slot unmap in a way that retains the address space
                 // reservation.
-                if image.clear_and_remain_ready().is_ok() {
+                if image
+                    .clear_and_remain_ready(self.linear_memory_keep_resident)
+                    .is_ok()
+                {
                     self.memories
                         .return_memory_image_slot(instance_index, def_mem_idx, image);
                 }
@@ -437,8 +444,18 @@ impl InstancePool {
             );
 
             drop(table);
-            decommit_table_pages(base, size).expect("failed to decommit table pages");
+            self.reset_table_pages_to_zero(base, size)
+                .expect("failed to decommit table pages");
         }
+    }
+
+    fn reset_table_pages_to_zero(&self, base: *mut u8, size: usize) -> Result<()> {
+        let size_to_memset = size.min(self.table_keep_resident);
+        unsafe {
+            std::ptr::write_bytes(base, 0, size_to_memset);
+            decommit_table_pages(base.add(size_to_memset), size - size_to_memset)?;
+        }
+        Ok(())
     }
 
     fn validate_table_plans(&self, module: &Module) -> Result<()> {
@@ -807,6 +824,7 @@ struct StackPool {
     page_size: usize,
     index_allocator: Mutex<PoolingAllocationState>,
     async_stack_zeroing: bool,
+    async_stack_keep_resident: usize,
 }
 
 #[cfg(all(feature = "async", unix))]
@@ -852,6 +870,7 @@ impl StackPool {
             max_instances,
             page_size,
             async_stack_zeroing: config.async_stack_zeroing,
+            async_stack_keep_resident: config.async_stack_keep_resident,
             // We always use a `NextAvailable` strategy for stack
             // allocation. We don't want or need an affinity policy
             // here: stacks do not benefit from being allocated to the
@@ -919,10 +938,31 @@ impl StackPool {
         assert!(index < self.max_instances);
 
         if self.async_stack_zeroing {
-            reset_stack_pages_to_zero(bottom_of_stack as _, stack_size).unwrap();
+            self.zero_stack(bottom_of_stack, stack_size);
         }
 
         self.index_allocator.lock().unwrap().free(SlotId(index));
+    }
+
+    fn zero_stack(&self, bottom: usize, size: usize) {
+        // Manually zero the top of the stack to keep the pages resident in
+        // memory and avoid future page faults. Use the system to deallocate
+        // pages past this. This hopefully strikes a reasonable balance between:
+        //
+        // * memset for the whole range is probably expensive
+        // * madvise for the whole range incurs expensive future page faults
+        // * most threads probably don't use most of the stack anyway
+        let size_to_memset = size.min(self.async_stack_keep_resident);
+        unsafe {
+            std::ptr::write_bytes(
+                (bottom + size - size_to_memset) as *mut u8,
+                0,
+                size_to_memset,
+            );
+        }
+
+        // Use the system to reset remaining stack pages to zero.
+        reset_stack_pages_to_zero(bottom as _, size - size_to_memset).unwrap();
     }
 }
 
@@ -940,6 +980,22 @@ pub struct PoolingInstanceAllocatorConfig {
     pub limits: InstanceLimits,
     /// Whether or not async stacks are zeroed after use.
     pub async_stack_zeroing: bool,
+    /// If async stack zeroing is enabled and the host platform is Linux this is
+    /// how much memory to zero out with `memset`.
+    ///
+    /// The rest of memory will be zeroed out with `madvise`.
+    pub async_stack_keep_resident: usize,
+    /// How much linear memory, in bytes, to keep resident after resetting for
+    /// use with the next instance. This much memory will be `memset` to zero
+    /// when a linear memory is deallocated.
+    ///
+    /// Memory exceeding this amount in the wasm linear memory will be released
+    /// with `madvise` back to the kernel.
+    ///
+    /// Only applicable on Linux.
+    pub linear_memory_keep_resident: usize,
+    /// Same as `linear_memory_keep_resident` but for tables.
+    pub table_keep_resident: usize,
 }
 
 impl Default for PoolingInstanceAllocatorConfig {
@@ -949,6 +1005,9 @@ impl Default for PoolingInstanceAllocatorConfig {
             stack_size: 2 << 20,
             limits: InstanceLimits::default(),
             async_stack_zeroing: false,
+            async_stack_keep_resident: 0,
+            linear_memory_keep_resident: 0,
+            table_keep_resident: 0,
         }
     }
 }

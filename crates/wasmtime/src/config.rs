@@ -1664,14 +1664,11 @@ pub enum WasmBacktraceDetails {
     Environment,
 }
 
-/// Global configuration options used to create an [`Engine`](crate::Engine)
-/// and customize its behavior.
+/// Configuration options used with [`InstanceAllocationStrategy::Pooling`] to
+/// change the behavior of the pooling instance allocator.
 ///
-/// This structure exposed a builder-like interface and is primarily consumed by
-/// [`Engine::new()`](crate::Engine::new).
-///
-/// The validation of `Config` is deferred until the engine is being built, thus
-/// a problematic config may cause `Engine::new` to fail.
+/// This structure has a builder-style API in the same manner as [`Config`] and
+/// is configured with [`Config::allocation_strategy`].
 #[cfg(feature = "pooling-allocator")]
 #[derive(Debug, Clone, Default)]
 pub struct PoolingAllocationConfig {
@@ -1703,11 +1700,8 @@ impl PoolingAllocationConfig {
     /// Wasmtime and the [`call_async`] variant
     /// of calling WebAssembly is used then Wasmtime will create a separate
     /// runtime execution stack for each future produced by [`call_async`].
-    /// When using the pooling instance allocator
-    /// ([`InstanceAllocationStrategy::Pooling`]) this allocation will happen
-    /// from a pool of stacks and additionally deallocation will simply release
-    /// the stack back to the pool. During the deallocation process Wasmtime
-    /// won't by default reset the contents of the stack back to zero.
+    /// During the deallocation process Wasmtime won't by default reset the
+    /// contents of the stack back to zero.
     ///
     /// When this option is enabled it can be seen as a defense-in-depth
     /// mechanism to reset a stack back to zero. This is not required for
@@ -1722,6 +1716,57 @@ impl PoolingAllocationConfig {
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
     pub fn async_stack_zeroing(&mut self, enable: bool) -> &mut Self {
         self.config.async_stack_zeroing = enable;
+        self
+    }
+
+    /// How much memory, in bytes, to keep resident for async stacks allocated
+    /// with the pooling allocator.
+    ///
+    /// When [`PoolingAllocationConfig::async_stack_zeroing`] is enabled then
+    /// Wasmtime will reset the contents of async stacks back to zero upon
+    /// deallocation. This option can be used to perform the zeroing operation
+    /// with `memset` up to a certain threshold of bytes instead of using system
+    /// calls to reset the stack to zero.
+    ///
+    /// Note that when using this option the memory with async stacks will
+    /// never be decommitted.
+    #[cfg(feature = "async")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    pub fn async_stack_keep_resident(&mut self, size: usize) -> &mut Self {
+        let size = round_up_to_pages(size as u64) as usize;
+        self.config.async_stack_keep_resident = size;
+        self
+    }
+
+    /// How much memory, in bytes, to keep resident for each linear memory
+    /// after deallocation.
+    ///
+    /// This option is only applicable on Linux and has no effect on other
+    /// platforms.
+    ///
+    /// By default Wasmtime will use `madvise` to reset the entire contents of
+    /// linear memory back to zero when a linear memory is deallocated. This
+    /// option can be used to use `memset` instead to set memory back to zero
+    /// which can, in some configurations, reduce the number of page faults
+    /// taken when a slot is reused.
+    pub fn linear_memory_keep_resident(&mut self, size: usize) -> &mut Self {
+        let size = round_up_to_pages(size as u64) as usize;
+        self.config.linear_memory_keep_resident = size;
+        self
+    }
+
+    /// How much memory, in bytes, to keep resident for each table after
+    /// deallocation.
+    ///
+    /// This option is only applicable on Linux and has no effect on other
+    /// platforms.
+    ///
+    /// This option is the same as
+    /// [`PoolingAllocationConfig::linear_memory_keep_resident`] except that it
+    /// is applicable to tables instead.
+    pub fn table_keep_resident(&mut self, size: usize) -> &mut Self {
+        let size = round_up_to_pages(size as u64) as usize;
+        self.config.table_keep_resident = size;
         self
     }
 
