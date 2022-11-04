@@ -118,7 +118,11 @@ fn _define_func(
                 }.instrument(_span)
             )
         } else {
-            quote!(#body)
+            quote!(
+                async move {
+                    #body
+                }
+            )
         };
         (
             quote!(
