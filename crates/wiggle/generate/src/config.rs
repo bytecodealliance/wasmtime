@@ -26,6 +26,7 @@ mod kw {
     syn::custom_keyword!(target);
     syn::custom_keyword!(wasmtime);
     syn::custom_keyword!(tracing);
+    syn::custom_keyword!(disable_for);
 }
 
 #[derive(Debug, Clone)]
@@ -566,14 +567,69 @@ impl Parse for WasmtimeConfigField {
     }
 }
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Debug)]
 pub struct TracingConf {
-    pub enabled: bool,
+    enabled: bool,
+    excluded_functions: HashMap<String, Vec<String>>,
+}
+
+impl TracingConf {
+    pub fn enabled_for(&self, module: &str, function: &str) -> bool {
+        if !self.enabled {
+            return false;
+        }
+        self.excluded_functions
+            .get(module)
+            .and_then(|fs| fs.iter().find(|f| *f == function))
+            .is_none()
+    }
+}
+
+impl Default for TracingConf {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            excluded_functions: HashMap::new(),
+        }
+    }
 }
 
 impl Parse for TracingConf {
     fn parse(input: ParseStream) -> Result<Self> {
         let enabled = input.parse::<syn::LitBool>()?.value;
-        Ok(TracingConf { enabled })
+
+        let lookahead = input.lookahead1();
+        if lookahead.peek(kw::disable_for) {
+            input.parse::<kw::disable_for>()?;
+            let content;
+            let _ = braced!(content in input);
+            let items: Punctuated<FunctionField, Token![,]> =
+                content.parse_terminated(Parse::parse)?;
+            let mut functions: HashMap<String, Vec<String>> = HashMap::new();
+            use std::collections::hash_map::Entry;
+            for i in items {
+                let function_names = i
+                    .function_names
+                    .iter()
+                    .map(|i| i.to_string())
+                    .collect::<Vec<String>>();
+                match functions.entry(i.module_name.to_string()) {
+                    Entry::Occupied(o) => o.into_mut().extend(function_names),
+                    Entry::Vacant(v) => {
+                        v.insert(function_names);
+                    }
+                }
+            }
+
+            Ok(TracingConf {
+                enabled,
+                excluded_functions: functions,
+            })
+        } else {
+            Ok(TracingConf {
+                enabled,
+                excluded_functions: HashMap::new(),
+            })
+        }
     }
 }
