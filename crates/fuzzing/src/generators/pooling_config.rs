@@ -14,6 +14,9 @@ pub struct PoolingAllocationConfig {
     pub instance_table_elements: u32,
     pub instance_size: usize,
     pub async_stack_zeroing: bool,
+    pub async_stack_keep_resident: usize,
+    pub linear_memory_keep_resident: usize,
+    pub table_keep_resident: usize,
 }
 
 impl PoolingAllocationConfig {
@@ -28,7 +31,10 @@ impl PoolingAllocationConfig {
             .instance_memory_pages(self.instance_memory_pages)
             .instance_table_elements(self.instance_table_elements)
             .instance_size(self.instance_size)
-            .async_stack_zeroing(self.async_stack_zeroing);
+            .async_stack_zeroing(self.async_stack_zeroing)
+            .async_stack_keep_resident(self.async_stack_keep_resident)
+            .linear_memory_keep_resident(self.linear_memory_keep_resident)
+            .table_keep_resident(self.table_keep_resident);
         cfg
     }
 }
@@ -51,6 +57,9 @@ impl<'a> Arbitrary<'a> for PoolingAllocationConfig {
             instance_count: u.int_in_range(1..=MAX_COUNT)?,
             instance_size: u.int_in_range(0..=MAX_SIZE)?,
             async_stack_zeroing: u.arbitrary()?,
+            async_stack_keep_resident: u.int_in_range(0..=1 << 20)?,
+            linear_memory_keep_resident: u.int_in_range(0..=1 << 20)?,
+            table_keep_resident: u.int_in_range(0..=1 << 20)?,
         })
     }
 }

@@ -466,39 +466,23 @@ impl MemoryImageSlot {
         Ok(())
     }
 
+    /// Resets this linear memory slot back to a "pristine state".
+    ///
+    /// This will reset the memory back to its original contents on Linux or
+    /// reset the contents back to zero on other platforms. The `keep_resident`
+    /// argument is the maximum amount of memory to keep resident in this
+    /// process's memory on Linux. Up to that much memory will be `memset` to
+    /// zero where the rest of it will be reset or released with `madvise`.
     #[allow(dead_code)] // ignore warnings as this is only used in some cfgs
-    pub(crate) fn clear_and_remain_ready(&mut self) -> Result<()> {
+    pub(crate) fn clear_and_remain_ready(&mut self, keep_resident: usize) -> Result<()> {
         assert!(self.dirty);
 
-        cfg_if::cfg_if! {
-            if #[cfg(target_os = "linux")] {
-                // On Linux we can use `madvise` to reset the virtual memory
-                // back to its original state. This means back to all zeros for
-                // anonymous-backed pages and back to the original contents for
-                // CoW memory (the initial heap image). This has the precise
-                // semantics we want for reuse between instances, so it's all we
-                // need to do.
-                unsafe {
-                    rustix::mm::madvise(
-                        self.base as *mut c_void,
-                        self.cur_size,
-                        rustix::mm::Advice::LinuxDontNeed,
-                    )?;
-                }
-            } else {
-                // If we're not on Linux, however, then there's no generic
-                // platform way to reset memory back to its original state, so
-                // instead this is "feigned" by resetting memory back to
-                // entirely zeros with an anonymous backing.
-                //
-                // Additionally the previous image, if any, is dropped here
-                // since it's no longer applicable to this mapping.
-                self.reset_with_anon_memory()?;
-                self.image = None;
-            }
+        unsafe {
+            self.reset_all_memory_contents(keep_resident)?;
         }
 
-        // mprotect the initial heap region beyond the initial heap size back to PROT_NONE.
+        // mprotect the initial heap region beyond the initial heap size back to
+        // PROT_NONE.
         self.set_protection(
             self.initial_size..self.cur_size,
             rustix::mm::MprotectFlags::empty(),
@@ -506,6 +490,136 @@ impl MemoryImageSlot {
         self.cur_size = self.initial_size;
         self.dirty = false;
         Ok(())
+    }
+
+    #[allow(dead_code)] // ignore warnings as this is only used in some cfgs
+    unsafe fn reset_all_memory_contents(&mut self, keep_resident: usize) -> Result<()> {
+        if !cfg!(target_os = "linux") {
+            // If we're not on Linux then there's no generic platform way to
+            // reset memory back to its original state, so instead reset memory
+            // back to entirely zeros with an anonymous backing.
+            //
+            // Additionally the previous image, if any, is dropped here
+            // since it's no longer applicable to this mapping.
+            return self.reset_with_anon_memory();
+        }
+
+        match &self.image {
+            Some(image) => {
+                assert!(self.cur_size >= image.linear_memory_offset + image.len);
+                if image.linear_memory_offset < keep_resident {
+                    // If the image starts below the `keep_resident` then
+                    // memory looks something like this:
+                    //
+                    //               up to `keep_resident` bytes
+                    //                          |
+                    //          +--------------------------+  remaining_memset
+                    //          |                          | /
+                    //  <-------------->                <------->
+                    //
+                    //                              image_end
+                    // 0        linear_memory_offset   |               cur_size
+                    // |                |              |                  |
+                    // +----------------+--------------+---------+--------+
+                    // |  dirty memory  |    image     |   dirty memory   |
+                    // +----------------+--------------+---------+--------+
+                    //
+                    //  <------+-------> <-----+----->  <---+---> <--+--->
+                    //         |               |            |        |
+                    //         |               |            |        |
+                    //   memset (1)            /            |   madvise (4)
+                    //                  mmadvise (2)       /
+                    //                                    /
+                    //                              memset (3)
+                    //
+                    //
+                    // In this situation there are two disjoint regions that are
+                    // `memset` manually to zero. Note that `memset (3)` may be
+                    // zero bytes large. Furthermore `madvise (4)` may also be
+                    // zero bytes large.
+
+                    let image_end = image.linear_memory_offset + image.len;
+                    let mem_after_image = self.cur_size - image_end;
+                    let remaining_memset =
+                        (keep_resident - image.linear_memory_offset).min(mem_after_image);
+
+                    // This is memset (1)
+                    std::ptr::write_bytes(self.base as *mut u8, 0u8, image.linear_memory_offset);
+
+                    // This is madvise (2)
+                    self.madvise_reset(image.linear_memory_offset, image.len)?;
+
+                    // This is memset (3)
+                    std::ptr::write_bytes(
+                        (self.base + image_end) as *mut u8,
+                        0u8,
+                        remaining_memset,
+                    );
+
+                    // This is madvise (4)
+                    self.madvise_reset(
+                        image_end + remaining_memset,
+                        mem_after_image - remaining_memset,
+                    )?;
+                } else {
+                    // If the image starts after the `keep_resident` threshold
+                    // then we memset the start of linear memory and then use
+                    // madvise below for the rest of it, including the image.
+                    //
+                    // 0             keep_resident                     cur_size
+                    // |                |                                 |
+                    // +----------------+---+----------+------------------+
+                    // |  dirty memory      |  image   |   dirty memory   |
+                    // +----------------+---+----------+------------------+
+                    //
+                    //  <------+-------> <-------------+----------------->
+                    //         |                       |
+                    //         |                       |
+                    //   memset (1)                 madvise (2)
+                    //
+                    // Here only a single memset is necessary since the image
+                    // started after the threshold which we're keeping resident.
+                    // Note that the memset may be zero bytes here.
+
+                    // This is memset (1)
+                    std::ptr::write_bytes(self.base as *mut u8, 0u8, keep_resident);
+
+                    // This is madvise (2)
+                    self.madvise_reset(keep_resident, self.cur_size - keep_resident)?;
+                }
+            }
+
+            // If there's no memory image for this slot then memset the first
+            // bytes in the memory back to zero while using `madvise` to purge
+            // the rest.
+            None => {
+                let size_to_memset = keep_resident.min(self.cur_size);
+                std::ptr::write_bytes(self.base as *mut u8, 0u8, size_to_memset);
+                self.madvise_reset(size_to_memset, self.cur_size - size_to_memset)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    #[allow(dead_code)] // ignore warnings as this is only used in some cfgs
+    unsafe fn madvise_reset(&self, base: usize, len: usize) -> Result<()> {
+        assert!(base + len <= self.cur_size);
+        if len == 0 {
+            return Ok(());
+        }
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "linux")] {
+                rustix::mm::madvise(
+                    (self.base + base) as *mut c_void,
+                    len,
+                    rustix::mm::Advice::LinuxDontNeed,
+                )?;
+                Ok(())
+            } else {
+                unreachable!();
+            }
+        }
     }
 
     fn set_protection(&self, range: Range<usize>, flags: rustix::mm::MprotectFlags) -> Result<()> {
@@ -532,7 +646,7 @@ impl MemoryImageSlot {
 
     /// Map anonymous zeroed memory across the whole slot,
     /// inaccessible. Used both during instantiate and during drop.
-    fn reset_with_anon_memory(&self) -> Result<()> {
+    fn reset_with_anon_memory(&mut self) -> Result<()> {
         unsafe {
             let ptr = rustix::mm::mmap_anonymous(
                 self.base as *mut c_void,
@@ -542,6 +656,11 @@ impl MemoryImageSlot {
             )?;
             assert_eq!(ptr as usize, self.base);
         }
+
+        self.image = None;
+        self.cur_size = 0;
+        self.initial_size = 0;
+
         Ok(())
     }
 }
@@ -638,7 +757,7 @@ mod test {
         assert_eq!(0, slice[131071]);
         // instantiate again; we should see zeroes, even as the
         // reuse-anon-mmap-opt kicks in
-        memfd.clear_and_remain_ready().unwrap();
+        memfd.clear_and_remain_ready(0).unwrap();
         assert!(!memfd.is_dirty());
         memfd.instantiate(64 << 10, None).unwrap();
         let slice = mmap.as_slice();
@@ -661,33 +780,69 @@ mod test {
         assert_eq!(&[1, 2, 3, 4], &slice[4096..4100]);
         slice[4096] = 5;
         // Clear and re-instantiate same image
-        memfd.clear_and_remain_ready().unwrap();
+        memfd.clear_and_remain_ready(0).unwrap();
         memfd.instantiate(64 << 10, Some(&image)).unwrap();
         let slice = mmap.as_slice();
         // Should not see mutation from above
         assert_eq!(&[1, 2, 3, 4], &slice[4096..4100]);
         // Clear and re-instantiate no image
-        memfd.clear_and_remain_ready().unwrap();
+        memfd.clear_and_remain_ready(0).unwrap();
         memfd.instantiate(64 << 10, None).unwrap();
         assert!(!memfd.has_image());
         let slice = mmap.as_slice();
         assert_eq!(&[0, 0, 0, 0], &slice[4096..4100]);
         // Clear and re-instantiate image again
-        memfd.clear_and_remain_ready().unwrap();
+        memfd.clear_and_remain_ready(0).unwrap();
         memfd.instantiate(64 << 10, Some(&image)).unwrap();
         let slice = mmap.as_slice();
         assert_eq!(&[1, 2, 3, 4], &slice[4096..4100]);
         // Create another image with different data.
         let image2 = Arc::new(create_memfd_with_data(4096, &[10, 11, 12, 13]).unwrap());
-        memfd.clear_and_remain_ready().unwrap();
+        memfd.clear_and_remain_ready(0).unwrap();
         memfd.instantiate(128 << 10, Some(&image2)).unwrap();
         let slice = mmap.as_slice();
         assert_eq!(&[10, 11, 12, 13], &slice[4096..4100]);
         // Instantiate the original image again; we should notice it's
         // a different image and not reuse the mappings.
-        memfd.clear_and_remain_ready().unwrap();
+        memfd.clear_and_remain_ready(0).unwrap();
         memfd.instantiate(64 << 10, Some(&image)).unwrap();
         let slice = mmap.as_slice();
         assert_eq!(&[1, 2, 3, 4], &slice[4096..4100]);
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn memset_instead_of_madvise() {
+        let mut mmap = Mmap::accessible_reserved(0, 4 << 20).unwrap();
+        let mut memfd = MemoryImageSlot::create(mmap.as_mut_ptr() as *mut _, 0, 4 << 20);
+        memfd.no_clear_on_drop();
+
+        // Test basics with the image
+        for image_off in [0, 4096, 8 << 10] {
+            let image = Arc::new(create_memfd_with_data(image_off, &[1, 2, 3, 4]).unwrap());
+            for amt_to_memset in [0, 4096, 10 << 12, 1 << 20, 10 << 20] {
+                memfd.instantiate(64 << 10, Some(&image)).unwrap();
+                assert!(memfd.has_image());
+                let slice = mmap.as_mut_slice();
+                if image_off > 0 {
+                    assert_eq!(slice[image_off - 1], 0);
+                }
+                assert_eq!(slice[image_off + 5], 0);
+                assert_eq!(&[1, 2, 3, 4], &slice[image_off..][..4]);
+                slice[image_off] = 5;
+                assert_eq!(&[5, 2, 3, 4], &slice[image_off..][..4]);
+                memfd.clear_and_remain_ready(amt_to_memset).unwrap();
+            }
+        }
+
+        // Test without an image
+        for amt_to_memset in [0, 4096, 10 << 12, 1 << 20, 10 << 20] {
+            memfd.instantiate(64 << 10, None).unwrap();
+            for chunk in mmap.as_mut_slice()[..64 << 10].chunks_mut(1024) {
+                assert_eq!(chunk[0], 0);
+                chunk[0] = 5;
+            }
+            memfd.clear_and_remain_ready(amt_to_memset).unwrap();
+        }
     }
 }
