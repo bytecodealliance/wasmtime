@@ -42,6 +42,15 @@ pub enum Error {
         span: Span,
     },
 
+    /// The rule can never match any input.
+    UnmatchableError {
+        /// The error message.
+        msg: String,
+
+        /// The location of the unmatchable rule.
+        span: Span,
+    },
+
     /// The rules mentioned overlap in the input they accept.
     OverlapError {
         /// The error message.
@@ -118,6 +127,10 @@ impl std::fmt::Display for Error {
             Error::ParseError { msg, .. } => write!(f, "parse error: {}", msg),
             #[cfg(feature = "miette-errors")]
             Error::TypeError { msg, .. } => write!(f, "type error: {}", msg),
+
+            Error::UnmatchableError { msg, .. } => {
+                write!(f, "unmatchable error: {}", msg)
+            }
 
             Error::OverlapError { msg, rules, .. } => {
                 writeln!(f, "overlap error: {}\n{}", msg, OverlappingRules(&rules))
