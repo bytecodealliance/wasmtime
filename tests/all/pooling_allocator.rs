@@ -4,16 +4,12 @@ use wasmtime::*;
 
 #[test]
 fn successful_instantiation() -> Result<()> {
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(1)
+        .instance_memory_pages(1)
+        .instance_table_elements(10);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: 1,
-            memory_pages: 1,
-            table_elements: 10,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);
     config.static_memory_maximum_size(65536);
@@ -30,16 +26,12 @@ fn successful_instantiation() -> Result<()> {
 
 #[test]
 fn memory_limit() -> Result<()> {
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(1)
+        .instance_memory_pages(3)
+        .instance_table_elements(10);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: 1,
-            memory_pages: 3,
-            table_elements: 10,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(65536);
     config.static_memory_maximum_size(3 * 65536);
@@ -109,16 +101,12 @@ fn memory_limit() -> Result<()> {
 
 #[test]
 fn memory_init() -> Result<()> {
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(1)
+        .instance_memory_pages(2)
+        .instance_table_elements(0);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: 1,
-            memory_pages: 2,
-            table_elements: 0,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
 
     let engine = Engine::new(&config)?;
 
@@ -142,16 +130,12 @@ fn memory_init() -> Result<()> {
 
 #[test]
 fn memory_guard_page_trap() -> Result<()> {
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(1)
+        .instance_memory_pages(2)
+        .instance_table_elements(0);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: 1,
-            memory_pages: 2,
-            table_elements: 0,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
 
     let engine = Engine::new(&config)?;
 
@@ -210,16 +194,12 @@ fn memory_zeroed() -> Result<()> {
         return Ok(());
     }
 
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(1)
+        .instance_memory_pages(1)
+        .instance_table_elements(0);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: 1,
-            memory_pages: 1,
-            table_elements: 0,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);
     config.static_memory_maximum_size(65536);
@@ -253,16 +233,12 @@ fn memory_zeroed() -> Result<()> {
 #[test]
 fn table_limit() -> Result<()> {
     const TABLE_ELEMENTS: u32 = 10;
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(1)
+        .instance_memory_pages(1)
+        .instance_table_elements(TABLE_ELEMENTS);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: 1,
-            memory_pages: 1,
-            table_elements: TABLE_ELEMENTS,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);
     config.static_memory_maximum_size(65536);
@@ -340,16 +316,12 @@ fn table_limit() -> Result<()> {
 
 #[test]
 fn table_init() -> Result<()> {
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(1)
+        .instance_memory_pages(0)
+        .instance_table_elements(6);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: 1,
-            memory_pages: 0,
-            table_elements: 6,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
 
     let engine = Engine::new(&config)?;
 
@@ -390,16 +362,12 @@ fn table_zeroed() -> Result<()> {
         return Ok(());
     }
 
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(1)
+        .instance_memory_pages(1)
+        .instance_table_elements(10);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: 1,
-            memory_pages: 1,
-            table_elements: 10,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);
     config.static_memory_maximum_size(65536);
@@ -434,16 +402,12 @@ fn table_zeroed() -> Result<()> {
 #[test]
 fn instantiation_limit() -> Result<()> {
     const INSTANCE_LIMIT: u32 = 10;
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(INSTANCE_LIMIT)
+        .instance_memory_pages(1)
+        .instance_table_elements(10);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: INSTANCE_LIMIT,
-            memory_pages: 1,
-            table_elements: 10,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);
     config.static_memory_maximum_size(65536);
@@ -484,16 +448,12 @@ fn instantiation_limit() -> Result<()> {
 
 #[test]
 fn preserve_data_segments() -> Result<()> {
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(2)
+        .instance_memory_pages(1)
+        .instance_table_elements(10);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: 2,
-            memory_pages: 1,
-            table_elements: 10,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     let engine = Engine::new(&config)?;
     let m = Module::new(
         &engine,
@@ -536,16 +496,12 @@ fn multi_memory_with_imported_memories() -> Result<()> {
     // This test checks that the base address for the defined memory is correct for the instance
     // despite the presence of an imported memory.
 
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(1)
+        .instance_memories(2)
+        .instance_memory_pages(1);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: 1,
-            memories: 2,
-            memory_pages: 1,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     config.wasm_multi_memory(true);
 
     let engine = Engine::new(&config)?;
@@ -581,15 +537,11 @@ fn drop_externref_global_during_module_init() -> Result<()> {
         }
     }
 
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(1);
     let mut config = Config::new();
     config.wasm_reference_types(true);
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: 1,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
 
     let engine = Engine::new(&config)?;
 
@@ -630,15 +582,10 @@ fn drop_externref_global_during_module_init() -> Result<()> {
 #[test]
 #[cfg(target_pointer_width = "64")]
 fn instance_too_large() -> Result<()> {
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_size(16).instance_count(1);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            size: 16,
-            count: 1,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
 
     let engine = Engine::new(&config)?;
     let expected = "\

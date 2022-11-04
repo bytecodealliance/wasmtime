@@ -21,8 +21,6 @@ use clap::Parser;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use wasmtime::{Config, ProfilingStrategy};
-#[cfg(feature = "pooling-allocator")]
-use wasmtime::{InstanceLimits, PoolingAllocationStrategy};
 
 pub const SUPPORTED_WASM_FEATURES: &[(&str, &str)] = &[
     ("all", "enables all supported WebAssembly features"),
@@ -332,11 +330,7 @@ impl CommonOptions {
         #[cfg(feature = "pooling-allocator")]
         {
             if self.pooling_allocator {
-                let instance_limits = InstanceLimits::default();
-                config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling {
-                    strategy: PoolingAllocationStrategy::NextAvailable,
-                    instance_limits,
-                });
+                config.allocation_strategy(wasmtime::InstanceAllocationStrategy::pooling());
             }
         }
 

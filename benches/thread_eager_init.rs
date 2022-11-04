@@ -91,15 +91,10 @@ fn test_setup() -> (Engine, Module) {
     // We only expect to create one Instance at a time, with a single memory.
     let pool_count = 10;
 
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(pool_count).instance_memory_pages(1);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: pool_count,
-            memory_pages: 1,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     let engine = Engine::new(&config).unwrap();
 
     // The module has a memory (shouldn't matter) and a single function which is a no-op.

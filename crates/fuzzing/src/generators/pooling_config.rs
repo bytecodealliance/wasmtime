@@ -1,0 +1,81 @@
+//! Generate instance limits for the pooling allocation strategy.
+
+use arbitrary::{Arbitrary, Unstructured};
+
+/// Configuration for `wasmtime::PoolingAllocationStrategy`.
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[allow(missing_docs)]
+pub struct PoolingAllocationConfig {
+    pub strategy: PoolingAllocationStrategy,
+    pub instance_count: u32,
+    pub instance_memories: u32,
+    pub instance_tables: u32,
+    pub instance_memory_pages: u64,
+    pub instance_table_elements: u32,
+    pub instance_size: usize,
+    pub async_stack_zeroing: bool,
+}
+
+impl PoolingAllocationConfig {
+    /// Convert the generated limits to Wasmtime limits.
+    pub fn to_wasmtime(&self) -> wasmtime::PoolingAllocationConfig {
+        let mut cfg = wasmtime::PoolingAllocationConfig::default();
+
+        cfg.strategy(self.strategy.to_wasmtime())
+            .instance_count(self.instance_count)
+            .instance_memories(self.instance_memories)
+            .instance_tables(self.instance_tables)
+            .instance_memory_pages(self.instance_memory_pages)
+            .instance_table_elements(self.instance_table_elements)
+            .instance_size(self.instance_size)
+            .async_stack_zeroing(self.async_stack_zeroing);
+        cfg
+    }
+}
+
+impl<'a> Arbitrary<'a> for PoolingAllocationConfig {
+    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        const MAX_COUNT: u32 = 100;
+        const MAX_TABLES: u32 = 10;
+        const MAX_MEMORIES: u32 = 10;
+        const MAX_ELEMENTS: u32 = 1000;
+        const MAX_MEMORY_PAGES: u64 = 160; // 10 MiB
+        const MAX_SIZE: usize = 1 << 20; // 1 MiB
+
+        Ok(Self {
+            strategy: u.arbitrary()?,
+            instance_tables: u.int_in_range(0..=MAX_TABLES)?,
+            instance_memories: u.int_in_range(0..=MAX_MEMORIES)?,
+            instance_table_elements: u.int_in_range(0..=MAX_ELEMENTS)?,
+            instance_memory_pages: u.int_in_range(0..=MAX_MEMORY_PAGES)?,
+            instance_count: u.int_in_range(1..=MAX_COUNT)?,
+            instance_size: u.int_in_range(0..=MAX_SIZE)?,
+            async_stack_zeroing: u.arbitrary()?,
+        })
+    }
+}
+
+/// Configuration for `wasmtime::PoolingAllocationStrategy`.
+#[derive(Arbitrary, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum PoolingAllocationStrategy {
+    /// Use next available instance slot.
+    NextAvailable,
+    /// Use random instance slot.
+    Random,
+    /// Use an affinity-based strategy.
+    ReuseAffinity,
+}
+
+impl PoolingAllocationStrategy {
+    fn to_wasmtime(&self) -> wasmtime::PoolingAllocationStrategy {
+        match self {
+            PoolingAllocationStrategy::NextAvailable => {
+                wasmtime::PoolingAllocationStrategy::NextAvailable
+            }
+            PoolingAllocationStrategy::Random => wasmtime::PoolingAllocationStrategy::Random,
+            PoolingAllocationStrategy::ReuseAffinity => {
+                wasmtime::PoolingAllocationStrategy::ReuseAffinity
+            }
+        }
+    }
+}

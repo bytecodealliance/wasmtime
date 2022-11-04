@@ -21,7 +21,10 @@ use wasmtime_environ::{
 mod pooling;
 
 #[cfg(feature = "pooling-allocator")]
-pub use self::pooling::{InstanceLimits, PoolingAllocationStrategy, PoolingInstanceAllocator};
+pub use self::pooling::{
+    InstanceLimits, PoolingAllocationStrategy, PoolingInstanceAllocator,
+    PoolingInstanceAllocatorConfig,
+};
 
 /// Represents a request for a new runtime instance.
 pub struct InstanceAllocationRequest<'a> {
