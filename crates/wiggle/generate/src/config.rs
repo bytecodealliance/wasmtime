@@ -409,7 +409,7 @@ impl Parse for AsyncFunctions {
         let lookahead = input.lookahead1();
         if lookahead.peek(syn::token::Brace) {
             let _ = braced!(content in input);
-            let items: Punctuated<AsyncConfField, Token![,]> =
+            let items: Punctuated<FunctionField, Token![,]> =
                 content.parse_terminated(Parse::parse)?;
             let mut functions: HashMap<String, Vec<String>> = HashMap::new();
             use std::collections::hash_map::Entry;
@@ -437,13 +437,13 @@ impl Parse for AsyncFunctions {
 }
 
 #[derive(Clone)]
-pub struct AsyncConfField {
+pub struct FunctionField {
     pub module_name: Ident,
     pub function_names: Vec<Ident>,
     pub err_loc: Span,
 }
 
-impl Parse for AsyncConfField {
+impl Parse for FunctionField {
     fn parse(input: ParseStream) -> Result<Self> {
         let err_loc = input.span();
         let module_name = input.parse::<Ident>()?;
@@ -454,14 +454,14 @@ impl Parse for AsyncConfField {
             let _ = braced!(content in input);
             let function_names: Punctuated<Ident, Token![,]> =
                 content.parse_terminated(Parse::parse)?;
-            Ok(AsyncConfField {
+            Ok(FunctionField {
                 module_name,
                 function_names: function_names.iter().cloned().collect(),
                 err_loc,
             })
         } else if lookahead.peek(Ident) {
             let name = input.parse()?;
-            Ok(AsyncConfField {
+            Ok(FunctionField {
                 module_name,
                 function_names: vec![name],
                 err_loc,
@@ -569,7 +569,6 @@ impl Parse for WasmtimeConfigField {
 #[derive(Clone, Default, Debug)]
 pub struct TracingConf {
     pub enabled: bool,
-    pub excluded_functions: HashMap<String, HashSet<String>>,
 }
 
 impl Parse for TracingConf {
