@@ -1,6 +1,6 @@
 use cranelift_module::{ModuleError, ModuleResult};
 
-#[cfg(feature = "selinux-fix")]
+#[cfg(all(not(target_os = "windows"), feature = "selinux-fix"))]
 use memmap2::MmapMut;
 
 #[cfg(not(any(feature = "selinux-fix", windows)))]
@@ -14,7 +14,7 @@ use wasmtime_jit_icache_coherence as icache_coherence;
 
 /// A simple struct consisting of a pointer and length.
 struct PtrLen {
-    #[cfg(feature = "selinux-fix")]
+    #[cfg(all(not(target_os = "windows"), feature = "selinux-fix"))]
     map: Option<MmapMut>,
 
     ptr: *mut u8,
@@ -25,7 +25,7 @@ impl PtrLen {
     /// Create a new empty `PtrLen`.
     fn new() -> Self {
         Self {
-            #[cfg(feature = "selinux-fix")]
+            #[cfg(all(not(target_os = "windows"), feature = "selinux-fix"))]
             map: None,
 
             ptr: ptr::null_mut(),
@@ -250,10 +250,10 @@ impl Memory {
     fn non_protected_allocations_iter(&self) -> impl Iterator<Item = &PtrLen> {
         let iter = self.allocations[self.already_protected..].iter();
 
-        #[cfg(feature = "selinux-fix")]
-        return iter.filter(|&PtrLen { ref map, len, .. }| len != 0 && map.is_some());
+        #[cfg(all(not(target_os = "windows"), feature = "selinux-fix"))]
+        return iter.filter(|&PtrLen { ref map, len, .. }| *len != 0 && map.is_some());
 
-        #[cfg(not(feature = "selinux-fix"))]
+        #[cfg(any(target_os = "windows", not(feature = "selinux-fix")))]
         return iter.filter(|&PtrLen { len, .. }| *len != 0);
     }
 
