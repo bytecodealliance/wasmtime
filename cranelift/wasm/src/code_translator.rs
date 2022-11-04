@@ -868,19 +868,19 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         Operator::F32ReinterpretI32 => {
             let val = state.pop1();
-            state.push1(builder.ins().bitcast(F32, val));
+            state.push1(builder.ins().bitcast(F32, MemFlags::new(), val));
         }
         Operator::F64ReinterpretI64 => {
             let val = state.pop1();
-            state.push1(builder.ins().bitcast(F64, val));
+            state.push1(builder.ins().bitcast(F64, MemFlags::new(), val));
         }
         Operator::I32ReinterpretF32 => {
             let val = state.pop1();
-            state.push1(builder.ins().bitcast(I32, val));
+            state.push1(builder.ins().bitcast(I32, MemFlags::new(), val));
         }
         Operator::I64ReinterpretF64 => {
             let val = state.pop1();
-            state.push1(builder.ins().bitcast(I64, val));
+            state.push1(builder.ins().bitcast(I64, MemFlags::new(), val));
         }
         Operator::I32Extend8S => {
             let val = state.pop1();
@@ -2898,7 +2898,9 @@ fn optionally_bitcast_vector(
     builder: &mut FunctionBuilder,
 ) -> Value {
     if builder.func.dfg.value_type(value) != needed_type {
-        builder.ins().bitcast(needed_type, value)
+        let mut flags = MemFlags::new();
+        flags.set_endianness(ir::Endianness::Little);
+        builder.ins().bitcast(needed_type, flags, value)
     } else {
         value
     }
@@ -2933,7 +2935,9 @@ fn canonicalise_v128_values<'a>(
     // Otherwise we'll have to cast, and push the resulting `Value`s into `canonicalised`.
     for v in values {
         tmp_canonicalised.push(if is_non_canonical_v128(builder.func.dfg.value_type(*v)) {
-            builder.ins().bitcast(I8X16, *v)
+            let mut flags = MemFlags::new();
+            flags.set_endianness(ir::Endianness::Little);
+            builder.ins().bitcast(I8X16, flags, *v)
         } else {
             *v
         });
@@ -3056,7 +3060,9 @@ pub fn bitcast_wasm_returns<FE: FuncEnvironment + ?Sized>(
         environ.is_wasm_return(&builder.func.signature, i)
     });
     for (t, arg) in changes {
-        *arg = builder.ins().bitcast(t, *arg);
+        let mut flags = MemFlags::new();
+        flags.set_endianness(ir::Endianness::Little);
+        *arg = builder.ins().bitcast(t, flags, *arg);
     }
 }
 
@@ -3072,6 +3078,8 @@ fn bitcast_wasm_params<FE: FuncEnvironment + ?Sized>(
         environ.is_wasm_parameter(&callee_signature, i)
     });
     for (t, arg) in changes {
-        *arg = builder.ins().bitcast(t, *arg);
+        let mut flags = MemFlags::new();
+        flags.set_endianness(ir::Endianness::Little);
+        *arg = builder.ins().bitcast(t, flags, *arg);
     }
 }

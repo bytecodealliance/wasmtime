@@ -1486,6 +1486,11 @@
 (rule (lane_order_equal (LaneOrder.BigEndian) (LaneOrder.LittleEndian)) $false)
 (rule (lane_order_equal (LaneOrder.BigEndian) (LaneOrder.BigEndian)) $true)
 
+;; Return lane order matching memory byte order.
+(decl pure lane_order_from_memflags (MemFlags) LaneOrder)
+(rule 0 (lane_order_from_memflags (littleendian)) (LaneOrder.LittleEndian))
+(rule 1 (lane_order_from_memflags (bigendian)) (LaneOrder.BigEndian))
+
 ;; Convert a CLIF immediate lane index value to big-endian lane order.
 (decl be_lane_idx (Type u8) u8)
 (extern constructor be_lane_idx be_lane_idx)

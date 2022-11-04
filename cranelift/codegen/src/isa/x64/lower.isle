@@ -3298,25 +3298,25 @@
 
 ;; Rules for `bitcast` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $I32 (bitcast src @ (value_type $F32))))
+(rule (lower (has_type $I32 (bitcast _ src @ (value_type $F32))))
       (bitcast_xmm_to_gpr $F32 src))
 
-(rule (lower (has_type $F32 (bitcast src @ (value_type $I32))))
+(rule (lower (has_type $F32 (bitcast _ src @ (value_type $I32))))
       (bitcast_gpr_to_xmm $I32 src))
 
-(rule (lower (has_type $I64 (bitcast src @ (value_type $F64))))
+(rule (lower (has_type $I64 (bitcast _ src @ (value_type $F64))))
       (bitcast_xmm_to_gpr $F64 src))
 
-(rule (lower (has_type $F64 (bitcast src @ (value_type $I64))))
+(rule (lower (has_type $F64 (bitcast _ src @ (value_type $I64))))
       (bitcast_gpr_to_xmm $I64 src))
 
 ;; Bitcast between types residing in GPR registers is a no-op.
 (rule 1 (lower (has_type (is_gpr_type _)
-                         (bitcast x @ (value_type (is_gpr_type _))))) x)
+                         (bitcast _ x @ (value_type (is_gpr_type _))))) x)
 
 ;; Bitcast between types residing in XMM registers is a no-op.
 (rule 2 (lower (has_type (is_xmm_type _)
-                         (bitcast x @ (value_type (is_xmm_type _))))) x)
+                         (bitcast _ x @ (value_type (is_xmm_type _))))) x)
 
 ;; Rules for `fcopysign` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

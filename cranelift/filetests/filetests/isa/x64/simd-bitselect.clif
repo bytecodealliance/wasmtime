@@ -43,7 +43,7 @@ block0(v0: f32x4, v1: f32x4, v2: i32x4, v3: i32x4):
 
 function %mask_casted(i8x16, i8x16, i32x4) -> i8x16 {
 block0(v0: i8x16, v1: i8x16, v2: i32x4):
-    v3 = bitcast.i8x16 v2
+    v3 = bitcast.i8x16 little v2
     v4 = bitselect v3, v0, v1
     return v4
 }

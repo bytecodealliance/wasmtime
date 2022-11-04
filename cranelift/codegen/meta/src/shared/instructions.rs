@@ -3104,6 +3104,7 @@ pub(crate) fn define(
 
     let x = &Operand::new("x", Mem);
     let a = &Operand::new("a", MemTo).with_doc("Bits of `x` reinterpreted");
+    let MemFlags = &Operand::new("MemFlags", &imm.memflags);
 
     ig.push(
         Inst::new(
@@ -3113,11 +3114,16 @@ pub(crate) fn define(
 
         The input and output types must be storable to memory and of the same
         size. A bitcast is equivalent to storing one type and loading the other
-        type from the same address.
+        type from the same address, both using the specified MemFlags.
+
+        Note that this operation only supports the `big` or `little` MemFlags.
+        The specified byte order only affects the result in the case where
+        input and output types differ in lane count/size.  In this case, the
+        operation is only valid if a byte order specifier is provided.
         "#,
-            &formats.unary,
+            &formats.load_no_offset,
         )
-        .operands_in(vec![x])
+        .operands_in(vec![MemFlags, x])
         .operands_out(vec![a]),
     );
 

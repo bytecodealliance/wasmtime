@@ -1200,3 +1200,21 @@ block0(v0: f32):
 ;   vlgvf %r2, %v0, 0
 ;   br %r14
 
+function %bitcast_f32_f32(f32) -> f32 {
+block0(v0: f32):
+  v1 = bitcast.f32 v0
+  return v1
+}
+
+; block0:
+;   br %r14
+
+function %bitcast_f64_f64(f64) -> f64 {
+block0(v0: f64):
+  v1 = bitcast.f64 v0
+  return v1
+}
+
+; block0:
+;   br %r14
+
