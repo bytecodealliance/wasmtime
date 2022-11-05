@@ -246,24 +246,6 @@ impl Rule {
     }
 }
 
-#[derive(Debug, Default)]
-struct RuleBuilder {
-    /// The in-progress rule being constructed.
-    rule: Rule,
-    /// While matching a pattern, variables get bound to binding sites.
-    vars: HashMap<sema::VarId, BindingId>,
-    /// While evaluating a let-expression, variables get bound to expressions.
-    let_vars: HashMap<sema::VarId, ExprId>,
-}
-
-impl RuleBuilder {
-    fn finish(&mut self) -> Rule {
-        self.vars.clear();
-        self.let_vars.clear();
-        std::mem::take(&mut self.rule)
-    }
-}
-
 /// A collection of [Rule]s, along with hash-consed [Binding]s and [Expr]s for all of them.
 #[derive(Debug, Default)]
 pub struct RuleSet {
@@ -304,7 +286,7 @@ pub fn build(termenv: &sema::TermEnv) -> (Vec<(sema::TermId, RuleSet)>, Errors) 
 
 #[derive(Debug, Default)]
 struct RuleSetBuilder {
-    current_rule: RuleBuilder,
+    current_rule: Rule,
     binding_map: HashMap<Binding, BindingId>,
     expr_map: HashMap<Expr, ExprId>,
     errors: Errors,
@@ -313,19 +295,21 @@ struct RuleSetBuilder {
 
 impl RuleSetBuilder {
     fn add_rule(&mut self, rule: &sema::Rule, termenv: &sema::TermEnv) {
-        self.current_rule.rule.pos = rule.pos;
-        self.current_rule.rule.prio = rule.prio;
-        self.current_rule.rule.result = rule.visit(self, termenv);
+        self.current_rule.pos = rule.pos;
+        self.current_rule.prio = rule.prio;
+        self.current_rule.result = rule.visit(self, termenv);
         self.normalize_equivalence_classes();
-        self.rules.rules.push((rule.id, self.current_rule.finish()));
+        self.rules
+            .rules
+            .push((rule.id, std::mem::take(&mut self.current_rule)));
     }
 
     // If a binding site is constrained and also required to be equal to another binding site, then
     // copy the constraint and push the equality inside it.
     fn normalize_equivalence_classes(&mut self) {
         let mut constraints = Vec::new();
-        for binding in self.current_rule.rule.equals.keys() {
-            if let Some(constraint) = self.current_rule.rule.constraints.get(binding) {
+        for binding in self.current_rule.equals.keys() {
+            if let Some(constraint) = self.current_rule.constraints.get(binding) {
                 constraints.push((*binding, *constraint));
             }
         }
@@ -356,7 +340,7 @@ impl RuleSetBuilder {
             // class. If there were more constraints in that class, then we discard them here. But
             // we left the original constraints in place above, so we've already checked that all
             // the constraints are equal.
-            while let Some(next) = self.current_rule.rule.equals.remove(&binding) {
+            while let Some(next) = self.current_rule.equals.remove(&binding) {
                 for &mut Pending {
                     ref mut binding,
                     variant,
@@ -369,8 +353,8 @@ impl RuleSetBuilder {
                         field,
                     });
 
-                    self.current_rule.rule.equals.insert(*binding, next);
-                    if let Some(constraint) = self.current_rule.rule.constraints.get(binding) {
+                    self.current_rule.equals.insert(*binding, next);
+                    if let Some(constraint) = self.current_rule.constraints.get(binding) {
                         constraints.push((*binding, *constraint));
                     }
 
@@ -412,7 +396,7 @@ impl RuleSetBuilder {
     }
 
     fn set_constraint_or_error(&mut self, input: BindingId, constraint: Constraint) {
-        if let Err(e) = self.current_rule.rule.set_constraint(input, constraint) {
+        if let Err(e) = self.current_rule.set_constraint(input, constraint) {
             self.errors.unmatchable.push(e);
         }
     }
@@ -426,8 +410,8 @@ impl sema::PatternVisitor for RuleSetBuilder {
         let b = self.dedup_binding(b);
         // If both bindings represent the same binding site, they're implicitly equal.
         if a != b {
-            self.current_rule.rule.set_equal(a, b);
-            self.current_rule.rule.set_equal(b, a);
+            self.current_rule.set_equal(a, b);
+            self.current_rule.set_equal(b, a);
         }
     }
 
