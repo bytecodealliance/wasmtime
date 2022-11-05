@@ -503,7 +503,7 @@ impl InstancePool {
                     if memory_size_pages < *bound {
                         bail!(
                             "memory size allocated per-memory is too small to \
-                             satisfy static bound of {bound:#x} bytes"
+                             satisfy static bound of {bound:#x} pages"
                         );
                     }
                 }
@@ -647,21 +647,14 @@ impl MemoryPool {
         // elide most bounds checks in wasm. If `memory_pages` is larger,
         // though, then this is a non-moving pooling allocator so create larger
         // reservations for account for that.
-        let memory_size = if instance_limits.memory_pages == 0 {
-            0
-        } else {
-            instance_limits
-                .memory_pages
-                .max(tunables.static_memory_bound)
-                * u64::from(WASM_PAGE_SIZE)
-        };
+        let memory_size = instance_limits
+            .memory_pages
+            .max(tunables.static_memory_bound)
+            * u64::from(WASM_PAGE_SIZE);
 
-        let memory_and_guard_size = if instance_limits.memory_pages > 0 {
+        let memory_and_guard_size =
             usize::try_from(memory_size + tunables.static_memory_offset_guard_size)
-                .map_err(|_| anyhow!("memory reservation size exceeds addressable memory"))?
-        } else {
-            0
-        };
+                .map_err(|_| anyhow!("memory reservation size exceeds addressable memory"))?;
 
         assert!(
             memory_and_guard_size % crate::page_size() == 0,
