@@ -103,20 +103,13 @@ impl std::error::Error for Error {
     }
 }
 
-fn write_source_span(
-    _f: &mut std::fmt::Formatter,
-    _src: &Source,
-    _span: &Span,
-) -> std::fmt::Result {
+fn write_source_span(f: &mut std::fmt::Formatter, src: &Source, span: &Span) -> std::fmt::Result {
     // Include locations directly in the `Display` output when
     // we're not wrapping errors with miette (which provides
     // its own way of showing locations and context).
-    #[cfg(not(feature = "miette-errors"))]
-    write!(
-        _f,
-        "{}: ",
-        _span.from.pretty_print_with_filename(&_src.name)
-    )?;
+    if cfg!(not(feature = "miette-errors")) {
+        write!(f, "{}: ", span.from.pretty_print_with_filename(&src.name))?;
+    }
 
     Ok(())
 }
