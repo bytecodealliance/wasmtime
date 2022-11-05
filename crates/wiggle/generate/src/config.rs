@@ -15,7 +15,7 @@ pub struct Config {
     pub errors: ErrorConf,
     pub async_: AsyncConf,
     pub wasmtime: bool,
-    pub tracing: bool,
+    pub tracing: TracingConf,
 }
 
 mod kw {
@@ -26,6 +26,7 @@ mod kw {
     syn::custom_keyword!(target);
     syn::custom_keyword!(wasmtime);
     syn::custom_keyword!(tracing);
+    syn::custom_keyword!(disable_for);
 }
 
 #[derive(Debug, Clone)]
@@ -34,7 +35,7 @@ pub enum ConfigField {
     Error(ErrorConf),
     Async(AsyncConf),
     Wasmtime(bool),
-    Tracing(bool),
+    Tracing(TracingConf),
 }
 
 impl Parse for ConfigField {
@@ -73,7 +74,7 @@ impl Parse for ConfigField {
         } else if lookahead.peek(kw::tracing) {
             input.parse::<kw::tracing>()?;
             input.parse::<Token![:]>()?;
-            Ok(ConfigField::Tracing(input.parse::<syn::LitBool>()?.value))
+            Ok(ConfigField::Tracing(input.parse()?))
         } else {
             Err(lookahead.error())
         }
@@ -128,7 +129,7 @@ impl Config {
             errors: errors.take().unwrap_or_default(),
             async_: async_.take().unwrap_or_default(),
             wasmtime: wasmtime.unwrap_or(true),
-            tracing: tracing.unwrap_or(true),
+            tracing: tracing.unwrap_or_default(),
         })
     }
 
@@ -409,7 +410,7 @@ impl Parse for AsyncFunctions {
         let lookahead = input.lookahead1();
         if lookahead.peek(syn::token::Brace) {
             let _ = braced!(content in input);
-            let items: Punctuated<AsyncConfField, Token![,]> =
+            let items: Punctuated<FunctionField, Token![,]> =
                 content.parse_terminated(Parse::parse)?;
             let mut functions: HashMap<String, Vec<String>> = HashMap::new();
             use std::collections::hash_map::Entry;
@@ -437,13 +438,13 @@ impl Parse for AsyncFunctions {
 }
 
 #[derive(Clone)]
-pub struct AsyncConfField {
+pub struct FunctionField {
     pub module_name: Ident,
     pub function_names: Vec<Ident>,
     pub err_loc: Span,
 }
 
-impl Parse for AsyncConfField {
+impl Parse for FunctionField {
     fn parse(input: ParseStream) -> Result<Self> {
         let err_loc = input.span();
         let module_name = input.parse::<Ident>()?;
@@ -454,14 +455,14 @@ impl Parse for AsyncConfField {
             let _ = braced!(content in input);
             let function_names: Punctuated<Ident, Token![,]> =
                 content.parse_terminated(Parse::parse)?;
-            Ok(AsyncConfField {
+            Ok(FunctionField {
                 module_name,
                 function_names: function_names.iter().cloned().collect(),
                 err_loc,
             })
         } else if lookahead.peek(Ident) {
             let name = input.parse()?;
-            Ok(AsyncConfField {
+            Ok(FunctionField {
                 module_name,
                 function_names: vec![name],
                 err_loc,
@@ -562,6 +563,73 @@ impl Parse for WasmtimeConfigField {
             })))
         } else {
             Err(lookahead.error())
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct TracingConf {
+    enabled: bool,
+    excluded_functions: HashMap<String, Vec<String>>,
+}
+
+impl TracingConf {
+    pub fn enabled_for(&self, module: &str, function: &str) -> bool {
+        if !self.enabled {
+            return false;
+        }
+        self.excluded_functions
+            .get(module)
+            .and_then(|fs| fs.iter().find(|f| *f == function))
+            .is_none()
+    }
+}
+
+impl Default for TracingConf {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            excluded_functions: HashMap::new(),
+        }
+    }
+}
+
+impl Parse for TracingConf {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let enabled = input.parse::<syn::LitBool>()?.value;
+
+        let lookahead = input.lookahead1();
+        if lookahead.peek(kw::disable_for) {
+            input.parse::<kw::disable_for>()?;
+            let content;
+            let _ = braced!(content in input);
+            let items: Punctuated<FunctionField, Token![,]> =
+                content.parse_terminated(Parse::parse)?;
+            let mut functions: HashMap<String, Vec<String>> = HashMap::new();
+            use std::collections::hash_map::Entry;
+            for i in items {
+                let function_names = i
+                    .function_names
+                    .iter()
+                    .map(|i| i.to_string())
+                    .collect::<Vec<String>>();
+                match functions.entry(i.module_name.to_string()) {
+                    Entry::Occupied(o) => o.into_mut().extend(function_names),
+                    Entry::Vacant(v) => {
+                        v.insert(function_names);
+                    }
+                }
+            }
+
+            Ok(TracingConf {
+                enabled,
+                excluded_functions: functions,
+            })
+        } else {
+            Ok(TracingConf {
+                enabled,
+                excluded_functions: HashMap::new(),
+            })
         }
     }
 }

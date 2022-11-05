@@ -15,6 +15,9 @@ pub enum RichError {
 // Define an errno with variants corresponding to RichError. Use it in a
 // trivial function.
 wiggle::from_witx!({
+    tracing: true disable_for {
+        one_error_conversion::foo,
+    },
 witx_literal: "
 (typename $errno (enum (@witx tag u8) $ok $invalid_arg $picket_line))
 (typename $s (record (field $f1 (@witx usize)) (field $f2 (@witx pointer u8))))
