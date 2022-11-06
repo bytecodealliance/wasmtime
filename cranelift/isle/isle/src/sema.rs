@@ -599,12 +599,8 @@ impl Pattern {
             &Pattern::BindPattern(_ty, var, ref subpat) => {
                 // Bind the appropriate variable and recurse.
                 assert!(!vars.contains_key(&var));
-                subpat.visit(visitor, input, termenv, vars);
-                // Don't make this variable visible within the subpattern. An expression can't be
-                // equal to a subtree of itself, so a rule with such an equality constraint can
-                // never match.
-                // TODO: verify that earlier phases catch this case
                 vars.insert(var, input);
+                subpat.visit(visitor, input, termenv, vars);
             }
             &Pattern::Var(ty, var) => {
                 // Assert that the value matches the existing bound var.

@@ -2,7 +2,6 @@
 use crate::error::{Error, Source, Span};
 use crate::lexer::Pos;
 use crate::sema::{self, RuleVisitor};
-use std::cmp::Reverse;
 use std::collections::{hash_map::Entry, HashMap};
 
 /// A field index in a tuple or an enum variant.
@@ -88,50 +87,6 @@ pub enum Expr {
     Constructor(sema::TermId, Box<[ExprId]>),
 }
 
-#[derive(Debug)]
-struct UnmatchableError {
-    pos: Pos,
-    constraint_a: Constraint,
-    constraint_b: Constraint,
-}
-
-/// A collection of errors detected during rule normalization.
-#[derive(Debug, Default)]
-pub struct Errors {
-    unmatchable: Vec<UnmatchableError>,
-}
-
-impl Errors {
-    /// Convert this collection into ISLE errors given the [sema::TypeEnv] context.
-    pub fn annotate(mut self, tyenv: &sema::TypeEnv) -> Result<(), Error> {
-        let one = |err: UnmatchableError| {
-            let src = Source::new(
-                tyenv.filenames[err.pos.file].clone(),
-                tyenv.file_texts[err.pos.file].clone(),
-            );
-            Error::UnmatchableError {
-                msg: format!(
-                    "rule requires binding to match both {:?} and {:?}",
-                    err.constraint_a, err.constraint_b
-                ),
-                src,
-                span: Span::new_single(err.pos),
-            }
-        };
-        match self.unmatchable.len() {
-            0 => Ok(()),
-            1 => Err(one(self.unmatchable.pop().unwrap())),
-            _ => Err(Error::Errors(
-                self.unmatchable.into_iter().map(one).collect(),
-            )),
-        }
-    }
-
-    fn append(&mut self, other: &mut Errors) {
-        self.unmatchable.append(&mut other.unmatchable);
-    }
-}
-
 /// A term-rewriting rule. All [BindingId]s and [ExprId]s are only meaningful in the context of the
 /// [RuleSet] that contains this rule.
 #[derive(Debug, Default)]
@@ -166,7 +121,75 @@ pub enum Overlap {
     },
 }
 
+/// A collection of [Rule]s, along with hash-consed [Binding]s and [Expr]s for all of them.
+#[derive(Debug, Default)]
+pub struct RuleSet {
+    /// The [Rule]s for a single [sema::Term].
+    pub rules: Vec<Rule>,
+    /// The bindings identified by [BindingId]s within rules.
+    pub bindings: Vec<Binding>,
+    /// The expressions identified by [ExprId]s within rules.
+    pub exprs: Vec<Expr>,
+}
+
+/// Construct a [RuleSet] for each term in `termenv` that has rules.
+pub fn build(
+    termenv: &sema::TermEnv,
+    tyenv: &sema::TypeEnv,
+) -> (Vec<(sema::TermId, RuleSet)>, Vec<Error>) {
+    let mut errors = Vec::new();
+    let mut term = HashMap::new();
+    for rule in termenv.rules.iter() {
+        term.entry(rule.lhs.root_term().unwrap())
+            .or_insert_with(RuleSetBuilder::default)
+            .add_rule(rule, termenv, tyenv, &mut errors);
+    }
+
+    // The `term` hash map may return terms in any order. Sort them to ensure that we produce the
+    // same output every time when given the same ISLE source. Rules are added to terms in `RuleId`
+    // order, so it's not necessary to sort within a `RuleSet`.
+    let mut result: Vec<_> = term
+        .into_iter()
+        .map(|(term, builder)| (term, builder.rules))
+        .collect();
+    result.sort_unstable_by_key(|(term, _)| *term);
+
+    (result, errors)
+}
+
 impl Rule {
+    /// Returns whether a given pair of rules can both match on some input, and if so, whether
+    /// either matches a subset of the other's inputs.
+    pub fn may_overlap(&self, other: &Rule) -> Overlap {
+        // The outer loop needs to go over the rule with fewer constraints in order to correctly
+        // identify if it's a subset of the other rule. Also, that way around is faster.
+        let (small, big) = if self.constraints.len() <= other.constraints.len() {
+            (self, other)
+        } else {
+            (other, self)
+        };
+
+        // TODO: nonlinear constraints complicate the subset check
+        let mut subset = small.equals.is_empty();
+
+        for (binding, a) in small.constraints.iter() {
+            if let Some(b) = big.constraints.get(binding) {
+                if a != b {
+                    // If any binding site is constrained differently by both rules then there is
+                    // no input where both rules can match.
+                    return Overlap::No;
+                }
+                // Otherwise both are constrained in the same way at this binding site. That doesn't
+                // rule out any possibilities for what inputs the rules accept.
+            } else {
+                // The `big` rule's inputs are a subset of the `small` rule's inputs if every
+                // constraint in `small` is exactly matched in `big`. But we found a counterexample.
+                subset = false;
+            }
+        }
+        Overlap::Yes { subset }
+    }
+
     fn set_constraint(
         &mut self,
         source: BindingId,
@@ -212,76 +235,13 @@ impl Rule {
             }
         }
     }
-
-    /// Returns whether a given pair of rules can both match on some input, and if so, whether
-    /// either matches a subset of the other's inputs.
-    pub fn may_overlap(&self, other: &Rule) -> Overlap {
-        // The outer loop needs to go over the rule with fewer constraints in order to correctly
-        // identify if it's a subset of the other rule. Also, that way around is faster.
-        let (small, big) = if self.constraints.len() <= other.constraints.len() {
-            (self, other)
-        } else {
-            (other, self)
-        };
-
-        // TODO: nonlinear constraints complicate the subset check
-        let mut subset = small.equals.is_empty();
-
-        for (binding, a) in small.constraints.iter() {
-            if let Some(b) = big.constraints.get(binding) {
-                if a != b {
-                    // If any binding site is constrained differently by both rules then there is
-                    // no input where both rules can match.
-                    return Overlap::No;
-                }
-                // Otherwise both are constrained in the same way at this binding site. That doesn't
-                // rule out any possibilities for what inputs the rules accept.
-            } else {
-                // The `big` rule's inputs are a subset of the `small` rule's inputs if every
-                // constraint in `small` is exactly matched in `big`. But we found a counterexample.
-                subset = false;
-            }
-        }
-        Overlap::Yes { subset }
-    }
 }
 
-/// A collection of [Rule]s, along with hash-consed [Binding]s and [Expr]s for all of them.
-#[derive(Debug, Default)]
-pub struct RuleSet {
-    /// The [Rule]s for a single [sema::Term].
-    pub rules: Vec<(sema::RuleId, Rule)>,
-    /// The bindings identified by [BindingId]s within rules.
-    pub bindings: Vec<Binding>,
-    /// The expressions identified by [ExprId]s within rules.
-    pub exprs: Vec<Expr>,
-}
-
-/// Construct a [RuleSet] for each term in `termenv` that has rules.
-pub fn build(termenv: &sema::TermEnv) -> (Vec<(sema::TermId, RuleSet)>, Errors) {
-    let mut errors = Errors::default();
-    let mut term = HashMap::new();
-    for rule in termenv.rules.iter() {
-        let builder = term
-            .entry(rule.lhs.root_term().unwrap())
-            .or_insert_with(RuleSetBuilder::default);
-        builder.add_rule(rule, termenv);
-        errors.append(&mut builder.errors);
-    }
-
-    let mut result: Vec<_> = term
-        .into_iter()
-        .map(|(term, builder)| {
-            let mut ruleset = builder.rules;
-            ruleset
-                .rules
-                .sort_unstable_by_key(|(_, rule)| (Reverse(rule.prio), rule.pos));
-            (term, ruleset)
-        })
-        .collect();
-    result.sort_unstable_by_key(|(term, _)| *term);
-
-    (result, errors)
+#[derive(Debug)]
+struct UnmatchableError {
+    pos: Pos,
+    constraint_a: Constraint,
+    constraint_b: Constraint,
 }
 
 #[derive(Debug, Default)]
@@ -289,19 +249,43 @@ struct RuleSetBuilder {
     current_rule: Rule,
     binding_map: HashMap<Binding, BindingId>,
     expr_map: HashMap<Expr, ExprId>,
-    errors: Errors,
+    unmatchable: Vec<UnmatchableError>,
     rules: RuleSet,
 }
 
 impl RuleSetBuilder {
-    fn add_rule(&mut self, rule: &sema::Rule, termenv: &sema::TermEnv) {
+    fn add_rule(
+        &mut self,
+        rule: &sema::Rule,
+        termenv: &sema::TermEnv,
+        tyenv: &sema::TypeEnv,
+        errors: &mut Vec<Error>,
+    ) {
         self.current_rule.pos = rule.pos;
         self.current_rule.prio = rule.prio;
         self.current_rule.result = rule.visit(self, termenv);
         self.normalize_equivalence_classes();
-        self.rules
-            .rules
-            .push((rule.id, std::mem::take(&mut self.current_rule)));
+        let rule = std::mem::take(&mut self.current_rule);
+
+        if self.unmatchable.is_empty() {
+            self.rules.rules.push(rule);
+        } else {
+            // If this rule can never match, drop it so it doesn't affect overlap checking.
+            errors.extend(self.unmatchable.drain(..).map(|err| {
+                let src = Source::new(
+                    tyenv.filenames[err.pos.file].clone(),
+                    tyenv.file_texts[err.pos.file].clone(),
+                );
+                Error::UnmatchableError {
+                    msg: format!(
+                        "rule requires binding to match both {:?} and {:?}",
+                        err.constraint_a, err.constraint_b
+                    ),
+                    src,
+                    span: Span::new_single(err.pos),
+                }
+            }))
+        }
     }
 
     // If a binding site is constrained and also required to be equal to another binding site, then
@@ -397,7 +381,7 @@ impl RuleSetBuilder {
 
     fn set_constraint_or_error(&mut self, input: BindingId, constraint: Constraint) {
         if let Err(e) = self.current_rule.set_constraint(input, constraint) {
-            self.errors.unmatchable.push(e);
+            self.unmatchable.push(e);
         }
     }
 }

@@ -36,26 +36,21 @@ impl SourceCode for Source {
 impl miette::Diagnostic for Error {
     fn labels(&self) -> Option<Box<dyn Iterator<Item = miette::LabeledSpan> + '_>> {
         match self {
-            Self::ParseError { msg, span, .. }
-            | Self::TypeError { msg, span, .. }
-            | Self::UnmatchableError { msg, span, .. } => Some(Box::new(std::iter::once(
-                miette::LabeledSpan::new_with_span(Some(msg.clone()), span.clone()),
-            ))),
-            Self::ShadowedError { shadowed, .. } => Some(Box::new(std::iter::once(
-                miette::LabeledSpan::new_with_span(
-                    Some("rule shadowed by more general higher-priority rule".to_string()),
-                    shadowed.1.clone(),
-                ),
-            ))),
+            Self::ParseError { msg, span, .. } | Self::TypeError { msg, span, .. } => {
+                Some(Box::new(
+                    vec![miette::LabeledSpan::new_with_span(
+                        Some(msg.clone()),
+                        span.clone(),
+                    )]
+                    .into_iter(),
+                ))
+            }
             _ => None,
         }
     }
     fn source_code(&self) -> std::option::Option<&dyn miette::SourceCode> {
         match self {
-            Self::ParseError { src, .. }
-            | Self::TypeError { src, .. }
-            | Self::UnmatchableError { src, .. } => Some(src),
-            Self::ShadowedError { shadowed, .. } => Some(&shadowed.0),
+            Self::ParseError { src, .. } | Self::TypeError { src, .. } => Some(src),
             _ => None,
         }
     }

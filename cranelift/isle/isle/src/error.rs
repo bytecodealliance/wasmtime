@@ -54,15 +54,6 @@ pub enum Error {
         span: Span,
     },
 
-    /// The rule can never match because another rule will always match first.
-    ShadowedError {
-        /// The location of the unmatchable rule.
-        shadowed: (Source, Span),
-
-        /// The location of the rule that shadows it.
-        other: (Source, Span),
-    },
-
     /// The rules mentioned overlap in the input they accept.
     OverlapError {
         /// The error message.
@@ -94,6 +85,15 @@ impl From<Vec<Error>> for Error {
     }
 }
 
+impl Error {
+    fn unwrap_errors(&self) -> &[Error] {
+        match self {
+            Error::Errors(e) => e,
+            _ => panic!("`isle::Error::unwrap_errors` on non-`isle::Error::Errors`"),
+        }
+    }
+}
+
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
@@ -103,46 +103,53 @@ impl std::error::Error for Error {
     }
 }
 
-fn write_source_span(f: &mut std::fmt::Formatter, src: &Source, span: &Span) -> std::fmt::Result {
-    // Include locations directly in the `Display` output when
-    // we're not wrapping errors with miette (which provides
-    // its own way of showing locations and context).
-    if cfg!(not(feature = "miette-errors")) {
-        write!(f, "{}: ", span.from.pretty_print_with_filename(&src.name))?;
-    }
-
-    Ok(())
-}
-
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Error::IoError { context, .. } => write!(f, "{}", context),
 
-            Error::ParseError { src, span, msg } => {
-                write_source_span(f, src, span)?;
-                write!(f, "parse error: {}", msg)
-            }
-            Error::TypeError { src, span, msg } => {
-                write_source_span(f, src, span)?;
-                write!(f, "type error: {}", msg)
-            }
+            // Include locations directly in the `Display` output when
+            // we're not wrapping errors with miette (which provides
+            // its own way of showing locations and context).
+            #[cfg(not(feature = "miette-errors"))]
+            Error::ParseError { src, span, msg, .. } => write!(
+                f,
+                "{}: parse error: {}",
+                span.from.pretty_print_with_filename(&*src.name),
+                msg
+            ),
+            #[cfg(not(feature = "miette-errors"))]
+            Error::TypeError { src, span, msg, .. } => write!(
+                f,
+                "{}: type error: {}",
+                span.from.pretty_print_with_filename(&*src.name),
+                msg
+            ),
+
+            #[cfg(feature = "miette-errors")]
+            Error::ParseError { msg, .. } => write!(f, "parse error: {}", msg),
+            #[cfg(feature = "miette-errors")]
+            Error::TypeError { msg, .. } => write!(f, "type error: {}", msg),
+
             Error::UnmatchableError { src, span, msg } => {
-                write_source_span(f, src, span)?;
-                write!(f, "unmatchable rule: {}", msg)
-            }
-            Error::ShadowedError { shadowed, other } => {
-                write_source_span(f, &shadowed.0, &shadowed.1)?;
-                writeln!(f, "rule shadowed by more general higher-priority rule")?;
-                write_source_span(f, &other.0, &other.1)?;
-                write!(f, "higher-priority rule is here")
+                write!(
+                    f,
+                    "{}: unmatchable rule: {}",
+                    span.from.pretty_print_with_filename(&*src.name),
+                    msg
+                )
             }
 
-            Error::OverlapError { msg, rules } => {
+            Error::OverlapError { msg, rules, .. } => {
                 writeln!(f, "overlap error: {}\n{}", msg, OverlappingRules(&rules))
             }
 
-            Error::Errors(e) => write!(f, "{}found {} errors", DisplayErrors(e), e.len()),
+            Error::Errors(_) => write!(
+                f,
+                "{}found {} errors",
+                DisplayErrors(self.unwrap_errors()),
+                self.unwrap_errors().len(),
+            ),
         }
     }
 }
