@@ -18,7 +18,7 @@ use wasmtime_runtime::{self as runtime, InstanceHandle};
 /// as well as required by [`Instance::new`](crate::Instance::new). In other
 /// words, this is the type of extracted values from an instantiated module, and
 /// it's also used to provide imported values when instantiating a module.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Extern {
     /// A WebAssembly `func` which can be called.
     Func(Func),
