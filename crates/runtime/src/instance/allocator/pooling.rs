@@ -24,7 +24,7 @@ use wasmtime_environ::{
 };
 
 mod index_allocator;
-use index_allocator::{PoolingAllocationState, SlotId};
+use index_allocator::{IndexAllocator, SlotId};
 
 cfg_if::cfg_if! {
     if #[cfg(windows)] {
@@ -123,7 +123,7 @@ struct InstancePool {
     mapping: Mmap,
     instance_size: usize,
     max_instances: usize,
-    index_allocator: Mutex<PoolingAllocationState>,
+    index_allocator: IndexAllocator,
     memories: MemoryPool,
     tables: TablePool,
     linear_memory_keep_resident: usize,
@@ -152,10 +152,7 @@ impl InstancePool {
             mapping,
             instance_size,
             max_instances,
-            index_allocator: Mutex::new(PoolingAllocationState::new(
-                config.strategy,
-                max_instances,
-            )),
+            index_allocator: IndexAllocator::new(config.strategy, max_instances),
             memories: MemoryPool::new(&config.limits, tunables)?,
             tables: TablePool::new(&config.limits)?,
             linear_memory_keep_resident: config.linear_memory_keep_resident,
@@ -225,21 +222,18 @@ impl InstancePool {
         &self,
         req: InstanceAllocationRequest,
     ) -> Result<InstanceHandle, InstantiationError> {
-        let index = {
-            let mut alloc = self.index_allocator.lock().unwrap();
-            if alloc.is_empty() {
-                return Err(InstantiationError::Limit(self.max_instances as u32));
-            }
-            alloc.alloc(req.runtime_info.unique_id()).index()
-        };
+        let id = self
+            .index_allocator
+            .alloc(req.runtime_info.unique_id())
+            .ok_or_else(|| InstantiationError::Limit(self.max_instances as u32))?;
 
-        match unsafe { self.initialize_instance(index, req) } {
+        match unsafe { self.initialize_instance(id.index(), req) } {
             Ok(handle) => Ok(handle),
             Err(e) => {
                 // If we failed to initialize the instance, there's no need to drop
                 // it as it was never "allocated", but we still need to free the
                 // instance's slot.
-                self.index_allocator.lock().unwrap().free(SlotId(index));
+                self.index_allocator.free(id);
                 Err(e)
             }
         }
@@ -271,7 +265,7 @@ impl InstancePool {
         // touched again until we write a fresh Instance in-place with
         // std::ptr::write in allocate() above.
 
-        self.index_allocator.lock().unwrap().free(SlotId(index));
+        self.index_allocator.free(SlotId(index));
     }
 
     fn allocate_instance_resources(
@@ -855,7 +849,7 @@ struct StackPool {
     stack_size: usize,
     max_instances: usize,
     page_size: usize,
-    index_allocator: Mutex<PoolingAllocationState>,
+    index_allocator: IndexAllocator,
     async_stack_zeroing: bool,
     async_stack_keep_resident: usize,
 }
@@ -909,10 +903,10 @@ impl StackPool {
             // here: stacks do not benefit from being allocated to the
             // same compiled module with the same image (they always
             // start zeroed just the same for everyone).
-            index_allocator: Mutex::new(PoolingAllocationState::new(
+            index_allocator: IndexAllocator::new(
                 PoolingAllocationStrategy::NextAvailable,
                 max_instances,
-            )),
+            ),
         })
     }
 
@@ -921,13 +915,11 @@ impl StackPool {
             return Err(FiberStackError::NotSupported);
         }
 
-        let index = {
-            let mut alloc = self.index_allocator.lock().unwrap();
-            if alloc.is_empty() {
-                return Err(FiberStackError::Limit(self.max_instances as u32));
-            }
-            alloc.alloc(None).index()
-        };
+        let index = self
+            .index_allocator
+            .alloc(None)
+            .ok_or(FiberStackError::Limit(self.max_instances as u32))?
+            .index();
 
         assert!(index < self.max_instances);
 
@@ -974,7 +966,7 @@ impl StackPool {
             self.zero_stack(bottom_of_stack, stack_size);
         }
 
-        self.index_allocator.lock().unwrap().free(SlotId(index));
+        self.index_allocator.free(SlotId(index));
     }
 
     fn zero_stack(&self, bottom: usize, size: usize) {
@@ -1215,8 +1207,8 @@ mod test {
         assert_eq!(instances.max_instances, 3);
 
         assert_eq!(
-            instances.index_allocator.lock().unwrap().testing_freelist(),
-            &[SlotId(0), SlotId(1), SlotId(2)]
+            instances.index_allocator.testing_freelist(),
+            [SlotId(0), SlotId(1), SlotId(2)]
         );
 
         let mut handles = Vec::new();
@@ -1240,10 +1232,7 @@ mod test {
             );
         }
 
-        assert_eq!(
-            instances.index_allocator.lock().unwrap().testing_freelist(),
-            &[]
-        );
+        assert_eq!(instances.index_allocator.testing_freelist(), []);
 
         match instances.allocate(InstanceAllocationRequest {
             runtime_info: &empty_runtime_info(module),
@@ -1265,8 +1254,8 @@ mod test {
         }
 
         assert_eq!(
-            instances.index_allocator.lock().unwrap().testing_freelist(),
-            &[SlotId(2), SlotId(1), SlotId(0)]
+            instances.index_allocator.testing_freelist(),
+            [SlotId(2), SlotId(1), SlotId(0)]
         );
 
         Ok(())
@@ -1372,8 +1361,8 @@ mod test {
         assert_eq!(pool.page_size, native_page_size);
 
         assert_eq!(
-            pool.index_allocator.lock().unwrap().testing_freelist(),
-            &[
+            pool.index_allocator.testing_freelist(),
+            [
                 SlotId(0),
                 SlotId(1),
                 SlotId(2),
@@ -1399,7 +1388,7 @@ mod test {
             stacks.push(stack);
         }
 
-        assert_eq!(pool.index_allocator.lock().unwrap().testing_freelist(), &[]);
+        assert_eq!(pool.index_allocator.testing_freelist(), []);
 
         match pool.allocate().unwrap_err() {
             FiberStackError::Limit(10) => {}
@@ -1411,8 +1400,8 @@ mod test {
         }
 
         assert_eq!(
-            pool.index_allocator.lock().unwrap().testing_freelist(),
-            &[
+            pool.index_allocator.testing_freelist(),
+            [
                 SlotId(9),
                 SlotId(8),
                 SlotId(7),
