@@ -8,7 +8,8 @@ import decompressUnzip from 'decompress-unzip';
 import decompressTar from 'decompress-tar';
 import plzma from 'plzmasdk';
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const tag = process.argv.slice(2).at(0) || 'dev';
+const input = process.argv.slice(2).at(0);
+const tag = input ? `v${input}` : 'dev';
 
 let packages = {
     'wizer-darwin-arm64': {
