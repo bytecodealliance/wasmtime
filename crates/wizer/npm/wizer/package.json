@@ -1,6 +1,6 @@
 {
   "name": "@bytecode-alliance/wizer",
-  "version": "1.5.56",
+  "version": "1.5.0",
   "description": "The WebAssembly Pre-Initializer",
   "type": "module",
   "scripts": {
