@@ -745,9 +745,23 @@ impl<T> Store<T> {
     /// If fuel consumption is not enabled via
     /// [`Config::consume_fuel`](crate::Config::consume_fuel) then this
     /// function will return `None`. Also note that fuel, if enabled, must be
-    /// originally configured via [`Store::add_fuel`].
+    /// originally configured via [`Store::add_fuel`] or [`Store::set_fuel`].
+    ///
+    /// Note that this only returns the amount of fuel consumed since the last
+    /// time [`set_fuel`][Store::set_fuel] was called, or since the creation
+    /// of the store if it's never been called.
     pub fn fuel_consumed(&self) -> Option<u64> {
         self.inner.fuel_consumed()
+    }
+
+    /// Returns the amount of fuel remaining in the store.
+    ///
+    /// If fuel consumption is not enabled via
+    /// [`Config::consume_fuel`](crate::Config::consume_fuel) then this
+    /// function will return `None`. Also note that fuel, if enabled, must be
+    /// originally configured via [`Store::add_fuel`] or [`Store::set_fuel`].
+    pub fn fuel_remaining(&self) -> Option<u64> {
+        self.inner.fuel_remaining()
     }
 
     /// Adds fuel to this [`Store`] for wasm to consume while executing.
@@ -763,15 +777,31 @@ impl<T> Store<T> {
     /// units, as any execution cost associated with them involves other
     /// instructions which do consume fuel.
     ///
-    /// Note that at this time when fuel is entirely consumed it will cause
-    /// wasm to trap. More usages of fuel are planned for the future.
+    /// By default, when fuel is entirely consumed it will cause wasm to trap.
+    /// If the `async` feature of this crate is enabled and this store's
+    /// [`Config`](crate::Config) was created with [async
+    /// support](crate::Config::async_support), you can use the
+    /// [`Store::out_of_fuel_async_yield`] function to change this behaviour
+    /// to yielding to the async runtime when out of fuel instead.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// This function will panic if the store's [`Config`](crate::Config) did
-    /// not have fuel consumption enabled.
+    /// This function will return an error if the store's
+    /// [`Config`](crate::Config) did not have fuel consumption enabled.
     pub fn add_fuel(&mut self, fuel: u64) -> Result<()> {
         self.inner.add_fuel(fuel)
+    }
+
+    /// Sets the amount of fuel that's present in the store.
+    ///
+    /// See [`Store::add_fuel`] for more information about fuel.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the store's
+    /// [`Config`](crate::Config) did not have fuel consumption enabled.
+    pub fn set_fuel(&mut self, fuel: u64) -> Result<()> {
+        self.inner.set_fuel(fuel)
     }
 
     /// Synthetically consumes fuel from this [`Store`].
@@ -990,6 +1020,13 @@ impl<'a, T> StoreContext<'a, T> {
     pub fn fuel_consumed(&self) -> Option<u64> {
         self.0.fuel_consumed()
     }
+
+    /// Returns the amount of fuel remaining in the store.
+    ///
+    /// For more information see [`Store::fuel_remaining`].
+    pub fn fuel_remaining(&self) -> Option<u64> {
+        self.0.fuel_remaining()
+    }
 }
 
 impl<'a, T> StoreContextMut<'a, T> {
@@ -1024,6 +1061,20 @@ impl<'a, T> StoreContextMut<'a, T> {
     /// For more information see [`Store::fuel_consumed`].
     pub fn fuel_consumed(&self) -> Option<u64> {
         self.0.fuel_consumed()
+    }
+
+    /// Returns the amount of fuel remaining in the store.
+    ///
+    /// For more information see [`Store::fuel_remaining`].
+    pub fn fuel_remaining(&self) -> Option<u64> {
+        self.0.fuel_remaining()
+    }
+
+    /// Sets the amount of fuel that's present in the store.
+    ///
+    /// For more information see [`Store::set_fuel`].
+    pub fn set_fuel(&mut self, fuel: u64) -> Result<()> {
+        self.0.set_fuel(fuel)
     }
 
     /// Inject more fuel into this store to be consumed when executing wasm code.
@@ -1333,6 +1384,14 @@ impl StoreOpaque {
         Some(u64::try_from(self.fuel_adj + consumed).unwrap())
     }
 
+    pub fn fuel_remaining(&self) -> Option<u64> {
+        if !self.engine.config().tunables.consume_fuel {
+            return None;
+        }
+        let consumed = unsafe { *self.runtime_limits.fuel_consumed.get() };
+        Some(-consumed as u64)
+    }
+
     fn out_of_fuel_trap(&mut self) {
         self.out_of_gas_behavior = OutOfGas::Trap;
     }
@@ -1391,6 +1450,17 @@ impl StoreOpaque {
                 .expect("attempted to pull async context during shutdown")
                 .block_on(Pin::new_unchecked(&mut future))
         }
+    }
+
+    fn set_fuel(&mut self, fuel: u64) -> Result<()> {
+        anyhow::ensure!(
+            self.engine().config().tunables.consume_fuel,
+            "fuel is not configured in this store"
+        );
+        let fuel = i64::try_from(fuel).unwrap_or(i64::max_value());
+        self.fuel_adj = fuel;
+        unsafe { *self.runtime_limits.fuel_consumed.get() = -fuel };
+        Ok(())
     }
 
     fn add_fuel(&mut self, fuel: u64) -> Result<()> {

@@ -1789,11 +1789,25 @@ impl<T> Caller<'_, T> {
         self.store.fuel_consumed()
     }
 
+    /// Returns the amount of fuel remaining in the store.
+    ///
+    /// For more information see [`Store::fuel_remaining`](crate::Store::fuel_remaining)
+    pub fn fuel_remaining(&self) -> Option<u64> {
+        self.store.fuel_remaining()
+    }
+
     /// Inject more fuel into this store to be consumed when executing wasm code.
     ///
     /// For more information see [`Store::add_fuel`](crate::Store::add_fuel)
     pub fn add_fuel(&mut self, fuel: u64) -> Result<()> {
         self.store.add_fuel(fuel)
+    }
+
+    /// Sets the amount of fuel that's present in the store.
+    ///
+    /// For more information see [`Store::set_fuel`](crate::Store::set_fuel)
+    pub fn set_fuel(&mut self, fuel: u64) -> Result<()> {
+        self.store.set_fuel(fuel)
     }
 
     /// Synthetically consumes fuel from the store.
