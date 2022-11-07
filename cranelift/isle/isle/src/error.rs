@@ -43,14 +43,14 @@ pub enum Error {
     },
 
     /// The rule can never match any input.
-    UnmatchableError {
+    UnreachableError {
         /// The error message.
         msg: String,
 
         /// The input ISLE source.
         src: Source,
 
-        /// The location of the unmatchable rule.
+        /// The location of the unreachable rule.
         span: Span,
     },
 
@@ -131,10 +131,10 @@ impl std::fmt::Display for Error {
             #[cfg(feature = "miette-errors")]
             Error::TypeError { msg, .. } => write!(f, "type error: {}", msg),
 
-            Error::UnmatchableError { src, span, msg } => {
+            Error::UnreachableError { src, span, msg } => {
                 write!(
                     f,
-                    "{}: unmatchable rule: {}",
+                    "{}: unreachable rule: {}",
                     span.from.pretty_print_with_filename(&*src.name),
                     msg
                 )

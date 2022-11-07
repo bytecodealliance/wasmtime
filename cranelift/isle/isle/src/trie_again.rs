@@ -194,11 +194,11 @@ impl Rule {
         &mut self,
         source: BindingId,
         constraint: Constraint,
-    ) -> Result<(), UnmatchableError> {
+    ) -> Result<(), UnreachableError> {
         match self.constraints.entry(source) {
             Entry::Occupied(entry) => {
                 if entry.get() != &constraint {
-                    return Err(UnmatchableError {
+                    return Err(UnreachableError {
                         pos: self.pos,
                         constraint_a: *entry.get(),
                         constraint_b: constraint,
@@ -238,7 +238,7 @@ impl Rule {
 }
 
 #[derive(Debug)]
-struct UnmatchableError {
+struct UnreachableError {
     pos: Pos,
     constraint_a: Constraint,
     constraint_b: Constraint,
@@ -249,7 +249,7 @@ struct RuleSetBuilder {
     current_rule: Rule,
     binding_map: HashMap<Binding, BindingId>,
     expr_map: HashMap<Expr, ExprId>,
-    unmatchable: Vec<UnmatchableError>,
+    unreachable: Vec<UnreachableError>,
     rules: RuleSet,
 }
 
@@ -267,16 +267,16 @@ impl RuleSetBuilder {
         self.normalize_equivalence_classes();
         let rule = std::mem::take(&mut self.current_rule);
 
-        if self.unmatchable.is_empty() {
+        if self.unreachable.is_empty() {
             self.rules.rules.push(rule);
         } else {
             // If this rule can never match, drop it so it doesn't affect overlap checking.
-            errors.extend(self.unmatchable.drain(..).map(|err| {
+            errors.extend(self.unreachable.drain(..).map(|err| {
                 let src = Source::new(
                     tyenv.filenames[err.pos.file].clone(),
                     tyenv.file_texts[err.pos.file].clone(),
                 );
-                Error::UnmatchableError {
+                Error::UnreachableError {
                     msg: format!(
                         "rule requires binding to match both {:?} and {:?}",
                         err.constraint_a, err.constraint_b
@@ -381,7 +381,7 @@ impl RuleSetBuilder {
 
     fn set_constraint_or_error(&mut self, input: BindingId, constraint: Constraint) {
         if let Err(e) = self.current_rule.set_constraint(input, constraint) {
-            self.unmatchable.push(e);
+            self.unreachable.push(e);
         }
     }
 }
