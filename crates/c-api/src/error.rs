@@ -1,4 +1,4 @@
-use crate::wasm_name_t;
+use crate::{wasm_frame_vec_t, wasm_name_t};
 use anyhow::{anyhow, Error, Result};
 
 #[repr(C)]
@@ -36,4 +36,26 @@ pub(crate) fn bad_utf8() -> Option<Box<wasmtime_error_t>> {
 #[no_mangle]
 pub extern "C" fn wasmtime_error_message(error: &wasmtime_error_t, message: &mut wasm_name_t) {
     message.set_buffer(format!("{:?}", error.error).into_bytes());
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_error_exit_status(raw: &wasmtime_error_t, status: &mut i32) -> bool {
+    #[cfg(feature = "wasi")]
+    if let Some(exit) = raw.error.downcast_ref::<wasmtime_wasi::I32Exit>() {
+        *status = exit.0;
+        return true;
+    }
+
+    // Squash unused warnings in wasi-disabled builds.
+    drop((raw, status));
+
+    false
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_error_wasm_trace<'a>(
+    raw: &'a wasmtime_error_t,
+    out: &mut wasm_frame_vec_t<'a>,
+) {
+    crate::trap::error_trace(&raw.error, out)
 }
