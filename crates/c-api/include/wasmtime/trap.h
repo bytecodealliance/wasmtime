@@ -70,15 +70,6 @@ WASM_API_EXTERN wasm_trap_t *wasmtime_trap_new(const char *msg, size_t msg_len);
 WASM_API_EXTERN bool wasmtime_trap_code(const wasm_trap_t*, wasmtime_trap_code_t *code);
 
 /**
- * \brief Attempts to extract a WASI-specific exit status from this trap.
- *
- * Returns `true` if the trap is a WASI "exit" trap and has a return status. If
- * `true` is returned then the exit status is returned through the `status`
- * pointer. If `false` is returned then this is not a wasi exit trap.
- */
-WASM_API_EXTERN bool wasmtime_trap_exit_status(const wasm_trap_t*, int *status);
-
-/**
  * \brief Returns a human-readable name for this frame's function.
  *
  * This function will attempt to load a human-readable name for function this
