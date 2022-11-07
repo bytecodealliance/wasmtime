@@ -21,3 +21,34 @@ block0(v0: i64):
     return v1
 }
 
+; "little"/"big" flag modifier is ok
+function %bitcast_little(i32) -> f32 { ; Ok
+block0(v0: i32):
+    v1 = bitcast.f32 little v0
+    return v1
+}
+function %bitcast_big(i32) -> f32 { ; Ok
+block0(v0: i32):
+    v1 = bitcast.f32 big v0
+    return v1
+}
+
+; other flag modifiers are not ok
+function %bitcast_big(i32) -> f32 {
+block0(v0: i32):
+    v1 = bitcast.f32 notrap v0 ;  error: The bitcast instruction only accepts the `big` or `little` memory flags
+    return v1
+}
+function %bitcast_big(i32) -> f32 {
+block0(v0: i32):
+    v1 = bitcast.f32 aligned v0 ;  error: The bitcast instruction only accepts the `big` or `little` memory flags
+    return v1
+}
+
+; if lane counts differ, a byte order specifier is required
+function %bitcast_lanes(i32x4) -> i64x2 {
+block0(v0: i32x4):
+    v1 = bitcast.i64x2 v0 ;  error: Byte order specifier required for bitcast instruction changing lane count
+    return v1
+}
+
