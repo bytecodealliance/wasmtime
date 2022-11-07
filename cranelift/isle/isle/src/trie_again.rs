@@ -5,11 +5,28 @@ use crate::sema::{self, RuleVisitor};
 use std::collections::{hash_map::Entry, HashMap};
 
 /// A field index in a tuple or an enum variant.
-pub type TupleIndex = u8;
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct TupleIndex(u8);
 /// A hash-consed identifier for a binding, stored in a [RuleSet].
-pub type BindingId = u16;
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct BindingId(u16);
 /// A hash-consed identifier for an expression, stored in a [RuleSet].
-pub type ExprId = u16;
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct ExprId(u16);
+
+impl BindingId {
+    /// Get the index of this id.
+    pub fn index(self) -> usize {
+        self.0.into()
+    }
+}
+
+impl ExprId {
+    /// Get the index of this id.
+    pub fn index(self) -> usize {
+        self.0.into()
+    }
+}
 
 /// Binding sites are the result of Rust pattern matching.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -305,7 +322,8 @@ impl RuleSetBuilder {
                 field: TupleIndex,
             }
             let mut bindings = if let Constraint::Variant(fields, _, variant) = constraint {
-                (0..fields)
+                (0..fields.0)
+                    .map(TupleIndex)
                     .map(|field| Pending {
                         binding: self.dedup_binding(Binding::Variant {
                             source: binding,
@@ -355,7 +373,7 @@ impl RuleSetBuilder {
         if let Some(binding) = self.binding_map.get(&binding) {
             *binding
         } else {
-            let id = self.rules.bindings.len().try_into().unwrap();
+            let id = BindingId(self.rules.bindings.len().try_into().unwrap());
             self.rules.bindings.push(binding.clone());
             self.binding_map.insert(binding, id);
             id
@@ -366,7 +384,7 @@ impl RuleSetBuilder {
         if let Some(expr) = self.expr_map.get(&expr) {
             *expr
         } else {
-            let id = self.rules.exprs.len().try_into().unwrap();
+            let id = ExprId(self.rules.exprs.len().try_into().unwrap());
             self.rules.exprs.push(expr.clone());
             self.expr_map.insert(expr, id);
             id
@@ -414,9 +432,10 @@ impl sema::PatternVisitor for RuleSetBuilder {
         arg_tys: &[sema::TypeId],
         variant: sema::VariantId,
     ) -> Vec<Binding> {
-        let fields = arg_tys.len().try_into().unwrap();
+        let fields = TupleIndex(arg_tys.len().try_into().unwrap());
         let source = self.set_constraint(input, Constraint::Variant(fields, input_ty, variant));
-        (0..fields)
+        (0..fields.0)
+            .map(TupleIndex)
             .map(|field| Binding::Variant {
                 source,
                 variant,
@@ -454,6 +473,7 @@ impl sema::PatternVisitor for RuleSetBuilder {
             outputs => {
                 let source = self.dedup_binding(source);
                 (0..outputs)
+                    .map(TupleIndex)
                     .map(|field| Binding::Tuple { source, field })
                     .collect()
             }
@@ -507,7 +527,8 @@ impl sema::RuleVisitor for RuleSetBuilder {
 
     fn add_arg(&mut self, index: usize, _ty: sema::TypeId) -> Binding {
         // Arguments don't need to be pattern-matched to reference them, so they're expressions
-        let expr = self.dedup_expr(Expr::Argument(index.try_into().unwrap()));
+        let argument = TupleIndex(index.try_into().unwrap());
+        let expr = self.dedup_expr(Expr::Argument(argument));
         Binding::Expr { constructor: expr }
     }
 
@@ -523,9 +544,9 @@ impl sema::RuleVisitor for RuleSetBuilder {
     }
 
     fn expr_as_pattern(&mut self, expr: ExprId) -> Binding {
-        if let &Expr::Binding(binding) = &self.rules.exprs[usize::from(expr)] {
+        if let &Expr::Binding(binding) = &self.rules.exprs[expr.index()] {
             // Short-circuit wrapping a binding around an expr from another binding
-            self.rules.bindings[usize::from(binding)]
+            self.rules.bindings[binding.index()]
         } else {
             Binding::Expr { constructor: expr }
         }
