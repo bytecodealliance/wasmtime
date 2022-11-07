@@ -120,7 +120,6 @@ where
         stub_fn::<F> as usize,
         &mut obj,
     )?;
-    engine.append_compiler_info(&mut obj);
     engine.append_bti(&mut obj);
     let obj = wasmtime_jit::ObjectBuilder::new(obj, &engine.config().tunables).finish()?;
 
