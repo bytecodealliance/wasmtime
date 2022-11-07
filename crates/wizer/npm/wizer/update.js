@@ -42,7 +42,7 @@ let packages = {
     },
 }
 
-const response = await fetch(`https://api.github.com/repos/bytecodealliance/wizer/releases/tags/${tag}`)
+let response = await fetch(`https://api.github.com/repos/bytecodealliance/wizer/releases/tags/${tag}`)
 if (!response.ok) {
     console.error(`Response from https://api.github.com/repos/bytecodealliance/wizer/releases/tags/${tag} was not ok`, response)
     console.error(await response.text())
@@ -50,7 +50,7 @@ if (!response.ok) {
 }
 response = await response.json()
 const id = response.id
-const assets = await fetch(`https://api.github.com/repos/bytecodealliance/wizer/releases/${id}/assets`)
+let assets = await fetch(`https://api.github.com/repos/bytecodealliance/wizer/releases/${id}/assets`)
 if (!assets.ok) {
     console.error(`Response from https://api.github.com/repos/bytecodealliance/wizer/releases/${id}/assets was not ok`, assets)
     console.error(await response.text())
@@ -95,7 +95,7 @@ for (const [packageName, info] of Object.entries(packages)) {
     }
     await decompress(Buffer.from(buf), packageDirectory, {
         // Remove the leading directory from the extracted file.
-        strip:1,
+        strip: 1,
         plugins: [
             decompressUnzip(),
             decompressTar()
