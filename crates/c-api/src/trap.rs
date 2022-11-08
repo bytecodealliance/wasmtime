@@ -94,7 +94,11 @@ pub extern "C" fn wasm_trap_origin(raw: &wasm_trap_t) -> Option<Box<wasm_frame_t
 
 #[no_mangle]
 pub extern "C" fn wasm_trap_trace<'a>(raw: &'a wasm_trap_t, out: &mut wasm_frame_vec_t<'a>) {
-    let trace = match raw.error.downcast_ref::<WasmBacktrace>() {
+    error_trace(&raw.error, out)
+}
+
+pub(crate) fn error_trace<'a>(error: &'a Error, out: &mut wasm_frame_vec_t<'a>) {
+    let trace = match error.downcast_ref::<WasmBacktrace>() {
         Some(trap) => trap,
         None => return out.set_buffer(Vec::new()),
     };
@@ -132,20 +136,6 @@ pub extern "C" fn wasmtime_trap_code(raw: &wasm_trap_t, code: &mut i32) -> bool 
         _ => unreachable!(),
     };
     true
-}
-
-#[no_mangle]
-pub extern "C" fn wasmtime_trap_exit_status(raw: &wasm_trap_t, status: &mut i32) -> bool {
-    #[cfg(feature = "wasi")]
-    if let Some(exit) = raw.error.downcast_ref::<wasmtime_wasi::I32Exit>() {
-        *status = exit.0;
-        return true;
-    }
-
-    // Squash unused warnings in wasi-disabled builds.
-    drop((raw, status));
-
-    false
 }
 
 #[no_mangle]
