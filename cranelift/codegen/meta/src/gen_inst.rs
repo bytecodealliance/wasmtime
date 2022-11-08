@@ -1197,11 +1197,20 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
     fmtln!(fmt, "}")
 }
 
+/// Which ISLE target are we generating code for?
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum IsleTarget {
+    /// Generating code for instruction selection and lowering.
+    Lower,
+    /// Generating code for CLIF to CLIF optimizations.
+    Opt,
+}
+
 fn gen_common_isle(
     formats: &[&InstructionFormat],
     instructions: &AllInstructions,
     fmt: &mut Formatter,
-    is_lower: bool,
+    isle_target: IsleTarget,
 ) {
     use std::collections::{BTreeMap, BTreeSet};
     use std::fmt::Write;
@@ -1255,7 +1264,7 @@ fn gen_common_isle(
         gen_isle_enum(name, variants, fmt)
     }
 
-    if is_lower {
+    if isle_target == IsleTarget::Lower {
         // Generate all of the value arrays we need for `InstructionData` as well as
         // the constructors and extractors for them.
         fmt.line(
@@ -1315,10 +1324,9 @@ fn gen_common_isle(
 
     // Generate the extern type declaration for `InstructionData`
     // (lowering) or `InstructionImms` (opt).
-    let inst_data_name = if is_lower {
-        "InstructionData"
-    } else {
-        "InstructionImms"
+    let inst_data_name = match isle_target {
+        IsleTarget::Lower => "InstructionData",
+        IsleTarget::Opt => "InstructionImms",
     };
     fmtln!(
         fmt,
@@ -1332,7 +1340,7 @@ fn gen_common_isle(
         fmt.indent(|fmt| {
             for format in formats {
                 let mut s = format!("({} (opcode Opcode)", format.name);
-                if is_lower {
+                if isle_target == IsleTarget::Lower {
                     if format.has_value_list {
                         s.push_str(" (args ValueList)");
                     } else if format.num_value_operands == 1 {
@@ -1366,9 +1374,12 @@ fn gen_common_isle(
         inst_data_name
     );
     fmt.empty_line();
-    let ret_ty = if is_lower { "Inst" } else { "Id" };
+    let ret_ty = match isle_target {
+        IsleTarget::Lower => "Inst",
+        IsleTarget::Opt => "Id",
+    };
     for inst in instructions {
-        if !is_lower && inst.format.has_value_list {
+        if isle_target == IsleTarget::Opt && inst.format.has_value_list {
             continue;
         }
 
@@ -1376,24 +1387,30 @@ fn gen_common_isle(
             fmt,
             "(decl {} ({}{}) {})",
             inst.name,
-            if is_lower { "" } else { "Type " },
+            match isle_target {
+                IsleTarget::Lower => "",
+                IsleTarget::Opt => "Type ",
+            },
             inst.operands_in
                 .iter()
                 .map(|o| {
                     let ty = o.kind.rust_type;
-                    if is_lower {
-                        if ty == "&[Value]" {
-                            "ValueSlice"
-                        } else {
-                            ty.rsplit("::").next().unwrap()
+                    match isle_target {
+                        IsleTarget::Lower => {
+                            if ty == "&[Value]" {
+                                "ValueSlice"
+                            } else {
+                                ty.rsplit("::").next().unwrap()
+                            }
                         }
-                    } else {
-                        if ty == "&[Value]" {
-                            panic!("value slice in mid-end extractor");
-                        } else if ty == "Value" || ty == "ir::Value" {
-                            "Id"
-                        } else {
-                            ty.rsplit("::").next().unwrap()
+                        IsleTarget::Opt => {
+                            if ty == "&[Value]" {
+                                panic!("value slice in mid-end extractor");
+                            } else if ty == "Value" || ty == "ir::Value" {
+                                "Id"
+                            } else {
+                                ty.rsplit("::").next().unwrap()
+                            }
                         }
                     }
                 })
@@ -1407,7 +1424,10 @@ fn gen_common_isle(
                 fmt,
                 "({} {}{})",
                 inst.name,
-                if is_lower { "" } else { "ty " },
+                match isle_target {
+                    IsleTarget::Lower => "",
+                    IsleTarget::Opt => "ty ",
+                },
                 inst.operands_in
                     .iter()
                     .map(|o| { o.name })
@@ -1415,7 +1435,7 @@ fn gen_common_isle(
                     .join(" ")
             );
 
-            if is_lower {
+            if isle_target == IsleTarget::Lower {
                 let mut s = format!(
                     "(inst_data (InstructionData.{} (Opcode.{})",
                     inst.format.name, inst.camel_name
@@ -1533,7 +1553,7 @@ fn gen_common_isle(
         fmt.line(")");
 
         // Generate a constructor if this is the mid-end prelude.
-        if !is_lower {
+        if isle_target == IsleTarget::Opt {
             fmtln!(
                 fmt,
                 "(rule ({} ty {})",
@@ -1587,7 +1607,7 @@ fn gen_opt_isle(
     instructions: &AllInstructions,
     fmt: &mut Formatter,
 ) {
-    gen_common_isle(formats, instructions, fmt, /* is_lower = */ false);
+    gen_common_isle(formats, instructions, fmt, IsleTarget::Opt);
 }
 
 fn gen_lower_isle(
@@ -1595,7 +1615,7 @@ fn gen_lower_isle(
     instructions: &AllInstructions,
     fmt: &mut Formatter,
 ) {
-    gen_common_isle(formats, instructions, fmt, /* is_lower = */ true);
+    gen_common_isle(formats, instructions, fmt, IsleTarget::Lower);
 }
 
 /// Generate an `enum` immediate in ISLE.
