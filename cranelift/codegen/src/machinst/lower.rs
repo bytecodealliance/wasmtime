@@ -19,13 +19,12 @@ use crate::machinst::{
     LoweredBlock, MachLabel, Reg, SigSet, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData,
     VCodeConstants, VCodeInst, ValueRegs, Writable,
 };
-use crate::{trace, CodegenError, CodegenResult};
+use crate::{trace, CodegenResult};
 use alloc::vec::Vec;
-use regalloc2::VReg;
 use smallvec::{smallvec, SmallVec};
 use std::fmt::Debug;
 
-use super::{first_user_vreg_index, VCodeBuildDirection};
+use super::{VCodeBuildDirection, VRegAllocator};
 
 /// An "instruction color" partitions CLIF instructions by side-effecting ops.
 /// All instructions with the same "color" are guaranteed not to be separated by
@@ -153,6 +152,9 @@ pub struct Lower<'func, I: VCodeInst> {
     /// Lowered machine instructions.
     vcode: VCodeBuilder<I>,
 
+    /// VReg allocation context, given to the vcode field at build time to finalize the vcode.
+    vregs: VRegAllocator<I>,
+
     /// Mapping from `Value` (SSA value in IR) to virtual register.
     value_regs: SecondaryMap<Value, ValueRegs<Reg>>,
 
@@ -194,9 +196,6 @@ pub struct Lower<'func, I: VCodeInst> {
     /// Effectful instructions that have been sunk; they are not codegen'd at
     /// their original locations.
     inst_sunk: FxHashSet<Inst>,
-
-    /// Next virtual register number to allocate.
-    next_vreg: usize,
 
     /// Instructions collected for the CLIF inst in progress, in forward order.
     ir_insts: Vec<I>,
@@ -318,32 +317,6 @@ pub enum RelocDistance {
     Far,
 }
 
-fn alloc_vregs<I: VCodeInst>(
-    ty: Type,
-    next_vreg: &mut usize,
-    vcode: &mut VCodeBuilder<I>,
-) -> CodegenResult<ValueRegs<Reg>> {
-    let v = *next_vreg;
-    let (regclasses, tys) = I::rc_for_type(ty)?;
-    *next_vreg += regclasses.len();
-    if *next_vreg >= VReg::MAX {
-        return Err(CodegenError::CodeTooLarge);
-    }
-
-    let regs: ValueRegs<Reg> = match regclasses {
-        &[rc0] => ValueRegs::one(VReg::new(v, rc0).into()),
-        &[rc0, rc1] => ValueRegs::two(VReg::new(v, rc0).into(), VReg::new(v + 1, rc1).into()),
-        // We can extend this if/when we support 32-bit targets; e.g.,
-        // an i128 on a 32-bit machine will need up to four machine regs
-        // for a `Value`.
-        _ => panic!("Value must reside in 1 or 2 registers"),
-    };
-    for (&reg_ty, &reg) in tys.iter().zip(regs.regs().iter()) {
-        vcode.set_vreg_type(reg.to_virtual_reg().unwrap(), reg_ty);
-    }
-    Ok(regs)
-}
-
 impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Prepare a new lowering context for the given IR function.
     pub fn new(
@@ -355,7 +328,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         sigs: SigSet,
     ) -> CodegenResult<Lower<'func, I>> {
         let constants = VCodeConstants::with_capacity(f.dfg.constants.len());
-        let mut vcode = VCodeBuilder::new(
+        let vcode = VCodeBuilder::new(
             sigs,
             abi,
             emit_info,
@@ -364,7 +337,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             VCodeBuildDirection::Backward,
         );
 
-        let mut next_vreg: usize = first_user_vreg_index();
+        let mut vregs = VRegAllocator::new();
 
         let mut value_regs = SecondaryMap::with_default(ValueRegs::invalid());
 
@@ -373,7 +346,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             for &param in f.dfg.block_params(bb) {
                 let ty = f.dfg.value_type(param);
                 if value_regs[param].is_invalid() {
-                    let regs = alloc_vregs(ty, &mut next_vreg, &mut vcode)?;
+                    let regs = vregs.alloc(ty)?;
                     value_regs[param] = regs;
                     trace!("bb {} param {}: regs {:?}", bb, param, regs);
                 }
@@ -382,7 +355,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 for &result in f.dfg.inst_results(inst) {
                     let ty = f.dfg.value_type(result);
                     if value_regs[result].is_invalid() && !ty.is_invalid() {
-                        let regs = alloc_vregs(ty, &mut next_vreg, &mut vcode)?;
+                        let regs = vregs.alloc(ty)?;
                         value_regs[result] = regs;
                         trace!(
                             "bb {} inst {} ({:?}): result {} regs {:?}",
@@ -400,7 +373,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         // Assign vreg(s) to each return value.
         let mut retval_regs = vec![];
         for ret in &vcode.abi().signature().returns.clone() {
-            let regs = alloc_vregs(ret.value_type, &mut next_vreg, &mut vcode)?;
+            let regs = vregs.alloc(ret.value_type)?;
             retval_regs.push(regs);
             trace!("retval gets regs {:?}", regs);
         }
@@ -439,12 +412,12 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             f,
             flags,
             vcode,
+            vregs,
             value_regs,
             retval_regs,
             block_end_colors,
             side_effect_inst_entry_colors,
             inst_constants,
-            next_vreg,
             value_ir_uses,
             value_lowered_uses: SecondaryMap::default(),
             inst_sunk: FxHashSet::default(),
@@ -774,8 +747,9 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             let (_reg_rcs, reg_tys) = I::rc_for_type(ty)?;
             debug_assert_eq!(reg_tys.len(), self.value_regs[param].len());
             for (&reg, &rty) in self.value_regs[param].regs().iter().zip(reg_tys.iter()) {
-                self.vcode
-                    .add_block_param(reg.to_virtual_reg().unwrap(), rty);
+                let vreg = reg.to_virtual_reg().unwrap();
+                self.vregs.set_vreg_type(vreg, rty);
+                self.vcode.add_block_param(vreg);
             }
         }
         Ok(())
@@ -1000,12 +974,11 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
                 let mut branch_arg_vregs: SmallVec<[Reg; 16]> = smallvec![];
                 for ty in self.f.dfg.block_param_types(orig_succ) {
-                    let regs = alloc_vregs(ty, &mut self.next_vreg, &mut self.vcode)?;
+                    let regs = self.vregs.alloc(ty)?;
                     for &reg in regs.regs() {
                         branch_arg_vregs.push(reg);
                         let vreg = reg.to_virtual_reg().unwrap();
-                        self.vcode
-                            .add_block_param(vreg, self.vcode.get_vreg_type(vreg));
+                        self.vcode.add_block_param(vreg);
                     }
                 }
                 self.vcode.add_succ(succ, &branch_arg_vregs[..]);
@@ -1031,7 +1004,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
         // Now that we've emitted all instructions into the
         // VCodeBuilder, let's build the VCode.
-        let vcode = self.vcode.build();
+        let vcode = self.vcode.build(self.vregs);
         trace!("built vcode: {:?}", vcode);
 
         Ok(vcode)
@@ -1337,7 +1310,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Get a new temp.
     pub fn alloc_tmp(&mut self, ty: Type) -> ValueRegs<Writable<Reg>> {
-        writable_value_regs(alloc_vregs(ty, &mut self.next_vreg, &mut self.vcode).unwrap())
+        writable_value_regs(self.vregs.alloc(ty).unwrap())
     }
 
     /// Emit a machine instruction.
