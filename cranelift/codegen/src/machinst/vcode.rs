@@ -1408,7 +1408,7 @@ impl<I: VCodeInst> VRegAllocator<I> {
     /// Set the type of this virtual register.
     pub fn set_vreg_type(&mut self, vreg: VirtualReg, ty: Type) {
         if self.vreg_types.len() <= vreg.index() {
-            self.vreg_types.resize(vreg.index() + 1, ir::types::I8);
+            self.vreg_types.resize(vreg.index() + 1, ir::types::INVALID);
         }
         self.vreg_types[vreg.index()] = ty;
         if is_reftype(ty) {
