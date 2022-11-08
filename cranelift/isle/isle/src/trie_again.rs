@@ -113,7 +113,7 @@ pub struct Rule {
     pub pos: Pos,
     /// All of these bindings must match for this rule to apply. Note that within a single rule, if
     /// a binding site must match two different constants, then the rule can never match.
-    pub constraints: HashMap<BindingId, Constraint>,
+    constraints: HashMap<BindingId, Constraint>,
     /// Sets of bindings which must be equal for this rule to match.
     pub equals: DisjointSets<BindingId>,
     /// If other rules apply along with this one, the one with the highest numeric priority is
@@ -217,6 +217,12 @@ impl Rule {
             }
         }
         Overlap::Yes { subset }
+    }
+
+    /// Returns the constraint that the given binding site must satisfy for this rule to match, if
+    /// there is one.
+    pub fn get_constraint(&self, source: BindingId) -> Option<Constraint> {
+        self.constraints.get(&source).copied()
     }
 
     fn set_constraint(
@@ -388,7 +394,7 @@ impl RuleSetBuilder {
                 // We've just added an equality constraint to a binding site that may not have had
                 // one already. If that binding site already had a concrete constraint, then we need
                 // to "recursively" propagate that constraint through the new equivalence class too.
-                if let Some(&constraint) = self.current_rule.constraints.get(&binding) {
+                if let Some(constraint) = self.current_rule.get_constraint(binding) {
                     deferred_constraints.push((binding, constraint));
                 }
                 binding
