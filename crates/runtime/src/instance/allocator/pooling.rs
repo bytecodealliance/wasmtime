@@ -19,8 +19,8 @@ use std::convert::TryFrom;
 use std::mem;
 use std::sync::Mutex;
 use wasmtime_environ::{
-    DefinedMemoryIndex, DefinedTableIndex, HostPtr, Module, PrimaryMap, Tunables, VMOffsets,
-    WASM_PAGE_SIZE,
+    DefinedMemoryIndex, DefinedTableIndex, HostPtr, MemoryStyle, Module, PrimaryMap, Tunables,
+    VMOffsets, WASM_PAGE_SIZE,
 };
 
 mod index_allocator;
@@ -312,7 +312,7 @@ impl InstancePool {
             let memory = unsafe {
                 std::slice::from_raw_parts_mut(
                     self.memories.get_base(instance_index, defined_index),
-                    self.memories.max_memory_size,
+                    self.memories.max_accessible,
                 )
             };
 
@@ -338,7 +338,7 @@ impl InstancePool {
                 // the process to continue, because we never perform a
                 // mmap that would leave an open space for someone
                 // else to come in and map something.
-                slot.instantiate(initial_size as usize, Some(image))
+                slot.instantiate(initial_size as usize, Some(image), &plan.style)
                     .map_err(|e| InstantiationError::Resource(e.into()))?;
 
                 memories.push(
@@ -496,7 +496,20 @@ impl InstancePool {
             .iter()
             .skip(module.num_imported_memories)
         {
-            let max = self.memories.max_memory_size / (WASM_PAGE_SIZE as usize);
+            match &plan.style {
+                MemoryStyle::Static { bound } => {
+                    let memory_size_pages =
+                        (self.memories.memory_size as u64) / u64::from(WASM_PAGE_SIZE);
+                    if memory_size_pages < *bound {
+                        bail!(
+                            "memory size allocated per-memory is too small to \
+                             satisfy static bound of {bound:#x} pages"
+                        );
+                    }
+                }
+                MemoryStyle::Dynamic { .. } => {}
+            }
+            let max = self.memories.max_accessible / (WASM_PAGE_SIZE as usize);
             if plan.memory.minimum > (max as u64) {
                 bail!(
                     "memory index {} has a minimum page size of {} which exceeds the limit of {}",
@@ -572,8 +585,28 @@ impl InstancePool {
 ///
 /// A linear memory is divided into accessible pages and guard pages.
 ///
-/// Each instance index into the pool returns an iterator over the base addresses
-/// of the instance's linear memories.
+/// Each instance index into the pool returns an iterator over the base
+/// addresses of the instance's linear memories.
+///
+/// A diagram for this struct's fields is:
+///
+/// ```ignore
+///                       memory_size
+///                           /
+///         max_accessible   /                    memory_and_guard_size
+///                 |       /                               |
+///              <--+--->  /                    <-----------+---------->
+///              <--------+->
+///
+/// +-----------+--------+---+-----------+     +--------+---+-----------+
+/// | PROT_NONE |            | PROT_NONE | ... |            | PROT_NONE |
+/// +-----------+--------+---+-----------+     +--------+---+-----------+
+/// |           |<------------------+---------------------------------->
+/// \           |                    \
+/// mapping     |     `max_instances * max_memories` memories
+///            /
+///    initial_memory_offset
+/// ```
 #[derive(Debug)]
 struct MemoryPool {
     mapping: Mmap,
@@ -581,12 +614,15 @@ struct MemoryPool {
     // dynamically transfer ownership of a slot to a Memory when in
     // use.
     image_slots: Vec<Mutex<Option<MemoryImageSlot>>>,
-    // The size, in bytes, of each linear memory's reservation plus the guard
-    // region allocated for it.
-    memory_reservation_size: usize,
-    // The maximum size, in bytes, of each linear memory. Guaranteed to be a
-    // whole number of wasm pages.
-    max_memory_size: usize,
+    // The size, in bytes, of each linear memory's reservation, not including
+    // any guard region.
+    memory_size: usize,
+    // The size, in bytes, of each linear memory's reservation plus the trailing
+    // guard region allocated for it.
+    memory_and_guard_size: usize,
+    // The maximum size that can become accessible, in bytes, of each linear
+    // memory. Guaranteed to be a whole number of wasm pages.
+    max_accessible: usize,
     // The size, in bytes, of the offset to the first linear memory in this
     // pool. This is here to help account for the first region of guard pages,
     // if desired, before the first linear memory.
@@ -605,29 +641,25 @@ impl MemoryPool {
             );
         }
 
-        // The maximum module memory page count cannot exceed the memory reservation size
-        if u64::from(instance_limits.memory_pages) > tunables.static_memory_bound {
-            bail!(
-                "module memory page limit of {} pages exceeds maximum static memory limit of {} pages",
-                instance_limits.memory_pages,
-                tunables.static_memory_bound,
-            );
-        }
+        // Interpret the larger of the maximal size of memory or the static
+        // memory bound as the size of the virtual address space reservation for
+        // memory itself. Typically `static_memory_bound` is 4G which helps
+        // elide most bounds checks in wasm. If `memory_pages` is larger,
+        // though, then this is a non-moving pooling allocator so create larger
+        // reservations for account for that.
+        let memory_size = instance_limits
+            .memory_pages
+            .max(tunables.static_memory_bound)
+            * u64::from(WASM_PAGE_SIZE);
 
-        let memory_size = if instance_limits.memory_pages > 0 {
-            usize::try_from(
-                u64::from(tunables.static_memory_bound) * u64::from(WASM_PAGE_SIZE)
-                    + tunables.static_memory_offset_guard_size,
-            )
-            .map_err(|_| anyhow!("memory reservation size exceeds addressable memory"))?
-        } else {
-            0
-        };
+        let memory_and_guard_size =
+            usize::try_from(memory_size + tunables.static_memory_offset_guard_size)
+                .map_err(|_| anyhow!("memory reservation size exceeds addressable memory"))?;
 
         assert!(
-            memory_size % crate::page_size() == 0,
+            memory_and_guard_size % crate::page_size() == 0,
             "memory size {} is not a multiple of system page size",
-            memory_size
+            memory_and_guard_size
         );
 
         let max_instances = instance_limits.count as usize;
@@ -651,7 +683,7 @@ impl MemoryPool {
         // `initial_memory_offset` variable here. If guards aren't specified
         // before linear memories this is set to `0`, otherwise it's set to
         // the same size as guard regions for other memories.
-        let allocation_size = memory_size
+        let allocation_size = memory_and_guard_size
             .checked_mul(max_memories)
             .and_then(|c| c.checked_mul(max_instances))
             .and_then(|c| c.checked_add(initial_memory_offset))
@@ -675,11 +707,12 @@ impl MemoryPool {
         let pool = Self {
             mapping,
             image_slots,
-            memory_reservation_size: memory_size,
+            memory_size: memory_size.try_into().unwrap(),
+            memory_and_guard_size,
             initial_memory_offset,
             max_memories,
             max_instances,
-            max_memory_size: (instance_limits.memory_pages as usize) * (WASM_PAGE_SIZE as usize),
+            max_accessible: (instance_limits.memory_pages as usize) * (WASM_PAGE_SIZE as usize),
         };
 
         Ok(pool)
@@ -690,7 +723,7 @@ impl MemoryPool {
         let memory_index = memory_index.as_u32() as usize;
         assert!(memory_index < self.max_memories);
         let idx = instance_index * self.max_memories + memory_index;
-        let offset = self.initial_memory_offset + idx * self.memory_reservation_size;
+        let offset = self.initial_memory_offset + idx * self.memory_and_guard_size;
         unsafe { self.mapping.as_mut_ptr().offset(offset as isize) }
     }
 
@@ -713,7 +746,7 @@ impl MemoryPool {
             MemoryImageSlot::create(
                 self.get_base(instance_index, memory_index) as *mut c_void,
                 0,
-                self.max_memory_size,
+                self.max_accessible,
             )
         })
     }
@@ -1061,13 +1094,6 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         Ok(())
     }
 
-    fn adjust_tunables(&self, tunables: &mut Tunables) {
-        // Treat the static memory bound as the maximum for unbounded Wasm memories
-        // Because we guarantee a module cannot compile unless it fits in the limits of
-        // the pool allocator, this ensures all memories are treated as static (i.e. immovable).
-        tunables.static_memory_bound_is_maximum = true;
-    }
-
     unsafe fn allocate(
         &self,
         req: InstanceAllocationRequest,
@@ -1265,10 +1291,10 @@ mod test {
             },
         )?;
 
-        assert_eq!(pool.memory_reservation_size, WASM_PAGE_SIZE as usize);
+        assert_eq!(pool.memory_and_guard_size, WASM_PAGE_SIZE as usize);
         assert_eq!(pool.max_memories, 3);
         assert_eq!(pool.max_instances, 5);
-        assert_eq!(pool.max_memory_size, WASM_PAGE_SIZE as usize);
+        assert_eq!(pool.max_accessible, WASM_PAGE_SIZE as usize);
 
         let base = pool.mapping.as_ptr() as usize;
 
@@ -1278,7 +1304,7 @@ mod test {
             for j in 0..3 {
                 assert_eq!(
                     iter.next().unwrap() as usize - base,
-                    ((i * 3) + j) * pool.memory_reservation_size
+                    ((i * 3) + j) * pool.memory_and_guard_size
                 );
             }
 
@@ -1454,19 +1480,16 @@ mod test {
             },
             ..PoolingInstanceAllocatorConfig::default()
         };
-        assert_eq!(
-            PoolingInstanceAllocator::new(
-                &config,
-                &Tunables {
-                    static_memory_bound: 1,
-                    static_memory_offset_guard_size: 0,
-                    ..Tunables::default()
-                },
-            )
-            .map_err(|e| e.to_string())
-            .expect_err("expected a failure constructing instance allocator"),
-            "module memory page limit of 2 pages exceeds maximum static memory limit of 1 pages"
-        );
+        let pool = PoolingInstanceAllocator::new(
+            &config,
+            &Tunables {
+                static_memory_bound: 1,
+                static_memory_offset_guard_size: 0,
+                ..Tunables::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(pool.instances.memories.memory_size, 2 * 65536);
     }
 
     #[cfg(all(unix, target_pointer_width = "64", feature = "async"))]
