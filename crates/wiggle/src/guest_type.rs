@@ -92,14 +92,13 @@ macro_rules! integer_primitives {
                     return Err(GuestError::PtrBorrowed(region));
                 }
                 // If the accessed memory is shared, we need to load the bytes
-                // with the correct memory consistency.
-                let value = if ptr.mem().is_shared_memory() {
-                    let atomic_value_ref: &$ty_atomic = unsafe { &*(host_ptr as *mut $ty as *const $ty_atomic) };
-                    $ty::from_le(atomic_value_ref.load(Ordering::Relaxed))
-                } else {
-                    unsafe { <$ty>::from_le_bytes(*host_ptr.cast::<[u8; mem::size_of::<Self>()]>()) }
-                };
-                Ok(value)
+                // with the correct memory consistency. We could check if the
+                // memory is shared each time, but we expect little performance
+                // difference between an additional branch and a relaxed memory
+                // access and thus always do the relaxed access here.
+                let atomic_value_ref: &$ty_atomic =
+                    unsafe { &*(host_ptr as *mut $ty as *const $ty_atomic) };
+                Ok($ty::from_le(atomic_value_ref.load(Ordering::Relaxed)))
             }
 
             #[inline]
@@ -119,15 +118,13 @@ macro_rules! integer_primitives {
                     return Err(GuestError::PtrBorrowed(region));
                 }
                 // If the accessed memory is shared, we need to load the bytes
-                // with the correct memory consistency.
-                if ptr.mem().is_shared_memory() {
-                    let atomic_value_ref: &$ty_atomic = unsafe { &*(host_ptr as *mut $ty as *const $ty_atomic) };
-                    atomic_value_ref.store(val.to_le(), Ordering::Relaxed)
-                } else {
-                    unsafe {
-                        *host_ptr.cast::<[u8; mem::size_of::<Self>()]>() = <$ty>::to_le_bytes(val);
-                    }
-                }
+                // with the correct memory consistency. We could check if the
+                // memory is shared each time, but we expect little performance
+                // difference between an additional branch and a relaxed memory
+                // access and thus always do the relaxed access here.
+                let atomic_value_ref: &$ty_atomic =
+                    unsafe { &*(host_ptr as *mut $ty as *const $ty_atomic) };
+                atomic_value_ref.store(val.to_le(), Ordering::Relaxed);
                 Ok(())
             }
         }
@@ -172,15 +169,14 @@ macro_rules! float_primitives {
                     return Err(GuestError::PtrBorrowed(region));
                 }
                 // If the accessed memory is shared, we need to load the bytes
-                // with the correct memory consistency.
-                let value = if ptr.mem().is_shared_memory() {
-                    let atomic_value_ref: &$ty_atomic = unsafe { &*(host_ptr as *mut $ty as *const $ty_atomic) };
-                    let value = $ty_unsigned::from_le(atomic_value_ref.load(Ordering::Relaxed));
-                    $ty::from_bits(value)
-                } else {
-                    unsafe { <$ty>::from_le_bytes(*host_ptr.cast::<[u8; mem::size_of::<Self>()]>()) }
-                };
-                Ok(value)
+                // with the correct memory consistency. We could check if the
+                // memory is shared each time, but we expect little performance
+                // difference between an additional branch and a relaxed memory
+                // access and thus always do the relaxed access here.
+                let atomic_value_ref: &$ty_atomic =
+                    unsafe { &*(host_ptr as *mut $ty as *const $ty_atomic) };
+                let value = $ty_unsigned::from_le(atomic_value_ref.load(Ordering::Relaxed));
+                Ok($ty::from_bits(value))
             }
 
             #[inline]
@@ -200,16 +196,14 @@ macro_rules! float_primitives {
                     return Err(GuestError::PtrBorrowed(region));
                 }
                 // If the accessed memory is shared, we need to load the bytes
-                // with the correct memory consistency.
-                if ptr.mem().is_shared_memory() {
-                    let atomic_value_ref: &$ty_atomic = unsafe { &*(host_ptr as *mut $ty as *const $ty_atomic) };
-                    let le_value = $ty_unsigned::to_le(val.to_bits());
-                    atomic_value_ref.store(le_value, Ordering::Relaxed)
-                } else {
-                    unsafe {
-                        *host_ptr.cast::<[u8; mem::size_of::<Self>()]>() = <$ty>::to_le_bytes(val);
-                    }
-                }
+                // with the correct memory consistency. We could check if the
+                // memory is shared each time, but we expect little performance
+                // difference between an additional branch and a relaxed memory
+                // access and thus always do the relaxed access here.
+                let atomic_value_ref: &$ty_atomic =
+                    unsafe { &*(host_ptr as *mut $ty as *const $ty_atomic) };
+                let le_value = $ty_unsigned::to_le(val.to_bits());
+                atomic_value_ref.store(le_value, Ordering::Relaxed);
                 Ok(())
             }
         }
