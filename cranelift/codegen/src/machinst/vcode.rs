@@ -24,6 +24,7 @@ use crate::ir::{self, types, Constant, ConstantData, DynamicStackSlot, LabelValu
 use crate::machinst::*;
 use crate::timing;
 use crate::trace;
+use crate::CodegenError;
 use crate::ValueLocRange;
 use regalloc2::{
     Edit, Function as RegallocFunction, InstOrEdit, InstRange, Operand, OperandKind, PReg, PRegSet,
@@ -62,9 +63,6 @@ impl<I: MachInst + MachInstEmit> VCodeInst for I {}
 pub struct VCode<I: VCodeInst> {
     /// VReg IR-level types.
     vreg_types: Vec<Type>,
-
-    /// Do we have any ref values among our vregs?
-    have_ref_values: bool,
 
     /// Lowered machine instructions in order corresponding to the original IR.
     insts: Vec<I>,
@@ -168,10 +166,6 @@ pub struct VCode<I: VCodeInst> {
     /// these in a dense slice (as opposed to querying the
     /// reftype-status of each vreg) for efficient iteration.
     reftyped_vregs: Vec<VReg>,
-
-    /// A set with the same contents as `reftyped_vregs`, in order to
-    /// avoid inserting more than once.
-    reftyped_vregs_set: FxHashSet<VReg>,
 
     /// Constants.
     constants: VCodeConstants,
@@ -332,28 +326,6 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         &self.vcode.block_order
     }
 
-    /// Set the type of a VReg.
-    pub fn set_vreg_type(&mut self, vreg: VirtualReg, ty: Type) {
-        if self.vcode.vreg_types.len() <= vreg.index() {
-            self.vcode
-                .vreg_types
-                .resize(vreg.index() + 1, ir::types::I8);
-        }
-        self.vcode.vreg_types[vreg.index()] = ty;
-        if is_reftype(ty) {
-            let vreg: VReg = vreg.into();
-            if self.vcode.reftyped_vregs_set.insert(vreg) {
-                self.vcode.reftyped_vregs.push(vreg);
-            }
-            self.vcode.have_ref_values = true;
-        }
-    }
-
-    /// Get the type of a VReg.
-    pub fn get_vreg_type(&self, vreg: VirtualReg) -> Type {
-        self.vcode.vreg_types[vreg.index()]
-    }
-
     /// Set the current block as the entry block.
     pub fn set_entry(&mut self, block: BlockIndex) {
         self.vcode.entry = block;
@@ -390,8 +362,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         self.branch_block_arg_succ_start = branch_block_arg_succ_end;
     }
 
-    pub fn add_block_param(&mut self, param: VirtualReg, ty: Type) {
-        self.set_vreg_type(param, ty);
+    pub fn add_block_param(&mut self, param: VirtualReg) {
         self.vcode.block_params.push(param.into());
     }
 
@@ -615,7 +586,10 @@ impl<I: VCodeInst> VCodeBuilder<I> {
     }
 
     /// Build the final VCode.
-    pub fn build(mut self) -> VCode<I> {
+    pub fn build(mut self, vregs: VRegAllocator<I>) -> VCode<I> {
+        self.vcode.vreg_types = vregs.vreg_types;
+        self.vcode.reftyped_vregs = vregs.reftyped_vregs;
+
         if self.direction == VCodeBuildDirection::Backward {
             self.reverse_and_finalize();
         }
@@ -658,7 +632,6 @@ impl<I: VCodeInst> VCode<I> {
         VCode {
             sigs,
             vreg_types: vec![],
-            have_ref_values: false,
             insts: Vec::with_capacity(10 * n_blocks),
             operands: Vec::with_capacity(30 * n_blocks),
             operand_ranges: Vec::with_capacity(10 * n_blocks),
@@ -679,7 +652,6 @@ impl<I: VCodeInst> VCode<I> {
             abi,
             emit_info,
             reftyped_vregs: vec![],
-            reftyped_vregs_set: FxHashSet::default(),
             constants,
             debug_value_labels: vec![],
             vreg_aliases: FxHashMap::with_capacity_and_hasher(10 * n_blocks, Default::default()),
@@ -1374,6 +1346,77 @@ impl<I: VCodeInst> fmt::Debug for VCode<I> {
 
         writeln!(f, "}}")?;
         Ok(())
+    }
+}
+
+/// This structure manages VReg allocation during the lifetime of the VCodeBuilder.
+pub struct VRegAllocator<I> {
+    /// Next virtual register number to allocate.
+    next_vreg: usize,
+
+    /// VReg IR-level types.
+    vreg_types: Vec<Type>,
+
+    /// A set with the same contents as `reftyped_vregs`, in order to
+    /// avoid inserting more than once.
+    reftyped_vregs_set: FxHashSet<VReg>,
+
+    /// Reference-typed `regalloc2::VReg`s. The regalloc requires
+    /// these in a dense slice (as opposed to querying the
+    /// reftype-status of each vreg) for efficient iteration.
+    reftyped_vregs: Vec<VReg>,
+
+    /// The type of instruction that this allocator makes registers for.
+    _inst: core::marker::PhantomData<I>,
+}
+
+impl<I: VCodeInst> VRegAllocator<I> {
+    /// Make a new VRegAllocator.
+    pub fn new() -> Self {
+        Self {
+            next_vreg: first_user_vreg_index(),
+            vreg_types: vec![],
+            reftyped_vregs_set: FxHashSet::default(),
+            reftyped_vregs: vec![],
+            _inst: core::marker::PhantomData::default(),
+        }
+    }
+
+    /// Allocate a fresh ValueRegs.
+    pub fn alloc(&mut self, ty: Type) -> CodegenResult<ValueRegs<Reg>> {
+        let v = self.next_vreg;
+        let (regclasses, tys) = I::rc_for_type(ty)?;
+        self.next_vreg += regclasses.len();
+        if self.next_vreg >= VReg::MAX {
+            return Err(CodegenError::CodeTooLarge);
+        }
+
+        let regs: ValueRegs<Reg> = match regclasses {
+            &[rc0] => ValueRegs::one(VReg::new(v, rc0).into()),
+            &[rc0, rc1] => ValueRegs::two(VReg::new(v, rc0).into(), VReg::new(v + 1, rc1).into()),
+            // We can extend this if/when we support 32-bit targets; e.g.,
+            // an i128 on a 32-bit machine will need up to four machine regs
+            // for a `Value`.
+            _ => panic!("Value must reside in 1 or 2 registers"),
+        };
+        for (&reg_ty, &reg) in tys.iter().zip(regs.regs().iter()) {
+            self.set_vreg_type(reg.to_virtual_reg().unwrap(), reg_ty);
+        }
+        Ok(regs)
+    }
+
+    /// Set the type of this virtual register.
+    pub fn set_vreg_type(&mut self, vreg: VirtualReg, ty: Type) {
+        if self.vreg_types.len() <= vreg.index() {
+            self.vreg_types.resize(vreg.index() + 1, ir::types::I8);
+        }
+        self.vreg_types[vreg.index()] = ty;
+        if is_reftype(ty) {
+            let vreg: VReg = vreg.into();
+            if self.reftyped_vregs_set.insert(vreg) {
+                self.reftyped_vregs.push(vreg);
+            }
+        }
     }
 }
 
