@@ -2,16 +2,17 @@
 use crate::error::{Error, Source, Span};
 use crate::lexer::Pos;
 use crate::sema::{self, RuleVisitor};
+use crate::DisjointSets;
 use std::collections::{hash_map::Entry, HashMap};
 
 /// A field index in a tuple or an enum variant.
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct TupleIndex(u8);
 /// A hash-consed identifier for a binding, stored in a [RuleSet].
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct BindingId(u16);
 /// A hash-consed identifier for an expression, stored in a [RuleSet].
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ExprId(u16);
 
 impl BindingId {
@@ -113,10 +114,8 @@ pub struct Rule {
     /// All of these bindings must match for this rule to apply. Note that within a single rule, if
     /// a binding site must match two different constants, then the rule can never match.
     pub constraints: HashMap<BindingId, Constraint>,
-    /// If (a, b) is in this map, then binding sites `a` and `b` must be equal for this rule to
-    /// match. As an additional invariant, these pairs must form a circularly-linked list for each
-    /// equivalence class, so we can find all the binding sites in that class given any one of them.
-    pub equals: HashMap<BindingId, BindingId>,
+    /// Sets of bindings which must be equal for this rule to match.
+    pub equals: DisjointSets<BindingId>,
     /// If other rules apply along with this one, the one with the highest numeric priority is
     /// evaluated. If multiple applicable rules have the same priority, that's an overlap error.
     pub prio: i64,
@@ -241,30 +240,6 @@ impl Rule {
         }
         Ok(())
     }
-
-    /// Add `b` into the equivalence class of `a`. The caller must call this function a second time
-    /// to also add `a` into the equivalence class of `b`.
-    fn set_equal(&mut self, a: BindingId, b: BindingId) {
-        match self.equals.entry(a) {
-            Entry::Vacant(entry) => {
-                entry.insert(b);
-            }
-            Entry::Occupied(entry) => {
-                // This binding site was already part of an equivalence class. Find the element of
-                // the circular linked list that points back to this binding site and make it point
-                // to `b` instead.
-                let mut cur = *entry.get();
-                loop {
-                    let next = self.equals.get_mut(&cur).unwrap();
-                    if *next == a {
-                        *next = b;
-                        break;
-                    }
-                    cur = *next;
-                }
-            }
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -336,9 +311,9 @@ impl RuleSetBuilder {
         // put them back later, but we rely on still having them around so that
         // `set_constraint_or_error` can detect conflicting constraints.
         let mut deferred_constraints = Vec::new();
-        for binding in self.current_rule.equals.keys() {
-            if let Some(constraint) = self.current_rule.constraints.get(binding) {
-                deferred_constraints.push((*binding, *constraint));
+        for (&binding, &constraint) in self.current_rule.constraints.iter() {
+            if let Some(root) = self.current_rule.equals.find_mut(binding) {
+                deferred_constraints.push((root, constraint));
             }
         }
 
@@ -347,45 +322,7 @@ impl RuleSetBuilder {
         // redundant constraints on an equivalence class were equal. We can write equal values into
         // the constraint map in any order and get the same result. If there were errors, we aren't
         // going to generate code from this rule, so order only affects how conflicts are reported.
-        while let Some((mut current, constraint)) = deferred_constraints.pop() {
-            /// If we need to push equalities inside an enum variant constraint, then we're going to
-            /// create a bunch of new binding sites and set groups of them equal to each other. This
-            /// structure tracks the last-introduced binding site for a single field of the enum
-            /// variant, so we can add the next binding site for that field into the same
-            /// equivalence class.
-            struct PendingBinding {
-                binding: BindingId,
-                variant: sema::VariantId,
-                field: TupleIndex,
-            }
-
-            let mut pending_bindings = match constraint {
-                // Create the initial binding site for each field of the enum variant. Since the
-                // initial value of `binding` is the binding site that already had `constraint` on
-                // it, these binding sites may already exist.
-                Constraint::Variant(fields, _, variant) => (0..fields.0)
-                    .map(TupleIndex)
-                    .map(|field| PendingBinding {
-                        binding: self.dedup_binding(Binding::Variant {
-                            source: current,
-                            variant,
-                            field,
-                        }),
-                        variant,
-                        field,
-                    })
-                    .collect(),
-
-                // These constraints don't introduce new binding sites.
-                Constraint::ConstInt(_) | Constraint::ConstPrim(_) => Vec::new(),
-
-                // Currently, `Some` constraints are only introduced implicitly during the
-                // translation from `sema`, so there's no way to set the corresponding binding sites
-                // equal to each other. Instead, any equality constraints get applied on the results
-                // of matching `Some()` or tuple patterns.
-                Constraint::Some => unreachable!(),
-            };
-
+        while let Some((current, constraint)) = deferred_constraints.pop() {
             // Remove the entire equivalence class and instead add copies of this constraint to
             // every binding site in the class. If there are constraints on other binding sites in
             // this class, then when we try to copy this constraint to those binding sites,
@@ -393,57 +330,70 @@ impl RuleSetBuilder {
             // appropriate error otherwise.
             //
             // Later, we'll re-visit those other binding sites because they're still in
-            // `deferred_constraints`, but this loop won't run because we already deleted the
+            // `deferred_constraints`, but `set` will be empty because we already deleted the
             // equivalence class the first time we encountered it.
-            //
-            // In each iteration of this loop, `current` is a binding site in this equivalence class
-            // that points to `next` as another binding site in the same equivalence class. On the
-            // last iteration, `next` points back to the binding site we started from, so we'll look
-            // up the same binding sites we created before entering the loop.
-            while let Some(next) = self.current_rule.equals.remove(&current) {
-                // Copy the constraint to each binding site in the equivalence class.
-                self.set_constraint_or_error(current, constraint);
+            let set = self.current_rule.equals.remove_set_of(current);
+            for &binding in set.iter() {
+                self.set_constraint_or_error(binding, constraint);
+            }
 
-                // If this is an enum variant constraint, then loop over the fields. There was a
-                // link from `current` to `next`, so for each field we want to create a
-                // corresponding link from `current_field` to `next_field`.
-                for &mut PendingBinding {
-                    binding: ref mut current_field,
-                    variant,
-                    field,
-                } in pending_bindings.iter_mut()
-                {
-                    // We have the binding site for `current_field` from the previous iteration of
-                    // the parent loop so now we need to create one for `next_field`.
-                    let next_field = self.dedup_binding(Binding::Variant {
-                        source: next,
-                        variant,
-                        field,
-                    });
+            match (constraint, set.split_first()) {
+                // If the equivalence class was empty we don't have to do anything.
+                (_, None) => {}
 
-                    // Link the two fields into the same equivalence class.
-                    // FIXME: think about what to do if `current_field` already has an equality constraint
-                    if let Some(_old) = self.current_rule.equals.insert(*current_field, next_field)
-                    {
-                        todo!();
+                // If we removed an equivalence class with an enum variant constraint, make the
+                // fields of the variant equal instead. Create a binding for every field of every
+                // member of `set`. Arbitrarily pick one to set all the others equal to.
+                (Constraint::Variant(fields, _, variant), Some((&base, rest))) => {
+                    let base_fields =
+                        self.field_bindings(base, fields, variant, &mut deferred_constraints);
+                    for &binding in rest {
+                        for (&x, &y) in self
+                            .field_bindings(binding, fields, variant, &mut deferred_constraints)
+                            .iter()
+                            .zip(base_fields.iter())
+                        {
+                            self.current_rule.equals.merge(x, y);
+                        }
                     }
-
-                    // We've just added an equality constraint to a binding site that may not have
-                    // had one already. If that binding site already had a concrete constraint, then
-                    // we need to "recursively" propagate that constraint through the new
-                    // equivalence class too.
-                    if let Some(constraint) = self.current_rule.constraints.get(current_field) {
-                        deferred_constraints.push((*current_field, *constraint));
-                    }
-
-                    // Remember this binding site for the next iteration of the parent loop.
-                    *current_field = next_field;
                 }
 
-                // At this point, `current` is fully normalized.
-                current = next;
+                // These constraints don't introduce new binding sites.
+                (Constraint::ConstInt(_) | Constraint::ConstPrim(_), _) => {}
+
+                // Currently, `Some` constraints are only introduced implicitly during the
+                // translation from `sema`, so there's no way to set the corresponding binding
+                // sites equal to each other. Instead, any equality constraints get applied on
+                // the results of matching `Some()` or tuple patterns.
+                (Constraint::Some, _) => unreachable!(),
             }
         }
+    }
+
+    fn field_bindings(
+        &mut self,
+        binding: BindingId,
+        fields: TupleIndex,
+        variant: sema::VariantId,
+        deferred_constraints: &mut Vec<(BindingId, Constraint)>,
+    ) -> Box<[BindingId]> {
+        (0..fields.0)
+            .map(TupleIndex)
+            .map(move |field| {
+                let binding = self.dedup_binding(Binding::Variant {
+                    source: binding,
+                    variant,
+                    field,
+                });
+                // We've just added an equality constraint to a binding site that may not have had
+                // one already. If that binding site already had a concrete constraint, then we need
+                // to "recursively" propagate that constraint through the new equivalence class too.
+                if let Some(&constraint) = self.current_rule.constraints.get(&binding) {
+                    deferred_constraints.push((binding, constraint));
+                }
+                binding
+            })
+            .collect()
     }
 
     fn dedup_binding(&mut self, binding: Binding) -> BindingId {
@@ -489,8 +439,7 @@ impl sema::PatternVisitor for RuleSetBuilder {
         let b = self.dedup_binding(b);
         // If both bindings represent the same binding site, they're implicitly equal.
         if a != b {
-            self.current_rule.set_equal(a, b);
-            self.current_rule.set_equal(b, a);
+            self.current_rule.equals.merge(a, b);
         }
     }
 
