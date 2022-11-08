@@ -100,6 +100,11 @@ int main() {
     wasmtime_val_t results[1];
     error = wasmtime_func_call(context, &fib.of.func, params, 1, results, 1, &trap);
     if (error != NULL || trap != NULL) {
+      if (trap != NULL) {
+        wasmtime_trap_code_t code;
+        assert(wasmtime_trap_code(trap, &code));
+        assert(code == WASMTIME_TRAP_CODE_OUT_OF_FUEL);
+      }
       printf("Exhausted fuel computing fib(%d)\n", n);
       break;
     }
