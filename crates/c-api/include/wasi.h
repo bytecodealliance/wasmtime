@@ -51,7 +51,6 @@ WASI_DECLARE_OWN(config)
  * `std::io::Read::read` returns Ok(0), while `read_exact` returns Err
  * 
  * It is safe to move a #wasi_read_pipe_t to any thread at any time.
- * However concurrent interactions may lock.
  *
  * \fn void wasi_read_pipe_delete(wasi_read_pipe_t *);
  * \brief Deletes a read pipe.
@@ -71,7 +70,6 @@ WASI_DECLARE_OWN(read_pipe)
  * Therefore `println!` will panic.
  * 
  * It is safe to move a #wasi_write_pipe_t to any thread at any time.
- * However concurrent interactions may lock.
  *
  * \fn void wasi_write_pipe_delete(wasi_write_pipe_t *);
  * \brief Deletes a read pipe.
@@ -245,7 +243,7 @@ WASM_API_EXTERN size_t wasi_read_pipe_len(const wasi_read_pipe_t* read_pipe);
  * `buf` is a memory slice of `buf_len` bytes.
  * Returns the number of bytes written to `buf`. 0 if the pipe is empty.
  */
-WASM_API_EXTERN size_t wasi_read_pipe_read(wasi_read_pipe_t* read_pipe, byte_t* buf, size_t buf_len);
+WASM_API_EXTERN size_t wasi_read_pipe_read(wasi_read_pipe_t* read_pipe, void* buf, size_t buf_len);
 
 /**
  * \brief Writes to a pipe from a vector of bytes.
@@ -253,7 +251,7 @@ WASM_API_EXTERN size_t wasi_read_pipe_read(wasi_read_pipe_t* read_pipe, byte_t* 
  * `buf` is a memory slice of `buf_len` bytes.
  * Returns the number of bytes read form `buf`. 0 if the pipe reached its capacity.
  */
-WASM_API_EXTERN size_t wasi_write_pipe_write(wasi_write_pipe_t* write_pipe, const byte_t* buf, size_t buf_len);
+WASM_API_EXTERN size_t wasi_write_pipe_write(wasi_write_pipe_t* write_pipe, const void* buf, size_t buf_len);
 
 #undef own
 
