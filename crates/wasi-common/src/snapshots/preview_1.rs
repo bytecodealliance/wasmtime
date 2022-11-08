@@ -521,14 +521,16 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .get_file_mut(u32::from(fd))?
             .get_cap_mut(FileCaps::READ)?;
 
-        let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> = iovs
-            .iter()
-            .map(|iov_ptr| {
-                let iov_ptr = iov_ptr?;
-                let iov: types::Iovec = iov_ptr.read()?;
-                Ok(iov.buf.as_array(iov.buf_len).as_slice_mut()?)
-            })
-            .collect::<Result<_, Error>>()?;
+        let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> =
+            iovs.iter()
+                .map(|iov_ptr| {
+                    let iov_ptr = iov_ptr?;
+                    let iov: types::Iovec = iov_ptr.read()?;
+                    Ok(iov.buf.as_array(iov.buf_len).as_slice_mut()?.expect(
+                        "cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)",
+                    ))
+                })
+                .collect::<Result<_, Error>>()?;
 
         let mut ioslices: Vec<IoSliceMut> = guest_slices
             .iter_mut()
@@ -550,14 +552,16 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .get_file_mut(u32::from(fd))?
             .get_cap_mut(FileCaps::READ | FileCaps::SEEK)?;
 
-        let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> = iovs
-            .iter()
-            .map(|iov_ptr| {
-                let iov_ptr = iov_ptr?;
-                let iov: types::Iovec = iov_ptr.read()?;
-                Ok(iov.buf.as_array(iov.buf_len).as_slice_mut()?)
-            })
-            .collect::<Result<_, Error>>()?;
+        let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> =
+            iovs.iter()
+                .map(|iov_ptr| {
+                    let iov_ptr = iov_ptr?;
+                    let iov: types::Iovec = iov_ptr.read()?;
+                    Ok(iov.buf.as_array(iov.buf_len).as_slice_mut()?.expect(
+                        "cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)",
+                    ))
+                })
+                .collect::<Result<_, Error>>()?;
 
         let mut ioslices: Vec<IoSliceMut> = guest_slices
             .iter_mut()
@@ -583,7 +587,11 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .map(|iov_ptr| {
                 let iov_ptr = iov_ptr?;
                 let iov: types::Ciovec = iov_ptr.read()?;
-                Ok(iov.buf.as_array(iov.buf_len).as_slice()?)
+                Ok(iov
+                    .buf
+                    .as_array(iov.buf_len)
+                    .as_slice()?
+                    .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)"))
             })
             .collect::<Result<_, Error>>()?;
 
@@ -612,7 +620,11 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .map(|iov_ptr| {
                 let iov_ptr = iov_ptr?;
                 let iov: types::Ciovec = iov_ptr.read()?;
-                Ok(iov.buf.as_array(iov.buf_len).as_slice()?)
+                Ok(iov
+                    .buf
+                    .as_array(iov.buf_len)
+                    .as_slice()?
+                    .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)"))
             })
             .collect::<Result<_, Error>>()?;
 
@@ -654,7 +666,10 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             if path_len < path_max_len as usize {
                 return Err(Error::name_too_long());
             }
-            let mut p_memory = path.as_array(path_len as u32).as_slice_mut()?;
+            let mut p_memory = path
+                .as_array(path_len as u32)
+                .as_slice_mut()?
+                .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
             p_memory.copy_from_slice(path_bytes);
             Ok(())
         } else {
@@ -948,7 +963,10 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         if link_len > buf_len as usize {
             return Err(Error::range());
         }
-        let mut buf = buf.as_array(link_len as u32).as_slice_mut()?;
+        let mut buf = buf
+            .as_array(link_len as u32)
+            .as_slice_mut()?
+            .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
         buf.copy_from_slice(link_bytes);
         Ok(link_len as types::Size)
     }
@@ -1236,7 +1254,10 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         buf: &GuestPtr<'a, u8>,
         buf_len: types::Size,
     ) -> Result<(), Error> {
-        let mut buf = buf.as_array(buf_len).as_slice_mut()?;
+        let mut buf = buf
+            .as_array(buf_len)
+            .as_slice_mut()?
+            .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
         self.random.try_fill_bytes(buf.deref_mut())?;
         Ok(())
     }
@@ -1273,14 +1294,17 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .get_file_mut(u32::from(fd))?
             .get_cap_mut(FileCaps::READ)?;
 
-        let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> = ri_data
-            .iter()
-            .map(|iov_ptr| {
-                let iov_ptr = iov_ptr?;
-                let iov: types::Iovec = iov_ptr.read()?;
-                Ok(iov.buf.as_array(iov.buf_len).as_slice_mut()?)
-            })
-            .collect::<Result<_, Error>>()?;
+        let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> =
+            ri_data
+                .iter()
+                .map(|iov_ptr| {
+                    let iov_ptr = iov_ptr?;
+                    let iov: types::Iovec = iov_ptr.read()?;
+                    Ok(iov.buf.as_array(iov.buf_len).as_slice_mut()?.expect(
+                        "cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)",
+                    ))
+                })
+                .collect::<Result<_, Error>>()?;
 
         let mut ioslices: Vec<IoSliceMut> = guest_slices
             .iter_mut()
@@ -1307,7 +1331,11 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .map(|iov_ptr| {
                 let iov_ptr = iov_ptr?;
                 let iov: types::Ciovec = iov_ptr.read()?;
-                Ok(iov.buf.as_array(iov.buf_len).as_slice()?)
+                Ok(iov
+                    .buf
+                    .as_array(iov.buf_len)
+                    .as_slice()?
+                    .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)"))
             })
             .collect::<Result<_, Error>>()?;
 

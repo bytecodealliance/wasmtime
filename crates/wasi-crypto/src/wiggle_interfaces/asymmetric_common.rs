@@ -39,7 +39,10 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
         kp_id_ptr: &wiggle::GuestPtr<'_, u8>,
         kp_id_max_len: guest_types::Size,
     ) -> Result<(), guest_types::CryptoErrno> {
-        let key_id_buf = &mut *kp_id_ptr.as_array(kp_id_max_len).as_slice_mut()?;
+        let key_id_buf = &mut *kp_id_ptr
+            .as_array(kp_id_max_len)
+            .as_slice_mut()?
+            .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
         Ok((&*self).keypair_store_managed(
             secrets_manager_handle.into(),
             kp_handle.into(),
@@ -69,7 +72,10 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
         kp_id_len: guest_types::Size,
         kp_version: guest_types::Version,
     ) -> Result<guest_types::Keypair, guest_types::CryptoErrno> {
-        let kp_id = &*kp_id_ptr.as_array(kp_id_len).as_slice()?;
+        let kp_id = &*kp_id_ptr
+            .as_array(kp_id_len)
+            .as_slice()?
+            .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
         Ok((&*self)
             .keypair_from_id(secrets_manager_handle.into(), kp_id, Version(kp_version))?
             .into())
@@ -102,7 +108,10 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
         encoding: guest_types::KeypairEncoding,
     ) -> Result<guest_types::Keypair, guest_types::CryptoErrno> {
         let alg_str = &*alg_str.as_str()?;
-        let encoded = &*encoded_ptr.as_array(encoded_len).as_slice()?;
+        let encoded = &*encoded_ptr
+            .as_array(encoded_len)
+            .as_slice()?
+            .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
         Ok((&*self)
             .keypair_import(alg_type.into(), alg_str, encoded, encoding.into())?
             .into())
@@ -114,7 +123,10 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
         kp_id_ptr: &wiggle::GuestPtr<'_, u8>,
         kp_id_max_len: guest_types::Size,
     ) -> Result<(guest_types::Size, guest_types::Version), guest_types::CryptoErrno> {
-        let kp_id_buf = &mut *kp_id_ptr.as_array(kp_id_max_len as _).as_slice_mut()?;
+        let kp_id_buf = &mut *kp_id_ptr
+            .as_array(kp_id_max_len as _)
+            .as_slice_mut()?
+            .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
         let (kp_id, version) = (&*self).keypair_id(kp_handle.into())?;
         ensure!(kp_id.len() <= kp_id_buf.len(), CryptoError::Overflow.into());
         kp_id_buf.copy_from_slice(&kp_id);
@@ -156,7 +168,10 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
         encoding: guest_types::PublickeyEncoding,
     ) -> Result<guest_types::Publickey, guest_types::CryptoErrno> {
         let alg_str = &*alg_str.as_str()?;
-        let encoded = &*encoded_ptr.as_array(encoded_len).as_slice()?;
+        let encoded = &*encoded_ptr
+            .as_array(encoded_len)
+            .as_slice()?
+            .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
         Ok((&*self)
             .publickey_import(alg_type.into(), alg_str, encoded, encoding.into())?
             .into())
@@ -204,7 +219,10 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
         encoding: guest_types::SecretkeyEncoding,
     ) -> Result<guest_types::Secretkey, guest_types::CryptoErrno> {
         let alg_str = &*alg_str.as_str()?;
-        let encoded = &*encoded_ptr.as_array(encoded_len).as_slice()?;
+        let encoded = &*encoded_ptr
+            .as_array(encoded_len)
+            .as_slice()?
+            .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
         Ok((&*self)
             .secretkey_import(alg_type.into(), alg_str, encoded, encoding.into())?
             .into())
