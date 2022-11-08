@@ -57,14 +57,8 @@ pub unsafe fn platform_init() {
         register(&mut PREV_SIGBUS, libc::SIGBUS);
     }
 
-    #[cfg(target_arch = "x86")]
-    {
-        compile_error!("x86-32 unsupported; may need SIGFPE handler registered");
-    }
-    #[cfg(target_arch = "arm")]
-    {
-        compile_error!("ARM32 unsupported; may need SIGBUS handler registered");
-    }
+    // TODO(#1980): x86-32, if we support it, will also need a SIGFPE handler.
+    // TODO(#1173): ARM32, if we support it, will also need a SIGBUS handler.
 }
 
 unsafe extern "C" fn trap_handler(
