@@ -176,9 +176,17 @@ pub fn build(
 
 impl Rule {
     /// Returns whether a given pair of rules can both match on some input, and if so, whether
-    /// either matches a subset of the other's inputs.
+    /// either matches a subset of the other's inputs. If this function returns `No`, then the two
+    /// rules definitely do not overlap. However, it may return `Yes` in cases where the rules can't
+    /// overlap in practice, or where this analysis is not yet precise enough to decide.
     pub fn may_overlap(&self, other: &Rule) -> Overlap {
-        // The outer loop needs to go over the rule with fewer constraints in order to correctly
+        // Two rules can't overlap if, for some binding site in the intersection of their
+        // constraints, the rules have different constraints: an input can't possibly match both
+        // rules then. If the rules do overlap, and one has a subset of the constraints of the
+        // other, then the less-constrained rule matches every input that the more-constrained rule
+        // matches, and possibly more. We test for both conditions at once, with the observation
+        // that if the intersection of two sets is equal to the smaller set, then it's a subset. So
+        // the outer loop needs to go over the rule with fewer constraints in order to correctly
         // identify if it's a subset of the other rule. Also, that way around is faster.
         let (small, big) = if self.constraints.len() <= other.constraints.len() {
             (self, other)
@@ -187,6 +195,11 @@ impl Rule {
         };
 
         // TODO: nonlinear constraints complicate the subset check
+        // For the purpose of overlap checking, equality constraints act like other constraints, in
+        // that they can cause rules to not overlap. However, because we don't have a concrete
+        // pattern to compare, the analysis to prove that is complicated. For now, we approximate
+        // the result. If `small` has any of these nonlinear constraints, conservatively report that
+        // it is not a subset of `big`.
         let mut subset = small.equals.is_empty();
 
         for (binding, a) in small.constraints.iter() {
