@@ -63,9 +63,9 @@ pub unsafe trait GuestTypeTransparent<'a>: GuestType<'a> {
     fn validate(ptr: *mut Self) -> Result<(), GuestError>;
 }
 
-macro_rules! primitives {
-    ($([$i:ident, $AtomicI:ident],)*) => ($(
-        impl<'a> GuestType<'a> for $i {
+macro_rules! integer_primitives {
+    ($([$ty:ident, $ty_atomic:ident],)*) => ($(
+        impl<'a> GuestType<'a> for $ty {
             fn guest_size() -> u32 { mem::size_of::<Self>() as u32 }
             fn guest_align() -> usize { mem::align_of::<Self>() }
 
@@ -94,14 +94,10 @@ macro_rules! primitives {
                 // If the accessed memory is shared, we need to load the bytes
                 // with the correct memory consistency.
                 let value = if ptr.mem().is_shared_memory() {
-                    let atomic_value_ref: &$AtomicI = unsafe { &*(host_ptr as *mut $i as *const $AtomicI) };
-                    let value = atomic_value_ref.load(Ordering::Relaxed);
-                    // For floating-point values, we must transmute from their
-                    // integer equivalent (see
-                    // https://doc.rust-lang.org/std/primitive.f32.html#method.to_bits).
-                    unsafe { std::mem::transmute::<_, $i>(value) }
+                    let atomic_value_ref: &$ty_atomic = unsafe { &*(host_ptr as *mut $ty as *const $ty_atomic) };
+                    $ty::from_le(atomic_value_ref.load(Ordering::Relaxed))
                 } else {
-                    unsafe { <$i>::from_le_bytes(*host_ptr.cast::<[u8; mem::size_of::<Self>()]>()) }
+                    unsafe { <$ty>::from_le_bytes(*host_ptr.cast::<[u8; mem::size_of::<Self>()]>()) }
                 };
                 Ok(value)
             }
@@ -125,24 +121,20 @@ macro_rules! primitives {
                 // If the accessed memory is shared, we need to load the bytes
                 // with the correct memory consistency.
                 if ptr.mem().is_shared_memory() {
-                    let atomic_value_ref: &$AtomicI = unsafe { &*(host_ptr as *mut $i as *const $AtomicI) };
-                    // For floating-point values, we must transmute to their
-                    // integer equivalent (see
-                    // https://doc.rust-lang.org/std/primitive.f32.html#method.to_bits).
-                    let val = unsafe { std::mem::transmute::<$i, _>(val) };
-                    atomic_value_ref.store(val, Ordering::Relaxed)
+                    let atomic_value_ref: &$ty_atomic = unsafe { &*(host_ptr as *mut $ty as *const $ty_atomic) };
+                    atomic_value_ref.store(val.to_le(), Ordering::Relaxed)
                 } else {
                     unsafe {
-                        *host_ptr.cast::<[u8; mem::size_of::<Self>()]>() = <$i>::to_le_bytes(val);
+                        *host_ptr.cast::<[u8; mem::size_of::<Self>()]>() = <$ty>::to_le_bytes(val);
                     }
                 }
                 Ok(())
             }
         }
 
-        unsafe impl<'a> GuestTypeTransparent<'a> for $i {
+        unsafe impl<'a> GuestTypeTransparent<'a> for $ty {
             #[inline]
-            fn validate(_ptr: *mut $i) -> Result<(), GuestError> {
+            fn validate(_ptr: *mut $ty) -> Result<(), GuestError> {
                 // All bit patterns are safe, nothing to do here
                 Ok(())
             }
@@ -151,13 +143,97 @@ macro_rules! primitives {
     )*)
 }
 
-primitives! {
+macro_rules! float_primitives {
+    ($([$ty:ident, $ty_unsigned:ident, $ty_atomic:ident],)*) => ($(
+        impl<'a> GuestType<'a> for $ty {
+            fn guest_size() -> u32 { mem::size_of::<Self>() as u32 }
+            fn guest_align() -> usize { mem::align_of::<Self>() }
+
+            #[inline]
+            fn read(ptr: &GuestPtr<'a, Self>) -> Result<Self, GuestError> {
+                // Any bit pattern for any primitive implemented with this
+                // macro is safe, so our `validate_size_align` method will
+                // guarantee that if we are given a pointer it's valid for the
+                // size of our type as well as properly aligned. Consequently we
+                // should be able to safely ready the pointer just after we
+                // validated it, returning it along here.
+                let offset = ptr.offset();
+                let size = Self::guest_size();
+                let host_ptr = ptr.mem().validate_size_align(
+                    offset,
+                    Self::guest_align(),
+                    size,
+                )?;
+                let region = Region {
+                    start: offset,
+                    len: size,
+                };
+                if ptr.mem().is_mut_borrowed(region) {
+                    return Err(GuestError::PtrBorrowed(region));
+                }
+                // If the accessed memory is shared, we need to load the bytes
+                // with the correct memory consistency.
+                let value = if ptr.mem().is_shared_memory() {
+                    let atomic_value_ref: &$ty_atomic = unsafe { &*(host_ptr as *mut $ty as *const $ty_atomic) };
+                    let value = $ty_unsigned::from_le(atomic_value_ref.load(Ordering::Relaxed));
+                    $ty::from_bits(value)
+                } else {
+                    unsafe { <$ty>::from_le_bytes(*host_ptr.cast::<[u8; mem::size_of::<Self>()]>()) }
+                };
+                Ok(value)
+            }
+
+            #[inline]
+            fn write(ptr: &GuestPtr<'_, Self>, val: Self) -> Result<(), GuestError> {
+                let offset = ptr.offset();
+                let size = Self::guest_size();
+                let host_ptr = ptr.mem().validate_size_align(
+                    offset,
+                    Self::guest_align(),
+                    size,
+                )?;
+                let region = Region {
+                    start: offset,
+                    len: size,
+                };
+                if ptr.mem().is_shared_borrowed(region) || ptr.mem().is_mut_borrowed(region) {
+                    return Err(GuestError::PtrBorrowed(region));
+                }
+                // If the accessed memory is shared, we need to load the bytes
+                // with the correct memory consistency.
+                if ptr.mem().is_shared_memory() {
+                    let atomic_value_ref: &$ty_atomic = unsafe { &*(host_ptr as *mut $ty as *const $ty_atomic) };
+                    let le_value = $ty_unsigned::to_le(val.to_bits());
+                    atomic_value_ref.store(le_value, Ordering::Relaxed)
+                } else {
+                    unsafe {
+                        *host_ptr.cast::<[u8; mem::size_of::<Self>()]>() = <$ty>::to_le_bytes(val);
+                    }
+                }
+                Ok(())
+            }
+        }
+
+        unsafe impl<'a> GuestTypeTransparent<'a> for $ty {
+            #[inline]
+            fn validate(_ptr: *mut $ty) -> Result<(), GuestError> {
+                // All bit patterns are safe, nothing to do here
+                Ok(())
+            }
+        }
+
+    )*)
+}
+
+integer_primitives! {
     // signed
     [i8, AtomicI8], [i16, AtomicI16], [i32, AtomicI32], [i64, AtomicI64],
     // unsigned
     [u8, AtomicU8], [u16, AtomicU16], [u32, AtomicU32], [u64, AtomicU64],
-    // floats
-    [f32, AtomicU32], [f64, AtomicU64],
+}
+
+float_primitives! {
+    [f32, u32, AtomicU32], [f64, u64, AtomicU64],
 }
 
 // Support pointers-to-pointers where pointers are always 32-bits in wasm land
