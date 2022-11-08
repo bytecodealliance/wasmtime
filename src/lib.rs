@@ -24,7 +24,8 @@ impl wasi_command::WasiCommand for Export {
     fn command(
         stdin: wasi_filesystem::Descriptor,
         stdout: wasi_filesystem::Descriptor, /* TODO add the environment Vec<(String, String)> */
-                                             /* TODO logging shouldnt be as ambient? */
+        /* TODO logging shouldnt be as ambient? */
+        args: Vec<Vec<u8>>,
     ) {
         *Descriptor::get(0) = Descriptor::File(File {
             fd: stdin,
@@ -35,12 +36,16 @@ impl wasi_command::WasiCommand for Export {
             position: 0,
         });
         *Descriptor::get(2) = Descriptor::Log;
-        /* TODO we need to be able to import the adaptee module's _start func somehow:
-         * this is probably a special case in wit-component
-        #[no_mangle]
-        extern "C" fn _start();
-        start()
-        */
+
+        // FIXME do something with the args. but definitely mem::forget them,
+        // because we dont want to Drop them - they arent allocated by the std allocator,
+        // they are allocated by the export_realloc
+        std::mem::forget(args);
+        #[link(wasm_import_module = "__main_module__")]
+        extern "C" {
+            fn _start();
+        }
+        unsafe { _start() }
     }
 }
 export_wasi_command!(Export);
@@ -82,7 +87,7 @@ unsafe fn register_buffer(buf: *mut u8, buf_len: usize) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn cabi_realloc(
+pub unsafe extern "C" fn cabi_import_realloc(
     old_ptr: *mut u8,
     old_size: usize,
     _align: usize,
@@ -100,6 +105,17 @@ pub unsafe extern "C" fn cabi_realloc(
         unreachable();
     }
     ptr
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn cabi_export_realloc(
+    old_ptr: *mut u8,
+    old_size: usize,
+    _align: usize,
+    new_size: usize,
+) -> *mut u8 {
+    // TODO implement a bump allocator in terms of memory.grow here
+    unreachable()
 }
 
 /// Read command-line argument data.
