@@ -526,7 +526,7 @@ impl Inst {
         }
     }
 
-    pub(crate) fn ret(rets: Vec<Reg>) -> Inst {
+    pub(crate) fn ret(rets: Vec<RetPair>) -> Inst {
         Inst::Ret { rets }
     }
 
@@ -2081,8 +2081,8 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         Inst::Ret { rets } => {
             // The return value(s) are live-out; we represent this
             // with register uses on the return instruction.
-            for &ret in rets {
-                collector.reg_use(ret);
+            for ret in rets.iter() {
+                collector.reg_fixed_use(ret.vreg, ret.preg);
             }
         }
 

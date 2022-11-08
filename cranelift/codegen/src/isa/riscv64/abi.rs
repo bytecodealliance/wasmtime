@@ -235,7 +235,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         Inst::Args { args }
     }
 
-    fn gen_ret(_setup_frame: bool, _isa_flags: &Self::F, rets: Vec<Reg>) -> Inst {
+    fn gen_ret(_setup_frame: bool, _isa_flags: &Self::F, rets: Vec<RetPair>) -> Inst {
         Inst::Ret { rets }
     }
 

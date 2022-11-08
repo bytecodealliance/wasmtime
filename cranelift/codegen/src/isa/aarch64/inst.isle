@@ -787,7 +787,7 @@
 
        ;; A machine return instruction.
        (Ret
-        (rets VecReg))
+        (rets VecRetPair))
 
        ;; A machine return instruction with pointer authentication using SP as the
        ;; modifier. This instruction requires pointer authentication support
@@ -797,7 +797,7 @@
        (AuthenticatedRet
         (key APIKey)
         (is_hint bool)
-        (rets VecReg))
+        (rets VecRetPair))
 
        ;; An unconditional branch.
        (Jump

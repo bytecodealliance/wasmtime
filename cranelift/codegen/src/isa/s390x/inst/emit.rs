@@ -3480,7 +3480,7 @@ impl Inst {
             }
 
             &Inst::Call { link, ref info } => {
-                let link = allocs.next_writable(link);
+                debug_assert_eq!(link.to_reg(), gpr(14));
 
                 // Add relocation for TLS libcalls to enable linker optimizations.
                 match &info.tls_symbol {
@@ -3509,7 +3509,7 @@ impl Inst {
                 }
             }
             &Inst::CallInd { link, ref info } => {
-                let link = allocs.next_writable(link);
+                debug_assert_eq!(link.to_reg(), gpr(14));
                 let rn = allocs.next(info.rn);
 
                 let opcode = 0x0d; // BASR
@@ -3523,7 +3523,7 @@ impl Inst {
             }
             &Inst::Args { .. } => {}
             &Inst::Ret { link, .. } => {
-                let link = allocs.next(link);
+                debug_assert_eq!(link, gpr(14));
 
                 let opcode = 0x07; // BCR
                 put(sink, &enc_rr(opcode, gpr(15), link));

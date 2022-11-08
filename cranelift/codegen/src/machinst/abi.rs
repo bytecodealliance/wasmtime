@@ -136,6 +136,17 @@ pub struct ArgPair {
     pub preg: Reg,
 }
 
+/// A type used by backends to track return register binding info in the "ret"
+/// pseudoinst. The pseudoinst holds a vec of `RetPair` structs.
+#[derive(Clone, Debug)]
+pub struct RetPair {
+    /// The vreg that is returned by this pseudionst.
+    pub vreg: Reg,
+    /// The preg that the arg is returned through; this constrains the vreg's
+    /// placement at the pseudoinst.
+    pub preg: Reg,
+}
+
 /// A location for (part of) an argument or return value. These "storage slots"
 /// are specified for each register-sized part of an argument.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -421,7 +432,7 @@ pub trait ABIMachineSpec {
     fn gen_args(isa_flags: &Self::F, args: Vec<ArgPair>) -> Self::I;
 
     /// Generate a return instruction.
-    fn gen_ret(setup_frame: bool, isa_flags: &Self::F, rets: Vec<Reg>) -> Self::I;
+    fn gen_ret(setup_frame: bool, isa_flags: &Self::F, rets: Vec<RetPair>) -> Self::I;
 
     /// Generate an add-with-immediate. Note that even if this uses a scratch
     /// register, it must satisfy two requirements:
@@ -1483,8 +1494,10 @@ impl<M: ABIMachineSpec> Callee<M> {
         &self,
         sigs: &SigSet,
         idx: usize,
-        from_regs: ValueRegs<Writable<Reg>>,
-    ) -> SmallInstVec<M::I> {
+        from_regs: ValueRegs<Reg>,
+        vregs: &mut VRegAllocator<M::I>,
+    ) -> (SmallVec<[RetPair; 2]>, SmallInstVec<M::I>) {
+        let mut reg_pairs = smallvec![];
         let mut ret = smallvec![];
         let word_bits = M::word_bits() as u8;
         match &sigs[self.sig].rets(sigs)[idx] {
@@ -1497,24 +1510,31 @@ impl<M: ABIMachineSpec> Callee<M> {
                         } => {
                             let from_bits = ty_bits(ty) as u8;
                             let ext = M::get_ext_mode(sigs[self.sig].call_conv, extension);
-                            let reg: Writable<Reg> = Writable::from_reg(Reg::from(reg));
-                            match (ext, from_bits) {
-                                (ArgumentExtension::Uext, n) | (ArgumentExtension::Sext, n)
+                            let vreg = match (ext, from_bits) {
+                                (ir::ArgumentExtension::Uext, n)
+                                | (ir::ArgumentExtension::Sext, n)
                                     if n < word_bits =>
                                 {
-                                    let signed = ext == ArgumentExtension::Sext;
+                                    let signed = ext == ir::ArgumentExtension::Sext;
+                                    let dst = writable_value_regs(vregs.alloc(ty).unwrap())
+                                        .only_reg()
+                                        .unwrap();
                                     ret.push(M::gen_extend(
-                                        reg,
-                                        from_reg.to_reg(),
-                                        signed,
-                                        from_bits,
+                                        dst, from_reg, signed, from_bits,
                                         /* to_bits = */ word_bits,
                                     ));
+                                    dst.to_reg()
                                 }
                                 _ => {
-                                    ret.push(M::gen_move(reg, from_reg.to_reg(), ty));
+                                    // No move needed, regalloc2 will emit it using the constraint
+                                    // added by the RetPair.
+                                    from_reg
                                 }
                             };
+                            reg_pairs.push(RetPair {
+                                vreg,
+                                preg: Reg::from(reg),
+                            });
                         }
                         &ABIArgSlot::Stack {
                             offset,
@@ -1533,16 +1553,17 @@ impl<M: ABIMachineSpec> Callee<M> {
                             let ext = M::get_ext_mode(sigs[self.sig].call_conv, extension);
                             // Trash the from_reg; it should be its last use.
                             match (ext, from_bits) {
-                                (ArgumentExtension::Uext, n) | (ArgumentExtension::Sext, n)
+                                (ir::ArgumentExtension::Uext, n)
+                                | (ir::ArgumentExtension::Sext, n)
                                     if n < word_bits =>
                                 {
-                                    assert_eq!(M::word_reg_class(), from_reg.to_reg().class());
-                                    let signed = ext == ArgumentExtension::Sext;
+                                    assert_eq!(M::word_reg_class(), from_reg.class());
+                                    let signed = ext == ir::ArgumentExtension::Sext;
+                                    let dst = writable_value_regs(vregs.alloc(ty).unwrap())
+                                        .only_reg()
+                                        .unwrap();
                                     ret.push(M::gen_extend(
-                                        Writable::from_reg(from_reg.to_reg()),
-                                        from_reg.to_reg(),
-                                        signed,
-                                        from_bits,
+                                        dst, from_reg, signed, from_bits,
                                         /* to_bits = */ word_bits,
                                     ));
                                     // Store the extended version.
@@ -1553,21 +1574,21 @@ impl<M: ABIMachineSpec> Callee<M> {
                             ret.push(M::gen_store_base_offset(
                                 self.ret_area_ptr.unwrap().to_reg(),
                                 off,
-                                from_reg.to_reg(),
+                                from_reg,
                                 ty,
                             ));
                         }
                     }
                 }
             }
-            &ABIArg::StructArg { .. } => {
+            ABIArg::StructArg { .. } => {
                 panic!("StructArg in return position is unsupported");
             }
-            &ABIArg::ImplicitPtrArg { .. } => {
+            ABIArg::ImplicitPtrArg { .. } => {
                 panic!("ImplicitPtrArg in return position is unsupported");
             }
         }
-        ret
+        (reg_pairs, ret)
     }
 
     /// Generate any setup instruction needed to save values to the
@@ -1594,22 +1615,7 @@ impl<M: ABIMachineSpec> Callee<M> {
     }
 
     /// Generate a return instruction.
-    pub fn gen_ret(&self, sigs: &SigSet) -> M::I {
-        let mut rets = vec![];
-        for ret in sigs[self.sig].rets(sigs) {
-            match ret {
-                ABIArg::Slots { slots, .. } => {
-                    for slot in slots {
-                        match slot {
-                            ABIArgSlot::Reg { reg, .. } => rets.push(Reg::from(*reg)),
-                            _ => {}
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-
+    pub fn gen_ret(&self, rets: Vec<RetPair>) -> M::I {
         M::gen_ret(self.setup_frame, &self.isa_flags, rets)
     }
 
