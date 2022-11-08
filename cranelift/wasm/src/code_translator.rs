@@ -91,7 +91,6 @@ use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_frontend::{FunctionBuilder, Variable};
 use itertools::Itertools;
 use smallvec::SmallVec;
-use std::cmp;
 use std::convert::TryFrom;
 use std::vec::Vec;
 use wasmparser::{FuncValidator, MemArg, Operator, WasmModuleResources};
@@ -697,33 +696,33 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             translate_load(memarg, ir::Opcode::Load, I8X16, builder, state, environ)?;
         }
         Operator::V128Load8x8S { memarg } => {
-            let (flags, base, offset) = prepare_addr(memarg, 8, builder, state, environ)?;
-            let loaded = builder.ins().sload8x8(flags, base, offset);
+            let (flags, base) = prepare_addr(memarg, 8, builder, state, environ)?;
+            let loaded = builder.ins().sload8x8(flags, base, 0);
             state.push1(loaded);
         }
         Operator::V128Load8x8U { memarg } => {
-            let (flags, base, offset) = prepare_addr(memarg, 8, builder, state, environ)?;
-            let loaded = builder.ins().uload8x8(flags, base, offset);
+            let (flags, base) = prepare_addr(memarg, 8, builder, state, environ)?;
+            let loaded = builder.ins().uload8x8(flags, base, 0);
             state.push1(loaded);
         }
         Operator::V128Load16x4S { memarg } => {
-            let (flags, base, offset) = prepare_addr(memarg, 8, builder, state, environ)?;
-            let loaded = builder.ins().sload16x4(flags, base, offset);
+            let (flags, base) = prepare_addr(memarg, 8, builder, state, environ)?;
+            let loaded = builder.ins().sload16x4(flags, base, 0);
             state.push1(loaded);
         }
         Operator::V128Load16x4U { memarg } => {
-            let (flags, base, offset) = prepare_addr(memarg, 8, builder, state, environ)?;
-            let loaded = builder.ins().uload16x4(flags, base, offset);
+            let (flags, base) = prepare_addr(memarg, 8, builder, state, environ)?;
+            let loaded = builder.ins().uload16x4(flags, base, 0);
             state.push1(loaded);
         }
         Operator::V128Load32x2S { memarg } => {
-            let (flags, base, offset) = prepare_addr(memarg, 8, builder, state, environ)?;
-            let loaded = builder.ins().sload32x2(flags, base, offset);
+            let (flags, base) = prepare_addr(memarg, 8, builder, state, environ)?;
+            let loaded = builder.ins().sload32x2(flags, base, 0);
             state.push1(loaded);
         }
         Operator::V128Load32x2U { memarg } => {
-            let (flags, base, offset) = prepare_addr(memarg, 8, builder, state, environ)?;
-            let loaded = builder.ins().uload32x2(flags, base, offset);
+            let (flags, base) = prepare_addr(memarg, 8, builder, state, environ)?;
+            let loaded = builder.ins().uload32x2(flags, base, 0);
             state.push1(loaded);
         }
         /****************************** Store instructions ***********************************
@@ -1067,8 +1066,13 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let heap = state.get_heap(builder.func, memarg.memory, environ)?;
             let timeout = state.pop1(); // 64 (fixed)
             let expected = state.pop1(); // 32 or 64 (per the `Ixx` in `IxxAtomicWait`)
-            let (_flags, addr) =
-                prepare_atomic_addr(memarg, implied_ty.bytes(), builder, state, environ)?;
+            let (_flags, addr) = prepare_atomic_addr(
+                memarg,
+                u8::try_from(implied_ty.bytes()).unwrap(),
+                builder,
+                state,
+                environ,
+            )?;
             assert!(builder.func.dfg.value_type(expected) == implied_ty);
             // `fn translate_atomic_wait` can inspect the type of `expected` to figure out what
             // code it needs to generate, if it wants.
@@ -2171,21 +2175,20 @@ fn translate_unreachable_operator<FE: FuncEnvironment + ?Sized>(
 /// This function is a generalized helper for validating that a wasm-supplied
 /// heap address is in-bounds.
 ///
-/// This function takes a litany of parameters and requires that the address to
-/// be verified is at the top of the stack in `state`. This will generate
-/// necessary IR to validate that the heap address is correctly in-bounds, and
-/// various parameters are returned describing the valid heap address if
-/// execution reaches that point.
+/// This function takes a litany of parameters and requires that the *Wasm*
+/// address to be verified is at the top of the stack in `state`. This will
+/// generate necessary IR to validate that the heap address is correctly
+/// in-bounds, and various parameters are returned describing the valid *native*
+/// heap address if execution reaches that point.
 fn prepare_addr<FE: FuncEnvironment + ?Sized>(
     memarg: &MemArg,
-    access_size: u32,
+    access_size: u8,
     builder: &mut FunctionBuilder,
     state: &mut FuncTranslationState,
     environ: &mut FE,
-) -> WasmResult<(MemFlags, Value, Offset32)> {
+) -> WasmResult<(MemFlags, Value)> {
     let addr = state.pop1();
     let heap = state.get_heap(builder.func, memarg.memory, environ)?;
-    let offset_guard_size: u64 = builder.func.heaps[heap].offset_guard_size.into();
 
     // How exactly the bounds check is performed here and what it's performed
     // on is a bit tricky. Generally we want to rely on access violations (e.g.
@@ -2244,10 +2247,9 @@ fn prepare_addr<FE: FuncEnvironment + ?Sized>(
     // hit like so:
     //
     // * For wasm32, wasmtime defaults to 4gb "static" memories with 2gb guard
-    //   regions. This means our `adjusted_offset` is 1 for all offsets <=2gb.
-    //   This hits the optimized case for `heap_addr` on static memories 4gb in
-    //   size in cranelift's legalization of `heap_addr`, eliding the bounds
-    //   check entirely.
+    //   regions. This means that for all offsets <=2gb, we hit the optimized
+    //   case for `heap_addr` on static memories 4gb in size in cranelift's
+    //   legalization of `heap_addr`, eliding the bounds check entirely.
     //
     // * For wasm64 offsets <=2gb will generate a single `heap_addr`
     //   instruction, but at this time all heaps are "dyanmic" which means that
@@ -2258,43 +2260,17 @@ fn prepare_addr<FE: FuncEnvironment + ?Sized>(
     // offsets in `memarg` are <=2gb, which means we get the fast path of one
     // `heap_addr` instruction plus a hardcoded i32-offset in memory-related
     // instructions.
-    let adjusted_offset = if offset_guard_size == 0 {
-        // Why saturating? see (1) above
-        memarg.offset.saturating_add(u64::from(access_size))
-    } else {
-        // Why is there rounding here? see (2) above
-        assert!(access_size < 1024);
-        cmp::max(memarg.offset / offset_guard_size * offset_guard_size, 1)
-    };
-
-    debug_assert!(adjusted_offset > 0); // want to bounds check at least 1 byte
-    let (addr, offset) = match u32::try_from(adjusted_offset) {
-        // If our adjusted offset fits within a u32, then we can place the
-        // entire offset into the offset of the `heap_addr` instruction. After
-        // the `heap_addr` instruction, though, we need to factor the the offset
-        // into the returned address. This is either an immediate to later
-        // memory instructions if the offset further fits within `i32`, or a
-        // manual add instruction otherwise.
-        //
-        // Note that native instructions take a signed offset hence the switch
-        // to i32. Note also the lack of overflow checking in the offset
-        // addition, which should be ok since if `heap_addr` passed we're
-        // guaranteed that this won't overflow.
-        Ok(adjusted_offset) => {
-            let base = builder
+    let addr = match u32::try_from(memarg.offset) {
+        // If our offset fits within a u32, then we can place the it into the
+        // offset immediate of the `heap_addr` instruction.
+        Ok(offset) => {
+            builder
                 .ins()
-                .heap_addr(environ.pointer_type(), heap, addr, adjusted_offset);
-            match i32::try_from(memarg.offset) {
-                Ok(val) => (base, val),
-                Err(_) => {
-                    let adj = builder.ins().iadd_imm(base, memarg.offset as i64);
-                    (adj, 0)
-                }
-            }
+                .heap_addr(environ.pointer_type(), heap, addr, offset, access_size)
         }
 
-        // If the adjusted offset doesn't fit within a u32, then we can't pass
-        // the adjust sized to `heap_addr` raw.
+        // If the offset doesn't fit within a u32, then we can't pass it
+        // directly into `heap_addr`.
         //
         // One reasonable question you might ask is "why not?". There's no
         // fundamental reason why `heap_addr` *must* take a 32-bit offset. The
@@ -2313,8 +2289,6 @@ fn prepare_addr<FE: FuncEnvironment + ?Sized>(
         //
         // Once we have the effective address, offset already folded in, then
         // `heap_addr` is used to verify that the address is indeed in-bounds.
-        // The access size of the `heap_addr` is what we were passed in from
-        // above.
         //
         // Note that this is generating what's likely to be at least two
         // branches, one for the overflow and one for the bounds check itself.
@@ -2328,10 +2302,9 @@ fn prepare_addr<FE: FuncEnvironment + ?Sized>(
                 builder
                     .ins()
                     .uadd_overflow_trap(addr, offset, ir::TrapCode::HeapOutOfBounds);
-            let base = builder
+            builder
                 .ins()
-                .heap_addr(environ.pointer_type(), heap, addr, access_size);
-            (base, 0)
+                .heap_addr(environ.pointer_type(), heap, addr, 0, access_size)
         }
     };
 
@@ -2348,12 +2321,12 @@ fn prepare_addr<FE: FuncEnvironment + ?Sized>(
     // vmctx, stack) accesses.
     flags.set_heap();
 
-    Ok((flags, addr, offset.into()))
+    Ok((flags, addr))
 }
 
 fn prepare_atomic_addr<FE: FuncEnvironment + ?Sized>(
     memarg: &MemArg,
-    loaded_bytes: u32,
+    loaded_bytes: u8,
     builder: &mut FunctionBuilder,
     state: &mut FuncTranslationState,
     environ: &mut FE,
@@ -2386,18 +2359,7 @@ fn prepare_atomic_addr<FE: FuncEnvironment + ?Sized>(
         builder.ins().trapnz(f, ir::TrapCode::HeapMisaligned);
     }
 
-    let (flags, mut addr, offset) = prepare_addr(memarg, loaded_bytes, builder, state, environ)?;
-
-    // Currently cranelift IR operations for atomics don't have offsets
-    // associated with them so we fold the offset into the address itself. Note
-    // that via the `prepare_addr` helper we know that if execution reaches
-    // this point that this addition won't overflow.
-    let offset: i64 = offset.into();
-    if offset != 0 {
-        addr = builder.ins().iadd_imm(addr, offset);
-    }
-
-    Ok((flags, addr))
+    prepare_addr(memarg, loaded_bytes, builder, state, environ)
 }
 
 /// Translate a load instruction.
@@ -2409,14 +2371,16 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
     state: &mut FuncTranslationState,
     environ: &mut FE,
 ) -> WasmResult<()> {
-    let (flags, base, offset) = prepare_addr(
+    let (flags, base) = prepare_addr(
         memarg,
         mem_op_size(opcode, result_ty),
         builder,
         state,
         environ,
     )?;
-    let (load, dfg) = builder.ins().Load(opcode, result_ty, flags, offset, base);
+    let (load, dfg) = builder
+        .ins()
+        .Load(opcode, result_ty, flags, Offset32::new(0), base);
     state.push1(dfg.first_result(load));
     Ok(())
 }
@@ -2432,20 +2396,19 @@ fn translate_store<FE: FuncEnvironment + ?Sized>(
     let val = state.pop1();
     let val_ty = builder.func.dfg.value_type(val);
 
-    let (flags, base, offset) =
-        prepare_addr(memarg, mem_op_size(opcode, val_ty), builder, state, environ)?;
+    let (flags, base) = prepare_addr(memarg, mem_op_size(opcode, val_ty), builder, state, environ)?;
     builder
         .ins()
-        .Store(opcode, val_ty, flags, offset.into(), val, base);
+        .Store(opcode, val_ty, flags, Offset32::new(0), val, base);
     Ok(())
 }
 
-fn mem_op_size(opcode: ir::Opcode, ty: Type) -> u32 {
+fn mem_op_size(opcode: ir::Opcode, ty: Type) -> u8 {
     match opcode {
         ir::Opcode::Istore8 | ir::Opcode::Sload8 | ir::Opcode::Uload8 => 1,
         ir::Opcode::Istore16 | ir::Opcode::Sload16 | ir::Opcode::Uload16 => 2,
         ir::Opcode::Istore32 | ir::Opcode::Sload32 | ir::Opcode::Uload32 => 4,
-        ir::Opcode::Store | ir::Opcode::Load => ty.bytes(),
+        ir::Opcode::Store | ir::Opcode::Load => u8::try_from(ty.bytes()).unwrap(),
         _ => panic!("unknown size of mem op for {:?}", opcode),
     }
 }
@@ -2490,7 +2453,13 @@ fn translate_atomic_rmw<FE: FuncEnvironment + ?Sized>(
         arg2 = builder.ins().ireduce(access_ty, arg2);
     }
 
-    let (flags, addr) = prepare_atomic_addr(memarg, access_ty.bytes(), builder, state, environ)?;
+    let (flags, addr) = prepare_atomic_addr(
+        memarg,
+        u8::try_from(access_ty.bytes()).unwrap(),
+        builder,
+        state,
+        environ,
+    )?;
 
     let mut res = builder.ins().atomic_rmw(access_ty, flags, op, addr, arg2);
     if access_ty != widened_ty {
@@ -2538,7 +2507,13 @@ fn translate_atomic_cas<FE: FuncEnvironment + ?Sized>(
         replacement = builder.ins().ireduce(access_ty, replacement);
     }
 
-    let (flags, addr) = prepare_atomic_addr(memarg, access_ty.bytes(), builder, state, environ)?;
+    let (flags, addr) = prepare_atomic_addr(
+        memarg,
+        u8::try_from(access_ty.bytes()).unwrap(),
+        builder,
+        state,
+        environ,
+    )?;
     let mut res = builder.ins().atomic_cas(flags, addr, expected, replacement);
     if access_ty != widened_ty {
         res = builder.ins().uextend(widened_ty, res);
@@ -2572,7 +2547,13 @@ fn translate_atomic_load<FE: FuncEnvironment + ?Sized>(
     };
     assert!(w_ty_ok && widened_ty.bytes() >= access_ty.bytes());
 
-    let (flags, addr) = prepare_atomic_addr(memarg, access_ty.bytes(), builder, state, environ)?;
+    let (flags, addr) = prepare_atomic_addr(
+        memarg,
+        u8::try_from(access_ty.bytes()).unwrap(),
+        builder,
+        state,
+        environ,
+    )?;
     let mut res = builder.ins().atomic_load(access_ty, flags, addr);
     if access_ty != widened_ty {
         res = builder.ins().uextend(widened_ty, res);
@@ -2612,7 +2593,13 @@ fn translate_atomic_store<FE: FuncEnvironment + ?Sized>(
         data = builder.ins().ireduce(access_ty, data);
     }
 
-    let (flags, addr) = prepare_atomic_addr(memarg, access_ty.bytes(), builder, state, environ)?;
+    let (flags, addr) = prepare_atomic_addr(
+        memarg,
+        u8::try_from(access_ty.bytes()).unwrap(),
+        builder,
+        state,
+        environ,
+    )?;
     builder.ins().atomic_store(flags, data, addr);
     Ok(())
 }

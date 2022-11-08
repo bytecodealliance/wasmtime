@@ -476,7 +476,13 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
             dynamic_stack_slot,
             ..
         } => write!(w, " {}, {}", arg, dynamic_stack_slot),
-        HeapAddr { heap, arg, imm, .. } => write!(w, " {}, {}, {}", heap, arg, imm),
+        HeapAddr {
+            heap,
+            arg,
+            offset,
+            size,
+            ..
+        } => write!(w, " {}, {}, {}, {}", heap, arg, offset, size),
         TableAddr { table, arg, .. } => write!(w, " {}, {}", table, arg),
         Load {
             flags, arg, offset, ..

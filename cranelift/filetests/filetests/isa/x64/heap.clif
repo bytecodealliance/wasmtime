@@ -25,7 +25,7 @@ function %f(i32, i64 vmctx) -> i64 {
     heap0 = dynamic gv1, bound gv2, offset_guard 0x1000, index_type i32
 
 block0(v0: i32, v1: i64):
-    v2 = heap_addr.i64 heap0, v0, 0x8000
+    v2 = heap_addr.i64 heap0, v0, 0x8000, 0
     return v2
 }
 
@@ -33,16 +33,17 @@ block0(v0: i32, v1: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movl    %edi, %eax
-;   movq    8(%rsi), %r11
+;   movq    8(%rsi), %rdx
 ;   movq    %rax, %rdi
 ;   addq    %rdi, $32768, %rdi
 ;   jnb ; ud2 heap_oob ;
-;   cmpq    %r11, %rdi
+;   cmpq    %rdx, %rdi
 ;   jbe     label1; j label2
 ; block1:
 ;   addq    %rax, 0(%rsi), %rax
+;   addq    %rax, $32768, %rax
 ;   xorq    %rcx, %rcx, %rcx
-;   cmpq    %r11, %rdi
+;   cmpq    %rdx, %rdi
 ;   cmovnbeq %rcx, %rax, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -60,7 +61,7 @@ function %f(i64 vmctx, i32) -> i64 system_v {
     heap0 = static gv1, bound 0x1000, offset_guard 0x1000, index_type i32
 
 block0(v0: i64, v1: i32):
-    v10 = heap_addr.i64 heap0, v1, 0
+    v10 = heap_addr.i64 heap0, v1, 0, 0
     return v10
 }
 
@@ -91,7 +92,7 @@ function %f(i64 vmctx, i32) -> i64 system_v {
     heap0 = static gv1, bound 0x1_0000_0000, offset_guard 0x8000_0000, index_type i32
 
 block0(v0: i64, v1: i32):
-    v10 = heap_addr.i64 heap0, v1, 0
+    v10 = heap_addr.i64 heap0, v1, 0, 0
     return v10
 }
 
@@ -103,4 +104,67 @@ block0(v0: i64, v1: i32):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+
+function %dynamic_heap_check_with_offset(i64 vmctx, i32) -> i64 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    heap0 = dynamic gv0, bound gv1, offset_guard 0x1000, index_type i32
+
+block0(v0: i64, v1: i32):
+    v2 = heap_addr.i64 heap0, v1, 16, 8
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   movl    %esi, %edi
+;   movq    %rax, %rcx
+;   movq    0(%rcx), %rsi
+;   movq    %rdi, %rdx
+;   addq    %rdx, $24, %rdx
+;   jnb ; ud2 heap_oob ;
+;   cmpq    %rsi, %rdx
+;   jbe     label1; j label2
+; block1:
+;   movq    %rcx, %rax
+;   addq    %rax, %rdi, %rax
+;   addq    %rax, $16, %rax
+;   xorq    %rcx, %rcx, %rcx
+;   cmpq    %rsi, %rdx
+;   cmovnbeq %rcx, %rax, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   ud2 heap_oob
+
+function %static_heap_check_with_offset(i64 vmctx, i32) -> i64 {
+    gv0 = vmctx
+    heap0 = static gv0, bound 0x1_0000, offset_guard 0x1000, index_type i32
+
+block0(v0: i64, v1: i32):
+    v2 = heap_addr.i64 heap0, v1, 16, 8
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    %esi, %r10d
+;   cmpq    $65512, %r10
+;   jbe     label1; j label2
+; block1:
+;   movq    %rdi, %rax
+;   addq    %rax, %r10, %rax
+;   addq    %rax, $16, %rax
+;   xorq    %r11, %r11, %r11
+;   cmpq    $65512, %r10
+;   cmovnbeq %r11, %rax, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   ud2 heap_oob
 

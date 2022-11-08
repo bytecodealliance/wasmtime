@@ -119,10 +119,6 @@ where
             }
             // 32-bit
             InstructionData::UnaryIeee32 { imm, .. } => DataValue::from(imm),
-            InstructionData::HeapAddr { imm, .. } => {
-                let imm: u32 = imm.into();
-                DataValue::from(imm as i32) // Note the switch from unsigned to signed.
-            }
             InstructionData::Load { offset, .. }
             | InstructionData::Store { offset, .. }
             | InstructionData::StackLoad { offset, .. }
@@ -489,19 +485,27 @@ where
         Opcode::SymbolValue => unimplemented!("SymbolValue"),
         Opcode::TlsValue => unimplemented!("TlsValue"),
         Opcode::HeapAddr => {
-            if let InstructionData::HeapAddr { heap, .. } = inst {
+            if let InstructionData::HeapAddr {
+                heap,
+                offset: imm_offset,
+                size,
+                ..
+            } = inst
+            {
                 let addr_ty = inst_context.controlling_type().unwrap();
-                let offset = arg(0)?.into_int()? as u64;
-                let load_size = imm().into_int()? as u64;
+                let dyn_offset = arg(0)?.into_int()? as u64;
                 assign_or_memtrap({
                     AddressSize::try_from(addr_ty).and_then(|addr_size| {
                         // Attempt to build an address at the maximum possible offset
                         // for this load. If address generation fails we know it's out of bounds.
-                        let bound_offset = (offset + load_size).saturating_sub(1);
+                        let bound_offset =
+                            (dyn_offset + u64::from(u32::from(imm_offset)) + u64::from(size))
+                                .saturating_sub(1);
                         state.heap_address(addr_size, heap, bound_offset)?;
 
                         // Build the actual address
-                        let addr = state.heap_address(addr_size, heap, offset)?;
+                        let mut addr = state.heap_address(addr_size, heap, dyn_offset)?;
+                        addr.offset += u64::from(u32::from(imm_offset));
                         let dv = DataValue::try_from(addr)?;
                         Ok(dv.into())
                     })

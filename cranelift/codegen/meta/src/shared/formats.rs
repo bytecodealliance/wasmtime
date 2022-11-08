@@ -202,7 +202,8 @@ impl Formats {
             heap_addr: Builder::new("HeapAddr")
                 .imm(&entities.heap)
                 .value()
-                .imm(&imm.uimm32)
+                .imm_with_name("offset", &imm.uimm32)
+                .imm_with_name("size", &imm.uimm8)
                 .build(),
 
             // Accessing a WebAssembly table.
