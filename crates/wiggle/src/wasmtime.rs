@@ -6,10 +6,11 @@ use crate::{BorrowHandle, GuestError, GuestMemory, Region};
 pub struct WasmtimeGuestMemory<'a> {
     mem: &'a mut [u8],
     bc: BorrowChecker,
+    shared: bool,
 }
 
 impl<'a> WasmtimeGuestMemory<'a> {
-    pub fn new(mem: &'a mut [u8]) -> Self {
+    pub fn new(mem: &'a mut [u8], shared: bool) -> Self {
         Self {
             mem,
             // Wiggle does not expose any methods for functions to re-enter
@@ -22,6 +23,7 @@ impl<'a> WasmtimeGuestMemory<'a> {
             // integrated fully with wasmtime:
             // https://github.com/bytecodealliance/wasmtime/issues/1917
             bc: BorrowChecker::new(),
+            shared,
         }
     }
 }
@@ -50,5 +52,8 @@ unsafe impl GuestMemory for WasmtimeGuestMemory<'_> {
     }
     fn mut_unborrow(&self, h: BorrowHandle) {
         self.bc.mut_unborrow(h)
+    }
+    fn is_shared_memory(&self) -> bool {
+        self.shared
     }
 }

@@ -1,5 +1,8 @@
 use crate::{region::Region, GuestError, GuestPtr};
 use std::mem;
+use std::sync::atomic::{
+    AtomicI16, AtomicI32, AtomicI64, AtomicI8, AtomicU16, AtomicU32, AtomicU64, AtomicU8, Ordering,
+};
 
 /// A trait for types which are used to report errors. Each type used in the
 /// first result position of an interface function is used, by convention, to
@@ -61,7 +64,7 @@ pub unsafe trait GuestTypeTransparent<'a>: GuestType<'a> {
 }
 
 macro_rules! primitives {
-    ($($i:ident)*) => ($(
+    ($([$i:ident, $AtomicI:ident],)*) => ($(
         impl<'a> GuestType<'a> for $i {
             fn guest_size() -> u32 { mem::size_of::<Self>() as u32 }
             fn guest_align() -> usize { mem::align_of::<Self>() }
@@ -88,7 +91,19 @@ macro_rules! primitives {
                 if ptr.mem().is_mut_borrowed(region) {
                     return Err(GuestError::PtrBorrowed(region));
                 }
-                Ok(unsafe { <$i>::from_le_bytes(*host_ptr.cast::<[u8; mem::size_of::<Self>()]>()) })
+                // If the accessed memory is shared, we need to load the bytes
+                // with the correct memory consistency.
+                let value = if ptr.mem().is_shared_memory() {
+                    let atomic_value_ref: &$AtomicI = unsafe { &*(host_ptr as *mut $i as *const $AtomicI) };
+                    let value = atomic_value_ref.load(Ordering::Relaxed);
+                    // For floating-point values, we must transmute from their
+                    // integer equivalent (see
+                    // https://doc.rust-lang.org/std/primitive.f32.html#method.to_bits).
+                    unsafe { std::mem::transmute::<_, $i>(value) }
+                } else {
+                    unsafe { <$i>::from_le_bytes(*host_ptr.cast::<[u8; mem::size_of::<Self>()]>()) }
+                };
+                Ok(value)
             }
 
             #[inline]
@@ -107,8 +122,19 @@ macro_rules! primitives {
                 if ptr.mem().is_shared_borrowed(region) || ptr.mem().is_mut_borrowed(region) {
                     return Err(GuestError::PtrBorrowed(region));
                 }
-                unsafe {
-                    *host_ptr.cast::<[u8; mem::size_of::<Self>()]>() = <$i>::to_le_bytes(val);
+                // If the accessed memory is shared, we need to load the bytes
+                // with the correct memory consistency.
+                if ptr.mem().is_shared_memory() {
+                    let atomic_value_ref: &$AtomicI = unsafe { &*(host_ptr as *mut $i as *const $AtomicI) };
+                    // For floating-point values, we must transmute to their
+                    // integer equivalent (see
+                    // https://doc.rust-lang.org/std/primitive.f32.html#method.to_bits).
+                    let val = unsafe { std::mem::transmute::<$i, _>(val) };
+                    atomic_value_ref.store(val, Ordering::Relaxed)
+                } else {
+                    unsafe {
+                        *host_ptr.cast::<[u8; mem::size_of::<Self>()]>() = <$i>::to_le_bytes(val);
+                    }
                 }
                 Ok(())
             }
@@ -127,11 +153,11 @@ macro_rules! primitives {
 
 primitives! {
     // signed
-    i8 i16 i32 i64 i128
+    [i8, AtomicI8], [i16, AtomicI16], [i32, AtomicI32], [i64, AtomicI64],
     // unsigned
-    u8 u16 u32 u64 u128
+    [u8, AtomicU8], [u16, AtomicU16], [u32, AtomicU32], [u64, AtomicU64],
     // floats
-    f32 f64
+    [f32, AtomicU32], [f64, AtomicU64],
 }
 
 // Support pointers-to-pointers where pointers are always 32-bits in wasm land
