@@ -192,6 +192,12 @@ pub unsafe trait GuestMemory: Send + Sync {
     /// `GuestStr` are implemented correctly, a shared `BorrowHandle` should only be
     /// unborrowed once.
     fn shared_unborrow(&self, h: BorrowHandle);
+
+    /// Check if the underlying memory is shared across multiple threads; e.g.,
+    /// with a WebAssembly shared memory.
+    fn is_shared_memory(&self) -> bool {
+        false
+    }
 }
 
 /// A handle to a borrow on linear memory. It is produced by `{mut, shared}_borrow` and

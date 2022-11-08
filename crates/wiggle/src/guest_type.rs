@@ -1,5 +1,8 @@
 use crate::{region::Region, GuestError, GuestPtr};
 use std::mem;
+use std::sync::atomic::{
+    AtomicI16, AtomicI32, AtomicI64, AtomicI8, AtomicU16, AtomicU32, AtomicU64, AtomicU8, Ordering,
+};
 
 /// A trait for types which are used to report errors. Each type used in the
 /// first result position of an interface function is used, by convention, to
@@ -60,9 +63,9 @@ pub unsafe trait GuestTypeTransparent<'a>: GuestType<'a> {
     fn validate(ptr: *mut Self) -> Result<(), GuestError>;
 }
 
-macro_rules! primitives {
-    ($($i:ident)*) => ($(
-        impl<'a> GuestType<'a> for $i {
+macro_rules! integer_primitives {
+    ($([$ty:ident, $ty_atomic:ident],)*) => ($(
+        impl<'a> GuestType<'a> for $ty {
             fn guest_size() -> u32 { mem::size_of::<Self>() as u32 }
             fn guest_align() -> usize { mem::align_of::<Self>() }
 
@@ -88,7 +91,14 @@ macro_rules! primitives {
                 if ptr.mem().is_mut_borrowed(region) {
                     return Err(GuestError::PtrBorrowed(region));
                 }
-                Ok(unsafe { <$i>::from_le_bytes(*host_ptr.cast::<[u8; mem::size_of::<Self>()]>()) })
+                // If the accessed memory is shared, we need to load the bytes
+                // with the correct memory consistency. We could check if the
+                // memory is shared each time, but we expect little performance
+                // difference between an additional branch and a relaxed memory
+                // access and thus always do the relaxed access here.
+                let atomic_value_ref: &$ty_atomic =
+                    unsafe { &*(host_ptr.cast::<$ty_atomic>()) };
+                Ok($ty::from_le(atomic_value_ref.load(Ordering::Relaxed)))
             }
 
             #[inline]
@@ -107,16 +117,21 @@ macro_rules! primitives {
                 if ptr.mem().is_shared_borrowed(region) || ptr.mem().is_mut_borrowed(region) {
                     return Err(GuestError::PtrBorrowed(region));
                 }
-                unsafe {
-                    *host_ptr.cast::<[u8; mem::size_of::<Self>()]>() = <$i>::to_le_bytes(val);
-                }
+                // If the accessed memory is shared, we need to load the bytes
+                // with the correct memory consistency. We could check if the
+                // memory is shared each time, but we expect little performance
+                // difference between an additional branch and a relaxed memory
+                // access and thus always do the relaxed access here.
+                let atomic_value_ref: &$ty_atomic =
+                    unsafe { &*(host_ptr.cast::<$ty_atomic>()) };
+                atomic_value_ref.store(val.to_le(), Ordering::Relaxed);
                 Ok(())
             }
         }
 
-        unsafe impl<'a> GuestTypeTransparent<'a> for $i {
+        unsafe impl<'a> GuestTypeTransparent<'a> for $ty {
             #[inline]
-            fn validate(_ptr: *mut $i) -> Result<(), GuestError> {
+            fn validate(_ptr: *mut $ty) -> Result<(), GuestError> {
                 // All bit patterns are safe, nothing to do here
                 Ok(())
             }
@@ -125,13 +140,94 @@ macro_rules! primitives {
     )*)
 }
 
-primitives! {
+macro_rules! float_primitives {
+    ($([$ty:ident, $ty_unsigned:ident, $ty_atomic:ident],)*) => ($(
+        impl<'a> GuestType<'a> for $ty {
+            fn guest_size() -> u32 { mem::size_of::<Self>() as u32 }
+            fn guest_align() -> usize { mem::align_of::<Self>() }
+
+            #[inline]
+            fn read(ptr: &GuestPtr<'a, Self>) -> Result<Self, GuestError> {
+                // Any bit pattern for any primitive implemented with this
+                // macro is safe, so our `validate_size_align` method will
+                // guarantee that if we are given a pointer it's valid for the
+                // size of our type as well as properly aligned. Consequently we
+                // should be able to safely ready the pointer just after we
+                // validated it, returning it along here.
+                let offset = ptr.offset();
+                let size = Self::guest_size();
+                let host_ptr = ptr.mem().validate_size_align(
+                    offset,
+                    Self::guest_align(),
+                    size,
+                )?;
+                let region = Region {
+                    start: offset,
+                    len: size,
+                };
+                if ptr.mem().is_mut_borrowed(region) {
+                    return Err(GuestError::PtrBorrowed(region));
+                }
+                // If the accessed memory is shared, we need to load the bytes
+                // with the correct memory consistency. We could check if the
+                // memory is shared each time, but we expect little performance
+                // difference between an additional branch and a relaxed memory
+                // access and thus always do the relaxed access here.
+                let atomic_value_ref: &$ty_atomic =
+                    unsafe { &*(host_ptr.cast::<$ty_atomic>()) };
+                let value = $ty_unsigned::from_le(atomic_value_ref.load(Ordering::Relaxed));
+                Ok($ty::from_bits(value))
+            }
+
+            #[inline]
+            fn write(ptr: &GuestPtr<'_, Self>, val: Self) -> Result<(), GuestError> {
+                let offset = ptr.offset();
+                let size = Self::guest_size();
+                let host_ptr = ptr.mem().validate_size_align(
+                    offset,
+                    Self::guest_align(),
+                    size,
+                )?;
+                let region = Region {
+                    start: offset,
+                    len: size,
+                };
+                if ptr.mem().is_shared_borrowed(region) || ptr.mem().is_mut_borrowed(region) {
+                    return Err(GuestError::PtrBorrowed(region));
+                }
+                // If the accessed memory is shared, we need to load the bytes
+                // with the correct memory consistency. We could check if the
+                // memory is shared each time, but we expect little performance
+                // difference between an additional branch and a relaxed memory
+                // access and thus always do the relaxed access here.
+                let atomic_value_ref: &$ty_atomic =
+                    unsafe { &*(host_ptr.cast::<$ty_atomic>()) };
+                let le_value = $ty_unsigned::to_le(val.to_bits());
+                atomic_value_ref.store(le_value, Ordering::Relaxed);
+                Ok(())
+            }
+        }
+
+        unsafe impl<'a> GuestTypeTransparent<'a> for $ty {
+            #[inline]
+            fn validate(_ptr: *mut $ty) -> Result<(), GuestError> {
+                // All bit patterns are safe, nothing to do here
+                Ok(())
+            }
+        }
+
+    )*)
+}
+
+integer_primitives! {
     // signed
-    i8 i16 i32 i64 i128
+    [i8, AtomicI8], [i16, AtomicI16], [i32, AtomicI32], [i64, AtomicI64],
     // unsigned
-    u8 u16 u32 u64 u128
-    // floats
-    f32 f64
+    [u8, AtomicU8], [u16, AtomicU16], [u32, AtomicU32], [u64, AtomicU64],
+}
+
+float_primitives! {
+    [f32, u32, AtomicU32], [f64, u64, AtomicU64],
 }
 
 // Support pointers-to-pointers where pointers are always 32-bits in wasm land
