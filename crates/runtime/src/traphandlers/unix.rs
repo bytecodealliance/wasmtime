@@ -47,15 +47,23 @@ pub unsafe fn platform_init() {
     register(&mut PREV_SIGILL, libc::SIGILL);
 
     // x86 and s390x use SIGFPE to report division by zero
-    if cfg!(target_arch = "x86") || cfg!(target_arch = "x86_64") || cfg!(target_arch = "s390x") {
+    if cfg!(target_arch = "x86_64") || cfg!(target_arch = "s390x") {
         register(&mut PREV_SIGFPE, libc::SIGFPE);
     }
 
     // Sometimes we need to handle SIGBUS too:
-    // - On ARM, handle Unaligned Accesses.
     // - On Darwin, guard page accesses are raised as SIGBUS.
-    if cfg!(target_arch = "arm") || cfg!(target_os = "macos") || cfg!(target_os = "freebsd") {
+    if cfg!(target_os = "macos") || cfg!(target_os = "freebsd") {
         register(&mut PREV_SIGBUS, libc::SIGBUS);
+    }
+
+    #[cfg(target_arch = "x86")]
+    {
+        compile_error!("x86-32 unsupported; may need SIGFPE handler registered");
+    }
+    #[cfg(target_arch = "arm")]
+    {
+        compile_error!("ARM32 unsupported; may need SIGBUS handler registered");
     }
 }
 
@@ -172,12 +180,6 @@ unsafe fn get_pc_and_fp(cx: *mut libc::c_void, _signum: libc::c_int) -> (*const 
                 cx.uc_mcontext.gregs[libc::REG_RIP as usize] as *const u8,
                 cx.uc_mcontext.gregs[libc::REG_RBP as usize] as usize
             )
-        } else if #[cfg(all(target_os = "linux", target_arch = "x86"))] {
-            let cx = &*(cx as *const libc::ucontext_t);
-            (
-                cx.uc_mcontext.gregs[libc::REG_EIP as usize] as *const u8,
-                cx.uc_mcontext.gregs[libc::REG_EBP as usize] as usize,
-            )
         } else if #[cfg(all(any(target_os = "linux", target_os = "android"), target_arch = "aarch64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
             (
@@ -209,12 +211,6 @@ unsafe fn get_pc_and_fp(cx: *mut libc::c_void, _signum: libc::c_int) -> (*const 
             (
                 (*cx.uc_mcontext).__ss.__rip as *const u8,
                 (*cx.uc_mcontext).__ss.__rbp as usize,
-            )
-        } else if #[cfg(all(target_os = "macos", target_arch = "x86"))] {
-            let cx = &*(cx as *const libc::ucontext_t);
-            (
-                (*cx.uc_mcontext).__ss.__eip as *const u8,
-                (*cx.uc_mcontext).__ss.__ebp as usize,
             )
         } else if #[cfg(all(target_os = "macos", target_arch = "aarch64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
