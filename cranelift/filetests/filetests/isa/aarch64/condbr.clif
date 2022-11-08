@@ -45,10 +45,10 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x7, lo
+;   cset x6, lo
 ;   subs xzr, x1, x3
-;   cset x10, lt
-;   csel x0, x7, x10, eq
+;   cset x9, lt
+;   csel x0, x6, x9, eq
 ;   ret
 
 function %icmp_ult_i128(i128, i128) -> i8 {
@@ -59,10 +59,10 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x7, lo
+;   cset x6, lo
 ;   subs xzr, x1, x3
-;   cset x10, lo
-;   csel x0, x7, x10, eq
+;   cset x9, lo
+;   csel x0, x6, x9, eq
 ;   ret
 
 function %icmp_sle_i128(i128, i128) -> i8 {
@@ -73,10 +73,10 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x7, ls
+;   cset x6, ls
 ;   subs xzr, x1, x3
-;   cset x10, le
-;   csel x0, x7, x10, eq
+;   cset x9, le
+;   csel x0, x6, x9, eq
 ;   ret
 
 function %icmp_ule_i128(i128, i128) -> i8 {
@@ -87,10 +87,10 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x7, ls
+;   cset x6, ls
 ;   subs xzr, x1, x3
-;   cset x10, ls
-;   csel x0, x7, x10, eq
+;   cset x9, ls
+;   csel x0, x6, x9, eq
 ;   ret
 
 function %icmp_sgt_i128(i128, i128) -> i8 {
@@ -101,10 +101,10 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x7, hi
+;   cset x6, hi
 ;   subs xzr, x1, x3
-;   cset x10, gt
-;   csel x0, x7, x10, eq
+;   cset x9, gt
+;   csel x0, x6, x9, eq
 ;   ret
 
 function %icmp_ugt_i128(i128, i128) -> i8 {
@@ -115,10 +115,10 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x7, hi
+;   cset x6, hi
 ;   subs xzr, x1, x3
-;   cset x10, hi
-;   csel x0, x7, x10, eq
+;   cset x9, hi
+;   csel x0, x6, x9, eq
 ;   ret
 
 function %icmp_sge_i128(i128, i128) -> i8 {
@@ -129,10 +129,10 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x7, hs
+;   cset x6, hs
 ;   subs xzr, x1, x3
-;   cset x10, ge
-;   csel x0, x7, x10, eq
+;   cset x9, ge
+;   csel x0, x6, x9, eq
 ;   ret
 
 function %icmp_uge_i128(i128, i128) -> i8 {
@@ -143,10 +143,10 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x7, hs
+;   cset x6, hs
 ;   subs xzr, x1, x3
-;   cset x10, hs
-;   csel x0, x7, x10, eq
+;   cset x9, hs
+;   csel x0, x6, x9, eq
 ;   ret
 
 function %f(i64, i64) -> i64 {

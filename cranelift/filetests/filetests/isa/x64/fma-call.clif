@@ -10,8 +10,8 @@ block0(v0: f32, v1: f32, v2: f32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_ext_name %FmaF32+0, %r9
-;   call    *%r9
+;   load_ext_name %FmaF32+0, %r8
+;   call    *%r8
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -25,8 +25,8 @@ block0(v0: f64, v1: f64, v2: f64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_ext_name %FmaF64+0, %r9
-;   call    *%r9
+;   load_ext_name %FmaF64+0, %r8
+;   call    *%r8
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

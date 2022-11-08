@@ -13,16 +13,16 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   uext.w t3,a1
-;   ld t4,0(a0)
-;   addi t4,t4,0
-;   ule t0,t3,t4##ty=i64
-;   bne t0,zero,taken(label1),not_taken(label2)
+;   uext.w a7,a1
+;   ld t3,0(a0)
+;   addi t3,t3,0
+;   ule t4,a7,t3##ty=i64
+;   bne t4,zero,taken(label1),not_taken(label2)
 ; block1:
-;   add t0,a0,t3
-;   ugt t3,t3,t4##ty=i64
-;   li t1,0
-;   selectif_spectre_guard a0,t1,t0##test=t3
+;   add t4,a0,a7
+;   ugt a7,a7,t3##ty=i64
+;   li t0,0
+;   selectif_spectre_guard a0,t0,t4##test=a7
 ;   ret
 ; block2:
 ;   udf##trap_code=heap_oob
@@ -37,16 +37,16 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   uext.w t3,a1
-;   lui a7,16
-;   ule t4,t3,a7##ty=i64
-;   bne t4,zero,taken(label1),not_taken(label2)
+;   uext.w a7,a1
+;   lui a6,16
+;   ule t3,a7,a6##ty=i64
+;   bne t3,zero,taken(label1),not_taken(label2)
 ; block1:
-;   add t4,a0,t3
-;   lui a7,16
-;   ugt t0,t3,a7##ty=i64
-;   li t1,0
-;   selectif_spectre_guard a0,t1,t4##test=t0
+;   add t3,a0,a7
+;   lui a6,16
+;   ugt t4,a7,a6##ty=i64
+;   li t0,0
+;   selectif_spectre_guard a0,t0,t3##test=t4
 ;   ret
 ; block2:
 ;   udf##trap_code=heap_oob

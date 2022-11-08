@@ -9,9 +9,9 @@ block0(v0: i8x8):
 }
 
 ; block0:
-;   uminv b3, v0.8b
-;   mov x5, v3.d[0]
-;   subs xzr, x5, #0
+;   uminv b2, v0.8b
+;   mov x4, v2.d[0]
+;   subs xzr, x4, #0
 ;   cset x0, ne
 ;   ret
 
@@ -22,9 +22,9 @@ block0(v0: i8x16):
 }
 
 ; block0:
-;   uminv b3, v0.16b
-;   mov x5, v3.d[0]
-;   subs xzr, x5, #0
+;   uminv b2, v0.16b
+;   mov x4, v2.d[0]
+;   subs xzr, x4, #0
 ;   cset x0, ne
 ;   ret
 
@@ -35,9 +35,9 @@ block0(v0: i16x4):
 }
 
 ; block0:
-;   uminv h3, v0.4h
-;   mov x5, v3.d[0]
-;   subs xzr, x5, #0
+;   uminv h2, v0.4h
+;   mov x4, v2.d[0]
+;   subs xzr, x4, #0
 ;   cset x0, ne
 ;   ret
 
@@ -48,9 +48,9 @@ block0(v0: i16x8):
 }
 
 ; block0:
-;   uminv h3, v0.8h
-;   mov x5, v3.d[0]
-;   subs xzr, x5, #0
+;   uminv h2, v0.8h
+;   mov x4, v2.d[0]
+;   subs xzr, x4, #0
 ;   cset x0, ne
 ;   ret
 
@@ -61,9 +61,9 @@ block0(v0: i32x2):
 }
 
 ; block0:
-;   mov x3, v0.d[0]
-;   subs xzr, xzr, x3, LSR 32
-;   ccmp w3, #0, #nZcv, ne
+;   mov x2, v0.d[0]
+;   subs xzr, xzr, x2, LSR 32
+;   ccmp w2, #0, #nZcv, ne
 ;   cset x0, ne
 ;   ret
 
@@ -74,9 +74,9 @@ block0(v0: i32x4):
 }
 
 ; block0:
-;   uminv s3, v0.4s
-;   mov x5, v3.d[0]
-;   subs xzr, x5, #0
+;   uminv s2, v0.4s
+;   mov x4, v2.d[0]
+;   subs xzr, x4, #0
 ;   cset x0, ne
 ;   ret
 
@@ -87,9 +87,9 @@ block0(v0: i64x2):
 }
 
 ; block0:
-;   cmeq v3.2d, v0.2d, #0
-;   addp v5.2d, v3.2d, v3.2d
-;   fcmp d5, d5
+;   cmeq v2.2d, v0.2d, #0
+;   addp v4.2d, v2.2d, v2.2d
+;   fcmp d4, d4
 ;   cset x0, eq
 ;   ret
 

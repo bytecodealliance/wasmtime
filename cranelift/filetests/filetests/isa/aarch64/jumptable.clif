@@ -32,7 +32,7 @@ block5(v5: i32):
 ; block0:
 ;   emit_island 44
 ;   subs wzr, w0, #3
-;   b.hs label1 ; csel x1, xzr, x0, hs ; csdb ; adr x15, pc+16 ; ldrsw x1, [x15, x1, uxtw #2] ; add x15, x15, x1 ; br x15 ; jt_entries [Label(MachLabel(3)), Label(MachLabel(5)), Label(MachLabel(7))]
+;   b.hs label1 ; csel x15, xzr, x0, hs ; csdb ; adr x14, pc+16 ; ldrsw x15, [x14, x15, uxtw #2] ; add x14, x14, x15 ; br x14 ; jt_entries [Label(MachLabel(3)), Label(MachLabel(5)), Label(MachLabel(7))]
 ; block1:
 ;   movz x5, #4
 ;   b label2
@@ -56,3 +56,4 @@ block5(v5: i32):
 ; block9:
 ;   add w0, w0, w5
 ;   ret
+

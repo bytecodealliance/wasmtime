@@ -8,10 +8,10 @@ block0(v0: i8x16, v1: i8x16):
 }
 
 ; block0:
-;   vgbm %v4, 0
-;   vrepib %v6, 16
-;   vmnlb %v16, %v6, %v25
-;   vperm %v24, %v24, %v4, %v16
+;   vgbm %v3, 0
+;   vrepib %v5, 16
+;   vmnlb %v7, %v5, %v25
+;   vperm %v24, %v24, %v3, %v7
 ;   br %r14
 
 function %shuffle_0(i8x16, i8x16) -> i8x16 {
@@ -21,8 +21,8 @@ block0(v0: i8x16, v1: i8x16):
 }
 
 ; block0:
-;   vgbm %v4, 0
-;   vperm %v24, %v24, %v25, %v4
+;   vgbm %v3, 0
+;   vperm %v24, %v24, %v25, %v3
 ;   br %r14
 
 function %shuffle_1(i8x16, i8x16) -> i8x16 {
@@ -32,8 +32,8 @@ block0(v0: i8x16, v1: i8x16):
 }
 
 ; block0:
-;   bras %r1, 20 ; data.u128 0x03001f1a04060c0b170d1804020f1105 ; vl %v4, 0(%r1)
-;   vperm %v24, %v24, %v25, %v4
+;   bras %r1, 20 ; data.u128 0x03001f1a04060c0b170d1804020f1105 ; vl %v3, 0(%r1)
+;   vperm %v24, %v24, %v25, %v3
 ;   br %r14
 
 function %shuffle_2(i8x16, i8x16) -> i8x16 {
@@ -43,10 +43,10 @@ block0(v0: i8x16, v1: i8x16):
 }
 
 ; block0:
-;   vgbm %v4, 32768
-;   bras %r1, 20 ; data.u128 0x00808080808080808080808080808080 ; vl %v6, 0(%r1)
-;   vperm %v16, %v24, %v25, %v6
-;   vn %v24, %v4, %v16
+;   vgbm %v3, 32768
+;   bras %r1, 20 ; data.u128 0x00808080808080808080808080808080 ; vl %v5, 0(%r1)
+;   vperm %v7, %v24, %v25, %v5
+;   vn %v24, %v3, %v7
 ;   br %r14
 
 function %shuffle_vmrhg_xy(i8x16, i8x16) -> i8x16 {

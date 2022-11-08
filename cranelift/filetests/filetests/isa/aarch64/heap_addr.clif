@@ -14,16 +14,16 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   mov w9, w1
-;   ldr x10, [x0]
-;   mov x10, x10
-;   subs xzr, x9, x10
+;   mov w8, w1
+;   ldr x9, [x0]
+;   mov x9, x9
+;   subs xzr, x8, x9
 ;   b.ls label1 ; b label2
 ; block1:
-;   add x11, x0, x1, UXTW
-;   movz x12, #0
-;   subs xzr, x9, x10
-;   csel x0, x12, x11, hi
+;   add x10, x0, x1, UXTW
+;   movz x11, #0
+;   subs xzr, x8, x9
+;   csel x0, x11, x10, hi
 ;   csdb
 ;   ret
 ; block2:
@@ -39,14 +39,14 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   mov w7, w1
-;   subs xzr, x7, #65536
+;   mov w6, w1
+;   subs xzr, x6, #65536
 ;   b.ls label1 ; b label2
 ; block1:
-;   add x9, x0, x1, UXTW
-;   movz x8, #0
-;   subs xzr, x7, #65536
-;   csel x0, x8, x9, hi
+;   add x8, x0, x1, UXTW
+;   movz x7, #0
+;   subs xzr, x6, #65536
+;   csel x0, x7, x8, hi
 ;   csdb
 ;   ret
 ; block2:

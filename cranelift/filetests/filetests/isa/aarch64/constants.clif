@@ -224,8 +224,8 @@ block0:
 }
 
 ; block0:
-;   movz x2, #16457, LSL #48
-;   fmov d0, x2
+;   movz x1, #16457, LSL #48
+;   fmov d0, x1
 ;   ret
 
 function %f() -> f32 {
@@ -235,8 +235,8 @@ block0:
 }
 
 ; block0:
-;   movz x2, #16968, LSL #16
-;   fmov s0, w2
+;   movz x1, #16968, LSL #16
+;   fmov s0, w1
 ;   ret
 
 function %f() -> f64 {

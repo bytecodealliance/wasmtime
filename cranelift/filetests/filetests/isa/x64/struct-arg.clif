@@ -29,8 +29,8 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   lea     16(%rbp), %rsi
 ;   movzbq  0(%rdi), %rax
-;   movzbq  0(%rsi), %r10
-;   addl    %eax, %r10d, %eax
+;   movzbq  0(%rsi), %r9
+;   addl    %eax, %r9d, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -71,20 +71,20 @@ block0(v0: i64, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ;   subq    %rsp, $16, %rsp
-;   movq    %r14, 0(%rsp)
+;   movq    %r13, 0(%rsp)
 ; block0:
-;   movq    %rdi, %r14
+;   movq    %rdi, %r13
 ;   subq    %rsp, $64, %rsp
 ;   virtual_sp_offset_adjust 64
 ;   lea     0(%rsp), %rdi
 ;   movl    $64, %edx
-;   load_ext_name %Memcpy+0, %rcx
-;   call    *%rcx
-;   movq    %r14, %rdi
+;   load_ext_name %Memcpy+0, %rax
+;   call    *%rax
+;   movq    %r13, %rdi
 ;   call    User(userextname0)
 ;   addq    %rsp, $64, %rsp
 ;   virtual_sp_offset_adjust -64
-;   movq    0(%rsp), %r14
+;   movq    0(%rsp), %r13
 ;   addq    %rsp, $16, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -104,8 +104,8 @@ block0(v0: i64, v1: i64):
 ;   lea     16(%rbp), %rsi
 ;   lea     144(%rbp), %rdi
 ;   movzbq  0(%rsi), %rax
-;   movzbq  0(%rdi), %r10
-;   addl    %eax, %r10d, %eax
+;   movzbq  0(%rdi), %r9
+;   addl    %eax, %r9d, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -121,29 +121,29 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ;   subq    %rsp, $16, %rsp
-;   movq    %r13, 0(%rsp)
-;   movq    %r15, 8(%rsp)
+;   movq    %r12, 0(%rsp)
+;   movq    %r14, 8(%rsp)
 ; block0:
-;   movq    %rdx, %r15
-;   movq    %rdi, %r13
+;   movq    %rdx, %r14
+;   movq    %rdi, %r12
 ;   subq    %rsp, $192, %rsp
 ;   virtual_sp_offset_adjust 192
 ;   lea     0(%rsp), %rdi
 ;   movl    $128, %edx
-;   load_ext_name %Memcpy+0, %r8
-;   call    *%r8
+;   load_ext_name %Memcpy+0, %rcx
+;   call    *%rcx
 ;   lea     128(%rsp), %rdi
-;   movq    %r15, %rsi
+;   movq    %r14, %rsi
 ;   movl    $64, %edx
-;   load_ext_name %Memcpy+0, %r8
-;   movq    %r15, %rsi
-;   call    *%r8
-;   movq    %r13, %rdi
+;   load_ext_name %Memcpy+0, %rcx
+;   movq    %r14, %rsi
+;   call    *%rcx
+;   movq    %r12, %rdi
 ;   call    User(userextname0)
 ;   addq    %rsp, $192, %rsp
 ;   virtual_sp_offset_adjust -192
-;   movq    0(%rsp), %r13
-;   movq    8(%rsp), %r15
+;   movq    0(%rsp), %r12
+;   movq    8(%rsp), %r14
 ;   addq    %rsp, $16, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

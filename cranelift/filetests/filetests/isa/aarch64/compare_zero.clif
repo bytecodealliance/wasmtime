@@ -57,8 +57,8 @@ block0(v0: i32x4):
 }
 
 ; block0:
-;   cmeq v3.4s, v0.4s, #0
-;   mvn v0.16b, v3.16b
+;   cmeq v2.4s, v0.4s, #0
+;   mvn v0.16b, v2.16b
 ;   ret
 
 function %f2_vconst(i32x4) -> i32x4 {
@@ -69,8 +69,8 @@ block0(v0: i32x4):
 }
 
 ; block0:
-;   cmeq v3.4s, v0.4s, #0
-;   mvn v0.16b, v3.16b
+;   cmeq v2.4s, v0.4s, #0
+;   mvn v0.16b, v2.16b
 ;   ret
 
 function %f3(i64x2) -> i64x2 {
@@ -82,8 +82,8 @@ block0(v0: i64x2):
 }
 
 ; block0:
-;   cmeq v3.2d, v0.2d, #0
-;   mvn v0.16b, v3.16b
+;   cmeq v2.2d, v0.2d, #0
+;   mvn v0.16b, v2.16b
 ;   ret
 
 function %f3_vconst(i64x2) -> i64x2 {
@@ -94,8 +94,8 @@ block0(v0: i64x2):
 }
 
 ; block0:
-;   cmeq v3.2d, v0.2d, #0
-;   mvn v0.16b, v3.16b
+;   cmeq v2.2d, v0.2d, #0
+;   mvn v0.16b, v2.16b
 ;   ret
 
 function %f4(i8x16) -> i8x16 {
@@ -337,8 +337,8 @@ block0(v0: f64x2):
 }
 
 ; block0:
-;   fcmeq v3.2d, v0.2d, #0.0
-;   mvn v0.16b, v3.16b
+;   fcmeq v2.2d, v0.2d, #0.0
+;   mvn v0.16b, v2.16b
 ;   ret
 
 function %f14_vconst(f64x2) -> i64x2 {
@@ -349,8 +349,8 @@ block0(v0: f64x2):
 }
 
 ; block0:
-;   fcmeq v3.2d, v0.2d, #0.0
-;   mvn v0.16b, v3.16b
+;   fcmeq v2.2d, v0.2d, #0.0
+;   mvn v0.16b, v2.16b
 ;   ret
 
 function %f15(f32x4) -> i32x4 {
@@ -362,8 +362,8 @@ block0(v0: f32x4):
 }
 
 ; block0:
-;   fcmeq v3.4s, v0.4s, #0.0
-;   mvn v0.16b, v3.16b
+;   fcmeq v2.4s, v0.4s, #0.0
+;   mvn v0.16b, v2.16b
 ;   ret
 
 function %f15_vconst(f32x4) -> i32x4 {
@@ -374,8 +374,8 @@ block0(v0: f32x4):
 }
 
 ; block0:
-;   fcmeq v3.4s, v0.4s, #0.0
-;   mvn v0.16b, v3.16b
+;   fcmeq v2.4s, v0.4s, #0.0
+;   mvn v0.16b, v2.16b
 ;   ret
 
 function %f16(f32x4) -> i32x4 {

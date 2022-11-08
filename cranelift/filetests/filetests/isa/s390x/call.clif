@@ -17,8 +17,8 @@ block0(v0: i64):
 ;   aghi %r15, -160
 ;   virtual_sp_offset_adjust 160
 ; block0:
-;   bras %r1, 12 ; data %g + 0 ; lg %r3, 0(%r1)
-;   basr %r14, %r3
+;   bras %r1, 12 ; data %g + 0 ; lg %r5, 0(%r1)
+;   basr %r14, %r5
 ;   lmg %r14, %r15, 272(%r15)
 ;   br %r14
 
@@ -35,8 +35,8 @@ block0(v0: i32):
 ;   virtual_sp_offset_adjust 160
 ; block0:
 ;   llgfr %r2, %r2
-;   bras %r1, 12 ; data %g + 0 ; lg %r4, 0(%r1)
-;   basr %r14, %r4
+;   bras %r1, 12 ; data %g + 0 ; lg %r3, 0(%r1)
+;   basr %r14, %r3
 ;   lmg %r14, %r15, 272(%r15)
 ;   br %r14
 
@@ -46,8 +46,7 @@ block0(v0: i32):
 }
 
 ; block0:
-;   lgr %r5, %r2
-;   llgfr %r2, %r5
+;   llgfr %r2, %r2
 ;   br %r14
 
 function %call_uext(i32) -> i64 {
@@ -63,8 +62,8 @@ block0(v0: i32):
 ;   virtual_sp_offset_adjust 160
 ; block0:
 ;   lgfr %r2, %r2
-;   bras %r1, 12 ; data %g + 0 ; lg %r4, 0(%r1)
-;   basr %r14, %r4
+;   bras %r1, 12 ; data %g + 0 ; lg %r3, 0(%r1)
+;   basr %r14, %r3
 ;   lmg %r14, %r15, 272(%r15)
 ;   br %r14
 
@@ -74,8 +73,7 @@ block0(v0: i32):
 }
 
 ; block0:
-;   lgr %r5, %r2
-;   lgfr %r2, %r5
+;   lgfr %r2, %r2
 ;   br %r14
 
 function %call_colocated(i64) -> i64 {
@@ -107,8 +105,8 @@ block0(v0: i32):
 ;   virtual_sp_offset_adjust 160
 ; block0:
 ;   llgfr %r2, %r2
-;   bras %r1, 12 ; data %g + 0 ; lg %r4, 0(%r1)
-;   basr %r14, %r4
+;   bras %r1, 12 ; data %g + 0 ; lg %r3, 0(%r1)
+;   basr %r14, %r3
 ;   lmg %r14, %r15, 272(%r15)
 ;   br %r14
 
@@ -151,38 +149,31 @@ block0(v0: i64, v1: i32, v2: i32, v3: i32, v4: i16, v5: i16, v6: i16, v7: i8, v8
 }
 
 ;   stmg %r6, %r15, 48(%r15)
-;   aghi %r15, -16
 ; block0:
-;   stg %r2, 0(%r15)
-;   lgr %r10, %r6
-;   lg %r11, 176(%r15)
-;   lg %r12, 184(%r15)
-;   llgc %r13, 199(%r15)
-;   lg %r6, 200(%r15)
-;   lg %r2, 208(%r15)
-;   stg %r2, 8(%r15)
-;   llgfr %r2, %r3
-;   llgfr %r9, %r4
+;   lg %r11, 160(%r15)
+;   lg %r12, 168(%r15)
+;   llgc %r13, 183(%r15)
+;   lg %r14, 184(%r15)
+;   lg %r8, 192(%r15)
+;   llgfr %r3, %r3
+;   llgfr %r4, %r4
 ;   llgfr %r7, %r5
-;   lgr %r4, %r10
-;   llghr %r8, %r4
+;   llghr %r6, %r6
 ;   llghr %r5, %r11
-;   llghr %r10, %r12
-;   llgcr %r4, %r13
-;   llgcr %r13, %r6
-;   lg %r3, 8(%r15)
-;   llgcr %r3, %r3
-;   lg %r11, 0(%r15)
-;   agrk %r2, %r11, %r2
-;   agrk %r6, %r9, %r7
-;   agrk %r5, %r8, %r5
-;   agrk %r4, %r10, %r4
-;   agrk %r3, %r13, %r3
-;   agr %r2, %r6
-;   agrk %r4, %r5, %r4
-;   agrk %r5, %r3, %r2
-;   agrk %r2, %r4, %r5
-;   lmg %r6, %r15, 64(%r15)
+;   llghr %r12, %r12
+;   llgcr %r13, %r13
+;   llgcr %r14, %r14
+;   llgcr %r8, %r8
+;   agrk %r3, %r2, %r3
+;   agr %r4, %r7
+;   agrk %r5, %r6, %r5
+;   agrk %r2, %r12, %r13
+;   agrk %r12, %r14, %r8
+;   agr %r3, %r4
+;   agrk %r4, %r5, %r2
+;   agrk %r3, %r12, %r3
+;   agrk %r2, %r4, %r3
+;   lmg %r6, %r15, 48(%r15)
 ;   br %r14
 
 function %incoming_args_i128(i128, i128, i128, i128, i128, i128, i128, i128) -> i128 {
@@ -202,24 +193,23 @@ block0(v0: i128, v1: i128, v2: i128, v3: i128, v4: i128, v5: i128, v6: i128, v7:
 ;   vl %v1, 0(%r4)
 ;   vl %v2, 0(%r5)
 ;   vl %v3, 0(%r6)
-;   lg %r4, 160(%r15)
-;   vl %v4, 0(%r4)
+;   lg %r3, 160(%r15)
+;   vl %v4, 0(%r3)
 ;   lg %r3, 168(%r15)
 ;   vl %v5, 0(%r3)
-;   lg %r3, 176(%r15)
-;   vl %v6, 0(%r3)
-;   lg %r5, 184(%r15)
-;   vl %v7, 0(%r5)
-;   vaq %v17, %v0, %v1
-;   vaq %v18, %v2, %v3
-;   vaq %v19, %v4, %v5
-;   vaq %v20, %v6, %v7
-;   vaq %v17, %v17, %v18
-;   vaq %v18, %v19, %v20
-;   vaq %v17, %v17, %v18
-;   vst %v17, 0(%r2)
+;   lg %r5, 176(%r15)
+;   vl %v6, 0(%r5)
+;   lg %r4, 184(%r15)
+;   vl %v7, 0(%r4)
+;   vaq %v16, %v0, %v1
+;   vaq %v17, %v2, %v3
+;   vaq %v18, %v4, %v5
+;   vaq %v19, %v6, %v7
+;   vaq %v16, %v16, %v17
+;   vaq %v17, %v18, %v19
+;   vaq %v16, %v16, %v17
+;   vst %v16, 0(%r2)
 ;   br %r14
-
 
 function %call_sret() -> i64 {
     fn0 = colocated %g(i64 sret)

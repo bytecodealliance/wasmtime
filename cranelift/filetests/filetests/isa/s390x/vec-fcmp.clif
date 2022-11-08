@@ -18,8 +18,8 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfcedb %v4, %v24, %v25
-;   vno %v24, %v4, %v4
+;   vfcedb %v3, %v24, %v25
+;   vno %v24, %v3, %v3
 ;   br %r14
 
 function %fcmp_gt_f64x2(f64x2, f64x2) -> i64x2 {
@@ -69,9 +69,9 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchdb %v4, %v24, %v25
-;   vfchdb %v6, %v25, %v24
-;   vno %v24, %v4, %v6
+;   vfchdb %v3, %v24, %v25
+;   vfchdb %v5, %v25, %v24
+;   vno %v24, %v3, %v5
 ;   br %r14
 
 function %fcmp_one_f64x2(f64x2, f64x2) -> i64x2 {
@@ -81,9 +81,9 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchdb %v4, %v24, %v25
-;   vfchdb %v6, %v25, %v24
-;   vo %v24, %v4, %v6
+;   vfchdb %v3, %v24, %v25
+;   vfchdb %v5, %v25, %v24
+;   vo %v24, %v3, %v5
 ;   br %r14
 
 function %fcmp_ugt_f64x2(f64x2, f64x2) -> i64x2 {
@@ -93,8 +93,8 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchedb %v4, %v25, %v24
-;   vno %v24, %v4, %v4
+;   vfchedb %v3, %v25, %v24
+;   vno %v24, %v3, %v3
 ;   br %r14
 
 function %fcmp_ult_f64x2(f64x2, f64x2) -> i64x2 {
@@ -104,8 +104,8 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchedb %v4, %v24, %v25
-;   vno %v24, %v4, %v4
+;   vfchedb %v3, %v24, %v25
+;   vno %v24, %v3, %v3
 ;   br %r14
 
 function %fcmp_uge_f64x2(f64x2, f64x2) -> i64x2 {
@@ -115,8 +115,8 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchdb %v4, %v25, %v24
-;   vno %v24, %v4, %v4
+;   vfchdb %v3, %v25, %v24
+;   vno %v24, %v3, %v3
 ;   br %r14
 
 function %fcmp_ule_f64x2(f64x2, f64x2) -> i64x2 {
@@ -126,8 +126,8 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchdb %v4, %v24, %v25
-;   vno %v24, %v4, %v4
+;   vfchdb %v3, %v24, %v25
+;   vno %v24, %v3, %v3
 ;   br %r14
 
 function %fcmp_ord_f64x2(f64x2, f64x2) -> i64x2 {
@@ -137,9 +137,9 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchedb %v4, %v24, %v25
-;   vfchedb %v6, %v25, %v24
-;   vo %v24, %v4, %v6
+;   vfchedb %v3, %v24, %v25
+;   vfchedb %v5, %v25, %v24
+;   vo %v24, %v3, %v5
 ;   br %r14
 
 function %fcmp_uno_f64x2(f64x2, f64x2) -> i64x2 {
@@ -149,9 +149,9 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchedb %v4, %v24, %v25
-;   vfchedb %v6, %v25, %v24
-;   vno %v24, %v4, %v6
+;   vfchedb %v3, %v24, %v25
+;   vfchedb %v5, %v25, %v24
+;   vno %v24, %v3, %v5
 ;   br %r14
 
 function %fcmp_eq_f32x4(f32x4, f32x4) -> i32x4 {
@@ -171,8 +171,8 @@ block0(v0: f32x4, v1: f32x4):
 }
 
 ; block0:
-;   vfcesb %v4, %v24, %v25
-;   vno %v24, %v4, %v4
+;   vfcesb %v3, %v24, %v25
+;   vno %v24, %v3, %v3
 ;   br %r14
 
 function %fcmp_gt_f32x4(f32x4, f32x4) -> i32x4 {
@@ -222,9 +222,9 @@ block0(v0: f32x4, v1: f32x4):
 }
 
 ; block0:
-;   vfchsb %v4, %v24, %v25
-;   vfchsb %v6, %v25, %v24
-;   vno %v24, %v4, %v6
+;   vfchsb %v3, %v24, %v25
+;   vfchsb %v5, %v25, %v24
+;   vno %v24, %v3, %v5
 ;   br %r14
 
 function %fcmp_one_f32x4(f32x4, f32x4) -> i32x4 {
@@ -234,9 +234,9 @@ block0(v0: f32x4, v1: f32x4):
 }
 
 ; block0:
-;   vfchsb %v4, %v24, %v25
-;   vfchsb %v6, %v25, %v24
-;   vo %v24, %v4, %v6
+;   vfchsb %v3, %v24, %v25
+;   vfchsb %v5, %v25, %v24
+;   vo %v24, %v3, %v5
 ;   br %r14
 
 function %fcmp_ugt_f32x4(f32x4, f32x4) -> i32x4 {
@@ -246,8 +246,8 @@ block0(v0: f32x4, v1: f32x4):
 }
 
 ; block0:
-;   vfchesb %v4, %v25, %v24
-;   vno %v24, %v4, %v4
+;   vfchesb %v3, %v25, %v24
+;   vno %v24, %v3, %v3
 ;   br %r14
 
 function %fcmp_ult_f32x4(f32x4, f32x4) -> i32x4 {
@@ -257,8 +257,8 @@ block0(v0: f32x4, v1: f32x4):
 }
 
 ; block0:
-;   vfchesb %v4, %v24, %v25
-;   vno %v24, %v4, %v4
+;   vfchesb %v3, %v24, %v25
+;   vno %v24, %v3, %v3
 ;   br %r14
 
 function %fcmp_uge_f32x4(f32x4, f32x4) -> i32x4 {
@@ -268,8 +268,8 @@ block0(v0: f32x4, v1: f32x4):
 }
 
 ; block0:
-;   vfchsb %v4, %v25, %v24
-;   vno %v24, %v4, %v4
+;   vfchsb %v3, %v25, %v24
+;   vno %v24, %v3, %v3
 ;   br %r14
 
 function %fcmp_ule_f32x4(f32x4, f32x4) -> i32x4 {
@@ -279,8 +279,8 @@ block0(v0: f32x4, v1: f32x4):
 }
 
 ; block0:
-;   vfchsb %v4, %v24, %v25
-;   vno %v24, %v4, %v4
+;   vfchsb %v3, %v24, %v25
+;   vno %v24, %v3, %v3
 ;   br %r14
 
 function %fcmp_ord_f32x4(f32x4, f32x4) -> i32x4 {
@@ -290,9 +290,9 @@ block0(v0: f32x4, v1: f32x4):
 }
 
 ; block0:
-;   vfchesb %v4, %v24, %v25
-;   vfchesb %v6, %v25, %v24
-;   vo %v24, %v4, %v6
+;   vfchesb %v3, %v24, %v25
+;   vfchesb %v5, %v25, %v24
+;   vo %v24, %v3, %v5
 ;   br %r14
 
 function %fcmp_uno_f32x4(f32x4, f32x4) -> i32x4 {
@@ -302,8 +302,8 @@ block0(v0: f32x4, v1: f32x4):
 }
 
 ; block0:
-;   vfchesb %v4, %v24, %v25
-;   vfchesb %v6, %v25, %v24
-;   vno %v24, %v4, %v6
+;   vfchesb %v3, %v24, %v25
+;   vfchesb %v5, %v25, %v24
+;   vno %v24, %v3, %v5
 ;   br %r14
 

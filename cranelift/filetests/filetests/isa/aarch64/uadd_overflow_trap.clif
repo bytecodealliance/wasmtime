@@ -9,8 +9,8 @@ block0(v0: i32):
 }
 
 ; block0:
-;   movz x3, #127
-;   adds w0, w0, w3
+;   movz x2, #127
+;   adds w0, w0, w2
 ;   b.lo 8 ; udf
 ;   ret
 
@@ -22,8 +22,8 @@ block0(v0: i32):
 }
 
 ; block0:
-;   movz x3, #127
-;   adds w0, w3, w0
+;   movz x2, #127
+;   adds w0, w2, w0
 ;   b.lo 8 ; udf
 ;   ret
 
@@ -46,8 +46,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   movz x3, #127
-;   adds x0, x0, x3
+;   movz x2, #127
+;   adds x0, x0, x2
 ;   b.lo 8 ; udf
 ;   ret
 
@@ -59,8 +59,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   movz x3, #127
-;   adds x0, x3, x0
+;   movz x2, #127
+;   adds x0, x2, x0
 ;   b.lo 8 ; udf
 ;   ret
 

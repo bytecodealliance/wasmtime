@@ -12,22 +12,21 @@ block0(v0: i32):
 
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
-;   str x25, [sp, #-16]!
+;   str x24, [sp, #-16]!
 ;   stp d14, d15, [sp, #-16]!
 ;   stp d12, d13, [sp, #-16]!
 ;   stp d10, d11, [sp, #-16]!
 ;   stp d8, d9, [sp, #-16]!
 ; block0:
-;   mov x25, x0
+;   mov x24, x0
 ;   elf_tls_get_addr x0, userextname0
-;   mov x7, x25
 ;   mov x1, x0
-;   mov x0, x7
+;   mov x0, x24
 ;   ldp d8, d9, [sp], #16
 ;   ldp d10, d11, [sp], #16
 ;   ldp d12, d13, [sp], #16
 ;   ldp d14, d15, [sp], #16
-;   ldr x25, [sp], #16
+;   ldr x24, [sp], #16
 ;   ldp fp, lr, [sp], #16
 ;   ret
 
