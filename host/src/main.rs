@@ -27,7 +27,7 @@ fn main() -> Result<()> {
 
     let (wasi, _instance) = Wasi::instantiate(&mut store, &component, &linker)?;
 
-    wasi.command(&mut store)?;
+    wasi.command(&mut store, 0, 0, Vec::new())?;
 
     Ok(())
 }
