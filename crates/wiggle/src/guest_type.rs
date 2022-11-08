@@ -97,7 +97,7 @@ macro_rules! integer_primitives {
                 // difference between an additional branch and a relaxed memory
                 // access and thus always do the relaxed access here.
                 let atomic_value_ref: &$ty_atomic =
-                    unsafe { &*(host_ptr as *mut $ty as *const $ty_atomic) };
+                    unsafe { &*(host_ptr.cast::<$ty_atomic>()) };
                 Ok($ty::from_le(atomic_value_ref.load(Ordering::Relaxed)))
             }
 
@@ -123,7 +123,7 @@ macro_rules! integer_primitives {
                 // difference between an additional branch and a relaxed memory
                 // access and thus always do the relaxed access here.
                 let atomic_value_ref: &$ty_atomic =
-                    unsafe { &*(host_ptr as *mut $ty as *const $ty_atomic) };
+                    unsafe { &*(host_ptr.cast::<$ty_atomic>()) };
                 atomic_value_ref.store(val.to_le(), Ordering::Relaxed);
                 Ok(())
             }
@@ -174,7 +174,7 @@ macro_rules! float_primitives {
                 // difference between an additional branch and a relaxed memory
                 // access and thus always do the relaxed access here.
                 let atomic_value_ref: &$ty_atomic =
-                    unsafe { &*(host_ptr as *mut $ty as *const $ty_atomic) };
+                    unsafe { &*(host_ptr.cast::<$ty_atomic>()) };
                 let value = $ty_unsigned::from_le(atomic_value_ref.load(Ordering::Relaxed));
                 Ok($ty::from_bits(value))
             }
@@ -201,7 +201,7 @@ macro_rules! float_primitives {
                 // difference between an additional branch and a relaxed memory
                 // access and thus always do the relaxed access here.
                 let atomic_value_ref: &$ty_atomic =
-                    unsafe { &*(host_ptr as *mut $ty as *const $ty_atomic) };
+                    unsafe { &*(host_ptr.cast::<$ty_atomic>()) };
                 let le_value = $ty_unsigned::to_le(val.to_bits());
                 atomic_value_ref.store(le_value, Ordering::Relaxed);
                 Ok(())
