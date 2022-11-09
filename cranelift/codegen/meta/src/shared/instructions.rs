@@ -1128,30 +1128,30 @@ pub(crate) fn define(
     );
 
     let H = &Operand::new("H", &entities.heap);
-    let p = &Operand::new("p", HeapOffset);
-    let Offset = &Operand::new("Offset", &imm.uimm32).with_doc("Offset in bytes");
-    let Size = &Operand::new("Size", &imm.uimm8).with_doc("Size in bytes");
+    let index = &Operand::new("index", HeapOffset);
+    let Offset = &Operand::new("Offset", &imm.uimm32).with_doc("Static offset immediate in bytes");
+    let Size = &Operand::new("Size", &imm.uimm8).with_doc("Static size immediate in bytes");
 
     ig.push(
         Inst::new(
             "heap_addr",
             r#"
-        Bounds check and compute absolute address of ``p + Offset`` in heap memory.
+        Bounds check and compute absolute address of ``index + Offset`` in heap memory.
 
-        Verify that the offset range ``p .. p + Offset + Size - 1`` is in bounds for the
-        heap H, and generate an absolute address that is safe to dereference.
+        Verify that the range ``index .. index + Offset + Size`` is in bounds for the
+        heap ``H``, and generate an absolute address that is safe to dereference.
 
-        1. If ``p + Offset + Size`` is not greater than the heap bound, return an
-           absolute address corresponding to a byte offset of ``p + Offset`` from the
+        1. If ``index + Offset + Size`` is less than or equal ot the heap bound, return an
+           absolute address corresponding to a byte offset of ``index + Offset`` from the
            heap's base address.
 
-        2. If ``p + Offset + Size`` is greater than the heap bound, return the
+        2. If ``index + Offset + Size`` is greater than the heap bound, return the
            ``NULL`` pointer or any other address that is guaranteed to generate a trap
            when accessed.
         "#,
             &formats.heap_addr,
         )
-        .operands_in(vec![H, p, Offset, Size])
+        .operands_in(vec![H, index, Offset, Size])
         .operands_out(vec![addr]),
     );
 
