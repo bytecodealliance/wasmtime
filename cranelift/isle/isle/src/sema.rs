@@ -429,10 +429,23 @@ pub struct Rule {
     /// The right-hand side expression that this rule evaluates upon successful
     /// match.
     pub rhs: Expr,
+    /// Variable names used in this rule, indexed by [VarId].
+    pub vars: Vec<BoundVar>,
     /// The priority of this rule, defaulted to 0 if it was missing in the source.
     pub prio: i64,
     /// The source position where this rule is defined.
     pub pos: Pos,
+}
+
+/// A name bound in a pattern or let-expression.
+#[derive(Clone, Debug)]
+pub struct BoundVar {
+    /// The identifier used for this variable within the scope of the current [Rule].
+    pub id: VarId,
+    /// The variable's name.
+    pub name: Sym,
+    /// The type of the value this variable is bound to.
+    pub ty: TypeId,
 }
 
 /// An `if-let` clause with a subpattern match on an expr after the
@@ -1082,17 +1095,22 @@ impl TypeEnv {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 struct Bindings {
-    next_var: usize,
-    vars: Vec<BoundVar>,
+    seen: Vec<BoundVar>,
 }
 
-#[derive(Clone, Debug)]
-struct BoundVar {
-    name: Sym,
-    id: VarId,
-    ty: TypeId,
+impl Bindings {
+    fn add_var(&mut self, name: Sym, ty: TypeId) -> VarId {
+        let id = VarId(self.seen.len());
+        log!("binding var {:?} as {:?} with type {:?}", name.0, id, ty);
+        self.seen.push(BoundVar { id, name, ty });
+        id
+    }
+
+    fn lookup(&self, name: Sym) -> Option<&BoundVar> {
+        self.seen.iter().rev().find(|binding| binding.name == name)
+    }
 }
 
 impl TermEnv {
@@ -1623,10 +1641,7 @@ impl TermEnv {
             match def {
                 &ast::Def::Rule(ref rule) => {
                     let pos = rule.pos;
-                    let mut bindings = Bindings {
-                        next_var: 0,
-                        vars: vec![],
-                    };
+                    let mut bindings = Bindings::default();
 
                     let rule_term = match rule.pattern.root_term() {
                         Some(name) => {
@@ -1692,6 +1707,7 @@ impl TermEnv {
                         lhs,
                         iflets,
                         rhs,
+                        vars: bindings.seen,
                         prio: rule.prio.unwrap_or(0),
                         pos,
                     });
@@ -1878,18 +1894,14 @@ impl TermEnv {
                 )?;
 
                 let name = tyenv.intern_mut(var);
-                if bindings.vars.iter().any(|bv| bv.name == name) {
+                if bindings.lookup(name).is_some() {
                     tyenv.report_error(
                         pos,
                         format!("Re-bound variable name in LHS pattern: '{}'", var.0),
                     );
                     // Try to keep going.
                 }
-                let id = VarId(bindings.next_var);
-                bindings.next_var += 1;
-                log!("binding var {:?}", var.0);
-                bindings.vars.push(BoundVar { name, id, ty });
-
+                let id = bindings.add_var(name, ty);
                 Some((Pattern::BindPattern(ty, id, Box::new(subpat)), ty))
             }
             &ast::Pattern::Var { ref var, pos } => {
@@ -1899,7 +1911,7 @@ impl TermEnv {
                 // `BindPattern` with a wildcard subpattern to capture
                 // at this location.
                 let name = tyenv.intern_mut(var);
-                match bindings.vars.iter().rev().find(|bv| bv.name == name) {
+                match bindings.lookup(name) {
                     None => {
                         let ty = match expected_ty {
                             Some(ty) => ty,
@@ -1911,10 +1923,7 @@ impl TermEnv {
                                 return None;
                             }
                         };
-                        let id = VarId(bindings.next_var);
-                        bindings.next_var += 1;
-                        log!("binding var {:?}", var.0);
-                        bindings.vars.push(BoundVar { name, id, ty });
+                        let id = bindings.add_var(name, ty);
                         Some((
                             Pattern::BindPattern(ty, id, Box::new(Pattern::Wildcard(ty))),
                             ty,
@@ -2123,7 +2132,7 @@ impl TermEnv {
                     None => {
                         // Maybe this was actually a variable binding and the user has placed
                         // parens around it by mistake? (See #4775.)
-                        if bindings.vars.iter().any(|b| b.name == name) {
+                        if bindings.lookup(name).is_some() {
                             tyenv.report_error(
                                 pos,
                                 format!(
@@ -2215,7 +2224,7 @@ impl TermEnv {
             &ast::Expr::Var { ref name, pos } => {
                 let sym = tyenv.intern_mut(name);
                 // Look through bindings, innermost (most recent) first.
-                let bv = match bindings.vars.iter().rev().find(|b| b.name == sym) {
+                let bv = match bindings.lookup(sym) {
                     None => {
                         tyenv.report_error(pos, format!("Unknown variable '{}'", name.0));
                         return None;
@@ -2295,7 +2304,7 @@ impl TermEnv {
                 ref body,
                 pos,
             } => {
-                let orig_binding_len = bindings.vars.len();
+                let orig_binding_len = bindings.seen.len();
 
                 // For each new binding...
                 let mut let_defs = vec![];
@@ -2335,10 +2344,7 @@ impl TermEnv {
                     )));
 
                     // Bind the var with the given type.
-                    let id = VarId(bindings.next_var);
-                    bindings.next_var += 1;
-                    bindings.vars.push(BoundVar { name, id, ty: tid });
-
+                    let id = bindings.add_var(name, tid);
                     let_defs.push((id, tid, val));
                 }
 
@@ -2347,7 +2353,7 @@ impl TermEnv {
                 let body_ty = body.ty();
 
                 // Pop the bindings.
-                bindings.vars.truncate(orig_binding_len);
+                bindings.seen.truncate(orig_binding_len);
 
                 Some(Expr::Let {
                     ty: body_ty,
