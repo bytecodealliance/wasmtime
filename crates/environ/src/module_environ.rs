@@ -774,10 +774,9 @@ and for re-adding support for interface types you can see this issue:
     fn name_section(&mut self, names: NameSectionReader<'data>) -> WasmResult<()> {
         for subsection in names {
             match subsection? {
-                wasmparser::Name::Function(f) => {
-                    let mut names = f.get_map()?;
-                    for _ in 0..names.get_count() {
-                        let Naming { index, name } = names.read()?;
+                wasmparser::Name::Function(names) => {
+                    for name in names {
+                        let Naming { index, name } = name?;
                         // Skip this naming if it's naming a function that
                         // doesn't actually exist.
                         if (index as usize) >= self.result.module.functions.len() {
@@ -796,34 +795,31 @@ and for re-adding support for interface types you can see this issue:
                             .insert(index, name);
                     }
                 }
-                wasmparser::Name::Module(module) => {
-                    let name = module.get_name()?;
+                wasmparser::Name::Module { name, .. } => {
                     self.result.module.name = Some(name.to_string());
                     if self.tunables.generate_native_debuginfo {
                         self.result.debuginfo.name_section.module_name = Some(name);
                     }
                 }
-                wasmparser::Name::Local(l) => {
+                wasmparser::Name::Local(reader) => {
                     if !self.tunables.generate_native_debuginfo {
                         continue;
                     }
-                    let mut reader = l.get_indirect_map()?;
-                    for _ in 0..reader.get_indirect_count() {
-                        let f = reader.read()?;
+                    for f in reader {
+                        let f = f?;
                         // Skip this naming if it's naming a function that
                         // doesn't actually exist.
-                        if (f.indirect_index as usize) >= self.result.module.functions.len() {
+                        if (f.index as usize) >= self.result.module.functions.len() {
                             continue;
                         }
-                        let mut map = f.get_map()?;
-                        for _ in 0..map.get_count() {
-                            let Naming { index, name } = map.read()?;
+                        for name in f.names {
+                            let Naming { index, name } = name?;
 
                             self.result
                                 .debuginfo
                                 .name_section
                                 .locals_names
-                                .entry(FuncIndex::from_u32(f.indirect_index))
+                                .entry(FuncIndex::from_u32(f.index))
                                 .or_insert(HashMap::new())
                                 .insert(index, name);
                         }

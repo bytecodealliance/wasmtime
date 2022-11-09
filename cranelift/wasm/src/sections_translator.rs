@@ -395,35 +395,27 @@ pub fn parse_name_section<'data>(
 ) -> WasmResult<()> {
     for subsection in names {
         match subsection? {
-            wasmparser::Name::Function(f) => {
-                let mut names = f.get_map()?;
-                for _ in 0..names.get_count() {
-                    let Naming { index, name } = names.read()?;
+            wasmparser::Name::Function(names) => {
+                for name in names {
+                    let Naming { index, name } = name?;
                     // We reserve `u32::MAX` for our own use in cranelift-entity.
                     if index != u32::max_value() {
                         environ.declare_func_name(FuncIndex::from_u32(index), name);
                     }
                 }
             }
-            wasmparser::Name::Module(module) => {
-                let name = module.get_name()?;
+            wasmparser::Name::Module { name, .. } => {
                 environ.declare_module_name(name);
             }
-            wasmparser::Name::Local(l) => {
-                let mut reader = l.get_indirect_map()?;
-                for _ in 0..reader.get_indirect_count() {
-                    let f = reader.read()?;
-                    if f.indirect_index == u32::max_value() {
+            wasmparser::Name::Local(reader) => {
+                for f in reader {
+                    let f = f?;
+                    if f.index == u32::max_value() {
                         continue;
                     }
-                    let mut map = f.get_map()?;
-                    for _ in 0..map.get_count() {
-                        let Naming { index, name } = map.read()?;
-                        environ.declare_local_name(
-                            FuncIndex::from_u32(f.indirect_index),
-                            index,
-                            name,
-                        )
+                    for name in f.names {
+                        let Naming { index, name } = name?;
+                        environ.declare_local_name(FuncIndex::from_u32(f.index), index, name)
                     }
                 }
             }
