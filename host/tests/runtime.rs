@@ -28,8 +28,9 @@ fn instantiate(path: &str) -> Result<(Store<WasiCtx>, Wasi)> {
 fn run_hello_stdout(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     wasi.command(
         &mut store,
-        0 as host::filesystem::Descriptor,
-        1 as host::filesystem::Descriptor,
+        0 as host::Descriptor,
+        1 as host::Descriptor,
+        &["gussie", "sparky", "willa"],
     )?;
     Ok(())
 }
@@ -37,8 +38,18 @@ fn run_hello_stdout(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
 fn run_panic(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     let r = wasi.command(
         &mut store,
-        0 as host::filesystem::Descriptor,
-        1 as host::filesystem::Descriptor,
+        0 as host::Descriptor,
+        1 as host::Descriptor,
+        &[
+            "diesel",
+            "the",
+            "cat",
+            "scratched",
+            "me",
+            "real",
+            "good",
+            "yesterday",
+        ],
     );
     assert!(r.is_err());
     println!("{:?}", r);
