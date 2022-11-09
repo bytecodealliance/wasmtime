@@ -108,7 +108,11 @@ fn dynamic_addr(
         // is_out_of_bounds, NULL, addr` to compute the address, and so the load
         // will trap if the address is out of bounds, which means we don't need
         // to do another explicit bounds check like we do below.
-        Some((cc, lhs, bound))
+        Some(SpectreOobComparison {
+            cc,
+            lhs,
+            rhs: bound,
+        })
     } else {
         let oob = pos.ins().icmp(cc, lhs, bound);
         trace!("  inserting: {}", pos.func.dfg.display_value_inst(oob));
@@ -206,7 +210,11 @@ fn static_addr(
         pos.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
         if isa.flags().enable_heap_access_spectre_mitigation() {
             let limit = pos.ins().iconst(addr_ty, limit_imm);
-            spectre_oob_comparison = Some((cc, lhs, limit));
+            spectre_oob_comparison = Some(SpectreOobComparison {
+                cc,
+                lhs,
+                rhs: limit,
+            });
         }
     }
 
@@ -252,6 +260,12 @@ fn cast_index_to_pointer_ty(
     extended_index
 }
 
+struct SpectreOobComparison {
+    cc: IntCC,
+    lhs: ir::Value,
+    rhs: ir::Value,
+}
+
 /// Emit code for the base address computation of a `heap_addr` instruction.
 fn compute_addr(
     isa: &dyn TargetIsa,
@@ -265,7 +279,7 @@ fn compute_addr(
     // values to compare and the condition code that indicates an out-of bounds
     // condition; on this condition, the conditional move will choose a
     // speculatively safe address (a zero / null pointer) instead.
-    spectre_oob_comparison: Option<(IntCC, ir::Value, ir::Value)>,
+    spectre_oob_comparison: Option<SpectreOobComparison>,
 ) {
     debug_assert_eq!(func.dfg.value_type(index), addr_ty);
     let mut pos = FuncCursor::new(func).at_inst(inst);
@@ -283,7 +297,7 @@ fn compute_addr(
         base
     };
 
-    if let Some((cc, a, b)) = spectre_oob_comparison {
+    if let Some(SpectreOobComparison { cc, lhs, rhs }) = spectre_oob_comparison {
         let final_base = pos.ins().iadd(base, index);
         // NB: The addition of the offset immediate must happen *before* the
         // `select_spectre_guard`. If it happens after, then we potentially are
@@ -301,7 +315,7 @@ fn compute_addr(
         let zero = pos.ins().iconst(addr_ty, 0);
         trace!("  inserting: {}", pos.func.dfg.display_value_inst(zero));
 
-        let cmp = pos.ins().icmp(cc, a, b);
+        let cmp = pos.ins().icmp(cc, lhs, rhs);
         trace!("  inserting: {}", pos.func.dfg.display_value_inst(cmp));
 
         let value = pos
