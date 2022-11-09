@@ -2965,12 +2965,15 @@ impl<'a> Parser<'a> {
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let arg = self.match_value("expected SSA value heap address")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
-                let imm = self.match_uimm32("expected 32-bit integer size")?;
+                let offset = self.match_uimm32("expected 32-bit integer offset")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let size = self.match_uimm8("expected 8-bit integer size")?;
                 InstructionData::HeapAddr {
                     opcode,
                     heap,
                     arg,
-                    imm,
+                    offset,
+                    size,
                 }
             }
             InstructionFormat::TableAddr => {

@@ -11,7 +11,7 @@ function %fpromote_f32_f64(i64 vmctx, i64, f32) -> f64 {
     heap0 = static gv1, min 0x10, bound 0x10, offset_guard 0x0, index_type i64
 
 block0(v0: i64, v1: i64, v2: f32):
-    v3 = heap_addr.i64 heap0, v1, 4
+    v3 = heap_addr.i64 heap0, v1, 0, 4
     store.f32 v2, v3
     v4 = load.f32 v3
     v5 = fpromote.f64 v4
@@ -31,7 +31,7 @@ function %fdemote_test(i64 vmctx, i64, f64) -> f32 {
     heap0 = static gv1, min 0x10, bound 0x10, offset_guard 0x0, index_type i64
 
 block0(v0: i64, v1: i64, v2: f64):
-    v3 = heap_addr.i64 heap0, v1, 8
+    v3 = heap_addr.i64 heap0, v1, 0, 8
     store.f64 v2, v3
     v4 = load.f64 v3
     v5 = fdemote.f32 v4
@@ -51,7 +51,7 @@ function %fvdemote_test(i64 vmctx, i64, f64x2) -> f32x4 {
     heap0 = static gv1, min 0x20, bound 0x20, offset_guard 0, index_type i64
 
 block0(v0: i64, v1: i64, v2: f64x2):
-    v3 = heap_addr.i64 heap0, v1, 16
+    v3 = heap_addr.i64 heap0, v1, 0, 16
     store.f64x2 v2, v3
     v4 = load.f64x2 v3
     v5 = fvdemote v4
@@ -72,7 +72,7 @@ function %fvpromote_low_test(i64 vmctx, i64, f32x4) -> f64x2 {
     heap0 = static gv1, min 0x20, bound 0x20, offset_guard 0, index_type i64
 
 block0(v0: i64, v1: i64, v2: f32x4):
-    v3 = heap_addr.i64 heap0, v1, 16
+    v3 = heap_addr.i64 heap0, v1, 0, 16
     store.f32x4 v2, v3
     v4 = load.f32x4 v3
     v5 = fvpromote_low v4

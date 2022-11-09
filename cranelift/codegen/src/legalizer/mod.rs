@@ -72,8 +72,9 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
                     opcode: ir::Opcode::HeapAddr,
                     heap,
                     arg,
-                    imm,
-                } => expand_heap_addr(inst, &mut pos.func, cfg, isa, heap, arg, imm),
+                    offset,
+                    size,
+                } => expand_heap_addr(inst, &mut pos.func, cfg, isa, heap, arg, offset, size),
                 InstructionData::StackLoad {
                     opcode: ir::Opcode::StackLoad,
                     stack_slot,

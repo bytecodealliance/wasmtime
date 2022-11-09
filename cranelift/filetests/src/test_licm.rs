@@ -45,6 +45,7 @@ impl SubTest for TestLICM {
             .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, Into::into(e)))?;
 
         let text = comp_ctx.func.display().to_string();
+        log::debug!("Post-LICM CLIF:\n{}", text);
         run_filecheck(&text, context)
     }
 }

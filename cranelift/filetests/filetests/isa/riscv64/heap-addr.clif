@@ -8,7 +8,7 @@ function %dynamic_heap_check(i64 vmctx, i32) -> i64 {
     heap0 = dynamic gv0, bound gv1, offset_guard 0x1000, index_type i32
 
 block0(v0: i64, v1: i32):
-    v2 = heap_addr.i64 heap0, v1, 0
+    v2 = heap_addr.i64 heap0, v1, 0, 0
     return v2
 }
 
@@ -32,7 +32,7 @@ function %static_heap_check(i64 vmctx, i32) -> i64 {
     heap0 = static gv0, bound 0x1_0000, offset_guard 0x1000, index_type i32
 
 block0(v0: i64, v1: i32):
-    v2 = heap_addr.i64 heap0, v1, 0
+    v2 = heap_addr.i64 heap0, v1, 0, 0
     return v2
 }
 
@@ -47,6 +47,62 @@ block0(v0: i64, v1: i32):
 ;   ugt t4,a7,a6##ty=i64
 ;   li t0,0
 ;   selectif_spectre_guard a0,t0,t3##test=t4
+;   ret
+; block2:
+;   udf##trap_code=heap_oob
+
+function %dynamic_heap_check_with_offset(i64 vmctx, i32) -> i64 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    heap0 = dynamic gv0, bound gv1, offset_guard 0x1000, index_type i32
+
+block0(v0: i64, v1: i32):
+    v2 = heap_addr.i64 heap0, v1, 16, 8
+    return v2
+}
+
+; block0:
+;   uext.w t1,a1
+;   ld t0,0(a0)
+;   li t3,24
+;   add t2,t1,t3
+;   ult a1,t2,t1##ty=i64
+;   trap_if a1,heap_oob
+;   ule a1,t2,t0##ty=i64
+;   bne a1,zero,taken(label1),not_taken(label2)
+; block1:
+;   add a0,a0,t1
+;   addi a0,a0,16
+;   ugt t1,t2,t0##ty=i64
+;   li a1,0
+;   selectif_spectre_guard a0,a1,a0##test=t1
+;   ret
+; block2:
+;   udf##trap_code=heap_oob
+
+function %static_heap_check_with_offset(i64 vmctx, i32) -> i64 {
+    gv0 = vmctx
+    heap0 = static gv0, bound 0x1_0000, offset_guard 0x1000, index_type i32
+
+block0(v0: i64, v1: i32):
+    v2 = heap_addr.i64 heap0, v1, 16, 8
+    return v2
+}
+
+; block0:
+;   uext.w t3,a1
+;   lui a7,16
+;   addi a7,a7,4072
+;   ule t0,t3,a7##ty=i64
+;   bne t0,zero,taken(label1),not_taken(label2)
+; block1:
+;   add t0,a0,t3
+;   addi t0,t0,16
+;   lui t4,16
+;   addi t4,t4,4072
+;   ugt t1,t3,t4##ty=i64
+;   li a0,0
+;   selectif_spectre_guard a0,a0,t0##test=t1
 ;   ret
 ; block2:
 ;   udf##trap_code=heap_oob
