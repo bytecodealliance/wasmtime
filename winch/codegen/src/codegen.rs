@@ -6,7 +6,7 @@ use crate::{
     stack::Stack,
 };
 use anyhow::Result;
-use wasmparser::{FuncValidator, FunctionBody, ValType, ValidatorResources};
+use wasmparser::{BinaryReader, FuncValidator, ValType, ValidatorResources, VisitOperator};
 
 /// The code generation context.
 pub(crate) struct CodeGenContext<'a, M>
@@ -32,9 +32,6 @@ pub(crate) struct CodeGen<'a, M>
 where
     M: MacroAssembler,
 {
-    /// A reference to the function body.
-    function: FunctionBody<'a>,
-
     /// The word size in bytes, extracted from the current ABI.
     word_size: u32,
 
@@ -46,36 +43,29 @@ where
 
     /// The register allocator.
     pub regalloc: RegAlloc,
-
-    /// Function body validator.
-    pub validator: FuncValidator<ValidatorResources>,
 }
 
 impl<'a, M> CodeGen<'a, M>
 where
     M: MacroAssembler,
 {
-    pub fn new<A: ABI>(
-        context: CodeGenContext<'a, M>,
-        sig: ABISig,
-        function: FunctionBody<'a>,
-        validator: FuncValidator<ValidatorResources>,
-        regalloc: RegAlloc,
-    ) -> Self {
+    pub fn new<A: ABI>(context: CodeGenContext<'a, M>, sig: ABISig, regalloc: RegAlloc) -> Self {
         Self {
-            function,
             word_size: <A as ABI>::word_bytes(),
             sig,
             context,
             regalloc,
-            validator,
         }
     }
 
     /// Emit the function body to machine code.
-    pub fn emit(&mut self) -> Result<Vec<String>> {
+    pub fn emit(
+        &mut self,
+        body: &mut BinaryReader<'a>,
+        validator: FuncValidator<ValidatorResources>,
+    ) -> Result<Vec<String>> {
         self.emit_start()
-            .and(self.emit_body())
+            .and(self.emit_body(body, validator))
             .and(self.emit_end())?;
         let buf = self.context.masm.finalize();
         let code = Vec::from(buf);
@@ -91,7 +81,11 @@ where
         Ok(())
     }
 
-    fn emit_body(&mut self) -> Result<()> {
+    fn emit_body(
+        &mut self,
+        body: &mut BinaryReader<'a>,
+        mut validator: FuncValidator<ValidatorResources>,
+    ) -> Result<()> {
         self.spill_register_arguments();
         let defined_locals_range = &self.context.frame.defined_locals_range;
         self.context.masm.zero_mem_range(
@@ -100,12 +94,35 @@ where
             &mut self.regalloc,
         );
 
-        let mut reader = self.function.get_operators_reader()?;
-        while !reader.eof() {
-            reader.visit_with_offset(self)??;
+        let mut visitor = ValidateThenVisit(&mut validator, self);
+        while !body.eof() {
+            body.visit_operator(&mut visitor)??;
+        }
+        validator.finish(body.original_position())?;
+        return Ok(());
+
+        struct ValidateThenVisit<'a, T, U>(&'a mut T, &'a mut U);
+
+        macro_rules! validate_then_visit {
+            ($( @$proposal:ident $op:ident $({ $($arg:ident: $argty:ty),* })? => $visit:ident)*) => {
+                $(
+                    fn $visit(&mut self, offset: usize $($(,$arg: $argty)*)?) -> Self::Output {
+                        self.0.$visit(offset, $($($arg.clone()),*)?)?;
+                        Ok(self.1.$visit(offset, $($($arg),*)?))
+                    }
+                )*
+            };
         }
 
-        reader.ensure_end().map_err(|e| e.into())
+        impl<'a, T, U> VisitOperator<'a> for ValidateThenVisit<'_, T, U>
+        where
+            T: VisitOperator<'a, Output = wasmparser::Result<()>>,
+            U: VisitOperator<'a>,
+        {
+            type Output = Result<U::Output>;
+
+            wasmparser::for_each_operator!(validate_then_visit);
+        }
     }
 
     // Emit the usual function end instruction sequence.

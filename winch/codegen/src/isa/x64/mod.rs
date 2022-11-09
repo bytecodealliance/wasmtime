@@ -47,9 +47,10 @@ impl TargetIsa for X64 {
     fn compile_function(
         &self,
         sig: &FuncType,
-        mut body: FunctionBody,
+        body: &FunctionBody,
         mut validator: FuncValidator<ValidatorResources>,
     ) -> Result<Vec<String>> {
+        let mut body = body.get_binary_reader();
         let masm = MacroAssembler::new();
         let stack = Stack::new();
         let abi = abi::X64ABI::default();
@@ -58,9 +59,8 @@ impl TargetIsa for X64 {
         // TODO Add in floating point bitmask
         let regalloc = RegAlloc::new(RegSet::new(ALL_GPR, 0), regs::scratch());
         let codegen_context = CodeGenContext::new(masm, stack, &frame);
-        let mut codegen =
-            CodeGen::new::<abi::X64ABI>(codegen_context, abi_sig, body, validator, regalloc);
+        let mut codegen = CodeGen::new::<abi::X64ABI>(codegen_context, abi_sig, regalloc);
 
-        codegen.emit()
+        codegen.emit(&mut body, validator)
     }
 }

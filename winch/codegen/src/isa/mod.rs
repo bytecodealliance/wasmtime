@@ -85,7 +85,7 @@ pub trait TargetIsa: Send + Sync {
     fn compile_function(
         &self,
         sig: &FuncType,
-        body: FunctionBody,
+        body: &FunctionBody,
         validator: FuncValidator<ValidatorResources>,
     ) -> Result<Vec<String>>;
 
