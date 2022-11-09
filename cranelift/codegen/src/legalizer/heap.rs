@@ -70,18 +70,18 @@ fn dynamic_addr(
     let (cc, lhs, bound) = if offset == 0 && access_size == 1 {
         // `index > bound - 1` is the same as `index >= bound`.
         (IntCC::UnsignedGreaterThanOrEqual, index, bound)
-    } else if offset as u64 + access_size as u64 <= min_size {
+    } else if offset_plus_size(offset, access_size) <= min_size {
         // We know that `bound >= min_size`, so here we can compare `offset >
         // bound - (offset + access_size)` without wrapping.
         let adj_bound = pos
             .ins()
-            .iadd_imm(bound, -(offset as i64 + access_size as i64));
+            .iadd_imm(bound, -(offset_plus_size(offset, access_size) as i64));
         (IntCC::UnsignedGreaterThan, index, adj_bound)
     } else {
         // We need an overflow check for the adjusted offset.
         let access_size_val = pos
             .ins()
-            .iconst(addr_ty, offset as i64 + access_size as i64);
+            .iconst(addr_ty, offset_plus_size(offset, access_size) as i64);
         let adj_offset =
             pos.ins()
                 .uadd_overflow_trap(index, access_size_val, ir::TrapCode::HeapOutOfBounds);
@@ -128,7 +128,7 @@ fn static_addr(
     // The goal here is to trap if `index + offset + access_size > bound`.
     //
     // This first case is a trivial case where we can statically trap.
-    if offset as u64 + access_size as u64 > bound {
+    if offset_plus_size(offset, access_size) > bound {
         // This will simply always trap since `offset >= 0`.
         pos.ins().trap(ir::TrapCode::HeapOutOfBounds);
         pos.func.dfg.replace(inst).iconst(addr_ty, 0);
@@ -281,4 +281,9 @@ fn compute_addr(
             .replace(inst)
             .iadd_imm(final_base, offset as i64);
     }
+}
+
+fn offset_plus_size(offset: u32, size: u8) -> u64 {
+    // Cannot overflow because we are widening to `u64`.
+    offset as u64 + size as u64
 }
