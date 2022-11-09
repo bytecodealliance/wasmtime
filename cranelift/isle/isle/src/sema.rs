@@ -1323,21 +1323,20 @@ impl TermEnv {
 
                 let mut callees = BTreeSet::new();
                 template.terms(&mut |pos, t| {
-                    let t = tyenv.intern_mut(t);
-                    callees.insert(t);
-
-                    if !self.term_map.contains_key(&t) {
+                    let sym = tyenv.intern_mut(t);
+                    if let Some(term) = self.term_map.get(&sym) {
+                        callees.insert(term);
+                    } else {
                         tyenv.report_error(
                             pos,
                             format!(
                                 "`{}` extractor definition references unknown term `{}`",
-                                ext.term.0,
-                                tyenv.syms[t.index()]
+                                ext.term.0, t.0
                             ),
                         );
                     }
                 });
-                extractor_call_graph.insert(sym, callees);
+                extractor_call_graph.insert(term, callees);
 
                 let termdata = &mut self.terms[term.index()];
                 match &mut termdata.kind {
@@ -1400,23 +1399,13 @@ impl TermEnv {
                         }));
                     }
                 } else {
-                    let term = match self.term_map.get(&caller) {
-                        Some(t) => t,
-                        None => {
-                            // Some other error must have already been recorded
-                            // if we don't have the caller's term data.
-                            assert!(!tyenv.errors.is_empty());
-                            continue 'outer;
-                        }
-                    };
-                    let pos = match &self.terms[term.index()].kind {
+                    let pos = match &self.terms[caller.index()].kind {
                         TermKind::Decl {
                             extractor_kind: Some(ExtractorKind::InternalExtractor { template }),
                             ..
                         } => template.pos(),
                         _ => {
-                            // Again, there must have already been errors
-                            // recorded.
+                            // There must have already been errors recorded.
                             assert!(!tyenv.errors.is_empty());
                             continue 'outer;
                         }
