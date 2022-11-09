@@ -398,7 +398,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         Inst::Args { args }
     }
 
-    fn gen_ret(setup_frame: bool, isa_flags: &aarch64_settings::Flags, rets: Vec<Reg>) -> Inst {
+    fn gen_ret(setup_frame: bool, isa_flags: &aarch64_settings::Flags, rets: Vec<RetPair>) -> Inst {
         if isa_flags.sign_return_address() && (setup_frame || isa_flags.sign_return_address_all()) {
             let key = if isa_flags.sign_return_address_with_bkey() {
                 APIKey::B

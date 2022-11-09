@@ -22,8 +22,8 @@ block0(v0: i32):
 }
 
 ; block0:
-;   llgfr %r5, %r2
-;   popcnt %r2, %r5, 8
+;   llgfr %r4, %r2
+;   popcnt %r2, %r4, 8
 ;   br %r14
 
 function %popcnt_i16(i16) -> i16 {
@@ -33,8 +33,8 @@ block0(v0: i16):
 }
 
 ; block0:
-;   llghr %r5, %r2
-;   popcnt %r2, %r5, 8
+;   llghr %r4, %r2
+;   popcnt %r2, %r4, 8
 ;   br %r14
 
 function %popcnt_i8(i8) -> i8 {

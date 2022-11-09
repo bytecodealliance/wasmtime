@@ -8,8 +8,8 @@ block0(v0: i64x2):
 }
 
 ; block0:
-;   vgbm %v3, 0
-;   vceqgs %v5, %v24, %v3
+;   vgbm %v2, 0
+;   vceqgs %v4, %v24, %v2
 ;   lhi %r2, 0
 ;   lochine %r2, 1
 ;   br %r14
@@ -21,8 +21,8 @@ block0(v0: i32x4):
 }
 
 ; block0:
-;   vgbm %v3, 0
-;   vceqfs %v5, %v24, %v3
+;   vgbm %v2, 0
+;   vceqfs %v4, %v24, %v2
 ;   lhi %r2, 0
 ;   lochine %r2, 1
 ;   br %r14
@@ -34,8 +34,8 @@ block0(v0: i16x8):
 }
 
 ; block0:
-;   vgbm %v3, 0
-;   vceqhs %v5, %v24, %v3
+;   vgbm %v2, 0
+;   vceqhs %v4, %v24, %v2
 ;   lhi %r2, 0
 ;   lochine %r2, 1
 ;   br %r14
@@ -47,8 +47,8 @@ block0(v0: i8x16):
 }
 
 ; block0:
-;   vgbm %v3, 0
-;   vceqbs %v5, %v24, %v3
+;   vgbm %v2, 0
+;   vceqbs %v4, %v24, %v2
 ;   lhi %r2, 0
 ;   lochine %r2, 1
 ;   br %r14
@@ -60,8 +60,8 @@ block0(v0: i64x2):
 }
 
 ; block0:
-;   vgbm %v3, 0
-;   vceqgs %v5, %v24, %v3
+;   vgbm %v2, 0
+;   vceqgs %v4, %v24, %v2
 ;   lhi %r2, 0
 ;   lochio %r2, 1
 ;   br %r14
@@ -73,8 +73,8 @@ block0(v0: i32x4):
 }
 
 ; block0:
-;   vgbm %v3, 0
-;   vceqfs %v5, %v24, %v3
+;   vgbm %v2, 0
+;   vceqfs %v4, %v24, %v2
 ;   lhi %r2, 0
 ;   lochio %r2, 1
 ;   br %r14
@@ -86,8 +86,8 @@ block0(v0: i16x8):
 }
 
 ; block0:
-;   vgbm %v3, 0
-;   vceqhs %v5, %v24, %v3
+;   vgbm %v2, 0
+;   vceqhs %v4, %v24, %v2
 ;   lhi %r2, 0
 ;   lochio %r2, 1
 ;   br %r14
@@ -99,8 +99,8 @@ block0(v0: i8x16):
 }
 
 ; block0:
-;   vgbm %v3, 0
-;   vceqbs %v5, %v24, %v3
+;   vgbm %v2, 0
+;   vceqbs %v4, %v24, %v2
 ;   lhi %r2, 0
 ;   lochio %r2, 1
 ;   br %r14
@@ -113,7 +113,7 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vceqgs %v4, %v24, %v25
+;   vceqgs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochino %r2, 1
 ;   br %r14
@@ -126,7 +126,7 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vceqgs %v4, %v24, %v25
+;   vceqgs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochine %r2, 1
 ;   br %r14
@@ -139,7 +139,7 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchgs %v4, %v24, %v25
+;   vchgs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochino %r2, 1
 ;   br %r14
@@ -152,7 +152,7 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchgs %v4, %v24, %v25
+;   vchgs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochine %r2, 1
 ;   br %r14
@@ -165,7 +165,7 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchgs %v4, %v25, %v24
+;   vchgs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochino %r2, 1
 ;   br %r14
@@ -178,7 +178,7 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchgs %v4, %v25, %v24
+;   vchgs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochine %r2, 1
 ;   br %r14
@@ -191,7 +191,7 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchlgs %v4, %v24, %v25
+;   vchlgs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochino %r2, 1
 ;   br %r14
@@ -204,7 +204,7 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchlgs %v4, %v24, %v25
+;   vchlgs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochine %r2, 1
 ;   br %r14
@@ -217,7 +217,7 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchlgs %v4, %v25, %v24
+;   vchlgs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochino %r2, 1
 ;   br %r14
@@ -230,7 +230,7 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchlgs %v4, %v25, %v24
+;   vchlgs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochine %r2, 1
 ;   br %r14
@@ -243,7 +243,7 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfcedbs %v4, %v24, %v25
+;   vfcedbs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochino %r2, 1
 ;   br %r14
@@ -256,7 +256,7 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfcedbs %v4, %v24, %v25
+;   vfcedbs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochine %r2, 1
 ;   br %r14
@@ -269,7 +269,7 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchdbs %v4, %v24, %v25
+;   vfchdbs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochino %r2, 1
 ;   br %r14
@@ -282,7 +282,7 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchdbs %v4, %v24, %v25
+;   vfchdbs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochine %r2, 1
 ;   br %r14
@@ -295,7 +295,7 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchedbs %v4, %v24, %v25
+;   vfchedbs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochino %r2, 1
 ;   br %r14
@@ -308,7 +308,7 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchedbs %v4, %v24, %v25
+;   vfchedbs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochine %r2, 1
 ;   br %r14
@@ -321,7 +321,7 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchdbs %v4, %v25, %v24
+;   vfchdbs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochino %r2, 1
 ;   br %r14
@@ -334,7 +334,7 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchdbs %v4, %v25, %v24
+;   vfchdbs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochine %r2, 1
 ;   br %r14
@@ -347,7 +347,7 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchedbs %v4, %v25, %v24
+;   vfchedbs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochino %r2, 1
 ;   br %r14
@@ -360,7 +360,7 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchedbs %v4, %v25, %v24
+;   vfchedbs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochine %r2, 1
 ;   br %r14
@@ -373,7 +373,7 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vceqgs %v4, %v24, %v25
+;   vceqgs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochie %r2, 1
 ;   br %r14
@@ -386,7 +386,7 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vceqgs %v4, %v24, %v25
+;   vceqgs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochio %r2, 1
 ;   br %r14
@@ -399,7 +399,7 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchgs %v4, %v24, %v25
+;   vchgs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochie %r2, 1
 ;   br %r14
@@ -412,7 +412,7 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchgs %v4, %v24, %v25
+;   vchgs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochio %r2, 1
 ;   br %r14
@@ -425,7 +425,7 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchgs %v4, %v25, %v24
+;   vchgs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochie %r2, 1
 ;   br %r14
@@ -438,7 +438,7 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchgs %v4, %v25, %v24
+;   vchgs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochio %r2, 1
 ;   br %r14
@@ -451,7 +451,7 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchlgs %v4, %v24, %v25
+;   vchlgs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochie %r2, 1
 ;   br %r14
@@ -464,7 +464,7 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchlgs %v4, %v24, %v25
+;   vchlgs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochio %r2, 1
 ;   br %r14
@@ -477,7 +477,7 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchlgs %v4, %v25, %v24
+;   vchlgs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochie %r2, 1
 ;   br %r14
@@ -490,7 +490,7 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchlgs %v4, %v25, %v24
+;   vchlgs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochio %r2, 1
 ;   br %r14
@@ -503,7 +503,7 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfcedbs %v4, %v24, %v25
+;   vfcedbs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochie %r2, 1
 ;   br %r14
@@ -516,7 +516,7 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfcedbs %v4, %v24, %v25
+;   vfcedbs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochio %r2, 1
 ;   br %r14
@@ -529,7 +529,7 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchdbs %v4, %v24, %v25
+;   vfchdbs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochie %r2, 1
 ;   br %r14
@@ -542,7 +542,7 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchdbs %v4, %v24, %v25
+;   vfchdbs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochio %r2, 1
 ;   br %r14
@@ -555,7 +555,7 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchedbs %v4, %v24, %v25
+;   vfchedbs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochie %r2, 1
 ;   br %r14
@@ -568,7 +568,7 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchedbs %v4, %v24, %v25
+;   vfchedbs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochio %r2, 1
 ;   br %r14
@@ -581,7 +581,7 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchdbs %v4, %v25, %v24
+;   vfchdbs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochie %r2, 1
 ;   br %r14
@@ -594,7 +594,7 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchdbs %v4, %v25, %v24
+;   vfchdbs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochio %r2, 1
 ;   br %r14
@@ -607,7 +607,7 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchedbs %v4, %v25, %v24
+;   vfchedbs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochie %r2, 1
 ;   br %r14
@@ -620,7 +620,7 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchedbs %v4, %v25, %v24
+;   vfchedbs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochio %r2, 1
 ;   br %r14
@@ -632,9 +632,9 @@ block0(v0: i64x2):
 }
 
 ; block0:
-;   bras %r1, 20 ; data.u128 0x80808080808080808080808080804000 ; vl %v3, 0(%r1)
-;   vbperm %v5, %v24, %v3
-;   lgdr %r2, %f5
+;   bras %r1, 20 ; data.u128 0x80808080808080808080808080804000 ; vl %v2, 0(%r1)
+;   vbperm %v4, %v24, %v2
+;   lgdr %r2, %f4
 ;   br %r14
 
 function %vhigh_bits_be(i32x4) -> i64 {
@@ -644,9 +644,9 @@ block0(v0: i32x4):
 }
 
 ; block0:
-;   bras %r1, 20 ; data.u128 0x80808080808080808080808060402000 ; vl %v3, 0(%r1)
-;   vbperm %v5, %v24, %v3
-;   lgdr %r2, %f5
+;   bras %r1, 20 ; data.u128 0x80808080808080808080808060402000 ; vl %v2, 0(%r1)
+;   vbperm %v4, %v24, %v2
+;   lgdr %r2, %f4
 ;   br %r14
 
 function %vhigh_bits_be(i16x8) -> i64 {
@@ -656,9 +656,9 @@ block0(v0: i16x8):
 }
 
 ; block0:
-;   bras %r1, 20 ; data.u128 0x80808080808080807060504030201000 ; vl %v3, 0(%r1)
-;   vbperm %v5, %v24, %v3
-;   lgdr %r2, %f5
+;   bras %r1, 20 ; data.u128 0x80808080808080807060504030201000 ; vl %v2, 0(%r1)
+;   vbperm %v4, %v24, %v2
+;   lgdr %r2, %f4
 ;   br %r14
 
 function %vhigh_bits_be(i8x16) -> i64 {
@@ -668,9 +668,9 @@ block0(v0: i8x16):
 }
 
 ; block0:
-;   bras %r1, 20 ; data.u128 0x78706860585048403830282018100800 ; vl %v3, 0(%r1)
-;   vbperm %v5, %v24, %v3
-;   lgdr %r2, %f5
+;   bras %r1, 20 ; data.u128 0x78706860585048403830282018100800 ; vl %v2, 0(%r1)
+;   vbperm %v4, %v24, %v2
+;   lgdr %r2, %f4
 ;   br %r14
 
 function %vhigh_bits_le(i64x2) -> i64 wasmtime_system_v {
@@ -680,9 +680,9 @@ block0(v0: i64x2):
 }
 
 ; block0:
-;   bras %r1, 20 ; data.u128 0x80808080808080808080808080800040 ; vl %v3, 0(%r1)
-;   vbperm %v5, %v24, %v3
-;   lgdr %r2, %f5
+;   bras %r1, 20 ; data.u128 0x80808080808080808080808080800040 ; vl %v2, 0(%r1)
+;   vbperm %v4, %v24, %v2
+;   lgdr %r2, %f4
 ;   br %r14
 
 function %vhigh_bits_le(i32x4) -> i64 wasmtime_system_v {
@@ -692,9 +692,9 @@ block0(v0: i32x4):
 }
 
 ; block0:
-;   bras %r1, 20 ; data.u128 0x80808080808080808080808000204060 ; vl %v3, 0(%r1)
-;   vbperm %v5, %v24, %v3
-;   lgdr %r2, %f5
+;   bras %r1, 20 ; data.u128 0x80808080808080808080808000204060 ; vl %v2, 0(%r1)
+;   vbperm %v4, %v24, %v2
+;   lgdr %r2, %f4
 ;   br %r14
 
 function %vhigh_bits_le(i16x8) -> i64 wasmtime_system_v {
@@ -704,9 +704,9 @@ block0(v0: i16x8):
 }
 
 ; block0:
-;   bras %r1, 20 ; data.u128 0x80808080808080800010203040506070 ; vl %v3, 0(%r1)
-;   vbperm %v5, %v24, %v3
-;   lgdr %r2, %f5
+;   bras %r1, 20 ; data.u128 0x80808080808080800010203040506070 ; vl %v2, 0(%r1)
+;   vbperm %v4, %v24, %v2
+;   lgdr %r2, %f4
 ;   br %r14
 
 function %vhigh_bits_le(i8x16) -> i64 wasmtime_system_v {
@@ -716,8 +716,8 @@ block0(v0: i8x16):
 }
 
 ; block0:
-;   bras %r1, 20 ; data.u128 0x00081018202830384048505860687078 ; vl %v3, 0(%r1)
-;   vbperm %v5, %v24, %v3
-;   lgdr %r2, %f5
+;   bras %r1, 20 ; data.u128 0x00081018202830384048505860687078 ; vl %v2, 0(%r1)
+;   vbperm %v4, %v24, %v2
+;   lgdr %r2, %f4
 ;   br %r14
 

@@ -71,7 +71,7 @@
     (Args
       (args VecArgPair))
 
-    (Ret (rets VecReg))
+    (Ret (rets VecRetPair))
 
      (Extend
       (rd WritableReg)

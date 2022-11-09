@@ -7,8 +7,9 @@ use std::cell::Cell;
 use target_lexicon::Triple;
 
 pub use super::MachLabel;
+use super::RetPair;
 pub use crate::ir::{
-    condcodes, condcodes::CondCode, dynamic_to_fixed, ArgumentExtension, Constant,
+    condcodes, condcodes::CondCode, dynamic_to_fixed, ArgumentExtension, ArgumentPurpose, Constant,
     DynamicStackSlot, ExternalName, FuncRef, GlobalValue, Immediate, SigRef, StackSlot,
 };
 pub use crate::isa::unwind::UnwindInst;
@@ -23,7 +24,7 @@ pub type ValueSlice = (ValueList, usize);
 pub type ValueArray2 = [Value; 2];
 pub type ValueArray3 = [Value; 3];
 pub type WritableReg = Writable<Reg>;
-pub type VecReg = Vec<Reg>;
+pub type VecRetPair = Vec<RetPair>;
 pub type VecMask = Vec<u8>;
 pub type ValueRegs = crate::machinst::ValueRegs<Reg>;
 pub type WritableValueRegs = crate::machinst::ValueRegs<WritableReg>;
@@ -422,10 +423,6 @@ macro_rules! isle_lower_prelude_methods {
             ))
         }
 
-        fn retval(&mut self, i: usize) -> WritableValueRegs {
-            self.lower_ctx.retval(i)
-        }
-
         fn only_writable_reg(&mut self, regs: WritableValueRegs) -> Option<WritableReg> {
             regs.only_reg()
         }
@@ -589,6 +586,17 @@ macro_rules! isle_lower_prelude_methods {
         #[inline]
         fn floatcc_inverse(&mut self, cc: &FloatCC) -> FloatCC {
             cc.inverse()
+        }
+
+        /// Generate the return instruction.
+        fn gen_return(&mut self, (list, off): ValueSlice) {
+            let rets = (off..list.len(&self.lower_ctx.dfg().value_lists))
+                .map(|ix| {
+                    let val = list.get(ix, &self.lower_ctx.dfg().value_lists).unwrap();
+                    self.put_in_regs(val)
+                })
+                .collect();
+            self.lower_ctx.gen_return(rets);
         }
     };
 }

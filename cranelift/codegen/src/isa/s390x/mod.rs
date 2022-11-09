@@ -298,26 +298,25 @@ mod test {
 
         // FIXME: the branching logic should be optimized more
 
-        // ahi %r2, 4660
-        // chi %r2, 0
-        // jglh label1 ; jg label2
-        // jg label6
-        // jg label3
-        // ahik %r3, %r2, 4660
-        // chi %r3, 0
-        // jglh label4 ; jg label5
-        // jg label3
-        // jg label6
-        // chi %r2, 0
-        // jglh label7 ; jg label8
-        // jg label3
-        // ahi %r2, -4660
-        // br %r14
+        // To update this comment, write the golden bytes to a file, and run the following command
+        // on it to update:
+        // > s390x-linux-gnu-objdump -b binary -D <file> -m s390
+        //
+        //  0:   a7 2a 12 34             ahi     %r2,4660
+        //  4:   a7 2e 00 00             chi     %r2,0
+        //  8:   c0 64 00 00 00 0b       jglh    0x1e
+        //  e:   ec 32 12 34 00 d8       ahik    %r3,%r2,4660
+        // 14:   a7 3e 00 00             chi     %r3,0
+        // 18:   c0 64 ff ff ff fb       jglh    0xe
+        // 1e:   a7 2e 00 00             chi     %r2,0
+        // 22:   c0 64 ff ff ff f6       jglh    0xe
+        // 28:   a7 2a ed cc             ahi     %r2,-4660
+        // 2c:   07 fe                   br      %r14
 
         let golden = vec![
-            236, 50, 18, 52, 0, 216, 167, 62, 0, 0, 192, 100, 0, 0, 0, 11, 236, 67, 18, 52, 0, 216,
-            167, 78, 0, 0, 192, 100, 255, 255, 255, 251, 167, 62, 0, 0, 192, 100, 255, 255, 255,
-            246, 236, 35, 237, 204, 0, 216, 7, 254,
+            167, 42, 18, 52, 167, 46, 0, 0, 192, 100, 0, 0, 0, 11, 236, 50, 18, 52, 0, 216, 167,
+            62, 0, 0, 192, 100, 255, 255, 255, 251, 167, 46, 0, 0, 192, 100, 255, 255, 255, 246,
+            167, 42, 237, 204, 7, 254,
         ];
 
         assert_eq!(code, &golden[..]);

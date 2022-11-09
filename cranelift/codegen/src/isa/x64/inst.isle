@@ -333,7 +333,7 @@
         (args VecArgPair))
 
        ;; Return.
-       (Ret (rets VecReg))
+       (Ret (rets VecRetPair))
 
        ;; Jump to a known target: jmp simm32.
        (JmpKnown (dst MachLabel))

@@ -20,11 +20,11 @@ block0(v0: i32, v1: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movl    %edi, %eax
-;   movq    8(%rsi), %r10
-;   movq    %rax, %r11
-;   addq    %r11, $32768, %r11
+;   movq    8(%rsi), %r9
+;   movq    %rax, %r10
+;   addq    %r10, $32768, %r10
 ;   jnb ; ud2 heap_oob ;
-;   cmpq    %r10, %r11
+;   cmpq    %r9, %r10
 ;   jbe     label1; j label2
 ; block1:
 ;   addq    %rax, 0(%rsi), %rax

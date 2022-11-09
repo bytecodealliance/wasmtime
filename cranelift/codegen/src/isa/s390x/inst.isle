@@ -906,7 +906,7 @@
     ;; A machine return instruction.
     (Ret
       (link Reg)
-      (rets VecReg))
+      (rets VecRetPair))
 
     ;; An unconditional branch.
     (Jump

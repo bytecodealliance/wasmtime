@@ -33,17 +33,17 @@ block0(v0: i32, v1: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movl    %edi, %eax
-;   movq    8(%rsi), %rdi
-;   movq    %rax, %rcx
-;   addq    %rcx, $32768, %rcx
+;   movq    8(%rsi), %r11
+;   movq    %rax, %rdi
+;   addq    %rdi, $32768, %rdi
 ;   jnb ; ud2 heap_oob ;
-;   cmpq    %rdi, %rcx
+;   cmpq    %r11, %rdi
 ;   jbe     label1; j label2
 ; block1:
 ;   addq    %rax, 0(%rsi), %rax
-;   xorq    %rdx, %rdx, %rdx
-;   cmpq    %rdi, %rcx
-;   cmovnbeq %rdx, %rax, %rax
+;   xorq    %rcx, %rcx, %rcx
+;   cmpq    %r11, %rdi
+;   cmovnbeq %rcx, %rax, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -67,15 +67,15 @@ block0(v0: i64, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movl    %esi, %r10d
-;   cmpq    $4096, %r10
+;   movl    %esi, %r9d
+;   cmpq    $4096, %r9
 ;   jbe     label1; j label2
 ; block1:
-;   movq    %r10, %rax
+;   movq    %r9, %rax
 ;   addq    %rax, 0(%rdi), %rax
-;   xorq    %r11, %r11, %r11
-;   cmpq    $4096, %r10
-;   cmovnbeq %r11, %rax, %rax
+;   xorq    %r10, %r10, %r10
+;   cmpq    $4096, %r9
+;   cmovnbeq %r10, %rax, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

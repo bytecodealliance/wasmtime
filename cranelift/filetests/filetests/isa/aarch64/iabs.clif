@@ -79,9 +79,9 @@ block0(v0: i8):
 }
 
 ; block0:
-;   sxtb w3, w0
-;   subs wzr, w3, #0
-;   csneg x0, x3, x3, gt
+;   sxtb w2, w0
+;   subs wzr, w2, #0
+;   csneg x0, x2, x2, gt
 ;   ret
 
 function %f9(i16) -> i16 {
@@ -91,9 +91,9 @@ block0(v0: i16):
 }
 
 ; block0:
-;   sxth w3, w0
-;   subs wzr, w3, #0
-;   csneg x0, x3, x3, gt
+;   sxth w2, w0
+;   subs wzr, w2, #0
+;   csneg x0, x2, x2, gt
 ;   ret
 
 function %f10(i32) -> i32 {

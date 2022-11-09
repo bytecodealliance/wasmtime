@@ -28,7 +28,7 @@ block0(v0: i16):
 }
 
 ; block0:
-;   lrvr %r5, %r2
-;   srlk %r2, %r5, 16
+;   lrvr %r4, %r2
+;   srlk %r2, %r4, 16
 ;   br %r14
 

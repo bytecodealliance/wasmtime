@@ -91,8 +91,8 @@ block2:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movl    0(%rdi), %r8d
-;   cmpl    $1, %r8d
+;   movl    0(%rdi), %edx
+;   cmpl    $1, %edx
 ;   jz      label1; j label2
 ; block1:
 ;   movl    $1, %eax
@@ -123,8 +123,8 @@ block2:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movl    0(%rdi), %r8d
-;   cmpl    $1, %r8d
+;   movl    0(%rdi), %edx
+;   cmpl    $1, %edx
 ;   jz      label1; j label2
 ; block1:
 ;   movl    $1, %eax

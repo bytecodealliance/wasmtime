@@ -11,9 +11,9 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   sext.w a3,a1
-;   add a3,a0,a3
-;   lw a0,0(a3)
+;   sext.w a2,a1
+;   add a2,a0,a2
+;   lw a0,0(a2)
 ;   ret
 
 function %f6(i64, i32) -> i32 {
@@ -25,9 +25,9 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   sext.w a3,a1
-;   add a3,a3,a0
-;   lw a0,0(a3)
+;   sext.w a2,a1
+;   add a2,a2,a0
+;   lw a0,0(a2)
 ;   ret
 
 function %f7(i32, i32) -> i32 {
@@ -40,10 +40,10 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   uext.w a4,a0
-;   uext.w a5,a1
-;   add a4,a4,a5
-;   lw a0,0(a4)
+;   uext.w a3,a0
+;   uext.w a4,a1
+;   add a3,a3,a4
+;   lw a0,0(a3)
 ;   ret
 
 function %f8(i64, i32) -> i32 {
@@ -58,11 +58,11 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   sext.w a5,a1
-;   addi a5,a5,32
-;   add a5,a5,a0
-;   add a5,a5,a5
-;   lw a0,4(a5)
+;   sext.w a4,a1
+;   addi a4,a4,32
+;   add a4,a4,a0
+;   add a4,a4,a4
+;   lw a0,4(a4)
 ;   ret
 
 function %f9(i64, i64, i64) -> i32 {
@@ -76,10 +76,10 @@ block0(v0: i64, v1: i64, v2: i64):
 }
 
 ; block0:
-;   add a5,a0,a1
-;   add a5,a5,a2
-;   addi a5,a5,48
-;   lw a0,0(a5)
+;   add a4,a0,a1
+;   add a4,a4,a2
+;   addi a4,a4,48
+;   lw a0,0(a4)
 ;   ret
 
 function %f10(i64, i64, i64) -> i32 {
@@ -93,12 +93,12 @@ block0(v0: i64, v1: i64, v2: i64):
 }
 
 ; block0:
-;   add a6,a0,a1
-;   add a6,a6,a2
-;   lui a5,1
-;   addi a5,a5,4
-;   add t3,a6,a5
-;   lw a0,0(t3)
+;   add a5,a0,a1
+;   add a5,a5,a2
+;   lui a4,1
+;   addi a4,a4,4
+;   add a7,a5,a4
+;   lw a0,0(a7)
 ;   ret
 
 function %f10() -> i32 {
@@ -109,8 +109,8 @@ block0:
 }
 
 ; block0:
-;   li t1,1234
-;   lw a0,0(t1)
+;   li t0,1234
+;   lw a0,0(t0)
 ;   ret
 
 function %f11(i64) -> i32 {
@@ -123,8 +123,8 @@ block0(v0: i64):
 
 ; block0:
 ;   lui a1,2048
-;   add a3,a0,a1
-;   lw a0,0(a3)
+;   add a2,a0,a1
+;   lw a0,0(a2)
 ;   ret
 
 function %f12(i64) -> i32 {
@@ -136,8 +136,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   addi a1,a0,-4
-;   lw a0,0(a1)
+;   addi a0,a0,-4
+;   lw a0,0(a0)
 ;   ret
 
 function %f13(i64) -> i32 {
@@ -151,8 +151,8 @@ block0(v0: i64):
 ; block0:
 ;   lui a1,244141
 ;   addi a1,a1,2560
-;   add a4,a0,a1
-;   lw a0,0(a4)
+;   add a3,a0,a1
+;   lw a0,0(a3)
 ;   ret
 
 function %f14(i32) -> i32 {
@@ -163,8 +163,8 @@ block0(v0: i32):
 }
 
 ; block0:
-;   sext.w a1,a0
-;   lw a0,0(a1)
+;   sext.w a0,a0
+;   lw a0,0(a0)
 ;   ret
 
 function %f15(i32, i32) -> i32 {
@@ -177,10 +177,10 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   sext.w a4,a0
-;   sext.w a5,a1
-;   add a4,a4,a5
-;   lw a0,0(a4)
+;   sext.w a3,a0
+;   sext.w a4,a1
+;   add a3,a3,a4
+;   lw a0,0(a3)
 ;   ret
 
 function %f18(i64, i64, i64) -> i32 {
@@ -192,10 +192,10 @@ block0(v0: i64, v1: i64, v2: i64):
 }
 
 ; block0:
-;   lui a3,1048575
-;   addi a3,a3,4094
-;   uext.w a6,a3
-;   lh a0,0(a6)
+;   lui a2,1048575
+;   addi a2,a2,4094
+;   uext.w a5,a2
+;   lh a0,0(a5)
 ;   ret
 
 function %f19(i64, i64, i64) -> i32 {
@@ -207,10 +207,10 @@ block0(v0: i64, v1: i64, v2: i64):
 }
 
 ; block0:
-;   lui a3,1
-;   addi a3,a3,2
-;   uext.w a6,a3
-;   lh a0,0(a6)
+;   lui a2,1
+;   addi a2,a2,2
+;   uext.w a5,a2
+;   lh a0,0(a5)
 ;   ret
 
 function %f20(i64, i64, i64) -> i32 {
@@ -222,10 +222,10 @@ block0(v0: i64, v1: i64, v2: i64):
 }
 
 ; block0:
-;   lui a3,1048575
-;   addi a3,a3,4094
-;   sext.w a6,a3
-;   lh a0,0(a6)
+;   lui a2,1048575
+;   addi a2,a2,4094
+;   sext.w a5,a2
+;   lh a0,0(a5)
 ;   ret
 
 function %f21(i64, i64, i64) -> i32 {
@@ -237,10 +237,10 @@ block0(v0: i64, v1: i64, v2: i64):
 }
 
 ; block0:
-;   lui a3,1
-;   addi a3,a3,2
-;   sext.w a6,a3
-;   lh a0,0(a6)
+;   lui a2,1
+;   addi a2,a2,2
+;   sext.w a5,a2
+;   lh a0,0(a5)
 ;   ret
 
 function %i128(i64) -> i128 {
@@ -251,13 +251,13 @@ block0(v0: i64):
 }
 
 ; block0:
-;   ld a1,0(a0)
-;   mv a3,a1
+;   ld t2,0(a0)
+;   mv a2,t2
 ;   ld a1,8(a0)
-;   mv a5,a3
-;   sd a5,0(a0)
+;   mv a3,a2
+;   sd a3,0(a0)
 ;   sd a1,8(a0)
-;   mv a0,a3
+;   mv a0,a2
 ;   ret
 
 function %i128_imm_offset(i64) -> i128 {
@@ -268,13 +268,13 @@ block0(v0: i64):
 }
 
 ; block0:
-;   ld a1,16(a0)
-;   mv a3,a1
+;   ld t2,16(a0)
+;   mv a2,t2
 ;   ld a1,24(a0)
-;   mv a5,a3
-;   sd a5,16(a0)
+;   mv a3,a2
+;   sd a3,16(a0)
 ;   sd a1,24(a0)
-;   mv a0,a3
+;   mv a0,a2
 ;   ret
 
 function %i128_imm_offset_large(i64) -> i128 {
@@ -285,13 +285,13 @@ block0(v0: i64):
 }
 
 ; block0:
-;   ld a1,504(a0)
-;   mv a3,a1
+;   ld t2,504(a0)
+;   mv a2,t2
 ;   ld a1,512(a0)
-;   mv a5,a3
-;   sd a5,504(a0)
+;   mv a3,a2
+;   sd a3,504(a0)
 ;   sd a1,512(a0)
-;   mv a0,a3
+;   mv a0,a2
 ;   ret
 
 function %i128_imm_offset_negative_large(i64) -> i128 {
@@ -302,13 +302,13 @@ block0(v0: i64):
 }
 
 ; block0:
-;   ld a1,-512(a0)
-;   mv a3,a1
+;   ld t2,-512(a0)
+;   mv a2,t2
 ;   ld a1,-504(a0)
-;   mv a5,a3
-;   sd a5,-512(a0)
+;   mv a3,a2
+;   sd a3,-512(a0)
 ;   sd a1,-504(a0)
-;   mv a0,a3
+;   mv a0,a2
 ;   ret
 
 function %i128_add_offset(i64) -> i128 {
@@ -320,11 +320,11 @@ block0(v0: i64):
 }
 
 ; block0:
-;   addi a3,a0,32
-;   ld a0,0(a3)
-;   ld a1,8(a3)
-;   sd a0,0(a3)
-;   sd a1,8(a3)
+;   addi a2,a0,32
+;   ld a0,0(a2)
+;   ld a1,8(a2)
+;   sd a0,0(a2)
+;   sd a1,8(a2)
 ;   ret
 
 function %i128_32bit_sextend_simple(i32) -> i128 {
@@ -336,11 +336,11 @@ block0(v0: i32):
 }
 
 ; block0:
-;   sext.w a3,a0
-;   ld a0,0(a3)
-;   ld a1,8(a3)
-;   sd a0,0(a3)
-;   sd a1,8(a3)
+;   sext.w a2,a0
+;   ld a0,0(a2)
+;   ld a1,8(a2)
+;   sd a0,0(a2)
+;   sd a1,8(a2)
 ;   ret
 
 function %i128_32bit_sextend(i64, i32) -> i128 {
@@ -354,12 +354,12 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   sext.w a6,a1
-;   add a6,a0,a6
-;   addi a6,a6,24
-;   ld a0,0(a6)
-;   ld a1,8(a6)
-;   sd a0,0(a6)
-;   sd a1,8(a6)
+;   sext.w a4,a1
+;   add a4,a0,a4
+;   addi a4,a4,24
+;   ld a0,0(a4)
+;   ld a1,8(a4)
+;   sd a0,0(a4)
+;   sd a1,8(a4)
 ;   ret
 

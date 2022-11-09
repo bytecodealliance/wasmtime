@@ -1009,17 +1009,17 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             collector.reg_use(rn);
         }
         &Inst::Call { link, ref info } => {
-            collector.reg_def(link);
             for u in &info.uses {
                 collector.reg_fixed_use(u.vreg, u.preg);
             }
             for d in &info.defs {
                 collector.reg_fixed_def(d.vreg, d.preg);
             }
-            collector.reg_clobbers(info.clobbers);
+            let mut clobbers = info.clobbers.clone();
+            clobbers.add(link.to_reg().to_real_reg().unwrap().into());
+            collector.reg_clobbers(clobbers);
         }
         &Inst::CallInd { link, ref info } => {
-            collector.reg_def(link);
             collector.reg_use(info.rn);
             for u in &info.uses {
                 collector.reg_fixed_use(u.vreg, u.preg);
@@ -1027,16 +1027,21 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             for d in &info.defs {
                 collector.reg_fixed_def(d.vreg, d.preg);
             }
-            collector.reg_clobbers(info.clobbers);
+            let mut clobbers = info.clobbers.clone();
+            clobbers.add(link.to_reg().to_real_reg().unwrap().into());
+            collector.reg_clobbers(clobbers);
         }
         &Inst::Args { ref args } => {
             for arg in args {
                 collector.reg_fixed_def(arg.vreg, arg.preg);
             }
         }
-        &Inst::Ret { link, ref rets } => {
-            collector.reg_use(link);
-            collector.reg_uses(&rets[..]);
+        &Inst::Ret { ref rets, .. } => {
+            // NOTE: we explicitly don't mark the link register as used here, as the use is only in
+            // the epilog where callee-save registers are restored.
+            for ret in rets {
+                collector.reg_fixed_use(ret.vreg, ret.preg);
+            }
         }
         &Inst::Jump { .. } => {}
         &Inst::IndirectBr { rn, .. } => {
@@ -3231,7 +3236,7 @@ impl Inst {
                 format!("{} {}, {}", op, rd, rn)
             }
             &Inst::Call { link, ref info, .. } => {
-                let link = pretty_print_reg(link.to_reg(), allocs);
+                let link = link.to_reg();
                 let tls_symbol = match &info.tls_symbol {
                     None => "".to_string(),
                     Some(SymbolReloc::TlsGd { name }) => {
@@ -3239,12 +3244,19 @@ impl Inst {
                     }
                     _ => unreachable!(),
                 };
-                format!("brasl {}, {}{}", link, info.dest.display(None), tls_symbol)
+                debug_assert_eq!(link, gpr(14));
+                format!(
+                    "brasl {}, {}{}",
+                    show_reg(link),
+                    info.dest.display(None),
+                    tls_symbol
+                )
             }
             &Inst::CallInd { link, ref info, .. } => {
-                let link = pretty_print_reg(link.to_reg(), allocs);
+                let link = link.to_reg();
                 let rn = pretty_print_reg(info.rn, allocs);
-                format!("basr {}, {}", link, rn)
+                debug_assert_eq!(link, gpr(14));
+                format!("basr {}, {}", show_reg(link), rn)
             }
             &Inst::Args { ref args } => {
                 let mut s = "args".to_string();
@@ -3257,8 +3269,8 @@ impl Inst {
                 s
             }
             &Inst::Ret { link, .. } => {
-                let link = pretty_print_reg(link, allocs);
-                format!("br {}", link)
+                debug_assert_eq!(link, gpr(14));
+                format!("br {}", show_reg(link))
             }
             &Inst::Jump { dest } => {
                 let dest = dest.to_string();

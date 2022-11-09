@@ -8,8 +8,8 @@ block0(v0: i8):
 }
 
 ; block0:
-;   sxtb w3, w0
-;   scvtf s0, w3
+;   sxtb w2, w0
+;   scvtf s0, w2
 ;   ret
 
 function %f2(i16) -> f32 {
@@ -19,8 +19,8 @@ block0(v0: i16):
 }
 
 ; block0:
-;   sxth w3, w0
-;   scvtf s0, w3
+;   sxth w2, w0
+;   scvtf s0, w2
 ;   ret
 
 function %f3(i32) -> f32 {
@@ -50,8 +50,8 @@ block0(v0: i8):
 }
 
 ; block0:
-;   sxtb w3, w0
-;   scvtf d0, w3
+;   sxtb w2, w0
+;   scvtf d0, w2
 ;   ret
 
 function %f6(i16) -> f64 {
@@ -61,8 +61,8 @@ block0(v0: i16):
 }
 
 ; block0:
-;   sxth w3, w0
-;   scvtf d0, w3
+;   sxth w2, w0
+;   scvtf d0, w2
 ;   ret
 
 function %f7(i32) -> f64 {
@@ -92,8 +92,8 @@ block0(v0: i32x4):
 }
 
 ; block0:
-;   sxtl v3.2d, v0.2s
-;   scvtf v0.2d, v3.2d
+;   sxtl v2.2d, v0.2s
+;   scvtf v0.2d, v2.2d
 ;   ret
 
 function %f10(i8, i16, i32, i64) -> f32 {
@@ -109,15 +109,15 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64):
 }
 
 ; block0:
-;   uxtb w13, w0
-;   ucvtf s23, w13
-;   uxth w13, w1
-;   ucvtf s24, w13
-;   ucvtf s22, w2
-;   ucvtf s25, x3
-;   fadd s23, s23, s24
-;   fadd s22, s23, s22
-;   fadd s0, s22, s25
+;   uxtb w12, w0
+;   ucvtf s22, w12
+;   uxth w12, w1
+;   ucvtf s23, w12
+;   ucvtf s21, w2
+;   ucvtf s24, x3
+;   fadd s22, s22, s23
+;   fadd s21, s22, s21
+;   fadd s0, s21, s24
 ;   ret
 
 function %f11(i32x4) -> f64x2 {
@@ -128,8 +128,8 @@ block0(v0: i32x4):
 }
 
 ; block0:
-;   uxtl v4.2d, v0.2s
-;   ucvtf v0.2d, v4.2d
+;   uxtl v3.2d, v0.2s
+;   ucvtf v0.2d, v3.2d
 ;   ret
 
 function %f12(i32x4) -> f32x4 {
@@ -151,12 +151,12 @@ block0(v0: f32):
 ; block0:
 ;   fcmp s0, s0
 ;   b.vc 8 ; udf
-;   fmov s5, #-1
-;   fcmp s0, s5
+;   fmov s4, #-1
+;   fcmp s0, s4
 ;   b.gt 8 ; udf
-;   movz x10, #20352, LSL #16
-;   fmov s18, w10
-;   fcmp s0, s18
+;   movz x9, #20352, LSL #16
+;   fmov s17, w9
+;   fcmp s0, s17
 ;   b.lt 8 ; udf
 ;   fcvtzu w0, s0
 ;   ret
@@ -170,12 +170,12 @@ block0(v0: f32):
 ; block0:
 ;   fcmp s0, s0
 ;   b.vc 8 ; udf
-;   fmov s5, #-1
-;   fcmp s0, s5
+;   fmov s4, #-1
+;   fcmp s0, s4
 ;   b.gt 8 ; udf
-;   movz x10, #24448, LSL #16
-;   fmov s18, w10
-;   fcmp s0, s18
+;   movz x9, #24448, LSL #16
+;   fmov s17, w9
+;   fcmp s0, s17
 ;   b.lt 8 ; udf
 ;   fcvtzu x0, s0
 ;   ret
@@ -189,12 +189,12 @@ block0(v0: f64):
 ; block0:
 ;   fcmp d0, d0
 ;   b.vc 8 ; udf
-;   fmov d5, #-1
-;   fcmp d0, d5
+;   fmov d4, #-1
+;   fcmp d0, d4
 ;   b.gt 8 ; udf
-;   movz x10, #16880, LSL #48
-;   fmov d18, x10
-;   fcmp d0, d18
+;   movz x9, #16880, LSL #48
+;   fmov d17, x9
+;   fcmp d0, d17
 ;   b.lt 8 ; udf
 ;   fcvtzu w0, d0
 ;   ret
@@ -208,12 +208,12 @@ block0(v0: f64):
 ; block0:
 ;   fcmp d0, d0
 ;   b.vc 8 ; udf
-;   fmov d5, #-1
-;   fcmp d0, d5
+;   fmov d4, #-1
+;   fcmp d0, d4
 ;   b.gt 8 ; udf
-;   movz x10, #17392, LSL #48
-;   fmov d18, x10
-;   fcmp d0, d18
+;   movz x9, #17392, LSL #48
+;   fmov d17, x9
+;   fcmp d0, d17
 ;   b.lt 8 ; udf
 ;   fcvtzu x0, d0
 ;   ret
@@ -267,13 +267,13 @@ block0(v0: f32):
 ; block0:
 ;   fcmp s0, s0
 ;   b.vc 8 ; udf
-;   movz x6, #52992, LSL #16
-;   fmov s6, w6
-;   fcmp s0, s6
+;   movz x5, #52992, LSL #16
+;   fmov s5, w5
+;   fcmp s0, s5
 ;   b.ge 8 ; udf
-;   movz x12, #20224, LSL #16
-;   fmov s20, w12
-;   fcmp s0, s20
+;   movz x11, #20224, LSL #16
+;   fmov s19, w11
+;   fcmp s0, s19
 ;   b.lt 8 ; udf
 ;   fcvtzs w0, s0
 ;   ret
@@ -287,13 +287,13 @@ block0(v0: f32):
 ; block0:
 ;   fcmp s0, s0
 ;   b.vc 8 ; udf
-;   movz x6, #57088, LSL #16
-;   fmov s6, w6
-;   fcmp s0, s6
+;   movz x5, #57088, LSL #16
+;   fmov s5, w5
+;   fcmp s0, s5
 ;   b.ge 8 ; udf
-;   movz x12, #24320, LSL #16
-;   fmov s20, w12
-;   fcmp s0, s20
+;   movz x11, #24320, LSL #16
+;   fmov s19, w11
+;   fcmp s0, s19
 ;   b.lt 8 ; udf
 ;   fcvtzs x0, s0
 ;   ret
@@ -307,12 +307,12 @@ block0(v0: f64):
 ; block0:
 ;   fcmp d0, d0
 ;   b.vc 8 ; udf
-;   ldr d5, pc+8 ; b 12 ; data.f64 -2147483649
-;   fcmp d0, d5
+;   ldr d4, pc+8 ; b 12 ; data.f64 -2147483649
+;   fcmp d0, d4
 ;   b.gt 8 ; udf
-;   movz x10, #16864, LSL #48
-;   fmov d18, x10
-;   fcmp d0, d18
+;   movz x9, #16864, LSL #48
+;   fmov d17, x9
+;   fcmp d0, d17
 ;   b.lt 8 ; udf
 ;   fcvtzs w0, d0
 ;   ret
@@ -326,13 +326,13 @@ block0(v0: f64):
 ; block0:
 ;   fcmp d0, d0
 ;   b.vc 8 ; udf
-;   movz x6, #50144, LSL #48
-;   fmov d6, x6
-;   fcmp d0, d6
+;   movz x5, #50144, LSL #48
+;   fmov d5, x5
+;   fcmp d0, d5
 ;   b.ge 8 ; udf
-;   movz x12, #17376, LSL #48
-;   fmov d20, x12
-;   fcmp d0, d20
+;   movz x11, #17376, LSL #48
+;   fmov d19, x11
+;   fcmp d0, d19
 ;   b.lt 8 ; udf
 ;   fcvtzs x0, d0
 ;   ret
@@ -404,10 +404,10 @@ block0(v0: f32):
 }
 
 ; block0:
-;   fcvtzu w3, s0
-;   movz w5, #255
-;   subs wzr, w3, w5
-;   csel x0, x5, x3, hi
+;   fcvtzu w2, s0
+;   movz w4, #255
+;   subs wzr, w2, w4
+;   csel x0, x4, x2, hi
 ;   ret
 
 function %f32(f32) -> i8 {
@@ -417,13 +417,13 @@ block0(v0: f32):
 }
 
 ; block0:
-;   fcvtzs w3, s0
-;   movz w5, #127
-;   movn x7, #127
-;   subs wzr, w3, w5
-;   csel x10, x5, x3, gt
-;   subs wzr, w10, w7
-;   csel x0, x7, x10, lt
+;   fcvtzs w2, s0
+;   movz w4, #127
+;   movn x6, #127
+;   subs wzr, w2, w4
+;   csel x9, x4, x2, gt
+;   subs wzr, w9, w6
+;   csel x0, x6, x9, lt
 ;   ret
 
 function %f33(f32) -> i16 {
@@ -433,10 +433,10 @@ block0(v0: f32):
 }
 
 ; block0:
-;   fcvtzu w3, s0
-;   movz w5, #65535
-;   subs wzr, w3, w5
-;   csel x0, x5, x3, hi
+;   fcvtzu w2, s0
+;   movz w4, #65535
+;   subs wzr, w2, w4
+;   csel x0, x4, x2, hi
 ;   ret
 
 function %f34(f32) -> i16 {
@@ -446,13 +446,13 @@ block0(v0: f32):
 }
 
 ; block0:
-;   fcvtzs w3, s0
-;   movz w5, #32767
-;   movn x7, #32767
-;   subs wzr, w3, w5
-;   csel x10, x5, x3, gt
-;   subs wzr, w10, w7
-;   csel x0, x7, x10, lt
+;   fcvtzs w2, s0
+;   movz w4, #32767
+;   movn x6, #32767
+;   subs wzr, w2, w4
+;   csel x9, x4, x2, gt
+;   subs wzr, w9, w6
+;   csel x0, x6, x9, lt
 ;   ret
 
 function %f35(f64) -> i8 {
@@ -462,10 +462,10 @@ block0(v0: f64):
 }
 
 ; block0:
-;   fcvtzu w3, d0
-;   movz w5, #255
-;   subs wzr, w3, w5
-;   csel x0, x5, x3, hi
+;   fcvtzu w2, d0
+;   movz w4, #255
+;   subs wzr, w2, w4
+;   csel x0, x4, x2, hi
 ;   ret
 
 function %f36(f64) -> i8 {
@@ -475,13 +475,13 @@ block0(v0: f64):
 }
 
 ; block0:
-;   fcvtzs w3, d0
-;   movz w5, #127
-;   movn x7, #127
-;   subs wzr, w3, w5
-;   csel x10, x5, x3, gt
-;   subs wzr, w10, w7
-;   csel x0, x7, x10, lt
+;   fcvtzs w2, d0
+;   movz w4, #127
+;   movn x6, #127
+;   subs wzr, w2, w4
+;   csel x9, x4, x2, gt
+;   subs wzr, w9, w6
+;   csel x0, x6, x9, lt
 ;   ret
 
 function %f37(f64) -> i16 {
@@ -491,10 +491,10 @@ block0(v0: f64):
 }
 
 ; block0:
-;   fcvtzu w3, d0
-;   movz w5, #65535
-;   subs wzr, w3, w5
-;   csel x0, x5, x3, hi
+;   fcvtzu w2, d0
+;   movz w4, #65535
+;   subs wzr, w2, w4
+;   csel x0, x4, x2, hi
 ;   ret
 
 function %f38(f64) -> i16 {
@@ -504,12 +504,12 @@ block0(v0: f64):
 }
 
 ; block0:
-;   fcvtzs w3, d0
-;   movz w5, #32767
-;   movn x7, #32767
-;   subs wzr, w3, w5
-;   csel x10, x5, x3, gt
-;   subs wzr, w10, w7
-;   csel x0, x7, x10, lt
+;   fcvtzs w2, d0
+;   movz w4, #32767
+;   movn x6, #32767
+;   subs wzr, w2, w4
+;   csel x9, x4, x2, gt
+;   subs wzr, w9, w6
+;   csel x0, x6, x9, lt
 ;   ret
 

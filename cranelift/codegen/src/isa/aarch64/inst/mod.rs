@@ -1022,8 +1022,8 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             }
         }
         &Inst::Ret { ref rets } | &Inst::AuthenticatedRet { ref rets, .. } => {
-            for &ret in rets {
-                collector.reg_use(ret);
+            for ret in rets {
+                collector.reg_fixed_use(ret.vreg, ret.preg);
             }
         }
         &Inst::Jump { .. } => {}

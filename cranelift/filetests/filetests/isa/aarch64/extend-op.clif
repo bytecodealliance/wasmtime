@@ -11,8 +11,8 @@ block0(v0: i8):
 }
 
 ; block0:
-;   sxtb x4, w0
-;   add x0, x4, #42
+;   sxtb x3, w0
+;   add x0, x3, #42
 ;   ret
 
 function %f2(i8, i64) -> i64 {

@@ -11,8 +11,8 @@ block0(v0: i8, v1: i8, v2: i8):
 }
 
 ; block0:
-;   uxtb w5, w0
-;   subs wzr, w5, #42
+;   uxtb w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   ret
 
@@ -25,8 +25,8 @@ block0(v0: i8, v1: i16, v2: i16):
 }
 
 ; block0:
-;   uxtb w5, w0
-;   subs wzr, w5, #42
+;   uxtb w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   ret
 
@@ -39,8 +39,8 @@ block0(v0: i8, v1: i32, v2: i32):
 }
 
 ; block0:
-;   uxtb w5, w0
-;   subs wzr, w5, #42
+;   uxtb w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   ret
 
@@ -53,8 +53,8 @@ block0(v0: i8, v1: i64, v2: i64):
 }
 
 ; block0:
-;   uxtb w5, w0
-;   subs wzr, w5, #42
+;   uxtb w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   ret
 
@@ -67,8 +67,8 @@ block0(v0: i8, v1: i128, v2: i128):
 }
 
 ; block0:
-;   uxtb w8, w0
-;   subs wzr, w8, #42
+;   uxtb w6, w0
+;   subs wzr, w6, #42
 ;   csel x0, x2, x4, eq
 ;   csel x1, x3, x5, eq
 ;   ret
@@ -82,8 +82,8 @@ block0(v0: i16, v1: i8, v2: i8):
 }
 
 ; block0:
-;   uxth w5, w0
-;   subs wzr, w5, #42
+;   uxth w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   ret
 
@@ -96,8 +96,8 @@ block0(v0: i16, v1: i16, v2: i16):
 }
 
 ; block0:
-;   uxth w5, w0
-;   subs wzr, w5, #42
+;   uxth w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   ret
 
@@ -110,8 +110,8 @@ block0(v0: i16, v1: i32, v2: i32):
 }
 
 ; block0:
-;   uxth w5, w0
-;   subs wzr, w5, #42
+;   uxth w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   ret
 
@@ -124,8 +124,8 @@ block0(v0: i16, v1: i64, v2: i64):
 }
 
 ; block0:
-;   uxth w5, w0
-;   subs wzr, w5, #42
+;   uxth w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   ret
 
@@ -138,8 +138,8 @@ block0(v0: i16, v1: i128, v2: i128):
 }
 
 ; block0:
-;   uxth w8, w0
-;   subs wzr, w8, #42
+;   uxth w6, w0
+;   subs wzr, w6, #42
 ;   csel x0, x2, x4, eq
 ;   csel x1, x3, x5, eq
 ;   ret
@@ -286,10 +286,10 @@ block0(v0: i128, v1: i8, v2: i8):
 }
 
 ; block0:
-;   movz x7, #42
-;   movz w9, #0
-;   subs xzr, x0, x7
-;   ccmp x1, x9, #nzcv, eq
+;   movz x6, #42
+;   movz w8, #0
+;   subs xzr, x0, x6
+;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
 ;   ret
 
@@ -303,10 +303,10 @@ block0(v0: i128, v1: i16, v2: i16):
 }
 
 ; block0:
-;   movz x7, #42
-;   movz w9, #0
-;   subs xzr, x0, x7
-;   ccmp x1, x9, #nzcv, eq
+;   movz x6, #42
+;   movz w8, #0
+;   subs xzr, x0, x6
+;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
 ;   ret
 
@@ -320,10 +320,10 @@ block0(v0: i128, v1: i32, v2: i32):
 }
 
 ; block0:
-;   movz x7, #42
-;   movz w9, #0
-;   subs xzr, x0, x7
-;   ccmp x1, x9, #nzcv, eq
+;   movz x6, #42
+;   movz w8, #0
+;   subs xzr, x0, x6
+;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
 ;   ret
 
@@ -337,10 +337,10 @@ block0(v0: i128, v1: i64, v2: i64):
 }
 
 ; block0:
-;   movz x7, #42
-;   movz w9, #0
-;   subs xzr, x0, x7
-;   ccmp x1, x9, #nzcv, eq
+;   movz x6, #42
+;   movz w8, #0
+;   subs xzr, x0, x6
+;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
 ;   ret
 
@@ -354,10 +354,10 @@ block0(v0: i128, v1: i128, v2: i128):
 }
 
 ; block0:
-;   movz x11, #42
-;   movz w13, #0
-;   subs xzr, x0, x11
-;   ccmp x1, x13, #nzcv, eq
+;   movz x9, #42
+;   movz w11, #0
+;   subs xzr, x0, x9
+;   ccmp x1, x11, #nzcv, eq
 ;   csel x0, x2, x4, eq
 ;   csel x1, x3, x5, eq
 ;   ret
@@ -371,8 +371,8 @@ block0(v0: i8, v1: i8, v2: i8):
 }
 
 ; block0:
-;   uxtb w5, w0
-;   subs wzr, w5, #42
+;   uxtb w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   csdb
 ;   ret
@@ -386,8 +386,8 @@ block0(v0: i8, v1: i16, v2: i16):
 }
 
 ; block0:
-;   uxtb w5, w0
-;   subs wzr, w5, #42
+;   uxtb w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   csdb
 ;   ret
@@ -401,8 +401,8 @@ block0(v0: i8, v1: i32, v2: i32):
 }
 
 ; block0:
-;   uxtb w5, w0
-;   subs wzr, w5, #42
+;   uxtb w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   csdb
 ;   ret
@@ -416,8 +416,8 @@ block0(v0: i8, v1: i64, v2: i64):
 }
 
 ; block0:
-;   uxtb w5, w0
-;   subs wzr, w5, #42
+;   uxtb w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   csdb
 ;   ret
@@ -431,8 +431,8 @@ block0(v0: i8, v1: i128, v2: i128):
 }
 
 ; block0:
-;   uxtb w8, w0
-;   subs wzr, w8, #42
+;   uxtb w6, w0
+;   subs wzr, w6, #42
 ;   csel x0, x2, x4, eq
 ;   csel x1, x3, x5, eq
 ;   csdb
@@ -447,8 +447,8 @@ block0(v0: i16, v1: i8, v2: i8):
 }
 
 ; block0:
-;   uxth w5, w0
-;   subs wzr, w5, #42
+;   uxth w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   csdb
 ;   ret
@@ -462,8 +462,8 @@ block0(v0: i16, v1: i16, v2: i16):
 }
 
 ; block0:
-;   uxth w5, w0
-;   subs wzr, w5, #42
+;   uxth w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   csdb
 ;   ret
@@ -477,8 +477,8 @@ block0(v0: i16, v1: i32, v2: i32):
 }
 
 ; block0:
-;   uxth w5, w0
-;   subs wzr, w5, #42
+;   uxth w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   csdb
 ;   ret
@@ -492,8 +492,8 @@ block0(v0: i16, v1: i64, v2: i64):
 }
 
 ; block0:
-;   uxth w5, w0
-;   subs wzr, w5, #42
+;   uxth w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   csdb
 ;   ret
@@ -507,8 +507,8 @@ block0(v0: i16, v1: i128, v2: i128):
 }
 
 ; block0:
-;   uxth w8, w0
-;   subs wzr, w8, #42
+;   uxth w6, w0
+;   subs wzr, w6, #42
 ;   csel x0, x2, x4, eq
 ;   csel x1, x3, x5, eq
 ;   csdb
@@ -666,10 +666,10 @@ block0(v0: i128, v1: i8, v2: i8):
 }
 
 ; block0:
-;   movz x7, #42
-;   movz w9, #0
-;   subs xzr, x0, x7
-;   ccmp x1, x9, #nzcv, eq
+;   movz x6, #42
+;   movz w8, #0
+;   subs xzr, x0, x6
+;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
 ;   csdb
 ;   ret
@@ -684,10 +684,10 @@ block0(v0: i128, v1: i16, v2: i16):
 }
 
 ; block0:
-;   movz x7, #42
-;   movz w9, #0
-;   subs xzr, x0, x7
-;   ccmp x1, x9, #nzcv, eq
+;   movz x6, #42
+;   movz w8, #0
+;   subs xzr, x0, x6
+;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
 ;   csdb
 ;   ret
@@ -702,10 +702,10 @@ block0(v0: i128, v1: i32, v2: i32):
 }
 
 ; block0:
-;   movz x7, #42
-;   movz w9, #0
-;   subs xzr, x0, x7
-;   ccmp x1, x9, #nzcv, eq
+;   movz x6, #42
+;   movz w8, #0
+;   subs xzr, x0, x6
+;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
 ;   csdb
 ;   ret
@@ -720,10 +720,10 @@ block0(v0: i128, v1: i64, v2: i64):
 }
 
 ; block0:
-;   movz x7, #42
-;   movz w9, #0
-;   subs xzr, x0, x7
-;   ccmp x1, x9, #nzcv, eq
+;   movz x6, #42
+;   movz w8, #0
+;   subs xzr, x0, x6
+;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
 ;   csdb
 ;   ret
@@ -738,10 +738,10 @@ block0(v0: i128, v1: i128, v2: i128):
 }
 
 ; block0:
-;   movz x11, #42
-;   movz w13, #0
-;   subs xzr, x0, x11
-;   ccmp x1, x13, #nzcv, eq
+;   movz x9, #42
+;   movz w11, #0
+;   subs xzr, x0, x9
+;   ccmp x1, x11, #nzcv, eq
 ;   csel x0, x2, x4, eq
 ;   csel x1, x3, x5, eq
 ;   csdb
@@ -755,8 +755,8 @@ block0(v0: i8):
 }
 
 ; block0:
-;   uxtb w3, w0
-;   subs wzr, w3, #42
+;   uxtb w2, w0
+;   subs wzr, w2, #42
 ;   cset x0, eq
 ;   ret
 
@@ -767,9 +767,9 @@ block0(v0: i8, v1: i8, v2: i8):
 }
 
 ; block0:
-;   and w5, w1, w0
-;   bic w7, w2, w0
-;   orr w0, w5, w7
+;   and w4, w1, w0
+;   bic w6, w2, w0
+;   orr w0, w4, w6
 ;   ret
 
 function %i(i8, i8, i8) -> i8 {

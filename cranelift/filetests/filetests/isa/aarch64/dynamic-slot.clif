@@ -80,8 +80,8 @@ block0:
 ;   mov fp, sp
 ;   sub sp, sp, #16
 ; block0:
-;   mov x3, sp
-;   ldr q0, [x3]
+;   mov x2, sp
+;   ldr q0, [x2]
 ;   add sp, sp, #16
 ;   ldp fp, lr, [sp], #16
 ;   ret

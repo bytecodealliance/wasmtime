@@ -158,8 +158,8 @@ pub struct Lower<'func, I: VCodeInst> {
     /// Mapping from `Value` (SSA value in IR) to virtual register.
     value_regs: SecondaryMap<Value, ValueRegs<Reg>>,
 
-    /// Return-value vregs.
-    retval_regs: Vec<ValueRegs<Reg>>,
+    /// sret registers, if needed.
+    sret_reg: Option<ValueRegs<Reg>>,
 
     /// Instruction colors at block exits. From this map, we can recover all
     /// instruction colors by scanning backward from the block end and
@@ -370,12 +370,13 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             }
         }
 
-        // Assign vreg(s) to each return value.
-        let mut retval_regs = vec![];
+        // Make a sret register, if one is needed.
+        let mut sret_reg = None;
         for ret in &vcode.abi().signature().returns.clone() {
-            let regs = vregs.alloc(ret.value_type)?;
-            retval_regs.push(regs);
-            trace!("retval gets regs {:?}", regs);
+            if ret.purpose == ArgumentPurpose::StructReturn {
+                assert!(sret_reg.is_none());
+                sret_reg = Some(vregs.alloc(ret.value_type)?);
+            }
         }
 
         // Compute instruction colors, find constant instructions, and find instructions with
@@ -414,7 +415,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             vcode,
             vregs,
             value_regs,
-            retval_regs,
+            sret_reg,
             block_end_colors,
             side_effect_inst_entry_colors,
             inst_constants,
@@ -576,15 +577,15 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     let ty = self.abi().signature().params[i].value_type;
                     // The ABI implementation must have ensured that a StructReturn
                     // arg is present in the return values.
-                    let struct_ret_idx = self
+                    assert!(self
                         .abi()
                         .signature()
                         .returns
                         .iter()
                         .position(|ret| ret.purpose == ArgumentPurpose::StructReturn)
-                        .expect("StructReturn return value not present!");
+                        .is_some());
                     self.emit(I::gen_move(
-                        Writable::from_reg(self.retval_regs[struct_ret_idx].regs()[0]),
+                        Writable::from_reg(self.sret_reg.unwrap().regs()[0]),
                         regs.regs()[0].to_reg(),
                         ty,
                     ));
@@ -611,21 +612,36 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         }
     }
 
-    fn gen_retval_setup(&mut self) {
-        let retval_regs = self.retval_regs.clone();
-        for (i, regs) in retval_regs.into_iter().enumerate() {
-            let regs = writable_value_regs(regs);
-            for insn in self
-                .vcode
-                .abi()
-                .gen_copy_regs_to_retval(self.sigs(), i, regs)
-                .into_iter()
-            {
+    /// Generate the return instruction.
+    pub fn gen_return(&mut self, rets: Vec<ValueRegs<Reg>>) {
+        let mut out_rets = vec![];
+
+        let mut rets = rets.into_iter();
+        for (i, ret) in self
+            .abi()
+            .signature()
+            .returns
+            .clone()
+            .into_iter()
+            .enumerate()
+        {
+            let regs = if ret.purpose == ArgumentPurpose::StructReturn {
+                self.sret_reg.unwrap().clone()
+            } else {
+                rets.next().unwrap()
+            };
+
+            let (regs, insns) = self.vcode.abi().gen_copy_regs_to_retval(
+                self.vcode.sigs(),
+                i,
+                regs,
+                &mut self.vregs,
+            );
+            out_rets.extend(regs);
+            for insn in insns {
                 self.emit(insn);
             }
         }
-        let inst = self.vcode.abi().gen_ret(self.sigs());
-        self.emit(inst);
 
         // Hack: generate a virtual instruction that uses vmctx in
         // order to keep it alive for the duration of the function,
@@ -636,6 +652,9 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 self.emit(I::gen_dummy_use(vmctx_reg));
             }
         }
+
+        let inst = self.abi().gen_ret(out_rets);
+        self.emit(inst);
     }
 
     /// Has this instruction been sunk to a use-site (i.e., away from its
@@ -719,10 +738,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             if has_side_effect || value_needed {
                 trace!("lowering: inst {}: {:?}", inst, self.f.dfg[inst]);
                 backend.lower(self, inst)?;
-            }
-            if data.opcode().is_return() {
-                // Return: handle specially, using ABI-appropriate sequence.
-                self.gen_retval_setup();
             }
 
             let loc = self.srcloc(inst);
@@ -1025,14 +1040,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Get the `Callee`.
     pub fn abi_mut(&mut self) -> &mut Callee<I::ABIMachineSpec> {
         self.vcode.abi_mut()
-    }
-
-    /// Get the (virtual) register that receives the return value. A return
-    /// instruction should lower into a sequence that fills this register. (Why
-    /// not allow the backend to specify its own result register for the return?
-    /// Because there may be multiple return points.)
-    pub fn retval(&self, idx: usize) -> ValueRegs<Writable<Reg>> {
-        writable_value_regs(self.retval_regs[idx])
     }
 }
 

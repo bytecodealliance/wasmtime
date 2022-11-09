@@ -28,8 +28,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   lrvg %r5, 0(%r2)
-;   ldgr %f0, %r5
+;   lrvg %r4, 0(%r2)
+;   ldgr %f0, %r4
 ;   br %r14
 
 function %load_f32_little(i64) -> f32 {
@@ -39,8 +39,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   lrv %r5, 0(%r2)
-;   vlvgf %v0, %r5, 0
+;   lrv %r4, 0(%r2)
+;   vlvgf %v0, %r4, 0
 ;   br %r14
 
 function %store_f64(f64, i64) {

@@ -10,8 +10,8 @@ block0(v0: f32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_ext_name %NearestF32+0, %rdx
-;   call    *%rdx
+;   load_ext_name %NearestF32+0, %rcx
+;   call    *%rcx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -25,8 +25,8 @@ block0(v0: f64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_ext_name %NearestF64+0, %rdx
-;   call    *%rdx
+;   load_ext_name %NearestF64+0, %rcx
+;   call    *%rcx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
