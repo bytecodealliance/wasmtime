@@ -9,8 +9,12 @@ wit_bindgen_guest_rust::generate!({
     import: "wit/wasi-random.wit.md",
     default: "wit/command.wit.md",
     name: "wasi_command",
+    no_std,
     raw_strings,
-    unchecked
+    unchecked,
+    // The generated definition of command will pull in std, so we are defining it
+    // manually below instead
+    skip: ["command"],
 });
 
 use core::arch::wasm32::unreachable;
@@ -19,36 +23,24 @@ use core::ptr::{copy_nonoverlapping, null_mut};
 use core::slice;
 use wasi::*;
 
-struct Export;
-impl wasi_command::WasiCommand for Export {
-    fn command(
-        stdin: wasi_filesystem::Descriptor,
-        stdout: wasi_filesystem::Descriptor, /* TODO add the environment Vec<(String, String)> */
-        /* TODO logging shouldnt be as ambient? */
-        args: Vec<Vec<u8>>,
-    ) {
-        *Descriptor::get(0) = Descriptor::File(File {
-            fd: stdin,
-            position: 0,
-        });
-        *Descriptor::get(1) = Descriptor::File(File {
-            fd: stdout,
-            position: 0,
-        });
-        *Descriptor::get(2) = Descriptor::Log;
+#[export_name = "command"]
+unsafe extern "C" fn command_entrypoint(stdin: i32, stdout: i32, _args_ptr: i32, _args_len: i32) {
+    *Descriptor::get(0) = Descriptor::File(File {
+        fd: stdin as u32,
+        position: 0,
+    });
+    *Descriptor::get(1) = Descriptor::File(File {
+        fd: stdout as u32,
+        position: 0,
+    });
+    *Descriptor::get(2) = Descriptor::Log;
 
-        // FIXME do something with the args. but definitely mem::forget them,
-        // because we dont want to Drop them - they arent allocated by the std allocator,
-        // they are allocated by the export_realloc
-        std::mem::forget(args);
-        #[link(wasm_import_module = "__main_module__")]
-        extern "C" {
-            fn _start();
-        }
-        unsafe { _start() }
+    #[link(wasm_import_module = "__main_module__")]
+    extern "C" {
+        fn _start();
     }
+    _start()
 }
-export_wasi_command!(Export);
 
 /// The maximum path length. WASI doesn't explicitly guarantee this, but all
 /// popular OS's have a `PATH_MAX` of at most 4096, so that's enough for this
@@ -111,10 +103,9 @@ pub unsafe extern "C" fn cabi_import_realloc(
 pub unsafe extern "C" fn cabi_export_realloc(
     old_ptr: *mut u8,
     old_size: usize,
-    _align: usize,
+    align: usize,
     new_size: usize,
 ) -> *mut u8 {
-    // TODO implement a bump allocator in terms of memory.grow here
     unreachable()
 }
 
