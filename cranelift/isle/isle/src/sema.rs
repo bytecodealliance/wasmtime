@@ -2397,7 +2397,7 @@ impl TermEnv {
             &iflet.pattern,
             Some(ty),
             bindings,
-            /* is_root = */ true,
+            /* is_root = */ false,
         )?;
 
         Some(IfLet { lhs, rhs })
