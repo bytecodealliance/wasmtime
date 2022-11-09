@@ -157,8 +157,10 @@ fn static_addr(
     // This first case is a trivial case where we can statically trap.
     if offset_plus_size(offset, access_size) > bound {
         // This will simply always trap since `offset >= 0`.
-        pos.ins().trap(ir::TrapCode::HeapOutOfBounds);
-        pos.func.dfg.replace(inst).iconst(addr_ty, 0);
+        let trap = pos.ins().trap(ir::TrapCode::HeapOutOfBounds);
+        trace!("  inserting: {}", pos.func.dfg.display_inst(trap));
+        let iconst = pos.func.dfg.replace(inst).iconst(addr_ty, 0);
+        trace!("  inserting: {}", pos.func.dfg.display_value_inst(iconst));
 
         // Split the block, as the trap is a terminator instruction.
         let curr_block = pos.current_block().expect("Cursor is not in a block");
@@ -207,9 +209,14 @@ fn static_addr(
             (IntCC::UnsignedGreaterThan, index, limit)
         };
         let oob = pos.ins().icmp_imm(cc, lhs, limit_imm);
-        pos.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
+        trace!("  inserting: {}", pos.func.dfg.display_value_inst(oob));
+
+        let trapnz = pos.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
+        trace!("  inserting: {}", pos.func.dfg.display_inst(trapnz));
+
         if isa.flags().enable_heap_access_spectre_mitigation() {
             let limit = pos.ins().iconst(addr_ty, limit_imm);
+            trace!("  inserting: {}", pos.func.dfg.display_value_inst(limit));
             spectre_oob_comparison = Some(SpectreOobComparison {
                 cc,
                 lhs,
