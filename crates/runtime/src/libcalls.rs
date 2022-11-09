@@ -434,17 +434,12 @@ unsafe fn externref_global_set(vmctx: *mut VMContext, index: u32, externref: *mu
 unsafe fn memory_atomic_notify(
     vmctx: *mut VMContext,
     memory_index: u32,
-    addr: *mut u8,
+    addr: u64,
     _count: u32,
 ) -> Result<u32, TrapReason> {
-    let addr = addr as usize;
     let memory = MemoryIndex::from_u32(memory_index);
     let instance = (*vmctx).instance();
-    // this should never overflow since addr + 4 either hits a guard page
-    // or it's been validated to be in-bounds already. Double-check for now
-    // just to be sure.
-    let addr_to_check = addr.checked_add(4).unwrap();
-    validate_atomic_addr(instance, memory, addr_to_check)?;
+    validate_atomic_addr(instance, memory, addr, 4, 4)?;
     Err(
         anyhow::anyhow!("unimplemented: wasm atomics (fn memory_atomic_notify) unsupported",)
             .into(),
@@ -455,17 +450,13 @@ unsafe fn memory_atomic_notify(
 unsafe fn memory_atomic_wait32(
     vmctx: *mut VMContext,
     memory_index: u32,
-    addr: *mut u8,
+    addr: u64,
     _expected: u32,
     _timeout: u64,
 ) -> Result<u32, TrapReason> {
-    let addr = addr as usize;
     let memory = MemoryIndex::from_u32(memory_index);
     let instance = (*vmctx).instance();
-    // see wasmtime_memory_atomic_notify for why this shouldn't overflow
-    // but we still double-check
-    let addr_to_check = addr.checked_add(4).unwrap();
-    validate_atomic_addr(instance, memory, addr_to_check)?;
+    validate_atomic_addr(instance, memory, addr, 4, 4)?;
     Err(
         anyhow::anyhow!("unimplemented: wasm atomics (fn memory_atomic_wait32) unsupported",)
             .into(),
@@ -476,40 +467,47 @@ unsafe fn memory_atomic_wait32(
 unsafe fn memory_atomic_wait64(
     vmctx: *mut VMContext,
     memory_index: u32,
-    addr: *mut u8,
+    addr: u64,
     _expected: u64,
     _timeout: u64,
 ) -> Result<u32, TrapReason> {
-    let addr = addr as usize;
     let memory = MemoryIndex::from_u32(memory_index);
     let instance = (*vmctx).instance();
-    // see wasmtime_memory_atomic_notify for why this shouldn't overflow
-    // but we still double-check
-    let addr_to_check = addr.checked_add(8).unwrap();
-    validate_atomic_addr(instance, memory, addr_to_check)?;
+    validate_atomic_addr(instance, memory, addr, 8, 8)?;
     Err(
         anyhow::anyhow!("unimplemented: wasm atomics (fn memory_atomic_wait64) unsupported",)
             .into(),
     )
 }
 
-/// For atomic operations we still check the actual address despite this also
-/// being checked via the `heap_addr` instruction in cranelift. The reason for
-/// that is because the `heap_addr` instruction can defer to a later segfault to
-/// actually recognize the out-of-bounds whereas once we're running Rust code
-/// here we don't want to segfault.
-///
-/// In the situations where bounds checks were elided in JIT code (because oob
-/// would then be later guaranteed to segfault) this manual check is here
-/// so we don't segfault from Rust.
+macro_rules! ensure {
+    ($cond:expr, $trap:expr) => {
+        if !($cond) {
+            return Err($trap);
+        }
+    };
+}
+
+/// In the configurations where bounds checks were elided in JIT code (because
+/// we are using static memories with virtual memory guard pages) this manual
+/// check is here so we don't segfault from Rust. For other configurations,
+/// these checks are required anyways.
 unsafe fn validate_atomic_addr(
     instance: &Instance,
     memory: MemoryIndex,
-    addr: usize,
+    addr: u64,
+    access_size: u64,
+    access_alignment: u64,
 ) -> Result<(), TrapCode> {
-    if addr > instance.get_memory(memory).current_length() {
-        return Err(TrapCode::HeapOutOfBounds);
-    }
+    debug_assert!(access_alignment.is_power_of_two());
+    ensure!(addr % access_alignment == 0, TrapCode::HeapMisaligned);
+
+    let length = u64::try_from(instance.get_memory(memory).current_length()).unwrap();
+    ensure!(
+        addr.saturating_add(access_size) < length,
+        TrapCode::HeapOutOfBounds
+    );
+
     Ok(())
 }
 
