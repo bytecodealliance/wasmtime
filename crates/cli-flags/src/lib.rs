@@ -106,11 +106,11 @@ pub struct CommonOptions {
     #[clap(long, parse(from_os_str), value_name = "CONFIG_PATH")]
     pub config: Option<PathBuf>,
 
-    /// Disable logging.
+    /// Disable logging
     #[clap(long, conflicts_with = "log-to-files")]
     pub disable_logging: bool,
 
-    /// Log to per-thread log files instead of stderr.
+    /// Log to per-thread log files instead of stderr
     #[clap(long)]
     pub log_to_files: bool,
 
@@ -126,11 +126,11 @@ pub struct CommonOptions {
     #[clap(long)]
     pub disable_parallel_compilation: bool,
 
-    /// Enables or disables WebAssembly features
+    /// Enable or disable WebAssembly features
     #[clap(long, value_name = "FEATURE,FEATURE,...", parse(try_from_str = parse_wasm_features))]
     pub wasm_features: Option<WasmFeatures>,
 
-    /// Enables or disables WASI modules
+    /// Enable or disable WASI modules
     #[clap(long, value_name = "MODULE,MODULE,...", parse(try_from_str = parse_wasi_modules))]
     pub wasi_modules: Option<WasiModules>,
 
@@ -176,15 +176,15 @@ pub struct CommonOptions {
     #[clap(long, value_name = "MAXIMUM")]
     pub static_memory_maximum_size: Option<u64>,
 
-    /// Force using a "static" style for all wasm memories.
+    /// Force using a "static" style for all wasm memories
     #[clap(long)]
     pub static_memory_forced: bool,
 
-    /// Byte size of the guard region after static memories are allocated.
+    /// Byte size of the guard region after static memories are allocated
     #[clap(long, value_name = "SIZE")]
     pub static_memory_guard_size: Option<u64>,
 
-    /// Byte size of the guard region after dynamic memories are allocated.
+    /// Byte size of the guard region after dynamic memories are allocated
     #[clap(long, value_name = "SIZE")]
     pub dynamic_memory_guard_size: Option<u64>,
 
@@ -212,23 +212,23 @@ pub struct CommonOptions {
     #[clap(long)]
     pub epoch_interruption: bool,
 
-    /// Disables the on-by-default address map from native code to wasm code.
+    /// Disable the on-by-default address map from native code to wasm code
     #[clap(long)]
     pub disable_address_map: bool,
 
-    /// Disables the default of attempting to initialize linear memory via a
-    /// copy-on-write mapping.
+    /// Disable the default of attempting to initialize linear memory via a
+    /// copy-on-write mapping
     #[cfg(feature = "memory-init-cow")]
     #[clap(long)]
     pub disable_memory_init_cow: bool,
 
-    /// Enables the pooling allocator, in place of the on-demand
+    /// Enable the pooling allocator, in place of the on-demand
     /// allocator.
     #[cfg(feature = "pooling-allocator")]
     #[clap(long)]
     pub pooling_allocator: bool,
 
-    /// Maximum stack size, in bytes, that wasm is allowed to consumed before a
+    /// Maximum stack size, in bytes, that wasm is allowed to consume before a
     /// stack overflow is reported.
     #[clap(long)]
     pub max_wasm_stack: Option<usize>,
@@ -507,10 +507,10 @@ pub struct WasiModules {
     /// parts once the implementation allows for it (e.g. wasi-fs, wasi-clocks, etc.).
     pub wasi_common: bool,
 
-    /// Enable the experimental wasi-nn implementation.
+    /// Enable the experimental wasi-nn implementation
     pub wasi_nn: bool,
 
-    /// Enable the experimental wasi-crypto implementation.
+    /// Enable the experimental wasi-crypto implementation
     pub wasi_crypto: bool,
 }
 
