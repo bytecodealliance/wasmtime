@@ -14,7 +14,6 @@
 //! the opposite).
 
 use crate::ast;
-use crate::ast::Ident;
 use crate::error::*;
 use crate::lexer::Pos;
 use crate::log;
@@ -947,9 +946,8 @@ impl TypeEnv {
                     ref ty,
                     pos,
                 }) => {
-                    let ty = tyenv.intern_mut(ty);
-                    let ty = match tyenv.type_map.get(&ty) {
-                        Some(ty) => *ty,
+                    let ty = match tyenv.get_type_by_name(ty) {
+                        Some(ty) => ty,
                         None => {
                             tyenv.report_error(pos, "Unknown type for constant");
                             continue;
@@ -1022,9 +1020,8 @@ impl TypeEnv {
                             );
                             return None;
                         }
-                        let field_ty = self.intern_mut(&field.ty);
-                        let field_tid = match self.type_map.get(&field_ty) {
-                            Some(tid) => *tid,
+                        let field_tid = match self.get_type_by_name(&field.ty) {
+                            Some(tid) => tid,
                             None => {
                                 self.report_error(
                                     field.ty.1,
@@ -1091,7 +1088,13 @@ impl TypeEnv {
     }
 
     fn intern(&self, ident: &ast::Ident) -> Option<Sym> {
-        self.sym_map.get(&ident.0).cloned()
+        self.sym_map.get(&ident.0).copied()
+    }
+
+    fn get_type_by_name(&self, sym: &ast::Ident) -> Option<TypeId> {
+        self.intern(sym)
+            .and_then(|sym| self.type_map.get(&sym))
+            .copied()
     }
 }
 
@@ -1167,8 +1170,7 @@ impl TermEnv {
                         .arg_tys
                         .iter()
                         .map(|id| {
-                            let sym = tyenv.intern_mut(id);
-                            tyenv.type_map.get(&sym).cloned().ok_or_else(|| {
+                            tyenv.get_type_by_name(id).ok_or_else(|| {
                                 tyenv.report_error(id.1, format!("Unknown arg type: '{}'", id.0));
                                 ()
                             })
@@ -1180,17 +1182,14 @@ impl TermEnv {
                             continue;
                         }
                     };
-                    let ret_ty = {
-                        let sym = tyenv.intern_mut(&decl.ret_ty);
-                        match tyenv.type_map.get(&sym).cloned() {
-                            Some(t) => t,
-                            None => {
-                                tyenv.report_error(
-                                    decl.ret_ty.1,
-                                    format!("Unknown return type: '{}'", decl.ret_ty.0),
-                                );
-                                continue;
-                            }
+                    let ret_ty = match tyenv.get_type_by_name(&decl.ret_ty) {
+                        Some(t) => t,
+                        None => {
+                            tyenv.report_error(
+                                decl.ret_ty.1,
+                                format!("Unknown return type: '{}'", decl.ret_ty.0),
+                            );
+                            continue;
                         }
                     };
 
@@ -1271,9 +1270,8 @@ impl TermEnv {
                             continue;
                         }
                     };
-                    let sym = tyenv.intern_mut(&term);
-                    let term = match self.term_map.get(&sym) {
-                        Some(&tid) => tid,
+                    let term = match self.get_term_by_name(tyenv, &term) {
+                        Some(tid) => tid,
                         None => {
                             tyenv
                                 .report_error(pos, "Rule LHS root term is not defined".to_string());
@@ -1324,8 +1322,7 @@ impl TermEnv {
 
         for def in &defs.defs {
             if let &ast::Def::Extractor(ref ext) = def {
-                let sym = tyenv.intern_mut(&ext.term);
-                let term = match self.term_map.get(&sym) {
+                let term = match self.get_term_by_name(tyenv, &ext.term) {
                     Some(x) => x,
                     None => {
                         tyenv.report_error(
@@ -1341,8 +1338,7 @@ impl TermEnv {
 
                 let mut callees = BTreeSet::new();
                 template.terms(&mut |pos, t| {
-                    let sym = tyenv.intern_mut(t);
-                    if let Some(term) = self.term_map.get(&sym) {
+                    if let Some(term) = self.get_term_by_name(tyenv, t) {
                         callees.insert(term);
                     } else {
                         tyenv.report_error(
@@ -1454,9 +1450,8 @@ impl TermEnv {
                     ref outer_ty,
                     pos,
                 }) => {
-                    let inner_ty_sym = tyenv.intern_mut(inner_ty);
-                    let inner_ty_id = match tyenv.type_map.get(&inner_ty_sym) {
-                        Some(ty) => *ty,
+                    let inner_ty_id = match tyenv.get_type_by_name(inner_ty) {
+                        Some(ty) => ty,
                         None => {
                             tyenv.report_error(
                                 inner_ty.1,
@@ -1466,9 +1461,8 @@ impl TermEnv {
                         }
                     };
 
-                    let outer_ty_sym = tyenv.intern_mut(outer_ty);
-                    let outer_ty_id = match tyenv.type_map.get(&outer_ty_sym) {
-                        Some(ty) => *ty,
+                    let outer_ty_id = match tyenv.get_type_by_name(outer_ty) {
+                        Some(ty) => ty,
                         None => {
                             tyenv.report_error(
                                 outer_ty.1,
@@ -1478,9 +1472,8 @@ impl TermEnv {
                         }
                     };
 
-                    let term_sym = tyenv.intern_mut(term);
-                    let term_id = match self.term_map.get(&term_sym) {
-                        Some(term_id) => *term_id,
+                    let term_id = match self.get_term_by_name(tyenv, term) {
+                        Some(term_id) => term_id,
                         None => {
                             tyenv.report_error(
                                 term.1,
@@ -1519,9 +1512,8 @@ impl TermEnv {
                     ref func,
                     pos,
                 }) => {
-                    let term_sym = tyenv.intern_mut(term);
                     let func_sym = tyenv.intern_mut(func);
-                    let term_id = match self.term_map.get(&term_sym) {
+                    let term_id = match self.get_term_by_name(tyenv, term) {
                         Some(term) => term,
                         None => {
                             tyenv.report_error(
@@ -1573,9 +1565,8 @@ impl TermEnv {
                     pos,
                     infallible,
                 }) => {
-                    let term_sym = tyenv.intern_mut(term);
                     let func_sym = tyenv.intern_mut(func);
-                    let term_id = match self.term_map.get(&term_sym) {
+                    let term_id = match self.get_term_by_name(tyenv, term) {
                         Some(term) => term,
                         None => {
                             tyenv.report_error(
@@ -1644,19 +1635,16 @@ impl TermEnv {
                     let mut bindings = Bindings::default();
 
                     let rule_term = match rule.pattern.root_term() {
-                        Some(name) => {
-                            let sym = tyenv.intern_mut(name);
-                            match self.term_map.get(&sym) {
-                                Some(term) => *term,
-                                None => {
-                                    tyenv.report_error(
-                                        pos,
-                                        "Cannot define a rule for an unknown term".to_string(),
-                                    );
-                                    continue;
-                                }
+                        Some(name) => match self.get_term_by_name(tyenv, name) {
+                            Some(term) => term,
+                            None => {
+                                tyenv.report_error(
+                                    pos,
+                                    "Cannot define a rule for an unknown term".to_string(),
+                                );
+                                continue;
                             }
-                        }
+                        },
                         None => {
                             tyenv.report_error(
                                 pos,
@@ -1720,8 +1708,7 @@ impl TermEnv {
     fn check_for_undefined_decls(&self, tyenv: &mut TypeEnv, defs: &ast::Defs) {
         for def in &defs.defs {
             if let ast::Def::Decl(decl) = def {
-                let sym = tyenv.intern_mut(&decl.term);
-                let term = self.term_map[&sym];
+                let term = self.get_term_by_name(tyenv, &decl.term).unwrap();
                 let term = &self.terms[term.index()];
                 if !term.has_constructor() && !term.has_extractor() {
                     tyenv.report_error(
@@ -1740,8 +1727,7 @@ impl TermEnv {
         for def in &defs.defs {
             if let ast::Def::Rule(rule) = def {
                 rule.expr.terms(&mut |pos, ident| {
-                    let sym = tyenv.intern_mut(ident);
-                    let term = match self.term_map.get(&sym) {
+                    let term = match self.get_term_by_name(tyenv, ident) {
                         None => {
                             debug_assert!(!tyenv.errors.is_empty());
                             return;
@@ -1778,7 +1764,7 @@ impl TermEnv {
                 // re-resolved. The pos doesn't matter
                 // as it shouldn't result in a lookup
                 // failure.
-                let converter_term_ident = Ident(
+                let converter_term_ident = ast::Ident(
                     tyenv.syms[self.terms[converter_term.index()].name.index()].clone(),
                     pattern.pos(),
                 );
@@ -1953,9 +1939,8 @@ impl TermEnv {
                 ref args,
                 pos,
             } => {
-                let name = tyenv.intern_mut(&sym);
                 // Look up the term.
-                let tid = match self.term_map.get(&name) {
+                let tid = match self.get_term_by_name(tyenv, sym) {
                     Some(t) => t,
                     None => {
                         tyenv.report_error(pos, format!("Unknown term in pattern: '{}'", sym.0));
@@ -2019,7 +2004,7 @@ impl TermEnv {
                     TermKind::Decl {
                         constructor_kind: Some(ConstructorKind::InternalConstructor),
                         ..
-                    } if is_root && *tid == rule_term => {}
+                    } if is_root && tid == rule_term => {}
                     TermKind::EnumVariant { .. } => {}
                     TermKind::Decl {
                         extractor_kind: Some(ExtractorKind::ExternalExtractor { .. }),
@@ -2079,7 +2064,7 @@ impl TermEnv {
                     subpats.push(subpat);
                 }
 
-                Some((Pattern::Term(ty, *tid, subpats), ty))
+                Some((Pattern::Term(ty, tid, subpats), ty))
             }
             &ast::Pattern::MacroArg { .. } => unreachable!(),
         }
@@ -2126,9 +2111,8 @@ impl TermEnv {
             } => {
                 // Look up the term.
                 let name = tyenv.intern_mut(&sym);
-                // Look up the term.
                 let tid = match self.term_map.get(&name) {
-                    Some(t) => t,
+                    Some(&t) => t,
                     None => {
                         // Maybe this was actually a variable binding and the user has placed
                         // parens around it by mistake? (See #4775.)
@@ -2183,7 +2167,7 @@ impl TermEnv {
                                 pos,
                                 format!(
                                     "Used non-pure constructor '{}' in pure expression context",
-                                    tyenv.syms[name.index()]
+                                    sym.0
                                 ),
                             );
                         }
@@ -2219,7 +2203,7 @@ impl TermEnv {
                     subexprs.push(subexpr);
                 }
 
-                Some(Expr::Term(ty, *tid, subexprs))
+                Some(Expr::Term(ty, tid, subexprs))
             }
             &ast::Expr::Var { ref name, pos } => {
                 let sym = tyenv.intern_mut(name);
@@ -2313,18 +2297,8 @@ impl TermEnv {
                     let name = tyenv.intern_mut(&def.var);
 
                     // Look up the type.
-                    let tysym = match tyenv.intern(&def.ty) {
-                        Some(ty) => ty,
-                        None => {
-                            tyenv.report_error(
-                                pos,
-                                format!("Unknown type {} for variable '{}'", def.ty.0, def.var.0),
-                            );
-                            continue;
-                        }
-                    };
-                    let tid = match tyenv.type_map.get(&tysym) {
-                        Some(tid) => *tid,
+                    let tid = match tyenv.get_type_by_name(&def.ty) {
+                        Some(tid) => tid,
                         None => {
                             tyenv.report_error(
                                 pos,
@@ -2401,6 +2375,13 @@ impl TermEnv {
         )?;
 
         Some(IfLet { lhs, rhs })
+    }
+
+    fn get_term_by_name(&self, tyenv: &TypeEnv, sym: &ast::Ident) -> Option<TermId> {
+        tyenv
+            .intern(sym)
+            .and_then(|sym| self.term_map.get(&sym))
+            .copied()
     }
 }
 
