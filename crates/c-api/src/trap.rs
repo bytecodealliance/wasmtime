@@ -133,6 +133,8 @@ pub extern "C" fn wasmtime_trap_code(raw: &wasm_trap_t, code: &mut u8) -> bool {
         Trap::BadConversionToInteger => 8,
         Trap::UnreachableCodeReached => 9,
         Trap::Interrupt => 10,
+        Trap::OutOfFuel => 11,
+        Trap::AlwaysTrapAdapter => unreachable!("component model not supported"),
         _ => unreachable!(),
     };
     true

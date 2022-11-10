@@ -46,6 +46,8 @@ enum wasmtime_trap_code_enum {
   WASMTIME_TRAP_CODE_UNREACHABLE_CODE_REACHED,
   /// Execution has potentially run too long and may be interrupted.
   WASMTIME_TRAP_CODE_INTERRUPT,
+  /// Execution has run out of the configured fuel amount.
+  WASMTIME_TRAP_CODE_OUT_OF_FUEL,
 };
 
 /**
