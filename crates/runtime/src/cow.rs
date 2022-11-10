@@ -422,6 +422,7 @@ impl MemoryImageSlot {
         }
     }
 
+    #[cfg(feature = "pooling-allocator")]
     pub(crate) fn dummy() -> MemoryImageSlot {
         MemoryImageSlot {
             base: 0,
