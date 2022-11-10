@@ -34,7 +34,7 @@ impl TargetIsa for Aarch64 {
     fn compile_function(
         &self,
         _sig: &FuncType,
-        mut _body: FunctionBody,
+        _body: &FunctionBody,
         mut _validator: FuncValidator<ValidatorResources>,
     ) -> Result<Vec<String>> {
         todo!()

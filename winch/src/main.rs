@@ -63,7 +63,7 @@ fn compile(
     let FunctionBodyData { body, validator } = f.1;
     let validator = validator.into_validator(Default::default());
     let buffer = isa
-        .compile_function(&sig, body, validator)
+        .compile_function(&sig, &body, validator)
         .expect("Couldn't compile function");
     for i in buffer {
         println!("{}", i);

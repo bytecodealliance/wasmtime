@@ -2,7 +2,7 @@ use crate::abi::{align_to, local::LocalSlot, ty_size, ABIArg, ABISig, ABI};
 use anyhow::Result;
 use smallvec::SmallVec;
 use std::ops::Range;
-use wasmparser::{FuncValidator, FunctionBody, ValType, ValidatorResources};
+use wasmparser::{BinaryReader, FuncValidator, ValType, ValidatorResources};
 
 // TODO:
 // SpiderMonkey's implementation uses 16;
@@ -39,13 +39,13 @@ impl Frame {
     /// Allocate a new Frame.
     pub fn new<A: ABI>(
         sig: &ABISig,
-        function: &mut FunctionBody,
+        body: &mut BinaryReader<'_>,
         validator: &mut FuncValidator<ValidatorResources>,
         abi: &A,
     ) -> Result<Self> {
         let (mut locals, defined_locals_start) = Self::compute_arg_slots(sig, abi)?;
         let (defined_slots, defined_locals_end) =
-            Self::compute_defined_slots(function, validator, defined_locals_start)?;
+            Self::compute_defined_slots(body, validator, defined_locals_start)?;
         locals.extend(defined_slots);
         let locals_size = align_to(defined_locals_end, abi.stack_align().into());
 
@@ -117,12 +117,11 @@ impl Frame {
     }
 
     fn compute_defined_slots(
-        body_data: &mut FunctionBody,
+        reader: &mut BinaryReader<'_>,
         validator: &mut FuncValidator<ValidatorResources>,
         next_stack: u32,
     ) -> Result<(Locals, u32)> {
         let mut next_stack = next_stack;
-        let mut reader = body_data.get_binary_reader();
         let local_count = reader.read_var_u32()?;
         let mut slots: Locals = Default::default();
 
