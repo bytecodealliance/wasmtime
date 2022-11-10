@@ -17,7 +17,7 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
         alg_str: &wiggle::GuestPtr<'_, str>,
         options_handle: &guest_types::OptOptions,
     ) -> Result<guest_types::Keypair, guest_types::CryptoErrno> {
-        let alg_str = &*alg_str.as_str()?;
+        let alg_str = &*alg_str.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
         let options_handle = match *options_handle {
             guest_types::OptOptions::Some(options_handle) => Some(options_handle),
             guest_types::OptOptions::None => None,
@@ -89,7 +89,7 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
         alg_str: &wiggle::GuestPtr<'_, str>,
         options_handle: &guest_types::OptOptions,
     ) -> Result<guest_types::Keypair, guest_types::CryptoErrno> {
-        let alg_str = &*alg_str.as_str()?;
+        let alg_str = &*alg_str.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
         let options_handle = match *options_handle {
             guest_types::OptOptions::Some(options_handle) => Some(options_handle),
             guest_types::OptOptions::None => None,
@@ -107,7 +107,7 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
         encoded_len: guest_types::Size,
         encoding: guest_types::KeypairEncoding,
     ) -> Result<guest_types::Keypair, guest_types::CryptoErrno> {
-        let alg_str = &*alg_str.as_str()?;
+        let alg_str = &*alg_str.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
         let encoded = &*encoded_ptr
             .as_array(encoded_len)
             .as_slice()?
@@ -167,7 +167,7 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
         encoded_len: guest_types::Size,
         encoding: guest_types::PublickeyEncoding,
     ) -> Result<guest_types::Publickey, guest_types::CryptoErrno> {
-        let alg_str = &*alg_str.as_str()?;
+        let alg_str = &*alg_str.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
         let encoded = &*encoded_ptr
             .as_array(encoded_len)
             .as_slice()?
@@ -218,7 +218,7 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
         encoded_len: guest_types::Size,
         encoding: guest_types::SecretkeyEncoding,
     ) -> Result<guest_types::Secretkey, guest_types::CryptoErrno> {
-        let alg_str = &*alg_str.as_str()?;
+        let alg_str = &*alg_str.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
         let encoded = &*encoded_ptr
             .as_array(encoded_len)
             .as_slice()?

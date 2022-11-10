@@ -22,7 +22,7 @@ impl super::wasi_ephemeral_crypto_signatures::WasiEphemeralCryptoSignatures for 
         encoded_len: guest_types::Size,
         encoding: guest_types::SignatureEncoding,
     ) -> Result<guest_types::Signature, guest_types::CryptoErrno> {
-        let alg_str = &*alg_str.as_str()?;
+        let alg_str = &*alg_str.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
         let encoded = &*encoded_ptr
             .as_array(encoded_len)
             .as_slice()?

@@ -724,42 +724,23 @@ impl<'a> GuestPtr<'a, str> {
         GuestPtr::new(self.mem, self.pointer)
     }
 
-    /// Returns a pointer for the underlying slice of bytes that this
-    /// pointer points to.
-    pub fn as_byte_ptr(&self) -> GuestPtr<'a, [u8]> {
-        GuestPtr::new(self.mem, self.pointer)
-    }
-
     /// Attempts to create a [`GuestStr<'_>`] from this pointer, performing
-    /// bounds checks and utf-8 checks. The resulting `GuestStr` can be used
-    /// as a `&str` via the `Deref` trait. The region of memory backing the
-    /// `str` will be marked as shareably borrowed by the [`GuestMemory`]
-    /// until the `GuestStr` is dropped.
+    /// bounds checks and utf-8 checks. The resulting `GuestStr` can be used as
+    /// a `&str` via the `Deref` trait. The region of memory backing the `str`
+    /// will be marked as shareably borrowed by the [`GuestMemory`] until the
+    /// `GuestStr` is dropped.
     ///
     /// This function will return `GuestStr` into host memory if all checks
     /// succeed (valid utf-8, valid pointers, etc). If any checks fail then
     /// `GuestError` will be returned.
-    pub fn as_str(&self) -> Result<GuestStr<'a>, GuestError> {
-        let ptr = self
-            .mem
-            .validate_size_align(self.pointer.0, 1, self.pointer.1)?;
-
-        let borrow = self.mem.shared_borrow(Region {
-            start: self.pointer.0,
-            len: self.pointer.1,
-        })?;
-
-        // SAFETY: iff there are no overlapping borrows it is ok to construct
-        // a &mut str.
-        let ptr = unsafe { slice::from_raw_parts(ptr, self.pointer.1 as usize) };
-        // Validate that contents are utf-8:
-        match str::from_utf8(ptr) {
-            Ok(ptr) => Ok(GuestStr {
-                ptr,
-                mem: self.mem,
-                borrow,
-            }),
-            Err(e) => Err(GuestError::InvalidUtf8(e)),
+    ///
+    /// Additionally, because it is `unsafe` to have a `GuestStr` of shared
+    /// memory, this function will return `None` in this case.
+    pub fn as_str(&self) -> Result<Option<GuestStr<'a>>, GuestError> {
+        match self.as_bytes().as_unsafe_slice_mut()?.shared_str() {
+            UnsafeBorrowResult::Ok(s) => Ok(Some(s)),
+            UnsafeBorrowResult::Shared(_) => Ok(None),
+            UnsafeBorrowResult::Err(e) => Err(e),
         }
     }
 
@@ -772,27 +753,14 @@ impl<'a> GuestPtr<'a, str> {
     /// This function will return `GuestStrMut` into host memory if all checks
     /// succeed (valid utf-8, valid pointers, etc). If any checks fail then
     /// `GuestError` will be returned.
-    pub fn as_str_mut(&self) -> Result<GuestStrMut<'a>, GuestError> {
-        let ptr = self
-            .mem
-            .validate_size_align(self.pointer.0, 1, self.pointer.1)?;
-
-        let borrow = self.mem.mut_borrow(Region {
-            start: self.pointer.0,
-            len: self.pointer.1,
-        })?;
-
-        // SAFETY: iff there are no overlapping borrows it is ok to construct
-        // a &mut str.
-        let ptr = unsafe { slice::from_raw_parts_mut(ptr, self.pointer.1 as usize) };
-        // Validate that contents are utf-8:
-        match str::from_utf8_mut(ptr) {
-            Ok(ptr) => Ok(GuestStrMut {
-                ptr,
-                mem: self.mem,
-                borrow,
-            }),
-            Err(e) => Err(GuestError::InvalidUtf8(e)),
+    ///
+    /// Additionally, because it is `unsafe` to have a `GuestStrMut` of shared
+    /// memory, this function will return `None` in this case.
+    pub fn as_str_mut(&self) -> Result<Option<GuestStrMut<'a>>, GuestError> {
+        match self.as_bytes().as_unsafe_slice_mut()?.mut_str() {
+            UnsafeBorrowResult::Ok(s) => Ok(Some(s)),
+            UnsafeBorrowResult::Shared(_) => Ok(None),
+            UnsafeBorrowResult::Err(e) => Err(e),
         }
     }
 }
@@ -945,6 +913,65 @@ impl<'a, T> UnsafeGuestSlice<'a, T> {
                         mem: self.mem,
                         borrow,
                     })
+                }
+                Err(e) => UnsafeBorrowResult::Err(e),
+            }
+        }
+    }
+}
+
+impl<'a> UnsafeGuestSlice<'a, u8> {
+    /// Transform an `unsafe` guest slice to a [`GuestStr`].
+    ///
+    /// # Safety
+    ///
+    /// This function is safe if and only if:
+    /// - the memory is not shared (it will return `None` in this case) and
+    /// - there are no overlapping mutable borrows for this region.
+    fn shared_str(self) -> UnsafeBorrowResult<GuestStr<'a>, Self> {
+        if self.mem.is_shared_memory() {
+            UnsafeBorrowResult::Shared(self)
+        } else {
+            match self.mem.shared_borrow(self.region) {
+                Ok(borrow) => {
+                    let ptr = unsafe { slice::from_raw_parts(self.ptr, self.len) };
+                    match str::from_utf8(ptr) {
+                        Ok(ptr) => UnsafeBorrowResult::Ok(GuestStr {
+                            ptr,
+                            mem: self.mem,
+                            borrow,
+                        }),
+                        Err(e) => UnsafeBorrowResult::Err(GuestError::InvalidUtf8(e)),
+                    }
+                }
+                Err(e) => UnsafeBorrowResult::Err(e),
+            }
+        }
+    }
+
+    /// Transform an `unsafe` guest slice to a [`GuestStrMut`].
+    ///
+    /// # Safety
+    ///
+    /// This function is safe if and only if:
+    /// - the memory is not shared (it will return `None` in this case) and
+    /// - there are no overlapping borrows of any kind (shared or mutable) for
+    ///   this region.
+    fn mut_str(self) -> UnsafeBorrowResult<GuestStrMut<'a>, Self> {
+        if self.mem.is_shared_memory() {
+            UnsafeBorrowResult::Shared(self)
+        } else {
+            match self.mem.shared_borrow(self.region) {
+                Ok(borrow) => {
+                    let ptr = unsafe { slice::from_raw_parts_mut(self.ptr, self.len) };
+                    match str::from_utf8_mut(ptr) {
+                        Ok(ptr) => UnsafeBorrowResult::Ok(GuestStrMut {
+                            ptr,
+                            mem: self.mem,
+                            borrow,
+                        }),
+                        Err(e) => UnsafeBorrowResult::Err(GuestError::InvalidUtf8(e)),
+                    }
                 }
                 Err(e) => UnsafeBorrowResult::Err(e),
             }

@@ -12,7 +12,7 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
         alg_str: &wiggle::GuestPtr<'_, str>,
         options_handle: &guest_types::OptOptions,
     ) -> Result<guest_types::SymmetricKey, guest_types::CryptoErrno> {
-        let alg_str = &*alg_str.as_str()?;
+        let alg_str = &*alg_str.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
         let options_handle = match *options_handle {
             guest_types::OptOptions::Some(options_handle) => Some(options_handle),
             guest_types::OptOptions::None => None,
@@ -86,7 +86,7 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
         alg_str: &wiggle::GuestPtr<'_, str>,
         options_handle: &guest_types::OptOptions,
     ) -> Result<guest_types::SymmetricKey, guest_types::CryptoErrno> {
-        let alg_str = &*alg_str.as_str()?;
+        let alg_str = &*alg_str.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
         let options_handle = match *options_handle {
             guest_types::OptOptions::Some(options_handle) => Some(options_handle),
             guest_types::OptOptions::None => None,
@@ -102,7 +102,7 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
         raw_ptr: &wiggle::GuestPtr<'_, u8>,
         raw_len: guest_types::Size,
     ) -> Result<guest_types::SymmetricKey, guest_types::CryptoErrno> {
-        let alg_str = &*alg_str.as_str()?;
+        let alg_str = &*alg_str.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
         let raw = &*raw_ptr
             .as_array(raw_len)
             .as_slice()?
@@ -153,7 +153,7 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
         key_handle: &guest_types::OptSymmetricKey,
         options_handle: &guest_types::OptOptions,
     ) -> Result<guest_types::SymmetricState, guest_types::CryptoErrno> {
-        let alg_str = &*alg_str.as_str()?;
+        let alg_str = &*alg_str.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
         let key_handle = match *key_handle {
             guest_types::OptSymmetricKey::Some(key_handle) => Some(key_handle),
             guest_types::OptSymmetricKey::None => None,
@@ -178,7 +178,7 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
         value_ptr: &wiggle::GuestPtr<'_, u8>,
         value_max_len: guest_types::Size,
     ) -> Result<guest_types::Size, guest_types::CryptoErrno> {
-        let name_str: &str = &*name_str.as_str()?;
+        let name_str: &str = &*name_str.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
         let value = &mut *value_ptr
             .as_array(value_max_len)
             .as_slice_mut()?
@@ -193,7 +193,7 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
         symmetric_state_handle: guest_types::SymmetricState,
         name_str: &wiggle::GuestPtr<'_, str>,
     ) -> Result<u64, guest_types::CryptoErrno> {
-        let name_str: &str = &*name_str.as_str()?;
+        let name_str: &str = &*name_str.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
         Ok((&*self).options_get_u64(symmetric_state_handle.into(), name_str)?)
     }
 
@@ -244,7 +244,7 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
         symmetric_state_handle: guest_types::SymmetricState,
         alg_str: &wiggle::GuestPtr<'_, str>,
     ) -> Result<guest_types::SymmetricKey, guest_types::CryptoErrno> {
-        let alg_str = &*alg_str.as_str()?;
+        let alg_str = &*alg_str.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
         Ok((&*self)
             .symmetric_state_squeeze_key(symmetric_state_handle.into(), alg_str)?
             .into())

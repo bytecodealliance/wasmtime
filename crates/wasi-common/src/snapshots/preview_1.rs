@@ -803,7 +803,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         self.table()
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::CREATE_DIRECTORY)?
-            .create_dir(path.as_str()?.deref())
+            .create_dir(path.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)").deref())
             .await
     }
 
@@ -818,7 +818,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::PATH_FILESTAT_GET)?
             .get_path_filestat(
-                path.as_str()?.deref(),
+                path.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)").deref(),
                 flags.contains(types::Lookupflags::SYMLINK_FOLLOW),
             )
             .await?;
@@ -845,7 +845,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::PATH_FILESTAT_SET_TIMES)?
             .set_times(
-                path.as_str()?.deref(),
+                path.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)").deref(),
                 atim,
                 mtim,
                 flags.contains(types::Lookupflags::SYMLINK_FOLLOW),
@@ -876,9 +876,9 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
         src_dir
             .hard_link(
-                src_path.as_str()?.deref(),
+                src_path.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)").deref(),
                 target_dir.deref(),
-                target_path.as_str()?.deref(),
+                target_path.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)").deref(),
             )
             .await
     }
@@ -904,7 +904,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
         let oflags = OFlags::from(&oflags);
         let fdflags = FdFlags::from(fdflags);
-        let path = path.as_str()?;
+        let path = path.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
         if oflags.contains(OFlags::DIRECTORY) {
             if oflags.contains(OFlags::CREATE)
                 || oflags.contains(OFlags::EXCLUSIVE)
@@ -953,7 +953,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .table()
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::READLINK)?
-            .read_link(path.as_str()?.deref())
+            .read_link(path.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)").deref())
             .await?
             .into_os_string()
             .into_string()
@@ -979,7 +979,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         self.table()
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::REMOVE_DIRECTORY)?
-            .remove_dir(path.as_str()?.deref())
+            .remove_dir(path.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)").deref())
             .await
     }
 
@@ -999,9 +999,9 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .get_cap(DirCaps::RENAME_TARGET)?;
         src_dir
             .rename(
-                src_path.as_str()?.deref(),
+                src_path.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)").deref(),
                 dest_dir.deref(),
-                dest_path.as_str()?.deref(),
+                dest_path.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)").deref(),
             )
             .await
     }
@@ -1015,7 +1015,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         self.table()
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::SYMLINK)?
-            .symlink(src_path.as_str()?.deref(), dest_path.as_str()?.deref())
+            .symlink(src_path.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)").deref(), dest_path.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)").deref())
             .await
     }
 
@@ -1027,7 +1027,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         self.table()
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::UNLINK_FILE)?
-            .unlink_file(path.as_str()?.deref())
+            .unlink_file(path.as_str()?
+            .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)").deref())
             .await
     }
 
