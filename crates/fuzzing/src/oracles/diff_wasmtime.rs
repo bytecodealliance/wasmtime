@@ -169,12 +169,11 @@ impl DiffInstance for WasmtimeInstance {
 
     fn get_memory(&mut self, name: &str, shared: bool) -> Option<Vec<u8>> {
         Some(if shared {
-            let data = self
+            let memory = self
                 .instance
                 .get_shared_memory(&mut self.store, name)
-                .unwrap()
-                .data();
-            unsafe { (*data).to_vec() }
+                .unwrap();
+            memory.data().iter().map(|i| unsafe { *i.get() }).collect()
         } else {
             self.instance
                 .get_memory(&mut self.store, name)
