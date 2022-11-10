@@ -189,37 +189,22 @@ fn static_addr(
     let mut spectre_oob_comparison = None;
     let index = cast_index_to_pointer_ty(index, index_ty, addr_ty, &mut pos);
     if index_ty != ir::types::I32 || limit < 0xffff_ffff {
-        // Here we want to test the condition `index > limit` and if that's
-        // true then this is an out-of-bounds access and needs to trap. For ARM
-        // and other RISC architectures it's easier to test against an immediate
-        // that's even instead of odd, so if `limit` is odd then we instead test
-        // for `index >= limit + 1`.
-        //
-        // The thinking behind this is that:
-        //
-        //      A >= B + 1  =>  A - 1 >= B  =>  A > B
-        //
-        // where the last step here is true because A/B are integers, which
-        // should mean that `A >= B + 1` is an equivalent check for `A > B`
-        let (cc, lhs, limit_imm) = if limit & 1 == 1 {
-            let limit = limit as i64 + 1;
-            (IntCC::UnsignedGreaterThanOrEqual, index, limit)
-        } else {
-            let limit = limit as i64;
-            (IntCC::UnsignedGreaterThan, index, limit)
-        };
-        let oob = pos.ins().icmp_imm(cc, lhs, limit_imm);
+        // Here we want to test the condition `index > limit` and if that's true
+        // then this is an out-of-bounds access and needs to trap.
+        let oob = pos
+            .ins()
+            .icmp_imm(IntCC::UnsignedGreaterThan, index, limit as i64);
         trace!("  inserting: {}", pos.func.dfg.display_value_inst(oob));
 
         let trapnz = pos.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
         trace!("  inserting: {}", pos.func.dfg.display_inst(trapnz));
 
         if isa.flags().enable_heap_access_spectre_mitigation() {
-            let limit = pos.ins().iconst(addr_ty, limit_imm);
+            let limit = pos.ins().iconst(addr_ty, limit as i64);
             trace!("  inserting: {}", pos.func.dfg.display_value_inst(limit));
             spectre_oob_comparison = Some(SpectreOobComparison {
-                cc,
-                lhs,
+                cc: IntCC::UnsignedGreaterThan,
+                lhs: index,
                 rhs: limit,
             });
         }
