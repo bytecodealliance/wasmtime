@@ -9,6 +9,7 @@ impl wasi_logging::WasiLogging for WasiCtx {
         context: String,
         message: String,
     ) -> anyhow::Result<()> {
-        todo!()
+        println!("{:?} {}: {}", level, context, message);
+        Ok(())
     }
 }

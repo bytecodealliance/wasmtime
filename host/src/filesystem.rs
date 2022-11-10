@@ -69,7 +69,11 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         buf: Vec<u8>,
         offset: wasi_filesystem::Filesize,
     ) -> HostResult<wasi_filesystem::Size, wasi_filesystem::Errno> {
-        todo!()
+        let out = std::str::from_utf8(&buf)
+            .map(|s| s.to_string())
+            .unwrap_or_else(|_| format!("binary: {:?}", buf));
+        println!("pwrite fd {fd}@{offset}: {out}");
+        Ok(buf.len() as u32)
     }
 
     fn readdir(
