@@ -1,5 +1,27 @@
 --------------------------------------------------------------------------------
 
+## 2.0.2
+
+Released 2022-11-10.
+
+### Fixed
+
+* [CVE-2022-39392] - modules may perform out-of-bounds reads/writes when the
+  pooling allocator was configured with `memory_pages: 0`.
+
+* [CVE-2022-39393] - data can be leaked between instances when using the pooling
+  allocator.
+
+* [CVE-2022-39394] - An incorrect Rust signature for the C API
+  `wasmtime_trap_code` function could lead to an out-of-bounds write of three
+  zero bytes.
+
+[CVE-2022-39392]: https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-44mr-8vmm-wjhg
+[CVE-2022-39393]: https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-wh6w-3828-g9qf
+[CVE-2022-39394]: https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-h84q-m8rr-3v9q
+
+--------------------------------------------------------------------------------
+
 ## 2.0.1
 
 Released 2022-10-27.
