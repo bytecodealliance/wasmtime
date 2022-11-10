@@ -1981,6 +1981,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         expected: ir::Value,
         timeout: ir::Value,
     ) -> WasmResult<ir::Value> {
+        let addr = self.cast_memory_index_to_i64(&mut pos, addr, memory_index);
         let implied_ty = pos.func.dfg.value_type(expected);
         let (func_sig, memory_index, func_idx) =
             self.get_memory_atomic_wait(&mut pos.func, memory_index, implied_ty);
@@ -2006,6 +2007,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         addr: ir::Value,
         count: ir::Value,
     ) -> WasmResult<ir::Value> {
+        let addr = self.cast_memory_index_to_i64(&mut pos, addr, memory_index);
         let func_sig = self
             .builtin_function_signatures
             .memory_atomic_notify(&mut pos.func);

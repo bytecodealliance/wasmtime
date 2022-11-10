@@ -1066,21 +1066,24 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let heap = state.get_heap(builder.func, memarg.memory, environ)?;
             let timeout = state.pop1(); // 64 (fixed)
             let expected = state.pop1(); // 32 or 64 (per the `Ixx` in `IxxAtomicWait`)
-            let (_flags, addr) = prepare_atomic_addr(
-                memarg,
-                u8::try_from(implied_ty.bytes()).unwrap(),
-                builder,
-                state,
-                environ,
-            )?;
             assert!(builder.func.dfg.value_type(expected) == implied_ty);
+            let addr = state.pop1();
+            let effective_addr = if memarg.offset == 0 {
+                addr
+            } else {
+                let index_type = builder.func.heaps[heap].index_type;
+                let offset = builder.ins().iconst(index_type, memarg.offset as i64);
+                builder
+                    .ins()
+                    .uadd_overflow_trap(addr, offset, ir::TrapCode::HeapOutOfBounds)
+            };
             // `fn translate_atomic_wait` can inspect the type of `expected` to figure out what
             // code it needs to generate, if it wants.
             let res = environ.translate_atomic_wait(
                 builder.cursor(),
                 heap_index,
                 heap,
-                addr,
+                effective_addr,
                 expected,
                 timeout,
             )?;
@@ -1090,12 +1093,23 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let heap_index = MemoryIndex::from_u32(memarg.memory);
             let heap = state.get_heap(builder.func, memarg.memory, environ)?;
             let count = state.pop1(); // 32 (fixed)
-
-            // `memory.atomic.notify` is defined to have an access size of 4
-            // bytes in the spec, even though it doesn't necessarily access memory.
-            let (_flags, addr) = prepare_atomic_addr(memarg, 4, builder, state, environ)?;
-            let res =
-                environ.translate_atomic_notify(builder.cursor(), heap_index, heap, addr, count)?;
+            let addr = state.pop1();
+            let effective_addr = if memarg.offset == 0 {
+                addr
+            } else {
+                let index_type = builder.func.heaps[heap].index_type;
+                let offset = builder.ins().iconst(index_type, memarg.offset as i64);
+                builder
+                    .ins()
+                    .uadd_overflow_trap(addr, offset, ir::TrapCode::HeapOutOfBounds)
+            };
+            let res = environ.translate_atomic_notify(
+                builder.cursor(),
+                heap_index,
+                heap,
+                effective_addr,
+                count,
+            )?;
             state.push1(res);
         }
         Operator::I32AtomicLoad { memarg } => {
@@ -2324,13 +2338,12 @@ fn prepare_addr<FE: FuncEnvironment + ?Sized>(
     Ok((flags, addr))
 }
 
-fn prepare_atomic_addr<FE: FuncEnvironment + ?Sized>(
+fn align_atomic_addr(
     memarg: &MemArg,
     loaded_bytes: u8,
     builder: &mut FunctionBuilder,
     state: &mut FuncTranslationState,
-    environ: &mut FE,
-) -> WasmResult<(MemFlags, Value)> {
+) {
     // Atomic addresses must all be aligned correctly, and for now we check
     // alignment before we check out-of-bounds-ness. The order of this check may
     // need to be updated depending on the outcome of the official threads
@@ -2358,7 +2371,16 @@ fn prepare_atomic_addr<FE: FuncEnvironment + ?Sized>(
         let f = builder.ins().icmp_imm(IntCC::NotEqual, misalignment, 0);
         builder.ins().trapnz(f, ir::TrapCode::HeapMisaligned);
     }
+}
 
+fn prepare_atomic_addr<FE: FuncEnvironment + ?Sized>(
+    memarg: &MemArg,
+    loaded_bytes: u8,
+    builder: &mut FunctionBuilder,
+    state: &mut FuncTranslationState,
+    environ: &mut FE,
+) -> WasmResult<(MemFlags, Value)> {
+    align_atomic_addr(memarg, loaded_bytes, builder, state);
     prepare_addr(memarg, loaded_bytes, builder, state, environ)
 }
 
