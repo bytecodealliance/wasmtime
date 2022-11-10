@@ -137,6 +137,9 @@
 (decl u64_nonzero (u64) u64)
 (extractor (u64_nonzero x) (and (u64_is_zero $false) x))
 
+(decl pure u64_is_odd (u64) bool)
+(extern constructor u64_is_odd u64_is_odd)
+
 ;;;; `cranelift_codegen::ir::Type` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (extern const $I8 Type)

@@ -93,13 +93,13 @@ block0(v0: i64, v1: i32):
 
 ; block0:
 ;   mov w9, w1
-;   movz x10, #65512
+;   movz w10, #65512
 ;   subs xzr, x9, x10
 ;   b.ls label1 ; b label2
 ; block1:
 ;   add x11, x0, x1, UXTW
 ;   add x11, x11, #16
-;   movz x10, #65512
+;   movz w10, #65512
 ;   movz x12, #0
 ;   subs xzr, x9, x10
 ;   csel x0, x12, x11, hi
