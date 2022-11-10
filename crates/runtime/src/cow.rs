@@ -422,6 +422,7 @@ impl MemoryImageSlot {
         }
     }
 
+    #[cfg(feature = "pooling-allocator")]
     pub(crate) fn dummy() -> MemoryImageSlot {
         MemoryImageSlot {
             base: 0,
@@ -760,6 +761,12 @@ impl MemoryImageSlot {
     /// Map anonymous zeroed memory across the whole slot,
     /// inaccessible. Used both during instantiate and during drop.
     fn reset_with_anon_memory(&mut self) -> Result<()> {
+        if self.static_size == 0 {
+            assert!(self.image.is_none());
+            assert_eq!(self.accessible, 0);
+            return Ok(());
+        }
+
         unsafe {
             cfg_if::cfg_if! {
                 if #[cfg(unix)] {

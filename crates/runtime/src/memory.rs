@@ -10,7 +10,6 @@ use crate::Store;
 use anyhow::Error;
 use anyhow::{bail, format_err, Result};
 use std::convert::TryFrom;
-use std::mem;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, RwLock};
 use wasmtime_environ::{MemoryPlan, MemoryStyle, WASM32_MAX_PAGES, WASM64_MAX_PAGES};
@@ -768,7 +767,7 @@ impl Memory {
     #[cfg(feature = "pooling-allocator")]
     pub fn unwrap_static_image(mut self) -> MemoryImageSlot {
         let mem = self.0.as_any_mut().downcast_mut::<StaticMemory>().unwrap();
-        mem::replace(&mut mem.memory_image, MemoryImageSlot::dummy())
+        std::mem::replace(&mut mem.memory_image, MemoryImageSlot::dummy())
     }
 
     /// If the [Memory] is a [SharedMemory], unwrap it and return a clone to
