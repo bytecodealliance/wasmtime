@@ -172,7 +172,7 @@
         (rm PReg))
 
        ;; Like `Move` but with a particular `PReg` destination (for
-       ;; implementing CLIF instructions like `get_stack_pointer`).
+       ;; implementing CLIF instructions like `set_pinned_reg`).
        (MovToPReg
         (rd PReg)
         (rm Reg))

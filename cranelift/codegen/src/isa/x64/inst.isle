@@ -99,7 +99,7 @@
                     (dst WritableGpr))
 
        ;; Like `MovRR` but with a physical register destination (for
-       ;; implementing CLIF instructions like `get_pinned_reg`).
+       ;; implementing CLIF instructions like `set_pinned_reg`).
        (MovToPReg (src Gpr)
                   (dst PReg))
 
