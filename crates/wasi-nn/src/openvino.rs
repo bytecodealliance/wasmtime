@@ -31,8 +31,15 @@ impl Backend for OpenvinoBackend {
 
         // Read the guest array.
         let builders = builders.as_ptr();
-        let xml = builders.read()?.as_slice()?;
-        let weights = builders.add(1)?.read()?.as_slice()?;
+        let xml = builders
+            .read()?
+            .as_slice()?
+            .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
+        let weights = builders
+            .add(1)?
+            .read()?
+            .as_slice()?
+            .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
 
         // Construct OpenVINO graph structures: `cnn_network` contains the graph
         // structure, `exec_network` can perform inference.
@@ -78,6 +85,7 @@ impl BackendExecutionContext for OpenvinoExecutionContext {
         let dimensions = tensor
             .dimensions
             .as_slice()?
+            .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)")
             .iter()
             .map(|d| *d as usize)
             .collect::<Vec<_>>();
@@ -86,7 +94,10 @@ impl BackendExecutionContext for OpenvinoExecutionContext {
         // TODO There must be some good way to discover the layout here; this
         // should not have to default to NHWC.
         let desc = TensorDesc::new(Layout::NHWC, &dimensions, precision);
-        let data = tensor.data.as_slice()?;
+        let data = tensor
+            .data
+            .as_slice()?
+            .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
         let blob = openvino::Blob::new(&desc, &data)?;
 
         // Actually assign the blob to the request.

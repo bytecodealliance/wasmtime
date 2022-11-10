@@ -147,7 +147,10 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
             let len: u32 = iov.buf_len;
             let buf: GuestPtr<[u8]> = base.as_array(len);
             // GuestSlice will remain borrowed until dropped:
-            let slice = buf.as_slice().expect("borrow slice from iovec");
+            let slice = buf
+                .as_slice()
+                .expect("borrow slice from iovec")
+                .expect("expected non-shared memory");
             slices.push(slice);
         }
         println!("iovec slices: [");

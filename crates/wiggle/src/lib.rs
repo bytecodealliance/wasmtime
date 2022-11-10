@@ -513,88 +513,106 @@ impl<'a, T> GuestPtr<'a, [T]> {
 
     /// Attempts to create a [`GuestSlice<'_, T>`] from this pointer, performing
     /// bounds checks and type validation. The `GuestSlice` is a smart pointer
-    /// that can be used as a `&[T]` via the `Deref` trait.
-    /// The region of memory backing the slice will be marked as shareably
-    /// borrowed by the [`GuestMemory`] until the `GuestSlice` is dropped.
-    /// Multiple shareable borrows of the same memory are permitted, but only
-    /// one mutable borrow.
+    /// that can be used as a `&[T]` via the `Deref` trait. The region of memory
+    /// backing the slice will be marked as shareably borrowed by the
+    /// [`GuestMemory`] until the `GuestSlice` is dropped. Multiple shareable
+    /// borrows of the same memory are permitted, but only one mutable borrow.
     ///
     /// This function will return a `GuestSlice` into host memory if all checks
-    /// succeed (valid utf-8, valid pointers, memory is not borrowed, etc). If
+    /// succeed (valid utf-8, valid pointers, memory is not borrowed, etc.). If
     /// any checks fail then `GuestError` will be returned.
-    pub fn as_slice(&self) -> Result<GuestSlice<'a, T>, GuestError>
+    ///
+    /// Additionally, because it is `unsafe` to have a `GuestSlice` of shared
+    /// memory, this function will return `None` in this case.
+    pub fn as_slice(&self) -> Result<Option<GuestSlice<'a, T>>, GuestError>
     where
         T: GuestTypeTransparent<'a>,
     {
-        let len = match self.pointer.1.checked_mul(T::guest_size()) {
-            Some(l) => l,
-            None => return Err(GuestError::PtrOverflow),
-        };
+        match self.as_unsafe_slice_mut()?.shared_borrow() {
+            UnsafeBorrowResult::Ok(slice) => Ok(Some(slice)),
+            UnsafeBorrowResult::Shared(_) => Ok(None),
+            UnsafeBorrowResult::Err(e) => Err(e),
+        }
+    }
+
+    /// Attempts to create a [`GuestSliceMut<'_, T>`] from this pointer,
+    /// performing bounds checks and type validation. The `GuestSliceMut` is a
+    /// smart pointer that can be used as a `&[T]` or a `&mut [T]` via the
+    /// `Deref` and `DerefMut` traits. The region of memory backing the slice
+    /// will be marked as borrowed by the [`GuestMemory`] until the `GuestSlice`
+    /// is dropped.
+    ///
+    /// This function will return a `GuestSliceMut` into host memory if all
+    /// checks succeed (valid utf-8, valid pointers, memory is not borrowed,
+    /// etc). If any checks fail then `GuestError` will be returned.
+    ///
+    /// Additionally, because it is `unsafe` to have a `GuestSliceMut` of shared
+    /// memory, this function will return `None` in this case.
+    pub fn as_slice_mut(&self) -> Result<Option<GuestSliceMut<'a, T>>, GuestError>
+    where
+        T: GuestTypeTransparent<'a>,
+    {
+        match self.as_unsafe_slice_mut()?.mut_borrow() {
+            UnsafeBorrowResult::Ok(slice) => Ok(Some(slice)),
+            UnsafeBorrowResult::Shared(_) => Ok(None),
+            UnsafeBorrowResult::Err(e) => Err(e),
+        }
+    }
+
+    /// Similar to `as_slice_mut`, this function will attempt to create a smart
+    /// pointer to the WebAssembly linear memory. All validation and Wiggle
+    /// borrow checking is the same, but unlike `as_slice_mut`, the returned
+    /// `&mut` slice can point to WebAssembly shared memory. Though the Wiggle
+    /// borrow checker can guarantee no other Wiggle calls will access this
+    /// slice, it cannot guarantee that another thread is not modifying the
+    /// `&mut` slice in some other way. Thus, access to that slice is marked
+    /// `unsafe`.
+    pub fn as_unsafe_slice_mut(&self) -> Result<UnsafeGuestSlice<'a, T>, GuestError>
+    where
+        T: GuestTypeTransparent<'a>,
+    {
+        // Validate the bounds of the region in the original memory.
+        let len = self.checked_byte_len()?;
         let ptr =
             self.mem
                 .validate_size_align(self.pointer.0, T::guest_align(), len)? as *mut T;
-
-        let borrow = self.mem.shared_borrow(Region {
+        let region = Region {
             start: self.pointer.0,
             len,
-        })?;
+        };
 
-        // Validate all elements in slice.
-        // SAFETY: ptr has been validated by self.mem.validate_size_align
+        // Validate all elements in slice. `T::validate` is expected to be a
+        // noop for `GuestTypeTransparent` so this check may not be entirely
+        // necessary (TODO).
+        //
+        // SAFETY: `ptr` has been validated by `self.mem.validate_size_align`.
         for offs in 0..self.pointer.1 {
             T::validate(unsafe { ptr.add(offs as usize) })?;
         }
 
-        // SAFETY: iff there are no overlapping mut borrows it is valid to construct a &[T]
-        let ptr = unsafe { slice::from_raw_parts(ptr, self.pointer.1 as usize) };
-
-        Ok(GuestSlice {
+        Ok(UnsafeGuestSlice {
             ptr,
+            len: self.pointer.1 as usize,
+            region,
             mem: self.mem,
-            borrow,
         })
     }
 
-    /// Attempts to create a [`GuestSliceMut<'_, T>`] from this pointer, performing
-    /// bounds checks and type validation. The `GuestSliceMut` is a smart pointer
-    /// that can be used as a `&[T]` or a `&mut [T]` via the `Deref` and `DerefMut`
-    /// traits. The region of memory backing the slice will be marked as borrowed
-    /// by the [`GuestMemory`] until the `GuestSlice` is dropped.
+    /// Copies the data in the guest region into a [`Vec`].
     ///
-    /// This function will return a `GuestSliceMut` into host memory if all checks
-    /// succeed (valid utf-8, valid pointers, memory is not borrowed, etc). If
-    /// any checks fail then `GuestError` will be returned.
-    pub fn as_slice_mut(&self) -> Result<GuestSliceMut<'a, T>, GuestError>
+    /// This is useful when one cannot use [`GuestPtr::as_slice`], e.g., when
+    /// pointing to a region of WebAssembly shared memory.
+    pub fn to_vec(&self) -> Result<Vec<T>, GuestError>
     where
-        T: GuestTypeTransparent<'a>,
+        T: GuestTypeTransparent<'a> + Copy + 'a,
     {
-        let len = match self.pointer.1.checked_mul(T::guest_size()) {
-            Some(l) => l,
-            None => return Err(GuestError::PtrOverflow),
-        };
-        let ptr =
-            self.mem
-                .validate_size_align(self.pointer.0, T::guest_align(), len)? as *mut T;
-
-        let borrow = self.mem.mut_borrow(Region {
-            start: self.pointer.0,
-            len,
-        })?;
-
-        // Validate all elements in slice.
-        // SAFETY: ptr has been validated by self.mem.validate_size_align
-        for offs in 0..self.pointer.1 {
-            T::validate(unsafe { ptr.add(offs as usize) })?;
+        let guest_slice = self.as_unsafe_slice_mut()?;
+        let mut vec = Vec::with_capacity(guest_slice.len);
+        for offs in 0..guest_slice.len {
+            let elem = self.get(offs as u32).expect("already validated the size");
+            vec.push(elem.read()?);
         }
-
-        // SAFETY: iff there are no overlapping borrows it is valid to construct a &mut [T]
-        let ptr = unsafe { slice::from_raw_parts_mut(ptr, self.pointer.1 as usize) };
-
-        Ok(GuestSliceMut {
-            ptr,
-            mem: self.mem,
-            borrow,
-        })
+        Ok(vec)
     }
 
     /// Copies the data pointed to by `slice` into this guest region.
@@ -613,14 +631,25 @@ impl<'a, T> GuestPtr<'a, [T]> {
     where
         T: GuestTypeTransparent<'a> + Copy + 'a,
     {
-        // bounds check ...
-        let mut self_slice = self.as_slice_mut()?;
+        // Retrieve the slice of memory to copy to, performing the necessary
+        // bounds checks ...
+        let guest_slice = self.as_unsafe_slice_mut()?;
         // ... length check ...
-        if self_slice.len() != slice.len() {
+        if guest_slice.len != slice.len() {
             return Err(GuestError::SliceLengthsDiffer);
         }
-        // ... and copy!
-        self_slice.copy_from_slice(slice);
+        // ... and copy the bytes.
+        match guest_slice.mut_borrow() {
+            UnsafeBorrowResult::Ok(mut dst) => dst.copy_from_slice(slice),
+            UnsafeBorrowResult::Shared(guest_slice) => {
+                // SAFETY:  in the shared memory case, we copy and accept that
+                // the guest data may be concurrently modified. TODO: audit that
+                // this use of `std::ptr::copy` is safe with shared memory
+                // (https://github.com/bytecodealliance/wasmtime/issues/4203)
+                unsafe { std::ptr::copy(slice.as_ptr(), guest_slice.ptr, guest_slice.len) };
+            }
+            UnsafeBorrowResult::Err(e) => return Err(e),
+        }
         Ok(())
     }
 
@@ -662,6 +691,17 @@ impl<'a, T> GuestPtr<'a, [T]> {
             )
         } else {
             None
+        }
+    }
+
+    /// Return the number of bytes necessary to represent the pointed-to value.
+    fn checked_byte_len(&self) -> Result<u32, GuestError>
+    where
+        T: GuestTypeTransparent<'a>,
+    {
+        match self.pointer.1.checked_mul(T::guest_size()) {
+            Some(l) => Ok(l),
+            None => Err(GuestError::PtrOverflow),
         }
     }
 }
@@ -780,6 +820,7 @@ impl<T: ?Sized + Pointee> fmt::Debug for GuestPtr<'_, T> {
 }
 
 /// A smart pointer to an shareable slice in guest memory.
+///
 /// Usable as a `&'a [T]` via [`std::ops::Deref`].
 pub struct GuestSlice<'a, T> {
     ptr: &'a [T],
@@ -801,6 +842,7 @@ impl<'a, T> Drop for GuestSlice<'a, T> {
 }
 
 /// A smart pointer to a mutable slice in guest memory.
+///
 /// Usable as a `&'a [T]` via [`std::ops::Deref`] and as a `&'a mut [T]` via
 /// [`std::ops::DerefMut`].
 pub struct GuestSliceMut<'a, T> {
@@ -825,6 +867,108 @@ impl<'a, T> std::ops::DerefMut for GuestSliceMut<'a, T> {
 impl<'a, T> Drop for GuestSliceMut<'a, T> {
     fn drop(&mut self) {
         self.mem.mut_unborrow(self.borrow)
+    }
+}
+
+/// A smart pointer to an `unsafe` slice in guest memory.
+///
+/// Accessing guest memory (e.g., WebAssembly linear memory) is inherently
+/// `unsafe`. Even though this structure expects that we will have validated the
+/// addresses, lengths, and alignment, we must be extra careful to maintain the
+/// Rust borrowing guarantees if we hand out slices to the underlying memory.
+/// This is done in two ways:
+///
+/// - with shared memory (i.e., memory that may be accessed concurrently by
+///   multiple threads), we have no guarantee that the underlying data will not
+///   be changed; thus, we can only hand out slices `unsafe`-ly (TODO:
+///   eventually with `UnsafeGuestSlice::as_slice`,
+///   `UnsafeGuestSlice::as_slice_mut`)
+/// - with non-shared memory, we _can_ maintain the Rust slice guarantees, but
+///   only by manually performing borrow-checking of the underlying regions that
+///   are accessed; this kind of borrowing is wrapped up in the [`GuestSlice`]
+///   and [`GuestSliceMut`] smart pointers (see
+///   [`UnsafeGuestSlice::shared_borrow`], [`UnsafeGuestSlice::mut_borrow`]).
+pub struct UnsafeGuestSlice<'a, T> {
+    /// A raw pointer to the bytes in memory.
+    ptr: *mut T,
+    /// The (validated) number of items in the slice.
+    len: usize,
+    /// The (validated) address bounds of the slice in memory.
+    region: Region,
+    /// The original memory.
+    mem: &'a dyn GuestMemory,
+}
+
+impl<'a, T> UnsafeGuestSlice<'a, T> {
+    /// Transform an `unsafe` guest slice to a [`GuestSliceMut`].
+    ///
+    /// # Safety
+    ///
+    /// This function is safe if and only if:
+    /// - the memory is not shared (it will return `None` in this case) and
+    /// - there are no overlapping mutable borrows for this region.
+    fn shared_borrow(self) -> UnsafeBorrowResult<GuestSlice<'a, T>, Self> {
+        if self.mem.is_shared_memory() {
+            UnsafeBorrowResult::Shared(self)
+        } else {
+            match self.mem.shared_borrow(self.region) {
+                Ok(borrow) => {
+                    let ptr = unsafe { slice::from_raw_parts(self.ptr, self.len) };
+                    UnsafeBorrowResult::Ok(GuestSlice {
+                        ptr,
+                        mem: self.mem,
+                        borrow,
+                    })
+                }
+                Err(e) => UnsafeBorrowResult::Err(e),
+            }
+        }
+    }
+
+    /// Transform an `unsafe` guest slice to a [`GuestSliceMut`].
+    ///
+    /// # Safety
+    ///
+    /// This function is safe if and only if:
+    /// - the memory is not shared (it will return `None` in this case) and
+    /// - there are no overlapping borrows of any kind (shared or mutable) for
+    ///   this region.
+    fn mut_borrow(self) -> UnsafeBorrowResult<GuestSliceMut<'a, T>, Self> {
+        if self.mem.is_shared_memory() {
+            UnsafeBorrowResult::Shared(self)
+        } else {
+            match self.mem.mut_borrow(self.region) {
+                Ok(borrow) => {
+                    let ptr = unsafe { slice::from_raw_parts_mut(self.ptr, self.len) };
+                    UnsafeBorrowResult::Ok(GuestSliceMut {
+                        ptr,
+                        mem: self.mem,
+                        borrow,
+                    })
+                }
+                Err(e) => UnsafeBorrowResult::Err(e),
+            }
+        }
+    }
+}
+
+/// A three-way result type for expressing that borrowing from an
+/// [`UnsafeGuestSlice`] could fail in multiple ways. Retaining the
+/// [`UnsafeGuestSlice`] in the `Shared` case allows us to reuse it.
+enum UnsafeBorrowResult<T, S> {
+    /// The borrow succeeded.
+    Ok(T),
+    /// The borrow failed because the underlying memory was shared--we cannot
+    /// safely borrow in this case and return the original unsafe slice.
+    Shared(S),
+    /// The borrow failed for some other reason, e.g., the region was already
+    /// borrowed.
+    Err(GuestError),
+}
+
+impl<T, S> From<GuestError> for UnsafeBorrowResult<T, S> {
+    fn from(e: GuestError) -> Self {
+        UnsafeBorrowResult::Err(e)
     }
 }
 

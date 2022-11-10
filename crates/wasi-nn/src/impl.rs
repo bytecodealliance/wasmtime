@@ -80,8 +80,11 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
         out_buffer: &GuestPtr<'_, u8>,
         out_buffer_max_size: u32,
     ) -> Result<u32> {
-        let mut destination = out_buffer.as_array(out_buffer_max_size).as_slice_mut()?;
         if let Some(exec_context) = self.executions.get_mut(exec_context_id) {
+            let mut destination = out_buffer
+                .as_array(out_buffer_max_size)
+                .as_slice_mut()?
+                .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
             Ok(exec_context.get_output(index, &mut destination)?)
         } else {
             Err(UsageError::InvalidGraphHandle.into())
