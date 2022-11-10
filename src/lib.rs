@@ -106,7 +106,17 @@ pub unsafe extern "C" fn cabi_export_realloc(
     align: usize,
     new_size: usize,
 ) -> *mut u8 {
-    unreachable()
+    if !old_ptr.is_null() {
+        unreachable();
+    }
+    if new_size > PAGE_SIZE {
+        unreachable();
+    }
+    let grew = core::arch::wasm32::memory_grow(0, 1);
+    if grew == usize::MAX {
+        unreachable();
+    }
+    (grew * PAGE_SIZE) as *mut u8
 }
 
 /// Read command-line argument data.
