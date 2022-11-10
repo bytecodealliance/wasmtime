@@ -580,6 +580,67 @@ fn drop_externref_global_during_module_init() -> Result<()> {
 }
 
 #[test]
+fn switch_image_and_non_image() -> Result<()> {
+    let mut c = Config::new();
+    c.allocation_strategy(InstanceAllocationStrategy::Pooling {
+        instance_limits: InstanceLimits {
+            count: 1,
+            ..Default::default()
+        },
+        strategy: Default::default(),
+    });
+    let engine = Engine::new(&c)?;
+    let module1 = Module::new(
+        &engine,
+        r#"
+            (module
+                (memory 1)
+                (func (export "load") (param i32) (result i32)
+                    local.get 0
+                    i32.load
+                )
+            )
+        "#,
+    )?;
+    let module2 = Module::new(
+        &engine,
+        r#"
+            (module
+                (memory (export "memory") 1)
+                (data (i32.const 0) "1234")
+            )
+        "#,
+    )?;
+
+    let assert_zero = || -> Result<()> {
+        let mut store = Store::new(&engine, ());
+        let instance = Instance::new(&mut store, &module1, &[])?;
+        let func = instance.get_typed_func::<i32, i32, _>(&mut store, "load")?;
+        assert_eq!(func.call(&mut store, 0)?, 0);
+        Ok(())
+    };
+
+    // Initialize with a heap image and make sure the next instance, without an
+    // image, is zeroed
+    Instance::new(&mut Store::new(&engine, ()), &module2, &[])?;
+    assert_zero()?;
+
+    // ... transition back to heap image and do this again
+    Instance::new(&mut Store::new(&engine, ()), &module2, &[])?;
+    assert_zero()?;
+
+    // And go back to an image and make sure it's read/write on the host.
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module2, &[])?;
+    let memory = instance.get_memory(&mut store, "memory").unwrap();
+    let mem = memory.data_mut(&mut store);
+    assert!(mem.starts_with(b"1234"));
+    mem[..6].copy_from_slice(b"567890");
+
+    Ok(())
+}
+
+#[test]
 #[cfg(target_pointer_width = "64")]
 fn instance_too_large() -> Result<()> {
     let mut pool = PoolingAllocationConfig::default();
