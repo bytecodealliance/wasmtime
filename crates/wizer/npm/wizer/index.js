@@ -23,7 +23,7 @@ let location;
 try {
   // Check for the binary package from our "optionalDependencies". This
   // package should have been installed alongside this package at install time.
-  location = await import(pkg);
+  location = (await import(pkg)).default;
 } catch (e) {
   throw new Error(`The package "${pkg}" could not be found, and is needed by @bytecode-alliance/wizer.
 If you are installing @bytecode-alliance/wizer with npm, make sure that you don't specify the
