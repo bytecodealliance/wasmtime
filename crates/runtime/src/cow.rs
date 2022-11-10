@@ -1,11 +1,12 @@
 //! Copy-on-write initialization support: creation of backing images for
 //! modules, and logic to support mapping these backing images into memory.
 
+#![cfg_attr(not(unix), allow(unused_imports, unused_variables))]
+
 use crate::InstantiationError;
 use crate::MmapVec;
 use anyhow::Result;
 use libc::c_void;
-use rustix::fd::AsRawFd;
 use std::fs::File;
 use std::sync::Arc;
 use std::{convert::TryFrom, ops::Range};
@@ -60,24 +61,34 @@ pub struct MemoryImage {
 
 #[derive(Debug)]
 enum FdSource {
+    #[cfg(unix)]
     Mmap(Arc<File>),
     #[cfg(target_os = "linux")]
     Memfd(memfd::Memfd),
 }
 
 impl FdSource {
+    #[cfg(unix)]
     fn as_file(&self) -> &File {
         match self {
-            FdSource::Mmap(file) => file,
+            FdSource::Mmap(ref file) => file,
             #[cfg(target_os = "linux")]
-            FdSource::Memfd(memfd) => memfd.as_file(),
+            FdSource::Memfd(ref memfd) => memfd.as_file(),
         }
     }
 }
 
 impl PartialEq for FdSource {
     fn eq(&self, other: &FdSource) -> bool {
-        self.as_file().as_raw_fd() == other.as_file().as_raw_fd()
+        cfg_if::cfg_if! {
+            if #[cfg(unix)] {
+                use rustix::fd::AsRawFd;
+                self.as_file().as_raw_fd() == other.as_file().as_raw_fd()
+            } else {
+                drop(other);
+                match *self {}
+            }
+        }
     }
 }
 
@@ -111,6 +122,7 @@ impl MemoryImage {
         // files, but for now this is still a Linux-specific region of Wasmtime.
         // Some work will be needed to get this file compiling for macOS and
         // Windows.
+        #[cfg(not(windows))]
         if let Some(mmap) = mmap {
             let start = mmap.as_ptr() as usize;
             let end = start + mmap.len();
@@ -182,6 +194,42 @@ impl MemoryImage {
                 // but that means that data may likely be preserved to disk
                 // which isn't what we want here.
                 Ok(None)
+            }
+        }
+    }
+
+    unsafe fn map_at(&self, base: usize) -> Result<()> {
+        cfg_if::cfg_if! {
+            if #[cfg(unix)] {
+                let ptr = rustix::mm::mmap(
+                    (base + self.linear_memory_offset) as *mut c_void,
+                    self.len,
+                    rustix::mm::ProtFlags::READ | rustix::mm::ProtFlags::WRITE,
+                    rustix::mm::MapFlags::PRIVATE | rustix::mm::MapFlags::FIXED,
+                    self.fd.as_file(),
+                    self.fd_offset,
+                )?;
+                assert_eq!(ptr as usize, base + self.linear_memory_offset);
+                Ok(())
+            } else {
+                match self.fd {}
+            }
+        }
+    }
+
+    unsafe fn remap_as_zeros_at(&self, base: usize) -> Result<()> {
+        cfg_if::cfg_if! {
+            if #[cfg(unix)] {
+                let ptr = rustix::mm::mmap_anonymous(
+                    (base + self.linear_memory_offset) as *mut c_void,
+                    self.len,
+                    rustix::mm::ProtFlags::READ | rustix::mm::ProtFlags::WRITE,
+                    rustix::mm::MapFlags::PRIVATE | rustix::mm::MapFlags::FIXED,
+                )?;
+                assert_eq!(ptr as usize, base + self.linear_memory_offset);
+                Ok(())
+            } else {
+                match self.fd {}
             }
         }
     }
@@ -374,6 +422,17 @@ impl MemoryImageSlot {
         }
     }
 
+    pub(crate) fn dummy() -> MemoryImageSlot {
+        MemoryImageSlot {
+            base: 0,
+            static_size: 0,
+            image: None,
+            accessible: 0,
+            dirty: false,
+            clear_on_drop: false,
+        }
+    }
+
     /// Inform the MemoryImageSlot that it should *not* clear the underlying
     /// address space when dropped. This should be used only when the
     /// caller will clear or reuse the address space in some other
@@ -396,10 +455,7 @@ impl MemoryImageSlot {
         }
 
         // Otherwise use `mprotect` to make the new pages read/write.
-        self.set_protection(
-            self.accessible..size_bytes,
-            rustix::mm::MprotectFlags::READ | rustix::mm::MprotectFlags::WRITE,
-        )?;
+        self.set_protection(self.accessible..size_bytes, true)?;
         self.accessible = size_bytes;
 
         Ok(())
@@ -444,14 +500,9 @@ impl MemoryImageSlot {
         if self.image.as_ref() != maybe_image {
             if let Some(image) = &self.image {
                 unsafe {
-                    let ptr = rustix::mm::mmap_anonymous(
-                        (self.base + image.linear_memory_offset) as *mut c_void,
-                        image.len,
-                        rustix::mm::ProtFlags::READ | rustix::mm::ProtFlags::WRITE,
-                        rustix::mm::MapFlags::PRIVATE | rustix::mm::MapFlags::FIXED,
-                    )
-                    .map_err(|e| InstantiationError::Resource(e.into()))?;
-                    assert_eq!(ptr as usize, self.base + image.linear_memory_offset);
+                    image
+                        .remap_as_zeros_at(self.base)
+                        .map_err(|e| InstantiationError::Resource(e.into()))?;
                 }
                 self.image = None;
             }
@@ -461,11 +512,8 @@ impl MemoryImageSlot {
         // appropriate. First up is to grow the read/write portion of memory if
         // it's not large enough to accommodate `initial_size_bytes`.
         if self.accessible < initial_size_bytes {
-            self.set_protection(
-                self.accessible..initial_size_bytes,
-                rustix::mm::MprotectFlags::READ | rustix::mm::MprotectFlags::WRITE,
-            )
-            .map_err(|e| InstantiationError::Resource(e.into()))?;
+            self.set_protection(self.accessible..initial_size_bytes, true)
+                .map_err(|e| InstantiationError::Resource(e.into()))?;
             self.accessible = initial_size_bytes;
         }
 
@@ -480,11 +528,8 @@ impl MemoryImageSlot {
         if initial_size_bytes < self.accessible {
             match style {
                 MemoryStyle::Static { .. } => {
-                    self.set_protection(
-                        initial_size_bytes..self.accessible,
-                        rustix::mm::MprotectFlags::empty(),
-                    )
-                    .map_err(|e| InstantiationError::Resource(e.into()))?;
+                    self.set_protection(initial_size_bytes..self.accessible, false)
+                        .map_err(|e| InstantiationError::Resource(e.into()))?;
                     self.accessible = initial_size_bytes;
                 }
                 MemoryStyle::Dynamic { .. } => {}
@@ -503,16 +548,9 @@ impl MemoryImageSlot {
                 );
                 if image.len > 0 {
                     unsafe {
-                        let ptr = rustix::mm::mmap(
-                            (self.base + image.linear_memory_offset) as *mut c_void,
-                            image.len,
-                            rustix::mm::ProtFlags::READ | rustix::mm::ProtFlags::WRITE,
-                            rustix::mm::MapFlags::PRIVATE | rustix::mm::MapFlags::FIXED,
-                            image.fd.as_file(),
-                            image.fd_offset,
-                        )
-                        .map_err(|e| InstantiationError::Resource(e.into()))?;
-                        assert_eq!(ptr as usize, self.base + image.linear_memory_offset);
+                        image
+                            .map_at(self.base)
+                            .map_err(|e| InstantiationError::Resource(e.into()))?;
                     }
                 }
             }
@@ -675,13 +713,35 @@ impl MemoryImageSlot {
         }
     }
 
-    fn set_protection(&self, range: Range<usize>, flags: rustix::mm::MprotectFlags) -> Result<()> {
+    fn set_protection(&self, range: Range<usize>, readwrite: bool) -> Result<()> {
         assert!(range.start <= range.end);
         assert!(range.end <= self.static_size);
-        let mprotect_start = self.base.checked_add(range.start).unwrap();
-        if range.len() > 0 {
-            unsafe {
-                rustix::mm::mprotect(mprotect_start as *mut _, range.len(), flags)?;
+        let start = self.base.checked_add(range.start).unwrap();
+        if range.len() == 0 {
+            return Ok(());
+        }
+
+        unsafe {
+            cfg_if::cfg_if! {
+                if #[cfg(unix)] {
+                    let flags = if readwrite {
+                        rustix::mm::MprotectFlags::READ | rustix::mm::MprotectFlags::WRITE
+                    } else {
+                        rustix::mm::MprotectFlags::empty()
+                    };
+                    rustix::mm::mprotect(start as *mut _, range.len(), flags)?;
+                } else {
+                    use windows_sys::Win32::System::Memory::*;
+
+                    let failure = if readwrite {
+                        VirtualAlloc(start as _, range.len(), MEM_COMMIT, PAGE_READWRITE).is_null()
+                    } else {
+                        VirtualFree(start as _, range.len(), MEM_DECOMMIT) == 0
+                    };
+                    if failure {
+                        return Err(std::io::Error::last_os_error().into());
+                    }
+                }
             }
         }
 
@@ -701,13 +761,22 @@ impl MemoryImageSlot {
     /// inaccessible. Used both during instantiate and during drop.
     fn reset_with_anon_memory(&mut self) -> Result<()> {
         unsafe {
-            let ptr = rustix::mm::mmap_anonymous(
-                self.base as *mut c_void,
-                self.static_size,
-                rustix::mm::ProtFlags::empty(),
-                rustix::mm::MapFlags::PRIVATE | rustix::mm::MapFlags::FIXED,
-            )?;
-            assert_eq!(ptr as usize, self.base);
+            cfg_if::cfg_if! {
+                if #[cfg(unix)] {
+                    let ptr = rustix::mm::mmap_anonymous(
+                        self.base as *mut c_void,
+                        self.static_size,
+                        rustix::mm::ProtFlags::empty(),
+                        rustix::mm::MapFlags::PRIVATE | rustix::mm::MapFlags::FIXED,
+                    )?;
+                    assert_eq!(ptr as usize, self.base);
+                } else {
+                    use windows_sys::Win32::System::Memory::*;
+                    if VirtualFree(self.base as _, self.static_size, MEM_DECOMMIT) == 0 {
+                        return Err(std::io::Error::last_os_error().into());
+                    }
+                }
+            }
         }
 
         self.image = None;

@@ -1340,8 +1340,6 @@ impl Config {
     ///
     /// [`Module::deserialize_file`]: crate::Module::deserialize_file
     /// [`Module`]: crate::Module
-    #[cfg(feature = "memory-init-cow")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "memory-init-cow")))]
     pub fn memory_init_cow(&mut self, enable: bool) -> &mut Self {
         self.memory_init_cow = enable;
         self
@@ -1367,8 +1365,6 @@ impl Config {
     /// on.
     ///
     /// This option is disabled by default.
-    #[cfg(feature = "memory-init-cow")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "memory-init-cow")))]
     pub fn force_memory_init_memfd(&mut self, enable: bool) -> &mut Self {
         self.force_memory_init_memfd = enable;
         self
@@ -1409,8 +1405,6 @@ impl Config {
     /// as the maximum module initial memory content size.
     ///
     /// By default this value is 16 MiB.
-    #[cfg(feature = "memory-init-cow")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "memory-init-cow")))]
     pub fn memory_guaranteed_dense_image_size(&mut self, size_in_bytes: u64) -> &mut Self {
         self.memory_guaranteed_dense_image_size = size_in_bytes;
         self
@@ -1683,11 +1677,7 @@ impl PoolingAllocationConfig {
     /// Configures the method by which slots in the pooling allocator are
     /// allocated to instances
     ///
-    /// This defaults to [`PoolingAllocationStrategy::ReuseAffinity`] when the
-    /// `memory-init-cow` feature of Wasmtime is enabled, which is enabled by
-    /// default. Otherwise it defaults to
-    /// [`PoolingAllocationStrategy::NextAvailable`] Otherwise it defaults to
-    /// [`PoolingAllocationStrategy::NextAvailable`].
+    /// This defaults to [`PoolingAllocationStrategy::ReuseAffinity`] .
     pub fn strategy(&mut self, strategy: PoolingAllocationStrategy) -> &mut Self {
         self.config.strategy = strategy;
         self

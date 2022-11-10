@@ -218,7 +218,6 @@ pub struct CommonOptions {
 
     /// Disable the default of attempting to initialize linear memory via a
     /// copy-on-write mapping
-    #[cfg(feature = "memory-init-cow")]
     #[clap(long)]
     pub disable_memory_init_cow: bool,
 
@@ -324,7 +323,6 @@ impl CommonOptions {
 
         config.epoch_interruption(self.epoch_interruption);
         config.generate_address_map(!self.disable_address_map);
-        #[cfg(feature = "memory-init-cow")]
         config.memory_init_cow(!self.disable_memory_init_cow);
 
         #[cfg(feature = "pooling-allocator")]

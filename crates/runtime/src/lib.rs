@@ -82,15 +82,8 @@ pub use crate::vmcontext::{
 mod module_id;
 pub use module_id::{CompiledModuleId, CompiledModuleIdAllocator};
 
-#[cfg(memory_init_cow)]
 mod cow;
-#[cfg(memory_init_cow)]
 pub use crate::cow::{MemoryImage, MemoryImageSlot, ModuleMemoryImages};
-
-#[cfg(not(memory_init_cow))]
-mod cow_disabled;
-#[cfg(not(memory_init_cow))]
-pub use crate::cow_disabled::{MemoryImage, MemoryImageSlot, ModuleMemoryImages};
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

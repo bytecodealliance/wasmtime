@@ -62,7 +62,6 @@ default = [
   'parallel-compilation',
   'cranelift',
   'pooling-allocator',
-  'memory-init-cow',
   'vtune',
 ]
 
@@ -103,13 +102,6 @@ all-arch = ["wasmtime-cranelift?/all-arch"]
 # It is useful for applications that do not bind their own exception ports and
 # need portable signal handling.
 posix-signals-on-macos = ["wasmtime-runtime/posix-signals-on-macos"]
-
-# Enables, on supported platforms, the usage of copy-on-write initialization of
-# compatible linear memories. For more information see the documentation of
-# `Config::memory_init_cow`.
-#
-# Enabling this feature has no effect on unsupported platforms.
-memory-init-cow = ["wasmtime-runtime/memory-init-cow"]
 
 # Enables in-progress support for the component model. Note that this feature is
 # in-progress, buggy, and incomplete. This is primarily here for internal

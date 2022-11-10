@@ -36,7 +36,7 @@ cfg_if::cfg_if! {
     }
 }
 
-use imp::{commit_memory_pages, commit_table_pages, decommit_memory_pages, decommit_table_pages};
+use imp::{commit_table_pages, decommit_table_pages};
 
 #[cfg(all(feature = "async", unix))]
 use imp::{commit_stack_pages, reset_stack_pages_to_zero};
@@ -104,11 +104,7 @@ pub enum PoolingAllocationStrategy {
 
 impl Default for PoolingAllocationStrategy {
     fn default() -> Self {
-        if cfg!(memory_init_cow) {
-            Self::ReuseAffinity
-        } else {
-            Self::NextAvailable
-        }
+        Self::ReuseAffinity
     }
 }
 
@@ -309,6 +305,18 @@ impl InstancePool {
                 .defined_memory_index(memory_index)
                 .expect("should be a defined memory since we skipped imported ones");
 
+            // Double-check that the runtime requirements of the memory are
+            // satisfied by the configuration of this pooling allocator. This
+            // should be returned as an error through `validate_memory_plans`
+            // but double-check here to be sure.
+            match plan.style {
+                MemoryStyle::Static { bound } => {
+                    let bound = bound * u64::from(WASM_PAGE_SIZE);
+                    assert!(bound <= (self.memories.memory_size as u64));
+                }
+                MemoryStyle::Dynamic { .. } => {}
+            }
+
             let memory = unsafe {
                 std::slice::from_raw_parts_mut(
                     self.memories.get_base(instance_index, defined_index),
@@ -316,45 +324,34 @@ impl InstancePool {
                 )
             };
 
-            if let Some(image) = runtime_info
+            let mut slot = self
+                .memories
+                .take_memory_image_slot(instance_index, defined_index);
+            let image = runtime_info
                 .memory_image(defined_index)
-                .map_err(|err| InstantiationError::Resource(err.into()))?
-            {
-                let mut slot = self
-                    .memories
-                    .take_memory_image_slot(instance_index, defined_index);
-                let initial_size = plan.memory.minimum * WASM_PAGE_SIZE as u64;
+                .map_err(|err| InstantiationError::Resource(err.into()))?;
+            let initial_size = plan.memory.minimum * WASM_PAGE_SIZE as u64;
 
-                // If instantiation fails, we can propagate the error
-                // upward and drop the slot. This will cause the Drop
-                // handler to attempt to map the range with PROT_NONE
-                // memory, to reserve the space while releasing any
-                // stale mappings. The next use of this slot will then
-                // create a new slot that will try to map over
-                // this, returning errors as well if the mapping
-                // errors persist. The unmap-on-drop is best effort;
-                // if it fails, then we can still soundly continue
-                // using the rest of the pool and allowing the rest of
-                // the process to continue, because we never perform a
-                // mmap that would leave an open space for someone
-                // else to come in and map something.
-                slot.instantiate(initial_size as usize, Some(image), &plan.style)
-                    .map_err(|e| InstantiationError::Resource(e.into()))?;
+            // If instantiation fails, we can propagate the error
+            // upward and drop the slot. This will cause the Drop
+            // handler to attempt to map the range with PROT_NONE
+            // memory, to reserve the space while releasing any
+            // stale mappings. The next use of this slot will then
+            // create a new slot that will try to map over
+            // this, returning errors as well if the mapping
+            // errors persist. The unmap-on-drop is best effort;
+            // if it fails, then we can still soundly continue
+            // using the rest of the pool and allowing the rest of
+            // the process to continue, because we never perform a
+            // mmap that would leave an open space for someone
+            // else to come in and map something.
+            slot.instantiate(initial_size as usize, image, &plan.style)
+                .map_err(|e| InstantiationError::Resource(e.into()))?;
 
-                memories.push(
-                    Memory::new_static(plan, memory, None, Some(slot), unsafe {
-                        &mut *store.unwrap()
-                    })
+            memories.push(
+                Memory::new_static(plan, memory, slot, unsafe { &mut *store.unwrap() })
                     .map_err(InstantiationError::Resource)?,
-                );
-            } else {
-                memories.push(
-                    Memory::new_static(plan, memory, Some(commit_memory_pages), None, unsafe {
-                        &mut *store.unwrap()
-                    })
-                    .map_err(InstantiationError::Resource)?,
-                );
-            }
+            );
         }
 
         Ok(())
@@ -367,26 +364,18 @@ impl InstancePool {
     ) {
         // Decommit any linear memories that were used.
         let memories = mem::take(memories);
-        for ((def_mem_idx, mut memory), base) in
-            memories.into_iter().zip(self.memories.get(instance_index))
-        {
-            assert!(memory.is_static());
-            let size = memory.byte_size();
-            if let Some(mut image) = memory.unwrap_static_image() {
-                // Reset the image slot. If there is any error clearing the
-                // image, just drop it here, and let the drop handler for the
-                // slot unmap in a way that retains the address space
-                // reservation.
-                if image
-                    .clear_and_remain_ready(self.linear_memory_keep_resident)
-                    .is_ok()
-                {
-                    self.memories
-                        .return_memory_image_slot(instance_index, def_mem_idx, image);
-                }
-            } else {
-                // Otherwise, decommit the memory pages.
-                decommit_memory_pages(base, size).expect("failed to decommit linear memory pages");
+        for (def_mem_idx, memory) in memories {
+            let mut image = memory.unwrap_static_image();
+            // Reset the image slot. If there is any error clearing the
+            // image, just drop it here, and let the drop handler for the
+            // slot unmap in a way that retains the address space
+            // reservation.
+            if image
+                .clear_and_remain_ready(self.linear_memory_keep_resident)
+                .is_ok()
+            {
+                self.memories
+                    .return_memory_image_slot(instance_index, def_mem_idx, image);
             }
         }
     }
@@ -496,11 +485,9 @@ impl InstancePool {
             .iter()
             .skip(module.num_imported_memories)
         {
-            match &plan.style {
+            match plan.style {
                 MemoryStyle::Static { bound } => {
-                    let memory_size_pages =
-                        (self.memories.memory_size as u64) / u64::from(WASM_PAGE_SIZE);
-                    if memory_size_pages < *bound {
+                    if (self.memories.memory_size as u64) < bound {
                         bail!(
                             "memory size allocated per-memory is too small to \
                              satisfy static bound of {bound:#x} pages"
@@ -695,11 +682,7 @@ impl MemoryPool {
         let mapping = Mmap::accessible_reserved(0, allocation_size)
             .context("failed to create memory pool mapping")?;
 
-        let num_image_slots = if cfg!(memory_init_cow) {
-            max_instances * max_memories
-        } else {
-            0
-        };
+        let num_image_slots = max_instances * max_memories;
         let image_slots: Vec<_> = std::iter::repeat_with(|| Mutex::new(None))
             .take(num_image_slots)
             .collect();
@@ -727,6 +710,7 @@ impl MemoryPool {
         unsafe { self.mapping.as_mut_ptr().offset(offset as isize) }
     }
 
+    #[cfg(test)]
     fn get<'a>(&'a self, instance_index: usize) -> impl Iterator<Item = *mut u8> + 'a {
         (0..self.max_memories)
             .map(move |i| self.get_base(instance_index, DefinedMemoryIndex::from_u32(i as u32)))
