@@ -303,6 +303,20 @@ impl Term {
         self.ret_ty
     }
 
+    fn check_args_count<T>(&self, args: &[T], tyenv: &mut TypeEnv, pos: Pos, sym: &ast::Ident) {
+        if self.arg_tys.len() != args.len() {
+            tyenv.report_error(
+                pos,
+                format!(
+                    "Incorrect argument count for term '{}': got {}, expect {}",
+                    sym.0,
+                    args.len(),
+                    self.arg_tys.len()
+                ),
+            );
+        }
+    }
+
     /// Is this term an enum variant?
     pub fn is_enum_variant(&self) -> bool {
         matches!(self.kind, TermKind::EnumVariant { .. })
@@ -926,13 +940,13 @@ impl TypeEnv {
         // Now lower AST nodes to type definitions, raising errors
         // where typenames of fields are undefined or field names are
         // duplicated.
-        let mut tid = 0;
         for def in &defs.defs {
             match def {
                 &ast::Def::Type(ref td) => {
-                    let ty = unwrap_or_continue!(tyenv.type_from_ast(TypeId(tid), td));
-                    tyenv.types.push(ty);
-                    tid += 1;
+                    let tid = tyenv.types.len();
+                    if let Some(ty) = tyenv.type_from_ast(TypeId(tid), td) {
+                        tyenv.types.push(ty);
+                    }
                 }
                 _ => {}
             }
@@ -1675,12 +1689,13 @@ impl TermEnv {
                         &mut bindings,
                         /* is_root = */ true,
                     ));
-                    let iflets = unwrap_or_continue!(self.translate_iflets(
-                        tyenv,
-                        rule_term,
-                        &rule.iflets[..],
-                        &mut bindings,
-                    ));
+                    let iflets = rule
+                        .iflets
+                        .iter()
+                        .filter_map(|iflet| {
+                            self.translate_iflet(tyenv, rule_term, iflet, &mut bindings)
+                        })
+                        .collect();
                     let rhs = unwrap_or_continue!(self.translate_expr(
                         tyenv,
                         &rule.expr,
@@ -1948,11 +1963,13 @@ impl TermEnv {
                     }
                 };
 
+                let termdata = &self.terms[tid.index()];
+
                 // Get the return type and arg types. Verify the
                 // expected type of this pattern, if any, against the
                 // return type of the term. Insert an implicit
                 // converter if needed.
-                let ret_ty = self.terms[tid.index()].ret_ty;
+                let ret_ty = termdata.ret_ty;
                 let ty = match expected_ty {
                     None => ret_ty,
                     Some(expected_ty) if expected_ty == ret_ty => ret_ty,
@@ -1985,20 +2002,7 @@ impl TermEnv {
                     }
                 };
 
-                // Check that we have the correct argument count.
-                if self.terms[tid.index()].arg_tys.len() != args.len() {
-                    tyenv.report_error(
-                        pos,
-                        format!(
-                            "Incorrect argument count for term '{}': got {}, expect {}",
-                            sym.0,
-                            args.len(),
-                            self.terms[tid.index()].arg_tys.len()
-                        ),
-                    );
-                }
-
-                let termdata = &self.terms[tid.index()];
+                termdata.check_args_count(args, tyenv, pos, sym);
 
                 match &termdata.kind {
                     TermKind::Decl {
@@ -2018,12 +2022,8 @@ impl TermEnv {
                         // from macro args to AST pattern trees and
                         // then evaluate the template with these
                         // substitutions.
-                        let mut macro_args: Vec<ast::Pattern> = vec![];
-                        for template_arg in args {
-                            macro_args.push(template_arg.clone());
-                        }
                         log!("internal extractor macro args = {:?}", args);
-                        let pat = template.subst_macro_args(&macro_args[..])?;
+                        let pat = template.subst_macro_args(&args)?;
                         return self.translate_pattern(
                             tyenv,
                             rule_term,
@@ -2049,20 +2049,21 @@ impl TermEnv {
                 }
 
                 // Resolve subpatterns.
-                let mut subpats = vec![];
-                for (i, arg) in args.iter().enumerate() {
-                    let term = unwrap_or_continue!(self.terms.get(tid.index()));
-                    let arg_ty = unwrap_or_continue!(term.arg_tys.get(i).copied());
-                    let (subpat, _) = unwrap_or_continue!(self.translate_pattern(
-                        tyenv,
-                        rule_term,
-                        arg,
-                        Some(arg_ty),
-                        bindings,
-                        /* is_root = */ false,
-                    ));
-                    subpats.push(subpat);
-                }
+                let subpats = args
+                    .iter()
+                    .zip(termdata.arg_tys.iter())
+                    .filter_map(|(arg, &arg_ty)| {
+                        self.translate_pattern(
+                            tyenv,
+                            rule_term,
+                            arg,
+                            Some(arg_ty),
+                            bindings,
+                            /* is_root = */ false,
+                        )
+                    })
+                    .map(|(subpat, _)| subpat)
+                    .collect();
 
                 Some((Pattern::Term(ty, tid, subpats), ty))
             }
@@ -2130,13 +2131,14 @@ impl TermEnv {
                         return None;
                     }
                 };
+                let termdata = &self.terms[tid.index()];
 
                 // Get the return type and arg types. Verify the
                 // expected type of this pattern, if any, against the
                 // return type of the term, and determine whether we
                 // are doing an implicit conversion. Report an error
                 // if types don't match and no conversion is possible.
-                let ret_ty = self.terms[tid.index()].ret_ty;
+                let ret_ty = termdata.ret_ty;
                 let ty = if ty.is_some() && ret_ty != ty.unwrap() {
                     // Is there a converter for this type mismatch?
                     if let Some(expanded_expr) =
@@ -2158,50 +2160,28 @@ impl TermEnv {
                 };
 
                 // Check that the term's constructor is pure.
-                match &self.terms[tid.index()].kind {
-                    TermKind::Decl {
-                        pure: ctor_is_pure, ..
-                    } => {
-                        if pure && !ctor_is_pure {
-                            tyenv.report_error(
-                                pos,
-                                format!(
-                                    "Used non-pure constructor '{}' in pure expression context",
-                                    sym.0
-                                ),
-                            );
-                        }
+                if pure {
+                    if let TermKind::Decl { pure: false, .. } = &termdata.kind {
+                        tyenv.report_error(
+                            pos,
+                            format!(
+                                "Used non-pure constructor '{}' in pure expression context",
+                                sym.0
+                            ),
+                        );
                     }
-                    _ => {}
                 }
 
-                // Check that we have the correct argument count.
-                if self.terms[tid.index()].arg_tys.len() != args.len() {
-                    tyenv.report_error(
-                        pos,
-                        format!(
-                            "Incorrect argument count for term '{}': got {}, expect {}",
-                            sym.0,
-                            args.len(),
-                            self.terms[tid.index()].arg_tys.len()
-                        ),
-                    );
-                }
+                termdata.check_args_count(args, tyenv, pos, sym);
 
                 // Resolve subexpressions.
-                let mut subexprs = vec![];
-                for (i, arg) in args.iter().enumerate() {
-                    let term = unwrap_or_continue!(self.terms.get(tid.index()));
-                    let arg_ty = unwrap_or_continue!(term.arg_tys.get(i).copied());
-                    let subexpr = unwrap_or_continue!(self.translate_expr(
-                        tyenv,
-                        arg,
-                        Some(arg_ty),
-                        bindings,
-                        pure
-                    ));
-                    subexprs.push(subexpr);
-                }
+                let subexprs = args
+                    .iter()
+                    .zip(termdata.arg_tys.iter())
+                    .filter_map(|(arg, &arg_ty)| {
+                        self.translate_expr(tyenv, arg, Some(arg_ty), bindings, pure)
+                    })
+                    .collect();
 
                 Some(Expr::Term(ty, tid, subexprs))
             }
@@ -2336,22 +2316,6 @@ impl TermEnv {
                 })
             }
         }
-    }
-
-    fn translate_iflets(
-        &self,
-        tyenv: &mut TypeEnv,
-        rule_term: TermId,
-        iflets: &[ast::IfLet],
-        bindings: &mut Bindings,
-    ) -> Option<Vec<IfLet>> {
-        let mut translated = vec![];
-        for iflet in iflets {
-            translated.push(unwrap_or_continue!(
-                self.translate_iflet(tyenv, rule_term, iflet, bindings)
-            ));
-        }
-        Some(translated)
     }
 
     fn translate_iflet(
