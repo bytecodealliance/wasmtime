@@ -19,8 +19,8 @@ use std::convert::TryFrom;
 use std::mem;
 use std::sync::Mutex;
 use wasmtime_environ::{
-    DefinedMemoryIndex, DefinedTableIndex, HostPtr, Module, PrimaryMap, Tunables, VMOffsets,
-    WASM_PAGE_SIZE,
+    DefinedMemoryIndex, DefinedTableIndex, HostPtr, MemoryStyle, Module, PrimaryMap, Tunables,
+    VMOffsets, WASM_PAGE_SIZE,
 };
 
 mod index_allocator;
@@ -386,6 +386,20 @@ impl InstancePool {
                 .defined_memory_index(memory_index)
                 .expect("should be a defined memory since we skipped imported ones");
 
+            match plan.style {
+                MemoryStyle::Static { bound } => {
+                    let bound = bound * u64::from(WASM_PAGE_SIZE);
+                    if bound < self.memories.static_memory_bound {
+                        return Err(InstantiationError::Resource(anyhow!(
+                            "static bound of {bound:x} bytes incompatible with \
+                             reservation of {:x} bytes",
+                            self.memories.static_memory_bound,
+                        )));
+                    }
+                }
+                MemoryStyle::Dynamic { .. } => {}
+            }
+
             let memory = unsafe {
                 std::slice::from_raw_parts_mut(
                     self.memories.get_base(instance_index, defined_index),
@@ -658,6 +672,7 @@ struct MemoryPool {
     initial_memory_offset: usize,
     max_memories: usize,
     max_instances: usize,
+    static_memory_bound: u64,
 }
 
 impl MemoryPool {
@@ -679,15 +694,11 @@ impl MemoryPool {
             );
         }
 
-        let memory_size = if instance_limits.memory_pages > 0 {
-            usize::try_from(
-                u64::from(tunables.static_memory_bound) * u64::from(WASM_PAGE_SIZE)
-                    + tunables.static_memory_offset_guard_size,
-            )
-            .map_err(|_| anyhow!("memory reservation size exceeds addressable memory"))?
-        } else {
-            0
-        };
+        let static_memory_bound =
+            u64::from(tunables.static_memory_bound) * u64::from(WASM_PAGE_SIZE);
+        let memory_size =
+            usize::try_from(static_memory_bound + tunables.static_memory_offset_guard_size)
+                .map_err(|_| anyhow!("memory reservation size exceeds addressable memory"))?;
 
         assert!(
             memory_size % crate::page_size() == 0,
@@ -745,6 +756,7 @@ impl MemoryPool {
             max_memories,
             max_instances,
             max_memory_size: (instance_limits.memory_pages as usize) * (WASM_PAGE_SIZE as usize),
+            static_memory_bound,
         };
 
         Ok(pool)
