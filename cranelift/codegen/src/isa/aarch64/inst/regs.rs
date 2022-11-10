@@ -93,6 +93,11 @@ pub fn link_reg() -> Reg {
     xreg(30)
 }
 
+/// Get a reference to the pinned register (x21).
+pub fn pinned_reg() -> Reg {
+    xreg(PINNED_REG)
+}
+
 /// Get a writable reference to the link register.
 pub fn writable_link_reg() -> Writable<Reg> {
     Writable::from_reg(link_reg())

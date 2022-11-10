@@ -2189,7 +2189,7 @@
 ;;; Rules for `{get,set}_pinned_reg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (get_pinned_reg))
-      (pinned_reg))
+      (mov_from_preg (preg_pinned)))
 
 (rule (lower (set_pinned_reg val))
       (side_effect (write_pinned_reg val)))

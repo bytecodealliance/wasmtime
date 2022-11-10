@@ -95,8 +95,13 @@
 
        ;; Like `MovRR` but with a physical register source (for implementing
        ;; CLIF instructions like `get_stack_pointer`).
-       (MovPReg (src PReg)
-                (dst WritableGpr))
+       (MovFromPReg (src PReg)
+                    (dst WritableGpr))
+
+       ;; Like `MovRR` but with a physical register destination (for
+       ;; implementing CLIF instructions like `get_pinned_reg`).
+       (MovToPReg (src Gpr)
+                  (dst PReg))
 
        ;; Zero-extended loads, except for 64 bits: movz (bl bq wl wq lq) addr
        ;; reg.
@@ -1199,10 +1204,6 @@
 ;; Allocate a new temporary XMM register.
 (decl temp_writable_xmm () WritableXmm)
 (extern constructor temp_writable_xmm temp_writable_xmm)
-
-;; Fetch the special pinned register.
-(decl pinned_writable_gpr () WritableGpr)
-(extern constructor pinned_writable_gpr pinned_writable_gpr)
 
 ;; Construct a new `XmmMem` from the given `RegMem`.
 ;;
@@ -3701,12 +3702,11 @@
 
 (decl read_pinned_gpr () Gpr)
 (rule (read_pinned_gpr)
-      (pinned_writable_gpr))
+      (mov_from_preg (preg_pinned)))
 
 (decl write_pinned_gpr (Gpr) SideEffectNoResult)
 (rule (write_pinned_gpr val)
-      (let ((dst WritableGpr (pinned_writable_gpr)))
-        (SideEffectNoResult.Inst (gen_move $I64 dst val))))
+      (mov_to_preg (preg_pinned) val))
 
 ;;;; Shuffle ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3882,12 +3882,16 @@
 (decl const_to_synthetic_amode (VCodeConstant) SyntheticAmode)
 (extern constructor const_to_synthetic_amode const_to_synthetic_amode)
 
-;; Helper for creating `MovPReg` instructions.
-(decl mov_preg (PReg) Reg)
-(rule (mov_preg preg)
+;; Helper for creating `MovFromPReg` instructions.
+(decl mov_from_preg (PReg) Reg)
+(rule (mov_from_preg preg)
       (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.MovPReg preg dst))))
+            (_ Unit (emit (MInst.MovFromPReg preg dst))))
         dst))
+
+(decl mov_to_preg (PReg Gpr) SideEffectNoResult)
+(rule (mov_to_preg dst src)
+      (SideEffectNoResult.Inst (MInst.MovToPReg src dst)))
 
 (decl preg_rbp () PReg)
 (extern constructor preg_rbp preg_rbp)
@@ -3895,13 +3899,16 @@
 (decl preg_rsp () PReg)
 (extern constructor preg_rsp preg_rsp)
 
+(decl preg_pinned () PReg)
+(extern constructor preg_pinned preg_pinned)
+
 (decl x64_rbp () Reg)
 (rule (x64_rbp)
-      (mov_preg (preg_rbp)))
+      (mov_from_preg (preg_rbp)))
 
 (decl x64_rsp () Reg)
 (rule (x64_rsp)
-      (mov_preg (preg_rsp)))
+      (mov_from_preg (preg_rsp)))
 
 ;;;; Helpers for Emitting LibCalls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

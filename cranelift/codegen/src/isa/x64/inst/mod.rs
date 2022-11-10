@@ -92,7 +92,8 @@ impl Inst {
             | Inst::Mov64MR { .. }
             | Inst::MovRM { .. }
             | Inst::MovRR { .. }
-            | Inst::MovPReg { .. }
+            | Inst::MovFromPReg { .. }
+            | Inst::MovToPReg { .. }
             | Inst::MovsxRmR { .. }
             | Inst::MovzxRmR { .. }
             | Inst::MulHi { .. }
@@ -1233,10 +1234,17 @@ impl PrettyPrint for Inst {
                 )
             }
 
-            Inst::MovPReg { src, dst } => {
+            Inst::MovFromPReg { src, dst } => {
                 let src: Reg = (*src).into();
                 let src = regs::show_ireg_sized(src, 8);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
+                format!("{} {}, {}", ljustify("movq".to_string()), src, dst)
+            }
+
+            Inst::MovToPReg { src, dst } => {
+                let src = pretty_print_reg(src.to_reg(), 8, allocs);
+                let dst: Reg = (*dst).into();
+                let dst = regs::show_ireg_sized(dst, 8);
                 format!("{} {}, {}", ljustify("movq".to_string()), src, dst)
             }
 
@@ -1877,10 +1885,15 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_use(src.to_reg());
             collector.reg_def(dst.to_writable_reg());
         }
-        Inst::MovPReg { dst, src } => {
-            debug_assert!([regs::rsp(), regs::rbp()].contains(&(*src).into()));
+        Inst::MovFromPReg { dst, src } => {
+            debug_assert!([regs::rsp(), regs::rbp(), regs::pinned_reg()].contains(&(*src).into()));
             debug_assert!(dst.to_reg().to_reg().is_virtual());
             collector.reg_def(dst.to_writable_reg());
+        }
+        Inst::MovToPReg { dst, src } => {
+            debug_assert!(src.to_reg().is_virtual());
+            debug_assert!([regs::rsp(), regs::rbp(), regs::pinned_reg()].contains(&(*dst).into()));
+            collector.reg_use(src.to_reg());
         }
         Inst::XmmToGpr { src, dst, .. } => {
             collector.reg_use(src.to_reg());
