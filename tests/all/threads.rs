@@ -65,15 +65,22 @@ fn test_sharing_of_shared_memory() -> Result<()> {
     let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, 5))?;
     let instance1 = Instance::new(&mut store, &module, &[shared_memory.clone().into()])?;
     let instance2 = Instance::new(&mut store, &module, &[shared_memory.clone().into()])?;
+    let data = shared_memory.data();
 
     // Modify the memory in one place.
     unsafe {
-        (*(shared_memory.data()))[0] = 42;
+        *data[0].get() = 42;
     }
 
     // Verify that the memory is the same in all shared locations.
-    let shared_memory_first_word =
-        i32::from_le_bytes(unsafe { (*shared_memory.data())[0..4].try_into()? });
+    let shared_memory_first_word = i32::from_le_bytes(unsafe {
+        [
+            *data[0].get(),
+            *data[1].get(),
+            *data[2].get(),
+            *data[3].get(),
+        ]
+    });
     let instance1_first_word = instance1
         .get_typed_func::<(), i32, _>(&mut store, "first_word")?
         .call(&mut store, ())?;

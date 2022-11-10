@@ -2,6 +2,7 @@ use crate::store::{StoreData, StoreOpaque, Stored};
 use crate::trampoline::generate_memory_export;
 use crate::{AsContext, AsContextMut, Engine, MemoryType, StoreContext, StoreContextMut};
 use anyhow::{bail, Result};
+use std::cell::UnsafeCell;
 use std::convert::TryFrom;
 use std::slice;
 use wasmtime_environ::MemoryPlan;
@@ -699,6 +700,7 @@ pub unsafe trait MemoryCreator: Send + Sync {
 /// ```
 #[derive(Clone)]
 pub struct SharedMemory(wasmtime_runtime::SharedMemory, Engine);
+
 impl SharedMemory {
     /// Construct a [`SharedMemory`] by providing both the `minimum` and
     /// `maximum` number of 64K-sized pages. This call allocates the necessary
@@ -737,19 +739,28 @@ impl SharedMemory {
 
     /// Return access to the available portion of the shared memory.
     ///
-    /// Because the memory is shared, it is possible that this memory is being
-    /// modified in other threads--in other words, the data can change at any
-    /// time. Users of this function must manage synchronization and locking to
-    /// this region of memory themselves.
+    /// The slice returned represents the region of accessible memory at the
+    /// time that this function was called. The contents of the returned slice
+    /// will reflect concurrent modifications happening on other threads.
     ///
-    /// Not only can the data change, but the length of this region can change
-    /// as well. Other threads can call `memory.grow` operations that will
-    /// extend the region length but--importantly--this will not be reflected in
-    /// the size of region returned by this function.
-    pub fn data(&self) -> *mut [u8] {
+    /// # Safety
+    ///
+    /// The returned slice is valid for the entire duration of the lifetime of
+    /// this instance of [`SharedMemory`]. The base pointer of a shared memory
+    /// does not change. This [`SharedMemory`] may grow further after this
+    /// function has been called, but the slice returned will not grow.
+    ///
+    /// Concurrent modifications may be happening to the data returned on other
+    /// threads. The `UnsafeCell<u8>` represents that safe access to the
+    /// contents of the slice is not possible through normal loads and stores.
+    ///
+    /// The memory returned must be accessed safely through the `Atomic*` types
+    /// in the [`std::sync::atomic`] module. Casting to those types must
+    /// currently be done unsafely.
+    pub fn data(&self) -> &[UnsafeCell<u8>] {
         unsafe {
             let definition = &*self.0.vmmemory_ptr();
-            slice::from_raw_parts_mut(definition.base, definition.current_length())
+            slice::from_raw_parts_mut(definition.base.cast(), definition.current_length())
         }
     }
 
