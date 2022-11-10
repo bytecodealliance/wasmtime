@@ -92,7 +92,7 @@ pub extern "C" fn wasm_trap_trace(raw: &wasm_trap_t, out: &mut wasm_frame_vec_t)
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_trap_code(raw: &wasm_trap_t, code: &mut i32) -> bool {
+pub extern "C" fn wasmtime_trap_code(raw: &wasm_trap_t, code: &mut u8) -> bool {
     match raw.trap.trap_code() {
         Some(c) => {
             *code = match c {
