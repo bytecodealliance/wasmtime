@@ -116,7 +116,7 @@ pub(crate) fn error_trace<'a>(error: &'a Error, out: &mut wasm_frame_vec_t<'a>) 
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_trap_code(raw: &wasm_trap_t, code: &mut i32) -> bool {
+pub extern "C" fn wasmtime_trap_code(raw: &wasm_trap_t, code: &mut u8) -> bool {
     let trap = match raw.error.downcast_ref::<Trap>() {
         Some(trap) => trap,
         None => return false,
