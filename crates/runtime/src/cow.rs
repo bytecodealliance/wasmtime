@@ -647,14 +647,16 @@ impl MemoryImageSlot {
     /// Map anonymous zeroed memory across the whole slot,
     /// inaccessible. Used both during instantiate and during drop.
     fn reset_with_anon_memory(&mut self) -> Result<()> {
-        unsafe {
-            let ptr = rustix::mm::mmap_anonymous(
-                self.base as *mut c_void,
-                self.static_size,
-                rustix::mm::ProtFlags::empty(),
-                rustix::mm::MapFlags::PRIVATE | rustix::mm::MapFlags::FIXED,
-            )?;
-            assert_eq!(ptr as usize, self.base);
+        if self.static_size > 0 {
+            unsafe {
+                let ptr = rustix::mm::mmap_anonymous(
+                    self.base as *mut c_void,
+                    self.static_size,
+                    rustix::mm::ProtFlags::empty(),
+                    rustix::mm::MapFlags::PRIVATE | rustix::mm::MapFlags::FIXED,
+                )?;
+                assert_eq!(ptr as usize, self.base);
+            }
         }
 
         self.image = None;
