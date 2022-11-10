@@ -1,7 +1,7 @@
-use crate::codegen_settings::CodegenSettings;
+use crate::codegen_settings::{CodegenSettings, ErrorType};
 use crate::lifetimes::anon_lifetime;
 use crate::module_trait::passed_by_reference;
-use crate::names::Names;
+use crate::names;
 use crate::types::WiggleType;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
@@ -9,54 +9,50 @@ use std::mem;
 use witx::Instruction;
 
 pub fn define_func(
-    names: &Names,
     module: &witx::Module,
     func: &witx::InterfaceFunc,
     settings: &CodegenSettings,
 ) -> TokenStream {
-    let (ts, _bounds) = _define_func(names, module, func, settings);
+    let (ts, _bounds) = _define_func(module, func, settings);
     ts
 }
 
 pub fn func_bounds(
-    names: &Names,
     module: &witx::Module,
     func: &witx::InterfaceFunc,
     settings: &CodegenSettings,
 ) -> Vec<Ident> {
-    let (_ts, bounds) = _define_func(names, module, func, settings);
+    let (_ts, bounds) = _define_func(module, func, settings);
     bounds
 }
 
 fn _define_func(
-    names: &Names,
     module: &witx::Module,
     func: &witx::InterfaceFunc,
     settings: &CodegenSettings,
 ) -> (TokenStream, Vec<Ident>) {
-    let rt = names.runtime_mod();
-    let ident = names.func(&func.name);
+    let ident = names::func(&func.name);
 
     let (wasm_params, wasm_results) = func.wasm_signature();
     let param_names = (0..wasm_params.len())
         .map(|i| Ident::new(&format!("arg{}", i), Span::call_site()))
         .collect::<Vec<_>>();
     let abi_params = wasm_params.iter().zip(&param_names).map(|(arg, name)| {
-        let wasm = names.wasm_type(*arg);
+        let wasm = names::wasm_type(*arg);
         quote!(#name : #wasm)
     });
 
     let abi_ret = match wasm_results.len() {
         0 => quote!(()),
         1 => {
-            let ty = names.wasm_type(wasm_results[0]);
+            let ty = names::wasm_type(wasm_results[0]);
             quote!(#ty)
         }
         _ => unimplemented!(),
     };
 
     let mut body = TokenStream::new();
-    let mut bounds = vec![names.trait_name(&module.name)];
+    let mut bounds = vec![names::trait_name(&module.name)];
     func.call_interface(
         &module.name,
         &mut Rust {
@@ -64,8 +60,6 @@ fn _define_func(
             params: &param_names,
             block_storage: Vec::new(),
             blocks: Vec::new(),
-            rt: &rt,
-            names,
             module,
             funcname: func.name.as_str(),
             settings,
@@ -76,8 +70,8 @@ fn _define_func(
     let mod_name = &module.name.as_str();
     let func_name = &func.name.as_str();
     let mk_span = quote!(
-        let _span = #rt::tracing::span!(
-            #rt::tracing::Level::TRACE,
+        let _span = wiggle::tracing::span!(
+            wiggle::tracing::Level::TRACE,
             "wiggle abi",
             module = #mod_name,
             function = #func_name
@@ -99,9 +93,9 @@ fn _define_func(
                 #[allow(unreachable_code)] // deals with warnings in noreturn functions
                 pub fn #ident(
                     ctx: &mut (impl #(#bounds)+*),
-                    memory: &dyn #rt::GuestMemory,
+                    memory: &dyn wiggle::GuestMemory,
                     #(#abi_params),*
-                ) -> #rt::anyhow::Result<#abi_ret> {
+                ) -> wiggle::anyhow::Result<#abi_ret> {
                     use std::convert::TryFrom as _;
                     #traced_body
                 }
@@ -111,7 +105,7 @@ fn _define_func(
     } else {
         let traced_body = if settings.tracing.enabled_for(&mod_name, &func_name) {
             quote!(
-                use #rt::tracing::Instrument as _;
+                use wiggle::tracing::Instrument as _;
                 #mk_span
                 async move {
                     #body
@@ -129,9 +123,9 @@ fn _define_func(
                 #[allow(unreachable_code)] // deals with warnings in noreturn functions
                 pub fn #ident<'a>(
                     ctx: &'a mut (impl #(#bounds)+*),
-                    memory: &'a dyn #rt::GuestMemory,
+                    memory: &'a dyn wiggle::GuestMemory,
                     #(#abi_params),*
-                ) -> impl std::future::Future<Output = #rt::anyhow::Result<#abi_ret>> + 'a {
+                ) -> impl std::future::Future<Output = wiggle::anyhow::Result<#abi_ret>> + 'a {
                     use std::convert::TryFrom as _;
                     #traced_body
                 }
@@ -146,8 +140,6 @@ struct Rust<'a> {
     params: &'a [Ident],
     block_storage: Vec<TokenStream>,
     blocks: Vec<TokenStream>,
-    rt: &'a TokenStream,
-    names: &'a Names,
     module: &'a witx::Module,
     funcname: &'a str,
     settings: &'a CodegenSettings,
@@ -196,17 +188,16 @@ impl witx::Bindgen for Rust<'_> {
         operands: &mut Vec<TokenStream>,
         results: &mut Vec<TokenStream>,
     ) {
-        let rt = self.rt;
         let wrap_err = |location: &str| {
             let modulename = self.module.name.as_str();
             let funcname = self.funcname;
             quote! {
                 |e| {
-                    #rt::GuestError::InFunc {
+                    wiggle::GuestError::InFunc {
                         modulename: #modulename,
                         funcname: #funcname,
                         location: #location,
-                        err: Box::new(#rt::GuestError::from(e)),
+                        err: Box::new(wiggle::GuestError::from(e)),
                     }
                 }
             }
@@ -226,9 +217,9 @@ impl witx::Bindgen for Rust<'_> {
 
             Instruction::PointerFromI32 { ty } | Instruction::ConstPointerFromI32 { ty } => {
                 let val = operands.pop().unwrap();
-                let pointee_type = self.names.type_ref(ty, anon_lifetime());
+                let pointee_type = names::type_ref(ty, anon_lifetime());
                 results.push(quote! {
-                    #rt::GuestPtr::<#pointee_type>::new(memory, #val as u32)
+                    wiggle::GuestPtr::<#pointee_type>::new(memory, #val as u32)
                 });
             }
 
@@ -238,12 +229,12 @@ impl witx::Bindgen for Rust<'_> {
                 let ty = match &**ty.type_() {
                     witx::Type::Builtin(witx::BuiltinType::Char) => quote!(str),
                     _ => {
-                        let ty = self.names.type_ref(ty, anon_lifetime());
+                        let ty = names::type_ref(ty, anon_lifetime());
                         quote!([#ty])
                     }
                 };
                 results.push(quote! {
-                    #rt::GuestPtr::<#ty>::new(memory, (#ptr as u32, #len as u32));
+                    wiggle::GuestPtr::<#ty>::new(memory, (#ptr as u32, #len as u32));
                 })
             }
 
@@ -252,7 +243,7 @@ impl witx::Bindgen for Rust<'_> {
                 // out, and afterwards we call the function with those bindings.
                 let mut args = Vec::new();
                 for (i, param) in func.params.iter().enumerate() {
-                    let name = self.names.func_param(&param.name);
+                    let name = names::func_param(&param.name);
                     let val = &operands[i];
                     self.src.extend(quote!(let #name = #val;));
                     if passed_by_reference(param.tref.type_()) {
@@ -271,21 +262,21 @@ impl witx::Bindgen for Rust<'_> {
                         .params
                         .iter()
                         .map(|param| {
-                            let name = self.names.func_param(&param.name);
+                            let name = names::func_param(&param.name);
                             if param.impls_display() {
-                                quote!( #name = #rt::tracing::field::display(&#name) )
+                                quote!( #name = wiggle::tracing::field::display(&#name) )
                             } else {
-                                quote!( #name = #rt::tracing::field::debug(&#name) )
+                                quote!( #name = wiggle::tracing::field::debug(&#name) )
                             }
                         })
                         .collect::<Vec<_>>();
                     self.src.extend(quote! {
-                        #rt::tracing::event!(#rt::tracing::Level::TRACE, #(#args),*);
+                        wiggle::tracing::event!(wiggle::tracing::Level::TRACE, #(#args),*);
                     });
                 }
 
-                let trait_name = self.names.trait_name(&self.module.name);
-                let ident = self.names.func(&func.name);
+                let trait_name = names::trait_name(&self.module.name);
+                let ident = names::func(&func.name);
                 if self.settings.get_async(&self.module, &func).is_sync() {
                     self.src.extend(quote! {
                         let ret = #trait_name::#ident(ctx, #(#args),*);
@@ -301,9 +292,9 @@ impl witx::Bindgen for Rust<'_> {
                     .enabled_for(self.module.name.as_str(), self.funcname)
                 {
                     self.src.extend(quote! {
-                        #rt::tracing::event!(
-                            #rt::tracing::Level::TRACE,
-                            result = #rt::tracing::field::debug(&ret),
+                        wiggle::tracing::event!(
+                            wiggle::tracing::Level::TRACE,
+                            result = wiggle::tracing::field::debug(&ret),
                         );
                     });
                 }
@@ -322,11 +313,12 @@ impl witx::Bindgen for Rust<'_> {
             Instruction::EnumLower { ty } => {
                 let val = operands.pop().unwrap();
                 let val = match self.settings.errors.for_name(ty) {
-                    Some(custom) => {
-                        let method = self.names.user_error_conversion_method(&custom);
+                    Some(ErrorType::User(custom)) => {
+                        let method = names::user_error_conversion_method(&custom);
                         self.bound(quote::format_ident!("UserErrorConversion"));
                         quote!(UserErrorConversion::#method(ctx, #val)?)
                     }
+                    Some(ErrorType::Generated(_)) => quote!(#val.downcast()?),
                     None => val,
                 };
                 results.push(quote!(#val as i32));
@@ -336,10 +328,10 @@ impl witx::Bindgen for Rust<'_> {
                 let err = self.blocks.pop().unwrap();
                 let ok = self.blocks.pop().unwrap();
                 let val = operands.pop().unwrap();
-                let err_typename = self.names.type_ref(err_ty.unwrap(), anon_lifetime());
+                let err_typename = names::type_ref(err_ty.unwrap(), anon_lifetime());
                 results.push(quote! {
                     match #val {
-                        Ok(e) => { #ok; <#err_typename as #rt::GuestErrorType>::success() as i32 }
+                        Ok(e) => { #ok; <#err_typename as wiggle::GuestErrorType>::success() as i32 }
                         Err(e) => { #err }
                     }
                 });
@@ -369,9 +361,9 @@ impl witx::Bindgen for Rust<'_> {
                 let ptr = operands.pop().unwrap();
                 let val = operands.pop().unwrap();
                 let wrap_err = wrap_err(&format!("write {}", ty.name.as_str()));
-                let pointee_type = self.names.type_(&ty.name);
+                let pointee_type = names::type_(&ty.name);
                 self.src.extend(quote! {
-                    #rt::GuestPtr::<#pointee_type>::new(memory, #ptr as u32)
+                    wiggle::GuestPtr::<#pointee_type>::new(memory, #ptr as u32)
                         .write(#val)
                         .map_err(#wrap_err)?;
                 });
@@ -380,9 +372,9 @@ impl witx::Bindgen for Rust<'_> {
             Instruction::Load { ty } => {
                 let ptr = operands.pop().unwrap();
                 let wrap_err = wrap_err(&format!("read {}", ty.name.as_str()));
-                let pointee_type = self.names.type_(&ty.name);
+                let pointee_type = names::type_(&ty.name);
                 results.push(quote! {
-                    #rt::GuestPtr::<#pointee_type>::new(memory, #ptr as u32)
+                    wiggle::GuestPtr::<#pointee_type>::new(memory, #ptr as u32)
                         .read()
                         .map_err(#wrap_err)?
                 });
@@ -390,7 +382,7 @@ impl witx::Bindgen for Rust<'_> {
 
             Instruction::HandleFromI32 { ty } => {
                 let val = operands.pop().unwrap();
-                let ty = self.names.type_(&ty.name);
+                let ty = names::type_(&ty.name);
                 results.push(quote!(#ty::from(#val)));
             }
 
@@ -418,7 +410,7 @@ impl witx::Bindgen for Rust<'_> {
             Instruction::EnumLift { ty }
             | Instruction::BitflagsFromI64 { ty }
             | Instruction::BitflagsFromI32 { ty } => {
-                let ty = self.names.type_(&ty.name);
+                let ty = names::type_(&ty.name);
                 try_from(quote!(#ty))
             }
 

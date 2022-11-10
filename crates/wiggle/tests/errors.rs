@@ -24,34 +24,32 @@ mod convert_just_errno {
      (param $strike u32)
      (result $err (expected (error $errno)))))
     ",
-        errors: { errno => RichError },
+        errors: { errno => trappable ErrnoT },
     });
 
     impl_errno!(types::Errno);
 
-    /// When the `errors` mapping in witx is non-empty, we need to impl the
-    /// types::UserErrorConversion trait that wiggle generates from that mapping.
-    impl<'a> types::UserErrorConversion for WasiCtx<'a> {
-        fn errno_from_rich_error(&mut self, e: RichError) -> Result<types::Errno> {
-            // WasiCtx can collect a Vec<String> log so we can test this. We're
-            // logging the Display impl that `thiserror::Error` provides us.
-            self.log.borrow_mut().push(e.to_string());
-            // Then do the trivial mapping down to the flat enum.
-            match e {
-                RichError::InvalidArg { .. } => Ok(types::Errno::InvalidArg),
-                RichError::PicketLine { .. } => Ok(types::Errno::PicketLine),
+    impl From<RichError> for types::ErrnoT {
+        fn from(rich: RichError) -> types::ErrnoT {
+            match rich {
+                RichError::InvalidArg(s) => {
+                    types::ErrnoT::from(types::Errno::InvalidArg).context(s)
+                }
+                RichError::PicketLine(s) => {
+                    types::ErrnoT::from(types::Errno::PicketLine).context(s)
+                }
             }
         }
     }
 
     impl<'a> one_error_conversion::OneErrorConversion for WasiCtx<'a> {
-        fn foo(&mut self, strike: u32) -> Result<(), RichError> {
+        fn foo(&mut self, strike: u32) -> Result<(), types::ErrnoT> {
             // We use the argument to this function to exercise all of the
             // possible error cases we could hit here
             match strike {
                 0 => Ok(()),
-                1 => Err(RichError::PicketLine(format!("I'm not a scab"))),
-                _ => Err(RichError::InvalidArg(format!("out-of-bounds: {}", strike))),
+                1 => Err(RichError::PicketLine(format!("I'm not a scab")))?,
+                _ => Err(RichError::InvalidArg(format!("out-of-bounds: {}", strike)))?,
             }
         }
     }
@@ -78,11 +76,6 @@ mod convert_just_errno {
             types::Errno::PicketLine as i32,
             "Expected return value for strike=1"
         );
-        assert_eq!(
-            ctx.log.borrow_mut().pop().expect("one log entry"),
-            "Won't cross picket line: I'm not a scab",
-            "Expected log entry for strike=1",
-        );
 
         // Second error case:
         let r2 = one_error_conversion::foo(&mut ctx, &host_memory, 2).unwrap();
@@ -90,11 +83,6 @@ mod convert_just_errno {
             r2,
             types::Errno::InvalidArg as i32,
             "Expected return value for strike=2"
-        );
-        assert_eq!(
-            ctx.log.borrow_mut().pop().expect("one log entry"),
-            "Invalid argument: out-of-bounds: 2",
-            "Expected log entry for strike=2",
         );
     }
 }
