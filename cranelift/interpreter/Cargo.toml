@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-interpreter"
-version = "0.88.1"
+version = "0.88.2"
 authors = ["The Cranelift Project Developers"]
 description = "Interpret Cranelift IR"
 repository = "https://github.com/bytecodealliance/wasmtime"
@@ -11,8 +11,8 @@ readme = "README.md"
 edition = "2021"
 
 [dependencies]
-cranelift-codegen = { path = "../codegen", version = "0.88.1" }
-cranelift-entity = { path = "../entity", version = "0.88.1" }
+cranelift-codegen = { path = "../codegen", version = "0.88.2" }
+cranelift-entity = { path = "../entity", version = "0.88.2" }
 log = { version = "0.4.8", default-features = false }
 smallvec = "1.6.1"
 thiserror = "1.0.15"
@@ -21,8 +21,8 @@ thiserror = "1.0.15"
 libm = "0.2.4"
 
 [dev-dependencies]
-cranelift-frontend = { path = "../frontend", version = "0.88.1" }
-cranelift-reader = { path = "../reader", version = "0.88.1" }
+cranelift-frontend = { path = "../frontend", version = "0.88.2" }
+cranelift-reader = { path = "../reader", version = "0.88.2" }
 
 [badges]
 maintenance = { status = "experimental" }

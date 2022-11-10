@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-component-macro"
-version = "1.0.1"
+version = "1.0.2"
 authors = ["The Wasmtime Project Developers"]
 description = "Macros for deriving component interface types from Rust types"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -17,7 +17,7 @@ proc-macro = true
 proc-macro2 = "1.0"
 quote = "1.0"
 syn = { version = "1.0", features = ["extra-traits"] }
-wasmtime-component-util = { path = "../component-util", version = "=1.0.1" }
+wasmtime-component-util = { path = "../component-util", version = "=1.0.2" }
 
 [badges]
 maintenance = { status = "actively-developed" }

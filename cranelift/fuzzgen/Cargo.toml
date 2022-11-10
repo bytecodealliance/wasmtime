@@ -11,8 +11,8 @@ publish = false
 
 
 [dependencies]
-cranelift = { path = "../umbrella", version = "0.88.1" }
-cranelift-native = { path = "../native", version = "0.88.1" }
+cranelift = { path = "../umbrella", version = "0.88.2" }
+cranelift-native = { path = "../native", version = "0.88.2" }
 
 anyhow = "1.0.19"
 arbitrary = "1.0.0"

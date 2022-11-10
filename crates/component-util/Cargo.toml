@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-component-util"
-version = "1.0.1"
+version = "1.0.2"
 authors = ["The Wasmtime Project Developers"]
 description = "Utility types and functions to support the component model in Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"

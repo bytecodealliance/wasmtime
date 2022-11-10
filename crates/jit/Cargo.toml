@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-jit"
-version = "1.0.1"
+version = "1.0.2"
 authors = ["The Wasmtime Project Developers"]
 description = "JIT-style execution for WebAsssembly code in Cranelift"
 documentation = "https://docs.rs/wasmtime-jit"
@@ -11,9 +11,9 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 edition = "2021"
 
 [dependencies]
-wasmtime-environ = { path = "../environ", version = "=1.0.1" }
-wasmtime-jit-debug = { path = "../jit-debug", version = "=1.0.1", features = ["perf_jitdump"], optional = true }
-wasmtime-runtime = { path = "../runtime", version = "=1.0.1" }
+wasmtime-environ = { path = "../environ", version = "=1.0.2" }
+wasmtime-jit-debug = { path = "../jit-debug", version = "=1.0.2", features = ["perf_jitdump"], optional = true }
+wasmtime-runtime = { path = "../runtime", version = "=1.0.2" }
 thiserror = "1.0.4"
 target-lexicon = { version = "0.12.0", default-features = false }
 anyhow = "1.0"

@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-jit-debug"
-version = "1.0.1"
+version = "1.0.2"
 authors = ["The Wasmtime Project Developers"]
 description = "JIT debug interfaces support for Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
