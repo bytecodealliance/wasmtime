@@ -778,3 +778,39 @@ fn dynamic_memory_pooling_allocator() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn zero_memory_pages_disallows_oob() -> Result<()> {
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(1).instance_memory_pages(0);
+    let mut config = Config::new();
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+
+    let engine = Engine::new(&config)?;
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (memory 0)
+
+                (func (export "load") (param i32) (result i32)
+                    local.get 0
+                    i32.load)
+
+                (func (export "store") (param i32 )
+                    local.get 0
+                    local.get 0
+                    i32.store)
+            )
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let load32 = instance.get_typed_func::<i32, i32, _>(&mut store, "load")?;
+    let store32 = instance.get_typed_func::<i32, (), _>(&mut store, "store")?;
+    for i in 0..31 {
+        assert!(load32.call(&mut store, 1 << i).is_err());
+        assert!(store32.call(&mut store, 1 << i).is_err());
+    }
+    Ok(())
+}
