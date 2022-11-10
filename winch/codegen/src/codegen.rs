@@ -94,21 +94,21 @@ where
             &mut self.regalloc,
         );
 
-        let mut visitor = ValidateThenVisit(&mut validator, self);
         while !body.eof() {
-            body.visit_operator(&mut visitor)??;
+            let offset = body.original_position();
+            body.visit_operator(&mut ValidateThenVisit(validator.visitor(offset), self))??;
         }
         validator.finish(body.original_position())?;
         return Ok(());
 
-        struct ValidateThenVisit<'a, T, U>(&'a mut T, &'a mut U);
+        struct ValidateThenVisit<'a, T, U>(T, &'a mut U);
 
         macro_rules! validate_then_visit {
             ($( @$proposal:ident $op:ident $({ $($arg:ident: $argty:ty),* })? => $visit:ident)*) => {
                 $(
-                    fn $visit(&mut self, offset: usize $($(,$arg: $argty)*)?) -> Self::Output {
-                        self.0.$visit(offset, $($($arg.clone()),*)?)?;
-                        Ok(self.1.$visit(offset, $($($arg),*)?))
+                    fn $visit(&mut self $($(,$arg: $argty)*)?) -> Self::Output {
+                        self.0.$visit($($($arg.clone()),*)?)?;
+                        Ok(self.1.$visit($($($arg),*)?))
                     }
                 )*
             };

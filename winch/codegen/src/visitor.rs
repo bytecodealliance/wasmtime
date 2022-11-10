@@ -62,7 +62,7 @@ macro_rules! def_unsupported {
 		emit
 		$op
 
-		fn $visit(&mut self, _offset: usize $($(,$arg: $argty)*)?) -> Self::Output {
+		fn $visit(&mut self $($(,$arg: $argty)*)?) -> Self::Output {
 		    $($(drop($arg);)*)?
 		    todo!(stringify!($op))
 		}
@@ -85,11 +85,11 @@ where
 {
     type Output = ();
 
-    fn visit_i32_const(&mut self, _offset: usize, val: i32) {
+    fn visit_i32_const(&mut self, val: i32) {
         self.context.stack.push(Val::i32(val));
     }
 
-    fn visit_i32_add(&mut self, _offset: usize) {
+    fn visit_i32_add(&mut self) {
         let is_const = self
             .context
             .stack
@@ -104,9 +104,9 @@ where
         }
     }
 
-    fn visit_end(&mut self, _offset: usize) {}
+    fn visit_end(&mut self) {}
 
-    fn visit_local_get(&mut self, _offset: usize, index: u32) {
+    fn visit_local_get(&mut self, index: u32) {
         let context = &mut self.context;
         let slot = context
             .frame
@@ -119,7 +119,7 @@ where
     }
 
     // TODO verify the case where the target local is on the stack.
-    fn visit_local_set(&mut self, _offset: usize, index: u32) {
+    fn visit_local_set(&mut self, index: u32) {
         let context = &mut self.context;
         let frame = context.frame;
         let slot = frame
