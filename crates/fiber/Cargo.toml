@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-fiber"
-version = "1.0.1"
+version = "1.0.2"
 authors = ["The Wasmtime Project Developers"]
 description = "Fiber support for Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -18,7 +18,7 @@ cfg-if = "1.0"
 
 [target.'cfg(unix)'.dependencies]
 rustix = { version = "0.35.6", features = ["mm", "param"] }
-wasmtime-asm-macros = { version = "=1.0.1", path = "../asm-macros" }
+wasmtime-asm-macros = { version = "=1.0.2", path = "../asm-macros" }
 
 [target.'cfg(windows)'.dependencies.windows-sys]
 version = "0.36.1"

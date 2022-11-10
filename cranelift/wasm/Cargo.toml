@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-wasm"
-version = "0.88.1"
+version = "0.88.2"
 authors = ["The Cranelift Project Developers"]
 description = "Translator from WebAssembly to Cranelift IR"
 documentation = "https://docs.rs/cranelift-wasm"
@@ -13,10 +13,10 @@ edition = "2021"
 
 [dependencies]
 wasmparser = { version = "0.89.0", default-features = false }
-cranelift-codegen = { path = "../codegen", version = "0.88.1", default-features = false }
-cranelift-entity = { path = "../entity", version = "0.88.1" }
-cranelift-frontend = { path = "../frontend", version = "0.88.1", default-features = false }
-wasmtime-types = { path = "../../crates/types", version = "1.0.1" }
+cranelift-codegen = { path = "../codegen", version = "0.88.2", default-features = false }
+cranelift-entity = { path = "../entity", version = "0.88.2" }
+cranelift-frontend = { path = "../frontend", version = "0.88.2", default-features = false }
+wasmtime-types = { path = "../../crates/types", version = "1.0.2" }
 hashbrown = { version = "0.12", optional = true }
 itertools = "0.10.0"
 log = { version = "0.4.6", default-features = false }
@@ -26,7 +26,7 @@ smallvec = "1.6.1"
 [dev-dependencies]
 wat = "1.0.47"
 target-lexicon = "0.12"
-cranelift-codegen = { path = "../codegen", version = "0.88.1", default-features = false }
+cranelift-codegen = { path = "../codegen", version = "0.88.2", default-features = false }
 
 [features]
 default = ["std"]

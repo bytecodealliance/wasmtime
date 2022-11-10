@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-runtime"
-version = "1.0.1"
+version = "1.0.2"
 authors = ["The Wasmtime Project Developers"]
 description = "Runtime library support for Wasmtime"
 documentation = "https://docs.rs/wasmtime-runtime"
@@ -11,10 +11,10 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 edition = "2021"
 
 [dependencies]
-wasmtime-asm-macros = { path = "../asm-macros", version = "=1.0.1" }
-wasmtime-environ = { path = "../environ", version = "=1.0.1" }
-wasmtime-fiber = { path = "../fiber", version = "=1.0.1", optional = true }
-wasmtime-jit-debug = { path = "../jit-debug", version = "=1.0.1", features = ["gdb_jit_int"] }
+wasmtime-asm-macros = { path = "../asm-macros", version = "=1.0.2" }
+wasmtime-environ = { path = "../environ", version = "=1.0.2" }
+wasmtime-fiber = { path = "../fiber", version = "=1.0.2", optional = true }
+wasmtime-jit-debug = { path = "../jit-debug", version = "=1.0.2", features = ["gdb_jit_int"] }
 libc = { version = "0.2.112", default-features = false }
 log = "0.4.8"
 memoffset = "0.6.0"
