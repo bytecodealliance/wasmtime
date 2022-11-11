@@ -132,11 +132,7 @@ impl Inst {
         }
     }
 
-    fn xmm_rm_r_blend(
-        op: SseOpcode,
-        src2: RegMem,
-        dst: Writable<Reg>,
-    ) -> Inst {
+    fn xmm_rm_r_blend(op: SseOpcode, src2: RegMem, dst: Writable<Reg>) -> Inst {
         Inst::XmmRmRBlend {
             op,
             src1: Xmm::new(dst.to_reg()).unwrap(),
