@@ -698,13 +698,23 @@ pub(crate) fn emit(
             );
         }
 
-        Inst::MovPReg { src, dst } => {
+        Inst::MovFromPReg { src, dst } => {
             let src: Reg = (*src).into();
-            debug_assert!([regs::rsp(), regs::rbp()].contains(&src));
+            debug_assert!([regs::rsp(), regs::rbp(), regs::pinned_reg()].contains(&src));
             let src = Gpr::new(src).unwrap();
             let size = OperandSize::Size64;
             let dst = allocs.next(dst.to_reg().to_reg());
             let dst = WritableGpr::from_writable_reg(Writable::from_reg(dst)).unwrap();
+            Inst::MovRR { size, src, dst }.emit(&[], sink, info, state);
+        }
+
+        Inst::MovToPReg { src, dst } => {
+            let src = allocs.next(src.to_reg());
+            let src = Gpr::new(src).unwrap();
+            let dst: Reg = (*dst).into();
+            debug_assert!([regs::rsp(), regs::rbp(), regs::pinned_reg()].contains(&dst));
+            let dst = WritableGpr::from_writable_reg(Writable::from_reg(dst)).unwrap();
+            let size = OperandSize::Size64;
             Inst::MovRR { size, src, dst }.emit(&[], sink, info, state);
         }
 

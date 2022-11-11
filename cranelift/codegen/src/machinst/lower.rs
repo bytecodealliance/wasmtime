@@ -1276,24 +1276,11 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             }
         }
 
-        let mut regs = self.value_regs[val];
+        let regs = self.value_regs[val];
         trace!(" -> regs {:?}", regs);
         assert!(regs.is_valid());
 
         self.value_lowered_uses[val] += 1;
-
-        // Pinned-reg hack: if backend specifies a fixed pinned register, use it
-        // directly when we encounter a GetPinnedReg op, rather than lowering
-        // the actual op, and do not return the source inst to the caller; the
-        // value comes "out of the ether" and we will not force generation of
-        // the superfluous move.
-        if let ValueDef::Result(i, 0) = self.f.dfg.value_def(val) {
-            if self.f.dfg[i].opcode() == Opcode::GetPinnedReg {
-                if let Some(pr) = self.pinned_reg {
-                    regs = ValueRegs::one(pr);
-                }
-            }
-        }
 
         regs
     }

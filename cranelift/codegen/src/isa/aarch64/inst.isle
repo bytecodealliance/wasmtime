@@ -167,9 +167,15 @@
 
        ;; Like `Move` but with a particular `PReg` source (for implementing CLIF
        ;; instructions like `get_stack_pointer`).
-       (MovPReg
+       (MovFromPReg
         (rd WritableReg)
         (rm PReg))
+
+       ;; Like `Move` but with a particular `PReg` destination (for
+       ;; implementing CLIF instructions like `set_pinned_reg`).
+       (MovToPReg
+        (rd PReg)
+        (rm Reg))
 
        ;; A MOV[Z,N] with a 16-bit immediate.
        (MovWide
@@ -3061,11 +3067,15 @@
         dst))
 
 ;; Helper for emitting `MInst.MovPReg` instructions.
-(decl mov_preg (PReg) Reg)
-(rule (mov_preg src)
+(decl mov_from_preg (PReg) Reg)
+(rule (mov_from_preg src)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.MovPReg dst src))))
+            (_ Unit (emit (MInst.MovFromPReg dst src))))
         dst))
+
+(decl mov_to_preg (PReg Reg) SideEffectNoResult)
+(rule (mov_to_preg dst src)
+      (SideEffectNoResult.Inst (MInst.MovToPReg dst src)))
 
 (decl preg_sp () PReg)
 (extern constructor preg_sp preg_sp)
@@ -3076,13 +3086,16 @@
 (decl preg_link () PReg)
 (extern constructor preg_link preg_link)
 
+(decl preg_pinned () PReg)
+(extern constructor preg_pinned preg_pinned)
+
 (decl aarch64_sp () Reg)
 (rule (aarch64_sp)
-      (mov_preg (preg_sp)))
+      (mov_from_preg (preg_sp)))
 
 (decl aarch64_fp () Reg)
 (rule (aarch64_fp)
-      (mov_preg (preg_fp)))
+      (mov_from_preg (preg_fp)))
 
 (decl aarch64_link () Reg)
 (rule 1 (aarch64_link)
@@ -3111,7 +3124,7 @@
             (lr WritableReg (writable_link_reg))
             (_ Unit (emit (MInst.ULoad64 lr addr (mem_flags_trusted))))
             (_ Unit (emit (MInst.Xpaclri))))
-           (mov_preg (preg_link))))
+           (mov_from_preg (preg_link))))
 
 ;; Helper for getting the maximum shift amount for a type.
 
@@ -3270,16 +3283,9 @@
 
 ;; Helpers for pinned register manipulation.
 
-(decl writable_pinned_reg () WritableReg)
-(extern constructor writable_pinned_reg writable_pinned_reg)
-
-(decl pinned_reg () Reg)
-(rule (pinned_reg) (writable_pinned_reg))
-
 (decl write_pinned_reg (Reg) SideEffectNoResult)
 (rule (write_pinned_reg val)
-      (let ((dst WritableReg (writable_pinned_reg)))
-        (SideEffectNoResult.Inst (gen_move $I64 dst val))))
+      (mov_to_preg (preg_pinned) val))
 
 ;; Helpers for stackslot effective address generation.
 

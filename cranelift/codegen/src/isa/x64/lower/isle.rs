@@ -640,6 +640,11 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         regs::rsp().to_real_reg().unwrap().into()
     }
 
+    #[inline]
+    fn preg_pinned(&mut self) -> PReg {
+        regs::pinned_reg().to_real_reg().unwrap().into()
+    }
+
     fn libcall_1(&mut self, libcall: &LibCall, a: Reg) -> Reg {
         let call_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
         let ret_ty = libcall.signature(call_conv).returns[0].value_type;
@@ -767,11 +772,6 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         ];
         self.lower_ctx
             .use_constant(VCodeConstantData::WellKnown(&UMAX_MASK))
-    }
-
-    #[inline]
-    fn pinned_writable_gpr(&mut self) -> WritableGpr {
-        Writable::from_reg(Gpr::new(regs::pinned_reg()).unwrap())
     }
 
     #[inline]

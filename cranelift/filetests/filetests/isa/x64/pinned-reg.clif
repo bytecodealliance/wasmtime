@@ -13,7 +13,9 @@ block0:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   addq    %r15, $1, %r15
+;   movq    %r15, %rsi
+;   addq    %rsi, $1, %rsi
+;   movq    %rsi, %r15
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -28,8 +30,14 @@ block0:
 
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
+;   subq    %rsp, $16, %rsp
+;   movq    %rsi, 0(%rsp)
 ; block0:
-;   addq    %r15, $1, %r15
+;   movq    %r15, %rsi
+;   addq    %rsi, $1, %rsi
+;   movq    %rsi, %r15
+;   movq    0(%rsp), %rsi
+;   addq    %rsp, $16, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
