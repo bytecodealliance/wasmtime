@@ -3977,19 +3977,19 @@ fn test_x64_emit() {
     insns.push((
         Inst::xmm_rm_r_blend(SseOpcode::Blendvpd, RegMem::reg(xmm15), w_xmm4),
         "66410F3815E7",
-        "blendvpd %xmm4, %xmm15, %xmm4, <%xmm0>",
+        "blendvpd %xmm4, %xmm15, %xmm4",
     ));
 
     insns.push((
         Inst::xmm_rm_r_blend(SseOpcode::Blendvps, RegMem::reg(xmm2), w_xmm3),
         "660F3814DA",
-        "blendvps %xmm3, %xmm2, %xmm3, <%xmm0>",
+        "blendvps %xmm3, %xmm2, %xmm3",
     ));
 
     insns.push((
         Inst::xmm_rm_r_blend(SseOpcode::Pblendvb, RegMem::reg(xmm12), w_xmm13),
         "66450F3810EC",
-        "pblendvb %xmm13, %xmm12, %xmm13, <%xmm0>",
+        "pblendvb %xmm13, %xmm12, %xmm13",
     ));
 
     // ========================================================

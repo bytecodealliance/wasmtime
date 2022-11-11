@@ -138,7 +138,7 @@ block0(v0: i16x8, v1: i16x8, v2: i16x8):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movdqa  %xmm2, %xmm4
-;   pblendvb %xmm4, %xmm1, %xmm4, <%xmm0>
+;   pblendvb %xmm4, %xmm1, %xmm4
 ;   movdqa  %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -154,7 +154,7 @@ block0(v0: i32x4, v1: f32x4, v2: f32x4):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movdqa  %xmm2, %xmm4
-;   blendvps %xmm4, %xmm1, %xmm4, <%xmm0>
+;   blendvps %xmm4, %xmm1, %xmm4
 ;   movdqa  %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -170,7 +170,7 @@ block0(v0: i64x2, v1: f64x2, v2: f64x2):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movdqa  %xmm2, %xmm4
-;   blendvpd %xmm4, %xmm1, %xmm4, <%xmm0>
+;   blendvpd %xmm4, %xmm1, %xmm4
 ;   movdqa  %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

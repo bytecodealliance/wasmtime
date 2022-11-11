@@ -3,7 +3,7 @@
 use crate::binemit::{Addend, CodeOffset, Reloc, StackMap};
 use crate::ir::{types, ExternalName, LibCall, Opcode, RelSourceLoc, TrapCode, Type};
 use crate::isa::x64::abi::X64ABIMachineSpec;
-use crate::isa::x64::inst::regs::pretty_print_reg;
+use crate::isa::x64::inst::regs::{pretty_print_reg, show_ireg_sized};
 use crate::isa::x64::settings as x64_settings;
 use crate::isa::CallConv;
 use crate::{machinst::*, trace};
@@ -947,11 +947,17 @@ impl PrettyPrint for Inst {
                 dst,
             } => {
                 let src1 = pretty_print_reg(src1.to_reg(), 8, allocs);
-                let mask = pretty_print_reg(mask.to_reg(), 8, allocs);
+                let mask = allocs.next(mask.to_reg());
+                let mask = if mask.is_virtual() {
+                    format!(" <{}>", show_ireg_sized(mask, 8))
+                } else {
+                    debug_assert_eq!(mask, regs::xmm0());
+                    String::new()
+                };
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
                 let src2 = src2.pretty_print(8, allocs);
                 format!(
-                    "{} {}, {}, {}, <{}>",
+                    "{} {}, {}, {}{}",
                     ljustify(op.to_string()),
                     src1,
                     src2,
