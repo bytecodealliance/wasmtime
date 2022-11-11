@@ -84,6 +84,10 @@ pub enum Trap {
     /// When wasm code is configured to consume fuel and it runs out of fuel
     /// then this trap will be raised.
     OutOfFuel,
+
+    /// Used to indicate that a trap was raised by atomic wait operations on non shared memory.
+    AtomicWaitNonSharedMemory,
+    // if adding a variant here be sure to update the `check!` macro below
 }
 
 impl fmt::Display for Trap {
@@ -104,6 +108,7 @@ impl fmt::Display for Trap {
             Interrupt => "interrupt",
             AlwaysTrapAdapter => "degenerate component adapter called",
             OutOfFuel => "all fuel consumed by WebAssembly",
+            AtomicWaitNonSharedMemory => "atomic wait on non-shared memory",
         };
         write!(f, "wasm trap: {desc}")
     }
@@ -217,6 +222,7 @@ pub fn lookup_trap_code(section: &[u8], offset: usize) -> Option<Trap> {
         Interrupt
         AlwaysTrapAdapter
         OutOfFuel
+        AtomicWaitNonSharedMemory
     }
 
     if cfg!(debug_assertions) {

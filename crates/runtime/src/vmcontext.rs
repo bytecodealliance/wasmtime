@@ -12,7 +12,7 @@ use std::ptr::NonNull;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::u32;
 pub use vm_host_func_context::VMHostFuncContext;
-use wasmtime_environ::DefinedMemoryIndex;
+use wasmtime_environ::{DefinedMemoryIndex, Trap};
 
 pub const VMCONTEXT_MAGIC: u32 = u32::from_le_bytes(*b"core");
 
@@ -247,6 +247,30 @@ impl VMMemoryDefinition {
             base: other.base,
             current_length: other.current_length().into(),
         }
+    }
+
+    /// In the configurations where bounds checks were elided in JIT code (because
+    /// we are using static memories with virtual memory guard pages) this manual
+    /// check is here so we don't segfault from Rust. For other configurations,
+    /// these checks are required anyways.
+    pub fn validate_addr(
+        &self,
+        addr: u64,
+        access_size: u64,
+        access_alignment: u64,
+    ) -> Result<*const u8, Trap> {
+        debug_assert!(access_alignment.is_power_of_two());
+        if !(addr % access_alignment == 0) {
+            return Err(Trap::HeapMisaligned);
+        }
+
+        let length = u64::try_from(self.current_length()).unwrap();
+        if !(addr.saturating_add(access_size) < length) {
+            return Err(Trap::MemoryOutOfBounds);
+        }
+
+        // SAFETY: checked above that the address is in bounds
+        Ok(unsafe { self.base.add(addr as usize) })
     }
 }
 

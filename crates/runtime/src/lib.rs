@@ -40,6 +40,7 @@ mod instance;
 mod memory;
 mod mmap;
 mod mmap_vec;
+mod parking_spot;
 mod table;
 mod traphandlers;
 mod vmcontext;

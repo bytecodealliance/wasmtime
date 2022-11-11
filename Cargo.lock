@@ -3700,6 +3700,7 @@ dependencies = [
  "mach",
  "memfd",
  "memoffset",
+ "once_cell",
  "paste",
  "rand 0.8.5",
  "rustix",
