@@ -1364,12 +1364,6 @@
 (decl intcc_without_eq (IntCC) IntCC)
 (extern constructor intcc_without_eq intcc_without_eq)
 
-;;;; Helpers for Getting Particular Physical Registers ;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-;; These should only be used for legalization purposes, when we can't otherwise
-;; rely on something like `Inst::mov_mitosis` to put an operand into the
-;; appropriate physical register for whatever reason.
-
 ;;;; Helpers for determining the register class of a value type ;;;;;;;;;;;;;;;;
 
 (type RegisterClass
