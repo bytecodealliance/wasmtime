@@ -351,14 +351,7 @@ pub unsafe extern "C" fn wasmtime_func_call(
             store.data_mut().wasm_val_storage = params;
             None
         }
-        Ok(Err(trap)) => {
-            if trap.is::<Trap>() {
-                *trap_ret = Box::into_raw(Box::new(wasm_trap_t::new(trap)));
-                None
-            } else {
-                Some(Box::new(wasmtime_error_t::from(trap)))
-            }
-        }
+        Ok(Err(trap)) => store_err(trap, trap_ret),
         Err(panic) => {
             let err = error_from_panic(panic);
             *trap_ret = Box::into_raw(Box::new(wasm_trap_t::new(err)));
@@ -372,10 +365,20 @@ pub unsafe extern "C" fn wasmtime_func_call_unchecked(
     store: CStoreContextMut<'_>,
     func: &Func,
     args_and_results: *mut ValRaw,
-) -> *mut wasm_trap_t {
+    trap_ret: &mut *mut wasm_trap_t,
+) -> Option<Box<wasmtime_error_t>> {
     match func.call_unchecked(store, args_and_results) {
-        Ok(()) => ptr::null_mut(),
-        Err(trap) => Box::into_raw(Box::new(wasm_trap_t::new(trap))),
+        Ok(()) => None,
+        Err(trap) => store_err(trap, trap_ret),
+    }
+}
+
+fn store_err(err: Error, trap_ret: &mut *mut wasm_trap_t) -> Option<Box<wasmtime_error_t>> {
+    if err.is::<Trap>() {
+        *trap_ret = Box::into_raw(Box::new(wasm_trap_t::new(err)));
+        None
+    } else {
+        Some(Box::new(wasmtime_error_t::from(err)))
     }
 }
 
