@@ -29,7 +29,59 @@ impl ExprId {
     }
 }
 
-/// Binding sites are the result of Rust pattern matching.
+/// Expressions construct new values. Rust pattern matching can only destructure existing values,
+/// not call functions or construct new values. So `if-let` and external extractor invocations need
+/// to interrupt pattern matching in order to evaluate a suitable expression. These expressions are
+/// also used when evaluating the right-hand side of a rule.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum Expr {
+    /// A binding from some sequence of pattern matches, used as an expression.
+    Binding {
+        /// Which binding site is being used as an expression?
+        source: BindingId,
+    },
+    /// Evaluates to the given integer literal.
+    ConstInt {
+        /// The constant value.
+        val: i128,
+    },
+    /// Evaluates to the given primitive Rust value.
+    ConstPrim {
+        /// The constant value.
+        val: sema::Sym,
+    },
+    /// One of the arguments to the top-level function.
+    Argument {
+        /// Which of the function's arguments is this?
+        index: TupleIndex,
+    },
+    /// The result of calling an external extractor.
+    Extractor {
+        /// Which extractor should be called?
+        term: sema::TermId,
+        /// What expression should be passed to the extractor?
+        parameter: ExprId,
+    },
+    /// The result of calling an external constructor.
+    Constructor {
+        /// Which constructor should be called?
+        term: sema::TermId,
+        /// What expressions should be passed to the constructor?
+        parameters: Box<[ExprId]>,
+    },
+    /// The result of constructing an enum variant.
+    Variant {
+        /// Which enum type should be constructed?
+        ty: sema::TypeId,
+        /// Which variant of that enum should be constructed?
+        variant: sema::VariantId,
+        /// What expressions should be provided for this variant's fields?
+        fields: Box<[ExprId]>,
+    },
+}
+
+/// Binding sites are the result of Rust pattern matching. This is the dual of an expression: while
+/// expressions build up values, bindings take values apart.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Binding {
     /// A match begins at the result of some expression that produces a Rust value.
@@ -70,39 +122,33 @@ pub enum Binding {
     },
 }
 
-/// Pattern matches which can fail.
+/// Pattern matches which can fail. Some binding sites are the result of successfully matching a
+/// constraint. A rule applies constraints to binding sites to determine whether the rule matches.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Constraint {
     /// The value must match this enum variant.
-    Variant(TupleIndex, sema::TypeId, sema::VariantId),
+    Variant {
+        /// Which enum type is being matched? This is implied by the binding where the constraint is
+        /// applied, but recorded here for convenience.
+        ty: sema::TypeId,
+        /// Which enum variant must this binding site match to satisfy the rule?
+        variant: sema::VariantId,
+        /// Number of fields in this variant of this enum. This is recorded in the constraint for
+        /// convenience, to avoid needing to look up the variant in a [sema::TypeEnv].
+        fields: TupleIndex,
+    },
     /// The value must equal this integer literal.
-    ConstInt(i128),
+    ConstInt {
+        /// The constant value.
+        val: i128,
+    },
     /// The value must equal this Rust primitive value.
-    ConstPrim(sema::Sym),
+    ConstPrim {
+        /// The constant value.
+        val: sema::Sym,
+    },
     /// The value must be an `Option::Some`, from a fallible extractor.
     Some,
-}
-
-/// Expressions construct new values. Rust pattern matching can only destructure existing values,
-/// not call functions or construct new values. So `if-let` and external extractor invocations need
-/// to interrupt pattern matching in order to evaluate a suitable expression. These expressions are
-/// also used when evaluating the right-hand side of a rule.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub enum Expr {
-    /// Evaluates to the given integer literal.
-    ConstInt(i128),
-    /// Evaluates to the given primitive Rust value.
-    ConstPrim(sema::Sym),
-    /// One of the arguments to the top-level function.
-    Argument(TupleIndex),
-    /// A binding from some sequence of pattern matches.
-    Binding(BindingId),
-    /// The result of calling an external extractor.
-    Extractor(sema::TermId, ExprId),
-    /// The result of constructing an enum variant.
-    Variant(sema::TypeId, sema::VariantId, Box<[ExprId]>),
-    /// The result of calling an external constructor.
-    Constructor(sema::TermId, Box<[ExprId]>),
 }
 
 /// A term-rewriting rule. All [BindingId]s and [ExprId]s are only meaningful in the context of the
@@ -298,14 +344,17 @@ impl RuleSetBuilder {
         }
     }
 
-    /// Establish the invariant that a binding site can have a concrete constraint or a nonlinear
-    /// constraint, but not both. This is useful because overlap checking is most effective on
-    /// concrete constraints, and also because it exposes more rule structure for codegen.
+    /// Establish the invariant that a binding site can have a concrete constraint in `constraints`,
+    /// or an equality constraint in `equals`, but not both. This is useful because overlap checking
+    /// is most effective on concrete constraints, and also because it exposes more rule structure
+    /// for codegen.
     ///
     /// If a binding site is constrained and also required to be equal to another binding site, then
     /// copy the constraint and push the equality inside it. For example:
     /// - `(term x @ 2 x)` is rewritten to `(term 2 2)`
-    /// - `(term x @ (T.A _) x)` is rewritten to `(term (T.A y) (T.A y))`
+    /// - `(term x @ (T.A _ _) x)` is rewritten to `(term (T.A y z) (T.A y z))`
+    /// In the latter case, note that every field of `T.A` has been replaced with a fresh variable
+    /// and each of the copies are set equal.
     ///
     /// If several binding sites are supposed to be equal but they each have conflicting constraints
     /// then this rule is unreachable. For example, `(term x @ 2 (and x 3))` requires both arguments
@@ -337,7 +386,12 @@ impl RuleSetBuilder {
                 // member of `set`. Arbitrarily pick one to set all the others equal to. If there
                 // are existing constraints on the new fields, copy those around the new equivalence
                 // classes too.
-                (Constraint::Variant(fields, _, variant), Some((&base, rest))) => {
+                (
+                    Constraint::Variant {
+                        fields, variant, ..
+                    },
+                    Some((&base, rest)),
+                ) => {
                     let base_fields =
                         self.field_bindings(base, fields, variant, &mut deferred_constraints);
                     for &binding in rest {
@@ -352,7 +406,7 @@ impl RuleSetBuilder {
                 }
 
                 // These constraints don't introduce new binding sites.
-                (Constraint::ConstInt(_) | Constraint::ConstPrim(_), _) => {}
+                (Constraint::ConstInt { .. } | Constraint::ConstPrim { .. }, _) => {}
 
                 // Currently, `Some` constraints are only introduced implicitly during the
                 // translation from `sema`, so there's no way to set the corresponding binding
@@ -447,12 +501,12 @@ impl sema::PatternVisitor for RuleSetBuilder {
         }
     }
 
-    fn add_match_int(&mut self, input: Binding, _ty: sema::TypeId, int_val: i128) {
-        self.set_constraint(input, Constraint::ConstInt(int_val));
+    fn add_match_int(&mut self, input: Binding, _ty: sema::TypeId, val: i128) {
+        self.set_constraint(input, Constraint::ConstInt { val });
     }
 
     fn add_match_prim(&mut self, input: Binding, _ty: sema::TypeId, val: sema::Sym) {
-        self.set_constraint(input, Constraint::ConstPrim(val));
+        self.set_constraint(input, Constraint::ConstPrim { val });
     }
 
     fn add_match_variant(
@@ -463,7 +517,14 @@ impl sema::PatternVisitor for RuleSetBuilder {
         variant: sema::VariantId,
     ) -> Vec<Binding> {
         let fields = TupleIndex(arg_tys.len().try_into().unwrap());
-        let source = self.set_constraint(input, Constraint::Variant(fields, input_ty, variant));
+        let source = self.set_constraint(
+            input,
+            Constraint::Variant {
+                fields,
+                ty: input_ty,
+                variant,
+            },
+        );
         (0..fields.0)
             .map(TupleIndex)
             .map(|field| Binding::Variant {
@@ -483,9 +544,14 @@ impl sema::PatternVisitor for RuleSetBuilder {
         infallible: bool,
         _multi: bool,
     ) -> Vec<Binding> {
-        // External extractor invocations are expressions in Rust
+        // ISLE treats external extractors as patterns, but in this representation they're
+        // expressions, because Rust doesn't support calling functions during pattern matching. To
+        // glue the two representations together we have to introduce suitable adapter nodes.
         let input = self.pattern_as_expr(input);
-        let input = self.dedup_expr(Expr::Extractor(term, input));
+        let input = self.dedup_expr(Expr::Extractor {
+            term,
+            parameter: input,
+        });
         let input = self.expr_as_pattern(input);
 
         // If the extractor is fallible, build a pattern and constraint for `Some`
@@ -515,11 +581,11 @@ impl sema::ExprVisitor for RuleSetBuilder {
     type ExprId = ExprId;
 
     fn add_const_int(&mut self, _ty: sema::TypeId, val: i128) -> ExprId {
-        self.dedup_expr(Expr::ConstInt(val))
+        self.dedup_expr(Expr::ConstInt { val })
     }
 
     fn add_const_prim(&mut self, _ty: sema::TypeId, val: sema::Sym) -> ExprId {
-        self.dedup_expr(Expr::ConstPrim(val))
+        self.dedup_expr(Expr::ConstPrim { val })
     }
 
     fn add_create_variant(
@@ -528,11 +594,11 @@ impl sema::ExprVisitor for RuleSetBuilder {
         ty: sema::TypeId,
         variant: sema::VariantId,
     ) -> ExprId {
-        self.dedup_expr(Expr::Variant(
+        self.dedup_expr(Expr::Variant {
             ty,
             variant,
-            inputs.into_iter().map(|(expr, _)| expr).collect(),
-        ))
+            fields: inputs.into_iter().map(|(expr, _)| expr).collect(),
+        })
     }
 
     fn add_construct(
@@ -543,10 +609,10 @@ impl sema::ExprVisitor for RuleSetBuilder {
         _infallible: bool,
         _multi: bool,
     ) -> ExprId {
-        self.dedup_expr(Expr::Constructor(
+        self.dedup_expr(Expr::Constructor {
             term,
-            inputs.into_iter().map(|(expr, _)| expr).collect(),
-        ))
+            parameters: inputs.into_iter().map(|(expr, _)| expr).collect(),
+        })
     }
 }
 
@@ -557,8 +623,8 @@ impl sema::RuleVisitor for RuleSetBuilder {
 
     fn add_arg(&mut self, index: usize, _ty: sema::TypeId) -> Binding {
         // Arguments don't need to be pattern-matched to reference them, so they're expressions
-        let argument = TupleIndex(index.try_into().unwrap());
-        let expr = self.dedup_expr(Expr::Argument(argument));
+        let index = TupleIndex(index.try_into().unwrap());
+        let expr = self.dedup_expr(Expr::Argument { index });
         Binding::Expr { constructor: expr }
     }
 
@@ -574,7 +640,7 @@ impl sema::RuleVisitor for RuleSetBuilder {
     }
 
     fn expr_as_pattern(&mut self, expr: ExprId) -> Binding {
-        if let &Expr::Binding(binding) = &self.rules.exprs[expr.index()] {
+        if let &Expr::Binding { source: binding } = &self.rules.exprs[expr.index()] {
             // Short-circuit wrapping a binding around an expr from another binding
             self.rules.bindings[binding.index()]
         } else {
@@ -588,7 +654,7 @@ impl sema::RuleVisitor for RuleSetBuilder {
             constructor
         } else {
             let binding = self.dedup_binding(pattern);
-            self.dedup_expr(Expr::Binding(binding))
+            self.dedup_expr(Expr::Binding { source: binding })
         }
     }
 }
