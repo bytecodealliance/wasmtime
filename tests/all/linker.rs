@@ -5,6 +5,8 @@ use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::sync::Arc;
 use wasmtime::*;
 
+const FUNC_REF : RefType = RefType { nullable: true, heap_type: HeapType::Func };
+
 #[test]
 fn link_undefined() -> Result<()> {
     let mut store = Store::<()>::default();
@@ -61,11 +63,11 @@ fn link_twice_bad() -> Result<()> {
     assert!(linker.define("m", "", memory.clone()).is_err());
 
     // tables
-    let ty = TableType::new(ValType::FuncRef, 1, None);
+    let ty = TableType::new(FUNC_REF, 1, None);
     let table = Table::new(&mut store, ty, Val::FuncRef(None))?;
     linker.define("t", "", table.clone())?;
     assert!(linker.define("t", "", table.clone()).is_err());
-    let ty = TableType::new(ValType::FuncRef, 2, None);
+    let ty = TableType::new(FUNC_REF, 2, None);
     let table = Table::new(&mut store, ty, Val::FuncRef(None))?;
     assert!(linker.define("t", "", table.clone()).is_err());
     Ok(())

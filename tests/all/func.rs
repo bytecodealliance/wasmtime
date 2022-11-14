@@ -3,6 +3,9 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 use std::sync::Arc;
 use wasmtime::*;
 
+const EXTERN_REF : RefType = RefType { nullable: true, heap_type: HeapType::Extern };
+const FUNC_REF : RefType = RefType { nullable: true, heap_type: HeapType::Func };
+
 #[test]
 fn func_constructors() {
     let mut store = Store::<()>::default();
@@ -114,8 +117,8 @@ fn signatures_match() {
             ValType::I32,
             ValType::I64,
             ValType::I32,
-            ValType::ExternRef,
-            ValType::FuncRef,
+            ValType::Ref(EXTERN_REF),
+            ValType::Ref(FUNC_REF),
         ]
     );
     assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::F64]);
@@ -533,8 +536,8 @@ fn externref_signature_no_reference_types() -> anyhow::Result<()> {
     Func::new(
         &mut store,
         FuncType::new(
-            [ValType::FuncRef, ValType::ExternRef].iter().cloned(),
-            [ValType::FuncRef, ValType::ExternRef].iter().cloned(),
+            [ValType::Ref(FUNC_REF), ValType::Ref(EXTERN_REF)].iter().cloned(),
+            [ValType::Ref(FUNC_REF), ValType::Ref(EXTERN_REF)].iter().cloned(),
         ),
         |_, _, _| Ok(()),
     );

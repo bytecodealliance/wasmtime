@@ -1,10 +1,13 @@
 use anyhow::Result;
 use wasmtime::*;
 
+const EXTERN_REF : RefType = RefType { nullable: true, heap_type: HeapType::Extern };
+const FUNC_REF : RefType = RefType { nullable: true, heap_type: HeapType::Func };
+
 #[test]
 fn get_none() {
     let mut store = Store::<()>::default();
-    let ty = TableType::new(ValType::FuncRef, 1, None);
+    let ty = TableType::new(FUNC_REF, 1, None);
     let table = Table::new(&mut store, ty, Val::FuncRef(None)).unwrap();
     match table.get(&mut store, 0) {
         Some(Val::FuncRef(None)) => {}
@@ -16,7 +19,7 @@ fn get_none() {
 #[test]
 fn fill_wrong() {
     let mut store = Store::<()>::default();
-    let ty = TableType::new(ValType::FuncRef, 1, None);
+    let ty = TableType::new(FUNC_REF, 1, None);
     let table = Table::new(&mut store, ty, Val::FuncRef(None)).unwrap();
     assert_eq!(
         table
@@ -26,7 +29,7 @@ fn fill_wrong() {
         "value does not match table element type"
     );
 
-    let ty = TableType::new(ValType::ExternRef, 1, None);
+    let ty = TableType::new(EXTERN_REF, 1, None);
     let table = Table::new(&mut store, ty, Val::ExternRef(None)).unwrap();
     assert_eq!(
         table
@@ -40,9 +43,9 @@ fn fill_wrong() {
 #[test]
 fn copy_wrong() {
     let mut store = Store::<()>::default();
-    let ty = TableType::new(ValType::FuncRef, 1, None);
+    let ty = TableType::new(FUNC_REF, 1, None);
     let table1 = Table::new(&mut store, ty, Val::FuncRef(None)).unwrap();
-    let ty = TableType::new(ValType::ExternRef, 1, None);
+    let ty = TableType::new(EXTERN_REF, 1, None);
     let table2 = Table::new(&mut store, ty, Val::ExternRef(None)).unwrap();
     assert_eq!(
         Table::copy(&mut store, &table1, 0, &table2, 0, 1)
@@ -55,7 +58,7 @@ fn copy_wrong() {
 #[test]
 fn null_elem_segment_works_with_imported_table() -> Result<()> {
     let mut store = Store::<()>::default();
-    let ty = TableType::new(ValType::FuncRef, 1, None);
+    let ty = TableType::new(FUNC_REF, 1, None);
     let table = Table::new(&mut store, ty, Val::FuncRef(None))?;
     let module = Module::new(
         store.engine(),

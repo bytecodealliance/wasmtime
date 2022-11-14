@@ -3,6 +3,10 @@ use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmtime::*;
 use wasmtime_wasi::sync::WasiCtxBuilder;
 
+const EXTERN_REF : RefType = RefType { nullable: true, heap_type: HeapType::Extern };
+const FUNC_REF : RefType = RefType { nullable: true, heap_type: HeapType::Func };
+
+
 #[test]
 #[should_panic = "cannot use `func_new_async` without enabling async support"]
 fn async_required() {
@@ -199,8 +203,8 @@ fn signatures_match() -> Result<()> {
             ValType::I32,
             ValType::I64,
             ValType::I32,
-            ValType::ExternRef,
-            ValType::FuncRef,
+            ValType::Ref(EXTERN_REF),
+            ValType::Ref(FUNC_REF),
         ]
     );
     assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::F64]);
