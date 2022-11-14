@@ -699,6 +699,7 @@ pub(crate) fn emit(
         }
 
         Inst::MovFromPReg { src, dst } => {
+            allocs.next_fixed_nonallocatable(*src);
             let src: Reg = (*src).into();
             debug_assert!([regs::rsp(), regs::rbp(), regs::pinned_reg()].contains(&src));
             let src = Gpr::new(src).unwrap();
@@ -711,6 +712,7 @@ pub(crate) fn emit(
         Inst::MovToPReg { src, dst } => {
             let src = allocs.next(src.to_reg());
             let src = Gpr::new(src).unwrap();
+            allocs.next_fixed_nonallocatable(*dst);
             let dst: Reg = (*dst).into();
             debug_assert!([regs::rsp(), regs::rbp(), regs::pinned_reg()].contains(&dst));
             let dst = WritableGpr::from_writable_reg(Writable::from_reg(dst)).unwrap();

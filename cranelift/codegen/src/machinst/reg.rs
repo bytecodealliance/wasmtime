@@ -329,10 +329,6 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
         }
     }
 
-    fn is_fixed_nonallocatable(&self, reg: Reg) -> Option<PReg> {
-        pinned_vreg_to_preg(reg.0).filter(|preg| !self.is_allocatable_preg(*preg))
-    }
-
     fn is_allocatable_preg(&self, reg: PReg) -> bool {
         self.allocatable.contains(reg)
     }
@@ -362,20 +358,12 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     /// Add a register use, at the start of the instruction (`Before`
     /// position).
     pub fn reg_use(&mut self, reg: Reg) {
-        if let Some(preg) = self.is_fixed_nonallocatable(reg) {
-            self.reg_fixed_nonallocatable(preg);
-        } else {
-            self.add_operand(Operand::reg_use(reg.into()));
-        }
+        self.add_operand(Operand::reg_use(reg.into()));
     }
 
     /// Add a register use, at the end of the instruction (`After` position).
     pub fn reg_late_use(&mut self, reg: Reg) {
-        if let Some(preg) = self.is_fixed_nonallocatable(reg) {
-            self.reg_fixed_nonallocatable(preg);
-        } else {
-            self.add_operand(Operand::reg_use_at_end(reg.into()));
-        }
+        self.add_operand(Operand::reg_use_at_end(reg.into()));
     }
 
     /// Add multiple register uses.
@@ -389,11 +377,7 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     /// position). Use only when this def will be written after all
     /// uses are read.
     pub fn reg_def(&mut self, reg: Writable<Reg>) {
-        if let Some(preg) = self.is_fixed_nonallocatable(reg.to_reg()) {
-            self.reg_fixed_nonallocatable(preg);
-        } else {
-            self.add_operand(Operand::reg_def(reg.to_reg().into()));
-        }
+        self.add_operand(Operand::reg_def(reg.to_reg().into()));
     }
 
     /// Add multiple register defs.
@@ -408,11 +392,7 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     /// when the def may be written before all uses are read; the
     /// regalloc will ensure that it does not overwrite any uses.
     pub fn reg_early_def(&mut self, reg: Writable<Reg>) {
-        if let Some(preg) = self.is_fixed_nonallocatable(reg.to_reg()) {
-            self.reg_fixed_nonallocatable(preg);
-        } else {
-            self.add_operand(Operand::reg_def_at_start(reg.to_reg().into()));
-        }
+        self.add_operand(Operand::reg_def_at_start(reg.to_reg().into()));
     }
 
     /// Add a register "fixed use", which ties a vreg to a particular
@@ -487,6 +467,19 @@ impl<'a> AllocationConsumer<'a> {
         Self {
             allocs: allocs.iter(),
         }
+    }
+
+    pub fn next_fixed_nonallocatable(&mut self, preg: PReg) {
+        let alloc = self.allocs.next();
+        let alloc = alloc.map(|alloc| {
+            Reg::from(
+                alloc
+                    .as_reg()
+                    .expect("Should not have gotten a stack allocation"),
+            )
+        });
+
+        assert_eq!(preg, alloc.unwrap().to_real_reg().unwrap().into());
     }
 
     pub fn next(&mut self, pre_regalloc_reg: Reg) -> Reg {

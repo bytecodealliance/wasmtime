@@ -1235,6 +1235,7 @@ impl PrettyPrint for Inst {
             }
 
             Inst::MovFromPReg { src, dst } => {
+                allocs.next_fixed_nonallocatable(*src);
                 let src: Reg = (*src).into();
                 let src = regs::show_ireg_sized(src, 8);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
@@ -1243,6 +1244,7 @@ impl PrettyPrint for Inst {
 
             Inst::MovToPReg { src, dst } => {
                 let src = pretty_print_reg(src.to_reg(), 8, allocs);
+                allocs.next_fixed_nonallocatable(*dst);
                 let dst: Reg = (*dst).into();
                 let dst = regs::show_ireg_sized(dst, 8);
                 format!("{} {}, {}", ljustify("movq".to_string()), src, dst)
@@ -1886,14 +1888,14 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_def(dst.to_writable_reg());
         }
         Inst::MovFromPReg { dst, src } => {
-            debug_assert!([regs::rsp(), regs::rbp(), regs::pinned_reg()].contains(&(*src).into()));
             debug_assert!(dst.to_reg().to_reg().is_virtual());
+            collector.reg_fixed_nonallocatable(*src);
             collector.reg_def(dst.to_writable_reg());
         }
         Inst::MovToPReg { dst, src } => {
             debug_assert!(src.to_reg().is_virtual());
-            debug_assert!([regs::rsp(), regs::rbp(), regs::pinned_reg()].contains(&(*dst).into()));
             collector.reg_use(src.to_reg());
+            collector.reg_fixed_nonallocatable(*dst);
         }
         Inst::XmmToGpr { src, dst, .. } => {
             collector.reg_use(src.to_reg());
