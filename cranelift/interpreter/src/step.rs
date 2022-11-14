@@ -743,17 +743,20 @@ where
         ),
         Opcode::IaddIfcin => unimplemented!("IaddIfcin"),
         Opcode::IaddCout => {
-            let sum = Value::add(arg(0)?, arg(1)?)?;
-            let carry = Value::lt(&sum, &arg(0)?)? && Value::lt(&sum, &arg(1)?)?;
+            let carry = arg(0)?.checked_add(arg(1)?)?.is_none();
+            let sum = arg(0)?.add(arg(1)?)?;
             assign_multiple(&[sum, Value::bool(carry, false, types::I8)?])
         }
         Opcode::IaddIfcout => unimplemented!("IaddIfcout"),
         Opcode::IaddCarry => {
             let mut sum = Value::add(arg(0)?, arg(1)?)?;
+            let mut carry = arg(0)?.checked_add(arg(1)?)?.is_none();
+
             if Value::into_bool(arg(2)?)? {
-                sum = Value::add(sum, Value::int(1, ctrl_ty)?)?
+                carry |= sum.clone().checked_add(Value::int(1, ctrl_ty)?)?.is_none();
+                sum = Value::add(sum, Value::int(1, ctrl_ty)?)?;
             }
-            let carry = Value::lt(&sum, &arg(0)?)? && Value::lt(&sum, &arg(1)?)?;
+
             assign_multiple(&[sum, Value::bool(carry, false, types::I8)?])
         }
         Opcode::IaddIfcarry => unimplemented!("IaddIfcarry"),
@@ -1153,6 +1156,7 @@ where
                         let x = u128::min(x as u128, max as u128);
                         x as i128
                     };
+
                     V::int(x, ctrl_ty.lane_type())
                 }
             };
