@@ -55,7 +55,7 @@ pub mod wasmtime_crate {
 /// The region returned by `base` must not only be valid, however, but it must
 /// be valid for "a period of time before the guest is reentered". This isn't
 /// exactly well defined but the general idea is that `GuestMemory` is allowed
-/// to change under our feet to accomodate instructions like `memory.grow` or
+/// to change under our feet to accommodate instructions like `memory.grow` or
 /// other guest modifications. Memory, however, cannot be changed if the guest
 /// is not reentered or if no explicitly action is taken to modify the guest
 /// memory.
