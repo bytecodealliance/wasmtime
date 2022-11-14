@@ -564,7 +564,7 @@ pub trait ABIMachineSpec {
         opcode: ir::Opcode,
         tmp: Writable<Reg>,
         callee_conv: isa::CallConv,
-        callee_conv: isa::CallConv,
+        caller_conv: isa::CallConv,
     ) -> SmallVec<[Self::I; 2]>;
 
     /// Generate a memcpy invocation. Used to set up struct
