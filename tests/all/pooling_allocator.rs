@@ -581,14 +581,10 @@ fn drop_externref_global_during_module_init() -> Result<()> {
 
 #[test]
 fn switch_image_and_non_image() -> Result<()> {
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(1);
     let mut c = Config::new();
-    c.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        instance_limits: InstanceLimits {
-            count: 1,
-            ..Default::default()
-        },
-        strategy: Default::default(),
-    });
+    c.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     let engine = Engine::new(&c)?;
     let module1 = Module::new(
         &engine,
@@ -683,15 +679,10 @@ configured maximum of 16 bytes; breakdown of allocation requirement:
 
 #[test]
 fn zero_memory_pages_disallows_oob() -> Result<()> {
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(1).instance_memory_pages(0);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: 1,
-            memory_pages: 0,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
 
     let engine = Engine::new(&config)?;
     let module = Module::new(
