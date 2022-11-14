@@ -481,6 +481,27 @@ unexpected usage of the filesystem or things like that and otherwise is mostly
 plumbing for all the integer operations in core wasm.
 """
 
+[[audits.wasmi_core]]
+who = "Robin Freyler <robin.freyler@gmail.com>"
+criteria = "safe-to-run"
+version = "0.5.0"
+notes = "See notes for version 0.4.0"
+
+[[audits.wasmi]]
+who = "Robin Freyler <robin.freyler@gmail.com>"
+criteria = "safe-to-run"
+version = "0.20.0"
+notes = """
+I am the author of this crate. It contains unsafe Rust code.
+However, the crate does not read or write data from any parts of the filesystem,
+it does not install software upon compilation e.g. via build scripts,
+it does not connect to network endpoints and does not misuse system resources.
+
+If any of the above happens it is either by the user explicitly telling the
+crate to do so (it is an interpreter) or due to a bug or other unintended
+behavior.
+"""
+
 [[audits.wasmparser]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
