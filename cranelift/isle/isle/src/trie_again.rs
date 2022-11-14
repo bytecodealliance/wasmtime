@@ -1,4 +1,5 @@
-//! A strongly-normalizing intermediate representation for ISLE rules.
+//! A strongly-normalizing intermediate representation for ISLE rules. This representation is chosen
+//! to closely reflect the operations we can implement in Rust, to make code generation easy.
 use crate::error::{Error, Source, Span};
 use crate::lexer::Pos;
 use crate::sema::{self, RuleVisitor};
@@ -499,6 +500,9 @@ impl RuleSetBuilder {
 }
 
 impl sema::PatternVisitor for RuleSetBuilder {
+    /// The "identifier" this visitor uses for binding sites is a [Binding], not a [BindingId].
+    /// Either choice would work but this approach avoids adding bindings to the [RuleSet] if they
+    /// are never used in any rule.
     type PatternId = Binding;
 
     fn add_match_equal(&mut self, a: Binding, b: Binding, _ty: sema::TypeId) {
@@ -587,6 +591,9 @@ impl sema::PatternVisitor for RuleSetBuilder {
 }
 
 impl sema::ExprVisitor for RuleSetBuilder {
+    /// Unlike the `PatternVisitor` implementation, we use [ExprId] to identify intermediate
+    /// expressions, not [Expr]. Visited expressions are always used so we might as well deduplicate
+    /// them eagerly.
     type ExprId = ExprId;
 
     fn add_const_int(&mut self, _ty: sema::TypeId, val: i128) -> ExprId {
