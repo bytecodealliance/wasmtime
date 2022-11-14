@@ -1,16 +1,20 @@
 #![allow(unused_variables)] // TODO: remove this when more things are implemented
 
-wit_bindgen_guest_rust::import!({
-    paths: [
-        "wit/wasi-clocks.wit.md",
-        "wit/wasi-default-clocks.wit.md",
-        "wit/wasi-filesystem.wit.md",
-        "wit/wasi-logging.wit.md",
-        "wit/wasi-poll.wit.md",
-        "wit/wasi-random.wit.md"
-    ],
+wit_bindgen_guest_rust::generate!({
+    import: "wit/wasi-clocks.wit.md",
+    import: "wit/wasi-default-clocks.wit.md",
+    import: "wit/wasi-filesystem.wit.md",
+    import: "wit/wasi-logging.wit.md",
+    import: "wit/wasi-poll.wit.md",
+    import: "wit/wasi-random.wit.md",
+    default: "wit/command.wit.md",
+    name: "wasi_command",
+    no_std,
     raw_strings,
-    unchecked
+    unchecked,
+    // The generated definition of command will pull in std, so we are defining it
+    // manually below instead
+    skip: ["command"],
 });
 
 use core::arch::wasm32::unreachable;
@@ -18,6 +22,25 @@ use core::mem::{forget, size_of};
 use core::ptr::{copy_nonoverlapping, null_mut};
 use core::slice;
 use wasi::*;
+
+#[export_name = "command"]
+unsafe extern "C" fn command_entrypoint(stdin: i32, stdout: i32, _args_ptr: i32, _args_len: i32) {
+    *Descriptor::get(0) = Descriptor::File(File {
+        fd: stdin as u32,
+        position: 0,
+    });
+    *Descriptor::get(1) = Descriptor::File(File {
+        fd: stdout as u32,
+        position: 0,
+    });
+    *Descriptor::get(2) = Descriptor::Log;
+
+    #[link(wasm_import_module = "__main_module__")]
+    extern "C" {
+        fn _start();
+    }
+    _start()
+}
 
 /// The maximum path length. WASI doesn't explicitly guarantee this, but all
 /// popular OS's have a `PATH_MAX` of at most 4096, so that's enough for this
@@ -56,7 +79,7 @@ unsafe fn register_buffer(buf: *mut u8, buf_len: usize) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn cabi_realloc(
+pub unsafe extern "C" fn cabi_import_realloc(
     old_ptr: *mut u8,
     old_size: usize,
     _align: usize,
@@ -74,6 +97,26 @@ pub unsafe extern "C" fn cabi_realloc(
         unreachable();
     }
     ptr
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn cabi_export_realloc(
+    old_ptr: *mut u8,
+    old_size: usize,
+    align: usize,
+    new_size: usize,
+) -> *mut u8 {
+    if !old_ptr.is_null() {
+        unreachable();
+    }
+    if new_size > PAGE_SIZE {
+        unreachable();
+    }
+    let grew = core::arch::wasm32::memory_grow(0, 1);
+    if grew == usize::MAX {
+        unreachable();
+    }
+    (grew * PAGE_SIZE) as *mut u8
 }
 
 /// Read command-line argument data.
@@ -174,7 +217,7 @@ pub unsafe extern "C" fn fd_close(fd: Fd) -> Errno {
 #[no_mangle]
 pub unsafe extern "C" fn fd_datasync(fd: Fd) -> Errno {
     match Descriptor::get(fd) {
-        Descriptor::File(file) => match file.fd.datasync() {
+        Descriptor::File(file) => match wasi_filesystem::datasync(file.fd) {
             Ok(()) => ERRNO_SUCCESS,
             Err(err) => errno_from_wasi_filesystem(err),
         },
@@ -189,7 +232,7 @@ pub unsafe extern "C" fn fd_datasync(fd: Fd) -> Errno {
 pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
     match Descriptor::get(fd) {
         Descriptor::File(file) => {
-            let info = match file.fd.info() {
+            let info = match wasi_filesystem::fd_info(file.fd) {
                 Ok(info) => info,
                 Err(err) => return errno_from_wasi_filesystem(err),
             };
@@ -364,7 +407,7 @@ pub unsafe extern "C" fn fd_read(
 
             // We can cast between a `usize`-sized value and `usize`.
             let read_len = len as _;
-            let result = file.fd.pread(read_len, file.position);
+            let result = wasi_filesystem::pread(file.fd, read_len, file.position);
             match result {
                 Ok(data) => {
                     assert_eq!(data.as_ptr(), ptr);
@@ -433,7 +476,7 @@ pub unsafe extern "C" fn fd_seek(
                 WHENCE_END => wasi_filesystem::SeekFrom::End(offset as _),
                 _ => return ERRNO_INVAL,
             };
-            match file.fd.seek(from) {
+            match wasi_filesystem::seek(file.fd, from) {
                 Ok(result) => {
                     *newoffset = result;
                     ERRNO_SUCCESS
@@ -451,7 +494,7 @@ pub unsafe extern "C" fn fd_seek(
 #[no_mangle]
 pub unsafe extern "C" fn fd_sync(fd: Fd) -> Errno {
     match Descriptor::get(fd) {
-        Descriptor::File(file) => match file.fd.sync() {
+        Descriptor::File(file) => match wasi_filesystem::sync(file.fd) {
             Ok(()) => ERRNO_SUCCESS,
             Err(err) => errno_from_wasi_filesystem(err),
         },
@@ -465,7 +508,7 @@ pub unsafe extern "C" fn fd_sync(fd: Fd) -> Errno {
 #[no_mangle]
 pub unsafe extern "C" fn fd_tell(fd: Fd, offset: *mut Filesize) -> Errno {
     match Descriptor::get(fd) {
-        Descriptor::File(file) => match file.fd.tell() {
+        Descriptor::File(file) => match wasi_filesystem::tell(file.fd) {
             Ok(result) => {
                 *offset = result;
                 ERRNO_SUCCESS
@@ -501,9 +544,8 @@ pub unsafe extern "C" fn fd_write(
 
     match Descriptor::get(fd) {
         Descriptor::File(file) => {
-            let result = file
-                .fd
-                .pwrite(slice::from_raw_parts(ptr, len), file.position);
+            let result =
+                wasi_filesystem::pwrite(file.fd, slice::from_raw_parts(ptr, len), file.position);
 
             match result {
                 Ok(bytes) => {
@@ -612,8 +654,6 @@ pub unsafe extern "C" fn path_readlink(
     buf_len: Size,
     bufused: *mut Size,
 ) -> Errno {
-    let fd = wasi_filesystem::Descriptor::from_raw(fd as _);
-
     let path = slice::from_raw_parts(path_ptr, path_len);
 
     // If the user gave us a buffer shorter than `PATH_MAX`, it may not be
@@ -625,7 +665,7 @@ pub unsafe extern "C" fn path_readlink(
 
     register_buffer(buf, buf_len);
 
-    let result = fd.readlink_at(path);
+    let result = wasi_filesystem::readlink_at(fd, path);
 
     let return_value = match &result {
         Ok(path) => {
@@ -659,7 +699,7 @@ unsafe fn path_readlink_slow(
 
     register_buffer(buffer.as_mut_ptr().cast(), PATH_MAX);
 
-    let result = fd.readlink_at(path);
+    let result = wasi_filesystem::readlink_at(fd, path);
 
     let return_value = match &result {
         Ok(path) => {
