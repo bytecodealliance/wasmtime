@@ -321,6 +321,7 @@ impl RuleSetBuilder {
         self.current_rule.pos = rule.pos;
         self.current_rule.prio = rule.prio;
         self.current_rule.result = rule.visit(self, termenv);
+        self.normalize_equivalence_classes();
         let rule = std::mem::take(&mut self.current_rule);
 
         if self.unreachable.is_empty() {
@@ -359,8 +360,23 @@ impl RuleSetBuilder {
     /// If several binding sites are supposed to be equal but they each have conflicting constraints
     /// then this rule is unreachable. For example, `(term x @ 2 (and x 3))` requires both arguments
     /// to be equal but also requires them to match both 2 and 3, which can't happen for any input.
-    fn set_constraint_on_class(&mut self, input: BindingId, constraint: Constraint) {
-        let mut deferred_constraints = vec![(input, constraint)];
+    ///
+    /// We could do this incrementally, while building the rule. The implementation is nearly
+    /// identical but, having tried both ways, it's slightly easier to think about this as a
+    /// separate pass. Also, batching up this work should be slightly faster if there are multiple
+    /// binding sites set equal to each other.
+    fn normalize_equivalence_classes(&mut self) {
+        // First, find all the constraints that need to be copied to other binding sites in their
+        // respective equivalence classes. Note: do not remove these constraints here! Yes, we'll
+        // put them back later, but we rely on still having them around so that
+        // `set_constraint_or_error` can detect conflicting constraints.
+        let mut deferred_constraints = Vec::new();
+        for (&binding, &constraint) in self.current_rule.constraints.iter() {
+            if let Some(root) = self.current_rule.equals.find_mut(binding) {
+                deferred_constraints.push((root, constraint));
+            }
+        }
+
         // Pick one constraint and propagate it through its equivalence class. If there are no
         // errors then it doesn't matter what order we do this in, because that means that any
         // redundant constraints on an equivalence class were equal. We can write equal values into
@@ -416,9 +432,7 @@ impl RuleSetBuilder {
             }
 
             for binding in set {
-                if let Err(e) = self.current_rule.set_constraint(binding, constraint) {
-                    self.unreachable.push(e);
-                }
+                self.set_constraint_or_error(binding, constraint);
             }
         }
     }
@@ -473,12 +487,14 @@ impl RuleSetBuilder {
 
     fn set_constraint(&mut self, input: Binding, constraint: Constraint) -> BindingId {
         let input = self.dedup_binding(input);
+        self.set_constraint_or_error(input, constraint);
+        input
+    }
+
+    fn set_constraint_or_error(&mut self, input: BindingId, constraint: Constraint) {
         if let Err(e) = self.current_rule.set_constraint(input, constraint) {
             self.unreachable.push(e);
-        } else {
-            self.set_constraint_on_class(input, constraint);
         }
-        input
     }
 }
 
@@ -491,13 +507,6 @@ impl sema::PatternVisitor for RuleSetBuilder {
         // If both bindings represent the same binding site, they're implicitly equal.
         if a != b {
             self.current_rule.equals.merge(a, b);
-            // If either binding had a constraint, copy that constraint to the whole equivalence
-            // class (including the other binding).
-            if let Some(constraint) = self.current_rule.get_constraint(a) {
-                self.set_constraint_on_class(a, constraint);
-            } else if let Some(constraint) = self.current_rule.get_constraint(b) {
-                self.set_constraint_on_class(b, constraint);
-            }
         }
     }
 
