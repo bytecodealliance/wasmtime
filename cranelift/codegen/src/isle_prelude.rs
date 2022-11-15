@@ -91,6 +91,11 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn u64_is_odd(&mut self, x: u64) -> Option<bool> {
+            Some(x & 1 == 1)
+        }
+
+        #[inline]
         fn u64_sextend_u32(&mut self, x: u64) -> Option<u64> {
             Some(x as u32 as i32 as i64 as u64)
         }
