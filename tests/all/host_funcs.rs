@@ -430,7 +430,7 @@ fn call_wasm_many_args() -> Result<()> {
     )?;
 
     let typed_run = instance
-        .get_typed_func::<(i32, i32, i32, i32, i32, i32, i32, i32, i32, i32), (), _>(
+        .get_typed_func::<(i32, i32, i32, i32, i32, i32, i32, i32, i32, i32), ()>(
             &mut store, "run",
         )?;
     typed_run.call(&mut store, (1, 2, 3, 4, 5, 6, 7, 8, 9, 10))?;
@@ -499,19 +499,19 @@ fn new_from_signature() -> Result<()> {
         .unwrap()
         .into_func()
         .unwrap();
-    assert!(f.typed::<(), (), _>(&store).is_ok());
-    assert!(f.typed::<(), i32, _>(&store).is_err());
-    assert!(f.typed::<i32, (), _>(&store).is_err());
+    assert!(f.typed::<(), ()>(&store).is_ok());
+    assert!(f.typed::<(), i32>(&store).is_err());
+    assert!(f.typed::<i32, ()>(&store).is_err());
 
     let f = linker
         .get(&mut store, "", "f2")
         .unwrap()
         .into_func()
         .unwrap();
-    assert!(f.typed::<(), (), _>(&store).is_err());
-    assert!(f.typed::<(), i32, _>(&store).is_err());
-    assert!(f.typed::<i32, (), _>(&store).is_err());
-    assert!(f.typed::<i32, f64, _>(&store).is_ok());
+    assert!(f.typed::<(), ()>(&store).is_err());
+    assert!(f.typed::<(), i32>(&store).is_err());
+    assert!(f.typed::<i32, ()>(&store).is_err());
+    assert!(f.typed::<i32, f64>(&store).is_ok());
 
     Ok(())
 }
@@ -549,7 +549,7 @@ fn call_wrapped_func() -> Result<()> {
         &[Val::I32(1), Val::I64(2), 3.0f32.into(), 4.0f64.into()],
         &mut [],
     )?;
-    f.typed::<(i32, i64, f32, f64), (), _>(&store)?
+    f.typed::<(i32, i64, f32, f64), ()>(&store)?
         .call(&mut store, (1, 2, 3.0, 4.0))?;
 
     let f = linker
@@ -559,7 +559,7 @@ fn call_wrapped_func() -> Result<()> {
         .unwrap();
     f.call(&mut store, &[], &mut results)?;
     assert_eq!(results[0].unwrap_i32(), 1);
-    assert_eq!(f.typed::<(), i32, _>(&store)?.call(&mut store, ())?, 1);
+    assert_eq!(f.typed::<(), i32>(&store)?.call(&mut store, ())?, 1);
 
     let f = linker
         .get(&mut store, "", "f3")
@@ -568,7 +568,7 @@ fn call_wrapped_func() -> Result<()> {
         .unwrap();
     f.call(&mut store, &[], &mut results)?;
     assert_eq!(results[0].unwrap_i64(), 2);
-    assert_eq!(f.typed::<(), i64, _>(&store)?.call(&mut store, ())?, 2);
+    assert_eq!(f.typed::<(), i64>(&store)?.call(&mut store, ())?, 2);
 
     let f = linker
         .get(&mut store, "", "f4")
@@ -577,7 +577,7 @@ fn call_wrapped_func() -> Result<()> {
         .unwrap();
     f.call(&mut store, &[], &mut results)?;
     assert_eq!(results[0].unwrap_f32(), 3.0);
-    assert_eq!(f.typed::<(), f32, _>(&store)?.call(&mut store, ())?, 3.0);
+    assert_eq!(f.typed::<(), f32>(&store)?.call(&mut store, ())?, 3.0);
 
     let f = linker
         .get(&mut store, "", "f5")
@@ -586,7 +586,7 @@ fn call_wrapped_func() -> Result<()> {
         .unwrap();
     f.call(&mut store, &[], &mut results)?;
     assert_eq!(results[0].unwrap_f64(), 4.0);
-    assert_eq!(f.typed::<(), f64, _>(&store)?.call(&mut store, ())?, 4.0);
+    assert_eq!(f.typed::<(), f64>(&store)?.call(&mut store, ())?, 4.0);
 
     Ok(())
 }
@@ -714,7 +714,7 @@ fn wasi_imports() -> Result<()> {
     let mut store = Store::new(&engine, WasiCtxBuilder::new().build());
     let instance = linker.instantiate(&mut store, &module)?;
 
-    let start = instance.get_typed_func::<(), (), _>(&mut store, "_start")?;
+    let start = instance.get_typed_func::<(), ()>(&mut store, "_start")?;
     let exit = start
         .call(&mut store, ())
         .unwrap_err()

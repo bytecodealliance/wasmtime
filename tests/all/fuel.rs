@@ -170,9 +170,7 @@ fn host_function_consumes_all() {
     });
 
     let instance = Instance::new(&mut store, &module, &[func.into()]).unwrap();
-    let export = instance
-        .get_typed_func::<(), (), _>(&mut store, "")
-        .unwrap();
+    let export = instance.get_typed_func::<(), ()>(&mut store, "").unwrap();
     let trap = export.call(&mut store, ()).unwrap_err();
     assert!(
         format!("{trap:?}").contains("all fuel consumed"),

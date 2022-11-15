@@ -53,7 +53,7 @@ pub fn check_stacks(stacks: Stacks) -> usize {
         .expect("should instantiate okay");
 
     let run = instance
-        .get_typed_func::<(u32,), (), _>(&mut store, "run")
+        .get_typed_func::<(u32,), ()>(&mut store, "run")
         .expect("should export `run` function");
 
     let mut max_stack_depth = 0;
@@ -62,7 +62,7 @@ pub fn check_stacks(stacks: Stacks) -> usize {
         if let Err(trap) = run.call(&mut store, (input.into(),)) {
             log::debug!("trap: {:?}", trap);
             let get_stack = instance
-                .get_typed_func::<(), (u32, u32), _>(&mut store, "get_stack")
+                .get_typed_func::<(), (u32, u32)>(&mut store, "get_stack")
                 .expect("should export `get_stack` function as expected");
 
             let (ptr, len) = get_stack

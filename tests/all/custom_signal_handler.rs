@@ -47,7 +47,7 @@ mod tests {
 
     fn invoke_export(store: &mut Store<()>, instance: Instance, func_name: &str) -> Result<i32> {
         let ret = instance
-            .get_typed_func::<(), i32, _>(&mut *store, func_name)?
+            .get_typed_func::<(), i32>(&mut *store, func_name)?
             .call(store, ())?;
         Ok(ret)
     }
@@ -175,7 +175,7 @@ mod tests {
 
         // these invoke wasmtime_call_trampoline from callable.rs
         {
-            let read_func = instance.get_typed_func::<(), i32, _>(&mut store, "read")?;
+            let read_func = instance.get_typed_func::<(), i32>(&mut store, "read")?;
             println!("calling read...");
             let result = read_func
                 .call(&mut store, ())
@@ -185,7 +185,7 @@ mod tests {
 
         {
             let read_out_of_bounds_func =
-                instance.get_typed_func::<(), i32, _>(&mut store, "read_out_of_bounds")?;
+                instance.get_typed_func::<(), i32>(&mut store, "read_out_of_bounds")?;
             println!("calling read_out_of_bounds...");
             let trap = read_out_of_bounds_func
                 .call(&mut store, ())

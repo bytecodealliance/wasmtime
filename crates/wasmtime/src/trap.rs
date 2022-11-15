@@ -54,12 +54,12 @@ use wasmtime_jit::{demangle_function_name, demangle_function_name_or_index};
 /// let mut store = Store::new(&engine, ());
 /// let instance = Instance::new(&mut store, &module, &[])?;
 ///
-/// let trap = instance.get_typed_func::<(), (), _>(&mut store, "trap")?;
+/// let trap = instance.get_typed_func::<(), ()>(&mut store, "trap")?;
 /// let error = trap.call(&mut store, ()).unwrap_err();
 /// assert_eq!(*error.downcast_ref::<Trap>().unwrap(), Trap::UnreachableCodeReached);
 /// assert!(error.root_cause().is::<Trap>());
 ///
-/// let overflow = instance.get_typed_func::<(), (), _>(&mut store, "overflow")?;
+/// let overflow = instance.get_typed_func::<(), ()>(&mut store, "overflow")?;
 /// let error = overflow.call(&mut store, ()).unwrap_err();
 /// assert_eq!(*error.downcast_ref::<Trap>().unwrap(), Trap::StackOverflow);
 /// # Ok(())
@@ -266,7 +266,7 @@ impl std::error::Error for Trap {}
 /// )?;
 /// let mut store = Store::new(&engine, ());
 /// let instance = Instance::new(&mut store, &module, &[])?;
-/// let func = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
+/// let func = instance.get_typed_func::<(), ()>(&mut store, "run")?;
 /// let error = func.call(&mut store, ()).unwrap_err();
 /// let bt = error.downcast_ref::<WasmBacktrace>().unwrap();
 /// let frames = bt.frames();

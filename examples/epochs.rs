@@ -36,7 +36,7 @@ fn main() -> Result<(), Error> {
 
     // Invoke `fibonacci` with a large argument such that a normal
     // invocation would take many seconds to complete.
-    let fibonacci = instance.get_typed_func::<i32, i32, _>(&mut store, "fibonacci")?;
+    let fibonacci = instance.get_typed_func::<i32, i32>(&mut store, "fibonacci")?;
     match fibonacci.call(&mut store, 100) {
         Ok(_) => panic!("Somehow we computed recursive fib(100) in less than a second!"),
         Err(_) => {

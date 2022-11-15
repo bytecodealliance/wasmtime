@@ -55,7 +55,7 @@ fn duration_of_call(engine: &Engine, module: &Module) -> Duration {
     let mut store = Store::new(engine, ());
     let inst = Instance::new(&mut store, module, &[]).expect("instantiate");
     let f = inst.get_func(&mut store, "f").expect("get f");
-    let f = f.typed::<(), (), _>(&store).expect("type f");
+    let f = f.typed::<(), ()>(&store).expect("type f");
 
     let call = Instant::now();
     f.call(&mut store, ()).expect("call f");
