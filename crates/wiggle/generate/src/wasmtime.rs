@@ -118,7 +118,7 @@ fn generate_func(
         };
         let (mem , ctx) = mem.data_and_store_mut(&mut caller);
         let ctx = get_cx(ctx);
-        let mem = #rt::wasmtime::WasmtimeGuestMemory::new(mem, false);
+        let mem = #rt::wasmtime::WasmtimeGuestMemory::new(mem);
         Ok(<#ret_ty>::from(#abi_func(ctx, &mem #(, #arg_names)*) #await_ ?))
     };
 
