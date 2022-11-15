@@ -212,12 +212,13 @@ impl MemArea {
 #[cfg(test)]
 mod test {
     use super::*;
+
     #[test]
     fn hostmemory_is_aligned() {
         let h = HostMemory::new();
-        assert_eq!(h.base().0 as usize % 4096, 0);
+        assert_eq!(h.base().as_ptr() as usize % 4096, 0);
         let h = Box::new(h);
-        assert_eq!(h.base().0 as usize % 4096, 0);
+        assert_eq!(h.base().as_ptr() as usize % 4096, 0);
     }
 
     #[test]
