@@ -85,32 +85,6 @@ pub(super) fn define_struct(
         (quote!(), quote!(, PartialEq))
     };
 
-    let transparent = if s.is_transparent() {
-        let member_validate = s.member_layout().into_iter().map(|ml| {
-            let offset = ml.offset;
-            let typename = names.type_ref(&ml.member.tref, anon_lifetime());
-            quote! {
-                // SAFETY: caller has validated bounds and alignment of `location`.
-                // member_layout gives correctly-aligned pointers inside that area.
-                #typename::validate(
-                    unsafe { (location as *mut u8).add(#offset) as *mut _ }
-                )?;
-            }
-        });
-
-        quote! {
-            unsafe impl<'a> #rt::GuestTypeTransparent<'a> for #ident {
-                #[inline]
-                fn validate(location: *mut #ident) -> Result<(), #rt::GuestError> {
-                    #(#member_validate)*
-                    Ok(())
-                }
-            }
-        }
-    } else {
-        quote!()
-    };
-
     quote! {
         #[derive(Clone, Debug #extra_derive)]
         pub struct #ident #struct_lifetime {
@@ -136,8 +110,6 @@ pub(super) fn define_struct(
                 Ok(())
             }
         }
-
-        #transparent
     }
 }
 

@@ -1,5 +1,7 @@
 use anyhow::{bail, Result};
+use std::cell::UnsafeCell;
 use std::fmt;
+use std::mem;
 use std::slice;
 use std::str;
 use std::sync::Arc;
@@ -97,56 +99,7 @@ pub unsafe trait GuestMemory: Send + Sync {
     /// Note that there are safety guarantees about this method that
     /// implementations must uphold, and for more details see the
     /// [`GuestMemory`] documentation.
-    fn base(&self) -> (*mut u8, u32);
-
-    /// Validates a guest-relative pointer given various attributes, and returns
-    /// the corresponding host pointer.
-    ///
-    /// * `offset` - this is the guest-relative pointer, an offset from the
-    ///   base.
-    /// * `align` - this is the desired alignment of the guest pointer, and if
-    ///   successful the host pointer will be guaranteed to have this alignment.
-    /// * `len` - this is the number of bytes, after `offset`, that the returned
-    ///   pointer must be valid for.
-    ///
-    /// This function will guarantee that the returned pointer is in-bounds of
-    /// `base`, *at this time*, for `len` bytes and has alignment `align`. If
-    /// any guarantees are not upheld then an error will be returned.
-    ///
-    /// Note that the returned pointer is an unsafe pointer. This is not safe to
-    /// use in general because guest memory can be relocated. Additionally the
-    /// guest may be modifying/reading memory as well. Consult the
-    /// [`GuestMemory`] documentation for safety information about using this
-    /// returned pointer.
-    fn validate_size_align(
-        &self,
-        offset: u32,
-        align: usize,
-        len: u32,
-    ) -> Result<*mut u8, GuestError> {
-        let (base_ptr, base_len) = self.base();
-        let region = Region { start: offset, len };
-
-        // Figure out our pointer to the start of memory
-        let start = match (base_ptr as usize).checked_add(offset as usize) {
-            Some(ptr) => ptr,
-            None => return Err(GuestError::PtrOverflow),
-        };
-        // and use that to figure out the end pointer
-        let end = match start.checked_add(len as usize) {
-            Some(ptr) => ptr,
-            None => return Err(GuestError::PtrOverflow),
-        };
-        // and then verify that our end doesn't reach past the end of our memory
-        if end > (base_ptr as usize) + (base_len as usize) {
-            return Err(GuestError::PtrOutOfBounds(region));
-        }
-        // and finally verify that the alignment is correct
-        if start % align != 0 {
-            return Err(GuestError::PtrNotAligned(region, align as u32));
-        }
-        Ok(start as *mut u8)
-    }
+    fn base(&self) -> &[UnsafeCell<u8>];
 
     /// Convenience method for creating a `GuestPtr` at a particular offset.
     ///
@@ -200,6 +153,54 @@ pub unsafe trait GuestMemory: Send + Sync {
     }
 }
 
+/// Validates a guest-relative pointer given various attributes, and returns
+/// the corresponding host pointer.
+///
+/// * `mem` - this is the guest memory being accessed.
+/// * `offset` - this is the guest-relative pointer, an offset from the
+///   base.
+/// * `len` - this is the number of length, in units of `T`, to return
+///   in the resulting slice.
+///
+/// If the parameters are valid then this function will return a slice into
+/// `mem` for units of `T`, assuming everything is in-bounds and properly
+/// aligned. Additionally the byte-based `Region` is returned, used for borrows
+/// later on.
+fn validate_size_align<'a, T: GuestTypeTransparent<'a>>(
+    mem: &'a dyn GuestMemory,
+    offset: u32,
+    len: u32,
+) -> Result<(&[UnsafeCell<T>], Region), GuestError> {
+    let base = mem.base();
+    let byte_len = len
+        .checked_mul(T::guest_size())
+        .ok_or(GuestError::PtrOverflow)?;
+    let region = Region {
+        start: offset,
+        len: byte_len,
+    };
+    let offset = usize::try_from(offset)?;
+    let byte_len = usize::try_from(byte_len)?;
+
+    // Slice the input region to the byte range that we're interested in.
+    let bytes = base
+        .get(offset..)
+        .and_then(|s| s.get(..byte_len))
+        .ok_or(GuestError::PtrOutOfBounds(region))?;
+
+    // ... and then align it to `T`, failing if either the head or tail slices
+    // are nonzero in length. This `unsafe` here is from the standard library
+    // and should be ok since the input slice is `UnsafeCell<u8>` and the output
+    // slice is `UnsafeCell<T>`, meaning the only guarantee of the output is
+    // that it's valid addressable memory, still unsafe to actually access.
+    assert!(mem::align_of::<T>() <= T::guest_align());
+    let (start, mid, end) = unsafe { bytes.align_to() };
+    if start.len() > 0 || end.len() > 0 {
+        return Err(GuestError::PtrNotAligned(region, T::guest_align() as u32));
+    }
+    Ok((mid, region))
+}
+
 /// A handle to a borrow on linear memory. It is produced by `{mut, shared}_borrow` and
 /// consumed by `{mut, shared}_unborrow`. Only the `GuestMemory` impl should ever construct
 /// a `BorrowHandle` or inspect its contents.
@@ -208,7 +209,7 @@ pub struct BorrowHandle(pub usize);
 
 // Forwarding trait implementations to the original type
 unsafe impl<'a, T: ?Sized + GuestMemory> GuestMemory for &'a T {
-    fn base(&self) -> (*mut u8, u32) {
+    fn base(&self) -> &[UnsafeCell<u8>] {
         T::base(self)
     }
     fn has_outstanding_borrows(&self) -> bool {
@@ -235,7 +236,7 @@ unsafe impl<'a, T: ?Sized + GuestMemory> GuestMemory for &'a T {
 }
 
 unsafe impl<'a, T: ?Sized + GuestMemory> GuestMemory for &'a mut T {
-    fn base(&self) -> (*mut u8, u32) {
+    fn base(&self) -> &[UnsafeCell<u8>] {
         T::base(self)
     }
     fn has_outstanding_borrows(&self) -> bool {
@@ -262,7 +263,7 @@ unsafe impl<'a, T: ?Sized + GuestMemory> GuestMemory for &'a mut T {
 }
 
 unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Box<T> {
-    fn base(&self) -> (*mut u8, u32) {
+    fn base(&self) -> &[UnsafeCell<u8>] {
         T::base(self)
     }
     fn has_outstanding_borrows(&self) -> bool {
@@ -289,7 +290,7 @@ unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Box<T> {
 }
 
 unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Arc<T> {
-    fn base(&self) -> (*mut u8, u32) {
+    fn base(&self) -> &[UnsafeCell<u8>] {
         T::base(self)
     }
     fn has_outstanding_borrows(&self) -> bool {
@@ -571,28 +572,10 @@ impl<'a, T> GuestPtr<'a, [T]> {
     where
         T: GuestTypeTransparent<'a>,
     {
-        // Validate the bounds of the region in the original memory.
-        let len = self.checked_byte_len()?;
-        let ptr =
-            self.mem
-                .validate_size_align(self.pointer.0, T::guest_align(), len)? as *mut T;
-        let region = Region {
-            start: self.pointer.0,
-            len,
-        };
-
-        // Validate all elements in slice. `T::validate` is expected to be a
-        // noop for `GuestTypeTransparent` so this check may not be entirely
-        // necessary (TODO).
-        //
-        // SAFETY: `ptr` has been validated by `self.mem.validate_size_align`.
-        for offs in 0..self.pointer.1 {
-            T::validate(unsafe { ptr.add(offs as usize) })?;
-        }
+        let (ptr, region) = validate_size_align(self.mem, self.pointer.0, self.pointer.1)?;
 
         Ok(UnsafeGuestSlice {
             ptr,
-            len: self.pointer.1 as usize,
             region,
             mem: self.mem,
         })
@@ -607,8 +590,8 @@ impl<'a, T> GuestPtr<'a, [T]> {
         T: GuestTypeTransparent<'a> + Copy + 'a,
     {
         let guest_slice = self.as_unsafe_slice_mut()?;
-        let mut vec = Vec::with_capacity(guest_slice.len);
-        for offs in 0..guest_slice.len {
+        let mut vec = Vec::with_capacity(guest_slice.ptr.len());
+        for offs in 0..guest_slice.ptr.len() {
             let elem = self.get(offs as u32).expect("already validated the size");
             vec.push(elem.read()?);
         }
@@ -635,18 +618,31 @@ impl<'a, T> GuestPtr<'a, [T]> {
         // bounds checks ...
         let guest_slice = self.as_unsafe_slice_mut()?;
         // ... length check ...
-        if guest_slice.len != slice.len() {
+        if guest_slice.ptr.len() != slice.len() {
             return Err(GuestError::SliceLengthsDiffer);
         }
+        if slice.len() == 0 {
+            return Ok(());
+        }
+
         // ... and copy the bytes.
         match guest_slice.mut_borrow() {
             UnsafeBorrowResult::Ok(mut dst) => dst.copy_from_slice(slice),
             UnsafeBorrowResult::Shared(guest_slice) => {
-                // SAFETY:  in the shared memory case, we copy and accept that
+                // SAFETY: in the shared memory case, we copy and accept that
                 // the guest data may be concurrently modified. TODO: audit that
                 // this use of `std::ptr::copy` is safe with shared memory
                 // (https://github.com/bytecodealliance/wasmtime/issues/4203)
-                unsafe { std::ptr::copy(slice.as_ptr(), guest_slice.ptr, guest_slice.len) };
+                //
+                // Also note that the validity of `guest_slice` has already been
+                // determined by the `as_unsafe_slice_mut` call above.
+                unsafe {
+                    std::ptr::copy(
+                        slice.as_ptr(),
+                        guest_slice.ptr[0].get(),
+                        guest_slice.ptr.len(),
+                    )
+                };
             }
             UnsafeBorrowResult::Err(e) => return Err(e),
         }
@@ -691,17 +687,6 @@ impl<'a, T> GuestPtr<'a, [T]> {
             )
         } else {
             None
-        }
-    }
-
-    /// Return the number of bytes necessary to represent the pointed-to value.
-    fn checked_byte_len(&self) -> Result<u32, GuestError>
-    where
-        T: GuestTypeTransparent<'a>,
-    {
-        match self.pointer.1.checked_mul(T::guest_size()) {
-            Some(l) => Ok(l),
-            None => Err(GuestError::PtrOverflow),
         }
     }
 }
@@ -791,15 +776,27 @@ impl<T: ?Sized + Pointee> fmt::Debug for GuestPtr<'_, T> {
 ///
 /// Usable as a `&'a [T]` via [`std::ops::Deref`].
 pub struct GuestSlice<'a, T> {
-    ptr: &'a [T],
+    ptr: &'a [UnsafeCell<T>],
     mem: &'a dyn GuestMemory,
     borrow: BorrowHandle,
 }
 
+// This is a wrapper around `&[T]` and must mirror send/sync impls due to the
+// interior usage of `&[UnsafeCell<T>]`.
+unsafe impl<T: Send> Send for GuestSlice<'_, T> {}
+unsafe impl<T: Sync> Sync for GuestSlice<'_, T> {}
+
 impl<'a, T> std::ops::Deref for GuestSlice<'a, T> {
     type Target = [T];
+
     fn deref(&self) -> &Self::Target {
-        self.ptr
+        // SAFETY: The presence of `GuestSlice` indicates that this is an
+        // unshared memory meaning concurrent acceses will not happen.
+        // Furthermore the validity of the slice has already been established
+        // and a runtime borrow has been recorded to prevent conflicting views.
+        // This all adds up to the ability to return a safe slice from this
+        // method whose lifetime is connected to `self`.
+        unsafe { slice::from_raw_parts(self.ptr.as_ptr().cast(), self.ptr.len()) }
     }
 }
 
@@ -814,21 +811,27 @@ impl<'a, T> Drop for GuestSlice<'a, T> {
 /// Usable as a `&'a [T]` via [`std::ops::Deref`] and as a `&'a mut [T]` via
 /// [`std::ops::DerefMut`].
 pub struct GuestSliceMut<'a, T> {
-    ptr: &'a mut [T],
+    ptr: &'a [UnsafeCell<T>],
     mem: &'a dyn GuestMemory,
     borrow: BorrowHandle,
 }
 
+// See docs in these impls for `GuestSlice` above.
+unsafe impl<T: Send> Send for GuestSliceMut<'_, T> {}
+unsafe impl<T: Sync> Sync for GuestSliceMut<'_, T> {}
+
 impl<'a, T> std::ops::Deref for GuestSliceMut<'a, T> {
     type Target = [T];
     fn deref(&self) -> &Self::Target {
-        self.ptr
+        // SAFETY: See docs in `Deref for GuestSlice`
+        unsafe { slice::from_raw_parts(self.ptr.as_ptr().cast(), self.ptr.len()) }
     }
 }
 
 impl<'a, T> std::ops::DerefMut for GuestSliceMut<'a, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.ptr
+        // SAFETY: See docs in `Deref for GuestSlice`
+        unsafe { slice::from_raw_parts_mut(self.ptr.as_ptr() as *mut T, self.ptr.len()) }
     }
 }
 
@@ -858,9 +861,7 @@ impl<'a, T> Drop for GuestSliceMut<'a, T> {
 ///   [`UnsafeGuestSlice::shared_borrow`], [`UnsafeGuestSlice::mut_borrow`]).
 pub struct UnsafeGuestSlice<'a, T> {
     /// A raw pointer to the bytes in memory.
-    ptr: *mut T,
-    /// The (validated) number of items in the slice.
-    len: usize,
+    ptr: &'a [UnsafeCell<T>],
     /// The (validated) address bounds of the slice in memory.
     region: Region,
     /// The original memory.
@@ -880,14 +881,11 @@ impl<'a, T> UnsafeGuestSlice<'a, T> {
             UnsafeBorrowResult::Shared(self)
         } else {
             match self.mem.shared_borrow(self.region) {
-                Ok(borrow) => {
-                    let ptr = unsafe { slice::from_raw_parts(self.ptr, self.len) };
-                    UnsafeBorrowResult::Ok(GuestSlice {
-                        ptr,
-                        mem: self.mem,
-                        borrow,
-                    })
-                }
+                Ok(borrow) => UnsafeBorrowResult::Ok(GuestSlice {
+                    ptr: self.ptr,
+                    mem: self.mem,
+                    borrow,
+                }),
                 Err(e) => UnsafeBorrowResult::Err(e),
             }
         }
@@ -906,14 +904,11 @@ impl<'a, T> UnsafeGuestSlice<'a, T> {
             UnsafeBorrowResult::Shared(self)
         } else {
             match self.mem.mut_borrow(self.region) {
-                Ok(borrow) => {
-                    let ptr = unsafe { slice::from_raw_parts_mut(self.ptr, self.len) };
-                    UnsafeBorrowResult::Ok(GuestSliceMut {
-                        ptr,
-                        mem: self.mem,
-                        borrow,
-                    })
-                }
+                Ok(borrow) => UnsafeBorrowResult::Ok(GuestSliceMut {
+                    ptr: self.ptr,
+                    mem: self.mem,
+                    borrow,
+                }),
                 Err(e) => UnsafeBorrowResult::Err(e),
             }
         }

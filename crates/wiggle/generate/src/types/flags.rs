@@ -87,15 +87,5 @@ pub(super) fn define_flags(
                 #repr::write(&location.cast(), val)
             }
         }
-        unsafe impl<'a> #rt::GuestTypeTransparent<'a> for #ident {
-            #[inline]
-            fn validate(location: *mut #ident) -> Result<(), #rt::GuestError> {
-                use std::convert::TryFrom;
-                // Validate value in memory using #ident::try_from(reprval)
-                let reprval = unsafe { (location as *mut #repr).read() };
-                let _val = #ident::try_from(reprval)?;
-                Ok(())
-            }
-        }
     }
 }

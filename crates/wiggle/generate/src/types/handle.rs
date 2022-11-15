@@ -70,14 +70,6 @@ pub(super) fn define_handle(
                 u32::write(&location.cast(), val.0)
             }
         }
-
-        unsafe impl<'a> #rt::GuestTypeTransparent<'a> for #ident {
-            #[inline]
-            fn validate(_location: *mut #ident) -> Result<(), #rt::GuestError> {
-                // All bit patterns accepted
-                Ok(())
-            }
-        }
     }
 }
 
