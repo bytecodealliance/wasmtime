@@ -3195,9 +3195,17 @@ pub(crate) fn emit(
             sink.put1(0x17);
         }
 
-        Inst::CoffTlsGetAddr { ref symbol, dst } => {
+        Inst::CoffTlsGetAddr {
+            ref symbol,
+            dst,
+            tmp,
+        } => {
             let dst = allocs.next(dst.to_reg().to_reg());
             debug_assert_eq!(dst, regs::rax());
+
+            // tmp is used below directly as %rcx
+            let tmp = allocs.next(tmp.to_reg().to_reg());
+            debug_assert_eq!(tmp, regs::rcx());
 
             // See: https://gcc.godbolt.org/z/M8or9x6ss
             // And: https://github.com/bjorn3/rustc_codegen_cranelift/issues/388#issuecomment-532930282

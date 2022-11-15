@@ -513,7 +513,8 @@
        ;; A Coff TLS symbol access. Returns address of the TLS symbol in
        ;; `dst`, which is constrained to `rax`.
        (CoffTlsGetAddr (symbol ExternalName)
-                       (dst WritableGpr))
+                       (dst WritableGpr)
+                       (tmp WritableGpr))
 
        ;; An unwind pseudoinstruction describing the state of the machine at
        ;; this program point.
@@ -3759,7 +3760,8 @@
 (decl coff_tls_get_addr (ExternalName) Gpr)
 (rule (coff_tls_get_addr name)
       (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.CoffTlsGetAddr name dst))))
+            (tmp WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.CoffTlsGetAddr name dst tmp))))
         dst))
 
 ;;;; sqmul_round_sat ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
