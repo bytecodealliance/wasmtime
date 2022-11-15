@@ -18,7 +18,7 @@ fn bench_wasi(c: &mut Criterion) {
             let bench_name = format!("wasi/{}", path.file_name().unwrap().to_string_lossy());
             // To avoid overhead, the module itself must iterate the expected
             // number of times in a specially-crafted `run` function (see
-            // `instantiate` for deta\ils).
+            // `instantiate` for details).
             c.bench_function(&bench_name, move |b| {
                 b.iter_custom(|iters| {
                     let start = Instant::now();
@@ -46,9 +46,7 @@ fn instantiate(wat: &[u8]) -> (Store<WasiCtx>, TypedFunc<u64, u64>) {
     let mut linker = Linker::new(&engine);
     wasmtime_wasi::add_to_linker(&mut linker, |cx| cx).unwrap();
     let instance = linker.instantiate(&mut store, &module).unwrap();
-    let run = instance
-        .get_typed_func::<_, _, _>(&mut store, "run")
-        .unwrap();
+    let run = instance.get_typed_func(&mut store, "run").unwrap();
     (store, run)
 }
 
