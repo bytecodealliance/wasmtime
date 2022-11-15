@@ -72,8 +72,8 @@ fn riscv_flush_icache(start: u64, end: u64) -> Result<()> {
             unsafe {
                 asm!("fence.i");
             };
-            return Ok(())
-        }else {
+            Ok(())
+        } else {
             match unsafe {
                 libc::syscall(
                     {
@@ -98,8 +98,8 @@ fn riscv_flush_icache(start: u64, end: u64) -> Result<()> {
                     }, // flags
                 )
             } {
-                0 => {return Ok(()) }
-                _ => return Err(Error::last_os_error()),
+                0 => { Ok(()) }
+                _ => Err(Error::last_os_error()),
             }
         }
     }
