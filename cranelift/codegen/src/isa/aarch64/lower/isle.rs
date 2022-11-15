@@ -129,10 +129,6 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         Imm12::maybe_from_u64(n)
     }
 
-    fn make_imm12_from_u64(&mut self, n: u64) -> Option<Imm12> {
-        Imm12::maybe_from_u64(n)
-    }
-
     fn imm12_from_negated_u64(&mut self, n: u64) -> Option<Imm12> {
         Imm12::maybe_from_u64((n as i64).wrapping_neg() as u64)
     }
