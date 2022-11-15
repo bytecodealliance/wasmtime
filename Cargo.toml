@@ -225,3 +225,7 @@ harness = false
 [[bench]]
 name = "call"
 harness = false
+
+[[bench]]
+name = "wasi"
+harness = false
