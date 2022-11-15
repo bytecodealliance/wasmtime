@@ -19,6 +19,7 @@ use crate::ir::immediates::Imm64;
 use crate::ir::types::{I128, I64};
 use crate::ir::{self, InstBuilder, InstructionData, MemFlags, Value};
 use crate::isa::TargetIsa;
+use crate::trace;
 
 mod globalvalue;
 mod heap;
@@ -46,6 +47,8 @@ fn imm_const(pos: &mut FuncCursor, arg: Value, imm: Imm64, is_signed: bool) -> V
 /// Perform a simple legalization by expansion of the function, without
 /// platform-specific transforms.
 pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa: &dyn TargetIsa) {
+    trace!("Pre-legalization function:\n{}", func.display());
+
     let mut pos = FuncCursor::new(func);
     let func_begin = pos.position();
     pos.set_position(func_begin);
@@ -246,6 +249,8 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
             pos.set_position(prev_pos);
         }
     }
+
+    trace!("Post-legalization function:\n{}", func.display());
 }
 
 /// Custom expansion for conditional trap instructions.
@@ -257,6 +262,12 @@ fn expand_cond_trap(
     arg: ir::Value,
     code: ir::TrapCode,
 ) {
+    trace!(
+        "expanding conditional trap: {:?}: {}",
+        inst,
+        func.dfg.display_inst(inst)
+    );
+
     // Parse the instruction.
     let trapz = match opcode {
         ir::Opcode::Trapz => true,

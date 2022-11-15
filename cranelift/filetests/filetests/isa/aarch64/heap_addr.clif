@@ -17,17 +17,12 @@ block0(v0: i64, v1: i32):
 ;   mov w8, w1
 ;   ldr x9, [x0]
 ;   mov x9, x9
-;   subs xzr, x8, x9
-;   b.ls label1 ; b label2
-; block1:
 ;   add x10, x0, x1, UXTW
-;   movz x11, #0
+;   movz x7, #0
 ;   subs xzr, x8, x9
-;   csel x0, x11, x10, hi
+;   csel x0, x7, x10, hi
 ;   csdb
 ;   ret
-; block2:
-;   udf #0xc11f
 
 function %static_heap_check(i64 vmctx, i32) -> i64 {
     gv0 = vmctx
@@ -69,18 +64,13 @@ block0(v0: i64, v1: i32):
 ;   movz x9, #24
 ;   adds x11, x11, x9
 ;   b.lo 8 ; udf
+;   add x12, x0, x1, UXTW
+;   add x12, x12, #16
+;   movz x13, #0
 ;   subs xzr, x11, x10
-;   b.ls label1 ; b label2
-; block1:
-;   add x13, x0, x1, UXTW
-;   add x13, x13, #16
-;   movz x12, #0
-;   subs xzr, x11, x10
-;   csel x0, x12, x13, hi
+;   csel x0, x13, x12, hi
 ;   csdb
 ;   ret
-; block2:
-;   udf #0xc11f
 
 function %static_heap_check_with_offset(i64 vmctx, i32) -> i64 {
     gv0 = vmctx

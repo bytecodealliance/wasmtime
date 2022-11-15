@@ -9,6 +9,7 @@ use crate::ir::condcodes::IntCC;
 use crate::ir::immediates::{Uimm32, Uimm8};
 use crate::ir::{self, InstBuilder, RelSourceLoc};
 use crate::isa::TargetIsa;
+use crate::trace;
 
 /// Expand a `heap_addr` instruction according to the definition of the heap.
 pub fn expand_heap_addr(
@@ -21,6 +22,12 @@ pub fn expand_heap_addr(
     offset_immediate: Uimm32,
     access_size: Uimm8,
 ) {
+    trace!(
+        "expanding heap_addr: {:?}: {}",
+        inst,
+        func.dfg.display_inst(inst)
+    );
+
     match func.heaps[heap].style {
         ir::HeapStyle::Dynamic { bound_gv } => dynamic_addr(
             isa,
@@ -76,6 +83,10 @@ fn dynamic_addr(
         let adj_bound = pos
             .ins()
             .iadd_imm(bound, -(offset_plus_size(offset, access_size) as i64));
+        trace!(
+            "  inserting: {}",
+            pos.func.dfg.display_value_inst(adj_bound)
+        );
         (IntCC::UnsignedGreaterThan, index, adj_bound)
     } else {
         // We need an overflow check for the adjusted offset.
@@ -85,14 +96,30 @@ fn dynamic_addr(
         let adj_offset =
             pos.ins()
                 .uadd_overflow_trap(index, access_size_val, ir::TrapCode::HeapOutOfBounds);
+        trace!(
+            "  inserting: {}",
+            pos.func.dfg.display_value_inst(adj_offset)
+        );
         (IntCC::UnsignedGreaterThan, adj_offset, bound)
     };
-    let oob = pos.ins().icmp(cc, lhs, bound);
-    pos.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
 
     let spectre_oob_comparison = if isa.flags().enable_heap_access_spectre_mitigation() {
-        Some((cc, lhs, bound))
+        // When we emit a spectre-guarded heap access, we do a `select
+        // is_out_of_bounds, NULL, addr` to compute the address, and so the load
+        // will trap if the address is out of bounds, which means we don't need
+        // to do another explicit bounds check like we do below.
+        Some(SpectreOobComparison {
+            cc,
+            lhs,
+            rhs: bound,
+        })
     } else {
+        let oob = pos.ins().icmp(cc, lhs, bound);
+        trace!("  inserting: {}", pos.func.dfg.display_value_inst(oob));
+
+        let trapnz = pos.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
+        trace!("  inserting: {}", pos.func.dfg.display_inst(trapnz));
+
         None
     };
 
@@ -130,8 +157,10 @@ fn static_addr(
     // This first case is a trivial case where we can statically trap.
     if offset_plus_size(offset, access_size) > bound {
         // This will simply always trap since `offset >= 0`.
-        pos.ins().trap(ir::TrapCode::HeapOutOfBounds);
-        pos.func.dfg.replace(inst).iconst(addr_ty, 0);
+        let trap = pos.ins().trap(ir::TrapCode::HeapOutOfBounds);
+        trace!("  inserting: {}", pos.func.dfg.display_inst(trap));
+        let iconst = pos.func.dfg.replace(inst).iconst(addr_ty, 0);
+        trace!("  inserting: {}", pos.func.dfg.display_value_inst(iconst));
 
         // Split the block, as the trap is a terminator instruction.
         let curr_block = pos.current_block().expect("Cursor is not in a block");
@@ -180,10 +209,19 @@ fn static_addr(
             (IntCC::UnsignedGreaterThan, index, limit)
         };
         let oob = pos.ins().icmp_imm(cc, lhs, limit_imm);
-        pos.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
+        trace!("  inserting: {}", pos.func.dfg.display_value_inst(oob));
+
+        let trapnz = pos.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
+        trace!("  inserting: {}", pos.func.dfg.display_inst(trapnz));
+
         if isa.flags().enable_heap_access_spectre_mitigation() {
             let limit = pos.ins().iconst(addr_ty, limit_imm);
-            spectre_oob_comparison = Some((cc, lhs, limit));
+            trace!("  inserting: {}", pos.func.dfg.display_value_inst(limit));
+            spectre_oob_comparison = Some(SpectreOobComparison {
+                cc,
+                lhs,
+                rhs: limit,
+            });
         }
     }
 
@@ -229,6 +267,12 @@ fn cast_index_to_pointer_ty(
     extended_index
 }
 
+struct SpectreOobComparison {
+    cc: IntCC,
+    lhs: ir::Value,
+    rhs: ir::Value,
+}
+
 /// Emit code for the base address computation of a `heap_addr` instruction.
 fn compute_addr(
     isa: &dyn TargetIsa,
@@ -242,7 +286,7 @@ fn compute_addr(
     // values to compare and the condition code that indicates an out-of bounds
     // condition; on this condition, the conditional move will choose a
     // speculatively safe address (a zero / null pointer) instead.
-    spectre_oob_comparison: Option<(IntCC, ir::Value, ir::Value)>,
+    spectre_oob_comparison: Option<SpectreOobComparison>,
 ) {
     debug_assert_eq!(func.dfg.value_type(index), addr_ty);
     let mut pos = FuncCursor::new(func).at_inst(inst);
@@ -250,13 +294,17 @@ fn compute_addr(
 
     // Add the heap base address base
     let base = if isa.flags().enable_pinned_reg() && isa.flags().use_pinned_reg_as_heap_base() {
-        pos.ins().get_pinned_reg(isa.pointer_type())
+        let base = pos.ins().get_pinned_reg(isa.pointer_type());
+        trace!("  inserting: {}", pos.func.dfg.display_value_inst(base));
+        base
     } else {
         let base_gv = pos.func.heaps[heap].base;
-        pos.ins().global_value(addr_ty, base_gv)
+        let base = pos.ins().global_value(addr_ty, base_gv);
+        trace!("  inserting: {}", pos.func.dfg.display_value_inst(base));
+        base
     };
 
-    if let Some((cc, a, b)) = spectre_oob_comparison {
+    if let Some(SpectreOobComparison { cc, lhs, rhs }) = spectre_oob_comparison {
         let final_base = pos.ins().iadd(base, index);
         // NB: The addition of the offset immediate must happen *before* the
         // `select_spectre_guard`. If it happens after, then we potentially are
@@ -264,22 +312,40 @@ fn compute_addr(
         let final_addr = if offset == 0 {
             final_base
         } else {
-            pos.ins().iadd_imm(final_base, offset as i64)
+            let final_addr = pos.ins().iadd_imm(final_base, offset as i64);
+            trace!(
+                "  inserting: {}",
+                pos.func.dfg.display_value_inst(final_addr)
+            );
+            final_addr
         };
         let zero = pos.ins().iconst(addr_ty, 0);
-        let cmp = pos.ins().icmp(cc, a, b);
-        pos.func
+        trace!("  inserting: {}", pos.func.dfg.display_value_inst(zero));
+
+        let cmp = pos.ins().icmp(cc, lhs, rhs);
+        trace!("  inserting: {}", pos.func.dfg.display_value_inst(cmp));
+
+        let value = pos
+            .func
             .dfg
             .replace(inst)
             .select_spectre_guard(cmp, zero, final_addr);
+        trace!("  inserting: {}", pos.func.dfg.display_value_inst(value));
     } else if offset == 0 {
-        pos.func.dfg.replace(inst).iadd(base, index);
+        let addr = pos.func.dfg.replace(inst).iadd(base, index);
+        trace!("  inserting: {}", pos.func.dfg.display_value_inst(addr));
     } else {
         let final_base = pos.ins().iadd(base, index);
-        pos.func
+        trace!(
+            "  inserting: {}",
+            pos.func.dfg.display_value_inst(final_base)
+        );
+        let addr = pos
+            .func
             .dfg
             .replace(inst)
             .iadd_imm(final_base, offset as i64);
+        trace!("  inserting: {}", pos.func.dfg.display_value_inst(addr));
     }
 }
 
