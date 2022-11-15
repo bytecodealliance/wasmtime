@@ -831,6 +831,10 @@ const OPCODE_SIGNATURES: &'static [(
     // Nearest
     (Opcode::Nearest, &[F32], &[F32], insert_opcode),
     (Opcode::Nearest, &[F64], &[F64], insert_opcode),
+    // Fpromote
+    (Opcode::Fpromote, &[F32], &[F64], insert_opcode),
+    // Fdemote
+    (Opcode::Fdemote, &[F64], &[F32], insert_opcode),
     // FcvtToUint
     // TODO: Some ops disabled:
     //   x64: https://github.com/bytecodealliance/wasmtime/issues/4897
