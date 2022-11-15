@@ -112,13 +112,19 @@ fn generate_func(
     };
 
     let body = quote! {
-        let mem = match caller.get_export("memory") {
-            Some(#rt::wasmtime_crate::Extern::Memory(m)) => m,
+        let export = caller.get_export("memory");
+        let (mem, ctx) = match &export {
+            Some(#rt::wasmtime_crate::Extern::Memory(m)) => {
+                let (mem, ctx) = m.data_and_store_mut(&mut caller);
+                let ctx = get_cx(ctx);
+                (#rt::wasmtime::WasmtimeGuestMemory::new(mem), ctx)
+            }
+            Some(#rt::wasmtime_crate::Extern::SharedMemory(m)) => {
+                let ctx = get_cx(caller.data_mut());
+                (#rt::wasmtime::WasmtimeGuestMemory::shared(m.data()), ctx)
+            }
             _ => #rt::anyhow::bail!("missing required memory export"),
         };
-        let (mem , ctx) = mem.data_and_store_mut(&mut caller);
-        let ctx = get_cx(ctx);
-        let mem = #rt::wasmtime::WasmtimeGuestMemory::new(mem);
         Ok(<#ret_ty>::from(#abi_func(ctx, &mem #(, #arg_names)*) #await_ ?))
     };
 
