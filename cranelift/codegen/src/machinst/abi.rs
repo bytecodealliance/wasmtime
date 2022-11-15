@@ -773,7 +773,7 @@ impl SigData {
 
     /// Get the number of return values expected.
     pub fn num_rets(&self) -> usize {
-        usize::try_from(self.rets_length).unwrap()
+        usize::from(self.rets_length)
     }
 
     /// Get information specifying how to pass one return value.
