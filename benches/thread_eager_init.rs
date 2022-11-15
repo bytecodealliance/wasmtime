@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use wasmtime::*;
 
 fn measure_execution_time(c: &mut Criterion) {
-    // Baseline performance: a single measurment covers both initializing
+    // Baseline performance: a single measurement covers both initializing
     // thread local resources and executing the first call.
     //
     // The other two bench functions should sum to this duration.
