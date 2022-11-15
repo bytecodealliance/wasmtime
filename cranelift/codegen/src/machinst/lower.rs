@@ -21,11 +21,11 @@ use crate::machinst::{
 };
 use crate::{trace, CodegenResult};
 use alloc::vec::Vec;
-use regalloc2::MachineEnv;
+use regalloc2::{MachineEnv, PRegSet};
 use smallvec::{smallvec, SmallVec};
 use std::fmt::Debug;
 
-use super::{VCodeBuildDirection, VRegAllocator};
+use super::{VCodeBuildDirection, VRegAllocator, preg_set_from_machine_env};
 
 /// An "instruction color" partitions CLIF instructions by side-effecting ops.
 /// All instructions with the same "color" are guaranteed not to be separated by
@@ -150,8 +150,8 @@ pub struct Lower<'func, I: VCodeInst> {
     /// Machine-independent flags.
     flags: crate::settings::Flags,
 
-    /// The MachineEnv used when allocating registers.
-    machine_env: &'func MachineEnv,
+    /// The set of allocatable registers.
+    allocatable: PRegSet,
 
     /// Lowered machine instructions.
     vcode: VCodeBuilder<I>,
@@ -326,7 +326,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     pub fn new(
         f: &'func Function,
         flags: crate::settings::Flags,
-        machine_env: &'func MachineEnv,
+        machine_env: &MachineEnv,
         abi: Callee<I::ABIMachineSpec>,
         emit_info: I::Info,
         block_order: BlockLoweringOrder,
@@ -417,7 +417,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         Ok(Lower {
             f,
             flags,
-            machine_env,
+            allocatable: preg_set_from_machine_env(machine_env),
             vcode,
             vregs,
             value_regs,
@@ -1025,7 +1025,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
         // Now that we've emitted all instructions into the
         // VCodeBuilder, let's build the VCode.
-        let vcode = self.vcode.build(self.machine_env, self.vregs);
+        let vcode = self.vcode.build(self.allocatable, self.vregs);
         trace!("built vcode: {:?}", vcode);
 
         Ok(vcode)
