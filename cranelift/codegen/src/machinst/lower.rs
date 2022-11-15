@@ -25,7 +25,7 @@ use regalloc2::{MachineEnv, PRegSet};
 use smallvec::{smallvec, SmallVec};
 use std::fmt::Debug;
 
-use super::{VCodeBuildDirection, VRegAllocator, preg_set_from_machine_env};
+use super::{preg_set_from_machine_env, VCodeBuildDirection, VRegAllocator};
 
 /// An "instruction color" partitions CLIF instructions by side-effecting ops.
 /// All instructions with the same "color" are guaranteed not to be separated by

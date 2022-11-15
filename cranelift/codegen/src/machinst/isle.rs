@@ -788,8 +788,7 @@ pub(crate) fn lower_common<I, Flags, IsaFlags, IsleFunction, const N: usize>(
 where
     I: VCodeInst,
     [(I, bool); N]: smallvec::Array<Item = (I, bool)>,
-    IsleFunction:
-        Fn(&mut IsleContext<'_, '_, I, Flags, IsaFlags, N>, Inst) -> Option<InstOutput>,
+    IsleFunction: Fn(&mut IsleContext<'_, '_, I, Flags, IsaFlags, N>, Inst) -> Option<InstOutput>,
 {
     // TODO: reuse the ISLE context across lowerings so we can reuse its
     // internal heap allocations.
