@@ -760,12 +760,12 @@ macro_rules! isle_prelude_method_helpers {
 
 /// This structure is used to implement the ISLE-generated `Context` trait and
 /// internally has a temporary reference to a machinst `LowerCtx`.
-pub(crate) struct IsleContext<'a, 'b, 'c, I, Flags, IsaFlags, const N: usize>
+pub(crate) struct IsleContext<'a, 'b, I, Flags, IsaFlags, const N: usize>
 where
     I: VCodeInst,
     [(I, bool); N]: smallvec::Array,
 {
-    pub lower_ctx: &'a mut Lower<'b, 'c, I>,
+    pub lower_ctx: &'a mut Lower<'b, I>,
     pub triple: &'a Triple,
     pub flags: &'a Flags,
     pub isa_flags: &'a IsaFlags,
@@ -789,7 +789,7 @@ where
     I: VCodeInst,
     [(I, bool); N]: smallvec::Array<Item = (I, bool)>,
     IsleFunction:
-        Fn(&mut IsleContext<'_, '_, '_, I, Flags, IsaFlags, N>, Inst) -> Option<InstOutput>,
+        Fn(&mut IsleContext<'_, '_, I, Flags, IsaFlags, N>, Inst) -> Option<InstOutput>,
 {
     // TODO: reuse the ISLE context across lowerings so we can reuse its
     // internal heap allocations.
