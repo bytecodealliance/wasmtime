@@ -8,19 +8,20 @@ use crate::{
         subscription::{RwEventFlags, SubscriptionResult},
         Poll, Userdata,
     },
-    Error, ErrorExt, ErrorKind, I32Exit, SystemTimeSpec, WasiCtx,
+    I32Exit, SystemTimeSpec, WasiCtx,
 };
-use anyhow::{anyhow, Context, Result};
 use cap_std::time::{Duration, SystemClock};
 use std::convert::{TryFrom, TryInto};
 use std::io::{IoSlice, IoSliceMut};
 use std::ops::{Deref, DerefMut};
-use tracing::debug;
 use wiggle::GuestPtr;
+
+pub mod error;
+use error::{Error, ErrorExt};
 
 wiggle::from_witx!({
     witx: ["$WASI_ROOT/phases/snapshot/witx/wasi_snapshot_preview1.witx"],
-    errors: { errno => Error },
+    errors: { errno => trappable Error },
     // Note: not every function actually needs to be async, however, nearly all of them do, and
     // keeping that set the same in this macro and the wasmtime_wiggle / lucet_wiggle macros is
     // tedious, and there is no cost to having a sync function be async in this case.
@@ -31,235 +32,6 @@ wiggle::from_witx!({
 impl wiggle::GuestErrorType for types::Errno {
     fn success() -> Self {
         Self::Success
-    }
-}
-
-impl types::UserErrorConversion for WasiCtx {
-    fn errno_from_error(&mut self, e: Error) -> Result<types::Errno> {
-        debug!("Error: {:?}", e);
-        let errno = e.try_into()?;
-        Ok(errno)
-    }
-}
-
-impl TryFrom<Error> for types::Errno {
-    type Error = Error;
-    fn try_from(e: Error) -> Result<types::Errno, Error> {
-        use types::Errno;
-        if e.is::<ErrorKind>() {
-            let e = e.downcast::<ErrorKind>().unwrap();
-            Ok(e.into())
-        } else if e.is::<std::io::Error>() {
-            let e = e.downcast::<std::io::Error>().unwrap();
-            e.try_into()
-        } else if e.is::<wiggle::GuestError>() {
-            let e = e.downcast::<wiggle::GuestError>().unwrap();
-            Ok(e.into())
-        } else if e.is::<std::num::TryFromIntError>() {
-            Ok(Errno::Overflow)
-        } else if e.is::<std::str::Utf8Error>() {
-            Ok(Errno::Ilseq)
-        } else {
-            Err(e)
-        }
-    }
-}
-
-impl From<ErrorKind> for types::Errno {
-    fn from(e: ErrorKind) -> types::Errno {
-        use types::Errno;
-        match e {
-            ErrorKind::TooBig => Errno::TooBig,
-            ErrorKind::Badf => Errno::Badf,
-            ErrorKind::Ilseq => Errno::Ilseq,
-            ErrorKind::Io => Errno::Io,
-            ErrorKind::Nametoolong => Errno::Nametoolong,
-            ErrorKind::Notdir => Errno::Notdir,
-            ErrorKind::Notsup => Errno::Notsup,
-            ErrorKind::Overflow => Errno::Overflow,
-            ErrorKind::Range => Errno::Range,
-            ErrorKind::Spipe => Errno::Spipe,
-            ErrorKind::Perm => Errno::Perm,
-        }
-    }
-}
-
-impl From<wiggle::GuestError> for types::Errno {
-    fn from(err: wiggle::GuestError) -> Self {
-        use wiggle::GuestError::*;
-        match err {
-            InvalidFlagValue { .. } => Self::Inval,
-            InvalidEnumValue { .. } => Self::Inval,
-            PtrOverflow { .. } => Self::Fault,
-            PtrOutOfBounds { .. } => Self::Fault,
-            PtrNotAligned { .. } => Self::Inval,
-            PtrBorrowed { .. } => Self::Fault,
-            InvalidUtf8 { .. } => Self::Ilseq,
-            TryFromIntError { .. } => Self::Overflow,
-            InFunc { err, .. } => types::Errno::from(*err),
-            SliceLengthsDiffer { .. } => Self::Fault,
-            BorrowCheckerOutOfHandles { .. } => Self::Fault,
-        }
-    }
-}
-
-impl TryFrom<std::io::Error> for types::Errno {
-    type Error = Error;
-    fn try_from(err: std::io::Error) -> Result<types::Errno, Error> {
-        #[cfg(unix)]
-        fn raw_error_code(err: &std::io::Error) -> Option<types::Errno> {
-            use rustix::io::Errno;
-            match Errno::from_io_error(err) {
-                Some(Errno::AGAIN) => Some(types::Errno::Again),
-                Some(Errno::PIPE) => Some(types::Errno::Pipe),
-                Some(Errno::PERM) => Some(types::Errno::Perm),
-                Some(Errno::NOENT) => Some(types::Errno::Noent),
-                Some(Errno::NOMEM) => Some(types::Errno::Nomem),
-                Some(Errno::TOOBIG) => Some(types::Errno::TooBig),
-                Some(Errno::IO) => Some(types::Errno::Io),
-                Some(Errno::BADF) => Some(types::Errno::Badf),
-                Some(Errno::BUSY) => Some(types::Errno::Busy),
-                Some(Errno::ACCESS) => Some(types::Errno::Acces),
-                Some(Errno::FAULT) => Some(types::Errno::Fault),
-                Some(Errno::NOTDIR) => Some(types::Errno::Notdir),
-                Some(Errno::ISDIR) => Some(types::Errno::Isdir),
-                Some(Errno::INVAL) => Some(types::Errno::Inval),
-                Some(Errno::EXIST) => Some(types::Errno::Exist),
-                Some(Errno::FBIG) => Some(types::Errno::Fbig),
-                Some(Errno::NOSPC) => Some(types::Errno::Nospc),
-                Some(Errno::SPIPE) => Some(types::Errno::Spipe),
-                Some(Errno::MFILE) => Some(types::Errno::Mfile),
-                Some(Errno::MLINK) => Some(types::Errno::Mlink),
-                Some(Errno::NAMETOOLONG) => Some(types::Errno::Nametoolong),
-                Some(Errno::NFILE) => Some(types::Errno::Nfile),
-                Some(Errno::NOTEMPTY) => Some(types::Errno::Notempty),
-                Some(Errno::LOOP) => Some(types::Errno::Loop),
-                Some(Errno::OVERFLOW) => Some(types::Errno::Overflow),
-                Some(Errno::ILSEQ) => Some(types::Errno::Ilseq),
-                Some(Errno::NOTSUP) => Some(types::Errno::Notsup),
-                Some(Errno::ADDRINUSE) => Some(types::Errno::Addrinuse),
-                Some(Errno::CANCELED) => Some(types::Errno::Canceled),
-                Some(Errno::ADDRNOTAVAIL) => Some(types::Errno::Addrnotavail),
-                Some(Errno::AFNOSUPPORT) => Some(types::Errno::Afnosupport),
-                Some(Errno::ALREADY) => Some(types::Errno::Already),
-                Some(Errno::CONNABORTED) => Some(types::Errno::Connaborted),
-                Some(Errno::CONNREFUSED) => Some(types::Errno::Connrefused),
-                Some(Errno::CONNRESET) => Some(types::Errno::Connreset),
-                Some(Errno::DESTADDRREQ) => Some(types::Errno::Destaddrreq),
-                Some(Errno::DQUOT) => Some(types::Errno::Dquot),
-                Some(Errno::HOSTUNREACH) => Some(types::Errno::Hostunreach),
-                Some(Errno::INPROGRESS) => Some(types::Errno::Inprogress),
-                Some(Errno::INTR) => Some(types::Errno::Intr),
-                Some(Errno::ISCONN) => Some(types::Errno::Isconn),
-                Some(Errno::MSGSIZE) => Some(types::Errno::Msgsize),
-                Some(Errno::NETDOWN) => Some(types::Errno::Netdown),
-                Some(Errno::NETRESET) => Some(types::Errno::Netreset),
-                Some(Errno::NETUNREACH) => Some(types::Errno::Netunreach),
-                Some(Errno::NOBUFS) => Some(types::Errno::Nobufs),
-                Some(Errno::NOPROTOOPT) => Some(types::Errno::Noprotoopt),
-                Some(Errno::NOTCONN) => Some(types::Errno::Notconn),
-                Some(Errno::NOTSOCK) => Some(types::Errno::Notsock),
-                Some(Errno::PROTONOSUPPORT) => Some(types::Errno::Protonosupport),
-                Some(Errno::PROTOTYPE) => Some(types::Errno::Prototype),
-                Some(Errno::STALE) => Some(types::Errno::Stale),
-                Some(Errno::TIMEDOUT) => Some(types::Errno::Timedout),
-
-                // On some platforms, these have the same value as other errno values.
-                #[allow(unreachable_patterns)]
-                Some(Errno::WOULDBLOCK) => Some(types::Errno::Again),
-                #[allow(unreachable_patterns)]
-                Some(Errno::OPNOTSUPP) => Some(types::Errno::Notsup),
-
-                _ => None,
-            }
-        }
-        #[cfg(windows)]
-        fn raw_error_code(err: &std::io::Error) -> Option<types::Errno> {
-            use windows_sys::Win32::Foundation;
-            use windows_sys::Win32::Networking::WinSock;
-
-            match err.raw_os_error().map(|code| code as u32) {
-                Some(Foundation::ERROR_BAD_ENVIRONMENT) => return Some(types::Errno::TooBig),
-                Some(Foundation::ERROR_FILE_NOT_FOUND) => return Some(types::Errno::Noent),
-                Some(Foundation::ERROR_PATH_NOT_FOUND) => return Some(types::Errno::Noent),
-                Some(Foundation::ERROR_TOO_MANY_OPEN_FILES) => return Some(types::Errno::Nfile),
-                Some(Foundation::ERROR_ACCESS_DENIED) => return Some(types::Errno::Acces),
-                Some(Foundation::ERROR_SHARING_VIOLATION) => return Some(types::Errno::Acces),
-                Some(Foundation::ERROR_PRIVILEGE_NOT_HELD) => return Some(types::Errno::Perm),
-                Some(Foundation::ERROR_INVALID_HANDLE) => return Some(types::Errno::Badf),
-                Some(Foundation::ERROR_INVALID_NAME) => return Some(types::Errno::Noent),
-                Some(Foundation::ERROR_NOT_ENOUGH_MEMORY) => return Some(types::Errno::Nomem),
-                Some(Foundation::ERROR_OUTOFMEMORY) => return Some(types::Errno::Nomem),
-                Some(Foundation::ERROR_DIR_NOT_EMPTY) => return Some(types::Errno::Notempty),
-                Some(Foundation::ERROR_NOT_READY) => return Some(types::Errno::Busy),
-                Some(Foundation::ERROR_BUSY) => return Some(types::Errno::Busy),
-                Some(Foundation::ERROR_NOT_SUPPORTED) => return Some(types::Errno::Notsup),
-                Some(Foundation::ERROR_FILE_EXISTS) => return Some(types::Errno::Exist),
-                Some(Foundation::ERROR_BROKEN_PIPE) => return Some(types::Errno::Pipe),
-                Some(Foundation::ERROR_BUFFER_OVERFLOW) => return Some(types::Errno::Nametoolong),
-                Some(Foundation::ERROR_NOT_A_REPARSE_POINT) => return Some(types::Errno::Inval),
-                Some(Foundation::ERROR_NEGATIVE_SEEK) => return Some(types::Errno::Inval),
-                Some(Foundation::ERROR_DIRECTORY) => return Some(types::Errno::Notdir),
-                Some(Foundation::ERROR_ALREADY_EXISTS) => return Some(types::Errno::Exist),
-                Some(Foundation::ERROR_STOPPED_ON_SYMLINK) => return Some(types::Errno::Loop),
-                Some(Foundation::ERROR_DIRECTORY_NOT_SUPPORTED) => {
-                    return Some(types::Errno::Isdir)
-                }
-                _ => {}
-            }
-
-            match err.raw_os_error() {
-                Some(WinSock::WSAEWOULDBLOCK) => Some(types::Errno::Again),
-                Some(WinSock::WSAECANCELLED) => Some(types::Errno::Canceled),
-                Some(WinSock::WSA_E_CANCELLED) => Some(types::Errno::Canceled),
-                Some(WinSock::WSAEBADF) => Some(types::Errno::Badf),
-                Some(WinSock::WSAEFAULT) => Some(types::Errno::Fault),
-                Some(WinSock::WSAEINVAL) => Some(types::Errno::Inval),
-                Some(WinSock::WSAEMFILE) => Some(types::Errno::Mfile),
-                Some(WinSock::WSAENAMETOOLONG) => Some(types::Errno::Nametoolong),
-                Some(WinSock::WSAENOTEMPTY) => Some(types::Errno::Notempty),
-                Some(WinSock::WSAELOOP) => Some(types::Errno::Loop),
-                Some(WinSock::WSAEOPNOTSUPP) => Some(types::Errno::Notsup),
-                Some(WinSock::WSAEADDRINUSE) => Some(types::Errno::Addrinuse),
-                Some(WinSock::WSAEACCES) => Some(types::Errno::Acces),
-                Some(WinSock::WSAEADDRNOTAVAIL) => Some(types::Errno::Addrnotavail),
-                Some(WinSock::WSAEAFNOSUPPORT) => Some(types::Errno::Afnosupport),
-                Some(WinSock::WSAEALREADY) => Some(types::Errno::Already),
-                Some(WinSock::WSAECONNABORTED) => Some(types::Errno::Connaborted),
-                Some(WinSock::WSAECONNREFUSED) => Some(types::Errno::Connrefused),
-                Some(WinSock::WSAECONNRESET) => Some(types::Errno::Connreset),
-                Some(WinSock::WSAEDESTADDRREQ) => Some(types::Errno::Destaddrreq),
-                Some(WinSock::WSAEDQUOT) => Some(types::Errno::Dquot),
-                Some(WinSock::WSAEHOSTUNREACH) => Some(types::Errno::Hostunreach),
-                Some(WinSock::WSAEINPROGRESS) => Some(types::Errno::Inprogress),
-                Some(WinSock::WSAEINTR) => Some(types::Errno::Intr),
-                Some(WinSock::WSAEISCONN) => Some(types::Errno::Isconn),
-                Some(WinSock::WSAEMSGSIZE) => Some(types::Errno::Msgsize),
-                Some(WinSock::WSAENETDOWN) => Some(types::Errno::Netdown),
-                Some(WinSock::WSAENETRESET) => Some(types::Errno::Netreset),
-                Some(WinSock::WSAENETUNREACH) => Some(types::Errno::Netunreach),
-                Some(WinSock::WSAENOBUFS) => Some(types::Errno::Nobufs),
-                Some(WinSock::WSAENOPROTOOPT) => Some(types::Errno::Noprotoopt),
-                Some(WinSock::WSAENOTCONN) => Some(types::Errno::Notconn),
-                Some(WinSock::WSAENOTSOCK) => Some(types::Errno::Notsock),
-                Some(WinSock::WSAEPROTONOSUPPORT) => Some(types::Errno::Protonosupport),
-                Some(WinSock::WSAEPROTOTYPE) => Some(types::Errno::Prototype),
-                Some(WinSock::WSAESTALE) => Some(types::Errno::Stale),
-                Some(WinSock::WSAETIMEDOUT) => Some(types::Errno::Timedout),
-                _ => None,
-            }
-        }
-
-        match raw_error_code(&err) {
-            Some(errno) => Ok(errno),
-            None => match err.kind() {
-                std::io::ErrorKind::NotFound => Ok(types::Errno::Noent),
-                std::io::ErrorKind::PermissionDenied => Ok(types::Errno::Perm),
-                std::io::ErrorKind::AlreadyExists => Ok(types::Errno::Exist),
-                std::io::ErrorKind::InvalidInput => Ok(types::Errno::Inval),
-                _ => Err(anyhow::anyhow!(err).context(format!("Unknown OS error"))),
-            },
-        }
     }
 }
 
@@ -311,7 +83,9 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 let now = self.clocks.system.now(precision).into_std();
                 let d = now
                     .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                    .map_err(|_| Error::trap("current time before unix epoch"))?;
+                    .map_err(|_| {
+                        Error::trap(anyhow::Error::msg("current time before unix epoch"))
+                    })?;
                 Ok(d.as_nanos().try_into()?)
             }
             types::Clockid::Monotonic => {
@@ -489,8 +263,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let set_mtim = fst_flags.contains(types::Fstflags::MTIM);
         let set_mtim_now = fst_flags.contains(types::Fstflags::MTIM_NOW);
 
-        let atim = systimespec(set_atim, atim, set_atim_now).context("atim")?;
-        let mtim = systimespec(set_mtim, mtim, set_mtim_now).context("mtim")?;
+        let atim = systimespec(set_atim, atim, set_atim_now).map_err(|e| e.context("atim"))?;
+        let mtim = systimespec(set_mtim, mtim, set_mtim_now).map_err(|e| e.context("mtim"))?;
 
         if table.is::<FileEntry>(fd) {
             table
@@ -839,8 +613,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let set_mtim = fst_flags.contains(types::Fstflags::MTIM);
         let set_mtim_now = fst_flags.contains(types::Fstflags::MTIM_NOW);
 
-        let atim = systimespec(set_atim, atim, set_atim_now).context("atim")?;
-        let mtim = systimespec(set_mtim, mtim, set_mtim_now).context("mtim")?;
+        let atim = systimespec(set_atim, atim, set_atim_now).map_err(|e| e.context("atim"))?;
+        let mtim = systimespec(set_mtim, mtim, set_mtim_now).map_err(|e| e.context("mtim"))?;
         self.table()
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::PATH_FILESTAT_SET_TIMES)?
@@ -1189,7 +963,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                         },
                         Err(e) => types::Event {
                             userdata,
-                            error: e.try_into().expect("non-trapping"),
+                            error: e.downcast().map_err(Error::trap)?,
                             type_,
                             fd_readwrite: fd_readwrite_empty(),
                         },
@@ -1209,7 +983,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                         },
                         Err(e) => types::Event {
                             userdata,
-                            error: e.try_into()?,
+                            error: e.downcast().map_err(Error::trap)?,
                             type_,
                             fd_readwrite: fd_readwrite_empty(),
                         },
@@ -1221,7 +995,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                         userdata,
                         error: match r {
                             Ok(()) => types::Errno::Success,
-                            Err(e) => e.try_into()?,
+                            Err(e) => e.downcast().map_err(Error::trap)?,
                         },
                         type_,
                         fd_readwrite: fd_readwrite_empty(),
@@ -1238,12 +1012,12 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         if status < 126 {
             I32Exit(status as i32).into()
         } else {
-            anyhow!("exit with invalid exit status outside of [0..126)")
+            anyhow::Error::msg("exit with invalid exit status outside of [0..126)")
         }
     }
 
     async fn proc_raise(&mut self, _sig: types::Signal) -> Result<(), Error> {
-        Err(Error::trap("proc_raise unsupported"))
+        Err(Error::trap(anyhow::Error::msg("proc_raise unsupported")))
     }
 
     async fn sched_yield(&mut self) -> Result<(), Error> {
