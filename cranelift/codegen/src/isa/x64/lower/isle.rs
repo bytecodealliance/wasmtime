@@ -337,11 +337,6 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     }
 
     #[inline]
-    fn xmm0(&mut self) -> WritableXmm {
-        WritableXmm::from_reg(Xmm::new(regs::xmm0()).unwrap())
-    }
-
-    #[inline]
     fn synthetic_amode_to_reg_mem(&mut self, addr: &SyntheticAmode) -> RegMem {
         RegMem::mem(addr.clone())
     }

@@ -3,7 +3,7 @@
 use crate::binemit::{Addend, CodeOffset, Reloc, StackMap};
 use crate::ir::{types, ExternalName, LibCall, Opcode, RelSourceLoc, TrapCode, Type};
 use crate::isa::x64::abi::X64ABIMachineSpec;
-use crate::isa::x64::inst::regs::pretty_print_reg;
+use crate::isa::x64::inst::regs::{pretty_print_reg, show_ireg_sized};
 use crate::isa::x64::settings as x64_settings;
 use crate::isa::CallConv;
 use crate::{machinst::*, trace};
@@ -130,6 +130,7 @@ impl Inst {
             | Inst::XmmMovRM { op, .. }
             | Inst::XmmRmiReg { opcode: op, .. }
             | Inst::XmmRmR { op, .. }
+            | Inst::XmmRmRBlend { op, .. }
             | Inst::XmmRmRImm { op, .. }
             | Inst::XmmToGpr { op, .. }
             | Inst::XmmUnaryRmRImm { op, .. }
@@ -936,6 +937,33 @@ impl PrettyPrint for Inst {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
                 let src2 = src2.pretty_print(8, allocs);
                 format!("{} {}, {}, {}", ljustify(op.to_string()), src1, src2, dst)
+            }
+
+            Inst::XmmRmRBlend {
+                op,
+                src1,
+                src2,
+                mask,
+                dst,
+            } => {
+                let src1 = pretty_print_reg(src1.to_reg(), 8, allocs);
+                let mask = allocs.next(mask.to_reg());
+                let mask = if mask.is_virtual() {
+                    format!(" <{}>", show_ireg_sized(mask, 8))
+                } else {
+                    debug_assert_eq!(mask, regs::xmm0());
+                    String::new()
+                };
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
+                let src2 = src2.pretty_print(8, allocs);
+                format!(
+                    "{} {}, {}, {}{}",
+                    ljustify(op.to_string()),
+                    src1,
+                    src2,
+                    dst,
+                    mask
+                )
             }
 
             Inst::XmmRmRVex {
@@ -1765,11 +1793,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             src.get_operands(collector);
         }
         Inst::XmmRmR {
-            src1,
-            src2,
-            dst,
-            op,
-            ..
+            src1, src2, dst, ..
         } => {
             if inst.produces_const() {
                 collector.reg_def(dst.to_writable_reg());
@@ -1777,15 +1801,24 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
                 collector.reg_use(src1.to_reg());
                 collector.reg_reuse_def(dst.to_writable_reg(), 0);
                 src2.get_operands(collector);
-
-                // Some instructions have an implicit use of XMM0.
-                if *op == SseOpcode::Blendvpd
+            }
+        }
+        Inst::XmmRmRBlend {
+            src1,
+            src2,
+            mask,
+            dst,
+            op,
+        } => {
+            assert!(
+                *op == SseOpcode::Blendvpd
                     || *op == SseOpcode::Blendvps
                     || *op == SseOpcode::Pblendvb
-                {
-                    collector.reg_use(regs::xmm0());
-                }
-            }
+            );
+            collector.reg_use(src1.to_reg());
+            collector.reg_fixed_use(mask.to_reg(), regs::xmm0());
+            collector.reg_reuse_def(dst.to_writable_reg(), 0);
+            src2.get_operands(collector);
         }
         Inst::XmmRmRVex {
             op,

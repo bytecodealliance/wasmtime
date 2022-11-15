@@ -131,6 +131,16 @@ impl Inst {
             size,
         }
     }
+
+    fn xmm_rm_r_blend(op: SseOpcode, src2: RegMem, dst: Writable<Reg>) -> Inst {
+        Inst::XmmRmRBlend {
+            op,
+            src1: Xmm::new(dst.to_reg()).unwrap(),
+            src2: XmmMem::new(src2).unwrap(),
+            mask: Xmm::new(regs::xmm0()).unwrap(),
+            dst: WritableXmm::from_writable_reg(dst).unwrap(),
+        }
+    }
 }
 
 #[test]
@@ -3961,19 +3971,19 @@ fn test_x64_emit() {
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Blendvpd, RegMem::reg(xmm15), w_xmm4),
+        Inst::xmm_rm_r_blend(SseOpcode::Blendvpd, RegMem::reg(xmm15), w_xmm4),
         "66410F3815E7",
         "blendvpd %xmm4, %xmm15, %xmm4",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Blendvps, RegMem::reg(xmm2), w_xmm3),
+        Inst::xmm_rm_r_blend(SseOpcode::Blendvps, RegMem::reg(xmm2), w_xmm3),
         "660F3814DA",
         "blendvps %xmm3, %xmm2, %xmm3",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pblendvb, RegMem::reg(xmm12), w_xmm13),
+        Inst::xmm_rm_r_blend(SseOpcode::Pblendvb, RegMem::reg(xmm12), w_xmm13),
         "66450F3810EC",
         "pblendvb %xmm13, %xmm12, %xmm13",
     ));
