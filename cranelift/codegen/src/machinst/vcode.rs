@@ -26,7 +26,6 @@ use crate::timing;
 use crate::trace;
 use crate::CodegenError;
 use crate::ValueLocRange;
-use regalloc2::MachineEnv;
 use regalloc2::{
     Edit, Function as RegallocFunction, InstOrEdit, InstRange, Operand, OperandKind, PReg, PRegSet,
     RegClass, VReg,
