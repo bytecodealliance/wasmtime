@@ -493,7 +493,7 @@ impl Instance {
         let (func_ptr, vmctx) = if let Some(def_index) = self.module().defined_func_index(index) {
             (
                 (self.runtime_info.image_base()
-                    + self.runtime_info.function_info(def_index).start as usize)
+                    + self.runtime_info.function_loc(def_index).start as usize)
                     as *mut _,
                 VMOpaqueContext::from_vmcontext(self.vmctx_ptr()),
             )

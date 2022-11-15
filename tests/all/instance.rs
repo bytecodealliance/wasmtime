@@ -40,14 +40,10 @@ fn linear_memory_limits() -> Result<()> {
         return Ok(());
     }
     test(&Engine::default())?;
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_memory_pages(65536);
     test(&Engine::new(Config::new().allocation_strategy(
-        InstanceAllocationStrategy::Pooling {
-            strategy: PoolingAllocationStrategy::NextAvailable,
-            instance_limits: InstanceLimits {
-                memory_pages: 65536,
-                ..Default::default()
-            },
-        },
+        InstanceAllocationStrategy::Pooling(pool),
     ))?)?;
     return Ok(());
 

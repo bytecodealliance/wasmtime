@@ -1,10 +1,12 @@
 use anyhow::Result;
-use component_test_util::{engine, TypedFuncExt};
+use component_test_util::{async_engine, engine, TypedFuncExt};
 use std::fmt::Write;
 use std::iter;
 use wasmtime::component::Component;
 use wasmtime_component_util::REALLOC_AND_FREE;
 
+mod aot;
+mod r#async;
 mod dynamic;
 mod func;
 mod import;

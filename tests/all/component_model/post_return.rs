@@ -1,6 +1,6 @@
 use anyhow::Result;
 use wasmtime::component::*;
-use wasmtime::{Store, StoreContextMut, Trap, TrapCode};
+use wasmtime::{Store, StoreContextMut, Trap};
 
 #[test]
 fn invalid_api() -> Result<()> {
@@ -120,13 +120,14 @@ fn invoke_post_return() -> Result<()> {
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, false);
     let mut linker = Linker::new(&engine);
-    linker
-        .root()
-        .func_wrap("f", |mut store: StoreContextMut<'_, bool>| -> Result<()> {
+    linker.root().func_wrap(
+        "f",
+        |mut store: StoreContextMut<'_, bool>, _: ()| -> Result<()> {
             assert!(!*store.data());
             *store.data_mut() = true;
             Ok(())
-        })?;
+        },
+    )?;
 
     let instance = linker.instantiate(&mut store, &component)?;
     let thunk = instance.get_typed_func::<(), (), _>(&mut store, "thunk")?;
@@ -283,7 +284,7 @@ fn trap_in_post_return_poisons_instance() -> Result<()> {
     let f = instance.get_typed_func::<(), (), _>(&mut store, "f")?;
     f.call(&mut store, ())?;
     let trap = f.post_return(&mut store).unwrap_err().downcast::<Trap>()?;
-    assert_eq!(trap.trap_code(), Some(TrapCode::UnreachableCodeReached));
+    assert_eq!(trap, Trap::UnreachableCodeReached);
     let err = f.call(&mut store, ()).unwrap_err();
     assert!(
         err.to_string()

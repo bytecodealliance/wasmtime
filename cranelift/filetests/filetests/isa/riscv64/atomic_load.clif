@@ -30,7 +30,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   atomic_load.i32 a1,(a0)
-;   uext.w a0,a1
+;   atomic_load.i32 a0,(a0)
+;   uext.w a0,a0
 ;   ret
 

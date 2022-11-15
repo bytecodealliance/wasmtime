@@ -1,4 +1,4 @@
-use crate::config::{AsyncConf, ErrorConf};
+use crate::config::{AsyncConf, ErrorConf, TracingConf};
 use anyhow::{anyhow, Error};
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -12,6 +12,10 @@ pub struct CodegenSettings {
     pub errors: ErrorTransform,
     pub async_: AsyncConf,
     pub wasmtime: bool,
+    // Disabling this feature makes it possible to remove all of the tracing
+    // code emitted in the Wiggle-generated code; this can be helpful while
+    // inspecting the code (e.g., with `cargo expand`).
+    pub tracing: TracingConf,
 }
 impl CodegenSettings {
     pub fn new(
@@ -19,12 +23,14 @@ impl CodegenSettings {
         async_: &AsyncConf,
         doc: &Document,
         wasmtime: bool,
+        tracing: &TracingConf,
     ) -> Result<Self, Error> {
         let errors = ErrorTransform::new(error_conf, doc)?;
         Ok(Self {
             errors,
             async_: async_.clone(),
             wasmtime,
+            tracing: tracing.clone(),
         })
     }
     pub fn get_async(&self, module: &Module, func: &InterfaceFunc) -> Asyncness {

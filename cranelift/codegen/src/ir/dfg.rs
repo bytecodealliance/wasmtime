@@ -274,6 +274,12 @@ impl DataFlowGraph {
         self.values[v].ty()
     }
 
+    /// Fill in the type of a value, only if currently invalid (as a placeholder).
+    pub(crate) fn fill_in_value_type(&mut self, v: Value, ty: Type) {
+        debug_assert!(self.values[v].ty().is_invalid() || self.values[v].ty() == ty);
+        self.values[v].set_type(ty);
+    }
+
     /// Get the definition of a value.
     ///
     /// This is either the instruction that defined it or the Block that has the value as an
@@ -517,7 +523,7 @@ impl ValueDataPacked {
 
     #[inline(always)]
     fn set_type(&mut self, ty: Type) {
-        self.0 &= !((1 << Self::TYPE_BITS) - 1) << Self::TYPE_SHIFT;
+        self.0 &= !(((1 << Self::TYPE_BITS) - 1) << Self::TYPE_SHIFT);
         self.0 |= (ty.repr() as u64) << Self::TYPE_SHIFT;
     }
 }
@@ -1461,10 +1467,5 @@ mod tests {
 
         assert_eq!(pos.func.dfg.resolve_aliases(c2), c2);
         assert_eq!(pos.func.dfg.resolve_aliases(c), c2);
-
-        // Make a copy of the alias.
-        let c3 = pos.ins().copy(c);
-        // This does not see through copies.
-        assert_eq!(pos.func.dfg.resolve_aliases(c3), c3);
     }
 }

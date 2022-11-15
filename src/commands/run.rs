@@ -15,6 +15,7 @@ use std::{
 use wasmtime::{Engine, Func, Linker, Module, Store, Trap, Val, ValType};
 use wasmtime_cli_flags::{CommonOptions, WasiModules};
 use wasmtime_wasi::sync::{ambient_authority, Dir, TcpListener, WasiCtxBuilder};
+use wasmtime_wasi::I32Exit;
 
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::WasiNnCtx;
@@ -211,24 +212,25 @@ impl RunCommand {
         {
             Ok(()) => (),
             Err(e) => {
-                // If the program exited because of a non-zero exit status, print
-                // a message and exit.
-                if let Some(trap) = e.downcast_ref::<Trap>() {
+                // If a specific WASI error code was requested then that's
+                // forwarded through to the process here without printing any
+                // extra error information.
+                if let Some(exit) = e.downcast_ref::<I32Exit>() {
                     // Print the error message in the usual way.
-                    if let Some(status) = trap.i32_exit_status() {
-                        // On Windows, exit status 3 indicates an abort (see below),
-                        // so return 1 indicating a non-zero status to avoid ambiguity.
-                        if cfg!(windows) && status >= 3 {
-                            process::exit(1);
-                        }
-                        process::exit(status);
+                    // On Windows, exit status 3 indicates an abort (see below),
+                    // so return 1 indicating a non-zero status to avoid ambiguity.
+                    if cfg!(windows) && exit.0 >= 3 {
+                        process::exit(1);
                     }
+                    process::exit(exit.0);
+                }
 
+                // If the program exited because of a trap, return an error code
+                // to the outside environment indicating a more severe problem
+                // than a simple failure.
+                if e.is::<Trap>() {
                     eprintln!("Error: {:?}", e);
 
-                    // If the program exited because of a trap, return an error code
-                    // to the outside environment indicating a more severe problem
-                    // than a simple failure.
                     if cfg!(unix) {
                         // On Unix, return the error code of an abort.
                         process::exit(128 + libc::SIGABRT);
@@ -238,6 +240,9 @@ impl RunCommand {
                         process::exit(3);
                     }
                 }
+
+                // Otherwise fall back on Rust's default error printing/return
+                // code.
                 return Err(e);
             }
         }

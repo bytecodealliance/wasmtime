@@ -1,7 +1,9 @@
 test interpret
 test run
+set enable_llvm_abi_extensions=true
 target aarch64
-; x86_64 and s390x do not support bitcasting to the same type as the input.
+target x86_64
+target s390x
 
 function %bitcast_i8(i8) -> i8 {
 block0(v0: i8):

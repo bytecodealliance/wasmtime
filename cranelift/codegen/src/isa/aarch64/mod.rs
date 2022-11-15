@@ -184,7 +184,7 @@ impl TargetIsa for AArch64Backend {
         Some(inst::unwind::systemv::create_cie())
     }
 
-    fn text_section_builder(&self, num_funcs: u32) -> Box<dyn TextSectionBuilder> {
+    fn text_section_builder(&self, num_funcs: usize) -> Box<dyn TextSectionBuilder> {
         Box::new(MachTextSectionBuilder::<inst::Inst>::new(num_funcs))
     }
 
@@ -265,12 +265,15 @@ mod test {
         let buffer = backend.compile_function(&mut func, false).unwrap().buffer;
         let code = buffer.data();
 
-        // mov x3, #0x1234
-        // add w0, w0, w3
-        // ret
-        let golden = vec![
-            0x83, 0x46, 0x82, 0xd2, 0x00, 0x00, 0x03, 0x0b, 0xc0, 0x03, 0x5f, 0xd6,
-        ];
+        // To update this comment, write the golden bytes to a file, and run the following command
+        // on it to update:
+        // > aarch64-linux-gnu-objdump -b binary -D <file> -m aarch64
+        //
+        // 0:   d2824682        mov     x2, #0x1234                     // #4660
+        // 4:   0b020000        add     w0, w0, w2
+        // 8:   d65f03c0        ret
+
+        let golden = vec![130, 70, 130, 210, 0, 0, 2, 11, 192, 3, 95, 214];
 
         assert_eq!(code, &golden[..]);
     }
@@ -320,24 +323,28 @@ mod test {
             .unwrap();
         let code = result.buffer.data();
 
-        // mov     x10, #0x1234                    // #4660
-        // add     w12, w0, w10
-        // mov     w11, w12
-        // cbnz    x11, 0x20
-        // mov     x13, #0x1234                    // #4660
-        // add     w15, w12, w13
-        // mov     w14, w15
-        // cbnz    x14, 0x10
-        // mov     w1, w12
-        // cbnz    x1, 0x10
-        // mov     x2, #0x1234                     // #4660
-        // sub     w0, w12, w2
-        // ret
+        // To update this comment, write the golden bytes to a file, and run the following command
+        // on it to update:
+        // > aarch64-linux-gnu-objdump -b binary -D <file> -m aarch64
+        //
+        //   0:   d2824689        mov     x9, #0x1234                     // #4660
+        //   4:   0b09000b        add     w11, w0, w9
+        //   8:   2a0b03ea        mov     w10, w11
+        //   c:   b50000aa        cbnz    x10, 0x20
+        //  10:   d282468c        mov     x12, #0x1234                    // #4660
+        //  14:   0b0c016e        add     w14, w11, w12
+        //  18:   2a0e03ed        mov     w13, w14
+        //  1c:   b5ffffad        cbnz    x13, 0x10
+        //  20:   2a0b03e0        mov     w0, w11
+        //  24:   b5ffff60        cbnz    x0, 0x10
+        //  28:   d2824681        mov     x1, #0x1234                     // #4660
+        //  2c:   4b010160        sub     w0, w11, w1
+        //  30:   d65f03c0        ret
 
         let golden = vec![
-            138, 70, 130, 210, 12, 0, 10, 11, 235, 3, 12, 42, 171, 0, 0, 181, 141, 70, 130, 210,
-            143, 1, 13, 11, 238, 3, 15, 42, 174, 255, 255, 181, 225, 3, 12, 42, 97, 255, 255, 181,
-            130, 70, 130, 210, 128, 1, 2, 75, 192, 3, 95, 214,
+            137, 70, 130, 210, 11, 0, 9, 11, 234, 3, 11, 42, 170, 0, 0, 181, 140, 70, 130, 210,
+            110, 1, 12, 11, 237, 3, 14, 42, 173, 255, 255, 181, 224, 3, 11, 42, 96, 255, 255, 181,
+            129, 70, 130, 210, 96, 1, 1, 75, 192, 3, 95, 214,
         ];
 
         assert_eq!(code, &golden[..]);
@@ -393,14 +400,18 @@ mod test {
             .unwrap();
         let code = result.buffer.data();
 
+        // To update this comment, write the golden bytes to a file, and run the following command
+        // on it to update:
+        // > aarch64-linux-gnu-objdump -b binary -D <file> -m aarch64
+        //
         //   0:   7100081f        cmp     w0, #0x2
         //   4:   54000122        b.cs    0x28  // b.hs, b.nlast
-        //   8:   9a8023e9        csel    x9, xzr, x0, cs  // cs = hs, nlast
+        //   8:   9a8023e8        csel    x8, xzr, x0, cs  // cs = hs, nlast
         //   c:   d503229f        csdb
-        //  10:   10000088        adr     x8, 0x1c
-        //  14:   b8a95909        ldrsw   x9, [x8, w9, uxtw #2]
-        //  18:   8b090108        add     x8, x8, x9
-        //  1c:   d61f0100        br      x8
+        //  10:   10000087        adr     x7, 0x20
+        //  14:   b8a858e8        ldrsw   x8, [x7, w8, uxtw #2]
+        //  18:   8b0800e7        add     x7, x7, x8
+        //  1c:   d61f00e0        br      x7
         //  20:   00000010        udf     #16
         //  24:   00000018        udf     #24
         //  28:   d2800060        mov     x0, #0x3                        // #3
@@ -411,9 +422,10 @@ mod test {
         //  3c:   d65f03c0        ret
 
         let golden = vec![
-            31, 8, 0, 113, 34, 1, 0, 84, 233, 35, 128, 154, 159, 34, 3, 213, 136, 0, 0, 16, 9, 89,
-            169, 184, 8, 1, 9, 139, 0, 1, 31, 214, 16, 0, 0, 0, 24, 0, 0, 0, 96, 0, 128, 210, 192,
-            3, 95, 214, 32, 0, 128, 210, 192, 3, 95, 214, 64, 0, 128, 210, 192, 3, 95, 214,
+            31, 8, 0, 113, 34, 1, 0, 84, 232, 35, 128, 154, 159, 34, 3, 213, 135, 0, 0, 16, 232,
+            88, 168, 184, 231, 0, 8, 139, 224, 0, 31, 214, 16, 0, 0, 0, 24, 0, 0, 0, 96, 0, 128,
+            210, 192, 3, 95, 214, 32, 0, 128, 210, 192, 3, 95, 214, 64, 0, 128, 210, 192, 3, 95,
+            214,
         ];
 
         assert_eq!(code, &golden[..]);

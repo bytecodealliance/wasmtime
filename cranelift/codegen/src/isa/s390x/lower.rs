@@ -43,7 +43,6 @@ impl LowerBackend for S390xBackend {
 
         match op {
             Opcode::Nop
-            | Opcode::Copy
             | Opcode::Iconst
             | Opcode::F32const
             | Opcode::F64const
@@ -59,9 +58,9 @@ impl LowerBackend for S390xBackend {
             | Opcode::UsubSat
             | Opcode::SsubSat
             | Opcode::IaddPairwise
-            | Opcode::Imin
+            | Opcode::Smin
             | Opcode::Umin
-            | Opcode::Imax
+            | Opcode::Smax
             | Opcode::Umax
             | Opcode::AvgRound
             | Opcode::Iabs
@@ -101,6 +100,7 @@ impl LowerBackend for S390xBackend {
             | Opcode::Vselect
             | Opcode::Bmask
             | Opcode::Bitrev
+            | Opcode::Bswap
             | Opcode::Clz
             | Opcode::Cls
             | Opcode::Ctz
@@ -141,7 +141,6 @@ impl LowerBackend for S390xBackend {
             | Opcode::ScalarToVector
             | Opcode::VhighBits
             | Opcode::Bitcast
-            | Opcode::RawBitcast
             | Opcode::Load
             | Opcode::Uload8
             | Opcode::Sload8
@@ -171,13 +170,12 @@ impl LowerBackend for S390xBackend {
             | Opcode::IsNull
             | Opcode::IsInvalid
             | Opcode::Select
-            | Opcode::SelectifSpectreGuard
+            | Opcode::SelectSpectreGuard
             | Opcode::Trap
             | Opcode::ResumableTrap
             | Opcode::Trapz
             | Opcode::Trapnz
             | Opcode::ResumableTrapnz
-            | Opcode::Trapif
             | Opcode::Debugtrap
             | Opcode::Call
             | Opcode::CallIndirect
@@ -223,21 +221,10 @@ impl LowerBackend for S390xBackend {
             Opcode::GlobalValue => {
                 panic!("global_value should have been removed by legalization!");
             }
-            Opcode::Ifcmp
-            | Opcode::Ffcmp
-            | Opcode::Trapff
-            | Opcode::Trueif
-            | Opcode::Trueff
-            | Opcode::Selectif => {
+            Opcode::Ifcmp | Opcode::Ffcmp => {
                 panic!("Flags opcode should not be encountered.");
             }
-            Opcode::Jump
-            | Opcode::Brz
-            | Opcode::Brnz
-            | Opcode::BrIcmp
-            | Opcode::Brif
-            | Opcode::Brff
-            | Opcode::BrTable => {
+            Opcode::Jump | Opcode::Brz | Opcode::Brnz | Opcode::BrTable => {
                 panic!("Branch opcode reached non-branch lowering logic!");
             }
             Opcode::IaddImm
@@ -252,6 +239,7 @@ impl LowerBackend for S390xBackend {
             | Opcode::IaddCout
             | Opcode::IaddCarry
             | Opcode::IaddIfcarry
+            | Opcode::UaddOverflowTrap
             | Opcode::IsubBin
             | Opcode::IsubIfbin
             | Opcode::IsubBout

@@ -3,19 +3,18 @@
 use crate::generators::{Config, DiffValue, DiffValueType};
 use crate::oracles::engine::{DiffEngine, DiffInstance};
 use anyhow::{Context, Error, Result};
-use wasmtime::{Trap, TrapCode};
+use wasmtime::Trap;
 
 /// A wrapper for `wasmi` as a [`DiffEngine`].
-pub struct WasmiEngine;
+pub struct WasmiEngine {
+    engine: wasmi::Engine,
+}
 
 impl WasmiEngine {
     pub(crate) fn new(config: &mut Config) -> Self {
         let config = &mut config.module_config.config;
         config.reference_types_enabled = false;
         config.simd_enabled = false;
-        config.multi_value_enabled = false;
-        config.saturating_float_to_int_enabled = false;
-        config.sign_extension_enabled = false;
         config.memory64_enabled = false;
         config.bulk_memory_enabled = false;
         config.threads_enabled = false;
@@ -24,7 +23,9 @@ impl WasmiEngine {
         config.max_tables = config.max_tables.min(1);
         config.min_tables = config.min_tables.min(1);
 
-        Self
+        Self {
+            engine: wasmi::Engine::default(),
+        }
     }
 }
 
@@ -34,11 +35,14 @@ impl DiffEngine for WasmiEngine {
     }
 
     fn instantiate(&mut self, wasm: &[u8]) -> Result<Box<dyn DiffInstance>> {
-        let module = wasmi::Module::from_buffer(wasm).context("unable to validate Wasm module")?;
-        let instance = wasmi::ModuleInstance::new(&module, &wasmi::ImportsBuilder::default())
+        let module =
+            wasmi::Module::new(&self.engine, wasm).context("unable to validate Wasm module")?;
+        let mut store = wasmi::Store::new(&self.engine, ());
+        let instance = wasmi::Linker::<()>::new()
+            .instantiate(&mut store, &module)
+            .and_then(|i| i.start(&mut store))
             .context("unable to instantiate module in wasmi")?;
-        let instance = instance.run_start(&mut wasmi::NopExternals)?;
-        Ok(Box::new(WasmiInstance { module, instance }))
+        Ok(Box::new(WasmiInstance { store, instance }))
     }
 
     fn assert_error_match(&self, trap: &Trap, err: &Error) {
@@ -51,8 +55,8 @@ impl DiffEngine for WasmiEngine {
             // Wasmtime reports as a `MemoryOutOfBounds`.
             Some(wasmi::Error::Memory(msg)) => {
                 assert_eq!(
-                    trap.trap_code(),
-                    Some(TrapCode::MemoryOutOfBounds),
+                    *trap,
+                    Trap::MemoryOutOfBounds,
                     "wasmtime error did not match wasmi: {msg}"
                 );
                 return;
@@ -69,62 +73,46 @@ impl DiffEngine for WasmiEngine {
             Some(other) => panic!("unexpected wasmi error: {}", other),
 
             None => err
-                .downcast_ref::<wasmi::Trap>()
+                .downcast_ref::<wasmi::core::Trap>()
                 .expect(&format!("not a trap: {:?}", err)),
         };
-        match wasmi.kind() {
-            wasmi::TrapKind::StackOverflow => {
-                assert_eq!(trap.trap_code(), Some(TrapCode::StackOverflow))
-            }
-            wasmi::TrapKind::MemoryAccessOutOfBounds => {
-                assert_eq!(trap.trap_code(), Some(TrapCode::MemoryOutOfBounds))
-            }
-            wasmi::TrapKind::Unreachable => {
-                assert_eq!(trap.trap_code(), Some(TrapCode::UnreachableCodeReached))
-            }
-            wasmi::TrapKind::TableAccessOutOfBounds => {
-                assert_eq!(trap.trap_code(), Some(TrapCode::TableOutOfBounds))
-            }
-            wasmi::TrapKind::ElemUninitialized => {
-                assert_eq!(trap.trap_code(), Some(TrapCode::IndirectCallToNull))
-            }
-            wasmi::TrapKind::DivisionByZero => {
-                assert_eq!(trap.trap_code(), Some(TrapCode::IntegerDivisionByZero))
-            }
-            wasmi::TrapKind::IntegerOverflow => {
-                assert_eq!(trap.trap_code(), Some(TrapCode::IntegerOverflow))
-            }
-            wasmi::TrapKind::InvalidConversionToInt => {
-                assert_eq!(trap.trap_code(), Some(TrapCode::BadConversionToInteger))
-            }
-            wasmi::TrapKind::UnexpectedSignature => {
-                assert_eq!(trap.trap_code(), Some(TrapCode::BadSignature))
-            }
-            wasmi::TrapKind::Host(_) => unreachable!(),
-        }
+        assert!(wasmi.as_code().is_some());
+        assert_eq!(wasmi_to_wasmtime_trap_code(wasmi.as_code().unwrap()), *trap);
     }
 
     fn is_stack_overflow(&self, err: &Error) -> bool {
         let trap = match err.downcast_ref::<wasmi::Error>() {
             Some(wasmi::Error::Trap(trap)) => trap,
             Some(_) => return false,
-            None => match err.downcast_ref::<wasmi::Trap>() {
+            None => match err.downcast_ref::<wasmi::core::Trap>() {
                 Some(trap) => trap,
                 None => return false,
             },
         };
-        match trap.kind() {
-            wasmi::TrapKind::StackOverflow => true,
-            _ => false,
-        }
+        matches!(trap.as_code(), Some(wasmi::core::TrapCode::StackOverflow))
+    }
+}
+
+/// Converts `wasmi` trap code to `wasmtime` trap code.
+fn wasmi_to_wasmtime_trap_code(trap: wasmi::core::TrapCode) -> Trap {
+    use wasmi::core::TrapCode;
+    match trap {
+        TrapCode::Unreachable => Trap::UnreachableCodeReached,
+        TrapCode::MemoryAccessOutOfBounds => Trap::MemoryOutOfBounds,
+        TrapCode::TableAccessOutOfBounds => Trap::TableOutOfBounds,
+        TrapCode::ElemUninitialized => Trap::IndirectCallToNull,
+        TrapCode::DivisionByZero => Trap::IntegerDivisionByZero,
+        TrapCode::IntegerOverflow => Trap::IntegerOverflow,
+        TrapCode::InvalidConversionToInt => Trap::BadConversionToInteger,
+        TrapCode::StackOverflow => Trap::StackOverflow,
+        TrapCode::UnexpectedSignature => Trap::BadSignature,
     }
 }
 
 /// A wrapper for `wasmi` Wasm instances.
 struct WasmiInstance {
-    #[allow(dead_code)] // reason = "the module must live as long as its reference"
-    module: wasmi::Module,
-    instance: wasmi::ModuleRef,
+    store: wasmi::Store<()>,
+    instance: wasmi::Instance,
 }
 
 impl DiffInstance for WasmiInstance {
@@ -136,57 +124,55 @@ impl DiffInstance for WasmiInstance {
         &mut self,
         function_name: &str,
         arguments: &[DiffValue],
-        _results: &[DiffValueType],
+        result_tys: &[DiffValueType],
     ) -> Result<Option<Vec<DiffValue>>> {
-        let arguments: Vec<_> = arguments.iter().map(wasmi::RuntimeValue::from).collect();
-        let export = self
+        let function = self
             .instance
-            .export_by_name(function_name)
-            .context(format!(
-                "unable to find function '{}' in wasmi instance",
-                function_name
-            ))?;
-        let function = export.as_func().context("wasmi export is not a function")?;
-        let result = wasmi::FuncInstance::invoke(&function, &arguments, &mut wasmi::NopExternals)
-            .context("failed while invoking function in wasmi")?;
-        Ok(Some(if let Some(result) = result {
-            vec![result.into()]
-        } else {
-            vec![]
-        }))
+            .get_export(&self.store, function_name)
+            .and_then(wasmi::Extern::into_func)
+            .unwrap();
+        let arguments: Vec<_> = arguments.iter().map(|x| x.into()).collect();
+        let mut results = vec![wasmi::core::Value::I32(0); result_tys.len()];
+        function
+            .call(&mut self.store, &arguments, &mut results)
+            .context("wasmi function trap")?;
+        Ok(Some(results.into_iter().map(Into::into).collect()))
     }
 
     fn get_global(&mut self, name: &str, _ty: DiffValueType) -> Option<DiffValue> {
-        match self.instance.export_by_name(name) {
-            Some(wasmi::ExternVal::Global(g)) => Some(g.get().into()),
-            _ => unreachable!(),
-        }
+        Some(
+            self.instance
+                .get_export(&self.store, name)
+                .unwrap()
+                .into_global()
+                .unwrap()
+                .get(&self.store)
+                .into(),
+        )
     }
 
     fn get_memory(&mut self, name: &str, shared: bool) -> Option<Vec<u8>> {
         assert!(!shared);
-        match self.instance.export_by_name(name) {
-            Some(wasmi::ExternVal::Memory(m)) => {
-                // `wasmi` memory may be stored non-contiguously; copy
-                // it out to a contiguous chunk.
-                let mut buffer: Vec<u8> = vec![0; m.current_size().0 * 65536];
-                m.get_into(0, &mut buffer[..])
-                    .expect("can access wasmi memory");
-                Some(buffer)
-            }
-            _ => unreachable!(),
-        }
+        Some(
+            self.instance
+                .get_export(&self.store, name)
+                .unwrap()
+                .into_memory()
+                .unwrap()
+                .data(&self.store)
+                .to_vec(),
+        )
     }
 }
 
-impl From<&DiffValue> for wasmi::RuntimeValue {
+impl From<&DiffValue> for wasmi::core::Value {
     fn from(v: &DiffValue) -> Self {
-        use wasmi::RuntimeValue::*;
+        use wasmi::core::Value::*;
         match *v {
             DiffValue::I32(n) => I32(n),
             DiffValue::I64(n) => I64(n),
-            DiffValue::F32(n) => F32(wasmi::nan_preserving_float::F32::from_bits(n)),
-            DiffValue::F64(n) => F64(wasmi::nan_preserving_float::F64::from_bits(n)),
+            DiffValue::F32(n) => F32(wasmi::core::F32::from_bits(n)),
+            DiffValue::F64(n) => F64(wasmi::core::F64::from_bits(n)),
             DiffValue::V128(_) | DiffValue::FuncRef { .. } | DiffValue::ExternRef { .. } => {
                 unimplemented!()
             }
@@ -194,14 +180,14 @@ impl From<&DiffValue> for wasmi::RuntimeValue {
     }
 }
 
-impl Into<DiffValue> for wasmi::RuntimeValue {
-    fn into(self) -> DiffValue {
-        use wasmi::RuntimeValue::*;
-        match self {
-            I32(n) => DiffValue::I32(n),
-            I64(n) => DiffValue::I64(n),
-            F32(n) => DiffValue::F32(n.to_bits()),
-            F64(n) => DiffValue::F64(n.to_bits()),
+impl From<wasmi::core::Value> for DiffValue {
+    fn from(value: wasmi::core::Value) -> Self {
+        use wasmi::core::Value as WasmiValue;
+        match value {
+            WasmiValue::I32(n) => DiffValue::I32(n),
+            WasmiValue::I64(n) => DiffValue::I64(n),
+            WasmiValue::F32(n) => DiffValue::F32(n.to_bits()),
+            WasmiValue::F64(n) => DiffValue::F64(n.to_bits()),
         }
     }
 }

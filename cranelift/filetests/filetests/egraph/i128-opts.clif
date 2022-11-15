@@ -1,0 +1,13 @@
+test optimize
+set opt_level=speed_and_size
+set use_egraphs=true
+target x86_64
+
+; This it a regression test to ensure that we don't insert a iconst.i128 when optimizing bxor.
+function %bxor_i128(i128) -> i128 system_v {
+block0(v0: i128):
+    v1 = bxor v0, v0
+    return v1
+    ; check: v1 = bxor v0, v0
+    ; nextln: return v1
+}

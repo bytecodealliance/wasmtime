@@ -1,14 +1,14 @@
 //! Trie construction.
 
-use crate::ir::{lower_rule, ExprSequence, PatternInst, PatternSequence};
+use crate::ir::{lower_rule, ExprSequence, PatternInst};
 use crate::log;
-use crate::sema::{RuleId, TermEnv, TermId, TypeEnv};
+use crate::sema::{TermEnv, TermId};
 use std::collections::BTreeMap;
 
 /// Construct the tries for each term.
-pub fn build_tries(typeenv: &TypeEnv, termenv: &TermEnv) -> BTreeMap<TermId, TrieNode> {
-    let mut builder = TermFunctionsBuilder::new(typeenv, termenv);
-    builder.build();
+pub fn build_tries(termenv: &TermEnv) -> BTreeMap<TermId, TrieNode> {
+    let mut builder = TermFunctionsBuilder::default();
+    builder.build(termenv);
     log!("builder: {:?}", builder);
     builder.finalize()
 }
@@ -280,91 +280,43 @@ impl TrieNode {
     }
 }
 
-/// Builder context for one function in generated code corresponding
-/// to one root input term.
-///
-/// A `TermFunctionBuilder` can correspond to the matching
-/// control-flow and operations that we execute either when evaluating
-/// *forward* on a term, trying to match left-hand sides against it
-/// and transforming it into another term; or *backward* on a term,
-/// trying to match another rule's left-hand side against an input to
-/// produce the term in question (when the term is used in the LHS of
-/// the calling term).
-#[derive(Debug)]
-struct TermFunctionBuilder {
-    trie: TrieNode,
+#[derive(Debug, Default)]
+struct TermFunctionsBuilder {
+    builders_by_term: BTreeMap<TermId, TrieNode>,
 }
 
-impl TermFunctionBuilder {
-    fn new() -> Self {
-        TermFunctionBuilder {
-            trie: TrieNode::Empty,
-        }
-    }
-
-    fn add_rule(&mut self, prio: Prio, pattern_seq: PatternSequence, expr_seq: ExprSequence) {
-        let symbols = pattern_seq
-            .insts
-            .into_iter()
-            .map(|op| TrieSymbol::Match { op })
-            .chain(std::iter::once(TrieSymbol::EndOfMatch));
-        self.trie.insert(prio, symbols, expr_seq);
-    }
-
-    fn sort_trie(&mut self) {
-        self.trie.sort();
-    }
-}
-
-#[derive(Debug)]
-struct TermFunctionsBuilder<'a> {
-    typeenv: &'a TypeEnv,
-    termenv: &'a TermEnv,
-    builders_by_term: BTreeMap<TermId, TermFunctionBuilder>,
-}
-
-impl<'a> TermFunctionsBuilder<'a> {
-    fn new(typeenv: &'a TypeEnv, termenv: &'a TermEnv) -> Self {
-        log!("typeenv: {:?}", typeenv);
+impl TermFunctionsBuilder {
+    fn build(&mut self, termenv: &TermEnv) {
         log!("termenv: {:?}", termenv);
-        Self {
-            builders_by_term: BTreeMap::new(),
-            typeenv,
-            termenv,
-        }
-    }
-
-    fn build(&mut self) {
-        for rule in 0..self.termenv.rules.len() {
-            let rule = RuleId(rule);
-            let prio = self.termenv.rules[rule.index()].prio;
-
-            let (pattern, expr) = lower_rule(self.typeenv, self.termenv, rule);
-            let root_term = self.termenv.rules[rule.index()].lhs.root_term().unwrap();
+        for rule in termenv.rules.iter() {
+            let (pattern, expr) = lower_rule(termenv, rule.id);
+            let root_term = rule.lhs.root_term().unwrap();
 
             log!(
                 "build:\n- rule {:?}\n- pattern {:?}\n- expr {:?}",
-                self.termenv.rules[rule.index()],
+                rule,
                 pattern,
                 expr
             );
+
+            let symbols = pattern
+                .insts
+                .into_iter()
+                .map(|op| TrieSymbol::Match { op })
+                .chain(std::iter::once(TrieSymbol::EndOfMatch));
+
             self.builders_by_term
                 .entry(root_term)
-                .or_insert_with(|| TermFunctionBuilder::new())
-                .add_rule(prio, pattern.clone(), expr.clone());
+                .or_insert(TrieNode::Empty)
+                .insert(rule.prio, symbols, expr);
         }
 
         for builder in self.builders_by_term.values_mut() {
-            builder.sort_trie();
+            builder.sort();
         }
     }
 
     fn finalize(self) -> BTreeMap<TermId, TrieNode> {
-        let functions_by_term = self
-            .builders_by_term
-            .into_iter()
-            .map(|(term, builder)| (term, builder.trie))
-            .collect::<BTreeMap<_, _>>();
-        functions_by_term
+        self.builders_by_term
     }
 }

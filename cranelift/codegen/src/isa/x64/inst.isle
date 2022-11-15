@@ -95,8 +95,13 @@
 
        ;; Like `MovRR` but with a physical register source (for implementing
        ;; CLIF instructions like `get_stack_pointer`).
-       (MovPReg (src PReg)
-                (dst WritableGpr))
+       (MovFromPReg (src PReg)
+                    (dst WritableGpr))
+
+       ;; Like `MovRR` but with a physical register destination (for
+       ;; implementing CLIF instructions like `set_pinned_reg`).
+       (MovToPReg (src Gpr)
+                  (dst PReg))
 
        ;; Zero-extended loads, except for 64 bits: movz (bl bq wl wq lq) addr
        ;; reg.
@@ -151,6 +156,11 @@
        (Setcc (cc CC)
               (dst WritableGpr))
 
+       ;; Swaps byte order in register
+       (Bswap (size OperandSize) ;; 4 or 8
+              (src Gpr)
+              (dst WritableGpr))
+
        ;; =========================================
        ;; Conditional moves.
 
@@ -191,6 +201,17 @@
                (src1 Xmm)
                (src2 XmmMem)
                (dst WritableXmm))
+
+       ;; XMM (scalar or vector) blend op. The mask is used to blend between
+       ;; src1 and src2. This differs from a use of `XmmRmR` as the mask is
+       ;; implicitly in register xmm0; this special case exists to allow us to
+       ;; communicate the constraint on the `mask` register to regalloc2.
+       (XmmRmRBlend
+         (op SseOpcode)
+         (src1 Xmm)
+         (src2 XmmMem)
+         (mask Xmm)
+         (dst WritableXmm))
 
        ;; XMM (scalar or vector) binary op that relies on the VEX prefix.
        (XmmRmRVex (op AvxOpcode)
@@ -328,7 +349,7 @@
         (args VecArgPair))
 
        ;; Return.
-       (Ret (rets VecReg))
+       (Ret (rets VecRetPair))
 
        ;; Jump to a known target: jmp simm32.
        (JmpKnown (dst MachLabel))
@@ -1089,12 +1110,6 @@
 (decl cc_invert (CC) CC)
 (extern constructor cc_invert cc_invert)
 
-(decl intcc_reverse (IntCC) IntCC)
-(extern constructor intcc_reverse intcc_reverse)
-
-(decl floatcc_inverse (FloatCC) FloatCC)
-(extern constructor floatcc_inverse floatcc_inverse)
-
 ;; Fails if the argument is not either CC.NZ or CC.Z.
 (decl cc_nz_or_z (CC) CC)
 (extern extractor cc_nz_or_z cc_nz_or_z)
@@ -1200,10 +1215,6 @@
 ;; Allocate a new temporary XMM register.
 (decl temp_writable_xmm () WritableXmm)
 (extern constructor temp_writable_xmm temp_writable_xmm)
-
-;; Fetch the special pinned register.
-(decl pinned_writable_gpr () WritableGpr)
-(extern constructor pinned_writable_gpr pinned_writable_gpr)
 
 ;; Construct a new `XmmMem` from the given `RegMem`.
 ;;
@@ -1352,15 +1363,6 @@
 ;; For conditions without a zero component, this is a no-op.
 (decl intcc_without_eq (IntCC) IntCC)
 (extern constructor intcc_without_eq intcc_without_eq)
-
-;;;; Helpers for Getting Particular Physical Registers ;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-;; These should only be used for legalization purposes, when we can't otherwise
-;; rely on something like `Inst::mov_mitosis` to put an operand into the
-;; appropriate physical register for whatever reason.
-
-(decl xmm0 () WritableXmm)
-(extern constructor xmm0 xmm0)
 
 ;;;; Helpers for determining the register class of a value type ;;;;;;;;;;;;;;;;
 
@@ -1965,6 +1967,16 @@
 (rule (x64_sar ty src1 src2)
       (shift_r ty (ShiftKind.ShiftRightArithmetic) src1 src2))
 
+;; Helper for creating byteswap instructions.
+;; In x64, 32- and 64-bit registers use BSWAP instruction, and
+;; for 16-bit registers one must instead use xchg or rol/ror
+(decl x64_bswap (Type Gpr) Gpr)
+(rule (x64_bswap ty src)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (size OperandSize (operand_size_of_type_32_64 ty))
+            (_ Unit (emit (MInst.Bswap size src dst))))
+        dst))
+
 ;; Helper for creating `MInst.CmpRmiR` instructions.
 (decl cmp_rmi_r (OperandSize CmpOpcode GprMemImm Gpr) ProducesFlags)
 (rule (cmp_rmi_r size opcode src1 src2)
@@ -2422,33 +2434,21 @@
 ;; Priority 0 because multi_lane overlaps with the previous two type patterns.
 (rule 0 (sse_mov_op (multi_lane _bits _lanes)) (SseOpcode.Movdqa))
 
+(decl xmm_rm_r_blend (SseOpcode Xmm XmmMem Xmm) Xmm)
+(rule (xmm_rm_r_blend op src1 src2 mask)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmRmRBlend op src1 src2 mask dst))))
+        dst))
+
 ;; Helper for creating `blendvp{d,s}` and `pblendvb` instructions.
-(decl x64_blend (Type XmmMem XmmMem Xmm) Xmm)
+(decl x64_blend (Type Xmm XmmMem Xmm) Xmm)
 (rule (x64_blend ty mask src1 src2)
-      ;; Move the mask into `xmm0`, as blend instructions implicitly operate on
-      ;; that register. (This kind of thing would normally happen inside of
-      ;; `Inst::mov_mitosis`, but has to happen here, where we still have the
-      ;; mask register, because the mask is implicit and doesn't appear in the
-      ;; `Inst` itself.)
-      (let ((mask2 WritableXmm (xmm0))
-            (_ Unit (emit (MInst.XmmUnaryRmR (sse_mov_op ty)
-                                             mask
-                                             mask2))))
-        (xmm_rm_r ty (sse_blend_op ty) src2 src1)))
+      (xmm_rm_r_blend (sse_blend_op ty) src2 src1 mask))
 
 ;; Helper for creating `blendvpd` instructions.
 (decl x64_blendvpd (Xmm XmmMem Xmm) Xmm)
 (rule (x64_blendvpd src1 src2 mask)
-      ;; Move the mask into `xmm0`, as `blendvpd` implicitly operates on that
-      ;; register. (This kind of thing would normally happen inside of
-      ;; `Inst::mov_mitosis`, but has to happen here, where we still have the
-      ;; mask register, because the mask is implicit and doesn't appear in the
-      ;; `Inst` itself.)
-      (let ((mask2 WritableXmm (xmm0))
-            (_ Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Movapd)
-                                             mask
-                                             mask2))))
-        (xmm_rm_r $F64X2 (SseOpcode.Blendvpd) src1 src2)))
+      (xmm_rm_r_blend (SseOpcode.Blendvpd) src1 src2 mask))
 
 ;; Helper for creating `movsd` instructions.
 (decl x64_movsd_regmove (Xmm XmmMem) Xmm)
@@ -2920,9 +2920,17 @@
 (decl x64_neg (Type Gpr) Gpr)
 (rule (x64_neg ty src)
       (let ((dst WritableGpr (temp_writable_gpr))
-            (size OperandSize (operand_size_of_type_32_64 ty))
+            (size OperandSize (raw_operand_size_of_type ty))
             (_ Unit (emit (MInst.Neg size src dst))))
         dst))
+
+;; Helper for creating `neg` instructions whose flags are also used.
+(decl x64_neg_paired (Type Gpr) ProducesFlags)
+(rule (x64_neg_paired ty src)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (size OperandSize (raw_operand_size_of_type ty))
+            (inst MInst (MInst.Neg size src dst)))
+        (ProducesFlags.ProducesFlagsReturnsResultWithConsumer inst dst)))
 
 (decl x64_lea (SyntheticAmode) Gpr)
 (rule (x64_lea addr)
@@ -3684,12 +3692,11 @@
 
 (decl read_pinned_gpr () Gpr)
 (rule (read_pinned_gpr)
-      (pinned_writable_gpr))
+      (mov_from_preg (preg_pinned)))
 
 (decl write_pinned_gpr (Gpr) SideEffectNoResult)
 (rule (write_pinned_gpr val)
-      (let ((dst WritableGpr (pinned_writable_gpr)))
-        (SideEffectNoResult.Inst (gen_move $I64 dst val))))
+      (mov_to_preg (preg_pinned) val))
 
 ;;;; Shuffle ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3865,12 +3872,16 @@
 (decl const_to_synthetic_amode (VCodeConstant) SyntheticAmode)
 (extern constructor const_to_synthetic_amode const_to_synthetic_amode)
 
-;; Helper for creating `MovPReg` instructions.
-(decl mov_preg (PReg) Reg)
-(rule (mov_preg preg)
+;; Helper for creating `MovFromPReg` instructions.
+(decl mov_from_preg (PReg) Reg)
+(rule (mov_from_preg preg)
       (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.MovPReg preg dst))))
+            (_ Unit (emit (MInst.MovFromPReg preg dst))))
         dst))
+
+(decl mov_to_preg (PReg Gpr) SideEffectNoResult)
+(rule (mov_to_preg dst src)
+      (SideEffectNoResult.Inst (MInst.MovToPReg src dst)))
 
 (decl preg_rbp () PReg)
 (extern constructor preg_rbp preg_rbp)
@@ -3878,13 +3889,16 @@
 (decl preg_rsp () PReg)
 (extern constructor preg_rsp preg_rsp)
 
+(decl preg_pinned () PReg)
+(extern constructor preg_pinned preg_pinned)
+
 (decl x64_rbp () Reg)
 (rule (x64_rbp)
-      (mov_preg (preg_rbp)))
+      (mov_from_preg (preg_rbp)))
 
 (decl x64_rsp () Reg)
 (rule (x64_rsp)
-      (mov_preg (preg_rsp)))
+      (mov_from_preg (preg_rsp)))
 
 ;;;; Helpers for Emitting LibCalls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

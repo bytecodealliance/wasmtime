@@ -25,5 +25,4 @@ default = [
     "wasmtime/parallel-compilation",
 ]
 pooling-allocator = []
-memory-init-cow = []
 component-model = []

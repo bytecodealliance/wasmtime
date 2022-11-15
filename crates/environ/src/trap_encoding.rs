@@ -1,3 +1,4 @@
+use crate::obj::ELF_WASMTIME_TRAPS;
 use object::write::{Object, StandardSegment};
 use object::{Bytes, LittleEndian, SectionKind, U32Bytes};
 use std::convert::TryFrom;
@@ -15,33 +16,6 @@ pub struct TrapEncodingBuilder {
     traps: Vec<u8>,
     last_offset: u32,
 }
-
-/// A custom binary-encoded section of wasmtime compilation artifacts which
-/// encodes the ability to map an offset in the text section to the trap code
-/// that it corresponds to.
-///
-/// This section is used at runtime to determine what flavor fo trap happened to
-/// ensure that embedders and debuggers know the reason for the wasm trap. The
-/// encoding of this section is custom to Wasmtime and managed with helpers in
-/// the `object` crate:
-///
-/// * First the section has a 32-bit little endian integer indicating how many
-///   trap entries are in the section.
-/// * Next is an array, of the same length as read before, of 32-bit
-///   little-endian integers. These integers are offsets into the text section
-///   of the compilation image.
-/// * Finally is the same count number of bytes. Each of these bytes corresponds
-///   to a trap code.
-///
-/// This section is decoded by `lookup_trap_code` below which will read the
-/// section count, slice some bytes to get the various arrays, and then perform
-/// a binary search on the offsets array to find the an index corresponding to
-/// the pc being looked up. If found the same index in the trap array (the array
-/// of bytes) is the trap code for that offset.
-///
-/// Note that at this time this section has an alignment of 1. Additionally due
-/// to the 32-bit encodings for offsets this doesn't support images >=4gb.
-pub const ELF_WASMTIME_TRAPS: &str = ".wasmtime.traps";
 
 /// Information about trap.
 #[derive(Debug, PartialEq, Eq, Clone)]

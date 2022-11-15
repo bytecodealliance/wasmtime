@@ -118,6 +118,18 @@ cfg_if! {
                     .mode(arch::sysz::ArchMode::Default)
                     .build()
                     .map_err(map_caperr)?,
+                Architecture::Riscv64 {..} => {
+                    let mut cs = Capstone::new()
+                        .riscv()
+                        .mode(arch::riscv::ArchMode::RiscV64)
+                        .build()
+                        .map_err(map_caperr)?;
+                    // Similar to AArch64, RISC-V uses inline constants rather than a separate
+                    // constant pool. We want to skip dissasembly over inline constants instead
+                    // of stopping on invalid bytes.
+                    cs.set_skipdata(true).map_err(map_caperr)?;
+                    cs
+                }
                 _ => anyhow::bail!("Unknown ISA"),
             };
 

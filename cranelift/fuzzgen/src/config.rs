@@ -1,8 +1,13 @@
+use std::collections::HashMap;
 use std::ops::RangeInclusive;
 
 /// Holds the range of acceptable values to use during the generation of testcases
 pub struct Config {
-    pub test_case_inputs: RangeInclusive<usize>,
+    /// Maximum allowed test case inputs.
+    /// We build test case inputs from the rest of the bytes that the fuzzer provides us
+    /// so we allow the fuzzer to control this by feeding us more or less bytes.
+    /// The upper bound here is to prevent too many inputs that cause long test times
+    pub max_test_case_inputs: usize,
     pub signature_params: RangeInclusive<usize>,
     pub signature_rets: RangeInclusive<usize>,
     pub instructions_per_block: RangeInclusive<usize>,
@@ -32,6 +37,8 @@ pub struct Config {
     pub static_stack_slots_per_function: RangeInclusive<usize>,
     /// Size in bytes
     pub static_stack_slot_size: RangeInclusive<usize>,
+    /// Allowed stack probe sizes
+    pub stack_probe_size_log2: RangeInclusive<usize>,
 
     /// Determines how often we generate a backwards branch
     /// Backwards branches are prone to infinite loops, and thus cause timeouts.
@@ -51,12 +58,17 @@ pub struct Config {
     /// We insert a checking sequence to guarantee that those inputs never make
     /// it to the instruction, but sometimes we want to allow them.
     pub allowed_fcvt_traps_ratio: (usize, usize),
+
+    /// Some flags really impact compile performance, we still want to test
+    /// them, but probably at a lower rate, so that overall execution time isn't
+    /// impacted as much
+    pub compile_flag_ratio: HashMap<&'static str, (usize, usize)>,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Config {
-            test_case_inputs: 1..=10,
+            max_test_case_inputs: 100,
             signature_params: 0..=16,
             signature_rets: 0..=16,
             instructions_per_block: 0..=64,
@@ -70,11 +82,25 @@ impl Default for Config {
             funcrefs_per_function: 0..=8,
             static_stack_slots_per_function: 0..=8,
             static_stack_slot_size: 0..=128,
+            // We need the mix of sizes that allows us to:
+            //  * not generates any stack probes
+            //  * generate unrolled stack probes
+            //  * generate loop stack probes
+            //
+            // This depends on the total amount of stack space that we have for this function
+            // (controlled by `static_stack_slots_per_function` and `static_stack_slot_size`)
+            //
+            // 1<<6 = 64 and 1<<14 = 16384
+            //
+            // This range allows us to generate all 3 cases within the current allowed
+            // stack size range.
+            stack_probe_size_log2: 6..=14,
             // 0.1% allows us to explore this, while not causing enough timeouts to significantly
             // impact execs/s
             backwards_branch_ratio: (1, 1000),
             allowed_int_divz_ratio: (1, 1_000_000),
             allowed_fcvt_traps_ratio: (1, 1_000_000),
+            compile_flag_ratio: [("regalloc_checker", (1usize, 1000))].into_iter().collect(),
         }
     }
 }

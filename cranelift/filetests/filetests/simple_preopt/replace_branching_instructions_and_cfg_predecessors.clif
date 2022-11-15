@@ -7,7 +7,7 @@ function u0:2(i64 , i64) {
     heap0 = static gv1
     block0(v0: i64, v1: i64):
         v16 = iconst.i32 6
-        v17 = heap_addr.i64 heap0, v16, 1
+        v17 = heap_addr.i64 heap0, v16, 0, 1
         v18 = load.i32 v17
         v19 = iconst.i32 4
         v20 = icmp ne v18, v19

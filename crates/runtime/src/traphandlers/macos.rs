@@ -120,7 +120,7 @@ mod mach_addons {
 
     pub static ARM_THREAD_STATE64: thread_state_flavor_t = 6;
 
-    #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
+    #[cfg(target_arch = "x86_64")]
     pub static THREAD_STATE_NONE: thread_state_flavor_t = 13;
     #[cfg(target_arch = "aarch64")]
     pub static THREAD_STATE_NONE: thread_state_flavor_t = 5;

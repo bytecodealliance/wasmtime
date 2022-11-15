@@ -20,7 +20,8 @@ fn main() -> Result<()> {
         let fuel_before = store.fuel_consumed().unwrap();
         let output = match fibonacci.call(&mut store, n) {
             Ok(v) => v,
-            Err(_) => {
+            Err(e) => {
+                assert_eq!(e.downcast::<Trap>()?, Trap::OutOfFuel);
                 println!("Exhausted fuel computing fib({})", n);
                 break;
             }

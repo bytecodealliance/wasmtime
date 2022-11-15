@@ -2,8 +2,10 @@
 
 use super::PoolingAllocationStrategy;
 use crate::CompiledModuleId;
-use rand::Rng;
+use rand::rngs::SmallRng;
+use rand::{Rng, SeedableRng};
 use std::collections::HashMap;
+use std::sync::Mutex;
 
 /// A slot index. The job of this allocator is to hand out these
 /// indices.
@@ -36,8 +38,17 @@ impl PerModuleFreeListIndex {
     }
 }
 
-#[derive(Clone, Debug)]
-pub(crate) enum PoolingAllocationState {
+#[derive(Debug)]
+pub struct IndexAllocator(Mutex<Inner>);
+
+#[derive(Debug)]
+struct Inner {
+    rng: SmallRng,
+    state: State,
+}
+
+#[derive(Debug)]
+enum State {
     NextAvailable(Vec<SlotId>),
     Random(Vec<SlotId>),
     /// Reuse-affinity policy state.
@@ -246,14 +257,14 @@ fn remove_module_free_list_item(
     }
 }
 
-impl PoolingAllocationState {
+impl IndexAllocator {
     /// Create the default state for this strategy.
-    pub(crate) fn new(strategy: PoolingAllocationStrategy, max_instances: usize) -> Self {
+    pub fn new(strategy: PoolingAllocationStrategy, max_instances: usize) -> Self {
         let ids = (0..max_instances).map(|i| SlotId(i)).collect::<Vec<_>>();
-        match strategy {
-            PoolingAllocationStrategy::NextAvailable => PoolingAllocationState::NextAvailable(ids),
-            PoolingAllocationStrategy::Random => PoolingAllocationState::Random(ids),
-            PoolingAllocationStrategy::ReuseAffinity => PoolingAllocationState::ReuseAffinity {
+        let state = match strategy {
+            PoolingAllocationStrategy::NextAvailable => State::NextAvailable(ids),
+            PoolingAllocationStrategy::Random => State::Random(ids),
+            PoolingAllocationStrategy::ReuseAffinity => State::ReuseAffinity {
                 free_list: ids,
                 per_module: HashMap::new(),
                 slot_state: (0..max_instances)
@@ -264,35 +275,37 @@ impl PoolingAllocationState {
                     })
                     .collect(),
             },
-        }
-    }
-
-    /// Are any slots left, or is this allocator empty?
-    pub(crate) fn is_empty(&self) -> bool {
-        match self {
-            &PoolingAllocationState::NextAvailable(ref free_list)
-            | &PoolingAllocationState::Random(ref free_list) => free_list.is_empty(),
-            &PoolingAllocationState::ReuseAffinity { ref free_list, .. } => free_list.is_empty(),
-        }
+        };
+        // Use a deterministic seed during fuzzing to improve reproducibility of
+        // test cases, but otherwise outside of fuzzing use a random seed to
+        // shake things up.
+        let seed = if cfg!(fuzzing) {
+            [0; 32]
+        } else {
+            rand::thread_rng().gen()
+        };
+        let rng = SmallRng::from_seed(seed);
+        IndexAllocator(Mutex::new(Inner { rng, state }))
     }
 
     /// Allocate a new slot.
-    pub(crate) fn alloc(&mut self, id: Option<CompiledModuleId>) -> SlotId {
-        match self {
-            &mut PoolingAllocationState::NextAvailable(ref mut free_list) => {
-                debug_assert!(free_list.len() > 0);
-                free_list.pop().unwrap()
+    pub fn alloc(&self, id: Option<CompiledModuleId>) -> Option<SlotId> {
+        let mut inner = self.0.lock().unwrap();
+        let inner = &mut *inner;
+        match &mut inner.state {
+            State::NextAvailable(free_list) => free_list.pop(),
+            State::Random(free_list) => {
+                if free_list.len() == 0 {
+                    None
+                } else {
+                    let id = inner.rng.gen_range(0..free_list.len());
+                    Some(free_list.swap_remove(id))
+                }
             }
-            &mut PoolingAllocationState::Random(ref mut free_list) => {
-                debug_assert!(free_list.len() > 0);
-                let id = rand::thread_rng().gen_range(0..free_list.len());
-                free_list.swap_remove(id)
-            }
-            &mut PoolingAllocationState::ReuseAffinity {
-                ref mut free_list,
-                ref mut per_module,
-                ref mut slot_state,
-                ..
+            State::ReuseAffinity {
+                free_list,
+                per_module,
+                slot_state,
             } => {
                 if let Some(this_module) = id.and_then(|id| per_module.get_mut(&id)) {
                     // There is a freelist of slots with affinity for
@@ -308,8 +321,11 @@ impl PoolingAllocationState {
                     // per-module list above.
                     remove_global_free_list_item(slot_state, free_list, slot_id);
                     slot_state[slot_id.index()] = SlotState::Taken(id);
-                    slot_id
+                    Some(slot_id)
                 } else {
+                    if free_list.len() == 0 {
+                        return None;
+                    }
                     // Pick a random free slot ID. Note that we do
                     // this, rather than pick a victim module first,
                     // to maintain an unbiased stealing distribution:
@@ -333,7 +349,7 @@ impl PoolingAllocationState {
                     // instantiation very quickly, so there will never
                     // (past an initial phase) be a slot with no
                     // affinity.
-                    let free_list_index = rand::thread_rng().gen_range(0..free_list.len());
+                    let free_list_index = inner.rng.gen_range(0..free_list.len());
                     let slot_id = free_list[free_list_index];
                     // Remove from both the global freelist and
                     // per-module freelist, if any.
@@ -345,22 +361,22 @@ impl PoolingAllocationState {
                     }
                     slot_state[slot_id.index()] = SlotState::Taken(id);
 
-                    slot_id
+                    Some(slot_id)
                 }
             }
         }
     }
 
-    pub(crate) fn free(&mut self, index: SlotId) {
-        match self {
-            &mut PoolingAllocationState::NextAvailable(ref mut free_list)
-            | &mut PoolingAllocationState::Random(ref mut free_list) => {
+    pub(crate) fn free(&self, index: SlotId) {
+        let mut inner = self.0.lock().unwrap();
+        match &mut inner.state {
+            State::NextAvailable(free_list) | State::Random(free_list) => {
                 free_list.push(index);
             }
-            &mut PoolingAllocationState::ReuseAffinity {
-                ref mut per_module,
-                ref mut free_list,
-                ref mut slot_state,
+            State::ReuseAffinity {
+                per_module,
+                free_list,
+                slot_state,
             } => {
                 let module_id = slot_state[index.index()].unwrap_module_id();
 
@@ -388,10 +404,10 @@ impl PoolingAllocationState {
     /// For testing only, we want to be able to assert what is on the
     /// single freelist, for the policies that keep just one.
     #[cfg(test)]
-    pub(crate) fn testing_freelist(&self) -> &[SlotId] {
-        match self {
-            &PoolingAllocationState::NextAvailable(ref free_list)
-            | &PoolingAllocationState::Random(ref free_list) => &free_list[..],
+    pub(crate) fn testing_freelist(&self) -> Vec<SlotId> {
+        let inner = self.0.lock().unwrap();
+        match &inner.state {
+            State::NextAvailable(free_list) | State::Random(free_list) => free_list.clone(),
             _ => panic!("Wrong kind of state"),
         }
     }
@@ -400,11 +416,12 @@ impl PoolingAllocationState {
     /// one slot with affinity for that module.
     #[cfg(test)]
     pub(crate) fn testing_module_affinity_list(&self) -> Vec<CompiledModuleId> {
-        match self {
-            &PoolingAllocationState::NextAvailable(..) | &PoolingAllocationState::Random(..) => {
+        let inner = self.0.lock().unwrap();
+        match &inner.state {
+            State::NextAvailable(..) | State::Random(..) => {
                 panic!("Wrong kind of state")
             }
-            &PoolingAllocationState::ReuseAffinity { ref per_module, .. } => {
+            State::ReuseAffinity { per_module, .. } => {
                 let mut ret = vec![];
                 for (module, list) in per_module {
                     assert!(!list.is_empty());
@@ -418,28 +435,34 @@ impl PoolingAllocationState {
 
 #[cfg(test)]
 mod test {
-    use super::{PoolingAllocationState, SlotId};
+    use super::{IndexAllocator, SlotId};
     use crate::CompiledModuleIdAllocator;
     use crate::PoolingAllocationStrategy;
 
     #[test]
     fn test_next_available_allocation_strategy() {
         let strat = PoolingAllocationStrategy::NextAvailable;
-        let mut state = PoolingAllocationState::new(strat, 10);
-        assert_eq!(state.alloc(None).index(), 9);
-        let mut state = PoolingAllocationState::new(strat, 5);
-        assert_eq!(state.alloc(None).index(), 4);
-        let mut state = PoolingAllocationState::new(strat, 1);
-        assert_eq!(state.alloc(None).index(), 0);
+
+        for size in 0..20 {
+            let state = IndexAllocator::new(strat, size);
+            for i in 0..size {
+                assert_eq!(state.alloc(None).unwrap().index(), size - i - 1);
+            }
+            assert!(state.alloc(None).is_none());
+        }
     }
 
     #[test]
     fn test_random_allocation_strategy() {
         let strat = PoolingAllocationStrategy::Random;
-        let mut state = PoolingAllocationState::new(strat, 100);
-        assert!(state.alloc(None).index() < 100);
-        let mut state = PoolingAllocationState::new(strat, 1);
-        assert_eq!(state.alloc(None).index(), 0);
+
+        for size in 0..20 {
+            let state = IndexAllocator::new(strat, size);
+            for _ in 0..size {
+                assert!(state.alloc(None).unwrap().index() < size);
+            }
+            assert!(state.alloc(None).is_none());
+        }
     }
 
     #[test]
@@ -448,16 +471,16 @@ mod test {
         let id_alloc = CompiledModuleIdAllocator::new();
         let id1 = id_alloc.alloc();
         let id2 = id_alloc.alloc();
-        let mut state = PoolingAllocationState::new(strat, 100);
+        let state = IndexAllocator::new(strat, 100);
 
-        let index1 = state.alloc(Some(id1));
+        let index1 = state.alloc(Some(id1)).unwrap();
         assert!(index1.index() < 100);
-        let index2 = state.alloc(Some(id2));
+        let index2 = state.alloc(Some(id2)).unwrap();
         assert!(index2.index() < 100);
         assert_ne!(index1, index2);
 
         state.free(index1);
-        let index3 = state.alloc(Some(id1));
+        let index3 = state.alloc(Some(id1)).unwrap();
         assert_eq!(index3, index1);
         state.free(index3);
 
@@ -476,10 +499,9 @@ mod test {
 
         let mut indices = vec![];
         for _ in 0..100 {
-            assert!(!state.is_empty());
-            indices.push(state.alloc(Some(id2)));
+            indices.push(state.alloc(Some(id2)).unwrap());
         }
-        assert!(state.is_empty());
+        assert!(state.alloc(None).is_none());
         assert_eq!(indices[0], index2);
 
         for i in indices {
@@ -493,7 +515,7 @@ mod test {
 
         // Allocate an index we know previously had an instance but
         // now does not (list ran empty).
-        let index = state.alloc(Some(id1));
+        let index = state.alloc(Some(id1)).unwrap();
         state.free(index);
     }
 
@@ -507,25 +529,30 @@ mod test {
         let ids = std::iter::repeat_with(|| id_alloc.alloc())
             .take(10)
             .collect::<Vec<_>>();
-        let mut state = PoolingAllocationState::new(strat, 1000);
+        let state = IndexAllocator::new(strat, 1000);
         let mut allocated: Vec<SlotId> = vec![];
         let mut last_id = vec![None; 1000];
 
         let mut hits = 0;
         for _ in 0..100_000 {
-            if !allocated.is_empty() && (state.is_empty() || rng.gen_bool(0.5)) {
-                let i = rng.gen_range(0..allocated.len());
-                let to_free_idx = allocated.swap_remove(i);
-                state.free(to_free_idx);
-            } else {
-                assert!(!state.is_empty());
-                let id = ids[rng.gen_range(0..ids.len())];
-                let index = state.alloc(Some(id));
-                if last_id[index.index()] == Some(id) {
-                    hits += 1;
+            loop {
+                if !allocated.is_empty() && rng.gen_bool(0.5) {
+                    let i = rng.gen_range(0..allocated.len());
+                    let to_free_idx = allocated.swap_remove(i);
+                    state.free(to_free_idx);
+                } else {
+                    let id = ids[rng.gen_range(0..ids.len())];
+                    let index = match state.alloc(Some(id)) {
+                        Some(id) => id,
+                        None => continue,
+                    };
+                    if last_id[index.index()] == Some(id) {
+                        hits += 1;
+                    }
+                    last_id[index.index()] = Some(id);
+                    allocated.push(index);
                 }
-                last_id[index.index()] = Some(id);
-                allocated.push(index);
+                break;
             }
         }
 

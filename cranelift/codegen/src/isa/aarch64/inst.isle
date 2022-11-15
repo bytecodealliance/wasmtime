@@ -167,9 +167,15 @@
 
        ;; Like `Move` but with a particular `PReg` source (for implementing CLIF
        ;; instructions like `get_stack_pointer`).
-       (MovPReg
+       (MovFromPReg
         (rd WritableReg)
         (rm PReg))
+
+       ;; Like `Move` but with a particular `PReg` destination (for
+       ;; implementing CLIF instructions like `set_pinned_reg`).
+       (MovToPReg
+        (rd PReg)
+        (rm Reg))
 
        ;; A MOV[Z,N] with a 16-bit immediate.
        (MovWide
@@ -787,7 +793,7 @@
 
        ;; A machine return instruction.
        (Ret
-        (rets VecReg))
+        (rets VecRetPair))
 
        ;; A machine return instruction with pointer authentication using SP as the
        ;; modifier. This instruction requires pointer authentication support
@@ -797,7 +803,7 @@
        (AuthenticatedRet
         (key APIKey)
         (is_hint bool)
-        (rets VecReg))
+        (rets VecRetPair))
 
        ;; An unconditional branch.
        (Jump
@@ -1023,6 +1029,10 @@
     (RBit)
     (Clz)
     (Cls)
+    ;; Byte reverse
+    (Rev16)
+    (Rev32)
+    (Rev64)
 ))
 
 (type MemLabel extern (enum))
@@ -1731,6 +1741,13 @@
 (decl writable_zero_reg () WritableReg)
 (extern constructor writable_zero_reg writable_zero_reg)
 
+(decl value_regs_zero () ValueRegs)
+(rule (value_regs_zero)
+      (value_regs
+            (imm $I64 (ImmExtend.Zero) 0)
+            (imm $I64 (ImmExtend.Zero) 0)))
+
+
 ;; Helper for emitting `MInst.Mov` instructions.
 (decl mov (Reg Type) Reg)
 (rule (mov src ty)
@@ -2286,6 +2303,24 @@
 (decl sub_vec (Reg Reg VectorSize) Reg)
 (rule (sub_vec x y size) (vec_rrr (VecALUOp.Sub) x y size))
 
+(decl sub_i128 (ValueRegs ValueRegs) ValueRegs)
+(rule (sub_i128 x y)
+      (let
+          ;; Get the high/low registers for `x`.
+          ((x_regs ValueRegs x)
+           (x_lo Reg (value_regs_get x_regs 0))
+           (x_hi Reg (value_regs_get x_regs 1))
+
+           ;; Get the high/low registers for `y`.
+           (y_regs ValueRegs y)
+           (y_lo Reg (value_regs_get y_regs 0))
+           (y_hi Reg (value_regs_get y_regs 1)))
+        ;; the actual subtraction is `subs` followed by `sbc` which comprises
+        ;; the low/high bits of the result
+        (with_flags
+          (sub_with_flags_paired $I64 x_lo y_lo)
+          (sbc_paired $I64 x_hi y_hi))))
+
 ;; Helpers for generating `madd` instructions.
 
 (decl madd (Type Reg Reg Reg) Reg)
@@ -2554,6 +2589,17 @@
 (decl a64_cls (Type Reg) Reg)
 (rule (a64_cls ty x) (bit_rr (BitOp.Cls) ty x))
 
+;; Helpers for generating `rev` instructions
+
+(decl a64_rev16 (Type Reg) Reg)
+(rule (a64_rev16 ty x) (bit_rr (BitOp.Rev16) ty x))
+
+(decl a64_rev32 (Type Reg) Reg)
+(rule (a64_rev32 ty x) (bit_rr (BitOp.Rev32) ty x))
+
+(decl a64_rev64 (Type Reg) Reg)
+(rule (a64_rev64 ty x) (bit_rr (BitOp.Rev64) ty x))
+
 ;; Helpers for generating `eon` instructions.
 
 (decl eon (Type Reg Reg) Reg)
@@ -2771,6 +2817,14 @@
                                       (trap_code_integer_overflow))))
         )
         x))
+
+;; Check for unsigned overflow.
+(decl trap_if_overflow (ProducesFlags TrapCode) Reg)
+(rule (trap_if_overflow producer tc)
+      (with_flags_reg
+        producer
+        (ConsumesFlags.ConsumesFlagsSideEffect
+          (MInst.TrapIf (cond_br_cond (Cond.Hs)) tc))))
 
 (decl sink_atomic_load (Inst) Reg)
 (rule (sink_atomic_load x @ (atomic_load _ addr))
@@ -3013,11 +3067,15 @@
         dst))
 
 ;; Helper for emitting `MInst.MovPReg` instructions.
-(decl mov_preg (PReg) Reg)
-(rule (mov_preg src)
+(decl mov_from_preg (PReg) Reg)
+(rule (mov_from_preg src)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.MovPReg dst src))))
+            (_ Unit (emit (MInst.MovFromPReg dst src))))
         dst))
+
+(decl mov_to_preg (PReg Reg) SideEffectNoResult)
+(rule (mov_to_preg dst src)
+      (SideEffectNoResult.Inst (MInst.MovToPReg dst src)))
 
 (decl preg_sp () PReg)
 (extern constructor preg_sp preg_sp)
@@ -3028,13 +3086,16 @@
 (decl preg_link () PReg)
 (extern constructor preg_link preg_link)
 
+(decl preg_pinned () PReg)
+(extern constructor preg_pinned preg_pinned)
+
 (decl aarch64_sp () Reg)
 (rule (aarch64_sp)
-      (mov_preg (preg_sp)))
+      (mov_from_preg (preg_sp)))
 
 (decl aarch64_fp () Reg)
 (rule (aarch64_fp)
-      (mov_preg (preg_fp)))
+      (mov_from_preg (preg_fp)))
 
 (decl aarch64_link () Reg)
 (rule 1 (aarch64_link)
@@ -3063,7 +3124,7 @@
             (lr WritableReg (writable_link_reg))
             (_ Unit (emit (MInst.ULoad64 lr addr (mem_flags_trusted))))
             (_ Unit (emit (MInst.Xpaclri))))
-           (mov_preg (preg_link))))
+           (mov_from_preg (preg_link))))
 
 ;; Helper for getting the maximum shift amount for a type.
 
@@ -3222,16 +3283,9 @@
 
 ;; Helpers for pinned register manipulation.
 
-(decl writable_pinned_reg () WritableReg)
-(extern constructor writable_pinned_reg writable_pinned_reg)
-
-(decl pinned_reg () Reg)
-(rule (pinned_reg) (writable_pinned_reg))
-
 (decl write_pinned_reg (Reg) SideEffectNoResult)
 (rule (write_pinned_reg val)
-      (let ((dst WritableReg (writable_pinned_reg)))
-        (SideEffectNoResult.Inst (gen_move $I64 dst val))))
+      (mov_to_preg (preg_pinned) val))
 
 ;; Helpers for stackslot effective address generation.
 
@@ -3458,14 +3512,15 @@
 
 (decl lower_bmask (Type Type ValueRegs) ValueRegs)
 
-;; For conversions that fit in a register, we can use csetm.
+
+;; For conversions that exactly fit a register, we can use csetm.
 ;;
 ;; cmp   val, #0
 ;; csetm res, ne
 (rule 0
-      (lower_bmask (fits_in_64 _) (fits_in_64 _) val)
+      (lower_bmask (fits_in_64 _) (ty_32_or_64 in_ty) val)
       (with_flags_reg
-        (cmp64_imm (value_regs_get val 0) (u8_into_imm12 0))
+        (cmp_imm (operand_size in_ty) (value_regs_get val 0) (u8_into_imm12 0))
         (csetm (Cond.Ne))))
 
 ;; For conversions from a 128-bit value into a 64-bit or smaller one, we or the
@@ -3482,21 +3537,25 @@
             (combined Reg (orr $I64 lo hi)))
         (lower_bmask ty $I64 (value_reg combined))))
 
-;; For converting from a smaller type into i128, duplicate the result of
+;; For converting from any type into i128, duplicate the result of
 ;; converting to i64.
 (rule 2
-      (lower_bmask $I128 (fits_in_64 ty) val)
-      (let ((res ValueRegs (lower_bmask $I64 ty val))
+      (lower_bmask $I128 in_ty val)
+      (let ((res ValueRegs (lower_bmask $I64 in_ty val))
             (res Reg (value_regs_get res 0)))
         (value_regs res res)))
 
-;; For conversions to a 128-bit mask, we duplicate the result of converting to
-;; an I64.
+;; For conversions smaller than a register, we need to mask off the high bits, and then
+;; we can recurse into the general case.
+;;
+;; and   tmp, val, #ty_mask
+;; cmp   tmp, #0
+;; csetm res, ne
 (rule 3
-      (lower_bmask $I128 $I128 val)
-      (let ((res ValueRegs (lower_bmask $I64 $I128 val))
-            (res Reg (value_regs_get res 0)))
-        (value_regs res res)))
+      (lower_bmask out_ty (fits_in_16 in_ty) val)
+      (let ((mask_bits ImmLogic (imm_logic_from_u64 $I32 (ty_mask in_ty)))
+            (masked Reg (and_imm $I32 (value_regs_get val 0) mask_bits)))
+        (lower_bmask out_ty $I32 masked)))
 
 ;; Exceptional `lower_icmp_into_flags` rules.
 ;; We need to guarantee that the flags for `cond` are correct, so we

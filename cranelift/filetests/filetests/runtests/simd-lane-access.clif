@@ -26,10 +26,10 @@ block0:
 function %shuffle_i32x4_in_same_place() -> i32x4 {
 block0:
     v1 = vconst.i32x4 [0 1 2 3]
-    v2 = raw_bitcast.i8x16 v1 ; we have to cast because shuffle is type-limited to Tx16
+    v2 = bitcast.i8x16 little v1 ; we have to cast because shuffle is type-limited to Tx16
     ; keep each lane in place from the first vector
     v3 = shuffle v2, v2, [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15]
-    v4 = raw_bitcast.i32x4 v3
+    v4 = bitcast.i32x4 little v3
     return v4
 }
 ; run: %shuffle_in_same_place() == [0 1 2 3]
@@ -37,10 +37,10 @@ block0:
 function %shuffle_i32x4_to_all_true() -> i32x4 {
 block0:
     v1 = vconst.i32x4 [-1 0 -1 0]
-    v2 = raw_bitcast.i8x16 v1 ; we have to cast because shuffle is type-limited to Tx16
+    v2 = bitcast.i8x16 little v1 ; we have to cast because shuffle is type-limited to Tx16
     ; pair up the true values to make the entire vector true
     v3 = shuffle v2, v2, [0 1 2 3 0 1 2 3 8 9 10 11 8 9 10 11]
-    v4 = raw_bitcast.i32x4 v3 ; TODO store.i32x4 is unavailable; see https://github.com/bytecodealliance/wasmtime/issues/2237
+    v4 = bitcast.i32x4 little v3 ; TODO store.i32x4 is unavailable; see https://github.com/bytecodealliance/wasmtime/issues/2237
     return v4
 }
 ; run: %shuffle_i32x4_to_all_true() == [0xffffffff 0xffffffff 0xffffffff 0xffffffff]
@@ -100,7 +100,7 @@ block0:
     v1 = vconst.i8x16 [0 0 0 0 0 0 0 0 0 0 -1 0 0
     0 0 0]
     v2 = extractlane v1, 10
-    v3 = raw_bitcast.i8 v2
+    v3 = bitcast.i8 v2
     return v3
 }
 ; run: %extractlane_i8x16_last() == 0xff

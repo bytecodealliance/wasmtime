@@ -1,6 +1,17 @@
 
 # cargo-vet audits file
 
+[[audits.anyhow]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.62 -> 1.0.66"
+notes = """
+This update looks to be related to minor fixes and mostly integrating with a
+nightly feature in the standard library for backtrace integration. No undue
+`unsafe` is added and nothing unsurprising for the `anyhow` crate is happening
+here.
+"""
+
 [[audits.arbitrary]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
@@ -47,6 +58,12 @@ delta = "0.9.0 -> 0.10.2"
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
 version = "3.9.1"
+notes = "I am the author of this crate."
+
+[[audits.bumpalo]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+version = "3.11.1"
 notes = "I am the author of this crate."
 
 [[audits.cap-fs-ext]]
@@ -170,6 +187,16 @@ criteria = "safe-to-deploy"
 version = "2.2.1"
 notes = "I am the author of this crate."
 
+[[audits.indexmap-nostd]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+version = "0.4.0"
+notes = """
+I've verified that this is a sliced-down version of the `indexmap` crate which
+is otherwise certified. This doesn't contain unnecessary `unsafe` and
+additionally doesn't reach for ambient capabilities.
+"""
+
 [[audits.is-terminal]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -180,6 +207,18 @@ notes = "Contains only unsafe code for interacting with the crate's intended pur
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
 version = "0.2.5"
+notes = "I am the author of this crate."
+
+[[audits.libfuzzer-sys]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-run"
+delta = "0.4.3 -> 0.4.4"
+notes = "I am the author of this crate."
+
+[[audits.libfuzzer-sys]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-run"
+delta = "0.4.4 -> 0.4.5"
 notes = "I am the author of this crate."
 
 [[audits.libm]]
@@ -200,6 +239,39 @@ notes = """
 Does not interact with the system in any way than otherwise instructed to.
 Contains unsafe blocks but are encapsulated and required for the operation at
 hand.
+"""
+
+[[audits.memory_units]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+delta = "0.3.0 -> 0.4.0"
+notes = """
+This bump only changed from a function to an associated `const` and trivially
+contains no significant changes.
+"""
+
+[[audits.openvino]]
+who = "Matthew Tamayo-Rios <matthew@geekbeast.com>"
+criteria = "safe-to-deploy"
+version = "0.4.2"
+notes = """
+I am the author of most of these changes.
+"""
+
+[[audits.openvino-finder]]
+who = "Matthew Tamayo-Rios <matthew@geekbeast.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.1 -> 0.4.2"
+notes = """
+Only updates to Cargo file for versioning.
+"""
+
+[[audits.openvino-sys]]
+who = "Matthew Tamayo-Rios <matthew@geekbeast.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.1 -> 0.4.2"
+notes = """
+Only updates to tests to use new rust functions for mut pointers.
 """
 
 [[audits.peeking_take_while]]
@@ -226,6 +298,12 @@ criteria = "safe-to-deploy"
 delta = "0.4.0 -> 0.4.1"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[audits.regalloc2]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.1 -> 0.4.2"
+notes = "The Bytecode Alliance is the author of this crate."
+
 [[audits.rustc-demangle]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -237,6 +315,18 @@ who = "Benjamin Bouvier <public@benj.me>"
 criteria = "safe-to-deploy"
 delta = "0.9.9 -> 0.10.2"
 notes = "This upgrade is mostly a code refactor, as far as I can tell. No new uses of unsafe nor any new ambient capabilities usage."
+
+[[audits.spin]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+version = "0.9.4"
+notes = """
+I've verified the contents of this crate and that while they contain `unsafe`
+it's exclusively around implementing atomic primitive where some `unsafe` is to
+be expected. Otherwise this crate does not unduly access ambient capabilities
+and does what it says on the tin, providing spin-based synchronization
+primitives.
+"""
 
 [[audits.system-interface]]
 who = "Dan Gohman <dev@sunfishcode.online>"
@@ -274,6 +364,18 @@ criteria = "safe-to-deploy"
 version = "0.18.0"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[audits.wasm-encoder]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.19.0"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wasm-encoder]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.19.0 -> 0.19.1"
+notes = "The Bytecode Alliance is the author of this crate."
+
 [[audits.wasm-mutate]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -302,6 +404,18 @@ notes = "The Bytecode Alliance is the author of this crate."
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 version = "0.2.9"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wasm-mutate]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+version = "0.2.10"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wasm-mutate]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+version = "0.2.11"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[audits.wasm-smith]]
@@ -333,6 +447,60 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 version = "0.11.6"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wasm-smith]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+version = "0.11.7"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wasm-smith]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+version = "0.11.8"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wasmi_arena]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+version = "0.1.0"
+notes = """
+This crate contains no `unsafe` code and doesn't reach in unnecessarily to the
+standard library or anything like that. This only contains a few data structures
+used by `wasmi` and various idiomatic Rust trait implementations.
+"""
+
+[[audits.wasmi_core]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+version = "0.4.0"
+notes = """
+This crate contains no `unsafe` code and otherwise is only the bits and bobs for
+the internals of a wasm implementation. Reading over this crate there is no
+unexpected usage of the filesystem or things like that and otherwise is mostly
+plumbing for all the integer operations in core wasm.
+"""
+
+[[audits.wasmi_core]]
+who = "Robin Freyler <robin.freyler@gmail.com>"
+criteria = "safe-to-run"
+version = "0.5.0"
+notes = "See notes for version 0.4.0"
+
+[[audits.wasmi]]
+who = "Robin Freyler <robin.freyler@gmail.com>"
+criteria = "safe-to-run"
+version = "0.20.0"
+notes = """
+I am the author of this crate. It contains unsafe Rust code.
+However, the crate does not read or write data from any parts of the filesystem,
+it does not install software upon compilation e.g. via build scripts,
+it does not connect to network endpoints and does not misuse system resources.
+
+If any of the above happens it is either by the user explicitly telling the
+crate to do so (it is an interpreter) or due to a bug or other unintended
+behavior.
+"""
 
 [[audits.wasmparser]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -370,6 +538,29 @@ criteria = "safe-to-deploy"
 version = "0.92.0"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[audits.wasmparser]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.93.0"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wasmparser]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.94.0"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wasmparser-nostd]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+version = "0.91.0"
+notes = """
+I have certified that this crate is a one-to-one fork of `wasmparser` with
+updates exclusively for the usage on targets without the standard library.
+This crate is otherwise primarily authored by the Bytecode Alliance and
+otherwise certified.
+"""
+
 [[audits.wasmprinter]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -398,6 +589,18 @@ notes = "The Bytecode Alliance is the author of this crate."
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 version = "0.2.41"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wasmprinter]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.2.42"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wasmprinter]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.2.43"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[audits.wast]]
@@ -436,6 +639,18 @@ criteria = "safe-to-deploy"
 version = "47.0.1"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[audits.wast]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "48.0.0"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wast]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "49.0.0"
+notes = "The Bytecode Alliance is the author of this crate."
+
 [[audits.wat]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -452,6 +667,18 @@ notes = "The Bytecode Alliance is the author of this crate."
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 version = "1.0.48"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wat]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "1.0.50"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wat]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "1.0.51"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[audits.wat]]

@@ -14,8 +14,7 @@ block0:
 
 function %trap_iadd_ifcout(i64, i64) {
 block0(v0: i64, v1: i64):
-  v2, v3 = iadd_ifcout v0, v1
-  trapif ult v3, user0
+  v2 = uadd_overflow_trap v0, v1, user0
   return
 }
 

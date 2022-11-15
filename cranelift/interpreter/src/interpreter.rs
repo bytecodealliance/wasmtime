@@ -1011,7 +1011,7 @@ mod tests {
         block0(v0: i64):
             v1 = iconst.i64 0
             v2 = iconst.i64 123
-            v3 = heap_addr.i64 heap0, v1, 8
+            v3 = heap_addr.i64 heap0, v1, 0, 8
             store.i64 v2, v3
             v4 = load.i64 v3
             v5 = icmp eq v2, v4

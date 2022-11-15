@@ -3,7 +3,7 @@ use anyhow::Result;
 use std::rc::Rc;
 use std::sync::Arc;
 use wasmtime::component::*;
-use wasmtime::{Store, StoreContextMut, Trap, TrapCode};
+use wasmtime::{Store, StoreContextMut, Trap};
 
 const CANON_32BIT_NAN: u32 = 0b01111111110000000000000000000000;
 const CANON_64BIT_NAN: u64 = 0b0111111111111000000000000000000000000000000000000000000000000000;
@@ -37,7 +37,7 @@ fn thunks() -> Result<()> {
         .get_typed_func::<(), (), _>(&mut store, "thunk-trap")?
         .call(&mut store, ())
         .unwrap_err();
-    assert!(err.downcast::<Trap>()?.trap_code() == Some(TrapCode::UnreachableCodeReached));
+    assert_eq!(err.downcast::<Trap>()?, Trap::UnreachableCodeReached);
 
     Ok(())
 }
@@ -1099,7 +1099,7 @@ fn some_traps() -> Result<()> {
         .call(&mut store, (&[],))
         .unwrap_err()
         .downcast::<Trap>()?;
-    assert_eq!(err.trap_code(), Some(TrapCode::UnreachableCodeReached));
+    assert_eq!(err, Trap::UnreachableCodeReached);
 
     // This should fail when calling the allocator function for the argument
     let err = instance(&mut store)?
@@ -1107,7 +1107,7 @@ fn some_traps() -> Result<()> {
         .call(&mut store, ("",))
         .unwrap_err()
         .downcast::<Trap>()?;
-    assert_eq!(err.trap_code(), Some(TrapCode::UnreachableCodeReached));
+    assert_eq!(err, Trap::UnreachableCodeReached);
 
     // This should fail when calling the allocator function for the space
     // to store the arguments (before arguments are even lowered)
@@ -1119,7 +1119,7 @@ fn some_traps() -> Result<()> {
         .call(&mut store, ("", "", "", "", "", "", "", "", "", ""))
         .unwrap_err()
         .downcast::<Trap>()?;
-    assert_eq!(err.trap_code(), Some(TrapCode::UnreachableCodeReached));
+    assert_eq!(err, Trap::UnreachableCodeReached);
 
     // Assert that when the base pointer returned by malloc is out of bounds
     // that errors are reported as such. Both empty and lists with contents
@@ -2004,12 +2004,13 @@ fn drop_component_still_works() -> Result<()> {
         let component = Component::new(&engine, component)?;
         let mut store = Store::new(&engine, 0);
         let mut linker = Linker::new(&engine);
-        linker
-            .root()
-            .func_wrap("f", |mut store: StoreContextMut<'_, u32>| -> Result<()> {
+        linker.root().func_wrap(
+            "f",
+            |mut store: StoreContextMut<'_, u32>, _: ()| -> Result<()> {
                 *store.data_mut() += 1;
                 Ok(())
-            })?;
+            },
+        )?;
         let instance = linker.instantiate(&mut store, &component)?;
         (store, instance)
     };
@@ -2216,7 +2217,7 @@ fn lower_then_lift() -> Result<()> {
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
     let mut linker = Linker::new(&engine);
-    linker.root().func_wrap("f", || Ok((2u32,)))?;
+    linker.root().func_wrap("f", |_, _: ()| Ok((2u32,)))?;
     let instance = linker.instantiate(&mut store, &component)?;
 
     let f = instance.get_typed_func::<(), (i32,), _>(&mut store, "f")?;
@@ -2252,7 +2253,7 @@ fn lower_then_lift() -> Result<()> {
     let mut store = Store::new(&engine, ());
     linker
         .root()
-        .func_wrap("s", |store: StoreContextMut<'_, ()>, x: WasmStr| {
+        .func_wrap("s", |store: StoreContextMut<'_, ()>, (x,): (WasmStr,)| {
             assert_eq!(x.to_str(&store)?, "hello");
             Ok(())
         })?;
@@ -2292,7 +2293,7 @@ fn lower_then_lift() -> Result<()> {
     let mut store = Store::new(&engine, ());
     linker
         .root()
-        .func_wrap("s2", |store: StoreContextMut<'_, ()>, x: WasmStr| {
+        .func_wrap("s2", |store: StoreContextMut<'_, ()>, (x,): (WasmStr,)| {
             assert_eq!(x.to_str(&store)?, "hello");
             Ok((u32::MAX,))
         })?;
@@ -2374,8 +2375,8 @@ fn errors_that_poison_instance() -> Result<()> {
             Err(e) => e,
         };
         assert_eq!(
-            err.downcast::<Trap>().unwrap().trap_code(),
-            Some(TrapCode::UnreachableCodeReached)
+            err.downcast::<Trap>().unwrap(),
+            Trap::UnreachableCodeReached
         );
     }
 

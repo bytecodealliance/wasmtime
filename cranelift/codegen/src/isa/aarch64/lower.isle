@@ -114,7 +114,7 @@
 
 ;;;; Rules for `isplit` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $I64 (isplit x)))
+(rule (lower (isplit x @ (value_type $I128)))
       (let
           ((x_regs ValueRegs x)
            (x_lo ValueRegs (value_regs_get x_regs 0))
@@ -540,21 +540,7 @@
 
 ;; `i128`
 (rule -1 (lower (has_type $I128 (isub x y)))
-      (let
-          ;; Get the high/low registers for `x`.
-          ((x_regs ValueRegs x)
-           (x_lo Reg (value_regs_get x_regs 0))
-           (x_hi Reg (value_regs_get x_regs 1))
-
-           ;; Get the high/low registers for `y`.
-           (y_regs ValueRegs y)
-           (y_lo Reg (value_regs_get y_regs 0))
-           (y_hi Reg (value_regs_get y_regs 1)))
-        ;; the actual subtraction is `subs` followed by `sbc` which comprises
-        ;; the low/high bits of the result
-        (with_flags
-          (sub_with_flags_paired $I64 x_lo y_lo)
-          (sbc_paired $I64 x_hi y_hi))))
+      (sub_i128 x y))
 
 ;;;; Rules for `uadd_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -581,6 +567,10 @@
 ;; `i64` and smaller.
 (rule 1 (lower (has_type (fits_in_64 ty) (ineg x)))
       (sub ty (zero_reg) x))
+
+;; `i128`
+(rule 2 (lower (has_type $I128 (ineg x)))  
+      (sub_i128 (value_regs_zero) x))
 
 ;; vectors.
 (rule (lower (has_type (ty_vec128 ty) (ineg x)))
@@ -884,12 +874,12 @@
             (result Reg (msub $I64 div y64 x64)))
         result))
 
-;;; Rules for integer min/max: umin, imin, umax, imax ;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Rules for integer min/max: umin, smin, umax, smax ;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type ty @ (not_i64x2) (imin x y)))
+(rule (lower (has_type ty @ (not_i64x2) (smin x y)))
       (vec_rrr (VecALUOp.Smin) x y (vector_size ty)))
 
-(rule 1 (lower (has_type $I64X2 (imin x y)))
+(rule 1 (lower (has_type $I64X2 (smin x y)))
       (bsl $I64X2 (vec_rrr (VecALUOp.Cmgt) y x (VectorSize.Size64x2)) x y))
 
 (rule (lower (has_type ty @ (not_i64x2) (umin x y)))
@@ -898,10 +888,10 @@
 (rule 1 (lower (has_type $I64X2 (umin x y)))
       (bsl $I64X2 (vec_rrr (VecALUOp.Cmhi) y x (VectorSize.Size64x2)) x y))
 
-(rule (lower (has_type ty @ (not_i64x2) (imax x y)))
+(rule (lower (has_type ty @ (not_i64x2) (smax x y)))
       (vec_rrr (VecALUOp.Smax) x y (vector_size ty)))
 
-(rule 1 (lower (has_type $I64X2 (imax x y)))
+(rule 1 (lower (has_type $I64X2 (smax x y)))
       (bsl $I64X2 (vec_rrr (VecALUOp.Cmgt) x y (VectorSize.Size64x2)) x y))
 
 (rule (lower (has_type ty @ (not_i64x2) (umax x y)))
@@ -1527,6 +1517,22 @@
 (rule -1 (lower (has_type ty (cls x)))
       (a64_cls ty x))
 
+;;;; Rules for `bswap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I16 (bswap x)))
+      (a64_rev16 $I16 x))
+
+(rule (lower (has_type $I32 (bswap x)))
+      (a64_rev32 $I32 x))
+
+(rule (lower (has_type $I64 (bswap x)))
+      (a64_rev64 $I64 x))
+
+(rule (lower (has_type $I128 (bswap x)))
+      (value_regs
+       (a64_rev64 $I64 (value_regs_get x 1))
+       (a64_rev64 $I64 (value_regs_get x 0))))
+
 ;;;; Rules for `bmask` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Bmask tests the value against zero, and uses `csetm` to assert the result.
@@ -1681,45 +1687,10 @@
 (rule (lower (trap trap_code))
       (side_effect (udf trap_code)))
 
-;;;; Rules for `trapif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (trapif cc insn @ (iadd_ifcout x y) trap_code))
-      ;; The flags must not have been clobbered by any other instruction, as
-      ;; verified by the CLIF validator; so we can simply use the flags here.
-      (let ((insn ProducesFlags (flags_to_producesflags insn)))
-       (trap_if insn trap_code (cond_code cc))))
-
-;; Verification ensures the input is always a single-def ifcmp.
-(rule (lower (trapif cc insn @ (ifcmp x @ (value_type ty) y) trap_code))
-      (let ((cond Cond (cond_code cc)))
-       (trap_if (lower_icmp_into_flags cc x y ty) trap_code cond)))
-
-;;;; Rules for `trapff` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Verification ensures the input is always a single-def ffcmp.
-(rule (lower (trapff cc insn @ (ffcmp x @ (value_type ty) y) trap_code))
-      (let ((cond Cond (fp_cond_code cc)))
-       (trap_if (fpu_cmp (scalar_size ty) x y) trap_code cond)))
-
 ;;;; Rules for `resumable_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (resumable_trap trap_code))
       (side_effect (udf trap_code)))
-
-;;;; Rules for `trueif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Verification ensures the input is always a single-def ifcmp.
-(rule (lower (has_type out_ty
-       (trueif cc insn @ (ifcmp x @ (value_type in_ty) y))))
-      (lower_icmp_into_reg cc x y in_ty out_ty))
-
-;;;; Rules for `trueff` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Verification ensures the input is always a single-def ffcmp.
-(rule (lower (trueff cc insn @ (ffcmp x @ (value_type in_ty) y)))
-      (with_flags_reg
-       (fpu_cmp (scalar_size in_ty) x y)
-       (materialize_bool_result (fp_cond_code cc))))
 
 ;;;; Rules for `select` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1755,22 +1726,11 @@
         (cmp (OperandSize.Size64) rcond (zero_reg))
         (Cond.Ne) ty rn rm)))
 
-;;;; Rules for `selectif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Verification ensures that the input is always a single-def ifcmp.
-(rule (lower (has_type ty
-       (selectif cc flags @ (ifcmp x @ (value_type in_ty) y)
-        if_true if_false)))
-      (let ((cond Cond (cond_code cc)))
-       (lower_select
-        (lower_icmp_into_flags cc x y in_ty)
-        cond ty if_true if_false)))
-
-;;;; Rules for `selectif_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `select_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty
-       (selectif_spectre_guard cc
-        flags @ (ifcmp x @ (value_type in_ty) y) if_true if_false)))
+       (select_spectre_guard
+        (icmp cc x @ (value_type in_ty) y) if_true if_false)))
       (let ((cond Cond (cond_code cc))
             (dst ValueRegs (lower_select
                       (lower_icmp_into_flags cc x y in_ty)
@@ -2229,7 +2189,7 @@
 ;;; Rules for `{get,set}_pinned_reg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (get_pinned_reg))
-      (pinned_reg))
+      (mov_from_preg (preg_pinned)))
 
 (rule (lower (set_pinned_reg val))
       (side_effect (write_pinned_reg val)))
@@ -2237,30 +2197,25 @@
 ;;; Rules for `bitcast` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ; SIMD&FP <=> SIMD&FP
-(rule 5 (lower (has_type (ty_float_or_vec out_ty) (bitcast x @ (value_type (ty_float_or_vec _)))))
-      (fpu_move out_ty x))
+(rule 5 (lower (has_type (ty_float_or_vec _) (bitcast _ x @ (value_type (ty_float_or_vec _)))))
+      x)
 
 ; GPR => SIMD&FP
-(rule 4 (lower (has_type (ty_float_or_vec _) (bitcast x @ (value_type in_ty))))
+(rule 4 (lower (has_type (ty_float_or_vec _) (bitcast _ x @ (value_type in_ty))))
       (if (ty_int_ref_scalar_64 in_ty))
       (mov_to_fpu x (scalar_size in_ty)))
 
 ; SIMD&FP => GPR
-(rule 3 (lower (has_type out_ty (bitcast x @ (value_type (fits_in_64 (ty_float_or_vec _))))))
+(rule 3 (lower (has_type out_ty (bitcast _ x @ (value_type (fits_in_64 (ty_float_or_vec _))))))
       (if (ty_int_ref_scalar_64 out_ty))
       (mov_from_vec x 0 (scalar_size out_ty)))
 
 ; GPR <=> GPR
-(rule 2 (lower (has_type out_ty (bitcast x @ (value_type in_ty))))
+(rule 2 (lower (has_type out_ty (bitcast _ x @ (value_type in_ty))))
       (if (ty_int_ref_scalar_64 out_ty))
       (if (ty_int_ref_scalar_64 in_ty))
       x)
-(rule 1 (lower (has_type $I128 (bitcast x @ (value_type $I128)))) x)
-
-;;; Rules for `raw_bitcast` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (raw_bitcast val))
-      val)
+(rule 1 (lower (has_type $I128 (bitcast _ x @ (value_type $I128)))) x)
 
 ;;; Rules for `extractlane` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2290,11 +2245,6 @@
                          val @ (value_type (ty_scalar_float _))
                          (u8_from_uimm8 lane)))
       (mov_vec_elem vec val lane 0 (vector_size vty)))
-
-;;; Rules for `copy` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (copy x))
-      x)
 
 ;;; Rules for `stack_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2404,6 +2354,11 @@
        (add_with_flags ty a b)
        (invalid_reg)))
 
+;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (fits_in_64 ty) (uadd_overflow_trap a b tc)))
+      (trap_if_overflow (add_with_flags_paired ty a b) tc))
+
 ;;; Rules for `tls_value` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (tls_value (symbol_value_data name _ _)))
@@ -2422,7 +2377,7 @@
 (rule (lower (fvpromote_low val))
       (vec_rr_long (VecRRLongOp.Fcvtl32) val $false))
 
-;;; Rules for `brz`/`brnz`/`brif`/`brff`/`bricmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Rules for `brz`/`brnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `brz` following `icmp`
 (rule (lower_branch (brz (icmp cc x @ (value_type ty) y) _ _) targets)
@@ -2504,58 +2459,6 @@
        (side_effect
         (with_flags_side_effect flags
          (cond_br taken not_taken (cond_br_not_zero rt))))))
-
-;; `br_icmp`
-(rule (lower_branch (br_icmp cc x @ (value_type ty) y _ _) targets)
-      (let ((cond Cond (cond_code cc))
-            (taken BranchTarget (branch_target targets 0))
-            (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
-        (with_flags_side_effect (lower_icmp_into_flags cc x y ty)
-                                (cond_br taken not_taken
-                                 (cond_br_cond cond))))))
-
-;; `brif`
-(rule (lower_branch (brif cc (ifcmp x @ (value_type ty) y) _ _) targets)
-      (let ((cond Cond (cond_code cc))
-            (taken BranchTarget (branch_target targets 0))
-            (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
-        (with_flags_side_effect (lower_icmp_into_flags cc x y ty)
-                                (cond_br taken not_taken
-                                 (cond_br_cond cond))))))
-;; If the `ifcmp` result is actually placed in a register, we need to move it
-;; back into the flags.
-(rule -1 (lower_branch (brif cc f _ _) targets)
-      (let ((cond Cond (cond_code cc))
-            (rn Reg (put_in_reg f))
-            (taken BranchTarget (branch_target targets 0))
-            (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
-        (with_flags_side_effect (mov_to_nzcv rn)
-                                (cond_br taken not_taken
-                                 (cond_br_cond cond))))))
-
-;; `brff`
-(rule (lower_branch (brff cc (ffcmp x @ (value_type ty) y) _ _) targets)
-      (let ((cond Cond (fp_cond_code cc))
-            (taken BranchTarget (branch_target targets 0))
-            (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
-        (with_flags_side_effect (fpu_cmp (scalar_size ty) x y)
-                                (cond_br taken not_taken
-                                 (cond_br_cond cond))))))
-;; If the `ffcmp` result is actually placed in a register, we need to move it
-;; back into the flags.
-(rule -1 (lower_branch (brff cc f _ _) targets)
-      (let ((cond Cond (fp_cond_code cc))
-            (rn Reg (put_in_reg f))
-            (taken BranchTarget (branch_target targets 0))
-            (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
-        (with_flags_side_effect (mov_to_nzcv rn)
-                                (cond_br taken not_taken
-                                 (cond_br_cond cond))))))
 
 ;;; Rules for `jump` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

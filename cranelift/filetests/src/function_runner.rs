@@ -244,7 +244,7 @@ impl TestFileCompiler {
         // Finalize the functions which we just defined, which resolves any
         // outstanding relocations (patching in addresses, now that they're
         // available).
-        self.module.finalize_definitions();
+        self.module.finalize_definitions()?;
 
         Ok(CompiledTestFile {
             module: Some(self.module),

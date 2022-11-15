@@ -9,8 +9,8 @@ block0(v0: i32x4, v1: i32x4):
 }
 
 ; block0:
-;   cmeq v4.4s, v0.4s, v1.4s
-;   mvn v0.16b, v4.16b
+;   cmeq v3.4s, v0.4s, v1.4s
+;   mvn v0.16b, v3.16b
 ;   ret
 
 function %icmp_ugt_i32x4(i32x4, i32x4) -> i32x4 {

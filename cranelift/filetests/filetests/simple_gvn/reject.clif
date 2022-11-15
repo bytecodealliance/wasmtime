@@ -18,14 +18,10 @@ function %cpu_flags() -> i8 {
 block0:
     v0 = iconst.i32 7
     v1 = iconst.i32 8
-    v2 = ifcmp v0, v1
-    v3 = trueif eq v2
-    v4 = ifcmp v0, v1
-    v5 = trueif eq v4
-    v6 = bor v3, v5
-; check: v2 = ifcmp v0, v1
-; check: v3 = trueif eq v2
-; check: v4 = ifcmp v0, v1
-; check: v5 = trueif eq v4
-    return v6
+    v2 = icmp eq v0, v1
+    v3 = icmp eq v0, v1
+    v4 = bor v2, v3
+; check: v2 = icmp eq v0, v1
+; check: v4 = bor v2, v2
+    return v4
 }

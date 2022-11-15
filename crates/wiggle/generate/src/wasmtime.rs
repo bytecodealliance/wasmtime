@@ -114,18 +114,12 @@ fn generate_func(
     let body = quote! {
         let mem = match caller.get_export("memory") {
             Some(#rt::wasmtime_crate::Extern::Memory(m)) => m,
-            _ => {
-                return Err(#rt::wasmtime_crate::Trap::new("missing required memory export"));
-            }
+            _ => #rt::anyhow::bail!("missing required memory export"),
         };
         let (mem , ctx) = mem.data_and_store_mut(&mut caller);
         let ctx = get_cx(ctx);
-        let mem = #rt::wasmtime::WasmtimeGuestMemory::new(mem);
-        match #abi_func(ctx, &mem #(, #arg_names)*) #await_ {
-            Ok(r) => Ok(<#ret_ty>::from(r)),
-            Err(#rt::Trap::String(err)) => Err(#rt::wasmtime_crate::Trap::new(err)),
-            Err(#rt::Trap::I32Exit(err)) => Err(#rt::wasmtime_crate::Trap::i32_exit(err)),
-        }
+        let mem = #rt::wasmtime::WasmtimeGuestMemory::new(mem, false);
+        Ok(<#ret_ty>::from(#abi_func(ctx, &mem #(, #arg_names)*) #await_ ?))
     };
 
     match asyncness {
@@ -147,7 +141,7 @@ fn generate_func(
                 linker.func_wrap(
                     #module_str,
                     #field_str,
-                    move |mut caller: #rt::wasmtime_crate::Caller<'_, T> #(, #arg_decls)*| -> Result<#ret_ty, #rt::wasmtime_crate::Trap> {
+                    move |mut caller: #rt::wasmtime_crate::Caller<'_, T> #(, #arg_decls)*| -> #rt::anyhow::Result<#ret_ty> {
                         let result = async { #body };
                         #rt::run_in_dummy_executor(result)?
                     },
@@ -160,7 +154,7 @@ fn generate_func(
                 linker.func_wrap(
                     #module_str,
                     #field_str,
-                    move |mut caller: #rt::wasmtime_crate::Caller<'_, T> #(, #arg_decls)*| -> Result<#ret_ty, #rt::wasmtime_crate::Trap> {
+                    move |mut caller: #rt::wasmtime_crate::Caller<'_, T> #(, #arg_decls)*| -> #rt::anyhow::Result<#ret_ty> {
                         #body
                     },
                 )?;

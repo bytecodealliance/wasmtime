@@ -152,7 +152,7 @@ impl TargetIsa for Riscv64Backend {
         Some(inst::unwind::systemv::create_cie())
     }
 
-    fn text_section_builder(&self, num_funcs: u32) -> Box<dyn TextSectionBuilder> {
+    fn text_section_builder(&self, num_funcs: usize) -> Box<dyn TextSectionBuilder> {
         Box::new(MachTextSectionBuilder::<inst::Inst>::new(num_funcs))
     }
 
@@ -233,13 +233,18 @@ mod test {
         );
         let buffer = backend.compile_function(&mut func, true).unwrap();
         let code = buffer.buffer.data();
-        // 0:   000015b7                lui     a1,0x1
-        // 4:   23458593                addi    a1,a1,564 # 0x1234
-        // 8:   00b5053b                addw    a0,a0,a1
+
+        // To update this comment, write the golden bytes to a file, and run the following command
+        // on it to update:
+        // > riscv64-linux-gnu-objdump -b binary -D <file> -m riscv
+        //
+        // 0:   000013b7                lui     t2,0x1
+        // 4:   23438393                addi    t2,t2,564 # 0x1234
+        // 8:   0075053b                .4byte  0x75053b
         // c:   00008067                ret
+
         let golden = vec![
-            0xb7, 0x15, 0x0, 0x0, 0x93, 0x85, 0x45, 0x23, 0x3b, 0x5, 0xb5, 0x0, 0x67, 0x80, 0x0,
-            0x0,
+            183, 19, 0, 0, 147, 131, 67, 35, 59, 5, 117, 0, 103, 128, 0, 0,
         ];
         assert_eq!(code, &golden[..]);
     }

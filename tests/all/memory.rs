@@ -186,19 +186,14 @@ fn guards_present() -> Result<()> {
 fn guards_present_pooling() -> Result<()> {
     const GUARD_SIZE: u64 = 65536;
 
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(2).instance_memory_pages(10);
     let mut config = Config::new();
     config.static_memory_maximum_size(1 << 20);
     config.dynamic_memory_guard_size(GUARD_SIZE);
     config.static_memory_guard_size(GUARD_SIZE);
     config.guard_before_linear_memory(true);
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::default(),
-        instance_limits: InstanceLimits {
-            count: 2,
-            memory_pages: 10,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     let engine = Engine::new(&config)?;
 
     let mut store = Store::new(&engine, ());

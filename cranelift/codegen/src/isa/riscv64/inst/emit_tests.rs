@@ -2188,7 +2188,7 @@ fn riscv64_worst_case_instruction_size() {
     candidates.push(Inst::IntSelect {
         dst: vec![writable_a0(), writable_a0()],
         ty: I128,
-        op: IntSelectOP::Imax,
+        op: IntSelectOP::Smax,
         x: ValueRegs::two(x_reg(1), x_reg(2)),
         y: ValueRegs::two(x_reg(3), x_reg(4)),
     });

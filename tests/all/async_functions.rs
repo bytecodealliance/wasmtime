@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, bail, Result};
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
@@ -354,17 +354,13 @@ async fn fuel_eventually_finishes() {
 
 #[tokio::test]
 async fn async_with_pooling_stacks() {
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(1)
+        .instance_memory_pages(1)
+        .instance_table_elements(0);
     let mut config = Config::new();
     config.async_support(true);
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: 1,
-            memory_pages: 1,
-            table_elements: 0,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);
     config.static_memory_maximum_size(65536);
@@ -383,17 +379,14 @@ async fn async_with_pooling_stacks() {
 
 #[tokio::test]
 async fn async_host_func_with_pooling_stacks() -> Result<()> {
+    let mut pooling = PoolingAllocationConfig::default();
+    pooling
+        .instance_count(1)
+        .instance_memory_pages(1)
+        .instance_table_elements(0);
     let mut config = Config::new();
     config.async_support(true);
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: 1,
-            memory_pages: 1,
-            table_elements: 0,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pooling));
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);
     config.static_memory_maximum_size(65536);
@@ -440,7 +433,7 @@ async fn resume_separate_thread() {
         let func = Func::wrap0_async(&mut store, |_| {
             Box::new(async {
                 tokio::task::yield_now().await;
-                Err::<(), _>(wasmtime::Trap::new("test"))
+                Err::<(), _>(anyhow!("test"))
             })
         });
         let result = Instance::new_async(&mut store, &module, &[func.into()]).await;
@@ -493,7 +486,7 @@ async fn resume_separate_thread3() {
     // situation we'll set up the TLS info so it's in place while the body of
     // the function executes...
     let mut store = Store::new(&Engine::default(), None);
-    let f = Func::wrap(&mut store, move |mut caller: Caller<'_, _>| {
+    let f = Func::wrap(&mut store, move |mut caller: Caller<'_, _>| -> Result<()> {
         // ... and the execution of this host-defined function (while the TLS
         // info is initialized), will set up a recursive call into wasm. This
         // recursive call will be done asynchronously so we can suspend it
@@ -536,7 +529,7 @@ async fn resume_separate_thread3() {
         // ... all in all this function will need access to the original TLS
         // information to raise the trap. This TLS information should be
         // restored even though the asynchronous execution is suspended.
-        Err::<(), _>(wasmtime::Trap::new(""))
+        bail!("")
     });
     assert!(f.call(&mut store, &[], &mut []).is_err());
 }
@@ -561,8 +554,12 @@ async fn recursive_async() -> Result<()> {
 
             // ... but calls that actually stack overflow should indeed stack
             // overflow
-            let err = overflow.call_async(&mut caller, ()).await.unwrap_err();
-            assert_eq!(err.trap_code(), Some(TrapCode::StackOverflow));
+            let err = overflow
+                .call_async(&mut caller, ())
+                .await
+                .unwrap_err()
+                .downcast::<Trap>()?;
+            assert_eq!(err, Trap::StackOverflow);
             Ok(())
         })
     });

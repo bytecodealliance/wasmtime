@@ -67,6 +67,9 @@ impl BitOp {
             BitOp::RBit => "rbit",
             BitOp::Clz => "clz",
             BitOp::Cls => "cls",
+            BitOp::Rev16 => "rev16",
+            BitOp::Rev32 => "rev32",
+            BitOp::Rev64 => "rev64",
         }
     }
 }
@@ -651,12 +654,27 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
             collector.reg_use(rm);
         }
-        &Inst::MovPReg { rd, rm } => {
-            debug_assert!(
-                [regs::fp_reg(), regs::stack_reg(), regs::link_reg()].contains(&rm.into())
-            );
+        &Inst::MovFromPReg { rd, rm } => {
+            debug_assert!([
+                regs::fp_reg(),
+                regs::stack_reg(),
+                regs::link_reg(),
+                regs::pinned_reg()
+            ]
+            .contains(&rm.into()));
             debug_assert!(rd.to_reg().is_virtual());
             collector.reg_def(rd);
+        }
+        &Inst::MovToPReg { rd, rm } => {
+            debug_assert!([
+                regs::fp_reg(),
+                regs::stack_reg(),
+                regs::link_reg(),
+                regs::pinned_reg()
+            ]
+            .contains(&rd.into()));
+            debug_assert!(rm.is_virtual());
+            collector.reg_use(rm);
         }
         &Inst::MovK { rd, rn, .. } => {
             collector.reg_use(rn);
@@ -1019,8 +1037,8 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             }
         }
         &Inst::Ret { ref rets } | &Inst::AuthenticatedRet { ref rets, .. } => {
-            for &ret in rets {
-                collector.reg_use(ret);
+            for ret in rets {
+                collector.reg_fixed_use(ret.vreg, ret.preg);
             }
         }
         &Inst::Jump { .. } => {}
@@ -1548,9 +1566,14 @@ impl Inst {
                 let rm = pretty_print_ireg(rm, size, allocs);
                 format!("mov {}, {}", rd, rm)
             }
-            &Inst::MovPReg { rd, rm } => {
+            &Inst::MovFromPReg { rd, rm } => {
                 let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size64, allocs);
                 let rm = show_ireg_sized(rm.into(), OperandSize::Size64);
+                format!("mov {}, {}", rd, rm)
+            }
+            &Inst::MovToPReg { rd, rm } => {
+                let rd = show_ireg_sized(rd.into(), OperandSize::Size64);
+                let rm = pretty_print_ireg(rm, OperandSize::Size64, allocs);
                 format!("mov {}, {}", rd, rm)
             }
             &Inst::MovWide {

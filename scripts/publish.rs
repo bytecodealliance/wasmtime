@@ -41,6 +41,9 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     // wiggle
     "wiggle-generate",
     "wiggle-macro",
+    // winch
+    "winch-codegen",
+    "winch",
     // wasmtime
     "wasmtime-asm-macros",
     "wasmtime-component-util",
@@ -52,6 +55,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-cranelift",
     "wasmtime-jit",
     "wasmtime-cache",
+    "wasmtime-winch",
     "wasmtime",
     // wasi-common/wiggle
     "wiggle",
@@ -127,6 +131,7 @@ fn main() {
     crates.push(root);
     find_crates("crates".as_ref(), &ws, &mut crates);
     find_crates("cranelift".as_ref(), &ws, &mut crates);
+    find_crates("winch".as_ref(), &ws, &mut crates);
 
     let pos = CRATES_TO_PUBLISH
         .iter()
@@ -156,7 +161,7 @@ fn main() {
             // publish in a loop and we remove crates once they're successfully
             // published. Failed-to-publish crates get enqueued for another try
             // later on.
-            for _ in 0..5 {
+            for _ in 0..10 {
                 crates.retain(|krate| !publish(krate));
 
                 if crates.is_empty() {
@@ -167,7 +172,7 @@ fn main() {
                     "{} crates failed to publish, waiting for a bit to retry",
                     crates.len(),
                 );
-                thread::sleep(Duration::from_secs(20));
+                thread::sleep(Duration::from_secs(40));
             }
 
             assert!(crates.is_empty(), "failed to publish all crates");

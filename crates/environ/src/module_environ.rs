@@ -14,7 +14,7 @@ use std::convert::{TryFrom, TryInto};
 use std::path::PathBuf;
 use std::sync::Arc;
 use wasmparser::{
-    CustomSectionReader, DataKind, ElementItem, ElementKind, Encoding, ExternalKind,
+    types::Types, CustomSectionReader, DataKind, ElementItem, ElementKind, Encoding, ExternalKind,
     FuncToValidate, FunctionBody, NameSectionReader, Naming, Operator, Parser, Payload, Type,
     TypeRef, Validator, ValidatorResources,
 };
@@ -90,6 +90,19 @@ pub struct ModuleTranslation<'data> {
     /// When we're parsing the code section this will be incremented so we know
     /// which function is currently being defined.
     code_index: u32,
+
+    /// The type information of the current module made available at the end of the
+    /// validation process.
+    types: Option<Types>,
+}
+
+impl<'data> ModuleTranslation<'data> {
+    /// Returns a reference to the type information of the current module.
+    pub fn get_types(&self) -> &Types {
+        self.types
+            .as_ref()
+            .expect("module type information to be available")
+    }
 }
 
 /// Contains function data: byte code and its offset in the module.
@@ -195,7 +208,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             }
 
             Payload::End(offset) => {
-                self.validator.end(offset)?;
+                self.result.types = Some(self.validator.end(offset)?);
 
                 // With the `escaped_funcs` set of functions finished
                 // we can calculate the set of signatures that are exported as
@@ -622,7 +635,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     "\
 Support for interface types has temporarily been removed from `wasmtime`.
 
-For more information about this temoprary you can read on the issue online:
+For more information about this temporary change you can read on the issue online:
 
     https://github.com/bytecodealliance/wasmtime/issues/1271
 
@@ -761,10 +774,9 @@ and for re-adding support for interface types you can see this issue:
     fn name_section(&mut self, names: NameSectionReader<'data>) -> WasmResult<()> {
         for subsection in names {
             match subsection? {
-                wasmparser::Name::Function(f) => {
-                    let mut names = f.get_map()?;
-                    for _ in 0..names.get_count() {
-                        let Naming { index, name } = names.read()?;
+                wasmparser::Name::Function(names) => {
+                    for name in names {
+                        let Naming { index, name } = name?;
                         // Skip this naming if it's naming a function that
                         // doesn't actually exist.
                         if (index as usize) >= self.result.module.functions.len() {
@@ -783,34 +795,31 @@ and for re-adding support for interface types you can see this issue:
                             .insert(index, name);
                     }
                 }
-                wasmparser::Name::Module(module) => {
-                    let name = module.get_name()?;
+                wasmparser::Name::Module { name, .. } => {
                     self.result.module.name = Some(name.to_string());
                     if self.tunables.generate_native_debuginfo {
                         self.result.debuginfo.name_section.module_name = Some(name);
                     }
                 }
-                wasmparser::Name::Local(l) => {
+                wasmparser::Name::Local(reader) => {
                     if !self.tunables.generate_native_debuginfo {
                         continue;
                     }
-                    let mut reader = l.get_indirect_map()?;
-                    for _ in 0..reader.get_indirect_count() {
-                        let f = reader.read()?;
+                    for f in reader {
+                        let f = f?;
                         // Skip this naming if it's naming a function that
                         // doesn't actually exist.
-                        if (f.indirect_index as usize) >= self.result.module.functions.len() {
+                        if (f.index as usize) >= self.result.module.functions.len() {
                             continue;
                         }
-                        let mut map = f.get_map()?;
-                        for _ in 0..map.get_count() {
-                            let Naming { index, name } = map.read()?;
+                        for name in f.names {
+                            let Naming { index, name } = name?;
 
                             self.result
                                 .debuginfo
                                 .name_section
                                 .locals_names
-                                .entry(FuncIndex::from_u32(f.indirect_index))
+                                .entry(FuncIndex::from_u32(f.index))
                                 .or_insert(HashMap::new())
                                 .insert(index, name);
                         }

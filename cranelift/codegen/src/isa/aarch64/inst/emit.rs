@@ -934,6 +934,9 @@ impl MachInstEmit for Inst {
                     BitOp::RBit => (0b00000, 0b000000),
                     BitOp::Clz => (0b00000, 0b000100),
                     BitOp::Cls => (0b00000, 0b000101),
+                    BitOp::Rev16 => (0b00000, 0b000001),
+                    BitOp::Rev32 => (0b00000, 0b000010),
+                    BitOp::Rev64 => (0b00000, 0b000011),
                 };
                 sink.put4(enc_bit_rr(size.sf_bit(), op1, op2, rn, rd))
             }
@@ -1364,12 +1367,33 @@ impl MachInstEmit for Inst {
                     }
                 }
             }
-            &Inst::MovPReg { rd, rm } => {
+            &Inst::MovFromPReg { rd, rm } => {
                 let rd = allocs.next_writable(rd);
                 let rm: Reg = rm.into();
-                debug_assert!([regs::fp_reg(), regs::stack_reg(), regs::link_reg()].contains(&rm));
+                debug_assert!([
+                    regs::fp_reg(),
+                    regs::stack_reg(),
+                    regs::link_reg(),
+                    regs::pinned_reg()
+                ]
+                .contains(&rm));
                 assert!(rm.class() == RegClass::Int);
                 assert!(rd.to_reg().class() == rm.class());
+                let size = OperandSize::Size64;
+                Inst::Mov { size, rd, rm }.emit(&[], sink, emit_info, state);
+            }
+            &Inst::MovToPReg { rd, rm } => {
+                let rd: Writable<Reg> = Writable::from_reg(rd.into());
+                let rm = allocs.next(rm);
+                debug_assert!([
+                    regs::fp_reg(),
+                    regs::stack_reg(),
+                    regs::link_reg(),
+                    regs::pinned_reg()
+                ]
+                .contains(&rd.to_reg()));
+                assert!(rd.to_reg().class() == RegClass::Int);
+                assert!(rm.class() == rd.to_reg().class());
                 let size = OperandSize::Size64;
                 Inst::Mov { size, rd, rm }.emit(&[], sink, emit_info, state);
             }

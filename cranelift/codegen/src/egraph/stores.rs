@@ -62,7 +62,7 @@ use crate::fx::{FxHashMap, FxHashSet};
 use crate::inst_predicates::has_memory_fence_semantics;
 use crate::ir::{Block, Function, Inst, InstructionData, MemFlags, Opcode};
 use crate::trace;
-use cranelift_entity::SecondaryMap;
+use cranelift_entity::{EntityRef, SecondaryMap};
 use smallvec::{smallvec, SmallVec};
 
 /// For a given program point, the vector of last-store instruction
@@ -95,6 +95,32 @@ pub enum MemoryState {
     /// store whose value we can cleanly forward. (E.g., perhaps a
     /// barrier of some sort.)
     AfterInst(Inst),
+}
+
+/// Memory state index, packed into a u32.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PackedMemoryState(u32);
+
+impl From<MemoryState> for PackedMemoryState {
+    fn from(state: MemoryState) -> Self {
+        match state {
+            MemoryState::Entry => Self(0),
+            MemoryState::Store(i) => Self(1 | (i.index() as u32) << 2),
+            MemoryState::BeforeInst(i) => Self(2 | (i.index() as u32) << 2),
+            MemoryState::AfterInst(i) => Self(3 | (i.index() as u32) << 2),
+        }
+    }
+}
+
+impl PackedMemoryState {
+    /// Does this memory state refer to a specific store instruction?
+    pub fn as_store(&self) -> Option<Inst> {
+        if self.0 & 3 == 1 {
+            Some(Inst::from_bits(self.0 >> 2))
+        } else {
+            None
+        }
+    }
 }
 
 impl LastStores {
@@ -148,7 +174,7 @@ impl LastStores {
 pub struct AliasAnalysis {
     /// Last-store instruction (or none) for a given load. Use a hash map
     /// instead of a `SecondaryMap` because this is sparse.
-    load_mem_state: FxHashMap<Inst, MemoryState>,
+    load_mem_state: FxHashMap<Inst, PackedMemoryState>,
 }
 
 impl AliasAnalysis {
@@ -165,7 +191,7 @@ impl AliasAnalysis {
         cfg: &ControlFlowGraph,
     ) -> SecondaryMap<Block, Option<LastStores>> {
         let mut block_input = SecondaryMap::with_capacity(func.dfg.num_blocks());
-        let mut worklist: SmallVec<[Block; 8]> = smallvec![];
+        let mut worklist: SmallVec<[Block; 16]> = smallvec![];
         let mut worklist_set = FxHashSet::default();
         let entry = func.layout.entry_block().unwrap();
         worklist.push(entry);
@@ -210,8 +236,9 @@ impl AliasAnalysis {
     fn compute_load_last_stores(
         func: &Function,
         block_input: SecondaryMap<Block, Option<LastStores>>,
-    ) -> FxHashMap<Inst, MemoryState> {
+    ) -> FxHashMap<Inst, PackedMemoryState> {
         let mut load_mem_state = FxHashMap::default();
+        load_mem_state.reserve(func.dfg.num_insts() / 8);
 
         for block in func.layout.blocks() {
             let mut state = block_input[block].clone().unwrap();
@@ -249,7 +276,7 @@ impl AliasAnalysis {
                         mem_state,
                     );
 
-                    load_mem_state.insert(inst, mem_state);
+                    load_mem_state.insert(inst, mem_state.into());
                 }
 
                 state.update(func, inst);
@@ -260,7 +287,7 @@ impl AliasAnalysis {
     }
 
     /// Get the state seen by a load, if any.
-    pub fn get_state_for_load(&self, inst: Inst) -> Option<MemoryState> {
+    pub fn get_state_for_load(&self, inst: Inst) -> Option<PackedMemoryState> {
         self.load_mem_state.get(&inst).copied()
     }
 }

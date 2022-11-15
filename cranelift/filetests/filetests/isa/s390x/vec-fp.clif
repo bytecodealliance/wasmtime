@@ -288,8 +288,8 @@ block0(v0: f32x4):
 }
 
 ; block0:
-;   vmrhf %v3, %v24, %v24
-;   vldeb %v24, %v3
+;   vmrhf %v2, %v24, %v24
+;   vldeb %v24, %v2
 ;   br %r14
 
 function %fvpromote_low_f32x4_le(f32x4) -> f64x2 wasmtime_system_v {
@@ -299,8 +299,8 @@ block0(v0: f32x4):
 }
 
 ; block0:
-;   vmrlf %v3, %v24, %v24
-;   vldeb %v24, %v3
+;   vmrlf %v2, %v24, %v24
+;   vldeb %v24, %v2
 ;   br %r14
 
 function %fvdemote_f64x2_be(f64x2) -> f32x4 {
@@ -310,10 +310,10 @@ block0(v0: f64x2):
 }
 
 ; block0:
-;   vledb %v3, %v24, 0, 0
-;   vesrlg %v5, %v3, 32
-;   vgbm %v7, 0
-;   vpkg %v24, %v5, %v7
+;   vledb %v2, %v24, 0, 0
+;   vesrlg %v4, %v2, 32
+;   vgbm %v6, 0
+;   vpkg %v24, %v4, %v6
 ;   br %r14
 
 function %fvdemote_f64x2_le(f64x2) -> f32x4 wasmtime_system_v {
@@ -323,10 +323,10 @@ block0(v0: f64x2):
 }
 
 ; block0:
-;   vledb %v3, %v24, 0, 0
-;   vesrlg %v5, %v3, 32
-;   vgbm %v7, 0
-;   vpkg %v24, %v7, %v5
+;   vledb %v2, %v24, 0, 0
+;   vesrlg %v4, %v2, 32
+;   vgbm %v6, 0
+;   vpkg %v24, %v6, %v4
 ;   br %r14
 
 function %ceil_f32x4(f32x4) -> f32x4 {
@@ -436,8 +436,8 @@ block0(v0: f32x4, v1: f32x4):
 }
 
 ; block0:
-;   vgmf %v4, 1, 31
-;   vsel %v24, %v24, %v25, %v4
+;   vgmf %v3, 1, 31
+;   vsel %v24, %v24, %v25, %v3
 ;   br %r14
 
 function %fcopysign_f64x2(f64x2, f64x2) -> f64x2 {
@@ -447,8 +447,8 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vgmg %v4, 1, 63
-;   vsel %v24, %v24, %v25, %v4
+;   vgmg %v3, 1, 63
+;   vsel %v24, %v24, %v25, %v3
 ;   br %r14
 
 function %fcvt_from_uint_i32x4_f32x4(i32x4) -> f32x4 {
@@ -458,14 +458,14 @@ block0(v0: i32x4):
 }
 
 ; block0:
-;   vuplhf %v3, %v24
-;   vcdlgb %v5, %v3, 0, 3
-;   vledb %v7, %v5, 0, 4
-;   vupllf %v17, %v24
-;   vcdlgb %v19, %v17, 0, 3
-;   vledb %v21, %v19, 0, 4
-;   bras %r1, 20 ; data.u128 0x0001020308090a0b1011121318191a1b ; vl %v23, 0(%r1)
-;   vperm %v24, %v7, %v21, %v23
+;   vuplhf %v2, %v24
+;   vcdlgb %v4, %v2, 0, 3
+;   vledb %v6, %v4, 0, 4
+;   vupllf %v16, %v24
+;   vcdlgb %v18, %v16, 0, 3
+;   vledb %v20, %v18, 0, 4
+;   bras %r1, 20 ; data.u128 0x0001020308090a0b1011121318191a1b ; vl %v22, 0(%r1)
+;   vperm %v24, %v6, %v20, %v22
 ;   br %r14
 
 function %fcvt_from_sint_i32x4_f32x4(i32x4) -> f32x4 {
@@ -475,14 +475,14 @@ block0(v0: i32x4):
 }
 
 ; block0:
-;   vuphf %v3, %v24
-;   vcdgb %v5, %v3, 0, 3
-;   vledb %v7, %v5, 0, 4
-;   vuplf %v17, %v24
-;   vcdgb %v19, %v17, 0, 3
-;   vledb %v21, %v19, 0, 4
-;   bras %r1, 20 ; data.u128 0x0001020308090a0b1011121318191a1b ; vl %v23, 0(%r1)
-;   vperm %v24, %v7, %v21, %v23
+;   vuphf %v2, %v24
+;   vcdgb %v4, %v2, 0, 3
+;   vledb %v6, %v4, 0, 4
+;   vuplf %v16, %v24
+;   vcdgb %v18, %v16, 0, 3
+;   vledb %v20, %v18, 0, 4
+;   bras %r1, 20 ; data.u128 0x0001020308090a0b1011121318191a1b ; vl %v22, 0(%r1)
+;   vperm %v24, %v6, %v20, %v22
 ;   br %r14
 
 function %fcvt_from_uint_i64x2_f64x2(i64x2) -> f64x2 {
@@ -513,8 +513,8 @@ block0(v0: i32x4):
 }
 
 ; block0:
-;   vuphf %v3, %v24
-;   vcdgb %v24, %v3, 0, 4
+;   vuphf %v2, %v24
+;   vcdgb %v24, %v2, 0, 4
 ;   br %r14
 
 function %fcvt_low_from_sint_i32x4_f64x2_le(i32x4) -> f64x2 wasmtime_system_v {
@@ -524,8 +524,8 @@ block0(v0: i32x4):
 }
 
 ; block0:
-;   vuplf %v3, %v24
-;   vcdgb %v24, %v3, 0, 4
+;   vuplf %v2, %v24
+;   vcdgb %v24, %v2, 0, 4
 ;   br %r14
 
 function %fcvt_to_uint_sat_f32x4_i32x4(f32x4) -> i32x4 {
@@ -535,13 +535,13 @@ block0(v0: f32x4):
 }
 
 ; block0:
-;   vmrhf %v3, %v24, %v24
-;   vldeb %v5, %v3
-;   vclgdb %v7, %v5, 0, 5
-;   vmrlf %v17, %v24, %v24
-;   vldeb %v19, %v17
-;   vclgdb %v21, %v19, 0, 5
-;   vpklsg %v24, %v7, %v21
+;   vmrhf %v2, %v24, %v24
+;   vldeb %v4, %v2
+;   vclgdb %v6, %v4, 0, 5
+;   vmrlf %v16, %v24, %v24
+;   vldeb %v18, %v16
+;   vclgdb %v20, %v18, 0, 5
+;   vpklsg %v24, %v6, %v20
 ;   br %r14
 
 function %fcvt_to_sint_sat_f32x4_i32x4(f32x4) -> i32x4 {
@@ -551,16 +551,16 @@ block0(v0: f32x4):
 }
 
 ; block0:
-;   vmrhf %v3, %v24, %v24
-;   vldeb %v5, %v3
-;   vcgdb %v7, %v5, 0, 5
-;   vmrlf %v17, %v24, %v24
-;   vldeb %v19, %v17
-;   vcgdb %v21, %v19, 0, 5
-;   vpksg %v23, %v7, %v21
+;   vmrhf %v2, %v24, %v24
+;   vldeb %v4, %v2
+;   vcgdb %v6, %v4, 0, 5
+;   vmrlf %v16, %v24, %v24
+;   vldeb %v18, %v16
+;   vcgdb %v20, %v18, 0, 5
+;   vpksg %v22, %v6, %v20
 ;   vgbm %v25, 0
-;   vfcesb %v27, %v24, %v24
-;   vsel %v24, %v23, %v25, %v27
+;   vfcesb %v26, %v24, %v24
+;   vsel %v24, %v22, %v25, %v26
 ;   br %r14
 
 function %fcvt_to_uint_sat_f64x2_i64x2(f64x2) -> i64x2 {
@@ -580,9 +580,9 @@ block0(v0: f64x2):
 }
 
 ; block0:
-;   vcgdb %v3, %v24, 0, 5
-;   vgbm %v5, 0
-;   vfcedb %v7, %v24, %v24
-;   vsel %v24, %v3, %v5, %v7
+;   vcgdb %v2, %v24, 0, 5
+;   vgbm %v4, 0
+;   vfcedb %v6, %v24, %v24
+;   vsel %v24, %v2, %v4, %v6
 ;   br %r14
 

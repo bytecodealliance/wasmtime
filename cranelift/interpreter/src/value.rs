@@ -56,6 +56,7 @@ pub trait Value: Clone + From<DataValue> {
     fn sqrt(self) -> ValueResult<Self>;
     fn fma(self, a: Self, b: Self) -> ValueResult<Self>;
     fn abs(self) -> ValueResult<Self>;
+    fn checked_add(self, other: Self) -> ValueResult<Option<Self>>;
 
     // Float operations
     fn neg(self) -> ValueResult<Self>;
@@ -86,6 +87,7 @@ pub trait Value: Clone + From<DataValue> {
     fn leading_zeros(self) -> ValueResult<Self>;
     fn trailing_zeros(self) -> ValueResult<Self>;
     fn reverse_bits(self) -> ValueResult<Self>;
+    fn swap_bytes(self) -> ValueResult<Self>;
 }
 
 #[derive(Error, Debug, PartialEq)]
@@ -183,6 +185,12 @@ macro_rules! binary_match {
     ( $op:ident($arg1:expr, $arg2:expr); [ $( $data_value_ty:ident ),* ] ) => {
         match ($arg1, $arg2) {
             $( (DataValue::$data_value_ty(a), DataValue::$data_value_ty(b)) => { Ok(DataValue::$data_value_ty(a.$op(*b))) } )*
+            _ => unimplemented!()
+        }
+    };
+    ( option $op:ident($arg1:expr, $arg2:expr); [ $( $data_value_ty:ident ),* ] ) => {
+        match ($arg1, $arg2) {
+            $( (DataValue::$data_value_ty(a), DataValue::$data_value_ty(b)) => { Ok(a.$op(*b).map(DataValue::$data_value_ty)) } )*
             _ => unimplemented!()
         }
     };
@@ -334,7 +342,7 @@ impl Value for DataValue {
     fn convert(self, kind: ValueConversionKind) -> ValueResult<Self> {
         Ok(match kind {
             ValueConversionKind::Exact(ty) => match (self, ty) {
-                // TODO a lot to do here: from bmask to ireduce to raw_bitcast...
+                // TODO a lot to do here: from bmask to ireduce to bitcast...
                 (val, ty) if val.ty().is_int() && ty.is_int() => {
                     DataValue::from_integer(val.into_int()?, ty)?
                 }
@@ -614,6 +622,10 @@ impl Value for DataValue {
         unary_match!(abs(&self); [F32, F64])
     }
 
+    fn checked_add(self, other: Self) -> ValueResult<Option<Self>> {
+        binary_match!(option checked_add(&self, &other); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128])
+    }
+
     fn neg(self) -> ValueResult<Self> {
         unary_match!(neg(&self); [F32, F64])
     }
@@ -715,5 +727,9 @@ impl Value for DataValue {
 
     fn reverse_bits(self) -> ValueResult<Self> {
         unary_match!(reverse_bits(&self); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128])
+    }
+
+    fn swap_bytes(self) -> ValueResult<Self> {
+        unary_match!(swap_bytes(&self); [I16, I32, I64, I128, U16, U32, U64, U128])
     }
 }

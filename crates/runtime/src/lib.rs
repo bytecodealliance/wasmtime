@@ -25,7 +25,7 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use wasmtime_environ::DefinedFuncIndex;
 use wasmtime_environ::DefinedMemoryIndex;
-use wasmtime_environ::FunctionInfo;
+use wasmtime_environ::FunctionLoc;
 use wasmtime_environ::SignatureIndex;
 
 #[macro_use]
@@ -57,7 +57,10 @@ pub use crate::instance::{
     InstantiationError, LinkError, OnDemandInstanceAllocator, StorePtr,
 };
 #[cfg(feature = "pooling-allocator")]
-pub use crate::instance::{InstanceLimits, PoolingAllocationStrategy, PoolingInstanceAllocator};
+pub use crate::instance::{
+    InstanceLimits, PoolingAllocationStrategy, PoolingInstanceAllocator,
+    PoolingInstanceAllocatorConfig,
+};
 pub use crate::memory::{
     DefaultMemoryCreator, Memory, RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory,
 };
@@ -79,15 +82,8 @@ pub use crate::vmcontext::{
 mod module_id;
 pub use module_id::{CompiledModuleId, CompiledModuleIdAllocator};
 
-#[cfg(memory_init_cow)]
 mod cow;
-#[cfg(memory_init_cow)]
 pub use crate::cow::{MemoryImage, MemoryImageSlot, ModuleMemoryImages};
-
-#[cfg(not(memory_init_cow))]
-mod cow_disabled;
-#[cfg(not(memory_init_cow))]
-pub use crate::cow_disabled::{MemoryImage, MemoryImageSlot, ModuleMemoryImages};
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -183,7 +179,7 @@ pub trait ModuleRuntimeInfo: Send + Sync + 'static {
 
     /// Descriptors about each compiled function, such as the offset from
     /// `image_base`.
-    fn function_info(&self, func_index: DefinedFuncIndex) -> &FunctionInfo;
+    fn function_loc(&self, func_index: DefinedFuncIndex) -> &FunctionLoc;
 
     /// Returns the `MemoryImage` structure used for copy-on-write
     /// initialization of the memory, if it's applicable.

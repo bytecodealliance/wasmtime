@@ -156,7 +156,7 @@ impl TargetIsa for X64Backend {
         inst::unwind::systemv::map_reg(reg).map(|reg| reg.0)
     }
 
-    fn text_section_builder(&self, num_funcs: u32) -> Box<dyn TextSectionBuilder> {
+    fn text_section_builder(&self, num_funcs: usize) -> Box<dyn TextSectionBuilder> {
         Box::new(MachTextSectionBuilder::<inst::Inst>::new(num_funcs))
     }
 
@@ -333,31 +333,36 @@ mod test {
             .unwrap();
         let code = result.buffer.data();
 
-        // 00000000  55                push rbp
-        // 00000001  4889E5            mov rbp,rsp
-        // 00000004  81C734120000      add edi,0x1234
-        // 0000000A  85FF              test edi,edi
-        // 0000000C  0F841C000000      jz near 0x2e
-        // 00000012  4989F8            mov r8,rdi
-        // 00000015  4889F8            mov rax,rdi
-        // 00000018  81E834120000      sub eax,0x1234
-        // 0000001E  4401C0            add eax,r8d
-        // 00000021  85FF              test edi,edi
-        // 00000023  0F8505000000      jnz near 0x2e
-        // 00000029  4889EC            mov rsp,rbp
-        // 0000002C  5D                pop rbp
-        // 0000002D  C3                ret
-        // 0000002E  4989F8            mov r8,rdi
-        // 00000031  4181C034120000    add r8d,0x1234
-        // 00000038  4585C0            test r8d,r8d
-        // 0000003B  0F85EDFFFFFF      jnz near 0x2e
-        // 00000041  E9CFFFFFFF        jmp 0x15
+        // To update this comment, write the golden bytes to a file, and run the following
+        // command on it:
+        // > objdump -b binary -D <file> -m i386:x86-64 -M intel
+        //
+        //  0:   55                      push   rbp
+        //  1:   48 89 e5                mov    rbp,rsp
+        //  4:   48 89 fe                mov    rsi,rdi
+        //  7:   81 c6 34 12 00 00       add    esi,0x1234
+        //  d:   85 f6                   test   esi,esi
+        //  f:   0f 84 1c 00 00 00       je     0x31
+        // 15:   49 89 f0                mov    r8,rsi
+        // 18:   48 89 f0                mov    rax,rsi
+        // 1b:   81 e8 34 12 00 00       sub    eax,0x1234
+        // 21:   44 01 c0                add    eax,r8d
+        // 24:   85 f6                   test   esi,esi
+        // 26:   0f 85 05 00 00 00       jne    0x31
+        // 2c:   48 89 ec                mov    rsp,rbp
+        // 2f:   5d                      pop    rbp
+        // 30:   c3                      ret
+        // 31:   49 89 f0                mov    r8,rsi
+        // 34:   41 81 c0 34 12 00 00    add    r8d,0x1234
+        // 3b:   45 85 c0                test   r8d,r8d
+        // 3e:   0f 85 ed ff ff ff       jne    0x31
+        // 44:   e9 cf ff ff ff          jmp    0x18
 
         let golden = vec![
-            85, 72, 137, 229, 129, 199, 52, 18, 0, 0, 133, 255, 15, 132, 28, 0, 0, 0, 73, 137, 248,
-            72, 137, 248, 129, 232, 52, 18, 0, 0, 68, 1, 192, 133, 255, 15, 133, 5, 0, 0, 0, 72,
-            137, 236, 93, 195, 73, 137, 248, 65, 129, 192, 52, 18, 0, 0, 69, 133, 192, 15, 133,
-            237, 255, 255, 255, 233, 207, 255, 255, 255,
+            85, 72, 137, 229, 72, 137, 254, 129, 198, 52, 18, 0, 0, 133, 246, 15, 132, 28, 0, 0, 0,
+            73, 137, 240, 72, 137, 240, 129, 232, 52, 18, 0, 0, 68, 1, 192, 133, 246, 15, 133, 5,
+            0, 0, 0, 72, 137, 236, 93, 195, 73, 137, 240, 65, 129, 192, 52, 18, 0, 0, 69, 133, 192,
+            15, 133, 237, 255, 255, 255, 233, 207, 255, 255, 255,
         ];
 
         assert_eq!(code, &golden[..]);
@@ -433,35 +438,42 @@ mod test {
             .unwrap();
         let code = result.buffer.data();
 
-        // 00000000  55                push rbp
-        // 00000001  4889E5            mov rbp,rsp
-        // 00000004  83FF02            cmp edi,byte +0x2
-        // 00000007  0F8327000000      jnc near 0x34
-        // 0000000D  448BDF            mov r11d,edi
-        // 00000010  41BA00000000      mov r10d,0x0
-        // 00000016  4D0F43DA          cmovnc r11,r10
-        // 0000001A  4C8D150B000000    lea r10,[rel 0x2c]
-        // 00000021  4F635C9A00        movsxd r11,dword [r10+r11*4+0x0]
-        // 00000026  4D01DA            add r10,r11
-        // 00000029  41FFE2            jmp r10
-        // 0000002C  120000001C000000  (jumptable data)
-        // 00000034  B803000000        mov eax,0x3
-        // 00000039  4889EC            mov rsp,rbp
-        // 0000003C  5D                pop rbp
-        // 0000003D  C3                ret
-        // 0000003E  B801000000        mov eax,0x1
-        // 00000043  4889EC            mov rsp,rbp
-        // 00000046  5D                pop rbp
-        // 00000047  C3                ret
-        // 00000048  B802000000        mov eax,0x2
-        // 0000004D  4889EC            mov rsp,rbp
-        // 00000050  5D                pop rbp
-        // 00000051  C3                ret
+        // To update this comment, write the golden bytes to a file, and run the following
+        // command on it:
+        // > objdump -b binary -D <file> -m i386:x86-64 -M intel
+        //
+        //  0:   55                      push   rbp
+        //  1:   48 89 e5                mov    rbp,rsp
+        //  4:   83 ff 02                cmp    edi,0x2
+        //  7:   0f 83 27 00 00 00       jae    0x34
+        //  d:   44 8b d7                mov    r10d,edi
+        // 10:   41 b9 00 00 00 00       mov    r9d,0x0
+        // 16:   4d 0f 43 d1             cmovae r10,r9
+        // 1a:   4c 8d 0d 0b 00 00 00    lea    r9,[rip+0xb]        # 0x2c
+        // 21:   4f 63 54 91 00          movsxd r10,DWORD PTR [r9+r10*4+0x0]
+        // 26:   4d 01 d1                add    r9,r10
+        // 29:   41 ff e1                jmp    r9
+        // 2c:   12 00                   adc    al,BYTE PTR [rax]
+        // 2e:   00 00                   add    BYTE PTR [rax],al
+        // 30:   1c 00                   sbb    al,0x0
+        // 32:   00 00                   add    BYTE PTR [rax],al
+        // 34:   b8 03 00 00 00          mov    eax,0x3
+        // 39:   48 89 ec                mov    rsp,rbp
+        // 3c:   5d                      pop    rbp
+        // 3d:   c3                      ret
+        // 3e:   b8 01 00 00 00          mov    eax,0x1
+        // 43:   48 89 ec                mov    rsp,rbp
+        // 46:   5d                      pop    rbp
+        // 47:   c3                      ret
+        // 48:   b8 02 00 00 00          mov    eax,0x2
+        // 4d:   48 89 ec                mov    rsp,rbp
+        // 50:   5d                      pop    rbp
+        // 51:   c3                      ret
 
         let golden = vec![
-            85, 72, 137, 229, 131, 255, 2, 15, 131, 39, 0, 0, 0, 68, 139, 223, 65, 186, 0, 0, 0, 0,
-            77, 15, 67, 218, 76, 141, 21, 11, 0, 0, 0, 79, 99, 92, 154, 0, 77, 1, 218, 65, 255,
-            226, 18, 0, 0, 0, 28, 0, 0, 0, 184, 3, 0, 0, 0, 72, 137, 236, 93, 195, 184, 1, 0, 0, 0,
+            85, 72, 137, 229, 131, 255, 2, 15, 131, 39, 0, 0, 0, 68, 139, 215, 65, 185, 0, 0, 0, 0,
+            77, 15, 67, 209, 76, 141, 13, 11, 0, 0, 0, 79, 99, 84, 145, 0, 77, 1, 209, 65, 255,
+            225, 18, 0, 0, 0, 28, 0, 0, 0, 184, 3, 0, 0, 0, 72, 137, 236, 93, 195, 184, 1, 0, 0, 0,
             72, 137, 236, 93, 195, 184, 2, 0, 0, 0, 72, 137, 236, 93, 195,
         ];
 

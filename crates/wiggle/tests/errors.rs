@@ -1,5 +1,6 @@
 /// Execute the wiggle guest conversion code to exercise it
 mod convert_just_errno {
+    use anyhow::Result;
     use wiggle_test::{impl_errno, HostMemory, WasiCtx};
 
     /// The `errors` argument to the wiggle gives us a hook to map a rich error
@@ -31,7 +32,7 @@ mod convert_just_errno {
     /// When the `errors` mapping in witx is non-empty, we need to impl the
     /// types::UserErrorConversion trait that wiggle generates from that mapping.
     impl<'a> types::UserErrorConversion for WasiCtx<'a> {
-        fn errno_from_rich_error(&mut self, e: RichError) -> Result<types::Errno, wiggle::Trap> {
+        fn errno_from_rich_error(&mut self, e: RichError) -> Result<types::Errno> {
             // WasiCtx can collect a Vec<String> log so we can test this. We're
             // logging the Display impl that `thiserror::Error` provides us.
             self.log.borrow_mut().push(e.to_string());
@@ -62,19 +63,19 @@ mod convert_just_errno {
 
         // Exercise each of the branches in `foo`.
         // Start with the success case:
-        let r0 = one_error_conversion::foo(&mut ctx, &host_memory, 0);
+        let r0 = one_error_conversion::foo(&mut ctx, &host_memory, 0).unwrap();
         assert_eq!(
             r0,
-            Ok(types::Errno::Ok as i32),
+            types::Errno::Ok as i32,
             "Expected return value for strike=0"
         );
         assert!(ctx.log.borrow().is_empty(), "No error log for strike=0");
 
         // First error case:
-        let r1 = one_error_conversion::foo(&mut ctx, &host_memory, 1);
+        let r1 = one_error_conversion::foo(&mut ctx, &host_memory, 1).unwrap();
         assert_eq!(
             r1,
-            Ok(types::Errno::PicketLine as i32),
+            types::Errno::PicketLine as i32,
             "Expected return value for strike=1"
         );
         assert_eq!(
@@ -84,10 +85,10 @@ mod convert_just_errno {
         );
 
         // Second error case:
-        let r2 = one_error_conversion::foo(&mut ctx, &host_memory, 2);
+        let r2 = one_error_conversion::foo(&mut ctx, &host_memory, 2).unwrap();
         assert_eq!(
             r2,
-            Ok(types::Errno::InvalidArg as i32),
+            types::Errno::InvalidArg as i32,
             "Expected return value for strike=2"
         );
         assert_eq!(
@@ -102,6 +103,7 @@ mod convert_just_errno {
 /// we use two distinct error types.
 mod convert_multiple_error_types {
     pub use super::convert_just_errno::RichError;
+    use anyhow::Result;
     use wiggle_test::{impl_errno, WasiCtx};
 
     /// Test that we can map multiple types of errors.
@@ -114,7 +116,7 @@ mod convert_multiple_error_types {
 
     // Just like the prior test, except that we have a second errno type. This should mean there
     // are two functions in UserErrorConversion.
-    // Additionally, test that the function "baz" marked noreturn always returns a wiggle::Trap.
+    // Additionally, test that the function "baz" marked noreturn always returns a wasmtime::Trap.
     wiggle::from_witx!({
         witx_literal: "
 (typename $errno (enum (@witx tag u8) $ok $invalid_arg $picket_line))
@@ -140,13 +142,13 @@ mod convert_multiple_error_types {
     // each member of the `errors` mapping.
     // Bodies elided.
     impl<'a> types::UserErrorConversion for WasiCtx<'a> {
-        fn errno_from_rich_error(&mut self, _e: RichError) -> Result<types::Errno, wiggle::Trap> {
+        fn errno_from_rich_error(&mut self, _e: RichError) -> Result<types::Errno> {
             unimplemented!()
         }
         fn errno2_from_another_rich_error(
             &mut self,
             _e: AnotherRichError,
-        ) -> Result<types::Errno2, wiggle::Trap> {
+        ) -> Result<types::Errno2> {
             unimplemented!()
         }
     }
@@ -159,7 +161,7 @@ mod convert_multiple_error_types {
         fn bar(&mut self, _: u32) -> Result<(), AnotherRichError> {
             unimplemented!()
         }
-        fn baz(&mut self, _: u32) -> wiggle::Trap {
+        fn baz(&mut self, _: u32) -> anyhow::Error {
             unimplemented!()
         }
     }

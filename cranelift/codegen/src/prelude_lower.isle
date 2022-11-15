@@ -158,6 +158,7 @@
 (type BoxExternalName (primitive BoxExternalName))
 (type RelocDistance (primitive RelocDistance))
 (type VecArgPair extern (enum))
+(type VecRetPair extern (enum))
 
 ;;;; Helper Clif Extractors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -320,6 +321,23 @@
 
 ;;;; Helpers for Working with Flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Reverse an IntCC flag.
+(decl intcc_reverse (IntCC) IntCC)
+(extern constructor intcc_reverse intcc_reverse)
+
+;; Invert an IntCC flag.
+(decl intcc_inverse (IntCC) IntCC)
+(extern constructor intcc_inverse intcc_inverse)
+
+;; Reverse an FloatCC flag.
+(decl floatcc_reverse (FloatCC) FloatCC)
+(extern constructor floatcc_reverse floatcc_reverse)
+
+;; Invert an FloatCC flag.
+(decl floatcc_inverse (FloatCC) FloatCC)
+(extern constructor floatcc_inverse floatcc_inverse)
+
+
 ;; Newtype wrapper around `MInst` for instructions that are used for their
 ;; effect on flags.
 ;;
@@ -407,6 +425,14 @@
       (let ((_x Unit (emit producer_inst))
             (_y Unit (emit consumer_inst)))
         (value_regs producer_result consumer_result)))
+
+;; A flag-producer that also produces a result, paired with a consumer that has
+;; no results.
+(rule (with_flags (ProducesFlags.ProducesFlagsReturnsResultWithConsumer producer_inst producer_result)
+                  (ConsumesFlags.ConsumesFlagsSideEffect consumer_inst))
+      (let ((_ Unit (emit producer_inst))
+            (_ Unit (emit consumer_inst)))
+        (value_reg producer_result)))
 
 (rule (with_flags (ProducesFlags.ProducesFlagsSideEffect producer_inst)
                   (ConsumesFlags.ConsumesFlagsReturnsReg consumer_inst consumer_result))
@@ -589,10 +615,6 @@
 
 ;;;; Helpers for generating returns ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; The (writable) register(s) that will contain the n'th return value.
-(decl retval (usize) WritableValueRegs)
-(extern constructor retval retval)
-
 ;; Extractor to check for the special case that a `WritableValueRegs`
 ;; contains only a single register.
 (decl only_writable_reg (WritableReg) WritableValueRegs)
@@ -700,31 +722,14 @@
 (decl gen_move (Type WritableReg Reg) MInst)
 (extern constructor gen_move gen_move)
 
-;; Copy a return value to a set of registers.
-(decl copy_to_regs (WritableValueRegs Value) Unit)
-(rule (copy_to_regs dsts val @ (value_type ty))
-      (let ((srcs ValueRegs (put_in_regs val)))
-        (copy_to_regs_range ty (value_regs_range srcs) dsts srcs)))
-
-;; Helper for `copy_to_regs` that uses a range to index into the reg/value
-;; vectors. Fails for the empty range.
-(decl copy_to_regs_range (Type Range WritableValueRegs ValueRegs) Unit)
-
-(rule (copy_to_regs_range ty (range_empty) dsts srcs)
-      (unit))
-
-(rule (copy_to_regs_range ty (range_unwrap head tail) dsts srcs)
-      (let ((dst WritableReg (writable_regs_get dsts head))
-            (src Reg (value_regs_get srcs head))
-            (_ Unit (emit (gen_move ty dst src))))
-        (copy_to_regs_range ty tail dsts srcs)))
-
-
+;; Generate a return instruction
 (decl lower_return (Range ValueSlice) InstOutput)
-(rule (lower_return (range_empty) _) (output_none))
-(rule (lower_return (range_unwrap head tail) args)
-      (let ((_ Unit (copy_to_regs (retval head) (value_slice_get args head))))
-        (lower_return tail args)))
+(rule (lower_return _ vals)
+      (let ((_ Unit (gen_return vals)))
+        (output_none)))
+
+(decl gen_return (ValueSlice) Unit)
+(extern constructor gen_return gen_return)
 
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

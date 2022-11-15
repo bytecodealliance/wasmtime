@@ -13,8 +13,8 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   vl %v0, 0(%r3)
 ;   vl %v1, 0(%r4)
-;   vn %v7, %v0, %v1
-;   vst %v7, 0(%r2)
+;   vn %v6, %v0, %v1
+;   vst %v6, 0(%r2)
 ;   br %r14
 
 function %band_i64(i64, i64) -> i64 {
@@ -123,8 +123,8 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   vl %v0, 0(%r3)
 ;   vl %v1, 0(%r4)
-;   vo %v7, %v0, %v1
-;   vst %v7, 0(%r2)
+;   vo %v6, %v0, %v1
+;   vst %v6, 0(%r2)
 ;   br %r14
 
 function %bor_i64(i64, i64) -> i64 {
@@ -233,8 +233,8 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   vl %v0, 0(%r3)
 ;   vl %v1, 0(%r4)
-;   vx %v7, %v0, %v1
-;   vst %v7, 0(%r2)
+;   vx %v6, %v0, %v1
+;   vst %v6, 0(%r2)
 ;   br %r14
 
 function %bxor_i64(i64, i64) -> i64 {
@@ -343,8 +343,8 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   vl %v0, 0(%r3)
 ;   vl %v1, 0(%r4)
-;   vnc %v7, %v0, %v1
-;   vst %v7, 0(%r2)
+;   vnc %v6, %v0, %v1
+;   vst %v6, 0(%r2)
 ;   br %r14
 
 function %band_not_i64(i64, i64) -> i64 {
@@ -366,8 +366,9 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   xilf %r3, 4294967295
-;   nr %r2, %r3
+;   lgr %r5, %r3
+;   xilf %r5, 4294967295
+;   nr %r2, %r5
 ;   br %r14
 
 function %band_not_i16(i16, i16) -> i16 {
@@ -377,8 +378,9 @@ block0(v0: i16, v1: i16):
 }
 
 ; block0:
-;   xilf %r3, 4294967295
-;   nr %r2, %r3
+;   lgr %r5, %r3
+;   xilf %r5, 4294967295
+;   nr %r2, %r5
 ;   br %r14
 
 function %band_not_i8(i8, i8) -> i8 {
@@ -388,8 +390,9 @@ block0(v0: i8, v1: i8):
 }
 
 ; block0:
-;   xilf %r3, 4294967295
-;   nr %r2, %r3
+;   lgr %r5, %r3
+;   xilf %r5, 4294967295
+;   nr %r2, %r5
 ;   br %r14
 
 function %bor_not_i128(i128, i128) -> i128 {
@@ -401,8 +404,8 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   vl %v0, 0(%r3)
 ;   vl %v1, 0(%r4)
-;   voc %v7, %v0, %v1
-;   vst %v7, 0(%r2)
+;   voc %v6, %v0, %v1
+;   vst %v6, 0(%r2)
 ;   br %r14
 
 function %bor_not_i64(i64, i64) -> i64 {
@@ -424,8 +427,9 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   xilf %r3, 4294967295
-;   or %r2, %r3
+;   lgr %r5, %r3
+;   xilf %r5, 4294967295
+;   or %r2, %r5
 ;   br %r14
 
 function %bor_not_i16(i16, i16) -> i16 {
@@ -435,8 +439,9 @@ block0(v0: i16, v1: i16):
 }
 
 ; block0:
-;   xilf %r3, 4294967295
-;   or %r2, %r3
+;   lgr %r5, %r3
+;   xilf %r5, 4294967295
+;   or %r2, %r5
 ;   br %r14
 
 function %bor_not_i8(i8, i8) -> i8 {
@@ -446,8 +451,9 @@ block0(v0: i8, v1: i8):
 }
 
 ; block0:
-;   xilf %r3, 4294967295
-;   or %r2, %r3
+;   lgr %r5, %r3
+;   xilf %r5, 4294967295
+;   or %r2, %r5
 ;   br %r14
 
 function %bxor_not_i128(i128, i128) -> i128 {
@@ -459,8 +465,8 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   vl %v0, 0(%r3)
 ;   vl %v1, 0(%r4)
-;   vnx %v7, %v0, %v1
-;   vst %v7, 0(%r2)
+;   vnx %v6, %v0, %v1
+;   vst %v6, 0(%r2)
 ;   br %r14
 
 function %bxor_not_i64(i64, i64) -> i64 {
@@ -516,8 +522,8 @@ block0(v0: i128):
 
 ; block0:
 ;   vl %v0, 0(%r3)
-;   vno %v5, %v0, %v0
-;   vst %v5, 0(%r2)
+;   vno %v4, %v0, %v0
+;   vst %v4, 0(%r2)
 ;   br %r14
 
 function %bnot_i64(i64) -> i64 {
@@ -571,8 +577,8 @@ block0(v0: i128, v1: i128, v2: i128):
 ;   vl %v0, 0(%r3)
 ;   vl %v1, 0(%r4)
 ;   vl %v2, 0(%r5)
-;   vsel %v17, %v1, %v2, %v0
-;   vst %v17, 0(%r2)
+;   vsel %v16, %v1, %v2, %v0
+;   vst %v16, 0(%r2)
 ;   br %r14
 
 function %bitselect_i64(i64, i64, i64) -> i64 {
@@ -583,10 +589,11 @@ block0(v0: i64, v1: i64, v2: i64):
 
 ; block0:
 ;   ngr %r3, %r2
-;   xilf %r2, 4294967295
-;   xihf %r2, 4294967295
-;   ngrk %r5, %r4, %r2
-;   ogrk %r2, %r5, %r3
+;   lgr %r5, %r2
+;   xilf %r5, 4294967295
+;   xihf %r5, 4294967295
+;   ngr %r4, %r5
+;   ogrk %r2, %r4, %r3
 ;   br %r14
 
 function %bitselect_i32(i32, i32, i32) -> i32 {
@@ -599,8 +606,8 @@ block0(v0: i32, v1: i32, v2: i32):
 ;   nr %r3, %r2
 ;   lgr %r5, %r2
 ;   xilf %r5, 4294967295
-;   nr %r4, %r5
-;   ork %r2, %r4, %r3
+;   nrk %r2, %r4, %r5
+;   or %r2, %r3
 ;   br %r14
 
 function %bitselect_i16(i16, i16, i16) -> i16 {
@@ -613,8 +620,8 @@ block0(v0: i16, v1: i16, v2: i16):
 ;   nr %r3, %r2
 ;   lgr %r5, %r2
 ;   xilf %r5, 4294967295
-;   nr %r4, %r5
-;   ork %r2, %r4, %r3
+;   nrk %r2, %r4, %r5
+;   or %r2, %r3
 ;   br %r14
 
 function %bitselect_i8(i8, i8, i8) -> i8 {
@@ -627,7 +634,7 @@ block0(v0: i8, v1: i8, v2: i8):
 ;   nr %r3, %r2
 ;   lgr %r5, %r2
 ;   xilf %r5, 4294967295
-;   nr %r4, %r5
-;   ork %r2, %r4, %r3
+;   nrk %r2, %r4, %r5
+;   or %r2, %r3
 ;   br %r14
 

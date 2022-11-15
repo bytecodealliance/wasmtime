@@ -107,6 +107,13 @@ impl Inst {
         Inst::Setcc { cc, dst }
     }
 
+    fn bswap(size: OperandSize, dst: Writable<Reg>) -> Inst {
+        debug_assert!(dst.to_reg().class() == RegClass::Int);
+        let src = Gpr::new(dst.to_reg()).unwrap();
+        let dst = WritableGpr::from_writable_reg(dst).unwrap();
+        Inst::Bswap { size, src, dst }
+    }
+
     fn xmm_rm_r_imm(
         op: SseOpcode,
         src: RegMem,
@@ -122,6 +129,16 @@ impl Inst {
             dst,
             imm,
             size,
+        }
+    }
+
+    fn xmm_rm_r_blend(op: SseOpcode, src2: RegMem, dst: Writable<Reg>) -> Inst {
+        Inst::XmmRmRBlend {
+            op,
+            src1: Xmm::new(dst.to_reg()).unwrap(),
+            src2: XmmMem::new(src2).unwrap(),
+            mask: Xmm::new(regs::xmm0()).unwrap(),
+            dst: WritableXmm::from_writable_reg(dst).unwrap(),
         }
     }
 }
@@ -3505,6 +3522,55 @@ fn test_x64_emit() {
     insns.push((Inst::setcc(CC::LE, w_r14), "410F9EC6", "setle   %r14b"));
     insns.push((Inst::setcc(CC::P, w_r9), "410F9AC1", "setp    %r9b"));
     insns.push((Inst::setcc(CC::NP, w_r8), "410F9BC0", "setnp   %r8b"));
+
+    // ========================================================
+    // Bswap
+    insns.push((
+        Inst::bswap(OperandSize::Size64, w_rax),
+        "480FC8",
+        "bswapq  %rax, %rax",
+    ));
+    insns.push((
+        Inst::bswap(OperandSize::Size64, w_r8),
+        "490FC8",
+        "bswapq  %r8, %r8",
+    ));
+    insns.push((
+        Inst::bswap(OperandSize::Size32, w_rax),
+        "0FC8",
+        "bswapl  %eax, %eax",
+    ));
+    insns.push((
+        Inst::bswap(OperandSize::Size64, w_rcx),
+        "480FC9",
+        "bswapq  %rcx, %rcx",
+    ));
+    insns.push((
+        Inst::bswap(OperandSize::Size32, w_rcx),
+        "0FC9",
+        "bswapl  %ecx, %ecx",
+    ));
+    insns.push((
+        Inst::bswap(OperandSize::Size64, w_r11),
+        "490FCB",
+        "bswapq  %r11, %r11",
+    ));
+    insns.push((
+        Inst::bswap(OperandSize::Size32, w_r11),
+        "410FCB",
+        "bswapl  %r11d, %r11d",
+    ));
+    insns.push((
+        Inst::bswap(OperandSize::Size64, w_r14),
+        "490FCE",
+        "bswapq  %r14, %r14",
+    ));
+    insns.push((
+        Inst::bswap(OperandSize::Size32, w_r14),
+        "410FCE",
+        "bswapl  %r14d, %r14d",
+    ));
+
     // ========================================================
     // Cmove
     insns.push((
@@ -3905,19 +3971,19 @@ fn test_x64_emit() {
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Blendvpd, RegMem::reg(xmm15), w_xmm4),
+        Inst::xmm_rm_r_blend(SseOpcode::Blendvpd, RegMem::reg(xmm15), w_xmm4),
         "66410F3815E7",
         "blendvpd %xmm4, %xmm15, %xmm4",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Blendvps, RegMem::reg(xmm2), w_xmm3),
+        Inst::xmm_rm_r_blend(SseOpcode::Blendvps, RegMem::reg(xmm2), w_xmm3),
         "660F3814DA",
         "blendvps %xmm3, %xmm2, %xmm3",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pblendvb, RegMem::reg(xmm12), w_xmm13),
+        Inst::xmm_rm_r_blend(SseOpcode::Pblendvb, RegMem::reg(xmm12), w_xmm13),
         "66450F3810EC",
         "pblendvb %xmm13, %xmm12, %xmm13",
     ));

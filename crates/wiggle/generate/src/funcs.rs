@@ -84,6 +84,16 @@ fn _define_func(
         );
     );
     if settings.get_async(&module, &func).is_sync() {
+        let traced_body = if settings.tracing.enabled_for(&mod_name, &func_name) {
+            quote!(
+                #mk_span
+                _span.in_scope(|| {
+                  #body
+                })
+            )
+        } else {
+            quote!(#body)
+        };
         (
             quote!(
                 #[allow(unreachable_code)] // deals with warnings in noreturn functions
@@ -91,17 +101,29 @@ fn _define_func(
                     ctx: &mut (impl #(#bounds)+*),
                     memory: &dyn #rt::GuestMemory,
                     #(#abi_params),*
-                ) -> Result<#abi_ret, #rt::Trap> {
+                ) -> #rt::anyhow::Result<#abi_ret> {
                     use std::convert::TryFrom as _;
-                    #mk_span
-                    _span.in_scope(|| {
-                      #body
-                    })
+                    #traced_body
                 }
             ),
             bounds,
         )
     } else {
+        let traced_body = if settings.tracing.enabled_for(&mod_name, &func_name) {
+            quote!(
+                use #rt::tracing::Instrument as _;
+                #mk_span
+                async move {
+                    #body
+                }.instrument(_span)
+            )
+        } else {
+            quote!(
+                async move {
+                    #body
+                }
+            )
+        };
         (
             quote!(
                 #[allow(unreachable_code)] // deals with warnings in noreturn functions
@@ -109,13 +131,9 @@ fn _define_func(
                     ctx: &'a mut (impl #(#bounds)+*),
                     memory: &'a dyn #rt::GuestMemory,
                     #(#abi_params),*
-                ) -> impl std::future::Future<Output = Result<#abi_ret, #rt::Trap>> + 'a {
+                ) -> impl std::future::Future<Output = #rt::anyhow::Result<#abi_ret>> + 'a {
                     use std::convert::TryFrom as _;
-                    use #rt::tracing::Instrument as _;
-                    #mk_span
-                    async move {
-                        #body
-                    }.instrument(_span)
+                    #traced_body
                 }
             ),
             bounds,
@@ -243,7 +261,12 @@ impl witx::Bindgen for Rust<'_> {
                         args.push(quote!(#name));
                     }
                 }
-                if func.params.len() > 0 {
+                if self
+                    .settings
+                    .tracing
+                    .enabled_for(self.module.name.as_str(), self.funcname)
+                    && func.params.len() > 0
+                {
                     let args = func
                         .params
                         .iter()
@@ -272,12 +295,18 @@ impl witx::Bindgen for Rust<'_> {
                         let ret = #trait_name::#ident(ctx, #(#args),*).await;
                     })
                 };
-                self.src.extend(quote! {
-                    #rt::tracing::event!(
-                        #rt::tracing::Level::TRACE,
-                        result = #rt::tracing::field::debug(&ret),
-                    );
-                });
+                if self
+                    .settings
+                    .tracing
+                    .enabled_for(self.module.name.as_str(), self.funcname)
+                {
+                    self.src.extend(quote! {
+                        #rt::tracing::event!(
+                            #rt::tracing::Level::TRACE,
+                            result = #rt::tracing::field::debug(&ret),
+                        );
+                    });
+                }
 
                 if func.results.len() > 0 {
                     results.push(quote!(ret));

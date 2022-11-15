@@ -2,8 +2,7 @@ use once_cell::sync::Lazy;
 use std::path::Path;
 use std::sync::{Condvar, Mutex};
 use wasmtime::{
-    Config, Engine, InstanceAllocationStrategy, InstanceLimits, PoolingAllocationStrategy, Store,
-    Strategy,
+    Config, Engine, InstanceAllocationStrategy, PoolingAllocationConfig, Store, Strategy,
 };
 use wasmtime_wast::WastContext;
 
@@ -79,16 +78,12 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
         // However, these limits may become insufficient in the future as the wast tests change.
         // If a wast test fails because of a limit being "exceeded" or if memory/table
         // fails to grow, the values here will need to be adjusted.
-        cfg.allocation_strategy(InstanceAllocationStrategy::Pooling {
-            strategy: PoolingAllocationStrategy::NextAvailable,
-            instance_limits: InstanceLimits {
-                count: 450,
-                memories: 2,
-                tables: 4,
-                memory_pages: 805,
-                ..Default::default()
-            },
-        });
+        let mut pool = PoolingAllocationConfig::default();
+        pool.instance_count(450)
+            .instance_memories(2)
+            .instance_tables(4)
+            .instance_memory_pages(805);
+        cfg.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
         Some(lock_pooling())
     } else {
         None

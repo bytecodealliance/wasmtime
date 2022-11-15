@@ -8,6 +8,6 @@ pub fn compile(defs: &ast::Defs, options: &codegen::CodegenOptions) -> Result<St
     let mut typeenv = sema::TypeEnv::from_ast(defs)?;
     let termenv = sema::TermEnv::from_ast(&mut typeenv, defs)?;
     crate::overlap::check(&mut typeenv, &termenv)?;
-    let tries = trie::build_tries(&typeenv, &termenv);
+    let tries = trie::build_tries(&termenv);
     Ok(codegen::codegen(&typeenv, &termenv, &tries, options))
 }
