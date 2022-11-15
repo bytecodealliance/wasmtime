@@ -655,25 +655,13 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(rm);
         }
         &Inst::MovFromPReg { rd, rm } => {
-            debug_assert!([
-                regs::fp_reg(),
-                regs::stack_reg(),
-                regs::link_reg(),
-                regs::pinned_reg()
-            ]
-            .contains(&rm.into()));
             debug_assert!(rd.to_reg().is_virtual());
             collector.reg_def(rd);
+            collector.reg_fixed_nonallocatable(rm);
         }
         &Inst::MovToPReg { rd, rm } => {
-            debug_assert!([
-                regs::fp_reg(),
-                regs::stack_reg(),
-                regs::link_reg(),
-                regs::pinned_reg()
-            ]
-            .contains(&rd.into()));
             debug_assert!(rm.is_virtual());
+            collector.reg_fixed_nonallocatable(rd);
             collector.reg_use(rm);
         }
         &Inst::MovK { rd, rn, .. } => {
@@ -1568,10 +1556,12 @@ impl Inst {
             }
             &Inst::MovFromPReg { rd, rm } => {
                 let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size64, allocs);
+                allocs.next_fixed_nonallocatable(rm);
                 let rm = show_ireg_sized(rm.into(), OperandSize::Size64);
                 format!("mov {}, {}", rd, rm)
             }
             &Inst::MovToPReg { rd, rm } => {
+                allocs.next_fixed_nonallocatable(rd);
                 let rd = show_ireg_sized(rd.into(), OperandSize::Size64);
                 let rm = pretty_print_ireg(rm, OperandSize::Size64, allocs);
                 format!("mov {}, {}", rd, rm)

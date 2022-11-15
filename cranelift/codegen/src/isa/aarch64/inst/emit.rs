@@ -1369,6 +1369,7 @@ impl MachInstEmit for Inst {
             }
             &Inst::MovFromPReg { rd, rm } => {
                 let rd = allocs.next_writable(rd);
+                allocs.next_fixed_nonallocatable(rm);
                 let rm: Reg = rm.into();
                 debug_assert!([
                     regs::fp_reg(),
@@ -1383,6 +1384,7 @@ impl MachInstEmit for Inst {
                 Inst::Mov { size, rd, rm }.emit(&[], sink, emit_info, state);
             }
             &Inst::MovToPReg { rd, rm } => {
+                allocs.next_fixed_nonallocatable(rd);
                 let rd: Writable<Reg> = Writable::from_reg(rd.into());
                 let rm = allocs.next(rm);
                 debug_assert!([

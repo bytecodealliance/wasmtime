@@ -541,7 +541,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
             .sort_unstable_by_key(|(vreg, _, _, _)| *vreg);
     }
 
-    fn collect_operands(&mut self) {
+    fn collect_operands(&mut self, allocatable: PRegSet) {
         for (i, insn) in self.vcode.insts.iter().enumerate() {
             // Push operands from the instruction onto the operand list.
             //
@@ -555,9 +555,10 @@ impl<I: VCodeInst> VCodeBuilder<I> {
             // its register fields (which is slow, branchy code) once.
 
             let vreg_aliases = &self.vcode.vreg_aliases;
-            let mut op_collector = OperandCollector::new(&mut self.vcode.operands, |vreg| {
-                Self::resolve_vreg_alias_impl(vreg_aliases, vreg)
-            });
+            let mut op_collector =
+                OperandCollector::new(&mut self.vcode.operands, allocatable, |vreg| {
+                    Self::resolve_vreg_alias_impl(vreg_aliases, vreg)
+                });
             insn.get_operands(&mut op_collector);
             let (ops, clobbers) = op_collector.finish();
             self.vcode.operand_ranges.push(ops);
@@ -586,14 +587,14 @@ impl<I: VCodeInst> VCodeBuilder<I> {
     }
 
     /// Build the final VCode.
-    pub fn build(mut self, vregs: VRegAllocator<I>) -> VCode<I> {
+    pub fn build(mut self, allocatable: PRegSet, vregs: VRegAllocator<I>) -> VCode<I> {
         self.vcode.vreg_types = vregs.vreg_types;
         self.vcode.reftyped_vregs = vregs.reftyped_vregs;
 
         if self.direction == VCodeBuildDirection::Backward {
             self.reverse_and_finalize();
         }
-        self.collect_operands();
+        self.collect_operands(allocatable);
 
         // Apply register aliases to the `reftyped_vregs` list since this list
         // will be returned directly to `regalloc2` eventually and all

@@ -60,15 +60,7 @@ impl S390xBackend {
         let emit_info = EmitInfo::new(self.isa_flags.clone());
         let sigs = SigSet::new::<abi::S390xMachineDeps>(func, &self.flags)?;
         let abi = abi::S390xCallee::new(func, self, &self.isa_flags, &sigs)?;
-        compile::compile::<S390xBackend>(
-            func,
-            self.flags.clone(),
-            self,
-            abi,
-            &self.machine_env,
-            emit_info,
-            sigs,
-        )
+        compile::compile::<S390xBackend>(func, self, abi, emit_info, sigs)
     }
 }
 
@@ -115,6 +107,10 @@ impl TargetIsa for S390xBackend {
 
     fn flags(&self) -> &shared_settings::Flags {
         &self.flags
+    }
+
+    fn machine_env(&self) -> &MachineEnv {
+        &self.machine_env
     }
 
     fn isa_flags(&self) -> Vec<shared_settings::Value> {
