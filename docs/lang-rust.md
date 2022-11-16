@@ -86,7 +86,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // There's a few ways we can call the `answer` `Func` value. The easiest
     // is to statically assert its signature with `typed` (in this case
     // asserting it takes no arguments and returns one i32) and then call it.
-    let answer = answer.typed::<(), i32, _>(&store)?;
+    let answer = answer.typed::<(), i32>(&store)?;
 
     // And finally we can call our function! Note that the error propagation
     // with `?` is done to handle the case where the wasm function traps.
@@ -184,7 +184,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let instance = linker.instantiate(&mut store, &module)?;
 
     // Like before, we can get the run function and execute it.
-    let run = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
     run.call(&mut store, ())?;
 
     // We can also inspect what integers were logged:
