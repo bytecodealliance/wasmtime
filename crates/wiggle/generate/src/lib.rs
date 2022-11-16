@@ -36,30 +36,22 @@ pub fn generate(doc: &witx::Document, settings: &CodegenSettings) -> TokenStream
         }
     });
 
-    let user_error_methods = settings
-        .errors
-        .iter()
-        .filter_map(|errtype| match errtype {
-            ErrorType::User(errtype) => {
-                let abi_typename = names::type_ref(&errtype.abi_type(), anon_lifetime());
-                let user_typename = errtype.typename();
-                let methodname = names::user_error_conversion_method(&errtype);
-                Some(quote! {
-                    fn #methodname(&mut self, e: super::#user_typename)
-                        -> wiggle::anyhow::Result<#abi_typename>;
-                })
-            }
-            ErrorType::Generated(_) => None,
-        })
-        .collect::<Vec<TokenStream>>();
-    let user_error_conversion = if !user_error_methods.is_empty() {
-        quote! {
-            pub trait UserErrorConversion {
-                #(#user_error_methods)*
-            }
+    let user_error_methods = settings.errors.iter().filter_map(|errtype| match errtype {
+        ErrorType::User(errtype) => {
+            let abi_typename = names::type_ref(&errtype.abi_type(), anon_lifetime());
+            let user_typename = errtype.typename();
+            let methodname = names::user_error_conversion_method(&errtype);
+            Some(quote! {
+                fn #methodname(&mut self, e: super::#user_typename)
+                    -> wiggle::anyhow::Result<#abi_typename>;
+            })
         }
-    } else {
-        Default::default()
+        ErrorType::Generated(_) => None,
+    });
+    let user_error_conversion = quote! {
+        pub trait UserErrorConversion {
+            #(#user_error_methods)*
+        }
     };
     let modules = doc.modules().map(|module| {
         let modname = names::module(&module.name);
@@ -73,6 +65,7 @@ pub fn generate(doc: &witx::Document, settings: &CodegenSettings) -> TokenStream
         quote!(
             pub mod #modname {
                 use super::types::*;
+                pub use super::types::UserErrorConversion;
                 #(#fs)*
 
                 #modtrait
