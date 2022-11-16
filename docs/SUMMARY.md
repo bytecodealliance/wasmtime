@@ -55,6 +55,7 @@
   - [Testing](./contributing-testing.md)
   - [Fuzzing](./contributing-fuzzing.md)
   - [CI](./contributing-ci.md)
+  - [Cross Compiling](./contributing-cross-compiling.md)
   - [Coding Guidelines](./contributing-coding-guidelines.md)
   - [Development Process](./contributing-development-process.md)
   - [Release Process](./contributing-release-process.md)
