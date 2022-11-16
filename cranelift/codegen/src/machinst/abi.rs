@@ -636,7 +636,7 @@ pub struct SigData {
     sized_stack_ret_space: i64,
 
     /// Index in `args` of the stack-return-value-area argument.
-    stack_ret_arg: Option<usize>,
+    stack_ret_arg: Option<u16>,
 
     /// Calling convention used.
     call_conv: isa::CallConv,
@@ -692,6 +692,7 @@ impl SigData {
             stack_ret_arg,
         );
 
+        let stack_ret_arg = stack_ret_arg.map(|s| u16::try_from(s).unwrap());
         Ok(SigData {
             args_start,
             args_length,
@@ -789,7 +790,7 @@ impl SigData {
     /// Get information specifying how to pass the implicit pointer
     /// to the return-value area on the stack, if required.
     pub fn get_ret_arg(&self, sigs: &SigSet) -> Option<ABIArg> {
-        let ret_arg = self.stack_ret_arg?;
+        let ret_arg = usize::from(self.stack_ret_arg?);
         Some(self.args(sigs)[ret_arg].clone())
     }
 
@@ -1607,8 +1608,11 @@ impl<M: ABIMachineSpec> Callee<M> {
     /// pointer to that memory.
     pub fn gen_retval_area_setup(&mut self, sigs: &SigSet) -> Option<M::I> {
         if let Some(i) = sigs[self.sig].stack_ret_arg {
-            let insts =
-                self.gen_copy_arg_to_regs(sigs, i, ValueRegs::one(self.ret_area_ptr.unwrap()));
+            let insts = self.gen_copy_arg_to_regs(
+                sigs,
+                i.into(),
+                ValueRegs::one(self.ret_area_ptr.unwrap()),
+            );
             insts.into_iter().next().map(|inst| {
                 trace!(
                     "gen_retval_area_setup: inst {:?}; ptr reg is {:?}",
@@ -2347,7 +2351,7 @@ impl<M: ABIMachineSpec> Caller<M> {
                 rd,
                 I8,
             ));
-            for inst in self.gen_arg(ctx, i, ValueRegs::one(rd.to_reg())) {
+            for inst in self.gen_arg(ctx, i.into(), ValueRegs::one(rd.to_reg())) {
                 ctx.emit(inst);
             }
         }
