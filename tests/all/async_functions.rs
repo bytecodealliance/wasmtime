@@ -269,6 +269,9 @@ async fn cancel_during_run() {
             *caller.data_mut() = 1;
             let dtor = SetOnDrop(caller);
             Box::new(async move {
+                // SetOnDrop is not destroyed when dropping the reference of it
+                // here. Instead, it is moved into the future where it's forced
+                // to live in and will be destroyed at the end of the future.
                 drop(&dtor);
                 tokio::task::yield_now().await;
                 Ok(())
