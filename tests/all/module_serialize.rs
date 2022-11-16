@@ -51,7 +51,7 @@ fn test_module_serialize_simple() -> Result<()> {
 
     let mut store = Store::default();
     let instance = unsafe { deserialize_and_instantiate(&mut store, &buffer)? };
-    let run = instance.get_typed_func::<(), i32, _>(&mut store, "run")?;
+    let run = instance.get_typed_func::<(), i32>(&mut store, "run")?;
     let result = run.call(&mut store, ())?;
 
     assert_eq!(42, result);
@@ -98,7 +98,7 @@ fn test_deserialize_from_file() -> Result<()> {
         fs::write(&path, &buffer)?;
         let module = unsafe { Module::deserialize_file(store.engine(), &path)? };
         let instance = Instance::new(&mut store, &module, &[])?;
-        let func = instance.get_typed_func::<(), i32, _>(&mut store, "run")?;
+        let func = instance.get_typed_func::<(), i32>(&mut store, "run")?;
         assert_eq!(func.call(&mut store, ())?, 42);
         Ok(())
     }

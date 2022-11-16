@@ -95,7 +95,7 @@ use wasmtime_runtime::{
 /// // ... or we can make a static assertion about its signature and call it.
 /// // Our first call here can fail if the signatures don't match, and then the
 /// // second call can fail if the function traps (like the `match` above).
-/// let foo = foo.typed::<(), (), _>(&store)?;
+/// let foo = foo.typed::<(), ()>(&store)?;
 /// foo.call(&mut store, ())?;
 /// # Ok(())
 /// # }
@@ -130,7 +130,7 @@ use wasmtime_runtime::{
 ///     "#,
 /// )?;
 /// let instance = Instance::new(&mut store, &module, &[add.into()])?;
-/// let call_add_twice = instance.get_typed_func::<(), i32, _>(&mut store, "call_add_twice")?;
+/// let call_add_twice = instance.get_typed_func::<(), i32>(&mut store, "call_add_twice")?;
 ///
 /// assert_eq!(call_add_twice.call(&mut store, ())?, 10);
 /// # Ok(())
@@ -603,7 +603,7 @@ impl Func {
     ///     "#,
     /// )?;
     /// let instance = Instance::new(&mut store, &module, &[add.into()])?;
-    /// let foo = instance.get_typed_func::<(i32, i32), i32, _>(&mut store, "foo")?;
+    /// let foo = instance.get_typed_func::<(i32, i32), i32>(&mut store, "foo")?;
     /// assert_eq!(foo.call(&mut store, (1, 2))?, 3);
     /// # Ok(())
     /// # }
@@ -634,7 +634,7 @@ impl Func {
     ///     "#,
     /// )?;
     /// let instance = Instance::new(&mut store, &module, &[add.into()])?;
-    /// let foo = instance.get_typed_func::<(i32, i32), i32, _>(&mut store, "foo")?;
+    /// let foo = instance.get_typed_func::<(i32, i32), i32>(&mut store, "foo")?;
     /// assert_eq!(foo.call(&mut store, (1, 2))?, 3);
     /// assert!(foo.call(&mut store, (i32::max_value(), 1)).is_err());
     /// # Ok(())
@@ -672,7 +672,7 @@ impl Func {
     ///     "#,
     /// )?;
     /// let instance = Instance::new(&mut store, &module, &[debug.into()])?;
-    /// let foo = instance.get_typed_func::<(), (), _>(&mut store, "foo")?;
+    /// let foo = instance.get_typed_func::<(), ()>(&mut store, "foo")?;
     /// foo.call(&mut store, ())?;
     /// # Ok(())
     /// # }
@@ -720,7 +720,7 @@ impl Func {
     ///     "#,
     /// )?;
     /// let instance = Instance::new(&mut store, &module, &[log_str.into()])?;
-    /// let foo = instance.get_typed_func::<(), (), _>(&mut store, "foo")?;
+    /// let foo = instance.get_typed_func::<(), ()>(&mut store, "foo")?;
     /// foo.call(&mut store, ())?;
     /// # Ok(())
     /// # }
@@ -1178,10 +1178,6 @@ impl Func {
     /// function. This behaves the same way as `Params`, but just for the
     /// results of the function.
     ///
-    /// The `S` type parameter represents the method of passing in the store
-    /// context, and can typically be specified as simply `_` when calling this
-    /// function.
-    ///
     /// Translation between Rust types and WebAssembly types looks like:
     ///
     /// | WebAssembly | Rust                |
@@ -1232,7 +1228,7 @@ impl Func {
     /// // Note that this call can fail due to the typecheck not passing, but
     /// // in our case we statically know the module so we know this should
     /// // pass.
-    /// let typed = foo.typed::<(), (), _>(&store)?;
+    /// let typed = foo.typed::<(), ()>(&store)?;
     ///
     /// // Note that this can fail if the wasm traps at runtime.
     /// typed.call(&mut store, ())?;
@@ -1245,7 +1241,7 @@ impl Func {
     /// ```
     /// # use wasmtime::*;
     /// # fn foo(add: &Func, mut store: Store<()>) -> anyhow::Result<()> {
-    /// let typed = add.typed::<(i32, i64), f32, _>(&store)?;
+    /// let typed = add.typed::<(i32, i64), f32>(&store)?;
     /// assert_eq!(typed.call(&mut store, (1, 2))?, 3.0);
     /// # Ok(())
     /// # }
@@ -1256,18 +1252,20 @@ impl Func {
     /// ```
     /// # use wasmtime::*;
     /// # fn foo(add_with_overflow: &Func, mut store: Store<()>) -> anyhow::Result<()> {
-    /// let typed = add_with_overflow.typed::<(u32, u32), (u32, i32), _>(&store)?;
+    /// let typed = add_with_overflow.typed::<(u32, u32), (u32, i32)>(&store)?;
     /// let (result, overflow) = typed.call(&mut store, (u32::max_value(), 2))?;
     /// assert_eq!(result, 1);
     /// assert_eq!(overflow, 1);
     /// # Ok(())
     /// # }
     /// ```
-    pub fn typed<Params, Results, S>(&self, store: S) -> Result<TypedFunc<Params, Results>>
+    pub fn typed<Params, Results>(
+        &self,
+        store: impl AsContext,
+    ) -> Result<TypedFunc<Params, Results>>
     where
         Params: WasmParams,
         Results: WasmResults,
-        S: AsContext,
     {
         // Type-check that the params/results are all valid
         let ty = self.ty(store);

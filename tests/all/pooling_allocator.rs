@@ -67,7 +67,7 @@ fn memory_limit() -> Result<()> {
     {
         let mut store = Store::new(&engine, ());
         let instance = Instance::new(&mut store, &module, &[])?;
-        let f = instance.get_typed_func::<(), i32, _>(&mut store, "f")?;
+        let f = instance.get_typed_func::<(), i32>(&mut store, "f")?;
 
         assert_eq!(f.call(&mut store, ()).expect("function should not trap"), 0);
         assert_eq!(f.call(&mut store, ()).expect("function should not trap"), 1);
@@ -149,7 +149,7 @@ fn memory_guard_page_trap() -> Result<()> {
         let mut store = Store::new(&engine, ());
         let instance = Instance::new(&mut store, &module, &[])?;
         let m = instance.get_memory(&mut store, "m").unwrap();
-        let f = instance.get_typed_func::<i32, (), _>(&mut store, "f")?;
+        let f = instance.get_typed_func::<i32, ()>(&mut store, "f")?;
 
         let trap = f
             .call(&mut store, 0)
@@ -273,7 +273,7 @@ fn table_limit() -> Result<()> {
     {
         let mut store = Store::new(&engine, ());
         let instance = Instance::new(&mut store, &module, &[])?;
-        let f = instance.get_typed_func::<(), i32, _>(&mut store, "f")?;
+        let f = instance.get_typed_func::<(), i32>(&mut store, "f")?;
 
         for i in 0..TABLE_ELEMENTS {
             assert_eq!(
@@ -611,7 +611,7 @@ fn switch_image_and_non_image() -> Result<()> {
     let assert_zero = || -> Result<()> {
         let mut store = Store::new(&engine, ());
         let instance = Instance::new(&mut store, &module1, &[])?;
-        let func = instance.get_typed_func::<i32, i32, _>(&mut store, "load")?;
+        let func = instance.get_typed_func::<i32, i32>(&mut store, "load")?;
         assert_eq!(func.call(&mut store, 0)?, 0);
         Ok(())
     };
@@ -719,10 +719,10 @@ fn dynamic_memory_pooling_allocator() -> Result<()> {
     let mut store = Store::new(&engine, ());
     let instance = Instance::new(&mut store, &module, &[])?;
 
-    let grow = instance.get_typed_func::<u32, i32, _>(&mut store, "grow")?;
-    let size = instance.get_typed_func::<(), u32, _>(&mut store, "size")?;
-    let i32_load = instance.get_typed_func::<u32, i32, _>(&mut store, "i32.load")?;
-    let i32_store = instance.get_typed_func::<(u32, i32), (), _>(&mut store, "i32.store")?;
+    let grow = instance.get_typed_func::<u32, i32>(&mut store, "grow")?;
+    let size = instance.get_typed_func::<(), u32>(&mut store, "size")?;
+    let i32_load = instance.get_typed_func::<u32, i32>(&mut store, "i32.load")?;
+    let i32_store = instance.get_typed_func::<(u32, i32), ()>(&mut store, "i32.store")?;
     let memory = instance.get_memory(&mut store, "memory").unwrap();
 
     // basic length 1 tests
@@ -757,7 +757,7 @@ fn dynamic_memory_pooling_allocator() -> Result<()> {
     // Re-instantiate in another store.
     store = Store::new(&engine, ());
     let instance = Instance::new(&mut store, &module, &[])?;
-    let i32_load = instance.get_typed_func::<u32, i32, _>(&mut store, "i32.load")?;
+    let i32_load = instance.get_typed_func::<u32, i32>(&mut store, "i32.load")?;
     let memory = instance.get_memory(&mut store, "memory").unwrap();
 
     // Technically this is out of bounds...
@@ -806,8 +806,8 @@ fn zero_memory_pages_disallows_oob() -> Result<()> {
     )?;
     let mut store = Store::new(&engine, ());
     let instance = Instance::new(&mut store, &module, &[])?;
-    let load32 = instance.get_typed_func::<i32, i32, _>(&mut store, "load")?;
-    let store32 = instance.get_typed_func::<i32, (), _>(&mut store, "store")?;
+    let load32 = instance.get_typed_func::<i32, i32>(&mut store, "load")?;
+    let store32 = instance.get_typed_func::<i32, ()>(&mut store, "store")?;
     for i in 0..31 {
         assert!(load32.call(&mut store, 1 << i).is_err());
         assert!(store32.call(&mut store, 1 << i).is_err());

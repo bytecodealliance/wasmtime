@@ -457,21 +457,20 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `store` does not own this instance.
-    pub fn get_typed_func<Params, Results, S>(
+    pub fn get_typed_func<Params, Results>(
         &self,
-        mut store: S,
+        mut store: impl AsContextMut,
         name: &str,
     ) -> Result<TypedFunc<Params, Results>>
     where
         Params: crate::WasmParams,
         Results: crate::WasmResults,
-        S: AsContextMut,
     {
         let f = self
             .get_export(store.as_context_mut(), name)
             .and_then(|f| f.into_func())
             .ok_or_else(|| anyhow!("failed to find function export `{}`", name))?;
-        Ok(f.typed::<Params, Results, _>(store)
+        Ok(f.typed::<Params, Results>(store)
             .with_context(|| format!("failed to convert function `{}` to given type", name))?)
     }
 

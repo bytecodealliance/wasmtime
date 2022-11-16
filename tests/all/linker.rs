@@ -101,7 +101,7 @@ fn function_interposition() -> Result<()> {
         .unwrap()
         .into_func()
         .unwrap();
-    let func = func.typed::<(), i32, _>(&store)?;
+    let func = func.typed::<(), i32>(&store)?;
     assert_eq!(func.call(&mut store, ())?, 112);
     Ok(())
 }
@@ -134,7 +134,7 @@ fn function_interposition_renamed() -> Result<()> {
     }
     let instance = linker.instantiate(&mut store, &module)?;
     let func = instance.get_func(&mut store, "export").unwrap();
-    let func = func.typed::<(), i32, _>(&store)?;
+    let func = func.typed::<(), i32>(&store)?;
     assert_eq!(func.call(&mut store, ())?, 112);
     Ok(())
 }
@@ -167,7 +167,7 @@ fn module_interposition() -> Result<()> {
         .unwrap()
         .into_func()
         .unwrap();
-    let func = func.typed::<(), i32, _>(&store)?;
+    let func = func.typed::<(), i32>(&store)?;
     assert_eq!(func.call(&mut store, ())?, 112);
     Ok(())
 }

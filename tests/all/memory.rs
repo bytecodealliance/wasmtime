@@ -346,7 +346,7 @@ fn tiny_static_heap() -> Result<()> {
     )?;
 
     let i = Instance::new(&mut store, &module, &[])?;
-    let f = i.get_typed_func::<(), (), _>(&mut store, "run")?;
+    let f = i.get_typed_func::<(), ()>(&mut store, "run")?;
     f.call(&mut store, ())?;
     Ok(())
 }

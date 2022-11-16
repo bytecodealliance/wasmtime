@@ -76,7 +76,7 @@ fn call_wrapped_func() -> Result<(), Error> {
         assert_eq!(store.data().calls_into_wasm, n);
         assert_eq!(store.data().returns_from_wasm, n);
 
-        f.typed::<(i32, i64, f32, f64), (), _>(&store)?
+        f.typed::<(i32, i64, f32, f64), ()>(&store)?
             .call(&mut store, (1, 2, 3.0, 4.0))?;
         n += 1;
 
@@ -150,7 +150,7 @@ async fn call_wrapped_async_func() -> Result<(), Error> {
     assert_eq!(store.data().calls_into_wasm, 1);
     assert_eq!(store.data().returns_from_wasm, 1);
 
-    f.typed::<(i32, i64, f32, f64), (), _>(&store)?
+    f.typed::<(i32, i64, f32, f64), ()>(&store)?
         .call_async(&mut store, (1, 2, 3.0, 4.0))
         .await?;
 
@@ -218,7 +218,7 @@ fn call_linked_func() -> Result<(), Error> {
     assert_eq!(store.data().calls_into_wasm, 1);
     assert_eq!(store.data().returns_from_wasm, 1);
 
-    export.typed::<(), (), _>(&store)?.call(&mut store, ())?;
+    export.typed::<(), ()>(&store)?.call(&mut store, ())?;
 
     assert_eq!(store.data().calls_into_host, 2);
     assert_eq!(store.data().returns_from_host, 2);
@@ -290,7 +290,7 @@ async fn call_linked_func_async() -> Result<(), Error> {
     assert_eq!(store.data().returns_from_wasm, 1);
 
     export
-        .typed::<(), (), _>(&store)?
+        .typed::<(), ()>(&store)?
         .call_async(&mut store, ())
         .await?;
 
@@ -362,7 +362,7 @@ fn recursion() -> Result<(), Error> {
                 .expect("caller exports \"export\"")
                 .into_func()
                 .expect("export is a func")
-                .typed::<i32, (), _>(&caller)
+                .typed::<i32, ()>(&caller)
                 .expect("export typing")
                 .call(&mut caller, n - 1)
                 .unwrap()
@@ -398,7 +398,7 @@ fn recursion() -> Result<(), Error> {
     assert_eq!(store.data().returns_from_wasm, n + 1);
 
     export
-        .typed::<i32, (), _>(&store)?
+        .typed::<i32, ()>(&store)?
         .call(&mut store, n as i32)?;
 
     assert_eq!(store.data().calls_into_host, 2 * (n + 1));
@@ -445,7 +445,7 @@ fn trapping() -> Result<(), Error> {
                     .expect("caller exports \"export\"")
                     .into_func()
                     .expect("export is a func")
-                    .typed::<(i32, i32), (), _>(&caller)
+                    .typed::<(i32, i32), ()>(&caller)
                     .expect("export typing")
                     .call(&mut caller, (action, 0))?;
             }
@@ -676,7 +676,7 @@ async fn timeout_async_hook() -> Result<(), Error> {
 
     let inst = linker.instantiate_async(&mut store, &module).await?;
     let export = inst
-        .get_typed_func::<(), (), _>(&mut store, "export")
+        .get_typed_func::<(), ()>(&mut store, "export")
         .expect("export is func");
 
     store.set_epoch_deadline(1);
@@ -743,7 +743,7 @@ async fn drop_suspended_async_hook() -> Result<(), Error> {
     let inst = linker.instantiate_async(&mut store, &module).await?;
     assert_eq!(*store.data(), 0);
     let export = inst
-        .get_typed_func::<(), (), _>(&mut store, "")
+        .get_typed_func::<(), ()>(&mut store, "")
         .expect("export is func");
 
     // First test that if we drop in the middle of an async hook that everything

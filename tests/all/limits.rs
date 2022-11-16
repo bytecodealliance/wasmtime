@@ -78,7 +78,7 @@ fn test_limits() -> Result<()> {
     store.limiter(|s| s as &mut dyn ResourceLimiter);
     let instance = Instance::new(&mut store, &module, &[])?;
     let grow = instance.get_func(&mut store, "grow").unwrap();
-    let grow = grow.typed::<i32, i32, _>(&store).unwrap();
+    let grow = grow.typed::<i32, i32>(&store).unwrap();
 
     grow.call(&mut store, 3).unwrap();
     grow.call(&mut store, 5).unwrap();
@@ -464,7 +464,7 @@ fn test_custom_memory_limiter() -> Result<()> {
     assert!(!store.data().limit_exceeded);
 
     // Grow the host "memory" by 384 KiB
-    let f = instance.get_typed_func::<u32, u32, _>(&mut store, "f")?;
+    let f = instance.get_typed_func::<u32, u32>(&mut store, "f")?;
 
     assert_eq!(f.call(&mut store, 1 * 0x10000)?, 1);
     assert_eq!(f.call(&mut store, 3 * 0x10000)?, 1);
@@ -576,7 +576,7 @@ async fn test_custom_memory_limiter_async() -> Result<()> {
     assert!(!store.data().limit_exceeded);
 
     // Grow the host "memory" by 384 KiB
-    let f = instance.get_typed_func::<u32, u32, _>(&mut store, "f")?;
+    let f = instance.get_typed_func::<u32, u32>(&mut store, "f")?;
 
     assert_eq!(f.call_async(&mut store, 1 * 0x10000).await?, 1);
     assert_eq!(f.call_async(&mut store, 3 * 0x10000).await?, 1);
@@ -965,7 +965,7 @@ fn panic_in_memory_limiter_wasm_stack() {
     store.limiter(|s| s as &mut dyn ResourceLimiter);
     let instance = linker.instantiate(&mut store, &module).unwrap();
     let grow = instance.get_func(&mut store, "grow").unwrap();
-    let grow = grow.typed::<i32, i32, _>(&store).unwrap();
+    let grow = grow.typed::<i32, i32>(&store).unwrap();
 
     // Grow the memory, which should panic
     grow.call(&mut store, 3).unwrap();
@@ -1032,7 +1032,7 @@ async fn panic_in_async_memory_limiter_wasm_stack() {
     store.limiter_async(|s| s as &mut dyn ResourceLimiterAsync);
     let instance = linker.instantiate_async(&mut store, &module).await.unwrap();
     let grow = instance.get_func(&mut store, "grow").unwrap();
-    let grow = grow.typed::<i32, i32, _>(&store).unwrap();
+    let grow = grow.typed::<i32, i32>(&store).unwrap();
 
     // Grow the memory, which should panic
     grow.call_async(&mut store, 3).await.unwrap();

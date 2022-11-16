@@ -43,7 +43,7 @@ fn forward_call_works() -> Result<()> {
     )?;
 
     let i = Instance::new(&mut store, &module, &[])?;
-    let foo = i.get_typed_func::<(), i32, _>(&mut store, "foo")?;
+    let foo = i.get_typed_func::<(), i32>(&mut store, "foo")?;
     assert_eq!(foo.call(&mut store, ())?, 4);
     Ok(())
 }
@@ -64,7 +64,7 @@ fn backwards_call_works() -> Result<()> {
     )?;
 
     let i = Instance::new(&mut store, &module, &[])?;
-    let foo = i.get_typed_func::<(), i32, _>(&mut store, "foo")?;
+    let foo = i.get_typed_func::<(), i32>(&mut store, "foo")?;
     assert_eq!(foo.call(&mut store, ())?, 4);
     Ok(())
 }
@@ -108,7 +108,7 @@ fn test_many_call_module(mut store: Store<()>) -> Result<()> {
 
     for i in 0..N {
         let name = i.to_string();
-        let func = instance.get_typed_func::<(), (i32, i32), _>(&mut store, &name)?;
+        let func = instance.get_typed_func::<(), (i32, i32)>(&mut store, &name)?;
         let (a, b) = func.call(&mut store, ())?;
         assert_eq!(a, i + 1);
         assert_eq!(b, i + 2);

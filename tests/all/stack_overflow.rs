@@ -24,7 +24,7 @@ fn host_always_has_some_stack() -> anyhow::Result<()> {
     )?;
     let func = Func::wrap(&mut store, test_host_stack);
     let instance = Instance::new(&mut store, &module, &[func.into()])?;
-    let foo = instance.get_typed_func::<(), (), _>(&mut store, "foo")?;
+    let foo = instance.get_typed_func::<(), ()>(&mut store, "foo")?;
 
     // Make sure that our function traps and the trap says that the call stack
     // has been exhausted.

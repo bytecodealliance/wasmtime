@@ -643,7 +643,7 @@ impl<T> Linker<T> {
     /// let module = Module::new(&engine, wat)?;
     /// linker.module(&mut store, "commander", &module)?;
     /// let run = linker.get_default(&mut store, "")?
-    ///     .typed::<(), (), _>(&store)?
+    ///     .typed::<(), ()>(&store)?
     ///     .clone();
     /// run.call(&mut store, ())?;
     /// run.call(&mut store, ())?;
@@ -664,7 +664,7 @@ impl<T> Linker<T> {
     /// let module = Module::new(&engine, wat)?;
     /// linker.module(&mut store, "", &module)?;
     /// let run = linker.get(&mut store, "", "run").unwrap().into_func().unwrap();
-    /// let count = run.typed::<(), i32, _>(&store)?.call(&mut store, ())?;
+    /// let count = run.typed::<(), i32>(&store)?.call(&mut store, ())?;
     /// assert_eq!(count, 0, "a Command should get a fresh instance on each invocation");
     ///
     /// # Ok(())
@@ -727,7 +727,7 @@ impl<T> Linker<T> {
 
                 if let Some(export) = instance.get_export(&mut store, "_initialize") {
                     if let Extern::Func(func) = export {
-                        func.typed::<(), (), _>(&store)
+                        func.typed::<(), ()>(&store)
                             .and_then(|f| f.call(&mut store, ()).map_err(Into::into))
                             .context("calling the Reactor initialization function")?;
                     }
@@ -793,7 +793,7 @@ impl<T> Linker<T> {
                 if let Some(export) = instance.get_export(&mut store, "_initialize") {
                     if let Extern::Func(func) = export {
                         let func = func
-                            .typed::<(), (), _>(&store)
+                            .typed::<(), ()>(&store)
                             .context("loading the Reactor initialization function")?;
                         func.call_async(&mut store, ())
                             .await

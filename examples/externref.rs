@@ -44,7 +44,7 @@ fn main() -> Result<()> {
 
     println!("Calling `externref` func...");
     let func =
-        instance.get_typed_func::<Option<ExternRef>, Option<ExternRef>, _>(&mut store, "func")?;
+        instance.get_typed_func::<Option<ExternRef>, Option<ExternRef>>(&mut store, "func")?;
     let ret = func.call(&mut store, Some(externref.clone()))?;
     assert!(ret.is_some());
     assert!(ret.unwrap().ptr_eq(&externref));

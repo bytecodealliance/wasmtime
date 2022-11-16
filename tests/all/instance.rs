@@ -63,8 +63,8 @@ fn linear_memory_limits() -> Result<()> {
 
         let mut store = Store::new(engine, ());
         let instance = Instance::new(&mut store, &module, &[])?;
-        let size = instance.get_typed_func::<(), i32, _>(&mut store, "size")?;
-        let grow = instance.get_typed_func::<(), i32, _>(&mut store, "grow")?;
+        let size = instance.get_typed_func::<(), i32>(&mut store, "size")?;
+        let grow = instance.get_typed_func::<(), i32>(&mut store, "grow")?;
 
         assert_eq!(size.call(&mut store, ())?, 65534);
         assert_eq!(grow.call(&mut store, ())?, 65534);
