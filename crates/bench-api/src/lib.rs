@@ -533,7 +533,7 @@ impl BenchState {
             .take()
             .expect("instantiate the module before executing it");
 
-        let start_func = instance.get_typed_func::<(), (), _>(&mut store, "_start")?;
+        let start_func = instance.get_typed_func::<(), ()>(&mut store, "_start")?;
         match start_func.call(&mut store, ()) {
             Ok(_) => Ok(()),
             Err(trap) => {
