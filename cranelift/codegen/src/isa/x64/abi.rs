@@ -639,8 +639,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         let arg0 = get_intreg_for_arg(&call_conv, 0, 0).unwrap();
         let arg1 = get_intreg_for_arg(&call_conv, 1, 1).unwrap();
         let arg2 = get_intreg_for_arg(&call_conv, 2, 2).unwrap();
-        insts.push(Inst::gen_move(Writable::from_reg(arg0), dst, I64));
-        insts.push(Inst::gen_move(Writable::from_reg(arg1), src, I64));
         insts.extend(
             Inst::gen_constant(ValueRegs::one(temp), size as u128, I64, |_| {
                 panic!("tmp should not be needed")
