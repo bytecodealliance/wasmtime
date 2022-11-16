@@ -1655,9 +1655,22 @@ impl PrettyPrint for Inst {
                 format!("{} = macho_tls_get_addr {:?}", dst, symbol)
             }
 
-            Inst::CoffTlsGetAddr { ref symbol, dst } => {
+            Inst::CoffTlsGetAddr {
+                ref symbol,
+                dst,
+                tmp,
+            } => {
+                use std::fmt::Write;
+
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
-                format!("{} = coff_tls_get_addr {:?}", dst, symbol)
+                let tmp = allocs.next(tmp.to_reg().to_reg());
+
+                let mut s = format!("{} = coff_tls_get_addr {:?}", dst, symbol);
+                if tmp.is_virtual() {
+                    write!(&mut s, ", {}", show_ireg_sized(tmp, 8)).unwrap();
+                };
+
+                s
             }
 
             Inst::Unwind { inst } => {
@@ -2161,7 +2174,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_clobbers(clobbers);
         }
 
-        Inst::CoffTlsGetAddr { dst, .. } => {
+        Inst::CoffTlsGetAddr { dst, tmp, .. } => {
             // We also use the gs register. But that register is not allocatable by the
             // register allocator, so we don't need to mark it as used here.
 
@@ -2169,7 +2182,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_fixed_def(dst.to_writable_reg(), regs::rax());
 
             // We use %rcx as a temporary variable to load the _tls_index
-            collector.reg_def(Writable::from_reg(regs::rcx()));
+            collector.reg_fixed_def(tmp.to_writable_reg(), regs::rcx());
         }
 
         Inst::Unwind { .. } => {}

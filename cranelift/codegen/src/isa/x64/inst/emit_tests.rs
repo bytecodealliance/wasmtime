@@ -4966,6 +4966,7 @@ fn test_x64_emit() {
         Inst::CoffTlsGetAddr {
             symbol: ExternalName::User(UserExternalNameRef::new(0)),
             dst: WritableGpr::from_writable_reg(w_rax).unwrap(),
+            tmp: WritableGpr::from_writable_reg(w_rcx).unwrap(),
         },
         "8B050000000065488B0C2558000000488B04C1488D8000000000",
         "%rax = coff_tls_get_addr User(userextname0)",
