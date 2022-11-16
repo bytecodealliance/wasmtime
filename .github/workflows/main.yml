@@ -390,6 +390,10 @@ jobs:
   build:
     name: Build wasmtime
     runs-on: ${{ matrix.os }}
+
+    # Only run the release build on main/version branches
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) && github.repository == 'bytecodealliance/wasmtime'
+
     strategy:
       matrix:
         include:
@@ -452,6 +456,7 @@ jobs:
     - run: cd .github/actions/github-release && npm install --production
     - name: Publish Release
       uses: ./.github/actions/github-release
+      # TODO: it should be fine to remove this guard
       if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) && github.repository == 'bytecodealliance/wasmtime'
       with:
         files: "dist/*"
