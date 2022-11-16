@@ -1,16 +1,11 @@
-use crate::names::Names;
+use crate::names;
 
 use proc_macro2::TokenStream;
 use quote::quote;
 use witx::Layout;
 
-pub(super) fn define_handle(
-    names: &Names,
-    name: &witx::Id,
-    h: &witx::HandleDatatype,
-) -> TokenStream {
-    let rt = names.runtime_mod();
-    let ident = names.type_(name);
+pub(super) fn define_handle(name: &witx::Id, h: &witx::HandleDatatype) -> TokenStream {
+    let ident = names::type_(name);
     let size = h.mem_size_align().size as u32;
     let align = h.mem_size_align().align as usize;
     quote! {
@@ -53,7 +48,7 @@ pub(super) fn define_handle(
             }
         }
 
-        impl<'a> #rt::GuestType<'a> for #ident {
+        impl<'a> wiggle::GuestType<'a> for #ident {
             fn guest_size() -> u32 {
                 #size
             }
@@ -62,11 +57,11 @@ pub(super) fn define_handle(
                 #align
             }
 
-            fn read(location: &#rt::GuestPtr<'a, #ident>) -> Result<#ident, #rt::GuestError> {
+            fn read(location: &wiggle::GuestPtr<'a, #ident>) -> Result<#ident, wiggle::GuestError> {
                 Ok(#ident(u32::read(&location.cast())?))
             }
 
-            fn write(location: &#rt::GuestPtr<'_, Self>, val: Self) -> Result<(), #rt::GuestError> {
+            fn write(location: &wiggle::GuestPtr<'_, Self>, val: Self) -> Result<(), wiggle::GuestError> {
                 u32::write(&location.cast(), val.0)
             }
         }

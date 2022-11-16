@@ -1,6 +1,6 @@
-use crate::config::{AsyncConf, ErrorConf, TracingConf};
+use crate::config::{AsyncConf, ErrorConf, ErrorConfField, TracingConf};
 use anyhow::{anyhow, Error};
-use proc_macro2::TokenStream;
+use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -39,7 +39,7 @@ impl CodegenSettings {
 }
 
 pub struct ErrorTransform {
-    m: Vec<UserErrorType>,
+    m: Vec<ErrorType>,
 }
 
 impl ErrorTransform {
@@ -49,7 +49,13 @@ impl ErrorTransform {
     pub fn new(conf: &ErrorConf, doc: &Document) -> Result<Self, Error> {
         let mut richtype_identifiers = HashMap::new();
         let m = conf.iter().map(|(ident, field)|
-            if let Some(abi_type) = doc.typename(&Id::new(ident.to_string())) {
+            match field {
+                ErrorConfField::Trappable(field) => if let Some(abi_type) = doc.typename(&Id::new(ident.to_string())) {
+                    Ok(ErrorType::Generated(TrappableErrorType { abi_type, rich_type: field.rich_error.clone() }))
+                } else {
+                    Err(anyhow!("No witx typename \"{}\" found", ident.to_string()))
+                },
+                ErrorConfField::User(field) => if let Some(abi_type) = doc.typename(&Id::new(ident.to_string())) {
                     if let Some(ident) = field.rich_error.get_ident() {
                         if let Some(prior_def) = richtype_identifiers.insert(ident.clone(), field.err_loc.clone())
                          {
@@ -58,11 +64,11 @@ impl ErrorTransform {
                                     ident, prior_def
                                 ));
                         }
-                        Ok(UserErrorType {
+                        Ok(ErrorType::User(UserErrorType {
                             abi_type,
                             rich_type: field.rich_error.clone(),
                             method_fragment: ident.to_string()
-                        })
+                        }))
                     } else {
                         return Err(anyhow!(
                             "rich error type must be identifier for now - TODO add ability to provide a corresponding identifier: {:?}",
@@ -71,23 +77,52 @@ impl ErrorTransform {
                     }
                 }
                 else { Err(anyhow!("No witx typename \"{}\" found", ident.to_string())) }
+            }
         ).collect::<Result<Vec<_>, Error>>()?;
         Ok(Self { m })
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &UserErrorType> {
+    pub fn iter(&self) -> impl Iterator<Item = &ErrorType> {
         self.m.iter()
     }
 
-    pub fn for_abi_error(&self, tref: &TypeRef) -> Option<&UserErrorType> {
+    pub fn for_abi_error(&self, tref: &TypeRef) -> Option<&ErrorType> {
         match tref {
             TypeRef::Name(nt) => self.for_name(nt),
             TypeRef::Value { .. } => None,
         }
     }
 
-    pub fn for_name(&self, nt: &NamedType) -> Option<&UserErrorType> {
-        self.m.iter().find(|u| u.abi_type.name == nt.name)
+    pub fn for_name(&self, nt: &NamedType) -> Option<&ErrorType> {
+        self.m.iter().find(|e| e.abi_type().name == nt.name)
+    }
+}
+
+pub enum ErrorType {
+    User(UserErrorType),
+    Generated(TrappableErrorType),
+}
+impl ErrorType {
+    pub fn abi_type(&self) -> &NamedType {
+        match self {
+            Self::User(u) => &u.abi_type,
+            Self::Generated(r) => &r.abi_type,
+        }
+    }
+}
+
+pub struct TrappableErrorType {
+    abi_type: Rc<NamedType>,
+    rich_type: Ident,
+}
+
+impl TrappableErrorType {
+    pub fn abi_type(&self) -> TypeRef {
+        TypeRef::Name(self.abi_type.clone())
+    }
+    pub fn typename(&self) -> TokenStream {
+        let richtype = &self.rich_type;
+        quote!(#richtype)
     }
 }
 
