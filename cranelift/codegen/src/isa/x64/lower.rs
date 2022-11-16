@@ -331,6 +331,7 @@ fn lower_insn_to_regs(
         | Opcode::F64const
         | Opcode::Null
         | Opcode::Iadd
+        | Opcode::IaddCout
         | Opcode::IaddIfcout
         | Opcode::SaddSat
         | Opcode::UaddSat
@@ -515,7 +516,6 @@ fn lower_insn_to_regs(
         | Opcode::IrsubImm
         | Opcode::IaddCin
         | Opcode::IaddIfcin
-        | Opcode::IaddCout
         | Opcode::IaddCarry
         | Opcode::IaddIfcarry
         | Opcode::IsubBin

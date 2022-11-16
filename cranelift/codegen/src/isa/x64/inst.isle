@@ -2124,6 +2124,15 @@
          (MInst.Setcc cc dst)
          dst)))
 
+;; Helper for creating `MInst.Setcc` instructions, when the flags producer will
+;; also return a value.
+(decl x64_setcc_paired (CC) ConsumesFlags)
+(rule (x64_setcc_paired cc)
+      (let ((dst WritableGpr (temp_writable_gpr)))
+        (ConsumesFlags.ConsumesFlagsReturnsResultWithProducer
+         (MInst.Setcc cc dst)
+         dst)))
+
 ;; Helper for creating `MInst.XmmRmR` instructions.
 (decl xmm_rm_r (Type SseOpcode Xmm XmmMem) Xmm)
 (rule (xmm_rm_r ty op src1 src2)
