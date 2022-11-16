@@ -2378,3 +2378,15 @@ impl<M: ABIMachineSpec> Caller<M> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::SigData;
+
+    #[test]
+    fn sig_data_size() {
+        // The size of `SigData` is performance sensitive, so make sure
+        // we don't regress it unintentionally.
+        assert_eq!(std::mem::size_of::<SigData>(), 40);
+    }
+}
