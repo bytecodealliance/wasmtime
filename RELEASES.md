@@ -83,6 +83,28 @@ Unreleased.
 
 --------------------------------------------------------------------------------
 
+## 2.0.2
+
+Released 2022-11-10.
+
+### Fixed
+
+* [CVE-2022-39392] - modules may perform out-of-bounds reads/writes when the
+  pooling allocator was configured with `memory_pages: 0`.
+
+* [CVE-2022-39393] - data can be leaked between instances when using the pooling
+  allocator.
+
+* [CVE-2022-39394] - An incorrect Rust signature for the C API
+  `wasmtime_trap_code` function could lead to an out-of-bounds write of three
+  zero bytes.
+
+[CVE-2022-39392]: https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-44mr-8vmm-wjhg
+[CVE-2022-39393]: https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-wh6w-3828-g9qf
+[CVE-2022-39394]: https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-h84q-m8rr-3v9q
+
+--------------------------------------------------------------------------------
+
 ## 2.0.1
 
 Released 2022-10-27.
@@ -143,6 +165,43 @@ Released 2022-10-20
 
 
 [Tier 3]: https://docs.wasmtime.dev/stability-tiers.html
+
+--------------------------------------------------------------------------------
+
+## 1.0.2
+
+Released 2022-11-10.
+
+### Fixed
+
+* [CVE-2022-39392] - modules may perform out-of-bounds reads/writes when the
+  pooling allocator was configured with `memory_pages: 0`.
+
+* [CVE-2022-39393] - data can be leaked between instances when using the pooling
+  allocator.
+
+* [CVE-2022-39394] - An incorrect Rust signature for the C API
+  `wasmtime_trap_code` function could lead to an out-of-bounds write of three
+  zero bytes.
+
+--------------------------------------------------------------------------------
+
+## 1.0.1
+
+Released 2022-09-26
+
+This is a patch release that incorporates a fix for a miscompilation of an
+atomic-CAS operator on aarch64. The instruction is not usable from Wasmtime
+with default settings, but may be used if the Wasm atomics extension is
+enabled. The bug may also be reachable via other uses of Cranelift. Thanks to
+@bjorn3 for reporting and debugging this issue!
+
+### Fixed
+
+* Fixed a miscompilation of `atomic_cas` on aarch64. The output register was
+  swapped with a temporary register in the register-allocator constraints.
+  [#4959](https://github.com/bytecodealliance/wasmtime/pull/4959)
+  [#4960](https://github.com/bytecodealliance/wasmtime/pull/4960)
 
 --------------------------------------------------------------------------------
 
