@@ -1,6 +1,13 @@
-//! TK rewrite the documentation
+//! wasi-common uses an [`Error`] type which represents either a preview 1 [`Errno`] enum, on
+//! [`anyhow::Error`] for trapping execution.
+//!
+//! The user can construct an [`Error`] out of an [`Errno`] using the `From`/`Into` traits.
+//! They may also use [`Error::trap`] to construct an error that traps execution. The contents
+//! can be inspected with [`Error::downcast`] and [`Error::downcast_ref`]. Additional context
+//! can be provided with the [`Error::context`] method. This context is only observable with the
+//! `Display` and `Debug` impls of the error.
 
-pub use crate::snapshots::preview_1::error::{Error, ErrorExt};
+pub use crate::snapshots::preview_1::error::{Errno, Error, ErrorExt};
 use std::fmt;
 
 /// An error returned from the `proc_exit` host syscall.
