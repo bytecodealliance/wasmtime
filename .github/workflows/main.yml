@@ -396,7 +396,7 @@ jobs:
       github.event_name == 'push' &&
       (github.ref == 'refs/heads/main' ||
         startsWith(github.ref, 'refs/tags/v') ||
-        (github.ref_type == 'branch' && startsWith(github.ref_name, 'release-'))) &&
+        startsWith(github.ref, 'refs/heads/release-')) &&
       github.repository == 'bytecodealliance/wasmtime'
 
     strategy:
