@@ -79,7 +79,6 @@ jobs:
       with:
         toolchain: nightly-2022-09-07
 
-
     # Build C API documentation
     - run: sudo apt-get update -y && sudo apt-get install -y libclang1-9 libclang-cpp9
     - run: curl -L https://sourceforge.net/projects/doxygen/files/rel-1.9.3/doxygen-1.9.3.linux.bin.tar.gz/download | tar xzf -
@@ -249,6 +248,7 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
+
     # Install targets in order to build various tests throughout the repo
     - run: rustup target add wasm32-wasi wasm32-unknown-unknown ${{ matrix.target }}
     - run: echo CARGO_BUILD_TARGET=${{ matrix.target }} >> $GITHUB_ENV
