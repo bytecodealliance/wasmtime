@@ -1275,9 +1275,11 @@ impl Config {
         Ok(self)
     }
 
-    /// Configure wether wasmtime should compile a module using multiple threads.
+    /// Configure wether wasmtime should compile a module using multiple
+    /// threads.
     ///
-    /// Disabling this will result in a single thread being used to compile the wasm bytecode.
+    /// Disabling this will result in a single thread being used to compile
+    /// the wasm bytecode.
     ///
     /// By default parallel compilation is enabled.
     #[cfg(feature = "parallel-compilation")]
