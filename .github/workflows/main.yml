@@ -38,6 +38,7 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
+    - uses: ./.github/actions/cache-crates
     - run: |
         set -e
         curl -L https://github.com/EmbarkStudios/cargo-deny/releases/download/0.8.5/cargo-deny-0.8.5-x86_64-unknown-linux-musl.tar.gz | tar xzf -
@@ -56,6 +57,7 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
+    - uses: ./.github/actions/cache-crates
     - uses: actions/cache@v3
       with:
         path: ${{ runner.tool_cache }}/cargo-vet
@@ -78,6 +80,8 @@ jobs:
     - uses: ./.github/actions/install-rust
       with:
         toolchain: nightly-2022-09-07
+
+    - uses: ./.github/actions/cache-crates
 
     # Build C API documentation
     - run: sudo apt-get update -y && sudo apt-get install -y libclang1-9 libclang-cpp9
@@ -184,6 +188,7 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
+    - uses: ./.github/actions/cache-crates
     - run: rustup target add aarch64-pc-windows-msvc
     - run: cargo check -p wasmtime --target aarch64-pc-windows-msvc
 
@@ -199,6 +204,7 @@ jobs:
     - uses: ./.github/actions/install-rust
       with:
         toolchain: nightly-2022-09-07
+    - uses: ./.github/actions/cache-crates
     - run: cargo install cargo-fuzz --vers "^0.11"
     # Install the OCaml packages necessary for fuzz targets that use the
     # `wasm-spec-interpreter`.
@@ -248,7 +254,7 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-
+    - uses: ./.github/actions/cache-crates
     # Install targets in order to build various tests throughout the repo
     - run: rustup target add wasm32-wasi wasm32-unknown-unknown ${{ matrix.target }}
     - run: echo CARGO_BUILD_TARGET=${{ matrix.target }} >> $GITHUB_ENV
@@ -341,6 +347,7 @@ jobs:
         with:
           submodules: true
       - uses: ./.github/actions/install-rust
+      - uses: ./.github/actions/cache-crates
       - run: rustup target add wasm32-wasi
       - uses: abrown/install-openvino-action@v3
       - run: ./ci/run-wasi-nn-example.sh
@@ -369,6 +376,7 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
+    - uses: ./.github/actions/cache-crates
     - run: rustup target add wasm32-wasi
     - run: cargo test --benches --release
 
@@ -381,6 +389,7 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
+    - uses: ./.github/actions/cache-crates
     - run: cd cranelift/codegen && cargo build --features all-arch
     - run: ci/ensure_deterministic_build.sh
 

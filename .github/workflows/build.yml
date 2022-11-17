@@ -56,6 +56,7 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
+    - uses: ./.github/actions/cache-crates
     # On one builder produce the source tarball since there's no need to produce
     # it everywhere
     - run: ./ci/build-src-tarball.sh
