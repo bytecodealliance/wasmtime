@@ -4,7 +4,7 @@
 //! T is intended to be a primitive unsigned type. Currently it can be any type between u8 and u32
 //!
 //! If you would like to add support for larger bitsets in the future, you need to change the trait
-//! bound Into<u32> and the u32 in the implementation of `max_bits()`.
+//! bound `Into<u32>` and the `u32` in the implementation of `max_bits()`.
 
 use core::convert::{From, Into};
 use core::mem::size_of;
