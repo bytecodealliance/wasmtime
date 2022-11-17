@@ -106,7 +106,6 @@ pub struct Config {
     pub(crate) memory_init_cow: bool,
     pub(crate) memory_guaranteed_dense_image_size: u64,
     pub(crate) force_memory_init_memfd: bool,
-    pub(crate) function_references: bool,
 }
 
 /// User-provided configuration for the compiler.
@@ -190,7 +189,6 @@ impl Config {
             memory_init_cow: true,
             memory_guaranteed_dense_image_size: 16 << 20,
             force_memory_init_memfd: false,
-            function_references: false,
         };
         #[cfg(compiler)]
         {
@@ -198,7 +196,6 @@ impl Config {
             ret.cranelift_opt_level(OptLevel::Speed);
         }
         ret.wasm_reference_types(true);
-        ret.wasm_function_references(true);
         ret.wasm_multi_value(true);
         ret.wasm_bulk_memory(true);
         ret.wasm_simd(true);
