@@ -128,7 +128,9 @@ macro_rules! wasi_file_write_impl {
             }
             async fn write_vectored<'a>(&mut self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
                 let n = (&*self.0.as_filelike_view::<File>()).write_vectored(bufs)?;
-                Ok(n.try_into().map_err(|c| Error::range().context(c))?)
+                Ok(n.try_into().map_err(|_| {
+                    Error::range().context("converting write_vectored total length")
+                })?)
             }
             async fn write_vectored_at<'a>(
                 &mut self,

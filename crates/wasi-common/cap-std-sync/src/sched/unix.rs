@@ -47,7 +47,7 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
         match rustix::io::poll(&mut pollfds, poll_timeout) {
             Ok(ready) => break ready,
             Err(rustix::io::Errno::INTR) => continue,
-            Err(err) => return Err(err.into()),
+            Err(err) => return Err(std::io::Error::from(err).into()),
         }
     };
     if ready > 0 {
