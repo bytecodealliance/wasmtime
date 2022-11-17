@@ -143,7 +143,8 @@ fn value_type(isa: &dyn TargetIsa, ty: WasmType) -> ir::types::Type {
         WasmType::F32 => ir::types::F32,
         WasmType::F64 => ir::types::F64,
         WasmType::V128 => ir::types::I8X16,
-        WasmType::FuncRef | WasmType::ExternRef => reference_type(ty, isa.pointer_type()),
+        WasmType::Ref(rt) => reference_type(rt.heap_type, isa.pointer_type()),
+        WasmType::Bot => panic!("WasmType::Bot will soon not exist"),
     }
 }
 
@@ -206,10 +207,10 @@ fn func_signature(
 }
 
 /// Returns the reference type to use for the provided wasm type.
-fn reference_type(wasm_ty: cranelift_wasm::WasmType, pointer_type: ir::Type) -> ir::Type {
-    match wasm_ty {
-        cranelift_wasm::WasmType::FuncRef => pointer_type,
-        cranelift_wasm::WasmType::ExternRef => match pointer_type {
+fn reference_type(wasm_ht: cranelift_wasm::WasmHeapType, pointer_type: ir::Type) -> ir::Type {
+    match wasm_ht {
+        cranelift_wasm::WasmHeapType::Func => pointer_type,
+        cranelift_wasm::WasmHeapType::Extern => match pointer_type {
             ir::types::I32 => ir::types::R32,
             ir::types::I64 => ir::types::R64,
             _ => panic!("unsupported pointer type"),
