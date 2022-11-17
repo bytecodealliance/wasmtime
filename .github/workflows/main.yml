@@ -319,36 +319,21 @@ jobs:
   # Build and test the C interface
   test_cmake:
     name: Test C Interface
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-          - os: windows-latest
-
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
 
-    - run: cargo fetch --locked
-    - run: cargo fetch --locked --manifest-path crates/test-programs/wasi-tests/Cargo.toml
-
     # Prepare tests in CMake
     - run: cmake -Sexamples -Bexamples/build -DBUILD_SHARED_LIBS=OFF
     # Build tests
     - run: cmake --build examples/build --config Debug
     # Run tests
-    - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target RUN_TESTS
-      env:
-        RUST_BACKTRACE: 1
-      if: matrix.os == 'windows-latest'
     - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target test
       env:
         RUST_BACKTRACE: 1
-      if: matrix.os != 'windows-latest'
 
   # Build and test the wasi-nn module.
   test_wasi_nn:
