@@ -64,6 +64,7 @@ use crate::entity::SparseSet;
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::ir;
 use crate::ir::entities::AnyEntity;
+use crate::ir::immediates::HeapImmData;
 use crate::ir::instructions::{BranchInfo, CallInfo, InstructionFormat, ResolvedConstraint};
 use crate::ir::{
     types, ArgumentPurpose, Block, Constant, DynamicStackSlot, FuncRef, Function, GlobalValue,
@@ -677,6 +678,10 @@ impl<'a> Verifier<'a> {
             }
             UnaryGlobalValue { global_value, .. } => {
                 self.verify_global_value(inst, global_value, errors)?;
+            }
+            HeapLoad { heap_imm, .. } | HeapStore { heap_imm, .. } => {
+                let HeapImmData { heap, .. } = self.func.dfg.heap_imms[heap_imm];
+                self.verify_heap(inst, heap, errors)?;
             }
             HeapAddr { heap, .. } => {
                 self.verify_heap(inst, heap, errors)?;

@@ -4,11 +4,12 @@ use crate::entity::{self, PrimaryMap, SecondaryMap};
 use crate::ir;
 use crate::ir::builder::ReplaceBuilder;
 use crate::ir::dynamic_type::{DynamicTypeData, DynamicTypes};
+use crate::ir::immediates::HeapImmData;
 use crate::ir::instructions::{BranchInfo, CallInfo, InstructionData};
 use crate::ir::{types, ConstantData, ConstantPool, Immediate};
 use crate::ir::{
-    Block, DynamicType, FuncRef, Inst, SigRef, Signature, Type, Value, ValueLabelAssignments,
-    ValueList, ValueListPool,
+    Block, DynamicType, FuncRef, HeapImm, Inst, SigRef, Signature, Type, Value,
+    ValueLabelAssignments, ValueList, ValueListPool,
 };
 use crate::ir::{ExtFuncData, RelSourceLoc};
 use crate::packed_option::ReservedValue;
@@ -83,6 +84,9 @@ pub struct DataFlowGraph {
 
     /// Stores large immediates that otherwise will not fit on InstructionData
     pub immediates: PrimaryMap<Immediate, ConstantData>,
+
+    /// Out-of-line heap access immediates that don't fit in `InstructionData`.
+    pub heap_imms: PrimaryMap<HeapImm, HeapImmData>,
 }
 
 impl DataFlowGraph {
@@ -101,6 +105,7 @@ impl DataFlowGraph {
             values_labels: None,
             constants: ConstantPool::new(),
             immediates: PrimaryMap::new(),
+            heap_imms: PrimaryMap::new(),
         }
     }
 

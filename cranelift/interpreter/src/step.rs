@@ -484,6 +484,12 @@ where
         }
         Opcode::SymbolValue => unimplemented!("SymbolValue"),
         Opcode::TlsValue => unimplemented!("TlsValue"),
+        Opcode::HeapLoad => {
+            todo!("FITZGEN")
+        }
+        Opcode::HeapStore => {
+            todo!("FITZGEN")
+        }
         Opcode::HeapAddr => {
             if let InstructionData::HeapAddr {
                 heap,

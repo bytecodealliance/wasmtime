@@ -394,6 +394,32 @@ impl Heap {
     }
 }
 
+/// An opaque reference to a [heap](https://en.wikipedia.org/wiki/Memory_management#DYNAMIC).
+///
+/// Heaps are used to access dynamically allocated memory through
+/// [`heap_addr`](super::InstBuilder::heap_addr).
+///
+/// To create a heap, use [`FunctionBuilder::create_heap`](https://docs.rs/cranelift-frontend/*/cranelift_frontend/struct.FunctionBuilder.html#method.create_heap).
+///
+/// While the order is stable, it is arbitrary.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct HeapImm(u32);
+entity_impl!(HeapImm, "heap_imm");
+
+impl HeapImm {
+    /// Create a new `HeapImm` reference from its number.
+    ///
+    /// This method is for use by the parser.
+    pub fn with_number(n: u32) -> Option<Self> {
+        if n < u32::MAX {
+            Some(Self(n))
+        } else {
+            None
+        }
+    }
+}
+
 /// An opaque reference to a [WebAssembly
 /// table](https://developer.mozilla.org/en-US/docs/WebAssembly/Understanding_the_text_format#WebAssembly_tables).
 ///

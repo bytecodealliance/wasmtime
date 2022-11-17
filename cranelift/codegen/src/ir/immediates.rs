@@ -4,6 +4,7 @@
 //! Each type here should have a corresponding definition in the
 //! `cranelift-codegen/meta/src/shared/immediates` crate in the meta language.
 
+use crate::ir;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::convert::TryFrom;
@@ -1177,6 +1178,18 @@ impl Not for Ieee64 {
     }
 }
 
+/// Out-of-line heap access immediates.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct HeapImmData {
+    /// The memory flags for the heap access.
+    pub flags: ir::MemFlags,
+    /// The heap being accessed.
+    pub heap: ir::Heap,
+    /// The static offset added to the heap access's index.
+    pub offset: Uimm32,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1470,7 +1483,7 @@ mod tests {
     fn fcvt_to_sint_negative_overflow_ieee32() {
         for n in &[8, 16] {
             assert_eq!(-((1u32 << (n - 1)) as f32) - 1.0, unsafe {
-                mem::transmute(Ieee32::fcvt_to_sint_negative_overflow(*n))
+                mem::transmute::<_, f32>(Ieee32::fcvt_to_sint_negative_overflow(*n))
             });
         }
     }

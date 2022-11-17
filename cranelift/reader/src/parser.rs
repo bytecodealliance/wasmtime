@@ -11,7 +11,9 @@ use crate::testfile::{Comment, Details, Feature, TestFile};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::entity::{EntityRef, PrimaryMap};
 use cranelift_codegen::ir::entities::{AnyEntity, DynamicType};
-use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64};
+use cranelift_codegen::ir::immediates::{
+    HeapImmData, Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64,
+};
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
 use cranelift_codegen::ir::types::INVALID;
 use cranelift_codegen::ir::types::*;
@@ -873,6 +875,19 @@ impl<'a> Parser<'a> {
             text.parse().map_err(|e| self.error(e))
         } else {
             err!(self.loc, err_msg)
+        }
+    }
+
+    // Match and consume an optional uimm32 offset immediate.
+    //
+    // Note that this will match an empty string as an empty offset, and that if an offset is
+    // present, it must contain a plus sign.
+    fn optional_uimm32_offset(&mut self) -> ParseResult<Uimm32> {
+        match self.token() {
+            Some(Token::Integer(x)) if x.starts_with('+') => {
+                self.match_uimm32("expected a uimm32 offset immediate")
+            }
+            _ => Ok(Uimm32::from(0)),
         }
     }
 
@@ -2974,6 +2989,42 @@ impl<'a> Parser<'a> {
                     arg,
                     offset,
                     size,
+                }
+            }
+            InstructionFormat::HeapLoad => {
+                let heap = self.match_heap("expected heap identifier")?;
+                ctx.check_heap(heap, self.loc)?;
+                let flags = self.optional_memflags();
+                let arg = self.match_value("expected SSA value heap index")?;
+                let offset = self.optional_uimm32_offset()?;
+                let heap_imm = ctx.function.dfg.heap_imms.push(HeapImmData {
+                    flags,
+                    heap,
+                    offset,
+                });
+                InstructionData::HeapLoad {
+                    opcode,
+                    heap_imm,
+                    arg,
+                }
+            }
+            InstructionFormat::HeapStore => {
+                let heap = self.match_heap("expected heap identifier")?;
+                ctx.check_heap(heap, self.loc)?;
+                let flags = self.optional_memflags();
+                let index = self.match_value("expected SSA value heap index")?;
+                let offset = self.optional_uimm32_offset()?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let value = self.match_value("expected SSA value to store")?;
+                let heap_imm = ctx.function.dfg.heap_imms.push(HeapImmData {
+                    flags,
+                    heap,
+                    offset,
+                });
+                InstructionData::HeapStore {
+                    opcode,
+                    heap_imm,
+                    args: [index, value],
                 }
             }
             InstructionFormat::TableAddr => {

@@ -212,8 +212,8 @@ impl LowerBackend for S390xBackend {
             Opcode::StackLoad | Opcode::StackStore => {
                 panic!("Direct stack memory access not supported; should not be used by Wasm");
             }
-            Opcode::HeapAddr => {
-                panic!("heap_addr should have been removed by legalization!");
+            Opcode::HeapLoad | Opcode::HeapStore | Opcode::HeapAddr => {
+                panic!("heap access instructions should have been removed by legalization!");
             }
             Opcode::TableAddr => {
                 panic!("table_addr should have been removed by legalization!");

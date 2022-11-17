@@ -37,8 +37,8 @@ pub use crate::ir::constant::{ConstantData, ConstantPool};
 pub use crate::ir::dfg::{DataFlowGraph, ValueDef};
 pub use crate::ir::dynamic_type::{dynamic_to_fixed, DynamicTypeData, DynamicTypes};
 pub use crate::ir::entities::{
-    Block, Constant, DynamicStackSlot, DynamicType, FuncRef, GlobalValue, Heap, Immediate, Inst,
-    JumpTable, SigRef, StackSlot, Table, UserExternalNameRef, Value,
+    Block, Constant, DynamicStackSlot, DynamicType, FuncRef, GlobalValue, Heap, HeapImm, Immediate,
+    Inst, JumpTable, SigRef, StackSlot, Table, UserExternalNameRef, Value,
 };
 pub use crate::ir::extfunc::{
     AbiParam, ArgumentExtension, ArgumentPurpose, ExtFuncData, Signature,
