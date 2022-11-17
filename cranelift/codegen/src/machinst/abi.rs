@@ -119,7 +119,6 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::marker::PhantomData;
 use std::mem;
-use std::ops::Range;
 
 /// A small vector of instructions (with some reasonable size); appropriate for
 /// a small fixed sequence implementing one operation.
@@ -612,17 +611,23 @@ cranelift_entity::entity_impl!(Sig);
 /// ABI information shared between body (callee) and caller.
 #[derive(Clone, Debug)]
 pub struct SigData {
-    /// Argument locations (regs or stack slots). Stack offsets are relative to
+    /// Argument location starting offset (regs or stack slots). Stack offsets are relative to
     /// SP on entry to function.
     ///
-    /// These are indices into the `SigSet::abi_args`.
-    arg_indices: Range<u32>,
+    /// This is a index into the `SigSet::abi_args`.
+    args_start: u32,
 
-    /// Return-value locations. Stack offsets are relative to the return-area
+    /// Amount of arguments in the stack.
+    args_length: u16,
+
+    /// Return-value location starting offset. Stack offsets are relative to the return-area
     /// pointer.
     ///
-    /// These are indices into the `SigSet::abi_args`.
-    ret_indices: Range<u32>,
+    /// This is a index into the `SigSet::abi_args`.
+    rets_start: u32,
+
+    /// Amount of Return value locations in the stack.
+    rets_length: u16,
 
     /// Space on stack used to store arguments.
     sized_stack_arg_space: i64,
@@ -631,7 +636,7 @@ pub struct SigData {
     sized_stack_ret_space: i64,
 
     /// Index in `args` of the stack-return-value-area argument.
-    stack_ret_arg: Option<usize>,
+    stack_ret_arg: Option<u16>,
 
     /// Calling convention used.
     call_conv: isa::CallConv,
@@ -671,22 +676,28 @@ impl SigData {
         )?;
         let args_end = u32::try_from(sigs.abi_args.len()).unwrap();
 
-        let arg_indices = args_start..args_end;
-        let ret_indices = rets_start..rets_end;
+        let args_length = u16::try_from(args_end - args_start).unwrap();
+        let rets_length = u16::try_from(rets_end - rets_start).unwrap();
 
         trace!(
-            "ABISig: sig {:?} => args = {:?} rets = {:?} arg stack = {} ret stack = {} stack_ret_arg = {:?}",
+            "ABISig: sig {:?} => args start = {} args len = {} rets start = {} rets len = {}
+             arg stack = {} ret stack = {} stack_ret_arg = {:?}",
             sig,
-            arg_indices,
-            ret_indices,
+            args_start,
+            args_length,
+            rets_start,
+            rets_length,
             sized_stack_arg_space,
             sized_stack_ret_space,
             stack_ret_arg,
         );
 
+        let stack_ret_arg = stack_ret_arg.map(|s| u16::try_from(s).unwrap());
         Ok(SigData {
-            arg_indices,
-            ret_indices,
+            args_start,
+            args_length,
+            rets_start,
+            rets_length,
             sized_stack_arg_space,
             sized_stack_ret_space,
             stack_ret_arg,
@@ -696,15 +707,15 @@ impl SigData {
 
     /// Get this signature's ABI arguments.
     pub fn args<'a>(&self, sigs: &'a SigSet) -> &'a [ABIArg] {
-        let start = usize::try_from(self.arg_indices.start).unwrap();
-        let end = usize::try_from(self.arg_indices.end).unwrap();
+        let start = usize::try_from(self.args_start).unwrap();
+        let end = usize::try_from(self.args_start + u32::from(self.args_length)).unwrap();
         &sigs.abi_args[start..end]
     }
 
     /// Get this signature's ABI returns.
     pub fn rets<'a>(&self, sigs: &'a SigSet) -> &'a [ABIArg] {
-        let start = usize::try_from(self.ret_indices.start).unwrap();
-        let end = usize::try_from(self.ret_indices.end).unwrap();
+        let start = usize::try_from(self.rets_start).unwrap();
+        let end = usize::try_from(self.rets_start + u32::from(self.rets_length)).unwrap();
         &sigs.abi_args[start..end]
     }
 
@@ -742,13 +753,13 @@ impl SigData {
 
     /// Get the number of arguments expected.
     pub fn num_args(&self) -> usize {
-        let len = self.arg_indices.end - self.arg_indices.start;
-        let len = usize::try_from(len).unwrap();
-        if self.stack_ret_arg.is_some() {
-            len - 1
+        let num = if self.stack_ret_arg.is_some() {
+            self.args_length - 1
         } else {
-            len
-        }
+            self.args_length
+        };
+
+        usize::from(num)
     }
 
     /// Get information specifying how to pass one argument.
@@ -763,8 +774,7 @@ impl SigData {
 
     /// Get the number of return values expected.
     pub fn num_rets(&self) -> usize {
-        let len = self.ret_indices.end - self.ret_indices.start;
-        usize::try_from(len).unwrap()
+        usize::from(self.rets_length)
     }
 
     /// Get information specifying how to pass one return value.
@@ -780,7 +790,7 @@ impl SigData {
     /// Get information specifying how to pass the implicit pointer
     /// to the return-value area on the stack, if required.
     pub fn get_ret_arg(&self, sigs: &SigSet) -> Option<ABIArg> {
-        let ret_arg = self.stack_ret_arg?;
+        let ret_arg = usize::from(self.stack_ret_arg?);
         Some(self.args(sigs)[ret_arg].clone())
     }
 
@@ -1598,8 +1608,11 @@ impl<M: ABIMachineSpec> Callee<M> {
     /// pointer to that memory.
     pub fn gen_retval_area_setup(&mut self, sigs: &SigSet) -> Option<M::I> {
         if let Some(i) = sigs[self.sig].stack_ret_arg {
-            let insts =
-                self.gen_copy_arg_to_regs(sigs, i, ValueRegs::one(self.ret_area_ptr.unwrap()));
+            let insts = self.gen_copy_arg_to_regs(
+                sigs,
+                i.into(),
+                ValueRegs::one(self.ret_area_ptr.unwrap()),
+            );
             insts.into_iter().next().map(|inst| {
                 trace!(
                     "gen_retval_area_setup: inst {:?}; ptr reg is {:?}",
@@ -2338,7 +2351,7 @@ impl<M: ABIMachineSpec> Caller<M> {
                 rd,
                 I8,
             ));
-            for inst in self.gen_arg(ctx, i, ValueRegs::one(rd.to_reg())) {
+            for inst in self.gen_arg(ctx, i.into(), ValueRegs::one(rd.to_reg())) {
                 ctx.emit(inst);
             }
         }
@@ -2363,5 +2376,17 @@ impl<M: ABIMachineSpec> Caller<M> {
         {
             ctx.emit(inst);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SigData;
+
+    #[test]
+    fn sig_data_size() {
+        // The size of `SigData` is performance sensitive, so make sure
+        // we don't regress it unintentionally.
+        assert_eq!(std::mem::size_of::<SigData>(), 40);
     }
 }
