@@ -333,29 +333,22 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
 
-    # Install targets in order to build various tests throughout the repo
-    - run: rustup target add wasm32-wasi wasm32-unknown-unknown ${{ matrix.target }}
-    - run: echo CARGO_BUILD_TARGET=${{ matrix.target }} >> $GITHUB_ENV
-      if: matrix.target != ''
-
     - run: cargo fetch --locked
     - run: cargo fetch --locked --manifest-path crates/test-programs/wasi-tests/Cargo.toml
 
     # Prepare tests in CMake
     - run: cmake -Sexamples -Bexamples/build -DBUILD_SHARED_LIBS=OFF
-      if: matrix.target == ''
     # Build tests
     - run: cmake --build examples/build --config Debug
-      if: matrix.target == ''
     # Run tests
     - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target RUN_TESTS
       env:
         RUST_BACKTRACE: 1
-      if: matrix.target == '' && matrix.os == 'windows-latest'
+      if: matrix.os == 'windows-latest'
     - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target test
       env:
         RUST_BACKTRACE: 1
-      if: matrix.target == '' && matrix.os != 'windows-latest'
+      if: matrix.os != 'windows-latest'
 
   # Build and test the wasi-nn module.
   test_wasi_nn:
