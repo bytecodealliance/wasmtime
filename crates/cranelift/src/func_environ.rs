@@ -10,7 +10,8 @@ use cranelift_frontend::FunctionBuilder;
 use cranelift_frontend::Variable;
 use cranelift_wasm::{
     self, FuncIndex, FuncTranslationState, GlobalIndex, GlobalVariable, MemoryIndex, TableIndex,
-    TargetEnvironment, TypeIndex, WasmError, WasmResult, WasmType, WasmRefType, WasmHeapType, WASM_EXTERN_REF,
+    TargetEnvironment, TypeIndex, WasmError, WasmHeapType, WasmRefType, WasmResult, WasmType,
+    WASM_EXTERN_REF,
 };
 use std::convert::TryFrom;
 use std::mem;
@@ -1269,13 +1270,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         ht: WasmHeapType,
     ) -> WasmResult<ir::Value> {
         Ok(match ht {
-            WasmHeapType::Func => pos.ins().iconst(self.pointer_type(), 0),
+            WasmHeapType::Func | WasmHeapType::Index(_) => pos.ins().iconst(self.pointer_type(), 0),
             WasmHeapType::Extern => pos.ins().null(self.reference_type(ht)),
-            _ => {
-                return Err(WasmError::Unsupported(
-                    "`ref.null T` that is not a `funcref` or an `externref`".into(),
-                ));
-            }
+            WasmHeapType::Bot => panic!("goes away in refactor"),
         })
     }
 
@@ -1481,7 +1478,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         // `GlobalVariable` for which `cranelift-wasm` supports custom access
         // translation.
         match self.module.globals[index].wasm_ty {
-            WasmType::Ref(WasmRefType { heap_type: WasmHeapType::Extern, .. }) => Ok(GlobalVariable::Custom),
+            WasmType::Ref(WasmRefType {
+                heap_type: WasmHeapType::Extern,
+                ..
+            }) => Ok(GlobalVariable::Custom),
             _ => {
                 let (gv, offset) = self.get_global_location(func, index);
                 Ok(GlobalVariable::Memory {
@@ -1706,7 +1706,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             i32::from(self.offsets.ptr.vmcaller_checked_anyfunc_func_ptr()),
         );
 
-
         let mut real_call_args = Vec::with_capacity(call_args.len() + 2);
         let caller_vmctx = builder
             .func
@@ -1730,7 +1729,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             .ins()
             .call_indirect(sig_ref, func_addr, &real_call_args))
     }
-
 
     fn translate_memory_grow(
         &mut self,
