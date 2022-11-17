@@ -69,7 +69,7 @@ impl fmt::Display for WasmType {
             WasmType::F32 => write!(f, "f32"),
             WasmType::F64 => write!(f, "f64"),
             WasmType::V128 => write!(f, "v128"),
-            WasmType::Ref(rt) => write!(f, "ref {}", rt),
+            WasmType::Ref(rt) => write!(f, "{}", rt),
             WasmType::Bot => write!(f, "bot"),
         }
     }

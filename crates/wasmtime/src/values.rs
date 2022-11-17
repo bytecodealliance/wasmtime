@@ -199,15 +199,15 @@ impl Val {
     pub(crate) fn into_table_element(
         self,
         store: &mut StoreOpaque,
-        ty: ValType,
+        ty: RefType,
     ) -> Result<TableElement> {
         match (self, ty) {
             (
                 Val::FuncRef(Some(f)),
-                ValType::Ref(RefType {
+                RefType {
                     heap_type: HeapType::Func,
                     ..
-                }),
+                },
             ) => {
                 if !f.comes_from_same_store(store) {
                     bail!("cross-`Store` values are not supported in tables");
@@ -218,24 +218,24 @@ impl Val {
             }
             (
                 Val::FuncRef(None),
-                ValType::Ref(RefType {
+                RefType {
                     heap_type: HeapType::Func,
                     ..
-                }),
+                },
             ) => Ok(TableElement::FuncRef(ptr::null_mut())),
             (
                 Val::ExternRef(Some(x)),
-                ValType::Ref(RefType {
+                RefType {
                     heap_type: HeapType::Extern,
                     ..
-                }),
+                },
             ) => Ok(TableElement::ExternRef(Some(x.inner))),
             (
                 Val::ExternRef(None),
-                ValType::Ref(RefType {
+                RefType {
                     heap_type: HeapType::Extern,
                     ..
-                }),
+                },
             ) => Ok(TableElement::ExternRef(None)),
             _ => bail!("value does not match table element type"),
         }

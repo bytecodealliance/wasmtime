@@ -61,8 +61,6 @@ impl fmt::Display for ValType {
             ValType::V128 => write!(f, "v128"),
             ValType::Ref(rt) => write!(f, "{}", rt),
             ValType::Bot => write!(f, "bot"),
-            // ValType::ExternRef => write!(f, "externref"),
-            // ValType::FuncRef => write!(f, "funcref"),
         }
     }
 }
@@ -172,7 +170,7 @@ impl fmt::Display for HeapType {
         match self {
             Self::Func => write!(f, "func"),
             Self::Extern => write!(f, "extern"),
-            Self::Index(i) => write!(f, "index({})", i), // TODO(dhil) fixme
+            Self::Index(i) => write!(f, "{}", i),
             Self::Bot => write!(f, "bot"),
         }
     }

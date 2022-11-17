@@ -465,7 +465,7 @@ impl Table {
 
     fn _new(store: &mut StoreOpaque, ty: TableType, init: Val) -> Result<Table> {
         let wasmtime_export = generate_table_export(store, &ty)?;
-        let init = init.into_table_element(store, ValType::Ref(ty.element()))?;
+        let init = init.into_table_element(store, ty.element())?;
         unsafe {
             let table = Table::from_wasmtime_table(wasmtime_export, store);
             (*table.wasmtime_table(store, std::iter::empty()))
@@ -541,8 +541,8 @@ impl Table {
     /// Panics if `store` does not own this table.
     pub fn set(&self, mut store: impl AsContextMut, index: u32, val: Val) -> Result<()> {
         let store = store.as_context_mut().0;
-        let ty = self.ty(&store).element().clone();
-        let val = val.into_table_element(store, ValType::Ref(ty))?;
+        let rt = self.ty(&store).element().clone();
+        let val = val.into_table_element(store, rt)?;
         let table = self.wasmtime_table(store, std::iter::empty());
         unsafe {
             (*table)
@@ -587,8 +587,8 @@ impl Table {
     /// instead.
     pub fn grow(&self, mut store: impl AsContextMut, delta: u32, init: Val) -> Result<u32> {
         let store = store.as_context_mut().0;
-        let ty = self.ty(&store).element().clone();
-        let init = init.into_table_element(store, ValType::Ref(ty))?;
+        let rt = self.ty(&store).element().clone();
+        let init = init.into_table_element(store, rt)?;
         let table = self.wasmtime_table(store, std::iter::empty());
         unsafe {
             match (*table).grow(delta, init, store)? {
@@ -682,8 +682,8 @@ impl Table {
     /// Panics if `store` does not own either `dst_table` or `src_table`.
     pub fn fill(&self, mut store: impl AsContextMut, dst: u32, val: Val, len: u32) -> Result<()> {
         let store = store.as_context_mut().0;
-        let ty = self.ty(&store).element().clone();
-        let val = val.into_table_element(store, ValType::Ref(ty))?;
+        let rt = self.ty(&store).element().clone();
+        let val = val.into_table_element(store, rt)?;
 
         let table = self.wasmtime_table(store, std::iter::empty());
         unsafe {
