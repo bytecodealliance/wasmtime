@@ -30,7 +30,7 @@ use wasmtime_environ::{
     packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex,
     GlobalInit, HostPtr, MemoryIndex, Module, PrimaryMap, SignatureIndex, TableIndex,
-    TableInitialization, TrapCode, VMOffsets, WasmType, WASM_EXTERN_REF, WASM_FUNC_REF,
+    TableInitialization, TrapCode, VMOffsets, WasmRefType, WasmType, WASM_EXTERN_REF,
 };
 
 mod allocator;
@@ -1006,7 +1006,7 @@ impl Instance {
                 }
                 GlobalInit::RefNullConst => match global.wasm_ty {
                     // `VMGlobalDefinition::new()` already zeroed out the bits
-                    WasmType::Ref(WASM_EXTERN_REF) | WasmType::Ref(WASM_FUNC_REF) => {}
+                    WasmType::Ref(WasmRefType { nullable: true, .. }) => {}
                     ty => panic!("unsupported reference type for global: {:?}", ty),
                 },
                 GlobalInit::Import => panic!("locally-defined global initialized as import"),

@@ -59,16 +59,6 @@ pub fn tabletype_to_type<PE: TargetEnvironment + ?Sized>(
     }
 }
 
-/// TODO(dhil): Temporary workaround, should be available from wasmparser/readers/core/types.rs
-const FUNC_REF: wasmparser::RefType = wasmparser::RefType {
-    nullable: true,
-    heap_type: wasmparser::HeapType::Func,
-};
-const EXTERN_REF: wasmparser::RefType = wasmparser::RefType {
-    nullable: true,
-    heap_type: wasmparser::HeapType::Extern,
-};
-
 /// Get the parameter and result types for the given Wasm blocktype.
 pub fn blocktype_params_results<'a, T>(
     validator: &'a FuncValidator<T>,
@@ -83,32 +73,20 @@ where
     return Ok(match ty {
         wasmparser::BlockType::Empty => {
             let params: &'static [wasmparser::ValType] = &[];
-            let results: &'static [wasmparser::ValType] = &[];
+            // If we care about not allocating, surely we can type munge more.
+            // But, it is midnight
+            let results: std::vec::Vec<wasmparser::ValType> = vec![];
             (
                 itertools::Either::Left(params.iter().copied()),
-                itertools::Either::Left(results.iter().copied()),
+                itertools::Either::Left(results.into_iter()),
             )
         }
         wasmparser::BlockType::Type(ty) => {
             let params: &'static [wasmparser::ValType] = &[];
-            let results: &'static [wasmparser::ValType] = match ty {
-                wasmparser::ValType::I32 => &[wasmparser::ValType::I32],
-                wasmparser::ValType::I64 => &[wasmparser::ValType::I64],
-                wasmparser::ValType::F32 => &[wasmparser::ValType::F32],
-                wasmparser::ValType::F64 => &[wasmparser::ValType::F64],
-                wasmparser::ValType::V128 => &[wasmparser::ValType::V128],
-                wasmparser::ValType::Ref(rt) => {
-                    match rt.heap_type {
-                        wasmparser::HeapType::Extern => &[wasmparser::ValType::Ref(EXTERN_REF)],
-                        wasmparser::HeapType::Func => &[wasmparser::ValType::Ref(FUNC_REF)],
-                        _ => todo!("Implement blocktype_params_results for HeapType::Bot/Index"), // TODO(dhil) fixme: I have a feeling this one is going to be somewhat painful.
-                    }
-                }
-                wasmparser::ValType::Bot => &[wasmparser::ValType::Bot],
-            };
+            let results: std::vec::Vec<wasmparser::ValType> = vec![ty.clone()];
             (
                 itertools::Either::Left(params.iter().copied()),
-                itertools::Either::Left(results.iter().copied()),
+                itertools::Either::Left(results.into_iter()),
             )
         }
         wasmparser::BlockType::FuncType(ty_index) => {
@@ -146,15 +124,7 @@ pub fn block_with_params<PE: TargetEnvironment + ?Sized>(
                 builder.append_block_param(block, ir::types::F64);
             }
             wasmparser::ValType::Ref(rt) => {
-                match rt.heap_type {
-                    wasmparser::HeapType::Func | wasmparser::HeapType::Extern => {
-                        builder.append_block_param(
-                            block,
-                            environ.reference_type(rt.heap_type.try_into()?),
-                        );
-                    } // TODO(dhil) fixme: verify that this is indeed the correct thing to do.
-                    _ => todo!("Implement block_with_params for HeapType::Bot/Index"), // TODO(dhil) fixme
-                }
+                builder.append_block_param(block, environ.reference_type(rt.heap_type.try_into()?));
             }
             wasmparser::ValType::V128 => {
                 builder.append_block_param(block, ir::types::I8X16);
