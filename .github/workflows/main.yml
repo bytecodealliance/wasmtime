@@ -326,6 +326,9 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
 
+    - run: cargo fetch --locked
+    - run: cargo fetch --locked --manifest-path crates/test-programs/wasi-tests/Cargo.toml
+
     # Prepare tests in CMake
     - run: cmake -Sexamples -Bexamples/build -DBUILD_SHARED_LIBS=OFF
     # Build tests
