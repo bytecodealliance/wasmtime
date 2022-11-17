@@ -14,7 +14,7 @@ edition = "2021"
 anyhow = "1.0"
 cranelift-entity = { path = "../../cranelift/entity", version = "0.88.0" }
 wasmtime-types = { path = "../types", version = "0.41.0" }
-wasmparser = "0.88.0"
+wasmparser = { git = "https://github.com/effect-handlers/wasm-tools", branch = "func-ref-2" }
 indexmap = { version = "1.0.2", features = ["serde-1"] }
 thiserror = "1.0.4"
 serde = { version = "1.0.94", features = ["derive"] }

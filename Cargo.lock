@@ -3318,7 +3318,7 @@ dependencies = [
 [[package]]
 name = "wasmparser"
 version = "0.88.0"
-source = "git+https://github.com/effect-handlers/wasm-tools?branch=func-ref-2#b9989767b52f2d629be9bfa40a726a09a17f8119"
+source = "git+https://github.com/effect-handlers/wasm-tools?branch=func-ref-2#b70721d912152e5e238bd7014e920d80946a8a6f"
 dependencies = [
  "indexmap",
 ]
@@ -3539,7 +3539,7 @@ dependencies = [
  "target-lexicon",
  "thiserror",
  "wasm-encoder",
- "wasmparser 0.88.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wasmparser 0.88.0 (git+https://github.com/effect-handlers/wasm-tools?branch=func-ref-2)",
  "wasmprinter",
  "wasmtime-component-util",
  "wasmtime-types",

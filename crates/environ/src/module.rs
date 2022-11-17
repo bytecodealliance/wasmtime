@@ -413,6 +413,13 @@ impl ModuleTranslation<'_> {
         // Keep the "leftovers" for eager init.
         let mut leftovers = vec![];
 
+        fn is_func_ref(rt: WasmRefType) -> bool {
+            match rt.heap_type {
+                WasmHeapType::Func => true,
+                _ => false
+            }
+        }
+
         for segment in segments {
             // Skip imported tables: we can't provide a preconstructed
             // table for them, because their values depend on the
@@ -428,7 +435,7 @@ impl ModuleTranslation<'_> {
 
             // If this is not a funcref table, then we can't support a
             // pre-computed table of function indices.
-            if self.module.table_plans[segment.table_index].table.wasm_ty != WasmType::FuncRef {
+            if !is_func_ref(self.module.table_plans[segment.table_index].table.wasm_ty) {
                 leftovers.push(segment.clone());
                 continue;
             }

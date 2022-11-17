@@ -78,8 +78,8 @@ impl fmt::Display for WasmType {
 /// WebAssembly reference type -- equivalent of `wasmparser`'s RefType
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct WasmRefType {
-    nullable: bool,
-    heap_type: WasmHeapType,
+    pub nullable: bool,
+    pub heap_type: WasmHeapType,
 }
 
 pub const WASM_EXTERN_REF: WasmRefType = WasmRefType {
