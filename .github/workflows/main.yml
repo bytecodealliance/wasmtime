@@ -303,6 +303,44 @@ jobs:
         touch ${{ runner.tool_cache }}/qemu/built
       if: matrix.gcc != ''
 
+    # Build and test all features
+    - run: ./ci/run-tests.sh --locked
+      env:
+        RUST_BACKTRACE: 1
+
+    # Test debug (DWARF) related functionality.
+    - run: |
+        sudo apt-get update && sudo apt-get install -y gdb lldb llvm
+        cargo test test_debug_dwarf -- --ignored --test-threads 1
+      if: matrix.os == 'ubuntu-latest' && matrix.target == ''
+      env:
+        RUST_BACKTRACE: 1
+
+  # Build and test the C interface
+  test_cmake:
+    name: Test C Interface
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+          - os: windows-latest
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+
+    # Install targets in order to build various tests throughout the repo
+    - run: rustup target add wasm32-wasi wasm32-unknown-unknown ${{ matrix.target }}
+    - run: echo CARGO_BUILD_TARGET=${{ matrix.target }} >> $GITHUB_ENV
+      if: matrix.target != ''
+
+    - run: cargo fetch --locked
+    - run: cargo fetch --locked --manifest-path crates/test-programs/wasi-tests/Cargo.toml
+
     # Prepare tests in CMake
     - run: cmake -Sexamples -Bexamples/build -DBUILD_SHARED_LIBS=OFF
       if: matrix.target == ''
@@ -318,19 +356,6 @@ jobs:
       env:
         RUST_BACKTRACE: 1
       if: matrix.target == '' && matrix.os != 'windows-latest'
-
-    # Build and test all features
-    - run: ./ci/run-tests.sh --locked
-      env:
-        RUST_BACKTRACE: 1
-
-    # Test debug (DWARF) related functionality.
-    - run: |
-        sudo apt-get update && sudo apt-get install -y gdb lldb llvm
-        cargo test test_debug_dwarf -- --ignored --test-threads 1
-      if: matrix.os == 'ubuntu-latest' && matrix.target == ''
-      env:
-        RUST_BACKTRACE: 1
 
   # Build and test the wasi-nn module.
   test_wasi_nn:
