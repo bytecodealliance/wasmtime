@@ -4,11 +4,11 @@ on:
   push:
     branches:
     - main
-    - 'release-*'
     tags:
     - 'v*'
-    tags-ignore:
-    - dev
+  pull_request:
+    branches:
+    - 'release-*'
 
 defaults:
   run:
