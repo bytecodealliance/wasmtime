@@ -2076,7 +2076,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             // `index` is the index of the function's signature and `table_index` is the index of
             // the table to search the function in.
             let (sigref, num_args) = state.get_indirect_sig(builder.func, index, environ)?;
-            //let table = state.get_or_create_table(builder.func, *table_index, environ)?;
             let callee = state.pop1();
 
             // Bitcast any vector arguments to their default type, I8X16, before calling.

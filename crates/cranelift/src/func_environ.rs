@@ -1695,7 +1695,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let pointer_type = self.pointer_type();
 
         // Check for whether the callee is null, and trap if so.
-        builder.ins().trapz(callee, ir::TrapCode::NullReference);
+        builder
+            .ins()
+            .trapz(callee, ir::TrapCode::IndirectCallToNull);
 
         // Dereference callee pointer to get the function address.
         let mem_flags = ir::MemFlags::trusted();

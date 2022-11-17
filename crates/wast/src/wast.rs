@@ -329,7 +329,7 @@ impl<T> WastContext<T> {
             // shepherd that information out.
             || (expected.contains("uninitialized element 2") && actual.contains("uninitialized element"))
             // function references call_ref
-            || (expected.contains("null function") && actual.contains("null reference"))
+            || (expected.contains("null function") && actual.contains("uninitialized element"))
         {
             return Ok(());
         }
