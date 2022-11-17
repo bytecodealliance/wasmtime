@@ -38,9 +38,8 @@ fn bench_multi_threaded_traps(c: &mut Criterion) {
                                 move || {
                                     let mut store = Store::new(&engine, ());
                                     let instance = Instance::new(&mut store, &module, &[]).unwrap();
-                                    let f = instance
-                                        .get_typed_func::<(), (), _>(&mut store, "")
-                                        .unwrap();
+                                    let f =
+                                        instance.get_typed_func::<(), ()>(&mut store, "").unwrap();
 
                                     // Notify the parent thread that we are
                                     // doing background work now.
@@ -67,9 +66,7 @@ fn bench_multi_threaded_traps(c: &mut Criterion) {
 
                     let mut store = Store::new(&engine, ());
                     let instance = Instance::new(&mut store, &module, &[]).unwrap();
-                    let f = instance
-                        .get_typed_func::<(), (), _>(&mut store, "")
-                        .unwrap();
+                    let f = instance.get_typed_func::<(), ()>(&mut store, "").unwrap();
 
                     // Measure how long it takes to do `iters` worth of traps
                     // while there is a bunch of background work going on.
@@ -111,9 +108,7 @@ fn bench_many_modules_registered_traps(c: &mut Criterion) {
                 b.iter_custom(|iters| {
                     let mut store = Store::new(&engine, ());
                     let instance = Instance::new(&mut store, modules.last().unwrap(), &[]).unwrap();
-                    let f = instance
-                        .get_typed_func::<(), (), _>(&mut store, "")
-                        .unwrap();
+                    let f = instance.get_typed_func::<(), ()>(&mut store, "").unwrap();
 
                     let start = std::time::Instant::now();
                     for _ in 0..iters {
@@ -143,9 +138,7 @@ fn bench_many_stack_frames_traps(c: &mut Criterion) {
                 b.iter_custom(|iters| {
                     let mut store = Store::new(&engine, ());
                     let instance = Instance::new(&mut store, &module, &[]).unwrap();
-                    let f = instance
-                        .get_typed_func::<(), (), _>(&mut store, "")
-                        .unwrap();
+                    let f = instance.get_typed_func::<(), ()>(&mut store, "").unwrap();
 
                     let start = std::time::Instant::now();
                     for _ in 0..iters {
@@ -204,7 +197,7 @@ fn bench_host_wasm_frames_traps(c: &mut Criterion) {
                     );
                     let instance = Instance::new(&mut store, &module, &[host_func.into()]).unwrap();
                     let f = instance
-                        .get_typed_func::<(i32,), (), _>(&mut store, "f")
+                        .get_typed_func::<(i32,), ()>(&mut store, "f")
                         .unwrap();
 
                     let start = std::time::Instant::now();

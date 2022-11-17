@@ -5,70 +5,70 @@ target aarch64
 function %f(i8, i8, i8) -> i8 {
 block0(v0: i8, v1: i8, v2: i8):
   v3 = iconst.i8 42
-  v4 = ifcmp v0, v3
-  v5 = selectif.i8 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
   return v5
 }
 
 ; block0:
-;   uxtb w5, w0
-;   subs wzr, w5, #42
+;   uxtb w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   ret
 
 function %f(i8, i16, i16) -> i16 {
 block0(v0: i8, v1: i16, v2: i16):
   v3 = iconst.i8 42
-  v4 = ifcmp v0, v3
-  v5 = selectif.i16 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
   return v5
 }
 
 ; block0:
-;   uxtb w5, w0
-;   subs wzr, w5, #42
+;   uxtb w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   ret
 
 function %f(i8, i32, i32) -> i32 {
 block0(v0: i8, v1: i32, v2: i32):
   v3 = iconst.i8 42
-  v4 = ifcmp v0, v3
-  v5 = selectif.i32 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
   return v5
 }
 
 ; block0:
-;   uxtb w5, w0
-;   subs wzr, w5, #42
+;   uxtb w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   ret
 
 function %f(i8, i64, i64) -> i64 {
 block0(v0: i8, v1: i64, v2: i64):
   v3 = iconst.i8 42
-  v4 = ifcmp v0, v3
-  v5 = selectif.i64 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
   return v5
 }
 
 ; block0:
-;   uxtb w5, w0
-;   subs wzr, w5, #42
+;   uxtb w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   ret
 
 function %f(i8, i128, i128) -> i128 {
 block0(v0: i8, v1: i128, v2: i128):
   v3 = iconst.i8 42
-  v4 = ifcmp v0, v3
-  v5 = selectif.i128 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
   return v5
 }
 
 ; block0:
-;   uxtb w8, w0
-;   subs wzr, w8, #42
+;   uxtb w6, w0
+;   subs wzr, w6, #42
 ;   csel x0, x2, x4, eq
 ;   csel x1, x3, x5, eq
 ;   ret
@@ -76,70 +76,70 @@ block0(v0: i8, v1: i128, v2: i128):
 function %f(i16, i8, i8) -> i8 {
 block0(v0: i16, v1: i8, v2: i8):
   v3 = iconst.i16 42
-  v4 = ifcmp v0, v3
-  v5 = selectif.i8 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
   return v5
 }
 
 ; block0:
-;   uxth w5, w0
-;   subs wzr, w5, #42
+;   uxth w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   ret
 
 function %f(i16, i16, i16) -> i16 {
 block0(v0: i16, v1: i16, v2: i16):
   v3 = iconst.i16 42
-  v4 = ifcmp v0, v3
-  v5 = selectif.i16 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
   return v5
 }
 
 ; block0:
-;   uxth w5, w0
-;   subs wzr, w5, #42
+;   uxth w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   ret
 
 function %f(i16, i32, i32) -> i32 {
 block0(v0: i16, v1: i32, v2: i32):
   v3 = iconst.i16 42
-  v4 = ifcmp v0, v3
-  v5 = selectif.i32 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
   return v5
 }
 
 ; block0:
-;   uxth w5, w0
-;   subs wzr, w5, #42
+;   uxth w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   ret
 
 function %f(i16, i64, i64) -> i64 {
 block0(v0: i16, v1: i64, v2: i64):
   v3 = iconst.i16 42
-  v4 = ifcmp v0, v3
-  v5 = selectif.i64 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
   return v5
 }
 
 ; block0:
-;   uxth w5, w0
-;   subs wzr, w5, #42
+;   uxth w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   ret
 
 function %f(i16, i128, i128) -> i128 {
 block0(v0: i16, v1: i128, v2: i128):
   v3 = iconst.i16 42
-  v4 = ifcmp v0, v3
-  v5 = selectif.i128 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
   return v5
 }
 
 ; block0:
-;   uxth w8, w0
-;   subs wzr, w8, #42
+;   uxth w6, w0
+;   subs wzr, w6, #42
 ;   csel x0, x2, x4, eq
 ;   csel x1, x3, x5, eq
 ;   ret
@@ -147,8 +147,8 @@ block0(v0: i16, v1: i128, v2: i128):
 function %f(i32, i8, i8) -> i8 {
 block0(v0: i32, v1: i8, v2: i8):
   v3 = iconst.i32 42
-  v4 = ifcmp v0, v3
-  v5 = selectif.i8 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
   return v5
 }
 
@@ -160,8 +160,8 @@ block0(v0: i32, v1: i8, v2: i8):
 function %f(i32, i16, i16) -> i16 {
 block0(v0: i32, v1: i16, v2: i16):
   v3 = iconst.i32 42
-  v4 = ifcmp v0, v3
-  v5 = selectif.i16 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
   return v5
 }
 
@@ -173,8 +173,8 @@ block0(v0: i32, v1: i16, v2: i16):
 function %f(i32, i32, i32) -> i32 {
 block0(v0: i32, v1: i32, v2: i32):
   v3 = iconst.i32 42
-  v4 = ifcmp v0, v3
-  v5 = selectif.i32 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
   return v5
 }
 
@@ -186,8 +186,8 @@ block0(v0: i32, v1: i32, v2: i32):
 function %f(i32, i64, i64) -> i64 {
 block0(v0: i32, v1: i64, v2: i64):
   v3 = iconst.i32 42
-  v4 = ifcmp v0, v3
-  v5 = selectif.i64 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
   return v5
 }
 
@@ -199,8 +199,8 @@ block0(v0: i32, v1: i64, v2: i64):
 function %f(i32, i128, i128) -> i128 {
 block0(v0: i32, v1: i128, v2: i128):
   v3 = iconst.i32 42
-  v4 = ifcmp v0, v3
-  v5 = selectif.i128 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
   return v5
 }
 
@@ -213,8 +213,8 @@ block0(v0: i32, v1: i128, v2: i128):
 function %f(i64, i8, i8) -> i8 {
 block0(v0: i64, v1: i8, v2: i8):
   v3 = iconst.i64 42
-  v4 = ifcmp v0, v3
-  v5 = selectif.i8 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
   return v5
 }
 
@@ -226,8 +226,8 @@ block0(v0: i64, v1: i8, v2: i8):
 function %f(i64, i16, i16) -> i16 {
 block0(v0: i64, v1: i16, v2: i16):
   v3 = iconst.i64 42
-  v4 = ifcmp v0, v3
-  v5 = selectif.i16 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
   return v5
 }
 
@@ -239,8 +239,8 @@ block0(v0: i64, v1: i16, v2: i16):
 function %f(i64, i32, i32) -> i32 {
 block0(v0: i64, v1: i32, v2: i32):
   v3 = iconst.i64 42
-  v4 = ifcmp v0, v3
-  v5 = selectif.i32 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
   return v5
 }
 
@@ -252,8 +252,8 @@ block0(v0: i64, v1: i32, v2: i32):
 function %f(i64, i64, i64) -> i64 {
 block0(v0: i64, v1: i64, v2: i64):
   v3 = iconst.i64 42
-  v4 = ifcmp v0, v3
-  v5 = selectif.i64 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
   return v5
 }
 
@@ -265,8 +265,8 @@ block0(v0: i64, v1: i64, v2: i64):
 function %f(i64, i128, i128) -> i128 {
 block0(v0: i64, v1: i128, v2: i128):
   v3 = iconst.i64 42
-  v4 = ifcmp v0, v3
-  v5 = selectif.i128 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select v4, v1, v2
   return v5
 }
 
@@ -278,15 +278,16 @@ block0(v0: i64, v1: i128, v2: i128):
 
 function %f(i128, i8, i8) -> i8 {
 block0(v0: i128, v1: i8, v2: i8):
-  v3 = iconst.i128 42
-  v4 = ifcmp v0, v3
-  v5 = selectif.i8 eq v4, v1, v2
-  return v5
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select.i8 v5, v1, v2
+  return v6
 }
 
 ; block0:
 ;   movz x6, #42
-;   movz x8, #0
+;   movz w8, #0
 ;   subs xzr, x0, x6
 ;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
@@ -294,15 +295,16 @@ block0(v0: i128, v1: i8, v2: i8):
 
 function %f(i128, i16, i16) -> i16 {
 block0(v0: i128, v1: i16, v2: i16):
-  v3 = iconst.i128 42
-  v4 = ifcmp v0, v3
-  v5 = selectif.i16 eq v4, v1, v2
-  return v5
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select.i16 v5, v1, v2
+  return v6
 }
 
 ; block0:
 ;   movz x6, #42
-;   movz x8, #0
+;   movz w8, #0
 ;   subs xzr, x0, x6
 ;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
@@ -310,15 +312,16 @@ block0(v0: i128, v1: i16, v2: i16):
 
 function %f(i128, i32, i32) -> i32 {
 block0(v0: i128, v1: i32, v2: i32):
-  v3 = iconst.i128 42
-  v4 = ifcmp v0, v3
-  v5 = selectif.i32 eq v4, v1, v2
-  return v5
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select.i32 v5, v1, v2
+  return v6
 }
 
 ; block0:
 ;   movz x6, #42
-;   movz x8, #0
+;   movz w8, #0
 ;   subs xzr, x0, x6
 ;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
@@ -326,15 +329,16 @@ block0(v0: i128, v1: i32, v2: i32):
 
 function %f(i128, i64, i64) -> i64 {
 block0(v0: i128, v1: i64, v2: i64):
-  v3 = iconst.i128 42
-  v4 = ifcmp v0, v3
-  v5 = selectif.i64 eq v4, v1, v2
-  return v5
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select.i64 v5, v1, v2
+  return v6
 }
 
 ; block0:
 ;   movz x6, #42
-;   movz x8, #0
+;   movz w8, #0
 ;   subs xzr, x0, x6
 ;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
@@ -342,15 +346,16 @@ block0(v0: i128, v1: i64, v2: i64):
 
 function %f(i128, i128, i128) -> i128 {
 block0(v0: i128, v1: i128, v2: i128):
-  v3 = iconst.i128 42
-  v4 = ifcmp v0, v3
-  v5 = selectif.i128 eq v4, v1, v2
-  return v5
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select.i128 v5, v1, v2
+  return v6
 }
 
 ; block0:
 ;   movz x9, #42
-;   movz x11, #0
+;   movz w11, #0
 ;   subs xzr, x0, x9
 ;   ccmp x1, x11, #nzcv, eq
 ;   csel x0, x2, x4, eq
@@ -360,14 +365,14 @@ block0(v0: i128, v1: i128, v2: i128):
 function %f(i8, i8, i8) -> i8 {
 block0(v0: i8, v1: i8, v2: i8):
   v3 = iconst.i8 42
-  v4 = ifcmp v0, v3
-  v5 = selectif_spectre_guard.i8 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i8 v4, v1, v2
   return v5
 }
 
 ; block0:
-;   uxtb w5, w0
-;   subs wzr, w5, #42
+;   uxtb w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   csdb
 ;   ret
@@ -375,14 +380,14 @@ block0(v0: i8, v1: i8, v2: i8):
 function %f(i8, i16, i16) -> i16 {
 block0(v0: i8, v1: i16, v2: i16):
   v3 = iconst.i8 42
-  v4 = ifcmp v0, v3
-  v5 = selectif_spectre_guard.i16 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i16 v4, v1, v2
   return v5
 }
 
 ; block0:
-;   uxtb w5, w0
-;   subs wzr, w5, #42
+;   uxtb w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   csdb
 ;   ret
@@ -390,14 +395,14 @@ block0(v0: i8, v1: i16, v2: i16):
 function %f(i8, i32, i32) -> i32 {
 block0(v0: i8, v1: i32, v2: i32):
   v3 = iconst.i8 42
-  v4 = ifcmp v0, v3
-  v5 = selectif_spectre_guard.i32 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i32 v4, v1, v2
   return v5
 }
 
 ; block0:
-;   uxtb w5, w0
-;   subs wzr, w5, #42
+;   uxtb w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   csdb
 ;   ret
@@ -405,14 +410,14 @@ block0(v0: i8, v1: i32, v2: i32):
 function %f(i8, i64, i64) -> i64 {
 block0(v0: i8, v1: i64, v2: i64):
   v3 = iconst.i8 42
-  v4 = ifcmp v0, v3
-  v5 = selectif_spectre_guard.i64 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i64 v4, v1, v2
   return v5
 }
 
 ; block0:
-;   uxtb w5, w0
-;   subs wzr, w5, #42
+;   uxtb w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   csdb
 ;   ret
@@ -420,14 +425,14 @@ block0(v0: i8, v1: i64, v2: i64):
 function %f(i8, i128, i128) -> i128 {
 block0(v0: i8, v1: i128, v2: i128):
   v3 = iconst.i8 42
-  v4 = ifcmp v0, v3
-  v5 = selectif_spectre_guard.i128 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i128 v4, v1, v2
   return v5
 }
 
 ; block0:
-;   uxtb w8, w0
-;   subs wzr, w8, #42
+;   uxtb w6, w0
+;   subs wzr, w6, #42
 ;   csel x0, x2, x4, eq
 ;   csel x1, x3, x5, eq
 ;   csdb
@@ -436,14 +441,14 @@ block0(v0: i8, v1: i128, v2: i128):
 function %f(i16, i8, i8) -> i8 {
 block0(v0: i16, v1: i8, v2: i8):
   v3 = iconst.i16 42
-  v4 = ifcmp v0, v3
-  v5 = selectif_spectre_guard.i8 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i8 v4, v1, v2
   return v5
 }
 
 ; block0:
-;   uxth w5, w0
-;   subs wzr, w5, #42
+;   uxth w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   csdb
 ;   ret
@@ -451,14 +456,14 @@ block0(v0: i16, v1: i8, v2: i8):
 function %f(i16, i16, i16) -> i16 {
 block0(v0: i16, v1: i16, v2: i16):
   v3 = iconst.i16 42
-  v4 = ifcmp v0, v3
-  v5 = selectif_spectre_guard.i16 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i16 v4, v1, v2
   return v5
 }
 
 ; block0:
-;   uxth w5, w0
-;   subs wzr, w5, #42
+;   uxth w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   csdb
 ;   ret
@@ -466,14 +471,14 @@ block0(v0: i16, v1: i16, v2: i16):
 function %f(i16, i32, i32) -> i32 {
 block0(v0: i16, v1: i32, v2: i32):
   v3 = iconst.i16 42
-  v4 = ifcmp v0, v3
-  v5 = selectif_spectre_guard.i32 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i32 v4, v1, v2
   return v5
 }
 
 ; block0:
-;   uxth w5, w0
-;   subs wzr, w5, #42
+;   uxth w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   csdb
 ;   ret
@@ -481,14 +486,14 @@ block0(v0: i16, v1: i32, v2: i32):
 function %f(i16, i64, i64) -> i64 {
 block0(v0: i16, v1: i64, v2: i64):
   v3 = iconst.i16 42
-  v4 = ifcmp v0, v3
-  v5 = selectif_spectre_guard.i64 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i64 v4, v1, v2
   return v5
 }
 
 ; block0:
-;   uxth w5, w0
-;   subs wzr, w5, #42
+;   uxth w4, w0
+;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
 ;   csdb
 ;   ret
@@ -496,14 +501,14 @@ block0(v0: i16, v1: i64, v2: i64):
 function %f(i16, i128, i128) -> i128 {
 block0(v0: i16, v1: i128, v2: i128):
   v3 = iconst.i16 42
-  v4 = ifcmp v0, v3
-  v5 = selectif_spectre_guard.i128 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i128 v4, v1, v2
   return v5
 }
 
 ; block0:
-;   uxth w8, w0
-;   subs wzr, w8, #42
+;   uxth w6, w0
+;   subs wzr, w6, #42
 ;   csel x0, x2, x4, eq
 ;   csel x1, x3, x5, eq
 ;   csdb
@@ -512,8 +517,8 @@ block0(v0: i16, v1: i128, v2: i128):
 function %f(i32, i8, i8) -> i8 {
 block0(v0: i32, v1: i8, v2: i8):
   v3 = iconst.i32 42
-  v4 = ifcmp v0, v3
-  v5 = selectif_spectre_guard.i8 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i8 v4, v1, v2
   return v5
 }
 
@@ -526,8 +531,8 @@ block0(v0: i32, v1: i8, v2: i8):
 function %f(i32, i16, i16) -> i16 {
 block0(v0: i32, v1: i16, v2: i16):
   v3 = iconst.i32 42
-  v4 = ifcmp v0, v3
-  v5 = selectif_spectre_guard.i16 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i16 v4, v1, v2
   return v5
 }
 
@@ -540,8 +545,8 @@ block0(v0: i32, v1: i16, v2: i16):
 function %f(i32, i32, i32) -> i32 {
 block0(v0: i32, v1: i32, v2: i32):
   v3 = iconst.i32 42
-  v4 = ifcmp v0, v3
-  v5 = selectif_spectre_guard.i32 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i32 v4, v1, v2
   return v5
 }
 
@@ -554,8 +559,8 @@ block0(v0: i32, v1: i32, v2: i32):
 function %f(i32, i64, i64) -> i64 {
 block0(v0: i32, v1: i64, v2: i64):
   v3 = iconst.i32 42
-  v4 = ifcmp v0, v3
-  v5 = selectif_spectre_guard.i64 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i64 v4, v1, v2
   return v5
 }
 
@@ -568,8 +573,8 @@ block0(v0: i32, v1: i64, v2: i64):
 function %f(i32, i128, i128) -> i128 {
 block0(v0: i32, v1: i128, v2: i128):
   v3 = iconst.i32 42
-  v4 = ifcmp v0, v3
-  v5 = selectif_spectre_guard.i128 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i128 v4, v1, v2
   return v5
 }
 
@@ -583,8 +588,8 @@ block0(v0: i32, v1: i128, v2: i128):
 function %f(i64, i8, i8) -> i8 {
 block0(v0: i64, v1: i8, v2: i8):
   v3 = iconst.i64 42
-  v4 = ifcmp v0, v3
-  v5 = selectif_spectre_guard.i8 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i8 v4, v1, v2
   return v5
 }
 
@@ -597,8 +602,8 @@ block0(v0: i64, v1: i8, v2: i8):
 function %f(i64, i16, i16) -> i16 {
 block0(v0: i64, v1: i16, v2: i16):
   v3 = iconst.i64 42
-  v4 = ifcmp v0, v3
-  v5 = selectif_spectre_guard.i16 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i16 v4, v1, v2
   return v5
 }
 
@@ -611,8 +616,8 @@ block0(v0: i64, v1: i16, v2: i16):
 function %f(i64, i32, i32) -> i32 {
 block0(v0: i64, v1: i32, v2: i32):
   v3 = iconst.i64 42
-  v4 = ifcmp v0, v3
-  v5 = selectif_spectre_guard.i32 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i32 v4, v1, v2
   return v5
 }
 
@@ -625,8 +630,8 @@ block0(v0: i64, v1: i32, v2: i32):
 function %f(i64, i64, i64) -> i64 {
 block0(v0: i64, v1: i64, v2: i64):
   v3 = iconst.i64 42
-  v4 = ifcmp v0, v3
-  v5 = selectif_spectre_guard.i64 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i64 v4, v1, v2
   return v5
 }
 
@@ -639,8 +644,8 @@ block0(v0: i64, v1: i64, v2: i64):
 function %f(i64, i128, i128) -> i128 {
 block0(v0: i64, v1: i128, v2: i128):
   v3 = iconst.i64 42
-  v4 = ifcmp v0, v3
-  v5 = selectif_spectre_guard.i128 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i128 v4, v1, v2
   return v5
 }
 
@@ -653,15 +658,16 @@ block0(v0: i64, v1: i128, v2: i128):
 
 function %f(i128, i8, i8) -> i8 {
 block0(v0: i128, v1: i8, v2: i8):
-  v3 = iconst.i128 42
-  v4 = ifcmp v0, v3
-  v5 = selectif_spectre_guard.i8 eq v4, v1, v2
-  return v5
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select_spectre_guard.i8 v5, v1, v2
+  return v6
 }
 
 ; block0:
 ;   movz x6, #42
-;   movz x8, #0
+;   movz w8, #0
 ;   subs xzr, x0, x6
 ;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
@@ -670,15 +676,16 @@ block0(v0: i128, v1: i8, v2: i8):
 
 function %f(i128, i16, i16) -> i16 {
 block0(v0: i128, v1: i16, v2: i16):
-  v3 = iconst.i128 42
-  v4 = ifcmp v0, v3
-  v5 = selectif_spectre_guard.i16 eq v4, v1, v2
-  return v5
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select_spectre_guard.i16 v5, v1, v2
+  return v6
 }
 
 ; block0:
 ;   movz x6, #42
-;   movz x8, #0
+;   movz w8, #0
 ;   subs xzr, x0, x6
 ;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
@@ -687,15 +694,16 @@ block0(v0: i128, v1: i16, v2: i16):
 
 function %f(i128, i32, i32) -> i32 {
 block0(v0: i128, v1: i32, v2: i32):
-  v3 = iconst.i128 42
-  v4 = ifcmp v0, v3
-  v5 = selectif_spectre_guard.i32 eq v4, v1, v2
-  return v5
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select_spectre_guard.i32 v5, v1, v2
+  return v6
 }
 
 ; block0:
 ;   movz x6, #42
-;   movz x8, #0
+;   movz w8, #0
 ;   subs xzr, x0, x6
 ;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
@@ -704,15 +712,16 @@ block0(v0: i128, v1: i32, v2: i32):
 
 function %f(i128, i64, i64) -> i64 {
 block0(v0: i128, v1: i64, v2: i64):
-  v3 = iconst.i128 42
-  v4 = ifcmp v0, v3
-  v5 = selectif_spectre_guard.i64 eq v4, v1, v2
-  return v5
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select_spectre_guard.i64 v5, v1, v2
+  return v6
 }
 
 ; block0:
 ;   movz x6, #42
-;   movz x8, #0
+;   movz w8, #0
 ;   subs xzr, x0, x6
 ;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
@@ -721,15 +730,16 @@ block0(v0: i128, v1: i64, v2: i64):
 
 function %f(i128, i128, i128) -> i128 {
 block0(v0: i128, v1: i128, v2: i128):
-  v3 = iconst.i128 42
-  v4 = ifcmp v0, v3
-  v5 = selectif_spectre_guard.i128 eq v4, v1, v2
-  return v5
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select_spectre_guard.i128 v5, v1, v2
+  return v6
 }
 
 ; block0:
 ;   movz x9, #42
-;   movz x11, #0
+;   movz w11, #0
 ;   subs xzr, x0, x9
 ;   ccmp x1, x11, #nzcv, eq
 ;   csel x0, x2, x4, eq
@@ -737,17 +747,16 @@ block0(v0: i128, v1: i128, v2: i128):
 ;   csdb
 ;   ret
 
-function %g(i8) -> b1 {
+function %g(i8) -> i8 {
 block0(v0: i8):
   v3 = iconst.i8 42
-  v4 = ifcmp v0, v3
-  v5 = trueif eq v4
-  return v5
+  v4 = icmp eq v0, v3
+  return v4
 }
 
 ; block0:
-;   uxtb w3, w0
-;   subs wzr, w3, #42
+;   uxtb w2, w0
+;   subs wzr, w2, #42
 ;   cset x0, eq
 ;   ret
 
@@ -758,20 +767,19 @@ block0(v0: i8, v1: i8, v2: i8):
 }
 
 ; block0:
-;   and w5, w1, w0
-;   bic w7, w2, w0
-;   orr w0, w5, w7
+;   and w4, w1, w0
+;   bic w6, w2, w0
+;   orr w0, w4, w6
 ;   ret
 
-function %i(b1, i8, i8) -> i8 {
-block0(v0: b1, v1: i8, v2: i8):
+function %i(i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8):
   v3 = select.i8 v0, v1, v2
   return v3
 }
 
 ; block0:
-;   and w5, w0, #1
-;   subs wzr, w5, wzr
+;   ands wzr, w0, #255
 ;   csel x0, x1, x2, ne
 ;   ret
 
@@ -788,15 +796,14 @@ block0(v0: i32, v1: i8, v2: i8):
 ;   csel x0, x1, x2, eq
 ;   ret
 
-function %i128_select(b1, i128, i128) -> i128 {
-block0(v0: b1, v1: i128, v2: i128):
+function %i128_select(i8, i128, i128) -> i128 {
+block0(v0: i8, v1: i128, v2: i128):
   v3 = select.i128 v0, v1, v2
   return v3
 }
 
 ; block0:
-;   and w8, w0, #1
-;   subs wzr, w8, wzr
+;   ands wzr, w0, #255
 ;   csel x0, x2, x4, ne
 ;   csel x1, x3, x5, ne
 ;   ret

@@ -390,7 +390,10 @@ impl<'a> Parser<'a> {
     fn parse_rule(&mut self) -> Result<Rule> {
         let pos = self.pos();
         let prio = if self.is_int() {
-            Some(self.int()?)
+            Some(
+                i64::try_from(self.int()?)
+                    .map_err(|err| self.error(pos, format!("Invalid rule priority: {}", err)))?,
+            )
         } else {
             None
         };
@@ -407,7 +410,7 @@ impl<'a> Parser<'a> {
                         iflets,
                         expr,
                         pos,
-                        prio: prio.map(|prio| i64::try_from(prio).unwrap()),
+                        prio,
                     });
                 }
             }

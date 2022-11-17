@@ -10,9 +10,9 @@ block0:
 }
 
 ; block0:
-;   movz x1, #1
-;   movk x1, x1, #1, LSL #48
-;   fmov d0, x1
+;   movz x0, #1
+;   movk x0, x0, #1, LSL #48
+;   fmov d0, x0
 ;   ret
 
 function %f2() -> i32x4 {
@@ -23,8 +23,8 @@ block0:
 }
 
 ; block0:
-;   movz x1, #42679
-;   fmov s0, w1
+;   movz x0, #42679
+;   fmov s0, w0
 ;   ret
 
 function %f3() -> f32x4 {
@@ -35,8 +35,8 @@ block0:
 }
 
 ; block0:
-;   fmov s1, #1
-;   fmov s0, s1
+;   fmov s0, #1
+;   fmov s0, s0
 ;   ret
 
 function %f4() -> f64x2 {
@@ -47,7 +47,7 @@ block0:
 }
 
 ; block0:
-;   fmov d1, #1
-;   fmov d0, d1
+;   fmov d0, #1
+;   fmov d0, d0
 ;   ret
 

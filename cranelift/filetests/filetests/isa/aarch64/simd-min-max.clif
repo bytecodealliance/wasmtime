@@ -4,7 +4,7 @@ target aarch64
 
 function %fn0(i8x8, i8x8) -> i8x8 {
 block0(v0: i8x8, v1: i8x8):
-  v2 = imin v0, v1
+  v2 = smin v0, v1
   return v2
 }
 
@@ -14,7 +14,7 @@ block0(v0: i8x8, v1: i8x8):
 
 function %fn1(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):
-  v2 = imin v0, v1
+  v2 = smin v0, v1
   return v2
 }
 
@@ -24,7 +24,7 @@ block0(v0: i8x16, v1: i8x16):
 
 function %fn2(i16x4, i16x4) -> i16x4 {
 block0(v0: i16x4, v1: i16x4):
-  v2 = imin v0, v1
+  v2 = smin v0, v1
   return v2
 }
 
@@ -34,7 +34,7 @@ block0(v0: i16x4, v1: i16x4):
 
 function %fn3(i16x8, i16x8) -> i16x8 {
 block0(v0: i16x8, v1: i16x8):
-  v2 = imin v0, v1
+  v2 = smin v0, v1
   return v2
 }
 
@@ -44,7 +44,7 @@ block0(v0: i16x8, v1: i16x8):
 
 function %fn4(i32x2, i32x2) -> i32x2 {
 block0(v0: i32x2, v1: i32x2):
-  v2 = imin v0, v1
+  v2 = smin v0, v1
   return v2
 }
 
@@ -54,7 +54,7 @@ block0(v0: i32x2, v1: i32x2):
 
 function %fn5(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):
-  v2 = imin v0, v1
+  v2 = smin v0, v1
   return v2
 }
 
@@ -124,7 +124,7 @@ block0(v0: i32x4, v1: i32x4):
 
 function %fn12(i8x8, i8x8) -> i8x8 {
 block0(v0: i8x8, v1: i8x8):
-  v2 = imax v0, v1
+  v2 = smax v0, v1
   return v2
 }
 
@@ -134,7 +134,7 @@ block0(v0: i8x8, v1: i8x8):
 
 function %fn13(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):
-  v2 = imax v0, v1
+  v2 = smax v0, v1
   return v2
 }
 
@@ -144,7 +144,7 @@ block0(v0: i8x16, v1: i8x16):
 
 function %fn14(i16x4, i16x4) -> i16x4 {
 block0(v0: i16x4, v1: i16x4):
-  v2 = imax v0, v1
+  v2 = smax v0, v1
   return v2
 }
 
@@ -154,7 +154,7 @@ block0(v0: i16x4, v1: i16x4):
 
 function %fn15(i16x8, i16x8) -> i16x8 {
 block0(v0: i16x8, v1: i16x8):
-  v2 = imax v0, v1
+  v2 = smax v0, v1
   return v2
 }
 
@@ -164,7 +164,7 @@ block0(v0: i16x8, v1: i16x8):
 
 function %fn16(i32x2, i32x2) -> i32x2 {
 block0(v0: i32x2, v1: i32x2):
-  v2 = imax v0, v1
+  v2 = smax v0, v1
   return v2
 }
 
@@ -174,7 +174,7 @@ block0(v0: i32x2, v1: i32x2):
 
 function %fn17(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):
-  v2 = imax v0, v1
+  v2 = smax v0, v1
   return v2
 }
 

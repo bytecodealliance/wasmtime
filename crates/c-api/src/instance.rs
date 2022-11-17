@@ -41,7 +41,7 @@ pub unsafe extern "C" fn wasm_instance_new(
         ))),
         Err(e) => {
             if let Some(ptr) = result {
-                *ptr = Box::into_raw(Box::new(wasm_trap_t::new(e.into())));
+                *ptr = Box::into_raw(Box::new(wasm_trap_t::new(e)));
             }
             None
         }
@@ -98,13 +98,14 @@ pub(crate) fn handle_instantiate(
             *instance_ptr = i;
             None
         }
-        Err(e) => match e.downcast::<Trap>() {
-            Ok(trap) => {
-                *trap_ptr = Box::into_raw(Box::new(wasm_trap_t::new(trap)));
+        Err(e) => {
+            if e.is::<Trap>() {
+                *trap_ptr = Box::into_raw(Box::new(wasm_trap_t::new(e)));
                 None
+            } else {
+                Some(Box::new(e.into()))
             }
-            Err(e) => Some(Box::new(e.into())),
-        },
+        }
     }
 }
 

@@ -40,14 +40,10 @@ fn linear_memory_limits() -> Result<()> {
         return Ok(());
     }
     test(&Engine::default())?;
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_memory_pages(65536);
     test(&Engine::new(Config::new().allocation_strategy(
-        InstanceAllocationStrategy::Pooling {
-            strategy: PoolingAllocationStrategy::NextAvailable,
-            instance_limits: InstanceLimits {
-                memory_pages: 65536,
-                ..Default::default()
-            },
-        },
+        InstanceAllocationStrategy::Pooling(pool),
     ))?)?;
     return Ok(());
 
@@ -67,8 +63,8 @@ fn linear_memory_limits() -> Result<()> {
 
         let mut store = Store::new(engine, ());
         let instance = Instance::new(&mut store, &module, &[])?;
-        let size = instance.get_typed_func::<(), i32, _>(&mut store, "size")?;
-        let grow = instance.get_typed_func::<(), i32, _>(&mut store, "grow")?;
+        let size = instance.get_typed_func::<(), i32>(&mut store, "size")?;
+        let grow = instance.get_typed_func::<(), i32>(&mut store, "grow")?;
 
         assert_eq!(size.call(&mut store, ())?, 65534);
         assert_eq!(grow.call(&mut store, ())?, 65534);

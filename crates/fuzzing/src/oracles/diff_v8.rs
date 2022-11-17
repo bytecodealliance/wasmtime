@@ -5,7 +5,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Once;
 use wasmtime::Trap;
-use wasmtime::TrapCode;
 
 pub struct V8Engine {
     isolate: Rc<RefCell<v8::OwnedIsolate>>,
@@ -91,14 +90,14 @@ impl DiffEngine for V8Engine {
                 v8
             );
         };
-        match wasmtime.trap_code() {
-            Some(TrapCode::MemoryOutOfBounds) => {
+        match wasmtime {
+            Trap::MemoryOutOfBounds => {
                 return verify_v8(&[
                     "memory access out of bounds",
                     "data segment is out of bounds",
                 ])
             }
-            Some(TrapCode::UnreachableCodeReached) => {
+            Trap::UnreachableCodeReached => {
                 return verify_v8(&[
                     "unreachable",
                     // All the wasms we test use wasm-smith's
@@ -113,10 +112,10 @@ impl DiffEngine for V8Engine {
                     "Maximum call stack size exceeded",
                 ]);
             }
-            Some(TrapCode::IntegerDivisionByZero) => {
+            Trap::IntegerDivisionByZero => {
                 return verify_v8(&["divide by zero", "remainder by zero"])
             }
-            Some(TrapCode::StackOverflow) => {
+            Trap::StackOverflow => {
                 return verify_v8(&[
                     "call stack size exceeded",
                     // Similar to the above comment in `UnreachableCodeReached`
@@ -128,15 +127,15 @@ impl DiffEngine for V8Engine {
                     "unreachable",
                 ]);
             }
-            Some(TrapCode::IndirectCallToNull) => return verify_v8(&["null function"]),
-            Some(TrapCode::TableOutOfBounds) => {
+            Trap::IndirectCallToNull => return verify_v8(&["null function"]),
+            Trap::TableOutOfBounds => {
                 return verify_v8(&[
                     "table initializer is out of bounds",
                     "table index is out of bounds",
                 ])
             }
-            Some(TrapCode::BadSignature) => return verify_v8(&["function signature mismatch"]),
-            Some(TrapCode::IntegerOverflow) | Some(TrapCode::BadConversionToInteger) => {
+            Trap::BadSignature => return verify_v8(&["function signature mismatch"]),
+            Trap::IntegerOverflow | Trap::BadConversionToInteger => {
                 return verify_v8(&[
                     "float unrepresentable in integer range",
                     "divide result unrepresentable",

@@ -16,6 +16,7 @@ proptest = "1.0.0"
 wiggle = { path = "..", features = ["tracing_log"] }
 
 [dev-dependencies]
+anyhow = { workspace = true }
 thiserror = "1.0"
 tracing = "0.1.26"
 tracing-subscriber = { version = "0.3.1", default-features = false, features = ['fmt'] }

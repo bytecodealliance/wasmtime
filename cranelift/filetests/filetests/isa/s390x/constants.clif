@@ -1,19 +1,19 @@
 test compile precise-output
 target s390x
 
-function %f() -> b8 {
+function %f() -> i8 {
 block0:
-  v0 = bconst.b8 true
+  v0 = iconst.i8 -1
   return v0
 }
 
 ; block0:
-;   lhi %r2, 255
+;   lhi %r2, -1
 ;   br %r14
 
-function %f() -> b16 {
+function %f() -> i16 {
 block0:
-  v0 = bconst.b16 false
+  v0 = iconst.i16 0
   return v0
 }
 

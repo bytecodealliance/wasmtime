@@ -378,7 +378,7 @@ pub trait FuncEnvironment: TargetEnvironment {
         value: ir::Value,
     ) -> WasmResult<ir::Value> {
         let is_null = pos.ins().is_null(value);
-        Ok(pos.ins().bint(ir::types::I32, is_null))
+        Ok(pos.ins().uextend(ir::types::I32, is_null))
     }
 
     /// Translate a `ref.func` WebAssembly instruction.

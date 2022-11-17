@@ -510,7 +510,7 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
 
         // We start with a sentinel value that will fail if we try to load / add to it
         // without resolving the base GV First.
-        let mut current_val = DataValue::B(false);
+        let mut current_val = DataValue::I8(0);
         let mut action_stack = vec![ResolveAction::Resolve(gv)];
 
         loop {
@@ -639,7 +639,7 @@ mod tests {
     // filetest infrastructure.
     #[test]
     fn sanity() {
-        let code = "function %test() -> b1 {
+        let code = "function %test() -> i8 {
         block0:
             v0 = iconst.i32 1
             v1 = iadd_imm v0, 1
@@ -657,7 +657,7 @@ mod tests {
             .unwrap()
             .unwrap_return();
 
-        assert_eq!(result, vec![DataValue::B(true)])
+        assert_eq!(result, vec![DataValue::I8(1)])
     }
 
     // We don't have a way to check for traps with the current filetest infrastructure
@@ -750,7 +750,7 @@ mod tests {
 
     #[test]
     fn fuel() {
-        let code = "function %test() -> b1 {
+        let code = "function %test() -> i8 {
         block0:
             v0 = iconst.i32 1
             v1 = iadd_imm v0, 1
@@ -1000,7 +1000,7 @@ mod tests {
     #[test]
     fn heap_sanity_test() {
         let code = "
-        function %heap_load_store(i64 vmctx) -> b1 {
+        function %heap_load_store(i64 vmctx) -> i8 {
             gv0 = vmctx
             gv1 = load.i64 notrap aligned gv0+0
             ; gv2/3 do nothing, but makes sure we understand the iadd_imm mechanism
@@ -1011,7 +1011,7 @@ mod tests {
         block0(v0: i64):
             v1 = iconst.i64 0
             v2 = iconst.i64 123
-            v3 = heap_addr.i64 heap0, v1, 8
+            v3 = heap_addr.i64 heap0, v1, 0, 8
             store.i64 v2, v3
             v4 = load.i64 v3
             v5 = icmp eq v2, v4
@@ -1039,7 +1039,7 @@ mod tests {
             .unwrap()
             .unwrap_return();
 
-        assert_eq!(result, vec![DataValue::B(true)])
+        assert_eq!(result, vec![DataValue::I8(1)])
     }
 
     #[test]

@@ -975,20 +975,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // Match and consume a boolean immediate.
-    fn match_bool(&mut self, err_msg: &str) -> ParseResult<bool> {
-        if let Some(Token::Identifier(text)) = self.token() {
-            self.consume();
-            match text {
-                "true" => Ok(true),
-                "false" => Ok(false),
-                _ => err!(self.loc, err_msg),
-            }
-        } else {
-            err!(self.loc, err_msg)
-        }
-    }
-
     // Match and consume an enumerated immediate, like one of the condition codes.
     fn match_enum<T: FromStr>(&mut self, err_msg: &str) -> ParseResult<T> {
         if let Some(Token::Identifier(text)) = self.token() {
@@ -1053,15 +1039,6 @@ impl<'a> Parser<'a> {
             }};
         }
 
-        fn boolean_to_vec(value: bool, ty: Type) -> Vec<u8> {
-            let lane_size = ty.bytes() / u32::from(ty.lane_count());
-            if lane_size < 1 {
-                panic!("The boolean lane must have a byte size greater than zero.");
-            }
-            let value = if value { 0xFF } else { 0 };
-            vec![value; lane_size as usize]
-        }
-
         if !ty.is_vector() && !ty.is_dynamic_vector() {
             err!(self.loc, "Expected a controlling vector type, not {}", ty)
         } else {
@@ -1072,10 +1049,6 @@ impl<'a> Parser<'a> {
                 I64 => consume!(ty, self.match_imm64("Expected a 64-bit integer")?),
                 F32 => consume!(ty, self.match_ieee32("Expected a 32-bit float")?),
                 F64 => consume!(ty, self.match_ieee64("Expected a 64-bit float")?),
-                b if b.is_bool() => consume!(
-                    ty,
-                    boolean_to_vec(self.match_bool("Expected a boolean")?, ty)
-                ),
                 _ => return err!(self.loc, "Expected a type of: float, int, bool"),
             };
             Ok(constant_data)
@@ -2565,14 +2538,14 @@ impl<'a> Parser<'a> {
                     Ok(RunCommand::Run(invocation, comparison, expected))
                 } else if sig.params.is_empty()
                     && sig.returns.len() == 1
-                    && sig.returns[0].value_type.is_bool()
+                    && sig.returns[0].value_type.is_int()
                 {
                     // To match the existing run behavior that does not require an explicit
-                    // invocation, we create an invocation from a function like `() -> b*` and
-                    // compare it to `true`.
+                    // invocation, we create an invocation from a function like `() -> i*` and
+                    // require the result to be non-zero.
                     let invocation = Invocation::new("default", vec![]);
-                    let expected = vec![DataValue::B(true)];
-                    let comparison = Comparison::Equals;
+                    let expected = vec![DataValue::I8(0)];
+                    let comparison = Comparison::NotEquals;
                     Ok(RunCommand::Run(invocation, comparison, expected))
                 } else {
                     Err(self.error("unable to parse the run command"))
@@ -2713,9 +2686,6 @@ impl<'a> Parser<'a> {
                     return Err(self.error("only 128-bit vectors are currently supported"));
                 }
             }
-            _ if ty.is_bool() && !ty.is_vector() => {
-                DataValue::from(self.match_bool("expected a boolean")?)
-            }
             _ => return Err(self.error(&format!("don't know how to parse data values of: {}", ty))),
         };
         Ok(dv)
@@ -2745,10 +2715,6 @@ impl<'a> Parser<'a> {
             InstructionFormat::UnaryIeee64 => InstructionData::UnaryIeee64 {
                 opcode,
                 imm: self.match_ieee64("expected immediate 64-bit float operand")?,
-            },
-            InstructionFormat::UnaryBool => InstructionData::UnaryBool {
-                opcode,
-                imm: self.match_bool("expected immediate boolean operand")?,
             },
             InstructionFormat::UnaryConst => {
                 let constant_handle = if let Some(Token::Constant(_)) = self.token() {
@@ -2847,47 +2813,6 @@ impl<'a> Parser<'a> {
                     args: args.into_value_list(&[ctrl_arg], &mut ctx.function.dfg.value_lists),
                 }
             }
-            InstructionFormat::BranchInt => {
-                let cond = self.match_enum("expected intcc condition code")?;
-                let arg = self.match_value("expected SSA value first operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let block_num = self.match_block("expected branch destination block")?;
-                let args = self.parse_opt_value_list()?;
-                InstructionData::BranchInt {
-                    opcode,
-                    cond,
-                    destination: block_num,
-                    args: args.into_value_list(&[arg], &mut ctx.function.dfg.value_lists),
-                }
-            }
-            InstructionFormat::BranchFloat => {
-                let cond = self.match_enum("expected floatcc condition code")?;
-                let arg = self.match_value("expected SSA value first operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let block_num = self.match_block("expected branch destination block")?;
-                let args = self.parse_opt_value_list()?;
-                InstructionData::BranchFloat {
-                    opcode,
-                    cond,
-                    destination: block_num,
-                    args: args.into_value_list(&[arg], &mut ctx.function.dfg.value_lists),
-                }
-            }
-            InstructionFormat::BranchIcmp => {
-                let cond = self.match_enum("expected intcc condition code")?;
-                let lhs = self.match_value("expected SSA value first operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let rhs = self.match_value("expected SSA value second operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let block_num = self.match_block("expected branch destination block")?;
-                let args = self.parse_opt_value_list()?;
-                InstructionData::BranchIcmp {
-                    opcode,
-                    cond,
-                    destination: block_num,
-                    args: args.into_value_list(&[lhs, rhs], &mut ctx.function.dfg.value_lists),
-                }
-            }
             InstructionFormat::BranchTable => {
                 let arg = self.match_value("expected SSA value operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
@@ -2950,11 +2875,6 @@ impl<'a> Parser<'a> {
                     imm: rhs,
                 }
             }
-            InstructionFormat::IntCond => {
-                let cond = self.match_enum("expected intcc condition code")?;
-                let arg = self.match_value("expected SSA value")?;
-                InstructionData::IntCond { opcode, cond, arg }
-            }
             InstructionFormat::FloatCompare => {
                 let cond = self.match_enum("expected floatcc condition code")?;
                 let lhs = self.match_value("expected SSA value first operand")?;
@@ -2964,24 +2884,6 @@ impl<'a> Parser<'a> {
                     opcode,
                     cond,
                     args: [lhs, rhs],
-                }
-            }
-            InstructionFormat::FloatCond => {
-                let cond = self.match_enum("expected floatcc condition code")?;
-                let arg = self.match_value("expected SSA value")?;
-                InstructionData::FloatCond { opcode, cond, arg }
-            }
-            InstructionFormat::IntSelect => {
-                let cond = self.match_enum("expected intcc condition code")?;
-                let guard = self.match_value("expected SSA value first operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let v_true = self.match_value("expected SSA value second operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let v_false = self.match_value("expected SSA value third operand")?;
-                InstructionData::IntSelect {
-                    opcode,
-                    cond,
-                    args: [guard, v_true, v_false],
                 }
             }
             InstructionFormat::Call => {
@@ -3063,12 +2965,15 @@ impl<'a> Parser<'a> {
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let arg = self.match_value("expected SSA value heap address")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
-                let imm = self.match_uimm32("expected 32-bit integer size")?;
+                let offset = self.match_uimm32("expected 32-bit integer offset")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let size = self.match_uimm8("expected 8-bit integer size")?;
                 InstructionData::HeapAddr {
                     opcode,
                     heap,
                     arg,
-                    imm,
+                    offset,
+                    size,
                 }
             }
             InstructionFormat::TableAddr => {
@@ -3119,30 +3024,6 @@ impl<'a> Parser<'a> {
                 let code = self.match_enum("expected trap code")?;
                 InstructionData::CondTrap { opcode, arg, code }
             }
-            InstructionFormat::IntCondTrap => {
-                let cond = self.match_enum("expected intcc condition code")?;
-                let arg = self.match_value("expected SSA value operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let code = self.match_enum("expected trap code")?;
-                InstructionData::IntCondTrap {
-                    opcode,
-                    cond,
-                    arg,
-                    code,
-                }
-            }
-            InstructionFormat::FloatCondTrap => {
-                let cond = self.match_enum("expected floatcc condition code")?;
-                let arg = self.match_value("expected SSA value operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let code = self.match_enum("expected trap code")?;
-                InstructionData::FloatCondTrap {
-                    opcode,
-                    cond,
-                    arg,
-                    code,
-                }
-            }
             InstructionFormat::AtomicCas => {
                 let flags = self.optional_memflags();
                 let addr = self.match_value("expected SSA value address")?;
@@ -3187,6 +3068,18 @@ impl<'a> Parser<'a> {
                     opcode,
                     flags,
                     args: [arg, addr],
+                }
+            }
+            InstructionFormat::IntAddTrap => {
+                let a = self.match_value("expected SSA value operand")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let b = self.match_value("expected SSA value operand")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let code = self.match_enum("expected trap code")?;
+                InstructionData::IntAddTrap {
+                    opcode,
+                    args: [a, b],
+                    code,
                 }
             }
         };
@@ -3807,10 +3700,10 @@ mod tests {
         can_parse_as_constant_data!("1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16", I8X16);
         can_parse_as_constant_data!("0x1.1 0x2.2 0x3.3 0x4.4", F32X4);
         can_parse_as_constant_data!("0x0 0x1 0x2 0x3", I32X4);
-        can_parse_as_constant_data!("true false true false true false true false", B16X8);
+        can_parse_as_constant_data!("-1 0 -1 0 -1 0 -1 0", I16X8);
         can_parse_as_constant_data!("0 -1", I64X2);
-        can_parse_as_constant_data!("true false", B64X2);
-        can_parse_as_constant_data!("true true true true true", B32X4); // note that parse_literals_to_constant_data will leave extra tokens unconsumed
+        can_parse_as_constant_data!("-1 0", I64X2);
+        can_parse_as_constant_data!("-1 -1 -1 -1 -1", I32X4); // note that parse_literals_to_constant_data will leave extra tokens unconsumed
 
         cannot_parse_as_constant_data!("1 2 3", I32X4);
         cannot_parse_as_constant_data!(" ", F32X4);
@@ -3818,8 +3711,8 @@ mod tests {
 
     #[test]
     fn parse_constant_from_booleans() {
-        let c = Parser::new("true false true false")
-            .parse_literals_to_constant_data(B32X4)
+        let c = Parser::new("-1 0 -1 0")
+            .parse_literals_to_constant_data(I32X4)
             .unwrap();
         assert_eq!(
             c.into_vec(),
@@ -3864,18 +3757,18 @@ mod tests {
         }
         assert_roundtrip("run: %fn0() == 42", &sig(&[], &[I32]));
         assert_roundtrip(
-            "run: %fn0(8, 16, 32, 64) == true",
-            &sig(&[I8, I16, I32, I64], &[B8]),
+            "run: %fn0(8, 16, 32, 64) == 1",
+            &sig(&[I8, I16, I32, I64], &[I8]),
         );
         assert_roundtrip(
-            "run: %my_func(true) == 0x0f0e0d0c0b0a09080706050403020100",
-            &sig(&[B32], &[I8X16]),
+            "run: %my_func(1) == 0x0f0e0d0c0b0a09080706050403020100",
+            &sig(&[I32], &[I8X16]),
         );
 
         // Verify that default invocations are created when not specified.
         assert_eq!(
-            parse("run", &sig(&[], &[B32])).unwrap().to_string(),
-            "run: %default() == true"
+            parse("run", &sig(&[], &[I32])).unwrap().to_string(),
+            "run: %default() != 0"
         );
         assert_eq!(
             parse("print", &sig(&[], &[F32X4, I16X8]))
@@ -3885,8 +3778,7 @@ mod tests {
         );
 
         // Demonstrate some unparseable cases.
-        assert!(parse("print", &sig(&[I32], &[B32])).is_err());
-        assert!(parse("run", &sig(&[], &[I32])).is_err());
+        assert!(parse("print", &sig(&[I32], &[I32])).is_err());
         assert!(parse("print:", &sig(&[], &[])).is_err());
         assert!(parse("run: ", &sig(&[], &[])).is_err());
     }
@@ -3947,8 +3839,6 @@ mod tests {
         assert_eq!(parse("1234567", I128).to_string(), "1234567");
         assert_eq!(parse("0x32.32", F32).to_string(), "0x1.919000p5");
         assert_eq!(parse("0x64.64", F64).to_string(), "0x1.9190000000000p6");
-        assert_eq!(parse("true", B1).to_string(), "true");
-        assert_eq!(parse("false", B64).to_string(), "false");
         assert_eq!(
             parse("[0 1 2 3]", I32X4).to_string(),
             "0x00000003000000020000000100000000"

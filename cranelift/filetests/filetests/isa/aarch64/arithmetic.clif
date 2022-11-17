@@ -74,8 +74,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   movz w3, #2
-;   sdiv x0, x0, x3
+;   movz w2, #2
+;   sdiv x0, x0, x2
 ;   ret
 
 function %f8(i64, i64) -> i64 {
@@ -97,8 +97,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   orr x3, xzr, #2
-;   udiv x0, x0, x3
+;   orr x2, xzr, #2
+;   udiv x0, x0, x2
 ;   ret
 
 function %f10(i64, i64) -> i64 {
@@ -109,8 +109,8 @@ block0(v0: i64, v1: i64):
 
 ; block0:
 ;   cbnz x1, 8 ; udf
-;   sdiv x5, x0, x1
-;   msub x0, x5, x1, x0
+;   sdiv x4, x0, x1
+;   msub x0, x4, x1, x0
 ;   ret
 
 function %f11(i64, i64) -> i64 {
@@ -121,8 +121,8 @@ block0(v0: i64, v1: i64):
 
 ; block0:
 ;   cbnz x1, 8 ; udf
-;   udiv x5, x0, x1
-;   msub x0, x5, x1, x0
+;   udiv x4, x0, x1
+;   msub x0, x4, x1, x0
 ;   ret
 
 function %f12(i32, i32) -> i32 {
@@ -132,13 +132,13 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   sxtw x4, w0
-;   sxtw x6, w1
-;   cbnz x6, 8 ; udf
-;   adds wzr, w6, #1
-;   ccmp w4, #1, #nzcv, eq
+;   sxtw x3, w0
+;   sxtw x5, w1
+;   cbnz x5, 8 ; udf
+;   adds wzr, w5, #1
+;   ccmp w3, #1, #nzcv, eq
 ;   b.vc 8 ; udf
-;   sdiv x0, x4, x6
+;   sdiv x0, x3, x5
 ;   ret
 
 function %f13(i32) -> i32 {
@@ -149,9 +149,9 @@ block0(v0: i32):
 }
 
 ; block0:
-;   sxtw x3, w0
-;   movz w5, #2
-;   sdiv x0, x3, x5
+;   sxtw x2, w0
+;   movz w4, #2
+;   sdiv x0, x2, x4
 ;   ret
 
 function %f14(i32, i32) -> i32 {
@@ -161,10 +161,10 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   mov w4, w0
-;   mov w6, w1
-;   cbnz x6, 8 ; udf
-;   udiv x0, x4, x6
+;   mov w3, w0
+;   mov w5, w1
+;   cbnz x5, 8 ; udf
+;   udiv x0, x3, x5
 ;   ret
 
 function %f15(i32) -> i32 {
@@ -175,9 +175,9 @@ block0(v0: i32):
 }
 
 ; block0:
-;   mov w3, w0
-;   orr w5, wzr, #2
-;   udiv x0, x3, x5
+;   mov w2, w0
+;   orr w4, wzr, #2
+;   udiv x0, x2, x4
 ;   ret
 
 function %f16(i32, i32) -> i32 {
@@ -187,11 +187,11 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   sxtw x4, w0
-;   sxtw x6, w1
-;   cbnz x6, 8 ; udf
-;   sdiv x9, x4, x6
-;   msub x0, x9, x6, x4
+;   sxtw x3, w0
+;   sxtw x5, w1
+;   cbnz x5, 8 ; udf
+;   sdiv x8, x3, x5
+;   msub x0, x8, x5, x3
 ;   ret
 
 function %f17(i32, i32) -> i32 {
@@ -201,11 +201,11 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   mov w4, w0
-;   mov w6, w1
-;   cbnz x6, 8 ; udf
-;   udiv x9, x4, x6
-;   msub x0, x9, x6, x4
+;   mov w3, w0
+;   mov w5, w1
+;   cbnz x5, 8 ; udf
+;   udiv x8, x3, x5
+;   msub x0, x8, x5, x3
 ;   ret
 
 function %f18(i64, i64) -> i64 {
@@ -331,8 +331,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   movz x3, #1
-;   sub x0, xzr, x3
+;   movz x2, #1
+;   sub x0, xzr, x2
 ;   ret
 
 function %f30(i8x16) -> i8x16 {
@@ -343,11 +343,11 @@ block0(v0: i8x16):
 }
 
 ; block0:
-;   movz x3, #1
-;   and w5, w3, #7
-;   sub x7, xzr, x5
-;   dup v17.16b, w7
-;   ushl v0.16b, v0.16b, v17.16b
+;   movz x2, #1
+;   and w4, w2, #7
+;   sub x6, xzr, x4
+;   dup v16.16b, w6
+;   ushl v0.16b, v0.16b, v16.16b
 ;   ret
 
 function %add_i128(i128, i128) -> i128 {
@@ -379,9 +379,9 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   umulh x7, x0, x2
-;   madd x9, x0, x3, x7
-;   madd x1, x1, x2, x9
+;   umulh x5, x0, x2
+;   madd x7, x0, x3, x5
+;   madd x1, x1, x2, x7
 ;   madd x0, x0, x2, xzr
 ;   ret
 
@@ -437,8 +437,8 @@ block0(v0: i32, v1: i32, v2: i32):
 }
 
 ; block0:
-;   madd w6, w1, w2, wzr
-;   sub w0, w6, w0
+;   madd w5, w1, w2, wzr
+;   sub w0, w5, w0
 ;   ret
 
 function %imul_sub_i64(i64, i64, i64) -> i64 {
@@ -449,8 +449,8 @@ block0(v0: i64, v1: i64, v2: i64):
 }
 
 ; block0:
-;   madd x6, x1, x2, xzr
-;   sub x0, x6, x0
+;   madd x5, x1, x2, xzr
+;   sub x0, x5, x0
 ;   ret
 
 function %srem_const (i64) -> i64 {
@@ -461,9 +461,9 @@ block0(v0: i64):
 }
 
 ; block0:
-;   movz w3, #2
-;   sdiv x5, x0, x3
-;   msub x0, x5, x3, x0
+;   movz w2, #2
+;   sdiv x4, x0, x2
+;   msub x0, x4, x2, x0
 ;   ret
 
 function %urem_const (i64) -> i64 {
@@ -474,9 +474,9 @@ block0(v0: i64):
 }
 
 ; block0:
-;   orr x3, xzr, #2
-;   udiv x5, x0, x3
-;   msub x0, x5, x3, x0
+;   orr x2, xzr, #2
+;   udiv x4, x0, x2
+;   msub x0, x4, x2, x0
 ;   ret
 
 function %sdiv_minus_one(i64) -> i64 {
@@ -487,9 +487,10 @@ block0(v0: i64):
 }
 
 ; block0:
-;   movn x3, #0
-;   adds xzr, x3, #1
+;   movn x2, #0
+;   adds xzr, x2, #1
 ;   ccmp x0, #1, #nzcv, eq
 ;   b.vc 8 ; udf
-;   sdiv x0, x0, x3
+;   sdiv x0, x0, x2
 ;   ret
+

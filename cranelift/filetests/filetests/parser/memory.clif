@@ -60,8 +60,8 @@ function %sheap(i32, i64 vmctx) -> i64 {
     ; check: heap1 = static gv5, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000
     ; check: heap2 = static gv5, min 0, bound 0x0001_0000, offset_guard 4096
 block0(v1: i32, v2: i64):
-    v3 = heap_addr.i64 heap1, v1, 0
-    ; check: v3 = heap_addr.i64 heap1, v1, 0
+    v3 = heap_addr.i64 heap1, v1, 0, 0
+    ; check: v3 = heap_addr.i64 heap1, v1, 0, 0
     return v3
 }
 
@@ -76,7 +76,7 @@ function %dheap(i32, i64 vmctx) -> i64 {
     ; check: heap1 = dynamic gv5, min 0x0001_0000, bound gv6, offset_guard 0x8000_0000
     ; check: heap2 = dynamic gv5, min 0, bound gv6, offset_guard 4096
 block0(v1: i32, v2: i64):
-    v3 = heap_addr.i64 heap2, v1, 0
-    ; check: v3 = heap_addr.i64 heap2, v1, 0
+    v3 = heap_addr.i64 heap2, v1, 0, 0
+    ; check: v3 = heap_addr.i64 heap2, v1, 0, 0
     return v3
 }

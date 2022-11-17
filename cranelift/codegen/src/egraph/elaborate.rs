@@ -66,7 +66,11 @@ enum ElabStackEntry {
     },
     /// Waiting for a result to return one projected value of a
     /// multi-value result.
-    PendingProjection { canonical: Id, index: usize },
+    PendingProjection {
+        canonical: Id,
+        index: usize,
+        ty: Type,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -189,15 +193,15 @@ impl<'a> Elaborator<'a> {
     }
 
     fn add_node(&mut self, node: &Node, args: &[Value], to_block: Block) -> ValueList {
-        let (instdata, result_tys) = match node {
-            Node::Pure { op, types, .. } | Node::Inst { op, types, .. } => (
+        let (instdata, result_ty, arity) = match node {
+            Node::Pure { op, ty, arity, .. } | Node::Inst { op, ty, arity, .. } => (
                 op.with_args(args, &mut self.func.dfg.value_lists),
-                types.as_slice(&self.node_ctx.types),
+                *ty,
+                *arity,
             ),
-            Node::Load { op, ty, .. } => (
-                op.with_args(args, &mut self.func.dfg.value_lists),
-                std::slice::from_ref(ty),
-            ),
+            Node::Load { op, ty, .. } => {
+                (op.with_args(args, &mut self.func.dfg.value_lists), *ty, 1)
+            }
             _ => panic!("Cannot `add_node()` on block param or projection"),
         };
         let srcloc = match node {
@@ -237,8 +241,12 @@ impl<'a> Elaborator<'a> {
         let inst = self.func.dfg.make_inst(instdata);
         self.func.srclocs[inst] = srcloc;
 
-        for &ty in result_tys {
-            self.func.dfg.append_result(inst, ty);
+        if arity == 1 {
+            self.func.dfg.append_result(inst, result_ty);
+        } else {
+            for _ in 0..arity {
+                self.func.dfg.append_result(inst, crate::ir::types::INVALID);
+            }
         }
 
         if is_terminator_group_inst {
@@ -371,11 +379,15 @@ impl<'a> Elaborator<'a> {
                     // the value we are projecting a part of, then
                     // eventually return here (saving state with a
                     // PendingProjection).
-                    if let Node::Result { value, result, .. } = node {
+                    if let Node::Result {
+                        value, result, ty, ..
+                    } = node
+                    {
                         trace!(" -> result; pushing arg value {}", value);
                         self.elab_stack.push(ElabStackEntry::PendingProjection {
                             index: *result,
                             canonical,
+                            ty: *ty,
                         });
                         self.elab_stack.push(ElabStackEntry::Start { id: *value });
                         continue;
@@ -493,7 +505,11 @@ impl<'a> Elaborator<'a> {
                     // Push onto the elab-results stack.
                     self.elab_result_stack.push(result)
                 }
-                &ElabStackEntry::PendingProjection { index, canonical } => {
+                &ElabStackEntry::PendingProjection {
+                    ty,
+                    index,
+                    canonical,
+                } => {
                     self.elab_stack.pop();
 
                     // Grab the input from the elab-result stack.
@@ -511,10 +527,12 @@ impl<'a> Elaborator<'a> {
                         }
                     };
                     let values = values.as_slice(&self.func.dfg.value_lists);
+                    let value = values[index];
+                    self.func.dfg.fill_in_value_type(value, ty);
                     let value = IdValue::Value {
                         depth,
                         block,
-                        value: values[index],
+                        value,
                     };
                     self.id_to_value.insert_if_absent(canonical, value.clone());
 

@@ -12,7 +12,7 @@
 (decl unit () Unit)
 (extern constructor unit unit)
 
-;; `bool` is declared in `clif.isle`.
+(type bool (primitive bool))
 (extern const $true bool)
 (extern const $false bool)
 
@@ -125,6 +125,9 @@
 (decl pure u64_sextend_u32 (u64) u64)
 (extern constructor u64_sextend_u32 u64_sextend_u32)
 
+(decl pure u64_uextend_u32 (u64) u64)
+(extern constructor u64_uextend_u32 u64_uextend_u32)
+
 (decl u64_is_zero (bool) u64)
 (extern extractor infallible u64_is_zero u64_is_zero)
 
@@ -134,14 +137,10 @@
 (decl u64_nonzero (u64) u64)
 (extractor (u64_nonzero x) (and (u64_is_zero $false) x))
 
-;;;; `cranelift_codegen::ir::Type` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(decl pure u64_is_odd (u64) bool)
+(extern constructor u64_is_odd u64_is_odd)
 
-(extern const $B1 Type)
-(extern const $B8 Type)
-(extern const $B16 Type)
-(extern const $B32 Type)
-(extern const $B64 Type)
-(extern const $B128 Type)
+;;;; `cranelift_codegen::ir::Type` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (extern const $I8 Type)
 (extern const $I16 Type)
@@ -154,11 +153,6 @@
 
 (extern const $F32 Type)
 (extern const $F64 Type)
-
-(extern const $B8X16 Type)
-(extern const $B16X8 Type)
-(extern const $B32X4 Type)
-(extern const $B64X2 Type)
 
 (extern const $I8X8 Type)
 (extern const $I8X16 Type)
@@ -229,10 +223,10 @@
 (decl ty_64 (Type) Type)
 (extern extractor ty_64 ty_64)
 
-;; A pure constructor that only matches scalar booleans, integers, and
-;; references that can fit in 64 bits.
-(decl pure ty_int_bool_ref_scalar_64 (Type) Type)
-(extern constructor ty_int_bool_ref_scalar_64 ty_int_bool_ref_scalar_64)
+;; A pure constructor that only matches scalar integers, and references that can
+;; fit in 64 bits.
+(decl pure ty_int_ref_scalar_64 (Type) Type)
+(extern constructor ty_int_ref_scalar_64 ty_int_ref_scalar_64)
 
 ;; An extractor that matches 32- and 64-bit types only.
 (decl ty_32_or_64 (Type) Type)
@@ -242,25 +236,13 @@
 (decl ty_8_or_16 (Type) Type)
 (extern extractor ty_8_or_16 ty_8_or_16)
 
-;; An extractor that matches int and bool types that fit in 32 bits.
-(decl int_bool_fits_in_32 (Type) Type)
-(extern extractor int_bool_fits_in_32 int_bool_fits_in_32)
+;; An extractor that matches int types that fit in 32 bits.
+(decl int_fits_in_32 (Type) Type)
+(extern extractor int_fits_in_32 int_fits_in_32)
 
-;; An extractor that matches I64 or B64.
-(decl ty_int_bool_64 (Type) Type)
-(extern extractor ty_int_bool_64 ty_int_bool_64)
-
-;; An extractor that matches I64 or B64 or R64.
-(decl ty_int_bool_ref_64 (Type) Type)
-(extern extractor ty_int_bool_ref_64 ty_int_bool_ref_64)
-
-;; An extractor that matches I128 or B128.
-(decl ty_int_bool_128 (Type) Type)
-(extern extractor ty_int_bool_128 ty_int_bool_128)
-
-;; An extractor that matches any int or bool.
-(decl ty_int_bool (Type) Type)
-(extern extractor ty_int_bool ty_int_bool)
+;; An extractor that matches I64 or R64.
+(decl ty_int_ref_64 (Type) Type)
+(extern extractor ty_int_ref_64 ty_int_ref_64)
 
 ;; An extractor that only matches integers.
 (decl ty_int (Type) Type)

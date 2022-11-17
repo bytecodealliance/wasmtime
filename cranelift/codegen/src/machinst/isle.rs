@@ -7,9 +7,10 @@ use std::cell::Cell;
 use target_lexicon::Triple;
 
 pub use super::MachLabel;
+use super::RetPair;
 pub use crate::ir::{
-    condcodes, dynamic_to_fixed, ArgumentExtension, Constant, DynamicStackSlot, ExternalName,
-    FuncRef, GlobalValue, Immediate, SigRef, StackSlot,
+    condcodes, condcodes::CondCode, dynamic_to_fixed, ArgumentExtension, ArgumentPurpose, Constant,
+    DynamicStackSlot, ExternalName, FuncRef, GlobalValue, Immediate, SigRef, StackSlot,
 };
 pub use crate::isa::unwind::UnwindInst;
 pub use crate::machinst::{
@@ -23,7 +24,7 @@ pub type ValueSlice = (ValueList, usize);
 pub type ValueArray2 = [Value; 2];
 pub type ValueArray3 = [Value; 3];
 pub type WritableReg = Writable<Reg>;
-pub type VecReg = Vec<Reg>;
+pub type VecRetPair = Vec<RetPair>;
 pub type VecMask = Vec<u8>;
 pub type ValueRegs = crate::machinst::ValueRegs<Reg>;
 pub type WritableValueRegs = crate::machinst::ValueRegs<WritableReg>;
@@ -422,10 +423,6 @@ macro_rules! isle_lower_prelude_methods {
             ))
         }
 
-        fn retval(&mut self, i: usize) -> WritableValueRegs {
-            self.lower_ctx.retval(i)
-        }
-
         fn only_writable_reg(&mut self, regs: WritableValueRegs) -> Option<WritableReg> {
             regs.only_reg()
         }
@@ -439,7 +436,7 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         fn abi_get_arg(&mut self, abi: &Sig, idx: usize) -> ABIArg {
-            self.lower_ctx.sigs()[*abi].get_arg(idx)
+            self.lower_ctx.sigs()[*abi].get_arg(self.lower_ctx.sigs(), idx)
         }
 
         fn abi_num_rets(&mut self, abi: &Sig) -> usize {
@@ -447,15 +444,15 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         fn abi_get_ret(&mut self, abi: &Sig, idx: usize) -> ABIArg {
-            self.lower_ctx.sigs()[*abi].get_ret(idx)
+            self.lower_ctx.sigs()[*abi].get_ret(self.lower_ctx.sigs(), idx)
         }
 
         fn abi_ret_arg(&mut self, abi: &Sig) -> Option<ABIArg> {
-            self.lower_ctx.sigs()[*abi].get_ret_arg()
+            self.lower_ctx.sigs()[*abi].get_ret_arg(self.lower_ctx.sigs())
         }
 
         fn abi_no_ret_arg(&mut self, abi: &Sig) -> Option<()> {
-            if let Some(_) = self.lower_ctx.sigs()[*abi].get_ret_arg() {
+            if let Some(_) = self.lower_ctx.sigs()[*abi].get_ret_arg(self.lower_ctx.sigs()) {
                 None
             } else {
                 Some(())
@@ -569,6 +566,37 @@ macro_rules! isle_lower_prelude_methods {
         #[inline]
         fn gen_move(&mut self, ty: Type, dst: WritableReg, src: Reg) -> MInst {
             MInst::gen_move(dst, src, ty)
+        }
+
+        #[inline]
+        fn intcc_reverse(&mut self, cc: &IntCC) -> IntCC {
+            cc.reverse()
+        }
+
+        #[inline]
+        fn intcc_inverse(&mut self, cc: &IntCC) -> IntCC {
+            cc.inverse()
+        }
+
+        #[inline]
+        fn floatcc_reverse(&mut self, cc: &FloatCC) -> FloatCC {
+            cc.reverse()
+        }
+
+        #[inline]
+        fn floatcc_inverse(&mut self, cc: &FloatCC) -> FloatCC {
+            cc.inverse()
+        }
+
+        /// Generate the return instruction.
+        fn gen_return(&mut self, (list, off): ValueSlice) {
+            let rets = (off..list.len(&self.lower_ctx.dfg().value_lists))
+                .map(|ix| {
+                    let val = list.get(ix, &self.lower_ctx.dfg().value_lists).unwrap();
+                    self.put_in_regs(val)
+                })
+                .collect();
+            self.lower_ctx.gen_return(rets);
         }
     };
 }
@@ -689,7 +717,7 @@ macro_rules! isle_prelude_method_helpers {
                 // borrow across the `&mut self` arg to
                 // `abi_arg_slot_regs()` below.
                 let sigdata = &self.lower_ctx.sigs()[abi];
-                let ret = sigdata.get_ret(i);
+                let ret = sigdata.get_ret(self.lower_ctx.sigs(), i);
                 let retval_regs = self.abi_arg_slot_regs(&ret).unwrap();
                 retval_insts.extend(
                     caller

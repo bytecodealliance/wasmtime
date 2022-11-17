@@ -47,7 +47,7 @@ let wat = r#"
 "#;
 let module = Module::new(store.engine(), wat)?;
 let instance = Instance::new(&mut store, &module, &[])?;
-let add = instance.get_typed_func::<(i32, i32), i32, _>(&mut store, "add")?;
+let add = instance.get_typed_func::<(i32, i32), i32>(&mut store, "add")?;
 println!("1 + 2 = {}", add.call(&mut store, (1, 2))?);
 # Ok(())
 # }

@@ -58,7 +58,6 @@ impl Block {
 /// - [`iconst`](super::InstBuilder::iconst) for integer constants
 /// - [`f32const`](super::InstBuilder::f32const) for 32-bit float constants
 /// - [`f64const`](super::InstBuilder::f64const) for 64-bit float constants
-/// - [`bconst`](super::InstBuilder::bconst) for boolean constants
 /// - [`vconst`](super::InstBuilder::vconst) for vector constants
 /// - [`null`](super::InstBuilder::null) for null reference constants
 ///

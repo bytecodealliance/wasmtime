@@ -71,7 +71,7 @@
     (Args
       (args VecArgPair))
 
-    (Ret (rets VecReg))
+    (Ret (rets VecRetPair))
 
      (Extend
       (rd WritableReg)
@@ -370,9 +370,9 @@
 ))
 
 (type IntSelectOP (enum
-  (Imax)
+  (Smax)
   (Umax)
-  (Imin)
+  (Smin)
   (Umin)
 ))
 
@@ -705,6 +705,10 @@
 ;; Helper for creating the zero register.
 (decl zero_reg () Reg)
 (extern constructor zero_reg zero_reg)
+
+(decl value_regs_zero () ValueRegs)
+(rule (value_regs_zero)
+  (value_regs (imm $I64 0) (imm $I64 0)))
 
 (decl gen_float_round (FloatRoundOP Reg Type) Reg)
 (rule
@@ -1662,11 +1666,6 @@
       (result Reg (alu_rrr (AluOPRRR.Or) tmp_x tmp_y)))
     result))
 
-(decl gen_bint (Reg) Reg)
-(rule 
-  (gen_bint r)
-  (alu_rr_imm12 (AluOPRRI.Andi) r (imm12_const 1)))
-
 (decl gen_int_select (Type IntSelectOP ValueRegs ValueRegs) ValueRegs)
 (rule
   (gen_int_select ty op x y)
@@ -1731,12 +1730,6 @@
       (tmp WritableReg (temp_writable_reg $F64))
       (_ Unit (emit (MInst.FcvtToInt is_sat result tmp rs is_signed in_type out_type))))
     result))
-
-;;;; in_type out_type
-;;;; out_type is returned.
-(decl pure valid_bextend_ty (Type Type) Type)
-(extern constructor valid_bextend_ty valid_bextend_ty)
-
 
 ;;; some float binary operation 
 ;;; 1. need move into x reister.
@@ -1861,22 +1854,22 @@
   (gen_fabs x ty)
   (fpu_rrr (fabs_copy_sign ty) ty x x))
 
-;;; right now only return if overflow.
-(decl lower_uadd_overflow (Reg Reg Type) Reg)
+;;; Returns the sum in the first register, and the overflow test in the second.
+(decl lower_uadd_overflow (Reg Reg Type) ValueRegs)
 
 (rule 1
   (lower_uadd_overflow x y $I64)
-  (let
-    ((tmp Reg (alu_add x y)))
-    (gen_icmp (IntCC.UnsignedLessThan) tmp x $I64)))
+  (let ((tmp Reg (alu_add x y))
+        (test Reg (gen_icmp (IntCC.UnsignedLessThan) tmp x $I64)))
+    (value_regs tmp test)))
 
 (rule
   (lower_uadd_overflow x y (fits_in_32 ty))
-  (let
-    ((tmp_x Reg (ext_int_if_need $false x ty))
-      (tmp_y Reg (ext_int_if_need $false y ty))
-      (sum Reg (alu_add tmp_x tmp_y)))
-    (alu_srli sum (ty_bits ty))))
+  (let ((tmp_x Reg (ext_int_if_need $false x ty))
+        (tmp_y Reg (ext_int_if_need $false y ty))
+        (sum Reg (alu_add tmp_x tmp_y))
+        (test Reg (alu_srli sum (ty_bits ty))))
+    (value_regs sum test)))
 
 (decl inst_output_get (InstOutput u8) ValueRegs)
 (extern constructor inst_output_get inst_output_get)
@@ -1910,28 +1903,49 @@
 (decl lower_brz_or_nz (IntCC ValueRegs VecMachLabel Type) InstOutput)
 (extern constructor lower_brz_or_nz lower_brz_or_nz)
 
+;; Normalize a value for comparision.
+;;
+;; This ensures that types smaller than a register don't accidentally 
+;; pass undefined high bits when being compared as a full register.
+(decl normalize_cmp_value (Type ValueRegs) ValueRegs)
+
+(rule (normalize_cmp_value $I8 r)
+      (value_reg (alu_rr_imm12 (AluOPRRI.Andi) r (imm12_const 255))))
+(rule (normalize_cmp_value $I16 r)
+      (value_reg (alu_rrr (AluOPRRR.And) r (imm $I16 65535))))
+(rule (normalize_cmp_value $I32 r)
+      (value_reg (alu_rr_imm12 (AluOPRRI.Addiw) r (imm12_const 0))))
+
+(rule (normalize_cmp_value $I64  r) r)
+(rule (normalize_cmp_value $I128 r) r)
+
 ;;;;; 
 (rule 
   (lower_branch (brz v @ (value_type ty) _ _) targets)
-  (lower_brz_or_nz (IntCC.Equal) v targets ty))
+  (lower_brz_or_nz (IntCC.Equal) (normalize_cmp_value ty v) targets ty))
+
+(rule 1
+  (lower_branch (brz (icmp cc a @ (value_type ty) b) _ _) targets)
+  (lower_br_icmp (intcc_inverse cc) a b targets ty))
+
+(rule 1
+  (lower_branch (brz (fcmp cc a @ (value_type ty) b) _ _) targets)
+  (lower_br_fcmp (floatcc_inverse cc) a b targets ty))
+
 ;;;; 
 (rule 
   (lower_branch (brnz v @ (value_type ty) _ _) targets)
-  (lower_brz_or_nz (IntCC.NotEqual) v targets ty))
+  (lower_brz_or_nz (IntCC.NotEqual) (normalize_cmp_value ty v) targets ty))
 
-;;; 
-(rule 
-  (lower_branch (br_icmp cc a @ (value_type ty) b _ _) targets)
+(rule 1
+  (lower_branch (brnz (icmp cc a @ (value_type ty) b) _ _) targets)
   (lower_br_icmp cc a b targets ty))
 
-(rule 
-  (lower_branch (brif cc (ifcmp a @ (value_type ty) b) _ _) targets)
-  (lower_br_icmp cc a b targets ty))
-
-(rule 
-  (lower_branch (brff cc (ffcmp a @ (value_type ty) b) _ _) targets)
+(rule 1
+  (lower_branch (brnz (fcmp cc a @ (value_type ty) b) _ _) targets)
   (lower_br_fcmp cc a b targets ty))
 
+;;; 
 (decl lower_br_table (Reg VecMachLabel) InstOutput)
 (extern constructor lower_br_table lower_br_table)
 
@@ -2092,3 +2106,44 @@
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.ElfTlsGetAddr name dst))))
         dst))
+;;;; Helpers for bmask ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl lower_bmask (Type Type ValueRegs) ValueRegs)
+
+;; Produces -1 if the 64-bit value is non-zero, and 0 otherwise.
+;; If the type is smaller than 64 bits, we need to mask off the
+;; high bits.
+(rule
+  0
+  (lower_bmask (fits_in_64 _) (fits_in_64 in_ty) val)
+  (let ((input Reg (normalize_cmp_value in_ty val))
+        (zero Reg (zero_reg))
+        (ones Reg (load_imm12 -1)))
+  (value_reg (gen_select_reg (IntCC.Equal) zero input zero ones))))
+
+;; Bitwise-or the two registers that make up the 128-bit value, then recurse as
+;; though it was a 64-bit value.
+(rule
+  1
+  (lower_bmask (fits_in_64 ty) $I128 val)
+  (let ((lo Reg (value_regs_get val 0))
+        (hi Reg (value_regs_get val 1))
+        (combined Reg (alu_rrr (AluOPRRR.Or) lo hi)))
+    (lower_bmask ty $I64 (value_reg combined))))
+
+;; Conversion of one 64-bit value to a 128-bit one. Duplicate the result of the
+;; bmask of the 64-bit value into both result registers of the i128.
+(rule
+  2
+  (lower_bmask $I128 (fits_in_64 in_ty) val)
+  (let ((res ValueRegs (lower_bmask $I64 in_ty val)))
+    (value_regs (value_regs_get res 0) (value_regs_get res 0))))
+
+;; Conversion of one 64-bit value to a 128-bit one. Duplicate the result of
+;; bmasking the 128-bit value to a 64-bit value into both registers of the
+;; 128-bit result.
+(rule
+  3
+  (lower_bmask $I128 $I128 val)
+  (let ((res ValueRegs (lower_bmask $I64 $I128 val)))
+    (value_regs (value_regs_get res 0) (value_regs_get res 0))))

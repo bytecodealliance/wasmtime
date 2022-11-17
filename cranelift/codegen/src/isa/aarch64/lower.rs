@@ -794,6 +794,6 @@ impl LowerBackend for AArch64Backend {
     }
 
     fn maybe_pinned_reg(&self) -> Option<Reg> {
-        Some(xreg(PINNED_REG))
+        Some(regs::pinned_reg())
     }
 }

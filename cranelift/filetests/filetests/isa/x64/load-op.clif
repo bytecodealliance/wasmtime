@@ -93,11 +93,11 @@ block0(v0: i64, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    0(%rdi), %r9
-;   movq    %r9, %r10
-;   addq    %r10, %rdi, %r10
-;   movq    %r10, 0(%rsi)
-;   movq    0(%r9,%rdi,1), %rax
+;   movq    0(%rdi), %r8
+;   movq    %r8, %r9
+;   addq    %r9, %rdi, %r9
+;   movq    %r9, 0(%rsi)
+;   movq    0(%r8,%rdi,1), %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -126,7 +126,7 @@ function %cmp_mem(i64) -> i64 {
 block0(v0: i64):
   v1 = load.i64 v0
   v2 = icmp eq v0, v1
-  v3 = bint.i64 v2
+  v3 = uextend.i64 v2
   return v3
 }
 
@@ -134,8 +134,8 @@ block0(v0: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   cmpq    0(%rdi), %rdi
-;   setz    %al
-;   andq    %rax, $1, %rax
+;   setz    %dl
+;   movzbq  %dl, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

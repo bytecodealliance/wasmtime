@@ -7,18 +7,16 @@ function u0:0() -> i8 system_v {
 block0:
     v0 = iconst.i16 0xddcc
     v1 = icmp.i16 ne v0, v0
-    v2 = bint.i8 v1
-    return v2
+    return v1
 }
 
 ; block0:
-;   lui t2,14
-;   addi t2,t2,3532
-;   lui a2,14
-;   addi a2,a2,3532
-;   uext.h a5,t2
-;   uext.h a7,a2
-;   ne t4,a5,a7##ty=i16
-;   andi a0,t4,1
+;   lui t0,14
+;   addi t0,t0,3532
+;   lui a0,14
+;   addi a0,a0,3532
+;   uext.h a3,t0
+;   uext.h a5,a0
+;   ne a0,a3,a5##ty=i16
 ;   ret
 

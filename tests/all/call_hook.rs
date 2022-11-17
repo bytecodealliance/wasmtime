@@ -1,4 +1,4 @@
-use anyhow::Error;
+use anyhow::{bail, Error, Result};
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{self, Poll};
@@ -76,7 +76,7 @@ fn call_wrapped_func() -> Result<(), Error> {
         assert_eq!(store.data().calls_into_wasm, n);
         assert_eq!(store.data().returns_from_wasm, n);
 
-        f.typed::<(i32, i64, f32, f64), (), _>(&store)?
+        f.typed::<(i32, i64, f32, f64), ()>(&store)?
             .call(&mut store, (1, 2, 3.0, 4.0))?;
         n += 1;
 
@@ -150,7 +150,7 @@ async fn call_wrapped_async_func() -> Result<(), Error> {
     assert_eq!(store.data().calls_into_wasm, 1);
     assert_eq!(store.data().returns_from_wasm, 1);
 
-    f.typed::<(i32, i64, f32, f64), (), _>(&store)?
+    f.typed::<(i32, i64, f32, f64), ()>(&store)?
         .call_async(&mut store, (1, 2, 3.0, 4.0))
         .await?;
 
@@ -218,7 +218,7 @@ fn call_linked_func() -> Result<(), Error> {
     assert_eq!(store.data().calls_into_wasm, 1);
     assert_eq!(store.data().returns_from_wasm, 1);
 
-    export.typed::<(), (), _>(&store)?.call(&mut store, ())?;
+    export.typed::<(), ()>(&store)?.call(&mut store, ())?;
 
     assert_eq!(store.data().calls_into_host, 2);
     assert_eq!(store.data().returns_from_host, 2);
@@ -290,7 +290,7 @@ async fn call_linked_func_async() -> Result<(), Error> {
     assert_eq!(store.data().returns_from_wasm, 1);
 
     export
-        .typed::<(), (), _>(&store)?
+        .typed::<(), ()>(&store)?
         .call_async(&mut store, ())
         .await?;
 
@@ -362,7 +362,7 @@ fn recursion() -> Result<(), Error> {
                 .expect("caller exports \"export\"")
                 .into_func()
                 .expect("export is a func")
-                .typed::<i32, (), _>(&caller)
+                .typed::<i32, ()>(&caller)
                 .expect("export typing")
                 .call(&mut caller, n - 1)
                 .unwrap()
@@ -398,7 +398,7 @@ fn recursion() -> Result<(), Error> {
     assert_eq!(store.data().returns_from_wasm, n + 1);
 
     export
-        .typed::<i32, (), _>(&store)?
+        .typed::<i32, ()>(&store)?
         .call(&mut store, n as i32)?;
 
     assert_eq!(store.data().calls_into_host, 2 * (n + 1));
@@ -424,12 +424,12 @@ fn trapping() -> Result<(), Error> {
     linker.func_wrap(
         "host",
         "f",
-        |mut caller: Caller<State>, action: i32, recur: i32| -> Result<(), Trap> {
+        |mut caller: Caller<State>, action: i32, recur: i32| -> Result<()> {
             assert_eq!(caller.data().context.last(), Some(&Context::Host));
             assert_eq!(caller.data().calls_into_host, caller.data().calls_into_wasm);
 
             match action {
-                TRAP_IN_F => return Err(Trap::new("trapping in f")),
+                TRAP_IN_F => bail!("trapping in f"),
                 TRAP_NEXT_CALL_HOST => caller.data_mut().trap_next_call_host = true,
                 TRAP_NEXT_RETURN_HOST => caller.data_mut().trap_next_return_host = true,
                 TRAP_NEXT_CALL_WASM => caller.data_mut().trap_next_call_wasm = true,
@@ -445,7 +445,7 @@ fn trapping() -> Result<(), Error> {
                     .expect("caller exports \"export\"")
                     .into_func()
                     .expect("export is a func")
-                    .typed::<(i32, i32), (), _>(&caller)
+                    .typed::<(i32, i32), ()>(&caller)
                     .expect("export typing")
                     .call(&mut caller, (action, 0))?;
             }
@@ -485,7 +485,7 @@ fn trapping() -> Result<(), Error> {
     };
 
     let (s, e) = run(TRAP_IN_F, false);
-    assert!(e.unwrap().to_string().starts_with("trapping in f"));
+    assert!(format!("{:?}", e.unwrap()).contains("trapping in f"));
     assert_eq!(s.calls_into_host, 1);
     assert_eq!(s.returns_from_host, 1);
     assert_eq!(s.calls_into_wasm, 1);
@@ -501,10 +501,7 @@ fn trapping() -> Result<(), Error> {
 
     // trap in next call to host. recur, so the second call into host traps:
     let (s, e) = run(TRAP_NEXT_CALL_HOST, true);
-    assert!(e
-        .unwrap()
-        .to_string()
-        .starts_with("call_hook: trapping on CallingHost"));
+    assert!(format!("{:?}", e.unwrap()).contains("call_hook: trapping on CallingHost"));
     assert_eq!(s.calls_into_host, 2);
     assert_eq!(s.returns_from_host, 1);
     assert_eq!(s.calls_into_wasm, 2);
@@ -512,10 +509,7 @@ fn trapping() -> Result<(), Error> {
 
     // trap in the return from host. should trap right away, without recursion
     let (s, e) = run(TRAP_NEXT_RETURN_HOST, false);
-    assert!(e
-        .unwrap()
-        .to_string()
-        .starts_with("call_hook: trapping on ReturningFromHost"));
+    assert!(format!("{:?}", e.unwrap()).contains("call_hook: trapping on ReturningFromHost"));
     assert_eq!(s.calls_into_host, 1);
     assert_eq!(s.returns_from_host, 1);
     assert_eq!(s.calls_into_wasm, 1);
@@ -531,10 +525,7 @@ fn trapping() -> Result<(), Error> {
 
     // trap in next call to wasm. recur, so the second call into wasm traps:
     let (s, e) = run(TRAP_NEXT_CALL_WASM, true);
-    assert!(e
-        .unwrap()
-        .to_string()
-        .starts_with("call_hook: trapping on CallingWasm"));
+    assert!(format!("{:?}", e.unwrap()).contains("call_hook: trapping on CallingWasm"));
     assert_eq!(s.calls_into_host, 1);
     assert_eq!(s.returns_from_host, 1);
     assert_eq!(s.calls_into_wasm, 2);
@@ -542,10 +533,7 @@ fn trapping() -> Result<(), Error> {
 
     // trap in the return from wasm. should trap right away, without recursion
     let (s, e) = run(TRAP_NEXT_RETURN_WASM, false);
-    assert!(e
-        .unwrap()
-        .to_string()
-        .starts_with("call_hook: trapping on ReturningFromWasm"));
+    assert!(format!("{:?}", e.unwrap()).contains("call_hook: trapping on ReturningFromWasm"));
     assert_eq!(s.calls_into_host, 1);
     assert_eq!(s.returns_from_host, 1);
     assert_eq!(s.calls_into_wasm, 1);
@@ -560,11 +548,7 @@ async fn basic_async_hook() -> Result<(), Error> {
 
     #[async_trait::async_trait]
     impl CallHookHandler<State> for HandlerR {
-        async fn handle_call_event(
-            &self,
-            obj: &mut State,
-            ch: CallHook,
-        ) -> Result<(), wasmtime::Trap> {
+        async fn handle_call_event(&self, obj: &mut State, ch: CallHook) -> Result<()> {
             State::call_hook(obj, ch)
         }
     }
@@ -638,13 +622,9 @@ async fn timeout_async_hook() -> Result<(), Error> {
 
     #[async_trait::async_trait]
     impl CallHookHandler<State> for HandlerR {
-        async fn handle_call_event(
-            &self,
-            obj: &mut State,
-            ch: CallHook,
-        ) -> Result<(), wasmtime::Trap> {
+        async fn handle_call_event(&self, obj: &mut State, ch: CallHook) -> Result<()> {
             if obj.calls_into_host > 200 {
-                return Err(wasmtime::Trap::new("timeout"));
+                bail!("timeout");
             }
 
             match ch {
@@ -696,7 +676,7 @@ async fn timeout_async_hook() -> Result<(), Error> {
 
     let inst = linker.instantiate_async(&mut store, &module).await?;
     let export = inst
-        .get_typed_func::<(), (), _>(&mut store, "export")
+        .get_typed_func::<(), ()>(&mut store, "export")
         .expect("export is func");
 
     store.set_epoch_deadline(1);
@@ -718,11 +698,7 @@ async fn drop_suspended_async_hook() -> Result<(), Error> {
 
     #[async_trait::async_trait]
     impl CallHookHandler<u32> for Handler {
-        async fn handle_call_event(
-            &self,
-            state: &mut u32,
-            _ch: CallHook,
-        ) -> Result<(), wasmtime::Trap> {
+        async fn handle_call_event(&self, state: &mut u32, _ch: CallHook) -> Result<()> {
             assert_eq!(*state, 0);
             *state += 1;
             let _dec = Decrement(state);
@@ -767,7 +743,7 @@ async fn drop_suspended_async_hook() -> Result<(), Error> {
     let inst = linker.instantiate_async(&mut store, &module).await?;
     assert_eq!(*store.data(), 0);
     let export = inst
-        .get_typed_func::<(), (), _>(&mut store, "")
+        .get_typed_func::<(), ()>(&mut store, "")
         .expect("export is func");
 
     // First test that if we drop in the middle of an async hook that everything
@@ -861,12 +837,12 @@ impl Default for State {
 
 impl State {
     // This implementation asserts that hooks are always called in a stack-like manner.
-    fn call_hook(&mut self, s: CallHook) -> Result<(), Trap> {
+    fn call_hook(&mut self, s: CallHook) -> Result<()> {
         match s {
             CallHook::CallingHost => {
                 self.calls_into_host += 1;
                 if self.trap_next_call_host {
-                    return Err(Trap::new("call_hook: trapping on CallingHost"));
+                    bail!("call_hook: trapping on CallingHost");
                 } else {
                     self.context.push(Context::Host);
                 }
@@ -875,7 +851,7 @@ impl State {
                 Some(Context::Host) => {
                     self.returns_from_host += 1;
                     if self.trap_next_return_host {
-                        return Err(Trap::new("call_hook: trapping on ReturningFromHost"));
+                        bail!("call_hook: trapping on ReturningFromHost");
                     }
                 }
                 c => panic!(
@@ -886,7 +862,7 @@ impl State {
             CallHook::CallingWasm => {
                 self.calls_into_wasm += 1;
                 if self.trap_next_call_wasm {
-                    return Err(Trap::new("call_hook: trapping on CallingWasm"));
+                    bail!("call_hook: trapping on CallingWasm");
                 } else {
                     self.context.push(Context::Wasm);
                 }
@@ -895,7 +871,7 @@ impl State {
                 Some(Context::Wasm) => {
                     self.returns_from_wasm += 1;
                     if self.trap_next_return_wasm {
-                        return Err(Trap::new("call_hook: trapping on ReturningFromWasm"));
+                        bail!("call_hook: trapping on ReturningFromWasm");
                     }
                 }
                 c => panic!(

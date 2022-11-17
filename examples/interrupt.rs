@@ -16,7 +16,7 @@ fn main() -> Result<()> {
     // Compile and instantiate a small example with an infinite loop.
     let module = Module::from_file(&engine, "examples/interrupt.wat")?;
     let instance = Instance::new(&mut store, &module, &[])?;
-    let run = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
 
     // Spin up a thread to send us an interrupt in a second
     std::thread::spawn(move || {
@@ -26,10 +26,10 @@ fn main() -> Result<()> {
     });
 
     println!("Entering infinite loop ...");
-    let trap = run.call(&mut store, ()).unwrap_err();
+    let err = run.call(&mut store, ()).unwrap_err();
 
     println!("trap received...");
-    assert!(trap.trap_code().unwrap() == TrapCode::Interrupt);
+    assert_eq!(err.downcast::<Trap>()?, Trap::Interrupt);
 
     Ok(())
 }

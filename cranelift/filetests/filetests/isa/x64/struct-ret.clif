@@ -31,8 +31,8 @@ block0(v0: i64, v1: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rdi
-;   load_ext_name %f2+0, %r8
-;   call    *%r8
+;   load_ext_name %f2+0, %rdx
+;   call    *%rdx
 ;   movq    %rdx, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

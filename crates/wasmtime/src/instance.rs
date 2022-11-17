@@ -88,7 +88,8 @@ impl Instance {
     ///
     /// When instantiation fails it's recommended to inspect the return value to
     /// see why it failed, or bubble it upwards. If you'd like to specifically
-    /// check for trap errors, you can use `error.downcast::<Trap>()`.
+    /// check for trap errors, you can use `error.downcast::<Trap>()`. For more
+    /// about error handling see the [`Trap`] documentation.
     ///
     /// # Panics
     ///
@@ -102,7 +103,7 @@ impl Instance {
         mut store: impl AsContextMut,
         module: &Module,
         imports: &[Extern],
-    ) -> Result<Instance, Error> {
+    ) -> Result<Instance> {
         let mut store = store.as_context_mut();
         let imports = Instance::typecheck_externs(store.0, module, imports)?;
         // Note that the unsafety here should be satisfied by the call to
@@ -134,7 +135,7 @@ impl Instance {
         mut store: impl AsContextMut<Data = T>,
         module: &Module,
         imports: &[Extern],
-    ) -> Result<Instance, Error>
+    ) -> Result<Instance>
     where
         T: Send,
     {
@@ -174,7 +175,18 @@ impl Instance {
             !store.0.async_support(),
             "must use async instantiation when async support is enabled",
         );
+        Self::new_started_impl(store, module, imports)
+    }
 
+    /// Internal function to create an instance and run the start function.
+    ///
+    /// ONLY CALL THIS IF YOU HAVE ALREADY CHECKED FOR ASYNCNESS AND HANDLED
+    /// THE FIBER NONSENSE
+    pub(crate) unsafe fn new_started_impl<T>(
+        store: &mut StoreContextMut<'_, T>,
+        module: &Module,
+        imports: Imports<'_>,
+    ) -> Result<Instance> {
         let (instance, start) = Instance::new_raw(store.0, module, imports)?;
         if let Some(start) = start {
             instance.start_raw(store, start)?;
@@ -194,22 +206,13 @@ impl Instance {
     where
         T: Send,
     {
-        // Note that the body of this function is intentionally quite similar
-        // to the `new_started` function, and it's intended that the two bodies
-        // here are small enough to be ok duplicating.
         assert!(
             store.0.async_support(),
             "must use sync instantiation when async support is disabled",
         );
 
         store
-            .on_fiber(|store| {
-                let (instance, start) = Instance::new_raw(store.0, module, imports)?;
-                if let Some(start) = start {
-                    instance.start_raw(store, start)?;
-                }
-                Ok(instance)
-            })
+            .on_fiber(|store| Self::new_started_impl(store, module, imports))
             .await?
     }
 
@@ -322,7 +325,7 @@ impl Instance {
             )
             .map_err(|e| -> Error {
                 match e {
-                    InstantiationError::Trap(trap) => Trap::new_wasm(trap, None).into(),
+                    InstantiationError::Trap(trap) => Trap::from_env(trap).into(),
                     other => other.into(),
                 }
             })?;
@@ -454,21 +457,20 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `store` does not own this instance.
-    pub fn get_typed_func<Params, Results, S>(
+    pub fn get_typed_func<Params, Results>(
         &self,
-        mut store: S,
+        mut store: impl AsContextMut,
         name: &str,
     ) -> Result<TypedFunc<Params, Results>>
     where
         Params: crate::WasmParams,
         Results: crate::WasmResults,
-        S: AsContextMut,
     {
         let f = self
             .get_export(store.as_context_mut(), name)
             .and_then(|f| f.into_func())
             .ok_or_else(|| anyhow!("failed to find function export `{}`", name))?;
-        Ok(f.typed::<Params, Results, _>(store)
+        Ok(f.typed::<Params, Results>(store)
             .with_context(|| format!("failed to convert function `{}` to given type", name))?)
     }
 

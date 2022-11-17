@@ -285,7 +285,7 @@ fn global_drops_externref() -> anyhow::Result<()> {
             "#,
         )?;
         let instance = Instance::new(&mut store, &module, &[])?;
-        let run = instance.get_typed_func::<Option<ExternRef>, (), _>(&mut store, "run")?;
+        let run = instance.get_typed_func::<Option<ExternRef>, ()>(&mut store, "run")?;
         let flag = Arc::new(AtomicBool::new(false));
         let externref = ExternRef::new(SetFlagOnDrop(flag.clone()));
         run.call(&mut store, Some(externref))?;
@@ -335,7 +335,7 @@ fn table_drops_externref() -> anyhow::Result<()> {
         "#,
         )?;
         let instance = Instance::new(&mut store, &module, &[])?;
-        let run = instance.get_typed_func::<Option<ExternRef>, (), _>(&mut store, "run")?;
+        let run = instance.get_typed_func::<Option<ExternRef>, ()>(&mut store, "run")?;
         let flag = Arc::new(AtomicBool::new(false));
         let externref = ExternRef::new(SetFlagOnDrop(flag.clone()));
         run.call(&mut store, Some(externref))?;
@@ -387,7 +387,7 @@ fn gee_i_sure_hope_refcounting_is_atomic() -> anyhow::Result<()> {
     )?;
 
     let instance = Instance::new(&mut store, &module, &[])?;
-    let run = instance.get_typed_func::<Option<ExternRef>, (), _>(&mut store, "run")?;
+    let run = instance.get_typed_func::<Option<ExternRef>, ()>(&mut store, "run")?;
 
     let flag = Arc::new(AtomicBool::new(false));
     let externref = ExternRef::new(SetFlagOnDrop(flag.clone()));
@@ -482,7 +482,7 @@ fn no_gc_middle_of_args() -> anyhow::Result<()> {
     )?;
 
     let instance = linker.instantiate(&mut store, &module)?;
-    let func = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
+    let func = instance.get_typed_func::<(), ()>(&mut store, "run")?;
     func.call(&mut store, ())?;
 
     Ok(())

@@ -6,9 +6,7 @@
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
 pub use crate::ir::condcodes::IntCC;
-use crate::ir::types::{
-    B1, B128, B16, B32, B64, B8, F32, F64, FFLAGS, I128, I16, I32, I64, I8, IFLAGS, R32, R64,
-};
+use crate::ir::types::{F32, F64, FFLAGS, I128, I16, I32, I64, I8, IFLAGS, R32, R64};
 
 pub use crate::ir::{ExternalName, MemFlags, Opcode, SourceLoc, Type, ValueLabel};
 use crate::isa::CallConv;
@@ -354,7 +352,9 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             }
         }
         &Inst::Ret { ref rets } => {
-            collector.reg_uses(&rets[..]);
+            for ret in rets {
+                collector.reg_fixed_use(ret.vreg, ret.preg);
+            }
         }
 
         &Inst::Extend { rd, rn, .. } => {
@@ -697,14 +697,11 @@ impl MachInst for Inst {
 
     fn gen_constant<F: FnMut(Type) -> Writable<Reg>>(
         to_regs: ValueRegs<Writable<Reg>>,
-        mut value: u128,
+        value: u128,
         ty: Type,
         mut alloc_tmp: F,
     ) -> SmallVec<[Inst; 4]> {
-        if ty.is_bool() && value != 0 {
-            value = !0;
-        }
-        if (ty.bits() <= 64 && (ty.is_bool() || ty.is_int())) || ty == R32 || ty == R64 {
+        if (ty.bits() <= 64 && ty.is_int()) || ty == R32 || ty == R64 {
             return Inst::load_constant_u64(to_regs.only_reg().unwrap(), value as u64);
         };
         match ty {
@@ -714,7 +711,7 @@ impl MachInst for Inst {
             F64 => {
                 Inst::load_fp_constant64(to_regs.only_reg().unwrap(), value as u64, alloc_tmp(I64))
             }
-            I128 | B128 => {
+            I128 => {
                 let mut insts = SmallInstVec::new();
                 insts.extend(Inst::load_constant_u64(
                     to_regs.regs()[0],
@@ -742,17 +739,11 @@ impl MachInst for Inst {
             I16 => Ok((&[RegClass::Int], &[I16])),
             I32 => Ok((&[RegClass::Int], &[I32])),
             I64 => Ok((&[RegClass::Int], &[I64])),
-            B1 => Ok((&[RegClass::Int], &[B1])),
-            B8 => Ok((&[RegClass::Int], &[B8])),
-            B16 => Ok((&[RegClass::Int], &[B16])),
-            B32 => Ok((&[RegClass::Int], &[B32])),
-            B64 => Ok((&[RegClass::Int], &[B64])),
             R32 => panic!("32-bit reftype pointer should never be seen on riscv64"),
             R64 => Ok((&[RegClass::Int], &[R64])),
             F32 => Ok((&[RegClass::Float], &[F32])),
             F64 => Ok((&[RegClass::Float], &[F64])),
             I128 => Ok((&[RegClass::Int, RegClass::Int], &[I64, I64])),
-            B128 => Ok((&[RegClass::Int, RegClass::Int], &[B64, B64])),
             IFLAGS => Ok((&[RegClass::Int], &[IFLAGS])),
             FFLAGS => Ok((&[RegClass::Int], &[FFLAGS])),
             _ => Err(CodegenError::Unsupported(format!(

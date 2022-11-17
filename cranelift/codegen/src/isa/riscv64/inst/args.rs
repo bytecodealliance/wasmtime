@@ -1189,10 +1189,8 @@ impl LoadOP {
             return if t == F32 { Self::Flw } else { Self::Fld };
         }
         match t {
-            B1 | B8 => Self::Lbu,
-            B16 => Self::Lhu,
-            B32 | R32 => Self::Lwu,
-            B64 | R64 | I64 => Self::Ld,
+            R32 => Self::Lwu,
+            R64 | I64 => Self::Ld,
 
             I8 => Self::Lb,
             I16 => Self::Lh,
@@ -1495,7 +1493,7 @@ impl AtomicOP {
     }
 
     /// like extract but sign extend the value.
-    /// suitable for imax.
+    /// suitable for smax.
     pub(crate) fn extract_sext(
         rd: WritableReg,
         offset: Reg,
@@ -1596,9 +1594,9 @@ impl IntSelectOP {
     #[inline]
     pub(crate) fn from_ir_op(op: crate::ir::Opcode) -> Self {
         match op {
-            crate::ir::Opcode::Imax => Self::Imax,
+            crate::ir::Opcode::Smax => Self::Smax,
             crate::ir::Opcode::Umax => Self::Umax,
-            crate::ir::Opcode::Imin => Self::Imin,
+            crate::ir::Opcode::Smin => Self::Smin,
             crate::ir::Opcode::Umin => Self::Umin,
             _ => unreachable!(),
         }
@@ -1606,18 +1604,18 @@ impl IntSelectOP {
     #[inline]
     pub(crate) fn op_name(self) -> &'static str {
         match self {
-            IntSelectOP::Imax => "imax",
+            IntSelectOP::Smax => "smax",
             IntSelectOP::Umax => "umax",
-            IntSelectOP::Imin => "imin",
+            IntSelectOP::Smin => "smin",
             IntSelectOP::Umin => "umin",
         }
     }
     #[inline]
     pub(crate) fn to_int_cc(self) -> IntCC {
         match self {
-            IntSelectOP::Imax => IntCC::SignedGreaterThan,
+            IntSelectOP::Smax => IntCC::SignedGreaterThan,
             IntSelectOP::Umax => IntCC::UnsignedGreaterThan,
-            IntSelectOP::Imin => IntCC::SignedLessThan,
+            IntSelectOP::Smin => IntCC::SignedLessThan,
             IntSelectOP::Umin => IntCC::UnsignedLessThan,
         }
     }

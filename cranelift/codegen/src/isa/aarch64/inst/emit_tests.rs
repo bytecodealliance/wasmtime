@@ -1376,6 +1376,61 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
+        Inst::BitRR {
+            op: BitOp::Rev16,
+            size: OperandSize::Size64,
+            rd: writable_xreg(2),
+            rn: xreg(11),
+        },
+        "6205C0DA",
+        "rev16 x2, x11",
+    ));
+
+    insns.push((
+        Inst::BitRR {
+            op: BitOp::Rev16,
+            size: OperandSize::Size32,
+            rd: writable_xreg(3),
+            rn: xreg(21),
+        },
+        "A306C05A",
+        "rev16 w3, w21",
+    ));
+
+    insns.push((
+        Inst::BitRR {
+            op: BitOp::Rev32,
+            size: OperandSize::Size64,
+            rd: writable_xreg(2),
+            rn: xreg(11),
+        },
+        "6209C0DA",
+        "rev32 x2, x11",
+    ));
+
+    insns.push((
+        Inst::BitRR {
+            op: BitOp::Rev32,
+            size: OperandSize::Size32,
+            rd: writable_xreg(3),
+            rn: xreg(21),
+        },
+        "A30AC05A",
+        "rev32 w3, w21",
+    ));
+
+    insns.push((
+        Inst::BitRR {
+            op: BitOp::Rev64,
+            size: OperandSize::Size64,
+            rd: writable_xreg(1),
+            rn: xreg(10),
+        },
+        "410DC0DA",
+        "rev64 x1, x10",
+    ));
+
+    insns.push((
         Inst::ULoad8 {
             rd: writable_xreg(1),
             mem: AMode::Unscaled {

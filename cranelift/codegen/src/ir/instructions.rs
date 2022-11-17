@@ -185,26 +185,11 @@ impl InstructionData {
                 ref args,
                 ..
             } => BranchInfo::SingleDest(destination, args.as_slice(pool)),
-            Self::BranchInt {
-                destination,
-                ref args,
-                ..
-            }
-            | Self::BranchFloat {
-                destination,
-                ref args,
-                ..
-            }
-            | Self::Branch {
+            Self::Branch {
                 destination,
                 ref args,
                 ..
             } => BranchInfo::SingleDest(destination, &args.as_slice(pool)[1..]),
-            Self::BranchIcmp {
-                destination,
-                ref args,
-                ..
-            } => BranchInfo::SingleDest(destination, &args.as_slice(pool)[2..]),
             Self::BranchTable {
                 table, destination, ..
             } => BranchInfo::Table(table, Some(destination)),
@@ -221,11 +206,7 @@ impl InstructionData {
     /// Multi-destination branches like `br_table` return `None`.
     pub fn branch_destination(&self) -> Option<Block> {
         match *self {
-            Self::Jump { destination, .. }
-            | Self::Branch { destination, .. }
-            | Self::BranchInt { destination, .. }
-            | Self::BranchFloat { destination, .. }
-            | Self::BranchIcmp { destination, .. } => Some(destination),
+            Self::Jump { destination, .. } | Self::Branch { destination, .. } => Some(destination),
             Self::BranchTable { .. } => None,
             _ => {
                 debug_assert!(!self.opcode().is_branch());
@@ -247,18 +228,6 @@ impl InstructionData {
             | Self::Branch {
                 ref mut destination,
                 ..
-            }
-            | Self::BranchInt {
-                ref mut destination,
-                ..
-            }
-            | Self::BranchFloat {
-                ref mut destination,
-                ..
-            }
-            | Self::BranchIcmp {
-                ref mut destination,
-                ..
             } => Some(destination),
             Self::BranchTable { .. } => None,
             _ => {
@@ -272,10 +241,7 @@ impl InstructionData {
     /// `None`.
     pub fn trap_code(&self) -> Option<TrapCode> {
         match *self {
-            Self::CondTrap { code, .. }
-            | Self::FloatCondTrap { code, .. }
-            | Self::IntCondTrap { code, .. }
-            | Self::Trap { code, .. } => Some(code),
+            Self::CondTrap { code, .. } | Self::Trap { code, .. } => Some(code),
             _ => None,
         }
     }
@@ -284,12 +250,7 @@ impl InstructionData {
     /// condition.  Otherwise, return `None`.
     pub fn cond_code(&self) -> Option<IntCC> {
         match self {
-            &InstructionData::IntCond { cond, .. }
-            | &InstructionData::BranchIcmp { cond, .. }
-            | &InstructionData::IntCompare { cond, .. }
-            | &InstructionData::IntCondTrap { cond, .. }
-            | &InstructionData::BranchInt { cond, .. }
-            | &InstructionData::IntSelect { cond, .. }
+            &InstructionData::IntCompare { cond, .. }
             | &InstructionData::IntCompareImm { cond, .. } => Some(cond),
             _ => None,
         }
@@ -299,10 +260,7 @@ impl InstructionData {
     /// condition.  Otherwise, return `None`.
     pub fn fp_cond_code(&self) -> Option<FloatCC> {
         match self {
-            &InstructionData::BranchFloat { cond, .. }
-            | &InstructionData::FloatCompare { cond, .. }
-            | &InstructionData::FloatCond { cond, .. }
-            | &InstructionData::FloatCondTrap { cond, .. } => Some(cond),
+            &InstructionData::FloatCompare { cond, .. } => Some(cond),
             _ => None,
         }
     }
@@ -311,10 +269,7 @@ impl InstructionData {
     /// trap code. Otherwise, return `None`.
     pub fn trap_code_mut(&mut self) -> Option<&mut TrapCode> {
         match self {
-            Self::CondTrap { code, .. }
-            | Self::FloatCondTrap { code, .. }
-            | Self::IntCondTrap { code, .. }
-            | Self::Trap { code, .. } => Some(code),
+            Self::CondTrap { code, .. } | Self::Trap { code, .. } => Some(code),
             _ => None,
         }
     }
@@ -575,8 +530,6 @@ pub struct ValueTypeSet {
     pub ints: BitSet8,
     /// Allowed float widths
     pub floats: BitSet8,
-    /// Allowed bool widths
-    pub bools: BitSet8,
     /// Allowed ref widths
     pub refs: BitSet8,
     /// Allowed dynamic vectors minimum lane sizes
@@ -593,8 +546,6 @@ impl ValueTypeSet {
             self.ints.contains(l2b)
         } else if scalar.is_float() {
             self.floats.contains(l2b)
-        } else if scalar.is_bool() {
-            self.bools.contains(l2b)
         } else if scalar.is_ref() {
             self.refs.contains(l2b)
         } else {
@@ -621,10 +572,8 @@ impl ValueTypeSet {
             types::I32
         } else if self.floats.max().unwrap_or(0) > 5 {
             types::F32
-        } else if self.bools.max().unwrap_or(0) > 5 {
-            types::B32
         } else {
-            types::B1
+            types::I8
         };
         t.by(1 << self.lanes.min().unwrap()).unwrap()
     }
@@ -860,7 +809,6 @@ mod tests {
             lanes: BitSet16::from_range(0, 8),
             ints: BitSet8::from_range(4, 7),
             floats: BitSet8::from_range(0, 0),
-            bools: BitSet8::from_range(3, 7),
             refs: BitSet8::from_range(5, 7),
             dynamic_lanes: BitSet16::from_range(0, 4),
         };
@@ -870,9 +818,6 @@ mod tests {
         assert!(vts.contains(I32X4));
         assert!(vts.contains(I32X4XN));
         assert!(!vts.contains(F32));
-        assert!(!vts.contains(B1));
-        assert!(vts.contains(B8));
-        assert!(vts.contains(B64));
         assert!(vts.contains(R32));
         assert!(vts.contains(R64));
         assert_eq!(vts.example().to_string(), "i32");
@@ -881,7 +826,6 @@ mod tests {
             lanes: BitSet16::from_range(0, 8),
             ints: BitSet8::from_range(0, 0),
             floats: BitSet8::from_range(5, 7),
-            bools: BitSet8::from_range(3, 7),
             refs: BitSet8::from_range(0, 0),
             dynamic_lanes: BitSet16::from_range(0, 8),
         };
@@ -891,7 +835,6 @@ mod tests {
             lanes: BitSet16::from_range(1, 8),
             ints: BitSet8::from_range(0, 0),
             floats: BitSet8::from_range(5, 7),
-            bools: BitSet8::from_range(3, 7),
             refs: BitSet8::from_range(0, 0),
             dynamic_lanes: BitSet16::from_range(0, 8),
         };
@@ -899,23 +842,18 @@ mod tests {
 
         let vts = ValueTypeSet {
             lanes: BitSet16::from_range(2, 8),
-            ints: BitSet8::from_range(0, 0),
+            ints: BitSet8::from_range(3, 7),
             floats: BitSet8::from_range(0, 0),
-            bools: BitSet8::from_range(3, 7),
             refs: BitSet8::from_range(0, 0),
             dynamic_lanes: BitSet16::from_range(0, 8),
         };
-        assert!(!vts.contains(B32X2));
-        assert!(vts.contains(B32X4));
-        assert!(vts.contains(B16X4XN));
-        assert_eq!(vts.example().to_string(), "b32x4");
+        assert_eq!(vts.example().to_string(), "i32x4");
 
         let vts = ValueTypeSet {
             // TypeSet(lanes=(1, 256), ints=(8, 64))
             lanes: BitSet16::from_range(0, 9),
             ints: BitSet8::from_range(3, 7),
             floats: BitSet8::from_range(0, 0),
-            bools: BitSet8::from_range(0, 0),
             refs: BitSet8::from_range(0, 0),
             dynamic_lanes: BitSet16::from_range(0, 8),
         };

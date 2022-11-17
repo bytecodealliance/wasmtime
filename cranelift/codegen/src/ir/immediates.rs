@@ -473,7 +473,7 @@ impl FromStr for Offset32 {
 /// containing the bit pattern.
 ///
 /// We specifically avoid using a f32 here since some architectures may silently alter floats.
-/// See: https://github.com/bytecodealliance/wasmtime/pull/2251#discussion_r498508646
+/// See: <https://github.com/bytecodealliance/wasmtime/pull/2251#discussion_r498508646>
 ///
 /// The [PartialEq] and [Hash] implementations are over the underlying bit pattern, but
 /// [PartialOrd] respects IEEE754 semantics.
@@ -488,7 +488,7 @@ pub struct Ieee32(u32);
 /// containing the bit pattern.
 ///
 /// We specifically avoid using a f64 here since some architectures may silently alter floats.
-/// See: https://github.com/bytecodealliance/wasmtime/pull/2251#discussion_r498508646
+/// See: <https://github.com/bytecodealliance/wasmtime/pull/2251#discussion_r498508646>
 ///
 /// The [PartialEq] and [Hash] implementations are over the underlying bit pattern, but
 /// [PartialOrd] respects IEEE754 semantics.

@@ -2,7 +2,6 @@
 use crate::ir::immediates::Offset32;
 use crate::ir::instructions::BranchInfo;
 use crate::ir::{Block, DataFlowGraph, Function, Inst, InstructionData, Opcode, Type, Value};
-use crate::machinst::ty_bits;
 use cranelift_entity::EntityRef;
 
 /// Preserve instructions with used result values.
@@ -53,7 +52,7 @@ pub fn has_lowering_side_effect(func: &Function, inst: Inst) -> bool {
     op != Opcode::GetPinnedReg && (has_side_effect(func, inst) || op.can_load())
 }
 
-/// Is the given instruction a constant value (`iconst`, `fconst`, `bconst`) that can be
+/// Is the given instruction a constant value (`iconst`, `fconst`) that can be
 /// represented in 64 bits?
 pub fn is_constant_64bit(func: &Function, inst: Inst) -> Option<u64> {
     let data = &func.dfg[inst];
@@ -64,21 +63,6 @@ pub fn is_constant_64bit(func: &Function, inst: Inst) -> Option<u64> {
         &InstructionData::UnaryImm { imm, .. } => Some(imm.bits() as u64),
         &InstructionData::UnaryIeee32 { imm, .. } => Some(imm.bits() as u64),
         &InstructionData::UnaryIeee64 { imm, .. } => Some(imm.bits()),
-        &InstructionData::UnaryBool { imm, .. } => {
-            let imm = if imm {
-                let bits = ty_bits(func.dfg.value_type(func.dfg.inst_results(inst)[0]));
-
-                if bits < 64 {
-                    (1u64 << bits) - 1
-                } else {
-                    u64::MAX
-                }
-            } else {
-                0
-            };
-
-            Some(imm)
-        }
         _ => None,
     }
 }

@@ -2,9 +2,9 @@ test compile precise-output
 set unwind_info=false
 target riscv64
 
-function %f() -> b8 {
+function %f() -> i8 {
 block0:
-  v0 = bconst.b8 true
+  v0 = iconst.i8 -1
   return v0
 }
 
@@ -12,9 +12,9 @@ block0:
 ;   li a0,-1
 ;   ret
 
-function %f() -> b16 {
+function %f() -> i16 {
 block0:
-  v0 = bconst.b16 false
+  v0 = iconst.i16 0
   return v0
 }
 
@@ -233,11 +233,11 @@ block0:
 }
 
 ; block0:
-;   auipc t2,0
-;   ld t2,12(t2)
+;   auipc t1,0
+;   ld t1,12(t1)
 ;   j 12
 ;   .8byte 0x3ff0000000000000
-;   fmv.d.x fa0,t2
+;   fmv.d.x fa0,t1
 ;   ret
 
 function %f() -> f32 {
@@ -247,8 +247,8 @@ block0:
 }
 
 ; block0:
-;   lui t2,264704
-;   fmv.w.x fa0,t2
+;   lui t1,264704
+;   fmv.w.x fa0,t1
 ;   ret
 
 function %f() -> f64 {
@@ -258,11 +258,11 @@ block0:
 }
 
 ; block0:
-;   auipc t2,0
-;   ld t2,12(t2)
+;   auipc t1,0
+;   ld t1,12(t1)
 ;   j 12
 ;   .8byte 0x4049000000000000
-;   fmv.d.x fa0,t2
+;   fmv.d.x fa0,t1
 ;   ret
 
 function %f() -> f32 {
@@ -272,8 +272,8 @@ block0:
 }
 
 ; block0:
-;   lui t2,271488
-;   fmv.w.x fa0,t2
+;   lui t1,271488
+;   fmv.w.x fa0,t1
 ;   ret
 
 function %f() -> f64 {
@@ -283,8 +283,8 @@ block0:
 }
 
 ; block0:
-;   li t2,0
-;   fmv.d.x fa0,t2
+;   li t1,0
+;   fmv.d.x fa0,t1
 ;   ret
 
 function %f() -> f32 {
@@ -294,8 +294,8 @@ block0:
 }
 
 ; block0:
-;   li t2,0
-;   fmv.w.x fa0,t2
+;   li t1,0
+;   fmv.w.x fa0,t1
 ;   ret
 
 function %f() -> f64 {
@@ -305,11 +305,11 @@ block0:
 }
 
 ; block0:
-;   auipc t2,0
-;   ld t2,12(t2)
+;   auipc t1,0
+;   ld t1,12(t1)
 ;   j 12
 ;   .8byte 0xc030000000000000
-;   fmv.d.x fa0,t2
+;   fmv.d.x fa0,t1
 ;   ret
 
 function %f() -> f32 {
@@ -319,10 +319,10 @@ block0:
 }
 
 ; block0:
-;   auipc t2,0
-;   lwu t2,12(t2)
+;   auipc t1,0
+;   lwu t1,12(t1)
 ;   j 8
 ;   .4byte 0xc1800000
-;   fmv.w.x fa0,t2
+;   fmv.w.x fa0,t1
 ;   ret
 

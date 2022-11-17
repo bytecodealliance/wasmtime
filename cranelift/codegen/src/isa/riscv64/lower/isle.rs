@@ -71,13 +71,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         }
     }
 
-    fn valid_bextend_ty(&mut self, from: Type, to: Type) -> Option<Type> {
-        if from.is_bool() && to.is_bool() && from.bits() < to.bits() {
-            Some(to)
-        } else {
-            None
-        }
-    }
     fn lower_br_fcmp(
         &mut self,
         cc: &FloatCC,
@@ -155,7 +148,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         }
     }
     fn int_zero_reg(&mut self, ty: Type) -> ValueRegs {
-        assert!(ty.is_int() || ty.is_bool(), "{:?}", ty);
+        assert!(ty.is_int(), "{:?}", ty);
         if ty.bits() == 128 {
             ValueRegs::two(self.zero_reg(), self.zero_reg())
         } else {
@@ -190,7 +183,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         Imm12::from_bits(imm.as_i16() & (x as i16))
     }
     fn alloc_vec_writable(&mut self, ty: Type) -> VecWritableReg {
-        if ty.is_int() || ty.is_bool() || ty == R32 || ty == R64 {
+        if ty.is_int() || ty == R32 || ty == R64 {
             if ty.bits() <= 64 {
                 vec![self.temp_writable_reg(I64)]
             } else {
@@ -203,26 +196,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         }
     }
 
-    fn imm(&mut self, ty: Type, mut val: u64) -> Reg {
-        // Boolean types
-        // Boolean values are either true or false.
-
-        // The b1 type represents an abstract boolean value. It can only exist as an SSA value, and can't be directly stored in memory. It can, however, be converted into an integer with value 0 or 1 by the bint instruction (and converted back with icmp_imm with 0).
-
-        // Several larger boolean types are also defined, primarily to be used as SIMD element types. They can be stored in memory, and are represented as either all zero bits or all one bits.
-
-        // b1
-        // b8
-        // b16
-        // b32
-        // b64
-        // ///////////////////////////////////////////////////////////
-        // "represented as either all zero bits or all one bits."
-        // \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-        if ty.is_bool() && val != 0 {
-            // need all be one
-            val = !0;
-        }
+    fn imm(&mut self, ty: Type, val: u64) -> Reg {
         let tmp = self.temp_writable_reg(ty);
         self.emit_list(&MInst::load_constant_u64(tmp, val));
         tmp.to_reg()
@@ -296,7 +270,11 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         rd.to_reg()
     }
     fn imm12_const(&mut self, val: i32) -> Imm12 {
-        Imm12::maybe_from_u64(val as u64).unwrap()
+        if let Some(res) = Imm12::maybe_from_u64(val as u64) {
+            res
+        } else {
+            panic!("Unable to make an Imm12 value from {}", val)
+        }
     }
     fn imm12_const_add(&mut self, val: i32, add: i32) -> Imm12 {
         Imm12::maybe_from_u64((val + add) as u64).unwrap()
@@ -526,7 +504,7 @@ fn construct_dest<F: std::ops::FnMut(Type) -> WritableReg>(
     mut alloc: F,
     ty: Type,
 ) -> WritableValueRegs {
-    if ty.is_bool() || ty.is_int() {
+    if ty.is_int() {
         if ty.bits() == 128 {
             WritableValueRegs::two(alloc(I64), alloc(I64))
         } else {

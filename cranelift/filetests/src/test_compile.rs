@@ -130,7 +130,10 @@ fn update_test(output: &[&str], context: &Context) -> Result<()> {
             // but after we hit a real line then we push all remaining lines.
             let mut in_next_function = false;
             for line in old_test {
-                if !in_next_function && (line.trim().is_empty() || line.starts_with(";")) {
+                if !in_next_function
+                    && (line.trim().is_empty()
+                        || (line.starts_with(";") && !line.starts_with(";;")))
+                {
                     continue;
                 }
                 in_next_function = true;

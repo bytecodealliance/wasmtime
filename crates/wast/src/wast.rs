@@ -2,7 +2,7 @@
 use crate::component;
 use crate::core;
 use crate::spectest::*;
-use anyhow::{anyhow, bail, Context as _, Result};
+use anyhow::{anyhow, bail, Context as _, Error, Result};
 use std::path::Path;
 use std::str;
 use wasmtime::*;
@@ -24,7 +24,7 @@ pub struct WastContext<T> {
 
 enum Outcome<T = Results> {
     Ok(T),
-    Trap(Trap),
+    Trap(Error),
 }
 
 impl<T> Outcome<T> {
@@ -35,7 +35,7 @@ impl<T> Outcome<T> {
         }
     }
 
-    fn into_result(self) -> Result<T, Trap> {
+    fn into_result(self) -> Result<T> {
         match self {
             Outcome::Ok(t) => Ok(t),
             Outcome::Trap(t) => Err(t),
@@ -111,22 +111,24 @@ impl<T> WastContext<T> {
 
     fn instantiate_module(&mut self, module: &[u8]) -> Result<Outcome<Instance>> {
         let module = Module::new(self.store.engine(), module)?;
-        let instance = match self.core_linker.instantiate(&mut self.store, &module) {
-            Ok(i) => i,
-            Err(e) => return e.downcast::<Trap>().map(Outcome::Trap),
-        };
-        Ok(Outcome::Ok(instance))
+        Ok(
+            match self.core_linker.instantiate(&mut self.store, &module) {
+                Ok(i) => Outcome::Ok(i),
+                Err(e) => Outcome::Trap(e),
+            },
+        )
     }
 
     #[cfg(feature = "component-model")]
     fn instantiate_component(&mut self, module: &[u8]) -> Result<Outcome<component::Instance>> {
         let engine = self.store.engine();
         let module = component::Component::new(engine, module)?;
-        let instance = match self.component_linker.instantiate(&mut self.store, &module) {
-            Ok(i) => i,
-            Err(e) => return e.downcast::<Trap>().map(Outcome::Trap),
-        };
-        Ok(Outcome::Ok(instance))
+        Ok(
+            match self.component_linker.instantiate(&mut self.store, &module) {
+                Ok(i) => Outcome::Ok(i),
+                Err(e) => Outcome::Trap(e),
+            },
+        )
     }
 
     /// Register "spectest" which is used by the spec testsuite.
@@ -174,7 +176,7 @@ impl<T> WastContext<T> {
                 let mut results = vec![Val::null(); func.ty(&self.store).results().len()];
                 Ok(match func.call(&mut self.store, &values, &mut results) {
                     Ok(()) => Outcome::Ok(Results::Core(results.into())),
-                    Err(e) => Outcome::Trap(e.downcast()?),
+                    Err(e) => Outcome::Trap(e),
                 })
             }
             #[cfg(feature = "component-model")]
@@ -200,7 +202,7 @@ impl<T> WastContext<T> {
                         func.post_return(&mut self.store)?;
                         Outcome::Ok(Results::Component(results.into()))
                     }
-                    Err(e) => Outcome::Trap(e.downcast()?),
+                    Err(e) => Outcome::Trap(e),
                 })
             }
         }
@@ -330,7 +332,7 @@ impl<T> WastContext<T> {
             Outcome::Ok(values) => bail!("expected trap, got {:?}", values),
             Outcome::Trap(t) => t,
         };
-        let actual = trap.to_string();
+        let actual = format!("{trap:?}");
         if actual.contains(expected)
             // `bulk-memory-operations/bulk.wast` checks for a message that
             // specifies which element is uninitialized, but our traps don't

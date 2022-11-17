@@ -1,0 +1,19 @@
+test interpret
+test run
+set enable_llvm_abi_extensions=true
+target aarch64
+target s390x
+target x86_64
+target riscv64
+
+function %ineg_i128(i128) -> i128 {
+block0(v0: i128):
+  v1 = ineg.i128 v0
+  return v1
+}
+; run: %ineg_i128(0) == 0
+; run: %ineg_i128(1) == -1
+; run: %ineg_i128(-1) == 1
+; run: %ineg_i128(2) == -2
+; run: %ineg_i128(0x80000000_00000000_00000000_00000000) == 0x80000000_00000000_00000000_00000000
+; run: %ineg_i128(0x7fffffff_ffffffff_ffffffff_ffffffff) == 0x80000000_00000000_00000000_00000001

@@ -227,6 +227,9 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// Get the ISA-independent flags that were used to make this trait object.
     fn flags(&self) -> &settings::Flags;
 
+    /// Get the ISA-dependent MachineEnv for managing register allocation.
+    fn machine_env(&self) -> &regalloc2::MachineEnv;
+
     /// Get the ISA-dependent flag values that were used to make this trait object.
     fn isa_flags(&self) -> Vec<settings::Value>;
 
@@ -285,7 +288,7 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// The `num_labeled_funcs` argument here is the number of functions which
     /// will be "labeled" or might have calls between them, typically the number
     /// of defined functions in the object file.
-    fn text_section_builder(&self, num_labeled_funcs: u32) -> Box<dyn TextSectionBuilder>;
+    fn text_section_builder(&self, num_labeled_funcs: usize) -> Box<dyn TextSectionBuilder>;
 
     /// The function alignment required by this ISA.
     fn function_alignment(&self) -> u32;

@@ -7,7 +7,7 @@
 //! Individual snapshots are available through
 //! `wasmtime_wasi::snapshots::preview_{0, 1}::Wasi::new(&Store, Rc<RefCell<WasiCtx>>)`.
 
-pub use wasi_common::{Error, WasiCtx, WasiDir, WasiFile};
+pub use wasi_common::{Error, I32Exit, WasiCtx, WasiDir, WasiFile};
 
 /// Re-export the commonly used wasi-cap-std-sync crate here. This saves
 /// consumers of this library from having to keep additional dependencies
@@ -48,9 +48,7 @@ pub fn add_to_linker<T, U>(
 ) -> anyhow::Result<()>
     where U: Send
             + wasi_common::snapshots::preview_0::wasi_unstable::WasiUnstable
-            + wasi_common::snapshots::preview_0::types::UserErrorConversion
-            + wasi_common::snapshots::preview_1::wasi_snapshot_preview1::WasiSnapshotPreview1
-            + wasi_common::snapshots::preview_1::types::UserErrorConversion,
+            + wasi_common::snapshots::preview_1::wasi_snapshot_preview1::WasiSnapshotPreview1,
         $($bounds)*
 {
     snapshots::preview_1::add_wasi_snapshot_preview1_to_linker(linker, get_cx)?;
@@ -66,7 +64,7 @@ pub mod snapshots {
             // This must be the same witx document as used above. This should be ensured by
             // the `WASI_ROOT` env variable, which is set in wasi-common's `build.rs`.
             witx: ["$WASI_ROOT/phases/snapshot/witx/wasi_snapshot_preview1.witx"],
-            errors: { errno => Error },
+            errors: { errno => trappable Error },
             $async_mode: *
         });
     }
@@ -77,7 +75,7 @@ pub mod snapshots {
             // This must be the same witx document as used above. This should be ensured by
             // the `WASI_ROOT` env variable, which is set in wasi-common's `build.rs`.
             witx: ["$WASI_ROOT/phases/old/snapshot_0/witx/wasi_unstable.witx"],
-            errors: { errno => Error },
+            errors: { errno => trappable Error },
             $async_mode: *
         });
     }

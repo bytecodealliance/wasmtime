@@ -106,7 +106,7 @@ async fn run_wasm(inputs: Inputs) -> Result<(), Error> {
         .instantiate_async(&mut store, &inputs.env.module)
         .await?;
     instance
-        .get_typed_func::<(), (), _>(&mut store, "_start")?
+        .get_typed_func::<(), ()>(&mut store, "_start")?
         .call_async(&mut store, ())
         .await?;
 

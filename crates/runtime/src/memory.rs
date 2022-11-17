@@ -242,7 +242,7 @@ impl MmapMemory {
                     minimum,
                     alloc_bytes + extra_to_reserve_on_growth,
                 );
-                slot.instantiate(minimum, Some(image))?;
+                slot.instantiate(minimum, Some(image), &plan.style)?;
                 // On drop, we will unmap our mmap'd range that this slot was
                 // mapped on top of, so there is no need for the slot to wipe
                 // it with an anonymous mapping first.
@@ -351,14 +351,9 @@ struct StaticMemory {
     /// The current size, in bytes, of this memory.
     size: usize,
 
-    /// A callback which makes portions of `base` accessible for when memory
-    /// is grown. Otherwise it's expected that accesses to `base` will
-    /// fault.
-    make_accessible: Option<fn(*mut u8, usize) -> Result<()>>,
-
     /// The image management, if any, for this memory. Owned here and
     /// returned to the pooling allocator when termination occurs.
-    memory_image: Option<MemoryImageSlot>,
+    memory_image: MemoryImageSlot,
 }
 
 impl StaticMemory {
@@ -366,8 +361,7 @@ impl StaticMemory {
         base: &'static mut [u8],
         initial_size: usize,
         maximum_size: Option<usize>,
-        make_accessible: Option<fn(*mut u8, usize) -> Result<()>>,
-        memory_image: Option<MemoryImageSlot>,
+        memory_image: MemoryImageSlot,
     ) -> Result<Self> {
         if base.len() < initial_size {
             bail!(
@@ -384,16 +378,9 @@ impl StaticMemory {
             _ => base,
         };
 
-        if let Some(make_accessible) = make_accessible {
-            if initial_size > 0 {
-                make_accessible(base.as_mut_ptr(), initial_size)?;
-            }
-        }
-
         Ok(Self {
             base,
             size: initial_size,
-            make_accessible,
             memory_image,
         })
     }
@@ -413,21 +400,7 @@ impl RuntimeLinearMemory for StaticMemory {
         // prior to arriving here.
         assert!(new_byte_size <= self.base.len());
 
-        // Actually grow the memory.
-        if let Some(image) = &mut self.memory_image {
-            image.set_heap_limit(new_byte_size)?;
-        } else {
-            let make_accessible = self
-                .make_accessible
-                .expect("make_accessible must be Some if this is not a CoW memory");
-
-            // Operating system can fail to make memory accessible.
-            let old_byte_size = self.byte_size();
-            make_accessible(
-                unsafe { self.base.as_mut_ptr().add(old_byte_size) },
-                new_byte_size - old_byte_size,
-            )?;
-        }
+        self.memory_image.set_heap_limit(new_byte_size)?;
 
         // Update our accounting of the available size.
         self.size = new_byte_size;
@@ -442,11 +415,7 @@ impl RuntimeLinearMemory for StaticMemory {
     }
 
     fn needs_init(&self) -> bool {
-        if let Some(slot) = &self.memory_image {
-            !slot.has_image()
-        } else {
-            true
-        }
+        !self.memory_image.has_image()
     }
 
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
@@ -627,13 +596,11 @@ impl Memory {
     pub fn new_static(
         plan: &MemoryPlan,
         base: &'static mut [u8],
-        make_accessible: Option<fn(*mut u8, usize) -> Result<()>>,
-        memory_image: Option<MemoryImageSlot>,
+        memory_image: MemoryImageSlot,
         store: &mut dyn Store,
     ) -> Result<Self> {
         let (minimum, maximum) = Self::limit_new(plan, Some(store))?;
-        let pooled_memory =
-            StaticMemory::new(base, minimum, maximum, make_accessible, memory_image)?;
+        let pooled_memory = StaticMemory::new(base, minimum, maximum, memory_image)?;
         let allocation = Box::new(pooled_memory);
         let allocation: Box<dyn RuntimeLinearMemory> = if plan.memory.shared {
             // FIXME: since the pooling allocator owns the memory allocation
@@ -794,25 +761,13 @@ impl Memory {
         self.0.vmmemory()
     }
 
-    /// Check if the inner implementation of [`Memory`] is a memory created with
-    /// [`Memory::new_static()`].
-    #[cfg(feature = "pooling-allocator")]
-    pub fn is_static(&mut self) -> bool {
-        let as_any = self.0.as_any_mut();
-        as_any.downcast_ref::<StaticMemory>().is_some()
-    }
-
     /// Consume the memory, returning its [`MemoryImageSlot`] if any is present.
     /// The image should only be present for a subset of memories created with
     /// [`Memory::new_static()`].
     #[cfg(feature = "pooling-allocator")]
-    pub fn unwrap_static_image(mut self) -> Option<MemoryImageSlot> {
-        let as_any = self.0.as_any_mut();
-        if let Some(m) = as_any.downcast_mut::<StaticMemory>() {
-            std::mem::take(&mut m.memory_image)
-        } else {
-            None
-        }
+    pub fn unwrap_static_image(mut self) -> MemoryImageSlot {
+        let mem = self.0.as_any_mut().downcast_mut::<StaticMemory>().unwrap();
+        std::mem::replace(&mut mem.memory_image, MemoryImageSlot::dummy())
     }
 
     /// If the [Memory] is a [SharedMemory], unwrap it and return a clone to

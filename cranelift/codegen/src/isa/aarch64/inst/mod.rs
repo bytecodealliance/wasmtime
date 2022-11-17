@@ -1,9 +1,7 @@
 //! This module defines aarch64-specific machine instruction types.
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
-use crate::ir::types::{
-    B1, B128, B16, B32, B64, B8, F32, F64, FFLAGS, I128, I16, I32, I64, I8, I8X16, IFLAGS, R32, R64,
-};
+use crate::ir::types::{F32, F64, FFLAGS, I128, I16, I32, I64, I8, I8X16, IFLAGS, R32, R64};
 use crate::ir::{types, ExternalName, MemFlags, Opcode, Type};
 use crate::isa::CallConv;
 use crate::machinst::*;
@@ -69,6 +67,9 @@ impl BitOp {
             BitOp::RBit => "rbit",
             BitOp::Clz => "clz",
             BitOp::Cls => "cls",
+            BitOp::Rev16 => "rev16",
+            BitOp::Rev32 => "rev32",
+            BitOp::Rev64 => "rev64",
         }
     }
 }
@@ -440,22 +441,22 @@ impl Inst {
     /// Generic constructor for a load (zero-extending where appropriate).
     pub fn gen_load(into_reg: Writable<Reg>, mem: AMode, ty: Type, flags: MemFlags) -> Inst {
         match ty {
-            B1 | B8 | I8 => Inst::ULoad8 {
+            I8 => Inst::ULoad8 {
                 rd: into_reg,
                 mem,
                 flags,
             },
-            B16 | I16 => Inst::ULoad16 {
+            I16 => Inst::ULoad16 {
                 rd: into_reg,
                 mem,
                 flags,
             },
-            B32 | I32 | R32 => Inst::ULoad32 {
+            I32 | R32 => Inst::ULoad32 {
                 rd: into_reg,
                 mem,
                 flags,
             },
-            B64 | I64 | R64 => Inst::ULoad64 {
+            I64 | R64 => Inst::ULoad64 {
                 rd: into_reg,
                 mem,
                 flags,
@@ -491,22 +492,22 @@ impl Inst {
     /// Generic constructor for a store.
     pub fn gen_store(mem: AMode, from_reg: Reg, ty: Type, flags: MemFlags) -> Inst {
         match ty {
-            B1 | B8 | I8 => Inst::Store8 {
+            I8 => Inst::Store8 {
                 rd: from_reg,
                 mem,
                 flags,
             },
-            B16 | I16 => Inst::Store16 {
+            I16 => Inst::Store16 {
                 rd: from_reg,
                 mem,
                 flags,
             },
-            B32 | I32 | R32 => Inst::Store32 {
+            I32 | R32 => Inst::Store32 {
                 rd: from_reg,
                 mem,
                 flags,
             },
-            B64 | I64 | R64 => Inst::Store64 {
+            I64 | R64 => Inst::Store64 {
                 rd: from_reg,
                 mem,
                 flags,
@@ -653,12 +654,15 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
             collector.reg_use(rm);
         }
-        &Inst::MovPReg { rd, rm } => {
-            debug_assert!(
-                [regs::fp_reg(), regs::stack_reg(), regs::link_reg()].contains(&rm.into())
-            );
+        &Inst::MovFromPReg { rd, rm } => {
             debug_assert!(rd.to_reg().is_virtual());
             collector.reg_def(rd);
+            collector.reg_fixed_nonallocatable(rm);
+        }
+        &Inst::MovToPReg { rd, rm } => {
+            debug_assert!(rm.is_virtual());
+            collector.reg_fixed_nonallocatable(rd);
+            collector.reg_use(rm);
         }
         &Inst::MovK { rd, rn, .. } => {
             collector.reg_use(rn);
@@ -1021,8 +1025,8 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             }
         }
         &Inst::Ret { ref rets } | &Inst::AuthenticatedRet { ref rets, .. } => {
-            for &ret in rets {
-                collector.reg_use(ret);
+            for ret in rets {
+                collector.reg_fixed_use(ret.vreg, ret.preg);
             }
         }
         &Inst::Jump { .. } => {}
@@ -1209,9 +1213,7 @@ impl MachInst for Inst {
         match ty {
             F64 => Inst::load_fp_constant64(to_reg.unwrap(), value as u64, alloc_tmp),
             F32 => Inst::load_fp_constant32(to_reg.unwrap(), value as u32, alloc_tmp),
-            B1 | B8 | B16 | B32 | B64 | I8 | I16 | I32 | I64 | R32 | R64 => {
-                Inst::load_constant(to_reg.unwrap(), value as u64)
-            }
+            I8 | I16 | I32 | I64 | R32 | R64 => Inst::load_constant(to_reg.unwrap(), value as u64),
             I128 => Inst::load_constant128(to_regs, value),
             _ => panic!("Cannot generate constant for type: {}", ty),
         }
@@ -1236,17 +1238,11 @@ impl MachInst for Inst {
             I16 => Ok((&[RegClass::Int], &[I16])),
             I32 => Ok((&[RegClass::Int], &[I32])),
             I64 => Ok((&[RegClass::Int], &[I64])),
-            B1 => Ok((&[RegClass::Int], &[B1])),
-            B8 => Ok((&[RegClass::Int], &[B8])),
-            B16 => Ok((&[RegClass::Int], &[B16])),
-            B32 => Ok((&[RegClass::Int], &[B32])),
-            B64 => Ok((&[RegClass::Int], &[B64])),
             R32 => panic!("32-bit reftype pointer should never be seen on AArch64"),
             R64 => Ok((&[RegClass::Int], &[R64])),
             F32 => Ok((&[RegClass::Float], &[F32])),
             F64 => Ok((&[RegClass::Float], &[F64])),
             I128 => Ok((&[RegClass::Int, RegClass::Int], &[I64, I64])),
-            B128 => Ok((&[RegClass::Int, RegClass::Int], &[B64, B64])),
             _ if ty.is_vector() => {
                 assert!(ty.bits() <= 128);
                 Ok((&[RegClass::Float], &[I8X16]))
@@ -1558,9 +1554,16 @@ impl Inst {
                 let rm = pretty_print_ireg(rm, size, allocs);
                 format!("mov {}, {}", rd, rm)
             }
-            &Inst::MovPReg { rd, rm } => {
+            &Inst::MovFromPReg { rd, rm } => {
                 let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size64, allocs);
+                allocs.next_fixed_nonallocatable(rm);
                 let rm = show_ireg_sized(rm.into(), OperandSize::Size64);
+                format!("mov {}, {}", rd, rm)
+            }
+            &Inst::MovToPReg { rd, rm } => {
+                allocs.next_fixed_nonallocatable(rd);
+                let rd = show_ireg_sized(rd.into(), OperandSize::Size64);
+                let rm = pretty_print_ireg(rm, OperandSize::Size64, allocs);
                 format!("mov {}, {}", rd, rm)
             }
             &Inst::MovWide {

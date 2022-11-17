@@ -62,7 +62,7 @@ fn aot_compiles() -> Result<()> {
     let mut store = Store::new(&engine, ());
     let instance = Instance::new(&mut store, &module, &[])?;
 
-    let f = instance.get_typed_func::<i32, i32, _>(&mut store, "f")?;
+    let f = instance.get_typed_func::<i32, i32>(&mut store, "f")?;
     assert_eq!(f.call(&mut store, 101)?, 101);
 
     Ok(())

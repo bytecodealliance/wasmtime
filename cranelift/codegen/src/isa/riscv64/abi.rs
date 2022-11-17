@@ -56,13 +56,17 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         16
     }
 
-    fn compute_arg_locs(
+    fn compute_arg_locs<'a, I>(
         call_conv: isa::CallConv,
         _flags: &settings::Flags,
-        params: &[ir::AbiParam],
+        params: I,
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
-    ) -> CodegenResult<(ABIArgVec, i64, Option<usize>)> {
+        mut args: ArgsAccumulator<'_>,
+    ) -> CodegenResult<(i64, Option<usize>)>
+    where
+        I: IntoIterator<Item = &'a ir::AbiParam>,
+    {
         // All registers that can be used as parameters or rets.
         // both start and end are included.
         let (x_start, x_end, f_start, f_end) = if args_or_rets == ArgsOrRets::Args {
@@ -75,7 +79,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         let mut next_f_reg = f_start;
         // Stack space.
         let mut next_stack: u64 = 0;
-        let mut ret = smallvec![];
         let mut return_one_register_used = false;
         // Max float bits allowed by call_conv.
         let max_float_bits = match call_conv {
@@ -89,7 +92,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 let offset = next_stack;
                 assert!(size % 8 == 0, "StructArgument size is not properly aligned");
                 next_stack += size as u64;
-                ret.push(ABIArg::StructArg {
+                args.push(ABIArg::StructArg {
                     pointer: None,
                     offset: offset as i64,
                     size: size as u64,
@@ -157,7 +160,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     next_stack += size;
                 }
             }
-            ret.push(ABIArg::Slots {
+            args.push(ABIArg::Slots {
                 slots,
                 purpose: param.purpose,
             });
@@ -171,7 +174,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     ir::ArgumentExtension::None,
                     ir::ArgumentPurpose::Normal,
                 );
-                ret.push(arg);
+                args.push(arg);
             } else {
                 let arg = ABIArg::stack(
                     next_stack as i64,
@@ -179,10 +182,10 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     ir::ArgumentExtension::None,
                     ir::ArgumentPurpose::Normal,
                 );
-                ret.push(arg);
+                args.push(arg);
                 next_stack += 8;
             }
-            Some(ret.len() - 1)
+            Some(args.args().len() - 1)
         } else {
             None
         };
@@ -192,7 +195,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         if next_stack > STACK_ARG_RET_SIZE_LIMIT {
             return Err(CodegenError::ImplLimitExceeded);
         }
-        CodegenResult::Ok((ret, next_stack as i64, pos))
+        CodegenResult::Ok((next_stack as i64, pos))
     }
 
     fn fp_to_arg_offset(_call_conv: isa::CallConv, _flags: &settings::Flags) -> i64 {
@@ -240,7 +243,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         Inst::Args { args }
     }
 
-    fn gen_ret(_setup_frame: bool, _isa_flags: &Self::F, rets: Vec<Reg>) -> Inst {
+    fn gen_ret(_setup_frame: bool, _isa_flags: &Self::F, rets: Vec<RetPair>) -> Inst {
         Inst::Ret { rets }
     }
 

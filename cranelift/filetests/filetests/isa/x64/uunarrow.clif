@@ -12,15 +12,15 @@ block0(v0: f64x2):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   xorpd   %xmm3, %xmm3, %xmm3
-;   movdqa  %xmm0, %xmm7
-;   maxpd   %xmm7, %xmm3, %xmm7
-;   movupd  const(0), %xmm8
-;   minpd   %xmm7, %xmm8, %xmm7
-;   roundpd $3, %xmm7, %xmm0
-;   movupd  const(1), %xmm13
-;   addpd   %xmm0, %xmm13, %xmm0
-;   shufps  $136, %xmm0, %xmm3, %xmm0
+;   xorpd   %xmm2, %xmm2, %xmm2
+;   movdqa  %xmm0, %xmm6
+;   maxpd   %xmm6, %xmm2, %xmm6
+;   movupd  const(0), %xmm7
+;   minpd   %xmm6, %xmm7, %xmm6
+;   roundpd $3, %xmm6, %xmm0
+;   movupd  const(1), %xmm12
+;   addpd   %xmm0, %xmm12, %xmm0
+;   shufps  $136, %xmm0, %xmm2, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

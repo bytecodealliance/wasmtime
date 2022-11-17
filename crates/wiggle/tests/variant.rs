@@ -134,9 +134,10 @@ impl GetTagExercise {
             &host_memory,
             self.input_loc.ptr as i32,
             self.return_loc.ptr as i32,
-        );
+        )
+        .unwrap();
 
-        assert_eq!(e, Ok(types::Errno::Ok as i32), "get_tag errno");
+        assert_eq!(e, types::Errno::Ok as i32, "get_tag errno");
 
         let return_val: types::Excuse = host_memory
             .ptr(self.return_loc.ptr)
@@ -218,9 +219,10 @@ impl ReasonMultExercise {
             &host_memory,
             self.input_loc.ptr as i32,
             self.multiply_by as i32,
-        );
+        )
+        .unwrap();
 
-        assert_eq!(e, Ok(types::Errno::Ok as i32), "reason_mult errno");
+        assert_eq!(e, types::Errno::Ok as i32, "reason_mult errno");
 
         match self.input {
             types::Reason::DogAte(f) => {

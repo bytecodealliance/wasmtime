@@ -2,7 +2,7 @@ test compile precise-output
 set unwind_info=false
 target aarch64
 
-function %f(i64, i64) -> b1 {
+function %f(i64, i64) -> i8 {
 block0(v0: i64, v1: i64):
   v2 = icmp eq v0, v1
   return v2
@@ -13,7 +13,7 @@ block0(v0: i64, v1: i64):
 ;   cset x0, eq
 ;   ret
 
-function %icmp_eq_i128(i128, i128) -> b1 {
+function %icmp_eq_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp eq v0, v1
   return v2
@@ -25,7 +25,7 @@ block0(v0: i128, v1: i128):
 ;   cset x0, eq
 ;   ret
 
-function %icmp_ne_i128(i128, i128) -> b1 {
+function %icmp_ne_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp ne v0, v1
   return v2
@@ -37,7 +37,7 @@ block0(v0: i128, v1: i128):
 ;   cset x0, ne
 ;   ret
 
-function %icmp_slt_i128(i128, i128) -> b1 {
+function %icmp_slt_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp slt v0, v1
   return v2
@@ -45,13 +45,13 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x7, lo
+;   cset x6, lo
 ;   subs xzr, x1, x3
-;   cset x10, lt
-;   csel x0, x7, x10, eq
+;   cset x9, lt
+;   csel x0, x6, x9, eq
 ;   ret
 
-function %icmp_ult_i128(i128, i128) -> b1 {
+function %icmp_ult_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp ult v0, v1
   return v2
@@ -59,13 +59,13 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x7, lo
+;   cset x6, lo
 ;   subs xzr, x1, x3
-;   cset x10, lo
-;   csel x0, x7, x10, eq
+;   cset x9, lo
+;   csel x0, x6, x9, eq
 ;   ret
 
-function %icmp_sle_i128(i128, i128) -> b1 {
+function %icmp_sle_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp sle v0, v1
   return v2
@@ -73,13 +73,13 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x7, ls
+;   cset x6, ls
 ;   subs xzr, x1, x3
-;   cset x10, le
-;   csel x0, x7, x10, eq
+;   cset x9, le
+;   csel x0, x6, x9, eq
 ;   ret
 
-function %icmp_ule_i128(i128, i128) -> b1 {
+function %icmp_ule_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp ule v0, v1
   return v2
@@ -87,13 +87,13 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x7, ls
+;   cset x6, ls
 ;   subs xzr, x1, x3
-;   cset x10, ls
-;   csel x0, x7, x10, eq
+;   cset x9, ls
+;   csel x0, x6, x9, eq
 ;   ret
 
-function %icmp_sgt_i128(i128, i128) -> b1 {
+function %icmp_sgt_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp sgt v0, v1
   return v2
@@ -101,13 +101,13 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x7, hi
+;   cset x6, hi
 ;   subs xzr, x1, x3
-;   cset x10, gt
-;   csel x0, x7, x10, eq
+;   cset x9, gt
+;   csel x0, x6, x9, eq
 ;   ret
 
-function %icmp_ugt_i128(i128, i128) -> b1 {
+function %icmp_ugt_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp ugt v0, v1
   return v2
@@ -115,13 +115,13 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x7, hi
+;   cset x6, hi
 ;   subs xzr, x1, x3
-;   cset x10, hi
-;   csel x0, x7, x10, eq
+;   cset x9, hi
+;   csel x0, x6, x9, eq
 ;   ret
 
-function %icmp_sge_i128(i128, i128) -> b1 {
+function %icmp_sge_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp sge v0, v1
   return v2
@@ -129,13 +129,13 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x7, hs
+;   cset x6, hs
 ;   subs xzr, x1, x3
-;   cset x10, ge
-;   csel x0, x7, x10, eq
+;   cset x9, ge
+;   csel x0, x6, x9, eq
 ;   ret
 
-function %icmp_uge_i128(i128, i128) -> b1 {
+function %icmp_uge_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp uge v0, v1
   return v2
@@ -143,16 +143,16 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x7, hs
+;   cset x6, hs
 ;   subs xzr, x1, x3
-;   cset x10, hs
-;   csel x0, x7, x10, eq
+;   cset x9, hs
+;   csel x0, x6, x9, eq
 ;   ret
 
 function %f(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-  v2 = ifcmp v0, v1
-  brif eq v2, block1
+  v2 = icmp eq v0, v1
+  brnz v2, block1
   jump block2
 
 block1:
@@ -176,8 +176,8 @@ block2:
 
 function %f(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-  v2 = ifcmp v0, v1
-  brif eq v2, block1
+  v2 = icmp eq v0, v1
+  brnz v2, block1
   jump block1
 
 block1:
@@ -238,7 +238,8 @@ block1:
 
 function %i128_bricmp_eq(i128, i128) {
 block0(v0: i128, v1: i128):
-  br_icmp eq v0, v1, block1
+  v2 = icmp eq v0, v1
+  brnz v2, block1
   jump block1
 
 block1:
@@ -258,7 +259,8 @@ block1:
 
 function %i128_bricmp_ne(i128, i128) {
 block0(v0: i128, v1: i128):
-  br_icmp ne v0, v1, block1
+  v2 = icmp ne v0, v1
+  brnz v2, block1
   jump block1
 
 block1:
@@ -278,7 +280,8 @@ block1:
 
 function %i128_bricmp_slt(i128, i128) {
 block0(v0: i128, v1: i128):
-  br_icmp slt v0, v1, block1
+  v2 = icmp slt v0, v1
+  brnz v2, block1
   jump block1
 
 block1:
@@ -302,7 +305,8 @@ block1:
 
 function %i128_bricmp_ult(i128, i128) {
 block0(v0: i128, v1: i128):
-  br_icmp ult v0, v1, block1
+  v2 = icmp ult v0, v1
+  brnz v2, block1
   jump block1
 
 block1:
@@ -326,7 +330,8 @@ block1:
 
 function %i128_bricmp_sle(i128, i128) {
 block0(v0: i128, v1: i128):
-  br_icmp sle v0, v1, block1
+  v2 = icmp sle v0, v1
+  brnz v2, block1
   jump block1
 
 block1:
@@ -351,7 +356,8 @@ block1:
 
 function %i128_bricmp_ule(i128, i128) {
 block0(v0: i128, v1: i128):
-  br_icmp ule v0, v1, block1
+  v2 = icmp ule v0, v1
+  brnz v2, block1
   jump block1
 
 block1:
@@ -376,7 +382,8 @@ block1:
 
 function %i128_bricmp_sgt(i128, i128) {
 block0(v0: i128, v1: i128):
-  br_icmp sgt v0, v1, block1
+  v2 = icmp sgt v0, v1
+  brnz v2, block1
   jump block1
 
 block1:
@@ -400,7 +407,8 @@ block1:
 
 function %i128_bricmp_ugt(i128, i128) {
 block0(v0: i128, v1: i128):
-  br_icmp ugt v0, v1, block1
+  v2 = icmp ugt v0, v1
+  brnz v2, block1
   jump block1
 
 block1:
@@ -424,7 +432,8 @@ block1:
 
 function %i128_bricmp_sge(i128, i128) {
 block0(v0: i128, v1: i128):
-  br_icmp sge v0, v1, block1
+  v2 = icmp sge v0, v1
+  brnz v2, block1
   jump block1
 
 block1:
@@ -449,7 +458,8 @@ block1:
 
 function %i128_bricmp_uge(i128, i128) {
 block0(v0: i128, v1: i128):
-  br_icmp uge v0, v1, block1
+  v2 = icmp uge v0, v1
+  brnz v2, block1
   jump block1
 
 block1:
@@ -471,3 +481,4 @@ block1:
 ;   b label3
 ; block3:
 ;   ret
+

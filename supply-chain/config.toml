@@ -4,8 +4,20 @@
 [imports.mozilla]
 url = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
+[policy.isle-fuzz]
+criteria = "safe-to-run"
+
 [policy.wasi-crypto]
 audit-as-crates-io = false
+
+[policy.wasmtime-environ-fuzz]
+criteria = "safe-to-run"
+
+[policy.wasmtime-fuzz]
+criteria = "safe-to-run"
+
+[policy.wasmtime-fuzzing]
+criteria = "safe-to-run"
 
 [policy.witx]
 audit-as-crates-io = false
@@ -192,7 +204,7 @@ criteria = "safe-to-deploy"
 
 [[exemptions.cty]]
 version = "0.2.2"
-criteria = "safe-to-deploy"
+criteria = "safe-to-run"
 
 [[exemptions.curve25519-dalek]]
 version = "3.2.0"
@@ -224,7 +236,7 @@ criteria = "safe-to-deploy"
 
 [[exemptions.downcast-rs]]
 version = "1.2.0"
-criteria = "safe-to-deploy"
+criteria = "safe-to-run"
 
 [[exemptions.dunce]]
 version = "1.0.2"
@@ -244,7 +256,7 @@ criteria = "safe-to-deploy"
 
 [[exemptions.egg]]
 version = "0.6.0"
-criteria = "safe-to-deploy"
+criteria = "safe-to-run"
 
 [[exemptions.either]]
 version = "1.6.1"
@@ -300,7 +312,7 @@ criteria = "safe-to-deploy"
 
 [[exemptions.fslock]]
 version = "0.1.8"
-criteria = "safe-to-deploy"
+criteria = "safe-to-run"
 
 [[exemptions.generic-array]]
 version = "0.14.5"
@@ -428,7 +440,7 @@ criteria = "safe-to-deploy"
 
 [[exemptions.libfuzzer-sys]]
 version = "0.4.3"
-criteria = "safe-to-deploy"
+criteria = "safe-to-run"
 
 [[exemptions.libloading]]
 version = "0.7.3"
@@ -472,7 +484,7 @@ criteria = "safe-to-deploy"
 
 [[exemptions.memory_units]]
 version = "0.3.0"
-criteria = "safe-to-deploy"
+criteria = "safe-to-run"
 
 [[exemptions.miette]]
 version = "5.1.0"
@@ -516,15 +528,15 @@ criteria = "safe-to-deploy"
 
 [[exemptions.ocaml-boxroot-sys]]
 version = "0.2.0"
-criteria = "safe-to-deploy"
+criteria = "safe-to-run"
 
 [[exemptions.ocaml-interop]]
 version = "0.8.8"
-criteria = "safe-to-deploy"
+criteria = "safe-to-run"
 
 [[exemptions.ocaml-sys]]
 version = "0.22.3"
-criteria = "safe-to-deploy"
+criteria = "safe-to-run"
 
 [[exemptions.once_cell]]
 version = "1.12.0"
@@ -536,10 +548,6 @@ criteria = "safe-to-run"
 
 [[exemptions.opaque-debug]]
 version = "0.3.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.openvino]]
-version = "0.4.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.openvino-finder]]
@@ -564,10 +572,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.p256]]
 version = "0.9.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.parity-wasm]]
-version = "0.42.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.parking_lot]]
@@ -844,7 +848,7 @@ criteria = "safe-to-deploy"
 
 [[exemptions.static_assertions]]
 version = "1.1.0"
-criteria = "safe-to-deploy"
+criteria = "safe-to-run"
 
 [[exemptions.strsim]]
 version = "0.10.0"
@@ -868,7 +872,7 @@ criteria = "safe-to-deploy"
 
 [[exemptions.symbolic_expressions]]
 version = "5.0.3"
-criteria = "safe-to-deploy"
+criteria = "safe-to-run"
 
 [[exemptions.syn]]
 version = "1.0.92"
@@ -968,7 +972,7 @@ criteria = "safe-to-deploy"
 
 [[exemptions.v8]]
 version = "0.44.3"
-criteria = "safe-to-deploy"
+criteria = "safe-to-run"
 
 [[exemptions.valuable]]
 version = "0.1.0"
@@ -1019,12 +1023,8 @@ version = "0.2.80"
 criteria = "safe-to-run"
 
 [[exemptions.wasmi]]
-version = "0.11.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.wasmi-validation]]
-version = "0.4.1"
-criteria = "safe-to-deploy"
+version = "0.19.0"
+criteria = "safe-to-run"
 
 [[exemptions.web-sys]]
 version = "0.3.57"
@@ -1032,7 +1032,7 @@ criteria = "safe-to-run"
 
 [[exemptions.which]]
 version = "4.2.5"
-criteria = "safe-to-deploy"
+criteria = "safe-to-run"
 
 [[exemptions.winapi]]
 version = "0.3.9"

@@ -274,6 +274,12 @@ impl DataFlowGraph {
         self.values[v].ty()
     }
 
+    /// Fill in the type of a value, only if currently invalid (as a placeholder).
+    pub(crate) fn fill_in_value_type(&mut self, v: Value, ty: Type) {
+        debug_assert!(self.values[v].ty().is_invalid() || self.values[v].ty() == ty);
+        self.values[v].set_type(ty);
+    }
+
     /// Get the definition of a value.
     ///
     /// This is either the instruction that defined it or the Block that has the value as an
@@ -517,7 +523,7 @@ impl ValueDataPacked {
 
     #[inline(always)]
     fn set_type(&mut self, ty: Type) {
-        self.0 &= !((1 << Self::TYPE_BITS) - 1) << Self::TYPE_SHIFT;
+        self.0 &= !(((1 << Self::TYPE_BITS) - 1) << Self::TYPE_SHIFT);
         self.0 |= (ty.repr() as u64) << Self::TYPE_SHIFT;
     }
 }
@@ -587,6 +593,17 @@ impl DataFlowGraph {
     /// Returns an object that displays `inst`.
     pub fn display_inst<'a>(&'a self, inst: Inst) -> DisplayInst<'a> {
         DisplayInst(self, inst)
+    }
+
+    /// Returns an object that displays the given `value`'s defining instruction.
+    ///
+    /// Panics if the value is not defined by an instruction (i.e. it is a basic
+    /// block argument).
+    pub fn display_value_inst(&self, value: Value) -> DisplayInst<'_> {
+        match self.value_def(value) {
+            ir::ValueDef::Result(inst, _) => self.display_inst(inst),
+            ir::ValueDef::Param(_, _) => panic!("value is not defined by an instruction"),
+        }
     }
 
     /// Get all value arguments on `inst` as a slice.
@@ -1461,10 +1478,5 @@ mod tests {
 
         assert_eq!(pos.func.dfg.resolve_aliases(c2), c2);
         assert_eq!(pos.func.dfg.resolve_aliases(c), c2);
-
-        // Make a copy of the alias.
-        let c3 = pos.ins().copy(c);
-        // This does not see through copies.
-        assert_eq!(pos.func.dfg.resolve_aliases(c3), c3);
     }
 }

@@ -17,7 +17,7 @@ wiggle-macro = { workspace = true }
 tracing = "0.1.26"
 bitflags = "1.2"
 async-trait = "0.1.42"
-wasmtime = { workspace = true, optional = true }
+wasmtime = { workspace = true }
 anyhow = { workspace = true }
 
 [badges]
@@ -41,12 +41,12 @@ required-features = ["wasmtime_async", "wasmtime/wat"]
 [[test]]
 name = "wasmtime_sync"
 path = "tests/wasmtime_sync.rs"
-required-features = ["wasmtime_integration", "wasmtime/wat"]
+required-features = ["wasmtime/wat"]
 
 [[test]]
 name = "wasmtime_integration"
 path = "tests/wasmtime_integration.rs"
-required-features = ["wasmtime_integration", "wasmtime/wat"]
+required-features = ["wasmtime/wat"]
 
 
 [features]
@@ -62,9 +62,7 @@ wiggle_metadata = ['witx', "wiggle-macro/wiggle_metadata"]
 # the logs out of wiggle-generated libraries.
 tracing_log = [ "tracing/log" ]
 
-# Generate adapters for wasmtime, and expose the wasmtime_integration macro.
-wasmtime_integration = [ "wasmtime", "wiggle-macro/wasmtime" ]
 # Support for async in the wasmtime crates.
-wasmtime_async = [ "wasmtime_integration", "wasmtime/async" ]
+wasmtime_async = [ "wasmtime/async" ]
 
-default = ["wiggle_metadata", "wasmtime_integration" ]
+default = ["wiggle_metadata", "wasmtime_async" ]

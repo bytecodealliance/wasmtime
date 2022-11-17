@@ -62,12 +62,11 @@ impl Riscv64Backend {
     fn compile_vcode(
         &self,
         func: &Function,
-        flags: shared_settings::Flags,
     ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
-        let emit_info = EmitInfo::new(flags.clone(), self.isa_flags.clone());
+        let emit_info = EmitInfo::new(self.flags.clone(), self.isa_flags.clone());
         let sigs = SigSet::new::<abi::Riscv64MachineDeps>(func, &self.flags)?;
         let abi = abi::Riscv64Callee::new(func, self, &self.isa_flags, &sigs)?;
-        compile::compile::<Riscv64Backend>(func, flags, self, abi, &self.mach_env, emit_info, sigs)
+        compile::compile::<Riscv64Backend>(func, self, abi, emit_info, sigs)
     }
 
     /// Get the information needed by frontends producing Cranelift IR.
@@ -93,11 +92,14 @@ impl TargetIsa for Riscv64Backend {
         func: &Function,
         want_disasm: bool,
     ) -> CodegenResult<CompiledCodeStencil> {
-        let flags = self.flags();
-        let (vcode, regalloc_result) = self.compile_vcode(func, flags.clone())?;
+        let (vcode, regalloc_result) = self.compile_vcode(func)?;
 
         let want_disasm = want_disasm || log::log_enabled!(log::Level::Debug);
-        let emit_result = vcode.emit(&regalloc_result, want_disasm, flags.machine_code_cfg_info());
+        let emit_result = vcode.emit(
+            &regalloc_result,
+            want_disasm,
+            self.flags.machine_code_cfg_info(),
+        );
         let frame_size = emit_result.frame_size;
         let value_labels_ranges = emit_result.value_labels_ranges;
         let buffer = emit_result.buffer.finish();
@@ -134,6 +136,10 @@ impl TargetIsa for Riscv64Backend {
 
     fn flags(&self) -> &shared_settings::Flags {
         &self.flags
+    }
+
+    fn machine_env(&self) -> &MachineEnv {
+        &self.mach_env
     }
 
     fn isa_flags(&self) -> Vec<shared_settings::Value> {
@@ -173,7 +179,7 @@ impl TargetIsa for Riscv64Backend {
         Some(inst::unwind::systemv::create_cie())
     }
 
-    fn text_section_builder(&self, num_funcs: u32) -> Box<dyn TextSectionBuilder> {
+    fn text_section_builder(&self, num_funcs: usize) -> Box<dyn TextSectionBuilder> {
         Box::new(MachTextSectionBuilder::<inst::Inst>::new(num_funcs))
     }
 
@@ -255,13 +261,18 @@ mod test {
         );
         let buffer = backend.compile_function(&mut func, true).unwrap();
         let code = buffer.buffer.data();
-        // 0:   000015b7                lui     a1,0x1
-        // 4:   23458593                addi    a1,a1,564 # 0x1234
-        // 8:   00b5053b                addw    a0,a0,a1
+
+        // To update this comment, write the golden bytes to a file, and run the following command
+        // on it to update:
+        // > riscv64-linux-gnu-objdump -b binary -D <file> -m riscv
+        //
+        // 0:   000013b7                lui     t2,0x1
+        // 4:   23438393                addi    t2,t2,564 # 0x1234
+        // 8:   0075053b                .4byte  0x75053b
         // c:   00008067                ret
+
         let golden = vec![
-            0xb7, 0x15, 0x0, 0x0, 0x93, 0x85, 0x45, 0x23, 0x3b, 0x5, 0xb5, 0x0, 0x67, 0x80, 0x0,
-            0x0,
+            183, 19, 0, 0, 147, 131, 67, 35, 59, 5, 117, 0, 103, 128, 0, 0,
         ];
         assert_eq!(code, &golden[..]);
     }

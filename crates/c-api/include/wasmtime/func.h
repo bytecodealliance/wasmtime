@@ -241,10 +241,11 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_func_call(
  * faster than that function, but the tradeoff is that embeddings must uphold
  * more invariants rather than relying on Wasmtime to check them for you.
  */
-WASM_API_EXTERN wasm_trap_t *wasmtime_func_call_unchecked(
+WASM_API_EXTERN wasmtime_error_t *wasmtime_func_call_unchecked(
     wasmtime_context_t *store,
     const wasmtime_func_t *func,
-    wasmtime_val_raw_t *args_and_results
+    wasmtime_val_raw_t *args_and_results,
+    wasm_trap_t **trap
 );
 
 /**

@@ -78,7 +78,7 @@ fn test_limits() -> Result<()> {
     store.limiter(|s| s as &mut dyn ResourceLimiter);
     let instance = Instance::new(&mut store, &module, &[])?;
     let grow = instance.get_func(&mut store, "grow").unwrap();
-    let grow = grow.typed::<i32, i32, _>(&store).unwrap();
+    let grow = grow.typed::<i32, i32>(&store).unwrap();
 
     grow.call(&mut store, 3).unwrap();
     grow.call(&mut store, 5).unwrap();
@@ -350,16 +350,11 @@ fn test_initial_table_limits_exceeded() -> Result<()> {
 
 #[test]
 fn test_pooling_allocator_initial_limits_exceeded() -> Result<()> {
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(1).instance_memories(2);
     let mut config = Config::new();
     config.wasm_multi_memory(true);
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: 1,
-            memories: 2,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
 
     let engine = Engine::new(&config)?;
     let module = Module::new(
@@ -469,7 +464,7 @@ fn test_custom_memory_limiter() -> Result<()> {
     assert!(!store.data().limit_exceeded);
 
     // Grow the host "memory" by 384 KiB
-    let f = instance.get_typed_func::<u32, u32, _>(&mut store, "f")?;
+    let f = instance.get_typed_func::<u32, u32>(&mut store, "f")?;
 
     assert_eq!(f.call(&mut store, 1 * 0x10000)?, 1);
     assert_eq!(f.call(&mut store, 3 * 0x10000)?, 1);
@@ -581,7 +576,7 @@ async fn test_custom_memory_limiter_async() -> Result<()> {
     assert!(!store.data().limit_exceeded);
 
     // Grow the host "memory" by 384 KiB
-    let f = instance.get_typed_func::<u32, u32, _>(&mut store, "f")?;
+    let f = instance.get_typed_func::<u32, u32>(&mut store, "f")?;
 
     assert_eq!(f.call_async(&mut store, 1 * 0x10000).await?, 1);
     assert_eq!(f.call_async(&mut store, 3 * 0x10000).await?, 1);
@@ -721,15 +716,10 @@ fn custom_limiter_detect_grow_failure() -> Result<()> {
     if std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok() {
         return Ok(());
     }
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_memory_pages(10).instance_table_elements(10);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            memory_pages: 10,
-            table_elements: 10,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     let engine = Engine::new(&config).unwrap();
     let linker = Linker::new(&engine);
 
@@ -829,16 +819,11 @@ async fn custom_limiter_async_detect_grow_failure() -> Result<()> {
     if std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok() {
         return Ok(());
     }
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_memory_pages(10).instance_table_elements(10);
     let mut config = Config::new();
     config.async_support(true);
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            memory_pages: 10,
-            table_elements: 10,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     let engine = Engine::new(&config).unwrap();
     let linker = Linker::new(&engine);
 
@@ -980,7 +965,7 @@ fn panic_in_memory_limiter_wasm_stack() {
     store.limiter(|s| s as &mut dyn ResourceLimiter);
     let instance = linker.instantiate(&mut store, &module).unwrap();
     let grow = instance.get_func(&mut store, "grow").unwrap();
-    let grow = grow.typed::<i32, i32, _>(&store).unwrap();
+    let grow = grow.typed::<i32, i32>(&store).unwrap();
 
     // Grow the memory, which should panic
     grow.call(&mut store, 3).unwrap();
@@ -1047,7 +1032,7 @@ async fn panic_in_async_memory_limiter_wasm_stack() {
     store.limiter_async(|s| s as &mut dyn ResourceLimiterAsync);
     let instance = linker.instantiate_async(&mut store, &module).await.unwrap();
     let grow = instance.get_func(&mut store, "grow").unwrap();
-    let grow = grow.typed::<i32, i32, _>(&store).unwrap();
+    let grow = grow.typed::<i32, i32>(&store).unwrap();
 
     // Grow the memory, which should panic
     grow.call_async(&mut store, 3).await.unwrap();

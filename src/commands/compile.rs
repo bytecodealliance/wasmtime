@@ -77,7 +77,7 @@ impl CompileCommand {
             );
         }
 
-        let input = fs::read(&self.module).with_context(|| "failed to read input file")?;
+        let input = wat::parse_file(&self.module).with_context(|| "failed to read input file")?;
 
         let output = self.output.take().unwrap_or_else(|| {
             let mut output: PathBuf = self.module.file_name().unwrap().into();
@@ -85,6 +85,16 @@ impl CompileCommand {
             output
         });
 
+        // If the component-model proposal is enabled and the binary we're
+        // compiling looks like a component, tested by sniffing the first 8
+        // bytes with the current component model proposal.
+        #[cfg(feature = "component-model")]
+        {
+            if input.starts_with(b"\0asm\x0a\0\x01\0") {
+                fs::write(output, engine.precompile_component(&input)?)?;
+                return Ok(());
+            }
+        }
         fs::write(output, engine.precompile_module(&input)?)?;
 
         Ok(())
@@ -123,7 +133,7 @@ mod test {
         let module = unsafe { Module::deserialize(&engine, contents)? };
         let mut store = Store::new(&engine, ());
         let instance = Instance::new(&mut store, &module, &[])?;
-        let f = instance.get_typed_func::<i32, i32, _>(&mut store, "f")?;
+        let f = instance.get_typed_func::<i32, i32>(&mut store, "f")?;
         assert_eq!(f.call(&mut store, 1234).unwrap(), 1234);
 
         Ok(())

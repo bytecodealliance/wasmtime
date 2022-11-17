@@ -209,5 +209,5 @@ fn libcall_function() {
 
     module.define_function(func_id, &mut ctx).unwrap();
 
-    module.finalize_definitions();
+    module.finalize_definitions().unwrap();
 }

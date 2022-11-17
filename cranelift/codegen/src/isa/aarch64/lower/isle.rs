@@ -165,7 +165,6 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     fn integral_ty(&mut self, ty: Type) -> Option<Type> {
         match ty {
             I8 | I16 | I32 | I64 | R64 => Some(ty),
-            ty if ty.is_bool() => Some(ty),
             _ => None,
         }
     }
@@ -560,6 +559,10 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         super::regs::link_reg().to_real_reg().unwrap().into()
     }
 
+    fn preg_pinned(&mut self) -> PReg {
+        super::regs::pinned_reg().to_real_reg().unwrap().into()
+    }
+
     fn branch_target(&mut self, elements: &VecMachLabel, idx: u8) -> BranchTarget {
         BranchTarget::Label(elements[idx as usize])
     }
@@ -718,9 +721,5 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
                 shift
             );
         }
-    }
-
-    fn writable_pinned_reg(&mut self) -> WritableReg {
-        super::regs::writable_xreg(super::regs::PINNED_REG)
     }
 }

@@ -33,7 +33,7 @@ block5(v5: i32):
 ; block0:
 ;   emit_island 44
 ;   subs wzr, w0, #3
-;   b.hs label1 ; csel x1, xzr, x0, hs ; csdb ; adr x15, pc+16 ; ldrsw x1, [x15, x1, uxtw #2] ; add x15, x15, x1 ; br x15 ; jt_entries [Label(MachLabel(3)), Label(MachLabel(5)), Label(MachLabel(7))]
+;   b.hs label1 ; csel x15, xzr, x0, hs ; csdb ; adr x14, pc+16 ; ldrsw x15, [x14, x15, uxtw #2] ; add x14, x14, x15 ; br x14 ; jt_entries [Label(MachLabel(3)), Label(MachLabel(5)), Label(MachLabel(7))]
 ; block1:
 ;   movz x5, #4
 ;   b label2
@@ -80,16 +80,17 @@ block2:
 
 ;   bti c
 ; block0:
-;   ldr x6, [x0]
+;   ldr x5, [x0]
+;   mov x8, x5
 ;   emit_island 36
 ;   subs wzr, w0, #1
-;   b.hs label1 ; csel x8, xzr, x0, hs ; csdb ; adr x7, pc+16 ; ldrsw x8, [x7, x8, uxtw #2] ; add x7, x7, x8 ; br x7 ; jt_entries [Label(MachLabel(2))]
+;   b.hs label1 ; csel x7, xzr, x0, hs ; csdb ; adr x6, pc+16 ; ldrsw x7, [x6, x7, uxtw #2] ; add x6, x6, x7 ; br x6 ; jt_entries [Label(MachLabel(2))]
 ; block1:
-;   mov x0, x6
+;   mov x0, x8
 ;   ret
 ; block2:
 ;   bti j
-;   mov x0, x6
+;   mov x0, x8
 ;   add x0, x0, #42
 ;   ret
 
@@ -105,8 +106,8 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   ldr x4, 8 ; b 12 ; data TestCase(%g) + 0
-;   blr x4
+;   ldr x3, 8 ; b 12 ; data TestCase(%g) + 0
+;   blr x3
 ;   ldp fp, lr, [sp], #16
 ;   ret
 

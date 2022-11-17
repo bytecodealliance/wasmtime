@@ -28,19 +28,19 @@ block1:
   return v0, v1, v2, v3, v4, v5
 }
 
-;   stmg %r8, %r15, 64(%r15)
+;   stmg %r7, %r15, 56(%r15)
 ; block0:
-;   lgr %r12, %r2
-;   lghi %r2, 1
+;   lghi %r4, 1
+;   lgr %r14, %r4
 ;   lghi %r3, 2
 ;   lghi %r4, 3
 ;   lghi %r5, 4
-;   lghi %r8, 5
-;   lghi %r11, 6
-;   lgr %r9, %r12
-;   stg %r8, 0(%r9)
-;   stg %r11, 8(%r9)
-;   lmg %r8, %r15, 64(%r15)
+;   lghi %r7, 5
+;   lghi %r9, 6
+;   stg %r7, 0(%r2)
+;   stg %r9, 8(%r2)
+;   lgr %r2, %r14
+;   lmg %r7, %r15, 56(%r15)
 ;   br %r14
 
 function %f3() -> f64, f64, f64, f64 {
@@ -75,9 +75,9 @@ block1:
 ;   bras %r1, 12 ; data.f64 1 ; ld %f2, 0(%r1)
 ;   bras %r1, 12 ; data.f64 2 ; ld %f4, 0(%r1)
 ;   bras %r1, 12 ; data.f64 3 ; ld %f6, 0(%r1)
-;   bras %r1, 12 ; data.f64 4 ; vleg %v28, 0(%r1), 0
-;   bras %r1, 12 ; data.f64 5 ; vleg %v31, 0(%r1), 0
-;   vsteg %v28, 0(%r2), 0
-;   vsteg %v31, 8(%r2), 0
+;   bras %r1, 12 ; data.f64 4 ; vleg %v18, 0(%r1), 0
+;   bras %r1, 12 ; data.f64 5 ; vleg %v20, 0(%r1), 0
+;   vsteg %v18, 0(%r2), 0
+;   vsteg %v20, 8(%r2), 0
 ;   br %r14
 

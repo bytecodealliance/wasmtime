@@ -47,7 +47,7 @@ pub use clocks::clocks_ctx;
 pub use sched::sched_ctx;
 
 use crate::net::Socket;
-use cap_rand::RngCore;
+use cap_rand::{Rng, RngCore, SeedableRng};
 use std::path::Path;
 use wasi_common::{file::FileCaps, table::Table, Error, WasiCtx, WasiFile};
 
@@ -141,5 +141,6 @@ impl WasiCtxBuilder {
 }
 
 pub fn random_ctx() -> Box<dyn RngCore + Send + Sync> {
-    Box::new(cap_rand::std_rng_from_entropy(cap_rand::ambient_authority()))
+    let mut rng = cap_rand::thread_rng(cap_rand::ambient_authority());
+    Box::new(cap_rand::rngs::StdRng::from_seed(rng.gen()))
 }

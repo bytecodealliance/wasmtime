@@ -185,8 +185,11 @@ impl From<FuncOrDataId> for ModuleExtName {
 /// Information about a function which can be called.
 #[derive(Debug)]
 pub struct FunctionDeclaration {
+    #[allow(missing_docs)]
     pub name: String,
+    #[allow(missing_docs)]
     pub linkage: Linkage,
+    #[allow(missing_docs)]
     pub signature: ir::Signature,
 }
 
@@ -226,6 +229,14 @@ pub enum ModuleError {
     /// Wraps a `cranelift-codegen` error
     Compilation(CodegenError),
 
+    /// Memory allocation failure from a backend
+    Allocation {
+        /// Tell where the allocation came from
+        message: &'static str,
+        /// Io error the allocation failed with
+        err: std::io::Error,
+    },
+
     /// Wraps a generic error from a backend
     Backend(anyhow::Error),
 }
@@ -247,6 +258,7 @@ impl std::error::Error for ModuleError {
             | Self::DuplicateDefinition { .. }
             | Self::InvalidImportDefinition { .. } => None,
             Self::Compilation(source) => Some(source),
+            Self::Allocation { err: source, .. } => Some(source),
             Self::Backend(source) => Some(&**source),
         }
     }
@@ -281,6 +293,9 @@ impl std::fmt::Display for ModuleError {
             Self::Compilation(err) => {
                 write!(f, "Compilation error: {}", err)
             }
+            Self::Allocation { message, err } => {
+                write!(f, "Allocation error: {}: {}", message, err)
+            }
             Self::Backend(err) => write!(f, "Backend error: {}", err),
         }
     }
@@ -298,9 +313,13 @@ pub type ModuleResult<T> = Result<T, ModuleError>;
 /// Information about a data object which can be accessed.
 #[derive(Debug)]
 pub struct DataDeclaration {
+    #[allow(missing_docs)]
     pub name: String,
+    #[allow(missing_docs)]
     pub linkage: Linkage,
+    #[allow(missing_docs)]
     pub writable: bool,
+    #[allow(missing_docs)]
     pub tls: bool,
 }
 

@@ -2,7 +2,7 @@ use super::REALLOC_AND_FREE;
 use anyhow::Result;
 use std::ops::Deref;
 use wasmtime::component::*;
-use wasmtime::{Store, StoreContextMut, Trap};
+use wasmtime::{Store, StoreContextMut, WasmBacktrace};
 
 #[test]
 fn can_compile() -> Result<()> {
@@ -127,7 +127,7 @@ fn simple() -> Result<()> {
     let mut linker = Linker::new(&engine);
     linker.root().func_wrap(
         "",
-        |mut store: StoreContextMut<'_, Option<String>>, arg: WasmStr| -> Result<_> {
+        |mut store: StoreContextMut<'_, Option<String>>, (arg,): (WasmStr,)| -> Result<_> {
             let s = arg.to_str(&store)?.to_string();
             assert!(store.data().is_none());
             *store.data_mut() = Some(s);
@@ -239,12 +239,14 @@ fn attempt_to_leave_during_malloc() -> Result<()> {
 
     let engine = super::engine();
     let mut linker = Linker::new(&engine);
+    linker.root().func_wrap("thunk", |_, _: ()| -> Result<()> {
+        panic!("should not get here")
+    })?;
     linker
         .root()
-        .func_wrap("thunk", || -> Result<()> { panic!("should not get here") })?;
-    linker
-        .root()
-        .func_wrap("ret-string", || -> Result<_> { Ok(("hello".to_string(),)) })?;
+        .func_wrap("ret-string", |_, _: ()| -> Result<_> {
+            Ok(("hello".to_string(),))
+        })?;
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
 
@@ -254,15 +256,13 @@ fn attempt_to_leave_during_malloc() -> Result<()> {
         .instantiate(&mut store, &component)?
         .get_typed_func::<(), (), _>(&mut store, "run")?
         .call(&mut store, ())
-        .unwrap_err()
-        .downcast::<Trap>()?;
+        .unwrap_err();
     assert!(
-        trap.to_string().contains("cannot leave component instance"),
-        "bad trap: {}",
-        trap,
+        format!("{trap:?}").contains("cannot leave component instance"),
+        "bad trap: {trap:?}",
     );
 
-    let trace = trap.trace().unwrap();
+    let trace = trap.downcast_ref::<WasmBacktrace>().unwrap().frames();
     assert_eq!(trace.len(), 4);
 
     // This was our entry point...
@@ -292,12 +292,10 @@ fn attempt_to_leave_during_malloc() -> Result<()> {
         .instantiate(&mut store, &component)?
         .get_typed_func::<(&str,), (), _>(&mut store, "take-string")?
         .call(&mut store, ("x",))
-        .unwrap_err()
-        .downcast::<Trap>()?;
+        .unwrap_err();
     assert!(
-        trap.to_string().contains("cannot leave component instance"),
-        "bad trap: {}",
-        trap,
+        format!("{trap:?}").contains("cannot leave component instance"),
+        "bad trap: {trap:?}",
     );
     Ok(())
 }
@@ -338,14 +336,12 @@ fn attempt_to_reenter_during_host() -> Result<()> {
     let mut linker = Linker::new(&engine);
     linker.root().func_wrap(
         "thunk",
-        |mut store: StoreContextMut<'_, StaticState>| -> Result<()> {
+        |mut store: StoreContextMut<'_, StaticState>, _: ()| -> Result<()> {
             let func = store.data_mut().func.take().unwrap();
             let trap = func.call(&mut store, ()).unwrap_err();
             assert!(
-                trap.to_string()
-                    .contains("cannot reenter component instance"),
-                "bad trap: {}",
-                trap,
+                format!("{trap:?}").contains("cannot reenter component instance"),
+                "bad trap: {trap:?}",
             );
             Ok(())
         },
@@ -370,10 +366,8 @@ fn attempt_to_reenter_during_host() -> Result<()> {
             let func = store.data_mut().func.take().unwrap();
             let trap = func.call(&mut store, &[], &mut []).unwrap_err();
             assert!(
-                trap.to_string()
-                    .contains("cannot reenter component instance"),
-                "bad trap: {}",
-                trap,
+                format!("{trap:?}").contains("cannot reenter component instance"),
+                "bad trap: {trap:?}",
             );
             Ok(())
         },
@@ -530,14 +524,16 @@ fn stack_and_heap_args_and_rets() -> Result<()> {
     // First, test the static API
 
     let mut linker = Linker::new(&engine);
-    linker.root().func_wrap("f1", |x: u32| -> Result<(u32,)> {
-        assert_eq!(x, 1);
-        Ok((2,))
-    })?;
+    linker
+        .root()
+        .func_wrap("f1", |_, (x,): (u32,)| -> Result<(u32,)> {
+            assert_eq!(x, 1);
+            Ok((2,))
+        })?;
     linker.root().func_wrap(
         "f2",
         |cx: StoreContextMut<'_, ()>,
-         arg: (
+         (arg,): ((
             WasmStr,
             WasmStr,
             WasmStr,
@@ -547,7 +543,7 @@ fn stack_and_heap_args_and_rets() -> Result<()> {
             WasmStr,
             WasmStr,
             WasmStr,
-        )|
+        ),)|
          -> Result<(u32,)> {
             assert_eq!(arg.0.to_str(&cx).unwrap(), "abc");
             Ok((3,))
@@ -555,14 +551,14 @@ fn stack_and_heap_args_and_rets() -> Result<()> {
     )?;
     linker
         .root()
-        .func_wrap("f3", |arg: u32| -> Result<(String,)> {
+        .func_wrap("f3", |_, (arg,): (u32,)| -> Result<(String,)> {
             assert_eq!(arg, 8);
             Ok(("xyz".to_string(),))
         })?;
     linker.root().func_wrap(
         "f4",
         |cx: StoreContextMut<'_, ()>,
-         arg: (
+         (arg,): ((
             WasmStr,
             WasmStr,
             WasmStr,
@@ -572,7 +568,7 @@ fn stack_and_heap_args_and_rets() -> Result<()> {
             WasmStr,
             WasmStr,
             WasmStr,
-        )|
+        ),)|
          -> Result<(String,)> {
             assert_eq!(arg.0.to_str(&cx).unwrap(), "abc");
             Ok(("xyz".to_string(),))
@@ -703,12 +699,13 @@ fn bad_import_alignment() -> Result<()> {
     let mut linker = Linker::new(&engine);
     linker
         .root()
-        .func_wrap("unaligned-retptr", || -> Result<(String,)> {
+        .func_wrap("unaligned-retptr", |_, _: ()| -> Result<(String,)> {
             Ok((String::new(),))
         })?;
     linker.root().func_wrap(
         "unaligned-argptr",
-        |_: (
+        |_,
+         _: ((
             WasmStr,
             WasmStr,
             WasmStr,
@@ -718,7 +715,7 @@ fn bad_import_alignment() -> Result<()> {
             WasmStr,
             WasmStr,
             WasmStr,
-        )|
+        ),)|
          -> Result<()> { unreachable!() },
     )?;
     let component = Component::new(&engine, component)?;
@@ -728,16 +725,22 @@ fn bad_import_alignment() -> Result<()> {
         .instantiate(&mut store, &component)?
         .get_typed_func::<(), (), _>(&mut store, "unaligned-retptr")?
         .call(&mut store, ())
-        .unwrap_err()
-        .downcast::<Trap>()?;
-    assert!(trap.to_string().contains("pointer not aligned"), "{}", trap);
+        .unwrap_err();
+    assert!(
+        format!("{:?}", trap).contains("pointer not aligned"),
+        "{}",
+        trap
+    );
     let trap = linker
         .instantiate(&mut store, &component)?
         .get_typed_func::<(), (), _>(&mut store, "unaligned-argptr")?
         .call(&mut store, ())
-        .unwrap_err()
-        .downcast::<Trap>()?;
-    assert!(trap.to_string().contains("pointer not aligned"), "{}", trap);
+        .unwrap_err();
+    assert!(
+        format!("{:?}", trap).contains("pointer not aligned"),
+        "{}",
+        trap
+    );
 
     Ok(())
 }
@@ -775,12 +778,13 @@ fn no_actual_wasm_code() -> Result<()> {
     // First, test the static API
 
     let mut linker = Linker::new(&engine);
-    linker
-        .root()
-        .func_wrap("f", |mut store: StoreContextMut<'_, u32>| -> Result<()> {
+    linker.root().func_wrap(
+        "f",
+        |mut store: StoreContextMut<'_, u32>, _: ()| -> Result<()> {
             *store.data_mut() += 1;
             Ok(())
-        })?;
+        },
+    )?;
 
     let instance = linker.instantiate(&mut store, &component)?;
     let thunk = instance.get_typed_func::<(), (), _>(&mut store, "thunk")?;

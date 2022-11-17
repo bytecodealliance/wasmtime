@@ -9,15 +9,6 @@
 (rule (lower (has_type ty (iconst (u64_from_imm64 n))))
   (imm ty n))
 
-;;;; Rules for `bconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (has_type ty (bconst $false)))
-  (imm ty 0))
-
-(rule (lower (has_type ty (bconst $true)))
-  (imm ty 1))
-
-
 ;;;; Rules for `null` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty (null)))
@@ -57,6 +48,13 @@
   (lower (has_type (fits_in_64 ty) (iadd_ifcout x y)))
   (output_ifcout (alu_add x y)))
 
+;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;
+(rule
+  (lower (has_type (fits_in_64 ty) (uadd_overflow_trap x y tc)))
+  (let ((res ValueRegs (lower_uadd_overflow x y ty))
+        (_ InstOutput (gen_trapif (value_regs_get res 1) tc)))
+    (value_regs_get res 0)))
+
 
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Base case, simply subtracting things in registers.
@@ -73,9 +71,11 @@
 ;;;; Rules for `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `i64` and smaller.
-(rule (lower (has_type (fits_in_64 ty) (ineg x)))
+(rule 1 (lower (has_type (fits_in_64 ty) (ineg x)))
   (alu_rrr (AluOPRRR.Sub) (zero_reg) x))
 
+(rule 2 (lower (has_type $I128 (ineg x)))
+  (i128_sub (value_regs_zero) x))
 
 ;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -194,8 +194,6 @@
 (rule 1 (lower (has_type (fits_in_64 ty) (band (imm12_from_value x) y)))
   (alu_rr_imm12 (AluOPRRI.Andi) y x))
 
-(rule (lower (has_type $B128 (band x y)))
-  (lower_b128_binary (AluOPRRR.And) x y))
 (rule (lower (has_type $I128 (band x y)))
   (lower_b128_binary (AluOPRRR.And) x y))
 
@@ -215,8 +213,6 @@
 
 (rule 1 (lower (has_type (fits_in_64 ty) (bor (imm12_from_value x) y)))
   (alu_rr_imm12 (AluOPRRI.Ori) y x))
-(rule (lower (has_type $B128 (bor x y)))
-  (lower_b128_binary (AluOPRRR.Or) x y))
 (rule (lower (has_type $I128 (bor x y)))
   (lower_b128_binary (AluOPRRR.Or) x y))
 (rule (lower (has_type $F32 (bor x y)))
@@ -235,8 +231,6 @@
 
 (rule 1 (lower (has_type (fits_in_64 ty) (bxor (imm12_from_value x) y)))
   (alu_rr_imm12 (AluOPRRI.Xori) y x))
-(rule (lower (has_type $B128 (bxor x y)))
-  (lower_b128_binary (AluOPRRR.Xor) x y))
 (rule (lower (has_type $I128 (bxor x y)))
   (lower_b128_binary (AluOPRRR.Xor) x y))
 (rule (lower (has_type $F32 (bxor x y)))
@@ -250,8 +244,6 @@
   (alu_rr_imm12 (AluOPRRI.Xori) x (imm_from_neg_bits -1)))
 
 (rule (lower (has_type $I128 (bnot x)))
-  (bnot_128 x))
-(rule (lower (has_type $B128 (bnot x)))
   (bnot_128 x))
 (rule
   (lower (has_type $F32 (bnot x)))
@@ -552,15 +544,6 @@
       (_ Unit (emit (MInst.AtomicCas (gen_atomic_offset p ty) t0 dst (ext_int_if_need $false e ty) (gen_atomic_p p ty) x ty))))
     (writable_reg_to_reg dst)))
 
-;;;;;  Rules for `copy`;;;;;;;;;;;;;;;;;
-(rule (lower (has_type ty (copy x)))
-  (gen_move2 x ty ty))
-
-;;;;;  Rules for `breduce`;;;;;;;;;;;;;;;;;
-(rule
-  (lower (has_type ty (breduce x)))
-  (gen_move2 (value_regs_get x 0) ty ty))
-
 ;;;;;  Rules for `ireduce`;;;;;;;;;;;;;;;;;
 (rule
   (lower (has_type ty (ireduce x)))
@@ -623,24 +606,18 @@
 
 ;;;;;  Rules for `select`;;;;;;;;;
 (rule
-  (lower (has_type ty (select c x y)))
-  (gen_select ty c x y)
-)
+  (lower (has_type ty (select c @ (value_type cty) x y)))
+  (gen_select ty (normalize_cmp_value cty c) x y))
+
+(rule 1
+  (lower (has_type ty (select (icmp cc a b) x y)))
+  (gen_select_reg cc a b x y))
 
 ;;;;;  Rules for `bitselect`;;;;;;;;;
 
 (rule
   (lower (has_type ty (bitselect c x y)))
   (gen_bitselect ty c x y))
-
-;;;;;  Rules for `bint`;;;;;;;;;
-(rule
-  (lower (has_type (fits_in_64 ty) (bint (valueregs_2_reg x))))
-  (gen_bint x))
-(rule 1
-  (lower (has_type $I128 (bint (valueregs_2_reg x))))
-  (let ((tmp Reg (gen_bint x)))
-   (value_regs tmp (load_u64_constant 0))))
 
 ;;;;;  Rules for `isplit`;;;;;;;;;
 (rule 
@@ -658,15 +635,15 @@
       (t2 Reg (gen_move2 y $I64 $I64)))
     (value_regs t1 t2)))
 
-;;;;;  Rules for `imax`;;;;;;;;;
+;;;;;  Rules for `smax`;;;;;;;;;
 (rule
-  (lower (has_type ty (imax x y)))
-  (gen_int_select ty (IntSelectOP.Imax) (ext_int_if_need $true x ty) (ext_int_if_need $true y ty)))
+  (lower (has_type ty (smax x y)))
+  (gen_int_select ty (IntSelectOP.Smax) (ext_int_if_need $true x ty) (ext_int_if_need $true y ty)))
 
-;;;;;  Rules for `imin`;;;;;;;;;
+;;;;;  Rules for `smin`;;;;;;;;;
 (rule
-  (lower (has_type ty (imin x y)))
-  (gen_int_select ty (IntSelectOP.Imin) (ext_int_if_need $true x ty) (ext_int_if_need $true y ty)))
+  (lower (has_type ty (smin x y)))
+  (gen_int_select ty (IntSelectOP.Smin) (ext_int_if_need $true x ty) (ext_int_if_need $true y ty)))
 ;;;;;  Rules for `umax`;;;;;;;;;
 (rule
   (lower (has_type ty (umax x y)))
@@ -733,10 +710,6 @@
 (rule 1
   (lower (has_type $I128 (load flags p offset)))
   (gen_load_128 p offset flags))
-;;;; for B128
-(rule 1
-  (lower (has_type $B128 (load flags p offset)))
-  (gen_load_128 p offset flags))
 
 ;;;;;  Rules for `istore8`;;;;;;;;;
 (rule 
@@ -760,11 +733,6 @@
 ;;; special for I128
 (rule 1
   (lower (store flags x @ (value_type $I128 ) p offset))
-  (gen_store_128 p offset flags x))
-
-;;; special for B128
-(rule 1
-  (lower (store flags x @ (value_type $B128 ) p offset))
   (gen_store_128 p offset flags x))
 
 (decl gen_icmp (IntCC ValueRegs ValueRegs Type) Reg)
@@ -843,12 +811,7 @@
 )
 ;;;;;  Rules for `bitcast`;;;;;;;;;
 (rule
-   (lower (has_type out (bitcast v @ (value_type in_ty))))
-   (gen_moves v in_ty out))
-
-;;;;;  Rules for `raw_bitcast`;;;;;;;;;
-(rule
-   (lower (has_type out (raw_bitcast v @ (value_type in_ty))))
+   (lower (has_type out (bitcast _ v @ (value_type in_ty))))
    (gen_moves v in_ty out))
 
 ;;;;;  Rules for `ceil`;;;;;;;;;
@@ -872,85 +835,20 @@
   (gen_float_round (FloatRoundOP.Nearest) x ty))
 
 
-;;;;;  Rules for `selectif`;;;;;;;;;
+;;;;;  Rules for `select_spectre_guard`;;;;;;;;;
 (rule
-  (lower (has_type r_ty (selectif cc (ifcmp ca @ (value_type cty) cb) a b)))
-  (let
-    ((dst VecWritableReg (alloc_vec_writable r_ty))
-      (r Reg (lower_icmp cc ca cb cty))
-      (_ Unit (emit (MInst.SelectIf $false (vec_writable_clone dst) r a b))))
-    (vec_writable_to_regs dst)))
-
-;;;;;  Rules for `selectif_spectre_guard`;;;;;;;;;
-(rule
-  (lower (has_type r_ty (selectif_spectre_guard cc (ifcmp ca @ (value_type cty) cb) a b)))
+  (lower (has_type r_ty (select_spectre_guard (icmp cc ca @ (value_type cty) cb) a b)))
   (let
     ((dst VecWritableReg (alloc_vec_writable r_ty))
       (r Reg (lower_icmp cc ca cb cty))
       (_ Unit (emit (MInst.SelectIf $true (vec_writable_clone dst) r a b))))
     (vec_writable_to_regs dst)))
 
-;;;;;  Rules for `trueif`;;;;;;;;;
-
-(rule
-  (lower (has_type ty (trueif cc (ifcmp ca @ (value_type cty) cb))))
-  (lower_icmp cc ca cb cty))
-
-;;;;;  Rules for `trueff`;;;;;;;;;
-(rule
-  (lower (has_type ty  (trueff cc (ffcmp ca @ (value_type cty) cb))))
-  (gen_fcmp cc ca cb cty))
-
-
-;;;;;  Rules for `trapif`;;;;;;;;;
-(rule
-  (lower (trapif cc (ifcmp a @ (value_type ty) b) trap_code))
-  (let
-    ((test Reg (lower_icmp cc a b ty)))
-    (gen_trapif test trap_code)))
-
-(rule
-  (lower (trapif _ (iadd_ifcout a @ (value_type ty) b) trap_code))
-  (let
-    ((test Reg (lower_uadd_overflow a b ty)))
-    (gen_trapif test trap_code)))
-
-
-;;;;;  Rules for `trapff`;;;;;;;;;
-(rule
-  (lower (trapff cc (ffcmp a @ (value_type ty) b) trap_code))
-  (gen_trapff cc a b ty trap_code))
 
 ;;;;;  Rules for `bmask`;;;;;;;;;
 (rule
-  ;; because we encode bool all 1s.
-  ;; move is just ok.
-  (lower (has_type (fits_in_64 ty) (bmask x @ (value_type ity))))
-  (gen_move2 (value_regs_get x 0) ity ty))
-;;; for i128 
-(rule 1
-  ;; because we encode bool all 1s.
-  ;; move is just ok.
-  (lower (has_type $I128 (bmask x @ (value_type ity))))
-  (value_regs (gen_move2 (value_regs_get x 0) $I64 $I64) (gen_move2 (value_regs_get x 0) $I64 $I64)))
-
-;;;;;  Rules for `bextend`;;;;;;;;;
-(rule
-  ;; because we encode bool all 1s.
-  ;; move is just ok.
-  (lower (has_type ty (bextend x @ (value_type ity))))
-  ;;extra checks.
-  (if-let _ (valid_bextend_ty ity ty))
-  (gen_moves x ity ty))
-
-;;; for B128
-(rule 1
-  ;; because we encode bool all 1s.
-  ;; move is just ok.
-  (lower (has_type ty (bextend x @ (value_type ity))))
-  ;;extra checks.
-  (if-let $B128 (valid_bextend_ty ity ty))
-  (value_regs (gen_moves x $I64 $I64) (gen_moves x $I64 $I64)))
+  (lower (has_type oty (bmask x @ (value_type ity))))
+  (lower_bmask oty ity x))
 
 ;; N.B.: the Ret itself is generated by the ABI.
 (rule (lower (return args))

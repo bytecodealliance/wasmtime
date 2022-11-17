@@ -14,8 +14,8 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   ldr x4, 8 ; b 12 ; data TestCase(%g) + 0
-;   blr x4
+;   ldr x3, 8 ; b 12 ; data TestCase(%g) + 0
+;   blr x3
 ;   ldp fp, lr, [sp], #16
 ;   ret
 
@@ -30,8 +30,8 @@ block0(v0: i32):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   ldr x4, 8 ; b 12 ; data TestCase(%g) + 0
-;   blr x4
+;   ldr x3, 8 ; b 12 ; data TestCase(%g) + 0
+;   blr x3
 ;   ldp fp, lr, [sp], #16
 ;   ret
 
@@ -54,8 +54,8 @@ block0(v0: i32):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   ldr x4, 8 ; b 12 ; data TestCase(%g) + 0
-;   blr x4
+;   ldr x3, 8 ; b 12 ; data TestCase(%g) + 0
+;   blr x3
 ;   ldp fp, lr, [sp], #16
 ;   ret
 
@@ -105,8 +105,8 @@ block0(v0: i8):
 }
 
 ; block0:
-;   mov x8, x0
-;   mov x13, x1
+;   mov x9, x0
+;   mov x8, x1
 ;   movz x0, #42
 ;   movz x1, #42
 ;   movz x2, #42
@@ -115,8 +115,7 @@ block0(v0: i8):
 ;   movz x5, #42
 ;   movz x6, #42
 ;   movz x7, #42
-;   mov x11, x8
-;   strb w11, [x13]
+;   strb w9, [x8]
 ;   ret
 
 function %f8() {
@@ -283,8 +282,8 @@ block0(v0: i64):
 ;   mov x1, x0
 ;   movz x0, #42
 ;   movz x2, #42
-;   ldr x7, 8 ; b 12 ; data TestCase(%f11) + 0
-;   blr x7
+;   ldr x6, 8 ; b 12 ; data TestCase(%f11) + 0
+;   blr x6
 ;   ldp fp, lr, [sp], #16
 ;   ret
 
@@ -314,8 +313,8 @@ block0(v0: i64):
 ;   mov x2, x0
 ;   movz x3, #42
 ;   movz x0, #42
-;   ldr x7, 8 ; b 12 ; data TestCase(%f12) + 0
-;   blr x7
+;   ldr x6, 8 ; b 12 ; data TestCase(%f12) + 0
+;   blr x6
 ;   ldp fp, lr, [sp], #16
 ;   ret
 
@@ -345,8 +344,8 @@ block0(v0: i64):
 ;   mov x1, x0
 ;   movz x2, #42
 ;   movz x0, #42
-;   ldr x7, 8 ; b 12 ; data TestCase(%f13) + 0
-;   blr x7
+;   ldr x6, 8 ; b 12 ; data TestCase(%f13) + 0
+;   blr x6
 ;   ldp fp, lr, [sp], #16
 ;   ret
 
@@ -381,12 +380,12 @@ block0(v0: i128, v1: i64):
 ;   mov x4, x0
 ;   str x1, [sp, #8]
 ;   mov x5, x1
-;   ldr x12, 8 ; b 12 ; data TestCase(%f14) + 0
+;   ldr x10, 8 ; b 12 ; data TestCase(%f14) + 0
 ;   mov x0, x4
 ;   mov x2, x4
 ;   mov x1, x5
 ;   mov x3, x5
-;   blr x12
+;   blr x10
 ;   add sp, sp, #16
 ;   virtual_sp_offset_adjust -16
 ;   ldp fp, lr, [sp], #16
@@ -423,12 +422,12 @@ block0(v0: i128, v1: i64):
 ;   mov x4, x0
 ;   str x1, [sp, #8]
 ;   mov x5, x1
-;   ldr x12, 8 ; b 12 ; data TestCase(%f15) + 0
+;   ldr x10, 8 ; b 12 ; data TestCase(%f15) + 0
 ;   mov x0, x4
 ;   mov x2, x4
 ;   mov x1, x5
 ;   mov x3, x5
-;   blr x12
+;   blr x10
 ;   add sp, sp, #16
 ;   virtual_sp_offset_adjust -16
 ;   ldp fp, lr, [sp], #16
@@ -442,10 +441,10 @@ block0:
 }
 
 ; block0:
-;   mov x11, x0
+;   mov x6, x0
 ;   movz x0, #0
-;   movz x7, #1
-;   str w7, [x11]
+;   movz x4, #1
+;   str w4, [x6]
 ;   ret
 
 function %f17(i64 sret) {
@@ -473,8 +472,8 @@ block0(v0: i64):
 ;   mov fp, sp
 ; block0:
 ;   mov x8, x0
-;   ldr x4, 8 ; b 12 ; data TestCase(%g) + 0
-;   blr x4
+;   ldr x3, 8 ; b 12 ; data TestCase(%g) + 0
+;   blr x3
 ;   ldp fp, lr, [sp], #16
 ;   ret
 

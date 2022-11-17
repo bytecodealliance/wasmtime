@@ -1,111 +1,111 @@
 test compile precise-output
 target s390x
 
-function %vany_true_i64x2(i64x2) -> b1 {
+function %vany_true_i64x2(i64x2) -> i8 {
 block0(v0: i64x2):
     v1 = vany_true v0
     return v1
 }
 
 ; block0:
-;   vgbm %v3, 0
-;   vceqgs %v5, %v24, %v3
+;   vgbm %v2, 0
+;   vceqgs %v4, %v24, %v2
 ;   lhi %r2, 0
 ;   lochine %r2, 1
 ;   br %r14
 
-function %vany_true_i32x4(i32x4) -> b1 {
+function %vany_true_i32x4(i32x4) -> i8 {
 block0(v0: i32x4):
     v1 = vany_true v0
     return v1
 }
 
 ; block0:
-;   vgbm %v3, 0
-;   vceqfs %v5, %v24, %v3
+;   vgbm %v2, 0
+;   vceqfs %v4, %v24, %v2
 ;   lhi %r2, 0
 ;   lochine %r2, 1
 ;   br %r14
 
-function %vany_true_i16x8(i16x8) -> b1 {
+function %vany_true_i16x8(i16x8) -> i8 {
 block0(v0: i16x8):
     v1 = vany_true v0
     return v1
 }
 
 ; block0:
-;   vgbm %v3, 0
-;   vceqhs %v5, %v24, %v3
+;   vgbm %v2, 0
+;   vceqhs %v4, %v24, %v2
 ;   lhi %r2, 0
 ;   lochine %r2, 1
 ;   br %r14
 
-function %vany_true_i8x16(i8x16) -> b1 {
+function %vany_true_i8x16(i8x16) -> i8 {
 block0(v0: i8x16):
     v1 = vany_true v0
     return v1
 }
 
 ; block0:
-;   vgbm %v3, 0
-;   vceqbs %v5, %v24, %v3
+;   vgbm %v2, 0
+;   vceqbs %v4, %v24, %v2
 ;   lhi %r2, 0
 ;   lochine %r2, 1
 ;   br %r14
 
-function %vall_true_i64x2(i64x2) -> b1 {
+function %vall_true_i64x2(i64x2) -> i8 {
 block0(v0: i64x2):
     v1 = vall_true v0
     return v1
 }
 
 ; block0:
-;   vgbm %v3, 0
-;   vceqgs %v5, %v24, %v3
+;   vgbm %v2, 0
+;   vceqgs %v4, %v24, %v2
 ;   lhi %r2, 0
 ;   lochio %r2, 1
 ;   br %r14
 
-function %vall_true_i32x4(i32x4) -> b1 {
+function %vall_true_i32x4(i32x4) -> i8 {
 block0(v0: i32x4):
     v1 = vall_true v0
     return v1
 }
 
 ; block0:
-;   vgbm %v3, 0
-;   vceqfs %v5, %v24, %v3
+;   vgbm %v2, 0
+;   vceqfs %v4, %v24, %v2
 ;   lhi %r2, 0
 ;   lochio %r2, 1
 ;   br %r14
 
-function %vall_true_i16x8(i16x8) -> b1 {
+function %vall_true_i16x8(i16x8) -> i8 {
 block0(v0: i16x8):
     v1 = vall_true v0
     return v1
 }
 
 ; block0:
-;   vgbm %v3, 0
-;   vceqhs %v5, %v24, %v3
+;   vgbm %v2, 0
+;   vceqhs %v4, %v24, %v2
 ;   lhi %r2, 0
 ;   lochio %r2, 1
 ;   br %r14
 
-function %vall_true_i8x16(i8x16) -> b1 {
+function %vall_true_i8x16(i8x16) -> i8 {
 block0(v0: i8x16):
     v1 = vall_true v0
     return v1
 }
 
 ; block0:
-;   vgbm %v3, 0
-;   vceqbs %v5, %v24, %v3
+;   vgbm %v2, 0
+;   vceqbs %v4, %v24, %v2
 ;   lhi %r2, 0
 ;   lochio %r2, 1
 ;   br %r14
 
-function %vany_true_icmp_eq_i64x2(i64x2, i64x2) -> b1 {
+function %vany_true_icmp_eq_i64x2(i64x2, i64x2) -> i8 {
 block0(v0: i64x2, v1: i64x2):
     v2 = icmp eq v0, v1
     v3 = vany_true v2
@@ -113,12 +113,12 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vceqgs %v4, %v24, %v25
+;   vceqgs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochino %r2, 1
 ;   br %r14
 
-function %vany_true_icmp_ne_i64x2(i64x2, i64x2) -> b1 {
+function %vany_true_icmp_ne_i64x2(i64x2, i64x2) -> i8 {
 block0(v0: i64x2, v1: i64x2):
     v2 = icmp ne v0, v1
     v3 = vany_true v2
@@ -126,12 +126,12 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vceqgs %v4, %v24, %v25
+;   vceqgs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochine %r2, 1
 ;   br %r14
 
-function %vany_true_icmp_sgt_i64x2(i64x2, i64x2) -> b1 {
+function %vany_true_icmp_sgt_i64x2(i64x2, i64x2) -> i8 {
 block0(v0: i64x2, v1: i64x2):
     v2 = icmp sgt v0, v1
     v3 = vany_true v2
@@ -139,12 +139,12 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchgs %v4, %v24, %v25
+;   vchgs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochino %r2, 1
 ;   br %r14
 
-function %vany_true_icmp_sle_i64x2(i64x2, i64x2) -> b1 {
+function %vany_true_icmp_sle_i64x2(i64x2, i64x2) -> i8 {
 block0(v0: i64x2, v1: i64x2):
     v2 = icmp sle v0, v1
     v3 = vany_true v2
@@ -152,12 +152,12 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchgs %v4, %v24, %v25
+;   vchgs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochine %r2, 1
 ;   br %r14
 
-function %vany_true_icmp_slt_i64x2(i64x2, i64x2) -> b1 {
+function %vany_true_icmp_slt_i64x2(i64x2, i64x2) -> i8 {
 block0(v0: i64x2, v1: i64x2):
     v2 = icmp slt v0, v1
     v3 = vany_true v2
@@ -165,12 +165,12 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchgs %v4, %v25, %v24
+;   vchgs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochino %r2, 1
 ;   br %r14
 
-function %vany_true_icmp_sge_i64x2(i64x2, i64x2) -> b1 {
+function %vany_true_icmp_sge_i64x2(i64x2, i64x2) -> i8 {
 block0(v0: i64x2, v1: i64x2):
     v2 = icmp sge v0, v1
     v3 = vany_true v2
@@ -178,12 +178,12 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchgs %v4, %v25, %v24
+;   vchgs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochine %r2, 1
 ;   br %r14
 
-function %vany_true_icmp_ugt_i64x2(i64x2, i64x2) -> b1 {
+function %vany_true_icmp_ugt_i64x2(i64x2, i64x2) -> i8 {
 block0(v0: i64x2, v1: i64x2):
     v2 = icmp ugt v0, v1
     v3 = vany_true v2
@@ -191,12 +191,12 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchlgs %v4, %v24, %v25
+;   vchlgs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochino %r2, 1
 ;   br %r14
 
-function %vany_true_icmp_ule_i64x2(i64x2, i64x2) -> b1 {
+function %vany_true_icmp_ule_i64x2(i64x2, i64x2) -> i8 {
 block0(v0: i64x2, v1: i64x2):
     v2 = icmp ule v0, v1
     v3 = vany_true v2
@@ -204,12 +204,12 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchlgs %v4, %v24, %v25
+;   vchlgs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochine %r2, 1
 ;   br %r14
 
-function %vany_true_icmp_ult_i64x2(i64x2, i64x2) -> b1 {
+function %vany_true_icmp_ult_i64x2(i64x2, i64x2) -> i8 {
 block0(v0: i64x2, v1: i64x2):
     v2 = icmp ult v0, v1
     v3 = vany_true v2
@@ -217,12 +217,12 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchlgs %v4, %v25, %v24
+;   vchlgs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochino %r2, 1
 ;   br %r14
 
-function %vany_true_icmp_uge_i64x2(i64x2, i64x2) -> b1 {
+function %vany_true_icmp_uge_i64x2(i64x2, i64x2) -> i8 {
 block0(v0: i64x2, v1: i64x2):
     v2 = icmp uge v0, v1
     v3 = vany_true v2
@@ -230,12 +230,12 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchlgs %v4, %v25, %v24
+;   vchlgs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochine %r2, 1
 ;   br %r14
 
-function %vany_true_fcmp_eq_f64x2(f64x2, f64x2) -> b1 {
+function %vany_true_fcmp_eq_f64x2(f64x2, f64x2) -> i8 {
 block0(v0: f64x2, v1: f64x2):
     v2 = fcmp eq v0, v1
     v3 = vany_true v2
@@ -243,12 +243,12 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfcedbs %v4, %v24, %v25
+;   vfcedbs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochino %r2, 1
 ;   br %r14
 
-function %vany_true_fcmp_ne_f64x2(f64x2, f64x2) -> b1 {
+function %vany_true_fcmp_ne_f64x2(f64x2, f64x2) -> i8 {
 block0(v0: f64x2, v1: f64x2):
     v2 = fcmp ne v0, v1
     v3 = vany_true v2
@@ -256,12 +256,12 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfcedbs %v4, %v24, %v25
+;   vfcedbs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochine %r2, 1
 ;   br %r14
 
-function %vany_true_fcmp_gt_f64x2(f64x2, f64x2) -> b1 {
+function %vany_true_fcmp_gt_f64x2(f64x2, f64x2) -> i8 {
 block0(v0: f64x2, v1: f64x2):
     v2 = fcmp gt v0, v1
     v3 = vany_true v2
@@ -269,12 +269,12 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchdbs %v4, %v24, %v25
+;   vfchdbs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochino %r2, 1
 ;   br %r14
 
-function %vany_true_fcmp_ule_f64x2(f64x2, f64x2) -> b1 {
+function %vany_true_fcmp_ule_f64x2(f64x2, f64x2) -> i8 {
 block0(v0: f64x2, v1: f64x2):
     v2 = fcmp ule v0, v1
     v3 = vany_true v2
@@ -282,12 +282,12 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchdbs %v4, %v24, %v25
+;   vfchdbs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochine %r2, 1
 ;   br %r14
 
-function %vany_true_fcmp_ge_f64x2(f64x2, f64x2) -> b1 {
+function %vany_true_fcmp_ge_f64x2(f64x2, f64x2) -> i8 {
 block0(v0: f64x2, v1: f64x2):
     v2 = fcmp ge v0, v1
     v3 = vany_true v2
@@ -295,12 +295,12 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchedbs %v4, %v24, %v25
+;   vfchedbs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochino %r2, 1
 ;   br %r14
 
-function %vany_true_fcmp_ult_f64x2(f64x2, f64x2) -> b1 {
+function %vany_true_fcmp_ult_f64x2(f64x2, f64x2) -> i8 {
 block0(v0: f64x2, v1: f64x2):
     v2 = fcmp ult v0, v1
     v3 = vany_true v2
@@ -308,12 +308,12 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchedbs %v4, %v24, %v25
+;   vfchedbs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochine %r2, 1
 ;   br %r14
 
-function %vany_true_fcmp_lt_f64x2(f64x2, f64x2) -> b1 {
+function %vany_true_fcmp_lt_f64x2(f64x2, f64x2) -> i8 {
 block0(v0: f64x2, v1: f64x2):
     v2 = fcmp lt v0, v1
     v3 = vany_true v2
@@ -321,12 +321,12 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchdbs %v4, %v25, %v24
+;   vfchdbs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochino %r2, 1
 ;   br %r14
 
-function %vany_true_fcmp_uge_f64x2(f64x2, f64x2) -> b1 {
+function %vany_true_fcmp_uge_f64x2(f64x2, f64x2) -> i8 {
 block0(v0: f64x2, v1: f64x2):
     v2 = fcmp uge v0, v1
     v3 = vany_true v2
@@ -334,12 +334,12 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchdbs %v4, %v25, %v24
+;   vfchdbs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochine %r2, 1
 ;   br %r14
 
-function %vany_true_fcmp_le_f64x2(f64x2, f64x2) -> b1 {
+function %vany_true_fcmp_le_f64x2(f64x2, f64x2) -> i8 {
 block0(v0: f64x2, v1: f64x2):
     v2 = fcmp le v0, v1
     v3 = vany_true v2
@@ -347,12 +347,12 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchedbs %v4, %v25, %v24
+;   vfchedbs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochino %r2, 1
 ;   br %r14
 
-function %vany_true_fcmp_ugt_f64x2(f64x2, f64x2) -> b1 {
+function %vany_true_fcmp_ugt_f64x2(f64x2, f64x2) -> i8 {
 block0(v0: f64x2, v1: f64x2):
     v2 = fcmp ugt v0, v1
     v3 = vany_true v2
@@ -360,12 +360,12 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchedbs %v4, %v25, %v24
+;   vfchedbs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochine %r2, 1
 ;   br %r14
 
-function %vall_true_icmp_eq_i64x2(i64x2, i64x2) -> b1 {
+function %vall_true_icmp_eq_i64x2(i64x2, i64x2) -> i8 {
 block0(v0: i64x2, v1: i64x2):
     v2 = icmp eq v0, v1
     v3 = vall_true v2
@@ -373,12 +373,12 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vceqgs %v4, %v24, %v25
+;   vceqgs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochie %r2, 1
 ;   br %r14
 
-function %vall_true_icmp_ne_i64x2(i64x2, i64x2) -> b1 {
+function %vall_true_icmp_ne_i64x2(i64x2, i64x2) -> i8 {
 block0(v0: i64x2, v1: i64x2):
     v2 = icmp ne v0, v1
     v3 = vall_true v2
@@ -386,12 +386,12 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vceqgs %v4, %v24, %v25
+;   vceqgs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochio %r2, 1
 ;   br %r14
 
-function %vall_true_icmp_sgt_i64x2(i64x2, i64x2) -> b1 {
+function %vall_true_icmp_sgt_i64x2(i64x2, i64x2) -> i8 {
 block0(v0: i64x2, v1: i64x2):
     v2 = icmp sgt v0, v1
     v3 = vall_true v2
@@ -399,12 +399,12 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchgs %v4, %v24, %v25
+;   vchgs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochie %r2, 1
 ;   br %r14
 
-function %vall_true_icmp_sle_i64x2(i64x2, i64x2) -> b1 {
+function %vall_true_icmp_sle_i64x2(i64x2, i64x2) -> i8 {
 block0(v0: i64x2, v1: i64x2):
     v2 = icmp sle v0, v1
     v3 = vall_true v2
@@ -412,12 +412,12 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchgs %v4, %v24, %v25
+;   vchgs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochio %r2, 1
 ;   br %r14
 
-function %vall_true_icmp_slt_i64x2(i64x2, i64x2) -> b1 {
+function %vall_true_icmp_slt_i64x2(i64x2, i64x2) -> i8 {
 block0(v0: i64x2, v1: i64x2):
     v2 = icmp slt v0, v1
     v3 = vall_true v2
@@ -425,12 +425,12 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchgs %v4, %v25, %v24
+;   vchgs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochie %r2, 1
 ;   br %r14
 
-function %vall_true_icmp_sge_i64x2(i64x2, i64x2) -> b1 {
+function %vall_true_icmp_sge_i64x2(i64x2, i64x2) -> i8 {
 block0(v0: i64x2, v1: i64x2):
     v2 = icmp sge v0, v1
     v3 = vall_true v2
@@ -438,12 +438,12 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchgs %v4, %v25, %v24
+;   vchgs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochio %r2, 1
 ;   br %r14
 
-function %vall_true_icmp_ugt_i64x2(i64x2, i64x2) -> b1 {
+function %vall_true_icmp_ugt_i64x2(i64x2, i64x2) -> i8 {
 block0(v0: i64x2, v1: i64x2):
     v2 = icmp ugt v0, v1
     v3 = vall_true v2
@@ -451,12 +451,12 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchlgs %v4, %v24, %v25
+;   vchlgs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochie %r2, 1
 ;   br %r14
 
-function %vall_true_icmp_ule_i64x2(i64x2, i64x2) -> b1 {
+function %vall_true_icmp_ule_i64x2(i64x2, i64x2) -> i8 {
 block0(v0: i64x2, v1: i64x2):
     v2 = icmp ule v0, v1
     v3 = vall_true v2
@@ -464,12 +464,12 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchlgs %v4, %v24, %v25
+;   vchlgs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochio %r2, 1
 ;   br %r14
 
-function %vall_true_icmp_ult_i64x2(i64x2, i64x2) -> b1 {
+function %vall_true_icmp_ult_i64x2(i64x2, i64x2) -> i8 {
 block0(v0: i64x2, v1: i64x2):
     v2 = icmp ult v0, v1
     v3 = vall_true v2
@@ -477,12 +477,12 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchlgs %v4, %v25, %v24
+;   vchlgs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochie %r2, 1
 ;   br %r14
 
-function %vall_true_icmp_uge_i64x2(i64x2, i64x2) -> b1 {
+function %vall_true_icmp_uge_i64x2(i64x2, i64x2) -> i8 {
 block0(v0: i64x2, v1: i64x2):
     v2 = icmp uge v0, v1
     v3 = vall_true v2
@@ -490,12 +490,12 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vchlgs %v4, %v25, %v24
+;   vchlgs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochio %r2, 1
 ;   br %r14
 
-function %vall_true_fcmp_eq_f64x2(f64x2, f64x2) -> b1 {
+function %vall_true_fcmp_eq_f64x2(f64x2, f64x2) -> i8 {
 block0(v0: f64x2, v1: f64x2):
     v2 = fcmp eq v0, v1
     v3 = vall_true v2
@@ -503,12 +503,12 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfcedbs %v4, %v24, %v25
+;   vfcedbs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochie %r2, 1
 ;   br %r14
 
-function %vall_true_fcmp_ne_f64x2(f64x2, f64x2) -> b1 {
+function %vall_true_fcmp_ne_f64x2(f64x2, f64x2) -> i8 {
 block0(v0: f64x2, v1: f64x2):
     v2 = fcmp ne v0, v1
     v3 = vall_true v2
@@ -516,12 +516,12 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfcedbs %v4, %v24, %v25
+;   vfcedbs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochio %r2, 1
 ;   br %r14
 
-function %vall_true_fcmp_gt_f64x2(f64x2, f64x2) -> b1 {
+function %vall_true_fcmp_gt_f64x2(f64x2, f64x2) -> i8 {
 block0(v0: f64x2, v1: f64x2):
     v2 = fcmp gt v0, v1
     v3 = vall_true v2
@@ -529,12 +529,12 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchdbs %v4, %v24, %v25
+;   vfchdbs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochie %r2, 1
 ;   br %r14
 
-function %vall_true_fcmp_ule_f64x2(f64x2, f64x2) -> b1 {
+function %vall_true_fcmp_ule_f64x2(f64x2, f64x2) -> i8 {
 block0(v0: f64x2, v1: f64x2):
     v2 = fcmp ule v0, v1
     v3 = vall_true v2
@@ -542,12 +542,12 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchdbs %v4, %v24, %v25
+;   vfchdbs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochio %r2, 1
 ;   br %r14
 
-function %vall_true_fcmp_ge_f64x2(f64x2, f64x2) -> b1 {
+function %vall_true_fcmp_ge_f64x2(f64x2, f64x2) -> i8 {
 block0(v0: f64x2, v1: f64x2):
     v2 = fcmp ge v0, v1
     v3 = vall_true v2
@@ -555,12 +555,12 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchedbs %v4, %v24, %v25
+;   vfchedbs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochie %r2, 1
 ;   br %r14
 
-function %vall_true_fcmp_ult_f64x2(f64x2, f64x2) -> b1 {
+function %vall_true_fcmp_ult_f64x2(f64x2, f64x2) -> i8 {
 block0(v0: f64x2, v1: f64x2):
     v2 = fcmp ult v0, v1
     v3 = vall_true v2
@@ -568,12 +568,12 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchedbs %v4, %v24, %v25
+;   vfchedbs %v3, %v24, %v25
 ;   lhi %r2, 0
 ;   lochio %r2, 1
 ;   br %r14
 
-function %vall_true_fcmp_lt_f64x2(f64x2, f64x2) -> b1 {
+function %vall_true_fcmp_lt_f64x2(f64x2, f64x2) -> i8 {
 block0(v0: f64x2, v1: f64x2):
     v2 = fcmp lt v0, v1
     v3 = vall_true v2
@@ -581,12 +581,12 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchdbs %v4, %v25, %v24
+;   vfchdbs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochie %r2, 1
 ;   br %r14
 
-function %vall_true_fcmp_uge_f64x2(f64x2, f64x2) -> b1 {
+function %vall_true_fcmp_uge_f64x2(f64x2, f64x2) -> i8 {
 block0(v0: f64x2, v1: f64x2):
     v2 = fcmp uge v0, v1
     v3 = vall_true v2
@@ -594,12 +594,12 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchdbs %v4, %v25, %v24
+;   vfchdbs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochio %r2, 1
 ;   br %r14
 
-function %vall_true_fcmp_le_f64x2(f64x2, f64x2) -> b1 {
+function %vall_true_fcmp_le_f64x2(f64x2, f64x2) -> i8 {
 block0(v0: f64x2, v1: f64x2):
     v2 = fcmp le v0, v1
     v3 = vall_true v2
@@ -607,12 +607,12 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchedbs %v4, %v25, %v24
+;   vfchedbs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochie %r2, 1
 ;   br %r14
 
-function %vall_true_fcmp_ugt_f64x2(f64x2, f64x2) -> b1 {
+function %vall_true_fcmp_ugt_f64x2(f64x2, f64x2) -> i8 {
 block0(v0: f64x2, v1: f64x2):
     v2 = fcmp ugt v0, v1
     v3 = vall_true v2
@@ -620,7 +620,7 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vfchedbs %v4, %v25, %v24
+;   vfchedbs %v3, %v25, %v24
 ;   lhi %r2, 0
 ;   lochio %r2, 1
 ;   br %r14
@@ -632,9 +632,9 @@ block0(v0: i64x2):
 }
 
 ; block0:
-;   bras %r1, 20 ; data.u128 0x80808080808080808080808080804000 ; vl %v3, 0(%r1)
-;   vbperm %v5, %v24, %v3
-;   lgdr %r2, %f5
+;   bras %r1, 20 ; data.u128 0x80808080808080808080808080804000 ; vl %v2, 0(%r1)
+;   vbperm %v4, %v24, %v2
+;   lgdr %r2, %f4
 ;   br %r14
 
 function %vhigh_bits_be(i32x4) -> i64 {
@@ -644,9 +644,9 @@ block0(v0: i32x4):
 }
 
 ; block0:
-;   bras %r1, 20 ; data.u128 0x80808080808080808080808060402000 ; vl %v3, 0(%r1)
-;   vbperm %v5, %v24, %v3
-;   lgdr %r2, %f5
+;   bras %r1, 20 ; data.u128 0x80808080808080808080808060402000 ; vl %v2, 0(%r1)
+;   vbperm %v4, %v24, %v2
+;   lgdr %r2, %f4
 ;   br %r14
 
 function %vhigh_bits_be(i16x8) -> i64 {
@@ -656,9 +656,9 @@ block0(v0: i16x8):
 }
 
 ; block0:
-;   bras %r1, 20 ; data.u128 0x80808080808080807060504030201000 ; vl %v3, 0(%r1)
-;   vbperm %v5, %v24, %v3
-;   lgdr %r2, %f5
+;   bras %r1, 20 ; data.u128 0x80808080808080807060504030201000 ; vl %v2, 0(%r1)
+;   vbperm %v4, %v24, %v2
+;   lgdr %r2, %f4
 ;   br %r14
 
 function %vhigh_bits_be(i8x16) -> i64 {
@@ -668,9 +668,9 @@ block0(v0: i8x16):
 }
 
 ; block0:
-;   bras %r1, 20 ; data.u128 0x78706860585048403830282018100800 ; vl %v3, 0(%r1)
-;   vbperm %v5, %v24, %v3
-;   lgdr %r2, %f5
+;   bras %r1, 20 ; data.u128 0x78706860585048403830282018100800 ; vl %v2, 0(%r1)
+;   vbperm %v4, %v24, %v2
+;   lgdr %r2, %f4
 ;   br %r14
 
 function %vhigh_bits_le(i64x2) -> i64 wasmtime_system_v {
@@ -680,9 +680,9 @@ block0(v0: i64x2):
 }
 
 ; block0:
-;   bras %r1, 20 ; data.u128 0x80808080808080808080808080800040 ; vl %v3, 0(%r1)
-;   vbperm %v5, %v24, %v3
-;   lgdr %r2, %f5
+;   bras %r1, 20 ; data.u128 0x80808080808080808080808080800040 ; vl %v2, 0(%r1)
+;   vbperm %v4, %v24, %v2
+;   lgdr %r2, %f4
 ;   br %r14
 
 function %vhigh_bits_le(i32x4) -> i64 wasmtime_system_v {
@@ -692,9 +692,9 @@ block0(v0: i32x4):
 }
 
 ; block0:
-;   bras %r1, 20 ; data.u128 0x80808080808080808080808000204060 ; vl %v3, 0(%r1)
-;   vbperm %v5, %v24, %v3
-;   lgdr %r2, %f5
+;   bras %r1, 20 ; data.u128 0x80808080808080808080808000204060 ; vl %v2, 0(%r1)
+;   vbperm %v4, %v24, %v2
+;   lgdr %r2, %f4
 ;   br %r14
 
 function %vhigh_bits_le(i16x8) -> i64 wasmtime_system_v {
@@ -704,9 +704,9 @@ block0(v0: i16x8):
 }
 
 ; block0:
-;   bras %r1, 20 ; data.u128 0x80808080808080800010203040506070 ; vl %v3, 0(%r1)
-;   vbperm %v5, %v24, %v3
-;   lgdr %r2, %f5
+;   bras %r1, 20 ; data.u128 0x80808080808080800010203040506070 ; vl %v2, 0(%r1)
+;   vbperm %v4, %v24, %v2
+;   lgdr %r2, %f4
 ;   br %r14
 
 function %vhigh_bits_le(i8x16) -> i64 wasmtime_system_v {
@@ -716,8 +716,8 @@ block0(v0: i8x16):
 }
 
 ; block0:
-;   bras %r1, 20 ; data.u128 0x00081018202830384048505860687078 ; vl %v3, 0(%r1)
-;   vbperm %v5, %v24, %v3
-;   lgdr %r2, %f5
+;   bras %r1, 20 ; data.u128 0x00081018202830384048505860687078 ; vl %v2, 0(%r1)
+;   vbperm %v4, %v24, %v2
+;   lgdr %r2, %f4
 ;   br %r14
 

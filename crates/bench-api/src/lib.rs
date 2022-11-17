@@ -136,14 +136,14 @@
 mod unsafe_send_sync;
 
 use crate::unsafe_send_sync::UnsafeSendSync;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use std::os::raw::{c_int, c_void};
 use std::slice;
 use std::{env, path::PathBuf};
 use target_lexicon::Triple;
 use wasmtime::{Config, Engine, Instance, Linker, Module, Store};
 use wasmtime_cli_flags::{CommonOptions, WasiModules};
-use wasmtime_wasi::{sync::WasiCtxBuilder, WasiCtx};
+use wasmtime_wasi::{sync::WasiCtxBuilder, I32Exit, WasiCtx};
 
 pub type ExitCode = c_int;
 pub const OK: ExitCode = 0;
@@ -533,20 +533,19 @@ impl BenchState {
             .take()
             .expect("instantiate the module before executing it");
 
-        let start_func = instance.get_typed_func::<(), (), _>(&mut store, "_start")?;
+        let start_func = instance.get_typed_func::<(), ()>(&mut store, "_start")?;
         match start_func.call(&mut store, ()) {
             Ok(_) => Ok(()),
             Err(trap) => {
                 // Since _start will likely return by using the system `exit` call, we must
                 // check the trap code to see if it actually represents a successful exit.
-                match trap.i32_exit_status() {
-                    Some(0) => Ok(()),
-                    Some(n) => Err(anyhow!("_start exited with a non-zero code: {}", n)),
-                    None => Err(anyhow!(
-                        "executing the benchmark resulted in a trap: {}",
-                        trap
-                    )),
+                if let Some(exit) = trap.downcast_ref::<I32Exit>() {
+                    if exit.0 == 0 {
+                        return Ok(());
+                    }
                 }
+
+                Err(trap)
             }
         }
     }

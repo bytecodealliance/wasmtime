@@ -42,8 +42,9 @@ mod traps;
 
 pub use crate::data_context::{DataContext, DataDescription, Init};
 pub use crate::module::{
-    DataId, FuncId, FuncOrDataId, Linkage, Module, ModuleCompiledFunction, ModuleDeclarations,
-    ModuleError, ModuleExtName, ModuleReloc, ModuleResult,
+    DataDeclaration, DataId, FuncId, FuncOrDataId, FunctionDeclaration, Linkage, Module,
+    ModuleCompiledFunction, ModuleDeclarations, ModuleError, ModuleExtName, ModuleReloc,
+    ModuleResult,
 };
 pub use crate::traps::TrapSite;
 

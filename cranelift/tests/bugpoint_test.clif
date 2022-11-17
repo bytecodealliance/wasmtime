@@ -418,11 +418,9 @@ block1:
     v114 = load.i64 v113
     v115 = iconst.i64 0
     v116 = icmp ugt v114, v115
-    v117 = bint.i8 v116
-    v118 = uextend.i32 v117
+    v118 = uextend.i32 v116
     v119 = icmp_imm eq v118, 0
-    v120 = bint.i8 v119
-    v121 = uextend.i32 v120
+    v121 = uextend.i32 v119
     brz v121, block3
     jump block2
 
@@ -436,11 +434,9 @@ block3:
     v126 = load.i64 v125
     v127 = iconst.i64 0
     v128 = icmp ugt v126, v127
-    v129 = bint.i8 v128
-    v130 = uextend.i32 v129
+    v130 = uextend.i32 v128
     v131 = icmp_imm eq v130, 0
-    v132 = bint.i8 v131
-    v133 = uextend.i32 v132
+    v133 = uextend.i32 v131
     brz v133, block5
     jump block4
 
@@ -454,11 +450,9 @@ block5:
     v138 = load.i64 v137+42
     v139 = iconst.i64 0
     v140 = icmp ugt v138, v139
-    v141 = bint.i8 v140
-    v142 = uextend.i32 v141
+    v142 = uextend.i32 v140
     v143 = icmp_imm eq v142, 0
-    v144 = bint.i8 v143
-    v145 = uextend.i32 v144
+    v145 = uextend.i32 v143
     brz v145, block7
     jump block6
 
@@ -482,8 +476,7 @@ block9:
     v153 = load.i8 v6
     v154 = uextend.i32 v153
     v155 = icmp_imm eq v154, 0
-    v156 = bint.i8 v155
-    v157 = uextend.i32 v156
+    v157 = uextend.i32 v155
     brz v157, block11
     jump block10
 
@@ -507,8 +500,7 @@ block13:
     v165 = load.i8 v8
     v166 = uextend.i32 v165
     v167 = icmp_imm eq v166, 0
-    v168 = bint.i8 v167
-    v169 = uextend.i32 v168
+    v169 = uextend.i32 v167
     brz v169, block15
     jump block14
 
@@ -527,11 +519,9 @@ block16:
     v175 = iconst.i64 17
     v176 = load.i64 v10
     v177 = icmp uge v176, v175
-    v178 = bint.i8 v177
-    v179 = uextend.i32 v178
+    v179 = uextend.i32 v177
     v180 = icmp_imm eq v179, 0
-    v181 = bint.i8 v180
-    v182 = uextend.i32 v181
+    v182 = uextend.i32 v180
     brz v182, block18
     jump block17
 
@@ -584,11 +574,9 @@ block163:
 block20:
     v212 = load.i64 v13
     v214 = icmp.i64 ult v213, v212
-    v215 = bint.i8 v214
-    v216 = uextend.i32 v215
+    v216 = uextend.i32 v214
     v217 = icmp_imm eq v216, 0
-    v218 = bint.i8 v217
-    v219 = uextend.i32 v218
+    v219 = uextend.i32 v217
     brz v219, block22
     jump block21
 
@@ -781,11 +769,9 @@ block36:
     v330 = load.i16 v327
     v331 = load.i16 v329
     v332 = icmp eq v330, v331
-    v333 = bint.i8 v332
-    v334 = uextend.i32 v333
+    v334 = uextend.i32 v332
     v335 = icmp_imm eq v334, 0
-    v336 = bint.i8 v335
-    v337 = uextend.i32 v336
+    v337 = uextend.i32 v335
     brz v337, block38
     jump block37
 
@@ -848,11 +834,9 @@ block43:
     v370 = load.i16 v367
     v371 = load.i16 v369
     v372 = icmp eq v370, v371
-    v373 = bint.i8 v372
-    v374 = uextend.i32 v373
+    v374 = uextend.i32 v372
     v375 = icmp_imm eq v374, 0
-    v376 = bint.i8 v375
-    v377 = uextend.i32 v376
+    v377 = uextend.i32 v375
     brz v377, block45
     jump block44
 
@@ -949,8 +933,7 @@ block51:
         v435 -> v429
     v430 = iconst.i16 0xffff_ffff_ffff_8000
     v431 = icmp eq v429, v430
-    v432 = bint.i8 v431
-    v433 = uextend.i32 v432
+    v433 = uextend.i32 v431
     brz v433, block52
     jump block154
 
@@ -1172,8 +1155,7 @@ block62(v552: i32, v1009: i64, v1013: i64, v1016: i64, v1019: i64, v1022: i16, v
         v560 -> v553
     v554 = iconst.i32 0
     v555 = icmp eq v553, v554
-    v556 = bint.i8 v555
-    v557 = uextend.i32 v556
+    v557 = uextend.i32 v555
     brz v557, block63
     jump block145
 
@@ -1188,8 +1170,7 @@ block63:
         v570 -> v563
     v564 = iconst.i32 0
     v565 = icmp eq v563, v564
-    v566 = bint.i8 v565
-    v567 = uextend.i32 v566
+    v567 = uextend.i32 v565
     brz v567, block64
     jump block144
 
@@ -1210,11 +1191,9 @@ block64:
 block65:
     v575 = iconst.i32 10
     v576 = icmp.i32 ult v574, v575
-    v577 = bint.i8 v576
-    v578 = uextend.i32 v577
+    v578 = uextend.i32 v576
     v579 = icmp_imm eq v578, 0
-    v580 = bint.i8 v579
-    v581 = uextend.i32 v580
+    v581 = uextend.i32 v579
     brz v581, block67
     jump block66
 
@@ -1248,8 +1227,7 @@ block69:
     v597 = load.i64 v3
     v598 = load.i64 v3+8
     v599 = icmp.i64 ult v596, v598
-    v600 = bint.i8 v599
-    v601 = uextend.i32 v600
+    v601 = uextend.i32 v599
     brnz v601, block70
     jump block142
 
@@ -1326,8 +1304,7 @@ block73:
         v675 -> v647
         v692 -> v647
     v649 = icmp ult v647, v648
-    v650 = bint.i8 v649
-    v651 = uextend.i32 v650
+    v651 = uextend.i32 v649
     brz v651, block80
     jump block74
 
@@ -1396,8 +1373,7 @@ block79:
 block80:
     v697 = uextend.i64 v696
     v698 = icmp.i64 ugt v695, v697
-    v699 = bint.i8 v698
-    v700 = uextend.i32 v699
+    v700 = uextend.i32 v698
     brz v700, block96
     jump block81
 
@@ -1418,11 +1394,9 @@ block82:
     v708 = load.i32 v705
     v709 = load.i32 v707
     v710 = icmp eq v708, v709
-    v711 = bint.i8 v710
-    v712 = uextend.i32 v711
+    v712 = uextend.i32 v710
     v713 = icmp_imm eq v712, 0
-    v714 = bint.i8 v713
-    v715 = uextend.i32 v714
+    v715 = uextend.i32 v713
     brz v715, block84
     jump block83
 
@@ -1484,11 +1458,9 @@ block89:
     v747 = load.i16 v744
     v748 = load.i16 v746
     v749 = icmp eq v747, v748
-    v750 = bint.i8 v749
-    v751 = uextend.i32 v750
+    v751 = uextend.i32 v749
     v752 = icmp_imm eq v751, 0
-    v753 = bint.i8 v752
-    v754 = uextend.i32 v753
+    v754 = uextend.i32 v752
     brz v754, block91
     jump block90
 
@@ -1560,8 +1532,7 @@ block97:
     v794 = iconst.i32 10
     v795 = iconst.i32 0
     v796 = icmp eq v794, v795
-    v797 = bint.i8 v796
-    v798 = uextend.i32 v797
+    v798 = uextend.i32 v796
     brz v798, block98
     jump block135
 
@@ -1734,11 +1705,9 @@ block105:
 block106:
     v887 = iconst.i64 10
     v888 = icmp.i64 ult v886, v887
-    v889 = bint.i8 v888
-    v890 = uextend.i32 v889
+    v890 = uextend.i32 v888
     v891 = icmp_imm eq v890, 0
-    v892 = bint.i8 v891
-    v893 = uextend.i32 v892
+    v893 = uextend.i32 v891
     brz v893, block108
     jump block107
 
@@ -1772,8 +1741,7 @@ block110:
     v909 = load.i64 v3
     v910 = load.i64 v3+8
     v911 = icmp.i64 ult v908, v910
-    v912 = bint.i8 v911
-    v913 = uextend.i32 v912
+    v913 = uextend.i32 v911
     brnz v913, block111
     jump block127
 
@@ -1809,8 +1777,7 @@ block112:
         v954 -> v933
         v1047 -> v933
     v936 = icmp.i64 ult v934, v935
-    v937 = bint.i8 v936
-    v938 = uextend.i32 v937
+    v938 = uextend.i32 v936
     brz v938, block119
     jump block113
 

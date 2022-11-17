@@ -145,8 +145,47 @@ where
     ///
     /// # Panics
     ///
-    /// This function will panic if `store` does not own this function.
-    pub fn call(&self, mut store: impl AsContextMut, params: Params) -> Result<Return> {
+    /// Panics if this is called on a function in an asynchronous store. This
+    /// only works with functions defined within a synchonous store. Also
+    /// panics if `store` does not own this function.
+    pub fn call(&self, store: impl AsContextMut, params: Params) -> Result<Return> {
+        assert!(
+            !store.as_context().async_support(),
+            "must use `call_async` when async support is enabled on the config"
+        );
+        self.call_impl(store, params)
+    }
+
+    /// Exactly like [`Self::call`], except for use on asynchronous stores.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is called on a function in a synchronous store. This
+    /// only works with functions defined within an asynchronous store. Also
+    /// panics if `store` does not own this function.
+    #[cfg(feature = "async")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    pub async fn call_async<T>(
+        &self,
+        mut store: impl AsContextMut<Data = T>,
+        params: Params,
+    ) -> Result<Return>
+    where
+        T: Send,
+        Params: Send + Sync,
+        Return: Send + Sync,
+    {
+        let mut store = store.as_context_mut();
+        assert!(
+            store.0.async_support(),
+            "cannot use `call_async` when async support is not enabled on the config"
+        );
+        store
+            .on_fiber(|store| self.call_impl(store, params))
+            .await?
+    }
+
+    fn call_impl(&self, mut store: impl AsContextMut, params: Params) -> Result<Return> {
         let store = &mut store.as_context_mut();
         // Note that this is in theory simpler than it might read at this time.
         // Here we're doing a runtime dispatch on the `flatten_count` for the
@@ -285,6 +324,16 @@ where
     /// See [`Func::post_return`]
     pub fn post_return(&self, store: impl AsContextMut) -> Result<()> {
         self.func.post_return(store)
+    }
+
+    /// See [`Func::post_return_async`]
+    #[cfg(feature = "async")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    pub async fn post_return_async<T: Send>(
+        &self,
+        store: impl AsContextMut<Data = T>,
+    ) -> Result<()> {
+        self.func.post_return_async(store).await
     }
 }
 

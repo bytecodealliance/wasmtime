@@ -57,7 +57,7 @@
 //!     // afterwards we can fetch exports by name, as well as asserting the
 //!     // type signature of the function with `get_typed_func`.
 //!     let instance = Instance::new(&mut store, &module, &[host_hello.into()])?;
-//!     let hello = instance.get_typed_func::<(), (), _>(&mut store, "hello")?;
+//!     let hello = instance.get_typed_func::<(), ()>(&mut store, "hello")?;
 //!
 //!     // And finally we can call the wasm!
 //!     hello.call(&mut store, ())?;
@@ -168,7 +168,7 @@
 //!     // resolve the imports of the module using name-based resolution.
 //!     let mut store = Store::new(&engine, 0);
 //!     let instance = linker.instantiate(&mut store, &module)?;
-//!     let hello = instance.get_typed_func::<(), (), _>(&mut store, "hello")?;
+//!     let hello = instance.get_typed_func::<(), ()>(&mut store, "hello")?;
 //!     hello.call(&mut store, ())?;
 //!
 //!     Ok(())
@@ -340,7 +340,7 @@
 //!     // module which called this host function.
 //!     let mem = match caller.get_export("memory") {
 //!         Some(Extern::Memory(mem)) => mem,
-//!         _ => return Err(Trap::new("failed to find host memory")),
+//!         _ => anyhow::bail!("failed to find host memory"),
 //!     };
 //!
 //!     // Use the `ptr` and `len` values to get a subslice of the wasm-memory
@@ -351,9 +351,9 @@
 //!     let string = match data {
 //!         Some(data) => match str::from_utf8(data) {
 //!             Ok(s) => s,
-//!             Err(_) => return Err(Trap::new("invalid utf-8")),
+//!             Err(_) => anyhow::bail!("invalid utf-8"),
 //!         },
-//!         None => return Err(Trap::new("pointer/length out of bounds")),
+//!         None => anyhow::bail!("pointer/length out of bounds"),
 //!     };
 //!     assert_eq!(string, "Hello, world!");
 //!     println!("{}", string);
@@ -373,22 +373,27 @@
 //!     "#,
 //! )?;
 //! let instance = Instance::new(&mut store, &module, &[log_str.into()])?;
-//! let foo = instance.get_typed_func::<(), (), _>(&mut store, "foo")?;
+//! let foo = instance.get_typed_func::<(), ()>(&mut store, "foo")?;
 //! foo.call(&mut store, ())?;
 //! # Ok(())
 //! # }
 //! ```
 
-#![allow(unknown_lints)]
-#![deny(missing_docs, rustdoc::broken_intra_doc_links)]
+#![deny(missing_docs)]
 #![doc(test(attr(deny(warnings))))]
 #![doc(test(attr(allow(dead_code, unused_variables, unused_mut))))]
 #![cfg_attr(nightlydoc, feature(doc_cfg))]
 #![cfg_attr(not(feature = "default"), allow(dead_code, unused_imports))]
+// Allow broken links when the default features is disabled because most of our
+// documentation is written for the "one build" of the `main` branch which has
+// most features enabled. This will present warnings in stripped-down doc builds
+// and will prevent the doc build from failing.
+#![cfg_attr(feature = "default", deny(rustdoc::broken_intra_doc_links))]
 
 #[macro_use]
 mod func;
 
+mod code;
 mod config;
 mod engine;
 mod externals;

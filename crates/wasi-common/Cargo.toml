@@ -20,7 +20,8 @@ links = "wasi-common-19"
 [dependencies]
 anyhow = { workspace = true }
 thiserror = "1.0"
-wiggle = { workspace = true, default-features = false }
+wiggle = { workspace = true }
+wasmtime = { workspace = true }
 tracing = "0.1.19"
 cap-std = { workspace = true }
 cap-rand = "0.26.0"

@@ -138,25 +138,6 @@ All SSA values have a type which determines the size and shape (for SIMD
 vectors) of the value. Many instructions are polymorphic -- they can operate on
 different types.
 
-### Boolean types
-
-Boolean values are either true or false.
-
-The `b1` type represents an abstract boolean value. It can only exist as
-an SSA value, and can't be directly stored in memory. It can, however, be
-converted into an integer with value 0 or 1 by the `bint` instruction (and
-converted back with `icmp_imm` with 0).
-
-Several larger boolean types are also defined, primarily to be used as SIMD
-element types. They can be stored in memory, and are represented as either all
-zero bits or all one bits.
-
-- b1
-- b8
-- b16
-- b32
-- b64
-
 ### Integer types
 
 Integer values have a fixed size and can be interpreted as either signed or
@@ -219,8 +200,8 @@ instructions either. The verifier enforces these rules.
 ### SIMD vector types
 
 A SIMD vector type represents a vector of values from one of the scalar types
-(boolean, integer, and floating point). Each scalar value in a SIMD type is
-called a *lane*. The number of lanes must be a power of two in the range 2-256.
+(integer, and floating point). Each scalar value in a SIMD type is called a
+*lane*. The number of lanes must be a power of two in the range 2-256.
 
 i%Bx%N
     A SIMD vector of integers. The lane type `iB` is one of the integer
@@ -246,14 +227,6 @@ f64x%N
     and `f64x8`.
 
     The size of a `f64` vector in memory is :math:`8N` bytes.
-
-b1x%N
-    A boolean SIMD vector.
-
-    Boolean vectors are used when comparing SIMD vectors. For example,
-    comparing two `i32x4` values would produce a `b1x4` result.
-
-    Like the `b1` type, a boolean vector cannot be stored in memory.
 
 ### Pseudo-types and type classes
 
@@ -313,12 +286,6 @@ ieee32
 ieee64
     A 64-bit immediate floating point number in the IEEE 754-2008 binary64
     interchange format. All bit patterns are allowed.
-
-bool
-    A boolean immediate value, either false or true.
-
-    In the textual format, `bool` immediates appear as 'false'
-    and 'true'.
 
 intcc
     An integer condition code. See the `icmp` instruction for details.
@@ -790,10 +757,9 @@ an instruction is required to load a constant into an SSA value: `iconst`,
 
 ### Bitwise operations
 
-The bitwise operations and operate on any value type: Integers, floating point
-numbers, and booleans. When operating on integer or floating point types, the
-bitwise operations are working on the binary representation of the values. When
-operating on boolean values, the bitwise operations work as logical operators.
+The bitwise operations and operate on any value type: Integers, and floating
+point numbers. When operating on integer or floating point types, the bitwise
+operations are working on the binary representation of the values.
 
 The shift and rotate operations only work on integer types (scalar and vector).
 The shift amount does not have to be the same type as the value being shifted.

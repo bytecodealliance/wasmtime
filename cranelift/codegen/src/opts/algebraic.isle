@@ -7,8 +7,8 @@
 ;; can freely rewrite e.g. `x+y-y` to `x`.
 
 ;; uextend/sextend of a constant.
-(rule (simplify (uextend $I64 (iconst $I32 imm)))
-      (iconst $I64 imm))
+(rule (simplify (uextend $I64 (iconst $I32 (u64_from_imm64 imm))))
+      (iconst $I64 (imm64 (u64_uextend_u32 imm))))
 (rule (simplify (sextend $I64 (iconst $I32 (u64_from_imm64 imm))))
       (iconst $I64 (imm64 (u64_sextend_u32 imm))))
 
@@ -107,7 +107,7 @@
       (subsume x))
 
 ;; x ^ x == 0.
-(rule (simplify (bxor ty x x))
+(rule (simplify (bxor (fits_in_64 ty) x x))
       (subsume (iconst ty (imm64 0))))
 
 ;; x ^ not(x) == not(x) ^ x == -1.
@@ -169,10 +169,6 @@
       (if (u8_lt ly lx))
       (if (u8_lt lz lx))
       (iadd ty (iadd ty y z) x))
-
-;; Select's selector input doesn't need bint; remove the redundant op.
-(rule (simplify (select ty (bint _ b) x y))
-      (subsume (select ty b x y)))
 
 ;; Rematerialize ALU-op-with-imm and iconsts in each block where they're
 ;; used. This is neutral (add-with-imm) or positive (iconst) for

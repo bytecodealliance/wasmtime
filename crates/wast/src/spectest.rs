@@ -48,11 +48,13 @@ pub fn link_spectest<T>(linker: &mut Linker<T>, store: &mut Store<T>) -> Result<
 #[cfg(feature = "component-model")]
 pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<()> {
     let engine = linker.engine().clone();
-    linker.root().func_wrap("host-return-two", || Ok((2u32,)))?;
+    linker
+        .root()
+        .func_wrap("host-return-two", |_, _: ()| Ok((2u32,)))?;
     let mut i = linker.instance("host")?;
-    i.func_wrap("return-three", || Ok((3u32,)))?;
+    i.func_wrap("return-three", |_, _: ()| Ok((3u32,)))?;
     i.instance("nested")?
-        .func_wrap("return-four", || Ok((4u32,)))?;
+        .func_wrap("return-four", |_, _: ()| Ok((4u32,)))?;
 
     let module = Module::new(
         &engine,

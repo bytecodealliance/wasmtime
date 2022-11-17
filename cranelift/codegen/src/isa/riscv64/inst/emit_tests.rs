@@ -575,33 +575,12 @@ fn test_riscv64_binemit() {
     insns.push(TestUnit::new(
         Inst::Load {
             rd: writable_a0(),
-            op: LoadOP::Lbu,
-            flags: MemFlags::new(),
-            from: AMode::RegOffset(a1(), 100, B8),
-        },
-        "lbu a0,100(a1)",
-        0x645c503,
-    ));
-    insns.push(TestUnit::new(
-        Inst::Load {
-            rd: writable_a0(),
             op: LoadOP::Lh,
             flags: MemFlags::new(),
             from: AMode::RegOffset(a1(), 100, I16),
         },
         "lh a0,100(a1)",
         0x6459503,
-    ));
-
-    insns.push(TestUnit::new(
-        Inst::Load {
-            rd: writable_a0(),
-            op: LoadOP::Lhu,
-            flags: MemFlags::new(),
-            from: AMode::RegOffset(a1(), 100, B16),
-        },
-        "lhu a0,100(a1)",
-        0x645d503,
     ));
 
     insns.push(TestUnit::new(
@@ -615,16 +594,6 @@ fn test_riscv64_binemit() {
         0x645a503,
     ));
 
-    insns.push(TestUnit::new(
-        Inst::Load {
-            rd: writable_a0(),
-            op: LoadOP::Lwu,
-            flags: MemFlags::new(),
-            from: AMode::RegOffset(a1(), 100, B32),
-        },
-        "lwu a0,100(a1)",
-        0x645e503,
-    ));
     insns.push(TestUnit::new(
         Inst::Load {
             rd: writable_a0(),
@@ -2219,7 +2188,7 @@ fn riscv64_worst_case_instruction_size() {
     candidates.push(Inst::IntSelect {
         dst: vec![writable_a0(), writable_a0()],
         ty: I128,
-        op: IntSelectOP::Imax,
+        op: IntSelectOP::Smax,
         x: ValueRegs::two(x_reg(1), x_reg(2)),
         y: ValueRegs::two(x_reg(3), x_reg(4)),
     });

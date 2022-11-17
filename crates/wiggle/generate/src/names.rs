@@ -6,204 +6,186 @@ use witx::{BuiltinType, Id, Type, TypeRef, WasmType};
 
 use crate::{lifetimes::LifetimeExt, UserErrorType};
 
-pub struct Names {
-    runtime_mod: TokenStream,
+pub fn type_(id: &Id) -> Ident {
+    escape_id(id, NamingConvention::CamelCase)
 }
 
-impl Names {
-    pub fn new(runtime_mod: TokenStream) -> Names {
-        Names { runtime_mod }
+pub fn builtin_type(b: BuiltinType) -> TokenStream {
+    match b {
+        BuiltinType::U8 { .. } => quote!(u8),
+        BuiltinType::U16 => quote!(u16),
+        BuiltinType::U32 { .. } => quote!(u32),
+        BuiltinType::U64 => quote!(u64),
+        BuiltinType::S8 => quote!(i8),
+        BuiltinType::S16 => quote!(i16),
+        BuiltinType::S32 => quote!(i32),
+        BuiltinType::S64 => quote!(i64),
+        BuiltinType::F32 => quote!(f32),
+        BuiltinType::F64 => quote!(f64),
+        BuiltinType::Char => quote!(char),
     }
+}
 
-    pub fn runtime_mod(&self) -> TokenStream {
-        self.runtime_mod.clone()
+pub fn wasm_type(ty: WasmType) -> TokenStream {
+    match ty {
+        WasmType::I32 => quote!(i32),
+        WasmType::I64 => quote!(i64),
+        WasmType::F32 => quote!(f32),
+        WasmType::F64 => quote!(f64),
     }
+}
 
-    pub fn type_(&self, id: &Id) -> TokenStream {
-        let ident = escape_id(id, NamingConvention::CamelCase);
-        quote!(#ident)
-    }
-
-    pub fn builtin_type(&self, b: BuiltinType) -> TokenStream {
-        match b {
-            BuiltinType::U8 { .. } => quote!(u8),
-            BuiltinType::U16 => quote!(u16),
-            BuiltinType::U32 { .. } => quote!(u32),
-            BuiltinType::U64 => quote!(u64),
-            BuiltinType::S8 => quote!(i8),
-            BuiltinType::S16 => quote!(i16),
-            BuiltinType::S32 => quote!(i32),
-            BuiltinType::S64 => quote!(i64),
-            BuiltinType::F32 => quote!(f32),
-            BuiltinType::F64 => quote!(f64),
-            BuiltinType::Char => quote!(char),
-        }
-    }
-
-    pub fn wasm_type(&self, ty: WasmType) -> TokenStream {
-        match ty {
-            WasmType::I32 => quote!(i32),
-            WasmType::I64 => quote!(i64),
-            WasmType::F32 => quote!(f32),
-            WasmType::F64 => quote!(f64),
-        }
-    }
-
-    pub fn type_ref(&self, tref: &TypeRef, lifetime: TokenStream) -> TokenStream {
-        match tref {
-            TypeRef::Name(nt) => {
-                let ident = self.type_(&nt.name);
-                if nt.tref.needs_lifetime() {
-                    quote!(#ident<#lifetime>)
-                } else {
-                    quote!(#ident)
-                }
+pub fn type_ref(tref: &TypeRef, lifetime: TokenStream) -> TokenStream {
+    match tref {
+        TypeRef::Name(nt) => {
+            let ident = type_(&nt.name);
+            if nt.tref.needs_lifetime() {
+                quote!(#ident<#lifetime>)
+            } else {
+                quote!(#ident)
             }
-            TypeRef::Value(ty) => match &**ty {
-                Type::Builtin(builtin) => self.builtin_type(*builtin),
-                Type::Pointer(pointee) | Type::ConstPointer(pointee) => {
-                    let rt = self.runtime_mod();
-                    let pointee_type = self.type_ref(&pointee, lifetime.clone());
-                    quote!(#rt::GuestPtr<#lifetime, #pointee_type>)
+        }
+        TypeRef::Value(ty) => match &**ty {
+            Type::Builtin(builtin) => builtin_type(*builtin),
+            Type::Pointer(pointee) | Type::ConstPointer(pointee) => {
+                let pointee_type = type_ref(&pointee, lifetime.clone());
+                quote!(wiggle::GuestPtr<#lifetime, #pointee_type>)
+            }
+            Type::List(pointee) => match &**pointee.type_() {
+                Type::Builtin(BuiltinType::Char) => {
+                    quote!(wiggle::GuestPtr<#lifetime, str>)
                 }
-                Type::List(pointee) => match &**pointee.type_() {
-                    Type::Builtin(BuiltinType::Char) => {
-                        let rt = self.runtime_mod();
-                        quote!(#rt::GuestPtr<#lifetime, str>)
-                    }
-                    _ => {
-                        let rt = self.runtime_mod();
-                        let pointee_type = self.type_ref(&pointee, lifetime.clone());
-                        quote!(#rt::GuestPtr<#lifetime, [#pointee_type]>)
-                    }
-                },
-                Type::Variant(v) => match v.as_expected() {
-                    Some((ok, err)) => {
-                        let ok = match ok {
-                            Some(ty) => self.type_ref(ty, lifetime.clone()),
-                            None => quote!(()),
-                        };
-                        let err = match err {
-                            Some(ty) => self.type_ref(ty, lifetime.clone()),
-                            None => quote!(()),
-                        };
-                        quote!(Result<#ok, #err>)
-                    }
-                    None => unimplemented!("anonymous variant ref {:?}", tref),
-                },
-                Type::Record(r) if r.is_tuple() => {
-                    let types = r
-                        .members
-                        .iter()
-                        .map(|m| self.type_ref(&m.tref, lifetime.clone()))
-                        .collect::<Vec<_>>();
-                    quote!((#(#types,)*))
+                _ => {
+                    let pointee_type = type_ref(&pointee, lifetime.clone());
+                    quote!(wiggle::GuestPtr<#lifetime, [#pointee_type]>)
                 }
-                _ => unimplemented!("anonymous type ref {:?}", tref),
             },
-        }
-    }
-
-    /// Convert an enum variant from its [`Id`][witx] name to its Rust [`Ident`][id] representation.
-    ///
-    /// [id]: https://docs.rs/proc-macro2/*/proc_macro2/struct.Ident.html
-    /// [witx]: https://docs.rs/witx/*/witx/struct.Id.html
-    pub fn enum_variant(&self, id: &Id) -> Ident {
-        handle_2big_enum_variant(id).unwrap_or_else(|| escape_id(id, NamingConvention::CamelCase))
-    }
-
-    pub fn flag_member(&self, id: &Id) -> Ident {
-        format_ident!("{}", id.as_str().to_shouty_snake_case())
-    }
-
-    pub fn int_member(&self, id: &Id) -> Ident {
-        format_ident!("{}", id.as_str().to_shouty_snake_case())
-    }
-
-    /// Convert a struct member from its [`Id`][witx] name to its Rust [`Ident`][id] representation.
-    ///
-    /// [id]: https://docs.rs/proc-macro2/*/proc_macro2/struct.Ident.html
-    /// [witx]: https://docs.rs/witx/*/witx/struct.Id.html
-    pub fn struct_member(&self, id: &Id) -> Ident {
-        escape_id(id, NamingConvention::SnakeCase)
-    }
-
-    /// Convert a module name from its [`Id`][witx] name to its Rust [`Ident`][id] representation.
-    ///
-    /// [id]: https://docs.rs/proc-macro2/*/proc_macro2/struct.Ident.html
-    /// [witx]: https://docs.rs/witx/*/witx/struct.Id.html
-    pub fn module(&self, id: &Id) -> Ident {
-        escape_id(id, NamingConvention::SnakeCase)
-    }
-
-    /// Convert a trait name from its [`Id`][witx] name to its Rust [`Ident`][id] representation.
-    ///
-    /// [id]: https://docs.rs/proc-macro2/*/proc_macro2/struct.Ident.html
-    /// [witx]: https://docs.rs/witx/*/witx/struct.Id.html
-    pub fn trait_name(&self, id: &Id) -> Ident {
-        escape_id(id, NamingConvention::CamelCase)
-    }
-
-    /// Convert a function name from its [`Id`][witx] name to its Rust [`Ident`][id] representation.
-    ///
-    /// [id]: https://docs.rs/proc-macro2/*/proc_macro2/struct.Ident.html
-    /// [witx]: https://docs.rs/witx/*/witx/struct.Id.html
-    pub fn func(&self, id: &Id) -> Ident {
-        escape_id(id, NamingConvention::SnakeCase)
-    }
-
-    /// Convert a parameter name from its [`Id`][witx] name to its Rust [`Ident`][id] representation.
-    ///
-    /// [id]: https://docs.rs/proc-macro2/*/proc_macro2/struct.Ident.html
-    /// [witx]: https://docs.rs/witx/*/witx/struct.Id.html
-    pub fn func_param(&self, id: &Id) -> Ident {
-        escape_id(id, NamingConvention::SnakeCase)
-    }
-
-    /// For when you need a {name}_ptr binding for passing a value by reference:
-    pub fn func_ptr_binding(&self, id: &Id) -> Ident {
-        format_ident!("{}_ptr", id.as_str().to_snake_case())
-    }
-
-    /// For when you need a {name}_len binding for passing an array:
-    pub fn func_len_binding(&self, id: &Id) -> Ident {
-        format_ident!("{}_len", id.as_str().to_snake_case())
-    }
-
-    fn builtin_name(b: &BuiltinType) -> &'static str {
-        match b {
-            BuiltinType::U8 { .. } => "u8",
-            BuiltinType::U16 => "u16",
-            BuiltinType::U32 { .. } => "u32",
-            BuiltinType::U64 => "u64",
-            BuiltinType::S8 => "i8",
-            BuiltinType::S16 => "i16",
-            BuiltinType::S32 => "i32",
-            BuiltinType::S64 => "i64",
-            BuiltinType::F32 => "f32",
-            BuiltinType::F64 => "f64",
-            BuiltinType::Char => "char",
-        }
-    }
-
-    fn snake_typename(tref: &TypeRef) -> String {
-        match tref {
-            TypeRef::Name(nt) => nt.name.as_str().to_snake_case(),
-            TypeRef::Value(ty) => match &**ty {
-                Type::Builtin(b) => Self::builtin_name(&b).to_owned(),
-                _ => panic!("unexpected anonymous type: {:?}", ty),
+            Type::Variant(v) => match v.as_expected() {
+                Some((ok, err)) => {
+                    let ok = match ok {
+                        Some(ty) => type_ref(ty, lifetime.clone()),
+                        None => quote!(()),
+                    };
+                    let err = match err {
+                        Some(ty) => type_ref(ty, lifetime.clone()),
+                        None => quote!(()),
+                    };
+                    quote!(Result<#ok, #err>)
+                }
+                None => unimplemented!("anonymous variant ref {:?}", tref),
             },
-        }
+            Type::Record(r) if r.is_tuple() => {
+                let types = r
+                    .members
+                    .iter()
+                    .map(|m| type_ref(&m.tref, lifetime.clone()))
+                    .collect::<Vec<_>>();
+                quote!((#(#types,)*))
+            }
+            _ => unimplemented!("anonymous type ref {:?}", tref),
+        },
     }
+}
 
-    pub fn user_error_conversion_method(&self, user_type: &UserErrorType) -> Ident {
-        let abi_type = Self::snake_typename(&user_type.abi_type());
-        format_ident!(
-            "{}_from_{}",
-            abi_type,
-            user_type.method_fragment().to_snake_case()
-        )
+/// Convert an enum variant from its [`Id`][witx] name to its Rust [`Ident`][id] representation.
+///
+/// [id]: https://docs.rs/proc-macro2/*/proc_macro2/struct.Ident.html
+/// [witx]: https://docs.rs/witx/*/witx/struct.Id.html
+pub fn enum_variant(id: &Id) -> Ident {
+    handle_2big_enum_variant(id).unwrap_or_else(|| escape_id(id, NamingConvention::CamelCase))
+}
+
+pub fn flag_member(id: &Id) -> Ident {
+    format_ident!("{}", id.as_str().to_shouty_snake_case())
+}
+
+pub fn int_member(id: &Id) -> Ident {
+    format_ident!("{}", id.as_str().to_shouty_snake_case())
+}
+
+/// Convert a struct member from its [`Id`][witx] name to its Rust [`Ident`][id] representation.
+///
+/// [id]: https://docs.rs/proc-macro2/*/proc_macro2/struct.Ident.html
+/// [witx]: https://docs.rs/witx/*/witx/struct.Id.html
+pub fn struct_member(id: &Id) -> Ident {
+    escape_id(id, NamingConvention::SnakeCase)
+}
+
+/// Convert a module name from its [`Id`][witx] name to its Rust [`Ident`][id] representation.
+///
+/// [id]: https://docs.rs/proc-macro2/*/proc_macro2/struct.Ident.html
+/// [witx]: https://docs.rs/witx/*/witx/struct.Id.html
+pub fn module(id: &Id) -> Ident {
+    escape_id(id, NamingConvention::SnakeCase)
+}
+
+/// Convert a trait name from its [`Id`][witx] name to its Rust [`Ident`][id] representation.
+///
+/// [id]: https://docs.rs/proc-macro2/*/proc_macro2/struct.Ident.html
+/// [witx]: https://docs.rs/witx/*/witx/struct.Id.html
+pub fn trait_name(id: &Id) -> Ident {
+    escape_id(id, NamingConvention::CamelCase)
+}
+
+/// Convert a function name from its [`Id`][witx] name to its Rust [`Ident`][id] representation.
+///
+/// [id]: https://docs.rs/proc-macro2/*/proc_macro2/struct.Ident.html
+/// [witx]: https://docs.rs/witx/*/witx/struct.Id.html
+pub fn func(id: &Id) -> Ident {
+    escape_id(id, NamingConvention::SnakeCase)
+}
+
+/// Convert a parameter name from its [`Id`][witx] name to its Rust [`Ident`][id] representation.
+///
+/// [id]: https://docs.rs/proc-macro2/*/proc_macro2/struct.Ident.html
+/// [witx]: https://docs.rs/witx/*/witx/struct.Id.html
+pub fn func_param(id: &Id) -> Ident {
+    escape_id(id, NamingConvention::SnakeCase)
+}
+
+/// For when you need a {name}_ptr binding for passing a value by reference:
+pub fn func_ptr_binding(id: &Id) -> Ident {
+    format_ident!("{}_ptr", id.as_str().to_snake_case())
+}
+
+/// For when you need a {name}_len binding for passing an array:
+pub fn func_len_binding(id: &Id) -> Ident {
+    format_ident!("{}_len", id.as_str().to_snake_case())
+}
+
+fn builtin_name(b: &BuiltinType) -> &'static str {
+    match b {
+        BuiltinType::U8 { .. } => "u8",
+        BuiltinType::U16 => "u16",
+        BuiltinType::U32 { .. } => "u32",
+        BuiltinType::U64 => "u64",
+        BuiltinType::S8 => "i8",
+        BuiltinType::S16 => "i16",
+        BuiltinType::S32 => "i32",
+        BuiltinType::S64 => "i64",
+        BuiltinType::F32 => "f32",
+        BuiltinType::F64 => "f64",
+        BuiltinType::Char => "char",
     }
+}
+
+fn snake_typename(tref: &TypeRef) -> String {
+    match tref {
+        TypeRef::Name(nt) => nt.name.as_str().to_snake_case(),
+        TypeRef::Value(ty) => match &**ty {
+            Type::Builtin(b) => builtin_name(&b).to_owned(),
+            _ => panic!("unexpected anonymous type: {:?}", ty),
+        },
+    }
+}
+
+pub fn user_error_conversion_method(user_type: &UserErrorType) -> Ident {
+    let abi_type = snake_typename(&user_type.abi_type());
+    format_ident!(
+        "{}_from_{}",
+        abi_type,
+        user_type.method_fragment().to_snake_case()
+    )
 }
 
 /// Identifier escaping utilities.

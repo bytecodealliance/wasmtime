@@ -91,8 +91,18 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn u64_is_odd(&mut self, x: u64) -> Option<bool> {
+            Some(x & 1 == 1)
+        }
+
+        #[inline]
         fn u64_sextend_u32(&mut self, x: u64) -> Option<u64> {
             Some(x as u32 as i32 as i64 as u64)
+        }
+
+        #[inline]
+        fn u64_uextend_u32(&mut self, x: u64) -> Option<u64> {
+            Some(x & 0xffff_ffff)
         }
 
         #[inline]
@@ -166,7 +176,7 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn ty_int_bool_ref_scalar_64(&mut self, ty: Type) -> Option<Type> {
+        fn ty_int_ref_scalar_64(&mut self, ty: Type) -> Option<Type> {
             if ty.bits() <= 64 && !ty.is_float() && !ty.is_vector() {
                 Some(ty)
             } else {
@@ -211,33 +221,17 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn int_bool_fits_in_32(&mut self, ty: Type) -> Option<Type> {
+        fn int_fits_in_32(&mut self, ty: Type) -> Option<Type> {
             match ty {
-                I8 | I16 | I32 | B8 | B16 | B32 => Some(ty),
+                I8 | I16 | I32 => Some(ty),
                 _ => None,
             }
         }
 
         #[inline]
-        fn ty_int_bool_64(&mut self, ty: Type) -> Option<Type> {
+        fn ty_int_ref_64(&mut self, ty: Type) -> Option<Type> {
             match ty {
-                I64 | B64 => Some(ty),
-                _ => None,
-            }
-        }
-
-        #[inline]
-        fn ty_int_bool_ref_64(&mut self, ty: Type) -> Option<Type> {
-            match ty {
-                I64 | B64 | R64 => Some(ty),
-                _ => None,
-            }
-        }
-
-        #[inline]
-        fn ty_int_bool_128(&mut self, ty: Type) -> Option<Type> {
-            match ty {
-                I128 | B128 => Some(ty),
+                I64 | R64 => Some(ty),
                 _ => None,
             }
         }
@@ -245,15 +239,6 @@ macro_rules! isle_common_prelude_methods {
         #[inline]
         fn ty_int(&mut self, ty: Type) -> Option<Type> {
             ty.is_int().then(|| ty)
-        }
-
-        #[inline]
-        fn ty_int_bool(&mut self, ty: Type) -> Option<Type> {
-            if ty.is_int() || ty.is_bool() {
-                Some(ty)
-            } else {
-                None
-            }
         }
 
         #[inline]

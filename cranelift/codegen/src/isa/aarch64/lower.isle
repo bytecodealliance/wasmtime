@@ -19,14 +19,6 @@
 (rule (lower (has_type ty (iconst (u64_from_imm64 n))))
       (imm ty (ImmExtend.Zero) n))
 
-;;;; Rules for `bconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (has_type ty (bconst $false)))
-      (imm ty (ImmExtend.Zero) 0))
-
-(rule (lower (has_type ty (bconst $true)))
-      (imm ty (ImmExtend.Zero) 1))
-
 ;;;; Rules for `null` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty (null)))
@@ -122,7 +114,7 @@
 
 ;;;; Rules for `isplit` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $I64 (isplit x)))
+(rule (lower (isplit x @ (value_type $I128)))
       (let
           ((x_regs ValueRegs x)
            (x_lo ValueRegs (value_regs_get x_regs 0))
@@ -142,10 +134,10 @@
 (rule (lower (has_type $F64X2 (scalar_to_vector x)))
       (fpu_extend x (ScalarSize.Size64)))
 
-(rule -1 (lower (scalar_to_vector x @ (value_type (ty_int_bool_64 _))))
+(rule -1 (lower (scalar_to_vector x @ (value_type $I64)))
       (mov_to_fpu x (ScalarSize.Size64)))
 
-(rule -2 (lower (scalar_to_vector x @ (value_type (int_bool_fits_in_32 _))))
+(rule -2 (lower (scalar_to_vector x @ (value_type (int_fits_in_32 _))))
       (mov_to_fpu (put_in_reg_zext32 x) (ScalarSize.Size32)))
 
 ;;;; Rules for `vall_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -159,18 +151,17 @@
 ;; 0 when all input elements are true, i.e. non-zero, or a NaN otherwise
 ;; (either -1 or -2 when represented as an integer); NaNs are the only
 ;; floating-point numbers that compare unequal to themselves.
-(rule (lower (has_type out_ty (vall_true x @ (value_type (multi_lane 64 2)))))
+(rule (lower (vall_true x @ (value_type (multi_lane 64 2))))
       (let ((x1 Reg (cmeq0 x (VectorSize.Size64x2)))
             (x2 Reg (addp x1 x1 (VectorSize.Size64x2))))
        (with_flags (fpu_cmp (ScalarSize.Size64) x2 x2)
-                   (materialize_bool_result (ty_bits out_ty) (Cond.Eq)))))
+                   (materialize_bool_result (Cond.Eq)))))
 
-(rule (lower (has_type out_ty (vall_true x @ (value_type (multi_lane 32 2)))))
+(rule (lower (vall_true x @ (value_type (multi_lane 32 2))))
       (let ((x1 Reg (mov_from_vec x 0 (ScalarSize.Size64))))
        (with_flags (cmp_rr_shift (OperandSize.Size64) (zero_reg) x1 32)
                    (ccmp_imm
                     (OperandSize.Size32)
-                    (ty_bits out_ty)
                     x1
                     (u8_into_uimm5 0)
                     (nzcv $false $true $false $false)
@@ -183,18 +174,18 @@
 ;; mov xm, vn.d[0]
 ;; cmp xm, #0
 ;; cset xm, ne
-(rule -1 (lower (has_type out_ty (vall_true x @ (value_type (lane_fits_in_32 ty)))))
+(rule -1 (lower (vall_true x @ (value_type (lane_fits_in_32 ty))))
       (if (not_vec32x2 ty))
       (let ((x1 Reg (vec_lanes (VecLanesOp.Uminv) x (vector_size ty)))
             (x2 Reg (mov_from_vec x1 0 (ScalarSize.Size64))))
        (with_flags (cmp_imm (OperandSize.Size64) x2 (u8_into_imm12 0))
-                   (materialize_bool_result (ty_bits out_ty) (Cond.Ne)))))
+                   (materialize_bool_result (Cond.Ne)))))
 
 ;;;; Rules for `vany_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type out_ty (vany_true x @ (value_type in_ty))))
+(rule (lower (vany_true x @ (value_type in_ty)))
       (with_flags (vanytrue x in_ty)
-                  (materialize_bool_result (ty_bits out_ty) (Cond.Ne))))
+                  (materialize_bool_result (Cond.Ne))))
 
 ;;;; Rules for `iadd_pairwise` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -549,21 +540,7 @@
 
 ;; `i128`
 (rule -1 (lower (has_type $I128 (isub x y)))
-      (let
-          ;; Get the high/low registers for `x`.
-          ((x_regs ValueRegs x)
-           (x_lo Reg (value_regs_get x_regs 0))
-           (x_hi Reg (value_regs_get x_regs 1))
-
-           ;; Get the high/low registers for `y`.
-           (y_regs ValueRegs y)
-           (y_lo Reg (value_regs_get y_regs 0))
-           (y_hi Reg (value_regs_get y_regs 1)))
-        ;; the actual subtraction is `subs` followed by `sbc` which comprises
-        ;; the low/high bits of the result
-        (with_flags
-          (sub_with_flags_paired $I64 x_lo y_lo)
-          (sbc_paired $I64 x_hi y_hi))))
+      (sub_i128 x y))
 
 ;;;; Rules for `uadd_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -590,6 +567,10 @@
 ;; `i64` and smaller.
 (rule 1 (lower (has_type (fits_in_64 ty) (ineg x)))
       (sub ty (zero_reg) x))
+
+;; `i128`
+(rule 2 (lower (has_type $I128 (ineg x)))  
+      (sub_i128 (value_regs_zero) x))
 
 ;; vectors.
 (rule (lower (has_type (ty_vec128 ty) (ineg x)))
@@ -893,12 +874,12 @@
             (result Reg (msub $I64 div y64 x64)))
         result))
 
-;;; Rules for integer min/max: umin, imin, umax, imax ;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Rules for integer min/max: umin, smin, umax, smax ;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type ty @ (not_i64x2) (imin x y)))
+(rule (lower (has_type ty @ (not_i64x2) (smin x y)))
       (vec_rrr (VecALUOp.Smin) x y (vector_size ty)))
 
-(rule 1 (lower (has_type $I64X2 (imin x y)))
+(rule 1 (lower (has_type $I64X2 (smin x y)))
       (bsl $I64X2 (vec_rrr (VecALUOp.Cmgt) y x (VectorSize.Size64x2)) x y))
 
 (rule (lower (has_type ty @ (not_i64x2) (umin x y)))
@@ -907,10 +888,10 @@
 (rule 1 (lower (has_type $I64X2 (umin x y)))
       (bsl $I64X2 (vec_rrr (VecALUOp.Cmhi) y x (VectorSize.Size64x2)) x y))
 
-(rule (lower (has_type ty @ (not_i64x2) (imax x y)))
+(rule (lower (has_type ty @ (not_i64x2) (smax x y)))
       (vec_rrr (VecALUOp.Smax) x y (vector_size ty)))
 
-(rule 1 (lower (has_type $I64X2 (imax x y)))
+(rule 1 (lower (has_type $I64X2 (smax x y)))
       (bsl $I64X2 (vec_rrr (VecALUOp.Cmgt) x y (VectorSize.Size64x2)) x y))
 
 (rule (lower (has_type ty @ (not_i64x2) (umax x y)))
@@ -1536,60 +1517,27 @@
 (rule -1 (lower (has_type ty (cls x)))
       (a64_cls ty x))
 
-;;;; Rules for `bint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `bswap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Booleans are stored as all-zeroes (0) or all-ones (-1). We AND
-;; out the LSB to give a 0 / 1-valued integer result.
+(rule (lower (has_type $I16 (bswap x)))
+      (a64_rev16 $I16 x))
 
-(rule 1 (lower (has_type $I128 (bint x)))
-      (let ((val ValueRegs x)
-            (in_lo Reg (value_regs_get val 0))
-            (dst_lo Reg (and_imm $I32 in_lo (u64_into_imm_logic $I32 1)))
-            (dst_hi Reg (imm $I64 (ImmExtend.Zero) 0)))
-        (value_regs dst_lo dst_hi)))
+(rule (lower (has_type $I32 (bswap x)))
+      (a64_rev32 $I32 x))
 
-(rule (lower (bint x))
-      (and_imm $I32 x (u64_into_imm_logic $I32 1)))
+(rule (lower (has_type $I64 (bswap x)))
+      (a64_rev64 $I64 x))
 
-;;;; Rules for `bmask`/`bextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type $I128 (bswap x)))
+      (value_regs
+       (a64_rev64 $I64 (value_regs_get x 1))
+       (a64_rev64 $I64 (value_regs_get x 0))))
 
-;; Bextend and Bmask both simply sign-extend. This works for:
-;; - Bextend, because booleans are stored as 0 / -1, so we
-;;   sign-extend the -1 to a -1 in the wider width.
-;; - Bmask, because the resulting integer mask value must be
-;;   all-ones (-1) if the argument is true.
+;;;; Rules for `bmask` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Use a common helper to type cast bools to either bool or integer types.
-(decl cast_bool (Type Type Value) InstOutput)
-(rule (lower (has_type out_ty (bextend x @ (value_type in_ty))))
-      (cast_bool in_ty out_ty x))
+;; Bmask tests the value against zero, and uses `csetm` to assert the result.
 (rule (lower (has_type out_ty (bmask x @ (value_type in_ty))))
-      (cast_bool in_ty out_ty x))
-
-
-;; If the target has the same or a smaller size than the source, it's a no-op.
-(rule (cast_bool $B8 $I8 x) x)
-(rule (cast_bool $B16 (fits_in_16 _out) x) x)
-(rule (cast_bool $B32 (fits_in_32 _out) x) x)
-(rule (cast_bool $B64 (fits_in_64 _out) x) x)
-
-;; Casting between 128 bits is a noop
-(rule -1 (cast_bool (ty_int_bool_128 _in) (ty_int_bool_128 _out) x)
-    x)
-
-;; Converting from 128 bits to anything below we just ignore the top register
-(rule -2 (cast_bool (ty_int_bool_128 _in) (fits_in_64 _out) x)
-    (value_regs_get x 0))
-
-;; Extend to 64 bits first, then this will be all 0s or all 1s and we can
-;; duplicate to both halves of 128 bits
-(rule -3 (cast_bool in (ty_int_bool_128 _out) x)
-      (let ((tmp Reg (extend x $true (ty_bits in) 64)))
-        (value_regs tmp tmp)))
-
-;; Values that fit in a single register are sign extended normally
-(rule -4 (cast_bool (fits_in_64 in) (fits_in_64 out) x)
-      (extend x $true (ty_bits in) (ty_bits out)))
+      (lower_bmask out_ty in_ty x))
 
 ;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1648,7 +1596,7 @@
 ;;;; Rules for `bitselect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty (bitselect c x y)))
-      (if (ty_int_bool_ref_scalar_64 ty))
+      (if (ty_int_ref_scalar_64 ty))
       (let ((tmp1 Reg (and_reg ty x c))
             (tmp2 Reg (bic ty y c)))
         (orr ty tmp1 tmp2)))
@@ -1661,21 +1609,14 @@
 (rule (lower (has_type (ty_vec128 ty) (vselect c x y)))
         (bsl ty c x y))
 
-;;;; Rules for `ireduce` / `breduce` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `ireduce` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; T -> I{64,32,16,8}: We can simply pass through the value: values
 ;; are always stored with high bits undefined, so we can just leave
 ;; them be.
 (rule (lower (has_type ty (ireduce src)))
-    (if (ty_int_bool_ref_scalar_64 ty))
+    (if (ty_int_ref_scalar_64 ty))
     (value_regs_get src 0))
-
-;; Likewise for breduce.
-
-(rule (lower (has_type ty (breduce src)))
-      (if (ty_int_bool_ref_scalar_64 ty))
-      (value_regs_get src 0))
-
 
 ;;;; Rules for `fcmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1706,9 +1647,7 @@
 (rule 0 (lower (has_type out_ty
               (fcmp cond x @ (value_type (ty_scalar_float in_ty)) y)))
       (with_flags (fpu_cmp (scalar_size in_ty) x y)
-                  (materialize_bool_result
-                   (ty_bits out_ty)
-                   (fp_cond_code cond))))
+                  (materialize_bool_result (fp_cond_code cond))))
 
 (rule -1 (lower (has_type out_ty (fcmp cond x @ (value_type in_ty) y)))
       (if (ty_vector_float in_ty))
@@ -1740,116 +1679,74 @@
             (vec_size VectorSize (vector_size ty)))
           (value_reg (int_cmp_zero_swap cond rn vec_size))))
 
-(rule -1 (lower (has_type out_ty (icmp cond x @ (value_type in_ty) y)))
-      (lower_icmp_into_reg cond x y in_ty out_ty))
+(rule -1 (lower (icmp cond x @ (value_type in_ty) y))
+      (lower_icmp_into_reg cond x y in_ty $I8))
 
 ;;;; Rules for `trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (trap trap_code))
       (side_effect (udf trap_code)))
 
-;;;; Rules for `trapif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (trapif cc insn @ (iadd_ifcout x y) trap_code))
-      ;; The flags must not have been clobbered by any other instruction, as
-      ;; verified by the CLIF validator; so we can simply use the flags here.
-      (let ((insn ProducesFlags (flags_to_producesflags insn)))
-       (trap_if insn trap_code (cond_code cc))))
-
-;; Verification ensures the input is always a single-def ifcmp.
-(rule (lower (trapif cc insn @ (ifcmp x @ (value_type ty) y) trap_code))
-      (let ((cond Cond (cond_code cc)))
-       (trap_if (lower_icmp_into_flags cc x y ty) trap_code cond)))
-
-;;;; Rules for `trapff` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Verification ensures the input is always a single-def ffcmp.
-(rule (lower (trapff cc insn @ (ffcmp x @ (value_type ty) y) trap_code))
-      (let ((cond Cond (fp_cond_code cc)))
-       (trap_if (fpu_cmp (scalar_size ty) x y) trap_code cond)))
-
 ;;;; Rules for `resumable_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (resumable_trap trap_code))
       (side_effect (udf trap_code)))
 
-;;;; Rules for `trueif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Verification ensures the input is always a single-def ifcmp.
-(rule (lower (has_type out_ty
-       (trueif cc insn @ (ifcmp x @ (value_type in_ty) y))))
-      (lower_icmp_into_reg cc x y in_ty out_ty))
-
-;;;; Rules for `trueff` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Verification ensures the input is always a single-def ffcmp.
-(rule (lower (has_type ty (trueff cc insn @ (ffcmp x @ (value_type in_ty) y))))
-      (with_flags_reg
-       (fpu_cmp (scalar_size in_ty) x y)
-       (materialize_bool_result (ty_bits ty) (fp_cond_code cc))))
-
 ;;;; Rules for `select` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty
-       (select _flags @ (icmp cc x @ (value_type in_ty) y) rn rm)))
-      (let ((cond Cond (cond_code cc)))
-       (lower_select
-        (lower_icmp_into_flags cc x y in_ty)
-        cond ty rn rm)))
+                       (select (icmp cc
+                                     x @ (value_type in_ty)
+                                     y)
+                               rn
+                               rm)))
+      (let ((comparison FlagsAndCC (lower_icmp_into_flags cc x y in_ty)))
+       (lower_select (flags_and_cc_flags comparison)
+                     (cond_code (flags_and_cc_cc comparison))
+                     ty
+                     rn
+                     rm)))
 
 (rule (lower (has_type ty
-       (select _flags @ (bint (icmp cc x @ (value_type in_ty) y)) rn rm)))
-      (let ((cond Cond (cond_code cc)))
-       (lower_select
-        (lower_icmp_into_flags cc x y in_ty)
-        cond ty rn rm)))
-
-(rule (lower (has_type ty
-       (select _flags @ (fcmp cc x @ (value_type in_ty) y) rn rm)))
+                       (select (fcmp cc x @ (value_type in_ty) y)
+                               rn
+                               rm)))
       (let ((cond Cond (fp_cond_code cc)))
        (lower_select
         (fpu_cmp (scalar_size in_ty) x y)
         cond ty rn rm)))
 
-(rule (lower (has_type ty
-       (select _flags @ (bint (fcmp cc x @ (value_type in_ty) y)) rn rm)))
-      (let ((cond Cond (fp_cond_code cc)))
+(rule -1 (lower (has_type ty (select rcond @ (value_type $I8) rn rm)))
+      (let ((rcond Reg rcond))
        (lower_select
-        (fpu_cmp (scalar_size in_ty) x y)
-        cond ty rn rm)))
+         (tst_imm $I32 rcond (u64_into_imm_logic $I32 255))
+         (Cond.Ne) ty rn rm)))
 
-(rule -1 (lower (has_type ty (select rcond @ (value_type (fits_in_32 _)) rn rm)))
+(rule -2 (lower (has_type ty (select rcond @ (value_type (fits_in_32 _)) rn rm)))
       (let ((rcond Reg (put_in_reg_zext32 rcond)))
        (lower_select
         (cmp (OperandSize.Size32) rcond (zero_reg))
         (Cond.Ne) ty rn rm)))
 
-(rule -2 (lower (has_type ty (select rcond rn rm)))
+(rule -3 (lower (has_type ty (select rcond rn rm)))
       (let ((rcond Reg (put_in_reg_zext64 rcond)))
        (lower_select
         (cmp (OperandSize.Size64) rcond (zero_reg))
         (Cond.Ne) ty rn rm)))
 
-;;;; Rules for `selectif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Verification ensures that the input is always a single-def ifcmp.
-(rule (lower (has_type ty
-       (selectif cc flags @ (ifcmp x @ (value_type in_ty) y)
-        if_true if_false)))
-      (let ((cond Cond (cond_code cc)))
-       (lower_select
-        (lower_icmp_into_flags cc x y in_ty)
-        cond ty if_true if_false)))
-
-;;;; Rules for `selectif_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `select_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty
-       (selectif_spectre_guard cc
-        flags @ (ifcmp x @ (value_type in_ty) y) if_true if_false)))
-      (let ((cond Cond (cond_code cc))
+                       (select_spectre_guard (icmp cc x @ (value_type in_ty) y)
+                                             if_true
+                                             if_false)))
+      (let ((comparison FlagsAndCC (lower_icmp_into_flags cc x y in_ty))
             (dst ValueRegs (lower_select
-                      (lower_icmp_into_flags cc x y in_ty)
-                      cond ty if_true if_false))
+                            (flags_and_cc_flags comparison)
+                            (cond_code (flags_and_cc_cc comparison))
+                            ty
+                            if_true
+                            if_false))
             (_ InstOutput (side_effect (csdb))))
        dst))
 
@@ -1865,17 +1762,11 @@
 ;;;; Rules for `splat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule -1 (lower (has_type ty (splat x @ (value_type in_ty))))
-      (if (ty_int_bool_ref_scalar_64 in_ty))
+      (if (ty_int_ref_scalar_64 in_ty))
       (vec_dup x (vector_size ty)))
 
 (rule -2 (lower (has_type ty (splat x @ (value_type (ty_scalar_float _)))))
       (vec_dup_from_fpu x (vector_size ty)))
-
-(rule (lower (has_type ty (splat (bconst (u64_from_bool n)))))
-      (splat_const n (vector_size ty)))
-
-(rule (lower (has_type ty (splat (breduce (bconst (u64_from_bool n))))))
-      (splat_const n (vector_size ty)))
 
 (rule (lower (has_type ty (splat (f32const (u64_from_ieee32 n)))))
       (splat_const n (vector_size ty)))
@@ -2089,17 +1980,15 @@
 
 ;;;; Rules for `IsNull` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type out_ty (is_null x @ (value_type ty))))
+(rule (lower (is_null x @ (value_type ty)))
       (with_flags (cmp_imm (operand_size ty) x (u8_into_imm12 0))
-                  (materialize_bool_result
-                   (ty_bits out_ty) (Cond.Eq))))
+                  (materialize_bool_result (Cond.Eq))))
 
 ;;;; Rules for `IsInvalid` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type out_ty (is_invalid x @ (value_type ty))))
+(rule (lower (is_invalid x @ (value_type ty)))
       (with_flags (cmn_imm (operand_size ty) x (u8_into_imm12 1))
-                  (materialize_bool_result
-                   (ty_bits out_ty) (Cond.Eq))))
+                  (materialize_bool_result (Cond.Eq))))
 
 ;;;; Rules for `Debugtrap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2312,7 +2201,7 @@
 ;;; Rules for `{get,set}_pinned_reg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (get_pinned_reg))
-      (pinned_reg))
+      (mov_from_preg (preg_pinned)))
 
 (rule (lower (set_pinned_reg val))
       (side_effect (write_pinned_reg val)))
@@ -2320,30 +2209,25 @@
 ;;; Rules for `bitcast` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ; SIMD&FP <=> SIMD&FP
-(rule 5 (lower (has_type (ty_float_or_vec out_ty) (bitcast x @ (value_type (ty_float_or_vec _)))))
-      (fpu_move out_ty x))
+(rule 5 (lower (has_type (ty_float_or_vec _) (bitcast _ x @ (value_type (ty_float_or_vec _)))))
+      x)
 
 ; GPR => SIMD&FP
-(rule 4 (lower (has_type (ty_float_or_vec _) (bitcast x @ (value_type in_ty))))
-      (if (ty_int_bool_ref_scalar_64 in_ty))
+(rule 4 (lower (has_type (ty_float_or_vec _) (bitcast _ x @ (value_type in_ty))))
+      (if (ty_int_ref_scalar_64 in_ty))
       (mov_to_fpu x (scalar_size in_ty)))
 
 ; SIMD&FP => GPR
-(rule 3 (lower (has_type out_ty (bitcast x @ (value_type (fits_in_64 (ty_float_or_vec _))))))
-      (if (ty_int_bool_ref_scalar_64 out_ty))
+(rule 3 (lower (has_type out_ty (bitcast _ x @ (value_type (fits_in_64 (ty_float_or_vec _))))))
+      (if (ty_int_ref_scalar_64 out_ty))
       (mov_from_vec x 0 (scalar_size out_ty)))
 
 ; GPR <=> GPR
-(rule 2 (lower (has_type out_ty (bitcast x @ (value_type in_ty))))
-      (if (ty_int_bool_ref_scalar_64 out_ty))
-      (if (ty_int_bool_ref_scalar_64 in_ty))
+(rule 2 (lower (has_type out_ty (bitcast _ x @ (value_type in_ty))))
+      (if (ty_int_ref_scalar_64 out_ty))
+      (if (ty_int_ref_scalar_64 in_ty))
       x)
-(rule 1 (lower (has_type $I128 (bitcast x @ (value_type $I128)))) x)
-
-;;; Rules for `raw_bitcast` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (raw_bitcast val))
-      val)
+(rule 1 (lower (has_type $I128 (bitcast _ x @ (value_type $I128)))) x)
 
 ;;; Rules for `extractlane` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2352,7 +2236,7 @@
 (rule 2 (lower (has_type (ty_scalar_float _) (extractlane val (u8_from_uimm8 0))))
       val)
 
-(rule 0 (lower (has_type (ty_int_bool ty)
+(rule 0 (lower (has_type (ty_int ty)
                        (extractlane val
                                     (u8_from_uimm8 lane))))
       (mov_from_vec val lane (scalar_size ty)))
@@ -2365,7 +2249,7 @@
 ;;; Rules for `insertlane` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 1 (lower (insertlane vec @ (value_type vty)
-                         val @ (value_type (ty_int_bool _))
+                         val @ (value_type (ty_int _))
                          (u8_from_uimm8 lane)))
       (mov_to_vec vec val lane (vector_size vty)))
 
@@ -2373,11 +2257,6 @@
                          val @ (value_type (ty_scalar_float _))
                          (u8_from_uimm8 lane)))
       (mov_vec_elem vec val lane 0 (vector_size vty)))
-
-;;; Rules for `copy` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (copy x))
-      x)
 
 ;;; Rules for `stack_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2487,6 +2366,11 @@
        (add_with_flags ty a b)
        (invalid_reg)))
 
+;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (fits_in_64 ty) (uadd_overflow_trap a b tc)))
+      (trap_if_overflow (add_with_flags_paired ty a b) tc))
+
 ;;; Rules for `tls_value` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (tls_value (symbol_value_data name _ _)))
@@ -2505,45 +2389,32 @@
 (rule (lower (fvpromote_low val))
       (vec_rr_long (VecRRLongOp.Fcvtl32) val $false))
 
-;;; Rules for `brz`/`brnz`/`brif`/`brff`/`bricmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Rules for `brz`/`brnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; `brz` following `icmp`, possibly converted via `bint`.
+;; `brz` following `icmp`
 (rule (lower_branch (brz (icmp cc x @ (value_type ty) y) _ _) targets)
-      (let ((cond Cond (cond_code cc))
-            (cond Cond (invert_cond cond)) ;; negate for `brz`
+      (let ((comparison FlagsAndCC (lower_icmp_into_flags cc x y ty))
+            ;; Negate the condition for `brz`.
+            (cond Cond (invert_cond (cond_code (flags_and_cc_cc comparison))))
             (taken BranchTarget (branch_target targets 0))
             (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
-        (with_flags_side_effect (lower_icmp_into_flags cc x y ty)
-                                (cond_br taken not_taken
-                                 (cond_br_cond cond))))))
-(rule (lower_branch (brz (bint (icmp cc x @ (value_type ty) y)) _ _) targets)
-      (let ((cond Cond (cond_code cc))
-            (cond Cond (invert_cond cond)) ;; negate for `brz`
-            (taken BranchTarget (branch_target targets 0))
-            (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
-        (with_flags_side_effect (lower_icmp_into_flags cc x y ty)
-                                (cond_br taken not_taken
-                                 (cond_br_cond cond))))))
-;; `brnz` following `icmp`, possibly converted via `bint`.
+        (side_effect
+         (with_flags_side_effect (flags_and_cc_flags comparison)
+                                 (cond_br taken
+                                          not_taken
+                                          (cond_br_cond cond))))))
+;; `brnz` following `icmp`
 (rule (lower_branch (brnz (icmp cc x @ (value_type ty) y) _ _) targets)
-      (let ((cond Cond (cond_code cc))
+      (let ((comparison FlagsAndCC (lower_icmp_into_flags cc x y ty))
+            (cond Cond (cond_code (flags_and_cc_cc comparison)))
             (taken BranchTarget (branch_target targets 0))
             (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
-        (with_flags_side_effect (lower_icmp_into_flags cc x y ty)
-                                (cond_br taken not_taken
-                                 (cond_br_cond cond))))))
-(rule (lower_branch (brnz (bint (icmp cc x @ (value_type ty) y)) _ _) targets)
-      (let ((cond Cond (cond_code cc))
-            (taken BranchTarget (branch_target targets 0))
-            (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
-        (with_flags_side_effect (lower_icmp_into_flags cc x y ty)
-                                (cond_br taken not_taken
-                                 (cond_br_cond cond))))))
-;; `brz` following `fcmp`, possibly converted via `bint`.
+        (side_effect
+         (with_flags_side_effect (flags_and_cc_flags comparison)
+                                 (cond_br taken
+                                          not_taken
+                                          (cond_br_cond cond))))))
+;; `brz` following `fcmp`
 (rule (lower_branch (brz (fcmp cc x @ (value_type (ty_scalar_float ty)) y) _ _) targets)
       (let ((cond Cond (fp_cond_code cc))
             (cond Cond (invert_cond cond)) ;; negate for `brz`
@@ -2553,25 +2424,8 @@
         (with_flags_side_effect (fpu_cmp (scalar_size ty) x y)
                                 (cond_br taken not_taken
                                  (cond_br_cond cond))))))
-(rule (lower_branch (brz (bint (fcmp cc x @ (value_type (ty_scalar_float ty)) y)) _ _) targets)
-      (let ((cond Cond (fp_cond_code cc))
-            (cond Cond (invert_cond cond)) ;; negate for `brz`
-            (taken BranchTarget (branch_target targets 0))
-            (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
-        (with_flags_side_effect (fpu_cmp (scalar_size ty) x y)
-                                (cond_br taken not_taken
-                                 (cond_br_cond cond))))))
-;; `brnz` following `fcmp`, possibly converted via `bint`.
+;; `brnz` following `fcmp`
 (rule (lower_branch (brnz (fcmp cc x @ (value_type (ty_scalar_float ty)) y) _ _) targets)
-      (let ((cond Cond (fp_cond_code cc))
-            (taken BranchTarget (branch_target targets 0))
-            (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
-        (with_flags_side_effect (fpu_cmp (scalar_size ty) x y)
-                                (cond_br taken not_taken
-                                 (cond_br_cond cond))))))
-(rule (lower_branch (brnz (bint (fcmp cc x @ (value_type (ty_scalar_float ty)) y)) _ _) targets)
       (let ((cond Cond (fp_cond_code cc))
             (taken BranchTarget (branch_target targets 0))
             (not_taken BranchTarget (branch_target targets 1)))
@@ -2592,7 +2446,7 @@
         (with_flags_side_effect flags
          (cond_br taken not_taken (cond_br_zero rt))))))
 (rule -2 (lower_branch (brz c @ (value_type ty) _ _) targets)
-      (if (ty_int_bool_ref_scalar_64 ty))
+      (if (ty_int_ref_scalar_64 ty))
       (let ((flags ProducesFlags (flags_to_producesflags c))
             (rt Reg (put_in_reg_zext64 c))
             (taken BranchTarget (branch_target targets 0))
@@ -2613,7 +2467,7 @@
         (with_flags_side_effect flags
          (cond_br taken not_taken (cond_br_not_zero rt))))))
 (rule -2 (lower_branch (brnz c @ (value_type ty) _ _) targets)
-      (if (ty_int_bool_ref_scalar_64 ty))
+      (if (ty_int_ref_scalar_64 ty))
       (let ((flags ProducesFlags (flags_to_producesflags c))
             (rt Reg (put_in_reg_zext64 c))
             (taken BranchTarget (branch_target targets 0))
@@ -2621,58 +2475,6 @@
        (side_effect
         (with_flags_side_effect flags
          (cond_br taken not_taken (cond_br_not_zero rt))))))
-
-;; `br_icmp`
-(rule (lower_branch (br_icmp cc x @ (value_type ty) y _ _) targets)
-      (let ((cond Cond (cond_code cc))
-            (taken BranchTarget (branch_target targets 0))
-            (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
-        (with_flags_side_effect (lower_icmp_into_flags cc x y ty)
-                                (cond_br taken not_taken
-                                 (cond_br_cond cond))))))
-
-;; `brif`
-(rule (lower_branch (brif cc (ifcmp x @ (value_type ty) y) _ _) targets)
-      (let ((cond Cond (cond_code cc))
-            (taken BranchTarget (branch_target targets 0))
-            (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
-        (with_flags_side_effect (lower_icmp_into_flags cc x y ty)
-                                (cond_br taken not_taken
-                                 (cond_br_cond cond))))))
-;; If the `ifcmp` result is actually placed in a register, we need to move it
-;; back into the flags.
-(rule -1 (lower_branch (brif cc f _ _) targets)
-      (let ((cond Cond (cond_code cc))
-            (rn Reg (put_in_reg f))
-            (taken BranchTarget (branch_target targets 0))
-            (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
-        (with_flags_side_effect (mov_to_nzcv rn)
-                                (cond_br taken not_taken
-                                 (cond_br_cond cond))))))
-
-;; `brff`
-(rule (lower_branch (brff cc (ffcmp x @ (value_type ty) y) _ _) targets)
-      (let ((cond Cond (fp_cond_code cc))
-            (taken BranchTarget (branch_target targets 0))
-            (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
-        (with_flags_side_effect (fpu_cmp (scalar_size ty) x y)
-                                (cond_br taken not_taken
-                                 (cond_br_cond cond))))))
-;; If the `ffcmp` result is actually placed in a register, we need to move it
-;; back into the flags.
-(rule -1 (lower_branch (brff cc f _ _) targets)
-      (let ((cond Cond (fp_cond_code cc))
-            (rn Reg (put_in_reg f))
-            (taken BranchTarget (branch_target targets 0))
-            (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
-        (with_flags_side_effect (mov_to_nzcv rn)
-                                (cond_br taken not_taken
-                                 (cond_br_cond cond))))))
 
 ;;; Rules for `jump` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

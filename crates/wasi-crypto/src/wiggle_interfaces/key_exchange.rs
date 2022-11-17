@@ -31,7 +31,8 @@ impl super::wasi_ephemeral_crypto_kx::WasiEphemeralCryptoKx for WasiCryptoCtx {
     ) -> Result<guest_types::ArrayOutput, guest_types::CryptoErrno> {
         let encapsulated_secret = &*encapsulated_secret_ptr
             .as_array(encapsulated_secret_len)
-            .as_slice()?;
+            .as_slice()?
+            .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
         Ok((&*self)
             .kx_decapsulate(sk_handle.into(), encapsulated_secret)?
             .into())

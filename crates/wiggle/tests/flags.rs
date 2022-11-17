@@ -77,8 +77,9 @@ impl ConfigureCarExercise {
             self.old_config.bits() as i32,
             self.other_config_by_ptr.ptr as i32,
             self.return_ptr_loc.ptr as i32,
-        );
-        assert_eq!(res, Ok(types::Errno::Ok as i32), "configure car errno");
+        )
+        .unwrap();
+        assert_eq!(res, types::Errno::Ok as i32, "configure car errno");
 
         let res_config = host_memory
             .ptr::<types::CarConfig>(self.return_ptr_loc.ptr)

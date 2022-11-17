@@ -8,8 +8,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   vlebrg %v3, 0(%r2), 0
-;   vuplhb %v24, %v3
+;   vlebrg %v2, 0(%r2), 0
+;   vuplhb %v24, %v2
 ;   br %r14
 
 function %uload16x4_big(i64) -> i32x4 wasmtime_system_v {
@@ -19,9 +19,9 @@ block0(v0: i64):
 }
 
 ; block0:
-;   vlebrg %v3, 0(%r2), 0
-;   verllh %v5, %v3, 8
-;   vuplhh %v24, %v5
+;   vlebrg %v2, 0(%r2), 0
+;   verllh %v4, %v2, 8
+;   vuplhh %v24, %v4
 ;   br %r14
 
 function %uload32x2_big(i64) -> i64x2 wasmtime_system_v {
@@ -31,9 +31,9 @@ block0(v0: i64):
 }
 
 ; block0:
-;   ld %f3, 0(%r2)
-;   verllg %v5, %v3, 32
-;   vuplhf %v24, %v5
+;   ld %f2, 0(%r2)
+;   verllg %v4, %v2, 32
+;   vuplhf %v24, %v4
 ;   br %r14
 
 function %sload8x8_big(i64) -> i16x8 wasmtime_system_v {
@@ -43,8 +43,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   vlebrg %v3, 0(%r2), 0
-;   vuphb %v24, %v3
+;   vlebrg %v2, 0(%r2), 0
+;   vuphb %v24, %v2
 ;   br %r14
 
 function %sload16x4_big(i64) -> i32x4 wasmtime_system_v {
@@ -54,9 +54,9 @@ block0(v0: i64):
 }
 
 ; block0:
-;   vlebrg %v3, 0(%r2), 0
-;   verllh %v5, %v3, 8
-;   vuphh %v24, %v5
+;   vlebrg %v2, 0(%r2), 0
+;   verllh %v4, %v2, 8
+;   vuphh %v24, %v4
 ;   br %r14
 
 function %sload32x2_big(i64) -> i64x2 wasmtime_system_v {
@@ -66,9 +66,9 @@ block0(v0: i64):
 }
 
 ; block0:
-;   ld %f3, 0(%r2)
-;   verllg %v5, %v3, 32
-;   vuphf %v24, %v5
+;   ld %f2, 0(%r2)
+;   verllg %v4, %v2, 32
+;   vuphf %v24, %v4
 ;   br %r14
 
 function %load_i8x16_big(i64) -> i8x16 wasmtime_system_v {
@@ -198,8 +198,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   vlebrg %v3, 0(%r2), 0
-;   vuplhb %v24, %v3
+;   vlebrg %v2, 0(%r2), 0
+;   vuplhb %v24, %v2
 ;   br %r14
 
 function %uload16x4_little(i64) -> i32x4 wasmtime_system_v {
@@ -209,8 +209,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   vlebrg %v3, 0(%r2), 0
-;   vuplhh %v24, %v3
+;   vlebrg %v2, 0(%r2), 0
+;   vuplhh %v24, %v2
 ;   br %r14
 
 function %uload32x2_little(i64) -> i64x2 wasmtime_system_v {
@@ -220,8 +220,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   vlebrg %v3, 0(%r2), 0
-;   vuplhf %v24, %v3
+;   vlebrg %v2, 0(%r2), 0
+;   vuplhf %v24, %v2
 ;   br %r14
 
 function %sload8x8_little(i64) -> i16x8 wasmtime_system_v {
@@ -231,8 +231,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   vlebrg %v3, 0(%r2), 0
-;   vuphb %v24, %v3
+;   vlebrg %v2, 0(%r2), 0
+;   vuphb %v24, %v2
 ;   br %r14
 
 function %sload16x4_little(i64) -> i32x4 wasmtime_system_v {
@@ -242,8 +242,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   vlebrg %v3, 0(%r2), 0
-;   vuphh %v24, %v3
+;   vlebrg %v2, 0(%r2), 0
+;   vuphh %v24, %v2
 ;   br %r14
 
 function %sload32x2_little(i64) -> i64x2 wasmtime_system_v {
@@ -253,8 +253,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   vlebrg %v3, 0(%r2), 0
-;   vuphf %v24, %v3
+;   vlebrg %v2, 0(%r2), 0
+;   vuphf %v24, %v2
 ;   br %r14
 
 function %load_i8x16_little(i64) -> i8x16 wasmtime_system_v {
