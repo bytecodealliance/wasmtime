@@ -15,7 +15,6 @@ runs:
   using: composite
   steps:
 
-    # install rust
     - name: Install Rust
       shell: bash
       run: |
