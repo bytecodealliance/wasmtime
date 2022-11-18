@@ -1396,6 +1396,7 @@ impl<M: ABIMachineSpec> Callee<M> {
         sigs: &SigSet,
         idx: usize,
         into_regs: ValueRegs<Writable<Reg>>,
+        vregs: &mut VRegAllocator<M::I>,
     ) -> SmallInstVec<M::I> {
         let mut insts = smallvec![];
         let mut copy_arg_slot_to_reg = |slot: &ABIArgSlot, into_reg: &Writable<Reg>| {
@@ -1470,7 +1471,14 @@ impl<M: ABIMachineSpec> Callee<M> {
                 let into_reg = into_regs.only_reg().unwrap();
                 // We need to dereference the pointer.
                 let base = match &pointer {
-                    &ABIArgSlot::Reg { reg, .. } => Reg::from(reg),
+                    &ABIArgSlot::Reg { reg, ty, .. } => {
+                        let tmp = vregs.alloc(ty).unwrap().only_reg().unwrap();
+                        self.reg_args.push(ArgPair {
+                            vreg: Writable::from_reg(tmp),
+                            preg: reg.into(),
+                        });
+                        tmp
+                    }
                     &ABIArgSlot::Stack { offset, ty, .. } => {
                         // In this case we need a temp register to hold the address.
                         // This was allocated in the `init` routine.
@@ -1606,12 +1614,17 @@ impl<M: ABIMachineSpec> Callee<M> {
     /// values or an otherwise large return value that must be passed on the
     /// stack; typically the ABI specifies an extra hidden argument that is a
     /// pointer to that memory.
-    pub fn gen_retval_area_setup(&mut self, sigs: &SigSet) -> Option<M::I> {
+    pub fn gen_retval_area_setup(
+        &mut self,
+        sigs: &SigSet,
+        vregs: &mut VRegAllocator<M::I>,
+    ) -> Option<M::I> {
         if let Some(i) = sigs[self.sig].stack_ret_arg {
             let insts = self.gen_copy_arg_to_regs(
                 sigs,
                 i.into(),
                 ValueRegs::one(self.ret_area_ptr.unwrap()),
+                vregs,
             );
             insts.into_iter().next().map(|inst| {
                 trace!(

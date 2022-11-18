@@ -1142,6 +1142,7 @@ impl MachInst for Inst {
         // See the note in [crate::isa::aarch64::abi::is_caller_save_reg] for
         // more information on this ABI-implementation hack.
         match self {
+            &Inst::Args { .. } => false,
             &Inst::Call { ref info } => info.caller_callconv != info.callee_callconv,
             &Inst::CallInd { ref info } => info.caller_callconv != info.callee_callconv,
             _ => true,

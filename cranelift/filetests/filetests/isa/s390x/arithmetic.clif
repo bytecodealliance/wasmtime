@@ -703,7 +703,7 @@ block0(v0: i128, v1: i128):
 
 ;   stmg %r7, %r15, 56(%r15)
 ; block0:
-;   lgr %r14, %r2
+;   lgr %r10, %r2
 ;   vl %v0, 0(%r3)
 ;   vl %v1, 0(%r4)
 ;   lgdr %r4, %f0
@@ -718,7 +718,7 @@ block0(v0: i128, v1: i128):
 ;   agrk %r4, %r2, %r8
 ;   agr %r5, %r4
 ;   vlvgp %v5, %r5, %r3
-;   lgr %r2, %r14
+;   lgr %r2, %r10
 ;   vst %v5, 0(%r2)
 ;   lmg %r7, %r15, 56(%r15)
 ;   br %r14

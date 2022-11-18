@@ -348,8 +348,8 @@ block0(v0: i128):
 
 ; block0:
 ;   vl %v0, 0(%r2)
-;   vgbm %v2, 0
-;   vceqgs %v4, %v0, %v2
+;   vgbm %v3, 0
+;   vceqgs %v5, %v0, %v3
 ;   lghi %r2, 0
 ;   locghine %r2, -1
 ;   br %r14
@@ -362,8 +362,8 @@ block0(v0: i128):
 
 ; block0:
 ;   vl %v0, 0(%r2)
-;   vgbm %v2, 0
-;   vceqgs %v4, %v0, %v2
+;   vgbm %v3, 0
+;   vceqgs %v5, %v0, %v3
 ;   lhi %r2, 0
 ;   lochine %r2, -1
 ;   br %r14
@@ -376,8 +376,8 @@ block0(v0: i128):
 
 ; block0:
 ;   vl %v0, 0(%r2)
-;   vgbm %v2, 0
-;   vceqgs %v4, %v0, %v2
+;   vgbm %v3, 0
+;   vceqgs %v5, %v0, %v3
 ;   lhi %r2, 0
 ;   lochine %r2, -1
 ;   br %r14
@@ -390,8 +390,8 @@ block0(v0: i128):
 
 ; block0:
 ;   vl %v0, 0(%r2)
-;   vgbm %v2, 0
-;   vceqgs %v4, %v0, %v2
+;   vgbm %v3, 0
+;   vceqgs %v5, %v0, %v3
 ;   lhi %r2, 0
 ;   lochine %r2, -1
 ;   br %r14
