@@ -306,13 +306,10 @@ pub fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -
     }
 
     let string = e.to_string();
-    // Also allow errors related to fuel consumption
-    if string.contains("all fuel consumed")
-        // Currently we instantiate with a `Linker` which can't instantiate
-        // every single module under the sun due to using name-based resolution
-        // rather than positional-based resolution
-        || string.contains("incompatible import type")
-    {
+    // Currently we instantiate with a `Linker` which can't instantiate
+    // every single module under the sun due to using name-based resolution
+    // rather than positional-based resolution
+    if string.contains("incompatible import type") {
         log::debug!("failed to instantiate: {}", string);
         return None;
     }
