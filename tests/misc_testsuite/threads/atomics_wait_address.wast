@@ -12,7 +12,7 @@
   (export "main" (func $main))
 )
 
-(assert_trap (invoke "main") "misaligned memory access")
+(assert_trap (invoke "main") "unaligned atomic")
 
 
 (module
@@ -48,5 +48,5 @@
   (export "wait64" (func $wait64))
 )
 
-(assert_trap (invoke "wait32") "misaligned memory access")
-(assert_trap (invoke "wait64") "misaligned memory access")
+(assert_trap (invoke "wait32") "unaligned atomic")
+(assert_trap (invoke "wait64") "unaligned atomic")

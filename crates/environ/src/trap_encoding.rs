@@ -97,7 +97,7 @@ impl fmt::Display for Trap {
         let desc = match self {
             StackOverflow => "call stack exhausted",
             MemoryOutOfBounds => "out of bounds memory access",
-            HeapMisaligned => "misaligned memory access",
+            HeapMisaligned => "unaligned atomic",
             TableOutOfBounds => "undefined element: out of bounds table access",
             IndirectCallToNull => "uninitialized element",
             BadSignature => "indirect call type mismatch",
