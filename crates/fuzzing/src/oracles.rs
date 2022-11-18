@@ -506,7 +506,7 @@ pub fn spectest(mut fuzz_config: generators::Config, test: generators::SpecTest)
     fuzz_config.set_spectest_compliant();
     log::debug!("running {:?}", test.file);
     let mut wast_context = WastContext::new(fuzz_config.to_store());
-    wast_context.register_spectest().unwrap();
+    wast_context.register_spectest(false).unwrap();
     wast_context
         .run_buffer(test.file, test.contents.as_bytes())
         .unwrap();
