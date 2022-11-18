@@ -116,11 +116,7 @@ fn iloop() {
         let mut store = Store::new(&engine, ());
         store.add_fuel(10_000).unwrap();
         let error = Instance::new(&mut store, &module, &[]).err().unwrap();
-        assert!(
-            format!("{:?}", error).contains("all fuel consumed"),
-            "bad error: {}",
-            error
-        );
+        assert_eq!(error.downcast::<Trap>().unwrap(), Trap::OutOfFuel);
     }
 }
 
@@ -172,10 +168,7 @@ fn host_function_consumes_all() {
     let instance = Instance::new(&mut store, &module, &[func.into()]).unwrap();
     let export = instance.get_typed_func::<(), ()>(&mut store, "").unwrap();
     let trap = export.call(&mut store, ()).unwrap_err();
-    assert!(
-        format!("{trap:?}").contains("all fuel consumed"),
-        "bad error: {trap:?}"
-    );
+    assert_eq!(trap.downcast::<Trap>().unwrap(), Trap::OutOfFuel);
 }
 
 #[test]
