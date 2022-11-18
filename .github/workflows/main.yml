@@ -205,9 +205,9 @@ jobs:
     - run: sudo apt install -y ocaml-nox ocamlbuild ocaml-findlib libzarith-ocaml-dev
     - run: cargo fetch
       working-directory: ./fuzz
-    - run: cargo fuzz build --dev
+    - run: cargo fuzz build --dev -s none
     # Check that the ISLE fuzz targets build too.
-    - run: cargo fuzz build --dev --fuzz-dir ./cranelift/isle/fuzz
+    - run: cargo fuzz build --dev -s none --fuzz-dir ./cranelift/isle/fuzz
 
   # Perform all tests (debug mode) for `wasmtime`. This runs stable/beta/nightly
   # channels of Rust as well as macOS/Linux/Windows.
