@@ -343,6 +343,8 @@ impl Func {
     ///
     /// For more information about errors in Wasmtime see the [`Trap`]
     /// documentation.
+    ///
+    /// [`Trap`]: crate::Trap
     #[cfg(compiler)]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn new<T>(
@@ -581,6 +583,8 @@ impl Func {
     /// For more information about errors in Wasmtime see the [`Trap`]
     /// documentation.
     ///
+    /// [`Trap`]: crate::Trap
+    ///
     /// # Examples
     ///
     /// First up we can see how simple wasm imports can be implemented, such
@@ -815,6 +819,8 @@ impl Func {
     ///
     /// Errors typically indicate that execution of WebAssembly was halted
     /// mid-way and did not complete after the error condition happened.
+    ///
+    /// [`Trap`]: crate::Trap
     ///
     /// # Panics
     ///

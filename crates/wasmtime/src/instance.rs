@@ -91,6 +91,8 @@ impl Instance {
     /// check for trap errors, you can use `error.downcast::<Trap>()`. For more
     /// about error handling see the [`Trap`] documentation.
     ///
+    /// [`Trap`]: crate::Trap
+    ///
     /// # Panics
     ///
     /// This function will panic if called with a store associated with a
