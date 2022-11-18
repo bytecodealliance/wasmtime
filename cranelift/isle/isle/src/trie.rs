@@ -290,7 +290,6 @@ impl TermFunctionsBuilder {
         log!("termenv: {:?}", termenv);
         for rule in termenv.rules.iter() {
             let (pattern, expr) = lower_rule(termenv, rule.id);
-            let root_term = rule.lhs.root_term().unwrap();
 
             log!(
                 "build:\n- rule {:?}\n- pattern {:?}\n- expr {:?}",
@@ -306,7 +305,7 @@ impl TermFunctionsBuilder {
                 .chain(std::iter::once(TrieSymbol::EndOfMatch));
 
             self.builders_by_term
-                .entry(root_term)
+                .entry(rule.root_term)
                 .or_insert(TrieNode::Empty)
                 .insert(rule.prio, symbols, expr);
         }

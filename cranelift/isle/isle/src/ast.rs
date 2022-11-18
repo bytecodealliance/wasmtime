@@ -152,7 +152,6 @@ pub enum Pattern {
 impl Pattern {
     pub fn root_term(&self) -> Option<&Ident> {
         match self {
-            &Pattern::BindPattern { ref subpat, .. } => subpat.root_term(),
             &Pattern::Term { ref sym, .. } => Some(sym),
             _ => None,
         }

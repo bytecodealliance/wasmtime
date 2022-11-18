@@ -174,7 +174,7 @@ pub fn build(
     let mut errors = Vec::new();
     let mut term = HashMap::new();
     for rule in termenv.rules.iter() {
-        term.entry(rule.lhs.root_term().unwrap())
+        term.entry(rule.root_term)
             .or_insert_with(RuleSetBuilder::default)
             .add_rule(rule, termenv, tyenv, &mut errors);
     }
