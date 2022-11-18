@@ -3,14 +3,13 @@
 use crate::code::CodeObject;
 #[cfg(feature = "component-model")]
 use crate::component::Component;
-use crate::{FrameInfo, Module};
+use crate::{FrameInfo, Module, Trap};
 use once_cell::sync::Lazy;
 use std::collections::btree_map::Entry;
 use std::{
     collections::BTreeMap,
     sync::{Arc, RwLock},
 };
-use wasmtime_environ::TrapCode;
 use wasmtime_jit::CodeMemory;
 use wasmtime_runtime::{ModuleInfo, VMCallerCheckedAnyfunc, VMTrampoline};
 
@@ -132,7 +131,7 @@ impl ModuleRegistry {
     }
 
     /// Fetches trap information about a program counter in a backtrace.
-    pub fn lookup_trap_code(&self, pc: usize) -> Option<TrapCode> {
+    pub fn lookup_trap_code(&self, pc: usize) -> Option<Trap> {
         let (code, offset) = self.code(pc)?;
         wasmtime_environ::lookup_trap_code(code.code.code_memory().trap_data(), offset)
     }

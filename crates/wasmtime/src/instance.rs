@@ -3,7 +3,7 @@ use crate::store::{InstanceId, StoreOpaque, Stored};
 use crate::types::matching;
 use crate::{
     AsContextMut, Engine, Export, Extern, Func, Global, Memory, Module, SharedMemory,
-    StoreContextMut, Table, Trap, TypedFunc,
+    StoreContextMut, Table, TypedFunc,
 };
 use anyhow::{anyhow, bail, Context, Error, Result};
 use std::mem;
@@ -325,7 +325,7 @@ impl Instance {
             )
             .map_err(|e| -> Error {
                 match e {
-                    InstantiationError::Trap(trap) => Trap::from_env(trap).into(),
+                    InstantiationError::Trap(trap) => trap.into(),
                     other => other.into(),
                 }
             })?;

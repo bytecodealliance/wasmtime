@@ -32,7 +32,7 @@ use std::sync::{Arc, Mutex};
 use wasmparser::{FuncValidatorAllocations, FunctionBody};
 use wasmtime_environ::{
     AddressMapSection, CacheStore, CompileError, FilePos, FlagValue, FunctionBodyData, FunctionLoc,
-    InstructionAddressMap, ModuleTranslation, ModuleTypes, PtrSize, StackMapInformation, TrapCode,
+    InstructionAddressMap, ModuleTranslation, ModuleTypes, PtrSize, StackMapInformation, Trap,
     TrapEncodingBuilder, TrapInformation, Tunables, VMOffsets, WasmFunctionInfo,
 };
 
@@ -1003,18 +1003,18 @@ fn mach_trap_to_trap(trap: &MachTrap) -> TrapInformation {
     TrapInformation {
         code_offset: offset,
         trap_code: match code {
-            ir::TrapCode::StackOverflow => TrapCode::StackOverflow,
-            ir::TrapCode::HeapOutOfBounds => TrapCode::HeapOutOfBounds,
-            ir::TrapCode::HeapMisaligned => TrapCode::HeapMisaligned,
-            ir::TrapCode::TableOutOfBounds => TrapCode::TableOutOfBounds,
-            ir::TrapCode::IndirectCallToNull => TrapCode::IndirectCallToNull,
-            ir::TrapCode::BadSignature => TrapCode::BadSignature,
-            ir::TrapCode::IntegerOverflow => TrapCode::IntegerOverflow,
-            ir::TrapCode::IntegerDivisionByZero => TrapCode::IntegerDivisionByZero,
-            ir::TrapCode::BadConversionToInteger => TrapCode::BadConversionToInteger,
-            ir::TrapCode::UnreachableCodeReached => TrapCode::UnreachableCodeReached,
-            ir::TrapCode::Interrupt => TrapCode::Interrupt,
-            ir::TrapCode::User(ALWAYS_TRAP_CODE) => TrapCode::AlwaysTrapAdapter,
+            ir::TrapCode::StackOverflow => Trap::StackOverflow,
+            ir::TrapCode::HeapOutOfBounds => Trap::MemoryOutOfBounds,
+            ir::TrapCode::HeapMisaligned => Trap::HeapMisaligned,
+            ir::TrapCode::TableOutOfBounds => Trap::TableOutOfBounds,
+            ir::TrapCode::IndirectCallToNull => Trap::IndirectCallToNull,
+            ir::TrapCode::BadSignature => Trap::BadSignature,
+            ir::TrapCode::IntegerOverflow => Trap::IntegerOverflow,
+            ir::TrapCode::IntegerDivisionByZero => Trap::IntegerDivisionByZero,
+            ir::TrapCode::BadConversionToInteger => Trap::BadConversionToInteger,
+            ir::TrapCode::UnreachableCodeReached => Trap::UnreachableCodeReached,
+            ir::TrapCode::Interrupt => Trap::Interrupt,
+            ir::TrapCode::User(ALWAYS_TRAP_CODE) => Trap::AlwaysTrapAdapter,
 
             // these should never be emitted by wasmtime-cranelift
             ir::TrapCode::User(_) => unreachable!(),

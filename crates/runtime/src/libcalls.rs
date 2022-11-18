@@ -63,7 +63,7 @@ use anyhow::Result;
 use std::mem;
 use std::ptr::{self, NonNull};
 use wasmtime_environ::{
-    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TrapCode,
+    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, Trap,
 };
 
 /// Actually public trampolines which are used by the runtime as the entrypoint
@@ -228,7 +228,7 @@ unsafe fn table_fill(
     // `VMCallerCheckedAnyfunc` until we look at the table's element type.
     val: *mut u8,
     len: u32,
-) -> Result<(), TrapCode> {
+) -> Result<(), Trap> {
     let instance = (*vmctx).instance_mut();
     let table_index = TableIndex::from_u32(table_index);
     let table = &mut *instance.get_table(table_index);
@@ -259,7 +259,7 @@ unsafe fn table_copy(
     dst: u32,
     src: u32,
     len: u32,
-) -> Result<(), TrapCode> {
+) -> Result<(), Trap> {
     let dst_table_index = TableIndex::from_u32(dst_table_index);
     let src_table_index = TableIndex::from_u32(src_table_index);
     let instance = (*vmctx).instance_mut();
@@ -278,7 +278,7 @@ unsafe fn table_init(
     dst: u32,
     src: u32,
     len: u32,
-) -> Result<(), TrapCode> {
+) -> Result<(), Trap> {
     let table_index = TableIndex::from_u32(table_index);
     let elem_index = ElemIndex::from_u32(elem_index);
     let instance = (*vmctx).instance_mut();
@@ -300,7 +300,7 @@ unsafe fn memory_copy(
     src_index: u32,
     src: u64,
     len: u64,
-) -> Result<(), TrapCode> {
+) -> Result<(), Trap> {
     let src_index = MemoryIndex::from_u32(src_index);
     let dst_index = MemoryIndex::from_u32(dst_index);
     let instance = (*vmctx).instance_mut();
@@ -314,7 +314,7 @@ unsafe fn memory_fill(
     dst: u64,
     val: u32,
     len: u64,
-) -> Result<(), TrapCode> {
+) -> Result<(), Trap> {
     let memory_index = MemoryIndex::from_u32(memory_index);
     let instance = (*vmctx).instance_mut();
     instance.memory_fill(memory_index, dst, val as u8, len)
@@ -328,7 +328,7 @@ unsafe fn memory_init(
     dst: u64,
     src: u32,
     len: u32,
-) -> Result<(), TrapCode> {
+) -> Result<(), Trap> {
     let memory_index = MemoryIndex::from_u32(memory_index);
     let data_index = DataIndex::from_u32(data_index);
     let instance = (*vmctx).instance_mut();
@@ -498,14 +498,14 @@ unsafe fn validate_atomic_addr(
     addr: u64,
     access_size: u64,
     access_alignment: u64,
-) -> Result<(), TrapCode> {
+) -> Result<(), Trap> {
     debug_assert!(access_alignment.is_power_of_two());
-    ensure!(addr % access_alignment == 0, TrapCode::HeapMisaligned);
+    ensure!(addr % access_alignment == 0, Trap::HeapMisaligned);
 
     let length = u64::try_from(instance.get_memory(memory).current_length()).unwrap();
     ensure!(
         addr.saturating_add(access_size) < length,
-        TrapCode::HeapOutOfBounds
+        Trap::MemoryOutOfBounds
     );
 
     Ok(())
