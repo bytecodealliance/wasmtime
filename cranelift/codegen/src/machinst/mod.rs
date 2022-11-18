@@ -104,9 +104,7 @@ pub trait MachInst: Clone + Debug {
     fn is_args(&self) -> bool;
 
     /// Should this instruction be included in the clobber-set?
-    fn is_included_in_clobbers(&self) -> bool {
-        true
-    }
+    fn is_included_in_clobbers(&self) -> bool;
 
     /// Generate a move.
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Self;
