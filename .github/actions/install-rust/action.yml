@@ -39,7 +39,7 @@ runs:
         # Deny warnings on CI to keep our code warning-free as it lands in-tree.
         # Don't do this on nightly though, since there's a fair amount of
         # warning churn there.
-        if [[ "${{ inputs.toolchain }}" =~ nightly* ]]; then
+        if [[ "${{ inputs.toolchain }}" != nightly* ]]; then
           echo RUSTFLAGS="-D warnings" >> "$GITHUB_ENV"
         fi
 
