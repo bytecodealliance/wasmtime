@@ -1,7 +1,7 @@
 use crate::store::{StoreData, StoreOpaque, Stored};
 use crate::{
     AsContext, AsContextMut, CallHook, Engine, Extern, FuncType, Instance, StoreContext,
-    StoreContextMut, Trap, Val, ValRaw, ValType,
+    StoreContextMut, Val, ValRaw, ValType,
 };
 use anyhow::{bail, Context as _, Error, Result};
 use std::future::Future;
@@ -343,6 +343,8 @@ impl Func {
     ///
     /// For more information about errors in Wasmtime see the [`Trap`]
     /// documentation.
+    ///
+    /// [`Trap`]: crate::Trap
     #[cfg(compiler)]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn new<T>(
@@ -581,6 +583,8 @@ impl Func {
     /// For more information about errors in Wasmtime see the [`Trap`]
     /// documentation.
     ///
+    /// [`Trap`]: crate::Trap
+    ///
     /// # Examples
     ///
     /// First up we can see how simple wasm imports can be implemented, such
@@ -815,6 +819,8 @@ impl Func {
     ///
     /// Errors typically indicate that execution of WebAssembly was halted
     /// mid-way and did not complete after the error condition happened.
+    ///
+    /// [`Trap`]: crate::Trap
     ///
     /// # Panics
     ///
@@ -1305,7 +1311,7 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
         );
         exit_wasm(store, exit);
         store.0.call_hook(CallHook::ReturningFromWasm)?;
-        result.map_err(|t| Trap::from_runtime_box(store.0, t))
+        result.map_err(|t| crate::trap::from_runtime_box(store.0, t))
     }
 }
 
@@ -1947,7 +1953,7 @@ macro_rules! impl_into_func {
 
                     match result {
                         CallResult::Ok(val) => val,
-                        CallResult::Trap(err) => Trap::raise(err),
+                        CallResult::Trap(err) => crate::trap::raise(err),
                         CallResult::Panic(panic) => wasmtime_runtime::resume_panic(panic),
                     }
                 }
