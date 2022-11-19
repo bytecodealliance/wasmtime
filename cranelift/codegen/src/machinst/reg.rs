@@ -437,15 +437,17 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     /// allocation. The index of that earlier operand (relative to the
     /// current instruction's start of operands) must be known.
     pub fn reg_reuse_def(&mut self, reg: Writable<Reg>, idx: usize) {
-        if reg.to_reg().is_virtual() {
-            // TODO: assert that the reused operand is virtual or allocatable
-            self.add_operand(Operand::reg_reuse_def(reg.to_reg().into(), idx));
+        if let Some(rreg) = reg.to_reg().to_real_reg() {
+            // In some cases we see real register arguments to a reg_reuse_def
+            // constraint. We assume the creator knows what they're doing
+            // here, though we do also require that the real register be a
+            // fixed-nonallocatable register.
+            self.reg_fixed_nonallocatable(rreg.into());
         } else {
-            // Sometimes destination registers that reuse a source are
-            // given with RealReg args. In this case, we assume the
-            // creator of the instruction knows what they are doing
-            // and just emit a normal def to the pinned vreg.
-            self.add_operand(Operand::reg_def(reg.to_reg().into()));
+            // The operand we're reusing must not be fixed-nonallocatable, as
+            // that would imply that the register has been allocated to a
+            // virtual register.
+            self.add_operand(Operand::reg_reuse_def(reg.to_reg().into(), idx));
         }
     }
 
