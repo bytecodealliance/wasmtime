@@ -657,7 +657,10 @@ impl MachInst for Inst {
     }
 
     fn is_included_in_clobbers(&self) -> bool {
-        true
+        match self {
+            &Inst::Args { .. } => false,
+            _ => true,
+        }
     }
 
     fn is_args(&self) -> bool {

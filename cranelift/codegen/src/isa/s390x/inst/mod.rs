@@ -1109,6 +1109,7 @@ impl MachInst for Inst {
         // half-caller-save, half-callee-save SysV ABI for some vector
         // registers.
         match self {
+            &Inst::Args { .. } => false,
             &Inst::Call { ref info, .. } => info.caller_callconv != info.callee_callconv,
             &Inst::CallInd { ref info, .. } => info.caller_callconv != info.callee_callconv,
             _ => true,

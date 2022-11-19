@@ -573,7 +573,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     .vcode
                     .vcode
                     .abi
-                    .gen_copy_arg_to_regs(&self.vcode.vcode.sigs, i, regs)
+                    .gen_copy_arg_to_regs(&self.vcode.vcode.sigs, i, regs, &mut self.vregs)
                     .into_iter()
                 {
                     self.emit(insn);
@@ -601,7 +601,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 .vcode
                 .vcode
                 .abi
-                .gen_retval_area_setup(&self.vcode.vcode.sigs)
+                .gen_retval_area_setup(&self.vcode.vcode.sigs, &mut self.vregs)
             {
                 self.emit(insn);
             }
