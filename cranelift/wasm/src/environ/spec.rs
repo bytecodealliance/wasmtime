@@ -9,7 +9,7 @@
 use crate::state::FuncTranslationState;
 use crate::{
     DataIndex, ElemIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex,
-    Table, TableIndex, Tag, TagIndex, TypeIndex, WasmError, WasmFuncType, WasmResult, WasmHeapType,
+    Table, TableIndex, Tag, TagIndex, TypeIndex, WasmError, WasmFuncType, WasmHeapType, WasmResult,
 };
 use core::convert::From;
 use cranelift_codegen::cursor::FuncCursor;
@@ -197,12 +197,11 @@ pub trait FuncEnvironment: TargetEnvironment {
     /// Translate a `call_ref` WebAssembly instruction at `pos`.
     ///
     /// Insert instructions at `pos` for an indirect call to the
-    /// function `callee`. The `callee` value will have type `Ref`. TODO
+    /// function `callee`. The `callee` value will have type `Ref`.
     ///
     /// The signature `sig_ref` was previously created by `make_indirect_sig()`.
     ///
     /// Return the call instruction whose results are the WebAssembly return values.
-    #[cfg_attr(feature = "cargo-clippy", allow(clippy::too_many_arguments))]
     fn translate_call_ref(
         &mut self,
         builder: &mut FunctionBuilder,
@@ -376,7 +375,11 @@ pub trait FuncEnvironment: TargetEnvironment {
     /// null sentinel is not a null reference type pointer for your type. If you
     /// override this method, then you should also override
     /// `translate_ref_is_null` as well.
-    fn translate_ref_null(&mut self, mut pos: FuncCursor, ty: WasmHeapType) -> WasmResult<ir::Value> {
+    fn translate_ref_null(
+        &mut self,
+        mut pos: FuncCursor,
+        ty: WasmHeapType,
+    ) -> WasmResult<ir::Value> {
         let _ = ty;
         Ok(pos.ins().null(self.reference_type(ty)))
     }
