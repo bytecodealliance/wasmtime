@@ -1,7 +1,7 @@
 //! Measure some common WASI call scenarios.
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use std::time::Instant;
+use std::{fs::File, path::Path, time::Instant};
 use wasmtime::{Engine, Linker, Module, Store, TypedFunc};
 use wasmtime_wasi::{sync::WasiCtxBuilder, WasiCtx};
 
@@ -9,6 +9,15 @@ criterion_group!(benches, bench_wasi);
 criterion_main!(benches);
 
 fn bench_wasi(c: &mut Criterion) {
+    let _ = env_logger::try_init();
+
+    // Build a zero-filled test file if it does not yet exist.
+    let test_file = Path::new("benches/wasi/test.bin");
+    if !test_file.is_file() {
+        let file = File::create(test_file).unwrap();
+        file.set_len(4096).unwrap();
+    }
+
     // Benchmark each `*.wat` file in the `wasi` directory.
     for file in std::fs::read_dir("benches/wasi").unwrap() {
         let path = file.unwrap().path();
@@ -66,6 +75,12 @@ fn wasi_context() -> WasiCtx {
         "--flag3".to_string(),
         "--flag4".to_string(),
     ])
+    .unwrap()
+    .preopened_dir(
+        wasmtime_wasi::Dir::open_ambient_dir("benches/wasi", wasmtime_wasi::ambient_authority())
+            .unwrap(),
+        "/",
+    )
     .unwrap()
     .build()
 }
