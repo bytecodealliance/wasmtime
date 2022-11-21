@@ -400,7 +400,7 @@ fn everything() -> Result<()> {
             r#"
             (record
                 (field "A" u32)
-                (field "B" (enum "1" "2"))
+                (field "B" (enum "a" "b"))
                 (field "C" (record (field "D" bool) (field "E" u32)))
                 (field "F" (list (flags "G" "H" "I")))
                 (field "J" (variant
@@ -464,7 +464,7 @@ fn everything() -> Result<()> {
     let f_element_type = &f_type.unwrap_list().ty();
     let input = ty.unwrap_record().new_val([
         ("A", Val::U32(32343)),
-        ("B", b_type.unwrap_enum().new_val("2")?),
+        ("B", b_type.unwrap_enum().new_val("b")?),
         (
             "C",
             c_type

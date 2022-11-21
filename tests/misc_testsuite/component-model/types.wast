@@ -60,7 +60,7 @@
   (type (instance))
 
   (type (component
-    (import "" (func (type $empty)))
+    (import "x" (func (type $empty)))
     (import "y" (func))
     (import "z" (component))
 
@@ -71,7 +71,7 @@
   ))
 
   (type (instance
-    (export "" (func (type $empty)))
+    (export "x" (func (type $empty)))
     (export "y" (func))
     (export "z" (component))
 
@@ -97,7 +97,7 @@
 
   (component $C2
     (alias outer $C $f (core type $my_f))
-    (import "" (core module (type $m)))
+    (import "a" (core module (type $m)))
     (import "x" (core module
       (alias outer $C2 $my_f (type $my_f))
       (import "" "1" (func (type $my_f)))

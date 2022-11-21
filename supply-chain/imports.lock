@@ -353,6 +353,17 @@ who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-run"
 delta = "0.1.27 -> 0.1.29"
 
+[[audits.mozilla.audits.unicode-normalization]]
+who = "Mike Hommey <mh+mozilla@glandium.org>"
+criteria = "safe-to-deploy"
+delta = "0.1.19 -> 0.1.20"
+notes = "I am the author of most of these changes upstream, and prepared the release myself, at which point I looked at the other changes since 0.1.19."
+
+[[audits.mozilla.audits.unicode-normalization]]
+who = "Mike Hommey <mh+mozilla@glandium.org>"
+criteria = "safe-to-deploy"
+delta = "0.1.20 -> 0.1.21"
+
 [[audits.mozilla.audits.wasm-encoder]]
 who = "Ryan Hunt <rhunt@eqrion.net>"
 criteria = "safe-to-deploy"
@@ -396,7 +407,6 @@ delta = "0.87.0 -> 0.88.0"
 who = "Ryan Hunt <rhunt@eqrion.net>"
 criteria = "safe-to-deploy"
 version = "44.0.0"
-notes = "Maintained by the Bytecode Alliance, with contributions from Mozilla. wast has no unsafe code and the only ambient capability it uses is to read the full contents of a file that is given to it."
 
 [[audits.mozilla.audits.wast]]
 who = "Yury Delendik <ydelendik@mozilla.com>"

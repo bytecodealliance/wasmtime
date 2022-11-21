@@ -668,7 +668,7 @@ impl<'a> Inliner<'a> {
                     ComponentInstanceDef::Import(path, ty) => {
                         let mut path = path.clone();
                         path.path.push(name);
-                        match self.types[*ty].exports[*name] {
+                        match self.types[*ty].exports[*name].1 {
                             TypeDef::ComponentFunc(_) => {
                                 frame.component_funcs.push(ComponentFuncDef::Import(path));
                             }
@@ -909,7 +909,7 @@ impl<'a> Inliner<'a> {
                     // Note that for now this would only work with
                     // module-exporting instances.
                     ComponentInstanceDef::Import(path, ty) => {
-                        for (name, ty) in self.types[ty].exports.iter() {
+                        for (name, (_url, ty)) in self.types[ty].exports.iter() {
                             let mut path = path.clone();
                             path.path.push(name);
                             let def = ComponentItemDef::from_import(path, *ty)?;

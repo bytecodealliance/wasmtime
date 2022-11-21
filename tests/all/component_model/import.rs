@@ -18,7 +18,7 @@ fn can_compile() -> Result<()> {
     Component::new(
         &engine,
         r#"(component
-            (import "" (func $f))
+            (import "a" (func $f))
             (core func (canon lower (func $f)))
         )"#,
     )?;
@@ -26,7 +26,7 @@ fn can_compile() -> Result<()> {
         &engine,
         format!(
             r#"(component
-                (import "" (func $f (param "a" string)))
+                (import "a" (func $f (param "a" string)))
                 {libc}
                 (core func (canon lower (func $f) (memory $libc "memory") (realloc (func $libc "realloc"))))
             )"#
@@ -84,7 +84,7 @@ fn can_compile() -> Result<()> {
 fn simple() -> Result<()> {
     let component = r#"
         (component
-            (import "" (func $log (param "a" string)))
+            (import "a" (func $log (param "a" string)))
 
             (core module $libc
                 (memory (export "memory") 1)
@@ -126,7 +126,7 @@ fn simple() -> Result<()> {
 
     let mut linker = Linker::new(&engine);
     linker.root().func_wrap(
-        "",
+        "a",
         |mut store: StoreContextMut<'_, Option<String>>, (arg,): (WasmStr,)| -> Result<_> {
             let s = arg.to_str(&store)?.to_string();
             assert!(store.data().is_none());
@@ -146,7 +146,7 @@ fn simple() -> Result<()> {
     let mut linker = Linker::new(&engine);
     linker.root().func_new(
         &component,
-        "",
+        "a",
         |mut store: StoreContextMut<'_, Option<String>>, args, _results| {
             if let Val::String(s) = &args[0] {
                 assert!(store.data().is_none());

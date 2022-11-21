@@ -7,7 +7,7 @@
   (func $foo (canon lift (core func $m "")))
 
   (component $c
-    (import "" (func $foo))
+    (import "a" (func $foo))
 
     (core func $foo (canon lower (func $foo)))
     (core module $m2
@@ -17,7 +17,7 @@
     (core instance $m2 (instantiate $m2 (with "" (instance (export "" (func $foo))))))
   )
 
-  (instance $c (instantiate $c (with "" (func $foo))))
+  (instance $c (instantiate $c (with "a" (func $foo))))
 )
 
 ;; boolean parameters
@@ -835,7 +835,7 @@
     (func (export "s16") (param "a" s16) (canon lift (core func $m "s")))
   )
   (component $c2
-    (import "" (instance $i
+    (import "a" (instance $i
       (export "u8" (func (param "a" u8)))
       (export "s8" (func (param "a" s8)))
       (export "u16" (func (param "a" u16)))
@@ -878,7 +878,7 @@
     ))
   )
   (instance $c1 (instantiate $c1))
-  (instance $c2 (instantiate $c2 (with "" (instance $c1))))
+  (instance $c2 (instantiate $c2 (with "a" (instance $c1))))
 )
 
 ;; translation of locals between different types
@@ -956,7 +956,7 @@
     (func (export "e") (type $func_e) (canon lift (core func $m "e")))
   )
   (component $c2
-    (import "" (instance $i
+    (import "a" (instance $i
       (export "a" (func (type $func_a)))
       (export "b" (func (type $func_b)))
       (export "c" (func (type $func_c)))
@@ -1008,7 +1008,7 @@
     ))
   )
   (instance $c1 (instantiate $c1))
-  (instance $c2 (instantiate $c2 (with "" (instance $c1))))
+  (instance $c2 (instantiate $c2 (with "a" (instance $c1))))
 )
 
 ;; different size variants
@@ -1063,7 +1063,7 @@
     (func (export "a") (param "x" u8) (param "a" $a) (canon lift (core func $m "a")))
   )
   (component $c2
-    (import "" (instance $i
+    (import "a" (instance $i
       (export "a" (func (param "x" u8) (param "a" $a)))
     ))
 
@@ -1111,7 +1111,7 @@
     ))
   )
   (instance $c1 (instantiate $c1))
-  (instance $c2 (instantiate $c2 (with "" (instance $c1))))
+  (instance $c2 (instantiate $c2 (with "a" (instance $c1))))
 )
 
 ;; roundtrip some valid chars
@@ -1124,7 +1124,7 @@
     (func (export "a") (param "a" char) (result char) (canon lift (core func $m "a")))
   )
   (component $c2
-    (import "" (instance $i
+    (import "a" (instance $i
       (export "a" (func (param "a" char) (result char)))
     ))
 
@@ -1158,7 +1158,7 @@
     (func (export "roundtrip") (param "a" char) (canon lift (core func $m "roundtrip")))
   )
   (instance $c1 (instantiate $c1))
-  (instance $c2 (instantiate $c2 (with "" (instance $c1))))
+  (instance $c2 (instantiate $c2 (with "a" (instance $c1))))
 
   (export "roundtrip" (func $c2 "roundtrip"))
 )
@@ -1176,7 +1176,7 @@
       (func (export "a") (param "a" char) (canon lift (core func $m "a")))
     )
     (component $c2
-      (import "" (instance $i (export "a" (func (param "a" char)))))
+      (import "a" (instance $i (export "a" (func (param "a" char)))))
       (core func $a (canon lower (func $i "a")))
       (core module $m
         (import "" "a" (func $a (param i32)))
@@ -1186,7 +1186,7 @@
       (core instance (instantiate $m (with "" (instance (export "a" (func $a))))))
     )
     (instance $c1 (instantiate $c1))
-    (instance $c2 (instantiate $c2 (with "" (instance $c1))))
+    (instance $c2 (instantiate $c2 (with "a" (instance $c1))))
   )
   "unreachable")
 (assert_trap
@@ -1197,7 +1197,7 @@
       (func (export "a") (param "a" char) (canon lift (core func $m "a")))
     )
     (component $c2
-      (import "" (instance $i (export "a" (func (param "a" char)))))
+      (import "a" (instance $i (export "a" (func (param "a" char)))))
       (core func $a (canon lower (func $i "a")))
       (core module $m
         (import "" "a" (func $a (param i32)))
@@ -1207,7 +1207,7 @@
       (core instance (instantiate $m (with "" (instance (export "a" (func $a))))))
     )
     (instance $c1 (instantiate $c1))
-    (instance $c2 (instantiate $c2 (with "" (instance $c1))))
+    (instance $c2 (instantiate $c2 (with "a" (instance $c1))))
   )
   "unreachable")
 (assert_trap
@@ -1218,7 +1218,7 @@
       (func (export "a") (param "a" char) (canon lift (core func $m "a")))
     )
     (component $c2
-      (import "" (instance $i (export "a" (func (param "a" char)))))
+      (import "a" (instance $i (export "a" (func (param "a" char)))))
       (core func $a (canon lower (func $i "a")))
       (core module $m
         (import "" "a" (func $a (param i32)))
@@ -1228,7 +1228,7 @@
       (core instance (instantiate $m (with "" (instance (export "a" (func $a))))))
     )
     (instance $c1 (instantiate $c1))
-    (instance $c2 (instantiate $c2 (with "" (instance $c1))))
+    (instance $c2 (instantiate $c2 (with "a" (instance $c1))))
   )
   "unreachable")
 
@@ -1332,7 +1332,7 @@
   (instance $c1 (instantiate $c1))
 
   (component $c2
-    (import "" (instance $i
+    (import "a" (instance $i
       (export "f0" (func (param "a" $f0)))
       (export "f1" (func (param "a" $f1)))
       (export "f8" (func (param "a" $f8)))
@@ -1397,7 +1397,7 @@
       ))
     ))
   )
-  (instance (instantiate $c2 (with "" (instance $c1))))
+  (instance (instantiate $c2 (with "a" (instance $c1))))
 )
 
 ;; Adapters are used slightly out-of-order here to stress the internals of
