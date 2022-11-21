@@ -107,7 +107,7 @@ fn test_probe_shared_memory_size() -> Result<()> {
     let mut store = Store::new(&engine, ());
     let instance = Instance::new(&mut store, &module, &[])?;
     let size_fn = instance.get_typed_func::<(), i32>(&mut store, "size")?;
-    let mut shared_memory = instance.get_shared_memory(&mut store, "memory").unwrap();
+    let shared_memory = instance.get_shared_memory(&mut store, "memory").unwrap();
 
     assert_eq!(size_fn.call(&mut store, ())?, 1);
     assert_eq!(shared_memory.size(), 1);
@@ -244,7 +244,7 @@ fn test_memory_size_accessibility() -> Result<()> {
     let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, NUM_GROW_OPS as u32))?;
     let done = Arc::new(AtomicBool::new(false));
 
-    let mut grow_memory = shared_memory.clone();
+    let grow_memory = shared_memory.clone();
     let grow_thread = std::thread::spawn(move || {
         for i in 0..NUM_GROW_OPS {
             if grow_memory.grow(1).is_err() {

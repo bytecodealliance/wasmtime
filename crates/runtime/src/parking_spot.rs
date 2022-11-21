@@ -14,22 +14,10 @@
 #![deny(missing_docs)]
 #![deny(unsafe_code)]
 
+use crate::WaitResult;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Instant;
-
-/// Result of a park operation.
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum ParkResult {
-    /// Unparked by another thread.
-    Unparked,
-
-    /// The validation callback returned false.
-    Invalid,
-
-    /// The timeout expired.
-    TimedOut,
-}
 
 #[derive(Default, Debug)]
 struct Spot {
@@ -57,7 +45,7 @@ impl ParkingSpot {
     /// `unpark_all` or `unpark` with the same key, the current thread will be unparked.
     ///
     /// The `validate` callback is called before parking.
-    /// If it returns `false`, the thread is not parked and `ParkResult::Invalid` is returned.
+    /// If it returns `false`, the thread is not parked and `WaitResult::Mismatch` is returned.
     ///
     /// The `timeout` argument specifies the maximum amount of time the thread will be parked.
     pub fn park(
@@ -65,7 +53,7 @@ impl ParkingSpot {
         key: u64,
         validate: impl FnOnce() -> bool,
         timeout: impl Into<Option<Instant>>,
-    ) -> ParkResult {
+    ) -> WaitResult {
         self.park_inner(key, validate, timeout.into())
     }
 
@@ -74,7 +62,7 @@ impl ParkingSpot {
         key: u64,
         validate: impl FnOnce() -> bool,
         timeout: Option<Instant>,
-    ) -> ParkResult {
+    ) -> WaitResult {
         let mut inner = self
             .inner
             .lock()
@@ -82,7 +70,7 @@ impl ParkingSpot {
 
         // check validation with lock held
         if !validate() {
-            return ParkResult::Invalid;
+            return WaitResult::Mismatch;
         }
 
         // clone the condvar, so we can move the lock
@@ -136,10 +124,10 @@ impl ParkingSpot {
             }
 
             if timed_out {
-                return ParkResult::TimedOut;
+                return WaitResult::TimedOut;
             }
 
-            return ParkResult::Unparked;
+            return WaitResult::Ok;
         }
     }
 
@@ -147,6 +135,9 @@ impl ParkingSpot {
     ///
     /// Returns the number of threads that were actually unparked.
     pub fn unpark(&self, key: u64, n: u32) -> u32 {
+        if n == 0 {
+            return 0;
+        }
         let mut num_unpark = 0;
 
         self.with_lot(key, |spot| {

@@ -57,7 +57,7 @@
 use crate::externref::VMExternRef;
 use crate::table::{Table, TableElementType};
 use crate::vmcontext::{VMCallerCheckedAnyfunc, VMContext};
-use crate::{SharedMemory, TrapReason};
+use crate::TrapReason;
 use anyhow::Result;
 use std::mem;
 use std::ptr::{self, NonNull};
@@ -436,25 +436,12 @@ unsafe fn memory_atomic_notify(
     memory_index: u32,
     addr_index: u64,
     count: u32,
-) -> Result<u32, TrapReason> {
+) -> Result<u32, Trap> {
     let memory = MemoryIndex::from_u32(memory_index);
     let instance = (*vmctx).instance_mut();
     instance
-        .get_memory(memory)
-        .validate_addr(addr_index, 4, 4)?;
-
-    let shared_mem = instance.get_runtime_memory(memory).as_shared_memory();
-
-    if count == 0 {
-        return Ok(0);
-    }
-
-    let unparked_threads = shared_mem.map_or(0, |shared_mem| {
-        // SAFETY: checked `addr_index` above
-        unsafe { shared_mem.unchecked_atomic_notify(addr_index, count) }
-    });
-
-    Ok(unparked_threads)
+        .get_runtime_memory(memory)
+        .atomic_notify(addr_index, count)
 }
 
 // Implementation of `memory.atomic.wait32` for locally defined memories.
@@ -464,24 +451,14 @@ unsafe fn memory_atomic_wait32(
     addr_index: u64,
     expected: u32,
     timeout: u64,
-) -> Result<u32, TrapReason> {
+) -> Result<u32, Trap> {
     // convert timeout to Instant, before any wait happens on locking
     let timeout = (timeout as i64 >= 0).then(|| Instant::now() + Duration::from_nanos(timeout));
-
     let memory = MemoryIndex::from_u32(memory_index);
     let instance = (*vmctx).instance_mut();
-    let addr = instance
-        .get_memory(memory)
-        .validate_addr(addr_index, 4, 4)?;
-
-    let shared_mem: SharedMemory = instance
+    Ok(instance
         .get_runtime_memory(memory)
-        .as_shared_memory()
-        .ok_or(Trap::AtomicWaitNonSharedMemory)?;
-
-    // SAFETY: checked `addr_index` above
-    let res = unsafe { shared_mem.unchecked_atomic_wait32(addr_index, addr, expected, timeout) };
-    Ok(res)
+        .atomic_wait32(addr_index, expected, timeout)? as u32)
 }
 
 // Implementation of `memory.atomic.wait64` for locally defined memories.
@@ -491,24 +468,14 @@ unsafe fn memory_atomic_wait64(
     addr_index: u64,
     expected: u64,
     timeout: u64,
-) -> Result<u32, TrapReason> {
+) -> Result<u32, Trap> {
     // convert timeout to Instant, before any wait happens on locking
     let timeout = (timeout as i64 >= 0).then(|| Instant::now() + Duration::from_nanos(timeout));
-
     let memory = MemoryIndex::from_u32(memory_index);
     let instance = (*vmctx).instance_mut();
-    let addr = instance
-        .get_memory(memory)
-        .validate_addr(addr_index, 8, 8)?;
-
-    let shared_mem: SharedMemory = instance
+    Ok(instance
         .get_runtime_memory(memory)
-        .as_shared_memory()
-        .ok_or(Trap::AtomicWaitNonSharedMemory)?;
-
-    // SAFETY: checked `addr_index` above
-    let res = unsafe { shared_mem.unchecked_atomic_wait64(addr_index, addr, expected, timeout) };
-    Ok(res)
+        .atomic_wait64(addr_index, expected, timeout)? as u32)
 }
 
 // Hook for when an instance runs out of fuel.

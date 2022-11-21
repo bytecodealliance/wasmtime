@@ -966,8 +966,8 @@ impl Instance {
                 let def_ptr = self.memories[defined_memory_index]
                     .as_shared_memory()
                     .unwrap()
-                    .vmmemory_ptr_mut();
-                ptr::write(ptr, def_ptr);
+                    .vmmemory_ptr();
+                ptr::write(ptr, def_ptr.cast_mut());
             } else {
                 ptr::write(owned_ptr, self.memories[defined_memory_index].vmmemory());
                 ptr::write(ptr, owned_ptr);
