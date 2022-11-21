@@ -28,7 +28,7 @@
 
             ;; Check that we indeed read at least 380 bytes of directory
             ;; entries.
-            (if (i32.lt_u (i32.load (i32.const 8)) (i32.const 380))
+            (if (i32.lt_u (i32.load (i32.const 8)) (i32.const 300))
                (then unreachable))
 
             ;; Continue looping until $i reaches $iters.
