@@ -394,12 +394,14 @@ impl Heap {
     }
 }
 
-/// An opaque reference to a [heap](https://en.wikipedia.org/wiki/Memory_management#DYNAMIC).
+/// An opaque reference to some out-of-line immediates for `heap_{load,store}`
+/// instructions.
 ///
-/// Heaps are used to access dynamically allocated memory through
-/// [`heap_addr`](super::InstBuilder::heap_addr).
-///
-/// To create a heap, use [`FunctionBuilder::create_heap`](https://docs.rs/cranelift-frontend/*/cranelift_frontend/struct.FunctionBuilder.html#method.create_heap).
+/// These immediates are too large to store in
+/// [`InstructionData`](super::instructions::InstructionData) and therefore must
+/// be tracked separately in
+/// [`DataFlowGraph::heap_imms`](super::dfg::DataFlowGraph). `HeapImm` provides
+/// a way to reference values stored there.
 ///
 /// While the order is stable, it is arbitrary.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
