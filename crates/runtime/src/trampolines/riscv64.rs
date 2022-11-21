@@ -23,7 +23,7 @@ asm_func!(
         // Store the last Wasm SP into the `last_wasm_entry_sp` in the limits, if this
         // was core Wasm, otherwise store an invalid sentinal value.
         sd t1,40(t0)
-        
+
         ld t0,16(a1)
         jr t0
 
@@ -95,23 +95,26 @@ macro_rules! wasm_to_libcall_trampoline {
     ($libcall:ident ; $libcall_impl:ident) => {
         wasmtime_asm_macros::asm_func!(
             stringify!($libcall),
-            "
-                .cfi_startproc
+            concat!(
+                "
+                    .cfi_startproc
 
-                // Load the pointer to `VMRuntimeLimits` in `t0`.
-                ld t0, 8(a0)
+                    // Load the pointer to `VMRuntimeLimits` in `t0`.
+                    ld t0, 8(a0)
 
-                // Store the last Wasm FP into the `last_wasm_exit_fp` in the limits.
-                sd fp, 24(t0)
+                    // Store the last Wasm FP into the `last_wasm_exit_fp` in the limits.
+                    sd fp, 24(t0)
 
-                // Store the last Wasm PC into the `last_wasm_exit_pc` in the limits.
-                sd ra, 32(t0)
+                    // Store the last Wasm PC into the `last_wasm_exit_pc` in the limits.
+                    sd ra, 32(t0)
 
-                // Tail call to the actual implementation of this libcall.
-                j ", wasmtime_asm_macros::asm_sym!(stringify!($libcall_impl)), "
+                    // Tail call to the actual implementation of this libcall.
+                    j {}
 
-                .cfi_endproc
-            "
+                    .cfi_endproc
+                ",
+            ),
+            sym $libcall_impl,
         );
     };
 }

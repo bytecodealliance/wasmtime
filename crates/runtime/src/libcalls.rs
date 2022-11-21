@@ -104,7 +104,12 @@ pub mod trampolines {
                 // This will delegate to the outer module to the actual
                 // implementation and automatically perform `catch_unwind` along
                 // with conversion of the return value in the face of traps.
-                #[no_mangle]
+                //
+                // Note that rust targets which support `global_asm!` can use
+                // the `sym` operator to get the symbol here, but other targets
+                // like s390x need to use outlined assembly files which requires
+                // `no_mangle`.
+                #[cfg_attr(target_arch = "s390x", no_mangle)]
                 unsafe extern "C" fn [<impl_ $name>](
                     vmctx : *mut VMContext,
                     $( $pname : libcall!(@ty $param), )*
