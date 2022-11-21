@@ -3,7 +3,7 @@ use std::time::Instant;
 use wasmtime::*;
 
 #[test]
-fn atomic_timeout_length() -> Result<()> {
+fn atomic_wait_timeout_length() -> Result<()> {
     let sleep_nanoseconds = 500000000;
     let wat = format!(
         r#"(module
@@ -39,7 +39,7 @@ fn atomic_timeout_length() -> Result<()> {
 }
 
 #[test]
-fn atomic_basic_wait_notify() -> Result<()> {
+fn atomic_wait_notify_basic() -> Result<()> {
     let wat = r#"(module
         (import "env" "memory" (memory 1 1 shared))
 
