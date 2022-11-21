@@ -196,6 +196,17 @@ impl Instance {
         }
     }
 
+    /// Get a locally defined or imported memory.
+    pub(crate) fn get_runtime_memory(&mut self, index: MemoryIndex) -> &mut Memory {
+        if let Some(defined_index) = self.module().defined_memory_index(index) {
+            unsafe { &mut *self.get_defined_memory(defined_index) }
+        } else {
+            let import = self.imported_memory(index);
+            let ctx = unsafe { &mut *import.vmctx };
+            unsafe { &mut *ctx.instance_mut().get_defined_memory(import.index) }
+        }
+    }
+
     /// Return the indexed `VMMemoryDefinition`.
     fn memory(&self, index: DefinedMemoryIndex) -> VMMemoryDefinition {
         unsafe { VMMemoryDefinition::load(self.memory_ptr(index)) }

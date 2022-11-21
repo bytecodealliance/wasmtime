@@ -45,6 +45,9 @@ features = [
   "Win32_Security",
 ]
 
+[dev-dependencies]
+once_cell = { workspace = true }
+
 [build-dependencies]
 cc = "1.0"
 

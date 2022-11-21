@@ -55,13 +55,13 @@
 //! ```
 
 use crate::externref::VMExternRef;
-use crate::instance::Instance;
 use crate::table::{Table, TableElementType};
 use crate::vmcontext::{VMCallerCheckedAnyfunc, VMContext};
-use crate::TrapReason;
+use crate::{SharedMemory, TrapReason};
 use anyhow::Result;
 use std::mem;
 use std::ptr::{self, NonNull};
+use std::time::{Duration, Instant};
 use wasmtime_environ::{
     DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, Trap,
 };
@@ -434,81 +434,81 @@ unsafe fn externref_global_set(vmctx: *mut VMContext, index: u32, externref: *mu
 unsafe fn memory_atomic_notify(
     vmctx: *mut VMContext,
     memory_index: u32,
-    addr: u64,
-    _count: u32,
+    addr_index: u64,
+    count: u32,
 ) -> Result<u32, TrapReason> {
     let memory = MemoryIndex::from_u32(memory_index);
-    let instance = (*vmctx).instance();
-    validate_atomic_addr(instance, memory, addr, 4, 4)?;
-    Err(
-        anyhow::anyhow!("unimplemented: wasm atomics (fn memory_atomic_notify) unsupported",)
-            .into(),
-    )
+    let instance = (*vmctx).instance_mut();
+    instance
+        .get_memory(memory)
+        .validate_addr(addr_index, 4, 4)?;
+
+    let shared_mem = instance.get_runtime_memory(memory).as_shared_memory();
+
+    if count == 0 {
+        return Ok(0);
+    }
+
+    let unparked_threads = shared_mem.map_or(0, |shared_mem| {
+        // SAFETY: checked `addr_index` above
+        unsafe { shared_mem.unchecked_atomic_notify(addr_index, count) }
+    });
+
+    Ok(unparked_threads)
 }
 
 // Implementation of `memory.atomic.wait32` for locally defined memories.
 unsafe fn memory_atomic_wait32(
     vmctx: *mut VMContext,
     memory_index: u32,
-    addr: u64,
-    _expected: u32,
-    _timeout: u64,
+    addr_index: u64,
+    expected: u32,
+    timeout: u64,
 ) -> Result<u32, TrapReason> {
+    // convert timeout to Instant, before any wait happens on locking
+    let timeout = (timeout as i64 >= 0).then(|| Instant::now() + Duration::from_nanos(timeout));
+
     let memory = MemoryIndex::from_u32(memory_index);
-    let instance = (*vmctx).instance();
-    validate_atomic_addr(instance, memory, addr, 4, 4)?;
-    Err(
-        anyhow::anyhow!("unimplemented: wasm atomics (fn memory_atomic_wait32) unsupported",)
-            .into(),
-    )
+    let instance = (*vmctx).instance_mut();
+    let addr = instance
+        .get_memory(memory)
+        .validate_addr(addr_index, 4, 4)?;
+
+    let shared_mem: SharedMemory = instance
+        .get_runtime_memory(memory)
+        .as_shared_memory()
+        .ok_or(Trap::AtomicWaitNonSharedMemory)?;
+
+    // SAFETY: checked `addr_index` above
+    let res = unsafe { shared_mem.unchecked_atomic_wait32(addr_index, addr, expected, timeout) };
+    Ok(res)
 }
 
 // Implementation of `memory.atomic.wait64` for locally defined memories.
 unsafe fn memory_atomic_wait64(
     vmctx: *mut VMContext,
     memory_index: u32,
-    addr: u64,
-    _expected: u64,
-    _timeout: u64,
+    addr_index: u64,
+    expected: u64,
+    timeout: u64,
 ) -> Result<u32, TrapReason> {
+    // convert timeout to Instant, before any wait happens on locking
+    let timeout = (timeout as i64 >= 0).then(|| Instant::now() + Duration::from_nanos(timeout));
+
     let memory = MemoryIndex::from_u32(memory_index);
-    let instance = (*vmctx).instance();
-    validate_atomic_addr(instance, memory, addr, 8, 8)?;
-    Err(
-        anyhow::anyhow!("unimplemented: wasm atomics (fn memory_atomic_wait64) unsupported",)
-            .into(),
-    )
-}
+    let instance = (*vmctx).instance_mut();
+    let addr = instance
+        .get_memory(memory)
+        .validate_addr(addr_index, 8, 8)?;
 
-macro_rules! ensure {
-    ($cond:expr, $trap:expr) => {
-        if !($cond) {
-            return Err($trap);
-        }
-    };
-}
+    let shared_mem: SharedMemory = instance
+        .get_runtime_memory(memory)
+        .as_shared_memory()
+        .ok_or(Trap::AtomicWaitNonSharedMemory)?;
 
-/// In the configurations where bounds checks were elided in JIT code (because
-/// we are using static memories with virtual memory guard pages) this manual
-/// check is here so we don't segfault from Rust. For other configurations,
-/// these checks are required anyways.
-unsafe fn validate_atomic_addr(
-    instance: &Instance,
-    memory: MemoryIndex,
-    addr: u64,
-    access_size: u64,
-    access_alignment: u64,
-) -> Result<(), Trap> {
-    debug_assert!(access_alignment.is_power_of_two());
-    ensure!(addr % access_alignment == 0, Trap::HeapMisaligned);
-
-    let length = u64::try_from(instance.get_memory(memory).current_length()).unwrap();
-    ensure!(
-        addr.saturating_add(access_size) < length,
-        Trap::MemoryOutOfBounds
-    );
-
-    Ok(())
+    // SAFETY: checked `addr_index` above
+    let res = unsafe { shared_mem.unchecked_atomic_wait64(addr_index, addr, expected, timeout) };
+    Ok(res)
 }
 
 // Hook for when an instance runs out of fuel.

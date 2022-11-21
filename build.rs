@@ -12,6 +12,7 @@ use std::process::Command;
 
 fn main() -> anyhow::Result<()> {
     println!("cargo:rerun-if-changed=build.rs");
+
     let out_dir = PathBuf::from(
         env::var_os("OUT_DIR").expect("The OUT_DIR environment variable must be set"),
     );
@@ -43,6 +44,7 @@ fn main() -> anyhow::Result<()> {
                     "tests/spec_testsuite/proposals/multi-memory",
                     strategy,
                 )?;
+                test_directory_module(out, "tests/spec_testsuite/proposals/threads", strategy)?;
             } else {
                 println!(
                     "cargo:warning=The spec testsuite is disabled. To enable, run `git submodule \
@@ -62,7 +64,6 @@ fn main() -> anyhow::Result<()> {
     drop(Command::new("rustfmt").arg(&output).status());
     Ok(())
 }
-
 fn test_directory_module(
     out: &mut String,
     path: impl AsRef<Path>,
@@ -91,7 +92,7 @@ fn test_directory(
                 return None;
             }
             // Ignore files starting with `.`, which could be editor temporary files
-            if p.file_stem()?.to_str()?.starts_with(".") {
+            if p.file_stem()?.to_str()?.starts_with('.') {
                 return None;
             }
             Some(p)
@@ -116,8 +117,7 @@ fn extract_name(path: impl AsRef<Path>) -> String {
         .expect("filename should have a stem")
         .to_str()
         .expect("filename should be representable as a string")
-        .replace("-", "_")
-        .replace("/", "_")
+        .replace(['-', '/'], "_")
 }
 
 fn with_test_module<T>(
@@ -163,7 +163,7 @@ fn write_testsuite_tests(
         "    crate::wast::run_wast(r#\"{}\"#, crate::wast::Strategy::{}, {}).unwrap();",
         path.display(),
         strategy,
-        pooling
+        pooling,
     )?;
     writeln!(out, "}}")?;
     writeln!(out)?;

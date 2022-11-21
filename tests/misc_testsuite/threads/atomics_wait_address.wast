@@ -12,7 +12,7 @@
   (export "main" (func $main))
 )
 
-(assert_trap (invoke "main") "misaligned memory access")
+(assert_trap (invoke "main") "unaligned atomic")
 
 
 (module
@@ -48,5 +48,96 @@
   (export "wait64" (func $wait64))
 )
 
-(assert_trap (invoke "wait32") "misaligned memory access")
-(assert_trap (invoke "wait64") "misaligned memory access")
+(assert_trap (invoke "wait32") "unaligned atomic")
+(assert_trap (invoke "wait64") "unaligned atomic")
+
+(module
+  (type (;0;) (func))
+  (func $wait32 (type 0)
+    i32.const 0
+    i32.const 42
+    i64.const 0
+    memory.atomic.wait32
+    unreachable)
+  (func $wait64 (type 0)
+    i32.const 0
+    i64.const 43
+    i64.const 0
+    memory.atomic.wait64
+    unreachable)
+  (memory (;0;) 4 4)
+  (export "wait32" (func $wait32))
+  (export "wait64" (func $wait64))
+)
+
+(assert_trap (invoke "wait32") "atomic wait on non-shared memory")
+(assert_trap (invoke "wait64") "atomic wait on non-shared memory")
+
+;; not valid values for memory.atomic.wait
+(module
+  (memory 1 1 shared)
+  (type (;0;) (func))
+  (func $wait32 (result i32)
+    i32.const 0
+    i32.const 42
+    i64.const -1
+    memory.atomic.wait32
+    )
+  (func $wait64 (result i32)
+    i32.const 0
+    i64.const 43
+    i64.const -1
+    memory.atomic.wait64
+    )
+  (export "wait32" (func $wait32))
+  (export "wait64" (func $wait64))
+)
+
+(assert_return (invoke "wait32") (i32.const 1))
+(assert_return (invoke "wait64") (i32.const 1))
+
+;; timeout
+(module
+  (memory 1 1 shared)
+  (type (;0;) (func))
+  (func $wait32 (result i32)
+    i32.const 0
+    i32.const 0
+    i64.const 1000
+    memory.atomic.wait32
+    )
+  (func $wait64 (result i32)
+    i32.const 0
+    i64.const 0
+    i64.const 1000
+    memory.atomic.wait64
+    )
+  (export "wait32" (func $wait32))
+  (export "wait64" (func $wait64))
+)
+
+(assert_return (invoke "wait32") (i32.const 2))
+(assert_return (invoke "wait64") (i32.const 2))
+
+;; timeout on 0ns
+(module
+  (memory 1 1 shared)
+  (type (;0;) (func))
+  (func $wait32 (result i32)
+    i32.const 0
+    i32.const 0
+    i64.const 0
+    memory.atomic.wait32
+    )
+  (func $wait64 (result i32)
+    i32.const 0
+    i64.const 0
+    i64.const 0
+    memory.atomic.wait64
+    )
+  (export "wait32" (func $wait32))
+  (export "wait64" (func $wait64))
+)
+
+(assert_return (invoke "wait32") (i32.const 2))
+(assert_return (invoke "wait64") (i32.const 2))

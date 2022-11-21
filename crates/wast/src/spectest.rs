@@ -3,7 +3,11 @@ use wasmtime::*;
 
 /// Return an instance implementing the "spectest" interface used in the
 /// spec testsuite.
-pub fn link_spectest<T>(linker: &mut Linker<T>, store: &mut Store<T>) -> Result<()> {
+pub fn link_spectest<T>(
+    linker: &mut Linker<T>,
+    store: &mut Store<T>,
+    use_shared_memory: bool,
+) -> Result<()> {
     linker.func_wrap("spectest", "print", || {})?;
     linker.func_wrap("spectest", "print_i32", |val: i32| println!("{}: i32", val))?;
     linker.func_wrap("spectest", "print_i64", |val: i64| println!("{}: i64", val))?;
@@ -41,6 +45,12 @@ pub fn link_spectest<T>(linker: &mut Linker<T>, store: &mut Store<T>) -> Result<
     let ty = MemoryType::new(1, Some(2));
     let memory = Memory::new(&mut *store, ty)?;
     linker.define("spectest", "memory", memory)?;
+
+    if use_shared_memory {
+        let ty = MemoryType::shared(1, 1);
+        let memory = Memory::new(&mut *store, ty)?;
+        linker.define("spectest", "shared_memory", memory)?;
+    }
 
     Ok(())
 }

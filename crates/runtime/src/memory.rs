@@ -3,6 +3,7 @@
 //! `RuntimeLinearMemory` is to WebAssembly linear memories what `Table` is to WebAssembly tables.
 
 use crate::mmap::Mmap;
+use crate::parking_spot::{ParkResult, ParkingSpot};
 use crate::vmcontext::VMMemoryDefinition;
 use crate::MemoryImage;
 use crate::MemoryImageSlot;
@@ -10,9 +11,10 @@ use crate::Store;
 use anyhow::Error;
 use anyhow::{bail, format_err, Result};
 use std::convert::TryFrom;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
-use wasmtime_environ::{MemoryPlan, MemoryStyle, WASM32_MAX_PAGES, WASM64_MAX_PAGES};
+use std::time::Instant;
+use wasmtime_environ::{MemoryPlan, MemoryStyle, Trap, WASM32_MAX_PAGES, WASM64_MAX_PAGES};
 
 const WASM_PAGE_SIZE: usize = wasmtime_environ::WASM_PAGE_SIZE as usize;
 const WASM_PAGE_SIZE_U64: u64 = wasmtime_environ::WASM_PAGE_SIZE as u64;
@@ -432,7 +434,8 @@ impl RuntimeLinearMemory for StaticMemory {
 /// [thread proposal]:
 ///     https://github.com/WebAssembly/threads/blob/master/proposals/threads/Overview.md#webassemblymemoryprototypegrow
 #[derive(Clone)]
-pub struct SharedMemory(Arc<RwLock<SharedMemoryInner>>);
+pub struct SharedMemory(Arc<SharedMemoryInner>);
+
 impl SharedMemory {
     /// Construct a new [`SharedMemory`].
     pub fn new(plan: MemoryPlan) -> Result<Self> {
@@ -458,16 +461,14 @@ impl SharedMemory {
             "cannot re-wrap a shared memory"
         );
         let def = LongTermVMMemoryDefinition(memory.vmmemory());
-        Ok(Self(Arc::new(RwLock::new(SharedMemoryInner {
-            memory: memory,
-            ty,
-            def,
-        }))))
+        let spot = ParkingSpot::default();
+        let inner = RwLock::new(SharedMemoryInnerRwLocked { memory, ty, def });
+        Ok(Self(Arc::new(SharedMemoryInner { spot, lock: inner })))
     }
 
     /// Return the memory type for this [`SharedMemory`].
     pub fn ty(&self) -> wasmtime_environ::Memory {
-        self.0.read().unwrap().ty
+        self.0.lock.read().unwrap().ty
     }
 
     /// Convert this shared memory into a [`Memory`].
@@ -477,19 +478,118 @@ impl SharedMemory {
 
     /// Return a mutable pointer to the shared memory's [VMMemoryDefinition].
     pub fn vmmemory_ptr_mut(&mut self) -> *mut VMMemoryDefinition {
-        &self.0.read().unwrap().def.0 as *const _ as *mut _
+        &self.0.lock.read().unwrap().def.0 as *const _ as *mut _
     }
 
     /// Return a pointer to the shared memory's [VMMemoryDefinition].
     pub fn vmmemory_ptr(&self) -> *const VMMemoryDefinition {
-        &self.0.read().unwrap().def.0 as *const _
+        &self.0.lock.read().unwrap().def.0 as *const _
+    }
+
+    /// Implementation of `memory.atomic.notify` for this shared memory.
+    pub fn atomic_notify(&self, addr_index: u64, count: u32) -> Result<u32, Trap> {
+        let definition = &self.0.lock.read().unwrap().def.0;
+        definition.validate_addr(addr_index, 4, 4)?;
+        // SAFETY: checked `addr_index` above
+        Ok(unsafe { self.unchecked_atomic_notify(addr_index, count) })
+    }
+
+    /// Unchecked implementation of `memory.atomic.notify` for this shared memory.
+    ///
+    /// # Safety
+    /// The caller must ensure that `addr_index` is a valid address in the memory.
+    pub unsafe fn unchecked_atomic_notify(&self, addr_index: u64, count: u32) -> u32 {
+        if count == 0 {
+            return 0;
+        }
+        self.0.spot.unpark(addr_index, count)
+    }
+
+    /// Implementation of `memory.atomic.wait32` for this shared memory.
+    pub fn atomic_wait32(
+        &self,
+        addr_index: u64,
+        expected: u32,
+        timeout: Option<Instant>,
+    ) -> Result<u32, Trap> {
+        let definition = &self.0.lock.read().unwrap().def.0;
+        let addr = definition.validate_addr(addr_index, 4, 4)?;
+        // SAFETY: checked `addr` above
+        Ok(unsafe { self.unchecked_atomic_wait32(addr_index, addr, expected, timeout) })
+    }
+
+    /// Unchecked implementation of `memory.atomic.wait32` for this shared memory.
+    ///
+    /// # Safety
+    /// The caller must ensure that `addr` is a valid address in the memory.
+    pub unsafe fn unchecked_atomic_wait32(
+        &self,
+        addr_index: u64,
+        addr: *const u8,
+        expected: u32,
+        timeout: Option<Instant>,
+    ) -> u32 {
+        // SAFETY: `addr_index` was validated by `validate_addr` above.
+        let atomic = unsafe { &*(addr as *const AtomicU32) };
+
+        // We want the sequential consistency of `SeqCst` to ensure that the `load` sees the value that the `notify` will/would see.
+        // All WASM atomic operations are also `SeqCst`.
+        let validate = || atomic.load(Ordering::SeqCst) == expected;
+
+        match self.0.spot.park(addr_index, validate, timeout) {
+            ParkResult::Unparked => 0,
+            ParkResult::Invalid => 1,
+            ParkResult::TimedOut => 2,
+        }
+    }
+
+    /// Implementation of `memory.atomic.wait64` for this shared memory.
+    pub fn atomic_wait64(
+        &self,
+        addr_index: u64,
+        expected: u64,
+        timeout: Option<Instant>,
+    ) -> Result<u32, Trap> {
+        let definition = &self.0.lock.read().unwrap().def.0;
+        let addr = definition.validate_addr(addr_index, 8, 8)?;
+        // SAFETY: checked `addr` above
+        Ok(unsafe { self.unchecked_atomic_wait64(addr_index, addr, expected, timeout) })
+    }
+    /// Unchecked implementation of `memory.atomic.wait64` for this shared memory.
+    ///
+    /// # Safety
+    /// The caller must ensure that `addr` is a valid address in the memory.
+    pub unsafe fn unchecked_atomic_wait64(
+        &self,
+        addr_index: u64,
+        addr: *const u8,
+        expected: u64,
+        timeout: Option<Instant>,
+    ) -> u32 {
+        // SAFETY: `addr_index` was validated by `validate_addr` above.
+        let atomic = unsafe { &*(addr as *const AtomicU64) };
+
+        // We want the sequential consistency of `SeqCst` to ensure that the `load` sees the value that the `notify` will/would see.
+        // All WASM atomic operations are also `SeqCst`.
+        let validate = || atomic.load(Ordering::SeqCst) == expected;
+
+        match self.0.spot.park(addr_index, validate, timeout) {
+            ParkResult::Unparked => 0,
+            ParkResult::Invalid => 1,
+            ParkResult::TimedOut => 2,
+        }
     }
 }
 
-struct SharedMemoryInner {
+struct SharedMemoryInnerRwLocked {
     memory: Box<dyn RuntimeLinearMemory>,
     ty: wasmtime_environ::Memory,
     def: LongTermVMMemoryDefinition,
+}
+
+struct SharedMemoryInner {
+    lock: RwLock<SharedMemoryInnerRwLocked>,
+    spot: ParkingSpot,
 }
 
 /// Shared memory needs some representation of a `VMMemoryDefinition` for
@@ -507,11 +607,11 @@ unsafe impl Sync for LongTermVMMemoryDefinition {}
 /// Proxy all calls through the [`RwLock`].
 impl RuntimeLinearMemory for SharedMemory {
     fn byte_size(&self) -> usize {
-        self.0.read().unwrap().memory.byte_size()
+        self.0.lock.read().unwrap().memory.byte_size()
     }
 
     fn maximum_byte_size(&self) -> Option<usize> {
-        self.0.read().unwrap().memory.maximum_byte_size()
+        self.0.lock.read().unwrap().memory.maximum_byte_size()
     }
 
     fn grow(
@@ -519,7 +619,7 @@ impl RuntimeLinearMemory for SharedMemory {
         delta_pages: u64,
         store: Option<&mut dyn Store>,
     ) -> Result<Option<(usize, usize)>, Error> {
-        let mut inner = self.0.write().unwrap();
+        let mut inner = self.0.lock.write().unwrap();
         let result = inner.memory.grow(delta_pages, store)?;
         if let Some((_old_size_in_bytes, new_size_in_bytes)) = result {
             // Store the new size to the `VMMemoryDefinition` for JIT-generated
@@ -551,7 +651,7 @@ impl RuntimeLinearMemory for SharedMemory {
     }
 
     fn grow_to(&mut self, size: usize) -> Result<()> {
-        self.0.write().unwrap().memory.grow_to(size)
+        self.0.lock.write().unwrap().memory.grow_to(size)
     }
 
     fn vmmemory(&mut self) -> VMMemoryDefinition {
@@ -563,7 +663,7 @@ impl RuntimeLinearMemory for SharedMemory {
     }
 
     fn needs_init(&self) -> bool {
-        self.0.read().unwrap().memory.needs_init()
+        self.0.lock.read().unwrap().memory.needs_init()
     }
 
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {

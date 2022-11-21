@@ -132,8 +132,8 @@ impl<T> WastContext<T> {
     }
 
     /// Register "spectest" which is used by the spec testsuite.
-    pub fn register_spectest(&mut self) -> Result<()> {
-        link_spectest(&mut self.core_linker, &mut self.store)?;
+    pub fn register_spectest(&mut self, use_shared_memory: bool) -> Result<()> {
+        link_spectest(&mut self.core_linker, &mut self.store, use_shared_memory)?;
         #[cfg(feature = "component-model")]
         link_component_spectest(&mut self.component_linker)?;
         Ok(())

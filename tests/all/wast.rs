@@ -1,9 +1,12 @@
+use anyhow::Context;
+use bstr::ByteSlice;
 use once_cell::sync::Lazy;
 use std::path::Path;
 use std::sync::{Condvar, Mutex};
 use wasmtime::{
     Config, Engine, InstanceAllocationStrategy, PoolingAllocationConfig, Store, Strategy,
 };
+use wasmtime_environ::WASM_PAGE_SIZE;
 use wasmtime_wast::WastContext;
 
 include!(concat!(env!("OUT_DIR"), "/wast_testsuite_tests.rs"));
@@ -14,20 +17,32 @@ include!(concat!(env!("OUT_DIR"), "/wast_testsuite_tests.rs"));
 fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()> {
     drop(env_logger::try_init());
 
+    let wast_bytes = std::fs::read(wast).with_context(|| format!("failed to read `{}`", wast))?;
+
     match strategy {
         Strategy::Cranelift => {}
         _ => unimplemented!(),
     }
+
     let wast = Path::new(wast);
 
     let memory64 = feature_found(wast, "memory64");
     let multi_memory = feature_found(wast, "multi-memory");
     let threads = feature_found(wast, "threads");
+    let reference_types = !(threads && feature_found(wast, "proposals"));
+    let use_shared_memory = feature_found_src(&wast_bytes, "shared_memory")
+        || feature_found_src(&wast_bytes, "shared)");
+
+    if pooling && use_shared_memory {
+        eprintln!("skipping pooling test with shared memory");
+        return Ok(());
+    }
 
     let mut cfg = Config::new();
     cfg.wasm_multi_memory(multi_memory)
         .wasm_threads(threads)
         .wasm_memory64(memory64)
+        .wasm_reference_types(reference_types)
         .cranelift_debug_verifier(true);
 
     cfg.wasm_component_model(feature_found(wast, "component-model"));
@@ -62,7 +77,11 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
         // Don't use 4gb address space reservations when not hogging memory, and
         // also don't reserve lots of memory after dynamic memories for growth
         // (makes growth slower).
-        cfg.static_memory_maximum_size(0);
+        if use_shared_memory {
+            cfg.static_memory_maximum_size(2 * WASM_PAGE_SIZE as u64);
+        } else {
+            cfg.static_memory_maximum_size(0);
+        }
         cfg.dynamic_memory_reserved_for_growth(0);
     }
 
@@ -91,8 +110,10 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
 
     let store = Store::new(&Engine::new(&cfg)?, ());
     let mut wast_context = WastContext::new(store);
-    wast_context.register_spectest()?;
-    wast_context.run_file(wast)?;
+
+    wast_context.register_spectest(use_shared_memory)?;
+    wast_context.run_buffer(wast.to_str().unwrap(), &wast_bytes)?;
+
     Ok(())
 }
 
@@ -101,6 +122,10 @@ fn feature_found(path: &Path, name: &str) -> bool {
         Some(s) => s.contains(name),
         None => false,
     })
+}
+
+fn feature_found_src(bytes: &[u8], name: &str) -> bool {
+    bytes.contains_str(name)
 }
 
 // The pooling tests make about 6TB of address space reservation which means
