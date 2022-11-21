@@ -549,8 +549,8 @@ fn lower_insn_to_regs(
             panic!("global_value should have been removed by legalization!");
         }
 
-        Opcode::HeapAddr => {
-            panic!("heap_addr should have been removed by legalization!");
+        Opcode::HeapLoad | Opcode::HeapStore | Opcode::HeapAddr => {
+            panic!("heap access instructions should have been removed by legalization!");
         }
 
         Opcode::TableAddr => {

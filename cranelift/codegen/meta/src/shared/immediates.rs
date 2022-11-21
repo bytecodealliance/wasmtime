@@ -59,6 +59,9 @@ pub(crate) struct Immediates {
     /// Flags for memory operations like `load` and `store`.
     pub memflags: OperandKind,
 
+    /// A reference to out-of-line immediates for heap accesses.
+    pub heap_imm: OperandKind,
+
     /// A trap code indicating the reason for trapping.
     ///
     /// The Rust enum type also has a `User(u16)` variant for user-provided trap codes.
@@ -182,6 +185,13 @@ impl Immediates {
             },
 
             memflags: new_imm("flags", "ir::MemFlags", "Memory operation flags"),
+
+            heap_imm: new_imm(
+                "heap_imm",
+                "ir::HeapImm",
+                "Reference to out-of-line heap access immediates",
+            ),
+
             trapcode: {
                 let mut trapcode_values = HashMap::new();
                 trapcode_values.insert("stk_ovf", "StackOverflow");

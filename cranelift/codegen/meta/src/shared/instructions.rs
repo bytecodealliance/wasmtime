@@ -1155,6 +1155,55 @@ pub(crate) fn define(
         .operands_out(vec![addr]),
     );
 
+    let heap_imm = &Operand::new("heap_imm", &imm.heap_imm);
+    let index =
+        &Operand::new("index", HeapOffset).with_doc("Dynamic index (in bytes) into the heap");
+    let a = &Operand::new("a", Mem).with_doc("The value loaded from the heap");
+
+    ig.push(
+        Inst::new(
+            "heap_load",
+            r#"
+            Load a value from the given heap at address ``index + offset``,
+            trapping on out-of-bounds accesses.
+
+            Checks that ``index + offset .. index + offset + sizeof(a)`` is
+            within the heap's bounds, trapping if it is not. Otherwise, when
+            that range is in bounds, loads the value from the heap.
+
+            Traps on ``index + offset + sizeof(a)`` overflow.
+            "#,
+            &formats.heap_load,
+        )
+        .operands_in(vec![heap_imm, index])
+        .operands_out(vec![a])
+        .can_load(true)
+        .can_trap(true),
+    );
+
+    let a = &Operand::new("a", Mem).with_doc("The value stored into the heap");
+
+    ig.push(
+        Inst::new(
+            "heap_store",
+            r#"
+            Store ``a`` into the given heap at address ``index + offset``,
+            trapping on out-of-bounds accesses.
+
+            Checks that ``index + offset .. index + offset + sizeof(a)`` is
+            within the heap's bounds, trapping if it is not. Otherwise, when
+            that range is in bounds, stores the value into the heap.
+
+            Traps on ``index + offset + sizeof(a)`` overflow.
+            "#,
+            &formats.heap_store,
+        )
+        .operands_in(vec![heap_imm, index, a])
+        .operands_out(vec![])
+        .can_store(true)
+        .can_trap(true),
+    );
+
     // Note this instruction is marked as having other side-effects, so GVN won't try to hoist it,
     // which would result in it being subject to spilling. While not hoisting would generally hurt
     // performance, since a computed value used many times may need to be regenerated before each
