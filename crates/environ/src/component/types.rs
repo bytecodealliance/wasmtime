@@ -553,13 +553,17 @@ impl ComponentTypesBuilder {
                 ComponentTypeDeclaration::Type(ty) => self.type_declaration_type(ty)?,
                 ComponentTypeDeclaration::CoreType(ty) => self.type_declaration_core_type(ty)?,
                 ComponentTypeDeclaration::Alias(alias) => self.type_declaration_alias(alias)?,
-                ComponentTypeDeclaration::Export { name, ty } => {
+                ComponentTypeDeclaration::Export { name, url, ty } => {
                     let ty = self.component_type_ref(ty);
-                    result.exports.insert(name.to_string(), ty);
+                    result
+                        .exports
+                        .insert(name.to_string(), (url.to_string(), ty));
                 }
                 ComponentTypeDeclaration::Import(import) => {
                     let ty = self.component_type_ref(&import.ty);
-                    result.imports.insert(import.name.to_string(), ty);
+                    result
+                        .imports
+                        .insert(import.name.to_string(), (import.url.to_string(), ty));
                 }
             }
         }
@@ -581,9 +585,11 @@ impl ComponentTypesBuilder {
                 InstanceTypeDeclaration::Type(ty) => self.type_declaration_type(ty)?,
                 InstanceTypeDeclaration::CoreType(ty) => self.type_declaration_core_type(ty)?,
                 InstanceTypeDeclaration::Alias(alias) => self.type_declaration_alias(alias)?,
-                InstanceTypeDeclaration::Export { name, ty } => {
+                InstanceTypeDeclaration::Export { name, url, ty } => {
                     let ty = self.component_type_ref(ty);
-                    result.exports.insert(name.to_string(), ty);
+                    result
+                        .exports
+                        .insert(name.to_string(), (url.to_string(), ty));
                 }
             }
         }
@@ -971,9 +977,9 @@ pub struct TypeModule {
 #[derive(Serialize, Deserialize, Default)]
 pub struct TypeComponent {
     /// The named values that this component imports.
-    pub imports: IndexMap<String, TypeDef>,
+    pub imports: IndexMap<String, (String, TypeDef)>,
     /// The named values that this component exports.
-    pub exports: IndexMap<String, TypeDef>,
+    pub exports: IndexMap<String, (String, TypeDef)>,
 }
 
 /// The type of a component instance in the component model, or an instantiated
@@ -983,7 +989,7 @@ pub struct TypeComponent {
 #[derive(Serialize, Deserialize, Default)]
 pub struct TypeComponentInstance {
     /// The list of exports that this component has along with their types.
-    pub exports: IndexMap<String, TypeDef>,
+    pub exports: IndexMap<String, (String, TypeDef)>,
 }
 
 /// A component function type in the component model.

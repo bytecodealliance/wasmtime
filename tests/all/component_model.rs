@@ -27,7 +27,7 @@ fn components_importing_modules() -> Result<()> {
         &engine,
         r#"
         (component
-            (import "" (core module))
+            (import "a" (core module))
         )
         "#,
     )?;
@@ -36,7 +36,7 @@ fn components_importing_modules() -> Result<()> {
         &engine,
         r#"
         (component
-            (import "" (core module $m1
+            (import "a" (core module $m1
                 (import "" "" (func))
                 (import "" "x" (global i32))
 

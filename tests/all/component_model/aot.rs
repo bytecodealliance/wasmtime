@@ -88,12 +88,12 @@ fn cannot_serialize_exported_module() -> Result<()> {
         &engine,
         r#"(component
             (core module $m)
-            (export "" (core module $m))
+            (export "a" (core module $m))
         )"#,
     )?;
     let mut store = Store::new(&engine, ());
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
-    let module = instance.get_module(&mut store, "").unwrap();
+    let module = instance.get_module(&mut store, "a").unwrap();
     assert!(module.serialize().is_err());
     Ok(())
 }

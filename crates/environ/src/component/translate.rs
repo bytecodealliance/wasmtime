@@ -840,14 +840,16 @@ impl<'a, 'data> Translator<'a, 'data> {
             // An imported component instance is being aliased, so the type of
             // the aliased item is directly available from the instance type.
             ComponentInstanceType::Index(ty) => {
-                self.result.push_typedef(self.types[ty].exports[name])
+                let (_url, ty) = &self.types[ty].exports[name];
+                self.result.push_typedef(*ty);
             }
 
             // An imported component was instantiated so the type of the aliased
             // export is available through the type of the export on the
             // original component.
             ComponentInstanceType::InstantiatedIndex(ty) => {
-                self.result.push_typedef(self.types[ty].exports[name])
+                let (_, ty) = self.types[ty].exports[name];
+                self.result.push_typedef(ty);
             }
 
             // A static nested component was instantiated which means that the

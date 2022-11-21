@@ -482,10 +482,6 @@ criteria = "safe-to-deploy"
 version = "0.6.5"
 criteria = "safe-to-deploy"
 
-[[exemptions.memory_units]]
-version = "0.3.0"
-criteria = "safe-to-run"
-
 [[exemptions.miette]]
 version = "5.1.0"
 criteria = "safe-to-deploy"
@@ -1020,10 +1016,6 @@ criteria = "safe-to-run"
 
 [[exemptions.wasm-bindgen-shared]]
 version = "0.2.80"
-criteria = "safe-to-run"
-
-[[exemptions.wasmi]]
-version = "0.19.0"
 criteria = "safe-to-run"
 
 [[exemptions.web-sys]]
