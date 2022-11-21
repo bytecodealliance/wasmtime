@@ -72,3 +72,72 @@
 
 (assert_trap (invoke "wait32") "atomic wait on non-shared memory")
 (assert_trap (invoke "wait64") "atomic wait on non-shared memory")
+
+;; not valid values for memory.atomic.wait
+(module
+  (memory 1 1 shared)
+  (type (;0;) (func))
+  (func $wait32 (result i32)
+    i32.const 0
+    i32.const 42
+    i64.const -1
+    memory.atomic.wait32
+    )
+  (func $wait64 (result i32)
+    i32.const 0
+    i64.const 43
+    i64.const -1
+    memory.atomic.wait64
+    )
+  (export "wait32" (func $wait32))
+  (export "wait64" (func $wait64))
+)
+
+(assert_return (invoke "wait32") (i32.const 1))
+(assert_return (invoke "wait64") (i32.const 1))
+
+;; timeout
+(module
+  (memory 1 1 shared)
+  (type (;0;) (func))
+  (func $wait32 (result i32)
+    i32.const 0
+    i32.const 0
+    i64.const 1000
+    memory.atomic.wait32
+    )
+  (func $wait64 (result i32)
+    i32.const 0
+    i64.const 0
+    i64.const 1000
+    memory.atomic.wait64
+    )
+  (export "wait32" (func $wait32))
+  (export "wait64" (func $wait64))
+)
+
+(assert_return (invoke "wait32") (i32.const 2))
+(assert_return (invoke "wait64") (i32.const 2))
+
+;; timeout on 0ns
+(module
+  (memory 1 1 shared)
+  (type (;0;) (func))
+  (func $wait32 (result i32)
+    i32.const 0
+    i32.const 0
+    i64.const 0
+    memory.atomic.wait32
+    )
+  (func $wait64 (result i32)
+    i32.const 0
+    i64.const 0
+    i64.const 0
+    memory.atomic.wait64
+    )
+  (export "wait32" (func $wait32))
+  (export "wait64" (func $wait64))
+)
+
+(assert_return (invoke "wait32") (i32.const 2))
+(assert_return (invoke "wait64") (i32.const 2))
