@@ -18,6 +18,7 @@ proc-macro2 = "1.0"
 quote = "1.0"
 syn = { version = "1.0", features = ["extra-traits"] }
 wasmtime-component-util = { workspace = true }
+wasmtime-wit-bindgen = { workspace = true }
 
 [badges]
 maintenance = { status = "actively-developed" }
