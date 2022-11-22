@@ -436,7 +436,7 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         fn abi_get_arg(&mut self, abi: &Sig, idx: usize) -> ABIArg {
-            self.lower_ctx.sigs()[*abi].get_arg(self.lower_ctx.sigs(), idx)
+            self.lower_ctx.sigs().get_arg(*abi, idx)
         }
 
         fn abi_num_rets(&mut self, abi: &Sig) -> usize {
@@ -444,15 +444,15 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         fn abi_get_ret(&mut self, abi: &Sig, idx: usize) -> ABIArg {
-            self.lower_ctx.sigs()[*abi].get_ret(self.lower_ctx.sigs(), idx)
+            self.lower_ctx.sigs().get_ret(*abi, idx)
         }
 
         fn abi_ret_arg(&mut self, abi: &Sig) -> Option<ABIArg> {
-            self.lower_ctx.sigs()[*abi].get_ret_arg(self.lower_ctx.sigs())
+            self.lower_ctx.sigs().get_ret_arg(*abi)
         }
 
         fn abi_no_ret_arg(&mut self, abi: &Sig) -> Option<()> {
-            if let Some(_) = self.lower_ctx.sigs()[*abi].get_ret_arg(self.lower_ctx.sigs()) {
+            if let Some(_) = self.lower_ctx.sigs().get_ret_arg(*abi) {
                 None
             } else {
                 Some(())
@@ -716,8 +716,7 @@ macro_rules! isle_prelude_method_helpers {
                 // Borrow `sigdata` again so we don't hold a `self`
                 // borrow across the `&mut self` arg to
                 // `abi_arg_slot_regs()` below.
-                let sigdata = &self.lower_ctx.sigs()[abi];
-                let ret = sigdata.get_ret(self.lower_ctx.sigs(), i);
+                let ret = self.lower_ctx.sigs().get_ret(abi, i);
                 let retval_regs = self.abi_arg_slot_regs(&ret).unwrap();
                 retval_insts.extend(
                     caller
