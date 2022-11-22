@@ -27,7 +27,7 @@ wit-parser = { workspace = true }
 maintenance = { status = "actively-developed" }
 
 [dev-dependencies]
-wasmtime = { workspace = true, features = ['component-model', 'async'] }
+wasmtime = { path = '../wasmtime', features = ['component-model'] }
 component-macro-test-helpers = { path = 'test-helpers' }
 tracing = { workspace = true }
 
