@@ -195,7 +195,23 @@ pub unsafe extern "C" fn fd_advise(
     len: Filesize,
     advice: Advice,
 ) -> Errno {
-    unreachable()
+    let advice = match advice {
+        ADVICE_NORMAL => wasi_filesystem::Advice::Normal,
+        ADVICE_SEQUENTIAL => wasi_filesystem::Advice::Sequential,
+        ADVICE_RANDOM => wasi_filesystem::Advice::Random,
+        ADVICE_WILLNEED => wasi_filesystem::Advice::WillNeed,
+        ADVICE_DONTNEED => wasi_filesystem::Advice::DontNeed,
+        ADVICE_NOREUSE => wasi_filesystem::Advice::NoReuse,
+        _ => return ERRNO_INVAL,
+    };
+    match Descriptor::get(fd) {
+        Descriptor::File(file) => match wasi_filesystem::fadvise(file.fd, offset, len, advice) {
+            Ok(()) => ERRNO_SUCCESS,
+            Err(err) => errno_from_wasi_filesystem(err),
+        },
+        Descriptor::Log => ERRNO_SPIPE,
+        Descriptor::Closed => ERRNO_BADF,
+    }
 }
 
 /// Force the allocation of space in a file.
@@ -338,7 +354,30 @@ pub unsafe extern "C" fn fd_filestat_set_times(
     mtim: Timestamp,
     fst_flags: Fstflags,
 ) -> Errno {
-    unreachable()
+    let atim =
+        if fst_flags & (FSTFLAGS_ATIM | FSTFLAGS_ATIM_NOW) == (FSTFLAGS_ATIM | FSTFLAGS_ATIM_NOW) {
+            wasi_filesystem::NewTimestamp::Now
+        } else if fst_flags & FSTFLAGS_ATIM == FSTFLAGS_ATIM {
+            wasi_filesystem::NewTimestamp::Timestamp(atim)
+        } else {
+            wasi_filesystem::NewTimestamp::NoChange
+        };
+    let mtim =
+        if fst_flags & (FSTFLAGS_MTIM | FSTFLAGS_MTIM_NOW) == (FSTFLAGS_MTIM | FSTFLAGS_MTIM_NOW) {
+            wasi_filesystem::NewTimestamp::Now
+        } else if fst_flags & FSTFLAGS_MTIM == FSTFLAGS_MTIM {
+            wasi_filesystem::NewTimestamp::Timestamp(mtim)
+        } else {
+            wasi_filesystem::NewTimestamp::NoChange
+        };
+    match Descriptor::get(fd) {
+        Descriptor::File(file) => match wasi_filesystem::set_times(file.fd, atim, mtim) {
+            Ok(()) => ERRNO_SUCCESS,
+            Err(err) => errno_from_wasi_filesystem(err),
+        },
+        Descriptor::Log => ERRNO_SPIPE,
+        Descriptor::Closed => ERRNO_BADF,
+    }
 }
 
 /// Read from a file descriptor, without using and updating the file descriptor's offset.
@@ -603,7 +642,36 @@ pub unsafe extern "C" fn path_filestat_set_times(
     mtim: Timestamp,
     fst_flags: Fstflags,
 ) -> Errno {
-    unreachable()
+    let atim =
+        if fst_flags & (FSTFLAGS_ATIM | FSTFLAGS_ATIM_NOW) == (FSTFLAGS_ATIM | FSTFLAGS_ATIM_NOW) {
+            wasi_filesystem::NewTimestamp::Now
+        } else if fst_flags & FSTFLAGS_ATIM == FSTFLAGS_ATIM {
+            wasi_filesystem::NewTimestamp::Timestamp(atim)
+        } else {
+            wasi_filesystem::NewTimestamp::NoChange
+        };
+    let mtim =
+        if fst_flags & (FSTFLAGS_MTIM | FSTFLAGS_MTIM_NOW) == (FSTFLAGS_MTIM | FSTFLAGS_MTIM_NOW) {
+            wasi_filesystem::NewTimestamp::Now
+        } else if fst_flags & FSTFLAGS_MTIM == FSTFLAGS_MTIM {
+            wasi_filesystem::NewTimestamp::Timestamp(mtim)
+        } else {
+            wasi_filesystem::NewTimestamp::NoChange
+        };
+
+    let path = slice::from_raw_parts(path_ptr, path_len);
+    let at_flags = at_flags_from_lookupflags(flags);
+
+    match Descriptor::get(fd) {
+        Descriptor::File(file) => {
+            match wasi_filesystem::set_times_at(file.fd, at_flags, path, atim, mtim) {
+                Ok(()) => ERRNO_SUCCESS,
+                Err(err) => errno_from_wasi_filesystem(err),
+            }
+        }
+        Descriptor::Log => ERRNO_SPIPE,
+        Descriptor::Closed => ERRNO_BADF,
+    }
 }
 
 /// Create a hard link.
@@ -732,7 +800,16 @@ pub unsafe extern "C" fn path_remove_directory(
     path_ptr: *const u8,
     path_len: usize,
 ) -> Errno {
-    unreachable()
+    let path = slice::from_raw_parts(path_ptr, path_len);
+
+    match Descriptor::get(fd) {
+        Descriptor::File(file) => match wasi_filesystem::remove_directory_at(file.fd, path) {
+            Ok(()) => ERRNO_SUCCESS,
+            Err(err) => errno_from_wasi_filesystem(err),
+        },
+        Descriptor::Log => ERRNO_SPIPE,
+        Descriptor::Closed => ERRNO_BADF,
+    }
 }
 
 /// Rename a file or directory.
@@ -860,6 +937,14 @@ pub unsafe extern "C" fn sock_send(
 #[no_mangle]
 pub unsafe extern "C" fn sock_shutdown(fd: Fd, how: Sdflags) -> Errno {
     unreachable()
+}
+
+fn at_flags_from_lookupflags(flags: Lookupflags) -> wasi_filesystem::AtFlags {
+    if flags & LOOKUPFLAGS_SYMLINK_FOLLOW == LOOKUPFLAGS_SYMLINK_FOLLOW {
+        wasi_filesystem::AtFlags::SYMLINK_FOLLOW
+    } else {
+        wasi_filesystem::AtFlags::empty()
+    }
 }
 
 #[inline(never)] // Disable inlining as this is bulky and relatively cold.
