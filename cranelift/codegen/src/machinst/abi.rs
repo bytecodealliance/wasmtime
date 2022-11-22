@@ -1621,8 +1621,7 @@ impl<M: ABIMachineSpec> Callee<M> {
         sigs: &SigSet,
         vregs: &mut VRegAllocator<M::I>,
     ) -> Option<M::I> {
-        let sig_data = &sigs[self.sig];
-        if let Some(i) = sig_data.stack_ret_arg {
+        if let Some(i) = sigs[self.sig].stack_ret_arg {
             let insts = self.gen_copy_arg_to_regs(
                 sigs,
                 i.into(),
