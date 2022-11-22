@@ -12,6 +12,8 @@ edition.workspace = true
 
 [lib]
 proc-macro = true
+test = false
+doctest = false
 
 [dependencies]
 proc-macro2 = "1.0"
@@ -23,3 +25,8 @@ wit-parser = { workspace = true }
 
 [badges]
 maintenance = { status = "actively-developed" }
+
+[dev-dependencies]
+wasmtime = { workspace = true, features = ['component-model', 'async'] }
+component-macro-test-helpers = { path = 'test-helpers' }
+tracing = { workspace = true }

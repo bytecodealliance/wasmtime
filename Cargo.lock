@@ -473,6 +473,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "component-macro-test-helpers"
+version = "0.0.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+]
+
+[[package]]
 name = "component-test-util"
 version = "0.0.0"
 dependencies = [
@@ -3516,9 +3524,12 @@ dependencies = [
 name = "wasmtime-component-macro"
 version = "5.0.0"
 dependencies = [
+ "component-macro-test-helpers",
  "proc-macro2",
  "quote",
  "syn",
+ "tracing",
+ "wasmtime",
  "wasmtime-component-util",
  "wasmtime-wit-bindgen",
  "wit-parser",

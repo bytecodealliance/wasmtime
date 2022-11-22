@@ -4,6 +4,7 @@
 //! probably buggy implementation of the component model.
 
 mod component;
+mod error;
 mod func;
 mod instance;
 mod linker;
@@ -13,6 +14,7 @@ mod store;
 pub mod types;
 mod values;
 pub use self::component::Component;
+pub use self::error::{Error, Result};
 pub use self::func::{
     ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, WasmList, WasmStr,
 };
@@ -35,6 +37,8 @@ pub mod __internal {
     pub use crate::map_maybe_uninit;
     pub use crate::store::StoreOpaque;
     pub use anyhow;
+    #[cfg(feature = "async")]
+    pub use async_trait::async_trait;
     pub use wasmtime_environ;
     pub use wasmtime_environ::component::{CanonicalAbiInfo, ComponentTypes, InterfaceType};
 }

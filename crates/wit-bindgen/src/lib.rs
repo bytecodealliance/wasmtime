@@ -92,7 +92,7 @@ impl Wasmtime {
                 #[allow(clippy::all)]
                 pub mod {snake} {{
                     #[allow(unused_imports)]
-                    use wit_bindgen_host_wasmtime_rust::{{wasmtime, anyhow}};
+                    use wasmtime::component::__internal::anyhow;
 
                     {module}
                 }}
@@ -151,7 +151,7 @@ impl Wasmtime {
                 #[allow(clippy::all)]
                 pub mod {snake} {{
                     #[allow(unused_imports)]
-                    use wit_bindgen_host_wasmtime_rust::{{wasmtime, anyhow}};
+                    use wasmtime::component::__internal::anyhow;
 
                     {module}
                 }}
@@ -219,6 +219,9 @@ impl Wasmtime {
             ("", "", "", "")
         };
 
+        uwriteln!(self.src, "const _: () = {{");
+        uwriteln!(self.src, "use wasmtime::component::__internal::anyhow;");
+
         uwriteln!(
             self.src,
             "
@@ -260,13 +263,15 @@ impl Wasmtime {
             uwriteln!(self.src, "{name},");
         }
         uwriteln!(self.src, "}})");
-        uwriteln!(self.src, "}}");
+        uwriteln!(self.src, "}}"); // close `fn new`
 
         for func in self.exports.funcs.iter() {
             self.src.push_str(func);
         }
 
-        uwriteln!(self.src, "}}");
+        uwriteln!(self.src, "}}"); // close `impl {camel}`
+
+        uwriteln!(self.src, "}};"); // close `const _: () = ...
 
         let mut src = mem::take(&mut self.src);
         if self.opts.rustfmt {
@@ -770,7 +775,7 @@ impl<'a> InterfaceGenerator<'a> {
     }
 
     fn special_case_host_error(&self, results: &Results) -> Option<&Result_> {
-        // We only support the wit_bindgen_host_wasmtime_rust::Error case when
+        // We only support the Error case when
         // a function has just one result, which is itself a `result<a, e>`, and the
         // `e` is *not* a primitive (i.e. defined in std) type.
         let mut i = results.iter_types();
@@ -794,7 +799,7 @@ impl<'a> InterfaceGenerator<'a> {
         let camel = name.to_upper_camel_case();
 
         if self.gen.opts.async_ {
-            uwriteln!(self.src, "#[wit_bindgen_host_wasmtime_rust::async_trait]")
+            uwriteln!(self.src, "#[wasmtime::component::__internal::async_trait]")
         }
         // Generate the `pub trait` which represents the host functionality for
         // this import.
@@ -822,7 +827,7 @@ impl<'a> InterfaceGenerator<'a> {
                 // Functions which have a single result `result<ok,err>` get special
                 // cased to use the host_wasmtime_rust::Error<err>, making it possible
                 // for them to trap or use `?` to propogate their errors
-                self.push_str("wit_bindgen_host_wasmtime_rust::Result<");
+                self.push_str("wasmtime::component::Result<");
                 if let Some(ok) = r.ok {
                     self.print_ty(&ok, TypeMode::Owned);
                 } else {
@@ -907,8 +912,8 @@ impl<'a> InterfaceGenerator<'a> {
         if self.gen.opts.tracing {
             self.src.push_str(&format!(
                 "
-                   let span = wit_bindgen_host_wasmtime_rust::tracing::span!(
-                       wit_bindgen_host_wasmtime_rust::tracing::Level::TRACE,
+                   let span = tracing::span!(
+                       tracing::Level::TRACE,
                        \"wit-bindgen guest import\",
                        module = \"{}\",
                        function = \"{}\",
@@ -1012,8 +1017,8 @@ impl<'a> InterfaceGenerator<'a> {
         if self.gen.opts.tracing {
             self.src.push_str(&format!(
                 "
-                   let span = wit_bindgen_host_wasmtime_rust::tracing::span!(
-                       wit_bindgen_host_wasmtime_rust::tracing::Level::TRACE,
+                   let span = tracing::span!(
+                       tracing::Level::TRACE,
                        \"wit-bindgen guest export\",
                        module = \"{}\",
                        function = \"{}\",
@@ -1090,15 +1095,15 @@ impl<'a> InterfaceGenerator<'a> {
                     }
                     self.push_str("impl From<");
                     self.push_str(&name);
-                    self.push_str("> for wit_bindgen_host_wasmtime_rust::Error<");
+                    self.push_str("> for wasmtime::component::Error<");
                     self.push_str(&name);
                     self.push_str("> {\n");
                     self.push_str("fn from(e: ");
                     self.push_str(&name);
-                    self.push_str(") -> wit_bindgen_host_wasmtime_rust::Error::< ");
+                    self.push_str(") -> wasmtime::component::Error::< ");
                     self.push_str(&name);
                     self.push_str("> {\n");
-                    self.push_str("wit_bindgen_host_wasmtime_rust::Error::new(e)\n");
+                    self.push_str("wasmtime::component::Error::new(e)\n");
                     self.push_str("}\n");
                     self.push_str("}\n");
                 }

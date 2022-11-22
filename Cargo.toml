@@ -182,6 +182,7 @@ bitflags = "1.2"
 thiserror = "1.0.15"
 async-trait = "0.1.42"
 heck = "0.4"
+tracing = "0.1.26"
 
 [features]
 default = [
