@@ -484,6 +484,15 @@ intended to multiplex across the internal representation of a tinyvec,
 presumably. This trivially doesn't contain anything bad.
 """
 
+[[audits.unicase]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "2.6.0"
+notes = """
+This crate contains no `unsafe` code and no unnecessary use of the standard
+library.
+"""
+
 [[audits.unicode-bidi]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
