@@ -115,7 +115,14 @@ impl ParkingSpot {
 
             let spot = inner.get_mut(&key).expect("failed to get spot");
 
-            if !timed_out {
+            if timed_out {
+                if let Some(timeout) = timeout {
+                    if Instant::now() < timeout {
+                        // Did not sleep long enough, try again.
+                        continue;
+                    }
+                }
+            } else {
                 if spot.to_unpark == 0 {
                     continue;
                 }
