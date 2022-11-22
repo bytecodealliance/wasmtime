@@ -16,7 +16,78 @@ Unreleased.
 
 ### Added
 
+* Dynamic memories are now supported with the pooling instance allocator which
+  can possibly reduce the number of page faults throughout execution at the cost
+  of slower to run code. Page faults are primarily reduced by avoiding
+  releasing memory back to the system, relying on bounds checks to keep the
+  memory inaccessible.
+  [#5208](https://github.com/bytecodealliance/wasmtime/pull/5208)
+
+* The `wiggle` generator now supports function-level control over `tracing`
+  calls.
+  [#5194](https://github.com/bytecodealliance/wasmtime/pull/5194)
+
+* Support has been added to `wiggle` to be compatible with shared memories.
+  [#5225](https://github.com/bytecodealliance/wasmtime/pull/5225)
+  [#5229](https://github.com/bytecodealliance/wasmtime/pull/5229)
+  [#5264](https://github.com/bytecodealliance/wasmtime/pull/5264)
+  [#5268](https://github.com/bytecodealliance/wasmtime/pull/5268)
+  [#5054](https://github.com/bytecodealliance/wasmtime/pull/5054)
+
+* The `wiggle` generator now supports a "trappable error" configuration to
+  improve error conversions to guest errors and ensure that no host errors are
+  forgotten or accidentally become traps. The `wasi-common` crate has been
+  updated to use this.
+  [#5276](https://github.com/bytecodealliance/wasmtime/pull/5276)
+  [#5279](https://github.com/bytecodealliance/wasmtime/pull/5279)
+
+* The `memory.atomic.{notify,wait32,wait64}` instructions are now all
+  implemented in Wasmtime.
+  [#5255](https://github.com/bytecodealliance/wasmtime/pull/5255)
+  [#5311](https://github.com/bytecodealliance/wasmtime/pull/5311)
+
+* A `wasm_config_parallel_compilation_set` configuration function has been added
+  to the C API.
+  [#5298](https://github.com/bytecodealliance/wasmtime/pull/5298)
+
+* The `wasmtime` CLI can have its input module piped into it from stdin now.
+  [#5342](https://github.com/bytecodealliance/wasmtime/pull/5342)
+
+* `WasmBacktrace::{capture,force_capture}` methods have been added to
+  programmatically capture a backtrace outside of a trapping context.
+  [#5341](https://github.com/bytecodealliance/wasmtime/pull/5341)
+
 ### Changed
+
+* The `S` type parameter on `Func::typed` and `Instance::get_typed_func` has
+  been removed and no longer needs to be specified.
+  [#5275](https://github.com/bytecodealliance/wasmtime/pull/5275)
+
+* The `SharedMemory::data` method now returns `&[UnsafeCell<u8>]` instead of the
+  prior raw slice return.
+  [#5240](https://github.com/bytecodealliance/wasmtime/pull/5240)
+
+* Creation of a `WasiCtx` will no longer unconditionally acquire randomness from
+  the OS, instead using the `rand::thread_rng()` function in Rust which is only
+  periodically reseeded with randomness from the OS.
+  [#5244](https://github.com/bytecodealliance/wasmtime/pull/5244)
+
+* Codegen of dynamically-bounds-checked wasm memory accesses has been improved.
+  [#5190](https://github.com/bytecodealliance/wasmtime/pull/5190)
+
+* Wasmtime will now emit inline stack probes in generated functions for x86\_64,
+  aarch64, and riscv64 architectures. This guarantees a process abort if an
+  engine was misconfigured to give wasm too much stack instead of optionally
+  allowing wasm to skip the guard page.
+  [#5350](https://github.com/bytecodealliance/wasmtime/pull/5350)
+  [#5353](https://github.com/bytecodealliance/wasmtime/pull/5353)
+
+### Fixed
+
+* Dropping a `Module` will now release kernel resources in-use by the pooling
+  allocator when enabled instead of waiting for a new instance to be
+  re-instantiated into prior slots.
+  [#5321](https://github.com/bytecodealliance/wasmtime/pull/5321)
 
 --------------------------------------------------------------------------------
 
