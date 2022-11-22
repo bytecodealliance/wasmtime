@@ -1,5 +1,4 @@
 use anyhow::Result;
-use std::time::Instant;
 use wasmtime::*;
 
 #[test]
@@ -23,17 +22,11 @@ fn atomic_wait_timeout_length() -> Result<()> {
     let mut store = Store::new(&engine, ());
     let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, 1))?;
     let instance = Instance::new(&mut store, &module, &[shared_memory.clone().into()])?;
-    let now = Instant::now();
     let func_ret = instance
         .get_typed_func::<(), i32>(&mut store, "func1")
         .unwrap()
         .call(&mut store, ())
         .unwrap();
-    let duration = now.elapsed();
-    assert!(
-        duration.as_nanos() >= sleep_nanoseconds,
-        "duration: {duration:?} < {sleep_nanoseconds:?}"
-    );
     assert_eq!(func_ret, 2);
     Ok(())
 }
