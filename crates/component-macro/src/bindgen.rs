@@ -15,6 +15,13 @@ pub struct Config {
 }
 
 pub fn expand(input: &Config) -> Result<TokenStream> {
+    if !cfg!(feature = "async") && input.opts.async_ {
+        return Err(Error::new(
+            Span::call_site(),
+            "cannot enable async bindings unless `async` crate feature is active",
+        ));
+    }
+
     let src = input.opts.generate(&input.world);
     let mut contents = src.parse::<TokenStream>().unwrap();
 

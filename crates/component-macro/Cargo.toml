@@ -30,3 +30,6 @@ maintenance = { status = "actively-developed" }
 wasmtime = { workspace = true, features = ['component-model', 'async'] }
 component-macro-test-helpers = { path = 'test-helpers' }
 tracing = { workspace = true }
+
+[features]
+async = []
