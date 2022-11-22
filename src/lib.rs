@@ -342,7 +342,14 @@ pub unsafe extern "C" fn fd_filestat_get(fd: Fd, buf: *mut Filestat) -> Errno {
 /// Note: This is similar to `ftruncate` in POSIX.
 #[no_mangle]
 pub unsafe extern "C" fn fd_filestat_set_size(fd: Fd, size: Filesize) -> Errno {
-    unreachable()
+    match Descriptor::get(fd) {
+        Descriptor::File(file) => match wasi_filesystem::set_size(file.fd, size) {
+            Ok(()) => ERRNO_SUCCESS,
+            Err(err) => errno_from_wasi_filesystem(err),
+        },
+        Descriptor::Log => ERRNO_SPIPE,
+        Descriptor::Closed => ERRNO_BADF,
+    }
 }
 
 /// Adjust the timestamps of an open file or directory.
@@ -385,12 +392,44 @@ pub unsafe extern "C" fn fd_filestat_set_times(
 #[no_mangle]
 pub unsafe extern "C" fn fd_pread(
     fd: Fd,
-    iovs_ptr: *const Iovec,
-    iovs_len: usize,
+    mut iovs_ptr: *const Iovec,
+    mut iovs_len: usize,
     offset: Filesize,
     nread: *mut Size,
 ) -> Errno {
-    unreachable()
+    // Advance to the first non-empty buffer.
+    while iovs_len != 0 && (*iovs_ptr).buf_len == 0 {
+        iovs_ptr = iovs_ptr.add(1);
+        iovs_len -= 1;
+    }
+    if iovs_len == 0 {
+        *nread = 0;
+        return ERRNO_SUCCESS;
+    }
+
+    match Descriptor::get(fd) {
+        Descriptor::File(file) => {
+            let ptr = (*iovs_ptr).buf;
+            let len = (*iovs_ptr).buf_len;
+
+            register_buffer(ptr, len);
+
+            // We can cast between a `usize`-sized value and `usize`.
+            let read_len = len as _;
+            let result = wasi_filesystem::pread(file.fd, read_len, offset);
+            match result {
+                Ok(data) => {
+                    assert_eq!(data.as_ptr(), ptr);
+                    assert!(data.len() <= len);
+                    *nread = data.len();
+                    forget(data);
+                    ERRNO_SUCCESS
+                }
+                Err(err) => errno_from_wasi_filesystem(err),
+            }
+        }
+        Descriptor::Closed | Descriptor::Log => ERRNO_BADF,
+    }
 }
 
 /// Return a description of the given preopened file descriptor.
@@ -410,12 +449,45 @@ pub unsafe extern "C" fn fd_prestat_dir_name(fd: Fd, path: *mut u8, path_len: Si
 #[no_mangle]
 pub unsafe extern "C" fn fd_pwrite(
     fd: Fd,
-    iovs_ptr: *const Ciovec,
-    iovs_len: usize,
+    mut iovs_ptr: *const Ciovec,
+    mut iovs_len: usize,
     offset: Filesize,
     nwritten: *mut Size,
 ) -> Errno {
-    unreachable()
+    // Advance to the first non-empty buffer.
+    while iovs_len != 0 && (*iovs_ptr).buf_len == 0 {
+        iovs_ptr = iovs_ptr.add(1);
+        iovs_len -= 1;
+    }
+    if iovs_len == 0 {
+        *nwritten = 0;
+        return ERRNO_SUCCESS;
+    }
+
+    let ptr = (*iovs_ptr).buf;
+    let len = (*iovs_ptr).buf_len;
+
+    match Descriptor::get(fd) {
+        Descriptor::File(file) => {
+            let result = wasi_filesystem::pwrite(file.fd, slice::from_raw_parts(ptr, len), offset);
+
+            match result {
+                Ok(bytes) => {
+                    *nwritten = bytes as usize;
+                    ERRNO_SUCCESS
+                }
+                Err(err) => errno_from_wasi_filesystem(err),
+            }
+        }
+        Descriptor::Log => {
+            let bytes = slice::from_raw_parts(ptr, len);
+            let context: [u8; 3] = [b'I', b'/', b'O'];
+            wasi_logging::log(wasi_logging::Level::Info, &context, bytes);
+            *nwritten = len;
+            ERRNO_SUCCESS
+        }
+        Descriptor::Closed => ERRNO_BADF,
+    }
 }
 
 /// Read from a file descriptor.
