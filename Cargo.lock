@@ -3521,6 +3521,7 @@ dependencies = [
  "syn",
  "wasmtime-component-util",
  "wasmtime-wit-bindgen",
+ "wit-parser",
 ]
 
 [[package]]

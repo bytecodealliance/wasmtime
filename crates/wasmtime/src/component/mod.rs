@@ -20,7 +20,7 @@ pub use self::instance::{ExportInstance, Exports, Instance, InstancePre};
 pub use self::linker::{Linker, LinkerInstance};
 pub use self::types::Type;
 pub use self::values::Val;
-pub use wasmtime_component_macro::{flags, ComponentType, Lift, Lower};
+pub use wasmtime_component_macro::{bindgen, flags, ComponentType, Lift, Lower};
 
 // These items are expected to be used by an eventual
 // `#[derive(ComponentType)]`, they are not part of Wasmtime's API stability
