@@ -231,3 +231,17 @@ pub fn page_size() -> usize {
         unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize }
     }
 }
+
+/// Result of [`Memory::atomic_wait32`] and [`Memory::atomic_wait64`]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum WaitResult {
+    /// Indicates that a `wait` completed by being awoken by a different thread.
+    /// This means the thread went to sleep and didn't time out.
+    Ok = 0,
+    /// Indicates that `wait` did not complete and instead returned due to the
+    /// value in memory not matching the expected value.
+    Mismatch = 1,
+    /// Indicates that `wait` completed with a timeout, meaning that the
+    /// original value matched as expected but nothing ever called `notify`.
+    TimedOut = 2,
+}
