@@ -610,7 +610,7 @@ cranelift_entity::entity_impl!(Sig);
 
 impl Sig {
     fn prev(self) -> Option<Sig> {
-        self.0.checked_sub(1).map(|x| Sig(x))
+        self.0.checked_sub(1).map(Sig)
     }
 }
 
