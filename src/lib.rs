@@ -248,43 +248,47 @@ pub unsafe extern "C" fn fd_datasync(fd: Fd) -> Errno {
 pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
     match Descriptor::get(fd) {
         Descriptor::File(file) => {
-            let info = match wasi_filesystem::info(file.fd) {
+            let flags = match wasi_filesystem::flags(file.fd) {
+                Ok(info) => info,
+                Err(err) => return errno_from_wasi_filesystem(err),
+            };
+            let type_ = match wasi_filesystem::todo_type(file.fd) {
                 Ok(info) => info,
                 Err(err) => return errno_from_wasi_filesystem(err),
             };
 
-            let fs_filetype = match info.type_ {
-                wasi_filesystem::Type::RegularFile => FILETYPE_REGULAR_FILE,
-                wasi_filesystem::Type::Directory => FILETYPE_DIRECTORY,
-                wasi_filesystem::Type::BlockDevice => FILETYPE_BLOCK_DEVICE,
-                wasi_filesystem::Type::CharacterDevice => FILETYPE_CHARACTER_DEVICE,
-                wasi_filesystem::Type::Fifo => FILETYPE_UNKNOWN,
-                wasi_filesystem::Type::Socket => FILETYPE_SOCKET_STREAM,
-                wasi_filesystem::Type::SymbolicLink => FILETYPE_SYMBOLIC_LINK,
-                wasi_filesystem::Type::Unknown => FILETYPE_UNKNOWN,
+            let fs_filetype = match type_ {
+                wasi_filesystem::DescriptorType::RegularFile => FILETYPE_REGULAR_FILE,
+                wasi_filesystem::DescriptorType::Directory => FILETYPE_DIRECTORY,
+                wasi_filesystem::DescriptorType::BlockDevice => FILETYPE_BLOCK_DEVICE,
+                wasi_filesystem::DescriptorType::CharacterDevice => FILETYPE_CHARACTER_DEVICE,
+                wasi_filesystem::DescriptorType::Fifo => FILETYPE_UNKNOWN,
+                wasi_filesystem::DescriptorType::Socket => FILETYPE_SOCKET_STREAM,
+                wasi_filesystem::DescriptorType::SymbolicLink => FILETYPE_SYMBOLIC_LINK,
+                wasi_filesystem::DescriptorType::Unknown => FILETYPE_UNKNOWN,
             };
 
             let mut fs_flags = 0;
             let mut fs_rights_base = !0;
-            if !info.flags.contains(wasi_filesystem::Flags::READ) {
+            if !flags.contains(wasi_filesystem::DescriptorFlags::READ) {
                 fs_rights_base &= !RIGHTS_FD_READ;
             }
-            if !info.flags.contains(wasi_filesystem::Flags::WRITE) {
+            if !flags.contains(wasi_filesystem::DescriptorFlags::WRITE) {
                 fs_rights_base &= !RIGHTS_FD_WRITE;
             }
-            if info.flags.contains(wasi_filesystem::Flags::APPEND) {
+            if flags.contains(wasi_filesystem::DescriptorFlags::APPEND) {
                 fs_flags |= FDFLAGS_APPEND;
             }
-            if info.flags.contains(wasi_filesystem::Flags::DSYNC) {
+            if flags.contains(wasi_filesystem::DescriptorFlags::DSYNC) {
                 fs_flags |= FDFLAGS_DSYNC;
             }
-            if info.flags.contains(wasi_filesystem::Flags::NONBLOCK) {
+            if flags.contains(wasi_filesystem::DescriptorFlags::NONBLOCK) {
                 fs_flags |= FDFLAGS_NONBLOCK;
             }
-            if info.flags.contains(wasi_filesystem::Flags::RSYNC) {
+            if flags.contains(wasi_filesystem::DescriptorFlags::RSYNC) {
                 fs_flags |= FDFLAGS_RSYNC;
             }
-            if info.flags.contains(wasi_filesystem::Flags::SYNC) {
+            if flags.contains(wasi_filesystem::DescriptorFlags::SYNC) {
                 fs_flags |= FDFLAGS_SYNC;
             }
             let fs_rights_inheriting = fs_rights_base;
@@ -318,7 +322,31 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
 /// Note: This is similar to `fcntl(fd, F_SETFL, flags)` in POSIX.
 #[no_mangle]
 pub unsafe extern "C" fn fd_fdstat_set_flags(fd: Fd, flags: Fdflags) -> Errno {
-    unreachable()
+    let mut new_flags = wasi_filesystem::DescriptorFlags::empty();
+    if flags & FDFLAGS_APPEND == FDFLAGS_APPEND {
+        new_flags |= wasi_filesystem::DescriptorFlags::APPEND;
+    }
+    if flags & FDFLAGS_DSYNC == FDFLAGS_DSYNC {
+        new_flags |= wasi_filesystem::DescriptorFlags::DSYNC;
+    }
+    if flags & FDFLAGS_NONBLOCK == FDFLAGS_NONBLOCK {
+        new_flags |= wasi_filesystem::DescriptorFlags::NONBLOCK;
+    }
+    if flags & FDFLAGS_RSYNC == FDFLAGS_RSYNC {
+        new_flags |= wasi_filesystem::DescriptorFlags::RSYNC;
+    }
+    if flags & FDFLAGS_SYNC == FDFLAGS_SYNC {
+        new_flags |= wasi_filesystem::DescriptorFlags::SYNC;
+    }
+
+    match Descriptor::get(fd) {
+        Descriptor::File(file) => match wasi_filesystem::set_flags(file.fd, new_flags) {
+            Ok(()) => ERRNO_SUCCESS,
+            Err(err) => errno_from_wasi_filesystem(err),
+        },
+        Descriptor::Log => ERRNO_INVAL,
+        Descriptor::Closed => ERRNO_BADF,
+    }
 }
 
 /// Adjust the rights associated with a file descriptor.
@@ -335,7 +363,39 @@ pub unsafe extern "C" fn fd_fdstat_set_rights(
 /// Return the attributes of an open file.
 #[no_mangle]
 pub unsafe extern "C" fn fd_filestat_get(fd: Fd, buf: *mut Filestat) -> Errno {
-    unreachable()
+    match Descriptor::get(fd) {
+        Descriptor::File(file) => match wasi_filesystem::stat(file.fd) {
+            Ok(stat) => {
+                let filetype = match stat.type_ {
+                    wasi_filesystem::DescriptorType::Unknown => FILETYPE_UNKNOWN,
+                    wasi_filesystem::DescriptorType::Directory => FILETYPE_DIRECTORY,
+                    wasi_filesystem::DescriptorType::BlockDevice => FILETYPE_BLOCK_DEVICE,
+                    wasi_filesystem::DescriptorType::RegularFile => FILETYPE_REGULAR_FILE,
+                    // TODO: Add a way to disginguish between FILETYPE_SOCKET_STREAM and
+                    // FILETYPE_SOCKET_DGRAM.
+                    wasi_filesystem::DescriptorType::Socket => unreachable(),
+                    wasi_filesystem::DescriptorType::SymbolicLink => FILETYPE_SYMBOLIC_LINK,
+                    wasi_filesystem::DescriptorType::CharacterDevice => FILETYPE_CHARACTER_DEVICE,
+                    // preview1 never had a FIFO code.
+                    wasi_filesystem::DescriptorType::Fifo => FILETYPE_UNKNOWN,
+                };
+                *buf = Filestat {
+                    dev: stat.dev,
+                    ino: stat.ino,
+                    filetype,
+                    nlink: stat.nlink,
+                    size: stat.size,
+                    atim: stat.atim,
+                    mtim: stat.mtim,
+                    ctim: stat.ctim,
+                };
+                ERRNO_SUCCESS
+            }
+            Err(err) => errno_from_wasi_filesystem(err),
+        },
+        Descriptor::Closed => ERRNO_BADF,
+        Descriptor::Log => ERRNO_NOTDIR,
+    }
 }
 
 /// Adjust the size of an open file. If this increases the file's size, the extra bytes are filled with zeros.
@@ -715,17 +775,17 @@ pub unsafe extern "C" fn path_filestat_get(
         Descriptor::File(file) => match wasi_filesystem::stat_at(file.fd, at_flags, path) {
             Ok(stat) => {
                 let filetype = match stat.type_ {
-                    wasi_filesystem::Type::Unknown => FILETYPE_UNKNOWN,
-                    wasi_filesystem::Type::Directory => FILETYPE_DIRECTORY,
-                    wasi_filesystem::Type::BlockDevice => FILETYPE_BLOCK_DEVICE,
-                    wasi_filesystem::Type::RegularFile => FILETYPE_REGULAR_FILE,
+                    wasi_filesystem::DescriptorType::Unknown => FILETYPE_UNKNOWN,
+                    wasi_filesystem::DescriptorType::Directory => FILETYPE_DIRECTORY,
+                    wasi_filesystem::DescriptorType::BlockDevice => FILETYPE_BLOCK_DEVICE,
+                    wasi_filesystem::DescriptorType::RegularFile => FILETYPE_REGULAR_FILE,
                     // TODO: Add a way to disginguish between FILETYPE_SOCKET_STREAM and
                     // FILETYPE_SOCKET_DGRAM.
-                    wasi_filesystem::Type::Socket => unreachable(),
-                    wasi_filesystem::Type::SymbolicLink => FILETYPE_SYMBOLIC_LINK,
-                    wasi_filesystem::Type::CharacterDevice => FILETYPE_CHARACTER_DEVICE,
+                    wasi_filesystem::DescriptorType::Socket => unreachable(),
+                    wasi_filesystem::DescriptorType::SymbolicLink => FILETYPE_SYMBOLIC_LINK,
+                    wasi_filesystem::DescriptorType::CharacterDevice => FILETYPE_CHARACTER_DEVICE,
                     // preview1 never had a FIFO code.
-                    wasi_filesystem::Type::Fifo => FILETYPE_UNKNOWN,
+                    wasi_filesystem::DescriptorType::Fifo => FILETYPE_UNKNOWN,
                 };
                 *buf = Filestat {
                     dev: stat.dev,
