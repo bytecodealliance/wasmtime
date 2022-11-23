@@ -8,7 +8,7 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         &mut self,
         fd: wasi_filesystem::Descriptor,
         offset: wasi_filesystem::Filesize,
-        len: wasi_filesystem::Size,
+        len: wasi_filesystem::Filesize,
         advice: wasi_filesystem::Advice,
     ) -> HostResult<(), wasi_filesystem::Errno> {
         todo!()
