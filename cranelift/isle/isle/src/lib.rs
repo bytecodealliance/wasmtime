@@ -211,6 +211,3 @@ pub mod parser;
 pub mod sema;
 pub mod trie;
 pub mod trie_again;
-
-#[cfg(feature = "miette-errors")]
-mod error_miette;

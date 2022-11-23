@@ -56,7 +56,7 @@ declare_id!(
 /// The type environment.
 ///
 /// Keeps track of which symbols and rules have which types.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct TypeEnv {
     /// Arena of input ISLE source filenames.
     ///
@@ -887,7 +887,7 @@ macro_rules! unwrap_or_continue {
 
 impl TypeEnv {
     /// Construct the type environment from the AST.
-    pub fn from_ast(defs: &ast::Defs) -> Result<TypeEnv> {
+    pub fn from_ast(defs: &ast::Defs) -> Result<TypeEnv, Errors> {
         let mut tyenv = TypeEnv {
             filenames: defs.filenames.clone(),
             file_texts: defs.file_texts.clone(),
@@ -968,11 +968,15 @@ impl TypeEnv {
         Ok(tyenv)
     }
 
-    fn return_errors(&mut self) -> Result<()> {
-        match self.errors.len() {
-            0 => Ok(()),
-            1 => Err(self.errors.pop().unwrap()),
-            _ => Err(Error::Errors(std::mem::take(&mut self.errors))),
+    fn return_errors(&mut self) -> Result<(), Errors> {
+        if self.errors.is_empty() {
+            Ok(())
+        } else {
+            Err(Errors {
+                errors: std::mem::take(&mut self.errors),
+                filenames: self.filenames.clone(),
+                file_texts: self.file_texts.clone(),
+            })
         }
     }
 
@@ -1062,16 +1066,10 @@ impl TypeEnv {
     }
 
     fn error(&self, pos: Pos, msg: impl Into<String>) -> Error {
-        let e = Error::TypeError {
+        Error::TypeError {
             msg: msg.into(),
-            src: Source::new(
-                self.filenames[pos.file].clone(),
-                self.file_texts[pos.file].clone(),
-            ),
             span: Span::new_single(pos),
-        };
-        log!("{}", e);
-        e
+        }
     }
 
     fn report_error(&mut self, pos: Pos, msg: impl Into<String>) {
@@ -1121,7 +1119,7 @@ impl Bindings {
 
 impl TermEnv {
     /// Construct the term environment from the AST and the type environment.
-    pub fn from_ast(tyenv: &mut TypeEnv, defs: &ast::Defs) -> Result<TermEnv> {
+    pub fn from_ast(tyenv: &mut TypeEnv, defs: &ast::Defs) -> Result<TermEnv, Errors> {
         let mut env = TermEnv {
             terms: vec![],
             term_map: StableMap::new(),

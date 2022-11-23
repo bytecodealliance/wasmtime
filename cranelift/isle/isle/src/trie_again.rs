@@ -1,6 +1,6 @@
 //! A strongly-normalizing intermediate representation for ISLE rules. This representation is chosen
 //! to closely reflect the operations we can implement in Rust, to make code generation easy.
-use crate::error::{Error, Source, Span};
+use crate::error::{Error, Span};
 use crate::lexer::Pos;
 use crate::sema;
 use crate::DisjointSets;
@@ -167,16 +167,13 @@ pub struct RuleSet {
 }
 
 /// Construct a [RuleSet] for each term in `termenv` that has rules.
-pub fn build(
-    termenv: &sema::TermEnv,
-    tyenv: &sema::TypeEnv,
-) -> (Vec<(sema::TermId, RuleSet)>, Vec<Error>) {
+pub fn build(termenv: &sema::TermEnv) -> (Vec<(sema::TermId, RuleSet)>, Vec<Error>) {
     let mut errors = Vec::new();
     let mut term = HashMap::new();
     for rule in termenv.rules.iter() {
         term.entry(rule.root_term)
             .or_insert_with(RuleSetBuilder::default)
-            .add_rule(rule, termenv, tyenv, &mut errors);
+            .add_rule(rule, termenv, &mut errors);
     }
 
     // The `term` hash map may return terms in any order. Sort them to ensure that we produce the
@@ -282,13 +279,7 @@ struct RuleSetBuilder {
 }
 
 impl RuleSetBuilder {
-    fn add_rule(
-        &mut self,
-        rule: &sema::Rule,
-        termenv: &sema::TermEnv,
-        tyenv: &sema::TypeEnv,
-        errors: &mut Vec<Error>,
-    ) {
+    fn add_rule(&mut self, rule: &sema::Rule, termenv: &sema::TermEnv, errors: &mut Vec<Error>) {
         self.current_rule.pos = rule.pos;
         self.current_rule.prio = rule.prio;
         self.current_rule.result = rule.visit(self, termenv);
@@ -299,20 +290,17 @@ impl RuleSetBuilder {
             self.rules.rules.push(rule);
         } else {
             // If this rule can never match, drop it so it doesn't affect overlap checking.
-            errors.extend(self.unreachable.drain(..).map(|err| {
-                let src = Source::new(
-                    tyenv.filenames[err.pos.file].clone(),
-                    tyenv.file_texts[err.pos.file].clone(),
-                );
-                Error::UnreachableError {
-                    msg: format!(
-                        "rule requires binding to match both {:?} and {:?}",
-                        err.constraint_a, err.constraint_b
-                    ),
-                    src,
-                    span: Span::new_single(err.pos),
-                }
-            }))
+            errors.extend(
+                self.unreachable
+                    .drain(..)
+                    .map(|err| Error::UnreachableError {
+                        msg: format!(
+                            "rule requires binding to match both {:?} and {:?}",
+                            err.constraint_a, err.constraint_b
+                        ),
+                        span: Span::new_single(err.pos),
+                    }),
+            )
         }
     }
 

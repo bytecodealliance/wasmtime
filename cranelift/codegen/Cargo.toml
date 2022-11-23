@@ -40,7 +40,6 @@ criterion = "0.3"
 [build-dependencies]
 cranelift-codegen-meta = { path = "meta", version = "0.91.0" }
 cranelift-isle = { path = "../isle/isle", version = "=0.91.0" }
-miette = { version = "5.1.0", features = ["fancy"], optional = true }
 
 [features]
 default = ["std", "unwind"]
@@ -101,7 +100,7 @@ incremental-cache = [
 souper-harvest = ["souper-ir", "souper-ir/stringify"]
 
 # Provide fancy Miette-produced errors for ISLE.
-isle-errors = ["miette", "cranelift-isle/miette-errors"]
+isle-errors = ["cranelift-isle/fancy-errors"]
 
 # Put ISLE generated files in isle_generated_code/, for easier
 # inspection, rather than inside of target/.

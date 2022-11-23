@@ -28,7 +28,7 @@ criteria = "safe-to-deploy"
 
 [[exemptions.adler]]
 version = "1.0.2"
-criteria = "safe-to-deploy"
+criteria = "safe-to-run"
 
 [[exemptions.aead]]
 version = "0.4.3"
@@ -394,10 +394,6 @@ criteria = "safe-to-deploy"
 version = "2.5.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.is_ci]]
-version = "1.1.1"
-criteria = "safe-to-deploy"
-
 [[exemptions.itertools]]
 version = "0.10.3"
 criteria = "safe-to-deploy"
@@ -482,17 +478,9 @@ criteria = "safe-to-deploy"
 version = "0.6.5"
 criteria = "safe-to-deploy"
 
-[[exemptions.miette]]
-version = "5.1.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.miette-derive]]
-version = "5.1.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.miniz_oxide]]
 version = "0.5.1"
-criteria = "safe-to-deploy"
+criteria = "safe-to-run"
 
 [[exemptions.mio]]
 version = "0.8.2"
@@ -560,10 +548,6 @@ criteria = "safe-to-run"
 
 [[exemptions.os_str_bytes]]
 version = "6.0.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.owo-colors]]
-version = "3.4.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.p256]]
@@ -818,10 +802,6 @@ criteria = "safe-to-deploy"
 version = "1.8.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.smawk]]
-version = "0.3.1"
-criteria = "safe-to-deploy"
-
 [[exemptions.socket2]]
 version = "0.4.4"
 criteria = "safe-to-deploy"
@@ -852,18 +832,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.subtle]]
 version = "2.4.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.supports-color]]
-version = "1.3.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.supports-hyperlinks]]
-version = "1.2.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.supports-unicode]]
-version = "1.0.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.symbolic_expressions]]
@@ -944,10 +912,6 @@ criteria = "safe-to-run"
 
 [[exemptions.typenum]]
 version = "1.15.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.unicode-linebreak]]
-version = "0.1.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.unicode-width]]
