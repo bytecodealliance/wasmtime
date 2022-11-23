@@ -30,10 +30,10 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         todo!()
     }
 
-    fn fd_info(
+    fn info(
         &mut self,
         fd: wasi_filesystem::Descriptor,
-    ) -> HostResult<wasi_filesystem::Info, wasi_filesystem::Errno> {
+    ) -> HostResult<wasi_filesystem::FdInfo, wasi_filesystem::Errno> {
         todo!()
     }
 
