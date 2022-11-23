@@ -945,14 +945,26 @@ pub unsafe extern "C" fn path_remove_directory(
 /// Note: This is similar to `renameat` in POSIX.
 #[no_mangle]
 pub unsafe extern "C" fn path_rename(
-    fd: Fd,
+    old_fd: Fd,
     old_path_ptr: *const u8,
     old_path_len: usize,
     new_fd: Fd,
     new_path_ptr: *const u8,
     new_path_len: usize,
 ) -> Errno {
-    unreachable()
+    let old_path = slice::from_raw_parts(old_path_ptr, old_path_len);
+    let new_path = slice::from_raw_parts(new_path_ptr, new_path_len);
+
+    match (Descriptor::get(old_fd), Descriptor::get(new_fd)) {
+        (Descriptor::File(old_file), Descriptor::File(new_file)) => {
+            match wasi_filesystem::rename_at(old_file.fd, old_path, new_file.fd, new_path) {
+                Ok(()) => ERRNO_SUCCESS,
+                Err(err) => errno_from_wasi_filesystem(err),
+            }
+        }
+        (_, Descriptor::Closed) | (Descriptor::Closed, _) => ERRNO_BADF,
+        _ => ERRNO_NOTDIR,
+    }
 }
 
 /// Create a symbolic link.
@@ -965,7 +977,17 @@ pub unsafe extern "C" fn path_symlink(
     new_path_ptr: *const u8,
     new_path_len: usize,
 ) -> Errno {
-    unreachable()
+    let old_path = slice::from_raw_parts(old_path_ptr, old_path_len);
+    let new_path = slice::from_raw_parts(new_path_ptr, new_path_len);
+
+    match Descriptor::get(fd) {
+        Descriptor::File(file) => match wasi_filesystem::symlink_at(file.fd, old_path, new_path) {
+            Ok(()) => ERRNO_SUCCESS,
+            Err(err) => errno_from_wasi_filesystem(err),
+        },
+        Descriptor::Closed => ERRNO_BADF,
+        _ => ERRNO_NOTDIR,
+    }
 }
 
 /// Unlink a file.
@@ -973,7 +995,16 @@ pub unsafe extern "C" fn path_symlink(
 /// Note: This is similar to `unlinkat(fd, path, 0)` in POSIX.
 #[no_mangle]
 pub unsafe extern "C" fn path_unlink_file(fd: Fd, path_ptr: *const u8, path_len: usize) -> Errno {
-    unreachable()
+    let path = slice::from_raw_parts(path_ptr, path_len);
+
+    match Descriptor::get(fd) {
+        Descriptor::File(file) => match wasi_filesystem::unlink_file_at(file.fd, path) {
+            Ok(()) => ERRNO_SUCCESS,
+            Err(err) => errno_from_wasi_filesystem(err),
+        },
+        Descriptor::Closed => ERRNO_BADF,
+        _ => ERRNO_NOTDIR,
+    }
 }
 
 /// Concurrently poll for the occurrence of a set of events.
