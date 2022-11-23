@@ -766,7 +766,7 @@ impl Compiler {
             .ins()
             .call_indirect(new_sig, callee_value, &callee_args);
 
-        self.wasm_to_host_load_results(ty, &mut builder, values_vec_ptr_val);
+        self.wasm_to_host_load_results(ty, builder, values_vec_ptr_val);
 
         let func = self.finish_trampoline(&mut context, cache_ctx.as_mut(), isa)?;
         self.save_context(CompilerContext {
@@ -840,7 +840,7 @@ impl Compiler {
     fn wasm_to_host_load_results(
         &self,
         ty: &WasmFuncType,
-        builder: &mut FunctionBuilder,
+        mut builder: FunctionBuilder,
         values_vec_ptr_val: Value,
     ) {
         let isa = &*self.isa;
