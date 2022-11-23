@@ -608,26 +608,26 @@ pub trait ABIMachineSpec {
 pub struct Sig(u32);
 cranelift_entity::entity_impl!(Sig);
 
+impl Sig {
+    fn prev(self) -> Option<Sig> {
+        self.0.checked_sub(1).map(|x| Sig(x))
+    }
+}
+
 /// ABI information shared between body (callee) and caller.
 #[derive(Clone, Debug)]
 pub struct SigData {
-    /// Argument location starting offset (regs or stack slots). Stack offsets are relative to
+    /// Argument location ending offset (regs or stack slots). Stack offsets are relative to
     /// SP on entry to function.
     ///
     /// This is a index into the `SigSet::abi_args`.
-    args_start: u32,
+    args_end: u32,
 
-    /// Amount of arguments in the stack.
-    args_length: u16,
-
-    /// Return-value location starting offset. Stack offsets are relative to the return-area
+    /// Return-value location ending offset. Stack offsets are relative to the return-area
     /// pointer.
     ///
     /// This is a index into the `SigSet::abi_args`.
-    rets_start: u32,
-
-    /// Amount of Return value locations in the stack.
-    rets_length: u16,
+    rets_end: u32,
 
     /// Space on stack used to store arguments.
     sized_stack_arg_space: i64,
@@ -643,25 +643,9 @@ pub struct SigData {
 }
 
 impl SigData {
-    /// Get the number of arguments expected.
-    pub fn num_args(&self) -> usize {
-        let num = if self.stack_ret_arg.is_some() {
-            self.args_length - 1
-        } else {
-            self.args_length
-        };
-
-        usize::from(num)
-    }
-
     /// Get total stack space required for arguments.
     pub fn sized_stack_arg_space(&self) -> i64 {
         self.sized_stack_arg_space
-    }
-
-    /// Get the number of return values expected.
-    pub fn num_rets(&self) -> usize {
-        usize::from(self.rets_length)
     }
 
     /// Get total stack space required for return values.
@@ -806,7 +790,6 @@ impl SigSet {
 
         // Compute args and retvals from signature. Handle retvals first,
         // because we may need to add a return-area arg to the args.
-        let rets_start = u32::try_from(self.abi_args.len()).unwrap();
         let (sized_stack_ret_space, _) = M::compute_arg_locs(
             sig.call_conv,
             flags,
@@ -818,7 +801,6 @@ impl SigSet {
         let rets_end = u32::try_from(self.abi_args.len()).unwrap();
 
         let need_stack_return_area = sized_stack_ret_space > 0;
-        let args_start = u32::try_from(self.abi_args.len()).unwrap();
         let (sized_stack_arg_space, stack_ret_arg) = M::compute_arg_locs(
             sig.call_conv,
             flags,
@@ -829,17 +811,12 @@ impl SigSet {
         )?;
         let args_end = u32::try_from(self.abi_args.len()).unwrap();
 
-        let args_length = u16::try_from(args_end - args_start).unwrap();
-        let rets_length = u16::try_from(rets_end - rets_start).unwrap();
-
         trace!(
-            "ABISig: sig {:?} => args start = {} args len = {} rets start = {} rets len = {}
+            "ABISig: sig {:?} => args end = {} rets end = {}
              arg stack = {} ret stack = {} stack_ret_arg = {:?}",
             sig,
-            args_start,
-            args_length,
-            rets_start,
-            rets_length,
+            args_end,
+            rets_end,
             sized_stack_arg_space,
             sized_stack_ret_space,
             need_stack_return_area,
@@ -847,10 +824,8 @@ impl SigSet {
 
         let stack_ret_arg = stack_ret_arg.map(|s| u16::try_from(s).unwrap());
         Ok(SigData {
-            args_start,
-            args_length,
-            rets_start,
-            rets_length,
+            args_end,
+            rets_end,
             sized_stack_arg_space,
             sized_stack_ret_space,
             stack_ret_arg,
@@ -861,8 +836,8 @@ impl SigSet {
     /// Get this signature's ABI arguments.
     pub fn args(&self, sig: Sig) -> &[ABIArg] {
         let sig_data = &self.sigs[sig];
-        let start = usize::try_from(sig_data.args_start).unwrap();
-        let end = usize::try_from(sig_data.args_start + u32::from(sig_data.args_length)).unwrap();
+        let start = usize::try_from(sig.prev().map_or(0, |prev| self.sigs[prev].args_end)).unwrap();
+        let end = usize::try_from(sig_data.args_end).unwrap();
         &self.abi_args[start..end]
     }
 
@@ -885,8 +860,8 @@ impl SigSet {
     /// Get this signature's ABI returns.
     pub fn rets(&self, sig: Sig) -> &[ABIArg] {
         let sig_data = &self.sigs[sig];
-        let start = usize::try_from(sig_data.rets_start).unwrap();
-        let end = usize::try_from(sig_data.rets_start + u32::from(sig_data.rets_length)).unwrap();
+        let start = usize::try_from(sig.prev().map_or(0, |prev| self.sigs[prev].rets_end)).unwrap();
+        let end = usize::try_from(sig_data.rets_end).unwrap();
         &self.abi_args[start..end]
     }
 
@@ -926,6 +901,23 @@ impl SigSet {
         }
 
         clobbers
+    }
+
+    /// Get the number of arguments expected.
+    pub fn num_args(&self, sig: Sig) -> usize {
+        let sig_data = &self.sigs[sig];
+        let num = if sig_data.stack_ret_arg.is_some() {
+            self.args(sig).len() - 1
+        } else {
+            self.args(sig).len()
+        };
+
+        usize::from(num)
+    }
+
+    /// Get the number of return values expected.
+    pub fn num_rets(&self, sig: Sig) -> usize {
+        usize::from(self.rets(sig).len())
     }
 }
 
@@ -2097,12 +2089,7 @@ fn adjust_stack_and_nominal_sp<M: ABIMachineSpec>(ctx: &mut Lower<M::I>, off: i3
 impl<M: ABIMachineSpec> Caller<M> {
     /// Get the number of arguments expected.
     pub fn num_args(&self, sigs: &SigSet) -> usize {
-        let len = sigs.args(self.sig).len();
-        if sigs[self.sig].stack_ret_arg.is_some() {
-            len - 1
-        } else {
-            len
-        }
+        sigs.num_args(self.sig)
     }
 
     /// Emit code to pre-adjust the stack, prior to argument copies and call.
@@ -2402,6 +2389,6 @@ mod tests {
     fn sig_data_size() {
         // The size of `SigData` is performance sensitive, so make sure
         // we don't regress it unintentionally.
-        assert_eq!(std::mem::size_of::<SigData>(), 40);
+        assert_eq!(std::mem::size_of::<SigData>(), 32);
     }
 }
