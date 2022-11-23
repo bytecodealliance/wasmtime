@@ -1,16 +1,20 @@
-#[cfg(feature = "selinux-fix")]
+use cranelift_module::{ModuleError, ModuleResult};
+
+#[cfg(all(not(target_os = "windows"), feature = "selinux-fix"))]
 use memmap2::MmapMut;
 
 #[cfg(not(any(feature = "selinux-fix", windows)))]
 use std::alloc;
 use std::convert::TryFrom;
+use std::ffi::c_void;
 use std::io;
 use std::mem;
 use std::ptr;
+use wasmtime_jit_icache_coherence as icache_coherence;
 
 /// A simple struct consisting of a pointer and length.
 struct PtrLen {
-    #[cfg(feature = "selinux-fix")]
+    #[cfg(all(not(target_os = "windows"), feature = "selinux-fix"))]
     map: Option<MmapMut>,
 
     ptr: *mut u8,
@@ -21,7 +25,7 @@ impl PtrLen {
     /// Create a new empty `PtrLen`.
     fn new() -> Self {
         Self {
-            #[cfg(feature = "selinux-fix")]
+            #[cfg(all(not(target_os = "windows"), feature = "selinux-fix"))]
             map: None,
 
             ptr: ptr::null_mut(),
@@ -54,10 +58,14 @@ impl PtrLen {
         // Safety: We assert that the size is non-zero above.
         let ptr = unsafe { alloc::alloc(layout) };
 
-        Ok(Self {
-            ptr,
-            len: alloc_size,
-        })
+        if !ptr.is_null() {
+            Ok(Self {
+                ptr,
+                len: alloc_size,
+            })
+        } else {
+            Err(io::Error::from(io::ErrorKind::OutOfMemory))
+        }
     }
 
     #[cfg(target_os = "windows")]
@@ -161,85 +169,92 @@ impl Memory {
         // TODO: Allocate more at a time.
         self.current = PtrLen::with_size(size)?;
         self.position = size;
+
         Ok(self.current.ptr)
     }
 
     /// Set all memory allocated in this `Memory` up to now as readable and executable.
-    pub(crate) fn set_readable_and_executable(&mut self) {
+    pub(crate) fn set_readable_and_executable(&mut self) -> ModuleResult<()> {
         self.finish_current();
 
-        let set_region_readable_and_executable = |ptr, len| {
-            if len != 0 {
-                if self.branch_protection == BranchProtection::BTI {
-                    #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
-                    if std::arch::is_aarch64_feature_detected!("bti") {
-                        let prot = libc::PROT_EXEC | libc::PROT_READ | /* PROT_BTI */ 0x10;
+        // Clear all the newly allocated code from cache if the processor requires it
+        //
+        // Do this before marking the memory as R+X, technically we should be able to do it after
+        // but there are some CPU's that have had errata about doing this with read only memory.
+        for &PtrLen { ptr, len, .. } in self.non_protected_allocations_iter() {
+            unsafe {
+                icache_coherence::clear_cache(ptr as *const c_void, len)
+                    .expect("Failed cache clear")
+            };
+        }
 
-                        unsafe {
-                            if libc::mprotect(ptr as *mut libc::c_void, len, prot) < 0 {
-                                panic!("unable to make memory readable+executable");
-                            }
+        let set_region_readable_and_executable = |ptr, len| -> ModuleResult<()> {
+            if self.branch_protection == BranchProtection::BTI {
+                #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
+                if std::arch::is_aarch64_feature_detected!("bti") {
+                    let prot = libc::PROT_EXEC | libc::PROT_READ | /* PROT_BTI */ 0x10;
+
+                    unsafe {
+                        if libc::mprotect(ptr as *mut libc::c_void, len, prot) < 0 {
+                            return Err(ModuleError::Backend(
+                                anyhow::Error::new(io::Error::last_os_error())
+                                    .context("unable to make memory readable+executable"),
+                            ));
                         }
-
-                        return;
                     }
-                }
 
-                unsafe {
-                    region::protect(ptr, len, region::Protection::READ_EXECUTE)
-                        .expect("unable to make memory readable+executable");
+                    return Ok(());
                 }
             }
+
+            unsafe {
+                region::protect(ptr, len, region::Protection::READ_EXECUTE).map_err(|e| {
+                    ModuleError::Backend(
+                        anyhow::Error::new(e).context("unable to make memory readable+executable"),
+                    )
+                })?;
+            }
+            Ok(())
         };
 
-        #[cfg(feature = "selinux-fix")]
-        {
-            for &PtrLen { ref map, ptr, len } in &self.allocations[self.already_protected..] {
-                if map.is_some() {
-                    set_region_readable_and_executable(ptr, len);
-                }
-            }
+        for &PtrLen { ptr, len, .. } in self.non_protected_allocations_iter() {
+            set_region_readable_and_executable(ptr, len)?;
         }
 
-        #[cfg(not(feature = "selinux-fix"))]
-        {
-            for &PtrLen { ptr, len } in &self.allocations[self.already_protected..] {
-                set_region_readable_and_executable(ptr, len);
-            }
-        }
+        // Flush any in-flight instructions from the pipeline
+        icache_coherence::pipeline_flush_mt().expect("Failed pipeline flush");
 
         self.already_protected = self.allocations.len();
+        Ok(())
     }
 
     /// Set all memory allocated in this `Memory` up to now as readonly.
-    pub(crate) fn set_readonly(&mut self) {
+    pub(crate) fn set_readonly(&mut self) -> ModuleResult<()> {
         self.finish_current();
 
-        #[cfg(feature = "selinux-fix")]
-        {
-            for &PtrLen { ref map, ptr, len } in &self.allocations[self.already_protected..] {
-                if len != 0 && map.is_some() {
-                    unsafe {
-                        region::protect(ptr, len, region::Protection::READ)
-                            .expect("unable to make memory readonly");
-                    }
-                }
-            }
-        }
-
-        #[cfg(not(feature = "selinux-fix"))]
-        {
-            for &PtrLen { ptr, len } in &self.allocations[self.already_protected..] {
-                if len != 0 {
-                    unsafe {
-                        region::protect(ptr, len, region::Protection::READ)
-                            .expect("unable to make memory readonly");
-                    }
-                }
+        for &PtrLen { ptr, len, .. } in self.non_protected_allocations_iter() {
+            unsafe {
+                region::protect(ptr, len, region::Protection::READ).map_err(|e| {
+                    ModuleError::Backend(
+                        anyhow::Error::new(e).context("unable to make memory readonly"),
+                    )
+                })?;
             }
         }
 
         self.already_protected = self.allocations.len();
+        Ok(())
+    }
+
+    /// Iterates non protected memory allocations that are of not zero bytes in size.
+    fn non_protected_allocations_iter(&self) -> impl Iterator<Item = &PtrLen> {
+        let iter = self.allocations[self.already_protected..].iter();
+
+        #[cfg(all(not(target_os = "windows"), feature = "selinux-fix"))]
+        return iter.filter(|&PtrLen { ref map, len, .. }| *len != 0 && map.is_some());
+
+        #[cfg(any(target_os = "windows", not(feature = "selinux-fix")))]
+        return iter.filter(|&PtrLen { len, .. }| *len != 0);
     }
 
     /// Frees all allocated memory regions that would be leaked otherwise.

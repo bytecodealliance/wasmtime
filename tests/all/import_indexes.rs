@@ -43,7 +43,7 @@ fn same_import_names_still_distinct() -> anyhow::Result<()> {
     ];
     let instance = Instance::new(&mut store, &module, &imports)?;
 
-    let func = instance.get_typed_func::<(), i32, _>(&mut store, "foo")?;
+    let func = instance.get_typed_func::<(), i32>(&mut store, "foo")?;
     let result = func.call(&mut store, ())?;
     assert_eq!(result, 3);
     Ok(())

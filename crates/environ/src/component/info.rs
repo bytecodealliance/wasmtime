@@ -411,6 +411,9 @@ pub enum Export {
     /// A nested instance is being exported which has recursively defined
     /// `Export` items.
     Instance(IndexMap<String, Export>),
+    /// An exported type from a component or instance, currently only
+    /// informational.
+    Type(TypeDef),
 }
 
 /// Canonical ABI options associated with a lifted or lowered function.

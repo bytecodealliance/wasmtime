@@ -26,8 +26,7 @@ use object::write::{Object, SectionId, StandardSegment, Symbol, SymbolId, Symbol
 use object::{Architecture, SectionKind, SymbolFlags, SymbolKind, SymbolScope};
 use std::convert::TryFrom;
 use std::ops::Range;
-use wasmtime_environ::obj;
-use wasmtime_environ::{DefinedFuncIndex, Module, PrimaryMap, SignatureIndex, Trampoline};
+use wasmtime_environ::FuncIndex;
 
 const TEXT_SECTION_NAME: &[u8] = b".text";
 
@@ -46,16 +45,9 @@ pub struct ModuleTextBuilder<'a> {
     obj: &'a mut Object<'static>,
 
     /// The WebAssembly module we're generating code for.
-    module: &'a Module,
-
     text_section: SectionId,
 
     unwind_info: UnwindInfoBuilder<'a>,
-
-    /// The corresponding symbol for each function, inserted as they're defined.
-    ///
-    /// If an index isn't here yet then it hasn't been defined yet.
-    func_symbols: PrimaryMap<DefinedFuncIndex, SymbolId>,
 
     /// In-progress text section that we're using cranelift's `MachBuffer` to
     /// build to resolve relocations (calls) between functions.
@@ -63,7 +55,13 @@ pub struct ModuleTextBuilder<'a> {
 }
 
 impl<'a> ModuleTextBuilder<'a> {
-    pub fn new(obj: &'a mut Object<'static>, module: &'a Module, isa: &'a dyn TargetIsa) -> Self {
+    /// Creates a new builder for the text section of an executable.
+    ///
+    /// The `.text` section will be appended to the specified `obj` along with
+    /// any unwinding or such information as necessary. The `num_funcs`
+    /// parameter indicates the number of times the `append_func` function will
+    /// be called. The `finish` function will panic if this contract is not met.
+    pub fn new(obj: &'a mut Object<'static>, isa: &'a dyn TargetIsa, num_funcs: usize) -> Self {
         // Entire code (functions and trampolines) will be placed
         // in the ".text" section.
         let text_section = obj.add_section(
@@ -72,37 +70,40 @@ impl<'a> ModuleTextBuilder<'a> {
             SectionKind::Text,
         );
 
-        let num_defined = module.functions.len() - module.num_imported_funcs;
         Self {
             isa,
             obj,
-            module,
             text_section,
-            func_symbols: PrimaryMap::with_capacity(num_defined),
             unwind_info: Default::default(),
-            text: isa.text_section_builder(num_defined as u32),
+            text: isa.text_section_builder(num_funcs),
         }
     }
 
     /// Appends the `func` specified named `name` to this object.
     ///
+    /// The `resolve_reloc_target` closure is used to resolve a relocation
+    /// target to an adjacent function which has already been added or will be
+    /// added to this object. The argument is the relocation target specified
+    /// within `CompiledFunction` and the return value must be an index where
+    /// the target will be defined by the `n`th call to `append_func`.
+    ///
     /// Returns the symbol associated with the function as well as the range
     /// that the function resides within the text section.
     pub fn append_func(
         &mut self,
-        labeled: bool,
-        name: Vec<u8>,
+        name: &str,
         func: &'a CompiledFunction,
+        resolve_reloc_target: impl Fn(FuncIndex) -> usize,
     ) -> (SymbolId, Range<u64>) {
         let body_len = func.body.len() as u64;
         let off = self.text.append(
-            labeled,
+            true,
             &func.body,
-            self.isa.function_alignment().max(func.info.alignment),
+            self.isa.function_alignment().max(func.alignment),
         );
 
         let symbol_id = self.obj.add_symbol(Symbol {
-            name,
+            name: name.as_bytes().to_vec(),
             value: off,
             size: body_len,
             kind: SymbolKind::Text,
@@ -125,13 +126,11 @@ impl<'a> ModuleTextBuilder<'a> {
                 // file, but if it can't handle it then we pass through the
                 // relocation.
                 RelocationTarget::UserFunc(index) => {
-                    let defined_index = self.module.defined_func_index(index).unwrap();
-                    if self.text.resolve_reloc(
-                        off + u64::from(r.offset),
-                        r.reloc,
-                        r.addend,
-                        defined_index.as_u32(),
-                    ) {
+                    let target = resolve_reloc_target(index);
+                    if self
+                        .text
+                        .resolve_reloc(off + u64::from(r.offset), r.reloc, r.addend, target)
+                    {
                         continue;
                     }
 
@@ -160,31 +159,6 @@ impl<'a> ModuleTextBuilder<'a> {
         (symbol_id, off..off + body_len)
     }
 
-    /// Appends a function to this object file.
-    ///
-    /// This is expected to be called in-order for ascending `index` values.
-    pub fn func(&mut self, index: DefinedFuncIndex, func: &'a CompiledFunction) -> Range<u64> {
-        let name = obj::func_symbol_name(self.module.func_index(index));
-        let (symbol_id, range) = self.append_func(true, name.into_bytes(), func);
-        assert_eq!(self.func_symbols.push(symbol_id), index);
-        range
-    }
-
-    pub fn trampoline(&mut self, sig: SignatureIndex, func: &'a CompiledFunction) -> Trampoline {
-        let name = obj::trampoline_symbol_name(sig);
-        let range = self.named_func(&name, func);
-        Trampoline {
-            signature: sig,
-            start: range.start,
-            length: u32::try_from(range.end - range.start).unwrap(),
-        }
-    }
-
-    pub fn named_func(&mut self, name: &str, func: &'a CompiledFunction) -> Range<u64> {
-        let (_, range) = self.append_func(false, name.as_bytes().to_vec(), func);
-        range
-    }
-
     /// Forces "veneers" to be used for inter-function calls in the text
     /// section which means that in-bounds optimized addresses are never used.
     ///
@@ -210,7 +184,7 @@ impl<'a> ModuleTextBuilder<'a> {
     ///
     /// Note that this will also write out the unwind information sections if
     /// necessary.
-    pub fn finish(mut self) -> Result<PrimaryMap<DefinedFuncIndex, SymbolId>> {
+    pub fn finish(mut self) {
         // Finish up the text section now that we're done adding functions.
         let text = self.text.finish();
         self.obj
@@ -220,8 +194,6 @@ impl<'a> ModuleTextBuilder<'a> {
         // Append the unwind information for all our functions, if necessary.
         self.unwind_info
             .append_section(self.isa, self.obj, self.text_section);
-
-        Ok(self.func_symbols)
     }
 }
 

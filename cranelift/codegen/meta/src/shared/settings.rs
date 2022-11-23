@@ -54,6 +54,17 @@ pub(crate) fn define() -> SettingGroup {
     );
 
     settings.add_bool(
+        "use_egraphs",
+        "Enable egraph-based optimization.",
+        r#"
+            This enables an optimization phase that converts CLIF to an egraph (equivalence graph)
+            representation, performs various rewrites, and then converts it back. This can result in
+            better optimization, but is currently considered experimental.
+        "#,
+        false,
+    );
+
+    settings.add_bool(
         "enable_verifier",
         "Run the Cranelift IR verifier at strategic times during compilation.",
         r#"
@@ -353,5 +364,7 @@ pub(crate) fn define() -> SettingGroup {
         false,
     );
 
+    // When adding new settings please check if they can also be added
+    // in cranelift/fuzzgen/src/lib.rs for fuzzing.
     settings.build()
 }

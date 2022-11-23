@@ -64,10 +64,11 @@ use crate::entity::SparseSet;
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::ir;
 use crate::ir::entities::AnyEntity;
+use crate::ir::immediates::HeapImmData;
 use crate::ir::instructions::{BranchInfo, CallInfo, InstructionFormat, ResolvedConstraint};
 use crate::ir::{
     types, ArgumentPurpose, Block, Constant, DynamicStackSlot, FuncRef, Function, GlobalValue,
-    Inst, JumpTable, Opcode, SigRef, StackSlot, Type, Value, ValueDef, ValueList,
+    Inst, JumpTable, MemFlags, Opcode, SigRef, StackSlot, Type, Value, ValueDef, ValueList,
 };
 use crate::isa::TargetIsa;
 use crate::iterators::IteratorExtras;
@@ -639,21 +640,6 @@ impl<'a> Verifier<'a> {
                 destination,
                 ref args,
                 ..
-            }
-            | BranchInt {
-                destination,
-                ref args,
-                ..
-            }
-            | BranchFloat {
-                destination,
-                ref args,
-                ..
-            }
-            | BranchIcmp {
-                destination,
-                ref args,
-                ..
             } => {
                 self.verify_block(inst, destination, errors)?;
                 self.verify_value_list(inst, args, errors)?;
@@ -692,6 +678,10 @@ impl<'a> Verifier<'a> {
             }
             UnaryGlobalValue { global_value, .. } => {
                 self.verify_global_value(inst, global_value, errors)?;
+            }
+            HeapLoad { heap_imm, .. } | HeapStore { heap_imm, .. } => {
+                let HeapImmData { heap, .. } = self.func.dfg.heap_imms[heap_imm];
+                self.verify_heap(inst, heap, errors)?;
             }
             HeapAddr { heap, .. } => {
                 self.verify_heap(inst, heap, errors)?;
@@ -744,11 +734,12 @@ impl<'a> Verifier<'a> {
                     ));
                 }
             }
-            Unary {
+            LoadNoOffset {
                 opcode: Opcode::Bitcast,
+                flags,
                 arg,
             } => {
-                self.verify_bitcast(inst, arg, errors)?;
+                self.verify_bitcast(inst, flags, arg, errors)?;
             }
             UnaryConst {
                 opcode: Opcode::Vconst,
@@ -768,25 +759,20 @@ impl<'a> Verifier<'a> {
             | UnaryImm { .. }
             | UnaryIeee32 { .. }
             | UnaryIeee64 { .. }
-            | UnaryBool { .. }
             | Binary { .. }
             | BinaryImm8 { .. }
             | BinaryImm64 { .. }
             | Ternary { .. }
             | TernaryImm8 { .. }
             | Shuffle { .. }
+            | IntAddTrap { .. }
             | IntCompare { .. }
             | IntCompareImm { .. }
-            | IntCond { .. }
             | FloatCompare { .. }
-            | FloatCond { .. }
-            | IntSelect { .. }
             | Load { .. }
             | Store { .. }
             | Trap { .. }
             | CondTrap { .. }
-            | IntCondTrap { .. }
-            | FloatCondTrap { .. }
             | NullAry { .. } => {}
         }
 
@@ -1090,23 +1076,14 @@ impl<'a> Verifier<'a> {
     fn verify_bitcast(
         &self,
         inst: Inst,
+        flags: MemFlags,
         arg: Value,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
         let typ = self.func.dfg.ctrl_typevar(inst);
         let value_type = self.func.dfg.value_type(arg);
 
-        if typ.lane_bits() != value_type.lane_bits() {
-            errors.fatal((
-                inst,
-                format!(
-                    "The bitcast argument {} has a lane type of {} bits, which doesn't match an expected type of {} bits",
-                    arg,
-                    value_type.lane_bits(),
-                    typ.lane_bits()
-                ),
-            ))
-        } else if typ.bits() != value_type.bits() {
+        if typ.bits() != value_type.bits() {
             errors.fatal((
                 inst,
                 format!(
@@ -1115,6 +1092,19 @@ impl<'a> Verifier<'a> {
                     value_type.bits(),
                     typ.bits()
                 ),
+            ))
+        } else if flags != MemFlags::new()
+            && flags != MemFlags::new().with_endianness(ir::Endianness::Little)
+            && flags != MemFlags::new().with_endianness(ir::Endianness::Big)
+        {
+            errors.fatal((
+                inst,
+                "The bitcast instruction only accepts the `big` or `little` memory flags",
+            ))
+        } else if flags == MemFlags::new() && typ.lane_count() != value_type.lane_count() {
+            errors.fatal((
+                inst,
+                "Byte order specifier required for bitcast instruction changing lane count",
             ))
         } else {
             Ok(())
@@ -1514,7 +1504,7 @@ impl<'a> Verifier<'a> {
             ir::InstructionData::Unary { opcode, arg } => {
                 let arg_type = self.func.dfg.value_type(arg);
                 match opcode {
-                    Opcode::Bextend | Opcode::Uextend | Opcode::Sextend | Opcode::Fpromote => {
+                    Opcode::Uextend | Opcode::Sextend | Opcode::Fpromote => {
                         if arg_type.lane_count() != ctrl_type.lane_count() {
                             return errors.nonfatal((
                                 inst,
@@ -1536,7 +1526,7 @@ impl<'a> Verifier<'a> {
                             ));
                         }
                     }
-                    Opcode::Breduce | Opcode::Ireduce | Opcode::Fdemote => {
+                    Opcode::Ireduce | Opcode::Fdemote => {
                         if arg_type.lane_count() != ctrl_type.lane_count() {
                             return errors.nonfatal((
                                 inst,

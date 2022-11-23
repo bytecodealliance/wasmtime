@@ -69,13 +69,13 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   movz x5, #1
-;   dup v5.2d, x5
-;   orr v16.16b, v0.16b, v1.16b
-;   and v18.16b, v16.16b, v5.16b
-;   ushr v20.2d, v0.2d, #1
-;   ushr v22.2d, v1.2d, #1
-;   add v24.2d, v20.2d, v22.2d
-;   add v0.2d, v18.2d, v24.2d
+;   movz x4, #1
+;   dup v4.2d, x4
+;   orr v7.16b, v0.16b, v1.16b
+;   and v17.16b, v7.16b, v4.16b
+;   ushr v19.2d, v0.2d, #1
+;   ushr v21.2d, v1.2d, #1
+;   add v23.2d, v19.2d, v21.2d
+;   add v0.2d, v17.2d, v23.2d
 ;   ret
 

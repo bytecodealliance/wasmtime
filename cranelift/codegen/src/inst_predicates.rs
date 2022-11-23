@@ -2,7 +2,6 @@
 use crate::ir::immediates::Offset32;
 use crate::ir::instructions::BranchInfo;
 use crate::ir::{Block, DataFlowGraph, Function, Inst, InstructionData, Opcode, Type, Value};
-use crate::machinst::ty_bits;
 use cranelift_entity::EntityRef;
 
 /// Preserve instructions with used result values.
@@ -11,6 +10,7 @@ pub fn any_inst_results_used(inst: Inst, live: &[bool], dfg: &DataFlowGraph) -> 
 }
 
 /// Test whether the given opcode is unsafe to even consider as side-effect-free.
+#[inline(always)]
 fn trivially_has_side_effects(opcode: Opcode) -> bool {
     opcode.is_call()
         || opcode.is_branch()
@@ -24,6 +24,7 @@ fn trivially_has_side_effects(opcode: Opcode) -> bool {
 /// Load instructions without the `notrap` flag are defined to trap when
 /// operating on inaccessible memory, so we can't treat them as side-effect-free even if the loaded
 /// value is unused.
+#[inline(always)]
 fn is_load_with_defined_trapping(opcode: Opcode, data: &InstructionData) -> bool {
     if !opcode.can_load() {
         return false;
@@ -37,6 +38,7 @@ fn is_load_with_defined_trapping(opcode: Opcode, data: &InstructionData) -> bool
 
 /// Does the given instruction have any side-effect that would preclude it from being removed when
 /// its value is unused?
+#[inline(always)]
 pub fn has_side_effect(func: &Function, inst: Inst) -> bool {
     let data = &func.dfg[inst];
     let opcode = data.opcode();
@@ -50,7 +52,7 @@ pub fn has_lowering_side_effect(func: &Function, inst: Inst) -> bool {
     op != Opcode::GetPinnedReg && (has_side_effect(func, inst) || op.can_load())
 }
 
-/// Is the given instruction a constant value (`iconst`, `fconst`, `bconst`) that can be
+/// Is the given instruction a constant value (`iconst`, `fconst`) that can be
 /// represented in 64 bits?
 pub fn is_constant_64bit(func: &Function, inst: Inst) -> Option<u64> {
     let data = &func.dfg[inst];
@@ -61,21 +63,6 @@ pub fn is_constant_64bit(func: &Function, inst: Inst) -> Option<u64> {
         &InstructionData::UnaryImm { imm, .. } => Some(imm.bits() as u64),
         &InstructionData::UnaryIeee32 { imm, .. } => Some(imm.bits() as u64),
         &InstructionData::UnaryIeee64 { imm, .. } => Some(imm.bits()),
-        &InstructionData::UnaryBool { imm, .. } => {
-            let imm = if imm {
-                let bits = ty_bits(func.dfg.value_type(func.dfg.inst_results(inst)[0]));
-
-                if bits < 64 {
-                    (1u64 << bits) - 1
-                } else {
-                    u64::MAX
-                }
-            } else {
-                0
-            };
-
-            Some(imm)
-        }
         _ => None,
     }
 }
@@ -123,8 +110,10 @@ pub fn has_memory_fence_semantics(op: Opcode) -> bool {
         | Opcode::AtomicCas
         | Opcode::AtomicLoad
         | Opcode::AtomicStore
-        | Opcode::Fence => true,
+        | Opcode::Fence
+        | Opcode::Debugtrap => true,
         Opcode::Call | Opcode::CallIndirect => true,
+        op if op.can_trap() => true,
         _ => false,
     }
 }

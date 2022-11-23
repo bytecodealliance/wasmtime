@@ -3,7 +3,7 @@ use anyhow::Result;
 use std::rc::Rc;
 use std::sync::Arc;
 use wasmtime::component::*;
-use wasmtime::{Store, StoreContextMut, Trap, TrapCode};
+use wasmtime::{Store, StoreContextMut, Trap};
 
 const CANON_32BIT_NAN: u32 = 0b01111111110000000000000000000000;
 const CANON_64BIT_NAN: u64 = 0b0111111111111000000000000000000000000000000000000000000000000000;
@@ -37,7 +37,7 @@ fn thunks() -> Result<()> {
         .get_typed_func::<(), (), _>(&mut store, "thunk-trap")?
         .call(&mut store, ())
         .unwrap_err();
-    assert!(err.downcast::<Trap>()?.trap_code() == Some(TrapCode::UnreachableCodeReached));
+    assert_eq!(err.downcast::<Trap>()?, Trap::UnreachableCodeReached);
 
     Ok(())
 }
@@ -60,10 +60,10 @@ fn typecheck() -> Result<()> {
             (func (export "thunk")
                 (canon lift (core func $i "thunk"))
             )
-            (func (export "tuple-thunk") (param (tuple)) (result (tuple))
+            (func (export "tuple-thunk") (param "a" (tuple)) (result (tuple))
                 (canon lift (core func $i "thunk"))
             )
-            (func (export "take-string") (param string)
+            (func (export "take-string") (param "a" string)
                 (canon lift (core func $i "take-string") (memory $i "memory") (realloc (func $i "realloc")))
             )
             (func (export "take-two-args") (param "a" s32) (param "b" (list u8))
@@ -154,14 +154,14 @@ fn integers() -> Result<()> {
                 (func (export "ret-i32-100000") (result i32) i32.const 100000)
             )
             (core instance $i (instantiate (module $m)))
-            (func (export "take-u8") (param u8) (canon lift (core func $i "take-i32-100")))
-            (func (export "take-s8") (param s8) (canon lift (core func $i "take-i32-100")))
-            (func (export "take-u16") (param u16) (canon lift (core func $i "take-i32-100")))
-            (func (export "take-s16") (param s16) (canon lift (core func $i "take-i32-100")))
-            (func (export "take-u32") (param u32) (canon lift (core func $i "take-i32-100")))
-            (func (export "take-s32") (param s32) (canon lift (core func $i "take-i32-100")))
-            (func (export "take-u64") (param u64) (canon lift (core func $i "take-i64-100")))
-            (func (export "take-s64") (param s64) (canon lift (core func $i "take-i64-100")))
+            (func (export "take-u8") (param "a" u8) (canon lift (core func $i "take-i32-100")))
+            (func (export "take-s8") (param "a" s8) (canon lift (core func $i "take-i32-100")))
+            (func (export "take-u16") (param "a" u16) (canon lift (core func $i "take-i32-100")))
+            (func (export "take-s16") (param "a" s16) (canon lift (core func $i "take-i32-100")))
+            (func (export "take-u32") (param "a" u32) (canon lift (core func $i "take-i32-100")))
+            (func (export "take-s32") (param "a" s32) (canon lift (core func $i "take-i32-100")))
+            (func (export "take-u64") (param "a" u64) (canon lift (core func $i "take-i64-100")))
+            (func (export "take-s64") (param "a" s64) (canon lift (core func $i "take-i64-100")))
 
             (func (export "ret-u8") (result u8) (canon lift (core func $i "ret-i32-0")))
             (func (export "ret-s8") (result s8) (canon lift (core func $i "ret-i32-0")))
@@ -420,7 +420,7 @@ fn type_layers() -> Result<()> {
                 )
             )
             (core instance $i (instantiate $m))
-            (func (export "take-u32") (param u32) (canon lift (core func $i "take-i32-100")))
+            (func (export "take-u32") (param "a" u32) (canon lift (core func $i "take-i32-100")))
         )
     "#;
 
@@ -472,16 +472,16 @@ fn floats() -> Result<()> {
             )
             (core instance $i (instantiate $m))
 
-            (func (export "f32-to-u32") (param float32) (result u32)
+            (func (export "f32-to-u32") (param "a" float32) (result u32)
                 (canon lift (core func $i "i32.reinterpret_f32"))
             )
-            (func (export "f64-to-u64") (param float64) (result u64)
+            (func (export "f64-to-u64") (param "a" float64) (result u64)
                 (canon lift (core func $i "i64.reinterpret_f64"))
             )
-            (func (export "u32-to-f32") (param u32) (result float32)
+            (func (export "u32-to-f32") (param "a" u32) (result float32)
                 (canon lift (core func $i "f32.reinterpret_i32"))
             )
-            (func (export "u64-to-f64") (param u64) (result float64)
+            (func (export "u64-to-f64") (param "a" u64) (result float64)
                 (canon lift (core func $i "f64.reinterpret_i64"))
             )
         )
@@ -545,10 +545,10 @@ fn bools() -> Result<()> {
             )
             (core instance $i (instantiate $m))
 
-            (func (export "u32-to-bool") (param u32) (result bool)
+            (func (export "u32-to-bool") (param "a" u32) (result bool)
                 (canon lift (core func $i "pass"))
             )
-            (func (export "bool-to-u32") (param bool) (result u32)
+            (func (export "bool-to-u32") (param "a" bool) (result u32)
                 (canon lift (core func $i "pass"))
             )
         )
@@ -584,10 +584,10 @@ fn chars() -> Result<()> {
             )
             (core instance $i (instantiate $m))
 
-            (func (export "u32-to-char") (param u32) (result char)
+            (func (export "u32-to-char") (param "a" u32) (result char)
                 (canon lift (core func $i "pass"))
             )
-            (func (export "char-to-u32") (param char) (result u32)
+            (func (export "char-to-u32") (param "a" char) (result u32)
                 (canon lift (core func $i "pass"))
             )
         )
@@ -722,21 +722,21 @@ fn strings() -> Result<()> {
             )
             (core instance $i (instantiate $m))
 
-            (func (export "list8-to-str") (param (list u8)) (result string)
+            (func (export "list8-to-str") (param "a" (list u8)) (result string)
                 (canon lift
                     (core func $i "roundtrip")
                     (memory $i "memory")
                     (realloc (func $i "realloc"))
                 )
             )
-            (func (export "str-to-list8") (param string) (result (list u8))
+            (func (export "str-to-list8") (param "a" string) (result (list u8))
                 (canon lift
                     (core func $i "roundtrip")
                     (memory $i "memory")
                     (realloc (func $i "realloc"))
                 )
             )
-            (func (export "list16-to-str") (param (list u16)) (result string)
+            (func (export "list16-to-str") (param "a" (list u16)) (result string)
                 (canon lift
                     (core func $i "roundtrip")
                     string-encoding=utf16
@@ -744,7 +744,7 @@ fn strings() -> Result<()> {
                     (realloc (func $i "realloc"))
                 )
             )
-            (func (export "str-to-list16") (param string) (result (list u16))
+            (func (export "str-to-list16") (param "a" string) (result (list u16))
                 (canon lift
                     (core func $i "roundtrip")
                     string-encoding=utf16
@@ -1001,10 +1001,10 @@ fn some_traps() -> Result<()> {
             )
             (core instance $i (instantiate $m))
 
-            (func (export "take-list-unreachable") (param (list u8))
+            (func (export "take-list-unreachable") (param "a" (list u8))
                 (canon lift (core func $i "take-list") (memory $i "memory") (realloc (func $i "realloc")))
             )
-            (func (export "take-string-unreachable") (param string)
+            (func (export "take-string-unreachable") (param "a" string)
                 (canon lift (core func $i "take-list") (memory $i "memory") (realloc (func $i "realloc")))
             )
 
@@ -1034,10 +1034,10 @@ fn some_traps() -> Result<()> {
             )
             (core instance $i2 (instantiate $m2))
 
-            (func (export "take-list-base-oob") (param (list u8))
+            (func (export "take-list-base-oob") (param "a" (list u8))
                 (canon lift (core func $i2 "take-list") (memory $i2 "memory") (realloc (func $i2 "realloc")))
             )
-            (func (export "take-string-base-oob") (param string)
+            (func (export "take-string-base-oob") (param "a" string)
                 (canon lift (core func $i2 "take-list") (memory $i2 "memory") (realloc (func $i2 "realloc")))
             )
             (func (export "take-many-base-oob") (type $t)
@@ -1054,10 +1054,10 @@ fn some_traps() -> Result<()> {
             )
             (core instance $i3 (instantiate $m3))
 
-            (func (export "take-list-end-oob") (param (list u8))
+            (func (export "take-list-end-oob") (param "a" (list u8))
                 (canon lift (core func $i3 "take-list") (memory $i3 "memory") (realloc (func $i3 "realloc")))
             )
-            (func (export "take-string-end-oob") (param string)
+            (func (export "take-string-end-oob") (param "a" string)
                 (canon lift (core func $i3 "take-list") (memory $i3 "memory") (realloc (func $i3 "realloc")))
             )
             (func (export "take-many-end-oob") (type $t)
@@ -1099,7 +1099,7 @@ fn some_traps() -> Result<()> {
         .call(&mut store, (&[],))
         .unwrap_err()
         .downcast::<Trap>()?;
-    assert_eq!(err.trap_code(), Some(TrapCode::UnreachableCodeReached));
+    assert_eq!(err, Trap::UnreachableCodeReached);
 
     // This should fail when calling the allocator function for the argument
     let err = instance(&mut store)?
@@ -1107,7 +1107,7 @@ fn some_traps() -> Result<()> {
         .call(&mut store, ("",))
         .unwrap_err()
         .downcast::<Trap>()?;
-    assert_eq!(err.trap_code(), Some(TrapCode::UnreachableCodeReached));
+    assert_eq!(err, Trap::UnreachableCodeReached);
 
     // This should fail when calling the allocator function for the space
     // to store the arguments (before arguments are even lowered)
@@ -1119,7 +1119,7 @@ fn some_traps() -> Result<()> {
         .call(&mut store, ("", "", "", "", "", "", "", "", "", ""))
         .unwrap_err()
         .downcast::<Trap>()?;
-    assert_eq!(err.trap_code(), Some(TrapCode::UnreachableCodeReached));
+    assert_eq!(err, Trap::UnreachableCodeReached);
 
     // Assert that when the base pointer returned by malloc is out of bounds
     // that errors are reported as such. Both empty and lists with contents
@@ -1453,23 +1453,23 @@ fn option() -> Result<()> {
             )
             (core instance $i (instantiate $m))
 
-            (func (export "option-unit-to-u32") (param (option (tuple))) (result u32)
+            (func (export "option-unit-to-u32") (param "a" (option (tuple))) (result u32)
                 (canon lift (core func $i "pass0"))
             )
-            (func (export "option-u8-to-tuple") (param (option u8)) (result "a" u32) (result "b" u32)
+            (func (export "option-u8-to-tuple") (param "a" (option u8)) (result "a" u32) (result "b" u32)
                 (canon lift (core func $i "pass1") (memory $i "memory"))
             )
-            (func (export "option-u32-to-tuple") (param (option u32)) (result "a" u32) (result "b" u32)
+            (func (export "option-u32-to-tuple") (param "a" (option u32)) (result "a" u32) (result "b" u32)
                 (canon lift (core func $i "pass1") (memory $i "memory"))
             )
-            (func (export "option-string-to-tuple") (param (option string)) (result "a" u32) (result "b" string)
+            (func (export "option-string-to-tuple") (param "a" (option string)) (result "a" u32) (result "b" string)
                 (canon lift
                     (core func $i "pass2")
                     (memory $i "memory")
                     (realloc (func $i "realloc"))
                 )
             )
-            (func (export "to-option-unit") (param u32) (result (option (tuple)))
+            (func (export "to-option-unit") (param "a" u32) (result (option (tuple)))
                 (canon lift (core func $i "pass0"))
             )
             (func (export "to-option-u8") (param "a" u32) (param "b" u32) (result (option u8))
@@ -1646,21 +1646,21 @@ fn expected() -> Result<()> {
             )
             (core instance $i (instantiate $m))
 
-            (func (export "take-expected-unit") (param (result)) (result u32)
+            (func (export "take-expected-unit") (param "a" (result)) (result u32)
                 (canon lift (core func $i "pass0"))
             )
-            (func (export "take-expected-u8-f32") (param (result u8 (error float32))) (result "a" u32) (result "b" u32)
+            (func (export "take-expected-u8-f32") (param "a" (result u8 (error float32))) (result "a" u32) (result "b" u32)
                 (canon lift (core func $i "pass1") (memory $i "memory"))
             )
             (type $list (list u8))
-            (func (export "take-expected-string") (param (result string (error $list))) (result "a" u32) (result "b" string)
+            (func (export "take-expected-string") (param "a" (result string (error $list))) (result "a" u32) (result "b" string)
                 (canon lift
                     (core func $i "pass2")
                     (memory $i "memory")
                     (realloc (func $i "realloc"))
                 )
             )
-            (func (export "to-expected-unit") (param u32) (result (result))
+            (func (export "to-expected-unit") (param "a" u32) (result (result))
                 (canon lift (core func $i "pass0"))
             )
             (func (export "to-expected-s16-f32") (param "a" u32) (param "b" u32) (result (result s16 (error float32)))
@@ -1782,7 +1782,7 @@ fn fancy_list() -> Result<()> {
             (type $b (result (error string)))
             (type $input (list (tuple $a $b)))
             (func (export "take")
-                (param $input)
+                (param "a" $input)
                 (result "ptr" u32)
                 (result "len" u32)
                 (result "list" (list u8))
@@ -2004,12 +2004,13 @@ fn drop_component_still_works() -> Result<()> {
         let component = Component::new(&engine, component)?;
         let mut store = Store::new(&engine, 0);
         let mut linker = Linker::new(&engine);
-        linker
-            .root()
-            .func_wrap("f", |mut store: StoreContextMut<'_, u32>| -> Result<()> {
+        linker.root().func_wrap(
+            "f",
+            |mut store: StoreContextMut<'_, u32>, _: ()| -> Result<()> {
                 *store.data_mut() += 1;
                 Ok(())
-            })?;
+            },
+        )?;
         let instance = linker.instantiate(&mut store, &component)?;
         (store, instance)
     };
@@ -2216,7 +2217,7 @@ fn lower_then_lift() -> Result<()> {
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
     let mut linker = Linker::new(&engine);
-    linker.root().func_wrap("f", || Ok((2u32,)))?;
+    linker.root().func_wrap("f", |_, _: ()| Ok((2u32,)))?;
     let instance = linker.instantiate(&mut store, &component)?;
 
     let f = instance.get_typed_func::<(), (i32,), _>(&mut store, "f")?;
@@ -2226,7 +2227,7 @@ fn lower_then_lift() -> Result<()> {
     let component = format!(
         r#"
 (component $c
-  (import "s" (func $f (param string)))
+  (import "s" (func $f (param "a" string)))
 
   (core module $libc
     (memory (export "memory") 1)
@@ -2237,7 +2238,7 @@ fn lower_then_lift() -> Result<()> {
   (core func $f_lower
     (canon lower (func $f) (memory $libc "memory"))
   )
-  (func $f2 (param string)
+  (func $f2 (param "a" string)
     (canon lift (core func $f_lower)
         (memory $libc "memory")
         (realloc (func $libc "realloc"))
@@ -2252,7 +2253,7 @@ fn lower_then_lift() -> Result<()> {
     let mut store = Store::new(&engine, ());
     linker
         .root()
-        .func_wrap("s", |store: StoreContextMut<'_, ()>, x: WasmStr| {
+        .func_wrap("s", |store: StoreContextMut<'_, ()>, (x,): (WasmStr,)| {
             assert_eq!(x.to_str(&store)?, "hello");
             Ok(())
         })?;
@@ -2266,7 +2267,7 @@ fn lower_then_lift() -> Result<()> {
     let component = format!(
         r#"
 (component $c
-  (import "s2" (func $f (param string) (result u32)))
+  (import "s2" (func $f (param "a" string) (result u32)))
 
   (core module $libc
     (memory (export "memory") 1)
@@ -2277,7 +2278,7 @@ fn lower_then_lift() -> Result<()> {
   (core func $f_lower
     (canon lower (func $f) (memory $libc "memory"))
   )
-  (func $f2 (param string) (result string)
+  (func $f2 (param "a" string) (result string)
     (canon lift (core func $f_lower)
         (memory $libc "memory")
         (realloc (func $libc "realloc"))
@@ -2292,7 +2293,7 @@ fn lower_then_lift() -> Result<()> {
     let mut store = Store::new(&engine, ());
     linker
         .root()
-        .func_wrap("s2", |store: StoreContextMut<'_, ()>, x: WasmStr| {
+        .func_wrap("s2", |store: StoreContextMut<'_, ()>, (x,): (WasmStr,)| {
             assert_eq!(x.to_str(&store)?, "hello");
             Ok((u32::MAX,))
         })?;
@@ -2328,7 +2329,7 @@ fn errors_that_poison_instance() -> Result<()> {
     (memory (export "m") 1)
   )
   (core instance $m2 (instantiate $m2))
-  (func (export "f3") (param string)
+  (func (export "f3") (param "a" string)
     (canon lift (core func $m2 "f") (realloc (func $m2 "r")) (memory $m2 "m"))
   )
 
@@ -2374,8 +2375,8 @@ fn errors_that_poison_instance() -> Result<()> {
             Err(e) => e,
         };
         assert_eq!(
-            err.downcast::<Trap>().unwrap().trap_code(),
-            Some(TrapCode::UnreachableCodeReached)
+            err.downcast::<Trap>().unwrap(),
+            Trap::UnreachableCodeReached
         );
     }
 
@@ -2398,7 +2399,7 @@ fn errors_that_poison_instance() -> Result<()> {
 fn run_export_with_internal_adapter() -> Result<()> {
     let component = r#"
 (component
-  (type $t (func (param u32) (result u32)))
+  (type $t (func (param "a" u32) (result u32)))
   (component $a
     (core module $m
       (func (export "add-five") (param i32) (result i32)
@@ -2410,7 +2411,7 @@ fn run_export_with_internal_adapter() -> Result<()> {
     (func (export "add-five") (type $t) (canon lift (core func $m "add-five")))
   )
   (component $b
-    (import "interface-0.1.0" (instance $i
+    (import "interface-v1" (instance $i
       (export "add-five" (func (type $t)))))
     (core module $m
       (func $add-five (import "interface-0.1.0" "add-five") (param i32) (result i32))
@@ -2427,7 +2428,7 @@ fn run_export_with_internal_adapter() -> Result<()> {
     (export "run" (func 1))
   )
   (instance $a (instantiate $a))
-  (instance $b (instantiate $b (with "interface-0.1.0" (instance $a))))
+  (instance $b (instantiate $b (with "interface-v1" (instance $a))))
   (export "run" (func $b "run"))
 )
 "#;

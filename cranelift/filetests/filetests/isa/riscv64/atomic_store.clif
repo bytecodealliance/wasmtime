@@ -1,0 +1,76 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %atomic_store_i64(i64, i64) {
+block0(v0: i64, v1: i64):
+  atomic_store.i64 v0, v1
+  return
+}
+
+; block0:
+;   atomic_store.i64 a0,(a1)
+;   ret
+
+function %atomic_store_i64_sym(i64) {
+  gv0 = symbol colocated %sym
+block0(v0: i64):
+  v1 = symbol_value.i64 gv0
+  atomic_store.i64 v0, v1
+  return
+}
+
+; block0:
+;   load_sym t2,%sym+0
+;   atomic_store.i64 a0,(t2)
+;   ret
+
+function %atomic_store_imm_i64(i64) {
+block0(v0: i64):
+  v1 = iconst.i64 12345
+  atomic_store.i64 v1, v0
+  return
+}
+
+; block0:
+;   lui t2,3
+;   addi t2,t2,57
+;   atomic_store.i64 t2,(a0)
+;   ret
+
+function %atomic_store_i32(i32, i64) {
+block0(v0: i32, v1: i64):
+  atomic_store.i32 v0, v1
+  return
+}
+
+; block0:
+;   atomic_store.i32 a0,(a1)
+;   ret
+
+function %atomic_store_i32_sym(i32) {
+  gv0 = symbol colocated %sym
+block0(v0: i32):
+  v1 = symbol_value.i64 gv0
+  atomic_store.i32 v0, v1
+  return
+}
+
+; block0:
+;   load_sym t2,%sym+0
+;   atomic_store.i32 a0,(t2)
+;   ret
+
+function %atomic_store_imm_i32(i64) {
+block0(v0: i64):
+  v1 = iconst.i32 12345
+  atomic_store.i32 v1, v0
+  return
+}
+
+; block0:
+;   lui t2,3
+;   addi t2,t2,57
+;   atomic_store.i32 t2,(a0)
+;   ret
+

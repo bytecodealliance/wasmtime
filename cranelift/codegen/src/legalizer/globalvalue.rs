@@ -14,6 +14,12 @@ pub fn expand_global_value(
     isa: &dyn TargetIsa,
     global_value: ir::GlobalValue,
 ) {
+    crate::trace!(
+        "expanding global value: {:?}: {}",
+        inst,
+        func.dfg.display_inst(inst)
+    );
+
     match func.global_values[global_value] {
         ir::GlobalValueData::VMContext => vmctx_addr(inst, func),
         ir::GlobalValueData::IAddImm {

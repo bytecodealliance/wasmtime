@@ -94,12 +94,11 @@ impl FuncTranslator {
         debug_assert_eq!(func.dfg.num_blocks(), 0, "Function must be empty");
         debug_assert_eq!(func.dfg.num_insts(), 0, "Function must be empty");
 
-        // This clears the `FunctionBuilderContext`.
         let mut builder = FunctionBuilder::new(func, &mut self.func_ctx);
         builder.set_srcloc(cur_srcloc(&reader));
         let entry_block = builder.create_block();
         builder.append_block_params_for_function_params(entry_block);
-        builder.switch_to_block(entry_block); // This also creates values for the arguments.
+        builder.switch_to_block(entry_block);
         builder.seal_block(entry_block); // Declare all predecessors known.
 
         // Make sure the entry block is inserted in the layout before we make any callbacks to
@@ -183,7 +182,7 @@ fn parse_local_decls<FE: FuncEnvironment + ?Sized>(
 
 /// Declare `count` local variables of the same type, starting from `next_local`.
 ///
-/// Fail of too many locals are declared in the function, or if the type is not valid for a local.
+/// Fail if too many locals are declared in the function, or if the type is not valid for a local.
 fn declare_locals<FE: FuncEnvironment + ?Sized>(
     builder: &mut FunctionBuilder,
     count: u32,
@@ -406,7 +405,10 @@ mod tests {
         let mut validator = Validator::new();
         for payload in Parser::new(0).parse_all(wat) {
             match validator.payload(&payload.unwrap()).unwrap() {
-                ValidPayload::Func(validator, body) => return (body, validator),
+                ValidPayload::Func(validator, body) => {
+                    let validator = validator.into_validator(Default::default());
+                    return (body, validator);
+                }
                 _ => {}
             }
         }

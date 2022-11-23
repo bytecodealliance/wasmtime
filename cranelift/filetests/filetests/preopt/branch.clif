@@ -4,7 +4,7 @@ target x86_64
 
 function %brz_fold() -> i32 {
 block0:
-    v0 = bconst.b1 false
+    v0 = iconst.i8 0
     brz v0, block2
     jump block1
 block1:
@@ -16,7 +16,7 @@ block2:
 }
 ; sameln: function %brz_fold
 ; nextln: block0:
-; nextln:     v0 = bconst.b1 false
+; nextln:     v0 = iconst.i8 0
 ; nextln:     jump block2
 ; nextln: 
 ; nextln: block1:
@@ -30,7 +30,7 @@ block2:
 
 function %brnz_fold() -> i32 {
 block0:
-    v0 = bconst.b1 true
+    v0 = iconst.i8 1
     brnz v0, block2
     jump block1
 block1:
@@ -42,7 +42,7 @@ block2:
 }
 ; sameln: function %brnz_fold
 ; nextln: block0:
-; nextln:     v0 = bconst.b1 true
+; nextln:     v0 = iconst.i8 1
 ; nextln:     jump block2
 ; nextln: 
 ; nextln: block1:
@@ -54,8 +54,8 @@ block2:
 ; nextln:     return v2
 ; nextln: }
 
-function %brz_fold_param(b1) -> i32 {
-block0(v0: b1):
+function %brz_fold_param(i8) -> i32 {
+block0(v0: i8):
     brz v0, block2
     jump block1
 block1:
@@ -65,8 +65,8 @@ block2:
     v2 = iconst.i32 24
     return v2
 }
-; sameln: function %brz_fold_param(b1) -> i32 fast {
-; nextln: block0(v0: b1):
+; sameln: function %brz_fold_param(i8) -> i32 fast {
+; nextln: block0(v0: i8):
 ; nextln:     brz v0, block2
 ; nextln:     jump block1
 ; nextln: 

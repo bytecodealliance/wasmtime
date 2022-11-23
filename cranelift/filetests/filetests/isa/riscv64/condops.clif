@@ -1,0 +1,79 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %f(i8, i64, i64) -> i64 {
+block0(v0: i8, v1: i64, v2: i64):
+  v3 = iconst.i8 42
+  v4 = icmp eq v0, v3
+  v5 = select.i64 v4, v1, v2
+  return v5
+}
+
+; block0:
+;   li a3,42
+;   select_reg a0,a1,a2##condition=(a0 eq a3)
+;   ret
+
+function %g(i8) -> i8 {
+block0(v0: i8):
+  v3 = iconst.i8 42
+  v4 = icmp eq v0, v3
+  return v4
+}
+
+; block0:
+;   li t2,42
+;   uext.b a1,a0
+;   uext.b a3,t2
+;   eq a0,a1,a3##ty=i8
+;   ret
+
+function %h(i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8):
+  v3 = bitselect.i8 v0, v1, v2
+  return v3
+}
+
+; block0:
+;   and a1,a0,a1
+;   not a3,a0
+;   and a5,a3,a2
+;   or a0,a1,a5
+;   ret
+
+function %i(i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8):
+  v3 = select.i8 v0, v1, v2
+  return v3
+}
+
+; block0:
+;   andi a3,a0,255
+;   select_i8 a0,a1,a2##condition=a3
+;   ret
+
+function %i(i32, i8, i8) -> i8 {
+block0(v0: i32, v1: i8, v2: i8):
+  v3 = iconst.i32 42
+  v4 = icmp.i32 eq v0, v3
+  v5 = select.i8 v4, v1, v2
+  return v5
+}
+
+; block0:
+;   li a3,42
+;   select_reg a0,a1,a2##condition=(a0 eq a3)
+;   ret
+
+function %i128_select(i8, i128, i128) -> i128 {
+block0(v0: i8, v1: i128, v2: i128):
+  v3 = select.i128 v0, v1, v2
+  return v3
+}
+
+; block0:
+;   andi a5,a0,255
+;   select_i128 [a0,a1],[a1,a2],[a3,a4]##condition=a5
+;   ret
+

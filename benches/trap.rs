@@ -9,6 +9,7 @@ fn bench_traps(c: &mut Criterion) {
     bench_multi_threaded_traps(c);
     bench_many_modules_registered_traps(c);
     bench_many_stack_frames_traps(c);
+    bench_host_wasm_frames_traps(c);
 }
 
 fn bench_multi_threaded_traps(c: &mut Criterion) {
@@ -37,9 +38,8 @@ fn bench_multi_threaded_traps(c: &mut Criterion) {
                                 move || {
                                     let mut store = Store::new(&engine, ());
                                     let instance = Instance::new(&mut store, &module, &[]).unwrap();
-                                    let f = instance
-                                        .get_typed_func::<(), (), _>(&mut store, "")
-                                        .unwrap();
+                                    let f =
+                                        instance.get_typed_func::<(), ()>(&mut store, "").unwrap();
 
                                     // Notify the parent thread that we are
                                     // doing background work now.
@@ -66,9 +66,7 @@ fn bench_multi_threaded_traps(c: &mut Criterion) {
 
                     let mut store = Store::new(&engine, ());
                     let instance = Instance::new(&mut store, &module, &[]).unwrap();
-                    let f = instance
-                        .get_typed_func::<(), (), _>(&mut store, "")
-                        .unwrap();
+                    let f = instance.get_typed_func::<(), ()>(&mut store, "").unwrap();
 
                     // Measure how long it takes to do `iters` worth of traps
                     // while there is a bunch of background work going on.
@@ -110,9 +108,7 @@ fn bench_many_modules_registered_traps(c: &mut Criterion) {
                 b.iter_custom(|iters| {
                     let mut store = Store::new(&engine, ());
                     let instance = Instance::new(&mut store, modules.last().unwrap(), &[]).unwrap();
-                    let f = instance
-                        .get_typed_func::<(), (), _>(&mut store, "")
-                        .unwrap();
+                    let f = instance.get_typed_func::<(), ()>(&mut store, "").unwrap();
 
                     let start = std::time::Instant::now();
                     for _ in 0..iters {
@@ -142,13 +138,71 @@ fn bench_many_stack_frames_traps(c: &mut Criterion) {
                 b.iter_custom(|iters| {
                     let mut store = Store::new(&engine, ());
                     let instance = Instance::new(&mut store, &module, &[]).unwrap();
-                    let f = instance
-                        .get_typed_func::<(), (), _>(&mut store, "")
-                        .unwrap();
+                    let f = instance.get_typed_func::<(), ()>(&mut store, "").unwrap();
 
                     let start = std::time::Instant::now();
                     for _ in 0..iters {
                         assert!(f.call(&mut store, ()).is_err());
+                    }
+                    start.elapsed()
+                });
+            },
+        );
+    }
+
+    group.finish()
+}
+
+fn bench_host_wasm_frames_traps(c: &mut Criterion) {
+    let mut group = c.benchmark_group("host-wasm-frames-traps");
+
+    let wat = r#"
+        (module
+            (import "" "" (func $host_func (param i32)))
+            (func (export "f") (param i32)
+                local.get 0
+                i32.eqz
+                if
+                    unreachable
+                end
+
+                local.get 0
+                i32.const 1
+                i32.sub
+                call $host_func
+            )
+        )
+    "#;
+
+    let engine = Engine::default();
+    let module = Module::new(&engine, wat).unwrap();
+
+    for num_stack_frames in vec![20, 40, 60, 80, 100, 120, 140, 160, 180, 200] {
+        group.throughput(Throughput::Elements(num_stack_frames));
+        group.bench_with_input(
+            BenchmarkId::from_parameter(num_stack_frames),
+            &num_stack_frames,
+            |b, &num_stack_frames| {
+                b.iter_custom(|iters| {
+                    let mut store = Store::new(&engine, ());
+                    let host_func = Func::new(
+                        &mut store,
+                        FuncType::new(vec![ValType::I32], vec![]),
+                        |mut caller, args, _results| {
+                            let f = caller.get_export("f").unwrap();
+                            let f = f.into_func().unwrap();
+                            f.call(caller, args, &mut [])?;
+                            Ok(())
+                        },
+                    );
+                    let instance = Instance::new(&mut store, &module, &[host_func.into()]).unwrap();
+                    let f = instance
+                        .get_typed_func::<(i32,), ()>(&mut store, "f")
+                        .unwrap();
+
+                    let start = std::time::Instant::now();
+                    for _ in 0..iters {
+                        assert!(f.call(&mut store, (num_stack_frames as i32,)).is_err());
                     }
                     start.elapsed()
                 });

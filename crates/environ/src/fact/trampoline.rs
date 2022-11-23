@@ -313,9 +313,9 @@ impl Compiler<'_, '_> {
 
     fn translate_params(&mut self, adapter: &AdapterData, param_locals: &[(u32, ValType)]) {
         let src_tys = &self.types[adapter.lower.ty].params;
-        let src_tys = src_tys.iter().map(|(_, ty)| *ty).collect::<Vec<_>>();
+        let src_tys = src_tys.iter().copied().collect::<Vec<_>>();
         let dst_tys = &self.types[adapter.lift.ty].params;
-        let dst_tys = dst_tys.iter().map(|(_, ty)| *ty).collect::<Vec<_>>();
+        let dst_tys = dst_tys.iter().copied().collect::<Vec<_>>();
         let lift_opts = &adapter.lift.options;
         let lower_opts = &adapter.lower.options;
 
@@ -389,9 +389,9 @@ impl Compiler<'_, '_> {
         result_locals: &[(u32, ValType)],
     ) {
         let src_tys = &self.types[adapter.lift.ty].results;
-        let src_tys = src_tys.iter().map(|(_, ty)| *ty).collect::<Vec<_>>();
+        let src_tys = src_tys.iter().map(|ty| *ty).collect::<Vec<_>>();
         let dst_tys = &self.types[adapter.lower.ty].results;
-        let dst_tys = dst_tys.iter().map(|(_, ty)| *ty).collect::<Vec<_>>();
+        let dst_tys = dst_tys.iter().map(|ty| *ty).collect::<Vec<_>>();
         let lift_opts = &adapter.lift.options;
         let lower_opts = &adapter.lower.options;
 
@@ -2718,22 +2718,22 @@ impl Compiler<'_, '_> {
 
     fn i32_load8u(&mut self, mem: &Memory) {
         self.instruction(LocalGet(mem.addr.idx));
-        self.instruction(I32Load8_U(mem.memarg(0)));
+        self.instruction(I32Load8U(mem.memarg(0)));
     }
 
     fn i32_load8s(&mut self, mem: &Memory) {
         self.instruction(LocalGet(mem.addr.idx));
-        self.instruction(I32Load8_S(mem.memarg(0)));
+        self.instruction(I32Load8S(mem.memarg(0)));
     }
 
     fn i32_load16u(&mut self, mem: &Memory) {
         self.instruction(LocalGet(mem.addr.idx));
-        self.instruction(I32Load16_U(mem.memarg(1)));
+        self.instruction(I32Load16U(mem.memarg(1)));
     }
 
     fn i32_load16s(&mut self, mem: &Memory) {
         self.instruction(LocalGet(mem.addr.idx));
-        self.instruction(I32Load16_S(mem.memarg(1)));
+        self.instruction(I32Load16S(mem.memarg(1)));
     }
 
     fn i32_load(&mut self, mem: &Memory) {

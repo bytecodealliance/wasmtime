@@ -61,6 +61,18 @@ impl Layout {
         self.last_block = None;
     }
 
+    /// Clear instructions from every block, but keep the blocks.
+    ///
+    /// Used by the egraph-based optimization to clear out the
+    /// function body but keep the CFG skeleton.
+    pub(crate) fn clear_insts(&mut self) {
+        self.insts.clear();
+        for block in self.blocks.values_mut() {
+            block.first_inst = None.into();
+            block.last_inst = None.into();
+        }
+    }
+
     /// Returns the capacity of the `BlockData` map.
     pub fn block_capacity(&self) -> usize {
         self.blocks.capacity()

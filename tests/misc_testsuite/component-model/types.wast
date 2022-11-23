@@ -1,6 +1,6 @@
 (component
   (type string)
-  (type (func (param string)))
+  (type (func (param "a" string)))
   (type $r (record (field "x" (record)) (field "y" string)))
   (type $u (union $r string))
   (type $e (result $u (error u32)))
@@ -8,7 +8,7 @@
   (type (result (error $u)))
   (type (result))
 
-  (type (func (param $e) (result (option $r))))
+  (type (func (param "a" $e) (result (option $r))))
 
   (type (variant
     (case "a" string)
@@ -53,14 +53,14 @@
 
 (component
   (type $empty (func))
-  (type (func (param string) (result u32)))
+  (type (func (param "a" string) (result u32)))
   (type (component))
   (core type (module))
   (core type (func))
   (type (instance))
 
   (type (component
-    (import "" (func (type $empty)))
+    (import "x" (func (type $empty)))
     (import "y" (func))
     (import "z" (component))
 
@@ -71,7 +71,7 @@
   ))
 
   (type (instance
-    (export "" (func (type $empty)))
+    (export "x" (func (type $empty)))
     (export "y" (func))
     (export "z" (component))
 
@@ -97,7 +97,7 @@
 
   (component $C2
     (alias outer $C $f (core type $my_f))
-    (import "" (core module (type $m)))
+    (import "a" (core module (type $m)))
     (import "x" (core module
       (alias outer $C2 $my_f (type $my_f))
       (import "" "1" (func (type $my_f)))
@@ -119,11 +119,11 @@
 (component
   (core module $m (func (export "") (param i32) (result i32) local.get 0))
   (core instance $m (instantiate $m))
-  (func (export "i-to-b") (param u32) (result bool) (canon lift (core func $m "")))
-  (func (export "i-to-u8") (param u32) (result u8) (canon lift (core func $m "")))
-  (func (export "i-to-s8") (param u32) (result s8) (canon lift (core func $m "")))
-  (func (export "i-to-u16") (param u32) (result u16) (canon lift (core func $m "")))
-  (func (export "i-to-s16") (param u32) (result s16) (canon lift (core func $m "")))
+  (func (export "i-to-b") (param "a" u32) (result bool) (canon lift (core func $m "")))
+  (func (export "i-to-u8") (param "a" u32) (result u8) (canon lift (core func $m "")))
+  (func (export "i-to-s8") (param "a" u32) (result s8) (canon lift (core func $m "")))
+  (func (export "i-to-u16") (param "a" u32) (result u16) (canon lift (core func $m "")))
+  (func (export "i-to-s16") (param "a" u32) (result s16) (canon lift (core func $m "")))
 )
 (assert_return (invoke "i-to-b" (u32.const 0)) (bool.const false))
 (assert_return (invoke "i-to-b" (u32.const 1)) (bool.const true))

@@ -16,112 +16,29 @@ use crate::isa::aarch64::inst::*;
 use crate::isa::aarch64::AArch64Backend;
 use crate::machinst::lower::*;
 use crate::machinst::{Reg, Writable};
+use crate::CodegenResult;
 use crate::{machinst::*, trace};
-use crate::{CodegenError, CodegenResult};
 use smallvec::{smallvec, SmallVec};
-use std::cmp;
 
 pub mod isle;
 
 //============================================================================
-// Result enum types.
-//
-// Lowering of a given value results in one of these enums, depending on the
-// modes in which we can accept the value.
-
-/// A lowering result: register, register-shift.  An SSA value can always be
-/// lowered into one of these options; the register form is the fallback.
-#[derive(Clone, Debug)]
-enum ResultRS {
-    Reg(Reg),
-    RegShift(Reg, ShiftOpAndAmt),
-}
-
-/// A lowering result: register, register-shift, register-extend.  An SSA value can always be
-/// lowered into one of these options; the register form is the fallback.
-#[derive(Clone, Debug)]
-enum ResultRSE {
-    Reg(Reg),
-    RegShift(Reg, ShiftOpAndAmt),
-    RegExtend(Reg, ExtendOp),
-}
-
-impl ResultRSE {
-    fn from_rs(rs: ResultRS) -> ResultRSE {
-        match rs {
-            ResultRS::Reg(r) => ResultRSE::Reg(r),
-            ResultRS::RegShift(r, s) => ResultRSE::RegShift(r, s),
-        }
-    }
-}
-
-/// A lowering result: register, register-shift, register-extend, or 12-bit immediate form.
-/// An SSA value can always be lowered into one of these options; the register form is the
-/// fallback.
-#[derive(Clone, Debug)]
-pub(crate) enum ResultRSEImm12 {
-    Reg(Reg),
-    RegShift(Reg, ShiftOpAndAmt),
-    RegExtend(Reg, ExtendOp),
-    Imm12(Imm12),
-}
-
-impl ResultRSEImm12 {
-    fn from_rse(rse: ResultRSE) -> ResultRSEImm12 {
-        match rse {
-            ResultRSE::Reg(r) => ResultRSEImm12::Reg(r),
-            ResultRSE::RegShift(r, s) => ResultRSEImm12::RegShift(r, s),
-            ResultRSE::RegExtend(r, e) => ResultRSEImm12::RegExtend(r, e),
-        }
-    }
-}
-
-//============================================================================
 // Lowering: convert instruction inputs to forms that we can use.
-
-/// Lower an instruction input to a 64-bit constant, if possible.
-pub(crate) fn input_to_const(ctx: &mut Lower<Inst>, input: InsnInput) -> Option<u64> {
-    let input = ctx.get_input_as_source_or_const(input.insn, input.input);
-    input.constant
-}
-
-/// Lower an instruction input to a constant register-shift amount, if possible.
-pub(crate) fn input_to_shiftimm(
-    ctx: &mut Lower<Inst>,
-    input: InsnInput,
-) -> Option<ShiftOpShiftImm> {
-    input_to_const(ctx, input).and_then(ShiftOpShiftImm::maybe_from_shift)
-}
 
 /// How to handle narrow values loaded into registers; see note on `narrow_mode`
 /// parameter to `put_input_in_*` below.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum NarrowValueMode {
     None,
-    /// Zero-extend to 32 bits if original is < 32 bits.
-    ZeroExtend32,
-    /// Sign-extend to 32 bits if original is < 32 bits.
-    SignExtend32,
     /// Zero-extend to 64 bits if original is < 64 bits.
     ZeroExtend64,
-    /// Sign-extend to 64 bits if original is < 64 bits.
-    SignExtend64,
 }
 
 impl NarrowValueMode {
     fn is_32bit(&self) -> bool {
         match self {
             NarrowValueMode::None => false,
-            NarrowValueMode::ZeroExtend32 | NarrowValueMode::SignExtend32 => true,
-            NarrowValueMode::ZeroExtend64 | NarrowValueMode::SignExtend64 => false,
-        }
-    }
-
-    fn is_signed(&self) -> bool {
-        match self {
-            NarrowValueMode::SignExtend32 | NarrowValueMode::SignExtend64 => true,
-            NarrowValueMode::ZeroExtend32 | NarrowValueMode::ZeroExtend64 => false,
-            NarrowValueMode::None => false,
+            NarrowValueMode::ZeroExtend64 => false,
         }
     }
 }
@@ -159,29 +76,6 @@ fn extend_reg(
     let from_bits = ty_bits(ty) as u8;
     match (narrow_mode, from_bits) {
         (NarrowValueMode::None, _) => in_reg,
-        (NarrowValueMode::ZeroExtend32, n) if n < 32 => {
-            let tmp = ctx.alloc_tmp(I32).only_reg().unwrap();
-            ctx.emit(Inst::Extend {
-                rd: tmp,
-                rn: in_reg,
-                signed: false,
-                from_bits,
-                to_bits: 32,
-            });
-            tmp.to_reg()
-        }
-        (NarrowValueMode::SignExtend32, n) if n < 32 => {
-            let tmp = ctx.alloc_tmp(I32).only_reg().unwrap();
-            ctx.emit(Inst::Extend {
-                rd: tmp,
-                rn: in_reg,
-                signed: true,
-                from_bits,
-                to_bits: 32,
-            });
-            tmp.to_reg()
-        }
-        (NarrowValueMode::ZeroExtend32, 32) | (NarrowValueMode::SignExtend32, 32) => in_reg,
 
         (NarrowValueMode::ZeroExtend64, n) if n < 64 => {
             if is_const {
@@ -198,17 +92,6 @@ fn extend_reg(
                 });
                 tmp.to_reg()
             }
-        }
-        (NarrowValueMode::SignExtend64, n) if n < 64 => {
-            let tmp = ctx.alloc_tmp(I32).only_reg().unwrap();
-            ctx.emit(Inst::Extend {
-                rd: tmp,
-                rn: in_reg,
-                signed: true,
-                from_bits,
-                to_bits: 64,
-            });
-            tmp.to_reg()
         }
         (_, 64) => in_reg,
         (_, 128) => in_reg,
@@ -261,72 +144,6 @@ fn put_value_in_reg(ctx: &mut Lower<Inst>, value: Value, narrow_mode: NarrowValu
     extend_reg(ctx, ty, reg, is_const, narrow_mode)
 }
 
-/// Lower an instruction input to multiple regs
-pub(crate) fn put_input_in_regs(ctx: &mut Lower<Inst>, input: InsnInput) -> ValueRegs<Reg> {
-    let value = ctx.input_as_value(input.insn, input.input);
-    let (in_regs, _, _) = lower_value_to_regs(ctx, value);
-    in_regs
-}
-
-/// Lower an instruction input to a reg or reg/shift, or reg/extend operand.
-///
-/// The `narrow_mode` flag indicates whether the consumer of this value needs
-/// the high bits clear. For many operations, such as an add/sub/mul or any
-/// bitwise logical operation, the low-bit results depend only on the low-bit
-/// inputs, so e.g. we can do an 8 bit add on 32 bit registers where the 8-bit
-/// value is stored in the low 8 bits of the register and the high 24 bits are
-/// undefined. If the op truly needs the high N bits clear (such as for a
-/// divide or a right-shift or a compare-to-zero), `narrow_mode` should be
-/// set to `ZeroExtend` or `SignExtend` as appropriate, and the resulting
-/// register will be provided the extended value.
-fn put_input_in_rs(
-    ctx: &mut Lower<Inst>,
-    input: InsnInput,
-    narrow_mode: NarrowValueMode,
-) -> ResultRS {
-    let inputs = ctx.get_input_as_source_or_const(input.insn, input.input);
-    // Unique or non-unique use is fine for merging here.
-    if let Some((insn, 0)) = inputs.inst.as_inst() {
-        let op = ctx.data(insn).opcode();
-
-        if op == Opcode::Ishl {
-            let shiftee = InsnInput { insn, input: 0 };
-            let shift_amt = InsnInput { insn, input: 1 };
-
-            // Can we get the shift amount as an immediate?
-            if let Some(shiftimm) = input_to_shiftimm(ctx, shift_amt) {
-                let shiftee_bits = ty_bits(ctx.input_ty(insn, 0));
-                if shiftee_bits <= std::u8::MAX as usize {
-                    let shiftimm = shiftimm.mask(shiftee_bits as u8);
-                    let reg = put_input_in_reg(ctx, shiftee, narrow_mode);
-                    return ResultRS::RegShift(reg, ShiftOpAndAmt::new(ShiftOp::LSL, shiftimm));
-                }
-            }
-        }
-    }
-
-    ResultRS::Reg(put_input_in_reg(ctx, input, narrow_mode))
-}
-
-/// Lower an instruction input to a reg or reg/shift, or reg/extend operand.
-/// This does not actually codegen the source instruction; it just uses the
-/// vreg into which the source instruction will generate its value.
-///
-/// See note on `put_input_in_rs` for a description of `narrow_mode`.
-fn put_input_in_rse(
-    ctx: &mut Lower<Inst>,
-    input: InsnInput,
-    narrow_mode: NarrowValueMode,
-) -> ResultRSE {
-    let value = ctx.input_as_value(input.insn, input.input);
-    if let Some((val, extendop)) = get_as_extended_value(ctx, value, narrow_mode) {
-        let reg = put_value_in_reg(ctx, val, NarrowValueMode::None);
-        return ResultRSE::RegExtend(reg, extendop);
-    }
-
-    ResultRSE::from_rs(put_input_in_rs(ctx, input, narrow_mode))
-}
-
 fn get_as_extended_value(
     ctx: &mut Lower<Inst>,
     val: Value,
@@ -351,13 +168,8 @@ fn get_as_extended_value(
             // A single zero-extend or sign-extend is equal to itself.
             (_, NarrowValueMode::None) => true,
             // Two zero-extends or sign-extends in a row is equal to a single zero-extend or sign-extend.
-            (false, NarrowValueMode::ZeroExtend32) | (false, NarrowValueMode::ZeroExtend64) => true,
-            (true, NarrowValueMode::SignExtend32) | (true, NarrowValueMode::SignExtend64) => true,
-            // A zero-extend and a sign-extend in a row is not equal to a single zero-extend or sign-extend
-            (false, NarrowValueMode::SignExtend32) | (false, NarrowValueMode::SignExtend64) => {
-                false
-            }
-            (true, NarrowValueMode::ZeroExtend32) | (true, NarrowValueMode::ZeroExtend64) => false,
+            (false, NarrowValueMode::ZeroExtend64) => true,
+            (true, NarrowValueMode::ZeroExtend64) => false,
         } {
             let extendop = match (sign_extend, inner_bits) {
                 (true, 8) => ExtendOp::SXTB,
@@ -379,98 +191,15 @@ fn get_as_extended_value(
         && ((narrow_mode.is_32bit() && out_bits < 32) || (!narrow_mode.is_32bit() && out_bits < 64))
     {
         let extendop = match (narrow_mode, out_bits) {
-            (NarrowValueMode::SignExtend32, 1) | (NarrowValueMode::SignExtend64, 1) => {
-                ExtendOp::SXTB
-            }
-            (NarrowValueMode::ZeroExtend32, 1) | (NarrowValueMode::ZeroExtend64, 1) => {
-                ExtendOp::UXTB
-            }
-            (NarrowValueMode::SignExtend32, 8) | (NarrowValueMode::SignExtend64, 8) => {
-                ExtendOp::SXTB
-            }
-            (NarrowValueMode::ZeroExtend32, 8) | (NarrowValueMode::ZeroExtend64, 8) => {
-                ExtendOp::UXTB
-            }
-            (NarrowValueMode::SignExtend32, 16) | (NarrowValueMode::SignExtend64, 16) => {
-                ExtendOp::SXTH
-            }
-            (NarrowValueMode::ZeroExtend32, 16) | (NarrowValueMode::ZeroExtend64, 16) => {
-                ExtendOp::UXTH
-            }
-            (NarrowValueMode::SignExtend64, 32) => ExtendOp::SXTW,
+            (NarrowValueMode::ZeroExtend64, 1) => ExtendOp::UXTB,
+            (NarrowValueMode::ZeroExtend64, 8) => ExtendOp::UXTB,
+            (NarrowValueMode::ZeroExtend64, 16) => ExtendOp::UXTH,
             (NarrowValueMode::ZeroExtend64, 32) => ExtendOp::UXTW,
             _ => unreachable!(),
         };
         return Some((val, extendop));
     }
     None
-}
-
-pub(crate) fn put_input_in_rse_imm12(
-    ctx: &mut Lower<Inst>,
-    input: InsnInput,
-    narrow_mode: NarrowValueMode,
-) -> ResultRSEImm12 {
-    if let Some(imm_value) = input_to_const(ctx, input) {
-        if let Some(i) = Imm12::maybe_from_u64(imm_value) {
-            let out_ty_bits = ty_bits(ctx.input_ty(input.insn, input.input));
-            let is_negative = (i.bits as u64) & (1 << (cmp::max(out_ty_bits, 1) - 1)) != 0;
-
-            // This condition can happen if we matched a value that overflows the output type of
-            // its `iconst` when viewed as a signed value (i.e. iconst.i8 200).
-            // When that happens we need to lower as a negative value, which we cannot do here.
-            if !(narrow_mode.is_signed() && is_negative) {
-                return ResultRSEImm12::Imm12(i);
-            }
-        }
-    }
-
-    ResultRSEImm12::from_rse(put_input_in_rse(ctx, input, narrow_mode))
-}
-
-//============================================================================
-// ALU instruction constructors.
-
-pub(crate) fn alu_inst_imm12(
-    op: ALUOp,
-    ty: Type,
-    rd: Writable<Reg>,
-    rn: Reg,
-    rm: ResultRSEImm12,
-) -> Inst {
-    let size = OperandSize::from_ty(ty);
-    match rm {
-        ResultRSEImm12::Imm12(imm12) => Inst::AluRRImm12 {
-            alu_op: op,
-            size,
-            rd,
-            rn,
-            imm12,
-        },
-        ResultRSEImm12::Reg(rm) => Inst::AluRRR {
-            alu_op: op,
-            size,
-            rd,
-            rn,
-            rm,
-        },
-        ResultRSEImm12::RegShift(rm, shiftop) => Inst::AluRRRShift {
-            alu_op: op,
-            size,
-            rd,
-            rn,
-            rm,
-            shiftop,
-        },
-        ResultRSEImm12::RegExtend(rm, extendop) => Inst::AluRRRExtend {
-            alu_op: op,
-            size,
-            rd,
-            rn,
-            rm,
-            extendop,
-        },
-    }
 }
 
 //============================================================================
@@ -967,129 +696,6 @@ pub(crate) fn lower_fp_condcode(cc: FloatCC) -> Cond {
     }
 }
 
-pub(crate) fn lower_vector_compare(
-    ctx: &mut Lower<Inst>,
-    rd: Writable<Reg>,
-    mut rn: Reg,
-    mut rm: Reg,
-    ty: Type,
-    cond: Cond,
-) -> CodegenResult<()> {
-    let is_float = ty.lane_type().is_float();
-    let size = VectorSize::from_ty(ty);
-
-    if is_float && (cond == Cond::Vc || cond == Cond::Vs) {
-        let tmp = ctx.alloc_tmp(ty).only_reg().unwrap();
-
-        ctx.emit(Inst::VecRRR {
-            alu_op: VecALUOp::Fcmeq,
-            rd,
-            rn,
-            rm: rn,
-            size,
-        });
-        ctx.emit(Inst::VecRRR {
-            alu_op: VecALUOp::Fcmeq,
-            rd: tmp,
-            rn: rm,
-            rm,
-            size,
-        });
-        ctx.emit(Inst::VecRRR {
-            alu_op: VecALUOp::And,
-            rd,
-            rn: rd.to_reg(),
-            rm: tmp.to_reg(),
-            size,
-        });
-
-        if cond == Cond::Vs {
-            ctx.emit(Inst::VecMisc {
-                op: VecMisc2::Not,
-                rd,
-                rn: rd.to_reg(),
-                size,
-            });
-        }
-    } else {
-        // 'Less than' operations are implemented by swapping
-        // the order of operands and using the 'greater than'
-        // instructions.
-        // 'Not equal' is implemented with 'equal' and inverting
-        // the result.
-        let (alu_op, swap) = match (is_float, cond) {
-            (false, Cond::Eq) => (VecALUOp::Cmeq, false),
-            (false, Cond::Ne) => (VecALUOp::Cmeq, false),
-            (false, Cond::Ge) => (VecALUOp::Cmge, false),
-            (false, Cond::Gt) => (VecALUOp::Cmgt, false),
-            (false, Cond::Le) => (VecALUOp::Cmge, true),
-            (false, Cond::Lt) => (VecALUOp::Cmgt, true),
-            (false, Cond::Hs) => (VecALUOp::Cmhs, false),
-            (false, Cond::Hi) => (VecALUOp::Cmhi, false),
-            (false, Cond::Ls) => (VecALUOp::Cmhs, true),
-            (false, Cond::Lo) => (VecALUOp::Cmhi, true),
-            (true, Cond::Eq) => (VecALUOp::Fcmeq, false),
-            (true, Cond::Ne) => (VecALUOp::Fcmeq, false),
-            (true, Cond::Mi) => (VecALUOp::Fcmgt, true),
-            (true, Cond::Ls) => (VecALUOp::Fcmge, true),
-            (true, Cond::Ge) => (VecALUOp::Fcmge, false),
-            (true, Cond::Gt) => (VecALUOp::Fcmgt, false),
-            _ => {
-                return Err(CodegenError::Unsupported(format!(
-                    "Unsupported {} SIMD vector comparison: {:?}",
-                    if is_float {
-                        "floating-point"
-                    } else {
-                        "integer"
-                    },
-                    cond
-                )))
-            }
-        };
-
-        if swap {
-            std::mem::swap(&mut rn, &mut rm);
-        }
-
-        ctx.emit(Inst::VecRRR {
-            alu_op,
-            rd,
-            rn,
-            rm,
-            size,
-        });
-
-        if cond == Cond::Ne {
-            ctx.emit(Inst::VecMisc {
-                op: VecMisc2::Not,
-                rd,
-                rn: rd.to_reg(),
-                size,
-            });
-        }
-    }
-
-    Ok(())
-}
-
-/// Determines whether this condcode interprets inputs as signed or unsigned.  See the
-/// documentation for the `icmp` instruction in cranelift-codegen/meta/src/shared/instructions.rs
-/// for further insights into this.
-pub(crate) fn condcode_is_signed(cc: IntCC) -> bool {
-    match cc {
-        IntCC::Equal
-        | IntCC::UnsignedGreaterThanOrEqual
-        | IntCC::UnsignedGreaterThan
-        | IntCC::UnsignedLessThanOrEqual
-        | IntCC::UnsignedLessThan
-        | IntCC::NotEqual => false,
-        IntCC::SignedGreaterThanOrEqual
-        | IntCC::SignedGreaterThan
-        | IntCC::SignedLessThanOrEqual
-        | IntCC::SignedLessThan => true,
-    }
-}
-
 //=============================================================================
 // Helpers for instruction lowering.
 
@@ -1142,264 +748,6 @@ pub(crate) fn maybe_value_multi(
     None
 }
 
-/// Checks for an instance of `op` feeding the given input, possibly via a conversion `conv` (e.g.,
-/// Bint or a bitcast).
-///
-/// FIXME cfallin 2020-03-30: this is really ugly. Factor out tree-matching stuff and make it
-/// a bit more generic.
-pub(crate) fn maybe_input_insn_via_conv(
-    c: &mut Lower<Inst>,
-    input: InsnInput,
-    op: Opcode,
-    conv: Opcode,
-) -> Option<IRInst> {
-    let inputs = c.get_input_as_source_or_const(input.insn, input.input);
-    if let Some((src_inst, _)) = inputs.inst.as_inst() {
-        let data = c.data(src_inst);
-        if data.opcode() == op {
-            return Some(src_inst);
-        }
-        if data.opcode() == conv {
-            let inputs = c.get_input_as_source_or_const(src_inst, 0);
-            if let Some((src_inst, _)) = inputs.inst.as_inst() {
-                let data = c.data(src_inst);
-                if data.opcode() == op {
-                    return Some(src_inst);
-                }
-            }
-        }
-    }
-    None
-}
-
-/// Specifies what [lower_icmp] should do when lowering
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) enum IcmpOutput {
-    /// Lowers the comparison into a cond code, discarding the results. The cond code emitted can
-    /// be checked in the resulting [IcmpResult].
-    CondCode,
-    /// Materializes the results into a register. This may overwrite any flags previously set.
-    Register(Writable<Reg>),
-}
-
-impl IcmpOutput {
-    pub fn reg(&self) -> Option<Writable<Reg>> {
-        match self {
-            IcmpOutput::CondCode => None,
-            IcmpOutput::Register(reg) => Some(*reg),
-        }
-    }
-}
-
-/// The output of an Icmp lowering.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) enum IcmpResult {
-    /// The result was output into the given [Cond]. Callers may perform operations using this [Cond]
-    /// and its inverse, other [Cond]'s are not guaranteed to be correct.
-    CondCode(Cond),
-    /// The result was materialized into the output register.
-    Register,
-}
-
-impl IcmpResult {
-    pub fn unwrap_cond(&self) -> Cond {
-        match self {
-            IcmpResult::CondCode(c) => *c,
-            _ => panic!("Unwrapped cond, but IcmpResult was {:?}", self),
-        }
-    }
-}
-
-/// Lower an icmp comparision
-///
-/// We can lower into the status flags, or materialize the result into a register
-/// This is controlled by the `output` parameter.
-pub(crate) fn lower_icmp(
-    ctx: &mut Lower<Inst>,
-    insn: IRInst,
-    condcode: IntCC,
-    output: IcmpOutput,
-) -> CodegenResult<IcmpResult> {
-    trace!(
-        "lower_icmp: insn {}, condcode: {}, output: {:?}",
-        insn,
-        condcode,
-        output
-    );
-
-    let rd = output.reg().unwrap_or(writable_zero_reg());
-    let inputs = insn_inputs(ctx, insn);
-    let cond = lower_condcode(condcode);
-    let is_signed = condcode_is_signed(condcode);
-    let ty = ctx.input_ty(insn, 0);
-    let bits = ty_bits(ty);
-    let narrow_mode = match (bits <= 32, is_signed) {
-        (true, true) => NarrowValueMode::SignExtend32,
-        (true, false) => NarrowValueMode::ZeroExtend32,
-        (false, true) => NarrowValueMode::SignExtend64,
-        (false, false) => NarrowValueMode::ZeroExtend64,
-    };
-    let mut should_materialize = output.reg().is_some();
-
-    let out_condcode = if ty == I128 {
-        let lhs = put_input_in_regs(ctx, inputs[0]);
-        let rhs = put_input_in_regs(ctx, inputs[1]);
-
-        let tmp1 = ctx.alloc_tmp(I64).only_reg().unwrap();
-        let tmp2 = ctx.alloc_tmp(I64).only_reg().unwrap();
-
-        match condcode {
-            IntCC::Equal | IntCC::NotEqual => {
-                // cmp lhs_lo, rhs_lo
-                // ccmp lhs_hi, rhs_hi, #0, eq
-                // cset dst, {eq, ne}
-
-                ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::SubS,
-                    size: OperandSize::Size64,
-                    rd: writable_zero_reg(),
-                    rn: lhs.regs()[0],
-                    rm: rhs.regs()[0],
-                });
-                ctx.emit(Inst::CCmp {
-                    size: OperandSize::Size64,
-                    rn: lhs.regs()[1],
-                    rm: rhs.regs()[1],
-                    nzcv: NZCV::new(false, false, false, false),
-                    cond: Cond::Eq,
-                });
-                cond
-            }
-            _ => {
-                // cmp     lhs_lo, rhs_lo
-                // cset    tmp1, unsigned_cond
-                // cmp     lhs_hi, rhs_hi
-                // cset    tmp2, cond
-                // csel    dst, tmp1, tmp2, eq
-
-                let rd = output.reg().unwrap_or(tmp1);
-                let unsigned_cond = lower_condcode(condcode.unsigned());
-
-                ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::SubS,
-                    size: OperandSize::Size64,
-                    rd: writable_zero_reg(),
-                    rn: lhs.regs()[0],
-                    rm: rhs.regs()[0],
-                });
-                materialize_bool_result(ctx, insn, tmp1, unsigned_cond);
-                ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::SubS,
-                    size: OperandSize::Size64,
-                    rd: writable_zero_reg(),
-                    rn: lhs.regs()[1],
-                    rm: rhs.regs()[1],
-                });
-                materialize_bool_result(ctx, insn, tmp2, cond);
-                ctx.emit(Inst::CSel {
-                    cond: Cond::Eq,
-                    rd,
-                    rn: tmp1.to_reg(),
-                    rm: tmp2.to_reg(),
-                });
-
-                if output == IcmpOutput::CondCode {
-                    // We only need to guarantee that the flags for `cond` are correct, so we can
-                    // compare rd with 0 or 1
-
-                    // If we are doing compare or equal, we want to compare with 1 instead of zero
-                    if condcode.without_equal() != condcode {
-                        lower_constant_u64(ctx, tmp2, 1);
-                    }
-
-                    let xzr = zero_reg();
-                    let rd = rd.to_reg();
-                    let tmp2 = tmp2.to_reg();
-                    let (rn, rm) = match condcode {
-                        IntCC::SignedGreaterThanOrEqual => (rd, tmp2),
-                        IntCC::UnsignedGreaterThanOrEqual => (rd, tmp2),
-                        IntCC::SignedLessThanOrEqual => (tmp2, rd),
-                        IntCC::UnsignedLessThanOrEqual => (tmp2, rd),
-                        IntCC::SignedGreaterThan => (rd, xzr),
-                        IntCC::UnsignedGreaterThan => (rd, xzr),
-                        IntCC::SignedLessThan => (xzr, rd),
-                        IntCC::UnsignedLessThan => (xzr, rd),
-                        _ => unreachable!(),
-                    };
-
-                    ctx.emit(Inst::AluRRR {
-                        alu_op: ALUOp::SubS,
-                        size: OperandSize::Size64,
-                        rd: writable_zero_reg(),
-                        rn,
-                        rm,
-                    });
-                }
-
-                // Prevent a second materialize_bool_result to be emitted at the end of the function
-                should_materialize = false;
-                cond
-            }
-        }
-    } else if ty.is_vector() {
-        assert_ne!(output, IcmpOutput::CondCode);
-        should_materialize = false;
-
-        let rn = put_input_in_reg(ctx, inputs[0], narrow_mode);
-        let rm = put_input_in_reg(ctx, inputs[1], narrow_mode);
-        lower_vector_compare(ctx, rd, rn, rm, ty, cond)?;
-        cond
-    } else {
-        let rn = put_input_in_reg(ctx, inputs[0], narrow_mode);
-        let rm = put_input_in_rse_imm12(ctx, inputs[1], narrow_mode);
-        ctx.emit(alu_inst_imm12(ALUOp::SubS, ty, writable_zero_reg(), rn, rm));
-        cond
-    };
-
-    // Most of the comparisons above produce flags by default, if the caller requested the result
-    // in a register we materialize those flags into a register. Some branches do end up producing
-    // the result as a register by default, so we ignore those.
-    if should_materialize {
-        materialize_bool_result(ctx, insn, rd, out_condcode);
-    }
-
-    Ok(match output {
-        // We currently never emit a different register than what was asked for
-        IcmpOutput::Register(_) => IcmpResult::Register,
-        IcmpOutput::CondCode => IcmpResult::CondCode(out_condcode),
-    })
-}
-
-pub(crate) fn lower_fcmp_or_ffcmp_to_flags(ctx: &mut Lower<Inst>, insn: IRInst) {
-    let ty = ctx.input_ty(insn, 0);
-    let inputs = [InsnInput { insn, input: 0 }, InsnInput { insn, input: 1 }];
-    let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-    let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-    ctx.emit(Inst::FpuCmp {
-        size: ScalarSize::from_ty(ty),
-        rn,
-        rm,
-    });
-}
-
-/// Materialize a boolean value into a register from the flags
-/// (e.g set by a comparison).
-/// A 0 / -1 (all-ones) result as expected for bool operations.
-pub(crate) fn materialize_bool_result(
-    ctx: &mut Lower<Inst>,
-    insn: IRInst,
-    rd: Writable<Reg>,
-    cond: Cond,
-) {
-    // A boolean is 0 / -1; if output width is > 1 use `csetm`,
-    // otherwise use `cset`.
-    if ty_bits(ctx.output_ty(insn, 0)) > 1 {
-        ctx.emit(Inst::CSetm { rd, cond });
-    } else {
-        ctx.emit(Inst::CSet { rd, cond });
-    }
-}
-
 //=============================================================================
 // Lowering-backend trait implementation.
 
@@ -1416,10 +764,36 @@ impl LowerBackend for AArch64Backend {
         branches: &[IRInst],
         targets: &[MachLabel],
     ) -> CodegenResult<()> {
-        lower_inst::lower_branch(ctx, branches, targets)
+        // A block should end with at most two branches. The first may be a
+        // conditional branch; a conditional branch can be followed only by an
+        // unconditional branch or fallthrough. Otherwise, if only one branch,
+        // it may be an unconditional branch, a fallthrough, a return, or a
+        // trap. These conditions are verified by `is_ebb_basic()` during the
+        // verifier pass.
+        assert!(branches.len() <= 2);
+        if branches.len() == 2 {
+            let op1 = ctx.data(branches[1]).opcode();
+            assert!(op1 == Opcode::Jump);
+        }
+
+        if let Ok(()) = super::lower::isle::lower_branch(
+            ctx,
+            &self.triple,
+            &self.flags,
+            &self.isa_flags,
+            branches[0],
+            targets,
+        ) {
+            return Ok(());
+        }
+
+        unreachable!(
+            "implemented in ISLE: branch = `{}`",
+            ctx.dfg().display_inst(branches[0]),
+        );
     }
 
     fn maybe_pinned_reg(&self) -> Option<Reg> {
-        Some(xreg(PINNED_REG))
+        Some(regs::pinned_reg())
     }
 }

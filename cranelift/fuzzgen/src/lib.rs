@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::function_generator::FunctionGenerator;
+use crate::settings::{Flags, OptLevel};
 use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
 use cranelift::codegen::data_value::DataValue;
@@ -12,6 +13,7 @@ use std::fmt;
 
 mod config;
 mod function_generator;
+mod passes;
 
 pub type TestCaseInput = Vec<DataValue>;
 
@@ -29,6 +31,9 @@ impl<'a> Arbitrary<'a> for SingleFunction {
 }
 
 pub struct TestCase {
+    /// [Flags] to use when compiling this test case
+    pub flags: Flags,
+    /// Function under test
     pub func: Function,
     /// Generate multiple test inputs for each test case.
     /// This allows us to get more coverage per compilation, which may be somewhat expensive.
@@ -37,19 +42,24 @@ pub struct TestCase {
 
 impl fmt::Debug for TestCase {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            r#";; Fuzzgen test case
+        writeln!(f, ";; Fuzzgen test case\n")?;
+        writeln!(f, "test interpret")?;
+        writeln!(f, "test run")?;
 
-test interpret
-test run
-set enable_llvm_abi_extensions
-target aarch64
-target s390x
-target x86_64
+        // Print only non default flags
+        let default_flags = Flags::new(settings::builder());
+        for (default, flag) in default_flags.iter().zip(self.flags.iter()) {
+            assert_eq!(default.name, flag.name);
 
-"#
-        )?;
+            if default.value_string() != flag.value_string() {
+                writeln!(f, "set {}={}", flag.name, flag.value_string())?;
+            }
+        }
+
+        writeln!(f, "target aarch64")?;
+        writeln!(f, "target s390x")?;
+        writeln!(f, "target riscv64")?;
+        writeln!(f, "target x86_64\n")?;
 
         writeln!(f, "{}", self.func)?;
 
@@ -128,7 +138,6 @@ where
                 };
                 DataValue::from_integer(imm, ty)?
             }
-            ty if ty.is_bool() => DataValue::B(bool::arbitrary(self.u)?),
             // f{32,64}::arbitrary does not generate a bunch of important values
             // such as Signaling NaN's / NaN's with payload, so generate floats from integers.
             F32 => DataValue::F32(Ieee32::with_bits(u32::arbitrary(self.u)?)),
@@ -140,7 +149,10 @@ where
     fn generate_test_inputs(mut self, signature: &Signature) -> Result<Vec<TestCaseInput>> {
         let mut inputs = Vec::new();
 
-        loop {
+        // Generate up to "max_test_case_inputs" inputs, we need an upper bound here since
+        // the fuzzer at some point starts trying to feed us way too many inputs. (I found one
+        // test case with 130k inputs!)
+        for _ in 0..self.config.max_test_case_inputs {
             let last_len = self.u.len();
 
             let test_args = signature
@@ -166,7 +178,7 @@ where
         Ok(inputs)
     }
 
-    fn run_func_passes(&self, func: Function) -> Function {
+    fn run_func_passes(&mut self, func: Function) -> Result<Function> {
         // Do a NaN Canonicalization pass on the generated function.
         //
         // Both IEEE754 and the Wasm spec are somewhat loose about what is allowed
@@ -201,12 +213,94 @@ where
         ctx.canonicalize_nans(isa.as_ref())
             .expect("Failed NaN canonicalization pass");
 
-        ctx.func
+        // Run the int_divz pass
+        //
+        // This pass replaces divs and rems with sequences that do not trap
+        passes::do_int_divz_pass(self, &mut ctx.func)?;
+
+        // This pass replaces fcvt* instructions with sequences that do not trap
+        passes::do_fcvt_trap_pass(self, &mut ctx.func)?;
+
+        Ok(ctx.func)
     }
 
     fn generate_func(&mut self) -> Result<Function> {
         let func = FunctionGenerator::new(&mut self.u, &self.config).generate()?;
-        Ok(self.run_func_passes(func))
+        self.run_func_passes(func)
+    }
+
+    /// Generate a random set of cranelift flags.
+    /// Only semantics preserving flags are considered
+    fn generate_flags(&mut self) -> Result<Flags> {
+        let mut builder = settings::builder();
+
+        let opt = self.u.choose(OptLevel::all())?;
+        builder.set("opt_level", &format!("{}", opt)[..])?;
+
+        // Boolean flags
+        // TODO: enable_pinned_reg does not work with our current trampolines. See: #4376
+        // TODO: is_pic has issues:
+        //   x86: https://github.com/bytecodealliance/wasmtime/issues/5005
+        //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/2735
+        let bool_settings = [
+            "enable_alias_analysis",
+            "enable_safepoints",
+            "unwind_info",
+            "preserve_frame_pointers",
+            "enable_jump_tables",
+            "enable_heap_access_spectre_mitigation",
+            "enable_table_access_spectre_mitigation",
+            "enable_incremental_compilation_cache_checks",
+            "regalloc_checker",
+            "enable_llvm_abi_extensions",
+        ];
+        for flag_name in bool_settings {
+            let enabled = self
+                .config
+                .compile_flag_ratio
+                .get(&flag_name)
+                .map(|&(num, denum)| self.u.ratio(num, denum))
+                .unwrap_or_else(|| bool::arbitrary(self.u))?;
+
+            let value = format!("{}", enabled);
+            builder.set(flag_name, value.as_str())?;
+        }
+
+        // Optionally test inline stackprobes on x86
+        // TODO: inline stack probes are not available on AArch64
+        // TODO: Test outlined stack probes.
+        if cfg!(target_arch = "x86_64") && bool::arbitrary(self.u)? {
+            builder.enable("enable_probestack")?;
+            builder.set("probestack_strategy", "inline")?;
+
+            let size = self
+                .u
+                .int_in_range(self.config.stack_probe_size_log2.clone())?;
+            builder.set("probestack_size_log2", &format!("{}", size))?;
+        }
+
+        // Fixed settings
+
+        // We need llvm ABI extensions for i128 values on x86, so enable it regardless of
+        // what we picked above.
+        if cfg!(target_arch = "x86_64") {
+            builder.enable("enable_llvm_abi_extensions")?;
+        }
+
+        // This is the default, but we should ensure that it wasn't accidentally turned off anywhere.
+        builder.enable("enable_verifier")?;
+
+        // These settings just panic when they're not enabled and we try to use their respective functionality
+        // so they aren't very interesting to be automatically generated.
+        builder.enable("enable_atomics")?;
+        builder.enable("enable_float")?;
+        builder.enable("enable_simd")?;
+
+        // `machine_code_cfg_info` generates additional metadata for the embedder but this doesn't feed back
+        // into compilation anywhere, we leave it on unconditionally to make sure the generation doesn't panic.
+        builder.enable("machine_code_cfg_info")?;
+
+        Ok(Flags::new(builder))
     }
 
     pub fn generate_test(mut self) -> Result<TestCase> {
@@ -215,8 +309,13 @@ where
         // have infrastructure for generating multiple functions, so just don't generate funcrefs.
         self.config.funcrefs_per_function = 0..=0;
 
+        let flags = self.generate_flags()?;
         let func = self.generate_func()?;
         let inputs = self.generate_test_inputs(&func.signature)?;
-        Ok(TestCase { func, inputs })
+        Ok(TestCase {
+            flags,
+            func,
+            inputs,
+        })
     }
 }

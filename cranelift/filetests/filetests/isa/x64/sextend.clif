@@ -1,0 +1,17 @@
+test compile precise-output
+target x86_64
+
+function %f0(i8) -> i64 {
+block0(v0: i8):
+  v1 = sextend.i64 v0
+  return v1
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movsbq  %dil, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+

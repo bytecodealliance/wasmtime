@@ -1,7 +1,9 @@
 test interpret
 test run
+target aarch64
 target s390x
 target x86_64
+target riscv64
 
 function %select_eq_f32(f32, f32) -> i32 {
 block0(v0: f32, v1: f32):
@@ -15,6 +17,18 @@ block0(v0: f32, v1: f32):
 ; run: %select_eq_f32(0x42.42, 0.0) == 0
 ; run: %select_eq_f32(0x42.42, NaN) == 0
 
+function %select_i8(i8) -> i32 {
+block0(v0: i8):
+    v1 = iconst.i32 42
+    v2 = iconst.i32 97
+    v3 = select v0, v1, v2
+    return v3
+}
+; run: %select_i8(0) == 97
+; run: %select_i8(1) == 42
+; run: %select_i8(2) == 42
+; run: %select_i8(-1) == 42
+
 function %select_ne_f64(f64, f64) -> i32 {
 block0(v0: f64, v1: f64):
     v2 = fcmp ne v0, v1
@@ -27,18 +41,18 @@ block0(v0: f64, v1: f64):
 ; run: %select_ne_f64(0x42.42, 0.0) == 1
 ; run: %select_ne_f64(NaN, NaN) == 1
 
-function %select_gt_f64(f64, f64) -> b1 {
+function %select_gt_f64(f64, f64) -> i8 {
 block0(v0: f64, v1: f64):
     v2 = fcmp gt v0, v1
-    v3 = bconst.b1 true
-    v4 = bconst.b1 false
+    v3 = iconst.i8 1
+    v4 = iconst.i8 0
     v5 = select v2, v3, v4
     return v5
 }
-; run: %select_gt_f64(0x42.42, 0.0) == true
-; run: %select_gt_f64(0.0, 0.0) == false
-; run: %select_gt_f64(0x0.0, 0x42.42) == false
-; run: %select_gt_f64(NaN, 0x42.42) == false
+; run: %select_gt_f64(0x42.42, 0.0) == 1
+; run: %select_gt_f64(0.0, 0.0) == 0
+; run: %select_gt_f64(0x0.0, 0x42.42) == 0
+; run: %select_gt_f64(NaN, 0x42.42) == 0
 
 function %select_ge_f64(f64, f64) -> i64 {
 block0(v0: f64, v1: f64):
@@ -79,3 +93,48 @@ block0(v0: f32, v1: f32):
 ; run: %select_uno_f32(0x0.0, 0x42.42) == 0
 ; run: %select_uno_f32(0x0.0, NaN) == 1
 ; run: %select_uno_f32(-NaN, 0x42.42) == 1
+
+function %select_overflow_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 255
+    v2 = iadd v0, v1
+    v3 = iconst.i8 1
+    v4 = iconst.i8 0
+    v5 = select v2, v3, v4
+    return v5
+}
+
+; run: %select_overflow_i8(0) == 1
+; run: %select_overflow_i8(2) == 1
+; run: %select_overflow_i8(1) == 0
+; run: %select_overflow_i8(98) == 1
+
+function %select_overflow_i16(i16) -> i8 {
+block0(v0: i16):
+    v1 = iconst.i16 65535
+    v2 = iadd v0, v1
+    v3 = iconst.i8 1
+    v4 = iconst.i8 0
+    v5 = select v2, v3, v4
+    return v5
+}
+
+; run: %select_overflow_i16(0) == 1
+; run: %select_overflow_i16(2) == 1
+; run: %select_overflow_i16(1) == 0
+; run: %select_overflow_i16(98) == 1
+
+function %select_overflow_i32(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 4294967295
+    v2 = iadd v0, v1
+    v3 = iconst.i8 1
+    v4 = iconst.i8 0
+    v5 = select v2, v3, v4
+    return v5
+}
+
+; run: %select_overflow_i32(0) == 1
+; run: %select_overflow_i32(2) == 1
+; run: %select_overflow_i32(1) == 0
+; run: %select_overflow_i32(98) == 1

@@ -1,0 +1,40 @@
+test optimize
+set opt_level=none
+set use_egraphs=true
+target x86_64
+
+function %f(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    jump block1(v0)
+
+block1(v2: i32):
+    v3 = iconst.i32 1
+    v4 = iadd.i32 v1, v3
+    v5 = iconst.i32 40
+    v6 = icmp eq v2, v5
+    v7 = iconst.i32 1
+    v8 = iadd.i32 v2, v7
+    brnz v6, block2(v4)
+    jump block1(v8)
+
+block2(v9: i32):
+    return v9
+}
+
+; check:  block0(v0: i32, v1: i32):
+; nextln:     jump block1(v0)
+
+; check:  block1(v2: i32):
+;; constants are not lifted; they are rematerialized in each block where used
+; nextln:     v3 = iconst.i32 40
+; nextln:     v4 = icmp eq v2, v3
+; nextln:     v5 = iconst.i32 1
+; nextln:     v6 = iadd v2, v5
+; nextln:     brnz v4, block2
+; nextln:     jump block1(v6)
+
+; check:  block2:
+; nextln:     v7 = iconst.i32 1
+; nextln:     v8 = iadd.i32 v1, v7
+; nextln:     return v8
+

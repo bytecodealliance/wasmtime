@@ -24,9 +24,9 @@ target x86_64 haswell
 ;;     elif r == "i64":
 ;;         val = "0"
 ;;         op = "iconst.i64"
-;;     elif r == "b1":
-;;         val = "true"
-;;         op = "bconst.b1"
+;;     elif r == "i8":
+;;         val = "1"
+;;         op = "iconst.i8"
 ;;     else:
 ;;         raise Exception("bad r = " + str(r))
 ;;     return "    v" + str(i) + " = " + op + " " + val
@@ -50,7 +50,7 @@ target x86_64 haswell
 ;;     tail = "}\n"
 ;;     return head + fn_decl + block + call + ret + tail
 ;;
-;; for results in permutations(["i32", "i64", "f32", "f64", "b1"]):
+;; for results in permutations(["i32", "i64", "f32", "f64", "i8"]):
 ;;     print make_returner(results)
 ;;     print make_caller(results)
 ;; ```
@@ -58,316 +58,316 @@ target x86_64 haswell
 ;; If you're modifying this test, it is likely easier to modify the script and
 ;; regenerate the test.
 
-function %return_i32_i64_f32_f64_b1() -> i32, i64, f32, f64, b1 {
+function %return_i32_i64_f32_f64_i8() -> i32, i64, f32, f64, i8 {
 block0:
     v0 = iconst.i32 0
     v1 = iconst.i64 0
     v2 = f32const 0x0.0
     v3 = f64const 0x0.0
-    v4 = bconst.b1 true
+    v4 = iconst.i8 1
     return v0, v1, v2, v3, v4
 }
 
-function %call_i32_i64_f32_f64_b1() {
-    fn0 = %foo() -> i32,i64,f32,f64,b1
+function %call_i32_i64_f32_f64_i8() {
+    fn0 = %foo() -> i32,i64,f32,f64,i8
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i32_i64_f32_b1_f64() -> i32, i64, f32, b1, f64 {
+function %return_i32_i64_f32_b1_f64() -> i32, i64, f32, i8, f64 {
 block0:
     v0 = iconst.i32 0
     v1 = iconst.i64 0
     v2 = f32const 0x0.0
-    v3 = bconst.b1 true
+    v3 = iconst.i8 1
     v4 = f64const 0x0.0
     return v0, v1, v2, v3, v4
 }
 
 function %call_i32_i64_f32_b1_f64() {
-    fn0 = %foo() -> i32,i64,f32,b1,f64
+    fn0 = %foo() -> i32,i64,f32,i8,f64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i32_i64_f64_f32_b1() -> i32, i64, f64, f32, b1 {
+function %return_i32_i64_f64_f32_i8() -> i32, i64, f64, f32, i8 {
 block0:
     v0 = iconst.i32 0
     v1 = iconst.i64 0
     v2 = f64const 0x0.0
     v3 = f32const 0x0.0
-    v4 = bconst.b1 true
+    v4 = iconst.i8 1
     return v0, v1, v2, v3, v4
 }
 
-function %call_i32_i64_f64_f32_b1() {
-    fn0 = %foo() -> i32,i64,f64,f32,b1
+function %call_i32_i64_f64_f32_i8() {
+    fn0 = %foo() -> i32,i64,f64,f32,i8
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i32_i64_f64_b1_f32() -> i32, i64, f64, b1, f32 {
+function %return_i32_i64_f64_b1_f32() -> i32, i64, f64, i8, f32 {
 block0:
     v0 = iconst.i32 0
     v1 = iconst.i64 0
     v2 = f64const 0x0.0
-    v3 = bconst.b1 true
+    v3 = iconst.i8 1
     v4 = f32const 0x0.0
     return v0, v1, v2, v3, v4
 }
 
 function %call_i32_i64_f64_b1_f32() {
-    fn0 = %foo() -> i32,i64,f64,b1,f32
+    fn0 = %foo() -> i32,i64,f64,i8,f32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i32_i64_b1_f32_f64() -> i32, i64, b1, f32, f64 {
+function %return_i32_i64_b1_f32_f64() -> i32, i64, i8, f32, f64 {
 block0:
     v0 = iconst.i32 0
     v1 = iconst.i64 0
-    v2 = bconst.b1 true
+    v2 = iconst.i8 1
     v3 = f32const 0x0.0
     v4 = f64const 0x0.0
     return v0, v1, v2, v3, v4
 }
 
 function %call_i32_i64_b1_f32_f64() {
-    fn0 = %foo() -> i32,i64,b1,f32,f64
+    fn0 = %foo() -> i32,i64,i8,f32,f64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i32_i64_b1_f64_f32() -> i32, i64, b1, f64, f32 {
+function %return_i32_i64_b1_f64_f32() -> i32, i64, i8, f64, f32 {
 block0:
     v0 = iconst.i32 0
     v1 = iconst.i64 0
-    v2 = bconst.b1 true
+    v2 = iconst.i8 1
     v3 = f64const 0x0.0
     v4 = f32const 0x0.0
     return v0, v1, v2, v3, v4
 }
 
 function %call_i32_i64_b1_f64_f32() {
-    fn0 = %foo() -> i32,i64,b1,f64,f32
+    fn0 = %foo() -> i32,i64,i8,f64,f32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i32_f32_i64_f64_b1() -> i32, f32, i64, f64, b1 {
+function %return_i32_f32_i64_f64_i8() -> i32, f32, i64, f64, i8 {
 block0:
     v0 = iconst.i32 0
     v1 = f32const 0x0.0
     v2 = iconst.i64 0
     v3 = f64const 0x0.0
-    v4 = bconst.b1 true
+    v4 = iconst.i8 1
     return v0, v1, v2, v3, v4
 }
 
-function %call_i32_f32_i64_f64_b1() {
-    fn0 = %foo() -> i32,f32,i64,f64,b1
+function %call_i32_f32_i64_f64_i8() {
+    fn0 = %foo() -> i32,f32,i64,f64,i8
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i32_f32_i64_b1_f64() -> i32, f32, i64, b1, f64 {
+function %return_i32_f32_i64_b1_f64() -> i32, f32, i64, i8, f64 {
 block0:
     v0 = iconst.i32 0
     v1 = f32const 0x0.0
     v2 = iconst.i64 0
-    v3 = bconst.b1 true
+    v3 = iconst.i8 1
     v4 = f64const 0x0.0
     return v0, v1, v2, v3, v4
 }
 
 function %call_i32_f32_i64_b1_f64() {
-    fn0 = %foo() -> i32,f32,i64,b1,f64
+    fn0 = %foo() -> i32,f32,i64,i8,f64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i32_f32_f64_i64_b1() -> i32, f32, f64, i64, b1 {
+function %return_i32_f32_f64_i64_i8() -> i32, f32, f64, i64, i8 {
 block0:
     v0 = iconst.i32 0
     v1 = f32const 0x0.0
     v2 = f64const 0x0.0
     v3 = iconst.i64 0
-    v4 = bconst.b1 true
+    v4 = iconst.i8 1
     return v0, v1, v2, v3, v4
 }
 
-function %call_i32_f32_f64_i64_b1() {
-    fn0 = %foo() -> i32,f32,f64,i64,b1
+function %call_i32_f32_f64_i64_i8() {
+    fn0 = %foo() -> i32,f32,f64,i64,i8
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i32_f32_f64_b1_i64() -> i32, f32, f64, b1, i64 {
+function %return_i32_f32_f64_b1_i64() -> i32, f32, f64, i8, i64 {
 block0:
     v0 = iconst.i32 0
     v1 = f32const 0x0.0
     v2 = f64const 0x0.0
-    v3 = bconst.b1 true
+    v3 = iconst.i8 1
     v4 = iconst.i64 0
     return v0, v1, v2, v3, v4
 }
 
 function %call_i32_f32_f64_b1_i64() {
-    fn0 = %foo() -> i32,f32,f64,b1,i64
+    fn0 = %foo() -> i32,f32,f64,i8,i64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i32_f32_b1_i64_f64() -> i32, f32, b1, i64, f64 {
+function %return_i32_f32_b1_i64_f64() -> i32, f32, i8, i64, f64 {
 block0:
     v0 = iconst.i32 0
     v1 = f32const 0x0.0
-    v2 = bconst.b1 true
+    v2 = iconst.i8 1
     v3 = iconst.i64 0
     v4 = f64const 0x0.0
     return v0, v1, v2, v3, v4
 }
 
 function %call_i32_f32_b1_i64_f64() {
-    fn0 = %foo() -> i32,f32,b1,i64,f64
+    fn0 = %foo() -> i32,f32,i8,i64,f64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i32_f32_b1_f64_i64() -> i32, f32, b1, f64, i64 {
+function %return_i32_f32_b1_f64_i64() -> i32, f32, i8, f64, i64 {
 block0:
     v0 = iconst.i32 0
     v1 = f32const 0x0.0
-    v2 = bconst.b1 true
+    v2 = iconst.i8 1
     v3 = f64const 0x0.0
     v4 = iconst.i64 0
     return v0, v1, v2, v3, v4
 }
 
 function %call_i32_f32_b1_f64_i64() {
-    fn0 = %foo() -> i32,f32,b1,f64,i64
+    fn0 = %foo() -> i32,f32,i8,f64,i64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i32_f64_i64_f32_b1() -> i32, f64, i64, f32, b1 {
+function %return_i32_f64_i64_f32_i8() -> i32, f64, i64, f32, i8 {
 block0:
     v0 = iconst.i32 0
     v1 = f64const 0x0.0
     v2 = iconst.i64 0
     v3 = f32const 0x0.0
-    v4 = bconst.b1 true
+    v4 = iconst.i8 1
     return v0, v1, v2, v3, v4
 }
 
-function %call_i32_f64_i64_f32_b1() {
-    fn0 = %foo() -> i32,f64,i64,f32,b1
+function %call_i32_f64_i64_f32_i8() {
+    fn0 = %foo() -> i32,f64,i64,f32,i8
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i32_f64_i64_b1_f32() -> i32, f64, i64, b1, f32 {
+function %return_i32_f64_i64_b1_f32() -> i32, f64, i64, i8, f32 {
 block0:
     v0 = iconst.i32 0
     v1 = f64const 0x0.0
     v2 = iconst.i64 0
-    v3 = bconst.b1 true
+    v3 = iconst.i8 1
     v4 = f32const 0x0.0
     return v0, v1, v2, v3, v4
 }
 
 function %call_i32_f64_i64_b1_f32() {
-    fn0 = %foo() -> i32,f64,i64,b1,f32
+    fn0 = %foo() -> i32,f64,i64,i8,f32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i32_f64_f32_i64_b1() -> i32, f64, f32, i64, b1 {
+function %return_i32_f64_f32_i64_i8() -> i32, f64, f32, i64, i8 {
 block0:
     v0 = iconst.i32 0
     v1 = f64const 0x0.0
     v2 = f32const 0x0.0
     v3 = iconst.i64 0
-    v4 = bconst.b1 true
+    v4 = iconst.i8 1
     return v0, v1, v2, v3, v4
 }
 
-function %call_i32_f64_f32_i64_b1() {
-    fn0 = %foo() -> i32,f64,f32,i64,b1
+function %call_i32_f64_f32_i64_i8() {
+    fn0 = %foo() -> i32,f64,f32,i64,i8
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i32_f64_f32_b1_i64() -> i32, f64, f32, b1, i64 {
+function %return_i32_f64_f32_b1_i64() -> i32, f64, f32, i8, i64 {
 block0:
     v0 = iconst.i32 0
     v1 = f64const 0x0.0
     v2 = f32const 0x0.0
-    v3 = bconst.b1 true
+    v3 = iconst.i8 1
     v4 = iconst.i64 0
     return v0, v1, v2, v3, v4
 }
 
 function %call_i32_f64_f32_b1_i64() {
-    fn0 = %foo() -> i32,f64,f32,b1,i64
+    fn0 = %foo() -> i32,f64,f32,i8,i64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i32_f64_b1_i64_f32() -> i32, f64, b1, i64, f32 {
+function %return_i32_f64_b1_i64_f32() -> i32, f64, i8, i64, f32 {
 block0:
     v0 = iconst.i32 0
     v1 = f64const 0x0.0
-    v2 = bconst.b1 true
+    v2 = iconst.i8 1
     v3 = iconst.i64 0
     v4 = f32const 0x0.0
     return v0, v1, v2, v3, v4
 }
 
 function %call_i32_f64_b1_i64_f32() {
-    fn0 = %foo() -> i32,f64,b1,i64,f32
+    fn0 = %foo() -> i32,f64,i8,i64,f32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i32_f64_b1_f32_i64() -> i32, f64, b1, f32, i64 {
+function %return_i32_f64_b1_f32_i64() -> i32, f64, i8, f32, i64 {
 block0:
     v0 = iconst.i32 0
     v1 = f64const 0x0.0
-    v2 = bconst.b1 true
+    v2 = iconst.i8 1
     v3 = f32const 0x0.0
     v4 = iconst.i64 0
     return v0, v1, v2, v3, v4
 }
 
 function %call_i32_f64_b1_f32_i64() {
-    fn0 = %foo() -> i32,f64,b1,f32,i64
+    fn0 = %foo() -> i32,f64,i8,f32,i64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i32_b1_i64_f32_f64() -> i32, b1, i64, f32, f64 {
+function %return_i32_b1_i64_f32_f64() -> i32, i8, i64, f32, f64 {
 block0:
     v0 = iconst.i32 0
-    v1 = bconst.b1 true
+    v1 = iconst.i8 1
     v2 = iconst.i64 0
     v3 = f32const 0x0.0
     v4 = f64const 0x0.0
@@ -375,16 +375,16 @@ block0:
 }
 
 function %call_i32_b1_i64_f32_f64() {
-    fn0 = %foo() -> i32,b1,i64,f32,f64
+    fn0 = %foo() -> i32,i8,i64,f32,f64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i32_b1_i64_f64_f32() -> i32, b1, i64, f64, f32 {
+function %return_i32_b1_i64_f64_f32() -> i32, i8, i64, f64, f32 {
 block0:
     v0 = iconst.i32 0
-    v1 = bconst.b1 true
+    v1 = iconst.i8 1
     v2 = iconst.i64 0
     v3 = f64const 0x0.0
     v4 = f32const 0x0.0
@@ -392,16 +392,16 @@ block0:
 }
 
 function %call_i32_b1_i64_f64_f32() {
-    fn0 = %foo() -> i32,b1,i64,f64,f32
+    fn0 = %foo() -> i32,i8,i64,f64,f32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i32_b1_f32_i64_f64() -> i32, b1, f32, i64, f64 {
+function %return_i32_b1_f32_i64_f64() -> i32, i8, f32, i64, f64 {
 block0:
     v0 = iconst.i32 0
-    v1 = bconst.b1 true
+    v1 = iconst.i8 1
     v2 = f32const 0x0.0
     v3 = iconst.i64 0
     v4 = f64const 0x0.0
@@ -409,16 +409,16 @@ block0:
 }
 
 function %call_i32_b1_f32_i64_f64() {
-    fn0 = %foo() -> i32,b1,f32,i64,f64
+    fn0 = %foo() -> i32,i8,f32,i64,f64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i32_b1_f32_f64_i64() -> i32, b1, f32, f64, i64 {
+function %return_i32_b1_f32_f64_i64() -> i32, i8, f32, f64, i64 {
 block0:
     v0 = iconst.i32 0
-    v1 = bconst.b1 true
+    v1 = iconst.i8 1
     v2 = f32const 0x0.0
     v3 = f64const 0x0.0
     v4 = iconst.i64 0
@@ -426,16 +426,16 @@ block0:
 }
 
 function %call_i32_b1_f32_f64_i64() {
-    fn0 = %foo() -> i32,b1,f32,f64,i64
+    fn0 = %foo() -> i32,i8,f32,f64,i64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i32_b1_f64_i64_f32() -> i32, b1, f64, i64, f32 {
+function %return_i32_b1_f64_i64_f32() -> i32, i8, f64, i64, f32 {
 block0:
     v0 = iconst.i32 0
-    v1 = bconst.b1 true
+    v1 = iconst.i8 1
     v2 = f64const 0x0.0
     v3 = iconst.i64 0
     v4 = f32const 0x0.0
@@ -443,16 +443,16 @@ block0:
 }
 
 function %call_i32_b1_f64_i64_f32() {
-    fn0 = %foo() -> i32,b1,f64,i64,f32
+    fn0 = %foo() -> i32,i8,f64,i64,f32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i32_b1_f64_f32_i64() -> i32, b1, f64, f32, i64 {
+function %return_i32_b1_f64_f32_i64() -> i32, i8, f64, f32, i64 {
 block0:
     v0 = iconst.i32 0
-    v1 = bconst.b1 true
+    v1 = iconst.i8 1
     v2 = f64const 0x0.0
     v3 = f32const 0x0.0
     v4 = iconst.i64 0
@@ -460,322 +460,322 @@ block0:
 }
 
 function %call_i32_b1_f64_f32_i64() {
-    fn0 = %foo() -> i32,b1,f64,f32,i64
+    fn0 = %foo() -> i32,i8,f64,f32,i64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i64_i32_f32_f64_b1() -> i64, i32, f32, f64, b1 {
+function %return_i64_i32_f32_f64_i8() -> i64, i32, f32, f64, i8 {
 block0:
     v0 = iconst.i64 0
     v1 = iconst.i32 0
     v2 = f32const 0x0.0
     v3 = f64const 0x0.0
-    v4 = bconst.b1 true
+    v4 = iconst.i8 1
     return v0, v1, v2, v3, v4
 }
 
-function %call_i64_i32_f32_f64_b1() {
-    fn0 = %foo() -> i64,i32,f32,f64,b1
+function %call_i64_i32_f32_f64_i8() {
+    fn0 = %foo() -> i64,i32,f32,f64,i8
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i64_i32_f32_b1_f64() -> i64, i32, f32, b1, f64 {
+function %return_i64_i32_f32_b1_f64() -> i64, i32, f32, i8, f64 {
 block0:
     v0 = iconst.i64 0
     v1 = iconst.i32 0
     v2 = f32const 0x0.0
-    v3 = bconst.b1 true
+    v3 = iconst.i8 1
     v4 = f64const 0x0.0
     return v0, v1, v2, v3, v4
 }
 
 function %call_i64_i32_f32_b1_f64() {
-    fn0 = %foo() -> i64,i32,f32,b1,f64
+    fn0 = %foo() -> i64,i32,f32,i8,f64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i64_i32_f64_f32_b1() -> i64, i32, f64, f32, b1 {
+function %return_i64_i32_f64_f32_i8() -> i64, i32, f64, f32, i8 {
 block0:
     v0 = iconst.i64 0
     v1 = iconst.i32 0
     v2 = f64const 0x0.0
     v3 = f32const 0x0.0
-    v4 = bconst.b1 true
+    v4 = iconst.i8 1
     return v0, v1, v2, v3, v4
 }
 
-function %call_i64_i32_f64_f32_b1() {
-    fn0 = %foo() -> i64,i32,f64,f32,b1
+function %call_i64_i32_f64_f32_i8() {
+    fn0 = %foo() -> i64,i32,f64,f32,i8
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i64_i32_f64_b1_f32() -> i64, i32, f64, b1, f32 {
+function %return_i64_i32_f64_b1_f32() -> i64, i32, f64, i8, f32 {
 block0:
     v0 = iconst.i64 0
     v1 = iconst.i32 0
     v2 = f64const 0x0.0
-    v3 = bconst.b1 true
+    v3 = iconst.i8 1
     v4 = f32const 0x0.0
     return v0, v1, v2, v3, v4
 }
 
 function %call_i64_i32_f64_b1_f32() {
-    fn0 = %foo() -> i64,i32,f64,b1,f32
+    fn0 = %foo() -> i64,i32,f64,i8,f32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i64_i32_b1_f32_f64() -> i64, i32, b1, f32, f64 {
+function %return_i64_i32_b1_f32_f64() -> i64, i32, i8, f32, f64 {
 block0:
     v0 = iconst.i64 0
     v1 = iconst.i32 0
-    v2 = bconst.b1 true
+    v2 = iconst.i8 1
     v3 = f32const 0x0.0
     v4 = f64const 0x0.0
     return v0, v1, v2, v3, v4
 }
 
 function %call_i64_i32_b1_f32_f64() {
-    fn0 = %foo() -> i64,i32,b1,f32,f64
+    fn0 = %foo() -> i64,i32,i8,f32,f64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i64_i32_b1_f64_f32() -> i64, i32, b1, f64, f32 {
+function %return_i64_i32_b1_f64_f32() -> i64, i32, i8, f64, f32 {
 block0:
     v0 = iconst.i64 0
     v1 = iconst.i32 0
-    v2 = bconst.b1 true
+    v2 = iconst.i8 1
     v3 = f64const 0x0.0
     v4 = f32const 0x0.0
     return v0, v1, v2, v3, v4
 }
 
 function %call_i64_i32_b1_f64_f32() {
-    fn0 = %foo() -> i64,i32,b1,f64,f32
+    fn0 = %foo() -> i64,i32,i8,f64,f32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i64_f32_i32_f64_b1() -> i64, f32, i32, f64, b1 {
+function %return_i64_f32_i32_f64_i8() -> i64, f32, i32, f64, i8 {
 block0:
     v0 = iconst.i64 0
     v1 = f32const 0x0.0
     v2 = iconst.i32 0
     v3 = f64const 0x0.0
-    v4 = bconst.b1 true
+    v4 = iconst.i8 1
     return v0, v1, v2, v3, v4
 }
 
-function %call_i64_f32_i32_f64_b1() {
-    fn0 = %foo() -> i64,f32,i32,f64,b1
+function %call_i64_f32_i32_f64_i8() {
+    fn0 = %foo() -> i64,f32,i32,f64,i8
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i64_f32_i32_b1_f64() -> i64, f32, i32, b1, f64 {
+function %return_i64_f32_i32_b1_f64() -> i64, f32, i32, i8, f64 {
 block0:
     v0 = iconst.i64 0
     v1 = f32const 0x0.0
     v2 = iconst.i32 0
-    v3 = bconst.b1 true
+    v3 = iconst.i8 1
     v4 = f64const 0x0.0
     return v0, v1, v2, v3, v4
 }
 
 function %call_i64_f32_i32_b1_f64() {
-    fn0 = %foo() -> i64,f32,i32,b1,f64
+    fn0 = %foo() -> i64,f32,i32,i8,f64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i64_f32_f64_i32_b1() -> i64, f32, f64, i32, b1 {
+function %return_i64_f32_f64_i32_i8() -> i64, f32, f64, i32, i8 {
 block0:
     v0 = iconst.i64 0
     v1 = f32const 0x0.0
     v2 = f64const 0x0.0
     v3 = iconst.i32 0
-    v4 = bconst.b1 true
+    v4 = iconst.i8 1
     return v0, v1, v2, v3, v4
 }
 
-function %call_i64_f32_f64_i32_b1() {
-    fn0 = %foo() -> i64,f32,f64,i32,b1
+function %call_i64_f32_f64_i32_i8() {
+    fn0 = %foo() -> i64,f32,f64,i32,i8
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i64_f32_f64_b1_i32() -> i64, f32, f64, b1, i32 {
+function %return_i64_f32_f64_b1_i32() -> i64, f32, f64, i8, i32 {
 block0:
     v0 = iconst.i64 0
     v1 = f32const 0x0.0
     v2 = f64const 0x0.0
-    v3 = bconst.b1 true
+    v3 = iconst.i8 1
     v4 = iconst.i32 0
     return v0, v1, v2, v3, v4
 }
 
 function %call_i64_f32_f64_b1_i32() {
-    fn0 = %foo() -> i64,f32,f64,b1,i32
+    fn0 = %foo() -> i64,f32,f64,i8,i32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i64_f32_b1_i32_f64() -> i64, f32, b1, i32, f64 {
+function %return_i64_f32_b1_i32_f64() -> i64, f32, i8, i32, f64 {
 block0:
     v0 = iconst.i64 0
     v1 = f32const 0x0.0
-    v2 = bconst.b1 true
+    v2 = iconst.i8 1
     v3 = iconst.i32 0
     v4 = f64const 0x0.0
     return v0, v1, v2, v3, v4
 }
 
 function %call_i64_f32_b1_i32_f64() {
-    fn0 = %foo() -> i64,f32,b1,i32,f64
+    fn0 = %foo() -> i64,f32,i8,i32,f64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i64_f32_b1_f64_i32() -> i64, f32, b1, f64, i32 {
+function %return_i64_f32_b1_f64_i32() -> i64, f32, i8, f64, i32 {
 block0:
     v0 = iconst.i64 0
     v1 = f32const 0x0.0
-    v2 = bconst.b1 true
+    v2 = iconst.i8 1
     v3 = f64const 0x0.0
     v4 = iconst.i32 0
     return v0, v1, v2, v3, v4
 }
 
 function %call_i64_f32_b1_f64_i32() {
-    fn0 = %foo() -> i64,f32,b1,f64,i32
+    fn0 = %foo() -> i64,f32,i8,f64,i32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i64_f64_i32_f32_b1() -> i64, f64, i32, f32, b1 {
+function %return_i64_f64_i32_f32_i8() -> i64, f64, i32, f32, i8 {
 block0:
     v0 = iconst.i64 0
     v1 = f64const 0x0.0
     v2 = iconst.i32 0
     v3 = f32const 0x0.0
-    v4 = bconst.b1 true
+    v4 = iconst.i8 1
     return v0, v1, v2, v3, v4
 }
 
-function %call_i64_f64_i32_f32_b1() {
-    fn0 = %foo() -> i64,f64,i32,f32,b1
+function %call_i64_f64_i32_f32_i8() {
+    fn0 = %foo() -> i64,f64,i32,f32,i8
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i64_f64_i32_b1_f32() -> i64, f64, i32, b1, f32 {
+function %return_i64_f64_i32_b1_f32() -> i64, f64, i32, i8, f32 {
 block0:
     v0 = iconst.i64 0
     v1 = f64const 0x0.0
     v2 = iconst.i32 0
-    v3 = bconst.b1 true
+    v3 = iconst.i8 1
     v4 = f32const 0x0.0
     return v0, v1, v2, v3, v4
 }
 
 function %call_i64_f64_i32_b1_f32() {
-    fn0 = %foo() -> i64,f64,i32,b1,f32
+    fn0 = %foo() -> i64,f64,i32,i8,f32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i64_f64_f32_i32_b1() -> i64, f64, f32, i32, b1 {
+function %return_i64_f64_f32_i32_i8() -> i64, f64, f32, i32, i8 {
 block0:
     v0 = iconst.i64 0
     v1 = f64const 0x0.0
     v2 = f32const 0x0.0
     v3 = iconst.i32 0
-    v4 = bconst.b1 true
+    v4 = iconst.i8 1
     return v0, v1, v2, v3, v4
 }
 
-function %call_i64_f64_f32_i32_b1() {
-    fn0 = %foo() -> i64,f64,f32,i32,b1
+function %call_i64_f64_f32_i32_i8() {
+    fn0 = %foo() -> i64,f64,f32,i32,i8
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i64_f64_f32_b1_i32() -> i64, f64, f32, b1, i32 {
+function %return_i64_f64_f32_b1_i32() -> i64, f64, f32, i8, i32 {
 block0:
     v0 = iconst.i64 0
     v1 = f64const 0x0.0
     v2 = f32const 0x0.0
-    v3 = bconst.b1 true
+    v3 = iconst.i8 1
     v4 = iconst.i32 0
     return v0, v1, v2, v3, v4
 }
 
 function %call_i64_f64_f32_b1_i32() {
-    fn0 = %foo() -> i64,f64,f32,b1,i32
+    fn0 = %foo() -> i64,f64,f32,i8,i32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i64_f64_b1_i32_f32() -> i64, f64, b1, i32, f32 {
+function %return_i64_f64_b1_i32_f32() -> i64, f64, i8, i32, f32 {
 block0:
     v0 = iconst.i64 0
     v1 = f64const 0x0.0
-    v2 = bconst.b1 true
+    v2 = iconst.i8 1
     v3 = iconst.i32 0
     v4 = f32const 0x0.0
     return v0, v1, v2, v3, v4
 }
 
 function %call_i64_f64_b1_i32_f32() {
-    fn0 = %foo() -> i64,f64,b1,i32,f32
+    fn0 = %foo() -> i64,f64,i8,i32,f32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i64_f64_b1_f32_i32() -> i64, f64, b1, f32, i32 {
+function %return_i64_f64_b1_f32_i32() -> i64, f64, i8, f32, i32 {
 block0:
     v0 = iconst.i64 0
     v1 = f64const 0x0.0
-    v2 = bconst.b1 true
+    v2 = iconst.i8 1
     v3 = f32const 0x0.0
     v4 = iconst.i32 0
     return v0, v1, v2, v3, v4
 }
 
 function %call_i64_f64_b1_f32_i32() {
-    fn0 = %foo() -> i64,f64,b1,f32,i32
+    fn0 = %foo() -> i64,f64,i8,f32,i32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i64_b1_i32_f32_f64() -> i64, b1, i32, f32, f64 {
+function %return_i64_b1_i32_f32_f64() -> i64, i8, i32, f32, f64 {
 block0:
     v0 = iconst.i64 0
-    v1 = bconst.b1 true
+    v1 = iconst.i8 1
     v2 = iconst.i32 0
     v3 = f32const 0x0.0
     v4 = f64const 0x0.0
@@ -783,16 +783,16 @@ block0:
 }
 
 function %call_i64_b1_i32_f32_f64() {
-    fn0 = %foo() -> i64,b1,i32,f32,f64
+    fn0 = %foo() -> i64,i8,i32,f32,f64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i64_b1_i32_f64_f32() -> i64, b1, i32, f64, f32 {
+function %return_i64_b1_i32_f64_f32() -> i64, i8, i32, f64, f32 {
 block0:
     v0 = iconst.i64 0
-    v1 = bconst.b1 true
+    v1 = iconst.i8 1
     v2 = iconst.i32 0
     v3 = f64const 0x0.0
     v4 = f32const 0x0.0
@@ -800,16 +800,16 @@ block0:
 }
 
 function %call_i64_b1_i32_f64_f32() {
-    fn0 = %foo() -> i64,b1,i32,f64,f32
+    fn0 = %foo() -> i64,i8,i32,f64,f32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i64_b1_f32_i32_f64() -> i64, b1, f32, i32, f64 {
+function %return_i64_b1_f32_i32_f64() -> i64, i8, f32, i32, f64 {
 block0:
     v0 = iconst.i64 0
-    v1 = bconst.b1 true
+    v1 = iconst.i8 1
     v2 = f32const 0x0.0
     v3 = iconst.i32 0
     v4 = f64const 0x0.0
@@ -817,16 +817,16 @@ block0:
 }
 
 function %call_i64_b1_f32_i32_f64() {
-    fn0 = %foo() -> i64,b1,f32,i32,f64
+    fn0 = %foo() -> i64,i8,f32,i32,f64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i64_b1_f32_f64_i32() -> i64, b1, f32, f64, i32 {
+function %return_i64_b1_f32_f64_i32() -> i64, i8, f32, f64, i32 {
 block0:
     v0 = iconst.i64 0
-    v1 = bconst.b1 true
+    v1 = iconst.i8 1
     v2 = f32const 0x0.0
     v3 = f64const 0x0.0
     v4 = iconst.i32 0
@@ -834,16 +834,16 @@ block0:
 }
 
 function %call_i64_b1_f32_f64_i32() {
-    fn0 = %foo() -> i64,b1,f32,f64,i32
+    fn0 = %foo() -> i64,i8,f32,f64,i32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i64_b1_f64_i32_f32() -> i64, b1, f64, i32, f32 {
+function %return_i64_b1_f64_i32_f32() -> i64, i8, f64, i32, f32 {
 block0:
     v0 = iconst.i64 0
-    v1 = bconst.b1 true
+    v1 = iconst.i8 1
     v2 = f64const 0x0.0
     v3 = iconst.i32 0
     v4 = f32const 0x0.0
@@ -851,16 +851,16 @@ block0:
 }
 
 function %call_i64_b1_f64_i32_f32() {
-    fn0 = %foo() -> i64,b1,f64,i32,f32
+    fn0 = %foo() -> i64,i8,f64,i32,f32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_i64_b1_f64_f32_i32() -> i64, b1, f64, f32, i32 {
+function %return_i64_b1_f64_f32_i32() -> i64, i8, f64, f32, i32 {
 block0:
     v0 = iconst.i64 0
-    v1 = bconst.b1 true
+    v1 = iconst.i8 1
     v2 = f64const 0x0.0
     v3 = f32const 0x0.0
     v4 = iconst.i32 0
@@ -868,322 +868,322 @@ block0:
 }
 
 function %call_i64_b1_f64_f32_i32() {
-    fn0 = %foo() -> i64,b1,f64,f32,i32
+    fn0 = %foo() -> i64,i8,f64,f32,i32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f32_i32_i64_f64_b1() -> f32, i32, i64, f64, b1 {
+function %return_f32_i32_i64_f64_i8() -> f32, i32, i64, f64, i8 {
 block0:
     v0 = f32const 0x0.0
     v1 = iconst.i32 0
     v2 = iconst.i64 0
     v3 = f64const 0x0.0
-    v4 = bconst.b1 true
+    v4 = iconst.i8 1
     return v0, v1, v2, v3, v4
 }
 
-function %call_f32_i32_i64_f64_b1() {
-    fn0 = %foo() -> f32,i32,i64,f64,b1
+function %call_f32_i32_i64_f64_i8() {
+    fn0 = %foo() -> f32,i32,i64,f64,i8
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f32_i32_i64_b1_f64() -> f32, i32, i64, b1, f64 {
+function %return_f32_i32_i64_b1_f64() -> f32, i32, i64, i8, f64 {
 block0:
     v0 = f32const 0x0.0
     v1 = iconst.i32 0
     v2 = iconst.i64 0
-    v3 = bconst.b1 true
+    v3 = iconst.i8 1
     v4 = f64const 0x0.0
     return v0, v1, v2, v3, v4
 }
 
 function %call_f32_i32_i64_b1_f64() {
-    fn0 = %foo() -> f32,i32,i64,b1,f64
+    fn0 = %foo() -> f32,i32,i64,i8,f64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f32_i32_f64_i64_b1() -> f32, i32, f64, i64, b1 {
+function %return_f32_i32_f64_i64_i8() -> f32, i32, f64, i64, i8 {
 block0:
     v0 = f32const 0x0.0
     v1 = iconst.i32 0
     v2 = f64const 0x0.0
     v3 = iconst.i64 0
-    v4 = bconst.b1 true
+    v4 = iconst.i8 1
     return v0, v1, v2, v3, v4
 }
 
-function %call_f32_i32_f64_i64_b1() {
-    fn0 = %foo() -> f32,i32,f64,i64,b1
+function %call_f32_i32_f64_i64_i8() {
+    fn0 = %foo() -> f32,i32,f64,i64,i8
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f32_i32_f64_b1_i64() -> f32, i32, f64, b1, i64 {
+function %return_f32_i32_f64_b1_i64() -> f32, i32, f64, i8, i64 {
 block0:
     v0 = f32const 0x0.0
     v1 = iconst.i32 0
     v2 = f64const 0x0.0
-    v3 = bconst.b1 true
+    v3 = iconst.i8 1
     v4 = iconst.i64 0
     return v0, v1, v2, v3, v4
 }
 
 function %call_f32_i32_f64_b1_i64() {
-    fn0 = %foo() -> f32,i32,f64,b1,i64
+    fn0 = %foo() -> f32,i32,f64,i8,i64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f32_i32_b1_i64_f64() -> f32, i32, b1, i64, f64 {
+function %return_f32_i32_b1_i64_f64() -> f32, i32, i8, i64, f64 {
 block0:
     v0 = f32const 0x0.0
     v1 = iconst.i32 0
-    v2 = bconst.b1 true
+    v2 = iconst.i8 1
     v3 = iconst.i64 0
     v4 = f64const 0x0.0
     return v0, v1, v2, v3, v4
 }
 
 function %call_f32_i32_b1_i64_f64() {
-    fn0 = %foo() -> f32,i32,b1,i64,f64
+    fn0 = %foo() -> f32,i32,i8,i64,f64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f32_i32_b1_f64_i64() -> f32, i32, b1, f64, i64 {
+function %return_f32_i32_b1_f64_i64() -> f32, i32, i8, f64, i64 {
 block0:
     v0 = f32const 0x0.0
     v1 = iconst.i32 0
-    v2 = bconst.b1 true
+    v2 = iconst.i8 1
     v3 = f64const 0x0.0
     v4 = iconst.i64 0
     return v0, v1, v2, v3, v4
 }
 
 function %call_f32_i32_b1_f64_i64() {
-    fn0 = %foo() -> f32,i32,b1,f64,i64
+    fn0 = %foo() -> f32,i32,i8,f64,i64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f32_i64_i32_f64_b1() -> f32, i64, i32, f64, b1 {
+function %return_f32_i64_i32_f64_i8() -> f32, i64, i32, f64, i8 {
 block0:
     v0 = f32const 0x0.0
     v1 = iconst.i64 0
     v2 = iconst.i32 0
     v3 = f64const 0x0.0
-    v4 = bconst.b1 true
+    v4 = iconst.i8 1
     return v0, v1, v2, v3, v4
 }
 
-function %call_f32_i64_i32_f64_b1() {
-    fn0 = %foo() -> f32,i64,i32,f64,b1
+function %call_f32_i64_i32_f64_i8() {
+    fn0 = %foo() -> f32,i64,i32,f64,i8
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f32_i64_i32_b1_f64() -> f32, i64, i32, b1, f64 {
+function %return_f32_i64_i32_b1_f64() -> f32, i64, i32, i8, f64 {
 block0:
     v0 = f32const 0x0.0
     v1 = iconst.i64 0
     v2 = iconst.i32 0
-    v3 = bconst.b1 true
+    v3 = iconst.i8 1
     v4 = f64const 0x0.0
     return v0, v1, v2, v3, v4
 }
 
 function %call_f32_i64_i32_b1_f64() {
-    fn0 = %foo() -> f32,i64,i32,b1,f64
+    fn0 = %foo() -> f32,i64,i32,i8,f64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f32_i64_f64_i32_b1() -> f32, i64, f64, i32, b1 {
+function %return_f32_i64_f64_i32_i8() -> f32, i64, f64, i32, i8 {
 block0:
     v0 = f32const 0x0.0
     v1 = iconst.i64 0
     v2 = f64const 0x0.0
     v3 = iconst.i32 0
-    v4 = bconst.b1 true
+    v4 = iconst.i8 1
     return v0, v1, v2, v3, v4
 }
 
-function %call_f32_i64_f64_i32_b1() {
-    fn0 = %foo() -> f32,i64,f64,i32,b1
+function %call_f32_i64_f64_i32_i8() {
+    fn0 = %foo() -> f32,i64,f64,i32,i8
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f32_i64_f64_b1_i32() -> f32, i64, f64, b1, i32 {
+function %return_f32_i64_f64_b1_i32() -> f32, i64, f64, i8, i32 {
 block0:
     v0 = f32const 0x0.0
     v1 = iconst.i64 0
     v2 = f64const 0x0.0
-    v3 = bconst.b1 true
+    v3 = iconst.i8 1
     v4 = iconst.i32 0
     return v0, v1, v2, v3, v4
 }
 
 function %call_f32_i64_f64_b1_i32() {
-    fn0 = %foo() -> f32,i64,f64,b1,i32
+    fn0 = %foo() -> f32,i64,f64,i8,i32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f32_i64_b1_i32_f64() -> f32, i64, b1, i32, f64 {
+function %return_f32_i64_b1_i32_f64() -> f32, i64, i8, i32, f64 {
 block0:
     v0 = f32const 0x0.0
     v1 = iconst.i64 0
-    v2 = bconst.b1 true
+    v2 = iconst.i8 1
     v3 = iconst.i32 0
     v4 = f64const 0x0.0
     return v0, v1, v2, v3, v4
 }
 
 function %call_f32_i64_b1_i32_f64() {
-    fn0 = %foo() -> f32,i64,b1,i32,f64
+    fn0 = %foo() -> f32,i64,i8,i32,f64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f32_i64_b1_f64_i32() -> f32, i64, b1, f64, i32 {
+function %return_f32_i64_b1_f64_i32() -> f32, i64, i8, f64, i32 {
 block0:
     v0 = f32const 0x0.0
     v1 = iconst.i64 0
-    v2 = bconst.b1 true
+    v2 = iconst.i8 1
     v3 = f64const 0x0.0
     v4 = iconst.i32 0
     return v0, v1, v2, v3, v4
 }
 
 function %call_f32_i64_b1_f64_i32() {
-    fn0 = %foo() -> f32,i64,b1,f64,i32
+    fn0 = %foo() -> f32,i64,i8,f64,i32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f32_f64_i32_i64_b1() -> f32, f64, i32, i64, b1 {
+function %return_f32_f64_i32_i64_i8() -> f32, f64, i32, i64, i8 {
 block0:
     v0 = f32const 0x0.0
     v1 = f64const 0x0.0
     v2 = iconst.i32 0
     v3 = iconst.i64 0
-    v4 = bconst.b1 true
+    v4 = iconst.i8 1
     return v0, v1, v2, v3, v4
 }
 
-function %call_f32_f64_i32_i64_b1() {
-    fn0 = %foo() -> f32,f64,i32,i64,b1
+function %call_f32_f64_i32_i64_i8() {
+    fn0 = %foo() -> f32,f64,i32,i64,i8
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f32_f64_i32_b1_i64() -> f32, f64, i32, b1, i64 {
+function %return_f32_f64_i32_b1_i64() -> f32, f64, i32, i8, i64 {
 block0:
     v0 = f32const 0x0.0
     v1 = f64const 0x0.0
     v2 = iconst.i32 0
-    v3 = bconst.b1 true
+    v3 = iconst.i8 1
     v4 = iconst.i64 0
     return v0, v1, v2, v3, v4
 }
 
 function %call_f32_f64_i32_b1_i64() {
-    fn0 = %foo() -> f32,f64,i32,b1,i64
+    fn0 = %foo() -> f32,f64,i32,i8,i64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f32_f64_i64_i32_b1() -> f32, f64, i64, i32, b1 {
+function %return_f32_f64_i64_i32_i8() -> f32, f64, i64, i32, i8 {
 block0:
     v0 = f32const 0x0.0
     v1 = f64const 0x0.0
     v2 = iconst.i64 0
     v3 = iconst.i32 0
-    v4 = bconst.b1 true
+    v4 = iconst.i8 1
     return v0, v1, v2, v3, v4
 }
 
-function %call_f32_f64_i64_i32_b1() {
-    fn0 = %foo() -> f32,f64,i64,i32,b1
+function %call_f32_f64_i64_i32_i8() {
+    fn0 = %foo() -> f32,f64,i64,i32,i8
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f32_f64_i64_b1_i32() -> f32, f64, i64, b1, i32 {
+function %return_f32_f64_i64_b1_i32() -> f32, f64, i64, i8, i32 {
 block0:
     v0 = f32const 0x0.0
     v1 = f64const 0x0.0
     v2 = iconst.i64 0
-    v3 = bconst.b1 true
+    v3 = iconst.i8 1
     v4 = iconst.i32 0
     return v0, v1, v2, v3, v4
 }
 
 function %call_f32_f64_i64_b1_i32() {
-    fn0 = %foo() -> f32,f64,i64,b1,i32
+    fn0 = %foo() -> f32,f64,i64,i8,i32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f32_f64_b1_i32_i64() -> f32, f64, b1, i32, i64 {
+function %return_f32_f64_b1_i32_i64() -> f32, f64, i8, i32, i64 {
 block0:
     v0 = f32const 0x0.0
     v1 = f64const 0x0.0
-    v2 = bconst.b1 true
+    v2 = iconst.i8 1
     v3 = iconst.i32 0
     v4 = iconst.i64 0
     return v0, v1, v2, v3, v4
 }
 
 function %call_f32_f64_b1_i32_i64() {
-    fn0 = %foo() -> f32,f64,b1,i32,i64
+    fn0 = %foo() -> f32,f64,i8,i32,i64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f32_f64_b1_i64_i32() -> f32, f64, b1, i64, i32 {
+function %return_f32_f64_b1_i64_i32() -> f32, f64, i8, i64, i32 {
 block0:
     v0 = f32const 0x0.0
     v1 = f64const 0x0.0
-    v2 = bconst.b1 true
+    v2 = iconst.i8 1
     v3 = iconst.i64 0
     v4 = iconst.i32 0
     return v0, v1, v2, v3, v4
 }
 
 function %call_f32_f64_b1_i64_i32() {
-    fn0 = %foo() -> f32,f64,b1,i64,i32
+    fn0 = %foo() -> f32,f64,i8,i64,i32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f32_b1_i32_i64_f64() -> f32, b1, i32, i64, f64 {
+function %return_f32_b1_i32_i64_f64() -> f32, i8, i32, i64, f64 {
 block0:
     v0 = f32const 0x0.0
-    v1 = bconst.b1 true
+    v1 = iconst.i8 1
     v2 = iconst.i32 0
     v3 = iconst.i64 0
     v4 = f64const 0x0.0
@@ -1191,16 +1191,16 @@ block0:
 }
 
 function %call_f32_b1_i32_i64_f64() {
-    fn0 = %foo() -> f32,b1,i32,i64,f64
+    fn0 = %foo() -> f32,i8,i32,i64,f64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f32_b1_i32_f64_i64() -> f32, b1, i32, f64, i64 {
+function %return_f32_b1_i32_f64_i64() -> f32, i8, i32, f64, i64 {
 block0:
     v0 = f32const 0x0.0
-    v1 = bconst.b1 true
+    v1 = iconst.i8 1
     v2 = iconst.i32 0
     v3 = f64const 0x0.0
     v4 = iconst.i64 0
@@ -1208,16 +1208,16 @@ block0:
 }
 
 function %call_f32_b1_i32_f64_i64() {
-    fn0 = %foo() -> f32,b1,i32,f64,i64
+    fn0 = %foo() -> f32,i8,i32,f64,i64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f32_b1_i64_i32_f64() -> f32, b1, i64, i32, f64 {
+function %return_f32_b1_i64_i32_f64() -> f32, i8, i64, i32, f64 {
 block0:
     v0 = f32const 0x0.0
-    v1 = bconst.b1 true
+    v1 = iconst.i8 1
     v2 = iconst.i64 0
     v3 = iconst.i32 0
     v4 = f64const 0x0.0
@@ -1225,16 +1225,16 @@ block0:
 }
 
 function %call_f32_b1_i64_i32_f64() {
-    fn0 = %foo() -> f32,b1,i64,i32,f64
+    fn0 = %foo() -> f32,i8,i64,i32,f64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f32_b1_i64_f64_i32() -> f32, b1, i64, f64, i32 {
+function %return_f32_b1_i64_f64_i32() -> f32, i8, i64, f64, i32 {
 block0:
     v0 = f32const 0x0.0
-    v1 = bconst.b1 true
+    v1 = iconst.i8 1
     v2 = iconst.i64 0
     v3 = f64const 0x0.0
     v4 = iconst.i32 0
@@ -1242,16 +1242,16 @@ block0:
 }
 
 function %call_f32_b1_i64_f64_i32() {
-    fn0 = %foo() -> f32,b1,i64,f64,i32
+    fn0 = %foo() -> f32,i8,i64,f64,i32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f32_b1_f64_i32_i64() -> f32, b1, f64, i32, i64 {
+function %return_f32_b1_f64_i32_i64() -> f32, i8, f64, i32, i64 {
 block0:
     v0 = f32const 0x0.0
-    v1 = bconst.b1 true
+    v1 = iconst.i8 1
     v2 = f64const 0x0.0
     v3 = iconst.i32 0
     v4 = iconst.i64 0
@@ -1259,16 +1259,16 @@ block0:
 }
 
 function %call_f32_b1_f64_i32_i64() {
-    fn0 = %foo() -> f32,b1,f64,i32,i64
+    fn0 = %foo() -> f32,i8,f64,i32,i64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f32_b1_f64_i64_i32() -> f32, b1, f64, i64, i32 {
+function %return_f32_b1_f64_i64_i32() -> f32, i8, f64, i64, i32 {
 block0:
     v0 = f32const 0x0.0
-    v1 = bconst.b1 true
+    v1 = iconst.i8 1
     v2 = f64const 0x0.0
     v3 = iconst.i64 0
     v4 = iconst.i32 0
@@ -1276,322 +1276,322 @@ block0:
 }
 
 function %call_f32_b1_f64_i64_i32() {
-    fn0 = %foo() -> f32,b1,f64,i64,i32
+    fn0 = %foo() -> f32,i8,f64,i64,i32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f64_i32_i64_f32_b1() -> f64, i32, i64, f32, b1 {
+function %return_f64_i32_i64_f32_i8() -> f64, i32, i64, f32, i8 {
 block0:
     v0 = f64const 0x0.0
     v1 = iconst.i32 0
     v2 = iconst.i64 0
     v3 = f32const 0x0.0
-    v4 = bconst.b1 true
+    v4 = iconst.i8 1
     return v0, v1, v2, v3, v4
 }
 
-function %call_f64_i32_i64_f32_b1() {
-    fn0 = %foo() -> f64,i32,i64,f32,b1
+function %call_f64_i32_i64_f32_i8() {
+    fn0 = %foo() -> f64,i32,i64,f32,i8
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f64_i32_i64_b1_f32() -> f64, i32, i64, b1, f32 {
+function %return_f64_i32_i64_b1_f32() -> f64, i32, i64, i8, f32 {
 block0:
     v0 = f64const 0x0.0
     v1 = iconst.i32 0
     v2 = iconst.i64 0
-    v3 = bconst.b1 true
+    v3 = iconst.i8 1
     v4 = f32const 0x0.0
     return v0, v1, v2, v3, v4
 }
 
 function %call_f64_i32_i64_b1_f32() {
-    fn0 = %foo() -> f64,i32,i64,b1,f32
+    fn0 = %foo() -> f64,i32,i64,i8,f32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f64_i32_f32_i64_b1() -> f64, i32, f32, i64, b1 {
+function %return_f64_i32_f32_i64_i8() -> f64, i32, f32, i64, i8 {
 block0:
     v0 = f64const 0x0.0
     v1 = iconst.i32 0
     v2 = f32const 0x0.0
     v3 = iconst.i64 0
-    v4 = bconst.b1 true
+    v4 = iconst.i8 1
     return v0, v1, v2, v3, v4
 }
 
-function %call_f64_i32_f32_i64_b1() {
-    fn0 = %foo() -> f64,i32,f32,i64,b1
+function %call_f64_i32_f32_i64_i8() {
+    fn0 = %foo() -> f64,i32,f32,i64,i8
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f64_i32_f32_b1_i64() -> f64, i32, f32, b1, i64 {
+function %return_f64_i32_f32_b1_i64() -> f64, i32, f32, i8, i64 {
 block0:
     v0 = f64const 0x0.0
     v1 = iconst.i32 0
     v2 = f32const 0x0.0
-    v3 = bconst.b1 true
+    v3 = iconst.i8 1
     v4 = iconst.i64 0
     return v0, v1, v2, v3, v4
 }
 
 function %call_f64_i32_f32_b1_i64() {
-    fn0 = %foo() -> f64,i32,f32,b1,i64
+    fn0 = %foo() -> f64,i32,f32,i8,i64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f64_i32_b1_i64_f32() -> f64, i32, b1, i64, f32 {
+function %return_f64_i32_b1_i64_f32() -> f64, i32, i8, i64, f32 {
 block0:
     v0 = f64const 0x0.0
     v1 = iconst.i32 0
-    v2 = bconst.b1 true
+    v2 = iconst.i8 1
     v3 = iconst.i64 0
     v4 = f32const 0x0.0
     return v0, v1, v2, v3, v4
 }
 
 function %call_f64_i32_b1_i64_f32() {
-    fn0 = %foo() -> f64,i32,b1,i64,f32
+    fn0 = %foo() -> f64,i32,i8,i64,f32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f64_i32_b1_f32_i64() -> f64, i32, b1, f32, i64 {
+function %return_f64_i32_b1_f32_i64() -> f64, i32, i8, f32, i64 {
 block0:
     v0 = f64const 0x0.0
     v1 = iconst.i32 0
-    v2 = bconst.b1 true
+    v2 = iconst.i8 1
     v3 = f32const 0x0.0
     v4 = iconst.i64 0
     return v0, v1, v2, v3, v4
 }
 
 function %call_f64_i32_b1_f32_i64() {
-    fn0 = %foo() -> f64,i32,b1,f32,i64
+    fn0 = %foo() -> f64,i32,i8,f32,i64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f64_i64_i32_f32_b1() -> f64, i64, i32, f32, b1 {
+function %return_f64_i64_i32_f32_i8() -> f64, i64, i32, f32, i8 {
 block0:
     v0 = f64const 0x0.0
     v1 = iconst.i64 0
     v2 = iconst.i32 0
     v3 = f32const 0x0.0
-    v4 = bconst.b1 true
+    v4 = iconst.i8 1
     return v0, v1, v2, v3, v4
 }
 
-function %call_f64_i64_i32_f32_b1() {
-    fn0 = %foo() -> f64,i64,i32,f32,b1
+function %call_f64_i64_i32_f32_i8() {
+    fn0 = %foo() -> f64,i64,i32,f32,i8
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f64_i64_i32_b1_f32() -> f64, i64, i32, b1, f32 {
+function %return_f64_i64_i32_b1_f32() -> f64, i64, i32, i8, f32 {
 block0:
     v0 = f64const 0x0.0
     v1 = iconst.i64 0
     v2 = iconst.i32 0
-    v3 = bconst.b1 true
+    v3 = iconst.i8 1
     v4 = f32const 0x0.0
     return v0, v1, v2, v3, v4
 }
 
 function %call_f64_i64_i32_b1_f32() {
-    fn0 = %foo() -> f64,i64,i32,b1,f32
+    fn0 = %foo() -> f64,i64,i32,i8,f32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f64_i64_f32_i32_b1() -> f64, i64, f32, i32, b1 {
+function %return_f64_i64_f32_i32_i8() -> f64, i64, f32, i32, i8 {
 block0:
     v0 = f64const 0x0.0
     v1 = iconst.i64 0
     v2 = f32const 0x0.0
     v3 = iconst.i32 0
-    v4 = bconst.b1 true
+    v4 = iconst.i8 1
     return v0, v1, v2, v3, v4
 }
 
-function %call_f64_i64_f32_i32_b1() {
-    fn0 = %foo() -> f64,i64,f32,i32,b1
+function %call_f64_i64_f32_i32_i8() {
+    fn0 = %foo() -> f64,i64,f32,i32,i8
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f64_i64_f32_b1_i32() -> f64, i64, f32, b1, i32 {
+function %return_f64_i64_f32_b1_i32() -> f64, i64, f32, i8, i32 {
 block0:
     v0 = f64const 0x0.0
     v1 = iconst.i64 0
     v2 = f32const 0x0.0
-    v3 = bconst.b1 true
+    v3 = iconst.i8 1
     v4 = iconst.i32 0
     return v0, v1, v2, v3, v4
 }
 
 function %call_f64_i64_f32_b1_i32() {
-    fn0 = %foo() -> f64,i64,f32,b1,i32
+    fn0 = %foo() -> f64,i64,f32,i8,i32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f64_i64_b1_i32_f32() -> f64, i64, b1, i32, f32 {
+function %return_f64_i64_b1_i32_f32() -> f64, i64, i8, i32, f32 {
 block0:
     v0 = f64const 0x0.0
     v1 = iconst.i64 0
-    v2 = bconst.b1 true
+    v2 = iconst.i8 1
     v3 = iconst.i32 0
     v4 = f32const 0x0.0
     return v0, v1, v2, v3, v4
 }
 
 function %call_f64_i64_b1_i32_f32() {
-    fn0 = %foo() -> f64,i64,b1,i32,f32
+    fn0 = %foo() -> f64,i64,i8,i32,f32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f64_i64_b1_f32_i32() -> f64, i64, b1, f32, i32 {
+function %return_f64_i64_b1_f32_i32() -> f64, i64, i8, f32, i32 {
 block0:
     v0 = f64const 0x0.0
     v1 = iconst.i64 0
-    v2 = bconst.b1 true
+    v2 = iconst.i8 1
     v3 = f32const 0x0.0
     v4 = iconst.i32 0
     return v0, v1, v2, v3, v4
 }
 
 function %call_f64_i64_b1_f32_i32() {
-    fn0 = %foo() -> f64,i64,b1,f32,i32
+    fn0 = %foo() -> f64,i64,i8,f32,i32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f64_f32_i32_i64_b1() -> f64, f32, i32, i64, b1 {
+function %return_f64_f32_i32_i64_i8() -> f64, f32, i32, i64, i8 {
 block0:
     v0 = f64const 0x0.0
     v1 = f32const 0x0.0
     v2 = iconst.i32 0
     v3 = iconst.i64 0
-    v4 = bconst.b1 true
+    v4 = iconst.i8 1
     return v0, v1, v2, v3, v4
 }
 
-function %call_f64_f32_i32_i64_b1() {
-    fn0 = %foo() -> f64,f32,i32,i64,b1
+function %call_f64_f32_i32_i64_i8() {
+    fn0 = %foo() -> f64,f32,i32,i64,i8
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f64_f32_i32_b1_i64() -> f64, f32, i32, b1, i64 {
+function %return_f64_f32_i32_b1_i64() -> f64, f32, i32, i8, i64 {
 block0:
     v0 = f64const 0x0.0
     v1 = f32const 0x0.0
     v2 = iconst.i32 0
-    v3 = bconst.b1 true
+    v3 = iconst.i8 1
     v4 = iconst.i64 0
     return v0, v1, v2, v3, v4
 }
 
 function %call_f64_f32_i32_b1_i64() {
-    fn0 = %foo() -> f64,f32,i32,b1,i64
+    fn0 = %foo() -> f64,f32,i32,i8,i64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f64_f32_i64_i32_b1() -> f64, f32, i64, i32, b1 {
+function %return_f64_f32_i64_i32_i8() -> f64, f32, i64, i32, i8 {
 block0:
     v0 = f64const 0x0.0
     v1 = f32const 0x0.0
     v2 = iconst.i64 0
     v3 = iconst.i32 0
-    v4 = bconst.b1 true
+    v4 = iconst.i8 1
     return v0, v1, v2, v3, v4
 }
 
-function %call_f64_f32_i64_i32_b1() {
-    fn0 = %foo() -> f64,f32,i64,i32,b1
+function %call_f64_f32_i64_i32_i8() {
+    fn0 = %foo() -> f64,f32,i64,i32,i8
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f64_f32_i64_b1_i32() -> f64, f32, i64, b1, i32 {
+function %return_f64_f32_i64_b1_i32() -> f64, f32, i64, i8, i32 {
 block0:
     v0 = f64const 0x0.0
     v1 = f32const 0x0.0
     v2 = iconst.i64 0
-    v3 = bconst.b1 true
+    v3 = iconst.i8 1
     v4 = iconst.i32 0
     return v0, v1, v2, v3, v4
 }
 
 function %call_f64_f32_i64_b1_i32() {
-    fn0 = %foo() -> f64,f32,i64,b1,i32
+    fn0 = %foo() -> f64,f32,i64,i8,i32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f64_f32_b1_i32_i64() -> f64, f32, b1, i32, i64 {
+function %return_f64_f32_b1_i32_i64() -> f64, f32, i8, i32, i64 {
 block0:
     v0 = f64const 0x0.0
     v1 = f32const 0x0.0
-    v2 = bconst.b1 true
+    v2 = iconst.i8 1
     v3 = iconst.i32 0
     v4 = iconst.i64 0
     return v0, v1, v2, v3, v4
 }
 
 function %call_f64_f32_b1_i32_i64() {
-    fn0 = %foo() -> f64,f32,b1,i32,i64
+    fn0 = %foo() -> f64,f32,i8,i32,i64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f64_f32_b1_i64_i32() -> f64, f32, b1, i64, i32 {
+function %return_f64_f32_b1_i64_i32() -> f64, f32, i8, i64, i32 {
 block0:
     v0 = f64const 0x0.0
     v1 = f32const 0x0.0
-    v2 = bconst.b1 true
+    v2 = iconst.i8 1
     v3 = iconst.i64 0
     v4 = iconst.i32 0
     return v0, v1, v2, v3, v4
 }
 
 function %call_f64_f32_b1_i64_i32() {
-    fn0 = %foo() -> f64,f32,b1,i64,i32
+    fn0 = %foo() -> f64,f32,i8,i64,i32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f64_b1_i32_i64_f32() -> f64, b1, i32, i64, f32 {
+function %return_f64_b1_i32_i64_f32() -> f64, i8, i32, i64, f32 {
 block0:
     v0 = f64const 0x0.0
-    v1 = bconst.b1 true
+    v1 = iconst.i8 1
     v2 = iconst.i32 0
     v3 = iconst.i64 0
     v4 = f32const 0x0.0
@@ -1599,16 +1599,16 @@ block0:
 }
 
 function %call_f64_b1_i32_i64_f32() {
-    fn0 = %foo() -> f64,b1,i32,i64,f32
+    fn0 = %foo() -> f64,i8,i32,i64,f32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f64_b1_i32_f32_i64() -> f64, b1, i32, f32, i64 {
+function %return_f64_b1_i32_f32_i64() -> f64, i8, i32, f32, i64 {
 block0:
     v0 = f64const 0x0.0
-    v1 = bconst.b1 true
+    v1 = iconst.i8 1
     v2 = iconst.i32 0
     v3 = f32const 0x0.0
     v4 = iconst.i64 0
@@ -1616,16 +1616,16 @@ block0:
 }
 
 function %call_f64_b1_i32_f32_i64() {
-    fn0 = %foo() -> f64,b1,i32,f32,i64
+    fn0 = %foo() -> f64,i8,i32,f32,i64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f64_b1_i64_i32_f32() -> f64, b1, i64, i32, f32 {
+function %return_f64_b1_i64_i32_f32() -> f64, i8, i64, i32, f32 {
 block0:
     v0 = f64const 0x0.0
-    v1 = bconst.b1 true
+    v1 = iconst.i8 1
     v2 = iconst.i64 0
     v3 = iconst.i32 0
     v4 = f32const 0x0.0
@@ -1633,16 +1633,16 @@ block0:
 }
 
 function %call_f64_b1_i64_i32_f32() {
-    fn0 = %foo() -> f64,b1,i64,i32,f32
+    fn0 = %foo() -> f64,i8,i64,i32,f32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f64_b1_i64_f32_i32() -> f64, b1, i64, f32, i32 {
+function %return_f64_b1_i64_f32_i32() -> f64, i8, i64, f32, i32 {
 block0:
     v0 = f64const 0x0.0
-    v1 = bconst.b1 true
+    v1 = iconst.i8 1
     v2 = iconst.i64 0
     v3 = f32const 0x0.0
     v4 = iconst.i32 0
@@ -1650,16 +1650,16 @@ block0:
 }
 
 function %call_f64_b1_i64_f32_i32() {
-    fn0 = %foo() -> f64,b1,i64,f32,i32
+    fn0 = %foo() -> f64,i8,i64,f32,i32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f64_b1_f32_i32_i64() -> f64, b1, f32, i32, i64 {
+function %return_f64_b1_f32_i32_i64() -> f64, i8, f32, i32, i64 {
 block0:
     v0 = f64const 0x0.0
-    v1 = bconst.b1 true
+    v1 = iconst.i8 1
     v2 = f32const 0x0.0
     v3 = iconst.i32 0
     v4 = iconst.i64 0
@@ -1667,16 +1667,16 @@ block0:
 }
 
 function %call_f64_b1_f32_i32_i64() {
-    fn0 = %foo() -> f64,b1,f32,i32,i64
+    fn0 = %foo() -> f64,i8,f32,i32,i64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_f64_b1_f32_i64_i32() -> f64, b1, f32, i64, i32 {
+function %return_f64_b1_f32_i64_i32() -> f64, i8, f32, i64, i32 {
 block0:
     v0 = f64const 0x0.0
-    v1 = bconst.b1 true
+    v1 = iconst.i8 1
     v2 = f32const 0x0.0
     v3 = iconst.i64 0
     v4 = iconst.i32 0
@@ -1684,15 +1684,15 @@ block0:
 }
 
 function %call_f64_b1_f32_i64_i32() {
-    fn0 = %foo() -> f64,b1,f32,i64,i32
+    fn0 = %foo() -> f64,i8,f32,i64,i32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_b1_i32_i64_f32_f64() -> b1, i32, i64, f32, f64 {
+function %return_b1_i32_i64_f32_f64() -> i8, i32, i64, f32, f64 {
 block0:
-    v0 = bconst.b1 true
+    v0 = iconst.i8 1
     v1 = iconst.i32 0
     v2 = iconst.i64 0
     v3 = f32const 0x0.0
@@ -1701,15 +1701,15 @@ block0:
 }
 
 function %call_b1_i32_i64_f32_f64() {
-    fn0 = %foo() -> b1,i32,i64,f32,f64
+    fn0 = %foo() -> i8,i32,i64,f32,f64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_b1_i32_i64_f64_f32() -> b1, i32, i64, f64, f32 {
+function %return_b1_i32_i64_f64_f32() -> i8, i32, i64, f64, f32 {
 block0:
-    v0 = bconst.b1 true
+    v0 = iconst.i8 1
     v1 = iconst.i32 0
     v2 = iconst.i64 0
     v3 = f64const 0x0.0
@@ -1718,15 +1718,15 @@ block0:
 }
 
 function %call_b1_i32_i64_f64_f32() {
-    fn0 = %foo() -> b1,i32,i64,f64,f32
+    fn0 = %foo() -> i8,i32,i64,f64,f32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_b1_i32_f32_i64_f64() -> b1, i32, f32, i64, f64 {
+function %return_b1_i32_f32_i64_f64() -> i8, i32, f32, i64, f64 {
 block0:
-    v0 = bconst.b1 true
+    v0 = iconst.i8 1
     v1 = iconst.i32 0
     v2 = f32const 0x0.0
     v3 = iconst.i64 0
@@ -1735,15 +1735,15 @@ block0:
 }
 
 function %call_b1_i32_f32_i64_f64() {
-    fn0 = %foo() -> b1,i32,f32,i64,f64
+    fn0 = %foo() -> i8,i32,f32,i64,f64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_b1_i32_f32_f64_i64() -> b1, i32, f32, f64, i64 {
+function %return_b1_i32_f32_f64_i64() -> i8, i32, f32, f64, i64 {
 block0:
-    v0 = bconst.b1 true
+    v0 = iconst.i8 1
     v1 = iconst.i32 0
     v2 = f32const 0x0.0
     v3 = f64const 0x0.0
@@ -1752,15 +1752,15 @@ block0:
 }
 
 function %call_b1_i32_f32_f64_i64() {
-    fn0 = %foo() -> b1,i32,f32,f64,i64
+    fn0 = %foo() -> i8,i32,f32,f64,i64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_b1_i32_f64_i64_f32() -> b1, i32, f64, i64, f32 {
+function %return_b1_i32_f64_i64_f32() -> i8, i32, f64, i64, f32 {
 block0:
-    v0 = bconst.b1 true
+    v0 = iconst.i8 1
     v1 = iconst.i32 0
     v2 = f64const 0x0.0
     v3 = iconst.i64 0
@@ -1769,15 +1769,15 @@ block0:
 }
 
 function %call_b1_i32_f64_i64_f32() {
-    fn0 = %foo() -> b1,i32,f64,i64,f32
+    fn0 = %foo() -> i8,i32,f64,i64,f32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_b1_i32_f64_f32_i64() -> b1, i32, f64, f32, i64 {
+function %return_b1_i32_f64_f32_i64() -> i8, i32, f64, f32, i64 {
 block0:
-    v0 = bconst.b1 true
+    v0 = iconst.i8 1
     v1 = iconst.i32 0
     v2 = f64const 0x0.0
     v3 = f32const 0x0.0
@@ -1786,15 +1786,15 @@ block0:
 }
 
 function %call_b1_i32_f64_f32_i64() {
-    fn0 = %foo() -> b1,i32,f64,f32,i64
+    fn0 = %foo() -> i8,i32,f64,f32,i64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_b1_i64_i32_f32_f64() -> b1, i64, i32, f32, f64 {
+function %return_b1_i64_i32_f32_f64() -> i8, i64, i32, f32, f64 {
 block0:
-    v0 = bconst.b1 true
+    v0 = iconst.i8 1
     v1 = iconst.i64 0
     v2 = iconst.i32 0
     v3 = f32const 0x0.0
@@ -1803,15 +1803,15 @@ block0:
 }
 
 function %call_b1_i64_i32_f32_f64() {
-    fn0 = %foo() -> b1,i64,i32,f32,f64
+    fn0 = %foo() -> i8,i64,i32,f32,f64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_b1_i64_i32_f64_f32() -> b1, i64, i32, f64, f32 {
+function %return_b1_i64_i32_f64_f32() -> i8, i64, i32, f64, f32 {
 block0:
-    v0 = bconst.b1 true
+    v0 = iconst.i8 1
     v1 = iconst.i64 0
     v2 = iconst.i32 0
     v3 = f64const 0x0.0
@@ -1820,15 +1820,15 @@ block0:
 }
 
 function %call_b1_i64_i32_f64_f32() {
-    fn0 = %foo() -> b1,i64,i32,f64,f32
+    fn0 = %foo() -> i8,i64,i32,f64,f32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_b1_i64_f32_i32_f64() -> b1, i64, f32, i32, f64 {
+function %return_b1_i64_f32_i32_f64() -> i8, i64, f32, i32, f64 {
 block0:
-    v0 = bconst.b1 true
+    v0 = iconst.i8 1
     v1 = iconst.i64 0
     v2 = f32const 0x0.0
     v3 = iconst.i32 0
@@ -1837,15 +1837,15 @@ block0:
 }
 
 function %call_b1_i64_f32_i32_f64() {
-    fn0 = %foo() -> b1,i64,f32,i32,f64
+    fn0 = %foo() -> i8,i64,f32,i32,f64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_b1_i64_f32_f64_i32() -> b1, i64, f32, f64, i32 {
+function %return_b1_i64_f32_f64_i32() -> i8, i64, f32, f64, i32 {
 block0:
-    v0 = bconst.b1 true
+    v0 = iconst.i8 1
     v1 = iconst.i64 0
     v2 = f32const 0x0.0
     v3 = f64const 0x0.0
@@ -1854,15 +1854,15 @@ block0:
 }
 
 function %call_b1_i64_f32_f64_i32() {
-    fn0 = %foo() -> b1,i64,f32,f64,i32
+    fn0 = %foo() -> i8,i64,f32,f64,i32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_b1_i64_f64_i32_f32() -> b1, i64, f64, i32, f32 {
+function %return_b1_i64_f64_i32_f32() -> i8, i64, f64, i32, f32 {
 block0:
-    v0 = bconst.b1 true
+    v0 = iconst.i8 1
     v1 = iconst.i64 0
     v2 = f64const 0x0.0
     v3 = iconst.i32 0
@@ -1871,15 +1871,15 @@ block0:
 }
 
 function %call_b1_i64_f64_i32_f32() {
-    fn0 = %foo() -> b1,i64,f64,i32,f32
+    fn0 = %foo() -> i8,i64,f64,i32,f32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_b1_i64_f64_f32_i32() -> b1, i64, f64, f32, i32 {
+function %return_b1_i64_f64_f32_i32() -> i8, i64, f64, f32, i32 {
 block0:
-    v0 = bconst.b1 true
+    v0 = iconst.i8 1
     v1 = iconst.i64 0
     v2 = f64const 0x0.0
     v3 = f32const 0x0.0
@@ -1888,15 +1888,15 @@ block0:
 }
 
 function %call_b1_i64_f64_f32_i32() {
-    fn0 = %foo() -> b1,i64,f64,f32,i32
+    fn0 = %foo() -> i8,i64,f64,f32,i32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_b1_f32_i32_i64_f64() -> b1, f32, i32, i64, f64 {
+function %return_b1_f32_i32_i64_f64() -> i8, f32, i32, i64, f64 {
 block0:
-    v0 = bconst.b1 true
+    v0 = iconst.i8 1
     v1 = f32const 0x0.0
     v2 = iconst.i32 0
     v3 = iconst.i64 0
@@ -1905,15 +1905,15 @@ block0:
 }
 
 function %call_b1_f32_i32_i64_f64() {
-    fn0 = %foo() -> b1,f32,i32,i64,f64
+    fn0 = %foo() -> i8,f32,i32,i64,f64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_b1_f32_i32_f64_i64() -> b1, f32, i32, f64, i64 {
+function %return_b1_f32_i32_f64_i64() -> i8, f32, i32, f64, i64 {
 block0:
-    v0 = bconst.b1 true
+    v0 = iconst.i8 1
     v1 = f32const 0x0.0
     v2 = iconst.i32 0
     v3 = f64const 0x0.0
@@ -1922,15 +1922,15 @@ block0:
 }
 
 function %call_b1_f32_i32_f64_i64() {
-    fn0 = %foo() -> b1,f32,i32,f64,i64
+    fn0 = %foo() -> i8,f32,i32,f64,i64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_b1_f32_i64_i32_f64() -> b1, f32, i64, i32, f64 {
+function %return_b1_f32_i64_i32_f64() -> i8, f32, i64, i32, f64 {
 block0:
-    v0 = bconst.b1 true
+    v0 = iconst.i8 1
     v1 = f32const 0x0.0
     v2 = iconst.i64 0
     v3 = iconst.i32 0
@@ -1939,15 +1939,15 @@ block0:
 }
 
 function %call_b1_f32_i64_i32_f64() {
-    fn0 = %foo() -> b1,f32,i64,i32,f64
+    fn0 = %foo() -> i8,f32,i64,i32,f64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_b1_f32_i64_f64_i32() -> b1, f32, i64, f64, i32 {
+function %return_b1_f32_i64_f64_i32() -> i8, f32, i64, f64, i32 {
 block0:
-    v0 = bconst.b1 true
+    v0 = iconst.i8 1
     v1 = f32const 0x0.0
     v2 = iconst.i64 0
     v3 = f64const 0x0.0
@@ -1956,15 +1956,15 @@ block0:
 }
 
 function %call_b1_f32_i64_f64_i32() {
-    fn0 = %foo() -> b1,f32,i64,f64,i32
+    fn0 = %foo() -> i8,f32,i64,f64,i32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_b1_f32_f64_i32_i64() -> b1, f32, f64, i32, i64 {
+function %return_b1_f32_f64_i32_i64() -> i8, f32, f64, i32, i64 {
 block0:
-    v0 = bconst.b1 true
+    v0 = iconst.i8 1
     v1 = f32const 0x0.0
     v2 = f64const 0x0.0
     v3 = iconst.i32 0
@@ -1973,15 +1973,15 @@ block0:
 }
 
 function %call_b1_f32_f64_i32_i64() {
-    fn0 = %foo() -> b1,f32,f64,i32,i64
+    fn0 = %foo() -> i8,f32,f64,i32,i64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_b1_f32_f64_i64_i32() -> b1, f32, f64, i64, i32 {
+function %return_b1_f32_f64_i64_i32() -> i8, f32, f64, i64, i32 {
 block0:
-    v0 = bconst.b1 true
+    v0 = iconst.i8 1
     v1 = f32const 0x0.0
     v2 = f64const 0x0.0
     v3 = iconst.i64 0
@@ -1990,15 +1990,15 @@ block0:
 }
 
 function %call_b1_f32_f64_i64_i32() {
-    fn0 = %foo() -> b1,f32,f64,i64,i32
+    fn0 = %foo() -> i8,f32,f64,i64,i32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_b1_f64_i32_i64_f32() -> b1, f64, i32, i64, f32 {
+function %return_b1_f64_i32_i64_f32() -> i8, f64, i32, i64, f32 {
 block0:
-    v0 = bconst.b1 true
+    v0 = iconst.i8 1
     v1 = f64const 0x0.0
     v2 = iconst.i32 0
     v3 = iconst.i64 0
@@ -2007,15 +2007,15 @@ block0:
 }
 
 function %call_b1_f64_i32_i64_f32() {
-    fn0 = %foo() -> b1,f64,i32,i64,f32
+    fn0 = %foo() -> i8,f64,i32,i64,f32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_b1_f64_i32_f32_i64() -> b1, f64, i32, f32, i64 {
+function %return_b1_f64_i32_f32_i64() -> i8, f64, i32, f32, i64 {
 block0:
-    v0 = bconst.b1 true
+    v0 = iconst.i8 1
     v1 = f64const 0x0.0
     v2 = iconst.i32 0
     v3 = f32const 0x0.0
@@ -2024,15 +2024,15 @@ block0:
 }
 
 function %call_b1_f64_i32_f32_i64() {
-    fn0 = %foo() -> b1,f64,i32,f32,i64
+    fn0 = %foo() -> i8,f64,i32,f32,i64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_b1_f64_i64_i32_f32() -> b1, f64, i64, i32, f32 {
+function %return_b1_f64_i64_i32_f32() -> i8, f64, i64, i32, f32 {
 block0:
-    v0 = bconst.b1 true
+    v0 = iconst.i8 1
     v1 = f64const 0x0.0
     v2 = iconst.i64 0
     v3 = iconst.i32 0
@@ -2041,15 +2041,15 @@ block0:
 }
 
 function %call_b1_f64_i64_i32_f32() {
-    fn0 = %foo() -> b1,f64,i64,i32,f32
+    fn0 = %foo() -> i8,f64,i64,i32,f32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_b1_f64_i64_f32_i32() -> b1, f64, i64, f32, i32 {
+function %return_b1_f64_i64_f32_i32() -> i8, f64, i64, f32, i32 {
 block0:
-    v0 = bconst.b1 true
+    v0 = iconst.i8 1
     v1 = f64const 0x0.0
     v2 = iconst.i64 0
     v3 = f32const 0x0.0
@@ -2058,15 +2058,15 @@ block0:
 }
 
 function %call_b1_f64_i64_f32_i32() {
-    fn0 = %foo() -> b1,f64,i64,f32,i32
+    fn0 = %foo() -> i8,f64,i64,f32,i32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_b1_f64_f32_i32_i64() -> b1, f64, f32, i32, i64 {
+function %return_b1_f64_f32_i32_i64() -> i8, f64, f32, i32, i64 {
 block0:
-    v0 = bconst.b1 true
+    v0 = iconst.i8 1
     v1 = f64const 0x0.0
     v2 = f32const 0x0.0
     v3 = iconst.i32 0
@@ -2075,15 +2075,15 @@ block0:
 }
 
 function %call_b1_f64_f32_i32_i64() {
-    fn0 = %foo() -> b1,f64,f32,i32,i64
+    fn0 = %foo() -> i8,f64,f32,i32,i64
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return
 }
 
-function %return_b1_f64_f32_i64_i32() -> b1, f64, f32, i64, i32 {
+function %return_b1_f64_f32_i64_i32() -> i8, f64, f32, i64, i32 {
 block0:
-    v0 = bconst.b1 true
+    v0 = iconst.i8 1
     v1 = f64const 0x0.0
     v2 = f32const 0x0.0
     v3 = iconst.i64 0
@@ -2092,7 +2092,7 @@ block0:
 }
 
 function %call_b1_f64_f32_i64_i32() {
-    fn0 = %foo() -> b1,f64,f32,i64,i32
+    fn0 = %foo() -> i8,f64,f32,i64,i32
 block0:
     v0,v1,v2,v3,v4 = call fn0()
     return

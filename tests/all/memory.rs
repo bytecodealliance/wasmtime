@@ -1,5 +1,7 @@
 use anyhow::Result;
 use rayon::prelude::*;
+use std::sync::atomic::{AtomicU32, Ordering::SeqCst};
+use std::time::{Duration, Instant};
 use wasmtime::*;
 
 fn module(engine: &Engine) -> Result<Module> {
@@ -19,7 +21,7 @@ fn module(engine: &Engine) -> Result<Module> {
             (2, &["i32.load16_s"]),
             (4, &["i32.load" /*, "f32.load"*/]),
             (8, &["i64.load" /*, "f64.load"*/]),
-            #[cfg(not(target_arch = "s390x"))]
+            #[cfg(not(any(target_arch = "s390x", target_arch = "riscv64")))]
             (16, &["v128.load"]),
         ]
         .iter()
@@ -186,19 +188,14 @@ fn guards_present() -> Result<()> {
 fn guards_present_pooling() -> Result<()> {
     const GUARD_SIZE: u64 = 65536;
 
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(2).instance_memory_pages(10);
     let mut config = Config::new();
     config.static_memory_maximum_size(1 << 20);
     config.dynamic_memory_guard_size(GUARD_SIZE);
     config.static_memory_guard_size(GUARD_SIZE);
     config.guard_before_linear_memory(true);
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::default(),
-        instance_limits: InstanceLimits {
-            count: 2,
-            memory_pages: 10,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     let engine = Engine::new(&config)?;
 
     let mut store = Store::new(&engine, ());
@@ -351,7 +348,7 @@ fn tiny_static_heap() -> Result<()> {
     )?;
 
     let i = Instance::new(&mut store, &module, &[])?;
-    let f = i.get_typed_func::<(), (), _>(&mut store, "run")?;
+    let f = i.get_typed_func::<(), ()>(&mut store, "run")?;
     f.call(&mut store, ())?;
     Ok(())
 }
@@ -464,6 +461,108 @@ fn memory64_maximum_minimum() -> Result<()> {
         ),
     )?;
     assert!(Instance::new(&mut store, &module, &[]).is_err());
+
+    Ok(())
+}
+
+#[test]
+fn shared_memory_basics() -> Result<()> {
+    let engine = Engine::default();
+    assert!(SharedMemory::new(&engine, MemoryType::new(1, None)).is_err());
+    assert!(SharedMemory::new(&engine, MemoryType::new(1, Some(1))).is_err());
+    assert!(SharedMemory::new(&engine, MemoryType::new64(1, None)).is_err());
+    assert!(SharedMemory::new(&engine, MemoryType::new64(1, Some(1))).is_err());
+    assert!(SharedMemory::new(&engine, MemoryType::shared(1, 0)).is_err());
+
+    let memory = SharedMemory::new(&engine, MemoryType::shared(1, 1))?;
+    assert!(memory.ty().is_shared());
+    assert_eq!(memory.ty().minimum(), 1);
+    assert_eq!(memory.ty().maximum(), Some(1));
+    assert_eq!(memory.size(), 1);
+    assert_eq!(memory.data_size(), 65536);
+    assert_eq!(memory.data().len(), 65536);
+    assert!(memory.grow(1).is_err());
+
+    // misaligned
+    assert_eq!(memory.atomic_notify(1, 100), Err(Trap::HeapMisaligned));
+    assert_eq!(
+        memory.atomic_wait32(1, 100, None),
+        Err(Trap::HeapMisaligned)
+    );
+    assert_eq!(
+        memory.atomic_wait64(1, 100, None),
+        Err(Trap::HeapMisaligned)
+    );
+
+    // oob
+    assert_eq!(
+        memory.atomic_notify(1 << 20, 100),
+        Err(Trap::MemoryOutOfBounds)
+    );
+    assert_eq!(
+        memory.atomic_wait32(1 << 20, 100, None),
+        Err(Trap::MemoryOutOfBounds)
+    );
+    assert_eq!(
+        memory.atomic_wait64(1 << 20, 100, None),
+        Err(Trap::MemoryOutOfBounds)
+    );
+
+    // ok
+    assert_eq!(memory.atomic_notify(8, 100), Ok(0));
+    assert_eq!(memory.atomic_wait32(8, 1, None), Ok(WaitResult::Mismatch));
+    assert_eq!(memory.atomic_wait64(8, 1, None), Ok(WaitResult::Mismatch));
+
+    // timeout
+    let near_future = Instant::now() + Duration::new(0, 100);
+    assert_eq!(
+        memory.atomic_wait32(8, 0, Some(near_future)),
+        Ok(WaitResult::TimedOut)
+    );
+    assert_eq!(
+        memory.atomic_wait64(8, 0, Some(near_future)),
+        Ok(WaitResult::TimedOut)
+    );
+
+    Ok(())
+}
+
+#[test]
+fn shared_memory_wait_notify() -> Result<()> {
+    const THREADS: usize = 8;
+    const COUNT: usize = 100_000;
+
+    let engine = Engine::default();
+    let memory = SharedMemory::new(&engine, MemoryType::shared(1, 1))?;
+    let data = unsafe { &*(memory.data().as_ptr() as *const AtomicU32) };
+    let locked = unsafe { &*(memory.data().as_ptr().add(4) as *const AtomicU32) };
+
+    // Note that `SeqCst` is used here to not think much about the orderings
+    // here, and it also somewhat more closely mirrors what's happening in wasm.
+    let lock = || {
+        while locked.swap(1, SeqCst) == 1 {
+            memory.atomic_wait32(0, 1, None).unwrap();
+        }
+    };
+    let unlock = || {
+        locked.store(0, SeqCst);
+        memory.atomic_notify(0, 1).unwrap();
+    };
+
+    std::thread::scope(|s| {
+        for _ in 0..THREADS {
+            s.spawn(|| {
+                for _ in 0..COUNT {
+                    lock();
+                    let next = data.load(SeqCst) + 1;
+                    data.store(next, SeqCst);
+                    unlock();
+                }
+            });
+        }
+    });
+
+    assert_eq!(data.load(SeqCst), (THREADS * COUNT) as u32);
 
     Ok(())
 }

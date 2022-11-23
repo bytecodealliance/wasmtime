@@ -7,7 +7,7 @@ use cranelift::codegen::ir::instructions::InstructionFormat;
 use cranelift::codegen::ir::stackslot::StackSize;
 use cranelift::codegen::ir::{types::*, FuncRef, LibCall, UserExternalName, UserFuncName};
 use cranelift::codegen::ir::{
-    AbiParam, Block, ExternalName, Function, JumpTable, Opcode, Signature, StackSlot, Type, Value,
+    AbiParam, Block, ExternalName, Function, Opcode, Signature, StackSlot, Type, Value,
 };
 use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Switch, Variable};
@@ -17,6 +17,15 @@ use cranelift::prelude::{
 };
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
+
+/// Generates a Vec with `len` elements comprised of `options`
+fn arbitrary_vec<T: Clone>(
+    u: &mut Unstructured,
+    len: usize,
+    options: &[T],
+) -> arbitrary::Result<Vec<T>> {
+    (0..len).map(|_| u.choose(options).cloned()).collect()
+}
 
 type BlockSignature = Vec<Type>;
 
@@ -61,6 +70,33 @@ fn insert_opcode(
         let var = fgen.get_variable_of_type(ty)?;
         builder.def_var(var, val);
     }
+    Ok(())
+}
+
+// `select_spectre_guard` is only implemented when preceded by a `icmp`
+// This ensures that we always insert it that way.
+fn insert_select_spectre_guard(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    _opcode: Opcode,
+    args: &'static [Type],
+    rets: &'static [Type],
+) -> Result<()> {
+    let icmp_ty = args[0];
+    let icmp_lhs = builder.use_var(fgen.get_variable_of_type(icmp_ty)?);
+    let icmp_rhs = builder.use_var(fgen.get_variable_of_type(icmp_ty)?);
+    let cc = *fgen.u.choose(IntCC::all())?;
+    let icmp_res = builder.ins().icmp(cc, icmp_lhs, icmp_rhs);
+
+    let select_lhs = builder.use_var(fgen.get_variable_of_type(args[1])?);
+    let select_rhs = builder.use_var(fgen.get_variable_of_type(args[2])?);
+    let select_res = builder
+        .ins()
+        .select_spectre_guard(icmp_res, select_lhs, select_rhs);
+
+    let var = fgen.get_variable_of_type(rets[0])?;
+    builder.def_var(var, select_res);
+
     Ok(())
 }
 
@@ -223,6 +259,7 @@ type OpcodeInserter = fn(
 ) -> Result<()>;
 
 // TODO: Derive this from the `cranelift-meta` generator.
+#[rustfmt::skip]
 const OPCODE_SIGNATURES: &'static [(
     Opcode,
     &'static [Type], // Args
@@ -268,6 +305,68 @@ const OPCODE_SIGNATURES: &'static [(
     //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4864
     #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Sdiv, &[I128, I128], &[I128], insert_opcode),
+    // Ineg
+    (Opcode::Ineg, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Ineg, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Ineg, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Ineg, &[I64, I64], &[I64], insert_opcode),
+    (Opcode::Ineg, &[I128, I128], &[I128], insert_opcode),
+    // Smin
+    // smin not implemented in some backends:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/3370
+    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4313
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Smin, &[I8, I8], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Smin, &[I16, I16], &[I16], insert_opcode),
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Smin, &[I32, I32], &[I32], insert_opcode),
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Smin, &[I64, I64], &[I64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Smin, &[I128, I128], &[I128], insert_opcode),
+    // Umin
+    // umin not implemented in some backends:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/3370
+    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4313
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Umin, &[I8, I8], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Umin, &[I16, I16], &[I16], insert_opcode),
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Umin, &[I32, I32], &[I32], insert_opcode),
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Umin, &[I64, I64], &[I64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Umin, &[I128, I128], &[I128], insert_opcode),
+    // Smax
+    // smax not implemented in some backends:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/3370
+    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4313
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Smax, &[I8, I8], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Smax, &[I16, I16], &[I16], insert_opcode),
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Smax, &[I32, I32], &[I32], insert_opcode),
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Smax, &[I64, I64], &[I64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Smax, &[I128, I128], &[I128], insert_opcode),
+    // Umax
+    // umax not implemented in some backends:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/3370
+    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4313
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Umax, &[I8, I8], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Umax, &[I16, I16], &[I16], insert_opcode),
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Umax, &[I32, I32], &[I32], insert_opcode),
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Umax, &[I64, I64], &[I64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Umax, &[I128, I128], &[I128], insert_opcode),
     // Rotr
     (Opcode::Rotr, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Rotr, &[I8, I16], &[I8], insert_opcode),
@@ -435,6 +534,252 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Isplit, &[I128], &[I64, I64], insert_opcode),
     // Iconcat
     (Opcode::Iconcat, &[I64, I64], &[I128], insert_opcode),
+    // Band
+    (Opcode::Band, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Band, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Band, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Band, &[I64, I64], &[I64], insert_opcode),
+    (Opcode::Band, &[I128, I128], &[I128], insert_opcode),
+    // Float bitops are currently not supported:
+    // See: https://github.com/bytecodealliance/wasmtime/issues/4870
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Band, &[F32, F32], &[F32], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Band, &[F64, F64], &[F64], insert_opcode),
+    // Bor
+    (Opcode::Bor, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Bor, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Bor, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Bor, &[I64, I64], &[I64], insert_opcode),
+    (Opcode::Bor, &[I128, I128], &[I128], insert_opcode),
+    // Float bitops are currently not supported:
+    // See: https://github.com/bytecodealliance/wasmtime/issues/4870
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Bor, &[F32, F32], &[F32], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Bor, &[F64, F64], &[F64], insert_opcode),
+    // Bxor
+    (Opcode::Bxor, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Bxor, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Bxor, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Bxor, &[I64, I64], &[I64], insert_opcode),
+    (Opcode::Bxor, &[I128, I128], &[I128], insert_opcode),
+    // Float bitops are currently not supported:
+    // See: https://github.com/bytecodealliance/wasmtime/issues/4870
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Bxor, &[F32, F32], &[F32], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Bxor, &[F64, F64], &[F64], insert_opcode),
+    // Bnot
+    (Opcode::Bnot, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Bnot, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Bnot, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Bnot, &[I64, I64], &[I64], insert_opcode),
+    (Opcode::Bnot, &[I128, I128], &[I128], insert_opcode),
+    // Float bitops are currently not supported:
+    // See: https://github.com/bytecodealliance/wasmtime/issues/4870
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Bnot, &[F32, F32], &[F32], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Bnot, &[F64, F64], &[F64], insert_opcode),
+    // BandNot
+    // Some Integer ops not supported on x86: https://github.com/bytecodealliance/wasmtime/issues/5041
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::BandNot, &[I8, I8], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::BandNot, &[I16, I16], &[I16], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::BandNot, &[I32, I32], &[I32], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::BandNot, &[I64, I64], &[I64], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::BandNot, &[I128, I128], &[I128], insert_opcode),
+    // Float bitops are currently not supported:
+    // See: https://github.com/bytecodealliance/wasmtime/issues/4870
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::BandNot, &[F32, F32], &[F32], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::BandNot, &[F64, F64], &[F64], insert_opcode),
+    // BorNot
+    // Some Integer ops not supported on x86: https://github.com/bytecodealliance/wasmtime/issues/5041
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::BorNot, &[I8, I8], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::BorNot, &[I16, I16], &[I16], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::BorNot, &[I32, I32], &[I32], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::BorNot, &[I64, I64], &[I64], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::BorNot, &[I128, I128], &[I128], insert_opcode),
+    // Float bitops are currently not supported:
+    // See: https://github.com/bytecodealliance/wasmtime/issues/4870
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::BorNot, &[F32, F32], &[F32], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::BorNot, &[F64, F64], &[F64], insert_opcode),
+    // BxorNot
+    // Some Integer ops not supported on x86: https://github.com/bytecodealliance/wasmtime/issues/5041
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::BxorNot, &[I8, I8], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::BxorNot, &[I16, I16], &[I16], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::BxorNot, &[I32, I32], &[I32], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::BxorNot, &[I64, I64], &[I64], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::BxorNot, &[I128, I128], &[I128], insert_opcode),
+    // Float bitops are currently not supported:
+    // See: https://github.com/bytecodealliance/wasmtime/issues/4870
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::BxorNot, &[F32, F32], &[F32], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::BxorNot, &[F64, F64], &[F64], insert_opcode),
+    // Bitrev
+    (Opcode::Bitrev, &[I8], &[I8], insert_opcode),
+    (Opcode::Bitrev, &[I16], &[I16], insert_opcode),
+    (Opcode::Bitrev, &[I32], &[I32], insert_opcode),
+    (Opcode::Bitrev, &[I64], &[I64], insert_opcode),
+    (Opcode::Bitrev, &[I128], &[I128], insert_opcode),
+    // Clz
+    (Opcode::Clz, &[I8], &[I8], insert_opcode),
+    (Opcode::Clz, &[I16], &[I16], insert_opcode),
+    (Opcode::Clz, &[I32], &[I32], insert_opcode),
+    (Opcode::Clz, &[I64], &[I64], insert_opcode),
+    (Opcode::Clz, &[I128], &[I128], insert_opcode),
+    // Cls
+    // cls not implemented in some backends:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/5107
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Cls, &[I8], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Cls, &[I16], &[I16], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Cls, &[I32], &[I32], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Cls, &[I64], &[I64], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Cls, &[I128], &[I128], insert_opcode),
+    // Ctz
+    (Opcode::Ctz, &[I8], &[I8], insert_opcode),
+    (Opcode::Ctz, &[I16], &[I16], insert_opcode),
+    (Opcode::Ctz, &[I32], &[I32], insert_opcode),
+    (Opcode::Ctz, &[I64], &[I64], insert_opcode),
+    (Opcode::Ctz, &[I128], &[I128], insert_opcode),
+    // Popcnt
+    (Opcode::Popcnt, &[I8], &[I8], insert_opcode),
+    (Opcode::Popcnt, &[I16], &[I16], insert_opcode),
+    (Opcode::Popcnt, &[I32], &[I32], insert_opcode),
+    (Opcode::Popcnt, &[I64], &[I64], insert_opcode),
+    (Opcode::Popcnt, &[I128], &[I128], insert_opcode),
+    // Bmask
+    (Opcode::Bmask, &[I8], &[I8], insert_opcode),
+    (Opcode::Bmask, &[I16], &[I8], insert_opcode),
+    (Opcode::Bmask, &[I32], &[I8], insert_opcode),
+    (Opcode::Bmask, &[I64], &[I8], insert_opcode),
+    (Opcode::Bmask, &[I128], &[I8], insert_opcode),
+    (Opcode::Bmask, &[I8], &[I16], insert_opcode),
+    (Opcode::Bmask, &[I16], &[I16], insert_opcode),
+    (Opcode::Bmask, &[I32], &[I16], insert_opcode),
+    (Opcode::Bmask, &[I64], &[I16], insert_opcode),
+    (Opcode::Bmask, &[I128], &[I16], insert_opcode),
+    (Opcode::Bmask, &[I8], &[I32], insert_opcode),
+    (Opcode::Bmask, &[I16], &[I32], insert_opcode),
+    (Opcode::Bmask, &[I32], &[I32], insert_opcode),
+    (Opcode::Bmask, &[I64], &[I32], insert_opcode),
+    (Opcode::Bmask, &[I128], &[I32], insert_opcode),
+    (Opcode::Bmask, &[I8], &[I64], insert_opcode),
+    (Opcode::Bmask, &[I16], &[I64], insert_opcode),
+    (Opcode::Bmask, &[I32], &[I64], insert_opcode),
+    (Opcode::Bmask, &[I64], &[I64], insert_opcode),
+    (Opcode::Bmask, &[I128], &[I64], insert_opcode),
+    (Opcode::Bmask, &[I8], &[I128], insert_opcode),
+    (Opcode::Bmask, &[I16], &[I128], insert_opcode),
+    (Opcode::Bmask, &[I32], &[I128], insert_opcode),
+    (Opcode::Bmask, &[I64], &[I128], insert_opcode),
+    (Opcode::Bmask, &[I128], &[I128], insert_opcode),
+    // Bswap
+    (Opcode::Bswap, &[I16], &[I16], insert_opcode),
+    (Opcode::Bswap, &[I32], &[I32], insert_opcode),
+    (Opcode::Bswap, &[I64], &[I64], insert_opcode),
+    (Opcode::Bswap, &[I128], &[I128], insert_opcode),
+    // Bitselect
+    // TODO: Some ops disabled:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/5197
+    //   AArch64: https://github.com/bytecodealliance/wasmtime/issues/5198
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Bitselect, &[I8, I8, I8], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Bitselect, &[I16, I16, I16], &[I16], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Bitselect, &[I32, I32, I32], &[I32], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Bitselect, &[I64, I64, I64], &[I64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Bitselect, &[I128, I128, I128], &[I128], insert_opcode),
+    // Select
+    // TODO: Some ops disabled:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/5199
+    //   AArch64: https://github.com/bytecodealliance/wasmtime/issues/5200
+    (Opcode::Select, &[I8, I8, I8], &[I8], insert_opcode),
+    (Opcode::Select, &[I8, I16, I16], &[I16], insert_opcode),
+    (Opcode::Select, &[I8, I32, I32], &[I32], insert_opcode),
+    (Opcode::Select, &[I8, I64, I64], &[I64], insert_opcode),
+    (Opcode::Select, &[I8, I128, I128], &[I128], insert_opcode),
+    (Opcode::Select, &[I16, I8, I8], &[I8], insert_opcode),
+    (Opcode::Select, &[I16, I16, I16], &[I16], insert_opcode),
+    (Opcode::Select, &[I16, I32, I32], &[I32], insert_opcode),
+    (Opcode::Select, &[I16, I64, I64], &[I64], insert_opcode),
+    (Opcode::Select, &[I16, I128, I128], &[I128], insert_opcode),
+    (Opcode::Select, &[I32, I8, I8], &[I8], insert_opcode),
+    (Opcode::Select, &[I32, I16, I16], &[I16], insert_opcode),
+    (Opcode::Select, &[I32, I32, I32], &[I32], insert_opcode),
+    (Opcode::Select, &[I32, I64, I64], &[I64], insert_opcode),
+    (Opcode::Select, &[I32, I128, I128], &[I128], insert_opcode),
+    (Opcode::Select, &[I64, I8, I8], &[I8], insert_opcode),
+    (Opcode::Select, &[I64, I16, I16], &[I16], insert_opcode),
+    (Opcode::Select, &[I64, I32, I32], &[I32], insert_opcode),
+    (Opcode::Select, &[I64, I64, I64], &[I64], insert_opcode),
+    (Opcode::Select, &[I64, I128, I128], &[I128], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Select, &[I128, I8, I8], &[I8], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Select, &[I128, I16, I16], &[I16], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Select, &[I128, I32, I32], &[I32], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Select, &[I128, I64, I64], &[I64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Select, &[I128, I128, I128], &[I128], insert_opcode),
+    // SelectSpectreGuard
+    // select_spectre_guard is only implemented on x86_64 and aarch64
+    // when a icmp is preceding it.
+    (Opcode::SelectSpectreGuard, &[I8, I8, I8], &[I8], insert_select_spectre_guard),
+    (Opcode::SelectSpectreGuard, &[I8, I16, I16], &[I16], insert_select_spectre_guard),
+    (Opcode::SelectSpectreGuard, &[I8, I32, I32], &[I32], insert_select_spectre_guard),
+    (Opcode::SelectSpectreGuard, &[I8, I64, I64], &[I64], insert_select_spectre_guard),
+    (Opcode::SelectSpectreGuard, &[I8, I128, I128], &[I128], insert_select_spectre_guard),
+    (Opcode::SelectSpectreGuard, &[I16, I8, I8], &[I8], insert_select_spectre_guard),
+    (Opcode::SelectSpectreGuard, &[I16, I16, I16], &[I16], insert_select_spectre_guard),
+    (Opcode::SelectSpectreGuard, &[I16, I32, I32], &[I32], insert_select_spectre_guard),
+    (Opcode::SelectSpectreGuard, &[I16, I64, I64], &[I64], insert_select_spectre_guard),
+    (Opcode::SelectSpectreGuard, &[I16, I128, I128], &[I128], insert_select_spectre_guard),
+    (Opcode::SelectSpectreGuard, &[I32, I8, I8], &[I8], insert_select_spectre_guard),
+    (Opcode::SelectSpectreGuard, &[I32, I16, I16], &[I16], insert_select_spectre_guard),
+    (Opcode::SelectSpectreGuard, &[I32, I32, I32], &[I32], insert_select_spectre_guard),
+    (Opcode::SelectSpectreGuard, &[I32, I64, I64], &[I64], insert_select_spectre_guard),
+    (Opcode::SelectSpectreGuard, &[I32, I128, I128], &[I128], insert_select_spectre_guard),
+    (Opcode::SelectSpectreGuard, &[I64, I8, I8], &[I8], insert_select_spectre_guard),
+    (Opcode::SelectSpectreGuard, &[I64, I16, I16], &[I16], insert_select_spectre_guard),
+    (Opcode::SelectSpectreGuard, &[I64, I32, I32], &[I32], insert_select_spectre_guard),
+    (Opcode::SelectSpectreGuard, &[I64, I64, I64], &[I64], insert_select_spectre_guard),
+    (Opcode::SelectSpectreGuard, &[I64, I128, I128], &[I128], insert_select_spectre_guard),
+    (Opcode::SelectSpectreGuard, &[I128, I8, I8], &[I8], insert_select_spectre_guard),
+    (Opcode::SelectSpectreGuard, &[I128, I16, I16], &[I16], insert_select_spectre_guard),
+    (Opcode::SelectSpectreGuard, &[I128, I32, I32], &[I32], insert_select_spectre_guard),
+    (Opcode::SelectSpectreGuard, &[I128, I64, I64], &[I64], insert_select_spectre_guard),
+    (Opcode::SelectSpectreGuard, &[I128, I128, I128], &[I128], insert_select_spectre_guard),
     // Fadd
     (Opcode::Fadd, &[F32, F32], &[F32], insert_opcode),
     (Opcode::Fadd, &[F64, F64], &[F64], insert_opcode),
@@ -486,15 +831,135 @@ const OPCODE_SIGNATURES: &'static [(
     // Nearest
     (Opcode::Nearest, &[F32], &[F32], insert_opcode),
     (Opcode::Nearest, &[F64], &[F64], insert_opcode),
+    // Fpromote
+    (Opcode::Fpromote, &[F32], &[F64], insert_opcode),
+    // Fdemote
+    (Opcode::Fdemote, &[F64], &[F32], insert_opcode),
+    // FcvtToUint
+    // TODO: Some ops disabled:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4897
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4899
+    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4934
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToUint, &[F32], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToUint, &[F32], &[I16], insert_opcode),
+    (Opcode::FcvtToUint, &[F32], &[I32], insert_opcode),
+    (Opcode::FcvtToUint, &[F32], &[I64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::FcvtToUint, &[F32], &[I128], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToUint, &[F64], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToUint, &[F64], &[I16], insert_opcode),
+    (Opcode::FcvtToUint, &[F64], &[I32], insert_opcode),
+    (Opcode::FcvtToUint, &[F64], &[I64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::FcvtToUint, &[F64], &[I128], insert_opcode),
+    // FcvtToUintSat
+    // TODO: Some ops disabled:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4897
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4899
+    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4934
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToUintSat, &[F32], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToUintSat, &[F32], &[I16], insert_opcode),
+    (Opcode::FcvtToUintSat, &[F32], &[I32], insert_opcode),
+    (Opcode::FcvtToUintSat, &[F32], &[I64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::FcvtToUintSat, &[F32], &[I128], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToUintSat, &[F64], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToUintSat, &[F64], &[I16], insert_opcode),
+    (Opcode::FcvtToUintSat, &[F64], &[I32], insert_opcode),
+    (Opcode::FcvtToUintSat, &[F64], &[I64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::FcvtToUintSat, &[F64], &[I128], insert_opcode),
+    // FcvtToSint
+    // TODO: Some ops disabled:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4897
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4899
+    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4934
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToSint, &[F32], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToSint, &[F32], &[I16], insert_opcode),
+    (Opcode::FcvtToSint, &[F32], &[I32], insert_opcode),
+    (Opcode::FcvtToSint, &[F32], &[I64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::FcvtToSint, &[F32], &[I128], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToSint, &[F64], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToSint, &[F64], &[I16], insert_opcode),
+    (Opcode::FcvtToSint, &[F64], &[I32], insert_opcode),
+    (Opcode::FcvtToSint, &[F64], &[I64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::FcvtToSint, &[F64], &[I128], insert_opcode),
+    // FcvtToSintSat
+    // TODO: Some ops disabled:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4897
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4899
+    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4934
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToSintSat, &[F32], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToSintSat, &[F32], &[I16], insert_opcode),
+    (Opcode::FcvtToSintSat, &[F32], &[I32], insert_opcode),
+    (Opcode::FcvtToSintSat, &[F32], &[I64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::FcvtToSintSat, &[F32], &[I128], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToSintSat, &[F64], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToSintSat, &[F64], &[I16], insert_opcode),
+    (Opcode::FcvtToSintSat, &[F64], &[I32], insert_opcode),
+    (Opcode::FcvtToSintSat, &[F64], &[I64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::FcvtToSintSat, &[F64], &[I128], insert_opcode),
+    // FcvtFromUint
+    // TODO: Some ops disabled:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4900
+    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4933
+    (Opcode::FcvtFromUint, &[I8], &[F32], insert_opcode),
+    (Opcode::FcvtFromUint, &[I16], &[F32], insert_opcode),
+    (Opcode::FcvtFromUint, &[I32], &[F32], insert_opcode),
+    (Opcode::FcvtFromUint, &[I64], &[F32], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::FcvtFromUint, &[I128], &[F32], insert_opcode),
+    (Opcode::FcvtFromUint, &[I8], &[F64], insert_opcode),
+    (Opcode::FcvtFromUint, &[I16], &[F64], insert_opcode),
+    (Opcode::FcvtFromUint, &[I32], &[F64], insert_opcode),
+    (Opcode::FcvtFromUint, &[I64], &[F64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::FcvtFromUint, &[I128], &[F64], insert_opcode),
+    // FcvtFromSint
+    // TODO: Some ops disabled:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4900
+    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4933
+    (Opcode::FcvtFromSint, &[I8], &[F32], insert_opcode),
+    (Opcode::FcvtFromSint, &[I16], &[F32], insert_opcode),
+    (Opcode::FcvtFromSint, &[I32], &[F32], insert_opcode),
+    (Opcode::FcvtFromSint, &[I64], &[F32], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::FcvtFromSint, &[I128], &[F32], insert_opcode),
+    (Opcode::FcvtFromSint, &[I8], &[F64], insert_opcode),
+    (Opcode::FcvtFromSint, &[I16], &[F64], insert_opcode),
+    (Opcode::FcvtFromSint, &[I32], &[F64], insert_opcode),
+    (Opcode::FcvtFromSint, &[I64], &[F64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::FcvtFromSint, &[I128], &[F64], insert_opcode),
     // Fcmp
-    (Opcode::Fcmp, &[F32, F32], &[B1], insert_cmp),
-    (Opcode::Fcmp, &[F64, F64], &[B1], insert_cmp),
+    (Opcode::Fcmp, &[F32, F32], &[I8], insert_cmp),
+    (Opcode::Fcmp, &[F64, F64], &[I8], insert_cmp),
     // Icmp
-    (Opcode::Icmp, &[I8, I8], &[B1], insert_cmp),
-    (Opcode::Icmp, &[I16, I16], &[B1], insert_cmp),
-    (Opcode::Icmp, &[I32, I32], &[B1], insert_cmp),
-    (Opcode::Icmp, &[I64, I64], &[B1], insert_cmp),
-    (Opcode::Icmp, &[I128, I128], &[B1], insert_cmp),
+    (Opcode::Icmp, &[I8, I8], &[I8], insert_cmp),
+    (Opcode::Icmp, &[I16, I16], &[I8], insert_cmp),
+    (Opcode::Icmp, &[I32, I32], &[I8], insert_cmp),
+    (Opcode::Icmp, &[I64, I64], &[I8], insert_cmp),
+    (Opcode::Icmp, &[I128, I128], &[I8], insert_cmp),
     // Stack Access
     (Opcode::StackStore, &[I8], &[], insert_stack_store),
     (Opcode::StackStore, &[I16], &[], insert_stack_store),
@@ -554,166 +1019,12 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Iconst, &[], &[I16], insert_const),
     (Opcode::Iconst, &[], &[I32], insert_const),
     (Opcode::Iconst, &[], &[I64], insert_const),
-    (Opcode::Iconst, &[], &[I128], insert_const),
     // Float Consts
     (Opcode::F32const, &[], &[F32], insert_const),
     (Opcode::F64const, &[], &[F64], insert_const),
-    // Bool Consts
-    (Opcode::Bconst, &[], &[B1], insert_const),
     // Call
     (Opcode::Call, &[], &[], insert_call),
 ];
-
-type BlockTerminator = fn(
-    fgen: &mut FunctionGenerator,
-    builder: &mut FunctionBuilder,
-    source_block: Block,
-) -> Result<()>;
-
-fn insert_return(
-    fgen: &mut FunctionGenerator,
-    builder: &mut FunctionBuilder,
-    _source_block: Block,
-) -> Result<()> {
-    let types: Vec<Type> = {
-        let rets = &builder.func.signature.returns;
-        rets.iter().map(|p| p.value_type).collect()
-    };
-    let vals = fgen.generate_values_for_signature(builder, types.into_iter())?;
-
-    builder.ins().return_(&vals[..]);
-    Ok(())
-}
-
-fn insert_jump(
-    fgen: &mut FunctionGenerator,
-    builder: &mut FunctionBuilder,
-    source_block: Block,
-) -> Result<()> {
-    let (block, args) = fgen.generate_target_block(builder, source_block)?;
-    builder.ins().jump(block, &args[..]);
-    Ok(())
-}
-
-/// Generates a br_table into a random block
-fn insert_br_table(
-    fgen: &mut FunctionGenerator,
-    builder: &mut FunctionBuilder,
-    source_block: Block,
-) -> Result<()> {
-    let var = fgen.get_variable_of_type(I32)?; // br_table only supports I32
-    let val = builder.use_var(var);
-
-    let target_blocks = fgen.resources.forward_blocks_without_params(source_block);
-    let default_block = *fgen.u.choose(target_blocks)?;
-
-    // We can still select a backwards branching jump table here!
-    let tables = fgen.resources.forward_jump_tables(builder, source_block);
-    let jt = *fgen.u.choose(&tables[..])?;
-    builder.ins().br_table(val, default_block, jt);
-    Ok(())
-}
-
-/// Generates a brz/brnz into a random block
-fn insert_br(
-    fgen: &mut FunctionGenerator,
-    builder: &mut FunctionBuilder,
-    source_block: Block,
-) -> Result<()> {
-    let (block, args) = fgen.generate_target_block(builder, source_block)?;
-
-    let condbr_types = [I8, I16, I32, I64, I128, B1];
-    let _type = *fgen.u.choose(&condbr_types[..])?;
-    let var = fgen.get_variable_of_type(_type)?;
-    let val = builder.use_var(var);
-
-    if bool::arbitrary(fgen.u)? {
-        builder.ins().brz(val, block, &args[..]);
-    } else {
-        builder.ins().brnz(val, block, &args[..]);
-    }
-
-    // After brz/brnz we must generate a jump
-    insert_jump(fgen, builder, source_block)?;
-    Ok(())
-}
-
-fn insert_bricmp(
-    fgen: &mut FunctionGenerator,
-    builder: &mut FunctionBuilder,
-    source_block: Block,
-) -> Result<()> {
-    let (block, args) = fgen.generate_target_block(builder, source_block)?;
-
-    let cc = *fgen.u.choose(IntCC::all())?;
-    let _type = *fgen.u.choose(&[I8, I16, I32, I64, I128])?;
-
-    let lhs_var = fgen.get_variable_of_type(_type)?;
-    let lhs_val = builder.use_var(lhs_var);
-
-    let rhs_var = fgen.get_variable_of_type(_type)?;
-    let rhs_val = builder.use_var(rhs_var);
-
-    builder
-        .ins()
-        .br_icmp(cc, lhs_val, rhs_val, block, &args[..]);
-
-    // After bricmp's we must generate a jump
-    insert_jump(fgen, builder, source_block)?;
-    Ok(())
-}
-
-fn insert_switch(
-    fgen: &mut FunctionGenerator,
-    builder: &mut FunctionBuilder,
-    source_block: Block,
-) -> Result<()> {
-    let _type = *fgen.u.choose(&[I8, I16, I32, I64, I128][..])?;
-    let switch_var = fgen.get_variable_of_type(_type)?;
-    let switch_val = builder.use_var(switch_var);
-
-    // TODO: We should also generate backwards branches in switches
-    let default_block = {
-        let target_blocks = fgen.resources.forward_blocks_without_params(source_block);
-        *fgen.u.choose(target_blocks)?
-    };
-
-    // Build this into a HashMap since we cannot have duplicate entries.
-    let mut entries = HashMap::new();
-    for _ in 0..fgen.param(&fgen.config.switch_cases)? {
-        // The Switch API only allows for entries that are addressable by the index type
-        // so we need to limit the range of values that we generate.
-        let (ty_min, ty_max) = _type.bounds(false);
-        let range_start = fgen.u.int_in_range(ty_min..=ty_max)?;
-
-        // We can either insert a contiguous range of blocks or a individual block
-        // This is done because the Switch API specializes contiguous ranges.
-        let range_size = if bool::arbitrary(fgen.u)? {
-            1
-        } else {
-            fgen.param(&fgen.config.switch_max_range_size)?
-        } as u128;
-
-        // Build the switch entries
-        for i in 0..range_size {
-            let index = range_start.wrapping_add(i) % ty_max;
-            let block = {
-                let target_blocks = fgen.resources.forward_blocks_without_params(source_block);
-                *fgen.u.choose(target_blocks)?
-            };
-
-            entries.insert(index, block);
-        }
-    }
-
-    let mut switch = Switch::new();
-    for (entry, block) in entries.into_iter() {
-        switch.set_entry(entry, block);
-    }
-    switch.emit(builder, switch_val, default_block);
-
-    Ok(())
-}
 
 /// These libcalls need a interpreter implementation in `cranelift-fuzzgen.rs`
 const ALLOWED_LIBCALLS: &'static [LibCall] = &[
@@ -734,33 +1045,35 @@ where
     resources: Resources,
 }
 
+#[derive(Debug, Clone)]
+enum BlockTerminator {
+    Return,
+    Jump(Block),
+    Br(Block, Block),
+    BrTable(Block, Vec<Block>),
+    Switch(Type, Block, HashMap<u128, Block>),
+}
+
+#[derive(Debug, Clone)]
+enum BlockTerminatorKind {
+    Return,
+    Jump,
+    Br,
+    BrTable,
+    Switch,
+}
+
 #[derive(Default)]
 struct Resources {
     vars: HashMap<Type, Vec<Variable>>,
     blocks: Vec<(Block, BlockSignature)>,
     blocks_without_params: Vec<Block>,
-    jump_tables: Vec<JumpTable>,
+    block_terminators: Vec<BlockTerminator>,
     func_refs: Vec<(Signature, FuncRef)>,
     stack_slots: Vec<(StackSlot, StackSize)>,
 }
 
 impl Resources {
-    /// Returns [JumpTable]'s where all blocks are forward of `block`
-    fn forward_jump_tables(&self, builder: &FunctionBuilder, block: Block) -> Vec<JumpTable> {
-        // TODO: We can avoid allocating a Vec here by sorting self.jump_tables based
-        // on the minimum block and returning a slice based on that.
-        // See https://github.com/bytecodealliance/wasmtime/pull/4894#discussion_r971241430 for more details
-
-        // Unlike with the blocks below jump table targets are not ordered, thus we do need
-        // to allocate a Vec here.
-        let jump_tables = &builder.func.jump_tables;
-        self.jump_tables
-            .iter()
-            .copied()
-            .filter(|jt| jump_tables[*jt].iter().all(|target| *target > block))
-            .collect()
-    }
-
     /// Partitions blocks at `block`. Only blocks that can be targeted by branches are considered.
     ///
     /// The first slice includes all blocks up to and including `block`.
@@ -773,6 +1086,12 @@ impl Resources {
         // their number. We also need to exclude the entry block since it isn't a valid target.
         let target_blocks = &self.blocks[1..];
         target_blocks.split_at(block.as_u32() as usize)
+    }
+
+    /// Returns blocks forward of `block`. Only blocks that can be targeted by branches are considered.
+    fn forward_blocks(&self, block: Block) -> &[(Block, BlockSignature)] {
+        let (_, forward_blocks) = self.partition_target_blocks(block);
+        forward_blocks
     }
 
     /// Generates a slice of `blocks_without_params` ahead of `block`
@@ -814,7 +1133,6 @@ where
         // TODO: It would be nice if we could get these directly from cranelift
         let scalars = [
             // IFLAGS, FFLAGS,
-            B1, // B8, B16, B32, B64, B128,
             I8, I16, I32, I64, I128, F32, F64,
             // R32, R64,
         ];
@@ -927,7 +1245,6 @@ where
                 };
                 builder.ins().iconst(ty, imm64)
             }
-            ty if ty.is_bool() => builder.ins().bconst(ty, bool::arbitrary(self.u)?),
             // f{32,64}::arbitrary does not generate a bunch of important values
             // such as Signaling NaN's / NaN's with payload, so generate floats from integers.
             F32 => builder
@@ -942,13 +1259,7 @@ where
 
     /// Chooses a random block which can be targeted by a jump / branch.
     /// This means any block that is not the first block.
-    ///
-    /// For convenience we also generate values that match the block's signature
-    fn generate_target_block(
-        &mut self,
-        builder: &mut FunctionBuilder,
-        source_block: Block,
-    ) -> Result<(Block, Vec<Value>)> {
+    fn generate_target_block(&mut self, source_block: Block) -> Result<Block> {
         // We try to mostly generate forward branches to avoid generating an excessive amount of
         // infinite loops. But they are still important, so give them a small chance of existing.
         let (backwards_blocks, forward_blocks) =
@@ -961,9 +1272,17 @@ where
         };
         assert!(!block_targets.is_empty());
 
-        let (block, signature) = self.u.choose(block_targets)?.clone();
-        let args = self.generate_values_for_signature(builder, signature.into_iter())?;
-        Ok((block, args))
+        let (block, _) = self.u.choose(block_targets)?.clone();
+        Ok(block)
+    }
+
+    fn generate_values_for_block(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        block: Block,
+    ) -> Result<Vec<Value>> {
+        let (_, sig) = self.resources.blocks[block.as_u32() as usize].clone();
+        self.generate_values_for_signature(builder, sig.iter().copied())
     }
 
     fn generate_values_for_signature<I: Iterator<Item = Type>>(
@@ -980,48 +1299,64 @@ where
             .collect()
     }
 
-    /// We always need to exit safely out of a block.
-    /// This either means a jump into another block or a return.
-    fn finalize_block(&mut self, builder: &mut FunctionBuilder, source_block: Block) -> Result<()> {
-        let has_jump_tables = !self
-            .resources
-            .forward_jump_tables(builder, source_block)
-            .is_empty();
+    /// The terminator that we need to insert has already been picked ahead of time
+    /// we just need to build the instructions for it
+    fn insert_terminator(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        source_block: Block,
+    ) -> Result<()> {
+        let terminator = self.resources.block_terminators[source_block.as_u32() as usize].clone();
 
-        let has_forward_blocks = {
-            let (_, forward_blocks) = self.resources.partition_target_blocks(source_block);
-            !forward_blocks.is_empty()
-        };
+        match terminator {
+            BlockTerminator::Return => {
+                let types: Vec<Type> = {
+                    let rets = &builder.func.signature.returns;
+                    rets.iter().map(|p| p.value_type).collect()
+                };
+                let vals = self.generate_values_for_signature(builder, types.into_iter())?;
 
-        let has_forward_blocks_without_params = !self
-            .resources
-            .forward_blocks_without_params(source_block)
-            .is_empty();
+                builder.ins().return_(&vals[..]);
+            }
+            BlockTerminator::Jump(target) => {
+                let args = self.generate_values_for_block(builder, target)?;
+                builder.ins().jump(target, &args[..]);
+            }
+            BlockTerminator::Br(left, right) => {
+                let left_args = self.generate_values_for_block(builder, left)?;
+                let right_args = self.generate_values_for_block(builder, right)?;
 
-        let terminators: &[(BlockTerminator, bool)] = &[
-            // Return is always a valid option
-            (insert_return, true),
-            // If we have forward blocks, we can allow generating jumps and branches
-            (insert_jump, has_forward_blocks),
-            (insert_br, has_forward_blocks),
-            (insert_bricmp, has_forward_blocks),
-            // Switches can only use blocks without params
-            (insert_switch, has_forward_blocks_without_params),
-            // We need both jump tables and a default block for br_table
-            (
-                insert_br_table,
-                has_jump_tables && has_forward_blocks_without_params,
-            ),
-        ];
+                let condbr_types = [I8, I16, I32, I64, I128];
+                let _type = *self.u.choose(&condbr_types[..])?;
+                let val = builder.use_var(self.get_variable_of_type(_type)?);
 
-        let terminators: Vec<_> = terminators
-            .into_iter()
-            .filter(|(_, valid)| *valid)
-            .map(|(term, _)| term)
-            .collect();
+                if bool::arbitrary(self.u)? {
+                    builder.ins().brz(val, left, &left_args[..]);
+                } else {
+                    builder.ins().brnz(val, left, &left_args[..]);
+                }
+                builder.ins().jump(right, &right_args[..]);
+            }
+            BlockTerminator::BrTable(default, targets) => {
+                // Create jump tables on demand
+                let jt = builder.create_jump_table(JumpTableData::with_blocks(targets));
 
-        let inserter = self.u.choose(&terminators[..])?;
-        inserter(self, builder, source_block)?;
+                // br_table only supports I32
+                let val = builder.use_var(self.get_variable_of_type(I32)?);
+
+                builder.ins().br_table(val, default, jt);
+            }
+            BlockTerminator::Switch(_type, default, entries) => {
+                let mut switch = Switch::new();
+                for (&entry, &block) in entries.iter() {
+                    switch.set_entry(entry, block);
+                }
+
+                let switch_val = builder.use_var(self.get_variable_of_type(_type)?);
+
+                switch.emit(builder, switch_val, default);
+            }
+        }
 
         Ok(())
     }
@@ -1033,27 +1368,6 @@ where
             inserter(self, builder, op, args, rets)?;
         }
 
-        Ok(())
-    }
-
-    fn generate_jumptables(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
-        // We shouldn't try to generate jumptables if we don't have any valid targets!
-        if self.resources.blocks_without_params.is_empty() {
-            return Ok(());
-        }
-
-        for _ in 0..self.param(&self.config.jump_tables_per_function)? {
-            let mut jt_data = JumpTableData::new();
-
-            for _ in 0..self.param(&self.config.jump_table_entries)? {
-                let block = *self.u.choose(&self.resources.blocks_without_params)?;
-                jt_data.push_entry(block);
-            }
-
-            self.resources
-                .jump_tables
-                .push(builder.create_jump_table(jt_data));
-        }
         Ok(())
     }
 
@@ -1108,11 +1422,11 @@ where
 
     /// Zero initializes the stack slot by inserting `stack_store`'s.
     fn initialize_stack_slots(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
-        let i128_zero = builder.ins().iconst(I128, 0);
-        let i64_zero = builder.ins().iconst(I64, 0);
-        let i32_zero = builder.ins().iconst(I32, 0);
-        let i16_zero = builder.ins().iconst(I16, 0);
         let i8_zero = builder.ins().iconst(I8, 0);
+        let i16_zero = builder.ins().iconst(I16, 0);
+        let i32_zero = builder.ins().iconst(I32, 0);
+        let i64_zero = builder.ins().iconst(I64, 0);
+        let i128_zero = builder.ins().uextend(I128, i64_zero);
 
         for &(slot, init_size) in self.resources.stack_slots.iter() {
             let mut size = init_size;
@@ -1177,6 +1491,112 @@ where
             .filter(|(_, sig)| sig.len() == 0)
             .map(|(b, _)| *b)
             .collect();
+
+        // Compute the block CFG
+        //
+        // cranelift-frontend requires us to never generate unreachable blocks
+        // To ensure this property we start by constructing a main "spine" of blocks. So block1 can
+        // always jump to block2, and block2 can always jump to block3, etc...
+        //
+        // That is not a very interesting CFG, so we introduce variations on that, but always
+        // ensuring that the property of pointing to the next block is maintained whatever the
+        // branching mechanism we use.
+        let blocks = self.resources.blocks.clone();
+        self.resources.block_terminators = blocks
+            .iter()
+            .map(|&(block, _)| {
+                let next_block = Block::with_number(block.as_u32() + 1).unwrap();
+                let forward_blocks = self.resources.forward_blocks(block);
+                let paramless_targets = self.resources.forward_blocks_without_params(block);
+                let has_paramless_targets = !paramless_targets.is_empty();
+                let next_block_is_paramless = paramless_targets.contains(&next_block);
+
+                let mut valid_terminators = vec![];
+
+                if forward_blocks.is_empty() {
+                    // Return is only valid on the last block.
+                    valid_terminators.push(BlockTerminatorKind::Return);
+                } else {
+                    // If we have more than one block we can allow terminators that target blocks.
+                    // TODO: We could add some kind of BrReturn here, to explore edges where we
+                    // exit in the middle of the function
+                    valid_terminators
+                        .extend_from_slice(&[BlockTerminatorKind::Jump, BlockTerminatorKind::Br]);
+                }
+
+                // BrTable and the Switch interface only allow targeting blocks without params
+                // we also need to ensure that the next block has no params, since that one is
+                // guaranteed to be picked in either case.
+                if has_paramless_targets && next_block_is_paramless {
+                    valid_terminators.extend_from_slice(&[
+                        BlockTerminatorKind::BrTable,
+                        BlockTerminatorKind::Switch,
+                    ]);
+                }
+
+                let terminator = self.u.choose(&valid_terminators[..])?;
+
+                // Choose block targets for the terminators that we picked above
+                Ok(match terminator {
+                    BlockTerminatorKind::Return => BlockTerminator::Return,
+                    BlockTerminatorKind::Jump => BlockTerminator::Jump(next_block),
+                    BlockTerminatorKind::Br => {
+                        BlockTerminator::Br(next_block, self.generate_target_block(block)?)
+                    }
+                    // TODO: Allow generating backwards branches here
+                    BlockTerminatorKind::BrTable => {
+                        // Make the default the next block, and then we don't have to worry
+                        // that we can reach it via the targets
+                        let default = next_block;
+
+                        let target_count = self.param(&self.config.jump_table_entries)?;
+                        let targets = arbitrary_vec(
+                            self.u,
+                            target_count,
+                            self.resources.forward_blocks_without_params(block),
+                        )?;
+
+                        BlockTerminator::BrTable(default, targets)
+                    }
+                    BlockTerminatorKind::Switch => {
+                        // Make the default the next block, and then we don't have to worry
+                        // that we can reach it via the entries below
+                        let default_block = next_block;
+
+                        let _type = *self.u.choose(&[I8, I16, I32, I64, I128][..])?;
+
+                        // Build this into a HashMap since we cannot have duplicate entries.
+                        let mut entries = HashMap::new();
+                        for _ in 0..self.param(&self.config.switch_cases)? {
+                            // The Switch API only allows for entries that are addressable by the index type
+                            // so we need to limit the range of values that we generate.
+                            let (ty_min, ty_max) = _type.bounds(false);
+                            let range_start = self.u.int_in_range(ty_min..=ty_max)?;
+
+                            // We can either insert a contiguous range of blocks or a individual block
+                            // This is done because the Switch API specializes contiguous ranges.
+                            let range_size = if bool::arbitrary(self.u)? {
+                                1
+                            } else {
+                                self.param(&self.config.switch_max_range_size)?
+                            } as u128;
+
+                            // Build the switch entries
+                            for i in 0..range_size {
+                                let index = range_start.wrapping_add(i) % ty_max;
+                                let block = *self
+                                    .u
+                                    .choose(self.resources.forward_blocks_without_params(block))?;
+
+                                entries.insert(index, block);
+                            }
+                        }
+
+                        BlockTerminator::Switch(_type, default_block, entries)
+                    }
+                })
+            })
+            .collect::<Result<_>>()?;
 
         Ok(())
     }
@@ -1245,7 +1665,6 @@ where
         self.generate_blocks(&mut builder, &sig)?;
 
         // Function preamble
-        self.generate_jumptables(&mut builder)?;
         self.generate_funcrefs(&mut builder)?;
         self.generate_stack_slots(&mut builder)?;
 
@@ -1275,7 +1694,8 @@ where
             // Generate block instructions
             self.generate_instructions(&mut builder)?;
 
-            self.finalize_block(&mut builder, block)?;
+            // Insert a terminator to safely exit the block
+            self.insert_terminator(&mut builder, block)?;
         }
 
         builder.seal_all_blocks();

@@ -66,6 +66,13 @@ pub enum Reloc {
     /// This is equivalent to `R_AARCH64_TLSGD_ADD_LO12_NC` in the [aaelf64](https://github.com/ARM-software/abi-aa/blob/2bcab1e3b22d55170c563c3c7940134089176746/aaelf64/aaelf64.rst#relocations-for-thread-local-storage)
     Aarch64TlsGdAddLo12Nc,
 
+    /// procedure call.
+    /// call symbol
+    /// expands to the following assembly and relocation:
+    /// auipc ra, 0
+    /// jalr ra, ra, 0
+    RiscvCall,
+
     /// s390x TLS GD64 - 64-bit offset of tls_index for GD symbol in GOT
     S390xTlsGd64,
     /// s390x TLS GDCall - marker to enable optimization of TLS calls
@@ -87,6 +94,7 @@ impl fmt::Display for Reloc {
             Self::X86GOTPCRel4 => write!(f, "GOTPCRel4"),
             Self::X86SecRel => write!(f, "SecRel"),
             Self::Arm32Call | Self::Arm64Call => write!(f, "Call"),
+            Self::RiscvCall => write!(f, "RiscvCall"),
 
             Self::ElfX86_64TlsGd => write!(f, "ElfX86_64TlsGd"),
             Self::MachOX86_64Tlv => write!(f, "MachOX86_64Tlv"),

@@ -56,7 +56,7 @@ use crate::CodegenResult;
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
 use core::fmt::{Debug, Formatter};
-use target_lexicon::{triple, Architecture, OperatingSystem, PointerWidth, Triple};
+use target_lexicon::{triple, Architecture, PointerWidth, Triple};
 
 // This module is made public here for benchmarking purposes. No guarantees are
 // made regarding API stability.
@@ -65,6 +65,9 @@ pub mod x64;
 
 #[cfg(feature = "arm64")]
 pub(crate) mod aarch64;
+
+#[cfg(feature = "riscv64")]
+pub mod riscv64;
 
 #[cfg(feature = "s390x")]
 mod s390x;
@@ -97,6 +100,7 @@ pub fn lookup(triple: Triple) -> Result<Builder, LookupError> {
         }
         Architecture::Aarch64 { .. } => isa_builder!(aarch64, (feature = "arm64"), triple),
         Architecture::S390x { .. } => isa_builder!(s390x, (feature = "s390x"), triple),
+        Architecture::Riscv64 { .. } => isa_builder!(riscv64, (feature = "riscv64"), triple),
         _ => Err(LookupError::Unsupported),
     }
 }
@@ -223,6 +227,9 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// Get the ISA-independent flags that were used to make this trait object.
     fn flags(&self) -> &settings::Flags;
 
+    /// Get the ISA-dependent MachineEnv for managing register allocation.
+    fn machine_env(&self) -> &regalloc2::MachineEnv;
+
     /// Get the ISA-dependent flag values that were used to make this trait object.
     fn isa_flags(&self) -> Vec<settings::Value>;
 
@@ -281,7 +288,7 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// The `num_labeled_funcs` argument here is the number of functions which
     /// will be "labeled" or might have calls between them, typically the number
     /// of defined functions in the object file.
-    fn text_section_builder(&self, num_labeled_funcs: u32) -> Box<dyn TextSectionBuilder>;
+    fn text_section_builder(&self, num_labeled_funcs: usize) -> Box<dyn TextSectionBuilder>;
 
     /// The function alignment required by this ISA.
     fn function_alignment(&self) -> u32;
@@ -354,18 +361,6 @@ impl<'a> dyn TargetIsa + 'a {
         TargetFrontendConfig {
             default_call_conv: self.default_call_conv(),
             pointer_width: self.pointer_width(),
-        }
-    }
-
-    /// Returns the flavor of unwind information emitted for this target.
-    pub(crate) fn unwind_info_kind(&self) -> UnwindInfoKind {
-        match self.triple().operating_system {
-            #[cfg(feature = "unwind")]
-            OperatingSystem::Windows => UnwindInfoKind::Windows,
-            #[cfg(feature = "unwind")]
-            _ => UnwindInfoKind::SystemV,
-            #[cfg(not(feature = "unwind"))]
-            _ => UnwindInfoKind::None,
         }
     }
 }

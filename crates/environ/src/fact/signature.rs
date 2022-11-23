@@ -37,7 +37,7 @@ impl ComponentTypesBuilder {
         let mut params = match self.flatten_types(
             &options.options,
             MAX_FLAT_PARAMS,
-            ty.params.iter().map(|(_, ty)| *ty),
+            ty.params.iter().copied(),
         ) {
             Some(list) => list,
             None => {
@@ -50,7 +50,7 @@ impl ComponentTypesBuilder {
         let results = match self.flatten_types(
             &options.options,
             MAX_FLAT_RESULTS,
-            ty.results.iter().map(|(_, ty)| *ty),
+            ty.results.iter().map(|ty| *ty),
         ) {
             Some(list) => list,
             None => {

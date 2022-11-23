@@ -4,11 +4,12 @@ use crate::entity::{self, PrimaryMap, SecondaryMap};
 use crate::ir;
 use crate::ir::builder::ReplaceBuilder;
 use crate::ir::dynamic_type::{DynamicTypeData, DynamicTypes};
+use crate::ir::immediates::HeapImmData;
 use crate::ir::instructions::{BranchInfo, CallInfo, InstructionData};
 use crate::ir::{types, ConstantData, ConstantPool, Immediate};
 use crate::ir::{
-    Block, DynamicType, FuncRef, Inst, SigRef, Signature, Type, Value, ValueLabelAssignments,
-    ValueList, ValueListPool,
+    Block, DynamicType, FuncRef, HeapImm, Inst, SigRef, Signature, Type, Value,
+    ValueLabelAssignments, ValueList, ValueListPool,
 };
 use crate::ir::{ExtFuncData, RelSourceLoc};
 use crate::packed_option::ReservedValue;
@@ -83,6 +84,9 @@ pub struct DataFlowGraph {
 
     /// Stores large immediates that otherwise will not fit on InstructionData
     pub immediates: PrimaryMap<Immediate, ConstantData>,
+
+    /// Out-of-line heap access immediates that don't fit in `InstructionData`.
+    pub heap_imms: PrimaryMap<HeapImm, HeapImmData>,
 }
 
 impl DataFlowGraph {
@@ -101,6 +105,7 @@ impl DataFlowGraph {
             values_labels: None,
             constants: ConstantPool::new(),
             immediates: PrimaryMap::new(),
+            heap_imms: PrimaryMap::new(),
         }
     }
 
@@ -118,6 +123,23 @@ impl DataFlowGraph {
         self.values_labels = None;
         self.constants.clear();
         self.immediates.clear();
+    }
+
+    /// Clear all instructions, but keep blocks and other metadata
+    /// (signatures, constants, immediates). Everything to do with
+    /// `Value`s is cleared, including block params and debug info.
+    ///
+    /// Used during egraph-based optimization to clear out the pre-opt
+    /// body so that we can regenerate it from the egraph.
+    pub(crate) fn clear_insts(&mut self) {
+        self.insts.clear();
+        self.results.clear();
+        self.value_lists.clear();
+        self.values.clear();
+        self.values_labels = None;
+        for block in self.blocks.values_mut() {
+            block.params = ValueList::new();
+        }
     }
 
     /// Get the total number of instructions created in this function, whether they are currently
@@ -255,6 +277,12 @@ impl DataFlowGraph {
     /// Get the type of a value.
     pub fn value_type(&self, v: Value) -> Type {
         self.values[v].ty()
+    }
+
+    /// Fill in the type of a value, only if currently invalid (as a placeholder).
+    pub(crate) fn fill_in_value_type(&mut self, v: Value, ty: Type) {
+        debug_assert!(self.values[v].ty().is_invalid() || self.values[v].ty() == ty);
+        self.values[v].set_type(ty);
     }
 
     /// Get the definition of a value.
@@ -500,7 +528,7 @@ impl ValueDataPacked {
 
     #[inline(always)]
     fn set_type(&mut self, ty: Type) {
-        self.0 &= !((1 << Self::TYPE_BITS) - 1) << Self::TYPE_SHIFT;
+        self.0 &= !(((1 << Self::TYPE_BITS) - 1) << Self::TYPE_SHIFT);
         self.0 |= (ty.repr() as u64) << Self::TYPE_SHIFT;
     }
 }
@@ -570,6 +598,17 @@ impl DataFlowGraph {
     /// Returns an object that displays `inst`.
     pub fn display_inst<'a>(&'a self, inst: Inst) -> DisplayInst<'a> {
         DisplayInst(self, inst)
+    }
+
+    /// Returns an object that displays the given `value`'s defining instruction.
+    ///
+    /// Panics if the value is not defined by an instruction (i.e. it is a basic
+    /// block argument).
+    pub fn display_value_inst(&self, value: Value) -> DisplayInst<'_> {
+        match self.value_def(value) {
+            ir::ValueDef::Result(inst, _) => self.display_inst(inst),
+            ir::ValueDef::Param(_, _) => panic!("value is not defined by an instruction"),
+        }
     }
 
     /// Get all value arguments on `inst` as a slice.
@@ -1444,10 +1483,5 @@ mod tests {
 
         assert_eq!(pos.func.dfg.resolve_aliases(c2), c2);
         assert_eq!(pos.func.dfg.resolve_aliases(c), c2);
-
-        // Make a copy of the alias.
-        let c3 = pos.ins().copy(c);
-        // This does not see through copies.
-        assert_eq!(pos.func.dfg.resolve_aliases(c3), c3);
     }
 }

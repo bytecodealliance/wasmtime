@@ -1,6 +1,7 @@
 test interpret
 test run
 target aarch64
+target riscv64
 target s390x
 ; x86_64 backend only supports `i16`, `i32`, and `i64` types.
 

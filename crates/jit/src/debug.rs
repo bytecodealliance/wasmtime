@@ -97,6 +97,7 @@ fn ensure_supported_elf_format(bytes: &[u8]) -> Result<Endianness, Error> {
         EM_AARCH64 => (),
         EM_X86_64 => (),
         EM_S390 => (),
+        EM_RISCV => (),
         machine => {
             bail!("Unsupported ELF target machine: {:x}", machine);
         }

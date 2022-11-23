@@ -1,7 +1,7 @@
 test compile precise-output
 target s390x
 
-function %icmp_eq_i64x2(i64x2, i64x2) -> b64x2 {
+function %icmp_eq_i64x2(i64x2, i64x2) -> i64x2 {
 block0(v0: i64x2, v1: i64x2):
   v2 = icmp.i64x2 eq v0, v1
   return v2
@@ -11,18 +11,18 @@ block0(v0: i64x2, v1: i64x2):
 ;   vceqg %v24, %v24, %v25
 ;   br %r14
 
-function %icmp_ne_i64x2(i64x2, i64x2) -> b64x2 {
+function %icmp_ne_i64x2(i64x2, i64x2) -> i64x2 {
 block0(v0: i64x2, v1: i64x2):
   v2 = icmp.i64x2 ne v0, v1
   return v2
 }
 
 ; block0:
-;   vceqg %v4, %v24, %v25
-;   vno %v24, %v4, %v4
+;   vceqg %v3, %v24, %v25
+;   vno %v24, %v3, %v3
 ;   br %r14
 
-function %icmp_sgt_i64x2(i64x2, i64x2) -> b64x2 {
+function %icmp_sgt_i64x2(i64x2, i64x2) -> i64x2 {
 block0(v0: i64x2, v1: i64x2):
   v2 = icmp.i64x2 sgt v0, v1
   return v2
@@ -32,7 +32,7 @@ block0(v0: i64x2, v1: i64x2):
 ;   vchg %v24, %v24, %v25
 ;   br %r14
 
-function %icmp_slt_i64x2(i64x2, i64x2) -> b64x2 {
+function %icmp_slt_i64x2(i64x2, i64x2) -> i64x2 {
 block0(v0: i64x2, v1: i64x2):
   v2 = icmp.i64x2 slt v0, v1
   return v2
@@ -42,29 +42,29 @@ block0(v0: i64x2, v1: i64x2):
 ;   vchg %v24, %v25, %v24
 ;   br %r14
 
-function %icmp_sge_i64x2(i64x2, i64x2) -> b64x2 {
+function %icmp_sge_i64x2(i64x2, i64x2) -> i64x2 {
 block0(v0: i64x2, v1: i64x2):
   v2 = icmp.i64x2 sge v0, v1
   return v2
 }
 
 ; block0:
-;   vchg %v4, %v25, %v24
-;   vno %v24, %v4, %v4
+;   vchg %v3, %v25, %v24
+;   vno %v24, %v3, %v3
 ;   br %r14
 
-function %icmp_sle_i64x2(i64x2, i64x2) -> b64x2 {
+function %icmp_sle_i64x2(i64x2, i64x2) -> i64x2 {
 block0(v0: i64x2, v1: i64x2):
   v2 = icmp.i64x2 sle v0, v1
   return v2
 }
 
 ; block0:
-;   vchg %v4, %v24, %v25
-;   vno %v24, %v4, %v4
+;   vchg %v3, %v24, %v25
+;   vno %v24, %v3, %v3
 ;   br %r14
 
-function %icmp_ugt_i64x2(i64x2, i64x2) -> b64x2 {
+function %icmp_ugt_i64x2(i64x2, i64x2) -> i64x2 {
 block0(v0: i64x2, v1: i64x2):
   v2 = icmp.i64x2 ugt v0, v1
   return v2
@@ -74,7 +74,7 @@ block0(v0: i64x2, v1: i64x2):
 ;   vchlg %v24, %v24, %v25
 ;   br %r14
 
-function %icmp_ult_i64x2(i64x2, i64x2) -> b64x2 {
+function %icmp_ult_i64x2(i64x2, i64x2) -> i64x2 {
 block0(v0: i64x2, v1: i64x2):
   v2 = icmp.i64x2 ult v0, v1
   return v2
@@ -84,29 +84,29 @@ block0(v0: i64x2, v1: i64x2):
 ;   vchlg %v24, %v25, %v24
 ;   br %r14
 
-function %icmp_uge_i64x2(i64x2, i64x2) -> b64x2 {
+function %icmp_uge_i64x2(i64x2, i64x2) -> i64x2 {
 block0(v0: i64x2, v1: i64x2):
   v2 = icmp.i64x2 uge v0, v1
   return v2
 }
 
 ; block0:
-;   vchlg %v4, %v25, %v24
-;   vno %v24, %v4, %v4
+;   vchlg %v3, %v25, %v24
+;   vno %v24, %v3, %v3
 ;   br %r14
 
-function %icmp_ule_i64x2(i64x2, i64x2) -> b64x2 {
+function %icmp_ule_i64x2(i64x2, i64x2) -> i64x2 {
 block0(v0: i64x2, v1: i64x2):
   v2 = icmp.i64x2 ule v0, v1
   return v2
 }
 
 ; block0:
-;   vchlg %v4, %v24, %v25
-;   vno %v24, %v4, %v4
+;   vchlg %v3, %v24, %v25
+;   vno %v24, %v3, %v3
 ;   br %r14
 
-function %icmp_eq_i32x4(i32x4, i32x4) -> b32x4 {
+function %icmp_eq_i32x4(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):
   v2 = icmp.i32x4 eq v0, v1
   return v2
@@ -116,18 +116,18 @@ block0(v0: i32x4, v1: i32x4):
 ;   vceqf %v24, %v24, %v25
 ;   br %r14
 
-function %icmp_ne_i32x4(i32x4, i32x4) -> b32x4 {
+function %icmp_ne_i32x4(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):
   v2 = icmp.i32x4 ne v0, v1
   return v2
 }
 
 ; block0:
-;   vceqf %v4, %v24, %v25
-;   vno %v24, %v4, %v4
+;   vceqf %v3, %v24, %v25
+;   vno %v24, %v3, %v3
 ;   br %r14
 
-function %icmp_sgt_i32x4(i32x4, i32x4) -> b32x4 {
+function %icmp_sgt_i32x4(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):
   v2 = icmp.i32x4 sgt v0, v1
   return v2
@@ -137,7 +137,7 @@ block0(v0: i32x4, v1: i32x4):
 ;   vchf %v24, %v24, %v25
 ;   br %r14
 
-function %icmp_slt_i32x4(i32x4, i32x4) -> b32x4 {
+function %icmp_slt_i32x4(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):
   v2 = icmp.i32x4 slt v0, v1
   return v2
@@ -147,29 +147,29 @@ block0(v0: i32x4, v1: i32x4):
 ;   vchf %v24, %v25, %v24
 ;   br %r14
 
-function %icmp_sge_i32x4(i32x4, i32x4) -> b32x4 {
+function %icmp_sge_i32x4(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):
   v2 = icmp.i32x4 sge v0, v1
   return v2
 }
 
 ; block0:
-;   vchf %v4, %v25, %v24
-;   vno %v24, %v4, %v4
+;   vchf %v3, %v25, %v24
+;   vno %v24, %v3, %v3
 ;   br %r14
 
-function %icmp_sle_i32x4(i32x4, i32x4) -> b32x4 {
+function %icmp_sle_i32x4(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):
   v2 = icmp.i32x4 sle v0, v1
   return v2
 }
 
 ; block0:
-;   vchf %v4, %v24, %v25
-;   vno %v24, %v4, %v4
+;   vchf %v3, %v24, %v25
+;   vno %v24, %v3, %v3
 ;   br %r14
 
-function %icmp_ugt_i32x4(i32x4, i32x4) -> b32x4 {
+function %icmp_ugt_i32x4(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):
   v2 = icmp.i32x4 ugt v0, v1
   return v2
@@ -179,7 +179,7 @@ block0(v0: i32x4, v1: i32x4):
 ;   vchlf %v24, %v24, %v25
 ;   br %r14
 
-function %icmp_ult_i32x4(i32x4, i32x4) -> b32x4 {
+function %icmp_ult_i32x4(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):
   v2 = icmp.i32x4 ult v0, v1
   return v2
@@ -189,29 +189,29 @@ block0(v0: i32x4, v1: i32x4):
 ;   vchlf %v24, %v25, %v24
 ;   br %r14
 
-function %icmp_uge_i32x4(i32x4, i32x4) -> b32x4 {
+function %icmp_uge_i32x4(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):
   v2 = icmp.i32x4 uge v0, v1
   return v2
 }
 
 ; block0:
-;   vchlf %v4, %v25, %v24
-;   vno %v24, %v4, %v4
+;   vchlf %v3, %v25, %v24
+;   vno %v24, %v3, %v3
 ;   br %r14
 
-function %icmp_ule_i32x4(i32x4, i32x4) -> b32x4 {
+function %icmp_ule_i32x4(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):
   v2 = icmp.i32x4 ule v0, v1
   return v2
 }
 
 ; block0:
-;   vchlf %v4, %v24, %v25
-;   vno %v24, %v4, %v4
+;   vchlf %v3, %v24, %v25
+;   vno %v24, %v3, %v3
 ;   br %r14
 
-function %icmp_eq_i16x8(i16x8, i16x8) -> b16x8 {
+function %icmp_eq_i16x8(i16x8, i16x8) -> i16x8 {
 block0(v0: i16x8, v1: i16x8):
   v2 = icmp.i16x8 eq v0, v1
   return v2
@@ -221,18 +221,18 @@ block0(v0: i16x8, v1: i16x8):
 ;   vceqh %v24, %v24, %v25
 ;   br %r14
 
-function %icmp_ne_i16x8(i16x8, i16x8) -> b16x8 {
+function %icmp_ne_i16x8(i16x8, i16x8) -> i16x8 {
 block0(v0: i16x8, v1: i16x8):
   v2 = icmp.i16x8 ne v0, v1
   return v2
 }
 
 ; block0:
-;   vceqh %v4, %v24, %v25
-;   vno %v24, %v4, %v4
+;   vceqh %v3, %v24, %v25
+;   vno %v24, %v3, %v3
 ;   br %r14
 
-function %icmp_sgt_i16x8(i16x8, i16x8) -> b16x8 {
+function %icmp_sgt_i16x8(i16x8, i16x8) -> i16x8 {
 block0(v0: i16x8, v1: i16x8):
   v2 = icmp.i16x8 sgt v0, v1
   return v2
@@ -242,7 +242,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   vchh %v24, %v24, %v25
 ;   br %r14
 
-function %icmp_slt_i16x8(i16x8, i16x8) -> b16x8 {
+function %icmp_slt_i16x8(i16x8, i16x8) -> i16x8 {
 block0(v0: i16x8, v1: i16x8):
   v2 = icmp.i16x8 slt v0, v1
   return v2
@@ -252,29 +252,29 @@ block0(v0: i16x8, v1: i16x8):
 ;   vchh %v24, %v25, %v24
 ;   br %r14
 
-function %icmp_sge_i16x8(i16x8, i16x8) -> b16x8 {
+function %icmp_sge_i16x8(i16x8, i16x8) -> i16x8 {
 block0(v0: i16x8, v1: i16x8):
   v2 = icmp.i16x8 sge v0, v1
   return v2
 }
 
 ; block0:
-;   vchh %v4, %v25, %v24
-;   vno %v24, %v4, %v4
+;   vchh %v3, %v25, %v24
+;   vno %v24, %v3, %v3
 ;   br %r14
 
-function %icmp_sle_i16x8(i16x8, i16x8) -> b16x8 {
+function %icmp_sle_i16x8(i16x8, i16x8) -> i16x8 {
 block0(v0: i16x8, v1: i16x8):
   v2 = icmp.i16x8 sle v0, v1
   return v2
 }
 
 ; block0:
-;   vchh %v4, %v24, %v25
-;   vno %v24, %v4, %v4
+;   vchh %v3, %v24, %v25
+;   vno %v24, %v3, %v3
 ;   br %r14
 
-function %icmp_ugt_i16x8(i16x8, i16x8) -> b16x8 {
+function %icmp_ugt_i16x8(i16x8, i16x8) -> i16x8 {
 block0(v0: i16x8, v1: i16x8):
   v2 = icmp.i16x8 ugt v0, v1
   return v2
@@ -284,7 +284,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   vchlh %v24, %v24, %v25
 ;   br %r14
 
-function %icmp_ult_i16x8(i16x8, i16x8) -> b16x8 {
+function %icmp_ult_i16x8(i16x8, i16x8) -> i16x8 {
 block0(v0: i16x8, v1: i16x8):
   v2 = icmp.i16x8 ult v0, v1
   return v2
@@ -294,29 +294,29 @@ block0(v0: i16x8, v1: i16x8):
 ;   vchlh %v24, %v25, %v24
 ;   br %r14
 
-function %icmp_uge_i16x8(i16x8, i16x8) -> b16x8 {
+function %icmp_uge_i16x8(i16x8, i16x8) -> i16x8 {
 block0(v0: i16x8, v1: i16x8):
   v2 = icmp.i16x8 uge v0, v1
   return v2
 }
 
 ; block0:
-;   vchlh %v4, %v25, %v24
-;   vno %v24, %v4, %v4
+;   vchlh %v3, %v25, %v24
+;   vno %v24, %v3, %v3
 ;   br %r14
 
-function %icmp_ule_i16x8(i16x8, i16x8) -> b16x8 {
+function %icmp_ule_i16x8(i16x8, i16x8) -> i16x8 {
 block0(v0: i16x8, v1: i16x8):
   v2 = icmp.i16x8 ule v0, v1
   return v2
 }
 
 ; block0:
-;   vchlh %v4, %v24, %v25
-;   vno %v24, %v4, %v4
+;   vchlh %v3, %v24, %v25
+;   vno %v24, %v3, %v3
 ;   br %r14
 
-function %icmp_eq_i8x16(i8x16, i8x16) -> b8x16 {
+function %icmp_eq_i8x16(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):
   v2 = icmp.i8x16 eq v0, v1
   return v2
@@ -326,18 +326,18 @@ block0(v0: i8x16, v1: i8x16):
 ;   vceqb %v24, %v24, %v25
 ;   br %r14
 
-function %icmp_ne_i8x16(i8x16, i8x16) -> b8x16 {
+function %icmp_ne_i8x16(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):
   v2 = icmp.i8x16 ne v0, v1
   return v2
 }
 
 ; block0:
-;   vceqb %v4, %v24, %v25
-;   vno %v24, %v4, %v4
+;   vceqb %v3, %v24, %v25
+;   vno %v24, %v3, %v3
 ;   br %r14
 
-function %icmp_sgt_i8x16(i8x16, i8x16) -> b8x16 {
+function %icmp_sgt_i8x16(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):
   v2 = icmp.i8x16 sgt v0, v1
   return v2
@@ -347,7 +347,7 @@ block0(v0: i8x16, v1: i8x16):
 ;   vchb %v24, %v24, %v25
 ;   br %r14
 
-function %icmp_slt_i8x16(i8x16, i8x16) -> b8x16 {
+function %icmp_slt_i8x16(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):
   v2 = icmp.i8x16 slt v0, v1
   return v2
@@ -357,29 +357,29 @@ block0(v0: i8x16, v1: i8x16):
 ;   vchb %v24, %v25, %v24
 ;   br %r14
 
-function %icmp_sge_i8x16(i8x16, i8x16) -> b8x16 {
+function %icmp_sge_i8x16(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):
   v2 = icmp.i8x16 sge v0, v1
   return v2
 }
 
 ; block0:
-;   vchb %v4, %v25, %v24
-;   vno %v24, %v4, %v4
+;   vchb %v3, %v25, %v24
+;   vno %v24, %v3, %v3
 ;   br %r14
 
-function %icmp_sle_i8x16(i8x16, i8x16) -> b8x16 {
+function %icmp_sle_i8x16(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):
   v2 = icmp.i8x16 sle v0, v1
   return v2
 }
 
 ; block0:
-;   vchb %v4, %v24, %v25
-;   vno %v24, %v4, %v4
+;   vchb %v3, %v24, %v25
+;   vno %v24, %v3, %v3
 ;   br %r14
 
-function %icmp_ugt_i8x16(i8x16, i8x16) -> b8x16 {
+function %icmp_ugt_i8x16(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):
   v2 = icmp.i8x16 ugt v0, v1
   return v2
@@ -389,7 +389,7 @@ block0(v0: i8x16, v1: i8x16):
 ;   vchlb %v24, %v24, %v25
 ;   br %r14
 
-function %icmp_ult_i8x16(i8x16, i8x16) -> b8x16 {
+function %icmp_ult_i8x16(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):
   v2 = icmp.i8x16 ult v0, v1
   return v2
@@ -399,25 +399,25 @@ block0(v0: i8x16, v1: i8x16):
 ;   vchlb %v24, %v25, %v24
 ;   br %r14
 
-function %icmp_uge_i8x16(i8x16, i8x16) -> b8x16 {
+function %icmp_uge_i8x16(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):
   v2 = icmp.i8x16 uge v0, v1
   return v2
 }
 
 ; block0:
-;   vchlb %v4, %v25, %v24
-;   vno %v24, %v4, %v4
+;   vchlb %v3, %v25, %v24
+;   vno %v24, %v3, %v3
 ;   br %r14
 
-function %icmp_ule_i8x16(i8x16, i8x16) -> b8x16 {
+function %icmp_ule_i8x16(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):
   v2 = icmp.i8x16 ule v0, v1
   return v2
 }
 
 ; block0:
-;   vchlb %v4, %v24, %v25
-;   vno %v24, %v4, %v4
+;   vchlb %v3, %v24, %v25
+;   vno %v24, %v3, %v3
 ;   br %r14
 

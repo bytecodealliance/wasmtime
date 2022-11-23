@@ -98,6 +98,26 @@ fn gen_iterator(group: &SettingGroup, fmt: &mut Formatter) {
     fmtln!(fmt, "}");
 }
 
+/// Generates a `all()` function with all options for this enum
+fn gen_enum_all(name: &str, values: &[&'static str], fmt: &mut Formatter) {
+    fmtln!(
+        fmt,
+        "/// Returns a slice with all possible [{}] values.",
+        name
+    );
+    fmtln!(fmt, "pub fn all() -> &'static [{}] {{", name);
+    fmt.indent(|fmt| {
+        fmtln!(fmt, "&[");
+        fmt.indent(|fmt| {
+            for v in values.iter() {
+                fmtln!(fmt, "Self::{},", camel_case(v));
+            }
+        });
+        fmtln!(fmt, "]");
+    });
+    fmtln!(fmt, "}");
+}
+
 /// Emit Display and FromStr implementations for enum settings.
 fn gen_to_and_from_str(name: &str, values: &[&'static str], fmt: &mut Formatter) {
     fmtln!(fmt, "impl fmt::Display for {} {{", name);
@@ -155,6 +175,12 @@ fn gen_enum_types(group: &SettingGroup, fmt: &mut Formatter) {
                 fmt.doc_comment(format!("`{}`.", v));
                 fmtln!(fmt, "{},", camel_case(v));
             }
+        });
+        fmtln!(fmt, "}");
+
+        fmtln!(fmt, "impl {} {{", name);
+        fmt.indent(|fmt| {
+            gen_enum_all(&name, values, fmt);
         });
         fmtln!(fmt, "}");
 

@@ -13,15 +13,18 @@ use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, HostPtr, InitMemory, MemoryInitialization,
-    MemoryInitializer, Module, PrimaryMap, TableInitialization, TableInitializer, TrapCode,
-    VMOffsets, WasmType, WASM_PAGE_SIZE,
+    MemoryInitializer, Module, PrimaryMap, TableInitialization, TableInitializer, Trap, VMOffsets,
+    WasmType, WASM_PAGE_SIZE,
 };
 
 #[cfg(feature = "pooling-allocator")]
 mod pooling;
 
 #[cfg(feature = "pooling-allocator")]
-pub use self::pooling::{InstanceLimits, PoolingAllocationStrategy, PoolingInstanceAllocator};
+pub use self::pooling::{
+    InstanceLimits, PoolingAllocationStrategy, PoolingInstanceAllocator,
+    PoolingInstanceAllocatorConfig,
+};
 
 /// Represents a request for a new runtime instance.
 pub struct InstanceAllocationRequest<'a> {
@@ -102,7 +105,7 @@ pub enum InstantiationError {
 
     /// A trap ocurred during instantiation, after linking.
     #[error("Trap occurred during instantiation")]
-    Trap(TrapCode),
+    Trap(Trap),
 
     /// A limit on how many instances are supported has been reached.
     #[error("Limit of {0} concurrent instances has been reached")]
@@ -383,7 +386,7 @@ fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<(), I
         },
     );
     if !ok {
-        return Err(InstantiationError::Trap(TrapCode::HeapOutOfBounds));
+        return Err(InstantiationError::Trap(Trap::MemoryOutOfBounds));
     }
 
     Ok(())

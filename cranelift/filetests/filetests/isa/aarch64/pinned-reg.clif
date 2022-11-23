@@ -11,6 +11,8 @@ block0:
 }
 
 ; block0:
-;   add x21, x21, #1
+;   mov x1, x21
+;   add x1, x1, #1
+;   mov x21, x1
 ;   ret
 

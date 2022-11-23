@@ -91,7 +91,9 @@ pub fn translate_module<'data>(
             }
 
             Payload::CodeSectionEntry(body) => {
-                let func_validator = validator.code_section_entry(&body)?;
+                let func_validator = validator
+                    .code_section_entry(&body)?
+                    .into_validator(Default::default());
                 environ.define_function_body(func_validator, body)?;
             }
 

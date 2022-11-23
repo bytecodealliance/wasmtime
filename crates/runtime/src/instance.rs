@@ -30,7 +30,7 @@ use wasmtime_environ::{
     packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex,
     GlobalInit, HostPtr, MemoryIndex, Module, PrimaryMap, SignatureIndex, TableIndex,
-    TableInitialization, TrapCode, VMOffsets, WasmType,
+    TableInitialization, Trap, VMOffsets, WasmType,
 };
 
 mod allocator;
@@ -193,6 +193,17 @@ impl Instance {
         } else {
             let import = self.imported_memory(index);
             unsafe { VMMemoryDefinition::load(import.from) }
+        }
+    }
+
+    /// Get a locally defined or imported memory.
+    pub(crate) fn get_runtime_memory(&mut self, index: MemoryIndex) -> &mut Memory {
+        if let Some(defined_index) = self.module().defined_memory_index(index) {
+            unsafe { &mut *self.get_defined_memory(defined_index) }
+        } else {
+            let import = self.imported_memory(index);
+            let ctx = unsafe { &mut *import.vmctx };
+            unsafe { &mut *ctx.instance_mut().get_defined_memory(import.index) }
         }
     }
 
@@ -493,7 +504,7 @@ impl Instance {
         let (func_ptr, vmctx) = if let Some(def_index) = self.module().defined_func_index(index) {
             (
                 (self.runtime_info.image_base()
-                    + self.runtime_info.function_info(def_index).start as usize)
+                    + self.runtime_info.function_loc(def_index).start as usize)
                     as *mut _,
                 VMOpaqueContext::from_vmcontext(self.vmctx_ptr()),
             )
@@ -580,7 +591,7 @@ impl Instance {
         dst: u32,
         src: u32,
         len: u32,
-    ) -> Result<(), TrapCode> {
+    ) -> Result<(), Trap> {
         // TODO: this `clone()` shouldn't be necessary but is used for now to
         // inform `rustc` that the lifetime of the elements here are
         // disconnected from the lifetime of `self`.
@@ -602,7 +613,7 @@ impl Instance {
         dst: u32,
         src: u32,
         len: u32,
-    ) -> Result<(), TrapCode> {
+    ) -> Result<(), Trap> {
         // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-table-init
 
         let table = unsafe { &mut *self.get_table(table_index) };
@@ -612,7 +623,7 @@ impl Instance {
             .and_then(|s| s.get(..usize::try_from(len).unwrap()))
         {
             Some(elements) => elements,
-            None => return Err(TrapCode::TableOutOfBounds),
+            None => return Err(Trap::TableOutOfBounds),
         };
 
         match table.element_type() {
@@ -662,7 +673,7 @@ impl Instance {
         src_index: MemoryIndex,
         src: u64,
         len: u64,
-    ) -> Result<(), TrapCode> {
+    ) -> Result<(), Trap> {
         // https://webassembly.github.io/reference-types/core/exec/instructions.html#exec-memory-copy
 
         let src_mem = self.get_memory(src_index);
@@ -684,8 +695,8 @@ impl Instance {
         Ok(())
     }
 
-    fn validate_inbounds(&self, max: usize, ptr: u64, len: u64) -> Result<usize, TrapCode> {
-        let oob = || TrapCode::HeapOutOfBounds;
+    fn validate_inbounds(&self, max: usize, ptr: u64, len: u64) -> Result<usize, Trap> {
+        let oob = || Trap::MemoryOutOfBounds;
         let end = ptr
             .checked_add(len)
             .and_then(|i| usize::try_from(i).ok())
@@ -708,7 +719,7 @@ impl Instance {
         dst: u64,
         val: u8,
         len: u64,
-    ) -> Result<(), TrapCode> {
+    ) -> Result<(), Trap> {
         let memory = self.get_memory(memory_index);
         let dst = self.validate_inbounds(memory.current_length(), dst, len)?;
 
@@ -738,7 +749,7 @@ impl Instance {
         dst: u64,
         src: u32,
         len: u32,
-    ) -> Result<(), TrapCode> {
+    ) -> Result<(), Trap> {
         let range = match self.module().passive_data_map.get(&data_index).cloned() {
             Some(range) if !self.dropped_data.contains(data_index) => range,
             _ => 0..0,
@@ -757,7 +768,7 @@ impl Instance {
         dst: u64,
         src: u32,
         len: u32,
-    ) -> Result<(), TrapCode> {
+    ) -> Result<(), Trap> {
         // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-memory-init
 
         let memory = self.get_memory(memory_index);
@@ -955,8 +966,8 @@ impl Instance {
                 let def_ptr = self.memories[defined_memory_index]
                     .as_shared_memory()
                     .unwrap()
-                    .vmmemory_ptr_mut();
-                ptr::write(ptr, def_ptr);
+                    .vmmemory_ptr();
+                ptr::write(ptr, def_ptr.cast_mut());
             } else {
                 ptr::write(owned_ptr, self.memories[defined_memory_index].vmmemory());
                 ptr::write(ptr, owned_ptr);

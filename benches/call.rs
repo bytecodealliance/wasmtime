@@ -117,7 +117,7 @@ fn bench_host_to_wasm<Params, Results>(
     // below.
     c.bench_function(&format!("host-to-wasm - typed - {}", name), |b| {
         let typed = instance
-            .get_typed_func::<Params, Results, _>(&mut *store, name)
+            .get_typed_func::<Params, Results>(&mut *store, name)
             .unwrap();
         b.iter(|| {
             let results = if is_async.use_async() {
@@ -370,7 +370,7 @@ fn wasm_to_host(c: &mut Criterion) {
     ) {
         group.bench_function(&format!("wasm-to-host - {} - nop", desc), |b| {
             let run = instance
-                .get_typed_func::<u64, (), _>(&mut *store, "run-nop")
+                .get_typed_func::<u64, ()>(&mut *store, "run-nop")
                 .unwrap();
             b.iter_custom(|iters| {
                 let start = Instant::now();
@@ -386,7 +386,7 @@ fn wasm_to_host(c: &mut Criterion) {
             &format!("wasm-to-host - {} - nop-params-and-results", desc),
             |b| {
                 let run = instance
-                    .get_typed_func::<u64, (), _>(&mut *store, "run-nop-params-and-results")
+                    .get_typed_func::<u64, ()>(&mut *store, "run-nop-params-and-results")
                     .unwrap();
                 b.iter_custom(|iters| {
                     let start = Instant::now();

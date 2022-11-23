@@ -1,10 +1,12 @@
 use anyhow::Result;
-use component_test_util::{engine, TypedFuncExt};
+use component_test_util::{async_engine, engine, TypedFuncExt};
 use std::fmt::Write;
 use std::iter;
 use wasmtime::component::Component;
 use wasmtime_component_util::REALLOC_AND_FREE;
 
+mod aot;
+mod r#async;
 mod dynamic;
 mod func;
 mod import;
@@ -25,7 +27,7 @@ fn components_importing_modules() -> Result<()> {
         &engine,
         r#"
         (component
-            (import "" (core module))
+            (import "a" (core module))
         )
         "#,
     )?;
@@ -34,7 +36,7 @@ fn components_importing_modules() -> Result<()> {
         &engine,
         r#"
         (component
-            (import "" (core module $m1
+            (import "a" (core module $m1
                 (import "" "" (func))
                 (import "" "x" (global i32))
 
@@ -189,7 +191,7 @@ fn make_echo_component_with_params(type_definition: &str, params: &[Param]) -> S
 
             (type $Foo {type_definition})
 
-            (func (export "echo") (param $Foo) (result $Foo)
+            (func (export "echo") (param "a" $Foo) (result "b" $Foo)
                 (canon lift
                     (core func $i "echo")
                     (memory $i "memory")

@@ -2,7 +2,7 @@ test compile precise-output
 set enable_simd
 target x86_64 skylake
 
-function %icmp_ne_32x4(i32x4, i32x4) -> b32x4 {
+function %icmp_ne_32x4(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):
     v2 = icmp ne v0, v1
     return v2
@@ -12,13 +12,13 @@ block0(v0: i32x4, v1: i32x4):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   pcmpeqd %xmm0, %xmm1, %xmm0
-;   pcmpeqd %xmm6, %xmm6, %xmm6
-;   pxor    %xmm0, %xmm6, %xmm0
+;   pcmpeqd %xmm5, %xmm5, %xmm5
+;   pxor    %xmm0, %xmm5, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
 
-function %icmp_ugt_i32x4(i32x4, i32x4) -> b32x4 {
+function %icmp_ugt_i32x4(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):
     v2 = icmp ugt v0, v1
     return v2
@@ -29,13 +29,13 @@ block0(v0: i32x4, v1: i32x4):
 ; block0:
 ;   pmaxud  %xmm0, %xmm1, %xmm0
 ;   pcmpeqd %xmm0, %xmm1, %xmm0
-;   pcmpeqd %xmm8, %xmm8, %xmm8
-;   pxor    %xmm0, %xmm8, %xmm0
+;   pcmpeqd %xmm7, %xmm7, %xmm7
+;   pxor    %xmm0, %xmm7, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
 
-function %icmp_sge_i16x8(i16x8, i16x8) -> b16x8 {
+function %icmp_sge_i16x8(i16x8, i16x8) -> i16x8 {
 block0(v0: i16x8, v1: i16x8):
     v2 = icmp sge v0, v1
     return v2
@@ -44,14 +44,14 @@ block0(v0: i16x8, v1: i16x8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm4
-;   pmaxsw  %xmm4, %xmm1, %xmm4
-;   pcmpeqw %xmm0, %xmm4, %xmm0
+;   movdqa  %xmm0, %xmm3
+;   pmaxsw  %xmm3, %xmm1, %xmm3
+;   pcmpeqw %xmm0, %xmm3, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
 
-function %icmp_uge_i8x16(i8x16, i8x16) -> b8x16 {
+function %icmp_uge_i8x16(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):
     v2 = icmp uge v0, v1
     return v2
@@ -60,9 +60,9 @@ block0(v0: i8x16, v1: i8x16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm4
-;   pmaxub  %xmm4, %xmm1, %xmm4
-;   pcmpeqb %xmm0, %xmm4, %xmm0
+;   movdqa  %xmm0, %xmm3
+;   pmaxub  %xmm3, %xmm1, %xmm3
+;   pcmpeqb %xmm0, %xmm3, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

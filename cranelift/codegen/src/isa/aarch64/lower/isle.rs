@@ -34,6 +34,7 @@ use crate::{
         abi::ArgPair, ty_bits, InsnOutput, Lower, MachInst, VCodeConstant, VCodeConstantData,
     },
 };
+use crate::{isle_common_prelude_methods, isle_lower_prelude_methods};
 use regalloc2::PReg;
 use std::boxed::Box;
 use std::convert::TryFrom;
@@ -67,6 +68,25 @@ pub(crate) fn lower(
     )
 }
 
+pub(crate) fn lower_branch(
+    lower_ctx: &mut Lower<MInst>,
+    triple: &Triple,
+    flags: &Flags,
+    isa_flags: &IsaFlags,
+    branch: Inst,
+    targets: &[MachLabel],
+) -> Result<(), ()> {
+    lower_common(
+        lower_ctx,
+        triple,
+        flags,
+        isa_flags,
+        &[],
+        branch,
+        |cx, insn| generated_code::constructor_lower_branch(cx, insn, &targets.to_vec()),
+    )
+}
+
 pub struct ExtendedValue {
     val: Value,
     extend: ExtendOp,
@@ -77,7 +97,7 @@ impl IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
 }
 
 impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
-    isle_prelude_methods!();
+    isle_lower_prelude_methods!();
     isle_prelude_caller_methods!(crate::isa::aarch64::abi::AArch64MachineDeps, AArch64Caller);
 
     fn sign_return_address_disabled(&mut self) -> Option<()> {
@@ -145,7 +165,6 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     fn integral_ty(&mut self, ty: Type) -> Option<Type> {
         match ty {
             I8 | I16 | I32 | I64 | R64 => Some(ty),
-            ty if ty.is_bool() => Some(ty),
             _ => None,
         }
     }
@@ -342,6 +361,10 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         CondBrKind::Zero(reg)
     }
 
+    fn cond_br_not_zero(&mut self, reg: Reg) -> CondBrKind {
+        CondBrKind::NotZero(reg)
+    }
+
     fn cond_br_cond(&mut self, cond: &Cond) -> CondBrKind {
         CondBrKind::Cond(*cond)
     }
@@ -521,6 +544,9 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         lower_condcode(*cc)
     }
 
+    fn invert_cond(&mut self, cond: &Cond) -> Cond {
+        (*cond).invert()
+    }
     fn preg_sp(&mut self) -> PReg {
         super::regs::stack_reg().to_real_reg().unwrap().into()
     }
@@ -531,6 +557,38 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
 
     fn preg_link(&mut self) -> PReg {
         super::regs::link_reg().to_real_reg().unwrap().into()
+    }
+
+    fn preg_pinned(&mut self) -> PReg {
+        super::regs::pinned_reg().to_real_reg().unwrap().into()
+    }
+
+    fn branch_target(&mut self, elements: &VecMachLabel, idx: u8) -> BranchTarget {
+        BranchTarget::Label(elements[idx as usize])
+    }
+
+    fn targets_jt_size(&mut self, elements: &VecMachLabel) -> u32 {
+        (elements.len() - 1) as u32
+    }
+
+    fn targets_jt_space(&mut self, elements: &VecMachLabel) -> CodeOffset {
+        // calculate the number of bytes needed for the jumptable sequence:
+        // 4 bytes per instruction, with 8 instructions base + the size of
+        // the jumptable more.
+        4 * (8 + self.targets_jt_size(elements))
+    }
+
+    fn targets_jt_info(&mut self, elements: &VecMachLabel) -> BoxJTSequenceInfo {
+        let targets: Vec<BranchTarget> = elements
+            .iter()
+            .skip(1)
+            .map(|bix| BranchTarget::Label(*bix))
+            .collect();
+        let default_target = BranchTarget::Label(elements[0]);
+        Box::new(JTSequenceInfo {
+            targets,
+            default_target,
+        })
     }
 
     fn min_fp_value(&mut self, signed: bool, in_bits: u8, out_bits: u8) -> Reg {
@@ -663,9 +721,5 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
                 shift
             );
         }
-    }
-
-    fn writable_pinned_reg(&mut self) -> WritableReg {
-        super::regs::writable_xreg(super::regs::PINNED_REG)
     }
 }

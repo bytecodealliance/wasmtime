@@ -95,8 +95,13 @@
 
        ;; Like `MovRR` but with a physical register source (for implementing
        ;; CLIF instructions like `get_stack_pointer`).
-       (MovPReg (src PReg)
-                (dst WritableGpr))
+       (MovFromPReg (src PReg)
+                    (dst WritableGpr))
+
+       ;; Like `MovRR` but with a physical register destination (for
+       ;; implementing CLIF instructions like `set_pinned_reg`).
+       (MovToPReg (src Gpr)
+                  (dst PReg))
 
        ;; Zero-extended loads, except for 64 bits: movz (bl bq wl wq lq) addr
        ;; reg.
@@ -151,6 +156,11 @@
        (Setcc (cc CC)
               (dst WritableGpr))
 
+       ;; Swaps byte order in register
+       (Bswap (size OperandSize) ;; 4 or 8
+              (src Gpr)
+              (dst WritableGpr))
+
        ;; =========================================
        ;; Conditional moves.
 
@@ -191,6 +201,17 @@
                (src1 Xmm)
                (src2 XmmMem)
                (dst WritableXmm))
+
+       ;; XMM (scalar or vector) blend op. The mask is used to blend between
+       ;; src1 and src2. This differs from a use of `XmmRmR` as the mask is
+       ;; implicitly in register xmm0; this special case exists to allow us to
+       ;; communicate the constraint on the `mask` register to regalloc2.
+       (XmmRmRBlend
+         (op SseOpcode)
+         (src1 Xmm)
+         (src2 XmmMem)
+         (mask Xmm)
+         (dst WritableXmm))
 
        ;; XMM (scalar or vector) binary op that relies on the VEX prefix.
        (XmmRmRVex (op AvxOpcode)
@@ -328,7 +349,7 @@
         (args VecArgPair))
 
        ;; Return.
-       (Ret (rets VecReg))
+       (Ret (rets VecRetPair))
 
        ;; Jump to a known target: jmp simm32.
        (JmpKnown (dst MachLabel))
@@ -492,7 +513,8 @@
        ;; A Coff TLS symbol access. Returns address of the TLS symbol in
        ;; `dst`, which is constrained to `rax`.
        (CoffTlsGetAddr (symbol ExternalName)
-                       (dst WritableGpr))
+                       (dst WritableGpr)
+                       (tmp WritableGpr))
 
        ;; An unwind pseudoinstruction describing the state of the machine at
        ;; this program point.
@@ -936,8 +958,7 @@
 ;; -- Case 2 (adding a register to an Amode with a register already).
 ;;
 ;; An Amode.ImmReg can absorb another register as the index register.
-(rule (amode_add (Amode.ImmReg off base flags) value)
-      (if-let (valid_reg) base)
+(rule (amode_add (Amode.ImmReg off (valid_reg base) flags) value)
       ;; Shift of 0 --> base + 1*value.
       (Amode.ImmRegRegShift off base value 0 flags))
 
@@ -946,12 +967,10 @@
 ;; An Amode.ImmReg can absorb a shift of another register as the index register.
 ;;
 ;; Priority 2 to take these rules above generic case.
-(rule 2 (amode_add (Amode.ImmReg off base flags) (ishl index (iconst (uimm8 shift))))
-      (if-let (valid_reg) base)
+(rule 2 (amode_add (Amode.ImmReg off (valid_reg base) flags) (ishl index (iconst (uimm8 shift))))
       (if (u32_lteq (u8_as_u32 shift) 3))
       (Amode.ImmRegRegShift off base index shift flags))
-(rule 2 (amode_add (Amode.ImmReg off base flags) (uextend (ishl index (iconst (uimm8 shift)))))
-      (if-let (valid_reg) base)
+(rule 2 (amode_add (Amode.ImmReg off (valid_reg base) flags) (uextend (ishl index (iconst (uimm8 shift)))))
       (if (u32_lteq (u8_as_u32 shift) 3))
       (Amode.ImmRegRegShift off base (extend_to_gpr index $I64 (ExtendKind.Zero)) shift flags))
 
@@ -960,10 +979,9 @@
 ;; always write the full register width, so we can effectively ignore
 ;; the `uextend` and look through it to the `ishl`.
 ;;
-;; Priority 2 to take this case above generic rules.
-(rule 2 (amode_add (Amode.ImmReg off base flags)
+;; Priority 3 to avoid conflict with the previous rule.
+(rule 3 (amode_add (Amode.ImmReg off (valid_reg base) flags)
                    (uextend (ishl index @ (iadd _ _) (iconst (uimm8 shift)))))
-      (if-let (valid_reg) base)
       (if (u32_lteq (u8_as_u32 shift) 3))
       (Amode.ImmRegRegShift off base index shift flags))
 
@@ -1061,9 +1079,9 @@
 ;;
 ;; This is used when lowering various shifts and rotates.
 (decl put_masked_in_imm8_gpr (Value Type) Imm8Gpr)
-(rule (put_masked_in_imm8_gpr (u64_from_iconst amt) ty)
+(rule 2 (put_masked_in_imm8_gpr (u64_from_iconst amt) ty)
       (const_to_type_masked_imm8 amt ty))
-(rule (put_masked_in_imm8_gpr amt (fits_in_16 ty))
+(rule 1 (put_masked_in_imm8_gpr amt (fits_in_16 ty))
       (x64_and $I64 (value_regs_get_gpr amt 0) (RegMemImm.Imm (shift_mask ty))))
 (rule (put_masked_in_imm8_gpr amt ty)
       (value_regs_get_gpr amt 0))
@@ -1092,12 +1110,6 @@
 
 (decl cc_invert (CC) CC)
 (extern constructor cc_invert cc_invert)
-
-(decl intcc_reverse (IntCC) IntCC)
-(extern constructor intcc_reverse intcc_reverse)
-
-(decl floatcc_inverse (FloatCC) FloatCC)
-(extern constructor floatcc_inverse floatcc_inverse)
 
 ;; Fails if the argument is not either CC.NZ or CC.Z.
 (decl cc_nz_or_z (CC) CC)
@@ -1204,10 +1216,6 @@
 ;; Allocate a new temporary XMM register.
 (decl temp_writable_xmm () WritableXmm)
 (extern constructor temp_writable_xmm temp_writable_xmm)
-
-;; Fetch the special pinned register.
-(decl pinned_writable_gpr () WritableGpr)
-(extern constructor pinned_writable_gpr pinned_writable_gpr)
 
 ;; Construct a new `XmmMem` from the given `RegMem`.
 ;;
@@ -1351,36 +1359,35 @@
 ;;;; Helpers for Working With Integer Comparison Codes ;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 
-;; An extractor that fails if the two arguments are equal. The first argument is
-;; returned when it does not match the second.
-(decl pure intcc_neq (IntCC IntCC) IntCC)
-(extern constructor intcc_neq intcc_neq)
-
 ;; This is a direct import of `IntCC::without_equal`.
 ;; Get the corresponding IntCC with the equal component removed.
 ;; For conditions without a zero component, this is a no-op.
 (decl intcc_without_eq (IntCC) IntCC)
 (extern constructor intcc_without_eq intcc_without_eq)
 
-;;;; Helpers for Getting Particular Physical Registers ;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-;; These should only be used for legalization purposes, when we can't otherwise
-;; rely on something like `Inst::mov_mitosis` to put an operand into the
-;; appropriate physical register for whatever reason.
-
-(decl xmm0 () WritableXmm)
-(extern constructor xmm0 xmm0)
-
 ;;;; Helpers for determining the register class of a value type ;;;;;;;;;;;;;;;;
 
+(type RegisterClass
+      (enum
+        (Gpr (single_register bool))
+        (Xmm)))
+
+(decl type_register_class (RegisterClass) Type)
+(extern extractor type_register_class type_register_class)
+
 (decl is_xmm_type (Type) Type)
-(extern extractor is_xmm_type is_xmm_type)
+(extractor (is_xmm_type ty) (and (type_register_class (RegisterClass.Xmm)) ty))
 
 (decl is_gpr_type (Type) Type)
-(extern extractor is_gpr_type is_gpr_type)
+(extractor (is_gpr_type ty) (and (type_register_class (RegisterClass.Gpr _)) ty))
 
-(decl is_single_register_type (Type) Type)
-(extern extractor is_single_register_type is_single_register_type)
+(decl is_single_register_gpr_type (Type) Type)
+(extractor (is_single_register_gpr_type ty)
+           (and (type_register_class (RegisterClass.Gpr $true)) ty))
+
+(decl is_multi_register_gpr_type (Type) Type)
+(extractor (is_multi_register_gpr_type ty)
+           (and (type_register_class (RegisterClass.Gpr $false)) ty))
 
 ;;;; Helpers for Querying Enabled ISA Extensions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1482,7 +1489,10 @@
 (decl extend_to_gpr (Value Type ExtendKind) Gpr)
 
 ;; If the value is already of the requested type, no extending is necessary.
-(rule (extend_to_gpr (and val (value_type ty)) ty _kind)
+;;
+;; Priority 1 because the equality constraint doesn't prove that this rule
+;; doesn't overlap with the one below.
+(rule 1 (extend_to_gpr (and val (value_type ty)) ty _kind)
       (put_in_gpr val))
 
 (rule (extend_to_gpr (and val (value_type from_ty))
@@ -1519,9 +1529,14 @@
 
 ;; Determine the appropriate operation for xor-ing vectors of the specified type
 (decl sse_xor_op (Type) SseOpcode)
-(rule (sse_xor_op $F32X4) (SseOpcode.Xorps))
-(rule (sse_xor_op $F64X2) (SseOpcode.Xorpd))
-(rule (sse_xor_op (multi_lane _bits _lanes)) (SseOpcode.Pxor))
+(rule 1 (sse_xor_op $F32X4) (SseOpcode.Xorps))
+(rule 1 (sse_xor_op $F64X2) (SseOpcode.Xorpd))
+(rule 1 (sse_xor_op $F32) (SseOpcode.Xorps))
+(rule 1 (sse_xor_op $F64) (SseOpcode.Xorpd))
+
+;; Priority 0 because multi_lane overlaps with the previous two explicit type
+;; patterns.
+(rule 0 (sse_xor_op (multi_lane _bits _lanes)) (SseOpcode.Pxor))
 
 ;; Performs an xor operation of the two operands specified.
 (decl sse_xor (Type Xmm XmmMem) Xmm)
@@ -1597,34 +1612,33 @@
 ;; Load a value into a register.
 (decl x64_load (Type SyntheticAmode ExtKind) Reg)
 
-(rule (x64_load (fits_in_32 ty) addr (ExtKind.SignExtend))
+(rule 1 (x64_load (fits_in_32 ty) addr (ExtKind.SignExtend))
       (x64_movsx (ext_mode (ty_bytes ty) 8)
              addr))
 
-(rule (x64_load $I64 addr _ext_kind)
+(rule 2 (x64_load $I64 addr _ext_kind)
       (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.Mov64MR addr dst))))
         dst))
 
-(rule (x64_load $F32 addr _ext_kind)
+(rule 2 (x64_load $F32 addr _ext_kind)
       (xmm_unary_rm_r (SseOpcode.Movss)
                       addr))
 
-(rule (x64_load $F64 addr _ext_kind)
+(rule 2 (x64_load $F64 addr _ext_kind)
       (xmm_unary_rm_r (SseOpcode.Movsd)
                       addr))
 
-(rule (x64_load $F32X4 addr _ext_kind)
+(rule 2 (x64_load $F32X4 addr _ext_kind)
       (xmm_unary_rm_r (SseOpcode.Movups)
                       addr))
 
-(rule (x64_load $F64X2 addr _ext_kind)
+(rule 2 (x64_load $F64X2 addr _ext_kind)
       (xmm_unary_rm_r (SseOpcode.Movupd)
                       addr))
 
-(rule (x64_load (multi_lane _bits _lanes) addr _ext_kind)
-      (xmm_unary_rm_r (SseOpcode.Movdqu)
-                      addr))
+(rule 0 (x64_load (multi_lane _bits _lanes) addr _ext_kind)
+      (xmm_unary_rm_r (SseOpcode.Movdqu) addr))
 
 (decl x64_mov (Amode) Reg)
 (rule (x64_mov addr)
@@ -1807,12 +1821,12 @@
 (decl x64_and_with_flags_paired (Type Gpr GprMemImm) ProducesFlags)
 (rule (x64_and_with_flags_paired ty src1 src2)
       (let ((dst WritableGpr (temp_writable_gpr)))
-            (ProducesFlags.ProducesFlagsSideEffect
-                  (MInst.AluRmiR (operand_size_of_type_32_64 ty)
-                        (AluRmiROpcode.And)
-                        src1
-                        src2
-                        dst))))
+           (ProducesFlags.ProducesFlagsSideEffect
+                 (MInst.AluRmiR (operand_size_of_type_32_64 ty)
+                       (AluRmiROpcode.And)
+                       src1
+                       src2
+                       dst))))
 
 ;; Helper for emitting `or` instructions.
 (decl x64_or (Type Gpr GprMemImm) Gpr)
@@ -1830,30 +1844,8 @@
                  src1
                  src2))
 
-;; Helper for emitting immediates.
-(decl imm (Type u64) Reg)
-
-;; Integer immediates.
-(rule (imm (fits_in_64 ty) simm64)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (size OperandSize (operand_size_of_type_32_64 ty))
-            (_ Unit (emit (MInst.Imm size simm64 dst))))
-        dst))
-
-;; `f32` immediates.
-(rule (imm $F32 bits)
-      (gpr_to_xmm (SseOpcode.Movd)
-                  (imm $I32 bits)
-                  (OperandSize.Size32)))
-
-;; `f64` immediates.
-(rule (imm $F64 bits)
-      (gpr_to_xmm (SseOpcode.Movq)
-                  (imm $I64 bits)
-                  (OperandSize.Size64)))
-
 ;; Helper for emitting immediates with an `i64` value. Note that
-;; integer constants in ISLE are always parsed as `i64`s; this enables
+;; integer constants in ISLE are always parsed as `i128`s; this enables
 ;; negative numbers to be used as immediates.
 (decl imm_i64 (Type i64) Reg)
 (rule (imm_i64 ty value)
@@ -1862,15 +1854,42 @@
 (decl nonzero_u64_fits_in_u32 (u64) u64)
 (extern extractor nonzero_u64_fits_in_u32 nonzero_u64_fits_in_u32)
 
+;; Helper for emitting immediates.
+;;
+;; There are three priorities in use in this rule:
+;; 2 - rules that match on an explicit type
+;; 1 - rules that match on types that fit in 64 bits
+;; 0 - rules that match on vectors
+(decl imm (Type u64) Reg)
+
+;; Integer immediates.
+(rule 1 (imm (fits_in_64 ty) (u64_nonzero simm64))
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (size OperandSize (operand_size_of_type_32_64 ty))
+            (_ Unit (emit (MInst.Imm size simm64 dst))))
+        dst))
+
+;; `f32` immediates.
+(rule 2 (imm $F32 (u64_nonzero bits))
+      (gpr_to_xmm (SseOpcode.Movd)
+                  (imm $I32 bits)
+                  (OperandSize.Size32)))
+
+;; `f64` immediates.
+(rule 2 (imm $F64 (u64_nonzero bits))
+      (gpr_to_xmm (SseOpcode.Movq)
+                  (imm $I64 bits)
+                  (OperandSize.Size64)))
+
 ;; Special case for when a 64-bit immediate fits into 32-bits. We can use a
 ;; 32-bit move that zero-extends the value, which has a smaller encoding.
-(rule (imm $I64 (nonzero_u64_fits_in_u32 x))
+(rule 2 (imm $I64 (nonzero_u64_fits_in_u32 x))
       (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.Imm (OperandSize.Size32) x dst))))
         dst))
 
 ;; Special case for integer zero immediates: turn them into an `xor r, r`.
-(rule (imm (fits_in_64 ty) 0)
+(rule 1 (imm (fits_in_64 ty) (u64_zero))
       (let ((wgpr WritableGpr (temp_writable_gpr))
             (g Gpr wgpr)
             (size OperandSize (operand_size_of_type_32_64 ty))
@@ -1883,7 +1902,7 @@
 
 ;; Special case for zero immediates with vector types, they turn into an xor
 ;; specific to the vector type.
-(rule (imm ty @ (multi_lane _bits _lanes) 0)
+(rule 0 (imm ty @ (multi_lane _bits _lanes) 0)
       (let ((wr WritableXmm (temp_writable_xmm))
             (r Xmm wr)
             (_ Unit (emit (MInst.XmmRmR (sse_xor_op ty)
@@ -1893,7 +1912,7 @@
         (xmm_to_reg r)))
 
 ;; Special case for `f32` zero immediates to use `xorps`.
-(rule (imm $F32 0)
+(rule 2 (imm $F32 (u64_zero))
       (let ((wr WritableXmm (temp_writable_xmm))
             (r Xmm wr)
             (_ Unit (emit (MInst.XmmRmR (SseOpcode.Xorps)
@@ -1905,7 +1924,7 @@
 ;; TODO: use cmpeqps for all 1s
 
 ;; Special case for `f64` zero immediates to use `xorpd`.
-(rule (imm $F64 0)
+(rule 2 (imm $F64 (u64_zero))
       (let ((wr WritableXmm (temp_writable_xmm))
             (r Xmm wr)
             (_ Unit (emit (MInst.XmmRmR (SseOpcode.Xorpd)
@@ -1950,6 +1969,16 @@
 (decl x64_sar (Type Gpr Imm8Gpr) Gpr)
 (rule (x64_sar ty src1 src2)
       (shift_r ty (ShiftKind.ShiftRightArithmetic) src1 src2))
+
+;; Helper for creating byteswap instructions.
+;; In x64, 32- and 64-bit registers use BSWAP instruction, and
+;; for 16-bit registers one must instead use xchg or rol/ror
+(decl x64_bswap (Type Gpr) Gpr)
+(rule (x64_bswap ty src)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (size OperandSize (operand_size_of_type_32_64 ty))
+            (_ Unit (emit (MInst.Bswap size src dst))))
+        dst))
 
 ;; Helper for creating `MInst.CmpRmiR` instructions.
 (decl cmp_rmi_r (OperandSize CmpOpcode GprMemImm Gpr) ProducesFlags)
@@ -2017,7 +2046,7 @@
 ;; to special-case the `I128` types and default to the `cmove` helper otherwise.
 ;; It also eliminates some `put_in_reg*` boilerplate in the lowering ISLE code.
 (decl cmove_from_values (Type CC Value Value) ConsumesFlags)
-(rule (cmove_from_values $I128 cc consequent alternative)
+(rule (cmove_from_values (is_multi_register_gpr_type $I128) cc consequent alternative)
       (let ((cons ValueRegs consequent)
             (alt ValueRegs alternative)
             (dst1 WritableGpr (temp_writable_gpr))
@@ -2038,10 +2067,10 @@
          upper_cmove
          (value_regs dst1 dst2))))
 
-(rule (cmove_from_values (is_gpr_type (is_single_register_type ty)) cc consequent alternative)
+(rule (cmove_from_values (is_single_register_gpr_type ty) cc consequent alternative)
       (cmove ty cc consequent alternative))
 
-(rule (cmove_from_values (is_xmm_type (is_single_register_type ty)) cc consequent alternative)
+(rule (cmove_from_values (is_xmm_type ty) cc consequent alternative)
       (cmove_xmm ty cc consequent alternative))
 
 ;; Helper for creating `cmove` instructions with the logical OR of multiple
@@ -2074,7 +2103,7 @@
 ;; us to special-case the `I128` types and default to the `cmove_or` helper
 ;; otherwise.
 (decl cmove_or_from_values (Type CC CC Value Value) ConsumesFlags)
-(rule (cmove_or_from_values $I128 cc1 cc2 consequent alternative)
+(rule (cmove_or_from_values (is_multi_register_gpr_type $I128) cc1 cc2 consequent alternative)
       (let ((cons ValueRegs consequent)
             (alt ValueRegs alternative)
             (dst1 WritableGpr (temp_writable_gpr))
@@ -2093,10 +2122,10 @@
          cmove4
          (value_regs dst1 dst2))))
 
-(rule (cmove_or_from_values (is_gpr_type (is_single_register_type ty)) cc1 cc2 consequent alternative)
+(rule (cmove_or_from_values (is_single_register_gpr_type ty) cc1 cc2 consequent alternative)
       (cmove_or ty cc1 cc2 consequent alternative))
 
-(rule (cmove_or_from_values (is_xmm_type (is_single_register_type ty)) cc1 cc2 consequent alternative)
+(rule (cmove_or_from_values (is_xmm_type ty) cc1 cc2 consequent alternative)
       (cmove_or_xmm ty cc1 cc2 consequent alternative))
 
 ;; Helper for creating `MInst.Setcc` instructions.
@@ -2395,42 +2424,34 @@
       (xmm_rm_r $F32 (SseOpcode.Divpd) src1 src2))
 
 (decl sse_blend_op (Type) SseOpcode)
-(rule (sse_blend_op $F32X4) (SseOpcode.Blendvps))
-(rule (sse_blend_op $F64X2) (SseOpcode.Blendvpd))
-(rule (sse_blend_op (multi_lane _bits _lanes)) (SseOpcode.Pblendvb))
+(rule 1 (sse_blend_op $F32X4) (SseOpcode.Blendvps))
+(rule 1 (sse_blend_op $F64X2) (SseOpcode.Blendvpd))
+
+;; Priority 0 because multi_lane overlaps with the previous two type patterns.
+(rule 0 (sse_blend_op (multi_lane _bits _lanes)) (SseOpcode.Pblendvb))
 
 (decl sse_mov_op (Type) SseOpcode)
-(rule (sse_mov_op $F32X4) (SseOpcode.Movaps))
-(rule (sse_mov_op $F64X2) (SseOpcode.Movapd))
-(rule (sse_mov_op (multi_lane _bits _lanes)) (SseOpcode.Movdqa))
+(rule 1 (sse_mov_op $F32X4) (SseOpcode.Movaps))
+(rule 1 (sse_mov_op $F64X2) (SseOpcode.Movapd))
+
+;; Priority 0 because multi_lane overlaps with the previous two type patterns.
+(rule 0 (sse_mov_op (multi_lane _bits _lanes)) (SseOpcode.Movdqa))
+
+(decl xmm_rm_r_blend (SseOpcode Xmm XmmMem Xmm) Xmm)
+(rule (xmm_rm_r_blend op src1 src2 mask)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmRmRBlend op src1 src2 mask dst))))
+        dst))
 
 ;; Helper for creating `blendvp{d,s}` and `pblendvb` instructions.
-(decl x64_blend (Type XmmMem XmmMem Xmm) Xmm)
+(decl x64_blend (Type Xmm XmmMem Xmm) Xmm)
 (rule (x64_blend ty mask src1 src2)
-      ;; Move the mask into `xmm0`, as blend instructions implicitly operate on
-      ;; that register. (This kind of thing would normally happen inside of
-      ;; `Inst::mov_mitosis`, but has to happen here, where we still have the
-      ;; mask register, because the mask is implicit and doesn't appear in the
-      ;; `Inst` itself.)
-      (let ((mask2 WritableXmm (xmm0))
-            (_ Unit (emit (MInst.XmmUnaryRmR (sse_mov_op ty)
-                                             mask
-                                             mask2))))
-        (xmm_rm_r ty (sse_blend_op ty) src2 src1)))
+      (xmm_rm_r_blend (sse_blend_op ty) src2 src1 mask))
 
 ;; Helper for creating `blendvpd` instructions.
 (decl x64_blendvpd (Xmm XmmMem Xmm) Xmm)
 (rule (x64_blendvpd src1 src2 mask)
-      ;; Move the mask into `xmm0`, as `blendvpd` implicitly operates on that
-      ;; register. (This kind of thing would normally happen inside of
-      ;; `Inst::mov_mitosis`, but has to happen here, where we still have the
-      ;; mask register, because the mask is implicit and doesn't appear in the
-      ;; `Inst` itself.)
-      (let ((mask2 WritableXmm (xmm0))
-            (_ Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Movapd)
-                                             mask
-                                             mask2))))
-        (xmm_rm_r $F64X2 (SseOpcode.Blendvpd) src1 src2)))
+      (xmm_rm_r_blend (SseOpcode.Blendvpd) src1 src2 mask))
 
 ;; Helper for creating `movsd` instructions.
 (decl x64_movsd_regmove (Xmm XmmMem) Xmm)
@@ -2902,9 +2923,17 @@
 (decl x64_neg (Type Gpr) Gpr)
 (rule (x64_neg ty src)
       (let ((dst WritableGpr (temp_writable_gpr))
-            (size OperandSize (operand_size_of_type_32_64 ty))
+            (size OperandSize (raw_operand_size_of_type ty))
             (_ Unit (emit (MInst.Neg size src dst))))
         dst))
+
+;; Helper for creating `neg` instructions whose flags are also used.
+(decl x64_neg_paired (Type Gpr) ProducesFlags)
+(rule (x64_neg_paired ty src)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (size OperandSize (raw_operand_size_of_type ty))
+            (inst MInst (MInst.Neg size src dst)))
+        (ProducesFlags.ProducesFlagsReturnsResultWithConsumer inst dst)))
 
 (decl x64_lea (SyntheticAmode) Gpr)
 (rule (x64_lea addr)
@@ -3145,14 +3174,14 @@
 (decl x64_cvtps2pd (Xmm) Xmm)
 (rule (x64_cvtps2pd x)
       (let ((dst WritableXmm (temp_writable_xmm))
-           (_ Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Cvtps2pd) x dst))))
+            (_ Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Cvtps2pd) x dst))))
         dst))
 
 ;; Helper for creating `cvtpd2ps` instructions.
 (decl x64_cvtpd2ps (Xmm) Xmm)
 (rule (x64_cvtpd2ps x)
       (let ((dst WritableXmm (temp_writable_xmm))
-           (_ Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Cvtpd2ps) x dst))))
+            (_ Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Cvtpd2ps) x dst))))
         dst))
 
 ;; Helper for creating `cvtdq2pd` instructions.
@@ -3422,11 +3451,11 @@
 ;; Ensure that we put the `x` argument into a register for single-register
 ;; gpr-typed arguments, as we rely on this for the legalization of heap_addr and
 ;; loading easily computed constants (like 0) from memory is too expensive.
-(rule (select_icmp (IcmpCondResult.Condition producer cc) x @ (value_type (is_gpr_type (is_single_register_type ty))) y)
+(rule 1 (select_icmp (IcmpCondResult.Condition producer cc) x @ (value_type (is_single_register_gpr_type ty)) y)
       (with_flags producer (cmove ty cc (put_in_gpr x) y)))
 
 ;; Otherwise, fall back on the behavior of `cmove_from_values`.
-(rule (select_icmp (IcmpCondResult.Condition producer cc) x @ (value_type ty) y)
+(rule 0 (select_icmp (IcmpCondResult.Condition producer cc) x @ (value_type ty) y)
       (with_flags producer (cmove_from_values ty cc x y)))
 
 (decl emit_cmp (IntCC Value Value) IcmpCondResult)
@@ -3434,20 +3463,20 @@
 ;; For GPR-held values we only need to emit `CMP + SETCC`. We rely here on
 ;; Cranelift's verification that `a` and `b` are of the same type.
 ;; Unfortunately for clarity, the registers are flipped here (TODO).
-(rule (emit_cmp cc a @ (value_type ty) b)
+(rule 0 (emit_cmp cc a @ (value_type ty) b)
       (let ((size OperandSize (raw_operand_size_of_type ty)))
         (icmp_cond_result (x64_cmp size b a) cc)))
 
 ;; As a special case, reverse the arguments to the comparison when the LHS is a
 ;; constant. This ensures that we avoid moving the constant into a register when
 ;; performing the comparison.
-(rule (emit_cmp cc (and (simm32_from_value a) (value_type ty)) b)
+(rule 1 (emit_cmp cc (and (simm32_from_value a) (value_type ty)) b)
       (let ((size OperandSize (raw_operand_size_of_type ty)))
         (icmp_cond_result (x64_cmp size a b) (intcc_reverse cc))))
 
 ;; For I128 values (held in two GPRs), the instruction sequences depend on what
 ;; kind of condition is tested.
-(rule (emit_cmp (IntCC.Equal) a @ (value_type $I128) b)
+(rule 3 (emit_cmp (IntCC.Equal) a @ (value_type $I128) b)
       (let ((a_lo Gpr (value_regs_get_gpr a 0))
             (a_hi Gpr (value_regs_get_gpr a 1))
             (b_lo Gpr (value_regs_get_gpr b 0))
@@ -3468,7 +3497,7 @@
           (x64_test (OperandSize.Size64) (RegMemImm.Imm 1) cmp)
           (CC.NZ))))
 
-(rule (emit_cmp (IntCC.NotEqual) a @ (value_type $I128) b)
+(rule 3 (emit_cmp (IntCC.NotEqual) a @ (value_type $I128) b)
       (let ((a_lo Gpr (value_regs_get_gpr a 0))
             (a_hi Gpr (value_regs_get_gpr a 1))
             (b_lo Gpr (value_regs_get_gpr b 0))
@@ -3483,9 +3512,7 @@
 
 ;; Result = (a_hi <> b_hi) ||
 ;;          (a_hi == b_hi && a_lo <> b_lo)
-(rule (emit_cmp cc a @ (value_type $I128) b)
-      (if (intcc_neq cc (IntCC.Equal)))
-      (if (intcc_neq cc (IntCC.NotEqual)))
+(rule 2 (emit_cmp cc a @ (value_type $I128) b)
       (let ((a_lo Gpr (value_regs_get_gpr a 0))
             (a_hi Gpr (value_regs_get_gpr a 1))
             (b_lo Gpr (value_regs_get_gpr b 0))
@@ -3650,7 +3677,7 @@
 (decl stack_addr_impl (StackSlot Offset32) Gpr)
 (rule (stack_addr_impl stack_slot offset)
       (let ((dst WritableGpr (temp_writable_gpr))
-           (_ Unit (emit (abi_stackslot_addr dst stack_slot offset))))
+            (_ Unit (emit (abi_stackslot_addr dst stack_slot offset))))
         dst))
 
 ;;;; Division/Remainders ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3668,12 +3695,11 @@
 
 (decl read_pinned_gpr () Gpr)
 (rule (read_pinned_gpr)
-      (pinned_writable_gpr))
+      (mov_from_preg (preg_pinned)))
 
 (decl write_pinned_gpr (Gpr) SideEffectNoResult)
 (rule (write_pinned_gpr val)
-      (let ((dst WritableGpr (pinned_writable_gpr)))
-        (SideEffectNoResult.Inst (gen_move $I64 dst val))))
+      (mov_to_preg (preg_pinned) val))
 
 ;;;; Shuffle ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3736,7 +3762,8 @@
 (decl coff_tls_get_addr (ExternalName) Gpr)
 (rule (coff_tls_get_addr name)
       (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.CoffTlsGetAddr name dst))))
+            (tmp WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.CoffTlsGetAddr name dst tmp))))
         dst))
 
 ;;;; sqmul_round_sat ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3849,12 +3876,16 @@
 (decl const_to_synthetic_amode (VCodeConstant) SyntheticAmode)
 (extern constructor const_to_synthetic_amode const_to_synthetic_amode)
 
-;; Helper for creating `MovPReg` instructions.
-(decl mov_preg (PReg) Reg)
-(rule (mov_preg preg)
+;; Helper for creating `MovFromPReg` instructions.
+(decl mov_from_preg (PReg) Reg)
+(rule (mov_from_preg preg)
       (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.MovPReg preg dst))))
+            (_ Unit (emit (MInst.MovFromPReg preg dst))))
         dst))
+
+(decl mov_to_preg (PReg Gpr) SideEffectNoResult)
+(rule (mov_to_preg dst src)
+      (SideEffectNoResult.Inst (MInst.MovToPReg src dst)))
 
 (decl preg_rbp () PReg)
 (extern constructor preg_rbp preg_rbp)
@@ -3862,13 +3893,16 @@
 (decl preg_rsp () PReg)
 (extern constructor preg_rsp preg_rsp)
 
+(decl preg_pinned () PReg)
+(extern constructor preg_pinned preg_pinned)
+
 (decl x64_rbp () Reg)
 (rule (x64_rbp)
-      (mov_preg (preg_rbp)))
+      (mov_from_preg (preg_rbp)))
 
 (decl x64_rsp () Reg)
 (rule (x64_rsp)
-      (mov_preg (preg_rsp)))
+      (mov_from_preg (preg_rsp)))
 
 ;;;; Helpers for Emitting LibCalls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

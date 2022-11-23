@@ -91,9 +91,9 @@ mod tests {
             Some(StackSlotData::new(StackSlotKind::ExplicitSlot, 64)),
         ));
 
-        context.compile(&*isa).expect("expected compilation");
+        let code = context.compile(&*isa).expect("expected compilation");
 
-        let fde = match context
+        let fde = match code
             .create_unwind_info(isa.as_ref())
             .expect("can create unwind info")
         {
@@ -130,9 +130,9 @@ mod tests {
 
         let mut context = Context::for_function(create_multi_return_function(CallConv::SystemV));
 
-        context.compile(&*isa).expect("expected compilation");
+        let code = context.compile(&*isa).expect("expected compilation");
 
-        let fde = match context
+        let fde = match code
             .create_unwind_info(isa.as_ref())
             .expect("can create unwind info")
         {

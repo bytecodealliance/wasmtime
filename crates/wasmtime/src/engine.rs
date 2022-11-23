@@ -1,16 +1,22 @@
 use crate::signatures::SignatureRegistry;
 use crate::Config;
-use anyhow::Result;
+use anyhow::{Context, Result};
+use object::write::{Object, StandardSegment};
+use object::SectionKind;
 use once_cell::sync::OnceCell;
 #[cfg(feature = "parallel-compilation")]
 use rayon::prelude::*;
+use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
-use wasmtime_environ::FlagValue;
-use wasmtime_jit::ProfilingAgent;
-use wasmtime_runtime::{debug_builtins, CompiledModuleIdAllocator, InstanceAllocator};
+use wasmtime_environ::obj;
+use wasmtime_environ::{FlagValue, ObjectKind};
+use wasmtime_jit::{CodeMemory, ProfilingAgent};
+use wasmtime_runtime::{debug_builtins, CompiledModuleIdAllocator, InstanceAllocator, MmapVec};
+
+mod serialization;
 
 /// An `Engine` which is a global context for compilation and management of wasm
 /// modules.
@@ -216,9 +222,21 @@ impl Engine {
     pub fn precompile_module(&self, bytes: &[u8]) -> Result<Vec<u8>> {
         #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(&bytes)?;
-        let (mmap, _, types) = crate::Module::build_artifacts(self, &bytes)?;
-        crate::module::SerializedModule::from_artifacts(self, &mmap, &types)
-            .to_bytes(&self.config().module_version)
+        let (mmap, _) = crate::Module::build_artifacts(self, &bytes)?;
+        Ok(mmap.to_vec())
+    }
+
+    /// Same as [`Engine::precompile_module`] except for a
+    /// [`Component`](crate::component::Component)
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg(feature = "component-model")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "component-model")))]
+    pub fn precompile_component(&self, bytes: &[u8]) -> Result<Vec<u8>> {
+        #[cfg(feature = "wat")]
+        let bytes = wat::parse_bytes(&bytes)?;
+        let (mmap, _) = crate::component::Component::build_artifacts(self, &bytes)?;
+        Ok(mmap.to_vec())
     }
 
     pub(crate) fn run_maybe_parallel<
@@ -292,6 +310,7 @@ impl Engine {
             .clone()
             .map_err(anyhow::Error::msg)
     }
+
     fn _check_compatible_with_native_host(&self) -> Result<(), String> {
         #[cfg(compiler)]
         {
@@ -393,6 +412,7 @@ impl Engine {
             | "machine_code_cfg_info"
             | "tls_model" // wasmtime doesn't use tls right now
             | "opt_level" // opt level doesn't change semantics
+            | "use_egraphs" // optimizing with egraphs doesn't change semantics
             | "enable_alias_analysis" // alias analysis-based opts don't change semantics
             | "probestack_func_adjusts_sp" // probestack above asserted disabled
             | "probestack_size_log2" // probestack above asserted disabled
@@ -490,6 +510,17 @@ impl Engine {
             }
         }
 
+        #[cfg(target_arch = "riscv64")]
+        {
+            enabled = match flag {
+                // make sure `test_isa_flags_mismatch` test pass.
+                "not_a_flag" => None,
+                // due to `is_riscv64_feature_detected` is not stable.
+                // we cannot use it.
+                _ => Some(true),
+            }
+        }
+
         #[cfg(target_arch = "x86_64")]
         {
             enabled = match flag {
@@ -533,6 +564,60 @@ impl Engine {
             "cannot test if target-specific flag {:?} is available at runtime",
             flag
         ))
+    }
+
+    #[cfg(compiler)]
+    pub(crate) fn append_compiler_info(&self, obj: &mut Object<'_>) {
+        serialization::append_compiler_info(self, obj);
+    }
+
+    #[cfg(compiler)]
+    pub(crate) fn append_bti(&self, obj: &mut Object<'_>) {
+        let section = obj.add_section(
+            obj.segment_name(StandardSegment::Data).to_vec(),
+            obj::ELF_WASM_BTI.as_bytes().to_vec(),
+            SectionKind::ReadOnlyData,
+        );
+        let contents = if self.compiler().is_branch_protection_enabled() {
+            1
+        } else {
+            0
+        };
+        obj.append_section_data(section, &[contents], 1);
+    }
+
+    /// Loads a `CodeMemory` from the specified in-memory slice, copying it to a
+    /// uniquely owned mmap.
+    ///
+    /// The `expected` marker here is whether the bytes are expected to be a
+    /// precompiled module or a component.
+    pub(crate) fn load_code_bytes(
+        &self,
+        bytes: &[u8],
+        expected: ObjectKind,
+    ) -> Result<Arc<CodeMemory>> {
+        self.load_code(MmapVec::from_slice(bytes)?, expected)
+    }
+
+    /// Like `load_code_bytes`, but crates a mmap from a file on disk.
+    pub(crate) fn load_code_file(
+        &self,
+        path: &Path,
+        expected: ObjectKind,
+    ) -> Result<Arc<CodeMemory>> {
+        self.load_code(
+            MmapVec::from_file(path).with_context(|| {
+                format!("failed to create file mapping for: {}", path.display())
+            })?,
+            expected,
+        )
+    }
+
+    fn load_code(&self, mmap: MmapVec, expected: ObjectKind) -> Result<Arc<CodeMemory>> {
+        serialization::check_compatible(self, &mmap, expected)?;
+        let mut code = CodeMemory::new(mmap)?;
+        code.publish()?;
+        Ok(Arc::new(code))
     }
 }
 

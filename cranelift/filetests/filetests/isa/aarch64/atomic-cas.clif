@@ -1,0 +1,30 @@
+; Regression test for incorrect regalloc constraints introduced in #4830
+
+test compile precise-output
+target aarch64
+
+function u0:0(i64, i32, i32) -> i8 system_v {
+block0(v0: i64, v1: i32, v2: i32):
+    v6 = atomic_cas.i32 v0, v1, v2
+    v7 = icmp eq v6, v1
+    return v7
+}
+
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   str x28, [sp, #-16]!
+;   stp x26, x27, [sp, #-16]!
+;   stp x24, x25, [sp, #-16]!
+; block0:
+;   mov x25, x0
+;   mov x26, x1
+;   mov x28, x2
+;   atomic_cas_loop_32 addr=x25, expect=x26, replacement=x28, oldval=x27, scratch=x24
+;   subs wzr, w27, w26
+;   cset x0, eq
+;   ldp x24, x25, [sp], #16
+;   ldp x26, x27, [sp], #16
+;   ldr x28, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+

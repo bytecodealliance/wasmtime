@@ -1,9 +1,9 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 
-use crate::codegen_settings::CodegenSettings;
+use crate::codegen_settings::{CodegenSettings, ErrorType};
 use crate::lifetimes::{anon_lifetime, LifetimeExt};
-use crate::names::Names;
+use crate::names;
 use witx::Module;
 
 pub fn passed_by_reference(ty: &witx::Type) -> bool {
@@ -15,9 +15,8 @@ pub fn passed_by_reference(ty: &witx::Type) -> bool {
     }
 }
 
-pub fn define_module_trait(names: &Names, m: &Module, settings: &CodegenSettings) -> TokenStream {
-    let traitname = names.trait_name(&m.name);
-    let rt = names.runtime_mod();
+pub fn define_module_trait(m: &Module, settings: &CodegenSettings) -> TokenStream {
+    let traitname = names::trait_name(&m.name);
     let traitmethods = m.funcs().map(|f| {
         // Check if we're returning an entity anotated with a lifetime,
         // in which case, we'll need to annotate the function itself, and
@@ -32,10 +31,10 @@ pub fn define_module_trait(names: &Names, m: &Module, settings: &CodegenSettings
         } else {
             (anon_lifetime(), true)
         };
-        let funcname = names.func(&f.name);
+        let funcname = names::func(&f.name);
         let args = f.params.iter().map(|arg| {
-            let arg_name = names.func_param(&arg.name);
-            let arg_typename = names.type_ref(&arg.tref, lifetime.clone());
+            let arg_name = names::func_param(&arg.name);
+            let arg_typename = names::type_ref(&arg.tref, lifetime.clone());
             let arg_type = if passed_by_reference(&*arg.tref.type_()) {
                 quote!(&#arg_typename)
             } else {
@@ -45,7 +44,7 @@ pub fn define_module_trait(names: &Names, m: &Module, settings: &CodegenSettings
         });
 
         let result = match f.results.len() {
-            0 if f.noreturn => quote!(#rt::Trap),
+            0 if f.noreturn => quote!(wiggle::anyhow::Error),
             0 => quote!(()),
             1 => {
                 let (ok, err) = match &**f.results[0].tref.type_() {
@@ -57,16 +56,17 @@ pub fn define_module_trait(names: &Names, m: &Module, settings: &CodegenSettings
                 };
 
                 let ok = match ok {
-                    Some(ty) => names.type_ref(ty, lifetime.clone()),
+                    Some(ty) => names::type_ref(ty, lifetime.clone()),
                     None => quote!(()),
                 };
                 let err = match err {
                     Some(ty) => match settings.errors.for_abi_error(ty) {
-                        Some(custom) => {
+                        Some(ErrorType::User(custom)) => {
                             let tn = custom.typename();
                             quote!(super::#tn)
                         }
-                        None => names.type_ref(ty, lifetime.clone()),
+                        Some(ErrorType::Generated(g)) => g.typename(),
+                        None => names::type_ref(ty, lifetime.clone()),
                     },
                     None => quote!(()),
                 };
@@ -89,7 +89,7 @@ pub fn define_module_trait(names: &Names, m: &Module, settings: &CodegenSettings
     });
 
     quote! {
-        #[#rt::async_trait]
+        #[wiggle::async_trait]
         pub trait #traitname {
             #(#traitmethods)*
         }

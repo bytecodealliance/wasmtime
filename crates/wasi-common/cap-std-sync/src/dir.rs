@@ -138,6 +138,19 @@ impl WasiDir for Dir {
         &self,
         cursor: ReaddirCursor,
     ) -> Result<Box<dyn Iterator<Item = Result<ReaddirEntity, Error>> + Send>, Error> {
+        // We need to keep a full-fidelity io Error around to check for a special failure mode
+        // on windows, but also this function can fail due to an illegal byte sequence in a
+        // filename, which we can't construct an io Error to represent.
+        enum ReaddirError {
+            Io(std::io::Error),
+            IllegalSequence,
+        }
+        impl From<std::io::Error> for ReaddirError {
+            fn from(e: std::io::Error) -> ReaddirError {
+                ReaddirError::Io(e)
+            }
+        }
+
         // cap_std's read_dir does not include . and .., we should prepend these.
         // Why does the Ok contain a tuple? We can't construct a cap_std::fs::DirEntry, and we don't
         // have enough info to make a ReaddirEntity yet.
@@ -145,7 +158,7 @@ impl WasiDir for Dir {
         let rd = vec![
             {
                 let name = ".".to_owned();
-                Ok((FileType::Directory, dir_meta.ino(), name))
+                Ok::<_, ReaddirError>((FileType::Directory, dir_meta.ino(), name))
             },
             {
                 let name = "..".to_owned();
@@ -163,24 +176,22 @@ impl WasiDir for Dir {
                 let name = entry
                     .file_name()
                     .into_string()
-                    .map_err(|_| Error::illegal_byte_sequence().context("filename"))?;
+                    .map_err(|_| ReaddirError::IllegalSequence)?;
                 Ok((filetype, inode, name))
             });
 
             // On Windows, filter out files like `C:\DumpStack.log.tmp` which we
             // can't get a full metadata for.
             #[cfg(windows)]
-            let entries = entries.filter(|entry: &Result<_, wasi_common::Error>| {
+            let entries = entries.filter(|entry| {
                 use windows_sys::Win32::Foundation::{
                     ERROR_ACCESS_DENIED, ERROR_SHARING_VIOLATION,
                 };
-                if let Err(err) = entry {
-                    if let Some(err) = err.downcast_ref::<std::io::Error>() {
-                        if err.raw_os_error() == Some(ERROR_SHARING_VIOLATION as i32)
-                            || err.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32)
-                        {
-                            return false;
-                        }
+                if let Err(ReaddirError::Io(err)) = entry {
+                    if err.raw_os_error() == Some(ERROR_SHARING_VIOLATION as i32)
+                        || err.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32)
+                    {
+                        return false;
                     }
                 }
                 true
@@ -197,7 +208,8 @@ impl WasiDir for Dir {
                 inode,
                 name,
             }),
-            Err(e) => Err(e),
+            Err(ReaddirError::Io(e)) => Err(e.into()),
+            Err(ReaddirError::IllegalSequence) => Err(Error::illegal_byte_sequence()),
         })
         .skip(u64::from(cursor) as usize);
 

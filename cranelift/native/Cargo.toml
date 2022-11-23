@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-native"
-version = "0.89.0"
+version = "0.91.0"
 authors = ["The Cranelift Project Developers"]
 description = "Support for targeting the host with Cranelift"
 documentation = "https://docs.rs/cranelift-native"
@@ -8,13 +8,13 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 categories = ["no-std"]
 license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
-edition = "2021"
+edition.workspace = true
 
 [dependencies]
-cranelift-codegen = { path = "../codegen", version = "0.89.0", default-features = false }
-target-lexicon = "0.12"
+cranelift-codegen = { workspace = true, default-features = false }
+target-lexicon = { workspace = true }
 
-[target.'cfg(target_arch = "s390x")'.dependencies]
+[target.'cfg(any(target_arch = "s390x", target_arch = "riscv64"))'.dependencies]
 libc = "0.2.95"
 
 [features]
@@ -24,3 +24,4 @@ core = ["cranelift-codegen/core"]
 
 [badges]
 maintenance = { status = "experimental" }
+ 

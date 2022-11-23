@@ -81,20 +81,23 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         16
     }
 
-    fn compute_arg_locs(
+    fn compute_arg_locs<'a, I>(
         call_conv: isa::CallConv,
         flags: &settings::Flags,
-        params: &[ir::AbiParam],
+        params: I,
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
-    ) -> CodegenResult<(ABIArgVec, i64, Option<usize>)> {
+        mut args: ArgsAccumulator<'_>,
+    ) -> CodegenResult<(i64, Option<usize>)>
+    where
+        I: IntoIterator<Item = &'a ir::AbiParam>,
+    {
         let is_fastcall = call_conv.extends_windows_fastcall();
 
         let mut next_gpr = 0;
         let mut next_vreg = 0;
         let mut next_stack: u64 = 0;
         let mut next_param_idx = 0; // Fastcall cares about overall param index
-        let mut ret = ABIArgVec::new();
 
         if args_or_rets == ArgsOrRets::Args && is_fastcall {
             // Fastcall always reserves 32 bytes of shadow space corresponding to
@@ -111,7 +114,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 let size = size as u64;
                 assert!(size % 8 == 0, "StructArgument size is not properly aligned");
                 next_stack += size;
-                ret.push(ABIArg::StructArg {
+                args.push(ABIArg::StructArg {
                     pointer: None,
                     offset,
                     size,
@@ -213,7 +216,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 }
             }
 
-            ret.push(ABIArg::Slots {
+            args.push(ABIArg::Slots {
                 slots,
                 purpose: param.purpose,
             });
@@ -222,14 +225,14 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         let extra_arg = if add_ret_area_ptr {
             debug_assert!(args_or_rets == ArgsOrRets::Args);
             if let Some(reg) = get_intreg_for_arg(&call_conv, next_gpr, next_param_idx) {
-                ret.push(ABIArg::reg(
+                args.push(ABIArg::reg(
                     reg.to_real_reg().unwrap(),
                     types::I64,
                     ir::ArgumentExtension::None,
                     ir::ArgumentPurpose::Normal,
                 ));
             } else {
-                ret.push(ABIArg::stack(
+                args.push(ABIArg::stack(
                     next_stack as i64,
                     types::I64,
                     ir::ArgumentExtension::None,
@@ -237,7 +240,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 ));
                 next_stack += 8;
             }
-            Some(ret.len() - 1)
+            Some(args.args().len() - 1)
         } else {
             None
         };
@@ -249,7 +252,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             return Err(CodegenError::ImplLimitExceeded);
         }
 
-        Ok((ret, next_stack as i64, extra_arg))
+        Ok((next_stack as i64, extra_arg))
     }
 
     fn fp_to_arg_offset(_call_conv: isa::CallConv, _flags: &settings::Flags) -> i64 {
@@ -260,13 +263,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         // For integer-typed values, we always load a full 64 bits (and we always spill a full 64
         // bits as well -- see `Inst::store()`).
         let ty = match ty {
-            types::B1
-            | types::B8
-            | types::I8
-            | types::B16
-            | types::I16
-            | types::B32
-            | types::I32 => types::I64,
+            types::I8 | types::I16 | types::I32 => types::I64,
             _ => ty,
         };
         Inst::load(ty, mem, into_reg, ExtKind::None)
@@ -301,7 +298,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         Inst::Args { args }
     }
 
-    fn gen_ret(_setup_frame: bool, _isa_flags: &x64_settings::Flags, rets: Vec<Reg>) -> Self::I {
+    fn gen_ret(
+        _setup_frame: bool,
+        _isa_flags: &x64_settings::Flags,
+        rets: Vec<RetPair>,
+    ) -> Self::I {
         Inst::ret(rets)
     }
 
@@ -638,8 +639,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         let arg0 = get_intreg_for_arg(&call_conv, 0, 0).unwrap();
         let arg1 = get_intreg_for_arg(&call_conv, 1, 1).unwrap();
         let arg2 = get_intreg_for_arg(&call_conv, 2, 2).unwrap();
-        insts.push(Inst::gen_move(Writable::from_reg(arg0), dst, I64));
-        insts.push(Inst::gen_move(Writable::from_reg(arg1), src, I64));
         insts.extend(
             Inst::gen_constant(ValueRegs::one(temp), size as u128, I64, |_| {
                 panic!("tmp should not be needed")

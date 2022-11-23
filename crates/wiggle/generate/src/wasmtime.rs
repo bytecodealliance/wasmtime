@@ -1,17 +1,17 @@
 use crate::config::Asyncness;
 use crate::funcs::func_bounds;
-use crate::{CodegenSettings, Names};
+use crate::names;
+use crate::CodegenSettings;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote};
 use std::collections::HashSet;
 
 pub fn link_module(
     module: &witx::Module,
-    names: &Names,
     target_path: Option<&syn::Path>,
     settings: &CodegenSettings,
 ) -> TokenStream {
-    let module_ident = names.module(&module.name);
+    let module_ident = names::module(&module.name);
 
     let send_bound = if settings.async_.contains_async(module) {
         quote! { + Send, T: Send }
@@ -23,8 +23,8 @@ pub fn link_module(
     let mut bounds = HashSet::new();
     for f in module.funcs() {
         let asyncness = settings.async_.get(module.name.as_str(), f.name.as_str());
-        bodies.push(generate_func(&module, &f, names, target_path, asyncness));
-        let bound = func_bounds(names, module, &f, settings);
+        bodies.push(generate_func(&module, &f, target_path, asyncness));
+        let bound = func_bounds(module, &f, settings);
         for b in bound {
             bounds.insert(b);
         }
@@ -46,14 +46,12 @@ pub fn link_module(
         format_ident!("add_{}_to_linker", module_ident)
     };
 
-    let rt = names.runtime_mod();
-
     quote! {
         /// Adds all instance items to the specified `Linker`.
         pub fn #func_name<T, U>(
-            linker: &mut #rt::wasmtime_crate::Linker<T>,
+            linker: &mut wiggle::wasmtime_crate::Linker<T>,
             get_cx: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-        ) -> #rt::anyhow::Result<()>
+        ) -> wiggle::anyhow::Result<()>
             where
                 U: #ctx_bound #send_bound
         {
@@ -66,17 +64,14 @@ pub fn link_module(
 fn generate_func(
     module: &witx::Module,
     func: &witx::InterfaceFunc,
-    names: &Names,
     target_path: Option<&syn::Path>,
     asyncness: Asyncness,
 ) -> TokenStream {
-    let rt = names.runtime_mod();
-
     let module_str = module.name.as_str();
-    let module_ident = names.module(&module.name);
+    let module_ident = names::module(&module.name);
 
     let field_str = func.name.as_str();
-    let field_ident = names.func(&func.name);
+    let field_ident = names::func(&func.name);
 
     let (params, results) = func.wasm_signature();
 
@@ -88,14 +83,14 @@ fn generate_func(
         .enumerate()
         .map(|(i, ty)| {
             let name = &arg_names[i];
-            let wasm = names.wasm_type(*ty);
+            let wasm = names::wasm_type(*ty);
             quote! { #name: #wasm }
         })
         .collect::<Vec<_>>();
 
     let ret_ty = match results.len() {
         0 => quote!(()),
-        1 => names.wasm_type(results[0]),
+        1 => names::wasm_type(results[0]),
         _ => unimplemented!(),
     };
 
@@ -112,20 +107,20 @@ fn generate_func(
     };
 
     let body = quote! {
-        let mem = match caller.get_export("memory") {
-            Some(#rt::wasmtime_crate::Extern::Memory(m)) => m,
-            _ => {
-                return Err(#rt::wasmtime_crate::Trap::new("missing required memory export"));
+        let export = caller.get_export("memory");
+        let (mem, ctx) = match &export {
+            Some(wiggle::wasmtime_crate::Extern::Memory(m)) => {
+                let (mem, ctx) = m.data_and_store_mut(&mut caller);
+                let ctx = get_cx(ctx);
+                (wiggle::wasmtime::WasmtimeGuestMemory::new(mem), ctx)
             }
+            Some(wiggle::wasmtime_crate::Extern::SharedMemory(m)) => {
+                let ctx = get_cx(caller.data_mut());
+                (wiggle::wasmtime::WasmtimeGuestMemory::shared(m.data()), ctx)
+            }
+            _ => wiggle::anyhow::bail!("missing required memory export"),
         };
-        let (mem , ctx) = mem.data_and_store_mut(&mut caller);
-        let ctx = get_cx(ctx);
-        let mem = #rt::wasmtime::WasmtimeGuestMemory::new(mem);
-        match #abi_func(ctx, &mem #(, #arg_names)*) #await_ {
-            Ok(r) => Ok(<#ret_ty>::from(r)),
-            Err(#rt::Trap::String(err)) => Err(#rt::wasmtime_crate::Trap::new(err)),
-            Err(#rt::Trap::I32Exit(err)) => Err(#rt::wasmtime_crate::Trap::i32_exit(err)),
-        }
+        Ok(<#ret_ty>::from(#abi_func(ctx, &mem #(, #arg_names)*) #await_ ?))
     };
 
     match asyncness {
@@ -135,7 +130,7 @@ fn generate_func(
                 linker.#wrapper(
                     #module_str,
                     #field_str,
-                    move |mut caller: #rt::wasmtime_crate::Caller<'_, T> #(, #arg_decls)*| {
+                    move |mut caller: wiggle::wasmtime_crate::Caller<'_, T> #(, #arg_decls)*| {
                         Box::new(async move { #body })
                     },
                 )?;
@@ -147,9 +142,9 @@ fn generate_func(
                 linker.func_wrap(
                     #module_str,
                     #field_str,
-                    move |mut caller: #rt::wasmtime_crate::Caller<'_, T> #(, #arg_decls)*| -> Result<#ret_ty, #rt::wasmtime_crate::Trap> {
+                    move |mut caller: wiggle::wasmtime_crate::Caller<'_, T> #(, #arg_decls)*| -> wiggle::anyhow::Result<#ret_ty> {
                         let result = async { #body };
-                        #rt::run_in_dummy_executor(result)?
+                        wiggle::run_in_dummy_executor(result)?
                     },
                 )?;
             }
@@ -160,7 +155,7 @@ fn generate_func(
                 linker.func_wrap(
                     #module_str,
                     #field_str,
-                    move |mut caller: #rt::wasmtime_crate::Caller<'_, T> #(, #arg_decls)*| -> Result<#ret_ty, #rt::wasmtime_crate::Trap> {
+                    move |mut caller: wiggle::wasmtime_crate::Caller<'_, T> #(, #arg_decls)*| -> wiggle::anyhow::Result<#ret_ty> {
                         #body
                     },
                 )?;

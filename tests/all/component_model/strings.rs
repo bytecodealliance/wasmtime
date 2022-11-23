@@ -1,7 +1,7 @@
 use super::REALLOC_AND_FREE;
 use anyhow::Result;
 use wasmtime::component::{Component, Linker};
-use wasmtime::{Engine, Store, StoreContextMut, Trap, TrapCode};
+use wasmtime::{Engine, Store, StoreContextMut, Trap};
 
 const UTF16_TAG: u32 = 1 << 31;
 
@@ -103,7 +103,7 @@ fn test_roundtrip(engine: &Engine, src: &str, dst: &str) -> Result<()> {
         format!(
             r#"
 (component {name}
-    (import "echo" (func $echo (param string) (result string)))
+    (import "echo" (func $echo (param "a" string) (result string)))
     (core instance $libc (instantiate $libc))
     (core func $echo (canon lower (func $echo)
         (memory $libc "memory")
@@ -114,7 +114,7 @@ fn test_roundtrip(engine: &Engine, src: &str, dst: &str) -> Result<()> {
         (with "libc" (instance $libc))
         (with "" (instance (export "echo" (func $echo))))
     ))
-    (func (export "echo") (param string) (result string)
+    (func (export "echo") (param "a" string) (result string)
         (canon lift
             (core func $echo "echo")
             (memory $libc "memory")
@@ -132,7 +132,7 @@ fn test_roundtrip(engine: &Engine, src: &str, dst: &str) -> Result<()> {
     let component = format!(
         r#"
 (component
-    (import "host" (func $host (param string) (result string)))
+    (import "host" (func $host (param "a" string) (result string)))
 
     (core module $libc
         (memory (export "memory") 1)
@@ -171,12 +171,13 @@ fn test_roundtrip(engine: &Engine, src: &str, dst: &str) -> Result<()> {
     let component = Component::new(engine, &component)?;
     let mut store = Store::new(engine, String::new());
     let mut linker = Linker::new(engine);
-    linker
-        .root()
-        .func_wrap("host", |store: StoreContextMut<String>, arg: String| {
+    linker.root().func_wrap(
+        "host",
+        |store: StoreContextMut<String>, (arg,): (String,)| {
             assert_eq!(*store.data(), arg);
             Ok((arg,))
-        })?;
+        },
+    )?;
     let instance = linker.instantiate(&mut store, &component)?;
     let func = instance.get_typed_func::<(String,), (String,), _>(&mut store, "echo")?;
 
@@ -213,14 +214,14 @@ fn test_ptr_out_of_bounds(engine: &Engine, src: &str, dst: &str) -> Result<()> {
       (memory (export "memory") 1)
     )
     (core instance $m (instantiate $m))
-    (func (export "") (param string)
+    (func (export "a") (param "a" string)
       (canon lift (core func $m "") (realloc (func $m "realloc")) (memory $m "memory")
         string-encoding={dst})
     )
   )
 
   (component $c2
-    (import "" (func $f (param string)))
+    (import "a" (func $f (param "a" string)))
     (core module $libc
       (memory (export "memory") 1)
     )
@@ -236,7 +237,7 @@ fn test_ptr_out_of_bounds(engine: &Engine, src: &str, dst: &str) -> Result<()> {
   )
 
   (instance $c (instantiate $c))
-  (instance $c2 (instantiate $c2 (with "" (func $c ""))))
+  (instance $c2 (instantiate $c2 (with "a" (func $c "a"))))
 )
 "#
         );
@@ -247,7 +248,7 @@ fn test_ptr_out_of_bounds(engine: &Engine, src: &str, dst: &str) -> Result<()> {
             .err()
             .unwrap()
             .downcast::<Trap>()?;
-        assert_eq!(trap.trap_code(), Some(TrapCode::UnreachableCodeReached));
+        assert_eq!(trap, Trap::UnreachableCodeReached);
         Ok(())
     };
 
@@ -281,14 +282,14 @@ fn test_ptr_overflow(engine: &Engine, src: &str, dst: &str) -> Result<()> {
       (memory (export "memory") 1)
     )
     (core instance $m (instantiate $m))
-    (func (export "") (param string)
+    (func (export "a") (param "a" string)
       (canon lift (core func $m "") (realloc (func $m "realloc")) (memory $m "memory")
         string-encoding={dst})
     )
   )
 
   (component $c2
-    (import "" (func $f (param string)))
+    (import "a" (func $f (param "a" string)))
     (core module $libc
       (memory (export "memory") 1)
     )
@@ -300,11 +301,11 @@ fn test_ptr_overflow(engine: &Engine, src: &str, dst: &str) -> Result<()> {
       (func (export "f") (param i32) (call $f (i32.const 1000) (local.get 0)))
     )
     (core instance $m (instantiate $m (with "" (instance (export "" (func $f))))))
-    (func (export "f") (param u32) (canon lift (core func $m "f")))
+    (func (export "f") (param "a" u32) (canon lift (core func $m "f")))
   )
 
   (instance $c (instantiate $c))
-  (instance $c2 (instantiate $c2 (with "" (func $c ""))))
+  (instance $c2 (instantiate $c2 (with "a" (func $c "a"))))
   (export "f" (func $c2 "f"))
 )
 "#
@@ -321,7 +322,7 @@ fn test_ptr_overflow(engine: &Engine, src: &str, dst: &str) -> Result<()> {
             .call(&mut store, (size,))
             .unwrap_err()
             .downcast::<Trap>()?;
-        assert_eq!(trap.trap_code(), Some(TrapCode::UnreachableCodeReached));
+        assert_eq!(trap, Trap::UnreachableCodeReached);
         Ok(())
     };
 
@@ -386,14 +387,14 @@ fn test_realloc_oob(engine: &Engine, src: &str, dst: &str) -> Result<()> {
       (memory (export "memory") 1)
     )
     (core instance $m (instantiate $m))
-    (func (export "") (param string)
+    (func (export "a") (param "a" string)
       (canon lift (core func $m "") (realloc (func $m "realloc")) (memory $m "memory")
         string-encoding={dst})
     )
   )
 
   (component $c2
-    (import "" (func $f (param string)))
+    (import "a" (func $f (param "a" string)))
     (core module $libc
       (memory (export "memory") 1)
     )
@@ -409,7 +410,7 @@ fn test_realloc_oob(engine: &Engine, src: &str, dst: &str) -> Result<()> {
   )
 
   (instance $c (instantiate $c))
-  (instance $c2 (instantiate $c2 (with "" (func $c ""))))
+  (instance $c2 (instantiate $c2 (with "a" (func $c "a"))))
   (export "f" (func $c2 "f"))
 )
 "#
@@ -421,7 +422,7 @@ fn test_realloc_oob(engine: &Engine, src: &str, dst: &str) -> Result<()> {
     let instance = Linker::new(engine).instantiate(&mut store, &component)?;
     let func = instance.get_typed_func::<(), (), _>(&mut store, "f")?;
     let trap = func.call(&mut store, ()).unwrap_err().downcast::<Trap>()?;
-    assert_eq!(trap.trap_code(), Some(TrapCode::UnreachableCodeReached));
+    assert_eq!(trap, Trap::UnreachableCodeReached);
     Ok(())
 }
 
@@ -497,9 +498,8 @@ fn test_invalid_string_encoding(
     let trap = test_raw_when_encoded(engine, src, dst, bytes, len)?.unwrap();
     let src = src.replace("latin1+", "");
     assert!(
-        trap.to_string()
-            .contains(&format!("invalid {src} encoding")),
-        "bad error: {}",
+        format!("{:?}", trap).contains(&format!("invalid {src} encoding")),
+        "bad error: {:?}",
         trap,
     );
     Ok(())
@@ -523,7 +523,7 @@ fn test_raw_when_encoded(
     dst: &str,
     bytes: &[u8],
     len: u32,
-) -> Result<Option<Trap>> {
+) -> Result<Option<anyhow::Error>> {
     let component = format!(
         r#"
 (component
@@ -534,14 +534,14 @@ fn test_raw_when_encoded(
       (memory (export "memory") 1)
     )
     (core instance $m (instantiate $m))
-    (func (export "") (param string)
+    (func (export "a") (param "a" string)
       (canon lift (core func $m "") (realloc (func $m "realloc")) (memory $m "memory")
         string-encoding={dst})
     )
   )
 
   (component $c2
-    (import "" (func $f (param string)))
+    (import "a" (func $f (param "a" string)))
     (core module $libc
       (memory (export "memory") 1)
       (func (export "realloc") (param i32 i32 i32 i32) (result i32) i32.const 0)
@@ -560,7 +560,7 @@ fn test_raw_when_encoded(
   )
 
   (instance $c (instantiate $c))
-  (instance $c2 (instantiate $c2 (with "" (func $c ""))))
+  (instance $c2 (instantiate $c2 (with "a" (func $c "a"))))
   (export "f" (func $c2 "f"))
 )
 "#
@@ -573,6 +573,6 @@ fn test_raw_when_encoded(
     let func = instance.get_typed_func::<(&[u8], u32), (), _>(&mut store, "f")?;
     match func.call(&mut store, (bytes, len)) {
         Ok(_) => Ok(None),
-        Err(e) => Ok(Some(e.downcast()?)),
+        Err(e) => Ok(Some(e)),
     }
 }

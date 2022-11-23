@@ -128,30 +128,8 @@ block0(v0: i32x4, v1: i32x4):
 ;   popq    %rbp
 ;   ret
 
-function %bitselect_i16x8() -> i16x8 {
-block0:
-    v0 = vconst.i16x8 [0 0 0 0 0 0 0 0]
-    v1 = vconst.i16x8 [0 0 0 0 0 0 0 0]
-    v2 = vconst.i16x8 [0 0 0 0 0 0 0 0]
-    v3 = bitselect v0, v1, v2
-    return v3
-}
-
-;   pushq   %rbp
-;   movq    %rsp, %rbp
-; block0:
-;   movdqu  const(0), %xmm0
-;   movdqu  const(0), %xmm2
-;   movdqu  const(0), %xmm6
-;   pand    %xmm2, %xmm0, %xmm2
-;   pandn   %xmm0, %xmm6, %xmm0
-;   por     %xmm0, %xmm2, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
-
-function %vselect_i16x8(b16x8, i16x8, i16x8) -> i16x8 {
-block0(v0: b16x8, v1: i16x8, v2: i16x8):
+function %vselect_i16x8(i16x8, i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8, v2: i16x8):
     v3 = vselect v0, v1, v2
     return v3
 }
@@ -159,15 +137,15 @@ block0(v0: b16x8, v1: i16x8, v2: i16x8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm2, %xmm6
-;   pblendvb %xmm6, %xmm1, %xmm6
-;   movdqa  %xmm6, %xmm0
+;   movdqa  %xmm2, %xmm4
+;   pblendvb %xmm4, %xmm1, %xmm4
+;   movdqa  %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
 
-function %vselect_f32x4(b32x4, f32x4, f32x4) -> f32x4 {
-block0(v0: b32x4, v1: f32x4, v2: f32x4):
+function %vselect_f32x4(i32x4, f32x4, f32x4) -> f32x4 {
+block0(v0: i32x4, v1: f32x4, v2: f32x4):
     v3 = vselect v0, v1, v2
     return v3
 }
@@ -175,15 +153,15 @@ block0(v0: b32x4, v1: f32x4, v2: f32x4):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm2, %xmm6
-;   blendvps %xmm6, %xmm1, %xmm6
-;   movdqa  %xmm6, %xmm0
+;   movdqa  %xmm2, %xmm4
+;   blendvps %xmm4, %xmm1, %xmm4
+;   movdqa  %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
 
-function %vselect_f64x2(b64x2, f64x2, f64x2) -> f64x2 {
-block0(v0: b64x2, v1: f64x2, v2: f64x2):
+function %vselect_f64x2(i64x2, f64x2, f64x2) -> f64x2 {
+block0(v0: i64x2, v1: f64x2, v2: f64x2):
     v3 = vselect v0, v1, v2
     return v3
 }
@@ -191,9 +169,9 @@ block0(v0: b64x2, v1: f64x2, v2: f64x2):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm2, %xmm6
-;   blendvpd %xmm6, %xmm1, %xmm6
-;   movdqa  %xmm6, %xmm0
+;   movdqa  %xmm2, %xmm4
+;   blendvpd %xmm4, %xmm1, %xmm4
+;   movdqa  %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -209,14 +187,14 @@ block0(v0: i32):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movdqu  const(1), %xmm0
-;   movq    %rdi, %r11
-;   andq    %r11, $7, %r11
-;   movd    %r11d, %xmm6
-;   psllw   %xmm0, %xmm6, %xmm0
-;   lea     const(0), %rdi
-;   shlq    $4, %r11, %r11
-;   movdqu  0(%rdi,%r11,1), %xmm14
-;   pand    %xmm0, %xmm14, %xmm0
+;   movq    %rdi, %r10
+;   andq    %r10, $7, %r10
+;   movd    %r10d, %xmm5
+;   psllw   %xmm0, %xmm5, %xmm0
+;   lea     const(0), %rsi
+;   shlq    $4, %r10, %r10
+;   movdqu  0(%rsi,%r10,1), %xmm13
+;   pand    %xmm0, %xmm13, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -233,14 +211,14 @@ block0:
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movdqu  const(1), %xmm0
-;   movl    $1, %r10d
-;   andq    %r10, $7, %r10
-;   movd    %r10d, %xmm6
-;   psrlw   %xmm0, %xmm6, %xmm0
-;   lea     const(0), %rdi
-;   shlq    $4, %r10, %r10
-;   movdqu  0(%rdi,%r10,1), %xmm14
-;   pand    %xmm0, %xmm14, %xmm0
+;   movl    $1, %r9d
+;   andq    %r9, $7, %r9
+;   movd    %r9d, %xmm5
+;   psrlw   %xmm0, %xmm5, %xmm0
+;   lea     const(0), %rsi
+;   shlq    $4, %r9, %r9
+;   movdqu  0(%rsi,%r9,1), %xmm13
+;   pand    %xmm0, %xmm13, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -255,17 +233,17 @@ block0(v0: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqu  const(0), %xmm9
-;   movq    %rdi, %r10
-;   andq    %r10, $7, %r10
-;   movdqa  %xmm9, %xmm0
-;   punpcklbw %xmm0, %xmm9, %xmm0
-;   punpckhbw %xmm9, %xmm9, %xmm9
-;   addl    %r10d, $8, %r10d
-;   movd    %r10d, %xmm12
-;   psraw   %xmm0, %xmm12, %xmm0
-;   psraw   %xmm9, %xmm12, %xmm9
-;   packsswb %xmm0, %xmm9, %xmm0
+;   movdqu  const(0), %xmm8
+;   movq    %rdi, %r9
+;   andq    %r9, $7, %r9
+;   movdqa  %xmm8, %xmm0
+;   punpcklbw %xmm0, %xmm8, %xmm0
+;   punpckhbw %xmm8, %xmm8, %xmm8
+;   addl    %r9d, $8, %r9d
+;   movd    %r9d, %xmm11
+;   psraw   %xmm0, %xmm11, %xmm0
+;   psraw   %xmm8, %xmm11, %xmm8
+;   packsswb %xmm0, %xmm8, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -279,19 +257,19 @@ block0(v0: i8x16, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movl    $3, %r11d
-;   andq    %r11, $7, %r11
-;   movdqa  %xmm0, %xmm14
-;   punpcklbw %xmm14, %xmm0, %xmm14
-;   movdqa  %xmm14, %xmm13
-;   movdqa  %xmm0, %xmm14
-;   punpckhbw %xmm14, %xmm0, %xmm14
-;   addl    %r11d, $8, %r11d
-;   movd    %r11d, %xmm15
-;   movdqa  %xmm13, %xmm0
-;   psraw   %xmm0, %xmm15, %xmm0
-;   psraw   %xmm14, %xmm15, %xmm14
-;   packsswb %xmm0, %xmm14, %xmm0
+;   movl    $3, %r10d
+;   andq    %r10, $7, %r10
+;   movdqa  %xmm0, %xmm13
+;   punpcklbw %xmm13, %xmm0, %xmm13
+;   movdqa  %xmm13, %xmm12
+;   movdqa  %xmm0, %xmm13
+;   punpckhbw %xmm13, %xmm0, %xmm13
+;   addl    %r10d, $8, %r10d
+;   movd    %r10d, %xmm14
+;   movdqa  %xmm12, %xmm0
+;   psraw   %xmm0, %xmm14, %xmm0
+;   psraw   %xmm13, %xmm14, %xmm13
+;   packsswb %xmm0, %xmm13, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -305,14 +283,14 @@ block0(v0: i64x2, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pextrd.w $0, %xmm0, %r9
-;   pextrd.w $1, %xmm0, %r11
+;   pextrd.w $0, %xmm0, %r8
+;   pextrd.w $1, %xmm0, %r10
 ;   movq    %rdi, %rcx
-;   sarq    %cl, %r9, %r9
-;   sarq    %cl, %r11, %r11
+;   sarq    %cl, %r8, %r8
+;   sarq    %cl, %r10, %r10
 ;   uninit  %xmm0
-;   pinsrd.w $0, %xmm0, %r9, %xmm0
-;   pinsrd.w $1, %xmm0, %r11, %xmm0
+;   pinsrd.w $0, %xmm0, %r8, %xmm0
+;   pinsrd.w $1, %xmm0, %r10, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

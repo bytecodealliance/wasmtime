@@ -1,5 +1,4 @@
-//! Example of instantiating of instantiating a wasm module which uses WASI
-//! imports.
+//! Example of instantiating a wasm module which uses WASI imports.
 
 /*
 You can execute this example with:
@@ -31,7 +30,7 @@ fn main() -> Result<()> {
     linker.module(&mut store, "", &module)?;
     linker
         .get_default(&mut store, "")?
-        .typed::<(), (), _>(&store)?
+        .typed::<(), ()>(&store)?
         .call(&mut store, ())?;
 
     Ok(())

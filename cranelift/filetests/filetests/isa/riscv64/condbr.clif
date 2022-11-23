@@ -1,0 +1,565 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %f(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+  v2 = icmp eq v0, v1
+  return v2
+}
+
+; block0:
+;   eq a0,a0,a1##ty=i64
+;   ret
+
+function %icmp_eq_i128(i128, i128) -> i8 {
+block0(v0: i128, v1: i128):
+  v2 = icmp eq v0, v1
+  return v2
+}
+
+; block0:
+;   eq a0,[a0,a1],[a2,a3]##ty=i128
+;   ret
+
+function %icmp_ne_i128(i128, i128) -> i8 {
+block0(v0: i128, v1: i128):
+  v2 = icmp ne v0, v1
+  return v2
+}
+
+; block0:
+;   ne a0,[a0,a1],[a2,a3]##ty=i128
+;   ret
+
+function %icmp_slt_i128(i128, i128) -> i8 {
+block0(v0: i128, v1: i128):
+  v2 = icmp slt v0, v1
+  return v2
+}
+
+; block0:
+;   slt a0,[a0,a1],[a2,a3]##ty=i128
+;   ret
+
+function %icmp_ult_i128(i128, i128) -> i8 {
+block0(v0: i128, v1: i128):
+  v2 = icmp ult v0, v1
+  return v2
+}
+
+; block0:
+;   ult a0,[a0,a1],[a2,a3]##ty=i128
+;   ret
+
+function %icmp_sle_i128(i128, i128) -> i8 {
+block0(v0: i128, v1: i128):
+  v2 = icmp sle v0, v1
+  return v2
+}
+
+; block0:
+;   sle a0,[a0,a1],[a2,a3]##ty=i128
+;   ret
+
+function %icmp_ule_i128(i128, i128) -> i8 {
+block0(v0: i128, v1: i128):
+  v2 = icmp ule v0, v1
+  return v2
+}
+
+; block0:
+;   ule a0,[a0,a1],[a2,a3]##ty=i128
+;   ret
+
+function %icmp_sgt_i128(i128, i128) -> i8 {
+block0(v0: i128, v1: i128):
+  v2 = icmp sgt v0, v1
+  return v2
+}
+
+; block0:
+;   sgt a0,[a0,a1],[a2,a3]##ty=i128
+;   ret
+
+function %icmp_ugt_i128(i128, i128) -> i8 {
+block0(v0: i128, v1: i128):
+  v2 = icmp ugt v0, v1
+  return v2
+}
+
+; block0:
+;   ugt a0,[a0,a1],[a2,a3]##ty=i128
+;   ret
+
+function %icmp_sge_i128(i128, i128) -> i8 {
+block0(v0: i128, v1: i128):
+  v2 = icmp sge v0, v1
+  return v2
+}
+
+; block0:
+;   sge a0,[a0,a1],[a2,a3]##ty=i128
+;   ret
+
+function %icmp_uge_i128(i128, i128) -> i8 {
+block0(v0: i128, v1: i128):
+  v2 = icmp uge v0, v1
+  return v2
+}
+
+; block0:
+;   uge a0,[a0,a1],[a2,a3]##ty=i128
+;   ret
+
+function %f(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = icmp eq v0, v1
+  brnz v2, block1
+  jump block2
+
+block1:
+  v4 = iconst.i64 1
+  return v4
+
+block2:
+  v5 = iconst.i64 2
+  return v5
+}
+
+; block0:
+;   eq a2,a0,a1##ty=i64
+;   bne a2,zero,taken(label1),not_taken(label2)
+; block1:
+;   li a0,1
+;   ret
+; block2:
+;   li a0,2
+;   ret
+
+function %f(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = icmp eq v0, v1
+  brnz v2, block1
+  jump block1
+
+block1:
+  v4 = iconst.i64 1
+  return v4
+}
+
+; block0:
+;   eq a1,a0,a1##ty=i64
+;   bne a1,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   li a0,1
+;   ret
+
+function %i128_brz(i128){
+block0(v0: i128):
+    brz v0, block1
+    jump block1
+
+block1:
+    nop
+    return
+}
+
+; block0:
+;   bne a1,zero,taken(label2),not_taken(0)
+;   beq a0,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i128_brnz(i128){
+block0(v0: i128):
+    brnz v0, block1
+    jump block1
+
+block1:
+    nop
+    return
+}
+
+; block0:
+;   bne a1,zero,taken(label1),not_taken(0)
+;   bne a0,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i128_bricmp_eq(i128, i128) {
+block0(v0: i128, v1: i128):
+  v2 = icmp eq v0, v1
+  brnz v2, block1
+  jump block1
+
+block1:
+  return
+}
+
+; block0:
+;   eq a2,[a0,a1],[a2,a3]##ty=i128
+;   bne a2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i128_bricmp_ne(i128, i128) {
+block0(v0: i128, v1: i128):
+  v2 = icmp ne v0, v1
+  brnz v2, block1
+  jump block1
+
+block1:
+  return
+}
+
+; block0:
+;   ne a2,[a0,a1],[a2,a3]##ty=i128
+;   bne a2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i128_bricmp_slt(i128, i128) {
+block0(v0: i128, v1: i128):
+  v2 = icmp slt v0, v1
+  brnz v2, block1
+  jump block1
+
+block1:
+  return
+}
+
+; block0:
+;   slt a2,[a0,a1],[a2,a3]##ty=i128
+;   bne a2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i128_bricmp_ult(i128, i128) {
+block0(v0: i128, v1: i128):
+  v2 = icmp ult v0, v1
+  brnz v2, block1
+  jump block1
+
+block1:
+  return
+}
+
+; block0:
+;   ult a2,[a0,a1],[a2,a3]##ty=i128
+;   bne a2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i128_bricmp_sle(i128, i128) {
+block0(v0: i128, v1: i128):
+  v2 = icmp sle v0, v1
+  brnz v2, block1
+  jump block1
+
+block1:
+  return
+}
+
+; block0:
+;   sle a2,[a0,a1],[a2,a3]##ty=i128
+;   bne a2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i128_bricmp_ule(i128, i128) {
+block0(v0: i128, v1: i128):
+  v2 = icmp ule v0, v1
+  brnz v2, block1
+  jump block1
+
+block1:
+  return
+}
+
+; block0:
+;   ule a2,[a0,a1],[a2,a3]##ty=i128
+;   bne a2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i128_bricmp_sgt(i128, i128) {
+block0(v0: i128, v1: i128):
+  v2 = icmp sgt v0, v1
+  brnz v2, block1
+  jump block1
+
+block1:
+  return
+}
+
+; block0:
+;   sgt a2,[a0,a1],[a2,a3]##ty=i128
+;   bne a2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i128_bricmp_ugt(i128, i128) {
+block0(v0: i128, v1: i128):
+  v2 = icmp ugt v0, v1
+  brnz v2, block1
+  jump block1
+
+block1:
+  return
+}
+
+; block0:
+;   ugt a2,[a0,a1],[a2,a3]##ty=i128
+;   bne a2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i128_bricmp_sge(i128, i128) {
+block0(v0: i128, v1: i128):
+  v2 = icmp sge v0, v1
+  brnz v2, block1
+  jump block1
+
+block1:
+  return
+}
+
+; block0:
+;   sge a2,[a0,a1],[a2,a3]##ty=i128
+;   bne a2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i128_bricmp_uge(i128, i128) {
+block0(v0: i128, v1: i128):
+  v2 = icmp uge v0, v1
+  brnz v2, block1
+  jump block1
+
+block1:
+  return
+}
+
+; block0:
+;   uge a2,[a0,a1],[a2,a3]##ty=i128
+;   bne a2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+
+
+function %i8_brz(i8){
+block0(v0: i8):
+    brz v0, block1
+    jump block1
+
+block1:
+    nop
+    return
+}
+
+; block0:
+;   andi t2,a0,255
+;   beq t2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i8_brnz(i8){
+block0(v0: i8):
+    brnz v0, block1
+    jump block1
+
+block1:
+    nop
+    return
+}
+
+; block0:
+;   andi t2,a0,255
+;   bne t2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i16_brz(i16){
+block0(v0: i16):
+    brz v0, block1
+    jump block1
+
+block1:
+    nop
+    return
+}
+
+; block0:
+;   lui t2,16
+;   addi t2,t2,4095
+;   and a2,a0,t2
+;   beq a2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i16_brnz(i16){
+block0(v0: i16):
+    brnz v0, block1
+    jump block1
+
+block1:
+    nop
+    return
+}
+
+; block0:
+;   lui t2,16
+;   addi t2,t2,4095
+;   and a2,a0,t2
+;   bne a2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i32_brz(i32){
+block0(v0: i32):
+    brz v0, block1
+    jump block1
+
+block1:
+    nop
+    return
+}
+
+; block0:
+;   addiw t2,a0,0
+;   beq t2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i32_brnz(i32){
+block0(v0: i32):
+    brnz v0, block1
+    jump block1
+
+block1:
+    nop
+    return
+}
+
+; block0:
+;   addiw t2,a0,0
+;   bne t2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i64_brz(i64){
+block0(v0: i64):
+    brz v0, block1
+    jump block1
+
+block1:
+    nop
+    return
+}
+
+; block0:
+;   beq a0,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i64_brnz(i64){
+block0(v0: i64):
+    brnz v0, block1
+    jump block1
+
+block1:
+    nop
+    return
+}
+
+; block0:
+;   bne a0,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+

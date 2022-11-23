@@ -427,7 +427,9 @@ impl JITModule {
     ///
     /// Use `get_finalized_function` and `get_finalized_data` to obtain the final
     /// artifacts.
-    pub fn finalize_definitions(&mut self) {
+    ///
+    /// Returns ModuleError in case of allocation or syscall failure
+    pub fn finalize_definitions(&mut self) -> ModuleResult<()> {
         for func in std::mem::take(&mut self.functions_to_finalize) {
             let decl = self.declarations.get_function_decl(func);
             assert!(decl.linkage.is_definable());
@@ -455,20 +457,13 @@ impl JITModule {
         }
 
         // Now that we're done patching, prepare the memory for execution!
-        self.memory.readonly.set_readonly();
-        self.memory.code.set_readable_and_executable();
-
-        #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
-        {
-            let cmd: libc::c_int = 32; // MEMBARRIER_CMD_PRIVATE_EXPEDITED_SYNC_CORE
-
-            // Ensure that no processor has fetched a stale instruction stream.
-            unsafe { libc::syscall(libc::SYS_membarrier, cmd) };
-        }
+        self.memory.readonly.set_readonly()?;
+        self.memory.code.set_readable_and_executable()?;
 
         for update in self.pending_got_updates.drain(..) {
             unsafe { update.entry.as_ref() }.store(update.ptr as *mut _, Ordering::SeqCst);
         }
+        Ok(())
     }
 
     /// Create a new `JITModule`.
@@ -528,15 +523,6 @@ impl JITModule {
             module.libcall_got_entries.insert(libcall, got_entry);
             let plt_entry = module.new_plt_entry(got_entry);
             module.libcall_plt_entries.insert(libcall, plt_entry);
-        }
-
-        #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
-        {
-            let cmd: libc::c_int = 64; // MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED_SYNC_CORE
-
-            // This is a requirement of the membarrier() call executed by
-            // the finalize_definitions() method.
-            unsafe { libc::syscall(libc::SYS_membarrier, cmd) };
         }
 
         module
@@ -705,7 +691,10 @@ impl Module for JITModule {
             .memory
             .code
             .allocate(size, align)
-            .expect("TODO: handle OOM etc.");
+            .map_err(|e| ModuleError::Allocation {
+                message: "unable to alloc function",
+                err: e,
+            })?;
 
         {
             let mem = unsafe { std::slice::from_raw_parts_mut(ptr, size) };
@@ -787,7 +776,10 @@ impl Module for JITModule {
             .memory
             .code
             .allocate(size, align)
-            .expect("TODO: handle OOM etc.");
+            .map_err(|e| ModuleError::Allocation {
+                message: "unable to alloc function bytes",
+                err: e,
+            })?;
 
         unsafe {
             ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, size);
@@ -853,12 +845,18 @@ impl Module for JITModule {
             self.memory
                 .writable
                 .allocate(size, align.unwrap_or(WRITABLE_DATA_ALIGNMENT))
-                .expect("TODO: handle OOM etc.")
+                .map_err(|e| ModuleError::Allocation {
+                    message: "unable to alloc writable data",
+                    err: e,
+                })?
         } else {
             self.memory
                 .readonly
                 .allocate(size, align.unwrap_or(READONLY_DATA_ALIGNMENT))
-                .expect("TODO: handle OOM etc.")
+                .map_err(|e| ModuleError::Allocation {
+                    message: "unable to alloc readonly data",
+                    err: e,
+                })?
         };
 
         match *init {

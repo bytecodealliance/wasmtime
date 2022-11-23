@@ -2,7 +2,7 @@
 use crate::component;
 use crate::core;
 use crate::spectest::*;
-use anyhow::{anyhow, bail, Context as _, Result};
+use anyhow::{anyhow, bail, Context as _, Error, Result};
 use std::path::Path;
 use std::str;
 use wasmtime::*;
@@ -24,7 +24,7 @@ pub struct WastContext<T> {
 
 enum Outcome<T = Results> {
     Ok(T),
-    Trap(Trap),
+    Trap(Error),
 }
 
 impl<T> Outcome<T> {
@@ -35,7 +35,7 @@ impl<T> Outcome<T> {
         }
     }
 
-    fn into_result(self) -> Result<T, Trap> {
+    fn into_result(self) -> Result<T> {
         match self {
             Outcome::Ok(t) => Ok(t),
             Outcome::Trap(t) => Err(t),
@@ -111,27 +111,29 @@ impl<T> WastContext<T> {
 
     fn instantiate_module(&mut self, module: &[u8]) -> Result<Outcome<Instance>> {
         let module = Module::new(self.store.engine(), module)?;
-        let instance = match self.core_linker.instantiate(&mut self.store, &module) {
-            Ok(i) => i,
-            Err(e) => return e.downcast::<Trap>().map(Outcome::Trap),
-        };
-        Ok(Outcome::Ok(instance))
+        Ok(
+            match self.core_linker.instantiate(&mut self.store, &module) {
+                Ok(i) => Outcome::Ok(i),
+                Err(e) => Outcome::Trap(e),
+            },
+        )
     }
 
     #[cfg(feature = "component-model")]
     fn instantiate_component(&mut self, module: &[u8]) -> Result<Outcome<component::Instance>> {
         let engine = self.store.engine();
         let module = component::Component::new(engine, module)?;
-        let instance = match self.component_linker.instantiate(&mut self.store, &module) {
-            Ok(i) => i,
-            Err(e) => return e.downcast::<Trap>().map(Outcome::Trap),
-        };
-        Ok(Outcome::Ok(instance))
+        Ok(
+            match self.component_linker.instantiate(&mut self.store, &module) {
+                Ok(i) => Outcome::Ok(i),
+                Err(e) => Outcome::Trap(e),
+            },
+        )
     }
 
     /// Register "spectest" which is used by the spec testsuite.
-    pub fn register_spectest(&mut self) -> Result<()> {
-        link_spectest(&mut self.core_linker, &mut self.store)?;
+    pub fn register_spectest(&mut self, use_shared_memory: bool) -> Result<()> {
+        link_spectest(&mut self.core_linker, &mut self.store, use_shared_memory)?;
         #[cfg(feature = "component-model")]
         link_component_spectest(&mut self.component_linker)?;
         Ok(())
@@ -174,7 +176,7 @@ impl<T> WastContext<T> {
                 let mut results = vec![Val::null(); func.ty(&self.store).results().len()];
                 Ok(match func.call(&mut self.store, &values, &mut results) {
                     Ok(()) => Outcome::Ok(Results::Core(results.into())),
-                    Err(e) => Outcome::Trap(e.downcast()?),
+                    Err(e) => Outcome::Trap(e),
                 })
             }
             #[cfg(feature = "component-model")]
@@ -200,7 +202,7 @@ impl<T> WastContext<T> {
                         func.post_return(&mut self.store)?;
                         Outcome::Ok(Results::Component(results.into()))
                     }
-                    Err(e) => Outcome::Trap(e.downcast()?),
+                    Err(e) => Outcome::Trap(e),
                 })
             }
         }
@@ -330,7 +332,7 @@ impl<T> WastContext<T> {
             Outcome::Ok(values) => bail!("expected trap, got {:?}", values),
             Outcome::Trap(t) => t,
         };
-        let actual = trap.to_string();
+        let actual = format!("{trap:?}");
         if actual.contains(expected)
             // `bulk-memory-operations/bulk.wast` checks for a message that
             // specifies which element is uninitialized, but our traps don't
@@ -476,9 +478,6 @@ impl<T> WastContext<T> {
 
 fn is_matching_assert_invalid_error_message(expected: &str, actual: &str) -> bool {
     actual.contains(expected)
-        // `elem.wast` and `proposals/bulk-memory-operations/elem.wast` disagree
-        // on the expected error message for the same error.
-        || (expected.contains("out of bounds") && actual.contains("does not fit"))
         // slight difference in error messages
         || (expected.contains("unknown elem segment") && actual.contains("unknown element segment"))
         // The same test here is asserted to have one error message in
@@ -486,4 +485,7 @@ fn is_matching_assert_invalid_error_message(expected: &str, actual: &str) -> boo
         // `memory64/memory.wast`, so we equate these two error messages to get
         // the memory64 tests to pass.
         || (expected.contains("memory size must be at most 65536 pages") && actual.contains("invalid u32 number"))
+        // the spec test suite asserts a different error message than we print
+        // for this scenario
+        || (expected == "unknown global" && actual.contains("global.get of locally defined global"))
 }

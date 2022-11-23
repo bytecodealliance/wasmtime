@@ -529,6 +529,7 @@ probestack_strategy = "outline"
 regalloc_checker = false
 regalloc_verbose_logs = false
 enable_alias_analysis = true
+use_egraphs = false
 enable_verifier = true
 is_pic = false
 use_colocated_libcalls = false

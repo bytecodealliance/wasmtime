@@ -698,13 +698,25 @@ pub(crate) fn emit(
             );
         }
 
-        Inst::MovPReg { src, dst } => {
+        Inst::MovFromPReg { src, dst } => {
+            allocs.next_fixed_nonallocatable(*src);
             let src: Reg = (*src).into();
-            debug_assert!([regs::rsp(), regs::rbp()].contains(&src));
+            debug_assert!([regs::rsp(), regs::rbp(), regs::pinned_reg()].contains(&src));
             let src = Gpr::new(src).unwrap();
             let size = OperandSize::Size64;
             let dst = allocs.next(dst.to_reg().to_reg());
             let dst = WritableGpr::from_writable_reg(Writable::from_reg(dst)).unwrap();
+            Inst::MovRR { size, src, dst }.emit(&[], sink, info, state);
+        }
+
+        Inst::MovToPReg { src, dst } => {
+            let src = allocs.next(src.to_reg());
+            let src = Gpr::new(src).unwrap();
+            allocs.next_fixed_nonallocatable(*dst);
+            let dst: Reg = (*dst).into();
+            debug_assert!([regs::rsp(), regs::rbp(), regs::pinned_reg()].contains(&dst));
+            let dst = WritableGpr::from_writable_reg(Writable::from_reg(dst)).unwrap();
+            let size = OperandSize::Size64;
             Inst::MovRR { size, src, dst }.emit(&[], sink, info, state);
         }
 
@@ -1113,6 +1125,21 @@ pub(crate) fn emit(
                 reg_enc(dst),
                 rex_flags,
             );
+        }
+
+        Inst::Bswap { size, src, dst } => {
+            let src = allocs.next(src.to_reg());
+            let dst = allocs.next(dst.to_reg().to_reg());
+            debug_assert_eq!(src, dst);
+            let enc_reg = int_reg_enc(dst);
+
+            // BSWAP reg32 is (REX.W==0) 0F C8
+            // BSWAP reg64 is (REX.W==1) 0F C8
+            let rex_flags = RexFlags::from(*size);
+            rex_flags.emit_one_op(sink, enc_reg);
+
+            sink.put1(0x0F);
+            sink.put1(0xC8 | (enc_reg & 7));
         }
 
         Inst::Cmove {
@@ -1795,8 +1822,6 @@ pub(crate) fn emit(
                 SseOpcode::Andpd => (LegacyPrefixes::_66, 0x0F54, 2),
                 SseOpcode::Andnps => (LegacyPrefixes::None, 0x0F55, 2),
                 SseOpcode::Andnpd => (LegacyPrefixes::_66, 0x0F55, 2),
-                SseOpcode::Blendvps => (LegacyPrefixes::_66, 0x0F3814, 3),
-                SseOpcode::Blendvpd => (LegacyPrefixes::_66, 0x0F3815, 3),
                 SseOpcode::Divps => (LegacyPrefixes::None, 0x0F5E, 2),
                 SseOpcode::Divpd => (LegacyPrefixes::_66, 0x0F5E, 2),
                 SseOpcode::Divss => (LegacyPrefixes::_F3, 0x0F5E, 2),
@@ -1834,7 +1859,6 @@ pub(crate) fn emit(
                 SseOpcode::Pandn => (LegacyPrefixes::_66, 0x0FDF, 2),
                 SseOpcode::Pavgb => (LegacyPrefixes::_66, 0x0FE0, 2),
                 SseOpcode::Pavgw => (LegacyPrefixes::_66, 0x0FE3, 2),
-                SseOpcode::Pblendvb => (LegacyPrefixes::_66, 0x0F3810, 3),
                 SseOpcode::Pcmpeqb => (LegacyPrefixes::_66, 0x0F74, 2),
                 SseOpcode::Pcmpeqw => (LegacyPrefixes::_66, 0x0F75, 2),
                 SseOpcode::Pcmpeqd => (LegacyPrefixes::_66, 0x0F76, 2),
@@ -1885,6 +1909,39 @@ pub(crate) fn emit(
                 SseOpcode::Unpcklps => (LegacyPrefixes::None, 0x0F14, 2),
                 SseOpcode::Xorps => (LegacyPrefixes::None, 0x0F57, 2),
                 SseOpcode::Xorpd => (LegacyPrefixes::_66, 0x0F57, 2),
+                _ => unimplemented!("Opcode {:?} not implemented", op),
+            };
+
+            match src_e {
+                RegMem::Reg { reg: reg_e } => {
+                    emit_std_reg_reg(sink, prefix, opcode, length, reg_g, reg_e, rex);
+                }
+                RegMem::Mem { addr } => {
+                    let addr = &addr.finalize(state, sink);
+                    emit_std_reg_mem(sink, info, prefix, opcode, length, reg_g, addr, rex, 0);
+                }
+            }
+        }
+
+        Inst::XmmRmRBlend {
+            op,
+            src1,
+            src2,
+            dst,
+            mask,
+        } => {
+            let src1 = allocs.next(src1.to_reg());
+            let mask = allocs.next(mask.to_reg());
+            debug_assert_eq!(mask, regs::xmm0());
+            let reg_g = allocs.next(dst.to_reg().to_reg());
+            debug_assert_eq!(src1, reg_g);
+            let src_e = src2.clone().to_reg_mem().with_allocs(allocs);
+
+            let rex = RexFlags::clear_w();
+            let (prefix, opcode, length) = match op {
+                SseOpcode::Blendvps => (LegacyPrefixes::_66, 0x0F3814, 3),
+                SseOpcode::Blendvpd => (LegacyPrefixes::_66, 0x0F3815, 3),
+                SseOpcode::Pblendvb => (LegacyPrefixes::_66, 0x0F3810, 3),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
 
@@ -3138,9 +3195,17 @@ pub(crate) fn emit(
             sink.put1(0x17);
         }
 
-        Inst::CoffTlsGetAddr { ref symbol, dst } => {
+        Inst::CoffTlsGetAddr {
+            ref symbol,
+            dst,
+            tmp,
+        } => {
             let dst = allocs.next(dst.to_reg().to_reg());
             debug_assert_eq!(dst, regs::rax());
+
+            // tmp is used below directly as %rcx
+            let tmp = allocs.next(tmp.to_reg().to_reg());
+            debug_assert_eq!(tmp, regs::rcx());
 
             // See: https://gcc.godbolt.org/z/M8or9x6ss
             // And: https://github.com/bjorn3/rustc_codegen_cranelift/issues/388#issuecomment-532930282

@@ -88,7 +88,7 @@ block0(v0: i8x16, v1: i8x16):
 }
 ; run: %usub_sat_i8x16([0x80 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0], [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]) == [0x7f 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
 
-function %add_sub_f32x4() -> b1 {
+function %add_sub_f32x4() -> i8 {
 block0:
     v0 = vconst.f32x4 [0x4.2 0.0 0.0 0.0]
     v1 = vconst.f32x4 [0x1.0 0x1.0 0x1.0 0x1.0]
@@ -106,7 +106,7 @@ block0:
 }
 ; run
 
-function %mul_div_f32x4() -> b1 {
+function %mul_div_f32x4() -> i8 {
 block0:
     v0 = vconst.f32x4 [0x4.2 -0x2.1 0x2.0 0.0]
     v1 = vconst.f32x4 [0x3.4 0x6.7 0x8.9 0xa.b]

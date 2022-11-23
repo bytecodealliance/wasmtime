@@ -1,17 +1,16 @@
 [package]
 authors = ["The Cranelift Project Developers"]
 description = "ISLE: Instruction Selection and Lowering Expressions. A domain-specific language for instruction selection in Cranelift."
-edition = "2021"
+edition.workspace = true
 license = "Apache-2.0 WITH LLVM-exception"
 name = "cranelift-isle"
 readme = "../README.md"
 repository = "https://github.com/bytecodealliance/wasmtime/tree/main/cranelift/isle"
-version = "0.89.0"
+version = "0.91.0"
 
 [dependencies]
-log = { version = "0.4", optional = true }
+log = { workspace = true, optional = true }
 miette = { version = "5.1.0", optional = true }
-rayon = "^1.5"
 
 [dev-dependencies]
 tempfile = "3"
@@ -19,6 +18,5 @@ tempfile = "3"
 [features]
 default = []
 
-overlap-errors = []
 logging = ["log"]
 miette-errors = ["miette"]

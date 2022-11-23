@@ -1,12 +1,12 @@
 [package]
 name = "wasmtime-bench-api"
-version = "0.19.0"
-authors = ["The Wasmtime Project Developers"]
+version.workspace = true
+authors.workspace = true
 description = "Exposes a benchmarking API for the Wasmtime runtime"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
-edition = "2021"
+edition.workspace = true
 publish = false
 
 [lib]
@@ -16,21 +16,21 @@ test = false
 doctest = false
 
 [dependencies]
-anyhow = "1.0"
+anyhow = { workspace = true }
 shuffling-allocator = { version = "1.1.1", optional = true }
-target-lexicon = "0.12"
-wasmtime = { path = "../wasmtime", default-features = true }
-wasmtime-cli-flags = { path = "../cli-flags", default-features = true }
-wasmtime-wasi = { path = "../wasi" }
-wasmtime-wasi-crypto = { path = "../wasi-crypto", optional = true }
-wasmtime-wasi-nn = { path = "../wasi-nn", optional = true }
-wasi-cap-std-sync = { path = "../wasi-common/cap-std-sync" }
-cap-std = "0.26.0"
+target-lexicon = { workspace = true }
+wasmtime = { workspace = true }
+wasmtime-cli-flags = { workspace = true, default-features = true }
+wasmtime-wasi = { workspace = true }
+wasmtime-wasi-crypto = { workspace = true, optional = true }
+wasmtime-wasi-nn = { workspace = true, optional = true }
+wasi-cap-std-sync = { workspace = true }
+cap-std = { workspace = true }
 
 [dev-dependencies]
-wat = "1.0.45"
+wat = { workspace = true }
 
 [features]
-default = ["shuffling-allocator"]
+default = ["shuffling-allocator", "wasi-nn"]
 wasi-crypto = ["wasmtime-wasi-crypto"]
 wasi-nn = ["wasmtime-wasi-nn"]

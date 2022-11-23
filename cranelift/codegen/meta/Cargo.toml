@@ -1,19 +1,19 @@
 [package]
 name = "cranelift-codegen-meta"
 authors = ["The Cranelift Project Developers"]
-version = "0.89.0"
+version = "0.91.0"
 description = "Metaprogram for cranelift-codegen code generator library"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
-edition = "2021"
+edition.workspace = true
 
 # FIXME(rust-lang/cargo#9300): uncomment once that lands
 # [package.metadata.docs.rs]
 # rustdoc-args = [ "--document-private-items" ]
 
 [dependencies]
-cranelift-codegen-shared = { path = "../shared", version = "0.89.0" }
+cranelift-codegen-shared = { path = "../shared", version = "0.91.0" }
 
 [badges]
 maintenance = { status = "experimental" }

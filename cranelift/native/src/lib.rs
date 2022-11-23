@@ -46,7 +46,12 @@ pub fn builder_with_options(infer_native_flags: bool) -> Result<isa::Builder, &'
         isa::LookupError::Unsupported => "unsupported architecture",
     })?;
 
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[cfg(target_arch = "x86")]
+    {
+        compile_error!("Unsupported architecture");
+    }
+
+    #[cfg(target_arch = "x86_64")]
     {
         use cranelift_codegen::settings::Configurable;
 
@@ -163,6 +168,58 @@ pub fn builder_with_options(infer_native_flags: bool) -> Result<isa::Builder, &'
             // that any machine with vxrs_ext2 also has mie2.
             isa_builder.enable("has_mie2").unwrap();
         }
+    }
+
+    // `is_riscv_feature_detected` is nightly only for now, use
+    // getauxval from the libc crate directly as a temporary measure.
+    #[cfg(all(target_arch = "riscv64", target_os = "linux"))]
+    {
+        use cranelift_codegen::settings::Configurable;
+
+        if !infer_native_flags {
+            return Ok(isa_builder);
+        }
+
+        let v = unsafe { libc::getauxval(libc::AT_HWCAP) };
+
+        const HWCAP_RISCV_EXT_A: libc::c_ulong = 1 << (b'a' - b'a');
+        const HWCAP_RISCV_EXT_C: libc::c_ulong = 1 << (b'c' - b'a');
+        const HWCAP_RISCV_EXT_D: libc::c_ulong = 1 << (b'd' - b'a');
+        const HWCAP_RISCV_EXT_F: libc::c_ulong = 1 << (b'f' - b'a');
+        const HWCAP_RISCV_EXT_M: libc::c_ulong = 1 << (b'm' - b'a');
+        const HWCAP_RISCV_EXT_V: libc::c_ulong = 1 << (b'v' - b'a');
+
+        if (v & HWCAP_RISCV_EXT_A) != 0 {
+            isa_builder.enable("has_a").unwrap();
+        }
+
+        if (v & HWCAP_RISCV_EXT_C) != 0 {
+            isa_builder.enable("has_c").unwrap();
+        }
+
+        if (v & HWCAP_RISCV_EXT_D) != 0 {
+            isa_builder.enable("has_d").unwrap();
+        }
+
+        if (v & HWCAP_RISCV_EXT_F) != 0 {
+            isa_builder.enable("has_f").unwrap();
+
+            // TODO: There doesn't seem to be a bit associated with this extension
+            // rust enables it with the `f` extension:
+            // https://github.com/rust-lang/stdarch/blob/790411f93c4b5eada3c23abb4c9a063fb0b24d99/crates/std_detect/src/detect/os/linux/riscv.rs#L43
+            isa_builder.enable("has_zicsr").unwrap();
+        }
+
+        if (v & HWCAP_RISCV_EXT_M) != 0 {
+            isa_builder.enable("has_m").unwrap();
+        }
+
+        if (v & HWCAP_RISCV_EXT_V) != 0 {
+            isa_builder.enable("has_v").unwrap();
+        }
+
+        // TODO: ZiFencei does not have a bit associated with it
+        // TODO: Zbkb does not have a bit associated with it
     }
 
     // squelch warnings about unused mut/variables on some platforms.

@@ -1,18 +1,18 @@
 [package]
 name = "cranelift-fuzzgen"
-version = "0.75.0"
+version = "0.0.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Cranelift module generator"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
-edition = "2021"
+edition.workspace = true
 publish = false
 
 
 [dependencies]
-cranelift = { path = "../umbrella", version = "0.89.0" }
-cranelift-native = { path = "../native", version = "0.89.0" }
+cranelift = { workspace = true }
+cranelift-native = { workspace = true }
 
-anyhow = "1.0.19"
+anyhow = { workspace = true }
 arbitrary = "1.0.0"

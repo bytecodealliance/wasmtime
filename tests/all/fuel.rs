@@ -116,11 +116,7 @@ fn iloop() {
         let mut store = Store::new(&engine, ());
         store.add_fuel(10_000).unwrap();
         let error = Instance::new(&mut store, &module, &[]).err().unwrap();
-        assert!(
-            error.to_string().contains("all fuel consumed"),
-            "bad error: {}",
-            error
-        );
+        assert_eq!(error.downcast::<Trap>().unwrap(), Trap::OutOfFuel);
     }
 }
 
@@ -138,10 +134,10 @@ fn manual_fuel() {
     assert_eq!(store.consume_fuel(999).unwrap(), 9_000);
     assert!(store.consume_fuel(10_000).is_err());
     assert_eq!(store.consume_fuel(8998).unwrap(), 2);
-    assert!(store.consume_fuel(2).is_err());
+    assert!(store.consume_fuel(3).is_err());
     assert_eq!(store.consume_fuel(1).unwrap(), 1);
-    assert!(store.consume_fuel(1).is_err());
-    assert_eq!(store.consume_fuel(0).unwrap(), 1);
+    assert_eq!(store.consume_fuel(1).unwrap(), 0);
+    assert_eq!(store.consume_fuel(0).unwrap(), 0);
 }
 
 #[test]
@@ -170,11 +166,9 @@ fn host_function_consumes_all() {
     });
 
     let instance = Instance::new(&mut store, &module, &[func.into()]).unwrap();
-    let export = instance
-        .get_typed_func::<(), (), _>(&mut store, "")
-        .unwrap();
-    let trap = export.call(&mut store, ()).err().unwrap().to_string();
-    assert!(trap.contains("all fuel consumed"), "bad error: {}", trap);
+    let export = instance.get_typed_func::<(), ()>(&mut store, "").unwrap();
+    let trap = export.call(&mut store, ()).unwrap_err();
+    assert_eq!(trap.downcast::<Trap>().unwrap(), Trap::OutOfFuel);
 }
 
 #[test]
@@ -186,7 +180,6 @@ fn manual_edge_cases() {
     store.add_fuel(u64::MAX).unwrap();
     assert_eq!(store.fuel_consumed(), Some(0));
     assert!(store.consume_fuel(u64::MAX).is_err());
-    assert!(store.consume_fuel(i64::MAX as u64).is_err());
     assert!(store.consume_fuel(i64::MAX as u64 + 1).is_err());
-    assert_eq!(store.consume_fuel(i64::MAX as u64 - 1).unwrap(), 1);
+    assert_eq!(store.consume_fuel(i64::MAX as u64).unwrap(), 0);
 }

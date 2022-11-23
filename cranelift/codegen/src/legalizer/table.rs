@@ -99,15 +99,11 @@ fn compute_addr(
     };
 
     let element_addr = if let Some((index, bound)) = spectre_oob_cmp {
-        let flags = pos.ins().ifcmp(index, bound);
+        let cond = pos
+            .ins()
+            .icmp(IntCC::UnsignedGreaterThanOrEqual, index, bound);
         // If out-of-bounds, choose the table base on the misspeculation path.
-        pos.ins().selectif_spectre_guard(
-            addr_ty,
-            IntCC::UnsignedGreaterThanOrEqual,
-            flags,
-            base,
-            element_addr,
-        )
+        pos.ins().select_spectre_guard(cond, base, element_addr)
     } else {
         element_addr
     };

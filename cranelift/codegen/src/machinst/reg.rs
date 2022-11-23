@@ -2,11 +2,9 @@
 //! interface over the register allocator so that we can more easily
 //! swap it out or shim it when necessary.
 
-use crate::machinst::MachInst;
 use alloc::{string::String, vec::Vec};
 use core::{fmt::Debug, hash::Hash};
-use regalloc2::{Allocation, Operand, PReg, PRegSet, VReg};
-use smallvec::{smallvec, SmallVec};
+use regalloc2::{Allocation, MachineEnv, Operand, PReg, PRegSet, VReg};
 
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
@@ -38,6 +36,26 @@ pub fn first_user_vreg_index() -> usize {
     // specific name in order to ensure other parts of the code don't
     // open-code and depend on the index-space scheme.
     PINNED_VREGS
+}
+
+/// Collect the registers from a regalloc2 MachineEnv into a PRegSet.
+/// TODO: remove this once it's upstreamed in regalloc2
+pub fn preg_set_from_machine_env(machine_env: &MachineEnv) -> PRegSet {
+    let mut regs = PRegSet::default();
+
+    for class in machine_env.preferred_regs_by_class.iter() {
+        for reg in class.iter() {
+            regs.add(*reg);
+        }
+    }
+
+    for class in machine_env.non_preferred_regs_by_class.iter() {
+        for reg in class.iter() {
+            regs.add(*reg);
+        }
+    }
+
+    regs
 }
 
 /// A register named in an instruction. This register can be either a
@@ -291,19 +309,28 @@ pub struct OperandCollector<'a, F: Fn(VReg) -> VReg> {
     operands: &'a mut Vec<Operand>,
     operands_start: usize,
     clobbers: PRegSet,
+
+    /// The subset of physical registers that are allocatable.
+    allocatable: PRegSet,
+
     renamer: F,
 }
 
 impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     /// Start gathering operands into one flattened operand array.
-    pub fn new(operands: &'a mut Vec<Operand>, renamer: F) -> Self {
+    pub fn new(operands: &'a mut Vec<Operand>, allocatable: PRegSet, renamer: F) -> Self {
         let operands_start = operands.len();
         Self {
             operands,
             operands_start,
             clobbers: PRegSet::default(),
+            allocatable,
             renamer,
         }
+    }
+
+    fn is_allocatable_preg(&self, reg: PReg) -> bool {
+        self.allocatable.contains(reg)
     }
 
     /// Add an operand.
@@ -320,6 +347,12 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
         let start = self.operands_start as u32;
         let end = self.operands.len() as u32;
         ((start, end), self.clobbers)
+    }
+
+    /// Add a use of a fixed, nonallocatable physical register.
+    pub fn reg_fixed_nonallocatable(&mut self, preg: PReg) {
+        debug_assert!(!self.is_allocatable_preg(preg));
+        self.add_operand(Operand::fixed_nonallocatable(preg))
     }
 
     /// Add a register use, at the start of the instruction (`Before`
@@ -391,34 +424,12 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
         }
     }
 
-    /// Add a register use+def, or "modify", where the reg must stay
-    /// in the same register on the input and output side of the
-    /// instruction.
-    pub fn reg_mod(&mut self, reg: Writable<Reg>) {
-        self.add_operand(Operand::new(
-            reg.to_reg().into(),
-            regalloc2::OperandConstraint::Reg,
-            regalloc2::OperandKind::Mod,
-            regalloc2::OperandPos::Early,
-        ));
-    }
-
     /// Add a register clobber set. This is a set of registers that
     /// are written by the instruction, so must be reserved (not used)
     /// for the whole instruction, but are not used afterward.
     pub fn reg_clobbers(&mut self, regs: PRegSet) {
         self.clobbers.union_from(regs);
     }
-}
-
-/// Use an OperandCollector to count the number of operands on an instruction.
-pub fn count_operands<I: MachInst>(inst: &I) -> usize {
-    let mut ops = vec![];
-    let mut coll = OperandCollector::new(&mut ops, |vreg| vreg);
-    inst.get_operands(&mut coll);
-    let ((start, end), _) = coll.finish();
-    debug_assert_eq!(0, start);
-    end as usize
 }
 
 /// Pretty-print part of a disassembly, with knowledge of
@@ -458,6 +469,19 @@ impl<'a> AllocationConsumer<'a> {
         }
     }
 
+    pub fn next_fixed_nonallocatable(&mut self, preg: PReg) {
+        let alloc = self.allocs.next();
+        let alloc = alloc.map(|alloc| {
+            Reg::from(
+                alloc
+                    .as_reg()
+                    .expect("Should not have gotten a stack allocation"),
+            )
+        });
+
+        assert_eq!(preg, alloc.unwrap().to_real_reg().unwrap().into());
+    }
+
     pub fn next(&mut self, pre_regalloc_reg: Reg) -> Reg {
         let alloc = self.allocs.next();
         let alloc = alloc.map(|alloc| {
@@ -481,18 +505,6 @@ impl<'a> AllocationConsumer<'a> {
 
     pub fn next_writable(&mut self, pre_regalloc_reg: Writable<Reg>) -> Writable<Reg> {
         Writable::from_reg(self.next(pre_regalloc_reg.to_reg()))
-    }
-
-    pub fn next_n(&mut self, count: usize) -> SmallVec<[Allocation; 4]> {
-        let mut allocs = smallvec![];
-        for _ in 0..count {
-            if let Some(next) = self.allocs.next() {
-                allocs.push(*next);
-            } else {
-                return allocs;
-            }
-        }
-        allocs
     }
 }
 

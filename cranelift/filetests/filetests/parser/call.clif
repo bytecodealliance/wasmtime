@@ -25,14 +25,14 @@ block1:
 
 function %signatures() {
     sig10 = ()
-    sig11 = (i32, f64) -> i32, b1
+    sig11 = (i32, f64) -> i32, i8
     fn5 = %foo sig11
-    fn8 = %bar(i32) -> b1
+    fn8 = %bar(i32) -> i8
 }
 ; sameln: function %signatures() fast {
 ; check:      sig10 = () fast
-; check:      sig11 = (i32, f64) -> i32, b1
-; check:      sig12 = (i32) -> b1 fast
+; check:      sig11 = (i32, f64) -> i32, i8
+; check:      sig12 = (i32) -> i8 fast
 ; not:        fn0
 ; check:      fn5 = %foo sig11
 ; check:      fn8 = %bar sig12

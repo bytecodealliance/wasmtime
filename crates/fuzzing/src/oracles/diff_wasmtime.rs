@@ -6,7 +6,7 @@ use crate::oracles::engine::DiffInstance;
 use crate::oracles::{compile_module, engine::DiffEngine, StoreLimits};
 use anyhow::{Context, Error, Result};
 use arbitrary::Unstructured;
-use wasmtime::{Extern, FuncType, Instance, Module, Store, Trap, TrapCode, Val};
+use wasmtime::{Extern, FuncType, Instance, Module, Store, Trap, Val};
 
 /// A wrapper for using Wasmtime as a [`DiffEngine`].
 pub struct WasmtimeEngine {
@@ -45,18 +45,12 @@ impl DiffEngine for WasmtimeEngine {
         let trap2 = err
             .downcast_ref::<Trap>()
             .expect(&format!("not a trap: {:?}", err));
-        assert_eq!(
-            trap.trap_code(),
-            trap2.trap_code(),
-            "{}\nis not equal to\n{}",
-            trap,
-            trap2
-        );
+        assert_eq!(trap, trap2, "{}\nis not equal to\n{}", trap, trap2);
     }
 
     fn is_stack_overflow(&self, err: &Error) -> bool {
         match err.downcast_ref::<Trap>() {
-            Some(trap) => trap.trap_code() == Some(TrapCode::StackOverflow),
+            Some(trap) => *trap == Trap::StackOverflow,
             None => false,
         }
     }
@@ -175,12 +169,11 @@ impl DiffInstance for WasmtimeInstance {
 
     fn get_memory(&mut self, name: &str, shared: bool) -> Option<Vec<u8>> {
         Some(if shared {
-            let data = self
+            let memory = self
                 .instance
                 .get_shared_memory(&mut self.store, name)
-                .unwrap()
-                .data();
-            unsafe { (*data).to_vec() }
+                .unwrap();
+            memory.data().iter().map(|i| unsafe { *i.get() }).collect()
         } else {
             self.instance
                 .get_memory(&mut self.store, name)

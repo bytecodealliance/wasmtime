@@ -3,8 +3,7 @@ use anyhow::{anyhow, Result};
 use core::mem;
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{
-    condcodes::IntCC, ExternalName, Function, InstBuilder, Signature, UserExternalName,
-    UserFuncName,
+    ExternalName, Function, InstBuilder, Signature, UserExternalName, UserFuncName,
 };
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{ir, settings, CodegenError, Context};
@@ -245,7 +244,7 @@ impl TestFileCompiler {
         // Finalize the functions which we just defined, which resolves any
         // outstanding relocations (patching in addresses, now that they're
         // available).
-        self.module.finalize_definitions();
+        self.module.finalize_definitions()?;
 
         Ok(CompiledTestFile {
             module: Some(self.module),
@@ -357,7 +356,7 @@ impl UnboxedValues {
         // Store the argument values into `values_vec`.
         for ((arg, slot), param) in arguments.iter().zip(&mut values_vec).zip(&signature.params) {
             assert!(
-                arg.ty() == param.value_type || arg.is_vector() || arg.is_bool(),
+                arg.ty() == param.value_type || arg.is_vector(),
                 "argument type mismatch: {} != {}",
                 arg.ty(),
                 param.value_type
@@ -425,9 +424,6 @@ fn make_trampoline(name: UserFuncName, signature: &ir::Signature, isa: &dyn Targ
         .iter()
         .enumerate()
         .map(|(i, param)| {
-            // Calculate the type to load from memory, using integers for booleans (no encodings).
-            let ty = param.value_type.coerce_bools_to_ints();
-
             // We always store vector types in little-endian byte order as DataValue.
             let mut flags = ir::MemFlags::trusted();
             if param.value_type.is_vector() {
@@ -435,32 +431,12 @@ fn make_trampoline(name: UserFuncName, signature: &ir::Signature, isa: &dyn Targ
             }
 
             // Load the value.
-            let loaded = builder.ins().load(
-                ty,
+            builder.ins().load(
+                param.value_type,
                 flags,
                 values_vec_ptr_val,
                 (i * UnboxedValues::SLOT_SIZE) as i32,
-            );
-
-            // For booleans, we want to type-convert the loaded integer into a boolean and ensure
-            // that we are using the architecture's canonical boolean representation (presumably
-            // comparison will emit this).
-            if param.value_type.is_bool() {
-                let b = builder.ins().icmp_imm(IntCC::NotEqual, loaded, 0);
-
-                // icmp_imm always produces a `b1`, `bextend` it if we need a larger bool
-                if param.value_type.bits() > 1 {
-                    builder.ins().bextend(param.value_type, b)
-                } else {
-                    b
-                }
-            } else if param.value_type.is_bool_vector() {
-                let zero_constant = builder.func.dfg.constants.insert(vec![0; 16].into());
-                let zero_vec = builder.ins().vconst(ty, zero_constant);
-                builder.ins().icmp(IntCC::NotEqual, loaded, zero_vec)
-            } else {
-                loaded
-            }
+            )
         })
         .collect::<Vec<_>>();
 
@@ -473,13 +449,6 @@ fn make_trampoline(name: UserFuncName, signature: &ir::Signature, isa: &dyn Targ
     // Store the return values into `values_vec`.
     let results = builder.func.dfg.inst_results(call).to_vec();
     for ((i, value), param) in results.iter().enumerate().zip(&signature.returns) {
-        // Before storing return values, we convert booleans to their integer representation.
-        let value = if param.value_type.lane_type().is_bool() {
-            let ty = param.value_type.lane_type().as_int();
-            builder.ins().bint(ty, *value)
-        } else {
-            *value
-        };
         // We always store vector types in little-endian byte order as DataValue.
         let mut flags = ir::MemFlags::trusted();
         if param.value_type.is_vector() {
@@ -488,7 +457,7 @@ fn make_trampoline(name: UserFuncName, signature: &ir::Signature, isa: &dyn Targ
         // Store the value.
         builder.ins().store(
             flags,
-            value,
+            *value,
             values_vec_ptr_val,
             (i * UnboxedValues::SLOT_SIZE) as i32,
         );
@@ -514,10 +483,10 @@ mod test {
         let code = String::from(
             "
             test run
-            function %test() -> b8 {
+            function %test() -> i8 {
             block0:
                 nop
-                v1 = bconst.b8 true
+                v1 = iconst.i8 -1
                 return v1
             }",
         );
@@ -535,17 +504,17 @@ mod test {
         let compiled = compiler.compile().unwrap();
         let trampoline = compiled.get_trampoline(&function).unwrap();
         let returned = trampoline.call(&[]);
-        assert_eq!(returned, vec![DataValue::B(true)])
+        assert_eq!(returned, vec![DataValue::I8(-1)])
     }
 
     #[test]
     fn trampolines() {
         let function = parse(
             "
-            function %test(f32, i8, i64x2, b1) -> f32x4, b64 {
-            block0(v0: f32, v1: i8, v2: i64x2, v3: b1):
+            function %test(f32, i8, i64x2, i8) -> f32x4, i64 {
+            block0(v0: f32, v1: i8, v2: i64x2, v3: i8):
                 v4 = vconst.f32x4 [0x0.1 0x0.2 0x0.3 0x0.4]
-                v5 = bconst.b64 true
+                v5 = iconst.i64 -1
                 return v4, v5
             }",
         );
@@ -556,19 +525,18 @@ mod test {
             &function.signature,
             compiler.module.isa(),
         );
+        println!("{}", trampoline);
         assert!(format!("{}", trampoline).ends_with(
-            "sig0 = (f32, i8, i64x2, b1) -> f32x4, b64 fast
+            "sig0 = (f32, i8, i64x2, i8) -> f32x4, i64 fast
 
 block0(v0: i64, v1: i64):
     v2 = load.f32 notrap aligned v1
     v3 = load.i8 notrap aligned v1+16
     v4 = load.i64x2 notrap aligned little v1+32
     v5 = load.i8 notrap aligned v1+48
-    v6 = icmp_imm ne v5, 0
-    v7, v8 = call_indirect sig0, v0(v2, v3, v4, v6)
-    store notrap aligned little v7, v1
-    v9 = bint.i64 v8
-    store notrap aligned v9, v1+16
+    v6, v7 = call_indirect sig0, v0(v2, v3, v4, v5)
+    store notrap aligned little v6, v1
+    store notrap aligned v7, v1+16
     return
 }
 "

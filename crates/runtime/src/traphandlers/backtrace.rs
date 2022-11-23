@@ -42,6 +42,9 @@ cfg_if! {
     } else if #[cfg(target_arch = "s390x")] {
         mod s390x;
         use s390x as arch;
+    } else if #[cfg(target_arch = "riscv64")] {
+        mod riscv64;
+        use riscv64 as arch;
     } else {
         compile_error!("unsupported architecture");
     }

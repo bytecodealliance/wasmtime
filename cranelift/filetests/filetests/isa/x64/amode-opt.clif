@@ -132,8 +132,8 @@ block0(v0: i64, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movl    %esi, %edx
-;   movq    -1(%rdi,%rdx,8), %rax
+;   movl    %esi, %ecx
+;   movq    -1(%rdi,%rcx,8), %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -153,9 +153,9 @@ block0(v0: i64, v1: i32, v2: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    %rsi, %r9
-;   addl    %r9d, %edx, %r9d
-;   movq    -1(%rdi,%r9,4), %rax
+;   movq    %rsi, %r8
+;   addl    %r8d, %edx, %r8d
+;   movq    -1(%rdi,%r8,4), %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

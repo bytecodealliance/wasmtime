@@ -1,6 +1,7 @@
 test interpret
 test run
 target aarch64
+target riscv64
 target s390x
 ; not implemented on `x86_64`
 

@@ -7,7 +7,6 @@ use crate::timing;
 use crate::trace;
 
 use regalloc2::RegallocOptions;
-use regalloc2::{self, MachineEnv};
 
 /// Compile the given function down to VCode with allocated registers, ready
 /// for binary emission.
@@ -15,15 +14,24 @@ pub fn compile<B: LowerBackend + TargetIsa>(
     f: &Function,
     b: &B,
     abi: Callee<<<B as LowerBackend>::MInst as MachInst>::ABIMachineSpec>,
-    machine_env: &MachineEnv,
     emit_info: <B::MInst as MachInstEmit>::Info,
     sigs: SigSet,
 ) -> CodegenResult<(VCode<B::MInst>, regalloc2::Output)> {
+    let machine_env = b.machine_env();
+
     // Compute lowered block order.
     let block_order = BlockLoweringOrder::new(f);
 
     // Build the lowering context.
-    let lower = crate::machinst::Lower::new(f, abi, emit_info, block_order, sigs)?;
+    let lower = crate::machinst::Lower::new(
+        f,
+        b.flags().clone(),
+        machine_env,
+        abi,
+        emit_info,
+        block_order,
+        sigs,
+    )?;
 
     // Lower the IR.
     let vcode = {

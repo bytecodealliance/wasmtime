@@ -19,13 +19,13 @@ use crate::machinst::{
     LoweredBlock, MachLabel, Reg, SigSet, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData,
     VCodeConstants, VCodeInst, ValueRegs, Writable,
 };
-use crate::{trace, CodegenError, CodegenResult};
+use crate::{trace, CodegenResult};
 use alloc::vec::Vec;
-use regalloc2::VReg;
+use regalloc2::{MachineEnv, PRegSet};
 use smallvec::{smallvec, SmallVec};
 use std::fmt::Debug;
 
-use super::{first_user_vreg_index, VCodeBuildDirection};
+use super::{preg_set_from_machine_env, VCodeBuildDirection, VRegAllocator};
 
 /// An "instruction color" partitions CLIF instructions by side-effecting ops.
 /// All instructions with the same "color" are guaranteed not to be separated by
@@ -147,14 +147,23 @@ pub struct Lower<'func, I: VCodeInst> {
     /// The function to lower.
     f: &'func Function,
 
+    /// Machine-independent flags.
+    flags: crate::settings::Flags,
+
+    /// The set of allocatable registers.
+    allocatable: PRegSet,
+
     /// Lowered machine instructions.
     vcode: VCodeBuilder<I>,
+
+    /// VReg allocation context, given to the vcode field at build time to finalize the vcode.
+    vregs: VRegAllocator<I>,
 
     /// Mapping from `Value` (SSA value in IR) to virtual register.
     value_regs: SecondaryMap<Value, ValueRegs<Reg>>,
 
-    /// Return-value vregs.
-    retval_regs: Vec<ValueRegs<Reg>>,
+    /// sret registers, if needed.
+    sret_reg: Option<ValueRegs<Reg>>,
 
     /// Instruction colors at block exits. From this map, we can recover all
     /// instruction colors by scanning backward from the block end and
@@ -191,9 +200,6 @@ pub struct Lower<'func, I: VCodeInst> {
     /// Effectful instructions that have been sunk; they are not codegen'd at
     /// their original locations.
     inst_sunk: FxHashSet<Inst>,
-
-    /// Next virtual register number to allocate.
-    next_vreg: usize,
 
     /// Instructions collected for the CLIF inst in progress, in forward order.
     ir_insts: Vec<I>,
@@ -315,43 +321,19 @@ pub enum RelocDistance {
     Far,
 }
 
-fn alloc_vregs<I: VCodeInst>(
-    ty: Type,
-    next_vreg: &mut usize,
-    vcode: &mut VCodeBuilder<I>,
-) -> CodegenResult<ValueRegs<Reg>> {
-    let v = *next_vreg;
-    let (regclasses, tys) = I::rc_for_type(ty)?;
-    *next_vreg += regclasses.len();
-    if *next_vreg >= VReg::MAX {
-        return Err(CodegenError::CodeTooLarge);
-    }
-
-    let regs: ValueRegs<Reg> = match regclasses {
-        &[rc0] => ValueRegs::one(VReg::new(v, rc0).into()),
-        &[rc0, rc1] => ValueRegs::two(VReg::new(v, rc0).into(), VReg::new(v + 1, rc1).into()),
-        // We can extend this if/when we support 32-bit targets; e.g.,
-        // an i128 on a 32-bit machine will need up to four machine regs
-        // for a `Value`.
-        _ => panic!("Value must reside in 1 or 2 registers"),
-    };
-    for (&reg_ty, &reg) in tys.iter().zip(regs.regs().iter()) {
-        vcode.set_vreg_type(reg.to_virtual_reg().unwrap(), reg_ty);
-    }
-    Ok(regs)
-}
-
 impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Prepare a new lowering context for the given IR function.
     pub fn new(
         f: &'func Function,
+        flags: crate::settings::Flags,
+        machine_env: &MachineEnv,
         abi: Callee<I::ABIMachineSpec>,
         emit_info: I::Info,
         block_order: BlockLoweringOrder,
         sigs: SigSet,
-    ) -> CodegenResult<Lower<'func, I>> {
+    ) -> CodegenResult<Self> {
         let constants = VCodeConstants::with_capacity(f.dfg.constants.len());
-        let mut vcode = VCodeBuilder::new(
+        let vcode = VCodeBuilder::new(
             sigs,
             abi,
             emit_info,
@@ -360,7 +342,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             VCodeBuildDirection::Backward,
         );
 
-        let mut next_vreg: usize = first_user_vreg_index();
+        let mut vregs = VRegAllocator::new();
 
         let mut value_regs = SecondaryMap::with_default(ValueRegs::invalid());
 
@@ -369,7 +351,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             for &param in f.dfg.block_params(bb) {
                 let ty = f.dfg.value_type(param);
                 if value_regs[param].is_invalid() {
-                    let regs = alloc_vregs(ty, &mut next_vreg, &mut vcode)?;
+                    let regs = vregs.alloc(ty)?;
                     value_regs[param] = regs;
                     trace!("bb {} param {}: regs {:?}", bb, param, regs);
                 }
@@ -377,8 +359,8 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             for inst in f.layout.block_insts(bb) {
                 for &result in f.dfg.inst_results(inst) {
                     let ty = f.dfg.value_type(result);
-                    if value_regs[result].is_invalid() {
-                        let regs = alloc_vregs(ty, &mut next_vreg, &mut vcode)?;
+                    if value_regs[result].is_invalid() && !ty.is_invalid() {
+                        let regs = vregs.alloc(ty)?;
                         value_regs[result] = regs;
                         trace!(
                             "bb {} inst {} ({:?}): result {} regs {:?}",
@@ -393,12 +375,13 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             }
         }
 
-        // Assign vreg(s) to each return value.
-        let mut retval_regs = vec![];
+        // Make a sret register, if one is needed.
+        let mut sret_reg = None;
         for ret in &vcode.abi().signature().returns.clone() {
-            let regs = alloc_vregs(ret.value_type, &mut next_vreg, &mut vcode)?;
-            retval_regs.push(regs);
-            trace!("retval gets regs {:?}", regs);
+            if ret.purpose == ArgumentPurpose::StructReturn {
+                assert!(sret_reg.is_none());
+                sret_reg = Some(vregs.alloc(ret.value_type)?);
+            }
         }
 
         // Compute instruction colors, find constant instructions, and find instructions with
@@ -433,13 +416,15 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
         Ok(Lower {
             f,
+            flags,
+            allocatable: preg_set_from_machine_env(machine_env),
             vcode,
+            vregs,
             value_regs,
-            retval_regs,
+            sret_reg,
             block_end_colors,
             side_effect_inst_entry_colors,
             inst_constants,
-            next_vreg,
             value_ir_uses,
             value_lowered_uses: SecondaryMap::default(),
             inst_sunk: FxHashSet::default(),
@@ -588,7 +573,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     .vcode
                     .vcode
                     .abi
-                    .gen_copy_arg_to_regs(&self.vcode.vcode.sigs, i, regs)
+                    .gen_copy_arg_to_regs(&self.vcode.vcode.sigs, i, regs, &mut self.vregs)
                     .into_iter()
                 {
                     self.emit(insn);
@@ -598,15 +583,15 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     let ty = self.abi().signature().params[i].value_type;
                     // The ABI implementation must have ensured that a StructReturn
                     // arg is present in the return values.
-                    let struct_ret_idx = self
+                    assert!(self
                         .abi()
                         .signature()
                         .returns
                         .iter()
                         .position(|ret| ret.purpose == ArgumentPurpose::StructReturn)
-                        .expect("StructReturn return value not present!");
+                        .is_some());
                     self.emit(I::gen_move(
-                        Writable::from_reg(self.retval_regs[struct_ret_idx].regs()[0]),
+                        Writable::from_reg(self.sret_reg.unwrap().regs()[0]),
                         regs.regs()[0].to_reg(),
                         ty,
                     ));
@@ -616,7 +601,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 .vcode
                 .vcode
                 .abi
-                .gen_retval_area_setup(&self.vcode.vcode.sigs)
+                .gen_retval_area_setup(&self.vcode.vcode.sigs, &mut self.vregs)
             {
                 self.emit(insn);
             }
@@ -633,21 +618,36 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         }
     }
 
-    fn gen_retval_setup(&mut self) {
-        let retval_regs = self.retval_regs.clone();
-        for (i, regs) in retval_regs.into_iter().enumerate() {
-            let regs = writable_value_regs(regs);
-            for insn in self
-                .vcode
-                .abi()
-                .gen_copy_regs_to_retval(self.sigs(), i, regs)
-                .into_iter()
-            {
+    /// Generate the return instruction.
+    pub fn gen_return(&mut self, rets: Vec<ValueRegs<Reg>>) {
+        let mut out_rets = vec![];
+
+        let mut rets = rets.into_iter();
+        for (i, ret) in self
+            .abi()
+            .signature()
+            .returns
+            .clone()
+            .into_iter()
+            .enumerate()
+        {
+            let regs = if ret.purpose == ArgumentPurpose::StructReturn {
+                self.sret_reg.unwrap().clone()
+            } else {
+                rets.next().unwrap()
+            };
+
+            let (regs, insns) = self.vcode.abi().gen_copy_regs_to_retval(
+                self.vcode.sigs(),
+                i,
+                regs,
+                &mut self.vregs,
+            );
+            out_rets.extend(regs);
+            for insn in insns {
                 self.emit(insn);
             }
         }
-        let inst = self.vcode.abi().gen_ret(self.sigs());
-        self.emit(inst);
 
         // Hack: generate a virtual instruction that uses vmctx in
         // order to keep it alive for the duration of the function,
@@ -658,6 +658,9 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 self.emit(I::gen_dummy_use(vmctx_reg));
             }
         }
+
+        let inst = self.abi().gen_ret(out_rets);
+        self.emit(inst);
     }
 
     /// Has this instruction been sunk to a use-site (i.e., away from its
@@ -742,10 +745,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 trace!("lowering: inst {}: {:?}", inst, self.f.dfg[inst]);
                 backend.lower(self, inst)?;
             }
-            if data.opcode().is_return() {
-                // Return: handle specially, using ABI-appropriate sequence.
-                self.gen_retval_setup();
-            }
 
             let loc = self.srcloc(inst);
             self.finish_ir_inst(loc);
@@ -769,8 +768,9 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             let (_reg_rcs, reg_tys) = I::rc_for_type(ty)?;
             debug_assert_eq!(reg_tys.len(), self.value_regs[param].len());
             for (&reg, &rty) in self.value_regs[param].regs().iter().zip(reg_tys.iter()) {
-                self.vcode
-                    .add_block_param(reg.to_virtual_reg().unwrap(), rty);
+                let vreg = reg.to_virtual_reg().unwrap();
+                self.vregs.set_vreg_type(vreg, rty);
+                self.vcode.add_block_param(vreg);
             }
         }
         Ok(())
@@ -995,12 +995,11 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
                 let mut branch_arg_vregs: SmallVec<[Reg; 16]> = smallvec![];
                 for ty in self.f.dfg.block_param_types(orig_succ) {
-                    let regs = alloc_vregs(ty, &mut self.next_vreg, &mut self.vcode)?;
+                    let regs = self.vregs.alloc(ty)?;
                     for &reg in regs.regs() {
                         branch_arg_vregs.push(reg);
                         let vreg = reg.to_virtual_reg().unwrap();
-                        self.vcode
-                            .add_block_param(vreg, self.vcode.get_vreg_type(vreg));
+                        self.vcode.add_block_param(vreg);
                     }
                 }
                 self.vcode.add_succ(succ, &branch_arg_vregs[..]);
@@ -1026,7 +1025,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
         // Now that we've emitted all instructions into the
         // VCodeBuilder, let's build the VCode.
-        let vcode = self.vcode.build();
+        let vcode = self.vcode.build(self.allocatable, self.vregs);
         trace!("built vcode: {:?}", vcode);
 
         Ok(vcode)
@@ -1047,14 +1046,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Get the `Callee`.
     pub fn abi_mut(&mut self) -> &mut Callee<I::ABIMachineSpec> {
         self.vcode.abi_mut()
-    }
-
-    /// Get the (virtual) register that receives the return value. A return
-    /// instruction should lower into a sequence that fills this register. (Why
-    /// not allow the backend to specify its own result register for the return?
-    /// Because there may be multiple return points.)
-    pub fn retval(&self, idx: usize) -> ValueRegs<Writable<Reg>> {
-        writable_value_regs(self.retval_regs[idx])
     }
 }
 
@@ -1265,46 +1256,37 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             assert!(!self.inst_sunk.contains(&inst));
         }
 
-        // If the value is a constant, then (re)materialize it at each use. This
-        // lowers register pressure.
-        if let Some(c) = self
-            .f
-            .dfg
-            .value_def(val)
-            .inst()
-            .and_then(|inst| self.get_constant(inst))
-        {
-            let regs = self.alloc_tmp(ty);
-            trace!(" -> regs {:?}", regs);
-            assert!(regs.is_valid());
+        // If the value is a constant, then (re)materialize it at each
+        // use. This lowers register pressure. (Only do this if we are
+        // not using egraph-based compilation; the egraph framework
+        // more efficiently rematerializes constants where needed.)
+        if !self.flags.use_egraphs() {
+            if let Some(c) = self
+                .f
+                .dfg
+                .value_def(val)
+                .inst()
+                .and_then(|inst| self.get_constant(inst))
+            {
+                let regs = self.alloc_tmp(ty);
+                trace!(" -> regs {:?}", regs);
+                assert!(regs.is_valid());
 
-            let insts = I::gen_constant(regs, c.into(), ty, |ty| {
-                self.alloc_tmp(ty).only_reg().unwrap()
-            });
-            for inst in insts {
-                self.emit(inst);
+                let insts = I::gen_constant(regs, c.into(), ty, |ty| {
+                    self.alloc_tmp(ty).only_reg().unwrap()
+                });
+                for inst in insts {
+                    self.emit(inst);
+                }
+                return non_writable_value_regs(regs);
             }
-            return non_writable_value_regs(regs);
         }
 
-        let mut regs = self.value_regs[val];
+        let regs = self.value_regs[val];
         trace!(" -> regs {:?}", regs);
         assert!(regs.is_valid());
 
         self.value_lowered_uses[val] += 1;
-
-        // Pinned-reg hack: if backend specifies a fixed pinned register, use it
-        // directly when we encounter a GetPinnedReg op, rather than lowering
-        // the actual op, and do not return the source inst to the caller; the
-        // value comes "out of the ether" and we will not force generation of
-        // the superfluous move.
-        if let ValueDef::Result(i, 0) = self.f.dfg.value_def(val) {
-            if self.f.dfg[i].opcode() == Opcode::GetPinnedReg {
-                if let Some(pr) = self.pinned_reg {
-                    regs = ValueRegs::one(pr);
-                }
-            }
-        }
 
         regs
     }
@@ -1328,7 +1310,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Get a new temp.
     pub fn alloc_tmp(&mut self, ty: Type) -> ValueRegs<Writable<Reg>> {
-        writable_value_regs(alloc_vregs(ty, &mut self.next_vreg, &mut self.vcode).unwrap())
+        writable_value_regs(self.vregs.alloc(ty).unwrap())
     }
 
     /// Emit a machine instruction.

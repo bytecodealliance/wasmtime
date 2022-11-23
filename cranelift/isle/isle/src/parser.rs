@@ -137,6 +137,7 @@ impl<'a> Parser<'a> {
         self.lparen()?;
         let pos = self.pos();
         let def = match &self.symbol()?[..] {
+            "pragma" => Def::Pragma(self.parse_pragma()?),
             "type" => Def::Type(self.parse_type()?),
             "decl" => Def::Decl(self.parse_decl()?),
             "rule" => Def::Rule(self.parse_rule()?),
@@ -194,6 +195,14 @@ impl<'a> Parser<'a> {
                 pos,
                 "Not a constant identifier; must start with a '$'".to_string(),
             ))
+        }
+    }
+
+    fn parse_pragma(&mut self) -> Result<Pragma> {
+        let ident = self.parse_ident()?;
+        // currently, no pragmas are defined, but the infrastructure is useful to keep around
+        match ident.0.as_str() {
+            pragma => Err(self.error(ident.1, format!("Unknown pragma '{}'", pragma))),
         }
     }
 
@@ -381,7 +390,10 @@ impl<'a> Parser<'a> {
     fn parse_rule(&mut self) -> Result<Rule> {
         let pos = self.pos();
         let prio = if self.is_int() {
-            Some(self.int()?)
+            Some(
+                i64::try_from(self.int()?)
+                    .map_err(|err| self.error(pos, format!("Invalid rule priority: {}", err)))?,
+            )
         } else {
             None
         };
@@ -398,7 +410,7 @@ impl<'a> Parser<'a> {
                         iflets,
                         expr,
                         pos,
-                        prio: prio.map(|prio| i64::try_from(prio).unwrap()),
+                        prio,
                     });
                 }
             }

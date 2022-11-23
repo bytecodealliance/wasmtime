@@ -6,6 +6,7 @@ use crate::state::{MemoryError, State};
 use crate::value::{Value, ValueConversionKind, ValueError, ValueResult};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
+use cranelift_codegen::ir::immediates::HeapImmData;
 use cranelift_codegen::ir::{
     types, AbiParam, Block, ExternalName, FuncRef, Function, InstructionData, Opcode, TrapCode,
     Type, Value as ValueRef,
@@ -29,7 +30,6 @@ fn validate_signature_params(sig: &[AbiParam], args: &[impl Value]) -> bool {
             // but we don't have enough information there either.
             //
             // Ideally the user has run the verifier and caught this properly...
-            (a, b) if a.is_bool() && b.is_bool() => true,
             (a, b) if a.is_vector() && b.is_vector() => true,
             (a, b) => a == b,
         })
@@ -108,23 +108,18 @@ where
                     .get(imm)
                     .unwrap()
                     .as_slice();
-                match ctrl_ty.bytes() {
+                match mask.len() {
                     16 => DataValue::V128(mask.try_into().expect("a 16-byte vector mask")),
                     8 => DataValue::V64(mask.try_into().expect("an 8-byte vector mask")),
-                    length => panic!("unexpected Shuffle mask length {}", length),
+                    length => panic!("unexpected Shuffle mask length {}", mask.len()),
                 }
             }
-            InstructionData::UnaryBool { imm, .. } => DataValue::from(imm),
             // 8-bit.
             InstructionData::BinaryImm8 { imm, .. } | InstructionData::TernaryImm8 { imm, .. } => {
                 DataValue::from(imm as i8) // Note the switch from unsigned to signed.
             }
             // 32-bit
             InstructionData::UnaryIeee32 { imm, .. } => DataValue::from(imm),
-            InstructionData::HeapAddr { imm, .. } => {
-                let imm: u32 = imm.into();
-                DataValue::from(imm as i32) // Note the switch from unsigned to signed.
-            }
             InstructionData::Load { offset, .. }
             | InstructionData::Store { offset, .. }
             | InstructionData::StackLoad { offset, .. }
@@ -247,10 +242,7 @@ where
     let branch_when = |condition: bool| -> Result<ControlFlow<V>, StepError> {
         let branch_args = match inst {
             InstructionData::Jump { .. } => args_range(0..),
-            InstructionData::BranchInt { .. }
-            | InstructionData::BranchFloat { .. }
-            | InstructionData::Branch { .. } => args_range(1..),
-            InstructionData::BranchIcmp { .. } => args_range(2..),
+            InstructionData::Branch { .. } => args_range(1..),
             _ => panic!("Unrecognized branch inst: {:?}", inst),
         }?;
 
@@ -295,11 +287,6 @@ where
                 .convert(ValueConversionKind::ToBoolean)?
                 .into_bool()?,
         )?,
-        Opcode::BrIcmp => {
-            branch_when(icmp(ctrl_ty, inst.cond_code().unwrap(), &arg(0)?, &arg(1)?)?.into_bool()?)?
-        }
-        Opcode::Brif => branch_when(state.has_iflag(inst.cond_code().unwrap()))?,
-        Opcode::Brff => branch_when(state.has_fflag(inst.fp_cond_code().unwrap()))?,
         Opcode::BrTable => {
             if let InstructionData::BranchTable {
                 table, destination, ..
@@ -325,14 +312,6 @@ where
         Opcode::Trapz => trap_when(!arg(0)?.into_bool()?, CraneliftTrap::User(trap_code())),
         Opcode::Trapnz => trap_when(arg(0)?.into_bool()?, CraneliftTrap::User(trap_code())),
         Opcode::ResumableTrapnz => trap_when(arg(0)?.into_bool()?, CraneliftTrap::Resumable),
-        Opcode::Trapif => trap_when(
-            state.has_iflag(inst.cond_code().unwrap()),
-            CraneliftTrap::User(trap_code()),
-        ),
-        Opcode::Trapff => trap_when(
-            state.has_fflag(inst.fp_cond_code().unwrap()),
-            CraneliftTrap::User(trap_code()),
-        ),
         Opcode::Return => ControlFlow::Return(args()?),
         Opcode::Call => {
             let func_ref = if let InstructionData::Call { func_ref, .. } = inst {
@@ -506,13 +485,81 @@ where
         }
         Opcode::SymbolValue => unimplemented!("SymbolValue"),
         Opcode::TlsValue => unimplemented!("TlsValue"),
-        Opcode::HeapAddr => {
-            if let InstructionData::HeapAddr { heap, .. } = inst {
+        Opcode::HeapLoad => {
+            if let InstructionData::HeapLoad { heap_imm, arg, .. } = inst {
+                let HeapImmData {
+                    flags,
+                    heap,
+                    offset,
+                } = state.get_current_function().dfg.heap_imms[heap_imm];
+                let offset = i128::from(u32::from(offset));
+                let addr_ty = state.get_current_function().dfg.value_type(arg);
+                let index = state.get_value(arg).unwrap().into_int().unwrap();
                 let load_ty = inst_context.controlling_type().unwrap();
-                let offset = calculate_addr(ctrl_ty, imm(), args()?)? as u64;
+                let load_size = i128::from(load_ty.bytes());
+                assign_or_memtrap(AddressSize::try_from(addr_ty).and_then(|addr_size| {
+                    let heap_address = index.saturating_add(offset).saturating_add(load_size);
+                    let heap_address =
+                        u64::try_from(heap_address).map_err(|e| MemoryError::OutOfBoundsLoad {
+                            addr: Address::try_from(0).unwrap(),
+                            load_size: load_size as usize,
+                        })?;
+                    let address = state.heap_address(addr_size, heap, heap_address)?;
+                    state.checked_load(address, load_ty)
+                }))
+            } else {
+                unreachable!()
+            }
+        }
+        Opcode::HeapStore => {
+            if let InstructionData::HeapStore { heap_imm, args, .. } = inst {
+                let HeapImmData {
+                    flags,
+                    heap,
+                    offset,
+                } = state.get_current_function().dfg.heap_imms[heap_imm];
+                let offset = i128::from(u32::from(offset));
+                let addr_ty = state.get_current_function().dfg.value_type(args[0]);
+                let index = state.get_value(args[0]).unwrap().into_int().unwrap();
+                let value = state.get_value(args[1]).unwrap();
+                let store_ty = state.get_current_function().dfg.value_type(args[1]);
+                let store_size = i128::from(store_ty.bytes());
+                continue_or_memtrap(AddressSize::try_from(addr_ty).and_then(|addr_size| {
+                    let heap_address = index.saturating_add(offset).saturating_add(store_size);
+                    let heap_address =
+                        u64::try_from(heap_address).map_err(|e| MemoryError::OutOfBoundsStore {
+                            addr: Address::try_from(0).unwrap(),
+                            store_size: store_size as usize,
+                        })?;
+                    let address = state.heap_address(addr_size, heap, heap_address)?;
+                    state.checked_store(address, value)
+                }))
+            } else {
+                unreachable!()
+            }
+        }
+        Opcode::HeapAddr => {
+            if let InstructionData::HeapAddr {
+                heap,
+                offset: imm_offset,
+                size,
+                ..
+            } = inst
+            {
+                let addr_ty = inst_context.controlling_type().unwrap();
+                let dyn_offset = arg(0)?.into_int()? as u64;
                 assign_or_memtrap({
-                    AddressSize::try_from(load_ty).and_then(|addr_size| {
-                        let addr = state.heap_address(addr_size, heap, offset)?;
+                    AddressSize::try_from(addr_ty).and_then(|addr_size| {
+                        // Attempt to build an address at the maximum possible offset
+                        // for this load. If address generation fails we know it's out of bounds.
+                        let bound_offset =
+                            (dyn_offset + u64::from(u32::from(imm_offset)) + u64::from(size))
+                                .saturating_sub(1);
+                        state.heap_address(addr_size, heap, bound_offset)?;
+
+                        // Build the actual address
+                        let mut addr = state.heap_address(addr_size, heap, dyn_offset)?;
+                        addr.offset += u64::from(u32::from(imm_offset));
                         let dv = DataValue::try_from(addr)?;
                         Ok(dv.into())
                     })
@@ -552,19 +599,17 @@ where
         Opcode::Iconst => assign(Value::int(imm().into_int()?, ctrl_ty)?),
         Opcode::F32const => assign(imm()),
         Opcode::F64const => assign(imm()),
-        Opcode::Bconst => assign(imm()),
         Opcode::Vconst => assign(imm()),
         Opcode::Null => unimplemented!("Null"),
         Opcode::Nop => ControlFlow::Continue,
-        Opcode::Select => choose(arg(0)?.into_bool()?, arg(1)?, arg(2)?),
-        Opcode::Selectif => choose(state.has_iflag(inst.cond_code().unwrap()), arg(1)?, arg(2)?),
-        Opcode::SelectifSpectreGuard => unimplemented!("SelectifSpectreGuard"),
+        Opcode::Select | Opcode::SelectSpectreGuard => {
+            choose(arg(0)?.into_bool()?, arg(1)?, arg(2)?)
+        }
         Opcode::Bitselect => {
             let mask_a = Value::and(arg(0)?, arg(1)?)?;
             let mask_b = Value::and(Value::not(arg(0)?)?, arg(2)?)?;
             assign(Value::or(mask_a, mask_b)?)
         }
-        Opcode::Copy => assign(arg(0)?),
         Opcode::Icmp => assign(icmp(
             ctrl_ty,
             inst.cond_code().unwrap(),
@@ -603,7 +648,7 @@ where
             }
             ControlFlow::Continue
         }
-        Opcode::Imin => {
+        Opcode::Smin => {
             if ctrl_ty.is_vector() {
                 let icmp = icmp(ctrl_ty, IntCC::SignedGreaterThan, &arg(1)?, &arg(0)?)?;
                 assign(vselect(&icmp, &arg(0)?, &arg(1)?, ctrl_ty)?)
@@ -626,7 +671,7 @@ where
                 )
             }
         }
-        Opcode::Imax => {
+        Opcode::Smax => {
             if ctrl_ty.is_vector() {
                 let icmp = icmp(ctrl_ty, IntCC::SignedGreaterThan, &arg(0)?, &arg(1)?)?;
                 assign(vselect(&icmp, &arg(0)?, &arg(1)?, ctrl_ty)?)
@@ -752,20 +797,32 @@ where
         ),
         Opcode::IaddIfcin => unimplemented!("IaddIfcin"),
         Opcode::IaddCout => {
-            let sum = Value::add(arg(0)?, arg(1)?)?;
-            let carry = Value::lt(&sum, &arg(0)?)? && Value::lt(&sum, &arg(1)?)?;
-            assign_multiple(&[sum, Value::bool(carry, types::B1)?])
+            let carry = arg(0)?.checked_add(arg(1)?)?.is_none();
+            let sum = arg(0)?.add(arg(1)?)?;
+            assign_multiple(&[sum, Value::bool(carry, false, types::I8)?])
         }
         Opcode::IaddIfcout => unimplemented!("IaddIfcout"),
         Opcode::IaddCarry => {
             let mut sum = Value::add(arg(0)?, arg(1)?)?;
+            let mut carry = arg(0)?.checked_add(arg(1)?)?.is_none();
+
             if Value::into_bool(arg(2)?)? {
-                sum = Value::add(sum, Value::int(1, ctrl_ty)?)?
+                carry |= sum.clone().checked_add(Value::int(1, ctrl_ty)?)?.is_none();
+                sum = Value::add(sum, Value::int(1, ctrl_ty)?)?;
             }
-            let carry = Value::lt(&sum, &arg(0)?)? && Value::lt(&sum, &arg(1)?)?;
-            assign_multiple(&[sum, Value::bool(carry, types::B1)?])
+
+            assign_multiple(&[sum, Value::bool(carry, false, types::I8)?])
         }
         Opcode::IaddIfcarry => unimplemented!("IaddIfcarry"),
+        Opcode::UaddOverflowTrap => {
+            let sum = Value::add(arg(0)?, arg(1)?)?;
+            let carry = Value::lt(&sum, &arg(0)?)? && Value::lt(&sum, &arg(1)?)?;
+            if carry {
+                ControlFlow::Trap(CraneliftTrap::User(trap_code()))
+            } else {
+                assign(sum)
+            }
+        }
         Opcode::IsubBin => choose(
             Value::into_bool(arg(2)?)?,
             Value::sub(arg(0)?, Value::add(arg(1)?, Value::int(1, ctrl_ty)?)?)?,
@@ -775,7 +832,7 @@ where
         Opcode::IsubBout => {
             let sum = Value::sub(arg(0)?, arg(1)?)?;
             let borrow = Value::lt(&arg(0)?, &arg(1)?)?;
-            assign_multiple(&[sum, Value::bool(borrow, types::B1)?])
+            assign_multiple(&[sum, Value::bool(borrow, false, types::I8)?])
         }
         Opcode::IsubIfbout => unimplemented!("IsubIfbout"),
         Opcode::IsubBorrow => {
@@ -786,7 +843,7 @@ where
             };
             let borrow = Value::lt(&arg(0)?, &rhs)?;
             let sum = Value::sub(arg(0)?, rhs)?;
-            assign_multiple(&[sum, Value::bool(borrow, types::B1)?])
+            assign_multiple(&[sum, Value::bool(borrow, false, types::I8)?])
         }
         Opcode::IsubIfborrow => unimplemented!("IsubIfborrow"),
         Opcode::Band => binary(Value::and, arg(0)?, arg(1)?)?,
@@ -810,6 +867,7 @@ where
         Opcode::UshrImm => binary_unsigned(Value::ushr, arg(0)?, imm_as_ctrl_ty()?)?,
         Opcode::SshrImm => binary(Value::ishr, arg(0)?, imm_as_ctrl_ty()?)?,
         Opcode::Bitrev => assign(Value::reverse_bits(arg(0)?)?),
+        Opcode::Bswap => assign(Value::swap_bytes(arg(0)?)?),
         Opcode::Clz => assign(arg(0)?.leading_zeros()?),
         Opcode::Cls => {
             let count = if Value::lt(&arg(0)?, &Value::int(0, ctrl_ty)?)? {
@@ -844,6 +902,7 @@ where
                     .map(|(x, y)| {
                         V::bool(
                             fcmp(inst.fp_cond_code().unwrap(), &x, &y).unwrap(),
+                            ctrl_ty.is_vector(),
                             ctrl_ty.lane_type().as_bool(),
                         )
                     })
@@ -942,21 +1001,7 @@ where
         Opcode::Nearest => assign(Value::nearest(arg(0)?)?),
         Opcode::IsNull => unimplemented!("IsNull"),
         Opcode::IsInvalid => unimplemented!("IsInvalid"),
-        Opcode::Trueif => choose(
-            state.has_iflag(inst.cond_code().unwrap()),
-            Value::bool(true, ctrl_ty)?,
-            Value::bool(false, ctrl_ty)?,
-        ),
-        Opcode::Trueff => choose(
-            state.has_fflag(inst.fp_cond_code().unwrap()),
-            Value::bool(true, ctrl_ty)?,
-            Value::bool(false, ctrl_ty)?,
-        ),
-        Opcode::Bitcast
-        | Opcode::RawBitcast
-        | Opcode::ScalarToVector
-        | Opcode::Breduce
-        | Opcode::Bextend => {
+        Opcode::Bitcast | Opcode::ScalarToVector => {
             let input_ty = inst_context.type_of(inst_context.args()[0]).unwrap();
             let arg0 = extractlanes(&arg(0)?, input_ty)?;
 
@@ -972,11 +1017,6 @@ where
             arg(0)?,
             ValueConversionKind::Truncate(ctrl_ty),
         )?),
-        Opcode::Bint => {
-            let bool = arg(0)?.into_bool()?;
-            let int = if bool { 1 } else { 0 };
-            assign(Value::int(int, ctrl_ty)?)
-        }
         Opcode::Snarrow | Opcode::Unarrow | Opcode::Uunarrow => {
             let arg0 = extractlanes(&arg(0)?, ctrl_ty)?;
             let arg1 = extractlanes(&arg(1)?, ctrl_ty)?;
@@ -1012,7 +1052,7 @@ where
             let bool_ty = ctrl_ty.as_bool_pedantic();
             let lanes = extractlanes(&bool, bool_ty)?
                 .into_iter()
-                .map(|lane| lane.convert(ValueConversionKind::Exact(ctrl_ty.lane_type())))
+                .map(|lane| lane.convert(ValueConversionKind::Mask(ctrl_ty.lane_type())))
                 .collect::<ValueResult<SimdVec<V>>>()?;
             vectorizelanes(&lanes, ctrl_ty)?
         }),
@@ -1044,7 +1084,7 @@ where
                     new[i] = b[mask[i] as usize - a.len()];
                 } // else leave as 0.
             }
-            assign(Value::vector(new, ctrl_ty)?)
+            assign(Value::vector(new, types::I8X16)?)
         }
         Opcode::Swizzle => {
             let x = Value::into_array(&arg(0)?)?;
@@ -1090,18 +1130,18 @@ where
         Opcode::Vsplit => unimplemented!("Vsplit"),
         Opcode::Vconcat => unimplemented!("Vconcat"),
         Opcode::Vselect => assign(vselect(&arg(0)?, &arg(1)?, &arg(2)?, ctrl_ty)?),
-        Opcode::VanyTrue => assign(fold_vector(
-            arg(0)?,
-            ctrl_ty,
-            V::bool(false, types::B1)?,
-            |acc, lane| acc.or(lane),
-        )?),
-        Opcode::VallTrue => assign(fold_vector(
-            arg(0)?,
-            ctrl_ty,
-            V::bool(true, types::B1)?,
-            |acc, lane| acc.and(lane),
-        )?),
+        Opcode::VanyTrue => {
+            let lane_ty = ctrl_ty.lane_type();
+            let init = V::bool(false, true, lane_ty)?;
+            let any = fold_vector(arg(0)?, ctrl_ty, init.clone(), |acc, lane| acc.or(lane))?;
+            assign(V::bool(!V::eq(&any, &init)?, false, types::I8)?)
+        }
+        Opcode::VallTrue => {
+            let lane_ty = ctrl_ty.lane_type();
+            let init = V::bool(true, true, lane_ty)?;
+            let all = fold_vector(arg(0)?, ctrl_ty, init.clone(), |acc, lane| acc.and(lane))?;
+            assign(V::bool(V::eq(&all, &init)?, false, types::I8)?)
+        }
         Opcode::SwidenLow | Opcode::SwidenHigh | Opcode::UwidenLow | Opcode::UwidenHigh => {
             let new_type = ctrl_ty.merge_lanes().unwrap();
             let conv_type = match inst.opcode() {
@@ -1170,6 +1210,7 @@ where
                         let x = u128::min(x as u128, max as u128);
                         x as i128
                     };
+
                     V::int(x, ctrl_ty.lane_type())
                 }
             };
@@ -1383,7 +1424,7 @@ impl<'a, V> ControlFlow<'a, V> {
     }
 }
 
-#[derive(Error, Debug, PartialEq)]
+#[derive(Error, Debug, PartialEq, Eq, Hash)]
 pub enum CraneliftTrap {
     #[error("user code: {0}")]
     User(TrapCode),
@@ -1424,6 +1465,7 @@ where
                     &right.clone().convert(ValueConversionKind::ToUnsigned)?,
                 )?,
             },
+            ctrl_ty.is_vector(),
             bool_ty,
         )?)
     };
@@ -1487,10 +1529,10 @@ where
     }
 
     let iterations = match lane_type {
-        types::I8 | types::B1 | types::B8 => 1,
-        types::I16 | types::B16 => 2,
-        types::I32 | types::B32 | types::F32 => 4,
-        types::I64 | types::B64 | types::F64 => 8,
+        types::I8 => 1,
+        types::I16 => 2,
+        types::I32 | types::F32 => 4,
+        types::I64 | types::F64 => 8,
         _ => unimplemented!("vectors with lanes wider than 64-bits are currently unsupported."),
     };
 
@@ -1501,9 +1543,7 @@ where
             lane += (x[((i * iterations) + j) as usize] as i128) << (8 * j);
         }
 
-        let lane_val: V = if lane_type.is_bool() {
-            Value::bool(lane != 0, lane_type)?
-        } else if lane_type.is_float() {
+        let lane_val: V = if lane_type.is_float() {
             Value::float(lane as u64, lane_type)?
         } else {
             Value::int(lane, lane_type)?
@@ -1526,10 +1566,10 @@ where
 
     let lane_type = vector_type.lane_type();
     let iterations = match lane_type {
-        types::I8 | types::B1 | types::B8 => 1,
-        types::I16 | types::B16 => 2,
-        types::I32 | types::B32 | types::F32 => 4,
-        types::I64 | types::B64 | types::F64 => 8,
+        types::I8 => 1,
+        types::I16 => 2,
+        types::I32 | types::F32 => 4,
+        types::I64 | types::F64 => 8,
         _ => unimplemented!("vectors with lanes wider than 64-bits are currently unsupported."),
     };
     let mut result: [u8; 16] = [0; 16];

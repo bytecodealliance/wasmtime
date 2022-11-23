@@ -51,12 +51,12 @@
 (extern constructor put_in_reg put_in_reg)
 
 ;; Simple rule for lowering adds.
-(rule (lower (HighLevelInst.Add a b))
+(rule -1 (lower (HighLevelInst.Add a b))
       (LowLevelInst.Add
         (AddrMode.RegReg (put_in_reg a) (put_in_reg b))))
 
 ;; Simple rule for lowering loads.
-(rule (lower (HighLevelInst.Load addr))
+(rule -1 (lower (HighLevelInst.Load addr))
       (LowLevelInst.Load 0 (put_in_reg addr)))
 
 ;; Declare an external extractor for extracting the instruction that defined a
@@ -72,7 +72,7 @@
                          0)))
 
 ;; Rule to sink a load of a base address with a static offset into a single add.
-(rule (lower (HighLevelInst.Add
+(rule 1 (lower (HighLevelInst.Add
                a
                (inst_result (HighLevelInst.Load
                               (inst_result (HighLevelInst.Add

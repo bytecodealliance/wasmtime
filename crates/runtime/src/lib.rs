@@ -25,7 +25,7 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use wasmtime_environ::DefinedFuncIndex;
 use wasmtime_environ::DefinedMemoryIndex;
-use wasmtime_environ::FunctionInfo;
+use wasmtime_environ::FunctionLoc;
 use wasmtime_environ::SignatureIndex;
 
 #[macro_use]
@@ -40,6 +40,7 @@ mod instance;
 mod memory;
 mod mmap;
 mod mmap_vec;
+mod parking_spot;
 mod table;
 mod traphandlers;
 mod vmcontext;
@@ -57,7 +58,10 @@ pub use crate::instance::{
     InstantiationError, LinkError, OnDemandInstanceAllocator, StorePtr,
 };
 #[cfg(feature = "pooling-allocator")]
-pub use crate::instance::{InstanceLimits, PoolingAllocationStrategy, PoolingInstanceAllocator};
+pub use crate::instance::{
+    InstanceLimits, PoolingAllocationStrategy, PoolingInstanceAllocator,
+    PoolingInstanceAllocatorConfig,
+};
 pub use crate::memory::{
     DefaultMemoryCreator, Memory, RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory,
 };
@@ -79,15 +83,8 @@ pub use crate::vmcontext::{
 mod module_id;
 pub use module_id::{CompiledModuleId, CompiledModuleIdAllocator};
 
-#[cfg(memory_init_cow)]
 mod cow;
-#[cfg(memory_init_cow)]
 pub use crate::cow::{MemoryImage, MemoryImageSlot, ModuleMemoryImages};
-
-#[cfg(not(memory_init_cow))]
-mod cow_disabled;
-#[cfg(not(memory_init_cow))]
-pub use crate::cow_disabled::{MemoryImage, MemoryImageSlot, ModuleMemoryImages};
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -183,7 +180,7 @@ pub trait ModuleRuntimeInfo: Send + Sync + 'static {
 
     /// Descriptors about each compiled function, such as the offset from
     /// `image_base`.
-    fn function_info(&self, func_index: DefinedFuncIndex) -> &FunctionInfo;
+    fn function_loc(&self, func_index: DefinedFuncIndex) -> &FunctionLoc;
 
     /// Returns the `MemoryImage` structure used for copy-on-write
     /// initialization of the memory, if it's applicable.
@@ -233,4 +230,18 @@ pub fn page_size() -> usize {
     fn get_page_size() -> usize {
         unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize }
     }
+}
+
+/// Result of [`Memory::atomic_wait32`] and [`Memory::atomic_wait64`]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum WaitResult {
+    /// Indicates that a `wait` completed by being awoken by a different thread.
+    /// This means the thread went to sleep and didn't time out.
+    Ok = 0,
+    /// Indicates that `wait` did not complete and instead returned due to the
+    /// value in memory not matching the expected value.
+    Mismatch = 1,
+    /// Indicates that `wait` completed with a timeout, meaning that the
+    /// original value matched as expected but nothing ever called `notify`.
+    TimedOut = 2,
 }

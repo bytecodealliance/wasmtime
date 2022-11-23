@@ -16,9 +16,6 @@ use wasmtime_runtime::{InstanceAllocator, OnDemandInstanceAllocator, RuntimeMemo
 
 pub use wasmtime_environ::CacheStore;
 
-#[cfg(feature = "pooling-allocator")]
-pub use wasmtime_runtime::{InstanceLimits, PoolingAllocationStrategy};
-
 /// Represents the module instance allocation strategy to use.
 #[derive(Clone)]
 pub enum InstanceAllocationStrategy {
@@ -35,22 +32,14 @@ pub enum InstanceAllocationStrategy {
     /// from the pool. Resources are returned to the pool when the `Store` referencing the instance
     /// is dropped.
     #[cfg(feature = "pooling-allocator")]
-    Pooling {
-        /// The allocation strategy to use.
-        strategy: PoolingAllocationStrategy,
-        /// The instance limits to use.
-        instance_limits: InstanceLimits,
-    },
+    Pooling(PoolingAllocationConfig),
 }
 
 impl InstanceAllocationStrategy {
     /// The default pooling instance allocation strategy.
     #[cfg(feature = "pooling-allocator")]
     pub fn pooling() -> Self {
-        Self::Pooling {
-            strategy: PoolingAllocationStrategy::default(),
-            instance_limits: InstanceLimits::default(),
-        }
+        Self::Pooling(Default::default())
     }
 }
 
@@ -109,7 +98,6 @@ pub struct Config {
     pub(crate) memory_init_cow: bool,
     pub(crate) memory_guaranteed_dense_image_size: u64,
     pub(crate) force_memory_init_memfd: bool,
-    pub(crate) async_stack_zeroing: bool,
 }
 
 /// User-provided configuration for the compiler.
@@ -197,7 +185,6 @@ impl Config {
             memory_init_cow: true,
             memory_guaranteed_dense_image_size: 16 << 20,
             force_memory_init_memfd: false,
-            async_stack_zeroing: false,
         };
         #[cfg(compiler)]
         {
@@ -343,35 +330,6 @@ impl Config {
         self
     }
 
-    /// Configures whether or not stacks used for async futures are reset to
-    /// zero after usage.
-    ///
-    /// When the [`async_support`](Config::async_support) method is enabled for
-    /// Wasmtime and the [`call_async`] variant
-    /// of calling WebAssembly is used then Wasmtime will create a separate
-    /// runtime execution stack for each future produced by [`call_async`].
-    /// When using the pooling instance allocator
-    /// ([`InstanceAllocationStrategy::Pooling`]) this allocation will happen
-    /// from a pool of stacks and additionally deallocation will simply release
-    /// the stack back to the pool. During the deallocation process Wasmtime
-    /// won't by default reset the contents of the stack back to zero.
-    ///
-    /// When this option is enabled it can be seen as a defense-in-depth
-    /// mechanism to reset a stack back to zero. This is not required for
-    /// correctness and can be a costly operation in highly concurrent
-    /// environments due to modifications of the virtual address space requiring
-    /// process-wide synchronization.
-    ///
-    /// This option defaults to `false`.
-    ///
-    /// [`call_async`]: crate::TypedFunc::call_async
-    #[cfg(feature = "async")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
-    pub fn async_stack_zeroing(&mut self, enable: bool) -> &mut Self {
-        self.async_stack_zeroing = enable;
-        self
-    }
-
     /// Configures whether DWARF debug information will be emitted during
     /// compilation.
     ///
@@ -381,15 +339,30 @@ impl Config {
         self
     }
 
-    /// Configures whether backtraces exist in a `Trap`.
+    /// Configures whether [`WasmBacktrace`] will be present in the context of
+    /// errors returned from Wasmtime.
     ///
-    /// Enabled by default, this feature builds in support to
-    /// generate backtraces at runtime for WebAssembly modules. This means that
-    /// unwinding information is compiled into wasm modules and necessary runtime
-    /// dependencies are enabled as well.
+    /// A backtrace may be collected whenever an error is returned from a host
+    /// function call through to WebAssembly or when WebAssembly itself hits a
+    /// trap condition, such as an out-of-bounds memory access. This flag
+    /// indicates, in these conditions, whether the backtrace is collected or
+    /// not.
     ///
-    /// When disabled, wasm backtrace details are ignored, and [`crate::Trap::trace()`]
-    /// will always return `None`.
+    /// Currently wasm backtraces are implemented through frame pointer walking.
+    /// This means that collecting a backtrace is expected to be a fast and
+    /// relatively cheap operation. Additionally backtrace collection is
+    /// suitable in concurrent environments since one thread capturing a
+    /// backtrace won't block other threads.
+    ///
+    /// Collected backtraces are attached via [`anyhow::Error::context`] to
+    /// errors returned from host functions. The [`WasmBacktrace`] type can be
+    /// acquired via [`anyhow::Error::downcast_ref`] to inspect the backtrace.
+    /// When this option is disabled then this context is never applied to
+    /// errors coming out of wasm.
+    ///
+    /// This option is `true` by default.
+    ///
+    /// [`WasmBacktrace`]: crate::WasmBacktrace
     #[deprecated = "Backtraces will always be enabled in future Wasmtime releases; if this \
                     causes problems for you, please file an issue."]
     pub fn wasm_backtrace(&mut self, enable: bool) -> &mut Self {
@@ -429,13 +402,16 @@ impl Config {
     /// This configuration option only exists to help third-party stack
     /// capturing mechanisms, such as the system's unwinder or the `backtrace`
     /// crate, determine how to unwind through Wasm frames. It does not affect
-    /// whether Wasmtime can capture Wasm backtraces or not, or whether
-    /// [`Trap::trace`][crate::Trap::trace] returns `Some` or `None`.
+    /// whether Wasmtime can capture Wasm backtraces or not. The presence of
+    /// [`WasmBacktrace`] is controlled by the [`Config::wasm_backtrace`]
+    /// option.
     ///
     /// Note that native unwind information is always generated when targeting
     /// Windows, since the Windows ABI requires it.
     ///
     /// This option defaults to `true`.
+    ///
+    /// [`WasmBacktrace`]: crate::WasmBacktrace
     pub fn native_unwind_info(&mut self, enable: bool) -> &mut Self {
         self.native_unwind_info = enable;
         self
@@ -850,6 +826,27 @@ impl Config {
         self.compiler_config
             .settings
             .insert("opt_level".to_string(), val.to_string());
+        self
+    }
+
+    /// Configures the Cranelift code generator to use its
+    /// "egraph"-based mid-end optimizer.
+    ///
+    /// This optimizer is intended to replace the compiler's more
+    /// traditional pipeline of optimization passes with a unified
+    /// code-rewriting system. It is not yet on by default, but it is
+    /// intended to become the default in a future version. It may
+    /// result in faster code, at the cost of slightly more
+    /// compilation-time work.
+    ///
+    /// The default value for this is `false`.
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    pub fn cranelift_use_egraphs(&mut self, enable: bool) -> &mut Self {
+        let val = if enable { "true" } else { "false" };
+        self.compiler_config
+            .settings
+            .insert("use_egraphs".to_string(), val.to_string());
         self
     }
 
@@ -1343,8 +1340,6 @@ impl Config {
     ///
     /// [`Module::deserialize_file`]: crate::Module::deserialize_file
     /// [`Module`]: crate::Module
-    #[cfg(feature = "memory-init-cow")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "memory-init-cow")))]
     pub fn memory_init_cow(&mut self, enable: bool) -> &mut Self {
         self.memory_init_cow = enable;
         self
@@ -1370,8 +1365,6 @@ impl Config {
     /// on.
     ///
     /// This option is disabled by default.
-    #[cfg(feature = "memory-init-cow")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "memory-init-cow")))]
     pub fn force_memory_init_memfd(&mut self, enable: bool) -> &mut Self {
         self.force_memory_init_memfd = enable;
         self
@@ -1412,8 +1405,6 @@ impl Config {
     /// as the maximum module initial memory content size.
     ///
     /// By default this value is 16 MiB.
-    #[cfg(feature = "memory-init-cow")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "memory-init-cow")))]
     pub fn memory_guaranteed_dense_image_size(&mut self, size_in_bytes: u64) -> &mut Self {
         self.memory_guaranteed_dense_image_size = size_in_bytes;
         self
@@ -1449,22 +1440,20 @@ impl Config {
         #[cfg(not(feature = "async"))]
         let stack_size = 0;
 
-        match self.allocation_strategy {
+        match &self.allocation_strategy {
             InstanceAllocationStrategy::OnDemand => Ok(Box::new(OnDemandInstanceAllocator::new(
                 self.mem_creator.clone(),
                 stack_size,
             ))),
             #[cfg(feature = "pooling-allocator")]
-            InstanceAllocationStrategy::Pooling {
-                strategy,
-                instance_limits,
-            } => Ok(Box::new(wasmtime_runtime::PoolingInstanceAllocator::new(
-                strategy,
-                instance_limits,
-                stack_size,
-                &self.tunables,
-                self.async_stack_zeroing,
-            )?)),
+            InstanceAllocationStrategy::Pooling(config) => {
+                let mut config = config.config;
+                config.stack_size = stack_size;
+                Ok(Box::new(wasmtime_runtime::PoolingInstanceAllocator::new(
+                    &config,
+                    &self.tunables,
+                )?))
+            }
         }
     }
 
@@ -1667,4 +1656,226 @@ pub enum WasmBacktraceDetails {
     /// Support for backtrace details is conditional on the
     /// `WASMTIME_BACKTRACE_DETAILS` environment variable.
     Environment,
+}
+
+/// Configuration options used with [`InstanceAllocationStrategy::Pooling`] to
+/// change the behavior of the pooling instance allocator.
+///
+/// This structure has a builder-style API in the same manner as [`Config`] and
+/// is configured with [`Config::allocation_strategy`].
+#[cfg(feature = "pooling-allocator")]
+#[derive(Debug, Clone, Default)]
+pub struct PoolingAllocationConfig {
+    config: wasmtime_runtime::PoolingInstanceAllocatorConfig,
+}
+
+#[cfg(feature = "pooling-allocator")]
+pub use wasmtime_runtime::PoolingAllocationStrategy;
+
+#[cfg(feature = "pooling-allocator")]
+impl PoolingAllocationConfig {
+    /// Configures the method by which slots in the pooling allocator are
+    /// allocated to instances
+    ///
+    /// This defaults to [`PoolingAllocationStrategy::ReuseAffinity`] .
+    pub fn strategy(&mut self, strategy: PoolingAllocationStrategy) -> &mut Self {
+        self.config.strategy = strategy;
+        self
+    }
+
+    /// Configures whether or not stacks used for async futures are reset to
+    /// zero after usage.
+    ///
+    /// When the [`async_support`](Config::async_support) method is enabled for
+    /// Wasmtime and the [`call_async`] variant
+    /// of calling WebAssembly is used then Wasmtime will create a separate
+    /// runtime execution stack for each future produced by [`call_async`].
+    /// During the deallocation process Wasmtime won't by default reset the
+    /// contents of the stack back to zero.
+    ///
+    /// When this option is enabled it can be seen as a defense-in-depth
+    /// mechanism to reset a stack back to zero. This is not required for
+    /// correctness and can be a costly operation in highly concurrent
+    /// environments due to modifications of the virtual address space requiring
+    /// process-wide synchronization.
+    ///
+    /// This option defaults to `false`.
+    ///
+    /// [`call_async`]: crate::TypedFunc::call_async
+    #[cfg(feature = "async")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    pub fn async_stack_zeroing(&mut self, enable: bool) -> &mut Self {
+        self.config.async_stack_zeroing = enable;
+        self
+    }
+
+    /// How much memory, in bytes, to keep resident for async stacks allocated
+    /// with the pooling allocator.
+    ///
+    /// When [`PoolingAllocationConfig::async_stack_zeroing`] is enabled then
+    /// Wasmtime will reset the contents of async stacks back to zero upon
+    /// deallocation. This option can be used to perform the zeroing operation
+    /// with `memset` up to a certain threshold of bytes instead of using system
+    /// calls to reset the stack to zero.
+    ///
+    /// Note that when using this option the memory with async stacks will
+    /// never be decommitted.
+    #[cfg(feature = "async")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    pub fn async_stack_keep_resident(&mut self, size: usize) -> &mut Self {
+        let size = round_up_to_pages(size as u64) as usize;
+        self.config.async_stack_keep_resident = size;
+        self
+    }
+
+    /// How much memory, in bytes, to keep resident for each linear memory
+    /// after deallocation.
+    ///
+    /// This option is only applicable on Linux and has no effect on other
+    /// platforms.
+    ///
+    /// By default Wasmtime will use `madvise` to reset the entire contents of
+    /// linear memory back to zero when a linear memory is deallocated. This
+    /// option can be used to use `memset` instead to set memory back to zero
+    /// which can, in some configurations, reduce the number of page faults
+    /// taken when a slot is reused.
+    pub fn linear_memory_keep_resident(&mut self, size: usize) -> &mut Self {
+        let size = round_up_to_pages(size as u64) as usize;
+        self.config.linear_memory_keep_resident = size;
+        self
+    }
+
+    /// How much memory, in bytes, to keep resident for each table after
+    /// deallocation.
+    ///
+    /// This option is only applicable on Linux and has no effect on other
+    /// platforms.
+    ///
+    /// This option is the same as
+    /// [`PoolingAllocationConfig::linear_memory_keep_resident`] except that it
+    /// is applicable to tables instead.
+    pub fn table_keep_resident(&mut self, size: usize) -> &mut Self {
+        let size = round_up_to_pages(size as u64) as usize;
+        self.config.table_keep_resident = size;
+        self
+    }
+
+    /// The maximum number of concurrent instances supported (default is 1000).
+    ///
+    /// This value has a direct impact on the amount of memory allocated by the pooling
+    /// instance allocator.
+    ///
+    /// The pooling instance allocator allocates three memory pools with sizes depending on this value:
+    ///
+    /// * An instance pool, where each entry in the pool can store the runtime representation
+    ///   of an instance, including a maximal `VMContext` structure.
+    ///
+    /// * A memory pool, where each entry in the pool contains the reserved address space for each
+    ///   linear memory supported by an instance.
+    ///
+    /// * A table pool, where each entry in the pool contains the space needed for each WebAssembly table
+    ///   supported by an instance (see `table_elements` to control the size of each table).
+    ///
+    /// Additionally, this value will also control the maximum number of execution stacks allowed for
+    /// asynchronous execution (one per instance), when enabled.
+    ///
+    /// The memory pool will reserve a large quantity of host process address space to elide the bounds
+    /// checks required for correct WebAssembly memory semantics. Even for 64-bit address spaces, the
+    /// address space is limited when dealing with a large number of supported instances.
+    ///
+    /// For example, on Linux x86_64, the userland address space limit is 128 TiB. That might seem like a lot,
+    /// but each linear memory will *reserve* 6 GiB of space by default. Multiply that by the number of linear
+    /// memories each instance supports and then by the number of supported instances and it becomes apparent
+    /// that address space can be exhausted depending on the number of supported instances.
+    pub fn instance_count(&mut self, count: u32) -> &mut Self {
+        self.config.limits.count = count;
+        self
+    }
+
+    /// The maximum size, in bytes, allocated for an instance and its
+    /// `VMContext`.
+    ///
+    /// This amount of space is pre-allocated for `count` number of instances
+    /// and is used to store the runtime `wasmtime_runtime::Instance` structure
+    /// along with its adjacent `VMContext` structure. The `Instance` type has a
+    /// static size but `VMContext` is dynamically sized depending on the module
+    /// being instantiated. This size limit loosely correlates to the size of
+    /// the wasm module, taking into account factors such as:
+    ///
+    /// * number of functions
+    /// * number of globals
+    /// * number of memories
+    /// * number of tables
+    /// * number of function types
+    ///
+    /// If the allocated size per instance is too small then instantiation of a
+    /// module will fail at runtime with an error indicating how many bytes were
+    /// needed. This amount of bytes are committed to memory per-instance when
+    /// a pooling allocator is created.
+    ///
+    /// The default value for this is 1MB.
+    pub fn instance_size(&mut self, size: usize) -> &mut Self {
+        self.config.limits.size = size;
+        self
+    }
+
+    /// The maximum number of defined tables for a module (default is 1).
+    ///
+    /// This value controls the capacity of the `VMTableDefinition` table in each instance's
+    /// `VMContext` structure.
+    ///
+    /// The allocated size of the table will be `tables * sizeof(VMTableDefinition)` for each
+    /// instance regardless of how many tables are defined by an instance's module.
+    pub fn instance_tables(&mut self, tables: u32) -> &mut Self {
+        self.config.limits.tables = tables;
+        self
+    }
+
+    /// The maximum table elements for any table defined in a module (default is 10000).
+    ///
+    /// If a table's minimum element limit is greater than this value, the module will
+    /// fail to instantiate.
+    ///
+    /// If a table's maximum element limit is unbounded or greater than this value,
+    /// the maximum will be `table_elements` for the purpose of any `table.grow` instruction.
+    ///
+    /// This value is used to reserve the maximum space for each supported table; table elements
+    /// are pointer-sized in the Wasmtime runtime.  Therefore, the space reserved for each instance
+    /// is `tables * table_elements * sizeof::<*const ()>`.
+    pub fn instance_table_elements(&mut self, elements: u32) -> &mut Self {
+        self.config.limits.table_elements = elements;
+        self
+    }
+
+    /// The maximum number of defined linear memories for a module (default is 1).
+    ///
+    /// This value controls the capacity of the `VMMemoryDefinition` table in each instance's
+    /// `VMContext` structure.
+    ///
+    /// The allocated size of the table will be `memories * sizeof(VMMemoryDefinition)` for each
+    /// instance regardless of how many memories are defined by an instance's module.
+    pub fn instance_memories(&mut self, memories: u32) -> &mut Self {
+        self.config.limits.memories = memories;
+        self
+    }
+
+    /// The maximum number of pages for any linear memory defined in a module (default is 160).
+    ///
+    /// The default of 160 means at most 10 MiB of host memory may be committed for each instance.
+    ///
+    /// If a memory's minimum page limit is greater than this value, the module will
+    /// fail to instantiate.
+    ///
+    /// If a memory's maximum page limit is unbounded or greater than this value,
+    /// the maximum will be `memory_pages` for the purpose of any `memory.grow` instruction.
+    ///
+    /// This value is used to control the maximum accessible space for each linear memory of an instance.
+    ///
+    /// The reservation size of each linear memory is controlled by the
+    /// `static_memory_maximum_size` setting and this value cannot
+    /// exceed the configured static memory maximum size.
+    pub fn instance_memory_pages(&mut self, pages: u64) -> &mut Self {
+        self.config.limits.memory_pages = pages;
+        self
+    }
 }

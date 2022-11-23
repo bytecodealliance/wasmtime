@@ -1,20 +1,16 @@
 //! Compilation support for the component model.
 
 use crate::compiler::{Compiler, CompilerContext};
-use crate::obj::ModuleTextBuilder;
 use crate::CompiledFunction;
 use anyhow::Result;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags};
 use cranelift_frontend::FunctionBuilder;
-use object::write::Object;
 use std::any::Any;
-use std::ops::Range;
 use wasmtime_environ::component::{
-    AlwaysTrapInfo, CanonicalOptions, Component, ComponentCompiler, ComponentTypes, FixedEncoding,
-    FunctionInfo, LowerImport, LoweredIndex, RuntimeAlwaysTrapIndex, RuntimeMemoryIndex,
-    RuntimeTranscoderIndex, Transcode, Transcoder, VMComponentOffsets,
+    CanonicalOptions, Component, ComponentCompiler, ComponentTypes, FixedEncoding, LowerImport,
+    RuntimeMemoryIndex, Transcode, Transcoder, VMComponentOffsets,
 };
-use wasmtime_environ::{PrimaryMap, PtrSize, SignatureIndex, Trampoline, TrapCode, WasmFuncType};
+use wasmtime_environ::{PtrSize, WasmFuncType};
 
 impl ComponentCompiler for Compiler {
     fn compile_lowered_trampoline(
@@ -32,6 +28,7 @@ impl ComponentCompiler for Compiler {
             mut func_translator,
             codegen_context: mut context,
             mut incremental_cache_ctx,
+            validator_allocations,
         } = self.take_context();
 
         context.func = ir::Function::with_name_signature(
@@ -156,6 +153,7 @@ impl ComponentCompiler for Compiler {
             func_translator,
             codegen_context: context,
             incremental_cache_ctx,
+            validator_allocations,
         });
         Ok(Box::new(func))
     }
@@ -166,6 +164,7 @@ impl ComponentCompiler for Compiler {
             mut func_translator,
             codegen_context: mut context,
             mut incremental_cache_ctx,
+            validator_allocations,
         } = self.take_context();
         context.func = ir::Function::with_name_signature(
             ir::UserFuncName::user(0, 0),
@@ -187,6 +186,7 @@ impl ComponentCompiler for Compiler {
             func_translator,
             codegen_context: context,
             incremental_cache_ctx,
+            validator_allocations,
         });
         Ok(Box::new(func))
     }
@@ -205,6 +205,7 @@ impl ComponentCompiler for Compiler {
             mut func_translator,
             codegen_context: mut context,
             mut incremental_cache_ctx,
+            validator_allocations,
         } = self.take_context();
 
         context.func = ir::Function::with_name_signature(
@@ -226,84 +227,9 @@ impl ComponentCompiler for Compiler {
             func_translator,
             codegen_context: context,
             incremental_cache_ctx,
+            validator_allocations,
         });
         Ok(Box::new(func))
-    }
-
-    fn emit_obj(
-        &self,
-        lowerings: PrimaryMap<LoweredIndex, Box<dyn Any + Send>>,
-        always_trap: PrimaryMap<RuntimeAlwaysTrapIndex, Box<dyn Any + Send>>,
-        transcoders: PrimaryMap<RuntimeTranscoderIndex, Box<dyn Any + Send>>,
-        trampolines: Vec<(SignatureIndex, Box<dyn Any + Send>)>,
-        obj: &mut Object<'static>,
-    ) -> Result<(
-        PrimaryMap<LoweredIndex, FunctionInfo>,
-        PrimaryMap<RuntimeAlwaysTrapIndex, AlwaysTrapInfo>,
-        PrimaryMap<RuntimeTranscoderIndex, FunctionInfo>,
-        Vec<Trampoline>,
-    )> {
-        let module = Default::default();
-        let mut text = ModuleTextBuilder::new(obj, &module, &*self.isa);
-
-        let range2info = |range: Range<u64>| FunctionInfo {
-            start: u32::try_from(range.start).unwrap(),
-            length: u32::try_from(range.end - range.start).unwrap(),
-        };
-        let ret_lowerings = lowerings
-            .iter()
-            .map(|(i, lowering)| {
-                let lowering = lowering.downcast_ref::<CompiledFunction>().unwrap();
-                assert!(lowering.traps.is_empty());
-                let range = text.named_func(
-                    &format!("_wasm_component_lowering_trampoline{}", i.as_u32()),
-                    &lowering,
-                );
-                range2info(range)
-            })
-            .collect();
-        let ret_always_trap = always_trap
-            .iter()
-            .map(|(i, func)| {
-                let func = func.downcast_ref::<CompiledFunction>().unwrap();
-                assert_eq!(func.traps.len(), 1);
-                assert_eq!(func.traps[0].trap_code, TrapCode::AlwaysTrapAdapter);
-                let name = format!("_wasmtime_always_trap{}", i.as_u32());
-                let range = text.named_func(&name, func);
-                AlwaysTrapInfo {
-                    info: range2info(range),
-                    trap_offset: func.traps[0].code_offset,
-                }
-            })
-            .collect();
-
-        let ret_transcoders = transcoders
-            .iter()
-            .map(|(i, func)| {
-                let func = func.downcast_ref::<CompiledFunction>().unwrap();
-                let name = format!("_wasmtime_transcoder{}", i.as_u32());
-                let range = text.named_func(&name, func);
-                range2info(range)
-            })
-            .collect();
-
-        let ret_trampolines = trampolines
-            .iter()
-            .map(|(i, func)| {
-                let func = func.downcast_ref::<CompiledFunction>().unwrap();
-                assert!(func.traps.is_empty());
-                text.trampoline(*i, func)
-            })
-            .collect();
-
-        text.finish()?;
-
-        Ok((
-            ret_lowerings,
-            ret_always_trap,
-            ret_transcoders,
-            ret_trampolines,
-        ))
     }
 }
 

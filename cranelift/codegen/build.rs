@@ -177,9 +177,19 @@ fn get_isle_compilations(
 ) -> Result<IsleCompilations, std::io::Error> {
     let cur_dir = std::env::current_dir()?;
 
-    let clif_isle = out_dir.join("clif.isle");
+    // Preludes.
+    let clif_lower_isle = out_dir.join("clif_lower.isle");
+    let clif_opt_isle = out_dir.join("clif_opt.isle");
     let prelude_isle =
         make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("prelude.isle"));
+    let prelude_opt_isle =
+        make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("prelude_opt.isle"));
+    let prelude_lower_isle =
+        make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("prelude_lower.isle"));
+
+    // Directory for mid-end optimizations.
+    let src_opts = make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("opts"));
+    // Directories for lowering backends.
     let src_isa_x64 =
         make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("isa").join("x64"));
     let src_isa_aarch64 =
@@ -187,6 +197,8 @@ fn get_isle_compilations(
     let src_isa_s390x =
         make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("isa").join("s390x"));
 
+    let src_isa_risc_v =
+        make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("isa").join("riscv64"));
     // This is a set of ISLE compilation units.
     //
     // The format of each entry is:
@@ -202,37 +214,62 @@ fn get_isle_compilations(
     // `cranelift/codegen/src/isa/*/lower/isle/generated_code.rs`!
     Ok(IsleCompilations {
         items: vec![
+            // The mid-end optimization rules.
+            IsleCompilation {
+                output: out_dir.join("isle_opt.rs"),
+                inputs: vec![
+                    prelude_isle.clone(),
+                    prelude_opt_isle.clone(),
+                    src_opts.join("algebraic.isle"),
+                    src_opts.join("cprop.isle"),
+                ],
+                untracked_inputs: vec![clif_opt_isle.clone()],
+            },
             // The x86-64 instruction selector.
             IsleCompilation {
                 output: out_dir.join("isle_x64.rs"),
                 inputs: vec![
                     prelude_isle.clone(),
+                    prelude_lower_isle.clone(),
                     src_isa_x64.join("inst.isle"),
                     src_isa_x64.join("lower.isle"),
                 ],
-                untracked_inputs: vec![clif_isle.clone()],
+                untracked_inputs: vec![clif_lower_isle.clone()],
             },
             // The aarch64 instruction selector.
             IsleCompilation {
                 output: out_dir.join("isle_aarch64.rs"),
                 inputs: vec![
                     prelude_isle.clone(),
+                    prelude_lower_isle.clone(),
                     src_isa_aarch64.join("inst.isle"),
                     src_isa_aarch64.join("inst_neon.isle"),
                     src_isa_aarch64.join("lower.isle"),
                     src_isa_aarch64.join("lower_dynamic_neon.isle"),
                 ],
-                untracked_inputs: vec![clif_isle.clone()],
+                untracked_inputs: vec![clif_lower_isle.clone()],
             },
             // The s390x instruction selector.
             IsleCompilation {
                 output: out_dir.join("isle_s390x.rs"),
                 inputs: vec![
                     prelude_isle.clone(),
+                    prelude_lower_isle.clone(),
                     src_isa_s390x.join("inst.isle"),
                     src_isa_s390x.join("lower.isle"),
                 ],
-                untracked_inputs: vec![clif_isle.clone()],
+                untracked_inputs: vec![clif_lower_isle.clone()],
+            },
+            // The risc-v instruction selector.
+            IsleCompilation {
+                output: out_dir.join("isle_riscv64.rs"),
+                inputs: vec![
+                    prelude_isle.clone(),
+                    prelude_lower_isle.clone(),
+                    src_isa_risc_v.join("inst.isle"),
+                    src_isa_risc_v.join("lower.isle"),
+                ],
+                untracked_inputs: vec![clif_lower_isle.clone()],
             },
         ],
     })

@@ -17,6 +17,7 @@ pub struct Defs {
 /// One toplevel form in an ISLE file.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Def {
+    Pragma(Pragma),
     Type(Type),
     Rule(Rule),
     Extractor(Extractor),
@@ -28,6 +29,12 @@ pub enum Def {
 /// An identifier -- a variable, term symbol, or type.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Ident(pub String, pub Pos);
+
+/// Pragmas parsed with the `(pragma <ident>)` syntax.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum Pragma {
+    // currently, no pragmas are defined, but the infrastructure is useful to keep around
+}
 
 /// A declaration of a type.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -145,7 +152,6 @@ pub enum Pattern {
 impl Pattern {
     pub fn root_term(&self) -> Option<&Ident> {
         match self {
-            &Pattern::BindPattern { ref subpat, .. } => subpat.root_term(),
             &Pattern::Term { ref sym, .. } => Some(sym),
             _ => None,
         }

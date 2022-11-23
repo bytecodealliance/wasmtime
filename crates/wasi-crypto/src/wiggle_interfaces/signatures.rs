@@ -22,8 +22,11 @@ impl super::wasi_ephemeral_crypto_signatures::WasiEphemeralCryptoSignatures for 
         encoded_len: guest_types::Size,
         encoding: guest_types::SignatureEncoding,
     ) -> Result<guest_types::Signature, guest_types::CryptoErrno> {
-        let alg_str = &*alg_str.as_str()?;
-        let encoded = &*encoded_ptr.as_array(encoded_len).as_slice()?;
+        let alg_str = &*alg_str.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
+        let encoded = &*encoded_ptr
+            .as_array(encoded_len)
+            .as_slice()?
+            .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
         Ok((&*self)
             .signature_import(alg_str, encoded, encoding.into())?
             .into())
@@ -42,7 +45,10 @@ impl super::wasi_ephemeral_crypto_signatures::WasiEphemeralCryptoSignatures for 
         input_ptr: &wiggle::GuestPtr<'_, u8>,
         input_len: guest_types::Size,
     ) -> Result<(), guest_types::CryptoErrno> {
-        let input = &*input_ptr.as_array(input_len).as_slice()?;
+        let input = &*input_ptr
+            .as_array(input_len)
+            .as_slice()?
+            .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
         Ok((&*self).signature_state_update(state_handle.into(), input)?)
     }
 
@@ -77,7 +83,10 @@ impl super::wasi_ephemeral_crypto_signatures::WasiEphemeralCryptoSignatures for 
         input_ptr: &wiggle::GuestPtr<'_, u8>,
         input_len: guest_types::Size,
     ) -> Result<(), guest_types::CryptoErrno> {
-        let input: &[u8] = &*input_ptr.as_array(input_len).as_slice()?;
+        let input: &[u8] = &*input_ptr
+            .as_array(input_len)
+            .as_slice()?
+            .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
         Ok(
             (&*self)
                 .signature_verification_state_update(verification_state_handle.into(), input)?,

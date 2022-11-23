@@ -10,7 +10,6 @@ use std::cell::{Cell, UnsafeCell};
 use std::mem::MaybeUninit;
 use std::ptr;
 use std::sync::Once;
-use wasmtime_environ::TrapCode;
 
 pub use self::backtrace::Backtrace;
 pub use self::tls::{tls_eager_initialize, TlsRestore};
@@ -95,8 +94,11 @@ pub unsafe fn raise_trap(reason: TrapReason) -> ! {
 /// Only safe to call when wasm code is on the stack, aka `catch_traps` must
 /// have been previously called. Additionally no Rust destructors can be on the
 /// stack. They will be skipped and not executed.
-pub unsafe fn raise_user_trap(data: Error) -> ! {
-    raise_trap(TrapReason::User(data))
+pub unsafe fn raise_user_trap(error: Error, needs_backtrace: bool) -> ! {
+    raise_trap(TrapReason::User {
+        error,
+        needs_backtrace,
+    })
 }
 
 /// Raises a trap from inside library code immediately.
@@ -109,7 +111,7 @@ pub unsafe fn raise_user_trap(data: Error) -> ! {
 /// Only safe to call when wasm code is on the stack, aka `catch_traps` must
 /// have been previously called. Additionally no Rust destructors can be on the
 /// stack. They will be skipped and not executed.
-pub unsafe fn raise_lib_trap(trap: TrapCode) -> ! {
+pub unsafe fn raise_lib_trap(trap: wasmtime_environ::Trap) -> ! {
     raise_trap(TrapReason::Wasm(trap))
 }
 
@@ -138,17 +140,38 @@ pub struct Trap {
 #[derive(Debug)]
 pub enum TrapReason {
     /// A user-raised trap through `raise_user_trap`.
-    User(Error),
+    User {
+        /// The actual user trap error.
+        error: Error,
+        /// Whether we need to capture a backtrace for this error or not.
+        needs_backtrace: bool,
+    },
 
     /// A trap raised from Cranelift-generated code with the pc listed of where
     /// the trap came from.
     Jit(usize),
 
     /// A trap raised from a wasm libcall
-    Wasm(TrapCode),
+    Wasm(wasmtime_environ::Trap),
 }
 
 impl TrapReason {
+    /// Create a new `TrapReason::User` that does not have a backtrace yet.
+    pub fn user_without_backtrace(error: Error) -> Self {
+        TrapReason::User {
+            error,
+            needs_backtrace: true,
+        }
+    }
+
+    /// Create a new `TrapReason::User` that already has a backtrace.
+    pub fn user_with_backtrace(error: Error) -> Self {
+        TrapReason::User {
+            error,
+            needs_backtrace: false,
+        }
+    }
+
     /// Is this a JIT trap?
     pub fn is_jit(&self) -> bool {
         matches!(self, TrapReason::Jit(_))
@@ -157,12 +180,12 @@ impl TrapReason {
 
 impl From<Error> for TrapReason {
     fn from(err: Error) -> Self {
-        TrapReason::User(err)
+        TrapReason::user_without_backtrace(err)
     }
 }
 
-impl From<TrapCode> for TrapReason {
-    fn from(code: TrapCode) -> Self {
+impl From<wasmtime_environ::Trap> for TrapReason {
+    fn from(code: wasmtime_environ::Trap) -> Self {
         TrapReason::Wasm(code)
     }
 }
@@ -216,7 +239,6 @@ mod call_thread_state {
     pub struct CallThreadState {
         pub(super) unwind: UnsafeCell<MaybeUninit<(UnwindReason, Option<Backtrace>)>>,
         pub(super) jmp_buf: Cell<*const u8>,
-        pub(super) handling_trap: Cell<bool>,
         pub(super) signal_handler: Option<*const SignalHandler<'static>>,
         pub(super) capture_backtrace: bool,
 
@@ -246,7 +268,6 @@ mod call_thread_state {
             CallThreadState {
                 unwind: UnsafeCell::new(MaybeUninit::uninit()),
                 jmp_buf: Cell::new(ptr::null()),
-                handling_trap: Cell::new(false),
                 signal_handler,
                 capture_backtrace,
                 limits,
@@ -383,7 +404,21 @@ impl CallThreadState {
     }
 
     fn unwind_with(&self, reason: UnwindReason) -> ! {
-        let backtrace = self.capture_backtrace(None);
+        let backtrace = match reason {
+            // Panics don't need backtraces. There is nowhere to attach the
+            // hypothetical backtrace to and it doesn't really make sense to try
+            // in the first place since this is a Rust problem rather than a
+            // Wasm problem.
+            UnwindReason::Panic(_)
+            // And if we are just propagating an existing trap that already has
+            // a backtrace attached to it, then there is no need to capture a
+            // new backtrace either.
+            | UnwindReason::Trap(TrapReason::User {
+                needs_backtrace: false,
+                ..
+            }) => None,
+            UnwindReason::Trap(_) => self.capture_backtrace(None),
+        };
         unsafe {
             (*self.unwind.get()).as_mut_ptr().write((reason, backtrace));
             wasmtime_longjmp(self.jmp_buf.get());
@@ -406,21 +441,11 @@ impl CallThreadState {
     /// * a different pointer - a jmp_buf buffer to longjmp to, meaning that
     ///   the wasm trap was succesfully handled.
     #[cfg_attr(target_os = "macos", allow(dead_code))] // macOS is more raw and doesn't use this
-    fn jmp_buf_if_trap(
+    fn take_jmp_buf_if_trap(
         &self,
         pc: *const u8,
         call_handler: impl Fn(&SignalHandler) -> bool,
     ) -> *const u8 {
-        // If we hit a fault while handling a previous trap, that's quite bad,
-        // so bail out and let the system handle this recursive segfault.
-        //
-        // Otherwise flag ourselves as handling a trap, do the trap handling,
-        // and reset our trap handling flag.
-        if self.handling_trap.replace(true) {
-            return ptr::null();
-        }
-        let _reset = ResetCell(&self.handling_trap, false);
-
         // If we haven't even started to handle traps yet, bail out.
         if self.jmp_buf.get().is_null() {
             return ptr::null();
@@ -442,7 +467,7 @@ impl CallThreadState {
 
         // If all that passed then this is indeed a wasm trap, so return the
         // `jmp_buf` passed to `wasmtime_longjmp` to resume.
-        self.jmp_buf.get()
+        self.jmp_buf.replace(ptr::null())
     }
 
     fn set_jit_trap(&self, pc: *const u8, fp: usize) {

@@ -15,16 +15,16 @@ use cranelift_codegen::ir::{
 };
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_codegen::packed_option::PackedOption;
-use std::convert::TryInto; // FIXME: Remove in edition2021
 
 /// Structure used for translating a series of functions into Cranelift IR.
 ///
 /// In order to reduce memory reallocations when compiling multiple functions,
 /// `FunctionBuilderContext` holds various data structures which are cleared between
 /// functions, rather than dropped, preserving the underlying allocations.
+#[derive(Default)]
 pub struct FunctionBuilderContext {
     ssa: SSABuilder,
-    blocks: SecondaryMap<Block, BlockData>,
+    status: SecondaryMap<Block, BlockStatus>,
     types: SecondaryMap<Variable, Type>,
 }
 
@@ -41,41 +41,32 @@ pub struct FunctionBuilder<'a> {
     position: PackedOption<Block>,
 }
 
-#[derive(Clone, Default)]
-struct BlockData {
-    /// A Block is "pristine" iff no instructions have been added since the last
-    /// call to `switch_to_block()`.
-    pristine: bool,
-
-    /// A Block is "filled" iff a terminator instruction has been inserted since
-    /// the last call to `switch_to_block()`.
-    ///
-    /// A filled block cannot be pristine.
-    filled: bool,
-
-    /// Count of parameters not supplied implicitly by the SSABuilder.
-    user_param_count: usize,
+#[derive(Clone, Default, Eq, PartialEq)]
+enum BlockStatus {
+    /// No instructions have been added.
+    #[default]
+    Empty,
+    /// Some instructions have been added, but no terminator.
+    Partial,
+    /// A terminator has been added; no further instructions may be added.
+    Filled,
 }
 
 impl FunctionBuilderContext {
     /// Creates a FunctionBuilderContext structure. The structure is automatically cleared after
     /// each [`FunctionBuilder`](struct.FunctionBuilder.html) completes translating a function.
     pub fn new() -> Self {
-        Self {
-            ssa: SSABuilder::new(),
-            blocks: SecondaryMap::new(),
-            types: SecondaryMap::new(),
-        }
+        Self::default()
     }
 
     fn clear(&mut self) {
         self.ssa.clear();
-        self.blocks.clear();
+        self.status.clear();
         self.types.clear();
     }
 
     fn is_empty(&self) -> bool {
-        self.ssa.is_empty() && self.blocks.is_empty() && self.types.is_empty()
+        self.ssa.is_empty() && self.status.is_empty() && self.types.is_empty()
     }
 }
 
@@ -144,11 +135,10 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
                         {
                             // Call `declare_block_predecessor` instead of `declare_successor` for
                             // avoiding the borrow checker.
-                            self.builder.func_ctx.ssa.declare_block_predecessor(
-                                *dest_block,
-                                self.builder.position.unwrap(),
-                                inst,
-                            );
+                            self.builder
+                                .func_ctx
+                                .ssa
+                                .declare_block_predecessor(*dest_block, inst);
                         }
                         self.builder.declare_successor(destination, inst);
                     }
@@ -308,11 +298,6 @@ impl<'a> FunctionBuilder<'a> {
     pub fn create_block(&mut self) -> Block {
         let block = self.func.dfg.make_block();
         self.func_ctx.ssa.declare_block(block);
-        self.func_ctx.blocks[block] = BlockData {
-            filled: false,
-            pristine: true,
-            user_param_count: 0,
-        };
         block
     }
 
@@ -341,13 +326,13 @@ impl<'a> FunctionBuilder<'a> {
         debug_assert!(
             self.position.is_none()
                 || self.is_unreachable()
-                || self.is_pristine()
-                || self.is_filled(),
+                || self.is_pristine(self.position.unwrap())
+                || self.is_filled(self.position.unwrap()),
             "you have to fill your block before switching"
         );
         // We cannot switch to a filled block
         debug_assert!(
-            !self.func_ctx.blocks[block].filled,
+            !self.is_filled(block),
             "you cannot switch to a block which is already filled"
         );
 
@@ -397,6 +382,12 @@ impl<'a> FunctionBuilder<'a> {
     /// Returns the Cranelift IR necessary to use a previously defined user
     /// variable, returning an error if this is not possible.
     pub fn try_use_var(&mut self, var: Variable) -> Result<Value, UseVariableError> {
+        // Assert that we're about to add instructions to this block using the definition of the
+        // given variable. ssa.use_var is the only part of this crate which can add block parameters
+        // behind the caller's back. If we disallow calling append_block_param as soon as use_var is
+        // called, then we enforce a strict separation between user parameters and SSA parameters.
+        self.ensure_inserted_block();
+
         let (val, side_effects) = {
             let ty = *self
                 .func_ctx
@@ -538,14 +529,14 @@ impl<'a> FunctionBuilder<'a> {
     /// Make sure that the current block is inserted in the layout.
     pub fn ensure_inserted_block(&mut self) {
         let block = self.position.unwrap();
-        if self.func_ctx.blocks[block].pristine {
+        if self.is_pristine(block) {
             if !self.func.layout.is_block_inserted(block) {
                 self.func.layout.append_block(block);
             }
-            self.func_ctx.blocks[block].pristine = false;
+            self.func_ctx.status[block] = BlockStatus::Partial;
         } else {
             debug_assert!(
-                !self.func_ctx.blocks[block].filled,
+                !self.is_filled(block),
                 "you cannot add an instruction to a block already filled"
             );
         }
@@ -573,9 +564,12 @@ impl<'a> FunctionBuilder<'a> {
 
         // These parameters count as "user" parameters here because they aren't
         // inserted by the SSABuilder.
-        let user_param_count = &mut self.func_ctx.blocks[block].user_param_count;
+        debug_assert!(
+            self.is_pristine(block),
+            "You can't add block parameters after adding any instruction"
+        );
+
         for argtyp in &self.func.stencil.signature.params {
-            *user_param_count += 1;
             self.func
                 .stencil
                 .dfg
@@ -589,9 +583,12 @@ impl<'a> FunctionBuilder<'a> {
     pub fn append_block_params_for_function_returns(&mut self, block: Block) {
         // These parameters count as "user" parameters here because they aren't
         // inserted by the SSABuilder.
-        let user_param_count = &mut self.func_ctx.blocks[block].user_param_count;
+        debug_assert!(
+            self.is_pristine(block),
+            "You can't add block parameters after adding any instruction"
+        );
+
         for argtyp in &self.func.stencil.signature.returns {
-            *user_param_count += 1;
             self.func
                 .stencil
                 .dfg
@@ -606,17 +603,19 @@ impl<'a> FunctionBuilder<'a> {
         // Check that all the `Block`s are filled and sealed.
         #[cfg(debug_assertions)]
         {
-            for (block, block_data) in self.func_ctx.blocks.iter() {
-                assert!(
-                    block_data.pristine || self.func_ctx.ssa.is_sealed(block),
-                    "FunctionBuilder finalized, but block {} is not sealed",
-                    block,
-                );
-                assert!(
-                    block_data.pristine || block_data.filled,
-                    "FunctionBuilder finalized, but block {} is not filled",
-                    block,
-                );
+            for block in self.func_ctx.status.keys() {
+                if !self.is_pristine(block) {
+                    assert!(
+                        self.func_ctx.ssa.is_sealed(block),
+                        "FunctionBuilder finalized, but block {} is not sealed",
+                        block,
+                    );
+                    assert!(
+                        self.is_filled(block),
+                        "FunctionBuilder finalized, but block {} is not filled",
+                        block,
+                    );
+                }
             }
         }
 
@@ -624,7 +623,7 @@ impl<'a> FunctionBuilder<'a> {
         #[cfg(debug_assertions)]
         {
             // Iterate manually to provide more helpful error messages.
-            for block in self.func_ctx.blocks.keys() {
+            for block in self.func_ctx.status.keys() {
                 if let Err((inst, msg)) = self.func.is_block_basic(block) {
                     let inst_str = self.func.dfg.display_inst(inst);
                     panic!(
@@ -669,14 +668,9 @@ impl<'a> FunctionBuilder<'a> {
     /// instructions to it, otherwise this could interfere with SSA construction.
     pub fn append_block_param(&mut self, block: Block, ty: Type) -> Value {
         debug_assert!(
-            self.func_ctx.blocks[block].pristine,
+            self.is_pristine(block),
             "You can't add block parameters after adding any instruction"
         );
-        debug_assert_eq!(
-            self.func_ctx.blocks[block].user_param_count,
-            self.func.dfg.num_block_params(block)
-        );
-        self.func_ctx.blocks[block].user_param_count += 1;
         self.func.dfg.append_block_param(block, ty)
     }
 
@@ -693,11 +687,9 @@ impl<'a> FunctionBuilder<'a> {
         let old_dest = self.func.dfg[inst]
             .branch_destination_mut()
             .expect("you want to change the jump destination of a non-jump instruction");
-        let pred = self.func_ctx.ssa.remove_block_predecessor(*old_dest, inst);
+        self.func_ctx.ssa.remove_block_predecessor(*old_dest, inst);
         *old_dest = new_dest;
-        self.func_ctx
-            .ssa
-            .declare_block_predecessor(new_dest, pred, inst);
+        self.func_ctx.ssa.declare_block_predecessor(new_dest, inst);
     }
 
     /// Returns `true` if and only if the current `Block` is sealed and has no predecessors declared.
@@ -718,14 +710,14 @@ impl<'a> FunctionBuilder<'a> {
 
     /// Returns `true` if and only if no instructions have been added since the last call to
     /// `switch_to_block`.
-    pub fn is_pristine(&self) -> bool {
-        self.func_ctx.blocks[self.position.unwrap()].pristine
+    fn is_pristine(&self, block: Block) -> bool {
+        self.func_ctx.status[block] == BlockStatus::Empty
     }
 
     /// Returns `true` if and only if a terminator instruction has been inserted since the
     /// last call to `switch_to_block`.
-    pub fn is_filled(&self) -> bool {
-        self.func_ctx.blocks[self.position.unwrap()].filled
+    fn is_filled(&self, block: Block) -> bool {
+        self.func_ctx.status[block] == BlockStatus::Filled
     }
 }
 
@@ -1020,13 +1012,13 @@ impl<'a> FunctionBuilder<'a> {
         use IntCC::*;
         let (zero_cc, empty_imm) = match int_cc {
             //
-            Equal => (Equal, true),
-            NotEqual => (NotEqual, false),
+            Equal => (Equal, 1),
+            NotEqual => (NotEqual, 0),
 
-            UnsignedLessThan => (SignedLessThan, false),
-            UnsignedGreaterThanOrEqual => (SignedGreaterThanOrEqual, true),
-            UnsignedGreaterThan => (SignedGreaterThan, false),
-            UnsignedLessThanOrEqual => (SignedLessThanOrEqual, true),
+            UnsignedLessThan => (SignedLessThan, 0),
+            UnsignedGreaterThanOrEqual => (SignedGreaterThanOrEqual, 1),
+            UnsignedGreaterThan => (SignedGreaterThan, 0),
+            UnsignedLessThanOrEqual => (SignedLessThanOrEqual, 1),
 
             SignedLessThan
             | SignedGreaterThanOrEqual
@@ -1037,7 +1029,7 @@ impl<'a> FunctionBuilder<'a> {
         };
 
         if size == 0 {
-            return self.ins().bconst(types::B1, empty_imm);
+            return self.ins().iconst(types::I8, empty_imm);
         }
 
         // Future work could consider expanding this to handle more-complex scenarios.
@@ -1082,21 +1074,23 @@ fn greatest_divisible_power_of_two(size: u64) -> u64 {
 impl<'a> FunctionBuilder<'a> {
     /// A Block is 'filled' when a terminator instruction is present.
     fn fill_current_block(&mut self) {
-        self.func_ctx.blocks[self.position.unwrap()].filled = true;
+        self.func_ctx.status[self.position.unwrap()] = BlockStatus::Filled;
     }
 
     fn declare_successor(&mut self, dest_block: Block, jump_inst: Inst) {
         self.func_ctx
             .ssa
-            .declare_block_predecessor(dest_block, self.position.unwrap(), jump_inst);
+            .declare_block_predecessor(dest_block, jump_inst);
     }
 
     fn handle_ssa_side_effects(&mut self, side_effects: SideEffects) {
         for split_block in side_effects.split_blocks_created {
-            self.func_ctx.blocks[split_block].filled = true
+            self.func_ctx.status[split_block] = BlockStatus::Filled;
         }
         for modified_block in side_effects.instructions_added_to_blocks {
-            self.func_ctx.blocks[modified_block].pristine = false
+            if self.is_pristine(modified_block) {
+                self.func_ctx.status[modified_block] = BlockStatus::Partial;
+            }
         }
     }
 }
@@ -1568,8 +1562,8 @@ block0:
     v1 -> v4
     v3 = iconst.i64 0
     v0 -> v3
-    v2 = bconst.b1 true
-    return v2  ; v2 = true",
+    v2 = iconst.i8 1
+    return v2  ; v2 = 1",
             |builder, target, x, y| {
                 builder.emit_small_memory_compare(
                     target.frontend_config(),
@@ -1724,7 +1718,7 @@ block0:
             .expect("Should be able to create backend with default flags");
 
         let mut sig = Signature::new(target.default_call_conv());
-        sig.returns.push(AbiParam::new(B1));
+        sig.returns.push(AbiParam::new(I8));
 
         let mut fn_ctx = FunctionBuilderContext::new();
         let mut func = Function::with_name_signature(UserFuncName::testcase("sample"), sig);
@@ -1750,7 +1744,7 @@ block0:
 
         check(
             &func,
-            &format!("function %sample() -> b1 system_v {{{}\n}}\n", expected),
+            &format!("function %sample() -> i8 system_v {{{}\n}}\n", expected),
         );
     }
 
@@ -1758,7 +1752,7 @@ block0:
     fn undef_vector_vars() {
         let mut sig = Signature::new(CallConv::SystemV);
         sig.returns.push(AbiParam::new(I8X16));
-        sig.returns.push(AbiParam::new(B8X16));
+        sig.returns.push(AbiParam::new(I8X16));
         sig.returns.push(AbiParam::new(F32X4));
 
         let mut fn_ctx = FunctionBuilderContext::new();
@@ -1771,7 +1765,7 @@ block0:
             let b = Variable::new(1);
             let c = Variable::new(2);
             builder.declare_var(a, I8X16);
-            builder.declare_var(b, B8X16);
+            builder.declare_var(b, I8X16);
             builder.declare_var(c, F32X4);
             builder.switch_to_block(block0);
 
@@ -1786,14 +1780,14 @@ block0:
 
         check(
             &func,
-            "function %sample() -> i8x16, b8x16, f32x4 system_v {
+            "function %sample() -> i8x16, i8x16, f32x4 system_v {
     const0 = 0x00000000000000000000000000000000
 
 block0:
     v5 = f32const 0.0
     v6 = splat.f32x4 v5  ; v5 = 0.0
     v2 -> v6
-    v4 = vconst.b8x16 const0
+    v4 = vconst.i8x16 const0
     v1 -> v4
     v3 = vconst.i8x16 const0
     v0 -> v3
@@ -1825,24 +1819,24 @@ block0:
             builder.switch_to_block(block0);
 
             assert_eq!(
-                builder.try_use_var(Variable::with_u32(0)),
-                Err(UseVariableError::UsedBeforeDeclared(Variable::with_u32(0)))
+                builder.try_use_var(Variable::from_u32(0)),
+                Err(UseVariableError::UsedBeforeDeclared(Variable::from_u32(0)))
             );
 
             let value = builder.ins().iconst(cranelift_codegen::ir::types::I32, 0);
 
             assert_eq!(
-                builder.try_def_var(Variable::with_u32(0), value),
-                Err(DefVariableError::DefinedBeforeDeclared(Variable::with_u32(
+                builder.try_def_var(Variable::from_u32(0), value),
+                Err(DefVariableError::DefinedBeforeDeclared(Variable::from_u32(
                     0
                 )))
             );
 
-            builder.declare_var(Variable::with_u32(0), cranelift_codegen::ir::types::I32);
+            builder.declare_var(Variable::from_u32(0), cranelift_codegen::ir::types::I32);
             assert_eq!(
-                builder.try_declare_var(Variable::with_u32(0), cranelift_codegen::ir::types::I32),
+                builder.try_declare_var(Variable::from_u32(0), cranelift_codegen::ir::types::I32),
                 Err(DeclareVariableError::DeclaredMultipleTimes(
-                    Variable::with_u32(0)
+                    Variable::from_u32(0)
                 ))
             );
         }

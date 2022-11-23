@@ -39,7 +39,7 @@ block0(v0: i64x2, v1: i32):
 ; run: %ushr_i64x2([1 2], 65) == [0 1]
 
 
-function %sshr_imm_i16x8() -> b1 {
+function %sshr_imm_i16x8() -> i8 {
 block0:
     v1 = vconst.i16x8 [1 2 4 -8 0 0 0 0]
     v2 = ushr_imm v1, 1

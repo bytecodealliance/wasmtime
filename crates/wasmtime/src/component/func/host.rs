@@ -17,18 +17,28 @@ use wasmtime_runtime::component::{
 };
 use wasmtime_runtime::{VMCallerCheckedAnyfunc, VMMemoryDefinition, VMOpaqueContext};
 
-/// Trait representing host-defined functions that can be imported into a wasm
-/// component.
-///
-/// For more information see the
-/// [`func_wrap`](crate::component::LinkerInstance::func_wrap) documentation.
-pub trait IntoComponentFunc<T, Params, Return> {
-    /// Host entrypoint from a cranelift-generated trampoline.
-    ///
-    /// This function has type `VMLoweringCallee` and delegates to the shared
-    /// `call_host` function below.
-    #[doc(hidden)]
-    extern "C" fn entrypoint(
+pub struct HostFunc {
+    entrypoint: VMLoweringCallee,
+    typecheck: Box<dyn (Fn(TypeFuncIndex, &Arc<ComponentTypes>) -> Result<()>) + Send + Sync>,
+    func: Box<dyn Any + Send + Sync>,
+}
+
+impl HostFunc {
+    pub(crate) fn from_closure<T, F, P, R>(func: F) -> Arc<HostFunc>
+    where
+        F: Fn(StoreContextMut<T>, P) -> Result<R> + Send + Sync + 'static,
+        P: ComponentNamedList + Lift + 'static,
+        R: ComponentNamedList + Lower + 'static,
+    {
+        let entrypoint = Self::entrypoint::<T, F, P, R>;
+        Arc::new(HostFunc {
+            entrypoint,
+            typecheck: Box::new(typecheck::<P, R>),
+            func: Box::new(func),
+        })
+    }
+
+    extern "C" fn entrypoint<T, F, P, R>(
         cx: *mut VMOpaqueContext,
         data: *mut u8,
         flags: InstanceFlags,
@@ -37,30 +47,25 @@ pub trait IntoComponentFunc<T, Params, Return> {
         string_encoding: StringEncoding,
         storage: *mut ValRaw,
         storage_len: usize,
-    );
-
-    #[doc(hidden)]
-    fn into_host_func(self) -> Arc<HostFunc>;
-}
-
-pub struct HostFunc {
-    entrypoint: VMLoweringCallee,
-    typecheck: Box<dyn (Fn(TypeFuncIndex, &Arc<ComponentTypes>) -> Result<()>) + Send + Sync>,
-    func: Box<dyn Any + Send + Sync>,
-}
-
-impl HostFunc {
-    fn new<F, P, R>(func: F, entrypoint: VMLoweringCallee) -> Arc<HostFunc>
-    where
-        F: Send + Sync + 'static,
+    ) where
+        F: Fn(StoreContextMut<T>, P) -> Result<R>,
         P: ComponentNamedList + Lift + 'static,
         R: ComponentNamedList + Lower + 'static,
     {
-        Arc::new(HostFunc {
-            entrypoint,
-            typecheck: Box::new(typecheck::<P, R>),
-            func: Box::new(func),
-        })
+        let data = data as *const F;
+        unsafe {
+            handle_result(|| {
+                call_host::<_, _, _, _>(
+                    cx,
+                    flags,
+                    memory,
+                    realloc,
+                    string_encoding,
+                    std::slice::from_raw_parts_mut(storage, storage_len),
+                    |store, args| (*data)(store, args),
+                )
+            })
+        }
     }
 
     pub(crate) fn new_dynamic<T, F>(
@@ -89,16 +94,8 @@ impl HostFunc {
             func: Box::new(DynamicContext {
                 func,
                 types: Types {
-                    params: ty
-                        .params
-                        .iter()
-                        .map(|(_, ty)| Type::from(ty, types))
-                        .collect(),
-                    results: ty
-                        .results
-                        .iter()
-                        .map(|(_, ty)| Type::from(ty, types))
-                        .collect(),
+                    params: ty.params.iter().map(|ty| Type::from(ty, types)).collect(),
+                    results: ty.results.iter().map(|ty| Type::from(ty, types)).collect(),
                 },
             }),
         })
@@ -123,17 +120,17 @@ where
     R: ComponentNamedList + Lower,
 {
     let ty = &types[ty];
-    P::typecheck_named_list(&ty.params, types).context("type mismatch with parameters")?;
-    R::typecheck_named_list(&ty.results, types).context("type mismatch with results")?;
+    P::typecheck_list(&ty.params, types).context("type mismatch with parameters")?;
+    R::typecheck_list(&ty.results, types).context("type mismatch with results")?;
     Ok(())
 }
 
 /// The "meat" of calling a host function from wasm.
 ///
-/// This function is delegated to from implementations of `IntoComponentFunc`
-/// generated in the macro below. Most of the arguments from the `entrypoint`
-/// are forwarded here except for the `data` pointer which is encapsulated in
-/// the `closure` argument here.
+/// This function is delegated to from implementations of
+/// `HostFunc::from_closure`. Most of the arguments from the `entrypoint` are
+/// forwarded here except for the `data` pointer which is encapsulated in the
+/// `closure` argument here.
 ///
 /// This function is parameterized over:
 ///
@@ -273,92 +270,10 @@ fn validate_inbounds<T: ComponentType>(memory: &[u8], ptr: &ValRaw) -> Result<us
 unsafe fn handle_result(func: impl FnOnce() -> Result<()>) {
     match panic::catch_unwind(AssertUnwindSafe(func)) {
         Ok(Ok(())) => {}
-        Ok(Err(e)) => wasmtime_runtime::raise_user_trap(e),
+        Ok(Err(e)) => crate::trap::raise(e),
         Err(e) => wasmtime_runtime::resume_panic(e),
     }
 }
-
-macro_rules! impl_into_component_func {
-    ($num:tt $($args:ident)*) => {
-        // Implement for functions without a leading `StoreContextMut` parameter
-        #[allow(non_snake_case)]
-        impl<T, F, $($args,)* R> IntoComponentFunc<T, ($($args,)*), R> for F
-        where
-            F: Fn($($args),*) -> Result<R> + Send + Sync + 'static,
-            ($($args,)*): ComponentNamedList + Lift + 'static,
-            R: ComponentNamedList + Lower + 'static,
-        {
-            extern "C" fn entrypoint(
-                cx: *mut VMOpaqueContext,
-                data: *mut u8,
-                flags: InstanceFlags,
-                memory: *mut VMMemoryDefinition,
-                realloc: *mut VMCallerCheckedAnyfunc,
-                string_encoding: StringEncoding,
-                storage: *mut ValRaw,
-                storage_len: usize,
-            ) {
-                let data = data as *const Self;
-                unsafe {
-                    handle_result(|| call_host::<T, _, _, _>(
-                        cx,
-                        flags,
-                        memory,
-                        realloc,
-                        string_encoding,
-                        std::slice::from_raw_parts_mut(storage, storage_len),
-                        |_, ($($args,)*)| (*data)($($args),*),
-                    ))
-                }
-            }
-
-            fn into_host_func(self) -> Arc<HostFunc> {
-                let entrypoint = <Self as IntoComponentFunc<T, ($($args,)*), R>>::entrypoint;
-                HostFunc::new::<_, ($($args,)*), R>(self, entrypoint)
-            }
-        }
-
-        // Implement for functions with a leading `StoreContextMut` parameter
-        #[allow(non_snake_case)]
-        impl<T, F, $($args,)* R> IntoComponentFunc<T, (StoreContextMut<'_, T>, $($args,)*), R> for F
-        where
-            F: Fn(StoreContextMut<'_, T>, $($args),*) -> Result<R> + Send + Sync + 'static,
-            ($($args,)*): ComponentNamedList + Lift + 'static,
-            R: ComponentNamedList + Lower + 'static,
-        {
-            extern "C" fn entrypoint(
-                cx: *mut VMOpaqueContext,
-                data: *mut u8,
-                flags: InstanceFlags,
-                memory: *mut VMMemoryDefinition,
-                realloc: *mut VMCallerCheckedAnyfunc,
-                string_encoding: StringEncoding,
-                storage: *mut ValRaw,
-                storage_len: usize,
-            ) {
-                let data = data as *const Self;
-                unsafe {
-                    handle_result(|| call_host::<T, _, _, _>(
-                        cx,
-                        flags,
-                        memory,
-                        realloc,
-                        string_encoding,
-                        std::slice::from_raw_parts_mut(storage, storage_len),
-                        |store, ($($args,)*)| (*data)(store, $($args),*),
-                    ))
-                }
-            }
-
-            fn into_host_func(self) -> Arc<HostFunc> {
-                let entrypoint = <Self as IntoComponentFunc<T, (StoreContextMut<'_, T>, $($args,)*), R>>::entrypoint;
-                HostFunc::new::<_, ($($args,)*), R>(self, entrypoint)
-            }
-        }
-    }
-}
-
-for_each_function_signature!(impl_into_component_func);
 
 unsafe fn call_host_dynamic<T, F>(
     Types { params, results }: &Types,

@@ -12,7 +12,7 @@ pub fn ty_bits(ty: Type) -> usize {
 
 /// Is the type represented by an integer (not float) at the machine level?
 pub(crate) fn ty_has_int_representation(ty: Type) -> bool {
-    ty.is_int() || ty.is_bool() || ty.is_ref()
+    ty.is_int() || ty.is_ref()
 }
 
 /// Is the type represented by a float or vector value at the machine level?

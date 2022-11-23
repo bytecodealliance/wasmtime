@@ -1,13 +1,14 @@
 test run
 target aarch64
 target s390x
+target riscv64
 target s390x has_mie2
 ; target x86_64 TODO: Not yet implemented on x86_64
 
-function %bnot_band() -> b1 {
+function %bnot_band() -> i8 {
 block0:
-    v1 = bconst.b1 false
-    v2 = bconst.b1 true
+    v1 = iconst.i8 0
+    v2 = iconst.i8 1
     v3 = bnot v1
     v4 = band v3, v2
     return v4

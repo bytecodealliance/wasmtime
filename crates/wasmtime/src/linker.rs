@@ -3,7 +3,7 @@ use crate::instance::InstancePre;
 use crate::store::StoreOpaque;
 use crate::{
     AsContextMut, Caller, Engine, Extern, ExternType, Func, FuncType, ImportType, Instance,
-    IntoFunc, Module, StoreContextMut, Trap, Val, ValRaw,
+    IntoFunc, Module, StoreContextMut, Val, ValRaw,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use log::warn;
@@ -149,7 +149,7 @@ macro_rules! generate_wrap_async_func {
                 let mut future = Pin::from(func(caller, $($args),*));
                 match unsafe { async_cx.block_on(future.as_mut()) } {
                     Ok(ret) => ret.into_fallible(),
-                    Err(e) => R::fallible_from_trap(e),
+                    Err(e) => R::fallible_from_error(e),
                 }
             })
         }
@@ -271,7 +271,7 @@ impl<T> Linker<T> {
                         import.name(),
                     );
                     self.func_new(import.module(), import.name(), func_ty, move |_, _, _| {
-                        Err(Trap::new(err_msg.clone()))
+                        bail!("{err_msg}")
                     })?;
                 }
             }
@@ -348,7 +348,7 @@ impl<T> Linker<T> {
         module: &str,
         name: &str,
         ty: FuncType,
-        func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<(), Trap> + Send + Sync + 'static,
+        func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
     ) -> Result<&mut Self> {
         let func = HostFunc::new(&self.engine, ty, func);
         let key = self.import_key(module, Some(name));
@@ -366,7 +366,7 @@ impl<T> Linker<T> {
         module: &str,
         name: &str,
         ty: FuncType,
-        func: impl Fn(Caller<'_, T>, &mut [ValRaw]) -> Result<(), Trap> + Send + Sync + 'static,
+        func: impl Fn(Caller<'_, T>, &mut [ValRaw]) -> Result<()> + Send + Sync + 'static,
     ) -> Result<&mut Self> {
         let func = HostFunc::new_unchecked(&self.engine, ty, func);
         let key = self.import_key(module, Some(name));
@@ -391,7 +391,7 @@ impl<T> Linker<T> {
                 Caller<'a, T>,
                 &'a [Val],
                 &'a mut [Val],
-            ) -> Box<dyn Future<Output = Result<(), Trap>> + Send + 'a>
+            ) -> Box<dyn Future<Output = Result<()>> + Send + 'a>
             + Send
             + Sync
             + 'static,
@@ -572,7 +572,7 @@ impl<T> Linker<T> {
     /// Ordinary modules which don't declare themselves to be either Commands
     /// or Reactors are treated as Reactors without any initialization calls.
     ///
-    /// [Commands and Reactors]: https://github.com/WebAssembly/WASI/blob/master/design/application-abi.md#current-unstable-abi
+    /// [Commands and Reactors]: https://github.com/WebAssembly/WASI/blob/main/legacy/application-abi.md#current-unstable-abi
     ///
     /// # Errors
     ///
@@ -643,7 +643,7 @@ impl<T> Linker<T> {
     /// let module = Module::new(&engine, wat)?;
     /// linker.module(&mut store, "commander", &module)?;
     /// let run = linker.get_default(&mut store, "")?
-    ///     .typed::<(), (), _>(&store)?
+    ///     .typed::<(), ()>(&store)?
     ///     .clone();
     /// run.call(&mut store, ())?;
     /// run.call(&mut store, ())?;
@@ -664,7 +664,7 @@ impl<T> Linker<T> {
     /// let module = Module::new(&engine, wat)?;
     /// linker.module(&mut store, "", &module)?;
     /// let run = linker.get(&mut store, "", "run").unwrap().into_func().unwrap();
-    /// let count = run.typed::<(), i32, _>(&store)?.call(&mut store, ())?;
+    /// let count = run.typed::<(), i32>(&store)?.call(&mut store, ())?;
     /// assert_eq!(count, 0, "a Command should get a fresh instance on each invocation");
     ///
     /// # Ok(())
@@ -714,8 +714,7 @@ impl<T> Linker<T> {
                                     .unwrap()
                                     .into_func()
                                     .unwrap()
-                                    .call(&mut caller, params, results)
-                                    .map_err(|error| error.downcast::<Trap>().unwrap())?;
+                                    .call(&mut caller, params, results)?;
 
                                 Ok(())
                             },
@@ -728,7 +727,7 @@ impl<T> Linker<T> {
 
                 if let Some(export) = instance.get_export(&mut store, "_initialize") {
                     if let Extern::Func(func) = export {
-                        func.typed::<(), (), _>(&store)
+                        func.typed::<(), ()>(&store)
                             .and_then(|f| f.call(&mut store, ()).map_err(Into::into))
                             .context("calling the Reactor initialization function")?;
                     }
@@ -781,8 +780,7 @@ impl<T> Linker<T> {
                                     .into_func()
                                     .unwrap()
                                     .call_async(&mut caller, params, results)
-                                    .await
-                                    .map_err(|error| error.downcast::<Trap>().unwrap())?;
+                                    .await?;
                                 Ok(())
                             })
                         },
@@ -795,7 +793,7 @@ impl<T> Linker<T> {
                 if let Some(export) = instance.get_export(&mut store, "_initialize") {
                     if let Extern::Func(func) = export {
                         let func = func
-                            .typed::<(), (), _>(&store)
+                            .typed::<(), ()>(&store)
                             .context("loading the Reactor initialization function")?;
                         func.call_async(&mut store, ())
                             .await

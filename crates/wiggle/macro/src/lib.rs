@@ -39,6 +39,10 @@ use syn::parse_macro_input;
 ///   `{ errno => YourErrnoType }`. This allows you to use the `UserErrorConversion`
 ///   trait to map these rich errors into the flat witx type, or to terminate
 ///   WebAssembly execution by trapping.
+///     * Instead of requiring the user to define an error type, wiggle can
+///       generate an error type for the user which has conversions to/from
+///       the base type, and permits trapping, using the syntax
+///       `errno => trappable AnErrorType`.
 /// * Optional: `async` takes a set of witx modules and functions which are
 ///   made Rust `async` functions in the module trait.
 ///
@@ -126,14 +130,14 @@ use syn::parse_macro_input;
 ///
 /// impl types::UserErrorConversion for YourCtxType {
 ///     fn errno_from_your_rich_error(&mut self, e: YourRichError)
-///         -> Result<types::Errno, wiggle::Trap>
+///         -> Result<types::Errno, wiggle::wasmtime_crate::Trap>
 ///     {
 ///         println!("Rich error: {:?}", e);
 ///         match e {
 ///             YourRichError::InvalidArg{..} => Ok(types::Errno::InvalidArg),
 ///             YourRichError::Io{..} => Ok(types::Errno::Io),
 ///             YourRichError::Overflow => Ok(types::Errno::Overflow),
-///             YourRichError::Trap(s) => Err(wiggle::Trap::String(s)),
+///             YourRichError::Trap(s) => Err(wiggle::wasmtime_crate::Trap::new(s)),
 ///         }
 ///     }
 /// }
@@ -146,19 +150,19 @@ pub fn from_witx(args: TokenStream) -> TokenStream {
     let config = parse_macro_input!(args as wiggle_generate::Config);
 
     let doc = config.load_document();
-    let names = wiggle_generate::Names::new(quote!(wiggle));
 
     let settings = wiggle_generate::CodegenSettings::new(
         &config.errors,
         &config.async_,
         &doc,
-        cfg!(feature = "wasmtime") && config.wasmtime,
+        config.wasmtime,
+        &config.tracing,
     )
     .expect("validating codegen settings");
 
-    let code = wiggle_generate::generate(&doc, &names, &settings);
+    let code = wiggle_generate::generate(&doc, &settings);
     let metadata = if cfg!(feature = "wiggle_metadata") {
-        wiggle_generate::generate_metadata(&doc, &names)
+        wiggle_generate::generate_metadata(&doc)
     } else {
         quote!()
     };
@@ -176,7 +180,6 @@ pub fn async_trait(attr: TokenStream, item: TokenStream) -> TokenStream {
     })
 }
 
-#[cfg(feature = "wasmtime")]
 /// Define the structs required to integrate a Wiggle implementation with Wasmtime.
 ///
 /// ## Arguments
@@ -188,18 +191,18 @@ pub fn async_trait(attr: TokenStream, item: TokenStream) -> TokenStream {
 pub fn wasmtime_integration(args: TokenStream) -> TokenStream {
     let config = parse_macro_input!(args as wiggle_generate::WasmtimeConfig);
     let doc = config.c.load_document();
-    let names = wiggle_generate::Names::new(quote!(wiggle));
 
     let settings = wiggle_generate::CodegenSettings::new(
         &config.c.errors,
         &config.c.async_,
         &doc,
-        cfg!(feature = "wasmtime"),
+        true,
+        &config.c.tracing,
     )
     .expect("validating codegen settings");
 
     let modules = doc.modules().map(|module| {
-        wiggle_generate::wasmtime::link_module(&module, &names, Some(&config.target), &settings)
+        wiggle_generate::wasmtime::link_module(&module, Some(&config.target), &settings)
     });
     quote!( #(#modules)* ).into()
 }

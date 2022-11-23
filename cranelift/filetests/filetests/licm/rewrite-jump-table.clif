@@ -12,14 +12,14 @@ function %rewrite_jump_table() {
         return
 
     block2:
-        v4 = bconst.b1 false
+        v4 = iconst.i8 0
         jump block2
 }
 
 ; sameln: function
 ; nextln: jt0 = jump_table [block1, block3]
 ; check: block3:
-; nextln: v4 = bconst.b1 false
+; nextln: v4 = iconst.i8 0
 ; nextln: jump block2
 ; check: block2:
 ; nextln: jump block2

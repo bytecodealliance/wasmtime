@@ -19,6 +19,7 @@ use crate::ir::immediates::Imm64;
 use crate::ir::types::{I128, I64};
 use crate::ir::{self, InstBuilder, InstructionData, MemFlags, Value};
 use crate::isa::TargetIsa;
+use crate::trace;
 
 mod globalvalue;
 mod heap;
@@ -46,6 +47,8 @@ fn imm_const(pos: &mut FuncCursor, arg: Value, imm: Imm64, is_signed: bool) -> V
 /// Perform a simple legalization by expansion of the function, without
 /// platform-specific transforms.
 pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa: &dyn TargetIsa) {
+    trace!("Pre-legalization function:\n{}", func.display());
+
     let mut pos = FuncCursor::new(func);
     let func_begin = pos.position();
     pos.set_position(func_begin);
@@ -54,27 +57,6 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
         while let Some(inst) = pos.next_inst() {
             match pos.func.dfg[inst] {
                 // control flow
-                InstructionData::BranchIcmp {
-                    opcode: ir::Opcode::BrIcmp,
-                    cond,
-                    destination,
-                    ref args,
-                } => {
-                    let a = args.get(0, &pos.func.dfg.value_lists).unwrap();
-                    let b = args.get(1, &pos.func.dfg.value_lists).unwrap();
-                    let block_args = args.as_slice(&pos.func.dfg.value_lists)[2..].to_vec();
-
-                    let old_block = pos.func.layout.pp_block(inst);
-                    pos.func.dfg.clear_results(inst);
-
-                    let icmp_res = pos.func.dfg.replace(inst).icmp(cond, a, b);
-                    let mut pos = FuncCursor::new(pos.func).after_inst(inst);
-                    pos.use_srcloc(inst);
-                    pos.ins().brnz(icmp_res, destination, &block_args);
-
-                    cfg.recompute_block(pos.func, destination);
-                    cfg.recompute_block(pos.func, old_block);
-                }
                 InstructionData::CondTrap {
                     opcode:
                         opcode @ (ir::Opcode::Trapnz | ir::Opcode::Trapz | ir::Opcode::ResumableTrapnz),
@@ -93,8 +75,9 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
                     opcode: ir::Opcode::HeapAddr,
                     heap,
                     arg,
-                    imm,
-                } => expand_heap_addr(inst, &mut pos.func, cfg, isa, heap, arg, imm),
+                    offset,
+                    size,
+                } => expand_heap_addr(inst, &mut pos.func, cfg, isa, heap, arg, offset, size),
                 InstructionData::StackLoad {
                     opcode: ir::Opcode::StackLoad,
                     stack_slot,
@@ -266,6 +249,8 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
             pos.set_position(prev_pos);
         }
     }
+
+    trace!("Post-legalization function:\n{}", func.display());
 }
 
 /// Custom expansion for conditional trap instructions.
@@ -277,6 +262,12 @@ fn expand_cond_trap(
     arg: ir::Value,
     code: ir::TrapCode,
 ) {
+    trace!(
+        "expanding conditional trap: {:?}: {}",
+        inst,
+        func.dfg.display_inst(inst)
+    );
+
     // Parse the instruction.
     let trapz = match opcode {
         ir::Opcode::Trapz => true,

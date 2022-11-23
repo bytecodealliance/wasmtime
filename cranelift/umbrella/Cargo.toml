@@ -1,7 +1,7 @@
 [package]
 authors = ["The Cranelift Project Developers"]
 name = "cranelift"
-version = "0.89.0"
+version = "0.91.0"
 description = "Umbrella for commonly-used cranelift crates"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/cranelift"
@@ -9,11 +9,11 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 categories = ["no-std"]
 readme = "README.md"
 keywords = ["compile", "compiler", "jit"]
-edition = "2021"
+edition.workspace = true
 
 [dependencies]
-cranelift-codegen = { path = "../codegen", version = "0.89.0", default-features = false }
-cranelift-frontend = { path = "../frontend", version = "0.89.0", default-features = false }
+cranelift-codegen = { workspace = true }
+cranelift-frontend = { workspace = true }
 
 [features]
 default = ["std"]

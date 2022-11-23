@@ -321,8 +321,8 @@ pub struct ExtFuncData {
     /// flag is best used when the target is known to be in the same unit of code generation, such
     /// as a Wasm module.
     ///
-    /// See the documentation for [`RelocDistance`](crate::machinst::RelocDistance) for more details. A
-    /// `colocated` flag value of `true` implies `RelocDistance::Near`.
+    /// See the documentation for `RelocDistance` for more details. A `colocated` flag value of
+    /// `true` implies `RelocDistance::Near`.
     pub colocated: bool,
 }
 
@@ -372,7 +372,7 @@ impl<'a> fmt::Display for DisplayableExtFuncData<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ir::types::{B8, F32, I32};
+    use crate::ir::types::{F32, I32, I8};
     use alloc::string::ToString;
 
     #[test]
@@ -424,7 +424,7 @@ mod tests {
         assert_eq!(sig.to_string(), "(i32) -> f32 windows_fastcall");
         sig.params.push(AbiParam::new(I32.by(4).unwrap()));
         assert_eq!(sig.to_string(), "(i32, i32x4) -> f32 windows_fastcall");
-        sig.returns.push(AbiParam::new(B8));
-        assert_eq!(sig.to_string(), "(i32, i32x4) -> f32, b8 windows_fastcall");
+        sig.returns.push(AbiParam::new(I8));
+        assert_eq!(sig.to_string(), "(i32, i32x4) -> f32, i8 windows_fastcall");
     }
 }

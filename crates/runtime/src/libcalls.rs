@@ -55,15 +55,15 @@
 //! ```
 
 use crate::externref::VMExternRef;
-use crate::instance::Instance;
 use crate::table::{Table, TableElementType};
 use crate::vmcontext::{VMCallerCheckedAnyfunc, VMContext};
 use crate::TrapReason;
 use anyhow::Result;
 use std::mem;
 use std::ptr::{self, NonNull};
+use std::time::{Duration, Instant};
 use wasmtime_environ::{
-    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TrapCode,
+    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, Trap,
 };
 
 /// Actually public trampolines which are used by the runtime as the entrypoint
@@ -165,13 +165,23 @@ pub mod trampolines {
     }
 }
 
-unsafe fn memory32_grow(vmctx: *mut VMContext, delta: u64, memory_index: u32) -> Result<*mut u8> {
+unsafe fn memory32_grow(
+    vmctx: *mut VMContext,
+    delta: u64,
+    memory_index: u32,
+) -> Result<*mut u8, TrapReason> {
     let instance = (*vmctx).instance_mut();
     let memory_index = MemoryIndex::from_u32(memory_index);
-    let result = match instance.memory_grow(memory_index, delta)? {
-        Some(size_in_bytes) => size_in_bytes / (wasmtime_environ::WASM_PAGE_SIZE as usize),
-        None => usize::max_value(),
-    };
+    let result =
+        match instance
+            .memory_grow(memory_index, delta)
+            .map_err(|error| TrapReason::User {
+                error,
+                needs_backtrace: true,
+            })? {
+            Some(size_in_bytes) => size_in_bytes / (wasmtime_environ::WASM_PAGE_SIZE as usize),
+            None => usize::max_value(),
+        };
     Ok(result as *mut _)
 }
 
@@ -218,7 +228,7 @@ unsafe fn table_fill(
     // `VMCallerCheckedAnyfunc` until we look at the table's element type.
     val: *mut u8,
     len: u32,
-) -> Result<(), TrapCode> {
+) -> Result<(), Trap> {
     let instance = (*vmctx).instance_mut();
     let table_index = TableIndex::from_u32(table_index);
     let table = &mut *instance.get_table(table_index);
@@ -249,7 +259,7 @@ unsafe fn table_copy(
     dst: u32,
     src: u32,
     len: u32,
-) -> Result<(), TrapCode> {
+) -> Result<(), Trap> {
     let dst_table_index = TableIndex::from_u32(dst_table_index);
     let src_table_index = TableIndex::from_u32(src_table_index);
     let instance = (*vmctx).instance_mut();
@@ -268,7 +278,7 @@ unsafe fn table_init(
     dst: u32,
     src: u32,
     len: u32,
-) -> Result<(), TrapCode> {
+) -> Result<(), Trap> {
     let table_index = TableIndex::from_u32(table_index);
     let elem_index = ElemIndex::from_u32(elem_index);
     let instance = (*vmctx).instance_mut();
@@ -290,7 +300,7 @@ unsafe fn memory_copy(
     src_index: u32,
     src: u64,
     len: u64,
-) -> Result<(), TrapCode> {
+) -> Result<(), Trap> {
     let src_index = MemoryIndex::from_u32(src_index);
     let dst_index = MemoryIndex::from_u32(dst_index);
     let instance = (*vmctx).instance_mut();
@@ -304,7 +314,7 @@ unsafe fn memory_fill(
     dst: u64,
     val: u32,
     len: u64,
-) -> Result<(), TrapCode> {
+) -> Result<(), Trap> {
     let memory_index = MemoryIndex::from_u32(memory_index);
     let instance = (*vmctx).instance_mut();
     instance.memory_fill(memory_index, dst, val as u8, len)
@@ -318,7 +328,7 @@ unsafe fn memory_init(
     dst: u64,
     src: u32,
     len: u32,
-) -> Result<(), TrapCode> {
+) -> Result<(), Trap> {
     let memory_index = MemoryIndex::from_u32(memory_index);
     let data_index = DataIndex::from_u32(data_index);
     let instance = (*vmctx).instance_mut();
@@ -424,83 +434,48 @@ unsafe fn externref_global_set(vmctx: *mut VMContext, index: u32, externref: *mu
 unsafe fn memory_atomic_notify(
     vmctx: *mut VMContext,
     memory_index: u32,
-    addr: *mut u8,
-    _count: u32,
-) -> Result<u32, TrapReason> {
-    let addr = addr as usize;
+    addr_index: u64,
+    count: u32,
+) -> Result<u32, Trap> {
     let memory = MemoryIndex::from_u32(memory_index);
-    let instance = (*vmctx).instance();
-    // this should never overflow since addr + 4 either hits a guard page
-    // or it's been validated to be in-bounds already. Double-check for now
-    // just to be sure.
-    let addr_to_check = addr.checked_add(4).unwrap();
-    validate_atomic_addr(instance, memory, addr_to_check)?;
-    Err(
-        anyhow::anyhow!("unimplemented: wasm atomics (fn memory_atomic_notify) unsupported",)
-            .into(),
-    )
+    let instance = (*vmctx).instance_mut();
+    instance
+        .get_runtime_memory(memory)
+        .atomic_notify(addr_index, count)
 }
 
 // Implementation of `memory.atomic.wait32` for locally defined memories.
 unsafe fn memory_atomic_wait32(
     vmctx: *mut VMContext,
     memory_index: u32,
-    addr: *mut u8,
-    _expected: u32,
-    _timeout: u64,
-) -> Result<u32, TrapReason> {
-    let addr = addr as usize;
+    addr_index: u64,
+    expected: u32,
+    timeout: u64,
+) -> Result<u32, Trap> {
+    // convert timeout to Instant, before any wait happens on locking
+    let timeout = (timeout as i64 >= 0).then(|| Instant::now() + Duration::from_nanos(timeout));
     let memory = MemoryIndex::from_u32(memory_index);
-    let instance = (*vmctx).instance();
-    // see wasmtime_memory_atomic_notify for why this shouldn't overflow
-    // but we still double-check
-    let addr_to_check = addr.checked_add(4).unwrap();
-    validate_atomic_addr(instance, memory, addr_to_check)?;
-    Err(
-        anyhow::anyhow!("unimplemented: wasm atomics (fn memory_atomic_wait32) unsupported",)
-            .into(),
-    )
+    let instance = (*vmctx).instance_mut();
+    Ok(instance
+        .get_runtime_memory(memory)
+        .atomic_wait32(addr_index, expected, timeout)? as u32)
 }
 
 // Implementation of `memory.atomic.wait64` for locally defined memories.
 unsafe fn memory_atomic_wait64(
     vmctx: *mut VMContext,
     memory_index: u32,
-    addr: *mut u8,
-    _expected: u64,
-    _timeout: u64,
-) -> Result<u32, TrapReason> {
-    let addr = addr as usize;
+    addr_index: u64,
+    expected: u64,
+    timeout: u64,
+) -> Result<u32, Trap> {
+    // convert timeout to Instant, before any wait happens on locking
+    let timeout = (timeout as i64 >= 0).then(|| Instant::now() + Duration::from_nanos(timeout));
     let memory = MemoryIndex::from_u32(memory_index);
-    let instance = (*vmctx).instance();
-    // see wasmtime_memory_atomic_notify for why this shouldn't overflow
-    // but we still double-check
-    let addr_to_check = addr.checked_add(8).unwrap();
-    validate_atomic_addr(instance, memory, addr_to_check)?;
-    Err(
-        anyhow::anyhow!("unimplemented: wasm atomics (fn memory_atomic_wait64) unsupported",)
-            .into(),
-    )
-}
-
-/// For atomic operations we still check the actual address despite this also
-/// being checked via the `heap_addr` instruction in cranelift. The reason for
-/// that is because the `heap_addr` instruction can defer to a later segfault to
-/// actually recognize the out-of-bounds whereas once we're running Rust code
-/// here we don't want to segfault.
-///
-/// In the situations where bounds checks were elided in JIT code (because oob
-/// would then be later guaranteed to segfault) this manual check is here
-/// so we don't segfault from Rust.
-unsafe fn validate_atomic_addr(
-    instance: &Instance,
-    memory: MemoryIndex,
-    addr: usize,
-) -> Result<(), TrapCode> {
-    if addr > instance.get_memory(memory).current_length() {
-        return Err(TrapCode::HeapOutOfBounds);
-    }
-    Ok(())
+    let instance = (*vmctx).instance_mut();
+    Ok(instance
+        .get_runtime_memory(memory)
+        .atomic_wait64(addr_index, expected, timeout)? as u32)
 }
 
 // Hook for when an instance runs out of fuel.

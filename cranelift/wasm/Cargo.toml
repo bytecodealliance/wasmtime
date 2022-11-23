@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-wasm"
-version = "0.89.0"
+version = "0.91.0"
 authors = ["The Cranelift Project Developers"]
 description = "Translator from WebAssembly to Cranelift IR"
 documentation = "https://docs.rs/cranelift-wasm"
@@ -9,24 +9,23 @@ license = "Apache-2.0 WITH LLVM-exception"
 categories = ["no-std", "wasm"]
 readme = "README.md"
 keywords = ["webassembly", "wasm"]
-edition = "2021"
+edition.workspace = true
 
 [dependencies]
-wasmparser = { version = "0.89.0", default-features = false }
-cranelift-codegen = { path = "../codegen", version = "0.89.0", default-features = false }
-cranelift-entity = { path = "../entity", version = "0.89.0" }
-cranelift-frontend = { path = "../frontend", version = "0.89.0", default-features = false }
-wasmtime-types = { path = "../../crates/types", version = "2.0.0" }
-hashbrown = { version = "0.12", optional = true }
+wasmparser = { workspace = true }
+cranelift-codegen = { workspace = true, default-features = false }
+cranelift-entity = { workspace = true }
+cranelift-frontend = { workspace = true, default-features = false }
+wasmtime-types = { workspace = true }
+hashbrown = { workspace = true, optional = true }
 itertools = "0.10.0"
-log = { version = "0.4.6", default-features = false }
+log = { workspace = true }
 serde = { version = "1.0.94", features = ["derive"], optional = true }
-smallvec = "1.6.1"
+smallvec = { workspace = true }
 
 [dev-dependencies]
-wat = "1.0.47"
-target-lexicon = "0.12"
-cranelift-codegen = { path = "../codegen", version = "0.89.0", default-features = false }
+wat = { workspace = true }
+target-lexicon = { workspace = true }
 
 [features]
 default = ["std"]

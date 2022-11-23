@@ -237,13 +237,13 @@ impl TableOp {
             }
             Self::TableGet(x) => {
                 func.instruction(&Instruction::I32Const(x));
-                func.instruction(&Instruction::TableGet { table: 0 });
+                func.instruction(&Instruction::TableGet(0));
             }
             Self::TableSet(x) => {
                 func.instruction(&Instruction::LocalSet(scratch_local));
                 func.instruction(&Instruction::I32Const(x));
                 func.instruction(&Instruction::LocalGet(scratch_local));
-                func.instruction(&Instruction::TableSet { table: 0 });
+                func.instruction(&Instruction::TableSet(0));
             }
             Self::GlobalGet(x) => {
                 func.instruction(&Instruction::GlobalGet(x));
@@ -325,7 +325,7 @@ mod tests {
   (import "" "make_refs" (func (;2;) (type 3)))
   (func (;3;) (type 1) (param externref externref externref externref externref externref externref externref externref externref)
     (local externref)
-    loop  ;; label = @1
+    loop ;; label = @1
       call 0
       call 2
       call 1

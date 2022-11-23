@@ -10,7 +10,10 @@ impl_errno!(types::Errno);
 
 impl<'a> strings::Strings for WasiCtx<'a> {
     fn hello_string(&mut self, a_string: &GuestPtr<str>) -> Result<u32, types::Errno> {
-        let s = a_string.as_str().expect("should be valid string");
+        let s = a_string
+            .as_str()
+            .expect("should be valid string")
+            .expect("expected non-shared memory");
         println!("a_string='{}'", &*s);
         Ok(s.len() as u32)
     }
@@ -21,9 +24,18 @@ impl<'a> strings::Strings for WasiCtx<'a> {
         b: &GuestPtr<str>,
         c: &GuestPtr<str>,
     ) -> Result<u32, types::Errno> {
-        let sa = a.as_str().expect("A should be valid string");
-        let sb = b.as_str().expect("B should be valid string");
-        let sc = c.as_str().expect("C should be valid string");
+        let sa = a
+            .as_str()
+            .expect("A should be valid string")
+            .expect("expected non-shared memory");
+        let sb = b
+            .as_str()
+            .expect("B should be valid string")
+            .expect("expected non-shared memory");
+        let sc = c
+            .as_str()
+            .expect("C should be valid string")
+            .expect("expected non-shared memory");
         let total_len = sa.len() + sb.len() + sc.len();
         println!(
             "len={}, a='{}', b='{}', c='{}'",
@@ -86,8 +98,9 @@ impl HelloStringExercise {
             self.string_ptr_loc.ptr as i32,
             self.test_word.len() as i32,
             self.return_ptr_loc.ptr as i32,
-        );
-        assert_eq!(res, Ok(types::Errno::Ok as i32), "hello string errno");
+        )
+        .unwrap();
+        assert_eq!(res, types::Errno::Ok as i32, "hello string errno");
 
         let given = host_memory
             .ptr::<u32>(self.return_ptr_loc.ptr)
@@ -207,8 +220,9 @@ impl MultiStringExercise {
             self.sc_ptr_loc.ptr as i32,
             self.c.len() as i32,
             self.return_ptr_loc.ptr as i32,
-        );
-        assert_eq!(res, Ok(types::Errno::Ok as i32), "multi string errno");
+        )
+        .unwrap();
+        assert_eq!(res, types::Errno::Ok as i32, "multi string errno");
 
         let given = host_memory
             .ptr::<u32>(self.return_ptr_loc.ptr)
@@ -285,8 +299,9 @@ impl OverlappingStringExercise {
             (self.sa_ptr_loc.ptr + self.offset_c) as i32,
             a_len - self.offset_c as i32,
             self.return_ptr_loc.ptr as i32,
-        );
-        assert_eq!(res, Ok(types::Errno::Ok as i32), "multi string errno");
+        )
+        .unwrap();
+        assert_eq!(res, types::Errno::Ok as i32, "multi string errno");
 
         let given = host_memory
             .ptr::<u32>(self.return_ptr_loc.ptr)

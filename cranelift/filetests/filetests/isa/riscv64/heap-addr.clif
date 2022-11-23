@@ -1,0 +1,99 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %dynamic_heap_check(i64 vmctx, i32) -> i64 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    heap0 = dynamic gv0, bound gv1, offset_guard 0x1000, index_type i32
+
+block0(v0: i64, v1: i32):
+    v2 = heap_addr.i64 heap0, v1, 0, 0
+    return v2
+}
+
+; block0:
+;   uext.w a6,a1
+;   ld a7,0(a0)
+;   addi t3,a7,0
+;   add a7,a0,a6
+;   ugt a5,a6,t3##ty=i64
+;   li t3,0
+;   selectif_spectre_guard a0,t3,a7##test=a5
+;   ret
+
+function %static_heap_check(i64 vmctx, i32) -> i64 {
+    gv0 = vmctx
+    heap0 = static gv0, bound 0x1_0000, offset_guard 0x1000, index_type i32
+
+block0(v0: i64, v1: i32):
+    v2 = heap_addr.i64 heap0, v1, 0, 0
+    return v2
+}
+
+; block0:
+;   uext.w a7,a1
+;   lui a6,16
+;   ule t3,a7,a6##ty=i64
+;   bne t3,zero,taken(label1),not_taken(label2)
+; block1:
+;   add t3,a0,a7
+;   lui a6,16
+;   ugt t4,a7,a6##ty=i64
+;   li t0,0
+;   selectif_spectre_guard a0,t0,t3##test=t4
+;   ret
+; block2:
+;   udf##trap_code=heap_oob
+
+function %dynamic_heap_check_with_offset(i64 vmctx, i32) -> i64 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    heap0 = dynamic gv0, bound gv1, offset_guard 0x1000, index_type i32
+
+block0(v0: i64, v1: i32):
+    v2 = heap_addr.i64 heap0, v1, 16, 8
+    return v2
+}
+
+; block0:
+;   uext.w t0,a1
+;   ld t4,0(a0)
+;   li a7,24
+;   add t1,t0,a7
+;   ult t2,t1,t0##ty=i64
+;   trap_if t2,heap_oob
+;   add t0,a0,t0
+;   addi t0,t0,16
+;   ugt t4,t1,t4##ty=i64
+;   li t1,0
+;   selectif_spectre_guard a0,t1,t0##test=t4
+;   ret
+
+function %static_heap_check_with_offset(i64 vmctx, i32) -> i64 {
+    gv0 = vmctx
+    heap0 = static gv0, bound 0x1_0000, offset_guard 0x1000, index_type i32
+
+block0(v0: i64, v1: i32):
+    v2 = heap_addr.i64 heap0, v1, 16, 8
+    return v2
+}
+
+; block0:
+;   uext.w t3,a1
+;   lui a7,16
+;   addi a7,a7,4072
+;   ule t0,t3,a7##ty=i64
+;   bne t0,zero,taken(label1),not_taken(label2)
+; block1:
+;   add t0,a0,t3
+;   addi t0,t0,16
+;   lui t4,16
+;   addi t4,t4,4072
+;   ugt t1,t3,t4##ty=i64
+;   li a0,0
+;   selectif_spectre_guard a0,a0,t0##test=t1
+;   ret
+; block2:
+;   udf##trap_code=heap_oob
+

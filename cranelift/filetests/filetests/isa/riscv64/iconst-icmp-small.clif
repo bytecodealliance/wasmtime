@@ -1,0 +1,22 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function u0:0() -> i8 system_v {
+
+block0:
+    v0 = iconst.i16 0xddcc
+    v1 = icmp.i16 ne v0, v0
+    return v1
+}
+
+; block0:
+;   lui t0,14
+;   addi t0,t0,3532
+;   lui a0,14
+;   addi a0,a0,3532
+;   uext.h a3,t0
+;   uext.h a5,a0
+;   ne a0,a3,a5##ty=i16
+;   ret
+

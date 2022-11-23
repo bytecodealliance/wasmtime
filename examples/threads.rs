@@ -52,7 +52,7 @@ fn run(engine: &Engine, module: &Module, linker: &Linker<()>) -> Result<()> {
     println!("Instantiating module...");
     let mut store = Store::new(&engine, ());
     let instance = linker.instantiate(&mut store, module)?;
-    let run = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
 
     println!("Executing...");
     for _ in 0..N_REPS {

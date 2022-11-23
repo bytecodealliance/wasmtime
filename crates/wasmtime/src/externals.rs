@@ -2,7 +2,7 @@ use crate::store::{StoreData, StoreOpaque, Stored};
 use crate::trampoline::{generate_global_export, generate_table_export};
 use crate::{
     AsContext, AsContextMut, Engine, ExternRef, ExternType, Func, GlobalType, Memory, Mutability,
-    SharedMemory, TableType, Trap, Val, ValType,
+    SharedMemory, TableType, Val, ValType,
 };
 use anyhow::{anyhow, bail, Result};
 use std::mem;
@@ -18,7 +18,7 @@ use wasmtime_runtime::{self as runtime, InstanceHandle};
 /// as well as required by [`Instance::new`](crate::Instance::new). In other
 /// words, this is the type of extracted values from an instantiated module, and
 /// it's also used to provide imported values when instantiating a module.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Extern {
     /// A WebAssembly `func` which can be called.
     Func(Func),
@@ -462,9 +462,7 @@ impl Table {
         let init = init.into_table_element(store, ty.element())?;
         unsafe {
             let table = Table::from_wasmtime_table(wasmtime_export, store);
-            (*table.wasmtime_table(store, std::iter::empty()))
-                .fill(0, init, ty.minimum())
-                .map_err(|c| Trap::new_wasm(c, None))?;
+            (*table.wasmtime_table(store, std::iter::empty())).fill(0, init, ty.minimum())?;
 
             Ok(table)
         }
@@ -652,8 +650,7 @@ impl Table {
         let src_range = src_index..(src_index.checked_add(len).unwrap_or(u32::MAX));
         let src_table = src_table.wasmtime_table(store, src_range);
         unsafe {
-            runtime::Table::copy(dst_table, src_table, dst_index, src_index, len)
-                .map_err(|c| Trap::new_wasm(c, None))?;
+            runtime::Table::copy(dst_table, src_table, dst_index, src_index, len)?;
         }
         Ok(())
     }
@@ -681,9 +678,7 @@ impl Table {
 
         let table = self.wasmtime_table(store, std::iter::empty());
         unsafe {
-            (*table)
-                .fill(dst, val, len)
-                .map_err(|c| Trap::new_wasm(c, None))?;
+            (*table).fill(dst, val, len)?;
         }
 
         Ok(())

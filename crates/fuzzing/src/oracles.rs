@@ -31,7 +31,7 @@ use std::time::{Duration, Instant};
 use wasmtime::*;
 use wasmtime_wast::WastContext;
 
-#[cfg(not(any(windows, target_arch = "s390x")))]
+#[cfg(not(any(windows, target_arch = "s390x", target_arch = "riscv64")))]
 mod diff_v8;
 
 static CNT: AtomicUsize = AtomicUsize::new(0);
@@ -306,13 +306,10 @@ pub fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -
     }
 
     let string = e.to_string();
-    // Also allow errors related to fuel consumption
-    if string.contains("all fuel consumed")
-        // Currently we instantiate with a `Linker` which can't instantiate
-        // every single module under the sun due to using name-based resolution
-        // rather than positional-based resolution
-        || string.contains("incompatible import type")
-    {
+    // Currently we instantiate with a `Linker` which can't instantiate
+    // every single module under the sun due to using name-based resolution
+    // rather than positional-based resolution
+    if string.contains("incompatible import type") {
         log::debug!("failed to instantiate: {}", string);
         return None;
     }
@@ -374,8 +371,7 @@ pub fn differential(
         // falls through to checking the intermediate state otherwise.
         (Err(lhs), Err(rhs)) => {
             let err = rhs.downcast::<Trap>().expect("not a trap");
-            let poisoned = err.trap_code() == Some(TrapCode::StackOverflow)
-                || lhs_engine.is_stack_overflow(&lhs);
+            let poisoned = err == Trap::StackOverflow || lhs_engine.is_stack_overflow(&lhs);
 
             if poisoned {
                 return Ok(false);
@@ -510,7 +506,7 @@ pub fn spectest(mut fuzz_config: generators::Config, test: generators::SpecTest)
     fuzz_config.set_spectest_compliant();
     log::debug!("running {:?}", test.file);
     let mut wast_context = WastContext::new(fuzz_config.to_store());
-    wast_context.register_spectest().unwrap();
+    wast_context.register_spectest(false).unwrap();
     wast_context
         .run_buffer(test.file, test.contents.as_bytes())
         .unwrap();
@@ -675,14 +671,9 @@ pub fn table_ops(
             .downcast::<Trap>()
             .unwrap();
 
-        match trap.trap_code() {
-            Some(TrapCode::TableOutOfBounds) => {}
-            None if trap
-                .to_string()
-                .contains("all fuel consumed by WebAssembly") => {}
-            _ => {
-                panic!("unexpected trap: {}", trap);
-            }
+        match trap {
+            Trap::TableOutOfBounds | Trap::OutOfFuel => {}
+            _ => panic!("unexpected trap: {trap}"),
         }
 
         // Do a final GC after running the Wasm.
@@ -787,7 +778,8 @@ impl Drop for SignalOnDrop {
     }
 }
 
-fn set_fuel<T>(store: &mut Store<T>, fuel: u64) {
+/// Set the amount of fuel in a store to a given value
+pub fn set_fuel<T>(store: &mut Store<T>, fuel: u64) {
     // Determine the amount of fuel already within the store, if any, and
     // add/consume as appropriate to set the remaining amount to` fuel`.
     let remaining = store.consume_fuel(0).unwrap();

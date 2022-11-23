@@ -11,7 +11,6 @@ use cranelift_codegen::{
 // };
 
 enum ConstImm {
-    Bool(bool),
     I64(i64),
     Ieee32(f32), // Ieee32 and Ieee64 will be replaced with `Single` and `Double` from the rust_apfloat library eventually.
     Ieee64(f64),
@@ -28,7 +27,6 @@ impl ConstImm {
 
     fn evaluate_truthiness(self) -> bool {
         match self {
-            Self::Bool(b) => b,
             Self::I64(imm) => imm != 0,
             _ => panic!(
                 "Only a `ConstImm::Bool` and `ConstImm::I64` can be evaluated for \"truthiness\""
@@ -93,10 +91,6 @@ fn resolve_value_to_imm(dfg: &ir::DataFlowGraph, value: ir::Value) -> Option<Con
             let ieee_f64 = f64::from_bits(imm.bits());
             Some(ConstImm::Ieee64(ieee_f64))
         }
-        UnaryBool {
-            opcode: Bconst,
-            imm,
-        } => Some(ConstImm::Bool(imm)),
         _ => None,
     }
 }
@@ -182,10 +176,6 @@ fn replace_inst(dfg: &mut ir::DataFlowGraph, inst: ir::Inst, const_imm: ConstImm
         Ieee64(imm) => {
             dfg.replace(inst)
                 .f64const(ir::immediates::Ieee64::with_bits(imm.to_bits()));
-        }
-        Bool(imm) => {
-            let typevar = dfg.ctrl_typevar(inst);
-            dfg.replace(inst).bconst(typevar, imm);
         }
     }
 }

@@ -1,6 +1,5 @@
 use crate::store::{StoreId, StoreOpaque};
 use crate::StoreContextMut;
-use crate::Trap;
 use anyhow::{bail, Result};
 use std::ptr::NonNull;
 use wasmtime_environ::component::StringEncoding;
@@ -97,7 +96,7 @@ impl Options {
         };
 
         if result % old_align != 0 {
-            bail!(Trap::new("realloc return: result not aligned"));
+            bail!("realloc return: result not aligned");
         }
         let result = usize::try_from(result)?;
 
@@ -105,7 +104,7 @@ impl Options {
 
         let result_slice = match memory.get_mut(result..).and_then(|s| s.get_mut(..new_size)) {
             Some(end) => end,
-            None => bail!(Trap::new("realloc return: beyond end of memory")),
+            None => bail!("realloc return: beyond end of memory"),
         };
 
         Ok((result_slice, result))

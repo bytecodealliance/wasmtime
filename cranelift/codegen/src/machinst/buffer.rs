@@ -1612,9 +1612,9 @@ pub struct MachTextSectionBuilder<I: VCodeInst> {
 }
 
 impl<I: VCodeInst> MachTextSectionBuilder<I> {
-    pub fn new(num_funcs: u32) -> MachTextSectionBuilder<I> {
+    pub fn new(num_funcs: usize) -> MachTextSectionBuilder<I> {
         let mut buf = MachBuffer::new();
-        buf.reserve_labels_for_blocks(num_funcs as usize);
+        buf.reserve_labels_for_blocks(num_funcs);
         MachTextSectionBuilder {
             buf,
             next_func: 0,
@@ -1624,7 +1624,7 @@ impl<I: VCodeInst> MachTextSectionBuilder<I> {
 }
 
 impl<I: VCodeInst> TextSectionBuilder for MachTextSectionBuilder<I> {
-    fn append(&mut self, named: bool, func: &[u8], align: u32) -> u64 {
+    fn append(&mut self, labeled: bool, func: &[u8], align: u32) -> u64 {
         // Conditionally emit an island if it's necessary to resolve jumps
         // between functions which are too far away.
         let size = func.len() as u32;
@@ -1634,7 +1634,7 @@ impl<I: VCodeInst> TextSectionBuilder for MachTextSectionBuilder<I> {
 
         self.buf.align_to(align);
         let pos = self.buf.cur_offset();
-        if named {
+        if labeled {
             self.buf
                 .bind_label(MachLabel::from_block(BlockIndex::new(self.next_func)));
             self.next_func += 1;
@@ -1643,8 +1643,8 @@ impl<I: VCodeInst> TextSectionBuilder for MachTextSectionBuilder<I> {
         u64::from(pos)
     }
 
-    fn resolve_reloc(&mut self, offset: u64, reloc: Reloc, addend: Addend, target: u32) -> bool {
-        let label = MachLabel::from_block(BlockIndex::new(target as usize));
+    fn resolve_reloc(&mut self, offset: u64, reloc: Reloc, addend: Addend, target: usize) -> bool {
+        let label = MachLabel::from_block(BlockIndex::new(target));
         let offset = u32::try_from(offset).unwrap();
         match I::LabelUse::from_reloc(reloc, addend) {
             Some(label_use) => {

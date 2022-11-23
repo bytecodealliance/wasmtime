@@ -144,6 +144,10 @@ fn main() {
             },
             true,
         ),
+        #[cfg(not(any(target_arch = "riscv64")))]
+        // Due to `InstanceAllocationStrategy::pooling()` trying to alloc more than 6000G memory space.
+        // https://gitlab.com/qemu-project/qemu/-/issues/1214
+        // https://gitlab.com/qemu-project/qemu/-/issues/290
         (
             "hit async stack guard page with pooling allocator",
             || {

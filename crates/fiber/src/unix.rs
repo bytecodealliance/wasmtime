@@ -189,7 +189,9 @@ cfg_if::cfg_if! {
     } else if #[cfg(target_arch = "s390x")] {
         // currently `global_asm!` isn't stable on s390x so this is an external
         // assembler file built with the `build.rs`.
-    } else {
+    } else if #[cfg(target_arch = "riscv64")]  {
+        mod riscv64;
+    }else {
         compile_error!("fibers are not supported on this CPU architecture");
     }
 }

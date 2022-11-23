@@ -1,26 +1,26 @@
 [package]
 name = "wasi-tokio"
-version = "2.0.0"
-authors = ["The Wasmtime Project Developers"]
+version.workspace = true
+authors.workspace = true
 description = "WASI implementation in Rust"
 license = "Apache-2.0 WITH LLVM-exception"
 categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
 repository = "https://github.com/bytecodealliance/wasmtime"
-edition = "2021"
+edition.workspace = true
 include = ["src/**/*", "LICENSE" ]
 
 [dependencies]
-wasi-common = { path = "../", version = "=2.0.0" }
-wasi-cap-std-sync = { path = "../cap-std-sync", version = "=2.0.0" }
-wiggle = { path = "../../wiggle", version = "=2.0.0" }
+wasi-common = { workspace = true }
+wasi-cap-std-sync = { workspace = true }
+wiggle = { workspace = true }
 tokio = { version = "1.8.0", features = [ "rt", "fs", "time", "io-util", "net", "io-std", "rt-multi-thread"] }
-cap-std = "0.26.0"
-anyhow = "1"
+cap-std = { workspace = true }
+anyhow = { workspace = true }
 io-lifetimes = { version = "0.7.0", default-features = false }
 
 [target.'cfg(unix)'.dependencies]
-rustix = { version = "0.35.10", features = ["fs"] }
+rustix = { workspace = true, features = ["fs"] }
 
 [target.'cfg(windows)'.dependencies]
 io-extras = "0.15.0"
@@ -28,5 +28,4 @@ io-extras = "0.15.0"
 [dev-dependencies]
 tempfile = "3.1.0"
 tokio = { version = "1.8.0", features = [ "macros" ] }
-anyhow = "1"
 cap-tempfile = "0.26.0"

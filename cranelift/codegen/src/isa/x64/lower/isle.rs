@@ -7,7 +7,8 @@ use crate::{
     ir::AtomicRmwOp,
     machinst::{InputSourceInst, Reg, Writable},
 };
-use generated_code::{Context, MInst};
+use crate::{isle_common_prelude_methods, isle_lower_prelude_methods};
+use generated_code::{Context, MInst, RegisterClass};
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{is_int_or_ref_ty, is_mergeable_load, lower_to_amode};
@@ -92,7 +93,7 @@ pub(crate) fn lower_branch(
 }
 
 impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
-    isle_prelude_methods!();
+    isle_lower_prelude_methods!();
     isle_prelude_caller_methods!(X64ABIMachineSpec, X64Caller);
 
     #[inline]
@@ -336,11 +337,6 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     }
 
     #[inline]
-    fn xmm0(&mut self) -> WritableXmm {
-        WritableXmm::from_reg(Xmm::new(regs::xmm0()).unwrap())
-    }
-
-    #[inline]
     fn synthetic_amode_to_reg_mem(&mut self, addr: &SyntheticAmode) -> RegMem {
         RegMem::mem(addr.clone())
     }
@@ -546,27 +542,14 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         Imm8Gpr::new(Imm8Reg::Imm8 { imm }).unwrap()
     }
 
-    fn is_gpr_type(&mut self, ty: Type) -> Option<Type> {
-        if is_int_or_ref_ty(ty) || ty == I128 || ty == B128 {
-            Some(ty)
-        } else {
-            None
-        }
-    }
-
     #[inline]
-    fn is_xmm_type(&mut self, ty: Type) -> Option<Type> {
-        if ty == F32 || ty == F64 || (ty.is_vector() && ty.bits() == 128) {
-            Some(ty)
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    fn is_single_register_type(&mut self, ty: Type) -> Option<Type> {
-        if ty != I128 {
-            Some(ty)
+    fn type_register_class(&mut self, ty: Type) -> Option<RegisterClass> {
+        if is_int_or_ref_ty(ty) || ty == I128 {
+            Some(RegisterClass::Gpr {
+                single_register: ty != I128,
+            })
+        } else if ty == F32 || ty == F64 || (ty.is_vector() && ty.bits() == 128) {
+            Some(RegisterClass::Xmm)
         } else {
             None
         }
@@ -576,18 +559,8 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     fn ty_int_bool_or_ref(&mut self, ty: Type) -> Option<()> {
         match ty {
             types::I8 | types::I16 | types::I32 | types::I64 | types::R64 => Some(()),
-            types::B1 | types::B8 | types::B16 | types::B32 | types::B64 => Some(()),
             types::R32 => panic!("shouldn't have 32-bits refs on x64"),
             _ => None,
-        }
-    }
-
-    #[inline]
-    fn intcc_neq(&mut self, x: &IntCC, y: &IntCC) -> Option<IntCC> {
-        if x != y {
-            Some(*x)
-        } else {
-            None
         }
     }
 
@@ -613,16 +586,6 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
             CC::NZ => Some(*cc),
             _ => None,
         }
-    }
-
-    #[inline]
-    fn intcc_reverse(&mut self, cc: &IntCC) -> IntCC {
-        cc.reverse()
-    }
-
-    #[inline]
-    fn floatcc_inverse(&mut self, cc: &FloatCC) -> FloatCC {
-        cc.inverse()
     }
 
     #[inline]
@@ -670,6 +633,11 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     #[inline]
     fn preg_rsp(&mut self) -> PReg {
         regs::rsp().to_real_reg().unwrap().into()
+    }
+
+    #[inline]
+    fn preg_pinned(&mut self) -> PReg {
+        regs::pinned_reg().to_real_reg().unwrap().into()
     }
 
     fn libcall_1(&mut self, libcall: &LibCall, a: Reg) -> Reg {
@@ -746,6 +714,15 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     }
 
     #[inline]
+    fn vconst_all_ones_or_all_zeros(&mut self, constant: Constant) -> Option<()> {
+        let const_data = self.lower_ctx.get_constant_data(constant);
+        if const_data.iter().all(|&b| b == 0 || b == 0xFF) {
+            return Some(());
+        }
+        None
+    }
+
+    #[inline]
     fn fcvt_uint_mask_const(&mut self) -> VCodeConstant {
         self.lower_ctx
             .use_constant(VCodeConstantData::WellKnown(&UINT_MASK))
@@ -790,11 +767,6 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         ];
         self.lower_ctx
             .use_constant(VCodeConstantData::WellKnown(&UMAX_MASK))
-    }
-
-    #[inline]
-    fn pinned_writable_gpr(&mut self) -> WritableGpr {
-        Writable::from_reg(Gpr::new(regs::pinned_reg()).unwrap())
     }
 
     #[inline]

@@ -8,13 +8,13 @@
         (memory (export "memory") 1)
       )
       (core instance $m (instantiate $m))
-      (func (export "") (param string)
+      (func (export "a") (param "a" string)
         (canon lift (core func $m "") (realloc (func $m "realloc")) (memory $m "memory"))
       )
     )
 
     (component $c2
-      (import "" (func $f (param string)))
+      (import "a" (func $f (param "a" string)))
       (core module $libc
         (memory (export "memory") 1)
       )
@@ -30,7 +30,7 @@
     )
 
     (instance $c (instantiate $c))
-    (instance $c2 (instantiate $c2 (with "" (func $c ""))))
+    (instance $c2 (instantiate $c2 (with "a" (func $c "a"))))
   )
   "unreachable")
 
@@ -44,13 +44,13 @@
         (memory (export "memory") 1)
       )
       (core instance $m (instantiate $m))
-      (func (export "") (param string)
+      (func (export "a") (param "a" string)
         (canon lift (core func $m "") (realloc (func $m "realloc")) (memory $m "memory"))
       )
     )
 
     (component $c2
-      (import "" (func $f (param string)))
+      (import "a" (func $f (param "a" string)))
       (core module $libc
         (memory (export "memory") 1)
       )
@@ -66,7 +66,7 @@
     )
 
     (instance $c (instantiate $c))
-    (instance $c2 (instantiate $c2 (with "" (func $c ""))))
+    (instance $c2 (instantiate $c2 (with "a" (func $c "a"))))
   )
   "unreachable")
 
@@ -80,14 +80,14 @@
         (memory (export "memory") 1)
       )
       (core instance $m (instantiate $m))
-      (func (export "") (param string)
+      (func (export "a") (param "a" string)
         (canon lift (core func $m "") (realloc (func $m "realloc")) (memory $m "memory")
           string-encoding=utf8)
       )
     )
 
     (component $c2
-      (import "" (func $f (param string)))
+      (import "a" (func $f (param "a" string)))
       (core module $libc
         (memory (export "memory") 1)
       )
@@ -103,6 +103,6 @@
     )
 
     (instance $c (instantiate $c))
-    (instance $c2 (instantiate $c2 (with "" (func $c ""))))
+    (instance $c2 (instantiate $c2 (with "a" (func $c "a"))))
   )
   "unreachable")

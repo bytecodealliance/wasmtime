@@ -42,6 +42,18 @@ pub enum Error {
         span: Span,
     },
 
+    /// The rule can never match any input.
+    UnreachableError {
+        /// The error message.
+        msg: String,
+
+        /// The input ISLE source.
+        src: Source,
+
+        /// The location of the unreachable rule.
+        span: Span,
+    },
+
     /// The rules mentioned overlap in the input they accept.
     OverlapError {
         /// The error message.
@@ -119,15 +131,24 @@ impl std::fmt::Display for Error {
             #[cfg(feature = "miette-errors")]
             Error::TypeError { msg, .. } => write!(f, "type error: {}", msg),
 
+            Error::UnreachableError { src, span, msg } => {
+                write!(
+                    f,
+                    "{}: unreachable rule: {}",
+                    span.from.pretty_print_with_filename(&*src.name),
+                    msg
+                )
+            }
+
             Error::OverlapError { msg, rules, .. } => {
                 writeln!(f, "overlap error: {}\n{}", msg, OverlappingRules(&rules))
             }
 
             Error::Errors(_) => write!(
                 f,
-                "found {} errors:\n\n{}",
+                "{}found {} errors",
+                DisplayErrors(self.unwrap_errors()),
                 self.unwrap_errors().len(),
-                DisplayErrors(self.unwrap_errors())
             ),
         }
     }
