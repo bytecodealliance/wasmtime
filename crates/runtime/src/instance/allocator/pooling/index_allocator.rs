@@ -43,49 +43,28 @@ pub struct IndexAllocator(Mutex<Inner>);
 
 #[derive(Debug)]
 struct Inner {
+    strategy: PoolingAllocationStrategy,
     rng: SmallRng,
-    state: State,
-}
 
-#[derive(Debug)]
-enum State {
-    NextAvailable(Vec<SlotId>),
-    Random(Vec<SlotId>),
-    /// Reuse-affinity policy state.
+    /// Free-list of all slots.
     ///
-    /// The data structures here deserve a little explanation:
+    /// We use this to pick a victim when we don't have an appropriate slot with
+    /// the preferred affinity.
+    free_list: Vec<SlotId>,
+
+    /// Affine slot management which tracks which slots are free and were last
+    /// used with the specified `CompiledModuleId`.
     ///
-    /// - free_list: this is a vec of slot indices that are free, no
-    ///   matter their affinities (or no affinity at all).
-    /// - per_module: this is a hashmap of vecs of slot indices that
-    ///   are free, with affinity for particular module IDs. A slot may
-    ///   appear in zero or one of these lists.
-    /// - slot_state: indicates what state each slot is in: allocated
-    ///   (Taken), only in free_list (Empty), or in free_list and a
-    ///   per_module list (Affinity).
+    /// Invariant: any module ID in this hashmap must have a non-empty list of
+    /// free slots (otherwise we remove it). We remove a module's freelist when
+    /// we have no more slots with affinity for that module.
+    per_module: HashMap<CompiledModuleId, Vec<SlotId>>,
+
+    /// The state of any given slot.
     ///
-    /// The slot state tracks a slot's index in the global and
-    /// per-module freelists, so it can be efficiently removed from
-    /// both. We take some care to keep these up-to-date as well.
-    ///
-    /// On allocation, we first try to find a slot with affinity for
-    /// the given module ID, if any. If not, we pick a random slot
-    /// ID. This random choice is unbiased across all free slots.
-    ReuseAffinity {
-        /// Free-list of all slots. We use this to pick a victim when
-        /// we don't have an appropriate slot with the preferred
-        /// affinity.
-        free_list: Vec<SlotId>,
-        /// Invariant: any module ID in this hashmap must have a
-        /// non-empty list of free slots (otherwise we remove it). We
-        /// remove a module's freelist when we have no more slots with
-        /// affinity for that module.
-        per_module: HashMap<CompiledModuleId, Vec<SlotId>>,
-        /// The state of any given slot. Records indices in the above
-        /// list (empty) or two lists (with affinity), and these
-        /// indices are kept up-to-date to allow fast removal.
-        slot_state: Vec<SlotState>,
-    },
+    /// Records indices in the above list (empty) or two lists (with affinity),
+    /// and these indices are kept up-to-date to allow fast removal.
+    slot_state: Vec<SlotState>,
 }
 
 #[derive(Clone, Debug)]
@@ -213,69 +192,10 @@ impl FreeSlotState {
     }
 }
 
-/// Internal: remove a slot-index from the global free list.
-fn remove_global_free_list_item(
-    slot_state: &mut Vec<SlotState>,
-    free_list: &mut Vec<SlotId>,
-    index: SlotId,
-) {
-    let free_list_index = slot_state[index.index()].unwrap_free().free_list_index();
-    assert_eq!(index, free_list.swap_remove(free_list_index.index()));
-    if free_list_index.index() < free_list.len() {
-        let replaced = free_list[free_list_index.index()];
-        slot_state[replaced.index()]
-            .unwrap_free_mut()
-            .update_free_list_index(free_list_index);
-    }
-}
-
-/// Internal: remove a slot-index from a per-module free list.
-fn remove_module_free_list_item(
-    slot_state: &mut Vec<SlotState>,
-    per_module: &mut HashMap<CompiledModuleId, Vec<SlotId>>,
-    id: CompiledModuleId,
-    index: SlotId,
-) {
-    debug_assert!(
-        per_module.contains_key(&id),
-        "per_module list for given module should not be empty"
-    );
-
-    let per_module_list = per_module.get_mut(&id).unwrap();
-    debug_assert!(!per_module_list.is_empty());
-
-    let per_module_index = slot_state[index.index()].unwrap_free().per_module_index();
-    assert_eq!(index, per_module_list.swap_remove(per_module_index.index()));
-    if per_module_index.index() < per_module_list.len() {
-        let replaced = per_module_list[per_module_index.index()];
-        slot_state[replaced.index()]
-            .unwrap_free_mut()
-            .update_per_module_index(per_module_index);
-    }
-    if per_module_list.is_empty() {
-        per_module.remove(&id);
-    }
-}
-
 impl IndexAllocator {
     /// Create the default state for this strategy.
     pub fn new(strategy: PoolingAllocationStrategy, max_instances: usize) -> Self {
         let ids = (0..max_instances).map(|i| SlotId(i)).collect::<Vec<_>>();
-        let state = match strategy {
-            PoolingAllocationStrategy::NextAvailable => State::NextAvailable(ids),
-            PoolingAllocationStrategy::Random => State::Random(ids),
-            PoolingAllocationStrategy::ReuseAffinity => State::ReuseAffinity {
-                free_list: ids,
-                per_module: HashMap::new(),
-                slot_state: (0..max_instances)
-                    .map(|i| {
-                        SlotState::Free(FreeSlotState::NoAffinity {
-                            free_list_index: GlobalFreeListIndex(i),
-                        })
-                    })
-                    .collect(),
-            },
-        };
         // Use a deterministic seed during fuzzing to improve reproducibility of
         // test cases, but otherwise outside of fuzzing use a random seed to
         // shake things up.
@@ -285,120 +205,121 @@ impl IndexAllocator {
             rand::thread_rng().gen()
         };
         let rng = SmallRng::from_seed(seed);
-        IndexAllocator(Mutex::new(Inner { rng, state }))
+        IndexAllocator(Mutex::new(Inner {
+            rng,
+            strategy,
+            free_list: ids,
+            per_module: HashMap::new(),
+            slot_state: (0..max_instances)
+                .map(|i| {
+                    SlotState::Free(FreeSlotState::NoAffinity {
+                        free_list_index: GlobalFreeListIndex(i),
+                    })
+                })
+                .collect(),
+        }))
     }
 
-    /// Allocate a new slot.
+    /// Allocate a new index from this allocator optionally using `id` as an
+    /// affinity request if the allocation strategy supports it.
+    ///
+    /// Returns `None` if no more slots are available.
     pub fn alloc(&self, id: Option<CompiledModuleId>) -> Option<SlotId> {
+        self._alloc(id, false)
+    }
+
+    /// Attempts to allocate a guaranteed-affine slot to the module `id`
+    /// specified.
+    ///
+    /// Returns `None` if there are no slots affine to `id`. The allocation of
+    /// this slot will not record the affinity to `id`, instead simply listing
+    /// it as taken. This is intended to be used for clearing out all affine
+    /// slots to a module.
+    pub fn alloc_affine_and_clear_affinity(&self, id: CompiledModuleId) -> Option<SlotId> {
+        self._alloc(Some(id), true)
+    }
+
+    fn _alloc(
+        &self,
+        id: Option<CompiledModuleId>,
+        force_affine_and_clear_affinity: bool,
+    ) -> Option<SlotId> {
         let mut inner = self.0.lock().unwrap();
         let inner = &mut *inner;
-        match &mut inner.state {
-            State::NextAvailable(free_list) => free_list.pop(),
-            State::Random(free_list) => {
-                if free_list.len() == 0 {
-                    None
-                } else {
-                    let id = inner.rng.gen_range(0..free_list.len());
-                    Some(free_list.swap_remove(id))
-                }
-            }
-            State::ReuseAffinity {
-                free_list,
-                per_module,
-                slot_state,
-            } => {
-                if let Some(this_module) = id.and_then(|id| per_module.get_mut(&id)) {
-                    // There is a freelist of slots with affinity for
-                    // the requested module-ID. Pick the last one; any
-                    // will do, no need for randomness here.
-                    assert!(!this_module.is_empty());
-                    let slot_id = this_module.pop().expect("List should never be empty");
-                    if this_module.is_empty() {
-                        per_module.remove(&id.unwrap());
-                    }
-                    // Make sure to remove from the global
-                    // freelist. We already removed from the
-                    // per-module list above.
-                    remove_global_free_list_item(slot_state, free_list, slot_id);
-                    slot_state[slot_id.index()] = SlotState::Taken(id);
-                    Some(slot_id)
-                } else {
-                    if free_list.len() == 0 {
-                        return None;
-                    }
-                    // Pick a random free slot ID. Note that we do
-                    // this, rather than pick a victim module first,
-                    // to maintain an unbiased stealing distribution:
-                    // we want the likelihood of our taking a slot
-                    // from some other module's freelist to be
-                    // proportional to that module's freelist
-                    // length. Or in other words, every *slot* should
-                    // be equally likely to be stolen. The
-                    // alternative, where we pick the victim module
-                    // freelist first, means that either a module with
-                    // an affinity freelist of one slot has the same
-                    // chances of losing that slot as one with a
-                    // hundred slots; or else we need a weighted
-                    // random choice among modules, which is just as
-                    // complex as this process.
-                    //
-                    // We don't bother picking an empty slot (no
-                    // established affinity) before a random slot,
-                    // because this is more complex, and in the steady
-                    // state, all slots will see at least one
-                    // instantiation very quickly, so there will never
-                    // (past an initial phase) be a slot with no
-                    // affinity.
-                    let free_list_index = inner.rng.gen_range(0..free_list.len());
-                    let slot_id = free_list[free_list_index];
-                    // Remove from both the global freelist and
-                    // per-module freelist, if any.
-                    remove_global_free_list_item(slot_state, free_list, slot_id);
-                    if let &SlotState::Free(FreeSlotState::Affinity { module, .. }) =
-                        &slot_state[slot_id.index()]
-                    {
-                        remove_module_free_list_item(slot_state, per_module, module, slot_id);
-                    }
-                    slot_state[slot_id.index()] = SlotState::Taken(id);
 
-                    Some(slot_id)
-                }
+        let slot_id = match inner.strategy {
+            PoolingAllocationStrategy::NextAvailable => *inner.free_list.last()?,
+            PoolingAllocationStrategy::Random => inner.alloc_random()?,
+            PoolingAllocationStrategy::ReuseAffinity => {
+                // First attempt an affine allocation where the slot returned
+                // was previously used by `id`, but if that fails pick a random
+                // free slot ID.
+                //
+                // Note that we do this to maintain an unbiased stealing
+                // distribution: we want the likelihood of our taking a slot
+                // from some other module's freelist to be proportional to that
+                // module's freelist length. Or in other words, every *slot*
+                // should be equally likely to be stolen. The alternative,
+                // where we pick the victim module freelist first, means that
+                // either a module with an affinity freelist of one slot has
+                // the same chances of losing that slot as one with a hundred
+                // slots; or else we need a weighted random choice among
+                // modules, which is just as complex as this process.
+                //
+                // We don't bother picking an empty slot (no established
+                // affinity) before a random slot, because this is more
+                // complex, and in the steady state, all slots will see at
+                // least one instantiation very quickly, so there will never
+                // (past an initial phase) be a slot with no affinity.
+                inner.alloc_affine(id).or_else(|| {
+                    if force_affine_and_clear_affinity {
+                        None
+                    } else {
+                        inner.alloc_random()
+                    }
+                })?
             }
+        };
+
+        // Update internal metadata bout the allocation of `slot_id` to `id`,
+        // meaning that it's removed from the per-module freelist if it was
+        // previously affine and additionally it's removed from the global
+        // freelist.
+        inner.remove_global_free_list_item(slot_id);
+        if let &SlotState::Free(FreeSlotState::Affinity { module, .. }) =
+            &inner.slot_state[slot_id.index()]
+        {
+            inner.remove_module_free_list_item(module, slot_id);
         }
+        inner.slot_state[slot_id.index()] = SlotState::Taken(if force_affine_and_clear_affinity {
+            None
+        } else {
+            id
+        });
+
+        Some(slot_id)
     }
 
     pub(crate) fn free(&self, index: SlotId) {
         let mut inner = self.0.lock().unwrap();
-        match &mut inner.state {
-            State::NextAvailable(free_list) | State::Random(free_list) => {
-                free_list.push(index);
-            }
-            State::ReuseAffinity {
-                per_module,
-                free_list,
-                slot_state,
-            } => {
-                let module_id = slot_state[index.index()].unwrap_module_id();
-
-                let free_list_index = GlobalFreeListIndex(free_list.len());
-                free_list.push(index);
-                if let Some(id) = module_id {
-                    let per_module_list = per_module
-                        .entry(id)
-                        .or_insert_with(|| Vec::with_capacity(1));
-                    let per_module_index = PerModuleFreeListIndex(per_module_list.len());
-                    per_module_list.push(index);
-                    slot_state[index.index()] = SlotState::Free(FreeSlotState::Affinity {
-                        module: id,
-                        free_list_index,
-                        per_module_index,
-                    });
-                } else {
-                    slot_state[index.index()] =
-                        SlotState::Free(FreeSlotState::NoAffinity { free_list_index });
-                }
-            }
-        }
+        let free_list_index = GlobalFreeListIndex(inner.free_list.len());
+        inner.free_list.push(index);
+        let module_id = inner.slot_state[index.index()].unwrap_module_id();
+        inner.slot_state[index.index()] = if let Some(id) = module_id {
+            let per_module_list = inner
+                .per_module
+                .entry(id)
+                .or_insert_with(|| Vec::with_capacity(1));
+            let per_module_index = PerModuleFreeListIndex(per_module_list.len());
+            per_module_list.push(index);
+            SlotState::Free(FreeSlotState::Affinity {
+                module: id,
+                free_list_index,
+                per_module_index,
+            })
+        } else {
+            SlotState::Free(FreeSlotState::NoAffinity { free_list_index })
+        };
     }
 
     /// For testing only, we want to be able to assert what is on the
@@ -406,10 +327,7 @@ impl IndexAllocator {
     #[cfg(test)]
     pub(crate) fn testing_freelist(&self) -> Vec<SlotId> {
         let inner = self.0.lock().unwrap();
-        match &inner.state {
-            State::NextAvailable(free_list) | State::Random(free_list) => free_list.clone(),
-            _ => panic!("Wrong kind of state"),
-        }
+        inner.free_list.clone()
     }
 
     /// For testing only, get the list of all modules with at least
@@ -417,18 +335,67 @@ impl IndexAllocator {
     #[cfg(test)]
     pub(crate) fn testing_module_affinity_list(&self) -> Vec<CompiledModuleId> {
         let inner = self.0.lock().unwrap();
-        match &inner.state {
-            State::NextAvailable(..) | State::Random(..) => {
-                panic!("Wrong kind of state")
-            }
-            State::ReuseAffinity { per_module, .. } => {
-                let mut ret = vec![];
-                for (module, list) in per_module {
-                    assert!(!list.is_empty());
-                    ret.push(*module);
-                }
-                ret
-            }
+        let mut ret = vec![];
+        for (module, list) in inner.per_module.iter() {
+            assert!(!list.is_empty());
+            ret.push(*module);
+        }
+        ret
+    }
+}
+
+impl Inner {
+    /// Attempts to allocate a slot already affine to `id`, returning `None` if
+    /// `id` is `None` or if there are no affine slots.
+    fn alloc_affine(&self, id: Option<CompiledModuleId>) -> Option<SlotId> {
+        let free = self.per_module.get(&id?)?;
+        free.last().copied()
+    }
+
+    fn alloc_random(&mut self) -> Option<SlotId> {
+        if self.free_list.len() == 0 {
+            return None;
+        }
+        let i = self.rng.gen_range(0..self.free_list.len());
+        Some(self.free_list[i])
+    }
+
+    /// Remove a slot-index from the global free list.
+    fn remove_global_free_list_item(&mut self, index: SlotId) {
+        let free_list_index = self.slot_state[index.index()]
+            .unwrap_free()
+            .free_list_index();
+        assert_eq!(index, self.free_list.swap_remove(free_list_index.index()));
+        if free_list_index.index() < self.free_list.len() {
+            let replaced = self.free_list[free_list_index.index()];
+            self.slot_state[replaced.index()]
+                .unwrap_free_mut()
+                .update_free_list_index(free_list_index);
+        }
+    }
+
+    /// Remove a slot-index from a per-module free list.
+    fn remove_module_free_list_item(&mut self, id: CompiledModuleId, index: SlotId) {
+        debug_assert!(
+            self.per_module.contains_key(&id),
+            "per_module list for given module should not be empty"
+        );
+
+        let per_module_list = self.per_module.get_mut(&id).unwrap();
+        debug_assert!(!per_module_list.is_empty());
+
+        let per_module_index = self.slot_state[index.index()]
+            .unwrap_free()
+            .per_module_index();
+        assert_eq!(index, per_module_list.swap_remove(per_module_index.index()));
+        if per_module_index.index() < per_module_list.len() {
+            let replaced = per_module_list[per_module_index.index()];
+            self.slot_state[replaced.index()]
+                .unwrap_free_mut()
+                .update_per_module_index(per_module_index);
+        }
+        if per_module_list.is_empty() {
+            self.per_module.remove(&id);
         }
     }
 }
@@ -517,6 +484,22 @@ mod test {
         // now does not (list ran empty).
         let index = state.alloc(Some(id1)).unwrap();
         state.free(index);
+    }
+
+    #[test]
+    fn clear_affine() {
+        let strat = PoolingAllocationStrategy::ReuseAffinity;
+        let id_alloc = CompiledModuleIdAllocator::new();
+        let id = id_alloc.alloc();
+        let state = IndexAllocator::new(strat, 100);
+
+        let index1 = state.alloc(Some(id)).unwrap();
+        let index2 = state.alloc(Some(id)).unwrap();
+        state.free(index2);
+        state.free(index1);
+        assert!(state.alloc_affine_and_clear_affinity(id).is_some());
+        assert!(state.alloc_affine_and_clear_affinity(id).is_some());
+        assert_eq!(state.alloc_affine_and_clear_affinity(id), None);
     }
 
     #[test]

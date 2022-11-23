@@ -12,7 +12,7 @@ use super::{
     InstantiationError,
 };
 use crate::{instance::Instance, Memory, Mmap, Table};
-use crate::{MemoryImageSlot, ModuleRuntimeInfo, Store};
+use crate::{CompiledModuleId, MemoryImageSlot, ModuleRuntimeInfo, Store};
 use anyhow::{anyhow, bail, Context, Result};
 use libc::c_void;
 use std::convert::TryFrom;
@@ -560,6 +560,22 @@ impl InstancePool {
 
         bail!("{}", message)
     }
+
+    fn purge_module(&self, module: CompiledModuleId) {
+        // Purging everything related to `module` primarily means clearing out
+        // all of its memory images present in the virtual address space. Go
+        // through the index allocator for slots affine to `module` and reset
+        // them, freeing up the index when we're done.
+        //
+        // Note that this is only called when the specified `module` won't be
+        // allocated further (the module is being dropped) so this shouldn't hit
+        // any sort of infinite loop since this should be the final operation
+        // working with `module`.
+        while let Some(index) = self.index_allocator.alloc_affine_and_clear_affinity(module) {
+            self.memories.clear_images(index.0);
+            self.index_allocator.free(index);
+        }
+    }
 }
 
 /// Represents a pool of WebAssembly linear memories.
@@ -739,6 +755,26 @@ impl MemoryPool {
         assert!(!slot.is_dirty());
         let idx = instance_index * self.max_memories + (memory_index.as_u32() as usize);
         *self.image_slots[idx].lock().unwrap() = Some(slot);
+    }
+
+    /// Resets all the images for the instance index slot specified to clear out
+    /// any prior mappings.
+    ///
+    /// This is used when a `Module` is dropped at the `wasmtime` layer to clear
+    /// out any remaining mappings and ensure that its memfd backing, if any, is
+    /// removed from the address space to avoid lingering references to it.
+    fn clear_images(&self, instance_index: usize) {
+        for i in 0..self.max_memories {
+            let index = DefinedMemoryIndex::from_u32(i as u32);
+
+            // Clear the image from the slot and, if successful, return it back
+            // to our state. Note that on failure here the whole slot will get
+            // paved over with an anonymous mapping.
+            let mut slot = self.take_memory_image_slot(instance_index, index);
+            if slot.remove_image().is_ok() {
+                self.return_memory_image_slot(instance_index, index, slot);
+            }
+        }
     }
 }
 
@@ -1115,6 +1151,10 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
     #[cfg(all(feature = "async", windows))]
     unsafe fn deallocate_fiber_stack(&self, _stack: &wasmtime_fiber::FiberStack) {
         // A no-op as we don't own the fiber stack on Windows
+    }
+
+    fn purge_module(&self, module: CompiledModuleId) {
+        self.instances.purge_module(module);
     }
 }
 

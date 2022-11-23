@@ -1015,6 +1015,18 @@ impl ModuleInner {
     }
 }
 
+impl Drop for ModuleInner {
+    fn drop(&mut self) {
+        // When a `Module` is being dropped that means that it's no longer
+        // present in any `Store` and it's additionally not longer held by any
+        // embedder. Take this opportunity to purge any lingering instantiations
+        // within a pooling instance allocator, if applicable.
+        self.engine
+            .allocator()
+            .purge_module(self.module.unique_id());
+    }
+}
+
 fn _assert_send_sync() {
     fn _assert<T: Send + Sync>() {}
     _assert::<Module>();
