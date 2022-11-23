@@ -905,19 +905,17 @@ impl SigSet {
 
     /// Get the number of arguments expected.
     pub fn num_args(&self, sig: Sig) -> usize {
-        let sig_data = &self.sigs[sig];
-        let num = if sig_data.stack_ret_arg.is_some() {
-            self.args(sig).len() - 1
+        let len = self.args(sig).len();
+        if self.sigs[sig].stack_ret_arg.is_some() {
+            len - 1
         } else {
-            self.args(sig).len()
-        };
-
-        usize::from(num)
+            len
+        }
     }
 
     /// Get the number of return values expected.
     pub fn num_rets(&self, sig: Sig) -> usize {
-        usize::from(self.rets(sig).len())
+        self.rets(sig).len()
     }
 }
 
