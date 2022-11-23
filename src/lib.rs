@@ -686,7 +686,16 @@ pub unsafe extern "C" fn path_create_directory(
     path_ptr: *const u8,
     path_len: usize,
 ) -> Errno {
-    unreachable()
+    let path = slice::from_raw_parts(path_ptr, path_len);
+
+    match Descriptor::get(fd) {
+        Descriptor::File(file) => match wasi_filesystem::create_directory_at(file.fd, path) {
+            Ok(()) => ERRNO_SUCCESS,
+            Err(err) => errno_from_wasi_filesystem(err),
+        },
+        Descriptor::Closed => ERRNO_BADF,
+        Descriptor::Log => ERRNO_NOTDIR,
+    }
 }
 
 /// Return the attributes of a file or directory.
@@ -699,7 +708,42 @@ pub unsafe extern "C" fn path_filestat_get(
     path_len: usize,
     buf: *mut Filestat,
 ) -> Errno {
-    unreachable()
+    let path = slice::from_raw_parts(path_ptr, path_len);
+    let at_flags = at_flags_from_lookupflags(flags);
+
+    match Descriptor::get(fd) {
+        Descriptor::File(file) => match wasi_filesystem::stat_at(file.fd, at_flags, path) {
+            Ok(stat) => {
+                let filetype = match stat.type_ {
+                    wasi_filesystem::Type::Unknown => FILETYPE_UNKNOWN,
+                    wasi_filesystem::Type::Directory => FILETYPE_DIRECTORY,
+                    wasi_filesystem::Type::BlockDevice => FILETYPE_BLOCK_DEVICE,
+                    wasi_filesystem::Type::RegularFile => FILETYPE_REGULAR_FILE,
+                    // TODO: Add a way to disginguish between FILETYPE_SOCKET_STREAM and
+                    // FILETYPE_SOCKET_DGRAM.
+                    wasi_filesystem::Type::Socket => unreachable(),
+                    wasi_filesystem::Type::SymbolicLink => FILETYPE_SYMBOLIC_LINK,
+                    wasi_filesystem::Type::CharacterDevice => FILETYPE_CHARACTER_DEVICE,
+                    // preview1 never had a FIFO code.
+                    wasi_filesystem::Type::Fifo => FILETYPE_UNKNOWN,
+                };
+                *buf = Filestat {
+                    dev: stat.dev,
+                    ino: stat.ino,
+                    filetype,
+                    nlink: stat.nlink,
+                    size: stat.size,
+                    atim: stat.atim,
+                    mtim: stat.mtim,
+                    ctim: stat.ctim,
+                };
+                ERRNO_SUCCESS
+            }
+            Err(err) => errno_from_wasi_filesystem(err),
+        },
+        Descriptor::Closed => ERRNO_BADF,
+        Descriptor::Log => ERRNO_NOTDIR,
+    }
 }
 
 /// Adjust the timestamps of a file or directory.
@@ -741,8 +785,8 @@ pub unsafe extern "C" fn path_filestat_set_times(
                 Err(err) => errno_from_wasi_filesystem(err),
             }
         }
-        Descriptor::Log => ERRNO_SPIPE,
         Descriptor::Closed => ERRNO_BADF,
+        Descriptor::Log => ERRNO_NOTDIR,
     }
 }
 
@@ -758,7 +802,20 @@ pub unsafe extern "C" fn path_link(
     new_path_ptr: *const u8,
     new_path_len: usize,
 ) -> Errno {
-    unreachable()
+    let old_path = slice::from_raw_parts(old_path_ptr, old_path_len);
+    let new_path = slice::from_raw_parts(new_path_ptr, new_path_len);
+    let at_flags = at_flags_from_lookupflags(old_flags);
+
+    match (Descriptor::get(old_fd), Descriptor::get(new_fd)) {
+        (Descriptor::File(old_file), Descriptor::File(new_file)) => {
+            match wasi_filesystem::link_at(old_file.fd, at_flags, old_path, new_file.fd, new_path) {
+                Ok(()) => ERRNO_SUCCESS,
+                Err(err) => errno_from_wasi_filesystem(err),
+            }
+        }
+        (_, Descriptor::Closed) | (Descriptor::Closed, _) => ERRNO_BADF,
+        _ => ERRNO_NOTDIR,
+    }
 }
 
 /// Open a file or directory.
@@ -879,8 +936,8 @@ pub unsafe extern "C" fn path_remove_directory(
             Ok(()) => ERRNO_SUCCESS,
             Err(err) => errno_from_wasi_filesystem(err),
         },
-        Descriptor::Log => ERRNO_SPIPE,
         Descriptor::Closed => ERRNO_BADF,
+        Descriptor::Log => ERRNO_NOTDIR,
     }
 }
 
