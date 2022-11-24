@@ -192,6 +192,11 @@ impl FreeSlotState {
     }
 }
 
+enum AllocMode {
+    ForceAffineAndClear,
+    AnySlot,
+}
+
 impl IndexAllocator {
     /// Create the default state for this strategy.
     pub fn new(strategy: PoolingAllocationStrategy, max_instances: usize) -> Self {
@@ -224,8 +229,8 @@ impl IndexAllocator {
     /// affinity request if the allocation strategy supports it.
     ///
     /// Returns `None` if no more slots are available.
-    pub fn alloc(&self, id: Option<CompiledModuleId>) -> Option<SlotId> {
-        self._alloc(id, false)
+    pub fn alloc(&self, module_id: Option<CompiledModuleId>) -> Option<SlotId> {
+        self._alloc(module_id, AllocMode::AnySlot)
     }
 
     /// Attempts to allocate a guaranteed-affine slot to the module `id`
@@ -235,66 +240,69 @@ impl IndexAllocator {
     /// this slot will not record the affinity to `id`, instead simply listing
     /// it as taken. This is intended to be used for clearing out all affine
     /// slots to a module.
-    pub fn alloc_affine_and_clear_affinity(&self, id: CompiledModuleId) -> Option<SlotId> {
-        self._alloc(Some(id), true)
+    pub fn alloc_affine_and_clear_affinity(&self, module_id: CompiledModuleId) -> Option<SlotId> {
+        self._alloc(Some(module_id), AllocMode::ForceAffineAndClear)
     }
 
-    fn _alloc(
-        &self,
-        id: Option<CompiledModuleId>,
-        force_affine_and_clear_affinity: bool,
-    ) -> Option<SlotId> {
+    fn _alloc(&self, module_id: Option<CompiledModuleId>, mode: AllocMode) -> Option<SlotId> {
         let mut inner = self.0.lock().unwrap();
         let inner = &mut *inner;
 
-        let slot_id = match inner.strategy {
-            PoolingAllocationStrategy::NextAvailable => *inner.free_list.last()?,
-            PoolingAllocationStrategy::Random => inner.alloc_random()?,
-            PoolingAllocationStrategy::ReuseAffinity => {
-                // First attempt an affine allocation where the slot returned
-                // was previously used by `id`, but if that fails pick a random
-                // free slot ID.
-                //
-                // Note that we do this to maintain an unbiased stealing
-                // distribution: we want the likelihood of our taking a slot
-                // from some other module's freelist to be proportional to that
-                // module's freelist length. Or in other words, every *slot*
-                // should be equally likely to be stolen. The alternative,
-                // where we pick the victim module freelist first, means that
-                // either a module with an affinity freelist of one slot has
-                // the same chances of losing that slot as one with a hundred
-                // slots; or else we need a weighted random choice among
-                // modules, which is just as complex as this process.
-                //
-                // We don't bother picking an empty slot (no established
-                // affinity) before a random slot, because this is more
-                // complex, and in the steady state, all slots will see at
-                // least one instantiation very quickly, so there will never
-                // (past an initial phase) be a slot with no affinity.
-                inner.alloc_affine(id).or_else(|| {
-                    if force_affine_and_clear_affinity {
-                        None
-                    } else {
-                        inner.alloc_random()
-                    }
-                })?
+        // Determine which `SlotId` will be chosen first. Below the free list
+        // metadata will be updated with our choice.
+        let slot_id = match mode {
+            // If any slot is desired then the pooling allocation strategy
+            // determines which index is chosen.
+            AllocMode::AnySlot => {
+                match inner.strategy {
+                    PoolingAllocationStrategy::NextAvailable => inner.pick_last_used()?,
+                    PoolingAllocationStrategy::Random => inner.pick_random()?,
+                    // First attempt an affine allocation where the slot
+                    // returned was previously used by `id`, but if that fails
+                    // pick a random free slot ID.
+                    //
+                    // Note that we do this to maintain an unbiased stealing
+                    // distribution: we want the likelihood of our taking a slot
+                    // from some other module's freelist to be proportional to
+                    // that module's freelist length. Or in other words, every
+                    // *slot* should be equally likely to be stolen. The
+                    // alternative, where we pick the victim module freelist
+                    // first, means that either a module with an affinity
+                    // freelist of one slot has the same chances of losing that
+                    // slot as one with a hundred slots; or else we need a
+                    // weighted random choice among modules, which is just as
+                    // complex as this process.
+                    //
+                    // We don't bother picking an empty slot (no established
+                    // affinity) before a random slot, because this is more
+                    // complex, and in the steady state, all slots will see at
+                    // least one instantiation very quickly, so there will never
+                    // (past an initial phase) be a slot with no affinity.
+                    PoolingAllocationStrategy::ReuseAffinity => inner
+                        .pick_affine(module_id)
+                        .or_else(|| inner.pick_random())?,
+                }
             }
+
+            // In this mode an affinity-based allocation is always performed as
+            // the purpose here is to clear out slots relevant to `module_id`
+            // during module teardown.
+            AllocMode::ForceAffineAndClear => inner.pick_affine(module_id)?,
         };
 
-        // Update internal metadata bout the allocation of `slot_id` to `id`,
-        // meaning that it's removed from the per-module freelist if it was
-        // previously affine and additionally it's removed from the global
-        // freelist.
+        // Update internal metadata about the allocation of `slot_id` to
+        // `module_id`, meaning that it's removed from the per-module freelist
+        // if it was previously affine and additionally it's removed from the
+        // global freelist.
         inner.remove_global_free_list_item(slot_id);
         if let &SlotState::Free(FreeSlotState::Affinity { module, .. }) =
             &inner.slot_state[slot_id.index()]
         {
             inner.remove_module_free_list_item(module, slot_id);
         }
-        inner.slot_state[slot_id.index()] = SlotState::Taken(if force_affine_and_clear_affinity {
-            None
-        } else {
-            id
+        inner.slot_state[slot_id.index()] = SlotState::Taken(match mode {
+            AllocMode::ForceAffineAndClear => None,
+            AllocMode::AnySlot => module_id,
         });
 
         Some(slot_id)
@@ -345,19 +353,23 @@ impl IndexAllocator {
 }
 
 impl Inner {
-    /// Attempts to allocate a slot already affine to `id`, returning `None` if
-    /// `id` is `None` or if there are no affine slots.
-    fn alloc_affine(&self, id: Option<CompiledModuleId>) -> Option<SlotId> {
-        let free = self.per_module.get(&id?)?;
-        free.last().copied()
+    fn pick_last_used(&self) -> Option<SlotId> {
+        self.free_list.last().copied()
     }
 
-    fn alloc_random(&mut self) -> Option<SlotId> {
+    fn pick_random(&mut self) -> Option<SlotId> {
         if self.free_list.len() == 0 {
             return None;
         }
         let i = self.rng.gen_range(0..self.free_list.len());
         Some(self.free_list[i])
+    }
+
+    /// Attempts to allocate a slot already affine to `id`, returning `None` if
+    /// `id` is `None` or if there are no affine slots.
+    fn pick_affine(&self, module_id: Option<CompiledModuleId>) -> Option<SlotId> {
+        let free = self.per_module.get(&module_id?)?;
+        free.last().copied()
     }
 
     /// Remove a slot-index from the global free list.
@@ -375,13 +387,13 @@ impl Inner {
     }
 
     /// Remove a slot-index from a per-module free list.
-    fn remove_module_free_list_item(&mut self, id: CompiledModuleId, index: SlotId) {
+    fn remove_module_free_list_item(&mut self, module_id: CompiledModuleId, index: SlotId) {
         debug_assert!(
-            self.per_module.contains_key(&id),
+            self.per_module.contains_key(&module_id),
             "per_module list for given module should not be empty"
         );
 
-        let per_module_list = self.per_module.get_mut(&id).unwrap();
+        let per_module_list = self.per_module.get_mut(&module_id).unwrap();
         debug_assert!(!per_module_list.is_empty());
 
         let per_module_index = self.slot_state[index.index()]
@@ -395,7 +407,7 @@ impl Inner {
                 .update_per_module_index(per_module_index);
         }
         if per_module_list.is_empty() {
-            self.per_module.remove(&id);
+            self.per_module.remove(&module_id);
         }
     }
 }
@@ -488,18 +500,24 @@ mod test {
 
     #[test]
     fn clear_affine() {
-        let strat = PoolingAllocationStrategy::ReuseAffinity;
         let id_alloc = CompiledModuleIdAllocator::new();
         let id = id_alloc.alloc();
-        let state = IndexAllocator::new(strat, 100);
 
-        let index1 = state.alloc(Some(id)).unwrap();
-        let index2 = state.alloc(Some(id)).unwrap();
-        state.free(index2);
-        state.free(index1);
-        assert!(state.alloc_affine_and_clear_affinity(id).is_some());
-        assert!(state.alloc_affine_and_clear_affinity(id).is_some());
-        assert_eq!(state.alloc_affine_and_clear_affinity(id), None);
+        for strat in [
+            PoolingAllocationStrategy::ReuseAffinity,
+            PoolingAllocationStrategy::NextAvailable,
+            PoolingAllocationStrategy::Random,
+        ] {
+            let state = IndexAllocator::new(strat, 100);
+
+            let index1 = state.alloc(Some(id)).unwrap();
+            let index2 = state.alloc(Some(id)).unwrap();
+            state.free(index2);
+            state.free(index1);
+            assert!(state.alloc_affine_and_clear_affinity(id).is_some());
+            assert!(state.alloc_affine_and_clear_affinity(id).is_some());
+            assert_eq!(state.alloc_affine_and_clear_affinity(id), None);
+        }
     }
 
     #[test]
