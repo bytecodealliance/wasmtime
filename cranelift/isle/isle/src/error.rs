@@ -24,6 +24,9 @@ impl std::fmt::Debug for Errors {
                 Error::TypeError { msg, .. } => format!("type error: {}", msg),
                 Error::UnreachableError { msg, .. } => format!("unreachable rule: {}", msg),
                 Error::OverlapError { msg, .. } => format!("overlap error: {}", msg),
+                Error::ShadowedError { .. } => {
+                    format!("more general higher-priority rule shadows other rules")
+                }
             };
 
             let labels = match e {
@@ -39,6 +42,16 @@ impl std::fmt::Debug for Errors {
                     let mut labels = vec![Label::primary(rules[0].from.file, &rules[0])];
                     labels.extend(
                         rules[1..]
+                            .iter()
+                            .map(|span| Label::secondary(span.from.file, span)),
+                    );
+                    labels
+                }
+
+                Error::ShadowedError { shadowed, mask } => {
+                    let mut labels = vec![Label::primary(mask.from.file, mask)];
+                    labels.extend(
+                        shadowed
                             .iter()
                             .map(|span| Label::secondary(span.from.file, span)),
                     );
@@ -113,6 +126,15 @@ pub enum Error {
         /// present, the first rule is the one with the most overlaps (likely a fall-through
         /// wildcard case).
         rules: Vec<Span>,
+    },
+
+    /// The rules can never match because another rule will always match first.
+    ShadowedError {
+        /// The locations of the unmatchable rules.
+        shadowed: Vec<Span>,
+
+        /// The location of the rule that shadows them.
+        mask: Span,
     },
 }
 
