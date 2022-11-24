@@ -1176,7 +1176,7 @@ impl TermEnv {
                                 ()
                             })
                         })
-                        .collect::<std::result::Result<Vec<_>, _>>();
+                        .collect::<Result<Vec<_>, _>>();
                     let arg_tys = match arg_tys {
                         Ok(a) => a,
                         Err(_) => {

@@ -40,8 +40,7 @@ could cause significant confusion.
 If there are any errors during ISLE compilation (e.g., a type mismatch), you
 will see a basic error message with a file, line number, and one-line error. To
 see a more detailed output with context, `--features isle-errors` can be used.
-This will leverage the `miette` error-reporting library to give pretty-printed
-errors with source context.
+This will give pretty-printed errors with source context.
 
 Additionally, the `cranelift-codegen-meta` crate will automatically generate
 ISLE `extern` declarations and helpers for working with CLIF. The code that does
