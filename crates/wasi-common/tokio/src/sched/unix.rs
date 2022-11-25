@@ -63,7 +63,6 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
                     f.complete(
                         f.file
                             .num_ready_bytes()
-                            .await
                             .map_err(|e| e.context("read num_ready_bytes"))?,
                         RwEventFlags::empty(),
                     );

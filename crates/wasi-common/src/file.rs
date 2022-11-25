@@ -1,32 +1,39 @@
 use crate::{Error, ErrorExt, SystemTimeSpec};
 use bitflags::bitflags;
 use std::any::Any;
+use std::sync::{Arc, RwLock};
+
+#[cfg(unix)]
+use cap_std::io_lifetimes::{AsFd, BorrowedFd};
+
+#[cfg(windows)]
+use io_extras::os::windows::{AsRawHandleOrSocket, RawHandleOrSocket};
 
 #[wiggle::async_trait]
 pub trait WasiFile: Send + Sync {
     fn as_any(&self) -> &dyn Any;
-    async fn get_filetype(&mut self) -> Result<FileType, Error>;
+    async fn get_filetype(&self) -> Result<FileType, Error>;
 
     #[cfg(unix)]
-    fn pollable(&self) -> Option<rustix::fd::BorrowedFd> {
+    fn pollable(&self) -> Option<Arc<dyn AsFd + '_>> {
         None
     }
 
     #[cfg(windows)]
-    fn pollable(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
+    fn pollable(&self) -> Option<Arc<dyn AsRawHandleOrSocket + '_>> {
         None
     }
 
-    fn isatty(&mut self) -> bool {
+    fn isatty(&self) -> bool {
         false
     }
 
-    async fn sock_accept(&mut self, _fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
+    async fn sock_accept(&self, _fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
         Err(Error::badf())
     }
 
     async fn sock_recv<'a>(
-        &mut self,
+        &self,
         _ri_data: &mut [std::io::IoSliceMut<'a>],
         _ri_flags: RiFlags,
     ) -> Result<(u64, RoFlags), Error> {
@@ -34,34 +41,34 @@ pub trait WasiFile: Send + Sync {
     }
 
     async fn sock_send<'a>(
-        &mut self,
+        &self,
         _si_data: &[std::io::IoSlice<'a>],
         _si_flags: SiFlags,
     ) -> Result<u64, Error> {
         Err(Error::badf())
     }
 
-    async fn sock_shutdown(&mut self, _how: SdFlags) -> Result<(), Error> {
+    async fn sock_shutdown(&self, _how: SdFlags) -> Result<(), Error> {
         Err(Error::badf())
     }
 
-    async fn datasync(&mut self) -> Result<(), Error> {
+    async fn datasync(&self) -> Result<(), Error> {
         Ok(())
     }
 
-    async fn sync(&mut self) -> Result<(), Error> {
+    async fn sync(&self) -> Result<(), Error> {
         Ok(())
     }
 
-    async fn get_fdflags(&mut self) -> Result<FdFlags, Error> {
+    async fn get_fdflags(&self) -> Result<FdFlags, Error> {
         Ok(FdFlags::empty())
     }
 
-    async fn set_fdflags(&mut self, _flags: FdFlags) -> Result<(), Error> {
+    async fn set_fdflags(&self, _flags: FdFlags) -> Result<(), Error> {
         Err(Error::badf())
     }
 
-    async fn get_filestat(&mut self) -> Result<Filestat, Error> {
+    async fn get_filestat(&self) -> Result<Filestat, Error> {
         Ok(Filestat {
             device_id: 0,
             inode: 0,
@@ -74,62 +81,59 @@ pub trait WasiFile: Send + Sync {
         })
     }
 
-    async fn set_filestat_size(&mut self, _size: u64) -> Result<(), Error> {
+    async fn set_filestat_size(&self, _size: u64) -> Result<(), Error> {
         Err(Error::badf())
     }
 
-    async fn advise(&mut self, _offset: u64, _len: u64, _advice: Advice) -> Result<(), Error> {
+    async fn advise(&self, _offset: u64, _len: u64, _advice: Advice) -> Result<(), Error> {
         Err(Error::badf())
     }
 
-    async fn allocate(&mut self, _offset: u64, _len: u64) -> Result<(), Error> {
+    async fn allocate(&self, _offset: u64, _len: u64) -> Result<(), Error> {
         Err(Error::badf())
     }
 
     async fn set_times(
-        &mut self,
+        &self,
         _atime: Option<SystemTimeSpec>,
         _mtime: Option<SystemTimeSpec>,
     ) -> Result<(), Error> {
         Err(Error::badf())
     }
 
-    async fn read_vectored<'a>(
-        &mut self,
-        _bufs: &mut [std::io::IoSliceMut<'a>],
-    ) -> Result<u64, Error> {
+    async fn read_vectored<'a>(&self, _bufs: &mut [std::io::IoSliceMut<'a>]) -> Result<u64, Error> {
         Err(Error::badf())
     }
 
     async fn read_vectored_at<'a>(
-        &mut self,
+        &self,
         _bufs: &mut [std::io::IoSliceMut<'a>],
         _offset: u64,
     ) -> Result<u64, Error> {
         Err(Error::badf())
     }
 
-    async fn write_vectored<'a>(&mut self, _bufs: &[std::io::IoSlice<'a>]) -> Result<u64, Error> {
+    async fn write_vectored<'a>(&self, _bufs: &[std::io::IoSlice<'a>]) -> Result<u64, Error> {
         Err(Error::badf())
     }
 
     async fn write_vectored_at<'a>(
-        &mut self,
+        &self,
         _bufs: &[std::io::IoSlice<'a>],
         _offset: u64,
     ) -> Result<u64, Error> {
         Err(Error::badf())
     }
 
-    async fn seek(&mut self, _pos: std::io::SeekFrom) -> Result<u64, Error> {
+    async fn seek(&self, _pos: std::io::SeekFrom) -> Result<u64, Error> {
         Err(Error::badf())
     }
 
-    async fn peek(&mut self, _buf: &mut [u8]) -> Result<u64, Error> {
+    async fn peek(&self, _buf: &mut [u8]) -> Result<u64, Error> {
         Err(Error::badf())
     }
 
-    async fn num_ready_bytes(&self) -> Result<u64, Error> {
+    fn num_ready_bytes(&self) -> Result<u64, Error> {
         Ok(0)
     }
 
@@ -212,33 +216,32 @@ pub struct Filestat {
 }
 
 pub(crate) trait TableFileExt {
-    fn get_file(&self, fd: u32) -> Result<&FileEntry, Error>;
-    fn get_file_mut(&mut self, fd: u32) -> Result<&mut FileEntry, Error>;
+    fn get_file(&self, fd: u32) -> Result<Arc<FileEntry>, Error>;
 }
 impl TableFileExt for crate::table::Table {
-    fn get_file(&self, fd: u32) -> Result<&FileEntry, Error> {
+    fn get_file(&self, fd: u32) -> Result<Arc<FileEntry>, Error> {
         self.get(fd)
-    }
-    fn get_file_mut(&mut self, fd: u32) -> Result<&mut FileEntry, Error> {
-        self.get_mut(fd)
     }
 }
 
 pub(crate) struct FileEntry {
-    caps: FileCaps,
+    caps: RwLock<FileCaps>,
     file: Box<dyn WasiFile>,
 }
 
 impl FileEntry {
     pub fn new(caps: FileCaps, file: Box<dyn WasiFile>) -> Self {
-        FileEntry { caps, file }
+        FileEntry {
+            caps: RwLock::new(caps),
+            file,
+        }
     }
 
     pub fn capable_of(&self, caps: FileCaps) -> Result<(), Error> {
-        if self.caps.contains(caps) {
+        if self.caps.read().unwrap().contains(caps) {
             Ok(())
         } else {
-            let missing = caps & !self.caps;
+            let missing = caps & !(*self.caps.read().unwrap());
             let err = if missing.intersects(FileCaps::READ | FileCaps::WRITE) {
                 // `EBADF` is a little surprising here because it's also used
                 // for unknown-file-descriptor errors, but it's what POSIX uses
@@ -251,16 +254,17 @@ impl FileEntry {
         }
     }
 
-    pub fn drop_caps_to(&mut self, caps: FileCaps) -> Result<(), Error> {
+    pub fn drop_caps_to(&self, caps: FileCaps) -> Result<(), Error> {
         self.capable_of(caps)?;
-        self.caps = caps;
+        *self.caps.write().unwrap() = caps;
         Ok(())
     }
 
-    pub async fn get_fdstat(&mut self) -> Result<FdStat, Error> {
+    pub async fn get_fdstat(&self) -> Result<FdStat, Error> {
+        let caps = self.caps.read().unwrap().clone();
         Ok(FdStat {
             filetype: self.file.get_filetype().await?,
-            caps: self.caps,
+            caps,
             flags: self.file.get_fdflags().await?,
         })
     }
@@ -268,18 +272,12 @@ impl FileEntry {
 
 pub trait FileEntryExt {
     fn get_cap(&self, caps: FileCaps) -> Result<&dyn WasiFile, Error>;
-    fn get_cap_mut(&mut self, caps: FileCaps) -> Result<&mut dyn WasiFile, Error>;
 }
 
 impl FileEntryExt for FileEntry {
     fn get_cap(&self, caps: FileCaps) -> Result<&dyn WasiFile, Error> {
         self.capable_of(caps)?;
         Ok(&*self.file)
-    }
-
-    fn get_cap_mut(&mut self, caps: FileCaps) -> Result<&mut dyn WasiFile, Error> {
-        self.capable_of(caps)?;
-        Ok(&mut *self.file)
     }
 }
 
@@ -316,4 +314,40 @@ pub enum Advice {
     WillNeed,
     DontNeed,
     NoReuse,
+}
+
+#[cfg(unix)]
+pub struct BorrowedAsFd<'a, T: AsFd>(&'a T);
+
+#[cfg(unix)]
+impl<'a, T: AsFd> BorrowedAsFd<'a, T> {
+    pub fn new(t: &'a T) -> Self {
+        BorrowedAsFd(t)
+    }
+}
+
+#[cfg(unix)]
+impl<T: AsFd> AsFd for BorrowedAsFd<'_, T> {
+    #[inline]
+    fn as_fd(&self) -> BorrowedFd {
+        self.0.as_fd()
+    }
+}
+
+#[cfg(windows)]
+pub struct BorrowedAsRawHandleOrSocket<'a, T: AsRawHandleOrSocket>(&'a T);
+
+#[cfg(windows)]
+impl<'a, T: AsRawHandleOrSocket> BorrowedAsRawHandleOrSocket<'a, T> {
+    pub fn new(t: &'a T) -> Self {
+        BorrowedAsRawHandleOrSocket(t)
+    }
+}
+
+#[cfg(windows)]
+impl<T: AsRawHandleOrSocket> AsRawHandleOrSocket for BorrowedAsRawHandleOrSocket<'_, T> {
+    #[inline]
+    fn as_raw_handle_or_socket(&self) -> RawHandleOrSocket {
+        self.0.as_raw_handle_or_socket()
+    }
 }

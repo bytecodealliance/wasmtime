@@ -62,15 +62,15 @@ impl WasiCtxBuilder {
         }
         Ok(self)
     }
-    pub fn stdin(mut self, f: Box<dyn WasiFile>) -> Self {
+    pub fn stdin(self, f: Box<dyn WasiFile>) -> Self {
         self.0.set_stdin(f);
         self
     }
-    pub fn stdout(mut self, f: Box<dyn WasiFile>) -> Self {
+    pub fn stdout(self, f: Box<dyn WasiFile>) -> Self {
         self.0.set_stdout(f);
         self
     }
-    pub fn stderr(mut self, f: Box<dyn WasiFile>) -> Self {
+    pub fn stderr(self, f: Box<dyn WasiFile>) -> Self {
         self.0.set_stderr(f);
         self
     }
@@ -87,7 +87,7 @@ impl WasiCtxBuilder {
         self.inherit_stdin().inherit_stdout().inherit_stderr()
     }
     pub fn preopened_dir(
-        mut self,
+        self,
         dir: cap_std::fs::Dir,
         guest_path: impl AsRef<Path>,
     ) -> Result<Self, Error> {
@@ -95,7 +95,7 @@ impl WasiCtxBuilder {
         self.0.push_preopened_dir(dir, guest_path)?;
         Ok(self)
     }
-    pub fn preopened_socket(mut self, fd: u32, socket: impl Into<Socket>) -> Result<Self, Error> {
+    pub fn preopened_socket(self, fd: u32, socket: impl Into<Socket>) -> Result<Self, Error> {
         let socket: Socket = socket.into();
         let file: Box<dyn WasiFile> = socket.into();
 
