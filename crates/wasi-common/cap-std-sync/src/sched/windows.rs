@@ -96,7 +96,7 @@ pub async fn poll_oneoff_<'a>(
         }
     }
     for r in immediate_reads {
-        match r.file.num_ready_bytes().await {
+        match r.file.num_ready_bytes() {
             Ok(ready_bytes) => {
                 r.complete(ready_bytes, RwEventFlags::empty());
                 ready = true;

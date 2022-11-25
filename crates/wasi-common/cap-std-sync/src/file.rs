@@ -5,6 +5,7 @@ use is_terminal::IsTerminal;
 use std::any::Any;
 use std::convert::TryInto;
 use std::io;
+use std::sync::{Arc, RwLock, RwLockReadGuard};
 use system_interface::{
     fs::{FileIoExt, GetSetFdFlags},
     io::{IoExt, ReadReady},
@@ -14,11 +15,48 @@ use wasi_common::{
     Error, ErrorExt,
 };
 
-pub struct File(cap_std::fs::File);
+#[cfg(unix)]
+use io_lifetimes::{AsFd, BorrowedFd};
+
+#[cfg(windows)]
+use io_lifetimes::{AsHandle, BorrowedHandle};
+
+#[cfg(windows)]
+use io_extras::os::windows::{AsRawHandleOrSocket, RawHandleOrSocket};
+
+pub struct BorrowedFile<'a>(RwLockReadGuard<'a, cap_std::fs::File>);
+
+#[cfg(unix)]
+impl AsFd for BorrowedFile<'_> {
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        self.0.as_fd()
+    }
+}
+
+#[cfg(windows)]
+impl AsHandle for BorrowedFile<'_> {
+    fn as_handle(&self) -> BorrowedHandle<'_> {
+        self.0.as_handle()
+    }
+}
+
+#[cfg(windows)]
+impl AsRawHandleOrSocket for BorrowedFile<'_> {
+    #[inline]
+    fn as_raw_handle_or_socket(&self) -> RawHandleOrSocket {
+        self.0.as_raw_handle_or_socket()
+    }
+}
+
+pub struct File(RwLock<cap_std::fs::File>);
 
 impl File {
     pub fn from_cap_std(file: cap_std::fs::File) -> Self {
-        File(file)
+        File(RwLock::new(file))
+    }
+
+    pub fn borrow(&self) -> BorrowedFile {
+        BorrowedFile(self.0.read().unwrap())
     }
 }
 
@@ -27,32 +65,35 @@ impl WasiFile for File {
     fn as_any(&self) -> &dyn Any {
         self
     }
+
     #[cfg(unix)]
-    fn pollable(&self) -> Option<rustix::fd::BorrowedFd> {
-        Some(self.0.as_fd())
+    fn pollable(&self) -> Option<Arc<dyn AsFd + '_>> {
+        Some(Arc::new(self.borrow()))
     }
 
     #[cfg(windows)]
-    fn pollable(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
-        Some(self.0.as_raw_handle_or_socket())
+    fn pollable(&self) -> Option<Arc<dyn AsRawHandleOrSocket + '_>> {
+        Some(Arc::new(BorrowedFile(self.0.read().unwrap())))
     }
-    async fn datasync(&mut self) -> Result<(), Error> {
-        self.0.sync_data()?;
+
+    async fn datasync(&self) -> Result<(), Error> {
+        self.0.read().unwrap().sync_data()?;
         Ok(())
     }
-    async fn sync(&mut self) -> Result<(), Error> {
-        self.0.sync_all()?;
+    async fn sync(&self) -> Result<(), Error> {
+        self.0.read().unwrap().sync_all()?;
         Ok(())
     }
-    async fn get_filetype(&mut self) -> Result<FileType, Error> {
-        let meta = self.0.metadata()?;
+    async fn get_filetype(&self) -> Result<FileType, Error> {
+        let meta = self.0.read().unwrap().metadata()?;
         Ok(filetype_from(&meta.file_type()))
     }
-    async fn get_fdflags(&mut self) -> Result<FdFlags, Error> {
-        let fdflags = get_fd_flags(&self.0)?;
+    async fn get_fdflags(&self) -> Result<FdFlags, Error> {
+        let file = self.0.read().unwrap();
+        let fdflags = get_fd_flags(&*file)?;
         Ok(fdflags)
     }
-    async fn set_fdflags(&mut self, fdflags: FdFlags) -> Result<(), Error> {
+    async fn set_fdflags(&self, fdflags: FdFlags) -> Result<(), Error> {
         if fdflags.intersects(
             wasi_common::file::FdFlags::DSYNC
                 | wasi_common::file::FdFlags::SYNC
@@ -60,12 +101,13 @@ impl WasiFile for File {
         ) {
             return Err(Error::invalid_argument().context("cannot set DSYNC, SYNC, or RSYNC flag"));
         }
-        let set_fd_flags = self.0.new_set_fd_flags(to_sysif_fdflags(fdflags))?;
-        self.0.set_fd_flags(set_fd_flags)?;
+        let mut file = self.0.write().unwrap();
+        let set_fd_flags = (*file).new_set_fd_flags(to_sysif_fdflags(fdflags))?;
+        (*file).set_fd_flags(set_fd_flags)?;
         Ok(())
     }
-    async fn get_filestat(&mut self) -> Result<Filestat, Error> {
-        let meta = self.0.metadata()?;
+    async fn get_filestat(&self) -> Result<Filestat, Error> {
+        let meta = self.0.read().unwrap().metadata()?;
         Ok(Filestat {
             device_id: meta.dev(),
             inode: meta.ino(),
@@ -77,63 +119,68 @@ impl WasiFile for File {
             ctim: meta.created().map(|t| Some(t.into_std())).unwrap_or(None),
         })
     }
-    async fn set_filestat_size(&mut self, size: u64) -> Result<(), Error> {
-        self.0.set_len(size)?;
+    async fn set_filestat_size(&self, size: u64) -> Result<(), Error> {
+        self.0.read().unwrap().set_len(size)?;
         Ok(())
     }
-    async fn advise(&mut self, offset: u64, len: u64, advice: Advice) -> Result<(), Error> {
-        self.0.advise(offset, len, convert_advice(advice))?;
+    async fn advise(&self, offset: u64, len: u64, advice: Advice) -> Result<(), Error> {
+        self.0
+            .read()
+            .unwrap()
+            .advise(offset, len, convert_advice(advice))?;
         Ok(())
     }
-    async fn allocate(&mut self, offset: u64, len: u64) -> Result<(), Error> {
-        self.0.allocate(offset, len)?;
+    async fn allocate(&self, offset: u64, len: u64) -> Result<(), Error> {
+        self.0.read().unwrap().allocate(offset, len)?;
         Ok(())
     }
     async fn set_times(
-        &mut self,
+        &self,
         atime: Option<wasi_common::SystemTimeSpec>,
         mtime: Option<wasi_common::SystemTimeSpec>,
     ) -> Result<(), Error> {
         self.0
+            .read()
+            .unwrap()
             .set_times(convert_systimespec(atime), convert_systimespec(mtime))?;
         Ok(())
     }
-    async fn read_vectored<'a>(&mut self, bufs: &mut [io::IoSliceMut<'a>]) -> Result<u64, Error> {
-        let n = self.0.read_vectored(bufs)?;
+    async fn read_vectored<'a>(&self, bufs: &mut [io::IoSliceMut<'a>]) -> Result<u64, Error> {
+        let n = self.0.read().unwrap().read_vectored(bufs)?;
         Ok(n.try_into()?)
     }
     async fn read_vectored_at<'a>(
-        &mut self,
+        &self,
         bufs: &mut [io::IoSliceMut<'a>],
         offset: u64,
     ) -> Result<u64, Error> {
-        let n = self.0.read_vectored_at(bufs, offset)?;
+        let n = self.0.read().unwrap().read_vectored_at(bufs, offset)?;
         Ok(n.try_into()?)
     }
-    async fn write_vectored<'a>(&mut self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
-        let n = self.0.write_vectored(bufs)?;
+    async fn write_vectored<'a>(&self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
+        let n = self.0.read().unwrap().write_vectored(bufs)?;
         Ok(n.try_into()?)
     }
     async fn write_vectored_at<'a>(
-        &mut self,
+        &self,
         bufs: &[io::IoSlice<'a>],
         offset: u64,
     ) -> Result<u64, Error> {
-        let n = self.0.write_vectored_at(bufs, offset)?;
+        let n = self.0.read().unwrap().write_vectored_at(bufs, offset)?;
         Ok(n.try_into()?)
     }
-    async fn seek(&mut self, pos: std::io::SeekFrom) -> Result<u64, Error> {
-        Ok(self.0.seek(pos)?)
+    async fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error> {
+        Ok(self.0.read().unwrap().seek(pos)?)
     }
-    async fn peek(&mut self, buf: &mut [u8]) -> Result<u64, Error> {
-        let n = self.0.peek(buf)?;
+    async fn peek(&self, buf: &mut [u8]) -> Result<u64, Error> {
+        let n = self.0.read().unwrap().peek(buf)?;
         Ok(n.try_into()?)
     }
-    async fn num_ready_bytes(&self) -> Result<u64, Error> {
-        Ok(self.0.num_ready_bytes()?)
+    fn num_ready_bytes(&self) -> Result<u64, Error> {
+        Ok(self.0.read().unwrap().num_ready_bytes()?)
     }
-    fn isatty(&mut self) -> bool {
-        self.0.is_terminal()
+    fn isatty(&self) -> bool {
+        self.0.read().unwrap().is_terminal()
     }
 }
 
@@ -157,35 +204,6 @@ pub fn filetype_from(ft: &cap_std::fs::FileType) -> FileType {
         FileType::RegularFile
     } else {
         FileType::Unknown
-    }
-}
-
-#[cfg(windows)]
-use io_lifetimes::{AsHandle, BorrowedHandle};
-#[cfg(windows)]
-impl AsHandle for File {
-    fn as_handle(&self) -> BorrowedHandle<'_> {
-        self.0.as_handle()
-    }
-}
-
-#[cfg(windows)]
-use io_extras::os::windows::{AsRawHandleOrSocket, RawHandleOrSocket};
-#[cfg(windows)]
-impl AsRawHandleOrSocket for File {
-    #[inline]
-    fn as_raw_handle_or_socket(&self) -> RawHandleOrSocket {
-        self.0.as_raw_handle_or_socket()
-    }
-}
-
-#[cfg(unix)]
-use io_lifetimes::{AsFd, BorrowedFd};
-
-#[cfg(unix)]
-impl AsFd for File {
-    fn as_fd(&self) -> BorrowedFd<'_> {
-        self.0.as_fd()
     }
 }
 

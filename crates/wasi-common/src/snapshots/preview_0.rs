@@ -527,10 +527,8 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         fd: types::Fd,
         iovs: &types::IovecArray<'a>,
     ) -> Result<types::Size, Error> {
-        let f = self
-            .table()
-            .get_file_mut(u32::from(fd))?
-            .get_cap_mut(FileCaps::READ)?;
+        let f = self.table().get_file(u32::from(fd))?;
+        let f = f.get_cap(FileCaps::READ)?;
 
         let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> =
             iovs.iter()
@@ -558,10 +556,8 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         iovs: &types::IovecArray<'a>,
         offset: types::Filesize,
     ) -> Result<types::Size, Error> {
-        let f = self
-            .table()
-            .get_file_mut(u32::from(fd))?
-            .get_cap_mut(FileCaps::READ | FileCaps::SEEK)?;
+        let f = self.table().get_file(u32::from(fd))?;
+        let f = f.get_cap(FileCaps::READ | FileCaps::SEEK)?;
 
         let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> =
             iovs.iter()
@@ -588,10 +584,8 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         fd: types::Fd,
         ciovs: &types::CiovecArray<'a>,
     ) -> Result<types::Size, Error> {
-        let f = self
-            .table()
-            .get_file_mut(u32::from(fd))?
-            .get_cap_mut(FileCaps::WRITE)?;
+        let f = self.table().get_file(u32::from(fd))?;
+        let f = f.get_cap(FileCaps::WRITE)?;
 
         let guest_slices: Vec<wiggle::GuestSlice<u8>> = ciovs
             .iter()
@@ -621,10 +615,8 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         ciovs: &types::CiovecArray<'a>,
         offset: types::Filesize,
     ) -> Result<types::Size, Error> {
-        let f = self
-            .table()
-            .get_file_mut(u32::from(fd))?
-            .get_cap_mut(FileCaps::WRITE | FileCaps::SEEK)?;
+        let f = self.table().get_file(u32::from(fd))?;
+        let f = f.get_cap(FileCaps::WRITE | FileCaps::SEEK)?;
 
         let guest_slices: Vec<wiggle::GuestSlice<u8>> = ciovs
             .iter()
@@ -874,7 +866,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
             }
         }
 
-        let table = &mut self.table;
+        let table = &self.table;
         let mut sub_fds: HashSet<types::Fd> = HashSet::new();
         // We need these refmuts to outlive Poll, which will hold the &mut dyn WasiFile inside
         let mut reads: Vec<(u32, Userdata)> = Vec::new();
@@ -924,8 +916,8 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
                         sub_fds.insert(fd);
                     }
                     table
-                        .get_file_mut(u32::from(fd))?
-                        .get_cap_mut(FileCaps::POLL_READWRITE)?;
+                        .get_file(u32::from(fd))?
+                        .get_cap(FileCaps::POLL_READWRITE)?;
                     reads.push((u32::from(fd), sub.userdata.into()));
                 }
                 types::SubscriptionU::FdWrite(writesub) => {
@@ -937,8 +929,8 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
                         sub_fds.insert(fd);
                     }
                     table
-                        .get_file_mut(u32::from(fd))?
-                        .get_cap_mut(FileCaps::POLL_READWRITE)?;
+                        .get_file(u32::from(fd))?
+                        .get_cap(FileCaps::POLL_READWRITE)?;
                     writes.push((u32::from(fd), sub.userdata.into()));
                 }
             }

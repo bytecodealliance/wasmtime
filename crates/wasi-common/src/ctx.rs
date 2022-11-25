@@ -7,6 +7,7 @@ use crate::table::Table;
 use crate::Error;
 use cap_rand::RngCore;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 pub struct WasiCtx {
     pub args: StringArray,
@@ -24,7 +25,7 @@ impl WasiCtx {
         sched: Box<dyn WasiSched>,
         table: Table,
     ) -> Self {
-        let mut s = WasiCtx {
+        let s = WasiCtx {
             args: StringArray::new(),
             env: StringArray::new(),
             random,
@@ -38,17 +39,17 @@ impl WasiCtx {
         s
     }
 
-    pub fn insert_file(&mut self, fd: u32, file: Box<dyn WasiFile>, caps: FileCaps) {
+    pub fn insert_file(&self, fd: u32, file: Box<dyn WasiFile>, caps: FileCaps) {
         self.table()
-            .insert_at(fd, Box::new(FileEntry::new(caps, file)));
+            .insert_at(fd, Arc::new(FileEntry::new(caps, file)));
     }
 
-    pub fn push_file(&mut self, file: Box<dyn WasiFile>, caps: FileCaps) -> Result<u32, Error> {
-        self.table().push(Box::new(FileEntry::new(caps, file)))
+    pub fn push_file(&self, file: Box<dyn WasiFile>, caps: FileCaps) -> Result<u32, Error> {
+        self.table().push(Arc::new(FileEntry::new(caps, file)))
     }
 
     pub fn insert_dir(
-        &mut self,
+        &self,
         fd: u32,
         dir: Box<dyn WasiDir>,
         caps: DirCaps,
@@ -57,23 +58,23 @@ impl WasiCtx {
     ) {
         self.table().insert_at(
             fd,
-            Box::new(DirEntry::new(caps, file_caps, Some(path), dir)),
+            Arc::new(DirEntry::new(caps, file_caps, Some(path), dir)),
         );
     }
 
     pub fn push_dir(
-        &mut self,
+        &self,
         dir: Box<dyn WasiDir>,
         caps: DirCaps,
         file_caps: FileCaps,
         path: PathBuf,
     ) -> Result<u32, Error> {
         self.table()
-            .push(Box::new(DirEntry::new(caps, file_caps, Some(path), dir)))
+            .push(Arc::new(DirEntry::new(caps, file_caps, Some(path), dir)))
     }
 
-    pub fn table(&mut self) -> &mut Table {
-        &mut self.table
+    pub fn table(&self) -> &Table {
+        &self.table
     }
 
     pub fn push_arg(&mut self, arg: &str) -> Result<(), StringArrayError> {
@@ -85,17 +86,17 @@ impl WasiCtx {
         Ok(())
     }
 
-    pub fn set_stdin(&mut self, mut f: Box<dyn WasiFile>) {
+    pub fn set_stdin(&self, mut f: Box<dyn WasiFile>) {
         let rights = Self::stdio_rights(&mut *f);
         self.insert_file(0, f, rights);
     }
 
-    pub fn set_stdout(&mut self, mut f: Box<dyn WasiFile>) {
+    pub fn set_stdout(&self, mut f: Box<dyn WasiFile>) {
         let rights = Self::stdio_rights(&mut *f);
         self.insert_file(1, f, rights);
     }
 
-    pub fn set_stderr(&mut self, mut f: Box<dyn WasiFile>) {
+    pub fn set_stderr(&self, mut f: Box<dyn WasiFile>) {
         let rights = Self::stdio_rights(&mut *f);
         self.insert_file(2, f, rights);
     }
@@ -114,13 +115,13 @@ impl WasiCtx {
     }
 
     pub fn push_preopened_dir(
-        &mut self,
+        &self,
         dir: Box<dyn WasiDir>,
         path: impl AsRef<Path>,
     ) -> Result<(), Error> {
         let caps = DirCaps::all();
         let file_caps = FileCaps::all();
-        self.table().push(Box::new(DirEntry::new(
+        self.table().push(Arc::new(DirEntry::new(
             caps,
             file_caps,
             Some(path.as_ref().to_owned()),
