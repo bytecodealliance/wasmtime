@@ -790,6 +790,10 @@ impl SigSet {
 
         // Compute args and retvals from signature. Handle retvals first,
         // because we may need to add a return-area arg to the args.
+
+        // NOTE: We rely on the order of the args (rets -> args) inserted to compute the offsets in
+        // `SigSet::args()` and `SigSet::rets()`. Therefore, we cannot change the two
+        // compute_arg_locs order.
         let (sized_stack_ret_space, _) = M::compute_arg_locs(
             sig.call_conv,
             flags,
@@ -836,7 +840,8 @@ impl SigSet {
     /// Get this signature's ABI arguments.
     pub fn args(&self, sig: Sig) -> &[ABIArg] {
         let sig_data = &self.sigs[sig];
-        let start = usize::try_from(sig.prev().map_or(0, |prev| self.sigs[prev].args_end)).unwrap();
+        // Please see comments in `SigSet::from_func_sig` of how we store the offsets.
+        let start = usize::try_from(sig_data.rets_end).unwrap();
         let end = usize::try_from(sig_data.args_end).unwrap();
         &self.abi_args[start..end]
     }
@@ -860,7 +865,8 @@ impl SigSet {
     /// Get this signature's ABI returns.
     pub fn rets(&self, sig: Sig) -> &[ABIArg] {
         let sig_data = &self.sigs[sig];
-        let start = usize::try_from(sig.prev().map_or(0, |prev| self.sigs[prev].rets_end)).unwrap();
+        // Please see comments in `SigSet::from_func_sig` of how we store the offsets.
+        let start = usize::try_from(sig.prev().map_or(0, |prev| self.sigs[prev].args_end)).unwrap();
         let end = usize::try_from(sig_data.rets_end).unwrap();
         &self.abi_args[start..end]
     }
