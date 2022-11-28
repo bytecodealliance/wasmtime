@@ -99,22 +99,12 @@
 (rule (lower (extract_vector x 0))
       (value_reg (fpu_move_128 (put_in_reg x))))
 
-;;;; Rules for `swiden_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule -1 (lower (has_type ty (swiden_low x)))
-      (value_reg (vec_extend (VecExtendOp.Sxtl) x $false (lane_size ty))))
-
 ;;;; Rules for `swiden_high` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule -1 (lower (has_type ty (swiden_high x)))
-      (value_reg (vec_extend (VecExtendOp.Sxtl) x $true (lane_size ty))))
-
-;;;; Rules for `uwiden_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule -1 (lower (has_type ty (uwiden_low x)))
-      (value_reg (vec_extend (VecExtendOp.Uxtl) x $false (lane_size ty))))
+      (vec_extend (VecExtendOp.Sxtl) x $true (lane_size ty)))
 
 ;;;; Rules for `uwiden_high` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule -1 (lower (has_type ty (uwiden_high x)))
-      (value_reg (vec_extend (VecExtendOp.Uxtl) x $true (lane_size ty))))
+      (vec_extend (VecExtendOp.Uxtl) x $true (lane_size ty)))
