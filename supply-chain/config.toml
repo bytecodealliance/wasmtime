@@ -306,10 +306,6 @@ criteria = "safe-to-deploy"
 version = "0.2.16"
 criteria = "safe-to-run"
 
-[[exemptions.fs-set-times]]
-version = "0.17.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.fslock]]
 version = "0.1.8"
 criteria = "safe-to-run"
@@ -382,14 +378,6 @@ criteria = "safe-to-deploy"
 version = "0.1.12"
 criteria = "safe-to-deploy"
 
-[[exemptions.io-extras]]
-version = "0.15.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.io-lifetimes]]
-version = "0.7.2"
-criteria = "safe-to-deploy"
-
 [[exemptions.ipnet]]
 version = "2.5.0"
 criteria = "safe-to-deploy"
@@ -444,10 +432,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.libm]]
 version = "0.2.2"
-criteria = "safe-to-deploy"
-
-[[exemptions.linux-raw-sys]]
-version = "0.0.46"
 criteria = "safe-to-deploy"
 
 [[exemptions.listenfd]]
@@ -734,10 +718,6 @@ criteria = "safe-to-deploy"
 version = "0.5.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.rustix]]
-version = "0.35.10"
-criteria = "safe-to-deploy"
-
 [[exemptions.rusty-fork]]
 version = "0.3.0"
 criteria = "safe-to-deploy"
@@ -1004,34 +984,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.winapi-x86_64-pc-windows-gnu]]
 version = "0.4.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.windows-sys]]
-version = "0.36.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.windows_aarch64_msvc]]
-version = "0.36.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.windows_i686_gnu]]
-version = "0.36.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.windows_i686_msvc]]
-version = "0.36.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.windows_x86_64_gnu]]
-version = "0.36.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.windows_x86_64_msvc]]
-version = "0.36.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.winx]]
-version = "0.33.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.xoodyak]]
