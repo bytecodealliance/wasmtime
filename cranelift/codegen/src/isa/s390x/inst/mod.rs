@@ -1068,6 +1068,12 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             for inst in body.iter() {
                 s390x_get_operands(inst, collector);
             }
+
+            // `reuse_def` constraints can't be permitted in a Loop instruction because the operand
+            // index will always be relative to the Loop instruction, not the individual
+            // instruction in the loop body. However, fixed-nonallocatable registers used with
+            // instructions that would have emitted `reuse_def` constraints are fine.
+            debug_assert!(collector.no_reuse_def());
         }
         &Inst::CondBreak { .. } => {}
         &Inst::VirtualSPOffsetAdj { .. } => {}

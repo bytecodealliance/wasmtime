@@ -4,7 +4,7 @@
 
 use alloc::{string::String, vec::Vec};
 use core::{fmt::Debug, hash::Hash};
-use regalloc2::{Allocation, MachineEnv, Operand, PReg, PRegSet, VReg};
+use regalloc2::{Allocation, MachineEnv, Operand, OperandConstraint, PReg, PRegSet, VReg};
 
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
@@ -327,6 +327,16 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
             allocatable,
             renamer,
         }
+    }
+
+    /// Returns true if no reuse_def constraints have been added.
+    pub fn no_reuse_def(&self) -> bool {
+        !self.operands[self.operands_start..]
+            .iter()
+            .any(|operand| match operand.constraint() {
+                OperandConstraint::Reuse(_) => true,
+                _ => false,
+            })
     }
 
     fn is_allocatable_preg(&self, reg: PReg) -> bool {
