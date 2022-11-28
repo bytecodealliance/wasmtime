@@ -665,6 +665,11 @@ impl<I: VCodeInst> VCode<I> {
         self.block_ranges.len()
     }
 
+    /// The number of lowered instructions.
+    pub fn num_insts(&self) -> usize {
+        self.insts.len()
+    }
+
     /// Get the successors for a block.
     pub fn succs(&self, block: BlockIndex) -> &[BlockIndex] {
         let (start, end) = self.block_succ_range[block.index()];

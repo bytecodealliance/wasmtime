@@ -39,6 +39,11 @@ pub fn compile<B: LowerBackend + TargetIsa>(
         lower.lower(b)?
     };
 
+    log::debug!(
+        "Number of lowered vcode instructions: {}",
+        vcode.num_insts()
+    );
+    log::debug!("Number of lowered vcode blocks: {}", vcode.num_blocks());
     trace!("vcode from lowering: \n{:?}", vcode);
 
     // Perform register allocation.
