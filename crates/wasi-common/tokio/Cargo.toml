@@ -17,15 +17,15 @@ wiggle = { workspace = true }
 tokio = { version = "1.8.0", features = [ "rt", "fs", "time", "io-util", "net", "io-std", "rt-multi-thread"] }
 cap-std = { workspace = true }
 anyhow = { workspace = true }
-io-lifetimes = { version = "0.7.0", default-features = false }
+io-lifetimes = { version = "1.0.0", default-features = false }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["fs"] }
 
 [target.'cfg(windows)'.dependencies]
-io-extras = "0.15.0"
+io-extras = "0.17.0"
 
 [dev-dependencies]
 tempfile = "3.1.0"
 tokio = { version = "1.8.0", features = [ "macros" ] }
-cap-tempfile = "0.26.0"
+cap-tempfile = "1.0.0"

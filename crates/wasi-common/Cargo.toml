@@ -24,14 +24,14 @@ wiggle = { workspace = true }
 wasmtime = { workspace = true }
 tracing = "0.1.19"
 cap-std = { workspace = true }
-cap-rand = "0.26.0"
+cap-rand = "1.0.0"
 bitflags = "1.2"
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["fs"] }
 
 [target.'cfg(windows)'.dependencies]
-io-extras = "0.15.0"
+io-extras = "0.17.0"
 
 [target.'cfg(windows)'.dependencies.windows-sys]
 workspace = true
