@@ -28,7 +28,12 @@ pub fn expand_heap_addr(
         func.dfg.display_inst(inst)
     );
 
-    match func.heaps[heap].style {
+    let ir::HeapData {
+        offset_guard_size,
+        style,
+        ..
+    } = &func.heaps[heap];
+    match *style {
         ir::HeapStyle::Dynamic { bound_gv } => dynamic_addr(
             isa,
             inst,
@@ -47,6 +52,7 @@ pub fn expand_heap_addr(
             u32::from(offset_immediate),
             u8::from(access_size),
             bound.into(),
+            (*offset_guard_size).into(),
             func,
             cfg,
         ),
@@ -144,6 +150,7 @@ fn static_addr(
     offset: u32,
     access_size: u8,
     bound: u64,
+    guard_size: u64,
     func: &mut ir::Function,
     cfg: &mut ControlFlowGraph,
 ) {
@@ -172,23 +179,45 @@ fn static_addr(
     }
 
     // After the trivial case is done we're now mostly interested in trapping if
-    // `index > bound - offset - access_size`. We know `bound - offset -
-    // access_size` here is non-negative from the above comparison.
     //
-    // If we can know `bound - offset - access_size >= 4GB` then with a 32-bit
-    // offset we're guaranteed:
+    //     index + offset + size > bound
     //
-    //      bound - offset - access_size >= 4GB > index
+    // We know `bound - offset - access_size` here is non-negative from the
+    // above comparison, so we can rewrite that as
     //
-    // or, in other words, `index < bound - offset - access_size`, meaning we
-    // can't trap for any value of `index`.
+    //     index > bound - offset - size
     //
-    // With that we have an optimization here where with 32-bit offsets and
-    // `bound - access_size >= 4GB` we can omit a bounds check.
-    let limit = bound - offset as u64 - access_size as u64;
+    // Additionally, we add our guard pages (if any) to the right-hand side,
+    // since we can rely on the virtual memory subsystem at runtime to catch
+    // out-of-bound accesses within the range `bound .. bound + guard_size`. So
+    // now we are dealing with
+    //
+    //     index > bound + guard_size - offset - size
+    //
+    // (Note that `bound + guard_size` cannot overflow for correctly-configured
+    // heaps, as otherwise the heap wouldn't fit in a 64-bit memory space.)
+    //
+    // If we know the right-hand side is greater than or equal to 4GiB then with
+    // a 32-bit index we're guaranteed:
+    //
+    //     index < 4GiB <= bound + guard_size - offset - access_size
+    //
+    // meaning that `index` is always either in bounds or within the guard page
+    // region, neither of which require emitting an explicit bounds check.
+    assert!(
+        bound.checked_add(guard_size).is_some(),
+        "heap's configuration doesn't fit in a 64-bit memory space"
+    );
     let mut spectre_oob_comparison = None;
     let index = cast_index_to_pointer_ty(index, index_ty, addr_ty, &mut pos);
-    if index_ty != ir::types::I32 || limit < 0xffff_ffff {
+    if index_ty == ir::types::I32
+        && bound + guard_size - offset_plus_size(offset, access_size) >= 0xffff_ffff
+    {
+        // Happy path! No bounds checks necessary!
+    } else {
+        // Since we have to emit explicit bounds checks anyways, ignore the
+        // guard pages and test against the precise limit.
+        let limit = bound - offset_plus_size(offset, access_size);
         // Here we want to test the condition `index > limit` and if that's true
         // then this is an out-of-bounds access and needs to trap.
         let oob = pos
