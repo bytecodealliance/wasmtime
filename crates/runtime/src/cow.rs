@@ -499,14 +499,8 @@ impl MemoryImageSlot {
         // extent of the prior initialization image in order to preserve
         // resident memory that might come before or after the image.
         if self.image.as_ref() != maybe_image {
-            if let Some(image) = &self.image {
-                unsafe {
-                    image
-                        .remap_as_zeros_at(self.base)
-                        .map_err(|e| InstantiationError::Resource(e.into()))?;
-                }
-                self.image = None;
-            }
+            self.remove_image()
+                .map_err(|e| InstantiationError::Resource(e.into()))?;
         }
 
         // The next order of business is to ensure that `self.accessible` is
@@ -562,6 +556,16 @@ impl MemoryImageSlot {
         // slot is required to be `clear_and_remain_ready`.
         self.dirty = true;
 
+        Ok(())
+    }
+
+    pub(crate) fn remove_image(&mut self) -> Result<()> {
+        if let Some(image) = &self.image {
+            unsafe {
+                image.remap_as_zeros_at(self.base)?;
+            }
+            self.image = None;
+        }
         Ok(())
     }
 

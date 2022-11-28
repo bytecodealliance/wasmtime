@@ -2,8 +2,7 @@ use crate::imports::Imports;
 use crate::instance::{Instance, InstanceHandle, RuntimeMemoryCreator};
 use crate::memory::{DefaultMemoryCreator, Memory};
 use crate::table::Table;
-use crate::ModuleRuntimeInfo;
-use crate::Store;
+use crate::{CompiledModuleId, ModuleRuntimeInfo, Store};
 use anyhow::Result;
 use std::alloc;
 use std::any::Any;
@@ -190,6 +189,13 @@ pub unsafe trait InstanceAllocator: Send + Sync {
     /// The provided stack is required to have been allocated with `allocate_fiber_stack`.
     #[cfg(feature = "async")]
     unsafe fn deallocate_fiber_stack(&self, stack: &wasmtime_fiber::FiberStack);
+
+    /// Purges all lingering resources related to `module` from within this
+    /// allocator.
+    ///
+    /// Primarily present for the pooling allocator to remove mappings of
+    /// this module from slots in linear memory.
+    fn purge_module(&self, module: CompiledModuleId);
 }
 
 fn get_table_init_start(
@@ -593,4 +599,6 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
     unsafe fn deallocate_fiber_stack(&self, _stack: &wasmtime_fiber::FiberStack) {
         // The on-demand allocator has no further bookkeeping for fiber stacks
     }
+
+    fn purge_module(&self, _: CompiledModuleId) {}
 }
