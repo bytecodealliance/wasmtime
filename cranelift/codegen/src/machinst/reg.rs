@@ -358,12 +358,22 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     /// Add a register use, at the start of the instruction (`Before`
     /// position).
     pub fn reg_use(&mut self, reg: Reg) {
-        self.add_operand(Operand::reg_use(reg.into()));
+        if let Some(rreg) = reg.to_real_reg() {
+            self.reg_fixed_nonallocatable(rreg.into());
+        } else {
+            debug_assert!(reg.is_virtual());
+            self.add_operand(Operand::reg_use(reg.into()));
+        }
     }
 
     /// Add a register use, at the end of the instruction (`After` position).
     pub fn reg_late_use(&mut self, reg: Reg) {
-        self.add_operand(Operand::reg_use_at_end(reg.into()));
+        if let Some(rreg) = reg.to_real_reg() {
+            self.reg_fixed_nonallocatable(rreg.into());
+        } else {
+            debug_assert!(reg.is_virtual());
+            self.add_operand(Operand::reg_use_at_end(reg.into()));
+        }
     }
 
     /// Add multiple register uses.
@@ -377,7 +387,12 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     /// position). Use only when this def will be written after all
     /// uses are read.
     pub fn reg_def(&mut self, reg: Writable<Reg>) {
-        self.add_operand(Operand::reg_def(reg.to_reg().into()));
+        if let Some(rreg) = reg.to_reg().to_real_reg() {
+            self.reg_fixed_nonallocatable(rreg.into());
+        } else {
+            debug_assert!(reg.to_reg().is_virtual());
+            self.add_operand(Operand::reg_def(reg.to_reg().into()));
+        }
     }
 
     /// Add multiple register defs.
@@ -392,20 +407,29 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     /// when the def may be written before all uses are read; the
     /// regalloc will ensure that it does not overwrite any uses.
     pub fn reg_early_def(&mut self, reg: Writable<Reg>) {
-        self.add_operand(Operand::reg_def_at_start(reg.to_reg().into()));
+        if let Some(rreg) = reg.to_reg().to_real_reg() {
+            self.reg_fixed_nonallocatable(rreg.into());
+        } else {
+            debug_assert!(reg.to_reg().is_virtual());
+            self.add_operand(Operand::reg_def_at_start(reg.to_reg().into()));
+        }
     }
 
     /// Add a register "fixed use", which ties a vreg to a particular
     /// RealReg at this point.
     pub fn reg_fixed_use(&mut self, reg: Reg, rreg: Reg) {
+        debug_assert!(reg.is_virtual());
         let rreg = rreg.to_real_reg().expect("fixed reg is not a RealReg");
+        debug_assert!(self.is_allocatable_preg(rreg.into()));
         self.add_operand(Operand::reg_fixed_use(reg.into(), rreg.into()));
     }
 
     /// Add a register "fixed def", which ties a vreg to a particular
     /// RealReg at this point.
     pub fn reg_fixed_def(&mut self, reg: Writable<Reg>, rreg: Reg) {
+        debug_assert!(reg.to_reg().is_virtual());
         let rreg = rreg.to_real_reg().expect("fixed reg is not a RealReg");
+        debug_assert!(self.is_allocatable_preg(rreg.into()));
         self.add_operand(Operand::reg_fixed_def(reg.to_reg().into(), rreg.into()));
     }
 
@@ -413,14 +437,17 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     /// allocation. The index of that earlier operand (relative to the
     /// current instruction's start of operands) must be known.
     pub fn reg_reuse_def(&mut self, reg: Writable<Reg>, idx: usize) {
-        if reg.to_reg().to_virtual_reg().is_some() {
-            self.add_operand(Operand::reg_reuse_def(reg.to_reg().into(), idx));
+        if let Some(rreg) = reg.to_reg().to_real_reg() {
+            // In some cases we see real register arguments to a reg_reuse_def
+            // constraint. We assume the creator knows what they're doing
+            // here, though we do also require that the real register be a
+            // fixed-nonallocatable register.
+            self.reg_fixed_nonallocatable(rreg.into());
         } else {
-            // Sometimes destination registers that reuse a source are
-            // given with RealReg args. In this case, we assume the
-            // creator of the instruction knows what they are doing
-            // and just emit a normal def to the pinned vreg.
-            self.add_operand(Operand::reg_def(reg.to_reg().into()));
+            // The operand we're reusing must not be fixed-nonallocatable, as
+            // that would imply that the register has been allocated to a
+            // virtual register.
+            self.add_operand(Operand::reg_reuse_def(reg.to_reg().into(), idx));
         }
     }
 
