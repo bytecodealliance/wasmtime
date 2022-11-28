@@ -35,6 +35,12 @@ pub fn compile<B: LowerBackend + TargetIsa>(
 
     // Lower the IR.
     let vcode = {
+        log::debug!(
+            "Number of CLIF instructions to lower: {}",
+            f.dfg.num_insts()
+        );
+        log::debug!("Number of CLIF blocks to lower: {}", f.dfg.num_blocks());
+
         let _tt = timing::vcode_lower();
         lower.lower(b)?
     };
