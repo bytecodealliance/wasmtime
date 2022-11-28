@@ -905,10 +905,10 @@
 
 ;; (No i8x16 multiply.)
 
-(rule 1 (lower (has_type (multi_lane 16 8) (imul x y)))
+(rule (lower (has_type (multi_lane 16 8) (imul x y)))
       (x64_pmullw x y))
 
-(rule 1 (lower (has_type (multi_lane 32 4) (imul x y)))
+(rule (lower (has_type (multi_lane 32 4) (imul x y)))
       (x64_pmulld x y))
 
 ;; With AVX-512 we can implement `i64x2` multiplication with a single
@@ -939,7 +939,7 @@
 ;; the lane of the destination. For this reason we don't need shifts to isolate
 ;; the lower 32-bits, however, we will need to use shifts to isolate the high
 ;; 32-bits when doing calculations, i.e., `Ah == A >> 32`.
-(rule 1 (lower (has_type (multi_lane 64 2)
+(rule (lower (has_type (multi_lane 64 2)
                        (imul a b)))
       (let ((a0 Xmm a)
             (b0 Xmm b)
@@ -961,7 +961,7 @@
         (x64_paddq al_bl aa_bb_shifted)))
 
 ;; Special case for `i16x8.extmul_high_i8x16_s`.
-(rule (lower (has_type (multi_lane 16 8)
+(rule 1 (lower (has_type (multi_lane 16 8)
                        (imul (swiden_high (and (value_type (multi_lane 8 16))
                                                x))
                              (swiden_high (and (value_type (multi_lane 8 16))
@@ -975,7 +975,7 @@
         (x64_pmullw x3 y3)))
 
 ;; Special case for `i32x4.extmul_high_i16x8_s`.
-(rule (lower (has_type (multi_lane 32 4)
+(rule 1 (lower (has_type (multi_lane 32 4)
                        (imul (swiden_high (and (value_type (multi_lane 16 8))
                                                x))
                              (swiden_high (and (value_type (multi_lane 16 8))
@@ -987,7 +987,7 @@
         (x64_punpckhwd lo hi)))
 
 ;; Special case for `i64x2.extmul_high_i32x4_s`.
-(rule (lower (has_type (multi_lane 64 2)
+(rule 1 (lower (has_type (multi_lane 64 2)
                        (imul (swiden_high (and (value_type (multi_lane 32 4))
                                                x))
                              (swiden_high (and (value_type (multi_lane 32 4))
@@ -1001,7 +1001,7 @@
         (x64_pmuldq x2 y2)))
 
 ;; Special case for `i16x8.extmul_low_i8x16_s`.
-(rule (lower (has_type (multi_lane 16 8)
+(rule 1 (lower (has_type (multi_lane 16 8)
                        (imul (swiden_low (and (value_type (multi_lane 8 16))
                                               x))
                              (swiden_low (and (value_type (multi_lane 8 16))
@@ -1011,7 +1011,7 @@
         (x64_pmullw x2 y2)))
 
 ;; Special case for `i32x4.extmul_low_i16x8_s`.
-(rule (lower (has_type (multi_lane 32 4)
+(rule 1 (lower (has_type (multi_lane 32 4)
                        (imul (swiden_low (and (value_type (multi_lane 16 8))
                                               x))
                              (swiden_low (and (value_type (multi_lane 16 8))
@@ -1023,7 +1023,7 @@
         (x64_punpcklwd lo hi)))
 
 ;; Special case for `i64x2.extmul_low_i32x4_s`.
-(rule (lower (has_type (multi_lane 64 2)
+(rule 1 (lower (has_type (multi_lane 64 2)
                        (imul (swiden_low (and (value_type (multi_lane 32 4))
                                               x))
                              (swiden_low (and (value_type (multi_lane 32 4))
@@ -1037,7 +1037,7 @@
         (x64_pmuldq x2 y2)))
 
 ;; Special case for `i16x8.extmul_high_i8x16_u`.
-(rule (lower (has_type (multi_lane 16 8)
+(rule 1 (lower (has_type (multi_lane 16 8)
                        (imul (uwiden_high (and (value_type (multi_lane 8 16))
                                                x))
                              (uwiden_high (and (value_type (multi_lane 8 16))
@@ -1051,7 +1051,7 @@
         (x64_pmullw x3 y3)))
 
 ;; Special case for `i32x4.extmul_high_i16x8_u`.
-(rule (lower (has_type (multi_lane 32 4)
+(rule 1 (lower (has_type (multi_lane 32 4)
                        (imul (uwiden_high (and (value_type (multi_lane 16 8))
                                                x))
                              (uwiden_high (and (value_type (multi_lane 16 8))
@@ -1063,7 +1063,7 @@
         (x64_punpckhwd lo hi)))
 
 ;; Special case for `i64x2.extmul_high_i32x4_u`.
-(rule (lower (has_type (multi_lane 64 2)
+(rule 1 (lower (has_type (multi_lane 64 2)
                        (imul (uwiden_high (and (value_type (multi_lane 32 4))
                                                x))
                              (uwiden_high (and (value_type (multi_lane 32 4))
@@ -1077,7 +1077,7 @@
         (x64_pmuludq x2 y2)))
 
 ;; Special case for `i16x8.extmul_low_i8x16_u`.
-(rule (lower (has_type (multi_lane 16 8)
+(rule 1 (lower (has_type (multi_lane 16 8)
                        (imul (uwiden_low (and (value_type (multi_lane 8 16))
                                               x))
                              (uwiden_low (and (value_type (multi_lane 8 16))
@@ -1087,7 +1087,7 @@
         (x64_pmullw x2 y2)))
 
 ;; Special case for `i32x4.extmul_low_i16x8_u`.
-(rule (lower (has_type (multi_lane 32 4)
+(rule 1 (lower (has_type (multi_lane 32 4)
                        (imul (uwiden_low (and (value_type (multi_lane 16 8))
                                               x))
                              (uwiden_low (and (value_type (multi_lane 16 8))
@@ -1099,7 +1099,7 @@
         (x64_punpcklwd lo hi)))
 
 ;; Special case for `i64x2.extmul_low_i32x4_u`.
-(rule (lower (has_type (multi_lane 64 2)
+(rule 1 (lower (has_type (multi_lane 64 2)
                        (imul (uwiden_low (and (value_type (multi_lane 32 4))
                                               x))
                              (uwiden_low (and (value_type (multi_lane 32 4))
