@@ -58,10 +58,10 @@ API](https://bytecodealliance.github.io/wasmtime-py/):
 from wasmtime import Store, Module, Instance
 
 store = Store()
-module = Module.from_file(store, 'gcd.wat')
-instance = Instance(module, [])
-gcd = instance.get_export('gcd')
-print("gcd(27, 6) =", gcd(27, 6))
+module = Module.from_file(store.engine, 'gcd.wat')
+instance = Instance(store, module, [])
+gcd = instance.exports(store)['gcd']
+print("gcd(27, 6) = %d" % gcd(store, 27, 6))
 ```
 
 ## More examples and contributing
