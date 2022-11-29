@@ -2366,6 +2366,43 @@
        (add_with_flags ty a b)
        (invalid_reg)))
 
+;;; Rules for `iadd_cout` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; For values smaller than a register, we do a normal `add` with both arguments
+;; sign extended. We then check if the output sign bit has flipped.
+(rule 0 (lower (has_type (fits_in_16 ty) (iadd_cout a b)))
+      (let ((extend ExtendOp (lower_extend_op ty $true))
+            
+            ;; Instead of emitting two `sxt{b,h}` we do one as an instruction and
+            ;; the other as an extend operation in the `add` instruction.
+            ;;
+            ;; sxtb    a_sext, a
+            ;; add     out, a_sext, b, sxtb
+            ;; cmp     out, out, sxtb
+            ;; cset    out_carry, ne
+            (a_sext Reg (put_in_reg_sext32 a))
+            (out Reg (add_extend_op ty a_sext b extend))
+            (out_carry Reg (with_flags_reg 
+                  (cmp_extend (OperandSize.Size32) out out extend)
+                  (cset (Cond.Ne)))))
+      (output_pair
+            (value_reg out)
+            (value_reg out_carry))))
+
+
+;; For register sized add's we just emit a adds+cset, without further masking.
+;;
+;; adds out, a, b
+;; cset carry, vs
+(rule 1 (lower (has_type (ty_32_or_64 ty) (iadd_cout a b)))
+      (let ((out ValueRegs
+              (with_flags
+                  (add_with_flags_paired ty a b)
+                  (cset_paired (Cond.Vs)))))
+      (output_pair
+            (value_regs_get out 0)
+            (value_regs_get out 1))))
+
 ;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (fits_in_64 ty) (uadd_overflow_trap a b tc)))
