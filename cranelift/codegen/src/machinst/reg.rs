@@ -4,7 +4,7 @@
 
 use alloc::{string::String, vec::Vec};
 use core::{fmt::Debug, hash::Hash};
-use regalloc2::{Allocation, MachineEnv, Operand, OperandConstraint, PReg, PRegSet, VReg};
+use regalloc2::{Allocation, Operand, OperandConstraint, PReg, PRegSet, VReg};
 
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
@@ -36,26 +36,6 @@ pub fn first_user_vreg_index() -> usize {
     // specific name in order to ensure other parts of the code don't
     // open-code and depend on the index-space scheme.
     PINNED_VREGS
-}
-
-/// Collect the registers from a regalloc2 MachineEnv into a PRegSet.
-/// TODO: remove this once it's upstreamed in regalloc2
-pub fn preg_set_from_machine_env(machine_env: &MachineEnv) -> PRegSet {
-    let mut regs = PRegSet::default();
-
-    for class in machine_env.preferred_regs_by_class.iter() {
-        for reg in class.iter() {
-            regs.add(*reg);
-        }
-    }
-
-    for class in machine_env.non_preferred_regs_by_class.iter() {
-        for reg in class.iter() {
-            regs.add(*reg);
-        }
-    }
-
-    regs
 }
 
 /// A register named in an instruction. This register can be either a
