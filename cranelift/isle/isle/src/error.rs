@@ -157,29 +157,24 @@ impl Errors {
         f: &mut std::fmt::Formatter,
         diagnostics: Vec<Diagnostic<usize>>,
     ) -> std::fmt::Result {
-        let line_starts: Vec<Vec<_>> = self
+        let line_ends: Vec<Vec<_>> = self
             .file_texts
             .iter()
-            .map(|text| {
-                let mut end = 0;
-                text.split_inclusive('\n')
-                    .map(|line| {
-                        let start = end;
-                        end += line.len();
-                        start
-                    })
-                    .collect()
-            })
+            .map(|text| text.match_indices('\n').map(|(i, _)| i + 1).collect())
             .collect();
         let pos = |file_id: usize, offset| {
-            let starts = &line_starts[file_id];
-            let line = starts.partition_point(|&start| start <= offset);
+            let ends = &line_ends[file_id];
+            let line0 = ends.partition_point(|&end| end <= offset);
             let text = &self.file_texts[file_id];
-            let line_range = starts[line - 1]..starts.get(line).copied().unwrap_or(text.len());
-            let col = offset - line_range.start + 1;
+            let start = line0.checked_sub(1).map_or(0, |prev| ends[prev]);
+            let end = ends.get(line0).copied().unwrap_or(text.len());
+            let col = offset - start + 1;
             format!(
                 "{}:{}:{}: {}",
-                self.filenames[file_id], line, col, &text[line_range]
+                self.filenames[file_id],
+                line0 + 1,
+                col,
+                &text[start..end]
             )
         };
         for diagnostic in diagnostics {
@@ -190,6 +185,7 @@ impl Errors {
             for note in diagnostic.notes {
                 writeln!(f, "{}", note)?;
             }
+            writeln!(f)?;
         }
         Ok(())
     }
@@ -219,10 +215,9 @@ impl Span {
         Span {
             from: pos,
             // This is a slight hack (we don't actually look at the
-            // file to find line/col of next char); but the span
-            // aspect, vs. just the starting point, is only relevant
-            // for miette and when miette is enabled we use only the
-            // `offset` here to provide its SourceSpans.
+            // file to find line/col of next char); but the `to`
+            // position only matters for pretty-printed errors and only
+            // the offset is used in that case.
             to: Pos {
                 file: pos.file,
                 offset: pos.offset + 1,
