@@ -7,7 +7,7 @@ test interpret
 ;; target aarch64
 ;; target riscv64
 
-set enable_heap_access_spectre_mitigation=true
+set enable_heap_access_spectre_mitigation=false
 
 function %do_store(i64 vmctx, i32, i32) {
     gv0 = vmctx
