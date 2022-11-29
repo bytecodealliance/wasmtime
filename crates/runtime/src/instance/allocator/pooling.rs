@@ -1128,7 +1128,8 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         }
 
         // On windows, we don't use a stack pool as we use the native fiber implementation
-        wasmtime_fiber::FiberStack::new(self.stack_size)
+        let stack = wasmtime_fiber::FiberStack::new(self.stack_size)?;
+        Ok(stack)
     }
 
     #[cfg(all(feature = "async", windows))]
