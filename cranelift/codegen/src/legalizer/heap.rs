@@ -197,10 +197,10 @@ fn static_addr(
     // (Note that `bound + guard_size` cannot overflow for correctly-configured
     // heaps, as otherwise the heap wouldn't fit in a 64-bit memory space.)
     //
-    // If we know the right-hand side is greater than or equal to 4GiB then with
-    // a 32-bit index we're guaranteed:
+    // If we know the right-hand side is greater than or equal to 4GiB - 1, aka
+    // 0xffff_ffff, then with a 32-bit index we're guaranteed:
     //
-    //     index < 4GiB <= bound + guard_size - offset - access_size
+    //     index <= 0xffff_ffff <= bound + guard_size - offset - access_size
     //
     // meaning that `index` is always either in bounds or within the guard page
     // region, neither of which require emitting an explicit bounds check.
