@@ -29,6 +29,8 @@ fn parse_module(s: &OsStr) -> anyhow::Result<PathBuf> {
         Some("help") | Some("config") | Some("run") | Some("wast") | Some("compile") => {
             bail!("module name cannot be the same as a subcommand")
         }
+        #[cfg(unix)]
+        Some("-") => Ok(PathBuf::from("/dev/stdin")),
         _ => Ok(s.into()),
     }
 }
