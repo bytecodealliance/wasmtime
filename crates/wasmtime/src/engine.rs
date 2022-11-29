@@ -88,7 +88,6 @@ impl Engine {
         let compiler = config.build_compiler()?;
 
         let allocator = config.build_allocator()?;
-        allocator.adjust_tunables(&mut config.tunables);
         let profiler = config.build_profiler()?;
 
         Ok(Engine {
