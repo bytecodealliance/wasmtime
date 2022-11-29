@@ -212,9 +212,9 @@ impl Rule {
         // For the purpose of overlap checking, equality constraints act like other constraints, in
         // that they can cause rules to not overlap. However, because we don't have a concrete
         // pattern to compare, the analysis to prove that is complicated. For now, we approximate
-        // the result. If `small` has any of these nonlinear constraints, conservatively report that
-        // it is not a subset of `big`.
-        let mut subset = small.equals.is_empty();
+        // the result. If either rule has nonlinear constraints, conservatively report that neither
+        // is a subset of the other.
+        let mut subset = small.equals.is_empty() && big.equals.is_empty();
 
         for (binding, a) in small.constraints.iter() {
             if let Some(b) = big.constraints.get(binding) {
@@ -438,6 +438,32 @@ impl RuleSetBuilder {
             self.unreachable.push(e);
         }
     }
+
+    fn add_pattern_constraints(&mut self, expr: BindingId) {
+        match &self.rules.bindings[expr.index()] {
+            Binding::ConstInt { .. } | Binding::ConstPrim { .. } | Binding::Argument { .. } => {}
+            Binding::Constructor {
+                parameters: sources,
+                ..
+            }
+            | Binding::MakeVariant {
+                fields: sources, ..
+            } => {
+                for source in sources.to_vec() {
+                    self.add_pattern_constraints(source);
+                }
+            }
+            &Binding::Extractor {
+                parameter: source, ..
+            }
+            | &Binding::MatchVariant { source, .. }
+            | &Binding::MatchTuple { source, .. } => self.add_pattern_constraints(source),
+            &Binding::MatchSome { source } => {
+                self.set_constraint(source, Constraint::Some);
+                self.add_pattern_constraints(source);
+            }
+        }
+    }
 }
 
 impl sema::PatternVisitor for RuleSetBuilder {
@@ -540,13 +566,23 @@ impl sema::ExprVisitor for RuleSetBuilder {
         inputs: Vec<(BindingId, sema::TypeId)>,
         _ty: sema::TypeId,
         term: sema::TermId,
-        _infallible: bool,
+        infallible: bool,
         _multi: bool,
     ) -> BindingId {
-        self.dedup_binding(Binding::Constructor {
+        let source = self.dedup_binding(Binding::Constructor {
             term,
             parameters: inputs.into_iter().map(|(expr, _)| expr).collect(),
-        })
+        });
+
+        // If the constructor is fallible, build a pattern for `Some`, but not a constraint. If the
+        // constructor is on the right-hand side of a rule then its failure is not considered when
+        // deciding which rule to evaluate. Corresponding constraints are only added if this
+        // expression is subsequently used as a pattern; see `expr_as_pattern`.
+        if infallible {
+            source
+        } else {
+            self.dedup_binding(Binding::MatchSome { source })
+        }
     }
 }
 
@@ -572,6 +608,7 @@ impl sema::RuleVisitor for RuleSetBuilder {
     }
 
     fn expr_as_pattern(&mut self, expr: BindingId) -> BindingId {
+        self.add_pattern_constraints(expr);
         expr
     }
 
