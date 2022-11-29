@@ -15,7 +15,7 @@ use std::sync::Arc;
 use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::{
     DefinedFuncIndex, DefinedMemoryIndex, ModuleEnvironment, ModuleTranslation, ModuleTypes,
-    ObjectKind, PrimaryMap, SignatureIndex, WasmFunctionInfo,
+    ObjectKind, PrimaryMap, WasmFunctionInfo,
 };
 use wasmtime_jit::{CodeMemory, CompiledModule, CompiledModuleInfo};
 use wasmtime_runtime::{
@@ -1099,10 +1099,6 @@ impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
         self.module.module()
     }
 
-    fn signature(&self, index: SignatureIndex) -> VMSharedSignatureIndex {
-        self.code.signatures().as_module_map()[index]
-    }
-
     fn function(&self, index: DefinedFuncIndex) -> *mut VMFunctionBody {
         self.module
             .finished_function(index)
@@ -1161,7 +1157,7 @@ impl wasmtime_runtime::ModuleInfo for ModuleInner {
 /// default-callee instance).
 pub(crate) struct BareModuleInfo {
     module: Arc<wasmtime_environ::Module>,
-    one_signature: Option<(SignatureIndex, VMSharedSignatureIndex)>,
+    one_signature: Option<VMSharedSignatureIndex>,
 }
 
 impl BareModuleInfo {
@@ -1174,7 +1170,7 @@ impl BareModuleInfo {
 
     pub(crate) fn maybe_imported_func(
         module: Arc<wasmtime_environ::Module>,
-        one_signature: Option<(SignatureIndex, VMSharedSignatureIndex)>,
+        one_signature: Option<VMSharedSignatureIndex>,
     ) -> Self {
         BareModuleInfo {
             module,
@@ -1190,14 +1186,6 @@ impl BareModuleInfo {
 impl wasmtime_runtime::ModuleRuntimeInfo for BareModuleInfo {
     fn module(&self) -> &Arc<wasmtime_environ::Module> {
         &self.module
-    }
-
-    fn signature(&self, index: SignatureIndex) -> VMSharedSignatureIndex {
-        let (signature_id, signature) = self
-            .one_signature
-            .expect("Signature for one function should be present if queried");
-        assert_eq!(index, signature_id);
-        signature
     }
 
     fn function(&self, _index: DefinedFuncIndex) -> *mut VMFunctionBody {
@@ -1218,7 +1206,7 @@ impl wasmtime_runtime::ModuleRuntimeInfo for BareModuleInfo {
 
     fn signature_ids(&self) -> &[VMSharedSignatureIndex] {
         match &self.one_signature {
-            Some((_, id)) => std::slice::from_ref(id),
+            Some(id) => std::slice::from_ref(id),
             None => &[],
         }
     }

@@ -25,7 +25,6 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use wasmtime_environ::DefinedFuncIndex;
 use wasmtime_environ::DefinedMemoryIndex;
-use wasmtime_environ::SignatureIndex;
 
 #[macro_use]
 mod trampolines;
@@ -170,9 +169,6 @@ pub unsafe trait Store {
 pub trait ModuleRuntimeInfo: Send + Sync + 'static {
     /// The underlying Module.
     fn module(&self) -> &Arc<wasmtime_environ::Module>;
-
-    /// The signatures.
-    fn signature(&self, index: SignatureIndex) -> VMSharedSignatureIndex;
 
     /// Returns the address, in memory, that the function `index` resides at.
     fn function(&self, index: DefinedFuncIndex) -> *mut VMFunctionBody;

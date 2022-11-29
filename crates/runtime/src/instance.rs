@@ -13,7 +13,7 @@ use crate::vmcontext::{
 };
 use crate::{
     ExportFunction, ExportGlobal, ExportMemory, ExportTable, Imports, ModuleRuntimeInfo, Store,
-    VMFunctionBody,
+    VMFunctionBody, VMSharedSignatureIndex,
 };
 use anyhow::Error;
 use memoffset::offset_of;
@@ -499,7 +499,11 @@ impl Instance {
         sig: SignatureIndex,
         into: *mut VMCallerCheckedAnyfunc,
     ) {
-        let type_index = self.runtime_info.signature(sig);
+        let type_index = unsafe {
+            let base: *const VMSharedSignatureIndex =
+                *self.vmctx_plus_offset(self.offsets.vmctx_signature_ids_array());
+            *base.add(sig.index())
+        };
 
         let (func_ptr, vmctx) = if let Some(def_index) = self.module().defined_func_index(index) {
             (
