@@ -8,14 +8,10 @@ block0(v0: i32):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   addl    %eax, $127, %eax
 ;   jnb ; ud2 user0 ;
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f1(i32) -> i32 {
@@ -25,14 +21,10 @@ block0(v0: i32):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   addl    %eax, $127, %eax
 ;   jnb ; ud2 user0 ;
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f2(i32, i32) -> i32 {
@@ -41,14 +33,10 @@ block0(v0: i32, v1: i32):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   addl    %eax, %esi, %eax
 ;   jnb ; ud2 user0 ;
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f3(i64) -> i64 {
@@ -58,14 +46,10 @@ block0(v0: i64):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   addq    %rax, $127, %rax
 ;   jnb ; ud2 user0 ;
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f3(i64) -> i64 {
@@ -75,14 +59,10 @@ block0(v0: i64):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   addq    %rax, $127, %rax
 ;   jnb ; ud2 user0 ;
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f4(i64, i64) -> i64 {
@@ -91,13 +71,9 @@ block0(v0: i64, v1: i64):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   addq    %rax, %rsi, %rax
 ;   jnb ; ud2 user0 ;
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 

@@ -8,11 +8,7 @@ block0(v0: i32x4):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   vcvtudq2ps %xmm0, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 

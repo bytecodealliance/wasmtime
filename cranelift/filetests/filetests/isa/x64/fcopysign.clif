@@ -7,8 +7,6 @@ block0(v0: f32, v1: f32):
   return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movl    $-2147483648, %ecx
 ;   movd    %ecx, %xmm7
@@ -17,8 +15,6 @@ block0(v0: f32, v1: f32):
 ;   andnps  %xmm0, %xmm10, %xmm0
 ;   andps   %xmm7, %xmm1, %xmm7
 ;   orps    %xmm0, %xmm7, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f1(f64, f64) -> f64 {
@@ -27,8 +23,6 @@ block0(v0: f64, v1: f64):
   return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movabsq $-9223372036854775808, %rcx
 ;   movq    %rcx, %xmm7
@@ -37,7 +31,5 @@ block0(v0: f64, v1: f64):
 ;   andnpd  %xmm0, %xmm10, %xmm0
 ;   andpd   %xmm7, %xmm1, %xmm7
 ;   orpd    %xmm0, %xmm7, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 

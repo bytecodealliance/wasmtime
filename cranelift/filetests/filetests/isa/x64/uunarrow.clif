@@ -9,8 +9,6 @@ block0(v0: f64x2):
   return v3
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   xorpd   %xmm2, %xmm2, %xmm2
 ;   movdqa  %xmm0, %xmm6
@@ -21,7 +19,5 @@ block0(v0: f64x2):
 ;   movupd  const(1), %xmm12
 ;   addpd   %xmm0, %xmm12, %xmm0
 ;   shufps  $136, %xmm0, %xmm2, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 

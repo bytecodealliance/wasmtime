@@ -12,12 +12,8 @@ function u0:1302(i64) -> i64 system_v {
     return v0
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   atomically { 64_bits_at_[%r9]) Add= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq    %rdi, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 

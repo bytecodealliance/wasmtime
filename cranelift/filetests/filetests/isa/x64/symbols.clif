@@ -25,11 +25,7 @@ block0:
     return v0
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   load_ext_name %global0+0, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 

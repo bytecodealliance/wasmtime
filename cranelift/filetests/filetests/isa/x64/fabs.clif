@@ -7,14 +7,10 @@ block0(v0: f32):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movl    $2147483647, %eax
 ;   movd    %eax, %xmm4
 ;   andps   %xmm0, %xmm4, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f2(f64) -> f64 {
@@ -23,14 +19,10 @@ block0(v0: f64):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movabsq $9223372036854775807, %rax
 ;   movq    %rax, %xmm4
 ;   andpd   %xmm0, %xmm4, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f3(f32x4) -> f32x4 {
@@ -39,14 +31,10 @@ block0(v0: f32x4):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   pcmpeqd %xmm3, %xmm3, %xmm3
 ;   psrld   %xmm3, $1, %xmm3
 ;   andps   %xmm0, %xmm3, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f4(f64x2) -> f64x2 {
@@ -55,13 +43,9 @@ block0(v0: f64x2):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   pcmpeqd %xmm3, %xmm3, %xmm3
 ;   psrlq   %xmm3, $1, %xmm3
 ;   andpd   %xmm0, %xmm3, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 

@@ -16,8 +16,6 @@ block0(v0: i32, v1: r64, v2: i64):
     return
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movl    8(%rdx), %r11d
 ;   cmpl    %r11d, %edi
@@ -30,8 +28,6 @@ block0(v0: i32, v1: r64, v2: i64):
 ;   cmpl    %r11d, %edi
 ;   cmovnbq %rax, %rdx, %rdx
 ;   movq    %rsi, 0(%rdx)
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 ; block2:
 ;   ud2 table_oob

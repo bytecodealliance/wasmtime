@@ -9,15 +9,11 @@ block0(v0: i8x16):
   return v3
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movdqa  %xmm0, %xmm4
 ;   movdqu  const(0), %xmm0
 ;   movdqa  %xmm4, %xmm5
 ;   pmaddubsw %xmm0, %xmm5, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %fn2(i16x8) -> i32x4 {
@@ -28,13 +24,9 @@ block0(v0: i16x8):
   return v3
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movdqu  const(0), %xmm2
 ;   pmaddwd %xmm0, %xmm2, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %fn3(i8x16) -> i16x8 {
@@ -45,13 +37,9 @@ block0(v0: i8x16):
   return v3
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movdqu  const(0), %xmm2
 ;   pmaddubsw %xmm0, %xmm2, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %fn4(i16x8) -> i32x4 {
@@ -62,8 +50,6 @@ block0(v0: i16x8):
   return v3
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movdqu  const(0), %xmm2
 ;   pxor    %xmm0, %xmm2, %xmm0
@@ -71,7 +57,5 @@ block0(v0: i16x8):
 ;   pmaddwd %xmm0, %xmm6, %xmm0
 ;   movdqu  const(2), %xmm10
 ;   paddd   %xmm0, %xmm10, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 

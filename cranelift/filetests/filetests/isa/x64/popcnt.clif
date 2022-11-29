@@ -7,8 +7,6 @@ block0(v0: i64):
     return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rcx
 ;   shrq    $1, %rdi, %rdi
@@ -30,8 +28,6 @@ block0(v0: i64):
 ;   movabsq $72340172838076673, %rcx
 ;   imulq   %rax, %rcx, %rax
 ;   shrq    $56, %rax, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %popcnt64load(i64) -> i64 {
@@ -41,8 +37,6 @@ block0(v0: i64):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    0(%rdi), %rdx
 ;   movq    %rdx, %rcx
@@ -64,8 +58,6 @@ block0(v0: i64):
 ;   movabsq $72340172838076673, %rdx
 ;   imulq   %rax, %rdx, %rax
 ;   shrq    $56, %rax, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %popcnt32(i32) -> i32 {
@@ -74,8 +66,6 @@ block0(v0: i32):
     return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   shrl    $1, %edi, %edi
@@ -95,8 +85,6 @@ block0(v0: i32):
 ;   andl    %eax, $252645135, %eax
 ;   imull   %eax, $16843009, %eax
 ;   shrl    $24, %eax, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %popcnt32load(i64) -> i32 {
@@ -106,8 +94,6 @@ block0(v0: i64):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movl    0(%rdi), %edx
 ;   movq    %rdx, %rcx
@@ -127,7 +113,5 @@ block0(v0: i64):
 ;   andl    %eax, $252645135, %eax
 ;   imull   %eax, $16843009, %eax
 ;   shrl    $24, %eax, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 

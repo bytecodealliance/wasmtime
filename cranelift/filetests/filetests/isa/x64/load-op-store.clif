@@ -9,12 +9,8 @@ block0(v0: i64, v1: i32):
   return
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   addl    %esi, 32(%rdi)
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f1(i64, i32) {
@@ -25,12 +21,8 @@ block0(v0: i64, v1: i32):
   return
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   addl    %esi, 32(%rdi)
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f2(i64, i32) {
@@ -41,12 +33,8 @@ block0(v0: i64, v1: i32):
   return
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   subl    %esi, 32(%rdi)
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f3(i64, i32) {
@@ -57,12 +45,8 @@ block0(v0: i64, v1: i32):
   return
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   andl    %esi, 32(%rdi)
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f4(i64, i32) {
@@ -73,12 +57,8 @@ block0(v0: i64, v1: i32):
   return
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   andl    %esi, 32(%rdi)
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f5(i64, i32) {
@@ -89,12 +69,8 @@ block0(v0: i64, v1: i32):
   return
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   orl     %esi, 32(%rdi)
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f6(i64, i32) {
@@ -105,12 +81,8 @@ block0(v0: i64, v1: i32):
   return
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   orl     %esi, 32(%rdi)
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f7(i64, i32) {
@@ -121,12 +93,8 @@ block0(v0: i64, v1: i32):
   return
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   xorl    %esi, 32(%rdi)
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f8(i64, i32) {
@@ -137,11 +105,7 @@ block0(v0: i64, v1: i32):
   return
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   xorl    %esi, 32(%rdi)
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 

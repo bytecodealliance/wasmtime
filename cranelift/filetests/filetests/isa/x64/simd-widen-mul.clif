@@ -12,8 +12,6 @@ block0(v0: i8x16, v1: i8x16):
     return v4
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movdqa  %xmm0, %xmm3
 ;   palignr $8, %xmm3, %xmm0, %xmm3
@@ -22,8 +20,6 @@ block0(v0: i8x16, v1: i8x16):
 ;   palignr $8, %xmm7, %xmm1, %xmm7
 ;   pmovsxbw %xmm7, %xmm9
 ;   pmullw  %xmm0, %xmm9, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %imul_swiden_hi_i16x8(i16x8, i16x8) -> i32x4 {
@@ -34,8 +30,6 @@ block0(v0: i16x8, v1: i16x8):
     return v4
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movdqa  %xmm0, %xmm5
 ;   pmullw  %xmm5, %xmm1, %xmm5
@@ -44,8 +38,6 @@ block0(v0: i16x8, v1: i16x8):
 ;   pmulhw  %xmm5, %xmm1, %xmm5
 ;   movdqa  %xmm6, %xmm0
 ;   punpckhwd %xmm0, %xmm5, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %imul_swiden_hi_i32x4(i32x4, i32x4) -> i64x2 {
@@ -56,14 +48,10 @@ block0(v0: i32x4, v1: i32x4):
     return v4
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   pshufd  $250, %xmm0, %xmm0
 ;   pshufd  $250, %xmm1, %xmm5
 ;   pmuldq  %xmm0, %xmm5, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %imul_swiden_low_i8x16(i8x16, i8x16) -> i16x8 {
@@ -74,14 +62,10 @@ block0(v0: i8x16, v1: i8x16):
     return v4
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   pmovsxbw %xmm0, %xmm0
 ;   pmovsxbw %xmm1, %xmm5
 ;   pmullw  %xmm0, %xmm5, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %imul_swiden_low_i16x8(i16x8, i16x8) -> i32x4 {
@@ -92,8 +76,6 @@ block0(v0: i16x8, v1: i16x8):
     return v4
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movdqa  %xmm0, %xmm5
 ;   pmullw  %xmm5, %xmm1, %xmm5
@@ -102,8 +84,6 @@ block0(v0: i16x8, v1: i16x8):
 ;   pmulhw  %xmm5, %xmm1, %xmm5
 ;   movdqa  %xmm6, %xmm0
 ;   punpcklwd %xmm0, %xmm5, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %imul_swiden_low_i32x4(i32x4, i32x4) -> i64x2 {
@@ -114,14 +94,10 @@ block0(v0: i32x4, v1: i32x4):
     return v4
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   pshufd  $80, %xmm0, %xmm0
 ;   pshufd  $80, %xmm1, %xmm5
 ;   pmuldq  %xmm0, %xmm5, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %imul_uwiden_hi_i8x16(i8x16, i8x16) -> i16x8 {
@@ -132,8 +108,6 @@ block0(v0: i8x16, v1: i8x16):
     return v4
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movdqa  %xmm0, %xmm3
 ;   palignr $8, %xmm3, %xmm0, %xmm3
@@ -142,8 +116,6 @@ block0(v0: i8x16, v1: i8x16):
 ;   palignr $8, %xmm7, %xmm1, %xmm7
 ;   pmovzxbw %xmm7, %xmm9
 ;   pmullw  %xmm0, %xmm9, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %imul_uwiden_hi_i16x8(i16x8, i16x8) -> i32x4 {
@@ -154,8 +126,6 @@ block0(v0: i16x8, v1: i16x8):
     return v4
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movdqa  %xmm0, %xmm5
 ;   pmullw  %xmm5, %xmm1, %xmm5
@@ -164,8 +134,6 @@ block0(v0: i16x8, v1: i16x8):
 ;   pmulhuw %xmm5, %xmm1, %xmm5
 ;   movdqa  %xmm6, %xmm0
 ;   punpckhwd %xmm0, %xmm5, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %imul_uwiden_hi_i32x4(i32x4, i32x4) -> i64x2 {
@@ -176,14 +144,10 @@ block0(v0: i32x4, v1: i32x4):
     return v4
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   pshufd  $250, %xmm0, %xmm0
 ;   pshufd  $250, %xmm1, %xmm5
 ;   pmuludq %xmm0, %xmm5, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %imul_uwiden_low_i8x16(i8x16, i8x16) -> i16x8 {
@@ -194,14 +158,10 @@ block0(v0: i8x16, v1: i8x16):
     return v4
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   pmovzxbw %xmm0, %xmm0
 ;   pmovzxbw %xmm1, %xmm5
 ;   pmullw  %xmm0, %xmm5, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %imul_uwiden_low_i16x8(i16x8, i16x8) -> i32x4 {
@@ -212,8 +172,6 @@ block0(v0: i16x8, v1: i16x8):
     return v4
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movdqa  %xmm0, %xmm5
 ;   pmullw  %xmm5, %xmm1, %xmm5
@@ -222,8 +180,6 @@ block0(v0: i16x8, v1: i16x8):
 ;   pmulhuw %xmm5, %xmm1, %xmm5
 ;   movdqa  %xmm6, %xmm0
 ;   punpcklwd %xmm0, %xmm5, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %imul_uwiden_low_i32x4(i32x4, i32x4) -> i64x2 {
@@ -234,13 +190,9 @@ block0(v0: i32x4, v1: i32x4):
     return v4
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   pshufd  $80, %xmm0, %xmm0
 ;   pshufd  $80, %xmm1, %xmm5
 ;   pmuludq %xmm0, %xmm5, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 

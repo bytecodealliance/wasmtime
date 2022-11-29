@@ -16,20 +16,14 @@ block2:
   return v4
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cmpl    %esi, %edi
 ;   jz      label1; j label2
 ; block1:
 ;   movl    $1, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 ; block2:
 ;   movl    $2, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f1(i32, i32) -> i32 {
@@ -47,20 +41,14 @@ block2:
   return v4
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cmpl    %esi, %edi
 ;   jnz     label1; j label2
 ; block1:
 ;   movl    $1, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 ; block2:
 ;   movl    $2, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f2(i32, i32) -> i32 {
@@ -78,20 +66,14 @@ block2:
   return v4
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cmpl    %esi, %edi
 ;   jz      label1; j label2
 ; block1:
 ;   movl    $1, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 ; block2:
 ;   movl    $2, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f3(f32, f32) -> i32 {
@@ -109,21 +91,15 @@ block2:
   return v4
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   ucomiss %xmm1, %xmm0
 ;   jp      label2
 ;   jnz     label2; j label1
 ; block1:
 ;   movl    $1, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 ; block2:
 ;   movl    $2, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f4(f32, f32) -> i8 {
@@ -139,21 +115,15 @@ block2:
   return v4
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   ucomiss %xmm1, %xmm0
 ;   jp      label1
 ;   jnz     label1; j label2
 ; block1:
 ;   movl    $1, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 ; block2:
 ;   xorl    %eax, %eax, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f4(f32, f32) -> i8 {
@@ -169,23 +139,16 @@ block2:
   return v4
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   ucomiss %xmm1, %xmm0
 ;   jp      label2
 ;   jnz     label2; j label1
 ; block1:
 ;   movl    $1, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 ; block2:
 ;   xorl    %eax, %eax, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
-
 
 function %f5(i32) -> i8 {
   jt0 = jump_table [block1, block2]
@@ -202,8 +165,6 @@ block2:
   return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cmpl    $2, %edi
 ;   br_table %rdi, %r8, %r9
@@ -213,13 +174,9 @@ block2:
 ;   jmp     label3
 ; block3:
 ;   movl    $1, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 ; block4:
 ;   xorl    %eax, %eax, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f6(i64) -> i8 {
@@ -236,20 +193,14 @@ block2:
   return v4
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cmpq    $0, %rdi
 ;   jl      label1; j label2
 ; block1:
 ;   movl    $1, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 ; block2:
 ;   xorl    %eax, %eax, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f7(i32) -> i8 {
@@ -266,20 +217,14 @@ block2:
   return v4
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cmpl    $0, %edi
 ;   jl      label1; j label2
 ; block1:
 ;   movl    $1, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 ; block2:
 ;   xorl    %eax, %eax, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %fflags(f32) {
@@ -304,8 +249,6 @@ block202:
     trap heap_oob
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movl    $1112539136, %r8d
 ;   movd    %r8d, %xmm5
@@ -324,7 +267,5 @@ block202:
 ; block4:
 ;   jmp     label5
 ; block5:
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 

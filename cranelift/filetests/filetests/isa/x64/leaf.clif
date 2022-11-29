@@ -10,11 +10,7 @@ block0(v0: i64):
     return v0
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 

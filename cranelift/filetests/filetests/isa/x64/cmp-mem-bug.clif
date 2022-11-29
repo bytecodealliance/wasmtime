@@ -10,8 +10,6 @@ block0(v0: i64, v1: i64):
     return v4, v5
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    0(%rsi), %r9
 ;   cmpq    %r9, %rdi
@@ -20,8 +18,6 @@ block0(v0: i64, v1: i64):
 ;   cmpq    %r9, %rdi
 ;   movq    %rsi, %rdx
 ;   cmovzq  %rdi, %rdx, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f1(f64, i64) -> i64, f64 {
@@ -33,8 +29,6 @@ block0(v0: f64, v1: i64):
     return v4, v5
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movsd   0(%rdi), %xmm9
 ;   ucomisd %xmm9, %xmm0
@@ -46,7 +40,5 @@ block0(v0: f64, v1: i64):
 ;   movdqa  %xmm0, %xmm2
 ;   mov z, sd; j%xmm2 $next; mov%xmm0 %xmm0, %xmm0; $next: 
 ;   mov np, sd; j%xmm2 $next; mov%xmm0 %xmm0, %xmm0; $next: 
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 

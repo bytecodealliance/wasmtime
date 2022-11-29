@@ -15,8 +15,6 @@ block0(v0: i64, v1: i64):
   return
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %r9
 ;   addq    %r9, const(0), %r9
@@ -29,7 +27,5 @@ block0(v0: i64, v1: i64):
 ;   movq    %r11, 0(%rsi)
 ;   orq     %rdi, const(0), %rdi
 ;   movq    %rdi, 0(%rsi)
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 

@@ -14,15 +14,11 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   xorl    %edx, %edx, %edx
 ;   srem_seq %al, %dl, %sil, %al, %dl, tmp=(none)
 ;   shrq    $8, %rax, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %i16(i16, i16) -> i16 {
@@ -32,15 +28,11 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   xorl    %edx, %edx, %edx
 ;   srem_seq %ax, %dx, %si, %ax, %dx, tmp=(none)
 ;   movq    %rdx, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %i32(i32, i32) -> i32 {
@@ -50,15 +42,11 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   xorl    %edx, %edx, %edx
 ;   srem_seq %eax, %edx, %esi, %eax, %edx, tmp=(none)
 ;   movq    %rdx, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %i64(i64, i64) -> i64 {
@@ -68,14 +56,10 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   xorl    %edx, %edx, %edx
 ;   srem_seq %rax, %rdx, %rsi, %rax, %rdx, tmp=(none)
 ;   movq    %rdx, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 

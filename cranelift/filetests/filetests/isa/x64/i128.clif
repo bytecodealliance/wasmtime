@@ -8,15 +8,11 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   addq    %rax, %rdx, %rax
 ;   movq    %rsi, %rdx
 ;   adcq    %rdx, %rcx, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f1(i128, i128) -> i128 {
@@ -25,15 +21,11 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   subq    %rax, %rdx, %rax
 ;   movq    %rsi, %rdx
 ;   sbbq    %rdx, %rcx, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f2(i128, i128) -> i128 {
@@ -42,15 +34,11 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   andq    %rax, %rdx, %rax
 ;   movq    %rsi, %rdx
 ;   andq    %rdx, %rcx, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f3(i128, i128) -> i128 {
@@ -59,15 +47,11 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   orq     %rax, %rdx, %rax
 ;   movq    %rsi, %rdx
 ;   orq     %rdx, %rcx, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f4(i128, i128) -> i128 {
@@ -76,15 +60,11 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   xorq    %rax, %rdx, %rax
 ;   movq    %rsi, %rdx
 ;   xorq    %rdx, %rcx, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f5(i128) -> i128 {
@@ -93,15 +73,11 @@ block0(v0: i128):
     return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   notq    %rax, %rax
 ;   movq    %rsi, %rdx
 ;   notq    %rdx, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f6(i128, i128) -> i128 {
@@ -110,8 +86,6 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdx, %rax
 ;   movq    %rdi, %rdx
@@ -126,8 +100,6 @@ block0(v0: i128, v1: i128):
 ;   movq    %rdx, %rcx
 ;   movq    %r9, %rdx
 ;   addq    %rdx, %rcx, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f7(i64, i64) -> i128 {
@@ -136,13 +108,9 @@ block0(v0: i64, v1: i64):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rdx
 ;   movq    %rdi, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f8(i128) -> i64, i64 {
@@ -151,13 +119,9 @@ block0(v0: i128):
     return v1, v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rdx
 ;   movq    %rdi, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f9(i128, i128) -> i8 {
@@ -314,8 +278,6 @@ block2:
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cmpq    $0, %rdi
 ;   setz    %r9b
@@ -325,13 +287,9 @@ block2:
 ;   jnz     label1; j label2
 ; block1:
 ;   movl    $1, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 ; block2:
 ;   movl    $2, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f11(i128) -> i32 {
@@ -348,8 +306,6 @@ block2:
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cmpq    $0, %rdi
 ;   setz    %r9b
@@ -359,13 +315,9 @@ block2:
 ;   jz      label1; j label2
 ; block1:
 ;   movl    $1, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 ; block2:
 ;   movl    $2, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f12(i64) -> i128 {
@@ -374,13 +326,9 @@ block0(v0: i64):
     return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   xorq    %rdx, %rdx, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f13(i64) -> i128 {
@@ -389,14 +337,10 @@ block0(v0: i64):
     return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rdx
 ;   sarq    $63, %rdx, %rdx
 ;   movq    %rdi, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f14(i8) -> i128 {
@@ -405,14 +349,10 @@ block0(v0: i8):
     return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movsbq  %dil, %rax
 ;   movq    %rax, %rdx
 ;   sarq    $63, %rdx, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f15(i8) -> i128 {
@@ -421,13 +361,9 @@ block0(v0: i8):
     return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movzbq  %dil, %rax
 ;   xorq    %rdx, %rdx, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f16(i128) -> i64 {
@@ -436,12 +372,8 @@ block0(v0: i128):
     return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f17(i128) -> i8 {
@@ -450,12 +382,8 @@ block0(v0: i128):
     return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f18(i8) -> i128 {
@@ -464,13 +392,9 @@ block0(v0: i8):
     return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movzbq  %dil, %rax
 ;   xorq    %rdx, %rdx, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f19(i128) -> i128 {
@@ -479,8 +403,6 @@ block0(v0: i128):
     return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   shrq    $1, %rax, %rax
@@ -524,8 +446,6 @@ block0(v0: i128):
 ;   shrq    $56, %rsi, %rsi
 ;   addq    %rax, %rsi, %rax
 ;   xorq    %rdx, %rdx, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f20(i128) -> i128 {
@@ -534,8 +454,6 @@ block0(v0: i128):
     return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movabsq $6148914691236517205, %rcx
 ;   movq    %rsi, %rdx
@@ -621,8 +539,6 @@ block0(v0: i128):
 ;   shrq    $32, %r8, %r8
 ;   shlq    $32, %rdx, %rdx
 ;   orq     %rdx, %r8, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f21(i128, i64) {
@@ -631,13 +547,9 @@ block0(v0: i128, v1: i64):
     return
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, 0(%rdx)
 ;   movq    %rsi, 8(%rdx)
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f22(i64) -> i128 {
@@ -646,13 +558,9 @@ block0(v0: i64):
     return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    0(%rdi), %rax
 ;   movq    8(%rdi), %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f23(i128, i8) -> i128 {
@@ -675,8 +583,6 @@ block2(v8: i128):
     return v11
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   xorq    %rax, %rax, %rax
 ;   xorq    %r9, %r9, %r9
@@ -688,8 +594,6 @@ block2(v8: i128):
 ;   addq    %rax, %r8, %rax
 ;   movq    %r9, %rdx
 ;   adcq    %rdx, %r10, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 ; block2:
 ;   movq    %r9, %rdx
@@ -697,8 +601,6 @@ block2(v8: i128):
 ;   xorq    %r11, %r11, %r11
 ;   addq    %rax, %r9, %rax
 ;   adcq    %rdx, %r11, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f24(i128, i128, i64, i128, i128, i128) -> i128 {
@@ -754,8 +656,6 @@ block0(v0: i128):
     return v0, v0, v0, v1, v0, v0
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, 0(%rdx)
 ;   movq    %rsi, 8(%rdx)
@@ -768,8 +668,6 @@ block0(v0: i128):
 ;   movq    %rdi, %rax
 ;   movq    %rsi, 64(%rdx)
 ;   movq    %rsi, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f26(i128, i128) -> i128, i128 {
@@ -809,8 +707,6 @@ block0(v0: i128):
     return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %r8
 ;   movabsq $-1, %rcx
@@ -827,8 +723,6 @@ block0(v0: i128):
 ;   cmpq    $64, %rdi
 ;   cmovnzq %rdi, %rax, %rax
 ;   xorq    %rdx, %rdx, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f28(i128) -> i128 {
@@ -837,8 +731,6 @@ block0(v0: i128):
     return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movl    $64, %ecx
 ;   bsfq    %rdi, %rax
@@ -850,8 +742,6 @@ block0(v0: i128):
 ;   cmpq    $64, %rax
 ;   cmovzq  %rdx, %rax, %rax
 ;   xorq    %rdx, %rdx, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f29(i8, i128) -> i8 {
@@ -860,15 +750,11 @@ block0(v0: i8, v1: i128):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
 ;   andq    %rcx, $7, %rcx
 ;   movq    %rdi, %rax
 ;   shlb    %cl, %al, %al
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f30(i128, i128) -> i128 {
@@ -877,8 +763,6 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdx, %rcx
 ;   movq    %rdi, %rdx
@@ -898,8 +782,6 @@ block0(v0: i128, v1: i128):
 ;   testq   $64, %r8
 ;   cmovzq  %rdx, %rax, %rax
 ;   cmovzq  %r10, %rdx, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f31(i128, i128) -> i128 {
@@ -908,8 +790,6 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdx, %rcx
 ;   movq    %rdi, %r8
@@ -930,8 +810,6 @@ block0(v0: i128, v1: i128):
 ;   movq    %r10, %rax
 ;   cmovzq  %r11, %rax, %rax
 ;   cmovzq  %r10, %rdx, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f32(i128, i128) -> i128 {
@@ -940,8 +818,6 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdx, %rcx
 ;   movq    %rdi, %r8
@@ -963,8 +839,6 @@ block0(v0: i128, v1: i128):
 ;   movq    %r10, %rax
 ;   cmovzq  %r8, %rax, %rax
 ;   cmovzq  %r10, %rdx, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f33(i128, i128) -> i128 {
@@ -973,8 +847,6 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdx, %rcx
 ;   movq    %rdi, %rdx
@@ -1017,8 +889,6 @@ block0(v0: i128, v1: i128):
 ;   cmovzq  %r9, %r8, %r8
 ;   orq     %rax, %r11, %rax
 ;   orq     %rdx, %r8, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f34(i128, i128) -> i128 {
@@ -1027,8 +897,6 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdx, %rcx
 ;   movq    %rdi, %r8
@@ -1071,7 +939,5 @@ block0(v0: i128, v1: i128):
 ;   cmovzq  %r11, %r9, %r9
 ;   orq     %rax, %rdi, %rax
 ;   orq     %rdx, %r9, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 

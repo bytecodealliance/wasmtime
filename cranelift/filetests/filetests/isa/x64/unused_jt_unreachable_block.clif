@@ -13,10 +13,6 @@ block1:
     trap unreachable
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 

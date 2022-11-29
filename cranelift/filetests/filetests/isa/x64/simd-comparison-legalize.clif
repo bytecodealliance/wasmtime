@@ -8,14 +8,10 @@ block0(v0: i32x4, v1: i32x4):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   pcmpeqd %xmm0, %xmm1, %xmm0
 ;   pcmpeqd %xmm5, %xmm5, %xmm5
 ;   pxor    %xmm0, %xmm5, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %icmp_ugt_i32x4(i32x4, i32x4) -> i32x4 {
@@ -24,15 +20,11 @@ block0(v0: i32x4, v1: i32x4):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   pmaxud  %xmm0, %xmm1, %xmm0
 ;   pcmpeqd %xmm0, %xmm1, %xmm0
 ;   pcmpeqd %xmm7, %xmm7, %xmm7
 ;   pxor    %xmm0, %xmm7, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %icmp_sge_i16x8(i16x8, i16x8) -> i16x8 {
@@ -41,14 +33,10 @@ block0(v0: i16x8, v1: i16x8):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movdqa  %xmm0, %xmm3
 ;   pmaxsw  %xmm3, %xmm1, %xmm3
 ;   pcmpeqw %xmm0, %xmm3, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %icmp_uge_i8x16(i8x16, i8x16) -> i8x16 {
@@ -57,13 +45,9 @@ block0(v0: i8x16, v1: i8x16):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movdqa  %xmm0, %xmm3
 ;   pmaxub  %xmm3, %xmm1, %xmm3
 ;   pcmpeqb %xmm0, %xmm3, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 

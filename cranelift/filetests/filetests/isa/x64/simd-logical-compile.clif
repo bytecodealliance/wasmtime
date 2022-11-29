@@ -8,13 +8,9 @@ block0(v0: i32x4):
     return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   pcmpeqd %xmm2, %xmm2, %xmm2
 ;   pxor    %xmm0, %xmm2, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %vany_true_i32x4(i32x4) -> i8 {
@@ -23,13 +19,9 @@ block0(v0: i32x4):
     return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   ptest   %xmm0, %xmm0
 ;   setnz   %al
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %vall_true_i64x2(i64x2) -> i8 {
@@ -38,15 +30,11 @@ block0(v0: i64x2):
     return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   pxor    %xmm2, %xmm2, %xmm2
 ;   movdqa  %xmm0, %xmm4
 ;   pcmpeqq %xmm4, %xmm2, %xmm4
 ;   ptest   %xmm4, %xmm4
 ;   setz    %al
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
