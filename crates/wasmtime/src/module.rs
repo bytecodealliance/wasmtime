@@ -14,12 +14,13 @@ use std::path::Path;
 use std::sync::Arc;
 use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::{
-    DefinedFuncIndex, DefinedMemoryIndex, FunctionLoc, ModuleEnvironment, ModuleTranslation,
-    ModuleTypes, ObjectKind, PrimaryMap, SignatureIndex, WasmFunctionInfo,
+    DefinedFuncIndex, DefinedMemoryIndex, ModuleEnvironment, ModuleTranslation, ModuleTypes,
+    ObjectKind, PrimaryMap, SignatureIndex, WasmFunctionInfo,
 };
 use wasmtime_jit::{CodeMemory, CompiledModule, CompiledModuleInfo};
 use wasmtime_runtime::{
-    CompiledModuleId, MemoryImage, MmapVec, ModuleMemoryImages, VMSharedSignatureIndex,
+    CompiledModuleId, MemoryImage, MmapVec, ModuleMemoryImages, VMFunctionBody,
+    VMSharedSignatureIndex,
 };
 
 mod registry;
@@ -1102,12 +1103,12 @@ impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
         self.code.signatures().as_module_map()[index]
     }
 
-    fn image_base(&self) -> usize {
-        self.module.text().as_ptr() as usize
-    }
-
-    fn function_loc(&self, index: DefinedFuncIndex) -> &FunctionLoc {
-        self.module.func_loc(index)
+    fn function(&self, index: DefinedFuncIndex) -> *mut VMFunctionBody {
+        self.module
+            .finished_function(index)
+            .as_ptr()
+            .cast::<VMFunctionBody>()
+            .cast_mut()
     }
 
     fn memory_image(&self, memory: DefinedMemoryIndex) -> Result<Option<&Arc<MemoryImage>>> {
@@ -1160,7 +1161,6 @@ impl wasmtime_runtime::ModuleInfo for ModuleInner {
 /// default-callee instance).
 pub(crate) struct BareModuleInfo {
     module: Arc<wasmtime_environ::Module>,
-    image_base: usize,
     one_signature: Option<(SignatureIndex, VMSharedSignatureIndex)>,
 }
 
@@ -1168,7 +1168,6 @@ impl BareModuleInfo {
     pub(crate) fn empty(module: Arc<wasmtime_environ::Module>) -> Self {
         BareModuleInfo {
             module,
-            image_base: 0,
             one_signature: None,
         }
     }
@@ -1179,7 +1178,6 @@ impl BareModuleInfo {
     ) -> Self {
         BareModuleInfo {
             module,
-            image_base: 0,
             one_signature,
         }
     }
@@ -1202,11 +1200,7 @@ impl wasmtime_runtime::ModuleRuntimeInfo for BareModuleInfo {
         signature
     }
 
-    fn image_base(&self) -> usize {
-        self.image_base
-    }
-
-    fn function_loc(&self, _index: DefinedFuncIndex) -> &FunctionLoc {
+    fn function(&self, _index: DefinedFuncIndex) -> *mut VMFunctionBody {
         unreachable!()
     }
 

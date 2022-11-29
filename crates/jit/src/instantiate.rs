@@ -20,8 +20,7 @@ use wasmtime_environ::{
     PrimaryMap, SignatureIndex, StackMapInformation, Tunables, WasmFunctionInfo,
 };
 use wasmtime_runtime::{
-    CompiledModuleId, CompiledModuleIdAllocator, GdbJitImageRegistration, MmapVec, VMFunctionBody,
-    VMTrampoline,
+    CompiledModuleId, CompiledModuleIdAllocator, GdbJitImageRegistration, MmapVec, VMTrampoline,
 };
 
 /// Secondary in-memory results of compilation.
@@ -482,19 +481,22 @@ impl CompiledModule {
         Arc::get_mut(&mut self.module)
     }
 
-    /// Returns the map of all finished JIT functions compiled for this module
+    /// Returns an iterator over all functions defined within this module with
+    /// their index and their body in memory.
     #[inline]
     pub fn finished_functions(
         &self,
-    ) -> impl ExactSizeIterator<Item = (DefinedFuncIndex, *const [VMFunctionBody])> + '_ {
-        let text = self.text();
-        self.funcs.iter().map(move |(i, (_, loc))| {
-            let func = &text[loc.start as usize..][..loc.length as usize];
-            (
-                i,
-                std::ptr::slice_from_raw_parts(func.as_ptr().cast::<VMFunctionBody>(), func.len()),
-            )
-        })
+    ) -> impl ExactSizeIterator<Item = (DefinedFuncIndex, &[u8])> + '_ {
+        self.funcs
+            .iter()
+            .map(move |(i, _)| (i, self.finished_function(i)))
+    }
+
+    /// Returns the body of the function that `index` points to.
+    #[inline]
+    pub fn finished_function(&self, index: DefinedFuncIndex) -> &[u8] {
+        let (_, loc) = &self.funcs[index];
+        &self.text()[loc.start as usize..][..loc.length as usize]
     }
 
     /// Returns the per-signature trampolines for this module.
@@ -517,9 +519,7 @@ impl CompiledModule {
     ///
     /// The iterator returned iterates over the span of the compiled function in
     /// memory with the stack maps associated with those bytes.
-    pub fn stack_maps(
-        &self,
-    ) -> impl Iterator<Item = (*const [VMFunctionBody], &[StackMapInformation])> {
+    pub fn stack_maps(&self) -> impl Iterator<Item = (&[u8], &[StackMapInformation])> {
         self.finished_functions()
             .map(|(_, f)| f)
             .zip(self.funcs.values().map(|f| &f.0.stack_maps[..]))

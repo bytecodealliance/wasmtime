@@ -25,7 +25,6 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use wasmtime_environ::DefinedFuncIndex;
 use wasmtime_environ::DefinedMemoryIndex;
-use wasmtime_environ::FunctionLoc;
 use wasmtime_environ::SignatureIndex;
 
 #[macro_use]
@@ -175,12 +174,8 @@ pub trait ModuleRuntimeInfo: Send + Sync + 'static {
     /// The signatures.
     fn signature(&self, index: SignatureIndex) -> VMSharedSignatureIndex;
 
-    /// The base address of where JIT functions are located.
-    fn image_base(&self) -> usize;
-
-    /// Descriptors about each compiled function, such as the offset from
-    /// `image_base`.
-    fn function_loc(&self, func_index: DefinedFuncIndex) -> &FunctionLoc;
+    /// Returns the address, in memory, that the function `index` resides at.
+    fn function(&self, index: DefinedFuncIndex) -> *mut VMFunctionBody;
 
     /// Returns the `MemoryImage` structure used for copy-on-write
     /// initialization of the memory, if it's applicable.

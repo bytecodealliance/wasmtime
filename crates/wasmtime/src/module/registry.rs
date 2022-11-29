@@ -161,7 +161,7 @@ impl LoadedCode {
             // functions.
             None => return,
         };
-        let start = unsafe { (*func).as_ptr() as usize };
+        let start = func.as_ptr() as usize;
 
         match self.modules.entry(start) {
             // This module is already present, and it should be the same as
