@@ -1130,26 +1130,22 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{CompiledModuleId, Imports, MemoryImage, StorePtr, VMSharedSignatureIndex};
+    use crate::{
+        CompiledModuleId, Imports, MemoryImage, StorePtr, VMFunctionBody, VMSharedSignatureIndex,
+    };
     use std::sync::Arc;
-    use wasmtime_environ::{DefinedFuncIndex, DefinedMemoryIndex, FunctionLoc, SignatureIndex};
+    use wasmtime_environ::{DefinedFuncIndex, DefinedMemoryIndex};
 
     pub(crate) fn empty_runtime_info(
         module: Arc<wasmtime_environ::Module>,
     ) -> Arc<dyn ModuleRuntimeInfo> {
-        struct RuntimeInfo(Arc<wasmtime_environ::Module>);
+        struct RuntimeInfo(Arc<wasmtime_environ::Module>, VMOffsets<HostPtr>);
 
         impl ModuleRuntimeInfo for RuntimeInfo {
             fn module(&self) -> &Arc<wasmtime_environ::Module> {
                 &self.0
             }
-            fn image_base(&self) -> usize {
-                0
-            }
-            fn function_loc(&self, _: DefinedFuncIndex) -> &FunctionLoc {
-                unimplemented!()
-            }
-            fn signature(&self, _: SignatureIndex) -> VMSharedSignatureIndex {
+            fn function(&self, _: DefinedFuncIndex) -> *mut VMFunctionBody {
                 unimplemented!()
             }
             fn memory_image(
@@ -1168,9 +1164,13 @@ mod test {
             fn signature_ids(&self) -> &[VMSharedSignatureIndex] {
                 &[]
             }
+            fn offsets(&self) -> &VMOffsets<HostPtr> {
+                &self.1
+            }
         }
 
-        Arc::new(RuntimeInfo(module))
+        let offsets = VMOffsets::new(HostPtr, &module);
+        Arc::new(RuntimeInfo(module, offsets))
     }
 
     #[cfg(target_pointer_width = "64")]
