@@ -191,6 +191,7 @@ impl Config {
             ret.cranelift_debug_verifier(false);
             ret.cranelift_opt_level(OptLevel::Speed);
         }
+
         ret.wasm_reference_types(true);
         ret.wasm_multi_value(true);
         ret.wasm_bulk_memory(true);
@@ -1467,11 +1468,34 @@ impl Config {
 
     #[cfg(compiler)]
     pub(crate) fn build_compiler(&mut self) -> Result<Box<dyn wasmtime_environ::Compiler>> {
+        use target_lexicon::Architecture;
+
         let mut compiler = match self.compiler_config.strategy {
             Strategy::Auto | Strategy::Cranelift => wasmtime_cranelift::builder(),
         };
+
         if let Some(target) = &self.compiler_config.target {
             compiler.target(target.clone())?;
+        }
+
+        // On x86-64 targets, we enable stack probing by default.
+        // This is required on Windows because of the way Windows
+        // commits its stacks, but it's also a good idea on other
+        // platforms to ensure guard pages are hit for large frame
+        // sizes.
+        if self
+            .compiler_config
+            .target
+            .as_ref()
+            .map(|t| t.architecture == Architecture::X86_64)
+            .unwrap_or(cfg!(target_arch = "x86_64"))
+        {
+            self.compiler_config
+                .flags
+                .insert("enable_probestack".into());
+            self.compiler_config
+                .settings
+                .insert("probestack_strategy".into(), "inline".into());
         }
 
         if self.native_unwind_info ||

@@ -1,8 +1,9 @@
+use anyhow::Result;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmtime::*;
 
 #[test]
-fn host_always_has_some_stack() -> anyhow::Result<()> {
+fn host_always_has_some_stack() -> Result<()> {
     static HITS: AtomicUsize = AtomicUsize::new(0);
     // assume hosts always have at least 128k of stack
     const HOST_STACK: usize = 128 * 1024;
@@ -53,4 +54,36 @@ fn host_always_has_some_stack() -> anyhow::Result<()> {
         let mut space = [0u8; 1024];
         consume_some_stack(space.as_mut_ptr() as usize, stack.saturating_sub(1024))
     }
+}
+
+#[test]
+fn big_stack_works_ok() -> Result<()> {
+    const N: usize = 5000;
+
+    // Build a module with a function that uses a very large amount of stack space,
+    // modeled here by calling a v128-returning-function many times followed by
+    // collecting that all into one v128.
+    //
+    // This should exercise the ability to consume multi-page stacks and
+    // only touch a few internals of it at a time.
+    let mut s = String::new();
+    s.push_str("(module\n");
+    s.push_str("(func (export \"\") (result i32)\n");
+    s.push_str("v128.const i64x2 0 0\n");
+    for _ in 0..N {
+        s.push_str("call $get\n");
+    }
+    for _ in 0..N {
+        s.push_str("i64x2.add\n");
+    }
+    s.push_str("i8x16.bitmask\n)\n");
+    s.push_str("(func $get (result v128) v128.const i64x2 0 0)\n");
+    s.push_str(")\n");
+
+    let mut store = Store::<()>::default();
+    let module = Module::new(store.engine(), &s)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let func = instance.get_typed_func::<(), i32>(&mut store, "")?;
+    assert_eq!(func.call(&mut store, ())?, 0);
+    Ok(())
 }
