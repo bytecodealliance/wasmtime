@@ -92,8 +92,8 @@ impl StorePtr {
 /// This trait is unsafe as it requires knowledge of Wasmtime's runtime internals to implement correctly.
 pub unsafe trait InstanceAllocator: Send + Sync {
     /// Validates that a module is supported by the allocator.
-    fn validate(&self, module: &Module) -> Result<()> {
-        drop(module);
+    fn validate(&self, module: &Module, offsets: &VMOffsets<HostPtr>) -> Result<()> {
+        drop((module, offsets));
         Ok(())
     }
 
@@ -464,11 +464,9 @@ pub unsafe fn allocate_single_memory_instance(
     let mut memories = PrimaryMap::default();
     memories.push(memory);
     let tables = PrimaryMap::default();
-    let module = req.runtime_info.module();
-    let offsets = VMOffsets::new(HostPtr, module);
-    let layout = Instance::alloc_layout(&offsets);
+    let layout = Instance::alloc_layout(req.runtime_info.offsets());
     let instance = alloc::alloc(layout) as *mut Instance;
-    Instance::new_at(instance, layout.size(), offsets, req, memories, tables);
+    Instance::new_at(instance, layout.size(), req, memories, tables);
     Ok(InstanceHandle { instance })
 }
 
@@ -476,7 +474,7 @@ pub unsafe fn allocate_single_memory_instance(
 ///
 /// See [`InstanceAllocator::deallocate()`] for more details.
 pub unsafe fn deallocate(handle: &InstanceHandle) {
-    let layout = Instance::alloc_layout(&handle.instance().offsets);
+    let layout = Instance::alloc_layout(handle.instance().offsets());
     ptr::drop_in_place(handle.instance);
     alloc::dealloc(handle.instance.cast(), layout);
 }
@@ -485,12 +483,10 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
     unsafe fn allocate(&self, mut req: InstanceAllocationRequest) -> Result<InstanceHandle> {
         let memories = self.create_memories(&mut req.store, &req.runtime_info)?;
         let tables = Self::create_tables(&mut req.store, &req.runtime_info)?;
-        let module = req.runtime_info.module();
-        let offsets = VMOffsets::new(HostPtr, module);
-        let layout = Instance::alloc_layout(&offsets);
+        let layout = Instance::alloc_layout(req.runtime_info.offsets());
         let instance_ptr = alloc::alloc(layout) as *mut Instance;
 
-        Instance::new_at(instance_ptr, layout.size(), offsets, req, memories, tables);
+        Instance::new_at(instance_ptr, layout.size(), req, memories, tables);
 
         Ok(InstanceHandle {
             instance: instance_ptr,

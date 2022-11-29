@@ -14,8 +14,8 @@ use std::path::Path;
 use std::sync::Arc;
 use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::{
-    DefinedFuncIndex, DefinedMemoryIndex, ModuleEnvironment, ModuleTranslation, ModuleTypes,
-    ObjectKind, PrimaryMap, WasmFunctionInfo,
+    DefinedFuncIndex, DefinedMemoryIndex, HostPtr, ModuleEnvironment, ModuleTranslation,
+    ModuleTypes, ObjectKind, PrimaryMap, VMOffsets, WasmFunctionInfo,
 };
 use wasmtime_jit::{CodeMemory, CompiledModule, CompiledModuleInfo};
 use wasmtime_runtime::{
@@ -124,6 +124,9 @@ struct ModuleInner {
 
     /// Flag indicating whether this module can be serialized or not.
     serializable: bool,
+
+    /// Runtime offset information for `VMContext`.
+    offsets: VMOffsets<HostPtr>,
 }
 
 impl Module {
@@ -665,7 +668,8 @@ impl Module {
         )?;
 
         // Validate the module can be used with the current allocator
-        engine.allocator().validate(module.module())?;
+        let offsets = VMOffsets::new(HostPtr, module.module());
+        engine.allocator().validate(module.module(), &offsets)?;
 
         Ok(Self {
             inner: Arc::new(ModuleInner {
@@ -674,6 +678,7 @@ impl Module {
                 memory_images: OnceCell::new(),
                 module,
                 serializable,
+                offsets,
             }),
         })
     }
@@ -1123,6 +1128,10 @@ impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
     fn signature_ids(&self) -> &[VMSharedSignatureIndex] {
         self.code.signatures().as_module_map().values().as_slice()
     }
+
+    fn offsets(&self) -> &VMOffsets<HostPtr> {
+        &self.offsets
+    }
 }
 
 impl wasmtime_runtime::ModuleInfo for ModuleInner {
@@ -1158,14 +1167,12 @@ impl wasmtime_runtime::ModuleInfo for ModuleInner {
 pub(crate) struct BareModuleInfo {
     module: Arc<wasmtime_environ::Module>,
     one_signature: Option<VMSharedSignatureIndex>,
+    offsets: VMOffsets<HostPtr>,
 }
 
 impl BareModuleInfo {
     pub(crate) fn empty(module: Arc<wasmtime_environ::Module>) -> Self {
-        BareModuleInfo {
-            module,
-            one_signature: None,
-        }
+        BareModuleInfo::maybe_imported_func(module, None)
     }
 
     pub(crate) fn maybe_imported_func(
@@ -1173,6 +1180,7 @@ impl BareModuleInfo {
         one_signature: Option<VMSharedSignatureIndex>,
     ) -> Self {
         BareModuleInfo {
+            offsets: VMOffsets::new(HostPtr, &module),
             module,
             one_signature,
         }
@@ -1209,6 +1217,10 @@ impl wasmtime_runtime::ModuleRuntimeInfo for BareModuleInfo {
             Some(id) => std::slice::from_ref(id),
             None => &[],
         }
+    }
+
+    fn offsets(&self) -> &VMOffsets<HostPtr> {
+        &self.offsets
     }
 }
 

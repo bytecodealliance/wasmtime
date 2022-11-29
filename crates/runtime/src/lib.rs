@@ -23,8 +23,7 @@
 use anyhow::Error;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
-use wasmtime_environ::DefinedFuncIndex;
-use wasmtime_environ::DefinedMemoryIndex;
+use wasmtime_environ::{DefinedFuncIndex, DefinedMemoryIndex, HostPtr, VMOffsets};
 
 #[macro_use]
 mod trampolines;
@@ -189,6 +188,9 @@ pub trait ModuleRuntimeInfo: Send + Sync + 'static {
     /// Returns an array, indexed by `SignatureIndex` of all
     /// `VMSharedSignatureIndex` entries corresponding to the `SignatureIndex`.
     fn signature_ids(&self) -> &[VMSharedSignatureIndex];
+
+    /// Offset information for the current host.
+    fn offsets(&self) -> &VMOffsets<HostPtr>;
 }
 
 /// Returns the host OS page size, in bytes.
