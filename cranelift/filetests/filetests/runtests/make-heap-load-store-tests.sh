@@ -16,12 +16,12 @@ function generate_one_test() {
     local spectre=$4
 
     local enable_spectre=true
-    if [[ spectre == "no" ]]; then
+    if [[ $spectre == "no" ]]; then
         enable_spectre=false
     fi
 
     local have_guards=yes
-    if [[ guard == "0" ]]; then
+    if [[ $guard == "0" ]]; then
         have_guards=no
     fi
 
@@ -79,10 +79,10 @@ block0(v0: i64, v1: ${index_type}, v2: i32):
 EOF
 }
 
-for spectre in yes no; do
-    for guard in 0 0xffff_ffff; do
-        for index_type in i32 i64; do
-            for kind in static dynamic; do
+for spectre in "yes" "no"; do
+    for guard in "0" "0xffff_ffff"; do
+        for index_type in "i32" "i64"; do
+            for kind in "static" "dynamic"; do
                 generate_one_test $kind $index_type $guard $spectre
             done
         done
