@@ -1,5 +1,5 @@
 use crate::store::StoreOpaque;
-use crate::Module;
+use crate::{AsContext, Module};
 use anyhow::Error;
 use std::fmt;
 use wasmtime_environ::{EntityRef, FilePos};
@@ -112,7 +112,7 @@ pub(crate) fn from_runtime_box(
     };
     match backtrace {
         Some(bt) => {
-            let bt = WasmBacktrace::new(store, bt, pc);
+            let bt = WasmBacktrace::from_captured(store, bt, pc);
             if bt.wasm_trace.is_empty() {
                 error
             } else {
@@ -183,7 +183,54 @@ pub struct WasmBacktrace {
 }
 
 impl WasmBacktrace {
-    fn new(
+    /// Captures a trace of the WebAssembly frames on the stack for the
+    /// provided store.
+    ///
+    /// This will return a [`WasmBacktrace`] which holds captured
+    /// [`FrameInfo`]s for each frame of WebAssembly on the call stack of the
+    /// current thread. If no WebAssembly is on the stack then the returned
+    /// backtrace will have no frames in it.
+    ///
+    /// Note that this function does not respect the [`Config::wasm_backtrace`]
+    /// configuration option and instead always captures a backtrace.
+    ///
+    /// [`Config::wasm_backtrace`]: crate::Config::wasm_backtrace
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # use anyhow::Result;
+    /// # fn main() -> Result<()> {
+    /// let engine = Engine::default();
+    /// let module = Module::new(
+    ///     &engine,
+    ///     r#"
+    ///         (module
+    ///             (import "" "" (func $host))
+    ///             (func $foo (export "f") call $bar)
+    ///             (func $bar call $host)
+    ///         )
+    ///     "#,
+    /// )?;
+    ///
+    /// let mut store = Store::new(&engine, ());
+    /// let func = Func::wrap(&mut store, |cx: Caller<'_, ()>| {
+    ///     let trace = WasmBacktrace::new(&cx);
+    ///     println!("{trace:?}");
+    /// });
+    /// let instance = Instance::new(&mut store, &module, &[func.into()])?;
+    /// let func = instance.get_typed_func::<(), ()>(&mut store, "f")?;
+    /// func.call(&mut store, ())?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn new(store: impl AsContext) -> WasmBacktrace {
+        let store = store.as_context();
+        Self::from_captured(store.0, wasmtime_runtime::Backtrace::new(), None)
+    }
+
+    fn from_captured(
         store: &StoreOpaque,
         runtime_trace: wasmtime_runtime::Backtrace,
         trap_pc: Option<usize>,
