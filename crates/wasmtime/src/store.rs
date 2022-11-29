@@ -766,10 +766,10 @@ impl<T> Store<T> {
     /// Note that at this time when fuel is entirely consumed it will cause
     /// wasm to trap. More usages of fuel are planned for the future.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// This function will panic if the store's [`Config`](crate::Config) did
-    /// not have fuel consumption enabled.
+    /// This function will return an error if fuel consumption is not enabled via
+    /// [`Config::consume_fuel`](crate::Config::consume_fuel).
     pub fn add_fuel(&mut self, fuel: u64) -> Result<()> {
         self.inner.add_fuel(fuel)
     }
@@ -790,9 +790,9 @@ impl<T> Store<T> {
     ///
     /// # Errors
     ///
-    /// This function will return an either either if fuel consumption via
-    /// [`Config`](crate::Config) is disabled or if `fuel` exceeds the amount
-    /// of remaining fuel within this store.
+    /// This function will return an error either if fuel consumption is not
+    /// enabled via [`Config::consume_fuel`](crate::Config::consume_fuel) or if
+    /// `fuel` exceeds the amount of remaining fuel within this store.
     pub fn consume_fuel(&mut self, fuel: u64) -> Result<u64> {
         self.inner.consume_fuel(fuel)
     }
