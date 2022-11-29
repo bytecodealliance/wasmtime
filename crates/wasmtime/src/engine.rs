@@ -86,6 +86,7 @@ impl Engine {
 
         #[cfg(compiler)]
         let compiler = config.build_compiler()?;
+        drop(&mut config); // silence warnings without `cfg(compiler)`
 
         let allocator = config.build_allocator()?;
         let profiler = config.build_profiler()?;
