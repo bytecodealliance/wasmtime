@@ -3,7 +3,6 @@
 
 #![cfg_attr(not(unix), allow(unused_imports, unused_variables))]
 
-use crate::InstantiationError;
 use crate::MmapVec;
 use anyhow::Result;
 use libc::c_void;
@@ -486,7 +485,7 @@ impl MemoryImageSlot {
         initial_size_bytes: usize,
         maybe_image: Option<&Arc<MemoryImage>>,
         style: &MemoryStyle,
-    ) -> Result<(), InstantiationError> {
+    ) -> Result<()> {
         assert!(!self.dirty);
         assert!(initial_size_bytes <= self.static_size);
 
@@ -499,16 +498,14 @@ impl MemoryImageSlot {
         // extent of the prior initialization image in order to preserve
         // resident memory that might come before or after the image.
         if self.image.as_ref() != maybe_image {
-            self.remove_image()
-                .map_err(|e| InstantiationError::Resource(e.into()))?;
+            self.remove_image()?;
         }
 
         // The next order of business is to ensure that `self.accessible` is
         // appropriate. First up is to grow the read/write portion of memory if
         // it's not large enough to accommodate `initial_size_bytes`.
         if self.accessible < initial_size_bytes {
-            self.set_protection(self.accessible..initial_size_bytes, true)
-                .map_err(|e| InstantiationError::Resource(e.into()))?;
+            self.set_protection(self.accessible..initial_size_bytes, true)?;
             self.accessible = initial_size_bytes;
         }
 
@@ -523,8 +520,7 @@ impl MemoryImageSlot {
         if initial_size_bytes < self.accessible {
             match style {
                 MemoryStyle::Static { .. } => {
-                    self.set_protection(initial_size_bytes..self.accessible, false)
-                        .map_err(|e| InstantiationError::Resource(e.into()))?;
+                    self.set_protection(initial_size_bytes..self.accessible, false)?;
                     self.accessible = initial_size_bytes;
                 }
                 MemoryStyle::Dynamic { .. } => {}
@@ -543,9 +539,7 @@ impl MemoryImageSlot {
                 );
                 if image.len > 0 {
                     unsafe {
-                        image
-                            .map_at(self.base)
-                            .map_err(|e| InstantiationError::Resource(e.into()))?;
+                        image.map_at(self.base)?;
                     }
                 }
             }

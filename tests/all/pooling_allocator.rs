@@ -428,7 +428,7 @@ fn instantiation_limit() -> Result<()> {
             Err(e) => assert_eq!(
                 e.to_string(),
                 format!(
-                    "Limit of {} concurrent instances has been reached",
+                    "maximum concurrent instance limit of {} reached",
                     INSTANCE_LIMIT
                 )
             ),

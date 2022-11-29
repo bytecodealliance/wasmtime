@@ -7,10 +7,7 @@
 //! Using the pooling instance allocator can speed up module instantiation
 //! when modules can be constrained based on configurable limits.
 
-use super::{
-    initialize_instance, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
-    InstantiationError,
-};
+use super::{initialize_instance, InstanceAllocationRequest, InstanceAllocator, InstanceHandle};
 use crate::{instance::Instance, Memory, Mmap, Table};
 use crate::{CompiledModuleId, MemoryImageSlot, ModuleRuntimeInfo, Store};
 use anyhow::{anyhow, bail, Context, Result};
@@ -40,9 +37,6 @@ use imp::{commit_table_pages, decommit_table_pages};
 
 #[cfg(all(feature = "async", unix))]
 use imp::{commit_stack_pages, reset_stack_pages_to_zero};
-
-#[cfg(feature = "async")]
-use super::FiberStackError;
 
 fn round_up_to_pow2(n: usize, to: usize) -> usize {
     debug_assert!(to > 0);
@@ -167,7 +161,7 @@ impl InstancePool {
         &self,
         instance_index: usize,
         req: InstanceAllocationRequest,
-    ) -> Result<InstanceHandle, InstantiationError> {
+    ) -> Result<InstanceHandle> {
         let module = req.runtime_info.module();
 
         // Before doing anything else ensure that our instance slot is actually
@@ -175,9 +169,7 @@ impl InstancePool {
         // If this fails then it's a configuration error at the `Engine` level
         // from when this pooling allocator was created and that needs updating
         // if this is to succeed.
-        let offsets = self
-            .validate_instance_size(module)
-            .map_err(InstantiationError::Resource)?;
+        let offsets = self.validate_instance_size(module)?;
 
         let mut memories =
             PrimaryMap::with_capacity(module.memory_plans.len() - module.num_imported_memories);
@@ -214,14 +206,16 @@ impl InstancePool {
         })
     }
 
-    fn allocate(
-        &self,
-        req: InstanceAllocationRequest,
-    ) -> Result<InstanceHandle, InstantiationError> {
+    fn allocate(&self, req: InstanceAllocationRequest) -> Result<InstanceHandle> {
         let id = self
             .index_allocator
             .alloc(req.runtime_info.unique_id())
-            .ok_or_else(|| InstantiationError::Limit(self.max_instances as u32))?;
+            .ok_or_else(|| {
+                anyhow!(
+                    "maximum concurrent instance limit of {} reached",
+                    self.max_instances
+                )
+            })?;
 
         match unsafe { self.initialize_instance(id.index(), req) } {
             Ok(handle) => Ok(handle),
@@ -271,7 +265,7 @@ impl InstancePool {
         store: Option<*mut dyn Store>,
         memories: &mut PrimaryMap<DefinedMemoryIndex, Memory>,
         tables: &mut PrimaryMap<DefinedTableIndex, Table>,
-    ) -> Result<(), InstantiationError> {
+    ) -> Result<()> {
         self.allocate_memories(instance_index, runtime_info, store, memories)?;
         self.allocate_tables(instance_index, runtime_info, store, tables)?;
 
@@ -284,11 +278,10 @@ impl InstancePool {
         runtime_info: &dyn ModuleRuntimeInfo,
         store: Option<*mut dyn Store>,
         memories: &mut PrimaryMap<DefinedMemoryIndex, Memory>,
-    ) -> Result<(), InstantiationError> {
+    ) -> Result<()> {
         let module = runtime_info.module();
 
-        self.validate_memory_plans(module)
-            .map_err(InstantiationError::Resource)?;
+        self.validate_memory_plans(module)?;
 
         for (memory_index, plan) in module
             .memory_plans
@@ -321,9 +314,7 @@ impl InstancePool {
             let mut slot = self
                 .memories
                 .take_memory_image_slot(instance_index, defined_index);
-            let image = runtime_info
-                .memory_image(defined_index)
-                .map_err(|err| InstantiationError::Resource(err.into()))?;
+            let image = runtime_info.memory_image(defined_index)?;
             let initial_size = plan.memory.minimum * WASM_PAGE_SIZE as u64;
 
             // If instantiation fails, we can propagate the error
@@ -339,13 +330,11 @@ impl InstancePool {
             // the process to continue, because we never perform a
             // mmap that would leave an open space for someone
             // else to come in and map something.
-            slot.instantiate(initial_size as usize, image, &plan.style)
-                .map_err(|e| InstantiationError::Resource(e.into()))?;
+            slot.instantiate(initial_size as usize, image, &plan.style)?;
 
-            memories.push(
-                Memory::new_static(plan, memory, slot, unsafe { &mut *store.unwrap() })
-                    .map_err(InstantiationError::Resource)?,
-            );
+            memories.push(Memory::new_static(plan, memory, slot, unsafe {
+                &mut *store.unwrap()
+            })?);
         }
 
         Ok(())
@@ -380,11 +369,10 @@ impl InstancePool {
         runtime_info: &dyn ModuleRuntimeInfo,
         store: Option<*mut dyn Store>,
         tables: &mut PrimaryMap<DefinedTableIndex, Table>,
-    ) -> Result<(), InstantiationError> {
+    ) -> Result<()> {
         let module = runtime_info.module();
 
-        self.validate_table_plans(module)
-            .map_err(InstantiationError::Resource)?;
+        self.validate_table_plans(module)?;
 
         let mut bases = self.tables.get(instance_index);
         for (_, plan) in module.table_plans.iter().skip(module.num_imported_tables) {
@@ -393,19 +381,13 @@ impl InstancePool {
             commit_table_pages(
                 base as *mut u8,
                 self.tables.max_elements as usize * mem::size_of::<*mut u8>(),
-            )
-            .map_err(InstantiationError::Resource)?;
+            )?;
 
-            tables.push(
-                Table::new_static(
-                    plan,
-                    unsafe {
-                        std::slice::from_raw_parts_mut(base, self.tables.max_elements as usize)
-                    },
-                    unsafe { &mut *store.unwrap() },
-                )
-                .map_err(InstantiationError::Resource)?,
-            );
+            tables.push(Table::new_static(
+                plan,
+                unsafe { std::slice::from_raw_parts_mut(base, self.tables.max_elements as usize) },
+                unsafe { &mut *store.unwrap() },
+            )?);
         }
 
         Ok(())
@@ -930,15 +912,20 @@ impl StackPool {
         })
     }
 
-    fn allocate(&self) -> Result<wasmtime_fiber::FiberStack, FiberStackError> {
+    fn allocate(&self) -> Result<wasmtime_fiber::FiberStack> {
         if self.stack_size == 0 {
-            return Err(FiberStackError::NotSupported);
+            bail!("pooling allocator not configured to enable fiber stack allocation");
         }
 
         let index = self
             .index_allocator
             .alloc(None)
-            .ok_or(FiberStackError::Limit(self.max_instances as u32))?
+            .ok_or_else(|| {
+                anyhow!(
+                    "maximum concurrent fiber limit of {} reached",
+                    self.max_instances
+                )
+            })?
             .index();
 
         assert!(index < self.max_instances);
@@ -952,11 +939,11 @@ impl StackPool {
                 .as_mut_ptr()
                 .add((index * self.stack_size) + self.page_size);
 
-            commit_stack_pages(bottom_of_stack, size_without_guard)
-                .map_err(FiberStackError::Resource)?;
+            commit_stack_pages(bottom_of_stack, size_without_guard)?;
 
-            wasmtime_fiber::FiberStack::from_top_ptr(bottom_of_stack.add(size_without_guard))
-                .map_err(|e| FiberStackError::Resource(e.into()))
+            let stack =
+                wasmtime_fiber::FiberStack::from_top_ptr(bottom_of_stack.add(size_without_guard))?;
+            Ok(stack)
         }
     }
 
@@ -1106,10 +1093,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         Ok(())
     }
 
-    unsafe fn allocate(
-        &self,
-        req: InstanceAllocationRequest,
-    ) -> Result<InstanceHandle, InstantiationError> {
+    unsafe fn allocate(&self, req: InstanceAllocationRequest) -> Result<InstanceHandle> {
         self.instances.allocate(req)
     }
 
@@ -1118,7 +1102,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         handle: &mut InstanceHandle,
         module: &Module,
         is_bulk_memory: bool,
-    ) -> Result<(), InstantiationError> {
+    ) -> Result<()> {
         let instance = handle.instance_mut();
         initialize_instance(instance, module, is_bulk_memory)
     }
@@ -1128,7 +1112,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
     }
 
     #[cfg(all(feature = "async", unix))]
-    fn allocate_fiber_stack(&self) -> Result<wasmtime_fiber::FiberStack, FiberStackError> {
+    fn allocate_fiber_stack(&self) -> Result<wasmtime_fiber::FiberStack> {
         self.stacks.allocate()
     }
 
@@ -1138,14 +1122,13 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
     }
 
     #[cfg(all(feature = "async", windows))]
-    fn allocate_fiber_stack(&self) -> Result<wasmtime_fiber::FiberStack, FiberStackError> {
+    fn allocate_fiber_stack(&self) -> Result<wasmtime_fiber::FiberStack> {
         if self.stack_size == 0 {
-            return Err(FiberStackError::NotSupported);
+            bail!("fiber stack allocation not supported")
         }
 
         // On windows, we don't use a stack pool as we use the native fiber implementation
         wasmtime_fiber::FiberStack::new(self.stack_size)
-            .map_err(|e| FiberStackError::Resource(e.into()))
     }
 
     #[cfg(all(feature = "async", windows))]
@@ -1269,7 +1252,7 @@ mod test {
             host_state: Box::new(()),
             store: StorePtr::empty(),
         }) {
-            Err(InstantiationError::Limit(3)) => {}
+            Err(_) => {}
             _ => panic!("unexpected error"),
         };
 
@@ -1414,10 +1397,7 @@ mod test {
 
         assert_eq!(pool.index_allocator.testing_freelist(), []);
 
-        match pool.allocate().unwrap_err() {
-            FiberStackError::Limit(10) => {}
-            _ => panic!("unexpected error"),
-        };
+        pool.allocate().unwrap_err();
 
         for stack in stacks {
             pool.deallocate(&stack);
