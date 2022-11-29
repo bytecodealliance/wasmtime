@@ -56,7 +56,7 @@ wast = { workspace = true }
 criterion = "0.3.4"
 num_cpus = "1.13.0"
 memchr = "2.4"
-async-trait = "0.1"
+async-trait = { workspace = true }
 wat = { workspace = true }
 rayon = "1.5.0"
 wasmtime-wast = { workspace = true, features = ['component-model'] }
@@ -171,8 +171,14 @@ gimli = { version = "0.26.0", default-features = false, features = ['read', 'std
 clap = { version = "3.2.0", features = ["color", "suggestions", "derive"] }
 hashbrown = "0.12"
 cap-std = "1.0.0"
+cap-rand = "1.0.0"
 once_cell = "1.12.0"
 smallvec = { version = "1.6.1", features = ["union"] }
+io-lifetimes = { version = "1.0.0", default-features = false }
+tracing = "0.1.26"
+bitflags = "1.2"
+thiserror = "1.0.15"
+async-trait = "0.1.42"
 
 [features]
 default = [

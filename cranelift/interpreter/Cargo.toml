@@ -15,7 +15,7 @@ cranelift-codegen = { workspace = true }
 cranelift-entity = { workspace = true }
 log = { workspace = true }
 smallvec = { workspace = true }
-thiserror = "1.0.15"
+thiserror = { workspace = true }
 
 [target.x86_64-pc-windows-gnu.dependencies]
 libm = "0.2.4"
