@@ -23,7 +23,7 @@ wasmparser = { workspace = true }
 target-lexicon = { workspace = true }
 gimli = { workspace = true }
 object = { workspace = true, features = ['write'] }
-thiserror = "1.0.4"
+thiserror = { workspace = true }
 
 [features]
 all-arch = ["cranelift-codegen/all-arch"]

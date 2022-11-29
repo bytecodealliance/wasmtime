@@ -14,7 +14,7 @@ edition.workspace = true
 wasmtime-environ = { workspace = true }
 wasmtime-jit-debug = { workspace = true, features = ["perf_jitdump"], optional = true }
 wasmtime-runtime = { workspace = true }
-thiserror = "1.0.4"
+thiserror = { workspace = true }
 target-lexicon = { workspace = true }
 anyhow = { workspace = true }
 cfg-if = "1.0"
