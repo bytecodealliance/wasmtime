@@ -3426,7 +3426,7 @@ impl MachInstEmit for Inst {
                 // The loop generated here uses `start` as a counter register to
                 // count backwards until negating it exceeds `end`. In other
                 // words `start` is an offset from `sp` we're testing where
-                // `end` is the max size we need to test. The loop looks lik:
+                // `end` is the max size we need to test. The loop looks like:
                 //
                 //      loop_start:
                 //          sub start, start, #step
@@ -3434,6 +3434,12 @@ impl MachInstEmit for Inst {
                 //          cmn start, end
                 //          br.gt loop_start
                 //      loop_end:
+                //
+                // Note that this loop cannot use the spilltmp and tmp2
+                // registers as those are currently used as the input to this
+                // loop when generating the instruction. This means that some
+                // more flavorful address modes and lowerings need to be
+                // avoided.
                 //
                 // Perhaps someone more clever than I can figure out how to use
                 // `subs` or the like and skip the `cmn`, but I can't figure it

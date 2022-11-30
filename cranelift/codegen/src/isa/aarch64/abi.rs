@@ -645,7 +645,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
         let probe_count = align_to(frame_size, guard_size) / guard_size;
         if probe_count <= PROBE_MAX_UNROLL {
-            // When manually unrolling stick an instruciton that stores 0 at a
+            // When manually unrolling stick an instruction that stores 0 at a
             // constant offset relative to the stack pointer. This will
             // turn into something like `movn tmp, #n ; stur xzr [sp, tmp]`.
             //
@@ -667,6 +667,10 @@ impl ABIMachineSpec for AArch64MachineDeps {
             // `start` contains the current offset from sp and counts downwards
             // during the loop by increments of `guard_size`. The `end` is
             // the size of the frame and where we stop.
+            //
+            // Note that this emission is all post-regalloc so it should be ok
+            // to use the temporary registers here as input/output as the loop
+            // itself is not allowed to use the registers.
             let start = writable_spilltmp_reg();
             let end = writable_tmp2_reg();
             insts.extend(Inst::load_constant(start, 0));

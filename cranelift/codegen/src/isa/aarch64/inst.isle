@@ -937,7 +937,11 @@
        (DummyUse
         (reg Reg))
 
-       ;; Emits a inline stack probe loop.
+       ;; Emits an inline stack probe loop.
+       ;;
+       ;; Note that this is emitted post-regalloc so `start` and `end` can be
+       ;; temporary registers such as the spilltmp and tmp2 registers. This also
+       ;; means that the internal codegen can't use these registers.
        (StackProbeLoop (start WritableReg)
                        (end Reg)
                        (step Imm12))
@@ -1140,8 +1144,7 @@
         ;; [crate::isa::aarch64::abi](the ABI module) for more details.
         (NominalSPOffset
          (off i64)
-         (ty Type))
-))
+         (ty Type))))
 
 (type PairAMode extern (enum))
 (type FPUOpRI extern (enum))
