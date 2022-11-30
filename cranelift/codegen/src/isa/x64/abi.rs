@@ -737,12 +737,14 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         num_clobbered_callee_saves: usize,
         frame_storage_size: u32,
     ) -> bool {
-        !is_leaf
+        (!is_leaf
             // The function arguments that are passed on the stack are addressed
             // relative to the Frame Pointer.
             || stack_args_size > 0
             || num_clobbered_callee_saves > 0
-            || frame_storage_size > 0
+            || frame_storage_size > 0)
+            // TODO
+            && !cfg!(target_os = "macos")
     }
 }
 
