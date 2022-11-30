@@ -3,6 +3,8 @@ set enable_heap_access_spectre_mitigation=true
 target x86_64
 
 ;; The offset guard is not large enough to avoid explicit bounds checks.
+;; Additionally, the explicit bounds check gets deduped with the Spectre
+;; mitigation.
 
 function %test(i64 vmctx, i32) -> i64 {
     gv0 = vmctx
@@ -16,19 +18,11 @@ block0(v0: i64, v1: i32):
 
 ; check:  block0(v0: i64, v1: i32):
 ; nextln:     v3 = uextend.i64 v1
-; nextln:     v10 = iconst.i64 4092
-; nextln:     v4 = icmp ugt v3, v10  ; v10 = 4092
-; nextln:     brz v4, block2
-; nextln:     jump block1
-; nextln: 
-; nextln: block1:
-; nextln:     trap heap_oob
-; nextln: 
-; nextln: block2:
-; nextln:     v5 = iconst.i64 4092
-; nextln:     v6 = load.i64 notrap aligned v0
-; nextln:     v7 = iadd v6, v3
-; nextln:     v8 = iconst.i64 0
-; nextln:     v9 = icmp.i64 ugt v3, v5  ; v5 = 4092
-; nextln:     v2 = select_spectre_guard v9, v8, v7  ; v8 = 0
+; nextln:     v4 = iconst.i64 4092
+; nextln:     v5 = load.i64 notrap aligned v0
+; nextln:     v6 = iadd v5, v3
+; nextln:     v7 = iconst.i64 0
+; nextln:     v8 = icmp ugt v3, v4  ; v4 = 4092
+; nextln:     v9 = select_spectre_guard v8, v7, v6  ; v7 = 0
+; nextln:     v2 -> v9
 ; nextln:     return v2
