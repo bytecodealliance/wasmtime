@@ -1,0 +1,71 @@
+test compile precise-output
+set enable_probestack=true
+set probestack_strategy=inline
+; This is the default and is equivalent to a page size of 4096
+set probestack_size_log2=12
+target aarch64
+
+
+; If the stack size is just one page, we can avoid the stack probe entirely
+function %single_page() -> i64 system_v {
+ss0 = explicit_slot 2048
+
+block0:
+  v1 = stack_addr.i64 ss0
+  return v1
+}
+
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #2048
+; block0:
+;   mov x0, sp
+;   add sp, sp, #2048
+;   ldp fp, lr, [sp], #16
+;   ret
+
+function %unrolled() -> i64 system_v {
+ss0 = explicit_slot 12288
+
+block0:
+  v1 = stack_addr.i64 ss0
+  return v1
+}
+
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   movn x16, #4095 ; str wzr, [sp, x16, SXTX]
+;   movn x16, #8191 ; str wzr, [sp, x16, SXTX]
+;   movn x16, #12287 ; str wzr, [sp, x16, SXTX]
+;   sub sp, sp, #12288
+; block0:
+;   mov x0, sp
+;   add sp, sp, #12288
+;   ldp fp, lr, [sp], #16
+;   ret
+
+function %large() -> i64 system_v {
+ss0 = explicit_slot 100000
+
+block0:
+  v1 = stack_addr.i64 ss0
+  return v1
+}
+
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   movz x16, #0
+;   movz w17, #34464
+;   movk w17, w17, #1, LSL #16
+;   stack_probe_loop x16, x17, #4096
+;   movz w16, #34464
+;   movk w16, w16, #1, LSL #16
+;   sub sp, sp, x16, UXTX
+; block0:
+;   mov x0, sp
+;   movz w16, #34464
+;   movk w16, w16, #1, LSL #16
+;   add sp, sp, x16, UXTX
+;   ldp fp, lr, [sp], #16
+;   ret
+

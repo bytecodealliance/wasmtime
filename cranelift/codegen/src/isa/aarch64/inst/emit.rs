@@ -3417,6 +3417,66 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::DummyUse { .. } => {}
+
+            &Inst::StackProbeLoop { start, end, step } => {
+                assert!(emit_info.0.enable_probestack());
+                let start = allocs.next_writable(start);
+                let end = allocs.next(end);
+
+                // The loop generated here uses `start` as a counter register to
+                // count backwards until negating it exceeds `end`. In other
+                // words `start` is an offset from `sp` we're testing where
+                // `end` is the max size we need to test. The loop looks lik:
+                //
+                //      loop_start:
+                //          sub start, start, #step
+                //          stur xzr, [sp, start]
+                //          cmn start, end
+                //          br.gt loop_start
+                //      loop_end:
+                //
+                // Perhaps someone more clever than I can figure out how to use
+                // `subs` or the like and skip the `cmn`, but I can't figure it
+                // out at this time.
+
+                let loop_start = sink.get_label();
+                sink.bind_label(loop_start);
+
+                Inst::AluRRImm12 {
+                    alu_op: ALUOp::Sub,
+                    size: OperandSize::Size64,
+                    rd: start,
+                    rn: start.to_reg(),
+                    imm12: step,
+                }
+                .emit(&[], sink, emit_info, state);
+                Inst::Store32 {
+                    rd: regs::zero_reg(),
+                    mem: AMode::RegReg {
+                        rn: regs::stack_reg(),
+                        rm: start.to_reg(),
+                    },
+                    flags: MemFlags::trusted(),
+                }
+                .emit(&[], sink, emit_info, state);
+                Inst::AluRRR {
+                    alu_op: ALUOp::AddS,
+                    size: OperandSize::Size64,
+                    rd: regs::writable_zero_reg(),
+                    rn: start.to_reg(),
+                    rm: end,
+                }
+                .emit(&[], sink, emit_info, state);
+
+                let loop_end = sink.get_label();
+                Inst::CondBr {
+                    taken: BranchTarget::Label(loop_start),
+                    not_taken: BranchTarget::Label(loop_end),
+                    kind: CondBrKind::Cond(Cond::Gt),
+                }
+                .emit(&[], sink, emit_info, state);
+                sink.bind_label(loop_end);
+            }
         }
 
         let end_off = sink.cur_offset();

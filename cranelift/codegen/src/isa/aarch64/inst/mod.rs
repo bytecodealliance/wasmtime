@@ -1103,6 +1103,10 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::DummyUse { reg } => {
             collector.reg_use(reg);
         }
+        &Inst::StackProbeLoop { start, end, .. } => {
+            collector.reg_early_def(start);
+            collector.reg_use(end);
+        }
     }
 }
 
@@ -2886,6 +2890,12 @@ impl Inst {
             &Inst::DummyUse { reg } => {
                 let reg = pretty_print_reg(reg, allocs);
                 format!("dummy_use {}", reg)
+            }
+            &Inst::StackProbeLoop { start, end, step } => {
+                let start = pretty_print_reg(start.to_reg(), allocs);
+                let end = pretty_print_reg(end, allocs);
+                let step = step.pretty_print(0, allocs);
+                format!("stack_probe_loop {start}, {end}, {step}")
             }
         }
     }

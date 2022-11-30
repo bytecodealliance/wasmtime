@@ -637,12 +637,46 @@ impl ABIMachineSpec for AArch64MachineDeps {
         unimplemented!("Stack probing is unimplemented on AArch64");
     }
 
-    fn gen_inline_probestack(
-        _insts: &mut SmallInstVec<Self::I>,
-        _frame_size: u32,
-        _guard_size: u32,
-    ) {
-        unimplemented!("Inline stack probing is unimplemented on AArch64");
+    fn gen_inline_probestack(insts: &mut SmallInstVec<Self::I>, frame_size: u32, guard_size: u32) {
+        // The stack probe loop currently takes 6 instructions and each inline
+        // probe takes 2 (ish, these numbers sort of depend on the constants).
+        // Set this to 3 to keep the max size of the probe to 6 instructions.
+        const PROBE_MAX_UNROLL: u32 = 3;
+
+        let probe_count = align_to(frame_size, guard_size) / guard_size;
+        if probe_count <= PROBE_MAX_UNROLL {
+            // When manually unrolling stick an instruciton that stores 0 at a
+            // constant offset relative to the stack pointer. This will
+            // turn into something like `movn tmp, #n ; stur xzr [sp, tmp]`.
+            //
+            // Note that this may actually store beyond the stack size for the
+            // last item but that's ok since it's unused stack space and if
+            // that faults accidentally we're so close to faulting it shouldn't
+            // make too much difference to fault there.
+            insts.reserve(probe_count as usize);
+            for i in 0..probe_count {
+                let offset = (guard_size * (i + 1)) as i64;
+                insts.push(Self::gen_store_stack(
+                    StackAMode::SPOffset(-offset, I8),
+                    zero_reg(),
+                    I32,
+                ));
+            }
+        } else {
+            // The non-unrolled version uses two temporary registers. The
+            // `start` contains the current offset from sp and counts downwards
+            // during the loop by increments of `guard_size`. The `end` is
+            // the size of the frame and where we stop.
+            let start = writable_spilltmp_reg();
+            let end = writable_tmp2_reg();
+            insts.extend(Inst::load_constant(start, 0));
+            insts.extend(Inst::load_constant(end, frame_size.into()));
+            insts.push(Inst::StackProbeLoop {
+                start,
+                end: end.to_reg(),
+                step: Imm12::maybe_from_u64(guard_size.into()).unwrap(),
+            });
+        }
     }
 
     // Returns stack bytes used as well as instructions. Does not adjust

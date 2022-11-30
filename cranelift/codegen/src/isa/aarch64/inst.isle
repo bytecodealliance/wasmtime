@@ -935,7 +935,13 @@
 
        ;; A dummy use, useful to keep a value alive.
        (DummyUse
-        (reg Reg))))
+        (reg Reg))
+
+       ;; Emits a inline stack probe loop.
+       (StackProbeLoop (start WritableReg)
+                       (end Reg)
+                       (step Imm12))
+))
 
 ;; An ALU operation. This can be paired with several instruction formats
 ;; below (see `Inst`) in any combination.
@@ -2242,7 +2248,7 @@
       (let ((dst WritableReg (temp_writable_reg $I64)))
         (ConsumesFlags.ConsumesFlagsReturnsResultWithProducer (MInst.CSet dst cond) dst)))
 
-;; Helper for constructing `csetm` instructions. 
+;; Helper for constructing `csetm` instructions.
 (decl csetm (Cond) ConsumesFlags)
 (rule (csetm cond)
       (let ((dst WritableReg (temp_writable_reg $I64)))
