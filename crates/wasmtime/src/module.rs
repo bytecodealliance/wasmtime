@@ -358,8 +358,8 @@ impl Module {
     pub unsafe fn from_trusted_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Module> {
         let mmap = MmapVec::from_file(file.as_ref())?;
         if &mmap[0..4] == b"\x7fELF" {
-            return SerializedModule::from_mmap(mmap, &engine.config().module_version)?
-                .into_module(engine);
+            let code = engine.load_code(mmap, ObjectKind::Module)?;
+            return Module::from_parts(engine, code, None);
         }
 
         Module::new(engine, &*mmap)
