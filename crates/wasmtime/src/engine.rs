@@ -613,7 +613,7 @@ impl Engine {
         )
     }
 
-    fn load_code(&self, mmap: MmapVec, expected: ObjectKind) -> Result<Arc<CodeMemory>> {
+    pub(crate) fn load_code(&self, mmap: MmapVec, expected: ObjectKind) -> Result<Arc<CodeMemory>> {
         serialization::check_compatible(self, &mmap, expected)?;
         let mut code = CodeMemory::new(mmap)?;
         code.publish()?;
