@@ -359,8 +359,6 @@ impl Engine {
         flag: &str,
         value: &FlagValue,
     ) -> Result<(), String> {
-        use target_lexicon::Architecture;
-
         let target = self.target();
         let ok = match flag {
             // These settings must all have be enabled, since their value
@@ -369,11 +367,8 @@ impl Engine {
             "avoid_div_traps" => *value == FlagValue::Bool(true),
             "libcall_call_conv" => *value == FlagValue::Enum("isa_default".into()),
             "preserve_frame_pointers" => *value == FlagValue::Bool(true),
-
-            // On x86-64 targets, stack probing is enabled by default.
-            "enable_probestack" => *value == FlagValue::Bool(target.architecture == Architecture::X86_64),
-            // On x86-64 targets, the default stack probing strategy is inline.
-            "probestack_strategy" => *value == FlagValue::Enum(if target.architecture == Architecture::X86_64 { "inline" } else { "outline" }.into()),
+            "enable_probestack" => *value == FlagValue::Bool(crate::config::probestack_supported(target.architecture)),
+            "probestack_strategy" => *value == FlagValue::Enum("inline".into()),
 
             // Features wasmtime doesn't use should all be disabled, since
             // otherwise if they are enabled it could change the behavior of

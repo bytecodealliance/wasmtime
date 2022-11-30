@@ -7,6 +7,7 @@ use std::fmt;
 #[cfg(feature = "cache")]
 use std::path::Path;
 use std::sync::Arc;
+use target_lexicon::Architecture;
 use wasmparser::WasmFeatures;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
@@ -1470,8 +1471,6 @@ impl Config {
 
     #[cfg(compiler)]
     pub(crate) fn build_compiler(&mut self) -> Result<Box<dyn wasmtime_environ::Compiler>> {
-        use target_lexicon::Architecture;
-
         let mut compiler = match self.compiler_config.strategy {
             Strategy::Auto | Strategy::Cranelift => wasmtime_cranelift::builder(),
         };
@@ -1480,35 +1479,30 @@ impl Config {
             compiler.target(target.clone())?;
         }
 
-        // On x86-64 targets, we enable stack probing by default.
+        // If probestack is enabled for a target, Wasmtime will always use the
+        // inline strategy which doesn't require us to define a `__probestack`
+        // function or similar.
+        self.compiler_config
+            .settings
+            .insert("probestack_strategy".into(), "inline".into());
+
+        let host = target_lexicon::Triple::host();
+        let target = self.compiler_config.target.as_ref().unwrap_or(&host);
+
+        // On supported targets, we enable stack probing by default.
         // This is required on Windows because of the way Windows
         // commits its stacks, but it's also a good idea on other
         // platforms to ensure guard pages are hit for large frame
         // sizes.
-        if self
-            .compiler_config
-            .target
-            .as_ref()
-            .map(|t| t.architecture == Architecture::X86_64)
-            .unwrap_or(cfg!(target_arch = "x86_64"))
-        {
+        if probestack_supported(target.architecture) {
             self.compiler_config
                 .flags
                 .insert("enable_probestack".into());
-            self.compiler_config
-                .settings
-                .insert("probestack_strategy".into(), "inline".into());
         }
 
         if self.native_unwind_info ||
-            // Windows always needs unwind info, since it is part of the ABI.
-            self
-                .compiler_config
-                .target
-                .as_ref()
-                .map_or(cfg!(target_os = "windows"), |target| {
-                    target.operating_system == target_lexicon::OperatingSystem::Windows
-                })
+             // Windows always needs unwind info, since it is part of the ABI.
+             target.operating_system == target_lexicon::OperatingSystem::Windows
         {
             if !self
                 .compiler_config
@@ -1904,4 +1898,11 @@ impl PoolingAllocationConfig {
         self.config.limits.memory_pages = pages;
         self
     }
+}
+
+pub(crate) fn probestack_supported(arch: Architecture) -> bool {
+    matches!(
+        arch,
+        Architecture::X86_64 | Architecture::Aarch64(_) | Architecture::Riscv64(_)
+    )
 }
