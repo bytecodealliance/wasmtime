@@ -617,6 +617,22 @@ impl Sig {
 /// ABI information shared between body (callee) and caller.
 #[derive(Clone, Debug)]
 pub struct SigData {
+    /// Currently both return values and arguments are stored in a continuous space vector
+    /// in `SigSet::abi_args`.
+    ///
+    /// ```plain
+    ///                  +----------------------------------------------+
+    ///                  | return values                                |
+    ///                  | ...                                          |
+    ///   rets_end   --> +----------------------------------------------+
+    ///                  | arguments                                    |
+    ///                  | ...                                          |
+    ///   args_end   --> +----------------------------------------------+
+    ///
+    /// ```
+    ///
+    /// Note we only store two offsets as rets_end == args_start, and rets_start == prev.args_end.
+    ///
     /// Argument location ending offset (regs or stack slots). Stack offsets are relative to
     /// SP on entry to function.
     ///
