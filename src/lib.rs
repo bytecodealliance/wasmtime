@@ -171,8 +171,21 @@ pub unsafe extern "C" fn environ_sizes_get(
 /// return `errno::inval`.
 /// Note: This is similar to `clock_getres` in POSIX.
 #[no_mangle]
-pub unsafe extern "C" fn clock_res_get(id: Clockid, resolution: *mut Timestamp) -> Errno {
-    unreachable()
+pub extern "C" fn clock_res_get(id: Clockid, resolution: &mut Timestamp) -> Errno {
+    match id {
+        CLOCKID_MONOTONIC => {
+            let res = wasi_clocks::monotonic_clock_resolution(
+                wasi_default_clocks::default_monotonic_clock(),
+            );
+            *resolution = res;
+        }
+        CLOCKID_REALTIME => {
+            let res = wasi_clocks::wall_clock_resolution(wasi_default_clocks::default_wall_clock());
+            *resolution = u64::from(res.nanoseconds) + res.seconds * 1_000_000_000;
+        }
+        _ => unreachable(),
+    }
+    ERRNO_SUCCESS
 }
 
 /// Return the time value of a clock.
@@ -180,10 +193,21 @@ pub unsafe extern "C" fn clock_res_get(id: Clockid, resolution: *mut Timestamp) 
 #[no_mangle]
 pub unsafe extern "C" fn clock_time_get(
     id: Clockid,
-    precision: Timestamp,
-    time: *mut Timestamp,
+    _precision: Timestamp,
+    time: &mut Timestamp,
 ) -> Errno {
-    unreachable()
+    match id {
+        CLOCKID_MONOTONIC => {
+            *time =
+                wasi_clocks::monotonic_clock_now(wasi_default_clocks::default_monotonic_clock());
+        }
+        CLOCKID_REALTIME => {
+            let res = wasi_clocks::wall_clock_now(wasi_default_clocks::default_wall_clock());
+            *time = u64::from(res.nanoseconds) + res.seconds * 1_000_000_000;
+        }
+        _ => unreachable(),
+    }
+    ERRNO_SUCCESS
 }
 
 /// Provide file advisory information on a file descriptor.
