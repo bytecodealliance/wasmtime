@@ -360,8 +360,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         insts
     }
 
-    fn gen_probestack(frame_size: u32) -> SmallInstVec<Self::I> {
-        let mut insts = SmallVec::new();
+    fn gen_probestack(insts: &mut SmallInstVec<Self::I>, frame_size: u32) {
         insts.extend(Inst::load_constant_u32(writable_a0(), frame_size as u64));
         insts.push(Inst::Call {
             info: Box::new(CallInfo {
@@ -377,7 +376,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 caller_callconv: CallConv::SystemV,
             }),
         });
-        insts
     }
     // Returns stack bytes used as well as instructions. Does not adjust
     // nominal SP offset; abi_impl generic code will do that.
@@ -632,16 +630,16 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         || fixed_frame_storage_size > 0
     }
 
-    fn gen_inline_probestack(frame_size: u32, guard_size: u32) -> SmallInstVec<Self::I> {
+    fn gen_inline_probestack(insts: &mut SmallInstVec<Self::I>, frame_size: u32, guard_size: u32) {
         // Unroll at most n consecutive probes, before falling back to using a loop
         const PROBE_MAX_UNROLL: u32 = 3;
         // Number of probes that we need to perform
         let probe_count = align_to(frame_size, guard_size) / guard_size;
 
         if probe_count <= PROBE_MAX_UNROLL {
-            Self::gen_probestack_unroll(guard_size, probe_count)
+            Self::gen_probestack_unroll(insts, guard_size, probe_count)
         } else {
-            Self::gen_probestack_loop(guard_size, probe_count)
+            Self::gen_probestack_loop(insts, guard_size, probe_count)
         }
     }
 }
@@ -697,8 +695,8 @@ fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
 }
 
 impl Riscv64MachineDeps {
-    fn gen_probestack_unroll(guard_size: u32, probe_count: u32) -> SmallInstVec<Inst> {
-        let mut insts = SmallVec::with_capacity(probe_count as usize);
+    fn gen_probestack_unroll(insts: &mut SmallInstVec<Inst>, guard_size: u32, probe_count: u32) {
+        insts.reserve(probe_count as usize);
         for i in 0..probe_count {
             let offset = (guard_size * (i + 1)) as i64;
             insts.push(Self::gen_store_stack(
@@ -707,13 +705,13 @@ impl Riscv64MachineDeps {
                 I32,
             ));
         }
-        insts
     }
-    fn gen_probestack_loop(guard_size: u32, probe_count: u32) -> SmallInstVec<Inst> {
-        smallvec![Inst::StackProbeLoop {
+
+    fn gen_probestack_loop(insts: &mut SmallInstVec<Inst>, guard_size: u32, probe_count: u32) {
+        insts.push(Inst::StackProbeLoop {
             guard_size,
             probe_count,
             tmp: Writable::from_reg(x_reg(28)), // t3
-        }]
+        });
     }
 }

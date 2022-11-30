@@ -273,7 +273,7 @@ pub(crate) fn define() -> SettingGroup {
         "enable_probestack",
         "Enable the use of stack probes for supported calling conventions.",
         "",
-        true,
+        false,
     );
 
     settings.add_bool(

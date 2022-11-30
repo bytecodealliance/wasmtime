@@ -266,10 +266,9 @@ where
             builder.set(flag_name, value.as_str())?;
         }
 
-        // Optionally test inline stackprobes on x86
-        // TODO: inline stack probes are not available on AArch64
+        // Optionally test inline stackprobes on supported platforms
         // TODO: Test outlined stack probes.
-        if cfg!(target_arch = "x86_64") && bool::arbitrary(self.u)? {
+        if supports_inline_probestack() && bool::arbitrary(self.u)? {
             builder.enable("enable_probestack")?;
             builder.set("probestack_strategy", "inline")?;
 
@@ -300,7 +299,11 @@ where
         // into compilation anywhere, we leave it on unconditionally to make sure the generation doesn't panic.
         builder.enable("machine_code_cfg_info")?;
 
-        Ok(Flags::new(builder))
+        return Ok(Flags::new(builder));
+
+        fn supports_inline_probestack() -> bool {
+            cfg!(target_arch = "x86_64") || cfg!(target_arch = "aarch64")
+        }
     }
 
     pub fn generate_test(mut self) -> Result<TestCase> {

@@ -63,21 +63,14 @@ pub fn mem_finalize(
                 (smallvec![], mem)
             } else {
                 let tmp = writable_spilltmp_reg();
-                let mut const_insts = Inst::load_constant(tmp, off as u64);
-                // N.B.: we must use AluRRRExtend because AluRRR uses the "shifted register" form
-                // (AluRRRShift) instead, which interprets register 31 as the zero reg, not SP. SP
-                // is a valid base (for SPOffset) which we must handle here.
-                // Also, SP needs to be the first arg, not second.
-                let add_inst = Inst::AluRRRExtend {
-                    alu_op: ALUOp::Add,
-                    size: OperandSize::Size64,
-                    rd: tmp,
-                    rn: basereg,
-                    rm: tmp.to_reg(),
-                    extendop: ExtendOp::UXTX,
-                };
-                const_insts.push(add_inst);
-                (const_insts, AMode::reg(tmp.to_reg()))
+                (
+                    Inst::load_constant(tmp, off as u64),
+                    AMode::RegExtended {
+                        rn: basereg,
+                        rm: tmp.to_reg(),
+                        extendop: ExtendOp::SXTX,
+                    },
+                )
             }
         }
 
@@ -3424,6 +3417,72 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::DummyUse { .. } => {}
+
+            &Inst::StackProbeLoop { start, end, step } => {
+                assert!(emit_info.0.enable_probestack());
+                let start = allocs.next_writable(start);
+                let end = allocs.next(end);
+
+                // The loop generated here uses `start` as a counter register to
+                // count backwards until negating it exceeds `end`. In other
+                // words `start` is an offset from `sp` we're testing where
+                // `end` is the max size we need to test. The loop looks like:
+                //
+                //      loop_start:
+                //          sub start, start, #step
+                //          stur xzr, [sp, start]
+                //          cmn start, end
+                //          br.gt loop_start
+                //      loop_end:
+                //
+                // Note that this loop cannot use the spilltmp and tmp2
+                // registers as those are currently used as the input to this
+                // loop when generating the instruction. This means that some
+                // more flavorful address modes and lowerings need to be
+                // avoided.
+                //
+                // Perhaps someone more clever than I can figure out how to use
+                // `subs` or the like and skip the `cmn`, but I can't figure it
+                // out at this time.
+
+                let loop_start = sink.get_label();
+                sink.bind_label(loop_start);
+
+                Inst::AluRRImm12 {
+                    alu_op: ALUOp::Sub,
+                    size: OperandSize::Size64,
+                    rd: start,
+                    rn: start.to_reg(),
+                    imm12: step,
+                }
+                .emit(&[], sink, emit_info, state);
+                Inst::Store32 {
+                    rd: regs::zero_reg(),
+                    mem: AMode::RegReg {
+                        rn: regs::stack_reg(),
+                        rm: start.to_reg(),
+                    },
+                    flags: MemFlags::trusted(),
+                }
+                .emit(&[], sink, emit_info, state);
+                Inst::AluRRR {
+                    alu_op: ALUOp::AddS,
+                    size: OperandSize::Size64,
+                    rd: regs::writable_zero_reg(),
+                    rn: start.to_reg(),
+                    rm: end,
+                }
+                .emit(&[], sink, emit_info, state);
+
+                let loop_end = sink.get_label();
+                Inst::CondBr {
+                    taken: BranchTarget::Label(loop_start),
+                    not_taken: BranchTarget::Label(loop_end),
+                    kind: CondBrKind::Cond(Cond::Gt),
+                }
+                .emit(&[], sink, emit_info, state);
+                sink.bind_label(loop_end);
+            }
         }
 
         let end_off = sink.cur_offset();

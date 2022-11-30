@@ -569,13 +569,17 @@ impl ABIMachineSpec for S390xMachineDeps {
         SmallVec::new()
     }
 
-    fn gen_probestack(_: u32) -> SmallInstVec<Self::I> {
+    fn gen_probestack(_insts: &mut SmallInstVec<Self::I>, _: u32) {
         // TODO: implement if we ever require stack probes on an s390x host
         // (unlikely unless Lucet is ported)
-        smallvec![]
+        unimplemented!("Stack probing is unimplemented on S390x");
     }
 
-    fn gen_inline_probestack(_frame_size: u32, _guard_size: u32) -> SmallInstVec<Self::I> {
+    fn gen_inline_probestack(
+        _insts: &mut SmallInstVec<Self::I>,
+        _frame_size: u32,
+        _guard_size: u32,
+    ) {
         unimplemented!("Inline stack probing is unimplemented on S390x");
     }
 

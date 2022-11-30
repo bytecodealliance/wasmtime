@@ -500,10 +500,10 @@ pub trait ABIMachineSpec {
     fn gen_epilogue_frame_restore(flags: &settings::Flags) -> SmallInstVec<Self::I>;
 
     /// Generate a probestack call.
-    fn gen_probestack(_frame_size: u32) -> SmallInstVec<Self::I>;
+    fn gen_probestack(insts: &mut SmallInstVec<Self::I>, frame_size: u32);
 
     /// Generate a inline stack probe.
-    fn gen_inline_probestack(_frame_size: u32, _guard_size: u32) -> SmallInstVec<Self::I>;
+    fn gen_inline_probestack(insts: &mut SmallInstVec<Self::I>, frame_size: u32, guard_size: u32);
 
     /// Get all clobbered registers that are callee-saved according to the ABI; the result
     /// contains the registers in a sorted order.
@@ -1838,14 +1838,13 @@ impl<M: ABIMachineSpec> Callee<M> {
                 .map_or(false, |min_frame| total_stacksize >= min_frame);
 
             if needs_probestack {
-                insts.extend(
-                    if self.flags.probestack_strategy() == ProbestackStrategy::Inline {
+                match self.flags.probestack_strategy() {
+                    ProbestackStrategy::Inline => {
                         let guard_size = 1 << self.flags.probestack_size_log2();
-                        M::gen_inline_probestack(total_stacksize, guard_size)
-                    } else {
-                        M::gen_probestack(total_stacksize)
-                    },
-                );
+                        M::gen_inline_probestack(&mut insts, total_stacksize, guard_size)
+                    }
+                    ProbestackStrategy::Outline => M::gen_probestack(&mut insts, total_stacksize),
+                }
             }
         }
 

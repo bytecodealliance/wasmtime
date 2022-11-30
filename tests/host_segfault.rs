@@ -144,6 +144,16 @@ fn main() {
             },
             true,
         ),
+        (
+            "overrun 8k with misconfigured host",
+            || overrun_with_big_module(8 << 10),
+            true,
+        ),
+        (
+            "overrun 32k with misconfigured host",
+            || overrun_with_big_module(32 << 10),
+            true,
+        ),
         #[cfg(not(any(target_arch = "riscv64")))]
         // Due to `InstanceAllocationStrategy::pooling()` trying to alloc more than 6000G memory space.
         // https://gitlab.com/qemu-project/qemu/-/issues/1214
@@ -178,6 +188,7 @@ fn main() {
         }
         Err(_) => {
             for (name, _test, stack_overflow) in tests {
+                println!("running {name}");
                 run_test(name, *stack_overflow);
             }
         }
@@ -245,7 +256,7 @@ fn is_stack_overflow(status: &ExitStatus, stderr: &str) -> bool {
     use std::os::unix::prelude::*;
 
     // The main thread might overflow or it might be from a fiber stack (SIGSEGV/SIGBUS)
-    stderr.contains("thread 'main' has overflowed its stack")
+    stderr.contains("has overflowed its stack")
         || match status.signal() {
             Some(libc::SIGSEGV) | Some(libc::SIGBUS) => true,
             _ => false,
@@ -266,4 +277,48 @@ fn is_stack_overflow(status: &ExitStatus, _stderr: &str) -> bool {
         Some(0xc00000fd) => true,
         _ => false,
     }
+}
+
+fn overrun_with_big_module(approx_stack: usize) {
+    // Each call to `$get` produces ten 8-byte values which need to be saved
+    // onto the stack, so divide `approx_stack` by 80 to get
+    // a rough number of calls to consume `approx_stack` stack.
+    let n = approx_stack / 10 / 8;
+
+    let mut s = String::new();
+    s.push_str("(module\n");
+    s.push_str("(func $big_stack\n");
+    for _ in 0..n {
+        s.push_str("call $get\n");
+    }
+    for _ in 0..n {
+        s.push_str("call $take\n");
+    }
+    s.push_str(")\n");
+    s.push_str("(func $get (result i64 i64 i64 i64 i64 i64 i64 i64 i64 i64) call $big_stack unreachable)\n");
+    s.push_str("(func $take (param i64 i64 i64 i64 i64 i64 i64 i64 i64 i64) unreachable)\n");
+    s.push_str("(func (export \"\") call $big_stack)\n");
+    s.push_str(")\n");
+
+    // Give 100MB of stack to wasm, representing a misconfigured host. Run the
+    // actual module on a 2MB stack in a child thread to guarantee that the
+    // module here will overrun the stack. This should deterministically hit the
+    // guard page.
+    let mut config = Config::default();
+    config.max_wasm_stack(100 << 20).async_stack_size(100 << 20);
+    let engine = Engine::new(&config).unwrap();
+    let module = Module::new(&engine, &s).unwrap();
+    let mut store = Store::new(&engine, ());
+    let i = Instance::new(&mut store, &module, &[]).unwrap();
+    let f = i.get_typed_func::<(), ()>(&mut store, "").unwrap();
+    std::thread::Builder::new()
+        .stack_size(2 << 20)
+        .spawn(move || {
+            println!("{CONFIRM}");
+            f.call(&mut store, ()).unwrap();
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+    unreachable!();
 }
