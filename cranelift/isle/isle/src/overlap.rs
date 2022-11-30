@@ -29,6 +29,9 @@ pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<(), error::Errors> {
 struct Errors {
     /// Edges between rules indicating overlap.
     nodes: HashMap<Pos, HashSet<Pos>>,
+    /// For each (mask, shadowed) pair, every rule in `shadowed` is unmatchable because `mask` will
+    /// always match first.
+    shadowed: HashMap<Pos, Vec<Pos>>,
 }
 
 impl Errors {
@@ -66,19 +69,37 @@ impl Errors {
             });
         }
 
+        errors.extend(
+            self.shadowed
+                .into_iter()
+                .map(|(mask, shadowed)| Error::ShadowedError {
+                    shadowed: shadowed.into_iter().map(Span::new_single).collect(),
+                    mask: Span::new_single(mask),
+                }),
+        );
+
         errors.sort_by_key(|err| match err {
-            Error::OverlapError { rules, .. } => rules.first().unwrap().from,
+            Error::ShadowedError { mask, .. } => mask.from,
+            Error::OverlapError { rules, .. } => rules[0].from,
             _ => Pos::default(),
         });
         errors
     }
 
     fn check_pair(&mut self, a: &trie_again::Rule, b: &trie_again::Rule) {
-        if let trie_again::Overlap::Yes { .. } = a.may_overlap(b) {
+        if let trie_again::Overlap::Yes { subset } = a.may_overlap(b) {
             if a.prio == b.prio {
                 // edges are undirected
                 self.nodes.entry(a.pos).or_default().insert(b.pos);
                 self.nodes.entry(b.pos).or_default().insert(a.pos);
+            } else if subset {
+                // One rule's constraints are a subset of the other's, or they're equal.
+                // This is fine as long as the higher-priority rule has more constraints.
+                let (lo, hi) = if a.prio < b.prio { (a, b) } else { (b, a) };
+                if hi.total_constraints() <= lo.total_constraints() {
+                    // Otherwise, the lower-priority rule can never match.
+                    self.shadowed.entry(hi.pos).or_default().push(lo.pos);
+                }
             }
         }
     }

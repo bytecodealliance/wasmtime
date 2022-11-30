@@ -151,8 +151,8 @@ pub enum Overlap {
     Yes {
         /// True if every input accepted by one rule is also accepted by the other. This does not
         /// indicate which rule is more general and in fact the rules could match exactly the same
-        /// set of inputs. You can work out which by comparing the number of constraints in both
-        /// rules: The more general rule has fewer constraints.
+        /// set of inputs. You can work out which by comparing `total_constraints()` in both rules:
+        /// The more general rule has fewer constraints.
         subset: bool,
     },
 }
@@ -213,7 +213,10 @@ impl Rule {
         // that they can cause rules to not overlap. However, because we don't have a concrete
         // pattern to compare, the analysis to prove that is complicated. For now, we approximate
         // the result. If either rule has nonlinear constraints, conservatively report that neither
-        // is a subset of the other.
+        // is a subset of the other. Note that this does not disagree with the doc comment for
+        // `Overlap::Yes { subset }` which says to use `total_constraints` to disambiguate, since if
+        // we return `subset: true` here, `equals` is empty for both rules, so `total_constraints()`
+        // equals `constraints.len()`.
         let mut subset = small.equals.is_empty() && big.equals.is_empty();
 
         for (binding, a) in small.constraints.iter() {
@@ -232,6 +235,14 @@ impl Rule {
             }
         }
         Overlap::Yes { subset }
+    }
+
+    /// Returns the total number of binding sites which this rule constrains, with either a concrete
+    /// pattern or an equality constraint.
+    pub fn total_constraints(&self) -> usize {
+        // Because of `normalize_equivalence_classes`, these two sets don't overlap, so the size of
+        // the union is the sum of their sizes.
+        self.constraints.len() + self.equals.len()
     }
 
     /// Returns the constraint that the given binding site must satisfy for this rule to match, if
