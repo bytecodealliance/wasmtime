@@ -2344,6 +2344,7 @@ pub(crate) fn emit(
                 OperandSize::Size64,
                 ShiftKind::ShiftRightLogical,
                 Imm8Gpr::new(Imm8Reg::Imm8 { imm: 1 }).unwrap(),
+                tmp_gpr1,
                 Writable::from_reg(tmp_gpr1),
             );
             inst.emit(&[], sink, info, state);

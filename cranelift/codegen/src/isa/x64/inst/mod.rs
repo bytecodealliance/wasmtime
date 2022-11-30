@@ -431,6 +431,7 @@ impl Inst {
         size: OperandSize,
         kind: ShiftKind,
         num_bits: Imm8Gpr,
+        src: Reg,
         dst: Writable<Reg>,
     ) -> Inst {
         if let Imm8Reg::Imm8 { imm: num_bits } = num_bits.clone().to_imm8_reg() {
@@ -440,7 +441,7 @@ impl Inst {
         Inst::ShiftR {
             size,
             kind,
-            src: Gpr::new(dst.to_reg()).unwrap(),
+            src: Gpr::new(src).unwrap(),
             num_bits,
             dst: WritableGpr::from_writable_reg(dst).unwrap(),
         }
