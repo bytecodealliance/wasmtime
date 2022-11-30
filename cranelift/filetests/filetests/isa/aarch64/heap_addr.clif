@@ -35,18 +35,12 @@ block0(v0: i64, v1: i32):
 
 ; block0:
 ;   mov w6, w1
+;   add x7, x0, x1, UXTW
+;   movz x5, #0
 ;   subs xzr, x6, #65536
-;   b.ls label1 ; b label2
-; block1:
-;   add x8, x0, x1, UXTW
-;   movz x7, #0
-;   subs xzr, x6, #65536
-;   csel x0, x7, x8, hi
+;   csel x0, x5, x7, hi
 ;   csdb
 ;   ret
-; block2:
-;   udf #0xc11f
-
 
 function %dynamic_heap_check_with_offset(i64 vmctx, i32) -> i64 {
     gv0 = vmctx
@@ -59,16 +53,16 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   mov w11, w1
-;   ldr x10, [x0]
+;   mov w10, w1
 ;   movz x9, #24
-;   adds x11, x11, x9
+;   adds x11, x10, x9
 ;   b.lo 8 ; udf
-;   add x12, x0, x1, UXTW
-;   add x12, x12, #16
-;   movz x13, #0
-;   subs xzr, x11, x10
-;   csel x0, x13, x12, hi
+;   ldr x12, [x0]
+;   add x13, x0, x1, UXTW
+;   add x13, x13, #16
+;   movz x10, #0
+;   subs xzr, x11, x12
+;   csel x0, x10, x13, hi
 ;   csdb
 ;   ret
 
@@ -82,19 +76,13 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   mov w9, w1
-;   movz w10, #65512
-;   subs xzr, x9, x10
-;   b.ls label1 ; b label2
-; block1:
-;   add x11, x0, x1, UXTW
-;   add x11, x11, #16
-;   movz w10, #65512
-;   movz x12, #0
-;   subs xzr, x9, x10
-;   csel x0, x12, x11, hi
+;   mov w8, w1
+;   add x9, x0, x1, UXTW
+;   add x9, x9, #16
+;   movz w6, #65512
+;   movz x10, #0
+;   subs xzr, x8, x6
+;   csel x0, x10, x9, hi
 ;   csdb
 ;   ret
-; block2:
-;   udf #0xc11f
 

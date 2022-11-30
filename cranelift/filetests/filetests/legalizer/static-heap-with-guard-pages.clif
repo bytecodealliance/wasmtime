@@ -17,5 +17,6 @@ block0(v0: i64, v1: i32):
 ; check:  block0(v0: i64, v1: i32):
 ; nextln:     v3 = uextend.i64 v1
 ; nextln:     v4 = load.i64 notrap aligned v0
-; nextln:     v2 = iadd v4, v3
+; nextln:     v5 = iadd v4, v3
+; nextln:     v2 -> v5
 ; nextln:     return v2

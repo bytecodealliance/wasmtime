@@ -33,14 +33,14 @@ block0(v0: i32, v1: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movl    %edi, %eax
-;   movq    8(%rsi), %rdi
-;   movq    %rax, %rcx
-;   addq    %rcx, $32768, %rcx
+;   movq    %rax, %rdi
+;   addq    %rdi, $32768, %rdi
 ;   jnb ; ud2 heap_oob ;
+;   movq    8(%rsi), %rcx
 ;   addq    %rax, 0(%rsi), %rax
 ;   addq    %rax, $32768, %rax
 ;   xorq    %rsi, %rsi, %rsi
-;   cmpq    %rdi, %rcx
+;   cmpq    %rcx, %rdi
 ;   cmovnbeq %rsi, %rax, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -64,19 +64,14 @@ block0(v0: i64, v1: i32):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movl    %esi, %r9d
-;   cmpq    $4096, %r9
-;   jbe     label1; j label2
-; block1:
 ;   movq    %r9, %rax
 ;   addq    %rax, 0(%rdi), %rax
-;   xorq    %r10, %r10, %r10
+;   xorq    %r8, %r8, %r8
 ;   cmpq    $4096, %r9
-;   cmovnbeq %r10, %rax, %rax
+;   cmovnbeq %r8, %rax, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; block2:
-;   ud2 heap_oob
 
 ;; When a static memory is the "right" size (4GB memory, 2GB guard regions), the
 ;; Spectre mitigation is not present. Cranelift relies on the memory permissions
@@ -113,17 +108,16 @@ block0(v0: i64, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    %rdi, %rax
-;   movl    %esi, %edi
-;   movq    0(%rax), %rsi
-;   movq    %rdi, %rcx
-;   addq    %rcx, $24, %rcx
+;   movl    %esi, %esi
+;   movq    %rsi, %r11
+;   addq    %r11, $24, %r11
 ;   jnb ; ud2 heap_oob ;
-;   addq    %rax, %rdi, %rax
+;   movq    %rdi, %rax
+;   addq    %rax, %rsi, %rax
 ;   addq    %rax, $16, %rax
-;   xorq    %rdi, %rdi, %rdi
-;   cmpq    %rsi, %rcx
-;   cmovnbeq %rdi, %rax, %rax
+;   xorq    %rsi, %rsi, %rsi
+;   cmpq    0(%rdi), %r11
+;   cmovnbeq %rsi, %rax, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -141,18 +135,13 @@ block0(v0: i64, v1: i32):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movl    %esi, %r10d
-;   cmpq    $65512, %r10
-;   jbe     label1; j label2
-; block1:
 ;   movq    %rdi, %rax
 ;   addq    %rax, %r10, %rax
 ;   addq    %rax, $16, %rax
-;   xorq    %r11, %r11, %r11
+;   xorq    %r9, %r9, %r9
 ;   cmpq    $65512, %r10
-;   cmovnbeq %r11, %rax, %rax
+;   cmovnbeq %r9, %rax, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; block2:
-;   ud2 heap_oob
 
