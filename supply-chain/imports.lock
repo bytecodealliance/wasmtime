@@ -169,6 +169,16 @@ who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
 delta = "0.2.6 -> 0.2.7"
 
+[[audits.mozilla.audits.half]]
+who = "John M. Schanck <jschanck@mozilla.com>"
+criteria = "safe-to-deploy"
+version = "1.8.2"
+notes = """
+This crate contains unsafe code for bitwise casts to/from binary16 floating-point
+format. I've reviewed these and found no issues. There are no uses of ambient
+capabilities.
+"""
+
 [[audits.mozilla.audits.hashbrown]]
 who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
@@ -287,6 +297,16 @@ delta = "1.0.137 -> 1.0.143"
 who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
 delta = "1.0.143 -> 1.0.144"
+
+[[audits.mozilla.audits.serde_cbor]]
+who = "R. Martinho Fernandes <bugs@rmf.io>"
+criteria = "safe-to-deploy"
+version = "0.11.1"
+
+[[audits.mozilla.audits.serde_cbor]]
+who = "John M. Schanck <jschanck@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "0.11.1 -> 0.11.2"
 
 [[audits.mozilla.audits.serde_derive]]
 who = "Mike Hommey <mh+mozilla@glandium.org>"

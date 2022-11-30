@@ -338,10 +338,6 @@ criteria = "safe-to-deploy"
 version = "0.10.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.half]]
-version = "1.8.2"
-criteria = "safe-to-run"
-
 [[exemptions.hermit-abi]]
 version = "0.1.19"
 criteria = "safe-to-deploy"
@@ -737,10 +733,6 @@ criteria = "safe-to-deploy"
 [[exemptions.serde]]
 version = "1.0.137"
 criteria = "safe-to-deploy"
-
-[[exemptions.serde_cbor]]
-version = "0.11.2"
-criteria = "safe-to-run"
 
 [[exemptions.serde_derive]]
 version = "1.0.137"
