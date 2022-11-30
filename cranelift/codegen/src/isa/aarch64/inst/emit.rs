@@ -63,21 +63,14 @@ pub fn mem_finalize(
                 (smallvec![], mem)
             } else {
                 let tmp = writable_spilltmp_reg();
-                let mut const_insts = Inst::load_constant(tmp, off as u64);
-                // N.B.: we must use AluRRRExtend because AluRRR uses the "shifted register" form
-                // (AluRRRShift) instead, which interprets register 31 as the zero reg, not SP. SP
-                // is a valid base (for SPOffset) which we must handle here.
-                // Also, SP needs to be the first arg, not second.
-                let add_inst = Inst::AluRRRExtend {
-                    alu_op: ALUOp::Add,
-                    size: OperandSize::Size64,
-                    rd: tmp,
-                    rn: basereg,
-                    rm: tmp.to_reg(),
-                    extendop: ExtendOp::UXTX,
-                };
-                const_insts.push(add_inst);
-                (const_insts, AMode::reg(tmp.to_reg()))
+                (
+                    Inst::load_constant(tmp, off as u64),
+                    AMode::RegExtended {
+                        rn: basereg,
+                        rm: tmp.to_reg(),
+                        extendop: ExtendOp::SXTX,
+                    },
+                )
             }
         }
 

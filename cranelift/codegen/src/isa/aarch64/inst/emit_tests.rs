@@ -1789,8 +1789,8 @@ fn test_aarch64_binemit() {
             mem: AMode::FPOffset { off: 32768, ty: I8 },
             flags: MemFlags::trusted(),
         },
-        "100090D2B063308B010240F9",
-        "movz x16, #32768 ; add x16, fp, x16, UXTX ; ldr x1, [x16]",
+        "100090D2A1EB70F8",
+        "movz x16, #32768 ; ldr x1, [fp, x16, SXTX]",
     ));
     insns.push((
         Inst::ULoad64 {
@@ -1801,8 +1801,8 @@ fn test_aarch64_binemit() {
             },
             flags: MemFlags::trusted(),
         },
-        "F0FF8F92B063308B010240F9",
-        "movn x16, #32767 ; add x16, fp, x16, UXTX ; ldr x1, [x16]",
+        "F0FF8F92A1EB70F8",
+        "movn x16, #32767 ; ldr x1, [fp, x16, SXTX]",
     ));
     insns.push((
         Inst::ULoad64 {
@@ -1813,8 +1813,8 @@ fn test_aarch64_binemit() {
             }, // 2^20
             flags: MemFlags::trusted(),
         },
-        "1002A0D2B063308B010240F9",
-        "movz x16, #16, LSL #16 ; add x16, fp, x16, UXTX ; ldr x1, [x16]",
+        "1002A0D2A1EB70F8",
+        "movz x16, #16, LSL #16 ; ldr x1, [fp, x16, SXTX]",
     ));
     insns.push((
         Inst::ULoad64 {
@@ -1825,8 +1825,8 @@ fn test_aarch64_binemit() {
             }, // 2^20 + 1
             flags: MemFlags::trusted(),
         },
-        "300080521002A072B063308B010240F9",
-        "movz w16, #1 ; movk w16, w16, #16, LSL #16 ; add x16, fp, x16, UXTX ; ldr x1, [x16]",
+        "300080521002A072A1EB70F8",
+        "movz w16, #1 ; movk w16, w16, #16, LSL #16 ; ldr x1, [fp, x16, SXTX]",
     ));
 
     insns.push((
@@ -1867,8 +1867,8 @@ fn test_aarch64_binemit() {
             },
             flags: MemFlags::trusted(),
         },
-        "1002A0D2F060308B010240F9",
-        "movz x16, #16, LSL #16 ; add x16, x7, x16, UXTX ; ldr x1, [x16]",
+        "1002A0D2E1E870F8",
+        "movz x16, #16, LSL #16 ; ldr x1, [x7, x16, SXTX]",
     ));
 
     insns.push((
