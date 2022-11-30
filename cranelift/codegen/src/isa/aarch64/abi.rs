@@ -631,13 +631,17 @@ impl ABIMachineSpec for AArch64MachineDeps {
         insts
     }
 
-    fn gen_probestack(_: u32) -> SmallInstVec<Self::I> {
+    fn gen_probestack(_insts: &mut SmallInstVec<Self::I>, _: u32) {
         // TODO: implement if we ever require stack probes on an AArch64 host
         // (unlikely unless Lucet is ported)
-        smallvec![]
+        unimplemented!("Stack probing is unimplemented on AArch64");
     }
 
-    fn gen_inline_probestack(_frame_size: u32, _guard_size: u32) -> SmallInstVec<Self::I> {
+    fn gen_inline_probestack(
+        _insts: &mut SmallInstVec<Self::I>,
+        _frame_size: u32,
+        _guard_size: u32,
+    ) {
         unimplemented!("Inline stack probing is unimplemented on AArch64");
     }
 
