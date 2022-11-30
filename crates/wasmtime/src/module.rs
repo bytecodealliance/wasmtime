@@ -241,10 +241,6 @@ impl Module {
                     if #[cfg(feature = "wat")] {
                         let mut e = e.downcast::<wat::Error>()?;
                         e.set_path(file);
-                        if e.to_string().ends_with("input bytes aren't valid utf-8") {
-                            eprintln!("note: wasmtime might be trying to load a precompiled binary without --allow-compiled.");
-                        }
-
                         bail!(e)
                     } else {
                         Err(e)
