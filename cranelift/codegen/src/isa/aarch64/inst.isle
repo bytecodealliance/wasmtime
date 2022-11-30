@@ -944,8 +944,7 @@
        ;; means that the internal codegen can't use these registers.
        (StackProbeLoop (start WritableReg)
                        (end Reg)
-                       (step Imm12))
-))
+                       (step Imm12))))
 
 ;; An ALU operation. This can be paired with several instruction formats
 ;; below (see `Inst`) in any combination.
