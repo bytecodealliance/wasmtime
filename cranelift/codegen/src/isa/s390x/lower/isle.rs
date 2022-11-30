@@ -126,7 +126,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
     fn defs_init(&mut self, abi: &Sig) -> CallRetList {
         // Allocate writable registers for all retval regs, except for StructRet args.
         let mut defs = smallvec![];
-        for i in 0..self.lower_ctx.sigs()[*abi].num_rets() {
+        for i in 0..self.lower_ctx.sigs().num_rets(*abi) {
             if let &ABIArg::Slots {
                 ref slots, purpose, ..
             } = &self.lower_ctx.sigs().get_ret(*abi, i)
@@ -169,7 +169,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         // Return the index of the first actual return value, excluding
         // any StructReturn that might have been added to Sig.
         let sig = &self.lower_ctx.dfg().signatures[sig_ref];
-        self.lower_ctx.sigs()[*abi].num_rets() - sig.returns.len()
+        self.lower_ctx.sigs().num_rets(*abi) - sig.returns.len()
     }
 
     fn abi_lane_order(&mut self, abi: &Sig) -> LaneOrder {
