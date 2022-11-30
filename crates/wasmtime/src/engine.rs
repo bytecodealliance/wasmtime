@@ -359,6 +359,9 @@ impl Engine {
         flag: &str,
         value: &FlagValue,
     ) -> Result<(), String> {
+        use target_lexicon::Architecture;
+
+        let target = self.target();
         let ok = match flag {
             // These settings must all have be enabled, since their value
             // can affect the way the generated code performs or behaves at
@@ -367,13 +370,16 @@ impl Engine {
             "libcall_call_conv" => *value == FlagValue::Enum("isa_default".into()),
             "preserve_frame_pointers" => *value == FlagValue::Bool(true),
 
+            // On x86-64 targets, stack probing is enabled by default.
+            "enable_probestack" => *value == FlagValue::Bool(target.architecture == Architecture::X86_64),
+            // On x86-64 targets, the default stack probing strategy is inline.
+            "probestack_strategy" => *value == FlagValue::Enum(if target.architecture == Architecture::X86_64 { "inline" } else { "outline" }.into()),
+
             // Features wasmtime doesn't use should all be disabled, since
             // otherwise if they are enabled it could change the behavior of
             // generated code.
             "enable_llvm_abi_extensions" => *value == FlagValue::Bool(false),
             "enable_pinned_reg" => *value == FlagValue::Bool(false),
-            "enable_probestack" => *value == FlagValue::Bool(false),
-            "probestack_strategy" => *value == FlagValue::Enum("outline".into()),
             "use_colocated_libcalls" => *value == FlagValue::Bool(false),
             "use_pinned_reg_as_heap_base" => *value == FlagValue::Bool(false),
 
@@ -389,7 +395,7 @@ impl Engine {
 
             // Windows requires unwind info as part of its ABI.
             "unwind_info" => {
-                if self.target().operating_system == target_lexicon::OperatingSystem::Windows {
+                if target.operating_system == target_lexicon::OperatingSystem::Windows {
                     *value == FlagValue::Bool(true)
                 } else {
                     return Ok(())
