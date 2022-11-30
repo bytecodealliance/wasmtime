@@ -20,6 +20,15 @@ impl BindingId {
     }
 }
 
+impl IntoIterator for TupleIndex {
+    type Item = Self;
+    type IntoIter = std::iter::Map<std::ops::Range<u8>, fn(u8) -> TupleIndex>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        (0..self.0).map(TupleIndex)
+    }
+}
+
 /// Bindings are anything which can be bound to a variable name in Rust. This includes expressions,
 /// such as constants or function calls; but it also includes names bound in pattern matches.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -186,6 +195,44 @@ pub fn build(termenv: &sema::TermEnv) -> (Vec<(sema::TermId, RuleSet)>, Vec<Erro
     result.sort_unstable_by_key(|(term, _)| *term);
 
     (result, errors)
+}
+
+impl Constraint {
+    /// Return the nested [Binding]s from matching the given [Constraint] against the given [BindingId].
+    pub fn bindings_for(self, source: BindingId) -> impl Iterator<Item = Binding> {
+        enum Bindings {
+            None,
+            Some,
+            Variant(sema::VariantId, <TupleIndex as IntoIterator>::IntoIter),
+        }
+        let mut state = match self {
+            // These constraints never introduce any bindings.
+            Constraint::ConstInt { .. } | Constraint::ConstPrim { .. } => Bindings::None,
+            Constraint::Some => Bindings::Some,
+            Constraint::Variant {
+                variant, fields, ..
+            } => Bindings::Variant(variant, fields.into_iter()),
+        };
+        std::iter::from_fn(move || match &mut state {
+            Bindings::None => None,
+            Bindings::Some => {
+                state = Bindings::None;
+                Some(Binding::MatchSome { source })
+            }
+            &mut Bindings::Variant(variant, ref mut fields) => {
+                if let Some(field) = fields.next() {
+                    Some(Binding::MatchVariant {
+                        source,
+                        variant,
+                        field,
+                    })
+                } else {
+                    state = Bindings::None;
+                    None
+                }
+            }
+        })
+    }
 }
 
 impl Rule {
@@ -363,74 +410,31 @@ impl RuleSetBuilder {
             // `deferred_constraints`, but `set` will be empty because we already deleted the
             // equivalence class the first time we encountered it.
             let set = self.current_rule.equals.remove_set_of(current);
-            match (constraint, set.split_first()) {
-                // If the equivalence class was empty we don't have to do anything.
-                (_, None) => continue,
+            if let Some((&base, rest)) = set.split_first() {
+                let mut defer = |this: &Self, binding| {
+                    // We're adding equality constraints to binding sites that may not have had
+                    // one already. If that binding site already had a concrete constraint, then
+                    // we need to "recursively" propagate that constraint through the new
+                    // equivalence class too.
+                    if let Some(constraint) = this.current_rule.get_constraint(binding) {
+                        deferred_constraints.push((binding, constraint));
+                    }
+                };
 
-                // If we removed an equivalence class with an enum variant constraint, make the
-                // fields of the variant equal instead. Create a binding for every field of every
-                // member of `set`. Arbitrarily pick one to set all the others equal to. If there
-                // are existing constraints on the new fields, copy those around the new equivalence
-                // classes too.
-                (
-                    Constraint::Variant {
-                        fields, variant, ..
-                    },
-                    Some((&base, rest)),
-                ) => {
-                    let mut defer = |this: &Self, binding| {
-                        // We're adding equality constraints to binding sites that may not have had
-                        // one already. If that binding site already had a concrete constraint, then
-                        // we need to "recursively" propagate that constraint through the new
-                        // equivalence class too.
-                        if let Some(constraint) = this.current_rule.get_constraint(binding) {
-                            deferred_constraints.push((binding, constraint));
-                        }
-                    };
-                    let base_fields = self.variant_bindings(base, fields, variant);
-                    base_fields.iter().for_each(|&x| defer(self, x));
-                    for &binding in rest {
-                        for (&x, y) in base_fields
-                            .iter()
-                            .zip(self.variant_bindings(binding, fields, variant))
-                        {
-                            defer(self, y);
-                            self.current_rule.equals.merge(x, y);
-                        }
+                // If this constraint introduces nested binding sites, make the fields of those
+                // binding sites equal instead. Arbitrarily pick one member of `set` to set all the
+                // others equal to. If there are existing constraints on the new binding sites, copy
+                // those around the new equivalence classes too.
+                let base_fields = self.set_constraint(base, constraint);
+                base_fields.iter().for_each(|&x| defer(self, x));
+                for &b in rest {
+                    for (&x, y) in base_fields.iter().zip(self.set_constraint(b, constraint)) {
+                        defer(self, y);
+                        self.current_rule.equals.merge(x, y);
                     }
                 }
-
-                // These constraints don't introduce new binding sites.
-                (Constraint::ConstInt { .. } | Constraint::ConstPrim { .. }, _) => {}
-
-                // Currently, `Some` constraints are only introduced implicitly during the
-                // translation from `sema`, so there's no way to set the corresponding binding
-                // sites equal to each other. Instead, any equality constraints get applied on
-                // the results of matching `Some()` or tuple patterns.
-                (Constraint::Some, _) => unreachable!(),
-            }
-
-            for binding in set {
-                self.set_constraint(binding, constraint);
             }
         }
-    }
-
-    fn variant_bindings(
-        &mut self,
-        binding: BindingId,
-        fields: TupleIndex,
-        variant: sema::VariantId,
-    ) -> Vec<BindingId> {
-        (0..fields.0)
-            .map(|field| {
-                self.dedup_binding(Binding::MatchVariant {
-                    source: binding,
-                    variant,
-                    field: TupleIndex(field),
-                })
-            })
-            .collect()
     }
 
     fn dedup_binding(&mut self, binding: Binding) -> BindingId {
@@ -444,36 +448,14 @@ impl RuleSetBuilder {
         }
     }
 
-    fn set_constraint(&mut self, input: BindingId, constraint: Constraint) {
+    fn set_constraint(&mut self, input: BindingId, constraint: Constraint) -> Vec<BindingId> {
         if let Err(e) = self.current_rule.set_constraint(input, constraint) {
             self.unreachable.push(e);
         }
-    }
-
-    fn add_pattern_constraints(&mut self, expr: BindingId) {
-        match &self.rules.bindings[expr.index()] {
-            Binding::ConstInt { .. } | Binding::ConstPrim { .. } | Binding::Argument { .. } => {}
-            Binding::Constructor {
-                parameters: sources,
-                ..
-            }
-            | Binding::MakeVariant {
-                fields: sources, ..
-            } => {
-                for source in sources.to_vec() {
-                    self.add_pattern_constraints(source);
-                }
-            }
-            &Binding::Extractor {
-                parameter: source, ..
-            }
-            | &Binding::MatchVariant { source, .. }
-            | &Binding::MatchTuple { source, .. } => self.add_pattern_constraints(source),
-            &Binding::MatchSome { source } => {
-                self.set_constraint(source, Constraint::Some);
-                self.add_pattern_constraints(source);
-            }
-        }
+        constraint
+            .bindings_for(input)
+            .map(|binding| self.dedup_binding(binding))
+            .collect()
     }
 }
 
@@ -488,11 +470,13 @@ impl sema::PatternVisitor for RuleSetBuilder {
     }
 
     fn add_match_int(&mut self, input: BindingId, _ty: sema::TypeId, val: i128) {
-        self.set_constraint(input, Constraint::ConstInt { val });
+        let bindings = self.set_constraint(input, Constraint::ConstInt { val });
+        debug_assert_eq!(bindings, &[]);
     }
 
     fn add_match_prim(&mut self, input: BindingId, _ty: sema::TypeId, val: sema::Sym) {
-        self.set_constraint(input, Constraint::ConstPrim { val });
+        let bindings = self.set_constraint(input, Constraint::ConstPrim { val });
+        debug_assert_eq!(bindings, &[]);
     }
 
     fn add_match_variant(
@@ -510,8 +494,7 @@ impl sema::PatternVisitor for RuleSetBuilder {
                 ty: input_ty,
                 variant,
             },
-        );
-        self.variant_bindings(input, fields, variant)
+        )
     }
 
     fn add_extract(
@@ -532,8 +515,9 @@ impl sema::PatternVisitor for RuleSetBuilder {
         let source = if infallible {
             source
         } else {
-            self.set_constraint(source, Constraint::Some);
-            self.dedup_binding(Binding::MatchSome { source })
+            let bindings = self.set_constraint(source, Constraint::Some);
+            debug_assert_eq!(bindings.len(), 1);
+            bindings[0]
         };
 
         // If the extractor has multiple outputs, create a separate binding for each
@@ -619,7 +603,32 @@ impl sema::RuleVisitor for RuleSetBuilder {
     }
 
     fn expr_as_pattern(&mut self, expr: BindingId) -> BindingId {
-        self.add_pattern_constraints(expr);
+        let mut todo = vec![expr];
+        while let Some(expr) = todo.pop() {
+            match &self.rules.bindings[expr.index()] {
+                Binding::ConstInt { .. } | Binding::ConstPrim { .. } | Binding::Argument { .. } => {
+                }
+
+                Binding::Constructor {
+                    parameters: sources,
+                    ..
+                }
+                | Binding::MakeVariant {
+                    fields: sources, ..
+                } => todo.extend_from_slice(sources),
+
+                &Binding::Extractor {
+                    parameter: source, ..
+                }
+                | &Binding::MatchVariant { source, .. }
+                | &Binding::MatchTuple { source, .. } => todo.push(source),
+
+                &Binding::MatchSome { source } => {
+                    let _ = self.set_constraint(source, Constraint::Some);
+                    todo.push(source);
+                }
+            }
+        }
         expr
     }
 
