@@ -1220,6 +1220,12 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
     }
 
     fn block_params(&self, block: BlockIndex) -> &[VReg] {
+        // As a special case we don't return block params for the entry block, as all the arguments
+        // will be defined by the `Inst::Args` instruction.
+        if block == self.entry {
+            return &[];
+        }
+
         let (start, end) = self.block_params_range[block.index()];
         let ret = &self.block_params[start as usize..end as usize];
         // Currently block params are never aliased to another vreg, but

@@ -150,25 +150,25 @@ block0(v0: i64, v1: i32, v2: i32, v3: i32, v4: i16, v5: i16, v6: i16, v7: i8, v8
 
 ;   stmg %r6, %r15, 48(%r15)
 ; block0:
-;   lg %r11, 160(%r15)
-;   lg %r12, 168(%r15)
-;   llgc %r13, 183(%r15)
-;   lg %r14, 184(%r15)
-;   lg %r8, 192(%r15)
+;   lg %r12, 160(%r15)
+;   lg %r14, 168(%r15)
+;   llgc %r7, 183(%r15)
+;   lg %r9, 184(%r15)
+;   lg %r11, 192(%r15)
 ;   llgfr %r3, %r3
 ;   llgfr %r4, %r4
-;   llgfr %r7, %r5
+;   llgfr %r13, %r5
 ;   llghr %r6, %r6
-;   llghr %r5, %r11
-;   llghr %r12, %r12
-;   llgcr %r13, %r13
-;   llgcr %r14, %r14
-;   llgcr %r8, %r8
+;   llghr %r5, %r12
+;   llghr %r12, %r14
+;   llgcr %r14, %r7
+;   llgcr %r7, %r9
+;   llgcr %r8, %r11
 ;   agrk %r3, %r2, %r3
-;   agr %r4, %r7
+;   agr %r4, %r13
 ;   agrk %r5, %r6, %r5
-;   agrk %r2, %r12, %r13
-;   agrk %r12, %r14, %r8
+;   agrk %r2, %r12, %r14
+;   agrk %r12, %r7, %r8
 ;   agr %r3, %r4
 ;   agrk %r4, %r5, %r2
 ;   agrk %r3, %r12, %r3
@@ -189,22 +189,22 @@ block0(v0: i128, v1: i128, v2: i128, v3: i128, v4: i128, v5: i128, v6: i128, v7:
 }
 
 ; block0:
-;   vl %v0, 0(%r3)
-;   vl %v1, 0(%r4)
-;   vl %v2, 0(%r5)
-;   vl %v3, 0(%r6)
+;   vl %v1, 0(%r3)
+;   vl %v3, 0(%r4)
+;   vl %v5, 0(%r5)
+;   vl %v7, 0(%r6)
 ;   lg %r3, 160(%r15)
-;   vl %v4, 0(%r3)
+;   vl %v18, 0(%r3)
 ;   lg %r3, 168(%r15)
-;   vl %v5, 0(%r3)
+;   vl %v21, 0(%r3)
 ;   lg %r5, 176(%r15)
-;   vl %v6, 0(%r5)
+;   vl %v24, 0(%r5)
 ;   lg %r4, 184(%r15)
-;   vl %v7, 0(%r4)
-;   vaq %v16, %v0, %v1
-;   vaq %v17, %v2, %v3
-;   vaq %v18, %v4, %v5
-;   vaq %v19, %v6, %v7
+;   vl %v27, 0(%r4)
+;   vaq %v16, %v1, %v3
+;   vaq %v17, %v5, %v7
+;   vaq %v18, %v18, %v21
+;   vaq %v19, %v24, %v27
 ;   vaq %v16, %v16, %v17
 ;   vaq %v17, %v18, %v19
 ;   vaq %v16, %v16, %v17

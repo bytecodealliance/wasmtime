@@ -19,8 +19,8 @@ block0(v0: i128):
 }
 
 ; block0:
-;   vl %v0, 0(%r2)
-;   lgdr %r3, %f0
-;   vlgvg %r2, %v0, 1
+;   vl %v1, 0(%r2)
+;   lgdr %r3, %f1
+;   vlgvg %r2, %v1, 1
 ;   br %r14
 
