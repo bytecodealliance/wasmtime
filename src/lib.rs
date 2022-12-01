@@ -23,17 +23,23 @@ mod bindings {
 }
 
 #[export_name = "command"]
-unsafe extern "C" fn command_entrypoint(stdin: i32, stdout: i32, _args_ptr: i32, _args_len: i32) {
+unsafe extern "C" fn command_entrypoint(
+    stdin: u32,
+    stdout: u32,
+    args_ptr: *const WasmStr,
+    args_len: usize,
+) {
     State::with_mut(|state| {
         state.push_desc(Descriptor::File(File {
-            fd: stdin as u32,
+            fd: stdin,
             position: Cell::new(0),
         }))?;
         state.push_desc(Descriptor::File(File {
-            fd: stdout as u32,
+            fd: stdout,
             position: Cell::new(0),
         }))?;
         state.push_desc(Descriptor::Log)?;
+        state.args = Some(slice::from_raw_parts(args_ptr, args_len));
         Ok(())
     });
 
@@ -84,6 +90,13 @@ pub unsafe extern "C" fn cabi_import_realloc(
     ptr
 }
 
+/// This allocator is only used for the `command` entrypoint.
+///
+/// The implementation here is a bump allocator into `State::command_data` which
+/// traps when it runs out of data. This means that the total size of
+/// arguments/env/etc coming into a component is bounded by the current 64k
+/// (ish) limit. That's just an implementation limit though which can be lifted
+/// by dynamically calling `memory.grow` as necessary for more data.
 #[no_mangle]
 pub unsafe extern "C" fn cabi_export_realloc(
     old_ptr: *mut u8,
@@ -91,42 +104,69 @@ pub unsafe extern "C" fn cabi_export_realloc(
     align: usize,
     new_size: usize,
 ) -> *mut u8 {
-    if !old_ptr.is_null() {
+    if !old_ptr.is_null() || old_size != 0 {
         unreachable();
     }
-    if new_size > PAGE_SIZE {
-        unreachable();
-    }
-    let grew = core::arch::wasm32::memory_grow(0, 1);
-    if grew == usize::MAX {
-        unreachable();
-    }
-    (grew * PAGE_SIZE) as *mut u8
+    let mut ret = null_mut::<u8>();
+    State::with_mut(|state| {
+        let data = state.command_data.as_mut_ptr();
+        let ptr = usize::try_from(state.command_data_next).unwrap();
+
+        // "oom" as too much argument data tried to flow into the component.
+        // Ideally this would have a better error message?
+        if ptr + new_size > (*data).len() {
+            unreachable();
+        }
+        state.command_data_next += new_size as u16;
+        ret = (*data).as_mut_ptr().add(ptr);
+        Ok(())
+    });
+    ret
 }
 
 /// Read command-line argument data.
 /// The size of the array should match that returned by `args_sizes_get`
 #[no_mangle]
-pub unsafe extern "C" fn args_get(argv: *mut *mut u8, argv_buf: *mut u8) -> Errno {
-    // TODO: Use real arguments.
-    // Store bytes one at a time to avoid needing a static init.
-    argv_buf.add(0).write(b'w');
-    argv_buf.add(1).write(b'a');
-    argv_buf.add(2).write(b's');
-    argv_buf.add(3).write(b'm');
-    argv_buf.add(4).write(b'\0');
-    argv.add(0).write(argv_buf);
-    argv.add(1).write(null_mut());
-    ERRNO_SUCCESS
+pub unsafe extern "C" fn args_get(mut argv: *mut *mut u8, mut argv_buf: *mut u8) -> Errno {
+    State::with(|state| {
+        if let Some(args) = state.args {
+            for arg in args {
+                // Copy the argument into `argv_buf` which must be sized
+                // appropriately by the caller.
+                ptr::copy_nonoverlapping(arg.ptr, argv_buf, arg.len);
+                *argv_buf.add(arg.len) = 0;
+
+                // Copy the argument pointer into the `argv` buf
+                *argv = argv_buf;
+
+                // Update our pointers past what's written to prepare for the
+                // next argument.
+                argv = argv.add(1);
+                argv_buf = argv_buf.add(arg.len + 1);
+            }
+        }
+        Ok(())
+    })
 }
 
 /// Return command-line argument data sizes.
 #[no_mangle]
 pub unsafe extern "C" fn args_sizes_get(argc: *mut Size, argv_buf_size: *mut Size) -> Errno {
-    // TODO: Use real arguments.
-    *argc = 1;
-    *argv_buf_size = 5;
-    ERRNO_SUCCESS
+    State::with(|state| {
+        match state.args {
+            Some(args) => {
+                *argc = args.len();
+                // Add one to each length for the terminating nul byte added by
+                // the `args_get` function.
+                *argv_buf_size = args.iter().map(|s| s.len + 1).sum();
+            }
+            None => {
+                *argc = 0;
+                *argv_buf_size = 0;
+            }
+        }
+        Ok(())
+    })
 }
 
 /// Read environment variable data.
@@ -1153,13 +1193,60 @@ const PAGE_SIZE: usize = 65536;
 /// polyfill.
 const PATH_MAX: usize = 4096;
 
+const MAX_DESCRIPTORS: usize = 128;
+
 struct State {
+    /// Used by `register_buffer` to coordinate allocations with
+    /// `cabi_import_realloc`.
     buffer_ptr: Cell<*mut u8>,
     buffer_len: Cell<usize>,
-    ndescriptors: usize,
-    descriptors: MaybeUninit<[Descriptor; 128]>,
+
+    /// Storage of mapping from preview1 file descriptors to preview2 file
+    /// descriptors.
+    ndescriptors: u16,
+    descriptors: MaybeUninit<[Descriptor; MAX_DESCRIPTORS]>,
+
+    /// Auxiliary storage to handle the `path_readlink` function.
     path_buf: UnsafeCell<MaybeUninit<[u8; PATH_MAX]>>,
+
+    /// Storage area for data passed to the `command` entrypoint. The
+    /// `command_data` is a block of memory which is dynamically allocated from
+    /// in `cabi_export_realloc`. The `command_data_next` is the
+    /// bump-allocated-pointer of where to allocate from next.
+    command_data: MaybeUninit<[u8; command_data_size()]>,
+    command_data_next: u16,
+
+    /// Arguments passed to the `command` entrypoint
+    args: Option<&'static [WasmStr]>,
 }
+
+struct WasmStr {
+    ptr: *const u8,
+    len: usize,
+}
+
+const fn command_data_size() -> usize {
+    // The total size of the struct should be a page, so start there
+    let mut start = PAGE_SIZE;
+
+    // Remove the big chunks of the struct, the `path_buf` and `descriptors`
+    // fields.
+    start -= PATH_MAX;
+    start -= size_of::<Descriptor>() * MAX_DESCRIPTORS;
+
+    // Remove miscellaneous metadata also stored in state.
+    start -= 5 * size_of::<usize>();
+
+    // Everything else is the `command_data` allocation.
+    start
+}
+
+// Statically assert that the `State` structure is the size of a wasm page. This
+// mostly guarantees that it's not larger than one page which is relied upon
+// below.
+const _: () = {
+    let _size_assert: [(); PAGE_SIZE] = [(); size_of::<State>()];
+};
 
 #[allow(improper_ctypes)]
 extern "C" {
@@ -1189,7 +1276,6 @@ impl State {
     }
 
     fn ptr() -> &'static RefCell<State> {
-        assert!(size_of::<State>() <= PAGE_SIZE);
         unsafe {
             let mut ptr = get_global_ptr();
             if ptr.is_null() {
@@ -1214,6 +1300,9 @@ impl State {
                 ndescriptors: 0,
                 descriptors: MaybeUninit::uninit(),
                 path_buf: UnsafeCell::new(MaybeUninit::uninit()),
+                command_data: MaybeUninit::uninit(),
+                command_data_next: 0,
+                args: None,
             }));
             &*ret
         }
@@ -1222,18 +1311,19 @@ impl State {
     fn push_desc(&mut self, desc: Descriptor) -> Result<Fd, Errno> {
         unsafe {
             let descriptors = self.descriptors.as_mut_ptr();
-            if self.ndescriptors >= (*descriptors).len() {
+            let ndescriptors = usize::try_from(self.ndescriptors).unwrap();
+            if ndescriptors >= (*descriptors).len() {
                 return Err(ERRNO_INVAL);
             }
-            ptr::addr_of_mut!((*descriptors)[self.ndescriptors]).write(desc);
+            ptr::addr_of_mut!((*descriptors)[ndescriptors]).write(desc);
             self.ndescriptors += 1;
-            Ok(Fd::try_from(self.ndescriptors - 1).unwrap())
+            Ok(Fd::from(self.ndescriptors - 1))
         }
     }
 
     fn get(&self, fd: Fd) -> Result<&Descriptor, Errno> {
         let index = usize::try_from(fd).unwrap();
-        if index < self.ndescriptors {
+        if index < usize::try_from(self.ndescriptors).unwrap() {
             unsafe { (*self.descriptors.as_ptr()).get(index).ok_or(ERRNO_BADF) }
         } else {
             Err(ERRNO_BADF)
