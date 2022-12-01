@@ -104,7 +104,7 @@ pub fn mem_finalize(
             } else {
                 let tmp = writable_spilltmp_reg();
                 assert!(base != tmp.to_reg());
-                insts.extend(Inst::load_constant64(tmp, off as u64));
+                insts.extend(Inst::load_constant64(tmp, off as u64, |_| tmp));
                 MemArg::reg_plus_reg(base, tmp.to_reg(), mem.get_flags())
             }
         }
