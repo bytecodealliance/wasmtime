@@ -1,6 +1,6 @@
 [package]
 name = "winch-tools"
-version = "0.1.0"
+version = "0.0.0"
 description = "Binaries for testing Winch"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
