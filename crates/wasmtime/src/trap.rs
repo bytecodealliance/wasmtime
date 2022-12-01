@@ -1,5 +1,5 @@
 use crate::store::StoreOpaque;
-use crate::Module;
+use crate::{AsContext, Module};
 use anyhow::Error;
 use std::fmt;
 use wasmtime_environ::{EntityRef, FilePos};
@@ -112,7 +112,7 @@ pub(crate) fn from_runtime_box(
     };
     match backtrace {
         Some(bt) => {
-            let bt = WasmBacktrace::new(store, bt, pc);
+            let bt = WasmBacktrace::from_captured(store, bt, pc);
             if bt.wasm_trace.is_empty() {
                 error
             } else {
@@ -183,7 +183,79 @@ pub struct WasmBacktrace {
 }
 
 impl WasmBacktrace {
-    fn new(
+    /// Captures a trace of the WebAssembly frames on the stack for the
+    /// provided store.
+    ///
+    /// This will return a [`WasmBacktrace`] which holds captured
+    /// [`FrameInfo`]s for each frame of WebAssembly on the call stack of the
+    /// current thread. If no WebAssembly is on the stack then the returned
+    /// backtrace will have no frames in it.
+    ///
+    /// Note that this function will respect the [`Config::wasm_backtrace`]
+    /// configuration option and will return an empty backtrace if that is
+    /// disabled. To always capture a backtrace use the
+    /// [`WasmBacktrace::force_capture`] method.
+    ///
+    /// Also note that this function will only capture frames from the
+    /// specified `store` on the stack, ignoring frames from other stores if
+    /// present.
+    ///
+    /// [`Config::wasm_backtrace`]: crate::Config::wasm_backtrace
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # use anyhow::Result;
+    /// # fn main() -> Result<()> {
+    /// let engine = Engine::default();
+    /// let module = Module::new(
+    ///     &engine,
+    ///     r#"
+    ///         (module
+    ///             (import "" "" (func $host))
+    ///             (func $foo (export "f") call $bar)
+    ///             (func $bar call $host)
+    ///         )
+    ///     "#,
+    /// )?;
+    ///
+    /// let mut store = Store::new(&engine, ());
+    /// let func = Func::wrap(&mut store, |cx: Caller<'_, ()>| {
+    ///     let trace = WasmBacktrace::capture(&cx);
+    ///     println!("{trace:?}");
+    /// });
+    /// let instance = Instance::new(&mut store, &module, &[func.into()])?;
+    /// let func = instance.get_typed_func::<(), ()>(&mut store, "f")?;
+    /// func.call(&mut store, ())?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn capture(store: impl AsContext) -> WasmBacktrace {
+        let store = store.as_context();
+        if store.engine().config().wasm_backtrace {
+            Self::force_capture(store)
+        } else {
+            WasmBacktrace {
+                wasm_trace: Vec::new(),
+                hint_wasm_backtrace_details_env: false,
+                runtime_trace: wasmtime_runtime::Backtrace::empty(),
+            }
+        }
+    }
+
+    /// Unconditionally captures a trace of the WebAssembly frames on the stack
+    /// for the provided store.
+    ///
+    /// Same as [`WasmBacktrace::capture`] except that it disregards the
+    /// [`Config::wasm_backtrace`](crate::Config::wasm_backtrace) setting and
+    /// always captures a backtrace.
+    pub fn force_capture(store: impl AsContext) -> WasmBacktrace {
+        let store = store.as_context();
+        Self::from_captured(store.0, wasmtime_runtime::Backtrace::new(), None)
+    }
+
+    fn from_captured(
         store: &StoreOpaque,
         runtime_trace: wasmtime_runtime::Backtrace,
         trap_pc: Option<usize>,
