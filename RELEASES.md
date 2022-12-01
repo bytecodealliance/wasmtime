@@ -1,5 +1,19 @@
 --------------------------------------------------------------------------------
 
+## 3.0.1
+
+Released 2022-12-01.
+
+### Fixed
+
+* The instruction cache is now flushed for AArch64 Android.
+  [#5331](https://github.com/bytecodealliance/wasmtime/pull/5331)
+
+* Building for FreeBSD and Android has been fixed.
+  [#5323](https://github.com/bytecodealliance/wasmtime/pull/5323)
+
+--------------------------------------------------------------------------------
+
 ## 3.0.0
 
 Released 2022-11-21.

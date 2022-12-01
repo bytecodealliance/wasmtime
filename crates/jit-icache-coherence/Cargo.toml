@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-jit-icache-coherence"
-version = "2.0.0"
+version = "2.0.1"
 authors.workspace = true
 description = "Utilities for JIT icache maintenance"
 documentation = "https://docs.rs/jit-icache-coherence"
