@@ -430,7 +430,10 @@ impl ABIMachineSpec for AArch64MachineDeps {
         } else {
             let scratch2 = writable_tmp2_reg();
             assert_ne!(scratch2.to_reg(), from_reg);
-            insts.extend(Inst::load_constant(scratch2, imm.into()));
+            // `gen_add_imm` is only ever called after register allocation has take place, and as a
+            // result it's ok to reuse the scratch2 register here. If that changes, we'll need to
+            // plumb through a way to allocate temporary virtual registers
+            insts.extend(Inst::load_constant(scratch2, imm.into(), &mut |_| scratch2));
             insts.push(Inst::AluRRRExtend {
                 alu_op: ALUOp::Add,
                 size: OperandSize::Size64,
@@ -515,7 +518,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
             ret.push(adj_inst);
         } else {
             let tmp = writable_spilltmp_reg();
-            let const_inst = Inst::load_constant(tmp, amount);
+            // `gen_sp_reg_adjust` is called after regalloc2, so it's acceptable to reuse `tmp` for
+            // intermediates in `load_constant`.
+            let const_inst = Inst::load_constant(tmp, amount, &mut |_| tmp);
             let adj_inst = Inst::AluRRRExtend {
                 alu_op,
                 size: OperandSize::Size64,
@@ -673,8 +678,10 @@ impl ABIMachineSpec for AArch64MachineDeps {
             // itself is not allowed to use the registers.
             let start = writable_spilltmp_reg();
             let end = writable_tmp2_reg();
-            insts.extend(Inst::load_constant(start, 0));
-            insts.extend(Inst::load_constant(end, frame_size.into()));
+            // `gen_inline_probestack` is called after regalloc2, so it's acceptable to reuse
+            // `start` and `end` as temporaries in load_constant.
+            insts.extend(Inst::load_constant(start, 0, &mut |_| start));
+            insts.extend(Inst::load_constant(end, frame_size.into(), &mut |_| end));
             insts.push(Inst::StackProbeLoop {
                 start,
                 end: end.to_reg(),
@@ -1019,19 +1026,19 @@ impl ABIMachineSpec for AArch64MachineDeps {
         insts
     }
 
-    fn gen_memcpy(
+    fn gen_memcpy<F: FnMut(Type) -> Writable<Reg>>(
         call_conv: isa::CallConv,
         dst: Reg,
         src: Reg,
-        tmp: Writable<Reg>,
-        _tmp2: Writable<Reg>,
         size: usize,
+        mut alloc_tmp: F,
     ) -> SmallVec<[Self::I; 8]> {
         let mut insts = SmallVec::new();
         let arg0 = writable_xreg(0);
         let arg1 = writable_xreg(1);
         let arg2 = writable_xreg(2);
-        insts.extend(Inst::load_constant(tmp, size as u64).into_iter());
+        let tmp = alloc_tmp(Self::word_type());
+        insts.extend(Inst::load_constant(tmp, size as u64, &mut alloc_tmp));
         insts.push(Inst::Call {
             info: Box::new(CallInfo {
                 dest: ExternalName::LibCall(LibCall::Memcpy),
