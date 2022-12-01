@@ -55,3 +55,13 @@ fn run_panic(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     println!("{:?}", r);
     Ok(())
 }
+
+fn run_args(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+    wasi.command(
+        &mut store,
+        0 as host::Descriptor,
+        1 as host::Descriptor,
+        &["hello", "this", "", "is an argument", "with 🚩 emoji"],
+    )?;
+    Ok(())
+}
