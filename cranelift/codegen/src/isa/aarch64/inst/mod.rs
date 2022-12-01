@@ -228,6 +228,8 @@ impl Inst {
                 prev_result = Some(rd.to_reg());
             }
 
+            assert!(prev_result.is_some());
+
             insts
         }
     }
