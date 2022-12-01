@@ -8,7 +8,6 @@
 //! is handled, according to the semantics of WebAssembly, to only specific expressions that are
 //! interpreted on the fly.
 use crate::environ::ModuleEnvironment;
-use crate::state::ModuleTranslationState;
 use crate::wasm_unsupported;
 use crate::{
     DataIndex, ElemIndex, FuncIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex, Table,
@@ -64,21 +63,15 @@ fn global(ty: GlobalType, initializer: GlobalInit) -> WasmResult<Global> {
 /// Parses the Type section of the wasm module.
 pub fn parse_type_section<'a>(
     types: TypeSectionReader<'a>,
-    module_translation_state: &mut ModuleTranslationState,
     environ: &mut dyn ModuleEnvironment<'a>,
 ) -> WasmResult<()> {
     let count = types.get_count();
-    module_translation_state.wasm_types.reserve(count as usize);
     environ.reserve_types(count)?;
 
     for entry in types {
         match entry? {
             Type::Func(wasm_func_ty) => {
                 environ.declare_type_func(wasm_func_ty.clone().try_into()?)?;
-                module_translation_state.wasm_types.push((
-                    wasm_func_ty.params().to_vec().into(),
-                    wasm_func_ty.results().to_vec().into(),
-                ));
             }
         }
     }
