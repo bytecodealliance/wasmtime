@@ -4,8 +4,9 @@ use crate::bindings::{
     wasi_clocks, wasi_default_clocks, wasi_filesystem, wasi_logging, wasi_random,
 };
 use core::arch::wasm32::unreachable;
-use core::mem::{forget, size_of};
-use core::ptr::{copy_nonoverlapping, null_mut};
+use core::cell::{Cell, RefCell, UnsafeCell};
+use core::mem::{forget, size_of, MaybeUninit};
+use core::ptr::{self, copy_nonoverlapping, null_mut};
 use core::slice;
 use wasi::*;
 
@@ -23,27 +24,25 @@ mod bindings {
 
 #[export_name = "command"]
 unsafe extern "C" fn command_entrypoint(stdin: i32, stdout: i32, _args_ptr: i32, _args_len: i32) {
-    *Descriptor::get(0) = Descriptor::File(File {
-        fd: stdin as u32,
-        position: 0,
+    State::with_mut(|state| {
+        state.push_desc(Descriptor::File(File {
+            fd: stdin as u32,
+            position: Cell::new(0),
+        }))?;
+        state.push_desc(Descriptor::File(File {
+            fd: stdout as u32,
+            position: Cell::new(0),
+        }))?;
+        state.push_desc(Descriptor::Log)?;
+        Ok(())
     });
-    *Descriptor::get(1) = Descriptor::File(File {
-        fd: stdout as u32,
-        position: 0,
-    });
-    *Descriptor::get(2) = Descriptor::Log;
 
     #[link(wasm_import_module = "__main_module__")]
     extern "C" {
         fn _start();
     }
-    _start()
+    _start();
 }
-
-/// The maximum path length. WASI doesn't explicitly guarantee this, but all
-/// popular OS's have a `PATH_MAX` of at most 4096, so that's enough for this
-/// polyfill.
-const PATH_MAX: usize = 4096;
 
 // We're avoiding static initializers, so replace the standard assert macros
 // with simpler implementations.
@@ -60,22 +59,6 @@ macro_rules! assert_eq {
     };
 }
 
-// These functions are defined by the object that the build.rs script produces.
-extern "C" {
-    fn replace_realloc_global_ptr(val: *mut u8) -> *mut u8;
-    fn replace_realloc_global_len(val: usize) -> usize;
-    fn replace_fds(val: *mut u8) -> *mut u8;
-}
-
-/// Register `buf` and `buf_len` to be used by `cabi_realloc` to satisfy the
-/// next request.
-unsafe fn register_buffer(buf: *mut u8, buf_len: usize) {
-    let old_ptr = replace_realloc_global_ptr(buf);
-    assert!(old_ptr.is_null());
-    let old_len = replace_realloc_global_len(buf_len);
-    assert_eq!(old_len, 0);
-}
-
 #[no_mangle]
 pub unsafe extern "C" fn cabi_import_realloc(
     old_ptr: *mut u8,
@@ -86,14 +69,18 @@ pub unsafe extern "C" fn cabi_import_realloc(
     if !old_ptr.is_null() || old_size != 0 {
         unreachable();
     }
-    let ptr = replace_realloc_global_ptr(null_mut());
-    if ptr.is_null() {
-        unreachable();
-    }
-    let len = replace_realloc_global_len(0);
-    if len < new_size {
-        unreachable();
-    }
+    let mut ptr = null_mut::<u8>();
+    State::with(|state| {
+        ptr = state.buffer_ptr.replace(null_mut());
+        if ptr.is_null() {
+            unreachable();
+        }
+        let len = state.buffer_len.replace(0);
+        if len < new_size {
+            unreachable();
+        }
+        Ok(())
+    });
     ptr
 }
 
@@ -226,14 +213,11 @@ pub unsafe extern "C" fn fd_advise(
         ADVICE_NOREUSE => wasi_filesystem::Advice::NoReuse,
         _ => return ERRNO_INVAL,
     };
-    match Descriptor::get(fd) {
-        Descriptor::File(file) => match wasi_filesystem::fadvise(file.fd, offset, len, advice) {
-            Ok(()) => ERRNO_SUCCESS,
-            Err(err) => errno_from_wasi_filesystem(err),
-        },
-        Descriptor::Log => ERRNO_SPIPE,
-        Descriptor::Closed => ERRNO_BADF,
-    }
+    State::with(|state| {
+        let file = state.get_seekable_file(fd)?;
+        wasi_filesystem::fadvise(file.fd, offset, len, advice)?;
+        Ok(())
+    })
 }
 
 /// Force the allocation of space in a file.
@@ -254,30 +238,21 @@ pub unsafe extern "C" fn fd_close(fd: Fd) -> Errno {
 /// Note: This is similar to `fdatasync` in POSIX.
 #[no_mangle]
 pub unsafe extern "C" fn fd_datasync(fd: Fd) -> Errno {
-    match Descriptor::get(fd) {
-        Descriptor::File(file) => match wasi_filesystem::datasync(file.fd) {
-            Ok(()) => ERRNO_SUCCESS,
-            Err(err) => errno_from_wasi_filesystem(err),
-        },
-        Descriptor::Log => ERRNO_INVAL,
-        Descriptor::Closed => ERRNO_BADF,
-    }
+    State::with(|state| {
+        let file = state.get_file(fd)?;
+        wasi_filesystem::datasync(file.fd)?;
+        Ok(())
+    })
 }
 
 /// Get the attributes of a file descriptor.
 /// Note: This returns similar flags to `fsync(fd, F_GETFL)` in POSIX, as well as additional fields.
 #[no_mangle]
 pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
-    match Descriptor::get(fd) {
+    State::with(|state| match state.get(fd)? {
         Descriptor::File(file) => {
-            let flags = match wasi_filesystem::flags(file.fd) {
-                Ok(info) => info,
-                Err(err) => return errno_from_wasi_filesystem(err),
-            };
-            let type_ = match wasi_filesystem::todo_type(file.fd) {
-                Ok(info) => info,
-                Err(err) => return errno_from_wasi_filesystem(err),
-            };
+            let flags = wasi_filesystem::flags(file.fd)?;
+            let type_ = wasi_filesystem::todo_type(file.fd)?;
 
             let fs_filetype = match type_ {
                 wasi_filesystem::DescriptorType::RegularFile => FILETYPE_REGULAR_FILE,
@@ -321,7 +296,7 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
                 fs_rights_base,
                 fs_rights_inheriting,
             });
-            ERRNO_SUCCESS
+            Ok(())
         }
         Descriptor::Log => {
             let fs_filetype = FILETYPE_UNKNOWN;
@@ -334,10 +309,10 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
                 fs_rights_base,
                 fs_rights_inheriting,
             });
-            ERRNO_SUCCESS
+            Ok(())
         }
-        Descriptor::Closed => ERRNO_BADF,
-    }
+        Descriptor::Closed => Err(ERRNO_BADF),
+    })
 }
 
 /// Adjust the flags associated with a file descriptor.
@@ -361,14 +336,11 @@ pub unsafe extern "C" fn fd_fdstat_set_flags(fd: Fd, flags: Fdflags) -> Errno {
         new_flags |= wasi_filesystem::DescriptorFlags::SYNC;
     }
 
-    match Descriptor::get(fd) {
-        Descriptor::File(file) => match wasi_filesystem::set_flags(file.fd, new_flags) {
-            Ok(()) => ERRNO_SUCCESS,
-            Err(err) => errno_from_wasi_filesystem(err),
-        },
-        Descriptor::Log => ERRNO_INVAL,
-        Descriptor::Closed => ERRNO_BADF,
-    }
+    State::with(|state| {
+        let file = state.get_file(fd)?;
+        wasi_filesystem::set_flags(file.fd, new_flags)?;
+        Ok(())
+    })
 }
 
 /// Adjust the rights associated with a file descriptor.
@@ -385,53 +357,45 @@ pub unsafe extern "C" fn fd_fdstat_set_rights(
 /// Return the attributes of an open file.
 #[no_mangle]
 pub unsafe extern "C" fn fd_filestat_get(fd: Fd, buf: *mut Filestat) -> Errno {
-    match Descriptor::get(fd) {
-        Descriptor::File(file) => match wasi_filesystem::stat(file.fd) {
-            Ok(stat) => {
-                let filetype = match stat.type_ {
-                    wasi_filesystem::DescriptorType::Unknown => FILETYPE_UNKNOWN,
-                    wasi_filesystem::DescriptorType::Directory => FILETYPE_DIRECTORY,
-                    wasi_filesystem::DescriptorType::BlockDevice => FILETYPE_BLOCK_DEVICE,
-                    wasi_filesystem::DescriptorType::RegularFile => FILETYPE_REGULAR_FILE,
-                    // TODO: Add a way to disginguish between FILETYPE_SOCKET_STREAM and
-                    // FILETYPE_SOCKET_DGRAM.
-                    wasi_filesystem::DescriptorType::Socket => unreachable(),
-                    wasi_filesystem::DescriptorType::SymbolicLink => FILETYPE_SYMBOLIC_LINK,
-                    wasi_filesystem::DescriptorType::CharacterDevice => FILETYPE_CHARACTER_DEVICE,
-                    // preview1 never had a FIFO code.
-                    wasi_filesystem::DescriptorType::Fifo => FILETYPE_UNKNOWN,
-                };
-                *buf = Filestat {
-                    dev: stat.dev,
-                    ino: stat.ino,
-                    filetype,
-                    nlink: stat.nlink,
-                    size: stat.size,
-                    atim: stat.atim,
-                    mtim: stat.mtim,
-                    ctim: stat.ctim,
-                };
-                ERRNO_SUCCESS
-            }
-            Err(err) => errno_from_wasi_filesystem(err),
-        },
-        Descriptor::Closed => ERRNO_BADF,
-        Descriptor::Log => ERRNO_NOTDIR,
-    }
+    State::with(|state| {
+        let file = state.get_file(fd)?;
+        let stat = wasi_filesystem::stat(file.fd)?;
+        let filetype = match stat.type_ {
+            wasi_filesystem::DescriptorType::Unknown => FILETYPE_UNKNOWN,
+            wasi_filesystem::DescriptorType::Directory => FILETYPE_DIRECTORY,
+            wasi_filesystem::DescriptorType::BlockDevice => FILETYPE_BLOCK_DEVICE,
+            wasi_filesystem::DescriptorType::RegularFile => FILETYPE_REGULAR_FILE,
+            // TODO: Add a way to disginguish between FILETYPE_SOCKET_STREAM and
+            // FILETYPE_SOCKET_DGRAM.
+            wasi_filesystem::DescriptorType::Socket => unreachable(),
+            wasi_filesystem::DescriptorType::SymbolicLink => FILETYPE_SYMBOLIC_LINK,
+            wasi_filesystem::DescriptorType::CharacterDevice => FILETYPE_CHARACTER_DEVICE,
+            // preview1 never had a FIFO code.
+            wasi_filesystem::DescriptorType::Fifo => FILETYPE_UNKNOWN,
+        };
+        *buf = Filestat {
+            dev: stat.dev,
+            ino: stat.ino,
+            filetype,
+            nlink: stat.nlink,
+            size: stat.size,
+            atim: stat.atim,
+            mtim: stat.mtim,
+            ctim: stat.ctim,
+        };
+        Ok(())
+    })
 }
 
 /// Adjust the size of an open file. If this increases the file's size, the extra bytes are filled with zeros.
 /// Note: This is similar to `ftruncate` in POSIX.
 #[no_mangle]
 pub unsafe extern "C" fn fd_filestat_set_size(fd: Fd, size: Filesize) -> Errno {
-    match Descriptor::get(fd) {
-        Descriptor::File(file) => match wasi_filesystem::set_size(file.fd, size) {
-            Ok(()) => ERRNO_SUCCESS,
-            Err(err) => errno_from_wasi_filesystem(err),
-        },
-        Descriptor::Log => ERRNO_SPIPE,
-        Descriptor::Closed => ERRNO_BADF,
-    }
+    State::with(|state| {
+        let file = state.get_file(fd)?;
+        wasi_filesystem::set_size(file.fd, size)?;
+        Ok(())
+    })
 }
 
 /// Adjust the timestamps of an open file or directory.
@@ -459,14 +423,12 @@ pub unsafe extern "C" fn fd_filestat_set_times(
         } else {
             wasi_filesystem::NewTimestamp::NoChange
         };
-    match Descriptor::get(fd) {
-        Descriptor::File(file) => match wasi_filesystem::set_times(file.fd, atim, mtim) {
-            Ok(()) => ERRNO_SUCCESS,
-            Err(err) => errno_from_wasi_filesystem(err),
-        },
-        Descriptor::Log => ERRNO_SPIPE,
-        Descriptor::Closed => ERRNO_BADF,
-    }
+
+    State::with(|state| {
+        let file = state.get_file(fd)?;
+        wasi_filesystem::set_times(file.fd, atim, mtim)?;
+        Ok(())
+    })
 }
 
 /// Read from a file descriptor, without using and updating the file descriptor's offset.
@@ -489,29 +451,20 @@ pub unsafe extern "C" fn fd_pread(
         return ERRNO_SUCCESS;
     }
 
-    match Descriptor::get(fd) {
-        Descriptor::File(file) => {
-            let ptr = (*iovs_ptr).buf;
-            let len = (*iovs_ptr).buf_len;
+    State::with(|state| {
+        let ptr = (*iovs_ptr).buf;
+        let len = (*iovs_ptr).buf_len;
+        state.register_buffer(ptr, len);
 
-            register_buffer(ptr, len);
-
-            // We can cast between a `usize`-sized value and `usize`.
-            let read_len = len as _;
-            let result = wasi_filesystem::pread(file.fd, read_len, offset);
-            match result {
-                Ok(data) => {
-                    assert_eq!(data.as_ptr(), ptr);
-                    assert!(data.len() <= len);
-                    *nread = data.len();
-                    forget(data);
-                    ERRNO_SUCCESS
-                }
-                Err(err) => errno_from_wasi_filesystem(err),
-            }
-        }
-        Descriptor::Closed | Descriptor::Log => ERRNO_BADF,
-    }
+        let read_len = u32::try_from(len).unwrap();
+        let file = state.get_file(fd)?;
+        let data = wasi_filesystem::pread(file.fd, read_len, offset)?;
+        assert_eq!(data.as_ptr(), ptr);
+        assert!(data.len() <= len);
+        *nread = data.len();
+        forget(data);
+        Ok(())
+    })
 }
 
 /// Return a description of the given preopened file descriptor.
@@ -549,27 +502,22 @@ pub unsafe extern "C" fn fd_pwrite(
     let ptr = (*iovs_ptr).buf;
     let len = (*iovs_ptr).buf_len;
 
-    match Descriptor::get(fd) {
+    State::with(|state| match state.get(fd)? {
         Descriptor::File(file) => {
-            let result = wasi_filesystem::pwrite(file.fd, slice::from_raw_parts(ptr, len), offset);
+            let bytes = wasi_filesystem::pwrite(file.fd, slice::from_raw_parts(ptr, len), offset)?;
 
-            match result {
-                Ok(bytes) => {
-                    *nwritten = bytes as usize;
-                    ERRNO_SUCCESS
-                }
-                Err(err) => errno_from_wasi_filesystem(err),
-            }
+            *nwritten = bytes as usize;
+            Ok(())
         }
         Descriptor::Log => {
             let bytes = slice::from_raw_parts(ptr, len);
             let context: [u8; 3] = [b'I', b'/', b'O'];
             wasi_logging::log(wasi_logging::Level::Info, &context, bytes);
             *nwritten = len;
-            ERRNO_SUCCESS
+            Ok(())
         }
-        Descriptor::Closed => ERRNO_BADF,
-    }
+        Descriptor::Closed => Err(ERRNO_BADF),
+    })
 }
 
 /// Read from a file descriptor.
@@ -591,30 +539,22 @@ pub unsafe extern "C" fn fd_read(
         return ERRNO_SUCCESS;
     }
 
-    match Descriptor::get(fd) {
-        Descriptor::File(file) => {
-            let ptr = (*iovs_ptr).buf;
-            let len = (*iovs_ptr).buf_len;
+    State::with(|state| {
+        let ptr = (*iovs_ptr).buf;
+        let len = (*iovs_ptr).buf_len;
 
-            register_buffer(ptr, len);
+        state.register_buffer(ptr, len);
 
-            // We can cast between a `usize`-sized value and `usize`.
-            let read_len = len as _;
-            let result = wasi_filesystem::pread(file.fd, read_len, file.position);
-            match result {
-                Ok(data) => {
-                    assert_eq!(data.as_ptr(), ptr);
-                    assert!(data.len() <= len);
-                    *nread = data.len();
-                    file.position += data.len() as u64;
-                    forget(data);
-                    ERRNO_SUCCESS
-                }
-                Err(err) => errno_from_wasi_filesystem(err),
-            }
-        }
-        Descriptor::Closed | Descriptor::Log => ERRNO_BADF,
-    }
+        let read_len = u32::try_from(len).unwrap();
+        let file = state.get_file(fd)?;
+        let data = wasi_filesystem::pread(file.fd, read_len, file.position.get())?;
+        assert_eq!(data.as_ptr(), ptr);
+        assert!(data.len() <= len);
+        *nread = data.len();
+        file.position.set(file.position.get() + data.len() as u64);
+        forget(data);
+        Ok(())
+    })
 }
 
 /// Read directory entries from a directory.
@@ -659,58 +599,42 @@ pub unsafe extern "C" fn fd_seek(
     whence: Whence,
     newoffset: *mut Filesize,
 ) -> Errno {
-    match Descriptor::get(fd) {
-        Descriptor::File(file) => {
-            // It's ok to cast these indices; the WASI API will fail if
-            // the resulting values are out of range.
-            let from = match whence {
-                WHENCE_SET => wasi_filesystem::SeekFrom::Set(offset as _),
-                WHENCE_CUR => wasi_filesystem::SeekFrom::Cur(offset),
-                WHENCE_END => wasi_filesystem::SeekFrom::End(offset as _),
-                _ => return ERRNO_INVAL,
-            };
-            match wasi_filesystem::seek(file.fd, from) {
-                Ok(result) => {
-                    *newoffset = result;
-                    ERRNO_SUCCESS
-                }
-                Err(err) => errno_from_wasi_filesystem(err),
-            }
-        }
-        Descriptor::Log => ERRNO_SPIPE,
-        Descriptor::Closed => ERRNO_BADF,
-    }
+    State::with(|state| {
+        let file = state.get_seekable_file(fd)?;
+        // It's ok to cast these indices; the WASI API will fail if
+        // the resulting values are out of range.
+        let from = match whence {
+            WHENCE_SET => wasi_filesystem::SeekFrom::Set(offset as _),
+            WHENCE_CUR => wasi_filesystem::SeekFrom::Cur(offset),
+            WHENCE_END => wasi_filesystem::SeekFrom::End(offset as _),
+            _ => return Err(ERRNO_INVAL),
+        };
+        let result = wasi_filesystem::seek(file.fd, from)?;
+        *newoffset = result;
+        Ok(())
+    })
 }
 
 /// Synchronize the data and metadata of a file to disk.
 /// Note: This is similar to `fsync` in POSIX.
 #[no_mangle]
 pub unsafe extern "C" fn fd_sync(fd: Fd) -> Errno {
-    match Descriptor::get(fd) {
-        Descriptor::File(file) => match wasi_filesystem::sync(file.fd) {
-            Ok(()) => ERRNO_SUCCESS,
-            Err(err) => errno_from_wasi_filesystem(err),
-        },
-        Descriptor::Log => ERRNO_INVAL,
-        Descriptor::Closed => ERRNO_BADF,
-    }
+    State::with(|state| {
+        let file = state.get_file(fd)?;
+        wasi_filesystem::sync(file.fd)?;
+        Ok(())
+    })
 }
 
 /// Return the current offset of a file descriptor.
 /// Note: This is similar to `lseek(fd, 0, SEEK_CUR)` in POSIX.
 #[no_mangle]
 pub unsafe extern "C" fn fd_tell(fd: Fd, offset: *mut Filesize) -> Errno {
-    match Descriptor::get(fd) {
-        Descriptor::File(file) => match wasi_filesystem::tell(file.fd) {
-            Ok(result) => {
-                *offset = result;
-                ERRNO_SUCCESS
-            }
-            Err(err) => errno_from_wasi_filesystem(err),
-        },
-        Descriptor::Log => ERRNO_SPIPE,
-        Descriptor::Closed => ERRNO_BADF,
-    }
+    State::with(|state| {
+        let file = state.get_seekable_file(fd)?;
+        *offset = wasi_filesystem::tell(file.fd)?;
+        Ok(())
+    })
 }
 
 /// Write to a file descriptor.
@@ -735,29 +659,27 @@ pub unsafe extern "C" fn fd_write(
     let ptr = (*iovs_ptr).buf;
     let len = (*iovs_ptr).buf_len;
 
-    match Descriptor::get(fd) {
+    State::with(|state| match state.get(fd)? {
         Descriptor::File(file) => {
-            let result =
-                wasi_filesystem::pwrite(file.fd, slice::from_raw_parts(ptr, len), file.position);
+            let bytes = wasi_filesystem::pwrite(
+                file.fd,
+                slice::from_raw_parts(ptr, len),
+                file.position.get(),
+            )?;
 
-            match result {
-                Ok(bytes) => {
-                    *nwritten = bytes as usize;
-                    file.position += bytes as u64;
-                    ERRNO_SUCCESS
-                }
-                Err(err) => errno_from_wasi_filesystem(err),
-            }
+            *nwritten = bytes as usize;
+            file.position.set(file.position.get() + u64::from(bytes));
+            Ok(())
         }
         Descriptor::Log => {
             let bytes = slice::from_raw_parts(ptr, len);
             let context: [u8; 3] = [b'I', b'/', b'O'];
             wasi_logging::log(wasi_logging::Level::Info, &context, bytes);
             *nwritten = len;
-            ERRNO_SUCCESS
+            Ok(())
         }
-        Descriptor::Closed => ERRNO_BADF,
-    }
+        Descriptor::Closed => Err(ERRNO_BADF),
+    })
 }
 
 /// Create a directory.
@@ -770,14 +692,11 @@ pub unsafe extern "C" fn path_create_directory(
 ) -> Errno {
     let path = slice::from_raw_parts(path_ptr, path_len);
 
-    match Descriptor::get(fd) {
-        Descriptor::File(file) => match wasi_filesystem::create_directory_at(file.fd, path) {
-            Ok(()) => ERRNO_SUCCESS,
-            Err(err) => errno_from_wasi_filesystem(err),
-        },
-        Descriptor::Closed => ERRNO_BADF,
-        Descriptor::Log => ERRNO_NOTDIR,
-    }
+    State::with(|state| {
+        let file = state.get_dir(fd)?;
+        wasi_filesystem::create_directory_at(file.fd, path)?;
+        Ok(())
+    })
 }
 
 /// Return the attributes of a file or directory.
@@ -793,39 +712,34 @@ pub unsafe extern "C" fn path_filestat_get(
     let path = slice::from_raw_parts(path_ptr, path_len);
     let at_flags = at_flags_from_lookupflags(flags);
 
-    match Descriptor::get(fd) {
-        Descriptor::File(file) => match wasi_filesystem::stat_at(file.fd, at_flags, path) {
-            Ok(stat) => {
-                let filetype = match stat.type_ {
-                    wasi_filesystem::DescriptorType::Unknown => FILETYPE_UNKNOWN,
-                    wasi_filesystem::DescriptorType::Directory => FILETYPE_DIRECTORY,
-                    wasi_filesystem::DescriptorType::BlockDevice => FILETYPE_BLOCK_DEVICE,
-                    wasi_filesystem::DescriptorType::RegularFile => FILETYPE_REGULAR_FILE,
-                    // TODO: Add a way to disginguish between FILETYPE_SOCKET_STREAM and
-                    // FILETYPE_SOCKET_DGRAM.
-                    wasi_filesystem::DescriptorType::Socket => unreachable(),
-                    wasi_filesystem::DescriptorType::SymbolicLink => FILETYPE_SYMBOLIC_LINK,
-                    wasi_filesystem::DescriptorType::CharacterDevice => FILETYPE_CHARACTER_DEVICE,
-                    // preview1 never had a FIFO code.
-                    wasi_filesystem::DescriptorType::Fifo => FILETYPE_UNKNOWN,
-                };
-                *buf = Filestat {
-                    dev: stat.dev,
-                    ino: stat.ino,
-                    filetype,
-                    nlink: stat.nlink,
-                    size: stat.size,
-                    atim: stat.atim,
-                    mtim: stat.mtim,
-                    ctim: stat.ctim,
-                };
-                ERRNO_SUCCESS
-            }
-            Err(err) => errno_from_wasi_filesystem(err),
-        },
-        Descriptor::Closed => ERRNO_BADF,
-        Descriptor::Log => ERRNO_NOTDIR,
-    }
+    State::with(|state| {
+        let file = state.get_dir(fd)?;
+        let stat = wasi_filesystem::stat_at(file.fd, at_flags, path)?;
+        let filetype = match stat.type_ {
+            wasi_filesystem::DescriptorType::Unknown => FILETYPE_UNKNOWN,
+            wasi_filesystem::DescriptorType::Directory => FILETYPE_DIRECTORY,
+            wasi_filesystem::DescriptorType::BlockDevice => FILETYPE_BLOCK_DEVICE,
+            wasi_filesystem::DescriptorType::RegularFile => FILETYPE_REGULAR_FILE,
+            // TODO: Add a way to disginguish between FILETYPE_SOCKET_STREAM and
+            // FILETYPE_SOCKET_DGRAM.
+            wasi_filesystem::DescriptorType::Socket => unreachable(),
+            wasi_filesystem::DescriptorType::SymbolicLink => FILETYPE_SYMBOLIC_LINK,
+            wasi_filesystem::DescriptorType::CharacterDevice => FILETYPE_CHARACTER_DEVICE,
+            // preview1 never had a FIFO code.
+            wasi_filesystem::DescriptorType::Fifo => FILETYPE_UNKNOWN,
+        };
+        *buf = Filestat {
+            dev: stat.dev,
+            ino: stat.ino,
+            filetype,
+            nlink: stat.nlink,
+            size: stat.size,
+            atim: stat.atim,
+            mtim: stat.mtim,
+            ctim: stat.ctim,
+        };
+        Ok(())
+    })
 }
 
 /// Adjust the timestamps of a file or directory.
@@ -860,16 +774,11 @@ pub unsafe extern "C" fn path_filestat_set_times(
     let path = slice::from_raw_parts(path_ptr, path_len);
     let at_flags = at_flags_from_lookupflags(flags);
 
-    match Descriptor::get(fd) {
-        Descriptor::File(file) => {
-            match wasi_filesystem::set_times_at(file.fd, at_flags, path, atim, mtim) {
-                Ok(()) => ERRNO_SUCCESS,
-                Err(err) => errno_from_wasi_filesystem(err),
-            }
-        }
-        Descriptor::Closed => ERRNO_BADF,
-        Descriptor::Log => ERRNO_NOTDIR,
-    }
+    State::with(|state| {
+        let file = state.get_dir(fd)?;
+        wasi_filesystem::set_times_at(file.fd, at_flags, path, atim, mtim)?;
+        Ok(())
+    })
 }
 
 /// Create a hard link.
@@ -888,16 +797,12 @@ pub unsafe extern "C" fn path_link(
     let new_path = slice::from_raw_parts(new_path_ptr, new_path_len);
     let at_flags = at_flags_from_lookupflags(old_flags);
 
-    match (Descriptor::get(old_fd), Descriptor::get(new_fd)) {
-        (Descriptor::File(old_file), Descriptor::File(new_file)) => {
-            match wasi_filesystem::link_at(old_file.fd, at_flags, old_path, new_file.fd, new_path) {
-                Ok(()) => ERRNO_SUCCESS,
-                Err(err) => errno_from_wasi_filesystem(err),
-            }
-        }
-        (_, Descriptor::Closed) | (Descriptor::Closed, _) => ERRNO_BADF,
-        _ => ERRNO_NOTDIR,
-    }
+    State::with(|state| {
+        let old = state.get_dir(old_fd)?.fd;
+        let new = state.get_dir(new_fd)?.fd;
+        wasi_filesystem::link_at(old, at_flags, old_path, new, new_path)?;
+        Ok(())
+    })
 }
 
 /// Open a file or directory.
@@ -935,71 +840,38 @@ pub unsafe extern "C" fn path_readlink(
 ) -> Errno {
     let path = slice::from_raw_parts(path_ptr, path_len);
 
-    // If the user gave us a buffer shorter than `PATH_MAX`, it may not be
-    // long enough to accept the actual path. `cabi_realloc` can't fail,
-    // so instead we handle this case specially.
-    if buf_len < PATH_MAX {
-        return path_readlink_slow(fd, path, buf, buf_len, bufused);
-    }
+    State::with(|state| {
+        // If the user gave us a buffer shorter than `PATH_MAX`, it may not be
+        // long enough to accept the actual path. `cabi_realloc` can't fail,
+        // so instead we handle this case specially.
+        let use_state_buf = buf_len < PATH_MAX;
 
-    register_buffer(buf, buf_len);
-
-    let result = wasi_filesystem::readlink_at(fd, path);
-
-    let return_value = match &result {
-        Ok(path) => {
-            assert_eq!(path.as_ptr(), buf);
-            assert!(path.len() <= buf_len);
-
-            *bufused = path.len();
-            ERRNO_SUCCESS
+        if use_state_buf {
+            state.register_buffer(state.path_buf.get().cast(), PATH_MAX);
+        } else {
+            state.register_buffer(buf, buf_len);
         }
-        Err(err) => errno_from_wasi_filesystem(*err),
-    };
 
-    // The returned string's memory was allocated in `buf`, so don't separately
-    // free it.
-    forget(result);
+        let file = state.get_dir(fd)?;
+        let path = wasi_filesystem::readlink_at(file.fd, path)?;
 
-    return_value
-}
+        assert_eq!(path.as_ptr(), buf);
+        assert!(path.len() <= buf_len);
 
-/// Slow-path for `path_readlink` that allocates a buffer on the stack to
-/// ensure that it has a big enough buffer.
-#[inline(never)] // Disable inlining as this has a large stack buffer.
-unsafe fn path_readlink_slow(
-    fd: wasi_filesystem::Descriptor,
-    path: &[u8],
-    buf: *mut u8,
-    buf_len: Size,
-    bufused: *mut Size,
-) -> Errno {
-    let mut buffer = core::mem::MaybeUninit::<[u8; PATH_MAX]>::uninit();
-
-    register_buffer(buffer.as_mut_ptr().cast(), PATH_MAX);
-
-    let result = wasi_filesystem::readlink_at(fd, path);
-
-    let return_value = match &result {
-        Ok(path) => {
-            assert_eq!(path.as_ptr(), buffer.as_ptr().cast());
-            assert!(path.len() <= PATH_MAX);
-
-            // Preview1 follows POSIX in truncating the returned path if
-            // it doesn't fit.
+        *bufused = path.len();
+        if use_state_buf {
+            // Preview1 follows POSIX in truncating the returned path if it
+            // doesn't fit.
             let len = core::cmp::min(path.len(), buf_len);
-            copy_nonoverlapping(buffer.as_ptr().cast(), buf, len);
-            *bufused = len;
-            ERRNO_SUCCESS
+            copy_nonoverlapping(path.as_ptr().cast(), buf, len);
         }
-        Err(err) => errno_from_wasi_filesystem(*err),
-    };
 
-    // The returned string's memory was allocated in `buf`, so don't separately
-    // free it.
-    forget(result);
+        // The returned string's memory was allocated in `buf`, so don't separately
+        // free it.
+        forget(path);
 
-    return_value
+        Ok(())
+    })
 }
 
 /// Remove a directory.
@@ -1013,14 +885,11 @@ pub unsafe extern "C" fn path_remove_directory(
 ) -> Errno {
     let path = slice::from_raw_parts(path_ptr, path_len);
 
-    match Descriptor::get(fd) {
-        Descriptor::File(file) => match wasi_filesystem::remove_directory_at(file.fd, path) {
-            Ok(()) => ERRNO_SUCCESS,
-            Err(err) => errno_from_wasi_filesystem(err),
-        },
-        Descriptor::Closed => ERRNO_BADF,
-        Descriptor::Log => ERRNO_NOTDIR,
-    }
+    State::with(|state| {
+        let file = state.get_dir(fd)?;
+        wasi_filesystem::remove_directory_at(file.fd, path)?;
+        Ok(())
+    })
 }
 
 /// Rename a file or directory.
@@ -1037,16 +906,12 @@ pub unsafe extern "C" fn path_rename(
     let old_path = slice::from_raw_parts(old_path_ptr, old_path_len);
     let new_path = slice::from_raw_parts(new_path_ptr, new_path_len);
 
-    match (Descriptor::get(old_fd), Descriptor::get(new_fd)) {
-        (Descriptor::File(old_file), Descriptor::File(new_file)) => {
-            match wasi_filesystem::rename_at(old_file.fd, old_path, new_file.fd, new_path) {
-                Ok(()) => ERRNO_SUCCESS,
-                Err(err) => errno_from_wasi_filesystem(err),
-            }
-        }
-        (_, Descriptor::Closed) | (Descriptor::Closed, _) => ERRNO_BADF,
-        _ => ERRNO_NOTDIR,
-    }
+    State::with(|state| {
+        let old = state.get_dir(old_fd)?.fd;
+        let new = state.get_dir(new_fd)?.fd;
+        wasi_filesystem::rename_at(old, old_path, new, new_path)?;
+        Ok(())
+    })
 }
 
 /// Create a symbolic link.
@@ -1062,14 +927,11 @@ pub unsafe extern "C" fn path_symlink(
     let old_path = slice::from_raw_parts(old_path_ptr, old_path_len);
     let new_path = slice::from_raw_parts(new_path_ptr, new_path_len);
 
-    match Descriptor::get(fd) {
-        Descriptor::File(file) => match wasi_filesystem::symlink_at(file.fd, old_path, new_path) {
-            Ok(()) => ERRNO_SUCCESS,
-            Err(err) => errno_from_wasi_filesystem(err),
-        },
-        Descriptor::Closed => ERRNO_BADF,
-        _ => ERRNO_NOTDIR,
-    }
+    State::with(|state| {
+        let file = state.get_dir(fd)?;
+        wasi_filesystem::symlink_at(file.fd, old_path, new_path)?;
+        Ok(())
+    })
 }
 
 /// Unlink a file.
@@ -1079,14 +941,11 @@ pub unsafe extern "C" fn path_symlink(
 pub unsafe extern "C" fn path_unlink_file(fd: Fd, path_ptr: *const u8, path_len: usize) -> Errno {
     let path = slice::from_raw_parts(path_ptr, path_len);
 
-    match Descriptor::get(fd) {
-        Descriptor::File(file) => match wasi_filesystem::unlink_file_at(file.fd, path) {
-            Ok(()) => ERRNO_SUCCESS,
-            Err(err) => errno_from_wasi_filesystem(err),
-        },
-        Descriptor::Closed => ERRNO_BADF,
-        _ => ERRNO_NOTDIR,
-    }
+    State::with(|state| {
+        let file = state.get_dir(fd)?;
+        wasi_filesystem::unlink_file_at(file.fd, path)?;
+        Ok(())
+    })
 }
 
 /// Concurrently poll for the occurrence of a set of events.
@@ -1132,17 +991,19 @@ pub unsafe extern "C" fn sched_yield() -> Errno {
 /// number generator, rather than to provide the random data directly.
 #[no_mangle]
 pub unsafe extern "C" fn random_get(buf: *mut u8, buf_len: Size) -> Errno {
-    register_buffer(buf, buf_len);
+    State::with(|state| {
+        state.register_buffer(buf, buf_len);
 
-    assert_eq!(buf_len as u32 as Size, buf_len);
-    let result = wasi_random::getrandom(buf_len as u32);
-    assert_eq!(result.as_ptr(), buf);
+        assert_eq!(buf_len as u32 as Size, buf_len);
+        let result = wasi_random::getrandom(buf_len as u32);
+        assert_eq!(result.as_ptr(), buf);
 
-    // The returned buffer's memory was allocated in `buf`, so don't separately
-    // free it.
-    forget(result);
+        // The returned buffer's memory was allocated in `buf`, so don't separately
+        // free it.
+        forget(result);
 
-    ERRNO_SUCCESS
+        Ok(())
+    })
 }
 
 /// Receive a message from a socket.
@@ -1189,77 +1050,79 @@ fn at_flags_from_lookupflags(flags: Lookupflags) -> wasi_filesystem::AtFlags {
     }
 }
 
-#[inline(never)] // Disable inlining as this is bulky and relatively cold.
-fn errno_from_wasi_filesystem(err: wasi_filesystem::Errno) -> Errno {
-    match err {
-        wasi_filesystem::Errno::Toobig => black_box(ERRNO_2BIG),
-        wasi_filesystem::Errno::Access => ERRNO_ACCES,
-        wasi_filesystem::Errno::Addrinuse => ERRNO_ADDRINUSE,
-        wasi_filesystem::Errno::Addrnotavail => ERRNO_ADDRNOTAVAIL,
-        wasi_filesystem::Errno::Afnosupport => ERRNO_AFNOSUPPORT,
-        wasi_filesystem::Errno::Again => ERRNO_AGAIN,
-        wasi_filesystem::Errno::Already => ERRNO_ALREADY,
-        wasi_filesystem::Errno::Badmsg => ERRNO_BADMSG,
-        wasi_filesystem::Errno::Busy => ERRNO_BUSY,
-        wasi_filesystem::Errno::Canceled => ERRNO_CANCELED,
-        wasi_filesystem::Errno::Child => ERRNO_CHILD,
-        wasi_filesystem::Errno::Connaborted => ERRNO_CONNABORTED,
-        wasi_filesystem::Errno::Connrefused => ERRNO_CONNREFUSED,
-        wasi_filesystem::Errno::Connreset => ERRNO_CONNRESET,
-        wasi_filesystem::Errno::Deadlk => ERRNO_DEADLK,
-        wasi_filesystem::Errno::Destaddrreq => ERRNO_DESTADDRREQ,
-        wasi_filesystem::Errno::Dquot => ERRNO_DQUOT,
-        wasi_filesystem::Errno::Exist => ERRNO_EXIST,
-        wasi_filesystem::Errno::Fault => ERRNO_FAULT,
-        wasi_filesystem::Errno::Fbig => ERRNO_FBIG,
-        wasi_filesystem::Errno::Hostunreach => ERRNO_HOSTUNREACH,
-        wasi_filesystem::Errno::Idrm => ERRNO_IDRM,
-        wasi_filesystem::Errno::Ilseq => ERRNO_ILSEQ,
-        wasi_filesystem::Errno::Inprogress => ERRNO_INPROGRESS,
-        wasi_filesystem::Errno::Intr => ERRNO_INTR,
-        wasi_filesystem::Errno::Inval => ERRNO_INVAL,
-        wasi_filesystem::Errno::Io => ERRNO_IO,
-        wasi_filesystem::Errno::Isconn => ERRNO_ISCONN,
-        wasi_filesystem::Errno::Isdir => ERRNO_ISDIR,
-        wasi_filesystem::Errno::Loop => ERRNO_LOOP,
-        wasi_filesystem::Errno::Mfile => ERRNO_MFILE,
-        wasi_filesystem::Errno::Mlink => ERRNO_MLINK,
-        wasi_filesystem::Errno::Msgsize => ERRNO_MSGSIZE,
-        wasi_filesystem::Errno::Multihop => ERRNO_MULTIHOP,
-        wasi_filesystem::Errno::Nametoolong => ERRNO_NAMETOOLONG,
-        wasi_filesystem::Errno::Netdown => ERRNO_NETDOWN,
-        wasi_filesystem::Errno::Netreset => ERRNO_NETRESET,
-        wasi_filesystem::Errno::Netunreach => ERRNO_NETUNREACH,
-        wasi_filesystem::Errno::Nfile => ERRNO_NFILE,
-        wasi_filesystem::Errno::Nobufs => ERRNO_NOBUFS,
-        wasi_filesystem::Errno::Nodev => ERRNO_NODEV,
-        wasi_filesystem::Errno::Noent => ERRNO_NOENT,
-        wasi_filesystem::Errno::Noexec => ERRNO_NOEXEC,
-        wasi_filesystem::Errno::Nolck => ERRNO_NOLCK,
-        wasi_filesystem::Errno::Nolink => ERRNO_NOLINK,
-        wasi_filesystem::Errno::Nomem => ERRNO_NOMEM,
-        wasi_filesystem::Errno::Nomsg => ERRNO_NOMSG,
-        wasi_filesystem::Errno::Noprotoopt => ERRNO_NOPROTOOPT,
-        wasi_filesystem::Errno::Nospc => ERRNO_NOSPC,
-        wasi_filesystem::Errno::Nosys => ERRNO_NOSYS,
-        wasi_filesystem::Errno::Notdir => ERRNO_NOTDIR,
-        wasi_filesystem::Errno::Notempty => ERRNO_NOTEMPTY,
-        wasi_filesystem::Errno::Notrecoverable => ERRNO_NOTRECOVERABLE,
-        wasi_filesystem::Errno::Notsup => ERRNO_NOTSUP,
-        wasi_filesystem::Errno::Notty => ERRNO_NOTTY,
-        wasi_filesystem::Errno::Nxio => ERRNO_NXIO,
-        wasi_filesystem::Errno::Overflow => ERRNO_OVERFLOW,
-        wasi_filesystem::Errno::Ownerdead => ERRNO_OWNERDEAD,
-        wasi_filesystem::Errno::Perm => ERRNO_PERM,
-        wasi_filesystem::Errno::Pipe => ERRNO_PIPE,
-        wasi_filesystem::Errno::Range => ERRNO_RANGE,
-        wasi_filesystem::Errno::Rofs => ERRNO_ROFS,
-        wasi_filesystem::Errno::Spipe => ERRNO_SPIPE,
-        wasi_filesystem::Errno::Srch => ERRNO_SRCH,
-        wasi_filesystem::Errno::Stale => ERRNO_STALE,
-        wasi_filesystem::Errno::Timedout => ERRNO_TIMEDOUT,
-        wasi_filesystem::Errno::Txtbsy => ERRNO_TXTBSY,
-        wasi_filesystem::Errno::Xdev => ERRNO_XDEV,
+impl From<wasi_filesystem::Errno> for Errno {
+    #[inline(never)] // Disable inlining as this is bulky and relatively cold.
+    fn from(err: wasi_filesystem::Errno) -> Errno {
+        match err {
+            wasi_filesystem::Errno::Toobig => black_box(ERRNO_2BIG),
+            wasi_filesystem::Errno::Access => ERRNO_ACCES,
+            wasi_filesystem::Errno::Addrinuse => ERRNO_ADDRINUSE,
+            wasi_filesystem::Errno::Addrnotavail => ERRNO_ADDRNOTAVAIL,
+            wasi_filesystem::Errno::Afnosupport => ERRNO_AFNOSUPPORT,
+            wasi_filesystem::Errno::Again => ERRNO_AGAIN,
+            wasi_filesystem::Errno::Already => ERRNO_ALREADY,
+            wasi_filesystem::Errno::Badmsg => ERRNO_BADMSG,
+            wasi_filesystem::Errno::Busy => ERRNO_BUSY,
+            wasi_filesystem::Errno::Canceled => ERRNO_CANCELED,
+            wasi_filesystem::Errno::Child => ERRNO_CHILD,
+            wasi_filesystem::Errno::Connaborted => ERRNO_CONNABORTED,
+            wasi_filesystem::Errno::Connrefused => ERRNO_CONNREFUSED,
+            wasi_filesystem::Errno::Connreset => ERRNO_CONNRESET,
+            wasi_filesystem::Errno::Deadlk => ERRNO_DEADLK,
+            wasi_filesystem::Errno::Destaddrreq => ERRNO_DESTADDRREQ,
+            wasi_filesystem::Errno::Dquot => ERRNO_DQUOT,
+            wasi_filesystem::Errno::Exist => ERRNO_EXIST,
+            wasi_filesystem::Errno::Fault => ERRNO_FAULT,
+            wasi_filesystem::Errno::Fbig => ERRNO_FBIG,
+            wasi_filesystem::Errno::Hostunreach => ERRNO_HOSTUNREACH,
+            wasi_filesystem::Errno::Idrm => ERRNO_IDRM,
+            wasi_filesystem::Errno::Ilseq => ERRNO_ILSEQ,
+            wasi_filesystem::Errno::Inprogress => ERRNO_INPROGRESS,
+            wasi_filesystem::Errno::Intr => ERRNO_INTR,
+            wasi_filesystem::Errno::Inval => ERRNO_INVAL,
+            wasi_filesystem::Errno::Io => ERRNO_IO,
+            wasi_filesystem::Errno::Isconn => ERRNO_ISCONN,
+            wasi_filesystem::Errno::Isdir => ERRNO_ISDIR,
+            wasi_filesystem::Errno::Loop => ERRNO_LOOP,
+            wasi_filesystem::Errno::Mfile => ERRNO_MFILE,
+            wasi_filesystem::Errno::Mlink => ERRNO_MLINK,
+            wasi_filesystem::Errno::Msgsize => ERRNO_MSGSIZE,
+            wasi_filesystem::Errno::Multihop => ERRNO_MULTIHOP,
+            wasi_filesystem::Errno::Nametoolong => ERRNO_NAMETOOLONG,
+            wasi_filesystem::Errno::Netdown => ERRNO_NETDOWN,
+            wasi_filesystem::Errno::Netreset => ERRNO_NETRESET,
+            wasi_filesystem::Errno::Netunreach => ERRNO_NETUNREACH,
+            wasi_filesystem::Errno::Nfile => ERRNO_NFILE,
+            wasi_filesystem::Errno::Nobufs => ERRNO_NOBUFS,
+            wasi_filesystem::Errno::Nodev => ERRNO_NODEV,
+            wasi_filesystem::Errno::Noent => ERRNO_NOENT,
+            wasi_filesystem::Errno::Noexec => ERRNO_NOEXEC,
+            wasi_filesystem::Errno::Nolck => ERRNO_NOLCK,
+            wasi_filesystem::Errno::Nolink => ERRNO_NOLINK,
+            wasi_filesystem::Errno::Nomem => ERRNO_NOMEM,
+            wasi_filesystem::Errno::Nomsg => ERRNO_NOMSG,
+            wasi_filesystem::Errno::Noprotoopt => ERRNO_NOPROTOOPT,
+            wasi_filesystem::Errno::Nospc => ERRNO_NOSPC,
+            wasi_filesystem::Errno::Nosys => ERRNO_NOSYS,
+            wasi_filesystem::Errno::Notdir => ERRNO_NOTDIR,
+            wasi_filesystem::Errno::Notempty => ERRNO_NOTEMPTY,
+            wasi_filesystem::Errno::Notrecoverable => ERRNO_NOTRECOVERABLE,
+            wasi_filesystem::Errno::Notsup => ERRNO_NOTSUP,
+            wasi_filesystem::Errno::Notty => ERRNO_NOTTY,
+            wasi_filesystem::Errno::Nxio => ERRNO_NXIO,
+            wasi_filesystem::Errno::Overflow => ERRNO_OVERFLOW,
+            wasi_filesystem::Errno::Ownerdead => ERRNO_OWNERDEAD,
+            wasi_filesystem::Errno::Perm => ERRNO_PERM,
+            wasi_filesystem::Errno::Pipe => ERRNO_PIPE,
+            wasi_filesystem::Errno::Range => ERRNO_RANGE,
+            wasi_filesystem::Errno::Rofs => ERRNO_ROFS,
+            wasi_filesystem::Errno::Spipe => ERRNO_SPIPE,
+            wasi_filesystem::Errno::Srch => ERRNO_SRCH,
+            wasi_filesystem::Errno::Stale => ERRNO_STALE,
+            wasi_filesystem::Errno::Timedout => ERRNO_TIMEDOUT,
+            wasi_filesystem::Errno::Txtbsy => ERRNO_TXTBSY,
+            wasi_filesystem::Errno::Xdev => ERRNO_XDEV,
+        }
     }
 }
 
@@ -1280,30 +1143,127 @@ pub enum Descriptor {
 #[repr(C)]
 pub struct File {
     fd: wasi_filesystem::Descriptor,
-    position: u64,
+    position: Cell<u64>,
 }
 
 const PAGE_SIZE: usize = 65536;
 
-impl Descriptor {
-    fn get(fd: Fd) -> &'static mut Descriptor {
-        unsafe {
-            let mut fds = replace_fds(null_mut());
-            if fds.is_null() {
-                let grew = core::arch::wasm32::memory_grow(0, 1);
-                if grew == usize::MAX {
-                    unreachable();
-                }
-                fds = (grew * PAGE_SIZE) as *mut u8;
-            }
-            // We allocated a page; abort if that's not enough.
-            if fd as usize * size_of::<Descriptor>() >= PAGE_SIZE {
-                unreachable()
-            }
-            let result = &mut *fds.cast::<Descriptor>().add(fd as usize);
-            let fds = replace_fds(fds);
-            assert!(fds.is_null());
-            result
+/// The maximum path length. WASI doesn't explicitly guarantee this, but all
+/// popular OS's have a `PATH_MAX` of at most 4096, so that's enough for this
+/// polyfill.
+const PATH_MAX: usize = 4096;
+
+struct State {
+    buffer_ptr: Cell<*mut u8>,
+    buffer_len: Cell<usize>,
+    ndescriptors: usize,
+    descriptors: MaybeUninit<[Descriptor; 128]>,
+    path_buf: UnsafeCell<MaybeUninit<[u8; PATH_MAX]>>,
+}
+
+#[allow(improper_ctypes)]
+extern "C" {
+    fn get_global_ptr() -> *const RefCell<State>;
+    fn set_global_ptr(a: *const RefCell<State>);
+}
+
+impl State {
+    fn with(f: impl FnOnce(&State) -> Result<(), Errno>) -> Errno {
+        let ptr = State::ptr();
+        let ptr = ptr.try_borrow().unwrap_or_else(|_| unreachable());
+        let ret = f(&*ptr);
+        match ret {
+            Ok(()) => ERRNO_SUCCESS,
+            Err(err) => err,
         }
+    }
+
+    fn with_mut(f: impl FnOnce(&mut State) -> Result<(), Errno>) -> Errno {
+        let ptr = State::ptr();
+        let mut ptr = ptr.try_borrow_mut().unwrap_or_else(|_| unreachable());
+        let ret = f(&mut *ptr);
+        match ret {
+            Ok(()) => ERRNO_SUCCESS,
+            Err(err) => err,
+        }
+    }
+
+    fn ptr() -> &'static RefCell<State> {
+        assert!(size_of::<State>() <= PAGE_SIZE);
+        unsafe {
+            let mut ptr = get_global_ptr();
+            if ptr.is_null() {
+                ptr = State::new();
+                set_global_ptr(ptr);
+            }
+            &*ptr
+        }
+    }
+
+    #[cold]
+    fn new() -> &'static RefCell<State> {
+        let grew = core::arch::wasm32::memory_grow(0, 1);
+        if grew == usize::MAX {
+            unreachable();
+        }
+        let ret = (grew * PAGE_SIZE) as *mut RefCell<State>;
+        unsafe {
+            ret.write(RefCell::new(State {
+                buffer_ptr: Cell::new(null_mut()),
+                buffer_len: Cell::new(0),
+                ndescriptors: 0,
+                descriptors: MaybeUninit::uninit(),
+                path_buf: UnsafeCell::new(MaybeUninit::uninit()),
+            }));
+            &*ret
+        }
+    }
+
+    fn push_desc(&mut self, desc: Descriptor) -> Result<Fd, Errno> {
+        unsafe {
+            let descriptors = self.descriptors.as_mut_ptr();
+            if self.ndescriptors >= (*descriptors).len() {
+                return Err(ERRNO_INVAL);
+            }
+            ptr::addr_of_mut!((*descriptors)[self.ndescriptors]).write(desc);
+            self.ndescriptors += 1;
+            Ok(Fd::try_from(self.ndescriptors - 1).unwrap())
+        }
+    }
+
+    fn get(&self, fd: Fd) -> Result<&Descriptor, Errno> {
+        let index = usize::try_from(fd).unwrap();
+        if index < self.ndescriptors {
+            unsafe { (*self.descriptors.as_ptr()).get(index).ok_or(ERRNO_BADF) }
+        } else {
+            Err(ERRNO_BADF)
+        }
+    }
+
+    fn get_file_with_log_error(&self, fd: Fd, log_error: Errno) -> Result<&File, Errno> {
+        match self.get(fd)? {
+            Descriptor::File(file) => Ok(file),
+            Descriptor::Log => Err(log_error),
+            Descriptor::Closed => Err(ERRNO_BADF),
+        }
+    }
+
+    fn get_file(&self, fd: Fd) -> Result<&File, Errno> {
+        self.get_file_with_log_error(fd, ERRNO_INVAL)
+    }
+
+    fn get_dir(&self, fd: Fd) -> Result<&File, Errno> {
+        self.get_file_with_log_error(fd, ERRNO_NOTDIR)
+    }
+
+    fn get_seekable_file(&self, fd: Fd) -> Result<&File, Errno> {
+        self.get_file_with_log_error(fd, ERRNO_SPIPE)
+    }
+
+    /// Register `buf` and `buf_len` to be used by `cabi_realloc` to satisfy
+    /// the next request.
+    fn register_buffer(&self, buf: *mut u8, buf_len: usize) {
+        self.buffer_ptr.set(buf);
+        self.buffer_len.set(buf_len);
     }
 }
