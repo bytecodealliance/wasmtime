@@ -426,7 +426,7 @@ impl RunCommand {
         if self.allow_precompiled {
             unsafe { Module::from_trusted_file(engine, path) }
         } else {
-            Module::from_file(engine, path)
+            Module::from_file(engine, path).context("if you're trying to run a precompiled module, pass --allow-precompiled")
         }
     }
 }
