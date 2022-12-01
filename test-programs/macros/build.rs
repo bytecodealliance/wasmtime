@@ -9,7 +9,7 @@ fn main() {
 
     let mut components = Vec::new();
 
-    println!("cargo:rerun-if-changed=../../");
+    println!("cargo:rerun-if-changed=../../src");
     let mut cmd = Command::new("cargo");
     cmd.arg("build")
         .arg("--release")
