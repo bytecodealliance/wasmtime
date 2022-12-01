@@ -222,7 +222,7 @@ impl WasmBacktrace {
     ///
     /// let mut store = Store::new(&engine, ());
     /// let func = Func::wrap(&mut store, |cx: Caller<'_, ()>| {
-    ///     let trace = WasmBacktrace::new(&cx);
+    ///     let trace = WasmBacktrace::capture(&cx);
     ///     println!("{trace:?}");
     /// });
     /// let instance = Instance::new(&mut store, &module, &[func.into()])?;
