@@ -340,7 +340,6 @@ impl Inst {
         value: u64,
         mut alloc_tmp: F,
     ) -> SmallVec<[Inst; 4]> {
-        crate::trace!("loading a constant! {}", value);
         if let Ok(imm) = i16::try_from(value as i64) {
             // 16-bit signed immediate
             smallvec![Inst::Mov64SImm16 { rd, imm }]
