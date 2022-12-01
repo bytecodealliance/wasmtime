@@ -7,14 +7,7 @@ mod table;
 pub use table::Table;
 
 wit_bindgen_host_wasmtime_rust::generate!({
-    import: "../wit/wasi-clocks.wit.md",
-    import: "../wit/wasi-default-clocks.wit.md",
-    import: "../wit/wasi-filesystem.wit.md",
-    import: "../wit/wasi-logging.wit.md",
-    import: "../wit/wasi-poll.wit.md",
-    import: "../wit/wasi-random.wit.md",
-    default: "../wit/command.wit.md",
-    name: "wasi",
+    path: "../wit/wasi.wit",
     tracing: true,
 });
 

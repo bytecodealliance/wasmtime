@@ -13,4 +13,4 @@ test = false
 quote = "1.0"
 
 [build-dependencies]
-wit-component = { git = "https://github.com/bytecodealliance/wit-bindgen" }
+wit-component = "0.3.2"

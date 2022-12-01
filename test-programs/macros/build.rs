@@ -23,6 +23,7 @@ fn main() {
 
     let wasi_adapter = out_dir.join("wasm32-wasi/release/wasi_snapshot_preview1.wasm");
     println!("wasi adapter: {:?}", &wasi_adapter);
+    let wasi_adapter = fs::read(&wasi_adapter).unwrap();
 
     let mut cmd = Command::new("cargo");
     cmd.arg("build")
@@ -46,7 +47,7 @@ fn main() {
             .module(module.as_slice())
             .unwrap()
             .validate(true)
-            .adapter_file(&wasi_adapter)
+            .adapter("wasi_snapshot_preview1", &wasi_adapter)
             .unwrap()
             .encode()
             .expect(&format!(
