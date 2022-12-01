@@ -191,8 +191,14 @@ impl WasmBacktrace {
     /// current thread. If no WebAssembly is on the stack then the returned
     /// backtrace will have no frames in it.
     ///
-    /// Note that this function does not respect the [`Config::wasm_backtrace`]
-    /// configuration option and instead always captures a backtrace.
+    /// Note that this function will respect the [`Config::wasm_backtrace`]
+    /// configuration option and will return an empty backtrace if that is
+    /// disabled. To always capture a backtrace use the
+    /// [`WasmBacktrace::force_capture`] method.
+    ///
+    /// Also note that this function will only capture frames from the
+    /// specified `store` on the stack, ignoring frames from other stores if
+    /// present.
     ///
     /// [`Config::wasm_backtrace`]: crate::Config::wasm_backtrace
     ///
@@ -225,7 +231,26 @@ impl WasmBacktrace {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new(store: impl AsContext) -> WasmBacktrace {
+    pub fn capture(store: impl AsContext) -> WasmBacktrace {
+        let store = store.as_context();
+        if store.engine().config().wasm_backtrace {
+            Self::force_capture(store)
+        } else {
+            WasmBacktrace {
+                wasm_trace: Vec::new(),
+                hint_wasm_backtrace_details_env: false,
+                runtime_trace: wasmtime_runtime::Backtrace::empty(),
+            }
+        }
+    }
+
+    /// Unconditionally captures a trace of the WebAssembly frames on the stack
+    /// for the provided store.
+    ///
+    /// Same as [`WasmBacktrace::capture`] except that it disregards the
+    /// [`Config::wasm_backtrace`](crate::Config::wasm_backtrace) setting and
+    /// always captures a backtrace.
+    pub fn force_capture(store: impl AsContext) -> WasmBacktrace {
         let store = store.as_context();
         Self::from_captured(store.0, wasmtime_runtime::Backtrace::new(), None)
     }

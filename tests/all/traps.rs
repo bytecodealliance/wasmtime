@@ -1104,7 +1104,7 @@ async fn sync_then_async_trap() -> Result<()> {
 fn standalone_backtrace() -> Result<()> {
     let engine = Engine::default();
     let mut store = Store::new(&engine, ());
-    let trace = WasmBacktrace::new(&store);
+    let trace = WasmBacktrace::capture(&store);
     assert!(trace.frames().is_empty());
     let module = Module::new(
         &engine,
@@ -1117,7 +1117,7 @@ fn standalone_backtrace() -> Result<()> {
         "#,
     )?;
     let func = Func::wrap(&mut store, |cx: Caller<'_, ()>| {
-        let trace = WasmBacktrace::new(&cx);
+        let trace = WasmBacktrace::capture(&cx);
         assert_eq!(trace.frames().len(), 2);
         let frame1 = &trace.frames()[0];
         let frame2 = &trace.frames()[1];
@@ -1125,6 +1125,35 @@ fn standalone_backtrace() -> Result<()> {
         assert_eq!(frame1.func_name(), Some("bar"));
         assert_eq!(frame2.func_index(), 1);
         assert_eq!(frame2.func_name(), Some("foo"));
+    });
+    let instance = Instance::new(&mut store, &module, &[func.into()])?;
+    let f = instance.get_typed_func::<(), ()>(&mut store, "f")?;
+    f.call(&mut store, ())?;
+    Ok(())
+}
+
+#[test]
+#[allow(deprecated)]
+fn standalone_backtrace_disabled() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_backtrace(false);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (import "" "" (func $host))
+                (func $foo (export "f") call $bar)
+                (func $bar call $host)
+            )
+        "#,
+    )?;
+    let func = Func::wrap(&mut store, |cx: Caller<'_, ()>| {
+        let trace = WasmBacktrace::capture(&cx);
+        assert_eq!(trace.frames().len(), 0);
+        let trace = WasmBacktrace::force_capture(&cx);
+        assert_eq!(trace.frames().len(), 2);
     });
     let instance = Instance::new(&mut store, &module, &[func.into()])?;
     let f = instance.get_typed_func::<(), ()>(&mut store, "f")?;

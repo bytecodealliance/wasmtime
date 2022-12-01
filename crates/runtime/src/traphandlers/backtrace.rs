@@ -74,6 +74,11 @@ impl Frame {
 }
 
 impl Backtrace {
+    /// Returns an empty backtrace
+    pub fn empty() -> Backtrace {
+        Backtrace(Vec::new())
+    }
+
     /// Capture the current Wasm stack in a backtrace.
     pub fn new() -> Backtrace {
         tls::with(|state| match state {
