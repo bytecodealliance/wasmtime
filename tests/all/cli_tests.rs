@@ -431,7 +431,6 @@ fn run_cwasm() -> Result<()> {
     Ok(())
 }
 
-#[cfg(unix)]
 #[test]
 fn hello_wasi_snapshot0_from_stdin() -> Result<()> {
     // Run a simple WASI hello world, snapshot0 edition.
@@ -454,7 +453,6 @@ fn hello_wasi_snapshot0_from_stdin() -> Result<()> {
     Ok(())
 }
 
-#[cfg(unix)]
 #[test]
 fn run_cwasm_from_stdin() -> Result<()> {
     let td = TempDir::new()?;
@@ -468,8 +466,6 @@ fn run_cwasm_from_stdin() -> Result<()> {
     assert_eq!(stdout, "");
     let args: &[&str] = &["run", "--allow-precompiled", "-"];
     let output = run_wasmtime_for_output(args, Some(&cwasm))?;
-    if output.status.success() {
-        bail!("wasmtime should fail loading precompiled modules from piped files, but suceeded");
-    }
+    assert!(output.status.success());
     Ok(())
 }

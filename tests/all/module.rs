@@ -168,3 +168,29 @@ fn serialize_not_overly_massive() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn from_trusted_file() -> Result<()> {
+    let td = tempfile::TempDir::new()?;
+    let f = td.path().join("f");
+    let engine = Engine::default();
+    unsafe {
+        // not present
+        let err = Module::from_trusted_file(&engine, &f).err().unwrap();
+        assert!(err.is::<std::io::Error>(), "{:?}", err);
+
+        // empty
+        std::fs::write(&f, "")?;
+        let err = Module::from_trusted_file(&engine, &f).err().unwrap();
+        assert!(err.is::<wat::Error>(), "{:?}", err);
+
+        // valid text
+        std::fs::write(&f, "(module)")?;
+        Module::from_trusted_file(&engine, &f)?;
+
+        // valid binary
+        std::fs::write(&f, b"\0asm\x01\0\0\0")?;
+        Module::from_trusted_file(&engine, &f)?;
+    }
+    Ok(())
+}

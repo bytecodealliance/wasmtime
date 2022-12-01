@@ -357,7 +357,7 @@ impl Module {
     #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub unsafe fn from_trusted_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Module> {
         let mmap = MmapVec::from_file(file.as_ref())?;
-        if &mmap[0..4] == b"\x7fELF" {
+        if mmap.starts_with(b"\x7fELF") {
             let code = engine.load_code(mmap, ObjectKind::Module)?;
             return Module::from_parts(engine, code, None);
         }

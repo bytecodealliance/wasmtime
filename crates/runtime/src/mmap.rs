@@ -62,6 +62,13 @@ impl Mmap {
                 .metadata()
                 .context("failed to get file metadata")?
                 .len();
+            if len == 0 {
+                return Ok(Self {
+                    ptr: 1,
+                    len: 0,
+                    file: None,
+                });
+            }
             let len = usize::try_from(len).map_err(|_| anyhow!("file too large to map"))?;
             let ptr = unsafe {
                 rustix::mm::mmap(

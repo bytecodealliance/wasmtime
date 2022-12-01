@@ -3,6 +3,8 @@
 use anyhow::{anyhow, bail, Context as _, Result};
 use clap::Parser;
 use once_cell::sync::Lazy;
+use std::fmt;
+use std::io::Read;
 use std::thread;
 use std::time::Duration;
 use std::{
@@ -21,15 +23,19 @@ use wasmtime_wasi_nn::WasiNnCtx;
 #[cfg(feature = "wasi-crypto")]
 use wasmtime_wasi_crypto::WasiCryptoCtx;
 
-fn parse_module(s: &OsStr) -> anyhow::Result<PathBuf> {
+enum ModuleInput {
+    Path(PathBuf),
+    Stdin,
+}
+
+fn parse_module(s: &OsStr) -> anyhow::Result<ModuleInput> {
     // Do not accept wasmtime subcommand names as the module name
     match s.to_str() {
         Some("help") | Some("config") | Some("run") | Some("wast") | Some("compile") => {
             bail!("module name cannot be the same as a subcommand")
         }
-        #[cfg(unix)]
-        Some("-") => Ok(PathBuf::from("/dev/stdin")),
-        _ => Ok(s.into()),
+        Some("-") => Ok(ModuleInput::Stdin),
+        _ => Ok(ModuleInput::Path(s.into())),
     }
 }
 
@@ -129,7 +135,7 @@ pub struct RunCommand {
         value_name = "MODULE",
         parse(try_from_os_str = parse_module),
     )]
-    module: PathBuf,
+    module: ModuleInput,
 
     /// Load the given WebAssembly module before the main module
     #[clap(
@@ -208,7 +214,7 @@ impl RunCommand {
         // Load the main wasm module.
         match self
             .load_main_module(&mut store, &mut linker)
-            .with_context(|| format!("failed to run main module `{}`", self.module.display()))
+            .with_context(|| format!("failed to run main module `{}`", self.module))
         {
             Ok(()) => (),
             Err(e) => {
@@ -291,15 +297,16 @@ impl RunCommand {
 
         // Add argv[0], which is the program name. Only include the base name of the
         // main wasm module, to avoid leaking path information.
-        result.push(
-            self.module
+        result.push(match &self.module {
+            ModuleInput::Path(path) => path
                 .components()
                 .next_back()
                 .map(Component::as_os_str)
                 .and_then(OsStr::to_str)
                 .unwrap_or("")
                 .to_owned(),
-        );
+            ModuleInput::Stdin => "<stdin>".to_owned(),
+        });
 
         // Add the remaining arguments.
         for arg in self.module_args.iter() {
@@ -320,16 +327,25 @@ impl RunCommand {
         }
 
         // Read the wasm module binary either as `*.wat` or a raw binary.
-        let module = self.load_module(linker.engine(), &self.module)?;
+        let module = match &self.module {
+            ModuleInput::Path(path) => self.load_module(linker.engine(), path)?,
+            ModuleInput::Stdin => {
+                let mut module = Vec::new();
+                std::io::stdin().read_to_end(&mut module)?;
+                if self.allow_precompiled && module.starts_with(b"\x7fELF") {
+                    unsafe { Module::deserialize(linker.engine(), &module)? }
+                } else {
+                    Module::new(linker.engine(), &module)?
+                }
+            }
+        };
         // The main module might be allowed to have unknown imports, which
         // should be defined as traps:
         if self.trap_unknown_imports {
             linker.define_unknown_imports_as_traps(&module)?;
         }
         // Use "" as a default module name.
-        linker
-            .module(&mut *store, "", &module)
-            .context(format!("failed to instantiate {:?}", self.module))?;
+        linker.module(&mut *store, "", &module)?;
 
         // If a function to invoke was given, invoke it.
         if let Some(name) = self.invoke.as_ref() {
@@ -535,4 +551,13 @@ fn ctx_set_listenfd(num_fd: usize, builder: WasiCtxBuilder) -> Result<(usize, Wa
     }
 
     Ok((num_fd, builder))
+}
+
+impl fmt::Display for ModuleInput {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ModuleInput::Path(p) => p.display().fmt(f),
+            ModuleInput::Stdin => "<stdin>".fmt(f),
+        }
+    }
 }
