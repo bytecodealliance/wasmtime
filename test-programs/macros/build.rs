@@ -16,7 +16,10 @@ fn main() {
         .current_dir("../../")
         .arg("--target=wasm32-wasi")
         .env("CARGO_TARGET_DIR", &out_dir)
-        .env("RUSTFLAGS", "-Clink-args=--import-memory")
+        .env(
+            "RUSTFLAGS",
+            "-Clink-args=--import-memory -Clink-args=-zstack-size=0",
+        )
         .env_remove("CARGO_ENCODED_RUSTFLAGS");
     let status = cmd.status().unwrap();
     assert!(status.success());
