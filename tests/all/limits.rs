@@ -253,7 +253,7 @@ fn test_initial_memory_limits_exceeded() -> Result<()> {
         Ok(_) => unreachable!(),
         Err(e) => assert_eq!(
             e.to_string(),
-            "Insufficient resources: memory minimum size of 11 pages exceeds memory limits"
+            "memory minimum size of 11 pages exceeds memory limits"
         ),
     }
 
@@ -261,7 +261,7 @@ fn test_initial_memory_limits_exceeded() -> Result<()> {
         Ok(_) => unreachable!(),
         Err(e) => assert_eq!(
             e.to_string(),
-            "Insufficient resources: memory minimum size of 25 pages exceeds memory limits"
+            "memory minimum size of 25 pages exceeds memory limits"
         ),
     }
 
@@ -329,7 +329,7 @@ fn test_initial_table_limits_exceeded() -> Result<()> {
         Ok(_) => unreachable!(),
         Err(e) => assert_eq!(
             e.to_string(),
-            "Insufficient resources: table minimum size of 23 elements exceeds table limits"
+            "table minimum size of 23 elements exceeds table limits"
         ),
     }
 
@@ -341,7 +341,7 @@ fn test_initial_table_limits_exceeded() -> Result<()> {
         Ok(_) => unreachable!(),
         Err(e) => assert_eq!(
             e.to_string(),
-            "Insufficient resources: table minimum size of 99 elements exceeds table limits"
+            "table minimum size of 99 elements exceeds table limits"
         ),
     }
 
@@ -374,7 +374,7 @@ fn test_pooling_allocator_initial_limits_exceeded() -> Result<()> {
         Ok(_) => unreachable!(),
         Err(e) => assert_eq!(
             e.to_string(),
-            "Insufficient resources: memory minimum size of 5 pages exceeds memory limits"
+            "memory minimum size of 5 pages exceeds memory limits"
         ),
     }
 

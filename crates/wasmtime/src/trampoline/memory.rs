@@ -8,8 +8,8 @@ use std::sync::Arc;
 use wasmtime_environ::{EntityIndex, MemoryPlan, MemoryStyle, Module, WASM_PAGE_SIZE};
 use wasmtime_runtime::{
     allocate_single_memory_instance, DefaultMemoryCreator, Imports, InstanceAllocationRequest,
-    InstantiationError, Memory, MemoryImage, RuntimeLinearMemory, RuntimeMemoryCreator,
-    SharedMemory, StorePtr, VMMemoryDefinition,
+    Memory, MemoryImage, RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory, StorePtr,
+    VMMemoryDefinition,
 };
 
 /// Create a "frankenstein" instance with a single memory.
@@ -48,8 +48,7 @@ pub fn create_memory(
                     .as_mut()
                     .expect("the store pointer cannot be null here")
             };
-            Memory::new_dynamic(&plan, creator, store, None)
-                .map_err(|err| InstantiationError::Resource(err.into()))?
+            Memory::new_dynamic(&plan, creator, store, None)?
         }
     };
 
