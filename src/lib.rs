@@ -1,27 +1,25 @@
 #![allow(unused_variables)] // TODO: remove this when more things are implemented
 
-wit_bindgen_guest_rust::generate!({
-    import: "wit/wasi-clocks.wit.md",
-    import: "wit/wasi-default-clocks.wit.md",
-    import: "wit/wasi-filesystem.wit.md",
-    import: "wit/wasi-logging.wit.md",
-    import: "wit/wasi-poll.wit.md",
-    import: "wit/wasi-random.wit.md",
-    default: "wit/command.wit.md",
-    name: "wasi_command",
-    no_std,
-    raw_strings,
-    unchecked,
-    // The generated definition of command will pull in std, so we are defining it
-    // manually below instead
-    skip: ["command"],
-});
-
+use crate::bindings::{
+    wasi_clocks, wasi_default_clocks, wasi_filesystem, wasi_logging, wasi_random,
+};
 use core::arch::wasm32::unreachable;
 use core::mem::{forget, size_of};
 use core::ptr::{copy_nonoverlapping, null_mut};
 use core::slice;
 use wasi::*;
+
+mod bindings {
+    wit_bindgen_guest_rust::generate!({
+        path: "wit/wasi.wit",
+        no_std,
+        raw_strings,
+        unchecked,
+        // The generated definition of command will pull in std, so we are defining it
+        // manually below instead
+        skip: ["command"],
+    });
+}
 
 #[export_name = "command"]
 unsafe extern "C" fn command_entrypoint(stdin: i32, stdout: i32, _args_ptr: i32, _args_len: i32) {
