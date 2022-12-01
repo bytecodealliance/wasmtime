@@ -342,19 +342,18 @@ pub(crate) fn lower_pair_address(ctx: &mut Lower<Inst>, addr: Value, offset: i32
         zero_reg()
     };
 
-    let addr = ctx.alloc_tmp(I64).only_reg().unwrap();
-    ctx.emit(Inst::gen_move(addr, base_reg, I64));
-
     // We have the base register, if we have any others, we need to add them
-    lower_add_addends(ctx, addr, addends64, addends32);
+    let addr = lower_add_addends(ctx, base_reg, addends64, addends32);
 
     // Figure out what offset we should emit
-    let imm7 = SImm7Scaled::maybe_from_i64(offset, I64).unwrap_or_else(|| {
-        lower_add_immediate(ctx, addr, addr.to_reg(), offset);
-        SImm7Scaled::maybe_from_i64(0, I64).unwrap()
-    });
+    let (addr, imm7) = if let Some(imm7) = SImm7Scaled::maybe_from_i64(offset, I64) {
+        (addr, imm7)
+    } else {
+        let res = lower_add_immediate(ctx, addr, offset);
+        (res, SImm7Scaled::maybe_from_i64(0, I64).unwrap())
+    };
 
-    PairAMode::SignedOffset(addr.to_reg(), imm7)
+    PairAMode::SignedOffset(addr, imm7)
 }
 
 /// Lower the address of a load or store.
@@ -492,25 +491,26 @@ pub(crate) fn lower_address(
 
     // If there is any offset, load that first into `addr`, and add the `reg`
     // that we kicked out of the `AMode`; otherwise, start with that reg.
-    if offset != 0 {
-        lower_add_immediate(ctx, addr, reg, offset)
+    let init = if offset != 0 {
+        lower_add_immediate(ctx, reg, offset)
     } else {
-        ctx.emit(Inst::gen_move(addr, reg, I64));
-    }
+        reg
+    };
 
     // Now handle reg64 and reg32-extended components.
-    lower_add_addends(ctx, addr, addends64, addends32);
+    let init = lower_add_addends(ctx, init, addends64, addends32);
+    ctx.emit(Inst::gen_move(addr, init, I64));
 
     memarg
 }
 
 fn lower_add_addends(
     ctx: &mut Lower<Inst>,
-    rd: Writable<Reg>,
+    init: Reg,
     addends64: AddressAddend64List,
     addends32: AddressAddend32List,
-) {
-    for reg in addends64 {
+) -> Reg {
+    let init = addends64.into_iter().fold(init, |prev, reg| {
         // If the register is the stack reg, we must move it to another reg
         // before adding it.
         let reg = if reg == stack_reg() {
@@ -520,30 +520,43 @@ fn lower_add_addends(
         } else {
             reg
         };
+
+        let rd = ctx.alloc_tmp(I64).only_reg().unwrap();
+
         ctx.emit(Inst::AluRRR {
             alu_op: ALUOp::Add,
             size: OperandSize::Size64,
             rd,
-            rn: rd.to_reg(),
+            rn: prev,
             rm: reg,
         });
-    }
-    for (reg, extendop) in addends32 {
+
+        rd.to_reg()
+    });
+
+    addends32.into_iter().fold(init, |prev, (reg, extendop)| {
         assert!(reg != stack_reg());
+
+        let rd = ctx.alloc_tmp(I64).only_reg().unwrap();
+
         ctx.emit(Inst::AluRRRExtend {
             alu_op: ALUOp::Add,
             size: OperandSize::Size64,
             rd,
-            rn: rd.to_reg(),
+            rn: prev,
             rm: reg,
             extendop,
         });
-    }
+
+        rd.to_reg()
+    })
 }
 
 /// Adds into `rd` a signed imm pattern matching the best instruction for it.
 // TODO: This function is duplicated in ctx.gen_add_imm
-fn lower_add_immediate(ctx: &mut Lower<Inst>, dst: Writable<Reg>, src: Reg, imm: i64) {
+fn lower_add_immediate(ctx: &mut Lower<Inst>, src: Reg, imm: i64) -> Reg {
+    let dst = ctx.alloc_tmp(I64).only_reg().unwrap();
+
     // If we can fit offset or -offset in an imm12, use an add-imm
     // Otherwise, lower the constant first then add.
     if let Some(imm12) = Imm12::maybe_from_u64(imm as u64) {
@@ -563,15 +576,18 @@ fn lower_add_immediate(ctx: &mut Lower<Inst>, dst: Writable<Reg>, src: Reg, imm:
             imm12,
         });
     } else {
-        lower_constant_u64(ctx, dst, imm as u64);
+        let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
+        lower_constant_u64(ctx, tmp, imm as u64);
         ctx.emit(Inst::AluRRR {
             alu_op: ALUOp::Add,
             size: OperandSize::Size64,
             rd: dst,
-            rn: dst.to_reg(),
+            rn: tmp.to_reg(),
             rm: src,
         });
     }
+
+    dst.to_reg()
 }
 
 pub(crate) fn lower_constant_u64(ctx: &mut Lower<Inst>, rd: Writable<Reg>, value: u64) {
