@@ -304,6 +304,9 @@ fn expand_cond_trap(
     let new_block_trap = func.dfg.make_block();
     let new_block_resume = func.dfg.make_block();
 
+    // Trapping is a rare event, mark the trapping block as cold.
+    func.layout.set_cold(new_block_trap);
+
     // Replace trap instruction by the inverted condition.
     if trapz {
         func.dfg.replace(inst).brnz(arg, new_block_resume, &[]);
