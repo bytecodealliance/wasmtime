@@ -600,7 +600,7 @@ impl Engine {
         self.load_code(MmapVec::from_slice(bytes)?, expected)
     }
 
-    /// Like `load_code_bytes`, but crates a mmap from a file on disk.
+    /// Like `load_code_bytes`, but creates a mmap from a file on disk.
     pub(crate) fn load_code_file(
         &self,
         path: &Path,
@@ -614,7 +614,7 @@ impl Engine {
         )
     }
 
-    fn load_code(&self, mmap: MmapVec, expected: ObjectKind) -> Result<Arc<CodeMemory>> {
+    pub(crate) fn load_code(&self, mmap: MmapVec, expected: ObjectKind) -> Result<Arc<CodeMemory>> {
         serialization::check_compatible(self, &mmap, expected)?;
         let mut code = CodeMemory::new(mmap)?;
         code.publish()?;
