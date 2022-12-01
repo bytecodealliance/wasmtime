@@ -14,12 +14,13 @@ use std::path::Path;
 use std::sync::Arc;
 use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::{
-    DefinedFuncIndex, DefinedMemoryIndex, FunctionLoc, ModuleEnvironment, ModuleTranslation,
-    ModuleTypes, ObjectKind, PrimaryMap, SignatureIndex, WasmFunctionInfo,
+    DefinedFuncIndex, DefinedMemoryIndex, HostPtr, ModuleEnvironment, ModuleTranslation,
+    ModuleTypes, ObjectKind, PrimaryMap, VMOffsets, WasmFunctionInfo,
 };
 use wasmtime_jit::{CodeMemory, CompiledModule, CompiledModuleInfo};
 use wasmtime_runtime::{
-    CompiledModuleId, MemoryImage, MmapVec, ModuleMemoryImages, VMSharedSignatureIndex,
+    CompiledModuleId, MemoryImage, MmapVec, ModuleMemoryImages, VMFunctionBody,
+    VMSharedSignatureIndex,
 };
 
 mod registry;
@@ -123,6 +124,9 @@ struct ModuleInner {
 
     /// Flag indicating whether this module can be serialized or not.
     serializable: bool,
+
+    /// Runtime offset information for `VMContext`.
+    offsets: VMOffsets<HostPtr>,
 }
 
 impl Module {
@@ -664,7 +668,8 @@ impl Module {
         )?;
 
         // Validate the module can be used with the current allocator
-        engine.allocator().validate(module.module())?;
+        let offsets = VMOffsets::new(HostPtr, module.module());
+        engine.allocator().validate(module.module(), &offsets)?;
 
         Ok(Self {
             inner: Arc::new(ModuleInner {
@@ -673,6 +678,7 @@ impl Module {
                 memory_images: OnceCell::new(),
                 module,
                 serializable,
+                offsets,
             }),
         })
     }
@@ -1098,16 +1104,12 @@ impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
         self.module.module()
     }
 
-    fn signature(&self, index: SignatureIndex) -> VMSharedSignatureIndex {
-        self.code.signatures().as_module_map()[index]
-    }
-
-    fn image_base(&self) -> usize {
-        self.module.text().as_ptr() as usize
-    }
-
-    fn function_loc(&self, index: DefinedFuncIndex) -> &FunctionLoc {
-        self.module.func_loc(index)
+    fn function(&self, index: DefinedFuncIndex) -> *mut VMFunctionBody {
+        self.module
+            .finished_function(index)
+            .as_ptr()
+            .cast::<VMFunctionBody>()
+            .cast_mut()
     }
 
     fn memory_image(&self, memory: DefinedMemoryIndex) -> Result<Option<&Arc<MemoryImage>>> {
@@ -1125,6 +1127,10 @@ impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
 
     fn signature_ids(&self) -> &[VMSharedSignatureIndex] {
         self.code.signatures().as_module_map().values().as_slice()
+    }
+
+    fn offsets(&self) -> &VMOffsets<HostPtr> {
+        &self.offsets
     }
 }
 
@@ -1160,26 +1166,22 @@ impl wasmtime_runtime::ModuleInfo for ModuleInner {
 /// default-callee instance).
 pub(crate) struct BareModuleInfo {
     module: Arc<wasmtime_environ::Module>,
-    image_base: usize,
-    one_signature: Option<(SignatureIndex, VMSharedSignatureIndex)>,
+    one_signature: Option<VMSharedSignatureIndex>,
+    offsets: VMOffsets<HostPtr>,
 }
 
 impl BareModuleInfo {
     pub(crate) fn empty(module: Arc<wasmtime_environ::Module>) -> Self {
-        BareModuleInfo {
-            module,
-            image_base: 0,
-            one_signature: None,
-        }
+        BareModuleInfo::maybe_imported_func(module, None)
     }
 
     pub(crate) fn maybe_imported_func(
         module: Arc<wasmtime_environ::Module>,
-        one_signature: Option<(SignatureIndex, VMSharedSignatureIndex)>,
+        one_signature: Option<VMSharedSignatureIndex>,
     ) -> Self {
         BareModuleInfo {
+            offsets: VMOffsets::new(HostPtr, &module),
             module,
-            image_base: 0,
             one_signature,
         }
     }
@@ -1194,19 +1196,7 @@ impl wasmtime_runtime::ModuleRuntimeInfo for BareModuleInfo {
         &self.module
     }
 
-    fn signature(&self, index: SignatureIndex) -> VMSharedSignatureIndex {
-        let (signature_id, signature) = self
-            .one_signature
-            .expect("Signature for one function should be present if queried");
-        assert_eq!(index, signature_id);
-        signature
-    }
-
-    fn image_base(&self) -> usize {
-        self.image_base
-    }
-
-    fn function_loc(&self, _index: DefinedFuncIndex) -> &FunctionLoc {
+    fn function(&self, _index: DefinedFuncIndex) -> *mut VMFunctionBody {
         unreachable!()
     }
 
@@ -1224,9 +1214,13 @@ impl wasmtime_runtime::ModuleRuntimeInfo for BareModuleInfo {
 
     fn signature_ids(&self) -> &[VMSharedSignatureIndex] {
         match &self.one_signature {
-            Some((_, id)) => std::slice::from_ref(id),
+            Some(id) => std::slice::from_ref(id),
             None => &[],
         }
+    }
+
+    fn offsets(&self) -> &VMOffsets<HostPtr> {
+        &self.offsets
     }
 }
 

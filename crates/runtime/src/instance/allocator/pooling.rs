@@ -169,7 +169,7 @@ impl InstancePool {
         // If this fails then it's a configuration error at the `Engine` level
         // from when this pooling allocator was created and that needs updating
         // if this is to succeed.
-        let offsets = self.validate_instance_size(module)?;
+        self.validate_instance_size(req.runtime_info.offsets())?;
 
         let mut memories =
             PrimaryMap::with_capacity(module.memory_plans.len() - module.num_imported_memories);
@@ -192,14 +192,7 @@ impl InstancePool {
 
         let instance_ptr = self.instance(instance_index) as _;
 
-        Instance::new_at(
-            instance_ptr,
-            self.instance_size,
-            offsets,
-            req,
-            memories,
-            tables,
-        );
+        Instance::new_at(instance_ptr, self.instance_size, req, memories, tables);
 
         Ok(InstanceHandle {
             instance: instance_ptr,
@@ -485,11 +478,10 @@ impl InstancePool {
         Ok(())
     }
 
-    fn validate_instance_size(&self, module: &Module) -> Result<VMOffsets<HostPtr>> {
-        let offsets = VMOffsets::new(HostPtr, module);
-        let layout = Instance::alloc_layout(&offsets);
+    fn validate_instance_size(&self, offsets: &VMOffsets<HostPtr>) -> Result<()> {
+        let layout = Instance::alloc_layout(offsets);
         if layout.size() <= self.instance_size {
-            return Ok(offsets);
+            return Ok(());
         }
 
         // If this `module` exceeds the allocation size allotted to it then an
@@ -1078,17 +1070,10 @@ impl PoolingInstanceAllocator {
 }
 
 unsafe impl InstanceAllocator for PoolingInstanceAllocator {
-    fn validate(&self, module: &Module) -> Result<()> {
+    fn validate(&self, module: &Module, offsets: &VMOffsets<HostPtr>) -> Result<()> {
         self.instances.validate_memory_plans(module)?;
         self.instances.validate_table_plans(module)?;
-
-        // Note that this check is not 100% accurate for cross-compiled systems
-        // where the pointer size may change since this check is often performed
-        // at compile time instead of runtime. Given that Wasmtime is almost
-        // always on a 64-bit platform though this is generally ok, and
-        // otherwise this check also happens during instantiation to
-        // double-check at that point.
-        self.instances.validate_instance_size(module)?;
+        self.instances.validate_instance_size(offsets)?;
 
         Ok(())
     }
@@ -1145,26 +1130,22 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{CompiledModuleId, Imports, MemoryImage, StorePtr, VMSharedSignatureIndex};
+    use crate::{
+        CompiledModuleId, Imports, MemoryImage, StorePtr, VMFunctionBody, VMSharedSignatureIndex,
+    };
     use std::sync::Arc;
-    use wasmtime_environ::{DefinedFuncIndex, DefinedMemoryIndex, FunctionLoc, SignatureIndex};
+    use wasmtime_environ::{DefinedFuncIndex, DefinedMemoryIndex};
 
     pub(crate) fn empty_runtime_info(
         module: Arc<wasmtime_environ::Module>,
     ) -> Arc<dyn ModuleRuntimeInfo> {
-        struct RuntimeInfo(Arc<wasmtime_environ::Module>);
+        struct RuntimeInfo(Arc<wasmtime_environ::Module>, VMOffsets<HostPtr>);
 
         impl ModuleRuntimeInfo for RuntimeInfo {
             fn module(&self) -> &Arc<wasmtime_environ::Module> {
                 &self.0
             }
-            fn image_base(&self) -> usize {
-                0
-            }
-            fn function_loc(&self, _: DefinedFuncIndex) -> &FunctionLoc {
-                unimplemented!()
-            }
-            fn signature(&self, _: SignatureIndex) -> VMSharedSignatureIndex {
+            fn function(&self, _: DefinedFuncIndex) -> *mut VMFunctionBody {
                 unimplemented!()
             }
             fn memory_image(
@@ -1183,9 +1164,13 @@ mod test {
             fn signature_ids(&self) -> &[VMSharedSignatureIndex] {
                 &[]
             }
+            fn offsets(&self) -> &VMOffsets<HostPtr> {
+                &self.1
+            }
         }
 
-        Arc::new(RuntimeInfo(module))
+        let offsets = VMOffsets::new(HostPtr, &module);
+        Arc::new(RuntimeInfo(module, offsets))
     }
 
     #[cfg(target_pointer_width = "64")]

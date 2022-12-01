@@ -83,7 +83,8 @@ impl State {
         let tid = pid; // ThreadId does appear to track underlying thread. Using PID.
 
         for (idx, func) in module.finished_functions() {
-            let (addr, len) = unsafe { ((*func).as_ptr().cast::<u8>(), (*func).len()) };
+            let addr = func.as_ptr();
+            let len = func.len();
             if let Some(img) = &dbg_image {
                 if let Err(err) = self.dump_from_debug_image(img, "wasm", addr, len, pid, tid) {
                     println!(

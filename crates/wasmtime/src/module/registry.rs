@@ -161,7 +161,7 @@ impl LoadedCode {
             // functions.
             None => return,
         };
-        let start = unsafe { (*func).as_ptr() as usize };
+        let start = func.as_ptr() as usize;
 
         match self.modules.entry(start) {
             // This module is already present, and it should be the same as
@@ -279,9 +279,9 @@ fn test_frame_info() -> Result<(), anyhow::Error> {
     Instance::new(&mut store, &module, &[])?;
 
     for (i, alloc) in module.compiled_module().finished_functions() {
-        let (start, end) = unsafe {
-            let ptr = (*alloc).as_ptr();
-            let len = (*alloc).len();
+        let (start, end) = {
+            let ptr = alloc.as_ptr();
+            let len = alloc.len();
             (ptr as usize, ptr as usize + len)
         };
         for pc in start..end {
