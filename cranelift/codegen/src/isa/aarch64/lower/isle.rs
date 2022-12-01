@@ -3,6 +3,7 @@
 // Pull in the ISLE generated code.
 pub mod generated_code;
 use generated_code::Context;
+use smallvec::SmallVec;
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{
@@ -217,7 +218,6 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         } else {
             value
         };
-        let rd = self.temp_writable_reg(I64);
         let size = OperandSize::Size64;
 
         // If the top 32 bits are zero, use 32-bit `mov` operations.
@@ -226,6 +226,7 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
             let lower_halfword = value as u16;
             let upper_halfword = (value >> 16) as u16;
 
+            let rd = self.temp_writable_reg(I64);
             if upper_halfword == u16::MAX {
                 self.emit(&MInst::MovWide {
                     op: MoveWideOp::MovN,
@@ -242,17 +243,20 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
                 });
 
                 if upper_halfword != 0 {
+                    let tmp = self.temp_writable_reg(I64);
                     self.emit(&MInst::MovK {
-                        rd,
+                        rd: tmp,
                         rn: rd.to_reg(),
                         imm: MoveWideConst::maybe_with_shift(upper_halfword, 16).unwrap(),
                         size,
                     });
+                    return tmp.to_reg();
                 }
-            }
+            };
 
             return rd.to_reg();
         } else if value == u64::MAX {
+            let rd = self.temp_writable_reg(I64);
             self.emit(&MInst::MovWide {
                 op: MoveWideOp::MovN,
                 rd,
@@ -265,50 +269,57 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         // If the number of 0xffff half words is greater than the number of 0x0000 half words
         // it is more efficient to use `movn` for the first instruction.
         let first_is_inverted = count_zero_half_words(!value) > count_zero_half_words(value);
+
         // Either 0xffff or 0x0000 half words can be skipped, depending on the first
         // instruction used.
         let ignored_halfword = if first_is_inverted { 0xffff } else { 0 };
-        let mut first_mov_emitted = false;
 
-        for i in 0..4 {
-            let imm16 = (value >> (16 * i)) & 0xffff;
-            if imm16 != ignored_halfword {
-                if !first_mov_emitted {
-                    first_mov_emitted = true;
-                    if first_is_inverted {
-                        let imm =
-                            MoveWideConst::maybe_with_shift(((!imm16) & 0xffff) as u16, i * 16)
-                                .unwrap();
-                        self.emit(&MInst::MovWide {
-                            op: MoveWideOp::MovN,
-                            rd,
-                            imm,
-                            size,
-                        });
-                    } else {
-                        let imm = MoveWideConst::maybe_with_shift(imm16 as u16, i * 16).unwrap();
-                        self.emit(&MInst::MovWide {
-                            op: MoveWideOp::MovZ,
-                            rd,
-                            imm,
-                            size,
-                        });
-                    }
+        let halfwords: SmallVec<[_; 4]> = (0..4)
+            .filter_map(|i| {
+                let imm16 = (value >> (16 * i)) & 0xffff;
+                if imm16 == ignored_halfword {
+                    None
                 } else {
-                    let imm = MoveWideConst::maybe_with_shift(imm16 as u16, i * 16).unwrap();
-                    self.emit(&MInst::MovK {
+                    Some((i, imm16))
+                }
+            })
+            .collect();
+
+        let mut prev_result = None;
+        for (i, imm16) in halfwords {
+            let shift = i * 16;
+            let rd = self.temp_writable_reg(I64);
+
+            if let Some(rn) = prev_result {
+                let imm = MoveWideConst::maybe_with_shift(imm16 as u16, shift).unwrap();
+                self.emit(&MInst::MovK { rd, rn, imm, size });
+            } else {
+                if first_is_inverted {
+                    let imm =
+                        MoveWideConst::maybe_with_shift(((!imm16) & 0xffff) as u16, shift).unwrap();
+                    self.emit(&MInst::MovWide {
+                        op: MoveWideOp::MovN,
                         rd,
-                        rn: rd.to_reg(),
+                        imm,
+                        size,
+                    });
+                } else {
+                    let imm = MoveWideConst::maybe_with_shift(imm16 as u16, shift).unwrap();
+                    self.emit(&MInst::MovWide {
+                        op: MoveWideOp::MovZ,
+                        rd,
                         imm,
                         size,
                     });
                 }
             }
+
+            prev_result = Some(rd.to_reg());
         }
 
-        assert!(first_mov_emitted);
+        assert!(prev_result.is_some());
 
-        return self.writable_reg_to_reg(rd);
+        return prev_result.unwrap();
 
         fn count_zero_half_words(mut value: u64) -> usize {
             let mut count = 0;

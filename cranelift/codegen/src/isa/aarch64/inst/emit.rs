@@ -64,7 +64,7 @@ pub fn mem_finalize(
             } else {
                 let tmp = writable_spilltmp_reg();
                 (
-                    Inst::load_constant(tmp, off as u64),
+                    Inst::load_constant(tmp, off as u64, &mut |_| tmp),
                     AMode::RegExtended {
                         rn: basereg,
                         rm: tmp.to_reg(),
@@ -3333,7 +3333,7 @@ impl MachInstEmit for Inst {
                     debug_assert!(rd.to_reg() != tmp2_reg());
                     debug_assert!(reg != tmp2_reg());
                     let tmp = writable_tmp2_reg();
-                    for insn in Inst::load_constant(tmp, abs_offset).into_iter() {
+                    for insn in Inst::load_constant(tmp, abs_offset, &mut |_| tmp).into_iter() {
                         insn.emit(&[], sink, emit_info, state);
                     }
                     let add = Inst::AluRRR {

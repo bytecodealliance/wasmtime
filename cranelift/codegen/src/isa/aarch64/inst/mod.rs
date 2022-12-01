@@ -130,7 +130,11 @@ fn inst_size_test() {
 impl Inst {
     /// Create an instruction that loads a constant, using one of serveral options (MOVZ, MOVN,
     /// logical immediate, or constant pool).
-    pub fn load_constant(rd: Writable<Reg>, value: u64) -> SmallVec<[Inst; 4]> {
+    pub fn load_constant<F: FnMut(Type) -> Writable<Reg>>(
+        rd: Writable<Reg>,
+        value: u64,
+        alloc_tmp: &mut F,
+    ) -> SmallVec<[Inst; 4]> {
         // NB: this is duplicated in `lower/isle.rs` and `inst.isle` right now,
         // if modifications are made here before this is deleted after moving to
         // ISLE then those locations should be updated as well.
@@ -169,60 +173,73 @@ impl Inst {
             } else {
                 (4, OperandSize::Size64, !value)
             };
+
             // If the number of 0xffff half words is greater than the number of 0x0000 half words
             // it is more efficient to use `movn` for the first instruction.
             let first_is_inverted = count_zero_half_words(negated, num_half_words)
                 > count_zero_half_words(value, num_half_words);
+
             // Either 0xffff or 0x0000 half words can be skipped, depending on the first
             // instruction used.
             let ignored_halfword = if first_is_inverted { 0xffff } else { 0 };
-            let mut first_mov_emitted = false;
 
-            for i in 0..num_half_words {
-                let imm16 = (value >> (16 * i)) & 0xffff;
-                if imm16 != ignored_halfword {
-                    if !first_mov_emitted {
-                        first_mov_emitted = true;
-                        if first_is_inverted {
-                            let imm =
-                                MoveWideConst::maybe_with_shift(((!imm16) & 0xffff) as u16, i * 16)
-                                    .unwrap();
-                            insts.push(Inst::MovWide {
-                                op: MoveWideOp::MovN,
-                                rd,
-                                imm,
-                                size,
-                            });
-                        } else {
-                            let imm =
-                                MoveWideConst::maybe_with_shift(imm16 as u16, i * 16).unwrap();
-                            insts.push(Inst::MovWide {
-                                op: MoveWideOp::MovZ,
-                                rd,
-                                imm,
-                                size,
-                            });
-                        }
+            let halfwords: SmallVec<[_; 4]> = (0..num_half_words)
+                .filter_map(|i| {
+                    let imm16 = (value >> (16 * i)) & 0xffff;
+                    if imm16 == ignored_halfword {
+                        None
                     } else {
-                        let imm = MoveWideConst::maybe_with_shift(imm16 as u16, i * 16).unwrap();
-                        insts.push(Inst::MovK {
+                        Some((i, imm16))
+                    }
+                })
+                .collect();
+
+            let mut prev_result = None;
+            let last_index = halfwords.last().unwrap().0;
+            for (i, imm16) in halfwords {
+                let shift = i * 16;
+                let rd = if i == last_index { rd } else { alloc_tmp(I16) };
+
+                if let Some(rn) = prev_result {
+                    let imm = MoveWideConst::maybe_with_shift(imm16 as u16, shift).unwrap();
+                    insts.push(Inst::MovK { rd, rn, imm, size });
+                } else {
+                    if first_is_inverted {
+                        let imm =
+                            MoveWideConst::maybe_with_shift(((!imm16) & 0xffff) as u16, shift)
+                                .unwrap();
+                        insts.push(Inst::MovWide {
+                            op: MoveWideOp::MovN,
                             rd,
-                            rn: rd.to_reg(), // Redef the same virtual register.
+                            imm,
+                            size,
+                        });
+                    } else {
+                        let imm = MoveWideConst::maybe_with_shift(imm16 as u16, shift).unwrap();
+                        insts.push(Inst::MovWide {
+                            op: MoveWideOp::MovZ,
+                            rd,
                             imm,
                             size,
                         });
                     }
                 }
+
+                prev_result = Some(rd.to_reg());
             }
 
-            assert!(first_mov_emitted);
+            assert!(prev_result.is_some());
 
             insts
         }
     }
 
     /// Create instructions that load a 128-bit constant.
-    pub fn load_constant128(to_regs: ValueRegs<Writable<Reg>>, value: u128) -> SmallVec<[Inst; 4]> {
+    pub fn load_constant128<F: FnMut(Type) -> Writable<Reg>>(
+        to_regs: ValueRegs<Writable<Reg>>,
+        value: u128,
+        mut alloc_tmp: F,
+    ) -> SmallVec<[Inst; 4]> {
         assert_eq!(to_regs.len(), 2, "Expected to load i128 into two registers");
 
         let lower = value as u64;
@@ -231,8 +248,8 @@ impl Inst {
         let lower_reg = to_regs.regs()[0];
         let upper_reg = to_regs.regs()[1];
 
-        let mut load_ins = Inst::load_constant(lower_reg, lower);
-        let load_upper = Inst::load_constant(upper_reg, upper);
+        let mut load_ins = Inst::load_constant(lower_reg, lower, &mut alloc_tmp);
+        let load_upper = Inst::load_constant(upper_reg, upper, &mut alloc_tmp);
 
         load_ins.extend(load_upper.into_iter());
         load_ins
@@ -264,7 +281,7 @@ impl Inst {
             }]
         } else {
             let tmp = alloc_tmp(I32);
-            let mut insts = Inst::load_constant(tmp, const_data as u64);
+            let mut insts = Inst::load_constant(tmp, const_data as u64, &mut alloc_tmp);
 
             insts.push(Inst::MovToFpu {
                 rd,
@@ -304,7 +321,7 @@ impl Inst {
             Inst::load_fp_constant32(rd, const_data, alloc_tmp)
         } else if const_data & (u32::MAX as u64) == 0 {
             let tmp = alloc_tmp(I64);
-            let mut insts = Inst::load_constant(tmp, const_data);
+            let mut insts = Inst::load_constant(tmp, const_data, &mut alloc_tmp);
 
             insts.push(Inst::MovToFpu {
                 rd,
@@ -426,7 +443,7 @@ impl Inst {
             smallvec![Inst::VecDupFPImm { rd, imm, size }]
         } else {
             let tmp = alloc_tmp(I64);
-            let mut insts = SmallVec::from(&Inst::load_constant(tmp, pattern)[..]);
+            let mut insts = SmallVec::from(&Inst::load_constant(tmp, pattern, &mut alloc_tmp)[..]);
 
             insts.push(Inst::VecDup {
                 rd,
@@ -1212,14 +1229,16 @@ impl MachInst for Inst {
         to_regs: ValueRegs<Writable<Reg>>,
         value: u128,
         ty: Type,
-        alloc_tmp: F,
+        mut alloc_tmp: F,
     ) -> SmallVec<[Inst; 4]> {
         let to_reg = to_regs.only_reg();
         match ty {
             F64 => Inst::load_fp_constant64(to_reg.unwrap(), value as u64, alloc_tmp),
             F32 => Inst::load_fp_constant32(to_reg.unwrap(), value as u32, alloc_tmp),
-            I8 | I16 | I32 | I64 | R32 | R64 => Inst::load_constant(to_reg.unwrap(), value as u64),
-            I128 => Inst::load_constant128(to_regs, value),
+            I8 | I16 | I32 | I64 | R32 | R64 => {
+                Inst::load_constant(to_reg.unwrap(), value as u64, &mut alloc_tmp)
+            }
+            I128 => Inst::load_constant128(to_regs, value, alloc_tmp),
             _ => panic!("Cannot generate constant for type: {}", ty),
         }
     }
@@ -2837,7 +2856,7 @@ impl Inst {
                     );
                 } else {
                     let tmp = writable_spilltmp_reg();
-                    for inst in Inst::load_constant(tmp, abs_offset).into_iter() {
+                    for inst in Inst::load_constant(tmp, abs_offset, &mut |_| tmp).into_iter() {
                         ret.push_str(
                             &inst.print_with_state(&mut EmitState::default(), &mut empty_allocs),
                         );

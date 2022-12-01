@@ -752,13 +752,12 @@ impl ABIMachineSpec for S390xMachineDeps {
         unreachable!();
     }
 
-    fn gen_memcpy(
+    fn gen_memcpy<F: FnMut(Type) -> Writable<Reg>>(
         _call_conv: isa::CallConv,
         _dst: Reg,
         _src: Reg,
-        _tmp1: Writable<Reg>,
-        _tmp2: Writable<Reg>,
         _size: usize,
+        _alloc: F,
     ) -> SmallVec<[Self::I; 8]> {
         unimplemented!("StructArgs not implemented for S390X yet");
     }

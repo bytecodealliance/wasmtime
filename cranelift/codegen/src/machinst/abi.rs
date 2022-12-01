@@ -567,16 +567,14 @@ pub trait ABIMachineSpec {
     ) -> SmallVec<[Self::I; 2]>;
 
     /// Generate a memcpy invocation. Used to set up struct
-    /// args. Takes `src`, `dst` as read-only inputs and requires two
-    /// temporaries to generate the call (for the size immediate and
-    /// possibly for the address of `memcpy` itself).
-    fn gen_memcpy(
+    /// args. Takes `src`, `dst` as read-only inputs and passes a temporary
+    /// allocator.
+    fn gen_memcpy<F: FnMut(Type) -> Writable<Reg>>(
         call_conv: isa::CallConv,
         dst: Reg,
         src: Reg,
-        tmp1: Writable<Reg>,
-        tmp2: Writable<Reg>,
         size: usize,
+        alloc_tmp: F,
     ) -> SmallVec<[Self::I; 8]>;
 
     /// Get the number of spillslots required for the given register-class.
@@ -2152,15 +2150,12 @@ impl<M: ABIMachineSpec> Caller<M> {
                 // arg regs.
                 let memcpy_call_conv =
                     isa::CallConv::for_libcall(&self.flags, ctx.sigs()[self.sig].call_conv);
-                let tmp1 = ctx.alloc_tmp(M::word_type()).only_reg().unwrap();
-                let tmp2 = ctx.alloc_tmp(M::word_type()).only_reg().unwrap();
                 for insn in M::gen_memcpy(
                     memcpy_call_conv,
                     dst_ptr.to_reg(),
                     src_ptr,
-                    tmp1,
-                    tmp2,
                     size as usize,
+                    |ty| ctx.alloc_tmp(ty).only_reg().unwrap(),
                 )
                 .into_iter()
                 {

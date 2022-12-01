@@ -575,7 +575,7 @@ fn lower_add_immediate(ctx: &mut Lower<Inst>, dst: Writable<Reg>, src: Reg, imm:
 }
 
 pub(crate) fn lower_constant_u64(ctx: &mut Lower<Inst>, rd: Writable<Reg>, value: u64) {
-    for inst in Inst::load_constant(rd, value) {
+    for inst in Inst::load_constant(rd, value, &mut |ty| ctx.alloc_tmp(ty).only_reg().unwrap()) {
         ctx.emit(inst);
     }
 }

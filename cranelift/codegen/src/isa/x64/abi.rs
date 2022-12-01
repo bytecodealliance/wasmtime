@@ -624,18 +624,19 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         insts
     }
 
-    fn gen_memcpy(
+    fn gen_memcpy<F: FnMut(Type) -> Writable<Reg>>(
         call_conv: isa::CallConv,
         dst: Reg,
         src: Reg,
-        temp: Writable<Reg>,
-        temp2: Writable<Reg>,
         size: usize,
+        mut alloc_tmp: F,
     ) -> SmallVec<[Self::I; 8]> {
         let mut insts = SmallVec::new();
         let arg0 = get_intreg_for_arg(&call_conv, 0, 0).unwrap();
         let arg1 = get_intreg_for_arg(&call_conv, 1, 1).unwrap();
         let arg2 = get_intreg_for_arg(&call_conv, 2, 2).unwrap();
+        let temp = alloc_tmp(Self::word_type());
+        let temp2 = alloc_tmp(Self::word_type());
         insts.extend(
             Inst::gen_constant(ValueRegs::one(temp), size as u128, I64, |_| {
                 panic!("tmp should not be needed")
