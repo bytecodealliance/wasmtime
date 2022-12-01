@@ -32,10 +32,7 @@ pub struct CodeMemory {
     address_map_data: Range<usize>,
     func_name_data: Range<usize>,
     info_data: Range<usize>,
-
-    /// Map of dwarf sections indexed by `gimli::SectionId` which points to the
-    /// range within `code_memory`'s mmap as to the contents of the section.
-    dwarf_sections: Vec<Range<usize>>,
+    dwarf: Range<usize>,
 }
 
 impl Drop for CodeMemory {
@@ -60,8 +57,6 @@ impl CodeMemory {
     /// The returned `CodeMemory` manages the internal `MmapVec` and the
     /// `publish` method is used to actually make the memory executable.
     pub fn new(mmap: MmapVec) -> Result<Self> {
-        use gimli::SectionId::*;
-
         let obj = File::parse(&mmap[..])
             .with_context(|| "failed to parse internal compilation artifact")?;
 
@@ -73,7 +68,7 @@ impl CodeMemory {
         let mut address_map_data = 0..0;
         let mut func_name_data = 0..0;
         let mut info_data = 0..0;
-        let mut dwarf_sections = Vec::new();
+        let mut dwarf = 0..0;
         for section in obj.sections() {
             let data = section.data()?;
             let name = section.name()?;
@@ -89,14 +84,6 @@ impl CodeMemory {
                     );
                 }
             }
-
-            let mut gimli = |id: gimli::SectionId| {
-                let idx = id as usize;
-                if dwarf_sections.len() <= idx {
-                    dwarf_sections.resize(idx + 1, 0..0);
-                }
-                dwarf_sections[idx] = range.clone();
-            };
 
             match name {
                 obj::ELF_WASM_BTI => match data.len() {
@@ -118,31 +105,7 @@ impl CodeMemory {
                 obj::ELF_WASMTIME_TRAPS => trap_data = range,
                 obj::ELF_NAME_DATA => func_name_data = range,
                 obj::ELF_WASMTIME_INFO => info_data = range,
-
-                // Register dwarf sections into the `dwarf_sections`
-                // array which is indexed by `gimli::SectionId`
-                ".debug_abbrev.wasm" => gimli(DebugAbbrev),
-                ".debug_addr.wasm" => gimli(DebugAddr),
-                ".debug_aranges.wasm" => gimli(DebugAranges),
-                ".debug_frame.wasm" => gimli(DebugFrame),
-                ".eh_frame.wasm" => gimli(EhFrame),
-                ".eh_frame_hdr.wasm" => gimli(EhFrameHdr),
-                ".debug_info.wasm" => gimli(DebugInfo),
-                ".debug_line.wasm" => gimli(DebugLine),
-                ".debug_line_str.wasm" => gimli(DebugLineStr),
-                ".debug_loc.wasm" => gimli(DebugLoc),
-                ".debug_loc_lists.wasm" => gimli(DebugLocLists),
-                ".debug_macinfo.wasm" => gimli(DebugMacinfo),
-                ".debug_macro.wasm" => gimli(DebugMacro),
-                ".debug_pub_names.wasm" => gimli(DebugPubNames),
-                ".debug_pub_types.wasm" => gimli(DebugPubTypes),
-                ".debug_ranges.wasm" => gimli(DebugRanges),
-                ".debug_rng_lists.wasm" => gimli(DebugRngLists),
-                ".debug_str.wasm" => gimli(DebugStr),
-                ".debug_str_offsets.wasm" => gimli(DebugStrOffsets),
-                ".debug_types.wasm" => gimli(DebugTypes),
-                ".debug_cu_index.wasm" => gimli(DebugCuIndex),
-                ".debug_tu_index.wasm" => gimli(DebugTuIndex),
+                obj::ELF_WASMTIME_DWARF => dwarf = range,
 
                 _ => log::debug!("ignoring section {name}"),
             }
@@ -158,7 +121,7 @@ impl CodeMemory {
             trap_data,
             address_map_data,
             func_name_data,
-            dwarf_sections,
+            dwarf,
             info_data,
             wasm_data,
         })
@@ -175,15 +138,9 @@ impl CodeMemory {
         &self.mmap[self.text.clone()]
     }
 
-    /// Returns the data in the corresponding dwarf section, or an empty slice
-    /// if the section wasn't present.
-    pub fn dwarf_section(&self, section: gimli::SectionId) -> &[u8] {
-        let range = self
-            .dwarf_sections
-            .get(section as usize)
-            .cloned()
-            .unwrap_or(0..0);
-        &self.mmap[range]
+    /// Returns the contents of the `ELF_WASMTIME_DWARF` section.
+    pub fn dwarf(&self) -> &[u8] {
+        &self.mmap[self.dwarf.clone()]
     }
 
     /// Returns the data in the `ELF_NAME_DATA` section.

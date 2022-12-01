@@ -119,3 +119,12 @@ pub const ELF_WASMTIME_INFO: &'static str = ".wasmtime.info";
 /// sometimes quite large (3MB seen for spidermonkey-compiled-to-wasm), can be
 /// paged in lazily from an mmap and is never paged in if we never reference it.
 pub const ELF_NAME_DATA: &'static str = ".name.wasm";
+
+/// This is the name of the section in the final ELF image that contains the
+/// concatenation of all the native DWARF information found in the original wasm
+/// files.
+///
+/// This concatenation is not intended to be read by external tools at this time
+/// and is instead indexed directly by relative indices stored in compilation
+/// metadata.
+pub const ELF_WASMTIME_DWARF: &str = ".wasmtime.dwarf";
