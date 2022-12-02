@@ -442,8 +442,8 @@ block0(v0: i128):
 ;   mov fp, sp
 ;   sub sp, sp, #16
 ; block0:
-;   mov x4, sp
-;   stp x0, x1, [x4]
+;   mov x3, sp
+;   stp x0, x1, [x3]
 ;   add sp, sp, #16
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -461,8 +461,8 @@ block0(v0: i128):
 ;   mov fp, sp
 ;   sub sp, sp, #32
 ; block0:
-;   add x4, sp, #32
-;   stp x0, x1, [x4]
+;   add x3, sp, #32
+;   stp x0, x1, [x3]
 ;   add sp, sp, #32
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -482,8 +482,8 @@ block0(v0: i128):
 ;   movk w16, w16, #1, LSL #16
 ;   sub sp, sp, x16, UXTX
 ; block0:
-;   mov x4, sp
-;   stp x0, x1, [x4]
+;   mov x3, sp
+;   stp x0, x1, [x3]
 ;   movz w16, #34480
 ;   movk w16, w16, #1, LSL #16
 ;   add sp, sp, x16, UXTX
@@ -502,8 +502,8 @@ block0:
 ;   mov fp, sp
 ;   sub sp, sp, #16
 ; block0:
-;   mov x3, sp
-;   ldp x0, x1, [x3]
+;   mov x2, sp
+;   ldp x0, x1, [x2]
 ;   add sp, sp, #16
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -521,8 +521,8 @@ block0:
 ;   mov fp, sp
 ;   sub sp, sp, #32
 ; block0:
-;   add x3, sp, #32
-;   ldp x0, x1, [x3]
+;   add x2, sp, #32
+;   ldp x0, x1, [x2]
 ;   add sp, sp, #32
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -542,8 +542,8 @@ block0:
 ;   movk w16, w16, #1, LSL #16
 ;   sub sp, sp, x16, UXTX
 ; block0:
-;   mov x3, sp
-;   ldp x0, x1, [x3]
+;   mov x2, sp
+;   ldp x0, x1, [x2]
 ;   movz w16, #34480
 ;   movk w16, w16, #1, LSL #16
 ;   add sp, sp, x16, UXTX
