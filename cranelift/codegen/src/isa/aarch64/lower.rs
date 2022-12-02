@@ -453,8 +453,9 @@ pub(crate) fn lower_address(
         return memarg;
     }
 
-    // Allocate the temp and shoehorn it into the AMode.
-    let reg = match memarg {
+    // Extract the first register from the memarg so that we can add all the
+    // immediate values to it.
+    let addr = match memarg {
         AMode::RegExtended { rn, .. } => rn,
         AMode::RegOffset { rn, .. } => rn,
         AMode::RegReg { rm, .. } => rm,
@@ -465,14 +466,15 @@ pub(crate) fn lower_address(
     // If there is any offset, load that first into `addr`, and add the `reg`
     // that we kicked out of the `AMode`; otherwise, start with that reg.
     let addr = if offset != 0 {
-        lower_add_immediate(ctx, reg, offset)
+        lower_add_immediate(ctx, addr, offset)
     } else {
-        reg
+        addr
     };
 
     // Now handle reg64 and reg32-extended components.
     let addr = lower_add_addends(ctx, addr, addends64, addends32);
 
+    // Shoehorn addr into the AMode.
     match memarg {
         AMode::RegExtended { rm, extendop, .. } => AMode::RegExtended {
             rn: addr,
