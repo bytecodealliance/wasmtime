@@ -19,13 +19,16 @@ else
 fi
 
 # Download all necessary test fixtures to the temporary directory.
-wget --no-clobber https://tfhub.dev/google/imagenet/mobilenet_v2_140_224/classification/5?tf-hub-format=compressed --output-document=$TMP_DIR/mobilenet.tar.gz
+wget --no-clobber https://github.com/bytecodealliance/wasi-nn/raw/performance/rust/examples/classification-example/models/mobilenet_v2/saved_model.pb --output-document=$TMP_DIR/saved_model.pb
+mkdir $TMP_DIR/variables
+wget --no-clobber https://github.com/bytecodealliance/wasi-nn/raw/performance/rust/examples/classification-example/models/mobilenet_v2/variables/variables.data-00000-of-00001 --output-document=$TMP_DIR/variables/variables.data-00000-of-00001
+wget --no-clobber https://github.com/bytecodealliance/wasi-nn/raw/performance/rust/examples/classification-example/models/mobilenet_v2/variables/variables.index --output-document=$TMP_DIR/variables/variables.index
 export BACKEND="tensorflow"
 export MAPDIR="fixture"
 
-tar -xf $TMP_DIR/mobilenet.tar.gz -C $TMP_DIR
 # Now build an example that uses the wasi-nn API.
 pushd $WASMTIME_DIR/crates/wasi-nn/examples/classification-example
+
 cp src/train.jpg $TMP_DIR/train.jpg
 cargo build --release --target=wasm32-wasi
 cp target/wasm32-wasi/release/wasi-nn-example.wasm $TMP_DIR

@@ -10,7 +10,6 @@ use tensorflow::{
     FetchToken, Graph, SavedModelBundle, Session, SessionOptions, SessionRunArgs, SignatureDef,
     Status, Tensor as TFTensor, DEFAULT_SERVING_SIGNATURE_DEF_KEY,
 };
-use wiggle::GuestSlice;
 
 #[derive(Default)]
 pub(crate) struct TensorflowBackend;
@@ -44,7 +43,7 @@ impl Backend for TensorflowBackend {
             // from bytes, that would be a better solution (TODO).
             let builders_len = builders.len();
             let builders = builders.as_ptr();
-            let guest_map = builders.read()?.as_slice()?;
+            let guest_map = builders.read()?.as_slice()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
             let mapped_directory =
                 build_path(&guest_map, map_dirs).ok_or(BackendError::MissingMapDir())?;
             let mut tags: Vec<String> = vec![];
@@ -52,19 +51,23 @@ impl Backend for TensorflowBackend {
 
             if builders_len > 1 {
                 // Get the user provided signature.
-                signature_str = str::from_utf8(&builders.add(1)?.read()?.as_slice()?)
-                    .unwrap()
-                    .to_owned();
+                let sig_opt = builders.add(1)?.read()?.as_slice()?;
+                if sig_opt.is_some() {
+                    signature_str = str::from_utf8(&sig_opt.unwrap())
+                        .unwrap()
+                        .to_owned();
 
-                if builders_len > 2 {
-                    // Get all the user provided tags.
-                    let mut itr: u32 = 2;
-                    while itr < builders_len {
-                        let opt = str::from_utf8(&builders.add(itr)?.read()?.as_slice()?)
-                            .unwrap()
-                            .to_owned();
-                        tags.push(opt);
-                        itr += 1;
+                    if builders_len > 2 {
+                        // Get all the user provided tags.
+                        let mut itr: u32 = 2;
+                        while itr < builders_len {
+                            let tag_opt = builders.add(itr)?.read()?.as_slice()?;
+                            let opt = str::from_utf8(&tag_opt.unwrap())
+                                .unwrap()
+                                .to_owned();
+                            tags.push(opt);
+                            itr += 1;
+                        }
                     }
                 }
             }
@@ -184,6 +187,7 @@ impl<'a> BackendExecutionContext for TensorflowExecutionContext<'a> {
         let dims = tensor
             .dimensions
             .as_slice()?
+            .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)")
             .iter()
             .map(|d| *d as u64)
             .collect::<Vec<_>>();
@@ -216,23 +220,29 @@ impl<'a> BackendExecutionContext for TensorflowExecutionContext<'a> {
         //   the tensor data we copied to `Self`.
         let self_ = unsafe { std::mem::transmute::<&mut Self, &'a mut Self>(self) };
         let tensor_ref = self_.tensors.last_mut().unwrap();
-        let data = tensor.data.as_slice()?;
+        let data = tensor.data.as_slice()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
+
+        // Pack the tensor with the data. If its not a u8 tensor, the data needs to be converted.
         use TensorTypes::*;
         match tensor_ref {
             TTU8(t) => {
-                copy_data(t, &data);
+                t.clone_from_slice(&data);
                 self_.args.add_feed(&operation, 0, t);
             }
-            TTF16(t) => {
-                copy_data(t, &data);
-                self_.args.add_feed(&operation, 0, t);
-            }
-            TTF32(t) => {
-                copy_data(t, &data);
+            TTF32(t) | TTF16(t) => {
+                for i in 0..t.len() {
+                    let jmp = i * std::mem::size_of::<f32>();
+                    let to_t = [data[jmp], data[jmp+1], data[jmp+2], data[jmp+3]];
+                    t[i] = f32::from_ne_bytes(to_t);
+                }
                 self_.args.add_feed(&operation, 0, t);
             }
             TTI32(t) => {
-                copy_data(t, &data);
+                for i in 0..t.len() {
+                    let jmp = i * std::mem::size_of::<i32>();
+                    let to_t = [data[jmp], data[jmp+1], data[jmp+2], data[jmp+3]];
+                    t[i] = i32::from_ne_bytes(to_t);
+                }
                 self_.args.add_feed(&operation, 0, t);
             }
         };
@@ -350,15 +360,6 @@ fn t_to_u8_copy<T>(data: &[T], destination: &mut [u8]) -> Result<(), BackendErro
             destination.copy_from_slice(tmpu8);
             Ok(())
         }
-    }
-}
-
-fn copy_data<T: tensorflow::TensorType + std::convert::From<u8>>(
-    tensor: &mut tensorflow::Tensor<T>,
-    data: &GuestSlice<u8>,
-) {
-    for i in 0..data.len() {
-        tensor[i] = T::from(data[i]);
     }
 }
 

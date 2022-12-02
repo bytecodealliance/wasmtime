@@ -8,6 +8,7 @@ use wiggle::GuestError;
 
 /// A [Backend] contains the necessary state to load [BackendGraph]s.
 pub(crate) trait Backend: Send {
+    // pub(crate) trait Backend {
     fn name(&self) -> &str;
     fn load(
         &mut self,
@@ -20,12 +21,14 @@ pub(crate) trait Backend: Send {
 /// A [BackendGraph] can create [BackendExecutionContext]s; this is the backing
 /// implementation for a [crate::witx::types::Graph].
 pub(crate) trait BackendGraph: Send {
+    // pub(crate) trait BackendGraph {
     fn init_execution_context(&mut self) -> Result<Box<dyn BackendExecutionContext>, BackendError>;
 }
 
 /// A [BackendExecutionContext] performs the actual inference; this is the
 /// backing implementation for a [crate::witx::types::GraphExecutionContext].
 pub(crate) trait BackendExecutionContext: Send + Sync {
+    // pub(crate) trait BackendExecutionContext {
     fn set_input(&mut self, index: u32, tensor: &Tensor<'_>) -> Result<(), BackendError>;
     fn compute(&mut self) -> Result<(), BackendError>;
     fn get_output(&mut self, index: u32, destination: &mut [u8]) -> Result<u32, BackendError>;

@@ -7,7 +7,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-image = { version = "0.23.14", default-features = false, features = ["gif", "jpeg", "ico", "png", "pnm", "tga", "tiff", "webp", "bmp", "hdr", "dxt", "dds", "farbfeld"]  }
+image2tensor = "0.2.0"
 wasi-nn = "0.2.1"
 
 # This crate is built with the wasm32-wasi target, so it's separate
