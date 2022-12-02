@@ -170,8 +170,8 @@ block1:
 }
 
 ; block0:
-;   bne a1,zero,taken(label2),not_taken(0)
-;   beq a0,zero,taken(label1),not_taken(label2)
+;   eq a0,[a0,a1],[zerozero]##ty=i128
+;   bne a0,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -190,7 +190,7 @@ block1:
 }
 
 ; block0:
-;   bne a1,zero,taken(label1),not_taken(0)
+;   ne a0,[a0,a1],[zerozero]##ty=i128
 ;   bne a0,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
