@@ -479,19 +479,9 @@ pub(crate) fn lower_address(
             rm,
             extendop,
         },
-        AMode::RegOffset { off, ty, .. } => AMode::RegOffset {
-            rn: addr,
-            off,
-            ty,
-        },
-        AMode::RegReg { rn, .. } => AMode::RegReg {
-            rn: addr,
-            rm: rn,
-        },
-        AMode::UnsignedOffset { uimm12, .. } => AMode::UnsignedOffset {
-            rn: addr,
-            uimm12,
-        },
+        AMode::RegOffset { off, ty, .. } => AMode::RegOffset { rn: addr, off, ty },
+        AMode::RegReg { rn, .. } => AMode::RegReg { rn: addr, rm: rn },
+        AMode::UnsignedOffset { uimm12, .. } => AMode::UnsignedOffset { rn: addr, uimm12 },
         _ => unreachable!(),
     }
 }
