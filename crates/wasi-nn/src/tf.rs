@@ -53,18 +53,14 @@ impl Backend for TensorflowBackend {
                 // Get the user provided signature.
                 let sig_opt = builders.add(1)?.read()?.as_slice()?;
                 if sig_opt.is_some() {
-                    signature_str = str::from_utf8(&sig_opt.unwrap())
-                        .unwrap()
-                        .to_owned();
+                    signature_str = str::from_utf8(&sig_opt.unwrap()).unwrap().to_owned();
 
                     if builders_len > 2 {
                         // Get all the user provided tags.
                         let mut itr: u32 = 2;
                         while itr < builders_len {
                             let tag_opt = builders.add(itr)?.read()?.as_slice()?;
-                            let opt = str::from_utf8(&tag_opt.unwrap())
-                                .unwrap()
-                                .to_owned();
+                            let opt = str::from_utf8(&tag_opt.unwrap()).unwrap().to_owned();
                             tags.push(opt);
                             itr += 1;
                         }
@@ -232,7 +228,7 @@ impl<'a> BackendExecutionContext for TensorflowExecutionContext<'a> {
             TTF32(t) | TTF16(t) => {
                 for i in 0..t.len() {
                     let jmp = i * std::mem::size_of::<f32>();
-                    let to_t = [data[jmp], data[jmp+1], data[jmp+2], data[jmp+3]];
+                    let to_t = [data[jmp], data[jmp + 1], data[jmp + 2], data[jmp + 3]];
                     t[i] = f32::from_ne_bytes(to_t);
                 }
                 self_.args.add_feed(&operation, 0, t);
@@ -240,7 +236,7 @@ impl<'a> BackendExecutionContext for TensorflowExecutionContext<'a> {
             TTI32(t) => {
                 for i in 0..t.len() {
                     let jmp = i * std::mem::size_of::<i32>();
-                    let to_t = [data[jmp], data[jmp+1], data[jmp+2], data[jmp+3]];
+                    let to_t = [data[jmp], data[jmp + 1], data[jmp + 2], data[jmp + 3]];
                     t[i] = i32::from_ne_bytes(to_t);
                 }
                 self_.args.add_feed(&operation, 0, t);
