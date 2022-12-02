@@ -30,8 +30,8 @@ pub(crate) type X64Caller = Caller<X64ABIMachineSpec>;
 pub struct X64ABIMachineSpec;
 
 impl X64ABIMachineSpec {
-    fn gen_probestack_unroll(guard_size: u32, probe_count: u32) -> SmallInstVec<Inst> {
-        let mut insts = SmallVec::with_capacity(probe_count as usize);
+    fn gen_probestack_unroll(insts: &mut SmallInstVec<Inst>, guard_size: u32, probe_count: u32) {
+        insts.reserve(probe_count as usize);
         for i in 0..probe_count {
             let offset = (guard_size * (i + 1)) as i64;
 
@@ -43,9 +43,8 @@ impl X64ABIMachineSpec {
                 I32,
             ));
         }
-        insts
     }
-    fn gen_probestack_loop(frame_size: u32, guard_size: u32) -> SmallInstVec<Inst> {
+    fn gen_probestack_loop(insts: &mut SmallInstVec<Inst>, frame_size: u32, guard_size: u32) {
         // We have to use a caller saved register since clobbering only happens
         // after stack probing.
         //
@@ -57,11 +56,11 @@ impl X64ABIMachineSpec {
             !is_callee_save_systemv(real_reg, false) && !is_callee_save_fastcall(real_reg, false)
         });
 
-        smallvec![Inst::StackProbeLoop {
+        insts.push(Inst::StackProbeLoop {
             tmp: Writable::from_reg(tmp),
             frame_size,
             guard_size,
-        }]
+        });
     }
 }
 
@@ -420,8 +419,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         insts
     }
 
-    fn gen_probestack(frame_size: u32) -> SmallInstVec<Self::I> {
-        let mut insts = SmallVec::new();
+    fn gen_probestack(insts: &mut SmallInstVec<Self::I>, frame_size: u32) {
         insts.push(Inst::imm(
             OperandSize::Size32,
             frame_size as u64,
@@ -438,10 +436,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 opcode: Opcode::Call,
             }),
         });
-        insts
     }
 
-    fn gen_inline_probestack(frame_size: u32, guard_size: u32) -> SmallInstVec<Self::I> {
+    fn gen_inline_probestack(insts: &mut SmallInstVec<Self::I>, frame_size: u32, guard_size: u32) {
         // Unroll at most n consecutive probes, before falling back to using a loop
         //
         // This was number was picked because the loop version is 38 bytes long. We can fit
@@ -452,9 +449,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         let probe_count = align_to(frame_size, guard_size) / guard_size;
 
         if probe_count <= PROBE_MAX_UNROLL {
-            Self::gen_probestack_unroll(guard_size, probe_count)
+            Self::gen_probestack_unroll(insts, guard_size, probe_count)
         } else {
-            Self::gen_probestack_loop(frame_size, guard_size)
+            Self::gen_probestack_loop(insts, frame_size, guard_size)
         }
     }
 
@@ -627,18 +624,19 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         insts
     }
 
-    fn gen_memcpy(
+    fn gen_memcpy<F: FnMut(Type) -> Writable<Reg>>(
         call_conv: isa::CallConv,
         dst: Reg,
         src: Reg,
-        temp: Writable<Reg>,
-        temp2: Writable<Reg>,
         size: usize,
+        mut alloc_tmp: F,
     ) -> SmallVec<[Self::I; 8]> {
         let mut insts = SmallVec::new();
         let arg0 = get_intreg_for_arg(&call_conv, 0, 0).unwrap();
         let arg1 = get_intreg_for_arg(&call_conv, 1, 1).unwrap();
         let arg2 = get_intreg_for_arg(&call_conv, 2, 2).unwrap();
+        let temp = alloc_tmp(Self::word_type());
+        let temp2 = alloc_tmp(Self::word_type());
         insts.extend(
             Inst::gen_constant(ValueRegs::one(temp), size as u128, I64, |_| {
                 panic!("tmp should not be needed")

@@ -7,6 +7,7 @@ use std::fmt;
 #[cfg(feature = "cache")]
 use std::path::Path;
 use std::sync::Arc;
+use target_lexicon::Architecture;
 use wasmparser::WasmFeatures;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
@@ -191,6 +192,7 @@ impl Config {
             ret.cranelift_debug_verifier(false);
             ret.cranelift_opt_level(OptLevel::Speed);
         }
+
         ret.wasm_reference_types(true);
         ret.wasm_multi_value(true);
         ret.wasm_bulk_memory(true);
@@ -1275,9 +1277,11 @@ impl Config {
         Ok(self)
     }
 
-    /// Configure wether wasmtime should compile a module using multiple threads.
+    /// Configure wether wasmtime should compile a module using multiple
+    /// threads.
     ///
-    /// Disabling this will result in a single thread being used to compile the wasm bytecode.
+    /// Disabling this will result in a single thread being used to compile
+    /// the wasm bytecode.
     ///
     /// By default parallel compilation is enabled.
     #[cfg(feature = "parallel-compilation")]
@@ -1470,19 +1474,35 @@ impl Config {
         let mut compiler = match self.compiler_config.strategy {
             Strategy::Auto | Strategy::Cranelift => wasmtime_cranelift::builder(),
         };
+
         if let Some(target) = &self.compiler_config.target {
             compiler.target(target.clone())?;
         }
 
+        // If probestack is enabled for a target, Wasmtime will always use the
+        // inline strategy which doesn't require us to define a `__probestack`
+        // function or similar.
+        self.compiler_config
+            .settings
+            .insert("probestack_strategy".into(), "inline".into());
+
+        let host = target_lexicon::Triple::host();
+        let target = self.compiler_config.target.as_ref().unwrap_or(&host);
+
+        // On supported targets, we enable stack probing by default.
+        // This is required on Windows because of the way Windows
+        // commits its stacks, but it's also a good idea on other
+        // platforms to ensure guard pages are hit for large frame
+        // sizes.
+        if probestack_supported(target.architecture) {
+            self.compiler_config
+                .flags
+                .insert("enable_probestack".into());
+        }
+
         if self.native_unwind_info ||
-            // Windows always needs unwind info, since it is part of the ABI.
-            self
-                .compiler_config
-                .target
-                .as_ref()
-                .map_or(cfg!(target_os = "windows"), |target| {
-                    target.operating_system == target_lexicon::OperatingSystem::Windows
-                })
+             // Windows always needs unwind info, since it is part of the ABI.
+             target.operating_system == target_lexicon::OperatingSystem::Windows
         {
             if !self
                 .compiler_config
@@ -1878,4 +1898,11 @@ impl PoolingAllocationConfig {
         self.config.limits.memory_pages = pages;
         self
     }
+}
+
+pub(crate) fn probestack_supported(arch: Architecture) -> bool {
+    matches!(
+        arch,
+        Architecture::X86_64 | Architecture::Aarch64(_) | Architecture::Riscv64(_)
+    )
 }

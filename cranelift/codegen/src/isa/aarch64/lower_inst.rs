@@ -257,6 +257,8 @@ pub(crate) fn lower_insn_to_regs(
 
         Opcode::UaddOverflowTrap => implemented_in_isle(ctx),
 
+        Opcode::IaddCout => implemented_in_isle(ctx),
+
         Opcode::IaddImm
         | Opcode::ImulImm
         | Opcode::UdivImm
@@ -266,7 +268,6 @@ pub(crate) fn lower_insn_to_regs(
         | Opcode::IrsubImm
         | Opcode::IaddCin
         | Opcode::IaddIfcin
-        | Opcode::IaddCout
         | Opcode::IaddCarry
         | Opcode::IaddIfcarry
         | Opcode::IsubBin

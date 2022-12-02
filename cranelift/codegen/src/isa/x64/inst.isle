@@ -1566,22 +1566,10 @@
 ;; Helper for creating an SSE register holding an `i64x2` from two `i64` values.
 (decl make_i64x2_from_lanes (GprMem GprMem) Xmm)
 (rule (make_i64x2_from_lanes lo hi)
-      (let ((dst_xmm WritableXmm (temp_writable_xmm))
-            (dst_reg WritableReg dst_xmm)
-            (_ Unit (emit (MInst.XmmUninitializedValue dst_xmm)))
-            (_ Unit (emit (MInst.XmmRmRImm (SseOpcode.Pinsrd)
-                                           dst_reg
-                                           lo
-                                           dst_reg
-                                           0
-                                           (OperandSize.Size64))))
-            (_ Unit (emit (MInst.XmmRmRImm (SseOpcode.Pinsrd)
-                                           dst_reg
-                                           hi
-                                           dst_reg
-                                           1
-                                           (OperandSize.Size64)))))
-        dst_xmm))
+      (let ((dst Xmm (xmm_uninit_value))
+            (dst Xmm (x64_pinsrd dst lo 0 (OperandSize.Size64)))
+            (dst Xmm (x64_pinsrd dst hi 1 (OperandSize.Size64))))
+        dst))
 
 ;; Move a `RegMemImm.Reg` operand to an XMM register, if necessary.
 (decl mov_rmi_to_xmm (RegMemImm) XmmMemImm)

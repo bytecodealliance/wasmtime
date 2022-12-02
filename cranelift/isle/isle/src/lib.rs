@@ -197,6 +197,20 @@ impl<T: Copy + std::fmt::Debug + Eq + Hash> DisjointSets<T> {
     pub fn is_empty(&self) -> bool {
         self.parent.is_empty()
     }
+
+    /// Returns the total number of elements in all sets. This method takes constant time.
+    ///
+    /// ```
+    /// let mut sets = cranelift_isle::DisjointSets::default();
+    /// sets.merge(1, 2);
+    /// assert_eq!(sets.len(), 2);
+    /// sets.merge(3, 4);
+    /// sets.merge(3, 5);
+    /// assert_eq!(sets.len(), 5);
+    /// ```
+    pub fn len(&self) -> usize {
+        self.parent.len()
+    }
 }
 
 pub mod ast;
@@ -211,6 +225,3 @@ pub mod parser;
 pub mod sema;
 pub mod trie;
 pub mod trie_again;
-
-#[cfg(feature = "miette-errors")]
-mod error_miette;

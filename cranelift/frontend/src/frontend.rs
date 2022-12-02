@@ -596,10 +596,11 @@ impl<'a> FunctionBuilder<'a> {
         }
     }
 
-    /// Declare that translation of the current function is complete. This
-    /// resets the state of the `FunctionBuilder` in preparation to be used
-    /// for another function.
-    pub fn finalize(&mut self) {
+    /// Declare that translation of the current function is complete.
+    ///
+    /// This resets the state of the `FunctionBuilderContext` in preparation to
+    /// be used for another function.
+    pub fn finalize(self) {
         // Check that all the `Block`s are filled and sealed.
         #[cfg(debug_assertions)]
         {
@@ -637,10 +638,6 @@ impl<'a> FunctionBuilder<'a> {
         // Clear the state (but preserve the allocated buffers) in preparation
         // for translation another function.
         self.func_ctx.clear();
-
-        // Reset srcloc and position to initial states.
-        self.srcloc = Default::default();
-        self.position = Default::default();
     }
 }
 

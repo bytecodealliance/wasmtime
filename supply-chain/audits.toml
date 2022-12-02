@@ -82,10 +82,22 @@ criteria = "safe-to-deploy"
 version = "0.26.0"
 notes = "The Bytecode Alliance is the author of this crate"
 
+[[audits.cap-fs-ext]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "1.0.1"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[audits.cap-primitives]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 version = "0.26.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.cap-primitives]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "1.0.1"
 notes = "The Bytecode Alliance is the author of this crate"
 
 [[audits.cap-rand]]
@@ -94,10 +106,22 @@ criteria = "safe-to-deploy"
 version = "0.26.0"
 notes = "The Bytecode Alliance is the author of this crate"
 
+[[audits.cap-rand]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "1.0.1"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[audits.cap-std]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 version = "0.26.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.cap-std]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "1.0.1"
 notes = "The Bytecode Alliance is the author of this crate"
 
 [[audits.cap-tempfile]]
@@ -106,10 +130,22 @@ criteria = "safe-to-run"
 version = "0.26.0"
 notes = "The Bytecode Alliance is the author of this crate"
 
+[[audits.cap-tempfile]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-run"
+version = "1.0.1"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[audits.cap-time-ext]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 version = "0.26.0"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.cap-time-ext]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "1.0.1"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[audits.cast]]
@@ -134,6 +170,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 version = "1.0.0"
 notes = "I am the author of this crate."
+
+[[audits.codespan-reporting]]
+who = "Jamey Sharp <jsharp@fastly.com>"
+criteria = "safe-to-deploy"
+version = "0.11.1"
+notes = "This library uses `forbid(unsafe_code)` and has no filesystem or network I/O."
 
 [[audits.crc]]
 who = "Brian Jones <brian.j.jones@intel.com>"
@@ -225,6 +267,12 @@ more than what it says on the tin. Contains one `unsafe` block related to
 performance around utf-8 validation which is fairly easy to verify as correct.
 """
 
+[[audits.fs-set-times]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.18.0"
+notes = "I am the author of this crate."
+
 [[audits.half]]
 who = "Brian Jones <brian.j.jones@intel.com>"
 criteria = "safe-to-deploy"
@@ -263,10 +311,28 @@ is otherwise certified. This doesn't contain unnecessary `unsafe` and
 additionally doesn't reach for ambient capabilities.
 """
 
+[[audits.io-extras]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.17.0"
+notes = "I am the author of this crate."
+
+[[audits.io-lifetimes]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "1.0.3"
+notes = "I am the author of this crate."
+
 [[audits.is-terminal]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 version = "0.3.0"
+notes = "Contains only unsafe code for interacting with the crate's intended purpose."
+
+[[audits.is-terminal]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.4.1"
 notes = "Contains only unsafe code for interacting with the crate's intended purpose."
 
 [[audits.leb128]]
@@ -302,6 +368,12 @@ who = "Brian Jones <brian.j.jones@intel.com>"
 criteria = "safe-to-deploy"
 version = "1.1.8"
 
+[[audits.linux-raw-sys]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.1.3"
+notes = "I am the author of this crate."
+
 [[audits.memfd]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -310,6 +382,15 @@ notes = """
 Does not interact with the system in any way than otherwise instructed to.
 Contains unsafe blocks but are encapsulated and required for the operation at
 hand.
+"""
+
+[[audits.memfd]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.6.2"
+notes = """
+The only changes from 0.6.1 were from my own PR which updated memfd to newer
+dependencies.
 """
 
 [[audits.memory_units]]
@@ -410,6 +491,12 @@ criteria = "safe-to-deploy"
 delta = "0.4.1 -> 0.4.2"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[audits.regalloc2]]
+who = "Trevor Elliott <telliott@fastly.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.2 -> 0.5.0"
+notes = "The Bytecode Alliance is the author of this crate."
+
 [[audits.rustc-demangle]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -420,6 +507,12 @@ notes = "I am the author of this crate."
 who = "Brian Jones <brian.j.jones@intel.com>"
 criteria = "safe-to-deploy"
 version = "1.0.9"
+
+[[audits.rustix]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.36.4"
+notes = "The Bytecode Alliance is the author of this crate."
 
 [[audits.schannel]]
 who = "Brian Jones <brian.j.jones@intel.com>"
@@ -453,6 +546,12 @@ primitives.
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 version = "0.23.0"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.system-interface]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.25.0"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[audits.tar]]
@@ -937,6 +1036,60 @@ notes = "The Bytecode Alliance is the author of this crate."
 who = "Brian Jones <brian.j.jones@intel.com>"
 criteria = "safe-to-deploy"
 version = "0.2.3"
+
+[[audits.windows-sys]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.42.0"
+notes = "This is a Windows API bindings library maintained by Microsoft themselves."
+
+[[audits.windows_aarch64_gnullvm]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.42.0"
+notes = "This is a Windows API bindings library maintained by Microsoft themselves."
+
+[[audits.windows_aarch64_msvc]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.42.0"
+notes = "This is a Windows API bindings library maintained by Microsoft themselves."
+
+[[audits.windows_i686_gnu]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.42.0"
+notes = "This is a Windows API bindings library maintained by Microsoft themselves."
+
+[[audits.windows_i686_msvc]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.42.0"
+notes = "This is a Windows API bindings library maintained by Microsoft themselves."
+
+[[audits.windows_x86_64_gnu]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.42.0"
+notes = "This is a Windows API bindings library maintained by Microsoft themselves."
+
+[[audits.windows_x86_64_gnullvm]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.42.0"
+notes = "This is a Windows API bindings library maintained by Microsoft themselves."
+
+[[audits.windows_x86_64_msvc]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.42.0"
+notes = "This is a Windows API bindings library maintained by Microsoft themselves."
+
+[[audits.winx]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.34.0"
+notes = "I am the author of this crate."
 
 [[audits.zip]]
 who = "Brian Jones <brian.j.jones@intel.com>"

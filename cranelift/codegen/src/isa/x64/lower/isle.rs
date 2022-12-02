@@ -980,18 +980,17 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
             ));
         } else {
             if size == OperandSize::Size8 {
+                let tmp = self.temp_writable_reg(ty);
                 // The remainder is in AH. Right-shift by 8 bits then move from rax.
                 self.lower_ctx.emit(MInst::shift_r(
                     OperandSize::Size64,
                     ShiftKind::ShiftRightLogical,
                     Imm8Gpr::new(Imm8Reg::Imm8 { imm: 8 }).unwrap(),
-                    dst_quotient,
-                ));
-                self.lower_ctx.emit(MInst::gen_move(
-                    dst.to_writable_reg(),
                     dst_quotient.to_reg(),
-                    ty,
+                    tmp,
                 ));
+                self.lower_ctx
+                    .emit(MInst::gen_move(dst.to_writable_reg(), tmp.to_reg(), ty));
             } else {
                 // The remainder is in rdx.
                 self.lower_ctx.emit(MInst::gen_move(

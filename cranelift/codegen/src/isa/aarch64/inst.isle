@@ -935,7 +935,16 @@
 
        ;; A dummy use, useful to keep a value alive.
        (DummyUse
-        (reg Reg))))
+        (reg Reg))
+
+       ;; Emits an inline stack probe loop.
+       ;;
+       ;; Note that this is emitted post-regalloc so `start` and `end` can be
+       ;; temporary registers such as the spilltmp and tmp2 registers. This also
+       ;; means that the internal codegen can't use these registers.
+       (StackProbeLoop (start WritableReg)
+                       (end Reg)
+                       (step Imm12))))
 
 ;; An ALU operation. This can be paired with several instruction formats
 ;; below (see `Inst`) in any combination.
@@ -1134,8 +1143,7 @@
         ;; [crate::isa::aarch64::abi](the ABI module) for more details.
         (NominalSPOffset
          (off i64)
-         (ty Type))
-))
+         (ty Type))))
 
 (type PairAMode extern (enum))
 (type FPUOpRI extern (enum))
@@ -2235,6 +2243,13 @@
       (let ((dst WritableReg (temp_writable_reg $I64)))
         (ConsumesFlags.ConsumesFlagsReturnsReg (MInst.CSet dst cond) dst)))
 
+;; Helper for constructing `cset` instructions, when the flags producer will
+;; also return a value.
+(decl cset_paired (Cond) ConsumesFlags)
+(rule (cset_paired cond)
+      (let ((dst WritableReg (temp_writable_reg $I64)))
+        (ConsumesFlags.ConsumesFlagsReturnsResultWithProducer (MInst.CSet dst cond) dst)))
+
 ;; Helper for constructing `csetm` instructions.
 (decl csetm (Cond) ConsumesFlags)
 (rule (csetm cond)
@@ -2279,6 +2294,9 @@
 
 (decl add_extend (Type Reg ExtendedValue) Reg)
 (rule (add_extend ty x y) (alu_rr_extend_reg (ALUOp.Add) ty x y))
+
+(decl add_extend_op (Type Reg Reg ExtendOp) Reg)
+(rule (add_extend_op ty x y extend) (alu_rrr_extend (ALUOp.Add) ty x y extend))
 
 (decl add_shift (Type Reg Reg ShiftOpAndAmt) Reg)
 (rule (add_shift ty x y z) (alu_rrr_shift (ALUOp.Add) ty x y z))
@@ -3442,11 +3460,11 @@
        (vec_cmp rn rm in_ty cond)))
 
 ;; Determines the appropriate extend op given the value type and whether it is signed.
-(decl lower_icmp_extend (Type bool) ExtendOp)
-(rule (lower_icmp_extend $I8 $true) (ExtendOp.SXTB))
-(rule (lower_icmp_extend $I16 $true) (ExtendOp.SXTH))
-(rule (lower_icmp_extend $I8 $false) (ExtendOp.UXTB))
-(rule (lower_icmp_extend $I16 $false) (ExtendOp.UXTH))
+(decl lower_extend_op (Type bool) ExtendOp)
+(rule (lower_extend_op $I8 $true) (ExtendOp.SXTB))
+(rule (lower_extend_op $I16 $true) (ExtendOp.SXTH))
+(rule (lower_extend_op $I8 $false) (ExtendOp.UXTB))
+(rule (lower_extend_op $I16 $false) (ExtendOp.UXTH))
 
 ;; Integers <= 64-bits.
 (rule -2 (lower_icmp_into_reg cond rn rm in_ty out_ty)
@@ -3457,13 +3475,13 @@
 (rule 1 (lower_icmp cond rn rm (fits_in_16 ty))
       (if (signed_cond_code cond))
       (let ((rn Reg (put_in_reg_sext32 rn)))
-      (flags_and_cc (cmp_extend (operand_size ty) rn rm (lower_icmp_extend ty $true)) cond)))
+      (flags_and_cc (cmp_extend (operand_size ty) rn rm (lower_extend_op ty $true)) cond)))
 (rule -1 (lower_icmp cond rn (imm12_from_value rm) (fits_in_16 ty))
       (let ((rn Reg (put_in_reg_zext32 rn)))
       (flags_and_cc (cmp_imm (operand_size ty) rn rm) cond)))
 (rule -2 (lower_icmp cond rn rm (fits_in_16 ty))
       (let ((rn Reg (put_in_reg_zext32 rn)))
-      (flags_and_cc (cmp_extend (operand_size ty) rn rm (lower_icmp_extend ty $false)) cond)))
+      (flags_and_cc (cmp_extend (operand_size ty) rn rm (lower_extend_op ty $false)) cond)))
 (rule -3 (lower_icmp cond rn (u64_from_iconst c) ty)
       (if (ty_int_ref_scalar_64 ty))
       (lower_icmp_const cond rn c ty))

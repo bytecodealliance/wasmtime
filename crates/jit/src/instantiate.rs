@@ -14,38 +14,14 @@ use std::convert::TryFrom;
 use std::ops::Range;
 use std::str;
 use std::sync::Arc;
-use thiserror::Error;
 use wasmtime_environ::obj;
 use wasmtime_environ::{
-    CompileError, DefinedFuncIndex, FuncIndex, FunctionLoc, MemoryInitialization, Module,
-    ModuleTranslation, PrimaryMap, SignatureIndex, StackMapInformation, Tunables, WasmFunctionInfo,
+    DefinedFuncIndex, FuncIndex, FunctionLoc, MemoryInitialization, Module, ModuleTranslation,
+    PrimaryMap, SignatureIndex, StackMapInformation, Tunables, WasmFunctionInfo,
 };
 use wasmtime_runtime::{
-    CompiledModuleId, CompiledModuleIdAllocator, GdbJitImageRegistration, InstantiationError,
-    MmapVec, VMFunctionBody, VMTrampoline,
+    CompiledModuleId, CompiledModuleIdAllocator, GdbJitImageRegistration, MmapVec, VMTrampoline,
 };
-
-/// An error condition while setting up a wasm instance, be it validation,
-/// compilation, or instantiation.
-#[derive(Error, Debug)]
-pub enum SetupError {
-    /// The module did not pass validation.
-    #[error("Validation error: {0}")]
-    Validate(String),
-
-    /// A wasm translation error occurred.
-    #[error("WebAssembly failed to compile")]
-    Compile(#[from] CompileError),
-
-    /// Some runtime resource was unavailable or insufficient, or the start function
-    /// trapped.
-    #[error("Instantiation failed during setup")]
-    Instantiate(#[from] InstantiationError),
-
-    /// Debug information generation error occurred.
-    #[error("Debug information error")]
-    DebugInfo(#[from] anyhow::Error),
-}
 
 /// Secondary in-memory results of compilation.
 ///
@@ -446,7 +422,7 @@ impl CompiledModule {
         if self.meta.native_debug_info_present {
             let text = self.text();
             let bytes = create_gdbjit_image(self.mmap().to_vec(), (text.as_ptr(), text.len()))
-                .map_err(SetupError::DebugInfo)?;
+                .context("failed to create jit image for gdb")?;
             profiler.module_load(self, Some(&bytes));
             let reg = GdbJitImageRegistration::register(bytes);
             self.dbg_jit_registration = Some(reg);
@@ -505,19 +481,22 @@ impl CompiledModule {
         Arc::get_mut(&mut self.module)
     }
 
-    /// Returns the map of all finished JIT functions compiled for this module
+    /// Returns an iterator over all functions defined within this module with
+    /// their index and their body in memory.
     #[inline]
     pub fn finished_functions(
         &self,
-    ) -> impl ExactSizeIterator<Item = (DefinedFuncIndex, *const [VMFunctionBody])> + '_ {
-        let text = self.text();
-        self.funcs.iter().map(move |(i, (_, loc))| {
-            let func = &text[loc.start as usize..][..loc.length as usize];
-            (
-                i,
-                std::ptr::slice_from_raw_parts(func.as_ptr().cast::<VMFunctionBody>(), func.len()),
-            )
-        })
+    ) -> impl ExactSizeIterator<Item = (DefinedFuncIndex, &[u8])> + '_ {
+        self.funcs
+            .iter()
+            .map(move |(i, _)| (i, self.finished_function(i)))
+    }
+
+    /// Returns the body of the function that `index` points to.
+    #[inline]
+    pub fn finished_function(&self, index: DefinedFuncIndex) -> &[u8] {
+        let (_, loc) = &self.funcs[index];
+        &self.text()[loc.start as usize..][..loc.length as usize]
     }
 
     /// Returns the per-signature trampolines for this module.
@@ -540,9 +519,7 @@ impl CompiledModule {
     ///
     /// The iterator returned iterates over the span of the compiled function in
     /// memory with the stack maps associated with those bytes.
-    pub fn stack_maps(
-        &self,
-    ) -> impl Iterator<Item = (*const [VMFunctionBody], &[StackMapInformation])> {
+    pub fn stack_maps(&self) -> impl Iterator<Item = (&[u8], &[StackMapInformation])> {
         self.finished_functions()
             .map(|(_, f)| f)
             .zip(self.funcs.values().map(|f| &f.0.stack_maps[..]))

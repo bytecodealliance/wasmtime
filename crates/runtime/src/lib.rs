@@ -23,10 +23,7 @@
 use anyhow::Error;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
-use wasmtime_environ::DefinedFuncIndex;
-use wasmtime_environ::DefinedMemoryIndex;
-use wasmtime_environ::FunctionLoc;
-use wasmtime_environ::SignatureIndex;
+use wasmtime_environ::{DefinedFuncIndex, DefinedMemoryIndex, HostPtr, VMOffsets};
 
 #[macro_use]
 mod trampolines;
@@ -55,7 +52,7 @@ pub use crate::externref::*;
 pub use crate::imports::Imports;
 pub use crate::instance::{
     allocate_single_memory_instance, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
-    InstantiationError, LinkError, OnDemandInstanceAllocator, StorePtr,
+    OnDemandInstanceAllocator, StorePtr,
 };
 #[cfg(feature = "pooling-allocator")]
 pub use crate::instance::{
@@ -172,15 +169,8 @@ pub trait ModuleRuntimeInfo: Send + Sync + 'static {
     /// The underlying Module.
     fn module(&self) -> &Arc<wasmtime_environ::Module>;
 
-    /// The signatures.
-    fn signature(&self, index: SignatureIndex) -> VMSharedSignatureIndex;
-
-    /// The base address of where JIT functions are located.
-    fn image_base(&self) -> usize;
-
-    /// Descriptors about each compiled function, such as the offset from
-    /// `image_base`.
-    fn function_loc(&self, func_index: DefinedFuncIndex) -> &FunctionLoc;
+    /// Returns the address, in memory, that the function `index` resides at.
+    fn function(&self, index: DefinedFuncIndex) -> *mut VMFunctionBody;
 
     /// Returns the `MemoryImage` structure used for copy-on-write
     /// initialization of the memory, if it's applicable.
@@ -198,6 +188,9 @@ pub trait ModuleRuntimeInfo: Send + Sync + 'static {
     /// Returns an array, indexed by `SignatureIndex` of all
     /// `VMSharedSignatureIndex` entries corresponding to the `SignatureIndex`.
     fn signature_ids(&self) -> &[VMSharedSignatureIndex];
+
+    /// Offset information for the current host.
+    fn offsets(&self) -> &VMOffsets<HostPtr>;
 }
 
 /// Returns the host OS page size, in bytes.

@@ -3,20 +3,24 @@
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 
-use crate::error::{Error, Result, Source, Span};
+use crate::error::{self, Error, Span};
 use crate::lexer::Pos;
 use crate::sema::{TermEnv, TermId, TermKind, TypeEnv};
 use crate::trie_again;
 
 /// Check for overlap.
-pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<()> {
-    let (terms, mut errors) = trie_again::build(termenv, tyenv);
-    errors.append(&mut check_overlaps(terms, termenv).report(tyenv));
+pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<(), error::Errors> {
+    let (terms, mut errors) = trie_again::build(termenv);
+    errors.append(&mut check_overlaps(terms, termenv).report());
 
-    match errors.len() {
-        0 => Ok(()),
-        1 => Err(errors.pop().unwrap()),
-        _ => Err(Error::Errors(errors)),
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(error::Errors {
+            errors,
+            filenames: tyenv.filenames.clone(),
+            file_texts: tyenv.file_texts.clone(),
+        })
     }
 }
 
@@ -25,6 +29,9 @@ pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<()> {
 struct Errors {
     /// Edges between rules indicating overlap.
     nodes: HashMap<Pos, HashSet<Pos>>,
+    /// For each (mask, shadowed) pair, every rule in `shadowed` is unmatchable because `mask` will
+    /// always match first.
+    shadowed: HashMap<Pos, Vec<Pos>>,
 }
 
 impl Errors {
@@ -32,18 +39,8 @@ impl Errors {
     /// nodes from the graph with the highest degree, reporting errors for them and their direct
     /// connections. The goal with reporting errors this way is to prefer reporting rules that
     /// overlap with many others first, and then report other more targeted overlaps later.
-    fn report(mut self, tyenv: &TypeEnv) -> Vec<Error> {
+    fn report(mut self) -> Vec<Error> {
         let mut errors = Vec::new();
-
-        let get_info = |pos: Pos| {
-            let file = pos.file;
-            let src = Source::new(
-                tyenv.filenames[file].clone(),
-                tyenv.file_texts[file].clone(),
-            );
-            let span = Span::new_single(pos);
-            (src, span)
-        };
 
         while let Some((&pos, _)) = self
             .nodes
@@ -62,9 +59,9 @@ impl Errors {
             }
 
             // build the real error
-            let mut rules = vec![get_info(pos)];
+            let mut rules = vec![Span::new_single(pos)];
 
-            rules.extend(node.into_iter().map(get_info));
+            rules.extend(node.into_iter().map(Span::new_single));
 
             errors.push(Error::OverlapError {
                 msg: String::from("rules are overlapping"),
@@ -72,19 +69,37 @@ impl Errors {
             });
         }
 
+        errors.extend(
+            self.shadowed
+                .into_iter()
+                .map(|(mask, shadowed)| Error::ShadowedError {
+                    shadowed: shadowed.into_iter().map(Span::new_single).collect(),
+                    mask: Span::new_single(mask),
+                }),
+        );
+
         errors.sort_by_key(|err| match err {
-            Error::OverlapError { rules, .. } => rules.first().unwrap().1.from,
+            Error::ShadowedError { mask, .. } => mask.from,
+            Error::OverlapError { rules, .. } => rules[0].from,
             _ => Pos::default(),
         });
         errors
     }
 
     fn check_pair(&mut self, a: &trie_again::Rule, b: &trie_again::Rule) {
-        if let trie_again::Overlap::Yes { .. } = a.may_overlap(b) {
+        if let trie_again::Overlap::Yes { subset } = a.may_overlap(b) {
             if a.prio == b.prio {
                 // edges are undirected
                 self.nodes.entry(a.pos).or_default().insert(b.pos);
                 self.nodes.entry(b.pos).or_default().insert(a.pos);
+            } else if subset {
+                // One rule's constraints are a subset of the other's, or they're equal.
+                // This is fine as long as the higher-priority rule has more constraints.
+                let (lo, hi) = if a.prio < b.prio { (a, b) } else { (b, a) };
+                if hi.total_constraints() <= lo.total_constraints() {
+                    // Otherwise, the lower-priority rule can never match.
+                    self.shadowed.entry(hi.pos).or_default().push(lo.pos);
+                }
             }
         }
     }

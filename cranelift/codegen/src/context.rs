@@ -148,8 +148,17 @@ impl Context {
     ///
     /// Public only for testing purposes.
     pub fn optimize(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
+        log::debug!(
+            "Number of CLIF instructions to optimize: {}",
+            self.func.dfg.num_insts()
+        );
+        log::debug!(
+            "Number of CLIF blocks to optimize: {}",
+            self.func.dfg.num_blocks()
+        );
+
         let opt_level = isa.flags().opt_level();
-        log::trace!(
+        crate::trace!(
             "Optimizing (opt level {:?}):\n{}",
             opt_level,
             self.func.display()

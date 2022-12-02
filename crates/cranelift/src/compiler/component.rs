@@ -145,7 +145,7 @@ impl ComponentCompiler for Compiler {
 
         // After the host function has returned the results are loaded from
         // `values_vec_ptr_val` and then returned.
-        self.wasm_to_host_load_results(ty, &mut builder, values_vec_ptr_val);
+        self.wasm_to_host_load_results(ty, builder, values_vec_ptr_val);
 
         let func: CompiledFunction =
             self.finish_trampoline(&mut context, incremental_cache_ctx.as_mut(), isa)?;
@@ -219,7 +219,7 @@ impl ComponentCompiler for Compiler {
         builder.switch_to_block(block0);
         builder.seal_block(block0);
 
-        self.translate_transcode(&mut builder, &offsets, transcoder, block0);
+        self.translate_transcode(builder, &offsets, transcoder, block0);
 
         let func: CompiledFunction =
             self.finish_trampoline(&mut context, incremental_cache_ctx.as_mut(), isa)?;
@@ -280,7 +280,7 @@ impl Compiler {
 
     fn translate_transcode(
         &self,
-        builder: &mut FunctionBuilder<'_>,
+        mut builder: FunctionBuilder<'_>,
         offsets: &VMComponentOffsets<u8>,
         transcoder: &Transcoder,
         block: ir::Block,
@@ -290,7 +290,7 @@ impl Compiler {
 
         // Save the exit FP and return address for stack walking purposes. This
         // is used when an invalid encoding is encountered and a trap is raised.
-        self.save_last_wasm_fp_and_pc(builder, &offsets, vmctx);
+        self.save_last_wasm_fp_and_pc(&mut builder, &offsets, vmctx);
 
         // Determine the static signature of the host libcall for this transcode
         // operation and additionally calculate the static offset within the
@@ -329,8 +329,9 @@ impl Compiler {
         );
 
         // Load the base pointers for the from/to linear memories.
-        let from_base = self.load_runtime_memory_base(builder, vmctx, offsets, transcoder.from);
-        let to_base = self.load_runtime_memory_base(builder, vmctx, offsets, transcoder.to);
+        let from_base =
+            self.load_runtime_memory_base(&mut builder, vmctx, offsets, transcoder.from);
+        let to_base = self.load_runtime_memory_base(&mut builder, vmctx, offsets, transcoder.to);
 
         // Helper function to cast a core wasm input to a host pointer type
         // which will go into the host libcall.
@@ -378,24 +379,24 @@ impl Compiler {
             | Transcode::Utf8ToLatin1
             | Transcode::Utf16ToLatin1
             | Transcode::Utf8ToUtf16 => {
-                args.push(ptr_param(builder, 0, from64, from_base));
-                args.push(len_param(builder, 1, from64));
-                args.push(ptr_param(builder, 2, to64, to_base));
+                args.push(ptr_param(&mut builder, 0, from64, from_base));
+                args.push(len_param(&mut builder, 1, from64));
+                args.push(ptr_param(&mut builder, 2, to64, to_base));
             }
 
             Transcode::Utf16ToUtf8 | Transcode::Latin1ToUtf8 => {
-                args.push(ptr_param(builder, 0, from64, from_base));
-                args.push(len_param(builder, 1, from64));
-                args.push(ptr_param(builder, 2, to64, to_base));
-                args.push(len_param(builder, 3, to64));
+                args.push(ptr_param(&mut builder, 0, from64, from_base));
+                args.push(len_param(&mut builder, 1, from64));
+                args.push(ptr_param(&mut builder, 2, to64, to_base));
+                args.push(len_param(&mut builder, 3, to64));
             }
 
             Transcode::Utf8ToCompactUtf16 | Transcode::Utf16ToCompactUtf16 => {
-                args.push(ptr_param(builder, 0, from64, from_base));
-                args.push(len_param(builder, 1, from64));
-                args.push(ptr_param(builder, 2, to64, to_base));
-                args.push(len_param(builder, 3, to64));
-                args.push(len_param(builder, 4, to64));
+                args.push(ptr_param(&mut builder, 0, from64, from_base));
+                args.push(len_param(&mut builder, 1, from64));
+                args.push(ptr_param(&mut builder, 2, to64, to_base));
+                args.push(len_param(&mut builder, 3, to64));
+                args.push(len_param(&mut builder, 4, to64));
             }
         };
         let call = builder.ins().call_indirect(sig, transcode_libcall, &args);
@@ -425,15 +426,15 @@ impl Compiler {
             | Transcode::Utf16ToCompactProbablyUtf16
             | Transcode::Utf8ToCompactUtf16
             | Transcode::Utf16ToCompactUtf16 => {
-                raw_results.push(cast_from_pointer(builder, results[0], to64));
+                raw_results.push(cast_from_pointer(&mut builder, results[0], to64));
             }
 
             Transcode::Latin1ToUtf8
             | Transcode::Utf16ToUtf8
             | Transcode::Utf8ToLatin1
             | Transcode::Utf16ToLatin1 => {
-                raw_results.push(cast_from_pointer(builder, results[0], from64));
-                raw_results.push(cast_from_pointer(builder, results[1], to64));
+                raw_results.push(cast_from_pointer(&mut builder, results[0], from64));
+                raw_results.push(cast_from_pointer(&mut builder, results[1], to64));
             }
         };
 

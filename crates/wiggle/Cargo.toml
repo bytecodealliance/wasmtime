@@ -11,12 +11,12 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 include = ["src/**/*", "README.md", "LICENSE"]
 
 [dependencies]
-thiserror = "1"
+thiserror = { workspace = true }
 witx = { path = "../wasi-common/WASI/tools/witx", version = "0.9.1", optional = true }
 wiggle-macro = { workspace = true }
-tracing = "0.1.26"
-bitflags = "1.2"
-async-trait = "0.1.42"
+tracing = { workspace = true }
+bitflags = { workspace = true }
+async-trait = { workspace = true }
 wasmtime = { workspace = true }
 anyhow = { workspace = true }
 

@@ -430,7 +430,10 @@ impl ABIMachineSpec for AArch64MachineDeps {
         } else {
             let scratch2 = writable_tmp2_reg();
             assert_ne!(scratch2.to_reg(), from_reg);
-            insts.extend(Inst::load_constant(scratch2, imm.into()));
+            // `gen_add_imm` is only ever called after register allocation has take place, and as a
+            // result it's ok to reuse the scratch2 register here. If that changes, we'll need to
+            // plumb through a way to allocate temporary virtual registers
+            insts.extend(Inst::load_constant(scratch2, imm.into(), &mut |_| scratch2));
             insts.push(Inst::AluRRRExtend {
                 alu_op: ALUOp::Add,
                 size: OperandSize::Size64,
@@ -515,7 +518,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
             ret.push(adj_inst);
         } else {
             let tmp = writable_spilltmp_reg();
-            let const_inst = Inst::load_constant(tmp, amount);
+            // `gen_sp_reg_adjust` is called after regalloc2, so it's acceptable to reuse `tmp` for
+            // intermediates in `load_constant`.
+            let const_inst = Inst::load_constant(tmp, amount, &mut |_| tmp);
             let adj_inst = Inst::AluRRRExtend {
                 alu_op,
                 size: OperandSize::Size64,
@@ -631,14 +636,58 @@ impl ABIMachineSpec for AArch64MachineDeps {
         insts
     }
 
-    fn gen_probestack(_: u32) -> SmallInstVec<Self::I> {
+    fn gen_probestack(_insts: &mut SmallInstVec<Self::I>, _: u32) {
         // TODO: implement if we ever require stack probes on an AArch64 host
         // (unlikely unless Lucet is ported)
-        smallvec![]
+        unimplemented!("Stack probing is unimplemented on AArch64");
     }
 
-    fn gen_inline_probestack(_frame_size: u32, _guard_size: u32) -> SmallInstVec<Self::I> {
-        unimplemented!("Inline stack probing is unimplemented on AArch64");
+    fn gen_inline_probestack(insts: &mut SmallInstVec<Self::I>, frame_size: u32, guard_size: u32) {
+        // The stack probe loop currently takes 6 instructions and each inline
+        // probe takes 2 (ish, these numbers sort of depend on the constants).
+        // Set this to 3 to keep the max size of the probe to 6 instructions.
+        const PROBE_MAX_UNROLL: u32 = 3;
+
+        let probe_count = align_to(frame_size, guard_size) / guard_size;
+        if probe_count <= PROBE_MAX_UNROLL {
+            // When manually unrolling stick an instruction that stores 0 at a
+            // constant offset relative to the stack pointer. This will
+            // turn into something like `movn tmp, #n ; stur xzr [sp, tmp]`.
+            //
+            // Note that this may actually store beyond the stack size for the
+            // last item but that's ok since it's unused stack space and if
+            // that faults accidentally we're so close to faulting it shouldn't
+            // make too much difference to fault there.
+            insts.reserve(probe_count as usize);
+            for i in 0..probe_count {
+                let offset = (guard_size * (i + 1)) as i64;
+                insts.push(Self::gen_store_stack(
+                    StackAMode::SPOffset(-offset, I8),
+                    zero_reg(),
+                    I32,
+                ));
+            }
+        } else {
+            // The non-unrolled version uses two temporary registers. The
+            // `start` contains the current offset from sp and counts downwards
+            // during the loop by increments of `guard_size`. The `end` is
+            // the size of the frame and where we stop.
+            //
+            // Note that this emission is all post-regalloc so it should be ok
+            // to use the temporary registers here as input/output as the loop
+            // itself is not allowed to use the registers.
+            let start = writable_spilltmp_reg();
+            let end = writable_tmp2_reg();
+            // `gen_inline_probestack` is called after regalloc2, so it's acceptable to reuse
+            // `start` and `end` as temporaries in load_constant.
+            insts.extend(Inst::load_constant(start, 0, &mut |_| start));
+            insts.extend(Inst::load_constant(end, frame_size.into(), &mut |_| end));
+            insts.push(Inst::StackProbeLoop {
+                start,
+                end: end.to_reg(),
+                step: Imm12::maybe_from_u64(guard_size.into()).unwrap(),
+            });
+        }
     }
 
     // Returns stack bytes used as well as instructions. Does not adjust
@@ -977,19 +1026,19 @@ impl ABIMachineSpec for AArch64MachineDeps {
         insts
     }
 
-    fn gen_memcpy(
+    fn gen_memcpy<F: FnMut(Type) -> Writable<Reg>>(
         call_conv: isa::CallConv,
         dst: Reg,
         src: Reg,
-        tmp: Writable<Reg>,
-        _tmp2: Writable<Reg>,
         size: usize,
+        mut alloc_tmp: F,
     ) -> SmallVec<[Self::I; 8]> {
         let mut insts = SmallVec::new();
         let arg0 = writable_xreg(0);
         let arg1 = writable_xreg(1);
         let arg2 = writable_xreg(2);
-        insts.extend(Inst::load_constant(tmp, size as u64).into_iter());
+        let tmp = alloc_tmp(Self::word_type());
+        insts.extend(Inst::load_constant(tmp, size as u64, &mut alloc_tmp));
         insts.push(Inst::Call {
             info: Box::new(CallInfo {
                 dest: ExternalName::LibCall(LibCall::Memcpy),

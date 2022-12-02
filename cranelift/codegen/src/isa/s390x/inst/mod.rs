@@ -335,7 +335,11 @@ impl Inst {
     }
 
     /// Create an instruction that loads a 64-bit integer constant.
-    pub fn load_constant64(rd: Writable<Reg>, value: u64) -> SmallVec<[Inst; 4]> {
+    pub fn load_constant64<F: FnMut(Type) -> Writable<Reg>>(
+        rd: Writable<Reg>,
+        value: u64,
+        mut alloc_tmp: F,
+    ) -> SmallVec<[Inst; 4]> {
         if let Ok(imm) = i16::try_from(value as i64) {
             // 16-bit signed immediate
             smallvec![Inst::Mov64SImm16 { rd, imm }]
@@ -353,12 +357,13 @@ impl Inst {
             let hi = value & 0xffff_ffff_0000_0000u64;
             let lo = value & 0x0000_0000_ffff_ffffu64;
 
+            let hi_rd = alloc_tmp(types::I64);
             if let Some(imm) = UImm16Shifted::maybe_from_u64(hi) {
                 // 16-bit shifted immediate
-                insts.push(Inst::Mov64UImm16Shifted { rd, imm });
+                insts.push(Inst::Mov64UImm16Shifted { rd: hi_rd, imm });
             } else if let Some(imm) = UImm32Shifted::maybe_from_u64(hi) {
                 // 32-bit shifted immediate
-                insts.push(Inst::Mov64UImm32Shifted { rd, imm });
+                insts.push(Inst::Mov64UImm32Shifted { rd: hi_rd, imm });
             } else {
                 unreachable!();
             }
@@ -367,14 +372,14 @@ impl Inst {
                 // 16-bit shifted immediate
                 insts.push(Inst::Insert64UImm16Shifted {
                     rd,
-                    ri: rd.to_reg(),
+                    ri: hi_rd.to_reg(),
                     imm,
                 });
             } else if let Some(imm) = UImm32Shifted::maybe_from_u64(lo) {
                 // 32-bit shifted immediate
                 insts.push(Inst::Insert64UImm32Shifted {
                     rd,
-                    ri: rd.to_reg(),
+                    ri: hi_rd.to_reg(),
                     imm,
                 });
             } else {
@@ -1068,6 +1073,12 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             for inst in body.iter() {
                 s390x_get_operands(inst, collector);
             }
+
+            // `reuse_def` constraints can't be permitted in a Loop instruction because the operand
+            // index will always be relative to the Loop instruction, not the individual
+            // instruction in the loop body. However, fixed-nonallocatable registers used with
+            // instructions that would have emitted `reuse_def` constraints are fine.
+            debug_assert!(collector.no_reuse_def());
         }
         &Inst::CondBreak { .. } => {}
         &Inst::VirtualSPOffsetAdj { .. } => {}
@@ -1166,7 +1177,7 @@ impl MachInst for Inst {
         to_regs: ValueRegs<Writable<Reg>>,
         value: u128,
         ty: Type,
-        _alloc_tmp: F,
+        alloc_tmp: F,
     ) -> SmallVec<[Inst; 4]> {
         let to_reg = to_regs
             .only_reg()
@@ -1198,7 +1209,7 @@ impl MachInst for Inst {
                 ));
                 ret
             }
-            types::I64 | types::R64 => Inst::load_constant64(to_reg, value as u64),
+            types::I64 | types::R64 => Inst::load_constant64(to_reg, value as u64, alloc_tmp),
             types::I8 | types::I16 | types::I32 => Inst::load_constant32(to_reg, value as u32),
             _ => unreachable!(),
         }

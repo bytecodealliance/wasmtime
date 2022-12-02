@@ -5,13 +5,13 @@ use crate::{
     AsContextMut, Engine, Export, Extern, Func, Global, Memory, Module, SharedMemory,
     StoreContextMut, Table, TypedFunc,
 };
-use anyhow::{anyhow, bail, Context, Error, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use std::mem;
 use std::sync::Arc;
 use wasmtime_environ::{EntityType, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap, TableIndex};
 use wasmtime_runtime::{
-    Imports, InstanceAllocationRequest, InstantiationError, StorePtr, VMContext, VMFunctionBody,
-    VMFunctionImport, VMGlobalImport, VMMemoryImport, VMOpaqueContext, VMTableImport,
+    Imports, InstanceAllocationRequest, StorePtr, VMContext, VMFunctionBody, VMFunctionImport,
+    VMGlobalImport, VMMemoryImport, VMOpaqueContext, VMTableImport,
 };
 
 /// An instantiated WebAssembly module.
@@ -317,20 +317,11 @@ impl Instance {
         // items from this instance into other instances should be ok when
         // those items are loaded and run we'll have all the metadata to
         // look at them.
-        store
-            .engine()
-            .allocator()
-            .initialize(
-                &mut instance_handle,
-                compiled_module.module(),
-                store.engine().config().features.bulk_memory,
-            )
-            .map_err(|e| -> Error {
-                match e {
-                    InstantiationError::Trap(trap) => trap.into(),
-                    other => other.into(),
-                }
-            })?;
+        store.engine().allocator().initialize(
+            &mut instance_handle,
+            compiled_module.module(),
+            store.engine().config().features.bulk_memory,
+        )?;
 
         Ok((instance, compiled_module.module().start_func))
     }

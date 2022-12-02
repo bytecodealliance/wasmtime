@@ -1,6 +1,6 @@
 //! A strongly-normalizing intermediate representation for ISLE rules. This representation is chosen
 //! to closely reflect the operations we can implement in Rust, to make code generation easy.
-use crate::error::{Error, Source, Span};
+use crate::error::{Error, Span};
 use crate::lexer::Pos;
 use crate::sema;
 use crate::DisjointSets;
@@ -151,8 +151,8 @@ pub enum Overlap {
     Yes {
         /// True if every input accepted by one rule is also accepted by the other. This does not
         /// indicate which rule is more general and in fact the rules could match exactly the same
-        /// set of inputs. You can work out which by comparing the number of constraints in both
-        /// rules: The more general rule has fewer constraints.
+        /// set of inputs. You can work out which by comparing `total_constraints()` in both rules:
+        /// The more general rule has fewer constraints.
         subset: bool,
     },
 }
@@ -167,16 +167,13 @@ pub struct RuleSet {
 }
 
 /// Construct a [RuleSet] for each term in `termenv` that has rules.
-pub fn build(
-    termenv: &sema::TermEnv,
-    tyenv: &sema::TypeEnv,
-) -> (Vec<(sema::TermId, RuleSet)>, Vec<Error>) {
+pub fn build(termenv: &sema::TermEnv) -> (Vec<(sema::TermId, RuleSet)>, Vec<Error>) {
     let mut errors = Vec::new();
     let mut term = HashMap::new();
     for rule in termenv.rules.iter() {
         term.entry(rule.root_term)
             .or_insert_with(RuleSetBuilder::default)
-            .add_rule(rule, termenv, tyenv, &mut errors);
+            .add_rule(rule, termenv, &mut errors);
     }
 
     // The `term` hash map may return terms in any order. Sort them to ensure that we produce the
@@ -215,9 +212,12 @@ impl Rule {
         // For the purpose of overlap checking, equality constraints act like other constraints, in
         // that they can cause rules to not overlap. However, because we don't have a concrete
         // pattern to compare, the analysis to prove that is complicated. For now, we approximate
-        // the result. If `small` has any of these nonlinear constraints, conservatively report that
-        // it is not a subset of `big`.
-        let mut subset = small.equals.is_empty();
+        // the result. If either rule has nonlinear constraints, conservatively report that neither
+        // is a subset of the other. Note that this does not disagree with the doc comment for
+        // `Overlap::Yes { subset }` which says to use `total_constraints` to disambiguate, since if
+        // we return `subset: true` here, `equals` is empty for both rules, so `total_constraints()`
+        // equals `constraints.len()`.
+        let mut subset = small.equals.is_empty() && big.equals.is_empty();
 
         for (binding, a) in small.constraints.iter() {
             if let Some(b) = big.constraints.get(binding) {
@@ -235,6 +235,14 @@ impl Rule {
             }
         }
         Overlap::Yes { subset }
+    }
+
+    /// Returns the total number of binding sites which this rule constrains, with either a concrete
+    /// pattern or an equality constraint.
+    pub fn total_constraints(&self) -> usize {
+        // Because of `normalize_equivalence_classes`, these two sets don't overlap, so the size of
+        // the union is the sum of their sizes.
+        self.constraints.len() + self.equals.len()
     }
 
     /// Returns the constraint that the given binding site must satisfy for this rule to match, if
@@ -282,13 +290,7 @@ struct RuleSetBuilder {
 }
 
 impl RuleSetBuilder {
-    fn add_rule(
-        &mut self,
-        rule: &sema::Rule,
-        termenv: &sema::TermEnv,
-        tyenv: &sema::TypeEnv,
-        errors: &mut Vec<Error>,
-    ) {
+    fn add_rule(&mut self, rule: &sema::Rule, termenv: &sema::TermEnv, errors: &mut Vec<Error>) {
         self.current_rule.pos = rule.pos;
         self.current_rule.prio = rule.prio;
         self.current_rule.result = rule.visit(self, termenv);
@@ -299,20 +301,17 @@ impl RuleSetBuilder {
             self.rules.rules.push(rule);
         } else {
             // If this rule can never match, drop it so it doesn't affect overlap checking.
-            errors.extend(self.unreachable.drain(..).map(|err| {
-                let src = Source::new(
-                    tyenv.filenames[err.pos.file].clone(),
-                    tyenv.file_texts[err.pos.file].clone(),
-                );
-                Error::UnreachableError {
-                    msg: format!(
-                        "rule requires binding to match both {:?} and {:?}",
-                        err.constraint_a, err.constraint_b
-                    ),
-                    src,
-                    span: Span::new_single(err.pos),
-                }
-            }))
+            errors.extend(
+                self.unreachable
+                    .drain(..)
+                    .map(|err| Error::UnreachableError {
+                        msg: format!(
+                            "rule requires binding to match both {:?} and {:?}",
+                            err.constraint_a, err.constraint_b
+                        ),
+                        span: Span::new_single(err.pos),
+                    }),
+            )
         }
     }
 
@@ -450,6 +449,32 @@ impl RuleSetBuilder {
             self.unreachable.push(e);
         }
     }
+
+    fn add_pattern_constraints(&mut self, expr: BindingId) {
+        match &self.rules.bindings[expr.index()] {
+            Binding::ConstInt { .. } | Binding::ConstPrim { .. } | Binding::Argument { .. } => {}
+            Binding::Constructor {
+                parameters: sources,
+                ..
+            }
+            | Binding::MakeVariant {
+                fields: sources, ..
+            } => {
+                for source in sources.to_vec() {
+                    self.add_pattern_constraints(source);
+                }
+            }
+            &Binding::Extractor {
+                parameter: source, ..
+            }
+            | &Binding::MatchVariant { source, .. }
+            | &Binding::MatchTuple { source, .. } => self.add_pattern_constraints(source),
+            &Binding::MatchSome { source } => {
+                self.set_constraint(source, Constraint::Some);
+                self.add_pattern_constraints(source);
+            }
+        }
+    }
 }
 
 impl sema::PatternVisitor for RuleSetBuilder {
@@ -552,13 +577,23 @@ impl sema::ExprVisitor for RuleSetBuilder {
         inputs: Vec<(BindingId, sema::TypeId)>,
         _ty: sema::TypeId,
         term: sema::TermId,
-        _infallible: bool,
+        infallible: bool,
         _multi: bool,
     ) -> BindingId {
-        self.dedup_binding(Binding::Constructor {
+        let source = self.dedup_binding(Binding::Constructor {
             term,
             parameters: inputs.into_iter().map(|(expr, _)| expr).collect(),
-        })
+        });
+
+        // If the constructor is fallible, build a pattern for `Some`, but not a constraint. If the
+        // constructor is on the right-hand side of a rule then its failure is not considered when
+        // deciding which rule to evaluate. Corresponding constraints are only added if this
+        // expression is subsequently used as a pattern; see `expr_as_pattern`.
+        if infallible {
+            source
+        } else {
+            self.dedup_binding(Binding::MatchSome { source })
+        }
     }
 }
 
@@ -584,6 +619,7 @@ impl sema::RuleVisitor for RuleSetBuilder {
     }
 
     fn expr_as_pattern(&mut self, expr: BindingId) -> BindingId {
+        self.add_pattern_constraints(expr);
         expr
     }
 

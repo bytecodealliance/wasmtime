@@ -28,7 +28,7 @@ criteria = "safe-to-deploy"
 
 [[exemptions.adler]]
 version = "1.0.2"
-criteria = "safe-to-deploy"
+criteria = "safe-to-run"
 
 [[exemptions.aead]]
 version = "0.4.3"
@@ -306,10 +306,6 @@ criteria = "safe-to-deploy"
 version = "0.2.16"
 criteria = "safe-to-run"
 
-[[exemptions.fs-set-times]]
-version = "0.17.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.fslock]]
 version = "0.1.8"
 criteria = "safe-to-run"
@@ -382,20 +378,8 @@ criteria = "safe-to-deploy"
 version = "0.1.12"
 criteria = "safe-to-deploy"
 
-[[exemptions.io-extras]]
-version = "0.15.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.io-lifetimes]]
-version = "0.7.2"
-criteria = "safe-to-deploy"
-
 [[exemptions.ipnet]]
 version = "2.5.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.is_ci]]
-version = "1.1.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.itertools]]
@@ -450,10 +434,6 @@ criteria = "safe-to-deploy"
 version = "0.2.2"
 criteria = "safe-to-deploy"
 
-[[exemptions.linux-raw-sys]]
-version = "0.0.46"
-criteria = "safe-to-deploy"
-
 [[exemptions.listenfd]]
 version = "1.0.0"
 criteria = "safe-to-deploy"
@@ -482,17 +462,9 @@ criteria = "safe-to-deploy"
 version = "0.6.5"
 criteria = "safe-to-deploy"
 
-[[exemptions.miette]]
-version = "5.1.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.miette-derive]]
-version = "5.1.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.miniz_oxide]]
 version = "0.5.1"
-criteria = "safe-to-deploy"
+criteria = "safe-to-run"
 
 [[exemptions.mio]]
 version = "0.8.2"
@@ -560,10 +532,6 @@ criteria = "safe-to-run"
 
 [[exemptions.os_str_bytes]]
 version = "6.0.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.owo-colors]]
-version = "3.4.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.p256]]
@@ -750,10 +718,6 @@ criteria = "safe-to-deploy"
 version = "0.5.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.rustix]]
-version = "0.35.10"
-criteria = "safe-to-deploy"
-
 [[exemptions.rusty-fork]]
 version = "0.3.0"
 criteria = "safe-to-deploy"
@@ -818,10 +782,6 @@ criteria = "safe-to-deploy"
 version = "1.8.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.smawk]]
-version = "0.3.1"
-criteria = "safe-to-deploy"
-
 [[exemptions.socket2]]
 version = "0.4.4"
 criteria = "safe-to-deploy"
@@ -852,18 +812,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.subtle]]
 version = "2.4.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.supports-color]]
-version = "1.3.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.supports-hyperlinks]]
-version = "1.2.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.supports-unicode]]
-version = "1.0.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.symbolic_expressions]]
@@ -944,10 +892,6 @@ criteria = "safe-to-run"
 
 [[exemptions.typenum]]
 version = "1.15.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.unicode-linebreak]]
-version = "0.1.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.unicode-width]]
@@ -1040,34 +984,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.winapi-x86_64-pc-windows-gnu]]
 version = "0.4.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.windows-sys]]
-version = "0.36.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.windows_aarch64_msvc]]
-version = "0.36.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.windows_i686_gnu]]
-version = "0.36.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.windows_i686_msvc]]
-version = "0.36.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.windows_x86_64_gnu]]
-version = "0.36.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.windows_x86_64_msvc]]
-version = "0.36.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.winx]]
-version = "0.33.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.xoodyak]]

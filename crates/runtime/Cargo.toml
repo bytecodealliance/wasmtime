@@ -19,11 +19,10 @@ libc = { version = "0.2.112", default-features = false }
 log = { workspace = true }
 memoffset = "0.6.0"
 indexmap = "1.0.2"
-thiserror = "1.0.4"
 cfg-if = "1.0"
 rand = { version = "0.8.3", features = ['small_rng'] }
 anyhow = { workspace = true }
-memfd = "0.6.1"
+memfd = "0.6.2"
 paste = "1.0.3"
 encoding_rs = { version = "0.8.31", optional = true }
 

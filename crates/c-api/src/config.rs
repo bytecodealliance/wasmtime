@@ -113,6 +113,12 @@ pub extern "C" fn wasmtime_config_strategy_set(
 }
 
 #[no_mangle]
+#[cfg(feature = "parallel-compilation")]
+pub extern "C" fn wasmtime_config_parallel_compilation_set(c: &mut wasm_config_t, enable: bool) {
+    c.config.parallel_compilation(enable);
+}
+
+#[no_mangle]
 pub extern "C" fn wasmtime_config_cranelift_debug_verifier_set(
     c: &mut wasm_config_t,
     enable: bool,

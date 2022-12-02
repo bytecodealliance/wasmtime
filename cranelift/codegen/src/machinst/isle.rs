@@ -432,7 +432,7 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         fn abi_num_args(&mut self, abi: &Sig) -> usize {
-            self.lower_ctx.sigs()[*abi].num_args()
+            self.lower_ctx.sigs().num_args(*abi)
         }
 
         fn abi_get_arg(&mut self, abi: &Sig, idx: usize) -> ABIArg {
@@ -440,7 +440,7 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         fn abi_num_rets(&mut self, abi: &Sig) -> usize {
-            self.lower_ctx.sigs()[*abi].num_rets()
+            self.lower_ctx.sigs().num_rets(*abi)
         }
 
         fn abi_get_ret(&mut self, abi: &Sig, idx: usize) -> ABIArg {
@@ -681,7 +681,7 @@ macro_rules! isle_prelude_method_helpers {
         ) -> InstOutput {
             caller.emit_stack_pre_adjust(self.lower_ctx);
 
-            let num_args = self.lower_ctx.sigs()[abi].num_args();
+            let num_args = self.lower_ctx.sigs().num_args(abi);
 
             assert_eq!(
                 inputs.len(&self.lower_ctx.dfg().value_lists) - off,
@@ -710,9 +710,9 @@ macro_rules! isle_prelude_method_helpers {
             let mut retval_insts: crate::machinst::abi::SmallInstVec<_> = smallvec::smallvec![];
             // We take the *last* `num_rets` returns of the sig:
             // this skips a StructReturn, if any, that is present.
-            let sigdata = &self.lower_ctx.sigs()[abi];
-            debug_assert!(num_rets <= sigdata.num_rets());
-            for i in (sigdata.num_rets() - num_rets)..sigdata.num_rets() {
+            let sigdata_num_rets = self.lower_ctx.sigs().num_rets(abi);
+            debug_assert!(num_rets <= sigdata_num_rets);
+            for i in (sigdata_num_rets - num_rets)..sigdata_num_rets {
                 // Borrow `sigdata` again so we don't hold a `self`
                 // borrow across the `&mut self` arg to
                 // `abi_arg_slot_regs()` below.
