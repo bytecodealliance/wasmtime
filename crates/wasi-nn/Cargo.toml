@@ -18,7 +18,7 @@ wiggle = { workspace = true }
 
 # These dependencies are necessary for the wasi-nn implementation:
 # TODO: update tensorflow once a new version has been released with the needed changes on crates.io.
-tensorflow = { git = "https://github.com/brianjjones/rust.git", branch = 'multithread', default-features = false, features = ["tensorflow_runtime_linking"]}
+tensorflow = { git = "https://github.com/brianjjones/rust.git", rev = "e79d43", default-features = false, features = ["tensorflow_runtime_linking"]}
 openvino = { version = "0.4.2", features = ["runtime-linking"] }
 thiserror = { workspace = true }
 

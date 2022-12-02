@@ -2827,7 +2827,7 @@ dependencies = [
 [[package]]
 name = "tensorflow"
 version = "0.19.1"
-source = "git+https://github.com/brianjjones/rust.git?branch=multithread#e79d436d2a183a641d63e7c40ed3c8d6b6f9494d"
+source = "git+https://github.com/brianjjones/rust.git?rev=e79d43#e79d436d2a183a641d63e7c40ed3c8d6b6f9494d"
 dependencies = [
  "byteorder",
  "crc",
@@ -2843,7 +2843,7 @@ dependencies = [
 [[package]]
 name = "tensorflow-internal-macros"
 version = "0.0.3"
-source = "git+https://github.com/brianjjones/rust.git?branch=multithread#e79d436d2a183a641d63e7c40ed3c8d6b6f9494d"
+source = "git+https://github.com/brianjjones/rust.git?rev=e79d43#e79d436d2a183a641d63e7c40ed3c8d6b6f9494d"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2853,7 +2853,7 @@ dependencies = [
 [[package]]
 name = "tensorflow-sys-runtime"
 version = "0.1.0"
-source = "git+https://github.com/brianjjones/rust.git?branch=multithread#e79d436d2a183a641d63e7c40ed3c8d6b6f9494d"
+source = "git+https://github.com/brianjjones/rust.git?rev=e79d43#e79d436d2a183a641d63e7c40ed3c8d6b6f9494d"
 dependencies = [
  "cfg-if",
  "lazy_static",
