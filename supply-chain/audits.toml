@@ -180,12 +180,12 @@ notes = "This library uses `forbid(unsafe_code)` and has no filesystem or networ
 [[audits.crc]]
 who = "Brian Jones <brian.j.jones@intel.com>"
 criteria = "safe-to-deploy"
-version = "2.1.0"
+version = "3.0.0"
 
 [[audits.crc-catalog]]
 who = "Brian Jones <brian.j.jones@intel.com>"
 criteria = "safe-to-deploy"
-version = "1.1.1"
+version = "2.1.0"
 
 [[audits.criterion]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -204,6 +204,11 @@ notes = """
 No major changes in this update, it was almost entirely stylistic with what
 appears to be a few clippy fixes here and there.
 """
+
+[[audits.crunchy]]
+who = "Brian Jones <brian.j.jones@intel.com>"
+criteria = "safe-to-deploy"
+version = "0.2.2"
 
 [[audits.crypto-common]]
 who = "Benjamin Bouvier <public@benj.me>"
@@ -277,6 +282,11 @@ notes = "I am the author of this crate."
 who = "Brian Jones <brian.j.jones@intel.com>"
 criteria = "safe-to-deploy"
 version = "1.8.2"
+
+[[audits.half]]
+who = "Brian Jones <brian.j.jones@intel.com>"
+criteria = "safe-to-deploy"
+version = "2.1.0"
 
 [[audits.heck]]
 who = "Alex Crichton <alex@alexcrichton.com>"
