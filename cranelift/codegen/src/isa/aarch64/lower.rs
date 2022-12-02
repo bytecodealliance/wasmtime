@@ -454,54 +454,46 @@ pub(crate) fn lower_address(
     }
 
     // Allocate the temp and shoehorn it into the AMode.
-    let addr = ctx.alloc_tmp(I64).only_reg().unwrap();
-    let (reg, memarg) = match memarg {
-        AMode::RegExtended { rn, rm, extendop } => (
-            rn,
-            AMode::RegExtended {
-                rn: addr.to_reg(),
-                rm,
-                extendop,
-            },
-        ),
-        AMode::RegOffset { rn, off, ty } => (
-            rn,
-            AMode::RegOffset {
-                rn: addr.to_reg(),
-                off,
-                ty,
-            },
-        ),
-        AMode::RegReg { rn, rm } => (
-            rm,
-            AMode::RegReg {
-                rn: addr.to_reg(),
-                rm: rn,
-            },
-        ),
-        AMode::UnsignedOffset { rn, uimm12 } => (
-            rn,
-            AMode::UnsignedOffset {
-                rn: addr.to_reg(),
-                uimm12,
-            },
-        ),
+    let reg = match memarg {
+        AMode::RegExtended { rn, .. } => rn,
+        AMode::RegOffset { rn, .. } => rn,
+        AMode::RegReg { rm, .. } => rm,
+        AMode::UnsignedOffset { rn, .. } => rn,
         _ => unreachable!(),
     };
 
     // If there is any offset, load that first into `addr`, and add the `reg`
     // that we kicked out of the `AMode`; otherwise, start with that reg.
-    let init = if offset != 0 {
+    let addr = if offset != 0 {
         lower_add_immediate(ctx, reg, offset)
     } else {
         reg
     };
 
     // Now handle reg64 and reg32-extended components.
-    let init = lower_add_addends(ctx, init, addends64, addends32);
-    ctx.emit(Inst::gen_move(addr, init, I64));
+    let addr = lower_add_addends(ctx, addr, addends64, addends32);
 
-    memarg
+    match memarg {
+        AMode::RegExtended { rm, extendop, .. } => AMode::RegExtended {
+            rn: addr,
+            rm,
+            extendop,
+        },
+        AMode::RegOffset { off, ty, .. } => AMode::RegOffset {
+            rn: addr,
+            off,
+            ty,
+        },
+        AMode::RegReg { rn, .. } => AMode::RegReg {
+            rn: addr,
+            rm: rn,
+        },
+        AMode::UnsignedOffset { uimm12, .. } => AMode::UnsignedOffset {
+            rn: addr,
+            uimm12,
+        },
+        _ => unreachable!(),
+    }
 }
 
 fn lower_add_addends(

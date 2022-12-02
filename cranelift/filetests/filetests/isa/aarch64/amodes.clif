@@ -52,10 +52,10 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   add x4, x0, #68
-;   add x6, x4, x0
-;   add x8, x6, x1, SXTW
-;   ldr w0, [x8, w1, SXTW]
+;   add x3, x0, #68
+;   add x5, x3, x0
+;   add x7, x5, x1, SXTW
+;   ldr w0, [x7, w1, SXTW]
 ;   ret
 
 function %f9(i64, i64, i64) -> i32 {
@@ -69,9 +69,9 @@ block0(v0: i64, v1: i64, v2: i64):
 }
 
 ; block0:
-;   add x5, x0, x2
-;   add x7, x5, x1
-;   ldr w0, [x7, #48]
+;   add x4, x0, x2
+;   add x6, x4, x1
+;   ldr w0, [x6, #48]
 ;   ret
 
 function %f10(i64, i64, i64) -> i32 {
@@ -85,10 +85,10 @@ block0(v0: i64, v1: i64, v2: i64):
 }
 
 ; block0:
-;   movz x6, #4100
-;   add x6, x6, x1
-;   add x9, x6, x2
-;   ldr w0, [x9, x0]
+;   movz x5, #4100
+;   add x5, x5, x1
+;   add x8, x5, x2
+;   ldr w0, [x8, x0]
 ;   ret
 
 function %f10() -> i32 {
@@ -112,8 +112,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   add x3, x0, #8388608
-;   ldr w0, [x3]
+;   add x2, x0, #8388608
+;   ldr w0, [x2]
 ;   ret
 
 function %f12(i64) -> i32 {
@@ -125,8 +125,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   sub x3, x0, #4
-;   ldr w0, [x3]
+;   sub x2, x0, #4
+;   ldr w0, [x2]
 ;   ret
 
 function %f13(i64) -> i32 {
@@ -138,10 +138,10 @@ block0(v0: i64):
 }
 
 ; block0:
-;   movz w4, #51712
-;   movk w4, w4, #15258, LSL #16
-;   add x5, x4, x0
-;   ldr w0, [x5]
+;   movz w3, #51712
+;   movk w3, w3, #15258, LSL #16
+;   add x4, x3, x0
+;   ldr w0, [x4]
 ;   ret
 
 function %f14(i32) -> i32 {
