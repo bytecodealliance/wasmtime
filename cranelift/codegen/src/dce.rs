@@ -11,7 +11,7 @@ use crate::ir::Function;
 use crate::timing;
 
 /// Perform DCE on `func`.
-pub fn do_dce(func: &mut Function, domtree: &mut DominatorTree) {
+pub fn do_dce(func: &mut Function, domtree: &DominatorTree) {
     let _tt = timing::dce();
     debug_assert!(domtree.is_valid());
 
