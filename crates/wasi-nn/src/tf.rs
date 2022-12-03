@@ -226,20 +226,28 @@ impl<'a> BackendExecutionContext for TensorflowExecutionContext<'a> {
                 self_.args.add_feed(&operation, 0, t);
             }
             TTF32(t) | TTF16(t) => {
-                for i in 0..t.len() {
-                    let jmp = i * std::mem::size_of::<f32>();
-                    let to_t = [data[jmp], data[jmp + 1], data[jmp + 2], data[jmp + 3]];
-                    t[i] = f32::from_ne_bytes(to_t);
+                if data.len() == t.len() * 4 {
+                    for i in 0..t.len() {
+                        let jmp = i * std::mem::size_of::<f32>();
+                        let to_t = [data[jmp], data[jmp + 1], data[jmp + 2], data[jmp + 3]];
+                        t[i] = f32::from_ne_bytes(to_t);
+                    }
+                    self_.args.add_feed(&operation, 0, t);
+                } else {
+                    return Err(BackendError::WrongTensorSize(t.len() * 4, data.len()));
                 }
-                self_.args.add_feed(&operation, 0, t);
             }
             TTI32(t) => {
-                for i in 0..t.len() {
-                    let jmp = i * std::mem::size_of::<i32>();
-                    let to_t = [data[jmp], data[jmp + 1], data[jmp + 2], data[jmp + 3]];
-                    t[i] = i32::from_ne_bytes(to_t);
+                if data.len() == t.len() * 4 {
+                    for i in 0..t.len() {
+                        let jmp = i * std::mem::size_of::<i32>();
+                        let to_t = [data[jmp], data[jmp + 1], data[jmp + 2], data[jmp + 3]];
+                        t[i] = i32::from_ne_bytes(to_t);
+                    }
+                    self_.args.add_feed(&operation, 0, t);
+                } else {
+                    return Err(BackendError::WrongTensorSize(t.len() * 4, data.len()));
                 }
-                self_.args.add_feed(&operation, 0, t);
             }
         };
         Ok(())

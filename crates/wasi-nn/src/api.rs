@@ -56,4 +56,6 @@ pub enum BackendError {
     InvalidTensorType(usize, String, String),
     #[error("Unsupported output precision")]
     UnsupportedOutputPrecision(),
+    #[error("Provided tensor is the wrong size: {0}, expected {1}")]
+    WrongTensorSize(usize, usize),
 }
