@@ -39,8 +39,8 @@ block0:
 }
 
 ; block0:
-;   lui a0,16
-;   addi a0,a0,4095
+;   lui t1,16
+;   addi a0,t1,4095
 ;   ret
 
 function %f() -> i64 {

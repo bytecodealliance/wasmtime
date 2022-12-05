@@ -10,7 +10,6 @@ use crate::ir::types::{F32, F64, FFLAGS, I128, I16, I32, I64, I8, IFLAGS, R32, R
 
 pub use crate::ir::{ExternalName, MemFlags, Opcode, SourceLoc, Type, ValueLabel};
 use crate::isa::CallConv;
-use crate::machinst::isle::WritableReg;
 use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
 
@@ -194,43 +193,57 @@ impl Inst {
     pub(crate) fn load_imm12(rd: Writable<Reg>, imm: Imm12) -> Inst {
         Inst::AluRRImm12 {
             alu_op: AluOPRRI::Addi,
-            rd: rd,
+            rd,
             rs: zero_reg(),
             imm12: imm,
         }
     }
 
     /// Immediates can be loaded using lui and addi instructions.
-    fn load_const_imm(rd: Writable<Reg>, value: u64) -> Option<SmallInstVec<Inst>> {
+    fn load_const_imm<F: FnMut(Type) -> Writable<Reg>>(
+        rd: Writable<Reg>,
+        value: u64,
+        alloc_tmp: &mut F,
+    ) -> Option<SmallInstVec<Inst>> {
         Inst::generate_imm(value, |imm20, imm12| {
             let mut insts = SmallVec::new();
-            imm20.map(|x| insts.push(Inst::Lui { rd, imm: x }));
-            imm12.map(|x| {
-                let imm20_is_none = imm20.is_none();
-                let rs = if imm20_is_none {
-                    zero_reg()
-                } else {
-                    rd.to_reg()
-                };
+
+            let rs = if let Some(imm) = imm20 {
+                let rd = if imm12.is_some() { alloc_tmp(I64) } else { rd };
+                insts.push(Inst::Lui { rd, imm });
+                rd.to_reg()
+            } else {
+                zero_reg()
+            };
+
+            if let Some(imm12) = imm12 {
                 insts.push(Inst::AluRRImm12 {
                     alu_op: AluOPRRI::Addi,
                     rd,
                     rs,
-                    imm12: x,
+                    imm12,
                 })
-            });
+            }
 
             insts
         })
     }
 
-    pub(crate) fn load_constant_u32(rd: Writable<Reg>, value: u64) -> SmallInstVec<Inst> {
-        let insts = Inst::load_const_imm(rd, value);
+    pub(crate) fn load_constant_u32<F: FnMut(Type) -> Writable<Reg>>(
+        rd: Writable<Reg>,
+        value: u64,
+        alloc_tmp: &mut F,
+    ) -> SmallInstVec<Inst> {
+        let insts = Inst::load_const_imm(rd, value, alloc_tmp);
         insts.unwrap_or(LoadConstant::U32(value as u32).load_constant(rd))
     }
 
-    pub fn load_constant_u64(rd: Writable<Reg>, value: u64) -> SmallInstVec<Inst> {
-        let insts = Inst::load_const_imm(rd, value);
+    pub fn load_constant_u64<F: FnMut(Type) -> Writable<Reg>>(
+        rd: Writable<Reg>,
+        value: u64,
+        alloc_tmp: &mut F,
+    ) -> SmallInstVec<Inst> {
+        let insts = Inst::load_const_imm(rd, value, alloc_tmp);
         insts.unwrap_or(LoadConstant::U64(value).load_constant(rd))
     }
 
@@ -255,13 +268,18 @@ impl Inst {
     }
 
     /// Create instructions that load a 32-bit floating-point constant.
-    pub fn load_fp_constant32(
+    pub fn load_fp_constant32<F: FnMut(Type) -> Writable<Reg>>(
         rd: Writable<Reg>,
         const_data: u32,
-        tmp: Writable<Reg>,
+        mut alloc_tmp: F,
     ) -> SmallVec<[Inst; 4]> {
         let mut insts = SmallVec::new();
-        insts.extend(Self::load_constant_u32(tmp, const_data as u64));
+        let tmp = alloc_tmp(I64);
+        insts.extend(Self::load_constant_u32(
+            tmp,
+            const_data as u64,
+            &mut alloc_tmp,
+        ));
         insts.push(Inst::FpuRR {
             frm: None,
             alu_op: FpuOPRR::move_x_to_f_op(F32),
@@ -272,13 +290,14 @@ impl Inst {
     }
 
     /// Create instructions that load a 64-bit floating-point constant.
-    pub fn load_fp_constant64(
+    pub fn load_fp_constant64<F: FnMut(Type) -> Writable<Reg>>(
         rd: Writable<Reg>,
         const_data: u64,
-        tmp: WritableReg,
+        mut alloc_tmp: F,
     ) -> SmallVec<[Inst; 4]> {
         let mut insts = SmallInstVec::new();
-        insts.extend(Self::load_constant_u64(tmp, const_data));
+        let tmp = alloc_tmp(I64);
+        insts.extend(Self::load_constant_u64(tmp, const_data, &mut alloc_tmp));
         insts.push(Inst::FpuRR {
             frm: None,
             alu_op: FpuOPRR::move_x_to_f_op(F64),
@@ -699,22 +718,31 @@ impl MachInst for Inst {
         mut alloc_tmp: F,
     ) -> SmallVec<[Inst; 4]> {
         if (ty.bits() <= 64 && ty.is_int()) || ty == R32 || ty == R64 {
-            return Inst::load_constant_u64(to_regs.only_reg().unwrap(), value as u64);
+            return Inst::load_constant_u64(
+                to_regs.only_reg().unwrap(),
+                value as u64,
+                &mut alloc_tmp,
+            );
         };
         match ty {
             F32 => {
-                Inst::load_fp_constant32(to_regs.only_reg().unwrap(), value as u32, alloc_tmp(I64))
+                Inst::load_fp_constant32(to_regs.only_reg().unwrap(), value as u32, &mut alloc_tmp)
             }
             F64 => {
-                Inst::load_fp_constant64(to_regs.only_reg().unwrap(), value as u64, alloc_tmp(I64))
+                Inst::load_fp_constant64(to_regs.only_reg().unwrap(), value as u64, &mut alloc_tmp)
             }
             I128 => {
                 let mut insts = SmallInstVec::new();
                 insts.extend(Inst::load_constant_u64(
                     to_regs.regs()[0],
                     (value >> 64) as u64,
+                    &mut alloc_tmp,
                 ));
-                insts.extend(Inst::load_constant_u64(to_regs.regs()[1], value as u64));
+                insts.extend(Inst::load_constant_u64(
+                    to_regs.regs()[1],
+                    value as u64,
+                    &mut alloc_tmp,
+                ));
                 return insts;
             }
             _ => unreachable!("vector type not implemented now."),
