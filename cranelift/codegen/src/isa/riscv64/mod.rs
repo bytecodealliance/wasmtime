@@ -244,13 +244,14 @@ mod test {
         // on it to update:
         // > riscv64-linux-gnu-objdump -b binary -D <file> -m riscv
         //
-        // 0:   000013b7                lui     t2,0x1
-        // 4:   23438393                addi    t2,t2,564 # 0x1234
-        // 8:   0075053b                .4byte  0x75053b
+        // 0:   000015b7                lui     a1,0x1
+        // 4:   23458593                addi    a1,a1,564 # 0x1234
+        // 8:   00b5053b                .4byte  0xb5053b
         // c:   00008067                ret
 
+
         let golden = vec![
-            183, 19, 0, 0, 147, 131, 67, 35, 59, 5, 117, 0, 103, 128, 0, 0,
+            183, 21, 0, 0, 147, 133, 69, 35, 59, 5, 181, 0, 103, 128, 0, 0,
         ];
         assert_eq!(code, &golden[..]);
     }
