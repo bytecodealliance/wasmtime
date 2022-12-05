@@ -50,8 +50,8 @@ block0:
 }
 
 ; block0:
-;   auipc a0,0
-;   ld a0,12(a0)
+;   auipc t1,0
+;   ld a0,12(t1)
 ;   j 12
 ;   .8byte 0xffff0000
 ;   ret
@@ -63,8 +63,8 @@ block0:
 }
 
 ; block0:
-;   auipc a0,0
-;   ld a0,12(a0)
+;   auipc t1,0
+;   ld a0,12(t1)
 ;   j 12
 ;   .8byte 0xffff00000000
 ;   ret
@@ -76,8 +76,8 @@ block0:
 }
 
 ; block0:
-;   auipc a0,0
-;   ld a0,12(a0)
+;   auipc t1,0
+;   ld a0,12(t1)
 ;   j 12
 ;   .8byte 0xffff000000000000
 ;   ret
@@ -109,8 +109,8 @@ block0:
 }
 
 ; block0:
-;   auipc a0,0
-;   ld a0,12(a0)
+;   auipc t1,0
+;   ld a0,12(t1)
 ;   j 12
 ;   .8byte 0xffffffff0000ffff
 ;   ret
@@ -122,8 +122,8 @@ block0:
 }
 
 ; block0:
-;   auipc a0,0
-;   ld a0,12(a0)
+;   auipc t1,0
+;   ld a0,12(t1)
 ;   j 12
 ;   .8byte 0xffff0000ffffffff
 ;   ret
@@ -135,8 +135,8 @@ block0:
 }
 
 ; block0:
-;   auipc a0,0
-;   ld a0,12(a0)
+;   auipc t1,0
+;   ld a0,12(t1)
 ;   j 12
 ;   .8byte 0xffffffffffff
 ;   ret
@@ -148,8 +148,8 @@ block0:
 }
 
 ; block0:
-;   auipc a0,0
-;   ld a0,12(a0)
+;   auipc t1,0
+;   ld a0,12(t1)
 ;   j 12
 ;   .8byte 0xf34bf0a31212003a
 ;   ret
@@ -161,8 +161,8 @@ block0:
 }
 
 ; block0:
-;   auipc a0,0
-;   ld a0,12(a0)
+;   auipc t1,0
+;   ld a0,12(t1)
 ;   j 12
 ;   .8byte 0x12e900001ef40000
 ;   ret
@@ -174,8 +174,8 @@ block0:
 }
 
 ; block0:
-;   auipc a0,0
-;   ld a0,12(a0)
+;   auipc t1,0
+;   ld a0,12(t1)
 ;   j 12
 ;   .8byte 0x12e9ffff1ef4ffff
 ;   ret
@@ -197,8 +197,8 @@ block0:
 }
 
 ; block0:
-;   auipc a0,0
-;   ld a0,12(a0)
+;   auipc t1,0
+;   ld a0,12(t1)
 ;   j 12
 ;   .8byte 0xfffffff7
 ;   ret
@@ -210,8 +210,8 @@ block0:
 }
 
 ; block0:
-;   auipc a0,0
-;   ld a0,12(a0)
+;   auipc t1,0
+;   ld a0,12(t1)
 ;   j 12
 ;   .8byte 0xfffffff7
 ;   ret
@@ -233,11 +233,11 @@ block0:
 }
 
 ; block0:
-;   auipc t1,0
-;   ld t1,12(t1)
+;   auipc t2,0
+;   ld t2,12(t2)
 ;   j 12
 ;   .8byte 0x3ff0000000000000
-;   fmv.d.x fa0,t1
+;   fmv.d.x fa0,t2
 ;   ret
 
 function %f() -> f32 {
@@ -258,11 +258,11 @@ block0:
 }
 
 ; block0:
-;   auipc t1,0
-;   ld t1,12(t1)
+;   auipc t2,0
+;   ld t2,12(t2)
 ;   j 12
 ;   .8byte 0x4049000000000000
-;   fmv.d.x fa0,t1
+;   fmv.d.x fa0,t2
 ;   ret
 
 function %f() -> f32 {
@@ -305,11 +305,11 @@ block0:
 }
 
 ; block0:
-;   auipc t1,0
-;   ld t1,12(t1)
+;   auipc t2,0
+;   ld t2,12(t2)
 ;   j 12
 ;   .8byte 0xc030000000000000
-;   fmv.d.x fa0,t1
+;   fmv.d.x fa0,t2
 ;   ret
 
 function %f() -> f32 {
@@ -319,10 +319,10 @@ block0:
 }
 
 ; block0:
-;   auipc t1,0
-;   lwu t1,12(t1)
+;   auipc t2,0
+;   lwu t2,12(t2)
 ;   j 8
 ;   .4byte 0xc1800000
-;   fmv.w.x fa0,t1
+;   fmv.w.x fa0,t2
 ;   ret
 

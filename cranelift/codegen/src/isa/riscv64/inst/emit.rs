@@ -53,11 +53,16 @@ impl LoadConstant {
         }
     }
 
-    pub(crate) fn load_constant(self, rd: Writable<Reg>) -> SmallInstVec<Inst> {
+    pub(crate) fn load_constant<F: FnMut(Type) -> Writable<Reg>>(
+        self,
+        rd: Writable<Reg>,
+        alloc_tmp: &mut F,
+    ) -> SmallInstVec<Inst> {
         let mut insts = SmallInstVec::new();
         // get current pc.
+        let pc = alloc_tmp(I64);
         insts.push(Inst::Auipc {
-            rd,
+            rd: pc,
             imm: Imm20 { bits: 0 },
         });
         // load
@@ -65,7 +70,7 @@ impl LoadConstant {
             rd,
             op: self.load_op(),
             flags: MemFlags::new(),
-            from: AMode::RegOffset(rd.to_reg(), 12, self.load_ty()),
+            from: AMode::RegOffset(pc.to_reg(), 12, self.load_ty()),
         });
         let data = self.to_le_bytes();
         // jump over.
@@ -78,10 +83,10 @@ impl LoadConstant {
 
     // load and perform an extra add.
     pub(crate) fn load_constant_and_add(self, rd: Writable<Reg>, rs: Reg) -> SmallInstVec<Inst> {
-        let mut insts = self.load_constant(rd);
+        let mut insts = self.load_constant(rd, &mut |_| rd);
         insts.push(Inst::AluRRR {
             alu_op: AluOPRRR::Add,
-            rd: rd,
+            rd,
             rs1: rd.to_reg(),
             rs2: rs,
         });
