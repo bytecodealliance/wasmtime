@@ -1921,6 +1921,13 @@
   (lower_branch (brz v @ (value_type ty) _ _) targets)
   (lower_brz_or_nz (IntCC.Equal) (normalize_cmp_value ty v) targets ty))
 
+;; Special case for SI128 to reify the comparison value and branch on it.
+(rule 2
+  (lower_branch (brz v @ (value_type $I128) _ _) targets)
+  (let ((zero ValueRegs (value_regs (zero_reg) (zero_reg)))
+        (cmp Reg (gen_icmp (IntCC.Equal) v zero $I128)))
+    (lower_brz_or_nz (IntCC.NotEqual) cmp targets $I64)))
+
 (rule 1
   (lower_branch (brz (icmp cc a @ (value_type ty) b) _ _) targets)
   (lower_br_icmp (intcc_inverse cc) a b targets ty))
@@ -1933,6 +1940,13 @@
 (rule 
   (lower_branch (brnz v @ (value_type ty) _ _) targets)
   (lower_brz_or_nz (IntCC.NotEqual) (normalize_cmp_value ty v) targets ty))
+
+;; Special case for SI128 to reify the comparison value and branch on it.
+(rule 2
+  (lower_branch (brnz v @ (value_type $I128) _ _) targets)
+  (let ((zero ValueRegs (value_regs (zero_reg) (zero_reg)))
+        (cmp Reg (gen_icmp (IntCC.NotEqual) v zero $I128)))
+    (lower_brz_or_nz (IntCC.NotEqual) cmp targets $I64)))
 
 (rule 1
   (lower_branch (brnz (icmp cc a @ (value_type ty) b) _ _) targets)
