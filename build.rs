@@ -29,6 +29,7 @@ fn main() -> anyhow::Result<()> {
             test_directory_module(out, "tests/misc_testsuite/threads", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/memory64", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/component-model", strategy)?;
+            test_directory_module(out, "tests/misc_testsuite/function-references", strategy)?;
             Ok(())
         })?;
 
@@ -38,7 +39,11 @@ fn main() -> anyhow::Result<()> {
             // out.
             if spec_tests > 0 {
                 test_directory_module(out, "tests/spec_testsuite/proposals/memory64", strategy)?;
-                test_directory_module(out, "tests/spec_testsuite/proposals/function-references", strategy)?;
+                test_directory_module(
+                    out,
+                    "tests/spec_testsuite/proposals/function-references",
+                    strategy,
+                )?;
             } else {
                 println!(
                     "cargo:warning=The spec testsuite is disabled. To enable, run `git submodule \
