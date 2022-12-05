@@ -293,15 +293,13 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
             tmp.to_reg()
         };
         let len_sub_shamt = {
+            let tmp = self.temp_writable_reg(I64);
+            self.emit(&MInst::load_imm12(tmp, Imm12::from_bits(ty.bits() as i16)));
             let len_sub_shamt = self.temp_writable_reg(I64);
-            self.emit(&MInst::load_imm12(
-                len_sub_shamt,
-                Imm12::from_bits(ty.bits() as i16),
-            ));
             self.emit(&MInst::AluRRR {
                 alu_op: AluOPRRR::Sub,
                 rd: len_sub_shamt,
-                rs1: len_sub_shamt.to_reg(),
+                rs1: tmp.to_reg(),
                 rs2: shamt,
             });
             len_sub_shamt.to_reg()
