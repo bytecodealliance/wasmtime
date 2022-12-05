@@ -195,6 +195,7 @@ pub struct TargetFrontendConfig {
 
     /// The pointer width of the target.
     pub pointer_width: PointerWidth,
+
 }
 
 impl TargetFrontendConfig {

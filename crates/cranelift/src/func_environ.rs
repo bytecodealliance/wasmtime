@@ -5,12 +5,12 @@ use cranelift_codegen::ir::immediates::{Imm64, Offset32, Uimm64};
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{AbiParam, ArgumentPurpose, Function, InstBuilder, Signature};
 use cranelift_codegen::isa::{self, TargetFrontendConfig, TargetIsa};
-use cranelift_entity::EntityRef;
+use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_frontend::Variable;
 use cranelift_wasm::{
-    self, FuncIndex, FuncTranslationState, GlobalIndex, GlobalVariable, MemoryIndex, TableIndex,
-    TargetEnvironment, TypeIndex, WasmError, WasmResult, WasmType,
+    self, FuncIndex, FuncTranslationState, GlobalIndex, GlobalVariable, Heap, HeapData, HeapStyle,
+    MemoryIndex, TableIndex, TargetEnvironment, TypeIndex, WasmError, WasmResult, WasmType,
 };
 use std::convert::TryFrom;
 use std::mem;
@@ -110,6 +110,9 @@ pub struct FuncEnvironment<'module_environment> {
     translation: &'module_environment ModuleTranslation<'module_environment>,
     types: &'module_environment ModuleTypes,
 
+    /// Heaps implementing WebAssembly linear memories.
+    heaps: PrimaryMap<Heap, HeapData>,
+
     /// The Cranelift global holding the vmctx address.
     vmctx: Option<ir::GlobalValue>,
 
@@ -170,6 +173,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             module: &translation.module,
             translation,
             types,
+            heaps: PrimaryMap::default(),
             vmctx: None,
             builtin_function_signatures,
             offsets: VMOffsets::new(isa.pointer_bytes(), &translation.module),
@@ -813,9 +817,17 @@ impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environm
     fn reference_type(&self, ty: WasmType) -> ir::Type {
         crate::reference_type(ty, self.pointer_type())
     }
+
+    fn heap_access_spectre_mitigation(&self) -> bool {
+        self.isa.flags().enable_heap_access_spectre_mitigation()
+    }
 }
 
 impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'module_environment> {
+    fn heaps(&self) -> &PrimaryMap<Heap, HeapData> {
+        &self.heaps
+    }
+
     fn is_wasm_parameter(&self, _signature: &ir::Signature, index: usize) -> bool {
         // The first two parameters are the vmctx and caller vmctx. The rest are
         // the wasm parameters.
@@ -1366,7 +1378,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         Ok(())
     }
 
-    fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> WasmResult<ir::Heap> {
+    fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> WasmResult<Heap> {
         let pointer_type = self.pointer_type();
         let is_shared = self.module.memory_plans[index].memory.shared;
         let (ptr, base_offset, current_length_offset) = {
@@ -1430,8 +1442,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     readonly: false,
                 });
                 (
-                    Uimm64::new(offset_guard_size),
-                    ir::HeapStyle::Dynamic {
+                    offset_guard_size,
+                    HeapStyle::Dynamic {
                         bound_gv: heap_bound,
                     },
                     false,
@@ -1443,9 +1455,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 pre_guard_size: _,
                 memory: _,
             } => (
-                Uimm64::new(offset_guard_size),
-                ir::HeapStyle::Static {
-                    bound: Uimm64::new(u64::from(bound) * u64::from(WASM_PAGE_SIZE)),
+                offset_guard_size,
+                HeapStyle::Static {
+                    bound: u64::from(bound) * u64::from(WASM_PAGE_SIZE),
                 },
                 true,
             ),
@@ -1457,9 +1469,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             global_type: pointer_type,
             readonly: readonly_base,
         });
-        Ok(func.create_heap(ir::HeapData {
+        Ok(self.heaps.push(HeapData {
             base: heap_base,
-            min_size: 0.into(),
+            min_size: 0,
             offset_guard_size,
             style: heap_style,
             index_type: self.memory_index_type(index),
@@ -1686,7 +1698,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         &mut self,
         mut pos: FuncCursor<'_>,
         index: MemoryIndex,
-        _heap: ir::Heap,
+        _heap: Heap,
         val: ir::Value,
     ) -> WasmResult<ir::Value> {
         let func_sig = self
@@ -1712,7 +1724,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         &mut self,
         mut pos: FuncCursor<'_>,
         index: MemoryIndex,
-        _heap: ir::Heap,
+        _heap: Heap,
     ) -> WasmResult<ir::Value> {
         let pointer_type = self.pointer_type();
         let vmctx = self.vmctx(&mut pos.func);
@@ -1788,9 +1800,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         &mut self,
         mut pos: FuncCursor,
         src_index: MemoryIndex,
-        _src_heap: ir::Heap,
+        _src_heap: Heap,
         dst_index: MemoryIndex,
-        _dst_heap: ir::Heap,
+        _dst_heap: Heap,
         dst: ir::Value,
         src: ir::Value,
         len: ir::Value,
@@ -1828,7 +1840,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         &mut self,
         mut pos: FuncCursor,
         memory_index: MemoryIndex,
-        _heap: ir::Heap,
+        _heap: Heap,
         dst: ir::Value,
         val: ir::Value,
         len: ir::Value,
@@ -1854,7 +1866,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         &mut self,
         mut pos: FuncCursor,
         memory_index: MemoryIndex,
-        _heap: ir::Heap,
+        _heap: Heap,
         seg_index: u32,
         dst: ir::Value,
         src: ir::Value,
@@ -1976,7 +1988,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         &mut self,
         mut pos: FuncCursor,
         memory_index: MemoryIndex,
-        _heap: ir::Heap,
+        _heap: Heap,
         addr: ir::Value,
         expected: ir::Value,
         timeout: ir::Value,
@@ -2003,7 +2015,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         &mut self,
         mut pos: FuncCursor,
         memory_index: MemoryIndex,
-        _heap: ir::Heap,
+        _heap: Heap,
         addr: ir::Value,
         count: ir::Value,
     ) -> WasmResult<ir::Value> {

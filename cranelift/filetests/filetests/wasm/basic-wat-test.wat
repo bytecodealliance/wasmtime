@@ -27,15 +27,18 @@
 ;; function u0:0(i32, i32, i64 vmctx) -> i32 fast {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0
-;;     heap0 = static gv1, min 0, bound 4096, offset_guard 0xffff_ffff, index_type i32
 ;;
 ;;                                 block0(v0: i32, v1: i32, v2: i64):
-;; @0021                               v4 = heap_addr.i64 heap0, v0, 0, 4
-;; @0021                               v5 = load.i32 little heap v4
-;; @0026                               v6 = heap_addr.i64 heap0, v1, 0, 4
-;; @0026                               v7 = load.i32 little heap v6
-;; @0029                               v8 = iadd v5, v7
-;; @002a                               jump block1(v8)
+;; @0021                               v4 = uextend.i64 v0
+;; @0021                               v5 = global_value.i64 gv1
+;; @0021                               v6 = iadd v5, v4
+;; @0021                               v7 = load.i32 little heap v6
+;; @0026                               v8 = uextend.i64 v1
+;; @0026                               v9 = global_value.i64 gv1
+;; @0026                               v10 = iadd v9, v8
+;; @0026                               v11 = load.i32 little heap v10
+;; @0029                               v12 = iadd v7, v11
+;; @002a                               jump block1(v12)
 ;;
 ;;                                 block1(v3: i32):
 ;; @002a                               return v3
