@@ -421,8 +421,9 @@ impl Inst {
                 size
             }]
         } else if let Some(imm) = widen_32_bit_pattern(pattern, lane_size) {
+            let tmp = alloc_tmp(types::I64X2);
             let mut insts = smallvec![Inst::VecDupImm {
-                rd,
+                rd: tmp,
                 imm,
                 invert: false,
                 size: VectorSize::Size64x2,
@@ -433,7 +434,7 @@ impl Inst {
             if !size.is_128bits() {
                 insts.push(Inst::FpuExtend {
                     rd,
-                    rn: rd.to_reg(),
+                    rn: tmp.to_reg(),
                     size: ScalarSize::Size64,
                 });
             }
