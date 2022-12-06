@@ -253,6 +253,7 @@ where
             "enable_incremental_compilation_cache_checks",
             "regalloc_checker",
             "enable_llvm_abi_extensions",
+            "use_egraphs",
         ];
         for flag_name in bool_settings {
             let enabled = self
