@@ -140,7 +140,7 @@ impl MachInstEmitState<Inst> for EmitState {
 impl Inst {
     /// construct a "imm - rs".
     pub(crate) fn construct_imm_sub_rs(rd: Writable<Reg>, imm: u64, rs: Reg) -> SmallInstVec<Inst> {
-        let mut insts = Inst::load_constant_u64(rd, imm);
+        let mut insts = Inst::load_constant_u64(rd, imm, &mut |_| rd);
         insts.push(Inst::AluRRR {
             alu_op: AluOPRRR::Sub,
             rd,
@@ -930,7 +930,7 @@ impl MachInstEmit for Inst {
                     .emit(&[], sink, emit_info, state);
                 } else {
                     let tmp = writable_spilltmp_reg();
-                    let mut insts = Inst::load_constant_u64(tmp, amount as u64);
+                    let mut insts = Inst::load_constant_u64(tmp, amount as u64, &mut |_| tmp);
                     insts.push(Inst::AluRRR {
                         alu_op: AluOPRRR::Add,
                         rd: writable_stack_reg(),
@@ -1111,9 +1111,11 @@ impl MachInstEmit for Inst {
             } => {
                 let index = allocs.next(index);
                 // load
-                Inst::load_constant_u32(writable_spilltmp_reg(), targets_len as u64)
-                    .iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+                Inst::load_constant_u32(writable_spilltmp_reg(), targets_len as u64, &mut |_| {
+                    writable_spilltmp_reg()
+                })
+                .iter()
+                .for_each(|i| i.emit(&[], sink, emit_info, state));
                 Inst::CondBr {
                     taken: BranchTarget::offset(Inst::INSTRUCTION_SIZE * 3),
                     not_taken: BranchTarget::zero(),
@@ -1254,7 +1256,7 @@ impl MachInstEmit for Inst {
                 if let Some(offset) = Imm12::maybe_from_u64(offset as u64) {
                     Inst::AluRRImm12 {
                         alu_op: AluOPRRI::Addi,
-                        rd: rd,
+                        rd,
                         rs: base,
                         imm12: offset,
                     }
@@ -1835,17 +1837,13 @@ impl MachInstEmit for Inst {
                     let f32_bounds = f32_cvt_to_int_bounds(is_signed, out_type.bits() as u8);
                     let f64_bounds = f64_cvt_to_int_bounds(is_signed, out_type.bits() as u8);
                     if in_type == F32 {
-                        Inst::load_fp_constant32(
-                            tmp,
-                            f32_bits(f32_bounds.0),
-                            writable_spilltmp_reg(),
-                        )
+                        Inst::load_fp_constant32(tmp, f32_bits(f32_bounds.0), |_| {
+                            writable_spilltmp_reg()
+                        })
                     } else {
-                        Inst::load_fp_constant64(
-                            tmp,
-                            f64_bits(f64_bounds.0),
-                            writable_spilltmp_reg(),
-                        )
+                        Inst::load_fp_constant64(tmp, f64_bits(f64_bounds.0), |_| {
+                            writable_spilltmp_reg()
+                        })
                     }
                     .iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
@@ -1859,17 +1857,13 @@ impl MachInstEmit for Inst {
                     }
                     .emit(&[], sink, emit_info, state);
                     if in_type == F32 {
-                        Inst::load_fp_constant32(
-                            tmp,
-                            f32_bits(f32_bounds.1),
-                            writable_spilltmp_reg(),
-                        )
+                        Inst::load_fp_constant32(tmp, f32_bits(f32_bounds.1), |_| {
+                            writable_spilltmp_reg()
+                        })
                     } else {
-                        Inst::load_fp_constant64(
-                            tmp,
-                            f64_bits(f64_bounds.1),
-                            writable_spilltmp_reg(),
-                        )
+                        Inst::load_fp_constant64(tmp, f64_bits(f64_bounds.1), |_| {
+                            writable_spilltmp_reg()
+                        })
                     }
                     .iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
@@ -2160,17 +2154,13 @@ impl MachInstEmit for Inst {
                 }
                 // load max value need to round.
                 if ty == F32 {
-                    Inst::load_fp_constant32(
-                        f_tmp,
-                        max_value_need_round(ty) as u32,
-                        writable_spilltmp_reg(),
-                    )
+                    Inst::load_fp_constant32(f_tmp, max_value_need_round(ty) as u32, &mut |_| {
+                        writable_spilltmp_reg()
+                    })
                 } else {
-                    Inst::load_fp_constant64(
-                        f_tmp,
-                        max_value_need_round(ty),
-                        writable_spilltmp_reg(),
-                    )
+                    Inst::load_fp_constant64(f_tmp, max_value_need_round(ty), &mut |_| {
+                        writable_spilltmp_reg()
+                    })
                 }
                 .into_iter()
                 .for_each(|i| i.emit(&[], sink, emit_info, state));
@@ -2843,10 +2833,14 @@ impl MachInstEmit for Inst {
                 tmp: guard_size_tmp,
             } => {
                 let step = writable_spilltmp_reg();
-                Inst::load_constant_u64(step, (guard_size as u64) * (probe_count as u64))
-                    .iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
-                Inst::load_constant_u64(guard_size_tmp, guard_size as u64)
+                Inst::load_constant_u64(
+                    step,
+                    (guard_size as u64) * (probe_count as u64),
+                    &mut |_| step,
+                )
+                .iter()
+                .for_each(|i| i.emit(&[], sink, emit_info, state));
+                Inst::load_constant_u64(guard_size_tmp, guard_size as u64, &mut |_| guard_size_tmp)
                     .iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
 

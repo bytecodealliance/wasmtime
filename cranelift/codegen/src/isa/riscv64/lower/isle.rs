@@ -198,7 +198,8 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
 
     fn imm(&mut self, ty: Type, val: u64) -> Reg {
         let tmp = self.temp_writable_reg(ty);
-        self.emit_list(&MInst::load_constant_u64(tmp, val));
+        let insts = &MInst::load_constant_u64(tmp, val, &mut |ty| self.temp_writable_reg(ty));
+        self.emit_list(insts);
         tmp.to_reg()
     }
     #[inline]
@@ -249,7 +250,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
     }
     fn load_u64_constant(&mut self, val: u64) -> Reg {
         let rd = self.temp_writable_reg(I64);
-        MInst::load_constant_u64(rd, val)
+        MInst::load_constant_u64(rd, val, &mut |ty| self.temp_writable_reg(ty))
             .iter()
             .for_each(|i| self.emit(i));
         rd.to_reg()
@@ -439,7 +440,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         self.emit(&MInst::BrTableCheck {
             index,
             targets_len: targets.len() as i32,
-            default_: default_,
+            default_,
         });
         self.emit(&MInst::BrTable {
             index,

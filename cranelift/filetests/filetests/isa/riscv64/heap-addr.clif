@@ -74,13 +74,13 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   uext.w a6,a1
-;   add a7,a0,a6
-;   addi a7,a7,16
-;   lui a4,16
-;   addi a4,a4,4072
-;   ugt t3,a6,a4##ty=i64
-;   li t4,0
-;   selectif_spectre_guard a0,t4,a7##test=t3
+;   uext.w a7,a1
+;   add t3,a0,a7
+;   addi t3,t3,16
+;   lui a5,16
+;   addi a5,a5,4072
+;   ugt t4,a7,a5##ty=i64
+;   li t0,0
+;   selectif_spectre_guard a0,t0,t3##test=t4
 ;   ret
 
