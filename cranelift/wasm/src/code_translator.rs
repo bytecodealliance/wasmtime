@@ -2053,8 +2053,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             canonicalise_then_brz(builder, is_null, br_destination, inputs);
             // In the null case, pop the ref
             state.pop1();
-            // It seems that we're required to create an unconditional jump for
-            // the non-br case, based on the example of BrIf, but i'm not sure why
             let next_block = builder.create_block();
             canonicalise_then_jump(builder, next_block, &[]);
             builder.seal_block(next_block); // The only predecessor is the current block.

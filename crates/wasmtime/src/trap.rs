@@ -88,7 +88,9 @@ pub enum TrapCode {
     /// Execution has potentially run too long and may be interrupted.
     Interrupt,
 
-    /// Okay why is this defined three times i am losing my mind
+    /// Used for ref.as_non_null; a reference which was asserted by the
+    /// program to be non-null was null. Not used for call_ref, which uses
+    /// IndirectCallToNull.
     NullReference,
 
     /// When the `component-model` feature is enabled this trap represents a
