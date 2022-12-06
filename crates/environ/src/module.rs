@@ -428,7 +428,12 @@ impl ModuleTranslation<'_> {
 
             // If this is not a funcref table, then we can't support a
             // pre-computed table of function indices.
-            if self.module.table_plans[segment.table_index].table.wasm_ty.heap_type == WasmHeapType::Func {
+            if self.module.table_plans[segment.table_index]
+                .table
+                .wasm_ty
+                .heap_type
+                != WasmHeapType::Func
+            {
                 leftovers.push(segment.clone());
                 continue;
             }
