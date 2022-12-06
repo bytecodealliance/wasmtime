@@ -23,15 +23,17 @@ fi
 source /opt/intel/openvino_2022/setupvars.sh
 
 # Build Wasmtime with wasi-nn enabled; we attempt this first to avoid extra work if the build fails.
-OPENVINO_INSTALL_DIR=/opt/intel/openvino_2022 cargo build -p wasmtime-cli --features wasi-nn
+OPENVINO_INSTALL_DIR=/opt/intel/openvino_2022 cargo build -p wasmtime-cli
 
 # Download all necessary test fixtures to the temporary directory.
 wget --no-clobber $FIXTURE/mobilenet.bin --output-document=$TMP_DIR/model.bin
 wget --no-clobber $FIXTURE/mobilenet.xml --output-document=$TMP_DIR/model.xml
-wget --no-clobber $FIXTURE/tensor-1x224x224x3-f32.bgr --output-document=$TMP_DIR/tensor.bgr
+export BACKEND="openvino"
+export MAPDIR="fixture"
 
 # Now build an example that uses the wasi-nn API.
 pushd $WASMTIME_DIR/crates/wasi-nn/examples/classification-example
+cp src/train.jpg $TMP_DIR/train.jpg
 cargo build --release --target=wasm32-wasi
 cp target/wasm32-wasi/release/wasi-nn-example.wasm $TMP_DIR
 popd

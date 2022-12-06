@@ -66,6 +66,16 @@ criteria = "safe-to-deploy"
 version = "3.11.1"
 notes = "I am the author of this crate."
 
+[[audits.bzip2]]
+who = "Brian Jones <brian.j.jones@intel.com>"
+criteria = "safe-to-deploy"
+version = "0.4.3"
+
+[[audits.bzip2-sys]]
+who = "Brian Jones <brian.j.jones@intel.com>"
+criteria = "safe-to-deploy"
+version = "0.1.11+1.0.8"
+
 [[audits.cap-fs-ext]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
@@ -167,6 +177,16 @@ criteria = "safe-to-deploy"
 version = "0.11.1"
 notes = "This library uses `forbid(unsafe_code)` and has no filesystem or network I/O."
 
+[[audits.crc]]
+who = "Brian Jones <brian.j.jones@intel.com>"
+criteria = "safe-to-deploy"
+version = "3.0.0"
+
+[[audits.crc-catalog]]
+who = "Brian Jones <brian.j.jones@intel.com>"
+criteria = "safe-to-deploy"
+version = "2.1.0"
+
 [[audits.criterion]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-run"
@@ -185,10 +205,25 @@ No major changes in this update, it was almost entirely stylistic with what
 appears to be a few clippy fixes here and there.
 """
 
+[[audits.crunchy]]
+who = "Brian Jones <brian.j.jones@intel.com>"
+criteria = "safe-to-deploy"
+version = "0.2.2"
+
 [[audits.crypto-common]]
 who = "Benjamin Bouvier <public@benj.me>"
 criteria = "safe-to-deploy"
 version = "0.1.3"
+
+[[audits.curl]]
+who = "Brian Jones <brian.j.jones@intel.com>"
+criteria = "safe-to-deploy"
+version = "0.4.44"
+
+[[audits.curl-sys]]
+who = "Brian Jones <brian.j.jones@intel.com>"
+criteria = "safe-to-deploy"
+version = "0.4.56+curl-7.83.1"
 
 [[audits.derive_arbitrary]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
@@ -217,6 +252,16 @@ are only created when requested by the application, however, and otherwise
 only does its stated purpose.
 """
 
+[[audits.filetime]]
+who = "Brian Jones <brian.j.jones@intel.com>"
+criteria = "safe-to-deploy"
+version = "0.2.16"
+
+[[audits.flate2]]
+who = "Brian Jones <brian.j.jones@intel.com>"
+criteria = "safe-to-deploy"
+version = "1.0.24"
+
 [[audits.form_urlencoded]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -232,6 +277,16 @@ who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 version = "0.18.0"
 notes = "I am the author of this crate."
+
+[[audits.half]]
+who = "Brian Jones <brian.j.jones@intel.com>"
+criteria = "safe-to-deploy"
+version = "1.8.2"
+
+[[audits.half]]
+who = "Brian Jones <brian.j.jones@intel.com>"
+criteria = "safe-to-deploy"
+version = "2.1.0"
 
 [[audits.heck]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -318,6 +373,11 @@ but also contains some other minor fixes as well. Everything looks A-OK and
 as expected.
 """
 
+[[audits.libz-sys]]
+who = "Brian Jones <brian.j.jones@intel.com>"
+criteria = "safe-to-deploy"
+version = "1.1.8"
+
 [[audits.linux-raw-sys]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
@@ -351,6 +411,21 @@ notes = """
 This bump only changed from a function to an associated `const` and trivially
 contains no significant changes.
 """
+
+[[audits.num-complex]]
+who = "Brian Jones <brian.j.jones@intel.com>"
+criteria = "safe-to-deploy"
+version = "0.4.2"
+
+[[audits.openssl-probe]]
+who = "Brian Jones <brian.j.jones@intel.com>"
+criteria = "safe-to-deploy"
+version = "0.1.5"
+
+[[audits.openssl-sys]]
+who = "Brian Jones <brian.j.jones@intel.com>"
+criteria = "safe-to-deploy"
+version = "0.9.75"
 
 [[audits.openvino]]
 who = "Matthew Tamayo-Rios <matthew@geekbeast.com>"
@@ -392,6 +467,16 @@ a few `unsafe` blocks related to utf-8 validation which are locally verifiable
 as correct and otherwise this crate is good to go.
 """
 
+[[audits.pkg-config]]
+who = "Brian Jones <brian.j.jones@intel.com>"
+criteria = "safe-to-deploy"
+version = "0.3.25"
+
+[[audits.protobuf]]
+who = "Brian Jones <brian.j.jones@intel.com>"
+criteria = "safe-to-deploy"
+version = "2.27.1"
+
 [[audits.regalloc2]]
 who = "Jamey Sharp <jsharp@fastly.com>"
 criteria = "safe-to-deploy"
@@ -428,11 +513,26 @@ criteria = "safe-to-deploy"
 version = "0.1.21"
 notes = "I am the author of this crate."
 
+[[audits.rustversion]]
+who = "Brian Jones <brian.j.jones@intel.com>"
+criteria = "safe-to-deploy"
+version = "1.0.9"
+
 [[audits.rustix]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 version = "0.36.4"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.schannel]]
+who = "Brian Jones <brian.j.jones@intel.com>"
+criteria = "safe-to-deploy"
+version = "0.1.20"
+
+[[audits.semver]]
+who = "Brian Jones <brian.j.jones@intel.com>"
+criteria = "safe-to-deploy"
+version = "1.0.9"
 
 [[audits.sha2]]
 who = "Benjamin Bouvier <public@benj.me>"
@@ -463,6 +563,31 @@ who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 version = "0.25.0"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.tar]]
+who = "Brian Jones <brian.j.jones@intel.com>"
+criteria = "safe-to-deploy"
+version = "0.4.38"
+
+[[audits.tensorflow]]
+who = "Brian Jones <brian.j.jones@intel.com>"
+criteria = "safe-to-deploy"
+version = "0.19.0"
+
+[[audits.tensorflow-internal-macros]]
+who = "Brian Jones <brian.j.jones@intel.com>"
+criteria = "safe-to-deploy"
+version = "0.0.3"
+
+[[audits.tensorflow-sys]]
+who = "Brian Jones <brian.j.jones@intel.com>"
+criteria = "safe-to-deploy"
+version = "0.22.0"
+
+[[audits.time]]
+who = "Brian Jones <brian.j.jones@intel.com>"
+criteria = "safe-to-deploy"
+version = "0.1.43"
 
 [[audits.tinyvec]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -517,6 +642,11 @@ and suss out bugs. I've historically reviewed this crate in the past and it
 is similar to what it once was back then. Skimming over the crate there is
 nothing suspicious and it's everything you'd expect a Rust URL parser to be.
 """
+
+[[audits.vcpkg]]
+who = "Brian Jones <brian.j.jones@intel.com>"
+criteria = "safe-to-deploy"
+version = "0.2.15"
 
 [[audits.wasm-encoder]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -912,6 +1042,10 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "1.0.48 -> 1.0.49"
 notes = "The Bytecode Alliance is the author of this crate."
+[[audits.xattr]]
+who = "Brian Jones <brian.j.jones@intel.com>"
+criteria = "safe-to-deploy"
+version = "0.2.3"
 
 [[audits.windows-sys]]
 who = "Dan Gohman <dev@sunfishcode.online>"
@@ -967,3 +1101,7 @@ criteria = "safe-to-deploy"
 version = "0.34.0"
 notes = "I am the author of this crate."
 
+[[audits.zip]]
+who = "Brian Jones <brian.j.jones@intel.com>"
+criteria = "safe-to-deploy"
+version = "0.5.13"

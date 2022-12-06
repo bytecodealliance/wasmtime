@@ -192,6 +192,12 @@ impl RunCommand {
             preopen_sockets,
         )?;
 
+        // Save the mapped directories so they can be read later from wasi-nn
+        if store.data_mut().wasi_nn.is_some() {
+            let wasinn = store.data_mut().wasi_nn.as_mut().unwrap();
+            wasinn.set_paths(&self.map_dirs);
+        }
+
         // Load the preload wasm modules.
         for (name, path) in self.preloads.iter() {
             // Read the wasm module binary either as `*.wat` or a raw binary

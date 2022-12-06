@@ -16,6 +16,7 @@ impl Backend for OpenvinoBackend {
         &mut self,
         builders: &GraphBuilderArray<'_>,
         target: ExecutionTarget,
+        _map_dirs: &Vec<(String, String)>,
     ) -> Result<Box<dyn BackendGraph>, BackendError> {
         if builders.len() != 2 {
             return Err(BackendError::InvalidNumberOfBuilders(2, builders.len()).into());

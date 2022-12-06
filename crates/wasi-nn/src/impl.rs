@@ -32,23 +32,23 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
         target: ExecutionTarget,
     ) -> Result<Graph> {
         let encoding_id: u8 = encoding.into();
-        let graph = if let Some(backend) = self.backends.get_mut(&encoding_id) {
-            backend.load(builders, target)?
+        let graph = if let Some(backend) = self.ctx.borrow_mut().backends.get_mut(&encoding_id) {
+            backend.load(builders, target, &self.map_dirs)?
         } else {
             return Err(UsageError::InvalidEncoding(encoding).into());
         };
-        let graph_id = self.graphs.insert(graph);
+        let graph_id = self.ctx.borrow_mut().graphs.insert(graph);
         Ok(graph_id)
     }
 
     fn init_execution_context(&mut self, graph_id: Graph) -> Result<GraphExecutionContext> {
-        let exec_context = if let Some(graph) = self.graphs.get_mut(graph_id) {
+        let exec_context = if let Some(graph) = self.ctx.borrow_mut().graphs.get_mut(graph_id) {
             graph.init_execution_context()?
         } else {
             return Err(UsageError::InvalidGraphHandle.into());
         };
 
-        let exec_context_id = self.executions.insert(exec_context);
+        let exec_context_id = self.ctx.borrow_mut().executions.insert(exec_context);
         Ok(exec_context_id)
     }
 
@@ -58,7 +58,7 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
         index: u32,
         tensor: &Tensor<'b>,
     ) -> Result<()> {
-        if let Some(exec_context) = self.executions.get_mut(exec_context_id) {
+        if let Some(exec_context) = self.ctx.borrow_mut().executions.get_mut(exec_context_id) {
             Ok(exec_context.set_input(index, tensor)?)
         } else {
             Err(UsageError::InvalidGraphHandle.into())
@@ -66,7 +66,7 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
     }
 
     fn compute(&mut self, exec_context_id: GraphExecutionContext) -> Result<()> {
-        if let Some(exec_context) = self.executions.get_mut(exec_context_id) {
+        if let Some(exec_context) = self.ctx.borrow_mut().executions.get_mut(exec_context_id) {
             Ok(exec_context.compute()?)
         } else {
             Err(UsageError::InvalidExecutionContextHandle.into())
@@ -80,7 +80,7 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
         out_buffer: &GuestPtr<'_, u8>,
         out_buffer_max_size: u32,
     ) -> Result<u32> {
-        if let Some(exec_context) = self.executions.get_mut(exec_context_id) {
+        if let Some(exec_context) = self.ctx.borrow_mut().executions.get_mut(exec_context_id) {
             let mut destination = out_buffer
                 .as_array(out_buffer_max_size)
                 .as_slice_mut()?
