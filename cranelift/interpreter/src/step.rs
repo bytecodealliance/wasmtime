@@ -6,7 +6,6 @@ use crate::state::{MemoryError, State};
 use crate::value::{Value, ValueConversionKind, ValueError, ValueResult};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
-use cranelift_codegen::ir::immediates::HeapImmData;
 use cranelift_codegen::ir::{
     types, AbiParam, Block, ExternalName, FuncRef, Function, InstructionData, Opcode, TrapCode,
     Type, Value as ValueRef,
@@ -485,89 +484,6 @@ where
         }
         Opcode::SymbolValue => unimplemented!("SymbolValue"),
         Opcode::TlsValue => unimplemented!("TlsValue"),
-        Opcode::HeapLoad => {
-            if let InstructionData::HeapLoad { heap_imm, arg, .. } = inst {
-                let HeapImmData {
-                    flags,
-                    heap,
-                    offset,
-                } = state.get_current_function().dfg.heap_imms[heap_imm];
-                let offset = i128::from(u32::from(offset));
-                let addr_ty = state.get_current_function().dfg.value_type(arg);
-                let index = state.get_value(arg).unwrap().into_int().unwrap();
-                let load_ty = inst_context.controlling_type().unwrap();
-                let load_size = i128::from(load_ty.bytes());
-                assign_or_memtrap(AddressSize::try_from(addr_ty).and_then(|addr_size| {
-                    let heap_address = index.saturating_add(offset).saturating_add(load_size);
-                    let heap_address =
-                        u64::try_from(heap_address).map_err(|e| MemoryError::OutOfBoundsLoad {
-                            addr: Address::try_from(0).unwrap(),
-                            load_size: load_size as usize,
-                        })?;
-                    let address = state.heap_address(addr_size, heap, heap_address)?;
-                    state.checked_load(address, load_ty)
-                }))
-            } else {
-                unreachable!()
-            }
-        }
-        Opcode::HeapStore => {
-            if let InstructionData::HeapStore { heap_imm, args, .. } = inst {
-                let HeapImmData {
-                    flags,
-                    heap,
-                    offset,
-                } = state.get_current_function().dfg.heap_imms[heap_imm];
-                let offset = i128::from(u32::from(offset));
-                let addr_ty = state.get_current_function().dfg.value_type(args[0]);
-                let index = state.get_value(args[0]).unwrap().into_int().unwrap();
-                let value = state.get_value(args[1]).unwrap();
-                let store_ty = state.get_current_function().dfg.value_type(args[1]);
-                let store_size = i128::from(store_ty.bytes());
-                continue_or_memtrap(AddressSize::try_from(addr_ty).and_then(|addr_size| {
-                    let heap_address = index.saturating_add(offset).saturating_add(store_size);
-                    let heap_address =
-                        u64::try_from(heap_address).map_err(|e| MemoryError::OutOfBoundsStore {
-                            addr: Address::try_from(0).unwrap(),
-                            store_size: store_size as usize,
-                        })?;
-                    let address = state.heap_address(addr_size, heap, heap_address)?;
-                    state.checked_store(address, value)
-                }))
-            } else {
-                unreachable!()
-            }
-        }
-        Opcode::HeapAddr => {
-            if let InstructionData::HeapAddr {
-                heap,
-                offset: imm_offset,
-                size,
-                ..
-            } = inst
-            {
-                let addr_ty = inst_context.controlling_type().unwrap();
-                let dyn_offset = arg(0)?.into_int()? as u64;
-                assign_or_memtrap({
-                    AddressSize::try_from(addr_ty).and_then(|addr_size| {
-                        // Attempt to build an address at the maximum possible offset
-                        // for this load. If address generation fails we know it's out of bounds.
-                        let bound_offset =
-                            (dyn_offset + u64::from(u32::from(imm_offset)) + u64::from(size))
-                                .saturating_sub(1);
-                        state.heap_address(addr_size, heap, bound_offset)?;
-
-                        // Build the actual address
-                        let mut addr = state.heap_address(addr_size, heap, dyn_offset)?;
-                        addr.offset += u64::from(u32::from(imm_offset));
-                        let dv = DataValue::try_from(addr)?;
-                        Ok(dv.into())
-                    })
-                })
-            } else {
-                unreachable!()
-            }
-        }
         Opcode::GetPinnedReg => assign(state.get_pinned_reg()),
         Opcode::SetPinnedReg => {
             let arg0 = arg(0)?;

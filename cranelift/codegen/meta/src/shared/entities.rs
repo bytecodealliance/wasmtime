@@ -35,9 +35,6 @@ pub(crate) struct EntityRefs {
     /// A reference to a jump table declared in the function preamble.
     pub(crate) jump_table: OperandKind,
 
-    /// A reference to a heap declared in the function preamble.
-    pub(crate) heap: OperandKind,
-
     /// A reference to a table declared in the function preamble.
     pub(crate) table: OperandKind,
 
@@ -68,8 +65,6 @@ impl EntityRefs {
             func_ref: new("func_ref", "ir::FuncRef", "An external function."),
 
             jump_table: new("table", "ir::JumpTable", "A jump table."),
-
-            heap: new("heap", "ir::Heap", "A heap."),
 
             table: new("table", "ir::Table", "A table."),
 

@@ -63,7 +63,6 @@ use crate::entity::SparseSet;
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::ir;
 use crate::ir::entities::AnyEntity;
-use crate::ir::immediates::HeapImmData;
 use crate::ir::instructions::{BranchInfo, CallInfo, InstructionFormat, ResolvedConstraint};
 use crate::ir::{
     types, ArgumentPurpose, Block, Constant, DynamicStackSlot, FuncRef, Function, GlobalValue,
@@ -676,13 +675,6 @@ impl<'a> Verifier<'a> {
             UnaryGlobalValue { global_value, .. } => {
                 self.verify_global_value(inst, global_value, errors)?;
             }
-            HeapLoad { heap_imm, .. } | HeapStore { heap_imm, .. } => {
-                let HeapImmData { heap, .. } = self.func.dfg.heap_imms[heap_imm];
-                self.verify_heap(inst, heap, errors)?;
-            }
-            HeapAddr { heap, .. } => {
-                self.verify_heap(inst, heap, errors)?;
-            }
             TableAddr { table, .. } => {
                 self.verify_table(inst, table, errors)?;
             }
@@ -873,19 +865,6 @@ impl<'a> Verifier<'a> {
                 self.context(inst),
                 format!("invalid global value {}", gv),
             ))
-        } else {
-            Ok(())
-        }
-    }
-
-    fn verify_heap(
-        &self,
-        inst: Inst,
-        heap: ir::Heap,
-        errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
-        if !self.func.heaps.is_valid(heap) {
-            errors.nonfatal((inst, self.context(inst), format!("invalid heap {}", heap)))
         } else {
             Ok(())
         }
@@ -1555,20 +1534,6 @@ impl<'a> Verifier<'a> {
                         }
                     }
                     _ => {}
-                }
-            }
-            ir::InstructionData::HeapAddr { heap, arg, .. } => {
-                let index_type = self.func.dfg.value_type(arg);
-                let heap_index_type = self.func.heaps[heap].index_type;
-                if index_type != heap_index_type {
-                    return errors.nonfatal((
-                        inst,
-                        self.context(inst),
-                        format!(
-                            "index type {} differs from heap index type {}",
-                            index_type, heap_index_type,
-                        ),
-                    ));
                 }
             }
             ir::InstructionData::TableAddr { table, arg, .. } => {
