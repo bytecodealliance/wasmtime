@@ -35,9 +35,9 @@ struct LoopData {
 
 /// A level in a loop nest.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct LoopLevel(u32);
+pub struct LoopLevel(u8);
 impl LoopLevel {
-    const INVALID: u32 = u32::MAX;
+    const INVALID: u8 = u8::MAX;
 
     /// Get the root level (no loop).
     pub fn root() -> Self {
@@ -62,7 +62,7 @@ impl LoopLevel {
     /// A clamped loop level from a larger-width (usize) depth.
     pub fn clamped(level: usize) -> Self {
         Self(
-            u32::try_from(std::cmp::min(level, (Self::INVALID as usize) - 1))
+            u8::try_from(std::cmp::min(level, (Self::INVALID as usize) - 1))
                 .expect("Clamped value must always convert"),
         )
     }

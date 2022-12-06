@@ -485,7 +485,34 @@ impl<'a> EgraphPass<'a> {
             &mut self.stats,
         );
         elaborator.elaborate();
+
+        self.check_post_egraph();
     }
+
+    #[cfg(debug_assertions)]
+    fn check_post_egraph(&self) {
+        // Verify that no union nodes are reachable from inst args,
+        // and that all inst args' defining instructions are in the
+        // layout.
+        for block in self.func.layout.blocks() {
+            for inst in self.func.layout.block_insts(block) {
+                for &arg in self.func.dfg.inst_args(inst) {
+                    match self.func.dfg.value_def(arg) {
+                        ValueDef::Result(i, _) => {
+                            debug_assert!(self.func.layout.inst_block(i).is_some());
+                        }
+                        ValueDef::Union(..) => {
+                            panic!("egraph union node {} still reachable at {}!", arg, inst);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(not(debug_assertions))]
+    fn check_post_egraph(&self) {}
 }
 
 /// Implementation of external-context equality and hashing on
