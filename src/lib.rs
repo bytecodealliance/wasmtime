@@ -1,14 +1,17 @@
 #![allow(unused_variables)] // TODO: remove this when more things are implemented
 
 use crate::bindings::{
-    wasi_clocks, wasi_default_clocks, wasi_filesystem, wasi_logging, wasi_random,
+    wasi_clocks, wasi_default_clocks, wasi_filesystem, wasi_logging, wasi_poll, wasi_random,
+    wasi_tcp,
 };
 use core::arch::wasm32::unreachable;
 use core::cell::{Cell, RefCell, UnsafeCell};
-use core::mem::{forget, size_of, MaybeUninit};
+use core::ffi::c_void;
+use core::mem::{self, forget, size_of, MaybeUninit};
 use core::ptr::{self, copy_nonoverlapping, null_mut};
 use core::slice;
 use wasi::*;
+use wasi_poll::WasiFuture;
 
 mod bindings {
     wit_bindgen_guest_rust::generate!({
@@ -63,6 +66,14 @@ macro_rules! assert_eq {
     ($left:expr, $right:expr $(,)?) => {
         assert!($left == $right);
     };
+}
+
+fn unwrap<T>(maybe: Option<T>) -> T {
+    if let Some(value) = maybe {
+        value
+    } else {
+        unreachable()
+    }
 }
 
 #[no_mangle]
@@ -351,6 +362,8 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
             });
             Ok(())
         }
+        // TODO: Handle socket case here once `wasi-tcp` has been fleshed out
+        Descriptor::Socket(_) => unreachable(),
         Descriptor::Closed => Err(ERRNO_BADF),
     })
 }
@@ -556,6 +569,8 @@ pub unsafe extern "C" fn fd_pwrite(
             *nwritten = len;
             Ok(())
         }
+        // TODO: Handle socket case here once `wasi-tcp` has been fleshed out
+        Descriptor::Socket(_) => unreachable(),
         Descriptor::Closed => Err(ERRNO_BADF),
     })
 }
@@ -718,6 +733,8 @@ pub unsafe extern "C" fn fd_write(
             *nwritten = len;
             Ok(())
         }
+        // TODO: Handle socket case here once `wasi-tcp` has been fleshed out
+        Descriptor::Socket(_) => unreachable(),
         Descriptor::Closed => Err(ERRNO_BADF),
     })
 }
@@ -988,6 +1005,44 @@ pub unsafe extern "C" fn path_unlink_file(fd: Fd, path_ptr: *const u8, path_len:
     })
 }
 
+struct Futures {
+    pointer: *mut WasiFuture,
+    index: usize,
+    length: usize,
+}
+
+impl Futures {
+    unsafe fn push(&mut self, future: WasiFuture) {
+        assert!(self.index < self.length);
+        *self.pointer.add(self.index) = future;
+        self.index += 1;
+    }
+}
+
+impl Drop for Futures {
+    fn drop(&mut self) {
+        for i in 0..self.index {
+            wasi_poll::drop_future(unsafe { *self.pointer.add(i) })
+        }
+    }
+}
+
+impl From<wasi_tcp::Error> for Errno {
+    fn from(error: wasi_tcp::Error) -> Errno {
+        use wasi_tcp::Error::*;
+
+        match error {
+            ConnectionAborted => black_box(ERRNO_CONNABORTED),
+            ConnectionRefused => ERRNO_CONNREFUSED,
+            ConnectionReset => ERRNO_CONNRESET,
+            HostUnreachable => ERRNO_HOSTUNREACH,
+            NetworkDown => ERRNO_NETDOWN,
+            NetworkUnreachable => ERRNO_NETUNREACH,
+            Timeout => ERRNO_TIMEDOUT,
+        }
+    }
+}
+
 /// Concurrently poll for the occurrence of a set of events.
 #[no_mangle]
 pub unsafe extern "C" fn poll_oneoff(
@@ -996,7 +1051,161 @@ pub unsafe extern "C" fn poll_oneoff(
     nsubscriptions: Size,
     nevents: *mut Size,
 ) -> Errno {
-    unreachable()
+    *nevents = 0;
+
+    let subscriptions = slice::from_raw_parts(r#in, nsubscriptions);
+
+    // We're going to split the `nevents` buffer into two non-overlapping buffers: one to store the future handles,
+    // and the other to store the bool results.
+    //
+    // First, we assert that this is possible:
+    assert!(mem::align_of::<Event>() >= mem::align_of::<WasiFuture>());
+    assert!(mem::align_of::<WasiFuture>() >= mem::align_of::<u8>());
+    assert!(
+        unwrap(nsubscriptions.checked_mul(mem::size_of::<Event>()))
+            > unwrap(
+                unwrap(nsubscriptions.checked_mul(mem::size_of::<WasiFuture>()))
+                    .checked_add(unwrap(nsubscriptions.checked_mul(mem::size_of::<u8>())))
+            )
+    );
+
+    let futures = out as *mut c_void as *mut WasiFuture;
+    let results = futures.add(nsubscriptions) as *mut c_void as *mut u8;
+
+    State::with(|state| {
+        state.register_buffer(
+            results,
+            unwrap(nsubscriptions.checked_mul(mem::size_of::<bool>())),
+        );
+
+        let mut futures = Futures {
+            pointer: futures,
+            index: 0,
+            length: nsubscriptions,
+        };
+
+        for subscription in subscriptions {
+            futures.push(match subscription.u.tag {
+                0 => {
+                    let clock = &subscription.u.u.clock;
+                    let absolute = (clock.flags & SUBCLOCKFLAGS_SUBSCRIPTION_CLOCK_ABSTIME) == 0;
+                    match clock.id {
+                        CLOCKID_REALTIME => wasi_clocks::subscribe_wall_clock(
+                            wasi_clocks::Datetime {
+                                seconds: unwrap((clock.timeout / 1_000_000_000).try_into().ok()),
+                                nanoseconds: unwrap(
+                                    (clock.timeout % 1_000_000_000).try_into().ok(),
+                                ),
+                            },
+                            absolute,
+                        ),
+
+                        CLOCKID_MONOTONIC => {
+                            wasi_clocks::subscribe_monotonic_clock(clock.timeout, absolute)
+                        }
+
+                        _ => return Err(ERRNO_INVAL),
+                    }
+                }
+
+                1 => wasi_tcp::subscribe_read(
+                    state.get_socket(subscription.u.u.fd_read.file_descriptor)?,
+                ),
+
+                2 => wasi_tcp::subscribe_write(
+                    state.get_socket(subscription.u.u.fd_write.file_descriptor)?,
+                ),
+
+                _ => return Err(ERRNO_INVAL),
+            });
+        }
+
+        let vec = wasi_poll::poll_oneoff(slice::from_raw_parts(futures.pointer, futures.length));
+
+        assert!(vec.len() == nsubscriptions);
+        assert_eq!(vec.as_ptr(), results);
+        mem::forget(vec);
+
+        drop(futures);
+
+        let ready = subscriptions
+            .iter()
+            .enumerate()
+            .filter_map(|(i, s)| (*results.add(i) != 0).then_some(s));
+
+        let mut count = 0;
+
+        for subscription in ready {
+            let error;
+            let type_;
+            let nbytes;
+            let flags;
+
+            match subscription.u.tag {
+                0 => {
+                    error = ERRNO_SUCCESS;
+                    type_ = EVENTTYPE_CLOCK;
+                    nbytes = 0;
+                    flags = 0;
+                }
+
+                1 => {
+                    type_ = EVENTTYPE_FD_READ;
+                    match wasi_tcp::bytes_readable(subscription.u.u.fd_read.file_descriptor) {
+                        Ok(result) => {
+                            error = ERRNO_SUCCESS;
+                            nbytes = result.nbytes;
+                            flags = if result.is_closed {
+                                EVENTRWFLAGS_FD_READWRITE_HANGUP
+                            } else {
+                                0
+                            };
+                        }
+                        Err(e) => {
+                            error = e.into();
+                            nbytes = 0;
+                            flags = 0;
+                        }
+                    }
+                }
+
+                2 => {
+                    type_ = EVENTTYPE_FD_WRITE;
+                    match wasi_tcp::bytes_writable(subscription.u.u.fd_write.file_descriptor) {
+                        Ok(result) => {
+                            error = ERRNO_SUCCESS;
+                            nbytes = result.nbytes;
+                            flags = if result.is_closed {
+                                EVENTRWFLAGS_FD_READWRITE_HANGUP
+                            } else {
+                                0
+                            };
+                        }
+                        Err(e) => {
+                            error = e.into();
+                            nbytes = 0;
+                            flags = 0;
+                        }
+                    }
+                }
+
+                _ => unreachable(),
+            }
+
+            *out.add(count) = Event {
+                userdata: subscription.userdata,
+                error,
+                type_,
+                fd_readwrite: EventFdReadwrite { nbytes, flags },
+            };
+
+            count += 1;
+        }
+
+        *nevents = count;
+
+        Ok(())
+    })
 }
 
 /// Terminate the process normally. An exit code of 0 indicates successful
@@ -1177,6 +1386,7 @@ fn black_box(x: Errno) -> Errno {
 pub enum Descriptor {
     Closed,
     File(File),
+    Socket(wasi_tcp::Socket),
     Log,
 }
 
@@ -1330,24 +1540,32 @@ impl State {
         }
     }
 
-    fn get_file_with_log_error(&self, fd: Fd, log_error: Errno) -> Result<&File, Errno> {
+    fn get_file_with_error(&self, fd: Fd, error: Errno) -> Result<&File, Errno> {
         match self.get(fd)? {
             Descriptor::File(file) => Ok(file),
-            Descriptor::Log => Err(log_error),
+            Descriptor::Log | Descriptor::Socket(_) => Err(error),
+            Descriptor::Closed => Err(ERRNO_BADF),
+        }
+    }
+
+    fn get_socket(&self, fd: Fd) -> Result<wasi_tcp::Socket, Errno> {
+        match self.get(fd)? {
+            Descriptor::Socket(socket) => Ok(*socket),
+            Descriptor::Log | Descriptor::File(_) => Err(ERRNO_INVAL),
             Descriptor::Closed => Err(ERRNO_BADF),
         }
     }
 
     fn get_file(&self, fd: Fd) -> Result<&File, Errno> {
-        self.get_file_with_log_error(fd, ERRNO_INVAL)
+        self.get_file_with_error(fd, ERRNO_INVAL)
     }
 
     fn get_dir(&self, fd: Fd) -> Result<&File, Errno> {
-        self.get_file_with_log_error(fd, ERRNO_NOTDIR)
+        self.get_file_with_error(fd, ERRNO_NOTDIR)
     }
 
     fn get_seekable_file(&self, fd: Fd) -> Result<&File, Errno> {
-        self.get_file_with_log_error(fd, ERRNO_SPIPE)
+        self.get_file_with_error(fd, ERRNO_SPIPE)
     }
 
     /// Register `buf` and `buf_len` to be used by `cabi_realloc` to satisfy
