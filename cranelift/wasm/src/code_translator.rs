@@ -100,8 +100,7 @@ use wasmparser::{FuncValidator, MemArg, Operator, WasmModuleResources};
     feature = "cargo-clippy",
     allow(clippy::unneeded_field_pattern, clippy::cognitive_complexity)
 )]
-/// Translates wasm operators into Cranelift IR instructions. Returns `true` if it inserted
-/// a return.
+/// Translates wasm operators into Cranelift IR instructions.
 pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
     validator: &mut FuncValidator<impl WasmModuleResources>,
     op: &Operator,
