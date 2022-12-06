@@ -235,7 +235,7 @@ impl Inst {
         alloc_tmp: &mut F,
     ) -> SmallInstVec<Inst> {
         let insts = Inst::load_const_imm(rd, value, alloc_tmp);
-        insts.unwrap_or(LoadConstant::U32(value as u32).load_constant(rd))
+        insts.unwrap_or(LoadConstant::U32(value as u32).load_constant(rd, alloc_tmp))
     }
 
     pub fn load_constant_u64<F: FnMut(Type) -> Writable<Reg>>(
@@ -244,7 +244,7 @@ impl Inst {
         alloc_tmp: &mut F,
     ) -> SmallInstVec<Inst> {
         let insts = Inst::load_const_imm(rd, value, alloc_tmp);
-        insts.unwrap_or(LoadConstant::U64(value).load_constant(rd))
+        insts.unwrap_or(LoadConstant::U64(value).load_constant(rd, alloc_tmp))
     }
 
     pub(crate) fn construct_auipc_and_jalr(
