@@ -217,11 +217,7 @@
       (rd WritableReg)
       (op ReferenceCheckOP)
       (x Reg))
-    
-    (BrTableCheck
-      (index Reg)
-      (targets_len i32)
-      (default_ BranchTarget))
+
     (BrTable
       (index Reg)
       (tmp1 WritableReg)

@@ -1123,14 +1123,15 @@ impl MachInstEmit for Inst {
                     }
                 }
             }
-            &Inst::BrTableCheck {
+            &Inst::BrTable {
                 index,
-                targets_len,
-                default_,
+                tmp1,
+                ref targets,
             } => {
                 let index = allocs.next(index);
-                // load
-                Inst::load_constant_u32(writable_spilltmp_reg(), targets_len as u64, &mut |_| {
+                let tmp1 = allocs.next_writable(tmp1);
+
+                Inst::load_constant_u32(writable_spilltmp_reg(), targets.len() as u64, &mut |_| {
                     writable_spilltmp_reg()
                 })
                 .iter()
@@ -1147,20 +1148,13 @@ impl MachInstEmit for Inst {
                 .emit(&[], sink, emit_info, state);
                 sink.use_label_at_offset(
                     sink.cur_offset(),
-                    default_.as_label().unwrap(),
+                    targets[0].as_label().unwrap(),
                     LabelUse::PCRel32,
                 );
                 Inst::construct_auipc_and_jalr(None, writable_spilltmp_reg(), 0)
                     .iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
-            }
-            &Inst::BrTable {
-                index,
-                tmp1,
-                ref targets,
-            } => {
-                let index = allocs.next(index);
-                let tmp1 = allocs.next_writable(tmp1);
+
                 let mut insts = SmallInstVec::new();
                 // get current pc.
                 insts.push(Inst::Auipc {
@@ -1189,7 +1183,7 @@ impl MachInstEmit for Inst {
 
                 // here is all the jumps.
                 let mut need_label_use = vec![];
-                for t in targets {
+                for t in targets.iter().skip(1) {
                     need_label_use.push((insts.len(), t.clone()));
                     insts.extend(Inst::construct_auipc_and_jalr(
                         None,

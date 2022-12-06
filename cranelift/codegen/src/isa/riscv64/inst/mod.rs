@@ -342,9 +342,6 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(index);
             collector.reg_early_def(tmp1);
         }
-        &Inst::BrTableCheck { index, .. } => {
-            collector.reg_use(index);
-        }
         &Inst::Auipc { rd, .. } => collector.reg_def(rd),
         &Inst::Lui { rd, .. } => collector.reg_def(rd),
         &Inst::LoadConst32 { rd, .. } => collector.reg_def(rd),
@@ -702,9 +699,7 @@ impl MachInst for Inst {
             &Inst::CondBr { .. } => MachTerminator::Cond,
             &Inst::Jalr { .. } => MachTerminator::Uncond,
             &Inst::Ret { .. } => MachTerminator::Ret,
-            // BrTableCheck is a check before BrTable
-            // can lead transfer to default_.
-            &Inst::BrTable { .. } | &Inst::BrTableCheck { .. } => MachTerminator::Indirect,
+            &Inst::BrTable { .. } => MachTerminator::Indirect,
             _ => MachTerminator::None,
         }
     }
@@ -1208,17 +1203,6 @@ impl Inst {
                 let dst: Vec<_> = dst.iter().map(|r| r.to_reg()).collect();
                 let dst = format_regs(&dst[..], allocs);
                 format!("{} {},{},{}##ty={}", op.op_name(), dst, x, y, ty,)
-            }
-            &Inst::BrTableCheck {
-                index,
-                targets_len,
-                default_,
-            } => {
-                let index = format_reg(index, allocs);
-                format!(
-                    "br_table_check {}##targets_len={} default_={}",
-                    index, targets_len, default_
-                )
             }
             &Inst::BrTable {
                 index,

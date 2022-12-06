@@ -430,21 +430,15 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         }
     }
     fn lower_br_table(&mut self, index: Reg, targets: &VecMachLabel) -> InstOutput {
-        let tmp = self.temp_writable_reg(I64);
-        let default_ = BranchTarget::Label(targets[0]);
+        let tmp1 = self.temp_writable_reg(I64);
         let targets: Vec<BranchTarget> = targets
-            .iter()
-            .skip(1)
-            .map(|bix| BranchTarget::Label(*bix))
+            .into_iter()
+            .copied()
+            .map(BranchTarget::Label)
             .collect();
-        self.emit(&MInst::BrTableCheck {
-            index,
-            targets_len: targets.len() as i32,
-            default_,
-        });
         self.emit(&MInst::BrTable {
             index,
-            tmp1: tmp,
+            tmp1,
             targets,
         });
         InstOutput::default()
