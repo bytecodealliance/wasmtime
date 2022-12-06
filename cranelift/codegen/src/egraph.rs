@@ -157,7 +157,7 @@ where
             self.stats.pure_inst_deduped += 1;
             if let NewOrExistingInst::Existing(inst) = inst {
                 debug_assert_eq!(self.func.dfg.inst_results(inst).len(), 1);
-                let result = self.func.dfg.inst_results(inst)[0];
+                let result = self.func.dfg.first_result(inst);
                 self.value_to_opt_value[result] = orig_result;
                 self.eclasses.union(result, orig_result);
                 self.stats.union += 1;
@@ -173,14 +173,14 @@ where
                     let inst = self.func.dfg.make_inst(data);
                     // TODO: reuse return value?
                     self.func.dfg.make_inst_results(inst, typevar);
-                    let result = self.func.dfg.inst_results(inst)[0];
+                    let result = self.func.dfg.first_result(inst);
                     // Add to eclass unionfind.
                     self.eclasses.add(result);
                     // New inst. We need to do the analysis of its result.
                     (inst, result, typevar)
                 }
                 NewOrExistingInst::Existing(inst) => {
-                    let result = self.func.dfg.inst_results(inst)[0];
+                    let result = self.func.dfg.first_result(inst);
                     let ty = self.func.dfg.ctrl_typevar(inst);
                     (inst, result, ty)
                 }
@@ -205,7 +205,7 @@ where
     /// that represents that eclass.
     fn optimize_pure_enode(&mut self, inst: Inst) -> Value {
         // A pure node always has exactly one result.
-        let orig_value = self.func.dfg.inst_results(inst)[0];
+        let orig_value = self.func.dfg.first_result(inst);
 
         let mut isle_ctx = IsleContext { ctx: self };
 
@@ -290,7 +290,7 @@ where
                 .process_inst(self.func, self.alias_analysis_state, inst)
         {
             self.stats.alias_analysis_removed += 1;
-            let result = self.func.dfg.inst_results(inst)[0];
+            let result = self.func.dfg.first_result(inst);
             self.value_to_opt_value[result] = new_result;
             true
         } else {

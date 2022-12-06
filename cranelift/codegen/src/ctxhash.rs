@@ -141,7 +141,7 @@ mod test {
     }
     impl CtxHash<Key> for Ctx {
         fn ctx_hash<H: Hasher>(&self, state: &mut H, value: &Key) {
-            self.vals[value.index as usize].hash(&mut state);
+            self.vals[value.index as usize].hash(state);
         }
     }
 
