@@ -32,6 +32,15 @@
 
 ;; `cranelift-entity`-based identifiers.
 (type Type (primitive Type))
+(type Value (primitive Value))
+(type ValueList (primitive ValueList))
+
+;; ISLE representation of `&[Value]`.
+(type ValueSlice (primitive ValueSlice))
+
+;; Extract the type of a `Value`.
+(decl value_type (Type) Value)
+(extern extractor infallible value_type value_type)
 
 (decl u32_add (u32 u32) u32)
 (extern constructor u32_add u32_add)

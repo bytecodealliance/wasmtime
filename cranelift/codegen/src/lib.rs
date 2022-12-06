@@ -95,6 +95,7 @@ mod alias_analysis;
 mod bitset;
 mod constant_hash;
 mod context;
+mod ctxhash;
 mod dce;
 mod divconst_magic_numbers;
 mod egraph;
@@ -111,6 +112,7 @@ mod result;
 mod scoped_hash_map;
 mod simple_gvn;
 mod simple_preopt;
+mod unionfind;
 mod unreachable_code;
 mod value_label;
 

@@ -5,15 +5,10 @@
 
 ;; `cranelift-entity`-based identifiers.
 (type Inst (primitive Inst))
-(type Value (primitive Value))
-
-;; ISLE representation of `&[Value]`.
-(type ValueSlice (primitive ValueSlice))
 
 ;; ISLE representation of `Vec<u8>`
 (type VecMask extern (enum))
 
-(type ValueList (primitive ValueList))
 (type ValueRegs (primitive ValueRegs))
 (type WritableValueRegs (primitive WritableValueRegs))
 
@@ -213,10 +208,6 @@
 ;; Extract the `InstructionData` for an `Inst`.
 (decl inst_data (InstructionData) Inst)
 (extern extractor infallible inst_data inst_data)
-
-;; Extract the type of a `Value`.
-(decl value_type (Type) Value)
-(extern extractor infallible value_type value_type)
 
 ;; Extract the type of the instruction's first result.
 (decl result_type (Type) Inst)
