@@ -365,7 +365,7 @@ impl Context {
     /// by a store instruction to the same instruction (so-called
     /// "store-to-load forwarding").
     pub fn replace_redundant_loads(&mut self) -> CodegenResult<()> {
-        let mut analysis = AliasAnalysis::new(&mut self.func, &self.domtree);
+        let mut analysis = AliasAnalysis::new(&self.func, &self.domtree);
         analysis.compute_and_update_aliases(&mut self.func);
         Ok(())
     }
