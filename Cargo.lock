@@ -3792,7 +3792,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-wit-bindgen"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "heck",
  "wit-parser",
