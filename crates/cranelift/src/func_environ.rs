@@ -947,7 +947,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<ir::Value> {
         let (func_idx, func_sig) =
             match self.module.table_plans[table_index].table.wasm_ty.heap_type {
-                WasmHeapType::Func => (
+                WasmHeapType::Func | WasmHeapType::Index(_) => (
                     BuiltinFunctionIndex::table_grow_funcref(),
                     self.builtin_function_signatures
                         .table_grow_funcref(&mut pos.func),
@@ -957,10 +957,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     self.builtin_function_signatures
                         .table_grow_externref(&mut pos.func),
                 ),
-                _ => return Err(WasmError::Unsupported(
-                    "`table.grow` with a table element type that is not `funcref` or `externref`"
-                        .into(),
-                )),
+                WasmHeapType::Bot => unreachable!("no bot"),
             };
 
         let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
@@ -1281,7 +1278,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<()> {
         let (builtin_idx, builtin_sig) =
             match self.module.table_plans[table_index].table.wasm_ty.heap_type {
-                WasmHeapType::Func => (
+                WasmHeapType::Func | WasmHeapType::Index(_) => (
                     BuiltinFunctionIndex::table_fill_funcref(),
                     self.builtin_function_signatures
                         .table_fill_funcref(&mut pos.func),
@@ -1291,10 +1288,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     self.builtin_function_signatures
                         .table_fill_externref(&mut pos.func),
                 ),
-                _ => return Err(WasmError::Unsupported(
-                    "`table.fill` with a table element type that is not `funcref` or `externref`"
-                        .into(),
-                )),
+                WasmHeapType::Bot => unreachable!("no bot"),
             };
 
         let (vmctx, builtin_addr) =
