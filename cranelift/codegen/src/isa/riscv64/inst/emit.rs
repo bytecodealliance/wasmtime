@@ -1837,9 +1837,13 @@ impl MachInstEmit for Inst {
                     let f32_bounds = f32_cvt_to_int_bounds(is_signed, out_type.bits() as u8);
                     let f64_bounds = f64_cvt_to_int_bounds(is_signed, out_type.bits() as u8);
                     if in_type == F32 {
-                        Inst::load_fp_constant32(tmp, f32_bits(f32_bounds.0), |_| tmp)
+                        Inst::load_fp_constant32(tmp, f32_bits(f32_bounds.0), |_| {
+                            writable_spilltmp_reg()
+                        })
                     } else {
-                        Inst::load_fp_constant64(tmp, f64_bits(f64_bounds.0), |_| tmp)
+                        Inst::load_fp_constant64(tmp, f64_bits(f64_bounds.0), |_| {
+                            writable_spilltmp_reg()
+                        })
                     }
                     .iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
@@ -1853,9 +1857,13 @@ impl MachInstEmit for Inst {
                     }
                     .emit(&[], sink, emit_info, state);
                     if in_type == F32 {
-                        Inst::load_fp_constant32(tmp, f32_bits(f32_bounds.1), |_| tmp)
+                        Inst::load_fp_constant32(tmp, f32_bits(f32_bounds.1), |_| {
+                            writable_spilltmp_reg()
+                        })
                     } else {
-                        Inst::load_fp_constant64(tmp, f64_bits(f64_bounds.1), |_| tmp)
+                        Inst::load_fp_constant64(tmp, f64_bits(f64_bounds.1), |_| {
+                            writable_spilltmp_reg()
+                        })
                     }
                     .iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
@@ -2146,9 +2154,13 @@ impl MachInstEmit for Inst {
                 }
                 // load max value need to round.
                 if ty == F32 {
-                    Inst::load_fp_constant32(f_tmp, max_value_need_round(ty) as u32, &mut |_| f_tmp)
+                    Inst::load_fp_constant32(f_tmp, max_value_need_round(ty) as u32, &mut |_| {
+                        writable_spilltmp_reg()
+                    })
                 } else {
-                    Inst::load_fp_constant64(f_tmp, max_value_need_round(ty), &mut |_| f_tmp)
+                    Inst::load_fp_constant64(f_tmp, max_value_need_round(ty), &mut |_| {
+                        writable_spilltmp_reg()
+                    })
                 }
                 .into_iter()
                 .for_each(|i| i.emit(&[], sink, emit_info, state));
