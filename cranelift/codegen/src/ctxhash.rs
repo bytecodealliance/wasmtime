@@ -24,7 +24,7 @@ pub trait CtxEq<V1: ?Sized, V2: ?Sized> {
 pub trait CtxHash<Value: ?Sized>: CtxEq<Value, Value> {
     /// Compute the hash of `value`, given the context in `self` and
     /// the union-find data structure `uf`.
-    fn ctx_hash(&self, value: &Value) -> u64;
+    fn ctx_hash<H: Hasher>(&self, state: &mut H, value: &Value);
 }
 
 /// A null-comparator context type for underlying value types that
@@ -38,10 +38,8 @@ impl<V: Eq + Hash> CtxEq<V, V> for NullCtx {
     }
 }
 impl<V: Eq + Hash> CtxHash<V> for NullCtx {
-    fn ctx_hash(&self, value: &V) -> u64 {
-        let mut state = crate::fx::FxHasher::default();
-        value.hash(&mut state);
-        state.finish()
+    fn ctx_hash<H: Hasher>(&self, state: &mut H, value: &V) {
+        value.hash(state);
     }
 }
 
@@ -74,11 +72,23 @@ impl<K, V> CtxHashMap<K, V> {
     }
 }
 
+fn compute_hash<Ctx, K>(ctx: &Ctx, k: &K) -> u32
+where
+    Ctx: CtxHash<K>,
+{
+    let mut hasher = crate::fx::FxHasher::default();
+    ctx.ctx_hash(&mut hasher, k);
+    hasher.finish() as u32
+}
+
 impl<K, V> CtxHashMap<K, V> {
     /// Insert a new key-value pair, returning the old value associated
     /// with this key (if any).
-    pub fn insert<Ctx: CtxEq<K, K> + CtxHash<K>>(&mut self, k: K, v: V, ctx: &Ctx) -> Option<V> {
-        let hash = ctx.ctx_hash(&k) as u32;
+    pub fn insert<Ctx>(&mut self, k: K, v: V, ctx: &Ctx) -> Option<V>
+    where
+        Ctx: CtxEq<K, K> + CtxHash<K>,
+    {
+        let hash = compute_hash(ctx, &k);
         match self.raw.find(hash as u64, |bucket| {
             hash == bucket.hash && ctx.ctx_eq(&bucket.k, &k)
         }) {
@@ -96,12 +106,11 @@ impl<K, V> CtxHashMap<K, V> {
     }
 
     /// Look up a key, returning a borrow of the value if present.
-    pub fn get<'a, Q, Ctx: CtxEq<K, Q> + CtxHash<Q> + CtxHash<K>>(
-        &'a self,
-        k: &Q,
-        ctx: &Ctx,
-    ) -> Option<&'a V> {
-        let hash = ctx.ctx_hash(k) as u32;
+    pub fn get<'a, Q, Ctx>(&'a self, k: &Q, ctx: &Ctx) -> Option<&'a V>
+    where
+        Ctx: CtxEq<K, Q> + CtxHash<Q> + CtxHash<K>,
+    {
+        let hash = compute_hash(ctx, k);
         self.raw
             .find(hash as u64, |bucket| {
                 hash == bucket.hash && ctx.ctx_eq(&bucket.k, k)
@@ -131,10 +140,8 @@ mod test {
         }
     }
     impl CtxHash<Key> for Ctx {
-        fn ctx_hash(&self, value: &Key) -> u64 {
-            let mut state = crate::fx::FxHasher::default();
+        fn ctx_hash<H: Hasher>(&self, state: &mut H, value: &Key) {
             self.vals[value.index as usize].hash(&mut state);
-            state.finish()
         }
     }
 

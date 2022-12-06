@@ -1,6 +1,6 @@
 //! Support for egraphs represented in the DataFlowGraph.
 
-use crate::alias_analysis::AliasAnalysis;
+use crate::alias_analysis::{AliasAnalysis, LastStores};
 use crate::ctxhash::{CtxEq, CtxHash, CtxHashMap};
 use crate::cursor::{Cursor, CursorPosition, FuncCursor};
 use crate::dominator_tree::DominatorTree;
@@ -69,14 +69,19 @@ pub struct EgraphPass<'a> {
 }
 
 /// Context passed through node insertion and optimization.
-pub(crate) struct OptimizeCtx<'a> {
+pub(crate) struct OptimizeCtx<'opt, 'analysis>
+where
+    'analysis: 'opt,
+{
     // Borrowed from EgraphPass:
-    pub(crate) func: &'a mut Function,
-    pub(crate) value_to_opt_value: &'a mut SecondaryMap<Value, Value>,
-    pub(crate) gvn_map: &'a mut CtxHashMap<(Type, InstructionData), Value>,
-    pub(crate) eclasses: &'a mut UnionFind<Value>,
-    pub(crate) remat_values: &'a mut FxHashSet<Value>,
-    pub(crate) stats: &'a mut Stats,
+    pub(crate) func: &'opt mut Function,
+    pub(crate) value_to_opt_value: &'opt mut SecondaryMap<Value, Value>,
+    pub(crate) gvn_map: &'opt mut CtxHashMap<(Type, InstructionData), Value>,
+    pub(crate) eclasses: &'opt mut UnionFind<Value>,
+    pub(crate) remat_values: &'opt mut FxHashSet<Value>,
+    pub(crate) stats: &'opt mut Stats,
+    pub(crate) alias_analysis: &'opt mut AliasAnalysis<'analysis>,
+    pub(crate) alias_analysis_state: &'opt mut LastStores,
     // Held locally during optimization of one node (recursively):
     pub(crate) rewrite_depth: usize,
     pub(crate) subsume_values: FxHashSet<Value>,
@@ -94,7 +99,7 @@ pub(crate) enum NewOrExistingInst {
 impl NewOrExistingInst {
     fn get_inst_key<'a>(&'a self, dfg: &'a DataFlowGraph) -> (Type, InstructionData) {
         match self {
-            NewOrExistingInst::New(data, ty) => (*ty, data.clone()),
+            NewOrExistingInst::New(data, ty) => (*ty, *data),
             NewOrExistingInst::Existing(inst) => {
                 let ty = dfg.ctrl_typevar(*inst);
                 (ty, dfg[*inst].clone())
@@ -103,7 +108,10 @@ impl NewOrExistingInst {
     }
 }
 
-impl<'a> OptimizeCtx<'a> {
+impl<'opt, 'analysis> OptimizeCtx<'opt, 'analysis>
+where
+    'analysis: 'opt,
+{
     /// Optimization of a single instruction.
     ///
     /// This does a few things:
@@ -269,6 +277,32 @@ impl<'a> OptimizeCtx<'a> {
 
         union_value
     }
+
+    /// Optimize a "skeleton" instruction, possibly removing
+    /// it. Returns `true` if the instruction should be removed from
+    /// the layout.
+    fn optimize_skeleton_inst(&mut self, inst: Inst) -> bool {
+        self.stats.skeleton_inst += 1;
+        // Not pure, but may still be a load or store:
+        // process it to see if we can optimize it.
+        if let Some(new_result) =
+            self.alias_analysis
+                .process_inst(self.func, self.alias_analysis_state, inst)
+        {
+            self.stats.alias_analysis_removed += 1;
+            let result = self.func.dfg.inst_results(inst)[0];
+            self.value_to_opt_value[result] = new_result;
+            true
+        } else {
+            // Set all results to identity-map to themselves
+            // in the value-to-opt-value map.
+            for &result in self.func.dfg.inst_results(inst) {
+                self.value_to_opt_value[result] = result;
+                self.eclasses.add(result);
+            }
+            false
+        }
+    }
 }
 
 impl<'a> EgraphPass<'a> {
@@ -296,14 +330,17 @@ impl<'a> EgraphPass<'a> {
     /// Run the process.
     pub fn run(&mut self) {
         self.remove_pure_and_optimize();
+
         trace!("egraph built:\n{}\n", self.func.display());
-        for (value, def) in self.func.dfg.values_and_defs() {
-            trace!(" -> {} = {:?}", value, def);
-            match def {
-                ValueDef::Result(i, 0) => {
-                    trace!("  -> {} = {:?}", i, self.func.dfg[i]);
+        if cfg!(feature = "trace-log") {
+            for (value, def) in self.func.dfg.values_and_defs() {
+                trace!(" -> {} = {:?}", value, def);
+                match def {
+                    ValueDef::Result(i, 0) => {
+                        trace!("  -> {} = {:?}", i, self.func.dfg[i]);
+                    }
+                    _ => {}
                 }
-                _ => {}
             }
         }
         trace!("stats: {:?}", self.stats);
@@ -343,9 +380,7 @@ impl<'a> EgraphPass<'a> {
         while let Some(block) = block_stack.pop() {
             // We popped this block; push children
             // immediately, then process this block.
-            for child in self.domtree_children.children(block) {
-                block_stack.push(child);
-            }
+            block_stack.extend(self.domtree_children.children(block));
 
             trace!("Processing block {}", block);
             cursor.set_position(CursorPosition::Before(block));
@@ -379,20 +414,28 @@ impl<'a> EgraphPass<'a> {
                     *arg = new_value;
                 }
 
-                if is_pure_for_egraph(cursor.func, inst) {
+                // Build a context for optimization, with borrows of
+                // state. We can't invoke a method on `self` because
+                // we've borrowed `self.func` mutably (as
+                // `cursor.func`) so we pull apart the pieces instead
+                // here.
+                let mut ctx = OptimizeCtx {
+                    func: cursor.func,
+                    value_to_opt_value: &mut value_to_opt_value,
+                    gvn_map: &mut gvn_map,
+                    eclasses: &mut self.eclasses,
+                    rewrite_depth: 0,
+                    subsume_values: FxHashSet::default(),
+                    remat_values: &mut self.remat_values,
+                    stats: &mut self.stats,
+                    alias_analysis: self.alias_analysis,
+                    alias_analysis_state: &mut alias_analysis_state,
+                };
+
+                if is_pure_for_egraph(ctx.func, inst) {
                     // Insert into GVN map and optimize any new nodes
                     // inserted (recursively performing this work for
                     // any nodes the optimization rules produce).
-                    let mut ctx = OptimizeCtx {
-                        func: cursor.func,
-                        value_to_opt_value: &mut value_to_opt_value,
-                        gvn_map: &mut gvn_map,
-                        eclasses: &mut self.eclasses,
-                        rewrite_depth: 0,
-                        subsume_values: FxHashSet::default(),
-                        remat_values: &mut self.remat_values,
-                        stats: &mut self.stats,
-                    };
                     let inst = NewOrExistingInst::Existing(inst);
                     ctx.insert_pure_enode(inst);
                     // We've now rewritten all uses, or will when we
@@ -400,26 +443,8 @@ impl<'a> EgraphPass<'a> {
                     // enode in the eclass, so we can remove it.
                     cursor.remove_inst_and_step_back();
                 } else {
-                    self.stats.skeleton_inst += 1;
-
-                    // Not pure, but may still be a load or store:
-                    // process it to see if we can optimize it.
-                    if let Some(new_result) = self.alias_analysis.process_inst(
-                        cursor.func,
-                        &mut alias_analysis_state,
-                        inst,
-                    ) {
-                        self.stats.alias_analysis_removed += 1;
-                        let result = cursor.func.dfg.inst_results(inst)[0];
-                        value_to_opt_value[result] = new_result;
+                    if ctx.optimize_skeleton_inst(inst) {
                         cursor.remove_inst_and_step_back();
-                    } else {
-                        // Set all results to identity-map to themselves
-                        // in the value-to-opt-value map.
-                        for &result in cursor.func.dfg.inst_results(inst) {
-                            value_to_opt_value[result] = result;
-                            self.eclasses.add(result);
-                        }
                     }
                 }
             }
@@ -486,13 +511,9 @@ impl<'a> CtxEq<(Type, InstructionData), (Type, InstructionData)> for GVNContext<
 }
 
 impl<'a> CtxHash<(Type, InstructionData)> for GVNContext<'a> {
-    fn ctx_hash(&self, (ty, inst): &(Type, InstructionData)) -> u64 {
-        let mut state = crate::fx::FxHasher::default();
-        std::hash::Hash::hash(&ty, &mut state);
-        inst.hash(&mut state, self.value_lists, |value| {
-            self.union_find.find(value)
-        });
-        state.finish()
+    fn ctx_hash<H: Hasher>(&self, state: &mut H, (ty, inst): &(Type, InstructionData)) {
+        std::hash::Hash::hash(&ty, state);
+        inst.hash(state, self.value_lists, |value| self.union_find.find(value));
     }
 }
 
