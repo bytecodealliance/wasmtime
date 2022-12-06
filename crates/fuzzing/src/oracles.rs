@@ -315,7 +315,7 @@ pub fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -
     }
 
     // Also allow failures to instantiate as a result of hitting instance limits
-    if string.contains("concurrent instances has been reached") {
+    if string.contains("maximum concurrent instance limit") {
         log::debug!("failed to instantiate: {}", string);
         return None;
     }
