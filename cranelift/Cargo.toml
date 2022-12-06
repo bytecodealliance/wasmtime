@@ -1,7 +1,7 @@
 [package]
 name = "cranelift-tools"
 authors = ["The Cranelift Project Developers"]
-version = "0.73.0"
+version = "0.0.0"
 description = "Binaries for testing the Cranelift libraries"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://github.com/bytecodealliance/wasmtime/blob/main/cranelift/docs/index.md"

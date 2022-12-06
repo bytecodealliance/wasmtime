@@ -465,7 +465,7 @@ dependencies = [
 
 [[package]]
 name = "component-macro-test"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -738,7 +738,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-tools"
-version = "0.73.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "capstone",
@@ -1554,7 +1554,7 @@ dependencies = [
 
 [[package]]
 name = "islec"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "clap 3.2.8",
  "cranelift-isle",
@@ -2794,7 +2794,7 @@ dependencies = [
 
 [[package]]
 name = "test-programs"
-version = "0.19.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "cap-std",
@@ -3268,7 +3268,7 @@ dependencies = [
 
 [[package]]
 name = "wasm-spec-interpreter"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "ocaml-interop",
  "once_cell",
@@ -3410,7 +3410,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-c-api-macros"
-version = "0.19.0"
+version = "0.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3661,7 +3661,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-jit-icache-coherence"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "cfg-if",
  "libc",
@@ -3851,7 +3851,7 @@ dependencies = [
 
 [[package]]
 name = "wiggle-test"
-version = "0.21.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "env_logger 0.9.0",
@@ -3907,7 +3907,7 @@ dependencies = [
 
 [[package]]
 name = "winch-tools"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "clap 3.2.8",

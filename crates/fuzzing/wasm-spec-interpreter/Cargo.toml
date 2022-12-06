@@ -2,7 +2,7 @@
 authors = ["The Wasmtime Project Developers"]
 description = "A Rust-to-OCaml wrapper for the WebAssembly specification interpreter"
 name = "wasm-spec-interpreter"
-version = "0.1.0"
+version = "0.0.0"
 publish = false
 edition.workspace = true
 license = "Apache-2.0 WITH LLVM-exception"
