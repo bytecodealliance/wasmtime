@@ -41,7 +41,7 @@ impl TryFrom<wasmparser::ValType> for WasmType {
             F32 => Ok(WasmType::F32),
             F64 => Ok(WasmType::F64),
             V128 => Ok(WasmType::V128),
-            Ref(rt) => Ok(WasmType::Ref(WasmRefType::try_from(rt)?)),
+            Ref(rt) => Ok(WasmType::Ref(WasmRefType::from(rt))),
             Bot => Ok(WasmType::Bot),
         }
     }
@@ -92,18 +92,17 @@ pub const WASM_FUNC_REF: WasmRefType = WasmRefType {
     heap_type: WasmHeapType::Func,
 };
 
-impl TryFrom<wasmparser::RefType> for WasmRefType {
-    type Error = WasmError;
-    fn try_from(
+impl From<wasmparser::RefType> for WasmRefType {
+    fn from(
         wasmparser::RefType {
             nullable,
             heap_type,
         }: wasmparser::RefType,
-    ) -> Result<Self, Self::Error> {
-        Ok(WasmRefType {
+    ) -> Self {
+        WasmRefType {
             nullable,
-            heap_type: WasmHeapType::try_from(heap_type)?,
-        })
+            heap_type: WasmHeapType::from(heap_type),
+        }
     }
 }
 
@@ -149,15 +148,14 @@ pub enum WasmHeapType {
     Index(u32),
 }
 
-impl TryFrom<wasmparser::HeapType> for WasmHeapType {
-    type Error = WasmError;
-    fn try_from(ht: wasmparser::HeapType) -> Result<Self, Self::Error> {
+impl From<wasmparser::HeapType> for WasmHeapType {
+    fn from(ht: wasmparser::HeapType) -> Self {
         use wasmparser::HeapType::*;
         match ht {
-            Bot => Ok(WasmHeapType::Bot),
-            Func => Ok(WasmHeapType::Func),
-            Extern => Ok(WasmHeapType::Extern),
-            Index(i) => Ok(WasmHeapType::Index(i)),
+            Bot => WasmHeapType::Bot,
+            Func => WasmHeapType::Func,
+            Extern => WasmHeapType::Extern,
+            Index(i) => WasmHeapType::Index(i),
         }
     }
 }
@@ -449,15 +447,13 @@ pub struct Table {
     pub maximum: Option<u32>,
 }
 
-impl TryFrom<wasmparser::TableType> for Table {
-    type Error = WasmError;
-
-    fn try_from(ty: wasmparser::TableType) -> WasmResult<Table> {
-        Ok(Table {
-            wasm_ty: ty.element_type.try_into()?,
+impl From<wasmparser::TableType> for Table {
+    fn from(ty: wasmparser::TableType) -> Table {
+        Table {
+            wasm_ty: ty.element_type.into(),
             minimum: ty.initial,
             maximum: ty.maximum,
-        })
+        }
     }
 }
 

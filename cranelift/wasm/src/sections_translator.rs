@@ -45,12 +45,12 @@ fn tag(e: TagType) -> Tag {
     }
 }
 
-fn table(ty: TableType) -> WasmResult<Table> {
-    Ok(Table {
-        wasm_ty: ty.element_type.try_into()?,
+fn table(ty: TableType) -> Table {
+    Table {
+        wasm_ty: ty.element_type.into(),
         minimum: ty.initial,
         maximum: ty.maximum,
-    })
+    }
 }
 
 fn global(ty: GlobalType, initializer: GlobalInit) -> WasmResult<Global> {
@@ -112,7 +112,7 @@ pub fn parse_import_section<'data>(
                 environ.declare_global_import(ty, import.module, import.name)?;
             }
             TypeRef::Table(ty) => {
-                let ty = table(ty)?;
+                let ty = table(ty);
                 environ.declare_table_import(ty, import.module, import.name)?;
             }
         }
@@ -151,7 +151,7 @@ pub fn parse_table_section(
     environ.reserve_tables(tables.get_count())?;
 
     for entry in tables {
-        let ty = table(entry?)?;
+        let ty = table(entry?);
         environ.declare_table(ty)?;
     }
 

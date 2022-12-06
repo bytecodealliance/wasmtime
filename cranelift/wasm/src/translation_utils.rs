@@ -1,7 +1,6 @@
 //! Helper functions and structures for the translation.
 use crate::environ::TargetEnvironment;
 use crate::WasmResult;
-use core::convert::TryInto;
 use core::u32;
 use cranelift_codegen::ir;
 use cranelift_frontend::FunctionBuilder;
@@ -30,31 +29,7 @@ pub fn type_to_type<PE: TargetEnvironment + ?Sized>(
         wasmparser::ValType::F32 => Ok(ir::types::F32),
         wasmparser::ValType::F64 => Ok(ir::types::F64),
         wasmparser::ValType::V128 => Ok(ir::types::I8X16),
-        wasmparser::ValType::Ref(rt) => Ok(environ.reference_type(rt.heap_type.try_into()?)),
-        wasmparser::ValType::Bot => todo!("ValType::Bot will not exist in final wasm-tools"),
-    }
-}
-
-/// Helper function translating wasmparser possible table types to Cranelift types when possible,
-/// or None for Func tables.
-pub fn tabletype_to_type<PE: TargetEnvironment + ?Sized>(
-    ty: wasmparser::ValType,
-    environ: &PE,
-) -> WasmResult<Option<ir::Type>> {
-    match ty {
-        wasmparser::ValType::I32 => Ok(Some(ir::types::I32)),
-        wasmparser::ValType::I64 => Ok(Some(ir::types::I64)),
-        wasmparser::ValType::F32 => Ok(Some(ir::types::F32)),
-        wasmparser::ValType::F64 => Ok(Some(ir::types::F64)),
-        wasmparser::ValType::V128 => Ok(Some(ir::types::I8X16)),
-        wasmparser::ValType::Ref(rt) => {
-            match rt.heap_type {
-                wasmparser::HeapType::Extern => {
-                    Ok(Some(environ.reference_type(rt.heap_type.try_into()?)))
-                }
-                _ => Ok(None), // TODO(dhil) fixme: verify this is indeed the right thing to do.
-            }
-        }
+        wasmparser::ValType::Ref(rt) => Ok(environ.reference_type(rt.heap_type.into())),
         wasmparser::ValType::Bot => todo!("ValType::Bot will not exist in final wasm-tools"),
     }
 }
@@ -124,7 +99,7 @@ pub fn block_with_params<PE: TargetEnvironment + ?Sized>(
                 builder.append_block_param(block, ir::types::F64);
             }
             wasmparser::ValType::Ref(rt) => {
-                builder.append_block_param(block, environ.reference_type(rt.heap_type.try_into()?));
+                builder.append_block_param(block, environ.reference_type(rt.heap_type.into()));
             }
             wasmparser::ValType::V128 => {
                 builder.append_block_param(block, ir::types::I8X16);

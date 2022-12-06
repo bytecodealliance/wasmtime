@@ -249,7 +249,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         }
                         TypeRef::Table(ty) => {
                             self.result.module.num_imported_tables += 1;
-                            EntityType::Table(ty.try_into()?)
+                            EntityType::Table(ty.into())
                         }
 
                         // doesn't get past validation
@@ -279,7 +279,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 self.result.module.table_plans.reserve_exact(cnt);
 
                 for entry in tables {
-                    let table = entry?.try_into()?;
+                    let table = entry?.into();
                     let plan = TablePlan::for_table(table, &self.tunables);
                     self.result.module.table_plans.push(plan);
                 }

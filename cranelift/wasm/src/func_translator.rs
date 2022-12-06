@@ -9,7 +9,6 @@ use crate::environ::FuncEnvironment;
 use crate::state::FuncTranslationState;
 use crate::translation_utils::get_vmctx_value_label;
 use crate::WasmResult;
-use core::convert::TryInto;
 use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir::{self, Block, InstBuilder, ValueLabel};
 use cranelift_codegen::timing;
@@ -202,7 +201,7 @@ fn declare_locals<FE: FuncEnvironment + ?Sized>(
             let constant_handle = builder.func.dfg.constants.insert([0; 16].to_vec().into());
             builder.ins().vconst(ir::types::I8X16, constant_handle)
         }
-        Ref(rt) => environ.translate_ref_null(builder.cursor(), rt.heap_type.try_into()?)?,
+        Ref(rt) => environ.translate_ref_null(builder.cursor(), rt.heap_type.into())?,
         Bot => panic!("ValType::Bot won't ever actually exist"),
     };
 
