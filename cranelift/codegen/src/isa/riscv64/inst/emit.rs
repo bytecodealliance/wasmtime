@@ -635,6 +635,20 @@ impl MachInstEmit for Inst {
                 let x: u32 = 0b0110111 | reg_to_gpr_num(rd.to_reg()) << 7 | (imm.as_u32() << 12);
                 sink.put4(x);
             }
+            &Inst::LoadConst32 { rd, imm } => {
+                let rd = allocs.next_writable(rd);
+                LoadConstant::U32(imm)
+                    .load_constant(rd, &mut |_| rd)
+                    .into_iter()
+                    .for_each(|inst| inst.emit(&[], sink, emit_info, state));
+            }
+            &Inst::LoadConst64 { rd, imm } => {
+                let rd = allocs.next_writable(rd);
+                LoadConstant::U64(imm)
+                    .load_constant(rd, &mut |_| rd)
+                    .into_iter()
+                    .for_each(|inst| inst.emit(&[], sink, emit_info, state));
+            }
             &Inst::FpuRR {
                 frm,
                 alu_op,
