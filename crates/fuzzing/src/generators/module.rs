@@ -39,6 +39,10 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
         // https://github.com/bytecodealliance/wasmtime/issues/4267.
         config.threads_enabled = !config.memory64_enabled && u.ratio(1, 20)?;
 
+        // We get better differential execution when we disallow traps, so we'll
+        // do that most of the time.
+        config.disallow_traps = u.ratio(9, 10)?;
+
         Ok(ModuleConfig { config })
     }
 }
