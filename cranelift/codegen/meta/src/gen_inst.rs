@@ -60,51 +60,36 @@ fn gen_formats(formats: &[&InstructionFormat], fmt: &mut Formatter) {
     fmt.empty_line();
 }
 
-/// Generate the InstructionData and InstructionImms enums.
+/// Generate the InstructionData enum.
 ///
 /// Every variant must contain an `opcode` field. The size of `InstructionData` should be kept at
 /// 16 bytes on 64-bit architectures. If more space is needed to represent an instruction, use a
 /// `ValueList` to store the additional information out of line.
-///
-/// `InstructionImms` stores everything about an instruction except for the arguments: in other
-/// words, the `Opcode` and any immediates or other parameters. `InstructionData` stores this, plus
-/// the SSA `Value` arguments.
 fn gen_instruction_data(formats: &[&InstructionFormat], fmt: &mut Formatter) {
-    for (name, include_args) in &[("InstructionData", true), ("InstructionImms", false)] {
-        fmt.line("#[derive(Copy, Clone, Debug, PartialEq, Hash)]");
-        if !include_args {
-            // `InstructionImms` gets some extra derives: it acts like a sort of
-            // extended opcode and we want to allow for hashconsing via `Eq`.
-            fmt.line("#[derive(Eq)]");
+    fmt.line("#[derive(Copy, Clone, Debug, PartialEq, Hash)]");
+    fmt.line(r#"#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]"#);
+    fmt.line("#[allow(missing_docs)]");
+    fmtln!(fmt, "pub enum InstructionData {");
+    fmt.indent(|fmt| {
+        for format in formats {
+            fmtln!(fmt, "{} {{", format.name);
+            fmt.indent(|fmt| {
+                fmt.line("opcode: Opcode,");
+                if format.has_value_list {
+                    fmt.line("args: ValueList,");
+                } else if format.num_value_operands == 1 {
+                    fmt.line("arg: Value,");
+                } else if format.num_value_operands > 0 {
+                    fmtln!(fmt, "args: [Value; {}],", format.num_value_operands);
+                }
+                for field in &format.imm_fields {
+                    fmtln!(fmt, "{}: {},", field.member, field.kind.rust_type);
+                }
+            });
+            fmtln!(fmt, "},");
         }
-        fmt.line(r#"#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]"#);
-        fmt.line("#[allow(missing_docs)]");
-        // Generate `enum InstructionData` or `enum InstructionImms`. (This
-        // comment exists so one can grep for `enum InstructionData`!)
-        fmtln!(fmt, "pub enum {} {{", name);
-        fmt.indent(|fmt| {
-            for format in formats {
-                fmtln!(fmt, "{} {{", format.name);
-                fmt.indent(|fmt| {
-                    fmt.line("opcode: Opcode,");
-                    if *include_args {
-                        if format.has_value_list {
-                            fmt.line("args: ValueList,");
-                        } else if format.num_value_operands == 1 {
-                            fmt.line("arg: Value,");
-                        } else if format.num_value_operands > 0 {
-                            fmtln!(fmt, "args: [Value; {}],", format.num_value_operands);
-                        }
-                    }
-                    for field in &format.imm_fields {
-                        fmtln!(fmt, "{}: {},", field.member, field.kind.rust_type);
-                    }
-                });
-                fmtln!(fmt, "},");
-            }
-        });
-        fmt.line("}");
-    }
+    });
+    fmt.line("}");
 }
 
 fn gen_arguments_method(formats: &[&InstructionFormat], fmt: &mut Formatter, is_mut: bool) {
@@ -163,122 +148,6 @@ fn gen_arguments_method(formats: &[&InstructionFormat], fmt: &mut Formatter, is_
         fmt.add_match(m);
     });
     fmtln!(fmt, "}");
-}
-
-/// Generate the conversion from `InstructionData` to `InstructionImms`, stripping out the
-/// `Value`s.
-fn gen_instruction_data_to_instruction_imms(formats: &[&InstructionFormat], fmt: &mut Formatter) {
-    fmt.line("impl std::convert::From<&InstructionData> for InstructionImms {");
-    fmt.indent(|fmt| {
-        fmt.doc_comment("Convert an `InstructionData` into an `InstructionImms`.");
-        fmt.line("fn from(data: &InstructionData) -> InstructionImms {");
-        fmt.indent(|fmt| {
-            fmt.line("match data {");
-            fmt.indent(|fmt| {
-                for format in formats {
-                    fmtln!(fmt, "InstructionData::{} {{", format.name);
-                    fmt.indent(|fmt| {
-                        fmt.line("opcode,");
-                        for field in &format.imm_fields {
-                            fmtln!(fmt, "{},", field.member);
-                        }
-                        fmt.line("..");
-                    });
-                    fmtln!(fmt, "}} => InstructionImms::{} {{", format.name);
-                    fmt.indent(|fmt| {
-                        fmt.line("opcode: *opcode,");
-                        for field in &format.imm_fields {
-                            fmtln!(fmt, "{}: {}.clone(),", field.member, field.member);
-                        }
-                    });
-                    fmt.line("},");
-                }
-            });
-            fmt.line("}");
-        });
-        fmt.line("}");
-    });
-    fmt.line("}");
-    fmt.empty_line();
-}
-
-/// Generate the conversion from `InstructionImms` to `InstructionData`, adding the
-/// `Value`s.
-fn gen_instruction_imms_to_instruction_data(formats: &[&InstructionFormat], fmt: &mut Formatter) {
-    fmt.line("impl  InstructionImms {");
-    fmt.indent(|fmt| {
-        fmt.doc_comment("Convert an `InstructionImms` into an `InstructionData` by adding args.");
-        fmt.line(
-            "pub fn with_args(&self, values: &[Value], value_list: &mut ValueListPool) -> InstructionData {",
-        );
-        fmt.indent(|fmt| {
-            fmt.line("match self {");
-            fmt.indent(|fmt| {
-                for format in formats {
-                    fmtln!(fmt, "InstructionImms::{} {{", format.name);
-                    fmt.indent(|fmt| {
-                        fmt.line("opcode,");
-                        for field in &format.imm_fields {
-                            fmtln!(fmt, "{},", field.member);
-                        }
-                    });
-                    fmt.line("} => {");
-                    if format.has_value_list {
-                        fmtln!(fmt, "let args = ValueList::from_slice(values, value_list);");
-                    }
-                    fmt.indent(|fmt| {
-                        fmtln!(fmt, "InstructionData::{} {{", format.name);
-                        fmt.indent(|fmt| {
-                            fmt.line("opcode: *opcode,");
-                            for field in &format.imm_fields {
-                                fmtln!(fmt, "{}: {}.clone(),", field.member, field.member);
-                            }
-                            if format.has_value_list {
-                                fmtln!(fmt, "args,");
-                            } else if format.num_value_operands == 1 {
-                                fmtln!(fmt, "arg: values[0],");
-                            } else if format.num_value_operands > 0 {
-                                let mut args = vec![];
-                                for i in 0..format.num_value_operands {
-                                    args.push(format!("values[{}]", i));
-                                }
-                                fmtln!(fmt, "args: [{}],", args.join(", "));
-                            }
-                        });
-                        fmt.line("}");
-                    });
-                    fmt.line("},");
-                }
-            });
-            fmt.line("}");
-        });
-        fmt.line("}");
-    });
-    fmt.line("}");
-    fmt.empty_line();
-}
-
-/// Generate the `opcode` method on InstructionImms.
-fn gen_instruction_imms_impl(formats: &[&InstructionFormat], fmt: &mut Formatter) {
-    fmt.line("impl InstructionImms {");
-    fmt.indent(|fmt| {
-        fmt.doc_comment("Get the opcode of this instruction.");
-        fmt.line("pub fn opcode(&self) -> Opcode {");
-        fmt.indent(|fmt| {
-            let mut m = Match::new("*self");
-            for format in formats {
-                m.arm(
-                    format!("Self::{}", format.name),
-                    vec!["opcode", ".."],
-                    "opcode".to_string(),
-                );
-            }
-            fmt.add_match(m);
-        });
-        fmt.line("}");
-    });
-    fmt.line("}");
-    fmt.empty_line();
 }
 
 /// Generate the boring parts of the InstructionData implementation.
@@ -401,8 +270,12 @@ fn gen_instruction_data_impl(formats: &[&InstructionFormat], fmt: &mut Formatter
 
             This operation requires a reference to a `ValueListPool` to
             determine if the contents of any `ValueLists` are equal.
+
+            This operation takes a closure that is allowed to map each
+            argument value to some other value before the instructions
+            are compared. This allows various forms of canonicalization.
         "#);
-        fmt.line("pub fn eq(&self, other: &Self, pool: &ir::ValueListPool) -> bool {");
+        fmt.line("pub fn eq<F: Fn(Value) -> Value>(&self, other: &Self, pool: &ir::ValueListPool, mapper: F) -> bool {");
         fmt.indent(|fmt| {
             fmt.line("if ::core::mem::discriminant(self) != ::core::mem::discriminant(other) {");
             fmt.indent(|fmt| {
@@ -418,13 +291,13 @@ fn gen_instruction_data_impl(formats: &[&InstructionFormat], fmt: &mut Formatter
 
                     let args_eq = if format.has_value_list {
                         members.push("args");
-                        Some("args1.as_slice(pool) == args2.as_slice(pool)")
+                        Some("args1.as_slice(pool).iter().zip(args2.as_slice(pool).iter()).all(|(a, b)| mapper(*a) == mapper(*b))")
                     } else if format.num_value_operands == 1 {
                         members.push("arg");
-                        Some("arg1 == arg2")
+                        Some("mapper(*arg1) == mapper(*arg2)")
                     } else if format.num_value_operands > 0 {
                         members.push("args");
-                        Some("args1 == args2")
+                        Some("args1.iter().zip(args2.iter()).all(|(a, b)| mapper(*a) == mapper(*b))")
                     } else {
                         None
                     };
@@ -459,8 +332,12 @@ fn gen_instruction_data_impl(formats: &[&InstructionFormat], fmt: &mut Formatter
 
             This operation requires a reference to a `ValueListPool` to
             hash the contents of any `ValueLists`.
+
+            This operation takes a closure that is allowed to map each
+            argument value to some other value before it is hashed. This
+            allows various forms of canonicalization.
         "#);
-        fmt.line("pub fn hash<H: ::core::hash::Hasher>(&self, state: &mut H, pool: &ir::ValueListPool) {");
+        fmt.line("pub fn hash<H: ::core::hash::Hasher, F: Fn(Value) -> Value>(&self, state: &mut H, pool: &ir::ValueListPool, mapper: F) {");
         fmt.indent(|fmt| {
             fmt.line("match *self {");
             fmt.indent(|fmt| {
@@ -468,17 +345,17 @@ fn gen_instruction_data_impl(formats: &[&InstructionFormat], fmt: &mut Formatter
                     let name = format!("Self::{}", format.name);
                     let mut members = vec!["opcode"];
 
-                    let args = if format.has_value_list {
+                    let (args, len) = if format.has_value_list {
                         members.push("ref args");
-                        "args.as_slice(pool)"
+                        ("args.as_slice(pool)", "args.len(pool)")
                     } else if format.num_value_operands == 1 {
                         members.push("ref arg");
-                        "arg"
-                    } else if format.num_value_operands > 0{
+                        ("std::slice::from_ref(arg)", "1")
+                    } else if format.num_value_operands > 0 {
                         members.push("ref args");
-                        "args"
+                        ("args", "args.len()")
                     } else {
-                        "&()"
+                        ("&[]", "0")
                     };
 
                     for field in &format.imm_fields {
@@ -493,7 +370,13 @@ fn gen_instruction_data_impl(formats: &[&InstructionFormat], fmt: &mut Formatter
                         for field in &format.imm_fields {
                             fmtln!(fmt, "::core::hash::Hash::hash(&{}, state);", field.member);
                         }
-                        fmtln!(fmt, "::core::hash::Hash::hash({}, state);", args);
+                        fmtln!(fmt, "::core::hash::Hash::hash(&{}, state);", len);
+                        fmtln!(fmt, "for &arg in {} {{", args);
+                        fmt.indent(|fmt| {
+                            fmtln!(fmt, "let arg = mapper(arg);");
+                            fmtln!(fmt, "::core::hash::Hash::hash(&arg, state);");
+                        });
+                        fmtln!(fmt, "}");
                     });
                     fmtln!(fmt, "}");
                 }
@@ -1264,46 +1147,40 @@ fn gen_common_isle(
         gen_isle_enum(name, variants, fmt)
     }
 
-    if isle_target == IsleTarget::Lower {
-        // Generate all of the value arrays we need for `InstructionData` as well as
-        // the constructors and extractors for them.
-        fmt.line(
-            ";;;; Value Arrays ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;",
+    // Generate all of the value arrays we need for `InstructionData` as well as
+    // the constructors and extractors for them.
+    fmt.line(";;;; Value Arrays ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;");
+    fmt.empty_line();
+    let value_array_arities: BTreeSet<_> = formats
+        .iter()
+        .filter(|f| f.typevar_operand.is_some() && !f.has_value_list && f.num_value_operands != 1)
+        .map(|f| f.num_value_operands)
+        .collect();
+    for n in value_array_arities {
+        fmtln!(fmt, ";; ISLE representation of `[Value; {}]`.", n);
+        fmtln!(fmt, "(type ValueArray{} extern (enum))", n);
+        fmt.empty_line();
+
+        fmtln!(
+            fmt,
+            "(decl value_array_{} ({}) ValueArray{})",
+            n,
+            (0..n).map(|_| "Value").collect::<Vec<_>>().join(" "),
+            n
+        );
+        fmtln!(
+            fmt,
+            "(extern constructor value_array_{} pack_value_array_{})",
+            n,
+            n
+        );
+        fmtln!(
+            fmt,
+            "(extern extractor infallible value_array_{} unpack_value_array_{})",
+            n,
+            n
         );
         fmt.empty_line();
-        let value_array_arities: BTreeSet<_> = formats
-            .iter()
-            .filter(|f| {
-                f.typevar_operand.is_some() && !f.has_value_list && f.num_value_operands != 1
-            })
-            .map(|f| f.num_value_operands)
-            .collect();
-        for n in value_array_arities {
-            fmtln!(fmt, ";; ISLE representation of `[Value; {}]`.", n);
-            fmtln!(fmt, "(type ValueArray{} extern (enum))", n);
-            fmt.empty_line();
-
-            fmtln!(
-                fmt,
-                "(decl value_array_{} ({}) ValueArray{})",
-                n,
-                (0..n).map(|_| "Value").collect::<Vec<_>>().join(" "),
-                n
-            );
-            fmtln!(
-                fmt,
-                "(extern constructor value_array_{} pack_value_array_{})",
-                n,
-                n
-            );
-            fmtln!(
-                fmt,
-                "(extern extractor infallible value_array_{} unpack_value_array_{})",
-                n,
-                n
-            );
-            fmt.empty_line();
-        }
     }
 
     // Generate the extern type declaration for `Opcode`.
@@ -1322,32 +1199,24 @@ fn gen_common_isle(
     fmt.line(")");
     fmt.empty_line();
 
-    // Generate the extern type declaration for `InstructionData`
-    // (lowering) or `InstructionImms` (opt).
-    let inst_data_name = match isle_target {
-        IsleTarget::Lower => "InstructionData",
-        IsleTarget::Opt => "InstructionImms",
-    };
+    // Generate the extern type declaration for `InstructionData`.
     fmtln!(
         fmt,
-        ";;;; `{}` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;",
-        inst_data_name
+        ";;;; `InstructionData` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;",
     );
     fmt.empty_line();
-    fmtln!(fmt, "(type {} extern", inst_data_name);
+    fmtln!(fmt, "(type InstructionData extern");
     fmt.indent(|fmt| {
         fmt.line("(enum");
         fmt.indent(|fmt| {
             for format in formats {
                 let mut s = format!("({} (opcode Opcode)", format.name);
-                if isle_target == IsleTarget::Lower {
-                    if format.has_value_list {
-                        s.push_str(" (args ValueList)");
-                    } else if format.num_value_operands == 1 {
-                        s.push_str(" (arg Value)");
-                    } else if format.num_value_operands > 1 {
-                        write!(&mut s, " (args ValueArray{})", format.num_value_operands).unwrap();
-                    }
+                if format.has_value_list {
+                    s.push_str(" (args ValueList)");
+                } else if format.num_value_operands == 1 {
+                    s.push_str(" (arg Value)");
+                } else if format.num_value_operands > 1 {
+                    write!(&mut s, " (args ValueArray{})", format.num_value_operands).unwrap();
                 }
                 for field in &format.imm_fields {
                     write!(
@@ -1370,13 +1239,12 @@ fn gen_common_isle(
     // Generate the helper extractors for each opcode's full instruction.
     fmtln!(
         fmt,
-        ";;;; Extracting Opcode, Operands, and Immediates from `{}` ;;;;;;;;",
-        inst_data_name
+        ";;;; Extracting Opcode, Operands, and Immediates from `InstructionData` ;;;;;;;;",
     );
     fmt.empty_line();
     let ret_ty = match isle_target {
         IsleTarget::Lower => "Inst",
-        IsleTarget::Opt => "Id",
+        IsleTarget::Opt => "Value",
     };
     for inst in instructions {
         if isle_target == IsleTarget::Opt && inst.format.has_value_list {
@@ -1395,23 +1263,10 @@ fn gen_common_isle(
                 .iter()
                 .map(|o| {
                     let ty = o.kind.rust_type;
-                    match isle_target {
-                        IsleTarget::Lower => {
-                            if ty == "&[Value]" {
-                                "ValueSlice"
-                            } else {
-                                ty.rsplit("::").next().unwrap()
-                            }
-                        }
-                        IsleTarget::Opt => {
-                            if ty == "&[Value]" {
-                                panic!("value slice in mid-end extractor");
-                            } else if ty == "Value" || ty == "ir::Value" {
-                                "Id"
-                            } else {
-                                ty.rsplit("::").next().unwrap()
-                            }
-                        }
+                    if ty == "&[Value]" {
+                        "ValueSlice"
+                    } else {
+                        ty.rsplit("::").next().unwrap()
                     }
                 })
                 .collect::<Vec<_>>()
@@ -1435,102 +1290,55 @@ fn gen_common_isle(
                     .join(" ")
             );
 
-            if isle_target == IsleTarget::Lower {
-                let mut s = format!(
-                    "(inst_data (InstructionData.{} (Opcode.{})",
-                    inst.format.name, inst.camel_name
-                );
+            let mut s = format!(
+                "(inst_data{} (InstructionData.{} (Opcode.{})",
+                match isle_target {
+                    IsleTarget::Lower => "",
+                    IsleTarget::Opt => " ty",
+                },
+                inst.format.name,
+                inst.camel_name
+            );
 
-                // Value and varargs operands.
-                if inst.format.has_value_list {
-                    // The instruction format uses a value list, but the
-                    // instruction itself might have not only a `&[Value]`
-                    // varargs operand, but also one or more `Value` operands as
-                    // well. If this is the case, then we need to read them off
-                    // the front of the `ValueList`.
-                    let values: Vec<_> = inst
-                        .operands_in
-                        .iter()
-                        .filter(|o| o.is_value())
-                        .map(|o| o.name)
-                        .collect();
-                    let varargs = inst
-                        .operands_in
-                        .iter()
-                        .find(|o| o.is_varargs())
-                        .unwrap()
-                        .name;
-                    if values.is_empty() {
-                        write!(&mut s, " (value_list_slice {})", varargs).unwrap();
-                    } else {
-                        write!(
-                            &mut s,
-                            " (unwrap_head_value_list_{} {} {})",
-                            values.len(),
-                            values.join(" "),
-                            varargs
-                        )
-                        .unwrap();
-                    }
-                } else if inst.format.num_value_operands == 1 {
+            // Value and varargs operands.
+            if inst.format.has_value_list {
+                // The instruction format uses a value list, but the
+                // instruction itself might have not only a `&[Value]`
+                // varargs operand, but also one or more `Value` operands as
+                // well. If this is the case, then we need to read them off
+                // the front of the `ValueList`.
+                let values: Vec<_> = inst
+                    .operands_in
+                    .iter()
+                    .filter(|o| o.is_value())
+                    .map(|o| o.name)
+                    .collect();
+                let varargs = inst
+                    .operands_in
+                    .iter()
+                    .find(|o| o.is_varargs())
+                    .unwrap()
+                    .name;
+                if values.is_empty() {
+                    write!(&mut s, " (value_list_slice {})", varargs).unwrap();
+                } else {
                     write!(
                         &mut s,
-                        " {}",
-                        inst.operands_in.iter().find(|o| o.is_value()).unwrap().name
-                    )
-                    .unwrap();
-                } else if inst.format.num_value_operands > 1 {
-                    let values = inst
-                        .operands_in
-                        .iter()
-                        .filter(|o| o.is_value())
-                        .map(|o| o.name)
-                        .collect::<Vec<_>>();
-                    assert_eq!(values.len(), inst.format.num_value_operands);
-                    let values = values.join(" ");
-                    write!(
-                        &mut s,
-                        " (value_array_{} {})",
-                        inst.format.num_value_operands, values,
+                        " (unwrap_head_value_list_{} {} {})",
+                        values.len(),
+                        values.join(" "),
+                        varargs
                     )
                     .unwrap();
                 }
-
-                // Immediates.
-                let imm_operands: Vec<_> = inst
-                    .operands_in
-                    .iter()
-                    .filter(|o| !o.is_value() && !o.is_varargs())
-                    .collect();
-                assert_eq!(imm_operands.len(), inst.format.imm_fields.len());
-                for op in imm_operands {
-                    write!(&mut s, " {}", op.name).unwrap();
-                }
-
-                s.push_str("))");
-                fmt.line(&s);
-            } else {
-                // Mid-end case.
-                let mut s = format!(
-                    "(enodes ty (InstructionImms.{} (Opcode.{})",
-                    inst.format.name, inst.camel_name
-                );
-
-                // Immediates.
-                let imm_operands: Vec<_> = inst
-                    .operands_in
-                    .iter()
-                    .filter(|o| !o.is_value() && !o.is_varargs())
-                    .collect();
-                assert_eq!(imm_operands.len(), inst.format.imm_fields.len());
-                for op in imm_operands {
-                    write!(&mut s, " {}", op.name).unwrap();
-                }
-                // End of `InstructionImms`.
-                s.push_str(")");
-
-                // Second arg to `enode`: value args.
-                assert!(!inst.operands_in.iter().any(|op| op.is_varargs()));
+            } else if inst.format.num_value_operands == 1 {
+                write!(
+                    &mut s,
+                    " {}",
+                    inst.operands_in.iter().find(|o| o.is_value()).unwrap().name
+                )
+                .unwrap();
+            } else if inst.format.num_value_operands > 1 {
                 let values = inst
                     .operands_in
                     .iter()
@@ -1541,14 +1349,25 @@ fn gen_common_isle(
                 let values = values.join(" ");
                 write!(
                     &mut s,
-                    " (id_array_{} {})",
+                    " (value_array_{} {})",
                     inst.format.num_value_operands, values,
                 )
                 .unwrap();
-
-                s.push_str(")");
-                fmt.line(&s);
             }
+
+            // Immediates.
+            let imm_operands: Vec<_> = inst
+                .operands_in
+                .iter()
+                .filter(|o| !o.is_value() && !o.is_varargs())
+                .collect();
+            assert_eq!(imm_operands.len(), inst.format.imm_fields.len());
+            for op in imm_operands {
+                write!(&mut s, " {}", op.name).unwrap();
+            }
+
+            s.push_str("))");
+            fmt.line(&s);
         });
         fmt.line(")");
 
@@ -1566,10 +1385,53 @@ fn gen_common_isle(
             );
             fmt.indent(|fmt| {
                 let mut s = format!(
-                    "(pure_enode ty (InstructionImms.{} (Opcode.{})",
+                    "(make_inst ty (InstructionData.{} (Opcode.{})",
                     inst.format.name, inst.camel_name
                 );
 
+                // Handle values. Note that we skip generating
+                // constructors for any instructions with variadic
+                // value lists. This is fine for the mid-end because
+                // in practice only calls and branches (for branch
+                // args) use this functionality, and neither can
+                // really be optimized or rewritten in the mid-end
+                // (currently).
+                //
+                // As a consequence, we only have to handle the
+                // one-`Value` case, in which the `Value` is directly
+                // in the `InstructionData`, and the multiple-`Value`
+                // case, in which the `Value`s are in a
+                // statically-sized array (e.g. `[Value; 2]` for a
+                // binary op).
+                assert!(!inst.format.has_value_list);
+                if inst.format.num_value_operands == 1 {
+                    write!(
+                        &mut s,
+                        " {}",
+                        inst.operands_in.iter().find(|o| o.is_value()).unwrap().name
+                    )
+                    .unwrap();
+                } else if inst.format.num_value_operands > 1 {
+                    // As above, get all bindings together, and pass
+                    // to a sub-term; here we use a constructor to
+                    // build the value array.
+                    let values = inst
+                        .operands_in
+                        .iter()
+                        .filter(|o| o.is_value())
+                        .map(|o| o.name)
+                        .collect::<Vec<_>>();
+                    assert_eq!(values.len(), inst.format.num_value_operands);
+                    let values = values.join(" ");
+                    write!(
+                        &mut s,
+                        " (value_array_{}_ctor {})",
+                        inst.format.num_value_operands, values
+                    )
+                    .unwrap();
+                }
+
+                // Immediates (non-value args).
                 for o in inst
                     .operands_in
                     .iter()
@@ -1577,22 +1439,7 @@ fn gen_common_isle(
                 {
                     write!(&mut s, " {}", o.name).unwrap();
                 }
-                s.push_str(")");
-
-                let values = inst
-                    .operands_in
-                    .iter()
-                    .filter(|o| o.is_value())
-                    .map(|o| o.name)
-                    .collect::<Vec<_>>();
-                let values = values.join(" ");
-                write!(
-                    &mut s,
-                    " (id_array_{} {})",
-                    inst.format.num_value_operands, values
-                )
-                .unwrap();
-                s.push_str(")");
+                s.push_str("))");
                 fmt.line(&s);
             });
             fmt.line(")");
@@ -1693,9 +1540,6 @@ pub(crate) fn generate(
     gen_instruction_data(&formats, &mut fmt);
     fmt.empty_line();
     gen_instruction_data_impl(&formats, &mut fmt);
-    gen_instruction_data_to_instruction_imms(&formats, &mut fmt);
-    gen_instruction_imms_impl(&formats, &mut fmt);
-    gen_instruction_imms_to_instruction_data(&formats, &mut fmt);
     fmt.empty_line();
     gen_opcodes(all_inst, &mut fmt);
     fmt.empty_line();

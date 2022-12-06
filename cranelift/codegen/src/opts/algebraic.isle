@@ -145,30 +145,14 @@
       (iadd ty x x))
 
 ;; x<<32>>32: uextend/sextend 32->64.
-(rule (simplify (ushr $I64 (ishl $I64 (uextend $I64 x @ (eclass_type $I32)) (iconst _ (simm32 32))) (iconst _ (simm32 32))))
+(rule (simplify (ushr $I64 (ishl $I64 (uextend $I64 x @ (value_type $I32)) (iconst _ (simm32 32))) (iconst _ (simm32 32))))
       (uextend $I64 x))
 
-(rule (simplify (sshr $I64 (ishl $I64 (uextend $I64 x @ (eclass_type $I32)) (iconst _ (simm32 32))) (iconst _ (simm32 32))))
+(rule (simplify (sshr $I64 (ishl $I64 (uextend $I64 x @ (value_type $I32)) (iconst _ (simm32 32))) (iconst _ (simm32 32))))
       (sextend $I64 x))
 
 ;; TODO: strength reduction: mul/div to shifts
 ;; TODO: div/rem by constants -> magic multiplications
-
-;; Reassociate when it benefits LICM.
-(rule (simplify (iadd ty (iadd ty x y) z))
-      (if-let (at_loop_level lx _) x)
-      (if-let (at_loop_level ly _) y)
-      (if-let (at_loop_level lz _) z)
-      (if (u8_lt lx ly))
-      (if (u8_lt lz ly))
-      (iadd ty (iadd ty x z) y))
-(rule (simplify (iadd ty (iadd ty x y) z))
-      (if-let (at_loop_level lx _) x)
-      (if-let (at_loop_level ly _) y)
-      (if-let (at_loop_level lz _) z)
-      (if (u8_lt ly lx))
-      (if (u8_lt lz lx))
-      (iadd ty (iadd ty y z) x))
 
 ;; Rematerialize ALU-op-with-imm and iconsts in each block where they're
 ;; used. This is neutral (add-with-imm) or positive (iconst) for

@@ -18,8 +18,7 @@ bumpalo = "3"
 cranelift-codegen-shared = { path = "./shared", version = "0.92.0" }
 cranelift-entity = { workspace = true }
 cranelift-bforest = { workspace = true }
-cranelift-egraph = { workspace = true }
-hashbrown = { workspace = true, optional = true }
+hashbrown = { workspace = true }
 target-lexicon = { workspace = true }
 log = { workspace = true }
 serde = { version = "1.0.94", features = ["derive"], optional = true }
@@ -42,16 +41,18 @@ cranelift-codegen-meta = { path = "meta", version = "0.92.0" }
 cranelift-isle = { path = "../isle/isle", version = "=0.92.0" }
 
 [features]
-default = ["std", "unwind"]
+default = ["std", "unwind", "trace-log"]
 
 # The "std" feature enables use of libstd. The "core" feature enables use
 # of some minimal std-like replacement libraries. At least one of these two
 # features need to be enabled.
 std = []
 
-# The "core" features enables use of "hashbrown" since core doesn't have
-# a HashMap implementation, and a workaround for Cargo #4866.
-core = ["hashbrown"]
+# The "core" feature used to enable a hashmap workaround, but is now
+# deprecated (we (i) always use hashbrown, and (ii) don't support a
+# no_std build anymore). The feature remains for backward
+# compatibility as a no-op.
+core = []
 
 # This enables some additional functions useful for writing tests, but which
 # can significantly increase the size of the library.

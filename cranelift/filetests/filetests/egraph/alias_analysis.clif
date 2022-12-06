@@ -16,7 +16,7 @@ block0(v0: i64):
     return v7
 }
 
-; check: v1 = load.i64 heap v0
-; nextln: store v0, v1
-; nextln: v2 = load.i64 v0
-; nextln: return v2
+; check: v3 = load.i64 heap v0
+; check: store v0, v3
+; check: v7 = load.i64 v0
+; check: return v7

@@ -298,6 +298,7 @@ fn type_suffix(func: &Function, inst: Inst) -> Option<Type> {
         let def_block = match func.dfg.value_def(ctrl_var) {
             ValueDef::Result(instr, _) => func.layout.inst_block(instr),
             ValueDef::Param(block, _) => Some(block),
+            ValueDef::Union(..) => None,
         };
         if def_block.is_some() && def_block == func.layout.inst_block(inst) {
             return None;

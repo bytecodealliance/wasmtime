@@ -56,25 +56,8 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         #[inline]
-        fn unpack_value_array_2(&mut self, arr: &ValueArray2) -> (Value, Value) {
-            let [a, b] = *arr;
-            (a, b)
-        }
-
-        #[inline]
-        fn pack_value_array_2(&mut self, a: Value, b: Value) -> ValueArray2 {
-            [a, b]
-        }
-
-        #[inline]
-        fn unpack_value_array_3(&mut self, arr: &ValueArray3) -> (Value, Value, Value) {
-            let [a, b, c] = *arr;
-            (a, b, c)
-        }
-
-        #[inline]
-        fn pack_value_array_3(&mut self, a: Value, b: Value, c: Value) -> ValueArray3 {
-            [a, b, c]
+        fn value_type(&mut self, val: Value) -> Type {
+            self.lower_ctx.dfg().value_type(val)
         }
 
         #[inline]
@@ -228,11 +211,6 @@ macro_rules! isle_lower_prelude_methods {
         #[inline]
         fn inst_data(&mut self, inst: Inst) -> InstructionData {
             self.lower_ctx.dfg()[inst]
-        }
-
-        #[inline]
-        fn value_type(&mut self, val: Value) -> Type {
-            self.lower_ctx.dfg().value_type(val)
         }
 
         #[inline]

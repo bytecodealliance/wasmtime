@@ -78,7 +78,6 @@ opt-level = 0
 resolver = '2'
 members = [
   "cranelift",
-  "cranelift/egraph",
   "cranelift/isle/fuzz",
   "cranelift/isle/islec",
   "cranelift/serde",
@@ -137,7 +136,6 @@ wasmtime-wit-bindgen = { path = "crates/wit-bindgen", version = "=5.0.0" }
 
 cranelift-wasm = { path = "cranelift/wasm", version = "0.92.0" }
 cranelift-codegen = { path = "cranelift/codegen", version = "0.92.0" }
-cranelift-egraph = { path = "cranelift/egraph", version = "0.92.0" }
 cranelift-frontend = { path = "cranelift/frontend", version = "0.92.0" }
 cranelift-entity = { path = "cranelift/entity", version = "0.92.0" }
 cranelift-native = { path = "cranelift/native", version = "0.92.0" }

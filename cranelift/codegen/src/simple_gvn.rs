@@ -39,14 +39,14 @@ struct HashKey<'a, 'f: 'a> {
 impl<'a, 'f: 'a> Hash for HashKey<'a, 'f> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         let pool = &self.pos.borrow().func.dfg.value_lists;
-        self.inst.hash(state, pool);
+        self.inst.hash(state, pool, |value| value);
         self.ty.hash(state);
     }
 }
 impl<'a, 'f: 'a> PartialEq for HashKey<'a, 'f> {
     fn eq(&self, other: &Self) -> bool {
         let pool = &self.pos.borrow().func.dfg.value_lists;
-        self.inst.eq(&other.inst, pool) && self.ty == other.ty
+        self.inst.eq(&other.inst, pool, |value| value) && self.ty == other.ty
     }
 }
 impl<'a, 'f: 'a> Eq for HashKey<'a, 'f> {}

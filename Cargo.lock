@@ -554,7 +554,6 @@ dependencies = [
  "cranelift-bforest",
  "cranelift-codegen-meta",
  "cranelift-codegen-shared",
- "cranelift-egraph",
  "cranelift-entity",
  "cranelift-isle",
  "criterion",
@@ -579,18 +578,6 @@ dependencies = [
 [[package]]
 name = "cranelift-codegen-shared"
 version = "0.92.0"
-
-[[package]]
-name = "cranelift-egraph"
-version = "0.92.0"
-dependencies = [
- "cranelift-entity",
- "fxhash",
- "hashbrown",
- "indexmap",
- "log",
- "smallvec",
-]
 
 [[package]]
 name = "cranelift-entity"

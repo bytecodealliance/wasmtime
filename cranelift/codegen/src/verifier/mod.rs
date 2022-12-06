@@ -1041,6 +1041,10 @@ impl<'a> Verifier<'a> {
                     ));
                 }
             }
+            ValueDef::Union(_, _) => {
+                // Nothing: union nodes themselves have no location,
+                // so we cannot check any dominance properties.
+            }
         }
         Ok(())
     }
@@ -1069,6 +1073,11 @@ impl<'a> Verifier<'a> {
                 loc_inst,
                 self.context(loc_inst),
                 format!("instruction result {} is not defined by the instruction", v),
+            )),
+            ValueDef::Union(_, _) => errors.fatal((
+                loc_inst,
+                self.context(loc_inst),
+                format!("instruction result {} is a union node", v),
             )),
         }
     }

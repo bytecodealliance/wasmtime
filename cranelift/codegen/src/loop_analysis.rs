@@ -37,7 +37,7 @@ struct LoopData {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LoopLevel(u8);
 impl LoopLevel {
-    const INVALID: u8 = 0xff;
+    const INVALID: u8 = u8::MAX;
 
     /// Get the root level (no loop).
     pub fn root() -> Self {

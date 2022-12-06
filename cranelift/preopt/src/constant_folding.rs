@@ -67,6 +67,7 @@ fn resolve_value_to_imm(dfg: &ir::DataFlowGraph, value: ir::Value) -> Option<Con
     let inst = match dfg.value_def(original) {
         ValueDef::Result(inst, _) => inst,
         ValueDef::Param(_, _) => return None,
+        ValueDef::Union(_, _) => return None,
     };
 
     use self::ir::{InstructionData::*, Opcode::*};

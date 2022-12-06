@@ -107,7 +107,7 @@
 (rule (simplify (isub ty
                       (iadd ty x (iconst ty (u64_from_imm64 k1)))
                       (iconst ty (u64_from_imm64 k2))))
-      (isub ty x (iconst ty (imm64 (u64_sub k1 k2)))))
+      (isub ty x (iconst ty (imm64 (u64_sub k2 k1)))))
 (rule (simplify (iadd ty
                       (isub ty x (iconst ty (u64_from_imm64 k1)))
                       (iconst ty (u64_from_imm64 k2))))
