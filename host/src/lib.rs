@@ -4,6 +4,7 @@ mod logging;
 mod poll;
 mod random;
 mod table;
+mod tcp;
 pub use table::Table;
 
 wit_bindgen_host_wasmtime_rust::generate!({
@@ -21,6 +22,7 @@ pub fn add_to_linker<T>(
     wasi_logging::add_to_linker(l, f)?;
     wasi_poll::add_to_linker(l, f)?;
     wasi_random::add_to_linker(l, f)?;
+    wasi_tcp::add_to_linker(l, f)?;
     Ok(())
 }
 

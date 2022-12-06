@@ -66,6 +66,24 @@ impl wasi_default_clocks::WasiDefaultClocks for WasiCtx {
 }
 
 impl wasi_clocks::WasiClocks for WasiCtx {
+    fn subscribe_wall_clock(
+        &mut self,
+        when: wasi_clocks::Datetime,
+        absolute: bool,
+    ) -> anyhow::Result<wasi_clocks::WasiFuture> {
+        drop((when, absolute));
+        todo!()
+    }
+
+    fn subscribe_monotonic_clock(
+        &mut self,
+        when: wasi_clocks::Instant,
+        absolute: bool,
+    ) -> anyhow::Result<wasi_clocks::WasiFuture> {
+        drop((when, absolute));
+        todo!()
+    }
+
     fn monotonic_clock_now(
         &mut self,
         fd: wasi_clocks::MonotonicClock,
