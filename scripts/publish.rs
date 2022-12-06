@@ -47,6 +47,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     // wasmtime
     "wasmtime-asm-macros",
     "wasmtime-component-util",
+    "wasmtime-wit-bindgen",
     "wasmtime-component-macro",
     "wasmtime-jit-debug",
     "wasmtime-fiber",

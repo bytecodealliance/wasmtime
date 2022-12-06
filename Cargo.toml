@@ -133,6 +133,7 @@ wasi-tokio = { path = "crates/wasi-common/tokio", version = "=5.0.0" }
 wasi-cap-std-sync = { path = "crates/wasi-common/cap-std-sync", version = "=5.0.0" }
 wasmtime-fuzzing = { path = "crates/fuzzing" }
 wasmtime-jit-icache-coherence = { path = "crates/jit-icache-coherence", version = "=5.0.0" }
+wasmtime-wit-bindgen = { path = "crates/wit-bindgen", version = "=5.0.0" }
 
 cranelift-wasm = { path = "cranelift/wasm", version = "0.92.0" }
 cranelift-codegen = { path = "cranelift/codegen", version = "0.92.0" }
@@ -162,6 +163,7 @@ wasmprinter = "0.2.44"
 wasm-encoder = "0.20.0"
 wasm-smith = "0.11.9"
 wasm-mutate = "0.2.12"
+wit-parser = "0.3"
 windows-sys = "0.42.0"
 env_logger = "0.9"
 rustix = "0.36.0"
@@ -179,6 +181,7 @@ tracing = "0.1.26"
 bitflags = "1.2"
 thiserror = "1.0.15"
 async-trait = "0.1.42"
+heck = "0.4"
 
 [features]
 default = [

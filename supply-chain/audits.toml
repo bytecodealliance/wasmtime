@@ -392,6 +392,16 @@ a few `unsafe` blocks related to utf-8 validation which are locally verifiable
 as correct and otherwise this crate is good to go.
 """
 
+[[audits.pulldown-cmark]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.8.0"
+notes = """
+This crate has `unsafe` blocks and they're all related to SIMD-acceleration and
+are otherwise not doing other `unsafe` operations. Additionally the crate does
+not do anything other than markdown rendering as is expected.
+"""
+
 [[audits.regalloc2]]
 who = "Jamey Sharp <jsharp@fastly.com>"
 criteria = "safe-to-deploy"
@@ -482,6 +492,15 @@ notes = """
 This is a trivial crate which only contains a singular macro definition which is
 intended to multiplex across the internal representation of a tinyvec,
 presumably. This trivially doesn't contain anything bad.
+"""
+
+[[audits.unicase]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "2.6.0"
+notes = """
+This crate contains no `unsafe` code and no unnecessary use of the standard
+library.
 """
 
 [[audits.unicode-bidi]]
@@ -966,4 +985,10 @@ who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 version = "0.34.0"
 notes = "I am the author of this crate."
+
+[[audits.wit-parser]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.3.0"
+notes = "The Bytecode Alliance is the author of this crate."
 

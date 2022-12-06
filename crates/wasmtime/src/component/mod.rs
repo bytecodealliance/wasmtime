@@ -4,6 +4,7 @@
 //! probably buggy implementation of the component model.
 
 mod component;
+mod error;
 mod func;
 mod instance;
 mod linker;
@@ -13,6 +14,7 @@ mod store;
 pub mod types;
 mod values;
 pub use self::component::Component;
+pub use self::error::{Error, Result};
 pub use self::func::{
     ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, WasmList, WasmStr,
 };
@@ -20,7 +22,7 @@ pub use self::instance::{ExportInstance, Exports, Instance, InstancePre};
 pub use self::linker::{Linker, LinkerInstance};
 pub use self::types::Type;
 pub use self::values::Val;
-pub use wasmtime_component_macro::{flags, ComponentType, Lift, Lower};
+pub use wasmtime_component_macro::{bindgen, flags, ComponentType, Lift, Lower};
 
 // These items are expected to be used by an eventual
 // `#[derive(ComponentType)]`, they are not part of Wasmtime's API stability
@@ -35,6 +37,8 @@ pub mod __internal {
     pub use crate::map_maybe_uninit;
     pub use crate::store::StoreOpaque;
     pub use anyhow;
+    #[cfg(feature = "async")]
+    pub use async_trait::async_trait;
     pub use wasmtime_environ;
     pub use wasmtime_environ::component::{CanonicalAbiInfo, ComponentTypes, InterfaceType};
 }

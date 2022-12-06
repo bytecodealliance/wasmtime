@@ -88,7 +88,12 @@ cache = ["dep:wasmtime-cache"]
 
 # Enables support for "async stores" as well as defining host functions as
 # `async fn` and calling functions asynchronously.
-async = ["dep:wasmtime-fiber", "wasmtime-runtime/async", "dep:async-trait"]
+async = [
+  "dep:wasmtime-fiber",
+  "wasmtime-runtime/async",
+  "dep:async-trait",
+  "wasmtime-component-macro?/async",
+]
 
 # Enables support for the pooling instance allocation strategy
 pooling-allocator = ["wasmtime-runtime/pooling-allocator"]

@@ -473,6 +473,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "component-macro-test-helpers"
+version = "0.0.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+]
+
+[[package]]
 name = "component-test-util"
 version = "0.0.0"
 dependencies = [
@@ -2236,6 +2244,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "pulldown-cmark"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ffade02495f22453cd593159ea2f59827aae7f53fa8323f756799b670881dcf8"
+dependencies = [
+ "bitflags",
+ "memchr",
+ "unicase",
+]
+
+[[package]]
 name = "quick-error"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2970,6 +2989,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dcf81ac59edc17cc8697ff311e8f5ef2d99fcbd9817b34cec66f90b6c3dfd987"
 
 [[package]]
+name = "unicase"
+version = "2.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50f37be617794602aabbeee0be4f259dc1778fabe05e2d67ee8f79326d5cb4f6"
+dependencies = [
+ "version_check",
+]
+
+[[package]]
 name = "unicode-bidi"
 version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3496,10 +3524,15 @@ dependencies = [
 name = "wasmtime-component-macro"
 version = "5.0.0"
 dependencies = [
+ "component-macro-test-helpers",
  "proc-macro2",
  "quote",
  "syn",
+ "tracing",
+ "wasmtime",
  "wasmtime-component-util",
+ "wasmtime-wit-bindgen",
+ "wit-parser",
 ]
 
 [[package]]
@@ -3758,6 +3791,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasmtime-wit-bindgen"
+version = "5.0.0"
+dependencies = [
+ "heck",
+ "wit-parser",
+]
+
+[[package]]
 name = "wast"
 version = "35.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3984,6 +4025,19 @@ dependencies = [
  "bitflags",
  "io-lifetimes",
  "windows-sys",
+]
+
+[[package]]
+name = "wit-parser"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "893834cffb239f88413eead7cf91862a6f24c2233afae15d7808256d8c58f91e"
+dependencies = [
+ "anyhow",
+ "id-arena",
+ "indexmap",
+ "pulldown-cmark",
+ "unicode-xid",
 ]
 
 [[package]]
