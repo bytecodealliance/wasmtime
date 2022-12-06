@@ -82,15 +82,16 @@ pub struct WasmRefType {
     pub heap_type: WasmHeapType,
 }
 
-pub const WASM_EXTERN_REF: WasmRefType = WasmRefType {
-    nullable: true,
-    heap_type: WasmHeapType::Extern,
-};
-
-pub const WASM_FUNC_REF: WasmRefType = WasmRefType {
-    nullable: true,
-    heap_type: WasmHeapType::Func,
-};
+impl WasmRefType {
+    pub const EXTERNREF: WasmRefType = WasmRefType {
+        nullable: true,
+        heap_type: WasmHeapType::Extern,
+    };
+    pub const FUNCREF: WasmRefType = WasmRefType {
+        nullable: true,
+        heap_type: WasmHeapType::Func,
+    };
+}
 
 impl From<wasmparser::RefType> for WasmRefType {
     fn from(
@@ -123,8 +124,8 @@ impl From<WasmRefType> for wasmparser::RefType {
 impl fmt::Display for WasmRefType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            &WASM_EXTERN_REF => write!(f, "externref"),
-            &WASM_FUNC_REF => write!(f, "funcref"),
+            &Self::EXTERNREF => write!(f, "externref"),
+            &Self::FUNCREF => write!(f, "funcref"),
             WasmRefType {
                 heap_type,
                 nullable,

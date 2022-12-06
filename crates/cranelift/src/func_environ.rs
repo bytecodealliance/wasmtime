@@ -11,7 +11,6 @@ use cranelift_frontend::Variable;
 use cranelift_wasm::{
     self, FuncIndex, FuncTranslationState, GlobalIndex, GlobalVariable, MemoryIndex, TableIndex,
     TargetEnvironment, TypeIndex, WasmError, WasmHeapType, WasmRefType, WasmResult, WasmType,
-    WASM_EXTERN_REF,
 };
 use std::convert::TryFrom;
 use std::mem;
@@ -1359,7 +1358,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<ir::Value> {
         debug_assert_eq!(
             self.module.globals[index].wasm_ty,
-            WasmType::Ref(WASM_EXTERN_REF),
+            WasmType::Ref(WasmRefType::EXTERNREF),
             "We only use GlobalVariable::Custom for externref"
         );
 
@@ -1387,7 +1386,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<()> {
         debug_assert_eq!(
             self.module.globals[index].wasm_ty,
-            WasmType::Ref(WASM_EXTERN_REF),
+            WasmType::Ref(WasmRefType::EXTERNREF),
             "We only use GlobalVariable::Custom for externref"
         );
 

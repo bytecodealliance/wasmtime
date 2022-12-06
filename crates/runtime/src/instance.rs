@@ -30,7 +30,7 @@ use wasmtime_environ::{
     packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex,
     GlobalInit, HostPtr, MemoryIndex, Module, PrimaryMap, SignatureIndex, TableIndex,
-    TableInitialization, TrapCode, VMOffsets, WasmRefType, WasmType, WASM_EXTERN_REF,
+    TableInitialization, TrapCode, VMOffsets, WasmRefType, WasmType,
 };
 
 mod allocator;
@@ -994,7 +994,7 @@ impl Instance {
                     // count as values move between globals, everything else is just
                     // copy-able bits.
                     match global.wasm_ty {
-                        WasmType::Ref(WASM_EXTERN_REF) => {
+                        WasmType::Ref(WasmRefType::EXTERNREF) => {
                             *(*to).as_externref_mut() = from.as_externref().clone()
                         }
                         _ => ptr::copy_nonoverlapping(from, to, 1),
@@ -1025,7 +1025,7 @@ impl Drop for Instance {
             };
             match global.wasm_ty {
                 // For now only externref globals need to get destroyed
-                WasmType::Ref(WASM_EXTERN_REF) => {}
+                WasmType::Ref(WasmRefType::EXTERNREF) => {}
                 _ => continue,
             }
             unsafe {
