@@ -40,7 +40,6 @@ pub enum Token<'a> {
     StackSlot(u32),        // ss3
     DynamicStackSlot(u32), // dss4
     GlobalValue(u32),      // gv3
-    Heap(u32),             // heap2
     Table(u32),            // table2
     JumpTable(u32),        // jt2
     Constant(u32),         // const2
@@ -346,7 +345,6 @@ impl<'a> Lexer<'a> {
             "dss" => Some(Token::DynamicStackSlot(number)),
             "dt" => Some(Token::DynamicType(number)),
             "gv" => Some(Token::GlobalValue(number)),
-            "heap" => Some(Token::Heap(number)),
             "table" => Some(Token::Table(number)),
             "jt" => Some(Token::JumpTable(number)),
             "const" => Some(Token::Constant(number)),

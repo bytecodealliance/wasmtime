@@ -4,7 +4,6 @@
 //! Each type here should have a corresponding definition in the
 //! `cranelift-codegen/meta/src/shared/immediates` crate in the meta language.
 
-use crate::ir;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::convert::TryFrom;
@@ -1176,18 +1175,6 @@ impl Not for Ieee64 {
     fn not(self) -> Self::Output {
         Self::with_bits(!self.bits())
     }
-}
-
-/// Out-of-line heap access immediates.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub struct HeapImmData {
-    /// The memory flags for the heap access.
-    pub flags: ir::MemFlags,
-    /// The heap being accessed.
-    pub heap: ir::Heap,
-    /// The static offset added to the heap access's index.
-    pub offset: Uimm32,
 }
 
 #[cfg(test)]

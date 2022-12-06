@@ -10,8 +10,8 @@ use crate::error::{Location, ParseResult};
 use crate::lexer::split_entity_name;
 use cranelift_codegen::ir::entities::{AnyEntity, DynamicType};
 use cranelift_codegen::ir::{
-    Block, Constant, DynamicStackSlot, FuncRef, GlobalValue, Heap, JumpTable, SigRef, StackSlot,
-    Table, Value,
+    Block, Constant, DynamicStackSlot, FuncRef, GlobalValue, JumpTable, SigRef, StackSlot, Table,
+    Value,
 };
 use std::collections::HashMap;
 
@@ -47,11 +47,6 @@ impl SourceMap {
     /// Look up a global value entity.
     pub fn contains_gv(&self, gv: GlobalValue) -> bool {
         self.locations.contains_key(&gv.into())
-    }
-
-    /// Look up a heap entity.
-    pub fn contains_heap(&self, heap: Heap) -> bool {
-        self.locations.contains_key(&heap.into())
     }
 
     /// Look up a table entity.
@@ -109,13 +104,6 @@ impl SourceMap {
                     None
                 } else {
                     Some(gv.into())
-                }
-            }),
-            "heap" => Heap::with_number(num).and_then(|heap| {
-                if !self.contains_heap(heap) {
-                    None
-                } else {
-                    Some(heap.into())
                 }
             }),
             "table" => Table::with_number(num).and_then(|table| {
@@ -191,11 +179,6 @@ impl SourceMap {
 
     /// Define the global value `entity`.
     pub fn def_gv(&mut self, entity: GlobalValue, loc: Location) -> ParseResult<()> {
-        self.def_entity(entity.into(), loc)
-    }
-
-    /// Define the heap `entity`.
-    pub fn def_heap(&mut self, entity: Heap, loc: Location) -> ParseResult<()> {
         self.def_entity(entity.into(), loc)
     }
 

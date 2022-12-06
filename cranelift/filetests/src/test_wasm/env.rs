@@ -49,6 +49,7 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv {
                 &self.inner.info,
                 self.inner.expected_reachability.clone(),
                 self.config.clone(),
+                self.heap_access_spectre_mitigation,
             );
             let func_index = FuncIndex::new(
                 self.inner.get_num_func_imports() + self.inner.info.function_bodies.len(),
@@ -234,6 +235,7 @@ pub struct FuncEnv<'a> {
     pub config: TestConfig,
     pub name_to_ir_global: BTreeMap<String, ir::GlobalValue>,
     pub next_heap: usize,
+    pub heap_access_spectre_mitigation: bool,
 }
 
 impl<'a> FuncEnv<'a> {
@@ -241,6 +243,7 @@ impl<'a> FuncEnv<'a> {
         mod_info: &'a cranelift_wasm::DummyModuleInfo,
         expected_reachability: Option<cranelift_wasm::ExpectedReachability>,
         config: TestConfig,
+        heap_access_spectre_mitigation: bool,
     ) -> Self {
         let inner = cranelift_wasm::DummyFuncEnvironment::new(mod_info, expected_reachability);
         Self {
@@ -248,6 +251,7 @@ impl<'a> FuncEnv<'a> {
             config,
             name_to_ir_global: Default::default(),
             next_heap: 0,
+            heap_access_spectre_mitigation,
         }
     }
 }
@@ -256,6 +260,10 @@ impl<'a> TargetEnvironment for FuncEnv<'a> {
     fn target_config(&self) -> TargetFrontendConfig {
         self.inner.target_config()
     }
+
+    fn heap_access_spectre_mitigation(&self) -> bool {
+        self.heap_access_spectre_mitigation
+    }
 }
 
 impl<'a> FuncEnvironment for FuncEnv<'a> {
@@ -263,7 +271,7 @@ impl<'a> FuncEnvironment for FuncEnv<'a> {
         &mut self,
         func: &mut ir::Function,
         index: cranelift_wasm::MemoryIndex,
-    ) -> cranelift_wasm::WasmResult<ir::Heap> {
+    ) -> cranelift_wasm::WasmResult<cranelift_wasm::Heap> {
         if self.next_heap < self.config.heaps.len() {
             let heap = &self.config.heaps[self.next_heap];
             self.next_heap += 1;
@@ -311,7 +319,7 @@ impl<'a> FuncEnvironment for FuncEnv<'a> {
                 self.name_to_ir_global.insert(global_name.to_string(), g);
             }
 
-            Ok(func.create_heap(heap.to_ir(&self.name_to_ir_global)))
+            Ok(self.inner.heaps.push(heap.to_ir(&self.name_to_ir_global)))
         } else {
             self.inner.make_heap(func, index)
         }
@@ -378,7 +386,7 @@ impl<'a> FuncEnvironment for FuncEnv<'a> {
         &mut self,
         pos: cranelift_codegen::cursor::FuncCursor,
         index: cranelift_wasm::MemoryIndex,
-        heap: ir::Heap,
+        heap: cranelift_wasm::Heap,
         val: ir::Value,
     ) -> cranelift_wasm::WasmResult<ir::Value> {
         self.inner.translate_memory_grow(pos, index, heap, val)
@@ -388,7 +396,7 @@ impl<'a> FuncEnvironment for FuncEnv<'a> {
         &mut self,
         pos: cranelift_codegen::cursor::FuncCursor,
         index: cranelift_wasm::MemoryIndex,
-        heap: ir::Heap,
+        heap: cranelift_wasm::Heap,
     ) -> cranelift_wasm::WasmResult<ir::Value> {
         self.inner.translate_memory_size(pos, index, heap)
     }
@@ -397,9 +405,9 @@ impl<'a> FuncEnvironment for FuncEnv<'a> {
         &mut self,
         pos: cranelift_codegen::cursor::FuncCursor,
         src_index: cranelift_wasm::MemoryIndex,
-        src_heap: ir::Heap,
+        src_heap: cranelift_wasm::Heap,
         dst_index: cranelift_wasm::MemoryIndex,
-        dst_heap: ir::Heap,
+        dst_heap: cranelift_wasm::Heap,
         dst: ir::Value,
         src: ir::Value,
         len: ir::Value,
@@ -412,7 +420,7 @@ impl<'a> FuncEnvironment for FuncEnv<'a> {
         &mut self,
         pos: cranelift_codegen::cursor::FuncCursor,
         index: cranelift_wasm::MemoryIndex,
-        heap: ir::Heap,
+        heap: cranelift_wasm::Heap,
         dst: ir::Value,
         val: ir::Value,
         len: ir::Value,
@@ -425,7 +433,7 @@ impl<'a> FuncEnvironment for FuncEnv<'a> {
         &mut self,
         pos: cranelift_codegen::cursor::FuncCursor,
         index: cranelift_wasm::MemoryIndex,
-        heap: ir::Heap,
+        heap: cranelift_wasm::Heap,
         seg_index: u32,
         dst: ir::Value,
         src: ir::Value,
@@ -574,7 +582,7 @@ impl<'a> FuncEnvironment for FuncEnv<'a> {
         &mut self,
         pos: cranelift_codegen::cursor::FuncCursor,
         index: cranelift_wasm::MemoryIndex,
-        heap: ir::Heap,
+        heap: cranelift_wasm::Heap,
         addr: ir::Value,
         expected: ir::Value,
         timeout: ir::Value,
@@ -587,7 +595,7 @@ impl<'a> FuncEnvironment for FuncEnv<'a> {
         &mut self,
         pos: cranelift_codegen::cursor::FuncCursor,
         index: cranelift_wasm::MemoryIndex,
-        heap: ir::Heap,
+        heap: cranelift_wasm::Heap,
         addr: ir::Value,
         count: ir::Value,
     ) -> cranelift_wasm::WasmResult<ir::Value> {
@@ -597,5 +605,12 @@ impl<'a> FuncEnvironment for FuncEnv<'a> {
 
     fn unsigned_add_overflow_condition(&self) -> ir::condcodes::IntCC {
         self.inner.unsigned_add_overflow_condition()
+    }
+
+    fn heaps(
+        &self,
+    ) -> &cranelift_codegen::entity::PrimaryMap<cranelift_wasm::Heap, cranelift_wasm::HeapData>
+    {
+        self.inner.heaps()
     }
 }

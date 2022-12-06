@@ -56,13 +56,6 @@ pub trait FuncWriter {
             self.write_entity_definition(w, func, gv.into(), gv_data)?;
         }
 
-        for (heap, heap_data) in &func.heaps {
-            if !heap_data.index_type.is_invalid() {
-                any = true;
-                self.write_entity_definition(w, func, heap.into(), heap_data)?;
-            }
-        }
-
         for (table, table_data) in &func.tables {
             if !table_data.index_type.is_invalid() {
                 any = true;

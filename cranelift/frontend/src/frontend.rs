@@ -8,10 +8,10 @@ use cranelift_codegen::ir;
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{
     types, AbiParam, Block, DataFlowGraph, DynamicStackSlot, DynamicStackSlotData, ExtFuncData,
-    ExternalName, FuncRef, Function, GlobalValue, GlobalValueData, Heap, HeapData, Inst,
-    InstBuilder, InstBuilderBase, InstructionData, JumpTable, JumpTableData, LibCall, MemFlags,
-    RelSourceLoc, SigRef, Signature, StackSlot, StackSlotData, Type, Value, ValueLabel,
-    ValueLabelAssignments, ValueLabelStart,
+    ExternalName, FuncRef, Function, GlobalValue, GlobalValueData, Inst, InstBuilder,
+    InstBuilderBase, InstructionData, JumpTable, JumpTableData, LibCall, MemFlags, RelSourceLoc,
+    SigRef, Signature, StackSlot, StackSlotData, Type, Value, ValueLabel, ValueLabelAssignments,
+    ValueLabelStart,
 };
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_codegen::packed_option::PackedOption;
@@ -510,11 +510,6 @@ impl<'a> FunctionBuilder<'a> {
     /// Declares a global value accessible to the function.
     pub fn create_global_value(&mut self, data: GlobalValueData) -> GlobalValue {
         self.func.create_global_value(data)
-    }
-
-    /// Declares a heap accessible to the function.
-    pub fn create_heap(&mut self, data: HeapData) -> Heap {
-        self.func.create_heap(data)
     }
 
     /// Returns an object with the [`InstBuilder`](cranelift_codegen::ir::InstBuilder)

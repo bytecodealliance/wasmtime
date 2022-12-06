@@ -213,7 +213,8 @@ pub struct DummyFuncEnvironment<'dummy_environment> {
     /// Expected reachability data (before/after for each op) to assert. This is used for testing.
     expected_reachability: Option<ExpectedReachability>,
 
-    heaps: PrimaryMap<Heap, HeapData>,
+    /// Heaps we have created to implement Wasm linear memories.
+    pub heaps: PrimaryMap<Heap, HeapData>,
 }
 
 impl<'dummy_environment> DummyFuncEnvironment<'dummy_environment> {
