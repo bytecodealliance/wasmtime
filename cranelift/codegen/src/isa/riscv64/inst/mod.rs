@@ -17,7 +17,7 @@ pub use crate::ir::condcodes::FloatCC;
 
 use alloc::vec::Vec;
 use regalloc2::{PRegSet, VReg};
-use smallvec::SmallVec;
+use smallvec::{smallvec, SmallVec};
 use std::boxed::Box;
 use std::string::{String, ToString};
 
@@ -235,7 +235,12 @@ impl Inst {
         alloc_tmp: &mut F,
     ) -> SmallInstVec<Inst> {
         let insts = Inst::load_const_imm(rd, value, alloc_tmp);
-        insts.unwrap_or(LoadConstant::U32(value as u32).load_constant(rd, alloc_tmp))
+        insts.unwrap_or_else(|| {
+            smallvec![Inst::LoadConst32 {
+                rd,
+                imm: value as u32
+            }]
+        })
     }
 
     pub fn load_constant_u64<F: FnMut(Type) -> Writable<Reg>>(
@@ -244,7 +249,7 @@ impl Inst {
         alloc_tmp: &mut F,
     ) -> SmallInstVec<Inst> {
         let insts = Inst::load_const_imm(rd, value, alloc_tmp);
-        insts.unwrap_or(LoadConstant::U64(value).load_constant(rd, alloc_tmp))
+        insts.unwrap_or_else(|| smallvec![Inst::LoadConst64 { rd, imm: value }])
     }
 
     pub(crate) fn construct_auipc_and_jalr(
@@ -337,11 +342,10 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(index);
             collector.reg_early_def(tmp1);
         }
-        &Inst::BrTableCheck { index, .. } => {
-            collector.reg_use(index);
-        }
         &Inst::Auipc { rd, .. } => collector.reg_def(rd),
         &Inst::Lui { rd, .. } => collector.reg_def(rd),
+        &Inst::LoadConst32 { rd, .. } => collector.reg_def(rd),
+        &Inst::LoadConst64 { rd, .. } => collector.reg_def(rd),
         &Inst::AluRRR { rd, rs1, rs2, .. } => {
             collector.reg_use(rs1);
             collector.reg_use(rs2);
@@ -695,9 +699,7 @@ impl MachInst for Inst {
             &Inst::CondBr { .. } => MachTerminator::Cond,
             &Inst::Jalr { .. } => MachTerminator::Uncond,
             &Inst::Ret { .. } => MachTerminator::Ret,
-            // BrTableCheck is a check before BrTable
-            // can lead transfer to default_.
-            &Inst::BrTable { .. } | &Inst::BrTableCheck { .. } => MachTerminator::Indirect,
+            &Inst::BrTable { .. } => MachTerminator::Indirect,
             _ => MachTerminator::None,
         }
     }
@@ -1202,17 +1204,6 @@ impl Inst {
                 let dst = format_regs(&dst[..], allocs);
                 format!("{} {},{},{}##ty={}", op.op_name(), dst, x, y, ty,)
             }
-            &Inst::BrTableCheck {
-                index,
-                targets_len,
-                default_,
-            } => {
-                let index = format_reg(index, allocs);
-                format!(
-                    "br_table_check {}##targets_len={} default_={}",
-                    index, targets_len, default_
-                )
-            }
             &Inst::BrTable {
                 index,
                 tmp1,
@@ -1249,7 +1240,28 @@ impl Inst {
             &Inst::Lui { rd, ref imm } => {
                 format!("{} {},{}", "lui", format_reg(rd.to_reg(), allocs), imm.bits)
             }
+            &Inst::LoadConst32 { rd, imm } => {
+                use std::fmt::Write;
 
+                let rd = format_reg(rd.to_reg(), allocs);
+                let mut buf = String::new();
+                write!(&mut buf, "auipc {},0; ", rd).unwrap();
+                write!(&mut buf, "ld {},12({}); ", rd, rd).unwrap();
+                write!(&mut buf, "j {}; ", Inst::INSTRUCTION_SIZE + 4).unwrap();
+                write!(&mut buf, ".4byte 0x{:x}", imm).unwrap();
+                buf
+            }
+            &Inst::LoadConst64 { rd, imm } => {
+                use std::fmt::Write;
+
+                let rd = format_reg(rd.to_reg(), allocs);
+                let mut buf = String::new();
+                write!(&mut buf, "auipc {},0; ", rd).unwrap();
+                write!(&mut buf, "ld {},12({}); ", rd, rd).unwrap();
+                write!(&mut buf, "j {}; ", Inst::INSTRUCTION_SIZE + 8).unwrap();
+                write!(&mut buf, ".8byte 0x{:x}", imm).unwrap();
+                buf
+            }
             &Inst::AluRRR {
                 alu_op,
                 rd,

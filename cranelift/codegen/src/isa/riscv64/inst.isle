@@ -10,6 +10,14 @@
       (rd WritableReg)
       (imm Imm20))
 
+    (LoadConst32
+      (rd WritableReg)
+      (imm u32))
+
+    (LoadConst64
+      (rd WritableReg)
+      (imm u64))
+
      (Auipc
       (rd WritableReg)
       (imm Imm20))
@@ -209,11 +217,7 @@
       (rd WritableReg)
       (op ReferenceCheckOP)
       (x Reg))
-    
-    (BrTableCheck
-      (index Reg)
-      (targets_len i32)
-      (default_ BranchTarget))
+
     (BrTable
       (index Reg)
       (tmp1 WritableReg)
