@@ -8,9 +8,9 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   vl %v0, 0(%r3)
-;   vl %v1, 0(%r4)
-;   vaq %v6, %v0, %v1
+;   vl %v1, 0(%r3)
+;   vl %v3, 0(%r4)
+;   vaq %v6, %v1, %v3
 ;   vst %v6, 0(%r2)
 ;   br %r14
 
@@ -339,9 +339,9 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   vl %v0, 0(%r3)
-;   vl %v1, 0(%r4)
-;   vsq %v6, %v0, %v1
+;   vl %v1, 0(%r3)
+;   vl %v3, 0(%r4)
+;   vsq %v6, %v1, %v3
 ;   vst %v6, 0(%r2)
 ;   br %r14
 
@@ -569,12 +569,12 @@ block0(v0: i128):
 }
 
 ; block0:
-;   vl %v0, 0(%r3)
+;   vl %v1, 0(%r3)
 ;   vgbm %v4, 0
-;   vsq %v6, %v4, %v0
-;   vrepg %v16, %v0, 0
+;   vsq %v6, %v4, %v1
+;   vrepg %v16, %v1, 0
 ;   vchg %v18, %v4, %v16
-;   vsel %v20, %v6, %v0, %v18
+;   vsel %v20, %v6, %v1, %v18
 ;   vst %v20, 0(%r2)
 ;   br %r14
 
@@ -638,9 +638,9 @@ block0(v0: i128):
 }
 
 ; block0:
-;   vl %v0, 0(%r3)
+;   vl %v1, 0(%r3)
 ;   vgbm %v4, 0
-;   vsq %v6, %v4, %v0
+;   vsq %v6, %v4, %v1
 ;   vst %v6, 0(%r2)
 ;   br %r14
 
@@ -704,12 +704,12 @@ block0(v0: i128, v1: i128):
 ;   stmg %r7, %r15, 56(%r15)
 ; block0:
 ;   lgr %r10, %r2
-;   vl %v0, 0(%r3)
-;   vl %v1, 0(%r4)
-;   lgdr %r4, %f0
-;   vlgvg %r5, %v0, 1
-;   lgdr %r7, %f1
-;   vlgvg %r9, %v1, 1
+;   vl %v1, 0(%r3)
+;   vl %v3, 0(%r4)
+;   lgdr %r4, %f1
+;   vlgvg %r5, %v1, 1
+;   lgdr %r7, %f3
+;   vlgvg %r9, %v3, 1
 ;   lgr %r3, %r5
 ;   mlgr %r2, %r9
 ;   lgr %r8, %r2

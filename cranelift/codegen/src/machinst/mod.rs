@@ -100,6 +100,9 @@ pub trait MachInst: Clone + Debug {
     /// (ret/uncond/cond) and target if applicable.
     fn is_term(&self) -> MachTerminator;
 
+    /// Is this an unconditional trap?
+    fn is_trap(&self) -> bool;
+
     /// Is this an "args" pseudoinst?
     fn is_args(&self) -> bool;
 

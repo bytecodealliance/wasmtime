@@ -1127,6 +1127,13 @@ impl MachInst for Inst {
         }
     }
 
+    fn is_trap(&self) -> bool {
+        match self {
+            Self::Trap { .. } => true,
+            _ => false,
+        }
+    }
+
     fn is_args(&self) -> bool {
         match self {
             Self::Args { .. } => true,

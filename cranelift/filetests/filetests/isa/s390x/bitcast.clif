@@ -46,8 +46,8 @@ block0(v0: i128):
 }
 
 ; block0:
-;   vl %v0, 0(%r3)
-;   vst %v0, 0(%r2)
+;   vl %v1, 0(%r3)
+;   vst %v1, 0(%r2)
 ;   br %r14
 
 function %bitcast_r64_i64(r64) -> i64 {

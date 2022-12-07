@@ -1220,6 +1220,12 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
     }
 
     fn block_params(&self, block: BlockIndex) -> &[VReg] {
+        // As a special case we don't return block params for the entry block, as all the arguments
+        // will be defined by the `Inst::Args` instruction.
+        if block == self.entry {
+            return &[];
+        }
+
         let (start, end) = self.block_params_range[block.index()];
         let ret = &self.block_params[start as usize..end as usize];
         // Currently block params are never aliased to another vreg, but
@@ -1239,6 +1245,8 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
 
     fn is_ret(&self, insn: InsnIndex) -> bool {
         match self.insts[insn.index()].is_term() {
+            // We treat blocks terminated by an unconditional trap like a return for regalloc.
+            MachTerminator::None => self.insts[insn.index()].is_trap(),
             MachTerminator::Ret => true,
             _ => false,
         }

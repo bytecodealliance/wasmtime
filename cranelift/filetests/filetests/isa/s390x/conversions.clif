@@ -227,8 +227,8 @@ block0(v0: i128):
 }
 
 ; block0:
-;   vl %v0, 0(%r2)
-;   vlgvg %r2, %v0, 1
+;   vl %v1, 0(%r2)
+;   vlgvg %r2, %v1, 1
 ;   br %r14
 
 function %ireduce_i128_i32(i128) -> i32 {
@@ -238,8 +238,8 @@ block0(v0: i128):
 }
 
 ; block0:
-;   vl %v0, 0(%r2)
-;   vlgvg %r2, %v0, 1
+;   vl %v1, 0(%r2)
+;   vlgvg %r2, %v1, 1
 ;   br %r14
 
 function %ireduce_i128_i16(i128) -> i16 {
@@ -249,8 +249,8 @@ block0(v0: i128):
 }
 
 ; block0:
-;   vl %v0, 0(%r2)
-;   vlgvg %r2, %v0, 1
+;   vl %v1, 0(%r2)
+;   vlgvg %r2, %v1, 1
 ;   br %r14
 
 function %ireduce_i128_i8(i128) -> i8 {
@@ -260,8 +260,8 @@ block0(v0: i128):
 }
 
 ; block0:
-;   vl %v0, 0(%r2)
-;   vlgvg %r2, %v0, 1
+;   vl %v1, 0(%r2)
+;   vlgvg %r2, %v1, 1
 ;   br %r14
 
 function %ireduce_i64_i32(i64, i64) -> i32 {
@@ -331,9 +331,9 @@ block0(v0: i128):
 }
 
 ; block0:
-;   vl %v0, 0(%r3)
+;   vl %v1, 0(%r3)
 ;   vgbm %v4, 0
-;   vceqgs %v6, %v0, %v4
+;   vceqgs %v6, %v1, %v4
 ;   lghi %r3, 0
 ;   locghine %r3, -1
 ;   vlvgp %v20, %r3, %r3
@@ -347,9 +347,9 @@ block0(v0: i128):
 }
 
 ; block0:
-;   vl %v0, 0(%r2)
+;   vl %v1, 0(%r2)
 ;   vgbm %v3, 0
-;   vceqgs %v5, %v0, %v3
+;   vceqgs %v5, %v1, %v3
 ;   lghi %r2, 0
 ;   locghine %r2, -1
 ;   br %r14
@@ -361,9 +361,9 @@ block0(v0: i128):
 }
 
 ; block0:
-;   vl %v0, 0(%r2)
+;   vl %v1, 0(%r2)
 ;   vgbm %v3, 0
-;   vceqgs %v5, %v0, %v3
+;   vceqgs %v5, %v1, %v3
 ;   lhi %r2, 0
 ;   lochine %r2, -1
 ;   br %r14
@@ -375,9 +375,9 @@ block0(v0: i128):
 }
 
 ; block0:
-;   vl %v0, 0(%r2)
+;   vl %v1, 0(%r2)
 ;   vgbm %v3, 0
-;   vceqgs %v5, %v0, %v3
+;   vceqgs %v5, %v1, %v3
 ;   lhi %r2, 0
 ;   lochine %r2, -1
 ;   br %r14
@@ -389,9 +389,9 @@ block0(v0: i128):
 }
 
 ; block0:
-;   vl %v0, 0(%r2)
+;   vl %v1, 0(%r2)
 ;   vgbm %v3, 0
-;   vceqgs %v5, %v0, %v3
+;   vceqgs %v5, %v1, %v3
 ;   lhi %r2, 0
 ;   lochine %r2, -1
 ;   br %r14

@@ -57,6 +57,11 @@ pub fn compile<B: LowerBackend + TargetIsa>(
         let _tt = timing::regalloc();
         let mut options = RegallocOptions::default();
         options.verbose_log = b.flags().regalloc_verbose_logs();
+
+        if cfg!(debug_assertions) {
+            options.validate_ssa = true;
+        }
+
         regalloc2::run(&vcode, machine_env, &options)
             .map_err(|err| {
                 log::error!(
