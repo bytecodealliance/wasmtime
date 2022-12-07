@@ -1429,6 +1429,7 @@ impl From<wasi_filesystem::Errno> for Errno {
             wasi_filesystem::Errno::Again => ERRNO_AGAIN,
             wasi_filesystem::Errno::Already => ERRNO_ALREADY,
             wasi_filesystem::Errno::Badmsg => ERRNO_BADMSG,
+            wasi_filesystem::Errno::Badf => ERRNO_BADF,
             wasi_filesystem::Errno::Busy => ERRNO_BUSY,
             wasi_filesystem::Errno::Canceled => ERRNO_CANCELED,
             wasi_filesystem::Errno::Child => ERRNO_CHILD,
