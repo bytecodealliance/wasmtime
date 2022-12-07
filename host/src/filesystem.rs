@@ -176,6 +176,10 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         todo!()
     }
 
+    fn close(&mut self, fd: wasi_filesystem::Descriptor) -> anyhow::Result<()> {
+        todo!()
+    }
+
     fn readlink_at(
         &mut self,
         fd: wasi_filesystem::Descriptor,
