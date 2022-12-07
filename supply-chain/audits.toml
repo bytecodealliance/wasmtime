@@ -998,3 +998,9 @@ criteria = "safe-to-deploy"
 version = "0.3.0"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[audits.wit-parser]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.3.1"
+notes = "The Bytecode Alliance is the author of this crate."
+
