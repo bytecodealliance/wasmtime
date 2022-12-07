@@ -2139,6 +2139,17 @@ impl TermEnv {
                         );
                     }
 
+                    // Multi-terms may only be used inside other multi-terms.
+                    if !root_flags.multi && flags.multi {
+                        tyenv.report_error(
+                            pos,
+                            format!(
+                                "Used multi-term '{}' but this rule is not in a multi-term",
+                                sym.0
+                            ),
+                        );
+                    }
+
                     // Partial terms may always be used on the left-hand side of a rule. On the
                     // right-hand side they may only be used inside other partial terms.
                     let partial_allowed = on_lhs || root_flags.partial;
