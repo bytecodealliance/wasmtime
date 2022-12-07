@@ -587,6 +587,26 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn intcc_reverse(&mut self, cc: &IntCC) -> IntCC {
+            cc.reverse()
+        }
+
+        #[inline]
+        fn intcc_inverse(&mut self, cc: &IntCC) -> IntCC {
+            cc.inverse()
+        }
+
+        #[inline]
+        fn floatcc_reverse(&mut self, cc: &FloatCC) -> FloatCC {
+            cc.reverse()
+        }
+
+        #[inline]
+        fn floatcc_inverse(&mut self, cc: &FloatCC) -> FloatCC {
+            cc.inverse()
+        }
+
+        #[inline]
         fn unpack_value_array_2(&mut self, arr: &ValueArray2) -> (Value, Value) {
             let [a, b] = *arr;
             (a, b)

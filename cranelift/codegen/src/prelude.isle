@@ -206,6 +206,24 @@
 (decl mem_flags_trusted () MemFlags)
 (extern constructor mem_flags_trusted mem_flags_trusted)
 
+;;;; Helpers for Working with Flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Reverse an IntCC flag.
+(decl intcc_reverse (IntCC) IntCC)
+(extern constructor intcc_reverse intcc_reverse)
+
+;; Invert an IntCC flag.
+(decl intcc_inverse (IntCC) IntCC)
+(extern constructor intcc_inverse intcc_inverse)
+
+;; Reverse an FloatCC flag.
+(decl floatcc_reverse (FloatCC) FloatCC)
+(extern constructor floatcc_reverse floatcc_reverse)
+
+;; Invert an FloatCC flag.
+(decl floatcc_inverse (FloatCC) FloatCC)
+(extern constructor floatcc_inverse floatcc_inverse)
+
 ;;;; Helper Clif Extractors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; An extractor that only matches types that can fit in 16 bits.

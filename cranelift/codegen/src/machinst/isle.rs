@@ -537,26 +537,6 @@ macro_rules! isle_lower_prelude_methods {
             MInst::gen_move(dst, src, ty)
         }
 
-        #[inline]
-        fn intcc_reverse(&mut self, cc: &IntCC) -> IntCC {
-            cc.reverse()
-        }
-
-        #[inline]
-        fn intcc_inverse(&mut self, cc: &IntCC) -> IntCC {
-            cc.inverse()
-        }
-
-        #[inline]
-        fn floatcc_reverse(&mut self, cc: &FloatCC) -> FloatCC {
-            cc.reverse()
-        }
-
-        #[inline]
-        fn floatcc_inverse(&mut self, cc: &FloatCC) -> FloatCC {
-            cc.inverse()
-        }
-
         /// Generate the return instruction.
         fn gen_return(&mut self, (list, off): ValueSlice) {
             let rets = (off..list.len(&self.lower_ctx.dfg().value_lists))
