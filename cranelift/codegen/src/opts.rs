@@ -90,8 +90,8 @@ impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
 
     type inst_data_etor_iter = InstDataEtorIter<'a, 'b, 'c>;
 
-    fn inst_data_etor(&mut self, eclass: Value) -> Option<InstDataEtorIter<'a, 'b, 'c>> {
-        Some(InstDataEtorIter::new(eclass))
+    fn inst_data_etor(&mut self, eclass: Value) -> InstDataEtorIter<'a, 'b, 'c> {
+        InstDataEtorIter::new(eclass)
     }
 
     fn make_inst_ctor(&mut self, ty: Type, op: &InstructionData) -> Value {

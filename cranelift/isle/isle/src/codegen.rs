@@ -125,7 +125,7 @@ impl<'a> Codegen<'a> {
         let ret_ty = match sig.ret_kind {
             ReturnKind::Plain => ret_tuple,
             ReturnKind::Option => format!("Option<{}>", ret_tuple),
-            ReturnKind::Iterator => format!("Option<Self::{}_iter>", sig.func_name),
+            ReturnKind::Iterator => format!("Self::{}_iter", sig.func_name),
         };
 
         writeln!(
@@ -720,49 +720,20 @@ impl<'a> Codegen<'a> {
                     args = input_values.join(", ")
                 );
 
-                match (infallible, multi) {
-                    (_, true) => {
-                        writeln!(
-                            code,
-                            "{indent}if let Some(mut iter) = {etor_call} {{",
-                            indent = indent,
-                            etor_call = etor_call,
-                        )
-                        .unwrap();
-                        writeln!(
-                            code,
-                            "{indent}    while let Some({bind_pattern}) = iter.next(ctx) {{",
-                            indent = indent,
-                            bind_pattern = bind_pattern,
-                        )
-                        .unwrap();
-
-                        (false, 2)
-                    }
-                    (false, false) => {
-                        writeln!(
-                            code,
-                            "{indent}if let Some({bind_pattern}) = {etor_call} {{",
-                            indent = indent,
-                            bind_pattern = bind_pattern,
-                            etor_call = etor_call,
-                        )
-                        .unwrap();
-
-                        (false, 1)
-                    }
-                    (true, false) => {
-                        writeln!(
-                            code,
-                            "{indent}let {bind_pattern} = {etor_call};",
-                            indent = indent,
-                            bind_pattern = bind_pattern,
-                            etor_call = etor_call,
-                        )
-                        .unwrap();
-
-                        (true, 0)
-                    }
+                if multi {
+                    writeln!(code, "{indent}let mut iter = {etor_call};").unwrap();
+                    writeln!(
+                        code,
+                        "{indent}while let Some({bind_pattern}) = iter.next(ctx) {{",
+                    )
+                    .unwrap();
+                    (false, 1)
+                } else if infallible {
+                    writeln!(code, "{indent}let {bind_pattern} = {etor_call};").unwrap();
+                    (true, 0)
+                } else {
+                    writeln!(code, "{indent}if let Some({bind_pattern}) = {etor_call} {{").unwrap();
+                    (false, 1)
                 }
             }
             &PatternInst::Expr {
