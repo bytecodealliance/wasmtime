@@ -117,13 +117,13 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         }
     }
 
-    fn imm_logic_from_u64(&mut self, ty: Type, n: u64) -> ImmLogic {
-        ImmLogic::maybe_from_u64(n, ty).unwrap()
+    fn imm_logic_from_u64(&mut self, ty: Type, n: u64) -> Option<ImmLogic> {
+        ImmLogic::maybe_from_u64(n, ty)
     }
 
     fn imm_logic_from_imm64(&mut self, ty: Type, n: Imm64) -> Option<ImmLogic> {
         let ty = if ty.bits() < 32 { I32 } else { ty };
-        ImmLogic::maybe_from_u64(n.bits() as u64, ty)
+        self.imm_logic_from_u64(ty, n.bits() as u64)
     }
 
     fn imm12_from_u64(&mut self, n: u64) -> Option<Imm12> {
