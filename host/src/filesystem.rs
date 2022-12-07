@@ -14,15 +14,6 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         todo!()
     }
 
-    fn fallocate(
-        &mut self,
-        fd: wasi_filesystem::Descriptor,
-        offset: u64,
-        len: u64,
-    ) -> HostResult<(), wasi_filesystem::Errno> {
-        todo!()
-    }
-
     fn datasync(
         &mut self,
         fd: wasi_filesystem::Descriptor,
