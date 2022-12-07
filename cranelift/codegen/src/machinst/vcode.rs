@@ -1245,10 +1245,8 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
 
     fn is_ret(&self, insn: InsnIndex) -> bool {
         match self.insts[insn.index()].is_term() {
-            // TODO: this is probably not the place for this, we likely need an `is_trap` in the
-            // regalloc2::Function trait that we can use when appropriate.
+            // We treat blocks terminated by an unconditional trap like a return for regalloc.
             MachTerminator::None => self.insts[insn.index()].is_trap(),
-
             MachTerminator::Ret => true,
             _ => false,
         }
