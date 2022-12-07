@@ -9,5 +9,6 @@ documentation = "https://docs.rs/wasmtime-wit-bindgen/"
 edition.workspace = true
 
 [dependencies]
+anyhow = { workspace = true }
 heck = { workspace = true }
 wit-parser = { workspace = true }

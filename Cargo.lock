@@ -3781,6 +3781,7 @@ dependencies = [
 name = "wasmtime-wit-bindgen"
 version = "5.0.0"
 dependencies = [
+ "anyhow",
  "heck",
  "wit-parser",
 ]
