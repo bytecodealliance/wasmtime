@@ -524,9 +524,9 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn offset32(&mut self, x: Offset32) -> Option<u32> {
+        fn offset32(&mut self, x: Offset32) -> u32 {
             let x: i32 = x.into();
-            Some(x as u32)
+            x as u32
         }
 
         #[inline]

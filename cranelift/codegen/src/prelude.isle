@@ -57,7 +57,7 @@
 ;; Extractor that pulls apart an Offset32 into a u32 with the raw
 ;; signed-32-bit twos-complement bits.
 (decl offset32 (u32) Offset32)
-(extern extractor offset32 offset32)
+(extern extractor infallible offset32 offset32)
 
 ;; Pure/fallible constructor that tests if one u32 is less than or
 ;; equal to another.
