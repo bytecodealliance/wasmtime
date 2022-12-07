@@ -4016,9 +4016,9 @@ dependencies = [
 
 [[package]]
 name = "wit-parser"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "893834cffb239f88413eead7cf91862a6f24c2233afae15d7808256d8c58f91e"
+checksum = "703eb1d2f89ff2c52d50f7ff002735e423cea75f0a5dc5c8a4626c4c47cd9ca6"
 dependencies = [
  "anyhow",
  "id-arena",

@@ -5,7 +5,7 @@ use syn::punctuated::Punctuated;
 use syn::token;
 use syn::Token;
 use wasmtime_wit_bindgen::Opts;
-use wit_parser::World;
+use wit_parser::{Document, World};
 
 #[derive(Default)]
 pub struct Config {
@@ -119,8 +119,10 @@ impl Parse for Opt {
             let span = input.parse::<kw::inline>()?.span;
             input.parse::<Token![:]>()?;
             let s = input.parse::<syn::LitStr>()?;
-            let world =
-                World::parse("<macro-input>", &s.value()).map_err(|e| Error::new(s.span(), e))?;
+            let world = Document::parse("<macro-input>".as_ref(), &s.value())
+                .map_err(|e| Error::new(s.span(), e))?
+                .into_world()
+                .map_err(|e| Error::new(s.span(), e))?;
             Ok(Opt::Inline(span, world))
         } else if l.peek(kw::tracing) {
             input.parse::<kw::tracing>()?;
