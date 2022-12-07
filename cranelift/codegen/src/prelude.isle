@@ -9,7 +9,7 @@
 ;; `()`
 (type Unit (primitive Unit))
 
-(decl unit () Unit)
+(decl pure unit () Unit)
 (extern constructor unit unit)
 
 (type bool (primitive bool))
@@ -42,7 +42,7 @@
 (decl value_type (Type) Value)
 (extern extractor infallible value_type value_type)
 
-(decl u32_add (u32 u32) u32)
+(decl pure u32_add (u32 u32) u32)
 (extern constructor u32_add u32_add)
 
 ;; Pure/fallible constructor that tries to add two `u32`s, interpreted
@@ -82,7 +82,7 @@
 (decl uimm8 (u8) Imm64)
 (extern extractor uimm8 uimm8)
 
-(decl u8_and (u8 u8) u8)
+(decl pure u8_and (u8 u8) u8)
 (extern constructor u8_and u8_and)
 
 ;;;; Primitive Type Conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -181,29 +181,29 @@
 (extern constructor ty_bits ty_bits)
 
 ;; Get the bit width of a given type.
-(decl ty_bits_u16 (Type) u16)
+(decl pure ty_bits_u16 (Type) u16)
 (extern constructor ty_bits_u16 ty_bits_u16)
 
 ;; Get the bit width of a given type.
-(decl ty_bits_u64 (Type) u64)
+(decl pure ty_bits_u64 (Type) u64)
 (extern constructor ty_bits_u64 ty_bits_u64)
 
 ;; Get a mask for the width of a given type.
-(decl ty_mask (Type) u64)
+(decl pure ty_mask (Type) u64)
 (extern constructor ty_mask ty_mask)
 
 ;; Get the byte width of a given type.
-(decl ty_bytes (Type) u16)
+(decl pure ty_bytes (Type) u16)
 (extern constructor ty_bytes ty_bytes)
 
 ;; Get the type of each lane in the given type.
-(decl lane_type (Type) Type)
+(decl pure lane_type (Type) Type)
 (extern constructor lane_type lane_type)
 
 ;;;; `cranelift_codegen::ir::MemFlags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `MemFlags::trusted`
-(decl mem_flags_trusted () MemFlags)
+(decl pure mem_flags_trusted () MemFlags)
 (extern constructor mem_flags_trusted mem_flags_trusted)
 
 ;;;; Helper Clif Extractors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -370,13 +370,13 @@
 (extern extractor ty_dyn128_int ty_dyn128_int)
 
 ;; Convert an `Offset32` to a primitive number.
-(decl offset32_to_u32 (Offset32) u32)
+(decl pure offset32_to_u32 (Offset32) u32)
 (extern constructor offset32_to_u32 offset32_to_u32)
 
 ;; This is a direct import of `IntCC::unsigned`.
 ;; Get the corresponding IntCC with the signed component removed.
 ;; For conditions without a signed component, this is a no-op.
-(decl intcc_unsigned (IntCC) IntCC)
+(decl pure intcc_unsigned (IntCC) IntCC)
 (extern constructor intcc_unsigned intcc_unsigned)
 
 ;; Pure constructor that only matches signed integer cond codes.
@@ -385,13 +385,13 @@
 
 ;;;; Helpers for Working with TrapCode ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl trap_code_division_by_zero () TrapCode)
+(decl pure trap_code_division_by_zero () TrapCode)
 (extern constructor trap_code_division_by_zero trap_code_division_by_zero)
 
-(decl trap_code_integer_overflow () TrapCode)
+(decl pure trap_code_integer_overflow () TrapCode)
 (extern constructor trap_code_integer_overflow trap_code_integer_overflow)
 
-(decl trap_code_bad_conversion_to_integer () TrapCode)
+(decl pure trap_code_bad_conversion_to_integer () TrapCode)
 (extern constructor trap_code_bad_conversion_to_integer trap_code_bad_conversion_to_integer)
 
 ;;;; Helpers for tail recursion loops ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -400,7 +400,7 @@
 (type Range (primitive Range))
 
 ;; Create a new range from `start` through `end` (exclusive).
-(decl range (usize usize) Range)
+(decl pure range (usize usize) Range)
 (extern constructor range range)
 
 ;; A view on the current state of the range.
