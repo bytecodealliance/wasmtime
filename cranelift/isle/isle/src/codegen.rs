@@ -545,7 +545,7 @@ impl<'a> Codegen<'a> {
                 } else {
                     writeln!(
                         code,
-                        "{}let mut it = {}(ctx, {})?;",
+                        "{}let mut iter = {}(ctx, {});",
                         indent,
                         sig.full_name,
                         input_exprs.join(", "),
@@ -553,7 +553,7 @@ impl<'a> Codegen<'a> {
                     .unwrap();
                     writeln!(
                         code,
-                        "{}while let Some({}) = it.next(ctx) {{",
+                        "{}while let Some({}) = iter.next(ctx) {{",
                         indent, outputname,
                     )
                     .unwrap();

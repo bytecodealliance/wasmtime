@@ -33,8 +33,8 @@ impl multi_extractor::ContextIter for It {
 struct Context;
 impl multi_extractor::Context for Context {
     type e1_etor_iter = It;
-    fn e1_etor(&mut self, arg0: u32) -> Option<It> {
-        Some(It { i: 0, arg: arg0 })
+    fn e1_etor(&mut self, arg0: u32) -> It {
+        It { i: 0, arg: arg0 }
     }
 }
 
