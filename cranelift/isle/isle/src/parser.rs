@@ -307,6 +307,12 @@ impl<'a> Parser<'a> {
         } else {
             false
         };
+        let partial = if self.is_sym_str("partial") {
+            self.symbol()?;
+            true
+        } else {
+            false
+        };
 
         let term = self.parse_ident()?;
 
@@ -325,6 +331,7 @@ impl<'a> Parser<'a> {
             ret_ty,
             pure,
             multi,
+            partial,
             pos,
         })
     }

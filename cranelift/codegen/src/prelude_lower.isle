@@ -227,11 +227,11 @@
            (def_inst (iconst (u64_from_imm64 x))))
 
 ;; Match any zero value for iconst, fconst32, fconst64, vconst and splat.
-(decl pure zero_value (Value) Value)
+(decl pure partial zero_value (Value) Value)
 (extern constructor zero_value zero_value)
 
 ;; Match a sinkable instruction from a value operand.
-(decl pure is_sinkable_inst (Value) Inst)
+(decl pure partial is_sinkable_inst (Value) Inst)
 (extern constructor is_sinkable_inst is_sinkable_inst)
 
 ;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -548,16 +548,16 @@
 (decl tls_model (TlsModel) Type)
 (extern extractor infallible tls_model tls_model)
 
-(decl pure tls_model_is_elf_gd () Unit)
+(decl pure partial tls_model_is_elf_gd () Unit)
 (extern constructor tls_model_is_elf_gd tls_model_is_elf_gd)
 
-(decl pure tls_model_is_macho () Unit)
+(decl pure partial tls_model_is_macho () Unit)
 (extern constructor tls_model_is_macho tls_model_is_macho)
 
-(decl pure tls_model_is_coff () Unit)
+(decl pure partial tls_model_is_coff () Unit)
 (extern constructor tls_model_is_coff tls_model_is_coff)
 
-(decl pure preserve_frame_pointers () Unit)
+(decl pure partial preserve_frame_pointers () Unit)
 (extern constructor preserve_frame_pointers preserve_frame_pointers)
 
 ;;;; Helpers for accessing instruction data ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

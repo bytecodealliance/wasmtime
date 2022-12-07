@@ -83,6 +83,8 @@ pub struct Decl {
     /// extractor or a constructor that matches multiple times, or
     /// produces multiple values.
     pub multi: bool,
+    /// Whether this term's constructor can fail to match.
+    pub partial: bool,
     pub pos: Pos,
 }
 

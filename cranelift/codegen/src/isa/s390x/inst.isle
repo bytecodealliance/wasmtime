@@ -1537,15 +1537,15 @@
 
 ;; Detect specific integer values
 
-(decl pure i64_nonequal (i64 i64) i64)
+(decl pure partial i64_nonequal (i64 i64) i64)
 (extern constructor i64_nonequal i64_nonequal)
 
-(decl pure i64_nonzero (i64) i64)
+(decl pure partial i64_nonzero (i64) i64)
 (rule (i64_nonzero x)
       (if (i64_nonequal x 0))
       x)
 
-(decl pure i64_not_neg1 (i64) i64)
+(decl pure partial i64_not_neg1 (i64) i64)
 (rule (i64_not_neg1 x)
       (if (i64_nonequal x -1))
       x)
@@ -1799,11 +1799,11 @@
 
 ;; Form the sum of two offset values, and check that the result is
 ;; a valid `MemArg::Symbol` offset (i.e. is even and fits into i32).
-(decl pure memarg_symbol_offset_sum (i64 i64) i32)
+(decl pure partial memarg_symbol_offset_sum (i64 i64) i32)
 (extern constructor memarg_symbol_offset_sum memarg_symbol_offset_sum)
 
 ;; Likewise, but just check a single offset value.
-(decl pure memarg_symbol_offset (i64) i32)
+(decl pure partial memarg_symbol_offset (i64) i32)
 (rule (memarg_symbol_offset x)
       (memarg_symbol_offset_sum x 0))
 
@@ -1837,7 +1837,7 @@
 
 ;; Test whether a `load` address will be lowered to a `MemArg::Symbol`.
 
-(decl pure load_sym (Inst) Inst)
+(decl pure partial load_sym (Inst) Inst)
 (rule (load_sym inst)
       (if-let (load _ (symbol_value (symbol_value_data _ (reloc_distance_near) sym_offset))
                     (i64_from_offset load_offset))
@@ -1845,7 +1845,7 @@
       (if (memarg_symbol_offset_sum sym_offset load_offset))
       inst)
 
-(decl pure uload16_sym (Inst) Inst)
+(decl pure partial uload16_sym (Inst) Inst)
 (rule (uload16_sym inst)
       (if-let (uload16 _ (symbol_value (symbol_value_data _ (reloc_distance_near) sym_offset))
                        (i64_from_offset load_offset))
@@ -2752,7 +2752,7 @@
 ;; Similarly, because we cannot allocate temp registers, if an instruction
 ;; requires matching source and destination registers, this needs to be handled
 ;; by the user.  Another helper to verify that constraint.
-(decl pure same_reg (WritableReg Reg) Reg)
+(decl pure partial same_reg (WritableReg Reg) Reg)
 (extern constructor same_reg same_reg)
 
 ;; Push a `MInst.AluRRR` instruction to a sequence.

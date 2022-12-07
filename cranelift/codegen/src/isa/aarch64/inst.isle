@@ -1599,7 +1599,7 @@
 ))
 
 ;; Extractors for target features ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(decl pure sign_return_address_disabled () Unit)
+(decl pure partial sign_return_address_disabled () Unit)
 (extern constructor sign_return_address_disabled sign_return_address_disabled)
 
 (decl use_lse () Inst)
@@ -1610,10 +1610,10 @@
 (decl pure imm_logic_from_u64 (Type u64) ImmLogic)
 (extern constructor imm_logic_from_u64 imm_logic_from_u64)
 
-(decl pure imm_logic_from_imm64 (Type Imm64) ImmLogic)
+(decl pure partial imm_logic_from_imm64 (Type Imm64) ImmLogic)
 (extern constructor imm_logic_from_imm64 imm_logic_from_imm64)
 
-(decl pure imm_shift_from_imm64 (Type Imm64) ImmShift)
+(decl pure partial imm_shift_from_imm64 (Type Imm64) ImmShift)
 (extern constructor imm_shift_from_imm64 imm_shift_from_imm64)
 
 (decl imm_shift_from_u8 (u8) ImmShift)
@@ -1672,13 +1672,13 @@
 (decl imm12_from_negated_u64 (Imm12) u64)
 (extern extractor imm12_from_negated_u64 imm12_from_negated_u64)
 
-(decl pure lshr_from_u64 (Type u64) ShiftOpAndAmt)
+(decl pure partial lshr_from_u64 (Type u64) ShiftOpAndAmt)
 (extern constructor lshr_from_u64 lshr_from_u64)
 
-(decl pure lshl_from_imm64 (Type Imm64) ShiftOpAndAmt)
+(decl pure partial lshl_from_imm64 (Type Imm64) ShiftOpAndAmt)
 (extern constructor lshl_from_imm64 lshl_from_imm64)
 
-(decl pure lshl_from_u64 (Type u64) ShiftOpAndAmt)
+(decl pure partial lshl_from_u64 (Type u64) ShiftOpAndAmt)
 (extern constructor lshl_from_u64 lshl_from_u64)
 
 (decl integral_ty (Type) Type)
@@ -1687,10 +1687,10 @@
 (decl valid_atomic_transaction (Type) Type)
 (extern extractor valid_atomic_transaction valid_atomic_transaction)
 
-(decl pure is_zero_simm9 (SImm9) Unit)
+(decl pure partial is_zero_simm9 (SImm9) Unit)
 (extern constructor is_zero_simm9 is_zero_simm9)
 
-(decl pure is_zero_uimm12 (UImm12Scaled) Unit)
+(decl pure partial is_zero_uimm12 (UImm12Scaled) Unit)
 (extern constructor is_zero_uimm12 is_zero_uimm12)
 
 ;; Helper to go directly from a `Value`, when it's an `iconst`, to an `Imm12`.
@@ -2758,7 +2758,7 @@
 ;; Weird logical-instruction immediate in ORI using zero register; to simplify,
 ;; we only match when we are zero-extending the value.
 (rule 1 (imm (integral_ty ty) (ImmExtend.Zero) k)
-      (if-let n (imm_logic_from_u64 ty k))
+      (if-let n (imm_logic_from_imm64 ty (imm64 k)))
       (orr_imm ty (zero_reg) n))
 
 (decl load_constant64_full (Type ImmExtend u64) Reg)

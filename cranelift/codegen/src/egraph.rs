@@ -229,48 +229,46 @@ where
         // values produced as equivalents to this value.
         trace!("Calling into ISLE with original value {}", orig_value);
         isle_ctx.ctx.stats.rewrite_rule_invoked += 1;
-        let optimized_values =
+        let mut optimized_values =
             crate::opts::generated_code::constructor_simplify(&mut isle_ctx, orig_value);
 
         // Create a union of all new values with the original (or
         // maybe just one new value marked as "subsuming" the
         // original, if present.)
         let mut union_value = orig_value;
-        if let Some(mut optimized_values) = optimized_values {
-            while let Some(optimized_value) = optimized_values.next(&mut isle_ctx) {
-                trace!(
-                    "Returned from ISLE for {}, got {:?}",
-                    orig_value,
-                    optimized_value
-                );
-                if optimized_value == orig_value {
-                    trace!(" -> same as orig value; skipping");
-                    continue;
-                }
-                if isle_ctx.ctx.subsume_values.contains(&optimized_value) {
-                    // Merge in the unionfind so canonicalization
-                    // still works, but take *only* the subsuming
-                    // value, and break now.
-                    isle_ctx.ctx.eclasses.union(optimized_value, union_value);
-                    union_value = optimized_value;
-                    break;
-                }
-
-                let old_union_value = union_value;
-                union_value = isle_ctx
-                    .ctx
-                    .func
-                    .dfg
-                    .union(old_union_value, optimized_value);
-                isle_ctx.ctx.stats.union += 1;
-                trace!(" -> union: now {}", union_value);
-                isle_ctx.ctx.eclasses.add(union_value);
-                isle_ctx
-                    .ctx
-                    .eclasses
-                    .union(old_union_value, optimized_value);
-                isle_ctx.ctx.eclasses.union(old_union_value, union_value);
+        while let Some(optimized_value) = optimized_values.next(&mut isle_ctx) {
+            trace!(
+                "Returned from ISLE for {}, got {:?}",
+                orig_value,
+                optimized_value
+            );
+            if optimized_value == orig_value {
+                trace!(" -> same as orig value; skipping");
+                continue;
             }
+            if isle_ctx.ctx.subsume_values.contains(&optimized_value) {
+                // Merge in the unionfind so canonicalization
+                // still works, but take *only* the subsuming
+                // value, and break now.
+                isle_ctx.ctx.eclasses.union(optimized_value, union_value);
+                union_value = optimized_value;
+                break;
+            }
+
+            let old_union_value = union_value;
+            union_value = isle_ctx
+                .ctx
+                .func
+                .dfg
+                .union(old_union_value, optimized_value);
+            isle_ctx.ctx.stats.union += 1;
+            trace!(" -> union: now {}", union_value);
+            isle_ctx.ctx.eclasses.add(union_value);
+            isle_ctx
+                .ctx
+                .eclasses
+                .union(old_union_value, optimized_value);
+            isle_ctx.ctx.eclasses.union(old_union_value, union_value);
         }
 
         isle_ctx.ctx.rewrite_depth -= 1;

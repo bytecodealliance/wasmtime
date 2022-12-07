@@ -238,6 +238,8 @@ pub enum TermKind {
         pure: bool,
         /// Whether the term is marked as `multi`.
         multi: bool,
+        /// Whether the term is marked as `partial`.
+        partial: bool,
         /// The kind of this term's constructor, if any.
         constructor_kind: Option<ConstructorKind>,
         /// The kind of this term's extractor, if any.
@@ -394,34 +396,27 @@ impl Term {
     pub fn constructor_sig(&self, tyenv: &TypeEnv) -> Option<ExternalSig> {
         match &self.kind {
             TermKind::Decl {
-                constructor_kind: Some(ConstructorKind::ExternalConstructor { name }),
+                constructor_kind: Some(kind),
                 multi,
-                pure,
-                ..
-            } => Some(ExternalSig {
-                func_name: tyenv.syms[name.index()].clone(),
-                full_name: format!("C::{}", tyenv.syms[name.index()]),
-                param_tys: self.arg_tys.clone(),
-                ret_tys: vec![self.ret_ty],
-                infallible: !pure && !*multi,
-                multi: *multi,
-            }),
-            TermKind::Decl {
-                constructor_kind: Some(ConstructorKind::InternalConstructor { .. }),
-                multi,
+                partial,
                 ..
             } => {
-                let name = format!("constructor_{}", tyenv.syms[self.name.index()]);
+                let (func_name, full_name) = match kind {
+                    ConstructorKind::InternalConstructor => {
+                        let name = format!("constructor_{}", tyenv.syms[self.name.index()]);
+                        (name.clone(), name)
+                    }
+                    ConstructorKind::ExternalConstructor { name } => (
+                        tyenv.syms[name.index()].clone(),
+                        format!("C::{}", tyenv.syms[name.index()]),
+                    ),
+                };
                 Some(ExternalSig {
-                    func_name: name.clone(),
-                    full_name: name,
+                    func_name,
+                    full_name,
                     param_tys: self.arg_tys.clone(),
                     ret_tys: vec![self.ret_ty],
-                    // Internal constructors are always fallible, even
-                    // if not pure, because ISLE allows partial
-                    // matching at the toplevel (an entry point can
-                    // fail to rewrite).
-                    infallible: false,
+                    infallible: !*partial,
                     multi: *multi,
                 })
             }
@@ -737,29 +732,16 @@ impl Expr {
                         visitor.add_create_variant(arg_values_tys, ty, *variant)
                     }
                     TermKind::Decl {
-                        constructor_kind: Some(ConstructorKind::InternalConstructor),
+                        constructor_kind: Some(_),
                         multi,
+                        partial,
                         ..
                     } => {
                         visitor.add_construct(
                             arg_values_tys,
                             ty,
                             term,
-                            /* infallible = */ false,
-                            *multi,
-                        )
-                    }
-                    TermKind::Decl {
-                        constructor_kind: Some(ConstructorKind::ExternalConstructor { .. }),
-                        pure,
-                        multi,
-                        ..
-                    } => {
-                        visitor.add_construct(
-                            arg_values_tys,
-                            ty,
-                            term,
-                            /* infallible = */ !pure,
+                            /* infallible = */ !*partial,
                             *multi,
                         )
                     }
@@ -786,6 +768,26 @@ impl Expr {
             ty: self.ty(),
             value: self.visit(visitor, termenv, &var_exprs),
         })
+    }
+
+    fn uses_partial_term(&self, termenv: &TermEnv) -> bool {
+        match self {
+            Expr::Term(_, termid, args) => {
+                if let TermKind::Decl { partial: true, .. } = termenv.terms[termid.index()].kind {
+                    return true;
+                }
+                args.iter().any(|arg| arg.uses_partial_term(termenv))
+            }
+            Expr::Let { bindings, body, .. } => {
+                body.uses_partial_term(termenv)
+                    || bindings
+                        .iter()
+                        .any(|(_, _, expr)| expr.uses_partial_term(termenv))
+            }
+            Expr::Var(..) => false,
+            Expr::ConstInt(..) => false,
+            Expr::ConstPrim(..) => false,
+        }
     }
 }
 
@@ -1141,6 +1143,7 @@ impl TermEnv {
         env.collect_rules(tyenv, defs);
         env.check_for_undefined_decls(tyenv, defs);
         env.check_for_expr_terms_without_constructors(tyenv, defs);
+        env.check_for_partial_terms(tyenv);
         tyenv.return_errors()?;
 
         Ok(env)
@@ -1207,6 +1210,7 @@ impl TermEnv {
                             extractor_kind: None,
                             pure: decl.pure,
                             multi: decl.multi,
+                            partial: decl.partial,
                         },
                     });
                 }
@@ -1744,6 +1748,40 @@ impl TermEnv {
                         )
                     }
                 });
+            }
+        }
+    }
+
+    fn check_for_partial_terms(&self, tyenv: &mut TypeEnv) {
+        let mut non_partial_terms = StableMap::new();
+        for term in self.terms.iter() {
+            if let TermKind::Decl {
+                partial: false,
+                constructor_kind: Some(ConstructorKind::InternalConstructor),
+                multi,
+                ..
+            } = term.kind
+            {
+                non_partial_terms.insert(term.id, multi);
+            }
+        }
+
+        for rule in self.rules.iter() {
+            if let Some(&multi) = non_partial_terms.get(&rule.root_term) {
+                if !rule.rhs.uses_partial_term(self) {
+                    // This rule is okay.
+                } else if multi {
+                    tyenv.report_error(
+                        rule.pos,
+                        "'multi' rule can't use partial constructors on RHS; \
+                        try moving them to if-lets",
+                    );
+                } else {
+                    tyenv.report_error(
+                        rule.pos,
+                        "term must be declared partial if it uses partial constructors on RHS",
+                    );
+                }
             }
         }
     }

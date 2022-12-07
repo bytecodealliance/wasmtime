@@ -2,7 +2,7 @@
 
 ;; The main lowering constructor term: takes a clif `Inst` and returns the
 ;; register(s) within which the lowered instruction's result values live.
-(decl lower (Inst) InstOutput)
+(decl partial lower (Inst) InstOutput)
 
 ;; Variant of the main lowering constructor term, which receives an
 ;; additional argument (a vector of branch targets to be used) for
@@ -12,7 +12,7 @@
 ;; blocks while we lower, the fallthrough in the new order is not (necessarily)
 ;; the same as the fallthrough in CLIF. So, we use the explicitly-provided
 ;; target.
-(decl lower_branch (Inst VecMachLabel) InstOutput)
+(decl partial lower_branch (Inst VecMachLabel) InstOutput)
 
 ;;;; Rules for `iconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
