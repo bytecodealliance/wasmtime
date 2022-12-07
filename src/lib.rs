@@ -25,13 +25,19 @@ mod bindings {
     });
 }
 
-#[export_name = "command"]
-unsafe extern "C" fn command_entrypoint(
+#[no_mangle]
+pub unsafe extern "C" fn command(
     stdin: u32,
     stdout: u32,
     args_ptr: *const WasmStr,
     args_len: usize,
 ) {
+    // TODO: ideally turning off `command` would remove this import and the
+    // `*.wit` metadata entirely but doing that ergonomically will likely
+    // require some form of `use` to avoid duplicating lots of `*.wit` bits.
+    if !cfg!(feature = "command") {
+        unreachable();
+    }
     State::with_mut(|state| {
         state.push_desc(Descriptor::File(File {
             fd: stdin,
@@ -1430,7 +1436,7 @@ struct State {
     args: Option<&'static [WasmStr]>,
 }
 
-struct WasmStr {
+pub struct WasmStr {
     ptr: *const u8,
     len: usize,
 }
