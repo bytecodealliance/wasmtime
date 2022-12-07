@@ -2,8 +2,7 @@
 
 use crate::ir::{ExprInst, InstId, PatternInst, Value};
 use crate::log;
-use crate::sema::ExternalSig;
-use crate::sema::{TermEnv, TermId, Type, TypeEnv, TypeId, Variant};
+use crate::sema::{ExternalSig, ReturnKind, TermEnv, TermId, Type, TypeEnv, TypeId, Variant};
 use crate::trie::{TrieEdge, TrieNode, TrieSymbol};
 use crate::{StableMap, StableSet};
 use std::borrow::Cow;
@@ -33,13 +32,6 @@ struct Codegen<'a> {
     typeenv: &'a TypeEnv,
     termenv: &'a TermEnv,
     functions_by_term: &'a BTreeMap<TermId, TrieNode>,
-}
-
-#[derive(Clone, Copy, Eq, PartialEq)]
-enum ReturnKind {
-    Plain,
-    Option,
-    Iterator,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -119,14 +111,21 @@ impl<'a> Codegen<'a> {
             close_paren = if sig.ret_tys.len() != 1 { ")" } else { "" },
         );
 
-        let ret_ty = match (sig.multi, sig.infallible) {
-            (false, false) => format!("Option<{}>", ret_tuple),
-            (false, true) => format!("{}", ret_tuple),
-            (true, false) => format!("Option<Self::{}_iter>", sig.func_name),
-            _ => panic!(
-                "Unsupported multiplicity/infallible combo: {:?}, {}",
-                sig.multi, sig.infallible
-            ),
+        if sig.ret_kind == ReturnKind::Iterator {
+            writeln!(
+                code,
+                "{indent}type {name}_iter: ContextIter<Context = Self, Output = {output}>;",
+                indent = indent,
+                name = sig.func_name,
+                output = ret_tuple,
+            )
+            .unwrap();
+        }
+
+        let ret_ty = match sig.ret_kind {
+            ReturnKind::Plain => ret_tuple,
+            ReturnKind::Option => format!("Option<{}>", ret_tuple),
+            ReturnKind::Iterator => format!("Option<Self::{}_iter>", sig.func_name),
         };
 
         writeln!(
@@ -144,17 +143,6 @@ impl<'a> Codegen<'a> {
             ret_ty = ret_ty,
         )
         .unwrap();
-
-        if sig.multi {
-            writeln!(
-                code,
-                "{indent}type {name}_iter: ContextIter<Context = Self, Output = {output}>;",
-                indent = indent,
-                name = sig.func_name,
-                output = ret_tuple,
-            )
-            .unwrap();
-        }
     }
 
     fn generate_ctx_trait(&self, code: &mut String) {
@@ -366,16 +354,8 @@ impl<'a> Codegen<'a> {
                 .join(", ");
             assert_eq!(sig.ret_tys.len(), 1);
 
-            let ret_kind = if sig.multi {
-                ReturnKind::Iterator
-            } else if !sig.infallible {
-                ReturnKind::Option
-            } else {
-                ReturnKind::Plain
-            };
-
             let ret = self.type_name(sig.ret_tys[0], false);
-            let ret = match ret_kind {
+            let ret = match sig.ret_kind {
                 ReturnKind::Iterator => format!("impl ContextIter<Context = C, Output = {}>", ret),
                 ReturnKind::Option => format!("Option<{}>", ret),
                 ReturnKind::Plain => ret,
@@ -395,7 +375,7 @@ impl<'a> Codegen<'a> {
             )
             .unwrap();
 
-            if ret_kind == ReturnKind::Iterator {
+            if sig.ret_kind == ReturnKind::Iterator {
                 writeln!(code, "let mut returns = ConstructorVec::new();").unwrap();
             }
 
@@ -406,10 +386,10 @@ impl<'a> Codegen<'a> {
                 trie,
                 "    ",
                 &mut body_ctx,
-                ret_kind,
+                sig.ret_kind,
             );
             if !returned {
-                let ret_expr = match ret_kind {
+                let ret_expr = match sig.ret_kind {
                     ReturnKind::Plain => Cow::from(format!(
                         "unreachable!(\"no rule matched for term {{}} at {{}}; should it be partial?\", {:?}, {:?})",
                         term_name,

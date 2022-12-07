@@ -288,6 +288,17 @@ pub enum ExtractorKind {
     },
 }
 
+/// How many values a function can return.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ReturnKind {
+    /// Exactly one return value.
+    Plain,
+    /// Zero or one return values.
+    Option,
+    /// Zero or more return values.
+    Iterator,
+}
+
 /// An external function signature.
 #[derive(Clone, Debug)]
 pub struct ExternalSig {
@@ -299,11 +310,8 @@ pub struct ExternalSig {
     pub param_tys: Vec<TypeId>,
     /// The types of this function signature's results.
     pub ret_tys: Vec<TypeId>,
-    /// Whether this signature is infallible or not.
-    pub infallible: bool,
-    /// "Multiplicity": does the function return multiple values (via
-    /// an iterator)?
-    pub multi: bool,
+    /// How many values can this function return?
+    pub ret_kind: ReturnKind,
 }
 
 impl Term {
@@ -387,14 +395,22 @@ impl Term {
                         name, infallible, ..
                     }),
                 ..
-            } => Some(ExternalSig {
-                func_name: tyenv.syms[name.index()].clone(),
-                full_name: format!("C::{}", tyenv.syms[name.index()]),
-                param_tys: vec![self.ret_ty],
-                ret_tys: self.arg_tys.clone(),
-                infallible: *infallible && !flags.multi,
-                multi: flags.multi,
-            }),
+            } => {
+                let ret_kind = if flags.multi {
+                    ReturnKind::Iterator
+                } else if *infallible {
+                    ReturnKind::Plain
+                } else {
+                    ReturnKind::Option
+                };
+                Some(ExternalSig {
+                    func_name: tyenv.syms[name.index()].clone(),
+                    full_name: format!("C::{}", tyenv.syms[name.index()]),
+                    param_tys: vec![self.ret_ty],
+                    ret_tys: self.arg_tys.clone(),
+                    ret_kind,
+                })
+            }
             _ => None,
         }
     }
@@ -417,13 +433,19 @@ impl Term {
                         format!("C::{}", tyenv.syms[name.index()]),
                     ),
                 };
+                let ret_kind = if flags.multi {
+                    ReturnKind::Iterator
+                } else if flags.partial {
+                    ReturnKind::Option
+                } else {
+                    ReturnKind::Plain
+                };
                 Some(ExternalSig {
                     func_name,
                     full_name,
                     param_tys: self.arg_tys.clone(),
                     ret_tys: vec![self.ret_ty],
-                    infallible: !flags.partial,
-                    multi: flags.multi,
+                    ret_kind,
                 })
             }
             _ => None,
