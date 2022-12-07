@@ -14,17 +14,14 @@ fn main() {
     cmd.arg("build")
         .arg("--release")
         .current_dir("../../")
-        .arg("--target=wasm32-wasi")
+        .arg("--target=wasm32-unknown-unknown")
+        .arg("--features=command")
         .env("CARGO_TARGET_DIR", &out_dir)
-        .env(
-            "RUSTFLAGS",
-            "-Clink-args=--import-memory -Clink-args=-zstack-size=0",
-        )
         .env_remove("CARGO_ENCODED_RUSTFLAGS");
     let status = cmd.status().unwrap();
     assert!(status.success());
 
-    let wasi_adapter = out_dir.join("wasm32-wasi/release/wasi_snapshot_preview1.wasm");
+    let wasi_adapter = out_dir.join("wasm32-unknown-unknown/release/wasi_snapshot_preview1.wasm");
     println!("wasi adapter: {:?}", &wasi_adapter);
     let wasi_adapter = fs::read(&wasi_adapter).unwrap();
 
