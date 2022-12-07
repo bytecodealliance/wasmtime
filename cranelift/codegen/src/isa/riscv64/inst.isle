@@ -1766,29 +1766,13 @@
   (value_regs_get x 0))
 (convert ValueRegs Reg convert_valueregs_reg)
 
-;;; intcc is not equal nor ne.
-;;; intcc is >= <= ... 
-;;; return alongside with if signed.
-(decl intcc_is_gt_etc (IntCC bool) IntCC)
-(extern extractor intcc_is_gt_etc intcc_is_gt_etc)
-
-(decl intcc_is_eq_or_ne (IntCC) IntCC)
-(extern extractor intcc_is_eq_or_ne intcc_is_eq_or_ne)
-
 ;;; lower icmp 
 (decl lower_icmp (IntCC ValueRegs ValueRegs Type) Reg)
-;;; eq or ne.
-(rule -1
-  (lower_icmp (intcc_is_eq_or_ne cc) x y ty)
-  (gen_icmp cc (ext_int_if_need $false x ty) (ext_int_if_need $false y ty) ty))
-;;;; singed >= ... 
-(rule
-  (lower_icmp (intcc_is_gt_etc cc $true) x y ty)
+(rule 1 (lower_icmp cc x y ty)
+  (if (signed_cond_code cc))
   (gen_icmp cc (ext_int_if_need $true x ty) (ext_int_if_need $true y ty) ty))
-;;;; unsigned >= ... 
-(rule
-  (lower_icmp (intcc_is_gt_etc cc $false) x y ty)
-  (gen_icmp cc (ext_int_if_need $false x ty ) (ext_int_if_need $false y ty) ty))
+(rule (lower_icmp cc x y ty)
+  (gen_icmp cc (ext_int_if_need $false x ty) (ext_int_if_need $false y ty) ty))
 
 (decl lower_icmp_over_flow (ValueRegs ValueRegs Type) Reg)
 

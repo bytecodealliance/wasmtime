@@ -47,15 +47,6 @@ macro_rules! isle_lower_prelude_methods {
         isle_common_prelude_methods!();
 
         #[inline]
-        fn same_value(&mut self, a: Value, b: Value) -> Option<Value> {
-            if a == b {
-                Some(a)
-            } else {
-                None
-            }
-        }
-
-        #[inline]
         fn value_type(&mut self, val: Value) -> Type {
             self.lower_ctx.dfg().value_type(val)
         }

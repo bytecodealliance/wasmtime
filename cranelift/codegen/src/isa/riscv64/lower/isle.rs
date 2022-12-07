@@ -406,29 +406,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         tmp.to_reg()
     }
 
-    fn intcc_is_gt_etc(&mut self, cc: &IntCC) -> Option<(IntCC, bool)> {
-        let cc = *cc;
-        match cc {
-            IntCC::SignedLessThan => Some((cc, true)),
-            IntCC::SignedGreaterThanOrEqual => Some((cc, true)),
-            IntCC::SignedGreaterThan => Some((cc, true)),
-            IntCC::SignedLessThanOrEqual => Some((cc, true)),
-            //
-            IntCC::UnsignedLessThan => Some((cc, false)),
-            IntCC::UnsignedGreaterThanOrEqual => Some((cc, false)),
-            IntCC::UnsignedGreaterThan => Some((cc, false)),
-            IntCC::UnsignedLessThanOrEqual => Some((cc, false)),
-            _ => None,
-        }
-    }
-    fn intcc_is_eq_or_ne(&mut self, cc: &IntCC) -> Option<IntCC> {
-        let cc = *cc;
-        if cc == IntCC::Equal || cc == IntCC::NotEqual {
-            Some(cc)
-        } else {
-            None
-        }
-    }
     fn lower_br_table(&mut self, index: Reg, targets: &VecMachLabel) -> InstOutput {
         let tmp1 = self.temp_writable_reg(I64);
         let targets: Vec<BranchTarget> = targets
