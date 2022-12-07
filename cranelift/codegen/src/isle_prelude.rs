@@ -607,5 +607,11 @@ macro_rules! isle_common_prelude_methods {
         fn pack_value_array_3(&mut self, a: Value, b: Value, c: Value) -> ValueArray3 {
             [a, b, c]
         }
+
+        #[inline]
+        fn intcc_invert(&mut self, cc: &IntCC) -> IntCC {
+            use crate::ir::condcodes::CondCode;
+            cc.inverse()
+        }
     };
 }

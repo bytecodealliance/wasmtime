@@ -383,6 +383,10 @@
 (decl pure signed_cond_code (IntCC) IntCC)
 (extern constructor signed_cond_code signed_cond_code)
 
+;; Constructor that inverts a condcode.
+(decl intcc_invert (IntCC) IntCC)
+(extern constructor intcc_invert intcc_invert)
+
 ;;;; Helpers for Working with TrapCode ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl trap_code_division_by_zero () TrapCode)

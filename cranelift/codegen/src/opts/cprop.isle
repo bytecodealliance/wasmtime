@@ -130,5 +130,12 @@
        (bxor ty (bxor ty x k1 @ (iconst ty _)) k2 @ (iconst ty _)))
       (bxor ty x (bxor ty k1 k2)))
 
+(rule (simplify
+       (select ty (iconst _ (u64_from_imm64 (u64_nonzero _))) x y))
+      x)
+(rule (simplify
+       (select ty (iconst _ (u64_from_imm64 0)) x y))
+      y)
+
 ;; TODO: fadd, fsub, fmul, fdiv, fneg, fabs
 

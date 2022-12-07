@@ -185,3 +185,25 @@
       (remat x))
 (rule (simplify x @ (f64const _ _))
       (remat x))
+
+;; Optimize icmp-of-icmp.
+(rule (simplify (icmp ty
+                      (IntCC.NotEqual)
+                      (uextend _ inner @ (icmp ty _ _ _))
+                      (iconst _ (u64_from_imm64 0))))
+      (subsume inner))
+
+(rule (simplify (icmp ty
+                      (IntCC.Equal)
+                      (uextend _ (icmp ty cc x y))
+                      (iconst _ (u64_from_imm64 0))))
+      (subsume (icmp ty (intcc_invert cc) x y)))
+
+;; Optimize select-of-uextend-of-icmp to select-of-icmp, because
+;; select can take an I8 condition too.
+(rule (simplify
+       (select ty (uextend _ c @ (icmp _ _ _ _)) x y))
+      (select ty c x y))
+(rule (simplify
+       (select ty (uextend _ c @ (icmp _ _ _ _)) x y))
+      (select ty c x y))

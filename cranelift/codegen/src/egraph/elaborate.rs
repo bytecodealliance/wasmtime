@@ -277,7 +277,7 @@ impl<'a> Elaborator<'a> {
                     let value = self.func.dfg.resolve_aliases(value);
 
                     self.stats.elaborate_visit_node += 1;
-                    let canonical_value = self.eclasses.find(value);
+                    let canonical_value = self.eclasses.find_and_update(value);
                     debug_assert_ne!(canonical_value, Value::reserved_value());
                     trace!(
                         "elaborate: value {} canonical {} before {}",
@@ -518,8 +518,9 @@ impl<'a> Elaborator<'a> {
                                 value: new_result,
                                 in_block: insert_block,
                             };
+                            let canonical_result = self.eclasses.find_and_update(result);
                             self.value_to_elaborated_value.insert_if_absent_with_depth(
-                                result,
+                                canonical_result,
                                 elab_value,
                                 scope_depth,
                             );
@@ -545,8 +546,9 @@ impl<'a> Elaborator<'a> {
                                 value: result,
                                 in_block: insert_block,
                             };
+                            let canonical_result = self.eclasses.find_and_update(result);
                             self.value_to_elaborated_value.insert_if_absent_with_depth(
-                                result,
+                                canonical_result,
                                 elab_value,
                                 scope_depth,
                             );
@@ -623,8 +625,9 @@ impl<'a> Elaborator<'a> {
             // map now.
             for &result in self.func.dfg.inst_results(inst) {
                 trace!(" -> result {}", result);
+                let canonical_result = self.eclasses.find_and_update(result);
                 self.value_to_elaborated_value.insert_if_absent(
-                    result,
+                    canonical_result,
                     ElaboratedValue {
                         in_block: block,
                         value: result,
