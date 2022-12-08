@@ -17,7 +17,9 @@ mod empty_error {
             default export interface {
                 empty-error: func(a: float64) -> result<float64>
             }
-        }"
+        }",
+        // This doesn't actually do anything, just showing the macro parses it correctly:
+        trappable_error_type: { imports::e: TrappableE }
     });
 
     #[test]

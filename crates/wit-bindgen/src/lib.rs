@@ -1,6 +1,5 @@
 use crate::rust::{to_rust_ident, RustGenerator, TypeMode};
 use crate::types::{TypeInfo, Types};
-use anyhow::{anyhow, Result};
 use heck::*;
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
