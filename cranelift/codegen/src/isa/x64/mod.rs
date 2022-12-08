@@ -1,6 +1,6 @@
 //! X86_64-bit Instruction Set Architecture.
 
-use self::inst::EmitInfo;
+pub use self::inst::{args, EmitInfo, EmitState, Inst};
 
 use super::TargetIsa;
 use crate::ir::{condcodes::IntCC, Function, Type};
