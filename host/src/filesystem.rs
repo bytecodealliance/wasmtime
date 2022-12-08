@@ -233,4 +233,39 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
     ) -> HostResult<(), wasi_filesystem::Errno> {
         todo!()
     }
+
+    fn lock_shared(
+        &mut self,
+        fd: wasi_filesystem::Descriptor,
+    ) -> HostResult<(), wasi_filesystem::Errno> {
+        todo!()
+    }
+
+    fn lock_exclusive(
+        &mut self,
+        fd: wasi_filesystem::Descriptor,
+    ) -> HostResult<(), wasi_filesystem::Errno> {
+        todo!()
+    }
+
+    fn try_lock_shared(
+        &mut self,
+        fd: wasi_filesystem::Descriptor,
+    ) -> HostResult<(), wasi_filesystem::Errno> {
+        todo!()
+    }
+
+    fn try_lock_exclusive(
+        &mut self,
+        fd: wasi_filesystem::Descriptor,
+    ) -> HostResult<(), wasi_filesystem::Errno> {
+        todo!()
+    }
+
+    fn unlock(
+        &mut self,
+        fd: wasi_filesystem::Descriptor,
+    ) -> HostResult<(), wasi_filesystem::Errno> {
+        todo!()
+    }
 }
