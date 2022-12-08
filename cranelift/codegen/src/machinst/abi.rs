@@ -643,11 +643,13 @@ pub struct SigData {
     /// This is a index into the `SigSet::abi_args`.
     rets_end: u32,
 
-    /// Space on stack used to store arguments.
-    sized_stack_arg_space: i64,
+    /// Space on stack used to store arguments. We're storing the size in u32 to
+    /// reduce the size of the struct.
+    sized_stack_arg_space: u32,
 
-    /// Space on stack used to store return values.
-    sized_stack_ret_space: i64,
+    /// Space on stack used to store return values. We're storing the size in u32 to
+    /// reduce the size of the struct.
+    sized_stack_ret_space: u32,
 
     /// Index in `args` of the stack-return-value-area argument.
     stack_ret_arg: Option<u16>,
@@ -659,12 +661,12 @@ pub struct SigData {
 impl SigData {
     /// Get total stack space required for arguments.
     pub fn sized_stack_arg_space(&self) -> i64 {
-        self.sized_stack_arg_space
+        self.sized_stack_arg_space.into()
     }
 
     /// Get total stack space required for return values.
     pub fn sized_stack_ret_space(&self) -> i64 {
-        self.sized_stack_ret_space
+        self.sized_stack_ret_space.into()
     }
 
     /// Get calling convention used.
@@ -817,6 +819,7 @@ impl SigSet {
             ArgsAccumulator::new(&mut self.abi_args),
         )?;
         let rets_end = u32::try_from(self.abi_args.len()).unwrap();
+        let sized_stack_ret_space = u32::try_from(sized_stack_ret_space).unwrap();
 
         let need_stack_return_area = sized_stack_ret_space > 0;
         let (sized_stack_arg_space, stack_ret_arg) = M::compute_arg_locs(
@@ -828,6 +831,7 @@ impl SigSet {
             ArgsAccumulator::new(&mut self.abi_args),
         )?;
         let args_end = u32::try_from(self.abi_args.len()).unwrap();
+        let sized_stack_arg_space = u32::try_from(sized_stack_arg_space).unwrap();
 
         trace!(
             "ABISig: sig {:?} => args end = {} rets end = {}
@@ -1920,7 +1924,7 @@ impl<M: ABIMachineSpec> Callee<M> {
 
     /// Returns the size of arguments expected on the stack.
     pub fn stack_args_size(&self, sigs: &SigSet) -> u32 {
-        sigs[self.sig].sized_stack_arg_space as u32
+        sigs[self.sig].sized_stack_arg_space
     }
 
     /// Get the spill-slot size.
@@ -2324,7 +2328,7 @@ impl<M: ABIMachineSpec> Caller<M> {
                             });
                         }
                         &ABIArgSlot::Stack { offset, ty, .. } => {
-                            let ret_area_base = ctx.sigs()[self.sig].sized_stack_arg_space;
+                            let ret_area_base = ctx.sigs()[self.sig].sized_stack_arg_space();
                             insts.push(M::gen_load_stack(
                                 StackAMode::SPOffset(offset + ret_area_base, ty),
                                 *into_reg,
@@ -2361,7 +2365,7 @@ impl<M: ABIMachineSpec> Caller<M> {
         let word_type = M::word_type();
         if let Some(i) = ctx.sigs()[self.sig].stack_ret_arg {
             let rd = ctx.alloc_tmp(word_type).only_reg().unwrap();
-            let ret_area_base = ctx.sigs()[self.sig].sized_stack_arg_space;
+            let ret_area_base = ctx.sigs()[self.sig].sized_stack_arg_space();
             ctx.emit(M::gen_get_stack_addr(
                 StackAMode::SPOffset(ret_area_base, I8),
                 rd,
