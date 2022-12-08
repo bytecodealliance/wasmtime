@@ -9,7 +9,7 @@
 ;; `()`
 (type Unit (primitive Unit))
 
-(decl unit () Unit)
+(decl pure unit () Unit)
 (extern constructor unit unit)
 
 (type bool (primitive bool))
@@ -42,12 +42,12 @@
 (decl value_type (Type) Value)
 (extern extractor infallible value_type value_type)
 
-(decl u32_add (u32 u32) u32)
+(decl pure u32_add (u32 u32) u32)
 (extern constructor u32_add u32_add)
 
 ;; Pure/fallible constructor that tries to add two `u32`s, interpreted
 ;; as signed values, and fails to match on overflow.
-(decl pure s32_add_fallible (u32 u32) u32)
+(decl pure partial s32_add_fallible (u32 u32) u32)
 (extern constructor s32_add_fallible s32_add_fallible)
 
 ;; Extractor that matches a `u32` only if non-negative.
@@ -61,17 +61,17 @@
 
 ;; Pure/fallible constructor that tests if one u32 is less than or
 ;; equal to another.
-(decl pure u32_lteq (u32 u32) Unit)
+(decl pure partial u32_lteq (u32 u32) Unit)
 (extern constructor u32_lteq u32_lteq)
 
 ;; Pure/fallible constructor that tests if one u8 is less than or
 ;; equal to another.
-(decl pure u8_lteq (u8 u8) Unit)
+(decl pure partial u8_lteq (u8 u8) Unit)
 (extern constructor u8_lteq u8_lteq)
 
 ;; Pure/fallible constructor that tests if one u8 is strictly less
 ;;  than another.
-(decl pure u8_lt (u8 u8) Unit)
+(decl pure partial u8_lt (u8 u8) Unit)
 (extern constructor u8_lt u8_lt)
 
 ;; Get a signed 32-bit immediate in an u32 from an Imm64, if possible.
@@ -82,7 +82,7 @@
 (decl uimm8 (u8) Imm64)
 (extern extractor uimm8 uimm8)
 
-(decl u8_and (u8 u8) u8)
+(decl pure u8_and (u8 u8) u8)
 (extern constructor u8_and u8_and)
 
 ;;;; Primitive Type Conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -113,10 +113,10 @@
 (decl pure u64_mul (u64 u64) u64)
 (extern constructor u64_mul u64_mul)
 
-(decl pure u64_sdiv (u64 u64) u64)
+(decl pure partial u64_sdiv (u64 u64) u64)
 (extern constructor u64_sdiv u64_sdiv)
 
-(decl pure u64_udiv (u64 u64) u64)
+(decl pure partial u64_udiv (u64 u64) u64)
 (extern constructor u64_udiv u64_udiv)
 
 (decl pure u64_and (u64 u64) u64)
@@ -181,29 +181,29 @@
 (extern constructor ty_bits ty_bits)
 
 ;; Get the bit width of a given type.
-(decl ty_bits_u16 (Type) u16)
+(decl pure ty_bits_u16 (Type) u16)
 (extern constructor ty_bits_u16 ty_bits_u16)
 
 ;; Get the bit width of a given type.
-(decl ty_bits_u64 (Type) u64)
+(decl pure ty_bits_u64 (Type) u64)
 (extern constructor ty_bits_u64 ty_bits_u64)
 
 ;; Get a mask for the width of a given type.
-(decl ty_mask (Type) u64)
+(decl pure ty_mask (Type) u64)
 (extern constructor ty_mask ty_mask)
 
 ;; Get the byte width of a given type.
-(decl ty_bytes (Type) u16)
+(decl pure ty_bytes (Type) u16)
 (extern constructor ty_bytes ty_bytes)
 
 ;; Get the type of each lane in the given type.
-(decl lane_type (Type) Type)
+(decl pure lane_type (Type) Type)
 (extern constructor lane_type lane_type)
 
 ;;;; `cranelift_codegen::ir::MemFlags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `MemFlags::trusted`
-(decl mem_flags_trusted () MemFlags)
+(decl pure mem_flags_trusted () MemFlags)
 (extern constructor mem_flags_trusted mem_flags_trusted)
 
 ;;;; Helpers for Working with Flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -252,7 +252,7 @@
 
 ;; A pure constructor that only matches scalar integers, and references that can
 ;; fit in 64 bits.
-(decl pure ty_int_ref_scalar_64 (Type) Type)
+(decl pure partial ty_int_ref_scalar_64 (Type) Type)
 (extern constructor ty_int_ref_scalar_64 ty_int_ref_scalar_64)
 
 ;; An extractor that matches 32- and 64-bit types only.
@@ -284,16 +284,16 @@
 (extern extractor ty_float_or_vec ty_float_or_vec)
 
 ;; A pure constructor that only matches vector floating-point types.
-(decl pure ty_vector_float (Type) Type)
+(decl pure partial ty_vector_float (Type) Type)
 (extern constructor ty_vector_float ty_vector_float)
 
 ;; A pure constructor that only matches vector types with lanes which
 ;; are not floating-point.
-(decl pure ty_vector_not_float (Type) Type)
+(decl pure partial ty_vector_not_float (Type) Type)
 (extern constructor ty_vector_not_float ty_vector_not_float)
 
 ;; A pure constructor/extractor that only matches 64-bit vector types.
-(decl pure ty_vec64 (Type) Type)
+(decl pure partial ty_vec64 (Type) Type)
 (extern constructor ty_vec64 ty_vec64_ctor)
 (extern extractor ty_vec64 ty_vec64)
 
@@ -322,7 +322,7 @@
 (extern extractor ty_vec128_int ty_vec128_int)
 
 ;; A pure constructor that matches everything except vectors with size 32X2.
-(decl pure not_vec32x2 (Type) Type)
+(decl pure partial not_vec32x2 (Type) Type)
 (extern constructor not_vec32x2 not_vec32x2)
 
 ;; An extractor that matches everything except I64X2
@@ -388,28 +388,28 @@
 (extern extractor ty_dyn128_int ty_dyn128_int)
 
 ;; Convert an `Offset32` to a primitive number.
-(decl offset32_to_u32 (Offset32) u32)
+(decl pure offset32_to_u32 (Offset32) u32)
 (extern constructor offset32_to_u32 offset32_to_u32)
 
 ;; This is a direct import of `IntCC::unsigned`.
 ;; Get the corresponding IntCC with the signed component removed.
 ;; For conditions without a signed component, this is a no-op.
-(decl intcc_unsigned (IntCC) IntCC)
+(decl pure intcc_unsigned (IntCC) IntCC)
 (extern constructor intcc_unsigned intcc_unsigned)
 
 ;; Pure constructor that only matches signed integer cond codes.
-(decl pure signed_cond_code (IntCC) IntCC)
+(decl pure partial signed_cond_code (IntCC) IntCC)
 (extern constructor signed_cond_code signed_cond_code)
 
 ;;;; Helpers for Working with TrapCode ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl trap_code_division_by_zero () TrapCode)
+(decl pure trap_code_division_by_zero () TrapCode)
 (extern constructor trap_code_division_by_zero trap_code_division_by_zero)
 
-(decl trap_code_integer_overflow () TrapCode)
+(decl pure trap_code_integer_overflow () TrapCode)
 (extern constructor trap_code_integer_overflow trap_code_integer_overflow)
 
-(decl trap_code_bad_conversion_to_integer () TrapCode)
+(decl pure trap_code_bad_conversion_to_integer () TrapCode)
 (extern constructor trap_code_bad_conversion_to_integer trap_code_bad_conversion_to_integer)
 
 ;;;; Helpers for tail recursion loops ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -418,7 +418,7 @@
 (type Range (primitive Range))
 
 ;; Create a new range from `start` through `end` (exclusive).
-(decl range (usize usize) Range)
+(decl pure range (usize usize) Range)
 (extern constructor range range)
 
 ;; A view on the current state of the range.

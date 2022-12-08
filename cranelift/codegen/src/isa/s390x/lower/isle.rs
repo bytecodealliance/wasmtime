@@ -526,15 +526,13 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
     }
 
     #[inline]
-    fn lane_order(&mut self) -> Option<LaneOrder> {
-        Some(lane_order_for_call_conv(
-            self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()),
-        ))
+    fn lane_order(&mut self) -> LaneOrder {
+        lane_order_for_call_conv(self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()))
     }
 
     #[inline]
     fn be_lane_idx(&mut self, ty: Type, idx: u8) -> u8 {
-        match self.lane_order().unwrap() {
+        match self.lane_order() {
             LaneOrder::LittleEndian => ty.lane_count() as u8 - 1 - idx,
             LaneOrder::BigEndian => idx,
         }
@@ -542,7 +540,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
 
     #[inline]
     fn be_vec_const(&mut self, ty: Type, n: u128) -> u128 {
-        match self.lane_order().unwrap() {
+        match self.lane_order() {
             LaneOrder::LittleEndian => n,
             LaneOrder::BigEndian => {
                 let lane_count = ty.lane_count();
@@ -568,7 +566,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
 
     #[inline]
     fn shuffle_mask_from_u128(&mut self, idx: u128) -> (u128, u16) {
-        let bytes = match self.lane_order().unwrap() {
+        let bytes = match self.lane_order() {
             LaneOrder::LittleEndian => idx.to_be_bytes().map(|x| {
                 if x < 16 {
                     15 - x
@@ -590,7 +588,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         let inst = self.lower_ctx.dfg().value_def(val).inst()?;
         let constant = self.lower_ctx.get_constant(inst)?;
         let ty = self.lower_ctx.output_ty(inst, 0);
-        Some(zero_extend_to_u64(constant, self.ty_bits(ty).unwrap()))
+        Some(zero_extend_to_u64(constant, self.ty_bits(ty)))
     }
 
     #[inline]
@@ -598,7 +596,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         let inst = self.lower_ctx.dfg().value_def(val).inst()?;
         let constant = self.lower_ctx.get_constant(inst)?;
         let ty = self.lower_ctx.output_ty(inst, 0);
-        Some(zero_extend_to_u64(!constant, self.ty_bits(ty).unwrap()))
+        Some(zero_extend_to_u64(!constant, self.ty_bits(ty)))
     }
 
     #[inline]
@@ -620,7 +618,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         let inst = self.lower_ctx.dfg().value_def(val).inst()?;
         let constant = self.lower_ctx.get_constant(inst)?;
         let ty = self.lower_ctx.output_ty(inst, 0);
-        Some(sign_extend_to_u64(constant, self.ty_bits(ty).unwrap()))
+        Some(sign_extend_to_u64(constant, self.ty_bits(ty)))
     }
 
     #[inline]

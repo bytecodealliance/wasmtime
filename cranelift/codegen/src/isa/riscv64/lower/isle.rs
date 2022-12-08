@@ -121,7 +121,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         targets: &VecMachLabel,
         ty: Type,
     ) -> InstOutput {
-        let test = generated_code::constructor_lower_icmp(self, cc, a, b, ty).unwrap();
+        let test = generated_code::constructor_lower_icmp(self, cc, a, b, ty);
         self.emit(&MInst::CondBr {
             taken: BranchTarget::Label(targets[0]),
             not_taken: BranchTarget::Label(targets[1]),
@@ -308,11 +308,11 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         ValueRegs::two(shamt, len_sub_shamt)
     }
 
-    fn has_b(&mut self) -> Option<bool> {
-        Some(self.isa_flags.has_b())
+    fn has_b(&mut self) -> bool {
+        self.isa_flags.has_b()
     }
-    fn has_zbkb(&mut self) -> Option<bool> {
-        Some(self.isa_flags.has_zbkb())
+    fn has_zbkb(&mut self) -> bool {
+        self.isa_flags.has_zbkb()
     }
 
     fn valueregs_2_reg(&mut self, val: Value) -> Reg {

@@ -14,43 +14,43 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn u8_as_u32(&mut self, x: u8) -> Option<u32> {
-            Some(x.into())
+        fn u8_as_u32(&mut self, x: u8) -> u32 {
+            x.into()
         }
 
         #[inline]
-        fn u8_as_u64(&mut self, x: u8) -> Option<u64> {
-            Some(x.into())
+        fn u8_as_u64(&mut self, x: u8) -> u64 {
+            x.into()
         }
 
         #[inline]
-        fn u16_as_u64(&mut self, x: u16) -> Option<u64> {
-            Some(x.into())
+        fn u16_as_u64(&mut self, x: u16) -> u64 {
+            x.into()
         }
 
         #[inline]
-        fn u32_as_u64(&mut self, x: u32) -> Option<u64> {
-            Some(x.into())
+        fn u32_as_u64(&mut self, x: u32) -> u64 {
+            x.into()
         }
 
         #[inline]
-        fn i64_as_u64(&mut self, x: i64) -> Option<u64> {
-            Some(x as u64)
+        fn i64_as_u64(&mut self, x: i64) -> u64 {
+            x as u64
         }
 
         #[inline]
-        fn u64_add(&mut self, x: u64, y: u64) -> Option<u64> {
-            Some(x.wrapping_add(y))
+        fn u64_add(&mut self, x: u64, y: u64) -> u64 {
+            x.wrapping_add(y)
         }
 
         #[inline]
-        fn u64_sub(&mut self, x: u64, y: u64) -> Option<u64> {
-            Some(x.wrapping_sub(y))
+        fn u64_sub(&mut self, x: u64, y: u64) -> u64 {
+            x.wrapping_sub(y)
         }
 
         #[inline]
-        fn u64_mul(&mut self, x: u64, y: u64) -> Option<u64> {
-            Some(x.wrapping_mul(y))
+        fn u64_mul(&mut self, x: u64, y: u64) -> u64 {
+            x.wrapping_mul(y)
         }
 
         #[inline]
@@ -66,23 +66,23 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn u64_and(&mut self, x: u64, y: u64) -> Option<u64> {
-            Some(x & y)
+        fn u64_and(&mut self, x: u64, y: u64) -> u64 {
+            x & y
         }
 
         #[inline]
-        fn u64_or(&mut self, x: u64, y: u64) -> Option<u64> {
-            Some(x | y)
+        fn u64_or(&mut self, x: u64, y: u64) -> u64 {
+            x | y
         }
 
         #[inline]
-        fn u64_xor(&mut self, x: u64, y: u64) -> Option<u64> {
-            Some(x ^ y)
+        fn u64_xor(&mut self, x: u64, y: u64) -> u64 {
+            x ^ y
         }
 
         #[inline]
-        fn u64_not(&mut self, x: u64) -> Option<u64> {
-            Some(!x)
+        fn u64_not(&mut self, x: u64) -> u64 {
+            !x
         }
 
         #[inline]
@@ -91,24 +91,24 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn u64_is_odd(&mut self, x: u64) -> Option<bool> {
-            Some(x & 1 == 1)
+        fn u64_is_odd(&mut self, x: u64) -> bool {
+            x & 1 == 1
         }
 
         #[inline]
-        fn u64_sextend_u32(&mut self, x: u64) -> Option<u64> {
-            Some(x as u32 as i32 as i64 as u64)
+        fn u64_sextend_u32(&mut self, x: u64) -> u64 {
+            x as u32 as i32 as i64 as u64
         }
 
         #[inline]
-        fn u64_uextend_u32(&mut self, x: u64) -> Option<u64> {
-            Some(x & 0xffff_ffff)
+        fn u64_uextend_u32(&mut self, x: u64) -> u64 {
+            x & 0xffff_ffff
         }
 
         #[inline]
-        fn ty_bits(&mut self, ty: Type) -> Option<u8> {
+        fn ty_bits(&mut self, ty: Type) -> u8 {
             use std::convert::TryInto;
-            Some(ty.bits().try_into().unwrap())
+            ty.bits().try_into().unwrap()
         }
 
         #[inline]
@@ -505,8 +505,8 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn imm64(&mut self, x: u64) -> Option<Imm64> {
-            Some(Imm64::new(x as i64))
+        fn imm64(&mut self, x: u64) -> Imm64 {
+            Imm64::new(x as i64)
         }
 
         #[inline]

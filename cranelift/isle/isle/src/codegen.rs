@@ -2,10 +2,10 @@
 
 use crate::ir::{ExprInst, InstId, PatternInst, Value};
 use crate::log;
-use crate::sema::ExternalSig;
-use crate::sema::{TermEnv, TermId, Type, TypeEnv, TypeId, Variant};
+use crate::sema::{ExternalSig, ReturnKind, TermEnv, TermId, Type, TypeEnv, TypeId, Variant};
 use crate::trie::{TrieEdge, TrieNode, TrieSymbol};
 use crate::{StableMap, StableSet};
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fmt::Write;
 
@@ -111,14 +111,21 @@ impl<'a> Codegen<'a> {
             close_paren = if sig.ret_tys.len() != 1 { ")" } else { "" },
         );
 
-        let ret_ty = match (sig.multi, sig.infallible) {
-            (false, false) => format!("Option<{}>", ret_tuple),
-            (false, true) => format!("{}", ret_tuple),
-            (true, false) => format!("Option<Self::{}_iter>", sig.func_name),
-            _ => panic!(
-                "Unsupported multiplicity/infallible combo: {:?}, {}",
-                sig.multi, sig.infallible
-            ),
+        if sig.ret_kind == ReturnKind::Iterator {
+            writeln!(
+                code,
+                "{indent}type {name}_iter: ContextIter<Context = Self, Output = {output}>;",
+                indent = indent,
+                name = sig.func_name,
+                output = ret_tuple,
+            )
+            .unwrap();
+        }
+
+        let ret_ty = match sig.ret_kind {
+            ReturnKind::Plain => ret_tuple,
+            ReturnKind::Option => format!("Option<{}>", ret_tuple),
+            ReturnKind::Iterator => format!("Self::{}_iter", sig.func_name),
         };
 
         writeln!(
@@ -136,17 +143,6 @@ impl<'a> Codegen<'a> {
             ret_ty = ret_ty,
         )
         .unwrap();
-
-        if sig.multi {
-            writeln!(
-                code,
-                "{indent}type {name}_iter: ContextIter<Context = Self, Output = {output}>;",
-                indent = indent,
-                name = sig.func_name,
-                output = ret_tuple,
-            )
-            .unwrap();
-        }
     }
 
     fn generate_ctx_trait(&self, code: &mut String) {
@@ -357,27 +353,29 @@ impl<'a> Codegen<'a> {
                 .collect::<Vec<_>>()
                 .join(", ");
             assert_eq!(sig.ret_tys.len(), 1);
+
             let ret = self.type_name(sig.ret_tys[0], false);
-            let ret = if sig.multi {
-                format!("impl ContextIter<Context = C, Output = {}>", ret)
-            } else {
-                ret
+            let ret = match sig.ret_kind {
+                ReturnKind::Iterator => format!("impl ContextIter<Context = C, Output = {}>", ret),
+                ReturnKind::Option => format!("Option<{}>", ret),
+                ReturnKind::Plain => ret,
             };
 
+            let term_name = &self.typeenv.syms[termdata.name.index()];
             writeln!(
                 code,
                 "\n// Generated as internal constructor for term {}.",
-                self.typeenv.syms[termdata.name.index()],
+                term_name,
             )
             .unwrap();
             writeln!(
                 code,
-                "pub fn {}<C: Context>(ctx: &mut C, {}) -> Option<{}> {{",
+                "pub fn {}<C: Context>(ctx: &mut C, {}) -> {} {{",
                 sig.func_name, args, ret,
             )
             .unwrap();
 
-            if sig.multi {
+            if sig.ret_kind == ReturnKind::Iterator {
                 writeln!(code, "let mut returns = ConstructorVec::new();").unwrap();
             }
 
@@ -388,18 +386,23 @@ impl<'a> Codegen<'a> {
                 trie,
                 "    ",
                 &mut body_ctx,
-                sig.multi,
+                sig.ret_kind,
             );
             if !returned {
-                if sig.multi {
-                    writeln!(
-                        code,
-                        "    return Some(ContextIterWrapper::from(returns.into_iter()));"
-                    )
-                    .unwrap();
-                } else {
-                    writeln!(code, "    return None;").unwrap();
-                }
+                let ret_expr = match sig.ret_kind {
+                    ReturnKind::Plain => Cow::from(format!(
+                        "unreachable!(\"no rule matched for term {{}} at {{}}; should it be partial?\", {:?}, {:?})",
+                        term_name,
+                        termdata
+                            .decl_pos
+                            .pretty_print_line(&self.typeenv.filenames[..])
+                    )),
+                    ReturnKind::Option => Cow::from("None"),
+                    ReturnKind::Iterator => {
+                        Cow::from("ContextIterWrapper::from(returns.into_iter())")
+                    }
+                };
+                write!(code, "    return {};", ret_expr).unwrap();
             }
 
             writeln!(code, "}}").unwrap();
@@ -542,7 +545,7 @@ impl<'a> Codegen<'a> {
                 } else {
                     writeln!(
                         code,
-                        "{}let mut it = {}(ctx, {})?;",
+                        "{}let mut iter = {}(ctx, {});",
                         indent,
                         sig.full_name,
                         input_exprs.join(", "),
@@ -550,7 +553,7 @@ impl<'a> Codegen<'a> {
                     .unwrap();
                     writeln!(
                         code,
-                        "{}while let Some({}) = it.next(ctx) {{",
+                        "{}while let Some({}) = iter.next(ctx) {{",
                         indent, outputname,
                     )
                     .unwrap();
@@ -717,49 +720,20 @@ impl<'a> Codegen<'a> {
                     args = input_values.join(", ")
                 );
 
-                match (infallible, multi) {
-                    (_, true) => {
-                        writeln!(
-                            code,
-                            "{indent}if let Some(mut iter) = {etor_call} {{",
-                            indent = indent,
-                            etor_call = etor_call,
-                        )
-                        .unwrap();
-                        writeln!(
-                            code,
-                            "{indent}    while let Some({bind_pattern}) = iter.next(ctx) {{",
-                            indent = indent,
-                            bind_pattern = bind_pattern,
-                        )
-                        .unwrap();
-
-                        (false, 2)
-                    }
-                    (false, false) => {
-                        writeln!(
-                            code,
-                            "{indent}if let Some({bind_pattern}) = {etor_call} {{",
-                            indent = indent,
-                            bind_pattern = bind_pattern,
-                            etor_call = etor_call,
-                        )
-                        .unwrap();
-
-                        (false, 1)
-                    }
-                    (true, false) => {
-                        writeln!(
-                            code,
-                            "{indent}let {bind_pattern} = {etor_call};",
-                            indent = indent,
-                            bind_pattern = bind_pattern,
-                            etor_call = etor_call,
-                        )
-                        .unwrap();
-
-                        (true, 0)
-                    }
+                if multi {
+                    writeln!(code, "{indent}let mut iter = {etor_call};").unwrap();
+                    writeln!(
+                        code,
+                        "{indent}while let Some({bind_pattern}) = iter.next(ctx) {{",
+                    )
+                    .unwrap();
+                    (false, 1)
+                } else if infallible {
+                    writeln!(code, "{indent}let {bind_pattern} = {etor_call};").unwrap();
+                    (true, 0)
+                } else {
+                    writeln!(code, "{indent}if let Some({bind_pattern}) = {etor_call} {{").unwrap();
+                    (false, 1)
                 }
             }
             &PatternInst::Expr {
@@ -833,7 +807,7 @@ impl<'a> Codegen<'a> {
         trie: &TrieNode,
         indent: &str,
         ctx: &mut BodyContext,
-        is_multi: bool,
+        ret_kind: ReturnKind,
     ) -> bool {
         log!("generate_body:\n{}", trie.pretty());
         let mut returned = false;
@@ -865,17 +839,18 @@ impl<'a> Codegen<'a> {
                 }
 
                 assert_eq!(returns.len(), 1);
-                if is_multi {
-                    writeln!(code, "{}returns.push({});", indent, returns[0].1).unwrap();
-                } else {
-                    writeln!(code, "{}return Some({});", indent, returns[0].1).unwrap();
-                }
+                let (before, after) = match ret_kind {
+                    ReturnKind::Plain => ("return ", ""),
+                    ReturnKind::Option => ("return Some(", ")"),
+                    ReturnKind::Iterator => ("returns.push(", ")"),
+                };
+                writeln!(code, "{}{}{}{};", indent, before, returns[0].1, after).unwrap();
 
                 for _ in 0..scopes {
                     writeln!(code, "{}}}", orig_indent).unwrap();
                 }
 
-                returned = !is_multi;
+                returned = ret_kind != ReturnKind::Iterator;
             }
 
             &TrieNode::Decision { ref edges } => {
@@ -930,7 +905,7 @@ impl<'a> Codegen<'a> {
                             &edges[i..last],
                             indent,
                             ctx,
-                            is_multi,
+                            ret_kind,
                         );
                         i = last;
                         continue;
@@ -950,7 +925,7 @@ impl<'a> Codegen<'a> {
                                     node,
                                     indent,
                                     ctx,
-                                    is_multi,
+                                    ret_kind,
                                 );
                             }
                             &TrieSymbol::Match { ref op } => {
@@ -967,7 +942,7 @@ impl<'a> Codegen<'a> {
                                     node,
                                     &subindent[..],
                                     ctx,
-                                    is_multi,
+                                    ret_kind,
                                 );
                                 for _ in 0..new_scopes {
                                     writeln!(code, "{}}}", indent).unwrap();
@@ -993,7 +968,7 @@ impl<'a> Codegen<'a> {
         edges: &[TrieEdge],
         indent: &str,
         ctx: &mut BodyContext,
-        is_multi: bool,
+        ret_kind: ReturnKind,
     ) {
         let (input, input_ty) = match &edges[0].symbol {
             &TrieSymbol::Match {
@@ -1058,7 +1033,7 @@ impl<'a> Codegen<'a> {
             )
             .unwrap();
             let subindent = format!("{}        ", indent);
-            self.generate_body(code, depth + 1, node, &subindent, ctx, is_multi);
+            self.generate_body(code, depth + 1, node, &subindent, ctx, ret_kind);
             writeln!(code, "{}    }}", indent).unwrap();
         }
 

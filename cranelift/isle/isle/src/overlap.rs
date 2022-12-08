@@ -112,7 +112,7 @@ fn check_overlaps(terms: Vec<(TermId, trie_again::RuleSet)>, env: &TermEnv) -> E
     let mut errs = Errors::default();
     for (tid, ruleset) in terms {
         let is_multi_ctor = match &env.terms[tid.index()].kind {
-            &TermKind::Decl { multi, .. } => multi,
+            TermKind::Decl { flags, .. } => flags.multi,
             _ => false,
         };
         if is_multi_ctor {

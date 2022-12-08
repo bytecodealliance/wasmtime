@@ -839,9 +839,9 @@
 
 ;; extend int if need.
 (decl ext_int_if_need (bool ValueRegs Type) ValueRegs)
-;;; for I8 and I16 ...
+;;; for I8, I16, and I32 ...
 (rule -1
-  (ext_int_if_need signed val (fits_in_32 ty))
+  (ext_int_if_need signed val ty)
   (gen_extend val signed (ty_bits ty) 64))
 ;;; otherwise this is a I64 or I128
 ;;; no need to extend.
@@ -1870,7 +1870,7 @@
 (decl vec_label_get (VecMachLabel u8) MachLabel )
 (extern constructor vec_label_get vec_label_get)
 
-(decl lower_branch (Inst VecMachLabel) InstOutput)
+(decl partial lower_branch (Inst VecMachLabel) InstOutput)
 (rule (lower_branch (jump _ _) targets )
       (side_effect (SideEffectNoResult.Inst (gen_jump (vec_label_get targets 0)))))
 

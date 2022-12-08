@@ -25,22 +25,28 @@ impl multi_constructor::ContextIter for It {
 
 impl multi_constructor::Context for Context {
     type etor_C_iter = It;
-    fn etor_C(&mut self, value: u32) -> Option<It> {
-        Some(It { i: 0, limit: value })
+    fn etor_C(&mut self, value: u32) -> It {
+        It { i: 0, limit: value }
     }
 
     type ctor_B_iter = multi_constructor::ContextIterWrapper<u32, std::vec::IntoIter<u32>, Context>;
-    fn ctor_B(&mut self, value: u32) -> Option<Self::ctor_B_iter> {
-        Some((0..value).rev().collect::<Vec<_>>().into_iter().into())
+    fn ctor_B(&mut self, value: u32) -> Self::ctor_B_iter {
+        (0..value).rev().collect::<Vec<_>>().into_iter().into()
     }
 }
 
-struct IterWithContext<'a, Item, I: multi_constructor::ContextIter<Output = Item, Context = Context>> {
+struct IterWithContext<
+    'a,
+    Item,
+    I: multi_constructor::ContextIter<Output = Item, Context = Context>,
+> {
     ctx: &'a mut Context,
     it: I,
 }
 
-impl<'a, Item, I: multi_constructor::ContextIter<Output = Item, Context = Context>> Iterator for IterWithContext<'a, Item, I> {
+impl<'a, Item, I: multi_constructor::ContextIter<Output = Item, Context = Context>> Iterator
+    for IterWithContext<'a, Item, I>
+{
     type Item = Item;
     fn next(&mut self) -> Option<Self::Item> {
         self.it.next(self.ctx)
@@ -49,9 +55,17 @@ impl<'a, Item, I: multi_constructor::ContextIter<Output = Item, Context = Contex
 
 fn main() {
     let mut ctx = Context;
-    let l1 = multi_constructor::constructor_A(&mut ctx, 10).unwrap();
-    let l2 = multi_constructor::constructor_D(&mut ctx, 5).unwrap();
-    let l1 = IterWithContext { ctx: &mut ctx, it: l1 }.collect::<Vec<_>>();
-    let l2 = IterWithContext { ctx: &mut ctx, it: l2 }.collect::<Vec<_>>();
+    let l1 = multi_constructor::constructor_A(&mut ctx, 10);
+    let l2 = multi_constructor::constructor_D(&mut ctx, 5);
+    let l1 = IterWithContext {
+        ctx: &mut ctx,
+        it: l1,
+    }
+    .collect::<Vec<_>>();
+    let l2 = IterWithContext {
+        ctx: &mut ctx,
+        it: l2,
+    }
+    .collect::<Vec<_>>();
     println!("l1 = {:?} l2 = {:?}", l1, l2);
 }

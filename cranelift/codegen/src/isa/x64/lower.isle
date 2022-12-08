@@ -2,12 +2,12 @@
 
 ;; The main lowering constructor term: takes a clif `Inst` and returns the
 ;; register(s) within which the lowered instruction's result values live.
-(decl lower (Inst) InstOutput)
+(decl partial lower (Inst) InstOutput)
 
 ;; A variant of the main lowering constructor term, used for branches.
 ;; The only difference is that it gets an extra argument holding a vector
 ;; of branch targets to be used.
-(decl lower_branch (Inst MachLabelSlice) InstOutput)
+(decl partial lower_branch (Inst MachLabelSlice) InstOutput)
 
 ;;;; Rules for `iconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1309,7 +1309,7 @@
                  if_true
                  if_false))
 
-(decl pure all_ones_or_all_zeros (Value) bool)
+(decl pure partial all_ones_or_all_zeros (Value) bool)
 (rule (all_ones_or_all_zeros (and (icmp _ _ _) (value_type (multi_lane _ _)))) $true)
 (rule (all_ones_or_all_zeros (and (fcmp _ _ _) (value_type (multi_lane _ _)))) $true)
 (rule (all_ones_or_all_zeros (vconst (vconst_all_ones_or_all_zeros))) $true)
