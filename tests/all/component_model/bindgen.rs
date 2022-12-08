@@ -5,6 +5,8 @@ use wasmtime::{
     Store,
 };
 
+mod results;
+
 mod no_imports {
     use super::*;
 
