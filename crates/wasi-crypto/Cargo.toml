@@ -13,7 +13,7 @@ edition.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
-wasi-crypto = { path = "spec/implementations/hostcalls/rust", version = "0.1.5" }
+wasi-crypto = { path = "spec/implementations/hostcalls/rust", version = "0.1.9" }
 wasmtime = { workspace = true }
 wiggle = { workspace = true }
 

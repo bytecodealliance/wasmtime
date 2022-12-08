@@ -281,7 +281,6 @@ impl From<guest_types::PublickeyEncoding> for PublicKeyEncoding {
             guest_types::PublickeyEncoding::Pkcs8 => PublicKeyEncoding::Pkcs8,
             guest_types::PublickeyEncoding::Pem => PublicKeyEncoding::Pem,
             guest_types::PublickeyEncoding::Sec => PublicKeyEncoding::Sec,
-            guest_types::PublickeyEncoding::CompressedSec => PublicKeyEncoding::CompressedSec,
             guest_types::PublickeyEncoding::Local => PublicKeyEncoding::Local,
         }
     }
@@ -294,7 +293,6 @@ impl From<guest_types::SecretkeyEncoding> for SecretKeyEncoding {
             guest_types::SecretkeyEncoding::Pkcs8 => SecretKeyEncoding::Pkcs8,
             guest_types::SecretkeyEncoding::Pem => SecretKeyEncoding::Pem,
             guest_types::SecretkeyEncoding::Sec => SecretKeyEncoding::Sec,
-            guest_types::SecretkeyEncoding::CompressedSec => SecretKeyEncoding::CompressedSec,
             guest_types::SecretkeyEncoding::Local => SecretKeyEncoding::Local,
         }
     }

@@ -197,6 +197,15 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
         Ok((&*self).options_get_u64(symmetric_state_handle.into(), name_str)?)
     }
 
+    fn symmetric_state_clone(
+        &mut self,
+        symmetric_state_handle: guest_types::SymmetricState,
+    ) -> Result<guest_types::SymmetricState, guest_types::CryptoErrno> {
+        Ok((&*self)
+            .symmetric_state_clone(symmetric_state_handle.into())?
+            .into())
+    }
+
     fn symmetric_state_close(
         &mut self,
         symmetric_state_handle: guest_types::SymmetricState,
