@@ -20,15 +20,6 @@ impl BindingId {
     }
 }
 
-impl IntoIterator for TupleIndex {
-    type Item = Self;
-    type IntoIter = std::iter::Map<std::ops::Range<u8>, fn(u8) -> TupleIndex>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        (0..self.0).map(TupleIndex)
-    }
-}
-
 /// Bindings are anything which can be bound to a variable name in Rust. This includes expressions,
 /// such as constants or function calls; but it also includes names bound in pattern matches.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -199,39 +190,22 @@ pub fn build(termenv: &sema::TermEnv) -> (Vec<(sema::TermId, RuleSet)>, Vec<Erro
 
 impl Constraint {
     /// Return the nested [Binding]s from matching the given [Constraint] against the given [BindingId].
-    pub fn bindings_for(self, source: BindingId) -> impl Iterator<Item = Binding> {
-        enum Bindings {
-            None,
-            Some,
-            Variant(sema::VariantId, <TupleIndex as IntoIterator>::IntoIter),
-        }
-        let mut state = match self {
+    pub fn bindings_for(self, source: BindingId) -> Vec<Binding> {
+        match self {
             // These constraints never introduce any bindings.
-            Constraint::ConstInt { .. } | Constraint::ConstPrim { .. } => Bindings::None,
-            Constraint::Some => Bindings::Some,
+            Constraint::ConstInt { .. } | Constraint::ConstPrim { .. } => vec![],
+            Constraint::Some => vec![Binding::MatchSome { source }],
             Constraint::Variant {
                 variant, fields, ..
-            } => Bindings::Variant(variant, fields.into_iter()),
-        };
-        std::iter::from_fn(move || match &mut state {
-            Bindings::None => None,
-            Bindings::Some => {
-                state = Bindings::None;
-                Some(Binding::MatchSome { source })
-            }
-            &mut Bindings::Variant(variant, ref mut fields) => {
-                if let Some(field) = fields.next() {
-                    Some(Binding::MatchVariant {
-                        source,
-                        variant,
-                        field,
-                    })
-                } else {
-                    state = Bindings::None;
-                    None
-                }
-            }
-        })
+            } => (0..fields.0)
+                .map(TupleIndex)
+                .map(|field| Binding::MatchVariant {
+                    source,
+                    variant,
+                    field,
+                })
+                .collect(),
+        }
     }
 }
 
@@ -454,6 +428,7 @@ impl RuleSetBuilder {
         }
         constraint
             .bindings_for(input)
+            .into_iter()
             .map(|binding| self.dedup_binding(binding))
             .collect()
     }
