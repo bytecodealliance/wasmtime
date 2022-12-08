@@ -168,6 +168,12 @@ impl Wizer {
                     continue;
                 }
 
+                s if s.id == SectionId::DataCount.into() => {
+                    encoder.section(&wasm_encoder::DataCountSection {
+                        count: u32::try_from(snapshot.data_segments.len()).unwrap(),
+                    });
+                }
+
                 s if s.id == SectionId::Data.into() => {
                     // TODO: supporting bulk memory will require copying over
                     // any passive and declared segments.
