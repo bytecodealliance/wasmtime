@@ -85,8 +85,14 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
     fn readdir(
         &mut self,
         fd: wasi_filesystem::Descriptor,
-        rewind: bool,
-    ) -> HostResult<Vec<u8>, wasi_filesystem::Errno> {
+    ) -> HostResult<wasi_filesystem::DirEntryStream, wasi_filesystem::Errno> {
+        todo!()
+    }
+
+    fn read_dir_entry(
+        &mut self,
+        stream: wasi_filesystem::DirEntryStream,
+    ) -> HostResult<wasi_filesystem::DirEntry, wasi_filesystem::Errno> {
         todo!()
     }
 
