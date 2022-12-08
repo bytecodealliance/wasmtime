@@ -5,45 +5,27 @@ use wasmtime::{
     Store,
 };
 
-wasmtime::component::bindgen!({
-    inline: "
+mod empty_error {
+    use super::*;
+    wasmtime::component::bindgen!({
+        inline: "
         world result-playground {
             import imports: interface {
                 empty-error: func(a: float64) -> result<float64>
-                string-error: func(a: float64) -> result<float64, string>
-
-                enum e1 { a, b, c }
-                enum-error1: func(a: float64) -> result<float64, e1>
-
-                record e2 { line: u32, column: u32 }
-                record-error2: func(a: float64) -> result<float64, e2>
-
-                variant e3 { e1(e1), e2(e2) }
-                variant-error3: func(a: float64) -> result<float64, e3>
             }
 
             default export interface {
                 empty-error: func(a: float64) -> result<float64>
-                string-error: func(a: float64) -> result<float64, string>
-
-                enum e1 { a, b, c }
-                enum-error1: func(a: float64) -> result<float64, e1>
-
-                record e2 { line: u32, column: u32 }
-                record-error2: func(a: float64) -> result<float64, e2>
-
-                variant e3 { e1(e1), e2(e2) }
-                variant-error3: func(a: float64) -> result<float64, e3>
             }
         }"
-});
+    });
 
-#[test]
-fn run() -> Result<(), Error> {
-    let engine = engine();
-    let component = Component::new(
-        &engine,
-        r#"
+    #[test]
+    fn run() -> Result<(), Error> {
+        let engine = engine();
+        let component = Component::new(
+            &engine,
+            r#"
             (component
                 (import "imports" (instance $i
                     (export "empty-error" (func (param "a" float64) (result (result float64))))
@@ -72,56 +54,45 @@ fn run() -> Result<(), Error> {
                 )
             )
         "#,
-    )?;
+        )?;
 
-    #[derive(Default)]
-    struct MyImports {}
+        #[derive(Default)]
+        struct MyImports {}
 
-    impl imports::Imports for MyImports {
-        fn empty_error(&mut self, a: f64) -> Result<Result<f64, ()>, Error> {
-            if a == 0.0 {
-                Ok(Ok(a))
-            } else if a == 1.0 {
-                Ok(Err(()))
-            } else {
-                Err(anyhow!("empty_error: trap"))
+        impl imports::Imports for MyImports {
+            fn empty_error(&mut self, a: f64) -> Result<Result<f64, ()>, Error> {
+                if a == 0.0 {
+                    Ok(Ok(a))
+                } else if a == 1.0 {
+                    Ok(Err(()))
+                } else {
+                    Err(anyhow!("empty_error: trap"))
+                }
             }
         }
-        fn string_error(&mut self, a: f64) -> Result<Result<f64, String>, Error> {
-            todo!()
-        }
-        fn enum_error1(&mut self, a: f64) -> Result<Result<f64, imports::E1>, Error> {
-            todo!()
-        }
-        fn record_error2(&mut self, a: f64) -> Result<Result<f64, imports::E2>, Error> {
-            todo!()
-        }
-        fn variant_error3(&mut self, a: f64) -> Result<Result<f64, imports::E3>, Error> {
-            todo!()
-        }
-    }
 
-    let mut linker = Linker::new(&engine);
-    imports::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
+        let mut linker = Linker::new(&engine);
+        imports::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
 
-    let mut store = Store::new(&engine, MyImports::default());
-    let (results, _) = ResultPlayground::instantiate(&mut store, &component, &linker)?;
+        let mut store = Store::new(&engine, MyImports::default());
+        let (results, _) = ResultPlayground::instantiate(&mut store, &component, &linker)?;
 
-    assert_eq!(
+        assert_eq!(
+            results
+                .empty_error(&mut store, 0.0)
+                .expect("no trap")
+                .expect("no error returned"),
+            0.0
+        );
+
         results
-            .empty_error(&mut store, 0.0)
+            .empty_error(&mut store, 1.0)
             .expect("no trap")
-            .expect("no error returned"),
-        0.0
-    );
+            .err()
+            .expect("() error returned");
 
-    results
-        .empty_error(&mut store, 1.0)
-        .expect("no trap")
-        .err()
-        .expect("() error returned");
+        results.empty_error(&mut store, 2.0).err().expect("trap");
 
-    results.empty_error(&mut store, 2.0).err().expect("trap");
-
-    Ok(())
+        Ok(())
+    }
 }
