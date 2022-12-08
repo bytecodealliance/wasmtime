@@ -39,15 +39,21 @@ pub unsafe extern "C" fn command(
         unreachable();
     }
     State::with_mut(|state| {
-        state.push_desc(Descriptor::File(File {
+        // Initialization of `State` automatically fills in some dummy
+        // structures for fds 0, 1, and 2. Overwrite the stdin/stdout slots of 0
+        // and 1 with actual files.
+        let descriptors = state.descriptors_mut();
+        if descriptors.len() < 3 {
+            unreachable();
+        }
+        descriptors[0] = Descriptor::File(File {
             fd: stdin,
             position: Cell::new(0),
-        }))?;
-        state.push_desc(Descriptor::File(File {
+        });
+        descriptors[1] = Descriptor::File(File {
             fd: stdout,
             position: Cell::new(0),
-        }))?;
-        state.push_desc(Descriptor::Log)?;
+        });
         state.args = Some(slice::from_raw_parts(args_ptr, args_len));
         Ok(())
     });
@@ -304,7 +310,7 @@ pub unsafe extern "C" fn fd_close(fd: Fd) -> Errno {
             Descriptor::File(file) => {
                 wasi_filesystem::close(file.fd);
             }
-            Descriptor::Log => {}
+            Descriptor::StdoutLog | Descriptor::StderrLog | Descriptor::EmptyStdin => {}
             Descriptor::Socket(_) => unreachable(),
             Descriptor::Closed(_) => return Err(ERRNO_BADF),
         }
@@ -379,10 +385,23 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
             });
             Ok(())
         }
-        Descriptor::Log => {
+        Descriptor::StdoutLog | Descriptor::StderrLog => {
             let fs_filetype = FILETYPE_UNKNOWN;
             let fs_flags = 0;
             let fs_rights_base = !RIGHTS_FD_READ;
+            let fs_rights_inheriting = fs_rights_base;
+            stat.write(Fdstat {
+                fs_filetype,
+                fs_flags,
+                fs_rights_base,
+                fs_rights_inheriting,
+            });
+            Ok(())
+        }
+        Descriptor::EmptyStdin => {
+            let fs_filetype = FILETYPE_UNKNOWN;
+            let fs_flags = 0;
+            let fs_rights_base = RIGHTS_FD_READ;
             let fs_rights_inheriting = fs_rights_base;
             stat.write(Fdstat {
                 fs_filetype,
@@ -585,23 +604,11 @@ pub unsafe extern "C" fn fd_pwrite(
     let ptr = (*iovs_ptr).buf;
     let len = (*iovs_ptr).buf_len;
 
-    State::with(|state| match state.get(fd)? {
-        Descriptor::File(file) => {
-            let bytes = wasi_filesystem::pwrite(file.fd, slice::from_raw_parts(ptr, len), offset)?;
-
-            *nwritten = bytes as usize;
-            Ok(())
-        }
-        Descriptor::Log => {
-            let bytes = slice::from_raw_parts(ptr, len);
-            let context: [u8; 3] = [b'I', b'/', b'O'];
-            wasi_logging::log(wasi_logging::Level::Info, &context, bytes);
-            *nwritten = len;
-            Ok(())
-        }
-        // TODO: Handle socket case here once `wasi-tcp` has been fleshed out
-        Descriptor::Socket(_) => unreachable(),
-        Descriptor::Closed(_) => Err(ERRNO_BADF),
+    State::with(|state| {
+        let file = state.get_seekable_file(fd)?;
+        let bytes = wasi_filesystem::pwrite(file.fd, slice::from_raw_parts(ptr, len), offset)?;
+        *nwritten = bytes as usize;
+        Ok(())
     })
 }
 
@@ -631,7 +638,18 @@ pub unsafe extern "C" fn fd_read(
         state.register_buffer(ptr, len);
 
         let read_len = u32::try_from(len).unwrap();
-        let file = state.get_file(fd)?;
+        let file = match state.get(fd)? {
+            Descriptor::File(f) => f,
+            Descriptor::Closed(_) | Descriptor::StdoutLog | Descriptor::StderrLog => {
+                return Err(ERRNO_BADF)
+            }
+            // TODO: Handle socket case here once `wasi-tcp` has been fleshed out
+            Descriptor::Socket(_) => unreachable(),
+            Descriptor::EmptyStdin => {
+                *nread = 0;
+                return Ok(());
+            }
+        };
         let data = wasi_filesystem::pread(file.fd, read_len, file.position.get())?;
         assert_eq!(data.as_ptr(), ptr);
         assert!(data.len() <= len);
@@ -756,7 +774,7 @@ pub unsafe extern "C" fn fd_write(
             file.position.set(file.position.get() + u64::from(bytes));
             Ok(())
         }
-        Descriptor::Log => {
+        Descriptor::StderrLog | Descriptor::StdoutLog => {
             let bytes = slice::from_raw_parts(ptr, len);
             let context: [u8; 3] = [b'I', b'/', b'O'];
             wasi_logging::log(wasi_logging::Level::Info, &context, bytes);
@@ -765,6 +783,7 @@ pub unsafe extern "C" fn fd_write(
         }
         // TODO: Handle socket case here once `wasi-tcp` has been fleshed out
         Descriptor::Socket(_) => unreachable(),
+        Descriptor::EmptyStdin => Err(ERRNO_INVAL),
         Descriptor::Closed(_) => Err(ERRNO_BADF),
     })
 }
@@ -1506,7 +1525,20 @@ pub enum Descriptor {
     Closed(Option<Fd>),
     File(File),
     Socket(wasi_tcp::Socket),
-    Log,
+
+    /// Initial state of fd 0 when `State` is created, representing a standard
+    /// input that is empty as it hasn't been configured yet. This is the
+    /// permanent fd 0 marker if `command` is never called.
+    EmptyStdin,
+
+    /// Initial state of fd 1 when `State` is created, representing that writes
+    /// to `fd_write` will go to a call to `log`. This is overwritten during
+    /// initialization in `command`.
+    StdoutLog,
+
+    /// Same as `StdoutLog` except for stderr. This is not overwritten during
+    /// `command`.
+    StderrLog,
 }
 
 #[repr(C)]
@@ -1625,7 +1657,7 @@ impl State {
             unreachable();
         }
         let ret = (grew * PAGE_SIZE) as *mut RefCell<State>;
-        unsafe {
+        let ret = unsafe {
             ret.write(RefCell::new(State {
                 buffer_ptr: Cell::new(null_mut()),
                 buffer_len: Cell::new(0),
@@ -1638,7 +1670,17 @@ impl State {
                 args: None,
             }));
             &*ret
-        }
+        };
+        ret.try_borrow_mut()
+            .unwrap_or_else(|_| unreachable())
+            .init();
+        ret
+    }
+
+    fn init(&mut self) {
+        self.push_desc(Descriptor::EmptyStdin).unwrap();
+        self.push_desc(Descriptor::StdoutLog).unwrap();
+        self.push_desc(Descriptor::StderrLog).unwrap();
     }
 
     fn push_desc(&mut self, desc: Descriptor) -> Result<Fd, Errno> {
@@ -1654,37 +1696,49 @@ impl State {
         }
     }
 
-    fn get(&self, fd: Fd) -> Result<&Descriptor, Errno> {
-        let index = usize::try_from(fd).unwrap();
-        if index < usize::try_from(self.ndescriptors).unwrap() {
-            unsafe { Ok(unwrap((*self.descriptors.as_ptr()).get(index))) }
-        } else {
-            Err(ERRNO_BADF)
+    fn descriptors(&self) -> &[Descriptor] {
+        unsafe {
+            core::slice::from_raw_parts(
+                self.descriptors.as_ptr().cast(),
+                usize::try_from(self.ndescriptors).unwrap(),
+            )
         }
     }
 
-    fn get_mut(&mut self, fd: Fd) -> Result<&mut Descriptor, Errno> {
-        let index = usize::try_from(fd).unwrap();
-        if index < usize::try_from(self.ndescriptors).unwrap() {
-            unsafe { Ok(unwrap((*self.descriptors.as_mut_ptr()).get_mut(index))) }
-        } else {
-            Err(ERRNO_BADF)
+    fn descriptors_mut(&mut self) -> &mut [Descriptor] {
+        unsafe {
+            core::slice::from_raw_parts_mut(
+                self.descriptors.as_mut_ptr().cast(),
+                usize::try_from(self.ndescriptors).unwrap(),
+            )
         }
+    }
+
+    fn get(&self, fd: Fd) -> Result<&Descriptor, Errno> {
+        self.descriptors()
+            .get(usize::try_from(fd).unwrap())
+            .ok_or(ERRNO_BADF)
+    }
+
+    fn get_mut(&mut self, fd: Fd) -> Result<&mut Descriptor, Errno> {
+        self.descriptors_mut()
+            .get_mut(usize::try_from(fd).unwrap())
+            .ok_or(ERRNO_BADF)
     }
 
     fn get_file_with_error(&self, fd: Fd, error: Errno) -> Result<&File, Errno> {
         match self.get(fd)? {
             Descriptor::File(file) => Ok(file),
-            Descriptor::Log | Descriptor::Socket(_) => Err(error),
             Descriptor::Closed(_) => Err(ERRNO_BADF),
+            _ => Err(error),
         }
     }
 
     fn get_socket(&self, fd: Fd) -> Result<wasi_tcp::Socket, Errno> {
         match self.get(fd)? {
             Descriptor::Socket(socket) => Ok(*socket),
-            Descriptor::Log | Descriptor::File(_) => Err(ERRNO_INVAL),
             Descriptor::Closed(_) => Err(ERRNO_BADF),
+            _ => Err(ERRNO_INVAL),
         }
     }
 
