@@ -115,6 +115,7 @@ export default location
 `
 }
 function packageJson(name, version, description, os, cpu) {
+    version = version.startsWith('v') ? version.replace('v','') : version
     return JSON.stringify({
         name: `@bytecode-alliance/${name}`,
         bin: {
