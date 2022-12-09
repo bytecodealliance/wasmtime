@@ -81,6 +81,8 @@ impl Settings {
 impl SettingsCommand {
     /// Executes the command.
     pub fn execute(self) -> Result<()> {
+
+        // Gather settings from the cranelift compiler builder
         let mut builder = wasmtime_cranelift::builder();
         if let Some(target) = &self.target {
             let target = target_lexicon::Triple::from_str(target).map_err(|e| anyhow!(e))?;
@@ -88,15 +90,49 @@ impl SettingsCommand {
         }
         let settings = Settings::from_builder(builder);
 
+        // Print settings
         if self.json {
-            self.print_json()
+            self.print_json(settings)
         } else {
             self.print_human_readable(settings)
         }
     }
 
-    fn print_json(self) -> Result<()> {
-        panic!();
+    fn print_json(self, settings: Settings) -> Result<()> {
+        println!("{{");
+        println!("  \"triple\": \"{}\",", settings.triple);
+
+        Self::print_settings_json("boolean", &settings.bools);
+        Self::print_settings_json("enum", &settings.enums);
+        Self::print_settings_json("numerical", &settings.nums);
+        Self::print_settings_json("presets", &settings.presets);
+
+        println!("}}");
+
+        Ok(())
+    }
+
+    fn print_settings_json(header: &str, settings: &[Setting]) {
+        println!("  \"{}\": [", header);
+
+        for setting in settings {
+            println!("    {{");
+            println!("      \"name\": \"{}\",", setting.name);
+
+            if let Some(values) = setting.values {
+                let v = values
+                    .iter()
+                    .map(|v| format!("\"{}\"", v))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                println!("      \"values\": [{}],", v);
+            }
+
+            println!("      \"description\": \"{}\"", setting.description);
+            println!("    }},");
+        }
+
+        println!("  ],");
     }
 
     fn print_human_readable(self, settings: Settings) -> Result<()> {
