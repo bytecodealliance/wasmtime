@@ -1,7 +1,7 @@
-use crate::utils::parse_sets_and_triple;
 use anyhow::{Context as _, Result};
 use clap::Parser;
 use cranelift_codegen::Context;
+use cranelift_reader::parse_sets_and_triple;
 use cranelift_wasm::DummyEnvironment;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use std::path::{Path, PathBuf};

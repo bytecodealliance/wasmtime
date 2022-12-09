@@ -152,7 +152,7 @@ cranelift = { path = "cranelift/umbrella", version = "0.92.0" }
 
 winch-codegen = { path = "winch/codegen", version = "=0.3.0" }
 
-target-lexicon = { version = "0.12.3", default-features = false }
+target-lexicon = { version = "0.12.3", default-features = false, features = ["std"] }
 anyhow = "1.0.22"
 wasmparser = "0.95.0"
 wat = "1.0.52"
