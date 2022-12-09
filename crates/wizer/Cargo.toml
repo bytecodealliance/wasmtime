@@ -4,6 +4,7 @@ categories = ["command-line-utilities", "development-tools", "wasm"]
 description = "The WebAssembly Pre-Initializer"
 documentation = "https://docs.rs/wizer"
 edition = "2018"
+exclude = ["**.wasm"]
 homepage = "https://github.com/bytecodealliance/wizer"
 license = "Apache-2.0 WITH LLVM-exception"
 name = "wizer"
