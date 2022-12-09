@@ -332,7 +332,6 @@ fn lower_insn_to_regs(
         | Opcode::Null
         | Opcode::Iadd
         | Opcode::IaddCout
-        | Opcode::IaddIfcout
         | Opcode::SaddSat
         | Opcode::UaddSat
         | Opcode::Isub
@@ -360,6 +359,7 @@ fn lower_insn_to_regs(
         | Opcode::Ineg
         | Opcode::Trap
         | Opcode::ResumableTrap
+        | Opcode::UaddOverflowTrap
         | Opcode::Clz
         | Opcode::Ctz
         | Opcode::Popcnt
@@ -500,13 +500,6 @@ fn lower_insn_to_regs(
             unimplemented!("Vector split/concat ops not implemented.");
         }
 
-        // Opcodes that should be removed by legalization. These should
-        // eventually be removed if/when we replace in-situ legalization with
-        // something better.
-        Opcode::Ifcmp | Opcode::Ffcmp => {
-            panic!("Should never reach ifcmp/ffcmp as isel root!");
-        }
-
         Opcode::IaddImm
         | Opcode::ImulImm
         | Opcode::UdivImm
@@ -515,16 +508,10 @@ fn lower_insn_to_regs(
         | Opcode::SremImm
         | Opcode::IrsubImm
         | Opcode::IaddCin
-        | Opcode::IaddIfcin
         | Opcode::IaddCarry
-        | Opcode::IaddIfcarry
         | Opcode::IsubBin
-        | Opcode::IsubIfbin
         | Opcode::IsubBout
-        | Opcode::IsubIfbout
         | Opcode::IsubBorrow
-        | Opcode::IsubIfborrow
-        | Opcode::UaddOverflowTrap
         | Opcode::BandImm
         | Opcode::BorImm
         | Opcode::BxorImm
@@ -533,8 +520,7 @@ fn lower_insn_to_regs(
         | Opcode::IshlImm
         | Opcode::UshrImm
         | Opcode::SshrImm
-        | Opcode::IcmpImm
-        | Opcode::IfcmpImm => {
+        | Opcode::IcmpImm => {
             panic!("ALU+imm and ALU+carry ops should not appear here!");
         }
 

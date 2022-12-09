@@ -57,7 +57,6 @@
 //! - Swizzle and shuffle instructions take a variable number of lane arguments. The number
 //!   of arguments must match the destination type, and the lane indexes must be in range.
 
-use self::flags::verify_flags;
 use crate::dbg::DisplayList;
 use crate::dominator_tree::DominatorTree;
 use crate::entity::SparseSet;
@@ -80,8 +79,6 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::fmt::{self, Display, Formatter};
-
-mod flags;
 
 /// A verifier error.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -1798,8 +1795,6 @@ impl<'a> Verifier<'a> {
 
             self.encodable_as_bb(block, errors)?;
         }
-
-        verify_flags(self.func, &self.expected_cfg, errors)?;
 
         if !errors.is_empty() {
             log::warn!(

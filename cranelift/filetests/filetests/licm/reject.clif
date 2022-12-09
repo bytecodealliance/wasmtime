@@ -20,29 +20,6 @@ block3(v6: i32):
 
 }
 
-function %cpu_flags(i32, i32) -> i32 {
-block0(v0: i32, v1: i32):
-    jump block1(v0, v1)
-
-block1(v2: i32, v3: i32):
-    v4 = ifcmp.i32 v0, v1
-    v5 = selectif.i32 eq v4, v2, v3
-; check: block1(v2: i32, v3: i32):
-; check: ifcmp.i32 v0, v1
-; check: v5 = selectif.i32 eq v4, v2, v3
-    v8 = iconst.i32 1
-    brz v1, block3(v1)
-    jump block2
-
-block2:
-    v9 = isub v1, v8
-    v10 = iadd v1, v8
-    jump block1(v9, v10)
-
-block3(v6: i32):
-    return v6
-}
-
 function %spill(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
     v2 = spill.i32 v0

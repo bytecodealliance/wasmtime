@@ -48,11 +48,6 @@ fn emit_dynamic_vectors(bits: u64, fmt: &mut srcgen::Formatter) {
 
 /// Emit types using the given formatter object.
 fn emit_types(fmt: &mut srcgen::Formatter) {
-    // Emit all of the special types, such as types for CPU flags.
-    for spec in cdsl_types::ValueType::all_special_types().map(cdsl_types::ValueType::from) {
-        emit_type(&spec, fmt);
-    }
-
     // Emit all of the lane types, such integers, floats, and booleans.
     for ty in cdsl_types::ValueType::all_lane_types().map(cdsl_types::ValueType::from) {
         emit_type(&ty, fmt);

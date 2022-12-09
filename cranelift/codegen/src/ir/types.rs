@@ -244,14 +244,6 @@ impl Type {
         }
     }
 
-    /// Is this a CPU flags type?
-    pub fn is_flags(self) -> bool {
-        match self {
-            IFLAGS | FFLAGS => true,
-            _ => false,
-        }
-    }
-
     /// Is this a ref type?
     pub fn is_ref(self) -> bool {
         match self {
@@ -453,12 +445,10 @@ impl Display for Type {
         } else if self.is_ref() {
             write!(f, "r{}", self.lane_bits())
         } else {
-            f.write_str(match *self {
-                IFLAGS => "iflags",
-                FFLAGS => "fflags",
+            match *self {
                 INVALID => panic!("INVALID encountered"),
                 _ => panic!("Unknown Type(0x{:x})", self.0),
-            })
+            }
         }
     }
 }
@@ -478,8 +468,6 @@ impl Debug for Type {
         } else {
             match *self {
                 INVALID => write!(f, "types::INVALID"),
-                IFLAGS => write!(f, "types::IFLAGS"),
-                FFLAGS => write!(f, "types::FFLAGS"),
                 _ => write!(f, "Type(0x{:x})", self.0),
             }
         }
@@ -501,10 +489,6 @@ mod tests {
     fn basic_scalars() {
         assert_eq!(INVALID, INVALID.lane_type());
         assert_eq!(0, INVALID.bits());
-        assert_eq!(IFLAGS, IFLAGS.lane_type());
-        assert_eq!(0, IFLAGS.bits());
-        assert_eq!(FFLAGS, FFLAGS.lane_type());
-        assert_eq!(0, FFLAGS.bits());
         assert_eq!(I8, I8.lane_type());
         assert_eq!(I16, I16.lane_type());
         assert_eq!(I32, I32.lane_type());
@@ -518,8 +502,6 @@ mod tests {
         assert_eq!(R64, R64.lane_type());
 
         assert_eq!(INVALID.lane_bits(), 0);
-        assert_eq!(IFLAGS.lane_bits(), 0);
-        assert_eq!(FFLAGS.lane_bits(), 0);
         assert_eq!(I8.lane_bits(), 8);
         assert_eq!(I16.lane_bits(), 16);
         assert_eq!(I32.lane_bits(), 32);
@@ -535,7 +517,6 @@ mod tests {
     fn typevar_functions() {
         assert_eq!(INVALID.half_width(), None);
         assert_eq!(INVALID.half_width(), None);
-        assert_eq!(FFLAGS.half_width(), None);
         assert_eq!(I8.half_width(), None);
         assert_eq!(I16.half_width(), Some(I8));
         assert_eq!(I32.half_width(), Some(I16));
@@ -546,8 +527,6 @@ mod tests {
         assert_eq!(F64.half_width(), Some(F32));
 
         assert_eq!(INVALID.double_width(), None);
-        assert_eq!(IFLAGS.double_width(), None);
-        assert_eq!(FFLAGS.double_width(), None);
         assert_eq!(I8.double_width(), Some(I16));
         assert_eq!(I16.double_width(), Some(I32));
         assert_eq!(I32.double_width(), Some(I64));
@@ -614,8 +593,6 @@ mod tests {
 
     #[test]
     fn format_scalars() {
-        assert_eq!(IFLAGS.to_string(), "iflags");
-        assert_eq!(FFLAGS.to_string(), "fflags");
         assert_eq!(I8.to_string(), "i8");
         assert_eq!(I16.to_string(), "i16");
         assert_eq!(I32.to_string(), "i32");

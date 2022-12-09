@@ -71,3 +71,14 @@ block0(v0: i64, v1: i64):
 ;   jle 6 ; trap
 ;   br %r14
 
+function %f5(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+    v2 = uextend.i64 v1
+    v3 = uadd_overflow_trap v0, v2, user0
+    return v3
+}
+
+; block0:
+;   algfr %r2, %r3
+;   jle 6 ; trap
+;   br %r14

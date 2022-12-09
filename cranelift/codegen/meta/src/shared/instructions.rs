@@ -571,9 +571,6 @@ pub(crate) fn define(
     define_simd_arithmetic(&mut ig, formats, imm, entities);
 
     // Operand kind shorthands.
-    let iflags: &TypeVar = &ValueType::Special(types::Flag::IFlags.into()).into();
-    let fflags: &TypeVar = &ValueType::Special(types::Flag::FFlags.into()).into();
-
     let i8: &TypeVar = &ValueType::from(LaneType::from(types::Int::I8)).into();
     let f32_: &TypeVar = &ValueType::from(LaneType::from(types::Float::F32)).into();
     let f64_: &TypeVar = &ValueType::from(LaneType::from(types::Float::F64)).into();
@@ -1671,40 +1668,6 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let f = &Operand::new("f", iflags);
-    let x = &Operand::new("x", iB);
-    let y = &Operand::new("y", iB);
-
-    ig.push(
-        Inst::new(
-            "ifcmp",
-            r#"
-        Compare scalar integers and return flags.
-
-        Compare two scalar integer values and return integer CPU flags
-        representing the result.
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![x, y])
-        .operands_out(vec![f]),
-    );
-
-    ig.push(
-        Inst::new(
-            "ifcmp_imm",
-            r#"
-        Compare scalar integer to a constant and return flags.
-
-        Like `icmp_imm`, but returns integer CPU flags instead of testing
-        a specific condition code.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![x, Y])
-        .operands_out(vec![f]),
-    );
-
     let a = &Operand::new("a", Int);
     let x = &Operand::new("x", Int);
     let y = &Operand::new("y", Int);
@@ -2043,11 +2006,6 @@ pub(crate) fn define(
     let b_in = &Operand::new("b_in", i8).with_doc("Input borrow flag");
     let b_out = &Operand::new("b_out", i8).with_doc("Output borrow flag");
 
-    let c_if_in = &Operand::new("c_in", iflags);
-    let c_if_out = &Operand::new("c_out", iflags);
-    let b_if_in = &Operand::new("b_in", iflags);
-    let b_if_out = &Operand::new("b_out", iflags);
-
     ig.push(
         Inst::new(
             "iadd_cin",
@@ -2066,27 +2024,6 @@ pub(crate) fn define(
             &formats.ternary,
         )
         .operands_in(vec![x, y, c_in])
-        .operands_out(vec![a]),
-    );
-
-    ig.push(
-        Inst::new(
-            "iadd_ifcin",
-            r#"
-        Add integers with carry in.
-
-        Same as `iadd` with an additional carry flag input. Computes:
-
-        ```text
-            a = x + y + c_{in} \pmod 2^B
-        ```
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.ternary,
-        )
-        .operands_in(vec![x, y, c_if_in])
         .operands_out(vec![a]),
     );
 
@@ -2114,28 +2051,6 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
-            "iadd_ifcout",
-            r#"
-        Add integers with carry out.
-
-        Same as `iadd` with an additional carry flag output.
-
-        ```text
-            a &= x + y \pmod 2^B \\
-            c_{out} &= x+y >= 2^B
-        ```
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a, c_if_out]),
-    );
-
-    ig.push(
-        Inst::new(
             "iadd_carry",
             r#"
         Add integers with carry in and out.
@@ -2154,28 +2069,6 @@ pub(crate) fn define(
         )
         .operands_in(vec![x, y, c_in])
         .operands_out(vec![a, c_out]),
-    );
-
-    ig.push(
-        Inst::new(
-            "iadd_ifcarry",
-            r#"
-        Add integers with carry in and out.
-
-        Same as `iadd` with an additional carry flag input and output.
-
-        ```text
-            a &= x + y + c_{in} \pmod 2^B \\
-            c_{out} &= x + y + c_{in} >= 2^B
-        ```
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.ternary,
-        )
-        .operands_in(vec![x, y, c_if_in])
-        .operands_out(vec![a, c_if_out]),
     );
 
     {
@@ -2229,27 +2122,6 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
-            "isub_ifbin",
-            r#"
-        Subtract integers with borrow in.
-
-        Same as `isub` with an additional borrow flag input. Computes:
-
-        ```text
-            a = x - (y + b_{in}) \pmod 2^B
-        ```
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.ternary,
-        )
-        .operands_in(vec![x, y, b_if_in])
-        .operands_out(vec![a]),
-    );
-
-    ig.push(
-        Inst::new(
             "isub_bout",
             r#"
         Subtract integers with borrow out.
@@ -2272,28 +2144,6 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
-            "isub_ifbout",
-            r#"
-        Subtract integers with borrow out.
-
-        Same as `isub` with an additional borrow flag output.
-
-        ```text
-            a &= x - y \pmod 2^B \\
-            b_{out} &= x < y
-        ```
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a, b_if_out]),
-    );
-
-    ig.push(
-        Inst::new(
             "isub_borrow",
             r#"
         Subtract integers with borrow in and out.
@@ -2312,28 +2162,6 @@ pub(crate) fn define(
         )
         .operands_in(vec![x, y, b_in])
         .operands_out(vec![a, b_out]),
-    );
-
-    ig.push(
-        Inst::new(
-            "isub_ifborrow",
-            r#"
-        Subtract integers with borrow in and out.
-
-        Same as `isub` with an additional borrow flag input and output.
-
-        ```text
-            a &= x - (y + b_{in}) \pmod 2^B \\
-            b_{out} &= x < y + b_{in}
-        ```
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.ternary,
-        )
-        .operands_in(vec![x, y, b_if_in])
-        .operands_out(vec![a, b_if_out]),
     );
 
     let bits = &TypeVar::new(
@@ -2846,23 +2674,6 @@ pub(crate) fn define(
         )
         .operands_in(vec![Cond, x, y])
         .operands_out(vec![a]),
-    );
-
-    let f = &Operand::new("f", fflags);
-
-    ig.push(
-        Inst::new(
-            "ffcmp",
-            r#"
-        Floating point comparison returning flags.
-
-        Compares two numbers like `fcmp`, but returns floating point CPU
-        flags instead of testing a specific condition.
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![x, y])
-        .operands_out(vec![f]),
     );
 
     let x = &Operand::new("x", Float);

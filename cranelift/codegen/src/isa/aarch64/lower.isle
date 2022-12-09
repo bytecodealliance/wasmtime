@@ -2332,36 +2332,6 @@
             (lower_msb Reg (lsr_imm $I64 lower_msb (imm_shift_from_u8 63))))
         (add_shift $I64 lower_msb upper_msb (lshl_from_u64 $I64 1))))
 
-;;; Rules for `iadd_ifcout` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; This is a two-output instruction that is needed for the
-;; legalizer's explicit heap-check sequence, among possible other
-;; uses. Its second output is a flags output only ever meant to
-;; check for overflow using the
-;; `backend.unsigned_add_overflow_condition()` condition.
-;;
-;; Note that the CLIF validation will ensure that no flag-setting
-;; operation comes between this IaddIfcout and its use (e.g., a
-;; Trapif). Thus, we can rely on implicit communication through the
-;; processor flags rather than explicitly generating flags into a
-;; register. We simply use the variant of the add instruction that
-;; sets flags (`adds`) here.
-;;
-;; Note that the second output (the flags) need not be generated,
-;; because flags are never materialized into a register; the only
-;; instructions that can use a value of type `iflags` or `fflags`
-;; will look directly for the flags-producing instruction (which can
-;; always be found, by construction) and merge it.
-;;
-;; Now handle the iadd as above, except use an AddS opcode that sets
-;; flags.
-
-(rule (lower (has_type (ty_int ty)
-                       (iadd_ifcout a b)))
-      (output_pair
-       (add_with_flags ty a b)
-       (invalid_reg)))
-
 ;;; Rules for `iadd_cout` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; For values smaller than a register, we do a normal `add` with both arguments

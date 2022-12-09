@@ -172,8 +172,7 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
                         | ir::Opcode::IrsubImm
                         | ir::Opcode::ImulImm
                         | ir::Opcode::SdivImm
-                        | ir::Opcode::SremImm
-                        | ir::Opcode::IfcmpImm => true,
+                        | ir::Opcode::SremImm => true,
                         _ => false,
                     };
 
@@ -228,10 +227,6 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
                         }
                         ir::Opcode::UremImm => {
                             replace.urem(arg, imm);
-                        }
-                        // comparisons
-                        ir::Opcode::IfcmpImm => {
-                            replace.ifcmp(arg, imm);
                         }
                         _ => prev_pos = pos.position(),
                     };

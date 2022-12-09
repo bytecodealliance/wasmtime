@@ -49,7 +49,6 @@ define_passes! {
     wasm_translate_function: "Translate WASM function",
 
     verifier: "Verify Cranelift IR",
-    verify_flags: "Verify CPU flags",
 
     compile: "Compilation passes",
     try_incremental_cache: "Try loading from incremental cache",

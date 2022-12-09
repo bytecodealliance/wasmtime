@@ -2037,10 +2037,6 @@
       (a2 Reg (alu_rr_imm12 (AluOPRRI.Addi) a (imm12_const 1))))
     (gen_select_reg (IntCC.SignedLessThan) r (zero_reg) a2 r)))
 
-(decl output_ifcout (Reg) InstOutput)
-(rule (output_ifcout reg)
-      (output_pair reg (value_regs_invalid)))
-
 (decl gen_trapff (FloatCC Reg Reg Type TrapCode) InstOutput)
 (rule
   (gen_trapff cc a b ty trap_code)

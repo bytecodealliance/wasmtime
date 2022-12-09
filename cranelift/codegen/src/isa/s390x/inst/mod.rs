@@ -1244,9 +1244,6 @@ impl MachInst for Inst {
             types::F64 => Ok((&[RegClass::Float], &[types::F64])),
             types::I128 => Ok((&[RegClass::Float], &[types::I128])),
             _ if ty.is_vector() && ty.bits() == 128 => Ok((&[RegClass::Float], &[types::I8X16])),
-            // FIXME: We don't really have IFLAGS, but need to allow it here
-            // for now to support the SelectifSpectreGuard instruction.
-            types::IFLAGS => Ok((&[RegClass::Int], &[types::I64])),
             _ => Err(CodegenError::Unsupported(format!(
                 "Unexpected SSA-value type: {}",
                 ty

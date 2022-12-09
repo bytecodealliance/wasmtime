@@ -622,32 +622,6 @@ where
             &arg(0)?,
             &imm_as_ctrl_ty()?,
         )?),
-        Opcode::Ifcmp | Opcode::IfcmpImm => {
-            let arg0 = arg(0)?;
-            let arg1 = match inst.opcode() {
-                Opcode::Ifcmp => arg(1)?,
-                Opcode::IfcmpImm => imm_as_ctrl_ty()?,
-                _ => unreachable!(),
-            };
-            state.clear_flags();
-            for f in &[
-                IntCC::Equal,
-                IntCC::NotEqual,
-                IntCC::SignedLessThan,
-                IntCC::SignedGreaterThanOrEqual,
-                IntCC::SignedGreaterThan,
-                IntCC::SignedLessThanOrEqual,
-                IntCC::UnsignedLessThan,
-                IntCC::UnsignedGreaterThanOrEqual,
-                IntCC::UnsignedGreaterThan,
-                IntCC::UnsignedLessThanOrEqual,
-            ] {
-                if icmp(ctrl_ty, *f, &arg0, &arg1)?.into_bool()? {
-                    state.set_iflag(*f);
-                }
-            }
-            ControlFlow::Continue
-        }
         Opcode::Smin => {
             if ctrl_ty.is_vector() {
                 let icmp = icmp(ctrl_ty, IntCC::SignedGreaterThan, &arg(1)?, &arg(0)?)?;
@@ -795,13 +769,11 @@ where
             Value::add(Value::add(arg(0)?, arg(1)?)?, Value::int(1, ctrl_ty)?)?,
             Value::add(arg(0)?, arg(1)?)?,
         ),
-        Opcode::IaddIfcin => unimplemented!("IaddIfcin"),
         Opcode::IaddCout => {
             let carry = arg(0)?.checked_add(arg(1)?)?.is_none();
             let sum = arg(0)?.add(arg(1)?)?;
             assign_multiple(&[sum, Value::bool(carry, false, types::I8)?])
         }
-        Opcode::IaddIfcout => unimplemented!("IaddIfcout"),
         Opcode::IaddCarry => {
             let mut sum = Value::add(arg(0)?, arg(1)?)?;
             let mut carry = arg(0)?.checked_add(arg(1)?)?.is_none();
@@ -813,7 +785,6 @@ where
 
             assign_multiple(&[sum, Value::bool(carry, false, types::I8)?])
         }
-        Opcode::IaddIfcarry => unimplemented!("IaddIfcarry"),
         Opcode::UaddOverflowTrap => {
             let sum = Value::add(arg(0)?, arg(1)?)?;
             let carry = Value::lt(&sum, &arg(0)?)? && Value::lt(&sum, &arg(1)?)?;
@@ -828,13 +799,11 @@ where
             Value::sub(arg(0)?, Value::add(arg(1)?, Value::int(1, ctrl_ty)?)?)?,
             Value::sub(arg(0)?, arg(1)?)?,
         ),
-        Opcode::IsubIfbin => unimplemented!("IsubIfbin"),
         Opcode::IsubBout => {
             let sum = Value::sub(arg(0)?, arg(1)?)?;
             let borrow = Value::lt(&arg(0)?, &arg(1)?)?;
             assign_multiple(&[sum, Value::bool(borrow, false, types::I8)?])
         }
-        Opcode::IsubIfbout => unimplemented!("IsubIfbout"),
         Opcode::IsubBorrow => {
             let rhs = if Value::into_bool(arg(2)?)? {
                 Value::add(arg(1)?, Value::int(1, ctrl_ty)?)?
@@ -845,7 +814,6 @@ where
             let sum = Value::sub(arg(0)?, rhs)?;
             assign_multiple(&[sum, Value::bool(borrow, false, types::I8)?])
         }
-        Opcode::IsubIfborrow => unimplemented!("IsubIfborrow"),
         Opcode::Band => binary(Value::and, arg(0)?, arg(1)?)?,
         Opcode::Bor => binary(Value::or, arg(0)?, arg(1)?)?,
         Opcode::Bxor => binary(Value::xor, arg(0)?, arg(1)?)?,
@@ -909,32 +877,6 @@ where
                     .collect::<ValueResult<SimdVec<V>>>()?),
                 ctrl_ty,
             )?)
-        }
-        Opcode::Ffcmp => {
-            let arg0 = arg(0)?;
-            let arg1 = arg(1)?;
-            state.clear_flags();
-            for f in &[
-                FloatCC::Ordered,
-                FloatCC::Unordered,
-                FloatCC::Equal,
-                FloatCC::NotEqual,
-                FloatCC::OrderedNotEqual,
-                FloatCC::UnorderedOrEqual,
-                FloatCC::LessThan,
-                FloatCC::LessThanOrEqual,
-                FloatCC::GreaterThan,
-                FloatCC::GreaterThanOrEqual,
-                FloatCC::UnorderedOrLessThan,
-                FloatCC::UnorderedOrLessThanOrEqual,
-                FloatCC::UnorderedOrGreaterThan,
-                FloatCC::UnorderedOrGreaterThanOrEqual,
-            ] {
-                if fcmp(*f, &arg0, &arg1)? {
-                    state.set_fflag(*f);
-                }
-            }
-            ControlFlow::Continue
         }
         Opcode::Fadd => binary(Value::add, arg(0)?, arg(1)?)?,
         Opcode::Fsub => binary(Value::sub, arg(0)?, arg(1)?)?,

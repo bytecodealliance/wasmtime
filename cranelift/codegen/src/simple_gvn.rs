@@ -18,7 +18,6 @@ fn trivially_unsafe_for_gvn(opcode: Opcode) -> bool {
         || opcode.can_trap()
         || opcode.other_side_effects()
         || opcode.can_store()
-        || opcode.writes_cpu_flags()
 }
 
 /// Test that, if the specified instruction is a load, it doesn't have the `readonly` memflag.

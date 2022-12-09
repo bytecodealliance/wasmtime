@@ -519,13 +519,6 @@ fn gen_opcodes(all_inst: &AllInstructions, fmt: &mut Formatter) {
             "Does this instruction have other side effects besides can_* flags?",
             fmt,
         );
-        gen_bool_accessor(
-            all_inst,
-            |inst| inst.writes_cpu_flags,
-            "writes_cpu_flags",
-            "Does this instruction write to CPU flags?",
-            fmt,
-        );
     });
     fmt.line("}");
     fmt.empty_line();
@@ -651,9 +644,6 @@ fn typeset_to_string(ts: &TypeSet) -> String {
     }
     if !ts.floats.is_empty() {
         result += &format!(", floats={}", iterable_to_string(&ts.floats));
-    }
-    if !ts.specials.is_empty() {
-        result += &format!(", specials=[{}]", iterable_to_string(&ts.specials));
     }
     if !ts.refs.is_empty() {
         result += &format!(", refs={}", iterable_to_string(&ts.refs));

@@ -9,7 +9,6 @@ use crate::entity::SecondaryMap;
 use crate::fx::{FxHashMap, FxHashSet};
 use crate::inst_predicates::{has_lowering_side_effect, is_constant_64bit};
 use crate::ir::{
-    types::{FFLAGS, IFLAGS},
     ArgumentPurpose, Block, Constant, ConstantData, DataFlowGraph, ExternalName, Function,
     GlobalValue, GlobalValueData, Immediate, Inst, InstructionData, MemFlags, Opcode, RelSourceLoc,
     Type, Value, ValueDef, ValueLabelAssignments, ValueLabelStart,
@@ -1246,12 +1245,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         let val = self.f.dfg.resolve_aliases(val);
         trace!("put_value_in_regs: val {}", val);
 
-        // Assert that the value is not `iflags`/`fflags`-typed; these
-        // cannot be reified into normal registers. TODO(#3249)
-        // eventually remove the `iflags` type altogether!
-        let ty = self.f.dfg.value_type(val);
-        assert!(ty != IFLAGS && ty != FFLAGS);
-
         if let Some(inst) = self.f.dfg.value_def(val).inst() {
             assert!(!self.inst_sunk.contains(&inst));
         }
@@ -1268,6 +1261,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 .inst()
                 .and_then(|inst| self.get_constant(inst))
             {
+                let ty = self.f.dfg.value_type(val);
                 let regs = self.alloc_tmp(ty);
                 trace!(" -> regs {:?}", regs);
                 assert!(regs.is_valid());

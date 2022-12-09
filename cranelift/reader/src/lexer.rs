@@ -329,8 +329,6 @@ impl<'a> Lexer<'a> {
                         .or_else(|| Self::value_type(text, prefix, number))
                 })
                 .unwrap_or_else(|| match text {
-                    "iflags" => Token::Type(types::IFLAGS),
-                    "fflags" => Token::Type(types::FFLAGS),
                     "cold" => Token::Cold,
                     _ => Token::Identifier(text),
                 }),
@@ -622,8 +620,7 @@ mod tests {
     fn lex_identifiers() {
         let mut lex = Lexer::new(
             "v0 v00 vx01 block1234567890 block5234567890 v1x vx1 vxvx4 \
-             function0 function i8 i32x4 f32x5 \
-             iflags fflags iflagss",
+             function0 function i8 i32x4 f32x5",
         );
         assert_eq!(
             lex.next(),
@@ -644,9 +641,6 @@ mod tests {
         assert_eq!(lex.next(), token(Token::Type(types::I8), 1));
         assert_eq!(lex.next(), token(Token::Type(types::I32X4), 1));
         assert_eq!(lex.next(), token(Token::Identifier("f32x5"), 1));
-        assert_eq!(lex.next(), token(Token::Type(types::IFLAGS), 1));
-        assert_eq!(lex.next(), token(Token::Type(types::FFLAGS), 1));
-        assert_eq!(lex.next(), token(Token::Identifier("iflagss"), 1));
         assert_eq!(lex.next(), None);
     }
 

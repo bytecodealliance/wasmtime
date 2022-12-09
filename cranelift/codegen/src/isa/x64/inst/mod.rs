@@ -2318,7 +2318,6 @@ impl MachInst for Inst {
                 assert!(ty.bits() <= 128);
                 Ok((&[RegClass::Float], &[types::I8X16]))
             }
-            types::IFLAGS | types::FFLAGS => Ok((&[RegClass::Int], &[types::I64])),
             _ => Err(CodegenError::Unsupported(format!(
                 "Unexpected SSA-value type: {}",
                 ty

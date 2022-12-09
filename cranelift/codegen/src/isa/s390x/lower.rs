@@ -51,7 +51,6 @@ impl LowerBackend for S390xBackend {
             | Opcode::Isplit
             | Opcode::Iconcat
             | Opcode::Iadd
-            | Opcode::IaddIfcout
             | Opcode::Isub
             | Opcode::UaddSat
             | Opcode::SaddSat
@@ -177,6 +176,7 @@ impl LowerBackend for S390xBackend {
             | Opcode::Trapnz
             | Opcode::ResumableTrapnz
             | Opcode::Debugtrap
+            | Opcode::UaddOverflowTrap
             | Opcode::Call
             | Opcode::CallIndirect
             | Opcode::Return
@@ -221,9 +221,6 @@ impl LowerBackend for S390xBackend {
             Opcode::GlobalValue => {
                 panic!("global_value should have been removed by legalization!");
             }
-            Opcode::Ifcmp | Opcode::Ffcmp => {
-                panic!("Flags opcode should not be encountered.");
-            }
             Opcode::Jump | Opcode::Brz | Opcode::Brnz | Opcode::BrTable => {
                 panic!("Branch opcode reached non-branch lowering logic!");
             }
@@ -235,17 +232,11 @@ impl LowerBackend for S390xBackend {
             | Opcode::SremImm
             | Opcode::IrsubImm
             | Opcode::IaddCin
-            | Opcode::IaddIfcin
             | Opcode::IaddCout
             | Opcode::IaddCarry
-            | Opcode::IaddIfcarry
-            | Opcode::UaddOverflowTrap
             | Opcode::IsubBin
-            | Opcode::IsubIfbin
             | Opcode::IsubBout
-            | Opcode::IsubIfbout
             | Opcode::IsubBorrow
-            | Opcode::IsubIfborrow
             | Opcode::BandImm
             | Opcode::BorImm
             | Opcode::BxorImm
@@ -254,8 +245,7 @@ impl LowerBackend for S390xBackend {
             | Opcode::IshlImm
             | Opcode::UshrImm
             | Opcode::SshrImm
-            | Opcode::IcmpImm
-            | Opcode::IfcmpImm => {
+            | Opcode::IcmpImm => {
                 panic!("ALU+imm and ALU+carry ops should not appear here!");
             }
         }

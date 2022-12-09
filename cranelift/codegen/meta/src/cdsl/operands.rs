@@ -87,17 +87,6 @@ impl Operand {
             _ => false,
         }
     }
-
-    pub fn is_cpu_flags(&self) -> bool {
-        match &self.kind.fields {
-            OperandKindFields::TypeVar(type_var)
-                if type_var.name == "iflags" || type_var.name == "fflags" =>
-            {
-                true
-            }
-            _ => false,
-        }
-    }
 }
 
 pub type EnumValues = HashMap<&'static str, &'static str>;
