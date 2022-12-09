@@ -5,6 +5,7 @@ use clap::Parser;
 use std::collections::BTreeMap;
 use std::str::FromStr;
 use wasmtime_environ::{FlagValue, Setting, SettingKind, CompilerBuilder};
+use serde::{Serialize, ser::SerializeMap};
 
 /// Displays available Cranelift settings for a target.
 #[derive(Parser)]
@@ -19,19 +20,48 @@ pub struct SettingsCommand {
     json: bool,
 }
 
-struct Settings {
-    builder: Box<dyn CompilerBuilder>,
-    triple: target_lexicon::Triple,
+struct SettingData(Setting);
 
-    enums: Vec<Setting>,
-    nums: Vec<Setting>,
-    bools: Vec<Setting>,
-    presets: Vec<Setting>,
+impl Serialize for SettingData {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where S: serde::Serializer
+    {
+        let mut map = serializer.serialize_map(None)?;
+        map.serialize_entry("name", self.0.name)?;
+        map.serialize_entry("description", self.0.description)?;
+        map.serialize_entry("values", &self.0.values)?;
+        map.end()
+    }
+}
+
+#[derive(Serialize)]
+struct Settings {
+    triple: String,
+
+    enums: Vec<SettingData>,
+    nums: Vec<SettingData>,
+    bools: Vec<SettingData>,
+    presets: Vec<SettingData>,
+
+    inferred: Option<Vec<String>>
 }
 
 impl Settings {
-    fn infer(&self) -> Result<Vec<String>> {
-        let compiler = self.builder.build()?;
+    fn from_builder(builder: &Box<dyn CompilerBuilder>) -> Settings {
+        let mut settings = Settings {
+            triple: builder.triple().to_string(),
+            enums: Vec::new(),
+            nums: Vec::new(),
+            bools: Vec::new(),
+            presets: Vec::new(),
+            inferred: None,
+        };
+        settings.add_settings(builder.settings());
+        settings
+    }
+
+    fn infer(&mut self, builder: &Box<dyn CompilerBuilder>) -> Result<()> {
+        let compiler = builder.build()?;
         let values = compiler.isa_flags().into_iter().collect::<BTreeMap<_, _>>();
         let mut result = Vec::new();
         for (name, value) in values {
@@ -39,20 +69,10 @@ impl Settings {
                 result.push(name);
             }
         }
-        Ok(result)
-    }
 
-    fn from_builder(builder: Box<dyn CompilerBuilder>) -> Settings {
-        let mut settings = Settings {
-            triple: builder.triple().clone(),
-            builder,
-            enums: Vec::new(),
-            nums: Vec::new(),
-            bools: Vec::new(),
-            presets: Vec::new(),
-        };
-        settings.add_settings(settings.builder.settings());
-        settings
+        self.inferred = Some(result);
+
+        Ok(())
     }
 
     fn add_setting(&mut self, setting: Setting) {
@@ -62,7 +82,7 @@ impl Settings {
             SettingKind::Bool => &mut self.bools,
             SettingKind::Preset => &mut self.presets,
         };
-        collection.push(setting);
+        collection.push(SettingData(setting));
     }
 
     fn add_settings<I>(&mut self, iterable: I)
@@ -88,7 +108,12 @@ impl SettingsCommand {
             let target = target_lexicon::Triple::from_str(target).map_err(|e| anyhow!(e))?;
             builder.target(target)?;
         }
-        let settings = Settings::from_builder(builder);
+        let mut settings = Settings::from_builder(&builder);
+
+        // Add inferred settings if no target specified
+        if self.target.is_none() {
+            settings.infer(&builder)?;
+        }
 
         // Print settings
         if self.json {
@@ -98,41 +123,10 @@ impl SettingsCommand {
         }
     }
 
-    fn print_json(self, settings: Settings) -> Result<()> {
-        println!("{{");
-        println!("  \"triple\": \"{}\",", settings.triple);
-
-        Self::print_settings_json("boolean", &settings.bools);
-        Self::print_settings_json("enum", &settings.enums);
-        Self::print_settings_json("numerical", &settings.nums);
-        Self::print_settings_json("presets", &settings.presets);
-
-        println!("}}");
-
+    fn print_json(self, settings: Settings) -> Result<()>
+    {
+        println!("{}", serde_json::to_string_pretty(&settings)?);
         Ok(())
-    }
-
-    fn print_settings_json(header: &str, settings: &[Setting]) {
-        println!("  \"{}\": [", header);
-
-        for setting in settings {
-            println!("    {{");
-            println!("      \"name\": \"{}\",", setting.name);
-
-            if let Some(values) = setting.values {
-                let v = values
-                    .iter()
-                    .map(|v| format!("\"{}\"", v))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                println!("      \"values\": [{}],", v);
-            }
-
-            println!("      \"description\": \"{}\"", setting.description);
-            println!("    }},");
-        }
-
-        println!("  ],");
     }
 
     fn print_human_readable(self, settings: Settings) -> Result<()> {
@@ -148,11 +142,10 @@ impl SettingsCommand {
         Self::print_settings_human_readable("Numerical settings:", &settings.nums);
         Self::print_settings_human_readable("Presets:", &settings.presets);
 
-        if self.target.is_none() {
+        if let Some(inferred) = settings.inferred {
             println!();
             println!("Settings inferred for the current host:");
 
-            let inferred = settings.infer()?;
             for name in inferred {
                 println!("  {}", name);
             }
@@ -161,7 +154,7 @@ impl SettingsCommand {
         Ok(())
     }
 
-    fn print_settings_human_readable(header: &str, settings: &[Setting]) {
+    fn print_settings_human_readable(header: &str, settings: &[SettingData]) {
 
         if settings.is_empty() {
             return;
@@ -171,16 +164,16 @@ impl SettingsCommand {
         println!("{}", header);
 
         let width = settings.iter()
-            .map(|s| s.name.len())
+            .map(|s| s.0.name.len())
             .max()
             .unwrap_or(0);
 
         for setting in settings {
             println!(
                 "  {:width$} {}{}",
-                setting.name,
-                setting.description,
-                setting
+                setting.0.name,
+                setting.0.description,
+                setting.0
                     .values
                     .map(|v| format!(" Supported values: {}.", v.join(", ")))
                     .unwrap_or("".to_string()),
