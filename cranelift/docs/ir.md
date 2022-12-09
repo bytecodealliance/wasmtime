@@ -179,24 +179,6 @@ instructions are encoded as follows:
 - f32
 - f64
 
-### CPU flags types
-
-Some target ISAs use CPU flags to represent the result of a comparison. These
-CPU flags are represented as two value types depending on the type of values
-compared.
-
-Since some ISAs don't have CPU flags, these value types should not be used
-until the legalization phase of compilation where the code is adapted to fit
-the target ISA. Use instructions like `icmp` instead.
-
-The CPU flags types are also restricted such that two flags values can not be
-live at the same time. After legalization, some instruction encodings will
-clobber the flags, and flags values are not allowed to be live across such
-instructions either. The verifier enforces these rules.
-
-- iflags
-- fflags
-
 ### SIMD vector types
 
 A SIMD vector type represents a vector of values from one of the scalar types

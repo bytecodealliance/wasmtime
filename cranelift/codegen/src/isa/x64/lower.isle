@@ -135,49 +135,6 @@
                        (uadd_sat x y)))
       (x64_paddusw x y))
 
-;;;; Rules for `iadd_ifcout` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; N.B.: the second output of `iadd_ifcout` is meant to be the
-;; `iflags` value containing the carry result. However, we plan to
-;; replace this with a bool carry flag, and all consumers of `iflags`
-;; remain in the handwritten pattern-matching code and explicitly
-;; match on the flags producer. So we can get away with just
-;; using an invalid second output, and the reg-renaming code does the
-;; right thing, for now. For safety, we assert elsewhere that no one
-;; actually uses the register assigned to the SSA `iflags`-typed
-;; `Value`.
-
-(decl output_ifcout (Reg) InstOutput)
-(rule (output_ifcout reg)
-      (output_pair reg (value_regs_invalid)))
-
-;; Add two registers.
-(rule 0 (lower (has_type (fits_in_64 ty)
-                       (iadd_ifcout x y)))
-      (output_ifcout (x64_add ty x y)))
-
-;; Add a register and an immediate.
-
-(rule 1 (lower (has_type (fits_in_64 ty)
-                       (iadd_ifcout x (simm32_from_value y))))
-      (output_ifcout (x64_add ty x y)))
-
-(rule 2 (lower (has_type (fits_in_64 ty)
-                       (iadd_ifcout (simm32_from_value x) y)))
-      (output_ifcout (x64_add ty y x)))
-
-;; Add a register and memory.
-
-(rule 3 (lower (has_type (fits_in_64 ty)
-                       (iadd_ifcout x (sinkable_load y))))
-      (output_ifcout (x64_add ty x (sink_load_to_gpr_mem_imm y))))
-
-(rule 4 (lower (has_type (fits_in_64 ty)
-                       (iadd_ifcout (sinkable_load x) y)))
-      (output_ifcout (x64_add ty y (sink_load_to_gpr_mem_imm x))))
-
-;; (No `iadd_ifcout` for `i128`.)
-
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `i64` and smaller.
@@ -2179,9 +2136,6 @@
 ;; the instruction pattern.s)
 (rule (lower (has_type $I64
                        (uextend src @ (has_type $I32 (iadd _ _)))))
-      src)
-(rule (lower (has_type $I64
-                       (uextend src @ (has_type $I32 (iadd_ifcout _ _)))))
       src)
 (rule (lower (has_type $I64
                        (uextend src @ (has_type $I32 (isub _ _)))))

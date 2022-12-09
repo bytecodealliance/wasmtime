@@ -167,14 +167,6 @@ pub(crate) fn lower_insn_to_regs(
 
         Opcode::Return => implemented_in_isle(ctx),
 
-        Opcode::Ifcmp | Opcode::Ffcmp => {
-            // An Ifcmp/Ffcmp must always be seen as a use of a brif/brff or trueif/trueff
-            // instruction. This will always be the case as long as the IR uses an Ifcmp/Ffcmp from
-            // the same block, or a dominating block. In other words, it cannot pass through a BB
-            // param (phi). The flags pass of the verifier will ensure this.
-            panic!("Should never reach ifcmp as isel root!");
-        }
-
         Opcode::Icmp => implemented_in_isle(ctx),
 
         Opcode::Fcmp => implemented_in_isle(ctx),
@@ -253,8 +245,6 @@ pub(crate) fn lower_insn_to_regs(
 
         Opcode::FcvtToUintSat | Opcode::FcvtToSintSat => implemented_in_isle(ctx),
 
-        Opcode::IaddIfcout => implemented_in_isle(ctx),
-
         Opcode::UaddOverflowTrap => implemented_in_isle(ctx),
 
         Opcode::IaddCout => implemented_in_isle(ctx),
@@ -267,15 +257,10 @@ pub(crate) fn lower_insn_to_regs(
         | Opcode::SremImm
         | Opcode::IrsubImm
         | Opcode::IaddCin
-        | Opcode::IaddIfcin
         | Opcode::IaddCarry
-        | Opcode::IaddIfcarry
         | Opcode::IsubBin
-        | Opcode::IsubIfbin
         | Opcode::IsubBout
-        | Opcode::IsubIfbout
         | Opcode::IsubBorrow
-        | Opcode::IsubIfborrow
         | Opcode::BandImm
         | Opcode::BorImm
         | Opcode::BxorImm
@@ -284,8 +269,7 @@ pub(crate) fn lower_insn_to_regs(
         | Opcode::IshlImm
         | Opcode::UshrImm
         | Opcode::SshrImm
-        | Opcode::IcmpImm
-        | Opcode::IfcmpImm => {
+        | Opcode::IcmpImm => {
             panic!("ALU+imm and ALU+carry ops should not appear here!");
         }
 

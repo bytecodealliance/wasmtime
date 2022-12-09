@@ -192,47 +192,6 @@
                                                   (vec_unpacks_low ty y))))
 
 
-;;;; Rules for `iadd_ifcout` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; N.B.: the second output of `iadd_ifcout` is meant to be the `iflags` value
-;; containing the carry result, but we do not support the `iflags` mechanism.
-;; However, the only actual use case is where `iadd_ifcout` feeds into `trapif`,
-;; which is implemented by explicitly matching on the flags producer.  So we can
-;; get away with just using an invalid second output, and the reg-renaming code
-;; does the right thing, for now.
-(decl output_ifcout (Reg) InstOutput)
-(rule (output_ifcout reg)
-      (output_pair reg (value_regs_invalid)))
-
-;; Add two registers.
-(rule 0 (lower (has_type (fits_in_64 ty) (iadd_ifcout x y)))
-      (output_ifcout (add_logical_reg ty x y)))
-
-;; Add a register and a zero-extended register.
-(rule 4 (lower (has_type (fits_in_64 ty) (iadd_ifcout x (zext32_value y))))
-      (output_ifcout (add_logical_reg_zext32 ty x y)))
-(rule 8 (lower (has_type (fits_in_64 ty) (iadd_ifcout (zext32_value x) y)))
-      (output_ifcout (add_logical_reg_zext32 ty y x)))
-
-;; Add a register and an immediate.
-(rule 3 (lower (has_type (fits_in_64 ty) (iadd_ifcout x (u32_from_value y))))
-      (output_ifcout (add_logical_zimm32 ty x y)))
-(rule 7 (lower (has_type (fits_in_64 ty) (iadd_ifcout (u32_from_value x) y)))
-      (output_ifcout (add_logical_zimm32 ty y x)))
-
-;; Add a register and memory (32/64-bit types).
-(rule 2 (lower (has_type (fits_in_64 ty) (iadd_ifcout x (sinkable_load_32_64 y))))
-      (output_ifcout (add_logical_mem ty x (sink_load y))))
-(rule 6 (lower (has_type (fits_in_64 ty) (iadd_ifcout (sinkable_load_32_64 x) y)))
-      (output_ifcout (add_logical_mem ty y (sink_load x))))
-
-;; Add a register and zero-extended memory.
-(rule 1 (lower (has_type (fits_in_64 ty) (iadd_ifcout x (sinkable_uload32 y))))
-      (output_ifcout (add_logical_mem_zext32 ty x (sink_uload32 y))))
-(rule 5 (lower (has_type (fits_in_64 ty) (iadd_ifcout (sinkable_uload32 x) y)))
-      (output_ifcout (add_logical_mem_zext32 ty y (sink_uload32 x))))
-
-
 ;;;; Rules for `iabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Absolute value of a register.
@@ -3742,14 +3701,12 @@
 
 ;;;; Rules for `select_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; We do not support the `iflags` mechanism on our platform.  However, common
-;; code will unconditionally emit certain patterns using `iflags` which we
-;; need to handle somehow.  Note that only those specific patterns are
-;; recognized by the code below, other uses will fail to lower.
-
+;; We need to guarantee a conditional move instruction.  But on this platform
+;; this is already the best way to implement select in general, so the
+;; implementation of `select_spectre_guard` is identical to `select`.
 (rule (lower (has_type ty (select_spectre_guard
-                             (icmp int_cc x y) val_true val_false)))
-      (select_bool_reg ty (icmp_val $false int_cc x y)
+                             val_cond val_true val_false)))
+      (select_bool_reg ty (value_nonzero val_cond)
                        (put_in_reg val_true) (put_in_reg val_false)))
 
 

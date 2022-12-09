@@ -72,41 +72,6 @@ impl Iterator for FloatIterator {
     }
 }
 
-/// A type representing CPU flags.
-///
-/// Flags can't be stored in memory.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub(crate) enum Flag {
-    /// CPU flags from an integer comparison.
-    IFlags,
-    /// CPU flags from a floating point comparison.
-    FFlags,
-}
-
-/// Iterator through the variants of the Flag enum.
-pub(crate) struct FlagIterator {
-    index: u8,
-}
-
-impl FlagIterator {
-    pub fn new() -> Self {
-        Self { index: 0 }
-    }
-}
-
-impl Iterator for FlagIterator {
-    type Item = Flag;
-    fn next(&mut self) -> Option<Self::Item> {
-        let res = match self.index {
-            0 => Some(Flag::IFlags),
-            1 => Some(Flag::FFlags),
-            _ => return None,
-        };
-        self.index += 1;
-        res
-    }
-}
-
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub(crate) enum Reference {
     /// 32-bit reference.
@@ -160,14 +125,6 @@ mod iter_tests {
         assert_eq!(float_iter.next(), Some(Float::F32));
         assert_eq!(float_iter.next(), Some(Float::F64));
         assert_eq!(float_iter.next(), None);
-    }
-
-    #[test]
-    fn flag_iter_works() {
-        let mut flag_iter = FlagIterator::new();
-        assert_eq!(flag_iter.next(), Some(Flag::IFlags));
-        assert_eq!(flag_iter.next(), Some(Flag::FFlags));
-        assert_eq!(flag_iter.next(), None);
     }
 
     #[test]

@@ -43,11 +43,6 @@
       (high Reg (alu_add high_tmp carry)))
     (value_regs low high)))
 
-;;; Rules for `iadd_ifcout` ;;;;;;;;;;;;;
-(rule
-  (lower (has_type (fits_in_64 ty) (iadd_ifcout x y)))
-  (output_ifcout (alu_add x y)))
-
 ;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;
 (rule
   (lower (has_type (fits_in_64 ty) (uadd_overflow_trap x y tc)))
@@ -747,14 +742,6 @@
 (rule
   (lower (icmp cc x @ (value_type ty) y))
   (lower_icmp cc x y ty))
-;; special for `iadd_ifcout` first out.
-(rule 2
-  (lower (icmp cc (iadd_ifcout a @ (value_type ty) b) y))
-  (lower_icmp cc (alu_add a b) y ty))
-
-(rule 1
-  (lower (icmp cc x (iadd_ifcout a @ (value_type ty) b)))
-  (lower_icmp cc x (alu_add a b) ty))
 
 (decl gen_fcmp (FloatCC Value Value Type) Reg)
 (rule

@@ -10,14 +10,12 @@ use crate::state::{MemoryError, State};
 use crate::step::{step, ControlFlow, StepError};
 use crate::value::{Value, ValueError};
 use cranelift_codegen::data_value::DataValue;
-use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
     ArgumentPurpose, Block, FuncRef, Function, GlobalValue, GlobalValueData, Heap, LibCall,
     StackSlot, TrapCode, Type, Value as ValueRef,
 };
 use log::trace;
 use smallvec::SmallVec;
-use std::collections::HashSet;
 use std::convert::{TryFrom, TryInto};
 use std::fmt::Debug;
 use std::iter;
@@ -204,8 +202,6 @@ pub struct InterpreterState<'a> {
     pub frame_offset: usize,
     pub stack: Vec<u8>,
     pub heaps: Vec<HeapBacking>,
-    pub iflags: HashSet<IntCC>,
-    pub fflags: HashSet<FloatCC>,
     pub pinned_reg: DataValue,
 }
 
@@ -218,8 +214,6 @@ impl Default for InterpreterState<'_> {
             frame_offset: 0,
             stack: Vec::with_capacity(1024),
             heaps: Vec::new(),
-            iflags: HashSet::new(),
-            fflags: HashSet::new(),
             pinned_reg: DataValue::U64(0),
         }
     }
@@ -347,27 +341,6 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
 
     fn set_value(&mut self, name: ValueRef, value: DataValue) -> Option<DataValue> {
         self.current_frame_mut().set(name, value)
-    }
-
-    fn has_iflag(&self, flag: IntCC) -> bool {
-        self.iflags.contains(&flag)
-    }
-
-    fn has_fflag(&self, flag: FloatCC) -> bool {
-        self.fflags.contains(&flag)
-    }
-
-    fn set_iflag(&mut self, flag: IntCC) {
-        self.iflags.insert(flag);
-    }
-
-    fn set_fflag(&mut self, flag: FloatCC) {
-        self.fflags.insert(flag);
-    }
-
-    fn clear_flags(&mut self) {
-        self.iflags.clear();
-        self.fflags.clear()
     }
 
     fn stack_address(
@@ -735,17 +708,6 @@ mod tests {
             .unwrap_return();
 
         assert_eq!(result, vec![DataValue::I32(0)])
-    }
-
-    #[test]
-    fn state_flags() {
-        let mut state = InterpreterState::default();
-        let flag = IntCC::UnsignedLessThan;
-        assert!(!state.has_iflag(flag));
-        state.set_iflag(flag);
-        assert!(state.has_iflag(flag));
-        state.clear_flags();
-        assert!(!state.has_iflag(flag));
     }
 
     #[test]

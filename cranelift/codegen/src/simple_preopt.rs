@@ -699,7 +699,6 @@ mod simplify {
                             imm = imm.wrapping_neg();
                             Opcode::IaddImm
                         }
-                        Opcode::Ifcmp => Opcode::IfcmpImm,
                         _ => return,
                     };
                     let ty = pos.func.dfg.ctrl_typevar(inst);

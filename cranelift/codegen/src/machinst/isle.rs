@@ -1,4 +1,4 @@
-use crate::ir::{types, Inst, Value, ValueList};
+use crate::ir::{Inst, Value, ValueList};
 use crate::machinst::{get_output_reg, InsnOutput};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -775,16 +775,8 @@ where
     for i in 0..outputs.len() {
         let regs = temp_regs[i];
         let dsts = get_output_reg(isle_ctx.lower_ctx, outputs[i]);
-        let ty = isle_ctx
-            .lower_ctx
-            .output_ty(outputs[i].insn, outputs[i].output);
-        if ty == types::IFLAGS || ty == types::FFLAGS {
-            // Flags values do not occupy any registers.
-            assert!(regs.len() == 0);
-        } else {
-            for (dst, temp) in dsts.regs().iter().zip(regs.regs().iter()) {
-                isle_ctx.lower_ctx.set_vreg_alias(dst.to_reg(), *temp);
-            }
+        for (dst, temp) in dsts.regs().iter().zip(regs.regs().iter()) {
+            isle_ctx.lower_ctx.set_vreg_alias(dst.to_reg(), *temp);
         }
     }
 

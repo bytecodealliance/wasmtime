@@ -1144,7 +1144,6 @@ where
     fn generate_type(&mut self) -> Result<Type> {
         // TODO: It would be nice if we could get these directly from cranelift
         let scalars = [
-            // IFLAGS, FFLAGS,
             I8, I16, I32, I64, I128, F32, F64,
             // R32, R64,
         ];

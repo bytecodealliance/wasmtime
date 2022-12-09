@@ -142,7 +142,6 @@ fn trivially_unsafe_for_licm(opcode: Opcode) -> bool {
         || opcode.is_return()
         || opcode.can_trap()
         || opcode.other_side_effects()
-        || opcode.writes_cpu_flags()
 }
 
 fn is_unsafe_load(inst_data: &InstructionData) -> bool {

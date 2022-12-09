@@ -3,7 +3,6 @@
 use crate::address::{Address, AddressSize};
 use crate::interpreter::LibCallHandler;
 use cranelift_codegen::data_value::DataValue;
-use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{FuncRef, Function, GlobalValue, Heap, StackSlot, Type, Value};
 use cranelift_entity::PrimaryMap;
 use smallvec::SmallVec;
@@ -50,17 +49,6 @@ pub trait State<'a, V> {
         }
         Ok(values)
     }
-
-    /// Check if an [IntCC] flag has been set.
-    fn has_iflag(&self, flag: IntCC) -> bool;
-    /// Set an [IntCC] flag.
-    fn set_iflag(&mut self, flag: IntCC);
-    /// Check if a [FloatCC] flag has been set.
-    fn has_fflag(&self, flag: FloatCC) -> bool;
-    /// Set a [FloatCC] flag.
-    fn set_fflag(&mut self, flag: FloatCC);
-    /// Clear all [IntCC] and [FloatCC] flags.
-    fn clear_flags(&mut self);
 
     /// Computes the stack address for this stack slot, including an offset.
     fn stack_address(
@@ -151,20 +139,6 @@ where
     fn set_value(&mut self, _name: Value, _value: V) -> Option<V> {
         None
     }
-
-    fn has_iflag(&self, _flag: IntCC) -> bool {
-        false
-    }
-
-    fn has_fflag(&self, _flag: FloatCC) -> bool {
-        false
-    }
-
-    fn set_iflag(&mut self, _flag: IntCC) {}
-
-    fn set_fflag(&mut self, _flag: FloatCC) {}
-
-    fn clear_flags(&mut self) {}
 
     fn stack_address(
         &self,
