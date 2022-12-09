@@ -34,6 +34,7 @@ impl Serialize for SettingData {
     }
 }
 
+// Gather together all of the setting data to displays
 #[derive(Serialize)]
 struct Settings {
     triple: String,
@@ -101,7 +102,6 @@ impl Settings {
 impl SettingsCommand {
     /// Executes the command.
     pub fn execute(self) -> Result<()> {
-
         // Gather settings from the cranelift compiler builder
         let mut builder = wasmtime_cranelift::builder();
         if let Some(target) = &self.target {
@@ -123,8 +123,7 @@ impl SettingsCommand {
         }
     }
 
-    fn print_json(self, settings: Settings) -> Result<()>
-    {
+    fn print_json(self, settings: Settings) -> Result<()> {
         println!("{}", serde_json::to_string_pretty(&settings)?);
         Ok(())
     }
