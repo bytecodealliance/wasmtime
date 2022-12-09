@@ -349,6 +349,10 @@
 (decl pure imm64 (u64) Imm64)
 (extern constructor imm64 imm64)
 
+;; Create a new Imm64, masked to the width of the given type.
+(decl pure imm64_masked (Type u64) Imm64)
+(extern constructor imm64_masked imm64_masked)
+
 ;; Extract a `u64` from an `Ieee32`.
 (decl u64_from_ieee32 (u64) Ieee32)
 (extern extractor infallible u64_from_ieee32 u64_from_ieee32)
