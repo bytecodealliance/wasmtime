@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 use clap::Parser;
 use std::collections::BTreeMap;
 use std::str::FromStr;
-use wasmtime_environ::{FlagValue, Setting, SettingKind};
+use wasmtime_environ::{FlagValue, Setting, SettingKind, CompilerBuilder};
 
 /// Displays available Cranelift settings for a target.
 #[derive(Parser)]
@@ -13,6 +13,69 @@ pub struct SettingsCommand {
     /// The target triple to get the settings for; defaults to the host triple.
     #[clap(long, value_name = "TARGET")]
     target: Option<String>,
+
+    /// Switch output format to JSON
+    #[clap(long)]
+    json: bool,
+}
+
+struct Settings {
+    builder: Box<dyn CompilerBuilder>,
+    triple: target_lexicon::Triple,
+
+    enums: Vec<Setting>,
+    nums: Vec<Setting>,
+    bools: Vec<Setting>,
+    presets: Vec<Setting>,
+}
+
+impl Settings {
+    fn infer(&self) -> Result<Vec<String>> {
+        let compiler = self.builder.build()?;
+        let values = compiler.isa_flags().into_iter().collect::<BTreeMap<_, _>>();
+        let mut result = Vec::new();
+        for (name, value) in values {
+            if let FlagValue::Bool(true) = value {
+                result.push(name);
+            }
+        }
+        Ok(result)
+    }
+
+    fn from_builder(builder: Box<dyn CompilerBuilder>) -> Settings {
+        let mut settings = Settings {
+            triple: builder.triple().clone(),
+            builder,
+            enums: Vec::new(),
+            nums: Vec::new(),
+            bools: Vec::new(),
+            presets: Vec::new(),
+        };
+        settings.add_settings(settings.builder.settings());
+        settings
+    }
+
+    fn add_setting(&mut self, setting: Setting) {
+        let collection = match setting.kind {
+            SettingKind::Enum => &mut self.enums,
+            SettingKind::Num => &mut self.nums,
+            SettingKind::Bool => &mut self.bools,
+            SettingKind::Preset => &mut self.presets,
+        };
+        collection.push(setting);
+    }
+
+    fn add_settings<I>(&mut self, iterable: I)
+        where I: IntoIterator<Item=Setting>
+    {
+        for item in iterable.into_iter() {
+            self.add_setting(item);
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.enums.is_empty() && self.nums.is_empty() && self.bools.is_empty() && self.presets.is_empty()
+    }
 }
 
 impl SettingsCommand {
@@ -23,63 +86,59 @@ impl SettingsCommand {
             let target = target_lexicon::Triple::from_str(target).map_err(|e| anyhow!(e))?;
             builder.target(target)?;
         }
+        let settings = Settings::from_builder(builder);
 
-        let mut enums = (Vec::new(), 0, "Enum settings:");
-        let mut nums = (Vec::new(), 0, "Numerical settings:");
-        let mut bools = (Vec::new(), 0, "Boolean settings:");
-        let mut presets = (Vec::new(), 0, "Presets:");
-
-        for setting in builder.settings() {
-            let (collection, max, _) = match setting.kind {
-                SettingKind::Enum => &mut enums,
-                SettingKind::Num => &mut nums,
-                SettingKind::Bool => &mut bools,
-                SettingKind::Preset => &mut presets,
-            };
-
-            if setting.name.len() > *max {
-                *max = setting.name.len();
-            }
-
-            collection.push(setting);
+        if self.json {
+            self.print_json()
+        } else {
+            self.print_human_readable(settings)
         }
+    }
 
-        if enums.0.is_empty() && nums.0.is_empty() && bools.0.is_empty() && presets.0.is_empty() {
-            println!("Target '{}' has no settings.", builder.triple());
+    fn print_json(self) -> Result<()> {
+        panic!();
+    }
+
+    fn print_human_readable(self, settings: Settings) -> Result<()> {
+        if settings.is_empty() {
+            println!("Target '{}' has no settings.", settings.triple);
             return Ok(());
         }
 
-        println!("Cranelift settings for target '{}':", builder.triple());
+        println!("Cranelift settings for target '{}':", settings.triple);
 
-        for (collection, max, header) in &mut [enums, nums, bools, presets] {
-            if collection.is_empty() {
-                continue;
-            }
-
-            collection.sort_by_key(|k| k.name);
-            println!();
-            Self::print_settings(header, collection, *max);
-        }
+        Self::print_settings_human_readable("Boolean settings:", &settings.bools);
+        Self::print_settings_human_readable("Enum settings:", &settings.enums);
+        Self::print_settings_human_readable("Numerical settings:", &settings.nums);
+        Self::print_settings_human_readable("Presets:", &settings.presets);
 
         if self.target.is_none() {
-            let compiler = builder.build()?;
             println!();
             println!("Settings inferred for the current host:");
 
-            let values = compiler.isa_flags().into_iter().collect::<BTreeMap<_, _>>();
-
-            for (name, value) in values {
-                if let FlagValue::Bool(true) = value {
-                    println!("  {}", name);
-                }
+            let inferred = settings.infer()?;
+            for name in inferred {
+                println!("  {}", name);
             }
         }
 
         Ok(())
     }
 
-    fn print_settings(header: &str, settings: &[Setting], width: usize) {
+    fn print_settings_human_readable(header: &str, settings: &[Setting]) {
+
+        if settings.is_empty() {
+            return;
+        }
+
+        println!();
         println!("{}", header);
+
+        let width = settings.iter()
+            .map(|s| s.name.len())
+            .max()
+            .unwrap_or(0);
+
         for setting in settings {
             println!(
                 "  {:width$} {}{}",
