@@ -30,7 +30,7 @@ let packages = {
         releaseAsset: `wizer-${tag}-x86_64-linux.tar.xz`,
         binaryAsset: 'wizer',
         description: 'The Linux 64-bit binary for Wizer, the WebAssembly Pre-Initializer',
-        os: 'darwin',
+        os: 'linux',
         cpu: 'x64',
     },
     'wizer-win32-x64': {
@@ -128,5 +128,8 @@ function packageJson(name, version, description, os, cpu) {
         preferUnplugged: false,
         os: [os],
         cpu: [cpu],
+        publishConfig: {
+            access: "public"
+        },
     }, null, 4);
 }
