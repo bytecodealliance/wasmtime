@@ -66,7 +66,7 @@ jobs:
 
   doc:
     name: Doc build
-    runs-on: ubuntu-20.04 # TODO: remove pin when fixed (#5408)
+    runs-on: ubuntu-latest
     env:
       CARGO_MDBOOK_VERSION: 0.4.21
       RUSTDOCFLAGS: -Dbroken_intra_doc_links --cfg nightlydoc
@@ -80,7 +80,6 @@ jobs:
         toolchain: nightly-2022-09-07
 
     # Build C API documentation
-    - run: sudo apt-get update -y && sudo apt-get install -y libclang1-9 libclang-cpp9
     - run: curl -L https://sourceforge.net/projects/doxygen/files/rel-1.9.3/doxygen-1.9.3.linux.bin.tar.gz/download | tar xzf -
     - run: echo "`pwd`/doxygen-1.9.3/bin" >> $GITHUB_PATH
     - run: cd crates/c-api && doxygen doxygen.conf
