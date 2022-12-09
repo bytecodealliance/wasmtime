@@ -1,0 +1,43 @@
+test optimize
+set opt_level=none
+set use_egraphs=true
+target x86_64
+
+function %f0() -> i8 {
+block0:
+    v1 = iconst.i8 51
+    v2 = imul.i8 v1, v1
+    return v2
+}
+
+; check: v9 = iconst.i8 41
+; nextln: return v9
+
+function %f1() -> i16 {
+block0:
+    v1 = iconst.i16 1
+    v2 = bnot.i16 v1
+    return v2
+}
+
+; check: v3 = iconst.i16 0xfffe
+; nextln: return v3
+
+function %f2(i8) -> i8 {
+block0(v1: i8):
+    v2 = icmp eq v1, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 1
+; check: return v3
+
+function %f3(i8) -> i8 {
+block0(v1: i8):
+    v2 = icmp ne v1, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 0
+; check: return v3
+

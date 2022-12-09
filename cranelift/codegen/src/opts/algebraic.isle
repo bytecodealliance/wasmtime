@@ -207,3 +207,36 @@
 (rule (simplify
        (select ty (uextend _ c @ (icmp _ _ _ _)) x y))
       (select ty c x y))
+
+;; `x == x` is always true for integers; `x != x` is false. Strict
+;; inequalities are false, and loose inequalities are true.
+(rule (simplify
+       (icmp ty (IntCC.Equal) x x))
+      (iconst ty (imm64 1)))
+(rule (simplify
+       (icmp ty (IntCC.NotEqual) x x))
+      (iconst ty (imm64 0)))
+(rule (simplify
+       (icmp ty (IntCC.UnsignedGreaterThan) x x))
+      (iconst ty (imm64 0)))
+(rule (simplify
+       (icmp ty (IntCC.UnsignedGreaterThanOrEqual) x x))
+      (iconst ty (imm64 1)))
+(rule (simplify
+       (icmp ty (IntCC.SignedGreaterThan) x x))
+      (iconst ty (imm64 0)))
+(rule (simplify
+       (icmp ty (IntCC.SignedGreaterThanOrEqual) x x))
+      (iconst ty (imm64 1)))
+(rule (simplify
+       (icmp ty (IntCC.UnsignedLessThan) x x))
+      (iconst ty (imm64 0)))
+(rule (simplify
+       (icmp ty (IntCC.UnsignedLessThanOrEqual) x x))
+      (iconst ty (imm64 1)))
+(rule (simplify
+       (icmp ty (IntCC.SignedLessThan) x x))
+      (iconst ty (imm64 0)))
+(rule (simplify
+       (icmp ty (IntCC.SignedLessThanOrEqual) x x))
+      (iconst ty (imm64 1)))
