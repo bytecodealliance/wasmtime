@@ -512,15 +512,11 @@ macro_rules! isle_common_prelude_methods {
         #[inline]
         fn imm64_masked(&mut self, ty: Type, x: u64) -> Imm64 {
             debug_assert!(ty.bits() <= 64);
-            if ty.bits() == 64 {
-                Imm64::new(x as i64)
-            } else {
-                // Careful: we can't do `(1 << bits) - 1` because that
-                // would overflow for `bits == 64`. Instead,
-                // right-shift an all-ones mask.
-                let mask = u64::MAX >> (64 - ty.bits());
-                Imm64::new((x & mask) as i64)
-            }
+            // Careful: we can't do `(1 << bits) - 1` because that
+            // would overflow for `bits == 64`. Instead,
+            // right-shift an all-ones mask.
+            let mask = u64::MAX >> (64 - ty.bits());
+            Imm64::new((x & mask) as i64)
         }
 
         #[inline]
