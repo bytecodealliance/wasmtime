@@ -2,10 +2,10 @@
 
 use anyhow::{anyhow, Result};
 use clap::Parser;
+use serde::{ser::SerializeMap, Serialize};
 use std::collections::BTreeMap;
 use std::str::FromStr;
-use wasmtime_environ::{FlagValue, Setting, SettingKind, CompilerBuilder};
-use serde::{Serialize, ser::SerializeMap};
+use wasmtime_environ::{CompilerBuilder, FlagValue, Setting, SettingKind};
 
 /// Displays available Cranelift settings for a target.
 #[derive(Parser)]
@@ -24,7 +24,8 @@ struct SettingData(Setting);
 
 impl Serialize for SettingData {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where S: serde::Serializer
+    where
+        S: serde::Serializer,
     {
         let mut map = serializer.serialize_map(None)?;
         map.serialize_entry("name", self.0.name)?;
@@ -44,7 +45,7 @@ struct Settings {
     bools: Vec<SettingData>,
     presets: Vec<SettingData>,
 
-    inferred: Option<Vec<String>>
+    inferred: Option<Vec<String>>,
 }
 
 impl Settings {
@@ -87,7 +88,8 @@ impl Settings {
     }
 
     fn add_settings<I>(&mut self, iterable: I)
-        where I: IntoIterator<Item=Setting>
+    where
+        I: IntoIterator<Item = Setting>,
     {
         for item in iterable.into_iter() {
             self.add_setting(item);
@@ -95,7 +97,10 @@ impl Settings {
     }
 
     fn is_empty(&self) -> bool {
-        self.enums.is_empty() && self.nums.is_empty() && self.bools.is_empty() && self.presets.is_empty()
+        self.enums.is_empty()
+            && self.nums.is_empty()
+            && self.bools.is_empty()
+            && self.presets.is_empty()
     }
 }
 
@@ -154,7 +159,6 @@ impl SettingsCommand {
     }
 
     fn print_settings_human_readable(header: &str, settings: &[SettingData]) {
-
         if settings.is_empty() {
             return;
         }
@@ -162,17 +166,15 @@ impl SettingsCommand {
         println!();
         println!("{}", header);
 
-        let width = settings.iter()
-            .map(|s| s.0.name.len())
-            .max()
-            .unwrap_or(0);
+        let width = settings.iter().map(|s| s.0.name.len()).max().unwrap_or(0);
 
         for setting in settings {
             println!(
                 "  {:width$} {}{}",
                 setting.0.name,
                 setting.0.description,
-                setting.0
+                setting
+                    .0
                     .values
                     .map(|v| format!(" Supported values: {}.", v.join(", ")))
                     .unwrap_or("".to_string()),
