@@ -18,7 +18,7 @@ use std::convert::TryFrom;
 /// This is the limit for the size of argument and return-value areas on the
 /// stack. We place a reasonable limit here to avoid integer overflow issues
 /// with 32-bit arithmetic: for now, 128 MB.
-static STACK_ARG_RET_SIZE_LIMIT: u64 = 128 * 1024 * 1024;
+static STACK_ARG_RET_SIZE_LIMIT: u32 = 128 * 1024 * 1024;
 
 /// Support for the x64 ABI from the callee side (within a function body).
 pub(crate) type X64Callee = Callee<X64ABIMachineSpec>;
@@ -87,7 +87,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
         mut args: ArgsAccumulator<'_>,
-    ) -> CodegenResult<(i64, Option<usize>)>
+    ) -> CodegenResult<(u32, Option<usize>)>
     where
         I: IntoIterator<Item = &'a ir::AbiParam>,
     {
@@ -95,7 +95,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
         let mut next_gpr = 0;
         let mut next_vreg = 0;
-        let mut next_stack: u64 = 0;
+        let mut next_stack: u32 = 0;
         let mut next_param_idx = 0; // Fastcall cares about overall param index
 
         if args_or_rets == ArgsOrRets::Args && is_fastcall {
@@ -110,13 +110,13 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         for param in params {
             if let ir::ArgumentPurpose::StructArgument(size) = param.purpose {
                 let offset = next_stack as i64;
-                let size = size as u64;
+                let size = size;
                 assert!(size % 8 == 0, "StructArgument size is not properly aligned");
                 next_stack += size;
                 args.push(ABIArg::StructArg {
                     pointer: None,
                     offset,
-                    size,
+                    size: size as u64,
                     purpose: param.purpose,
                 });
                 continue;
@@ -197,7 +197,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     //
                     // Note that in all cases 16-byte stack alignment happens
                     // separately after all args.
-                    let size = (reg_ty.bits() / 8) as u64;
+                    let size = reg_ty.bits() / 8;
                     let size = if args_or_rets == ArgsOrRets::Rets && call_conv.extends_wasmtime() {
                         size
                     } else {
@@ -251,7 +251,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             return Err(CodegenError::ImplLimitExceeded);
         }
 
-        Ok((next_stack as i64, extra_arg))
+        Ok((next_stack, extra_arg))
     }
 
     fn fp_to_arg_offset(_call_conv: isa::CallConv, _flags: &settings::Flags) -> i64 {
