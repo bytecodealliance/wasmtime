@@ -35,7 +35,7 @@ pub(crate) type Riscv64ABICaller = Caller<Riscv64MachineDeps>;
 /// This is the limit for the size of argument and return-value areas on the
 /// stack. We place a reasonable limit here to avoid integer overflow issues
 /// with 32-bit arithmetic: for now, 128 MB.
-static STACK_ARG_RET_SIZE_LIMIT: u64 = 128 * 1024 * 1024;
+static STACK_ARG_RET_SIZE_LIMIT: u32 = 128 * 1024 * 1024;
 
 /// Riscv64-specific ABI behavior. This struct just serves as an implementation
 /// point for the trait; it is never actually instantiated.
@@ -63,7 +63,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
         mut args: ArgsAccumulator<'_>,
-    ) -> CodegenResult<(i64, Option<usize>)>
+    ) -> CodegenResult<(u32, Option<usize>)>
     where
         I: IntoIterator<Item = &'a ir::AbiParam>,
     {
@@ -78,14 +78,14 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         let mut next_x_reg = x_start;
         let mut next_f_reg = f_start;
         // Stack space.
-        let mut next_stack: u64 = 0;
+        let mut next_stack: u32 = 0;
         let mut return_one_register_used = false;
 
         for param in params {
             if let ir::ArgumentPurpose::StructArgument(size) = param.purpose {
                 let offset = next_stack;
                 assert!(size % 8 == 0, "StructArgument size is not properly aligned");
-                next_stack += size as u64;
+                next_stack += size;
                 args.push(ABIArg::StructArg {
                     pointer: None,
                     offset: offset as i64,
@@ -135,7 +135,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     //
                     // Note that in all cases 16-byte stack alignment happens
                     // separately after all args.
-                    let size = (reg_ty.bits() / 8) as u64;
+                    let size = reg_ty.bits() / 8;
                     let size = if args_or_rets == ArgsOrRets::Rets && call_conv.extends_wasmtime() {
                         size
                     } else {
@@ -181,13 +181,13 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         } else {
             None
         };
-        next_stack = align_to(next_stack, Self::stack_align(call_conv) as u64);
+        next_stack = align_to(next_stack, Self::stack_align(call_conv));
         // To avoid overflow issues, limit the arg/return size to something
         // reasonable -- here, 128 MB.
         if next_stack > STACK_ARG_RET_SIZE_LIMIT {
             return Err(CodegenError::ImplLimitExceeded);
         }
-        CodegenResult::Ok((next_stack as i64, pos))
+        CodegenResult::Ok((next_stack, pos))
     }
 
     fn fp_to_arg_offset(_call_conv: isa::CallConv, _flags: &settings::Flags) -> i64 {

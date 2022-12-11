@@ -400,7 +400,7 @@ pub trait ABIMachineSpec {
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
         args: ArgsAccumulator<'_>,
-    ) -> CodegenResult<(i64, Option<usize>)>
+    ) -> CodegenResult<(u32, Option<usize>)>
     where
         I: IntoIterator<Item = &'a ir::AbiParam>;
 
@@ -819,7 +819,6 @@ impl SigSet {
             ArgsAccumulator::new(&mut self.abi_args),
         )?;
         let rets_end = u32::try_from(self.abi_args.len()).unwrap();
-        let sized_stack_ret_space = u32::try_from(sized_stack_ret_space).unwrap();
 
         let need_stack_return_area = sized_stack_ret_space > 0;
         let (sized_stack_arg_space, stack_ret_arg) = M::compute_arg_locs(
@@ -831,7 +830,6 @@ impl SigSet {
             ArgsAccumulator::new(&mut self.abi_args),
         )?;
         let args_end = u32::try_from(self.abi_args.len()).unwrap();
-        let sized_stack_arg_space = u32::try_from(sized_stack_arg_space).unwrap();
 
         trace!(
             "ABISig: sig {:?} => args end = {} rets end = {}

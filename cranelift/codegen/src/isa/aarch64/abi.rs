@@ -29,7 +29,7 @@ pub(crate) type AArch64Caller = Caller<AArch64MachineDeps>;
 /// This is the limit for the size of argument and return-value areas on the
 /// stack. We place a reasonable limit here to avoid integer overflow issues
 /// with 32-bit arithmetic: for now, 128 MB.
-static STACK_ARG_RET_SIZE_LIMIT: u64 = 128 * 1024 * 1024;
+static STACK_ARG_RET_SIZE_LIMIT: u32 = 128 * 1024 * 1024;
 
 impl Into<AMode> for StackAMode {
     fn into(self) -> AMode {
@@ -94,7 +94,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
         mut args: ArgsAccumulator<'_>,
-    ) -> CodegenResult<(i64, Option<usize>)>
+    ) -> CodegenResult<(u32, Option<usize>)>
     where
         I: IntoIterator<Item = &'a ir::AbiParam>,
     {
@@ -116,7 +116,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
         let mut next_xreg = 0;
         let mut next_vreg = 0;
-        let mut next_stack: u64 = 0;
+        let mut next_stack: u32 = 0;
 
         let (max_per_class_reg_vals, mut remaining_reg_vals) = match args_or_rets {
             ArgsOrRets::Args => (8, 16), // x0-x7 and v0-v7
@@ -152,13 +152,13 @@ impl ABIMachineSpec for AArch64MachineDeps {
             if let ir::ArgumentPurpose::StructArgument(size) = param.purpose {
                 assert_eq!(args_or_rets, ArgsOrRets::Args);
                 let offset = next_stack as i64;
-                let size = size as u64;
+                let size = size;
                 assert!(size % 8 == 0, "StructArgument size is not properly aligned");
                 next_stack += size;
                 args.push(ABIArg::StructArg {
                     pointer: None,
                     offset,
-                    size,
+                    size: size as u64,
                     purpose: param.purpose,
                 });
                 continue;
@@ -282,7 +282,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             // Spill to the stack
 
             // Compute the stack slot's size.
-            let size = (ty_bits(param.value_type) / 8) as u64;
+            let size = (ty_bits(param.value_type) / 8) as u32;
 
             let size = if is_apple_cc
                 || (call_conv.extends_wasmtime() && args_or_rets == ArgsOrRets::Rets)
@@ -308,7 +308,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 // Build the stack locations from each slot
                 .scan(next_stack, |next_stack, ty| {
                     let slot_offset = *next_stack as i64;
-                    *next_stack += (ty_bits(ty) / 8) as u64;
+                    *next_stack += (ty_bits(ty) / 8) as u32;
 
                     Some((ty, slot_offset))
                 })
@@ -358,7 +358,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             return Err(CodegenError::ImplLimitExceeded);
         }
 
-        Ok((next_stack as i64, extra_arg))
+        Ok((next_stack, extra_arg))
     }
 
     fn fp_to_arg_offset(_call_conv: isa::CallConv, _flags: &settings::Flags) -> i64 {
