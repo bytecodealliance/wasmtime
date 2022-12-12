@@ -54,6 +54,7 @@ mod test_simple_gvn;
 mod test_simple_preopt;
 mod test_unwind;
 mod test_verifier;
+mod test_wasm;
 
 /// Main entry point for `clif-util test`.
 ///

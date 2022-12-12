@@ -27,3 +27,9 @@ target-lexicon = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 similar = "2.1.0"
+wat.workspace = true
+toml = "0.5.9"
+serde = "1.0.94"
+cranelift-wasm.workspace = true
+wasmparser.workspace = true
+cranelift.workspace = true

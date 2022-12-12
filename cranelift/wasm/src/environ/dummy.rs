@@ -138,13 +138,13 @@ pub struct DummyEnvironment {
     pub info: DummyModuleInfo,
 
     /// Function translation.
-    trans: FuncTranslator,
+    pub trans: FuncTranslator,
 
     /// Vector of wasm bytecode size for each function.
     pub func_bytecode_sizes: Vec<usize>,
 
     /// Instructs to collect debug data during translation.
-    debug_info: bool,
+    pub debug_info: bool,
 
     /// Name of the module from the wasm file.
     pub module_name: Option<String>,
@@ -153,7 +153,8 @@ pub struct DummyEnvironment {
     function_names: SecondaryMap<FuncIndex, String>,
 
     /// Expected reachability data (before/after for each op) to assert. This is used for testing.
-    expected_reachability: Option<ExpectedReachability>,
+    #[doc(hidden)]
+    pub expected_reachability: Option<ExpectedReachability>,
 }
 
 impl DummyEnvironment {
@@ -176,7 +177,8 @@ impl DummyEnvironment {
         DummyFuncEnvironment::new(&self.info, self.expected_reachability.clone())
     }
 
-    fn get_func_type(&self, func_index: FuncIndex) -> TypeIndex {
+    /// Get the type for the function at the given index.
+    pub fn get_func_type(&self, func_index: FuncIndex) -> TypeIndex {
         self.info.functions[func_index].entity
     }
 
@@ -205,6 +207,7 @@ impl DummyEnvironment {
 
 /// The `FuncEnvironment` implementation for use by the `DummyEnvironment`.
 pub struct DummyFuncEnvironment<'dummy_environment> {
+    /// This function environment's module info.
     pub mod_info: &'dummy_environment DummyModuleInfo,
 
     /// Expected reachability data (before/after for each op) to assert. This is used for testing.
@@ -212,6 +215,7 @@ pub struct DummyFuncEnvironment<'dummy_environment> {
 }
 
 impl<'dummy_environment> DummyFuncEnvironment<'dummy_environment> {
+    /// Construct a new `DummyFuncEnvironment`.
     pub fn new(
         mod_info: &'dummy_environment DummyModuleInfo,
         expected_reachability: Option<ExpectedReachability>,
@@ -222,9 +226,9 @@ impl<'dummy_environment> DummyFuncEnvironment<'dummy_environment> {
         }
     }
 
-    // Create a signature for `sigidx` amended with a `vmctx` argument after the standard wasm
-    // arguments.
-    fn vmctx_sig(&self, sigidx: TypeIndex) -> ir::Signature {
+    /// Create a signature for `sigidx` amended with a `vmctx` argument after
+    /// the standard wasm arguments.
+    pub fn vmctx_sig(&self, sigidx: TypeIndex) -> ir::Signature {
         let mut sig = self.mod_info.signatures[sigidx].clone();
         sig.params.push(ir::AbiParam::special(
             self.pointer_type(),

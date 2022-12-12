@@ -1,6 +1,6 @@
 //! CLI tool to reduce Cranelift IR files crashing during compilation.
 
-use crate::utils::{parse_sets_and_triple, read_to_string};
+use crate::utils::read_to_string;
 use anyhow::{Context as _, Result};
 use clap::Parser;
 use cranelift::prelude::Value;
@@ -14,7 +14,7 @@ use cranelift_codegen::ir::{
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::Context;
 use cranelift_entity::PrimaryMap;
-use cranelift_reader::{parse_test, ParseOptions};
+use cranelift_reader::{parse_sets_and_triple, parse_test, ParseOptions};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use std::collections::HashMap;
 use std::path::PathBuf;

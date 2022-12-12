@@ -591,6 +591,7 @@ name = "cranelift-filetests"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "cranelift",
  "cranelift-codegen",
  "cranelift-frontend",
  "cranelift-interpreter",
@@ -599,14 +600,19 @@ dependencies = [
  "cranelift-native",
  "cranelift-preopt",
  "cranelift-reader",
+ "cranelift-wasm",
  "file-per-thread-logger",
  "filecheck",
  "gimli",
  "log",
  "num_cpus",
+ "serde",
  "similar",
  "target-lexicon",
  "thiserror",
+ "toml",
+ "wasmparser",
+ "wat",
 ]
 
 [[package]]
@@ -716,6 +722,7 @@ dependencies = [
 name = "cranelift-reader"
 version = "0.92.0"
 dependencies = [
+ "anyhow",
  "cranelift-codegen",
  "smallvec",
  "target-lexicon",
