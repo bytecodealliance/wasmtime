@@ -38,6 +38,8 @@ humantime = "2.0.0"
 once_cell = { workspace = true }
 listenfd = "1.0.0"
 wat = { workspace = true }
+serde = "1.0.94"
+serde_json = "1.0.26"
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["mm", "param"] }

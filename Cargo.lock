@@ -3475,6 +3475,8 @@ dependencies = [
  "once_cell",
  "rayon",
  "rustix",
+ "serde",
+ "serde_json",
  "target-lexicon",
  "tempfile",
  "test-programs",
