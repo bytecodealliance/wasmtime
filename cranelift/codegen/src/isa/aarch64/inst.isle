@@ -3245,14 +3245,14 @@
       (fpu_to_int op src))
 (rule (fpu_to_int_cvt_sat op src $false (fits_in_16 out_ty))
       (let ((result Reg (fpu_to_int op src))
-            (max Reg (imm out_ty (ImmExtend.Zero) -1)))
+            (max Reg (imm out_ty (ImmExtend.Zero) (ty_mask out_ty))))
        (with_flags_reg
         (cmp (OperandSize.Size32) result max)
         (csel (Cond.Hi) max result))))
 (rule (fpu_to_int_cvt_sat op src $true (fits_in_16 out_ty))
       (let ((result Reg (fpu_to_int op src))
-            (max Reg (imm $I32 (ImmExtend.Sign) (signed_max out_ty)))
-            (min Reg (imm $I32 (ImmExtend.Sign) (signed_min out_ty)))
+            (max Reg (signed_max out_ty))
+            (min Reg (signed_min out_ty))
             (result Reg (with_flags_reg
                          (cmp (operand_size out_ty) result max)
                          (csel (Cond.Gt) max result)))
@@ -3261,13 +3261,13 @@
                          (csel (Cond.Lt) min result))))
        result))
 
-(decl signed_min (Type) u64)
-(rule (signed_min $I8) -128)
-(rule (signed_min $I16) -32768)
+(decl signed_min (Type) Reg)
+(rule (signed_min $I8) (imm $I8 (ImmExtend.Sign) 0x80))
+(rule (signed_min $I16) (imm $I16 (ImmExtend.Sign) 0x8000))
 
-(decl signed_max (Type) u64)
-(rule (signed_max $I8) 127)
-(rule (signed_max $I16) 32767)
+(decl signed_max (Type) Reg)
+(rule (signed_max $I8) (imm $I8 (ImmExtend.Sign) 0x7F))
+(rule (signed_max $I16) (imm $I16 (ImmExtend.Sign) 0x7FFF))
 
 (decl fpu_to_int (FpuToIntOp Reg) Reg)
 (rule (fpu_to_int op src)
