@@ -114,31 +114,3 @@ block0(v0: i64, v1: i64, v2: i64):
 ;; We just make sure that the first and last byte are the same to deal with that.
 ; run: %multi_elm_write(0, 0xC0FFEEEE_FFEEEEC0) == [0xC0, 0xC0]
 ; run: %multi_elm_write(1, 0xAABBCCDD_EEFF00AA) == [0xAA, 0xAA]
-
-
-
-function %heap_table(i64 vmctx, i64, i64, i64) -> i64 {
-    gv0 = vmctx
-    gv1 = load.i64 notrap aligned gv0
-    gv2 = load.i64 notrap aligned gv0 +8
-    heap0 = dynamic gv1, bound gv2, offset_guard 0, index_type i64
-    table0 = dynamic gv1, element_size 9, bound gv2, index_type i64
-
-block0(v0: i64, v1: i64, v2: i64, v3: i64):
-    ; v1 - heap offset (bytes)
-    ; v2 - table offset (elements)
-    ; v3 - store/load value
-    v4 = heap_addr.i64 heap0, v1, 0, 0
-    v5 = table_addr.i64 table0, v2, +2
-
-    ; Store via heap, load via table
-    store.i64 v3, v4
-    v6 = load.i64 v5
-
-    return v6
-}
-; heap: static, size=0x1000, ptr=vmctx+0, bound=vmctx+8
-; run: %heap_table(2, 0, 0xAABBCCDD_EEFF0011) == 0xAABBCCDD_EEFF0011
-; run: %heap_table(11, 1, 0xC0FFEEEE_DECAFFFF) == 0xC0FFEEEE_DECAFFFF
-; run: %heap_table(20, 2, 1) == 1
-; run: %heap_table(29, 3, -10) == -10
