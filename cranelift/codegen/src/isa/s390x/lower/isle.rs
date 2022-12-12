@@ -123,13 +123,13 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         builder.take()
     }
 
-    fn defs_init(&mut self, abi: &Sig) -> CallRetList {
+    fn defs_init(&mut self, abi: Sig) -> CallRetList {
         // Allocate writable registers for all retval regs, except for StructRet args.
         let mut defs = smallvec![];
-        for i in 0..self.lower_ctx.sigs().num_rets(*abi) {
+        for i in 0..self.lower_ctx.sigs().num_rets(abi) {
             if let &ABIArg::Slots {
                 ref slots, purpose, ..
-            } = &self.lower_ctx.sigs().get_ret(*abi, i)
+            } = &self.lower_ctx.sigs().get_ret(abi, i)
             {
                 if purpose == ArgumentPurpose::StructReturn {
                     continue;
@@ -165,20 +165,20 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         self.lower_ctx.sigs().abi_sig_for_sig_ref(sig_ref)
     }
 
-    fn abi_first_ret(&mut self, sig_ref: SigRef, abi: &Sig) -> usize {
+    fn abi_first_ret(&mut self, sig_ref: SigRef, abi: Sig) -> usize {
         // Return the index of the first actual return value, excluding
         // any StructReturn that might have been added to Sig.
         let sig = &self.lower_ctx.dfg().signatures[sig_ref];
-        self.lower_ctx.sigs().num_rets(*abi) - sig.returns.len()
+        self.lower_ctx.sigs().num_rets(abi) - sig.returns.len()
     }
 
-    fn abi_lane_order(&mut self, abi: &Sig) -> LaneOrder {
-        lane_order_for_call_conv(self.lower_ctx.sigs()[*abi].call_conv())
+    fn abi_lane_order(&mut self, abi: Sig) -> LaneOrder {
+        lane_order_for_call_conv(self.lower_ctx.sigs()[abi].call_conv())
     }
 
-    fn abi_accumulate_outgoing_args_size(&mut self, abi: &Sig) -> Unit {
-        let off = self.lower_ctx.sigs()[*abi].sized_stack_arg_space()
-            + self.lower_ctx.sigs()[*abi].sized_stack_ret_space();
+    fn abi_accumulate_outgoing_args_size(&mut self, abi: Sig) -> Unit {
+        let off = self.lower_ctx.sigs()[abi].sized_stack_arg_space()
+            + self.lower_ctx.sigs()[abi].sized_stack_ret_space();
         self.lower_ctx
             .abi_mut()
             .accumulate_outgoing_args_size(off as u32);
@@ -186,16 +186,13 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
 
     fn abi_call_info(
         &mut self,
-        abi: &Sig,
+        abi: Sig,
         name: ExternalName,
         uses: &CallArgList,
         defs: &CallRetList,
         opcode: &Opcode,
     ) -> BoxCallInfo {
-        let clobbers = self
-            .lower_ctx
-            .sigs()
-            .call_clobbers::<S390xMachineDeps>(*abi);
+        let clobbers = self.lower_ctx.sigs().call_clobbers::<S390xMachineDeps>(abi);
         Box::new(CallInfo {
             dest: name.clone(),
             uses: uses.clone(),
@@ -203,23 +200,20 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
             clobbers,
             opcode: *opcode,
             caller_callconv: self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()),
-            callee_callconv: self.lower_ctx.sigs()[*abi].call_conv(),
+            callee_callconv: self.lower_ctx.sigs()[abi].call_conv(),
             tls_symbol: None,
         })
     }
 
     fn abi_call_ind_info(
         &mut self,
-        abi: &Sig,
+        abi: Sig,
         target: Reg,
         uses: &CallArgList,
         defs: &CallRetList,
         opcode: &Opcode,
     ) -> BoxCallIndInfo {
-        let clobbers = self
-            .lower_ctx
-            .sigs()
-            .call_clobbers::<S390xMachineDeps>(*abi);
+        let clobbers = self.lower_ctx.sigs().call_clobbers::<S390xMachineDeps>(abi);
         Box::new(CallIndInfo {
             rn: target,
             uses: uses.clone(),
@@ -227,7 +221,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
             clobbers,
             opcode: *opcode,
             caller_callconv: self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()),
-            callee_callconv: self.lower_ctx.sigs()[*abi].call_conv(),
+            callee_callconv: self.lower_ctx.sigs()[abi].call_conv(),
         })
     }
 

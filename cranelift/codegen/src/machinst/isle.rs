@@ -400,40 +400,40 @@ macro_rules! isle_lower_prelude_methods {
             regs.regs()[idx]
         }
 
-        fn abi_num_args(&mut self, abi: &Sig) -> usize {
-            self.lower_ctx.sigs().num_args(*abi)
+        fn abi_num_args(&mut self, abi: Sig) -> usize {
+            self.lower_ctx.sigs().num_args(abi)
         }
 
-        fn abi_get_arg(&mut self, abi: &Sig, idx: usize) -> ABIArg {
-            self.lower_ctx.sigs().get_arg(*abi, idx)
+        fn abi_get_arg(&mut self, abi: Sig, idx: usize) -> ABIArg {
+            self.lower_ctx.sigs().get_arg(abi, idx)
         }
 
-        fn abi_num_rets(&mut self, abi: &Sig) -> usize {
-            self.lower_ctx.sigs().num_rets(*abi)
+        fn abi_num_rets(&mut self, abi: Sig) -> usize {
+            self.lower_ctx.sigs().num_rets(abi)
         }
 
-        fn abi_get_ret(&mut self, abi: &Sig, idx: usize) -> ABIArg {
-            self.lower_ctx.sigs().get_ret(*abi, idx)
+        fn abi_get_ret(&mut self, abi: Sig, idx: usize) -> ABIArg {
+            self.lower_ctx.sigs().get_ret(abi, idx)
         }
 
-        fn abi_ret_arg(&mut self, abi: &Sig) -> Option<ABIArg> {
-            self.lower_ctx.sigs().get_ret_arg(*abi)
+        fn abi_ret_arg(&mut self, abi: Sig) -> Option<ABIArg> {
+            self.lower_ctx.sigs().get_ret_arg(abi)
         }
 
-        fn abi_no_ret_arg(&mut self, abi: &Sig) -> Option<()> {
-            if let Some(_) = self.lower_ctx.sigs().get_ret_arg(*abi) {
+        fn abi_no_ret_arg(&mut self, abi: Sig) -> Option<()> {
+            if let Some(_) = self.lower_ctx.sigs().get_ret_arg(abi) {
                 None
             } else {
                 Some(())
             }
         }
 
-        fn abi_sized_stack_arg_space(&mut self, abi: &Sig) -> i64 {
-            self.lower_ctx.sigs()[*abi].sized_stack_arg_space()
+        fn abi_sized_stack_arg_space(&mut self, abi: Sig) -> i64 {
+            self.lower_ctx.sigs()[abi].sized_stack_arg_space()
         }
 
-        fn abi_sized_stack_ret_space(&mut self, abi: &Sig) -> i64 {
-            self.lower_ctx.sigs()[*abi].sized_stack_ret_space()
+        fn abi_sized_stack_ret_space(&mut self, abi: Sig) -> i64 {
+            self.lower_ctx.sigs()[abi].sized_stack_ret_space()
         }
 
         fn abi_arg_only_slot(&mut self, arg: &ABIArg) -> Option<ABIArgSlot> {
