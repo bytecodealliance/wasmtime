@@ -324,6 +324,27 @@ impl Wasmtime {
         &'a self,
         iface: &'a Interface,
     ) -> impl Iterator<Item = (&String, &TypeId, &String)> + 'a {
+        println!("TRAPPABLE ERROR TYPES {:?}", self.opts.trappable_error_type);
+        println!("{:?}", iface.name);
+
+        println!(
+            "{:?}",
+            self.opts
+                .trappable_error_type
+                .iter()
+                .filter(|(interface_name, _, _)| iface.name == *interface_name)
+                .collect::<Vec<_>>()
+        );
+        println!(
+            "{:?}",
+            self.opts
+                .trappable_error_type
+                .iter()
+                .filter(|(interface_name, _, _)| iface.name == *interface_name)
+                .map(|(_, tn, _)| (tn, iface.type_lookup.get(tn)))
+                .collect::<Vec<_>>()
+        );
+
         self.opts
             .trappable_error_type
             .iter()
@@ -1125,6 +1146,11 @@ impl<'a> InterfaceGenerator<'a> {
                 )
             }
             let abi_type = self.param_name(*wit_type);
+
+            println!(
+                "TRAPPABLE TYPE {}::{wit_typename}({abi_type}): {trappable_type}",
+                self.iface.name
+            );
             uwriteln!(
                 self.src,
                 "

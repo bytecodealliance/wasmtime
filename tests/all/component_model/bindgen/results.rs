@@ -214,3 +214,117 @@ mod string_error {
         Ok(())
     }
 }
+
+mod enum_error {
+    use super::*;
+    wasmtime::component::bindgen!({
+        inline: "
+        world result-playground {
+            import imports: interface {
+                enum e1 { a, b, c }
+                enum-error: func(a: float64) -> result<float64, e1>
+            }
+
+            default export interface {
+                enum e1 { a, b, c }
+                enum-error: func(a: float64) -> result<float64, e1>
+            }
+        }",
+        trappable_error_type: { imports::e1: TrappableE1 }
+    });
+
+    #[test]
+    fn run() -> Result<(), Error> {
+        let engine = engine();
+        let component = Component::new(
+            &engine,
+            format!(
+                r#"
+            (component
+                (import "imports" (instance $i
+                    (export "enum-error" (func (param "a" float64) (result (result float64 (error (enum "a" "b" "c"))))))
+                ))
+                (core module $libc
+                    (memory (export "memory") 1)
+                    {REALLOC_AND_FREE}
+                )
+                (core instance $libc (instantiate $libc))
+                (core module $m
+                    (import "" "core_enum_error" (func $f (param f64 i32)))
+                    (import "libc" "memory" (memory 0))
+                    (import "libc" "realloc" (func $realloc (param i32 i32 i32 i32) (result i32)))
+                    (func (export "core_enum_error_export") (param f64) (result i32)
+                        (local $retptr i32)
+                        (local.set $retptr
+                            (call $realloc
+                                (i32.const 0)
+                                (i32.const 0)
+                                (i32.const 4)
+                                (i32.const 16)))
+                        (call $f (local.get 0) (local.get $retptr))
+                        (local.get $retptr)
+                    )
+                )
+                (core func $core_enum_error
+                    (canon lower (func $i "enum-error") (memory $libc "memory") (realloc (func $libc "realloc")))
+                )
+                (core instance $i (instantiate $m
+                    (with "" (instance (export "core_enum_error" (func $core_enum_error))))
+                    (with "libc" (instance $libc))
+                ))
+                (func $f_enum_error
+                    (export "enum-error")
+                    (param "a" float64)
+                    (result (result float64 (error (enum "a" "b" "c"))))
+                    (canon lift (core func $i "core_enum_error_export") (memory $libc "memory"))
+                )
+            )
+        "#
+            ),
+        )?;
+
+        #[derive(Default)]
+        struct MyImports {}
+
+        impl imports::Imports for MyImports {
+            fn enum_error(&mut self, a: f64) -> Result<Result<f64, imports::E1>, Error> {
+                if a == 0.0 {
+                    Ok(Ok(a))
+                } else if a == 1.0 {
+                    Ok(Err(imports::E1::A))
+                } else {
+                    Err(anyhow!("enum_error: trap"))
+                }
+            }
+        }
+
+        let mut linker = Linker::new(&engine);
+        imports::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
+
+        let mut store = Store::new(&engine, MyImports::default());
+        let (results, _) = ResultPlayground::instantiate(&mut store, &component, &linker)?;
+
+        assert_eq!(
+            results
+                .enum_error(&mut store, 0.0)
+                .expect("no trap")
+                .expect("no error returned"),
+            0.0
+        );
+
+        let e = results
+            .enum_error(&mut store, 1.0)
+            .expect("no trap")
+            .err()
+            .expect("error returned");
+        assert_eq!(e, enum_error::E1::A);
+
+        let e = results.enum_error(&mut store, 2.0).err().expect("trap");
+        assert_eq!(
+            format!("{}", e.source().expect("trap message is stored in source")),
+            "enum_error: trap"
+        );
+
+        Ok(())
+    }
+}
