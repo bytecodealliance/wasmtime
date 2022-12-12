@@ -141,7 +141,6 @@
 //! semantics below (grep for "Preserves execution semantics").
 
 use crate::binemit::{Addend, CodeOffset, Reloc, StackMap};
-use crate::ir::function::FunctionParameters;
 use crate::ir::{ExternalName, Opcode, RelSourceLoc, SourceLoc, TrapCode};
 use crate::isa::unwind::UnwindInst;
 use crate::machinst::{
@@ -172,8 +171,6 @@ pub trait CompilePhase {
 }
 
 /// Status of a compiled artifact that needs patching before being used.
-///
-/// Only used internally.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct Stencil;
@@ -267,7 +264,8 @@ pub struct MachBuffer<I: VCodeInst> {
 }
 
 impl MachBufferFinalized<Stencil> {
-    pub(crate) fn apply_params(self, params: &FunctionParameters) -> MachBufferFinalized<Final> {
+    /// Get a finalized machine buffer by applying the function's base source location.
+    pub fn apply_base_srcloc(self, base_srcloc: SourceLoc) -> MachBufferFinalized<Final> {
         MachBufferFinalized {
             data: self.data,
             relocs: self.relocs,
@@ -276,7 +274,7 @@ impl MachBufferFinalized<Stencil> {
             srclocs: self
                 .srclocs
                 .into_iter()
-                .map(|srcloc| srcloc.apply_params(params))
+                .map(|srcloc| srcloc.apply_base_srcloc(base_srcloc))
                 .collect(),
             stack_maps: self.stack_maps,
             unwind_info: self.unwind_info,
@@ -1550,11 +1548,11 @@ pub struct MachSrcLoc<T: CompilePhase> {
 }
 
 impl MachSrcLoc<Stencil> {
-    fn apply_params(self, params: &FunctionParameters) -> MachSrcLoc<Final> {
+    fn apply_base_srcloc(self, base_srcloc: SourceLoc) -> MachSrcLoc<Final> {
         MachSrcLoc {
             start: self.start,
             end: self.end,
-            loc: self.loc.expand(params.base_srcloc()),
+            loc: self.loc.expand(base_srcloc),
         }
     }
 }
