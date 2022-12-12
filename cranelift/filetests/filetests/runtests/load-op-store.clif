@@ -8,10 +8,9 @@ target riscv64
 function %load_op_store_iadd_i64(i64 vmctx, i64, i64) -> i64 {
     gv0 = vmctx
     gv1 = load.i64 notrap aligned gv0+0
-    heap0 = static gv1, min 0x1000, bound 0x1_0000_0000, offset_guard 0, index_type i64
 
 block0(v0: i64, v1: i64, v2: i64):
-    v3 = heap_addr.i64 heap0, v1, 0, 8
+    v3 = global_value.i64 gv1
     v4 = iconst.i64 42
     store.i64 v4, v3
     v5 = load.i64 v3
@@ -27,10 +26,9 @@ block0(v0: i64, v1: i64, v2: i64):
 function %load_op_store_iadd_i32(i64 vmctx, i64, i32) -> i32 {
     gv0 = vmctx
     gv1 = load.i64 notrap aligned gv0+0
-    heap0 = static gv1, min 0x1000, bound 0x1_0000_0000, offset_guard 0, index_type i64
 
 block0(v0: i64, v1: i64, v2: i32):
-    v3 = heap_addr.i64 heap0, v1, 0, 4
+    v3 = global_value.i64 gv1
     v4 = iconst.i32 42
     store.i32 v4, v3
     v5 = load.i32 v3
@@ -46,10 +44,9 @@ block0(v0: i64, v1: i64, v2: i32):
 function %load_op_store_iadd_i8(i64 vmctx, i64, i8) -> i8 {
     gv0 = vmctx
     gv1 = load.i64 notrap aligned gv0+0
-    heap0 = static gv1, min 0x1000, bound 0x1_0000_0000, offset_guard 0, index_type i64
 
 block0(v0: i64, v1: i64, v2: i8):
-    v3 = heap_addr.i64 heap0, v1, 0, 4
+    v3 = global_value.i64 gv1
     v4 = iconst.i8 42
     store.i8 v4, v3
     v5 = load.i8 v3
@@ -65,10 +62,9 @@ block0(v0: i64, v1: i64, v2: i8):
 function %load_op_store_iadd_isub_iand_ior_ixor_i64(i64 vmctx, i64, i64) -> i64 {
     gv0 = vmctx
     gv1 = load.i64 notrap aligned gv0+0
-    heap0 = static gv1, min 0x1000, bound 0x1_0000_0000, offset_guard 0, index_type i64
 
 block0(v0: i64, v1: i64, v2: i64):
-    v3 = heap_addr.i64 heap0, v1, 0, 8
+    v3 = global_value.i64 gv1
     store.i64 v2, v3
     v4 = load.i64 v3
     v5 = iconst.i64 1
