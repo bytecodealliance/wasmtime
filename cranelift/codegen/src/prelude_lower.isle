@@ -597,7 +597,7 @@
 ;;;; Helpers for generating calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Type to hold information about a function call signature.
-(type Sig extern (enum))
+(type Sig (primitive Sig))
 
 ;; Information how to pass one argument or return value.
 (type ABIArg extern (enum))

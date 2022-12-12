@@ -1018,11 +1018,11 @@ pub struct Callee<M: ABIMachineSpec> {
 fn get_special_purpose_param_register(
     f: &ir::Function,
     sigs: &SigSet,
-    sig: &Sig,
+    sig: Sig,
     purpose: ir::ArgumentPurpose,
 ) -> Option<Reg> {
     let idx = f.signature.special_param_index(purpose)?;
-    match &sigs.args(*sig)[idx] {
+    match &sigs.args(sig)[idx] {
         &ABIArg::Slots { ref slots, .. } => match &slots[0] {
             &ABIArgSlot::Reg { reg, .. } => Some(reg.into()),
             _ => None,
@@ -1100,11 +1100,11 @@ impl<M: ABIMachineSpec> Callee<M> {
         // argument or as a global value which often calculates the stack limit
         // from the arguments.
         let stack_limit =
-            get_special_purpose_param_register(f, sigs, &sig, ir::ArgumentPurpose::StackLimit)
+            get_special_purpose_param_register(f, sigs, sig, ir::ArgumentPurpose::StackLimit)
                 .map(|reg| (reg, smallvec![]))
                 .or_else(|| {
                     f.stack_limit
-                        .map(|gv| gen_stack_limit::<M>(f, sigs, &sig, gv))
+                        .map(|gv| gen_stack_limit::<M>(f, sigs, sig, gv))
                 });
 
         // Determine whether a probestack call is required for large enough
@@ -1225,7 +1225,7 @@ impl<M: ABIMachineSpec> Callee<M> {
 fn gen_stack_limit<M: ABIMachineSpec>(
     f: &ir::Function,
     sigs: &SigSet,
-    sig: &Sig,
+    sig: Sig,
     gv: ir::GlobalValue,
 ) -> (Reg, SmallInstVec<M::I>) {
     let mut insts = smallvec![];
@@ -1236,7 +1236,7 @@ fn gen_stack_limit<M: ABIMachineSpec>(
 fn generate_gv<M: ABIMachineSpec>(
     f: &ir::Function,
     sigs: &SigSet,
-    sig: &Sig,
+    sig: Sig,
     gv: ir::GlobalValue,
     insts: &mut SmallInstVec<M::I>,
 ) -> Reg {
