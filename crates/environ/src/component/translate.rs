@@ -618,8 +618,8 @@ impl<'a, 'data> Translator<'a, 'data> {
                 }
             }
 
-            Payload::ComponentStartSection(s) => {
-                self.validator.component_start_section(&s)?;
+            Payload::ComponentStartSection { start, range } => {
+                self.validator.component_start_section(&start, &range)?;
                 unimplemented!("component start section");
             }
 

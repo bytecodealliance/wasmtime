@@ -265,7 +265,12 @@ impl wasmtime_environ::Compiler for Compiler {
         context.func.stack_limit = Some(stack_limit);
         let FunctionBodyData { validator, body } = input;
         let mut validator = validator.into_validator(validator_allocations);
-        func_translator.translate_body(&mut validator, body, &mut context.func, &mut func_env)?;
+        func_translator.translate_body(
+            &mut validator,
+            body.clone(),
+            &mut context.func,
+            &mut func_env,
+        )?;
 
         let (_, code_buf) = compile_maybe_cached(&mut context, isa, cache_ctx.as_mut())?;
         // compile_maybe_cached returns the compiled_code but that borrow has the same lifetime as

@@ -13,14 +13,12 @@ use crate::{
     DataIndex, ElemIndex, FuncIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex, Table,
     TableIndex, Tag, TagIndex, TypeIndex, WasmError, WasmResult,
 };
-use core::convert::TryFrom;
-use core::convert::TryInto;
 use cranelift_entity::packed_option::ReservedValue;
 use cranelift_entity::EntityRef;
 use std::boxed::Box;
 use std::vec::Vec;
 use wasmparser::{
-    self, Data, DataKind, DataSectionReader, Element, ElementItem, ElementItems, ElementKind,
+    self, Data, DataKind, DataSectionReader, Element, ElementItems, ElementKind,
     ElementSectionReader, Export, ExportSectionReader, ExternalKind, FunctionSectionReader,
     GlobalSectionReader, GlobalType, ImportSectionReader, MemorySectionReader, MemoryType,
     NameSectionReader, Naming, Operator, TableSectionReader, TableType, TagSectionReader, TagType,
@@ -65,7 +63,7 @@ pub fn parse_type_section<'a>(
     types: TypeSectionReader<'a>,
     environ: &mut dyn ModuleEnvironment<'a>,
 ) -> WasmResult<()> {
-    let count = types.get_count();
+    let count = types.count();
     environ.reserve_types(count)?;
 
     for entry in types {
@@ -83,7 +81,7 @@ pub fn parse_import_section<'data>(
     imports: ImportSectionReader<'data>,
     environ: &mut dyn ModuleEnvironment<'data>,
 ) -> WasmResult<()> {
-    environ.reserve_imports(imports.get_count())?;
+    environ.reserve_imports(imports.count())?;
 
     for entry in imports {
         let import = entry?;
@@ -121,7 +119,7 @@ pub fn parse_function_section(
     functions: FunctionSectionReader,
     environ: &mut dyn ModuleEnvironment,
 ) -> WasmResult<()> {
-    let num_functions = functions.get_count();
+    let num_functions = functions.count();
     if num_functions == std::u32::MAX {
         // We reserve `u32::MAX` for our own use in cranelift-entity.
         return Err(WasmError::ImplLimitExceeded);
@@ -142,7 +140,7 @@ pub fn parse_table_section(
     tables: TableSectionReader,
     environ: &mut dyn ModuleEnvironment,
 ) -> WasmResult<()> {
-    environ.reserve_tables(tables.get_count())?;
+    environ.reserve_tables(tables.count())?;
 
     for entry in tables {
         let ty = table(entry?)?;
@@ -157,7 +155,7 @@ pub fn parse_memory_section(
     memories: MemorySectionReader,
     environ: &mut dyn ModuleEnvironment,
 ) -> WasmResult<()> {
-    environ.reserve_memories(memories.get_count())?;
+    environ.reserve_memories(memories.count())?;
 
     for entry in memories {
         let memory = memory(entry?);
@@ -172,7 +170,7 @@ pub fn parse_tag_section(
     tags: TagSectionReader,
     environ: &mut dyn ModuleEnvironment,
 ) -> WasmResult<()> {
-    environ.reserve_tags(tags.get_count())?;
+    environ.reserve_tags(tags.count())?;
 
     for entry in tags {
         let tag = tag(entry?);
@@ -187,7 +185,7 @@ pub fn parse_global_section(
     globals: GlobalSectionReader,
     environ: &mut dyn ModuleEnvironment,
 ) -> WasmResult<()> {
-    environ.reserve_globals(globals.get_count())?;
+    environ.reserve_globals(globals.count())?;
 
     for entry in globals {
         let wasmparser::Global { ty, init_expr } = entry?;
@@ -226,7 +224,7 @@ pub fn parse_export_section<'data>(
     exports: ExportSectionReader<'data>,
     environ: &mut dyn ModuleEnvironment<'data>,
 ) -> WasmResult<()> {
-    environ.reserve_exports(exports.get_count())?;
+    environ.reserve_exports(exports.count())?;
 
     for entry in exports {
         let Export {
@@ -259,23 +257,28 @@ pub fn parse_start_section(index: u32, environ: &mut dyn ModuleEnvironment) -> W
 }
 
 fn read_elems(items: &ElementItems) -> WasmResult<Box<[FuncIndex]>> {
-    let items_reader = items.get_items_reader()?;
-    let mut elems = Vec::with_capacity(usize::try_from(items_reader.get_count()).unwrap());
-    for item in items_reader {
-        let elem = match item? {
-            ElementItem::Expr(init) => match init.get_binary_reader().read_operator()? {
-                Operator::RefNull { .. } => FuncIndex::reserved_value(),
-                Operator::RefFunc { function_index } => FuncIndex::from_u32(function_index),
-                s => {
-                    return Err(WasmError::Unsupported(format!(
-                        "unsupported init expr in element section: {:?}",
-                        s
-                    )));
-                }
-            },
-            ElementItem::Func(index) => FuncIndex::from_u32(index),
-        };
-        elems.push(elem);
+    let mut elems = Vec::new();
+    match items {
+        ElementItems::Functions(funcs) => {
+            for func in funcs.clone() {
+                elems.push(FuncIndex::from_u32(func?));
+            }
+        }
+        ElementItems::Expressions(funcs) => {
+            for func in funcs.clone() {
+                let idx = match func?.get_binary_reader().read_operator()? {
+                    Operator::RefNull { .. } => FuncIndex::reserved_value(),
+                    Operator::RefFunc { function_index } => FuncIndex::from_u32(function_index),
+                    s => {
+                        return Err(WasmError::Unsupported(format!(
+                            "unsupported init expr in element section: {:?}",
+                            s
+                        )));
+                    }
+                };
+                elems.push(idx);
+            }
+        }
     }
     Ok(elems.into_boxed_slice())
 }
@@ -285,7 +288,7 @@ pub fn parse_element_section<'data>(
     elements: ElementSectionReader<'data>,
     environ: &mut dyn ModuleEnvironment,
 ) -> WasmResult<()> {
-    environ.reserve_table_elements(elements.get_count())?;
+    environ.reserve_table_elements(elements.count())?;
 
     for (index, entry) in elements.into_iter().enumerate() {
         let Element {
@@ -337,7 +340,7 @@ pub fn parse_data_section<'data>(
     data: DataSectionReader<'data>,
     environ: &mut dyn ModuleEnvironment<'data>,
 ) -> WasmResult<()> {
-    environ.reserve_data_initializers(data.get_count())?;
+    environ.reserve_data_initializers(data.count())?;
 
     for (index, entry) in data.into_iter().enumerate() {
         let Data {

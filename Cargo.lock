@@ -3262,9 +3262,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-mutate"
-version = "0.2.12"
+version = "0.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a3f74c801ac9b17a797d7d2ea441277bc1ded7ba521ca5146258d6510cc2f11"
+checksum = "a0e9666b36c1e7e88bf1e0d114c8a4fe7d4e32d3aa38c1e8e9d71a972b99764a"
 dependencies = [
  "egg",
  "log",
@@ -3276,9 +3276,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-smith"
-version = "0.11.9"
+version = "0.11.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca488f460a34d3af30f1d65f26f108612f2755872f2aba9906c36f1c046ef1cf"
+checksum = "e6ca3f5a24b691771929ac6adf330972e8ecbfe48dcf8809d7bf83216c124cfd"
 dependencies = [
  "arbitrary",
  "flagset",
@@ -3328,9 +3328,9 @@ dependencies = [
 
 [[package]]
 name = "wasmparser"
-version = "0.95.0"
+version = "0.96.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2ea896273ea99b15132414be1da01ab0d8836415083298ecaffbe308eaac87a"
+checksum = "adde01ade41ab9a5d10ec8ed0bb954238cf8625b5cd5a13093d6de2ad9c2be1a"
 dependencies = [
  "indexmap",
  "url",
@@ -3347,9 +3347,9 @@ dependencies = [
 
 [[package]]
 name = "wasmprinter"
-version = "0.2.44"
+version = "0.2.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae24500f9cc27a4b2b338e66693ff53c08b17cf920bdc81e402a09fe7a204eea"
+checksum = "3045e1aa2cac847f4f94a1e25db9f084a947aeff47d9099fb9c5ccd16d335040"
 dependencies = [
  "anyhow",
  "wasmparser",

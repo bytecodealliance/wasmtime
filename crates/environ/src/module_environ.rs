@@ -14,7 +14,7 @@ use std::convert::{TryFrom, TryInto};
 use std::path::PathBuf;
 use std::sync::Arc;
 use wasmparser::{
-    types::Types, CustomSectionReader, DataKind, ElementItem, ElementKind, Encoding, ExternalKind,
+    types::Types, CustomSectionReader, DataKind, ElementItems, ElementKind, Encoding, ExternalKind,
     FuncToValidate, FunctionBody, NameSectionReader, Naming, Operator, Parser, Payload, Type,
     TypeRef, Validator, ValidatorResources,
 };
@@ -232,7 +232,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
 
             Payload::TypeSection(types) => {
                 self.validator.type_section(&types)?;
-                let num = usize::try_from(types.get_count()).unwrap();
+                let num = usize::try_from(types.count()).unwrap();
                 self.result.module.types.reserve(num);
                 self.types.reserve_wasm_signatures(num);
 
@@ -248,7 +248,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             Payload::ImportSection(imports) => {
                 self.validator.import_section(&imports)?;
 
-                let cnt = usize::try_from(imports.get_count()).unwrap();
+                let cnt = usize::try_from(imports.count()).unwrap();
                 self.result.module.initializers.reserve(cnt);
 
                 for entry in imports {
@@ -284,7 +284,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             Payload::FunctionSection(functions) => {
                 self.validator.function_section(&functions)?;
 
-                let cnt = usize::try_from(functions.get_count()).unwrap();
+                let cnt = usize::try_from(functions.count()).unwrap();
                 self.result.module.functions.reserve_exact(cnt);
 
                 for entry in functions {
@@ -297,7 +297,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
 
             Payload::TableSection(tables) => {
                 self.validator.table_section(&tables)?;
-                let cnt = usize::try_from(tables.get_count()).unwrap();
+                let cnt = usize::try_from(tables.count()).unwrap();
                 self.result.module.table_plans.reserve_exact(cnt);
 
                 for entry in tables {
@@ -310,7 +310,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             Payload::MemorySection(memories) => {
                 self.validator.memory_section(&memories)?;
 
-                let cnt = usize::try_from(memories.get_count()).unwrap();
+                let cnt = usize::try_from(memories.count()).unwrap();
                 self.result.module.memory_plans.reserve_exact(cnt);
 
                 for entry in memories {
@@ -331,7 +331,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             Payload::GlobalSection(globals) => {
                 self.validator.global_section(&globals)?;
 
-                let cnt = usize::try_from(globals.get_count()).unwrap();
+                let cnt = usize::try_from(globals.count()).unwrap();
                 self.result.module.globals.reserve_exact(cnt);
 
                 for entry in globals {
@@ -369,7 +369,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             Payload::ExportSection(exports) => {
                 self.validator.export_section(&exports)?;
 
-                let cnt = usize::try_from(exports.get_count()).unwrap();
+                let cnt = usize::try_from(exports.count()).unwrap();
                 self.result.module.exports.reserve(cnt);
 
                 for entry in exports {
@@ -419,33 +419,36 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     // possible to create anything other than a `ref.null
                     // extern` for externref segments, so those just get
                     // translated to the reserved value of `FuncIndex`.
-                    let items_reader = items.get_items_reader()?;
-                    let mut elements =
-                        Vec::with_capacity(usize::try_from(items_reader.get_count()).unwrap());
-                    for item in items_reader {
-                        let func = match item? {
-                            ElementItem::Func(f) => Some(f),
-                            ElementItem::Expr(init) => {
-                                match init.get_binary_reader().read_operator()? {
-                                    Operator::RefNull { .. } => None,
-                                    Operator::RefFunc { function_index } => Some(function_index),
+                    let mut elements = Vec::new();
+                    match items {
+                        ElementItems::Functions(funcs) => {
+                            elements.reserve(usize::try_from(funcs.count()).unwrap());
+                            for func in funcs {
+                                let func = FuncIndex::from_u32(func?);
+                                self.flag_func_escaped(func);
+                                elements.push(func);
+                            }
+                        }
+                        ElementItems::Expressions(funcs) => {
+                            elements.reserve(usize::try_from(funcs.count()).unwrap());
+                            for func in funcs {
+                                let func = match func?.get_binary_reader().read_operator()? {
+                                    Operator::RefNull { .. } => FuncIndex::reserved_value(),
+                                    Operator::RefFunc { function_index } => {
+                                        let func = FuncIndex::from_u32(function_index);
+                                        self.flag_func_escaped(func);
+                                        func
+                                    }
                                     s => {
                                         return Err(WasmError::Unsupported(format!(
                                             "unsupported init expr in element section: {:?}",
                                             s
                                         )));
                                     }
-                                }
+                                };
+                                elements.push(func);
                             }
-                        };
-                        elements.push(match func {
-                            Some(f) => {
-                                let f = FuncIndex::from_u32(f);
-                                self.flag_func_escaped(f);
-                                f
-                            }
-                            None => FuncIndex::reserved_value(),
-                        });
+                        }
                     }
 
                     match kind {
@@ -540,7 +543,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     _ => unreachable!(),
                 };
 
-                let cnt = usize::try_from(data.get_count()).unwrap();
+                let cnt = usize::try_from(data.count()).unwrap();
                 initializers.reserve_exact(cnt);
                 self.result.data.reserve_exact(cnt);
 
@@ -620,9 +623,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             }
 
             Payload::CustomSection(s) if s.name() == "name" => {
-                let result = NameSectionReader::new(s.data(), s.data_offset())
-                    .map_err(|e| e.into())
-                    .and_then(|s| self.name_section(s));
+                let result = self.name_section(NameSectionReader::new(s.data(), s.data_offset()));
                 if let Err(e) = result {
                     log::warn!("failed to parse name section {:?}", e);
                 }
