@@ -8,16 +8,11 @@ block0(v0: i64):
     return
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   movl    $42, %edx
 ;   movq    %rdx, 0(%rdi)
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
-
 
 function %f1(i64, i64) -> i64 {
     fn0 = %f2(i64 sret) -> i64

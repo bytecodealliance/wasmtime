@@ -6,11 +6,8 @@ block0:
   trap user0
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   ud2 user0
-
 
 function %trap_iadd_ifcout(i64, i64) {
 block0(v0: i64, v1: i64):
@@ -18,13 +15,9 @@ block0(v0: i64, v1: i64):
   return
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rcx
 ;   addq    %rcx, %rsi, %rcx
 ;   jnb ; ud2 user0 ;
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 

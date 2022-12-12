@@ -10,14 +10,10 @@ block0:
     return
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %r15, %rsi
 ;   addq    %rsi, $1, %rsi
 ;   movq    %rsi, %r15
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f1() windows_fastcall {

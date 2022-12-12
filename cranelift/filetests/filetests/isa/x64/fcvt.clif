@@ -7,13 +7,9 @@ block0(v0: i8):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movsbl  %dil, %eax
 ;   cvtsi2ss %eax, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f2(i16) -> f32 {
@@ -22,13 +18,9 @@ block0(v0: i16):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movswl  %di, %eax
 ;   cvtsi2ss %eax, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f3(i32) -> f32 {
@@ -37,12 +29,8 @@ block0(v0: i32):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cvtsi2ss %edi, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f4(i64) -> f32 {
@@ -51,12 +39,8 @@ block0(v0: i64):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cvtsi2ss %rdi, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f5(i8) -> f64 {
@@ -65,13 +49,9 @@ block0(v0: i8):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movsbl  %dil, %eax
 ;   cvtsi2sd %eax, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f6(i16) -> f64 {
@@ -80,13 +60,9 @@ block0(v0: i16):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movswl  %di, %eax
 ;   cvtsi2sd %eax, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f7(i32) -> f64 {
@@ -95,12 +71,8 @@ block0(v0: i32):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cvtsi2sd %edi, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f8(i64) -> f64 {
@@ -109,12 +81,8 @@ block0(v0: i64):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cvtsi2sd %rdi, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f9(i32x4) -> f64x2 {
@@ -123,12 +91,8 @@ block0(v0: i32x4):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cvtdq2pd %xmm0, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f10(i8, i16, i32, i64) -> f32 {
@@ -143,8 +107,6 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64):
   return v10
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movzbq  %dil, %r9
 ;   cvtsi2ss %r9, %xmm0
@@ -156,8 +118,6 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64):
 ;   addss   %xmm0, %xmm1, %xmm0
 ;   addss   %xmm0, %xmm2, %xmm0
 ;   addss   %xmm0, %xmm14, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f11(i32x4) -> f64x2 {
@@ -167,15 +127,11 @@ block0(v0: i32x4):
   return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movdqu  const(0), %xmm2
 ;   unpcklps %xmm0, %xmm2, %xmm0
 ;   movdqu  const(1), %xmm6
 ;   subpd   %xmm0, %xmm6, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f12(i32x4) -> f32x4 {
@@ -184,8 +140,6 @@ block0(v0: i32x4):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movdqa  %xmm0, %xmm3
 ;   pslld   %xmm3, $16, %xmm3
@@ -197,8 +151,6 @@ block0(v0: i32x4):
 ;   cvtdq2ps %xmm9, %xmm0
 ;   addps   %xmm0, %xmm0, %xmm0
 ;   addps   %xmm0, %xmm8, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f13(f32) -> i32 {
@@ -207,12 +159,8 @@ block0(v0: f32):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cvt_float32_to_uint32_seq %xmm0, %eax, %r8, %xmm3, %xmm4
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f14(f32) -> i64 {
@@ -221,12 +169,8 @@ block0(v0: f32):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cvt_float32_to_uint64_seq %xmm0, %rax, %r8, %xmm3, %xmm4
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f15(f64) -> i32 {
@@ -235,12 +179,8 @@ block0(v0: f64):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cvt_float64_to_uint32_seq %xmm0, %eax, %r8, %xmm3, %xmm4
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f16(f64) -> i64 {
@@ -249,12 +189,8 @@ block0(v0: f64):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cvt_float64_to_uint64_seq %xmm0, %rax, %r8, %xmm3, %xmm4
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f17(f32) -> i32 {
@@ -263,12 +199,8 @@ block0(v0: f32):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cvt_float32_to_uint32_sat_seq %xmm0, %eax, %r8, %xmm3, %xmm4
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f18(f32) -> i64 {
@@ -277,12 +209,8 @@ block0(v0: f32):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cvt_float32_to_uint64_sat_seq %xmm0, %rax, %r8, %xmm3, %xmm4
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f19(f64) -> i32 {
@@ -291,12 +219,8 @@ block0(v0: f64):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cvt_float64_to_uint32_sat_seq %xmm0, %eax, %r8, %xmm3, %xmm4
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f20(f64) -> i64 {
@@ -305,12 +229,8 @@ block0(v0: f64):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cvt_float64_to_uint64_sat_seq %xmm0, %rax, %r8, %xmm3, %xmm4
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f21(f32) -> i32 {
@@ -319,12 +239,8 @@ block0(v0: f32):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cvt_float32_to_sint32_seq %xmm0, %eax, %rdx, %xmm3
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f22(f32) -> i64 {
@@ -333,12 +249,8 @@ block0(v0: f32):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cvt_float32_to_sint64_seq %xmm0, %rax, %rdx, %xmm3
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f23(f64) -> i32 {
@@ -347,12 +259,8 @@ block0(v0: f64):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cvt_float64_to_sint32_seq %xmm0, %eax, %rdx, %xmm3
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f24(f64) -> i64 {
@@ -361,12 +269,8 @@ block0(v0: f64):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cvt_float64_to_sint64_seq %xmm0, %rax, %rdx, %xmm3
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f25(f32) -> i32 {
@@ -375,12 +279,8 @@ block0(v0: f32):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cvt_float32_to_sint32_sat_seq %xmm0, %eax, %rdx, %xmm3
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f26(f32) -> i64 {
@@ -389,12 +289,8 @@ block0(v0: f32):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cvt_float32_to_sint64_sat_seq %xmm0, %rax, %rdx, %xmm3
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f27(f64) -> i32 {
@@ -403,12 +299,8 @@ block0(v0: f64):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cvt_float64_to_sint32_sat_seq %xmm0, %eax, %rdx, %xmm3
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f28(f64) -> i64 {
@@ -417,12 +309,8 @@ block0(v0: f64):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cvt_float64_to_sint64_sat_seq %xmm0, %rax, %rdx, %xmm3
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f29(f32x4) -> i32x4 {
@@ -431,8 +319,6 @@ block0(v0: f32x4):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   pxor    %xmm2, %xmm2, %xmm2
 ;   movdqa  %xmm0, %xmm9
@@ -448,8 +334,6 @@ block0(v0: f32x4):
 ;   pxor    %xmm6, %xmm6, %xmm6
 ;   pmaxsd  %xmm0, %xmm6, %xmm0
 ;   paddd   %xmm0, %xmm12, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f30(f32x4) -> i32x4 {
@@ -458,8 +342,6 @@ block0(v0: f32x4):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movdqa  %xmm0, %xmm4
 ;   cmpps   $0, %xmm4, %xmm0, %xmm4
@@ -471,7 +353,5 @@ block0(v0: f32x4):
 ;   pand    %xmm0, %xmm4, %xmm0
 ;   psrad   %xmm0, $31, %xmm0
 ;   pxor    %xmm0, %xmm8, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 

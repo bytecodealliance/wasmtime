@@ -14,8 +14,6 @@ block0(v0: i128, v1: i8):
     return v4
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movzbq  %dl, %rcx
 ;   movq    %rdi, %rdx
@@ -35,8 +33,6 @@ block0(v0: i128, v1: i8):
 ;   testq   $64, %r8
 ;   cmovzq  %rdx, %rax, %rax
 ;   cmovzq  %r10, %rdx, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %ishl_i128_i64(i128, i64) -> i128 {
@@ -45,8 +41,6 @@ block0(v0: i128, v1: i64):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdx, %rcx
 ;   movq    %rdi, %rdx
@@ -66,8 +60,6 @@ block0(v0: i128, v1: i64):
 ;   testq   $64, %rsi
 ;   cmovzq  %rdx, %rax, %rax
 ;   cmovzq  %r9, %rdx, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %ishl_i128_i32(i128, i32) -> i128 {
@@ -76,8 +68,6 @@ block0(v0: i128, v1: i32):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdx, %rcx
 ;   movq    %rdi, %rdx
@@ -97,8 +87,6 @@ block0(v0: i128, v1: i32):
 ;   testq   $64, %rsi
 ;   cmovzq  %rdx, %rax, %rax
 ;   cmovzq  %r9, %rdx, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %ishl_i128_i16(i128, i16) -> i128 {
@@ -107,8 +95,6 @@ block0(v0: i128, v1: i16):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdx, %rcx
 ;   movq    %rdi, %rdx
@@ -128,8 +114,6 @@ block0(v0: i128, v1: i16):
 ;   testq   $64, %rsi
 ;   cmovzq  %rdx, %rax, %rax
 ;   cmovzq  %r9, %rdx, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %ishl_i128_i8(i128, i8) -> i128 {
@@ -138,8 +122,6 @@ block0(v0: i128, v1: i8):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdx, %rcx
 ;   movq    %rdi, %rdx
@@ -159,8 +141,6 @@ block0(v0: i128, v1: i8):
 ;   testq   $64, %rsi
 ;   cmovzq  %rdx, %rax, %rax
 ;   cmovzq  %r9, %rdx, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %ishl_i64_i128(i64, i128) -> i64 {
@@ -169,14 +149,10 @@ block0(v0: i64, v1: i128):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
 ;   movq    %rdi, %rax
 ;   shlq    %cl, %rax, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %ishl_i32_i128(i32, i128) -> i32 {
@@ -185,14 +161,10 @@ block0(v0: i32, v1: i128):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
 ;   movq    %rdi, %rax
 ;   shll    %cl, %eax, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %ishl_i16_i128(i16, i128) -> i16 {
@@ -201,15 +173,11 @@ block0(v0: i16, v1: i128):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
 ;   andq    %rcx, $15, %rcx
 ;   movq    %rdi, %rax
 ;   shlw    %cl, %ax, %ax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %ishl_i8_i128(i8, i128) -> i8 {
@@ -218,15 +186,11 @@ block0(v0: i8, v1: i128):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
 ;   andq    %rcx, $7, %rcx
 ;   movq    %rdi, %rax
 ;   shlb    %cl, %al, %al
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %ishl_i64_i64(i64, i64) -> i64 {
@@ -235,14 +199,10 @@ block0(v0: i64, v1: i64):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
 ;   movq    %rdi, %rax
 ;   shlq    %cl, %rax, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %ishl_i64_i32(i64, i32) -> i64 {
@@ -251,14 +211,10 @@ block0(v0: i64, v1: i32):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
 ;   movq    %rdi, %rax
 ;   shlq    %cl, %rax, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %ishl_i64_i16(i64, i16) -> i64 {
@@ -267,14 +223,10 @@ block0(v0: i64, v1: i16):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
 ;   movq    %rdi, %rax
 ;   shlq    %cl, %rax, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %ishl_i64_i8(i64, i8) -> i64 {
@@ -283,14 +235,10 @@ block0(v0: i64, v1: i8):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
 ;   movq    %rdi, %rax
 ;   shlq    %cl, %rax, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %ishl_i32_i64(i32, i64) -> i32 {
@@ -299,14 +247,10 @@ block0(v0: i32, v1: i64):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
 ;   movq    %rdi, %rax
 ;   shll    %cl, %eax, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %ishl_i32_i32(i32, i32) -> i32 {
@@ -315,14 +259,10 @@ block0(v0: i32, v1: i32):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
 ;   movq    %rdi, %rax
 ;   shll    %cl, %eax, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %ishl_i32_i16(i32, i16) -> i32 {
@@ -331,14 +271,10 @@ block0(v0: i32, v1: i16):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
 ;   movq    %rdi, %rax
 ;   shll    %cl, %eax, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %ishl_i32_i8(i32, i8) -> i32 {
@@ -347,14 +283,10 @@ block0(v0: i32, v1: i8):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
 ;   movq    %rdi, %rax
 ;   shll    %cl, %eax, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %ishl_i16_i64(i16, i64) -> i16 {
@@ -363,15 +295,11 @@ block0(v0: i16, v1: i64):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
 ;   andq    %rcx, $15, %rcx
 ;   movq    %rdi, %rax
 ;   shlw    %cl, %ax, %ax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %ishl_i16_i32(i16, i32) -> i16 {
@@ -380,15 +308,11 @@ block0(v0: i16, v1: i32):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
 ;   andq    %rcx, $15, %rcx
 ;   movq    %rdi, %rax
 ;   shlw    %cl, %ax, %ax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %ishl_i16_i16(i16, i16) -> i16 {
@@ -397,15 +321,11 @@ block0(v0: i16, v1: i16):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
 ;   andq    %rcx, $15, %rcx
 ;   movq    %rdi, %rax
 ;   shlw    %cl, %ax, %ax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %ishl_i16_i8(i16, i8) -> i16 {
@@ -414,15 +334,11 @@ block0(v0: i16, v1: i8):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
 ;   andq    %rcx, $15, %rcx
 ;   movq    %rdi, %rax
 ;   shlw    %cl, %ax, %ax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %ishl_i8_i64(i8, i64) -> i8 {
@@ -431,15 +347,11 @@ block0(v0: i8, v1: i64):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
 ;   andq    %rcx, $7, %rcx
 ;   movq    %rdi, %rax
 ;   shlb    %cl, %al, %al
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %ishl_i8_i32(i8, i32) -> i8 {
@@ -448,15 +360,11 @@ block0(v0: i8, v1: i32):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
 ;   andq    %rcx, $7, %rcx
 ;   movq    %rdi, %rax
 ;   shlb    %cl, %al, %al
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %ishl_i8_i16(i8, i16) -> i8 {
@@ -465,15 +373,11 @@ block0(v0: i8, v1: i16):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
 ;   andq    %rcx, $7, %rcx
 ;   movq    %rdi, %rax
 ;   shlb    %cl, %al, %al
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %ishl_i8_i8(i8, i8) -> i8 {
@@ -482,15 +386,11 @@ block0(v0: i8, v1: i8):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
 ;   andq    %rcx, $7, %rcx
 ;   movq    %rdi, %rax
 ;   shlb    %cl, %al, %al
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %ishl_i64_const(i64) -> i64 {
@@ -499,13 +399,9 @@ block0(v0: i64):
     return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   shlq    $1, %rax, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %ishl_i32_const(i32) -> i32 {
@@ -514,13 +410,9 @@ block0(v0: i32):
     return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   shll    $1, %eax, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %ishl_i16_const(i16) -> i16 {
@@ -529,13 +421,9 @@ block0(v0: i16):
     return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   shlw    $1, %ax, %ax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %ishl_i8_const(i8) -> i8 {
@@ -544,12 +432,8 @@ block0(v0: i8):
     return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   shlb    $1, %al, %al
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 

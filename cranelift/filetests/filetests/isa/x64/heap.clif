@@ -29,8 +29,6 @@ block0(v0: i32, v1: i64):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movl    %edi, %eax
 ;   movq    %rax, %rdi
@@ -42,8 +40,6 @@ block0(v0: i32, v1: i64):
 ;   xorq    %rsi, %rsi, %rsi
 ;   cmpq    %rcx, %rdi
 ;   cmovnbeq %rsi, %rax, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 ;; The heap address calculation for this statically-allocated memory checks that
@@ -60,8 +56,6 @@ block0(v0: i64, v1: i32):
     return v10
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movl    %esi, %r9d
 ;   movq    %r9, %rax
@@ -69,8 +63,6 @@ block0(v0: i64, v1: i32):
 ;   xorq    %r8, %r8, %r8
 ;   cmpq    $4096, %r9
 ;   cmovnbeq %r8, %rax, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 ;; When a static memory is the "right" size (4GB memory, 2GB guard regions), the
@@ -86,13 +78,9 @@ block0(v0: i64, v1: i32):
     return v10
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movl    %esi, %eax
 ;   addq    %rax, 0(%rdi), %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %dynamic_heap_check_with_offset(i64 vmctx, i32) -> i64 {
@@ -105,8 +93,6 @@ block0(v0: i64, v1: i32):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movl    %esi, %esi
 ;   movq    %rsi, %r11
@@ -118,8 +104,6 @@ block0(v0: i64, v1: i32):
 ;   xorq    %rsi, %rsi, %rsi
 ;   cmpq    0(%rdi), %r11
 ;   cmovnbeq %rsi, %rax, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %static_heap_check_with_offset(i64 vmctx, i32) -> i64 {
@@ -131,8 +115,6 @@ block0(v0: i64, v1: i32):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movl    %esi, %r10d
 ;   movq    %rdi, %rax
@@ -141,7 +123,5 @@ block0(v0: i64, v1: i32):
 ;   xorq    %r9, %r9, %r9
 ;   cmpq    $65512, %r10
 ;   cmovnbeq %r9, %rax, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 

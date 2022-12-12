@@ -7,12 +7,8 @@ block0(v0: i8x16):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   pextrb  $1, %xmm0, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f2(i16x8) -> i16 {
@@ -21,12 +17,8 @@ block0(v0: i16x8):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   pextrw  $1, %xmm0, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f3(i32x4) -> i32 {
@@ -35,12 +27,8 @@ block0(v0: i32x4):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   pextrd  $1, %xmm0, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f4(i64x2) -> i64 {
@@ -49,12 +37,8 @@ block0(v0: i64x2):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   pextrd.w $1, %xmm0, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f5(f32x4) -> f32 {
@@ -63,12 +47,8 @@ block0(v0: f32x4):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   pshufd  $1, %xmm0, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f6(f64x2) -> f64 {
@@ -77,11 +57,7 @@ block0(v0: f64x2):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   pshufd  $238, %xmm0, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 

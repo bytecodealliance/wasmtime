@@ -8,12 +8,8 @@ block0(v0: i32, v1: i32):
     return v3
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   addl    %eax, %esi, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 

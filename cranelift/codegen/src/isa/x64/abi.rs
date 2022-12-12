@@ -468,9 +468,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
         if flags.unwind_info() && setup_frame {
             // Emit unwind info: start the frame. The frame (from unwind
-            // consumers' point of view) starts at clobbbers, just below
-            // the FP and return address. Spill slots and stack slots are
-            // part of our actual frame but do not concern the unwinder.
+            // consumers' point of view) starts at clobbers, just below the FP
+            // and return address. Spill slots and stack slots are part of our
+            // actual frame but do not concern the unwinder.
             insts.push(Inst::Unwind {
                 inst: UnwindInst::DefineNewFrame {
                     offset_downward_to_clobbers: clobbered_size,
@@ -733,12 +733,19 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     }
 
     fn is_frame_setup_needed(
-        _is_leaf: bool,
-        _stack_args_size: u32,
-        _num_clobbered_callee_saves: usize,
-        _frame_storage_size: u32,
+        is_leaf: bool,
+        stack_args_size: u32,
+        num_clobbered_callee_saves: usize,
+        frame_storage_size: u32,
     ) -> bool {
-        true
+        (!is_leaf
+            // The function arguments that are passed on the stack are addressed
+            // relative to the Frame Pointer.
+            || stack_args_size > 0
+            || num_clobbered_callee_saves > 0
+            || frame_storage_size > 0)
+            // TODO
+            && !cfg!(target_os = "macos")
     }
 }
 

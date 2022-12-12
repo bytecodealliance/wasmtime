@@ -343,32 +343,28 @@ mod test {
         // command on it:
         // > objdump -b binary -D <file> -m i386:x86-64 -M intel
         //
-        //  0:   55                      push   rbp
-        //  1:   48 89 e5                mov    rbp,rsp
-        //  4:   48 89 fe                mov    rsi,rdi
-        //  7:   81 c6 34 12 00 00       add    esi,0x1234
-        //  d:   85 f6                   test   esi,esi
-        //  f:   0f 84 1c 00 00 00       je     0x31
-        // 15:   49 89 f0                mov    r8,rsi
-        // 18:   48 89 f0                mov    rax,rsi
-        // 1b:   81 e8 34 12 00 00       sub    eax,0x1234
-        // 21:   44 01 c0                add    eax,r8d
-        // 24:   85 f6                   test   esi,esi
-        // 26:   0f 85 05 00 00 00       jne    0x31
-        // 2c:   48 89 ec                mov    rsp,rbp
-        // 2f:   5d                      pop    rbp
-        // 30:   c3                      ret
-        // 31:   49 89 f0                mov    r8,rsi
-        // 34:   41 81 c0 34 12 00 00    add    r8d,0x1234
-        // 3b:   45 85 c0                test   r8d,r8d
-        // 3e:   0f 85 ed ff ff ff       jne    0x31
-        // 44:   e9 cf ff ff ff          jmp    0x18
+        //     0:   48 89 fe                mov    rsi,rdi
+        //     3:   81 c6 34 12 00 00       add    esi,0x1234
+        //     9:   85 f6                   test   esi,esi
+        //     b:   0f 84 18 00 00 00       je     0x29
+        //    11:   49 89 f0                mov    r8,rsi
+        //    14:   48 89 f0                mov    rax,rsi
+        //    17:   81 e8 34 12 00 00       sub    eax,0x1234
+        //    1d:   44 01 c0                add    eax,r8d
+        //    20:   85 f6                   test   esi,esi
+        //    22:   0f 85 01 00 00 00       jne    0x29
+        //    28:   c3                      ret
+        //    29:   49 89 f0                mov    r8,rsi
+        //    2c:   41 81 c0 34 12 00 00    add    r8d,0x1234
+        //    33:   45 85 c0                test   r8d,r8d
+        //    36:   0f 85 ed ff ff ff       jne    0x29
+        //    3c:   e9 d3 ff ff ff          jmp    0x14
 
         let golden = vec![
-            85, 72, 137, 229, 72, 137, 254, 129, 198, 52, 18, 0, 0, 133, 246, 15, 132, 28, 0, 0, 0,
-            73, 137, 240, 72, 137, 240, 129, 232, 52, 18, 0, 0, 68, 1, 192, 133, 246, 15, 133, 5,
-            0, 0, 0, 72, 137, 236, 93, 195, 73, 137, 240, 65, 129, 192, 52, 18, 0, 0, 69, 133, 192,
-            15, 133, 237, 255, 255, 255, 233, 207, 255, 255, 255,
+            72, 137, 254, 129, 198, 52, 18, 0, 0, 133, 246, 15, 132, 24, 0, 0, 0, 73, 137, 240, 72,
+            137, 240, 129, 232, 52, 18, 0, 0, 68, 1, 192, 133, 246, 15, 133, 1, 0, 0, 0, 195, 73,
+            137, 240, 65, 129, 192, 52, 18, 0, 0, 69, 133, 192, 15, 133, 237, 255, 255, 255, 233,
+            211, 255, 255, 255,
         ];
 
         assert_eq!(code, &golden[..]);
@@ -448,39 +444,30 @@ mod test {
         // command on it:
         // > objdump -b binary -D <file> -m i386:x86-64 -M intel
         //
-        //  0:   55                      push   rbp
-        //  1:   48 89 e5                mov    rbp,rsp
-        //  4:   83 ff 02                cmp    edi,0x2
-        //  7:   0f 83 27 00 00 00       jae    0x34
-        //  d:   44 8b d7                mov    r10d,edi
-        // 10:   41 b9 00 00 00 00       mov    r9d,0x0
-        // 16:   4d 0f 43 d1             cmovae r10,r9
-        // 1a:   4c 8d 0d 0b 00 00 00    lea    r9,[rip+0xb]        # 0x2c
-        // 21:   4f 63 54 91 00          movsxd r10,DWORD PTR [r9+r10*4+0x0]
-        // 26:   4d 01 d1                add    r9,r10
-        // 29:   41 ff e1                jmp    r9
-        // 2c:   12 00                   adc    al,BYTE PTR [rax]
-        // 2e:   00 00                   add    BYTE PTR [rax],al
-        // 30:   1c 00                   sbb    al,0x0
-        // 32:   00 00                   add    BYTE PTR [rax],al
-        // 34:   b8 03 00 00 00          mov    eax,0x3
-        // 39:   48 89 ec                mov    rsp,rbp
-        // 3c:   5d                      pop    rbp
-        // 3d:   c3                      ret
-        // 3e:   b8 01 00 00 00          mov    eax,0x1
-        // 43:   48 89 ec                mov    rsp,rbp
-        // 46:   5d                      pop    rbp
-        // 47:   c3                      ret
-        // 48:   b8 02 00 00 00          mov    eax,0x2
-        // 4d:   48 89 ec                mov    rsp,rbp
-        // 50:   5d                      pop    rbp
-        // 51:   c3                      ret
+        //    0:   83 ff 02                cmp    edi,0x2
+        //    3:   0f 83 27 00 00 00       jae    0x30
+        //    9:   44 8b d7                mov    r10d,edi
+        //    c:   41 b9 00 00 00 00       mov    r9d,0x0
+        //   12:   4d 0f 43 d1             cmovae r10,r9
+        //   16:   4c 8d 0d 0b 00 00 00    lea    r9,[rip+0xb]        # 0x28
+        //   1d:   4f 63 54 91 00          movsxd r10,DWORD PTR [r9+r10*4+0x0]
+        //   22:   4d 01 d1                add    r9,r10
+        //   25:   41 ff e1                jmp    r9
+        //   28:   0e                      (bad)
+        //   29:   00 00                   add    BYTE PTR [rax],al
+        //   2b:   00 14 00                add    BYTE PTR [rax+rax*1],dl
+        //   2e:   00 00                   add    BYTE PTR [rax],al
+        //   30:   b8 03 00 00 00          mov    eax,0x3
+        //   35:   c3                      ret
+        //   36:   b8 01 00 00 00          mov    eax,0x1
+        //   3b:   c3                      ret
+        //   3c:   b8 02 00 00 00          mov    eax,0x2
+        //   41:   c3                      ret
 
         let golden = vec![
-            85, 72, 137, 229, 131, 255, 2, 15, 131, 39, 0, 0, 0, 68, 139, 215, 65, 185, 0, 0, 0, 0,
-            77, 15, 67, 209, 76, 141, 13, 11, 0, 0, 0, 79, 99, 84, 145, 0, 77, 1, 209, 65, 255,
-            225, 18, 0, 0, 0, 28, 0, 0, 0, 184, 3, 0, 0, 0, 72, 137, 236, 93, 195, 184, 1, 0, 0, 0,
-            72, 137, 236, 93, 195, 184, 2, 0, 0, 0, 72, 137, 236, 93, 195,
+            131, 255, 2, 15, 131, 39, 0, 0, 0, 68, 139, 215, 65, 185, 0, 0, 0, 0, 77, 15, 67, 209,
+            76, 141, 13, 11, 0, 0, 0, 79, 99, 84, 145, 0, 77, 1, 209, 65, 255, 225, 14, 0, 0, 0,
+            20, 0, 0, 0, 184, 3, 0, 0, 0, 195, 184, 1, 0, 0, 0, 195, 184, 2, 0, 0, 0, 195,
         ];
 
         assert_eq!(code, &golden[..]);

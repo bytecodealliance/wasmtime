@@ -7,12 +7,8 @@ block0(v0: i8x16):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   pmovmskb %xmm0, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f2(i8x16) -> i16 {
@@ -21,12 +17,8 @@ block0(v0: i8x16):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   pmovmskb %xmm0, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f3(i16x8) -> i8 {
@@ -35,15 +27,11 @@ block0(v0: i16x8):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movdqa  %xmm0, %xmm2
 ;   packsswb %xmm2, %xmm0, %xmm2
 ;   pmovmskb %xmm2, %eax
 ;   shrq    $8, %rax, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f4(i32x4) -> i8 {
@@ -52,12 +40,8 @@ block0(v0: i32x4):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movmskps %xmm0, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f5(i64x2) -> i8 {
@@ -66,11 +50,7 @@ block0(v0: i64x2):
   return v1
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movmskpd %xmm0, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 

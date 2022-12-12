@@ -10,8 +10,6 @@ block0(v0: i32, v1: i128, v2: i128):
     return v5
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cmpl    $42, %edi
 ;   movq    %rcx, %rax
@@ -19,8 +17,6 @@ block0(v0: i32, v1: i128, v2: i128):
 ;   movq    %rdx, %rdi
 ;   movq    %r8, %rdx
 ;   cmovzq  %rdi, %rdx, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %f1(f32, i128, i128) -> i128 {
@@ -30,8 +26,6 @@ block0(v0: f32, v1: i128, v2: i128):
     return v4
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   ucomiss %xmm0, %xmm0
 ;   movq    %rdi, %rax
@@ -40,7 +34,5 @@ block0(v0: f32, v1: i128, v2: i128):
 ;   movq    %rsi, %rdx
 ;   cmovnzq %rcx, %rdx, %rdx
 ;   cmovpq  %rcx, %rdx, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 

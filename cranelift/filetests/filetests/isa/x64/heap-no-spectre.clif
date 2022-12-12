@@ -16,8 +16,6 @@ block0(v0: i32, v1: i64):
     return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movl    %edi, %eax
 ;   movq    %rax, %r10
@@ -29,8 +27,6 @@ block0(v0: i32, v1: i64):
 ; block1:
 ;   addq    %rax, 0(%rsi), %rax
 ;   addq    %rax, $32768, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 ; block2:
 ;   ud2 heap_oob
@@ -48,16 +44,12 @@ block0(v0: i64, v1: i32):
     return v10
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movl    %esi, %eax
 ;   cmpq    $4096, %rax
 ;   jbe     label1; j label2
 ; block1:
 ;   addq    %rax, 0(%rdi), %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 ; block2:
 ;   ud2 heap_oob
@@ -75,12 +67,8 @@ block0(v0: i64, v1: i32):
     return v10
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movl    %esi, %eax
 ;   addq    %rax, 0(%rdi), %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 

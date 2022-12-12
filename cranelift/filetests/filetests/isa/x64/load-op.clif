@@ -8,13 +8,9 @@ block0(v0: i64, v1: i32):
   return v3
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rax
 ;   addl    %eax, 0(%rdi), %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %add_from_mem_u32_2(i64, i32) -> i32 {
@@ -24,13 +20,9 @@ block0(v0: i64, v1: i32):
   return v3
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rax
 ;   addl    %eax, 0(%rdi), %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %add_from_mem_u64_1(i64, i64) -> i64 {
@@ -40,13 +32,9 @@ block0(v0: i64, v1: i64):
   return v3
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rax
 ;   addq    %rax, 0(%rdi), %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %add_from_mem_u64_2(i64, i64) -> i64 {
@@ -56,13 +44,9 @@ block0(v0: i64, v1: i64):
   return v3
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rax
 ;   addq    %rax, 0(%rdi), %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %add_from_mem_not_narrow(i64, i8) -> i8 {
@@ -72,13 +56,9 @@ block0(v0: i64, v1: i8):
   return v3
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movzbq  0(%rdi), %rax
 ;   addl    %eax, %esi, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %no_merge_if_lookback_use(i64, i64) -> i64 {
@@ -90,16 +70,12 @@ block0(v0: i64, v1: i64):
   return v4
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movq    0(%rdi), %r8
 ;   movq    %r8, %r9
 ;   addq    %r9, %rdi, %r9
 ;   movq    %r9, 0(%rsi)
 ;   movq    0(%r8,%rdi,1), %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %merge_scalar_to_vector(i64) -> i32x4 {
@@ -112,14 +88,10 @@ block1:
   return v2
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   movss   0(%rdi), %xmm0
 ;   jmp     label1
 ; block1:
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
 function %cmp_mem(i64) -> i64 {
@@ -130,13 +102,9 @@ block0(v0: i64):
   return v3
 }
 
-;   pushq   %rbp
-;   movq    %rsp, %rbp
 ; block0:
 ;   cmpq    0(%rdi), %rdi
 ;   setz    %dl
 ;   movzbq  %dl, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
 ;   ret
 
