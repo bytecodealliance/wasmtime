@@ -1746,6 +1746,12 @@
             (_ InstOutput (side_effect (csdb))))
        dst))
 
+(rule -1 (lower (has_type ty (select_spectre_guard rcond rn rm)))
+      (let ((rcond Reg (put_in_reg_zext64 rcond)))
+       (lower_select
+        (cmp (OperandSize.Size64) rcond (zero_reg))
+        (Cond.Ne) ty rn rm)))
+
 ;;;; Rules for `vconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (ty_vec128 _) (vconst (u128_from_constant x))))
