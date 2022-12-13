@@ -7,8 +7,8 @@ use crate::ir::dynamic_type::{DynamicTypeData, DynamicTypes};
 use crate::ir::instructions::{BranchInfo, CallInfo, InstructionData};
 use crate::ir::{types, ConstantData, ConstantPool, Immediate};
 use crate::ir::{
-    Block, DynamicType, FuncRef, Inst, SigRef, Signature, Type, Value,
-    ValueLabelAssignments, ValueList, ValueListPool,
+    Block, DynamicType, FuncRef, Inst, SigRef, Signature, Type, Value, ValueLabelAssignments,
+    ValueList, ValueListPool,
 };
 use crate::ir::{ExtFuncData, RelSourceLoc};
 use crate::packed_option::ReservedValue;

@@ -83,8 +83,7 @@ fn run_test(func_store: &FunctionStore, func: &Function, details: &Details) -> a
                 .run(|func_name, run_args| {
                     // Rebuild the interpreter state on every run to ensure that we don't accidentally depend on
                     // some leftover state
-                    let state =
-                        InterpreterState::default().with_function_store(func_store.clone());
+                    let state = InterpreterState::default().with_function_store(func_store.clone());
 
                     let mut args = Vec::with_capacity(run_args.len());
                     args.extend_from_slice(run_args);
