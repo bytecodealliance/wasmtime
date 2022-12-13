@@ -8,6 +8,7 @@ anyhow = { workspace = true }
 thiserror = { workspace = true }
 async-trait = { workspace = true }
 cap-std = { workspace = true }
+cap-rand = { workspace = true }
 tokio = { version = "1.22.0", features = [ "rt", "macros" ] }
 wasmtime = { git = "https://github.com/bytecodealliance/wasmtime" }
 wit-bindgen-host-wasmtime-rust = { git = "https://github.com/bytecodealliance/wit-bindgen", features = ["tracing"] }
