@@ -38,7 +38,7 @@ entity_impl!(Heap, "heap");
 ///
 /// The *heap bound* is the total size of the mapped and unmapped pages. This is
 /// the bound that `heap_addr` checks against. Memory accesses inside the heap
-/// bounds can trap if they hit an unmapped page (which is not [accessible]).
+/// bounds can trap if they hit an unmapped page (which is not accessible).
 ///
 /// Two styles of heaps are supported, *static* and *dynamic*. They behave
 /// differently when resized.
