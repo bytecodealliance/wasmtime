@@ -3,7 +3,6 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use smallvec::SmallVec;
 use std::cell::Cell;
-use target_lexicon::Triple;
 
 pub use super::MachLabel;
 use super::RetPair;
@@ -12,9 +11,10 @@ pub use crate::ir::{
     DynamicStackSlot, ExternalName, FuncRef, GlobalValue, Immediate, SigRef, StackSlot,
 };
 pub use crate::isa::unwind::UnwindInst;
+pub use crate::isa::TargetIsa;
 pub use crate::machinst::{
-    ABIArg, ABIArgSlot, InputSourceInst, Lower, RealReg, Reg, RelocDistance, Sig, VCodeInst,
-    Writable,
+    ABIArg, ABIArgSlot, InputSourceInst, Lower, LowerBackend, RealReg, Reg, RelocDistance, Sig,
+    VCodeInst, Writable,
 };
 pub use crate::settings::TlsModel;
 
@@ -262,7 +262,7 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         fn avoid_div_traps(&mut self, _: Type) -> Option<()> {
-            if self.flags.avoid_div_traps() {
+            if self.backend.flags().avoid_div_traps() {
                 Some(())
             } else {
                 None
@@ -271,12 +271,12 @@ macro_rules! isle_lower_prelude_methods {
 
         #[inline]
         fn tls_model(&mut self, _: Type) -> TlsModel {
-            self.flags.tls_model()
+            self.backend.flags().tls_model()
         }
 
         #[inline]
         fn tls_model_is_elf_gd(&mut self) -> Option<()> {
-            if self.flags.tls_model() == TlsModel::ElfGd {
+            if self.backend.flags().tls_model() == TlsModel::ElfGd {
                 Some(())
             } else {
                 None
@@ -285,7 +285,7 @@ macro_rules! isle_lower_prelude_methods {
 
         #[inline]
         fn tls_model_is_macho(&mut self) -> Option<()> {
-            if self.flags.tls_model() == TlsModel::Macho {
+            if self.backend.flags().tls_model() == TlsModel::Macho {
                 Some(())
             } else {
                 None
@@ -294,7 +294,7 @@ macro_rules! isle_lower_prelude_methods {
 
         #[inline]
         fn tls_model_is_coff(&mut self) -> Option<()> {
-            if self.flags.tls_model() == TlsModel::Coff {
+            if self.backend.flags().tls_model() == TlsModel::Coff {
                 Some(())
             } else {
                 None
@@ -303,7 +303,7 @@ macro_rules! isle_lower_prelude_methods {
 
         #[inline]
         fn preserve_frame_pointers(&mut self) -> Option<()> {
-            if self.flags.preserve_frame_pointers() {
+            if self.backend.flags().preserve_frame_pointers() {
                 Some(())
             } else {
                 None
@@ -571,7 +571,7 @@ macro_rules! isle_prelude_caller_methods {
                 &extname,
                 dist,
                 caller_conv,
-                self.flags.clone(),
+                self.backend.flags().clone(),
             )
             .unwrap();
 
@@ -600,7 +600,7 @@ macro_rules! isle_prelude_caller_methods {
                 ptr,
                 Opcode::CallIndirect,
                 caller_conv,
-                self.flags.clone(),
+                self.backend.flags().clone(),
             )
             .unwrap();
 
@@ -707,13 +707,11 @@ macro_rules! isle_prelude_method_helpers {
 
 /// This structure is used to implement the ISLE-generated `Context` trait and
 /// internally has a temporary reference to a machinst `LowerCtx`.
-pub(crate) struct IsleContext<'a, 'b, I, Flags, IsaFlags, const N: usize>
+pub(crate) struct IsleContext<'a, 'b, I, B>
 where
     I: VCodeInst,
-    [(I, bool); N]: smallvec::Array,
+    B: LowerBackend,
 {
     pub lower_ctx: &'a mut Lower<'b, I>,
-    pub triple: &'a Triple,
-    pub flags: &'a Flags,
-    pub isa_flags: &'a IsaFlags,
+    pub backend: &'a B,
 }

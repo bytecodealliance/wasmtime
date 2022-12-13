@@ -21,7 +21,6 @@ use target_lexicon::{Aarch64Architecture, Architecture, OperatingSystem, Triple}
 mod abi;
 pub(crate) mod inst;
 mod lower;
-mod lower_inst;
 mod settings;
 
 use inst::create_reg_env;

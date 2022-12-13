@@ -18,10 +18,9 @@ use super::{
 use crate::ir::condcodes;
 use crate::isa::aarch64::inst::{FPULeftShiftImm, FPURightShiftImm};
 use crate::isa::aarch64::lower::{lower_address, lower_pair_address, lower_splat_const};
-use crate::isa::aarch64::settings::Flags as IsaFlags;
+use crate::isa::aarch64::AArch64Backend;
 use crate::machinst::valueregs;
 use crate::machinst::{isle::*, InputSourceInst};
-use crate::settings::Flags;
 use crate::{
     binemit::CodeOffset,
     ir::{
@@ -40,7 +39,6 @@ use regalloc2::PReg;
 use std::boxed::Box;
 use std::convert::TryFrom;
 use std::vec::Vec;
-use target_lexicon::Triple;
 
 type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;
@@ -52,38 +50,24 @@ type VecArgPair = Vec<ArgPair>;
 /// The main entry point for lowering with ISLE.
 pub(crate) fn lower(
     lower_ctx: &mut Lower<MInst>,
-    triple: &Triple,
-    flags: &Flags,
-    isa_flags: &IsaFlags,
+    backend: &AArch64Backend,
     inst: Inst,
 ) -> Option<InstOutput> {
     // TODO: reuse the ISLE context across lowerings so we can reuse its
     // internal heap allocations.
-    let mut isle_ctx = IsleContext {
-        lower_ctx,
-        triple,
-        flags,
-        isa_flags,
-    };
+    let mut isle_ctx = IsleContext { lower_ctx, backend };
     generated_code::constructor_lower(&mut isle_ctx, inst)
 }
 
 pub(crate) fn lower_branch(
     lower_ctx: &mut Lower<MInst>,
-    triple: &Triple,
-    flags: &Flags,
-    isa_flags: &IsaFlags,
+    backend: &AArch64Backend,
     branch: Inst,
     targets: &[MachLabel],
 ) -> Option<InstOutput> {
     // TODO: reuse the ISLE context across lowerings so we can reuse its
     // internal heap allocations.
-    let mut isle_ctx = IsleContext {
-        lower_ctx,
-        triple,
-        flags,
-        isa_flags,
-    };
+    let mut isle_ctx = IsleContext { lower_ctx, backend };
     generated_code::constructor_lower_branch(&mut isle_ctx, branch, &targets.to_vec())
 }
 
@@ -92,16 +76,16 @@ pub struct ExtendedValue {
     extend: ExtendOp,
 }
 
-impl IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
+impl IsleContext<'_, '_, MInst, AArch64Backend> {
     isle_prelude_method_helpers!(AArch64Caller);
 }
 
-impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
+impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
     isle_lower_prelude_methods!();
     isle_prelude_caller_methods!(crate::isa::aarch64::abi::AArch64MachineDeps, AArch64Caller);
 
     fn sign_return_address_disabled(&mut self) -> Option<()> {
-        if self.isa_flags.sign_return_address() {
+        if self.backend.isa_flags.sign_return_address() {
             None
         } else {
             Some(())
@@ -109,7 +93,7 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     }
 
     fn use_lse(&mut self, _: Inst) -> Option<()> {
-        if self.isa_flags.has_lse() {
+        if self.backend.isa_flags.has_lse() {
             Some(())
         } else {
             None
