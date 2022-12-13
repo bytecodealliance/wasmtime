@@ -108,9 +108,8 @@ pub fn translate_module<'data>(
             }
 
             Payload::CustomSection(s) if s.name() == "name" => {
-                let result = NameSectionReader::new(s.data(), s.data_offset())
-                    .map_err(|e| e.into())
-                    .and_then(|s| parse_name_section(s, environ));
+                let result =
+                    parse_name_section(NameSectionReader::new(s.data(), s.data_offset()), environ);
                 if let Err(e) = result {
                     log::warn!("failed to parse name section {:?}", e);
                 }

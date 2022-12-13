@@ -164,7 +164,6 @@ struct WasmFeatures {
     simd: bool,
     threads: bool,
     tail_call: bool,
-    deterministic_only: bool,
     multi_memory: bool,
     exceptions: bool,
     memory64: bool,
@@ -183,7 +182,6 @@ impl Metadata {
             simd,
             threads,
             tail_call,
-            deterministic_only,
             multi_memory,
             exceptions,
             memory64,
@@ -194,6 +192,7 @@ impl Metadata {
             mutable_global: _,
             saturating_float_to_int: _,
             sign_extension: _,
+            floats: _,
         } = engine.config().features;
 
         Metadata {
@@ -209,7 +208,6 @@ impl Metadata {
                 simd,
                 threads,
                 tail_call,
-                deterministic_only,
                 multi_memory,
                 exceptions,
                 memory64,
@@ -375,7 +373,6 @@ impl Metadata {
             simd,
             threads,
             tail_call,
-            deterministic_only,
             multi_memory,
             exceptions,
             memory64,
@@ -406,11 +403,6 @@ impl Metadata {
         Self::check_bool(simd, other.simd, "WebAssembly SIMD support")?;
         Self::check_bool(threads, other.threads, "WebAssembly threads support")?;
         Self::check_bool(tail_call, other.tail_call, "WebAssembly tail-call support")?;
-        Self::check_bool(
-            deterministic_only,
-            other.deterministic_only,
-            "WebAssembly deterministic-only support",
-        )?;
         Self::check_bool(
             multi_memory,
             other.multi_memory,
