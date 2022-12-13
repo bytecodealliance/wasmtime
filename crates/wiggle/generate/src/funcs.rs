@@ -77,6 +77,7 @@ fn _define_func(
             function = #func_name
         );
     );
+    let ctx_type = if settings.mutable { quote!(&'a mut) } else { quote!(&'a) };
     if settings.get_async(&module, &func).is_sync() {
         let traced_body = if settings.tracing.enabled_for(&mod_name, &func_name) {
             quote!(
@@ -91,8 +92,8 @@ fn _define_func(
         (
             quote!(
                 #[allow(unreachable_code)] // deals with warnings in noreturn functions
-                pub fn #ident(
-                    ctx: &mut (impl #(#bounds)+*),
+                pub fn #ident<'a>(
+                    ctx: #ctx_type (impl #(#bounds)+*),
                     memory: &dyn wiggle::GuestMemory,
                     #(#abi_params),*
                 ) -> wiggle::anyhow::Result<#abi_ret> {
@@ -122,7 +123,7 @@ fn _define_func(
             quote!(
                 #[allow(unreachable_code)] // deals with warnings in noreturn functions
                 pub fn #ident<'a>(
-                    ctx: &'a mut (impl #(#bounds)+*),
+                    ctx: #ctx_type (impl #(#bounds)+*),
                     memory: &'a dyn wiggle::GuestMemory,
                     #(#abi_params),*
                 ) -> impl std::future::Future<Output = wiggle::anyhow::Result<#abi_ret>> + 'a {

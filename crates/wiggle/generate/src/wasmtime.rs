@@ -46,11 +46,17 @@ pub fn link_module(
         format_ident!("add_{}_to_linker", module_ident)
     };
 
+    assert!(!settings.mutable);
+    let u = if settings.mutable {
+        quote!(&mut U)
+    } else {
+        quote!(&U)
+    };
     quote! {
         /// Adds all instance items to the specified `Linker`.
         pub fn #func_name<T, U>(
             linker: &mut wiggle::wasmtime_crate::Linker<T>,
-            get_cx: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            get_cx: impl Fn(&mut T) -> #u + Send + Sync + Copy + 'static,
         ) -> wiggle::anyhow::Result<()>
             where
                 U: #ctx_bound #send_bound

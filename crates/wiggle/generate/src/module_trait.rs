@@ -81,10 +81,15 @@ pub fn define_module_trait(m: &Module, settings: &CodegenSettings) -> TokenStrea
             quote!(async)
         };
 
-        if is_anonymous {
-            quote!(#asyncness fn #funcname(&mut self, #(#args),*) -> #result; )
+        let self_ = if settings.mutable {
+            quote!(&mut self)
         } else {
-            quote!(#asyncness fn #funcname<#lifetime>(&mut self, #(#args),*) -> #result;)
+            quote!(&self)
+        };
+        if is_anonymous {
+            quote!(#asyncness fn #funcname(#self_, #(#args),*) -> #result; )
+        } else {
+            quote!(#asyncness fn #funcname<#lifetime>(#self_, #(#args),*) -> #result;)
         }
     });
 

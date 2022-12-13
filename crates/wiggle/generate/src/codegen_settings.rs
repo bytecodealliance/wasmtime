@@ -12,10 +12,13 @@ pub struct CodegenSettings {
     pub errors: ErrorTransform,
     pub async_: AsyncConf,
     pub wasmtime: bool,
-    // Disabling this feature makes it possible to remove all of the tracing
-    // code emitted in the Wiggle-generated code; this can be helpful while
-    // inspecting the code (e.g., with `cargo expand`).
+    /// Disabling this feature makes it possible to remove all of the tracing
+    /// code emitted in the Wiggle-generated code; this can be helpful while
+    /// inspecting the code (e.g., with `cargo expand`).
     pub tracing: TracingConf,
+    /// Determine whether the context structure will use `&mut self` (true) or
+    /// simply `&self`.
+    pub mutable: bool,
 }
 impl CodegenSettings {
     pub fn new(
@@ -24,6 +27,7 @@ impl CodegenSettings {
         doc: &Document,
         wasmtime: bool,
         tracing: &TracingConf,
+        mutable: bool,
     ) -> Result<Self, Error> {
         let errors = ErrorTransform::new(error_conf, doc)?;
         Ok(Self {
@@ -31,6 +35,7 @@ impl CodegenSettings {
             async_: async_.clone(),
             wasmtime,
             tracing: tracing.clone(),
+            mutable,
         })
     }
     pub fn get_async(&self, module: &Module, func: &InterfaceFunc) -> Asyncness {
