@@ -1,72 +1,30 @@
 use crate::{wasi_clocks, wasi_default_clocks, WasiCtx};
 use anyhow::Context;
+use cap_std::time::SystemTime;
+use wasi_common::clocks::{MonotonicClock, MonotonicTimer, WallClock};
 
-pub struct MonotonicClock {
-    start: std::time::Instant,
-}
-
-impl Default for MonotonicClock {
-    fn default() -> MonotonicClock {
-        MonotonicClock {
-            start: std::time::Instant::now(),
-        }
-    }
-}
-
-impl MonotonicClock {
-    fn now(&self) -> std::time::Duration {
-        std::time::Instant::now().duration_since(self.start)
-    }
-    fn resolution(&self) -> std::time::Duration {
-        // FIXME bogus value
-        std::time::Duration::from_millis(1)
-    }
-    fn new_timer(&self, initial: std::time::Duration) -> MonotonicTimer {
-        MonotonicTimer { initial }
-    }
-}
-
-pub struct MonotonicTimer {
-    initial: std::time::Duration,
-}
-
-impl MonotonicTimer {
-    fn current(&self) -> std::time::Duration {
-        // FIXME totally bogus implementation
-        self.initial
-    }
-}
-
-#[derive(Default)]
-pub struct WallClock;
-
-impl WallClock {
-    fn now(&self) -> std::time::SystemTime {
-        std::time::SystemTime::now()
-    }
-    fn resolution(&self) -> std::time::SystemTime {
-        todo!()
-    }
-}
-
-impl TryInto<wasi_clocks::Datetime> for std::time::SystemTime {
+impl TryFrom<SystemTime> for wasi_clocks::Datetime {
     type Error = anyhow::Error;
-    fn try_into(self) -> anyhow::Result<wasi_clocks::Datetime> {
+
+    fn try_from(time: SystemTime) -> Result<Self, Self::Error> {
+        drop(time);
         todo!()
     }
 }
 
+#[async_trait::async_trait]
 impl wasi_default_clocks::WasiDefaultClocks for WasiCtx {
-    fn default_monotonic_clock(&mut self) -> anyhow::Result<wasi_clocks::MonotonicClock> {
-        Ok(self.default_monotonic)
+    async fn default_monotonic_clock(&mut self) -> anyhow::Result<wasi_clocks::MonotonicClock> {
+        Ok(self.clocks.default_monotonic)
     }
-    fn default_wall_clock(&mut self) -> anyhow::Result<wasi_clocks::WallClock> {
-        Ok(self.default_wall)
+    async fn default_wall_clock(&mut self) -> anyhow::Result<wasi_clocks::WallClock> {
+        Ok(self.clocks.default_wall)
     }
 }
 
+#[async_trait::async_trait]
 impl wasi_clocks::WasiClocks for WasiCtx {
-    fn subscribe_wall_clock(
+    async fn subscribe_wall_clock(
         &mut self,
         when: wasi_clocks::Datetime,
         absolute: bool,
@@ -75,7 +33,7 @@ impl wasi_clocks::WasiClocks for WasiCtx {
         todo!()
     }
 
-    fn subscribe_monotonic_clock(
+    async fn subscribe_monotonic_clock(
         &mut self,
         when: wasi_clocks::Instant,
         absolute: bool,
@@ -84,18 +42,19 @@ impl wasi_clocks::WasiClocks for WasiCtx {
         todo!()
     }
 
-    fn monotonic_clock_now(
+    async fn monotonic_clock_now(
         &mut self,
         fd: wasi_clocks::MonotonicClock,
     ) -> anyhow::Result<wasi_clocks::Instant> {
         let clock = self.table.get::<MonotonicClock>(fd)?;
-        let now = clock.now();
+        let now = clock.now(self.clocks.monotonic.as_ref());
         Ok(now
             .as_nanos()
             .try_into()
             .context("converting monotonic time to nanos u64")?)
     }
-    fn monotonic_clock_resolution(
+
+    async fn monotonic_clock_resolution(
         &mut self,
         fd: wasi_clocks::MonotonicClock,
     ) -> anyhow::Result<wasi_clocks::Instant> {
@@ -107,7 +66,7 @@ impl wasi_clocks::WasiClocks for WasiCtx {
             .context("converting monotonic resolution to nanos u64")?)
     }
 
-    fn monotonic_clock_new_timer(
+    async fn monotonic_clock_new_timer(
         &mut self,
         fd: wasi_clocks::MonotonicClock,
         initial: wasi_clocks::Instant,
@@ -119,23 +78,29 @@ impl wasi_clocks::WasiClocks for WasiCtx {
         Ok(timer_fd)
     }
 
-    fn wall_clock_now(
+    async fn wall_clock_now(
         &mut self,
         fd: wasi_clocks::WallClock,
     ) -> anyhow::Result<wasi_clocks::Datetime> {
         let clock = self.table.get::<WallClock>(fd)?;
-        Ok(clock.now().try_into()?)
+        Ok(clock.now(self.clocks.system.as_ref()).try_into()?)
     }
 
-    fn wall_clock_resolution(
+    async fn wall_clock_resolution(
         &mut self,
         fd: wasi_clocks::WallClock,
     ) -> anyhow::Result<wasi_clocks::Datetime> {
         let clock = self.table.get::<WallClock>(fd)?;
-        Ok(clock.resolution().try_into()?)
+        let nanos = clock.resolution().as_nanos();
+        Ok(wasi_clocks::Datetime {
+            seconds: (nanos / 1_000_000_000_u128)
+                .try_into()
+                .context("converting wall clock resolution to seconds u64")?,
+            nanoseconds: (nanos % 1_000_000_000_u128).try_into().unwrap(),
+        })
     }
 
-    fn monotonic_timer_current(
+    async fn monotonic_timer_current(
         &mut self,
         fd: wasi_clocks::MonotonicTimer,
     ) -> anyhow::Result<wasi_clocks::Instant> {

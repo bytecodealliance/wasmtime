@@ -1,12 +1,14 @@
 use anyhow::{Context, Result};
-use host::{add_to_linker, Wasi, WasiCtx};
+use host::{add_to_linker, Wasi};
 use std::path::PathBuf;
+use wasi_cap_std_sync::WasiCtxBuilder;
 use wasmtime::{
     component::{Component, Linker},
     Config, Engine, Store,
 };
 
-fn main() -> Result<()> {
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<()> {
     let input = PathBuf::from(
         std::env::args()
             .collect::<Vec<String>>()
@@ -23,11 +25,11 @@ fn main() -> Result<()> {
     let mut linker = Linker::new(&engine);
     add_to_linker(&mut linker, |x| x)?;
 
-    let mut store = Store::new(&engine, WasiCtx::default());
+    let mut store = Store::new(&engine, WasiCtxBuilder::new().build());
 
-    let (wasi, _instance) = Wasi::instantiate(&mut store, &component, &linker)?;
+    let (wasi, _instance) = Wasi::instantiate_async(&mut store, &component, &linker).await?;
 
-    wasi.command(&mut store, 0, 0, &[])?;
+    wasi.command(&mut store, 0, 0, &[]).await?;
 
     Ok(())
 }

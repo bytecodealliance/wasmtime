@@ -6,12 +6,13 @@ use crate::{
 };
 use anyhow::Result;
 
+#[async_trait::async_trait]
 impl WasiPoll for WasiCtx {
-    fn drop_future(&mut self, future: WasiFuture) -> Result<()> {
+    async fn drop_future(&mut self, future: WasiFuture) -> Result<()> {
         todo!()
     }
 
-    fn poll_oneoff(&mut self, futures: Vec<WasiFuture>) -> Result<Vec<u8>> {
+    async fn poll_oneoff(&mut self, futures: Vec<WasiFuture>) -> Result<Vec<u8>> {
         todo!()
     }
 }

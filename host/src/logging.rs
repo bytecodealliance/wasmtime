@@ -2,8 +2,9 @@
 
 use crate::{wasi_logging, WasiCtx};
 
+#[async_trait::async_trait]
 impl wasi_logging::WasiLogging for WasiCtx {
-    fn log(
+    async fn log(
         &mut self,
         level: wasi_logging::Level,
         context: String,
