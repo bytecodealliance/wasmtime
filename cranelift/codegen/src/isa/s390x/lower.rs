@@ -4,9 +4,8 @@ use crate::ir::Inst as IRInst;
 use crate::ir::Opcode;
 use crate::isa::s390x::inst::Inst;
 use crate::isa::s390x::S390xBackend;
-use crate::machinst::{InsnOutput, Lower, LowerBackend, MachLabel};
+use crate::machinst::{InstOutput, Lower, LowerBackend, MachLabel};
 use crate::CodegenResult;
-use smallvec::SmallVec;
 
 pub mod isle;
 
@@ -16,29 +15,18 @@ pub mod isle;
 impl LowerBackend for S390xBackend {
     type MInst = Inst;
 
-    fn lower(&self, ctx: &mut Lower<Inst>, ir_inst: IRInst) -> CodegenResult<()> {
+    fn lower(&self, ctx: &mut Lower<Inst>, ir_inst: IRInst) -> CodegenResult<InstOutput> {
         let op = ctx.data(ir_inst).opcode();
-        let outputs: SmallVec<[InsnOutput; 2]> = (0..ctx.num_outputs(ir_inst))
-            .map(|i| InsnOutput {
-                insn: ir_inst,
-                output: i,
-            })
-            .collect();
-        let ty = if outputs.len() > 0 {
+        let ty = if ctx.num_outputs(ir_inst) > 0 {
             Some(ctx.output_ty(ir_inst, 0))
         } else {
             None
         };
 
-        if let Ok(()) = super::lower::isle::lower(
-            ctx,
-            &self.triple,
-            &self.flags,
-            &self.isa_flags,
-            &outputs,
-            ir_inst,
-        ) {
-            return Ok(());
+        if let Some(temp_regs) =
+            super::lower::isle::lower(ctx, &self.triple, &self.flags, &self.isa_flags, ir_inst)
+        {
+            return Ok(temp_regs);
         }
 
         match op {
@@ -271,7 +259,7 @@ impl LowerBackend for S390xBackend {
 
         // Lower the first branch in ISLE.  This will automatically handle
         // the second branch (if any) by emitting a two-way conditional branch.
-        if let Ok(()) = super::lower::isle::lower_branch(
+        if let Some(temp_regs) = super::lower::isle::lower_branch(
             ctx,
             &self.triple,
             &self.flags,
@@ -279,6 +267,7 @@ impl LowerBackend for S390xBackend {
             branches[0],
             targets,
         ) {
+            assert!(temp_regs.len() == 0);
             return Ok(());
         }
         unreachable!(

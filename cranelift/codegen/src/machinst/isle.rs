@@ -1,5 +1,4 @@
-use crate::ir::{Inst, Value, ValueList};
-use crate::machinst::{get_output_reg, InsnOutput};
+use crate::ir::{Value, ValueList};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use smallvec::SmallVec;
@@ -717,68 +716,4 @@ where
     pub triple: &'a Triple,
     pub flags: &'a Flags,
     pub isa_flags: &'a IsaFlags,
-}
-
-/// Shared lowering code amongst all backends for doing ISLE-based lowering.
-///
-/// The `isle_lower` argument here is an ISLE-generated function for `lower` and
-/// then this function otherwise handles register mapping and such around the
-/// lowering.
-pub(crate) fn lower_common<I, Flags, IsaFlags, IsleFunction, const N: usize>(
-    lower_ctx: &mut Lower<I>,
-    triple: &Triple,
-    flags: &Flags,
-    isa_flags: &IsaFlags,
-    outputs: &[InsnOutput],
-    inst: Inst,
-    isle_lower: IsleFunction,
-) -> Result<(), ()>
-where
-    I: VCodeInst,
-    [(I, bool); N]: smallvec::Array<Item = (I, bool)>,
-    IsleFunction: Fn(&mut IsleContext<'_, '_, I, Flags, IsaFlags, N>, Inst) -> Option<InstOutput>,
-{
-    // TODO: reuse the ISLE context across lowerings so we can reuse its
-    // internal heap allocations.
-    let mut isle_ctx = IsleContext {
-        lower_ctx,
-        triple,
-        flags,
-        isa_flags,
-    };
-
-    let temp_regs = isle_lower(&mut isle_ctx, inst).ok_or(())?;
-
-    #[cfg(debug_assertions)]
-    {
-        debug_assert_eq!(
-            temp_regs.len(),
-            outputs.len(),
-            "the number of temporary values and destination values do \
-         not match ({} != {}); ensure the correct registers are being \
-         returned.",
-            temp_regs.len(),
-            outputs.len(),
-        );
-    }
-
-    // The ISLE generated code emits its own registers to define the
-    // instruction's lowered values in. However, other instructions
-    // that use this SSA value will be lowered assuming that the value
-    // is generated into a pre-assigned, different, register.
-    //
-    // To connect the two, we set up "aliases" in the VCodeBuilder
-    // that apply when it is building the Operand table for the
-    // regalloc to use. These aliases effectively rewrite any use of
-    // the pre-assigned register to the register that was returned by
-    // the ISLE lowering logic.
-    for i in 0..outputs.len() {
-        let regs = temp_regs[i];
-        let dsts = get_output_reg(isle_ctx.lower_ctx, outputs[i]);
-        for (dst, temp) in dsts.regs().iter().zip(regs.regs().iter()) {
-            isle_ctx.lower_ctx.set_vreg_alias(dst.to_reg(), *temp);
-        }
-    }
-
-    Ok(())
 }

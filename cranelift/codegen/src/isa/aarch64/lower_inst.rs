@@ -5,7 +5,6 @@ use crate::ir::Opcode;
 use crate::isa::aarch64::inst::*;
 use crate::isa::aarch64::settings as aarch64_settings;
 use crate::machinst::lower::*;
-use crate::machinst::*;
 use crate::settings::Flags;
 use crate::{CodegenError, CodegenResult};
 use target_lexicon::Triple;
@@ -17,17 +16,16 @@ pub(crate) fn lower_insn_to_regs(
     triple: &Triple,
     flags: &Flags,
     isa_flags: &aarch64_settings::Flags,
-) -> CodegenResult<()> {
+) -> CodegenResult<InstOutput> {
     let op = ctx.data(insn).opcode();
-    let outputs = insn_outputs(ctx, insn);
-    let ty = if outputs.len() > 0 {
+    let ty = if ctx.num_outputs(insn) > 0 {
         Some(ctx.output_ty(insn, 0))
     } else {
         None
     };
 
-    if let Ok(()) = super::lower::isle::lower(ctx, triple, flags, isa_flags, &outputs, insn) {
-        return Ok(());
+    if let Some(temp_regs) = super::lower::isle::lower(ctx, triple, flags, isa_flags, insn) {
+        return Ok(temp_regs);
     }
 
     let implemented_in_isle = |ctx: &mut Lower<Inst>| -> ! {

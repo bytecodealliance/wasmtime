@@ -1,8 +1,6 @@
 //! A place to park MachInst::Inst fragments which are common across multiple architectures.
 
-use super::{Lower, VCodeInst};
 use crate::ir::{self, Inst as IRInst};
-use smallvec::SmallVec;
 
 //============================================================================
 // Instruction input "slots".
@@ -22,15 +20,6 @@ pub(crate) struct InsnInput {
 pub(crate) struct InsnOutput {
     pub(crate) insn: IRInst,
     pub(crate) output: usize,
-}
-
-pub(crate) fn insn_outputs<I: VCodeInst>(
-    ctx: &Lower<I>,
-    insn: IRInst,
-) -> SmallVec<[InsnOutput; 4]> {
-    (0..ctx.num_outputs(insn))
-        .map(|i| InsnOutput { insn, output: i })
-        .collect()
 }
 
 //============================================================================

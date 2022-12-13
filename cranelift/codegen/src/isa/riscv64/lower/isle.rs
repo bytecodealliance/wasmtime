@@ -19,7 +19,7 @@ use crate::{
         StackSlot, TrapCode, Value, ValueList,
     },
     isa::riscv64::inst::*,
-    machinst::{ArgPair, InsnOutput, Lower},
+    machinst::{ArgPair, InstOutput, Lower},
 };
 use crate::{isle_common_prelude_methods, isle_lower_prelude_methods};
 use regalloc2::PReg;
@@ -41,18 +41,17 @@ pub(crate) fn lower(
     flags: &Flags,
     triple: &Triple,
     isa_flags: &IsaFlags,
-    outputs: &[InsnOutput],
     inst: Inst,
-) -> Result<(), ()> {
-    lower_common(
+) -> Option<InstOutput> {
+    // TODO: reuse the ISLE context across lowerings so we can reuse its
+    // internal heap allocations.
+    let mut isle_ctx = IsleContext {
         lower_ctx,
         triple,
         flags,
         isa_flags,
-        outputs,
-        inst,
-        |cx, insn| generated_code::constructor_lower(cx, insn),
-    )
+    };
+    generated_code::constructor_lower(&mut isle_ctx, inst)
 }
 
 impl IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
@@ -462,16 +461,16 @@ pub(crate) fn lower_branch(
     isa_flags: &IsaFlags,
     branch: Inst,
     targets: &[MachLabel],
-) -> Result<(), ()> {
-    lower_common(
+) -> Option<InstOutput> {
+    // TODO: reuse the ISLE context across lowerings so we can reuse its
+    // internal heap allocations.
+    let mut isle_ctx = IsleContext {
         lower_ctx,
         triple,
         flags,
         isa_flags,
-        &[],
-        branch,
-        |cx, insn| generated_code::constructor_lower_branch(cx, insn, &targets.to_vec()),
-    )
+    };
+    generated_code::constructor_lower_branch(&mut isle_ctx, branch, &targets.to_vec())
 }
 
 /// construct destination according to ty.

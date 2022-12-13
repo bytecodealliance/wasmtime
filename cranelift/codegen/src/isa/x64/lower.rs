@@ -13,7 +13,7 @@ use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::result::CodegenResult;
 use crate::settings::Flags;
-use smallvec::{smallvec, SmallVec};
+use smallvec::smallvec;
 use target_lexicon::Triple;
 
 //=============================================================================
@@ -303,13 +303,9 @@ fn lower_insn_to_regs(
     flags: &Flags,
     isa_flags: &x64_settings::Flags,
     triple: &Triple,
-) -> CodegenResult<()> {
-    let outputs: SmallVec<[InsnOutput; 2]> = (0..ctx.num_outputs(insn))
-        .map(|i| InsnOutput { insn, output: i })
-        .collect();
-
-    if let Ok(()) = isle::lower(ctx, triple, flags, isa_flags, &outputs, insn) {
-        return Ok(());
+) -> CodegenResult<InstOutput> {
+    if let Some(temp_regs) = isle::lower(ctx, triple, flags, isa_flags, insn) {
+        return Ok(temp_regs);
     }
 
     let op = ctx.data(insn).opcode();
@@ -456,7 +452,7 @@ fn lower_insn_to_regs(
         | Opcode::Uunarrow
         | Opcode::Nop
         | Opcode::Bmask => {
-            let ty = if outputs.len() > 0 {
+            let ty = if ctx.num_outputs(insn) > 0 {
                 Some(ctx.output_ty(insn, 0))
             } else {
                 None
@@ -547,7 +543,7 @@ fn lower_insn_to_regs(
 impl LowerBackend for X64Backend {
     type MInst = Inst;
 
-    fn lower(&self, ctx: &mut Lower<Inst>, ir_inst: IRInst) -> CodegenResult<()> {
+    fn lower(&self, ctx: &mut Lower<Inst>, ir_inst: IRInst) -> CodegenResult<InstOutput> {
         lower_insn_to_regs(ctx, ir_inst, &self.flags, &self.x64_flags, &self.triple)
     }
 
@@ -569,7 +565,7 @@ impl LowerBackend for X64Backend {
             assert!(op1 == Opcode::Jump);
         }
 
-        if let Ok(()) = isle::lower_branch(
+        if let Some(temp_regs) = isle::lower_branch(
             ctx,
             &self.triple,
             &self.flags,
@@ -577,6 +573,7 @@ impl LowerBackend for X64Backend {
             branches[0],
             targets,
         ) {
+            assert!(temp_regs.len() == 0);
             return Ok(());
         }
 

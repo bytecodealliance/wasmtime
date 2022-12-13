@@ -26,6 +26,9 @@ use std::fmt::Debug;
 
 use super::{VCodeBuildDirection, VRegAllocator};
 
+/// A vector of ValueRegs, used to represent the outputs of an instruction.
+pub type InstOutput = SmallVec<[ValueRegs<Reg>; 2]>;
+
 /// An "instruction color" partitions CLIF instructions by side-effecting ops.
 /// All instructions with the same "color" are guaranteed not to be separated by
 /// any side-effecting op (for this purpose, loads are also considered
@@ -121,7 +124,7 @@ pub trait LowerBackend {
     /// edge (block-param actuals) into registers, because the actual branch
     /// generation (`lower_branch_group()`) happens *after* any possible merged
     /// out-edge.
-    fn lower(&self, ctx: &mut Lower<Self::MInst>, inst: Inst) -> CodegenResult<()>;
+    fn lower(&self, ctx: &mut Lower<Self::MInst>, inst: Inst) -> CodegenResult<InstOutput>;
 
     /// Lower a block-terminating group of branches (which together can be seen
     /// as one N-way branch), given a vcode MachLabel for each target.
@@ -742,7 +745,27 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             // or any of its outputs its used.
             if has_side_effect || value_needed {
                 trace!("lowering: inst {}: {:?}", inst, self.f.dfg[inst]);
-                backend.lower(self, inst)?;
+                let temp_regs = backend.lower(self, inst)?;
+
+                // The ISLE generated code emits its own registers to define the
+                // instruction's lowered values in. However, other instructions
+                // that use this SSA value will be lowered assuming that the value
+                // is generated into a pre-assigned, different, register.
+                //
+                // To connect the two, we set up "aliases" in the VCodeBuilder
+                // that apply when it is building the Operand table for the
+                // regalloc to use. These aliases effectively rewrite any use of
+                // the pre-assigned register to the register that was returned by
+                // the ISLE lowering logic.
+                debug_assert_eq!(temp_regs.len(), self.num_outputs(inst));
+                for i in 0..self.num_outputs(inst) {
+                    let regs = temp_regs[i];
+                    let dsts = self.value_regs[self.f.dfg.inst_results(inst)[i]];
+                    debug_assert_eq!(regs.len(), dsts.len());
+                    for (dst, temp) in dsts.regs().iter().zip(regs.regs().iter()) {
+                        self.set_vreg_alias(*dst, *temp);
+                    }
+                }
             }
 
             let loc = self.srcloc(inst);
@@ -1283,19 +1306,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         self.value_lowered_uses[val] += 1;
 
         regs
-    }
-
-    /// Get the `idx`th output register(s) of the given IR instruction.
-    ///
-    /// When `backend.lower_inst_to_regs(ctx, inst)` is called, it is expected
-    /// that the backend will write results to these output register(s).  This
-    /// register will always be "fresh"; it is guaranteed not to overlap with
-    /// any of the inputs, and can be freely used as a scratch register within
-    /// the lowered instruction sequence, as long as its final value is the
-    /// result of the computation.
-    pub fn get_output(&self, ir_inst: Inst, idx: usize) -> ValueRegs<Writable<Reg>> {
-        let val = self.f.dfg.inst_results(ir_inst)[idx];
-        writable_value_regs(self.value_regs[val])
     }
 }
 

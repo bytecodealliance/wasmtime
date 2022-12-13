@@ -31,7 +31,7 @@ use crate::{
         },
     },
     machinst::{
-        isle::*, valueregs, ArgPair, InsnInput, InsnOutput, Lower, MachAtomicRmwOp, MachInst,
+        isle::*, valueregs, ArgPair, InsnInput, InstOutput, Lower, MachAtomicRmwOp, MachInst,
         VCodeConstant, VCodeConstantData,
     },
 };
@@ -59,18 +59,17 @@ pub(crate) fn lower(
     triple: &Triple,
     flags: &Flags,
     isa_flags: &IsaFlags,
-    outputs: &[InsnOutput],
     inst: Inst,
-) -> Result<(), ()> {
-    lower_common(
+) -> Option<InstOutput> {
+    // TODO: reuse the ISLE context across lowerings so we can reuse its
+    // internal heap allocations.
+    let mut isle_ctx = IsleContext {
         lower_ctx,
         triple,
         flags,
         isa_flags,
-        outputs,
-        inst,
-        |cx, insn| generated_code::constructor_lower(cx, insn),
-    )
+    };
+    generated_code::constructor_lower(&mut isle_ctx, inst)
 }
 
 pub(crate) fn lower_branch(
@@ -80,16 +79,16 @@ pub(crate) fn lower_branch(
     isa_flags: &IsaFlags,
     branch: Inst,
     targets: &[MachLabel],
-) -> Result<(), ()> {
-    lower_common(
+) -> Option<InstOutput> {
+    // TODO: reuse the ISLE context across lowerings so we can reuse its
+    // internal heap allocations.
+    let mut isle_ctx = IsleContext {
         lower_ctx,
         triple,
         flags,
         isa_flags,
-        &[],
-        branch,
-        |cx, insn| generated_code::constructor_lower_branch(cx, insn, targets),
-    )
+    };
+    generated_code::constructor_lower_branch(&mut isle_ctx, branch, &targets.to_vec())
 }
 
 impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {

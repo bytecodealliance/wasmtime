@@ -14,7 +14,7 @@ pub mod isle;
 impl LowerBackend for Riscv64Backend {
     type MInst = Inst;
 
-    fn lower(&self, ctx: &mut Lower<Inst>, ir_inst: IRInst) -> CodegenResult<()> {
+    fn lower(&self, ctx: &mut Lower<Inst>, ir_inst: IRInst) -> CodegenResult<InstOutput> {
         lower_inst::lower_insn_to_regs(ctx, ir_inst, &self.triple, &self.flags, &self.isa_flags)
     }
 
@@ -38,7 +38,7 @@ impl LowerBackend for Riscv64Backend {
 
         // Lower the first branch in ISLE.  This will automatically handle
         // the second branch (if any) by emitting a two-way conditional branch.
-        if let Ok(()) = super::lower::isle::lower_branch(
+        if let Some(temp_regs) = super::lower::isle::lower_branch(
             ctx,
             &self.triple,
             &self.flags,
@@ -46,6 +46,7 @@ impl LowerBackend for Riscv64Backend {
             branches[0],
             targets,
         ) {
+            assert!(temp_regs.len() == 0);
             return Ok(());
         }
         unreachable!(
