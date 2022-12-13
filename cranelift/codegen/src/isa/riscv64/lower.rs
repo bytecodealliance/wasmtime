@@ -55,8 +55,9 @@ impl LowerBackend for Riscv64Backend {
             assert!(temp_regs.len() == 0);
             return Ok(());
         }
+
         unreachable!(
-            "implemented in ISLE: branch = `{}`",
+            "not implemented in ISLE: branch = `{}`",
             ctx.dfg().display_inst(branches[0]),
         );
     }
