@@ -16,6 +16,7 @@ pub struct Config {
     pub async_: AsyncConf,
     pub wasmtime: bool,
     pub tracing: TracingConf,
+    pub mutable: bool,
 }
 
 mod kw {
@@ -25,6 +26,7 @@ mod kw {
     syn::custom_keyword!(errors);
     syn::custom_keyword!(target);
     syn::custom_keyword!(wasmtime);
+    syn::custom_keyword!(mutable);
     syn::custom_keyword!(tracing);
     syn::custom_keyword!(disable_for);
     syn::custom_keyword!(trappable);
@@ -37,6 +39,7 @@ pub enum ConfigField {
     Async(AsyncConf),
     Wasmtime(bool),
     Tracing(TracingConf),
+    Mutable(bool),
 }
 
 impl Parse for ConfigField {
@@ -76,6 +79,10 @@ impl Parse for ConfigField {
             input.parse::<kw::tracing>()?;
             input.parse::<Token![:]>()?;
             Ok(ConfigField::Tracing(input.parse()?))
+        } else if lookahead.peek(kw::mutable) {
+            input.parse::<kw::mutable>()?;
+            input.parse::<Token![:]>()?;
+            Ok(ConfigField::Mutable(input.parse::<syn::LitBool>()?.value))
         } else {
             Err(lookahead.error())
         }
@@ -89,6 +96,7 @@ impl Config {
         let mut async_ = None;
         let mut wasmtime = None;
         let mut tracing = None;
+        let mut mutable = None;
         for f in fields {
             match f {
                 ConfigField::Witx(c) => {
@@ -121,6 +129,12 @@ impl Config {
                     }
                     tracing = Some(c);
                 }
+                ConfigField::Mutable(c) => {
+                    if mutable.is_some() {
+                        return Err(Error::new(err_loc, "duplicate `mutable` field"));
+                    }
+                    mutable = Some(c);
+                }
             }
         }
         Ok(Config {
@@ -131,6 +145,7 @@ impl Config {
             async_: async_.take().unwrap_or_default(),
             wasmtime: wasmtime.unwrap_or(true),
             tracing: tracing.unwrap_or_default(),
+            mutable: mutable.unwrap_or(true),
         })
     }
 
@@ -601,6 +616,12 @@ impl Parse for WasmtimeConfigField {
                 blocking: true,
                 functions: input.parse()?,
             })))
+        } else if lookahead.peek(kw::mutable) {
+            input.parse::<kw::mutable>()?;
+            input.parse::<Token![:]>()?;
+            Ok(WasmtimeConfigField::Core(ConfigField::Mutable(
+                input.parse::<syn::LitBool>()?.value,
+            )))
         } else {
             Err(lookahead.error())
         }
