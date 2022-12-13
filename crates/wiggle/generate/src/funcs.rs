@@ -77,7 +77,11 @@ fn _define_func(
             function = #func_name
         );
     );
-    let ctx_type = if settings.mutable { quote!(&'a mut) } else { quote!(&'a) };
+    let ctx_type = if settings.mutable {
+        quote!(&'a mut)
+    } else {
+        quote!(&'a)
+    };
     if settings.get_async(&module, &func).is_sync() {
         let traced_body = if settings.tracing.enabled_for(&mod_name, &func_name) {
             quote!(

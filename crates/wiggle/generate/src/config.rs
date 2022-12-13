@@ -619,7 +619,9 @@ impl Parse for WasmtimeConfigField {
         } else if lookahead.peek(kw::mutable) {
             input.parse::<kw::mutable>()?;
             input.parse::<Token![:]>()?;
-            Ok(WasmtimeConfigField::Core(ConfigField::Mutable(input.parse::<syn::LitBool>()?.value)))
+            Ok(WasmtimeConfigField::Core(ConfigField::Mutable(
+                input.parse::<syn::LitBool>()?.value,
+            )))
         } else {
             Err(lookahead.error())
         }
