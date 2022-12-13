@@ -7,7 +7,7 @@ use crate::bindings::{
 use core::arch::wasm32::unreachable;
 use core::cell::{Cell, RefCell, UnsafeCell};
 use core::ffi::c_void;
-use core::mem::{self, forget, size_of, ManuallyDrop, MaybeUninit};
+use core::mem::{self, forget, replace, size_of, ManuallyDrop, MaybeUninit};
 use core::ptr::{self, copy_nonoverlapping, null_mut};
 use core::slice;
 use wasi::*;
@@ -141,7 +141,7 @@ pub unsafe extern "C" fn cabi_export_realloc(
     let mut ret = null_mut::<u8>();
     State::with_mut(|state| {
         let data = state.command_data.as_mut_ptr();
-        let ptr = usize::try_from(state.command_data_next).unwrap();
+        let ptr = unwrap_result(usize::try_from(state.command_data_next));
 
         // "oom" as too much argument data tried to flow into the component.
         // Ideally this would have a better error message?
@@ -312,16 +312,6 @@ pub unsafe extern "C" fn fd_close(fd: Fd) -> Errno {
 
         let closed = state.closed;
         let desc = state.get_mut(fd)?;
-
-        match desc {
-            Descriptor::File(file) => {
-                wasi_filesystem::close(file.fd);
-            }
-            Descriptor::StdoutLog | Descriptor::StderrLog | Descriptor::EmptyStdin => {}
-            Descriptor::Socket(_) => unreachable(),
-            Descriptor::Closed(_) => return Err(ERRNO_BADF),
-        }
-
         *desc = Descriptor::Closed(closed);
         state.closed = Some(fd);
         Ok(())
@@ -850,7 +840,17 @@ pub unsafe extern "C" fn fd_readdir(
 /// would disappear if `dup2()` were to be removed entirely.
 #[no_mangle]
 pub unsafe extern "C" fn fd_renumber(fd: Fd, to: Fd) -> Errno {
-    unreachable()
+    State::with_mut(|state| {
+        let closed = state.closed;
+
+        let fd_desc = state.get_mut(fd)?;
+        let desc = replace(fd_desc, Descriptor::Closed(closed));
+
+        let to_desc = state.get_mut(to)?;
+        *to_desc = desc;
+        state.closed = Some(fd);
+        Ok(())
+    })
 }
 
 /// Move the offset of a file descriptor.
@@ -1098,13 +1098,7 @@ pub unsafe extern "C" fn path_open(
 
         let fd = match state.closed {
             // No free fds; create a new one.
-            None => match state.push_desc(desc) {
-                Ok(new) => new,
-                Err(err) => {
-                    wasi_filesystem::close(result);
-                    return Err(err);
-                }
-            },
+            None => state.push_desc(desc)?,
             // `recycle_fd` is a free fd.
             Some(recycle_fd) => {
                 let recycle_desc = unwrap_result(state.get_mut(recycle_fd));
@@ -1707,6 +1701,17 @@ pub enum Descriptor {
     StderrLog,
 }
 
+impl Drop for Descriptor {
+    fn drop(&mut self) {
+        match self {
+            Descriptor::File(file) => wasi_filesystem::close(file.fd),
+            Descriptor::StdoutLog | Descriptor::StderrLog | Descriptor::EmptyStdin => {}
+            Descriptor::Socket(_) => unreachable(),
+            Descriptor::Closed(_) => {}
+        }
+    }
+}
+
 #[repr(C)]
 pub struct File {
     /// The handle to the preview2 descriptor that this file is referencing.
@@ -1881,15 +1886,15 @@ impl State {
     }
 
     fn init(&mut self) {
-        self.push_desc(Descriptor::EmptyStdin).unwrap();
-        self.push_desc(Descriptor::StdoutLog).unwrap();
-        self.push_desc(Descriptor::StderrLog).unwrap();
+        unwrap_result(self.push_desc(Descriptor::EmptyStdin));
+        unwrap_result(self.push_desc(Descriptor::StdoutLog));
+        unwrap_result(self.push_desc(Descriptor::StderrLog));
     }
 
     fn push_desc(&mut self, desc: Descriptor) -> Result<Fd, Errno> {
         unsafe {
             let descriptors = self.descriptors.as_mut_ptr();
-            let ndescriptors = usize::try_from(self.ndescriptors).unwrap();
+            let ndescriptors = unwrap_result(usize::try_from(self.ndescriptors));
             if ndescriptors >= (*descriptors).len() {
                 return Err(ERRNO_NOMEM);
             }
@@ -1903,7 +1908,7 @@ impl State {
         unsafe {
             core::slice::from_raw_parts(
                 self.descriptors.as_ptr().cast(),
-                usize::try_from(self.ndescriptors).unwrap(),
+                unwrap_result(usize::try_from(self.ndescriptors)),
             )
         }
     }
@@ -1912,20 +1917,20 @@ impl State {
         unsafe {
             core::slice::from_raw_parts_mut(
                 self.descriptors.as_mut_ptr().cast(),
-                usize::try_from(self.ndescriptors).unwrap(),
+                unwrap_result(usize::try_from(self.ndescriptors)),
             )
         }
     }
 
     fn get(&self, fd: Fd) -> Result<&Descriptor, Errno> {
         self.descriptors()
-            .get(usize::try_from(fd).unwrap())
+            .get(unwrap_result(usize::try_from(fd)))
             .ok_or(ERRNO_BADF)
     }
 
     fn get_mut(&mut self, fd: Fd) -> Result<&mut Descriptor, Errno> {
         self.descriptors_mut()
-            .get_mut(usize::try_from(fd).unwrap())
+            .get_mut(unwrap_result(usize::try_from(fd)))
             .ok_or(ERRNO_BADF)
     }
 
