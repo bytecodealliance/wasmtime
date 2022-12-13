@@ -2983,49 +2983,49 @@
 (decl imm (Type u64) Reg)
 
 ;; 16-bit (or smaller) result type, any value
-(rule 5 (imm (fits_in_16 ty) n)
+(rule 7 (imm (fits_in_16 ty) n)
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.Mov32SImm16 dst (u64_as_i16 n)))))
         dst))
 
 ;; 32-bit result type, value fits in i16
-(rule 4 (imm (gpr32_ty ty) (i16_from_u64 n))
+(rule 6 (imm (gpr32_ty ty) (i16_from_u64 n))
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.Mov32SImm16 dst n))))
         dst))
 
 ;; 32-bit result type, any value
-(rule 3 (imm (gpr32_ty ty) n)
+(rule 5 (imm (gpr32_ty ty) n)
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.Mov32Imm dst (u64_as_u32 n)))))
         dst))
 
 ;; 64-bit result type, value fits in i16
-(rule 6 (imm (gpr64_ty ty) (i16_from_u64 n))
+(rule 4 (imm (gpr64_ty ty) (i16_from_u64 n))
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.Mov64SImm16 dst n))))
         dst))
 
 ;; 64-bit result type, value fits in i32
-(rule 2 (imm (gpr64_ty ty) (i32_from_u64 n))
+(rule 3 (imm (gpr64_ty ty) (i32_from_u64 n))
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.Mov64SImm32 dst n))))
         dst))
 
 ;; 64-bit result type, value fits in UImm16Shifted
-(rule 1 (imm (gpr64_ty ty) (uimm16shifted_from_u64 n))
+(rule 2 (imm (gpr64_ty ty) (uimm16shifted_from_u64 n))
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.Mov64UImm16Shifted dst n))))
         dst))
 
 ;; 64-bit result type, value fits in UImm32Shifted
-(rule 0 (imm (gpr64_ty ty) (uimm32shifted_from_u64 n))
+(rule 1 (imm (gpr64_ty ty) (uimm32shifted_from_u64 n))
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.Mov64UImm32Shifted dst n))))
         dst))
 
 ;; 64-bit result type, value with non-zero low-/high-parts.
-(rule 7 (imm (gpr64_ty ty) (and (u64_nonzero_hipart hi)
+(rule 0 (imm (gpr64_ty ty) (and (u64_nonzero_hipart hi)
                                 (u64_nonzero_lopart lo)))
       (insert_imm ty (imm ty hi) lo))
 
