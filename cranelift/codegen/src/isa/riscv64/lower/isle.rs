@@ -8,25 +8,23 @@ use generated_code::{Context, MInst};
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{writable_zero_reg, zero_reg};
 use crate::isa::riscv64::abi::Riscv64ABICaller;
-use crate::isa::riscv64::settings::Flags as IsaFlags;
+use crate::isa::riscv64::Riscv64Backend;
 use crate::machinst::Reg;
 use crate::machinst::{isle::*, MachInst, SmallInstVec};
 use crate::machinst::{VCodeConstant, VCodeConstantData};
-use crate::settings::Flags;
 use crate::{
     ir::{
         immediates::*, types::*, AtomicRmwOp, ExternalName, Inst, InstructionData, MemFlags,
         StackSlot, TrapCode, Value, ValueList,
     },
     isa::riscv64::inst::*,
-    machinst::{ArgPair, InsnOutput, Lower},
+    machinst::{ArgPair, InstOutput, Lower},
 };
 use crate::{isle_common_prelude_methods, isle_lower_prelude_methods};
 use regalloc2::PReg;
 use std::boxed::Box;
 use std::convert::TryFrom;
 use std::vec::Vec;
-use target_lexicon::Triple;
 
 type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;
@@ -38,28 +36,20 @@ use crate::machinst::valueregs;
 /// The main entry point for lowering with ISLE.
 pub(crate) fn lower(
     lower_ctx: &mut Lower<MInst>,
-    flags: &Flags,
-    triple: &Triple,
-    isa_flags: &IsaFlags,
-    outputs: &[InsnOutput],
+    backend: &Riscv64Backend,
     inst: Inst,
-) -> Result<(), ()> {
-    lower_common(
-        lower_ctx,
-        triple,
-        flags,
-        isa_flags,
-        outputs,
-        inst,
-        |cx, insn| generated_code::constructor_lower(cx, insn),
-    )
+) -> Option<InstOutput> {
+    // TODO: reuse the ISLE context across lowerings so we can reuse its
+    // internal heap allocations.
+    let mut isle_ctx = IsleContext { lower_ctx, backend };
+    generated_code::constructor_lower(&mut isle_ctx, inst)
 }
 
-impl IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
+impl IsleContext<'_, '_, MInst, Riscv64Backend> {
     isle_prelude_method_helpers!(Riscv64ABICaller);
 }
 
-impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
+impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
     isle_lower_prelude_methods!();
     isle_prelude_caller_methods!(Riscv64MachineDeps, Riscv64ABICaller);
 
@@ -134,7 +124,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         InstOutput::default()
     }
     fn load_ra(&mut self) -> Reg {
-        if self.flags.preserve_frame_pointers() {
+        if self.backend.flags.preserve_frame_pointers() {
             let tmp = self.temp_writable_reg(I64);
             self.emit(&MInst::Load {
                 rd: tmp,
@@ -198,8 +188,13 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
 
     fn imm(&mut self, ty: Type, val: u64) -> Reg {
         let tmp = self.temp_writable_reg(ty);
-        let insts = &MInst::load_constant_u64(tmp, val, &mut |ty| self.temp_writable_reg(ty));
-        self.emit_list(insts);
+        let alloc_tmp = &mut |ty| self.temp_writable_reg(ty);
+        let insts = match ty {
+            F32 => MInst::load_fp_constant32(tmp, val as u32, alloc_tmp),
+            F64 => MInst::load_fp_constant64(tmp, val, alloc_tmp),
+            _ => MInst::load_constant_u64(tmp, val, alloc_tmp),
+        };
+        self.emit_list(&insts);
         tmp.to_reg()
     }
     #[inline]
@@ -309,10 +304,10 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
     }
 
     fn has_b(&mut self) -> bool {
-        self.isa_flags.has_b()
+        self.backend.isa_flags.has_b()
     }
     fn has_zbkb(&mut self) -> bool {
-        self.isa_flags.has_zbkb()
+        self.backend.isa_flags.has_zbkb()
     }
 
     fn inst_output_get(&mut self, x: InstOutput, index: u8) -> ValueRegs {
@@ -436,7 +431,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
     }
 }
 
-impl IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
+impl IsleContext<'_, '_, MInst, Riscv64Backend> {
     #[inline]
     fn emit_list(&mut self, list: &SmallInstVec<MInst>) {
         for i in list {
@@ -448,21 +443,14 @@ impl IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
 /// The main entry point for branch lowering with ISLE.
 pub(crate) fn lower_branch(
     lower_ctx: &mut Lower<MInst>,
-    triple: &Triple,
-    flags: &Flags,
-    isa_flags: &IsaFlags,
+    backend: &Riscv64Backend,
     branch: Inst,
     targets: &[MachLabel],
-) -> Result<(), ()> {
-    lower_common(
-        lower_ctx,
-        triple,
-        flags,
-        isa_flags,
-        &[],
-        branch,
-        |cx, insn| generated_code::constructor_lower_branch(cx, insn, &targets.to_vec()),
-    )
+) -> Option<InstOutput> {
+    // TODO: reuse the ISLE context across lowerings so we can reuse its
+    // internal heap allocations.
+    let mut isle_ctx = IsleContext { lower_ctx, backend };
+    generated_code::constructor_lower_branch(&mut isle_ctx, branch, &targets.to_vec())
 }
 
 /// construct destination according to ty.

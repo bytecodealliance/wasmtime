@@ -9,6 +9,16 @@
 (rule (lower (has_type ty (iconst (u64_from_imm64 n))))
   (imm ty n))
 
+;;;; Rules for `f32const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (f32const (u64_from_ieee32 n)))
+  (imm $F32 n))
+
+;;;; Rules for `f64const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (f64const (u64_from_ieee64 n)))
+  (imm $F64 n))
+
 ;;;; Rules for `null` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty (null)))

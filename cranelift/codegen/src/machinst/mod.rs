@@ -112,14 +112,6 @@ pub trait MachInst: Clone + Debug {
     /// Generate a move.
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Self;
 
-    /// Generate a constant into a reg.
-    fn gen_constant<F: FnMut(Type) -> Writable<Reg>>(
-        to_regs: ValueRegs<Writable<Reg>>,
-        value: u128,
-        ty: Type,
-        alloc_tmp: F,
-    ) -> SmallVec<[Self; 4]>;
-
     /// Generate a dummy instruction that will keep a value alive but
     /// has no other purpose.
     fn gen_dummy_use(reg: Reg) -> Self;

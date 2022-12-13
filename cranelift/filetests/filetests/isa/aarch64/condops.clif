@@ -287,7 +287,7 @@ block0(v0: i128, v1: i8, v2: i8):
 
 ; block0:
 ;   movz x6, #42
-;   movz w8, #0
+;   movz x8, #0
 ;   subs xzr, x0, x6
 ;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
@@ -304,7 +304,7 @@ block0(v0: i128, v1: i16, v2: i16):
 
 ; block0:
 ;   movz x6, #42
-;   movz w8, #0
+;   movz x8, #0
 ;   subs xzr, x0, x6
 ;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
@@ -321,7 +321,7 @@ block0(v0: i128, v1: i32, v2: i32):
 
 ; block0:
 ;   movz x6, #42
-;   movz w8, #0
+;   movz x8, #0
 ;   subs xzr, x0, x6
 ;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
@@ -338,7 +338,7 @@ block0(v0: i128, v1: i64, v2: i64):
 
 ; block0:
 ;   movz x6, #42
-;   movz w8, #0
+;   movz x8, #0
 ;   subs xzr, x0, x6
 ;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
@@ -355,7 +355,7 @@ block0(v0: i128, v1: i128, v2: i128):
 
 ; block0:
 ;   movz x9, #42
-;   movz w11, #0
+;   movz x11, #0
 ;   subs xzr, x0, x9
 ;   ccmp x1, x11, #nzcv, eq
 ;   csel x0, x2, x4, eq
@@ -667,7 +667,7 @@ block0(v0: i128, v1: i8, v2: i8):
 
 ; block0:
 ;   movz x6, #42
-;   movz w8, #0
+;   movz x8, #0
 ;   subs xzr, x0, x6
 ;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
@@ -685,7 +685,7 @@ block0(v0: i128, v1: i16, v2: i16):
 
 ; block0:
 ;   movz x6, #42
-;   movz w8, #0
+;   movz x8, #0
 ;   subs xzr, x0, x6
 ;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
@@ -703,7 +703,7 @@ block0(v0: i128, v1: i32, v2: i32):
 
 ; block0:
 ;   movz x6, #42
-;   movz w8, #0
+;   movz x8, #0
 ;   subs xzr, x0, x6
 ;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
@@ -721,7 +721,7 @@ block0(v0: i128, v1: i64, v2: i64):
 
 ; block0:
 ;   movz x6, #42
-;   movz w8, #0
+;   movz x8, #0
 ;   subs xzr, x0, x6
 ;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
@@ -739,7 +739,7 @@ block0(v0: i128, v1: i128, v2: i128):
 
 ; block0:
 ;   movz x9, #42
-;   movz w11, #0
+;   movz x11, #0
 ;   subs xzr, x0, x9
 ;   ccmp x1, x11, #nzcv, eq
 ;   csel x0, x2, x4, eq

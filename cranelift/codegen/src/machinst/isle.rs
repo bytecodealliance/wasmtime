@@ -1,10 +1,8 @@
-use crate::ir::{Inst, Value, ValueList};
-use crate::machinst::{get_output_reg, InsnOutput};
+use crate::ir::{Value, ValueList};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use smallvec::SmallVec;
 use std::cell::Cell;
-use target_lexicon::Triple;
 
 pub use super::MachLabel;
 use super::RetPair;
@@ -13,9 +11,10 @@ pub use crate::ir::{
     DynamicStackSlot, ExternalName, FuncRef, GlobalValue, Immediate, SigRef, StackSlot,
 };
 pub use crate::isa::unwind::UnwindInst;
+pub use crate::isa::TargetIsa;
 pub use crate::machinst::{
-    ABIArg, ABIArgSlot, InputSourceInst, Lower, RealReg, Reg, RelocDistance, Sig, VCodeInst,
-    Writable,
+    ABIArg, ABIArgSlot, InputSourceInst, Lower, LowerBackend, RealReg, Reg, RelocDistance, Sig,
+    VCodeInst, Writable,
 };
 pub use crate::settings::TlsModel;
 
@@ -123,11 +122,32 @@ macro_rules! isle_lower_prelude_methods {
 
         #[inline]
         fn put_in_reg(&mut self, val: Value) -> Reg {
-            self.lower_ctx.put_value_in_regs(val).only_reg().unwrap()
+            self.put_in_regs(val).only_reg().unwrap()
         }
 
         #[inline]
         fn put_in_regs(&mut self, val: Value) -> ValueRegs {
+            // If the value is a constant, then (re)materialize it at each
+            // use. This lowers register pressure. (Only do this if we are
+            // not using egraph-based compilation; the egraph framework
+            // more efficiently rematerializes constants where needed.)
+            if !self.backend.flags().use_egraphs() {
+                let inputs = self.lower_ctx.get_value_as_source_or_const(val);
+                if inputs.constant.is_some() {
+                    let insn = match inputs.inst {
+                        InputSourceInst::UniqueUse(insn, 0) => Some(insn),
+                        InputSourceInst::Use(insn, 0) => Some(insn),
+                        _ => None,
+                    };
+                    if let Some(insn) = insn {
+                        if let Ok(regs) = self.backend.lower(self.lower_ctx, insn) {
+                            assert!(regs.len() == 1);
+                            return regs[0];
+                        }
+                    }
+                }
+            }
+
             self.lower_ctx.put_value_in_regs(val)
         }
 
@@ -263,7 +283,7 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         fn avoid_div_traps(&mut self, _: Type) -> Option<()> {
-            if self.flags.avoid_div_traps() {
+            if self.backend.flags().avoid_div_traps() {
                 Some(())
             } else {
                 None
@@ -272,12 +292,12 @@ macro_rules! isle_lower_prelude_methods {
 
         #[inline]
         fn tls_model(&mut self, _: Type) -> TlsModel {
-            self.flags.tls_model()
+            self.backend.flags().tls_model()
         }
 
         #[inline]
         fn tls_model_is_elf_gd(&mut self) -> Option<()> {
-            if self.flags.tls_model() == TlsModel::ElfGd {
+            if self.backend.flags().tls_model() == TlsModel::ElfGd {
                 Some(())
             } else {
                 None
@@ -286,7 +306,7 @@ macro_rules! isle_lower_prelude_methods {
 
         #[inline]
         fn tls_model_is_macho(&mut self) -> Option<()> {
-            if self.flags.tls_model() == TlsModel::Macho {
+            if self.backend.flags().tls_model() == TlsModel::Macho {
                 Some(())
             } else {
                 None
@@ -295,7 +315,7 @@ macro_rules! isle_lower_prelude_methods {
 
         #[inline]
         fn tls_model_is_coff(&mut self) -> Option<()> {
-            if self.flags.tls_model() == TlsModel::Coff {
+            if self.backend.flags().tls_model() == TlsModel::Coff {
                 Some(())
             } else {
                 None
@@ -304,7 +324,7 @@ macro_rules! isle_lower_prelude_methods {
 
         #[inline]
         fn preserve_frame_pointers(&mut self) -> Option<()> {
-            if self.flags.preserve_frame_pointers() {
+            if self.backend.flags().preserve_frame_pointers() {
                 Some(())
             } else {
                 None
@@ -572,7 +592,7 @@ macro_rules! isle_prelude_caller_methods {
                 &extname,
                 dist,
                 caller_conv,
-                self.flags.clone(),
+                self.backend.flags().clone(),
             )
             .unwrap();
 
@@ -601,7 +621,7 @@ macro_rules! isle_prelude_caller_methods {
                 ptr,
                 Opcode::CallIndirect,
                 caller_conv,
-                self.flags.clone(),
+                self.backend.flags().clone(),
             )
             .unwrap();
 
@@ -641,7 +661,7 @@ macro_rules! isle_prelude_method_helpers {
                 let input = inputs
                     .get(off + i, &self.lower_ctx.dfg().value_lists)
                     .unwrap();
-                arg_regs.push(self.lower_ctx.put_value_in_regs(input));
+                arg_regs.push(self.put_in_regs(input));
             }
             for (i, arg_regs) in arg_regs.iter().enumerate() {
                 caller.emit_copy_regs_to_buffer(self.lower_ctx, i, *arg_regs);
@@ -708,77 +728,11 @@ macro_rules! isle_prelude_method_helpers {
 
 /// This structure is used to implement the ISLE-generated `Context` trait and
 /// internally has a temporary reference to a machinst `LowerCtx`.
-pub(crate) struct IsleContext<'a, 'b, I, Flags, IsaFlags, const N: usize>
+pub(crate) struct IsleContext<'a, 'b, I, B>
 where
     I: VCodeInst,
-    [(I, bool); N]: smallvec::Array,
+    B: LowerBackend,
 {
     pub lower_ctx: &'a mut Lower<'b, I>,
-    pub triple: &'a Triple,
-    pub flags: &'a Flags,
-    pub isa_flags: &'a IsaFlags,
-}
-
-/// Shared lowering code amongst all backends for doing ISLE-based lowering.
-///
-/// The `isle_lower` argument here is an ISLE-generated function for `lower` and
-/// then this function otherwise handles register mapping and such around the
-/// lowering.
-pub(crate) fn lower_common<I, Flags, IsaFlags, IsleFunction, const N: usize>(
-    lower_ctx: &mut Lower<I>,
-    triple: &Triple,
-    flags: &Flags,
-    isa_flags: &IsaFlags,
-    outputs: &[InsnOutput],
-    inst: Inst,
-    isle_lower: IsleFunction,
-) -> Result<(), ()>
-where
-    I: VCodeInst,
-    [(I, bool); N]: smallvec::Array<Item = (I, bool)>,
-    IsleFunction: Fn(&mut IsleContext<'_, '_, I, Flags, IsaFlags, N>, Inst) -> Option<InstOutput>,
-{
-    // TODO: reuse the ISLE context across lowerings so we can reuse its
-    // internal heap allocations.
-    let mut isle_ctx = IsleContext {
-        lower_ctx,
-        triple,
-        flags,
-        isa_flags,
-    };
-
-    let temp_regs = isle_lower(&mut isle_ctx, inst).ok_or(())?;
-
-    #[cfg(debug_assertions)]
-    {
-        debug_assert_eq!(
-            temp_regs.len(),
-            outputs.len(),
-            "the number of temporary values and destination values do \
-         not match ({} != {}); ensure the correct registers are being \
-         returned.",
-            temp_regs.len(),
-            outputs.len(),
-        );
-    }
-
-    // The ISLE generated code emits its own registers to define the
-    // instruction's lowered values in. However, other instructions
-    // that use this SSA value will be lowered assuming that the value
-    // is generated into a pre-assigned, different, register.
-    //
-    // To connect the two, we set up "aliases" in the VCodeBuilder
-    // that apply when it is building the Operand table for the
-    // regalloc to use. These aliases effectively rewrite any use of
-    // the pre-assigned register to the register that was returned by
-    // the ISLE lowering logic.
-    for i in 0..outputs.len() {
-        let regs = temp_regs[i];
-        let dsts = get_output_reg(isle_ctx.lower_ctx, outputs[i]);
-        for (dst, temp) in dsts.regs().iter().zip(regs.regs().iter()) {
-            isle_ctx.lower_ctx.set_vreg_alias(dst.to_reg(), *temp);
-        }
-    }
-
-    Ok(())
+    pub backend: &'a B,
 }

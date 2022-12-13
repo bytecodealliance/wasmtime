@@ -18,10 +18,9 @@ use super::{
 use crate::ir::condcodes;
 use crate::isa::aarch64::inst::{FPULeftShiftImm, FPURightShiftImm};
 use crate::isa::aarch64::lower::{lower_address, lower_pair_address, lower_splat_const};
-use crate::isa::aarch64::settings::Flags as IsaFlags;
+use crate::isa::aarch64::AArch64Backend;
 use crate::machinst::valueregs;
 use crate::machinst::{isle::*, InputSourceInst};
-use crate::settings::Flags;
 use crate::{
     binemit::CodeOffset,
     ir::{
@@ -32,7 +31,7 @@ use crate::{
     isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},
     isa::unwind::UnwindInst,
     machinst::{
-        abi::ArgPair, ty_bits, InsnOutput, Lower, MachInst, VCodeConstant, VCodeConstantData,
+        abi::ArgPair, ty_bits, InstOutput, Lower, MachInst, VCodeConstant, VCodeConstantData,
     },
 };
 use crate::{isle_common_prelude_methods, isle_lower_prelude_methods};
@@ -40,7 +39,6 @@ use regalloc2::PReg;
 use std::boxed::Box;
 use std::convert::TryFrom;
 use std::vec::Vec;
-use target_lexicon::Triple;
 
 type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;
@@ -52,40 +50,25 @@ type VecArgPair = Vec<ArgPair>;
 /// The main entry point for lowering with ISLE.
 pub(crate) fn lower(
     lower_ctx: &mut Lower<MInst>,
-    triple: &Triple,
-    flags: &Flags,
-    isa_flags: &IsaFlags,
-    outputs: &[InsnOutput],
+    backend: &AArch64Backend,
     inst: Inst,
-) -> Result<(), ()> {
-    lower_common(
-        lower_ctx,
-        triple,
-        flags,
-        isa_flags,
-        outputs,
-        inst,
-        |cx, insn| generated_code::constructor_lower(cx, insn),
-    )
+) -> Option<InstOutput> {
+    // TODO: reuse the ISLE context across lowerings so we can reuse its
+    // internal heap allocations.
+    let mut isle_ctx = IsleContext { lower_ctx, backend };
+    generated_code::constructor_lower(&mut isle_ctx, inst)
 }
 
 pub(crate) fn lower_branch(
     lower_ctx: &mut Lower<MInst>,
-    triple: &Triple,
-    flags: &Flags,
-    isa_flags: &IsaFlags,
+    backend: &AArch64Backend,
     branch: Inst,
     targets: &[MachLabel],
-) -> Result<(), ()> {
-    lower_common(
-        lower_ctx,
-        triple,
-        flags,
-        isa_flags,
-        &[],
-        branch,
-        |cx, insn| generated_code::constructor_lower_branch(cx, insn, &targets.to_vec()),
-    )
+) -> Option<InstOutput> {
+    // TODO: reuse the ISLE context across lowerings so we can reuse its
+    // internal heap allocations.
+    let mut isle_ctx = IsleContext { lower_ctx, backend };
+    generated_code::constructor_lower_branch(&mut isle_ctx, branch, &targets.to_vec())
 }
 
 pub struct ExtendedValue {
@@ -93,16 +76,16 @@ pub struct ExtendedValue {
     extend: ExtendOp,
 }
 
-impl IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
+impl IsleContext<'_, '_, MInst, AArch64Backend> {
     isle_prelude_method_helpers!(AArch64Caller);
 }
 
-impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
+impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
     isle_lower_prelude_methods!();
     isle_prelude_caller_methods!(crate::isa::aarch64::abi::AArch64MachineDeps, AArch64Caller);
 
     fn sign_return_address_disabled(&mut self) -> Option<()> {
-        if self.isa_flags.sign_return_address() {
+        if self.backend.isa_flags.sign_return_address() {
             None
         } else {
             Some(())
@@ -110,11 +93,25 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     }
 
     fn use_lse(&mut self, _: Inst) -> Option<()> {
-        if self.isa_flags.has_lse() {
+        if self.backend.isa_flags.has_lse() {
             Some(())
         } else {
             None
         }
+    }
+
+    fn move_wide_const_from_u64(&mut self, ty: Type, n: u64) -> Option<MoveWideConst> {
+        let bits = ty.bits();
+        let n = if bits < 64 {
+            n & !(u64::MAX << bits)
+        } else {
+            n
+        };
+        MoveWideConst::maybe_from_u64(n)
+    }
+
+    fn move_wide_const_from_inverted_u64(&mut self, ty: Type, n: u64) -> Option<MoveWideConst> {
+        self.move_wide_const_from_u64(ty, !n)
     }
 
     fn imm_logic_from_u64(&mut self, ty: Type, n: u64) -> Option<ImmLogic> {
@@ -521,6 +518,14 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
 
     fn pair_amode(&mut self, addr: Value, offset: u32) -> PairAMode {
         lower_pair_address(self.lower_ctx, addr, offset as i32)
+    }
+
+    fn constant_f32(&mut self, value: u64) -> Reg {
+        let rd = self.temp_writable_reg(I8X16);
+
+        lower_constant_f32(self.lower_ctx, rd, f32::from_bits(value as u32));
+
+        rd.to_reg()
     }
 
     fn constant_f64(&mut self, value: u64) -> Reg {

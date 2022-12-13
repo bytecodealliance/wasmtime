@@ -97,7 +97,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   orr x2, xzr, #2
+;   movz x2, #2
 ;   udiv x0, x0, x2
 ;   ret
 
@@ -176,7 +176,7 @@ block0(v0: i32):
 
 ; block0:
 ;   mov w2, w0
-;   orr w4, wzr, #2
+;   movz w4, #2
 ;   udiv x0, x2, x4
 ;   ret
 
@@ -474,7 +474,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   orr x2, xzr, #2
+;   movz x2, #2
 ;   udiv x4, x0, x2
 ;   msub x0, x4, x2, x0
 ;   ret

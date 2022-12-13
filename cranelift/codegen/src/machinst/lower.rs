@@ -14,9 +14,9 @@ use crate::ir::{
     Type, Value, ValueDef, ValueLabelAssignments, ValueLabelStart,
 };
 use crate::machinst::{
-    non_writable_value_regs, writable_value_regs, BlockIndex, BlockLoweringOrder, Callee,
-    LoweredBlock, MachLabel, Reg, SigSet, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData,
-    VCodeConstants, VCodeInst, ValueRegs, Writable,
+    writable_value_regs, BlockIndex, BlockLoweringOrder, Callee, LoweredBlock, MachLabel, Reg,
+    SigSet, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData, VCodeConstants, VCodeInst,
+    ValueRegs, Writable,
 };
 use crate::{trace, CodegenResult};
 use alloc::vec::Vec;
@@ -25,6 +25,9 @@ use smallvec::{smallvec, SmallVec};
 use std::fmt::Debug;
 
 use super::{VCodeBuildDirection, VRegAllocator};
+
+/// A vector of ValueRegs, used to represent the outputs of an instruction.
+pub type InstOutput = SmallVec<[ValueRegs<Reg>; 2]>;
 
 /// An "instruction color" partitions CLIF instructions by side-effecting ops.
 /// All instructions with the same "color" are guaranteed not to be separated by
@@ -121,7 +124,7 @@ pub trait LowerBackend {
     /// edge (block-param actuals) into registers, because the actual branch
     /// generation (`lower_branch_group()`) happens *after* any possible merged
     /// out-edge.
-    fn lower(&self, ctx: &mut Lower<Self::MInst>, inst: Inst) -> CodegenResult<()>;
+    fn lower(&self, ctx: &mut Lower<Self::MInst>, inst: Inst) -> CodegenResult<InstOutput>;
 
     /// Lower a block-terminating group of branches (which together can be seen
     /// as one N-way branch), given a vcode MachLabel for each target.
@@ -145,9 +148,6 @@ pub trait LowerBackend {
 pub struct Lower<'func, I: VCodeInst> {
     /// The function to lower.
     f: &'func Function,
-
-    /// Machine-independent flags.
-    flags: crate::settings::Flags,
 
     /// The set of allocatable registers.
     allocatable: PRegSet,
@@ -324,7 +324,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Prepare a new lowering context for the given IR function.
     pub fn new(
         f: &'func Function,
-        flags: crate::settings::Flags,
         machine_env: &MachineEnv,
         abi: Callee<I::ABIMachineSpec>,
         emit_info: I::Info,
@@ -415,7 +414,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
         Ok(Lower {
             f,
-            flags,
             allocatable: PRegSet::from(machine_env),
             vcode,
             vregs,
@@ -742,7 +740,27 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             // or any of its outputs its used.
             if has_side_effect || value_needed {
                 trace!("lowering: inst {}: {:?}", inst, self.f.dfg[inst]);
-                backend.lower(self, inst)?;
+                let temp_regs = backend.lower(self, inst)?;
+
+                // The ISLE generated code emits its own registers to define the
+                // instruction's lowered values in. However, other instructions
+                // that use this SSA value will be lowered assuming that the value
+                // is generated into a pre-assigned, different, register.
+                //
+                // To connect the two, we set up "aliases" in the VCodeBuilder
+                // that apply when it is building the Operand table for the
+                // regalloc to use. These aliases effectively rewrite any use of
+                // the pre-assigned register to the register that was returned by
+                // the ISLE lowering logic.
+                debug_assert_eq!(temp_regs.len(), self.num_outputs(inst));
+                for i in 0..self.num_outputs(inst) {
+                    let regs = temp_regs[i];
+                    let dsts = self.value_regs[self.f.dfg.inst_results(inst)[i]];
+                    debug_assert_eq!(regs.len(), dsts.len());
+                    for (dst, temp) in dsts.regs().iter().zip(regs.regs().iter()) {
+                        self.set_vreg_alias(*dst, *temp);
+                    }
+                }
             }
 
             let loc = self.srcloc(inst);
@@ -1249,33 +1267,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             assert!(!self.inst_sunk.contains(&inst));
         }
 
-        // If the value is a constant, then (re)materialize it at each
-        // use. This lowers register pressure. (Only do this if we are
-        // not using egraph-based compilation; the egraph framework
-        // more efficiently rematerializes constants where needed.)
-        if !self.flags.use_egraphs() {
-            if let Some(c) = self
-                .f
-                .dfg
-                .value_def(val)
-                .inst()
-                .and_then(|inst| self.get_constant(inst))
-            {
-                let ty = self.f.dfg.value_type(val);
-                let regs = self.alloc_tmp(ty);
-                trace!(" -> regs {:?}", regs);
-                assert!(regs.is_valid());
-
-                let insts = I::gen_constant(regs, c.into(), ty, |ty| {
-                    self.alloc_tmp(ty).only_reg().unwrap()
-                });
-                for inst in insts {
-                    self.emit(inst);
-                }
-                return non_writable_value_regs(regs);
-            }
-        }
-
         let regs = self.value_regs[val];
         trace!(" -> regs {:?}", regs);
         assert!(regs.is_valid());
@@ -1283,19 +1274,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         self.value_lowered_uses[val] += 1;
 
         regs
-    }
-
-    /// Get the `idx`th output register(s) of the given IR instruction.
-    ///
-    /// When `backend.lower_inst_to_regs(ctx, inst)` is called, it is expected
-    /// that the backend will write results to these output register(s).  This
-    /// register will always be "fresh"; it is guaranteed not to overlap with
-    /// any of the inputs, and can be freely used as a scratch register within
-    /// the lowered instruction sequence, as long as its final value is the
-    /// result of the computation.
-    pub fn get_output(&self, ir_inst: Inst, idx: usize) -> ValueRegs<Writable<Reg>> {
-        let val = self.f.dfg.inst_results(ir_inst)[idx];
-        writable_value_regs(self.value_regs[val])
     }
 }
 

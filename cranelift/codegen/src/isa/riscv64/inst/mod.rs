@@ -720,44 +720,6 @@ impl MachInst for Inst {
         x
     }
 
-    fn gen_constant<F: FnMut(Type) -> Writable<Reg>>(
-        to_regs: ValueRegs<Writable<Reg>>,
-        value: u128,
-        ty: Type,
-        mut alloc_tmp: F,
-    ) -> SmallVec<[Inst; 4]> {
-        if (ty.bits() <= 64 && ty.is_int()) || ty == R32 || ty == R64 {
-            return Inst::load_constant_u64(
-                to_regs.only_reg().unwrap(),
-                value as u64,
-                &mut alloc_tmp,
-            );
-        };
-        match ty {
-            F32 => {
-                Inst::load_fp_constant32(to_regs.only_reg().unwrap(), value as u32, &mut alloc_tmp)
-            }
-            F64 => {
-                Inst::load_fp_constant64(to_regs.only_reg().unwrap(), value as u64, &mut alloc_tmp)
-            }
-            I128 => {
-                let mut insts = SmallInstVec::new();
-                insts.extend(Inst::load_constant_u64(
-                    to_regs.regs()[0],
-                    (value >> 64) as u64,
-                    &mut alloc_tmp,
-                ));
-                insts.extend(Inst::load_constant_u64(
-                    to_regs.regs()[1],
-                    value as u64,
-                    &mut alloc_tmp,
-                ));
-                return insts;
-            }
-            _ => unreachable!("vector type not implemented now."),
-        }
-    }
-
     fn gen_nop(preferred_size: usize) -> Inst {
         if preferred_size == 0 {
             return Inst::Nop0;

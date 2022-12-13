@@ -1607,6 +1607,12 @@
 
 ;; Extractor helpers for various immmediate constants ;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(decl pure partial move_wide_const_from_u64 (Type u64) MoveWideConst)
+(extern constructor move_wide_const_from_u64 move_wide_const_from_u64)
+
+(decl pure partial move_wide_const_from_inverted_u64 (Type u64) MoveWideConst)
+(extern constructor move_wide_const_from_inverted_u64 move_wide_const_from_inverted_u64)
+
 (decl pure partial imm_logic_from_u64 (Type u64) ImmLogic)
 (extern constructor imm_logic_from_u64 imm_logic_from_u64)
 
@@ -2747,6 +2753,15 @@
 ;; such as `I8` are either sign- or zero-extended.
 (decl imm (Type ImmExtend u64) Reg)
 
+;; Move wide immediate instructions; to simplify, we only match when we
+;; are zero-extending the value.
+(rule 3 (imm (integral_ty ty) (ImmExtend.Zero) k)
+      (if-let n (move_wide_const_from_u64 ty k))
+      (movz n (operand_size ty)))
+(rule 2 (imm (integral_ty (ty_32_or_64 ty)) (ImmExtend.Zero) k)
+      (if-let n (move_wide_const_from_inverted_u64 ty k))
+      (movn n (operand_size ty)))
+
 ;; Weird logical-instruction immediate in ORI using zero register; to simplify,
 ;; we only match when we are zero-extending the value.
 (rule 1 (imm (integral_ty ty) (ImmExtend.Zero) k)
@@ -2939,6 +2954,11 @@
 (rule (sink_load_into_amode ty x @ (load _ addr offset))
       (let ((_ Unit (sink_inst x)))
            (amode ty addr offset)))
+
+;; Lower a constant f32.
+(decl constant_f32 (u64) Reg)
+;; TODO: Port lower_constant_f32() to ISLE.
+(extern constructor constant_f32 constant_f32)
 
 ;; Lower a constant f64.
 (decl constant_f64 (u64) Reg)

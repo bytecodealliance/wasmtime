@@ -19,7 +19,6 @@ use target_lexicon::{Architecture, Triple};
 mod abi;
 pub(crate) mod inst;
 mod lower;
-mod lower_inst;
 mod settings;
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv;

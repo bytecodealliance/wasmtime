@@ -1,5 +1,4 @@
 //! Lowering rules for Riscv64.
-use super::lower_inst;
 use crate::ir::Inst as IRInst;
 use crate::isa::riscv64::inst::*;
 use crate::isa::riscv64::Riscv64Backend;
@@ -14,8 +13,22 @@ pub mod isle;
 impl LowerBackend for Riscv64Backend {
     type MInst = Inst;
 
-    fn lower(&self, ctx: &mut Lower<Inst>, ir_inst: IRInst) -> CodegenResult<()> {
-        lower_inst::lower_insn_to_regs(ctx, ir_inst, &self.triple, &self.flags, &self.isa_flags)
+    fn lower(&self, ctx: &mut Lower<Inst>, ir_inst: IRInst) -> CodegenResult<InstOutput> {
+        if let Some(temp_regs) = super::lower::isle::lower(ctx, self, ir_inst) {
+            return Ok(temp_regs);
+        }
+
+        let ty = if ctx.num_outputs(ir_inst) > 0 {
+            Some(ctx.output_ty(ir_inst, 0))
+        } else {
+            None
+        };
+
+        unreachable!(
+            "not implemented in ISLE: inst = `{}`, type = `{:?}`",
+            ctx.dfg().display_inst(ir_inst),
+            ty
+        );
     }
 
     fn lower_branch_group(
@@ -38,14 +51,8 @@ impl LowerBackend for Riscv64Backend {
 
         // Lower the first branch in ISLE.  This will automatically handle
         // the second branch (if any) by emitting a two-way conditional branch.
-        if let Ok(()) = super::lower::isle::lower_branch(
-            ctx,
-            &self.triple,
-            &self.flags,
-            &self.isa_flags,
-            branches[0],
-            targets,
-        ) {
+        if let Some(temp_regs) = super::lower::isle::lower_branch(ctx, self, branches[0], targets) {
+            assert!(temp_regs.len() == 0);
             return Ok(());
         }
         unreachable!(

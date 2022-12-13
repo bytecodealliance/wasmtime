@@ -1,7 +1,5 @@
 //! Miscellaneous helpers for machine backends.
 
-use super::{InsnOutput, Lower, VCodeInst, ValueRegs};
-use super::{Reg, Writable};
 use crate::ir::Type;
 use std::ops::{Add, BitAnd, Not, Sub};
 
@@ -18,14 +16,6 @@ pub(crate) fn ty_has_int_representation(ty: Type) -> bool {
 /// Is the type represented by a float or vector value at the machine level?
 pub(crate) fn ty_has_float_or_vec_representation(ty: Type) -> bool {
     ty.is_vector() || ty.is_float()
-}
-
-/// Allocate a register for an instruction output and return it.
-pub(crate) fn get_output_reg<I: VCodeInst>(
-    ctx: &mut Lower<I>,
-    spec: InsnOutput,
-) -> ValueRegs<Writable<Reg>> {
-    ctx.get_output(spec.insn, spec.output)
 }
 
 /// Align a size up to a power-of-two alignment.
