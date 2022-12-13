@@ -831,6 +831,9 @@
       (_ Unit (emit (MInst.SelectIf $true (vec_writable_clone dst) r a b))))
     (vec_writable_to_regs dst)))
 
+(rule -1
+  (lower (has_type ty (select_spectre_guard c @ (value_type cty) x y)))
+  (gen_select ty (normalize_cmp_value cty c) x y))
 
 ;;;;;  Rules for `bmask`;;;;;;;;;
 (rule
