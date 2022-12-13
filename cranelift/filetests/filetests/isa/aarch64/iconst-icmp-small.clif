@@ -14,9 +14,9 @@ block0:
 }
 
 ; block0:
-;   movz x0, #56780
+;   movz w0, #56780
 ;   uxth w2, w0
-;   movz x4, #56780
+;   movz w4, #56780
 ;   subs wzr, w2, w4, UXTH
 ;   cset x0, ne
 ;   ret

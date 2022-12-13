@@ -8,9 +8,8 @@ use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use core::convert::TryFrom;
 use regalloc2::{PRegSet, VReg};
-use smallvec::{smallvec, SmallVec};
+use smallvec::SmallVec;
 use std::string::{String, ToString};
 pub mod regs;
 pub use self::regs::*;
@@ -331,102 +330,6 @@ impl Inst {
                 rd: to_reg,
                 rn: from_reg,
             }
-        }
-    }
-
-    /// Create an instruction that loads a 64-bit integer constant.
-    pub fn load_constant64<F: FnMut(Type) -> Writable<Reg>>(
-        rd: Writable<Reg>,
-        value: u64,
-        mut alloc_tmp: F,
-    ) -> SmallVec<[Inst; 4]> {
-        if let Ok(imm) = i16::try_from(value as i64) {
-            // 16-bit signed immediate
-            smallvec![Inst::Mov64SImm16 { rd, imm }]
-        } else if let Ok(imm) = i32::try_from(value as i64) {
-            // 32-bit signed immediate
-            smallvec![Inst::Mov64SImm32 { rd, imm }]
-        } else if let Some(imm) = UImm16Shifted::maybe_from_u64(value) {
-            // 16-bit shifted immediate
-            smallvec![Inst::Mov64UImm16Shifted { rd, imm }]
-        } else if let Some(imm) = UImm32Shifted::maybe_from_u64(value) {
-            // 32-bit shifted immediate
-            smallvec![Inst::Mov64UImm32Shifted { rd, imm }]
-        } else {
-            let mut insts = smallvec![];
-            let hi = value & 0xffff_ffff_0000_0000u64;
-            let lo = value & 0x0000_0000_ffff_ffffu64;
-
-            let hi_rd = alloc_tmp(types::I64);
-            if let Some(imm) = UImm16Shifted::maybe_from_u64(hi) {
-                // 16-bit shifted immediate
-                insts.push(Inst::Mov64UImm16Shifted { rd: hi_rd, imm });
-            } else if let Some(imm) = UImm32Shifted::maybe_from_u64(hi) {
-                // 32-bit shifted immediate
-                insts.push(Inst::Mov64UImm32Shifted { rd: hi_rd, imm });
-            } else {
-                unreachable!();
-            }
-
-            if let Some(imm) = UImm16Shifted::maybe_from_u64(lo) {
-                // 16-bit shifted immediate
-                insts.push(Inst::Insert64UImm16Shifted {
-                    rd,
-                    ri: hi_rd.to_reg(),
-                    imm,
-                });
-            } else if let Some(imm) = UImm32Shifted::maybe_from_u64(lo) {
-                // 32-bit shifted immediate
-                insts.push(Inst::Insert64UImm32Shifted {
-                    rd,
-                    ri: hi_rd.to_reg(),
-                    imm,
-                });
-            } else {
-                unreachable!();
-            }
-
-            insts
-        }
-    }
-
-    /// Create an instruction that loads a 32-bit integer constant.
-    pub fn load_constant32(rd: Writable<Reg>, value: u32) -> SmallVec<[Inst; 4]> {
-        if let Ok(imm) = i16::try_from(value as i32) {
-            // 16-bit signed immediate
-            smallvec![Inst::Mov32SImm16 { rd, imm }]
-        } else {
-            // 32-bit full immediate
-            smallvec![Inst::Mov32Imm { rd, imm: value }]
-        }
-    }
-
-    /// Create an instruction that loads a 32-bit floating-point constant.
-    pub fn load_fp_constant32(rd: Writable<Reg>, value: f32) -> Inst {
-        // TODO: use LZER to load 0.0
-        Inst::LoadFpuConst32 {
-            rd,
-            const_data: value.to_bits(),
-        }
-    }
-
-    /// Create an instruction that loads a 64-bit floating-point constant.
-    pub fn load_fp_constant64(rd: Writable<Reg>, value: f64) -> Inst {
-        // TODO: use LZDR to load 0.0
-        Inst::LoadFpuConst64 {
-            rd,
-            const_data: value.to_bits(),
-        }
-    }
-
-    /// Create an instruction that loads a 128-bit floating-point constant.
-    pub fn load_vec_constant(rd: Writable<Reg>, value: u128) -> Inst {
-        // FIXME: This doesn't special-case constants that can be loaded
-        // without a constant pool, like the ISLE lowering does.  Ideally,
-        // we should not have to duplicate the logic here.
-        Inst::VecLoadConst {
-            rd,
-            const_data: value,
         }
     }
 
@@ -1177,48 +1080,6 @@ impl MachInst for Inst {
             Inst::mov64(to_reg, from_reg)
         } else {
             Inst::mov128(to_reg, from_reg)
-        }
-    }
-
-    fn gen_constant<F: FnMut(Type) -> Writable<Reg>>(
-        to_regs: ValueRegs<Writable<Reg>>,
-        value: u128,
-        ty: Type,
-        alloc_tmp: F,
-    ) -> SmallVec<[Inst; 4]> {
-        let to_reg = to_regs
-            .only_reg()
-            .expect("multi-reg values not supported yet");
-        match ty {
-            types::I128 => {
-                let mut ret = SmallVec::new();
-                ret.push(Inst::load_vec_constant(to_reg, value));
-                ret
-            }
-            _ if ty.is_vector() && ty.bits() == 128 => {
-                let mut ret = SmallVec::new();
-                ret.push(Inst::load_vec_constant(to_reg, value));
-                ret
-            }
-            types::F64 => {
-                let mut ret = SmallVec::new();
-                ret.push(Inst::load_fp_constant64(
-                    to_reg,
-                    f64::from_bits(value as u64),
-                ));
-                ret
-            }
-            types::F32 => {
-                let mut ret = SmallVec::new();
-                ret.push(Inst::load_fp_constant32(
-                    to_reg,
-                    f32::from_bits(value as u32),
-                ));
-                ret
-            }
-            types::I64 | types::R64 => Inst::load_constant64(to_reg, value as u64, alloc_tmp),
-            types::I8 | types::I16 | types::I32 => Inst::load_constant32(to_reg, value as u32),
-            _ => unreachable!(),
         }
     }
 

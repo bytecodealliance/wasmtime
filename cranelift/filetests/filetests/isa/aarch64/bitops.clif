@@ -312,7 +312,7 @@ block0:
 }
 
 ; block0:
-;   movn x0, #0
+;   movz w0, #255
 ;   sxtb w0, w0
 ;   ret
 
@@ -324,7 +324,7 @@ block0:
 }
 
 ; block0:
-;   movn x0, #0
+;   movz w0, #255
 ;   sxtb w0, w0
 ;   ret
 

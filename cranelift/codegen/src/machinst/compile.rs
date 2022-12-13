@@ -23,15 +23,7 @@ pub fn compile<B: LowerBackend + TargetIsa>(
     let block_order = BlockLoweringOrder::new(f);
 
     // Build the lowering context.
-    let lower = crate::machinst::Lower::new(
-        f,
-        b.flags().clone(),
-        machine_env,
-        abi,
-        emit_info,
-        block_order,
-        sigs,
-    )?;
+    let lower = crate::machinst::Lower::new(f, machine_env, abi, emit_info, block_order, sigs)?;
 
     // Lower the IR.
     let vcode = {

@@ -14,9 +14,9 @@ use crate::ir::{
     Type, Value, ValueDef, ValueLabelAssignments, ValueLabelStart,
 };
 use crate::machinst::{
-    non_writable_value_regs, writable_value_regs, BlockIndex, BlockLoweringOrder, Callee,
-    LoweredBlock, MachLabel, Reg, SigSet, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData,
-    VCodeConstants, VCodeInst, ValueRegs, Writable,
+    writable_value_regs, BlockIndex, BlockLoweringOrder, Callee, LoweredBlock, MachLabel, Reg,
+    SigSet, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData, VCodeConstants, VCodeInst,
+    ValueRegs, Writable,
 };
 use crate::{trace, CodegenResult};
 use alloc::vec::Vec;
@@ -148,9 +148,6 @@ pub trait LowerBackend {
 pub struct Lower<'func, I: VCodeInst> {
     /// The function to lower.
     f: &'func Function,
-
-    /// Machine-independent flags.
-    flags: crate::settings::Flags,
 
     /// The set of allocatable registers.
     allocatable: PRegSet,
@@ -327,7 +324,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Prepare a new lowering context for the given IR function.
     pub fn new(
         f: &'func Function,
-        flags: crate::settings::Flags,
         machine_env: &MachineEnv,
         abi: Callee<I::ABIMachineSpec>,
         emit_info: I::Info,
@@ -418,7 +414,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
         Ok(Lower {
             f,
-            flags,
             allocatable: PRegSet::from(machine_env),
             vcode,
             vregs,
@@ -1270,33 +1265,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
         if let Some(inst) = self.f.dfg.value_def(val).inst() {
             assert!(!self.inst_sunk.contains(&inst));
-        }
-
-        // If the value is a constant, then (re)materialize it at each
-        // use. This lowers register pressure. (Only do this if we are
-        // not using egraph-based compilation; the egraph framework
-        // more efficiently rematerializes constants where needed.)
-        if !self.flags.use_egraphs() {
-            if let Some(c) = self
-                .f
-                .dfg
-                .value_def(val)
-                .inst()
-                .and_then(|inst| self.get_constant(inst))
-            {
-                let ty = self.f.dfg.value_type(val);
-                let regs = self.alloc_tmp(ty);
-                trace!(" -> regs {:?}", regs);
-                assert!(regs.is_valid());
-
-                let insts = I::gen_constant(regs, c.into(), ty, |ty| {
-                    self.alloc_tmp(ty).only_reg().unwrap()
-                });
-                for inst in insts {
-                    self.emit(inst);
-                }
-                return non_writable_value_regs(regs);
-            }
         }
 
         let regs = self.value_regs[val];

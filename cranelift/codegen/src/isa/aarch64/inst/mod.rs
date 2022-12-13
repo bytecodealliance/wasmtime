@@ -234,27 +234,6 @@ impl Inst {
         }
     }
 
-    /// Create instructions that load a 128-bit constant.
-    pub fn load_constant128<F: FnMut(Type) -> Writable<Reg>>(
-        to_regs: ValueRegs<Writable<Reg>>,
-        value: u128,
-        mut alloc_tmp: F,
-    ) -> SmallVec<[Inst; 4]> {
-        assert_eq!(to_regs.len(), 2, "Expected to load i128 into two registers");
-
-        let lower = value as u64;
-        let upper = (value >> 64) as u64;
-
-        let lower_reg = to_regs.regs()[0];
-        let upper_reg = to_regs.regs()[1];
-
-        let mut load_ins = Inst::load_constant(lower_reg, lower, &mut alloc_tmp);
-        let load_upper = Inst::load_constant(upper_reg, upper, &mut alloc_tmp);
-
-        load_ins.extend(load_upper.into_iter());
-        load_ins
-    }
-
     /// Create instructions that load a 32-bit floating-point constant.
     pub fn load_fp_constant32<F: FnMut(Type) -> Writable<Reg>>(
         rd: Writable<Reg>,
@@ -1230,24 +1209,6 @@ impl MachInst for Inst {
             | &Inst::TrapIf { .. }
             | &Inst::Udf { .. } => true,
             _ => false,
-        }
-    }
-
-    fn gen_constant<F: FnMut(Type) -> Writable<Reg>>(
-        to_regs: ValueRegs<Writable<Reg>>,
-        value: u128,
-        ty: Type,
-        mut alloc_tmp: F,
-    ) -> SmallVec<[Inst; 4]> {
-        let to_reg = to_regs.only_reg();
-        match ty {
-            F64 => Inst::load_fp_constant64(to_reg.unwrap(), value as u64, alloc_tmp),
-            F32 => Inst::load_fp_constant32(to_reg.unwrap(), value as u32, alloc_tmp),
-            I8 | I16 | I32 | I64 | R32 | R64 => {
-                Inst::load_constant(to_reg.unwrap(), value as u64, &mut alloc_tmp)
-            }
-            I128 => Inst::load_constant128(to_regs, value, alloc_tmp),
-            _ => panic!("Cannot generate constant for type: {}", ty),
         }
     }
 

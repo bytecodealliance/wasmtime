@@ -162,7 +162,7 @@ block0:
 
 ; block0:
 ;   ldr q5, pc+8 ; b 20 ; data.f128 0x0f0e0d0c0b0a09080706050403020100
-;   movz x1, #1
+;   movz w1, #1
 ;   and w3, w1, #7
 ;   sub x5, xzr, x3
 ;   dup v7.16b, w5
@@ -191,7 +191,7 @@ block0(v0: i8x16, v1: i32):
 }
 
 ; block0:
-;   movz x3, #3
+;   movz w3, #3
 ;   and w5, w3, #7
 ;   sub x7, xzr, x5
 ;   dup v17.16b, w7
