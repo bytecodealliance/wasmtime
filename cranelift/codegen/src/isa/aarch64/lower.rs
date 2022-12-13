@@ -15,7 +15,6 @@ use crate::isa::aarch64::inst::*;
 use crate::isa::aarch64::AArch64Backend;
 use crate::machinst::lower::*;
 use crate::machinst::{Reg, Writable};
-use crate::CodegenError;
 use crate::CodegenResult;
 use crate::{machinst::*, trace};
 use smallvec::{smallvec, SmallVec};
@@ -751,222 +750,17 @@ impl LowerBackend for AArch64Backend {
             return Ok(temp_regs);
         }
 
-        let op = ctx.data(ir_inst).opcode();
         let ty = if ctx.num_outputs(ir_inst) > 0 {
             Some(ctx.output_ty(ir_inst, 0))
         } else {
             None
         };
 
-        match op {
-            Opcode::Iconst
-            | Opcode::Null
-            | Opcode::F32const
-            | Opcode::F64const
-            | Opcode::GetFramePointer
-            | Opcode::GetStackPointer
-            | Opcode::GetReturnAddress
-            | Opcode::Iadd
-            | Opcode::Isub
-            | Opcode::UaddSat
-            | Opcode::SaddSat
-            | Opcode::UsubSat
-            | Opcode::SsubSat
-            | Opcode::Ineg
-            | Opcode::Imul
-            | Opcode::Umulhi
-            | Opcode::Smulhi
-            | Opcode::Udiv
-            | Opcode::Sdiv
-            | Opcode::Urem
-            | Opcode::Srem
-            | Opcode::Uextend
-            | Opcode::Sextend
-            | Opcode::Bnot
-            | Opcode::Band
-            | Opcode::Bor
-            | Opcode::Bxor
-            | Opcode::BandNot
-            | Opcode::BorNot
-            | Opcode::BxorNot
-            | Opcode::Ishl
-            | Opcode::Ushr
-            | Opcode::Sshr
-            | Opcode::Rotr
-            | Opcode::Rotl
-            | Opcode::Bitrev
-            | Opcode::Clz
-            | Opcode::Cls
-            | Opcode::Ctz
-            | Opcode::Bswap
-            | Opcode::Popcnt
-            | Opcode::Load
-            | Opcode::Uload8
-            | Opcode::Sload8
-            | Opcode::Uload16
-            | Opcode::Sload16
-            | Opcode::Uload32
-            | Opcode::Sload32
-            | Opcode::Sload8x8
-            | Opcode::Uload8x8
-            | Opcode::Sload16x4
-            | Opcode::Uload16x4
-            | Opcode::Sload32x2
-            | Opcode::Uload32x2
-            | Opcode::Store
-            | Opcode::Istore8
-            | Opcode::Istore16
-            | Opcode::Istore32
-            | Opcode::StackAddr
-            | Opcode::DynamicStackAddr
-            | Opcode::AtomicRmw
-            | Opcode::AtomicCas
-            | Opcode::AtomicLoad
-            | Opcode::AtomicStore
-            | Opcode::Fence
-            | Opcode::Nop
-            | Opcode::Select
-            | Opcode::SelectSpectreGuard
-            | Opcode::Bitselect
-            | Opcode::Vselect
-            | Opcode::IsNull
-            | Opcode::IsInvalid
-            | Opcode::Ireduce
-            | Opcode::Bmask
-            | Opcode::Bitcast
-            | Opcode::Return
-            | Opcode::Icmp
-            | Opcode::Fcmp
-            | Opcode::Debugtrap
-            | Opcode::Trap
-            | Opcode::ResumableTrap
-            | Opcode::FuncAddr
-            | Opcode::SymbolValue
-            | Opcode::Call
-            | Opcode::CallIndirect
-            | Opcode::GetPinnedReg
-            | Opcode::SetPinnedReg
-            | Opcode::Vconst
-            | Opcode::Extractlane
-            | Opcode::Insertlane
-            | Opcode::Splat
-            | Opcode::ScalarToVector
-            | Opcode::VallTrue
-            | Opcode::VanyTrue
-            | Opcode::VhighBits
-            | Opcode::Shuffle
-            | Opcode::Swizzle
-            | Opcode::Isplit
-            | Opcode::Iconcat
-            | Opcode::Smax
-            | Opcode::Umax
-            | Opcode::Umin
-            | Opcode::Smin
-            | Opcode::IaddPairwise
-            | Opcode::WideningPairwiseDotProductS
-            | Opcode::Fadd
-            | Opcode::Fsub
-            | Opcode::Fmul
-            | Opcode::Fdiv
-            | Opcode::Fmin
-            | Opcode::Fmax
-            | Opcode::FminPseudo
-            | Opcode::FmaxPseudo
-            | Opcode::Sqrt
-            | Opcode::Fneg
-            | Opcode::Fabs
-            | Opcode::Fpromote
-            | Opcode::Fdemote
-            | Opcode::Ceil
-            | Opcode::Floor
-            | Opcode::Trunc
-            | Opcode::Nearest
-            | Opcode::Fma
-            | Opcode::Fcopysign
-            | Opcode::FcvtToUint
-            | Opcode::FcvtToSint
-            | Opcode::FcvtFromUint
-            | Opcode::FcvtFromSint
-            | Opcode::FcvtToUintSat
-            | Opcode::FcvtToSintSat
-            | Opcode::UaddOverflowTrap
-            | Opcode::IaddCout
-            | Opcode::Iabs
-            | Opcode::AvgRound
-            | Opcode::Snarrow
-            | Opcode::Unarrow
-            | Opcode::Uunarrow
-            | Opcode::SwidenLow
-            | Opcode::SwidenHigh
-            | Opcode::UwidenLow
-            | Opcode::UwidenHigh
-            | Opcode::TlsValue
-            | Opcode::SqmulRoundSat
-            | Opcode::FcvtLowFromSint
-            | Opcode::FvpromoteLow
-            | Opcode::Fvdemote
-            | Opcode::ExtractVector => {
-                unreachable!(
-                    "implemented in ISLE: inst = `{}`, type = `{:?}`",
-                    ctx.dfg().display_inst(ir_inst),
-                    ty
-                );
-            }
-
-            Opcode::StackLoad
-            | Opcode::StackStore
-            | Opcode::DynamicStackStore
-            | Opcode::DynamicStackLoad => {
-                panic!("Direct stack memory access not supported; should not be used by Wasm");
-            }
-            Opcode::HeapLoad | Opcode::HeapStore | Opcode::HeapAddr => {
-                panic!("heap access instructions should have been removed by legalization!");
-            }
-            Opcode::TableAddr => {
-                panic!("table_addr should have been removed by legalization!");
-            }
-            Opcode::Trapz | Opcode::Trapnz | Opcode::ResumableTrapnz => {
-                panic!(
-                    "trapz / trapnz / resumable_trapnz should have been removed by legalization!"
-                );
-            }
-            Opcode::GlobalValue => {
-                panic!("global_value should have been removed by legalization!");
-            }
-            Opcode::Jump | Opcode::Brz | Opcode::Brnz | Opcode::BrTable => {
-                panic!("Branch opcode reached non-branch lowering logic!");
-            }
-            Opcode::IaddImm
-            | Opcode::ImulImm
-            | Opcode::UdivImm
-            | Opcode::SdivImm
-            | Opcode::UremImm
-            | Opcode::SremImm
-            | Opcode::IrsubImm
-            | Opcode::IaddCin
-            | Opcode::IaddCarry
-            | Opcode::IsubBin
-            | Opcode::IsubBout
-            | Opcode::IsubBorrow
-            | Opcode::BandImm
-            | Opcode::BorImm
-            | Opcode::BxorImm
-            | Opcode::RotlImm
-            | Opcode::RotrImm
-            | Opcode::IshlImm
-            | Opcode::UshrImm
-            | Opcode::SshrImm
-            | Opcode::IcmpImm => {
-                panic!("ALU+imm and ALU+carry ops should not appear here!");
-            }
-
-            Opcode::Vconcat | Opcode::Vsplit => {
-                return Err(CodegenError::Unsupported(format!(
-                    "Unimplemented lowering: {}",
-                    op
-                )));
-            }
-        }
+        unreachable!(
+            "not implemented in ISLE: inst = `{}`, type = `{:?}`",
+            ctx.dfg().display_inst(ir_inst),
+            ty
+        );
     }
 
     fn lower_branch_group(
@@ -993,7 +787,7 @@ impl LowerBackend for AArch64Backend {
         }
 
         unreachable!(
-            "implemented in ISLE: branch = `{}`",
+            "not implemented in ISLE: branch = `{}`",
             ctx.dfg().display_inst(branches[0]),
         );
     }
