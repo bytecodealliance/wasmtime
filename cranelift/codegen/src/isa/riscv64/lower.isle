@@ -298,93 +298,93 @@
   (lower_popcnt_i128 x))
 
 ;;;; Rules for `ishl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule 1 (lower (has_type $I8 (ishl x (valueregs_2_reg y))))
-  (alu_rrr (AluOPRRR.Sllw) x (alu_andi y 7))
+(rule 1 (lower (has_type $I8 (ishl x y)))
+  (alu_rrr (AluOPRRR.Sllw) x (alu_andi (value_regs_get y 0) 7))
 )
 (rule 2 (lower (has_type $I8 (ishl x (imm12_from_value y))))
   (alu_rr_imm12 (AluOPRRI.Slliw) x (imm12_and y 7)))
 
-(rule 1 (lower (has_type $I16 (ishl x (valueregs_2_reg y))))
-  (alu_rrr (AluOPRRR.Sllw) x (alu_andi y 15))
+(rule 1 (lower (has_type $I16 (ishl x y)))
+  (alu_rrr (AluOPRRR.Sllw) x (alu_andi (value_regs_get y 0) 15))
 )
 (rule 2 (lower (has_type $I16 (ishl x (imm12_from_value y))))
   (alu_rr_imm12 (AluOPRRI.Slliw) x (imm12_and y 15)))
 
-(rule 1 (lower (has_type $I32 (ishl x (valueregs_2_reg y))))
-  (alu_rrr (AluOPRRR.Sllw) x y))
+(rule 1 (lower (has_type $I32 (ishl x y)))
+  (alu_rrr (AluOPRRR.Sllw) x (value_regs_get y 0)))
 (rule 2 (lower (has_type $I32 (ishl x (imm12_from_value y))))
   (alu_rr_imm12 (AluOPRRI.Slliw) x y))
 
 (rule 2 (lower (has_type $I64 (ishl x (imm12_from_value y))))
   (alu_rr_imm12 (AluOPRRI.Slli) x y))
-(rule 1 (lower (has_type $I64 (ishl x (valueregs_2_reg y))))
-  (alu_rrr (AluOPRRR.Sll) x y))
+(rule 1 (lower (has_type $I64 (ishl x y)))
+  (alu_rrr (AluOPRRR.Sll) x (value_regs_get y 0)))
 
 (rule 0 (lower (has_type $I128 (ishl x y)))
   (lower_i128_ishl x y))
 
 ;;;; Rules for `ushr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule 1 (lower (has_type $I8 (ushr x (valueregs_2_reg y))))
-  (alu_rrr (AluOPRRR.Srlw) (ext_int_if_need $false x $I8) (alu_andi y 7))
+(rule 1 (lower (has_type $I8 (ushr x y)))
+  (alu_rrr (AluOPRRR.Srlw) (ext_int_if_need $false x $I8) (alu_andi (value_regs_get y 0) 7))
 )
 (rule 2 (lower (has_type $I8 (ushr x (imm12_from_value y))))
   (alu_rr_imm12 (AluOPRRI.SrliW) (ext_int_if_need $false x $I8) (imm12_and y 7)))
 
-(rule 1 (lower (has_type $I16 (ushr x (valueregs_2_reg y))))
-  (alu_rrr (AluOPRRR.Srlw) (ext_int_if_need $false x $I16) (alu_andi y 15))
+(rule 1 (lower (has_type $I16 (ushr x y)))
+  (alu_rrr (AluOPRRR.Srlw) (ext_int_if_need $false x $I16) (alu_andi (value_regs_get y 0) 15))
 )
 (rule 2 (lower (has_type $I16 (ushr x (imm12_from_value y))))
   (alu_rr_imm12 (AluOPRRI.SrliW) (ext_int_if_need $false x $I16) (imm12_and y 15)))
 
-(rule 1 (lower (has_type $I32 (ushr x (valueregs_2_reg y))))
-  (alu_rrr (AluOPRRR.Srlw) x y))
+(rule 1 (lower (has_type $I32 (ushr x y)))
+  (alu_rrr (AluOPRRR.Srlw) x (value_regs_get y 0)))
 (rule 2 (lower (has_type $I32 (ushr x (imm12_from_value y))))
   (alu_rr_imm12 (AluOPRRI.SrliW) x y))
 
 (rule 2 (lower (has_type $I64 (ushr x (imm12_from_value y))))
   (alu_rr_imm12 (AluOPRRI.Srli) x y))
-(rule 1 (lower (has_type $I64 (ushr x (valueregs_2_reg y))))
-  (alu_rrr (AluOPRRR.Srl) x y))
+(rule 1 (lower (has_type $I64 (ushr x y)))
+  (alu_rrr (AluOPRRR.Srl) x (value_regs_get y 0)))
 
 (rule 0 (lower (has_type $I128 (ushr x y)))
   (lower_i128_ushr x y))
 
 
 ;;;; Rules for `sshr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule 1 (lower (has_type $I8 (sshr x (valueregs_2_reg y))))
-  (alu_rrr (AluOPRRR.Sra) (ext_int_if_need $true x $I8) (alu_andi y 7))
+(rule 1 (lower (has_type $I8 (sshr x y)))
+  (alu_rrr (AluOPRRR.Sra) (ext_int_if_need $true x $I8) (alu_andi (value_regs_get y 0) 7))
 )
 (rule 2 (lower (has_type $I8 (sshr x (imm12_from_value y))))
   (alu_rr_imm12 (AluOPRRI.Srai) (ext_int_if_need $true x $I8) (imm12_and y 7)))
 
-(rule 1 (lower (has_type $I16 (sshr x (valueregs_2_reg y))))
-  (alu_rrr (AluOPRRR.Sra) (ext_int_if_need $true x $I16) (alu_andi y 15))
+(rule 1 (lower (has_type $I16 (sshr x y)))
+  (alu_rrr (AluOPRRR.Sra) (ext_int_if_need $true x $I16) (alu_andi (value_regs_get y 0) 15))
 )
 (rule 2 (lower (has_type $I16 (sshr x (imm12_from_value y))))
   (alu_rr_imm12 (AluOPRRI.Srai) (ext_int_if_need $true x $I16) (imm12_and y 15)))
 
-(rule 1 (lower (has_type $I32 (sshr x (valueregs_2_reg y))))
-  (alu_rrr (AluOPRRR.Sraw) x y))
+(rule 1 (lower (has_type $I32 (sshr x y)))
+  (alu_rrr (AluOPRRR.Sraw) x (value_regs_get y 0)))
 (rule 2 (lower (has_type $I32 (sshr x (imm12_from_value y))))
   (alu_rr_imm12 (AluOPRRI.Sraiw) x y))
-(rule 1 (lower (has_type $I64 (sshr x (valueregs_2_reg y))))
-  (alu_rrr (AluOPRRR.Sra) x y))
+(rule 1 (lower (has_type $I64 (sshr x y)))
+  (alu_rrr (AluOPRRR.Sra) x (value_regs_get y 0)))
 (rule 2 (lower (has_type $I64 (sshr x (imm12_from_value y))))
   (alu_rr_imm12 (AluOPRRI.Srai) x y))
 (rule 0 (lower (has_type $I128 (sshr x y)))
-  (lower_i128_sshr x y))
+  (lower_i128_sshr x (value_regs_get y 0)))
 
 
 ;;;; Rules for `rotl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type (fits_in_64 ty) (rotl x (valueregs_2_reg y))))
-  (lower_rotl ty (ext_int_if_need $false x ty) y))
+(rule (lower (has_type (fits_in_64 ty) (rotl x y)))
+  (lower_rotl ty (ext_int_if_need $false x ty) (value_regs_get y 0)))
 
 (rule 1 (lower (has_type $I128 (rotl x y)))
   (lower_i128_rotl x y))
 
 ;;;; Rules for `rotr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type (fits_in_64 ty) (rotr x (valueregs_2_reg y))))
-  (lower_rotr ty (ext_int_if_need $false x ty) y))
+(rule (lower (has_type (fits_in_64 ty) (rotr x y)))
+  (lower_rotr ty (ext_int_if_need $false x ty) (value_regs_get y 0)))
 
 (rule 1 (lower (has_type $I128 (rotr x y)))
   (lower_i128_rotr x y))

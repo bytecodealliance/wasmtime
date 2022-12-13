@@ -364,13 +364,13 @@ block0(v0: i32):
 }
 
 ; block0:
-;   li t2,17
-;   uext.w a1,a0
-;   andi a3,t2,31
+;   uext.w t2,a0
+;   li a1,17
+;   andi a3,a1,31
 ;   li a5,32
 ;   sub a7,a5,a3
-;   sll t4,a1,a3
-;   srl t1,a1,a7
+;   sll t4,t2,a3
+;   srl t1,t2,a7
 ;   select_reg a0,zero,t1##condition=(a3 eq zero)
 ;   or a0,t4,a0
 ;   ret
@@ -383,13 +383,13 @@ block0(v0: i16):
 }
 
 ; block0:
-;   li t2,10
-;   uext.h a1,a0
-;   andi a3,t2,15
+;   uext.h t2,a0
+;   li a1,10
+;   andi a3,a1,15
 ;   li a5,16
 ;   sub a7,a5,a3
-;   sll t4,a1,a3
-;   srl t1,a1,a7
+;   sll t4,t2,a3
+;   srl t1,t2,a7
 ;   select_reg a0,zero,t1##condition=(a3 eq zero)
 ;   or a0,t4,a0
 ;   ret
@@ -402,13 +402,13 @@ block0(v0: i8):
 }
 
 ; block0:
-;   li t2,3
-;   uext.b a1,a0
-;   andi a3,t2,7
+;   uext.b t2,a0
+;   li a1,3
+;   andi a3,a1,7
 ;   li a5,8
 ;   sub a7,a5,a3
-;   sll t4,a1,a3
-;   srl t1,a1,a7
+;   sll t4,t2,a3
+;   srl t1,t2,a7
 ;   select_reg a0,zero,t1##condition=(a3 eq zero)
 ;   or a0,t4,a0
 ;   ret
