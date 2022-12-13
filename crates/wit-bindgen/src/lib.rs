@@ -1126,10 +1126,6 @@ impl<'a> InterfaceGenerator<'a> {
             }
             let abi_type = self.param_name(*wit_type);
 
-            println!(
-                "TRAPPABLE TYPE {}::{wit_typename}({abi_type}): {trappable_type}",
-                self.iface.name
-            );
             uwriteln!(
                 self.src,
                 "

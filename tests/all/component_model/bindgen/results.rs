@@ -283,6 +283,28 @@ mod enum_error {
             ),
         )?;
 
+        // You can create concrete trap types which make it all the way out to the
+        // host caller, via downcast_ref below.
+        #[derive(Debug)]
+        struct MyTrap;
+
+        impl std::fmt::Display for MyTrap {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{:?}", self)
+            }
+        }
+        impl std::error::Error for MyTrap {}
+
+        // It is possible to define From impls that target these generated trappable
+        // types. This allows you to integrate libraries with other error types, or
+        // use your own more descriptive error types, and use ? to convert them at
+        // their throw site.
+        impl From<MyTrap> for imports::TrappableE1 {
+            fn from(t: MyTrap) -> imports::TrappableE1 {
+                imports::TrappableE1::trap(anyhow!(t))
+            }
+        }
+
         #[derive(Default)]
         struct MyImports {}
 
@@ -293,7 +315,7 @@ mod enum_error {
                 } else if a == 1.0 {
                     Err(imports::E1::A)?
                 } else {
-                    Err(imports::TrappableE1::trap(anyhow!("enum_error: trap")))
+                    Err(MyTrap)?
                 }
             }
         }
@@ -322,8 +344,10 @@ mod enum_error {
         let e = results.enum_error(&mut store, 2.0).err().expect("trap");
         assert_eq!(
             format!("{}", e.source().expect("trap message is stored in source")),
-            "enum_error: trap"
+            "MyTrap"
         );
+        e.downcast_ref::<MyTrap>()
+            .expect("downcast trap to concrete MyTrap type");
 
         Ok(())
     }
