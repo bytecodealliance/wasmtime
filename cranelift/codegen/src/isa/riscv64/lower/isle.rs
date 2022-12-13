@@ -198,8 +198,13 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
 
     fn imm(&mut self, ty: Type, val: u64) -> Reg {
         let tmp = self.temp_writable_reg(ty);
-        let insts = &MInst::load_constant_u64(tmp, val, &mut |ty| self.temp_writable_reg(ty));
-        self.emit_list(insts);
+        let alloc_tmp = &mut |ty| self.temp_writable_reg(ty);
+        let insts = match ty {
+            F32 => MInst::load_fp_constant32(tmp, val as u32, alloc_tmp),
+            F64 => MInst::load_fp_constant64(tmp, val, alloc_tmp),
+            _ => MInst::load_constant_u64(tmp, val, alloc_tmp),
+        };
+        self.emit_list(&insts);
         tmp.to_reg()
     }
     #[inline]
