@@ -53,8 +53,7 @@ impl LowerBackend for S390xBackend {
 
         // Lower the first branch in ISLE.  This will automatically handle
         // the second branch (if any) by emitting a two-way conditional branch.
-        if let Some(temp_regs) = super::lower::isle::lower_branch(ctx, self, branches[0], targets) {
-            assert!(temp_regs.len() == 0);
+        if let Some(()) = super::lower::isle::lower_branch(ctx, self, branches[0], targets) {
             return Ok(());
         }
 

@@ -68,7 +68,7 @@ pub(crate) fn lower_branch(
     backend: &X64Backend,
     branch: Inst,
     targets: &[MachLabel],
-) -> Option<InstOutput> {
+) -> Option<()> {
     // TODO: reuse the ISLE context across lowerings so we can reuse its
     // internal heap allocations.
     let mut isle_ctx = IsleContext { lower_ctx, backend };

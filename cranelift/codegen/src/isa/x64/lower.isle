@@ -7,7 +7,7 @@
 ;; A variant of the main lowering constructor term, used for branches.
 ;; The only difference is that it gets an extra argument holding a vector
 ;; of branch targets to be used.
-(decl partial lower_branch (Inst MachLabelSlice) InstOutput)
+(decl partial lower_branch (Inst MachLabelSlice) Unit)
 
 ;;;; Rules for `iconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2865,55 +2865,55 @@
 ;; Rules for `jump` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower_branch (jump _ _) (single_target target))
-      (side_effect (jmp_known target)))
+      (emit_side_effect (jmp_known target)))
 
 ;; Rules for `brz` and `brnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 2 (lower_branch (brz (icmp cc a b) _ _) (two_targets taken not_taken))
       (let ((cmp IcmpCondResult (invert_icmp_cond_result (emit_cmp cc a b))))
-        (side_effect (jmp_cond_icmp cmp taken not_taken))))
+        (emit_side_effect (jmp_cond_icmp cmp taken not_taken))))
 
 (rule 2 (lower_branch (brz (uextend (icmp cc a b)) _ _) (two_targets taken not_taken))
       (let ((cmp IcmpCondResult (invert_icmp_cond_result (emit_cmp cc a b))))
-        (side_effect (jmp_cond_icmp cmp taken not_taken))))
+        (emit_side_effect (jmp_cond_icmp cmp taken not_taken))))
 
 
 (rule 2 (lower_branch (brz (fcmp cc a b) _ _) (two_targets taken not_taken))
       (let ((cmp FcmpCondResult (emit_fcmp (floatcc_inverse cc) a b)))
-        (side_effect (jmp_cond_fcmp cmp taken not_taken))))
+        (emit_side_effect (jmp_cond_fcmp cmp taken not_taken))))
 
 (rule 2 (lower_branch (brz (uextend (fcmp cc a b)) _ _) (two_targets taken not_taken))
       (let ((cmp FcmpCondResult (emit_fcmp (floatcc_inverse cc) a b)))
-        (side_effect (jmp_cond_fcmp cmp taken not_taken))))
+        (emit_side_effect (jmp_cond_fcmp cmp taken not_taken))))
 
 (rule 1 (lower_branch (brz val @ (value_type $I128) _ _) (two_targets taken not_taken))
-      (side_effect (jmp_cond_icmp (cmp_zero_i128 (CC.NZ) val) taken not_taken)))
+      (emit_side_effect (jmp_cond_icmp (cmp_zero_i128 (CC.NZ) val) taken not_taken)))
 
 (rule 0 (lower_branch (brz val @ (value_type (ty_int_bool_or_ref)) _ _) (two_targets taken not_taken))
-      (side_effect
+      (emit_side_effect
         (with_flags_side_effect (cmp_zero_int_bool_ref val)
                                 (jmp_cond (CC.Z) taken not_taken))))
 
 
 (rule 2 (lower_branch (brnz (icmp cc a b) _ _) (two_targets taken not_taken))
-      (side_effect (jmp_cond_icmp (emit_cmp cc a b) taken not_taken)))
+      (emit_side_effect (jmp_cond_icmp (emit_cmp cc a b) taken not_taken)))
 
 (rule 2 (lower_branch (brnz (fcmp cc a b) _ _) (two_targets taken not_taken))
       (let ((cmp FcmpCondResult (emit_fcmp cc a b)))
-        (side_effect (jmp_cond_fcmp cmp taken not_taken))))
+        (emit_side_effect (jmp_cond_fcmp cmp taken not_taken))))
 
 (rule 2 (lower_branch (brnz (uextend (icmp cc a b)) _ _) (two_targets taken not_taken))
-      (side_effect (jmp_cond_icmp (emit_cmp cc a b) taken not_taken)))
+      (emit_side_effect (jmp_cond_icmp (emit_cmp cc a b) taken not_taken)))
 
 (rule 2 (lower_branch (brnz (uextend (fcmp cc a b)) _ _) (two_targets taken not_taken))
       (let ((cmp FcmpCondResult (emit_fcmp cc a b)))
-        (side_effect (jmp_cond_fcmp cmp taken not_taken))))
+        (emit_side_effect (jmp_cond_fcmp cmp taken not_taken))))
 
 (rule 1 (lower_branch (brnz val @ (value_type $I128) _ _) (two_targets taken not_taken))
-      (side_effect (jmp_cond_icmp (cmp_zero_i128 (CC.Z) val) taken not_taken)))
+      (emit_side_effect (jmp_cond_icmp (cmp_zero_i128 (CC.Z) val) taken not_taken)))
 
 (rule 0 (lower_branch (brnz val @ (value_type (ty_int_bool_or_ref)) _ _) (two_targets taken not_taken))
-      (side_effect
+      (emit_side_effect
         (with_flags_side_effect (cmp_zero_int_bool_ref val)
                                 (jmp_cond (CC.NZ) taken not_taken))))
 
@@ -2944,7 +2944,7 @@
 ;; Rules for `br_table` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower_branch (br_table idx @ (value_type ty) _ _) (jump_table_targets default_target jt_targets))
-      (side_effect (jmp_table_seq ty idx default_target jt_targets)))
+      (emit_side_effect (jmp_table_seq ty idx default_target jt_targets)))
 
 ;; Rules for `select_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

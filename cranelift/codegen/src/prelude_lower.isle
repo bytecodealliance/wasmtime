@@ -282,20 +282,23 @@
                                  (inst2 MInst)
                                  (inst3 MInst))))
 
+;; Emit given side-effectful instruction.
+(decl emit_side_effect (SideEffectNoResult) Unit)
+(rule (emit_side_effect (SideEffectNoResult.Inst inst))
+      (emit inst))
+(rule (emit_side_effect (SideEffectNoResult.Inst2 inst1 inst2))
+      (let ((_ Unit (emit inst1)))
+        (emit inst2)))
+(rule (emit_side_effect (SideEffectNoResult.Inst3 inst1 inst2 inst3))
+      (let ((_ Unit (emit inst1))
+            (_ Unit (emit inst2)))
+        (emit inst3)))
+
 ;; Create an empty `InstOutput`, but do emit the given side-effectful
 ;; instruction.
 (decl side_effect (SideEffectNoResult) InstOutput)
-(rule (side_effect (SideEffectNoResult.Inst inst))
-      (let ((_ Unit (emit inst)))
-        (output_none)))
-(rule (side_effect (SideEffectNoResult.Inst2 inst1 inst2))
-      (let ((_ Unit (emit inst1))
-            (_ Unit (emit inst2)))
-        (output_none)))
-(rule (side_effect (SideEffectNoResult.Inst3 inst1 inst2 inst3))
-      (let ((_ Unit (emit inst1))
-            (_ Unit (emit inst2))
-            (_ Unit (emit inst3)))
+(rule (side_effect inst)
+      (let ((_ Unit (emit_side_effect inst)))
         (output_none)))
 
 (decl side_effect_concat (SideEffectNoResult SideEffectNoResult) SideEffectNoResult)

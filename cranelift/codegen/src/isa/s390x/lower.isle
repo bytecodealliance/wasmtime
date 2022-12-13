@@ -7,7 +7,7 @@
 ;; A variant of the main lowering constructor term, used for branches.
 ;; The only difference is that it gets an extra argument holding a vector
 ;; of branch targets to be used.
-(decl partial lower_branch (Inst VecMachLabel) InstOutput)
+(decl partial lower_branch (Inst VecMachLabel) Unit)
 
 
 ;;;; Rules for `iconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3715,7 +3715,7 @@
 ;; Unconditional branch.  The target is found as first (and only) element in
 ;; the list of the current block's branch targets passed as `targets`.
 (rule (lower_branch (jump _ _) targets)
-      (side_effect (jump_impl (vec_element targets 0))))
+      (emit_side_effect (jump_impl (vec_element targets 0))))
 
 
 ;;;; Rules for `br_table` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3731,8 +3731,8 @@
             (cond ProducesBool
               (bool (icmpu_uimm32 $I64 idx (vec_length_minus1 targets))
                     (intcc_as_cond (IntCC.UnsignedGreaterThanOrEqual))))
-            (_ InstOutput (side_effect (oneway_cond_br_bool cond
-                                         (vec_element targets 0)))))
+            (_ Unit (emit_side_effect (oneway_cond_br_bool cond
+                                        (vec_element targets 0)))))
         ;; Scale the index by the element size, and then emit the
         ;; compound instruction that does:
         ;;
@@ -3747,7 +3747,7 @@
         ;; PC-rel offset to the jumptable would be incorrect.
         ;; (The alternative is to introduce a relocation pass
         ;; for inlined jumptables, which is much worse, IMHO.)
-        (side_effect (jt_sequence (lshl_imm $I64 idx 2) targets))))
+        (emit_side_effect (jt_sequence (lshl_imm $I64 idx 2) targets))))
 
 
 ;;;; Rules for `brz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3756,9 +3756,9 @@
 ;; - element 0: target if the condition is true (i.e. value is zero)
 ;; - element 1: target if the condition is false (i.e. value is nonzero)
 (rule (lower_branch (brz val_cond _ _) targets)
-      (side_effect (cond_br_bool (invert_bool (value_nonzero val_cond))
-                                 (vec_element targets 0)
-                                 (vec_element targets 1))))
+      (emit_side_effect (cond_br_bool (invert_bool (value_nonzero val_cond))
+                                      (vec_element targets 0)
+                                      (vec_element targets 1))))
 
 
 ;;;; Rules for `brnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3767,9 +3767,9 @@
 ;; - element 0: target if the condition is true (i.e. value is nonzero)
 ;; - element 1: target if the condition is false (i.e. value is zero)
 (rule (lower_branch (brnz val_cond _ _) targets)
-      (side_effect (cond_br_bool (value_nonzero val_cond)
-                                 (vec_element targets 0)
-                                 (vec_element targets 1))))
+      (emit_side_effect (cond_br_bool (value_nonzero val_cond)
+                                     (vec_element targets 0)
+                                     (vec_element targets 1))))
 
 
 ;;;; Rules for `trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

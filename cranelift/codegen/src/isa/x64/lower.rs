@@ -335,8 +335,7 @@ impl LowerBackend for X64Backend {
             assert!(op1 == Opcode::Jump);
         }
 
-        if let Some(temp_regs) = isle::lower_branch(ctx, self, branches[0], targets) {
-            assert!(temp_regs.len() == 0);
+        if let Some(()) = isle::lower_branch(ctx, self, branches[0], targets) {
             return Ok(());
         }
 

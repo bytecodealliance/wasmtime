@@ -781,8 +781,7 @@ impl LowerBackend for AArch64Backend {
             assert!(op1 == Opcode::Jump);
         }
 
-        if let Some(temp_regs) = super::lower::isle::lower_branch(ctx, self, branches[0], targets) {
-            assert!(temp_regs.len() == 0);
+        if let Some(()) = super::lower::isle::lower_branch(ctx, self, branches[0], targets) {
             return Ok(());
         }
 
