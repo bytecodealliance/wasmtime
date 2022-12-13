@@ -6,7 +6,9 @@ mod random;
 mod tcp;
 pub use wasi_common::{table::Table, WasiCtx};
 
-wit_bindgen_host_wasmtime_rust::generate!({
+type HostResult<T, E> = Result<T, wasmtime::component::Error<E>>;
+
+wasmtime::component::bindgen!({
     path: "../wit/wasi.wit",
     tracing: true,
     async: true,

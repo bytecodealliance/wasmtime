@@ -1,18 +1,15 @@
 #![allow(unused_variables)]
 
-use crate::{wasi_filesystem, WasiCtx};
+use crate::{wasi_filesystem, HostResult, WasiCtx};
 use std::io::{IoSlice, IoSliceMut};
 use wasi_common::file::TableFileExt;
-use wit_bindgen_host_wasmtime_rust::Result as HostResult;
 
-fn convert(
-    error: wasi_common::Error,
-) -> wit_bindgen_host_wasmtime_rust::Error<wasi_filesystem::Errno> {
+fn convert(error: wasi_common::Error) -> wasmtime::component::Error<wasi_filesystem::Errno> {
     if let Some(errno) = error.downcast_ref() {
         use wasi_common::Errno::*;
         use wasi_filesystem::Errno;
 
-        wit_bindgen_host_wasmtime_rust::Error::new(match errno {
+        wasmtime::component::Error::new(match errno {
             Acces => Errno::Access,
             Addrinuse => Errno::Addrinuse,
             Addrnotavail => Errno::Addrnotavail,
@@ -199,7 +196,7 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         todo!()
     }
 
-    fn close_dir_entry_stream(
+    async fn close_dir_entry_stream(
         &mut self,
         fd: wasi_filesystem::DirEntryStream,
     ) -> anyhow::Result<()> {

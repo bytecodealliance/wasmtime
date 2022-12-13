@@ -10,13 +10,12 @@ async-trait = { workspace = true }
 cap-std = { workspace = true }
 cap-rand = { workspace = true }
 tokio = { version = "1.22.0", features = [ "rt", "macros" ] }
-wasmtime = { git = "https://github.com/bytecodealliance/wasmtime" }
-wit-bindgen-host-wasmtime-rust = { git = "https://github.com/bytecodealliance/wit-bindgen", features = ["tracing"] }
+tracing = { workspace = true }
+wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", features = ["component-model"] }
 wasi-common = { path = "../wasi-common" }
 wasi-cap-std-sync = { path = "../wasi-common/cap-std-sync" }
 
 [dev-dependencies]
 test-programs-macros = { path = "../test-programs/macros" }
-tracing = { version = "0.1.26" }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt" ]}
 test-log = { version = "0.2", default-features = false, features = ["trace"] }
