@@ -140,7 +140,7 @@ macro_rules! isle_lower_prelude_methods {
                         _ => None,
                     };
                     if let Some(insn) = insn {
-                        if let Ok(regs) = self.backend.lower(self.lower_ctx, insn) {
+                        if let Some(regs) = self.backend.lower(self.lower_ctx, insn) {
                             assert!(regs.len() == 1);
                             return regs[0];
                         }

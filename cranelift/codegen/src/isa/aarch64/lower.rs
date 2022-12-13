@@ -15,7 +15,6 @@ use crate::isa::aarch64::inst::*;
 use crate::isa::aarch64::AArch64Backend;
 use crate::machinst::lower::*;
 use crate::machinst::{Reg, Writable};
-use crate::CodegenResult;
 use crate::{machinst::*, trace};
 use smallvec::{smallvec, SmallVec};
 
@@ -745,50 +744,17 @@ pub(crate) fn maybe_value_multi(
 impl LowerBackend for AArch64Backend {
     type MInst = Inst;
 
-    fn lower(&self, ctx: &mut Lower<Inst>, ir_inst: IRInst) -> CodegenResult<InstOutput> {
-        if let Some(temp_regs) = super::lower::isle::lower(ctx, self, ir_inst) {
-            return Ok(temp_regs);
-        }
-
-        let ty = if ctx.num_outputs(ir_inst) > 0 {
-            Some(ctx.output_ty(ir_inst, 0))
-        } else {
-            None
-        };
-
-        unreachable!(
-            "not implemented in ISLE: inst = `{}`, type = `{:?}`",
-            ctx.dfg().display_inst(ir_inst),
-            ty
-        );
+    fn lower(&self, ctx: &mut Lower<Inst>, ir_inst: IRInst) -> Option<InstOutput> {
+        isle::lower(ctx, self, ir_inst)
     }
 
-    fn lower_branch_group(
+    fn lower_branch(
         &self,
         ctx: &mut Lower<Inst>,
-        branches: &[IRInst],
+        ir_inst: IRInst,
         targets: &[MachLabel],
-    ) -> CodegenResult<()> {
-        // A block should end with at most two branches. The first may be a
-        // conditional branch; a conditional branch can be followed only by an
-        // unconditional branch or fallthrough. Otherwise, if only one branch,
-        // it may be an unconditional branch, a fallthrough, a return, or a
-        // trap. These conditions are verified by `is_ebb_basic()` during the
-        // verifier pass.
-        assert!(branches.len() <= 2);
-        if branches.len() == 2 {
-            let op1 = ctx.data(branches[1]).opcode();
-            assert!(op1 == Opcode::Jump);
-        }
-
-        if let Some(()) = super::lower::isle::lower_branch(ctx, self, branches[0], targets) {
-            return Ok(());
-        }
-
-        unreachable!(
-            "not implemented in ISLE: branch = `{}`",
-            ctx.dfg().display_inst(branches[0]),
-        );
+    ) -> Option<()> {
+        isle::lower_branch(ctx, self, ir_inst, targets)
     }
 
     fn maybe_pinned_reg(&self) -> Option<Reg> {
