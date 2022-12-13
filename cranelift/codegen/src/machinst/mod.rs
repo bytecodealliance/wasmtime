@@ -323,7 +323,7 @@ impl CompiledCodeStencil {
     /// Apply function parameters to finalize a stencil into its final form.
     pub fn apply_params(self, params: &FunctionParameters) -> CompiledCode {
         CompiledCode {
-            buffer: self.buffer.apply_params(params),
+            buffer: self.buffer.apply_base_srcloc(params.base_srcloc()),
             frame_size: self.frame_size,
             disasm: self.disasm,
             value_labels_ranges: self.value_labels_ranges,
