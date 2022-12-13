@@ -46,7 +46,6 @@ pub fn link_module(
         format_ident!("add_{}_to_linker", module_ident)
     };
 
-    assert!(!settings.mutable);
     let u = if settings.mutable {
         quote!(&mut U)
     } else {
