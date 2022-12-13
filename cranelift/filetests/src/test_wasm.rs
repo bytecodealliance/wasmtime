@@ -48,14 +48,6 @@ pub fn run(path: &Path, wat: &str) -> Result<()> {
         .validate_all(&wasm)
         .context("test WAT failed to validate")?;
 
-    let wasm = wat::parse_str(wat).context("failed to parse the test WAT")?;
-    let mut validator = wasmparser::Validator::new_with_features(
-        cranelift_wasm::ModuleEnvironment::wasm_features(&env),
-    );
-    validator
-        .validate_all(&wasm)
-        .context("test WAT failed to validate")?;
-
     cranelift_wasm::translate_module(&wasm, &mut env)
         .context("failed to translate the test case into CLIF")?;
 
