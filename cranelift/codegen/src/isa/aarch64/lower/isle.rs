@@ -117,6 +117,20 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         }
     }
 
+    fn move_wide_const_from_u64(&mut self, ty: Type, n: u64) -> Option<MoveWideConst> {
+        let bits = ty.bits();
+        let n = if bits < 64 {
+            n & !(u64::MAX << bits)
+        } else {
+            n
+        };
+        MoveWideConst::maybe_from_u64(n)
+    }
+
+    fn move_wide_const_from_inverted_u64(&mut self, ty: Type, n: u64) -> Option<MoveWideConst> {
+        self.move_wide_const_from_u64(ty, !n)
+    }
+
     fn imm_logic_from_u64(&mut self, ty: Type, n: u64) -> Option<ImmLogic> {
         ImmLogic::maybe_from_u64(n, ty)
     }
@@ -521,6 +535,14 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
 
     fn pair_amode(&mut self, addr: Value, offset: u32) -> PairAMode {
         lower_pair_address(self.lower_ctx, addr, offset as i32)
+    }
+
+    fn constant_f32(&mut self, value: u64) -> Reg {
+        let rd = self.temp_writable_reg(I8X16);
+
+        lower_constant_f32(self.lower_ctx, rd, f32::from_bits(value as u32));
+
+        rd.to_reg()
     }
 
     fn constant_f64(&mut self, value: u64) -> Reg {

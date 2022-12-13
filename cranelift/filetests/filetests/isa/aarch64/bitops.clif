@@ -111,7 +111,7 @@ block0(v0: i128):
 ;   clz x5, x0
 ;   lsr x7, x3, #6
 ;   madd x0, x5, x7, x3
-;   movz w1, #0
+;   movz x1, #0
 ;   ret
 
 function %c(i8) -> i8 {
@@ -173,7 +173,7 @@ block0(v0: i128):
 ;   subs xzr, x5, #63
 ;   csel x14, x11, xzr, eq
 ;   add x0, x14, x5
-;   movz w1, #0
+;   movz x1, #0
 ;   ret
 
 function %d(i8) -> i8 {
@@ -235,7 +235,7 @@ block0(v0: i128):
 ;   clz x9, x5
 ;   lsr x11, x7, #6
 ;   madd x0, x9, x11, x7
-;   movz w1, #0
+;   movz x1, #0
 ;   ret
 
 function %d(i128) -> i128 {
@@ -250,7 +250,7 @@ block0(v0: i128):
 ;   cnt v7.16b, v4.16b
 ;   addv b17, v7.16b
 ;   umov w0, v17.b[0]
-;   movz w1, #0
+;   movz x1, #0
 ;   ret
 
 function %d(i64) -> i64 {

@@ -13,7 +13,7 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   orr x5, xzr, #128
+;   movz x5, #128
 ;   sub x7, x5, x2
 ;   lsr x9, x0, x2
 ;   lsr x11, x1, x2
@@ -96,7 +96,7 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   orr x5, xzr, #128
+;   movz x5, #128
 ;   sub x7, x5, x2
 ;   lsl x9, x0, x2
 ;   lsl x11, x1, x2

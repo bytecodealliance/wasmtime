@@ -24,6 +24,21 @@
 (rule (lower (has_type ty (null)))
       (imm ty (ImmExtend.Zero) 0))
 
+;;;; Rules for `f32const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (f32const (u64_from_ieee32 n)))
+      (constant_f32 n))
+
+;;;; Rules for `f64const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (f64const (u64_from_ieee64 n)))
+      (constant_f64 n))
+
+;;;; Rules for `nop` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (nop))
+      (invalid_reg))
+
 ;;;; Rules for `iadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `i64` and smaller

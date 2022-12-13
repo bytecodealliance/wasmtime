@@ -79,7 +79,7 @@ block0(v0: i64, v1: i32):
 ;   mov w8, w1
 ;   add x9, x0, x1, UXTW
 ;   add x9, x9, #16
-;   movz w6, #65512
+;   movz x6, #65512
 ;   movz x10, #0
 ;   subs xzr, x8, x6
 ;   csel x0, x10, x9, hi

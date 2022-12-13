@@ -43,27 +43,6 @@ impl NarrowValueMode {
     }
 }
 
-/// Emits instruction(s) to generate the given constant value into newly-allocated
-/// temporary registers, returning these registers.
-fn generate_constant(ctx: &mut Lower<Inst>, ty: Type, c: u128) -> ValueRegs<Reg> {
-    let from_bits = ty_bits(ty);
-    let masked = if from_bits < 128 {
-        c & ((1u128 << from_bits) - 1)
-    } else {
-        c
-    };
-
-    let cst_copy = ctx.alloc_tmp(ty);
-    for inst in Inst::gen_constant(cst_copy, masked, ty, |ty| {
-        ctx.alloc_tmp(ty).only_reg().unwrap()
-    })
-    .into_iter()
-    {
-        ctx.emit(inst);
-    }
-    non_writable_value_regs(cst_copy)
-}
-
 /// Extends a register according to `narrow_mode`.
 /// If extended, the value is always extended to 64 bits, for simplicity.
 fn extend_reg(
@@ -112,7 +91,20 @@ fn lower_value_to_regs(ctx: &mut Lower<Inst>, value: Value) -> (ValueRegs<Reg>, 
 
     let in_regs = if let Some(c) = inputs.constant {
         // Generate constants fresh at each use to minimize long-range register pressure.
-        generate_constant(ctx, ty, c as u128)
+        let from_bits = ty_bits(ty);
+        let c = if from_bits < 64 {
+            c & ((1u64 << from_bits) - 1)
+        } else {
+            c
+        };
+        match ty {
+            I8 | I16 | I32 | I64 | R32 | R64 => {
+                let cst_copy = ctx.alloc_tmp(ty);
+                lower_constant_u64(ctx, cst_copy.only_reg().unwrap(), c);
+                non_writable_value_regs(cst_copy)
+            }
+            _ => unreachable!(), // Only used for addresses.
+        }
     } else {
         ctx.put_value_in_regs(value)
     };

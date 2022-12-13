@@ -370,7 +370,7 @@ block1:
 ;   subs xzr, x1, x3
 ;   cset x9, ls
 ;   csel x11, x6, x9, eq
-;   orr x13, xzr, #1
+;   movz x13, #1
 ;   subs xzr, x13, x11
 ;   b.ls label1 ; b label2
 ; block1:
@@ -472,7 +472,7 @@ block1:
 ;   subs xzr, x1, x3
 ;   cset x9, hs
 ;   csel x11, x6, x9, eq
-;   orr x13, xzr, #1
+;   movz x13, #1
 ;   subs xzr, x11, x13
 ;   b.hs label1 ; b label2
 ; block1:

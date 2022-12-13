@@ -41,25 +41,7 @@ pub(crate) fn lower_insn_to_regs(
     match op {
         Opcode::Iconst | Opcode::Null => implemented_in_isle(ctx),
 
-        Opcode::F32const => {
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let val = ctx.get_constant(insn).unwrap();
-            for inst in
-                Inst::load_fp_constant32(rd, val as u32, |ty| ctx.alloc_tmp(ty).only_reg().unwrap())
-            {
-                ctx.emit(inst);
-            }
-        }
-
-        Opcode::F64const => {
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let val = ctx.get_constant(insn).unwrap();
-            for inst in
-                Inst::load_fp_constant64(rd, val, |ty| ctx.alloc_tmp(ty).only_reg().unwrap())
-            {
-                ctx.emit(inst);
-            }
-        }
+        Opcode::F32const | Opcode::F64const => implemented_in_isle(ctx),
 
         Opcode::GetFramePointer | Opcode::GetStackPointer | Opcode::GetReturnAddress => {
             implemented_in_isle(ctx)
@@ -147,9 +129,7 @@ pub(crate) fn lower_insn_to_regs(
             panic!("table_addr should have been removed by legalization!");
         }
 
-        Opcode::Nop => {
-            // Nothing.
-        }
+        Opcode::Nop => implemented_in_isle(ctx),
 
         Opcode::Select => implemented_in_isle(ctx),
 
@@ -301,6 +281,4 @@ pub(crate) fn lower_insn_to_regs(
             )));
         }
     }
-
-    Ok(())
 }
