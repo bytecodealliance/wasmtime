@@ -311,6 +311,20 @@ impl<'a> Arbitrary<'a> for Config {
                 cfg.max_memory_pages = pooling.instance_memory_pages;
             }
 
+            // If traps are disallowed then memories must have at least one page
+            // of memory so if we still are only allowing 0 pages of memory then
+            // increase that to one here.
+            if cfg.disallow_traps {
+                if pooling.instance_memory_pages == 0 {
+                    pooling.instance_memory_pages = 1;
+                    cfg.max_memory_pages = 1;
+                }
+                // .. additionally update tables
+                if pooling.instance_table_elements == 0 {
+                    pooling.instance_table_elements = 1;
+                }
+            }
+
             // Forcibly don't use the `CustomUnaligned` memory configuration
             // with the pooling allocator active.
             if let MemoryConfig::CustomUnaligned = config.wasmtime.memory_config {
