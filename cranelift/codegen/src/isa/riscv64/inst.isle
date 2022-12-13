@@ -1366,11 +1366,6 @@
   (load_imm12 x)
   (alu_rr_imm12 (AluOPRRI.Addi) (zero_reg) (imm12_const x)))
 
-;; Let me always get low part of ValueRegs.
-;; Sometimes I only need lowest bits, like `I8 << I128`.
-(decl valueregs_2_reg (Reg) Value)
-(extern extractor infallible valueregs_2_reg valueregs_2_reg)
-
 (decl lower_cls_i128 (ValueRegs) ValueRegs)
 (rule
   (lower_cls_i128 x)
