@@ -570,7 +570,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
             if let Some((dst, src)) = insn.is_move() {
                 // As we only use real registers with reg_fixed_def/reg_fixed_use constraints, the
                 // only situation where we would find a real register here is if it came from a
-                // reg_fixed_nonallocatable constraint. Don't add the alias at this point, as that
+                // reg_fixed_nonallocatable constraint. Don't add the move at this point, as that
                 // would only serve to allow an allocation of a fixed_nonallocatable register to a
                 // virtual register in RA2.
                 if dst.to_reg().is_virtual() && src.is_virtual() {
