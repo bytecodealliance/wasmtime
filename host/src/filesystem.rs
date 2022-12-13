@@ -195,7 +195,14 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
     async fn read_dir_entry(
         &mut self,
         stream: wasi_filesystem::DirEntryStream,
-    ) -> HostResult<wasi_filesystem::DirEntry, wasi_filesystem::Errno> {
+    ) -> HostResult<Option<wasi_filesystem::DirEntry>, wasi_filesystem::Errno> {
+        todo!()
+    }
+
+    fn close_dir_entry_stream(
+        &mut self,
+        fd: wasi_filesystem::DirEntryStream,
+    ) -> anyhow::Result<()> {
         todo!()
     }
 
