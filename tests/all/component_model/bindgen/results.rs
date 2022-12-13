@@ -219,12 +219,12 @@ mod enum_error {
     use super::*;
     wasmtime::component::bindgen!({
         inline: "
+        interface imports {
+            enum e1 { a, b, c }
+            enum-error: func(a: float64) -> result<float64, e1>
+        }
         world result-playground {
-            import imports: interface {
-                enum e1 { a, b, c }
-                enum-error: func(a: float64) -> result<float64, e1>
-            }
-
+            import imports: imports
             default export interface {
                 enum e1 { a, b, c }
                 enum-error: func(a: float64) -> result<float64, e1>
@@ -287,13 +287,13 @@ mod enum_error {
         struct MyImports {}
 
         impl imports::Imports for MyImports {
-            fn enum_error(&mut self, a: f64) -> Result<Result<f64, imports::E1>, Error> {
+            fn enum_error(&mut self, a: f64) -> Result<f64, imports::TrappableE1> {
                 if a == 0.0 {
-                    Ok(Ok(a))
+                    Ok(a)
                 } else if a == 1.0 {
-                    Ok(Err(imports::E1::A))
+                    Err(imports::E1::A)?
                 } else {
-                    Err(anyhow!("enum_error: trap"))
+                    Err(imports::TrappableE1::trap(anyhow!("enum_error: trap")))
                 }
             }
         }
