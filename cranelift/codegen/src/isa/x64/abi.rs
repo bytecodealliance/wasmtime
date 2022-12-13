@@ -637,12 +637,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         let arg2 = get_intreg_for_arg(&call_conv, 2, 2).unwrap();
         let temp = alloc_tmp(Self::word_type());
         let temp2 = alloc_tmp(Self::word_type());
-        insts.extend(
-            Inst::gen_constant(ValueRegs::one(temp), size as u128, I64, |_| {
-                panic!("tmp should not be needed")
-            })
-            .into_iter(),
-        );
+        insts.push(Inst::imm(OperandSize::Size64, size as u64, temp));
         // We use an indirect call and a full LoadExtName because we do not have
         // information about the libcall `RelocDistance` here, so we
         // conservatively use the more flexible calling sequence.

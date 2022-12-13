@@ -41,27 +41,6 @@ fn matches_input(ctx: &mut Lower<Inst>, input: InsnInput, op: Opcode) -> Option<
     })
 }
 
-/// Emits instruction(s) to generate the given 64-bit constant value into a newly-allocated
-/// temporary register, returning that register.
-fn generate_constant(ctx: &mut Lower<Inst>, ty: Type, c: u64) -> ValueRegs<Reg> {
-    let from_bits = ty_bits(ty);
-    let masked = if from_bits < 64 {
-        c & ((1u64 << from_bits) - 1)
-    } else {
-        c
-    };
-
-    let cst_copy = ctx.alloc_tmp(ty);
-    for inst in Inst::gen_constant(cst_copy, masked as u128, ty, |ty| {
-        ctx.alloc_tmp(ty).only_reg().unwrap()
-    })
-    .into_iter()
-    {
-        ctx.emit(inst);
-    }
-    non_writable_value_regs(cst_copy)
-}
-
 /// Put the given input into possibly multiple registers, and mark it as used (side-effect).
 fn put_input_in_regs(ctx: &mut Lower<Inst>, spec: InsnInput) -> ValueRegs<Reg> {
     let ty = ctx.input_ty(spec.insn, spec.input);
@@ -69,7 +48,16 @@ fn put_input_in_regs(ctx: &mut Lower<Inst>, spec: InsnInput) -> ValueRegs<Reg> {
 
     if let Some(c) = input.constant {
         // Generate constants fresh at each use to minimize long-range register pressure.
-        generate_constant(ctx, ty, c)
+        let from_bits = ty_bits(ty);
+        let (size, c) = if from_bits < 64 {
+            (OperandSize::Size32, c & ((1u64 << from_bits) - 1))
+        } else {
+            (OperandSize::Size64, c)
+        };
+        assert!(is_int_or_ref_ty(ty)); // Only used for addresses.
+        let cst_copy = ctx.alloc_tmp(ty);
+        ctx.emit(Inst::imm(size, c, cst_copy.only_reg().unwrap()));
+        non_writable_value_regs(cst_copy)
     } else {
         ctx.put_input_in_regs(spec.insn, spec.input)
     }
