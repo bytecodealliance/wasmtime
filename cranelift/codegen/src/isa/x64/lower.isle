@@ -521,9 +521,12 @@
                             (x64_sub $I64
                                  (imm $I64 64)
                                  amt)))
+            ;; Share the zero value to reduce register pressure
+            (zero Gpr (imm $I64 0))
+
             ;; Nullify the carry if we are shifting by a multiple of 128.
             (carry_ Gpr (with_flags_reg (x64_test (OperandSize.Size64) (RegMemImm.Imm 127) amt)
-                                        (cmove $I64 (CC.Z) (imm $I64 0) carry)))
+                                        (cmove $I64 (CC.Z) zero carry)))
             ;; Add the carry bits into the lo.
             (lo_shifted_ Gpr (x64_or $I64 carry_ lo_shifted)))
         ;; Combine the two shifted halves. However, if we are shifting by >= 64
@@ -532,7 +535,7 @@
         (with_flags (x64_test (OperandSize.Size64) (RegMemImm.Imm 64) amt)
                     (consumes_flags_concat
                      (cmove $I64 (CC.Z) lo_shifted_ hi_shifted)
-                     (cmove $I64 (CC.Z) hi_shifted (imm $I64 0))))))
+                     (cmove $I64 (CC.Z) hi_shifted zero)))))
 
 (rule (lower (has_type $I128 (ushr src amt)))
       ;; NB: Only the low bits of `amt` matter since we logically mask the shift
