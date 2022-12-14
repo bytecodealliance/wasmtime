@@ -707,6 +707,7 @@ pub trait ExprVisitor {
         inputs: Vec<(Self::ExprId, TypeId)>,
         ty: TypeId,
         term: TermId,
+        pure: bool,
         infallible: bool,
         multi: bool,
     ) -> Self::ExprId;
@@ -768,6 +769,7 @@ impl Expr {
                             arg_values_tys,
                             ty,
                             term,
+                            flags.pure,
                             /* infallible = */ !flags.partial,
                             flags.multi,
                         )

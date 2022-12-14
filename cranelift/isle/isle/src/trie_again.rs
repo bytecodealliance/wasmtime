@@ -52,6 +52,9 @@ pub enum Binding {
         term: sema::TermId,
         /// What expressions should be passed to the constructor?
         parameters: Box<[BindingId]>,
+        /// For impure constructors, a unique number for each use of this term. Always 0 for pure
+        /// constructors.
+        instance: u32,
     },
     /// The result of constructing an enum variant.
     MakeVariant {
@@ -139,6 +142,8 @@ pub struct Rule {
     /// If other rules apply along with this one, the one with the highest numeric priority is
     /// evaluated. If multiple applicable rules have the same priority, that's an overlap error.
     pub prio: i64,
+    /// If this rule applies, these side effects should be evaluated before returning.
+    pub impure: Vec<BindingId>,
     /// If this rule applies, the top-level term should evaluate to this expression.
     pub result: BindingId,
 }
@@ -331,12 +336,14 @@ struct UnreachableError {
 #[derive(Debug, Default)]
 struct RuleSetBuilder {
     current_rule: Rule,
+    impure_instance: u32,
     unreachable: Vec<UnreachableError>,
     rules: RuleSet,
 }
 
 impl RuleSetBuilder {
     fn add_rule(&mut self, rule: &sema::Rule, termenv: &sema::TermEnv, errors: &mut Vec<Error>) {
+        self.impure_instance = 0;
         self.current_rule.pos = rule.pos;
         self.current_rule.prio = rule.prio;
         self.current_rule.result = rule.visit(self, termenv);
@@ -561,23 +568,37 @@ impl sema::ExprVisitor for RuleSetBuilder {
         inputs: Vec<(BindingId, sema::TypeId)>,
         _ty: sema::TypeId,
         term: sema::TermId,
+        pure: bool,
         infallible: bool,
         _multi: bool,
     ) -> BindingId {
+        let instance = if pure {
+            0
+        } else {
+            self.impure_instance += 1;
+            self.impure_instance
+        };
         let source = self.dedup_binding(Binding::Constructor {
             term,
             parameters: inputs.into_iter().map(|(expr, _)| expr).collect(),
+            instance,
         });
 
         // If the constructor is fallible, build a pattern for `Some`, but not a constraint. If the
         // constructor is on the right-hand side of a rule then its failure is not considered when
         // deciding which rule to evaluate. Corresponding constraints are only added if this
         // expression is subsequently used as a pattern; see `expr_as_pattern`.
-        if infallible {
+        let source = if infallible {
             source
         } else {
             self.dedup_binding(Binding::MatchSome { source })
+        };
+
+        if !pure {
+            self.current_rule.impure.push(source);
         }
+
+        source
     }
 }
 
