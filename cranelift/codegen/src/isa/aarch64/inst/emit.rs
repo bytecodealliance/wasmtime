@@ -3458,6 +3458,64 @@ impl MachInstEmit for Inst {
                 sink.put4(0xd503201f);
             }
 
+            &Inst::MachOTlsGetAddr {
+                ref symbol,
+                rd,
+                rtmp,
+            } => {
+                // Each thread local variable gets a descriptor, where the first xword of the descriptor is a pointer
+                // to a function that takes the descriptor address in x0, and after the function returns x0
+                // contains the address for the thread local variable
+                //
+                // what we want to emit is basically:
+                //
+                // adrp x0, <label>@TLVPPAGE  ; Load the address of the page of the thread local variable pointer (TLVP)
+                // ldr x0, [x0, <label>@TLVPPAGEOFF] ; Load the descriptor's address into x0
+                // ldr x1, [x0] ; Load the function pointer (the first part of the descriptor)
+                // blr x1 ; Call the function pointer with the descriptor address in x0
+                // ; x0 now contains the TLV address
+
+                let rd = allocs.next_writable(rd);
+                assert_eq!(xreg(0), rd.to_reg());
+                let rtmp = allocs.next_writable(rtmp);
+
+                // adrp x0, <label>@TLVPPAGE
+                sink.add_reloc(Reloc::MachOAarch64TlsAdrPage21, symbol, 0);
+                sink.put4(0x90000000);
+
+                // ldr x0, [x0, <label>@TLVPPAGEOFF]
+                sink.add_reloc(Reloc::MachOAarch64TlsAdrPageOff12, symbol, 0);
+                sink.put4(0xf9400000);
+
+                // load [x0] into temp register
+                Inst::ULoad64 {
+                    rd: rtmp,
+                    mem: AMode::reg(rd.to_reg()),
+                    flags: MemFlags::trusted(),
+                }
+                .emit(&[], sink, emit_info, state);
+
+                // call function pointer in temp register
+                Inst::CallInd {
+                    info: crate::isa::Box::new(CallIndInfo {
+                        rn: rtmp.to_reg(),
+                        uses: smallvec![CallArgPair {
+                            vreg: rd.to_reg(),
+                            preg: rd.to_reg(),
+                        }],
+                        defs: smallvec![CallRetPair {
+                            vreg: rd,
+                            preg: rd.to_reg(),
+                        }],
+                        clobbers: PRegSet::empty().with(xreg_preg(16)).with(xreg_preg(17)),
+                        opcode: Opcode::CallIndirect,
+                        caller_callconv: CallConv::AppleAarch64,
+                        callee_callconv: CallConv::AppleAarch64,
+                    }),
+                }
+                .emit(&[], sink, emit_info, state);
+            }
+
             &Inst::Unwind { ref inst } => {
                 sink.add_unwind(inst.clone());
             }

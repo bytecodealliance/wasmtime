@@ -907,6 +907,14 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             clobbers.remove(regs::xreg_preg(0));
             collector.reg_clobbers(clobbers);
         }
+        &Inst::MachOTlsGetAddr { rd, rtmp, .. } => {
+            collector.reg_fixed_def(rd, regs::xreg(0));
+            collector.reg_def(rtmp);
+            let mut clobbers =
+                AArch64MachineDeps::get_regs_clobbered_by_call(CallConv::AppleAarch64);
+            clobbers.remove(regs::xreg_preg(0));
+            collector.reg_clobbers(clobbers);
+        }
         &Inst::Unwind { .. } => {}
         &Inst::EmitIsland { .. } => {}
         &Inst::DummyUse { reg } => {
@@ -2700,6 +2708,20 @@ impl Inst {
             &Inst::ElfTlsGetAddr { ref symbol, rd } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
                 format!("elf_tls_get_addr {}, {}", rd, symbol.display(None))
+            }
+            &Inst::MachOTlsGetAddr {
+                ref symbol,
+                rd,
+                rtmp,
+            } => {
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rtmp = pretty_print_reg(rtmp.to_reg(), allocs);
+                format!(
+                    "macho_tls_get_addr {}, {}, {}",
+                    rd,
+                    rtmp,
+                    symbol.display(None)
+                )
             }
             &Inst::Unwind { ref inst } => {
                 format!("unwind {:?}", inst)
