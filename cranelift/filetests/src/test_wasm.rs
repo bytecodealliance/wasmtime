@@ -29,25 +29,41 @@ pub fn run(path: &Path, wat: &str) -> Result<()> {
         .validate()
         .context("test configuration is malformed")?;
 
-    let wasm = wat::parse_str(wat).context("failed to parse the test WAT")?;
-    wasmparser::validate(&wasm).context("test WAT failed to validate")?;
-
     let parsed = cranelift_reader::parse_sets_and_triple(&config.settings, &config.target)
         .context("invalid ISA target or Cranelift settings")?;
-    let fisa = parsed.as_fisa();
+    let flags_or_isa = parsed.as_fisa();
     ensure!(
-        fisa.isa.is_some(),
+        flags_or_isa.isa.is_some(),
         "Running `.wat` tests requires specifying an ISA"
     );
+    let isa = flags_or_isa.isa.unwrap();
 
-    let mut env = ModuleEnv::new(fisa.isa.as_ref().unwrap().frontend_config(), config);
+    let mut env = ModuleEnv::new(isa, config.clone());
+
+    let wasm = wat::parse_str(wat).context("failed to parse the test WAT")?;
+    let mut validator = wasmparser::Validator::new_with_features(
+        cranelift_wasm::ModuleEnvironment::wasm_features(&env),
+    );
+    validator
+        .validate_all(&wasm)
+        .context("test WAT failed to validate")?;
 
     cranelift_wasm::translate_module(&wasm, &mut env)
         .context("failed to translate the test case into CLIF")?;
 
     let mut actual = String::new();
     for (_index, func) in env.inner.info.function_bodies.iter() {
-        writeln!(&mut actual, "{}", func.display()).unwrap();
+        if config.compile {
+            let mut ctx = cranelift_codegen::Context::for_function(func.clone());
+            ctx.set_disasm(true);
+            let code = ctx
+                .compile(isa)
+                .map_err(|e| crate::pretty_anyhow_error(&e.func, e.inner))?;
+            writeln!(&mut actual, "function {}:", func.name).unwrap();
+            writeln!(&mut actual, "{}", code.disasm.as_ref().unwrap()).unwrap();
+        } else {
+            writeln!(&mut actual, "{}", func.display()).unwrap();
+        }
     }
     let actual = actual.trim();
     log::debug!("=== actual ===\n{actual}");
