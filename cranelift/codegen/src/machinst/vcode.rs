@@ -568,21 +568,13 @@ impl<I: VCodeInst> VCodeBuilder<I> {
             }
 
             if let Some((dst, src)) = insn.is_move() {
-                // As we only use real registers with reg_fixed_def/reg_fixed_use constraints, the
-                // only situation where we would find a real register here is if it came from a
-                // reg_fixed_nonallocatable constraint. Don't add the move at this point, as that
-                // would only serve to allow an allocation of a fixed_nonallocatable register to a
-                // virtual register in RA2.
-                if dst.to_reg().is_virtual() && src.is_virtual() {
-                    let src =
-                        Operand::reg_use(Self::resolve_vreg_alias_impl(vreg_aliases, src.into()));
-                    let dst = Operand::reg_def(Self::resolve_vreg_alias_impl(
-                        vreg_aliases,
-                        dst.to_reg().into(),
-                    ));
-                    // Note that regalloc2 requires these in (src, dst) order.
-                    self.vcode.is_move.insert(InsnIndex::new(i), (src, dst));
-                }
+                let src = Operand::reg_use(Self::resolve_vreg_alias_impl(vreg_aliases, src.into()));
+                let dst = Operand::reg_def(Self::resolve_vreg_alias_impl(
+                    vreg_aliases,
+                    dst.to_reg().into(),
+                ));
+                // Note that regalloc2 requires these in (src, dst) order.
+                self.vcode.is_move.insert(InsnIndex::new(i), (src, dst));
             }
         }
 
@@ -918,7 +910,7 @@ impl<I: VCodeInst> VCode<I> {
                             }
                         }
 
-                        if self.is_move.contains_key(&iix) {
+                        if self.insts[iix.index()].is_move().is_some() {
                             // Skip moves in the pre-regalloc program;
                             // all of these are incorporated by the
                             // regalloc into its unified move handling
