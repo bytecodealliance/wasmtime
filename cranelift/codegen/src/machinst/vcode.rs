@@ -918,7 +918,7 @@ impl<I: VCodeInst> VCode<I> {
                             }
                         }
 
-                        if self.insts[iix.index()].is_move().is_some() {
+                        if self.is_move.contains_key(&iix) {
                             // Skip moves in the pre-regalloc program;
                             // all of these are incorporated by the
                             // regalloc into its unified move handling
