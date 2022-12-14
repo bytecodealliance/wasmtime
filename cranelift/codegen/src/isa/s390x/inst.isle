@@ -2843,6 +2843,9 @@
 (decl preg_stack () PReg)
 (extern constructor preg_stack preg_stack)
 
+(decl preg_gpr_0 () PReg)
+(extern constructor preg_gpr_0 preg_gpr_0)
+
 ;; Copy the physical stack register into a virtual register.
 (decl sp () Reg)
 (rule (sp)
@@ -3414,7 +3417,7 @@
 ;; be written if the memory location still holds the old value in %r0.
 ;; The result should be passed to "casloop_result" or (in the case of
 ;; subword loops) to "casloop_rotate_result".
-(decl casloop_emit (VecMInstBuilder Type MemFlags Reg Reg) Reg)
+(decl casloop_emit (VecMInstBuilder Type MemFlags Reg Reg) PReg)
 (rule (casloop_emit ib ty flags aligned_addr val)
       (let (;; Construct a memory argument for the aligned word.
             (aligned_mem MemArg (memarg_reg_plus_off aligned_addr 0 0 flags))
@@ -3424,17 +3427,23 @@
             ;; Emit initial load followed by compare-and-swap loop.
             (_ Unit (emit_load (ty_ext32 ty) (casloop_val_reg) aligned_mem))
             (_ Unit (emit_loop ib (intcc_as_cond (IntCC.NotEqual)))))
-        result))
+
+        ;; push_atomic_cas above returns its destination register argument,
+        ;; cas_loop_val_reg, as its result. As cas_loop_val_reg is a writable
+        ;; version of `gpr 0`, we return that directly here as a physical
+        ;; register to avoid accidentally using it with a non-preg move
+        ;; instruction.
+        (preg_gpr_0)))
 
 ;; Compute the previous memory value after a (fullword) compare-and-swap loop.
 ;; In the big-endian case, the value is already correct, but may need to be
 ;; copied out of the hard register.  In the little-endian case, we need to
 ;; byte-swap since the compare-and-swap instruction is always big-endian.
-(decl casloop_result (Type MemFlags Reg) Reg)
+(decl casloop_result (Type MemFlags PReg) Reg)
 (rule 1 (casloop_result (ty_32_or_64 ty) (bigendian) result)
-      (copy_reg ty result))
+      (mov_preg result))
 (rule (casloop_result (ty_32_or_64 ty) (littleendian) result)
-      (bswap_reg ty result))
+      (bswap_reg ty (preg_to_reg result)))
 
 ;; Emit a fullword compare-and-swap loop, returning the previous memory value.
 (decl casloop (VecMInstBuilder Type MemFlags Reg Reg) Reg)
