@@ -2,8 +2,7 @@ use proc_macro2::{Span, TokenStream};
 use std::path::{Path, PathBuf};
 use syn::parse::{Error, Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
-use syn::token;
-use syn::Token;
+use syn::{braced, token, Ident, Token};
 use wasmtime_wit_bindgen::Opts;
 use wit_parser::{Document, World};
 
@@ -68,6 +67,7 @@ impl Parse for Config {
                     }
                     Opt::Tracing(val) => ret.opts.tracing = val,
                     Opt::Async(val) => ret.opts.async_ = val,
+                    Opt::TrappableErrorType(val) => ret.opts.trappable_error_type = val,
                 }
             }
         } else {
@@ -99,6 +99,7 @@ mod kw {
     syn::custom_keyword!(path);
     syn::custom_keyword!(inline);
     syn::custom_keyword!(tracing);
+    syn::custom_keyword!(trappable_error_type);
 }
 
 enum Opt {
@@ -106,6 +107,7 @@ enum Opt {
     Inline(Span, World),
     Tracing(bool),
     Async(bool),
+    TrappableErrorType(Vec<(String, String, String)>),
 }
 
 impl Parse for Opt {
@@ -132,8 +134,25 @@ impl Parse for Opt {
             input.parse::<Token![async]>()?;
             input.parse::<Token![:]>()?;
             Ok(Opt::Async(input.parse::<syn::LitBool>()?.value))
+        } else if l.peek(kw::trappable_error_type) {
+            input.parse::<kw::trappable_error_type>()?;
+            input.parse::<Token![:]>()?;
+            let contents;
+            let _lbrace = braced!(contents in input);
+            let fields: Punctuated<(String, String, String), Token![,]> =
+                contents.parse_terminated(trappable_error_field_parse)?;
+            Ok(Opt::TrappableErrorType(fields.into_iter().collect()))
         } else {
             Err(l.error())
         }
     }
+}
+
+fn trappable_error_field_parse(input: ParseStream<'_>) -> Result<(String, String, String)> {
+    let interface = input.parse::<Ident>()?.to_string();
+    input.parse::<Token![::]>()?;
+    let type_ = input.parse::<Ident>()?.to_string();
+    input.parse::<Token![:]>()?;
+    let rust_type = input.parse::<Ident>()?.to_string();
+    Ok((interface, type_, rust_type))
 }

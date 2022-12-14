@@ -4,7 +4,6 @@
 //! probably buggy implementation of the component model.
 
 mod component;
-mod error;
 mod func;
 mod instance;
 mod linker;
@@ -14,7 +13,6 @@ mod store;
 pub mod types;
 mod values;
 pub use self::component::Component;
-pub use self::error::{Error, Result};
 pub use self::func::{
     ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, WasmList, WasmStr,
 };
