@@ -122,18 +122,22 @@ pub trait LowerBackend {
     /// For a branch, this function should not generate the actual branch
     /// instruction. However, it must force any values it needs for the branch
     /// edge (block-param actuals) into registers, because the actual branch
-    /// generation (`lower_branch_group()`) happens *after* any possible merged
+    /// generation (`lower_branch()`) happens *after* any possible merged
     /// out-edge.
-    fn lower(&self, ctx: &mut Lower<Self::MInst>, inst: Inst) -> CodegenResult<InstOutput>;
+    ///
+    /// Returns `None` if no lowering for the instruction was found.
+    fn lower(&self, ctx: &mut Lower<Self::MInst>, inst: Inst) -> Option<InstOutput>;
 
     /// Lower a block-terminating group of branches (which together can be seen
     /// as one N-way branch), given a vcode MachLabel for each target.
-    fn lower_branch_group(
+    ///
+    /// Returns `None` if no lowering for the branch was found.
+    fn lower_branch(
         &self,
         ctx: &mut Lower<Self::MInst>,
-        insts: &[Inst],
+        inst: Inst,
         targets: &[MachLabel],
-    ) -> CodegenResult<()>;
+    ) -> Option<()>;
 
     /// A bit of a hack: give a fixed register that always holds the result of a
     /// `get_pinned_reg` instruction, if known.  This allows elision of moves
@@ -740,7 +744,18 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             // or any of its outputs its used.
             if has_side_effect || value_needed {
                 trace!("lowering: inst {}: {:?}", inst, self.f.dfg[inst]);
-                let temp_regs = backend.lower(self, inst)?;
+                let temp_regs = backend.lower(self, inst).unwrap_or_else(|| {
+                    let ty = if self.num_outputs(inst) > 0 {
+                        Some(self.output_ty(inst, 0))
+                    } else {
+                        None
+                    };
+                    panic!(
+                        "should be implemented in ISLE: inst = `{}`, type = `{:?}`",
+                        self.f.dfg.display_inst(inst),
+                        ty
+                    )
+                });
 
                 // The ISLE generated code emits its own registers to define the
                 // instruction's lowered values in. However, other instructions
@@ -895,10 +910,29 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             branches,
             targets,
         );
+        // A block should end with at most two branches. The first may be a
+        // conditional branch; a conditional branch can be followed only by an
+        // unconditional branch or fallthrough. Otherwise, if only one branch,
+        // it may be an unconditional branch, a fallthrough, a return, or a
+        // trap. These conditions are verified by `is_ebb_basic()` during the
+        // verifier pass.
+        assert!(branches.len() <= 2);
+        if branches.len() == 2 {
+            assert!(self.data(branches[1]).opcode() == Opcode::Jump);
+        }
         // When considering code-motion opportunities, consider the current
         // program point to be the first branch.
         self.cur_inst = Some(branches[0]);
-        backend.lower_branch_group(self, branches, targets)?;
+        // Lower the first branch in ISLE.  This will automatically handle
+        // the second branch (if any) by emitting a two-way conditional branch.
+        backend
+            .lower_branch(self, branches[0], targets)
+            .unwrap_or_else(|| {
+                panic!(
+                    "should be implemented in ISLE: branch = `{}`",
+                    self.f.dfg.display_inst(branches[0]),
+                )
+            });
         let loc = self.srcloc(branches[0]);
         self.finish_ir_inst(loc);
         // Add block param outputs for current block.

@@ -12,7 +12,7 @@
 ;; blocks while we lower, the fallthrough in the new order is not (necessarily)
 ;; the same as the fallthrough in CLIF. So, we use the explicitly-provided
 ;; target.
-(decl partial lower_branch (Inst VecMachLabel) InstOutput)
+(decl partial lower_branch (Inst VecMachLabel) Unit)
 
 ;;;; Rules for `iconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2422,7 +2422,7 @@
             (cond Cond (invert_cond (cond_code (flags_and_cc_cc comparison))))
             (taken BranchTarget (branch_target targets 0))
             (not_taken BranchTarget (branch_target targets 1)))
-        (side_effect
+        (emit_side_effect
          (with_flags_side_effect (flags_and_cc_flags comparison)
                                  (cond_br taken
                                           not_taken
@@ -2433,7 +2433,7 @@
             (cond Cond (cond_code (flags_and_cc_cc comparison)))
             (taken BranchTarget (branch_target targets 0))
             (not_taken BranchTarget (branch_target targets 1)))
-        (side_effect
+        (emit_side_effect
          (with_flags_side_effect (flags_and_cc_flags comparison)
                                  (cond_br taken
                                           not_taken
@@ -2444,7 +2444,7 @@
             (cond Cond (invert_cond cond)) ;; negate for `brz`
             (taken BranchTarget (branch_target targets 0))
             (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
+       (emit_side_effect
         (with_flags_side_effect (fpu_cmp (scalar_size ty) x y)
                                 (cond_br taken not_taken
                                  (cond_br_cond cond))))))
@@ -2453,7 +2453,7 @@
       (let ((cond Cond (fp_cond_code cc))
             (taken BranchTarget (branch_target targets 0))
             (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
+       (emit_side_effect
         (with_flags_side_effect (fpu_cmp (scalar_size ty) x y)
                                 (cond_br taken not_taken
                                  (cond_br_cond cond))))))
@@ -2466,7 +2466,7 @@
             (rt Reg (orr $I64 c_lo c_hi))
             (taken BranchTarget (branch_target targets 0))
             (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
+       (emit_side_effect
         (with_flags_side_effect flags
          (cond_br taken not_taken (cond_br_zero rt))))))
 (rule -2 (lower_branch (brz c @ (value_type ty) _ _) targets)
@@ -2475,7 +2475,7 @@
             (rt Reg (put_in_reg_zext64 c))
             (taken BranchTarget (branch_target targets 0))
             (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
+       (emit_side_effect
         (with_flags_side_effect flags
          (cond_br taken not_taken (cond_br_zero rt))))))
 ;; standard `brnz`
@@ -2487,7 +2487,7 @@
             (rt Reg (orr $I64 c_lo c_hi))
             (taken BranchTarget (branch_target targets 0))
             (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
+       (emit_side_effect
         (with_flags_side_effect flags
          (cond_br taken not_taken (cond_br_not_zero rt))))))
 (rule -2 (lower_branch (brnz c @ (value_type ty) _ _) targets)
@@ -2496,14 +2496,14 @@
             (rt Reg (put_in_reg_zext64 c))
             (taken BranchTarget (branch_target targets 0))
             (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
+       (emit_side_effect
         (with_flags_side_effect flags
          (cond_br taken not_taken (cond_br_not_zero rt))))))
 
 ;;; Rules for `jump` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower_branch (jump _ _) targets)
-      (side_effect (aarch64_jump (branch_target targets 0))))
+      (emit_side_effect (aarch64_jump (branch_target targets 0))))
 
 ;;; Rules for `br_table` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

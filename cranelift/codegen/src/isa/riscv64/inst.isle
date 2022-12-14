@@ -1865,22 +1865,22 @@
 (decl vec_label_get (VecMachLabel u8) MachLabel )
 (extern constructor vec_label_get vec_label_get)
 
-(decl partial lower_branch (Inst VecMachLabel) InstOutput)
+(decl partial lower_branch (Inst VecMachLabel) Unit)
 (rule (lower_branch (jump _ _) targets )
-      (side_effect (SideEffectNoResult.Inst (gen_jump (vec_label_get targets 0)))))
+      (emit_side_effect (SideEffectNoResult.Inst (gen_jump (vec_label_get targets 0)))))
 
 ;;; cc a b targets Type
-(decl lower_br_icmp (IntCC ValueRegs ValueRegs VecMachLabel Type) InstOutput)
+(decl lower_br_icmp (IntCC ValueRegs ValueRegs VecMachLabel Type) Unit)
 (extern constructor lower_br_icmp lower_br_icmp)
 
-(decl lower_br_fcmp (FloatCC Reg Reg VecMachLabel Type) InstOutput)
+(decl lower_br_fcmp (FloatCC Reg Reg VecMachLabel Type) Unit)
 (extern constructor lower_br_fcmp lower_br_fcmp)
 
 ;; int scalar zero regs.
 (decl int_zero_reg (Type) ValueRegs)
 (extern constructor int_zero_reg int_zero_reg)
 
-(decl lower_brz_or_nz (IntCC ValueRegs VecMachLabel Type) InstOutput)
+(decl lower_brz_or_nz (IntCC ValueRegs VecMachLabel Type) Unit)
 (extern constructor lower_brz_or_nz lower_brz_or_nz)
 
 ;; Normalize a value for comparision.
@@ -1940,7 +1940,7 @@
   (lower_br_fcmp cc a b targets ty))
 
 ;;;
-(decl lower_br_table (Reg VecMachLabel) InstOutput)
+(decl lower_br_table (Reg VecMachLabel) Unit)
 (extern constructor lower_br_table lower_br_table)
 
 (rule

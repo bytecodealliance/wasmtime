@@ -3748,15 +3748,15 @@
        (MInst.EmitIsland needed_space)))
 
 ;; Helper for emitting `br_table` sequences.
-(decl br_table_impl (u64 Reg VecMachLabel) InstOutput)
+(decl br_table_impl (u64 Reg VecMachLabel) Unit)
 (rule (br_table_impl (imm12_from_u64 jt_size) ridx targets)
       (let ((jt_info BoxJTSequenceInfo (targets_jt_info targets)))
-       (side_effect (with_flags_side_effect
+       (emit_side_effect (with_flags_side_effect
             (cmp_imm (OperandSize.Size32) ridx jt_size)
             (jt_sequence ridx jt_info)))))
 (rule -1 (br_table_impl jt_size ridx targets)
       (let ((jt_size Reg (imm $I64 (ImmExtend.Zero) jt_size))
             (jt_info BoxJTSequenceInfo (targets_jt_info targets)))
-       (side_effect (with_flags_side_effect
+       (emit_side_effect (with_flags_side_effect
             (cmp (OperandSize.Size32) ridx jt_size)
             (jt_sequence ridx jt_info)))))

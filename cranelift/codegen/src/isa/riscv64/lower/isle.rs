@@ -68,7 +68,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         b: Reg,
         targets: &VecMachLabel,
         ty: Type,
-    ) -> InstOutput {
+    ) -> Unit {
         let tmp = self.temp_writable_reg(I64);
         MInst::lower_br_fcmp(
             *cc,
@@ -81,7 +81,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         )
         .iter()
         .for_each(|i| self.emit(i));
-        InstOutput::default()
     }
 
     fn lower_brz_or_nz(
@@ -90,7 +89,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         a: ValueRegs,
         targets: &VecMachLabel,
         ty: Type,
-    ) -> InstOutput {
+    ) -> Unit {
         MInst::lower_br_icmp(
             *cc,
             a,
@@ -101,7 +100,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         )
         .iter()
         .for_each(|i| self.emit(i));
-        InstOutput::default()
     }
     fn lower_br_icmp(
         &mut self,
@@ -110,7 +108,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         b: ValueRegs,
         targets: &VecMachLabel,
         ty: Type,
-    ) -> InstOutput {
+    ) -> Unit {
         let test = generated_code::constructor_lower_icmp(self, cc, a, b, ty);
         self.emit(&MInst::CondBr {
             taken: BranchTarget::Label(targets[0]),
@@ -121,7 +119,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
                 rs2: zero_reg(),
             },
         });
-        InstOutput::default()
     }
     fn load_ra(&mut self) -> Reg {
         if self.backend.flags.preserve_frame_pointers() {
@@ -397,7 +394,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         tmp.to_reg()
     }
 
-    fn lower_br_table(&mut self, index: Reg, targets: &VecMachLabel) -> InstOutput {
+    fn lower_br_table(&mut self, index: Reg, targets: &VecMachLabel) -> Unit {
         let tmp1 = self.temp_writable_reg(I64);
         let targets: Vec<BranchTarget> = targets
             .into_iter()
@@ -409,7 +406,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
             tmp1,
             targets,
         });
-        InstOutput::default()
     }
     fn x_reg(&mut self, x: u8) -> Reg {
         x_reg(x as usize)
@@ -446,7 +442,7 @@ pub(crate) fn lower_branch(
     backend: &Riscv64Backend,
     branch: Inst,
     targets: &[MachLabel],
-) -> Option<InstOutput> {
+) -> Option<()> {
     // TODO: reuse the ISLE context across lowerings so we can reuse its
     // internal heap allocations.
     let mut isle_ctx = IsleContext { lower_ctx, backend };
