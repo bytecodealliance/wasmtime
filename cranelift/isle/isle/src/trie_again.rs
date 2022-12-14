@@ -164,6 +164,8 @@ pub struct RuleSet {
     pub rules: Vec<Rule>,
     /// The bindings identified by [BindingId]s within rules.
     pub bindings: Vec<Binding>,
+    /// Intern table for de-duplicating [Binding]s.
+    binding_map: HashMap<Binding, BindingId>,
 }
 
 /// Construct a [RuleSet] for each term in `termenv` that has rules.
@@ -186,6 +188,30 @@ pub fn build(termenv: &sema::TermEnv) -> (Vec<(sema::TermId, RuleSet)>, Vec<Erro
     result.sort_unstable_by_key(|(term, _)| *term);
 
     (result, errors)
+}
+
+impl RuleSet {
+    /// Returns the [BindingId] corresponding to the given [Binding] within this rule-set, if any.
+    pub fn find_binding(&self, binding: &Binding) -> Option<BindingId> {
+        self.binding_map.get(binding).copied()
+    }
+}
+
+impl Binding {
+    /// Returns the binding sites which must be evaluated before this binding.
+    pub fn sources(&self) -> &[BindingId] {
+        match self {
+            Binding::ConstInt { .. } => &[][..],
+            Binding::ConstPrim { .. } => &[][..],
+            Binding::Argument { .. } => &[][..],
+            Binding::Extractor { parameter, .. } => std::slice::from_ref(parameter),
+            Binding::Constructor { parameters, .. } => &parameters[..],
+            Binding::MakeVariant { fields, .. } => &fields[..],
+            Binding::MatchVariant { source, .. } => std::slice::from_ref(source),
+            Binding::MatchSome { source } => std::slice::from_ref(source),
+            Binding::MatchTuple { source, .. } => std::slice::from_ref(source),
+        }
+    }
 }
 
 impl Constraint {
@@ -305,7 +331,6 @@ struct UnreachableError {
 #[derive(Debug, Default)]
 struct RuleSetBuilder {
     current_rule: Rule,
-    binding_map: HashMap<Binding, BindingId>,
     unreachable: Vec<UnreachableError>,
     rules: RuleSet,
 }
@@ -412,12 +437,12 @@ impl RuleSetBuilder {
     }
 
     fn dedup_binding(&mut self, binding: Binding) -> BindingId {
-        if let Some(binding) = self.binding_map.get(&binding) {
+        if let Some(binding) = self.rules.binding_map.get(&binding) {
             *binding
         } else {
             let id = BindingId(self.rules.bindings.len().try_into().unwrap());
             self.rules.bindings.push(binding.clone());
-            self.binding_map.insert(binding, id);
+            self.rules.binding_map.insert(binding, id);
             id
         }
     }
@@ -580,28 +605,10 @@ impl sema::RuleVisitor for RuleSetBuilder {
     fn expr_as_pattern(&mut self, expr: BindingId) -> BindingId {
         let mut todo = vec![expr];
         while let Some(expr) = todo.pop() {
-            match &self.rules.bindings[expr.index()] {
-                Binding::ConstInt { .. } | Binding::ConstPrim { .. } | Binding::Argument { .. } => {
-                }
-
-                Binding::Constructor {
-                    parameters: sources,
-                    ..
-                }
-                | Binding::MakeVariant {
-                    fields: sources, ..
-                } => todo.extend_from_slice(sources),
-
-                &Binding::Extractor {
-                    parameter: source, ..
-                }
-                | &Binding::MatchVariant { source, .. }
-                | &Binding::MatchTuple { source, .. } => todo.push(source),
-
-                &Binding::MatchSome { source } => {
-                    let _ = self.set_constraint(source, Constraint::Some);
-                    todo.push(source);
-                }
+            let expr = &self.rules.bindings[expr.index()];
+            todo.extend_from_slice(expr.sources());
+            if let &Binding::MatchSome { source } = expr {
+                let _ = self.set_constraint(source, Constraint::Some);
             }
         }
         expr
