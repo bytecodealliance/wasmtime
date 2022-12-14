@@ -40,23 +40,18 @@ struct Exports {
 }
 
 #[derive(Default, Debug, Clone)]
-#[cfg_attr(feature = "clap", derive(clap::Args))]
 pub struct Opts {
     /// Whether or not `rustfmt` is executed to format generated code.
-    #[cfg_attr(feature = "clap", arg(long))]
     pub rustfmt: bool,
 
     /// Whether or not to emit `tracing` macro calls on function entry/exit.
-    #[cfg_attr(feature = "clap", arg(long))]
     pub tracing: bool,
 
     /// Whether or not to use async rust functions and traits.
-    #[cfg_attr(feature = "clap", arg(long = "async"))]
     pub async_: bool,
 
     /// For a given wit interface and type name, generate a "trappable error type"
     /// of the following Rust type name
-    #[cfg_attr(feature = "clap", arg(long = "trappable_error_type"), clap(value_name="INTERFACE:TYPE=RUSTTYPE", value_parser = parse_trappable_error))]
     pub trappable_error_type: Vec<(String, String, String)>,
 }
 
@@ -66,18 +61,6 @@ impl Opts {
         r.opts = self.clone();
         r.generate(world)
     }
-}
-
-#[cfg(feature = "clap")]
-// Argument looks like `INTERFACE:TYPE=RUSTTYPE`
-fn parse_trappable_error(s: &str) -> Result<(String, String, String)> {
-    let (interface, after_colon) = s
-        .split_once(':')
-        .ok_or_else(|| anyhow!("expected `:` separator"))?;
-    let (ty, rustty) = after_colon
-        .split_once('=')
-        .ok_or_else(|| anyhow!("expected `=` separator"))?;
-    Ok((interface, ty, rustty))
 }
 
 impl Wasmtime {
