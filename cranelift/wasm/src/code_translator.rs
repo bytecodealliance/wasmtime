@@ -100,7 +100,9 @@ use wasmparser::{FuncValidator, MemArg, Operator, WasmModuleResources};
 /// Given an `Option<T>`, unwrap the inner `T` or, if the option is `None`, set
 /// the state to unreachable and return.
 ///
-/// Used in combination with calling `prepare_addr` and `prepare_atomic_addr`.
+/// Used in combination with calling `prepare_addr` and `prepare_atomic_addr`
+/// when we can statically determine that a Wasm access will unconditionally
+/// trap.
 macro_rules! unwrap_or_return_unreachable_state {
     ($state:ident, $value:expr) => {
         match $value {
@@ -2229,6 +2231,8 @@ fn translate_unreachable_operator<FE: FuncEnvironment + ?Sized>(
 /// generate necessary IR to validate that the heap address is correctly
 /// in-bounds, and various parameters are returned describing the valid *native*
 /// heap address if execution reaches that point.
+///
+/// Returns `None` when the Wasm access will unconditionally trap.
 fn prepare_addr<FE>(
     memarg: &MemArg,
     access_size: u8,
@@ -2423,6 +2427,9 @@ fn align_atomic_addr(
     }
 }
 
+/// Like `prepare_addr` but for atomic accesses.
+///
+/// Returns `None` when the Wasm access will unconditionally trap.
 fn prepare_atomic_addr<FE: FuncEnvironment + ?Sized>(
     memarg: &MemArg,
     loaded_bytes: u8,

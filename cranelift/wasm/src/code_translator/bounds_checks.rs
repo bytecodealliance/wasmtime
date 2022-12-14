@@ -18,7 +18,8 @@ use cranelift_frontend::FunctionBuilder;
 /// Helper used to emit bounds checks (as necessary) and compute the native
 /// address of a heap access.
 ///
-/// Returns the `ir::Value` holding the native address of the heap access.
+/// Returns the `ir::Value` holding the native address of the heap access, or
+/// `None` if the heap access will unconditionally trap.
 pub fn bounds_check_and_compute_addr<TE>(
     builder: &mut FunctionBuilder,
     env: &TE,
