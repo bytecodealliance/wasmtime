@@ -563,6 +563,7 @@ dependencies = [
  "regalloc2",
  "serde",
  "sha2 0.10.2",
+ "similar",
  "smallvec",
  "souper-ir",
  "target-lexicon",

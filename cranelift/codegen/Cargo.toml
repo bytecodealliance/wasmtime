@@ -35,6 +35,7 @@ sha2 = { version = "0.10.2", optional = true }
 
 [dev-dependencies]
 criterion = "0.3"
+similar = "2.1.0"
 
 [build-dependencies]
 cranelift-codegen-meta = { path = "meta", version = "0.92.0" }
