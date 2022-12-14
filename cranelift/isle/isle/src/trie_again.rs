@@ -13,6 +13,29 @@ pub struct TupleIndex(u8);
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct BindingId(u16);
 
+impl std::convert::TryFrom<usize> for TupleIndex {
+    type Error = <u8 as std::convert::TryFrom<usize>>::Error;
+
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        Ok(TupleIndex(value.try_into()?))
+    }
+}
+
+impl std::convert::TryFrom<usize> for BindingId {
+    type Error = <u16 as std::convert::TryFrom<usize>>::Error;
+
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        Ok(BindingId(value.try_into()?))
+    }
+}
+
+impl TupleIndex {
+    /// Get the index of this field.
+    pub fn index(self) -> usize {
+        self.0.into()
+    }
+}
+
 impl BindingId {
     /// Get the index of this id.
     pub fn index(self) -> usize {
@@ -107,7 +130,7 @@ pub enum Binding {
 
 /// Pattern matches which can fail. Some binding sites are the result of successfully matching a
 /// constraint. A rule applies constraints to binding sites to determine whether the rule matches.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum Constraint {
     /// The value must match this enum variant.
     Variant {
@@ -160,6 +183,7 @@ pub struct Rule {
 }
 
 /// Records whether a given pair of rules can both match on some input.
+#[derive(Debug, Eq, PartialEq)]
 pub enum Overlap {
     /// There is no input on which this pair of rules can both match.
     No,
