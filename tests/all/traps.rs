@@ -790,7 +790,7 @@ fn hint_with_dwarf_info() -> Result<()> {
         "\
 error while executing at wasm backtrace:
     0:   0x1a - <unknown>!start
-note: using the `WASMTIME_BACKTRACE_DETAILS=1` environment variable to may show more debugging information
+note: using the `WASMTIME_BACKTRACE_DETAILS=1` environment variable may show more debugging information
 
 Caused by:
     wasm trap: wasm `unreachable` instruction executed\
