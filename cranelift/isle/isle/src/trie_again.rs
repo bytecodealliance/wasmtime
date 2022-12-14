@@ -3,7 +3,7 @@
 use crate::error::{Error, Span};
 use crate::lexer::Pos;
 use crate::sema;
-use crate::DisjointSets;
+use crate::{DisjointSets, StableSet};
 use std::collections::{hash_map::Entry, HashMap};
 
 /// A field index in a tuple or an enum variant.
@@ -57,6 +57,11 @@ pub enum Binding {
         /// For impure constructors, a unique number for each use of this term. Always 0 for pure
         /// constructors.
         instance: u32,
+    },
+    /// The result of getting one value from a multi-constructor or multi-extractor.
+    Iterator {
+        /// Which expression produced the iterator that this consumes?
+        source: BindingId,
     },
     /// The result of constructing an enum variant.
     MakeVariant {
@@ -143,6 +148,8 @@ pub struct Rule {
     constraints: HashMap<BindingId, Constraint>,
     /// Sets of bindings which must be equal for this rule to match.
     pub equals: DisjointSets<BindingId>,
+    /// These bindings are from multi-terms which need to be evaluated in this rule.
+    pub iterators: StableSet<BindingId>,
     /// If other rules apply along with this one, the one with the highest numeric priority is
     /// evaluated. If multiple applicable rules have the same priority, that's an overlap error.
     pub prio: i64,
@@ -215,6 +222,7 @@ impl Binding {
             Binding::Argument { .. } => &[][..],
             Binding::Extractor { parameter, .. } => std::slice::from_ref(parameter),
             Binding::Constructor { parameters, .. } => &parameters[..],
+            Binding::Iterator { source } => std::slice::from_ref(source),
             Binding::MakeVariant { fields, .. } => &fields[..],
             Binding::MatchVariant { source, .. } => std::slice::from_ref(source),
             Binding::MatchSome { source } => std::slice::from_ref(source),
@@ -515,7 +523,7 @@ impl sema::PatternVisitor for RuleSetBuilder {
         output_tys: Vec<sema::TypeId>,
         term: sema::TermId,
         infallible: bool,
-        _multi: bool,
+        multi: bool,
     ) -> Vec<BindingId> {
         let source = self.dedup_binding(Binding::Extractor {
             term,
@@ -523,7 +531,10 @@ impl sema::PatternVisitor for RuleSetBuilder {
         });
 
         // If the extractor is fallible, build a pattern and constraint for `Some`
-        let source = if infallible {
+        let source = if multi {
+            self.current_rule.iterators.insert(source);
+            self.dedup_binding(Binding::Iterator { source })
+        } else if infallible {
             source
         } else {
             let bindings = self.set_constraint(source, Constraint::Some);
@@ -574,7 +585,7 @@ impl sema::ExprVisitor for RuleSetBuilder {
         term: sema::TermId,
         pure: bool,
         infallible: bool,
-        _multi: bool,
+        multi: bool,
     ) -> BindingId {
         let instance = if pure {
             0
@@ -592,7 +603,10 @@ impl sema::ExprVisitor for RuleSetBuilder {
         // constructor is on the right-hand side of a rule then its failure is not considered when
         // deciding which rule to evaluate. Corresponding constraints are only added if this
         // expression is subsequently used as a pattern; see `expr_as_pattern`.
-        let source = if infallible {
+        let source = if multi {
+            self.current_rule.iterators.insert(source);
+            self.dedup_binding(Binding::Iterator { source })
+        } else if infallible {
             source
         } else {
             self.dedup_binding(Binding::MatchSome { source })
