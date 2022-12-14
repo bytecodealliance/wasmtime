@@ -956,6 +956,11 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
     }
 
     #[inline]
+    fn preg_gpr_0(&mut self) -> PReg {
+        gpr(0).to_real_reg().unwrap().into()
+    }
+
+    #[inline]
     fn writable_regpair(&mut self, hi: WritableReg, lo: WritableReg) -> WritableRegPair {
         WritableRegPair { hi, lo }
     }
