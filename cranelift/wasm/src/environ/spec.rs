@@ -118,6 +118,12 @@ pub trait FuncEnvironment: TargetEnvironment {
     ) -> WasmResult<GlobalVariable>;
 
     /// Get the heaps for this function environment.
+    ///
+    /// The returned map should provide heap format details (encoded in
+    /// `HeapData`) for each `Heap` that was previously returned by
+    /// `make_heap()`. The translator will first call make_heap for each Wasm
+    /// memory, and then later when translating code, will invoke `heaps()` to
+    /// learn how to access the environment's implementation of each memory.
     fn heaps(&self) -> &PrimaryMap<Heap, HeapData>;
 
     /// Set up the necessary preamble definitions in `func` to access the linear memory identified
