@@ -707,6 +707,7 @@ pub trait ExprVisitor {
         inputs: Vec<(Self::ExprId, TypeId)>,
         ty: TypeId,
         term: TermId,
+        pure: bool,
         infallible: bool,
         multi: bool,
     ) -> Self::ExprId;
@@ -768,6 +769,7 @@ impl Expr {
                             arg_values_tys,
                             ty,
                             term,
+                            flags.pure,
                             /* infallible = */ !flags.partial,
                             flags.multi,
                         )
@@ -1997,6 +1999,8 @@ impl TermEnv {
 
                 termdata.check_args_count(args, tyenv, pos, sym);
 
+                // TODO: check that multi-extractors are only used in terms declared `multi`
+
                 match &termdata.kind {
                     TermKind::EnumVariant { .. } => {}
                     TermKind::Decl {
@@ -2166,7 +2170,7 @@ impl TermEnv {
                         tyenv.report_error(
                             pos,
                             format!(
-                                "Used multi-term '{}' but this rule is not in a multi-term",
+                                "Used multi-constructor '{}' but this rule is not in a multi-term",
                                 sym.0
                             ),
                         );

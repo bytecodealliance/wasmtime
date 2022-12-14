@@ -3,7 +3,7 @@
 use crate::error::{Error, Span};
 use crate::lexer::Pos;
 use crate::sema;
-use crate::DisjointSets;
+use crate::{DisjointSets, StableSet};
 use std::collections::{hash_map::Entry, HashMap};
 
 /// A field index in a tuple or an enum variant.
@@ -12,6 +12,29 @@ pub struct TupleIndex(u8);
 /// A hash-consed identifier for a binding, stored in a [RuleSet].
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct BindingId(u16);
+
+impl std::convert::TryFrom<usize> for TupleIndex {
+    type Error = <u8 as std::convert::TryFrom<usize>>::Error;
+
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        Ok(TupleIndex(value.try_into()?))
+    }
+}
+
+impl std::convert::TryFrom<usize> for BindingId {
+    type Error = <u16 as std::convert::TryFrom<usize>>::Error;
+
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        Ok(BindingId(value.try_into()?))
+    }
+}
+
+impl TupleIndex {
+    /// Get the index of this field.
+    pub fn index(self) -> usize {
+        self.0.into()
+    }
+}
 
 impl BindingId {
     /// Get the index of this id.
@@ -28,6 +51,8 @@ pub enum Binding {
     ConstInt {
         /// The constant value.
         val: i128,
+        /// The constant's type. Unsigned types preserve the representation of `val`, not its value.
+        ty: sema::TypeId,
     },
     /// Evaluates to the given primitive Rust value.
     ConstPrim {
@@ -52,6 +77,14 @@ pub enum Binding {
         term: sema::TermId,
         /// What expressions should be passed to the constructor?
         parameters: Box<[BindingId]>,
+        /// For impure constructors, a unique number for each use of this term. Always 0 for pure
+        /// constructors.
+        instance: u32,
+    },
+    /// The result of getting one value from a multi-constructor or multi-extractor.
+    Iterator {
+        /// Which expression produced the iterator that this consumes?
+        source: BindingId,
     },
     /// The result of constructing an enum variant.
     MakeVariant {
@@ -97,7 +130,7 @@ pub enum Binding {
 
 /// Pattern matches which can fail. Some binding sites are the result of successfully matching a
 /// constraint. A rule applies constraints to binding sites to determine whether the rule matches.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum Constraint {
     /// The value must match this enum variant.
     Variant {
@@ -114,6 +147,8 @@ pub enum Constraint {
     ConstInt {
         /// The constant value.
         val: i128,
+        /// The constant's type. Unsigned types preserve the representation of `val`, not its value.
+        ty: sema::TypeId,
     },
     /// The value must equal this Rust primitive value.
     ConstPrim {
@@ -136,14 +171,19 @@ pub struct Rule {
     constraints: HashMap<BindingId, Constraint>,
     /// Sets of bindings which must be equal for this rule to match.
     pub equals: DisjointSets<BindingId>,
+    /// These bindings are from multi-terms which need to be evaluated in this rule.
+    pub iterators: StableSet<BindingId>,
     /// If other rules apply along with this one, the one with the highest numeric priority is
     /// evaluated. If multiple applicable rules have the same priority, that's an overlap error.
     pub prio: i64,
+    /// If this rule applies, these side effects should be evaluated before returning.
+    pub impure: Vec<BindingId>,
     /// If this rule applies, the top-level term should evaluate to this expression.
     pub result: BindingId,
 }
 
 /// Records whether a given pair of rules can both match on some input.
+#[derive(Debug, Eq, PartialEq)]
 pub enum Overlap {
     /// There is no input on which this pair of rules can both match.
     No,
@@ -164,6 +204,8 @@ pub struct RuleSet {
     pub rules: Vec<Rule>,
     /// The bindings identified by [BindingId]s within rules.
     pub bindings: Vec<Binding>,
+    /// Intern table for de-duplicating [Binding]s.
+    binding_map: HashMap<Binding, BindingId>,
 }
 
 /// Construct a [RuleSet] for each term in `termenv` that has rules.
@@ -186,6 +228,31 @@ pub fn build(termenv: &sema::TermEnv) -> (Vec<(sema::TermId, RuleSet)>, Vec<Erro
     result.sort_unstable_by_key(|(term, _)| *term);
 
     (result, errors)
+}
+
+impl RuleSet {
+    /// Returns the [BindingId] corresponding to the given [Binding] within this rule-set, if any.
+    pub fn find_binding(&self, binding: &Binding) -> Option<BindingId> {
+        self.binding_map.get(binding).copied()
+    }
+}
+
+impl Binding {
+    /// Returns the binding sites which must be evaluated before this binding.
+    pub fn sources(&self) -> &[BindingId] {
+        match self {
+            Binding::ConstInt { .. } => &[][..],
+            Binding::ConstPrim { .. } => &[][..],
+            Binding::Argument { .. } => &[][..],
+            Binding::Extractor { parameter, .. } => std::slice::from_ref(parameter),
+            Binding::Constructor { parameters, .. } => &parameters[..],
+            Binding::Iterator { source } => std::slice::from_ref(source),
+            Binding::MakeVariant { fields, .. } => &fields[..],
+            Binding::MatchVariant { source, .. } => std::slice::from_ref(source),
+            Binding::MatchSome { source } => std::slice::from_ref(source),
+            Binding::MatchTuple { source, .. } => std::slice::from_ref(source),
+        }
+    }
 }
 
 impl Constraint {
@@ -305,13 +372,14 @@ struct UnreachableError {
 #[derive(Debug, Default)]
 struct RuleSetBuilder {
     current_rule: Rule,
-    binding_map: HashMap<Binding, BindingId>,
+    impure_instance: u32,
     unreachable: Vec<UnreachableError>,
     rules: RuleSet,
 }
 
 impl RuleSetBuilder {
     fn add_rule(&mut self, rule: &sema::Rule, termenv: &sema::TermEnv, errors: &mut Vec<Error>) {
+        self.impure_instance = 0;
         self.current_rule.pos = rule.pos;
         self.current_rule.prio = rule.prio;
         self.current_rule.result = rule.visit(self, termenv);
@@ -412,12 +480,12 @@ impl RuleSetBuilder {
     }
 
     fn dedup_binding(&mut self, binding: Binding) -> BindingId {
-        if let Some(binding) = self.binding_map.get(&binding) {
+        if let Some(binding) = self.rules.binding_map.get(&binding) {
             *binding
         } else {
             let id = BindingId(self.rules.bindings.len().try_into().unwrap());
             self.rules.bindings.push(binding.clone());
-            self.binding_map.insert(binding, id);
+            self.rules.binding_map.insert(binding, id);
             id
         }
     }
@@ -444,8 +512,8 @@ impl sema::PatternVisitor for RuleSetBuilder {
         }
     }
 
-    fn add_match_int(&mut self, input: BindingId, _ty: sema::TypeId, val: i128) {
-        let bindings = self.set_constraint(input, Constraint::ConstInt { val });
+    fn add_match_int(&mut self, input: BindingId, ty: sema::TypeId, val: i128) {
+        let bindings = self.set_constraint(input, Constraint::ConstInt { val, ty });
         debug_assert_eq!(bindings, &[]);
     }
 
@@ -479,7 +547,7 @@ impl sema::PatternVisitor for RuleSetBuilder {
         output_tys: Vec<sema::TypeId>,
         term: sema::TermId,
         infallible: bool,
-        _multi: bool,
+        multi: bool,
     ) -> Vec<BindingId> {
         let source = self.dedup_binding(Binding::Extractor {
             term,
@@ -487,7 +555,10 @@ impl sema::PatternVisitor for RuleSetBuilder {
         });
 
         // If the extractor is fallible, build a pattern and constraint for `Some`
-        let source = if infallible {
+        let source = if multi {
+            self.current_rule.iterators.insert(source);
+            self.dedup_binding(Binding::Iterator { source })
+        } else if infallible {
             source
         } else {
             let bindings = self.set_constraint(source, Constraint::Some);
@@ -510,8 +581,8 @@ impl sema::PatternVisitor for RuleSetBuilder {
 impl sema::ExprVisitor for RuleSetBuilder {
     type ExprId = BindingId;
 
-    fn add_const_int(&mut self, _ty: sema::TypeId, val: i128) -> BindingId {
-        self.dedup_binding(Binding::ConstInt { val })
+    fn add_const_int(&mut self, ty: sema::TypeId, val: i128) -> BindingId {
+        self.dedup_binding(Binding::ConstInt { val, ty })
     }
 
     fn add_const_prim(&mut self, _ty: sema::TypeId, val: sema::Sym) -> BindingId {
@@ -536,23 +607,40 @@ impl sema::ExprVisitor for RuleSetBuilder {
         inputs: Vec<(BindingId, sema::TypeId)>,
         _ty: sema::TypeId,
         term: sema::TermId,
+        pure: bool,
         infallible: bool,
-        _multi: bool,
+        multi: bool,
     ) -> BindingId {
+        let instance = if pure {
+            0
+        } else {
+            self.impure_instance += 1;
+            self.impure_instance
+        };
         let source = self.dedup_binding(Binding::Constructor {
             term,
             parameters: inputs.into_iter().map(|(expr, _)| expr).collect(),
+            instance,
         });
 
         // If the constructor is fallible, build a pattern for `Some`, but not a constraint. If the
         // constructor is on the right-hand side of a rule then its failure is not considered when
         // deciding which rule to evaluate. Corresponding constraints are only added if this
         // expression is subsequently used as a pattern; see `expr_as_pattern`.
-        if infallible {
+        let source = if multi {
+            self.current_rule.iterators.insert(source);
+            self.dedup_binding(Binding::Iterator { source })
+        } else if infallible {
             source
         } else {
             self.dedup_binding(Binding::MatchSome { source })
+        };
+
+        if !pure {
+            self.current_rule.impure.push(source);
         }
+
+        source
     }
 }
 
@@ -580,28 +668,10 @@ impl sema::RuleVisitor for RuleSetBuilder {
     fn expr_as_pattern(&mut self, expr: BindingId) -> BindingId {
         let mut todo = vec![expr];
         while let Some(expr) = todo.pop() {
-            match &self.rules.bindings[expr.index()] {
-                Binding::ConstInt { .. } | Binding::ConstPrim { .. } | Binding::Argument { .. } => {
-                }
-
-                Binding::Constructor {
-                    parameters: sources,
-                    ..
-                }
-                | Binding::MakeVariant {
-                    fields: sources, ..
-                } => todo.extend_from_slice(sources),
-
-                &Binding::Extractor {
-                    parameter: source, ..
-                }
-                | &Binding::MatchVariant { source, .. }
-                | &Binding::MatchTuple { source, .. } => todo.push(source),
-
-                &Binding::MatchSome { source } => {
-                    let _ = self.set_constraint(source, Constraint::Some);
-                    todo.push(source);
-                }
+            let expr = &self.rules.bindings[expr.index()];
+            todo.extend_from_slice(expr.sources());
+            if let &Binding::MatchSome { source } = expr {
+                let _ = self.set_constraint(source, Constraint::Some);
             }
         }
         expr

@@ -3,8 +3,8 @@
 (decl partial X (i64) i64)
 (rule (X -1) -2)
 (rule (X -2) -3)
-(rule (X 0x7fff_ffff_ffff_ffff) 0x8000_0000_0000_0000)
-(rule (X 0xffff_ffff_ffff_fff0) 1)
+(rule (X 0x7fff_ffff_ffff_ffff) -0x8000_0000_0000_0000)
+(rule (X -16) 1)
 
 (type i128 (primitive i128))
 

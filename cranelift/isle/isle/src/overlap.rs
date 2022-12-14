@@ -9,12 +9,15 @@ use crate::sema::{TermEnv, TermId, TermKind, TypeEnv};
 use crate::trie_again;
 
 /// Check for overlap.
-pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<(), error::Errors> {
+pub fn check(
+    tyenv: &TypeEnv,
+    termenv: &TermEnv,
+) -> Result<Vec<(TermId, trie_again::RuleSet)>, error::Errors> {
     let (terms, mut errors) = trie_again::build(termenv);
-    errors.append(&mut check_overlaps(terms, termenv).report());
+    errors.append(&mut check_overlaps(&terms, termenv).report());
 
     if errors.is_empty() {
-        Ok(())
+        Ok(terms)
     } else {
         Err(error::Errors {
             errors,
@@ -108,7 +111,7 @@ impl Errors {
 /// Determine if any rules overlap in the input that they accept. This checks every unique pair of
 /// rules, as checking rules in aggregate tends to suffer from exponential explosion in the
 /// presence of wildcard patterns.
-fn check_overlaps(terms: Vec<(TermId, trie_again::RuleSet)>, env: &TermEnv) -> Errors {
+fn check_overlaps(terms: &[(TermId, trie_again::RuleSet)], env: &TermEnv) -> Errors {
     let mut errs = Errors::default();
     for (tid, ruleset) in terms {
         let is_multi_ctor = match &env.terms[tid.index()].kind {

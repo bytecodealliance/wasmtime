@@ -398,6 +398,7 @@ impl ExprVisitor for ExprSequence {
         inputs: Vec<(Value, TypeId)>,
         ty: TypeId,
         term: TermId,
+        _pure: bool,
         infallible: bool,
         multi: bool,
     ) -> Value {

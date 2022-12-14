@@ -25,8 +25,8 @@ macro_rules! declare_id {
 
 /// A wrapper around a [HashSet] which prevents accidentally observing the non-deterministic
 /// iteration order.
-#[derive(Clone, Debug)]
-struct StableSet<T>(HashSet<T>);
+#[derive(Clone, Debug, Default)]
+pub struct StableSet<T>(HashSet<T>);
 
 impl<T> StableSet<T> {
     fn new() -> Self {
@@ -35,11 +35,13 @@ impl<T> StableSet<T> {
 }
 
 impl<T: Hash + Eq> StableSet<T> {
-    fn insert(&mut self, val: T) -> bool {
+    /// Adds a value to the set. Returns whether the value was newly inserted.
+    pub fn insert(&mut self, val: T) -> bool {
         self.0.insert(val)
     }
 
-    fn contains(&self, val: &T) -> bool {
+    /// Returns true if the set contains a value.
+    pub fn contains(&self, val: &T) -> bool {
         self.0.contains(val)
     }
 }
@@ -59,6 +61,7 @@ impl<K, V> StableMap<K, V> {
     }
 }
 
+// NOTE: Can't auto-derive this
 impl<K, V> Default for StableMap<K, V> {
     fn default() -> Self {
         StableMap(HashMap::new())
@@ -121,6 +124,28 @@ impl<T: Copy + std::fmt::Debug + Eq + Hash> DisjointSets<T> {
             // Re-do the lookup but take a mutable borrow this time
             self.parent.get_mut(&x).unwrap().0 = grandparent;
             x = grandparent;
+        }
+        None
+    }
+
+    /// Find a representative member of the set containing `x`. If `x` has not been merged with any
+    /// other items using `merge`, returns `None`. This method does not update the data structure to
+    /// make future queries faster, so `find_mut` should be preferred.
+    ///
+    /// ```
+    /// let mut sets = cranelift_isle::DisjointSets::default();
+    /// sets.merge(1, 2);
+    /// sets.merge(1, 3);
+    /// sets.merge(2, 4);
+    /// assert_eq!(sets.find(3).unwrap(), sets.find(4).unwrap());
+    /// assert_eq!(sets.find(10), None);
+    /// ```
+    pub fn find(&self, mut x: T) -> Option<T> {
+        while let Some(node) = self.parent.get(&x) {
+            if node.0 == x {
+                return Some(x);
+            }
+            x = node.0;
         }
         None
     }
