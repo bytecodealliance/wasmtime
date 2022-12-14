@@ -5,7 +5,7 @@
 
 (extern extractor E1 e1_etor)
 
-(decl Rule (u32) u32)
+(decl multi Rule (u32) u32)
 
 (rule 1 (Rule (E1 a idx))
       (if-let (A.B) a)
