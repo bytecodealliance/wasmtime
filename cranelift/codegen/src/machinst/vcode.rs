@@ -568,11 +568,25 @@ impl<I: VCodeInst> VCodeBuilder<I> {
             }
 
             if let Some((dst, src)) = insn.is_move() {
+                // We should never see non-virtual registers present in move
+                // instructions.
+                assert!(
+                    src.is_virtual(),
+                    "the real register {:?} was used as the source of a move instruction",
+                    src
+                );
+                assert!(
+                    dst.to_reg().is_virtual(),
+                    "the real register {:?} was used as the destination of a move instruction",
+                    dst.to_reg()
+                );
+
                 let src = Operand::reg_use(Self::resolve_vreg_alias_impl(vreg_aliases, src.into()));
                 let dst = Operand::reg_def(Self::resolve_vreg_alias_impl(
                     vreg_aliases,
                     dst.to_reg().into(),
                 ));
+
                 // Note that regalloc2 requires these in (src, dst) order.
                 self.vcode.is_move.insert(InsnIndex::new(i), (src, dst));
             }
