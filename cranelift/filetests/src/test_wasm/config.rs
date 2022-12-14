@@ -16,6 +16,9 @@ pub struct TestConfig {
     pub target: String,
 
     #[serde(default)]
+    pub compile: bool,
+
+    #[serde(default)]
     pub settings: Vec<String>,
 
     #[serde(default)]

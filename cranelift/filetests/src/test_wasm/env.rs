@@ -7,7 +7,10 @@ use std::collections::{BTreeMap, HashSet};
 
 use super::config::TestConfig;
 use cranelift::prelude::EntityRef;
-use cranelift_codegen::{ir, isa::TargetFrontendConfig};
+use cranelift_codegen::{
+    ir,
+    isa::{TargetFrontendConfig, TargetIsa},
+};
 use cranelift_wasm::{
     DummyEnvironment, FuncEnvironment, FuncIndex, ModuleEnvironment, TargetEnvironment,
 };
@@ -15,12 +18,19 @@ use cranelift_wasm::{
 pub struct ModuleEnv {
     pub inner: DummyEnvironment,
     pub config: TestConfig,
+    pub heap_access_spectre_mitigation: bool,
 }
 
 impl ModuleEnv {
-    pub fn new(frontend_config: TargetFrontendConfig, config: TestConfig) -> Self {
-        let inner = DummyEnvironment::new(frontend_config, config.debug_info);
-        Self { inner, config }
+    pub fn new(target_isa: &dyn TargetIsa, config: TestConfig) -> Self {
+        let inner = DummyEnvironment::new(target_isa.frontend_config(), config.debug_info);
+        Self {
+            inner,
+            config,
+            heap_access_spectre_mitigation: target_isa
+                .flags()
+                .enable_heap_access_spectre_mitigation(),
+        }
     }
 }
 
@@ -65,6 +75,14 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv {
         self.inner.info.function_bodies.push(func);
 
         Ok(())
+    }
+
+    fn wasm_features(&self) -> wasmparser::WasmFeatures {
+        wasmparser::WasmFeatures {
+            memory64: true,
+            multi_memory: true,
+            ..self.inner.wasm_features()
+        }
     }
 
     // ================================================================
