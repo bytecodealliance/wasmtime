@@ -41,6 +41,7 @@ where
         &mut builder.cursor(),
     );
     let offset_and_size = offset_plus_size(offset, access_size);
+    let spectre_mitigations_enabled = env.heap_access_spectre_mitigation();
 
     // We need to emit code that will trap (or compute an address that will trap
     // when accessed) if
@@ -72,9 +73,7 @@ where
         //    1.a. When Spectre mitigations are enabled, avoid duplicating
         //         bounds checks between the mitigations and the regular bounds
         //         checks.
-        HeapStyle::Dynamic { bound_gv }
-            if offset_and_size == 1 && env.heap_access_spectre_mitigation() =>
-        {
+        HeapStyle::Dynamic { bound_gv } if offset_and_size == 1 && spectre_mitigations_enabled => {
             let bound = builder.ins().global_value(env.pointer_type(), bound_gv);
             Some(compute_addr(
                 &mut builder.cursor(),
@@ -116,7 +115,7 @@ where
         //
         //    2.a. Dedupe bounds checks with Spectre mitigations.
         HeapStyle::Dynamic { bound_gv }
-            if offset_and_size <= heap.min_size.into() && env.heap_access_spectre_mitigation() =>
+            if offset_and_size <= heap.min_size.into() && spectre_mitigations_enabled =>
         {
             let bound = builder.ins().global_value(env.pointer_type(), bound_gv);
             let adjusted_bound = builder.ins().iadd_imm(bound, -(offset_and_size as i64));
@@ -159,7 +158,7 @@ where
         //    And we have to handle the overflow case in the left-hand side.
         //
         //    3.a. Dedupe bounds checks with Spectre mitigations.
-        HeapStyle::Dynamic { bound_gv } if env.heap_access_spectre_mitigation() => {
+        HeapStyle::Dynamic { bound_gv } if spectre_mitigations_enabled => {
             let access_size_val = builder
                 .ins()
                 .iconst(env.pointer_type(), offset_and_size as i64);
@@ -287,7 +286,7 @@ where
         //    factor in the guard pages here.
         //
         //    3.a. Dedupe the Spectre mitigation and the explicit bounds check.
-        HeapStyle::Static { bound } if env.heap_access_spectre_mitigation() => {
+        HeapStyle::Static { bound } if spectre_mitigations_enabled => {
             // NB: this subtraction cannot wrap because we didn't hit the first
             // special case.
             let adjusted_bound = u64::from(bound) - offset_and_size;
