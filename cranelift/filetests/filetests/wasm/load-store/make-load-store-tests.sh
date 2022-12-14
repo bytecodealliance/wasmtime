@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# This script generates the `heap_load_store_*.clif` test files.
+# This script generates the `load_store_*.clif` test files.
 #
 # Usage:
 #
