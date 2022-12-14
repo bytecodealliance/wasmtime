@@ -28,6 +28,8 @@ pub enum Binding {
     ConstInt {
         /// The constant value.
         val: i128,
+        /// The constant's type. Unsigned types preserve the representation of `val`, not its value.
+        ty: sema::TypeId,
     },
     /// Evaluates to the given primitive Rust value.
     ConstPrim {
@@ -117,6 +119,8 @@ pub enum Constraint {
     ConstInt {
         /// The constant value.
         val: i128,
+        /// The constant's type. Unsigned types preserve the representation of `val`, not its value.
+        ty: sema::TypeId,
     },
     /// The value must equal this Rust primitive value.
     ConstPrim {
@@ -476,8 +480,8 @@ impl sema::PatternVisitor for RuleSetBuilder {
         }
     }
 
-    fn add_match_int(&mut self, input: BindingId, _ty: sema::TypeId, val: i128) {
-        let bindings = self.set_constraint(input, Constraint::ConstInt { val });
+    fn add_match_int(&mut self, input: BindingId, ty: sema::TypeId, val: i128) {
+        let bindings = self.set_constraint(input, Constraint::ConstInt { val, ty });
         debug_assert_eq!(bindings, &[]);
     }
 
@@ -542,8 +546,8 @@ impl sema::PatternVisitor for RuleSetBuilder {
 impl sema::ExprVisitor for RuleSetBuilder {
     type ExprId = BindingId;
 
-    fn add_const_int(&mut self, _ty: sema::TypeId, val: i128) -> BindingId {
-        self.dedup_binding(Binding::ConstInt { val })
+    fn add_const_int(&mut self, ty: sema::TypeId, val: i128) -> BindingId {
+        self.dedup_binding(Binding::ConstInt { val, ty })
     }
 
     fn add_const_prim(&mut self, _ty: sema::TypeId, val: sema::Sym) -> BindingId {
