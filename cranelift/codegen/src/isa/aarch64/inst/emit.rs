@@ -3499,15 +3499,9 @@ impl MachInstEmit for Inst {
                 Inst::CallInd {
                     info: crate::isa::Box::new(CallIndInfo {
                         rn: rtmp.to_reg(),
-                        uses: smallvec![CallArgPair {
-                            vreg: rd.to_reg(),
-                            preg: rd.to_reg(),
-                        }],
-                        defs: smallvec![CallRetPair {
-                            vreg: rd,
-                            preg: rd.to_reg(),
-                        }],
-                        clobbers: PRegSet::empty().with(xreg_preg(16)).with(xreg_preg(17)),
+                        uses: smallvec![],
+                        defs: smallvec![],
+                        clobbers: PRegSet::empty(),
                         opcode: Opcode::CallIndirect,
                         caller_callconv: CallConv::AppleAarch64,
                         callee_callconv: CallConv::AppleAarch64,
