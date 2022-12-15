@@ -378,7 +378,7 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
                 continue;
             }
 
-            let old_actuals = func.dfg.insts[edge.inst].take_value_list().unwrap();
+            let old_actuals = func.dfg.insts[edge.inst].value_list().unwrap();
             let num_old_actuals = old_actuals.len(&func.dfg.value_lists);
             let num_fixed_actuals = func.dfg.insts[edge.inst]
                 .opcode()
@@ -412,7 +412,7 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
                     new_actuals.push(actual_i, &mut func.dfg.value_lists);
                 }
             }
-            func.dfg.insts[edge.inst].put_value_list(new_actuals);
+            *func.dfg.insts[edge.inst].value_list_mut().unwrap() = new_actuals;
         }
     }
 

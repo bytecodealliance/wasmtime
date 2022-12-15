@@ -44,7 +44,6 @@ impl IndexMut<Inst> for Insts {
     }
 }
 
-
 /// A data flow graph defines all instructions and basic blocks in a function as well as
 /// the data flow dependencies between them. The DFG also tracks values which can be either
 /// instruction results or block parameters.
@@ -871,11 +870,10 @@ impl DataFlowGraph {
     ///
     /// Panics if the instruction doesn't support arguments.
     pub fn append_inst_arg(&mut self, inst: Inst, new_arg: Value) {
-        let mut branch_values = self.insts[inst]
-            .take_value_list()
-            .expect("the instruction doesn't have value arguments");
-        branch_values.push(new_arg, &mut self.value_lists);
-        self.insts[inst].put_value_list(branch_values)
+        self.insts[inst]
+            .value_list_mut()
+            .expect("the instruction doesn't have value arguments")
+            .push(new_arg, &mut self.value_lists);
     }
 
     /// Clone an instruction, attaching new result `Value`s and
@@ -1382,7 +1380,7 @@ mod tests {
         // Immutable reference resolution.
         {
             let immdfg = &dfg;
-            let ins = &immdfg[inst];
+            let ins = &immdfg.insts[inst];
             assert_eq!(ins.opcode(), Opcode::Iconst);
         }
 
