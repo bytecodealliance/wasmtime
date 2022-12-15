@@ -3458,11 +3458,7 @@ impl MachInstEmit for Inst {
                 sink.put4(0xd503201f);
             }
 
-            &Inst::MachOTlsGetAddr {
-                ref symbol,
-                rd,
-                rtmp,
-            } => {
+            &Inst::MachOTlsGetAddr { ref symbol, rd } => {
                 // Each thread local variable gets a descriptor, where the first xword of the descriptor is a pointer
                 // to a function that takes the descriptor address in x0, and after the function returns x0
                 // contains the address for the thread local variable
@@ -3477,7 +3473,7 @@ impl MachInstEmit for Inst {
 
                 let rd = allocs.next_writable(rd);
                 assert_eq!(xreg(0), rd.to_reg());
-                let rtmp = allocs.next_writable(rtmp);
+                let rtmp = writable_xreg(1);
 
                 // adrp x0, <label>@TLVPPAGE
                 sink.add_reloc(Reloc::MachOAarch64TlsAdrPage21, symbol, 0);
