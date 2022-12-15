@@ -99,7 +99,7 @@ impl<'a> Codegen<'a> {
         self.generate_header(&mut code, options);
         self.generate_ctx_trait(&mut code);
         self.generate_internal_types(&mut code);
-        self.generate_internal_term_constructors(&mut code);
+        self.generate_internal_term_constructors(&mut code).unwrap();
 
         code
     }
@@ -310,12 +310,97 @@ impl<'a> Codegen<'a> {
         }
     }
 
-    fn generate_internal_term_constructors(&self, code: &mut String) {
+    fn generate_internal_term_constructors(&self, code: &mut String) -> std::fmt::Result {
         for &(termid, ref ruleset) in self.terms.iter() {
             let root = crate::serialize::serialize(ruleset);
             let mut ctx = BodyContext::new(code, ruleset);
-            self.emit_fn(&mut ctx, termid, &root).unwrap();
+
+            let termdata = &self.termenv.terms[termid.index()];
+            let term_name = &self.typeenv.syms[termdata.name.index()];
+            writeln!(ctx.out)?;
+            writeln!(
+                ctx.out,
+                "{}// Generated as internal constructor for term {}.",
+                &ctx.indent, term_name,
+            )?;
+
+            let sig = termdata.constructor_sig(self.typeenv).unwrap();
+            writeln!(
+                ctx.out,
+                "{}pub fn {}<C: Context>(",
+                &ctx.indent, sig.func_name
+            )?;
+
+            writeln!(ctx.out, "{}    ctx: &mut C,", &ctx.indent)?;
+            for (i, &ty) in sig.param_tys.iter().enumerate() {
+                let (is_ref, sym) = self.ty(ty);
+                write!(ctx.out, "{}    arg{}: ", &ctx.indent, i)?;
+                write!(
+                    ctx.out,
+                    "{}{}",
+                    if is_ref { "&" } else { "" },
+                    &self.typeenv.syms[sym.index()]
+                )?;
+                if let Some(binding) = ctx.ruleset.find_binding(&Binding::Argument {
+                    index: i.try_into().unwrap(),
+                }) {
+                    ctx.set_ref(binding, is_ref);
+                }
+                writeln!(ctx.out, ",")?;
+            }
+
+            write!(ctx.out, "{}) -> ", &ctx.indent)?;
+            let (_, ret) = self.ty(sig.ret_tys[0]);
+            let ret = &self.typeenv.syms[ret.index()];
+            match sig.ret_kind {
+                ReturnKind::Iterator => {
+                    write!(ctx.out, "impl ContextIter<Context = C, Output = {}>", ret)?
+                }
+                ReturnKind::Option => write!(ctx.out, "Option<{}>", ret)?,
+                ReturnKind::Plain => write!(ctx.out, "{}", ret)?,
+            };
+
+            let scope = ctx.enter_scope();
+            ctx.begin_block()?;
+
+            if sig.ret_kind == ReturnKind::Iterator {
+                writeln!(
+                    ctx.out,
+                    "{}let mut returns = ConstructorVec::new();",
+                    &ctx.indent
+                )?;
+            }
+
+            self.emit_block(&mut ctx, &root, sig.ret_kind)?;
+
+            match (sig.ret_kind, root.cases.last()) {
+                    (ReturnKind::Iterator, _) => {
+                        writeln!(
+                            ctx.out,
+                            "{}return ContextIterWrapper::from(returns.into_iter());",
+                            &ctx.indent
+                        )?;
+                    }
+                    (_, Some(Case { check: Condition::Result { .. }, .. })) => {
+                        // If there's an outermost fallback, no need for another `return` statement.
+                    }
+                    (ReturnKind::Option, _) => {
+                        writeln!(ctx.out, "{}None", &ctx.indent)?
+                    }
+                    (ReturnKind::Plain, _) => {
+                        writeln!(ctx.out,
+                                "unreachable!(\"no rule matched for term {{}} at {{}}; should it be partial?\", {:?}, {:?})",
+                                term_name,
+                                termdata
+                                    .decl_pos
+                                    .pretty_print_line(&self.typeenv.filenames[..])
+                        )?
+                    }
+                }
+
+            ctx.end_block(scope)?;
         }
+        Ok(())
     }
 
     fn ty(&self, typeid: TypeId) -> (bool, Sym) {
@@ -323,98 +408,6 @@ impl<'a> Codegen<'a> {
             &Type::Primitive(_, sym, _) => (false, sym),
             &Type::Enum { name, .. } => (true, name),
         }
-    }
-
-    fn emit_fn<W: Write>(
-        &self,
-        ctx: &mut BodyContext<W>,
-        termid: TermId,
-        root: &Block,
-    ) -> std::fmt::Result {
-        let termdata = &self.termenv.terms[termid.index()];
-        let term_name = &self.typeenv.syms[termdata.name.index()];
-        writeln!(ctx.out)?;
-        writeln!(
-            ctx.out,
-            "{}// Generated as internal constructor for term {}.",
-            &ctx.indent, term_name,
-        )?;
-
-        let sig = termdata.constructor_sig(self.typeenv).unwrap();
-        writeln!(
-            ctx.out,
-            "{}pub fn {}<C: Context>(",
-            &ctx.indent, sig.func_name
-        )?;
-
-        writeln!(ctx.out, "{}    ctx: &mut C,", &ctx.indent)?;
-        for (i, &ty) in sig.param_tys.iter().enumerate() {
-            let (is_ref, sym) = self.ty(ty);
-            write!(ctx.out, "{}    arg{}: ", &ctx.indent, i)?;
-            write!(
-                ctx.out,
-                "{}{}",
-                if is_ref { "&" } else { "" },
-                &self.typeenv.syms[sym.index()]
-            )?;
-            if let Some(binding) = ctx.ruleset.find_binding(&Binding::Argument {
-                index: i.try_into().unwrap(),
-            }) {
-                ctx.set_ref(binding, is_ref);
-            }
-            writeln!(ctx.out, ",")?;
-        }
-
-        write!(ctx.out, "{}) -> ", &ctx.indent)?;
-        let (_, ret) = self.ty(sig.ret_tys[0]);
-        let ret = &self.typeenv.syms[ret.index()];
-        match sig.ret_kind {
-            ReturnKind::Iterator => {
-                write!(ctx.out, "impl ContextIter<Context = C, Output = {}>", ret)?
-            }
-            ReturnKind::Option => write!(ctx.out, "Option<{}>", ret)?,
-            ReturnKind::Plain => write!(ctx.out, "{}", ret)?,
-        };
-
-        let scope = ctx.enter_scope();
-        ctx.begin_block()?;
-
-        if sig.ret_kind == ReturnKind::Iterator {
-            writeln!(
-                ctx.out,
-                "{}let mut returns = ConstructorVec::new();",
-                &ctx.indent
-            )?;
-        }
-
-        self.emit_block(ctx, root, sig.ret_kind)?;
-
-        match (sig.ret_kind, root.cases.last()) {
-            (ReturnKind::Iterator, _) => {
-                writeln!(
-                    ctx.out,
-                    "{}return ContextIterWrapper::from(returns.into_iter());",
-                    &ctx.indent
-                )?;
-            }
-            (_, Some(Case { check: Condition::Result { .. }, .. })) => {
-                // If there's an outermost fallback, no need for another `return` statement.
-            }
-            (ReturnKind::Option, _) => {
-                writeln!(ctx.out, "{}None", &ctx.indent)?
-            }
-            (ReturnKind::Plain, _) => {
-                writeln!(ctx.out,
-                        "unreachable!(\"no rule matched for term {{}} at {{}}; should it be partial?\", {:?}, {:?})",
-                        term_name,
-                        termdata
-                            .decl_pos
-                            .pretty_print_line(&self.typeenv.filenames[..])
-                )?
-            }
-        }
-
-        ctx.end_block(scope)
     }
 
     fn emit_block<W: Write>(
