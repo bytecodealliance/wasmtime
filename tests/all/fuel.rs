@@ -212,7 +212,9 @@ fn unconditionally_trapping_memory_accesses_save_fuel_before_trapping() {
     store.add_fuel(1_000).unwrap();
 
     let instance = Instance::new(&mut store, &module, &[]).unwrap();
-    let f = instance.get_typed_func::<i32, i32>(&mut store, "f").unwrap();
+    let f = instance
+        .get_typed_func::<i32, i32>(&mut store, "f")
+        .unwrap();
 
     let trap = f.call(&mut store, 0).unwrap_err();
     assert_eq!(trap.downcast::<Trap>().unwrap(), Trap::MemoryOutOfBounds);
