@@ -282,7 +282,7 @@ impl FunctionStencil {
     ///
     /// Note that this method ignores multi-destination branches like `br_table`.
     pub fn change_branch_destination(&mut self, inst: Inst, new_dest: Block) {
-        match self.dfg[inst].branch_destination_mut() {
+        match self.dfg.insts[inst].branch_destination_mut() {
             None => (),
             Some(inst_dest) => *inst_dest = new_dest,
         }
@@ -309,7 +309,7 @@ impl FunctionStencil {
                 });
 
                 if default_dest == Some(old_dest) {
-                    match &mut self.dfg[inst] {
+                    match &mut self.dfg.insts[inst] {
                         InstructionData::BranchTable { destination, .. } => {
                             *destination = new_dest;
                         }
@@ -333,13 +333,13 @@ impl FunctionStencil {
         let inst_iter = self.layout.block_insts(block);
 
         // Ignore all instructions prior to the first branch.
-        let mut inst_iter = inst_iter.skip_while(|&inst| !dfg[inst].opcode().is_branch());
+        let mut inst_iter = inst_iter.skip_while(|&inst| !dfg.insts[inst].opcode().is_branch());
 
         // A conditional branch is permitted in a basic block only when followed
         // by a terminal jump instruction.
         if let Some(_branch) = inst_iter.next() {
             if let Some(next) = inst_iter.next() {
-                match dfg[next].opcode() {
+                match dfg.insts[next].opcode() {
                     Opcode::Jump => (),
                     _ => return Err((next, "post-branch instruction not jump")),
                 }
@@ -377,7 +377,7 @@ impl FunctionStencil {
             .zip(self.dfg.inst_results(src))
             .all(|(a, b)| self.dfg.value_type(*a) == self.dfg.value_type(*b)));
 
-        self.dfg[dst] = self.dfg[src];
+        self.dfg.insts[dst] = self.dfg.insts[src];
         self.layout.remove_inst(src);
     }
 

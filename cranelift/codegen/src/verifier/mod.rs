@@ -470,7 +470,7 @@ impl<'a> Verifier<'a> {
         inst: Inst,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
-        let is_terminator = self.func.dfg[inst].opcode().is_terminator();
+        let is_terminator = self.func.dfg.insts[inst].opcode().is_terminator();
         let is_last_inst = self.func.layout.last_inst(block) == Some(inst);
 
         if is_terminator && !is_last_inst {
@@ -520,7 +520,7 @@ impl<'a> Verifier<'a> {
         inst: Inst,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
-        let inst_data = &self.func.dfg[inst];
+        let inst_data = &self.func.dfg.insts[inst];
         let dfg = &self.func.dfg;
 
         // The instruction format matches the opcode
@@ -580,7 +580,7 @@ impl<'a> Verifier<'a> {
             self.verify_inst_result(inst, res, errors)?;
         }
 
-        match self.func.dfg[inst] {
+        match self.func.dfg.insts[inst] {
             MultiAry { ref args, .. } => {
                 self.verify_value_list(inst, args, errors)?;
             }
@@ -1181,7 +1181,7 @@ impl<'a> Verifier<'a> {
     }
 
     fn typecheck(&self, inst: Inst, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
-        let inst_data = &self.func.dfg[inst];
+        let inst_data = &self.func.dfg.insts[inst];
         let constraints = inst_data.opcode().constraints();
 
         let ctrl_type = if let Some(value_typeset) = constraints.ctrl_typeset() {
@@ -1261,7 +1261,7 @@ impl<'a> Verifier<'a> {
         ctrl_type: Type,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
-        let constraints = self.func.dfg[inst].opcode().constraints();
+        let constraints = self.func.dfg.insts[inst].opcode().constraints();
 
         for (i, &arg) in self.func.dfg.inst_fixed_args(inst).iter().enumerate() {
             let arg_type = self.func.dfg.value_type(arg);
@@ -1341,7 +1341,7 @@ impl<'a> Verifier<'a> {
             BranchInfo::NotABranch => {}
         }
 
-        match self.func.dfg[inst].analyze_call(&self.func.dfg.value_lists) {
+        match self.func.dfg.insts[inst].analyze_call(&self.func.dfg.value_lists) {
             CallInfo::Direct(func_ref, _) => {
                 let sig_ref = self.func.dfg.ext_funcs[func_ref].signature;
                 let arg_types = self.func.dfg.signatures[sig_ref]
@@ -1407,7 +1407,7 @@ impl<'a> Verifier<'a> {
     }
 
     fn typecheck_return(&self, inst: Inst, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
-        if self.func.dfg[inst].opcode().is_return() {
+        if self.func.dfg.insts[inst].opcode().is_return() {
             let args = self.func.dfg.inst_variable_args(inst);
             let expected_types = &self.func.signature.returns;
             if args.len() != expected_types.len() {
@@ -1442,7 +1442,7 @@ impl<'a> Verifier<'a> {
         ctrl_type: Type,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
-        match self.func.dfg[inst] {
+        match self.func.dfg.insts[inst] {
             ir::InstructionData::Unary { opcode, arg } => {
                 let arg_type = self.func.dfg.value_type(arg);
                 match opcode {
@@ -1604,7 +1604,7 @@ impl<'a> Verifier<'a> {
         inst: Inst,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
-        let inst_data = &self.func.dfg[inst];
+        let inst_data = &self.func.dfg.insts[inst];
 
         match *inst_data {
             ir::InstructionData::Store { flags, .. } => {

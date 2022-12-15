@@ -676,7 +676,7 @@ impl<'a> FunctionBuilder<'a> {
     /// **Note:** You are responsible for maintaining the coherence with the arguments of
     /// other jump instructions.
     pub fn change_jump_destination(&mut self, inst: Inst, new_dest: Block) {
-        let old_dest = self.func.dfg[inst]
+        let old_dest = self.func.dfg.insts[inst]
             .branch_destination_mut()
             .expect("you want to change the jump destination of a non-jump instruction");
         self.func_ctx.ssa.remove_block_predecessor(*old_dest, inst);

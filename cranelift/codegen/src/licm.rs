@@ -153,11 +153,11 @@ fn is_unsafe_load(inst_data: &InstructionData) -> bool {
 
 /// Test whether the given instruction is loop-invariant.
 fn is_loop_invariant(inst: Inst, dfg: &DataFlowGraph, loop_values: &FxHashSet<Value>) -> bool {
-    if trivially_unsafe_for_licm(dfg[inst].opcode()) {
+    if trivially_unsafe_for_licm(dfg.insts[inst].opcode()) {
         return false;
     }
 
-    if is_unsafe_load(&dfg[inst]) {
+    if is_unsafe_load(&dfg.insts[inst]) {
         return false;
     }
 

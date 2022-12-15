@@ -76,7 +76,7 @@ where
                 ValueDef::Result(inst, _) if ctx.ctx.func.dfg.inst_results(inst).len() == 1 => {
                     let ty = ctx.ctx.func.dfg.value_type(value);
                     trace!(" -> value of type {}", ty);
-                    return Some((ty, ctx.ctx.func.dfg[inst].clone()));
+                    return Some((ty, ctx.ctx.func.dfg.insts[inst].clone()));
                 }
                 _ => {}
             }

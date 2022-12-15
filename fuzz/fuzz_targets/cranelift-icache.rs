@@ -95,15 +95,15 @@ fuzz_target!(|func: SingleFunction| {
                 if let ir::InstructionData::UnaryImm {
                     opcode: ir::Opcode::Iconst,
                     imm,
-                } = cursor.func.dfg[inst]
+                } = cursor.func.dfg.insts[inst]
                 {
                     let imm = imm.bits();
-                    cursor.func.dfg[inst] = ir::InstructionData::UnaryImm {
+                    cursor.func.dfg.insts[inst] = ir::InstructionData::UnaryImm {
                         opcode: ir::Opcode::Iconst,
                         imm: Imm64::new(imm.checked_add(1).unwrap_or_else(|| imm - 1)),
                     };
                 } else {
-                    cursor.func.dfg[inst] = ir::InstructionData::UnaryImm {
+                    cursor.func.dfg.insts[inst] = ir::InstructionData::UnaryImm {
                         opcode: ir::Opcode::Iconst,
                         imm: Imm64::new(42),
                     };

@@ -45,7 +45,7 @@ pub fn fold_constants(func: &mut ir::Function) {
     while let Some(_block) = pos.next_block() {
         while let Some(inst) = pos.next_inst() {
             use self::ir::InstructionData::*;
-            match pos.func.dfg[inst] {
+            match pos.func.dfg.insts[inst] {
                 Binary { opcode, args } => {
                     fold_binary(&mut pos.func.dfg, inst, opcode, args);
                 }
@@ -71,7 +71,7 @@ fn resolve_value_to_imm(dfg: &ir::DataFlowGraph, value: ir::Value) -> Option<Con
     };
 
     use self::ir::{InstructionData::*, Opcode::*};
-    match dfg[inst] {
+    match dfg.insts[inst] {
         UnaryImm {
             opcode: Iconst,
             imm,
@@ -218,7 +218,7 @@ fn fold_unary(dfg: &mut ir::DataFlowGraph, inst: ir::Inst, opcode: ir::Opcode, a
 fn fold_branch(pos: &mut FuncCursor, inst: ir::Inst, opcode: ir::Opcode) {
     let (cond, block, args) = {
         let values = pos.func.dfg.inst_args(inst);
-        let inst_data = &pos.func.dfg[inst];
+        let inst_data = &pos.func.dfg.insts[inst];
         (
             match resolve_value_to_imm(&pos.func.dfg, values[0]) {
                 Some(imm) => imm,

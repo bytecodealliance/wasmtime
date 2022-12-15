@@ -232,7 +232,7 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
         let mut summary = BlockSummary::new(&bump, formals);
 
         for inst in func.layout.block_insts(b) {
-            let idetails = &func.dfg[inst];
+            let idetails = &func.dfg.insts[inst];
             // Note that multi-dest transfers (i.e., branch tables) don't
             // carry parameters in our IR, so we only have to care about
             // `SingleDest` here.
@@ -378,9 +378,9 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
                 continue;
             }
 
-            let old_actuals = func.dfg[edge.inst].take_value_list().unwrap();
+            let old_actuals = func.dfg.insts[edge.inst].take_value_list().unwrap();
             let num_old_actuals = old_actuals.len(&func.dfg.value_lists);
-            let num_fixed_actuals = func.dfg[edge.inst]
+            let num_fixed_actuals = func.dfg.insts[edge.inst]
                 .opcode()
                 .constraints()
                 .num_fixed_value_arguments();
@@ -412,7 +412,7 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
                     new_actuals.push(actual_i, &mut func.dfg.value_lists);
                 }
             }
-            func.dfg[edge.inst].put_value_list(new_actuals);
+            func.dfg.insts[edge.inst].put_value_list(new_actuals);
         }
     }
 

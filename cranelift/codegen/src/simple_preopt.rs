@@ -142,7 +142,7 @@ fn package_up_divrem_info(
 /// Examine `inst` to see if it is a div or rem by a constant, and if so return the operands,
 /// signedness, operation size and div-vs-rem-ness in a handy bundle.
 fn get_div_info(inst: Inst, dfg: &DataFlowGraph) -> Option<DivRemByConstInfo> {
-    if let InstructionData::BinaryImm64 { opcode, arg, imm } = dfg[inst] {
+    if let InstructionData::BinaryImm64 { opcode, arg, imm } = dfg.insts[inst] {
         let (is_signed, is_rem) = match opcode {
             Opcode::UdivImm => (false, false),
             Opcode::UremImm => (false, true),
@@ -478,7 +478,7 @@ enum BranchOrderKind {
 /// layout-wise. The unconditional jump can then become a fallthrough.
 fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, block: Block, inst: Inst) {
     let (term_inst, term_inst_args, term_dest, cond_inst, cond_inst_args, cond_dest, kind) =
-        match pos.func.dfg[inst] {
+        match pos.func.dfg.insts[inst] {
             InstructionData::Jump {
                 opcode: Opcode::Jump,
                 destination,
@@ -500,7 +500,7 @@ fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, block: Block, 
                     return;
                 };
 
-                let prev_inst_data = &pos.func.dfg[prev_inst];
+                let prev_inst_data = &pos.func.dfg.insts[prev_inst];
 
                 if let Some(prev_dest) = prev_inst_data.branch_destination() {
                     if prev_dest != next_block {
@@ -609,7 +609,7 @@ mod simplify {
             if let InstructionData::UnaryImm {
                 opcode: Opcode::Iconst,
                 imm,
-            } = dfg[candidate_inst]
+            } = dfg.insts[candidate_inst]
             {
                 return Some(imm);
             }
@@ -631,7 +631,7 @@ mod simplify {
                 opcode: Opcode::IshlImm,
                 arg: prev_arg,
                 imm: prev_imm,
-            } = &pos.func.dfg[arg_inst]
+            } = &pos.func.dfg.insts[arg_inst]
             {
                 if imm != *prev_imm {
                     return false;
@@ -677,7 +677,7 @@ mod simplify {
     /// would likely be expanded back into an instruction on smaller types with the same initial
     /// opcode, creating unnecessary churn.
     fn simplify(pos: &mut FuncCursor, inst: Inst, native_word_width: u32) {
-        match pos.func.dfg[inst] {
+        match pos.func.dfg.insts[inst] {
             InstructionData::Binary { opcode, args } => {
                 if let Some(mut imm) = resolve_imm64_value(&pos.func.dfg, args[1]) {
                     let new_opcode = match opcode {
@@ -748,7 +748,7 @@ mod simplify {
                                 opcode: prev_opcode,
                                 arg: prev_arg,
                                 imm: prev_imm,
-                            } = &pos.func.dfg[arg_inst]
+                            } = &pos.func.dfg.insts[arg_inst]
                             {
                                 if opcode == *prev_opcode
                                     && ty == pos.func.dfg.ctrl_typevar(arg_inst)
@@ -846,7 +846,7 @@ mod simplify {
             opcode: br_opcode,
             args: ref br_args,
             ..
-        } = pos.func.dfg[inst]
+        } = pos.func.dfg.insts[inst]
         {
             let first_arg = {
                 let args = pos.func.dfg.inst_args(inst);
@@ -865,7 +865,7 @@ mod simplify {
                 arg: cmp_arg,
                 cond: cmp_cond,
                 imm: cmp_imm,
-            } = pos.func.dfg[icmp_inst]
+            } = pos.func.dfg.insts[icmp_inst]
             {
                 let cmp_imm: i64 = cmp_imm.into();
                 if cmp_imm != 0 {
@@ -900,7 +900,7 @@ mod simplify {
         };
 
         info.args.as_mut_slice(&mut pos.func.dfg.value_lists)[0] = info.cmp_arg;
-        if let InstructionData::Branch { ref mut opcode, .. } = pos.func.dfg[info.br_inst] {
+        if let InstructionData::Branch { ref mut opcode, .. } = pos.func.dfg.insts[info.br_inst] {
             *opcode = info.new_opcode;
         } else {
             panic!();

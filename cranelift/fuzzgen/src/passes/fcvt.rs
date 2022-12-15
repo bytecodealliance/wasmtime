@@ -24,7 +24,7 @@ pub fn do_fcvt_trap_pass(fuzz: &mut FuzzGen, func: &mut Function) -> Result<()> 
 
 /// Returns true/false if this instruction can trap
 fn can_fcvt_trap(pos: &FuncCursor, inst: Inst) -> bool {
-    let opcode = pos.func.dfg[inst].opcode();
+    let opcode = pos.func.dfg.insts[inst].opcode();
 
     matches!(opcode, Opcode::FcvtToUint | Opcode::FcvtToSint)
 }
@@ -66,7 +66,7 @@ fn float_limits(
 /// Prepend instructions to inst to avoid traps
 fn insert_fcvt_sequence(pos: &mut FuncCursor, inst: Inst) {
     let dfg = &pos.func.dfg;
-    let opcode = dfg[inst].opcode();
+    let opcode = dfg.insts[inst].opcode();
     let arg = dfg.inst_args(inst)[0];
     let float_ty = dfg.value_type(arg);
     let int_ty = dfg.value_type(dfg.first_result(inst));

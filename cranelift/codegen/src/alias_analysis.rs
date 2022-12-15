@@ -85,14 +85,14 @@ pub struct LastStores {
 
 impl LastStores {
     fn update(&mut self, func: &Function, inst: Inst) {
-        let opcode = func.dfg[inst].opcode();
+        let opcode = func.dfg.insts[inst].opcode();
         if has_memory_fence_semantics(opcode) {
             self.heap = inst.into();
             self.table = inst.into();
             self.vmctx = inst.into();
             self.other = inst.into();
         } else if opcode.can_store() {
-            if let Some(memflags) = func.dfg[inst].memflags() {
+            if let Some(memflags) = func.dfg.insts[inst].memflags() {
                 if memflags.heap() {
                     self.heap = inst.into();
                 } else if memflags.table() {
@@ -112,7 +112,7 @@ impl LastStores {
     }
 
     fn get_last_store(&self, func: &Function, inst: Inst) -> PackedOption<Inst> {
-        if let Some(memflags) = func.dfg[inst].memflags() {
+        if let Some(memflags) = func.dfg.insts[inst].memflags() {
             if memflags.heap() {
                 self.heap
             } else if memflags.table() {
@@ -122,7 +122,9 @@ impl LastStores {
             } else {
                 self.other
             }
-        } else if func.dfg[inst].opcode().can_load() || func.dfg[inst].opcode().can_store() {
+        } else if func.dfg.insts[inst].opcode().can_load()
+            || func.dfg.insts[inst].opcode().can_store()
+        {
             inst.into()
         } else {
             PackedOption::default()
@@ -277,13 +279,13 @@ impl<'a> AliasAnalysis<'a> {
             "alias analysis: scanning at inst{} with state {:?} ({:?})",
             inst.index(),
             state,
-            func.dfg[inst],
+            func.dfg.insts[inst],
         );
 
         let replacing_value = if let Some((address, offset, ty)) = inst_addr_offset_type(func, inst)
         {
             let address = func.dfg.resolve_aliases(address);
-            let opcode = func.dfg[inst].opcode();
+            let opcode = func.dfg.insts[inst].opcode();
 
             if opcode.can_store() {
                 let store_data = inst_store_data(func, inst).unwrap();
