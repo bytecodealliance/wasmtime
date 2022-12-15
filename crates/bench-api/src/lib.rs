@@ -406,6 +406,8 @@ struct BenchState {
     make_wasi_cx: Box<dyn FnMut() -> Result<WasiCtx>>,
     module: Option<Module>,
     store_and_instance: Option<(Store<HostState>, Instance)>,
+    epoch_interruption: bool,
+    fuel: Option<u64>,
 }
 
 struct HostState {
@@ -454,6 +456,13 @@ impl BenchState {
             Ok(())
         })?;
 
+        let mut epoch_interruption = false;
+        let mut fuel = None;
+        if let Some(opts) = &options {
+            epoch_interruption = opts.epoch_interruption;
+            fuel = opts.fuel;
+        }
+
         let wasi_modules = options
             .map(|o| o.wasi_modules)
             .flatten()
@@ -484,6 +493,8 @@ impl BenchState {
             make_wasi_cx: Box::new(make_wasi_cx) as _,
             module: None,
             store_and_instance: None,
+            epoch_interruption,
+            fuel,
         })
     }
 
@@ -520,6 +531,13 @@ impl BenchState {
         // stdin/stdout/stderr.
         (self.instantiation_start)(self.instantiation_timer);
         let mut store = Store::new(self.linker.engine(), host);
+        if self.epoch_interruption {
+            store.set_epoch_deadline(1);
+        }
+        if let Some(fuel) = self.fuel {
+            store.add_fuel(fuel).unwrap();
+        }
+
         let instance = self.linker.instantiate(&mut store, &module)?;
         (self.instantiation_end)(self.instantiation_timer);
 
