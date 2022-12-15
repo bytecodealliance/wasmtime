@@ -2316,17 +2316,18 @@ where
     // offsets in `memarg` are <=2gb, which means we get the fast path of one
     // `heap_addr` instruction plus a hardcoded i32-offset in memory-related
     // instructions.
+    let heap = environ.heaps()[heap].clone();
     let addr = match u32::try_from(memarg.offset) {
         // If our offset fits within a u32, then we can place the it into the
         // offset immediate of the `heap_addr` instruction.
         Ok(offset) => bounds_checks::bounds_check_and_compute_addr(
             builder,
-            &*environ,
-            &environ.heaps()[heap],
+            environ,
+            &heap,
             index,
             offset,
             access_size,
-        ),
+        )?,
 
         // If the offset doesn't fit within a u32, then we can't pass it
         // directly into `heap_addr`.
@@ -2355,20 +2356,19 @@ where
         // relatively odd/rare. In the future if needed we can look into
         // optimizing this more.
         Err(_) => {
-            let index_type = environ.heaps()[heap].index_type;
-            let offset = builder.ins().iconst(index_type, memarg.offset as i64);
+            let offset = builder.ins().iconst(heap.index_type, memarg.offset as i64);
             let adjusted_index =
                 builder
                     .ins()
                     .uadd_overflow_trap(index, offset, ir::TrapCode::HeapOutOfBounds);
             bounds_checks::bounds_check_and_compute_addr(
                 builder,
-                &*environ,
-                &environ.heaps()[heap],
+                environ,
+                &heap,
                 adjusted_index,
                 0,
                 access_size,
-            )
+            )?
         }
     };
     let addr = match addr {

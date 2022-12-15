@@ -490,6 +490,18 @@ pub trait FuncEnvironment: TargetEnvironment {
         Ok(())
     }
 
+    /// Optional callback for the `FuncEnvironment` performing this translation
+    /// to maintain, prepare, or finalize custom, internal state when we
+    /// statically determine that a Wasm memory access will unconditionally
+    /// trap, rendering the rest of the block unreachable. Called just before
+    /// the unconditional trap is emitted.
+    fn before_unconditionally_trapping_memory_access(
+        &mut self,
+        _builder: &mut FunctionBuilder,
+    ) -> WasmResult<()> {
+        Ok(())
+    }
+
     /// Optional callback for the `FunctionEnvironment` performing this translation to perform work
     /// before the function body is translated.
     fn before_translate_function(

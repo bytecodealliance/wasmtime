@@ -2078,6 +2078,17 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         Ok(())
     }
 
+    fn before_unconditionally_trapping_memory_access(
+        &mut self,
+        builder: &mut FunctionBuilder,
+    ) -> WasmResult<()> {
+        if self.tunables.consume_fuel {
+            self.fuel_increment_var(builder);
+            self.fuel_save_from_var(builder);
+        }
+        Ok(())
+    }
+
     fn before_translate_function(
         &mut self,
         builder: &mut FunctionBuilder,

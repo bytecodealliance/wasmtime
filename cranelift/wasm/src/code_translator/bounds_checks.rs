@@ -8,21 +8,22 @@
 //!
 //! bounds check the memory access and translate it into a native memory access.
 
-use crate::{HeapData, HeapStyle, TargetEnvironment};
+use crate::{FuncEnvironment, HeapData, HeapStyle};
 use cranelift_codegen::{
     cursor::{Cursor, FuncCursor},
     ir::{self, condcodes::IntCC, InstBuilder, RelSourceLoc},
 };
 use cranelift_frontend::FunctionBuilder;
+use wasmtime_types::WasmResult;
 
 /// Helper used to emit bounds checks (as necessary) and compute the native
 /// address of a heap access.
 ///
 /// Returns the `ir::Value` holding the native address of the heap access, or
 /// `None` if the heap access will unconditionally trap.
-pub fn bounds_check_and_compute_addr<TE>(
+pub fn bounds_check_and_compute_addr<Env>(
     builder: &mut FunctionBuilder,
-    env: &TE,
+    env: &mut Env,
     heap: &HeapData,
     // Dynamic operand indexing into the heap.
     index: ir::Value,
@@ -30,9 +31,9 @@ pub fn bounds_check_and_compute_addr<TE>(
     offset: u32,
     // Static size of the heap access.
     access_size: u8,
-) -> Option<ir::Value>
+) -> WasmResult<Option<ir::Value>>
 where
-    TE: TargetEnvironment + ?Sized,
+    Env: FuncEnvironment + ?Sized,
 {
     let index = cast_index_to_pointer_ty(
         index,
@@ -62,7 +63,7 @@ where
     // different bounds checks and optimizations of those bounds checks. It is
     // intentionally written in a straightforward case-matching style that will
     // hopefully make it easy to port to ISLE one day.
-    match heap.style {
+    Ok(match heap.style {
         // ====== Dynamic Memories ======
         //
         // 1. First special case for when `offset + access_size == 1`:
@@ -216,6 +217,7 @@ where
         //    bound`, since we will end up being out-of-bounds regardless of the
         //    given `index`.
         HeapStyle::Static { bound } if offset_and_size > bound.into() => {
+            env.before_unconditionally_trapping_memory_access(builder)?;
             builder.ins().trap(ir::TrapCode::HeapOutOfBounds);
             None
         }
@@ -325,7 +327,7 @@ where
                 None,
             ))
         }
-    }
+    })
 }
 
 fn cast_index_to_pointer_ty(
