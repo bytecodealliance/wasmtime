@@ -5,7 +5,6 @@
 
 use crate::entity::SecondaryMap;
 use crate::ir::entities::AnyEntity;
-use crate::ir::immediates::{HeapImmData, Uimm32};
 use crate::ir::{Block, DataFlowGraph, Function, Inst, SigRef, Type, Value, ValueDef};
 use crate::packed_option::ReservedValue;
 use alloc::string::{String, ToString};
@@ -55,13 +54,6 @@ pub trait FuncWriter {
         for (gv, gv_data) in &func.global_values {
             any = true;
             self.write_entity_definition(w, func, gv.into(), gv_data)?;
-        }
-
-        for (heap, heap_data) in &func.heaps {
-            if !heap_data.index_type.is_invalid() {
-                any = true;
-                self.write_entity_definition(w, func, heap.into(), heap_data)?;
-            }
         }
 
         for (table, table_data) in &func.tables {
@@ -478,54 +470,6 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
             dynamic_stack_slot,
             ..
         } => write!(w, " {}, {}", arg, dynamic_stack_slot),
-        HeapLoad {
-            opcode: _,
-            heap_imm,
-            arg,
-        } => {
-            let HeapImmData {
-                flags,
-                heap,
-                offset,
-            } = dfg.heap_imms[heap_imm];
-            write!(
-                w,
-                " {heap} {flags} {arg}{optional_offset}",
-                optional_offset = if offset == Uimm32::from(0) {
-                    "".to_string()
-                } else {
-                    format!("+{offset}")
-                }
-            )
-        }
-        HeapStore {
-            opcode: _,
-            heap_imm,
-            args,
-        } => {
-            let HeapImmData {
-                flags,
-                heap,
-                offset,
-            } = dfg.heap_imms[heap_imm];
-            let [index, value] = args;
-            write!(
-                w,
-                " {heap} {flags} {index}{optional_offset}, {value}",
-                optional_offset = if offset == Uimm32::from(0) {
-                    "".to_string()
-                } else {
-                    format!("+{offset}")
-                }
-            )
-        }
-        HeapAddr {
-            heap,
-            arg,
-            offset,
-            size,
-            ..
-        } => write!(w, " {}, {}, {}, {}", heap, arg, offset, size),
         TableAddr { table, arg, .. } => write!(w, " {}, {}", table, arg),
         Load {
             flags, arg, offset, ..

@@ -1,131 +1,47 @@
-//! Legalization of heaps.
+//! Implementation of Wasm to CLIF memory access translation.
 //!
-//! This module exports the `expand_heap_addr` function which transforms a `heap_addr`
-//! instruction into code that depends on the kind of heap referenced.
+//! Given
+//!
+//! * a dynamic Wasm memory index operand,
+//! * a static offset immediate, and
+//! * a static access size,
+//!
+//! bounds check the memory access and translate it into a native memory access.
 
-use crate::cursor::{Cursor, FuncCursor};
-use crate::flowgraph::ControlFlowGraph;
-use crate::ir::condcodes::IntCC;
-use crate::ir::immediates::{HeapImmData, Offset32, Uimm32, Uimm8};
-use crate::ir::{self, InstBuilder, RelSourceLoc};
-use crate::isa::TargetIsa;
-use crate::trace;
-
-/// Expand a `heap_load` instruction according to the definition of the heap.
-pub fn expand_heap_load(
-    inst: ir::Inst,
-    func: &mut ir::Function,
-    cfg: &mut ControlFlowGraph,
-    isa: &dyn TargetIsa,
-    heap_imm: ir::HeapImm,
-    index: ir::Value,
-) {
-    let HeapImmData {
-        flags,
-        heap,
-        offset,
-    } = func.dfg.heap_imms[heap_imm];
-
-    let result_ty = func.dfg.ctrl_typevar(inst);
-    let access_size = result_ty.bytes();
-    let access_size = u8::try_from(access_size).unwrap();
-
-    let mut pos = FuncCursor::new(func).at_inst(inst);
-    pos.use_srcloc(inst);
-
-    let addr =
-        bounds_check_and_compute_addr(&mut pos, cfg, isa, heap, index, offset.into(), access_size);
-
-    pos.func
-        .dfg
-        .replace(inst)
-        .load(result_ty, flags, addr, Offset32::new(0));
-}
-
-/// Expand a `heap_store` instruction according to the definition of the heap.
-pub fn expand_heap_store(
-    inst: ir::Inst,
-    func: &mut ir::Function,
-    cfg: &mut ControlFlowGraph,
-    isa: &dyn TargetIsa,
-    heap_imm: ir::HeapImm,
-    index: ir::Value,
-    value: ir::Value,
-) {
-    let HeapImmData {
-        flags,
-        heap,
-        offset,
-    } = func.dfg.heap_imms[heap_imm];
-
-    let store_ty = func.dfg.value_type(value);
-    let access_size = u8::try_from(store_ty.bytes()).unwrap();
-
-    let mut pos = FuncCursor::new(func).at_inst(inst);
-    pos.use_srcloc(inst);
-
-    let addr =
-        bounds_check_and_compute_addr(&mut pos, cfg, isa, heap, index, offset.into(), access_size);
-
-    pos.func
-        .dfg
-        .replace(inst)
-        .store(flags, value, addr, Offset32::new(0));
-}
-
-/// Expand a `heap_addr` instruction according to the definition of the heap.
-pub fn expand_heap_addr(
-    inst: ir::Inst,
-    func: &mut ir::Function,
-    cfg: &mut ControlFlowGraph,
-    isa: &dyn TargetIsa,
-    heap: ir::Heap,
-    index: ir::Value,
-    offset: Uimm32,
-    access_size: Uimm8,
-) {
-    let mut pos = FuncCursor::new(func).at_inst(inst);
-    pos.use_srcloc(inst);
-
-    let addr =
-        bounds_check_and_compute_addr(&mut pos, cfg, isa, heap, index, offset.into(), access_size);
-
-    // Replace the `heap_addr` and its result value with the legalized native
-    // address.
-    let addr_inst = pos.func.dfg.value_def(addr).unwrap_inst();
-    pos.func.dfg.replace_with_aliases(inst, addr_inst);
-    pos.func.layout.remove_inst(inst);
-}
+use crate::{HeapData, HeapStyle, TargetEnvironment};
+use cranelift_codegen::{
+    cursor::{Cursor, FuncCursor},
+    ir::{self, condcodes::IntCC, InstBuilder, RelSourceLoc},
+};
+use cranelift_frontend::FunctionBuilder;
 
 /// Helper used to emit bounds checks (as necessary) and compute the native
 /// address of a heap access.
 ///
-/// Returns the `ir::Value` holding the native address of the heap access.
-fn bounds_check_and_compute_addr(
-    pos: &mut FuncCursor,
-    cfg: &mut ControlFlowGraph,
-    isa: &dyn TargetIsa,
-    heap: ir::Heap,
+/// Returns the `ir::Value` holding the native address of the heap access, or
+/// `None` if the heap access will unconditionally trap.
+pub fn bounds_check_and_compute_addr<TE>(
+    builder: &mut FunctionBuilder,
+    env: &TE,
+    heap: &HeapData,
     // Dynamic operand indexing into the heap.
     index: ir::Value,
     // Static immediate added to the index.
     offset: u32,
     // Static size of the heap access.
     access_size: u8,
-) -> ir::Value {
-    let pointer_type = isa.pointer_type();
-    let spectre = isa.flags().enable_heap_access_spectre_mitigation();
+) -> Option<ir::Value>
+where
+    TE: TargetEnvironment + ?Sized,
+{
+    let index = cast_index_to_pointer_ty(
+        index,
+        heap.index_type,
+        env.pointer_type(),
+        &mut builder.cursor(),
+    );
     let offset_and_size = offset_plus_size(offset, access_size);
-
-    let ir::HeapData {
-        base: _,
-        min_size,
-        offset_guard_size: guard_size,
-        style,
-        index_type,
-    } = pos.func.heaps[heap].clone();
-
-    let index = cast_index_to_pointer_ty(index, index_type, pointer_type, pos);
+    let spectre_mitigations_enabled = env.heap_access_spectre_mitigation();
 
     // We need to emit code that will trap (or compute an address that will trap
     // when accessed) if
@@ -146,7 +62,7 @@ fn bounds_check_and_compute_addr(
     // different bounds checks and optimizations of those bounds checks. It is
     // intentionally written in a straightforward case-matching style that will
     // hopefully make it easy to port to ISLE one day.
-    match style {
+    match heap.style {
         // ====== Dynamic Memories ======
         //
         // 1. First special case for when `offset + access_size == 1`:
@@ -157,13 +73,12 @@ fn bounds_check_and_compute_addr(
         //    1.a. When Spectre mitigations are enabled, avoid duplicating
         //         bounds checks between the mitigations and the regular bounds
         //         checks.
-        ir::HeapStyle::Dynamic { bound_gv } if offset_and_size == 1 && spectre => {
-            let bound = pos.ins().global_value(pointer_type, bound_gv);
-            compute_addr(
-                isa,
-                pos,
+        HeapStyle::Dynamic { bound_gv } if offset_and_size == 1 && spectre_mitigations_enabled => {
+            let bound = builder.ins().global_value(env.pointer_type(), bound_gv);
+            Some(compute_addr(
+                &mut builder.cursor(),
                 heap,
-                pointer_type,
+                env.pointer_type(),
                 index,
                 offset,
                 Some(SpectreOobComparison {
@@ -171,16 +86,23 @@ fn bounds_check_and_compute_addr(
                     lhs: index,
                     rhs: bound,
                 }),
-            )
+            ))
         }
         //    1.b. Emit explicit `index >= bound` bounds checks.
-        ir::HeapStyle::Dynamic { bound_gv } if offset_and_size == 1 => {
-            let bound = pos.ins().global_value(pointer_type, bound_gv);
-            let oob = pos
+        HeapStyle::Dynamic { bound_gv } if offset_and_size == 1 => {
+            let bound = builder.ins().global_value(env.pointer_type(), bound_gv);
+            let oob = builder
                 .ins()
                 .icmp(IntCC::UnsignedGreaterThanOrEqual, index, bound);
-            pos.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
-            compute_addr(isa, pos, heap, pointer_type, index, offset, None)
+            builder.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
+            Some(compute_addr(
+                &mut builder.cursor(),
+                heap,
+                env.pointer_type(),
+                index,
+                offset,
+                None,
+            ))
         }
 
         // 2. Second special case for when `offset + access_size <= min_size`.
@@ -192,14 +114,15 @@ fn bounds_check_and_compute_addr(
         //        ==> index > bound - (offset + access_size)
         //
         //    2.a. Dedupe bounds checks with Spectre mitigations.
-        ir::HeapStyle::Dynamic { bound_gv } if offset_and_size <= min_size.into() && spectre => {
-            let bound = pos.ins().global_value(pointer_type, bound_gv);
-            let adjusted_bound = pos.ins().iadd_imm(bound, -(offset_and_size as i64));
-            compute_addr(
-                isa,
-                pos,
+        HeapStyle::Dynamic { bound_gv }
+            if offset_and_size <= heap.min_size.into() && spectre_mitigations_enabled =>
+        {
+            let bound = builder.ins().global_value(env.pointer_type(), bound_gv);
+            let adjusted_bound = builder.ins().iadd_imm(bound, -(offset_and_size as i64));
+            Some(compute_addr(
+                &mut builder.cursor(),
                 heap,
-                pointer_type,
+                env.pointer_type(),
                 index,
                 offset,
                 Some(SpectreOobComparison {
@@ -207,18 +130,25 @@ fn bounds_check_and_compute_addr(
                     lhs: index,
                     rhs: adjusted_bound,
                 }),
-            )
+            ))
         }
         //    2.b. Emit explicit `index > bound - (offset + access_size)` bounds
         //         checks.
-        ir::HeapStyle::Dynamic { bound_gv } if offset_and_size <= min_size.into() => {
-            let bound = pos.ins().global_value(pointer_type, bound_gv);
-            let adjusted_bound = pos.ins().iadd_imm(bound, -(offset_and_size as i64));
-            let oob = pos
+        HeapStyle::Dynamic { bound_gv } if offset_and_size <= heap.min_size.into() => {
+            let bound = builder.ins().global_value(env.pointer_type(), bound_gv);
+            let adjusted_bound = builder.ins().iadd_imm(bound, -(offset_and_size as i64));
+            let oob = builder
                 .ins()
                 .icmp(IntCC::UnsignedGreaterThan, index, adjusted_bound);
-            pos.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
-            compute_addr(isa, pos, heap, pointer_type, index, offset, None)
+            builder.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
+            Some(compute_addr(
+                &mut builder.cursor(),
+                heap,
+                env.pointer_type(),
+                index,
+                offset,
+                None,
+            ))
         }
 
         // 3. General case for dynamic memories:
@@ -228,17 +158,20 @@ fn bounds_check_and_compute_addr(
         //    And we have to handle the overflow case in the left-hand side.
         //
         //    3.a. Dedupe bounds checks with Spectre mitigations.
-        ir::HeapStyle::Dynamic { bound_gv } if spectre => {
-            let access_size_val = pos.ins().iconst(pointer_type, offset_and_size as i64);
-            let adjusted_index =
-                pos.ins()
-                    .uadd_overflow_trap(index, access_size_val, ir::TrapCode::HeapOutOfBounds);
-            let bound = pos.ins().global_value(pointer_type, bound_gv);
-            compute_addr(
-                isa,
-                pos,
+        HeapStyle::Dynamic { bound_gv } if spectre_mitigations_enabled => {
+            let access_size_val = builder
+                .ins()
+                .iconst(env.pointer_type(), offset_and_size as i64);
+            let adjusted_index = builder.ins().uadd_overflow_trap(
+                index,
+                access_size_val,
+                ir::TrapCode::HeapOutOfBounds,
+            );
+            let bound = builder.ins().global_value(env.pointer_type(), bound_gv);
+            Some(compute_addr(
+                &mut builder.cursor(),
                 heap,
-                pointer_type,
+                env.pointer_type(),
                 index,
                 offset,
                 Some(SpectreOobComparison {
@@ -246,21 +179,32 @@ fn bounds_check_and_compute_addr(
                     lhs: adjusted_index,
                     rhs: bound,
                 }),
-            )
+            ))
         }
         //    3.b. Emit an explicit `index + offset + access_size > bound`
         //         check.
-        ir::HeapStyle::Dynamic { bound_gv } => {
-            let access_size_val = pos.ins().iconst(pointer_type, offset_and_size as i64);
-            let adjusted_index =
-                pos.ins()
-                    .uadd_overflow_trap(index, access_size_val, ir::TrapCode::HeapOutOfBounds);
-            let bound = pos.ins().global_value(pointer_type, bound_gv);
-            let oob = pos
+        HeapStyle::Dynamic { bound_gv } => {
+            let access_size_val = builder
+                .ins()
+                .iconst(env.pointer_type(), offset_and_size as i64);
+            let adjusted_index = builder.ins().uadd_overflow_trap(
+                index,
+                access_size_val,
+                ir::TrapCode::HeapOutOfBounds,
+            );
+            let bound = builder.ins().global_value(env.pointer_type(), bound_gv);
+            let oob = builder
                 .ins()
                 .icmp(IntCC::UnsignedGreaterThan, adjusted_index, bound);
-            pos.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
-            compute_addr(isa, pos, heap, pointer_type, index, offset, None)
+            builder.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
+            Some(compute_addr(
+                &mut builder.cursor(),
+                heap,
+                env.pointer_type(),
+                index,
+                offset,
+                None,
+            ))
         }
 
         // ====== Static Memories ======
@@ -271,18 +215,9 @@ fn bounds_check_and_compute_addr(
         // 1. First special case: trap immediately if `offset + access_size >
         //    bound`, since we will end up being out-of-bounds regardless of the
         //    given `index`.
-        ir::HeapStyle::Static { bound } if offset_and_size > bound.into() => {
-            pos.ins().trap(ir::TrapCode::HeapOutOfBounds);
-
-            // Split the block, as the trap is a terminator instruction.
-            let curr_block = pos.current_block().expect("Cursor is not in a block");
-            let new_block = pos.func.dfg.make_block();
-            pos.insert_block(new_block);
-            cfg.recompute_block(pos.func, curr_block);
-            cfg.recompute_block(pos.func, new_block);
-
-            let null = pos.ins().iconst(pointer_type, 0);
-            return null;
+        HeapStyle::Static { bound } if offset_and_size > bound.into() => {
+            builder.ins().trap(ir::TrapCode::HeapOutOfBounds);
+            None
         }
 
         // 2. Second special case for when we can completely omit explicit
@@ -323,12 +258,19 @@ fn bounds_check_and_compute_addr(
         //    `u32::MAX`. This means that `index` is always either in bounds or
         //    within the guard page region, neither of which require emitting an
         //    explicit bounds check.
-        ir::HeapStyle::Static { bound }
-            if index_type == ir::types::I32
+        HeapStyle::Static { bound }
+            if heap.index_type == ir::types::I32
                 && u64::from(u32::MAX)
-                    <= u64::from(bound) + u64::from(guard_size) - offset_and_size =>
+                    <= u64::from(bound) + u64::from(heap.offset_guard_size) - offset_and_size =>
         {
-            compute_addr(isa, pos, heap, pointer_type, index, offset, None)
+            Some(compute_addr(
+                &mut builder.cursor(),
+                heap,
+                env.pointer_type(),
+                index,
+                offset,
+                None,
+            ))
         }
 
         // 3. General case for static memories.
@@ -344,16 +286,17 @@ fn bounds_check_and_compute_addr(
         //    factor in the guard pages here.
         //
         //    3.a. Dedupe the Spectre mitigation and the explicit bounds check.
-        ir::HeapStyle::Static { bound } if spectre => {
+        HeapStyle::Static { bound } if spectre_mitigations_enabled => {
             // NB: this subtraction cannot wrap because we didn't hit the first
             // special case.
             let adjusted_bound = u64::from(bound) - offset_and_size;
-            let adjusted_bound = pos.ins().iconst(pointer_type, adjusted_bound as i64);
-            compute_addr(
-                isa,
-                pos,
+            let adjusted_bound = builder
+                .ins()
+                .iconst(env.pointer_type(), adjusted_bound as i64);
+            Some(compute_addr(
+                &mut builder.cursor(),
                 heap,
-                pointer_type,
+                env.pointer_type(),
                 index,
                 offset,
                 Some(SpectreOobComparison {
@@ -361,18 +304,26 @@ fn bounds_check_and_compute_addr(
                     lhs: index,
                     rhs: adjusted_bound,
                 }),
-            )
+            ))
         }
         //    3.b. Emit the explicit `index > bound - (offset + access_size)`
         //         check.
-        ir::HeapStyle::Static { bound } => {
+        HeapStyle::Static { bound } => {
             // See comment in 3.a. above.
             let adjusted_bound = u64::from(bound) - offset_and_size;
-            let oob = pos
-                .ins()
-                .icmp_imm(IntCC::UnsignedGreaterThan, index, adjusted_bound as i64);
-            pos.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
-            compute_addr(isa, pos, heap, pointer_type, index, offset, None)
+            let oob =
+                builder
+                    .ins()
+                    .icmp_imm(IntCC::UnsignedGreaterThan, index, adjusted_bound as i64);
+            builder.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
+            Some(compute_addr(
+                &mut builder.cursor(),
+                heap,
+                env.pointer_type(),
+                index,
+                offset,
+                None,
+            ))
         }
     }
 }
@@ -416,9 +367,8 @@ struct SpectreOobComparison {
 /// Emit code for the base address computation of a `heap_addr` instruction,
 /// without any bounds checks (other than optional Spectre mitigations).
 fn compute_addr(
-    isa: &dyn TargetIsa,
     pos: &mut FuncCursor,
-    heap: ir::Heap,
+    heap: &HeapData,
     addr_ty: ir::Type,
     index: ir::Value,
     offset: u32,
@@ -431,54 +381,24 @@ fn compute_addr(
     debug_assert_eq!(pos.func.dfg.value_type(index), addr_ty);
 
     // Add the heap base address base
-    let base = if isa.flags().enable_pinned_reg() && isa.flags().use_pinned_reg_as_heap_base() {
-        let base = pos.ins().get_pinned_reg(isa.pointer_type());
-        trace!("  inserting: {}", pos.func.dfg.display_value_inst(base));
-        base
-    } else {
-        let base_gv = pos.func.heaps[heap].base;
-        let base = pos.ins().global_value(addr_ty, base_gv);
-        trace!("  inserting: {}", pos.func.dfg.display_value_inst(base));
-        base
-    };
+    let base = pos.ins().global_value(addr_ty, heap.base);
 
-    if let Some(SpectreOobComparison { cc, lhs, rhs }) = spectre_oob_comparison {
-        let final_base = pos.ins().iadd(base, index);
+    let final_base = pos.ins().iadd(base, index);
+    let final_addr = if offset == 0 {
+        final_base
+    } else {
         // NB: The addition of the offset immediate must happen *before* the
         // `select_spectre_guard`. If it happens after, then we potentially are
         // letting speculative execution read the whole first 4GiB of memory.
-        let final_addr = if offset == 0 {
-            final_base
-        } else {
-            let final_addr = pos.ins().iadd_imm(final_base, offset as i64);
-            trace!(
-                "  inserting: {}",
-                pos.func.dfg.display_value_inst(final_addr)
-            );
-            final_addr
-        };
-        let zero = pos.ins().iconst(addr_ty, 0);
-        trace!("  inserting: {}", pos.func.dfg.display_value_inst(zero));
+        pos.ins().iadd_imm(final_base, offset as i64)
+    };
 
+    if let Some(SpectreOobComparison { cc, lhs, rhs }) = spectre_oob_comparison {
+        let null = pos.ins().iconst(addr_ty, 0);
         let cmp = pos.ins().icmp(cc, lhs, rhs);
-        trace!("  inserting: {}", pos.func.dfg.display_value_inst(cmp));
-
-        let value = pos.ins().select_spectre_guard(cmp, zero, final_addr);
-        trace!("  inserting: {}", pos.func.dfg.display_value_inst(value));
-        value
-    } else if offset == 0 {
-        let addr = pos.ins().iadd(base, index);
-        trace!("  inserting: {}", pos.func.dfg.display_value_inst(addr));
-        addr
+        pos.ins().select_spectre_guard(cmp, null, final_addr)
     } else {
-        let final_base = pos.ins().iadd(base, index);
-        trace!(
-            "  inserting: {}",
-            pos.func.dfg.display_value_inst(final_base)
-        );
-        let addr = pos.ins().iadd_imm(final_base, offset as i64);
-        trace!("  inserting: {}", pos.func.dfg.display_value_inst(addr));
-        addr
+        final_addr
     }
 }
 

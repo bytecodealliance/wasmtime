@@ -15,9 +15,6 @@ pub(crate) struct Formats {
     pub(crate) cond_trap: Rc<InstructionFormat>,
     pub(crate) float_compare: Rc<InstructionFormat>,
     pub(crate) func_addr: Rc<InstructionFormat>,
-    pub(crate) heap_addr: Rc<InstructionFormat>,
-    pub(crate) heap_load: Rc<InstructionFormat>,
-    pub(crate) heap_store: Rc<InstructionFormat>,
     pub(crate) int_compare: Rc<InstructionFormat>,
     pub(crate) int_compare_imm: Rc<InstructionFormat>,
     pub(crate) int_add_trap: Rc<InstructionFormat>,
@@ -198,25 +195,6 @@ impl Formats {
             dynamic_stack_store: Builder::new("DynamicStackStore")
                 .value()
                 .imm(&entities.dynamic_stack_slot)
-                .build(),
-
-            // Accessing a WebAssembly heap.
-            heap_addr: Builder::new("HeapAddr")
-                .imm(&entities.heap)
-                .value()
-                .imm_with_name("offset", &imm.uimm32)
-                .imm_with_name("size", &imm.uimm8)
-                .build(),
-
-            heap_load: Builder::new("HeapLoad").imm(&imm.heap_imm).value().build(),
-
-            heap_store: Builder::new("HeapStore")
-                // We have more fields for this instruction than
-                // `InstructionData` can hold without growing in size, so we
-                // push the immediates out into a side table.
-                .imm(&imm.heap_imm)
-                .value()
-                .value()
                 .build(),
 
             // Accessing a WebAssembly table.

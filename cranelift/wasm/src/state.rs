@@ -4,7 +4,7 @@
 //! value and control stacks during the translation of a single function.
 
 use crate::environ::{FuncEnvironment, GlobalVariable};
-use crate::{FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeIndex, WasmResult};
+use crate::{FuncIndex, GlobalIndex, Heap, MemoryIndex, TableIndex, TypeIndex, WasmResult};
 use crate::{HashMap, Occupied, Vacant};
 use cranelift_codegen::ir::{self, Block, Inst, Value};
 use std::vec::Vec;
@@ -225,7 +225,7 @@ pub struct FuncTranslationState {
     globals: HashMap<GlobalIndex, GlobalVariable>,
 
     // Map of heaps that have been created by `FuncEnvironment::make_heap`.
-    heaps: HashMap<MemoryIndex, ir::Heap>,
+    memory_to_heap: HashMap<MemoryIndex, Heap>,
 
     // Map of tables that have been created by `FuncEnvironment::make_table`.
     pub(crate) tables: HashMap<TableIndex, ir::Table>,
@@ -258,7 +258,7 @@ impl FuncTranslationState {
             control_stack: Vec::new(),
             reachable: true,
             globals: HashMap::new(),
-            heaps: HashMap::new(),
+            memory_to_heap: HashMap::new(),
             tables: HashMap::new(),
             signatures: HashMap::new(),
             functions: HashMap::new(),
@@ -270,7 +270,7 @@ impl FuncTranslationState {
         debug_assert!(self.control_stack.is_empty());
         self.reachable = true;
         self.globals.clear();
-        self.heaps.clear();
+        self.memory_to_heap.clear();
         self.tables.clear();
         self.signatures.clear();
         self.functions.clear();
@@ -462,9 +462,9 @@ impl FuncTranslationState {
         func: &mut ir::Function,
         index: u32,
         environ: &mut FE,
-    ) -> WasmResult<ir::Heap> {
+    ) -> WasmResult<Heap> {
         let index = MemoryIndex::from_u32(index);
-        match self.heaps.entry(index) {
+        match self.memory_to_heap.entry(index) {
             Occupied(entry) => Ok(*entry.get()),
             Vacant(entry) => Ok(*entry.insert(environ.make_heap(func, index)?)),
         }

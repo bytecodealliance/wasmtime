@@ -10,8 +10,8 @@ use crate::func_translator::FuncTranslator;
 use crate::state::FuncTranslationState;
 use crate::WasmType;
 use crate::{
-    DataIndex, DefinedFuncIndex, ElemIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex,
-    Table, TableIndex, TypeIndex, WasmFuncType, WasmResult,
+    DataIndex, DefinedFuncIndex, ElemIndex, FuncIndex, Global, GlobalIndex, Heap, HeapData,
+    HeapStyle, Memory, MemoryIndex, Table, TableIndex, TypeIndex, WasmFuncType, WasmResult,
 };
 use core::convert::TryFrom;
 use cranelift_codegen::cursor::FuncCursor;
@@ -212,6 +212,9 @@ pub struct DummyFuncEnvironment<'dummy_environment> {
 
     /// Expected reachability data (before/after for each op) to assert. This is used for testing.
     expected_reachability: Option<ExpectedReachability>,
+
+    /// Heaps we have created to implement Wasm linear memories.
+    pub heaps: PrimaryMap<Heap, HeapData>,
 }
 
 impl<'dummy_environment> DummyFuncEnvironment<'dummy_environment> {
@@ -223,6 +226,7 @@ impl<'dummy_environment> DummyFuncEnvironment<'dummy_environment> {
         Self {
             mod_info,
             expected_reachability,
+            heaps: Default::default(),
         }
     }
 
@@ -250,6 +254,10 @@ impl<'dummy_environment> TargetEnvironment for DummyFuncEnvironment<'dummy_envir
     fn target_config(&self) -> TargetFrontendConfig {
         self.mod_info.config
     }
+
+    fn heap_access_spectre_mitigation(&self) -> bool {
+        false
+    }
 }
 
 impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environment> {
@@ -275,7 +283,11 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         })
     }
 
-    fn make_heap(&mut self, func: &mut ir::Function, _index: MemoryIndex) -> WasmResult<ir::Heap> {
+    fn heaps(&self) -> &PrimaryMap<Heap, HeapData> {
+        &self.heaps
+    }
+
+    fn make_heap(&mut self, func: &mut ir::Function, _index: MemoryIndex) -> WasmResult<Heap> {
         // Create a static heap whose base address is stored at `vmctx+0`.
         let addr = func.create_global_value(ir::GlobalValueData::VMContext);
         let gv = func.create_global_value(ir::GlobalValueData::Load {
@@ -285,12 +297,12 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
             readonly: true,
         });
 
-        Ok(func.create_heap(ir::HeapData {
+        Ok(self.heaps.push(HeapData {
             base: gv,
-            min_size: 0.into(),
-            offset_guard_size: 0x8000_0000.into(),
-            style: ir::HeapStyle::Static {
-                bound: 0x1_0000_0000.into(),
+            min_size: 0,
+            offset_guard_size: 0x8000_0000,
+            style: HeapStyle::Static {
+                bound: 0x1_0000_0000,
             },
             index_type: I32,
         }))
@@ -455,7 +467,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         &mut self,
         mut pos: FuncCursor,
         _index: MemoryIndex,
-        _heap: ir::Heap,
+        _heap: Heap,
         _val: ir::Value,
     ) -> WasmResult<ir::Value> {
         Ok(pos.ins().iconst(I32, -1))
@@ -465,7 +477,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         &mut self,
         mut pos: FuncCursor,
         _index: MemoryIndex,
-        _heap: ir::Heap,
+        _heap: Heap,
     ) -> WasmResult<ir::Value> {
         Ok(pos.ins().iconst(I32, -1))
     }
@@ -474,9 +486,9 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         &mut self,
         _pos: FuncCursor,
         _src_index: MemoryIndex,
-        _src_heap: ir::Heap,
+        _src_heap: Heap,
         _dst_index: MemoryIndex,
-        _dst_heap: ir::Heap,
+        _dst_heap: Heap,
         _dst: ir::Value,
         _src: ir::Value,
         _len: ir::Value,
@@ -488,7 +500,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         &mut self,
         _pos: FuncCursor,
         _index: MemoryIndex,
-        _heap: ir::Heap,
+        _heap: Heap,
         _dst: ir::Value,
         _val: ir::Value,
         _len: ir::Value,
@@ -500,7 +512,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         &mut self,
         _pos: FuncCursor,
         _index: MemoryIndex,
-        _heap: ir::Heap,
+        _heap: Heap,
         _seg_index: u32,
         _dst: ir::Value,
         _src: ir::Value,
@@ -625,7 +637,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         &mut self,
         mut pos: FuncCursor,
         _index: MemoryIndex,
-        _heap: ir::Heap,
+        _heap: Heap,
         _addr: ir::Value,
         _expected: ir::Value,
         _timeout: ir::Value,
@@ -637,7 +649,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         &mut self,
         mut pos: FuncCursor,
         _index: MemoryIndex,
-        _heap: ir::Heap,
+        _heap: Heap,
         _addr: ir::Value,
         _count: ir::Value,
     ) -> WasmResult<ir::Value> {
@@ -652,6 +664,10 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
 impl TargetEnvironment for DummyEnvironment {
     fn target_config(&self) -> TargetFrontendConfig {
         self.info.config
+    }
+
+    fn heap_access_spectre_mitigation(&self) -> bool {
+        false
     }
 }
 

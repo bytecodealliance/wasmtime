@@ -43,11 +43,18 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned readonly gv0
-;;     heap0 = dynamic gv2, min 0x0001_0000, bound gv1, offset_guard 0xffff_ffff, index_type i32
 ;;
 ;;                                 block0(v0: i32, v1: i32, v2: i64):
-;; @0040                               v3 = heap_addr.i64 heap0, v0, 4096, 1
-;; @0040                               istore8 little heap v1, v3
+;; @0040                               v3 = uextend.i64 v0
+;; @0040                               v4 = global_value.i64 gv1
+;; @0040                               v5 = iadd_imm v4, -4097
+;; @0040                               v6 = global_value.i64 gv2
+;; @0040                               v7 = iadd v6, v3
+;; @0040                               v8 = iadd_imm v7, 4096
+;; @0040                               v9 = iconst.i64 0
+;; @0040                               v10 = icmp ugt v3, v5
+;; @0040                               v11 = select_spectre_guard v10, v9, v8  ; v9 = 0
+;; @0040                               istore8 little heap v1, v11
 ;; @0044                               jump block1
 ;;
 ;;                                 block1:
@@ -58,12 +65,19 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned readonly gv0
-;;     heap0 = dynamic gv2, min 0x0001_0000, bound gv1, offset_guard 0xffff_ffff, index_type i32
 ;;
 ;;                                 block0(v0: i32, v1: i64):
-;; @0049                               v3 = heap_addr.i64 heap0, v0, 4096, 1
-;; @0049                               v4 = uload8.i32 little heap v3
-;; @004d                               jump block1(v4)
+;; @0049                               v3 = uextend.i64 v0
+;; @0049                               v4 = global_value.i64 gv1
+;; @0049                               v5 = iadd_imm v4, -4097
+;; @0049                               v6 = global_value.i64 gv2
+;; @0049                               v7 = iadd v6, v3
+;; @0049                               v8 = iadd_imm v7, 4096
+;; @0049                               v9 = iconst.i64 0
+;; @0049                               v10 = icmp ugt v3, v5
+;; @0049                               v11 = select_spectre_guard v10, v9, v8  ; v9 = 0
+;; @0049                               v12 = uload8.i32 little heap v11
+;; @004d                               jump block1(v12)
 ;;
 ;;                                 block1(v2: i32):
 ;; @004d                               return v2

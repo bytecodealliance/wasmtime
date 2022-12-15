@@ -43,11 +43,14 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned readonly gv0
-;;     heap0 = dynamic gv2, min 0x0001_0000, bound gv1, offset_guard 0xffff_ffff, index_type i64
 ;;
 ;;                                 block0(v0: i64, v1: i32, v2: i64):
-;; @0040                               v3 = heap_addr.i64 heap0, v0, 0, 1
-;; @0040                               istore8 little heap v1, v3
+;; @0040                               v3 = global_value.i64 gv1
+;; @0040                               v4 = icmp uge v0, v3
+;; @0040                               trapnz v4, heap_oob
+;; @0040                               v5 = global_value.i64 gv2
+;; @0040                               v6 = iadd v5, v0
+;; @0040                               istore8 little heap v1, v6
 ;; @0043                               jump block1
 ;;
 ;;                                 block1:
@@ -58,12 +61,15 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned readonly gv0
-;;     heap0 = dynamic gv2, min 0x0001_0000, bound gv1, offset_guard 0xffff_ffff, index_type i64
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @0048                               v3 = heap_addr.i64 heap0, v0, 0, 1
-;; @0048                               v4 = uload8.i32 little heap v3
-;; @004b                               jump block1(v4)
+;; @0048                               v3 = global_value.i64 gv1
+;; @0048                               v4 = icmp uge v0, v3
+;; @0048                               trapnz v4, heap_oob
+;; @0048                               v5 = global_value.i64 gv2
+;; @0048                               v6 = iadd v5, v0
+;; @0048                               v7 = uload8.i32 little heap v6
+;; @004b                               jump block1(v7)
 ;;
 ;;                                 block1(v2: i32):
 ;; @004b                               return v2

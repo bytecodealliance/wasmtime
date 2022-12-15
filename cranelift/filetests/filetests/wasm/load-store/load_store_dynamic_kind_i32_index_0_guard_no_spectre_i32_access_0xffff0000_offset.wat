@@ -43,11 +43,18 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned readonly gv0
-;;     heap0 = dynamic gv2, min 0x0001_0000, bound gv1, offset_guard 0, index_type i32
 ;;
 ;;                                 block0(v0: i32, v1: i32, v2: i64):
-;; @0040                               v3 = heap_addr.i64 heap0, v0, 0xffff_0000, 4
-;; @0040                               store little heap v1, v3
+;; @0040                               v3 = uextend.i64 v0
+;; @0040                               v4 = iconst.i64 0xffff_0004
+;; @0040                               v5 = uadd_overflow_trap v3, v4, heap_oob  ; v4 = 0xffff_0004
+;; @0040                               v6 = global_value.i64 gv1
+;; @0040                               v7 = icmp ugt v5, v6
+;; @0040                               trapnz v7, heap_oob
+;; @0040                               v8 = global_value.i64 gv2
+;; @0040                               v9 = iadd v8, v3
+;; @0040                               v10 = iadd_imm v9, 0xffff_0000
+;; @0040                               store little heap v1, v10
 ;; @0047                               jump block1
 ;;
 ;;                                 block1:
@@ -58,12 +65,19 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned readonly gv0
-;;     heap0 = dynamic gv2, min 0x0001_0000, bound gv1, offset_guard 0, index_type i32
 ;;
 ;;                                 block0(v0: i32, v1: i64):
-;; @004c                               v3 = heap_addr.i64 heap0, v0, 0xffff_0000, 4
-;; @004c                               v4 = load.i32 little heap v3
-;; @0053                               jump block1(v4)
+;; @004c                               v3 = uextend.i64 v0
+;; @004c                               v4 = iconst.i64 0xffff_0004
+;; @004c                               v5 = uadd_overflow_trap v3, v4, heap_oob  ; v4 = 0xffff_0004
+;; @004c                               v6 = global_value.i64 gv1
+;; @004c                               v7 = icmp ugt v5, v6
+;; @004c                               trapnz v7, heap_oob
+;; @004c                               v8 = global_value.i64 gv2
+;; @004c                               v9 = iadd v8, v3
+;; @004c                               v10 = iadd_imm v9, 0xffff_0000
+;; @004c                               v11 = load.i32 little heap v10
+;; @0053                               jump block1(v11)
 ;;
 ;;                                 block1(v2: i32):
 ;; @0053                               return v2

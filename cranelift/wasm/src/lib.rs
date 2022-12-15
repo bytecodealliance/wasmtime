@@ -51,6 +51,7 @@ use std::collections::{
 mod code_translator;
 mod environ;
 mod func_translator;
+mod heap;
 mod module_translator;
 mod sections_translator;
 mod state;
@@ -61,6 +62,7 @@ pub use crate::environ::{
     GlobalVariable, ModuleEnvironment, TargetEnvironment,
 };
 pub use crate::func_translator::FuncTranslator;
+pub use crate::heap::{Heap, HeapData, HeapStyle};
 pub use crate::module_translator::translate_module;
 pub use crate::state::FuncTranslationState;
 pub use crate::translation_utils::*;

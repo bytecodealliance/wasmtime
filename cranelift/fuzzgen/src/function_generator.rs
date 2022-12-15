@@ -1209,8 +1209,8 @@ where
         builder: &mut FunctionBuilder,
         min_size: u32,
     ) -> Result<(Value, Offset32)> {
-        // TODO: Currently our only source of addresses is stack_addr, but we should
-        // add heap_addr, global_value, symbol_value eventually
+        // TODO: Currently our only source of addresses is stack_addr, but we
+        // should add global_value, symbol_value eventually
         let (addr, available_size) = {
             let (ss, slot_size) = self.stack_slot_with_size(min_size)?;
             let max_offset = slot_size.saturating_sub(min_size);

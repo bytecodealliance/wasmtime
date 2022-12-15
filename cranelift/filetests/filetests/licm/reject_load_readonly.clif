@@ -10,14 +10,13 @@ target x86_64
 function %hoist_load(i32, i64 vmctx) -> i32 {
     gv0 = vmctx
     gv1 = load.i64 notrap aligned readonly gv0
-    heap0 = static gv1, min 0x1_0000, bound 0x1_0000_0000, offset_guard 0x8000_0000, index_type i32
 
 block0(v0: i32, v1: i64):
     jump block1(v0, v1)
 
 block1(v2: i32, v3: i64):
     v4 = iconst.i32 1
-    v5 = heap_addr.i64 heap0, v4, 0, 4
+    v5 = global_value.i64 gv1
     v6 = load.i32 aligned readonly v5
     v7 = iadd v2, v6
     brz v2, block3(v2)
@@ -34,11 +33,10 @@ block3(v9: i32):
 ; sameln: function %hoist_load(i32, i64 vmctx) -> i32 fast {
 ; nextln:    gv0 = vmctx
 ; nextln:    gv1 = load.i64 notrap aligned readonly gv0
-; nextln:    heap0 = static gv1, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000, index_type i32
 ; nextln: 
 ; nextln: block0(v0: i32, v1: i64):
 ; nextln:    v4 = iconst.i32 1
-; nextln:    v5 = heap_addr.i64 heap0, v4, 0, 4
+; nextln:    v5 = global_value.i64 gv1
 ; nextln:    jump block1(v0, v1)
 ; nextln: 
 ; nextln: block1(v2: i32, v3: i64):

@@ -8,8 +8,8 @@ use crate::ir;
 use crate::ir::JumpTables;
 use crate::ir::{
     instructions::BranchInfo, Block, DynamicStackSlot, DynamicStackSlotData, DynamicType,
-    ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Heap, HeapData, Inst, InstructionData,
-    JumpTable, JumpTableData, Opcode, SigRef, StackSlot, StackSlotData, Table, TableData, Type,
+    ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Inst, InstructionData, JumpTable,
+    JumpTableData, Opcode, SigRef, StackSlot, StackSlotData, Table, TableData, Type,
 };
 use crate::ir::{DataFlowGraph, Layout, Signature};
 use crate::ir::{DynamicStackSlots, SourceLocs, StackSlots};
@@ -170,9 +170,6 @@ pub struct FunctionStencil {
     /// Global values referenced.
     pub global_values: PrimaryMap<ir::GlobalValue, ir::GlobalValueData>,
 
-    /// Heaps referenced.
-    pub heaps: PrimaryMap<ir::Heap, ir::HeapData>,
-
     /// Tables referenced.
     pub tables: PrimaryMap<ir::Table, ir::TableData>,
 
@@ -205,7 +202,6 @@ impl FunctionStencil {
         self.sized_stack_slots.clear();
         self.dynamic_stack_slots.clear();
         self.global_values.clear();
-        self.heaps.clear();
         self.tables.clear();
         self.jump_tables.clear();
         self.dfg.clear();
@@ -259,11 +255,6 @@ impl FunctionStencil {
             .get(ty)
             .unwrap_or_else(|| panic!("Undeclared dynamic vector type: {}", ty))
             .concrete()
-    }
-
-    /// Declares a heap accessible to the function.
-    pub fn create_heap(&mut self, data: HeapData) -> Heap {
-        self.heaps.push(data)
     }
 
     /// Declares a table accessible to the function.
@@ -447,7 +438,6 @@ impl Function {
                 sized_stack_slots: StackSlots::new(),
                 dynamic_stack_slots: DynamicStackSlots::new(),
                 global_values: PrimaryMap::new(),
-                heaps: PrimaryMap::new(),
                 tables: PrimaryMap::new(),
                 jump_tables: PrimaryMap::new(),
                 dfg: DataFlowGraph::new(),

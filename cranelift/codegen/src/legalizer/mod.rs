@@ -22,11 +22,9 @@ use crate::isa::TargetIsa;
 use crate::trace;
 
 mod globalvalue;
-mod heap;
 mod table;
 
 use self::globalvalue::expand_global_value;
-use self::heap::{expand_heap_addr, expand_heap_load, expand_heap_store};
 use self::table::expand_table_addr;
 
 fn imm_const(pos: &mut FuncCursor, arg: Value, imm: Imm64, is_signed: bool) -> Value {
@@ -71,23 +69,6 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
                     opcode: ir::Opcode::GlobalValue,
                     global_value,
                 } => expand_global_value(inst, &mut pos.func, isa, global_value),
-                InstructionData::HeapAddr {
-                    opcode: ir::Opcode::HeapAddr,
-                    heap,
-                    arg,
-                    offset,
-                    size,
-                } => expand_heap_addr(inst, &mut pos.func, cfg, isa, heap, arg, offset, size),
-                InstructionData::HeapLoad {
-                    opcode: ir::Opcode::HeapLoad,
-                    heap_imm,
-                    arg,
-                } => expand_heap_load(inst, &mut pos.func, cfg, isa, heap_imm, arg),
-                InstructionData::HeapStore {
-                    opcode: ir::Opcode::HeapStore,
-                    heap_imm,
-                    args,
-                } => expand_heap_store(inst, &mut pos.func, cfg, isa, heap_imm, args[0], args[1]),
                 InstructionData::StackLoad {
                     opcode: ir::Opcode::StackLoad,
                     stack_slot,

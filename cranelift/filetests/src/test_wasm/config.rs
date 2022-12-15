@@ -154,8 +154,11 @@ pub struct TestHeap {
 }
 
 impl TestHeap {
-    pub fn to_ir(&self, name_to_ir_global: &BTreeMap<String, ir::GlobalValue>) -> ir::HeapData {
-        ir::HeapData {
+    pub fn to_ir(
+        &self,
+        name_to_ir_global: &BTreeMap<String, ir::GlobalValue>,
+    ) -> cranelift_wasm::HeapData {
+        cranelift_wasm::HeapData {
             base: name_to_ir_global[&self.base],
             min_size: self.min_size.into(),
             offset_guard_size: self.offset_guard_size.into(),
@@ -187,15 +190,18 @@ pub struct TestHeapStyle {
 }
 
 impl TestHeapStyle {
-    pub fn to_ir(&self, name_to_ir_global: &BTreeMap<String, ir::GlobalValue>) -> ir::HeapStyle {
+    pub fn to_ir(
+        &self,
+        name_to_ir_global: &BTreeMap<String, ir::GlobalValue>,
+    ) -> cranelift_wasm::HeapStyle {
         match self.kind.as_str() {
-            "static" => ir::HeapStyle::Static {
+            "static" => cranelift_wasm::HeapStyle::Static {
                 bound: match &self.bound {
                     toml::Value::Integer(x) => u64::try_from(*x).unwrap().into(),
                     _ => unreachable!(),
                 },
             },
-            "dynamic" => ir::HeapStyle::Dynamic {
+            "dynamic" => cranelift_wasm::HeapStyle::Dynamic {
                 bound_gv: match &self.bound {
                     toml::Value::String(g) => name_to_ir_global[g],
                     _ => unreachable!(),

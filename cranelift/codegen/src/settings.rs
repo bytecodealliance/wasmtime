@@ -518,9 +518,8 @@ mod tests {
     fn display_default() {
         let b = builder();
         let f = Flags::new(b);
-        assert_eq!(
-            f.to_string(),
-            r#"[shared]
+        let actual = f.to_string();
+        let expected = r#"[shared]
 opt_level = "none"
 tls_model = "none"
 libcall_call_conv = "isa_default"
@@ -537,7 +536,6 @@ avoid_div_traps = false
 enable_float = true
 enable_nan_canonicalization = false
 enable_pinned_reg = false
-use_pinned_reg_as_heap_base = false
 enable_simd = false
 enable_atomics = true
 enable_safepoints = false
@@ -551,8 +549,15 @@ enable_jump_tables = true
 enable_heap_access_spectre_mitigation = true
 enable_table_access_spectre_mitigation = true
 enable_incremental_compilation_cache_checks = false
-"#
-        );
+"#;
+        if actual != expected {
+            panic!(
+                "Default settings do not match expectations:\n\n{}",
+                similar::TextDiff::from_lines(expected, &actual)
+                    .unified_diff()
+                    .header("expected", "actual")
+            );
+        }
         assert_eq!(f.opt_level(), super::OptLevel::None);
         assert_eq!(f.enable_simd(), false);
     }

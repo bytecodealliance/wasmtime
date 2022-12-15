@@ -63,7 +63,6 @@ use crate::entity::SparseSet;
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::ir;
 use crate::ir::entities::AnyEntity;
-use crate::ir::immediates::HeapImmData;
 use crate::ir::instructions::{BranchInfo, CallInfo, InstructionFormat, ResolvedConstraint};
 use crate::ir::{
     types, ArgumentPurpose, Block, Constant, DynamicStackSlot, FuncRef, Function, GlobalValue,
@@ -404,49 +403,6 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    fn verify_heaps(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
-        if let Some(isa) = self.isa {
-            for (heap, heap_data) in &self.func.heaps {
-                let base = heap_data.base;
-                if !self.func.global_values.is_valid(base) {
-                    return errors.nonfatal((heap, format!("invalid base global value {}", base)));
-                }
-
-                let pointer_type = isa.pointer_type();
-                let base_type = self.func.global_values[base].global_type(isa);
-                if base_type != pointer_type {
-                    errors.report((
-                        heap,
-                        format!(
-                            "heap base has type {}, which is not the pointer type {}",
-                            base_type, pointer_type
-                        ),
-                    ));
-                }
-
-                if let ir::HeapStyle::Dynamic { bound_gv, .. } = heap_data.style {
-                    if !self.func.global_values.is_valid(bound_gv) {
-                        return errors
-                            .nonfatal((heap, format!("invalid bound global value {}", bound_gv)));
-                    }
-
-                    let bound_type = self.func.global_values[bound_gv].global_type(isa);
-                    if pointer_type != bound_type {
-                        errors.report((
-                            heap,
-                            format!(
-                                "heap pointer type {} differs from the type of its bound, {}",
-                                pointer_type, bound_type
-                            ),
-                        ));
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
     fn verify_tables(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         if let Some(isa) = self.isa {
             for (table, table_data) in &self.func.tables {
@@ -676,13 +632,6 @@ impl<'a> Verifier<'a> {
             UnaryGlobalValue { global_value, .. } => {
                 self.verify_global_value(inst, global_value, errors)?;
             }
-            HeapLoad { heap_imm, .. } | HeapStore { heap_imm, .. } => {
-                let HeapImmData { heap, .. } = self.func.dfg.heap_imms[heap_imm];
-                self.verify_heap(inst, heap, errors)?;
-            }
-            HeapAddr { heap, .. } => {
-                self.verify_heap(inst, heap, errors)?;
-            }
             TableAddr { table, .. } => {
                 self.verify_table(inst, table, errors)?;
             }
@@ -873,19 +822,6 @@ impl<'a> Verifier<'a> {
                 self.context(inst),
                 format!("invalid global value {}", gv),
             ))
-        } else {
-            Ok(())
-        }
-    }
-
-    fn verify_heap(
-        &self,
-        inst: Inst,
-        heap: ir::Heap,
-        errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
-        if !self.func.heaps.is_valid(heap) {
-            errors.nonfatal((inst, self.context(inst), format!("invalid heap {}", heap)))
         } else {
             Ok(())
         }
@@ -1557,20 +1493,6 @@ impl<'a> Verifier<'a> {
                     _ => {}
                 }
             }
-            ir::InstructionData::HeapAddr { heap, arg, .. } => {
-                let index_type = self.func.dfg.value_type(arg);
-                let heap_index_type = self.func.heaps[heap].index_type;
-                if index_type != heap_index_type {
-                    return errors.nonfatal((
-                        inst,
-                        self.context(inst),
-                        format!(
-                            "index type {} differs from heap index type {}",
-                            index_type, heap_index_type,
-                        ),
-                    ));
-                }
-            }
             ir::InstructionData::TableAddr { table, arg, .. } => {
                 let index_type = self.func.dfg.value_type(arg);
                 let table_index_type = self.func.tables[table].index_type;
@@ -1775,7 +1697,6 @@ impl<'a> Verifier<'a> {
 
     pub fn run(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         self.verify_global_values(errors)?;
-        self.verify_heaps(errors)?;
         self.verify_tables(errors)?;
         self.verify_jump_tables(errors)?;
         self.typecheck_entry_block_params(errors)?;

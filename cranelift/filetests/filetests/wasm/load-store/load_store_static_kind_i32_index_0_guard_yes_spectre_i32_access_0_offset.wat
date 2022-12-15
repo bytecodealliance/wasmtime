@@ -40,11 +40,16 @@
 ;; function u0:0(i32, i32, i64 vmctx) fast {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0
-;;     heap0 = static gv1, min 0x0001_0000, bound 0x1000_0000, offset_guard 0, index_type i32
 ;;
 ;;                                 block0(v0: i32, v1: i32, v2: i64):
-;; @0040                               v3 = heap_addr.i64 heap0, v0, 0, 4
-;; @0040                               store little heap v1, v3
+;; @0040                               v3 = uextend.i64 v0
+;; @0040                               v4 = iconst.i64 0x0fff_fffc
+;; @0040                               v5 = global_value.i64 gv1
+;; @0040                               v6 = iadd v5, v3
+;; @0040                               v7 = iconst.i64 0
+;; @0040                               v8 = icmp ugt v3, v4  ; v4 = 0x0fff_fffc
+;; @0040                               v9 = select_spectre_guard v8, v7, v6  ; v7 = 0
+;; @0040                               store little heap v1, v9
 ;; @0043                               jump block1
 ;;
 ;;                                 block1:
@@ -54,12 +59,17 @@
 ;; function u0:1(i32, i64 vmctx) -> i32 fast {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0
-;;     heap0 = static gv1, min 0x0001_0000, bound 0x1000_0000, offset_guard 0, index_type i32
 ;;
 ;;                                 block0(v0: i32, v1: i64):
-;; @0048                               v3 = heap_addr.i64 heap0, v0, 0, 4
-;; @0048                               v4 = load.i32 little heap v3
-;; @004b                               jump block1(v4)
+;; @0048                               v3 = uextend.i64 v0
+;; @0048                               v4 = iconst.i64 0x0fff_fffc
+;; @0048                               v5 = global_value.i64 gv1
+;; @0048                               v6 = iadd v5, v3
+;; @0048                               v7 = iconst.i64 0
+;; @0048                               v8 = icmp ugt v3, v4  ; v4 = 0x0fff_fffc
+;; @0048                               v9 = select_spectre_guard v8, v7, v6  ; v7 = 0
+;; @0048                               v10 = load.i32 little heap v9
+;; @004b                               jump block1(v10)
 ;;
 ;;                                 block1(v2: i32):
 ;; @004b                               return v2

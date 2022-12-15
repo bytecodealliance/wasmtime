@@ -11,12 +11,12 @@ use crate::step::{step, ControlFlow, StepError};
 use crate::value::{Value, ValueError};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{
-    ArgumentPurpose, Block, FuncRef, Function, GlobalValue, GlobalValueData, Heap, LibCall,
-    StackSlot, TrapCode, Type, Value as ValueRef,
+    ArgumentPurpose, Block, FuncRef, Function, GlobalValue, GlobalValueData, LibCall, StackSlot,
+    TrapCode, Type, Value as ValueRef,
 };
 use log::trace;
 use smallvec::SmallVec;
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::iter;
 use thiserror::Error;
@@ -175,21 +175,6 @@ pub enum InterpreterError {
     FuelExhausted,
 }
 
-pub type HeapBacking = Vec<u8>;
-
-/// Represents a registered heap with an interpreter.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct HeapId(u32);
-
-/// Options for initializing a heap memory region
-#[derive(Debug)]
-pub enum HeapInit {
-    /// A zero initialized heap with `size` bytes
-    Zeroed(usize),
-    /// Initializes the heap with the backing memory unchanged.
-    FromBacking(HeapBacking),
-}
-
 pub type LibCallValues<V> = SmallVec<[V; 1]>;
 pub type LibCallHandler<V> = fn(LibCall, LibCallValues<V>) -> Result<LibCallValues<V>, TrapCode>;
 
@@ -201,7 +186,6 @@ pub struct InterpreterState<'a> {
     /// Number of bytes from the bottom of the stack where the current frame's stack space is
     pub frame_offset: usize,
     pub stack: Vec<u8>,
-    pub heaps: Vec<HeapBacking>,
     pub pinned_reg: DataValue,
 }
 
@@ -213,7 +197,6 @@ impl Default for InterpreterState<'_> {
             frame_stack: vec![],
             frame_offset: 0,
             stack: Vec::with_capacity(1024),
-            heaps: Vec::new(),
             pinned_reg: DataValue::U64(0),
         }
     }
@@ -228,57 +211,6 @@ impl<'a> InterpreterState<'a> {
     pub fn with_libcall_handler(mut self, handler: LibCallHandler<DataValue>) -> Self {
         self.libcall_handler = handler;
         self
-    }
-
-    /// Registers a static heap and returns a reference to it
-    ///
-    /// This heap reference can be used to generate a heap pointer, which
-    /// can be used inside the interpreter to load / store values into the heap.
-    ///
-    /// ```rust
-    /// # use cranelift_codegen::ir::types::I64;
-    /// # use cranelift_interpreter::interpreter::{InterpreterState, HeapInit};
-    /// let mut state = InterpreterState::default();
-    /// let heap0 = state.register_heap(HeapInit::Zeroed(1024));
-    ///
-    /// let backing = Vec::from([10u8; 24]);
-    /// let heap1 = state.register_heap(HeapInit::FromBacking(backing));
-    /// ```
-    pub fn register_heap(&mut self, init: HeapInit) -> HeapId {
-        let heap_id = HeapId(self.heaps.len() as u32);
-
-        self.heaps.push(match init {
-            HeapInit::Zeroed(size) => iter::repeat(0).take(size).collect(),
-            HeapInit::FromBacking(backing) => backing,
-        });
-
-        heap_id
-    }
-
-    /// Returns a heap address that can be used inside the interpreter
-    ///
-    /// ```rust
-    /// # use cranelift_codegen::ir::types::I64;
-    /// # use cranelift_interpreter::interpreter::{InterpreterState, HeapInit};
-    /// let mut state = InterpreterState::default();
-    /// let heap_id = state.register_heap(HeapInit::Zeroed(1024));
-    /// let heap_base = state.get_heap_address(I64, heap_id, 0);
-    /// let heap_bound = state.get_heap_address(I64, heap_id, 1024);
-    /// ```
-    pub fn get_heap_address(
-        &self,
-        ty: Type,
-        heap_id: HeapId,
-        offset: u64,
-    ) -> Result<DataValue, MemoryError> {
-        let size = AddressSize::try_from(ty)?;
-        let heap_id = heap_id.0 as u64;
-        let addr = Address::from_parts(size, AddressRegion::Heap, heap_id, offset)?;
-
-        self.validate_address(&addr)?;
-        let dv = addr.try_into()?;
-
-        Ok(dv)
     }
 
     fn current_frame_mut(&mut self) -> &mut Frame<'a> {
@@ -371,33 +303,6 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
         Address::from_parts(size, AddressRegion::Stack, 0, final_offset)
     }
 
-    /// Builds an [Address] for the [Heap] referenced in the currently executing function.
-    ///
-    /// A CLIF Heap is essentially a GlobalValue and some metadata about that memory
-    /// region, such as bounds. Since heaps are based on Global Values it means that
-    /// once that GV is resolved we can essentially end up anywhere in memory.
-    ///
-    /// To build an [Address] we perform GV resolution, and try to ensure that we end up
-    /// in a valid region of memory.
-    fn heap_address(
-        &self,
-        size: AddressSize,
-        heap: Heap,
-        offset: u64,
-    ) -> Result<Address, MemoryError> {
-        let heap_data = &self.get_current_function().heaps[heap];
-        let heap_base = self.resolve_global_value(heap_data.base)?;
-        let mut addr = Address::try_from(heap_base)?;
-        addr.size = size;
-        addr.offset += offset;
-
-        // After resolving the address can point anywhere, we need to check if it's
-        // still valid.
-        self.validate_address(&addr)?;
-
-        Ok(addr)
-    }
-
     fn checked_load(&self, addr: Address, ty: Type) -> Result<DataValue, MemoryError> {
         let load_size = ty.bytes() as usize;
         let addr_start = addr.offset as usize;
@@ -410,14 +315,6 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
                 }
 
                 &self.stack[addr_start..addr_end]
-            }
-            AddressRegion::Heap => {
-                let heap_mem = match self.heaps.get(addr.entry as usize) {
-                    Some(mem) if addr_end <= mem.len() => mem,
-                    _ => return Err(MemoryError::OutOfBoundsLoad { addr, load_size }),
-                };
-
-                &heap_mem[addr_start..addr_end]
             }
             _ => unimplemented!(),
         };
@@ -437,14 +334,6 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
                 }
 
                 &mut self.stack[addr_start..addr_end]
-            }
-            AddressRegion::Heap => {
-                let heap_mem = match self.heaps.get_mut(addr.entry as usize) {
-                    Some(mem) if addr_end <= mem.len() => mem,
-                    _ => return Err(MemoryError::OutOfBoundsStore { addr, store_size }),
-                };
-
-                &mut heap_mem[addr_start..addr_end]
             }
             _ => unimplemented!(),
         };
@@ -561,24 +450,7 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
                 if addr.offset > stack_len {
                     return Err(MemoryError::InvalidEntry {
                         entry: addr.entry,
-                        max: self.heaps.len() as u64,
-                    });
-                }
-            }
-            AddressRegion::Heap => {
-                let heap_len = self
-                    .heaps
-                    .get(addr.entry as usize)
-                    .ok_or_else(|| MemoryError::InvalidEntry {
-                        entry: addr.entry,
-                        max: self.heaps.len() as u64,
-                    })
-                    .map(|heap| heap.len() as u64)?;
-
-                if addr.offset > heap_len {
-                    return Err(MemoryError::InvalidOffset {
-                        offset: addr.offset,
-                        max: heap_len,
+                        max: self.stack.len() as u64,
                     });
                 }
             }
@@ -602,7 +474,6 @@ mod tests {
     use super::*;
     use crate::step::CraneliftTrap;
     use cranelift_codegen::ir::immediates::Ieee32;
-    use cranelift_codegen::ir::types::I64;
     use cranelift_codegen::ir::TrapCode;
     use cranelift_reader::parse_functions;
     use smallvec::smallvec;
@@ -955,53 +826,6 @@ mod tests {
             .unwrap_trap();
 
         assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapOutOfBounds));
-    }
-
-    /// Most heap tests are in .clif files using the filetest machinery. However, this is a sanity
-    /// check that the heap mechanism works without the rest of the filetest infrastructure
-    #[test]
-    fn heap_sanity_test() {
-        let code = "
-        function %heap_load_store(i64 vmctx) -> i8 {
-            gv0 = vmctx
-            gv1 = load.i64 notrap aligned gv0+0
-            ; gv2/3 do nothing, but makes sure we understand the iadd_imm mechanism
-            gv2 = iadd_imm.i64 gv1, 1
-            gv3 = iadd_imm.i64 gv2, -1
-            heap0 = static gv3, min 0x1000, bound 0x1_0000_0000, offset_guard 0, index_type i64
-
-        block0(v0: i64):
-            v1 = iconst.i64 0
-            v2 = iconst.i64 123
-            v3 = heap_addr.i64 heap0, v1, 0, 8
-            store.i64 v2, v3
-            v4 = load.i64 v3
-            v5 = icmp eq v2, v4
-            return v5
-        }";
-
-        let func = parse_functions(code).unwrap().into_iter().next().unwrap();
-        let mut env = FunctionStore::default();
-        env.add(func.name.to_string(), &func);
-        let mut state = InterpreterState::default().with_function_store(env);
-
-        let heap0 = state.register_heap(HeapInit::Zeroed(0x1000));
-        let base_addr = state.get_heap_address(I64, heap0, 0).unwrap();
-
-        // Build a vmctx struct by writing the base pointer at index 0
-        let mut vmctx_struct = vec![0u8; 8];
-        base_addr.write_to_slice(&mut vmctx_struct[..]);
-
-        // This is our vmctx "heap"
-        let vmctx = state.register_heap(HeapInit::FromBacking(vmctx_struct));
-        let vmctx_addr = state.get_heap_address(I64, vmctx, 0).unwrap();
-
-        let result = Interpreter::new(state)
-            .call_by_name("%heap_load_store", &[vmctx_addr])
-            .unwrap()
-            .unwrap_return();
-
-        assert_eq!(result, vec![DataValue::I8(1)])
     }
 
     #[test]

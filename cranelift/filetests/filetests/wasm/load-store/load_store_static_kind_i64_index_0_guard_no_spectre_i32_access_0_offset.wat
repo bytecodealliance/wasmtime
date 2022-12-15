@@ -40,11 +40,13 @@
 ;; function u0:0(i64, i32, i64 vmctx) fast {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0
-;;     heap0 = static gv1, min 0x0001_0000, bound 0x1000_0000, offset_guard 0, index_type i64
 ;;
 ;;                                 block0(v0: i64, v1: i32, v2: i64):
-;; @0040                               v3 = heap_addr.i64 heap0, v0, 0, 4
-;; @0040                               store little heap v1, v3
+;; @0040                               v3 = icmp_imm ugt v0, 0x0fff_fffc
+;; @0040                               trapnz v3, heap_oob
+;; @0040                               v4 = global_value.i64 gv1
+;; @0040                               v5 = iadd v4, v0
+;; @0040                               store little heap v1, v5
 ;; @0043                               jump block1
 ;;
 ;;                                 block1:
@@ -54,12 +56,14 @@
 ;; function u0:1(i64, i64 vmctx) -> i32 fast {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0
-;;     heap0 = static gv1, min 0x0001_0000, bound 0x1000_0000, offset_guard 0, index_type i64
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @0048                               v3 = heap_addr.i64 heap0, v0, 0, 4
-;; @0048                               v4 = load.i32 little heap v3
-;; @004b                               jump block1(v4)
+;; @0048                               v3 = icmp_imm ugt v0, 0x0fff_fffc
+;; @0048                               trapnz v3, heap_oob
+;; @0048                               v4 = global_value.i64 gv1
+;; @0048                               v5 = iadd v4, v0
+;; @0048                               v6 = load.i32 little heap v5
+;; @004b                               jump block1(v6)
 ;;
 ;;                                 block1(v2: i32):
 ;; @004b                               return v2

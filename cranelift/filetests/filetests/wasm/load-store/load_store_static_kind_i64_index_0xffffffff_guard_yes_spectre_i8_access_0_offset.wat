@@ -40,11 +40,15 @@
 ;; function u0:0(i64, i32, i64 vmctx) fast {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0
-;;     heap0 = static gv1, min 0x0001_0000, bound 0x1000_0000, offset_guard 0xffff_ffff, index_type i64
 ;;
 ;;                                 block0(v0: i64, v1: i32, v2: i64):
-;; @0040                               v3 = heap_addr.i64 heap0, v0, 0, 1
-;; @0040                               istore8 little heap v1, v3
+;; @0040                               v3 = iconst.i64 0x0fff_ffff
+;; @0040                               v4 = global_value.i64 gv1
+;; @0040                               v5 = iadd v4, v0
+;; @0040                               v6 = iconst.i64 0
+;; @0040                               v7 = icmp ugt v0, v3  ; v3 = 0x0fff_ffff
+;; @0040                               v8 = select_spectre_guard v7, v6, v5  ; v6 = 0
+;; @0040                               istore8 little heap v1, v8
 ;; @0043                               jump block1
 ;;
 ;;                                 block1:
@@ -54,12 +58,16 @@
 ;; function u0:1(i64, i64 vmctx) -> i32 fast {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0
-;;     heap0 = static gv1, min 0x0001_0000, bound 0x1000_0000, offset_guard 0xffff_ffff, index_type i64
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @0048                               v3 = heap_addr.i64 heap0, v0, 0, 1
-;; @0048                               v4 = uload8.i32 little heap v3
-;; @004b                               jump block1(v4)
+;; @0048                               v3 = iconst.i64 0x0fff_ffff
+;; @0048                               v4 = global_value.i64 gv1
+;; @0048                               v5 = iadd v4, v0
+;; @0048                               v6 = iconst.i64 0
+;; @0048                               v7 = icmp ugt v0, v3  ; v3 = 0x0fff_ffff
+;; @0048                               v8 = select_spectre_guard v7, v6, v5  ; v6 = 0
+;; @0048                               v9 = uload8.i32 little heap v8
+;; @004b                               jump block1(v9)
 ;;
 ;;                                 block1(v2: i32):
 ;; @004b                               return v2
