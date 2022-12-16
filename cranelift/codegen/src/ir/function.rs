@@ -301,6 +301,24 @@ impl FunctionStencil {
                 }
             }
 
+            BranchInfo::Conditional(block_then, block_else) => {
+                if block_then.block(&self.dfg.value_lists) == old_dest {
+                    if let InstructionData::Brif { block_then, .. } = &mut self.dfg.insts[inst] {
+                        block_then.set_block(new_dest, &mut self.dfg.value_lists);
+                    } else {
+                        unreachable!();
+                    }
+                }
+
+                if block_else.block(&self.dfg.value_lists) == old_dest {
+                    if let InstructionData::Brif { block_else, .. } = &mut self.dfg.insts[inst] {
+                        block_else.set_block(new_dest, &mut self.dfg.value_lists);
+                    } else {
+                        unreachable!();
+                    }
+                }
+            }
+
             BranchInfo::Table(table, default_dest) => {
                 self.jump_tables[table].iter_mut().for_each(|entry| {
                     if *entry == old_dest {

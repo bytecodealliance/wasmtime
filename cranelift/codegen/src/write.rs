@@ -418,6 +418,17 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
             write!(w, " {}", destination.block(pool))?;
             write_block_args(w, destination.args_slice(pool))
         }
+        Brif {
+            arg,
+            block_then,
+            block_else,
+            ..
+        } => {
+            write!(w, " {}, {}", arg, block_then.block(pool))?;
+            write_block_args(w, block_then.args_slice(pool))?;
+            write!(w, ", {}", block_else.block(pool))?;
+            write_block_args(w, block_else.args_slice(pool))
+        }
         Branch {
             arg, destination, ..
         } => {

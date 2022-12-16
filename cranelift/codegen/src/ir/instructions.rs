@@ -271,6 +271,11 @@ impl InstructionData {
         match *self {
             Self::Jump { destination, .. } => BranchInfo::SingleDest(destination),
             Self::Branch { destination, .. } => BranchInfo::SingleDest(destination),
+            Self::Brif {
+                block_then,
+                block_else,
+                ..
+            } => BranchInfo::Conditional(block_then, block_else),
             Self::BranchTable {
                 table, destination, ..
             } => BranchInfo::Table(table, destination),
@@ -455,6 +460,9 @@ pub enum BranchInfo {
 
     /// This is a branch or jump to a single destination block, possibly taking value arguments.
     SingleDest(BlockCall),
+
+    /// This is a conditional branch
+    Conditional(BlockCall, BlockCall),
 
     /// This is a jump table branch which can have many destination blocks and one default block.
     Table(JumpTable, Block),

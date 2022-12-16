@@ -592,6 +592,26 @@ impl SSABuilder {
                     .append_argument(val, &mut dfg.value_lists);
                 None
             }
+            BranchInfo::Conditional(block_then, block_else) => {
+                let dfg = &mut func.dfg;
+                if dest_block == block_then.block(&dfg.value_lists) {
+                    if let InstructionData::Brif { block_then, .. } = &mut dfg.insts[branch] {
+                        block_then.append_argument(val, &mut dfg.value_lists);
+                    } else {
+                        unreachable!();
+                    }
+                }
+
+                if dest_block == block_else.block(&dfg.value_lists) {
+                    if let InstructionData::Brif { block_else, .. } = &mut dfg.insts[branch] {
+                        block_else.append_argument(val, &mut dfg.value_lists);
+                    } else {
+                        unreachable!();
+                    }
+                }
+
+                None
+            }
             BranchInfo::Table(mut jt, _default_block) => {
                 // In the case of a jump table, the situation is tricky because br_table doesn't
                 // support arguments. We have to split the critical edge.

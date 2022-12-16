@@ -169,6 +169,10 @@ fn visit_branch_targets<F: FnMut(Inst, Block, bool)>(f: &Function, inst: Inst, v
         BranchInfo::SingleDest(dest) => {
             visit(inst, dest.block(&f.dfg.value_lists), false);
         }
+        BranchInfo::Conditional(block_then, block_else) => {
+            visit(inst, block_then.block(&f.dfg.value_lists), false);
+            visit(inst, block_else.block(&f.dfg.value_lists), false);
+        }
         BranchInfo::Table(table, dest) => {
             // The default block is reached via a direct conditional branch,
             // so it is not part of the table.

@@ -46,6 +46,27 @@ fn define_control_flow(
 
     {
         let c = &Operand::new("c", ScalarTruthy).with_doc("Controlling value to test");
+        let block_then = &Operand::new("block_then", &entities.block_then).with_doc("Then block");
+        let block_else = &Operand::new("block_else", &entities.block_else).with_doc("Else block");
+
+        ig.push(
+            Inst::new(
+                "brif",
+                r#"
+        Conditional branch when cond is non-zero.
+
+        Take the ``then`` branch when ``c != 0``, and the ``else`` branch otherwise.
+        "#,
+                &formats.brif,
+            )
+            .operands_in(vec![c, block_then, block_else])
+            .is_terminator(true)
+            .is_branch(true),
+        );
+    }
+
+    {
+        let c = &Operand::new("c", ScalarTruthy).with_doc("Controlling value to test");
 
         ig.push(
             Inst::new(

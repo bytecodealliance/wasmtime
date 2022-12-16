@@ -2461,6 +2461,52 @@
 (rule (lower (fvpromote_low val))
       (vec_rr_long (VecRRLongOp.Fcvtl32) val $false))
 
+;;; Rules for `brif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; `brif` following `icmp`
+(rule (lower_branch (brif (icmp cc x @ (value_type ty) y) _ _) targets)
+      (let ((comparison FlagsAndCC (lower_icmp_into_flags cc x y ty))
+            (cond Cond (cond_code (flags_and_cc_cc comparison)))
+            (taken BranchTarget (branch_target targets 0))
+            (not_taken BranchTarget (branch_target targets 1)))
+        (emit_side_effect
+         (with_flags_side_effect (flags_and_cc_flags comparison)
+                                 (cond_br taken
+                                          not_taken
+                                          (cond_br_cond cond))))))
+
+;; `brif` following `fcmp`
+(rule (lower_branch (brif (fcmp cc x @ (value_type (ty_scalar_float ty)) y) _ _) targets)
+      (let ((cond Cond (fp_cond_code cc))
+            (taken BranchTarget (branch_target targets 0))
+            (not_taken BranchTarget (branch_target targets 1)))
+       (emit_side_effect
+        (with_flags_side_effect (fpu_cmp (scalar_size ty) x y)
+                                (cond_br taken not_taken
+                                 (cond_br_cond cond))))))
+
+;; standard `brif`
+(rule -1 (lower_branch (brif c @ (value_type $I128) _ _) targets)
+      (let ((flags ProducesFlags (flags_to_producesflags c))
+            (c ValueRegs (put_in_regs c))
+            (c_lo Reg (value_regs_get c 0))
+            (c_hi Reg (value_regs_get c 1))
+            (rt Reg (orr $I64 c_lo c_hi))
+            (taken BranchTarget (branch_target targets 0))
+            (not_taken BranchTarget (branch_target targets 1)))
+       (emit_side_effect
+        (with_flags_side_effect flags
+         (cond_br taken not_taken (cond_br_not_zero rt))))))
+(rule -2 (lower_branch (brif c @ (value_type ty) _ _) targets)
+      (if (ty_int_ref_scalar_64 ty))
+      (let ((flags ProducesFlags (flags_to_producesflags c))
+            (rt Reg (put_in_reg_zext64 c))
+            (taken BranchTarget (branch_target targets 0))
+            (not_taken BranchTarget (branch_target targets 1)))
+       (emit_side_effect
+        (with_flags_side_effect flags
+         (cond_br taken not_taken (cond_br_not_zero rt))))))
+
 ;;; Rules for `brz`/`brnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `brz` following `icmp`

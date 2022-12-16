@@ -114,3 +114,24 @@ block50:
 ; nextln: block50:
 ; nextln:     trap user1
 ; nextln: }
+
+function %twoargs(i32, f32) {
+block0(v90: i32, v91: f32):
+    brif v90, block1(v90, v91), block2(v91, v90)
+
+block1(v92: i32, v93: f32):
+    brif v90, block1(v90, v91), block2(v91, v90)
+
+block2(v94: f32, v95: i32):
+    brif v90, block1(v90, v91), block2(v91, v90)
+}
+; sameln: function %twoargs(i32, f32) fast {
+; nextln: block0(v90: i32, v91: f32):
+; nextln:     brif v90, block1(v90, v91), block2(v91, v90)
+; nextln: 
+; nextln: block1(v92: i32, v93: f32):
+; nextln:     brif.i32 v90, block1(v90, v91), block2(v91, v90)
+; nextln: 
+; nextln: block2(v94: f32, v95: i32):
+; nextln:     brif.i32 v90, block1(v90, v91), block2(v91, v90)
+; nextln: }
