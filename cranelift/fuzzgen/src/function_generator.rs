@@ -704,9 +704,6 @@ const OPCODE_SIGNATURES: &'static [(
     #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Bitselect, &[I128, I128, I128], &[I128], insert_opcode),
     // Select
-    // TODO: Some ops disabled:
-    //   x64: https://github.com/bytecodealliance/wasmtime/issues/5199
-    //   AArch64: https://github.com/bytecodealliance/wasmtime/issues/5200
     (Opcode::Select, &[I8, I8, I8], &[I8], insert_opcode),
     (Opcode::Select, &[I8, I16, I16], &[I16], insert_opcode),
     (Opcode::Select, &[I8, I32, I32], &[I32], insert_opcode),
@@ -727,20 +724,12 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Select, &[I64, I32, I32], &[I32], insert_opcode),
     (Opcode::Select, &[I64, I64, I64], &[I64], insert_opcode),
     (Opcode::Select, &[I64, I128, I128], &[I128], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Select, &[I128, I8, I8], &[I8], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Select, &[I128, I16, I16], &[I16], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Select, &[I128, I32, I32], &[I32], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Select, &[I128, I64, I64], &[I64], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Select, &[I128, I128, I128], &[I128], insert_opcode),
     // SelectSpectreGuard
-    // TODO: Some ops disabled:
-    //   x64: https://github.com/bytecodealliance/wasmtime/issues/5452
-    //   AArch64: https://github.com/bytecodealliance/wasmtime/issues/5453
     (Opcode::SelectSpectreGuard, &[I8, I8, I8], &[I8], insert_opcode),
     (Opcode::SelectSpectreGuard, &[I8, I16, I16], &[I16], insert_opcode),
     (Opcode::SelectSpectreGuard, &[I8, I32, I32], &[I32], insert_opcode),
@@ -761,15 +750,10 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::SelectSpectreGuard, &[I64, I32, I32], &[I32], insert_opcode),
     (Opcode::SelectSpectreGuard, &[I64, I64, I64], &[I64], insert_opcode),
     (Opcode::SelectSpectreGuard, &[I64, I128, I128], &[I128], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::SelectSpectreGuard, &[I128, I8, I8], &[I8], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::SelectSpectreGuard, &[I128, I16, I16], &[I16], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::SelectSpectreGuard, &[I128, I32, I32], &[I32], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::SelectSpectreGuard, &[I128, I64, I64], &[I64], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::SelectSpectreGuard, &[I128, I128, I128], &[I128], insert_opcode),
     // Fadd
     (Opcode::Fadd, &[F32, F32], &[F32], insert_opcode),

@@ -1899,6 +1899,17 @@
 (rule (normalize_cmp_value $I64  r) r)
 (rule (normalize_cmp_value $I128 r) r)
 
+;; Convert a truthy value, possibly of more than one register (an
+;; I128), to one register. If narrower than 64 bits, must have already
+;; been masked (e.g. by `normalize_cmp_value`).
+(decl truthy_to_reg (Type ValueRegs) Reg)
+(rule 1 (truthy_to_reg (fits_in_64 _) regs)
+      (value_regs_get regs 0))
+(rule 0 (truthy_to_reg $I128 regs)
+      (let ((lo Reg (value_regs_get regs 0))
+            (hi Reg (value_regs_get regs 1)))
+        (alu_rrr (AluOPRRR.Or) lo hi)))
+
 ;;;;;
 (rule
   (lower_branch (brz v @ (value_type ty) _ _) targets)

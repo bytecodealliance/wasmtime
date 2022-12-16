@@ -1,4 +1,4 @@
-;; the interpreter does not support `select_spectre_guard`.
+test interpret
 test run
 set enable_llvm_abi_extensions=true
 target aarch64
@@ -314,3 +314,13 @@ block0(v0: i8, v1: i128, v2: i128):
 ; run: %select_spectre_guard_i128_sle(127, 32, -1) == -1
 ; run: %select_spectre_guard_i128_sle(127, 32, 19000000000000000000) == 19000000000000000000
 ; run: %select_spectre_guard_i128_sle(42, 32, 19000000000000000000) == 32
+
+function %select_spectre_guard_i128_cond(i128, i128, i128) -> i128 {
+block0(v0: i128, v1: i128, v2: i128):
+  v3 = select_spectre_guard.i128 v0, v1, v2
+  return v3
+}
+; run: %select_spectre_guard_i128_cond(1, 2, 3) == 2
+; run: %select_spectre_guard_i128_cond(0, 2, 3) == 3
+; run: %select_spectre_guard_i128_cond(18446744073709551616, 2, 3) == 2
+; run: %select_spectre_guard_i128_cond(18446744073709551616, 18446744073709551616, 3) == 18446744073709551616
