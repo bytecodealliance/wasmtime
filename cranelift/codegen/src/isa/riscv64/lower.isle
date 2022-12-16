@@ -612,7 +612,7 @@
 ;;;;;  Rules for `select`;;;;;;;;;
 (rule
   (lower (has_type ty (select c @ (value_type cty) x y)))
-  (gen_select ty (normalize_cmp_value cty c) x y))
+  (gen_select ty (truthy_to_reg cty (normalize_cmp_value cty c)) x y))
 
 (rule 1
   (lower (has_type ty (select (icmp cc a b) x y)))
@@ -843,7 +843,7 @@
 
 (rule -1
   (lower (has_type ty (select_spectre_guard c @ (value_type cty) x y)))
-  (gen_select ty (normalize_cmp_value cty c) x y))
+  (gen_select ty (truthy_to_reg cty (normalize_cmp_value cty c)) x y))
 
 ;;;;;  Rules for `bmask`;;;;;;;;;
 (rule

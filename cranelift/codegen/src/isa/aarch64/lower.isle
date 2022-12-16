@@ -1739,11 +1739,20 @@
         (cmp (OperandSize.Size32) rcond (zero_reg))
         (Cond.Ne) ty rn rm)))
 
-(rule -3 (lower (has_type ty (select rcond rn rm)))
+(rule -3 (lower (has_type ty (select rcond @ (value_type (fits_in_64 _)) rn rm)))
       (let ((rcond Reg (put_in_reg_zext64 rcond)))
        (lower_select
         (cmp (OperandSize.Size64) rcond (zero_reg))
         (Cond.Ne) ty rn rm)))
+
+(rule -4 (lower (has_type ty (select rcond @ (value_type $I128) rn rm)))
+      (let ((c ValueRegs (put_in_regs rcond))
+            (c_lo Reg (value_regs_get c 0))
+            (c_hi Reg (value_regs_get c 1))
+            (rt Reg (orr $I64 c_lo c_hi)))
+        (lower_select
+         (cmp (OperandSize.Size64) rt (zero_reg))
+         (Cond.Ne) ty rn rm)))
 
 ;;;; Rules for `select_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1761,11 +1770,20 @@
             (_ InstOutput (side_effect (csdb))))
        dst))
 
-(rule -1 (lower (has_type ty (select_spectre_guard rcond rn rm)))
+(rule -1 (lower (has_type ty (select_spectre_guard rcond @ (value_type (fits_in_64 _)) rn rm)))
       (let ((rcond Reg (put_in_reg_zext64 rcond)))
        (lower_select
         (cmp (OperandSize.Size64) rcond (zero_reg))
         (Cond.Ne) ty rn rm)))
+
+(rule -2 (lower (has_type ty (select_spectre_guard rcond @ (value_type $I128) rn rm)))
+      (let ((c ValueRegs (put_in_regs rcond))
+            (c_lo Reg (value_regs_get c 0))
+            (c_hi Reg (value_regs_get c 1))
+            (rt Reg (orr $I64 c_lo c_hi)))
+        (lower_select
+         (cmp (OperandSize.Size64) rt (zero_reg))
+         (Cond.Ne) ty rn rm)))
 
 ;;;; Rules for `vconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

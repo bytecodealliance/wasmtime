@@ -1749,6 +1749,10 @@
             (gpr_c Gpr (put_in_gpr c)))
            (with_flags (x64_test size gpr_c gpr_c) (cmove_from_values ty (CC.NZ) x y))))
 
+(rule -2 (lower (has_type ty (select c @ (value_type $I128) x y)))
+      (let ((cond_result IcmpCondResult (cmp_zero_i128 (CC.Z) c)))
+        (select_icmp cond_result x y)))
+
 ;; Rules for `clz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; If available, we can use a plain lzcnt instruction here. Note no
@@ -2954,7 +2958,11 @@
 (rule -1 (lower (has_type ty (select_spectre_guard c @ (value_type (fits_in_64 a_ty)) x y)))
       (let ((size OperandSize (raw_operand_size_of_type a_ty))
             (gpr_c Gpr (put_in_gpr c)))
-           (with_flags (x64_test size gpr_c gpr_c) (cmove_from_values ty (CC.NZ) x y))))
+        (with_flags (x64_test size gpr_c gpr_c) (cmove_from_values ty (CC.NZ) x y))))
+
+(rule -2 (lower (has_type ty (select_spectre_guard c @ (value_type $I128) x y)))
+      (let ((cond_result IcmpCondResult (cmp_zero_i128 (CC.Z) c)))
+        (select_icmp cond_result x y)))
 
 ;; Rules for `fcvt_from_sint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
