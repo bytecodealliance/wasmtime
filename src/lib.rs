@@ -1,8 +1,8 @@
 #![allow(unused_variables)] // TODO: remove this when more things are implemented
 
 use crate::bindings::{
-    wasi_clocks, wasi_default_clocks, wasi_filesystem, wasi_logging, wasi_poll, wasi_random,
-    wasi_tcp,
+    wasi_clocks, wasi_default_clocks, wasi_exit, wasi_filesystem, wasi_logging, wasi_poll,
+    wasi_random, wasi_tcp,
 };
 use core::arch::wasm32::unreachable;
 use core::cell::{Cell, RefCell, UnsafeCell};
@@ -534,7 +534,7 @@ pub unsafe extern "C" fn fd_pread(
         let len = (*iovs_ptr).buf_len;
         state.register_buffer(ptr, len);
 
-        let read_len = u32::try_from(len).unwrap();
+        let read_len = unwrap_result(u32::try_from(len));
         let file = state.get_file(fd)?;
         let data = wasi_filesystem::pread(file.fd, read_len, offset)?;
         assert_eq!(data.as_ptr(), ptr);
@@ -613,7 +613,7 @@ pub unsafe extern "C" fn fd_read(
 
         state.register_buffer(ptr, len);
 
-        let read_len = u32::try_from(len).unwrap();
+        let read_len = unwrap_result(u32::try_from(len));
         let file = match state.get(fd)? {
             Descriptor::File(f) => f,
             Descriptor::Closed(_) | Descriptor::StdoutLog | Descriptor::StderrLog => {
@@ -816,7 +816,7 @@ pub unsafe extern "C" fn fd_readdir(
             let dirent = wasi::Dirent {
                 d_next: self.cookie,
                 d_ino: ino.unwrap_or(0),
-                d_namlen: u32::try_from(name.len()).unwrap(),
+                d_namlen: unwrap_result(u32::try_from(name.len())),
                 d_type: type_.into(),
             };
             // Extend the lifetime of `name` to the `self.state` lifetime for
@@ -921,21 +921,16 @@ pub unsafe extern "C" fn fd_write(
 
     let ptr = (*iovs_ptr).buf;
     let len = (*iovs_ptr).buf_len;
+    let bytes = slice::from_raw_parts(ptr, len);
 
     State::with(|state| match state.get(fd)? {
         Descriptor::File(file) => {
-            let bytes = wasi_filesystem::pwrite(
-                file.fd,
-                slice::from_raw_parts(ptr, len),
-                file.position.get(),
-            )?;
-
+            let bytes = wasi_filesystem::pwrite(file.fd, bytes, file.position.get())?;
             *nwritten = bytes as usize;
             file.position.set(file.position.get() + u64::from(bytes));
             Ok(())
         }
         Descriptor::StderrLog | Descriptor::StdoutLog => {
-            let bytes = slice::from_raw_parts(ptr, len);
             let context: [u8; 3] = [b'I', b'/', b'O'];
             wasi_logging::log(wasi_logging::Level::Info, &context, bytes);
             *nwritten = len;
@@ -1446,7 +1441,9 @@ pub unsafe extern "C" fn poll_oneoff(
 /// the environment.
 #[no_mangle]
 pub unsafe extern "C" fn proc_exit(rval: Exitcode) -> ! {
-    unreachable()
+    let status = if rval == 0 { Ok(()) } else { Err(()) };
+    wasi_exit::exit(status); // does not return
+    unreachable() // actually unreachable
 }
 
 /// Send a signal to the process of the calling thread.
