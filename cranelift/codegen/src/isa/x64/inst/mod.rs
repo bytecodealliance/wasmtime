@@ -90,6 +90,7 @@ impl Inst {
             | Inst::LoadExtName { .. }
             | Inst::LockCmpxchg { .. }
             | Inst::Mov64MR { .. }
+            | Inst::MovImmM { .. }
             | Inst::MovRM { .. }
             | Inst::MovRR { .. }
             | Inst::MovFromPReg { .. }
@@ -1252,6 +1253,25 @@ impl PrettyPrint for Inst {
                 }
             }
 
+            Inst::MovImmM { size, simm64, dst } => {
+                let dst = dst.pretty_print(size.to_bytes(), allocs);
+                let suffix = suffix_bwlq(*size);
+                let instruction = ljustify2("mov".to_string(), suffix);
+
+                match *size {
+                    OperandSize::Size8 => {
+                        format!("{} ${}, {}", instruction, (*simm64 as u8) as i8, dst)
+                    }
+                    OperandSize::Size16 => {
+                        format!("{} ${}, {}", instruction, (*simm64 as u16) as i16, dst)
+                    }
+                    OperandSize::Size32 => {
+                        format!("{} ${}, {}", instruction, (*simm64 as u32) as i32, dst)
+                    }
+                    OperandSize::Size64 => format!("{} ${}, {}", instruction, *simm64 as i64, dst),
+                }
+            }
+
             Inst::MovRR { size, src, dst } => {
                 let src = pretty_print_reg(src.to_reg(), size.to_bytes(), allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes(), allocs);
@@ -1990,6 +2010,11 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_early_def(tmp_xmm.to_writable_reg());
             collector.reg_early_def(tmp_xmm2.to_writable_reg());
         }
+
+        Inst::MovImmM { dst, .. } => {
+            dst.get_operands(collector);
+        }
+
         Inst::MovzxRmR { src, dst, .. } => {
             collector.reg_def(dst.to_writable_reg());
             src.get_operands(collector);
