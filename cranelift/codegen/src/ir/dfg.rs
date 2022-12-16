@@ -328,7 +328,7 @@ impl DataFlowGraph {
     /// For each argument of inst which is defined by an alias, replace the
     /// alias with the aliased value.
     pub fn resolve_aliases_in_arguments(&mut self, inst: Inst) {
-        for arg in self.insts.0[inst].arguments_mut(&mut self.value_lists) {
+        for arg in self.insts[inst].arguments_mut(&mut self.value_lists) {
             let resolved = resolve_aliases(&self.values, *arg);
             if resolved != *arg {
                 *arg = resolved;
