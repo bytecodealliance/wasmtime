@@ -33,14 +33,14 @@ impl Index<Inst> for Insts {
     type Output = InstructionData;
 
     fn index(&self, inst: Inst) -> &InstructionData {
-        &self.0[inst]
+        self.0.index(inst)
     }
 }
 
 /// Allow mutable access to instructions via indexing.
 impl IndexMut<Inst> for Insts {
     fn index_mut(&mut self, inst: Inst) -> &mut InstructionData {
-        &mut self.0[inst]
+        self.0.index_mut(inst)
     }
 }
 
