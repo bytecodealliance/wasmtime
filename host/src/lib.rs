@@ -1,4 +1,5 @@
 mod clocks;
+mod exit;
 mod filesystem;
 mod logging;
 mod poll;
@@ -25,5 +26,6 @@ pub fn add_to_linker<T: Send>(
     wasi_poll::add_to_linker(l, f)?;
     wasi_random::add_to_linker(l, f)?;
     wasi_tcp::add_to_linker(l, f)?;
+    wasi_exit::add_to_linker(l, f)?;
     Ok(())
 }
