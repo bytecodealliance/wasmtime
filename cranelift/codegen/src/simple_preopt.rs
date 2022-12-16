@@ -477,96 +477,66 @@ enum BranchOrderKind {
 /// branch, this will reorder them if one of them is branching to the next Block
 /// layout-wise. The unconditional jump can then become a fallthrough.
 fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, block: Block, inst: Inst) {
-    let (term_inst, term_inst_args, term_dest, cond_inst, cond_inst_args, cond_dest, kind) =
-        match pos.func.dfg.insts[inst] {
-            InstructionData::Jump {
-                opcode: Opcode::Jump,
-                destination,
-                ref args,
-            } => {
-                let next_block = if let Some(next_block) = pos.func.layout.next_block(block) {
-                    next_block
-                } else {
-                    return;
-                };
+    let (term_inst, term_dest, cond_inst, cond_dest, kind) = match pos.func.dfg.insts[inst] {
+        InstructionData::Jump {
+            opcode: Opcode::Jump,
+            destination,
+        } => {
+            let next_block = if let Some(next_block) = pos.func.layout.next_block(block) {
+                next_block
+            } else {
+                return;
+            };
 
-                if destination == next_block {
-                    return;
-                }
-
-                let prev_inst = if let Some(prev_inst) = pos.func.layout.prev_inst(inst) {
-                    prev_inst
-                } else {
-                    return;
-                };
-
-                let prev_inst_data = &pos.func.dfg.insts[prev_inst];
-
-                if let Some(prev_dest) = prev_inst_data.branch_destination() {
-                    if prev_dest != next_block {
-                        return;
-                    }
-                } else {
-                    return;
-                }
-
-                match prev_inst_data {
-                    InstructionData::Branch {
-                        opcode,
-                        args: ref prev_args,
-                        destination: cond_dest,
-                    } => {
-                        let cond_arg = {
-                            let args = pos.func.dfg.inst_args(prev_inst);
-                            args[0]
-                        };
-
-                        let kind = match opcode {
-                            Opcode::Brz => BranchOrderKind::BrzToBrnz(cond_arg),
-                            Opcode::Brnz => BranchOrderKind::BrnzToBrz(cond_arg),
-                            _ => panic!("unexpected opcode"),
-                        };
-
-                        (
-                            inst,
-                            args.clone(),
-                            destination,
-                            prev_inst,
-                            prev_args.clone(),
-                            *cond_dest,
-                            kind,
-                        )
-                    }
-                    _ => return,
-                }
+            if destination.block(&pos.func.dfg.value_lists) == next_block {
+                return;
             }
 
-            _ => return,
-        };
+            let prev_inst = if let Some(prev_inst) = pos.func.layout.prev_inst(inst) {
+                prev_inst
+            } else {
+                return;
+            };
 
-    let cond_args = cond_inst_args.as_slice(&pos.func.dfg.value_lists).to_vec();
-    let term_args = term_inst_args.as_slice(&pos.func.dfg.value_lists).to_vec();
+            let prev_inst_data = &pos.func.dfg.insts[prev_inst];
+
+            if let Some(prev_dest) = prev_inst_data.branch_destination() {
+                if prev_dest.block(&pos.func.dfg.value_lists) != next_block {
+                    return;
+                }
+            } else {
+                return;
+            }
+
+            match prev_inst_data {
+                &InstructionData::Branch {
+                    opcode,
+                    arg,
+                    destination: cond_dest,
+                } => {
+                    let kind = match opcode {
+                        Opcode::Brz => BranchOrderKind::BrzToBrnz(arg),
+                        Opcode::Brnz => BranchOrderKind::BrnzToBrz(arg),
+                        _ => panic!("unexpected opcode"),
+                    };
+
+                    (inst, destination, prev_inst, cond_dest, kind)
+                }
+                _ => return,
+            }
+        }
+
+        _ => return,
+    };
 
     match kind {
         BranchOrderKind::BrnzToBrz(cond_arg) => {
-            pos.func
-                .dfg
-                .replace(term_inst)
-                .jump(cond_dest, &cond_args[1..]);
-            pos.func
-                .dfg
-                .replace(cond_inst)
-                .brz(cond_arg, term_dest, &term_args);
+            pos.func.dfg.replace(term_inst).jump(cond_dest);
+            pos.func.dfg.replace(cond_inst).brz(cond_arg, term_dest);
         }
         BranchOrderKind::BrzToBrnz(cond_arg) => {
-            pos.func
-                .dfg
-                .replace(term_inst)
-                .jump(cond_dest, &cond_args[1..]);
-            pos.func
-                .dfg
-                .replace(cond_inst)
-                .brnz(cond_arg, term_dest, &term_args);
+            pos.func.dfg.replace(term_inst).jump(cond_dest);
+            pos.func.dfg.replace(cond_inst).brnz(cond_arg, term_dest);
         }
     }
 
@@ -578,7 +548,7 @@ mod simplify {
     use crate::ir::{
         dfg::ValueDef,
         immediates,
-        instructions::{Opcode, ValueList},
+        instructions::Opcode,
         types::{I16, I32, I8},
     };
     use std::marker::PhantomData;
@@ -832,7 +802,6 @@ mod simplify {
     struct BranchOptInfo {
         br_inst: Inst,
         cmp_arg: Value,
-        args: ValueList,
         new_opcode: Opcode,
     }
 
@@ -842,17 +811,12 @@ mod simplify {
     /// result in a `brz` or `brnz` branch. It folds those two operations into a
     /// single `brz` or `brnz`.
     fn branch_opt(pos: &mut FuncCursor, inst: Inst) {
-        let mut info = if let InstructionData::Branch {
+        let info = if let InstructionData::Branch {
             opcode: br_opcode,
-            args: ref br_args,
+            arg: first_arg,
             ..
         } = pos.func.dfg.insts[inst]
         {
-            let first_arg = {
-                let args = pos.func.dfg.inst_args(inst);
-                args[0]
-            };
-
             let icmp_inst =
                 if let ValueDef::Result(icmp_inst, _) = pos.func.dfg.value_def(first_arg) {
                     icmp_inst
@@ -889,7 +853,6 @@ mod simplify {
                 BranchOptInfo {
                     br_inst: inst,
                     cmp_arg,
-                    args: br_args.clone(),
                     new_opcode,
                 }
             } else {
@@ -899,11 +862,11 @@ mod simplify {
             return;
         };
 
-        info.args.as_mut_slice(&mut pos.func.dfg.value_lists)[0] = info.cmp_arg;
-        if let InstructionData::Branch { ref mut opcode, .. } = pos.func.dfg.insts[info.br_inst] {
+        if let InstructionData::Branch { opcode, arg, .. } = &mut pos.func.dfg.insts[info.br_inst] {
             *opcode = info.new_opcode;
+            *arg = info.cmp_arg;
         } else {
-            panic!();
+            unreachable!();
         }
     }
 }

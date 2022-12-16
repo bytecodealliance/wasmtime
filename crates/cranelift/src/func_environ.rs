@@ -549,8 +549,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let cmp = builder
             .ins()
             .icmp(IntCC::SignedGreaterThanOrEqual, fuel, zero);
-        builder.ins().brnz(cmp, out_of_gas_block, &[]);
-        builder.ins().jump(continuation_block, &[]);
+        let target = builder.func.dfg.block_with_args(out_of_gas_block, &[]);
+        builder.ins().brnz(cmp, target);
+        let target = builder.func.dfg.block_with_args(continuation_block, &[]);
+        builder.ins().jump(target);
         builder.seal_block(out_of_gas_block);
 
         // If we ran out of gas then we call our out-of-gas intrinsic and it
@@ -571,7 +573,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             .ins()
             .call_indirect(out_of_gas_sig, out_of_gas, &[vmctx]);
         self.fuel_load_into_var(builder);
-        builder.ins().jump(continuation_block, &[]);
+        let target = builder.func.dfg.block_with_args(continuation_block, &[]);
+        builder.ins().jump(target);
         builder.seal_block(continuation_block);
 
         builder.switch_to_block(continuation_block);
@@ -658,8 +661,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             cur_epoch_value,
             epoch_deadline,
         );
-        builder.ins().brnz(cmp, new_epoch_block, &[]);
-        builder.ins().jump(continuation_block, &[]);
+        let target = builder.func.dfg.block_with_args(new_epoch_block, &[]);
+        builder.ins().brnz(cmp, target);
+        let target = builder.func.dfg.block_with_args(continuation_block, &[]);
+        builder.ins().jump(target);
         builder.seal_block(new_epoch_block);
 
         // In the "new epoch block", we've noticed that the epoch has
@@ -677,10 +682,13 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             cur_epoch_value,
             fresh_epoch_deadline,
         );
-        builder
-            .ins()
-            .brnz(fresh_cmp, new_epoch_doublecheck_block, &[]);
-        builder.ins().jump(continuation_block, &[]);
+        let target = builder
+            .func
+            .dfg
+            .block_with_args(new_epoch_doublecheck_block, &[]);
+        builder.ins().brnz(fresh_cmp, target);
+        let target = builder.func.dfg.block_with_args(continuation_block, &[]);
+        builder.ins().jump(target);
         builder.seal_block(new_epoch_doublecheck_block);
 
         builder.switch_to_block(new_epoch_doublecheck_block);
@@ -696,7 +704,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             .call_indirect(new_epoch_sig, new_epoch, &[vmctx]);
         let new_deadline = *builder.func.dfg.inst_results(call).first().unwrap();
         builder.def_var(self.epoch_deadline_var, new_deadline);
-        builder.ins().jump(continuation_block, &[]);
+        let target = builder.func.dfg.block_with_args(continuation_block, &[]);
+        builder.ins().jump(target);
         builder.seal_block(continuation_block);
 
         builder.switch_to_block(continuation_block);
@@ -784,8 +793,13 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let result_param = builder.append_block_param(continuation_block, pointer_type);
         builder.set_cold_block(null_block);
 
-        builder.ins().brz(value, null_block, &[]);
-        builder.ins().jump(continuation_block, &[value_masked]);
+        let target = builder.func.dfg.block_with_args(null_block, &[]);
+        builder.ins().brz(value, target);
+        let target = builder
+            .func
+            .dfg
+            .block_with_args(continuation_block, &[value_masked]);
+        builder.ins().jump(target);
         builder.seal_block(null_block);
 
         builder.switch_to_block(null_block);
@@ -801,7 +815,11 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                 .ins()
                 .call_indirect(builtin_sig, builtin_addr, &[vmctx, table_index, index]);
         let returned_entry = builder.func.dfg.inst_results(call_inst)[0];
-        builder.ins().jump(continuation_block, &[returned_entry]);
+        let target = builder
+            .func
+            .dfg
+            .block_with_args(continuation_block, &[returned_entry]);
+        builder.ins().jump(target);
         builder.seal_block(continuation_block);
 
         builder.switch_to_block(continuation_block);
@@ -994,8 +1012,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 let elem = builder.ins().load(reference_type, flags, elem_addr, 0);
 
                 let elem_is_null = builder.ins().is_null(elem);
-                builder.ins().brnz(elem_is_null, continue_block, &[]);
-                builder.ins().jump(non_null_elem_block, &[]);
+                let target = builder.func.dfg.block_with_args(continue_block, &[]);
+                builder.ins().brnz(elem_is_null, target);
+                let target = builder.func.dfg.block_with_args(non_null_elem_block, &[]);
+                builder.ins().jump(target);
 
                 // Load the `VMExternRefActivationsTable::next` bump finger and
                 // the `VMExternRefActivationsTable::end` bump boundary.
@@ -1025,8 +1045,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 // builtin to do a GC and insert this reference into the
                 // just-swept table for us.
                 let at_capacity = builder.ins().icmp(ir::condcodes::IntCC::Equal, next, end);
-                builder.ins().brnz(at_capacity, gc_block, &[]);
-                builder.ins().jump(no_gc_block, &[]);
+                let target = builder.func.dfg.block_with_args(gc_block, &[]);
+                builder.ins().brnz(at_capacity, target);
+                let target = builder.func.dfg.block_with_args(no_gc_block, &[]);
+                builder.ins().jump(target);
                 builder.switch_to_block(gc_block);
                 let builtin_idx = BuiltinFunctionIndex::activations_table_insert_with_gc();
                 let builtin_sig = self
@@ -1037,7 +1059,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 builder
                     .ins()
                     .call_indirect(builtin_sig, builtin_addr, &[vmctx, elem]);
-                builder.ins().jump(continue_block, &[]);
+                let target = builder.func.dfg.block_with_args(continue_block, &[]);
+                builder.ins().jump(target);
 
                 // If `next != end`, then:
                 //
@@ -1058,7 +1081,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     i32::try_from(self.offsets.vm_extern_ref_activation_table_next()).unwrap(),
                 );
 
-                builder.ins().jump(continue_block, &[]);
+                let target = builder.func.dfg.block_with_args(continue_block, &[]);
+                builder.ins().jump(target);
                 builder.switch_to_block(continue_block);
 
                 builder.seal_block(non_null_elem_block);
@@ -1161,13 +1185,20 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 // deallocate `value` and leave it in the table, leading to use
                 // after free.
                 let value_is_null = builder.ins().is_null(value);
-                builder
-                    .ins()
-                    .brnz(value_is_null, check_current_elem_block, &[]);
-                builder.ins().jump(inc_ref_count_block, &[]);
+                let target = builder
+                    .func
+                    .dfg
+                    .block_with_args(check_current_elem_block, &[]);
+                builder.ins().brnz(value_is_null, target);
+                let target = builder.func.dfg.block_with_args(inc_ref_count_block, &[]);
+                builder.ins().jump(target);
                 builder.switch_to_block(inc_ref_count_block);
                 self.mutate_externref_ref_count(builder, value, 1);
-                builder.ins().jump(check_current_elem_block, &[]);
+                let target = builder
+                    .func
+                    .dfg
+                    .block_with_args(check_current_elem_block, &[]);
+                builder.ins().jump(target);
 
                 // Grab the current element from the table, and store the new
                 // `value` into the table.
@@ -1190,17 +1221,19 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     builder
                         .ins()
                         .icmp_imm(ir::condcodes::IntCC::Equal, current_elem, 0);
-                builder
-                    .ins()
-                    .brz(current_elem_is_null, dec_ref_count_block, &[]);
-                builder.ins().jump(continue_block, &[]);
+                let target = builder.func.dfg.block_with_args(dec_ref_count_block, &[]);
+                builder.ins().brz(current_elem_is_null, target);
+                let target = builder.func.dfg.block_with_args(continue_block, &[]);
+                builder.ins().jump(target);
 
                 builder.switch_to_block(dec_ref_count_block);
                 let prev_ref_count = self.mutate_externref_ref_count(builder, current_elem, -1);
                 let one = builder.ins().iconst(pointer_type, 1);
                 let cond = builder.ins().icmp(IntCC::Equal, one, prev_ref_count);
-                builder.ins().brnz(cond, drop_block, &[]);
-                builder.ins().jump(continue_block, &[]);
+                let target = builder.func.dfg.block_with_args(drop_block, &[]);
+                builder.ins().brnz(cond, target);
+                let target = builder.func.dfg.block_with_args(continue_block, &[]);
+                builder.ins().jump(target);
 
                 // Call the `drop_externref` builtin to (you guessed it) drop
                 // the `externref`.
@@ -1214,7 +1247,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 builder
                     .ins()
                     .call_indirect(builtin_sig, builtin_addr, &[vmctx, current_elem]);
-                builder.ins().jump(continue_block, &[]);
+                let target = builder.func.dfg.block_with_args(continue_block, &[]);
+                builder.ins().jump(target);
 
                 builder.switch_to_block(continue_block);
 

@@ -1,13 +1,12 @@
 //! A Constant-Phi-Node removal pass.
 
 use crate::dominator_tree::DominatorTree;
-use crate::entity::EntityList;
 use crate::fx::FxHashMap;
 use crate::fx::FxHashSet;
 use crate::ir;
 use crate::ir::instructions::BranchInfo;
 use crate::ir::Function;
-use crate::ir::{Block, Inst, Value};
+use crate::ir::{Block, BlockWithArgs, Inst, Value};
 use crate::timing;
 use arrayvec::ArrayVec;
 use bumpalo::Bump;
@@ -127,8 +126,13 @@ impl<'a> OutEdge<'a> {
     /// Returns `None` if this is an edge without any block arguments, which
     /// means we can ignore it for this analysis's purposes.
     #[inline]
-    fn new(bump: &'a Bump, dfg: &ir::DataFlowGraph, inst: Inst, block: Block) -> Option<Self> {
-        let inst_var_args = dfg.inst_variable_args(inst);
+    fn new(
+        bump: &'a Bump,
+        dfg: &ir::DataFlowGraph,
+        inst: Inst,
+        block: BlockWithArgs,
+    ) -> Option<Self> {
+        let inst_var_args = block.args_slice(&dfg.value_lists);
 
         // Skip edges without params.
         if inst_var_args.is_empty() {
@@ -137,7 +141,7 @@ impl<'a> OutEdge<'a> {
 
         Some(OutEdge {
             inst,
-            block,
+            block: block.block(&dfg.value_lists),
             args: bump.alloc_slice_fill_iter(
                 inst_var_args
                     .iter()
@@ -236,8 +240,7 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
             // Note that multi-dest transfers (i.e., branch tables) don't
             // carry parameters in our IR, so we only have to care about
             // `SingleDest` here.
-            if let BranchInfo::SingleDest(dest, _) = idetails.analyze_branch(&func.dfg.value_lists)
-            {
+            if let BranchInfo::SingleDest(dest) = idetails.analyze_branch() {
                 if let Some(edge) = OutEdge::new(&bump, &func.dfg, inst, dest) {
                     summary.dests.push(edge);
                 }
@@ -372,47 +375,35 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
     // Secondly, visit all branch insns.  If the destination has had its
     // formals changed, change the actuals accordingly.  Don't scan all insns,
     // rather just visit those as listed in the summaries we prepared earlier.
+    let mut old_actuals = alloc::vec::Vec::new();
     for summary in summaries.values() {
         for edge in &summary.dests {
             if !need_editing.contains(&edge.block) {
                 continue;
             }
 
-            let old_actuals = func.dfg.insts[edge.inst].value_list().unwrap();
-            let num_old_actuals = old_actuals.len(&func.dfg.value_lists);
-            let num_fixed_actuals = func.dfg.insts[edge.inst]
-                .opcode()
-                .constraints()
-                .num_fixed_value_arguments();
+            let mut block = func.dfg.insts[edge.inst].branch_destination().unwrap();
+            old_actuals.clear();
+            old_actuals.extend(block.args_slice(&func.dfg.value_lists));
             let dst_summary = &summaries[edge.block];
 
             // Check that the numbers of arguments make sense.
-            assert!(num_fixed_actuals <= num_old_actuals);
-            assert_eq!(
-                num_fixed_actuals + dst_summary.formals.len(),
-                num_old_actuals
-            );
+            assert_eq!(dst_summary.formals.len(), old_actuals.len());
 
             // Create a new value list.
-            let mut new_actuals = EntityList::<Value>::new();
-            // Copy the fixed args to the new list
-            for i in 0..num_fixed_actuals {
-                let val = old_actuals.get(i, &func.dfg.value_lists).unwrap();
-                new_actuals.push(val, &mut func.dfg.value_lists);
-            }
+            block.clear(&mut func.dfg.value_lists);
 
             // Copy the variable args (the actual block params) to the new
             // list, filtering out redundant ones.
             for (i, formal_i) in dst_summary.formals.iter().enumerate() {
-                let actual_i = old_actuals
-                    .get(num_fixed_actuals + i, &func.dfg.value_lists)
-                    .unwrap();
+                let actual_i = old_actuals[i];
                 let is_redundant = state.get(*formal_i).is_one();
                 if !is_redundant {
-                    new_actuals.push(actual_i, &mut func.dfg.value_lists);
+                    block.append_argument(actual_i, &mut func.dfg.value_lists);
                 }
             }
-            *func.dfg.insts[edge.inst].value_list_mut().unwrap() = new_actuals;
+
+            *func.dfg.insts[edge.inst].branch_destination_mut().unwrap() = block;
         }
     }
 

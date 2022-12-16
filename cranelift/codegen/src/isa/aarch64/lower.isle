@@ -2464,7 +2464,7 @@
 ;;; Rules for `brz`/`brnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `brz` following `icmp`
-(rule (lower_branch (brz (maybe_uextend (icmp cc x @ (value_type ty) y)) _ _) targets)
+(rule (lower_branch (brz (maybe_uextend (icmp cc x @ (value_type ty) y)) _) targets)
       (let ((comparison FlagsAndCC (lower_icmp_into_flags cc x y ty))
             ;; Negate the condition for `brz`.
             (cond Cond (invert_cond (cond_code (flags_and_cc_cc comparison))))
@@ -2476,7 +2476,7 @@
                                           not_taken
                                           (cond_br_cond cond))))))
 ;; `brnz` following `icmp`
-(rule (lower_branch (brnz (maybe_uextend (icmp cc x @ (value_type ty) y)) _ _) targets)
+(rule (lower_branch (brnz (maybe_uextend (icmp cc x @ (value_type ty) y)) _) targets)
       (let ((comparison FlagsAndCC (lower_icmp_into_flags cc x y ty))
             (cond Cond (cond_code (flags_and_cc_cc comparison)))
             (taken BranchTarget (branch_target targets 0))
@@ -2487,7 +2487,7 @@
                                           not_taken
                                           (cond_br_cond cond))))))
 ;; `brz` following `fcmp`
-(rule (lower_branch (brz (maybe_uextend (fcmp cc x @ (value_type (ty_scalar_float ty)) y)) _ _) targets)
+(rule (lower_branch (brz (maybe_uextend (fcmp cc x @ (value_type (ty_scalar_float ty)) y)) _) targets)
       (let ((cond Cond (fp_cond_code cc))
             (cond Cond (invert_cond cond)) ;; negate for `brz`
             (taken BranchTarget (branch_target targets 0))
@@ -2497,7 +2497,7 @@
                                 (cond_br taken not_taken
                                  (cond_br_cond cond))))))
 ;; `brnz` following `fcmp`
-(rule (lower_branch (brnz (maybe_uextend (fcmp cc x @ (value_type (ty_scalar_float ty)) y)) _ _) targets)
+(rule (lower_branch (brnz (maybe_uextend (fcmp cc x @ (value_type (ty_scalar_float ty)) y)) _) targets)
       (let ((cond Cond (fp_cond_code cc))
             (taken BranchTarget (branch_target targets 0))
             (not_taken BranchTarget (branch_target targets 1)))
@@ -2506,7 +2506,7 @@
                                 (cond_br taken not_taken
                                  (cond_br_cond cond))))))
 ;; standard `brz`
-(rule -1 (lower_branch (brz c @ (value_type $I128) _ _) targets)
+(rule -1 (lower_branch (brz c @ (value_type $I128) _) targets)
       (let ((flags ProducesFlags (flags_to_producesflags c))
             (c ValueRegs (put_in_regs c))
             (c_lo Reg (value_regs_get c 0))
@@ -2517,7 +2517,7 @@
        (emit_side_effect
         (with_flags_side_effect flags
          (cond_br taken not_taken (cond_br_zero rt))))))
-(rule -2 (lower_branch (brz c @ (value_type ty) _ _) targets)
+(rule -2 (lower_branch (brz c @ (value_type ty) _) targets)
       (if (ty_int_ref_scalar_64 ty))
       (let ((flags ProducesFlags (flags_to_producesflags c))
             (rt Reg (put_in_reg_zext64 c))
@@ -2527,7 +2527,7 @@
         (with_flags_side_effect flags
          (cond_br taken not_taken (cond_br_zero rt))))))
 ;; standard `brnz`
-(rule -1 (lower_branch (brnz c @ (value_type $I128) _ _) targets)
+(rule -1 (lower_branch (brnz c @ (value_type $I128) _) targets)
       (let ((flags ProducesFlags (flags_to_producesflags c))
             (c ValueRegs (put_in_regs c))
             (c_lo Reg (value_regs_get c 0))
@@ -2538,7 +2538,7 @@
        (emit_side_effect
         (with_flags_side_effect flags
          (cond_br taken not_taken (cond_br_not_zero rt))))))
-(rule -2 (lower_branch (brnz c @ (value_type ty) _ _) targets)
+(rule -2 (lower_branch (brnz c @ (value_type ty) _) targets)
       (if (ty_int_ref_scalar_64 ty))
       (let ((flags ProducesFlags (flags_to_producesflags c))
             (rt Reg (put_in_reg_zext64 c))
@@ -2550,7 +2550,7 @@
 
 ;;; Rules for `jump` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower_branch (jump _ _) targets)
+(rule (lower_branch (jump _) targets)
       (emit_side_effect (aarch64_jump (branch_target targets 0))))
 
 ;;; Rules for `br_table` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

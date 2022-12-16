@@ -353,7 +353,9 @@ impl DominatorTree {
     fn push_successors(&mut self, func: &Function, block: Block) {
         for inst in func.layout.block_likely_branches(block) {
             match func.dfg.analyze_branch(inst) {
-                BranchInfo::SingleDest(succ, _) => self.push_if_unseen(succ),
+                BranchInfo::SingleDest(succ) => {
+                    self.push_if_unseen(succ.block(&func.dfg.value_lists))
+                }
                 BranchInfo::Table(jt, dest) => {
                     for succ in func.jump_tables[jt].iter() {
                         self.push_if_unseen(*succ);
@@ -653,13 +655,13 @@ mod tests {
         let mut cur = FuncCursor::new(&mut func);
 
         cur.insert_block(block0);
-        cur.ins().brnz(v0, block2, &[]);
+        cur.ins().brnz(v0, func.dfg.block_with_args(block2, &[]));
         cur.ins().trap(TrapCode::User(0));
 
         cur.insert_block(block1);
         let v1 = cur.ins().iconst(I32, 1);
         let v2 = cur.ins().iadd(v0, v1);
-        cur.ins().jump(block0, &[v2]);
+        cur.ins().jump(func.dfg.block_with_args(block0, &[v2]));
 
         cur.insert_block(block2);
         cur.ins().return_(&[v0]);
@@ -707,14 +709,14 @@ mod tests {
         let mut cur = FuncCursor::new(&mut func);
 
         cur.insert_block(block3);
-        let jmp_block3_block1 = cur.ins().jump(block1, &[]);
+        let jmp_block3_block1 = cur.ins().jump(func.dfg.block_with_args(block1, &[]));
 
         cur.insert_block(block1);
-        let br_block1_block0 = cur.ins().brnz(cond, block0, &[]);
-        let jmp_block1_block2 = cur.ins().jump(block2, &[]);
+        let br_block1_block0 = cur.ins().brnz(cond, func.dfg.block_with_args(block0, &[]));
+        let jmp_block1_block2 = cur.ins().jump(func.dfg.block_with_args(block2, &[]));
 
         cur.insert_block(block2);
-        cur.ins().jump(block0, &[]);
+        cur.ins().jump(func.dfg.block_with_args(block0, &[]));
 
         cur.insert_block(block0);
 

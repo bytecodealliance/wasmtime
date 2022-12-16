@@ -46,7 +46,7 @@ pub use crate::ir::extname::{ExternalName, UserExternalName, UserFuncName};
 pub use crate::ir::function::{DisplayFunctionAnnotations, Function};
 pub use crate::ir::globalvalue::GlobalValueData;
 pub use crate::ir::instructions::{
-    InstructionData, Opcode, ValueList, ValueListPool, VariableArgs,
+    BlockWithArgs, InstructionData, Opcode, ValueList, ValueListPool, VariableArgs,
 };
 pub use crate::ir::jumptable::JumpTableData;
 pub use crate::ir::known_symbol::KnownSymbol;

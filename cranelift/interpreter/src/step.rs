@@ -7,8 +7,8 @@ use crate::value::{Value, ValueConversionKind, ValueError, ValueResult};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
-    types, AbiParam, Block, ExternalName, FuncRef, Function, InstructionData, Opcode, TrapCode,
-    Type, Value as ValueRef,
+    types, AbiParam, Block, BlockWithArgs, ExternalName, FuncRef, Function, InstructionData,
+    Opcode, TrapCode, Type, Value as ValueRef,
 };
 use log::trace;
 use smallvec::{smallvec, SmallVec};
@@ -235,21 +235,26 @@ where
     };
 
     // Retrieve an instruction's branch destination; expects the instruction to be a branch.
-    let branch = || -> Block { inst.branch_destination().unwrap() };
+    let branch = || -> BlockWithArgs { inst.branch_destination().unwrap() };
+
+    let continue_at = |block| {
+        let block = branch();
+        let branch_args = state
+            .collect_values(block.args_slice(&state.get_current_function().dfg.value_lists))
+            .map_err(|v| StepError::UnknownValue(v))?;
+        Ok(ControlFlow::ContinueAt(
+            block.block(&state.get_current_function().dfg.value_lists),
+            branch_args,
+        ))
+    };
 
     // Based on `condition`, indicate where to continue the control flow.
     let branch_when = |condition: bool| -> Result<ControlFlow<V>, StepError> {
-        let branch_args = match inst {
-            InstructionData::Jump { .. } => args_range(0..),
-            InstructionData::Branch { .. } => args_range(1..),
-            _ => panic!("Unrecognized branch inst: {:?}", inst),
-        }?;
-
-        Ok(if condition {
-            ControlFlow::ContinueAt(branch(), branch_args)
+        if condition {
+            continue_at(branch())
         } else {
-            ControlFlow::Continue
-        })
+            Ok(ControlFlow::Continue)
+        }
     };
 
     // Retrieve an instruction's trap code; expects the instruction to be a trap.
@@ -275,7 +280,7 @@ where
 
     // Interpret a Cranelift instruction.
     Ok(match inst.opcode() {
-        Opcode::Jump => ControlFlow::ContinueAt(branch(), args()?),
+        Opcode::Jump => continue_at(branch())?,
         Opcode::Brz => branch_when(
             !arg(0)?
                 .convert(ValueConversionKind::ToBoolean)?

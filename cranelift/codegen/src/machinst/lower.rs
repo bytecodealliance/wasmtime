@@ -9,9 +9,9 @@ use crate::entity::SecondaryMap;
 use crate::fx::{FxHashMap, FxHashSet};
 use crate::inst_predicates::{has_lowering_side_effect, is_constant_64bit};
 use crate::ir::{
-    ArgumentPurpose, Block, Constant, ConstantData, DataFlowGraph, ExternalName, Function,
-    GlobalValue, GlobalValueData, Immediate, Inst, InstructionData, MemFlags, Opcode, RelSourceLoc,
-    Type, Value, ValueDef, ValueLabelAssignments, ValueLabelStart,
+    instructions::BranchInfo, ArgumentPurpose, Block, Constant, ConstantData, DataFlowGraph,
+    ExternalName, Function, GlobalValue, GlobalValueData, Immediate, Inst, InstructionData,
+    MemFlags, Opcode, RelSourceLoc, Type, Value, ValueDef, ValueLabelAssignments, ValueLabelStart,
 };
 use crate::machinst::{
     writable_value_regs, BlockIndex, BlockLoweringOrder, Callee, LoweredBlock, MachLabel, Reg,
@@ -942,7 +942,11 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             // Avoid immutable borrow by explicitly indexing.
             let (inst, succ) = self.vcode.block_order().succ_indices(block)[succ_idx];
             // Get branch args and convert to Regs.
-            let branch_args = self.f.dfg.inst_variable_args(inst);
+            let branch_args = match self.f.dfg.analyze_branch(inst) {
+                BranchInfo::NotABranch => unreachable!(),
+                BranchInfo::SingleDest(block) => block.args_slice(&self.f.dfg.value_lists),
+                BranchInfo::Table(_, _) => &[],
+            };
             let mut branch_arg_vregs: SmallVec<[Reg; 16]> = smallvec![];
             for &arg in branch_args {
                 let arg = self.f.dfg.resolve_aliases(arg);

@@ -155,8 +155,10 @@ impl Switch {
                 let first_index = right[0].first_index;
                 let should_take_right_side =
                     icmp_imm_u128(bx, IntCC::UnsignedGreaterThanOrEqual, val, first_index);
-                bx.ins().brnz(should_take_right_side, right_block, &[]);
-                bx.ins().jump(left_block, &[]);
+                let target = bx.func.dfg.block_with_args(right_block, &[]);
+                bx.ins().brnz(should_take_right_side, target);
+                let target = bx.func.dfg.block_with_args(left_block, &[]);
+                bx.ins().jump(target);
 
                 bx.seal_block(left_block);
                 bx.seal_block(right_block);
@@ -181,7 +183,8 @@ impl Switch {
         let ins_fallthrough_jump = |was_branch: bool, bx: &mut FunctionBuilder| {
             if was_branch {
                 let block = bx.create_block();
-                bx.ins().jump(block, &[]);
+                let target = bx.func.dfg.block_with_args(block, &[]);
+                bx.ins().jump(target);
                 bx.seal_block(block);
                 bx.switch_to_block(block);
             }
@@ -194,17 +197,20 @@ impl Switch {
             match (blocks.len(), first_index) {
                 (1, 0) => {
                     ins_fallthrough_jump(was_branch, bx);
-                    bx.ins().brz(val, blocks[0], &[]);
+                    let target = bx.func.dfg.block_with_args(blocks[0], &[]);
+                    bx.ins().brz(val, target);
                 }
                 (1, _) => {
                     ins_fallthrough_jump(was_branch, bx);
                     let is_good_val = icmp_imm_u128(bx, IntCC::Equal, val, first_index);
-                    bx.ins().brnz(is_good_val, blocks[0], &[]);
+                    let target = bx.func.dfg.block_with_args(blocks[0], &[]);
+                    bx.ins().brnz(is_good_val, target);
                 }
                 (_, 0) => {
                     // if `first_index` is 0, then `icmp_imm uge val, first_index` is trivially true
                     let jt_block = bx.create_block();
-                    bx.ins().jump(jt_block, &[]);
+                    let target = bx.func.dfg.block_with_args(jt_block, &[]);
+                    bx.ins().jump(target);
                     bx.seal_block(jt_block);
                     cases_and_jt_blocks.push((first_index, jt_block, blocks));
                     // `jump otherwise` below must not be hit, because the current block has been
@@ -217,7 +223,8 @@ impl Switch {
                     let jt_block = bx.create_block();
                     let is_good_val =
                         icmp_imm_u128(bx, IntCC::UnsignedGreaterThanOrEqual, val, first_index);
-                    bx.ins().brnz(is_good_val, jt_block, &[]);
+                    let target = bx.func.dfg.block_with_args(jt_block, &[]);
+                    bx.ins().brnz(is_good_val, target);
                     bx.seal_block(jt_block);
                     cases_and_jt_blocks.push((first_index, jt_block, blocks));
                 }
@@ -225,7 +232,8 @@ impl Switch {
             was_branch = true;
         }
 
-        bx.ins().jump(otherwise, &[]);
+        let target = bx.func.dfg.block_with_args(otherwise, &[]);
+        bx.ins().jump(target);
     }
 
     /// For every item in `cases_and_jt_blocks` this will create a jump table in the specified block.
@@ -271,8 +279,10 @@ impl Switch {
                     let bigger_than_u32 =
                         bx.ins()
                             .icmp_imm(IntCC::UnsignedGreaterThan, discr, u32::MAX as i64);
-                    bx.ins().brnz(bigger_than_u32, otherwise, &[]);
-                    bx.ins().jump(new_block, &[]);
+                    let target = bx.func.dfg.block_with_args(otherwise, &[]);
+                    bx.ins().brnz(bigger_than_u32, target);
+                    let target = bx.func.dfg.block_with_args(new_block, &[]);
+                    bx.ins().jump(target);
                     bx.seal_block(new_block);
                     bx.switch_to_block(new_block);
 

@@ -565,6 +565,17 @@ impl<'a> Elaborator<'a> {
                         *dest = val.value;
                     }
 
+                    let dfg = &mut self.func.dfg;
+                    if let Some(dest) = dfg.insts[inst].branch_destination_mut() {
+                        for (dest, val) in dest
+                            .args_slice_mut(&mut dfg.value_lists)
+                            .iter_mut()
+                            .zip(arg_values.iter())
+                        {
+                            *dest = val.value;
+                        }
+                    }
+
                     // Now that we've consumed the arg values, pop
                     // them off the stack.
                     self.elab_result_stack.truncate(arg_idx);
@@ -619,6 +630,21 @@ impl<'a> Elaborator<'a> {
                 let arg = self.elaborate_eclass_use(arg, before);
                 trace!("   -> rewrote arg to {:?}", arg);
                 self.func.dfg.inst_args_mut(inst)[i] = arg.value;
+            }
+
+            if let Some(mut dest) = self.func.dfg.insts[inst].branch_destination() {
+                for i in 0..dest.args_slice(&self.func.dfg.value_lists).len() {
+                    // Don't borrow across the below.
+                    let arg = dest.args_slice(&self.func.dfg.value_lists)[i];
+                    trace!(" -> arg {}", arg);
+                    // Elaborate the arg, placing any newly-inserted insts
+                    // before `before`. Get the updated value, which may
+                    // be different than the original.
+                    let arg = self.elaborate_eclass_use(arg, before);
+                    trace!("   -> rewrote arg to {:?}", arg);
+                    dest.args_slice_mut(&mut self.func.dfg.value_lists)[i] = arg.value;
+                }
+                *self.func.dfg.insts[inst].branch_destination_mut().unwrap() = dest;
             }
 
             // We need to put the results of this instruction in the

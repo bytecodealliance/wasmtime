@@ -584,18 +584,8 @@ impl<'a> Verifier<'a> {
             MultiAry { ref args, .. } => {
                 self.verify_value_list(inst, args, errors)?;
             }
-            Jump {
-                destination,
-                ref args,
-                ..
-            }
-            | Branch {
-                destination,
-                ref args,
-                ..
-            } => {
-                self.verify_block(inst, destination, errors)?;
-                self.verify_value_list(inst, args, errors)?;
+            Jump { destination, .. } | Branch { destination, .. } => {
+                self.verify_block(inst, destination.block(&self.func.dfg.value_lists), errors)?;
             }
             BranchTable {
                 table, destination, ..
@@ -1301,14 +1291,15 @@ impl<'a> Verifier<'a> {
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
         match self.func.dfg.analyze_branch(inst) {
-            BranchInfo::SingleDest(block, _) => {
+            BranchInfo::SingleDest(block) => {
                 let iter = self
                     .func
                     .dfg
-                    .block_params(block)
+                    .block_params(block.block(&self.func.dfg.value_lists))
                     .iter()
                     .map(|&v| self.func.dfg.value_type(v));
-                self.typecheck_variable_args_iterator(inst, iter, errors)?;
+                let args = block.args_slice(&self.func.dfg.value_lists);
+                self.typecheck_variable_args_iterator(inst, iter, args, errors)?;
             }
             BranchInfo::Table(table, block) => {
                 if let Some(block) = block {
@@ -1342,20 +1333,20 @@ impl<'a> Verifier<'a> {
         }
 
         match self.func.dfg.insts[inst].analyze_call(&self.func.dfg.value_lists) {
-            CallInfo::Direct(func_ref, _) => {
+            CallInfo::Direct(func_ref, args) => {
                 let sig_ref = self.func.dfg.ext_funcs[func_ref].signature;
                 let arg_types = self.func.dfg.signatures[sig_ref]
                     .params
                     .iter()
                     .map(|a| a.value_type);
-                self.typecheck_variable_args_iterator(inst, arg_types, errors)?;
+                self.typecheck_variable_args_iterator(inst, arg_types, args, errors)?;
             }
-            CallInfo::Indirect(sig_ref, _) => {
+            CallInfo::Indirect(sig_ref, args) => {
                 let arg_types = self.func.dfg.signatures[sig_ref]
                     .params
                     .iter()
                     .map(|a| a.value_type);
-                self.typecheck_variable_args_iterator(inst, arg_types, errors)?;
+                self.typecheck_variable_args_iterator(inst, arg_types, args, errors)?;
             }
             CallInfo::NotACall => {}
         }
@@ -1366,9 +1357,9 @@ impl<'a> Verifier<'a> {
         &self,
         inst: Inst,
         iter: I,
+        variable_args: &[Value],
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
-        let variable_args = self.func.dfg.inst_variable_args(inst);
         let mut i = 0;
 
         for expected_type in iter {

@@ -3714,7 +3714,7 @@
 
 ;; Unconditional branch.  The target is found as first (and only) element in
 ;; the list of the current block's branch targets passed as `targets`.
-(rule (lower_branch (jump _ _) targets)
+(rule (lower_branch (jump _) targets)
       (emit_side_effect (jump_impl (vec_element targets 0))))
 
 
@@ -3755,7 +3755,7 @@
 ;; Two-way conditional branch on zero.  `targets` contains:
 ;; - element 0: target if the condition is true (i.e. value is zero)
 ;; - element 1: target if the condition is false (i.e. value is nonzero)
-(rule (lower_branch (brz val_cond _ _) targets)
+(rule (lower_branch (brz val_cond _) targets)
       (emit_side_effect (cond_br_bool (invert_bool (value_nonzero val_cond))
                                       (vec_element targets 0)
                                       (vec_element targets 1))))
@@ -3766,7 +3766,7 @@
 ;; Two-way conditional branch on nonzero.  `targets` contains:
 ;; - element 0: target if the condition is true (i.e. value is nonzero)
 ;; - element 1: target if the condition is false (i.e. value is zero)
-(rule (lower_branch (brnz val_cond _ _) targets)
+(rule (lower_branch (brnz val_cond _) targets)
       (emit_side_effect (cond_br_bool (value_nonzero val_cond)
                                      (vec_element targets 0)
                                      (vec_element targets 1))))

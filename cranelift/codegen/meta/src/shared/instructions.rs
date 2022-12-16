@@ -18,7 +18,7 @@ fn define_control_flow(
     entities: &EntityRefs,
 ) {
     let block = &Operand::new("block", &entities.block).with_doc("Destination basic block");
-    let args = &Operand::new("args", &entities.varargs).with_doc("block arguments");
+    let label = &Operand::new("label", &entities.label).with_doc("Destination basic block");
 
     ig.push(
         Inst::new(
@@ -32,7 +32,7 @@ fn define_control_flow(
         "#,
             &formats.jump,
         )
-        .operands_in(vec![block, args])
+        .operands_in(vec![block])
         .is_terminator(true)
         .is_branch(true),
     );
@@ -56,7 +56,7 @@ fn define_control_flow(
         "#,
                 &formats.branch,
             )
-            .operands_in(vec![c, block, args])
+            .operands_in(vec![c, block])
             .is_branch(true),
         );
 
@@ -70,7 +70,7 @@ fn define_control_flow(
         "#,
                 &formats.branch,
             )
-            .operands_in(vec![c, block, args])
+            .operands_in(vec![c, block])
             .is_branch(true),
         );
     }
@@ -105,7 +105,7 @@ fn define_control_flow(
         "#,
                 &formats.branch_table,
             )
-            .operands_in(vec![x, block, JT])
+            .operands_in(vec![x, label, JT])
             .is_terminator(true)
             .is_branch(true),
         );

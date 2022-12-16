@@ -7,8 +7,8 @@ use crate::ir::dynamic_type::{DynamicTypeData, DynamicTypes};
 use crate::ir::instructions::{BranchInfo, CallInfo, InstructionData};
 use crate::ir::{types, ConstantData, ConstantPool, Immediate};
 use crate::ir::{
-    Block, DynamicType, FuncRef, Inst, SigRef, Signature, Type, Value, ValueLabelAssignments,
-    ValueList, ValueListPool,
+    Block, BlockWithArgs, DynamicType, FuncRef, Inst, SigRef, Signature, Type, Value,
+    ValueLabelAssignments, ValueList, ValueListPool,
 };
 use crate::ir::{ExtFuncData, RelSourceLoc};
 use crate::packed_option::ReservedValue;
@@ -165,6 +165,11 @@ impl DataFlowGraph {
     /// Returns `true` if the given block reference is valid.
     pub fn block_is_valid(&self, block: Block) -> bool {
         self.blocks.is_valid(block)
+    }
+
+    /// Make a BlockWithArgs, bundling together the block and its arguments.
+    pub fn block_with_args(&mut self, block: Block, args: &[Value]) -> BlockWithArgs {
+        BlockWithArgs::new(block, args, &mut self.value_lists)
     }
 
     /// Get the total number of values.
@@ -332,6 +337,15 @@ impl DataFlowGraph {
             let resolved = resolve_aliases(&self.values, *arg);
             if resolved != *arg {
                 *arg = resolved;
+            }
+        }
+
+        if let Some(dest) = self.insts[inst].branch_destination_mut() {
+            for arg in dest.args_slice_mut(&mut self.value_lists) {
+                let resolved = resolve_aliases(&self.values, *arg);
+                if resolved != *arg {
+                    *arg = resolved;
+                }
             }
         }
     }
@@ -933,7 +947,7 @@ impl DataFlowGraph {
 
     /// Check if `inst` is a branch.
     pub fn analyze_branch(&self, inst: Inst) -> BranchInfo {
-        self.insts[inst].analyze_branch(&self.value_lists)
+        self.insts[inst].analyze_branch()
     }
 
     /// Compute the type of an instruction result from opcode constraints and call signatures.

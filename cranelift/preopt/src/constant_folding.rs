@@ -216,7 +216,7 @@ fn fold_unary(dfg: &mut ir::DataFlowGraph, inst: ir::Inst, opcode: ir::Opcode, a
 }
 
 fn fold_branch(pos: &mut FuncCursor, inst: ir::Inst, opcode: ir::Opcode) {
-    let (cond, block, args) = {
+    let (cond, block) = {
         let values = pos.func.dfg.inst_args(inst);
         let inst_data = &pos.func.dfg.insts[inst];
         (
@@ -225,7 +225,6 @@ fn fold_branch(pos: &mut FuncCursor, inst: ir::Inst, opcode: ir::Opcode) {
                 None => return,
             },
             inst_data.branch_destination().unwrap(),
-            values[1..].to_vec(),
         )
     };
 
@@ -237,7 +236,7 @@ fn fold_branch(pos: &mut FuncCursor, inst: ir::Inst, opcode: ir::Opcode) {
     };
 
     if (branch_if_zero && !truthiness) || (!branch_if_zero && truthiness) {
-        pos.func.dfg.replace(inst).jump(block, &args);
+        pos.func.dfg.replace(inst).jump(block);
         // remove the rest of the block to avoid verifier errors
         while let Some(next_inst) = pos.func.layout.next_inst(inst) {
             pos.func.layout.remove_inst(next_inst);

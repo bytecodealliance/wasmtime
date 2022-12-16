@@ -285,15 +285,18 @@ fn expand_cond_trap(
 
     // Replace trap instruction by the inverted condition.
     if trapz {
-        func.dfg.replace(inst).brnz(arg, new_block_resume, &[]);
+        let target = func.dfg.block_with_args(new_block_resume, &[]);
+        func.dfg.replace(inst).brnz(arg, target);
     } else {
-        func.dfg.replace(inst).brz(arg, new_block_resume, &[]);
+        let target = func.dfg.block_with_args(new_block_resume, &[]);
+        func.dfg.replace(inst).brz(arg, target);
     }
 
     // Add jump instruction after the inverted branch.
     let mut pos = FuncCursor::new(func).after_inst(inst);
     pos.use_srcloc(inst);
-    pos.ins().jump(new_block_trap, &[]);
+    let target = pos.func.dfg.block_with_args(new_block_trap, &[]);
+    pos.ins().jump(target);
 
     // Insert the new label and the unconditional trap terminator.
     pos.insert_block(new_block_trap);
@@ -304,7 +307,8 @@ fn expand_cond_trap(
         }
         ir::Opcode::ResumableTrapnz => {
             pos.ins().resumable_trap(code);
-            pos.ins().jump(new_block_resume, &[]);
+            let target = pos.func.dfg.block_with_args(new_block_resume, &[]);
+            pos.ins().jump(target);
         }
         _ => unreachable!(),
     }

@@ -2582,21 +2582,22 @@ impl<'a> Parser<'a> {
                 // Parse the destination block number.
                 let block_num = self.match_block("expected jump destination block")?;
                 let args = self.parse_opt_value_list()?;
+                let destination = ctx.function.dfg.block_with_args(block_num, &args);
                 InstructionData::Jump {
                     opcode,
-                    destination: block_num,
-                    args: args.into_value_list(&[], &mut ctx.function.dfg.value_lists),
+                    destination,
                 }
             }
             InstructionFormat::Branch => {
-                let ctrl_arg = self.match_value("expected SSA value control operand")?;
+                let arg = self.match_value("expected SSA value control operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let block_num = self.match_block("expected branch destination block")?;
                 let args = self.parse_opt_value_list()?;
+                let destination = ctx.function.dfg.block_with_args(block_num, &args);
                 InstructionData::Branch {
                     opcode,
-                    destination: block_num,
-                    args: args.into_value_list(&[ctrl_arg], &mut ctx.function.dfg.value_lists),
+                    arg,
+                    destination,
                 }
             }
             InstructionFormat::BranchTable => {

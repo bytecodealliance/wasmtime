@@ -122,8 +122,8 @@ impl ControlFlowGraph {
     fn compute_block(&mut self, func: &Function, block: Block) {
         for inst in func.layout.block_likely_branches(block) {
             match func.dfg.analyze_branch(inst) {
-                BranchInfo::SingleDest(dest, _) => {
-                    self.add_edge(block, inst, dest);
+                BranchInfo::SingleDest(dest) => {
+                    self.add_edge(block, inst, dest.block(&func.dfg.value_lists));
                 }
                 BranchInfo::Table(jt, dest) => {
                     if let Some(dest) = dest {
@@ -259,12 +259,12 @@ mod tests {
             let mut cur = FuncCursor::new(&mut func);
 
             cur.insert_block(block0);
-            br_block0_block2 = cur.ins().brnz(cond, block2, &[]);
-            jmp_block0_block1 = cur.ins().jump(block1, &[]);
+            br_block0_block2 = cur.ins().brnz(cond, func.dfg.block_with_args(block2, &[]));
+            jmp_block0_block1 = cur.ins().jump(func.dfg.block_with_args(block1, &[]));
 
             cur.insert_block(block1);
-            br_block1_block1 = cur.ins().brnz(cond, block1, &[]);
-            jmp_block1_block2 = cur.ins().jump(block2, &[]);
+            br_block1_block1 = cur.ins().brnz(cond, func.dfg.block_with_args(block1, &[]));
+            jmp_block1_block2 = cur.ins().jump(func.dfg.block_with_args(block2, &[]));
 
             cur.insert_block(block2);
         }
@@ -307,7 +307,9 @@ mod tests {
         }
 
         // Change some instructions and recompute block0
-        func.dfg.replace(br_block0_block2).brnz(cond, block1, &[]);
+        func.dfg
+            .replace(br_block0_block2)
+            .brnz(cond, func.dfg.block_with_args(block1, &[]));
         func.dfg.replace(jmp_block0_block1).return_(&[]);
         cfg.recompute_block(&mut func, block0);
         let br_block0_block1 = br_block0_block2;
