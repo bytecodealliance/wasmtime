@@ -73,33 +73,6 @@ fn insert_opcode(
     Ok(())
 }
 
-// `select_spectre_guard` is only implemented when preceded by a `icmp`
-// This ensures that we always insert it that way.
-fn insert_select_spectre_guard(
-    fgen: &mut FunctionGenerator,
-    builder: &mut FunctionBuilder,
-    _opcode: Opcode,
-    args: &'static [Type],
-    rets: &'static [Type],
-) -> Result<()> {
-    let icmp_ty = args[0];
-    let icmp_lhs = builder.use_var(fgen.get_variable_of_type(icmp_ty)?);
-    let icmp_rhs = builder.use_var(fgen.get_variable_of_type(icmp_ty)?);
-    let cc = *fgen.u.choose(IntCC::all())?;
-    let icmp_res = builder.ins().icmp(cc, icmp_lhs, icmp_rhs);
-
-    let select_lhs = builder.use_var(fgen.get_variable_of_type(args[1])?);
-    let select_rhs = builder.use_var(fgen.get_variable_of_type(args[2])?);
-    let select_res = builder
-        .ins()
-        .select_spectre_guard(icmp_res, select_lhs, select_rhs);
-
-    let var = fgen.get_variable_of_type(rets[0])?;
-    builder.def_var(var, select_res);
-
-    Ok(())
-}
-
 fn insert_call(
     fgen: &mut FunctionGenerator,
     builder: &mut FunctionBuilder,
@@ -765,33 +738,39 @@ const OPCODE_SIGNATURES: &'static [(
     #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Select, &[I128, I128, I128], &[I128], insert_opcode),
     // SelectSpectreGuard
-    // select_spectre_guard is only implemented on x86_64 and aarch64
-    // when a icmp is preceding it.
-    (Opcode::SelectSpectreGuard, &[I8, I8, I8], &[I8], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I8, I16, I16], &[I16], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I8, I32, I32], &[I32], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I8, I64, I64], &[I64], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I8, I128, I128], &[I128], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I16, I8, I8], &[I8], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I16, I16, I16], &[I16], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I16, I32, I32], &[I32], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I16, I64, I64], &[I64], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I16, I128, I128], &[I128], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I32, I8, I8], &[I8], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I32, I16, I16], &[I16], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I32, I32, I32], &[I32], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I32, I64, I64], &[I64], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I32, I128, I128], &[I128], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I64, I8, I8], &[I8], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I64, I16, I16], &[I16], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I64, I32, I32], &[I32], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I64, I64, I64], &[I64], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I64, I128, I128], &[I128], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I128, I8, I8], &[I8], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I128, I16, I16], &[I16], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I128, I32, I32], &[I32], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I128, I64, I64], &[I64], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I128, I128, I128], &[I128], insert_select_spectre_guard),
+    // TODO: Some ops disabled:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/5452
+    //   AArch64: https://github.com/bytecodealliance/wasmtime/issues/5453
+    (Opcode::SelectSpectreGuard, &[I8, I8, I8], &[I8], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I8, I16, I16], &[I16], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I8, I32, I32], &[I32], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I8, I64, I64], &[I64], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I8, I128, I128], &[I128], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I16, I8, I8], &[I8], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I16, I16, I16], &[I16], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I16, I32, I32], &[I32], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I16, I64, I64], &[I64], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I16, I128, I128], &[I128], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I32, I8, I8], &[I8], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I32, I16, I16], &[I16], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I32, I32, I32], &[I32], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I32, I64, I64], &[I64], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I32, I128, I128], &[I128], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I64, I8, I8], &[I8], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I64, I16, I16], &[I16], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I64, I32, I32], &[I32], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I64, I64, I64], &[I64], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I64, I128, I128], &[I128], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::SelectSpectreGuard, &[I128, I8, I8], &[I8], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::SelectSpectreGuard, &[I128, I16, I16], &[I16], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::SelectSpectreGuard, &[I128, I32, I32], &[I32], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::SelectSpectreGuard, &[I128, I64, I64], &[I64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::SelectSpectreGuard, &[I128, I128, I128], &[I128], insert_opcode),
     // Fadd
     (Opcode::Fadd, &[F32, F32], &[F32], insert_opcode),
     (Opcode::Fadd, &[F64, F64], &[F64], insert_opcode),
