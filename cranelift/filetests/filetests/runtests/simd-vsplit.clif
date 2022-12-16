@@ -1,0 +1,31 @@
+test interpret
+
+function %vsplit_i32x4_hi(i32x4) -> i32x2 {
+block0(v0: i32x4):
+    v1, v2 = vsplit.i32x4 v0
+    return v1
+}
+; run: %vsplit_i32x4_hi([1 2 3 4]) == [1 2]
+
+function %vsplit_i32x4_lo(i32x4) -> i32x2 {
+block0(v0: i32x4):
+    v1, v2 = vsplit.i32x4 v0
+    return v2
+}
+; run: %vsplit_i32x4_lo([1 2 3 4]) == [3 4]
+
+
+
+function %vsplit_scalar_i64x2_hi(i64x2) -> i64 {
+block0(v0: i64x2):
+    v1, v2 = vsplit.i64x2 v0
+    return v1
+}
+; run: %vsplit_scalar_i64x2_hi([1 2]) == 1
+
+function %vsplit_scalar_i64x2_lo(i64x2) -> i64 {
+block0(v0: i64x2):
+    v1, v2 = vsplit.i64x2 v0
+    return v2
+}
+; run: %vsplit_scalar_i64x2_lo([3 4]) == 4
