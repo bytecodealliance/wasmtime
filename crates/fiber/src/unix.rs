@@ -110,6 +110,8 @@ extern "C" {
         entry_arg0: *mut u8,
     );
     fn wasmtime_fiber_switch(top_of_stack: *mut u8);
+    #[allow(dead_code)] // only used in inline assembly for some platforms
+    fn wasmtime_fiber_start();
 }
 
 extern "C" fn fiber_start<F, A, B, C>(arg0: *mut u8, top_of_stack: *mut u8)
