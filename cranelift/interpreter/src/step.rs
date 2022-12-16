@@ -985,7 +985,15 @@ where
             }
             assign(Value::int(result, ctrl_ty)?)
         }
-        Opcode::Vsplit => unimplemented!("Vsplit"),
+        Opcode::Vsplit => {
+            let new_type = ctrl_ty.half_vector().unwrap();
+            let vector = extractlanes(&arg(0)?, ctrl_ty)?;
+            let (high, low) = vector.split_at((ctrl_ty.lane_count() / 2) as usize);
+            assign_multiple(&[
+                vectorizelanes(high, new_type)?,
+                vectorizelanes(low, new_type)?,
+            ])
+        }
         Opcode::Vconcat => unimplemented!("Vconcat"),
         Opcode::Vselect => assign(vselect(&arg(0)?, &arg(1)?, &arg(2)?, ctrl_ty)?),
         Opcode::VanyTrue => {
