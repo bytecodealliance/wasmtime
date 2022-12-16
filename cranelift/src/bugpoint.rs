@@ -174,7 +174,7 @@ impl Mutator for ReplaceInstWithConst {
             |(_prev_block, prev_inst)| {
                 let num_results = func.dfg.inst_results(prev_inst).len();
 
-                let opcode = func.dfg[prev_inst].opcode();
+                let opcode = func.dfg.insts[prev_inst].opcode();
                 if num_results == 0
                     || opcode == ir::Opcode::Iconst
                     || opcode == ir::Opcode::F32const
@@ -193,7 +193,7 @@ impl Mutator for ReplaceInstWithConst {
                     let arg_def = func.dfg.value_def(arg);
                     let arg_is_iconst = arg_def
                         .inst()
-                        .map(|inst| func.dfg[inst].opcode() == ir::Opcode::Iconst)
+                        .map(|inst| func.dfg.insts[inst].opcode() == ir::Opcode::Iconst)
                         .unwrap_or(false);
 
                     if is_uextend_i128 && arg_is_iconst {
@@ -266,7 +266,7 @@ impl Mutator for ReplaceInstWithTrap {
     fn mutate(&mut self, mut func: Function) -> Option<(Function, String, ProgressStatus)> {
         next_inst_ret_prev(&func, &mut self.block, &mut self.inst).map(
             |(_prev_block, prev_inst)| {
-                let status = if func.dfg[prev_inst].opcode() == ir::Opcode::Trap {
+                let status = if func.dfg.insts[prev_inst].opcode() == ir::Opcode::Trap {
                     ProgressStatus::Skip
                 } else {
                     func.dfg.replace(prev_inst).trap(TrapCode::User(0));
@@ -421,11 +421,12 @@ impl Mutator for ReplaceBlockParamWithConst {
 
         // Remove parameters in branching instructions that point to this block
         for pred in cfg.pred_iter(self.block) {
-            let inst = &mut func.dfg[pred.inst];
+            let dfg = &mut func.dfg;
+            let inst = &mut dfg.insts[pred.inst];
             let num_fixed_args = inst.opcode().constraints().num_fixed_value_arguments();
-            let mut values = inst.take_value_list().unwrap();
-            values.remove(num_fixed_args + param_index, &mut func.dfg.value_lists);
-            func.dfg[pred.inst].put_value_list(values);
+            inst.value_list_mut()
+                .unwrap()
+                .remove(num_fixed_args + param_index, &mut dfg.value_lists);
         }
 
         if Some(self.block) == func.layout.entry_block() {
@@ -471,7 +472,7 @@ impl Mutator for RemoveUnusedEntities {
                 let mut ext_func_usage_map = HashMap::new();
                 for block in func.layout.blocks() {
                     for inst in func.layout.block_insts(block) {
-                        match func.dfg[inst] {
+                        match func.dfg.insts[inst] {
                             // Add new cases when there are new instruction formats taking a `FuncRef`.
                             InstructionData::Call { func_ref, .. }
                             | InstructionData::FuncAddr { func_ref, .. } => {
@@ -491,7 +492,7 @@ impl Mutator for RemoveUnusedEntities {
                     if let Some(func_ref_usage) = ext_func_usage_map.get(&func_ref) {
                         let new_func_ref = ext_funcs.push(ext_func_data.clone());
                         for &inst in func_ref_usage {
-                            match func.dfg[inst] {
+                            match func.dfg.insts[inst] {
                                 // Keep in sync with the above match.
                                 InstructionData::Call {
                                     ref mut func_ref, ..
@@ -522,7 +523,8 @@ impl Mutator for RemoveUnusedEntities {
                 for block in func.layout.blocks() {
                     for inst in func.layout.block_insts(block) {
                         // Add new cases when there are new instruction formats taking a `SigRef`.
-                        if let InstructionData::CallIndirect { sig_ref, .. } = func.dfg[inst] {
+                        if let InstructionData::CallIndirect { sig_ref, .. } = func.dfg.insts[inst]
+                        {
                             signatures_usage_map
                                 .entry(sig_ref)
                                 .or_insert_with(Vec::new)
@@ -544,7 +546,7 @@ impl Mutator for RemoveUnusedEntities {
                         let new_sig_ref = signatures.push(sig_data.clone());
                         for &sig_ref_user in sig_ref_usage {
                             match sig_ref_user {
-                                SigRefUser::Instruction(inst) => match func.dfg[inst] {
+                                SigRefUser::Instruction(inst) => match func.dfg.insts[inst] {
                                     // Keep in sync with the above match.
                                     InstructionData::CallIndirect {
                                         ref mut sig_ref, ..
@@ -569,7 +571,7 @@ impl Mutator for RemoveUnusedEntities {
                 let mut stack_slot_usage_map = HashMap::new();
                 for block in func.layout.blocks() {
                     for inst in func.layout.block_insts(block) {
-                        match func.dfg[inst] {
+                        match func.dfg.insts[inst] {
                             // Add new cases when there are new instruction formats taking a `StackSlot`.
                             InstructionData::StackLoad { stack_slot, .. }
                             | InstructionData::StackStore { stack_slot, .. } => {
@@ -590,7 +592,7 @@ impl Mutator for RemoveUnusedEntities {
                     if let Some(stack_slot_usage) = stack_slot_usage_map.get(&stack_slot) {
                         let new_stack_slot = stack_slots.push(stack_slot_data.clone());
                         for &inst in stack_slot_usage {
-                            match &mut func.dfg[inst] {
+                            match &mut func.dfg.insts[inst] {
                                 // Keep in sync with the above match.
                                 InstructionData::StackLoad { stack_slot, .. }
                                 | InstructionData::StackStore { stack_slot, .. } => {
@@ -612,7 +614,7 @@ impl Mutator for RemoveUnusedEntities {
                     for inst in func.layout.block_insts(block) {
                         // Add new cases when there are new instruction formats taking a `GlobalValue`.
                         if let InstructionData::UnaryGlobalValue { global_value, .. } =
-                            func.dfg[inst]
+                            func.dfg.insts[inst]
                         {
                             global_value_usage_map
                                 .entry(global_value)
@@ -640,7 +642,7 @@ impl Mutator for RemoveUnusedEntities {
                     if let Some(global_value_usage) = global_value_usage_map.get(&global_value) {
                         let new_global_value = global_values.push(global_value_data.clone());
                         for &inst in global_value_usage {
-                            match &mut func.dfg[inst] {
+                            match &mut func.dfg.insts[inst] {
                                 // Keep in sync with the above match.
                                 InstructionData::UnaryGlobalValue { global_value, .. } => {
                                     *global_value = new_global_value;
@@ -711,7 +713,7 @@ impl Mutator for MergeBlocks {
         // instruction, then we have a conditional jump sequence that we should not break by
         // replacing the second instruction by more of them.
         if let Some(pred_pred_inst) = func.layout.prev_inst(pred.inst) {
-            if func.dfg[pred_pred_inst].opcode().is_branch() {
+            if func.dfg.insts[pred_pred_inst].opcode().is_branch() {
                 return Some((
                     func,
                     format!("did nothing for {}", block),
@@ -1024,7 +1026,7 @@ impl<'a> CrashCheckContext<'a> {
             let contains_call = func.layout.blocks().any(|block| {
                 func.layout
                     .block_insts(block)
-                    .any(|inst| match func.dfg[inst] {
+                    .any(|inst| match func.dfg.insts[inst] {
                         InstructionData::Call { .. } => true,
                         _ => false,
                     })

@@ -93,7 +93,7 @@ fn harvest_candidate_lhs(
     // Should we keep tracing through the given `val`? Only if it is defined
     // by an instruction that we can translate to Souper IR.
     let should_trace = |val| match func.dfg.value_def(val) {
-        ir::ValueDef::Result(inst, 0) => match func.dfg[inst].opcode() {
+        ir::ValueDef::Result(inst, 0) => match func.dfg.insts[inst].opcode() {
                 ir::Opcode::Iadd
                 | ir::Opcode::IaddImm
                 | ir::Opcode::IrsubImm
@@ -157,7 +157,7 @@ fn harvest_candidate_lhs(
                         // `iconst`s into souper operands here,
                         // when they are actually used.
                         match func.dfg.value_def(arg) {
-                            ir::ValueDef::Result(inst, 0) => match func.dfg[inst] {
+                            ir::ValueDef::Result(inst, 0) => match func.dfg.insts[inst] {
                                 ir::InstructionData::UnaryImm { opcode, imm } => {
                                     debug_assert_eq!(opcode, ir::Opcode::Iconst);
                                     let imm: i64 = imm.into();
@@ -179,7 +179,7 @@ fn harvest_candidate_lhs(
                     }
                 };
 
-                match (func.dfg[inst].opcode(), &func.dfg[inst]) {
+                match (func.dfg.insts[inst].opcode(), &func.dfg.insts[inst]) {
                     (ir::Opcode::Iadd, _) => {
                         let a = arg(allocs, 0);
                         let b = arg(allocs, 1);

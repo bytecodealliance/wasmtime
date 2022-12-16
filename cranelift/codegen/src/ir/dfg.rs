@@ -23,6 +23,27 @@ use alloc::collections::BTreeMap;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
 
+/// Storage for instructions within the DFG.
+#[derive(Clone, PartialEq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct Insts(PrimaryMap<Inst, InstructionData>);
+
+/// Allow immutable access to instructions via indexing.
+impl Index<Inst> for Insts {
+    type Output = InstructionData;
+
+    fn index(&self, inst: Inst) -> &InstructionData {
+        self.0.index(inst)
+    }
+}
+
+/// Allow mutable access to instructions via indexing.
+impl IndexMut<Inst> for Insts {
+    fn index_mut(&mut self, inst: Inst) -> &mut InstructionData {
+        self.0.index_mut(inst)
+    }
+}
+
 /// A data flow graph defines all instructions and basic blocks in a function as well as
 /// the data flow dependencies between them. The DFG also tracks values which can be either
 /// instruction results or block parameters.
@@ -36,7 +57,7 @@ pub struct DataFlowGraph {
     /// Data about all of the instructions in the function, including opcodes and operands.
     /// The instructions in this map are not in program order. That is tracked by `Layout`, along
     /// with the block containing each instruction.
-    insts: PrimaryMap<Inst, InstructionData>,
+    pub insts: Insts,
 
     /// List of result values for each instruction.
     ///
@@ -89,7 +110,7 @@ impl DataFlowGraph {
     /// Create a new empty `DataFlowGraph`.
     pub fn new() -> Self {
         Self {
-            insts: PrimaryMap::new(),
+            insts: Insts(PrimaryMap::new()),
             results: SecondaryMap::new(),
             blocks: PrimaryMap::new(),
             dynamic_types: DynamicTypes::new(),
@@ -106,7 +127,7 @@ impl DataFlowGraph {
 
     /// Clear everything.
     pub fn clear(&mut self) {
-        self.insts.clear();
+        self.insts.0.clear();
         self.results.clear();
         self.blocks.clear();
         self.dynamic_types.clear();
@@ -125,12 +146,12 @@ impl DataFlowGraph {
     ///
     /// This is intended for use with `SecondaryMap::with_capacity`.
     pub fn num_insts(&self) -> usize {
-        self.insts.len()
+        self.insts.0.len()
     }
 
     /// Returns `true` if the given instruction reference is valid.
     pub fn inst_is_valid(&self, inst: Inst) -> bool {
-        self.insts.is_valid(inst)
+        self.insts.0.is_valid(inst)
     }
 
     /// Get the total number of basic blocks created in this function, whether they are
@@ -619,7 +640,7 @@ impl DataFlowGraph {
     pub fn make_inst(&mut self, data: InstructionData) -> Inst {
         let n = self.num_insts() + 1;
         self.results.resize(n);
-        self.insts.push(data)
+        self.insts.0.push(data)
     }
 
     /// Declares a dynamic vector type
@@ -656,7 +677,7 @@ impl DataFlowGraph {
 
     /// Get the fixed value arguments on `inst` as a slice.
     pub fn inst_fixed_args(&self, inst: Inst) -> &[Value] {
-        let num_fixed_args = self[inst]
+        let num_fixed_args = self.insts[inst]
             .opcode()
             .constraints()
             .num_fixed_value_arguments();
@@ -665,7 +686,7 @@ impl DataFlowGraph {
 
     /// Get the fixed value arguments on `inst` as a mutable slice.
     pub fn inst_fixed_args_mut(&mut self, inst: Inst) -> &mut [Value] {
-        let num_fixed_args = self[inst]
+        let num_fixed_args = self.insts[inst]
             .opcode()
             .constraints()
             .num_fixed_value_arguments();
@@ -674,7 +695,7 @@ impl DataFlowGraph {
 
     /// Get the variable value arguments on `inst` as a slice.
     pub fn inst_variable_args(&self, inst: Inst) -> &[Value] {
-        let num_fixed_args = self[inst]
+        let num_fixed_args = self.insts[inst]
             .opcode()
             .constraints()
             .num_fixed_value_arguments();
@@ -683,7 +704,7 @@ impl DataFlowGraph {
 
     /// Get the variable value arguments on `inst` as a mutable slice.
     pub fn inst_variable_args_mut(&mut self, inst: Inst) -> &mut [Value] {
-        let num_fixed_args = self[inst]
+        let num_fixed_args = self.insts[inst]
             .opcode()
             .constraints()
             .num_fixed_value_arguments();
@@ -849,18 +870,17 @@ impl DataFlowGraph {
     ///
     /// Panics if the instruction doesn't support arguments.
     pub fn append_inst_arg(&mut self, inst: Inst, new_arg: Value) {
-        let mut branch_values = self.insts[inst]
-            .take_value_list()
-            .expect("the instruction doesn't have value arguments");
-        branch_values.push(new_arg, &mut self.value_lists);
-        self.insts[inst].put_value_list(branch_values)
+        self.insts[inst]
+            .value_list_mut()
+            .expect("the instruction doesn't have value arguments")
+            .push(new_arg, &mut self.value_lists);
     }
 
     /// Clone an instruction, attaching new result `Value`s and
     /// returning them.
     pub fn clone_inst(&mut self, inst: Inst) -> Inst {
         // First, add a clone of the InstructionData.
-        let inst_data = self[inst].clone();
+        let inst_data = self.insts[inst].clone();
         let new_inst = self.make_inst(inst_data);
         // Get the controlling type variable.
         let ctrl_typevar = self.ctrl_typevar(inst);
@@ -947,7 +967,7 @@ impl DataFlowGraph {
 
     /// Get the controlling type variable, or `INVALID` if `inst` isn't polymorphic.
     pub fn ctrl_typevar(&self, inst: Inst) -> Type {
-        let constraints = self[inst].opcode().constraints();
+        let constraints = self.insts[inst].opcode().constraints();
 
         if !constraints.is_polymorphic() {
             types::INVALID
@@ -955,34 +975,18 @@ impl DataFlowGraph {
             // Not all instruction formats have a designated operand, but in that case
             // `requires_typevar_operand()` should never be true.
             self.value_type(
-                self[inst]
+                self.insts[inst]
                     .typevar_operand(&self.value_lists)
                     .unwrap_or_else(|| {
                         panic!(
                             "Instruction format for {:?} doesn't have a designated operand",
-                            self[inst]
+                            self.insts[inst]
                         )
                     }),
             )
         } else {
             self.value_type(self.first_result(inst))
         }
-    }
-}
-
-/// Allow immutable access to instructions via indexing.
-impl Index<Inst> for DataFlowGraph {
-    type Output = InstructionData;
-
-    fn index(&self, inst: Inst) -> &InstructionData {
-        &self.insts[inst]
-    }
-}
-
-/// Allow mutable access to instructions via indexing.
-impl IndexMut<Inst> for DataFlowGraph {
-    fn index_mut(&mut self, inst: Inst) -> &mut InstructionData {
-        &mut self.insts[inst]
     }
 }
 
@@ -1187,9 +1191,9 @@ impl<'a> fmt::Display for DisplayInst<'a> {
 
         let typevar = dfg.ctrl_typevar(inst);
         if typevar.is_invalid() {
-            write!(f, "{}", dfg[inst].opcode())?;
+            write!(f, "{}", dfg.insts[inst].opcode())?;
         } else {
-            write!(f, "{}.{}", dfg[inst].opcode(), typevar)?;
+            write!(f, "{}.{}", dfg.insts[inst].opcode(), typevar)?;
         }
         write_operands(f, dfg, inst)
     }
@@ -1376,7 +1380,7 @@ mod tests {
         // Immutable reference resolution.
         {
             let immdfg = &dfg;
-            let ins = &immdfg[inst];
+            let ins = &immdfg.insts[inst];
             assert_eq!(ins.opcode(), Opcode::Iconst);
         }
 

@@ -368,7 +368,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                             "bb {} inst {} ({:?}): result {} regs {:?}",
                             bb,
                             inst,
-                            f.dfg[inst],
+                            f.dfg.insts[inst],
                             result,
                             regs,
                         );
@@ -705,7 +705,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         // then reverse these and append to the VCode at the end of
         // each IR instruction.
         for inst in self.f.layout.block_insts(block).rev() {
-            let data = &self.f.dfg[inst];
+            let data = &self.f.dfg.insts[inst];
             let has_side_effect = has_lowering_side_effect(self.f, inst);
             // If  inst has been sunk to another location, skip it.
             if self.is_inst_sunk(inst) {
@@ -736,14 +736,14 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
             // Skip lowering branches; these are handled separately
             // (see `lower_clif_branches()` below).
-            if self.f.dfg[inst].opcode().is_branch() {
+            if self.f.dfg.insts[inst].opcode().is_branch() {
                 continue;
             }
 
             // Normal instruction: codegen if the instruction is side-effecting
             // or any of its outputs its used.
             if has_side_effect || value_needed {
-                trace!("lowering: inst {}: {:?}", inst, self.f.dfg[inst]);
+                trace!("lowering: inst {}: {:?}", inst, self.f.dfg.insts[inst]);
                 let temp_regs = backend.lower(self, inst).unwrap_or_else(|| {
                     let ty = if self.num_outputs(inst) > 0 {
                         Some(self.output_ty(inst, 0))
@@ -975,7 +975,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             if last_inst != Some(inst) {
                 branches.push(inst);
             } else {
-                debug_assert!(self.f.dfg[inst].opcode() == Opcode::BrTable);
+                debug_assert!(self.f.dfg.insts[inst].opcode() == Opcode::BrTable);
                 debug_assert!(branches.len() == 1);
             }
             last_inst = Some(inst);
@@ -1104,7 +1104,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Get the instdata for a given IR instruction.
     pub fn data(&self, ir_inst: Inst) -> &InstructionData {
-        &self.f.dfg[ir_inst]
+        &self.f.dfg.insts[ir_inst]
     }
 
     /// Likewise, but starting with a GlobalValue identifier.
@@ -1129,7 +1129,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
     /// Returns the memory flags of a given memory access.
     pub fn memflags(&self, ir_inst: Inst) -> Option<MemFlags> {
-        match &self.f.dfg[ir_inst] {
+        match &self.f.dfg.insts[ir_inst] {
             &InstructionData::AtomicCas { flags, .. } => Some(flags),
             &InstructionData::AtomicRmw { flags, .. } => Some(flags),
             &InstructionData::Load { flags, .. }

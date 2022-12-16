@@ -611,7 +611,7 @@ impl SSABuilder {
                 }
 
                 // Redo the match from `analyze_branch` but this time capture mutable references
-                match &mut func.dfg[branch] {
+                match &mut func.dfg.insts[branch] {
                     InstructionData::BranchTable {
                         destination, table, ..
                     } => {
@@ -1192,7 +1192,7 @@ mod tests {
         ssa.use_var(&mut func, x_var, I32, block0);
         assert_eq!(func.dfg.num_block_params(block0), 0);
         assert_eq!(
-            func.dfg[func.layout.first_inst(block0).unwrap()].opcode(),
+            func.dfg.insts[func.layout.first_inst(block0).unwrap()].opcode(),
             Opcode::Iconst
         );
     }
@@ -1213,7 +1213,7 @@ mod tests {
         ssa.seal_block(block0, &mut func);
         assert_eq!(func.dfg.num_block_params(block0), 0);
         assert_eq!(
-            func.dfg[func.layout.first_inst(block0).unwrap()].opcode(),
+            func.dfg.insts[func.layout.first_inst(block0).unwrap()].opcode(),
             Opcode::Iconst
         );
     }

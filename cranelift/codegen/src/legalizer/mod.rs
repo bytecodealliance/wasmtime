@@ -53,7 +53,7 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
     while let Some(_block) = pos.next_block() {
         let mut prev_pos = pos.position();
         while let Some(inst) = pos.next_inst() {
-            match pos.func.dfg[inst] {
+            match pos.func.dfg.insts[inst] {
                 // control flow
                 InstructionData::CondTrap {
                     opcode:

@@ -276,7 +276,7 @@ fn decorate_block<FW: FuncWriter>(
 // if it can't be trivially inferred.
 //
 fn type_suffix(func: &Function, inst: Inst) -> Option<Type> {
-    let inst_data = &func.dfg[inst];
+    let inst_data = &func.dfg.insts[inst];
     let constraints = inst_data.opcode().constraints();
 
     if !constraints.is_polymorphic() {
@@ -357,7 +357,7 @@ fn write_instruction(
     }
 
     // Then the opcode, possibly with a '.type' suffix.
-    let opcode = func.dfg[inst].opcode();
+    let opcode = func.dfg.insts[inst].opcode();
 
     match type_suffix(func, inst) {
         Some(suf) => write!(w, "{}.{}", opcode, suf)?,
@@ -378,7 +378,7 @@ fn write_instruction(
 pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt::Result {
     let pool = &dfg.value_lists;
     use crate::ir::instructions::InstructionData::*;
-    match dfg[inst] {
+    match dfg.insts[inst] {
         AtomicRmw { op, args, .. } => write!(w, " {} {}, {}", op, args[0], args[1]),
         AtomicCas { args, .. } => write!(w, " {}, {}, {}", args[0], args[1], args[2]),
         LoadNoOffset { flags, arg, .. } => write!(w, "{} {}", flags, arg),
@@ -487,7 +487,7 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
     let mut sep = "  ; ";
     for &arg in dfg.inst_args(inst) {
         if let ValueDef::Result(src, _) = dfg.value_def(arg) {
-            let imm = match dfg[src] {
+            let imm = match dfg.insts[src] {
                 UnaryImm { imm, .. } => imm.to_string(),
                 UnaryIeee32 { imm, .. } => imm.to_string(),
                 UnaryIeee64 { imm, .. } => imm.to_string(),

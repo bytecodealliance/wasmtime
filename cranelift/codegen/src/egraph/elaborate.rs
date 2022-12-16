@@ -218,7 +218,7 @@ impl<'a> Elaborator<'a> {
                 }
                 ValueDef::Result(inst, _) => {
                     trace!(" -> value {}: result, computing cost", value);
-                    let inst_data = &self.func.dfg[inst];
+                    let inst_data = &self.func.dfg.insts[inst];
                     let loop_level = self
                         .func
                         .layout
@@ -358,7 +358,7 @@ impl<'a> Elaborator<'a> {
                     trace!(
                         " -> result {} of inst {:?}",
                         result_idx,
-                        self.func.dfg[inst]
+                        self.func.dfg.insts[inst]
                     );
 
                     // We're going to need to use this instruction
@@ -600,7 +600,7 @@ impl<'a> Elaborator<'a> {
             // elaboration for args of *any* branch must be inserted
             // before the *first* branch, because the branch group
             // must remain contiguous at the end of the block.
-            if self.func.dfg[inst].opcode().is_branch() && first_branch == None {
+            if self.func.dfg.insts[inst].opcode().is_branch() && first_branch == None {
                 first_branch = Some(inst);
             }
 

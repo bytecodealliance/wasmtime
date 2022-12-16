@@ -40,7 +40,7 @@ fn is_load_with_defined_trapping(opcode: Opcode, data: &InstructionData) -> bool
 /// its value is unused?
 #[inline(always)]
 pub fn has_side_effect(func: &Function, inst: Inst) -> bool {
-    let data = &func.dfg[inst];
+    let data = &func.dfg.insts[inst];
     let opcode = data.opcode();
     trivially_has_side_effects(opcode) || is_load_with_defined_trapping(opcode, data)
 }
@@ -51,7 +51,7 @@ pub fn has_side_effect(func: &Function, inst: Inst) -> bool {
 /// - Actual pure nodes (arithmetic, etc)
 /// - Loads with the `readonly` flag set
 pub fn is_pure_for_egraph(func: &Function, inst: Inst) -> bool {
-    let is_readonly_load = match func.dfg[inst] {
+    let is_readonly_load = match func.dfg.insts[inst] {
         InstructionData::Load {
             opcode: Opcode::Load,
             flags,
@@ -69,7 +69,7 @@ pub fn is_pure_for_egraph(func: &Function, inst: Inst) -> bool {
     // are, we can always trivially eliminate them with no effect.)
     let has_one_result = func.dfg.inst_results(inst).len() == 1;
 
-    let op = func.dfg[inst].opcode();
+    let op = func.dfg.insts[inst].opcode();
 
     has_one_result && (is_readonly_load || (!op.can_load() && !trivially_has_side_effects(op)))
 }
@@ -77,14 +77,14 @@ pub fn is_pure_for_egraph(func: &Function, inst: Inst) -> bool {
 /// Does the given instruction have any side-effect as per [has_side_effect], or else is a load,
 /// but not the get_pinned_reg opcode?
 pub fn has_lowering_side_effect(func: &Function, inst: Inst) -> bool {
-    let op = func.dfg[inst].opcode();
+    let op = func.dfg.insts[inst].opcode();
     op != Opcode::GetPinnedReg && (has_side_effect(func, inst) || op.can_load())
 }
 
 /// Is the given instruction a constant value (`iconst`, `fconst`) that can be
 /// represented in 64 bits?
 pub fn is_constant_64bit(func: &Function, inst: Inst) -> Option<u64> {
-    let data = &func.dfg[inst];
+    let data = &func.dfg.insts[inst];
     if data.opcode() == Opcode::Null {
         return Some(0);
     }
@@ -98,7 +98,7 @@ pub fn is_constant_64bit(func: &Function, inst: Inst) -> Option<u64> {
 
 /// Get the address, offset, and access type from the given instruction, if any.
 pub fn inst_addr_offset_type(func: &Function, inst: Inst) -> Option<(Value, Offset32, Type)> {
-    let data = &func.dfg[inst];
+    let data = &func.dfg.insts[inst];
     match data {
         InstructionData::Load { arg, offset, .. } => {
             let ty = func.dfg.value_type(func.dfg.inst_results(inst)[0]);
@@ -122,7 +122,7 @@ pub fn inst_addr_offset_type(func: &Function, inst: Inst) -> Option<(Value, Offs
 
 /// Get the store data, if any, from an instruction.
 pub fn inst_store_data(func: &Function, inst: Inst) -> Option<Value> {
-    let data = &func.dfg[inst];
+    let data = &func.dfg.insts[inst];
     match data {
         InstructionData::Store { args, .. } | InstructionData::StoreNoOffset { args, .. } => {
             Some(args[0])
@@ -157,14 +157,14 @@ pub(crate) fn visit_block_succs<F: FnMut(Inst, Block, bool)>(
     mut visit: F,
 ) {
     for inst in f.layout.block_likely_branches(block) {
-        if f.dfg[inst].opcode().is_branch() {
+        if f.dfg.insts[inst].opcode().is_branch() {
             visit_branch_targets(f, inst, &mut visit);
         }
     }
 }
 
 fn visit_branch_targets<F: FnMut(Inst, Block, bool)>(f: &Function, inst: Inst, visit: &mut F) {
-    match f.dfg[inst].analyze_branch(&f.dfg.value_lists) {
+    match f.dfg.insts[inst].analyze_branch(&f.dfg.value_lists) {
         BranchInfo::NotABranch => {}
         BranchInfo::SingleDest(dest, _) => {
             visit(inst, dest, false);

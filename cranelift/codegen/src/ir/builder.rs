@@ -201,7 +201,7 @@ impl<'f> InstBuilderBase<'f> for ReplaceBuilder<'f> {
 
     fn build(self, data: InstructionData, ctrl_typevar: Type) -> (Inst, &'f mut DataFlowGraph) {
         // Splat the new instruction on top of the old one.
-        self.dfg[self.inst] = data;
+        self.dfg.insts[self.inst] = data;
 
         if !self.dfg.has_results(self.inst) {
             // The old result values were either detached or non-existent.

@@ -158,8 +158,8 @@ fn gen_arguments_method(formats: &[&InstructionFormat], fmt: &mut Formatter, is_
 /// - `pub fn opcode(&self) -> Opcode`
 /// - `pub fn arguments(&self, &pool) -> &[Value]`
 /// - `pub fn arguments_mut(&mut self, &pool) -> &mut [Value]`
-/// - `pub fn take_value_list(&mut self) -> Option<ir::ValueList>`
-/// - `pub fn put_value_list(&mut self, args: ir::ValueList>`
+/// - `pub fn value_list(&self) -> Option<ir::ValueList>`
+/// - `pub fn value_list_mut(&mut self) -> Option<&mut ir::ValueList>`
 /// - `pub fn eq(&self, &other: Self, &pool) -> bool`
 /// - `pub fn hash<H: Hasher>(&self, state: &mut H, &pool)`
 fn gen_instruction_data_impl(formats: &[&InstructionFormat], fmt: &mut Formatter) {
@@ -214,21 +214,17 @@ fn gen_instruction_data_impl(formats: &[&InstructionFormat], fmt: &mut Formatter
         fmt.empty_line();
 
         fmt.doc_comment(r#"
-            Take out the value list with all the value arguments and return
-            it.
-
-            This leaves the value list in the instruction empty. Use
-            `put_value_list` to put the value list back.
+            The ValueList for the instruction.
         "#);
-        fmt.line("pub fn take_value_list(&mut self) -> Option<ir::ValueList> {");
+        fmt.line("pub fn value_list(&self) -> Option<ir::ValueList> {");
         fmt.indent(|fmt| {
             let mut m = Match::new("*self");
 
             for format in formats {
                 if format.has_value_list {
                     m.arm(format!("Self::{}", format.name),
-                    vec!["ref mut args", ".."],
-                    "Some(args.take())".to_string());
+                    vec!["args", ".."],
+                    "Some(args)".to_string());
                 }
             }
 
@@ -240,27 +236,24 @@ fn gen_instruction_data_impl(formats: &[&InstructionFormat], fmt: &mut Formatter
         fmt.empty_line();
 
         fmt.doc_comment(r#"
-            Put back a value list.
-
-            After removing a value list with `take_value_list()`, use this
-            method to put it back. It is required that this instruction has
-            a format that accepts a value list, and that the existing value
-            list is empty. This avoids leaking list pool memory.
+            A mutable reference to the ValueList for this instruction, if it
+            has one.
         "#);
-        fmt.line("pub fn put_value_list(&mut self, vlist: ir::ValueList) {");
+        fmt.line("pub fn value_list_mut(&mut self) -> Option<&mut ir::ValueList> {");
         fmt.indent(|fmt| {
-            fmt.line("let args = match *self {");
-            fmt.indent(|fmt| {
-                for format in formats {
-                    if format.has_value_list {
-                        fmtln!(fmt, "Self::{} {{ ref mut args, .. }} => args,", format.name);
-                    }
+            let mut m = Match::new("*self");
+
+            for format in formats {
+                if format.has_value_list {
+                    m.arm(format!("Self::{}", format.name),
+                    vec!["ref mut args", ".."],
+                    "Some(args)".to_string());
                 }
-                fmt.line("_ => panic!(\"No value list: {:?}\", self),");
-            });
-            fmt.line("};");
-            fmt.line("debug_assert!(args.is_empty(), \"Value list already in use\");");
-            fmt.line("*args = vlist;");
+            }
+
+            m.arm_no_fields("_", "None");
+
+            fmt.add_match(m);
         });
         fmt.line("}");
         fmt.empty_line();

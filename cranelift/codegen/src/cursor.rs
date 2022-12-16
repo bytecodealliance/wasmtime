@@ -641,9 +641,9 @@ impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut FuncCursor<'f> {
             if let CursorPosition::At(_) = self.position() {
                 if let Some(curr) = self.current_inst() {
                     if let Some(prev) = self.layout().prev_inst(curr) {
-                        let prev_op = self.data_flow_graph()[prev].opcode();
-                        let inst_op = self.data_flow_graph()[inst].opcode();
-                        let curr_op = self.data_flow_graph()[curr].opcode();
+                        let prev_op = self.data_flow_graph().insts[prev].opcode();
+                        let inst_op = self.data_flow_graph().insts[inst].opcode();
+                        let curr_op = self.data_flow_graph().insts[curr].opcode();
                         if prev_op.is_branch()
                             && !prev_op.is_terminator()
                             && !inst_op.is_terminator()

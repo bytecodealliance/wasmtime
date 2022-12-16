@@ -30,7 +30,7 @@ pub fn do_nan_canonicalization(func: &mut Function) {
 /// arithmetic operation. This ignores operations like `fneg`, `fabs`, or
 /// `fcopysign` that only operate on the sign bit of a floating point value.
 fn is_fp_arith(pos: &mut FuncCursor, inst: Inst) -> bool {
-    match pos.func.dfg[inst] {
+    match pos.func.dfg.insts[inst] {
         InstructionData::Unary { opcode, .. } => {
             opcode == Opcode::Ceil
                 || opcode == Opcode::Floor

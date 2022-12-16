@@ -600,7 +600,7 @@ impl Layout {
         // If two, the former is conditional and the latter is unconditional.
         let last = self.last_inst(block)?;
         if let Some(prev) = self.prev_inst(last) {
-            if dfg[prev].opcode().is_branch() {
+            if dfg.insts[prev].opcode().is_branch() {
                 return Some(prev);
             }
         }

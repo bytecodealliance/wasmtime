@@ -102,7 +102,7 @@ impl NewOrExistingInst {
             NewOrExistingInst::New(data, ty) => (*ty, *data),
             NewOrExistingInst::Existing(inst) => {
                 let ty = dfg.ctrl_typevar(*inst);
-                (ty, dfg[*inst].clone())
+                (ty, dfg.insts[*inst].clone())
             }
         }
     }
@@ -191,8 +191,11 @@ where
                 union_find: self.eclasses,
                 value_lists: &self.func.dfg.value_lists,
             };
-            self.gvn_map
-                .insert((ty, self.func.dfg[inst].clone()), opt_value, &gvn_context);
+            self.gvn_map.insert(
+                (ty, self.func.dfg.insts[inst].clone()),
+                opt_value,
+                &gvn_context,
+            );
             self.value_to_opt_value[result] = opt_value;
             opt_value
         }
@@ -335,7 +338,7 @@ impl<'a> EgraphPass<'a> {
                 trace!(" -> {} = {:?}", value, def);
                 match def {
                     ValueDef::Result(i, 0) => {
-                        trace!("  -> {} = {:?}", i, self.func.dfg[i]);
+                        trace!("  -> {} = {:?}", i, self.func.dfg.insts[i]);
                     }
                     _ => {}
                 }

@@ -251,7 +251,7 @@ impl BlockLoweringOrder {
             block_succ_range[block] = (block_succ_start, block_succ_end);
 
             for inst in f.layout.block_likely_branches(block) {
-                if f.dfg[inst].opcode() == Opcode::Return {
+                if f.dfg.insts[inst].opcode() == Opcode::Return {
                     // Implicit output edge for any return.
                     block_out_count[block] += 1;
                 }
@@ -279,7 +279,7 @@ impl BlockLoweringOrder {
             for inst in f.layout.block_likely_branches(block) {
                 // If the block has a branch with any "fixed args"
                 // (not blockparam args) ...
-                if f.dfg[inst].opcode().is_branch() && f.dfg.inst_fixed_args(inst).len() > 0 {
+                if f.dfg.insts[inst].opcode().is_branch() && f.dfg.inst_fixed_args(inst).len() > 0 {
                     // ... then force a minimum successor count of
                     // two, so the below algorithm cannot put
                     // edge-moves on the end of the block.
