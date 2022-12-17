@@ -1409,17 +1409,6 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let Any128 = &TypeVar::new(
-        "Any128",
-        "Any scalar or vector type with as most 128 lanes",
-        TypeSetBuilder::new()
-            .ints(Interval::All)
-            .floats(Interval::All)
-            .simd_lanes(1..128)
-            .includes_scalars(true)
-            .build(),
-    );
-
     let c = &Operand::new("c", &TxN.as_bool()).with_doc("Controlling vector");
     let x = &Operand::new("x", TxN).with_doc("Value to use where `c` is true");
     let y = &Operand::new("y", TxN).with_doc("Value to use where `c` is false");
