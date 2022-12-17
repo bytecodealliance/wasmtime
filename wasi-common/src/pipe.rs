@@ -112,6 +112,14 @@ impl<R: Read + Any + Send + Sync> WasiFile for ReadPipe<R> {
         let n = self.borrow().read_vectored(bufs)?;
         Ok(n.try_into()?)
     }
+    async fn read_vectored_at<'a>(
+        &mut self,
+        bufs: &mut [io::IoSliceMut<'a>],
+        _offset: u64,
+    ) -> Result<u64, Error> {
+        let n = self.borrow().read_vectored(bufs)?;
+        Ok(n.try_into()?)
+    }
 }
 
 /// A virtual pipe write end.

@@ -30,32 +30,29 @@ pub struct MonotonicClock {
 impl From<&dyn WasiMonotonicClock> for MonotonicClock {
     fn from(clock: &dyn WasiMonotonicClock) -> MonotonicClock {
         MonotonicClock {
-            start: clock.now(Duration::from_millis(1)),
+            start: clock.now(clock.resolution()),
         }
     }
 }
 
 impl MonotonicClock {
     pub fn now(&self, clock: &dyn WasiMonotonicClock) -> Duration {
-        clock.now(self.resolution()).duration_since(self.start)
-    }
-    pub fn resolution(&self) -> Duration {
-        // FIXME bogus value
-        Duration::from_millis(1)
+        clock.now(clock.resolution()).duration_since(self.start)
     }
     pub fn new_timer(&self, initial: Duration) -> MonotonicTimer {
-        MonotonicTimer { initial }
+        MonotonicTimer {
+            start: self.start + initial,
+        }
     }
 }
 
 pub struct MonotonicTimer {
-    initial: Duration,
+    start: Instant,
 }
 
 impl MonotonicTimer {
-    pub fn current(&self) -> Duration {
-        // FIXME totally bogus implementation
-        self.initial
+    pub fn current(&self, clock: &dyn WasiMonotonicClock) -> Duration {
+        clock.now(clock.resolution()).duration_since(self.start)
     }
 }
 
@@ -64,9 +61,6 @@ pub struct WallClock;
 
 impl WallClock {
     pub fn now(&self, clock: &dyn WasiSystemClock) -> SystemTime {
-        clock.now(self.resolution())
-    }
-    pub fn resolution(&self) -> Duration {
-        todo!()
+        clock.now(clock.resolution())
     }
 }

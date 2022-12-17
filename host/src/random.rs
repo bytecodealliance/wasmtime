@@ -1,4 +1,3 @@
-#![allow(unused_variables)]
 use cap_rand::{distributions::Standard, Rng};
 
 use crate::{wasi_random, WasiCtx};

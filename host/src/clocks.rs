@@ -7,8 +7,13 @@ impl TryFrom<SystemTime> for wasi_clocks::Datetime {
     type Error = anyhow::Error;
 
     fn try_from(time: SystemTime) -> Result<Self, Self::Error> {
-        drop(time);
-        todo!()
+        let duration =
+            time.duration_since(SystemTime::from_std(std::time::SystemTime::UNIX_EPOCH))?;
+
+        Ok(wasi_clocks::Datetime {
+            seconds: duration.as_secs(),
+            nanoseconds: duration.subsec_nanos(),
+        })
     }
 }
 
@@ -17,6 +22,7 @@ impl wasi_default_clocks::WasiDefaultClocks for WasiCtx {
     async fn default_monotonic_clock(&mut self) -> anyhow::Result<wasi_clocks::MonotonicClock> {
         Ok(self.clocks.default_monotonic)
     }
+
     async fn default_wall_clock(&mut self) -> anyhow::Result<wasi_clocks::WallClock> {
         Ok(self.clocks.default_wall)
     }
@@ -58,8 +64,8 @@ impl wasi_clocks::WasiClocks for WasiCtx {
         &mut self,
         fd: wasi_clocks::MonotonicClock,
     ) -> anyhow::Result<wasi_clocks::Instant> {
-        let clock = self.table.get::<MonotonicClock>(fd)?;
-        let res = clock.resolution();
+        self.table.get::<MonotonicClock>(fd)?;
+        let res = self.clocks.monotonic.resolution();
         Ok(res
             .as_nanos()
             .try_into()
@@ -90,8 +96,8 @@ impl wasi_clocks::WasiClocks for WasiCtx {
         &mut self,
         fd: wasi_clocks::WallClock,
     ) -> anyhow::Result<wasi_clocks::Datetime> {
-        let clock = self.table.get::<WallClock>(fd)?;
-        let nanos = clock.resolution().as_nanos();
+        self.table.get::<WallClock>(fd)?;
+        let nanos = self.clocks.system.resolution().as_nanos();
         Ok(wasi_clocks::Datetime {
             seconds: (nanos / 1_000_000_000_u128)
                 .try_into()
@@ -106,7 +112,7 @@ impl wasi_clocks::WasiClocks for WasiCtx {
     ) -> anyhow::Result<wasi_clocks::Instant> {
         let timer = self.table.get::<MonotonicTimer>(fd)?;
         Ok(timer
-            .current()
+            .current(self.clocks.monotonic.as_ref())
             .as_nanos()
             .try_into()
             .context("converting monotonic timer to nanos u64")?)
