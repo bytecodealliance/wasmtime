@@ -1409,26 +1409,6 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let x = &Operand::new("x", TxN).with_doc("Vector to split");
-    let lo = &Operand::new("lo", &TxN.half_vector()).with_doc("Low-numbered lanes of `x`");
-    let hi = &Operand::new("hi", &TxN.half_vector()).with_doc("High-numbered lanes of `x`");
-
-    ig.push(
-        Inst::new(
-            "vsplit",
-            r#"
-        Split a vector into two halves.
-
-        Split the vector `x` into two separate values, each containing half of
-        the lanes from ``x``. The result may be two scalars if ``x`` only had
-        two lanes.
-        "#,
-            &formats.unary,
-        )
-        .operands_in(vec![x])
-        .operands_out(vec![lo, hi]),
-    );
-
     let Any128 = &TypeVar::new(
         "Any128",
         "Any scalar or vector type with as most 128 lanes",
