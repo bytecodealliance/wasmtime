@@ -603,12 +603,6 @@ enum OperandConstraint {
     /// This operand is `ctrlType.double_width()`.
     DoubleWidth,
 
-    /// This operand is `ctrlType.half_vector()`.
-    HalfVector,
-
-    /// This operand is `ctrlType.double_vector()`.
-    DoubleVector,
-
     /// This operand is `ctrlType.split_lanes()`.
     SplitLanes,
 
@@ -637,12 +631,6 @@ impl OperandConstraint {
                     .double_width()
                     .expect("invalid type for double_width"),
             ),
-            HalfVector => Bound(
-                ctrl_type
-                    .half_vector()
-                    .expect("invalid type for half_vector"),
-            ),
-            DoubleVector => Bound(ctrl_type.by(2).expect("invalid type for double_vector")),
             SplitLanes => {
                 if ctrl_type.is_dynamic_vector() {
                     Bound(
