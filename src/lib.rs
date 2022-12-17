@@ -1792,7 +1792,7 @@ const fn command_data_size() -> usize {
     start -= size_of::<DirentCache>();
 
     // Remove miscellaneous metadata also stored in state.
-    start -= 7 * size_of::<usize>();
+    start -= 9 * size_of::<usize>();
 
     // Everything else is the `command_data` allocation.
     start
@@ -1802,7 +1802,7 @@ const fn command_data_size() -> usize {
 // mostly guarantees that it's not larger than one page which is relied upon
 // below.
 const _: () = {
-    let _size_assert: [(); PAGE_SIZE] = [(); size_of::<State>()];
+    let _size_assert: [(); PAGE_SIZE] = [(); size_of::<RefCell<State>>()];
 };
 
 #[allow(improper_ctypes)]
