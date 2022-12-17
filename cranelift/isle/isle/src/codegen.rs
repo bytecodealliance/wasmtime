@@ -1,7 +1,7 @@
 //! Generate Rust code from a series of Sequences.
 
 use crate::sema::{ExternalSig, ReturnKind, Sym, Term, TermEnv, TermId, Type, TypeEnv, TypeId};
-use crate::serialize::{Block, Case, Condition, MatchArm};
+use crate::serialize::{Block, ControlFlow, EvalStep, MatchArm};
 use crate::trie_again::{Binding, BindingId, Constraint, RuleSet};
 use crate::StableSet;
 use std::fmt::Write;
@@ -373,7 +373,7 @@ impl<'a> Codegen<'a> {
 
             self.emit_block(&mut ctx, &root, sig.ret_kind)?;
 
-            match (sig.ret_kind, root.cases.last()) {
+            match (sig.ret_kind, root.steps.last()) {
                     (ReturnKind::Iterator, _) => {
                         writeln!(
                             ctx.out,
@@ -381,7 +381,7 @@ impl<'a> Codegen<'a> {
                             &ctx.indent
                         )?;
                     }
-                    (_, Some(Case { check: Condition::Result { .. }, .. })) => {
+                    (_, Some(EvalStep { check: ControlFlow::Return { .. }, .. })) => {
                         // If there's an outermost fallback, no need for another `return` statement.
                     }
                     (ReturnKind::Option, _) => {
@@ -419,22 +419,22 @@ impl<'a> Codegen<'a> {
         if !matches!(ret_kind, ReturnKind::Iterator) {
             // Loops are only allowed if we're returning an iterator.
             assert!(!block
-                .cases
+                .steps
                 .iter()
-                .any(|c| matches!(c.check, Condition::Loop { .. })));
+                .any(|c| matches!(c.check, ControlFlow::Loop { .. })));
 
             // Unless we're returning an iterator, a case which returns a result must be the last
             // case in a block.
             if let Some(result_pos) = block
-                .cases
+                .steps
                 .iter()
-                .position(|c| matches!(c.check, Condition::Result { .. }))
+                .position(|c| matches!(c.check, ControlFlow::Return { .. }))
             {
-                assert_eq!(block.cases.len() - 1, result_pos);
+                assert_eq!(block.steps.len() - 1, result_pos);
             }
         }
 
-        for case in block.cases.iter() {
+        for case in block.steps.iter() {
             for &expr in case.bind_order.iter() {
                 write!(ctx.out, "{}let v{} = ", &ctx.indent, expr.index())?;
                 self.emit_expr(ctx, expr)?;
@@ -444,7 +444,7 @@ impl<'a> Codegen<'a> {
 
             match &case.check {
                 // Use a shorthand notation if there's only one match arm.
-                Condition::Match { source, arms } if arms.len() == 1 => {
+                ControlFlow::Match { source, arms } if arms.len() == 1 => {
                     let arm = &arms[0];
                     let scope = ctx.enter_scope();
                     match arm.constraint {
@@ -466,7 +466,7 @@ impl<'a> Codegen<'a> {
                     ctx.end_block(scope)?;
                 }
 
-                Condition::Match { source, arms } => {
+                ControlFlow::Match { source, arms } => {
                     let scope = ctx.enter_scope();
                     write!(ctx.out, "{}match ", &ctx.indent)?;
                     self.emit_scrutinee(ctx, *source, arms[0].constraint)?;
@@ -486,7 +486,7 @@ impl<'a> Codegen<'a> {
                     ctx.end_block(scope)?;
                 }
 
-                Condition::Equal { a, b, body } => {
+                ControlFlow::Equal { a, b, body } => {
                     let scope = ctx.enter_scope();
                     write!(ctx.out, "{}if ", &ctx.indent)?;
                     self.emit_expr(ctx, *a)?;
@@ -497,7 +497,7 @@ impl<'a> Codegen<'a> {
                     ctx.end_block(scope)?;
                 }
 
-                Condition::Loop { result, body } => {
+                ControlFlow::Loop { result, body } => {
                     let source = match &ctx.ruleset.bindings[result.index()] {
                         Binding::Iterator { source } => source,
                         _ => unreachable!("Loop from a non-Iterator"),
@@ -519,7 +519,7 @@ impl<'a> Codegen<'a> {
                     ctx.end_block(scope)?;
                 }
 
-                &Condition::Result { pos, result } => {
+                &ControlFlow::Return { pos, result } => {
                     writeln!(
                         ctx.out,
                         "{}// Rule at {}.",
