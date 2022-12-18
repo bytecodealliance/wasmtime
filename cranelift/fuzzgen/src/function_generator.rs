@@ -296,6 +296,20 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Ineg, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Ineg, &[I64, I64], &[I64], insert_opcode),
     (Opcode::Ineg, &[I128, I128], &[I128], insert_opcode),
+    // Iabs
+    // Some variants missing:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/5466
+    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/5467
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Iabs, &[I8], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Iabs, &[I16], &[I16], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Iabs, &[I32], &[I32], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Iabs, &[I64], &[I64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Iabs, &[I128], &[I128], insert_opcode),
     // Smin
     // smin not implemented in some backends:
     //   x64: https://github.com/bytecodealliance/wasmtime/issues/3370
