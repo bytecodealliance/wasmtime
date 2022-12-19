@@ -2560,6 +2560,128 @@ fn test_x64_emit() {
         "movslq  -7(%r11), %rdx",
     ));
 
+    // Mov_Imm_M.
+
+    insns.push((
+        Inst::MovImmM {
+            size: OperandSize::Size8,
+            simm64: i8::MIN as u64,
+            dst: Amode::imm_reg(99u32, rax).into(),
+        },
+        "C6406380",
+        "movb    $-128, 99(%rax)",
+    ));
+
+    insns.push((
+        Inst::MovImmM {
+            size: OperandSize::Size8,
+            simm64: i8::MAX as u64,
+            dst: Amode::imm_reg(99u32, r8).into(),
+        },
+        "41C640637F",
+        "movb    $127, 99(%r8)",
+    ));
+
+    insns.push((
+        Inst::MovImmM {
+            size: OperandSize::Size16,
+            simm64: i16::MIN as u64,
+            dst: Amode::imm_reg(99u32, rcx).into(),
+        },
+        "66C741630080",
+        "movw    $-32768, 99(%rcx)",
+    ));
+
+    insns.push((
+        Inst::MovImmM {
+            size: OperandSize::Size16,
+            simm64: i16::MAX as u64,
+            dst: Amode::imm_reg(99u32, r9).into(),
+        },
+        "6641C74163FF7F",
+        "movw    $32767, 99(%r9)",
+    ));
+
+    insns.push((
+        Inst::MovImmM {
+            size: OperandSize::Size32,
+            simm64: i32::MIN as u64,
+            dst: Amode::imm_reg(99u32, rdx).into(),
+        },
+        "C7426300000080",
+        "movl    $-2147483648, 99(%rdx)",
+    ));
+
+    insns.push((
+        Inst::MovImmM {
+            size: OperandSize::Size32,
+            simm64: i32::MAX as u64,
+            dst: Amode::imm_reg(99u32, r10).into(),
+        },
+        "41C74263FFFFFF7F",
+        "movl    $2147483647, 99(%r10)",
+    ));
+
+    insns.push((
+        Inst::MovImmM {
+            size: OperandSize::Size64,
+            simm64: i32::MIN as u64,
+            dst: Amode::imm_reg(99u32, rbx).into(),
+        },
+        "48C7436300000080",
+        "movq    $-2147483648, 99(%rbx)",
+    ));
+
+    insns.push((
+        Inst::MovImmM {
+            size: OperandSize::Size64,
+            simm64: i32::MAX as u64,
+            dst: Amode::imm_reg(99u32, r11).into(),
+        },
+        "49C74363FFFFFF7F",
+        "movq    $2147483647, 99(%r11)",
+    ));
+
+    insns.push((
+        Inst::MovImmM {
+            size: OperandSize::Size8,
+            simm64: 0u64,
+            dst: Amode::imm_reg(99u32, rsp).into(),
+        },
+        "C644246300",
+        "movb    $0, 99(%rsp)",
+    ));
+
+    insns.push((
+        Inst::MovImmM {
+            size: OperandSize::Size16,
+            simm64: 0u64,
+            dst: Amode::imm_reg(99u32, r12).into(),
+        },
+        "6641C74424630000",
+        "movw    $0, 99(%r12)",
+    ));
+
+    insns.push((
+        Inst::MovImmM {
+            size: OperandSize::Size32,
+            simm64: 0u64,
+            dst: Amode::imm_reg(99u32, rbp).into(),
+        },
+        "C7456300000000",
+        "movl    $0, 99(%rbp)",
+    ));
+
+    insns.push((
+        Inst::MovImmM {
+            size: OperandSize::Size64,
+            simm64: 0u64,
+            dst: Amode::imm_reg(99u32, r13).into(),
+        },
+        "49C7456300000000",
+        "movq    $0, 99(%r13)",
+    ));
+
     // ========================================================
     // Mov_R_M.  Byte stores are tricky.  Check everything carefully.
     insns.push((

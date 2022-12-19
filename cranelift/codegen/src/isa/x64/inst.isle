@@ -126,6 +126,11 @@
                  (src GprMem)
                  (dst WritableGpr))
 
+       ;; Immediate store.
+       (MovImmM (size OperandSize)
+		(simm64 u64)
+		(dst SyntheticAmode))
+       
        ;; Integer stores: mov (b w l q) reg addr.
        (MovRM (size OperandSize) ;; 1, 2, 4, or 8
               (src Gpr)
