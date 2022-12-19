@@ -585,7 +585,11 @@ impl SSABuilder {
             // For a single destination appending a jump argument to the instruction
             // is sufficient.
             BranchInfo::SingleDest(_) => {
-                func.dfg.append_inst_arg(branch, val);
+                let dfg = &mut func.dfg;
+                dfg.insts[branch]
+                    .branch_destination_mut()
+                    .unwrap()
+                    .append_argument(val, &mut dfg.value_lists);
                 None
             }
             BranchInfo::Table(mut jt, _default_block) => {

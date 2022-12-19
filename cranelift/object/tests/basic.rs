@@ -98,7 +98,8 @@ fn switch_error() {
         let in_val = bcx.append_block_param(start, types::I32);
         bcx.switch_to_block(start);
         bcx.def_var(Variable::new(0), in_val);
-        bcx.ins().jump(bb0, &[]);
+        let target = bcx.func.dfg.block_with_args(bb0, &[]);
+        bcx.ins().jump(target);
 
         bcx.switch_to_block(bb0);
         let discr = bcx.use_var(Variable::new(0));
@@ -118,12 +119,14 @@ fn switch_error() {
         bcx.switch_to_block(bb1);
         let v = bcx.use_var(Variable::new(0));
         bcx.def_var(Variable::new(1), v);
-        bcx.ins().jump(bb3, &[]);
+        let target = bcx.func.dfg.block_with_args(bb3, &[]);
+        bcx.ins().jump(target);
 
         bcx.switch_to_block(bb2);
         let v = bcx.use_var(Variable::new(0));
         bcx.def_var(Variable::new(1), v);
-        bcx.ins().jump(bb3, &[]);
+        let target = bcx.func.dfg.block_with_args(bb3, &[]);
+        bcx.ins().jump(target);
 
         bcx.switch_to_block(bb3);
         let r = bcx.use_var(Variable::new(1));

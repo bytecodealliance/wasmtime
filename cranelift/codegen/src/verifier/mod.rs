@@ -1734,7 +1734,6 @@ impl<'a> Verifier<'a> {
 #[cfg(test)]
 mod tests {
     use super::{Verifier, VerifierError, VerifierErrors};
-    use crate::entity::EntityList;
     use crate::ir::instructions::{InstructionData, Opcode};
     use crate::ir::{types, AbiParam, Function};
     use crate::settings;
@@ -1776,11 +1775,11 @@ mod tests {
             imm: 0.into(),
         });
         func.layout.append_inst(nullary_with_bad_opcode, block0);
+        let destination = func.dfg.block_with_args(block0, &[]);
         func.stencil.layout.append_inst(
             func.stencil.dfg.make_inst(InstructionData::Jump {
                 opcode: Opcode::Jump,
-                destination: block0,
-                args: EntityList::default(),
+                destination,
             }),
             block0,
         );

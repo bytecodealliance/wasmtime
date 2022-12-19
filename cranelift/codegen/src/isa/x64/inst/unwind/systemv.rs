@@ -184,8 +184,10 @@ mod tests {
 
         let mut pos = FuncCursor::new(&mut func);
         pos.insert_block(block0);
-        pos.ins().brnz(v0, block2, &[]);
-        pos.ins().jump(block1, &[]);
+        let target = pos.func.dfg.block_with_args(block2, &[]);
+        pos.ins().brnz(v0, target);
+        let target = pos.func.dfg.block_with_args(block1, &[]);
+        pos.ins().jump(target);
 
         pos.insert_block(block1);
         pos.ins().return_(&[]);

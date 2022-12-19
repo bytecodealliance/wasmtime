@@ -259,12 +259,16 @@ mod tests {
             let mut cur = FuncCursor::new(&mut func);
 
             cur.insert_block(block0);
-            br_block0_block2 = cur.ins().brnz(cond, func.dfg.block_with_args(block2, &[]));
-            jmp_block0_block1 = cur.ins().jump(func.dfg.block_with_args(block1, &[]));
+            let target = cur.func.dfg.block_with_args(block2, &[]);
+            br_block0_block2 = cur.ins().brnz(cond, target);
+            let target = cur.func.dfg.block_with_args(block1, &[]);
+            jmp_block0_block1 = cur.ins().jump(target);
 
             cur.insert_block(block1);
-            br_block1_block1 = cur.ins().brnz(cond, func.dfg.block_with_args(block1, &[]));
-            jmp_block1_block2 = cur.ins().jump(func.dfg.block_with_args(block2, &[]));
+            let target = cur.func.dfg.block_with_args(block1, &[]);
+            br_block1_block1 = cur.ins().brnz(cond, target);
+            let target = cur.func.dfg.block_with_args(block2, &[]);
+            jmp_block1_block2 = cur.ins().jump(target);
 
             cur.insert_block(block2);
         }
@@ -307,9 +311,8 @@ mod tests {
         }
 
         // Change some instructions and recompute block0
-        func.dfg
-            .replace(br_block0_block2)
-            .brnz(cond, func.dfg.block_with_args(block1, &[]));
+        let target = func.dfg.block_with_args(block1, &[]);
+        func.dfg.replace(br_block0_block2).brnz(cond, target);
         func.dfg.replace(jmp_block0_block1).return_(&[]);
         cfg.recompute_block(&mut func, block0);
         let br_block0_block1 = br_block0_block2;

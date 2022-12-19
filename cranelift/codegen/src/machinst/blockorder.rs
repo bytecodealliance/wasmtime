@@ -559,10 +559,13 @@ mod test {
             if succs.len() == 0 {
                 pos.ins().return_(&[arg0]);
             } else if succs.len() == 1 {
-                pos.ins().jump(blocks[succs[0]], &[]);
+                let target = pos.func.dfg.block_with_args(blocks[succs[0]], &[]);
+                pos.ins().jump(target);
             } else if succs.len() == 2 {
-                pos.ins().brnz(arg0, blocks[succs[0]], &[]);
-                pos.ins().jump(blocks[succs[1]], &[]);
+                let target = pos.func.dfg.block_with_args(blocks[succs[0]], &[]);
+                pos.ins().brnz(arg0, target);
+                let target = pos.func.dfg.block_with_args(blocks[succs[1]], &[]);
+                pos.ins().jump(target);
             } else {
                 panic!("Too many successors");
             }

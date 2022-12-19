@@ -261,23 +261,29 @@ mod test {
         let v0 = pos.ins().iconst(I32, 0x1234);
         pos.set_srcloc(SourceLoc::new(2));
         let v1 = pos.ins().iadd(arg0, v0);
-        pos.ins().brnz(v1, bb1, &[v1]);
-        pos.ins().jump(bb2, &[]);
+        let target = pos.func.dfg.block_with_args(bb1, &[v1]);
+        pos.ins().brnz(v1, target);
+        let target = pos.func.dfg.block_with_args(bb2, &[]);
+        pos.ins().jump(target);
 
         pos.insert_block(bb1);
         pos.set_srcloc(SourceLoc::new(3));
         let v2 = pos.ins().isub(v1, v0);
         pos.set_srcloc(SourceLoc::new(4));
         let v3 = pos.ins().iadd(v2, bb1_param);
-        pos.ins().brnz(v1, bb2, &[]);
-        pos.ins().jump(bb3, &[v3]);
+        let target = pos.func.dfg.block_with_args(bb2, &[]);
+        pos.ins().brnz(v1, target);
+        let target = pos.func.dfg.block_with_args(bb3, &[v3]);
+        pos.ins().jump(target);
 
         pos.func.layout.set_cold(bb2);
         pos.insert_block(bb2);
         pos.set_srcloc(SourceLoc::new(5));
         let v4 = pos.ins().iadd(v1, v0);
-        pos.ins().brnz(v4, bb2, &[]);
-        pos.ins().jump(bb1, &[v4]);
+        let target = pos.func.dfg.block_with_args(bb2, &[]);
+        pos.ins().brnz(v4, target);
+        let target = pos.func.dfg.block_with_args(bb1, &[v4]);
+        pos.ins().jump(target);
 
         pos.insert_block(bb3);
         pos.set_srcloc(SourceLoc::new(6));
