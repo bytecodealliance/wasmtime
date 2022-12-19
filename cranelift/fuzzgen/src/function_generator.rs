@@ -270,6 +270,20 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Imul, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Imul, &[I64, I64], &[I64], insert_opcode),
     (Opcode::Imul, &[I128, I128], &[I128], insert_opcode),
+    // Smulhi
+    // Not implemented on x64: https://github.com/bytecodealliance/wasmtime/issues/5468
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Smulhi, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Smulhi, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Smulhi, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Smulhi, &[I64, I64], &[I64], insert_opcode),
+    // Umulhi
+    // Not implemented on x64: https://github.com/bytecodealliance/wasmtime/issues/5468
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Umulhi, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Umulhi, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Umulhi, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Umulhi, &[I64, I64], &[I64], insert_opcode),
     // Udiv
     (Opcode::Udiv, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Udiv, &[I16, I16], &[I16], insert_opcode),
@@ -296,6 +310,20 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Ineg, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Ineg, &[I64, I64], &[I64], insert_opcode),
     (Opcode::Ineg, &[I128, I128], &[I128], insert_opcode),
+    // Iabs
+    // Some variants missing:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/5466
+    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/5467
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Iabs, &[I8], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Iabs, &[I16], &[I16], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Iabs, &[I32], &[I32], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Iabs, &[I64], &[I64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Iabs, &[I128], &[I128], insert_opcode),
     // Smin
     // smin not implemented in some backends:
     //   x64: https://github.com/bytecodealliance/wasmtime/issues/3370
