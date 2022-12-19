@@ -101,7 +101,8 @@ impl crate::isa::unwind::systemv::RegisterMapper<Reg> for RegisterMapper {
 mod tests {
     use crate::cursor::{Cursor, FuncCursor};
     use crate::ir::{
-        types, AbiParam, Function, InstBuilder, Signature, StackSlotData, StackSlotKind,
+        types, AbiParam, Function, InstBuilder, InstBuilderDerived, Signature, StackSlotData,
+        StackSlotKind,
     };
     use crate::isa::{lookup, CallConv};
     use crate::settings::{builder, Flags};

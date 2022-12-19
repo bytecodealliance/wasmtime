@@ -41,6 +41,25 @@ include!(concat!(env!("OUT_DIR"), "/inst_builder.rs"));
 /// Any type implementing `InstBuilderBase` gets all the `InstBuilder` methods for free.
 impl<'f, T: InstBuilderBase<'f>> InstBuilder<'f> for T {}
 
+/// Additional helper functions derived on top of `InstBuilder`.
+pub trait InstBuilderDerived<'f>: InstBuilder<'f> {
+    /// Jump.
+    ///
+    /// Unconditionally jump to a basic block, passing the specified
+    /// block arguments. The number and types of arguments must match the
+    /// destination block.
+    ///
+    /// Inputs:
+    ///
+    /// - block: Destination basic block
+    /// - args: block arguments
+    fn jump(self, block: ir::Block, args: &[Value]) -> Inst {
+        self.jump_(block, args)
+    }
+}
+
+impl<'f, T: InstBuilder<'f>> InstBuilderDerived<'f> for T {}
+
 /// Base trait for instruction inserters.
 ///
 /// This is an alternative base trait for an instruction builder to implement.

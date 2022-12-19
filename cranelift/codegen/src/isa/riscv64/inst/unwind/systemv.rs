@@ -67,8 +67,8 @@ mod tests {
     use crate::cursor::{Cursor, FuncCursor};
 
     use crate::ir::{
-        types, AbiParam, Function, InstBuilder, Signature, StackSlotData, StackSlotKind,
-        UserFuncName,
+        types, AbiParam, Function, InstBuilder, InstBuilderDerived, Signature, StackSlotData,
+        StackSlotKind, UserFuncName,
     };
     use crate::isa::{lookup, CallConv};
     use crate::settings::{builder, Flags};

@@ -30,7 +30,8 @@ use serde::{Deserialize, Serialize};
 
 pub use crate::ir::atomic_rmw_op::AtomicRmwOp;
 pub use crate::ir::builder::{
-    InsertBuilder, InstBuilder, InstBuilderBase, InstInserterBase, ReplaceBuilder,
+    InsertBuilder, InstBuilder, InstBuilderBase, InstBuilderDerived, InstInserterBase,
+    ReplaceBuilder,
 };
 pub use crate::ir::constant::{ConstantData, ConstantPool};
 pub use crate::ir::dfg::{DataFlowGraph, ValueDef};

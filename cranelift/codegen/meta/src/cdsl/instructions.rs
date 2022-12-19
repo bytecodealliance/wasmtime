@@ -57,6 +57,10 @@ pub(crate) struct InstructionContent {
     /// Indices in operands_out of output operands that are values.
     pub value_results: Vec<usize>,
 
+    /// True when this instruction's generated builder should have a trailing '_' in the name to
+    /// indicate that it's a lower-level interface.
+    pub is_raw: bool,
+
     /// True for instructions that terminate the block.
     pub is_terminator: bool,
     /// True for all branch or jump instructions.
@@ -133,6 +137,7 @@ pub(crate) struct InstructionBuilder {
     can_store: bool,
     can_trap: bool,
     other_side_effects: bool,
+    is_raw: bool,
 }
 
 impl InstructionBuilder {
@@ -152,6 +157,7 @@ impl InstructionBuilder {
             can_store: false,
             can_trap: false,
             other_side_effects: false,
+            is_raw: false,
         }
     }
 
@@ -211,6 +217,14 @@ impl InstructionBuilder {
         self
     }
 
+    /// Mark this instruction as not needing a generated builder function. This is useful for the
+    /// cases where we want to define a different builder interface manually than would have been
+    /// generated.
+    pub fn is_raw(mut self, val: bool) -> Self {
+        self.is_raw = val;
+        self
+    }
+
     fn build(self) -> Instruction {
         let operands_in = self.operands_in.unwrap_or_else(Vec::new);
         let operands_out = self.operands_out.unwrap_or_else(Vec::new);
@@ -250,6 +264,7 @@ impl InstructionBuilder {
             polymorphic_info,
             value_opnums,
             value_results,
+            is_raw: self.is_raw,
             imm_opnums,
             is_terminator: self.is_terminator,
             is_branch: self.is_branch,

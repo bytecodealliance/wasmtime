@@ -12,7 +12,8 @@ use crate::ir::{
     condcodes::{CondCode, IntCC},
     instructions::Opcode,
     types::{I128, I32, I64},
-    Block, DataFlowGraph, Function, Inst, InstBuilder, InstructionData, Type, Value,
+    Block, DataFlowGraph, Function, Inst, InstBuilder, InstBuilderDerived, InstructionData, Type,
+    Value,
 };
 use crate::isa::TargetIsa;
 use crate::timing;

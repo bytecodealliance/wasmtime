@@ -12,8 +12,8 @@ use cranelift::codegen::ir::{
 use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Switch, Variable};
 use cranelift::prelude::{
-    EntityRef, ExtFuncData, FloatCC, InstBuilder, IntCC, JumpTableData, MemFlags, StackSlotData,
-    StackSlotKind,
+    EntityRef, ExtFuncData, FloatCC, InstBuilder, InstBuilderDerived, IntCC, JumpTableData,
+    MemFlags, StackSlotData, StackSlotKind,
 };
 use std::collections::HashMap;
 use std::ops::RangeInclusive;

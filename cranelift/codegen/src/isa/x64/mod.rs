@@ -221,8 +221,10 @@ fn isa_constructor(
 mod test {
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
-    use crate::ir::{types::*, RelSourceLoc, SourceLoc, UserFuncName, ValueLabel, ValueLabelStart};
-    use crate::ir::{AbiParam, Function, InstBuilder, JumpTableData, Signature};
+    use crate::ir::{
+        types::*, AbiParam, Function, InstBuilder, InstBuilderDerived, JumpTableData, RelSourceLoc,
+        Signature, SourceLoc, UserFuncName, ValueLabel, ValueLabelStart,
+    };
     use crate::isa::CallConv;
     use crate::settings;
     use crate::settings::Configurable;

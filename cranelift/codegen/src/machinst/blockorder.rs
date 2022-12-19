@@ -526,7 +526,7 @@ mod test {
     use crate::cursor::{Cursor, FuncCursor};
     use crate::ir::types::*;
     use crate::ir::UserFuncName;
-    use crate::ir::{AbiParam, Function, InstBuilder, Signature};
+    use crate::ir::{AbiParam, Function, InstBuilder, InstBuilderDerived, Signature};
     use crate::isa::CallConv;
 
     fn build_test_func(n_blocks: usize, edges: &[(usize, usize)]) -> Function {

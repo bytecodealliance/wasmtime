@@ -17,7 +17,7 @@ use crate::cursor::{Cursor, FuncCursor};
 use crate::flowgraph::ControlFlowGraph;
 use crate::ir::immediates::Imm64;
 use crate::ir::types::{I128, I64};
-use crate::ir::{self, InstBuilder, InstructionData, MemFlags, Value};
+use crate::ir::{self, InstBuilder, InstBuilderDerived, InstructionData, MemFlags, Value};
 use crate::isa::TargetIsa;
 use crate::trace;
 

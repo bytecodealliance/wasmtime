@@ -17,7 +17,8 @@ use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};
 use cranelift_codegen::ir::instructions::BranchInfo;
 use cranelift_codegen::ir::types::{F32, F64, I128, I64};
 use cranelift_codegen::ir::{
-    Block, Function, Inst, InstBuilder, InstructionData, JumpTableData, Type, Value,
+    Block, Function, Inst, InstBuilder, InstBuilderDerived, InstructionData, JumpTableData, Type,
+    Value,
 };
 use cranelift_codegen::packed_option::PackedOption;
 
@@ -679,7 +680,9 @@ mod tests {
     use cranelift_codegen::entity::EntityRef;
     use cranelift_codegen::ir::instructions::BranchInfo;
     use cranelift_codegen::ir::types::*;
-    use cranelift_codegen::ir::{Function, Inst, InstBuilder, JumpTableData, Opcode};
+    use cranelift_codegen::ir::{
+        Function, Inst, InstBuilder, InstBuilderDerived, JumpTableData, Opcode,
+    };
     use cranelift_codegen::settings;
     use cranelift_codegen::verify_function;
 

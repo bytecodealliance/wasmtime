@@ -944,9 +944,12 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
         "".into()
     };
 
+    let raw_suffix = if inst.is_raw { "_" } else { "" };
+
     let proto = format!(
-        "{}{}({}) -> {}",
+        "{}{}{}({}) -> {}",
         inst.snake_name(),
+        raw_suffix,
         tmpl,
         args.join(", "),
         rtype

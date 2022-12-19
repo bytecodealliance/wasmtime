@@ -1098,8 +1098,11 @@ mod tests {
     use alloc::string::ToString;
     use cranelift_codegen::entity::EntityRef;
     use cranelift_codegen::ir::condcodes::IntCC;
-    use cranelift_codegen::ir::{types::*, UserFuncName};
-    use cranelift_codegen::ir::{AbiParam, Function, InstBuilder, MemFlags, Signature, Value};
+    use cranelift_codegen::ir::types::*;
+    use cranelift_codegen::ir::{
+        AbiParam, Function, InstBuilder, InstBuilderDerived, MemFlags, Signature, UserFuncName,
+        Value,
+    };
     use cranelift_codegen::isa::{CallConv, TargetFrontendConfig, TargetIsa};
     use cranelift_codegen::settings;
     use cranelift_codegen::verifier::verify_function;

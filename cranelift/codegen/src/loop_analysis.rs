@@ -319,7 +319,7 @@ mod tests {
     use crate::cursor::{Cursor, FuncCursor};
     use crate::dominator_tree::DominatorTree;
     use crate::flowgraph::ControlFlowGraph;
-    use crate::ir::{types, Function, InstBuilder};
+    use crate::ir::{types, Function, InstBuilder, InstBuilderDerived};
     use crate::loop_analysis::{Loop, LoopAnalysis};
     use alloc::vec::Vec;
 

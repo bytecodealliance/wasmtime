@@ -33,6 +33,7 @@ fn define_control_flow(
             &formats.jump,
         )
         .operands_in(vec![block, args])
+        .is_raw(true)
         .is_terminator(true)
         .is_branch(true),
     );

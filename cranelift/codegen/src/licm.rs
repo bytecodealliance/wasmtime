@@ -6,7 +6,8 @@ use crate::entity::{EntityList, ListPool};
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::fx::FxHashSet;
 use crate::ir::{
-    Block, DataFlowGraph, Function, Inst, InstBuilder, InstructionData, Layout, Opcode, Type, Value,
+    Block, DataFlowGraph, Function, Inst, InstBuilderDerived, InstructionData, Layout, Opcode,
+    Type, Value,
 };
 use crate::loop_analysis::{Loop, LoopAnalysis};
 use crate::timing;

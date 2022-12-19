@@ -627,7 +627,7 @@ mod tests {
     use crate::cursor::{Cursor, FuncCursor};
     use crate::flowgraph::ControlFlowGraph;
     use crate::ir::types::*;
-    use crate::ir::{Function, InstBuilder, TrapCode};
+    use crate::ir::{Function, InstBuilder, InstBuilderDerived, TrapCode};
 
     #[test]
     fn empty() {

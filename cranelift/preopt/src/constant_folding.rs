@@ -3,7 +3,7 @@
 
 use cranelift_codegen::{
     cursor::{Cursor, FuncCursor},
-    ir::{self, dfg::ValueDef, InstBuilder},
+    ir::{self, dfg::ValueDef, InstBuilder, InstBuilderDerived},
 };
 // use rustc_apfloat::{
 //     ieee::{Double, Single},
