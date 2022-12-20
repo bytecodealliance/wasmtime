@@ -304,6 +304,28 @@ const OPCODE_SIGNATURES: &'static [(
     //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4864
     #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Sdiv, &[I128, I128], &[I128], insert_opcode),
+    // Urem
+    (Opcode::Urem, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Urem, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Urem, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Urem, &[I64, I64], &[I64], insert_opcode),
+    // urem.i128 not implemented in some backends:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/5474
+    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/5472
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Urem, &[I128, I128], &[I128], insert_opcode),
+    // Srem
+    // Issues on x64: https://github.com/bytecodealliance/wasmtime/issues/5470
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Srem, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Srem, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Srem, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Srem, &[I64, I64], &[I64], insert_opcode),
+    // srem.i128 not implemented in some backends:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/5474
+    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/5472
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Srem, &[I128, I128], &[I128], insert_opcode),
     // Ineg
     (Opcode::Ineg, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Ineg, &[I16, I16], &[I16], insert_opcode),
