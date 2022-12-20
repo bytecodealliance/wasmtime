@@ -33,7 +33,7 @@ impl<'a> Arbitrary<'a> for SingleFunction {
 }
 
 /// A generated function with an ISA that targets one of cranelift's backends.
-pub struct FunctionWithIsa{
+pub struct FunctionWithIsa {
     /// TargetIsa to use when compiling this test case
     pub isa: Box<dyn isa::TargetIsa>,
 
