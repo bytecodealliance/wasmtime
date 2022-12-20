@@ -272,9 +272,7 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::IaddCout, &[I8, I8], &[I8, I8], insert_opcode),
     #[cfg(not(target_arch = "x86_64"))]
     (Opcode::IaddCout, &[I16, I16], &[I16, I8], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::IaddCout, &[I32, I32], &[I32, I8], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::IaddCout, &[I64, I64], &[I64, I8], insert_opcode),
     #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::IaddCout, &[I128, I128], &[I128, I8], insert_opcode),
