@@ -407,9 +407,15 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
             targets,
         });
     }
-    fn px_reg(&mut self, x: u8) -> PReg {
-        px_reg(x as usize)
+
+    fn fp_reg(&mut self) -> PReg {
+        px_reg(8)
     }
+
+    fn sp_reg(&mut self) -> PReg {
+        px_reg(2)
+    }
+
     fn shift_int_to_most_significant(&mut self, v: Reg, ty: Type) -> Reg {
         assert!(ty.is_int() && ty.bits() <= 64);
         if ty == I64 {

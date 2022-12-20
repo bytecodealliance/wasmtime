@@ -1125,6 +1125,7 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::MovFromPReg { rd, rm } => {
+                debug_assert!([px_reg(2), px_reg(8)].contains(&rm));
                 let rd = allocs.next_writable(rd);
                 let x = Inst::AluRRImm12 {
                     alu_op: AluOPRRI::Ori,

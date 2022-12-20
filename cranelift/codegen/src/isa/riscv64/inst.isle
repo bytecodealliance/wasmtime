@@ -141,7 +141,6 @@
       (amount i64))
 
     ;; A MOV instruction. These are encoded as OrR's (AluRRR form) but we
-    ;; luRRR form) but we
     ;; keep them separate at the `Inst` level for better pretty-printing
     ;; and faster `is_move()` logic.
     (Mov
@@ -149,7 +148,9 @@
       (rm Reg)
       (ty Type))
 
-    ;; A MOV instruction, but where the source register is a PReg.
+    ;; A MOV instruction, but where the source register is a non-allocatable
+    ;; PReg. It's important that the register be non-allocatable, as regalloc2
+    ;; will not see it as used.
     (MovFromPReg
       (rd WritableReg)
       (rm PReg))
@@ -2157,5 +2158,8 @@
         (_ Unit (emit (MInst.MovFromPReg rd rm))))
     rd))
 
-(decl px_reg (u8) PReg)
-(extern constructor px_reg px_reg)
+(decl fp_reg () PReg)
+(extern constructor fp_reg fp_reg)
+
+(decl sp_reg () PReg)
+(extern constructor sp_reg sp_reg)
