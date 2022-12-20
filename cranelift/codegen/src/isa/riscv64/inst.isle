@@ -141,12 +141,18 @@
       (amount i64))
 
     ;; A MOV instruction. These are encoded as OrR's (AluRRR form) but we
+    ;; luRRR form) but we
     ;; keep them separate at the `Inst` level for better pretty-printing
     ;; and faster `is_move()` logic.
     (Mov
       (rd WritableReg)
       (rm Reg)
       (ty Type))
+
+    ;; A MOV instruction, but where the source register is a PReg.
+    (MovFromPReg
+      (rd WritableReg)
+      (rm PReg))
 
     (Fence
       (pred FenceReq)
@@ -1958,9 +1964,6 @@
   (lower_branch (br_table index _ _) targets)
   (lower_br_table index targets))
 
-(decl x_reg (u8) Reg)
-(extern constructor x_reg x_reg)
-
 (decl load_ra () Reg)
 (extern constructor load_ra load_ra)
 
@@ -2142,3 +2145,17 @@
   (lower_bmask $I128 $I128 val)
   (let ((res ValueRegs (lower_bmask $I64 $I128 val)))
     (value_regs (value_regs_get res 0) (value_regs_get res 0))))
+
+
+;;;; Helpers for physical registers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl gen_mov_from_preg (PReg) Reg)
+
+(rule
+  (gen_mov_from_preg rm)
+  (let ((rd WritableReg (temp_writable_reg $I64))
+        (_ Unit (emit (MInst.MovFromPReg rd rm))))
+    rd))
+
+(decl px_reg (u8) PReg)
+(extern constructor px_reg px_reg)

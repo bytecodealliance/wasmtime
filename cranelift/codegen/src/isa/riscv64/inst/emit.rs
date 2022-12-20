@@ -1123,6 +1123,18 @@ impl MachInstEmit for Inst {
                     }
                 }
             }
+
+            &Inst::MovFromPReg { rd, rm } => {
+                let rd = allocs.next_writable(rd);
+                let x = Inst::AluRRImm12 {
+                    alu_op: AluOPRRI::Ori,
+                    rd,
+                    rs: Reg::from(rm),
+                    imm12: Imm12::zero(),
+                };
+                x.emit(&[], sink, emit_info, state);
+            }
+
             &Inst::BrTable {
                 index,
                 tmp1,
