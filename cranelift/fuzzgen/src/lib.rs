@@ -32,6 +32,66 @@ impl<'a> Arbitrary<'a> for SingleFunction {
     }
 }
 
+/// A generated function with an ISA that targets one of cranelift's backends.
+pub struct FunctionWithIsa{
+    /// TargetIsa to use when compiling this test case
+    pub isa: Box<dyn isa::TargetIsa>,
+
+    /// Function under test
+    pub func: Function,
+}
+
+impl fmt::Debug for FunctionWithIsa {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, ";; Compile test case\n")?;
+
+        // Print only non default flags
+        let default_flags = settings::Flags::new(settings::builder());
+        for (default, flag) in default_flags.iter().zip(self.isa.flags().iter()) {
+            assert_eq!(default.name, flag.name);
+
+            if default.value_string() != flag.value_string() {
+                writeln!(f, "set {}={}", flag.name, flag.value_string())?;
+            }
+        }
+
+        writeln!(f, "test compile\n")?;
+
+        match self.isa.triple().architecture {
+            Architecture::X86_64 => writeln!(f, "target aarch64")?,
+            Architecture::Aarch64 { .. } => writeln!(f, "target aarch64")?,
+            Architecture::S390x => writeln!(f, "target s390x")?,
+            Architecture::Riscv64 { .. } => writeln!(f, "target riscv64")?,
+            _ => unreachable!(),
+        }
+
+        writeln!(f, "{}", self.func)?;
+
+        Ok(())
+    }
+}
+
+impl<'a> Arbitrary<'a> for FunctionWithIsa {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        let target = u.choose(&["x86_64", "s390x", "aarch64", "riscv64"])?;
+        let builder = isa::lookup_by_name(target).expect("Unable to find target architecture");
+
+        let mut gen = FuzzGen::new(u);
+        let flags = gen
+            .generate_flags(builder.triple().architecture)
+            .map_err(|_| arbitrary::Error::IncorrectFormat)?;
+        let isa = builder
+            .finish(flags)
+            .map_err(|_| arbitrary::Error::IncorrectFormat)?;
+
+        let func = gen
+            .generate_func()
+            .map_err(|_| arbitrary::Error::IncorrectFormat)?;
+
+        Ok(FunctionWithIsa { isa, func })
+    }
+}
+
 pub struct TestCase {
     /// TargetIsa to use when compiling this test case
     pub isa: Box<dyn isa::TargetIsa>,

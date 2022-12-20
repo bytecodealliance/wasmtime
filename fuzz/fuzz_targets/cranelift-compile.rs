@@ -1,15 +1,10 @@
 #![no_main]
 
-use libfuzzer_sys::{arbitrary, fuzz_target};
+use libfuzzer_sys::fuzz_target;
 use once_cell::sync::Lazy;
-use std::fmt;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
-use target_lexicon::Architecture;
 
-use cranelift_codegen::ir;
-use cranelift_codegen::isa;
-use cranelift_codegen::settings;
 use cranelift_filetests::function_runner::TestFileCompiler;
 use cranelift_fuzzgen::*;
 
@@ -49,63 +44,7 @@ impl Default for Statistics {
 
 static STATISTICS: Lazy<Statistics> = Lazy::new(Statistics::default);
 
-struct CompileTest {
-    isa: Box<dyn isa::TargetIsa>,
-    func: ir::Function,
-}
-
-impl fmt::Debug for CompileTest {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, ";; Compile test case\n")?;
-
-        // Print only non default flags
-        let default_flags = settings::Flags::new(settings::builder());
-        for (default, flag) in default_flags.iter().zip(self.isa.flags().iter()) {
-            assert_eq!(default.name, flag.name);
-
-            if default.value_string() != flag.value_string() {
-                writeln!(f, "set {}={}", flag.name, flag.value_string())?;
-            }
-        }
-
-        writeln!(f, "test compile\n")?;
-
-        match self.isa.triple().architecture {
-            Architecture::X86_64 => writeln!(f, "target aarch64")?,
-            Architecture::Aarch64 { .. } => writeln!(f, "target aarch64")?,
-            Architecture::S390x => writeln!(f, "target s390x")?,
-            Architecture::Riscv64 { .. } => writeln!(f, "target riscv64")?,
-            _ => unreachable!(),
-        }
-
-        writeln!(f, "{}", self.func)?;
-
-        Ok(())
-    }
-}
-
-impl<'a> arbitrary::Arbitrary<'a> for CompileTest {
-    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
-        let target = u.choose(&["x86_64", "s390x", "aarch64", "riscv64"])?;
-        let builder = isa::lookup_by_name(target).expect("Unable to find target architecture");
-
-        let mut gen = FuzzGen::new(u);
-        let flags = gen
-            .generate_flags(builder.triple().architecture)
-            .map_err(|_| arbitrary::Error::IncorrectFormat)?;
-        let isa = builder
-            .finish(flags)
-            .map_err(|_| arbitrary::Error::IncorrectFormat)?;
-
-        let func = gen
-            .generate_func()
-            .map_err(|_| arbitrary::Error::IncorrectFormat)?;
-
-        Ok(CompileTest { isa, func })
-    }
-}
-
-fuzz_target!(|testcase: CompileTest| {
+fuzz_target!(|testcase: FunctionWithIsa| {
     // This is the default, but we should ensure that it wasn't accidentally turned off anywhere.
     assert!(testcase.isa.flags().enable_verifier());
 
