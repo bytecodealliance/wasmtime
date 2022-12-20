@@ -473,3 +473,23 @@ fn run_cwasm_from_stdin() -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(feature = "wasi-threads")]
+#[test]
+fn run_threads() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/threads.wat")?;
+    let stdout = run_wasmtime(&[
+        "run",
+        "--wasi-modules",
+        "experimental-wasi-threads",
+        "--wasm-features",
+        "threads",
+        "--disable-cache",
+        wasm.path().to_str().unwrap(),
+    ])?;
+
+    assert!(stdout.contains("Hello _start"));
+    assert!(stdout.contains("Hello wasi_thread_start"));
+    assert!(stdout.contains("Hello done"));
+    Ok(())
+}

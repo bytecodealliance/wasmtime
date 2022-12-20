@@ -3,6 +3,7 @@
 use anyhow::{anyhow, bail, Context as _, Result};
 use clap::Parser;
 use once_cell::sync::Lazy;
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use std::{
@@ -20,6 +21,9 @@ use wasmtime_wasi_nn::WasiNnCtx;
 
 #[cfg(feature = "wasi-crypto")]
 use wasmtime_wasi_crypto::WasiCryptoCtx;
+
+#[cfg(feature = "wasi-threads")]
+use wasmtime_wasi_threads::WasiThreadsCtx;
 
 fn parse_module(s: &OsStr) -> anyhow::Result<PathBuf> {
     // Do not accept wasmtime subcommand names as the module name
@@ -164,13 +168,6 @@ impl RunCommand {
             config.epoch_interruption(true);
         }
         let engine = Engine::new(&config)?;
-        let mut store = Store::new(&engine, Host::default());
-
-        // If fuel has been configured, we want to add the configured
-        // fuel amount to this store.
-        if let Some(fuel) = self.common.fuel {
-            store.add_fuel(fuel)?;
-        }
 
         let preopen_sockets = self.compute_preopen_sockets()?;
 
@@ -181,9 +178,16 @@ impl RunCommand {
         let mut linker = Linker::new(&engine);
         linker.allow_unknown_exports(self.allow_unknown_exports);
 
+        // Read the wasm module binary either as `*.wat` or a raw binary.
+        let module = self.load_module(linker.engine(), &self.module)?;
+
+        let mut host = Arc::new(Host::default());
+        let mut store = Store::new(&engine, host.clone());
         populate_with_wasi(
-            &mut store,
+            &mut host,
             &mut linker,
+            &store,
+            module.clone(),
             preopen_dirs,
             &argv,
             &self.vars,
@@ -191,6 +195,12 @@ impl RunCommand {
             self.listenfd,
             preopen_sockets,
         )?;
+
+        // If fuel has been configured, we want to add the configured
+        // fuel amount to this store.
+        if let Some(fuel) = self.common.fuel {
+            store.add_fuel(fuel)?;
+        }
 
         // Load the preload wasm modules.
         for (name, path) in self.preloads.iter() {
@@ -207,7 +217,7 @@ impl RunCommand {
 
         // Load the main wasm module.
         match self
-            .load_main_module(&mut store, &mut linker)
+            .load_main_module(&mut store, &mut linker, module)
             .with_context(|| format!("failed to run main module `{}`", self.module.display()))
         {
             Ok(()) => (),
@@ -309,7 +319,12 @@ impl RunCommand {
         result
     }
 
-    fn load_main_module(&self, store: &mut Store<Host>, linker: &mut Linker<Host>) -> Result<()> {
+    fn load_main_module(
+        &self,
+        store: &mut Store<Arc<Host>>,
+        linker: &mut Linker<Arc<Host>>,
+        module: Module,
+    ) -> Result<()> {
         if let Some(timeout) = self.wasm_timeout {
             store.set_epoch_deadline(1);
             let engine = store.engine().clone();
@@ -319,8 +334,6 @@ impl RunCommand {
             });
         }
 
-        // Read the wasm module binary either as `*.wat` or a raw binary.
-        let module = self.load_module(linker.engine(), &self.module)?;
         // The main module might be allowed to have unknown imports, which
         // should be defined as traps:
         if self.trap_unknown_imports {
@@ -342,8 +355,8 @@ impl RunCommand {
 
     fn invoke_export(
         &self,
-        store: &mut Store<Host>,
-        linker: &Linker<Host>,
+        store: &mut Store<Arc<Host>>,
+        linker: &Linker<Arc<Host>>,
         name: &str,
     ) -> Result<()> {
         let func = match linker
@@ -357,7 +370,12 @@ impl RunCommand {
         self.invoke_func(store, func, Some(name))
     }
 
-    fn invoke_func(&self, store: &mut Store<Host>, func: Func, name: Option<&str>) -> Result<()> {
+    fn invoke_func(
+        &self,
+        store: &mut Store<Arc<Host>>,
+        func: Func,
+        name: Option<&str>,
+    ) -> Result<()> {
         let ty = func.ty(&store);
         if ty.params().len() > 0 {
             eprintln!(
@@ -435,16 +453,20 @@ impl RunCommand {
 #[derive(Default)]
 struct Host {
     wasi: Option<wasmtime_wasi::WasiCtx>,
-    #[cfg(feature = "wasi-nn")]
-    wasi_nn: Option<WasiNnCtx>,
     #[cfg(feature = "wasi-crypto")]
     wasi_crypto: Option<WasiCryptoCtx>,
+    #[cfg(feature = "wasi-nn")]
+    wasi_nn: Option<WasiNnCtx>,
+    #[cfg(feature = "wasi-threads")]
+    wasi_threads: Option<WasiThreadsCtx<Arc<Host>>>,
 }
 
 /// Populates the given `Linker` with WASI APIs.
 fn populate_with_wasi(
-    store: &mut Store<Host>,
-    linker: &mut Linker<Host>,
+    host: &mut Arc<Host>,
+    linker: &mut Linker<Arc<Host>>,
+    store: &Store<Arc<Host>>,
+    module: Module,
     preopen_dirs: Vec<(String, Dir)>,
     argv: &[String],
     vars: &[(String, String)],
@@ -453,7 +475,9 @@ fn populate_with_wasi(
     mut tcplisten: Vec<TcpListener>,
 ) -> Result<()> {
     if wasi_modules.wasi_common {
-        wasmtime_wasi::add_to_linker(linker, |host| host.wasi.as_mut().unwrap())?;
+        wasmtime_wasi::add_to_linker(linker, |host| {
+            Arc::get_mut(host).unwrap().wasi.as_mut().unwrap()
+        })?;
 
         let mut builder = WasiCtxBuilder::new();
         builder = builder.inherit_stdio().args(argv)?.envs(vars)?;
@@ -475,19 +499,9 @@ fn populate_with_wasi(
             builder = builder.preopened_dir(dir, name)?;
         }
 
-        store.data_mut().wasi = Some(builder.build());
-    }
-
-    if wasi_modules.wasi_nn {
-        #[cfg(not(feature = "wasi-nn"))]
-        {
-            bail!("Cannot enable wasi-nn when the binary is not compiled with this feature.");
-        }
-        #[cfg(feature = "wasi-nn")]
-        {
-            wasmtime_wasi_nn::add_to_linker(linker, |host| host.wasi_nn.as_mut().unwrap())?;
-            store.data_mut().wasi_nn = Some(WasiNnCtx::new()?);
-        }
+        Arc::get_mut(host)
+            .expect("there must be no other host references during setup")
+            .wasi = Some(builder.build());
     }
 
     if wasi_modules.wasi_crypto {
@@ -497,8 +511,50 @@ fn populate_with_wasi(
         }
         #[cfg(feature = "wasi-crypto")]
         {
-            wasmtime_wasi_crypto::add_to_linker(linker, |host| host.wasi_crypto.as_mut().unwrap())?;
-            store.data_mut().wasi_crypto = Some(WasiCryptoCtx::new());
+            wasmtime_wasi_crypto::add_to_linker(linker, |host| {
+                Arc::get_mut(host)
+                    .wasi_crypto
+                    .as_mut()
+                    .expect("wasi-crypto is not implemented with multi-threading support")
+            })?;
+            Arc::get_mut(host)
+                .expect("there must be no other host references during setup")
+                .wasi_crypto = Some(WasiCryptoCtx::new());
+        }
+    }
+
+    if wasi_modules.wasi_nn {
+        #[cfg(not(feature = "wasi-nn"))]
+        {
+            bail!("Cannot enable wasi-nn when the binary is not compiled with this feature.");
+        }
+        #[cfg(feature = "wasi-nn")]
+        {
+            wasmtime_wasi_nn::add_to_linker(linker, |host| {
+                Arc::get_mut(host)
+                    .wasi_nn
+                    .as_mut()
+                    .expect("wasi-nn is not implemented with multi-threading support")
+            })?;
+            Arc::get_mut(host)
+                .expect("there must be no other host references during setup")
+                .wasi_nn = Some(WasiNnCtx::new()?);
+        }
+    }
+
+    if wasi_modules.wasi_threads {
+        #[cfg(not(feature = "wasi-threads"))]
+        {
+            bail!("Cannot enable wasi-threads when the binary is not compiled with this feature.");
+        }
+        #[cfg(feature = "wasi-threads")]
+        {
+            wasmtime_wasi_threads::add_to_linker(linker, store, &module, |host| {
+                host.wasi_threads.as_ref().unwrap()
+            })?;
+            Arc::get_mut(host)
+                .expect("there must be no other host references during setup")
+                .wasi_threads = Some(WasiThreadsCtx::new(module, linker.clone()));
         }
     }
 

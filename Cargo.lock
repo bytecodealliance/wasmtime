@@ -3506,6 +3506,7 @@ dependencies = [
  "wasmtime-wasi",
  "wasmtime-wasi-crypto",
  "wasmtime-wasi-nn",
+ "wasmtime-wasi-threads",
  "wasmtime-wast",
  "wast 52.0.2",
  "wat",
@@ -3772,6 +3773,17 @@ dependencies = [
  "thiserror",
  "walkdir",
  "wiggle",
+]
+
+[[package]]
+name = "wasmtime-wasi-threads"
+version = "7.0.0"
+dependencies = [
+ "anyhow",
+ "log",
+ "rand 0.8.5",
+ "wasi-common",
+ "wasmtime",
 ]
 
 [[package]]
