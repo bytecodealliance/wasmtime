@@ -174,18 +174,6 @@ impl TypeVar {
                     "can't double all float types"
                 );
             }
-            DerivedFunc::HalfVector => {
-                assert!(
-                    *ts.lanes.iter().min().unwrap() > 1,
-                    "can't halve a scalar type"
-                );
-            }
-            DerivedFunc::DoubleVector => {
-                assert!(
-                    *ts.lanes.iter().max().unwrap() < MAX_LANES,
-                    "can't double 256 lanes"
-                );
-            }
             DerivedFunc::SplitLanes => {
                 assert!(
                     ts.ints.is_empty() || *ts.ints.iter().min().unwrap() > 8,
@@ -243,12 +231,6 @@ impl TypeVar {
     }
     pub fn double_width(&self) -> TypeVar {
         self.derived(DerivedFunc::DoubleWidth)
-    }
-    pub fn half_vector(&self) -> TypeVar {
-        self.derived(DerivedFunc::HalfVector)
-    }
-    pub fn double_vector(&self) -> TypeVar {
-        self.derived(DerivedFunc::DoubleVector)
     }
     pub fn split_lanes(&self) -> TypeVar {
         self.derived(DerivedFunc::SplitLanes)
@@ -317,8 +299,6 @@ pub(crate) enum DerivedFunc {
     AsBool,
     HalfWidth,
     DoubleWidth,
-    HalfVector,
-    DoubleVector,
     SplitLanes,
     MergeLanes,
     DynamicToVector,
@@ -331,8 +311,6 @@ impl DerivedFunc {
             DerivedFunc::AsBool => "as_bool",
             DerivedFunc::HalfWidth => "half_width",
             DerivedFunc::DoubleWidth => "double_width",
-            DerivedFunc::HalfVector => "half_vector",
-            DerivedFunc::DoubleVector => "double_vector",
             DerivedFunc::SplitLanes => "split_lanes",
             DerivedFunc::MergeLanes => "merge_lanes",
             DerivedFunc::DynamicToVector => "dynamic_to_vector",
@@ -410,8 +388,6 @@ impl TypeSet {
             DerivedFunc::AsBool => self.as_bool(),
             DerivedFunc::HalfWidth => self.half_width(),
             DerivedFunc::DoubleWidth => self.double_width(),
-            DerivedFunc::HalfVector => self.half_vector(),
-            DerivedFunc::DoubleVector => self.double_vector(),
             DerivedFunc::SplitLanes => self.half_width().double_vector(),
             DerivedFunc::MergeLanes => self.double_width().half_vector(),
             DerivedFunc::DynamicToVector => self.dynamic_to_vector(),

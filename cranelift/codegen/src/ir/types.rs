@@ -364,17 +364,6 @@ impl Type {
         Some(Self(self.0 - constants::VECTOR_BASE))
     }
 
-    /// Get a SIMD vector with half the number of lanes.
-    ///
-    /// There is no `double_vector()` method. Use `t.by(2)` instead.
-    pub fn half_vector(self) -> Option<Self> {
-        if self.is_vector() && !self.is_dynamic_vector() {
-            Some(Self(self.0 - 0x10))
-        } else {
-            None
-        }
-    }
-
     /// Split the lane width in half and double the number of lanes to maintain the same bit-width.
     ///
     /// If this is a scalar type of `n` bits, it produces a SIMD vector type of `(n/2)x2`.
@@ -391,7 +380,13 @@ impl Type {
     /// If this is a scalar type, it will return `None`.
     pub fn merge_lanes(self) -> Option<Self> {
         match self.double_width() {
-            Some(double_width) => double_width.half_vector(),
+            Some(double_width) => {
+                if double_width.is_vector() && !double_width.is_dynamic_vector() {
+                    Some(Self(double_width.0 - 0x10))
+                } else {
+                    None
+                }
+            }
             None => None,
         }
     }
@@ -544,10 +539,6 @@ mod tests {
         assert_eq!(big.lane_count(), 256);
         assert_eq!(big.bits(), 64 * 256);
 
-        assert_eq!(big.half_vector().unwrap().to_string(), "f64x128");
-        assert_eq!(I32.half_vector(), None);
-        assert_eq!(INVALID.half_vector(), None);
-
         // Check that the generated constants match the computed vector types.
         assert_eq!(I32.by(4), Some(I32X4));
         assert_eq!(F64.by(8), Some(F64X8));
@@ -566,7 +557,6 @@ mod tests {
         assert_eq!(I16X8XN.min_lane_count(), 8);
 
         // Change lane counts
-        assert_eq!(F64X4XN.half_vector(), None);
         assert_eq!(I8X8XN.by(2), None);
 
         // Conversions to and from vectors.

@@ -1409,60 +1409,6 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let x = &Operand::new("x", TxN).with_doc("Vector to split");
-    let lo = &Operand::new("lo", &TxN.half_vector()).with_doc("Low-numbered lanes of `x`");
-    let hi = &Operand::new("hi", &TxN.half_vector()).with_doc("High-numbered lanes of `x`");
-
-    ig.push(
-        Inst::new(
-            "vsplit",
-            r#"
-        Split a vector into two halves.
-
-        Split the vector `x` into two separate values, each containing half of
-        the lanes from ``x``. The result may be two scalars if ``x`` only had
-        two lanes.
-        "#,
-            &formats.unary,
-        )
-        .operands_in(vec![x])
-        .operands_out(vec![lo, hi]),
-    );
-
-    let Any128 = &TypeVar::new(
-        "Any128",
-        "Any scalar or vector type with as most 128 lanes",
-        TypeSetBuilder::new()
-            .ints(Interval::All)
-            .floats(Interval::All)
-            .simd_lanes(1..128)
-            .includes_scalars(true)
-            .build(),
-    );
-
-    let x = &Operand::new("x", Any128).with_doc("Low-numbered lanes");
-    let y = &Operand::new("y", Any128).with_doc("High-numbered lanes");
-    let a = &Operand::new("a", &Any128.double_vector()).with_doc("Concatenation of `x` and `y`");
-
-    ig.push(
-        Inst::new(
-            "vconcat",
-            r#"
-        Vector concatenation.
-
-        Return a vector formed by concatenating ``x`` and ``y``. The resulting
-        vector type has twice as many lanes as each of the inputs. The lanes of
-        ``x`` appear as the low-numbered lanes, and the lanes of ``y`` become
-        the high-numbered lanes of ``a``.
-
-        It is possible to form a vector by concatenating two scalars.
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
-    );
-
     let c = &Operand::new("c", &TxN.as_bool()).with_doc("Controlling vector");
     let x = &Operand::new("x", TxN).with_doc("Value to use where `c` is true");
     let y = &Operand::new("y", TxN).with_doc("Value to use where `c` is false");
