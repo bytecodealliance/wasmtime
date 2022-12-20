@@ -58,10 +58,13 @@ impl fmt::Debug for TestCase {
             }
         }
 
-        writeln!(f, "target aarch64")?;
-        writeln!(f, "target s390x")?;
-        writeln!(f, "target riscv64")?;
-        writeln!(f, "target x86_64\n")?;
+        match self.isa.triple().architecture {
+            Architecture::X86_64 => writeln!(f, "target aarch64")?,
+            Architecture::Aarch64 { .. } => writeln!(f, "target aarch64")?,
+            Architecture::S390x => writeln!(f, "target s390x")?,
+            Architecture::Riscv64 { .. } => writeln!(f, "target riscv64")?,
+            _ => unreachable!(),
+        }
 
         writeln!(f, "{}", self.func)?;
 
