@@ -1164,7 +1164,11 @@ where
         Opcode::AtomicCas => unimplemented!("AtomicCas"),
         Opcode::AtomicLoad => unimplemented!("AtomicLoad"),
         Opcode::AtomicStore => unimplemented!("AtomicStore"),
-        Opcode::Fence => unimplemented!("Fence"),
+        Opcode::Fence => {
+            // The interpreter always runs in a single threaded context, so we don't
+            // actually need to emit a fence here.
+            ControlFlow::Continue
+        }
         Opcode::WideningPairwiseDotProductS => {
             let ctrl_ty = types::I16X8;
             let new_type = ctrl_ty.merge_lanes().unwrap();

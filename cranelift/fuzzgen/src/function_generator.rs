@@ -1040,6 +1040,8 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::Icmp, &[I32, I32], &[I8], insert_cmp),
     (Opcode::Icmp, &[I64, I64], &[I8], insert_cmp),
     (Opcode::Icmp, &[I128, I128], &[I8], insert_cmp),
+    // Fence
+    (Opcode::Fence, &[], &[], insert_opcode),
     // Stack Access
     (Opcode::StackStore, &[I8], &[], insert_stack_store),
     (Opcode::StackStore, &[I16], &[], insert_stack_store),
