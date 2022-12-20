@@ -188,6 +188,26 @@ fn insert_const(
     Ok(())
 }
 
+fn insert_bitcast(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    _opcode: Opcode,
+    args: &'static [Type],
+    rets: &'static [Type],
+) -> Result<()> {
+    let from_var = fgen.get_variable_of_type(args[0])?;
+    let from_val = builder.use_var(from_var);
+
+    let to_var = fgen.get_variable_of_type(rets[0])?;
+
+    // TODO: We can generate little/big endian flags here.
+    let memflags = MemFlags::new();
+
+    let res = builder.ins().bitcast(rets[0], memflags, from_val);
+    builder.def_var(to_var, res);
+    Ok(())
+}
+
 fn insert_load_store(
     fgen: &mut FunctionGenerator,
     builder: &mut FunctionBuilder,
@@ -1017,6 +1037,11 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Istore16, &[I32], &[], insert_load_store),
     (Opcode::Istore16, &[I64], &[], insert_load_store),
     (Opcode::Istore32, &[I64], &[], insert_load_store),
+    // Bitcast
+    (Opcode::Bitcast, &[F32], &[I32], insert_bitcast),
+    (Opcode::Bitcast, &[I32], &[F32], insert_bitcast),
+    (Opcode::Bitcast, &[F64], &[I64], insert_bitcast),
+    (Opcode::Bitcast, &[I64], &[F64], insert_bitcast),
     // Integer Consts
     (Opcode::Iconst, &[], &[I8], insert_const),
     (Opcode::Iconst, &[], &[I16], insert_const),
