@@ -7,9 +7,11 @@ use cranelift::codegen::data_value::DataValue;
 use cranelift::codegen::ir::types::*;
 use cranelift::codegen::ir::Function;
 use cranelift::codegen::Context;
+use cranelift::prelude::isa;
 use cranelift::prelude::*;
 use cranelift_native::builder_with_options;
 use std::fmt;
+use target_lexicon::Architecture;
 
 mod config;
 mod function_generator;
@@ -31,8 +33,8 @@ impl<'a> Arbitrary<'a> for SingleFunction {
 }
 
 pub struct TestCase {
-    /// [Flags] to use when compiling this test case
-    pub flags: Flags,
+    /// TargetIsa to use when compiling this test case
+    pub isa: Box<dyn isa::TargetIsa>,
     /// Function under test
     pub func: Function,
     /// Generate multiple test inputs for each test case.
@@ -48,7 +50,7 @@ impl fmt::Debug for TestCase {
 
         // Print only non default flags
         let default_flags = Flags::new(settings::builder());
-        for (default, flag) in default_flags.iter().zip(self.flags.iter()) {
+        for (default, flag) in default_flags.iter().zip(self.isa.flags().iter()) {
             assert_eq!(default.name, flag.name);
 
             if default.value_string() != flag.value_string() {
@@ -101,7 +103,7 @@ impl fmt::Debug for TestCase {
 impl<'a> Arbitrary<'a> for TestCase {
     fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
         FuzzGen::new(u)
-            .generate_test()
+            .generate_host_test()
             .map_err(|_| arbitrary::Error::IncorrectFormat)
     }
 }
@@ -224,14 +226,14 @@ where
         Ok(ctx.func)
     }
 
-    fn generate_func(&mut self) -> Result<Function> {
+    pub fn generate_func(&mut self) -> Result<Function> {
         let func = FunctionGenerator::new(&mut self.u, &self.config).generate()?;
         self.run_func_passes(func)
     }
 
     /// Generate a random set of cranelift flags.
     /// Only semantics preserving flags are considered
-    fn generate_flags(&mut self) -> Result<Flags> {
+    pub fn generate_flags(&mut self, target_arch: Architecture) -> Result<Flags> {
         let mut builder = settings::builder();
 
         let opt = self.u.choose(OptLevel::all())?;
@@ -267,6 +269,12 @@ where
             builder.set(flag_name, value.as_str())?;
         }
 
+        let supports_inline_probestack = || match target_arch {
+            Architecture::X86_64 => true,
+            Architecture::Aarch64(_) => true,
+            _ => false,
+        };
+
         // Optionally test inline stackprobes on supported platforms
         // TODO: Test outlined stack probes.
         if supports_inline_probestack() && bool::arbitrary(self.u)? {
@@ -283,7 +291,7 @@ where
 
         // We need llvm ABI extensions for i128 values on x86, so enable it regardless of
         // what we picked above.
-        if cfg!(target_arch = "x86_64") {
+        if target_arch == Architecture::X86_64 {
             builder.enable("enable_llvm_abi_extensions")?;
         }
 
@@ -300,26 +308,23 @@ where
         // into compilation anywhere, we leave it on unconditionally to make sure the generation doesn't panic.
         builder.enable("machine_code_cfg_info")?;
 
-        return Ok(Flags::new(builder));
-
-        fn supports_inline_probestack() -> bool {
-            cfg!(target_arch = "x86_64") || cfg!(target_arch = "aarch64")
-        }
+        Ok(Flags::new(builder))
     }
 
-    pub fn generate_test(mut self) -> Result<TestCase> {
+    pub fn generate_host_test(mut self) -> Result<TestCase> {
         // If we're generating test inputs as well as a function, then we're planning to execute
         // this function. That means that any function references in it need to exist. We don't yet
         // have infrastructure for generating multiple functions, so just don't generate funcrefs.
         self.config.funcrefs_per_function = 0..=0;
 
-        let flags = self.generate_flags()?;
+        // TestCase is meant to be consumed by a runner, so we make the assumption here that we're
+        // generating a TargetIsa for the host.
+        let builder =
+            builder_with_options(true).expect("Unable to build a TargetIsa for the current host");
+        let flags = self.generate_flags(builder.triple().architecture)?;
+        let isa = builder.finish(flags)?;
         let func = self.generate_func()?;
         let inputs = self.generate_test_inputs(&func.signature)?;
-        Ok(TestCase {
-            flags,
-            func,
-            inputs,
-        })
+        Ok(TestCase { isa, func, inputs })
     }
 }
