@@ -184,9 +184,10 @@ enum HasControlFlow {
 
 impl HasControlFlow {
     /// Identify which rules satisfy this query. Partition matching rules
-    /// first in `order`, and return the number of rules found. No ordering is
-    /// guaranteed within either partition, which is fine because later we'll
-    /// recursively sort both partitions.
+    /// first in `order`, and return the number of rules found. No ordering
+    /// is guaranteed within either partition, which allows this function to
+    /// run in linear time. That's fine because later we'll recursively sort
+    /// both partitions.
     fn partition_ignoring_priority(self, rules: &RuleSet, order: &mut [usize]) -> usize {
         partition_in_place(order, |&idx| {
             let rule = &rules.rules[idx];
@@ -236,14 +237,29 @@ enum BindingState {
     Matched,
 }
 
+/// A rule filter ([HasControlFlow]), plus temporary storage for the sort
+/// key used in `best_control_flow` to order these candidates. Keeping the
+/// temporary storage here lets us avoid repeated heap allocations.
 #[derive(Clone, Debug)]
 struct Candidate {
+    kind: HasControlFlow,
     count: usize,
     state: BindingState,
-    kind: HasControlFlow,
 }
 
 impl Candidate {
+    /// Construct a candidate where the sort key is smaller than that
+    /// of any valid candidate. The sort key will need to be reset by
+    /// `best_control_flow` before use.
+    const fn with_invalid_key(kind: HasControlFlow) -> Self {
+        Candidate {
+            kind,
+            count: 0,
+            state: BindingState::Unavailable,
+        }
+    }
+
+    /// Extract the sort key from this candidate.
     fn key(&self) -> impl Ord {
         // We prefer to match as many rules at once as possible. Break ties by
         // preferring bindings we've already emitted.
@@ -299,9 +315,15 @@ impl<'a> Decomposition<'a> {
         }
     }
 
+    /// Ensure that every binding site's state reflects its dependencies'
+    /// states. This takes time linear in the number of bindings. Because
+    /// `trie_again` only hash-conses a binding after all its dependencies have
+    /// already been hash-consed, a single in-order pass visits a binding's
+    /// dependencies before visiting the binding itself.
     fn add_bindings(&mut self) {
         for (idx, binding) in self.rules.bindings.iter().enumerate() {
-            // We only add these bindings when matching a corresponding constraint.
+            // We only add these bindings when matching a corresponding
+            // type of control flow, in `make_control_flow`.
             if matches!(
                 binding,
                 Binding::Iterator { .. } | Binding::MatchVariant { .. } | Binding::MatchSome { .. }
@@ -310,16 +332,16 @@ impl<'a> Decomposition<'a> {
             }
 
             // TODO: proactively put some bindings in `Emitted` state
-            // That makes them visible to the best-binding heuristic, which prefers to match on
-            // already-emitted bindings first. This helps to sort cheap computations before
-            // expensive ones.
+            // That makes them visible to the best-binding heuristic, which
+            // prefers to match on already-emitted bindings first. This helps
+            // to sort cheap computations before expensive ones.
 
-            let idx = idx.try_into().unwrap();
-            if self.ready(idx) < BindingState::Available {
+            let idx: BindingId = idx.try_into().unwrap();
+            if self.ready[idx.index()] < BindingState::Available {
                 if binding
                     .sources()
                     .iter()
-                    .all(|&source| self.ready(source) >= BindingState::Available)
+                    .all(|&source| self.ready[source.index()] >= BindingState::Available)
                 {
                     self.set_ready(idx, BindingState::Available);
                 }
@@ -327,70 +349,8 @@ impl<'a> Decomposition<'a> {
         }
     }
 
-    fn use_expr(&mut self, name: BindingId) {
-        if self.ready(name) < BindingState::Emitted {
-            self.set_ready(name, BindingState::Emitted);
-            let binding = &self.rules.bindings[name.index()];
-            for &source in binding.sources() {
-                self.use_expr(source);
-            }
-            let let_bind = match binding {
-                // Never let-bind trivial expressions.
-                Binding::MatchTuple { .. } => false,
-                Binding::ConstInt { .. } => false,
-                Binding::ConstPrim { .. } => false,
-                Binding::Argument { .. } => false,
-                // Only let-bind variant constructors if they have some fields.
-                // Building a variant with no fields is cheap, but don't
-                // duplicate more complex expressions.
-                Binding::MakeVariant { fields, .. } => !fields.is_empty(),
-                _ => true,
-            };
-            if let_bind {
-                self.bind_order.push(name);
-            }
-        }
-    }
-
-    fn ready(&self, source: BindingId) -> BindingState {
-        self.ready[source.index()]
-    }
-
-    fn set_ready(&mut self, source: BindingId, state: BindingState) {
-        let old = &mut self.ready[source.index()];
-        debug_assert!(*old <= state);
-
-        // Add candidates for this binding, but only when it first becomes
-        // available.
-        if let BindingState::Unavailable = old {
-            self.candidates.extend(
-                // A binding site will have at most one of these kinds of
-                // constraint, and many have none. But `best_single_binding`
-                // has to check all candidates anyway, so let it figure out
-                // which (if any) of these are applicable. It will only check
-                // false candidates once on any partition, removing them from
-                // this list immediately.
-                [
-                    HasControlFlow::Match(source),
-                    HasControlFlow::Loop(source),
-                    // Obviously this binding site equals itself, so this
-                    // checks whether it participates in any equality
-                    // constraints at all.
-                    HasControlFlow::Equal(source, source),
-                ]
-                .into_iter()
-                .map(|kind| Candidate {
-                    // count will be filled in later by `best_single_binding`
-                    count: 0,
-                    state,
-                    kind,
-                }),
-            );
-        }
-
-        *old = state;
-    }
-
+    /// Determines the final evaluation order for the given subset of rules, and
+    /// builds a [Block] representing that order.
     fn sort(mut self, mut order: &mut [usize]) -> Block {
         while let Some(best) = self.best_control_flow(order) {
             // Peel off all rules that have this particular control flow, and
@@ -412,13 +372,10 @@ impl<'a> Decomposition<'a> {
         // no unhandled rules left, or because every candidate for control flow
         // for the remaining rules has already been matched by some ancestor in
         // the tree.
-        debug_assert_eq!(
-            self.candidates
-                .iter()
-                .filter(|c| c.state != BindingState::Matched)
-                .count(),
-            0
-        );
+        debug_assert!(self
+            .candidates
+            .iter()
+            .all(|c| c.state == BindingState::Matched));
 
         // If we're building a multi-constructor, then there could be multiple
         // rules with the same left-hand side. We'll evaluate them all, but
@@ -447,6 +404,38 @@ impl<'a> Decomposition<'a> {
         }
 
         self.block
+    }
+
+    /// Let-bind this binding site and all its dependencies, skipping any
+    /// which are already let-bound. Also skip let-bindings for certain trivial
+    /// expressions which are safe and cheap to evaluate multiple times,
+    /// because that reduces clutter in the generated code.
+    fn use_expr(&mut self, name: BindingId) {
+        if self.ready[name.index()] < BindingState::Emitted {
+            self.set_ready(name, BindingState::Emitted);
+            let binding = &self.rules.bindings[name.index()];
+            for &source in binding.sources() {
+                self.use_expr(source);
+            }
+
+            let should_let_bind = match binding {
+                Binding::ConstInt { .. } => false,
+                Binding::ConstPrim { .. } => false,
+                Binding::Argument { .. } => false,
+                Binding::MatchTuple { .. } => false,
+
+                // Only let-bind variant constructors if they have some fields.
+                // Building a variant with no fields is cheap, but don't
+                // duplicate more complex expressions.
+                Binding::MakeVariant { fields, .. } => !fields.is_empty(),
+
+                // By default, do let-bind: that's always safe.
+                _ => true,
+            };
+            if should_let_bind {
+                self.bind_order.push(name);
+            }
+        }
     }
 
     /// Build one control-flow construct and its subtree for the specified rules.
@@ -533,11 +522,24 @@ impl<'a> Decomposition<'a> {
             }
 
             HasControlFlow::Loop(source) => {
+                // Consuming a multi-term involves two binding sites:
+                // calling the multi-term to get an iterator (the `source`),
+                // and looping over the iterator to get a binding for each
+                // `result`.
                 let result = self
                     .rules
                     .find_binding(&Binding::Iterator { source })
                     .unwrap();
+
+                // We must not let-bind the iterator until we're ready to
+                // consume it, because it can only be consumed once. This also
+                // means that the let-binding for `source` is not actually
+                // reusable after this point, so even though we need to emit
+                // its let-binding here, we pretend we haven't.
+                let base_state = self.ready[source.index()];
+                debug_assert_eq!(base_state, BindingState::Available);
                 self.use_expr(source);
+                self.ready[source.index()] = base_state;
                 self.add_bindings();
 
                 let mut child = self.new_block();
@@ -552,6 +554,35 @@ impl<'a> Decomposition<'a> {
         }
     }
 
+    /// Advance the given binding to a new state. The new state usually should
+    /// be greater than the existing state; but at the least it must never
+    /// go backward.
+    fn set_ready(&mut self, source: BindingId, state: BindingState) {
+        let old = &mut self.ready[source.index()];
+        debug_assert!(*old <= state);
+
+        // Add candidates for this binding, but only when it first becomes
+        // available.
+        if let BindingState::Unavailable = old {
+            // A binding site can't have all of these kinds of constraint,
+            // and many have none. But `best_control_flow` has to check all
+            // candidates anyway, so let it figure out which (if any) of these
+            // are applicable. It will only check false candidates once on any
+            // partition, removing them from this list immediately.
+            self.candidates.extend([
+                Candidate::with_invalid_key(HasControlFlow::Match(source)),
+                Candidate::with_invalid_key(HasControlFlow::Loop(source)),
+                // Obviously this binding site equals itself, so this checks
+                // whether it participates in any equality constraints at all.
+                Candidate::with_invalid_key(HasControlFlow::Equal(source, source)),
+            ]);
+        }
+
+        *old = state;
+    }
+
+    /// For the specified set of rules, heuristically choose which control-flow
+    /// will minimize redundant work when the generated code is running.
     fn best_control_flow(&mut self, order: &mut [usize]) -> Option<HasControlFlow> {
         // If there are no rules left, none of the candidates will match
         // anything in the `retain_mut` call below, so short-circuit it.
@@ -561,11 +592,8 @@ impl<'a> Decomposition<'a> {
             return None;
         }
 
-        // Remove false candidates, and recompute candidate state for the
-        // current set of rules in `order`. Note that as we partition the rule
-        // set into smaller groups, the number of rules which have a particular
-        // kind of constraint can never grow, so a candidate removed here
-        // doesn't need to be examined again in this partition.
+        // Remove false candidates, and recompute the candidate sort key for
+        // the current set of rules in `order`.
         self.candidates.retain_mut(|candidate| {
             // This binding's state may have changed since we last looked at it.
             let source = match candidate.kind {
@@ -575,39 +603,36 @@ impl<'a> Decomposition<'a> {
             };
             candidate.state = self.ready[source.index()];
 
-            // Never evaluate concrete constraints on binding sites that
-            // we already matched. Either we matched against a concrete
-            // constraint, in which case we shouldn't do it again; or we
-            // matched an equality constraint, in which case we know there
-            // are no concrete constraints on the same binding sites in these
-            // rules.
-            // FIXME: discard matched loops too; only matched equals are still useful
-            if let Candidate {
-                state: BindingState::Matched,
-                kind: HasControlFlow::Match(_),
-                ..
-            } = candidate
-            {
-                return false;
+            // Candidates which have already been matched in this partition
+            // are only used for equality constraints. Prune others to avoid
+            // spending any more time on them.
+            if candidate.state == BindingState::Matched {
+                if !matches!(candidate.kind, HasControlFlow::Equal(_, _)) {
+                    return false;
+                }
             }
 
-            // Only consider constraints that are present in some rule in the
-            // current partition.
             let constrained = candidate
                 .kind
                 .partition_ignoring_priority(&self.rules, order);
+
+            // Only consider constraints that are present in some rule in the
+            // current partition. Note that as we partition the rule set into
+            // smaller groups, the number of rules which have a particular
+            // kind of constraint can never grow, so a candidate removed here
+            // doesn't need to be examined again in this partition.
             if constrained == 0 {
                 return false;
             }
 
-            // The sort key below is not based solely on how many rules have
-            // this constraint, but on how many such rules can go into the same
-            // block without violating rule priority.
+            // The sort key is not based solely on how many rules have this
+            // constraint, but on how many such rules can go into the same
+            // block without violating rule priority. This number can grow
+            // as higher-priority rules are removed from the partition, so we
+            // _can't_ drop candidates just because this is zero. Since some
+            // rule has this constraint, it will become viable in some later
+            // partition.
             candidate.count = respect_priority(&self.rules, order, constrained);
-
-            // Even if there are no satisfying rules now, we still need to keep
-            // this candidate. Since some rule has this constraint, it will
-            // become viable in some later partition.
             true
         });
 
@@ -625,26 +650,32 @@ impl<'a> Decomposition<'a> {
         let unmatched = self
             .candidates
             .partition_point(|candidate| candidate.state != BindingState::Matched);
-        let (mut unmatched, matched) = self.candidates.split_at_mut(unmatched);
+        let (mut unmatched, matched) = self.candidates.split_at(unmatched);
 
-        let mut best = Candidate {
-            count: 0,
-            // All valid candidates have count > 0 so the other fields don't
-            // matter.
-            state: BindingState::Unavailable,
-            kind: HasControlFlow::Match(0.try_into().unwrap()),
-        };
-        while let Some((candidate, rest)) = unmatched.split_first_mut() {
+        // All valid candidates sort greater than this so the kind of control flow
+        // doesn't matter.
+        let mut best = Candidate::with_invalid_key(HasControlFlow::Match(0.try_into().unwrap()));
+
+        // We sorted the candidates in reverse order of their sort key, so the
+        // first one is usually the best option we have. However, equality-
+        // constraint candidates are over-approximated. Those identify how many
+        // rules have some kind of equality constraint involving a particular
+        // binding site, but we actually need to find the rules with an
+        // equality constraint on a particular _pair_ of binding sites. Those
+        // are the intersection of two candidates' rules, so the upper bound on
+        // the number of matching rules is whichever candidate is smaller.
+        while let Some((candidate, rest)) = unmatched.split_first() {
             unmatched = rest;
             if candidate.key() <= best.key() {
                 break;
             }
             match candidate.kind {
+                HasControlFlow::Match(_) | HasControlFlow::Loop(_) => return Some(candidate.kind),
                 HasControlFlow::Equal(a, _) => {
                     for other in unmatched.iter().chain(matched.iter()) {
                         if let HasControlFlow::Equal(b, _) = other.kind {
                             let mut new = Candidate {
-                                // `split_on` will find the intersection of
+                                // `partition` will find the intersection of
                                 // these two candidates' rules, and the best
                                 // case is one is a subset of the other.
                                 count: candidate.count.min(other.count),
@@ -674,7 +705,6 @@ impl<'a> Decomposition<'a> {
                         }
                     }
                 }
-                HasControlFlow::Match(_) | HasControlFlow::Loop(_) => return Some(candidate.kind),
             }
         }
         if best.count > 0 {
@@ -685,15 +715,31 @@ impl<'a> Decomposition<'a> {
     }
 }
 
-fn partition_in_place<T>(xs: &mut [T], mut f: impl FnMut(&T) -> bool) -> usize {
+/// Places all elements which satisfy the predicate at the beginning of the
+/// slice, and all elements which don't at the end. Returns the number of
+/// elements in the first partition.
+///
+/// This function runs in time linear in the number of elements, and calls the
+/// predicate exactly once per element. If either partition is empty,
+fn partition_in_place<T>(xs: &mut [T], mut pred: impl FnMut(&T) -> bool) -> usize {
     let mut iter = xs.iter_mut();
     let mut partition_point = 0;
     while let Some(a) = iter.next() {
-        if f(a) {
+        if pred(a) {
             partition_point += 1;
-        } else if let Some(b) = iter.rfind(|b| f(b)) {
-            std::mem::swap(a, b);
-            partition_point += 1;
+        } else {
+            // `a` belongs in the partition at the end. If there's some later
+            // element `b` that belongs in the partition at the beginning,
+            // swap them. Working backwards from the end establishes the loop
+            // invariant that both ends of the array are partitioned correctly,
+            // and only the middle needs to be checked.
+            while let Some(b) = iter.next_back() {
+                if pred(b) {
+                    std::mem::swap(a, b);
+                    partition_point += 1;
+                    break;
+                }
+            }
         }
     }
     partition_point
