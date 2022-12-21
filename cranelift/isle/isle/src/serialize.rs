@@ -20,7 +20,7 @@
 use std::cmp::Reverse;
 
 use crate::lexer::Pos;
-use crate::trie_again::{Binding, BindingId, Constraint, Overlap, RuleSet};
+use crate::trie_again::{Binding, BindingId, Constraint, Overlap, Rule, RuleSet};
 
 /// Decomposes the rule-set into a tree of [Block]s.
 pub fn serialize(rules: &RuleSet) -> Block {
@@ -251,15 +251,31 @@ impl Candidate {
     }
 }
 
+/// Builder for one [Block] in the tree.
 struct Decomposition<'a> {
+    /// The complete RuleSet, shared across the whole tree.
     rules: &'a RuleSet,
+    /// The state of all binding sites at this point in the tree, indexed by
+    /// [BindingId]. Cloned when decomposing children of this block so they
+    /// can reflect the state in nested scopes without falsely claiming that
+    /// bindings are subsequently available in this outer scope.
     ready: Vec<BindingState>,
+    /// The current set of candidates for control flow to add at this point in
+    /// the tree. These are sorted before use, so order doesn't matter. Cloned
+    /// when decomposing children of this block because we can't rely on any
+    /// match results that might be computed in a nested scope, so if we still
+    /// care about a candidate in the fallback case then we need to emit the
+    /// correct control flow for it again.
     candidates: Vec<Candidate>,
+    /// Accumulator for bindings that should be emitted before the next
+    /// control-flow construct.
     bind_order: Vec<BindingId>,
+    /// Accumulator for the final Block that we'll return as this subtree.
     block: Block,
 }
 
 impl<'a> Decomposition<'a> {
+    /// Create a builder for the root [Block].
     fn new(rules: &'a RuleSet) -> Decomposition<'a> {
         let mut result = Decomposition {
             rules,
@@ -272,6 +288,7 @@ impl<'a> Decomposition<'a> {
         result
     }
 
+    /// Create a builder for a nested [Block].
     fn new_block(&mut self) -> Decomposition {
         Decomposition {
             rules: self.rules,
@@ -375,16 +392,26 @@ impl<'a> Decomposition<'a> {
     }
 
     fn sort(mut self, mut order: &mut [usize]) -> Block {
-        while let Some(best) = self.best_single_binding(order) {
+        while let Some(best) = self.best_control_flow(order) {
+            // Peel off all rules that have this particular control flow, and
+            // save the rest for the next iteration of the loop.
             let partition_point = best.partition(&self.rules, order);
             debug_assert!(partition_point > 0);
             let (this, rest) = order.split_at_mut(partition_point);
             order = rest;
 
-            let control_flow = self.make_control_flow(best, this);
-            self.add_step(control_flow);
+            // Recursively build the control-flow tree for these rules.
+            let check = self.make_control_flow(best, this);
+            // Note that `make_control_flow` may have added more let-bindings.
+            let bind_order = std::mem::take(&mut self.bind_order);
+            self.block.steps.push(EvalStep { bind_order, check });
         }
 
+        // At this point, `best_control_flow` says the remaining rules don't
+        // have any control flow left to emit. That could be because there are
+        // no unhandled rules left, or because every candidate for control flow
+        // for the remaining rules has already been matched by some ancestor in
+        // the tree.
         debug_assert_eq!(
             self.candidates
                 .iter()
@@ -392,22 +419,38 @@ impl<'a> Decomposition<'a> {
                 .count(),
             0
         );
+
+        // If we're building a multi-constructor, then there could be multiple
+        // rules with the same left-hand side. We'll evaluate them all, but
+        // to keep the output consistent, first sort by descending priority
+        // and break ties with the order the rules were declared. In non-multi
+        // constructors, there should be at most one rule remaining here.
         order.sort_unstable_by_key(|&idx| (Reverse(self.rules.rules[idx].prio), idx));
         for &idx in order.iter() {
-            let rule = &self.rules.rules[idx];
-            for &impure in rule.impure.iter() {
+            let &Rule {
+                pos,
+                result,
+                ref impure,
+                ..
+            } = &self.rules.rules[idx];
+
+            // Ensure that any impure constructors are called, even if their
+            // results aren't used.
+            for &impure in impure.iter() {
                 self.use_expr(impure);
             }
-            self.use_expr(rule.result);
-            self.add_step(ControlFlow::Return {
-                pos: rule.pos,
-                result: rule.result,
-            });
+            self.use_expr(result);
+
+            let check = ControlFlow::Return { pos, result };
+            let bind_order = std::mem::take(&mut self.bind_order);
+            self.block.steps.push(EvalStep { bind_order, check });
         }
 
         self.block
     }
 
+    /// Build one control-flow construct and its subtree for the specified rules.
+    /// The rules in `order` must all have the kind of control-flow named in `best`.
     fn make_control_flow(&mut self, best: HasControlFlow, order: &mut [usize]) -> ControlFlow {
         match best {
             HasControlFlow::Match(source) => {
@@ -417,15 +460,23 @@ impl<'a> Decomposition<'a> {
 
                 let get_constraint =
                     |idx: usize| self.rules.rules[idx].get_constraint(source).unwrap();
+
+                // Ensure that identical constraints are grouped together, then
+                // loop over each group.
                 order.sort_unstable_by_key(|&idx| get_constraint(idx));
                 for g in group_by_mut(order, |&a, &b| get_constraint(a) == get_constraint(b)) {
+                    // Applying a constraint moves the discriminant from
+                    // Emitted to Matched, but only within the constraint's
+                    // match arm; later fallthrough cases may need to match
+                    // this discriminant again. Since `source` is in the
+                    // `Emitted` state in the parent due to the above call
+                    // to `use_expr`, calling `add_bindings` again after this
+                    // wouldn't change anything.
                     let mut child = self.new_block();
-                    // Applying a constraint moves the discriminant
-                    // from Emitted to Matched, but only within the
-                    // constraint's match arm; later fallthrough cases
-                    // may need to match this discriminant again.
                     child.set_ready(source, BindingState::Matched);
 
+                    // Get the constraint for this group, and all of the
+                    // binding sites that it introduces.
                     let constraint = get_constraint(g[0]);
                     let bindings = Vec::from_iter(
                         constraint
@@ -451,8 +502,8 @@ impl<'a> Decomposition<'a> {
                         child.add_bindings();
                     }
 
+                    // Recursively construct a Block for this group of rules.
                     let body = child.sort(g);
-
                     arms.push(MatchArm {
                         constraint,
                         bindings,
@@ -464,6 +515,10 @@ impl<'a> Decomposition<'a> {
             }
 
             HasControlFlow::Equal(a, b) => {
+                // Both sides of the equality test must be evaluated before
+                // the condition can be tested. Go ahead and let-bind them
+                // so they're available without re-evaluation in fall-through
+                // cases. But only mark them as matched within the subtree.
                 self.use_expr(a);
                 self.use_expr(b);
                 self.add_bindings();
@@ -471,8 +526,9 @@ impl<'a> Decomposition<'a> {
                 let mut child = self.new_block();
                 child.set_ready(a, BindingState::Matched);
                 child.set_ready(b, BindingState::Matched);
-                let body = child.sort(order);
 
+                // Recursively construct a Block for this group of rules.
+                let body = child.sort(order);
                 ControlFlow::Equal { a, b, body }
             }
 
@@ -488,19 +544,15 @@ impl<'a> Decomposition<'a> {
                 child.set_ready(source, BindingState::Matched);
                 child.set_ready(result, BindingState::Emitted);
                 child.add_bindings();
-                let body = child.sort(order);
 
+                // Recursively construct a Block for this group of rules.
+                let body = child.sort(order);
                 ControlFlow::Loop { result, body }
             }
         }
     }
 
-    fn add_step(&mut self, check: ControlFlow) {
-        let bind_order = std::mem::take(&mut self.bind_order);
-        self.block.steps.push(EvalStep { bind_order, check });
-    }
-
-    fn best_single_binding(&mut self, order: &mut [usize]) -> Option<HasControlFlow> {
+    fn best_control_flow(&mut self, order: &mut [usize]) -> Option<HasControlFlow> {
         // If there are no rules left, none of the candidates will match
         // anything in the `retain_mut` call below, so short-circuit it.
         if order.is_empty() {
