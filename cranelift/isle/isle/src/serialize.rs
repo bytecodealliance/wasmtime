@@ -70,8 +70,8 @@ pub enum ControlFlow {
     },
     /// Evaluate a block once with each value of the given binding site.
     Loop {
-        /// A binding site of type [trie_again::Binding::Iterator]. Its source
-        /// binding site must be a multi-extractor or multi-constructor call.
+        /// A binding site of type [Binding::Iterator]. Its source binding site
+        /// must be a multi-extractor or multi-constructor call.
         result: BindingId,
         /// What to evaluate with each binding.
         body: Block,
