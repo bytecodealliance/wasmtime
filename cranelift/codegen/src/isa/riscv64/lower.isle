@@ -858,10 +858,10 @@
 ;;; Rules for `get_{frame,stack}_pointer` and `get_return_address` ;;;;;;;;;;;;;
 
 (rule (lower (get_frame_pointer))
-  (gen_move2 (x_reg 8) $I64 $I64))
+  (gen_mov_from_preg (fp_reg)))
 
 (rule (lower (get_stack_pointer))
-  (gen_move2 (x_reg 2) $I64 $I64))
+  (gen_mov_from_preg (sp_reg)))
 
 (rule (lower (get_return_address))
   (load_ra))

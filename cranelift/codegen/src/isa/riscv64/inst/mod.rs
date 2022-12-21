@@ -431,6 +431,10 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(rm);
             collector.reg_def(rd);
         }
+        &Inst::MovFromPReg { rd, rm } => {
+            debug_assert!([px_reg(2), px_reg(8)].contains(&rm));
+            collector.reg_def(rd);
+        }
         &Inst::Fence { .. } => {}
         &Inst::FenceI => {}
         &Inst::ECall => {}
@@ -1529,6 +1533,12 @@ impl Inst {
                     "mv"
                 };
                 format!("{} {},{}", v, rd, rm)
+            }
+            &MInst::MovFromPReg { rd, rm } => {
+                let rd = format_reg(rd.to_reg(), allocs);
+                debug_assert!([px_reg(2), px_reg(8)].contains(&rm));
+                let rm = reg_name(Reg::from(rm));
+                format!("mv {},{}", rd, rm)
             }
             &MInst::Fence { pred, succ } => {
                 format!(
