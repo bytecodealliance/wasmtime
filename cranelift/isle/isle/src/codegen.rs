@@ -746,8 +746,10 @@ impl<'a> Codegen<'a> {
         val: i128,
         ty: TypeId,
     ) -> Result<(), std::fmt::Error> {
-        // For the kinds of situations where we use ISLE, magic numbers are much more likely to be
-        // understandable if they're in hex rather than decimal.
+        // For the kinds of situations where we use ISLE, magic numbers are
+        // much more likely to be understandable if they're in hex rather than
+        // decimal.
+        // TODO: use better type info (https://github.com/bytecodealliance/wasmtime/issues/5431)
         if val < 0
             && self.typeenv.types[ty.index()]
                 .name(self.typeenv)
