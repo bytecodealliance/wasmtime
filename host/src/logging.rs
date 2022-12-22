@@ -1,5 +1,3 @@
-#![allow(unused_variables)]
-
 use crate::{wasi_logging, WasiCtx};
 
 #[async_trait::async_trait]
