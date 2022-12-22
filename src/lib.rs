@@ -1474,7 +1474,7 @@ pub unsafe extern "C" fn random_get(buf: *mut u8, buf_len: Size) -> Errno {
         state.register_buffer(buf, buf_len);
 
         assert_eq!(buf_len as u32 as Size, buf_len);
-        let result = wasi_random::getrandom(buf_len as u32);
+        let result = wasi_random::get_random_bytes(buf_len as u32);
         assert_eq!(result.as_ptr(), buf);
 
         // The returned buffer's memory was allocated in `buf`, so don't separately
