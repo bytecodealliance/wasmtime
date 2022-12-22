@@ -1706,9 +1706,9 @@
 ;;;; Rules for `select` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty
-                       (select (icmp cc
-                                     x @ (value_type in_ty)
-                                     y)
+                       (select (maybe_uextend (icmp cc
+                                                    x @ (value_type in_ty)
+                                                    y))
                                rn
                                rm)))
       (let ((comparison FlagsAndCC (lower_icmp_into_flags cc x y in_ty)))
@@ -1719,7 +1719,7 @@
                      rm)))
 
 (rule (lower (has_type ty
-                       (select (fcmp cc x @ (value_type in_ty) y)
+                       (select (maybe_uextend (fcmp cc x @ (value_type in_ty) y))
                                rn
                                rm)))
       (let ((cond Cond (fp_cond_code cc)))
@@ -1757,7 +1757,7 @@
 ;;;; Rules for `select_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty
-                       (select_spectre_guard (icmp cc x @ (value_type in_ty) y)
+                       (select_spectre_guard (maybe_uextend (icmp cc x @ (value_type in_ty) y))
                                              if_true
                                              if_false)))
       (let ((comparison FlagsAndCC (lower_icmp_into_flags cc x y in_ty))
@@ -2434,7 +2434,7 @@
 ;;; Rules for `brz`/`brnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `brz` following `icmp`
-(rule (lower_branch (brz (icmp cc x @ (value_type ty) y) _ _) targets)
+(rule (lower_branch (brz (maybe_uextend (icmp cc x @ (value_type ty) y)) _ _) targets)
       (let ((comparison FlagsAndCC (lower_icmp_into_flags cc x y ty))
             ;; Negate the condition for `brz`.
             (cond Cond (invert_cond (cond_code (flags_and_cc_cc comparison))))
@@ -2446,7 +2446,7 @@
                                           not_taken
                                           (cond_br_cond cond))))))
 ;; `brnz` following `icmp`
-(rule (lower_branch (brnz (icmp cc x @ (value_type ty) y) _ _) targets)
+(rule (lower_branch (brnz (maybe_uextend (icmp cc x @ (value_type ty) y)) _ _) targets)
       (let ((comparison FlagsAndCC (lower_icmp_into_flags cc x y ty))
             (cond Cond (cond_code (flags_and_cc_cc comparison)))
             (taken BranchTarget (branch_target targets 0))
@@ -2457,7 +2457,7 @@
                                           not_taken
                                           (cond_br_cond cond))))))
 ;; `brz` following `fcmp`
-(rule (lower_branch (brz (fcmp cc x @ (value_type (ty_scalar_float ty)) y) _ _) targets)
+(rule (lower_branch (brz (maybe_uextend (fcmp cc x @ (value_type (ty_scalar_float ty)) y)) _ _) targets)
       (let ((cond Cond (fp_cond_code cc))
             (cond Cond (invert_cond cond)) ;; negate for `brz`
             (taken BranchTarget (branch_target targets 0))
@@ -2467,7 +2467,7 @@
                                 (cond_br taken not_taken
                                  (cond_br_cond cond))))))
 ;; `brnz` following `fcmp`
-(rule (lower_branch (brnz (fcmp cc x @ (value_type (ty_scalar_float ty)) y) _ _) targets)
+(rule (lower_branch (brnz (maybe_uextend (fcmp cc x @ (value_type (ty_scalar_float ty)) y)) _ _) targets)
       (let ((cond Cond (fp_cond_code cc))
             (taken BranchTarget (branch_target targets 0))
             (not_taken BranchTarget (branch_target targets 1)))
