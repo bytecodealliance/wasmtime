@@ -669,12 +669,7 @@ impl<'a> Decomposition<'a> {
             .retain_mut(|candidate| set_score(&mut candidate.score, candidate.kind.0));
 
         // Find the best normal candidate.
-        let mut best = None;
-        for candidate in self.scope.candidates.iter() {
-            if best.as_ref() < Some(candidate) {
-                best = Some(candidate.clone());
-            }
-        }
+        let mut best = self.scope.candidates.iter().max().cloned();
 
         // Equality constraints are more complicated. We need to identify
         // some pair of binding sites which are constrained to be equal in at
