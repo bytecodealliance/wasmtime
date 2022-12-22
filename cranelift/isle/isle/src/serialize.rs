@@ -16,7 +16,8 @@
 //!
 //! To meet both requirements, we repeatedly partition the set of rules for a
 //! term and build a tree of Rust control-flow constructs corresponding to each
-//! partition. The root of such a tree is a [Block].
+//! partition. The root of such a tree is a [Block], and [serialize] constructs
+//! it.
 use std::cmp::Reverse;
 
 use crate::lexer::Pos;
@@ -25,6 +26,25 @@ use crate::DisjointSets;
 
 /// Decomposes the rule-set into a tree of [Block]s.
 pub fn serialize(rules: &RuleSet) -> Block {
+    // While building the tree, we need temporary storage to keep track of
+    // different subsets of the rules as we partition them into ever smaller
+    // sets. As long as we're allowed to re-order the rules, we can ensure
+    // that every partition is contiguous; but since we plan to re-order them,
+    // we actually just store indexes into the `RuleSet` to minimize data
+    // movement. The algorithm in this module never duplicates or discards
+    // rules, so the total size of all partitions is exactly the number of
+    // rules. For all the above reasons, we can pre-allocate all the space
+    // we'll need to hold those partitions up front and share it throughout the
+    // tree.
+    //
+    // As an interesting side effect, when the algorithm finishes, this vector
+    // records the order in which rule bodies will be emitted in the generated
+    // Rust. We don't care because we could get the same information from the
+    // built tree, but it may be helpful to think about the intermediate steps
+    // as recursively sorting the rules. It may not be possible to produce the
+    // same order using a comparison sort, and the asymptotic complexity is
+    // probably worse than the O(n log n) of a comparison sort, but it's still
+    // doing sorting of some kind.
     let mut order = Vec::from_iter(0..rules.rules.len());
     Decomposition::new(rules).sort(&mut order)
 }
@@ -148,10 +168,9 @@ fn respect_priority(rules: &RuleSet, order: &mut [usize], partition_point: usize
     })
 }
 
-/// A query which can be tested against a [trie_again::Rule] to see if that
-/// rule requires the given kind of control flow around the given binding
-/// sites. These choices correspond to the identically-named variants of
-/// [ControlFlow].
+/// A query which can be tested against a [Rule] to see if that rule requires
+/// the given kind of control flow around the given binding sites. These
+/// choices correspond to the identically-named variants of [ControlFlow].
 ///
 /// The order of these variants is significant, because it's used as a tie-
 /// breaker in the heuristic that picks which control flow to generate next.
@@ -745,8 +764,10 @@ impl<'a> Decomposition<'a> {
 /// slice, and all elements which don't at the end. Returns the number of
 /// elements in the first partition.
 ///
-/// This function runs in time linear in the number of elements, and calls the
-/// predicate exactly once per element. If either partition is empty,
+/// This function runs in time linear in the number of elements, and calls
+/// the predicate exactly once per element. If either partition is empty, no
+/// writes will occur in the slice, so it's okay to call this frequently with
+/// predicates that we expect won't match anything.
 fn partition_in_place<T>(xs: &mut [T], mut pred: impl FnMut(&T) -> bool) -> usize {
     let mut iter = xs.iter_mut();
     let mut partition_point = 0;
