@@ -387,7 +387,7 @@ pub fn get_fd_flags<Socketlike: AsSocketlike>(
 
 /// Return the file-descriptor flags for a given file-like object.
 ///
-/// This returns the flags needed to implement [`WasiFile::get_fdflags`].
+/// This returns the flags needed to implement [`wasi_common::WasiFile::get_fdflags`].
 pub fn is_read_write<Socketlike: AsSocketlike>(f: Socketlike) -> io::Result<(bool, bool)> {
     // On Unix-family platforms, we have an `IsReadWrite` impl.
     #[cfg(not(windows))]
