@@ -288,32 +288,36 @@ impl EqualCandidate {
     }
 }
 
+/// State for a [Decomposition] that needs to be cloned when entering a nested
+/// scope, so that changes in that scope don't affect this one.
+#[derive(Clone, Default)]
+struct ScopedState {
+    /// The state of all binding sites at this point in the tree, indexed by
+    /// [BindingId]. Bindings which become available in nested scopes don't
+    /// magically become available in outer scopes too.
+    ready: Vec<BindingState>,
+    /// The current set of candidates for control flow to add at this point in
+    /// the tree. We can't rely on any match results that might be computed in
+    /// a nested scope, so if we still care about a candidate in the fallback
+    /// case then we need to emit the correct control flow for it again.
+    candidates: Vec<Candidate>,
+    /// The current set of binding sites which participate in equality
+    /// constraints at this point in the tree. We can't rely on any match
+    /// results that might be computed in a nested scope, so if we still care
+    /// about a candidate in the fallback case then we need to emit the correct
+    /// control flow for it again.
+    equal_candidates: Vec<EqualCandidate>,
+    /// Equivalence classes that we've established on the current path from
+    /// the root.
+    equal: DisjointSets<BindingId>,
+}
+
 /// Builder for one [Block] in the tree.
 struct Decomposition<'a> {
     /// The complete RuleSet, shared across the whole tree.
     rules: &'a RuleSet,
-    /// The state of all binding sites at this point in the tree, indexed by
-    /// [BindingId]. Cloned when decomposing children of this block so they
-    /// can reflect the state in nested scopes without falsely claiming that
-    /// bindings are subsequently available in this outer scope.
-    ready: Vec<BindingState>,
-    /// The current set of candidates for control flow to add at this point
-    /// in the tree. Cloned when decomposing children of this block because
-    /// we can't rely on any match results that might be computed in a nested
-    /// scope, so if we still care about a candidate in the fallback case then
-    /// we need to emit the correct control flow for it again.
-    candidates: Vec<Candidate>,
-    /// The current set of binding sites which participate in equality
-    /// constraints at this point in the tree. Cloned when decomposing children
-    /// of this block because we can't rely on any match results that might
-    /// be computed in a nested scope, so if we still care about a candidate
-    /// in the fallback case then we need to emit the correct control flow for
-    /// it again.
-    equal_candidates: Vec<EqualCandidate>,
-    /// Equivalence classes that we've established on the current path from the
-    /// root. Cloned when decomposing children of this block because each child
-    /// has a different scope.
-    equal: DisjointSets<BindingId>,
+    /// Decomposition state that is scoped to the current subtree.
+    scope: ScopedState,
     /// Accumulator for bindings that should be emitted before the next
     /// control-flow construct.
     bind_order: Vec<BindingId>,
@@ -324,12 +328,11 @@ struct Decomposition<'a> {
 impl<'a> Decomposition<'a> {
     /// Create a builder for the root [Block].
     fn new(rules: &'a RuleSet) -> Decomposition<'a> {
+        let mut scope = ScopedState::default();
+        scope.ready.resize(rules.bindings.len(), Default::default());
         let mut result = Decomposition {
             rules,
-            ready: vec![BindingState::Unavailable; rules.bindings.len()],
-            candidates: Default::default(),
-            equal_candidates: Default::default(),
-            equal: Default::default(),
+            scope,
             bind_order: Default::default(),
             block: Default::default(),
         };
@@ -341,10 +344,7 @@ impl<'a> Decomposition<'a> {
     fn new_block(&mut self) -> Decomposition {
         Decomposition {
             rules: self.rules,
-            ready: self.ready.clone(),
-            candidates: self.candidates.clone(),
-            equal_candidates: self.equal_candidates.clone(),
-            equal: self.equal.clone(),
+            scope: self.scope.clone(),
             bind_order: Default::default(),
             block: Default::default(),
         }
@@ -372,11 +372,11 @@ impl<'a> Decomposition<'a> {
             // to sort cheap computations before expensive ones.
 
             let idx: BindingId = idx.try_into().unwrap();
-            if self.ready[idx.index()] < BindingState::Available {
+            if self.scope.ready[idx.index()] < BindingState::Available {
                 if binding
                     .sources()
                     .iter()
-                    .all(|&source| self.ready[source.index()] >= BindingState::Available)
+                    .all(|&source| self.scope.ready[source.index()] >= BindingState::Available)
                 {
                     self.set_ready(idx, BindingState::Available);
                 }
@@ -407,7 +407,7 @@ impl<'a> Decomposition<'a> {
         // no unhandled rules left, or because every candidate for control flow
         // for the remaining rules has already been matched by some ancestor in
         // the tree.
-        debug_assert_eq!(self.candidates.len(), 0);
+        debug_assert_eq!(self.scope.candidates.len(), 0);
         // TODO: assert something about self.equal_candidates?
 
         // If we're building a multi-constructor, then there could be multiple
@@ -444,7 +444,7 @@ impl<'a> Decomposition<'a> {
     /// expressions which are safe and cheap to evaluate multiple times,
     /// because that reduces clutter in the generated code.
     fn use_expr(&mut self, name: BindingId) {
-        if self.ready[name.index()] < BindingState::Emitted {
+        if self.scope.ready[name.index()] < BindingState::Emitted {
             self.set_ready(name, BindingState::Emitted);
             let binding = &self.rules.bindings[name.index()];
             for &source in binding.sources() {
@@ -550,7 +550,7 @@ impl<'a> Decomposition<'a> {
                 // "matched", because either might need to be used again in
                 // a later equality check. Instead record that they're in the
                 // same equivalence class on this path.
-                child.equal.merge(a, b);
+                child.scope.equal.merge(a, b);
                 let body = child.sort(order);
                 ControlFlow::Equal { a, b, body }
             }
@@ -570,10 +570,10 @@ impl<'a> Decomposition<'a> {
                 // means that the let-binding for `source` is not actually
                 // reusable after this point, so even though we need to emit
                 // its let-binding here, we pretend we haven't.
-                let base_state = self.ready[source.index()];
+                let base_state = self.scope.ready[source.index()];
                 debug_assert_eq!(base_state, BindingState::Available);
                 self.use_expr(source);
-                self.ready[source.index()] = base_state;
+                self.scope.ready[source.index()] = base_state;
                 self.add_bindings();
 
                 let mut child = self.new_block();
@@ -590,7 +590,7 @@ impl<'a> Decomposition<'a> {
     /// be greater than the existing state; but at the least it must never
     /// go backward.
     fn set_ready(&mut self, source: BindingId, state: BindingState) {
-        let old = &mut self.ready[source.index()];
+        let old = &mut self.scope.ready[source.index()];
         debug_assert!(*old <= state);
 
         // Add candidates for this binding, but only when it first becomes
@@ -601,11 +601,13 @@ impl<'a> Decomposition<'a> {
             // candidates anyway, so let it figure out which (if any) of these
             // are applicable. It will only check false candidates once on any
             // partition, removing them from this list immediately.
-            self.candidates.extend([
+            self.scope.candidates.extend([
                 Candidate::new(HasControlFlow::Match(source)),
                 Candidate::new(HasControlFlow::Loop(source)),
             ]);
-            self.equal_candidates.push(EqualCandidate::new(source));
+            self.scope
+                .equal_candidates
+                .push(EqualCandidate::new(source));
         }
 
         *old = state;
@@ -618,7 +620,7 @@ impl<'a> Decomposition<'a> {
         // anything in the `retain_mut` call below, so short-circuit it.
         if order.is_empty() {
             // This is only read in a debug-assert but it's fast so just do it
-            self.candidates.clear();
+            self.scope.candidates.clear();
             return None;
         }
 
@@ -629,7 +631,7 @@ impl<'a> Decomposition<'a> {
                 HasControlFlow::Equal(source, _) => source,
                 HasControlFlow::Loop(source) => source,
             };
-            score.state = self.ready[source.index()];
+            score.state = self.scope.ready[source.index()];
 
             // Candidates which have already been matched in this partition
             // must not be matched again. (Note that equality constraints are
@@ -662,12 +664,13 @@ impl<'a> Decomposition<'a> {
 
         // Remove false candidates, and recompute the candidate sort key for
         // the current set of rules in `order`.
-        self.candidates
+        self.scope
+            .candidates
             .retain_mut(|candidate| set_score(&mut candidate.score, candidate.kind.0));
 
         // Find the best normal candidate.
         let mut best = None;
-        for candidate in self.candidates.iter() {
+        for candidate in self.scope.candidates.iter() {
             if best.as_ref() < Some(candidate) {
                 best = Some(candidate.clone());
             }
@@ -680,7 +683,7 @@ impl<'a> Decomposition<'a> {
         // equality constraint in some rule. We compute the best-case `Score`
         // we could get, if there were another binding site where all the rules
         // constraining this binding site require it to be equal to that one.
-        self.equal_candidates.retain_mut(|candidate| {
+        self.scope.equal_candidates.retain_mut(|candidate| {
             let source = candidate.source.0;
             // The `Equal` case checks that both binding sites are in the same
             // equivalence class. By specifying the same binding site twice,
@@ -700,9 +703,11 @@ impl<'a> Decomposition<'a> {
         // Then the O(n^2) all-pairs loop can do branch-and-bound style
         // pruning, breaking out of a loop as soon as the remaining candidates
         // must all produce worse results than our current best candidate.
-        self.equal_candidates.sort_unstable_by(|x, y| y.cmp(x));
+        self.scope
+            .equal_candidates
+            .sort_unstable_by(|x, y| y.cmp(x));
 
-        let mut equals = self.equal_candidates.iter();
+        let mut equals = self.scope.equal_candidates.iter();
         while let Some(x) = equals.next() {
             if Some(&x.score) < best.as_ref().map(|best| &best.score) {
                 break;
@@ -716,7 +721,7 @@ impl<'a> Decomposition<'a> {
                 // If x and y are already in the same path-scoped equivalence
                 // class, then skip this pair because we already emitted this
                 // check or a combination of equivalent checks on this path.
-                if !self.equal.in_same_set(x_id, y_id) {
+                if !self.scope.equal.in_same_set(x_id, y_id) {
                     // Sort arguments for consistency.
                     let kind = if x_id < y_id {
                         HasControlFlow::Equal(x_id, y_id)
