@@ -27,9 +27,7 @@ unsafe fn try_read_file(dir_fd: wasi::Fd) {
     // Since we no longer have the right to fd_read, trying to read a file
     // should be an error.
     assert_errno!(
-        wasi::fd_read(fd, &[iovec])
-            .expect_err("reading bytes from file should fail")
-            .raw_error(),
+        wasi::fd_read(fd, &[iovec]).expect_err("reading bytes from file should fail"),
         wasi::ERRNO_BADF
     );
 }

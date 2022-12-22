@@ -9,8 +9,7 @@ unsafe fn test_symlink_loop(dir_fd: wasi::Fd) {
         // Try to open it.
         assert_errno!(
             wasi::path_open(dir_fd, 0, "symlink", 0, 0, 0, 0)
-                .expect_err("opening a self-referencing symlink")
-                .raw_error(),
+                .expect_err("opening a self-referencing symlink"),
             wasi::ERRNO_LOOP
         );
 

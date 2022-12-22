@@ -47,9 +47,7 @@ unsafe fn test_renumber(dir_fd: wasi::Fd) {
 
     // Ensure that fd_from is closed
     assert_errno!(
-        wasi::fd_close(fd_from)
-            .expect_err("closing already closed file descriptor")
-            .raw_error(),
+        wasi::fd_close(fd_from).expect_err("closing already closed file descriptor"),
         wasi::ERRNO_BADF
     );
 

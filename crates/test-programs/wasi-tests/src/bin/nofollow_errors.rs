@@ -11,8 +11,7 @@ unsafe fn test_nofollow_errors(dir_fd: wasi::Fd) {
     // Try to open it as a directory with O_NOFOLLOW again.
     assert_errno!(
         wasi::path_open(dir_fd, 0, "symlink", wasi::OFLAGS_DIRECTORY, 0, 0, 0)
-            .expect_err("opening a directory symlink as a directory should fail")
-            .raw_error(),
+            .expect_err("opening a directory symlink as a directory should fail"),
         wasi::ERRNO_LOOP,
         wasi::ERRNO_NOTDIR
     );
@@ -20,8 +19,7 @@ unsafe fn test_nofollow_errors(dir_fd: wasi::Fd) {
     // Try to open it with just O_NOFOLLOW.
     assert_errno!(
         wasi::path_open(dir_fd, 0, "symlink", 0, 0, 0, 0)
-            .expect_err("opening a symlink with O_NOFOLLOW should fail")
-            .raw_error(),
+            .expect_err("opening a symlink with O_NOFOLLOW should fail"),
         wasi::ERRNO_LOOP,
         wasi::ERRNO_ACCES
     );
@@ -56,8 +54,7 @@ unsafe fn test_nofollow_errors(dir_fd: wasi::Fd) {
     // Try to open it as a directory with O_NOFOLLOW again.
     assert_errno!(
         wasi::path_open(dir_fd, 0, "symlink", wasi::OFLAGS_DIRECTORY, 0, 0, 0)
-            .expect_err("opening a directory symlink as a directory should fail")
-            .raw_error(),
+            .expect_err("opening a directory symlink as a directory should fail"),
         wasi::ERRNO_LOOP,
         wasi::ERRNO_NOTDIR
     );
@@ -65,8 +62,7 @@ unsafe fn test_nofollow_errors(dir_fd: wasi::Fd) {
     // Try to open it with just O_NOFOLLOW.
     assert_errno!(
         wasi::path_open(dir_fd, 0, "symlink", 0, 0, 0, 0)
-            .expect_err("opening a symlink with NOFOLLOW should fail")
-            .raw_error(),
+            .expect_err("opening a symlink with NOFOLLOW should fail"),
         wasi::ERRNO_LOOP
     );
 
@@ -81,8 +77,7 @@ unsafe fn test_nofollow_errors(dir_fd: wasi::Fd) {
             0,
             0,
         )
-        .expect_err("opening a symlink to a file as a directory")
-        .raw_error(),
+        .expect_err("opening a symlink to a file as a directory"),
         wasi::ERRNO_NOTDIR
     );
 
