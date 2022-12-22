@@ -234,6 +234,11 @@
 (decl pure partial is_sinkable_inst (Value) Inst)
 (extern constructor is_sinkable_inst is_sinkable_inst)
 
+;; Match a uextend or any other instruction, "seeing through" the uextend if
+;; present.
+(decl maybe_uextend (Value) Value)
+(extern extractor maybe_uextend maybe_uextend)
+
 ;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Emit an instruction.

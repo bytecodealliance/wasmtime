@@ -1670,22 +1670,22 @@
 ;;  - `CC.BE -> C = 1 OR Z = 1` (below or equal)
 ;;  - `CC.NBE -> C = 0 AND Z = 0` (not below or equal)
 
-(rule (lower (has_type ty (select (fcmp (FloatCC.Ordered) a b) x y)))
+(rule (lower (has_type ty (select (maybe_uextend (fcmp (FloatCC.Ordered) a b)) x y)))
       (with_flags (x64_ucomis b a) (cmove_from_values ty (CC.NP) x y)))
 
-(rule (lower (has_type ty (select (fcmp (FloatCC.Unordered) a b) x y)))
+(rule (lower (has_type ty (select (maybe_uextend (fcmp (FloatCC.Unordered) a b)) x y)))
       (with_flags (x64_ucomis b a) (cmove_from_values ty (CC.P) x y)))
 
-(rule (lower (has_type ty (select (fcmp (FloatCC.GreaterThan) a b) x y)))
+(rule (lower (has_type ty (select (maybe_uextend (fcmp (FloatCC.GreaterThan) a b)) x y)))
       (with_flags (x64_ucomis b a) (cmove_from_values ty (CC.NBE) x y)))
 
-(rule (lower (has_type ty (select (fcmp (FloatCC.GreaterThanOrEqual) a b) x y)))
+(rule (lower (has_type ty (select (maybe_uextend (fcmp (FloatCC.GreaterThanOrEqual) a b)) x y)))
       (with_flags (x64_ucomis b a) (cmove_from_values ty (CC.NB) x y)))
 
-(rule (lower (has_type ty (select (fcmp (FloatCC.UnorderedOrLessThan) a b) x y)))
+(rule (lower (has_type ty (select (maybe_uextend (fcmp (FloatCC.UnorderedOrLessThan) a b)) x y)))
       (with_flags (x64_ucomis b a) (cmove_from_values ty (CC.B) x y)))
 
-(rule (lower (has_type ty (select (fcmp (FloatCC.UnorderedOrLessThanOrEqual) a b) x y)))
+(rule (lower (has_type ty (select (maybe_uextend (fcmp (FloatCC.UnorderedOrLessThanOrEqual) a b)) x y)))
       (with_flags (x64_ucomis b a) (cmove_from_values ty (CC.BE) x y)))
 
 ;; Certain FloatCC variants are implemented by flipping the operands of the
@@ -1699,16 +1699,16 @@
 ;; not `LT | UNO`. By flipping the operands AND inverting the comparison (e.g.,
 ;; to `CC.NBE`), we also avoid these unordered cases.
 
-(rule (lower (has_type ty (select (fcmp (FloatCC.LessThan) a b) x y)))
+(rule (lower (has_type ty (select (maybe_uextend (fcmp (FloatCC.LessThan) a b)) x y)))
       (with_flags (x64_ucomis a b) (cmove_from_values ty (CC.NBE) x y)))
 
-(rule (lower (has_type ty (select (fcmp (FloatCC.LessThanOrEqual) a b) x y)))
+(rule (lower (has_type ty (select (maybe_uextend (fcmp (FloatCC.LessThanOrEqual) a b)) x y)))
       (with_flags (x64_ucomis a b) (cmove_from_values ty (CC.NB) x y)))
 
-(rule (lower (has_type ty (select (fcmp (FloatCC.UnorderedOrGreaterThan) a b) x y)))
+(rule (lower (has_type ty (select (maybe_uextend (fcmp (FloatCC.UnorderedOrGreaterThan) a b)) x y)))
       (with_flags (x64_ucomis a b) (cmove_from_values ty (CC.B) x y)))
 
-(rule (lower (has_type ty (select (fcmp (FloatCC.UnorderedOrGreaterThanOrEqual) a b) x y)))
+(rule (lower (has_type ty (select (maybe_uextend (fcmp (FloatCC.UnorderedOrGreaterThanOrEqual) a b)) x y)))
       (with_flags (x64_ucomis a b) (cmove_from_values ty (CC.BE) x y)))
 
 ;; `FloatCC.Equal` and `FloatCC.NotEqual` can only be implemented with multiple
@@ -1724,10 +1724,10 @@
 ;; More details about the CLIF semantics for `fcmp` are available at
 ;; https://docs.rs/cranelift-codegen/latest/cranelift_codegen/ir/trait.InstBuilder.html#method.fcmp.
 
-(rule (lower (has_type ty (select (fcmp (FloatCC.Equal) a b) x y)))
+(rule (lower (has_type ty (select (maybe_uextend (fcmp (FloatCC.Equal) a b)) x y)))
       (with_flags (x64_ucomis a b) (cmove_or_from_values ty (CC.NZ) (CC.P) y x)))
 
-(rule (lower (has_type ty (select (fcmp (FloatCC.NotEqual) a b) x y)))
+(rule (lower (has_type ty (select (maybe_uextend (fcmp (FloatCC.NotEqual) a b)) x y)))
       (with_flags (x64_ucomis a b) (cmove_or_from_values ty (CC.NZ) (CC.P) x y)))
 
 ;; We also can lower `select`s that depend on an `icmp` test, but more simply
@@ -1735,7 +1735,7 @@
 ;; instruction plus a `CMOV`; recall that `cmove_from_values` here may emit more
 ;; than one instruction for certain types (e.g., XMM-held, I128).
 
-(rule (lower (has_type ty (select (icmp cc a @ (value_type (fits_in_64 a_ty)) b) x y)))
+(rule (lower (has_type ty (select (maybe_uextend (icmp cc a @ (value_type (fits_in_64 a_ty)) b)) x y)))
       (let ((size OperandSize (raw_operand_size_of_type a_ty)))
            (with_flags (x64_cmp size b a) (cmove_from_values ty cc x y))))
 
@@ -2873,20 +2873,11 @@
 
 ;; Rules for `brz` and `brnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 2 (lower_branch (brz (icmp cc a b) _ _) (two_targets taken not_taken))
+(rule 2 (lower_branch (brz (maybe_uextend (icmp cc a b)) _ _) (two_targets taken not_taken))
       (let ((cmp IcmpCondResult (invert_icmp_cond_result (emit_cmp cc a b))))
         (emit_side_effect (jmp_cond_icmp cmp taken not_taken))))
 
-(rule 2 (lower_branch (brz (uextend (icmp cc a b)) _ _) (two_targets taken not_taken))
-      (let ((cmp IcmpCondResult (invert_icmp_cond_result (emit_cmp cc a b))))
-        (emit_side_effect (jmp_cond_icmp cmp taken not_taken))))
-
-
-(rule 2 (lower_branch (brz (fcmp cc a b) _ _) (two_targets taken not_taken))
-      (let ((cmp FcmpCondResult (emit_fcmp (floatcc_inverse cc) a b)))
-        (emit_side_effect (jmp_cond_fcmp cmp taken not_taken))))
-
-(rule 2 (lower_branch (brz (uextend (fcmp cc a b)) _ _) (two_targets taken not_taken))
+(rule 2 (lower_branch (brz (maybe_uextend (fcmp cc a b)) _ _) (two_targets taken not_taken))
       (let ((cmp FcmpCondResult (emit_fcmp (floatcc_inverse cc) a b)))
         (emit_side_effect (jmp_cond_fcmp cmp taken not_taken))))
 
