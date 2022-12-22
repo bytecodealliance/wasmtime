@@ -97,7 +97,7 @@ impl<K: Hash + Eq, V> Index<&K> for StableMap<K, V> {
 /// Stores disjoint sets and provides efficient operations to merge two sets, and to find a
 /// representative member of a set given any member of that set. In this implementation, sets always
 /// have at least two members, and can only be formed by the `merge` operation.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct DisjointSets<T> {
     parent: HashMap<T, (T, u8)>,
 }

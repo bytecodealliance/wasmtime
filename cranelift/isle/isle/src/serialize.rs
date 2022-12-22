@@ -21,6 +21,7 @@ use std::cmp::Reverse;
 
 use crate::lexer::Pos;
 use crate::trie_again::{Binding, BindingId, Constraint, Overlap, Rule, RuleSet};
+use crate::DisjointSets;
 
 /// Decomposes the rule-set into a tree of [Block]s.
 pub fn serialize(rules: &RuleSet) -> Block {
@@ -240,7 +241,7 @@ enum BindingState {
 /// A rule filter ([HasControlFlow]), plus temporary storage for the sort
 /// key used in `best_control_flow` to order these candidates. Keeping the
 /// temporary storage here lets us avoid repeated heap allocations.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct Candidate {
     kind: HasControlFlow,
     count: usize,
@@ -258,12 +259,23 @@ impl Candidate {
             state: BindingState::Unavailable,
         }
     }
+}
 
-    /// Extract the sort key from this candidate.
-    fn key(&self) -> impl Ord {
-        // We prefer to match as many rules at once as possible. Break ties by
-        // preferring bindings we've already emitted.
-        (self.count, self.state)
+impl PartialOrd for Candidate {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Candidate {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // We prefer to match as many rules at once as possible.
+        let base = self.count.cmp(&other.count);
+        // Break ties by preferring bindings we've already emitted.
+        base.then(self.state.cmp(&other.state))
+            // Last resort tie-breaker: defer to HasControlFlow order, but
+            // prefer control-flow that sorts earlier.
+            .then(other.kind.cmp(&self.kind))
     }
 }
 
@@ -283,6 +295,10 @@ struct Decomposition<'a> {
     /// care about a candidate in the fallback case then we need to emit the
     /// correct control flow for it again.
     candidates: Vec<Candidate>,
+    /// Equivalence classes that we've established on the current path from the
+    /// root. Cloned when decomposing children of this block because each child
+    /// has a different scope.
+    equal: DisjointSets<BindingId>,
     /// Accumulator for bindings that should be emitted before the next
     /// control-flow construct.
     bind_order: Vec<BindingId>,
@@ -297,6 +313,7 @@ impl<'a> Decomposition<'a> {
             rules,
             ready: vec![BindingState::Unavailable; rules.bindings.len()],
             candidates: Default::default(),
+            equal: Default::default(),
             bind_order: Default::default(),
             block: Default::default(),
         };
@@ -310,6 +327,7 @@ impl<'a> Decomposition<'a> {
             rules: self.rules,
             ready: self.ready.clone(),
             candidates: self.candidates.clone(),
+            equal: self.equal.clone(),
             bind_order: Default::default(),
             block: Default::default(),
         }
@@ -372,10 +390,19 @@ impl<'a> Decomposition<'a> {
         // no unhandled rules left, or because every candidate for control flow
         // for the remaining rules has already been matched by some ancestor in
         // the tree.
-        debug_assert!(self
-            .candidates
-            .iter()
-            .all(|c| c.state == BindingState::Matched));
+        debug_assert!(self.candidates.iter().all(|c| {
+            if let &Candidate {
+                kind: HasControlFlow::Equal(x, y),
+                ..
+            } = c
+            {
+                let x = self.equal.find(x);
+                let y = self.equal.find(y);
+                x.zip(y).filter(|(x, y)| x == y).is_some()
+            } else {
+                false
+            }
+        }));
 
         // If we're building a multi-constructor, then there could be multiple
         // rules with the same left-hand side. We'll evaluate them all, but
@@ -507,16 +534,17 @@ impl<'a> Decomposition<'a> {
                 // Both sides of the equality test must be evaluated before
                 // the condition can be tested. Go ahead and let-bind them
                 // so they're available without re-evaluation in fall-through
-                // cases. But only mark them as matched within the subtree.
+                // cases.
                 self.use_expr(a);
                 self.use_expr(b);
                 self.add_bindings();
 
                 let mut child = self.new_block();
-                child.set_ready(a, BindingState::Matched);
-                child.set_ready(b, BindingState::Matched);
-
-                // Recursively construct a Block for this group of rules.
+                // Never mark binding sites used in equality constraints as
+                // "matched", because either might need to be used again in
+                // a later equality check. Instead record that they're in the
+                // same equivalence class on this path.
+                child.equal.merge(a, b);
                 let body = child.sort(order);
                 ControlFlow::Equal { a, b, body }
             }
@@ -546,8 +574,6 @@ impl<'a> Decomposition<'a> {
                 child.set_ready(source, BindingState::Matched);
                 child.set_ready(result, BindingState::Emitted);
                 child.add_bindings();
-
-                // Recursively construct a Block for this group of rules.
                 let body = child.sort(order);
                 ControlFlow::Loop { result, body }
             }
@@ -604,12 +630,11 @@ impl<'a> Decomposition<'a> {
             candidate.state = self.ready[source.index()];
 
             // Candidates which have already been matched in this partition
-            // are only used for equality constraints. Prune others to avoid
-            // spending any more time on them.
+            // must not be matched again. (Note that equality constraints are
+            // de-duplicated using more complicated equivalence-class checks
+            // instead.)
             if candidate.state == BindingState::Matched {
-                if !matches!(candidate.kind, HasControlFlow::Equal(_, _)) {
-                    return false;
-                }
+                return false;
             }
 
             let constrained = candidate
@@ -636,82 +661,80 @@ impl<'a> Decomposition<'a> {
             true
         });
 
-        self.candidates.sort_unstable_by_key(|candidate| {
-            (
-                // Put unmatched binding sites first, for partition_point
-                // below.
-                candidate.state == BindingState::Matched,
-                Reverse(candidate.key()),
-                // Final tie-breaker: prefer constraints on the earliest
-                // binding site.
-                candidate.kind,
-            )
+        // Set aside candidates which currently can't handle any rules. They
+        // can't influence this round, but we'll revisit them later.
+        let progress = partition_in_place(&mut self.candidates, |candidate| candidate.count > 0);
+        let candidates = &mut self.candidates[..progress];
+
+        // Now separate out the equality constraint candidates, which require
+        // special handling, from the normal cases.
+        let normals = partition_in_place(candidates, |candidate| {
+            !matches!(candidate.kind, HasControlFlow::Equal(_, _))
         });
-        let unmatched = self
-            .candidates
-            .partition_point(|candidate| candidate.state != BindingState::Matched);
-        let (mut unmatched, matched) = self.candidates.split_at(unmatched);
+        let (normals, equals) = candidates.split_at_mut(normals);
 
-        // All valid candidates sort greater than this so the kind of control flow
-        // doesn't matter.
-        let mut best = Candidate::with_invalid_key(HasControlFlow::Match(0.try_into().unwrap()));
+        // Find the best normal candidate.
+        let mut best = None;
+        for candidate in normals.iter() {
+            if best.as_ref() < Some(candidate) {
+                best = Some(candidate.clone());
+            }
+        }
 
-        // We sorted the candidates in reverse order of their sort key, so the
-        // first one is usually the best option we have. However, equality-
-        // constraint candidates are over-approximated. Those identify how many
-        // rules have some kind of equality constraint involving a particular
-        // binding site, but we actually need to find the rules with an
-        // equality constraint on a particular _pair_ of binding sites. Those
-        // are the intersection of two candidates' rules, so the upper bound on
-        // the number of matching rules is whichever candidate is smaller.
-        while let Some((candidate, rest)) = unmatched.split_first() {
-            unmatched = rest;
-            if candidate.key() <= best.key() {
+        // Everything before this took O(n) time.
+
+        // Equality-constraint candidates are over-approximated. They identify
+        // how many rules have some kind of equality constraint involving a
+        // particular binding site, but we actually need to find the rules
+        // with an equality constraint on a particular _pair_ of binding
+        // sites. Those are the intersection of two candidates' rules, so the
+        // upper bound on the number of matching rules is whichever candidate
+        // is smaller. Do an O(n log n) sort before the O(n^2) all-pairs loop
+        // so we can do branch-and-bound style pruning.
+        equals.sort_unstable_by(|x, y| y.cmp(x));
+        let mut equals = &equals[..];
+        while let Some((x, rest)) = equals.split_first() {
+            equals = rest;
+            if Some(x) < best.as_ref() {
                 break;
             }
-            match candidate.kind {
-                HasControlFlow::Match(_) | HasControlFlow::Loop(_) => return Some(candidate.kind),
-                HasControlFlow::Equal(a, _) => {
-                    for other in unmatched.iter().chain(matched.iter()) {
-                        if let HasControlFlow::Equal(b, _) = other.kind {
-                            let mut new = Candidate {
-                                // `partition` will find the intersection of
-                                // these two candidates' rules, and the best
-                                // case is one is a subset of the other.
-                                count: candidate.count.min(other.count),
+            if let HasControlFlow::Equal(x_id, _) = x.kind {
+                let x_repr = self.equal.find_mut(x_id);
+                for y in rest.iter() {
+                    if Some(y) < best.as_ref() {
+                        break;
+                    }
+                    if let HasControlFlow::Equal(y_id, _) = y.kind {
+                        let y_repr = self.equal.find_mut(y_id);
+                        // If x and y both have representatives and they're
+                        // the same, skip this pair because we already emitted
+                        // this check or a combination of equivalent checks on
+                        // this path.
+                        if x_repr.is_none() || x_repr != y_repr {
+                            // Sort arguments for consistency.
+                            let kind = if x_id < y_id {
+                                HasControlFlow::Equal(x_id, y_id)
+                            } else {
+                                HasControlFlow::Equal(y_id, x_id)
+                            };
+                            let pair = Candidate {
+                                kind,
+                                count: kind.partition(self.rules, order),
                                 // Only treat this as already-emitted if both
                                 // bindings are.
-                                state: candidate.state.min(other.state),
-                                // Sort arguments for consistency.
-                                kind: if a < b {
-                                    HasControlFlow::Equal(a, b)
-                                } else {
-                                    HasControlFlow::Equal(b, a)
-                                },
+                                state: x.state.min(y.state),
                             };
-                            if new.key() > best.key() {
-                                new.count = new.kind.partition(&self.rules, order);
-                                if new.key() > best.key() {
-                                    best = new;
-                                    // `new` can be no better than either
-                                    // `candidate` or `other`, but if it's no
-                                    // worse, then it's better than all our
-                                    // other candidates.
-                                    if best.key() == candidate.key() {
-                                        return Some(best.kind);
-                                    }
-                                }
+                            if best.as_ref() < Some(&pair) {
+                                best = Some(pair);
                             }
                         }
                     }
                 }
             }
         }
-        if best.count > 0 {
-            Some(best.kind)
-        } else {
-            None
-        }
+
+        best.filter(|candidate| candidate.count > 0)
+            .map(|candidate| candidate.kind)
     }
 }
 
