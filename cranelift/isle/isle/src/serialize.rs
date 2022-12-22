@@ -194,11 +194,7 @@ impl HasControlFlow {
             let rule = &rules.rules[idx];
             match self {
                 HasControlFlow::Match(binding_id) => rule.get_constraint(binding_id).is_some(),
-                HasControlFlow::Equal(x, y) => {
-                    let x = rule.equals.find(x);
-                    let y = rule.equals.find(y);
-                    x.zip(y).filter(|(x, y)| x == y).is_some()
-                }
+                HasControlFlow::Equal(x, y) => rule.equals.in_same_set(x, y),
                 HasControlFlow::Loop(binding_id) => rule.iterators.contains(&binding_id),
             }
         })
@@ -712,18 +708,15 @@ impl<'a> Decomposition<'a> {
                 break;
             }
             let x_id = x.source.0;
-            let x_repr = self.equal.find_mut(x_id);
             for y in equals.as_slice().iter() {
                 if Some(&y.score) < best.as_ref().map(|best| &best.score) {
                     break;
                 }
                 let y_id = y.source.0;
-                let y_repr = self.equal.find_mut(y_id);
-                // If x and y both have representatives and they're
-                // the same, skip this pair because we already emitted
-                // this check or a combination of equivalent checks on
-                // this path.
-                if x_repr.is_none() || x_repr != y_repr {
+                // If x and y are already in the same path-scoped equivalence
+                // class, then skip this pair because we already emitted this
+                // check or a combination of equivalent checks on this path.
+                if !self.equal.in_same_set(x_id, y_id) {
                     // Sort arguments for consistency.
                     let kind = if x_id < y_id {
                         HasControlFlow::Equal(x_id, y_id)
