@@ -57,7 +57,7 @@ WebAssembly code in Ruby!
 
 ## More examples and contributing
 
-To learn more, check out the [more adavanced examples](https://github.com/bytecodealliance/wasmtime-rb/tree/main/examples)
+To learn more, check out the [more advanced examples](https://github.com/bytecodealliance/wasmtime-rb/tree/main/examples)
 and the [API documentation](https://bytecodealliance.github.io/wasmtime-rb/latest/).
-If you have any questions or found an issue, make sure to open an issue on the
+If you have any questions, do not hesitate to open an issue on the
 [GitHub repository](https://github.com/bytecodealliance/wasmtime-rb).
