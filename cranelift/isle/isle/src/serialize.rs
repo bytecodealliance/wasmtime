@@ -183,33 +183,33 @@ enum HasControlFlow {
     Loop(BindingId),
 }
 
+struct PartitionResults {
+    any_matched: bool,
+    valid: usize,
+}
+
 impl HasControlFlow {
-    /// Identify which rules satisfy this query. Partition matching rules
-    /// first in `order`, and return the number of rules found. No ordering
-    /// is guaranteed within either partition, which allows this function to
-    /// run in linear time. That's fine because later we'll recursively sort
-    /// both partitions.
-    fn partition_ignoring_priority(self, rules: &RuleSet, order: &mut [usize]) -> usize {
-        partition_in_place(order, |&idx| {
+    /// Identify which rules both satisfy this query, and are safe to evaluate
+    /// before all rules that don't satisfy the query, considering rules'
+    /// relative priorities like [respect_priority]. Partition matching rules
+    /// first in `order`. Return the number of rules which are valid with
+    /// respect to priority, as well as whether any rules matched the query at
+    /// all. No ordering is guaranteed within either partition, which allows
+    /// this function to run in linear time. That's fine because later we'll
+    /// recursively sort both partitions.
+    fn partition(self, rules: &RuleSet, order: &mut [usize]) -> PartitionResults {
+        let matching = partition_in_place(order, |&idx| {
             let rule = &rules.rules[idx];
             match self {
                 HasControlFlow::Match(binding_id) => rule.get_constraint(binding_id).is_some(),
                 HasControlFlow::Equal(x, y) => rule.equals.in_same_set(x, y),
                 HasControlFlow::Loop(binding_id) => rule.iterators.contains(&binding_id),
             }
-        })
-    }
-
-    /// Identify rules which both:
-    /// 1. satisfy this query, like
-    ///    [HasControlFlow::partition_ignoring_priority], and
-    /// 2. are safe to evaluate before all rules that don't satisfy the query,
-    ///    considering rules' relative priorities, like [respect_priority].
-    /// This combination is usually what you want, but sometimes it's useful to
-    /// check these conditions separately.
-    fn partition(self, rules: &RuleSet, order: &mut [usize]) -> usize {
-        let constrained = self.partition_ignoring_priority(rules, order);
-        respect_priority(rules, order, constrained)
+        });
+        PartitionResults {
+            any_matched: matching > 0,
+            valid: respect_priority(rules, order, matching),
+        }
     }
 }
 
@@ -390,7 +390,7 @@ impl<'a> Decomposition<'a> {
         while let Some(best) = self.best_control_flow(order) {
             // Peel off all rules that have this particular control flow, and
             // save the rest for the next iteration of the loop.
-            let partition_point = best.partition(&self.rules, order);
+            let partition_point = best.partition(self.rules, order).valid;
             debug_assert!(partition_point > 0);
             let (this, rest) = order.split_at_mut(partition_point);
             order = rest;
@@ -641,25 +641,22 @@ impl<'a> Decomposition<'a> {
                 return false;
             }
 
+            // The sort key is not based solely on how many rules have this
+            // constraint, but on how many such rules can go into the same
+            // block without violating rule priority. This number can grow
+            // as higher-priority rules are removed from the partition, so
+            // we can't drop candidates just because this is zero. If some
+            // rule has this constraint, it will become viable in some later
+            // partition.
+            let partition = kind.partition(self.rules, order);
+            score.count = partition.valid;
+
             // Only consider constraints that are present in some rule in the
             // current partition. Note that as we partition the rule set into
             // smaller groups, the number of rules which have a particular
             // kind of constraint can never grow, so a candidate removed here
             // doesn't need to be examined again in this partition.
-            let constrained = kind.partition_ignoring_priority(&self.rules, order);
-            if constrained == 0 {
-                return false;
-            }
-
-            // The sort key is not based solely on how many rules have this
-            // constraint, but on how many such rules can go into the same
-            // block without violating rule priority. This number can grow
-            // as higher-priority rules are removed from the partition, so we
-            // _can't_ drop candidates just because this is zero. Since some
-            // rule has this constraint, it will become viable in some later
-            // partition.
-            score.count = respect_priority(&self.rules, order, constrained);
-            true
+            partition.any_matched
         };
 
         // Remove false candidates, and recompute the candidate sort key for
@@ -726,7 +723,7 @@ impl<'a> Decomposition<'a> {
                     let pair = Candidate {
                         kind: Reverse(kind),
                         score: Score {
-                            count: kind.partition(self.rules, order),
+                            count: kind.partition(self.rules, order).valid,
                             // Only treat this as already-emitted if
                             // both bindings are.
                             state: x.score.state.min(y.score.state),
