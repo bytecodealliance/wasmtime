@@ -843,10 +843,18 @@ pub unsafe extern "C" fn fd_renumber(fd: Fd, to: Fd) -> Errno {
     State::with_mut(|state| {
         let closed = state.closed;
 
+        // Ensure the table is big enough to contain `to`. Do this before
+        // looking up `fd` as it can fail due to `NOMEM`.
+        while Fd::from(state.ndescriptors) <= to {
+            let old_closed = state.closed;
+            let new_closed = state.push_desc(Descriptor::Closed(old_closed))?;
+            state.closed = Some(new_closed);
+        }
+
         let fd_desc = state.get_mut(fd)?;
         let desc = replace(fd_desc, Descriptor::Closed(closed));
 
-        let to_desc = state.get_mut(to)?;
+        let to_desc = unwrap_result(state.get_mut(to));
         *to_desc = desc;
         state.closed = Some(fd);
         Ok(())
