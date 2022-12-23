@@ -31,6 +31,8 @@ pub unsafe extern "C" fn command(
     stdout: u32,
     args_ptr: *const WasmStr,
     args_len: usize,
+    env_vars: StrTupleList,
+    preopens: PreopenList,
 ) {
     // TODO: ideally turning off `command` would remove this import and the
     // `*.wit` metadata entirely but doing that ergonomically will likely
@@ -42,19 +44,33 @@ pub unsafe extern "C" fn command(
         // Initialization of `State` automatically fills in some dummy
         // structures for fds 0, 1, and 2. Overwrite the stdin/stdout slots of 0
         // and 1 with actual files.
-        let descriptors = state.descriptors_mut();
-        if descriptors.len() < 3 {
-            unreachable();
+        {
+            let descriptors = state.descriptors_mut();
+            if descriptors.len() < 3 {
+                unreachable();
+            }
+            descriptors[0] = Descriptor::File(File {
+                fd: stdin,
+                position: Cell::new(0),
+            });
+            descriptors[1] = Descriptor::File(File {
+                fd: stdout,
+                position: Cell::new(0),
+            });
         }
-        descriptors[0] = Descriptor::File(File {
-            fd: stdin,
-            position: Cell::new(0),
-        });
-        descriptors[1] = Descriptor::File(File {
-            fd: stdout,
-            position: Cell::new(0),
-        });
         state.args = Some(slice::from_raw_parts(args_ptr, args_len));
+        state.env_vars = Some(slice::from_raw_parts(env_vars.base, env_vars.len));
+
+        let preopens = slice::from_raw_parts(preopens.base, preopens.len);
+        state.preopens = Some(preopens);
+
+        for preopen in preopens {
+            unwrap_result(state.push_desc(Descriptor::File(File {
+                fd: preopen.descriptor,
+                position: Cell::new(0),
+            })));
+        }
+
         Ok(())
     });
 
@@ -121,6 +137,10 @@ pub unsafe extern "C" fn cabi_import_realloc(
     ptr
 }
 
+fn align_to(ptr: usize, align: usize) -> usize {
+    (ptr + (align - 1)) & !(align - 1)
+}
+
 /// This allocator is only used for the `command` entrypoint.
 ///
 /// The implementation here is a bump allocator into `State::command_data` which
@@ -141,14 +161,19 @@ pub unsafe extern "C" fn cabi_export_realloc(
     let mut ret = null_mut::<u8>();
     State::with_mut(|state| {
         let data = state.command_data.as_mut_ptr();
-        let ptr = unwrap_result(usize::try_from(state.command_data_next));
+        let ptr = align_to(
+            unwrap_result(usize::try_from(state.command_data_next)),
+            align,
+        );
 
         // "oom" as too much argument data tried to flow into the component.
         // Ideally this would have a better error message?
         if ptr + new_size > (*data).len() {
             unreachable();
         }
-        state.command_data_next += new_size as u16;
+        state.command_data_next = (ptr + new_size)
+            .try_into()
+            .unwrap_or_else(|_| unreachable());
         ret = (*data).as_mut_ptr().add(ptr);
         Ok(())
     });
@@ -204,10 +229,30 @@ pub unsafe extern "C" fn args_sizes_get(argc: *mut Size, argv_buf_size: *mut Siz
 /// The sizes of the buffers should match that returned by `environ_sizes_get`.
 #[no_mangle]
 pub unsafe extern "C" fn environ_get(environ: *mut *mut u8, environ_buf: *mut u8) -> Errno {
-    // TODO: Use real env vars.
-    *environ = null_mut();
-    let _ = environ_buf;
-    ERRNO_SUCCESS
+    State::with(|state| {
+        if let Some(list) = state.env_vars {
+            let mut offsets = environ;
+            let mut buffer = environ_buf;
+            for pair in list {
+                ptr::write(offsets, buffer);
+                offsets = offsets.add(1);
+
+                ptr::copy_nonoverlapping(pair.key.ptr, buffer, pair.key.len);
+                buffer = buffer.add(pair.key.len);
+
+                ptr::write(buffer, b'=');
+                buffer = buffer.add(1);
+
+                ptr::copy_nonoverlapping(pair.value.ptr, buffer, pair.value.len);
+                buffer = buffer.add(pair.value.len);
+
+                ptr::write(buffer, 0);
+                buffer = buffer.add(1);
+            }
+        }
+
+        Ok(())
+    })
 }
 
 /// Return environment variable data sizes.
@@ -216,10 +261,23 @@ pub unsafe extern "C" fn environ_sizes_get(
     environc: *mut Size,
     environ_buf_size: *mut Size,
 ) -> Errno {
-    // TODO: Use real env vars.
-    *environc = 0;
-    *environ_buf_size = 0;
-    ERRNO_SUCCESS
+    State::with(|state| {
+        if let Some(list) = state.env_vars {
+            *environc = list.len();
+            *environ_buf_size = {
+                let mut sum = 0;
+                for pair in list {
+                    sum += pair.key.len + pair.value.len + 2;
+                }
+                sum
+            };
+        } else {
+            *environc = 0;
+            *environ_buf_size = 0;
+        }
+
+        Ok(())
+    })
 }
 
 /// Return the resolution of a clock.
@@ -545,16 +603,46 @@ pub unsafe extern "C" fn fd_pread(
     })
 }
 
+fn get_preopen(state: &State, fd: Fd) -> Option<&Preopen> {
+    state.preopens?.get(fd.checked_sub(3)? as usize)
+}
+
 /// Return a description of the given preopened file descriptor.
 #[no_mangle]
 pub unsafe extern "C" fn fd_prestat_get(fd: Fd, buf: *mut Prestat) -> Errno {
-    unreachable()
+    State::with(|state| {
+        if let Some(preopen) = get_preopen(state, fd) {
+            buf.write(Prestat {
+                tag: 0,
+                u: PrestatU {
+                    dir: PrestatDir {
+                        pr_name_len: preopen.path.len,
+                    },
+                },
+            });
+
+            Ok(())
+        } else {
+            Err(ERRNO_BADF)
+        }
+    })
 }
 
 /// Return a description of the given preopened file descriptor.
 #[no_mangle]
 pub unsafe extern "C" fn fd_prestat_dir_name(fd: Fd, path: *mut u8, path_len: Size) -> Errno {
-    unreachable()
+    State::with(|state| {
+        if let Some(preopen) = get_preopen(state, fd) {
+            if preopen.path.len < path_len as usize {
+                Err(ERRNO_NAMETOOLONG)
+            } else {
+                ptr::copy_nonoverlapping(preopen.path.ptr, path, preopen.path.len);
+                Ok(())
+            }
+        } else {
+            Err(ERRNO_NOTDIR)
+        }
+    })
 }
 
 /// Write to a file descriptor, without using and updating the file descriptor's offset.
@@ -660,7 +748,7 @@ pub unsafe extern "C" fn fd_readdir(
         // used with a fixed-sized buffer to avoid re-invoking the `readdir`
         // function and continuing to use the same iterator.
         //
-        // This is a bit tricky since the reqeusted state in this function call
+        // This is a bit tricky since the requested state in this function call
         // must match the prior state of the dirent stream, if any, so that's
         // all validated here as well.
         //
@@ -1763,6 +1851,12 @@ struct State {
     /// Arguments passed to the `command` entrypoint
     args: Option<&'static [WasmStr]>,
 
+    /// Environment variables passed to the `command` entrypoint
+    env_vars: Option<&'static [StrTuple]>,
+
+    /// Preopened directories passed to the `command` entrypoint
+    preopens: Option<&'static [Preopen]>,
+
     /// Cache for the `fd_readdir` call for a final `wasi::Dirent` plus path
     /// name that didn't fit into the caller's buffer.
     dirent_cache: DirentCache,
@@ -1784,8 +1878,34 @@ impl Drop for DirEntryStream {
     }
 }
 
+#[repr(C)]
 pub struct WasmStr {
     ptr: *const u8,
+    len: usize,
+}
+
+#[repr(C)]
+pub struct StrTuple {
+    key: WasmStr,
+    value: WasmStr,
+}
+
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct StrTupleList {
+    base: *const StrTuple,
+    len: usize,
+}
+
+#[repr(C)]
+pub struct Preopen {
+    descriptor: u32,
+    path: WasmStr,
+}
+
+#[repr(C)]
+pub struct PreopenList {
+    base: *const Preopen,
     len: usize,
 }
 
@@ -1800,7 +1920,7 @@ const fn command_data_size() -> usize {
     start -= size_of::<DirentCache>();
 
     // Remove miscellaneous metadata also stored in state.
-    start -= 9 * size_of::<usize>();
+    start -= 14 * size_of::<usize>();
 
     // Everything else is the `command_data` allocation.
     start
@@ -1869,6 +1989,8 @@ impl State {
                 command_data: MaybeUninit::uninit(),
                 command_data_next: 0,
                 args: None,
+                env_vars: None,
+                preopens: None,
                 dirent_cache: DirentCache {
                     stream: Cell::new(None),
                     for_fd: Cell::new(0),
