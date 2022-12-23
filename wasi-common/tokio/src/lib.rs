@@ -97,14 +97,14 @@ impl WasiCtxBuilder {
     }
     pub fn preopened_socket(mut self, fd: u32, socket: impl Into<Socket>) -> Result<Self, Error> {
         let socket: Socket = socket.into();
-        let file: Box<dyn WasiFile> = socket.into();
+        let listener: Box<dyn WasiListener> = socket.into();
 
         let caps = FileCaps::FDSTAT_SET_FLAGS
             | FileCaps::FILESTAT_GET
             | FileCaps::READ
             | FileCaps::POLL_READWRITE;
 
-        self.0.insert_file(fd, file, caps);
+        self.0.insert_listener(fd, listener, caps);
         Ok(self)
     }
 

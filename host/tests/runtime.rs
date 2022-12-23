@@ -1,9 +1,6 @@
 use anyhow::Result;
 use cap_rand::RngCore;
-use cap_std::{
-    fs::Dir,
-    time::{Duration, Instant, SystemTime},
-};
+use cap_std::{fs::Dir, time::Duration};
 use host::{add_to_linker, Wasi, WasiCtx};
 use std::{
     io::{Cursor, Write},
@@ -11,7 +8,7 @@ use std::{
 };
 use wasi_cap_std_sync::WasiCtxBuilder;
 use wasi_common::{
-    clocks::{WasiMonotonicClock, WasiSystemClock},
+    clocks::{WasiMonotonicClock, WasiWallClock},
     pipe::ReadPipe,
 };
 use wasmtime::{
@@ -43,8 +40,8 @@ async fn instantiate(path: &str) -> Result<(Store<WasiCtx>, Wasi)> {
 async fn run_hello_stdout(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     wasi.command(
         &mut store,
-        0 as host::Descriptor,
-        1 as host::Descriptor,
+        0 as host::WasiStream,
+        1 as host::WasiStream,
         &["gussie", "sparky", "willa"],
         &[],
         &[],
@@ -57,8 +54,8 @@ async fn run_panic(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     let r = wasi
         .command(
             &mut store,
-            0 as host::Descriptor,
-            1 as host::Descriptor,
+            0 as host::WasiStream,
+            1 as host::WasiStream,
             &[
                 "diesel",
                 "the",
@@ -81,8 +78,8 @@ async fn run_panic(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
 async fn run_args(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     wasi.command(
         &mut store,
-        0 as host::Descriptor,
-        1 as host::Descriptor,
+        0 as host::WasiStream,
+        1 as host::WasiStream,
         &["hello", "this", "", "is an argument", "with 🚩 emoji"],
         &[],
         &[],
@@ -116,8 +113,8 @@ async fn run_random(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
 
     wasi.command(
         &mut store,
-        0 as host::Descriptor,
-        1 as host::Descriptor,
+        0 as host::WasiStream,
+        1 as host::WasiStream,
         &[],
         &[],
         &[],
@@ -127,45 +124,54 @@ async fn run_random(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
 }
 
 async fn run_time(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    struct FakeSystemClock;
+    struct FakeWallClock;
 
-    impl WasiSystemClock for FakeSystemClock {
+    impl WasiWallClock for FakeWallClock {
         fn resolution(&self) -> Duration {
             Duration::from_secs(1)
         }
 
-        fn now(&self, _precision: Duration) -> SystemTime {
-            SystemTime::from_std(std::time::SystemTime::UNIX_EPOCH)
-                + Duration::from_secs(1431648000)
+        fn now(&self) -> Duration {
+            Duration::from_secs(1431648000)
+        }
+
+        fn dup(&self) -> Box<dyn WasiWallClock + Send + Sync> {
+            Box::new(Self)
         }
     }
 
     struct FakeMonotonicClock {
-        now: Mutex<Instant>,
+        now: Mutex<u64>,
     }
 
     impl WasiMonotonicClock for FakeMonotonicClock {
-        fn resolution(&self) -> Duration {
-            Duration::from_secs(1)
+        fn resolution(&self) -> u64 {
+            1_000_000_000
         }
 
-        fn now(&self, _precision: Duration) -> Instant {
+        fn now(&self) -> u64 {
             let mut now = self.now.lock().unwrap();
             let then = *now;
-            *now += Duration::from_secs(42);
+            *now += 42 * 1_000_000_000;
             then
+        }
+
+        fn dup(&self) -> Box<dyn WasiMonotonicClock + Send + Sync> {
+            let now = *self.now.lock().unwrap();
+            Box::new(Self {
+                now: Mutex::new(now),
+            })
         }
     }
 
-    store.data_mut().clocks.system = Box::new(FakeSystemClock);
-    store.data_mut().clocks.monotonic = Box::new(FakeMonotonicClock {
-        now: Mutex::new(Instant::from_std(std::time::Instant::now())),
-    });
+    store.data_mut().clocks.default_wall_clock = Box::new(FakeWallClock);
+    store.data_mut().clocks.default_monotonic_clock =
+        Box::new(FakeMonotonicClock { now: Mutex::new(0) });
 
     wasi.command(
         &mut store,
-        0 as host::Descriptor,
-        1 as host::Descriptor,
+        0 as host::WasiStream,
+        1 as host::WasiStream,
         &[],
         &[],
         &[],
@@ -183,8 +189,8 @@ async fn run_stdin(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
 
     wasi.command(
         &mut store,
-        0 as host::Descriptor,
-        1 as host::Descriptor,
+        0 as host::WasiStream,
+        1 as host::WasiStream,
         &[],
         &[],
         &[],

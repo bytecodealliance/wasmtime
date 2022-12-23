@@ -1,7 +1,9 @@
 use crate::clocks::WasiClocks;
 use crate::dir::WasiDir;
 use crate::file::WasiFile;
+use crate::listener::WasiListener;
 use crate::sched::WasiSched;
+use crate::stream::WasiStream;
 use crate::table::Table;
 use crate::Error;
 use cap_rand::RngCore;
@@ -33,34 +35,46 @@ impl WasiCtx {
     }
 
     pub fn insert_file(&mut self, fd: u32, file: Box<dyn WasiFile>) {
-        self.table().insert_at(fd, Box::new(file));
+        self.table_mut().insert_at(fd, Box::new(file));
+    }
+
+    pub fn insert_stream(&mut self, fd: u32, stream: Box<dyn WasiStream>) {
+        self.table_mut().insert_at(fd, Box::new(stream));
+    }
+
+    pub fn insert_listener(&mut self, fd: u32, listener: Box<dyn WasiListener>) {
+        self.table_mut().insert_at(fd, Box::new(listener));
     }
 
     pub fn push_file(&mut self, file: Box<dyn WasiFile>) -> Result<u32, Error> {
-        self.table().push(Box::new(file))
+        self.table_mut().push(Box::new(file))
     }
 
     pub fn insert_dir(&mut self, fd: u32, dir: Box<dyn WasiDir>) {
-        self.table().insert_at(fd, Box::new(dir))
+        self.table_mut().insert_at(fd, Box::new(dir))
     }
 
     pub fn push_dir(&mut self, dir: Box<dyn WasiDir>) -> Result<u32, Error> {
-        self.table().push(Box::new(dir))
+        self.table_mut().push(Box::new(dir))
     }
 
-    pub fn table(&mut self) -> &mut Table {
+    pub fn table(&self) -> &Table {
+        &self.table
+    }
+
+    pub fn table_mut(&mut self) -> &mut Table {
         &mut self.table
     }
 
-    pub fn set_stdin(&mut self, f: Box<dyn WasiFile>) {
-        self.insert_file(0, f);
+    pub fn set_stdin(&mut self, s: Box<dyn WasiStream>) {
+        self.insert_stream(0, s);
     }
 
-    pub fn set_stdout(&mut self, f: Box<dyn WasiFile>) {
-        self.insert_file(1, f);
+    pub fn set_stdout(&mut self, s: Box<dyn WasiStream>) {
+        self.insert_stream(1, s);
     }
 
-    pub fn set_stderr(&mut self, f: Box<dyn WasiFile>) {
-        self.insert_file(2, f);
+    pub fn set_stderr(&mut self, s: Box<dyn WasiStream>) {
+        self.insert_stream(2, s);
     }
 }

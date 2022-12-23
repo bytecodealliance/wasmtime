@@ -7,70 +7,90 @@ use io_lifetimes::{AsFd, BorrowedFd};
 use io_lifetimes::{AsSocket, BorrowedSocket};
 use std::any::Any;
 use std::convert::TryInto;
-use std::io;
-#[cfg(unix)]
+use std::io::{self, Read, Write};
 use system_interface::fs::GetSetFdFlags;
 use system_interface::io::IoExt;
 use system_interface::io::IsReadWrite;
 use system_interface::io::ReadReady;
 use wasi_common::{
-    file::{FdFlags, FileType, RiFlags, RoFlags, SdFlags, SiFlags, WasiFile},
+    connection::{RiFlags, RoFlags, SdFlags, SiFlags, WasiConnection},
+    listener::WasiListener,
+    stream::WasiStream,
     Error, ErrorExt,
 };
 
-pub enum Socket {
+pub enum Listener {
     TcpListener(cap_std::net::TcpListener),
-    TcpStream(cap_std::net::TcpStream),
-    #[cfg(unix)]
-    UnixStream(cap_std::os::unix::net::UnixStream),
     #[cfg(unix)]
     UnixListener(cap_std::os::unix::net::UnixListener),
 }
 
-impl From<cap_std::net::TcpListener> for Socket {
+pub enum Connection {
+    TcpStream(cap_std::net::TcpStream),
+    #[cfg(unix)]
+    UnixStream(cap_std::os::unix::net::UnixStream),
+}
+
+impl From<cap_std::net::TcpListener> for Listener {
     fn from(listener: cap_std::net::TcpListener) -> Self {
         Self::TcpListener(listener)
     }
 }
 
-impl From<cap_std::net::TcpStream> for Socket {
+impl From<cap_std::net::TcpStream> for Connection {
     fn from(stream: cap_std::net::TcpStream) -> Self {
         Self::TcpStream(stream)
     }
 }
 
 #[cfg(unix)]
-impl From<cap_std::os::unix::net::UnixListener> for Socket {
+impl From<cap_std::os::unix::net::UnixListener> for Listener {
     fn from(listener: cap_std::os::unix::net::UnixListener) -> Self {
         Self::UnixListener(listener)
     }
 }
 
 #[cfg(unix)]
-impl From<cap_std::os::unix::net::UnixStream> for Socket {
+impl From<cap_std::os::unix::net::UnixStream> for Connection {
     fn from(stream: cap_std::os::unix::net::UnixStream) -> Self {
         Self::UnixStream(stream)
     }
 }
 
 #[cfg(unix)]
-impl From<Socket> for Box<dyn WasiFile> {
-    fn from(listener: Socket) -> Self {
+impl From<Listener> for Box<dyn WasiListener> {
+    fn from(listener: Listener) -> Self {
         match listener {
-            Socket::TcpListener(l) => Box::new(crate::net::TcpListener::from_cap_std(l)),
-            Socket::UnixListener(l) => Box::new(crate::net::UnixListener::from_cap_std(l)),
-            Socket::TcpStream(l) => Box::new(crate::net::TcpStream::from_cap_std(l)),
-            Socket::UnixStream(l) => Box::new(crate::net::UnixStream::from_cap_std(l)),
+            Listener::TcpListener(l) => Box::new(crate::net::TcpListener::from_cap_std(l)),
+            Listener::UnixListener(l) => Box::new(crate::net::UnixListener::from_cap_std(l)),
         }
     }
 }
 
 #[cfg(windows)]
-impl From<Socket> for Box<dyn WasiFile> {
-    fn from(listener: Socket) -> Self {
+impl From<Listener> for Box<dyn WasiListener> {
+    fn from(listener: Listener) -> Self {
         match listener {
-            Socket::TcpListener(l) => Box::new(crate::net::TcpListener::from_cap_std(l)),
-            Socket::TcpStream(l) => Box::new(crate::net::TcpStream::from_cap_std(l)),
+            Listener::TcpListener(l) => Box::new(crate::net::TcpListener::from_cap_std(l)),
+        }
+    }
+}
+
+#[cfg(unix)]
+impl From<Connection> for Box<dyn WasiConnection> {
+    fn from(listener: Connection) -> Self {
+        match listener {
+            Connection::TcpStream(l) => Box::new(crate::net::TcpStream::from_cap_std(l)),
+            Connection::UnixStream(l) => Box::new(crate::net::UnixStream::from_cap_std(l)),
+        }
+    }
+}
+
+#[cfg(windows)]
+impl From<Connection> for Box<dyn WasiConnection> {
+    fn from(listener: Connection) -> Self {
+        match listener {
+            Connection::TcpStream(l) => Box::new(crate::net::TcpStream::from_cap_std(l)),
         }
     }
 }
@@ -78,47 +98,29 @@ impl From<Socket> for Box<dyn WasiFile> {
 macro_rules! wasi_listen_write_impl {
     ($ty:ty, $stream:ty) => {
         #[async_trait::async_trait]
-        impl WasiFile for $ty {
+        impl WasiListener for $ty {
             fn as_any(&self) -> &dyn Any {
                 self
             }
-            #[cfg(unix)]
-            fn pollable(&self) -> Option<rustix::fd::BorrowedFd> {
-                Some(self.0.as_fd())
-            }
 
-            #[cfg(windows)]
-            fn pollable(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
-                Some(self.0.as_raw_handle_or_socket())
-            }
-            async fn sock_accept(&mut self, fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
+            async fn sock_accept(
+                &mut self,
+                nonblocking: bool,
+            ) -> Result<Box<dyn WasiConnection>, Error> {
                 let (stream, _) = self.0.accept()?;
-                let mut stream = <$stream>::from_cap_std(stream);
-                stream.set_fdflags(fdflags).await?;
+                stream.set_nonblocking(nonblocking)?;
+                let stream = <$stream>::from_cap_std(stream);
                 Ok(Box::new(stream))
             }
-            async fn get_filetype(&mut self) -> Result<FileType, Error> {
-                Ok(FileType::SocketStream)
+
+            fn get_nonblocking(&mut self) -> Result<bool, Error> {
+                let s = self.0.as_socketlike().get_fd_flags()?;
+                Ok(s.contains(system_interface::fs::FdFlags::NONBLOCK))
             }
-            #[cfg(unix)]
-            async fn get_fdflags(&mut self) -> Result<FdFlags, Error> {
-                let fdflags = get_fd_flags(&self.0)?;
-                Ok(fdflags)
-            }
-            async fn set_fdflags(&mut self, fdflags: FdFlags) -> Result<(), Error> {
-                if fdflags == wasi_common::file::FdFlags::NONBLOCK {
-                    self.0.set_nonblocking(true)?;
-                } else if fdflags.is_empty() {
-                    self.0.set_nonblocking(false)?;
-                } else {
-                    return Err(
-                        Error::invalid_argument().context("cannot set anything else than NONBLOCK")
-                    );
-                }
+
+            fn set_nonblocking(&mut self, flag: bool) -> Result<(), Error> {
+                self.0.set_nonblocking(flag)?;
                 Ok(())
-            }
-            async fn num_ready_bytes(&self) -> Result<u64, Error> {
-                Ok(1)
             }
         }
 
@@ -172,80 +174,14 @@ wasi_listen_write_impl!(UnixListener, UnixStream);
 macro_rules! wasi_stream_write_impl {
     ($ty:ty, $std_ty:ty) => {
         #[async_trait::async_trait]
-        impl WasiFile for $ty {
+        impl WasiConnection for $ty {
             fn as_any(&self) -> &dyn Any {
                 self
-            }
-            #[cfg(unix)]
-            fn pollable(&self) -> Option<rustix::fd::BorrowedFd> {
-                Some(self.0.as_fd())
-            }
-
-            #[cfg(windows)]
-            fn pollable(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
-                Some(self.0.as_raw_handle_or_socket())
-            }
-            async fn get_filetype(&mut self) -> Result<FileType, Error> {
-                Ok(FileType::SocketStream)
-            }
-            #[cfg(unix)]
-            async fn get_fdflags(&mut self) -> Result<FdFlags, Error> {
-                let fdflags = get_fd_flags(&self.0)?;
-                Ok(fdflags)
-            }
-            async fn set_fdflags(&mut self, fdflags: FdFlags) -> Result<(), Error> {
-                if fdflags == wasi_common::file::FdFlags::NONBLOCK {
-                    self.0.set_nonblocking(true)?;
-                } else if fdflags.is_empty() {
-                    self.0.set_nonblocking(false)?;
-                } else {
-                    return Err(
-                        Error::invalid_argument().context("cannot set anything else than NONBLOCK")
-                    );
-                }
-                Ok(())
-            }
-            async fn read_vectored<'a>(
-                &mut self,
-                bufs: &mut [io::IoSliceMut<'a>],
-            ) -> Result<u64, Error> {
-                use std::io::Read;
-                let n = Read::read_vectored(&mut &*self.as_socketlike_view::<$std_ty>(), bufs)?;
-                Ok(n.try_into()?)
-            }
-            async fn write_vectored<'a>(&mut self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
-                use std::io::Write;
-                let n = Write::write_vectored(&mut &*self.as_socketlike_view::<$std_ty>(), bufs)?;
-                Ok(n.try_into()?)
-            }
-            async fn peek(&mut self, buf: &mut [u8]) -> Result<u64, Error> {
-                let n = self.0.peek(buf)?;
-                Ok(n.try_into()?)
-            }
-            async fn num_ready_bytes(&self) -> Result<u64, Error> {
-                let val = self.as_socketlike_view::<$std_ty>().num_ready_bytes()?;
-                Ok(val)
-            }
-            async fn readable(&self) -> Result<(), Error> {
-                let (readable, _writeable) = is_read_write(&self.0)?;
-                if readable {
-                    Ok(())
-                } else {
-                    Err(Error::io())
-                }
-            }
-            async fn writable(&self) -> Result<(), Error> {
-                let (_readable, writeable) = is_read_write(&self.0)?;
-                if writeable {
-                    Ok(())
-                } else {
-                    Err(Error::io())
-                }
             }
 
             async fn sock_recv<'a>(
                 &mut self,
-                ri_data: &mut [std::io::IoSliceMut<'a>],
+                ri_data: &mut [io::IoSliceMut<'a>],
                 ri_flags: RiFlags,
             ) -> Result<(u64, RoFlags), Error> {
                 if (ri_flags & !(RiFlags::RECV_PEEK | RiFlags::RECV_WAITALL)) != RiFlags::empty() {
@@ -273,7 +209,7 @@ macro_rules! wasi_stream_write_impl {
 
             async fn sock_send<'a>(
                 &mut self,
-                si_data: &[std::io::IoSlice<'a>],
+                si_data: &[io::IoSlice<'a>],
                 si_flags: SiFlags,
             ) -> Result<u64, Error> {
                 if si_flags != SiFlags::empty() {
@@ -296,6 +232,133 @@ macro_rules! wasi_stream_write_impl {
                 };
                 self.0.shutdown(how)?;
                 Ok(())
+            }
+
+            fn get_nonblocking(&mut self) -> Result<bool, Error> {
+                let s = self.0.as_socketlike().get_fd_flags()?;
+                Ok(s.contains(system_interface::fs::FdFlags::NONBLOCK))
+            }
+
+            fn set_nonblocking(&mut self, flag: bool) -> Result<(), Error> {
+                self.0.set_nonblocking(flag)?;
+                Ok(())
+            }
+
+            async fn readable(&self) -> Result<(), Error> {
+                if is_read_write(&self.0)?.0 {
+                    Ok(())
+                } else {
+                    Err(Error::badf())
+                }
+            }
+
+            async fn writable(&self) -> Result<(), Error> {
+                if is_read_write(&self.0)?.1 {
+                    Ok(())
+                } else {
+                    Err(Error::badf())
+                }
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl WasiStream for $ty {
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+            #[cfg(unix)]
+            fn pollable_read(&self) -> Option<rustix::fd::BorrowedFd> {
+                Some(self.0.as_fd())
+            }
+            #[cfg(unix)]
+            fn pollable_write(&self) -> Option<rustix::fd::BorrowedFd> {
+                Some(self.0.as_fd())
+            }
+
+            #[cfg(windows)]
+            fn pollable_read(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
+                Some(self.0.as_raw_handle_or_socket())
+            }
+            #[cfg(windows)]
+            fn pollable_write(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
+                Some(self.0.as_raw_handle_or_socket())
+            }
+
+            async fn read(&mut self, buf: &mut [u8]) -> Result<(u64, bool), Error> {
+                match Read::read(&mut &*self.as_socketlike_view::<$std_ty>(), buf) {
+                    Ok(0) => Ok((0, true)),
+                    Ok(n) => Ok((n as u64, false)),
+                    Err(err) if err.kind() == io::ErrorKind::Interrupted => Ok((0, false)),
+                    Err(err) => Err(err.into()),
+                }
+            }
+            async fn read_vectored<'a>(
+                &mut self,
+                bufs: &mut [io::IoSliceMut<'a>],
+            ) -> Result<(u64, bool), Error> {
+                match Read::read_vectored(&mut &*self.as_socketlike_view::<$std_ty>(), bufs) {
+                    Ok(0) => Ok((0, true)),
+                    Ok(n) => Ok((n as u64, false)),
+                    Err(err) if err.kind() == io::ErrorKind::Interrupted => Ok((0, false)),
+                    Err(err) => Err(err.into()),
+                }
+            }
+            #[cfg(can_vector)]
+            fn is_read_vectored(&self) -> bool {
+                Read::is_read_vectored(&mut &*self.as_socketlike_view::<$std_ty>())
+            }
+            async fn write(&mut self, buf: &[u8]) -> Result<u64, Error> {
+                let n = Write::write(&mut &*self.as_socketlike_view::<$std_ty>(), buf)?;
+                Ok(n.try_into()?)
+            }
+            async fn write_vectored<'a>(&mut self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
+                let n = Write::write_vectored(&mut &*self.as_socketlike_view::<$std_ty>(), bufs)?;
+                Ok(n.try_into()?)
+            }
+            #[cfg(can_vector)]
+            fn is_write_vectored(&self) -> bool {
+                Write::is_write_vectored(&mut &*self.as_socketlike_view::<$std_ty>())
+            }
+            async fn splice(
+                &mut self,
+                dst: &mut dyn WasiStream,
+                nelem: u64,
+            ) -> Result<(u64, bool), Error> {
+                if let Some(handle) = dst.pollable_write() {
+                    let num = io::copy(
+                        &mut io::Read::take(&self.0, nelem),
+                        &mut &*handle.as_socketlike_view::<$std_ty>(),
+                    )?;
+                    Ok((num, num < nelem))
+                } else {
+                    WasiStream::splice(self, dst, nelem).await
+                }
+            }
+            async fn skip(&mut self, nelem: u64) -> Result<(u64, bool), Error> {
+                let num = io::copy(&mut io::Read::take(&self.0, nelem), &mut io::sink())?;
+                Ok((num, num < nelem))
+            }
+            async fn write_repeated(&mut self, byte: u8, nelem: u64) -> Result<u64, Error> {
+                let num = io::copy(&mut io::Read::take(io::repeat(byte), nelem), &mut self.0)?;
+                Ok(num)
+            }
+            async fn num_ready_bytes(&self) -> Result<u64, Error> {
+                let val = self.as_socketlike_view::<$std_ty>().num_ready_bytes()?;
+                Ok(val)
+            }
+            async fn readable(&self) -> Result<(), Error> {
+                if is_read_write(&self.0)?.0 {
+                    Ok(())
+                } else {
+                    Err(Error::badf())
+                }
+            }
+            async fn writable(&self) -> Result<(), Error> {
+                if is_read_write(&self.0)?.1 {
+                    Ok(())
+                } else {
+                    Err(Error::badf())
+                }
             }
         }
         #[cfg(unix)]
@@ -345,45 +408,6 @@ impl UnixStream {
 
 #[cfg(unix)]
 wasi_stream_write_impl!(UnixStream, std::os::unix::net::UnixStream);
-
-pub fn filetype_from(ft: &cap_std::fs::FileType) -> FileType {
-    use cap_fs_ext::FileTypeExt;
-    if ft.is_block_device() {
-        FileType::SocketDgram
-    } else {
-        FileType::SocketStream
-    }
-}
-
-/// Return the file-descriptor flags for a given file-like object.
-///
-/// This returns the flags needed to implement [`WasiFile::get_fdflags`].
-pub fn get_fd_flags<Socketlike: AsSocketlike>(
-    f: Socketlike,
-) -> io::Result<wasi_common::file::FdFlags> {
-    // On Unix-family platforms, we can use the same system call that we'd use
-    // for files on sockets here.
-    #[cfg(not(windows))]
-    {
-        let mut out = wasi_common::file::FdFlags::empty();
-        if f.get_fd_flags()?
-            .contains(system_interface::fs::FdFlags::NONBLOCK)
-        {
-            out |= wasi_common::file::FdFlags::NONBLOCK;
-        }
-        Ok(out)
-    }
-
-    // On Windows, sockets are different, and there is no direct way to
-    // query for the non-blocking flag. We can get a sufficient approximation
-    // by testing whether a zero-length `recv` appears to block.
-    #[cfg(windows)]
-    match rustix::net::recv(f, &mut [], rustix::net::RecvFlags::empty()) {
-        Ok(_) => Ok(wasi_common::file::FdFlags::empty()),
-        Err(rustix::io::Errno::WOULDBLOCK) => Ok(wasi_common::file::FdFlags::NONBLOCK),
-        Err(e) => Err(e.into()),
-    }
-}
 
 /// Return the file-descriptor flags for a given file-like object.
 ///

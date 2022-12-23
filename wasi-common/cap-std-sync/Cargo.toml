@@ -16,7 +16,7 @@ wasi-common = { workspace = true }
 async-trait = { workspace = true }
 anyhow = { workspace = true }
 cap-std = { workspace = true }
-cap-fs-ext = "1.0.0"
+cap-fs-ext = { workspace = true }
 cap-time-ext = "1.0.0"
 cap-rand = { workspace = true }
 fs-set-times = "0.18.0"

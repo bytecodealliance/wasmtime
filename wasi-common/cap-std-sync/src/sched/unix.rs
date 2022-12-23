@@ -1,4 +1,3 @@
-use cap_std::time::Duration;
 use rustix::io::{PollFd, PollFlags};
 use std::convert::TryInto;
 use wasi_common::sched::subscription::{RwEventFlags, Subscription};
@@ -13,16 +12,16 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
         match s {
             Subscription::Read(f) => {
                 let fd = f
-                    .file
-                    .pollable()
+                    .stream
+                    .pollable_read()
                     .ok_or(Error::invalid_argument().context("file is not pollable"))?;
                 pollfds.push(PollFd::from_borrowed_fd(fd, PollFlags::IN));
             }
 
             Subscription::Write(f) => {
                 let fd = f
-                    .file
-                    .pollable()
+                    .stream
+                    .pollable_write()
                     .ok_or(Error::invalid_argument().context("file is not pollable"))?;
                 pollfds.push(PollFd::from_borrowed_fd(fd, PollFlags::OUT));
             }
@@ -32,8 +31,13 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
 
     let ready = loop {
         let poll_timeout = if let Some(t) = poll.earliest_clock_deadline() {
-            let duration = t.duration_until().unwrap_or(Duration::from_secs(0));
-            (duration.as_millis() + 1) // XXX try always rounding up?
+            let duration = t.duration_until().unwrap_or(0);
+
+            // Convert the timeout to milliseconds for `poll`, rounding up.
+            //
+            // TODO: On Linux and FreeBSD, we could use `ppoll` instead
+            // which takes a `timespec.`
+            ((duration + 999) / 1000)
                 .try_into()
                 .map_err(|_| Error::overflow().context("poll timeout"))?
         } else {
@@ -55,7 +59,7 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
             let revents = pollfd.revents();
             let (nbytes, rwsub) = match rwsub {
                 Subscription::Read(sub) => {
-                    let ready = sub.file.num_ready_bytes().await?;
+                    let ready = sub.stream.num_ready_bytes().await?;
                     (std::cmp::max(ready, 1), sub)
                 }
                 Subscription::Write(sub) => (0, sub),

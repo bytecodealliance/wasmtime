@@ -1,12 +1,17 @@
 #![allow(unused_variables)]
 
+use crate::wasi_poll::WasiStream;
 use crate::{wasi_filesystem, HostResult, WasiCtx};
 use std::{
     io::{IoSlice, IoSliceMut},
     ops::BitAnd,
     time::SystemTime,
 };
-use wasi_common::{dir::TableDirExt, file::TableFileExt, WasiDir, WasiFile};
+use wasi_common::{
+    dir::TableDirExt,
+    file::{FileStream, TableFileExt},
+    WasiDir, WasiFile,
+};
 
 fn contains<T: BitAnd<Output = T> + Eq + Copy>(flags: T, flag: T) -> bool {
     (flags & flag) == flag
@@ -118,9 +123,6 @@ impl Into<wasi_common::file::OFlags> for wasi_filesystem::OFlags {
 impl Into<wasi_common::file::FdFlags> for wasi_filesystem::DescriptorFlags {
     fn into(self) -> wasi_common::file::FdFlags {
         let mut flags = wasi_common::file::FdFlags::empty();
-        if contains(self, wasi_filesystem::DescriptorFlags::APPEND) {
-            flags |= wasi_common::file::FdFlags::APPEND;
-        }
         if contains(self, wasi_filesystem::DescriptorFlags::DSYNC) {
             flags |= wasi_common::file::FdFlags::DSYNC;
         }
@@ -242,19 +244,19 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         fd: wasi_filesystem::Descriptor,
         len: wasi_filesystem::Size,
         offset: wasi_filesystem::Filesize,
-    ) -> HostResult<Vec<u8>, wasi_filesystem::Errno> {
-        let f = self.table().get_file_mut(u32::from(fd)).map_err(convert)?;
+    ) -> HostResult<(Vec<u8>, bool), wasi_filesystem::Errno> {
+        let f = self.table_mut().get_file_mut(fd).map_err(convert)?;
 
         let mut buffer = vec![0; len.try_into().unwrap()];
 
-        let bytes_read = f
+        let (bytes_read, end) = f
             .read_vectored_at(&mut [IoSliceMut::new(&mut buffer)], offset)
             .await
             .map_err(convert)?;
 
         buffer.truncate(bytes_read.try_into().unwrap());
 
-        Ok(buffer)
+        Ok((buffer, end))
     }
 
     async fn pwrite(
@@ -263,7 +265,7 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         buf: Vec<u8>,
         offset: wasi_filesystem::Filesize,
     ) -> HostResult<wasi_filesystem::Size, wasi_filesystem::Errno> {
-        let f = self.table().get_file_mut(u32::from(fd)).map_err(convert)?;
+        let f = self.table_mut().get_file_mut(fd).map_err(convert)?;
 
         let bytes_written = f
             .write_vectored_at(&[IoSlice::new(&buf)], offset)
@@ -294,39 +296,10 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         todo!()
     }
 
-    async fn seek(
-        &mut self,
-        fd: wasi_filesystem::Descriptor,
-        from: wasi_filesystem::SeekFrom,
-    ) -> HostResult<wasi_filesystem::Filesize, wasi_filesystem::Errno> {
-        use std::io::SeekFrom;
-
-        let from = match from {
-            wasi_filesystem::SeekFrom::Cur(offset) => SeekFrom::Current(offset),
-            wasi_filesystem::SeekFrom::End(offset) => SeekFrom::End(offset.try_into().unwrap()),
-            wasi_filesystem::SeekFrom::Set(offset) => SeekFrom::Start(offset),
-        };
-
-        Ok(self
-            .table()
-            .get_file_mut(fd)
-            .map_err(convert)?
-            .seek(from)
-            .await
-            .map_err(convert)?)
-    }
-
     async fn sync(
         &mut self,
         fd: wasi_filesystem::Descriptor,
     ) -> HostResult<(), wasi_filesystem::Errno> {
-        todo!()
-    }
-
-    async fn tell(
-        &mut self,
-        fd: wasi_filesystem::Descriptor,
-    ) -> HostResult<wasi_filesystem::Filesize, wasi_filesystem::Errno> {
         todo!()
     }
 
@@ -345,7 +318,7 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         let table = self.table();
         if table.is::<Box<dyn WasiFile>>(fd) {
             Ok(table
-                .get_file_mut(fd)
+                .get_file(fd)
                 .map_err(convert)?
                 .get_filestat()
                 .await
@@ -405,7 +378,7 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         // TODO: How should this be used?
         _mode: wasi_filesystem::Mode,
     ) -> HostResult<wasi_filesystem::Descriptor, wasi_filesystem::Errno> {
-        let table = self.table();
+        let table = self.table_mut();
         if !table.is::<Box<dyn WasiDir>>(fd) {
             return Err(wasi_filesystem::Errno::Notdir.into());
         }
@@ -444,7 +417,7 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
     }
 
     async fn close(&mut self, fd: wasi_filesystem::Descriptor) -> anyhow::Result<()> {
-        let table = self.table();
+        let table = self.table_mut();
         if table.is::<Box<dyn WasiFile>>(fd) {
             let _ = table.delete(fd);
         } else if table.is::<Box<dyn WasiDir>>(fd) {
@@ -553,5 +526,70 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         fd: wasi_filesystem::Descriptor,
     ) -> HostResult<(), wasi_filesystem::Errno> {
         todo!()
+    }
+
+    async fn read_via_stream(
+        &mut self,
+        fd: wasi_filesystem::Descriptor,
+        offset: u64,
+    ) -> HostResult<WasiStream, wasi_filesystem::Errno> {
+        let f = self.table_mut().get_file_mut(fd).map_err(convert)?;
+
+        // Duplicate the file descriptor so that we get an indepenent lifetime.
+        let clone = f.try_clone().await.map_err(convert)?;
+
+        // Create a stream view for it.
+        let reader = FileStream::new_reader(clone, offset);
+
+        // Box it up.
+        let boxed: Box<dyn wasi_common::WasiStream> = Box::new(reader);
+
+        // Insert the stream view into the table.
+        let index = self.table_mut().push(Box::new(boxed)).map_err(convert)?;
+
+        Ok(index)
+    }
+
+    async fn write_via_stream(
+        &mut self,
+        fd: wasi_filesystem::Descriptor,
+        offset: u64,
+    ) -> HostResult<WasiStream, wasi_filesystem::Errno> {
+        let f = self.table_mut().get_file_mut(fd).map_err(convert)?;
+
+        // Duplicate the file descriptor so that we get an indepenent lifetime.
+        let clone = f.try_clone().await.map_err(convert)?;
+
+        // Create a stream view for it.
+        let writer = FileStream::new_writer(clone, offset);
+
+        // Box it up.
+        let boxed: Box<dyn wasi_common::WasiStream> = Box::new(writer);
+
+        // Insert the stream view into the table.
+        let index = self.table_mut().push(Box::new(boxed)).map_err(convert)?;
+
+        Ok(index)
+    }
+
+    async fn append_via_stream(
+        &mut self,
+        fd: wasi_filesystem::Descriptor,
+    ) -> HostResult<WasiStream, wasi_filesystem::Errno> {
+        let f = self.table_mut().get_file_mut(fd).map_err(convert)?;
+
+        // Duplicate the file descriptor so that we get an indepenent lifetime.
+        let clone = f.try_clone().await.map_err(convert)?;
+
+        // Create a stream view for it.
+        let appender = FileStream::new_appender(clone);
+
+        // Box it up.
+        let boxed: Box<dyn wasi_common::WasiStream> = Box::new(appender);
+
+        // Insert the stream view into the table.
+        let index = self.table_mut().push(Box::new(boxed)).map_err(convert)?;
+
+        Ok(index)
     }
 }

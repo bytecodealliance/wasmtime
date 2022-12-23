@@ -56,12 +56,12 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
         match s {
             Subscription::Read(f) => {
                 futures.push(async move {
-                    f.file
+                    f.stream
                         .readable()
                         .await
                         .map_err(|e| e.context("readable future"))?;
                     f.complete(
-                        f.file
+                        f.stream
                             .num_ready_bytes()
                             .await
                             .map_err(|e| e.context("read num_ready_bytes"))?,
@@ -73,7 +73,7 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
 
             Subscription::Write(f) => {
                 futures.push(async move {
-                    f.file
+                    f.stream
                         .writable()
                         .await
                         .map_err(|e| e.context("writable future"))?;

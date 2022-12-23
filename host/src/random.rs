@@ -12,6 +12,6 @@ impl wasi_random::WasiRandom for WasiCtx {
     }
 
     async fn get_random_u64(&mut self) -> anyhow::Result<u64> {
-        Ok((&mut self.random).sample(Standard))
+        Ok(self.random.sample(Standard))
     }
 }

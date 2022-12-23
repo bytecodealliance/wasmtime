@@ -1,7 +1,6 @@
 use crate::clocks::WasiMonotonicClock;
-use crate::file::WasiFile;
-use crate::Error;
-use cap_std::time::Instant;
+use crate::stream::WasiStream;
+use crate::{Error, ErrorExt};
 pub mod subscription;
 pub use cap_std::time::Duration;
 
@@ -43,32 +42,35 @@ impl<'a> Poll<'a> {
     pub fn subscribe_monotonic_clock(
         &mut self,
         clock: &'a dyn WasiMonotonicClock,
-        deadline: Instant,
-        precision: Duration,
+        deadline: u64,
+        absolute: bool,
         ud: Userdata,
-    ) {
+    ) -> Result<(), Error> {
+        let deadline = if absolute {
+            deadline
+                .checked_sub(clock.now())
+                .ok_or_else(Error::overflow)?
+        } else {
+            deadline
+        };
         self.subs.push((
-            Subscription::MonotonicClock(MonotonicClockSubscription {
-                clock,
-                deadline,
-                precision,
-            }),
+            Subscription::MonotonicClock(MonotonicClockSubscription { clock, deadline }),
             ud,
         ));
+        Ok(())
     }
-    pub fn subscribe_read(&mut self, file: &'a dyn WasiFile, ud: Userdata) {
+    pub fn subscribe_read(&mut self, stream: &'a dyn WasiStream, ud: Userdata) {
         self.subs
-            .push((Subscription::Read(RwSubscription::new(file)), ud));
+            .push((Subscription::Read(RwSubscription::new(stream)), ud));
     }
-    pub fn subscribe_write(&mut self, file: &'a dyn WasiFile, ud: Userdata) {
+    pub fn subscribe_write(&mut self, stream: &'a dyn WasiStream, ud: Userdata) {
         self.subs
-            .push((Subscription::Write(RwSubscription::new(file)), ud));
+            .push((Subscription::Write(RwSubscription::new(stream)), ud));
     }
-    pub fn results(self) -> Vec<(SubscriptionResult, Userdata)> {
+    pub fn results(self) -> impl Iterator<Item = (SubscriptionResult, Userdata)> + 'a {
         self.subs
             .into_iter()
             .filter_map(|(s, ud)| SubscriptionResult::from_subscription(s).map(|r| (r, ud)))
-            .collect()
     }
     pub fn is_empty(&self) -> bool {
         self.subs.is_empty()

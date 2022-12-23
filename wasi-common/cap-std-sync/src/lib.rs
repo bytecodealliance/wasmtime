@@ -46,31 +46,30 @@ pub use cap_std::net::TcpListener;
 pub use clocks::clocks_ctx;
 pub use sched::sched_ctx;
 
-use crate::net::Socket;
+use crate::net::Listener;
 use cap_rand::{Rng, RngCore, SeedableRng};
-use wasi_common::{table::Table, WasiCtx, WasiFile};
+use wasi_common::{listener::WasiListener, stream::WasiStream, table::Table, WasiCtx};
 
 pub struct WasiCtxBuilder(WasiCtx);
 
 impl WasiCtxBuilder {
     pub fn new() -> Self {
-        let mut table = Table::new();
         WasiCtxBuilder(WasiCtx::new(
             random_ctx(),
-            clocks_ctx(&mut table),
+            clocks_ctx(),
             sched_ctx(),
-            table,
+            Table::new(),
         ))
     }
-    pub fn stdin(mut self, f: Box<dyn WasiFile>) -> Self {
+    pub fn stdin(mut self, f: Box<dyn WasiStream>) -> Self {
         self.0.set_stdin(f);
         self
     }
-    pub fn stdout(mut self, f: Box<dyn WasiFile>) -> Self {
+    pub fn stdout(mut self, f: Box<dyn WasiStream>) -> Self {
         self.0.set_stdout(f);
         self
     }
-    pub fn stderr(mut self, f: Box<dyn WasiFile>) -> Self {
+    pub fn stderr(mut self, f: Box<dyn WasiStream>) -> Self {
         self.0.set_stderr(f);
         self
     }
@@ -91,11 +90,11 @@ impl WasiCtxBuilder {
         self.0.insert_dir(fd, dir);
         self
     }
-    pub fn preopened_socket(mut self, fd: u32, socket: impl Into<Socket>) -> Self {
-        let socket: Socket = socket.into();
-        let file: Box<dyn WasiFile> = socket.into();
+    pub fn preopened_listener(mut self, fd: u32, listener: impl Into<Listener>) -> Self {
+        let listener: Listener = listener.into();
+        let listener: Box<dyn WasiListener> = listener.into();
 
-        self.0.insert_file(fd, file);
+        self.0.insert_listener(fd, listener);
         self
     }
     pub fn build(self) -> WasiCtx {

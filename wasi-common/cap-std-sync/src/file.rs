@@ -5,10 +5,8 @@ use is_terminal::IsTerminal;
 use std::any::Any;
 use std::convert::TryInto;
 use std::io;
-use system_interface::{
-    fs::{FileIoExt, GetSetFdFlags},
-    io::{IoExt, ReadReady},
-};
+use system_interface::fs::{FileIoExt, GetSetFdFlags};
+use system_interface::io::IsReadWrite;
 use wasi_common::{
     file::{Advice, FdFlags, FileType, Filestat, WasiFile},
     Error, ErrorExt,
@@ -36,6 +34,12 @@ impl WasiFile for File {
     fn pollable(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
         Some(self.0.as_raw_handle_or_socket())
     }
+
+    async fn try_clone(&mut self) -> Result<Box<dyn WasiFile>, Error> {
+        let clone = self.0.try_clone()?;
+        Ok(Box::new(Self(clone)))
+    }
+
     async fn datasync(&mut self) -> Result<(), Error> {
         self.0.sync_data()?;
         Ok(())
@@ -44,11 +48,11 @@ impl WasiFile for File {
         self.0.sync_all()?;
         Ok(())
     }
-    async fn get_filetype(&mut self) -> Result<FileType, Error> {
+    async fn get_filetype(&self) -> Result<FileType, Error> {
         let meta = self.0.metadata()?;
         Ok(filetype_from(&meta.file_type()))
     }
-    async fn get_fdflags(&mut self) -> Result<FdFlags, Error> {
+    async fn get_fdflags(&self) -> Result<FdFlags, Error> {
         let fdflags = get_fd_flags(&self.0)?;
         Ok(fdflags)
     }
@@ -64,7 +68,7 @@ impl WasiFile for File {
         self.0.set_fd_flags(set_fd_flags)?;
         Ok(())
     }
-    async fn get_filestat(&mut self) -> Result<Filestat, Error> {
+    async fn get_filestat(&self) -> Result<Filestat, Error> {
         let meta = self.0.metadata()?;
         Ok(Filestat {
             device_id: meta.dev(),
@@ -98,20 +102,31 @@ impl WasiFile for File {
             .set_times(convert_systimespec(atime), convert_systimespec(mtime))?;
         Ok(())
     }
-    async fn read_vectored<'a>(&mut self, bufs: &mut [io::IoSliceMut<'a>]) -> Result<u64, Error> {
-        let n = self.0.read_vectored(bufs)?;
-        Ok(n.try_into()?)
+    async fn read_at<'a>(&mut self, buf: &mut [u8], offset: u64) -> Result<(u64, bool), Error> {
+        match self.0.read_at(buf, offset) {
+            Ok(0) => Ok((0, true)),
+            Ok(n) => Ok((n as u64, false)),
+            Err(err) if err.kind() == io::ErrorKind::Interrupted => Ok((0, false)),
+            Err(err) => Err(err.into()),
+        }
     }
     async fn read_vectored_at<'a>(
         &mut self,
         bufs: &mut [io::IoSliceMut<'a>],
         offset: u64,
-    ) -> Result<u64, Error> {
-        let n = self.0.read_vectored_at(bufs, offset)?;
-        Ok(n.try_into()?)
+    ) -> Result<(u64, bool), Error> {
+        match self.0.read_vectored_at(bufs, offset) {
+            Ok(0) => Ok((0, true)),
+            Ok(n) => Ok((n as u64, false)),
+            Err(err) if err.kind() == io::ErrorKind::Interrupted => Ok((0, false)),
+            Err(err) => Err(err.into()),
+        }
     }
-    async fn write_vectored<'a>(&mut self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
-        let n = self.0.write_vectored(bufs)?;
+    fn is_read_vectored_at(&self) -> bool {
+        self.0.is_read_vectored_at()
+    }
+    async fn write_at<'a>(&mut self, buf: &[u8], offset: u64) -> Result<u64, Error> {
+        let n = self.0.write_at(buf, offset)?;
         Ok(n.try_into()?)
     }
     async fn write_vectored_at<'a>(
@@ -122,18 +137,27 @@ impl WasiFile for File {
         let n = self.0.write_vectored_at(bufs, offset)?;
         Ok(n.try_into()?)
     }
-    async fn seek(&mut self, pos: std::io::SeekFrom) -> Result<u64, Error> {
-        Ok(self.0.seek(pos)?)
-    }
-    async fn peek(&mut self, buf: &mut [u8]) -> Result<u64, Error> {
-        let n = self.0.peek(buf)?;
-        Ok(n.try_into()?)
-    }
-    async fn num_ready_bytes(&self) -> Result<u64, Error> {
-        Ok(self.0.num_ready_bytes()?)
+    fn is_write_vectored_at(&self) -> bool {
+        self.0.is_write_vectored_at()
     }
     fn isatty(&mut self) -> bool {
         self.0.is_terminal()
+    }
+
+    async fn readable(&self) -> Result<(), Error> {
+        if is_read_write(&self.0)?.0 {
+            Ok(())
+        } else {
+            Err(Error::badf())
+        }
+    }
+
+    async fn writable(&self) -> Result<(), Error> {
+        if is_read_write(&self.0)?.1 {
+            Ok(())
+        } else {
+            Err(Error::badf())
+        }
     }
 }
 
@@ -243,6 +267,13 @@ pub fn get_fd_flags<Filelike: AsFilelike>(f: Filelike) -> io::Result<wasi_common
         out |= wasi_common::file::FdFlags::SYNC;
     }
     Ok(out)
+}
+
+/// Return the file-descriptor flags for a given file-like object.
+///
+/// This returns the flags needed to implement [`WasiFile::get_fdflags`].
+pub fn is_read_write<Filelike: AsFilelike>(f: Filelike) -> io::Result<(bool, bool)> {
+    f.is_read_write()
 }
 
 fn convert_advice(advice: Advice) -> system_interface::fs::Advice {

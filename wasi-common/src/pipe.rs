@@ -7,8 +7,8 @@
 //! Some convenience constructors are included for common backing types like `Vec<u8>` and `String`,
 //! but the virtual pipes can be instantiated with any `Read` or `Write` type.
 //!
-use crate::file::{FdFlags, FileType, WasiFile};
-use crate::Error;
+use crate::stream::WasiStream;
+use crate::{Error, ErrorExt};
 use std::any::Any;
 use std::convert::TryInto;
 use std::io::{self, Read, Write};
@@ -99,24 +99,45 @@ impl From<&str> for ReadPipe<io::Cursor<String>> {
 }
 
 #[async_trait::async_trait]
-impl<R: Read + Any + Send + Sync> WasiFile for ReadPipe<R> {
+impl<R: Read + Any + Send + Sync> WasiStream for ReadPipe<R> {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    async fn get_filetype(&mut self) -> Result<FileType, Error> {
-        Ok(FileType::Pipe)
+
+    async fn read(&mut self, buf: &mut [u8]) -> Result<(u64, bool), Error> {
+        match self.borrow().read(buf) {
+            Ok(0) => Ok((0, true)),
+            Ok(n) => Ok((n.try_into()?, false)),
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => Ok((0, false)),
+            Err(e) => Err(e.into()),
+        }
     }
-    async fn read_vectored<'a>(&mut self, bufs: &mut [io::IoSliceMut<'a>]) -> Result<u64, Error> {
-        let n = self.borrow().read_vectored(bufs)?;
-        Ok(n.try_into()?)
-    }
-    async fn read_vectored_at<'a>(
+
+    // TODO: Optimize for pipes.
+    /*
+    async fn splice(
         &mut self,
-        bufs: &mut [io::IoSliceMut<'a>],
-        _offset: u64,
+        dst: &mut dyn WasiStream,
+        nelem: u64,
     ) -> Result<u64, Error> {
-        let n = self.borrow().read_vectored(bufs)?;
-        Ok(n.try_into()?)
+        todo!()
+    }
+    */
+
+    async fn skip(&mut self, nelem: u64) -> Result<(u64, bool), Error> {
+        let num = io::copy(
+            &mut io::Read::take(&mut *self.borrow(), nelem),
+            &mut io::sink(),
+        )?;
+        Ok((num, num < nelem))
+    }
+
+    async fn readable(&self) -> Result<(), Error> {
+        Ok(())
+    }
+
+    async fn writable(&self) -> Result<(), Error> {
+        Err(Error::badf())
     }
 }
 
@@ -191,18 +212,40 @@ impl WritePipe<io::Cursor<Vec<u8>>> {
 }
 
 #[async_trait::async_trait]
-impl<W: Write + Any + Send + Sync> WasiFile for WritePipe<W> {
+impl<W: Write + Any + Send + Sync> WasiStream for WritePipe<W> {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    async fn get_filetype(&mut self) -> Result<FileType, Error> {
-        Ok(FileType::Pipe)
-    }
-    async fn get_fdflags(&mut self) -> Result<FdFlags, Error> {
-        Ok(FdFlags::APPEND)
-    }
-    async fn write_vectored<'a>(&mut self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
-        let n = self.borrow().write_vectored(bufs)?;
+
+    async fn write(&mut self, buf: &[u8]) -> Result<u64, Error> {
+        let n = self.borrow().write(buf)?;
         Ok(n.try_into()?)
+    }
+
+    // TODO: Optimize for pipes.
+    /*
+    async fn splice(
+        &mut self,
+        dst: &mut dyn WasiStream,
+        nelem: u64,
+    ) -> Result<u64, Error> {
+        todo!()
+    }
+    */
+
+    async fn write_repeated(&mut self, byte: u8, nelem: u64) -> Result<u64, Error> {
+        let num = io::copy(
+            &mut io::Read::take(io::repeat(byte), nelem),
+            &mut *self.borrow(),
+        )?;
+        Ok(num)
+    }
+
+    async fn readable(&self) -> Result<(), Error> {
+        Err(Error::badf())
+    }
+
+    async fn writable(&self) -> Result<(), Error> {
+        Ok(())
     }
 }

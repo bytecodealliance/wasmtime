@@ -1,66 +1,65 @@
-use cap_std::time::{Duration, Instant, SystemTime};
+use crate::Error;
+use cap_std::time::Duration;
 
-pub enum SystemTimeSpec {
-    SymbolicNow,
-    Absolute(SystemTime),
-}
-
-pub trait WasiSystemClock: Send + Sync {
+pub trait WasiWallClock: Send + Sync {
     fn resolution(&self) -> Duration;
-    fn now(&self, precision: Duration) -> SystemTime;
+    fn now(&self) -> Duration;
+    fn dup(&self) -> Box<dyn WasiWallClock + Send + Sync>;
 }
 
 pub trait WasiMonotonicClock: Send + Sync {
-    fn resolution(&self) -> Duration;
-    fn now(&self, precision: Duration) -> Instant;
+    fn resolution(&self) -> u64;
+    fn now(&self) -> u64;
+    fn dup(&self) -> Box<dyn WasiMonotonicClock + Send + Sync>;
 }
 
 pub struct WasiClocks {
-    pub system: Box<dyn WasiSystemClock>,
-    pub monotonic: Box<dyn WasiMonotonicClock>,
-    pub creation_time: cap_std::time::Instant,
-    pub default_monotonic: u32,
-    pub default_wall: u32,
+    pub default_wall_clock: Box<dyn WasiWallClock + Send + Sync>,
+    pub default_monotonic_clock: Box<dyn WasiMonotonicClock + Send + Sync>,
 }
 
-pub struct MonotonicClock {
-    start: Instant,
+pub trait TableWallClockExt {
+    fn get_wall_clock(&self, fd: u32) -> Result<&(dyn WasiWallClock + Send + Sync), Error>;
+    fn get_wall_clock_mut(
+        &mut self,
+        fd: u32,
+    ) -> Result<&mut Box<dyn WasiWallClock + Send + Sync>, Error>;
 }
-
-impl From<&dyn WasiMonotonicClock> for MonotonicClock {
-    fn from(clock: &dyn WasiMonotonicClock) -> MonotonicClock {
-        MonotonicClock {
-            start: clock.now(clock.resolution()),
-        }
+impl TableWallClockExt for crate::table::Table {
+    fn get_wall_clock(&self, fd: u32) -> Result<&(dyn WasiWallClock + Send + Sync), Error> {
+        self.get::<Box<dyn WasiWallClock + Send + Sync>>(fd)
+            .map(|f| f.as_ref())
+    }
+    fn get_wall_clock_mut(
+        &mut self,
+        fd: u32,
+    ) -> Result<&mut Box<dyn WasiWallClock + Send + Sync>, Error> {
+        self.get_mut::<Box<dyn WasiWallClock + Send + Sync>>(fd)
     }
 }
 
-impl MonotonicClock {
-    pub fn now(&self, clock: &dyn WasiMonotonicClock) -> Duration {
-        clock.now(clock.resolution()).duration_since(self.start)
-    }
-    pub fn new_timer(&self, initial: Duration) -> MonotonicTimer {
-        MonotonicTimer {
-            start: self.start + initial,
-        }
-    }
+pub trait TableMonotonicClockExt {
+    fn get_monotonic_clock(
+        &self,
+        fd: u32,
+    ) -> Result<&(dyn WasiMonotonicClock + Send + Sync), Error>;
+    fn get_monotonic_clock_mut(
+        &mut self,
+        fd: u32,
+    ) -> Result<&mut Box<dyn WasiMonotonicClock + Send + Sync>, Error>;
 }
-
-pub struct MonotonicTimer {
-    start: Instant,
-}
-
-impl MonotonicTimer {
-    pub fn current(&self, clock: &dyn WasiMonotonicClock) -> Duration {
-        clock.now(clock.resolution()).duration_since(self.start)
+impl TableMonotonicClockExt for crate::table::Table {
+    fn get_monotonic_clock(
+        &self,
+        fd: u32,
+    ) -> Result<&(dyn WasiMonotonicClock + Send + Sync), Error> {
+        self.get::<Box<dyn WasiMonotonicClock + Send + Sync>>(fd)
+            .map(|f| f.as_ref())
     }
-}
-
-#[derive(Default)]
-pub struct WallClock;
-
-impl WallClock {
-    pub fn now(&self, clock: &dyn WasiSystemClock) -> SystemTime {
-        clock.now(clock.resolution())
+    fn get_monotonic_clock_mut(
+        &mut self,
+        fd: u32,
+    ) -> Result<&mut Box<dyn WasiMonotonicClock + Send + Sync>, Error> {
+        self.get_mut::<Box<dyn WasiMonotonicClock + Send + Sync>>(fd)
     }
 }

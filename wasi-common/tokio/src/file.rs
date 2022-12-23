@@ -103,6 +103,10 @@ macro_rules! wasi_file_impl {
             fn pollable(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
                 Some(self.0.as_raw_handle_or_socket())
             }
+
+            async fn try_clone(&mut self) -> Result<Box<dyn WasiFile>, Error> {
+                block_on_dummy_executor(|| self.0.try_clone())
+            }
             async fn datasync(&mut self) -> Result<(), Error> {
                 block_on_dummy_executor(|| self.0.datasync())
             }
@@ -130,12 +134,6 @@ macro_rules! wasi_file_impl {
             async fn allocate(&mut self, offset: u64, len: u64) -> Result<(), Error> {
                 block_on_dummy_executor(move || self.0.allocate(offset, len))
             }
-            async fn read_vectored<'a>(
-                &mut self,
-                bufs: &mut [io::IoSliceMut<'a>],
-            ) -> Result<u64, Error> {
-                block_on_dummy_executor(move || self.0.read_vectored(bufs))
-            }
             async fn read_vectored_at<'a>(
                 &mut self,
                 bufs: &mut [io::IoSliceMut<'a>],
@@ -143,8 +141,8 @@ macro_rules! wasi_file_impl {
             ) -> Result<u64, Error> {
                 block_on_dummy_executor(move || self.0.read_vectored_at(bufs, offset))
             }
-            async fn write_vectored<'a>(&mut self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
-                block_on_dummy_executor(move || self.0.write_vectored(bufs))
+            fn is_read_vectored_at(&self) -> bool {
+                self.0.is_read_vectored_at()
             }
             async fn write_vectored_at<'a>(
                 &mut self,
@@ -153,11 +151,11 @@ macro_rules! wasi_file_impl {
             ) -> Result<u64, Error> {
                 block_on_dummy_executor(move || self.0.write_vectored_at(bufs, offset))
             }
+            fn is_write_vectored_at(&self) -> bool {
+                self.0.is_write_vectored_at()
+            }
             async fn seek(&mut self, pos: std::io::SeekFrom) -> Result<u64, Error> {
                 block_on_dummy_executor(move || self.0.seek(pos))
-            }
-            async fn peek(&mut self, buf: &mut [u8]) -> Result<u64, Error> {
-                block_on_dummy_executor(move || self.0.peek(buf))
             }
             async fn set_times(
                 &mut self,
