@@ -96,7 +96,7 @@ pub trait WasiDir: Send + Sync {
     }
 }
 
-pub(crate) trait TableDirExt {
+pub trait TableDirExt {
     fn get_dir(&self, fd: u32) -> Result<&Box<dyn WasiDir>, Error>;
 }
 

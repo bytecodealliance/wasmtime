@@ -1,8 +1,16 @@
 #![allow(unused_variables)]
 
 use crate::{wasi_filesystem, HostResult, WasiCtx};
-use std::io::{IoSlice, IoSliceMut};
-use wasi_common::file::TableFileExt;
+use std::{
+    io::{IoSlice, IoSliceMut},
+    ops::BitAnd,
+    time::SystemTime,
+};
+use wasi_common::{dir::TableDirExt, file::TableFileExt, WasiDir, WasiFile};
+
+fn contains<T: BitAnd<Output = T> + Eq + Copy>(flags: T, flag: T) -> bool {
+    (flags & flag) == flag
+}
 
 fn convert(error: wasi_common::Error) -> wasmtime::component::Error<wasi_filesystem::Errno> {
     if let Some(errno) = error.downcast_ref() {
@@ -85,6 +93,89 @@ fn convert(error: wasi_common::Error) -> wasmtime::component::Error<wasi_filesys
         })
     } else {
         error.into().into()
+    }
+}
+
+impl Into<wasi_common::file::OFlags> for wasi_filesystem::OFlags {
+    fn into(self) -> wasi_common::file::OFlags {
+        let mut flags = wasi_common::file::OFlags::empty();
+        if contains(self, wasi_filesystem::OFlags::CREATE) {
+            flags |= wasi_common::file::OFlags::CREATE;
+        }
+        if contains(self, wasi_filesystem::OFlags::DIRECTORY) {
+            flags |= wasi_common::file::OFlags::DIRECTORY;
+        }
+        if contains(self, wasi_filesystem::OFlags::EXCL) {
+            flags |= wasi_common::file::OFlags::EXCLUSIVE;
+        }
+        if contains(self, wasi_filesystem::OFlags::TRUNC) {
+            flags |= wasi_common::file::OFlags::TRUNCATE;
+        }
+        flags
+    }
+}
+
+impl Into<wasi_common::file::FdFlags> for wasi_filesystem::DescriptorFlags {
+    fn into(self) -> wasi_common::file::FdFlags {
+        let mut flags = wasi_common::file::FdFlags::empty();
+        if contains(self, wasi_filesystem::DescriptorFlags::APPEND) {
+            flags |= wasi_common::file::FdFlags::APPEND;
+        }
+        if contains(self, wasi_filesystem::DescriptorFlags::DSYNC) {
+            flags |= wasi_common::file::FdFlags::DSYNC;
+        }
+        if contains(self, wasi_filesystem::DescriptorFlags::NONBLOCK) {
+            flags |= wasi_common::file::FdFlags::NONBLOCK;
+        }
+        if contains(self, wasi_filesystem::DescriptorFlags::RSYNC) {
+            flags |= wasi_common::file::FdFlags::RSYNC;
+        }
+        if contains(self, wasi_filesystem::DescriptorFlags::SYNC) {
+            flags |= wasi_common::file::FdFlags::SYNC;
+        }
+        flags
+    }
+}
+
+impl From<wasi_common::file::FileType> for wasi_filesystem::DescriptorType {
+    fn from(type_: wasi_common::file::FileType) -> Self {
+        match type_ {
+            wasi_common::file::FileType::Unknown => Self::Unknown,
+            wasi_common::file::FileType::BlockDevice => Self::BlockDevice,
+            wasi_common::file::FileType::CharacterDevice => Self::CharacterDevice,
+            wasi_common::file::FileType::Directory => Self::Directory,
+            wasi_common::file::FileType::RegularFile => Self::RegularFile,
+            wasi_common::file::FileType::SocketDgram
+            | wasi_common::file::FileType::SocketStream => Self::Socket,
+            wasi_common::file::FileType::SymbolicLink => Self::SymbolicLink,
+            wasi_common::file::FileType::Pipe => Self::Fifo,
+        }
+    }
+}
+
+impl From<wasi_common::file::Filestat> for wasi_filesystem::DescriptorStat {
+    fn from(stat: wasi_common::file::Filestat) -> Self {
+        fn timestamp(time: Option<std::time::SystemTime>) -> wasi_filesystem::Timestamp {
+            time.map(|t| {
+                t.duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+                    .try_into()
+                    .unwrap()
+            })
+            .unwrap_or(0)
+        }
+
+        Self {
+            dev: stat.device_id,
+            ino: stat.inode,
+            type_: stat.filetype.into(),
+            nlink: stat.nlink,
+            size: stat.size,
+            atim: timestamp(stat.atim),
+            mtim: timestamp(stat.mtim),
+            ctim: timestamp(stat.ctim),
+        }
     }
 }
 
@@ -208,7 +299,21 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         fd: wasi_filesystem::Descriptor,
         from: wasi_filesystem::SeekFrom,
     ) -> HostResult<wasi_filesystem::Filesize, wasi_filesystem::Errno> {
-        todo!()
+        use std::io::SeekFrom;
+
+        let from = match from {
+            wasi_filesystem::SeekFrom::Cur(offset) => SeekFrom::Current(offset),
+            wasi_filesystem::SeekFrom::End(offset) => SeekFrom::End(offset.try_into().unwrap()),
+            wasi_filesystem::SeekFrom::Set(offset) => SeekFrom::Start(offset),
+        };
+
+        Ok(self
+            .table()
+            .get_file_mut(fd)
+            .map_err(convert)?
+            .seek(from)
+            .await
+            .map_err(convert)?)
     }
 
     async fn sync(
@@ -237,7 +342,26 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         &mut self,
         fd: wasi_filesystem::Descriptor,
     ) -> HostResult<wasi_filesystem::DescriptorStat, wasi_filesystem::Errno> {
-        todo!()
+        let table = self.table();
+        if table.is::<Box<dyn WasiFile>>(fd) {
+            Ok(table
+                .get_file_mut(fd)
+                .map_err(convert)?
+                .get_filestat()
+                .await
+                .map_err(convert)?
+                .into())
+        } else if table.is::<Box<dyn WasiDir>>(fd) {
+            Ok(table
+                .get_dir(fd)
+                .map_err(convert)?
+                .get_filestat()
+                .await
+                .map_err(convert)?
+                .into())
+        } else {
+            Err(wasi_filesystem::Errno::Badf.into())
+        }
     }
 
     async fn stat_at(
@@ -278,13 +402,59 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         old_path: String,
         oflags: wasi_filesystem::OFlags,
         flags: wasi_filesystem::DescriptorFlags,
-        mode: wasi_filesystem::Mode,
+        // TODO: How should this be used?
+        _mode: wasi_filesystem::Mode,
     ) -> HostResult<wasi_filesystem::Descriptor, wasi_filesystem::Errno> {
-        todo!()
+        let table = self.table();
+        if !table.is::<Box<dyn WasiDir>>(fd) {
+            return Err(wasi_filesystem::Errno::Notdir.into());
+        }
+        let dir = table.get_dir(fd).map_err(convert)?;
+
+        let symlink_follow = contains(at_flags, wasi_filesystem::AtFlags::SYMLINK_FOLLOW);
+
+        if contains(oflags, wasi_filesystem::OFlags::DIRECTORY) {
+            if contains(oflags, wasi_filesystem::OFlags::CREATE)
+                || contains(oflags, wasi_filesystem::OFlags::EXCL)
+                || contains(oflags, wasi_filesystem::OFlags::TRUNC)
+            {
+                return Err(wasi_filesystem::Errno::Inval.into());
+            }
+            let child_dir = dir
+                .open_dir(symlink_follow, &old_path)
+                .await
+                .map_err(convert)?;
+            drop(dir);
+            Ok(table.push(Box::new(child_dir)).map_err(convert)?)
+        } else {
+            let file = dir
+                .open_file(
+                    symlink_follow,
+                    &old_path,
+                    oflags.into(),
+                    contains(flags, wasi_filesystem::DescriptorFlags::READ),
+                    contains(flags, wasi_filesystem::DescriptorFlags::WRITE),
+                    flags.into(),
+                )
+                .await
+                .map_err(convert)?;
+            drop(dir);
+            Ok(table.push(Box::new(file)).map_err(convert)?)
+        }
     }
 
     async fn close(&mut self, fd: wasi_filesystem::Descriptor) -> anyhow::Result<()> {
-        todo!()
+        let table = self.table();
+        if table.is::<Box<dyn WasiFile>>(fd) {
+            let _ = table.delete(fd);
+        } else if table.is::<Box<dyn WasiDir>>(fd) {
+            // TODO: `WasiCtx` no longer keeps track of which directories are preopens, so we currently have no way
+            // of preventing them from being closed.  Is that a problem?
+            let _ = table.delete(fd);
+        } else {
+            anyhow::bail!("{fd} is neither a file nor a directory");
+        }
+        Ok(())
     }
 
     async fn readlink_at(
