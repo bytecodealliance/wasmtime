@@ -96,36 +96,12 @@ pub trait WasiDir: Send + Sync {
     }
 }
 
-pub struct DirEntry {
-    preopen_path: Option<PathBuf>, // precondition: PathBuf is valid unicode
-    dir: Box<dyn WasiDir>,
-}
-
-impl DirEntry {
-    pub fn new(preopen_path: Option<PathBuf>, dir: Box<dyn WasiDir>) -> Self {
-        DirEntry { preopen_path, dir }
-    }
-    pub fn preopen_path(&self) -> &Option<PathBuf> {
-        &self.preopen_path
-    }
-}
-
-pub trait DirEntryExt {
-    fn get_dir(&self) -> Result<&dyn WasiDir, Error>;
-}
-
-impl DirEntryExt for DirEntry {
-    fn get_dir(&self) -> Result<&dyn WasiDir, Error> {
-        Ok(&*self.dir)
-    }
-}
-
 pub(crate) trait TableDirExt {
-    fn get_dir(&self, fd: u32) -> Result<&DirEntry, Error>;
+    fn get_dir(&self, fd: u32) -> Result<&Box<dyn WasiDir>, Error>;
 }
 
 impl TableDirExt for crate::table::Table {
-    fn get_dir(&self, fd: u32) -> Result<&DirEntry, Error> {
+    fn get_dir(&self, fd: u32) -> Result<&Box<dyn WasiDir>, Error> {
         self.get(fd)
     }
 }

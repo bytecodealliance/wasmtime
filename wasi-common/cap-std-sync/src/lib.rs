@@ -48,8 +48,7 @@ pub use sched::sched_ctx;
 
 use crate::net::Socket;
 use cap_rand::{Rng, RngCore, SeedableRng};
-use std::path::Path;
-use wasi_common::{table::Table, Error, WasiCtx, WasiFile};
+use wasi_common::{table::Table, WasiCtx, WasiFile};
 
 pub struct WasiCtxBuilder(WasiCtx);
 
@@ -62,38 +61,6 @@ impl WasiCtxBuilder {
             sched_ctx(),
             table,
         ))
-    }
-    pub fn env(mut self, var: &str, value: &str) -> Result<Self, wasi_common::StringArrayError> {
-        self.0.push_env(var, value)?;
-        Ok(self)
-    }
-    pub fn envs(mut self, env: &[(String, String)]) -> Result<Self, wasi_common::StringArrayError> {
-        for (k, v) in env {
-            self.0.push_env(k, v)?;
-        }
-        Ok(self)
-    }
-    pub fn inherit_env(mut self) -> Result<Self, wasi_common::StringArrayError> {
-        for (key, value) in std::env::vars() {
-            self.0.push_env(&key, &value)?;
-        }
-        Ok(self)
-    }
-    pub fn arg(mut self, arg: &str) -> Result<Self, wasi_common::StringArrayError> {
-        self.0.push_arg(arg)?;
-        Ok(self)
-    }
-    pub fn args(mut self, arg: &[String]) -> Result<Self, wasi_common::StringArrayError> {
-        for a in arg {
-            self.0.push_arg(&a)?;
-        }
-        Ok(self)
-    }
-    pub fn inherit_args(mut self) -> Result<Self, wasi_common::StringArrayError> {
-        for arg in std::env::args() {
-            self.0.push_arg(&arg)?;
-        }
-        Ok(self)
     }
     pub fn stdin(mut self, f: Box<dyn WasiFile>) -> Self {
         self.0.set_stdin(f);
@@ -119,17 +86,17 @@ impl WasiCtxBuilder {
     pub fn inherit_stdio(self) -> Self {
         self.inherit_stdin().inherit_stdout().inherit_stderr()
     }
-    pub fn preopened_dir(mut self, dir: Dir, guest_path: impl AsRef<Path>) -> Result<Self, Error> {
+    pub fn preopened_dir(mut self, fd: u32, dir: Dir) -> Self {
         let dir = Box::new(crate::dir::Dir::from_cap_std(dir));
-        self.0.push_preopened_dir(dir, guest_path)?;
-        Ok(self)
+        self.0.insert_dir(fd, dir);
+        self
     }
-    pub fn preopened_socket(mut self, fd: u32, socket: impl Into<Socket>) -> Result<Self, Error> {
+    pub fn preopened_socket(mut self, fd: u32, socket: impl Into<Socket>) -> Self {
         let socket: Socket = socket.into();
         let file: Box<dyn WasiFile> = socket.into();
 
         self.0.insert_file(fd, file);
-        Ok(self)
+        self
     }
     pub fn build(self) -> WasiCtx {
         self.0

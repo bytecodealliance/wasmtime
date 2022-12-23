@@ -1,16 +1,12 @@
 use crate::clocks::WasiClocks;
-use crate::dir::{DirEntry, WasiDir};
+use crate::dir::WasiDir;
 use crate::file::WasiFile;
 use crate::sched::WasiSched;
-use crate::string_array::{StringArray, StringArrayError};
 use crate::table::Table;
 use crate::Error;
 use cap_rand::RngCore;
-use std::path::{Path, PathBuf};
 
 pub struct WasiCtx {
-    pub args: StringArray,
-    pub env: StringArray,
     pub random: Box<dyn RngCore + Send + Sync>,
     pub clocks: WasiClocks,
     pub sched: Box<dyn WasiSched>,
@@ -25,8 +21,6 @@ impl WasiCtx {
         table: Table,
     ) -> Self {
         let mut s = WasiCtx {
-            args: StringArray::new(),
-            env: StringArray::new(),
             random,
             clocks,
             sched,
@@ -46,26 +40,16 @@ impl WasiCtx {
         self.table().push(Box::new(file))
     }
 
-    pub fn insert_dir(&mut self, fd: u32, dir: Box<dyn WasiDir>, path: PathBuf) {
-        self.table()
-            .insert_at(fd, Box::new(DirEntry::new(Some(path), dir)));
+    pub fn insert_dir(&mut self, fd: u32, dir: Box<dyn WasiDir>) {
+        self.table().insert_at(fd, Box::new(dir))
     }
 
-    pub fn push_dir(&mut self, dir: Box<dyn WasiDir>, path: PathBuf) -> Result<u32, Error> {
-        self.table().push(Box::new(DirEntry::new(Some(path), dir)))
+    pub fn push_dir(&mut self, dir: Box<dyn WasiDir>) -> Result<u32, Error> {
+        self.table().push(Box::new(dir))
     }
 
     pub fn table(&mut self) -> &mut Table {
         &mut self.table
-    }
-
-    pub fn push_arg(&mut self, arg: &str) -> Result<(), StringArrayError> {
-        self.args.push(arg.to_owned())
-    }
-
-    pub fn push_env(&mut self, var: &str, value: &str) -> Result<(), StringArrayError> {
-        self.env.push(format!("{}={}", var, value))?;
-        Ok(())
     }
 
     pub fn set_stdin(&mut self, f: Box<dyn WasiFile>) {
@@ -78,15 +62,5 @@ impl WasiCtx {
 
     pub fn set_stderr(&mut self, f: Box<dyn WasiFile>) {
         self.insert_file(2, f);
-    }
-
-    pub fn push_preopened_dir(
-        &mut self,
-        dir: Box<dyn WasiDir>,
-        path: impl AsRef<Path>,
-    ) -> Result<(), Error> {
-        self.table()
-            .push(Box::new(DirEntry::new(Some(path.as_ref().to_owned()), dir)))?;
-        Ok(())
     }
 }

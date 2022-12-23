@@ -1,8 +1,14 @@
 use anyhow::Result;
 use cap_rand::RngCore;
-use cap_std::time::{Duration, Instant, SystemTime};
+use cap_std::{
+    fs::Dir,
+    time::{Duration, Instant, SystemTime},
+};
 use host::{add_to_linker, Wasi, WasiCtx};
-use std::{io::Cursor, sync::Mutex};
+use std::{
+    io::{Cursor, Write},
+    sync::Mutex,
+};
 use wasi_cap_std_sync::WasiCtxBuilder;
 use wasi_common::{
     clocks::{WasiMonotonicClock, WasiSystemClock},
@@ -40,6 +46,8 @@ async fn run_hello_stdout(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
         0 as host::Descriptor,
         1 as host::Descriptor,
         &["gussie", "sparky", "willa"],
+        &[],
+        &[],
     )
     .await?;
     Ok(())
@@ -61,6 +69,8 @@ async fn run_panic(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
                 "good",
                 "yesterday",
             ],
+            &[],
+            &[],
         )
         .await;
     assert!(r.is_err());
@@ -74,6 +84,8 @@ async fn run_args(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
         0 as host::Descriptor,
         1 as host::Descriptor,
         &["hello", "this", "", "is an argument", "with 🚩 emoji"],
+        &[],
+        &[],
     )
     .await?;
     Ok(())
@@ -106,6 +118,8 @@ async fn run_random(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
         &mut store,
         0 as host::Descriptor,
         1 as host::Descriptor,
+        &[],
+        &[],
         &[],
     )
     .await?;
@@ -153,6 +167,8 @@ async fn run_time(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
         0 as host::Descriptor,
         1 as host::Descriptor,
         &[],
+        &[],
+        &[],
     )
     .await?;
     Ok(())
@@ -170,6 +186,45 @@ async fn run_stdin(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
         0 as host::Descriptor,
         1 as host::Descriptor,
         &[],
+        &[],
+        &[],
+    )
+    .await?;
+    Ok(())
+}
+
+async fn run_env(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+    wasi.command(
+        &mut store,
+        0 as host::Descriptor,
+        1 as host::Descriptor,
+        &[],
+        &[("frabjous", "day"), ("callooh", "callay")],
+        &[],
+    )
+    .await?;
+    Ok(())
+}
+
+async fn run_file_read(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+    let dir = tempfile::tempdir()?;
+
+    std::fs::File::create(dir.path().join("bar.txt"))?.write_all(b"And stood awhile in thought")?;
+
+    let descriptor =
+        store
+            .data_mut()
+            .push_dir(Box::new(wasi_cap_std_sync::dir::Dir::from_cap_std(
+                Dir::from_std_file(std::fs::File::open(dir.path())?),
+            )))?;
+
+    wasi.command(
+        &mut store,
+        0 as host::Descriptor,
+        1 as host::Descriptor,
+        &[],
+        &[],
+        &[(descriptor, "/")],
     )
     .await?;
     Ok(())

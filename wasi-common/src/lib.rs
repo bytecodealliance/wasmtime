@@ -41,10 +41,11 @@
 //! * Timekeeping: `WasiSystemClock` and `WasiMonotonicClock` provide the two
 //! interfaces for a clock. `WasiSystemClock` represents time as a
 //! `cap_std::time::SystemTime`, and `WasiMonotonicClock` represents time as
-//! `cap_std::time::Instant`.  * Randomness: we re-use the `cap_rand::RngCore`
-//! trait to represent a randomness source. A trivial `Deterministic` impl is
-//! provided.  * Scheduling: The `WasiSched` trait abstracts over the
-//! `sched_yield` and `poll_oneoff` functions.
+//! `cap_std::time::Instant`.
+//! * Randomness: we re-use the `cap_rand::RngCore` trait to represent a
+//! randomness source. A trivial `Deterministic` impl is provided.
+//! * Scheduling: The `WasiSched` trait abstracts over the `sched_yield` and
+//! `poll_oneoff` functions.
 //!
 //! Users can provide implementations of each of these interfaces to the
 //! `WasiCtx::builder(...)` function. The
@@ -58,7 +59,6 @@ pub mod file;
 pub mod pipe;
 pub mod random;
 pub mod sched;
-mod string_array;
 pub mod table;
 
 pub use cap_rand::RngCore;
@@ -68,5 +68,4 @@ pub use dir::WasiDir;
 pub use error::{Errno, Error, ErrorExt, I32Exit};
 pub use file::WasiFile;
 pub use sched::{Poll, WasiSched};
-pub use string_array::StringArrayError;
 pub use table::Table;

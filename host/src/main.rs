@@ -29,7 +29,7 @@ async fn main() -> Result<()> {
 
     let (wasi, _instance) = Wasi::instantiate_async(&mut store, &component, &linker).await?;
 
-    wasi.command(&mut store, 0, 0, &[]).await?;
+    wasi.command(&mut store, 0, 0, &[], &[], &[]).await?;
 
     Ok(())
 }
