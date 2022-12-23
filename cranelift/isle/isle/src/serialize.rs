@@ -714,6 +714,8 @@ impl<'a> Decomposition<'a> {
         // Then the O(n^2) all-pairs loop can do branch-and-bound style
         // pruning, breaking out of a loop as soon as the remaining candidates
         // must all produce worse results than our current best candidate.
+        //
+        // Note that `x` and `y` are reversed, to sort in descending order.
         self.scope
             .equal_candidates
             .sort_unstable_by(|x, y| y.cmp(x));
