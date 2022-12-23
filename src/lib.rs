@@ -969,6 +969,7 @@ pub unsafe extern "C" fn fd_seek(
             _ => return Err(ERRNO_INVAL),
         };
         let result = wasi_filesystem::seek(file.fd, from)?;
+        file.position.set(result);
         *newoffset = result;
         Ok(())
     })
