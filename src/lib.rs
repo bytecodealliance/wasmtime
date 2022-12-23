@@ -11,7 +11,7 @@ use core::mem::{self, forget, replace, size_of, ManuallyDrop, MaybeUninit};
 use core::ptr::{self, copy_nonoverlapping, null_mut};
 use core::slice;
 use wasi::*;
-use wasi_poll::WasiFuture;
+use wasi_poll::{WasiFuture, WasiStream};
 
 mod bindings {
     wit_bindgen_guest_rust::generate!({
@@ -27,8 +27,8 @@ mod bindings {
 
 #[no_mangle]
 pub unsafe extern "C" fn command(
-    stdin: u32,
-    stdout: u32,
+    stdin: WasiStream,
+    stdout: WasiStream,
     args_ptr: *const WasmStr,
     args_len: usize,
     env_vars: StrTupleList,
@@ -40,6 +40,7 @@ pub unsafe extern "C" fn command(
     if !cfg!(feature = "command") {
         unreachable();
     }
+
     State::with_mut(|state| {
         // Initialization of `State` automatically fills in some dummy
         // structures for fds 0, 1, and 2. Overwrite the stdin/stdout slots of 0
@@ -49,13 +50,15 @@ pub unsafe extern "C" fn command(
             if descriptors.len() < 3 {
                 unreachable();
             }
-            descriptors[0] = Descriptor::File(File {
-                fd: stdin,
-                position: Cell::new(0),
+            descriptors[0] = Descriptor::Streams(Streams {
+                input: Cell::new(Some(stdin)),
+                output: Cell::new(None),
+                type_: StreamType::Unknown,
             });
-            descriptors[1] = Descriptor::File(File {
-                fd: stdout,
-                position: Cell::new(0),
+            descriptors[1] = Descriptor::Streams(Streams {
+                input: Cell::new(None),
+                output: Cell::new(Some(stdout)),
+                type_: StreamType::Unknown,
             });
         }
         state.args = Some(slice::from_raw_parts(args_ptr, args_len));
@@ -65,9 +68,13 @@ pub unsafe extern "C" fn command(
         state.preopens = Some(preopens);
 
         for preopen in preopens {
-            unwrap_result(state.push_desc(Descriptor::File(File {
-                fd: preopen.descriptor,
-                position: Cell::new(0),
+            unwrap_result(state.push_desc(Descriptor::Streams(Streams {
+                input: Cell::new(None),
+                output: Cell::new(None),
+                type_: StreamType::File(File {
+                    fd: preopen.descriptor,
+                    position: Cell::new(0),
+                }),
             })));
         }
 
@@ -286,20 +293,23 @@ pub unsafe extern "C" fn environ_sizes_get(
 /// Note: This is similar to `clock_getres` in POSIX.
 #[no_mangle]
 pub extern "C" fn clock_res_get(id: Clockid, resolution: &mut Timestamp) -> Errno {
-    match id {
-        CLOCKID_MONOTONIC => {
-            let res = wasi_clocks::monotonic_clock_resolution(
-                wasi_default_clocks::default_monotonic_clock(),
-            );
-            *resolution = res;
+    State::with(|state| {
+        match id {
+            CLOCKID_MONOTONIC => {
+                let res = wasi_clocks::monotonic_clock_resolution(state.default_monotonic_clock());
+                *resolution = res;
+            }
+            CLOCKID_REALTIME => {
+                let res = wasi_clocks::wall_clock_resolution(state.default_wall_clock());
+                *resolution = u64::from(res.nanoseconds)
+                    .checked_add(res.seconds)
+                    .and_then(|secs| secs.checked_mul(1_000_000_000))
+                    .ok_or(ERRNO_OVERFLOW)?;
+            }
+            _ => unreachable(),
         }
-        CLOCKID_REALTIME => {
-            let res = wasi_clocks::wall_clock_resolution(wasi_default_clocks::default_wall_clock());
-            *resolution = u64::from(res.nanoseconds) + res.seconds * 1_000_000_000;
-        }
-        _ => unreachable(),
-    }
-    ERRNO_SUCCESS
+        Ok(())
+    })
 }
 
 /// Return the time value of a clock.
@@ -310,18 +320,22 @@ pub unsafe extern "C" fn clock_time_get(
     _precision: Timestamp,
     time: &mut Timestamp,
 ) -> Errno {
-    match id {
-        CLOCKID_MONOTONIC => {
-            *time =
-                wasi_clocks::monotonic_clock_now(wasi_default_clocks::default_monotonic_clock());
+    State::with(|state| {
+        match id {
+            CLOCKID_MONOTONIC => {
+                *time = wasi_clocks::monotonic_clock_now(state.default_monotonic_clock());
+            }
+            CLOCKID_REALTIME => {
+                let res = wasi_clocks::wall_clock_now(state.default_wall_clock());
+                *time = u64::from(res.nanoseconds)
+                    .checked_add(res.seconds)
+                    .and_then(|secs| secs.checked_mul(1_000_000_000))
+                    .ok_or(ERRNO_OVERFLOW)?;
+            }
+            _ => unreachable(),
         }
-        CLOCKID_REALTIME => {
-            let res = wasi_clocks::wall_clock_now(wasi_default_clocks::default_wall_clock());
-            *time = u64::from(res.nanoseconds) + res.seconds * 1_000_000_000;
-        }
-        _ => unreachable(),
-    }
-    ERRNO_SUCCESS
+        Ok(())
+    })
 }
 
 /// Provide file advisory information on a file descriptor.
@@ -392,7 +406,10 @@ pub unsafe extern "C" fn fd_datasync(fd: Fd) -> Errno {
 #[no_mangle]
 pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
     State::with(|state| match state.get(fd)? {
-        Descriptor::File(file) => {
+        Descriptor::Streams(Streams {
+            type_: StreamType::File(file),
+            ..
+        }) => {
             let flags = wasi_filesystem::flags(file.fd)?;
             let type_ = wasi_filesystem::todo_type(file.fd)?;
 
@@ -405,9 +422,6 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
             }
             if !flags.contains(wasi_filesystem::DescriptorFlags::WRITE) {
                 fs_rights_base &= !RIGHTS_FD_WRITE;
-            }
-            if flags.contains(wasi_filesystem::DescriptorFlags::APPEND) {
-                fs_flags |= FDFLAGS_APPEND;
             }
             if flags.contains(wasi_filesystem::DescriptorFlags::DSYNC) {
                 fs_flags |= FDFLAGS_DSYNC;
@@ -444,7 +458,39 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
             });
             Ok(())
         }
-        Descriptor::EmptyStdin => {
+        Descriptor::Streams(Streams {
+            input,
+            output,
+            type_: StreamType::Socket(_),
+        })
+        | Descriptor::Streams(Streams {
+            input,
+            output,
+            type_: StreamType::Unknown,
+        }) => {
+            let fs_filetype = FILETYPE_UNKNOWN;
+            let fs_flags = 0;
+            let mut fs_rights_base = 0;
+            if input.get().is_some() {
+                fs_rights_base |= RIGHTS_FD_READ;
+            }
+            if output.get().is_some() {
+                fs_rights_base |= RIGHTS_FD_WRITE;
+            }
+            let fs_rights_inheriting = fs_rights_base;
+            stat.write(Fdstat {
+                fs_filetype,
+                fs_flags,
+                fs_rights_base,
+                fs_rights_inheriting,
+            });
+            Ok(())
+        }
+        Descriptor::Streams(Streams {
+            input,
+            output,
+            type_: StreamType::EmptyStdin,
+        }) => {
             let fs_filetype = FILETYPE_UNKNOWN;
             let fs_flags = 0;
             let fs_rights_base = RIGHTS_FD_READ;
@@ -457,8 +503,6 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
             });
             Ok(())
         }
-        // TODO: Handle socket case here once `wasi-tcp` has been fleshed out
-        Descriptor::Socket(_) => unreachable(),
         Descriptor::Closed(_) => Err(ERRNO_BADF),
     })
 }
@@ -468,9 +512,6 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
 #[no_mangle]
 pub unsafe extern "C" fn fd_fdstat_set_flags(fd: Fd, flags: Fdflags) -> Errno {
     let mut new_flags = wasi_filesystem::DescriptorFlags::empty();
-    if flags & FDFLAGS_APPEND == FDFLAGS_APPEND {
-        new_flags |= wasi_filesystem::DescriptorFlags::APPEND;
-    }
     if flags & FDFLAGS_DSYNC == FDFLAGS_DSYNC {
         new_flags |= wasi_filesystem::DescriptorFlags::DSYNC;
     }
@@ -594,12 +635,18 @@ pub unsafe extern "C" fn fd_pread(
 
         let read_len = unwrap_result(u32::try_from(len));
         let file = state.get_file(fd)?;
-        let data = wasi_filesystem::pread(file.fd, read_len, offset)?;
+        let (data, end) = wasi_filesystem::pread(file.fd, read_len, offset)?;
         assert_eq!(data.as_ptr(), ptr);
         assert!(data.len() <= len);
-        *nread = data.len();
+
+        let len = data.len();
         forget(data);
-        Ok(())
+        if !end && len == 0 {
+            Err(ERRNO_INTR)
+        } else {
+            *nread = len;
+            Ok(())
+        }
     })
 }
 
@@ -695,32 +742,42 @@ pub unsafe extern "C" fn fd_read(
         return ERRNO_SUCCESS;
     }
 
-    State::with(|state| {
-        let ptr = (*iovs_ptr).buf;
-        let len = (*iovs_ptr).buf_len;
+    let ptr = (*iovs_ptr).buf;
+    let len = (*iovs_ptr).buf_len;
 
+    State::with(|state| {
         state.register_buffer(ptr, len);
 
-        let read_len = unwrap_result(u32::try_from(len));
-        let file = match state.get(fd)? {
-            Descriptor::File(f) => f,
-            Descriptor::Closed(_) | Descriptor::StdoutLog | Descriptor::StderrLog => {
-                return Err(ERRNO_BADF)
+        match state.get(fd)? {
+            Descriptor::Streams(streams) => {
+                let wasi_stream = streams.get_read_stream()?;
+
+                let read_len = unwrap_result(u32::try_from(len));
+                let wasi_stream = streams.get_read_stream()?;
+                let (data, end) =
+                    wasi_poll::read_stream(wasi_stream, read_len).map_err(|_| ERRNO_IO)?;
+
+                assert_eq!(data.as_ptr(), ptr);
+                assert!(data.len() <= len);
+
+                // If this is a file, keep the current-position pointer up to date.
+                if let StreamType::File(file) = &streams.type_ {
+                    file.position.set(file.position.get() + data.len() as u64);
+                }
+
+                let len = data.len();
+                forget(data);
+                if !end && len == 0 {
+                    Err(ERRNO_INTR)
+                } else {
+                    *nread = len;
+                    Ok(())
+                }
             }
-            // TODO: Handle socket case here once `wasi-tcp` has been fleshed out
-            Descriptor::Socket(_) => unreachable(),
-            Descriptor::EmptyStdin => {
-                *nread = 0;
-                return Ok(());
+            Descriptor::StdoutLog | Descriptor::StderrLog | Descriptor::Closed(_) => {
+                Err(ERRNO_BADF)
             }
-        };
-        let data = wasi_filesystem::pread(file.fd, read_len, file.position.get())?;
-        assert_eq!(data.as_ptr(), ptr);
-        assert!(data.len() <= len);
-        *nread = data.len();
-        file.position.set(file.position.get() + data.len() as u64);
-        forget(data);
-        Ok(())
+        }
     })
 }
 
@@ -959,19 +1016,26 @@ pub unsafe extern "C" fn fd_seek(
     newoffset: *mut Filesize,
 ) -> Errno {
     State::with(|state| {
-        let file = state.get_seekable_file(fd)?;
-        // It's ok to cast these indices; the WASI API will fail if
-        // the resulting values are out of range.
-        let from = match whence {
-            WHENCE_SET => wasi_filesystem::SeekFrom::Set(offset as _),
-            WHENCE_CUR => wasi_filesystem::SeekFrom::Cur(offset),
-            WHENCE_END => wasi_filesystem::SeekFrom::End(offset as _),
-            _ => return Err(ERRNO_INVAL),
-        };
-        let result = wasi_filesystem::seek(file.fd, from)?;
-        file.position.set(result);
-        *newoffset = result;
-        Ok(())
+        let stream = state.get_seekable_stream(fd)?;
+
+        // Seeking only works on files.
+        if let StreamType::File(file) = &stream.type_ {
+            // It's ok to cast these indices; the WASI API will fail if
+            // the resulting values are out of range.
+            let from = match whence {
+                WHENCE_SET => offset,
+                WHENCE_CUR => (file.position.get() as i64).wrapping_add(offset),
+                WHENCE_END => (wasi_filesystem::stat(file.fd)?.size as i64) + offset,
+                _ => return Err(ERRNO_INVAL),
+            };
+            stream.input.set(None);
+            stream.output.set(None);
+            file.position.set(from as u64);
+            *newoffset = from as u64;
+            Ok(())
+        } else {
+            Err(ERRNO_SPIPE)
+        }
     })
 }
 
@@ -992,7 +1056,7 @@ pub unsafe extern "C" fn fd_sync(fd: Fd) -> Errno {
 pub unsafe extern "C" fn fd_tell(fd: Fd, offset: *mut Filesize) -> Errno {
     State::with(|state| {
         let file = state.get_seekable_file(fd)?;
-        *offset = wasi_filesystem::tell(file.fd)?;
+        *offset = file.position.get() as Filesize;
         Ok(())
     })
 }
@@ -1021,10 +1085,16 @@ pub unsafe extern "C" fn fd_write(
     let bytes = slice::from_raw_parts(ptr, len);
 
     State::with(|state| match state.get(fd)? {
-        Descriptor::File(file) => {
-            let bytes = wasi_filesystem::pwrite(file.fd, bytes, file.position.get())?;
+        Descriptor::Streams(streams) => {
+            let wasi_stream = streams.get_write_stream()?;
+            let bytes = wasi_poll::write_stream(wasi_stream, bytes).map_err(|_| ERRNO_IO)?;
+
+            // If this is a file, keep the current-position pointer up to date.
+            if let StreamType::File(file) = &streams.type_ {
+                file.position.set(file.position.get() + u64::from(bytes));
+            }
+
             *nwritten = bytes as usize;
-            file.position.set(file.position.get() + u64::from(bytes));
             Ok(())
         }
         Descriptor::StderrLog | Descriptor::StdoutLog => {
@@ -1033,9 +1103,6 @@ pub unsafe extern "C" fn fd_write(
             *nwritten = len;
             Ok(())
         }
-        // TODO: Handle socket case here once `wasi-tcp` has been fleshed out
-        Descriptor::Socket(_) => unreachable(),
-        Descriptor::EmptyStdin => Err(ERRNO_INVAL),
         Descriptor::Closed(_) => Err(ERRNO_BADF),
     })
 }
@@ -1183,9 +1250,13 @@ pub unsafe extern "C" fn path_open(
 
         let file = state.get_dir(fd)?;
         let result = wasi_filesystem::open_at(file.fd, at_flags, path, o_flags, flags, mode)?;
-        let desc = Descriptor::File(File {
-            fd: result,
-            position: Cell::new(0),
+        let desc = Descriptor::Streams(Streams {
+            input: Cell::new(None),
+            output: Cell::new(None),
+            type_: StreamType::File(File {
+                fd: result,
+                position: Cell::new(0),
+            }),
         });
 
         let fd = match state.closed {
@@ -1410,35 +1481,66 @@ pub unsafe extern "C" fn poll_oneoff(
         };
 
         for subscription in subscriptions {
+            const EVENTTYPE_CLOCK: u8 = wasi::EVENTTYPE_CLOCK.raw();
+            const EVENTTYPE_FD_READ: u8 = wasi::EVENTTYPE_FD_READ.raw();
+            const EVENTTYPE_FD_WRITE: u8 = wasi::EVENTTYPE_FD_WRITE.raw();
             futures.push(match subscription.u.tag {
-                0 => {
+                EVENTTYPE_CLOCK => {
                     let clock = &subscription.u.u.clock;
                     let absolute = (clock.flags & SUBCLOCKFLAGS_SUBSCRIPTION_CLOCK_ABSTIME) == 0;
                     match clock.id {
-                        CLOCKID_REALTIME => wasi_clocks::subscribe_wall_clock(
-                            wasi_clocks::Datetime {
-                                seconds: unwrap((clock.timeout / 1_000_000_000).try_into().ok()),
-                                nanoseconds: unwrap(
-                                    (clock.timeout % 1_000_000_000).try_into().ok(),
-                                ),
-                            },
+                        CLOCKID_REALTIME => {
+                            let timeout = if absolute {
+                                // Convert `clock.timeout` to `Datetime`.
+                                let mut datetime = wasi_clocks::Datetime {
+                                    seconds: clock.timeout / 1_000_000_000,
+                                    nanoseconds: (clock.timeout % 1_000_000_000) as _,
+                                };
+
+                                // Subtract `now`.
+                                let now = wasi_clocks::wall_clock_now(state.default_wall_clock());
+                                datetime.seconds -= now.seconds;
+                                if datetime.nanoseconds < now.nanoseconds {
+                                    datetime.seconds -= 1;
+                                    datetime.nanoseconds += 1_000_000_000;
+                                }
+                                datetime.nanoseconds -= now.nanoseconds;
+
+                                // Convert to nanoseconds.
+                                let nanos = datetime
+                                    .seconds
+                                    .checked_mul(1_000_000_000)
+                                    .ok_or(ERRNO_OVERFLOW)?;
+                                nanos
+                                    .checked_add(datetime.nanoseconds.into())
+                                    .ok_or(ERRNO_OVERFLOW)?
+                            } else {
+                                clock.timeout
+                            };
+
+                            wasi_poll::subscribe_monotonic_clock(
+                                state.default_monotonic_clock(),
+                                timeout,
+                                false,
+                            )
+                        }
+
+                        CLOCKID_MONOTONIC => wasi_poll::subscribe_monotonic_clock(
+                            state.default_monotonic_clock(),
+                            clock.timeout,
                             absolute,
                         ),
-
-                        CLOCKID_MONOTONIC => {
-                            wasi_clocks::subscribe_monotonic_clock(clock.timeout, absolute)
-                        }
 
                         _ => return Err(ERRNO_INVAL),
                     }
                 }
 
-                1 => wasi_tcp::subscribe_read(
-                    state.get_socket(subscription.u.u.fd_read.file_descriptor)?,
+                EVENTTYPE_FD_READ => wasi_poll::subscribe_read(
+                    state.get_read_stream(subscription.u.u.fd_read.file_descriptor)?,
                 ),
 
-                2 => wasi_tcp::subscribe_write(
-                    state.get_socket(subscription.u.u.fd_write.file_descriptor)?,
+                EVENTTYPE_FD_WRITE => wasi_poll::subscribe_write(
+                    state.get_write_stream(subscription.u.u.fd_write.file_descriptor)?,
                 ),
 
                 _ => return Err(ERRNO_INVAL),
@@ -1663,9 +1765,6 @@ fn flags_from_descriptor_flags(
     if fdflags & wasi::FDFLAGS_RSYNC == wasi::FDFLAGS_RSYNC {
         flags |= wasi_filesystem::DescriptorFlags::RSYNC;
     }
-    if fdflags & wasi::FDFLAGS_APPEND == wasi::FDFLAGS_APPEND {
-        flags |= wasi_filesystem::DescriptorFlags::APPEND;
-    }
     if fdflags & wasi::FDFLAGS_NONBLOCK == wasi::FDFLAGS_NONBLOCK {
         flags |= wasi_filesystem::DescriptorFlags::NONBLOCK;
     }
@@ -1775,15 +1874,13 @@ fn black_box(x: Errno) -> Errno {
 }
 
 #[repr(C)]
-pub enum Descriptor {
+enum Descriptor {
+    /// A closed descriptor, holding a reference to the previous closed
+    /// descriptor to support reusing them.
     Closed(Option<Fd>),
-    File(File),
-    Socket(wasi_tcp::Socket),
 
-    /// Initial state of fd 0 when `State` is created, representing a standard
-    /// input that is empty as it hasn't been configured yet. This is the
-    /// permanent fd 0 marker if `command` is never called.
-    EmptyStdin,
+    /// Input and/or output wasi-streams, along with stream metadata.
+    Streams(Streams),
 
     /// Initial state of fd 1 when `State` is created, representing that writes
     /// to `fd_write` will go to a call to `log`. This is overwritten during
@@ -1795,21 +1892,99 @@ pub enum Descriptor {
     StderrLog,
 }
 
+/// Input and/or output wasi-streams, along with a stream type that
+/// identifies what kind of stream they are and possibly supporting
+/// type-specific operations like seeking.
+struct Streams {
+    /// The output stream, if present.
+    input: Cell<Option<WasiStream>>,
+
+    /// The input stream, if present.
+    output: Cell<Option<WasiStream>>,
+
+    /// Information about the source of the stream.
+    type_: StreamType,
+}
+
+impl Streams {
+    /// Return the input stream, initializing it on the fly if needed.
+    fn get_read_stream(&self) -> Result<WasiStream, Errno> {
+        match &self.input.get() {
+            Some(wasi_stream) => Ok(*wasi_stream),
+            None => match &self.type_ {
+                // For files, we may have adjusted the position for seeking, so
+                // create a new stream.
+                StreamType::File(file) => {
+                    let input = wasi_filesystem::read_via_stream(file.fd, file.position.get())?;
+                    self.input.set(Some(input));
+                    Ok(input)
+                }
+                _ => Err(ERRNO_BADF),
+            },
+        }
+    }
+
+    /// Return the output stream, initializing it on the fly if needed.
+    fn get_write_stream(&self) -> Result<WasiStream, Errno> {
+        match &self.output.get() {
+            Some(wasi_stream) => Ok(*wasi_stream),
+            None => match &self.type_ {
+                // For files, we may have adjusted the position for seeking, so
+                // create a new stream.
+                StreamType::File(file) => {
+                    let output = wasi_filesystem::write_via_stream(file.fd, file.position.get())?;
+                    self.output.set(Some(output));
+                    Ok(output)
+                }
+                _ => Err(ERRNO_BADF),
+            },
+        }
+    }
+}
+
+#[allow(dead_code)] // until Socket is implemented
+enum StreamType {
+    /// It's a valid stream but we don't know where it comes from.
+    Unknown,
+
+    /// A stdin source containing no bytes.
+    EmptyStdin,
+
+    /// Streaming data with a file.
+    File(File),
+
+    /// Streaming data with a socket.
+    Socket(wasi_tcp::Socket),
+}
+
 impl Drop for Descriptor {
     fn drop(&mut self) {
         match self {
-            Descriptor::File(file) => wasi_filesystem::close(file.fd),
-            Descriptor::StdoutLog | Descriptor::StderrLog | Descriptor::EmptyStdin => {}
-            Descriptor::Socket(_) => unreachable(),
+            Descriptor::Streams(stream) => {
+                if let Some(input) = stream.input.get() {
+                    wasi_poll::drop_stream(input);
+                }
+                if let Some(output) = stream.output.get() {
+                    wasi_poll::drop_stream(output);
+                }
+                match &stream.type_ {
+                    StreamType::File(file) => wasi_filesystem::close(file.fd),
+                    StreamType::Socket(_) => unreachable(),
+                    StreamType::EmptyStdin | StreamType::Unknown => {}
+                }
+            }
+            Descriptor::StdoutLog | Descriptor::StderrLog => {}
             Descriptor::Closed(_) => {}
         }
     }
 }
 
 #[repr(C)]
-pub struct File {
+struct File {
     /// The handle to the preview2 descriptor that this file is referencing.
     fd: wasi_filesystem::Descriptor,
+
+    /// The current-position pointer.
     position: Cell<u64>,
 }
 
@@ -1861,6 +2036,12 @@ struct State {
     /// Cache for the `fd_readdir` call for a final `wasi::Dirent` plus path
     /// name that didn't fit into the caller's buffer.
     dirent_cache: DirentCache,
+
+    /// The clock handle for `CLOCKID_MONOTONIC`.
+    default_monotonic_clock: Cell<Option<Fd>>,
+
+    /// The clock handle for `CLOCKID_REALTIME`.
+    default_wall_clock: Cell<Option<Fd>>,
 }
 
 struct DirentCache {
@@ -1921,7 +2102,7 @@ const fn command_data_size() -> usize {
     start -= size_of::<DirentCache>();
 
     // Remove miscellaneous metadata also stored in state.
-    start -= 14 * size_of::<usize>();
+    start -= 17 * size_of::<usize>();
 
     // Everything else is the `command_data` allocation.
     start
@@ -2004,6 +2185,8 @@ impl State {
                     }),
                     path_data: UnsafeCell::new(MaybeUninit::uninit()),
                 },
+                default_monotonic_clock: Cell::new(None),
+                default_wall_clock: Cell::new(None),
             }));
             &*ret
         };
@@ -2014,7 +2197,11 @@ impl State {
     }
 
     fn init(&mut self) {
-        unwrap_result(self.push_desc(Descriptor::EmptyStdin));
+        unwrap_result(self.push_desc(Descriptor::Streams(Streams {
+            input: Cell::new(None),
+            output: Cell::new(None),
+            type_: StreamType::Unknown,
+        })));
         unwrap_result(self.push_desc(Descriptor::StdoutLog));
         unwrap_result(self.push_desc(Descriptor::StderrLog));
     }
@@ -2062,17 +2249,32 @@ impl State {
             .ok_or(ERRNO_BADF)
     }
 
-    fn get_file_with_error(&self, fd: Fd, error: Errno) -> Result<&File, Errno> {
+    fn get_stream_with_error(&self, fd: Fd, error: Errno) -> Result<&Streams, Errno> {
         match self.get(fd)? {
-            Descriptor::File(file) => Ok(file),
+            Descriptor::Streams(streams) => Ok(streams),
             Descriptor::Closed(_) => Err(ERRNO_BADF),
             _ => Err(error),
         }
     }
 
+    fn get_file_with_error(&self, fd: Fd, error: Errno) -> Result<&File, Errno> {
+        match self.get(fd)? {
+            Descriptor::Streams(Streams {
+                type_: StreamType::File(file),
+                ..
+            }) => Ok(file),
+            Descriptor::Closed(_) => Err(ERRNO_BADF),
+            _ => Err(error),
+        }
+    }
+
+    #[allow(dead_code)] // until Socket is implemented
     fn get_socket(&self, fd: Fd) -> Result<wasi_tcp::Socket, Errno> {
         match self.get(fd)? {
-            Descriptor::Socket(socket) => Ok(*socket),
+            Descriptor::Streams(Streams {
+                type_: StreamType::Socket(socket),
+                ..
+            }) => Ok(*socket),
             Descriptor::Closed(_) => Err(ERRNO_BADF),
             _ => Err(ERRNO_INVAL),
         }
@@ -2090,10 +2292,62 @@ impl State {
         self.get_file_with_error(fd, ERRNO_SPIPE)
     }
 
+    fn get_seekable_stream(&self, fd: Fd) -> Result<&Streams, Errno> {
+        self.get_stream_with_error(fd, ERRNO_SPIPE)
+    }
+
+    fn get_read_stream(&self, fd: Fd) -> Result<WasiStream, Errno> {
+        match self.get(fd)? {
+            Descriptor::Streams(streams) => streams.get_read_stream(),
+            Descriptor::Closed(_) | Descriptor::StdoutLog | Descriptor::StderrLog => {
+                Err(ERRNO_BADF)
+            }
+        }
+    }
+
+    fn get_write_stream(&self, fd: Fd) -> Result<WasiStream, Errno> {
+        match self.get(fd)? {
+            Descriptor::Streams(streams) => streams.get_write_stream(),
+            Descriptor::Closed(_) | Descriptor::StdoutLog | Descriptor::StderrLog => {
+                Err(ERRNO_BADF)
+            }
+        }
+    }
+
     /// Register `buf` and `buf_len` to be used by `cabi_realloc` to satisfy
     /// the next request.
     fn register_buffer(&self, buf: *mut u8, buf_len: usize) {
         self.buffer_ptr.set(buf);
         self.buffer_len.set(buf_len);
+    }
+
+    /// Return a handle to the default wall clock, creating one if we
+    /// don't already have one.
+    fn default_wall_clock(&self) -> Fd {
+        match self.default_wall_clock.get() {
+            Some(fd) => fd,
+            None => self.init_default_wall_clock(),
+        }
+    }
+
+    fn init_default_wall_clock(&self) -> Fd {
+        let clock = wasi_default_clocks::default_wall_clock();
+        self.default_wall_clock.set(Some(clock));
+        clock
+    }
+
+    /// Return a handle to the default monotonic clock, creating one if we
+    /// don't already have one.
+    fn default_monotonic_clock(&self) -> Fd {
+        match self.default_monotonic_clock.get() {
+            Some(fd) => fd,
+            None => self.init_default_monotonic_clock(),
+        }
+    }
+
+    fn init_default_monotonic_clock(&self) -> Fd {
+        let clock = wasi_default_clocks::default_monotonic_clock();
+        self.default_monotonic_clock.set(Some(clock));
+        clock
     }
 }
