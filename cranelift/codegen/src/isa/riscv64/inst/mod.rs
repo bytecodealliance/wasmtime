@@ -1406,8 +1406,16 @@ impl Inst {
                 }
                 s
             }
-            &Inst::Ret { .. } => {
-                format!("ret")
+            &Inst::Ret { ref rets } => {
+                let mut s = "ret".to_string();
+                let mut empty_allocs = AllocationConsumer::default();
+                for ret in rets {
+                    use std::fmt::Write;
+                    let preg = format_reg(ret.preg, &mut empty_allocs);
+                    let vreg = format_reg(ret.vreg, allocs);
+                    write!(&mut s, " {}={}", vreg, preg).unwrap();
+                }
+                s
             }
 
             &MInst::Extend {

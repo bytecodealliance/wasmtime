@@ -1537,7 +1537,16 @@ impl PrettyPrint for Inst {
                 s
             }
 
-            Inst::Ret { .. } => "ret".to_string(),
+            Inst::Ret { rets } => {
+                let mut s = "ret".to_string();
+                for ret in rets {
+                    use std::fmt::Write;
+                    let preg = regs::show_reg(ret.preg);
+                    let vreg = pretty_print_reg(ret.vreg, 8, allocs);
+                    write!(&mut s, " {}={}", vreg, preg).unwrap();
+                }
+                s
+            }
 
             Inst::JmpKnown { dst } => {
                 format!("{} {}", ljustify("jmp".to_string()), dst.to_string())

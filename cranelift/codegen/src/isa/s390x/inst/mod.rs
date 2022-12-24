@@ -3145,9 +3145,16 @@ impl Inst {
                 }
                 s
             }
-            &Inst::Ret { link, .. } => {
+            &Inst::Ret { link, ref rets } => {
                 debug_assert_eq!(link, gpr(14));
-                format!("br {}", show_reg(link))
+                let mut s = format!("br {}", show_reg(link));
+                for ret in rets {
+                    use std::fmt::Write;
+                    let preg = pretty_print_reg(ret.preg, &mut empty_allocs);
+                    let vreg = pretty_print_reg(ret.vreg, allocs);
+                    write!(&mut s, " {}={}", vreg, preg).unwrap();
+                }
+                s
             }
             &Inst::Jump { dest } => {
                 let dest = dest.to_string();
