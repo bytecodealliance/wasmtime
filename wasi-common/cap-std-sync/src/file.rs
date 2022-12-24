@@ -31,8 +31,8 @@ impl WasiFile for File {
     }
 
     #[cfg(windows)]
-    fn pollable(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
-        Some(self.0.as_raw_handle_or_socket())
+    fn pollable(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
+        Some(self.0.as_handle_or_socket())
     }
 
     async fn try_clone(&mut self) -> Result<Box<dyn WasiFile>, Error> {
@@ -205,12 +205,12 @@ impl AsHandle for File {
 }
 
 #[cfg(windows)]
-use io_extras::os::windows::{AsRawHandleOrSocket, RawHandleOrSocket};
+use io_extras::os::windows::{AsBorrowedHandleOrSocket, BorrowedHandleOrSocket};
 #[cfg(windows)]
-impl AsRawHandleOrSocket for File {
+impl AsBorrowedHandleOrSocket for File {
     #[inline]
-    fn as_raw_handle_or_socket(&self) -> RawHandleOrSocket {
-        self.0.as_raw_handle_or_socket()
+    fn as_handle_or_socket(&self) -> BorrowedHandleOrSocket {
+        self.0.as_handle_or_socket()
     }
 }
 

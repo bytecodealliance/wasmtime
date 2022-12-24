@@ -20,7 +20,7 @@ pub trait WasiStream: Send + Sync {
     /// If this stream is reading from a host file descriptor, return it so
     /// that it can be polled with a host poll.
     #[cfg(windows)]
-    fn pollable_read(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
+    fn pollable_read(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
         None
     }
 
@@ -34,7 +34,7 @@ pub trait WasiStream: Send + Sync {
     /// If this stream is writing from a host file descriptor, return it so
     /// that it can be polled with a host poll.
     #[cfg(windows)]
-    fn pollable_write(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
+    fn pollable_write(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
         None
     }
 

@@ -1,5 +1,5 @@
 #[cfg(windows)]
-use io_extras::os::windows::{AsRawHandleOrSocket, RawHandleOrSocket};
+use io_extras::os::windows::{AsBorrowedHandleOrSocket, BorrowedHandleOrSocket};
 use io_lifetimes::AsSocketlike;
 #[cfg(unix)]
 use io_lifetimes::{AsFd, BorrowedFd};
@@ -133,10 +133,10 @@ macro_rules! wasi_listen_write_impl {
         }
 
         #[cfg(windows)]
-        impl AsRawHandleOrSocket for $ty {
+        impl AsBorrowedHandleOrSocket for $ty {
             #[inline]
-            fn as_raw_handle_or_socket(&self) -> RawHandleOrSocket {
-                self.0.as_raw_handle_or_socket()
+            fn as_handle_or_socket(&self) -> BorrowedHandleOrSocket {
+                self.0.as_handle_or_socket()
             }
         }
 
@@ -276,12 +276,12 @@ macro_rules! wasi_stream_write_impl {
             }
 
             #[cfg(windows)]
-            fn pollable_read(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
-                Some(self.0.as_raw_handle_or_socket())
+            fn pollable_read(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
+                Some(self.0.as_handle_or_socket())
             }
             #[cfg(windows)]
-            fn pollable_write(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
-                Some(self.0.as_raw_handle_or_socket())
+            fn pollable_write(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
+                Some(self.0.as_handle_or_socket())
             }
 
             async fn read(&mut self, buf: &mut [u8]) -> Result<(u64, bool), Error> {
@@ -377,10 +377,10 @@ macro_rules! wasi_stream_write_impl {
         }
 
         #[cfg(windows)]
-        impl AsRawHandleOrSocket for TcpStream {
+        impl AsBorrowedHandleOrSocket for TcpStream {
             #[inline]
-            fn as_raw_handle_or_socket(&self) -> RawHandleOrSocket {
-                self.0.as_raw_handle_or_socket()
+            fn as_handle_or_socket(&self) -> BorrowedHandleOrSocket {
+                self.0.as_handle_or_socket()
             }
         }
     };

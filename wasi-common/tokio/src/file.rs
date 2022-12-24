@@ -1,6 +1,6 @@
 use crate::block_on_dummy_executor;
 #[cfg(windows)]
-use io_extras::os::windows::{AsRawHandleOrSocket, RawHandleOrSocket};
+use io_extras::os::windows::{AsBorrowedHandleOrSocket, BorrowedHandleOrSocket};
 #[cfg(not(windows))]
 use io_lifetimes::AsFd;
 use std::any::Any;
@@ -100,8 +100,8 @@ macro_rules! wasi_file_impl {
             }
 
             #[cfg(windows)]
-            fn pollable(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
-                Some(self.0.as_raw_handle_or_socket())
+            fn pollable(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
+                Some(self.0.as_handle_or_socket())
             }
 
             async fn try_clone(&mut self) -> Result<Box<dyn WasiFile>, Error> {
@@ -224,10 +224,10 @@ macro_rules! wasi_file_impl {
             }
         }
         #[cfg(windows)]
-        impl AsRawHandleOrSocket for $ty {
+        impl AsBorrowedHandleOrSocket for $ty {
             #[inline]
-            fn as_raw_handle_or_socket(&self) -> RawHandleOrSocket {
-                self.0.as_raw_handle_or_socket()
+            fn as_handle_or_socket(&self) -> BorrowedHandleOrSocket {
+                self.0.as_handle_or_socket()
             }
         }
     };

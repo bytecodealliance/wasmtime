@@ -5,7 +5,7 @@ use std::io::{Read, Write};
 use system_interface::io::ReadReady;
 
 #[cfg(windows)]
-use io_extras::os::windows::{AsRawHandleOrSocket, RawHandleOrSocket};
+use io_extras::os::windows::{AsBorrowedHandleOrSocket, BorrowedHandleOrSocket};
 #[cfg(unix)]
 use io_lifetimes::{AsFd, BorrowedFd};
 #[cfg(windows)]
@@ -29,8 +29,8 @@ impl WasiStream for Stdin {
     }
 
     #[cfg(windows)]
-    fn pollable_read(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
-        Some(self.0.as_raw_handle_or_socket())
+    fn pollable_read(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
+        Some(self.0.as_handle_or_socket())
     }
 
     async fn read(&mut self, buf: &mut [u8]) -> Result<(u64, bool), Error> {
@@ -102,10 +102,10 @@ impl AsHandle for Stdin {
     }
 }
 #[cfg(windows)]
-impl AsRawHandleOrSocket for Stdin {
+impl AsBorrowedHandleOrSocket for Stdin {
     #[inline]
-    fn as_raw_handle_or_socket(&self) -> RawHandleOrSocket {
-        self.0.as_raw_handle_or_socket()
+    fn as_handle_or_socket(&self) -> BorrowedHandleOrSocket {
+        self.0.as_handle_or_socket()
     }
 }
 #[cfg(unix)]
@@ -128,8 +128,8 @@ macro_rules! wasi_file_write_impl {
                 Some(self.0.as_fd())
             }
             #[cfg(windows)]
-            fn pollable_write(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
-                Some(self.0.as_raw_handle_or_socket())
+            fn pollable_write(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
+                Some(self.0.as_handle_or_socket())
             }
 
             async fn read(&mut self, _buf: &mut [u8]) -> Result<(u64, bool), Error> {
@@ -194,10 +194,10 @@ macro_rules! wasi_file_write_impl {
             }
         }
         #[cfg(windows)]
-        impl AsRawHandleOrSocket for $ty {
+        impl AsBorrowedHandleOrSocket for $ty {
             #[inline]
-            fn as_raw_handle_or_socket(&self) -> RawHandleOrSocket {
-                self.0.as_raw_handle_or_socket()
+            fn as_handle_or_socket(&self) -> BorrowedHandleOrSocket {
+                self.0.as_handle_or_socket()
             }
         }
     };
