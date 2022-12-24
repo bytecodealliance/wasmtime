@@ -46,8 +46,8 @@ async fn run_hello_stdout(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
         &[],
         &[],
     )
-    .await?;
-    Ok(())
+    .await?
+    .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
 async fn run_panic(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
@@ -84,8 +84,8 @@ async fn run_args(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
         &[],
         &[],
     )
-    .await?;
-    Ok(())
+    .await?
+    .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
 async fn run_random(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
@@ -119,8 +119,8 @@ async fn run_random(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
         &[],
         &[],
     )
-    .await?;
-    Ok(())
+    .await?
+    .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
 async fn run_time(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
@@ -176,8 +176,8 @@ async fn run_time(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
         &[],
         &[],
     )
-    .await?;
-    Ok(())
+    .await?
+    .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
 async fn run_stdin(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
@@ -195,8 +195,8 @@ async fn run_stdin(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
         &[],
         &[],
     )
-    .await?;
-    Ok(())
+    .await?
+    .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
 async fn run_env(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
@@ -208,8 +208,8 @@ async fn run_env(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
         &[("frabjous", "day"), ("callooh", "callay")],
         &[],
     )
-    .await?;
-    Ok(())
+    .await?
+    .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
 async fn run_file_read(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
@@ -232,6 +232,72 @@ async fn run_file_read(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
         &[],
         &[(descriptor, "/")],
     )
-    .await?;
+    .await?
+    .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
+}
+
+async fn run_exit_success(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+    let r = wasi
+        .command(
+            &mut store,
+            0 as host::Descriptor,
+            1 as host::Descriptor,
+            &[],
+            &[("frabjous", "day"), ("callooh", "callay")],
+            &[],
+        )
+        .await;
+    let err = r.unwrap_err();
+    let status = err.downcast_ref::<wasi_common::I32Exit>().unwrap();
+    assert_eq!(status.0, 0);
+    Ok(())
+}
+
+async fn run_exit_default(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+    let r = wasi
+        .command(
+            &mut store,
+            0 as host::Descriptor,
+            1 as host::Descriptor,
+            &[],
+            &[("frabjous", "day"), ("callooh", "callay")],
+            &[],
+        )
+        .await?;
+    assert!(r.is_ok());
+    Ok(())
+}
+
+async fn run_exit_failure(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+    let r = wasi
+        .command(
+            &mut store,
+            0 as host::Descriptor,
+            1 as host::Descriptor,
+            &[],
+            &[("frabjous", "day"), ("callooh", "callay")],
+            &[],
+        )
+        .await;
+    let err = r.unwrap_err();
+    let status = err.downcast_ref::<wasi_common::I32Exit>().unwrap();
+    assert_eq!(status.0, 1);
+    Ok(())
+}
+
+async fn run_exit_panic(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+    let r = wasi
+        .command(
+            &mut store,
+            0 as host::Descriptor,
+            1 as host::Descriptor,
+            &[],
+            &[("frabjous", "day"), ("callooh", "callay")],
+            &[],
+        )
+        .await;
+    let err = r.unwrap_err();
+    // The panic should trap.
+    assert!(err.downcast_ref::<wasi_common::I32Exit>().is_none());
     Ok(())
 }
