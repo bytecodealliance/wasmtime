@@ -33,7 +33,7 @@ pub unsafe extern "C" fn command(
     args_len: usize,
     env_vars: StrTupleList,
     preopens: PreopenList,
-) {
+) -> Result<(), ()> {
     // TODO: ideally turning off `command` would remove this import and the
     // `*.wit` metadata entirely but doing that ergonomically will likely
     // require some form of `use` to avoid duplicating lots of `*.wit` bits.
@@ -86,6 +86,7 @@ pub unsafe extern "C" fn command(
         fn _start();
     }
     _start();
+    Ok(())
 }
 
 // We're avoiding static initializers, so replace the standard assert macros
