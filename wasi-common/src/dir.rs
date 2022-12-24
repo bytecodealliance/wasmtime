@@ -27,6 +27,10 @@ pub trait WasiDir: Send + Sync {
         Err(Error::not_supported())
     }
 
+    async fn get_fdflags(&self) -> Result<FdFlags, Error> {
+        Ok(FdFlags::empty())
+    }
+
     async fn create_dir(&self, _path: &str) -> Result<(), Error> {
         Err(Error::not_supported())
     }

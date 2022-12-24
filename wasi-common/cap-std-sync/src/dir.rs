@@ -1,4 +1,4 @@
-use crate::file::{filetype_from, File};
+use crate::file::{filetype_from, get_fd_flags, File};
 use cap_fs_ext::{DirEntryExt, DirExt, MetadataExt, SystemTimeSpec};
 use std::any::Any;
 use std::path::{Path, PathBuf};
@@ -78,6 +78,11 @@ impl Dir {
             f.set_fd_flags(set_fd_flags)?;
         }
         Ok(File::from_cap_std(f))
+    }
+
+    pub fn get_fdflags(&self) -> Result<FdFlags, Error> {
+        let fdflags = get_fd_flags(&self.0)?;
+        Ok(fdflags)
     }
 
     pub fn open_dir_(&self, symlink_follow: bool, path: &str) -> Result<Self, Error> {

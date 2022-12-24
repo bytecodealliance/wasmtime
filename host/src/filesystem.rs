@@ -9,7 +9,7 @@ use std::{
 };
 use wasi_common::{
     dir::TableDirExt,
-    file::{FileStream, TableFileExt},
+    file::{FdFlags, FileStream, TableFileExt},
     WasiDir, WasiFile,
 };
 
@@ -101,41 +101,60 @@ fn convert(error: wasi_common::Error) -> wasmtime::component::Error<wasi_filesys
     }
 }
 
-impl Into<wasi_common::file::OFlags> for wasi_filesystem::OFlags {
-    fn into(self) -> wasi_common::file::OFlags {
+impl From<wasi_filesystem::OFlags> for wasi_common::file::OFlags {
+    fn from(oflags: wasi_filesystem::OFlags) -> Self {
         let mut flags = wasi_common::file::OFlags::empty();
-        if contains(self, wasi_filesystem::OFlags::CREATE) {
+        if contains(oflags, wasi_filesystem::OFlags::CREATE) {
             flags |= wasi_common::file::OFlags::CREATE;
         }
-        if contains(self, wasi_filesystem::OFlags::DIRECTORY) {
+        if contains(oflags, wasi_filesystem::OFlags::DIRECTORY) {
             flags |= wasi_common::file::OFlags::DIRECTORY;
         }
-        if contains(self, wasi_filesystem::OFlags::EXCL) {
+        if contains(oflags, wasi_filesystem::OFlags::EXCL) {
             flags |= wasi_common::file::OFlags::EXCLUSIVE;
         }
-        if contains(self, wasi_filesystem::OFlags::TRUNC) {
+        if contains(oflags, wasi_filesystem::OFlags::TRUNC) {
             flags |= wasi_common::file::OFlags::TRUNCATE;
         }
         flags
     }
 }
 
-impl Into<wasi_common::file::FdFlags> for wasi_filesystem::DescriptorFlags {
-    fn into(self) -> wasi_common::file::FdFlags {
-        let mut flags = wasi_common::file::FdFlags::empty();
-        if contains(self, wasi_filesystem::DescriptorFlags::DSYNC) {
-            flags |= wasi_common::file::FdFlags::DSYNC;
+impl From<FdFlags> for wasi_filesystem::DescriptorFlags {
+    fn from(fdflags: FdFlags) -> Self {
+        let mut flags = wasi_filesystem::DescriptorFlags::empty();
+        if contains(fdflags, FdFlags::DSYNC) {
+            flags |= wasi_filesystem::DescriptorFlags::DSYNC;
         }
-        if contains(self, wasi_filesystem::DescriptorFlags::NONBLOCK) {
-            flags |= wasi_common::file::FdFlags::NONBLOCK;
+        if contains(fdflags, FdFlags::NONBLOCK) {
+            flags |= wasi_filesystem::DescriptorFlags::NONBLOCK;
         }
-        if contains(self, wasi_filesystem::DescriptorFlags::RSYNC) {
-            flags |= wasi_common::file::FdFlags::RSYNC;
+        if contains(fdflags, FdFlags::RSYNC) {
+            flags |= wasi_filesystem::DescriptorFlags::RSYNC;
         }
-        if contains(self, wasi_filesystem::DescriptorFlags::SYNC) {
-            flags |= wasi_common::file::FdFlags::SYNC;
+        if contains(fdflags, FdFlags::SYNC) {
+            flags |= wasi_filesystem::DescriptorFlags::SYNC;
         }
         flags
+    }
+}
+
+impl From<wasi_filesystem::DescriptorFlags> for FdFlags {
+    fn from(flags: wasi_filesystem::DescriptorFlags) -> FdFlags {
+        let mut fdflags = FdFlags::empty();
+        if contains(flags, wasi_filesystem::DescriptorFlags::DSYNC) {
+            fdflags |= FdFlags::DSYNC;
+        }
+        if contains(flags, wasi_filesystem::DescriptorFlags::NONBLOCK) {
+            fdflags |= FdFlags::NONBLOCK;
+        }
+        if contains(flags, wasi_filesystem::DescriptorFlags::RSYNC) {
+            fdflags |= FdFlags::RSYNC;
+        }
+        if contains(flags, wasi_filesystem::DescriptorFlags::SYNC) {
+            fdflags |= FdFlags::SYNC;
+        }
+        fdflags
     }
 }
 
@@ -204,14 +223,46 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         &mut self,
         fd: wasi_filesystem::Descriptor,
     ) -> HostResult<wasi_filesystem::DescriptorFlags, wasi_filesystem::Errno> {
-        todo!()
+        let table = self.table();
+        if table.is::<Box<dyn WasiFile>>(fd) {
+            Ok(table
+                .get_file(fd)
+                .map_err(convert)?
+                .get_fdflags()
+                .await
+                .map_err(convert)?
+                .into())
+        } else if table.is::<Box<dyn WasiDir>>(fd) {
+            Ok(table
+                .get_dir(fd)
+                .map_err(convert)?
+                .get_fdflags()
+                .await
+                .map_err(convert)?
+                .into())
+        } else {
+            Err(wasi_filesystem::Errno::Badf.into())
+        }
     }
 
     async fn todo_type(
         &mut self,
         fd: wasi_filesystem::Descriptor,
     ) -> HostResult<wasi_filesystem::DescriptorType, wasi_filesystem::Errno> {
-        todo!()
+        let table = self.table();
+        if table.is::<Box<dyn WasiFile>>(fd) {
+            Ok(table
+                .get_file(fd)
+                .map_err(convert)?
+                .get_filetype()
+                .await
+                .map_err(convert)?
+                .into())
+        } else if table.is::<Box<dyn WasiDir>>(fd) {
+            Ok(wasi_filesystem::DescriptorType::Directory)
+        } else {
+            Err(wasi_filesystem::Errno::Badf.into())
+        }
     }
 
     async fn set_flags(
