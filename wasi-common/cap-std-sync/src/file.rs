@@ -205,9 +205,9 @@ impl AsHandle for File {
 }
 
 #[cfg(windows)]
-use io_extras::os::windows::{AsBorrowedHandleOrSocket, BorrowedHandleOrSocket};
+use io_extras::os::windows::{AsHandleOrSocket, BorrowedHandleOrSocket};
 #[cfg(windows)]
-impl AsBorrowedHandleOrSocket for File {
+impl AsHandleOrSocket for File {
     #[inline]
     fn as_handle_or_socket(&self) -> BorrowedHandleOrSocket {
         self.0.as_handle_or_socket()

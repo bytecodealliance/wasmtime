@@ -5,7 +5,7 @@ use std::io::{Read, Write};
 use system_interface::io::ReadReady;
 
 #[cfg(windows)]
-use io_extras::os::windows::{AsBorrowedHandleOrSocket, BorrowedHandleOrSocket};
+use io_extras::os::windows::{AsHandleOrSocket, BorrowedHandleOrSocket};
 #[cfg(unix)]
 use io_lifetimes::{AsFd, BorrowedFd};
 #[cfg(windows)]
@@ -102,7 +102,7 @@ impl AsHandle for Stdin {
     }
 }
 #[cfg(windows)]
-impl AsBorrowedHandleOrSocket for Stdin {
+impl AsHandleOrSocket for Stdin {
     #[inline]
     fn as_handle_or_socket(&self) -> BorrowedHandleOrSocket {
         self.0.as_handle_or_socket()
@@ -194,7 +194,7 @@ macro_rules! wasi_file_write_impl {
             }
         }
         #[cfg(windows)]
-        impl AsBorrowedHandleOrSocket for $ty {
+        impl AsHandleOrSocket for $ty {
             #[inline]
             fn as_handle_or_socket(&self) -> BorrowedHandleOrSocket {
                 self.0.as_handle_or_socket()

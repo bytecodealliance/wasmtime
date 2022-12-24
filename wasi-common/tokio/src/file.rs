@@ -1,6 +1,6 @@
 use crate::block_on_dummy_executor;
 #[cfg(windows)]
-use io_extras::os::windows::{AsBorrowedHandleOrSocket, BorrowedHandleOrSocket};
+use io_extras::os::windows::{AsHandleOrSocket, BorrowedHandleOrSocket};
 #[cfg(not(windows))]
 use io_lifetimes::AsFd;
 use std::any::Any;
@@ -224,7 +224,7 @@ macro_rules! wasi_file_impl {
             }
         }
         #[cfg(windows)]
-        impl AsBorrowedHandleOrSocket for $ty {
+        impl AsHandleOrSocket for $ty {
             #[inline]
             fn as_handle_or_socket(&self) -> BorrowedHandleOrSocket {
                 self.0.as_handle_or_socket()

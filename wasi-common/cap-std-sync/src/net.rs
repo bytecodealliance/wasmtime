@@ -1,5 +1,5 @@
 #[cfg(windows)]
-use io_extras::os::windows::{AsBorrowedHandleOrSocket, BorrowedHandleOrSocket};
+use io_extras::os::windows::{AsHandleOrSocket, BorrowedHandleOrSocket};
 use io_lifetimes::AsSocketlike;
 #[cfg(unix)]
 use io_lifetimes::{AsFd, BorrowedFd};
@@ -133,7 +133,7 @@ macro_rules! wasi_listen_write_impl {
         }
 
         #[cfg(windows)]
-        impl AsBorrowedHandleOrSocket for $ty {
+        impl AsHandleOrSocket for $ty {
             #[inline]
             fn as_handle_or_socket(&self) -> BorrowedHandleOrSocket {
                 self.0.as_handle_or_socket()
@@ -377,7 +377,7 @@ macro_rules! wasi_stream_write_impl {
         }
 
         #[cfg(windows)]
-        impl AsBorrowedHandleOrSocket for TcpStream {
+        impl AsHandleOrSocket for TcpStream {
             #[inline]
             fn as_handle_or_socket(&self) -> BorrowedHandleOrSocket {
                 self.0.as_handle_or_socket()
