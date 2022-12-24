@@ -30,7 +30,7 @@ rustix = { workspace = true, features = ["fs"] }
 
 [target.'cfg(windows)'.dependencies]
 once_cell = { workspace = true }
-io-extras = "0.17.0"
+io-extras = "0.17.1"
 rustix = { workspace = true, features = ["net"] }
 
 [target.'cfg(windows)'.dependencies.windows-sys]
