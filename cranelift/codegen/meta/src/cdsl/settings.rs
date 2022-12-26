@@ -66,7 +66,7 @@ impl Setting {
     }
 }
 
-#[derive(Hash, PartialEq, Eq)]
+#[derive(Hash, PartialEq, Eq, Copy, Clone)]
 pub(crate) struct PresetIndex(usize);
 
 #[derive(Hash, PartialEq, Eq)]
