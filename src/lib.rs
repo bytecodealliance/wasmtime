@@ -1468,7 +1468,7 @@ pub unsafe extern "C" fn poll_oneoff(
     assert!(align_of::<WasiFuture>() >= align_of::<u8>());
     assert!(
         unwrap(nsubscriptions.checked_mul(size_of::<Event>()))
-            > unwrap(
+            >= unwrap(
                 unwrap(nsubscriptions.checked_mul(size_of::<WasiFuture>()))
                     .checked_add(unwrap(nsubscriptions.checked_mul(size_of::<u8>())))
             )
@@ -1476,6 +1476,11 @@ pub unsafe extern "C" fn poll_oneoff(
 
     let futures = out as *mut c_void as *mut WasiFuture;
     let results = futures.add(nsubscriptions) as *mut c_void as *mut u8;
+
+    // Indefinite sleeping is not supported in preview1.
+    if nsubscriptions == 0 {
+        return ERRNO_INVAL;
+    }
 
     State::with(|state| {
         state.register_buffer(
@@ -1496,7 +1501,8 @@ pub unsafe extern "C" fn poll_oneoff(
             futures.push(match subscription.u.tag {
                 EVENTTYPE_CLOCK => {
                     let clock = &subscription.u.u.clock;
-                    let absolute = (clock.flags & SUBCLOCKFLAGS_SUBSCRIPTION_CLOCK_ABSTIME) == 0;
+                    let absolute = (clock.flags & SUBCLOCKFLAGS_SUBSCRIPTION_CLOCK_ABSTIME)
+                        == SUBCLOCKFLAGS_SUBSCRIPTION_CLOCK_ABSTIME;
                     match clock.id {
                         CLOCKID_REALTIME => {
                             let timeout = if absolute {
@@ -1587,41 +1593,94 @@ pub unsafe extern "C" fn poll_oneoff(
 
                 1 => {
                     type_ = EVENTTYPE_FD_READ;
-                    match wasi_tcp::bytes_readable(subscription.u.u.fd_read.file_descriptor) {
-                        Ok(result) => {
-                            error = ERRNO_SUCCESS;
-                            nbytes = result.nbytes;
-                            flags = if result.is_closed {
-                                EVENTRWFLAGS_FD_READWRITE_HANGUP
-                            } else {
-                                0
-                            };
-                        }
-                        Err(e) => {
-                            error = e.into();
-                            nbytes = 0;
-                            flags = 0;
-                        }
+                    let desc = unwrap_result(state.get(subscription.u.u.fd_read.file_descriptor));
+                    match desc {
+                        Descriptor::Streams(streams) => match &streams.type_ {
+                            StreamType::File(file) => match wasi_filesystem::stat(file.fd) {
+                                Ok(stat) => {
+                                    error = ERRNO_SUCCESS;
+                                    nbytes = stat.size.saturating_sub(file.position.get());
+                                    flags = if nbytes == 0 {
+                                        EVENTRWFLAGS_FD_READWRITE_HANGUP
+                                    } else {
+                                        0
+                                    };
+                                }
+                                Err(e) => {
+                                    error = e.into();
+                                    nbytes = 1;
+                                    flags = 0;
+                                }
+                            },
+                            StreamType::Socket(_) => unreachable(), // TODO
+                            /*
+                            StreamType::Socket(_) => match wasi_tcp::bytes_readable(todo!()) {
+                                Ok(result) => {
+                                    error = ERRNO_SUCCESS;
+                                    nbytes = result.nbytes;
+                                    flags = if result.is_closed {
+                                        EVENTRWFLAGS_FD_READWRITE_HANGUP
+                                    } else {
+                                        0
+                                    };
+                                }
+                                Err(e) => {
+                                    error = e.into();
+                                    nbytes = 0;
+                                    flags = 0;
+                                }
+                            },
+                            */
+                            StreamType::EmptyStdin => {
+                                error = ERRNO_SUCCESS;
+                                nbytes = 0;
+                                flags = EVENTRWFLAGS_FD_READWRITE_HANGUP;
+                            }
+                            StreamType::Unknown => {
+                                error = ERRNO_SUCCESS;
+                                nbytes = 1;
+                                flags = 0;
+                            }
+                        },
+                        _ => unreachable(),
                     }
                 }
-
                 2 => {
                     type_ = EVENTTYPE_FD_WRITE;
-                    match wasi_tcp::bytes_writable(subscription.u.u.fd_write.file_descriptor) {
-                        Ok(result) => {
-                            error = ERRNO_SUCCESS;
-                            nbytes = result.nbytes;
-                            flags = if result.is_closed {
-                                EVENTRWFLAGS_FD_READWRITE_HANGUP
-                            } else {
-                                0
-                            };
-                        }
-                        Err(e) => {
-                            error = e.into();
-                            nbytes = 0;
-                            flags = 0;
-                        }
+                    let desc = unwrap_result(state.get(subscription.u.u.fd_read.file_descriptor));
+                    match desc {
+                        Descriptor::Streams(streams) => match streams.type_ {
+                            StreamType::File(_) | StreamType::Unknown => {
+                                error = ERRNO_SUCCESS;
+                                nbytes = 1;
+                                flags = 0;
+                            }
+                            StreamType::Socket(_) => unreachable(), // TODO
+                            /*
+                            StreamType::Socket(_) => match wasi_tcp::bytes_writable(todo!()) {
+                                Ok(result) => {
+                                    error = ERRNO_SUCCESS;
+                                    nbytes = result.nbytes;
+                                    flags = if result.is_closed {
+                                        EVENTRWFLAGS_FD_READWRITE_HANGUP
+                                    } else {
+                                        0
+                                    };
+                                }
+                                Err(e) => {
+                                    error = e.into();
+                                    nbytes = 0;
+                                    flags = 0;
+                                }
+                            },
+                            */
+                            StreamType::EmptyStdin => {
+                                error = ERRNO_BADF;
+                                nbytes = 0;
+                                flags = 0;
+                            }
+                        },
+                        _ => unreachable(),
                     }
                 }
 
