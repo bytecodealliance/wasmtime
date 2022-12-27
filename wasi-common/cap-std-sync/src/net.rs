@@ -8,7 +8,6 @@ use io_lifetimes::{AsSocket, BorrowedSocket};
 use std::any::Any;
 use std::convert::TryInto;
 use std::io::{self, Read, Write};
-use system_interface::fs::GetSetFdFlags;
 use system_interface::io::IoExt;
 use system_interface::io::IsReadWrite;
 use system_interface::io::ReadReady;
@@ -111,11 +110,6 @@ macro_rules! wasi_listen_write_impl {
                 stream.set_nonblocking(nonblocking)?;
                 let stream = <$stream>::from_cap_std(stream);
                 Ok(Box::new(stream))
-            }
-
-            fn get_nonblocking(&mut self) -> Result<bool, Error> {
-                let s = self.0.as_socketlike().get_fd_flags()?;
-                Ok(s.contains(system_interface::fs::FdFlags::NONBLOCK))
             }
 
             fn set_nonblocking(&mut self, flag: bool) -> Result<(), Error> {
@@ -232,11 +226,6 @@ macro_rules! wasi_stream_write_impl {
                 };
                 self.0.shutdown(how)?;
                 Ok(())
-            }
-
-            fn get_nonblocking(&mut self) -> Result<bool, Error> {
-                let s = self.0.as_socketlike().get_fd_flags()?;
-                Ok(s.contains(system_interface::fs::FdFlags::NONBLOCK))
             }
 
             fn set_nonblocking(&mut self, flag: bool) -> Result<(), Error> {

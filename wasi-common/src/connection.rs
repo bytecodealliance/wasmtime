@@ -23,8 +23,6 @@ pub trait WasiConnection: Send + Sync {
 
     async fn sock_shutdown(&mut self, _how: SdFlags) -> Result<(), Error>;
 
-    fn get_nonblocking(&mut self) -> Result<bool, Error>;
-
     fn set_nonblocking(&mut self, _flag: bool) -> Result<(), Error>;
 
     async fn readable(&self) -> Result<(), Error>;

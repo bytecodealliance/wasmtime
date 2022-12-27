@@ -10,8 +10,6 @@ pub trait WasiListener: Send + Sync {
 
     async fn sock_accept(&mut self, nonblocking: bool) -> Result<Box<dyn WasiConnection>, Error>;
 
-    fn get_nonblocking(&mut self) -> Result<bool, Error>;
-
     fn set_nonblocking(&mut self, _flag: bool) -> Result<(), Error>;
 }
 
