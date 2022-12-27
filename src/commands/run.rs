@@ -24,6 +24,8 @@ use wasmtime_wasi_crypto::WasiCryptoCtx;
 #[cfg(feature = "wasi-threads")]
 use wasmtime_wasi_threads::WasiThreadsCtx;
 
+use wasi_experimental_http_wasmtime::HttpCtx;
+
 fn parse_module(s: &OsStr) -> anyhow::Result<PathBuf> {
     // Do not accept wasmtime subcommand names as the module name
     match s.to_str() {
@@ -424,6 +426,7 @@ struct Host {
     wasi_nn: Option<Arc<WasiNnCtx>>,
     #[cfg(feature = "wasi-threads")]
     wasi_threads: Option<Arc<WasiThreadsCtx<Host>>>,
+    wasi_experimental_http_wasmtime: Option<HttpCtx>,
 }
 
 /// Populates the given `Linker` with WASI APIs.
@@ -522,6 +525,39 @@ fn populate_with_wasi(
             )?));
         }
     }
+
+    if wasi_modules.wasi_http {
+        let mut allowed_list = vec![];
+        let host_config = std::env::var("WASI_HTTP_ALLOWED_HOSTS");
+        if !host_config.is_err() {
+            for piece in host_config.unwrap().split(",") {
+                allowed_list.push(piece.to_string());
+            }
+        }
+        let allowed_hosts = Some(allowed_list);
+
+        let max_requests;
+        let max_request_config = std::env::var("WASI_HTTP_MAX_REQUESTS");
+        match max_request_config {
+            Ok(value) => match value.parse::<u32>() {
+                Ok(parsed) => { max_requests = parsed; },
+                Err(_) => { max_requests = 1; },
+            },
+            Err(_) => {
+                max_requests = 1;
+            }
+        }
+        let max_concurrent_requests = Some(max_requests);
+
+        let http = HttpCtx {
+            allowed_hosts,
+            max_concurrent_requests,
+        };
+
+        wasi_experimental_http_wasmtime::add_to_linker(linker, |host| host.wasi_experimental_http_wasmtime.as_ref().unwrap())?;
+        store.data_mut().wasi_experimental_http_wasmtime = Some(http);
+    }
+
 
     Ok(())
 }
