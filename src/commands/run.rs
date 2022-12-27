@@ -26,6 +26,8 @@ use wasmtime_wasi_crypto::WasiCryptoCtx;
 #[cfg(feature = "wasi-threads")]
 use wasmtime_wasi_threads::WasiThreadsCtx;
 
+use wasi_http::WasiHttp;
+
 fn parse_module(s: &OsStr) -> anyhow::Result<PathBuf> {
     // Do not accept wasmtime subcommand names as the module name
     match s.to_str() {
@@ -459,6 +461,7 @@ struct Host {
     wasi_nn: Option<Arc<WasiNnCtx>>,
     #[cfg(feature = "wasi-threads")]
     wasi_threads: Option<Arc<WasiThreadsCtx<Host>>>,
+    wasi_http: Option<WasiHttp>,
 }
 
 /// Populates the given `Linker` with WASI APIs.
@@ -556,6 +559,12 @@ fn populate_with_wasi(
                 Arc::new(linker.clone()),
             )?));
         }
+    }
+
+    if wasi_modules.wasi_http {
+        let w_http = WasiHttp::new();
+        wasi_http::add_to_linker(linker, |host: &mut Host| host.wasi_http.as_mut().unwrap())?;
+        store.data_mut().wasi_http = Some(w_http);
     }
 
     Ok(())

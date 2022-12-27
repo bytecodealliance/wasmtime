@@ -393,7 +393,7 @@ jobs:
       run: |
         set -ex
         sudo apt-get update
-        sudo apt-get install -y ${{ matrix.gcc_package }} ninja-build
+        sudo apt-get install -y ${{ matrix.gcc_package }} ninja-build libssl-dev
 
         # Configure Cargo for cross compilation and tell it how it can run
         # cross executables

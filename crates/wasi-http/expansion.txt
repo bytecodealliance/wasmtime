@@ -1,0 +1,3613 @@
+#![feature(prelude_import)]get_cx
+#[prelude_import]
+use std::prelude::rust_2021::*;
+#[macro_use]
+extern crate std;
+#[allow(clippy::all)]
+pub mod random {
+    #[allow(unused_imports)]
+    use wasmtime::component::__internal::anyhow;
+    pub trait Host: Sized {
+        /// Return `len` cryptographically-secure pseudo-random bytes.
+        ///
+        /// This function must produce data from an adequately seeded
+        /// cryptographically-secure pseudo-random number generator (CSPRNG), so it
+        /// must not block, from the perspective of the calling program, and the
+        /// returned data is always unpredictable.
+        ///
+        /// This function must always return fresh pseudo-random data. Deterministic
+        /// environments must omit this function, rather than implementing it with
+        /// deterministic data.
+        fn get_random_bytes(&mut self, len: u64) -> wasmtime::Result<Vec<u8>>;
+        /// Return a cryptographically-secure pseudo-random `u64` value.
+        ///
+        /// This function returns the same type of pseudo-random data as
+        /// `get-random-bytes`, represented as a `u64`.
+        fn get_random_u64(&mut self) -> wasmtime::Result<u64>;
+        /// Return a 128-bit value that may contain a pseudo-random value.
+        ///
+        /// The returned value is not required to be computed from a CSPRNG, and may
+        /// even be entirely deterministic. Host implementations are encouraged to
+        /// provide pseudo-random values to any program exposed to
+        /// attacker-controlled content, to enable DoS protection built into many
+        /// languages' hash-map implementations.
+        ///
+        /// This function is intended to only be called once, by a source language
+        /// to initialize Denial Of Service (DoS) protection in its hash-map
+        /// implementation.
+        ///
+        /// # Expected future evolution
+        ///
+        /// This will likely be changed to a value import, to prevent it from being
+        /// called multiple times and potentially used for purposes other than DoS
+        /// protection.
+        fn insecure_random(&mut self) -> wasmtime::Result<(u64, u64)>;
+    }
+    pub fn add_to_linker<T, U>(
+        linker: &mut wasmtime::component::Linker<T>,
+        get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+    ) -> wasmtime::Result<()>
+    where
+        U: Host,
+    {
+        let mut inst = linker.instance("random")?;
+        inst.func_wrap(
+            "get-random-bytes",
+            move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (u64,)| {
+                let host = get(caller.data_mut());
+                let r = host.get_random_bytes(arg0);
+                Ok((r?,))
+            },
+        )?;
+        inst.func_wrap(
+            "get-random-u64",
+            move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                let host = get(caller.data_mut());
+                let r = host.get_random_u64();
+                Ok((r?,))
+            },
+        )?;
+        inst.func_wrap(
+            "insecure-random",
+            move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                let host = get(caller.data_mut());
+                let r = host.insecure_random();
+                Ok((r?,))
+            },
+        )?;
+        Ok(())
+    }
+}
+#[allow(clippy::all)]
+pub mod console {
+    #[allow(unused_imports)]
+    use wasmtime::component::__internal::anyhow;
+    /// A log level, describing a kind of message.
+    #[component(enum)]
+    pub enum Level {
+        /// Describes messages about the values of variables and the flow of
+        /// control within a program.
+        #[component(name = "trace")]
+        Trace,
+        /// Describes messages likely to be of interest to someone debugging a
+        /// program.
+        #[component(name = "debug")]
+        Debug,
+        /// Describes messages likely to be of interest to someone monitoring a
+        /// program.
+        #[component(name = "info")]
+        Info,
+        /// Describes messages indicating hazardous situations.
+        #[component(name = "warn")]
+        Warn,
+        /// Describes messages indicating serious errors.
+        #[component(name = "error")]
+        Error,
+    }
+    #[automatically_derived]
+    impl ::core::clone::Clone for Level {
+        #[inline]
+        fn clone(&self) -> Level {
+            *self
+        }
+    }
+    #[automatically_derived]
+    impl ::core::marker::Copy for Level {}
+    #[automatically_derived]
+    impl ::core::marker::StructuralPartialEq for Level {}
+    #[automatically_derived]
+    impl ::core::cmp::PartialEq for Level {
+        #[inline]
+        fn eq(&self, other: &Level) -> bool {
+            let __self_tag = ::core::intrinsics::discriminant_value(self);
+            let __arg1_tag = ::core::intrinsics::discriminant_value(other);
+            __self_tag == __arg1_tag
+        }
+    }
+    #[automatically_derived]
+    impl ::core::marker::StructuralEq for Level {}
+    #[automatically_derived]
+    impl ::core::cmp::Eq for Level {
+        #[inline]
+        #[doc(hidden)]
+        #[no_coverage]
+        fn assert_receiver_is_total_eq(&self) -> () {}
+    }
+    unsafe impl wasmtime::component::Lower for Level {
+        #[inline]
+        fn lower<T>(
+            &self,
+            store: &mut wasmtime::StoreContextMut<T>,
+            options: &wasmtime::component::__internal::Options,
+            dst: &mut std::mem::MaybeUninit<Self::Lower>,
+        ) -> wasmtime::component::__internal::anyhow::Result<()> {
+            match self {
+                Self::Trace => {
+                    {
+                        #[allow(unused_unsafe)]
+                        {
+                            unsafe {
+                                use ::wasmtime::component::__internal::MaybeUninitExt;
+                                let m: &mut std::mem::MaybeUninit<_> = dst;
+                                m.map(|p| &raw mut (*p).tag)
+                            }
+                        }
+                    }
+                        .write(wasmtime::ValRaw::u32(0u32));
+                    unsafe {
+                        wasmtime::component::__internal::lower_payload(
+                            {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = dst;
+                                        m.map(|p| &raw mut (*p).payload)
+                                    }
+                                }
+                            },
+                            |payload| {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = payload;
+                                        m.map(|p| &raw mut (*p).Trace)
+                                    }
+                                }
+                            },
+                            |dst| Ok(()),
+                        )
+                    }
+                }
+                Self::Debug => {
+                    {
+                        #[allow(unused_unsafe)]
+                        {
+                            unsafe {
+                                use ::wasmtime::component::__internal::MaybeUninitExt;
+                                let m: &mut std::mem::MaybeUninit<_> = dst;
+                                m.map(|p| &raw mut (*p).tag)
+                            }
+                        }
+                    }
+                        .write(wasmtime::ValRaw::u32(1u32));
+                    unsafe {
+                        wasmtime::component::__internal::lower_payload(
+                            {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = dst;
+                                        m.map(|p| &raw mut (*p).payload)
+                                    }
+                                }
+                            },
+                            |payload| {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = payload;
+                                        m.map(|p| &raw mut (*p).Debug)
+                                    }
+                                }
+                            },
+                            |dst| Ok(()),
+                        )
+                    }
+                }
+                Self::Info => {
+                    {
+                        #[allow(unused_unsafe)]
+                        {
+                            unsafe {
+                                use ::wasmtime::component::__internal::MaybeUninitExt;
+                                let m: &mut std::mem::MaybeUninit<_> = dst;
+                                m.map(|p| &raw mut (*p).tag)
+                            }
+                        }
+                    }
+                        .write(wasmtime::ValRaw::u32(2u32));
+                    unsafe {
+                        wasmtime::component::__internal::lower_payload(
+                            {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = dst;
+                                        m.map(|p| &raw mut (*p).payload)
+                                    }
+                                }
+                            },
+                            |payload| {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = payload;
+                                        m.map(|p| &raw mut (*p).Info)
+                                    }
+                                }
+                            },
+                            |dst| Ok(()),
+                        )
+                    }
+                }
+                Self::Warn => {
+                    {
+                        #[allow(unused_unsafe)]
+                        {
+                            unsafe {
+                                use ::wasmtime::component::__internal::MaybeUninitExt;
+                                let m: &mut std::mem::MaybeUninit<_> = dst;
+                                m.map(|p| &raw mut (*p).tag)
+                            }
+                        }
+                    }
+                        .write(wasmtime::ValRaw::u32(3u32));
+                    unsafe {
+                        wasmtime::component::__internal::lower_payload(
+                            {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = dst;
+                                        m.map(|p| &raw mut (*p).payload)
+                                    }
+                                }
+                            },
+                            |payload| {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = payload;
+                                        m.map(|p| &raw mut (*p).Warn)
+                                    }
+                                }
+                            },
+                            |dst| Ok(()),
+                        )
+                    }
+                }
+                Self::Error => {
+                    {
+                        #[allow(unused_unsafe)]
+                        {
+                            unsafe {
+                                use ::wasmtime::component::__internal::MaybeUninitExt;
+                                let m: &mut std::mem::MaybeUninit<_> = dst;
+                                m.map(|p| &raw mut (*p).tag)
+                            }
+                        }
+                    }
+                        .write(wasmtime::ValRaw::u32(4u32));
+                    unsafe {
+                        wasmtime::component::__internal::lower_payload(
+                            {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = dst;
+                                        m.map(|p| &raw mut (*p).payload)
+                                    }
+                                }
+                            },
+                            |payload| {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = payload;
+                                        m.map(|p| &raw mut (*p).Error)
+                                    }
+                                }
+                            },
+                            |dst| Ok(()),
+                        )
+                    }
+                }
+            }
+        }
+        #[inline]
+        fn store<T>(
+            &self,
+            memory: &mut wasmtime::component::__internal::MemoryMut<'_, T>,
+            mut offset: usize,
+        ) -> wasmtime::component::__internal::anyhow::Result<()> {
+            if true {
+                if !(offset
+                    % (<Self as wasmtime::component::ComponentType>::ALIGN32 as usize)
+                    == 0)
+                {
+                    ::core::panicking::panic(
+                        "assertion failed: offset % (<Self as wasmtime::component::ComponentType>::ALIGN32 as usize) == 0",
+                    )
+                }
+            }
+            match self {
+                Self::Trace => {
+                    *memory.get::<1usize>(offset) = 0u8.to_le_bytes();
+                    Ok(())
+                }
+                Self::Debug => {
+                    *memory.get::<1usize>(offset) = 1u8.to_le_bytes();
+                    Ok(())
+                }
+                Self::Info => {
+                    *memory.get::<1usize>(offset) = 2u8.to_le_bytes();
+                    Ok(())
+                }
+                Self::Warn => {
+                    *memory.get::<1usize>(offset) = 3u8.to_le_bytes();
+                    Ok(())
+                }
+                Self::Error => {
+                    *memory.get::<1usize>(offset) = 4u8.to_le_bytes();
+                    Ok(())
+                }
+            }
+        }
+    }
+    unsafe impl wasmtime::component::Lift for Level {
+        #[inline]
+        fn lift(
+            store: &wasmtime::component::__internal::StoreOpaque,
+            options: &wasmtime::component::__internal::Options,
+            src: &Self::Lower,
+        ) -> wasmtime::component::__internal::anyhow::Result<Self> {
+            Ok(
+                match src.tag.get_u32() {
+                    0u32 => Self::Trace,
+                    1u32 => Self::Debug,
+                    2u32 => Self::Info,
+                    3u32 => Self::Warn,
+                    4u32 => Self::Error,
+                    discrim => {
+                        return ::anyhow::__private::Err(
+                            ::anyhow::Error::msg({
+                                let res = ::alloc::fmt::format(
+                                    format_args!("unexpected discriminant: {0}", discrim),
+                                );
+                                res
+                            }),
+                        );
+                    }
+                },
+            )
+        }
+        #[inline]
+        fn load(
+            memory: &wasmtime::component::__internal::Memory,
+            bytes: &[u8],
+        ) -> wasmtime::component::__internal::anyhow::Result<Self> {
+            let align = <Self as wasmtime::component::ComponentType>::ALIGN32;
+            if true {
+                if !((bytes.as_ptr() as usize) % (align as usize) == 0) {
+                    ::core::panicking::panic(
+                        "assertion failed: (bytes.as_ptr() as usize) % (align as usize) == 0",
+                    )
+                }
+            }
+            let discrim = bytes[0];
+            let payload_offset = <Self as wasmtime::component::__internal::ComponentVariant>::PAYLOAD_OFFSET32;
+            let payload = &bytes[payload_offset..];
+            Ok(
+                match discrim {
+                    0u8 => Self::Trace,
+                    1u8 => Self::Debug,
+                    2u8 => Self::Info,
+                    3u8 => Self::Warn,
+                    4u8 => Self::Error,
+                    discrim => {
+                        return ::anyhow::__private::Err(
+                            ::anyhow::Error::msg({
+                                let res = ::alloc::fmt::format(
+                                    format_args!("unexpected discriminant: {0}", discrim),
+                                );
+                                res
+                            }),
+                        );
+                    }
+                },
+            )
+        }
+    }
+    const _: () = {
+        #[doc(hidden)]
+        #[repr(C)]
+        pub struct LowerLevel {
+            tag: wasmtime::ValRaw,
+            payload: LowerPayloadLevel,
+        }
+        #[automatically_derived]
+        impl ::core::clone::Clone for LowerLevel {
+            #[inline]
+            fn clone(&self) -> LowerLevel {
+                let _: ::core::clone::AssertParamIsClone<wasmtime::ValRaw>;
+                let _: ::core::clone::AssertParamIsClone<LowerPayloadLevel>;
+                *self
+            }
+        }
+        #[automatically_derived]
+        impl ::core::marker::Copy for LowerLevel {}
+        #[doc(hidden)]
+        #[allow(non_snake_case)]
+        #[repr(C)]
+        union LowerPayloadLevel {
+            Trace: [wasmtime::ValRaw; 0],
+            Debug: [wasmtime::ValRaw; 0],
+            Info: [wasmtime::ValRaw; 0],
+            Warn: [wasmtime::ValRaw; 0],
+            Error: [wasmtime::ValRaw; 0],
+        }
+        #[automatically_derived]
+        #[allow(non_snake_case)]
+        impl ::core::clone::Clone for LowerPayloadLevel {
+            #[inline]
+            fn clone(&self) -> LowerPayloadLevel {
+                let _: ::core::clone::AssertParamIsCopy<Self>;
+                *self
+            }
+        }
+        #[automatically_derived]
+        #[allow(non_snake_case)]
+        impl ::core::marker::Copy for LowerPayloadLevel {}
+        unsafe impl wasmtime::component::ComponentType for Level {
+            type Lower = LowerLevel;
+            #[inline]
+            fn typecheck(
+                ty: &wasmtime::component::__internal::InterfaceType,
+                types: &wasmtime::component::__internal::ComponentTypes,
+            ) -> wasmtime::component::__internal::anyhow::Result<()> {
+                wasmtime::component::__internal::typecheck_enum(
+                    ty,
+                    types,
+                    &["trace", "debug", "info", "warn", "error"],
+                )
+            }
+            const ABI: wasmtime::component::__internal::CanonicalAbiInfo = wasmtime::component::__internal::CanonicalAbiInfo::variant_static(
+                &[None, None, None, None, None],
+            );
+        }
+        unsafe impl wasmtime::component::__internal::ComponentVariant for Level {
+            const CASES: &'static [Option<
+                wasmtime::component::__internal::CanonicalAbiInfo,
+            >] = &[None, None, None, None, None];
+        }
+    };
+    impl core::fmt::Debug for Level {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            match self {
+                Level::Trace => f.debug_tuple("Level::Trace").finish(),
+                Level::Debug => f.debug_tuple("Level::Debug").finish(),
+                Level::Info => f.debug_tuple("Level::Info").finish(),
+                Level::Warn => f.debug_tuple("Level::Warn").finish(),
+                Level::Error => f.debug_tuple("Level::Error").finish(),
+            }
+        }
+    }
+    pub trait Host: Sized {
+        /// Emit a log message.
+        ///
+        /// A log message has a `level` describing what kind of message is being
+        /// sent, a context, which is an uninterpreted string meant to help
+        /// consumers group similar messages, and a string containing the message
+        /// text.
+        fn log(
+            &mut self,
+            level: Level,
+            context: String,
+            message: String,
+        ) -> wasmtime::Result<()>;
+    }
+    pub fn add_to_linker<T, U>(
+        linker: &mut wasmtime::component::Linker<T>,
+        get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+    ) -> wasmtime::Result<()>
+    where
+        U: Host,
+    {
+        let mut inst = linker.instance("console")?;
+        inst.func_wrap(
+            "log",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0, arg1, arg2): (Level, String, String)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.log(arg0, arg1, arg2);
+                r
+            },
+        )?;
+        Ok(())
+    }
+}
+#[allow(clippy::all)]
+pub mod poll {
+    #[allow(unused_imports)]
+    use wasmtime::component::__internal::anyhow;
+    /// A "pollable" handle.
+    ///
+    /// This is conceptually represents a `stream<_, _>`, or in other words,
+    /// a stream that one can wait on, repeatedly, but which does not itself
+    /// produce any data. It's temporary scaffolding until component-model's
+    /// async features are ready.
+    ///
+    /// And at present, it is a `u32` instead of being an actual handle, until
+    /// the wit-bindgen implementation of handles and resources is ready.
+    ///
+    /// `pollable` lifetimes are not automatically managed. Users must ensure
+    /// that they do not outlive the resource they reference.
+    ///
+    /// This [represents a resource](https://github.com/WebAssembly/WASI/blob/main/docs/WitInWasi.md#Resources).
+    pub type Pollable = u32;
+    pub trait Host: Sized {
+        /// Dispose of the specified `pollable`, after which it may no longer
+        /// be used.
+        fn drop_pollable(&mut self, this: Pollable) -> wasmtime::Result<()>;
+        /// Poll for completion on a set of pollables.
+        ///
+        /// The "oneoff" in the name refers to the fact that this function must do a
+        /// linear scan through the entire list of subscriptions, which may be
+        /// inefficient if the number is large and the same subscriptions are used
+        /// many times. In the future, this is expected to be obsoleted by the
+        /// component model async proposal, which will include a scalable waiting
+        /// facility.
+        ///
+        /// Note that the return type would ideally be `list<bool>`, but that would
+        /// be more difficult to polyfill given the current state of `wit-bindgen`.
+        /// See <https://github.com/bytecodealliance/preview2-prototyping/pull/11#issuecomment-1329873061>
+        /// for details.  For now, we use zero to mean "not ready" and non-zero to
+        /// mean "ready".
+        fn poll_oneoff(&mut self, in_: Vec<Pollable>) -> wasmtime::Result<Vec<u8>>;
+    }
+    pub fn add_to_linker<T, U>(
+        linker: &mut wasmtime::component::Linker<T>,
+        get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+    ) -> wasmtime::Result<()>
+    where
+        U: Host,
+    {
+        let mut inst = linker.instance("poll")?;
+        inst.func_wrap(
+            "drop-pollable",
+            move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (Pollable,)| {
+                let host = get(caller.data_mut());
+                let r = host.drop_pollable(arg0);
+                r
+            },
+        )?;
+        inst.func_wrap(
+            "poll-oneoff",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0,): (Vec<Pollable>,)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.poll_oneoff(arg0);
+                Ok((r?,))
+            },
+        )?;
+        Ok(())
+    }
+}
+#[allow(clippy::all)]
+pub mod streams {
+    #[allow(unused_imports)]
+    use wasmtime::component::__internal::anyhow;
+    pub type Pollable = super::poll::Pollable;
+    /// An error type returned from a stream operation. Currently this
+    /// doesn't provide any additional information.
+    #[component(record)]
+    pub struct StreamError {}
+    #[automatically_derived]
+    impl ::core::marker::Copy for StreamError {}
+    #[automatically_derived]
+    impl ::core::clone::Clone for StreamError {
+        #[inline]
+        fn clone(&self) -> StreamError {
+            *self
+        }
+    }
+    unsafe impl wasmtime::component::Lower for StreamError {
+        #[inline]
+        fn lower<T>(
+            &self,
+            store: &mut wasmtime::StoreContextMut<T>,
+            options: &wasmtime::component::__internal::Options,
+            dst: &mut std::mem::MaybeUninit<Self::Lower>,
+        ) -> wasmtime::component::__internal::anyhow::Result<()> {
+            Ok(())
+        }
+        #[inline]
+        fn store<T>(
+            &self,
+            memory: &mut wasmtime::component::__internal::MemoryMut<'_, T>,
+            mut offset: usize,
+        ) -> wasmtime::component::__internal::anyhow::Result<()> {
+            if true {
+                if !(offset
+                    % (<Self as wasmtime::component::ComponentType>::ALIGN32 as usize)
+                    == 0)
+                {
+                    ::core::panicking::panic(
+                        "assertion failed: offset % (<Self as wasmtime::component::ComponentType>::ALIGN32 as usize) == 0",
+                    )
+                }
+            }
+            Ok(())
+        }
+    }
+    unsafe impl wasmtime::component::Lift for StreamError {
+        #[inline]
+        fn lift(
+            store: &wasmtime::component::__internal::StoreOpaque,
+            options: &wasmtime::component::__internal::Options,
+            src: &Self::Lower,
+        ) -> wasmtime::component::__internal::anyhow::Result<Self> {
+            Ok(Self {})
+        }
+        #[inline]
+        fn load(
+            memory: &wasmtime::component::__internal::Memory,
+            bytes: &[u8],
+        ) -> wasmtime::component::__internal::anyhow::Result<Self> {
+            if true {
+                if !((bytes.as_ptr() as usize)
+                    % (<Self as wasmtime::component::ComponentType>::ALIGN32 as usize)
+                    == 0)
+                {
+                    ::core::panicking::panic(
+                        "assertion failed: (bytes.as_ptr() as usize) %\\n        (<Self as wasmtime::component::ComponentType>::ALIGN32 as usize) == 0",
+                    )
+                }
+            }
+            let mut offset = 0;
+            Ok(Self {})
+        }
+    }
+    const _: () = {
+        #[doc(hidden)]
+        #[repr(C)]
+        pub struct LowerStreamError {
+            _align: [wasmtime::ValRaw; 0],
+        }
+        #[automatically_derived]
+        impl ::core::clone::Clone for LowerStreamError {
+            #[inline]
+            fn clone(&self) -> LowerStreamError {
+                let _: ::core::clone::AssertParamIsClone<[wasmtime::ValRaw; 0]>;
+                *self
+            }
+        }
+        #[automatically_derived]
+        impl ::core::marker::Copy for LowerStreamError {}
+        unsafe impl wasmtime::component::ComponentType for StreamError {
+            type Lower = LowerStreamError;
+            const ABI: wasmtime::component::__internal::CanonicalAbiInfo = wasmtime::component::__internal::CanonicalAbiInfo::record_static(
+                &[],
+            );
+            #[inline]
+            fn typecheck(
+                ty: &wasmtime::component::__internal::InterfaceType,
+                types: &wasmtime::component::__internal::ComponentTypes,
+            ) -> wasmtime::component::__internal::anyhow::Result<()> {
+                wasmtime::component::__internal::typecheck_record(ty, types, &[])
+            }
+        }
+    };
+    impl core::fmt::Debug for StreamError {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            f.debug_struct("StreamError").finish()
+        }
+    }
+    impl core::fmt::Display for StreamError {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            f.write_fmt(format_args!("{0:?}", self))
+        }
+    }
+    impl std::error::Error for StreamError {}
+    /// An output bytestream. In the future, this will be replaced by handle
+    /// types.
+    ///
+    /// This conceptually represents a `stream<u8, _>`. It's temporary
+    /// scaffolding until component-model's async features are ready.
+    ///
+    /// `output-stream`s are *non-blocking* to the extent practical on
+    /// underlying platforms. Except where specified otherwise, I/O operations also
+    /// always return promptly, after the number of bytes that can be written
+    /// promptly, which could even be zero. To wait for the stream to be ready to
+    /// accept data, the `subscribe-to-output-stream` function to obtain a
+    /// `pollable` which can be polled for using `wasi_poll`.
+    ///
+    /// And at present, it is a `u32` instead of being an actual handle, until
+    /// the wit-bindgen implementation of handles and resources is ready.
+    ///
+    /// This [represents a resource](https://github.com/WebAssembly/WASI/blob/main/docs/WitInWasi.md#Resources).
+    pub type OutputStream = u32;
+    /// An input bytestream. In the future, this will be replaced by handle
+    /// types.
+    ///
+    /// This conceptually represents a `stream<u8, _>`. It's temporary
+    /// scaffolding until component-model's async features are ready.
+    ///
+    /// `input-stream`s are *non-blocking* to the extent practical on underlying
+    /// platforms. I/O operations always return promptly; if fewer bytes are
+    /// promptly available than requested, they return the number of bytes promptly
+    /// available, which could even be zero. To wait for data to be available,
+    /// use the `subscribe-to-input-stream` function to obtain a `pollable` which
+    /// can be polled for using `wasi_poll`.
+    ///
+    /// And at present, it is a `u32` instead of being an actual handle, until
+    /// the wit-bindgen implementation of handles and resources is ready.
+    ///
+    /// This [represents a resource](https://github.com/WebAssembly/WASI/blob/main/docs/WitInWasi.md#Resources).
+    pub type InputStream = u32;
+    pub trait Host: Sized {
+        /// Read bytes from a stream.
+        ///
+        /// This function returns a list of bytes containing the data that was
+        /// read, along with a bool indicating whether the end of the stream
+        /// was reached. The returned list will contain up to `len` bytes; it
+        /// may return fewer than requested, but not more.
+        ///
+        /// Once a stream has reached the end, subsequent calls to read or
+        /// `skip` will always report end-of-stream rather than producing more
+        /// data.
+        ///
+        /// If `len` is 0, it represents a request to read 0 bytes, which should
+        /// always succeed, assuming the stream hasn't reached its end yet, and
+        /// return an empty list.
+        ///
+        /// The len here is a `u64`, but some callees may not be able to allocate
+        /// a buffer as large as that would imply.
+        /// FIXME: describe what happens if allocation fails.
+        fn read(
+            &mut self,
+            this: InputStream,
+            len: u64,
+        ) -> wasmtime::Result<Result<(Vec<u8>, bool), StreamError>>;
+        /// Skip bytes from a stream.
+        ///
+        /// This is similar to the `read` function, but avoids copying the
+        /// bytes into the instance.
+        ///
+        /// Once a stream has reached the end, subsequent calls to read or
+        /// `skip` will always report end-of-stream rather than producing more
+        /// data.
+        ///
+        /// This function returns the number of bytes skipped, along with a bool
+        /// indicating whether the end of the stream was reached. The returned
+        /// value will be at most `len`; it may be less.
+        fn skip(
+            &mut self,
+            this: InputStream,
+            len: u64,
+        ) -> wasmtime::Result<Result<(u64, bool), StreamError>>;
+        /// Create a `pollable` which will resolve once either the specified stream
+        /// has bytes available to read or the other end of the stream has been
+        /// closed.
+        fn subscribe_to_input_stream(
+            &mut self,
+            this: InputStream,
+        ) -> wasmtime::Result<Pollable>;
+        /// Dispose of the specified `input-stream`, after which it may no longer
+        /// be used.
+        fn drop_input_stream(&mut self, this: InputStream) -> wasmtime::Result<()>;
+        /// Write bytes to a stream.
+        ///
+        /// This function returns a `u64` indicating the number of bytes from
+        /// `buf` that were written; it may be less than the full list.
+        fn write(
+            &mut self,
+            this: OutputStream,
+            buf: Vec<u8>,
+        ) -> wasmtime::Result<Result<u64, StreamError>>;
+        /// Write multiple zero bytes to a stream.
+        ///
+        /// This function returns a `u64` indicating the number of zero bytes
+        /// that were written; it may be less than `len`.
+        fn write_zeroes(
+            &mut self,
+            this: OutputStream,
+            len: u64,
+        ) -> wasmtime::Result<Result<u64, StreamError>>;
+        /// Read from one stream and write to another.
+        ///
+        /// This function returns the number of bytes transferred; it may be less
+        /// than `len`.
+        ///
+        /// Unlike other I/O functions, this function blocks until all the data
+        /// read from the input stream has been written to the output stream.
+        fn splice(
+            &mut self,
+            this: OutputStream,
+            src: InputStream,
+            len: u64,
+        ) -> wasmtime::Result<Result<(u64, bool), StreamError>>;
+        /// Forward the entire contents of an input stream to an output stream.
+        ///
+        /// This function repeatedly reads from the input stream and writes
+        /// the data to the output stream, until the end of the input stream
+        /// is reached, or an error is encountered.
+        ///
+        /// Unlike other I/O functions, this function blocks until the end
+        /// of the input stream is seen and all the data has been written to
+        /// the output stream.
+        ///
+        /// This function returns the number of bytes transferred.
+        fn forward(
+            &mut self,
+            this: OutputStream,
+            src: InputStream,
+        ) -> wasmtime::Result<Result<u64, StreamError>>;
+        /// Create a `pollable` which will resolve once either the specified stream
+        /// is ready to accept bytes or the other end of the stream has been closed.
+        fn subscribe_to_output_stream(
+            &mut self,
+            this: OutputStream,
+        ) -> wasmtime::Result<Pollable>;
+        /// Dispose of the specified `output-stream`, after which it may no longer
+        /// be used.
+        fn drop_output_stream(&mut self, this: OutputStream) -> wasmtime::Result<()>;
+    }
+    pub fn add_to_linker<T, U>(
+        linker: &mut wasmtime::component::Linker<T>,
+        get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+    ) -> wasmtime::Result<()>
+    where
+        U: Host,
+    {
+        let mut inst = linker.instance("streams")?;
+        inst.func_wrap(
+            "read",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0, arg1): (InputStream, u64)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.read(arg0, arg1);
+                Ok((r?,))
+            },
+        )?;
+        inst.func_wrap(
+            "skip",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0, arg1): (InputStream, u64)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.skip(arg0, arg1);
+                Ok((r?,))
+            },
+        )?;
+        inst.func_wrap(
+            "subscribe-to-input-stream",
+            move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (InputStream,)| {
+                let host = get(caller.data_mut());
+                let r = host.subscribe_to_input_stream(arg0);
+                Ok((r?,))
+            },
+        )?;
+        inst.func_wrap(
+            "drop-input-stream",
+            move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (InputStream,)| {
+                let host = get(caller.data_mut());
+                let r = host.drop_input_stream(arg0);
+                r
+            },
+        )?;
+        inst.func_wrap(
+            "write",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0, arg1): (OutputStream, Vec<u8>)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.write(arg0, arg1);
+                Ok((r?,))
+            },
+        )?;
+        inst.func_wrap(
+            "write-zeroes",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0, arg1): (OutputStream, u64)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.write_zeroes(arg0, arg1);
+                Ok((r?,))
+            },
+        )?;
+        inst.func_wrap(
+            "splice",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0, arg1, arg2): (OutputStream, InputStream, u64)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.splice(arg0, arg1, arg2);
+                Ok((r?,))
+            },
+        )?;
+        inst.func_wrap(
+            "forward",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0, arg1): (OutputStream, InputStream)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.forward(arg0, arg1);
+                Ok((r?,))
+            },
+        )?;
+        inst.func_wrap(
+            "subscribe-to-output-stream",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0,): (OutputStream,)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.subscribe_to_output_stream(arg0);
+                Ok((r?,))
+            },
+        )?;
+        inst.func_wrap(
+            "drop-output-stream",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0,): (OutputStream,)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.drop_output_stream(arg0);
+                r
+            },
+        )?;
+        Ok(())
+    }
+}
+#[allow(clippy::all)]
+pub mod types {
+    #[allow(unused_imports)]
+    use wasmtime::component::__internal::anyhow;
+    pub type InputStream = super::streams::InputStream;
+    pub type OutputStream = super::streams::OutputStream;
+    pub type Pollable = super::poll::Pollable;
+    pub type StatusCode = u16;
+    #[component(variant)]
+    pub enum Scheme {
+        #[component(name = "HTTP")]
+        Http,
+        #[component(name = "HTTPS")]
+        Https,
+        #[component(name = "other")]
+        Other(String),
+    }
+    #[automatically_derived]
+    impl ::core::clone::Clone for Scheme {
+        #[inline]
+        fn clone(&self) -> Scheme {
+            match self {
+                Scheme::Http => Scheme::Http,
+                Scheme::Https => Scheme::Https,
+                Scheme::Other(__self_0) => {
+                    Scheme::Other(::core::clone::Clone::clone(__self_0))
+                }
+            }
+        }
+    }
+    unsafe impl wasmtime::component::Lower for Scheme {
+        #[inline]
+        fn lower<T>(
+            &self,
+            store: &mut wasmtime::StoreContextMut<T>,
+            options: &wasmtime::component::__internal::Options,
+            dst: &mut std::mem::MaybeUninit<Self::Lower>,
+        ) -> wasmtime::component::__internal::anyhow::Result<()> {
+            match self {
+                Self::Http => {
+                    {
+                        #[allow(unused_unsafe)]
+                        {
+                            unsafe {
+                                use ::wasmtime::component::__internal::MaybeUninitExt;
+                                let m: &mut std::mem::MaybeUninit<_> = dst;
+                                m.map(|p| &raw mut (*p).tag)
+                            }
+                        }
+                    }
+                        .write(wasmtime::ValRaw::u32(0u32));
+                    unsafe {
+                        wasmtime::component::__internal::lower_payload(
+                            {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = dst;
+                                        m.map(|p| &raw mut (*p).payload)
+                                    }
+                                }
+                            },
+                            |payload| {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = payload;
+                                        m.map(|p| &raw mut (*p).Http)
+                                    }
+                                }
+                            },
+                            |dst| Ok(()),
+                        )
+                    }
+                }
+                Self::Https => {
+                    {
+                        #[allow(unused_unsafe)]
+                        {
+                            unsafe {
+                                use ::wasmtime::component::__internal::MaybeUninitExt;
+                                let m: &mut std::mem::MaybeUninit<_> = dst;
+                                m.map(|p| &raw mut (*p).tag)
+                            }
+                        }
+                    }
+                        .write(wasmtime::ValRaw::u32(1u32));
+                    unsafe {
+                        wasmtime::component::__internal::lower_payload(
+                            {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = dst;
+                                        m.map(|p| &raw mut (*p).payload)
+                                    }
+                                }
+                            },
+                            |payload| {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = payload;
+                                        m.map(|p| &raw mut (*p).Https)
+                                    }
+                                }
+                            },
+                            |dst| Ok(()),
+                        )
+                    }
+                }
+                Self::Other(value) => {
+                    {
+                        #[allow(unused_unsafe)]
+                        {
+                            unsafe {
+                                use ::wasmtime::component::__internal::MaybeUninitExt;
+                                let m: &mut std::mem::MaybeUninit<_> = dst;
+                                m.map(|p| &raw mut (*p).tag)
+                            }
+                        }
+                    }
+                        .write(wasmtime::ValRaw::u32(2u32));
+                    unsafe {
+                        wasmtime::component::__internal::lower_payload(
+                            {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = dst;
+                                        m.map(|p| &raw mut (*p).payload)
+                                    }
+                                }
+                            },
+                            |payload| {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = payload;
+                                        m.map(|p| &raw mut (*p).Other)
+                                    }
+                                }
+                            },
+                            |dst| value.lower(store, options, dst),
+                        )
+                    }
+                }
+            }
+        }
+        #[inline]
+        fn store<T>(
+            &self,
+            memory: &mut wasmtime::component::__internal::MemoryMut<'_, T>,
+            mut offset: usize,
+        ) -> wasmtime::component::__internal::anyhow::Result<()> {
+            if true {
+                if !(offset
+                    % (<Self as wasmtime::component::ComponentType>::ALIGN32 as usize)
+                    == 0)
+                {
+                    ::core::panicking::panic(
+                        "assertion failed: offset % (<Self as wasmtime::component::ComponentType>::ALIGN32 as usize) == 0",
+                    )
+                }
+            }
+            match self {
+                Self::Http => {
+                    *memory.get::<1usize>(offset) = 0u8.to_le_bytes();
+                    Ok(())
+                }
+                Self::Https => {
+                    *memory.get::<1usize>(offset) = 1u8.to_le_bytes();
+                    Ok(())
+                }
+                Self::Other(value) => {
+                    *memory.get::<1usize>(offset) = 2u8.to_le_bytes();
+                    value
+                        .store(
+                            memory,
+                            offset
+                                + <Self as wasmtime::component::__internal::ComponentVariant>::PAYLOAD_OFFSET32,
+                        )
+                }
+            }
+        }
+    }
+    unsafe impl wasmtime::component::Lift for Scheme {
+        #[inline]
+        fn lift(
+            store: &wasmtime::component::__internal::StoreOpaque,
+            options: &wasmtime::component::__internal::Options,
+            src: &Self::Lower,
+        ) -> wasmtime::component::__internal::anyhow::Result<Self> {
+            Ok(
+                match src.tag.get_u32() {
+                    0u32 => Self::Http,
+                    1u32 => Self::Https,
+                    2u32 => {
+                        Self::Other(
+                            <String as wasmtime::component::Lift>::lift(
+                                store,
+                                options,
+                                unsafe { &src.payload.Other },
+                            )?,
+                        )
+                    }
+                    discrim => {
+                        return ::anyhow::__private::Err(
+                            ::anyhow::Error::msg({
+                                let res = ::alloc::fmt::format(
+                                    format_args!("unexpected discriminant: {0}", discrim),
+                                );
+                                res
+                            }),
+                        );
+                    }
+                },
+            )
+        }
+        #[inline]
+        fn load(
+            memory: &wasmtime::component::__internal::Memory,
+            bytes: &[u8],
+        ) -> wasmtime::component::__internal::anyhow::Result<Self> {
+            let align = <Self as wasmtime::component::ComponentType>::ALIGN32;
+            if true {
+                if !((bytes.as_ptr() as usize) % (align as usize) == 0) {
+                    ::core::panicking::panic(
+                        "assertion failed: (bytes.as_ptr() as usize) % (align as usize) == 0",
+                    )
+                }
+            }
+            let discrim = bytes[0];
+            let payload_offset = <Self as wasmtime::component::__internal::ComponentVariant>::PAYLOAD_OFFSET32;
+            let payload = &bytes[payload_offset..];
+            Ok(
+                match discrim {
+                    0u8 => Self::Http,
+                    1u8 => Self::Https,
+                    2u8 => {
+                        Self::Other(
+                            <String as wasmtime::component::Lift>::load(
+                                memory,
+                                &payload[..<String as wasmtime::component::ComponentType>::SIZE32],
+                            )?,
+                        )
+                    }
+                    discrim => {
+                        return ::anyhow::__private::Err(
+                            ::anyhow::Error::msg({
+                                let res = ::alloc::fmt::format(
+                                    format_args!("unexpected discriminant: {0}", discrim),
+                                );
+                                res
+                            }),
+                        );
+                    }
+                },
+            )
+        }
+    }
+    const _: () = {
+        #[doc(hidden)]
+        #[repr(C)]
+        pub struct LowerScheme<T2: Copy> {
+            tag: wasmtime::ValRaw,
+            payload: LowerPayloadScheme<T2>,
+        }
+        #[automatically_derived]
+        impl<T2: ::core::clone::Clone + Copy> ::core::clone::Clone for LowerScheme<T2> {
+            #[inline]
+            fn clone(&self) -> LowerScheme<T2> {
+                LowerScheme {
+                    tag: ::core::clone::Clone::clone(&self.tag),
+                    payload: ::core::clone::Clone::clone(&self.payload),
+                }
+            }
+        }
+        #[automatically_derived]
+        impl<T2: ::core::marker::Copy + Copy> ::core::marker::Copy for LowerScheme<T2> {}
+        #[doc(hidden)]
+        #[allow(non_snake_case)]
+        #[repr(C)]
+        union LowerPayloadScheme<T2: Copy> {
+            Http: [wasmtime::ValRaw; 0],
+            Https: [wasmtime::ValRaw; 0],
+            Other: T2,
+        }
+        #[automatically_derived]
+        #[allow(non_snake_case)]
+        impl<T2: ::core::marker::Copy + ::core::clone::Clone + Copy> ::core::clone::Clone
+        for LowerPayloadScheme<T2> {
+            #[inline]
+            fn clone(&self) -> LowerPayloadScheme<T2> {
+                let _: ::core::clone::AssertParamIsCopy<Self>;
+                *self
+            }
+        }
+        #[automatically_derived]
+        #[allow(non_snake_case)]
+        impl<T2: ::core::marker::Copy + Copy> ::core::marker::Copy
+        for LowerPayloadScheme<T2> {}
+        unsafe impl wasmtime::component::ComponentType for Scheme {
+            type Lower = LowerScheme<
+                <String as wasmtime::component::ComponentType>::Lower,
+            >;
+            #[inline]
+            fn typecheck(
+                ty: &wasmtime::component::__internal::InterfaceType,
+                types: &wasmtime::component::__internal::ComponentTypes,
+            ) -> wasmtime::component::__internal::anyhow::Result<()> {
+                wasmtime::component::__internal::typecheck_variant(
+                    ty,
+                    types,
+                    &[
+                        ("HTTP", None),
+                        ("HTTPS", None),
+                        (
+                            "other",
+                            Some(
+                                <String as wasmtime::component::ComponentType>::typecheck,
+                            ),
+                        ),
+                    ],
+                )
+            }
+            const ABI: wasmtime::component::__internal::CanonicalAbiInfo = wasmtime::component::__internal::CanonicalAbiInfo::variant_static(
+                &[None, None, Some(<String as wasmtime::component::ComponentType>::ABI)],
+            );
+        }
+        unsafe impl wasmtime::component::__internal::ComponentVariant for Scheme {
+            const CASES: &'static [Option<
+                wasmtime::component::__internal::CanonicalAbiInfo,
+            >] = &[
+                None,
+                None,
+                Some(<String as wasmtime::component::ComponentType>::ABI),
+            ];
+        }
+    };
+    impl core::fmt::Debug for Scheme {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            match self {
+                Scheme::Http => f.debug_tuple("Scheme::Http").finish(),
+                Scheme::Https => f.debug_tuple("Scheme::Https").finish(),
+                Scheme::Other(e) => f.debug_tuple("Scheme::Other").field(e).finish(),
+            }
+        }
+    }
+    pub type ResponseOutparam = u32;
+    #[component(record)]
+    pub struct RequestOptions {
+        #[component(name = "connect-timeout-ms")]
+        pub connect_timeout_ms: Option<u32>,
+        #[component(name = "first-byte-timeout-ms")]
+        pub first_byte_timeout_ms: Option<u32>,
+        #[component(name = "between-bytes-timeout-ms")]
+        pub between_bytes_timeout_ms: Option<u32>,
+    }
+    #[automatically_derived]
+    impl ::core::marker::Copy for RequestOptions {}
+    #[automatically_derived]
+    impl ::core::clone::Clone for RequestOptions {
+        #[inline]
+        fn clone(&self) -> RequestOptions {
+            let _: ::core::clone::AssertParamIsClone<Option<u32>>;
+            let _: ::core::clone::AssertParamIsClone<Option<u32>>;
+            let _: ::core::clone::AssertParamIsClone<Option<u32>>;
+            *self
+        }
+    }
+    unsafe impl wasmtime::component::Lower for RequestOptions {
+        #[inline]
+        fn lower<T>(
+            &self,
+            store: &mut wasmtime::StoreContextMut<T>,
+            options: &wasmtime::component::__internal::Options,
+            dst: &mut std::mem::MaybeUninit<Self::Lower>,
+        ) -> wasmtime::component::__internal::anyhow::Result<()> {
+            wasmtime::component::Lower::lower(
+                &self.connect_timeout_ms,
+                store,
+                options,
+                {
+                    #[allow(unused_unsafe)]
+                    {
+                        unsafe {
+                            use ::wasmtime::component::__internal::MaybeUninitExt;
+                            let m: &mut std::mem::MaybeUninit<_> = dst;
+                            m.map(|p| &raw mut (*p).connect_timeout_ms)
+                        }
+                    }
+                },
+            )?;
+            wasmtime::component::Lower::lower(
+                &self.first_byte_timeout_ms,
+                store,
+                options,
+                {
+                    #[allow(unused_unsafe)]
+                    {
+                        unsafe {
+                            use ::wasmtime::component::__internal::MaybeUninitExt;
+                            let m: &mut std::mem::MaybeUninit<_> = dst;
+                            m.map(|p| &raw mut (*p).first_byte_timeout_ms)
+                        }
+                    }
+                },
+            )?;
+            wasmtime::component::Lower::lower(
+                &self.between_bytes_timeout_ms,
+                store,
+                options,
+                {
+                    #[allow(unused_unsafe)]
+                    {
+                        unsafe {
+                            use ::wasmtime::component::__internal::MaybeUninitExt;
+                            let m: &mut std::mem::MaybeUninit<_> = dst;
+                            m.map(|p| &raw mut (*p).between_bytes_timeout_ms)
+                        }
+                    }
+                },
+            )?;
+            Ok(())
+        }
+        #[inline]
+        fn store<T>(
+            &self,
+            memory: &mut wasmtime::component::__internal::MemoryMut<'_, T>,
+            mut offset: usize,
+        ) -> wasmtime::component::__internal::anyhow::Result<()> {
+            if true {
+                if !(offset
+                    % (<Self as wasmtime::component::ComponentType>::ALIGN32 as usize)
+                    == 0)
+                {
+                    ::core::panicking::panic(
+                        "assertion failed: offset % (<Self as wasmtime::component::ComponentType>::ALIGN32 as usize) == 0",
+                    )
+                }
+            }
+            wasmtime::component::Lower::store(
+                &self.connect_timeout_ms,
+                memory,
+                <Option<u32> as wasmtime::component::ComponentType>::ABI
+                    .next_field32_size(&mut offset),
+            )?;
+            wasmtime::component::Lower::store(
+                &self.first_byte_timeout_ms,
+                memory,
+                <Option<u32> as wasmtime::component::ComponentType>::ABI
+                    .next_field32_size(&mut offset),
+            )?;
+            wasmtime::component::Lower::store(
+                &self.between_bytes_timeout_ms,
+                memory,
+                <Option<u32> as wasmtime::component::ComponentType>::ABI
+                    .next_field32_size(&mut offset),
+            )?;
+            Ok(())
+        }
+    }
+    unsafe impl wasmtime::component::Lift for RequestOptions {
+        #[inline]
+        fn lift(
+            store: &wasmtime::component::__internal::StoreOpaque,
+            options: &wasmtime::component::__internal::Options,
+            src: &Self::Lower,
+        ) -> wasmtime::component::__internal::anyhow::Result<Self> {
+            Ok(Self {
+                connect_timeout_ms: <Option<
+                    u32,
+                > as wasmtime::component::Lift>::lift(
+                    store,
+                    options,
+                    &src.connect_timeout_ms,
+                )?,
+                first_byte_timeout_ms: <Option<
+                    u32,
+                > as wasmtime::component::Lift>::lift(
+                    store,
+                    options,
+                    &src.first_byte_timeout_ms,
+                )?,
+                between_bytes_timeout_ms: <Option<
+                    u32,
+                > as wasmtime::component::Lift>::lift(
+                    store,
+                    options,
+                    &src.between_bytes_timeout_ms,
+                )?,
+            })
+        }
+        #[inline]
+        fn load(
+            memory: &wasmtime::component::__internal::Memory,
+            bytes: &[u8],
+        ) -> wasmtime::component::__internal::anyhow::Result<Self> {
+            if true {
+                if !((bytes.as_ptr() as usize)
+                    % (<Self as wasmtime::component::ComponentType>::ALIGN32 as usize)
+                    == 0)
+                {
+                    ::core::panicking::panic(
+                        "assertion failed: (bytes.as_ptr() as usize) %\\n        (<Self as wasmtime::component::ComponentType>::ALIGN32 as usize) == 0",
+                    )
+                }
+            }
+            let mut offset = 0;
+            Ok(Self {
+                connect_timeout_ms: <Option<
+                    u32,
+                > as wasmtime::component::Lift>::load(
+                    memory,
+                    &bytes[<Option<u32> as wasmtime::component::ComponentType>::ABI
+                        .next_field32_size(
+                            &mut offset,
+                        )..][..<Option<
+                        u32,
+                    > as wasmtime::component::ComponentType>::SIZE32],
+                )?,
+                first_byte_timeout_ms: <Option<
+                    u32,
+                > as wasmtime::component::Lift>::load(
+                    memory,
+                    &bytes[<Option<u32> as wasmtime::component::ComponentType>::ABI
+                        .next_field32_size(
+                            &mut offset,
+                        )..][..<Option<
+                        u32,
+                    > as wasmtime::component::ComponentType>::SIZE32],
+                )?,
+                between_bytes_timeout_ms: <Option<
+                    u32,
+                > as wasmtime::component::Lift>::load(
+                    memory,
+                    &bytes[<Option<u32> as wasmtime::component::ComponentType>::ABI
+                        .next_field32_size(
+                            &mut offset,
+                        )..][..<Option<
+                        u32,
+                    > as wasmtime::component::ComponentType>::SIZE32],
+                )?,
+            })
+        }
+    }
+    const _: () = {
+        #[doc(hidden)]
+        #[repr(C)]
+        pub struct LowerRequestOptions<T0: Copy, T1: Copy, T2: Copy> {
+            connect_timeout_ms: T0,
+            first_byte_timeout_ms: T1,
+            between_bytes_timeout_ms: T2,
+            _align: [wasmtime::ValRaw; 0],
+        }
+        #[automatically_derived]
+        impl<
+            T0: ::core::clone::Clone + Copy,
+            T1: ::core::clone::Clone + Copy,
+            T2: ::core::clone::Clone + Copy,
+        > ::core::clone::Clone for LowerRequestOptions<T0, T1, T2> {
+            #[inline]
+            fn clone(&self) -> LowerRequestOptions<T0, T1, T2> {
+                LowerRequestOptions {
+                    connect_timeout_ms: ::core::clone::Clone::clone(
+                        &self.connect_timeout_ms,
+                    ),
+                    first_byte_timeout_ms: ::core::clone::Clone::clone(
+                        &self.first_byte_timeout_ms,
+                    ),
+                    between_bytes_timeout_ms: ::core::clone::Clone::clone(
+                        &self.between_bytes_timeout_ms,
+                    ),
+                    _align: ::core::clone::Clone::clone(&self._align),
+                }
+            }
+        }
+        #[automatically_derived]
+        impl<
+            T0: ::core::marker::Copy + Copy,
+            T1: ::core::marker::Copy + Copy,
+            T2: ::core::marker::Copy + Copy,
+        > ::core::marker::Copy for LowerRequestOptions<T0, T1, T2> {}
+        unsafe impl wasmtime::component::ComponentType for RequestOptions {
+            type Lower = LowerRequestOptions<
+                <Option<u32> as wasmtime::component::ComponentType>::Lower,
+                <Option<u32> as wasmtime::component::ComponentType>::Lower,
+                <Option<u32> as wasmtime::component::ComponentType>::Lower,
+            >;
+            const ABI: wasmtime::component::__internal::CanonicalAbiInfo = wasmtime::component::__internal::CanonicalAbiInfo::record_static(
+                &[
+                    <Option<u32> as wasmtime::component::ComponentType>::ABI,
+                    <Option<u32> as wasmtime::component::ComponentType>::ABI,
+                    <Option<u32> as wasmtime::component::ComponentType>::ABI,
+                ],
+            );
+            #[inline]
+            fn typecheck(
+                ty: &wasmtime::component::__internal::InterfaceType,
+                types: &wasmtime::component::__internal::ComponentTypes,
+            ) -> wasmtime::component::__internal::anyhow::Result<()> {
+                wasmtime::component::__internal::typecheck_record(
+                    ty,
+                    types,
+                    &[
+                        (
+                            "connect-timeout-ms",
+                            <Option<
+                                u32,
+                            > as wasmtime::component::ComponentType>::typecheck,
+                        ),
+                        (
+                            "first-byte-timeout-ms",
+                            <Option<
+                                u32,
+                            > as wasmtime::component::ComponentType>::typecheck,
+                        ),
+                        (
+                            "between-bytes-timeout-ms",
+                            <Option<
+                                u32,
+                            > as wasmtime::component::ComponentType>::typecheck,
+                        ),
+                    ],
+                )
+            }
+        }
+    };
+    impl core::fmt::Debug for RequestOptions {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            f.debug_struct("RequestOptions")
+                .field("connect-timeout-ms", &self.connect_timeout_ms)
+                .field("first-byte-timeout-ms", &self.first_byte_timeout_ms)
+                .field("between-bytes-timeout-ms", &self.between_bytes_timeout_ms)
+                .finish()
+        }
+    }
+    pub type OutgoingStream = OutputStream;
+    pub type OutgoingResponse = u32;
+    pub type OutgoingRequest = u32;
+    #[component(variant)]
+    pub enum Method {
+        #[component(name = "get")]
+        Get,
+        #[component(name = "head")]
+        Head,
+        #[component(name = "post")]
+        Post,
+        #[component(name = "put")]
+        Put,
+        #[component(name = "delete")]
+        Delete,
+        #[component(name = "connect")]
+        Connect,
+        #[component(name = "options")]
+        Options,
+        #[component(name = "trace")]
+        Trace,
+        #[component(name = "patch")]
+        Patch,
+        #[component(name = "other")]
+        Other(String),
+    }
+    #[automatically_derived]
+    impl ::core::clone::Clone for Method {
+        #[inline]
+        fn clone(&self) -> Method {
+            match self {
+                Method::Get => Method::Get,
+                Method::Head => Method::Head,
+                Method::Post => Method::Post,
+                Method::Put => Method::Put,
+                Method::Delete => Method::Delete,
+                Method::Connect => Method::Connect,
+                Method::Options => Method::Options,
+                Method::Trace => Method::Trace,
+                Method::Patch => Method::Patch,
+                Method::Other(__self_0) => {
+                    Method::Other(::core::clone::Clone::clone(__self_0))
+                }
+            }
+        }
+    }
+    unsafe impl wasmtime::component::Lower for Method {
+        #[inline]
+        fn lower<T>(
+            &self,
+            store: &mut wasmtime::StoreContextMut<T>,
+            options: &wasmtime::component::__internal::Options,
+            dst: &mut std::mem::MaybeUninit<Self::Lower>,
+        ) -> wasmtime::component::__internal::anyhow::Result<()> {
+            match self {
+                Self::Get => {
+                    {
+                        #[allow(unused_unsafe)]
+                        {
+                            unsafe {
+                                use ::wasmtime::component::__internal::MaybeUninitExt;
+                                let m: &mut std::mem::MaybeUninit<_> = dst;
+                                m.map(|p| &raw mut (*p).tag)
+                            }
+                        }
+                    }
+                        .write(wasmtime::ValRaw::u32(0u32));
+                    unsafe {
+                        wasmtime::component::__internal::lower_payload(
+                            {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = dst;
+                                        m.map(|p| &raw mut (*p).payload)
+                                    }
+                                }
+                            },
+                            |payload| {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = payload;
+                                        m.map(|p| &raw mut (*p).Get)
+                                    }
+                                }
+                            },
+                            |dst| Ok(()),
+                        )
+                    }
+                }
+                Self::Head => {
+                    {
+                        #[allow(unused_unsafe)]
+                        {
+                            unsafe {
+                                use ::wasmtime::component::__internal::MaybeUninitExt;
+                                let m: &mut std::mem::MaybeUninit<_> = dst;
+                                m.map(|p| &raw mut (*p).tag)
+                            }
+                        }
+                    }
+                        .write(wasmtime::ValRaw::u32(1u32));
+                    unsafe {
+                        wasmtime::component::__internal::lower_payload(
+                            {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = dst;
+                                        m.map(|p| &raw mut (*p).payload)
+                                    }
+                                }
+                            },
+                            |payload| {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = payload;
+                                        m.map(|p| &raw mut (*p).Head)
+                                    }
+                                }
+                            },
+                            |dst| Ok(()),
+                        )
+                    }
+                }
+                Self::Post => {
+                    {
+                        #[allow(unused_unsafe)]
+                        {
+                            unsafe {
+                                use ::wasmtime::component::__internal::MaybeUninitExt;
+                                let m: &mut std::mem::MaybeUninit<_> = dst;
+                                m.map(|p| &raw mut (*p).tag)
+                            }
+                        }
+                    }
+                        .write(wasmtime::ValRaw::u32(2u32));
+                    unsafe {
+                        wasmtime::component::__internal::lower_payload(
+                            {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = dst;
+                                        m.map(|p| &raw mut (*p).payload)
+                                    }
+                                }
+                            },
+                            |payload| {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = payload;
+                                        m.map(|p| &raw mut (*p).Post)
+                                    }
+                                }
+                            },
+                            |dst| Ok(()),
+                        )
+                    }
+                }
+                Self::Put => {
+                    {
+                        #[allow(unused_unsafe)]
+                        {
+                            unsafe {
+                                use ::wasmtime::component::__internal::MaybeUninitExt;
+                                let m: &mut std::mem::MaybeUninit<_> = dst;
+                                m.map(|p| &raw mut (*p).tag)
+                            }
+                        }
+                    }
+                        .write(wasmtime::ValRaw::u32(3u32));
+                    unsafe {
+                        wasmtime::component::__internal::lower_payload(
+                            {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = dst;
+                                        m.map(|p| &raw mut (*p).payload)
+                                    }
+                                }
+                            },
+                            |payload| {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = payload;
+                                        m.map(|p| &raw mut (*p).Put)
+                                    }
+                                }
+                            },
+                            |dst| Ok(()),
+                        )
+                    }
+                }
+                Self::Delete => {
+                    {
+                        #[allow(unused_unsafe)]
+                        {
+                            unsafe {
+                                use ::wasmtime::component::__internal::MaybeUninitExt;
+                                let m: &mut std::mem::MaybeUninit<_> = dst;
+                                m.map(|p| &raw mut (*p).tag)
+                            }
+                        }
+                    }
+                        .write(wasmtime::ValRaw::u32(4u32));
+                    unsafe {
+                        wasmtime::component::__internal::lower_payload(
+                            {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = dst;
+                                        m.map(|p| &raw mut (*p).payload)
+                                    }
+                                }
+                            },
+                            |payload| {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = payload;
+                                        m.map(|p| &raw mut (*p).Delete)
+                                    }
+                                }
+                            },
+                            |dst| Ok(()),
+                        )
+                    }
+                }
+                Self::Connect => {
+                    {
+                        #[allow(unused_unsafe)]
+                        {
+                            unsafe {
+                                use ::wasmtime::component::__internal::MaybeUninitExt;
+                                let m: &mut std::mem::MaybeUninit<_> = dst;
+                                m.map(|p| &raw mut (*p).tag)
+                            }
+                        }
+                    }
+                        .write(wasmtime::ValRaw::u32(5u32));
+                    unsafe {
+                        wasmtime::component::__internal::lower_payload(
+                            {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = dst;
+                                        m.map(|p| &raw mut (*p).payload)
+                                    }
+                                }
+                            },
+                            |payload| {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = payload;
+                                        m.map(|p| &raw mut (*p).Connect)
+                                    }
+                                }
+                            },
+                            |dst| Ok(()),
+                        )
+                    }
+                }
+                Self::Options => {
+                    {
+                        #[allow(unused_unsafe)]
+                        {
+                            unsafe {
+                                use ::wasmtime::component::__internal::MaybeUninitExt;
+                                let m: &mut std::mem::MaybeUninit<_> = dst;
+                                m.map(|p| &raw mut (*p).tag)
+                            }
+                        }
+                    }
+                        .write(wasmtime::ValRaw::u32(6u32));
+                    unsafe {
+                        wasmtime::component::__internal::lower_payload(
+                            {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = dst;
+                                        m.map(|p| &raw mut (*p).payload)
+                                    }
+                                }
+                            },
+                            |payload| {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = payload;
+                                        m.map(|p| &raw mut (*p).Options)
+                                    }
+                                }
+                            },
+                            |dst| Ok(()),
+                        )
+                    }
+                }
+                Self::Trace => {
+                    {
+                        #[allow(unused_unsafe)]
+                        {
+                            unsafe {
+                                use ::wasmtime::component::__internal::MaybeUninitExt;
+                                let m: &mut std::mem::MaybeUninit<_> = dst;
+                                m.map(|p| &raw mut (*p).tag)
+                            }
+                        }
+                    }
+                        .write(wasmtime::ValRaw::u32(7u32));
+                    unsafe {
+                        wasmtime::component::__internal::lower_payload(
+                            {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = dst;
+                                        m.map(|p| &raw mut (*p).payload)
+                                    }
+                                }
+                            },
+                            |payload| {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = payload;
+                                        m.map(|p| &raw mut (*p).Trace)
+                                    }
+                                }
+                            },
+                            |dst| Ok(()),
+                        )
+                    }
+                }
+                Self::Patch => {
+                    {
+                        #[allow(unused_unsafe)]
+                        {
+                            unsafe {
+                                use ::wasmtime::component::__internal::MaybeUninitExt;
+                                let m: &mut std::mem::MaybeUninit<_> = dst;
+                                m.map(|p| &raw mut (*p).tag)
+                            }
+                        }
+                    }
+                        .write(wasmtime::ValRaw::u32(8u32));
+                    unsafe {
+                        wasmtime::component::__internal::lower_payload(
+                            {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = dst;
+                                        m.map(|p| &raw mut (*p).payload)
+                                    }
+                                }
+                            },
+                            |payload| {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = payload;
+                                        m.map(|p| &raw mut (*p).Patch)
+                                    }
+                                }
+                            },
+                            |dst| Ok(()),
+                        )
+                    }
+                }
+                Self::Other(value) => {
+                    {
+                        #[allow(unused_unsafe)]
+                        {
+                            unsafe {
+                                use ::wasmtime::component::__internal::MaybeUninitExt;
+                                let m: &mut std::mem::MaybeUninit<_> = dst;
+                                m.map(|p| &raw mut (*p).tag)
+                            }
+                        }
+                    }
+                        .write(wasmtime::ValRaw::u32(9u32));
+                    unsafe {
+                        wasmtime::component::__internal::lower_payload(
+                            {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = dst;
+                                        m.map(|p| &raw mut (*p).payload)
+                                    }
+                                }
+                            },
+                            |payload| {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = payload;
+                                        m.map(|p| &raw mut (*p).Other)
+                                    }
+                                }
+                            },
+                            |dst| value.lower(store, options, dst),
+                        )
+                    }
+                }
+            }
+        }
+        #[inline]
+        fn store<T>(
+            &self,
+            memory: &mut wasmtime::component::__internal::MemoryMut<'_, T>,
+            mut offset: usize,
+        ) -> wasmtime::component::__internal::anyhow::Result<()> {
+            if true {
+                if !(offset
+                    % (<Self as wasmtime::component::ComponentType>::ALIGN32 as usize)
+                    == 0)
+                {
+                    ::core::panicking::panic(
+                        "assertion failed: offset % (<Self as wasmtime::component::ComponentType>::ALIGN32 as usize) == 0",
+                    )
+                }
+            }
+            match self {
+                Self::Get => {
+                    *memory.get::<1usize>(offset) = 0u8.to_le_bytes();
+                    Ok(())
+                }
+                Self::Head => {
+                    *memory.get::<1usize>(offset) = 1u8.to_le_bytes();
+                    Ok(())
+                }
+                Self::Post => {
+                    *memory.get::<1usize>(offset) = 2u8.to_le_bytes();
+                    Ok(())
+                }
+                Self::Put => {
+                    *memory.get::<1usize>(offset) = 3u8.to_le_bytes();
+                    Ok(())
+                }
+                Self::Delete => {
+                    *memory.get::<1usize>(offset) = 4u8.to_le_bytes();
+                    Ok(())
+                }
+                Self::Connect => {
+                    *memory.get::<1usize>(offset) = 5u8.to_le_bytes();
+                    Ok(())
+                }
+                Self::Options => {
+                    *memory.get::<1usize>(offset) = 6u8.to_le_bytes();
+                    Ok(())
+                }
+                Self::Trace => {
+                    *memory.get::<1usize>(offset) = 7u8.to_le_bytes();
+                    Ok(())
+                }
+                Self::Patch => {
+                    *memory.get::<1usize>(offset) = 8u8.to_le_bytes();
+                    Ok(())
+                }
+                Self::Other(value) => {
+                    *memory.get::<1usize>(offset) = 9u8.to_le_bytes();
+                    value
+                        .store(
+                            memory,
+                            offset
+                                + <Self as wasmtime::component::__internal::ComponentVariant>::PAYLOAD_OFFSET32,
+                        )
+                }
+            }
+        }
+    }
+    unsafe impl wasmtime::component::Lift for Method {
+        #[inline]
+        fn lift(
+            store: &wasmtime::component::__internal::StoreOpaque,
+            options: &wasmtime::component::__internal::Options,
+            src: &Self::Lower,
+        ) -> wasmtime::component::__internal::anyhow::Result<Self> {
+            Ok(
+                match src.tag.get_u32() {
+                    0u32 => Self::Get,
+                    1u32 => Self::Head,
+                    2u32 => Self::Post,
+                    3u32 => Self::Put,
+                    4u32 => Self::Delete,
+                    5u32 => Self::Connect,
+                    6u32 => Self::Options,
+                    7u32 => Self::Trace,
+                    8u32 => Self::Patch,
+                    9u32 => {
+                        Self::Other(
+                            <String as wasmtime::component::Lift>::lift(
+                                store,
+                                options,
+                                unsafe { &src.payload.Other },
+                            )?,
+                        )
+                    }
+                    discrim => {
+                        return ::anyhow::__private::Err(
+                            ::anyhow::Error::msg({
+                                let res = ::alloc::fmt::format(
+                                    format_args!("unexpected discriminant: {0}", discrim),
+                                );
+                                res
+                            }),
+                        );
+                    }
+                },
+            )
+        }
+        #[inline]
+        fn load(
+            memory: &wasmtime::component::__internal::Memory,
+            bytes: &[u8],
+        ) -> wasmtime::component::__internal::anyhow::Result<Self> {
+            let align = <Self as wasmtime::component::ComponentType>::ALIGN32;
+            if true {
+                if !((bytes.as_ptr() as usize) % (align as usize) == 0) {
+                    ::core::panicking::panic(
+                        "assertion failed: (bytes.as_ptr() as usize) % (align as usize) == 0",
+                    )
+                }
+            }
+            let discrim = bytes[0];
+            let payload_offset = <Self as wasmtime::component::__internal::ComponentVariant>::PAYLOAD_OFFSET32;
+            let payload = &bytes[payload_offset..];
+            Ok(
+                match discrim {
+                    0u8 => Self::Get,
+                    1u8 => Self::Head,
+                    2u8 => Self::Post,
+                    3u8 => Self::Put,
+                    4u8 => Self::Delete,
+                    5u8 => Self::Connect,
+                    6u8 => Self::Options,
+                    7u8 => Self::Trace,
+                    8u8 => Self::Patch,
+                    9u8 => {
+                        Self::Other(
+                            <String as wasmtime::component::Lift>::load(
+                                memory,
+                                &payload[..<String as wasmtime::component::ComponentType>::SIZE32],
+                            )?,
+                        )
+                    }
+                    discrim => {
+                        return ::anyhow::__private::Err(
+                            ::anyhow::Error::msg({
+                                let res = ::alloc::fmt::format(
+                                    format_args!("unexpected discriminant: {0}", discrim),
+                                );
+                                res
+                            }),
+                        );
+                    }
+                },
+            )
+        }
+    }
+    const _: () = {
+        #[doc(hidden)]
+        #[repr(C)]
+        pub struct LowerMethod<T9: Copy> {
+            tag: wasmtime::ValRaw,
+            payload: LowerPayloadMethod<T9>,
+        }
+        #[automatically_derived]
+        impl<T9: ::core::clone::Clone + Copy> ::core::clone::Clone for LowerMethod<T9> {
+            #[inline]
+            fn clone(&self) -> LowerMethod<T9> {
+                LowerMethod {
+                    tag: ::core::clone::Clone::clone(&self.tag),
+                    payload: ::core::clone::Clone::clone(&self.payload),
+                }
+            }
+        }
+        #[automatically_derived]
+        impl<T9: ::core::marker::Copy + Copy> ::core::marker::Copy for LowerMethod<T9> {}
+        #[doc(hidden)]
+        #[allow(non_snake_case)]
+        #[repr(C)]
+        union LowerPayloadMethod<T9: Copy> {
+            Get: [wasmtime::ValRaw; 0],
+            Head: [wasmtime::ValRaw; 0],
+            Post: [wasmtime::ValRaw; 0],
+            Put: [wasmtime::ValRaw; 0],
+            Delete: [wasmtime::ValRaw; 0],
+            Connect: [wasmtime::ValRaw; 0],
+            Options: [wasmtime::ValRaw; 0],
+            Trace: [wasmtime::ValRaw; 0],
+            Patch: [wasmtime::ValRaw; 0],
+            Other: T9,
+        }
+        #[automatically_derived]
+        #[allow(non_snake_case)]
+        impl<T9: ::core::marker::Copy + ::core::clone::Clone + Copy> ::core::clone::Clone
+        for LowerPayloadMethod<T9> {
+            #[inline]
+            fn clone(&self) -> LowerPayloadMethod<T9> {
+                let _: ::core::clone::AssertParamIsCopy<Self>;
+                *self
+            }
+        }
+        #[automatically_derived]
+        #[allow(non_snake_case)]
+        impl<T9: ::core::marker::Copy + Copy> ::core::marker::Copy
+        for LowerPayloadMethod<T9> {}
+        unsafe impl wasmtime::component::ComponentType for Method {
+            type Lower = LowerMethod<
+                <String as wasmtime::component::ComponentType>::Lower,
+            >;
+            #[inline]
+            fn typecheck(
+                ty: &wasmtime::component::__internal::InterfaceType,
+                types: &wasmtime::component::__internal::ComponentTypes,
+            ) -> wasmtime::component::__internal::anyhow::Result<()> {
+                wasmtime::component::__internal::typecheck_variant(
+                    ty,
+                    types,
+                    &[
+                        ("get", None),
+                        ("head", None),
+                        ("post", None),
+                        ("put", None),
+                        ("delete", None),
+                        ("connect", None),
+                        ("options", None),
+                        ("trace", None),
+                        ("patch", None),
+                        (
+                            "other",
+                            Some(
+                                <String as wasmtime::component::ComponentType>::typecheck,
+                            ),
+                        ),
+                    ],
+                )
+            }
+            const ABI: wasmtime::component::__internal::CanonicalAbiInfo = wasmtime::component::__internal::CanonicalAbiInfo::variant_static(
+                &[
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    Some(<String as wasmtime::component::ComponentType>::ABI),
+                ],
+            );
+        }
+        unsafe impl wasmtime::component::__internal::ComponentVariant for Method {
+            const CASES: &'static [Option<
+                wasmtime::component::__internal::CanonicalAbiInfo,
+            >] = &[
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(<String as wasmtime::component::ComponentType>::ABI),
+            ];
+        }
+    };
+    impl core::fmt::Debug for Method {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            match self {
+                Method::Get => f.debug_tuple("Method::Get").finish(),
+                Method::Head => f.debug_tuple("Method::Head").finish(),
+                Method::Post => f.debug_tuple("Method::Post").finish(),
+                Method::Put => f.debug_tuple("Method::Put").finish(),
+                Method::Delete => f.debug_tuple("Method::Delete").finish(),
+                Method::Connect => f.debug_tuple("Method::Connect").finish(),
+                Method::Options => f.debug_tuple("Method::Options").finish(),
+                Method::Trace => f.debug_tuple("Method::Trace").finish(),
+                Method::Patch => f.debug_tuple("Method::Patch").finish(),
+                Method::Other(e) => f.debug_tuple("Method::Other").field(e).finish(),
+            }
+        }
+    }
+    pub type IncomingStream = InputStream;
+    pub type IncomingResponse = u32;
+    pub type IncomingRequest = u32;
+    pub type FutureIncomingResponse = u32;
+    pub type Fields = u32;
+    pub type Trailers = Fields;
+    pub type Headers = Fields;
+    #[component(variant)]
+    pub enum Error {
+        #[component(name = "invalid-url")]
+        InvalidUrl(String),
+        #[component(name = "timeout-error")]
+        TimeoutError(String),
+        #[component(name = "protocol-error")]
+        ProtocolError(String),
+        #[component(name = "status-error")]
+        StatusError(u16),
+        #[component(name = "unexpected-error")]
+        UnexpectedError(String),
+    }
+    #[automatically_derived]
+    impl ::core::clone::Clone for Error {
+        #[inline]
+        fn clone(&self) -> Error {
+            match self {
+                Error::InvalidUrl(__self_0) => {
+                    Error::InvalidUrl(::core::clone::Clone::clone(__self_0))
+                }
+                Error::TimeoutError(__self_0) => {
+                    Error::TimeoutError(::core::clone::Clone::clone(__self_0))
+                }
+                Error::ProtocolError(__self_0) => {
+                    Error::ProtocolError(::core::clone::Clone::clone(__self_0))
+                }
+                Error::StatusError(__self_0) => {
+                    Error::StatusError(::core::clone::Clone::clone(__self_0))
+                }
+                Error::UnexpectedError(__self_0) => {
+                    Error::UnexpectedError(::core::clone::Clone::clone(__self_0))
+                }
+            }
+        }
+    }
+    unsafe impl wasmtime::component::Lower for Error {
+        #[inline]
+        fn lower<T>(
+            &self,
+            store: &mut wasmtime::StoreContextMut<T>,
+            options: &wasmtime::component::__internal::Options,
+            dst: &mut std::mem::MaybeUninit<Self::Lower>,
+        ) -> wasmtime::component::__internal::anyhow::Result<()> {
+            match self {
+                Self::InvalidUrl(value) => {
+                    {
+                        #[allow(unused_unsafe)]
+                        {
+                            unsafe {
+                                use ::wasmtime::component::__internal::MaybeUninitExt;
+                                let m: &mut std::mem::MaybeUninit<_> = dst;
+                                m.map(|p| &raw mut (*p).tag)
+                            }
+                        }
+                    }
+                        .write(wasmtime::ValRaw::u32(0u32));
+                    unsafe {
+                        wasmtime::component::__internal::lower_payload(
+                            {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = dst;
+                                        m.map(|p| &raw mut (*p).payload)
+                                    }
+                                }
+                            },
+                            |payload| {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = payload;
+                                        m.map(|p| &raw mut (*p).InvalidUrl)
+                                    }
+                                }
+                            },
+                            |dst| value.lower(store, options, dst),
+                        )
+                    }
+                }
+                Self::TimeoutError(value) => {
+                    {
+                        #[allow(unused_unsafe)]
+                        {
+                            unsafe {
+                                use ::wasmtime::component::__internal::MaybeUninitExt;
+                                let m: &mut std::mem::MaybeUninit<_> = dst;
+                                m.map(|p| &raw mut (*p).tag)
+                            }
+                        }
+                    }
+                        .write(wasmtime::ValRaw::u32(1u32));
+                    unsafe {
+                        wasmtime::component::__internal::lower_payload(
+                            {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = dst;
+                                        m.map(|p| &raw mut (*p).payload)
+                                    }
+                                }
+                            },
+                            |payload| {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = payload;
+                                        m.map(|p| &raw mut (*p).TimeoutError)
+                                    }
+                                }
+                            },
+                            |dst| value.lower(store, options, dst),
+                        )
+                    }
+                }
+                Self::ProtocolError(value) => {
+                    {
+                        #[allow(unused_unsafe)]
+                        {
+                            unsafe {
+                                use ::wasmtime::component::__internal::MaybeUninitExt;
+                                let m: &mut std::mem::MaybeUninit<_> = dst;
+                                m.map(|p| &raw mut (*p).tag)
+                            }
+                        }
+                    }
+                        .write(wasmtime::ValRaw::u32(2u32));
+                    unsafe {
+                        wasmtime::component::__internal::lower_payload(
+                            {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = dst;
+                                        m.map(|p| &raw mut (*p).payload)
+                                    }
+                                }
+                            },
+                            |payload| {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = payload;
+                                        m.map(|p| &raw mut (*p).ProtocolError)
+                                    }
+                                }
+                            },
+                            |dst| value.lower(store, options, dst),
+                        )
+                    }
+                }
+                Self::StatusError(value) => {
+                    {
+                        #[allow(unused_unsafe)]
+                        {
+                            unsafe {
+                                use ::wasmtime::component::__internal::MaybeUninitExt;
+                                let m: &mut std::mem::MaybeUninit<_> = dst;
+                                m.map(|p| &raw mut (*p).tag)
+                            }
+                        }
+                    }
+                        .write(wasmtime::ValRaw::u32(3u32));
+                    unsafe {
+                        wasmtime::component::__internal::lower_payload(
+                            {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = dst;
+                                        m.map(|p| &raw mut (*p).payload)
+                                    }
+                                }
+                            },
+                            |payload| {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = payload;
+                                        m.map(|p| &raw mut (*p).StatusError)
+                                    }
+                                }
+                            },
+                            |dst| value.lower(store, options, dst),
+                        )
+                    }
+                }
+                Self::UnexpectedError(value) => {
+                    {
+                        #[allow(unused_unsafe)]
+                        {
+                            unsafe {
+                                use ::wasmtime::component::__internal::MaybeUninitExt;
+                                let m: &mut std::mem::MaybeUninit<_> = dst;
+                                m.map(|p| &raw mut (*p).tag)
+                            }
+                        }
+                    }
+                        .write(wasmtime::ValRaw::u32(4u32));
+                    unsafe {
+                        wasmtime::component::__internal::lower_payload(
+                            {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = dst;
+                                        m.map(|p| &raw mut (*p).payload)
+                                    }
+                                }
+                            },
+                            |payload| {
+                                #[allow(unused_unsafe)]
+                                {
+                                    unsafe {
+                                        use ::wasmtime::component::__internal::MaybeUninitExt;
+                                        let m: &mut std::mem::MaybeUninit<_> = payload;
+                                        m.map(|p| &raw mut (*p).UnexpectedError)
+                                    }
+                                }
+                            },
+                            |dst| value.lower(store, options, dst),
+                        )
+                    }
+                }
+            }
+        }
+        #[inline]
+        fn store<T>(
+            &self,
+            memory: &mut wasmtime::component::__internal::MemoryMut<'_, T>,
+            mut offset: usize,
+        ) -> wasmtime::component::__internal::anyhow::Result<()> {
+            if true {
+                if !(offset
+                    % (<Self as wasmtime::component::ComponentType>::ALIGN32 as usize)
+                    == 0)
+                {
+                    ::core::panicking::panic(
+                        "assertion failed: offset % (<Self as wasmtime::component::ComponentType>::ALIGN32 as usize) == 0",
+                    )
+                }
+            }
+            match self {
+                Self::InvalidUrl(value) => {
+                    *memory.get::<1usize>(offset) = 0u8.to_le_bytes();
+                    value
+                        .store(
+                            memory,
+                            offset
+                                + <Self as wasmtime::component::__internal::ComponentVariant>::PAYLOAD_OFFSET32,
+                        )
+                }
+                Self::TimeoutError(value) => {
+                    *memory.get::<1usize>(offset) = 1u8.to_le_bytes();
+                    value
+                        .store(
+                            memory,
+                            offset
+                                + <Self as wasmtime::component::__internal::ComponentVariant>::PAYLOAD_OFFSET32,
+                        )
+                }
+                Self::ProtocolError(value) => {
+                    *memory.get::<1usize>(offset) = 2u8.to_le_bytes();
+                    value
+                        .store(
+                            memory,
+                            offset
+                                + <Self as wasmtime::component::__internal::ComponentVariant>::PAYLOAD_OFFSET32,
+                        )
+                }
+                Self::StatusError(value) => {
+                    *memory.get::<1usize>(offset) = 3u8.to_le_bytes();
+                    value
+                        .store(
+                            memory,
+                            offset
+                                + <Self as wasmtime::component::__internal::ComponentVariant>::PAYLOAD_OFFSET32,
+                        )
+                }
+                Self::UnexpectedError(value) => {
+                    *memory.get::<1usize>(offset) = 4u8.to_le_bytes();
+                    value
+                        .store(
+                            memory,
+                            offset
+                                + <Self as wasmtime::component::__internal::ComponentVariant>::PAYLOAD_OFFSET32,
+                        )
+                }
+            }
+        }
+    }
+    unsafe impl wasmtime::component::Lift for Error {
+        #[inline]
+        fn lift(
+            store: &wasmtime::component::__internal::StoreOpaque,
+            options: &wasmtime::component::__internal::Options,
+            src: &Self::Lower,
+        ) -> wasmtime::component::__internal::anyhow::Result<Self> {
+            Ok(
+                match src.tag.get_u32() {
+                    0u32 => {
+                        Self::InvalidUrl(
+                            <String as wasmtime::component::Lift>::lift(
+                                store,
+                                options,
+                                unsafe { &src.payload.InvalidUrl },
+                            )?,
+                        )
+                    }
+                    1u32 => {
+                        Self::TimeoutError(
+                            <String as wasmtime::component::Lift>::lift(
+                                store,
+                                options,
+                                unsafe { &src.payload.TimeoutError },
+                            )?,
+                        )
+                    }
+                    2u32 => {
+                        Self::ProtocolError(
+                            <String as wasmtime::component::Lift>::lift(
+                                store,
+                                options,
+                                unsafe { &src.payload.ProtocolError },
+                            )?,
+                        )
+                    }
+                    3u32 => {
+                        Self::StatusError(
+                            <u16 as wasmtime::component::Lift>::lift(
+                                store,
+                                options,
+                                unsafe { &src.payload.StatusError },
+                            )?,
+                        )
+                    }
+                    4u32 => {
+                        Self::UnexpectedError(
+                            <String as wasmtime::component::Lift>::lift(
+                                store,
+                                options,
+                                unsafe { &src.payload.UnexpectedError },
+                            )?,
+                        )
+                    }
+                    discrim => {
+                        return ::anyhow::__private::Err(
+                            ::anyhow::Error::msg({
+                                let res = ::alloc::fmt::format(
+                                    format_args!("unexpected discriminant: {0}", discrim),
+                                );
+                                res
+                            }),
+                        );
+                    }
+                },
+            )
+        }
+        #[inline]
+        fn load(
+            memory: &wasmtime::component::__internal::Memory,
+            bytes: &[u8],
+        ) -> wasmtime::component::__internal::anyhow::Result<Self> {
+            let align = <Self as wasmtime::component::ComponentType>::ALIGN32;
+            if true {
+                if !((bytes.as_ptr() as usize) % (align as usize) == 0) {
+                    ::core::panicking::panic(
+                        "assertion failed: (bytes.as_ptr() as usize) % (align as usize) == 0",
+                    )
+                }
+            }
+            let discrim = bytes[0];
+            let payload_offset = <Self as wasmtime::component::__internal::ComponentVariant>::PAYLOAD_OFFSET32;
+            let payload = &bytes[payload_offset..];
+            Ok(
+                match discrim {
+                    0u8 => {
+                        Self::InvalidUrl(
+                            <String as wasmtime::component::Lift>::load(
+                                memory,
+                                &payload[..<String as wasmtime::component::ComponentType>::SIZE32],
+                            )?,
+                        )
+                    }
+                    1u8 => {
+                        Self::TimeoutError(
+                            <String as wasmtime::component::Lift>::load(
+                                memory,
+                                &payload[..<String as wasmtime::component::ComponentType>::SIZE32],
+                            )?,
+                        )
+                    }
+                    2u8 => {
+                        Self::ProtocolError(
+                            <String as wasmtime::component::Lift>::load(
+                                memory,
+                                &payload[..<String as wasmtime::component::ComponentType>::SIZE32],
+                            )?,
+                        )
+                    }
+                    3u8 => {
+                        Self::StatusError(
+                            <u16 as wasmtime::component::Lift>::load(
+                                memory,
+                                &payload[..<u16 as wasmtime::component::ComponentType>::SIZE32],
+                            )?,
+                        )
+                    }
+                    4u8 => {
+                        Self::UnexpectedError(
+                            <String as wasmtime::component::Lift>::load(
+                                memory,
+                                &payload[..<String as wasmtime::component::ComponentType>::SIZE32],
+                            )?,
+                        )
+                    }
+                    discrim => {
+                        return ::anyhow::__private::Err(
+                            ::anyhow::Error::msg({
+                                let res = ::alloc::fmt::format(
+                                    format_args!("unexpected discriminant: {0}", discrim),
+                                );
+                                res
+                            }),
+                        );
+                    }
+                },
+            )
+        }
+    }
+    const _: () = {
+        #[doc(hidden)]
+        #[repr(C)]
+        pub struct LowerError<T0: Copy, T1: Copy, T2: Copy, T3: Copy, T4: Copy> {
+            tag: wasmtime::ValRaw,
+            payload: LowerPayloadError<T0, T1, T2, T3, T4>,
+        }
+        #[automatically_derived]
+        impl<
+            T0: ::core::clone::Clone + Copy,
+            T1: ::core::clone::Clone + Copy,
+            T2: ::core::clone::Clone + Copy,
+            T3: ::core::clone::Clone + Copy,
+            T4: ::core::clone::Clone + Copy,
+        > ::core::clone::Clone for LowerError<T0, T1, T2, T3, T4> {
+            #[inline]
+            fn clone(&self) -> LowerError<T0, T1, T2, T3, T4> {
+                LowerError {
+                    tag: ::core::clone::Clone::clone(&self.tag),
+                    payload: ::core::clone::Clone::clone(&self.payload),
+                }
+            }
+        }
+        #[automatically_derived]
+        impl<
+            T0: ::core::marker::Copy + Copy,
+            T1: ::core::marker::Copy + Copy,
+            T2: ::core::marker::Copy + Copy,
+            T3: ::core::marker::Copy + Copy,
+            T4: ::core::marker::Copy + Copy,
+        > ::core::marker::Copy for LowerError<T0, T1, T2, T3, T4> {}
+        #[doc(hidden)]
+        #[allow(non_snake_case)]
+        #[repr(C)]
+        union LowerPayloadError<T0: Copy, T1: Copy, T2: Copy, T3: Copy, T4: Copy> {
+            InvalidUrl: T0,
+            TimeoutError: T1,
+            ProtocolError: T2,
+            StatusError: T3,
+            UnexpectedError: T4,
+        }
+        #[automatically_derived]
+        #[allow(non_snake_case)]
+        impl<
+            T0: ::core::marker::Copy + ::core::clone::Clone + Copy,
+            T1: ::core::marker::Copy + ::core::clone::Clone + Copy,
+            T2: ::core::marker::Copy + ::core::clone::Clone + Copy,
+            T3: ::core::marker::Copy + ::core::clone::Clone + Copy,
+            T4: ::core::marker::Copy + ::core::clone::Clone + Copy,
+        > ::core::clone::Clone for LowerPayloadError<T0, T1, T2, T3, T4> {
+            #[inline]
+            fn clone(&self) -> LowerPayloadError<T0, T1, T2, T3, T4> {
+                let _: ::core::clone::AssertParamIsCopy<Self>;
+                *self
+            }
+        }
+        #[automatically_derived]
+        #[allow(non_snake_case)]
+        impl<
+            T0: ::core::marker::Copy + Copy,
+            T1: ::core::marker::Copy + Copy,
+            T2: ::core::marker::Copy + Copy,
+            T3: ::core::marker::Copy + Copy,
+            T4: ::core::marker::Copy + Copy,
+        > ::core::marker::Copy for LowerPayloadError<T0, T1, T2, T3, T4> {}
+        unsafe impl wasmtime::component::ComponentType for Error {
+            type Lower = LowerError<
+                <String as wasmtime::component::ComponentType>::Lower,
+                <String as wasmtime::component::ComponentType>::Lower,
+                <String as wasmtime::component::ComponentType>::Lower,
+                <u16 as wasmtime::component::ComponentType>::Lower,
+                <String as wasmtime::component::ComponentType>::Lower,
+            >;
+            #[inline]
+            fn typecheck(
+                ty: &wasmtime::component::__internal::InterfaceType,
+                types: &wasmtime::component::__internal::ComponentTypes,
+            ) -> wasmtime::component::__internal::anyhow::Result<()> {
+                wasmtime::component::__internal::typecheck_variant(
+                    ty,
+                    types,
+                    &[
+                        (
+                            "invalid-url",
+                            Some(
+                                <String as wasmtime::component::ComponentType>::typecheck,
+                            ),
+                        ),
+                        (
+                            "timeout-error",
+                            Some(
+                                <String as wasmtime::component::ComponentType>::typecheck,
+                            ),
+                        ),
+                        (
+                            "protocol-error",
+                            Some(
+                                <String as wasmtime::component::ComponentType>::typecheck,
+                            ),
+                        ),
+                        (
+                            "status-error",
+                            Some(<u16 as wasmtime::component::ComponentType>::typecheck),
+                        ),
+                        (
+                            "unexpected-error",
+                            Some(
+                                <String as wasmtime::component::ComponentType>::typecheck,
+                            ),
+                        ),
+                    ],
+                )
+            }
+            const ABI: wasmtime::component::__internal::CanonicalAbiInfo = wasmtime::component::__internal::CanonicalAbiInfo::variant_static(
+                &[
+                    Some(<String as wasmtime::component::ComponentType>::ABI),
+                    Some(<String as wasmtime::component::ComponentType>::ABI),
+                    Some(<String as wasmtime::component::ComponentType>::ABI),
+                    Some(<u16 as wasmtime::component::ComponentType>::ABI),
+                    Some(<String as wasmtime::component::ComponentType>::ABI),
+                ],
+            );
+        }
+        unsafe impl wasmtime::component::__internal::ComponentVariant for Error {
+            const CASES: &'static [Option<
+                wasmtime::component::__internal::CanonicalAbiInfo,
+            >] = &[
+                Some(<String as wasmtime::component::ComponentType>::ABI),
+                Some(<String as wasmtime::component::ComponentType>::ABI),
+                Some(<String as wasmtime::component::ComponentType>::ABI),
+                Some(<u16 as wasmtime::component::ComponentType>::ABI),
+                Some(<String as wasmtime::component::ComponentType>::ABI),
+            ];
+        }
+    };
+    impl core::fmt::Debug for Error {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            match self {
+                Error::InvalidUrl(e) => {
+                    f.debug_tuple("Error::InvalidUrl").field(e).finish()
+                }
+                Error::TimeoutError(e) => {
+                    f.debug_tuple("Error::TimeoutError").field(e).finish()
+                }
+                Error::ProtocolError(e) => {
+                    f.debug_tuple("Error::ProtocolError").field(e).finish()
+                }
+                Error::StatusError(e) => {
+                    f.debug_tuple("Error::StatusError").field(e).finish()
+                }
+                Error::UnexpectedError(e) => {
+                    f.debug_tuple("Error::UnexpectedError").field(e).finish()
+                }
+            }
+        }
+    }
+    pub trait Host: Sized {
+        fn drop_fields(&mut self, fields: Fields) -> wasmtime::Result<()>;
+        fn new_fields(
+            &mut self,
+            entries: Vec<(String, String)>,
+        ) -> wasmtime::Result<Fields>;
+        fn fields_get(
+            &mut self,
+            fields: Fields,
+            name: String,
+        ) -> wasmtime::Result<Vec<String>>;
+        fn fields_set(
+            &mut self,
+            fields: Fields,
+            name: String,
+            value: Vec<String>,
+        ) -> wasmtime::Result<()>;
+        fn fields_delete(
+            &mut self,
+            fields: Fields,
+            name: String,
+        ) -> wasmtime::Result<()>;
+        fn fields_append(
+            &mut self,
+            fields: Fields,
+            name: String,
+            value: String,
+        ) -> wasmtime::Result<()>;
+        fn fields_entries(
+            &mut self,
+            fields: Fields,
+        ) -> wasmtime::Result<Vec<(String, String)>>;
+        fn fields_clone(&mut self, fields: Fields) -> wasmtime::Result<Fields>;
+        fn finish_incoming_stream(
+            &mut self,
+            s: IncomingStream,
+        ) -> wasmtime::Result<Option<Trailers>>;
+        fn finish_outgoing_stream(
+            &mut self,
+            s: OutgoingStream,
+            trailers: Option<Trailers>,
+        ) -> wasmtime::Result<()>;
+        fn drop_incoming_request(
+            &mut self,
+            request: IncomingRequest,
+        ) -> wasmtime::Result<()>;
+        fn drop_outgoing_request(
+            &mut self,
+            request: OutgoingRequest,
+        ) -> wasmtime::Result<()>;
+        fn incoming_request_method(
+            &mut self,
+            request: IncomingRequest,
+        ) -> wasmtime::Result<Method>;
+        fn incoming_request_path(
+            &mut self,
+            request: IncomingRequest,
+        ) -> wasmtime::Result<String>;
+        fn incoming_request_scheme(
+            &mut self,
+            request: IncomingRequest,
+        ) -> wasmtime::Result<Option<Scheme>>;
+        fn incoming_request_authority(
+            &mut self,
+            request: IncomingRequest,
+        ) -> wasmtime::Result<String>;
+        fn incoming_request_headers(
+            &mut self,
+            request: IncomingRequest,
+        ) -> wasmtime::Result<Headers>;
+        fn incoming_request_consume(
+            &mut self,
+            request: IncomingRequest,
+        ) -> wasmtime::Result<Result<IncomingStream, ()>>;
+        fn new_outgoing_request(
+            &mut self,
+            method: Method,
+            path: String,
+            scheme: Option<Scheme>,
+            authority: String,
+            headers: Headers,
+        ) -> wasmtime::Result<OutgoingRequest>;
+        fn outgoing_request_write(
+            &mut self,
+            request: OutgoingRequest,
+        ) -> wasmtime::Result<Result<OutgoingStream, ()>>;
+        fn drop_response_outparam(
+            &mut self,
+            response: ResponseOutparam,
+        ) -> wasmtime::Result<()>;
+        fn set_response_outparam(
+            &mut self,
+            response: Result<OutgoingResponse, Error>,
+        ) -> wasmtime::Result<Result<(), ()>>;
+        fn drop_incoming_response(
+            &mut self,
+            response: IncomingResponse,
+        ) -> wasmtime::Result<()>;
+        fn drop_outgoing_response(
+            &mut self,
+            response: OutgoingResponse,
+        ) -> wasmtime::Result<()>;
+        fn incoming_response_status(
+            &mut self,
+            response: IncomingResponse,
+        ) -> wasmtime::Result<StatusCode>;
+        fn incoming_response_headers(
+            &mut self,
+            response: IncomingResponse,
+        ) -> wasmtime::Result<Headers>;
+        fn incoming_response_consume(
+            &mut self,
+            response: IncomingResponse,
+        ) -> wasmtime::Result<Result<IncomingStream, ()>>;
+        fn new_outgoing_response(
+            &mut self,
+            status_code: StatusCode,
+            headers: Headers,
+        ) -> wasmtime::Result<OutgoingResponse>;
+        fn outgoing_response_write(
+            &mut self,
+            response: OutgoingResponse,
+        ) -> wasmtime::Result<Result<OutgoingStream, ()>>;
+        fn drop_future_incoming_response(
+            &mut self,
+            f: FutureIncomingResponse,
+        ) -> wasmtime::Result<()>;
+        fn future_incoming_response_get(
+            &mut self,
+            f: FutureIncomingResponse,
+        ) -> wasmtime::Result<Option<Result<IncomingResponse, Error>>>;
+        fn listen_to_future_incoming_response(
+            &mut self,
+            f: FutureIncomingResponse,
+        ) -> wasmtime::Result<Pollable>;
+    }
+    pub fn add_to_linker<T, U>(
+        linker: &mut wasmtime::component::Linker<T>,
+        get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+    ) -> wasmtime::Result<()>
+    where
+        U: Host,
+    {
+        let mut inst = linker.instance("types")?;
+        inst.func_wrap(
+            "drop-fields",
+            move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (Fields,)| {
+                let host = get(caller.data_mut());
+                let r = host.drop_fields(arg0);
+                r
+            },
+        )?;
+        inst.func_wrap(
+            "new-fields",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0,): (Vec<(String, String)>,)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.new_fields(arg0);
+                Ok((r?,))
+            },
+        )?;
+        inst.func_wrap(
+            "fields-get",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0, arg1): (Fields, String)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.fields_get(arg0, arg1);
+                Ok((r?,))
+            },
+        )?;
+        inst.func_wrap(
+            "fields-set",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0, arg1, arg2): (Fields, String, Vec<String>)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.fields_set(arg0, arg1, arg2);
+                r
+            },
+        )?;
+        inst.func_wrap(
+            "fields-delete",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0, arg1): (Fields, String)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.fields_delete(arg0, arg1);
+                r
+            },
+        )?;
+        inst.func_wrap(
+            "fields-append",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0, arg1, arg2): (Fields, String, String)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.fields_append(arg0, arg1, arg2);
+                r
+            },
+        )?;
+        inst.func_wrap(
+            "fields-entries",
+            move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (Fields,)| {
+                let host = get(caller.data_mut());
+                let r = host.fields_entries(arg0);
+                Ok((r?,))
+            },
+        )?;
+        inst.func_wrap(
+            "fields-clone",
+            move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (Fields,)| {
+                let host = get(caller.data_mut());
+                let r = host.fields_clone(arg0);
+                Ok((r?,))
+            },
+        )?;
+        inst.func_wrap(
+            "finish-incoming-stream",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0,): (IncomingStream,)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.finish_incoming_stream(arg0);
+                Ok((r?,))
+            },
+        )?;
+        inst.func_wrap(
+            "finish-outgoing-stream",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0, arg1): (OutgoingStream, Option<Trailers>)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.finish_outgoing_stream(arg0, arg1);
+                r
+            },
+        )?;
+        inst.func_wrap(
+            "drop-incoming-request",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0,): (IncomingRequest,)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.drop_incoming_request(arg0);
+                r
+            },
+        )?;
+        inst.func_wrap(
+            "drop-outgoing-request",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0,): (OutgoingRequest,)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.drop_outgoing_request(arg0);
+                r
+            },
+        )?;
+        inst.func_wrap(
+            "incoming-request-method",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0,): (IncomingRequest,)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.incoming_request_method(arg0);
+                Ok((r?,))
+            },
+        )?;
+        inst.func_wrap(
+            "incoming-request-path",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0,): (IncomingRequest,)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.incoming_request_path(arg0);
+                Ok((r?,))
+            },
+        )?;
+        inst.func_wrap(
+            "incoming-request-scheme",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0,): (IncomingRequest,)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.incoming_request_scheme(arg0);
+                Ok((r?,))
+            },
+        )?;
+        inst.func_wrap(
+            "incoming-request-authority",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0,): (IncomingRequest,)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.incoming_request_authority(arg0);
+                Ok((r?,))
+            },
+        )?;
+        inst.func_wrap(
+            "incoming-request-headers",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0,): (IncomingRequest,)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.incoming_request_headers(arg0);
+                Ok((r?,))
+            },
+        )?;
+        inst.func_wrap(
+            "incoming-request-consume",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0,): (IncomingRequest,)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.incoming_request_consume(arg0);
+                Ok((r?,))
+            },
+        )?;
+        inst.func_wrap(
+            "new-outgoing-request",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (
+                    arg0,
+                    arg1,
+                    arg2,
+                    arg3,
+                    arg4,
+                ): (Method, String, Option<Scheme>, String, Headers)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.new_outgoing_request(arg0, arg1, arg2, arg3, arg4);
+                Ok((r?,))
+            },
+        )?;
+        inst.func_wrap(
+            "outgoing-request-write",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0,): (OutgoingRequest,)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.outgoing_request_write(arg0);
+                Ok((r?,))
+            },
+        )?;
+        inst.func_wrap(
+            "drop-response-outparam",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0,): (ResponseOutparam,)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.drop_response_outparam(arg0);
+                r
+            },
+        )?;
+        inst.func_wrap(
+            "set-response-outparam",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0,): (Result<OutgoingResponse, Error>,)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.set_response_outparam(arg0);
+                Ok((r?,))
+            },
+        )?;
+        inst.func_wrap(
+            "drop-incoming-response",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0,): (IncomingResponse,)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.drop_incoming_response(arg0);
+                r
+            },
+        )?;
+        inst.func_wrap(
+            "drop-outgoing-response",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0,): (OutgoingResponse,)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.drop_outgoing_response(arg0);
+                r
+            },
+        )?;
+        inst.func_wrap(
+            "incoming-response-status",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0,): (IncomingResponse,)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.incoming_response_status(arg0);
+                Ok((r?,))
+            },
+        )?;
+        inst.func_wrap(
+            "incoming-response-headers",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0,): (IncomingResponse,)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.incoming_response_headers(arg0);
+                Ok((r?,))
+            },
+        )?;
+        inst.func_wrap(
+            "incoming-response-consume",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0,): (IncomingResponse,)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.incoming_response_consume(arg0);
+                Ok((r?,))
+            },
+        )?;
+        inst.func_wrap(
+            "new-outgoing-response",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0, arg1): (StatusCode, Headers)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.new_outgoing_response(arg0, arg1);
+                Ok((r?,))
+            },
+        )?;
+        inst.func_wrap(
+            "outgoing-response-write",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0,): (OutgoingResponse,)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.outgoing_response_write(arg0);
+                Ok((r?,))
+            },
+        )?;
+        inst.func_wrap(
+            "drop-future-incoming-response",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0,): (FutureIncomingResponse,)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.drop_future_incoming_response(arg0);
+                r
+            },
+        )?;
+        inst.func_wrap(
+            "future-incoming-response-get",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0,): (FutureIncomingResponse,)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.future_incoming_response_get(arg0);
+                Ok((r?,))
+            },
+        )?;
+        inst.func_wrap(
+            "listen-to-future-incoming-response",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0,): (FutureIncomingResponse,)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.listen_to_future_incoming_response(arg0);
+                Ok((r?,))
+            },
+        )?;
+        Ok(())
+    }
+}
+#[allow(clippy::all)]
+pub mod default_outgoing_http {
+    #[allow(unused_imports)]
+    use wasmtime::component::__internal::anyhow;
+    pub type OutgoingRequest = super::types::OutgoingRequest;
+    pub type RequestOptions = super::types::RequestOptions;
+    pub type FutureIncomingResponse = super::types::FutureIncomingResponse;
+    pub trait Host: Sized {
+        fn handle(
+            &mut self,
+            request: OutgoingRequest,
+            options: Option<RequestOptions>,
+        ) -> wasmtime::Result<FutureIncomingResponse>;
+    }
+    pub fn add_to_linker<T, U>(
+        linker: &mut wasmtime::component::Linker<T>,
+        get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+    ) -> wasmtime::Result<()>
+    where
+        U: Host,
+    {
+        let mut inst = linker.instance("default-outgoing-HTTP")?;
+        inst.func_wrap(
+            "handle",
+            move |
+                mut caller: wasmtime::StoreContextMut<'_, T>,
+                (arg0, arg1): (OutgoingRequest, Option<RequestOptions>)|
+            {
+                let host = get(caller.data_mut());
+                let r = host.handle(arg0, arg1);
+                Ok((r?,))
+            },
+        )?;
+        Ok(())
+    }
+}
+#[allow(clippy::all)]
+pub mod http {
+    #[allow(unused_imports)]
+    use wasmtime::component::__internal::anyhow;
+    pub type IncomingRequest = super::types::IncomingRequest;
+    pub type ResponseOutparam = super::types::ResponseOutparam;
+    pub struct Http {
+        handle: wasmtime::component::Func,
+    }
+    impl Http {
+        pub fn new(
+            __exports: &mut wasmtime::component::ExportInstance<'_, '_>,
+        ) -> wasmtime::Result<Http> {
+            let handle = *__exports
+                .typed_func::<(IncomingRequest, ResponseOutparam), ()>("handle")?
+                .func();
+            Ok(Http { handle })
+        }
+        pub fn call_handle<S: wasmtime::AsContextMut>(
+            &self,
+            mut store: S,
+            arg0: IncomingRequest,
+            arg1: ResponseOutparam,
+        ) -> wasmtime::Result<()> {
+            let callee = unsafe {
+                wasmtime::component::TypedFunc::<
+                    (IncomingRequest, ResponseOutparam),
+                    (),
+                >::new_unchecked(self.handle)
+            };
+            let () = callee.call(store.as_context_mut(), (arg0, arg1))?;
+            callee.post_return(store.as_context_mut())?;
+            Ok(())
+        }
+    }
+}
+pub struct Proxy {
+    http: http::Http,
+}
+const _: () = {
+    use wasmtime::component::__internal::anyhow;
+    impl Proxy {
+        pub fn add_to_linker<T, U>(
+            linker: &mut wasmtime::component::Linker<T>,
+            get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+        ) -> wasmtime::Result<()>
+        where
+            U: random::Host + console::Host + poll::Host + streams::Host + types::Host
+                + default_outgoing_http::Host,
+        {
+            random::add_to_linker(linker, get)?;
+            console::add_to_linker(linker, get)?;
+            poll::add_to_linker(linker, get)?;
+            streams::add_to_linker(linker, get)?;
+            types::add_to_linker(linker, get)?;
+            default_outgoing_http::add_to_linker(linker, get)?;
+            Ok(())
+        }
+        /// Instantiates the provided `module` using the specified
+        /// parameters, wrapping up the result in a structure that
+        /// translates between wasm and the host.
+        pub fn instantiate<T>(
+            mut store: impl wasmtime::AsContextMut<Data = T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<T>,
+        ) -> wasmtime::Result<(Self, wasmtime::component::Instance)> {
+            let instance = linker.instantiate(&mut store, component)?;
+            Ok((Self::new(store, &instance)?, instance))
+        }
+        /// Instantiates a pre-instantiated module using the specified
+        /// parameters, wrapping up the result in a structure that
+        /// translates between wasm and the host.
+        pub fn instantiate_pre<T>(
+            mut store: impl wasmtime::AsContextMut<Data = T>,
+            instance_pre: &wasmtime::component::InstancePre<T>,
+        ) -> wasmtime::Result<(Self, wasmtime::component::Instance)> {
+            let instance = instance_pre.instantiate(&mut store)?;
+            Ok((Self::new(store, &instance)?, instance))
+        }
+        /// Low-level creation wrapper for wrapping up the exports
+        /// of the `instance` provided in this structure of wasm
+        /// exports.
+        ///
+        /// This function will extract exports from the `instance`
+        /// defined within `store` and wrap them all up in the
+        /// returned structure which can be used to interact with
+        /// the wasm module.
+        pub fn new(
+            mut store: impl wasmtime::AsContextMut,
+            instance: &wasmtime::component::Instance,
+        ) -> wasmtime::Result<Self> {
+            let mut store = store.as_context_mut();
+            let mut exports = instance.exports(&mut store);
+            let mut __exports = exports.root();
+            let http = http::Http::new(
+                &mut __exports
+                    .instance("HTTP")
+                    .ok_or_else(|| ::anyhow::__private::must_use({
+                        let error = ::anyhow::__private::format_err(
+                            format_args!("exported instance `HTTP` not present"),
+                        );
+                        error
+                    }))?,
+            )?;
+            Ok(Proxy { http })
+        }
+        pub fn http(&self) -> &http::Http {
+            &self.http
+        }
+    }
+};
+const _: &str = "/// WASI Random is a random data API.\n///\n/// It is intended to be portable at least between Unix-family platforms and\n/// Windows.\ndefault interface random {\n    /// Return `len` cryptographically-secure pseudo-random bytes.\n    ///\n    /// This function must produce data from an adequately seeded\n    /// cryptographically-secure pseudo-random number generator (CSPRNG), so it\n    /// must not block, from the perspective of the calling program, and the\n    /// returned data is always unpredictable.\n    ///\n    /// This function must always return fresh pseudo-random data. Deterministic\n    /// environments must omit this function, rather than implementing it with\n    /// deterministic data.\n    get-random-bytes: func(len: u64) -> list<u8>\n\n    /// Return a cryptographically-secure pseudo-random `u64` value.\n    ///\n    /// This function returns the same type of pseudo-random data as\n    /// `get-random-bytes`, represented as a `u64`.\n    get-random-u64: func() -> u64\n\n    /// Return a 128-bit value that may contain a pseudo-random value.\n    ///\n    /// The returned value is not required to be computed from a CSPRNG, and may\n    /// even be entirely deterministic. Host implementations are encouraged to\n    /// provide pseudo-random values to any program exposed to\n    /// attacker-controlled content, to enable DoS protection built into many\n    /// languages\' hash-map implementations.\n    ///\n    /// This function is intended to only be called once, by a source language\n    /// to initialize Denial Of Service (DoS) protection in its hash-map\n    /// implementation.\n    ///\n    /// # Expected future evolution\n    ///\n    /// This will likely be changed to a value import, to prevent it from being\n    /// called multiple times and potentially used for purposes other than DoS\n    /// protection.\n    insecure-random: func() -> tuple<u64, u64>\n}\n";
+const _: &str = "/// WASI Logging is a logging API intended to let users emit log messages with\n/// simple priority levels and context values.\ndefault interface handler {\n    /// A log level, describing a kind of message.\n    enum level {\n       /// Describes messages about the values of variables and the flow of\n       /// control within a program.\n       trace,\n\n       /// Describes messages likely to be of interest to someone debugging a\n       /// program.\n       debug,\n\n       /// Describes messages likely to be of interest to someone monitoring a\n       /// program.\n       info,\n\n       /// Describes messages indicating hazardous situations.\n       warn,\n\n       /// Describes messages indicating serious errors.\n       error,\n    }\n\n    /// Emit a log message.\n    ///\n    /// A log message has a `level` describing what kind of message is being\n    /// sent, a context, which is an uninterpreted string meant to help\n    /// consumers group similar messages, and a string containing the message\n    /// text.\n    log: func(level: level, context: string, message: string)\n}\n";
+const _: &str = "/// A poll API intended to let users wait for I/O events on multiple handles\n/// at once.\ndefault interface poll {\n    /// A \"pollable\" handle.\n    ///\n    /// This is conceptually represents a `stream<_, _>`, or in other words,\n    /// a stream that one can wait on, repeatedly, but which does not itself\n    /// produce any data. It\'s temporary scaffolding until component-model\'s\n    /// async features are ready.\n    ///\n    /// And at present, it is a `u32` instead of being an actual handle, until\n    /// the wit-bindgen implementation of handles and resources is ready.\n    ///\n    /// `pollable` lifetimes are not automatically managed. Users must ensure\n    /// that they do not outlive the resource they reference.\n    ///\n    /// This [represents a resource](https://github.com/WebAssembly/WASI/blob/main/docs/WitInWasi.md#Resources).\n    type pollable = u32\n\n    /// Dispose of the specified `pollable`, after which it may no longer\n    /// be used.\n    drop-pollable: func(this: pollable)\n\n    /// Poll for completion on a set of pollables.\n    ///\n    /// The \"oneoff\" in the name refers to the fact that this function must do a\n    /// linear scan through the entire list of subscriptions, which may be\n    /// inefficient if the number is large and the same subscriptions are used\n    /// many times. In the future, this is expected to be obsoleted by the\n    /// component model async proposal, which will include a scalable waiting\n    /// facility.\n    ///\n    /// Note that the return type would ideally be `list<bool>`, but that would\n    /// be more difficult to polyfill given the current state of `wit-bindgen`.\n    /// See <https://github.com/bytecodealliance/preview2-prototyping/pull/11#issuecomment-1329873061>\n    /// for details.  For now, we use zero to mean \"not ready\" and non-zero to\n    /// mean \"ready\".\n    poll-oneoff: func(in: list<pollable>) -> list<u8>\n}\n";
+const _: &str = "/// WASI I/O is an I/O abstraction API which is currently focused on providing\n/// stream types.\n///\n/// In the future, the component model is expected to add built-in stream types;\n/// when it does, they are expected to subsume this API.\ndefault interface streams {\n    use poll.poll.{pollable}\n\n    /// An error type returned from a stream operation. Currently this\n    /// doesn\'t provide any additional information.\n    record stream-error {}\n\n    /// An input bytestream. In the future, this will be replaced by handle\n    /// types.\n    ///\n    /// This conceptually represents a `stream<u8, _>`. It\'s temporary\n    /// scaffolding until component-model\'s async features are ready.\n    ///\n    /// `input-stream`s are *non-blocking* to the extent practical on underlying\n    /// platforms. I/O operations always return promptly; if fewer bytes are\n    /// promptly available than requested, they return the number of bytes promptly\n    /// available, which could even be zero. To wait for data to be available,\n    /// use the `subscribe-to-input-stream` function to obtain a `pollable` which\n    /// can be polled for using `wasi_poll`.\n    ///\n    /// And at present, it is a `u32` instead of being an actual handle, until\n    /// the wit-bindgen implementation of handles and resources is ready.\n    ///\n    /// This [represents a resource](https://github.com/WebAssembly/WASI/blob/main/docs/WitInWasi.md#Resources).\n    type input-stream = u32\n\n    /// Read bytes from a stream.\n    ///\n    /// This function returns a list of bytes containing the data that was\n    /// read, along with a bool indicating whether the end of the stream\n    /// was reached. The returned list will contain up to `len` bytes; it\n    /// may return fewer than requested, but not more.\n    ///\n    /// Once a stream has reached the end, subsequent calls to read or\n    /// `skip` will always report end-of-stream rather than producing more\n    /// data.\n    ///\n    /// If `len` is 0, it represents a request to read 0 bytes, which should\n    /// always succeed, assuming the stream hasn\'t reached its end yet, and\n    /// return an empty list.\n    ///\n    /// The len here is a `u64`, but some callees may not be able to allocate\n    /// a buffer as large as that would imply.\n    /// FIXME: describe what happens if allocation fails.\n    read: func(\n        this: input-stream,\n        /// The maximum number of bytes to read\n        len: u64\n    ) -> result<tuple<list<u8>, bool>, stream-error>\n\n    /// Skip bytes from a stream.\n    ///\n    /// This is similar to the `read` function, but avoids copying the\n    /// bytes into the instance.\n    ///\n    /// Once a stream has reached the end, subsequent calls to read or\n    /// `skip` will always report end-of-stream rather than producing more\n    /// data.\n    ///\n    /// This function returns the number of bytes skipped, along with a bool\n    /// indicating whether the end of the stream was reached. The returned\n    /// value will be at most `len`; it may be less.\n    skip: func(\n        this: input-stream,\n        /// The maximum number of bytes to skip.\n        len: u64,\n    ) -> result<tuple<u64, bool>, stream-error>\n\n    /// Create a `pollable` which will resolve once either the specified stream\n    /// has bytes available to read or the other end of the stream has been\n    /// closed.\n    subscribe-to-input-stream: func(this: input-stream) -> pollable\n\n    /// Dispose of the specified `input-stream`, after which it may no longer\n    /// be used.\n    drop-input-stream: func(this: input-stream)\n\n    /// An output bytestream. In the future, this will be replaced by handle\n    /// types.\n    ///\n    /// This conceptually represents a `stream<u8, _>`. It\'s temporary\n    /// scaffolding until component-model\'s async features are ready.\n    ///\n    /// `output-stream`s are *non-blocking* to the extent practical on\n    /// underlying platforms. Except where specified otherwise, I/O operations also\n    /// always return promptly, after the number of bytes that can be written\n    /// promptly, which could even be zero. To wait for the stream to be ready to\n    /// accept data, the `subscribe-to-output-stream` function to obtain a\n    /// `pollable` which can be polled for using `wasi_poll`.\n    ///\n    /// And at present, it is a `u32` instead of being an actual handle, until\n    /// the wit-bindgen implementation of handles and resources is ready.\n    ///\n    /// This [represents a resource](https://github.com/WebAssembly/WASI/blob/main/docs/WitInWasi.md#Resources).\n    type output-stream = u32\n\n    /// Write bytes to a stream.\n    ///\n    /// This function returns a `u64` indicating the number of bytes from\n    /// `buf` that were written; it may be less than the full list.\n    write: func(\n        this: output-stream,\n        /// Data to write\n        buf: list<u8>\n    ) -> result<u64, stream-error>\n\n    /// Write multiple zero bytes to a stream.\n    ///\n    /// This function returns a `u64` indicating the number of zero bytes\n    /// that were written; it may be less than `len`.\n    write-zeroes: func(\n        this: output-stream,\n        /// The number of zero bytes to write\n        len: u64\n    ) -> result<u64, stream-error>\n\n    /// Read from one stream and write to another.\n    ///\n    /// This function returns the number of bytes transferred; it may be less\n    /// than `len`.\n    ///\n    /// Unlike other I/O functions, this function blocks until all the data\n    /// read from the input stream has been written to the output stream.\n    splice: func(\n        this: output-stream,\n        /// The stream to read from\n        src: input-stream,\n        /// The number of bytes to splice\n        len: u64,\n    ) -> result<tuple<u64, bool>, stream-error>\n\n    /// Forward the entire contents of an input stream to an output stream.\n    ///\n    /// This function repeatedly reads from the input stream and writes\n    /// the data to the output stream, until the end of the input stream\n    /// is reached, or an error is encountered.\n    ///\n    /// Unlike other I/O functions, this function blocks until the end\n    /// of the input stream is seen and all the data has been written to\n    /// the output stream.\n    ///\n    /// This function returns the number of bytes transferred.\n    forward: func(\n        this: output-stream,\n        /// The stream to read from\n        src: input-stream\n    ) -> result<u64, stream-error>\n\n    /// Create a `pollable` which will resolve once either the specified stream\n    /// is ready to accept bytes or the other end of the stream has been closed.\n    subscribe-to-output-stream: func(this: output-stream) -> pollable\n\n    /// Dispose of the specified `output-stream`, after which it may no longer\n    /// be used.\n    drop-output-stream: func(this: output-stream)\n}\n";
+const _: &str = "// The `wasi:http/outgoing-handler` interface is meant to be imported by\n// components and implemented by the host.\n//\n//   NOTE: in Preview3, this interface will be merged with\n//   `wasi:http/outgoing-handler` into a single `wasi:http/handler` interface\n//   that takes a `request` parameter and returns a `response` result.\n//\ndefault interface outgoing-handler {\n  use pkg.types.{outgoing-request, request-options, future-incoming-response}\n\n  // The parameter and result types of the `handle` function allow the caller\n  // to concurrently stream the bodies of the outgoing request and the incoming\n  // response.\n  handle: func(\n    request: outgoing-request,\n    options: option<request-options>\n  ) -> future-incoming-response\n}\n";
+const _: &str = "// The `wasi:http/incoming-handler` interface is meant to be exported by\n// components and called by the host in response to a new incoming HTTP\n// response.\n//\n//   NOTE: in Preview3, this interface will be merged with\n//   `wasi:http/outgoing-handler` into a single `wasi:http/handler` interface\n//   that takes a `request` parameter and returns a `response` result.\n//\ndefault interface incoming-handler {\n  use pkg.types.{incoming-request, response-outparam}\n\n  // The `handle` function takes an outparam instead of returning its response\n  // so that the component may stream its response while streaming any other\n  // request or response bodies. The callee MUST write a response to the\n  // `response-out` and then finish the response before returning. The `handle`\n  // function is allowed to continue execution after finishing the response\'s\n  // output stream. While this post-response execution is taken off the\n  // critical path, since there is no return value, there is no way to report\n  // its success or failure.\n  handle: func(\n    request: incoming-request,\n    response-out: response-outparam\n  )\n}\n";
+const _: &str = "// The `wasi:http/proxy` world captures a widely-implementable intersection of\n// hosts that includes HTTP forward and reverse proxies. Components targeting\n// this world may concurrently stream in and out any number of incoming and\n// outgoing HTTP requests.\ndefault world proxy {\n  // HTTP proxies have access to time and randomness.\n  import random: random.random\n  // TODO: add `import wall-clock: clocks.wall-clock`\n  // TODO: add `import monotonic-clock: clocks.monotonic-clock`\n\n  // This is the default logging handler to use when user code simply wants to\n  // log to a developer-facing console (e.g., via `console.log()`).\n  import console: logging.handler\n\n  // TODO: Once the underlying Wit template machinery is implemented, add:\n  //\n  //   import loggers: interface {\n  //     *: logging.handler\n  //   }\n  //\n  // which will allow a component to import any number of non-default logging\n  // backends that different categories of log messages can be sent to.\n\n  // TODO: add `import metrics: metrics.counters`\n\n  // This is the default handler to use when user code simply wants to make an\n  // HTTP request (e.g., via `fetch()`) but doesn\'t otherwise specify a\n  // particular handler.\n  import default-outgoing-HTTP: pkg.outgoing-handler\n\n  // TODO: Once the underlying Wit template machinery is implemented, add:\n  //\n  //  import upstreams: interface {\n  //    *: pkg.outgoing-handler\n  //  }\n  //\n  // which will allow a component to import any number of non-default backends\n  // that HTTP requests can be dispatched to.\n\n  // The host delivers incoming HTTP requests to a component by calling the\n  // `handle` function of this exported interface. A host may arbitrarily reuse\n  // or not reuse component instance when delivering incoming HTTP requests and\n  // thus a component must be able to handle 0..N calls to `handle`.\n  export HTTP: pkg.incoming-handler\n}\n";
+const _: &str = "// The `wasi:http/types` interface is meant to be imported by components to\n// define the HTTP resource types and operations used by the component\'s\n// imported and exported interfaces.\ndefault interface types {\n  use io.streams.{input-stream, output-stream}\n  use poll.poll.{pollable}\n  \n  // This type corresponds to HTTP standard Methods.\n  variant method {\n    get,\n    head,\n    post,\n    put,\n    delete,\n    connect,\n    options,\n    trace,\n    patch,\n    other(string)\n  }\n\n  // This type corresponds to HTTP standard Related Schemes.\n  variant scheme {\n    HTTP,\n    HTTPS,\n    other(string)\n  }\n\n  // TODO: perhaps better align with HTTP semantics?\n  // This type enumerates the different kinds of errors that may occur when\n  // initially returning a response.\n  variant error {\n      invalid-url(string),\n      timeout-error(string),\n      protocol-error(string),\n      status-error(u16),\n      unexpected-error(string)\n  }\n\n  // This following block defines the `fields` resource which corresponds to\n  // HTTP standard Fields. Soon, when resource types are added, the `type\n  // fields = u32` type alias can be replaced by a proper `resource fields`\n  // definition containing all the functions using the method syntactic sugar.\n  type fields = u32\n  drop-fields: func(fields: fields)\n  new-fields: func(entries: list<tuple<string,string>>) -> fields\n  fields-get: func(fields: fields, name: string) -> list<string>\n  fields-set: func(fields: fields, name: string, value: list<string>)\n  fields-delete: func(fields: fields, name: string)\n  fields-append: func(fields: fields, name: string, value: string)\n  fields-entries: func(fields: fields) -> list<tuple<string,string>>\n  fields-clone: func(fields: fields) -> fields\n\n  type headers = fields\n  type trailers = fields\n\n  // The following block defines stream types which corresponds to the HTTP\n  // standard Contents and Trailers. With Preview3, all of these fields can be\n  // replaced by a stream<u8, option<trailers>>. In the interim, we need to\n  // build on separate resource types defined by `wasi:io/streams`. The\n  // `finish-` functions emulate the stream\'s result value and MUST be called\n  // exactly once after the final read/write from/to the stream before dropping\n  // the stream.\n  type incoming-stream = input-stream\n  type outgoing-stream = output-stream\n  finish-incoming-stream: func(s: incoming-stream) -> option<trailers>\n  finish-outgoing-stream: func(s: outgoing-stream, trailers: option<trailers>)\n\n  // The following block defines the `incoming-request` and `outgoing-request`\n  // resource types that correspond to HTTP standard Requests. Soon, when\n  // resource types are added, the `u32` type aliases can be replaced by\n  // proper `resource` type definitions containing all the functions as\n  // methods. Later, Preview2 will allow both types to be merged together into\n  // a single `request` type (that uses the single `stream` type mentioned\n  // above). The `consume` and `write` methods may only be called once (and\n  // return failure thereafter).\n  type incoming-request = u32\n  type outgoing-request = u32\n  drop-incoming-request: func(request: incoming-request)\n  drop-outgoing-request: func(request: outgoing-request)\n  incoming-request-method: func(request: incoming-request) -> method\n  incoming-request-path: func(request: incoming-request) -> string\n  incoming-request-scheme: func(request: incoming-request) -> option<scheme>\n  incoming-request-authority: func(request: incoming-request) -> string\n  incoming-request-headers: func(request: incoming-request) -> headers\n  incoming-request-consume: func(request: incoming-request) -> result<incoming-stream>\n  new-outgoing-request: func(\n    method: method,\n    path: string,\n    scheme: option<scheme>,\n    authority: string,\n    headers: headers\n  ) -> outgoing-request\n  outgoing-request-write: func(request: outgoing-request) -> result<outgoing-stream>\n\n  // Additional optional parameters that can be set when making a request.\n  record request-options {\n    // The following timeouts are specific to the HTTP protocol and work\n    // independently of the overall timeouts passed to `io.poll.poll-oneoff`.\n\n    // The timeout for the initial connect.\n    connect-timeout-ms: option<u32>,\n\n    // The timeout for receiving the first byte of the response body.\n    first-byte-timeout-ms: option<u32>,\n\n    // The timeout for receiving the next chunk of bytes in the response body\n    // stream.\n    between-bytes-timeout-ms: option<u32>\n  }\n\n  // The following block defines a special resource type used by the\n  // `wasi:http/incoming-handler` interface. When resource types are added, this\n  // block can be replaced by a proper `resource response-outparam { ... }`\n  // definition. Later, with Preview3, the need for an outparam goes away entirely\n  // (the `wasi:http/handler` interface used for both incoming and outgoing can\n  // simply return a `stream`).\n  type response-outparam = u32\n  drop-response-outparam: func(response: response-outparam)\n  set-response-outparam: func(response: result<outgoing-response, error>) -> result\n\n  // This type corresponds to the HTTP standard Status Code.\n  type status-code = u16\n\n  // The following block defines the `incoming-response` and `outgoing-response`\n  // resource types that correspond to HTTP standard Responses. Soon, when\n  // resource types are added, the `u32` type aliases can be replaced by proper\n  // `resource` type definitions containing all the functions as methods. Later,\n  // Preview2 will allow both types to be merged together into a single `response`\n  // type (that uses the single `stream` type mentioned above). The `consume` and\n  // `write` methods may only be called once (and return failure thereafter).\n  type incoming-response = u32\n  type outgoing-response = u32\n  drop-incoming-response: func(response: incoming-response)\n  drop-outgoing-response: func(response: outgoing-response)\n  incoming-response-status: func(response: incoming-response) -> status-code\n  incoming-response-headers: func(response: incoming-response) -> headers\n  incoming-response-consume: func(response: incoming-response) -> result<incoming-stream>\n  new-outgoing-response: func(\n    status-code: status-code,\n    headers: headers\n  ) -> outgoing-response\n  outgoing-response-write: func(response: outgoing-response) -> result<outgoing-stream>\n\n  // The following block defines a special resource type used by the\n  // `wasi:http/outgoing-handler` interface to emulate\n  // `future<result<response, error>>` in advance of Preview3. Given a\n  // `future-incoming-response`, the client can call the non-blocking `get`\n  // method to get the result if it is available. If the result is not available,\n  // the client can call `listen` to get a `pollable` that can be passed to\n  // `io.poll.poll-oneoff`.\n  type future-incoming-response = u32\n  drop-future-incoming-response: func(f: future-incoming-response)\n  future-incoming-response-get: func(f: future-incoming-response) -> option<result<incoming-response, error>>\n  listen-to-future-incoming-response: func(f: future-incoming-response) -> pollable\n}\n";
+struct WasiHttp {}
+impl default_outgoing_http::Host for WasiHttp {}

@@ -33,6 +33,7 @@ wasmtime-wasi = { workspace = true, features = ["exit"] }
 wasmtime-wasi-crypto = { workspace = true, optional = true }
 wasmtime-wasi-nn = { workspace = true, optional = true }
 wasmtime-wasi-threads = { workspace = true, optional = true }
+wasi-http = { workspace = true }
 clap = { workspace = true, features = ["color", "suggestions", "derive"] }
 anyhow = { workspace = true }
 target-lexicon = { workspace = true }
@@ -161,6 +162,8 @@ cranelift-jit = { path = "cranelift/jit", version = "0.95.0" }
 cranelift-fuzzgen = { path = "cranelift/fuzzgen" }
 cranelift-bforest = { path = "cranelift/bforest", version = "0.95.0" }
 cranelift = { path = "cranelift/umbrella", version = "0.95.0" }
+
+wasi-http = { path = "crates/wasi-http", version = "=0.0.1" }
 
 winch-codegen = { path = "winch/codegen", version = "=0.6.0" }
 winch-filetests = { path = "winch/filetests" }
