@@ -3,8 +3,7 @@
 //! to the local filesystem on both Unix and Windows.
 //!
 //! All syscalls are hidden behind the `cap-std` hierarchy, with the lone
-//! exception of the `sched` implementation, which is provided for both unix
-//! and windows in separate modules.
+//! exception of the `sched` implementation.
 //!
 //! Any `wasi_common::{WasiCtx, WasiCtxBuilder}` is interoperable with the
 //! `wasi-cap-std-sync` crate. However, for convenience, `wasi-cap-std-sync`

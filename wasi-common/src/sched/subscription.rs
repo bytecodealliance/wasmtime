@@ -30,6 +30,9 @@ impl<'a> RwSubscription<'a> {
     pub fn result(&mut self) -> Option<Result<(u64, RwEventFlags), Error>> {
         self.status.take()
     }
+    pub fn is_complete(&self) -> bool {
+        self.status.is_some()
+    }
 }
 
 pub struct MonotonicClockSubscription<'a> {
@@ -54,23 +57,28 @@ impl<'a> MonotonicClockSubscription<'a> {
 }
 
 pub enum Subscription<'a> {
-    Read(RwSubscription<'a>),
-    Write(RwSubscription<'a>),
+    ReadWrite(RwSubscription<'a>, RwSubscriptionKind),
     MonotonicClock(MonotonicClockSubscription<'a>),
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum RwSubscriptionKind {
+    Read,
+    Write,
 }
 
 #[derive(Debug)]
 pub enum SubscriptionResult {
-    Read(Result<(u64, RwEventFlags), Error>),
-    Write(Result<(u64, RwEventFlags), Error>),
+    ReadWrite(Result<(u64, RwEventFlags), Error>, RwSubscriptionKind),
     MonotonicClock(Result<(), Error>),
 }
 
 impl SubscriptionResult {
     pub fn from_subscription(s: Subscription) -> Option<SubscriptionResult> {
         match s {
-            Subscription::Read(mut s) => s.result().map(SubscriptionResult::Read),
-            Subscription::Write(mut s) => s.result().map(SubscriptionResult::Write),
+            Subscription::ReadWrite(mut s, kind) => s
+                .result()
+                .map(|sub| SubscriptionResult::ReadWrite(sub, kind)),
             Subscription::MonotonicClock(s) => s.result().map(SubscriptionResult::MonotonicClock),
         }
     }

@@ -13,10 +13,17 @@ use std::any::Any;
 use std::convert::TryInto;
 use std::io::{self, Read, Write};
 use std::sync::{Arc, RwLock};
+use system_interface::io::ReadReady;
 
 /// A virtual pipe read end.
 ///
-/// A variety of `From` impls are provided so that common pipe types are easy to create. For example:
+/// This reads from a source that implements the [`Read`] trait. It
+/// also requires the [`ReadReady`] trait, which is implemented for many
+/// popular `Read`-implementing types and is easy to implemented for new
+/// types.
+///
+/// A variety of `From` impls are provided so that common pipe types are
+/// easy to create. For example:
 ///
 /// ```no_run
 /// use wasi_common::{pipe::ReadPipe, WasiCtx, Table};
@@ -30,11 +37,11 @@ use std::sync::{Arc, RwLock};
 /// ctx.set_stdin(Box::new(stdin.clone()));
 /// ```
 #[derive(Debug)]
-pub struct ReadPipe<R: Read> {
+pub struct ReadPipe<R: Read + ReadReady> {
     reader: Arc<RwLock<R>>,
 }
 
-impl<R: Read> Clone for ReadPipe<R> {
+impl<R: Read + ReadReady> Clone for ReadPipe<R> {
     fn clone(&self) -> Self {
         Self {
             reader: self.reader.clone(),
@@ -42,7 +49,7 @@ impl<R: Read> Clone for ReadPipe<R> {
     }
 }
 
-impl<R: Read> ReadPipe<R> {
+impl<R: Read + ReadReady> ReadPipe<R> {
     /// Create a new pipe from a `Read` type.
     ///
     /// All `Handle` read operations delegate to reading from this underlying reader.
@@ -99,9 +106,13 @@ impl From<&str> for ReadPipe<io::Cursor<String>> {
 }
 
 #[async_trait::async_trait]
-impl<R: Read + Any + Send + Sync> WasiStream for ReadPipe<R> {
+impl<R: Read + ReadReady + Any + Send + Sync> WasiStream for ReadPipe<R> {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    async fn num_ready_bytes(&self) -> Result<u64, Error> {
+        Ok(self.borrow().num_ready_bytes()?)
     }
 
     async fn read(&mut self, buf: &mut [u8]) -> Result<(u64, bool), Error> {
