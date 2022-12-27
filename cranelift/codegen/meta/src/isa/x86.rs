@@ -174,7 +174,8 @@ fn define_settings(shared: &SettingGroup) -> SettingGroup {
     settings.add_predicate("not_is_pic", predicate!(!is_pic));
 
     // Presets corresponding to x86 CPUs.
-
+    // Features and architecture names are from LLVM's x86 presets:
+    // https://github.com/llvm/llvm-project/blob/d4493dd1ed58ac3f1eab0c4ca6e363e2b15bfd1c/llvm/lib/Target/X86/X86.td#L1300-L1643
     settings.add_preset(
         "baseline",
         "A baseline preset with no extensions enabled.",
