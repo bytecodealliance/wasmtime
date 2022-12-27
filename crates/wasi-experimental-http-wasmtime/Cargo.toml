@@ -1,0 +1,24 @@
+[package]
+    name        = "wasi-experimental-http-wasmtime"
+    version     = "0.10.0"
+    authors     = [ "Radu Matei <radu.matei@microsoft.com>" ]
+    edition     = "2021"
+    repository  = "https://github.com/deislabs/wasi-experimental-http"
+    license     = "MIT"
+    description = "Experimental HTTP library for WebAssembly in Wasmtime"
+    readme      = "readme.md"
+
+[dependencies]
+    anyhow = "1.0"
+    bytes = "1"
+    futures = "0.3"
+    http = "0.2"
+    reqwest = { version = "0.11", default-features = true, features = [
+        "json",
+        "blocking",
+    ] }
+    thiserror = "1.0"
+    tokio = { version = "1.4.0", features = [ "full" ] }
+    tracing = { version = "0.1", features = [ "log" ] }
+    url = "2.2.1"
+    wasmtime = { workspace = true }
