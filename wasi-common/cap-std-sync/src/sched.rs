@@ -72,13 +72,11 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
     if !ready {
         loop {
             let poll_timeout = if let Some(t) = poll.earliest_clock_deadline() {
-                let duration = t.duration_until().unwrap_or(0);
-
                 // Convert the timeout to milliseconds for `poll`, rounding up.
                 //
                 // TODO: On Linux and FreeBSD, we could use `ppoll` instead
                 // which takes a `timespec.`
-                ((duration + 999) / 1000)
+                ((t.deadline + 999) / 1000)
                     .try_into()
                     .map_err(|_| Error::overflow().context("poll timeout"))?
             } else {
