@@ -1,3 +1,4 @@
+use io_extras::borrowed::BorrowedWriteable;
 #[cfg(windows)]
 use io_extras::os::windows::{AsHandleOrSocket, BorrowedHandleOrSocket};
 use io_lifetimes::AsSocketlike;
@@ -313,10 +314,10 @@ macro_rules! wasi_stream_write_impl {
                 dst: &mut dyn WasiStream,
                 nelem: u64,
             ) -> Result<(u64, bool), Error> {
-                if let Some(handle) = dst.pollable_write() {
+                if let Some(writeable) = dst.pollable_write() {
                     let num = io::copy(
                         &mut io::Read::take(&self.0, nelem),
-                        &mut &*handle.as_socketlike_view::<$std_ty>(),
+                        &mut BorrowedWriteable::borrow(writeable),
                     )?;
                     Ok((num, num < nelem))
                 } else {

@@ -24,13 +24,13 @@ system-interface = { version = "0.25.0", features = ["cap_std_impls"] }
 tracing = { workspace = true }
 io-lifetimes = { workspace = true }
 is-terminal = "0.4.0"
+io-extras = "0.17.1"
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["fs"] }
 
 [target.'cfg(windows)'.dependencies]
 once_cell = { workspace = true }
-io-extras = "0.17.1"
 rustix = { workspace = true, features = ["net"] }
 
 [target.'cfg(windows)'.dependencies.windows-sys]

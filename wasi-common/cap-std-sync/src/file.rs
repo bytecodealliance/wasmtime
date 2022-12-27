@@ -283,8 +283,8 @@ pub fn get_fd_flags<Filelike: AsFilelike>(f: Filelike) -> io::Result<wasi_common
 /// Return the file-descriptor flags for a given file-like object.
 ///
 /// This returns the flags needed to implement [`WasiFile::get_fdflags`].
-pub fn is_read_write<Filelike: AsFilelike>(f: Filelike) -> io::Result<(bool, bool)> {
-    f.is_read_write()
+pub fn is_read_write<T: IsReadWrite>(t: &T) -> io::Result<(bool, bool)> {
+    t.is_read_write()
 }
 
 fn convert_advice(advice: Advice) -> system_interface::fs::Advice {
