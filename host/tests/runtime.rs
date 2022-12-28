@@ -1,6 +1,6 @@
 use anyhow::Result;
 use cap_rand::RngCore;
-use cap_std::{fs::Dir, time::Duration};
+use cap_std::{ambient_authority, fs::Dir, time::Duration};
 use host::{add_to_linker, Wasi, WasiCtx};
 use std::{
     io::{Cursor, Write},
@@ -217,12 +217,10 @@ async fn run_file_read(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
 
     std::fs::File::create(dir.path().join("bar.txt"))?.write_all(b"And stood awhile in thought")?;
 
-    let descriptor =
-        store
-            .data_mut()
-            .push_dir(Box::new(wasi_cap_std_sync::dir::Dir::from_cap_std(
-                Dir::from_std_file(std::fs::File::open(dir.path())?),
-            )))?;
+    let dir = Dir::open_ambient_dir(dir.path(), ambient_authority())?;
+    let descriptor = store
+        .data_mut()
+        .push_dir(Box::new(wasi_cap_std_sync::dir::Dir::from_cap_std(dir)))?;
 
     wasi.command(
         &mut store,
