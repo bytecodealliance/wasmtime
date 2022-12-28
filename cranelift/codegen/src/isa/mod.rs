@@ -297,6 +297,9 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
 
     /// The function alignment required by this ISA.
     fn function_alignment(&self) -> u32;
+
+    /// Produce an owned copy of this ISA object.
+    fn cloned(&self) -> Box<dyn TargetIsa>;
 }
 
 /// Methods implemented for free for target ISA!

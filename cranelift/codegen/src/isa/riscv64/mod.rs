@@ -28,6 +28,7 @@ use inst::crate_reg_eviroment;
 use self::inst::EmitInfo;
 
 /// An riscv64 backend.
+#[derive(Clone)]
 pub struct Riscv64Backend {
     triple: Triple,
     flags: shared_settings::Flags,
@@ -168,6 +169,10 @@ impl TargetIsa for Riscv64Backend {
 
     fn function_alignment(&self) -> u32 {
         4
+    }
+
+    fn cloned(&self) -> Box<dyn TargetIsa> {
+        Box::new(self.clone())
     }
 }
 

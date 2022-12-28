@@ -28,6 +28,7 @@ use inst::create_reg_env;
 use self::inst::EmitInfo;
 
 /// An AArch64 backend.
+#[derive(Clone)]
 pub struct AArch64Backend {
     triple: Triple,
     flags: shared_settings::Flags,
@@ -194,6 +195,10 @@ impl TargetIsa for AArch64Backend {
         // We use 32-byte alignment for performance reasons, but for correctness we would only need
         // 4-byte alignment.
         32
+    }
+
+    fn cloned(&self) -> Box<dyn TargetIsa> {
+        Box::new(self.clone())
     }
 }
 
