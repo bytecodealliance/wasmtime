@@ -615,8 +615,10 @@
   (gen_select ty (truthy_to_reg cty (normalize_cmp_value cty c)) x y))
 
 (rule 1
-  (lower (has_type ty (select (icmp cc a b) x y)))
-  (gen_select_reg cc a b x y))
+  (lower (has_type ty (select (icmp cc a b @ (value_type in_ty)) x y)))
+  (let ((a Reg (normalize_cmp_value in_ty a))
+        (b Reg (normalize_cmp_value in_ty b)))
+    (gen_select_reg cc a b x y)))
 
 ;;;;;  Rules for `bitselect`;;;;;;;;;
 
