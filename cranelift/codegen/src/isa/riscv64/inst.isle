@@ -2011,8 +2011,12 @@
       (step WritableReg (temp_writable_reg $I64))
       (_ Unit (emit (MInst.Rev8 rs step tmp rd))))
     (writable_reg_to_reg rd)))
+
 (decl pure has_zbkb () bool)
 (extern constructor has_zbkb has_zbkb)
+
+(decl pure has_zbb () bool)
+(extern constructor has_zbb has_zbb)
 
 (decl gen_brev8 (Reg Type) Reg)
 (rule 1
@@ -2038,14 +2042,41 @@
     ((tmp Reg (gen_bit_not y)))
     (alu_rrr (AluOPRRR.Xor) x tmp)))
 
-(decl lower_iabs (Reg Type) Reg)
-(rule
-  (lower_iabs r ty)
-  (let
-    ((tmp Reg (ext_int_if_need $true r ty))
-      (a Reg (gen_bit_not r))
-      (a2 Reg (alu_rr_imm12 (AluOPRRI.Addi) a (imm12_const 1))))
-    (gen_select_reg (IntCC.SignedLessThan) r (zero_reg) a2 r)))
+;; Negates x
+;; Equivalent to 0 - x
+(decl neg (Type ValueRegs) ValueRegs)
+(rule 1 (neg (fits_in_64 (ty_int ty)) val)
+  (value_reg
+    (alu_rrr (AluOPRRR.Sub) (zero_reg) (value_regs_get val 0))))
+
+(rule 2 (neg $I128 val)
+  (i128_sub (value_regs_zero) val))
+
+
+;; Selects the greatest of two registers as signed values.
+(decl max (Type Reg Reg) Reg)
+(rule (max (fits_in_64 (ty_int ty)) x y)
+  (if-let $true (has_zbb))
+  (alu_rrr (AluOPRRR.Max) x y))
+
+(rule (max (fits_in_64 (ty_int ty)) x y)
+  (if-let $false (has_zbb))
+  (gen_select_reg (IntCC.SignedGreaterThan) x y x y))
+
+
+(decl lower_iabs (Type Reg) Reg)
+
+; I64 and lower
+; Generate the following code:
+;   sext.{b,h,w} a0, a0
+;   neg a1, a0
+;   max a0, a0, a1
+(rule (lower_iabs (fits_in_64 ty) val)
+  (let ((extended Reg (ext_int_if_need $true val ty))
+        (negated Reg (neg $I64 extended)))
+    (max $I64 extended negated)))
+
+
 
 (decl gen_trapff (FloatCC Reg Reg Type TrapCode) InstOutput)
 (rule
