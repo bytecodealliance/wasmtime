@@ -1143,86 +1143,128 @@ impl MachInstEmit for Inst {
             } => {
                 let index = allocs.next(index);
                 let tmp1 = allocs.next_writable(tmp1);
+                let tmp2 = writable_spilltmp_reg();
 
-                Inst::load_constant_u32(writable_spilltmp_reg(), targets.len() as u64, &mut |_| {
-                    writable_spilltmp_reg()
-                })
-                .iter()
-                .for_each(|i| i.emit(&[], sink, emit_info, state));
+                // The default target is passed in as the 0th element of `targets`
+                // separate it here for clarity.
+                let default_target = targets[0];
+                let targets = &targets[1..];
+
+                // We emit a bounds check on the index, if the index is larger than the number of
+                // jump table entries, we jump to the default block.  Otherwise we compute a jump
+                // offset by multiplying the index by 8 (the size of each entry) and then jump to
+                // that offset. Each jump table entry is a regular auipc+jalr which we emit sequentially.
+                //
+                // Build the following sequence:
+                // bounds_check:
+                //     li      tmp, n_labels
+                //     bltu    index, tmp, compute_target
+                // jump_to_default_block:
+                //     auipc   pc, 0
+                //     jalr    zero, pc, default_block
+                // compute_target:
+                //     auipc   pc, 0
+                //     slli    tmp, index, 3
+                //     add     pc, pc, tmp
+                //     jalr    zero, pc, 0x10
+                // jump_table:
+                //     ; This repeats for each entry in the jumptable
+                //     auipc   pc, 0
+                //     jalr    zero, pc, block_target
+
+                // Bounds check.
+                //
+                // Check if the index passed in is larger than the number of jumptable
+                // entries that we have. If it is, we fallthrough to a jump into the
+                // default block.
+                Inst::load_constant_u32(tmp2, targets.len() as u64, &mut |_| tmp2)
+                    .iter()
+                    .for_each(|i| i.emit(&[], sink, emit_info, state));
                 Inst::CondBr {
                     taken: BranchTarget::offset(Inst::INSTRUCTION_SIZE * 3),
                     not_taken: BranchTarget::zero(),
                     kind: IntegerCompare {
                         kind: IntCC::UnsignedLessThan,
                         rs1: index,
-                        rs2: spilltmp_reg(),
+                        rs2: tmp2.to_reg(),
                     },
                 }
                 .emit(&[], sink, emit_info, state);
                 sink.use_label_at_offset(
                     sink.cur_offset(),
-                    targets[0].as_label().unwrap(),
+                    default_target.as_label().unwrap(),
                     LabelUse::PCRel32,
                 );
-                Inst::construct_auipc_and_jalr(None, writable_spilltmp_reg(), 0)
+                Inst::construct_auipc_and_jalr(None, tmp2, 0)
                     .iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
 
-                let mut insts = SmallInstVec::new();
-                // get current pc.
-                insts.push(Inst::Auipc {
+                // Compute the jump table offset.
+                // We need to emit a PC relative offset,
+
+                // Get the current PC.
+                Inst::Auipc {
                     rd: tmp1,
                     imm: Imm20::from_bits(0),
-                });
-                // t *= 8; very jump that I emit is 8 byte size.
-                insts.push(Inst::AluRRImm12 {
+                }
+                .emit(&[], sink, emit_info, state);
+
+                // Multiply the index by 8, since that is the size in
+                // bytes of each jump table entry
+                Inst::AluRRImm12 {
                     alu_op: AluOPRRI::Slli,
-                    rd: writable_spilltmp_reg(),
+                    rd: tmp2,
                     rs: index,
                     imm12: Imm12::from_bits(3),
-                });
-                // tmp1 += t
-                insts.push(Inst::AluRRR {
+                }
+                .emit(&[], sink, emit_info, state);
+
+                // Calculate the base of the jump, PC + the offset from above.
+                Inst::AluRRR {
                     alu_op: AluOPRRR::Add,
                     rd: tmp1,
                     rs1: tmp1.to_reg(),
-                    rs2: spilltmp_reg(),
-                });
-                insts.push(Inst::Jalr {
+                    rs2: tmp2.to_reg(),
+                }
+                .emit(&[], sink, emit_info, state);
+
+                // Jump to the middle of the jump table.
+                // We add a 16 byte offset here, since we used 4 instructions
+                // since the AUIPC that was used to get the PC.
+                Inst::Jalr {
                     rd: writable_zero_reg(),
                     base: tmp1.to_reg(),
-                    offset: Imm12::from_bits(16),
-                });
-
-                // here is all the jumps.
-                let mut need_label_use = vec![];
-                for t in targets.iter().skip(1) {
-                    need_label_use.push((insts.len(), t.clone()));
-                    insts.extend(Inst::construct_auipc_and_jalr(
-                        None,
-                        writable_spilltmp_reg(),
-                        0,
-                    ));
+                    offset: Imm12::from_bits((4 * Inst::INSTRUCTION_SIZE) as i16),
                 }
-                // emit island if need.
-                let distance = (insts.len() * 4) as u32;
+                .emit(&[], sink, emit_info, state);
+
+                // Emit the jump table.
+                //
+                // Each entry is a aupc + jalr to the target block. We also start with a island
+                // if necessary.
+
+                // Each entry in the jump table is 2 instructions, so 8 bytes. Check if
+                // we need to emit a jump table here to support that jump.
+                let distance = (targets.len() * 2 * Inst::INSTRUCTION_SIZE as usize) as u32;
                 if sink.island_needed(distance) {
                     sink.emit_island(distance);
                 }
-                let mut need_label_use = &need_label_use[..];
-                insts.into_iter().enumerate().for_each(|(index, inst)| {
-                    if !need_label_use.is_empty() && need_label_use[0].0 == index {
-                        sink.use_label_at_offset(
-                            sink.cur_offset(),
-                            need_label_use[0].1.as_label().unwrap(),
-                            LabelUse::PCRel32,
-                        );
-                        need_label_use = &need_label_use[1..];
-                    }
-                    inst.emit(&[], sink, emit_info, state);
-                });
-                // emit the island before, so we can safely
-                // disable the worst-case-size check in this case.
+
+                // Emit the jumps back to back
+                for target in targets.iter() {
+                    sink.use_label_at_offset(
+                        sink.cur_offset(),
+                        target.as_label().unwrap(),
+                        LabelUse::PCRel32,
+                    );
+
+                    Inst::construct_auipc_and_jalr(None, tmp2, 0)
+                        .iter()
+                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                }
+
+                // We've just emitted an island that is safe up to *here*.
+                // Mark it as such so that we don't needlessly emit additional islands.
                 start_off = sink.cur_offset();
             }
 
