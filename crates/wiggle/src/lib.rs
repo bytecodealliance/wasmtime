@@ -482,6 +482,11 @@ impl<'a, T: ?Sized + Pointee> GuestPtr<'a, T> {
     {
         GuestPtr::new(self.mem, (self.pointer, elems))
     }
+
+    /// Check if this pointer references WebAssembly shared memory.
+    pub fn is_shared_memory(&self) -> bool {
+        self.mem.is_shared_memory()
+    }
 }
 
 impl<'a, T> GuestPtr<'a, [T]> {

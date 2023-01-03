@@ -1111,15 +1111,24 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         buf: &GuestPtr<'a, u8>,
         buf_len: types::Size,
     ) -> Result<(), Error> {
-        let buf = buf.as_array(buf_len).as_unsafe_slice_mut()?;
+        let buf = buf.as_array(buf_len);
         if buf.is_shared_memory() {
             // If the Wasm memory is shared, copy to an intermediate buffer to
             // avoid Rust unsafety (i.e., the called function could rely on
             // `&mut [u8]`'s exclusive ownership which is not guaranteed due to
             // potential access from other threads).
-            let mut tmp = vec![0; buf.len().min(MAX_SHARED_BUFFER_SIZE)];
-            self.random.try_fill_bytes(&mut tmp)?;
-            buf.copy_from_slice(&tmp)?;
+            let mut copied: u32 = 0;
+            while copied < buf.len() {
+                let len = (buf.len() - copied).min(MAX_SHARED_BUFFER_SIZE as u32);
+                let mut tmp = vec![0; len as usize];
+                self.random.try_fill_bytes(&mut tmp)?;
+                let dest = buf
+                    .get_range(copied..copied + len)
+                    .unwrap()
+                    .as_unsafe_slice_mut()?;
+                dest.copy_from_slice(&tmp)?;
+                copied += len;
+            }
         } else {
             // If the Wasm memory is non-shared, copy directly into the linear
             // memory.
