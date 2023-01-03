@@ -2657,7 +2657,16 @@ impl Inst {
                 }
                 s
             }
-            &Inst::Ret { .. } => "ret".to_string(),
+            &Inst::Ret { ref rets } => {
+                let mut s = "ret".to_string();
+                for ret in rets {
+                    use std::fmt::Write;
+                    let preg = pretty_print_reg(ret.preg, &mut empty_allocs);
+                    let vreg = pretty_print_reg(ret.vreg, allocs);
+                    write!(&mut s, " {}={}", vreg, preg).unwrap();
+                }
+                s
+            }
             &Inst::AuthenticatedRet { key, is_hint, .. } => {
                 let key = match key {
                     APIKey::A => "a",
