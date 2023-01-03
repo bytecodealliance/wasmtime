@@ -11,7 +11,7 @@ use std::ops::Deref;
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 use wasmtime_environ::component::VariantInfo;
 
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Clone)]
 pub struct List {
     ty: types::List,
     values: Box<[Val]>,
@@ -57,7 +57,7 @@ impl fmt::Debug for List {
     }
 }
 
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Clone)]
 pub struct Record {
     ty: types::Record,
     values: Box<[Val]>,
@@ -127,7 +127,7 @@ impl fmt::Debug for Record {
     }
 }
 
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Clone)]
 pub struct Tuple {
     ty: types::Tuple,
     values: Box<[Val]>,
@@ -176,7 +176,7 @@ impl fmt::Debug for Tuple {
     }
 }
 
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Clone)]
 pub struct Variant {
     ty: types::Variant,
     discriminant: u32,
@@ -284,7 +284,7 @@ impl fmt::Debug for Enum {
     }
 }
 
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Clone)]
 pub struct Union {
     ty: types::Union,
     discriminant: u32,
@@ -336,7 +336,7 @@ impl fmt::Debug for Union {
     }
 }
 
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Clone)]
 pub struct OptionVal {
     ty: types::OptionType,
     discriminant: u32,
@@ -378,7 +378,7 @@ impl fmt::Debug for OptionVal {
     }
 }
 
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Clone)]
 pub struct ResultVal {
     ty: types::ResultType,
     discriminant: u32,
@@ -487,7 +487,7 @@ impl fmt::Debug for Flags {
 }
 
 /// Represents possible runtime values which a component function can either consume or produce
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[allow(missing_docs)]
 pub enum Val {
     Bool(bool),
@@ -499,8 +499,8 @@ pub enum Val {
     U32(u32),
     S64(i64),
     U64(u64),
-    Float32(u32),
-    Float64(u64),
+    Float32(f32),
+    Float64(f64),
     Char(char),
     String(Box<str>),
     List(List),
@@ -560,8 +560,8 @@ impl Val {
             Type::U32 => Val::U32(u32::lift(store, options, next(src))?),
             Type::S64 => Val::S64(i64::lift(store, options, next(src))?),
             Type::U64 => Val::U64(u64::lift(store, options, next(src))?),
-            Type::Float32 => Val::Float32(u32::lift(store, options, next(src))?),
-            Type::Float64 => Val::Float64(u64::lift(store, options, next(src))?),
+            Type::Float32 => Val::Float32(f32::lift(store, options, next(src))?),
+            Type::Float64 => Val::Float64(f64::lift(store, options, next(src))?),
             Type::Char => Val::Char(char::lift(store, options, next(src))?),
             Type::String => {
                 Val::String(Box::<str>::lift(store, options, &[*next(src), *next(src)])?)
@@ -688,8 +688,8 @@ impl Val {
             Type::U32 => Val::U32(u32::load(mem, bytes)?),
             Type::S64 => Val::S64(i64::load(mem, bytes)?),
             Type::U64 => Val::U64(u64::load(mem, bytes)?),
-            Type::Float32 => Val::Float32(u32::load(mem, bytes)?),
-            Type::Float64 => Val::Float64(u64::load(mem, bytes)?),
+            Type::Float32 => Val::Float32(f32::load(mem, bytes)?),
+            Type::Float64 => Val::Float64(f64::load(mem, bytes)?),
             Type::Char => Val::Char(char::load(mem, bytes)?),
             Type::String => Val::String(Box::<str>::load(mem, bytes)?),
             Type::List(handle) => {
