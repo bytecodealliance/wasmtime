@@ -746,7 +746,7 @@ impl<'a> GuestPtr<'a, str> {
     /// a [`GuestStrCow::Borrowed`] (a thin wrapper over [`GuestStr<'_, T>]`).
     pub fn as_cow(&self) -> Result<GuestStrCow<'a>, GuestError> {
         match self.as_bytes().as_unsafe_slice_mut()?.shared_borrow() {
-            UnsafeBorrowResult::Ok(s) => Ok(GuestStrCow::Borrowed(GuestStr(s))),
+            UnsafeBorrowResult::Ok(s) => Ok(GuestStrCow::Borrowed(s.try_into()?)),
             UnsafeBorrowResult::Shared(_) => {
                 let copied = self.as_bytes().to_vec()?;
                 let utf8_string = String::from_utf8(copied).map_err(|e| e.utf8_error())?;
