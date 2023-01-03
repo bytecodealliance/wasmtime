@@ -24,6 +24,24 @@ fn link_undefined() -> Result<()> {
 }
 
 #[test]
+fn test_unknown_import_error() -> Result<()> {
+    let mut store = Store::<()>::default();
+    let linker = Linker::new(store.engine());
+    let module = Module::new(
+        store.engine(),
+        r#"(module (import "unknown-module" "unknown-name" (func)))"#,
+    )?;
+    let err = linker
+        .instantiate(&mut store, &module)
+        .expect_err("should fail");
+    let unknown_import: UnknownImportError = err.downcast()?;
+    assert_eq!(unknown_import.module(), "unknown-module");
+    assert_eq!(unknown_import.name(), "unknown-name");
+    unknown_import.ty().unwrap_func();
+    Ok(())
+}
+
+#[test]
 fn link_twice_bad() -> Result<()> {
     let mut store = Store::<()>::default();
     let mut linker = Linker::<()>::new(store.engine());
@@ -366,7 +384,8 @@ fn test_trapping_unknown_import() -> Result<()> {
         .get_func(&mut store, "run")
         .expect("expected a run func in the module");
 
-    assert!(run_func.call(&mut store, &[], &mut []).is_err());
+    let err = run_func.call(&mut store, &[], &mut []).unwrap_err();
+    assert!(err.is::<UnknownImportError>());
 
     // "other" does not call the import function, so it should not trap
     let other_func = instance
