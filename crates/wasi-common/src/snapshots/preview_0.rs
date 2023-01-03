@@ -5,6 +5,7 @@ use crate::sched::{
 };
 use crate::snapshots::preview_1::types as snapshot1_types;
 use crate::snapshots::preview_1::wasi_snapshot_preview1::WasiSnapshotPreview1 as Snapshot1;
+use crate::snapshots::preview_1::MAX_SHARED_BUFFER_SIZE;
 use crate::{ErrorExt, WasiCtx};
 use cap_std::time::Duration;
 use std::collections::HashSet;
@@ -532,23 +533,69 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
             .get_file_mut(u32::from(fd))?
             .get_cap_mut(FileCaps::READ)?;
 
-        let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> =
-            iovs.iter()
-                .map(|iov_ptr| {
-                    let iov_ptr = iov_ptr?;
-                    let iov: types::Iovec = iov_ptr.read()?;
-                    Ok(iov.buf.as_array(iov.buf_len).as_slice_mut()?.expect(
-                        "cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)",
-                    ))
-                })
+        let iovs: Vec<wiggle::UnsafeGuestSlice<u8>> = iovs
+            .iter()
+            .map(|iov_ptr| {
+                let iov_ptr = iov_ptr?;
+                let iov: types::Iovec = iov_ptr.read()?;
+                Ok(iov.buf.as_array(iov.buf_len).as_unsafe_slice_mut()?)
+            })
+            .collect::<Result<_, Error>>()?;
+
+        // If the first iov structure is from shared memory we can safely assume
+        // all the rest will be. We then read into memory based on the memory's
+        // shared-ness:
+        // - if not shared, we copy directly into the Wasm memory
+        // - if shared, we use an intermediate buffer; this avoids Rust unsafety
+        //   due to holding on to a `&mut [u8]` of Wasm memory when we cannot
+        //   guarantee the `&mut` exclusivity--other threads could be modifying
+        //   the data as this functions writes to it. Though likely there is no
+        //   issue with OS writing to io structs in multi-threaded scenarios,
+        //   since we do not know here if `&dyn WasiFile` does anything else
+        //   (e.g., read), we cautiously incur some performance overhead by
+        //   copying twice.
+        let is_shared_memory = iovs
+            .iter()
+            .next()
+            .and_then(|s| Some(s.is_shared_memory()))
+            .unwrap_or(false);
+        let bytes_read: u64 = if is_shared_memory {
+            // Read into an intermediate buffer.
+            let total_available_size = iovs.iter().fold(0, |a, s| a + s.len());
+            let mut buffer = vec![0; total_available_size.min(MAX_SHARED_BUFFER_SIZE)];
+            let bytes_read = f.read_vectored(&mut [IoSliceMut::new(&mut buffer)]).await?;
+
+            // Copy the intermediate buffer into the Wasm shared memory--`iov`
+            // by `iov`.
+            let mut data_to_write = &buffer[0..];
+            for iov in iovs.into_iter() {
+                let len = data_to_write.len().min(iov.len());
+                iov.copy_from_slice(&data_to_write[0..len])?;
+                data_to_write = &data_to_write[len..];
+                if data_to_write.is_empty() {
+                    break;
+                }
+            }
+
+            bytes_read
+        } else {
+            // Convert all of the unsafe guest slices to safe ones--this uses
+            // Wiggle's internal borrow checker to ensure no overlaps. We assume
+            // here that, because the memory is not shared, there are no other
+            // threads to access it while it is written to.
+            let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> = iovs
+                .into_iter()
+                .map(|iov| Ok(iov.as_slice_mut()?.unwrap()))
                 .collect::<Result<_, Error>>()?;
 
-        let mut ioslices: Vec<IoSliceMut> = guest_slices
-            .iter_mut()
-            .map(|s| IoSliceMut::new(&mut *s))
-            .collect();
+            // Read directly into the Wasm memory.
+            let mut ioslices: Vec<IoSliceMut> = guest_slices
+                .iter_mut()
+                .map(|s| IoSliceMut::new(&mut *s))
+                .collect();
+            f.read_vectored(&mut ioslices).await?
+        };
 
-        let bytes_read = f.read_vectored(&mut ioslices).await?;
         Ok(types::Size::try_from(bytes_read)?)
     }
 
@@ -563,23 +610,71 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
             .get_file_mut(u32::from(fd))?
             .get_cap_mut(FileCaps::READ | FileCaps::SEEK)?;
 
-        let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> =
-            iovs.iter()
-                .map(|iov_ptr| {
-                    let iov_ptr = iov_ptr?;
-                    let iov: types::Iovec = iov_ptr.read()?;
-                    Ok(iov.buf.as_array(iov.buf_len).as_slice_mut()?.expect(
-                        "cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)",
-                    ))
-                })
+        let iovs: Vec<wiggle::UnsafeGuestSlice<u8>> = iovs
+            .iter()
+            .map(|iov_ptr| {
+                let iov_ptr = iov_ptr?;
+                let iov: types::Iovec = iov_ptr.read()?;
+                Ok(iov.buf.as_array(iov.buf_len).as_unsafe_slice_mut()?)
+            })
+            .collect::<Result<_, Error>>()?;
+
+        // If the first iov structure is from shared memory we can safely assume
+        // all the rest will be. We then read into memory based on the memory's
+        // shared-ness:
+        // - if not shared, we copy directly into the Wasm memory
+        // - if shared, we use an intermediate buffer; this avoids Rust unsafety
+        //   due to holding on to a `&mut [u8]` of Wasm memory when we cannot
+        //   guarantee the `&mut` exclusivity--other threads could be modifying
+        //   the data as this functions writes to it. Though likely there is no
+        //   issue with OS writing to io structs in multi-threaded scenarios,
+        //   since we do not know here if `&dyn WasiFile` does anything else
+        //   (e.g., read), we cautiously incur some performance overhead by
+        //   copying twice.
+        let is_shared_memory = iovs
+            .iter()
+            .next()
+            .and_then(|s| Some(s.is_shared_memory()))
+            .unwrap_or(false);
+        let bytes_read: u64 = if is_shared_memory {
+            // Read into an intermediate buffer.
+            let total_available_size = iovs.iter().fold(0, |a, s| a + s.len());
+            let mut buffer = vec![0; total_available_size.min(MAX_SHARED_BUFFER_SIZE)];
+            let bytes_read = f
+                .read_vectored_at(&mut [IoSliceMut::new(&mut buffer)], offset)
+                .await?;
+
+            // Copy the intermediate buffer into the Wasm shared memory--`iov`
+            // by `iov`.
+            let mut data_to_write = &buffer[0..];
+            for iov in iovs.into_iter() {
+                let len = data_to_write.len().min(iov.len());
+                iov.copy_from_slice(&data_to_write[0..len])?;
+                data_to_write = &data_to_write[len..];
+                if data_to_write.is_empty() {
+                    break;
+                }
+            }
+
+            bytes_read
+        } else {
+            // Convert all of the unsafe guest slices to safe ones--this uses
+            // Wiggle's internal borrow checker to ensure no overlaps. We assume
+            // here that, because the memory is not shared, there are no other
+            // threads to access it while it is written to.
+            let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> = iovs
+                .into_iter()
+                .map(|iov| Ok(iov.as_slice_mut()?.unwrap()))
                 .collect::<Result<_, Error>>()?;
 
-        let mut ioslices: Vec<IoSliceMut> = guest_slices
-            .iter_mut()
-            .map(|s| IoSliceMut::new(&mut *s))
-            .collect();
+            // Read directly into the Wasm memory.
+            let mut ioslices: Vec<IoSliceMut> = guest_slices
+                .iter_mut()
+                .map(|s| IoSliceMut::new(&mut *s))
+                .collect();
+            f.read_vectored_at(&mut ioslices, offset).await?
+        };
 
-        let bytes_read = f.read_vectored_at(&mut ioslices, offset).await?;
         Ok(types::Size::try_from(bytes_read)?)
     }
 
@@ -593,16 +688,12 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
             .get_file_mut(u32::from(fd))?
             .get_cap_mut(FileCaps::WRITE)?;
 
-        let guest_slices: Vec<wiggle::GuestSlice<u8>> = ciovs
+        let guest_slices: Vec<wiggle::GuestCow<u8>> = ciovs
             .iter()
             .map(|iov_ptr| {
                 let iov_ptr = iov_ptr?;
                 let iov: types::Ciovec = iov_ptr.read()?;
-                Ok(iov
-                    .buf
-                    .as_array(iov.buf_len)
-                    .as_slice()?
-                    .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)"))
+                Ok(iov.buf.as_array(iov.buf_len).as_cow()?)
             })
             .collect::<Result<_, Error>>()?;
 
@@ -626,16 +717,12 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
             .get_file_mut(u32::from(fd))?
             .get_cap_mut(FileCaps::WRITE | FileCaps::SEEK)?;
 
-        let guest_slices: Vec<wiggle::GuestSlice<u8>> = ciovs
+        let guest_slices: Vec<wiggle::GuestCow<u8>> = ciovs
             .iter()
             .map(|iov_ptr| {
                 let iov_ptr = iov_ptr?;
                 let iov: types::Ciovec = iov_ptr.read()?;
-                Ok(iov
-                    .buf
-                    .as_array(iov.buf_len)
-                    .as_slice()?
-                    .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)"))
+                Ok(iov.buf.as_array(iov.buf_len).as_cow()?)
             })
             .collect::<Result<_, Error>>()?;
 
