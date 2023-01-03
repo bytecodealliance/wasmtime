@@ -563,8 +563,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
             // Read into an intermediate buffer.
             let total_available_size = iovs.iter().fold(0, |a, s| a + s.len());
             let mut buffer = vec![0; total_available_size.min(MAX_SHARED_BUFFER_SIZE)];
-            let mut ioslices = vec![IoSliceMut::new(&mut buffer)];
-            let bytes_read = f.read_vectored(&mut ioslices).await?;
+            let bytes_read = f.read_vectored(&mut [IoSliceMut::new(&mut buffer)]).await?;
 
             // Copy the intermediate buffer into the Wasm shared memory--`iov`
             // by `iov`.
@@ -641,8 +640,9 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
             // Read into an intermediate buffer.
             let total_available_size = iovs.iter().fold(0, |a, s| a + s.len());
             let mut buffer = vec![0; total_available_size.min(MAX_SHARED_BUFFER_SIZE)];
-            let mut ioslices = vec![IoSliceMut::new(&mut buffer)];
-            let bytes_read = f.read_vectored_at(&mut ioslices, offset).await?;
+            let bytes_read = f
+                .read_vectored_at(&mut [IoSliceMut::new(&mut buffer)], offset)
+                .await?;
 
             // Copy the intermediate buffer into the Wasm shared memory--`iov`
             // by `iov`.
