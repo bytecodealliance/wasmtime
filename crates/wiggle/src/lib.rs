@@ -875,6 +875,9 @@ pub struct UnsafeGuestSlice<'a, T> {
     mem: &'a dyn GuestMemory,
 }
 
+// SAFETY: `UnsafeGuestSlice` can be used across an `await` and therefore must
+// be `Send` and `Sync`. As with `GuestSlice` and friends, we mirror the
+// `Send`/`Sync` impls due to the interior usage of `&[UnsafeCell<T>]`.
 unsafe impl<T: Sync> Sync for UnsafeGuestSlice<'_, T> {}
 unsafe impl<T: Send> Send for UnsafeGuestSlice<'_, T> {}
 
