@@ -11,20 +11,19 @@ unsafe fn test_path_rename_trailing_slashes(dir_fd: wasi::Fd) {
 
     assert_errno!(
         wasi::path_rename(dir_fd, "source/", dir_fd, "target")
-            .expect_err("renaming a file with a trailing slash in the source name should fail")
-            .raw_error(),
+            .expect_err("renaming a file with a trailing slash in the source name should fail"),
         wasi::ERRNO_NOTDIR
     );
     assert_errno!(
-        wasi::path_rename(dir_fd, "source", dir_fd, "target/")
-            .expect_err("renaming a file with a trailing slash in the destination name should fail")
-            .raw_error(),
+        wasi::path_rename(dir_fd, "source", dir_fd, "target/").expect_err(
+            "renaming a file with a trailing slash in the destination name should fail"
+        ),
         wasi::ERRNO_NOTDIR
     );
     assert_errno!(
-        wasi::path_rename(dir_fd, "source/", dir_fd, "target/")
-            .expect_err("renaming a file with a trailing slash in the source and destination names should fail")
-            .raw_error(),
+        wasi::path_rename(dir_fd, "source/", dir_fd, "target/").expect_err(
+            "renaming a file with a trailing slash in the source and destination names should fail"
+        ),
         wasi::ERRNO_NOTDIR
     );
     wasi::path_unlink_file(dir_fd, "source").expect("removing a file");

@@ -6,8 +6,7 @@ unsafe fn test_path_symlink_trailing_slashes(dir_fd: wasi::Fd) {
         // Dangling symlink: Link destination shouldn't end with a slash.
         assert_errno!(
             wasi::path_symlink("source", dir_fd, "target/")
-                .expect_err("link destination ending with a slash should fail")
-                .raw_error(),
+                .expect_err("link destination ending with a slash should fail"),
             wasi::ERRNO_NOENT
         );
 
@@ -21,8 +20,7 @@ unsafe fn test_path_symlink_trailing_slashes(dir_fd: wasi::Fd) {
     wasi::path_create_directory(dir_fd, "target").expect("creating a directory");
     assert_errno!(
         wasi::path_symlink("source", dir_fd, "target/")
-            .expect_err("link destination already exists")
-            .raw_error(),
+            .expect_err("link destination already exists"),
         unix => wasi::ERRNO_EXIST,
         windows => wasi::ERRNO_NOENT
     );
@@ -32,8 +30,7 @@ unsafe fn test_path_symlink_trailing_slashes(dir_fd: wasi::Fd) {
     wasi::path_create_directory(dir_fd, "target").expect("creating a directory");
     assert_errno!(
         wasi::path_symlink("source", dir_fd, "target")
-            .expect_err("link destination already exists")
-            .raw_error(),
+            .expect_err("link destination already exists"),
         unix => wasi::ERRNO_EXIST,
         windows => wasi::ERRNO_NOENT
     );
@@ -44,8 +41,7 @@ unsafe fn test_path_symlink_trailing_slashes(dir_fd: wasi::Fd) {
 
     assert_errno!(
         wasi::path_symlink("source", dir_fd, "target/")
-            .expect_err("link destination already exists")
-            .raw_error(),
+            .expect_err("link destination already exists"),
         unix => wasi::ERRNO_NOTDIR,
         windows => wasi::ERRNO_NOENT
     );
@@ -56,8 +52,7 @@ unsafe fn test_path_symlink_trailing_slashes(dir_fd: wasi::Fd) {
 
     assert_errno!(
         wasi::path_symlink("source", dir_fd, "target")
-            .expect_err("link destination already exists")
-            .raw_error(),
+            .expect_err("link destination already exists"),
         unix => wasi::ERRNO_EXIST,
         windows => wasi::ERRNO_NOENT
     );

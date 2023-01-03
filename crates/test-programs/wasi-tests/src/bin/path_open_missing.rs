@@ -7,8 +7,7 @@ unsafe fn test_path_open_missing(dir_fd: wasi::Fd) {
             dir_fd, 0, "file", 0, // not passing O_CREAT here
             0, 0, 0,
         )
-        .expect_err("trying to open a file that doesn't exist")
-        .raw_error(),
+        .expect_err("trying to open a file that doesn't exist"),
         wasi::ERRNO_NOENT
     );
 }

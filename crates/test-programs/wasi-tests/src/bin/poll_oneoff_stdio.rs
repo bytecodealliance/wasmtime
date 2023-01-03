@@ -6,7 +6,7 @@ const TIMEOUT: u64 = 200_000_000u64; // 200 milliseconds, required to satisfy sl
 const CLOCK_ID: wasi::Userdata = 0x0123_45678;
 const STDIN_ID: wasi::Userdata = 0x8765_43210;
 
-unsafe fn poll_oneoff_impl(r#in: &[wasi::Subscription]) -> Result<Vec<wasi::Event>, wasi::Error> {
+unsafe fn poll_oneoff_impl(r#in: &[wasi::Subscription]) -> Result<Vec<wasi::Event>, wasi::Errno> {
     let mut out: Vec<wasi::Event> = Vec::new();
     out.resize_with(r#in.len(), || {
         MaybeUninit::<wasi::Event>::zeroed().assume_init()
@@ -31,14 +31,14 @@ unsafe fn test_stdin_read() {
         wasi::Subscription {
             userdata: CLOCK_ID,
             u: wasi::SubscriptionU {
-                tag: wasi::EVENTTYPE_CLOCK,
+                tag: wasi::EVENTTYPE_CLOCK.raw(),
                 u: wasi::SubscriptionUU { clock },
             },
         },
         wasi::Subscription {
             userdata: STDIN_ID,
             u: wasi::SubscriptionU {
-                tag: wasi::EVENTTYPE_FD_READ,
+                tag: wasi::EVENTTYPE_FD_READ.raw(),
                 u: wasi::SubscriptionUU {
                     fd_read: fd_readwrite,
                 },
@@ -50,20 +50,20 @@ unsafe fn test_stdin_read() {
     // Both are valid behaviors that depend on the test environment.
     assert!(out.len() >= 1, "stdin read should return at least 1 event");
     for event in out {
-        if event.r#type == wasi::EVENTTYPE_CLOCK {
+        if event.type_ == wasi::EVENTTYPE_CLOCK {
             assert_errno!(event.error, wasi::ERRNO_SUCCESS);
             assert_eq!(
                 event.userdata, CLOCK_ID,
                 "the event.userdata should contain CLOCK_ID",
             );
-        } else if event.r#type == wasi::EVENTTYPE_FD_READ {
+        } else if event.type_ == wasi::EVENTTYPE_FD_READ {
             assert_errno!(event.error, wasi::ERRNO_SUCCESS);
             assert_eq!(
                 event.userdata, STDIN_ID,
                 "the event.userdata should contain STDIN_ID",
             );
         } else {
-            panic!("unexpected event type {}", event.r#type);
+            panic!("unexpected event type {}", event.type_.raw());
         }
     }
 }
@@ -74,7 +74,7 @@ fn writable_subs(h: &HashMap<u64, wasi::Fd>) -> Vec<wasi::Subscription> {
         .map(|(ud, fd)| wasi::Subscription {
             userdata: *ud,
             u: wasi::SubscriptionU {
-                tag: wasi::EVENTTYPE_FD_WRITE,
+                tag: wasi::EVENTTYPE_FD_WRITE.raw(),
                 u: wasi::SubscriptionUU {
                     fd_write: wasi::SubscriptionFdReadwrite {
                         file_descriptor: *fd,
@@ -92,7 +92,7 @@ unsafe fn test_stdout_stderr_write() {
     let clock = wasi::Subscription {
         userdata: CLOCK_ID,
         u: wasi::SubscriptionU {
-            tag: wasi::EVENTTYPE_CLOCK,
+            tag: wasi::EVENTTYPE_CLOCK.raw(),
             u: wasi::SubscriptionUU {
                 clock: wasi::SubscriptionClock {
                     id: wasi::CLOCKID_MONOTONIC,
@@ -114,7 +114,7 @@ unsafe fn test_stdout_stderr_write() {
                 }
                 ud => {
                     if let Some(_) = writable.remove(&ud) {
-                        assert_eq!(event.r#type, wasi::EVENTTYPE_FD_WRITE);
+                        assert_eq!(event.type_, wasi::EVENTTYPE_FD_WRITE);
                         assert_errno!(event.error, wasi::ERRNO_SUCCESS);
                     } else {
                         panic!("Unknown userdata {}, pending sub: {:?}", ud, writable)

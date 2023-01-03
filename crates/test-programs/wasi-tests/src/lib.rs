@@ -18,7 +18,7 @@ pub fn open_scratch_directory(path: &str) -> Result<wasi::Fd, String> {
                 Ok(s) => s,
                 Err(_) => break,
             };
-            if stat.tag != wasi::PREOPENTYPE_DIR {
+            if stat.tag != wasi::PREOPENTYPE_DIR.raw() {
                 continue;
             }
             let mut dst = Vec::with_capacity(stat.u.dir.pr_name_len);
@@ -122,8 +122,8 @@ macro_rules! assert_errno {
             }
             assert!( $( e == $i || )+ false,
                 "expected errno {}; got {}",
-                Alt(&[ $( wasi::errno_name($i) ),+ ]),
-                wasi::errno_name(e),
+                Alt(&[ $( $i.name() ),+ ]),
+                e.name()
             )
         }
     };

@@ -8,8 +8,7 @@ unsafe fn test_dirfd_not_dir(dir_fd: wasi::Fd) {
     // Now try to open a file underneath it as if it were a directory.
     assert_errno!(
         wasi::path_open(file_fd, 0, "foo", wasi::OFLAGS_CREAT, 0, 0, 0)
-            .expect_err("non-directory base fd should get ERRNO_NOTDIR")
-            .raw_error(),
+            .expect_err("non-directory base fd should get ERRNO_NOTDIR"),
         wasi::ERRNO_NOTDIR
     );
     wasi::fd_close(file_fd).expect("closing a file");
