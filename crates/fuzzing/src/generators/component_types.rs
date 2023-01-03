@@ -34,8 +34,8 @@ pub fn arbitrary_val(ty: &component::Type, input: &mut Unstructured) -> arbitrar
         Type::U32 => Val::U32(input.arbitrary()?),
         Type::S64 => Val::S64(input.arbitrary()?),
         Type::U64 => Val::U64(input.arbitrary()?),
-        Type::Float32 => Val::Float32(input.arbitrary::<f32>()?.to_bits()),
-        Type::Float64 => Val::Float64(input.arbitrary::<f64>()?.to_bits()),
+        Type::Float32 => Val::Float32(input.arbitrary()?),
+        Type::Float64 => Val::Float64(input.arbitrary()?),
         Type::Char => Val::Char(input.arbitrary()?),
         Type::String => Val::String(input.arbitrary()?),
         Type::List(list) => {

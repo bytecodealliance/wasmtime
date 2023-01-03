@@ -18,8 +18,8 @@ pub fn val(v: &WastVal<'_>, ty: &Type) -> Result<Val> {
         WastVal::S32(b) => Val::S32(*b),
         WastVal::U64(b) => Val::U64(*b),
         WastVal::S64(b) => Val::S64(*b),
-        WastVal::Float32(b) => Val::Float32(b.bits),
-        WastVal::Float64(b) => Val::Float64(b.bits),
+        WastVal::Float32(b) => Val::Float32(f32::from_bits(b.bits)),
+        WastVal::Float64(b) => Val::Float64(f64::from_bits(b.bits)),
         WastVal::Char(b) => Val::Char(*b),
         WastVal::String(s) => Val::String(s.to_string().into()),
         WastVal::List(vals) => match ty {
@@ -173,11 +173,11 @@ pub fn match_val(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
             _ => mismatch(expected, actual),
         },
         WastVal::Float32(e) => match actual {
-            Val::Float32(a) => core::match_f32(*a, &NanPattern::Value(*e)),
+            Val::Float32(a) => core::match_f32(a.to_bits(), &NanPattern::Value(*e)),
             _ => mismatch(expected, actual),
         },
         WastVal::Float64(e) => match actual {
-            Val::Float64(a) => core::match_f64(*a, &NanPattern::Value(*e)),
+            Val::Float64(a) => core::match_f64(a.to_bits(), &NanPattern::Value(*e)),
             _ => mismatch(expected, actual),
         },
         WastVal::Char(e) => match actual {
