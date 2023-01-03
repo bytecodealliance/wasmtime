@@ -97,8 +97,8 @@ use std::convert::TryFrom;
 use std::vec::Vec;
 use wasmparser::{FuncValidator, MemArg, Operator, WasmModuleResources};
 
-/// Given an `Option<T>`, unwrap the inner `T` or, if the option is `None`, set
-/// the state to unreachable and return.
+/// Given a `Reachability<T>`, unwrap the inner `T` or, when unreachable, set
+/// `state.reachable = false` and return.
 ///
 /// Used in combination with calling `prepare_addr` and `prepare_atomic_addr`
 /// when we can statically determine that a Wasm access will unconditionally
@@ -106,8 +106,8 @@ use wasmparser::{FuncValidator, MemArg, Operator, WasmModuleResources};
 macro_rules! unwrap_or_return_unreachable_state {
     ($state:ident, $value:expr) => {
         match $value {
-            Some(x) => x,
-            None => {
+            Reachability::Reachable(x) => x,
+            Reachability::Unreachable => {
                 $state.reachable = false;
                 return Ok(());
             }
@@ -670,49 +670,94 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          * The memory base address is provided by the environment.
          ************************************************************************************/
         Operator::I32Load8U { memarg } => {
-            translate_load(memarg, ir::Opcode::Uload8, I32, builder, state, environ)?;
+            unwrap_or_return_unreachable_state!(
+                state,
+                translate_load(memarg, ir::Opcode::Uload8, I32, builder, state, environ)?
+            );
         }
         Operator::I32Load16U { memarg } => {
-            translate_load(memarg, ir::Opcode::Uload16, I32, builder, state, environ)?;
+            unwrap_or_return_unreachable_state!(
+                state,
+                translate_load(memarg, ir::Opcode::Uload16, I32, builder, state, environ)?
+            );
         }
         Operator::I32Load8S { memarg } => {
-            translate_load(memarg, ir::Opcode::Sload8, I32, builder, state, environ)?;
+            unwrap_or_return_unreachable_state!(
+                state,
+                translate_load(memarg, ir::Opcode::Sload8, I32, builder, state, environ)?
+            );
         }
         Operator::I32Load16S { memarg } => {
-            translate_load(memarg, ir::Opcode::Sload16, I32, builder, state, environ)?;
+            unwrap_or_return_unreachable_state!(
+                state,
+                translate_load(memarg, ir::Opcode::Sload16, I32, builder, state, environ)?
+            );
         }
         Operator::I64Load8U { memarg } => {
-            translate_load(memarg, ir::Opcode::Uload8, I64, builder, state, environ)?;
+            unwrap_or_return_unreachable_state!(
+                state,
+                translate_load(memarg, ir::Opcode::Uload8, I64, builder, state, environ)?
+            );
         }
         Operator::I64Load16U { memarg } => {
-            translate_load(memarg, ir::Opcode::Uload16, I64, builder, state, environ)?;
+            unwrap_or_return_unreachable_state!(
+                state,
+                translate_load(memarg, ir::Opcode::Uload16, I64, builder, state, environ)?
+            );
         }
         Operator::I64Load8S { memarg } => {
-            translate_load(memarg, ir::Opcode::Sload8, I64, builder, state, environ)?;
+            unwrap_or_return_unreachable_state!(
+                state,
+                translate_load(memarg, ir::Opcode::Sload8, I64, builder, state, environ)?
+            );
         }
         Operator::I64Load16S { memarg } => {
-            translate_load(memarg, ir::Opcode::Sload16, I64, builder, state, environ)?;
+            unwrap_or_return_unreachable_state!(
+                state,
+                translate_load(memarg, ir::Opcode::Sload16, I64, builder, state, environ)?
+            );
         }
         Operator::I64Load32S { memarg } => {
-            translate_load(memarg, ir::Opcode::Sload32, I64, builder, state, environ)?;
+            unwrap_or_return_unreachable_state!(
+                state,
+                translate_load(memarg, ir::Opcode::Sload32, I64, builder, state, environ)?
+            );
         }
         Operator::I64Load32U { memarg } => {
-            translate_load(memarg, ir::Opcode::Uload32, I64, builder, state, environ)?;
+            unwrap_or_return_unreachable_state!(
+                state,
+                translate_load(memarg, ir::Opcode::Uload32, I64, builder, state, environ)?
+            );
         }
         Operator::I32Load { memarg } => {
-            translate_load(memarg, ir::Opcode::Load, I32, builder, state, environ)?;
+            unwrap_or_return_unreachable_state!(
+                state,
+                translate_load(memarg, ir::Opcode::Load, I32, builder, state, environ)?
+            );
         }
         Operator::F32Load { memarg } => {
-            translate_load(memarg, ir::Opcode::Load, F32, builder, state, environ)?;
+            unwrap_or_return_unreachable_state!(
+                state,
+                translate_load(memarg, ir::Opcode::Load, F32, builder, state, environ)?
+            );
         }
         Operator::I64Load { memarg } => {
-            translate_load(memarg, ir::Opcode::Load, I64, builder, state, environ)?;
+            unwrap_or_return_unreachable_state!(
+                state,
+                translate_load(memarg, ir::Opcode::Load, I64, builder, state, environ)?
+            );
         }
         Operator::F64Load { memarg } => {
-            translate_load(memarg, ir::Opcode::Load, F64, builder, state, environ)?;
+            unwrap_or_return_unreachable_state!(
+                state,
+                translate_load(memarg, ir::Opcode::Load, F64, builder, state, environ)?
+            );
         }
         Operator::V128Load { memarg } => {
-            translate_load(memarg, ir::Opcode::Load, I8X16, builder, state, environ)?;
+            unwrap_or_return_unreachable_state!(
+                state,
+                translate_load(memarg, ir::Opcode::Load, I8X16, builder, state, environ)?
+            );
         }
         Operator::V128Load8x8S { memarg } => {
             let (flags, base) = unwrap_or_return_unreachable_state!(
@@ -1502,26 +1547,32 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::V128Load16Splat { memarg }
         | Operator::V128Load32Splat { memarg }
         | Operator::V128Load64Splat { memarg } => {
-            translate_load(
-                memarg,
-                ir::Opcode::Load,
-                type_of(op).lane_type(),
-                builder,
+            unwrap_or_return_unreachable_state!(
                 state,
-                environ,
-            )?;
+                translate_load(
+                    memarg,
+                    ir::Opcode::Load,
+                    type_of(op).lane_type(),
+                    builder,
+                    state,
+                    environ,
+                )?
+            );
             let splatted = builder.ins().splat(type_of(op), state.pop1());
             state.push1(splatted)
         }
         Operator::V128Load32Zero { memarg } | Operator::V128Load64Zero { memarg } => {
-            translate_load(
-                memarg,
-                ir::Opcode::Load,
-                type_of(op).lane_type(),
-                builder,
+            unwrap_or_return_unreachable_state!(
                 state,
-                environ,
-            )?;
+                translate_load(
+                    memarg,
+                    ir::Opcode::Load,
+                    type_of(op).lane_type(),
+                    builder,
+                    state,
+                    environ,
+                )?
+            );
             let as_vector = builder.ins().scalar_to_vector(type_of(op), state.pop1());
             state.push1(as_vector)
         }
@@ -1530,14 +1581,17 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::V128Load32Lane { memarg, lane }
         | Operator::V128Load64Lane { memarg, lane } => {
             let vector = pop1_with_bitcast(state, type_of(op), builder);
-            translate_load(
-                memarg,
-                ir::Opcode::Load,
-                type_of(op).lane_type(),
-                builder,
+            unwrap_or_return_unreachable_state!(
                 state,
-                environ,
-            )?;
+                translate_load(
+                    memarg,
+                    ir::Opcode::Load,
+                    type_of(op).lane_type(),
+                    builder,
+                    state,
+                    environ,
+                )?
+            );
             let replacement = state.pop1();
             state.push1(builder.ins().insertlane(vector, replacement, *lane))
         }
@@ -2239,7 +2293,7 @@ fn prepare_addr<FE>(
     builder: &mut FunctionBuilder,
     state: &mut FuncTranslationState,
     environ: &mut FE,
-) -> WasmResult<Option<(MemFlags, Value)>>
+) -> WasmResult<Reachability<(MemFlags, Value)>>
 where
     FE: FuncEnvironment + ?Sized,
 {
@@ -2372,8 +2426,8 @@ where
         }
     };
     let addr = match addr {
-        None => return Ok(None),
-        Some(a) => a,
+        Reachability::Unreachable => return Ok(Reachability::Unreachable),
+        Reachability::Reachable(a) => a,
     };
 
     // Note that we don't set `is_aligned` here, even if the load instruction's
@@ -2389,7 +2443,7 @@ where
     // vmctx, stack) accesses.
     flags.set_heap();
 
-    Ok(Some((flags, addr)))
+    Ok(Reachability::Reachable((flags, addr)))
 }
 
 fn align_atomic_addr(
@@ -2436,12 +2490,30 @@ fn prepare_atomic_addr<FE: FuncEnvironment + ?Sized>(
     builder: &mut FunctionBuilder,
     state: &mut FuncTranslationState,
     environ: &mut FE,
-) -> WasmResult<Option<(MemFlags, Value)>> {
+) -> WasmResult<Reachability<(MemFlags, Value)>> {
     align_atomic_addr(memarg, loaded_bytes, builder, state);
     prepare_addr(memarg, loaded_bytes, builder, state, environ)
 }
 
+/// Like `Option<T>` but specifically for passing information about transitions
+/// from reachable to unreachable state and the like from callees to callers.
+///
+/// Marked `must_use` to force callers to update
+/// `FuncTranslationState::reachable` as necessary.
+#[derive(PartialEq, Eq)]
+#[must_use]
+pub enum Reachability<T> {
+    /// The Wasm execution state is reachable, here is a `T`.
+    Reachable(T),
+    /// The Wasm execution state has been determined to be statically
+    /// unreachable. It is the receiver of this value's responsibility to update
+    /// `FuncTranslationState::reachable` as necessary.
+    Unreachable,
+}
+
 /// Translate a load instruction.
+///
+/// Returns the execution state's reachability after the load is translated.
 fn translate_load<FE: FuncEnvironment + ?Sized>(
     memarg: &MemArg,
     opcode: ir::Opcode,
@@ -2449,22 +2521,22 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
     builder: &mut FunctionBuilder,
     state: &mut FuncTranslationState,
     environ: &mut FE,
-) -> WasmResult<()> {
-    let (flags, base) = unwrap_or_return_unreachable_state!(
+) -> WasmResult<Reachability<()>> {
+    let (flags, base) = match prepare_addr(
+        memarg,
+        mem_op_size(opcode, result_ty),
+        builder,
         state,
-        prepare_addr(
-            memarg,
-            mem_op_size(opcode, result_ty),
-            builder,
-            state,
-            environ,
-        )?
-    );
+        environ,
+    )? {
+        Reachability::Unreachable => return Ok(Reachability::Unreachable),
+        Reachability::Reachable((f, b)) => (f, b),
+    };
     let (load, dfg) = builder
         .ins()
         .Load(opcode, result_ty, flags, Offset32::new(0), base);
     state.push1(dfg.first_result(load));
-    Ok(())
+    Ok(Reachability::Reachable(()))
 }
 
 /// Translate a store instruction.

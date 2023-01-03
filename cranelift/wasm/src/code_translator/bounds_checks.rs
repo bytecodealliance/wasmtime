@@ -8,6 +8,7 @@
 //!
 //! bounds check the memory access and translate it into a native memory access.
 
+use super::Reachability;
 use crate::{FuncEnvironment, HeapData, HeapStyle};
 use cranelift_codegen::{
     cursor::{Cursor, FuncCursor},
@@ -15,6 +16,7 @@ use cranelift_codegen::{
 };
 use cranelift_frontend::FunctionBuilder;
 use wasmtime_types::WasmResult;
+use Reachability::*;
 
 /// Helper used to emit bounds checks (as necessary) and compute the native
 /// address of a heap access.
@@ -31,7 +33,7 @@ pub fn bounds_check_and_compute_addr<Env>(
     offset: u32,
     // Static size of the heap access.
     access_size: u8,
-) -> WasmResult<Option<ir::Value>>
+) -> WasmResult<Reachability<ir::Value>>
 where
     Env: FuncEnvironment + ?Sized,
 {
@@ -76,7 +78,7 @@ where
         //         checks.
         HeapStyle::Dynamic { bound_gv } if offset_and_size == 1 && spectre_mitigations_enabled => {
             let bound = builder.ins().global_value(env.pointer_type(), bound_gv);
-            Some(compute_addr(
+            Reachable(compute_addr(
                 &mut builder.cursor(),
                 heap,
                 env.pointer_type(),
@@ -96,7 +98,7 @@ where
                 .ins()
                 .icmp(IntCC::UnsignedGreaterThanOrEqual, index, bound);
             builder.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
-            Some(compute_addr(
+            Reachable(compute_addr(
                 &mut builder.cursor(),
                 heap,
                 env.pointer_type(),
@@ -120,7 +122,7 @@ where
         {
             let bound = builder.ins().global_value(env.pointer_type(), bound_gv);
             let adjusted_bound = builder.ins().iadd_imm(bound, -(offset_and_size as i64));
-            Some(compute_addr(
+            Reachable(compute_addr(
                 &mut builder.cursor(),
                 heap,
                 env.pointer_type(),
@@ -142,7 +144,7 @@ where
                 .ins()
                 .icmp(IntCC::UnsignedGreaterThan, index, adjusted_bound);
             builder.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
-            Some(compute_addr(
+            Reachable(compute_addr(
                 &mut builder.cursor(),
                 heap,
                 env.pointer_type(),
@@ -169,7 +171,7 @@ where
                 ir::TrapCode::HeapOutOfBounds,
             );
             let bound = builder.ins().global_value(env.pointer_type(), bound_gv);
-            Some(compute_addr(
+            Reachable(compute_addr(
                 &mut builder.cursor(),
                 heap,
                 env.pointer_type(),
@@ -198,7 +200,7 @@ where
                 .ins()
                 .icmp(IntCC::UnsignedGreaterThan, adjusted_index, bound);
             builder.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
-            Some(compute_addr(
+            Reachable(compute_addr(
                 &mut builder.cursor(),
                 heap,
                 env.pointer_type(),
@@ -219,7 +221,7 @@ where
         HeapStyle::Static { bound } if offset_and_size > bound.into() => {
             env.before_unconditionally_trapping_memory_access(builder)?;
             builder.ins().trap(ir::TrapCode::HeapOutOfBounds);
-            None
+            Unreachable
         }
 
         // 2. Second special case for when we can completely omit explicit
@@ -265,7 +267,7 @@ where
                 && u64::from(u32::MAX)
                     <= u64::from(bound) + u64::from(heap.offset_guard_size) - offset_and_size =>
         {
-            Some(compute_addr(
+            Reachable(compute_addr(
                 &mut builder.cursor(),
                 heap,
                 env.pointer_type(),
@@ -295,7 +297,7 @@ where
             let adjusted_bound = builder
                 .ins()
                 .iconst(env.pointer_type(), adjusted_bound as i64);
-            Some(compute_addr(
+            Reachable(compute_addr(
                 &mut builder.cursor(),
                 heap,
                 env.pointer_type(),
@@ -318,7 +320,7 @@ where
                     .ins()
                     .icmp_imm(IntCC::UnsignedGreaterThan, index, adjusted_bound as i64);
             builder.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
-            Some(compute_addr(
+            Reachable(compute_addr(
                 &mut builder.cursor(),
                 heap,
                 env.pointer_type(),
