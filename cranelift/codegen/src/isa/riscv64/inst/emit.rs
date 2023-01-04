@@ -1879,15 +1879,28 @@ impl MachInstEmit for Inst {
                     }
                     .iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
-                    Inst::TrapFf {
-                        cc: FloatCC::LessThanOrEqual,
-                        x: rs,
-                        y: tmp.to_reg(),
-                        ty: in_type,
-                        tmp: rd,
+
+                    let le_op = if in_type == F32 {
+                        FpuOPRRR::FleS
+                    } else {
+                        FpuOPRRR::FleD
+                    };
+
+                    // rd := rs <= tmp
+                    Inst::FpuRRR {
+                        alu_op: le_op,
+                        frm: None,
+                        rd,
+                        rs1: rs,
+                        rs2: tmp.to_reg(),
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    Inst::TrapIf {
+                        test: rd.to_reg(),
                         trap_code: TrapCode::IntegerOverflow,
                     }
                     .emit(&[], sink, emit_info, state);
+
                     if in_type == F32 {
                         Inst::load_fp_constant32(tmp, f32_bits(f32_bounds.1), |_| {
                             writable_spilltmp_reg()
@@ -1899,12 +1912,19 @@ impl MachInstEmit for Inst {
                     }
                     .iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
-                    Inst::TrapFf {
-                        cc: FloatCC::GreaterThanOrEqual,
-                        x: rs,
-                        y: tmp.to_reg(),
-                        ty: in_type,
-                        tmp: rd,
+
+                    // rd := rs >= tmp
+                    Inst::FpuRRR {
+                        alu_op: le_op,
+                        frm: None,
+                        rd,
+                        rs1: tmp.to_reg(),
+                        rs2: rs,
+                    }
+                    .emit(&[], sink, emit_info, state);
+
+                    Inst::TrapIf {
+                        test: rd.to_reg(),
                         trap_code: TrapCode::IntegerOverflow,
                     }
                     .emit(&[], sink, emit_info, state);
@@ -2017,39 +2037,6 @@ impl MachInstEmit for Inst {
                 .emit(&[], sink, emit_info, state);
                 sink.bind_label(label_jump_over);
             }
-            &Inst::TrapFf {
-                cc,
-                x,
-                y,
-                ty,
-                trap_code,
-                tmp,
-            } => {
-                let x = allocs.next(x);
-                let y = allocs.next(y);
-                let tmp = allocs.next_writable(tmp);
-                let label_trap = sink.get_label();
-                let label_jump_over = sink.get_label();
-                Inst::lower_br_fcmp(
-                    cc,
-                    x,
-                    y,
-                    BranchTarget::Label(label_trap),
-                    BranchTarget::Label(label_jump_over),
-                    ty,
-                    tmp,
-                )
-                .iter()
-                .for_each(|i| i.emit(&[], sink, emit_info, state));
-                // trap
-                sink.bind_label(label_trap);
-                Inst::Udf {
-                    trap_code: trap_code,
-                }
-                .emit(&[], sink, emit_info, state);
-                sink.bind_label(label_jump_over);
-            }
-
             &Inst::Udf { trap_code } => {
                 sink.add_trap(trap_code);
                 if let Some(s) = state.take_stack_map() {
@@ -2211,6 +2198,7 @@ impl MachInstEmit for Inst {
                 )
                 .into_iter()
                 .for_each(|i| i.emit(&[], sink, emit_info, state));
+
                 //convert to int.
                 Inst::FpuRR {
                     alu_op: FpuOPRR::float_convert_2_int_op(ty, true, I64),
