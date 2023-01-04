@@ -2040,6 +2040,13 @@
       (a2 Reg (alu_rr_imm12 (AluOPRRI.Addi) a (imm12_const 1))))
     (gen_select_reg (IntCC.SignedLessThan) r (zero_reg) a2 r)))
 
+(decl gen_trapff (FloatCC Reg Reg Type TrapCode) InstOutput)
+(rule
+  (gen_trapff cc a b ty trap_code)
+  (let
+    ((tmp WritableReg (temp_writable_reg $I64)))
+    (side_effect (SideEffectNoResult.Inst (MInst.TrapFf cc a b ty tmp trap_code)))))
+
 (decl gen_trapif (Reg TrapCode) InstOutput)
 (rule
   (gen_trapif test trap_code)
@@ -2207,7 +2214,7 @@
       (SideEffectNoResult.Inst
         (MInst.CondBr then else (cmp_integer_compare cmp))))
 
-;; Construct an InegerCompare value.
+;; Construct an IntegerCompare value.
 (decl int_compare (IntCC Reg Reg) IntegerCompare)
 (extern constructor int_compare int_compare)
 
@@ -2257,7 +2264,7 @@
   (emit_fcmp (FloatCC.OrderedNotEqual) ty a b)
   (cmp_result (emit_or (flt ty a b) (fgt ty a b))))
 
-;; !(ordered a b) || a < b
+;; !(ordered a b) || a == b
 (rule
   (emit_fcmp (FloatCC.UnorderedOrEqual) ty a b)
   (cmp_result (emit_or (not (ordered ty a b)) (feq ty a b))))
