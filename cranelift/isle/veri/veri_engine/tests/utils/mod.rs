@@ -138,27 +138,40 @@ fn test_with_rule_filter(
 pub fn test_from_file_with_filter(s: &str, filter: String, tr: TestResult) -> () {
     // TODO: clean up path logic
     let cur_dir = env::current_dir().expect("Can't access current working directory");
-    let clif_isle = cur_dir.join("../../../codegen/src").join("clif.isle");
+    let clif_isle = cur_dir.join("../../../codegen/src").join("clif_lower.isle");
     let prelude_isle = cur_dir.join("../../../codegen/src").join("prelude.isle");
+    let prelude_lower_isle = cur_dir
+        .join("../../../codegen/src")
+        .join("prelude_lower.isle");
     let input = PathBuf::from(s);
-    test_with_filter(vec![clif_isle, prelude_isle, input], Some(filter), tr);
+    test_with_filter(
+        vec![prelude_isle, prelude_lower_isle, clif_isle, input],
+        Some(filter),
+        tr,
+    );
 }
 
 pub fn test_from_file(s: &str, tr: TestResult) -> () {
     // TODO: clean up path logic
     let cur_dir = env::current_dir().expect("Can't access current working directory");
-    let clif_isle = cur_dir.join("../../../codegen/src").join("clif.isle");
+    let clif_isle = cur_dir.join("../../../codegen/src").join("clif_lower.isle");
     let prelude_isle = cur_dir.join("../../../codegen/src").join("prelude.isle");
+    let prelude_lower_isle = cur_dir
+        .join("../../../codegen/src")
+        .join("prelude_lower.isle");
     let input = PathBuf::from(s);
-    test(vec![clif_isle, prelude_isle, input], tr);
+    test(vec![prelude_isle, prelude_lower_isle, clif_isle, input], tr);
 }
 
 pub fn test_from_files_with_lhs_termname(files: Vec<&str>, termname: &str, tr: TestResult) -> () {
     // TODO: clean up path logic
     let cur_dir = env::current_dir().expect("Can't access current working directory");
-    let clif_isle = cur_dir.join("../../../codegen/src").join("clif.isle");
+    let clif_isle = cur_dir.join("../../../codegen/src").join("clif_lower.isle");
     let prelude_isle = cur_dir.join("../../../codegen/src").join("prelude.isle");
-    let mut inputs = vec![clif_isle, prelude_isle];
+    let prelude_lower_isle = cur_dir
+        .join("../../../codegen/src")
+        .join("prelude_lower.isle");
+    let mut inputs = vec![prelude_isle, prelude_lower_isle, clif_isle];
     for f in files {
         inputs.push(PathBuf::from(f));
     }

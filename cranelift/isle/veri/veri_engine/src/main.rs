@@ -13,8 +13,11 @@ fn main() {
     let cur_dir = env::current_dir().expect("Can't access current working directory");
 
     // TODO: clean up path logic
-    let clif_isle = cur_dir.join("../../../codegen/src").join("clif.isle");
+    let clif_isle = cur_dir.join("../../../codegen/src").join("clif_lower.isle");
     let prelude_isle = cur_dir.join("../../../codegen/src").join("prelude.isle");
+    let prelude_lower_isle = cur_dir
+        .join("../../../codegen/src")
+        .join("prelude_lower.isle");
 
     // Disable for now to not have to consider all rules
     // let aarch64_isle = cur_dir.join("../../../codegen/src/isa/aarch64").join("inst.isle");
@@ -29,7 +32,7 @@ fn main() {
         .get_matches();
     let input = PathBuf::from(matches.value_of("INPUT").unwrap());
 
-    let inputs = vec![clif_isle, prelude_isle, input];
+    let inputs = vec![prelude_isle, prelude_lower_isle, clif_isle, input];
     let lexer = isle::lexer::Lexer::from_files(&inputs).unwrap();
     // Parses to an AST, as a list of definitions
     let defs = isle::parser::parse(lexer).expect("should parse");

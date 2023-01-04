@@ -652,29 +652,22 @@ impl Pattern {
                         extractor_kind: Some(ExtractorKind::InternalExtractor { .. }),
                         ..
                     } => {
-                    //    let mut inputs = vec![];
-                    //    let mut input_tys = vec![];
-                    //    let mut output_tys = vec![];
-                    //    let mut output_pats = vec![];
-                    //    inputs.push(input);
-                    //    input_tys.push(termdata.ret_ty);
-                    //    for arg in args.iter() {
-                    //        output_tys.push(arg.ty());
-                    //        output_pats.push(arg);
-                    //    }
+                        //    let mut inputs = vec![];
+                        //    let mut input_tys = vec![];
+                        //    let mut output_tys = vec![];
+                        //    let mut output_pats = vec![];
+                        //    inputs.push(input);
+                        //    input_tys.push(termdata.ret_ty);
+                        //    for arg in args.iter() {
+                        //        output_tys.push(arg.ty());
+                        //        output_pats.push(arg);
+                        //    }
 
                         // Evaluate all `input` args.
                         let output_tys = args.iter().map(|arg| arg.ty()).collect();
 
                         // Invoke the extractor.
-                        visitor.add_extract(
-                            input,
-                            termdata.ret_ty,
-                            output_tys,
-                            term,
-                            true,
-                            false,
-                        )
+                        visitor.add_extract(input, termdata.ret_ty, output_tys, term, true, false)
                     }
                     TermKind::Decl {
                         flags,
@@ -1186,7 +1179,11 @@ impl Bindings {
 
 impl TermEnv {
     /// Construct the term environment from the AST and the type environment.
-    pub fn from_ast(tyenv: &mut TypeEnv, defs: &ast::Defs, expand_internal_extractors: bool) -> Result<TermEnv, Errors> {
+    pub fn from_ast(
+        tyenv: &mut TypeEnv,
+        defs: &ast::Defs,
+        expand_internal_extractors: bool,
+    ) -> Result<TermEnv, Errors> {
         let mut env = TermEnv {
             terms: vec![],
             term_map: StableMap::new(),

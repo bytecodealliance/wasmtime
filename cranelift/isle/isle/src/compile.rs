@@ -37,7 +37,7 @@ pub fn create_envs(defs: &ast::Defs) -> Result<(sema::TypeEnv, sema::TermEnv), E
     let termenv = sema::TermEnv::from_ast(
         &mut typeenv,
         defs,
-        /* expand_internal_extractors */ false
+        /* expand_internal_extractors */ false,
     )?;
     Ok((typeenv, termenv))
 }

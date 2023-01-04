@@ -155,10 +155,10 @@ fn type_annotations_using_rule<'a>(
 
     let mut annotation_infos = vec![];
     if !rule.iflets.is_empty() {
-        for i in &rule.iflets {
-            // AVH TODO
-            // i.lhs.build_var_map(var_map);
-        }
+        // for i in &rule.iflets {
+        //     // AVH TODO
+        //     // i.lhs.build_var_map(var_map);
+        // }
         print!("\n\tif-lets:");
         for iflet in &rule.iflets {
             let iflet_lhs = &mut create_parse_tree_pattern(
