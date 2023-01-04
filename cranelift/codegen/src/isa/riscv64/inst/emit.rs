@@ -270,163 +270,6 @@ impl Inst {
         }
     }
 
-    pub(crate) fn lower_br_fcmp(
-        cc: FloatCC,
-        x: Reg,
-        y: Reg,
-        taken: BranchTarget,
-        not_taken: BranchTarget,
-        ty: Type,
-        tmp: Writable<Reg>,
-    ) -> SmallInstVec<Inst> {
-        assert!(tmp.to_reg().class() == RegClass::Int);
-        let mut insts = SmallInstVec::new();
-        let mut cc_args = FloatCCArgs::from_floatcc(cc);
-        let eq_op = if ty == F32 {
-            FpuOPRRR::FeqS
-        } else {
-            FpuOPRRR::FeqD
-        };
-        let lt_op = if ty == F32 {
-            FpuOPRRR::FltS
-        } else {
-            FpuOPRRR::FltD
-        };
-        let le_op = if ty == F32 {
-            FpuOPRRR::FleS
-        } else {
-            FpuOPRRR::FleD
-        };
-
-        // >=
-        if cc_args.has_and_clear(FloatCCArgs::GT | FloatCCArgs::EQ) {
-            insts.push(Inst::FpuRRR {
-                frm: None,
-                alu_op: le_op,
-                rd: tmp,
-                rs1: y, //  x and y order reversed.
-                rs2: x,
-            });
-            insts.push(Inst::CondBr {
-                taken: taken,
-                not_taken: BranchTarget::zero(),
-                kind: IntegerCompare {
-                    kind: IntCC::NotEqual,
-                    rs1: tmp.to_reg(),
-                    rs2: zero_reg(),
-                },
-            });
-        }
-
-        // <=
-        if cc_args.has_and_clear(FloatCCArgs::LT | FloatCCArgs::EQ) {
-            insts.push(Inst::FpuRRR {
-                frm: None,
-                alu_op: le_op,
-                rd: tmp,
-                rs1: x,
-                rs2: y,
-            });
-            insts.push(Inst::CondBr {
-                taken: taken,
-                not_taken: BranchTarget::zero(),
-                kind: IntegerCompare {
-                    kind: IntCC::NotEqual,
-                    rs1: tmp.to_reg(),
-                    rs2: zero_reg(),
-                },
-            });
-        }
-
-        // if eq
-        if cc_args.has_and_clear(FloatCCArgs::EQ) {
-            insts.push(Inst::FpuRRR {
-                frm: None,
-                alu_op: eq_op,
-                rd: tmp,
-                rs1: x,
-                rs2: y,
-            });
-            insts.push(Inst::CondBr {
-                taken: taken,
-                not_taken: BranchTarget::zero(),
-                kind: IntegerCompare {
-                    kind: IntCC::NotEqual,
-                    rs1: tmp.to_reg(),
-                    rs2: zero_reg(),
-                },
-            });
-        }
-        // if ne
-        if cc_args.has_and_clear(FloatCCArgs::NE) {
-            insts.push(Inst::FpuRRR {
-                frm: None,
-                alu_op: eq_op,
-                rd: tmp,
-                rs1: x,
-                rs2: y,
-            });
-            insts.push(Inst::CondBr {
-                taken: taken,
-                not_taken: BranchTarget::zero(),
-                kind: IntegerCompare {
-                    kind: IntCC::Equal,
-                    rs1: tmp.to_reg(),
-                    rs2: zero_reg(),
-                },
-            });
-        }
-
-        // if <
-        if cc_args.has_and_clear(FloatCCArgs::LT) {
-            insts.push(Inst::FpuRRR {
-                frm: None,
-                alu_op: lt_op,
-                rd: tmp,
-                rs1: x,
-                rs2: y,
-            });
-            insts.push(Inst::CondBr {
-                taken: taken,
-                not_taken: BranchTarget::zero(),
-                kind: IntegerCompare {
-                    kind: IntCC::NotEqual,
-                    rs1: tmp.to_reg(),
-                    rs2: zero_reg(),
-                },
-            });
-        }
-        // if gt
-        if cc_args.has_and_clear(FloatCCArgs::GT) {
-            insts.push(Inst::FpuRRR {
-                frm: None,
-                alu_op: lt_op,
-                rd: tmp,
-                rs1: y, // x and y order reversed.
-                rs2: x,
-            });
-            insts.push(Inst::CondBr {
-                taken,
-                not_taken: BranchTarget::zero(),
-                kind: IntegerCompare {
-                    kind: IntCC::NotEqual,
-                    rs1: tmp.to_reg(),
-                    rs2: zero_reg(),
-                },
-            });
-        }
-        // if unordered
-        if cc_args.has_and_clear(FloatCCArgs::UN) {
-            insts.extend(Inst::lower_float_unordered(tmp, ty, x, y, taken, not_taken));
-        } else {
-            //make sure we goto the not_taken.
-            //finally goto not_taken
-            insts.push(Inst::Jal { dest: not_taken });
-        }
-        // make sure we handle all cases.
-        assert!(cc_args.0 == 0);
-        insts
-    }
     pub(crate) fn lower_br_icmp(
         cc: IntCC,
         a: ValueRegs<Reg>,
@@ -2186,18 +2029,31 @@ impl MachInstEmit for Inst {
 
                 // get abs value.
                 Inst::emit_fabs(rd, rs, ty).emit(&[], sink, emit_info, state);
-                Inst::lower_br_fcmp(
-                    FloatCC::GreaterThan,
-                    // abs value > max_value_need_round
-                    rd.to_reg(),
-                    f_tmp.to_reg(),
-                    BranchTarget::Label(label_x),
-                    BranchTarget::zero(),
-                    ty,
-                    int_tmp,
-                )
-                .into_iter()
-                .for_each(|i| i.emit(&[], sink, emit_info, state));
+
+                // branch if f_tmp < rd
+                Inst::FpuRRR {
+                    frm: None,
+                    alu_op: if ty == F32 {
+                        FpuOPRRR::FltS
+                    } else {
+                        FpuOPRRR::FltD
+                    },
+                    rd: int_tmp,
+                    rs1: f_tmp.to_reg(),
+                    rs2: rd.to_reg(),
+                }
+                .emit(&[], sink, emit_info, state);
+
+                Inst::CondBr {
+                    taken: BranchTarget::Label(label_x),
+                    not_taken: BranchTarget::zero(),
+                    kind: IntegerCompare {
+                        kind: IntCC::NotEqual,
+                        rs1: int_tmp.to_reg(),
+                        rs2: zero_reg(),
+                    },
+                }
+                .emit(&[], sink, emit_info, state);
 
                 //convert to int.
                 Inst::FpuRR {
