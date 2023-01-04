@@ -708,7 +708,8 @@ impl<'a> GuestPtr<'a, str> {
     /// `GuestError` will be returned.
     ///
     /// Additionally, because it is `unsafe` to have a `GuestStr` of shared
-    /// memory, this function will return `None` in this case.
+    /// memory, this function will return `None` in this case (see
+    /// [`GuestPtr<'_, str>::as_cow`]).
     pub fn as_str(&self) -> Result<Option<GuestStr<'a>>, GuestError> {
         match self.as_bytes().as_unsafe_slice_mut()?.shared_borrow() {
             UnsafeBorrowResult::Ok(s) => Ok(Some(s.try_into()?)),
@@ -736,6 +737,24 @@ impl<'a> GuestPtr<'a, str> {
             UnsafeBorrowResult::Err(e) => Err(e),
         }
     }
+
+    /// Attempts to create a [`GuestStrCow<'_>`] from this pointer, performing
+    /// bounds checks and utf-8 checks. Whereas [`GuestPtr::as_str`] will fail
+    /// with `None` if attempting to access Wasm shared memory, this call will
+    /// succeed: if used on shared memory, this function will copy the string
+    /// into [`GuestStrCow::Copied`]. If the memory is non-shared, this returns
+    /// a [`GuestStrCow::Borrowed`] (a thin wrapper over [`GuestStr<'_, T>]`).
+    pub fn as_cow(&self) -> Result<GuestStrCow<'a>, GuestError> {
+        match self.as_bytes().as_unsafe_slice_mut()?.shared_borrow() {
+            UnsafeBorrowResult::Ok(s) => Ok(GuestStrCow::Borrowed(s.try_into()?)),
+            UnsafeBorrowResult::Shared(_) => {
+                let copied = self.as_bytes().to_vec()?;
+                let utf8_string = String::from_utf8(copied).map_err(|e| e.utf8_error())?;
+                Ok(GuestStrCow::Copied(utf8_string))
+            }
+            UnsafeBorrowResult::Err(e) => Err(e),
+        }
+    }
 }
 
 impl<'a> GuestPtr<'a, [u8]> {
@@ -757,30 +776,6 @@ impl<T: ?Sized + Pointee> Copy for GuestPtr<'_, T> {}
 impl<T: ?Sized + Pointee> fmt::Debug for GuestPtr<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         T::debug(self.pointer, f)
-    }
-}
-
-/// A smart pointer for distinguishing between different kinds of Wasm memory:
-/// shared and non-shared.
-///
-/// As with `GuestSlice`, this is usable as a `&'a [T]` via [`std::ops::Deref`].
-/// The major difference is that, for shared memories, the memory will be copied
-/// out of Wasm linear memory to avoid the possibility of concurrent mutation by
-/// another thread. This extra copy exists solely to maintain the Rust
-/// guarantees regarding `&[T]`.
-pub enum GuestCow<'a, T> {
-    Borrowed(GuestSlice<'a, T>),
-    Copied(Vec<T>),
-}
-
-impl<'a, T> std::ops::Deref for GuestCow<'a, T> {
-    type Target = [T];
-
-    fn deref(&self) -> &Self::Target {
-        match self {
-            GuestCow::Borrowed(s) => s,
-            GuestCow::Copied(s) => s,
-        }
     }
 }
 
@@ -850,6 +845,30 @@ impl<'a, T> std::ops::DerefMut for GuestSliceMut<'a, T> {
 impl<'a, T> Drop for GuestSliceMut<'a, T> {
     fn drop(&mut self) {
         self.mem.mut_unborrow(self.borrow)
+    }
+}
+
+/// A smart pointer for distinguishing between different kinds of Wasm memory:
+/// shared and non-shared.
+///
+/// As with `GuestSlice`, this is usable as a `&'a [T]` via [`std::ops::Deref`].
+/// The major difference is that, for shared memories, the memory will be copied
+/// out of Wasm linear memory to avoid the possibility of concurrent mutation by
+/// another thread. This extra copy exists solely to maintain the Rust
+/// guarantees regarding `&[T]`.
+pub enum GuestCow<'a, T> {
+    Borrowed(GuestSlice<'a, T>),
+    Copied(Vec<T>),
+}
+
+impl<'a, T> std::ops::Deref for GuestCow<'a, T> {
+    type Target = [T];
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            GuestCow::Borrowed(s) => s,
+            GuestCow::Copied(s) => s,
+        }
     }
 }
 
@@ -1064,6 +1083,30 @@ impl<'a> std::ops::DerefMut for GuestStrMut<'a> {
         // SAFETY: every slice in a `GuestStrMut` has already been checked for
         // UTF-8 validity during construction (i.e., `TryFrom`).
         unsafe { str::from_utf8_unchecked_mut(&mut self.0) }
+    }
+}
+
+/// A smart pointer to a `str` for distinguishing between different kinds of
+/// Wasm memory: shared and non-shared.
+///
+/// As with `GuestStr`, this is usable as a `&'a str` via [`std::ops::Deref`].
+/// The major difference is that, for shared memories, the string will be copied
+/// out of Wasm linear memory to avoid the possibility of concurrent mutation by
+/// another thread. This extra copy exists solely to maintain the Rust
+/// guarantees regarding `&str`.
+pub enum GuestStrCow<'a> {
+    Borrowed(GuestStr<'a>),
+    Copied(String),
+}
+
+impl<'a> std::ops::Deref for GuestStrCow<'a> {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            GuestStrCow::Borrowed(s) => s,
+            GuestStrCow::Copied(s) => s,
+        }
     }
 }
 
