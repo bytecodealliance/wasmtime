@@ -18,12 +18,12 @@ fn contains<T: BitAnd<Output = T> + Eq + Copy>(flags: T, flag: T) -> bool {
     (flags & flag) == flag
 }
 
-fn convert(error: wasi_common::Error) -> wasmtime::component::Error<wasi_filesystem::Errno> {
+fn convert(error: wasi_common::Error) -> anyhow::Error {
     if let Some(errno) = error.downcast_ref() {
         use wasi_common::Errno::*;
         use wasi_filesystem::Errno;
 
-        wasmtime::component::Error::new(match errno {
+        match errno {
             Acces => Errno::Access,
             Addrinuse => Errno::Addrinuse,
             Addrnotavail => Errno::Addrnotavail,
@@ -94,11 +94,12 @@ fn convert(error: wasi_common::Error) -> wasmtime::component::Error<wasi_filesys
             Xdev => Errno::Xdev,
             Success | Dom | Notcapable | Notsock | Proto | Protonosupport | Prototype | TooBig
             | Notconn => {
-                return error.into().into();
+                return error.into();
             }
-        })
+        }
+        .into()
     } else {
-        error.into().into()
+        error.into()
     }
 }
 
@@ -226,21 +227,21 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
     ) -> HostResult<wasi_filesystem::DescriptorFlags, wasi_filesystem::Errno> {
         let table = self.table();
         if table.is::<Box<dyn WasiFile>>(fd) {
-            Ok(table
+            Ok(Ok(table
                 .get_file(fd)
                 .map_err(convert)?
                 .get_fdflags()
                 .await
                 .map_err(convert)?
-                .into())
+                .into()))
         } else if table.is::<Box<dyn WasiDir>>(fd) {
-            Ok(table
+            Ok(Ok(table
                 .get_dir(fd)
                 .map_err(convert)?
                 .get_fdflags()
                 .await
                 .map_err(convert)?
-                .into())
+                .into()))
         } else {
             Err(wasi_filesystem::Errno::Badf.into())
         }
@@ -252,15 +253,15 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
     ) -> HostResult<wasi_filesystem::DescriptorType, wasi_filesystem::Errno> {
         let table = self.table();
         if table.is::<Box<dyn WasiFile>>(fd) {
-            Ok(table
+            Ok(Ok(table
                 .get_file(fd)
                 .map_err(convert)?
                 .get_filetype()
                 .await
                 .map_err(convert)?
-                .into())
+                .into()))
         } else if table.is::<Box<dyn WasiDir>>(fd) {
-            Ok(wasi_filesystem::DescriptorType::Directory)
+            Ok(Ok(wasi_filesystem::DescriptorType::Directory))
         } else {
             Err(wasi_filesystem::Errno::Badf.into())
         }
@@ -308,7 +309,7 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
 
         buffer.truncate(bytes_read.try_into().unwrap());
 
-        Ok((buffer, end))
+        Ok(Ok((buffer, end)))
     }
 
     async fn pwrite(
@@ -324,7 +325,7 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
             .await
             .map_err(convert)?;
 
-        Ok(wasi_filesystem::Size::try_from(bytes_written).unwrap())
+        Ok(Ok(wasi_filesystem::Size::try_from(bytes_written).unwrap()))
     }
 
     async fn readdir(
@@ -397,21 +398,21 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
     ) -> HostResult<wasi_filesystem::DescriptorStat, wasi_filesystem::Errno> {
         let table = self.table();
         if table.is::<Box<dyn WasiFile>>(fd) {
-            Ok(table
+            Ok(Ok(table
                 .get_file(fd)
                 .map_err(convert)?
                 .get_filestat()
                 .await
                 .map_err(convert)?
-                .into())
+                .into()))
         } else if table.is::<Box<dyn WasiDir>>(fd) {
-            Ok(table
+            Ok(Ok(table
                 .get_dir(fd)
                 .map_err(convert)?
                 .get_filestat()
                 .await
                 .map_err(convert)?
-                .into())
+                .into()))
         } else {
             Err(wasi_filesystem::Errno::Badf.into())
         }
@@ -478,7 +479,7 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
                 .await
                 .map_err(convert)?;
             drop(dir);
-            Ok(table.push(Box::new(child_dir)).map_err(convert)?)
+            Ok(Ok(table.push(Box::new(child_dir)).map_err(convert)?))
         } else {
             let file = dir
                 .open_file(
@@ -492,7 +493,7 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
                 .await
                 .map_err(convert)?;
             drop(dir);
-            Ok(table.push(Box::new(file)).map_err(convert)?)
+            Ok(Ok(table.push(Box::new(file)).map_err(convert)?))
         }
     }
 
@@ -625,7 +626,7 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         // Insert the stream view into the table.
         let index = self.table_mut().push(Box::new(boxed)).map_err(convert)?;
 
-        Ok(index)
+        Ok(Ok(index))
     }
 
     async fn write_via_stream(
@@ -647,7 +648,7 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         // Insert the stream view into the table.
         let index = self.table_mut().push(Box::new(boxed)).map_err(convert)?;
 
-        Ok(index)
+        Ok(Ok(index))
     }
 
     async fn append_via_stream(
@@ -668,6 +669,6 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         // Insert the stream view into the table.
         let index = self.table_mut().push(Box::new(boxed)).map_err(convert)?;
 
-        Ok(index)
+        Ok(Ok(index))
     }
 }

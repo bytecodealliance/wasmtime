@@ -8,7 +8,7 @@ mod stderr;
 mod tcp;
 pub use wasi_common::{table::Table, WasiCtx};
 
-type HostResult<T, E> = Result<T, wasmtime::component::Error<E>>;
+type HostResult<T, E> = anyhow::Result<Result<T, E>>;
 
 wasmtime::component::bindgen!({
     path: "../wit/wasi.wit",
