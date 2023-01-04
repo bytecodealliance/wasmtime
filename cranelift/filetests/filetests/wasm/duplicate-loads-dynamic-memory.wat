@@ -68,12 +68,12 @@
 ;;                                     v20 -> v11
 ;; @0057                               v12 = load.i32 little heap v11
 ;;                                     v2 -> v12
-;; @005c                               v21 = load.i32 little heap v11
+;;                                     v21 -> v12
 ;;                                     v3 -> v21
 ;; @005f                               jump block1
 ;;
 ;;                                 block1:
-;; @005f                               return v12, v21
+;; @005f                               return v12, v12
 ;; }
 ;;
 ;; function u0:1(i32, i64 vmctx) -> i32, i32 fast {
@@ -106,10 +106,10 @@
 ;;                                     v22 -> v12
 ;; @0064                               v13 = load.i32 little heap v12
 ;;                                     v2 -> v13
-;; @006a                               v23 = load.i32 little heap v12
+;;                                     v23 -> v13
 ;;                                     v3 -> v23
 ;; @006e                               jump block1
 ;;
 ;;                                 block1:
-;; @006e                               return v13, v23
+;; @006e                               return v13, v13
 ;; }
