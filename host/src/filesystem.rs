@@ -342,6 +342,7 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
 
         self.table_mut()
             .push(Box::new(Mutex::new(iterator)))
+            .map(Ok)
             .map_err(convert)
     }
 
@@ -359,11 +360,11 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
             .transpose()
             .map_err(convert)?;
 
-        Ok(entity.map(|e| wasi_filesystem::DirEntry {
+        Ok(Ok(entity.map(|e| wasi_filesystem::DirEntry {
             ino: Some(e.inode),
             type_: e.filetype.into(),
             name: e.name,
-        }))
+        })))
     }
 
     async fn close_dir_entry_stream(
