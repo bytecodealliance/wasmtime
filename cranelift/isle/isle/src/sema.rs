@@ -200,6 +200,10 @@ pub struct TermEnv {
     /// defined implicit type-converter terms we can try to use to fit
     /// types together.
     pub converters: StableMap<(TypeId, TypeId), TermId>,
+
+    /// Flag for whether to expand internal extractors in the
+    /// translation from the AST to sema.
+    pub expand_internal_extractors: bool,
 }
 
 /// A term.
@@ -507,7 +511,7 @@ pub enum Pattern {
     /// Bind a variable of the given type from the current value.
     ///
     /// Keep matching on the value with the subpattern.
-    BindPattern(TypeId, VarId, Box<Pattern>, Option<Sym>),
+    BindPattern(TypeId, VarId, Box<Pattern>),
 
     /// Match the current value against an already bound variable with the given
     /// type.
@@ -526,45 +530,10 @@ pub enum Pattern {
     Term(TypeId, TermId, Vec<Pattern>),
 
     /// Match anything of the given type successfully.
-    /// Optionally include a reference to the the bound var the wildcard is capturing   
-    Wildcard(TypeId, Option<Sym>),
+    Wildcard(TypeId),
 
     /// Match all of the following patterns of the given type.
     And(TypeId, Vec<Pattern>),
-}
-
-impl Pattern {
-    /// Build associations between var ids and syms.    
-    /// Why do this after the fact instead of keeping a mapping of VarIds to Syms in    
-    /// the Termenv/Typeenv? Because that's a lot of VarIds, and this is really only    
-    /// import for debugging in the verification infrastructure.    
-    /// MLFB: May change key to var id index.   
-    pub fn build_var_map(&self, syms: &mut BTreeMap<VarId, Sym>) -> () {
-        match self {
-            Pattern::BindPattern(_, vid, pat, Some(sym)) => {
-                syms.insert(*vid, *sym);
-                pat.build_var_map(syms)
-            }
-            Pattern::BindPattern(_, vid, pat, None) => match **pat {
-                Pattern::Wildcard(_, Some(sym)) => {
-                    syms.insert(*vid, sym);
-                }
-                Pattern::Wildcard(_, None) => panic!("Unexpected bind pattern: {:?}", pat),
-                _ => pat.build_var_map(syms),
-            },
-            Pattern::Term(_, _, pats) => {
-                for pat in pats {
-                    pat.build_var_map(syms)
-                }
-            }
-            Pattern::And(_, pats) => {
-                for pat in pats {
-                    pat.build_var_map(syms)
-                }
-            }
-            _ => return,
-        }
-    }
 }
 
 /// A right-hand side expression of some rule.
@@ -584,7 +553,7 @@ pub enum Expr {
         /// The type of the result of this let expression.
         ty: TypeId,
         /// The expressions that are evaluated and bound to the given variables.
-        bindings: Vec<(VarId, TypeId, Sym, Box<Expr>)>,
+        bindings: Vec<(VarId, TypeId, Box<Expr>)>,
         /// The body expression that is evaluated after the bindings.
         body: Box<Expr>,
     },
@@ -683,7 +652,29 @@ impl Pattern {
                         extractor_kind: Some(ExtractorKind::InternalExtractor { .. }),
                         ..
                     } => {
-                        panic!("Should have been expanded away")
+                    //    let mut inputs = vec![];
+                    //    let mut input_tys = vec![];
+                    //    let mut output_tys = vec![];
+                    //    let mut output_pats = vec![];
+                    //    inputs.push(input);
+                    //    input_tys.push(termdata.ret_ty);
+                    //    for arg in args.iter() {
+                    //        output_tys.push(arg.ty());
+                    //        output_pats.push(arg);
+                    //    }
+
+                        // Evaluate all `input` args.
+                        let output_tys = args.iter().map(|arg| arg.ty()).collect();
+
+                        // Invoke the extractor.
+                        visitor.add_extract(
+                            input,
+                            termdata.ret_ty,
+                            output_tys,
+                            term,
+                            true,
+                            false,
+                        )
                     }
                     TermKind::Decl {
                         flags,
@@ -716,32 +707,6 @@ impl Pattern {
             &Pattern::Wildcard(_ty) => {
                 // Nothing!
             }
-        }
-    }
-
-    /// Given a var ID, find its matching sym in the pattern (if it exists)
-    pub fn get_sym(&self, vid: &VarId) -> Option<Sym> {
-        match self {
-            Self::BindPattern(_, var_id, pat, _) => {
-                if var_id == vid {
-                    pat.get_sym(vid)
-                } else {
-                    None
-                }
-            }
-            Self::Term(_, _, pats) => {
-                let sym = pats
-                    .iter()
-                    .filter_map(|pat| pat.get_sym(vid))
-                    .collect::<Vec<Sym>>();
-                if sym.is_empty() {
-                    return None;
-                }
-                assert!(sym.len() == 1);
-                return Some(sym[0]);
-            }
-            Self::Wildcard(_, Some(sym)) => Some(*sym),
-            _ => return None,
         }
     }
 }
@@ -1221,12 +1186,13 @@ impl Bindings {
 
 impl TermEnv {
     /// Construct the term environment from the AST and the type environment.
-    pub fn from_ast(tyenv: &mut TypeEnv, defs: &ast::Defs) -> Result<TermEnv, Errors> {
+    pub fn from_ast(tyenv: &mut TypeEnv, defs: &ast::Defs, expand_internal_extractors: bool) -> Result<TermEnv, Errors> {
         let mut env = TermEnv {
             terms: vec![],
             term_map: StableMap::new(),
             rules: vec![],
             converters: StableMap::new(),
+            expand_internal_extractors,
         };
 
         env.collect_pragmas(defs);
@@ -1950,7 +1916,7 @@ impl TermEnv {
                         return None;
                     }
                 };
-                Some((Pattern::Wildcard(ty, None), ty))
+                Some((Pattern::Wildcard(ty), ty))
             }
             &ast::Pattern::And { ref subpats, pos } => {
                 let mut expected_ty = expected_ty;
@@ -2017,12 +1983,7 @@ impl TermEnv {
                         };
                         let id = bindings.add_var(name, ty);
                         Some((
-                            Pattern::BindPattern(
-                                ty,
-                                id,
-                                Box::new(Pattern::Wildcard(ty, Some(name))),
-                                Some(name),
-                            ),
+                            Pattern::BindPattern(ty, id, Box::new(Pattern::Wildcard(ty))),
                             ty,
                         ))
                     }
@@ -2110,13 +2071,15 @@ impl TermEnv {
                         extractor_kind: Some(ExtractorKind::InternalExtractor { ref template }),
                         ..
                     } => {
-                        // Expand the extractor macro! We create a map
-                        // from macro args to AST pattern trees and
-                        // then evaluate the template with these
-                        // substitutions.
-                        log!("internal extractor macro args = {:?}", args);
-                        let pat = template.subst_macro_args(&args)?;
-                        return self.translate_pattern(tyenv, &pat, expected_ty, bindings);
+                        if self.expand_internal_extractors {
+                            // Expand the extractor macro! We create a map
+                            // from macro args to AST pattern trees and
+                            // then evaluate the template with these
+                            // substitutions.
+                            log!("internal extractor macro args = {:?}", args);
+                            let pat = template.subst_macro_args(&args)?;
+                            return self.translate_pattern(tyenv, &pat, expected_ty, bindings);
+                        }
                     }
                     TermKind::Decl {
                         extractor_kind: None,

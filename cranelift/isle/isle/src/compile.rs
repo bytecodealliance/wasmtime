@@ -27,3 +27,17 @@ pub fn from_files<P: AsRef<Path>>(
     let defs = crate::parser::parse(lexer)?;
     compile(&defs, options)
 }
+
+/// Construct the ISLE type and term environments for further analysis
+/// (i.e., verification), without going all the way through codegen.
+pub fn create_envs(defs: &ast::Defs) -> Result<(sema::TypeEnv, sema::TermEnv), Errors> {
+    let mut typeenv = sema::TypeEnv::from_ast(defs)?;
+    // We want to allow annotations on terms with internal extractors,
+    // so we avoid expanding them within the sema rules.
+    let termenv = sema::TermEnv::from_ast(
+        &mut typeenv,
+        defs,
+        /* expand_internal_extractors */ false
+    )?;
+    Ok((typeenv, termenv))
+}

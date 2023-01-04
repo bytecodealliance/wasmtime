@@ -163,7 +163,17 @@ pub fn test_from_files_with_lhs_termname(files: Vec<&str>, termname: &str, tr: T
         inputs.push(PathBuf::from(f));
     }
     test_with_rule_filter(inputs, tr, |rule, termenv, typeenv| {
-        pattern_contains_termname(&rule.lhs, termname, termenv, typeenv)
+        pattern_contains_termname(
+            // Hack for now: typeid not used
+            &cranelift_isle::sema::Pattern::Term(
+                cranelift_isle::sema::TypeId(0),
+                rule.root_term,
+                rule.args.clone(),
+            ),
+            termname,
+            termenv,
+            typeenv,
+        )
     });
 }
 

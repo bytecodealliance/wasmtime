@@ -540,7 +540,6 @@ fn test_fits_in_32_bxor() {
     )
 }
 
-
 #[test]
 fn test_64_bxor() {
     test_from_file_with_filter(

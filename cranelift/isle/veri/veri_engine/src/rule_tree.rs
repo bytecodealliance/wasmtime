@@ -1,10 +1,11 @@
+use std::any::Any;
 use std::collections::HashMap;
 
 use crate::solver::run_solver;
 use crate::type_inference::Solution;
 use crate::{interp::Context, termname::pattern_contains_termname};
 use cranelift_isle as isle;
-use isle::sema::{Pattern, Rule, RuleId, TermEnv, TypeEnv};
+use isle::sema::{Pattern, Rule, RuleId, TermEnv, TermId, TypeEnv};
 use itertools::Itertools;
 use veri_annotation::parser_wrapper::AnnotationEnv;
 use veri_ir::{
@@ -188,7 +189,7 @@ pub fn rules_with_lhs_root(name: &str, termenv: &TermEnv, typeenv: &TypeEnv) -> 
         .rules
         .iter()
         .filter_map(|rule| {
-            if pattern_term_name(rule.lhs.clone(), termenv, typeenv) == name {
+            if pattern_term_name(rule.root_term, termenv, typeenv) == name {
                 Some(rule.clone())
             } else {
                 None
@@ -259,7 +260,19 @@ pub fn verify_rules_for_type_with_lhs_contains(
         annotationenv,
         typesols,
         width,
-        |rule, termenv, typeenv| pattern_contains_termname(&rule.lhs, name, termenv, typeenv),
+        |rule, termenv, typeenv| {
+            pattern_contains_termname(
+                // Hack for now: typeid not used
+                &Pattern::Term(
+                    cranelift_isle::sema::TypeId(0),
+                    rule.root_term,
+                    rule.args.clone(),
+                ),
+                name,
+                termenv,
+                typeenv,
+            )
+        },
     )
 }
 
@@ -277,7 +290,7 @@ pub fn verify_rules_for_type_with_lhs_root(
         annotationenv,
         typesols,
         width,
-        |rule, termenv, typeenv| pattern_term_name(rule.lhs.clone(), termenv, typeenv) == root,
+        |rule, termenv, typeenv| pattern_term_name(rule.root_term, termenv, typeenv) == root,
     )
 }
 
@@ -323,12 +336,7 @@ pub fn verify_rules_for_type_wih_rule_filter(
     }
 }
 
-fn pattern_term_name(pattern: Pattern, termenv: &TermEnv, typeenv: &TypeEnv) -> String {
-    match pattern {
-        Pattern::Term(_, termid, _) => {
-            let term = &termenv.terms[termid.index()];
-            typeenv.syms[term.name.index()].clone()
-        }
-        _ => unreachable!("Must be term"),
-    }
+fn pattern_term_name(termid: TermId, termenv: &TermEnv, typeenv: &TypeEnv) -> String {
+    let term = &termenv.terms[termid.index()];
+    typeenv.syms[term.name.index()].clone()
 }
