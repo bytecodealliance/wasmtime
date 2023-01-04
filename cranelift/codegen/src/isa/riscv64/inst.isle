@@ -108,19 +108,11 @@
       (cc IntCC)
       (trap_code TrapCode))
 
-    (TrapFf
-      (cc FloatCC)
-      (x Reg)
-      (y Reg)
-      (ty Type)
-      (tmp WritableReg)
-      (trap_code TrapCode))
-
     (Jal
       ;; (rd WritableReg) don't use
       (dest BranchTarget))
 
-     (CondBr
+    (CondBr
       (taken BranchTarget)
       (not_taken BranchTarget)
       (kind IntegerCompare))
@@ -2068,15 +2060,6 @@
   (let ((extended Reg (ext_int_if_need $true val ty))
         (negated Reg (neg $I64 extended)))
     (max $I64 extended negated)))
-
-
-
-(decl gen_trapff (FloatCC Reg Reg Type TrapCode) InstOutput)
-(rule
-  (gen_trapff cc a b ty trap_code)
-  (let
-    ((tmp WritableReg (temp_writable_reg $I64)))
-    (side_effect (SideEffectNoResult.Inst (MInst.TrapFf cc a b ty tmp trap_code)))))
 
 (decl gen_trapif (Reg TrapCode) InstOutput)
 (rule

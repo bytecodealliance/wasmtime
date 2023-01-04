@@ -407,12 +407,6 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::TrapIf { test, .. } => {
             collector.reg_use(test);
         }
-        &Inst::TrapFf { x, y, tmp, .. } => {
-            collector.reg_use(x);
-            collector.reg_use(y);
-            collector.reg_early_def(tmp);
-        }
-
         &Inst::Jal { .. } => {}
         &Inst::CondBr { kind, .. } => {
             collector.reg_use(kind.rs1);
@@ -1431,22 +1425,6 @@ impl Inst {
                 let rs2 = format_reg(rs2, allocs);
                 format!("trap_ifc {}##({} {} {})", trap_code, rs1, cc, rs2)
             }
-            &MInst::TrapFf {
-                cc,
-                x,
-                y,
-                ty,
-                trap_code,
-                tmp,
-            } => format!(
-                "trap_ff_{} {} {},{}##tmp={} ty={}",
-                cc,
-                trap_code,
-                format_reg(x, allocs),
-                format_reg(y, allocs),
-                format_reg(tmp.to_reg(), allocs),
-                ty,
-            ),
             &MInst::Jal { dest, .. } => {
                 format!("{} {}", "j", dest)
             }
