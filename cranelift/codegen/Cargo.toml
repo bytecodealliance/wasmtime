@@ -18,7 +18,7 @@ bumpalo = "3"
 cranelift-codegen-shared = { path = "./shared", version = "0.94.0" }
 cranelift-entity = { workspace = true }
 cranelift-bforest = { workspace = true }
-hashbrown = { workspace = true }
+hashbrown = { workspace = true, features = ["raw"] }
 target-lexicon = { workspace = true }
 log = { workspace = true }
 serde = { version = "1.0.94", features = ["derive"], optional = true }
