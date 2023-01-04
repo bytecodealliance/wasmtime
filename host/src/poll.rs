@@ -28,7 +28,7 @@ enum Future {
 #[async_trait::async_trait]
 impl WasiPoll for WasiCtx {
     async fn drop_future(&mut self, future: WasiFuture) -> anyhow::Result<()> {
-        self.table_mut().delete(future);
+        self.table_mut().delete::<Future>(future).map_err(convert)?;
         Ok(())
     }
 
@@ -74,7 +74,9 @@ impl WasiPoll for WasiCtx {
     }
 
     async fn drop_stream(&mut self, stream: WasiStream) -> anyhow::Result<()> {
-        self.table_mut().delete(stream);
+        self.table_mut()
+            .delete::<Box<dyn wasi_common::WasiStream>>(stream)
+            .map_err(convert)?;
         Ok(())
     }
 

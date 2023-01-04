@@ -301,3 +301,32 @@ async fn run_exit_panic(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     assert!(err.downcast_ref::<wasi_common::I32Exit>().is_none());
     Ok(())
 }
+
+async fn run_directory_list(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+    let dir = tempfile::tempdir()?;
+
+    std::fs::File::create(dir.path().join("foo.txt"))?;
+    std::fs::File::create(dir.path().join("bar.txt"))?;
+    std::fs::File::create(dir.path().join("baz.txt"))?;
+    std::fs::create_dir(dir.path().join("sub"))?;
+    std::fs::File::create(dir.path().join("sub").join("wow.txt"))?;
+    std::fs::File::create(dir.path().join("sub").join("yay.txt"))?;
+
+    let descriptor =
+        store
+            .data_mut()
+            .push_dir(Box::new(wasi_cap_std_sync::dir::Dir::from_cap_std(
+                Dir::from_std_file(std::fs::File::open(dir.path())?),
+            )))?;
+
+    wasi.command(
+        &mut store,
+        0 as host::Descriptor,
+        1 as host::Descriptor,
+        &[],
+        &[],
+        &[(descriptor, "/")],
+    )
+    .await?
+    .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
+}

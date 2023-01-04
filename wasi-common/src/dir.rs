@@ -36,10 +36,7 @@ pub trait WasiDir: Send + Sync {
     }
 
     // XXX the iterator here needs to be asyncified as well!
-    async fn readdir(
-        &self,
-        _cursor: ReaddirCursor,
-    ) -> Result<Box<dyn Iterator<Item = Result<ReaddirEntity, Error>> + Send>, Error> {
+    async fn readdir(&self, _cursor: ReaddirCursor) -> Result<ReaddirIterator, Error> {
         Err(Error::not_supported())
     }
 
@@ -130,3 +127,5 @@ impl From<ReaddirCursor> for u64 {
         c.0
     }
 }
+
+pub type ReaddirIterator = Box<dyn Iterator<Item = Result<ReaddirEntity, Error>> + Send>;

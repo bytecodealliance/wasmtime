@@ -86,7 +86,14 @@ impl Table {
 
     /// Remove a resource at a given index from the table. Returns the resource
     /// if it was present.
-    pub fn delete(&mut self, key: u32) -> Option<Box<dyn Any + Send + Sync>> {
-        self.map.remove(&key)
+    pub fn delete<T: Any + Sized>(&mut self, key: u32) -> Result<Option<T>, Error> {
+        self.map
+            .remove(&key)
+            .map(|r| {
+                r.downcast::<T>()
+                    .map(|r| *r)
+                    .map_err(|_| Error::badf().context("element is a different type"))
+            })
+            .transpose()
     }
 }
