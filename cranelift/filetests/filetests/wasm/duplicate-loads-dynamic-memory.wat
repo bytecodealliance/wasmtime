@@ -65,10 +65,10 @@
 ;; @0057                               v10 = icmp ugt v4, v6
 ;;                                     v19 -> v10
 ;; @0057                               v11 = select_spectre_guard v10, v9, v8  ; v9 = 0
+;;                                     v20 -> v11
 ;; @0057                               v12 = load.i32 little heap v11
 ;;                                     v2 -> v12
-;; @005c                               v20 = select_spectre_guard v10, v9, v8  ; v9 = 0
-;; @005c                               v21 = load.i32 little heap v20
+;; @005c                               v21 = load.i32 little heap v11
 ;;                                     v3 -> v21
 ;; @005f                               jump block1
 ;;
@@ -103,10 +103,10 @@
 ;; @0064                               v11 = icmp ugt v4, v6
 ;;                                     v21 -> v11
 ;; @0064                               v12 = select_spectre_guard v11, v10, v9  ; v10 = 0
+;;                                     v22 -> v12
 ;; @0064                               v13 = load.i32 little heap v12
 ;;                                     v2 -> v13
-;; @006a                               v22 = select_spectre_guard v11, v10, v9  ; v10 = 0
-;; @006a                               v23 = load.i32 little heap v22
+;; @006a                               v23 = load.i32 little heap v12
 ;;                                     v3 -> v23
 ;; @006e                               jump block1
 ;;
