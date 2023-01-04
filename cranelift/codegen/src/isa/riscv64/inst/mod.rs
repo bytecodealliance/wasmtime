@@ -460,11 +460,6 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(src);
             collector.reg_def(rd);
         }
-        &Inst::Fcmp { rd, rs1, rs2, .. } => {
-            collector.reg_use(rs1);
-            collector.reg_use(rs2);
-            collector.reg_early_def(rd);
-        }
         &Inst::Select {
             ref dst,
             condition,
@@ -1365,25 +1360,6 @@ impl Inst {
                 let base = from.to_string_with_alloc(allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!("{} {},{}", op.op_name(), rd, base,)
-            }
-            &Inst::Fcmp {
-                rd,
-                cc,
-                ty,
-                rs1,
-                rs2,
-            } => {
-                let rs1 = format_reg(rs1, allocs);
-                let rs2 = format_reg(rs2, allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
-                format!(
-                    "f{}.{} {},{},{}",
-                    cc,
-                    if ty == F32 { "s" } else { "d" },
-                    rd,
-                    rs1,
-                    rs2,
-                )
             }
             &Inst::Store {
                 to,

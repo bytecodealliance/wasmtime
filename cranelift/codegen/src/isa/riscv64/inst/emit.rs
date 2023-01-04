@@ -1337,42 +1337,6 @@ impl MachInstEmit for Inst {
                 }
             }
 
-            &Inst::Fcmp {
-                rd,
-                cc,
-                ty,
-                rs1,
-                rs2,
-            } => {
-                let rs1 = allocs.next(rs1);
-                let rs2 = allocs.next(rs2);
-                let rd = allocs.next_writable(rd);
-                let label_true = sink.get_label();
-                let label_jump_over = sink.get_label();
-                Inst::lower_br_fcmp(
-                    cc,
-                    rs1,
-                    rs2,
-                    BranchTarget::Label(label_true),
-                    BranchTarget::zero(),
-                    ty,
-                    rd,
-                )
-                .iter()
-                .for_each(|i| i.emit(&[], sink, emit_info, state));
-                // here is not taken.
-                Inst::load_imm12(rd, Imm12::FALSE).emit(&[], sink, emit_info, state);
-                // jump over.
-                Inst::Jal {
-                    dest: BranchTarget::Label(label_jump_over),
-                }
-                .emit(&[], sink, emit_info, state);
-                // here is true
-                sink.bind_label(label_true);
-                Inst::load_imm12(rd, Imm12::TRUE).emit(&[], sink, emit_info, state);
-                sink.bind_label(label_jump_over);
-            }
-
             &Inst::Select {
                 ref dst,
                 condition,
