@@ -512,6 +512,13 @@ fn gen_opcodes(all_inst: &AllInstructions, fmt: &mut Formatter) {
             "Does this instruction have other side effects besides can_* flags?",
             fmt,
         );
+        gen_bool_accessor(
+            all_inst,
+            |inst| inst.side_effects_okay_for_gvn,
+            "side_effects_okay_for_gvn",
+            "Despite `self.other_side_effects() == true`, is this instruction okay to GVN?",
+            fmt,
+        )
     });
     fmt.line("}");
     fmt.empty_line();
