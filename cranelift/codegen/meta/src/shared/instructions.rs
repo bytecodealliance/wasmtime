@@ -1961,7 +1961,8 @@ pub(crate) fn define(
             )
             .operands_in(vec![x, y, code])
             .operands_out(vec![a])
-            .can_trap(true),
+            .can_trap(true)
+            .side_effects_okay_for_gvn(true),
         );
     }
 

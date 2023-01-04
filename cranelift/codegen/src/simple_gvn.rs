@@ -15,8 +15,8 @@ fn trivially_unsafe_for_gvn(opcode: Opcode) -> bool {
         || opcode.is_branch()
         || opcode.is_terminator()
         || opcode.is_return()
-        || opcode.can_trap()
         || opcode.can_store()
+        || (opcode.can_trap() && !opcode.side_effects_okay_for_gvn())
         || (opcode.other_side_effects() && !opcode.side_effects_okay_for_gvn())
 }
 
