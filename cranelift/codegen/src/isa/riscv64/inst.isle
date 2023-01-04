@@ -2235,7 +2235,8 @@
   (emit_fcmp (FloatCC.Ordered) ty a b)
   (cmp_result (ordered ty a b)))
 
-;; a is NaN || b is NaN
+;; a is nan || b is nan
+;; == !(a is not nan && b is not nan)
 (rule
   (emit_fcmp (FloatCC.Unordered) ty a b)
   (cmp_result_invert (ordered ty a b)))
@@ -2246,6 +2247,7 @@
   (cmp_result (feq ty a b)))
 
 ;; a != b
+;; == !(a == b)
 (rule
   (emit_fcmp (FloatCC.NotEqual) ty a b)
   (cmp_result_invert (feq ty a b)))
@@ -2281,21 +2283,25 @@
   (cmp_result (fge ty a b)))
 
 ;; !(ordered a b) || a < b
+;; == !(ordered a b && a >= b)
 (rule
   (emit_fcmp (FloatCC.UnorderedOrLessThan) ty a b)
-  (cmp_result (emit_or (not (ordered ty a b)) (flt ty a b))))
+  (cmp_result_invert (emit_and (ordered ty a b) (fge ty a b))))
 
 ;; !(ordered a b) || a <= b
+;; == !(ordered a b && a > b)
 (rule
   (emit_fcmp (FloatCC.UnorderedOrLessThanOrEqual) ty a b)
-  (cmp_result (emit_or (not (ordered ty a b)) (fle ty a b))))
+  (cmp_result_invert (emit_and (ordered ty a b) (fgt ty a b))))
 
 ;; !(ordered a b) || a > b
+;; == !(ordered a b && a <= b)
 (rule
   (emit_fcmp (FloatCC.UnorderedOrGreaterThan) ty a b)
-  (cmp_result (emit_or (not (ordered ty a b)) (fgt ty a b))))
+  (cmp_result_invert (emit_and (ordered ty a b) (fle ty a b))))
 
 ;; !(ordered a b) || a >= b
+;; == !(ordered a b && a < b)
 (rule
   (emit_fcmp (FloatCC.UnorderedOrGreaterThanOrEqual) ty a b)
-  (cmp_result (emit_or (not (ordered ty a b)) (fge ty a b))))
+  (cmp_result_invert (emit_and (ordered ty a b) (flt ty a b))))
