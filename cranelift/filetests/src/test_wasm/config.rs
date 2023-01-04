@@ -19,6 +19,9 @@ pub struct TestConfig {
     pub compile: bool,
 
     #[serde(default)]
+    pub optimize: bool,
+
+    #[serde(default)]
     pub settings: Vec<String>,
 
     #[serde(default)]
@@ -30,6 +33,13 @@ pub struct TestConfig {
 
 impl TestConfig {
     pub fn validate(&self) -> Result<()> {
+        if self.compile || self.optimize {
+            ensure!(
+                !(self.compile && self.optimize),
+                "The `compile` and `optimize` options are mutually exclusive."
+            );
+        }
+
         for global in self.globals.values() {
             ensure!(
                 global.vmctx || global.load.is_some(),
