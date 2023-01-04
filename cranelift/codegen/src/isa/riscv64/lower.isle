@@ -753,18 +753,10 @@
   (lower (icmp cc x @ (value_type ty) y))
   (lower_icmp cc x y ty))
 
-(decl gen_fcmp (FloatCC Value Value Type) Reg)
-(rule
-  (gen_fcmp cc x y ty)
-  (let
-    ((result WritableReg (temp_writable_reg $I64))
-      (_ Unit (emit (MInst.Fcmp cc result x y ty))))
-    (writable_reg_to_reg result)))
-
 ;;;;;  Rules for `fcmp`;;;;;;;;;
 (rule
   (lower (fcmp cc x @ (value_type ty) y))
-  (gen_fcmp cc x y ty))
+  (cmp_value (emit_fcmp cc ty x y)))
 
 ;;;;;  Rules for `func_addr`;;;;;;;;;
 (rule

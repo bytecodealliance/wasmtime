@@ -61,28 +61,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         }
     }
 
-    fn lower_br_fcmp(
-        &mut self,
-        cc: &FloatCC,
-        a: Reg,
-        b: Reg,
-        targets: &VecMachLabel,
-        ty: Type,
-    ) -> Unit {
-        let tmp = self.temp_writable_reg(I64);
-        MInst::lower_br_fcmp(
-            *cc,
-            a,
-            b,
-            BranchTarget::Label(targets[0]),
-            BranchTarget::Label(targets[1]),
-            ty,
-            tmp,
-        )
-        .iter()
-        .for_each(|i| self.emit(i));
-    }
-
     fn lower_brz_or_nz(
         &mut self,
         cc: &IntCC,
@@ -430,6 +408,15 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         });
 
         tmp.to_reg()
+    }
+
+    #[inline]
+    fn int_compare(&mut self, kind: &IntCC, rs1: Reg, rs2: Reg) -> IntegerCompare {
+        IntegerCompare {
+            kind: *kind,
+            rs1,
+            rs2,
+        }
     }
 }
 
