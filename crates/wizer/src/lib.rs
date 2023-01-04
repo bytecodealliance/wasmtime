@@ -543,10 +543,6 @@ impl Wizer {
         // Proposals we support.
         config.wasm_multi_memory(self.wasm_multi_memory.unwrap_or(DEFAULT_WASM_MULTI_MEMORY));
         config.wasm_multi_value(self.wasm_multi_value.unwrap_or(DEFAULT_WASM_MULTI_VALUE));
-        config.wasm_module_linking(
-            self.wasm_module_linking
-                .unwrap_or(DEFAULT_WASM_MODULE_LINKING),
-        );
         // Note that we only support `memory.copy`, `memory.fill`, and
         // `memory.init` for the time being:
         config.wasm_bulk_memory(self.wasm_bulk_memory.unwrap_or(DEFAULT_WASM_BULK_MEMORY));

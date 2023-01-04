@@ -279,14 +279,11 @@ fn snapshot_instantiations(
     instance: &wasmtime::Instance,
 ) -> Vec<Snapshot> {
     log::debug!("Snapshotting nested instantiations");
-    let mut instantiations = vec![];
+    let instantiations = vec![];
     loop {
         let name = format!("__wizer_instance_{}", instantiations.len());
         match instance.get_export(&mut *ctx, &name) {
             None => break,
-            Some(wasmtime::Extern::Instance(instance)) => {
-                instantiations.push(snapshot(&mut *ctx, &instance));
-            }
             Some(_) => unreachable!(),
         }
     }

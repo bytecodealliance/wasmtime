@@ -38,7 +38,6 @@ fuzz_target!(|module: wasm_smith::ConfiguredModule<WasmConfig>| {
 
     let mut config = Config::new();
     config.cache_config_load_default().unwrap();
-    config.wasm_module_linking(true);
     config.wasm_multi_memory(true);
     config.wasm_multi_value(true);
 
@@ -162,10 +161,7 @@ fuzz_target!(|module: wasm_smith::ConfiguredModule<WasmConfig>| {
                             panic!("divergence between snapshot and non-snapshot memories");
                         }
                     }
-                    Extern::Instance(_)
-                    | Extern::Func(_)
-                    | Extern::Table(_)
-                    | Extern::Module(_) => continue,
+                    Extern::SharedMemory(_) | Extern::Func(_) | Extern::Table(_) => continue,
                 }
             }
         }

@@ -33,7 +33,6 @@ fn run_wasm(args: &[wasmtime::Val], expected: i32, wasm: &[u8]) -> Result<()> {
     config.cache_config_load_default().unwrap();
     config.wasm_multi_memory(true);
     config.wasm_multi_value(true);
-    config.wasm_module_linking(true);
 
     let engine = wasmtime::Engine::new(&config)?;
     let wasi_ctx = wasi_cap_std_sync::WasiCtxBuilder::new().build();

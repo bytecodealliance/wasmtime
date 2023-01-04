@@ -33,11 +33,11 @@ env_logger = { version = "0.8.2", optional = true }
 log = "0.4.14"
 rayon = "1.5.0"
 structopt = { version = "0.3.21", optional = true }
-wasi-cap-std-sync = "0.35.3"
+wasi-cap-std-sync = "0.38.0"
 wasm-encoder = "0.6.0"
 wasmparser = "0.78.2"
-wasmtime = "0.35.3"
-wasmtime-wasi = "0.35.3"
+wasmtime = "0.38.0"
+wasmtime-wasi = "0.38.0"
 
 # Enable this dependency to get messages with WAT disassemblies when certain
 # internal panics occur.
