@@ -911,8 +911,8 @@ pub unsafe extern "C" fn fd_readdir(
                 state.dirent_cache.cookie.set(cookie - 1);
                 state.dirent_cache.cached_dirent.set(dirent);
                 std::ptr::copy(
-                    name.as_ptr().cast(),
-                    (*state.dirent_cache.path_data.get()).as_mut_ptr(),
+                    name.as_ptr().cast::<u8>(),
+                    (*state.dirent_cache.path_data.get()).as_mut_ptr() as *mut u8,
                     name.len(),
                 );
                 break;
