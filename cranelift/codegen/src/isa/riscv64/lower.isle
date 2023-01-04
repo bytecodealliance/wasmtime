@@ -76,11 +76,8 @@
 ;;;; Rules for `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `i64` and smaller.
-(rule 1 (lower (has_type (fits_in_64 ty) (ineg x)))
-  (alu_rrr (AluOPRRR.Sub) (zero_reg) x))
-
-(rule 2 (lower (has_type $I128 (ineg x)))
-  (i128_sub (value_regs_zero) x))
+(rule (lower (has_type ty (ineg val)))
+  (neg ty val))
 
 ;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -871,7 +868,7 @@
 ;;; Rules for `iabs` ;;;;;;;;;;;;;
 (rule
   (lower (has_type (fits_in_64 ty) (iabs x)))
-  (lower_iabs x ty))
+  (lower_iabs ty x))
 
 ;;;; Rules for calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

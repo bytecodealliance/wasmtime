@@ -306,6 +306,9 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
     fn has_zbkb(&mut self) -> bool {
         self.backend.isa_flags.has_zbkb()
     }
+    fn has_zbb(&mut self) -> bool {
+        self.backend.isa_flags.has_zbb()
+    }
 
     fn inst_output_get(&mut self, x: InstOutput, index: u8) -> ValueRegs {
         x[index as usize]
