@@ -7,6 +7,13 @@
   (enum
 ))
 
+;; Constructor to test whether two values are same.
+;;@ (spec (sig (args x, y) (ret))
+;;@     (assertions (= (x) (ret)),
+;;@                 (= (x) (y))))
+(decl pure same_value (Value Value) Value)
+(extern constructor same_value same_value)
+
 (rule (lower (has_type (fits_in_64 ty) (iadd x y)))
       (if-let z (same_value x y))
       (add ty z z))
