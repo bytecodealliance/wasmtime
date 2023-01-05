@@ -1471,7 +1471,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         });
         Ok(self.heaps.push(HeapData {
             base: heap_base,
-            min_size: 0,
+            min_size: self.module.memory_plans[index].memory.minimum * u64::from(WASM_PAGE_SIZE),
             offset_guard_size,
             style: heap_style,
             index_type: self.memory_index_type(index),
