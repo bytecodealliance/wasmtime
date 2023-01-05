@@ -362,6 +362,7 @@
 ;; Get the produced register out of a ProducesFlags.
 (decl produces_flags_get_reg (ProducesFlags) Reg)
 (rule (produces_flags_get_reg (ProducesFlags.ProducesFlagsReturnsReg _ reg)) reg)
+(rule (produces_flags_get_reg (ProducesFlags.ProducesFlagsReturnsResultWithConsumer _ reg)) reg)
 
 ;; Modify a ProducesFlags to use it only for its side-effect, ignoring
 ;; its result.
