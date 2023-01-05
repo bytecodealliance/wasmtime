@@ -1381,6 +1381,20 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> WasmResult<Heap> {
         let pointer_type = self.pointer_type();
         let is_shared = self.module.memory_plans[index].memory.shared;
+
+        let min_size = self.module.memory_plans[index]
+            .memory
+            .minimum
+            .checked_mul(u64::from(WASM_PAGE_SIZE))
+            .unwrap_or_else(|| {
+                // The only valid Wasm memory size that won't fit in a 64-bit
+                // integer is the maximum memory64 size (2^64) which is one
+                // larger than `u64::MAX` (2^64 - 1). In this case, just say the
+                // minimum heap size is `u64::MAX`.
+                debug_assert_eq!(self.module.memory_plans[index].memory.minimum, 1 << 48);
+                u64::MAX
+            });
+
         let (ptr, base_offset, current_length_offset) = {
             let vmctx = self.vmctx(func);
             if let Some(def_index) = self.module.defined_memory_index(index) {
@@ -1471,7 +1485,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         });
         Ok(self.heaps.push(HeapData {
             base: heap_base,
-            min_size: self.module.memory_plans[index].memory.minimum * u64::from(WASM_PAGE_SIZE),
+            min_size,
             offset_guard_size,
             style: heap_style,
             index_type: self.memory_index_type(index),
