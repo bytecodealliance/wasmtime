@@ -34,3 +34,28 @@ block0(v0: i64x2, v1: i64x2):
 ; run: %simd_icmp_ult_i64([-1 0], [-1 1]) == [0 -1]
 ; run: %simd_icmp_ult_i64([-5 1], [-1 -1]) == [-1 -1]
 ; run: %simd_icmp_ult_i64([0 0], [0 0]) == [0 0]
+
+
+function %icmp_ult_const_i32x4() -> i8 {
+block0:
+    v0 = vconst.i32x4 [1 1 1 1]
+    v1 = vconst.i32x4 [-1 2 3 4] ; -1 = 0xffff... will be greater than 1 when unsigned
+    v2 = icmp ult v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run: %icmp_ult_const_i32x4() == 1
+
+
+function %icmp_ult_const_i16x8() -> i8 {
+block0:
+    v0 = vconst.i16x8 [-1 -1 -1 -1 -1 -1 -1 -1]
+    v1 = vconst.i16x8 [-1 -1 -1 -1 -1 -1 -1 -1]
+    v2 = icmp ult v0, v1
+    v3 = vconst.i16x8 0x00
+    v4 = bitcast.i16x8 v2
+    v5 = icmp eq v3, v4
+    v8 = vall_true v5
+    return v8
+}
+; run: %icmp_ult_const_i16x8() == 1

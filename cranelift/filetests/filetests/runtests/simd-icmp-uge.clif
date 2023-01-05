@@ -34,3 +34,14 @@ block0(v0: i64x2, v1: i64x2):
 ; run: %simd_icmp_uge_i64([-1 0], [-1 1]) == [-1 0]
 ; run: %simd_icmp_uge_i64([-5 1], [-1 -1]) == [0 0]
 ; run: %simd_icmp_uge_i64([0 0], [0 0]) == [-1 -1]
+
+
+function %icmp_uge_const_i32x4() -> i8 {
+block0:
+    v0 = vconst.i32x4 [1 2 3 4]
+    v1 = vconst.i32x4 [1 1 1 1]
+    v2 = icmp uge v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run: %icmp_uge_const_i32x4() == 1

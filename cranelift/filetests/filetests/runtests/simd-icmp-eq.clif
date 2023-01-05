@@ -32,3 +32,25 @@ block0(v0: i64x2, v1: i64x2):
 }
 ; run: %simd_icmp_eq_i64([10 0], [1 0]) == [0 -1]
 ; run: %simd_icmp_eq_i64([-1 1], [-1 0]) == [-1 0]
+
+
+function %icmp_eq_const_i8x16() -> i8 {
+block0:
+    v0 = vconst.i8x16 0x00
+    v1 = vconst.i8x16 0x00
+    v2 = icmp eq v0, v1
+    v3 = extractlane v2, 0
+    return v3
+}
+; run: %icmp_eq_const_i8x16() == -1
+
+
+function %icmp_eq_const_i64x2() -> i64 {
+block0:
+    v0 = vconst.i64x2 0xf1ffffffffffffffffffffffffffffff
+    v1 = vconst.i64x2 0xffffffffffffffffffffffffffffffff
+    v2 = icmp eq v0, v1
+    v3 = extractlane v2, 1
+    return v3
+}
+; run: %icmp_eq_const_i64x2()  == 0

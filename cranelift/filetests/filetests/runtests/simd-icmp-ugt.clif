@@ -34,3 +34,14 @@ block0(v0: i64x2, v1: i64x2):
 ; run: %simd_icmp_ugt_i64([-1 0], [-1 1]) == [0 0]
 ; run: %simd_icmp_ugt_i64([-5 1], [-1 -1]) == [0 0]
 ; run: %simd_icmp_ugt_i64([0 0], [0 0]) == [0 0]
+
+
+function %icmp_ugt_const_i8x16() -> i8 {
+block0:
+    v0 = vconst.i8x16 [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16]
+    v1 = vconst.i8x16 [0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]
+    v2 = icmp ugt v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run: %icmp_ugt_const_i8x16() == 1

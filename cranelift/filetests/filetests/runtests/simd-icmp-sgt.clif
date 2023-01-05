@@ -37,3 +37,28 @@ block0(v0: i64x2, v1: i64x2):
 ; run: %simd_icmp_sgt_i64([-1 0], [-1 1]) == [0 0]
 ; run: %simd_icmp_sgt_i64([-5 1], [-1 -1]) == [0 -1]
 ; run: %simd_icmp_sgt_i64([0 0], [0 0]) == [0 0]
+
+
+function %icmp_sgt_const_i8x16() -> i8 {
+block0:
+    v0 = vconst.i8x16 [0 1 2 0 0 0 0 0 0 0 0 0 0 0 0 0]
+    v1 = vconst.i8x16 [1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0xff]
+    v2 = icmp sgt v0, v1
+    v3 = bitcast.i8x16 v2
+    v4 = vconst.i8x16 [0 0 0xff 0 0 0 0 0 0 0 0 0 0 0 0 0xff]
+    v7 = icmp eq v3, v4
+    v8 = vall_true v7
+    return v8
+}
+; run: %icmp_sgt_const_i8x16() == 1
+
+
+function %icmp_sgt_const_i64x2() -> i8 {
+block0:
+    v0 = vconst.i64x2 [0 -42]
+    v1 = vconst.i64x2 [-1 -43]
+    v2 = icmp sgt v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run: %icmp_sgt_const_i64x2() == 1
