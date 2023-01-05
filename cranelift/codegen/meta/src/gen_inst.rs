@@ -514,9 +514,9 @@ fn gen_opcodes(all_inst: &AllInstructions, fmt: &mut Formatter) {
         );
         gen_bool_accessor(
             all_inst,
-            |inst| inst.side_effects_okay_for_gvn,
-            "side_effects_okay_for_gvn",
-            "Despite `self.other_side_effects() == true`, is this instruction okay to GVN?",
+            |inst| inst.side_effects_idempotent,
+            "side_effects_idempotent",
+            "Despite having side effects, is this instruction okay to GVN?",
             fmt,
         )
     });

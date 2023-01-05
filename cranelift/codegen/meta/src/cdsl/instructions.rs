@@ -74,7 +74,7 @@ pub(crate) struct InstructionContent {
     /// Does this instruction have other side effects besides can_* flags?
     pub other_side_effects: bool,
     /// Despite having other side effects, is this instruction okay to GVN?
-    pub side_effects_okay_for_gvn: bool,
+    pub side_effects_idempotent: bool,
 }
 
 impl InstructionContent {
@@ -135,7 +135,7 @@ pub(crate) struct InstructionBuilder {
     can_store: bool,
     can_trap: bool,
     other_side_effects: bool,
-    side_effects_okay_for_gvn: bool,
+    side_effects_idempotent: bool,
 }
 
 impl InstructionBuilder {
@@ -155,7 +155,7 @@ impl InstructionBuilder {
             can_store: false,
             can_trap: false,
             other_side_effects: false,
-            side_effects_okay_for_gvn: false,
+            side_effects_idempotent: false,
         }
     }
 
@@ -215,8 +215,8 @@ impl InstructionBuilder {
         self
     }
 
-    pub fn side_effects_okay_for_gvn(mut self, val: bool) -> Self {
-        self.side_effects_okay_for_gvn = val;
+    pub fn side_effects_idempotent(mut self, val: bool) -> Self {
+        self.side_effects_idempotent = val;
         self
     }
 
@@ -268,7 +268,7 @@ impl InstructionBuilder {
             can_store: self.can_store,
             can_trap: self.can_trap,
             other_side_effects: self.other_side_effects,
-            side_effects_okay_for_gvn: self.side_effects_okay_for_gvn,
+            side_effects_idempotent: self.side_effects_idempotent,
         })
     }
 }

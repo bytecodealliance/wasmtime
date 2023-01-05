@@ -114,7 +114,9 @@ pub fn run(path: &Path, wat: &str) -> Result<()> {
                 }
             }))
             .collect();
-        std::fs::write(path, new_wat_lines.join("\n"))
+        let mut new_wat = new_wat_lines.join("\n");
+        new_wat.push('\n');
+        std::fs::write(path, new_wat)
             .with_context(|| format!("failed to write file: {}", path.display()))?;
         return Ok(());
     }

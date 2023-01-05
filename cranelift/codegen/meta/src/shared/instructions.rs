@@ -1392,7 +1392,7 @@ pub(crate) fn define(
         .other_side_effects(true)
         // We can de-duplicate spectre selects since the side effect is
         // idempotent.
-        .side_effects_okay_for_gvn(true),
+        .side_effects_idempotent(true),
     );
 
     let c = &Operand::new("c", Any).with_doc("Controlling value to test");
@@ -1961,7 +1961,8 @@ pub(crate) fn define(
             )
             .operands_in(vec![x, y, code])
             .operands_out(vec![a])
-            .can_trap(true),
+            .can_trap(true)
+            .side_effects_idempotent(true),
         );
     }
 
