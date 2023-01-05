@@ -51,10 +51,14 @@
 (extern constructor output_pair output_pair)
 
 ;; Construct a single-element `InstOutput` from a single register.
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (arg) (conv_to (widthof (arg)) (ret)))))
 (decl output_reg (Reg) InstOutput)
 (rule (output_reg reg) (output (value_reg reg)))
 
 ;; Construct a single-element `InstOutput` from a value.
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (arg) (ret))))
 (decl output_value (Value) InstOutput)
 (rule (output_value val) (output (put_in_regs val)))
 
@@ -101,6 +105,8 @@
 ;; multiple registers for its representation (like `i128` on x64 for example).
 ;;
 ;; As a side effect, this marks the value as used.
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (conv_to (regwidth) (arg)) (ret))))
 (decl put_in_reg (Value) Reg)
 (extern constructor put_in_reg put_in_reg)
 
@@ -212,6 +218,8 @@
 
 ;; Extract the type of the instruction's first result and pass along the
 ;; instruction as well.
+;;@ (spec (sig (args ty, arg) (ret))
+;;@ (assertions (= (ty) (widthof (arg))), (= (arg) (ret))))
 (decl has_type (Type Inst) Inst)
 (extractor (has_type ty inst)
            (and (result_type ty)

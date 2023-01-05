@@ -239,6 +239,8 @@
 (extern extractor lane_fits_in_32 lane_fits_in_32)
 
 ;; An extractor that only matches types that can fit in 64 bits.
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (arg) (ret)), (<= (arg) (64i128: isleType))))
 (decl fits_in_64 (Type) Type)
 (extern extractor fits_in_64 fits_in_64)
 

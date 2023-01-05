@@ -191,6 +191,7 @@ fn type_annotations_using_rule<'a>(
                 Box::new(iflet_rhs_expr.unwrap()),
             ));
         }
+        print!("\n");
     }
     let lhs = &mut create_parse_tree_pattern(
         rule,
@@ -1282,6 +1283,7 @@ fn create_parse_tree_pattern(
         isle::sema::Pattern::Var(_, var_id) => {
             let sym = rule.vars[var_id.index()].name;
             let ident = typeenv.syms[sym.index()].clone();
+            dbg!(&ident);
 
             let type_var = tree
                 .var_to_type_var_map
@@ -1303,6 +1305,7 @@ fn create_parse_tree_pattern(
         isle::sema::Pattern::BindPattern(_, var_id, subpat) => {
             let sym = rule.vars[var_id.index()].name;
             let var = typeenv.syms[sym.index()].clone();
+            dbg!(&var);
             let subpat_node = create_parse_tree_pattern(rule, subpat, tree, typeenv, termenv);
             let type_var = tree.next_type_var;
             tree.next_type_var += 1;
@@ -1435,6 +1438,7 @@ fn create_parse_tree_expr(
             if var_id.index() < rule.vars.len() {
                 let sym = rule.vars[var_id.index()].name;
                 let ident = typeenv.syms[sym.index()].clone();
+                dbg!(ident);
             } else {
                 println!("var {} not found, using var id instead", var_id.0);
                 ident = format!("v{}", ident);

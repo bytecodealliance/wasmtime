@@ -790,6 +790,8 @@
     (inst_data (InstructionData.IntCompareImm (Opcode.IcmpImm) x Cond Y))
 )
 
+;;@ (spec (sig (args x, y) (ret))
+;;@       (assertions (= (+ (x) (y)) (ret))))
 (decl iadd (Value Value) Inst)
 (extractor
     (iadd x y)

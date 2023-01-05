@@ -2388,7 +2388,7 @@ impl TermEnv {
                         on_lhs,
                     )));
 
-                    dbg!(tid);
+                    // dbg!(tid);
                     // panic!("AVH");
 
                     // Bind the var with the given type.
@@ -2432,7 +2432,7 @@ impl TermEnv {
         )?;
         let ty = rhs.ty();
         let (lhs, _lhs_ty) = self.translate_pattern(tyenv, &iflet.pattern, Some(ty), bindings)?;
-        panic!("AVH");
+        // panic!("AVH");
         Some(IfLet { lhs, rhs })
     }
 
