@@ -734,7 +734,7 @@ impl Wizer {
 
         if let Some(export) = instance.get_export(&mut *store, "_initialize") {
             if let Extern::Func(func) = export {
-                func.typed::<(), (), _>(&store)
+                func.typed::<(), ()>(&store)
                     .and_then(|f| {
                         has_wasi_initialize = true;
                         f.call(&mut *store, ()).map_err(Into::into)
@@ -744,7 +744,7 @@ impl Wizer {
         }
 
         let init_func = instance
-            .get_typed_func::<(), (), _>(&mut *store, &self.init_func)
+            .get_typed_func::<(), ()>(&mut *store, &self.init_func)
             .expect("checked by `validate_init_func`");
         init_func
             .call(&mut *store, ())

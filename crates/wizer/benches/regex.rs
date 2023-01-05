@@ -14,7 +14,7 @@ fn run_iter(
     data[ptr..].copy_from_slice(b"hello");
 
     let run = instance
-        .get_typed_func::<(i32, i32), i32, _>(&mut store, "run")
+        .get_typed_func::<(i32, i32), i32>(&mut store, "run")
         .unwrap();
     let result = run
         .call(&mut store, (i32::try_from(ptr).unwrap(), 5))

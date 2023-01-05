@@ -11,7 +11,7 @@ fn run_iter(
     let ua = "Mozilla/5.0 (X11; Linux x86_64; rv:85.0) Gecko/20100101 Firefox/85.0";
 
     let alloc = instance
-        .get_typed_func::<(u32, u32), u32, _>(&mut store, "alloc")
+        .get_typed_func::<(u32, u32), u32>(&mut store, "alloc")
         .unwrap();
     let ptr = alloc.call(&mut store, (ua.len() as u32, 1)).unwrap() as usize;
 
@@ -20,7 +20,7 @@ fn run_iter(
     data[ptr..ptr + ua.len()].copy_from_slice(ua.as_bytes());
 
     let run = instance
-        .get_typed_func::<(i32, i32), i32, _>(&mut store, "run")
+        .get_typed_func::<(i32, i32), i32>(&mut store, "run")
         .unwrap();
     let result = run
         .call(&mut store, (i32::try_from(ptr).unwrap(), 5))
@@ -28,7 +28,7 @@ fn run_iter(
     assert_eq!(result, 0);
 
     let dealloc = instance
-        .get_typed_func::<(u32, u32, u32), (), _>(&mut store, "dealloc")
+        .get_typed_func::<(u32, u32, u32), ()>(&mut store, "dealloc")
         .unwrap();
     dealloc
         .call(&mut store, (ptr as u32, ua.len() as u32, 1))
