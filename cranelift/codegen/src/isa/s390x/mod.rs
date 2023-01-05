@@ -28,7 +28,6 @@ use inst::create_machine_env;
 use self::inst::EmitInfo;
 
 /// A IBM Z backend.
-#[derive(Clone)]
 pub struct S390xBackend {
     triple: Triple,
     flags: shared_settings::Flags,
@@ -170,10 +169,6 @@ impl TargetIsa for S390xBackend {
 
     fn function_alignment(&self) -> u32 {
         4
-    }
-
-    fn cloned(&self) -> Box<dyn TargetIsa> {
-        Box::new(self.clone())
     }
 }
 

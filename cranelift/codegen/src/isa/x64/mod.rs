@@ -26,7 +26,6 @@ mod lower;
 mod settings;
 
 /// An X64 backend.
-#[derive(Clone)]
 pub(crate) struct X64Backend {
     triple: Triple,
     flags: Flags,
@@ -171,10 +170,6 @@ impl TargetIsa for X64Backend {
     /// always from aligned memory.
     fn function_alignment(&self) -> u32 {
         16
-    }
-
-    fn cloned(&self) -> Box<dyn TargetIsa> {
-        Box::new(self.clone())
     }
 }
 

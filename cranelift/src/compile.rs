@@ -49,7 +49,7 @@ pub fn run(options: &Options) -> Result<()> {
     let mut module = match (&options.output, parsed.as_fisa().isa) {
         (Some(output), Some(isa)) => {
             let builder = cranelift_object::ObjectBuilder::new(
-                isa.cloned(),
+                isa,
                 output
                     .file_name()
                     .and_then(|s| s.to_str())
