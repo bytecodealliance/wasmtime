@@ -12,17 +12,17 @@ block0:
     v3 = extractlane v2, 0
     return v3
 }
-; run
+; run: %icmp_eq_i8x16() == -1
 
 function %icmp_eq_i64x2() -> i64 {
 block0:
-    v0 = vconst.i64x2 0xffffffffffffffffffffffffffffffff
+    v0 = vconst.i64x2 0xf1ffffffffffffffffffffffffffffff
     v1 = vconst.i64x2 0xffffffffffffffffffffffffffffffff
     v2 = icmp eq v0, v1
     v3 = extractlane v2, 1
     return v3
 }
-; run
+; run: %icmp_eq_i64x2()  == 0
 
 function %icmp_ne_i32x4() -> i8 {
 block0:
@@ -32,7 +32,7 @@ block0:
     v3 = vall_true v2
     return v3
 }
-; run
+; run: %icmp_ne_i32x4() == 1
 
 function %icmp_ne_i16x8() -> i8 {
 block0:
@@ -44,7 +44,7 @@ block0:
     v5 = icmp_imm eq v4, 0
     return v5
 }
-; run
+; run: %icmp_ne_i16x8() == 1
 
 function %icmp_sgt_i8x16() -> i8 {
 block0:
@@ -57,7 +57,7 @@ block0:
     v8 = vall_true v7
     return v8
 }
-; run
+; run: %icmp_sgt_i8x16() == 1
 
 function %icmp_sgt_i64x2() -> i8 {
 block0:
@@ -67,7 +67,7 @@ block0:
     v8 = vall_true v2
     return v8
 }
-; run
+; run: %icmp_sgt_i64x2() == 1
 
 function %icmp_ugt_i8x16() -> i8 {
 block0:
@@ -77,7 +77,7 @@ block0:
     v8 = vall_true v2
     return v8
 }
-; run
+; run: %icmp_ugt_i8x16() == 1
 
 function %icmp_sge_i16x8() -> i8 {
 block0:
@@ -87,7 +87,7 @@ block0:
     v8 = vall_true v2
     return v8
 }
-; run
+; run: %icmp_sge_i16x8() == 1
 
 function %icmp_uge_i32x4() -> i8 {
 block0:
@@ -97,7 +97,7 @@ block0:
     v8 = vall_true v2
     return v8
 }
-; run
+; run: %icmp_uge_i32x4() == 1
 
 function %icmp_slt_i32x4() -> i8 {
 block0:
@@ -107,7 +107,7 @@ block0:
     v8 = vall_true v2
     return v8
 }
-; run
+; run: %icmp_slt_i32x4() == 1
 
 function %icmp_ult_i32x4() -> i8 {
 block0:
@@ -117,7 +117,7 @@ block0:
     v8 = vall_true v2
     return v8
 }
-; run
+; run: %icmp_ult_i32x4() == 1
 
 
 function %icmp_ult_i16x8() -> i8 {
@@ -131,7 +131,7 @@ block0:
     v8 = vall_true v5
     return v8
 }
-; run
+; run: %icmp_ult_i16x8() == 1
 
 function %icmp_sle_i16x8() -> i8 {
 block0:
@@ -141,7 +141,7 @@ block0:
     v8 = vall_true v2
     return v8
 }
-; run
+; run: %icmp_sle_i16x8() == 1
 
 function %icmp_ule_i16x8() -> i8 {
 block0:
@@ -151,7 +151,7 @@ block0:
     v8 = vall_true v2
     return v8
 }
-; run
+; run: %icmp_ule_i16x8() == 1
 
 function %fcmp_eq_f32x4() -> i8 {
 block0:
@@ -161,7 +161,7 @@ block0:
     v8 = vall_true v2
     return v8
 }
-; run
+; run: %fcmp_eq_f32x4() == 1
 
 function %fcmp_lt_f32x4() -> i8 {
 block0:
@@ -171,7 +171,7 @@ block0:
     v8 = vall_true v2
     return v8
 }
-; run
+; run: %fcmp_lt_f32x4() == 1
 
 function %fcmp_ge_f64x2() -> i8 {
 block0:
@@ -181,7 +181,7 @@ block0:
     v8 = vall_true v2
     return v8
 }
-; run
+; run: %fcmp_ge_f64x2() == 1
 
 function %fcmp_uno_f64x2() -> i8 {
 block0:
@@ -191,7 +191,7 @@ block0:
     v8 = vall_true v2
     return v8
 }
-; run
+; run: %fcmp_uno_f64x2() == 1
 
 function %fcmp_gt_nans_f32x4() -> i8 {
 block0:
@@ -205,4 +205,4 @@ block0:
     v8 = vall_true v5
     return v8
 }
-; run
+; run: %fcmp_gt_nans_f32x4() == 1
