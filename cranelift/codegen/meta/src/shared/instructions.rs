@@ -1686,7 +1686,8 @@ pub(crate) fn define(
             )
             .operands_in(vec![x, y])
             .operands_out(vec![a])
-            .can_trap(true),
+            .can_trap(true)
+            .side_effects_idempotent(true),
         );
 
         ig.push(
@@ -1704,7 +1705,8 @@ pub(crate) fn define(
             )
             .operands_in(vec![x, y])
             .operands_out(vec![a])
-            .can_trap(true),
+            .can_trap(true)
+            .side_effects_idempotent(true),
         );
 
         ig.push(
@@ -1719,7 +1721,8 @@ pub(crate) fn define(
             )
             .operands_in(vec![x, y])
             .operands_out(vec![a])
-            .can_trap(true),
+            .can_trap(true)
+            .side_effects_idempotent(true),
         );
 
         ig.push(
@@ -1734,7 +1737,8 @@ pub(crate) fn define(
             )
             .operands_in(vec![x, y])
             .operands_out(vec![a])
-            .can_trap(true),
+            .can_trap(true)
+            .side_effects_idempotent(true),
         );
     }
 
@@ -3324,7 +3328,8 @@ pub(crate) fn define(
         )
         .operands_in(vec![x])
         .operands_out(vec![a])
-        .can_trap(true),
+        .can_trap(true)
+        .side_effects_idempotent(true),
     );
 
     ig.push(
@@ -3342,7 +3347,8 @@ pub(crate) fn define(
         )
         .operands_in(vec![x])
         .operands_out(vec![a])
-        .can_trap(true),
+        .can_trap(true)
+        .side_effects_idempotent(true),
     );
 
     let x = &Operand::new("x", Float);
