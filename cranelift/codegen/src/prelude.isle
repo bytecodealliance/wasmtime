@@ -39,6 +39,8 @@
 (type ValueSlice (primitive ValueSlice))
 
 ;; Extract the type of a `Value`.
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (arg) (widthof (ret)))))
 (decl value_type (Type) Value)
 (extern extractor infallible value_type value_type)
 
@@ -177,6 +179,8 @@
 (extern const $I32X4XN Type)
 
 ;; Get the bit width of a given type.
+;;@ (spec (sig (args x) (ret))
+;;@     (assertions (= (x) (ret))))
 (decl pure ty_bits (Type) u8)
 (extern constructor ty_bits ty_bits)
 
@@ -227,10 +231,14 @@
 ;;;; Helper Clif Extractors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; An extractor that only matches types that can fit in 16 bits.
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (arg) (ret)), (<= (arg) (16i128: isleType))))
 (decl fits_in_16 (Type) Type)
 (extern extractor fits_in_16 fits_in_16)
 
 ;; An extractor that only matches types that can fit in 32 bits.
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (arg) (ret)), (<= (arg) (32i128: isleType))))
 (decl fits_in_32 (Type) Type)
 (extern extractor fits_in_32 fits_in_32)
 
@@ -340,6 +348,8 @@
 (extern extractor infallible u64_from_bool u64_from_bool)
 
 ;; Extract a `u64` from an `Imm64`.
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (arg) (ret))))
 (decl u64_from_imm64 (u64) Imm64)
 (extern extractor infallible u64_from_imm64 u64_from_imm64)
 

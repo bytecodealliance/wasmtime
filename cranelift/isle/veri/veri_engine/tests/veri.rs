@@ -8,20 +8,20 @@ use utils::{
 };
 use veri_ir::{Counterexample, VerificationResult};
 
-#[test]
-fn test_iadds() {
-    /*test_from_file_custom_prelude(
-        "./tests/code/selfcontained/simple_prelude.isle",
-        "./tests/code/selfcontained/simple_iadd.isle",
-        lte_64_success_result(),
-    );
+// #[test]
+// fn test_iadds() {
+/*test_from_file_custom_prelude(
+    "./tests/code/selfcontained/simple_prelude.isle",
+    "./tests/code/selfcontained/simple_iadd.isle",
+    lte_64_success_result(),
+);
 
-    test_from_file_custom_prelude(
-        "./tests/code/selfcontained/simple_prelude.isle",
-        "./tests/code/selfcontained/iadd_to_sub.isle",
-        lte_64_success_result(),
-    );*/
-}
+test_from_file_custom_prelude(
+    "./tests/code/selfcontained/simple_prelude.isle",
+    "./tests/code/selfcontained/iadd_to_sub.isle",
+    lte_64_success_result(),
+);*/
+// }
 
 #[test]
 fn test_implicit_conversions() {

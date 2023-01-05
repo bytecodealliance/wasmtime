@@ -691,7 +691,7 @@ pub fn run_solver(rule_sem: RuleSemantics, query_width: usize) -> VerificationRe
 
     println!("Declaring additional variables");
     for (name, ty) in &ctx.additional_decls {
-        // println!("\t{} : {:?}", name, ty);
+        println!("\t{} : {:?}", name, ty);
         solver.declare_const(name, ty).unwrap();
     }
 

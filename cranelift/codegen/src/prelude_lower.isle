@@ -27,6 +27,8 @@
 (type PReg (primitive PReg))
 
 ;; Construct a `ValueRegs` of one register.
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (arg) (ret))))
 (decl value_reg (Reg) ValueRegs)
 (extern constructor value_reg value_reg)
 
@@ -43,6 +45,8 @@
 (extern constructor output_none output_none)
 
 ;; Construct a single-element `InstOutput`.
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (arg) (ret))))
 (decl output (ValueRegs) InstOutput)
 (extern constructor output output)
 
@@ -113,6 +117,8 @@
 ;; Put the given value into one or more registers.
 ;;
 ;; As a side effect, this marks the value as used.
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (arg) (ret))))
 (decl put_in_regs (Value) ValueRegs)
 (extern constructor put_in_regs put_in_regs)
 
@@ -122,6 +128,8 @@
 (extern constructor ensure_in_vreg ensure_in_vreg)
 
 ;; Get the `n`th register inside a `ValueRegs`.
+;;@ (spec (sig (args arg, i) (ret))
+;;@     (assertions (= (arg) (ret))))
 (decl value_regs_get (ValueRegs usize) Reg)
 (extern constructor value_regs_get value_regs_get)
 
@@ -204,10 +212,14 @@
 (extern extractor infallible inst_results inst_results)
 
 ;; Extract the first result value of the given instruction.
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (arg) (ret))))
 (decl first_result (Value) Inst)
 (extern extractor first_result first_result)
 
 ;; Extract the `InstructionData` for an `Inst`.
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (arg) (ret))))
 (decl inst_data (InstructionData) Inst)
 (extern extractor infallible inst_data inst_data)
 
@@ -226,6 +238,8 @@
                 inst))
 
 ;; Match the instruction that defines the given value, if any.
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (arg) (ret))))
 (decl def_inst (Inst) Value)
 (extern extractor def_inst def_inst)
 
