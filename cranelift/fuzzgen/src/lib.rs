@@ -11,7 +11,7 @@ use cranelift::prelude::isa;
 use cranelift::prelude::*;
 use cranelift_native::builder_with_options;
 use std::fmt;
-use target_lexicon::Architecture;
+use target_lexicon::{Architecture, Triple};
 
 mod config;
 mod function_generator;
@@ -26,7 +26,7 @@ pub struct SingleFunction(pub Function);
 impl<'a> Arbitrary<'a> for SingleFunction {
     fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
         FuzzGen::new(u)
-            .generate_func()
+            .generate_func(Triple::host())
             .map_err(|_| arbitrary::Error::IncorrectFormat)
             .map(Self)
     }
@@ -56,15 +56,7 @@ impl fmt::Debug for FunctionWithIsa {
         }
 
         writeln!(f, "test compile\n")?;
-
-        match self.isa.triple().architecture {
-            Architecture::X86_64 => writeln!(f, "target aarch64")?,
-            Architecture::Aarch64 { .. } => writeln!(f, "target aarch64")?,
-            Architecture::S390x => writeln!(f, "target s390x")?,
-            Architecture::Riscv64 { .. } => writeln!(f, "target riscv64")?,
-            _ => unreachable!(),
-        }
-
+        writeln!(f, "target {}", self.isa.triple().architecture)?;
         writeln!(f, "{}", self.func)?;
 
         Ok(())
@@ -73,8 +65,8 @@ impl fmt::Debug for FunctionWithIsa {
 
 impl<'a> Arbitrary<'a> for FunctionWithIsa {
     fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
-        let target = u.choose(&["x86_64", "s390x", "aarch64", "riscv64"])?;
-        let builder = isa::lookup_by_name(target).expect("Unable to find target architecture");
+        let target = u.choose(isa::ALL_ARCHITECTURES)?;
+        let builder = isa::lookup_by_name(target).map_err(|_| arbitrary::Error::IncorrectFormat)?;
 
         let mut gen = FuzzGen::new(u);
         let flags = gen
@@ -85,7 +77,7 @@ impl<'a> Arbitrary<'a> for FunctionWithIsa {
             .map_err(|_| arbitrary::Error::IncorrectFormat)?;
 
         let func = gen
-            .generate_func()
+            .generate_func(isa.triple().clone())
             .map_err(|_| arbitrary::Error::IncorrectFormat)?;
 
         Ok(FunctionWithIsa { isa, func })
@@ -118,16 +110,8 @@ impl fmt::Debug for TestCase {
             }
         }
 
-        match self.isa.triple().architecture {
-            Architecture::X86_64 => writeln!(f, "target aarch64")?,
-            Architecture::Aarch64 { .. } => writeln!(f, "target aarch64")?,
-            Architecture::S390x => writeln!(f, "target s390x")?,
-            Architecture::Riscv64 { .. } => writeln!(f, "target riscv64")?,
-            _ => unreachable!(),
-        }
-
+        writeln!(f, "target {}", self.isa.triple().architecture)?;
         writeln!(f, "{}", self.func)?;
-
         writeln!(f, "; Note: the results in the below test cases are simply a placeholder and probably will be wrong\n")?;
 
         for input in self.inputs.iter() {
@@ -289,8 +273,8 @@ where
         Ok(ctx.func)
     }
 
-    pub fn generate_func(&mut self) -> Result<Function> {
-        let func = FunctionGenerator::new(&mut self.u, &self.config).generate()?;
+    pub fn generate_func(&mut self, target_triple: Triple) -> Result<Function> {
+        let func = FunctionGenerator::new(&mut self.u, &self.config, target_triple).generate()?;
         self.run_func_passes(func)
     }
 
@@ -386,7 +370,7 @@ where
             builder_with_options(true).expect("Unable to build a TargetIsa for the current host");
         let flags = self.generate_flags(builder.triple().architecture)?;
         let isa = builder.finish(flags)?;
-        let func = self.generate_func()?;
+        let func = self.generate_func(isa.triple().clone())?;
         let inputs = self.generate_test_inputs(&func.signature)?;
         Ok(TestCase { isa, func, inputs })
     }

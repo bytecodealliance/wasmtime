@@ -17,6 +17,7 @@ use cranelift::prelude::{
 };
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
+use target_lexicon::{Architecture, Triple};
 
 /// Generates a Vec with `len` elements comprised of `options`
 fn arbitrary_vec<T: Clone>(
@@ -251,14 +252,74 @@ type OpcodeInserter = fn(
     &'static [Type],
 ) -> Result<()>;
 
-// TODO: Derive this from the `cranelift-meta` generator.
-#[rustfmt::skip]
-const OPCODE_SIGNATURES: &'static [(
+/// Returns true when this OpcodeSignature is valid for the given target triple.
+fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -> bool {
+    macro_rules! exceptions {
+        ( $(($($cases:pat),*)),* $(,)?) => {
+            match (op, args, rets) {
+                $( ($($cases,)* ..) => false, )*
+                _ => true,
+            }
+        }
+    }
+
+    match triple.architecture {
+        Architecture::X86_64 => {
+            exceptions!(
+                (Opcode::IaddCout, &[I8, I8]),
+                (Opcode::IaddCout, &[I16, I16]),
+                (Opcode::IaddCout, &[I128, I128]),
+                (Opcode::Smulhi, &[I8, I8]),
+                (Opcode::Umulhi, &[I8, I8]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4756
+                (Opcode::Udiv, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4770
+                (Opcode::Sdiv, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5474
+                (Opcode::Urem, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5470
+                (Opcode::Srem, &[I8, I8]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5474
+                (Opcode::Srem, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5466
+                (Opcode::Iabs),
+                // https://github.com/bytecodealliance/wasmtime/issues/3370
+                (Opcode::Smin, &[I128, I128]),
+            )
+        }
+
+        Architecture::Aarch64(_) => {
+            exceptions!(
+                (Opcode::IaddCout, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4864
+                (Opcode::Udiv, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4864
+                (Opcode::Sdiv, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5472
+                (Opcode::Urem, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5472
+                (Opcode::Srem, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5467
+                (Opcode::Iabs, &[I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4313
+                (Opcode::Smin, &[I128, I128]),
+            )
+        }
+
+        _ => true,
+    }
+}
+
+type OpcodeSignature = (
     Opcode,
     &'static [Type], // Args
     &'static [Type], // Rets
     OpcodeInserter,
-)] = &[
+);
+
+// TODO: Derive this from the `cranelift-meta` generator.
+#[rustfmt::skip]
+const OPCODE_SIGNATURES: &'static [OpcodeSignature] = &[
     (Opcode::Nop, &[], &[], insert_opcode),
     // Iadd
     (Opcode::Iadd, &[I8, I8], &[I8], insert_opcode),
@@ -267,14 +328,10 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Iadd, &[I64, I64], &[I64], insert_opcode),
     (Opcode::Iadd, &[I128, I128], &[I128], insert_opcode),
     // IaddCout
-    // IaddCout not implemented in x64
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::IaddCout, &[I8, I8], &[I8, I8], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::IaddCout, &[I16, I16], &[I16, I8], insert_opcode),
     (Opcode::IaddCout, &[I32, I32], &[I32, I8], insert_opcode),
     (Opcode::IaddCout, &[I64, I64], &[I64, I8], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::IaddCout, &[I128, I128], &[I128, I8], insert_opcode),
     // Isub
     (Opcode::Isub, &[I8, I8], &[I8], insert_opcode),
@@ -290,14 +347,12 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Imul, &[I128, I128], &[I128], insert_opcode),
     // Smulhi
     // Not implemented on x64: https://github.com/bytecodealliance/wasmtime/issues/5468
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Smulhi, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Smulhi, &[I16, I16], &[I16], insert_opcode),
     (Opcode::Smulhi, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Smulhi, &[I64, I64], &[I64], insert_opcode),
     // Umulhi
     // Not implemented on x64: https://github.com/bytecodealliance/wasmtime/issues/5468
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Umulhi, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Umulhi, &[I16, I16], &[I16], insert_opcode),
     (Opcode::Umulhi, &[I32, I32], &[I32], insert_opcode),
@@ -307,42 +362,24 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Udiv, &[I16, I16], &[I16], insert_opcode),
     (Opcode::Udiv, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Udiv, &[I64, I64], &[I64], insert_opcode),
-    // udiv.i128 not implemented in some backends:
-    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4756
-    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4864
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Udiv, &[I128, I128], &[I128], insert_opcode),
     // Sdiv
     (Opcode::Sdiv, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Sdiv, &[I16, I16], &[I16], insert_opcode),
     (Opcode::Sdiv, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Sdiv, &[I64, I64], &[I64], insert_opcode),
-    // sdiv.i128 not implemented in some backends:
-    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4770
-    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4864
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Sdiv, &[I128, I128], &[I128], insert_opcode),
     // Urem
     (Opcode::Urem, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Urem, &[I16, I16], &[I16], insert_opcode),
     (Opcode::Urem, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Urem, &[I64, I64], &[I64], insert_opcode),
-    // urem.i128 not implemented in some backends:
-    //   x64: https://github.com/bytecodealliance/wasmtime/issues/5474
-    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/5472
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Urem, &[I128, I128], &[I128], insert_opcode),
     // Srem
-    // Issues on x64: https://github.com/bytecodealliance/wasmtime/issues/5470
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Srem, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Srem, &[I16, I16], &[I16], insert_opcode),
     (Opcode::Srem, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Srem, &[I64, I64], &[I64], insert_opcode),
-    // srem.i128 not implemented in some backends:
-    //   x64: https://github.com/bytecodealliance/wasmtime/issues/5474
-    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/5472
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Srem, &[I128, I128], &[I128], insert_opcode),
     // Ineg
     (Opcode::Ineg, &[I8, I8], &[I8], insert_opcode),
@@ -351,28 +388,16 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Ineg, &[I64, I64], &[I64], insert_opcode),
     (Opcode::Ineg, &[I128, I128], &[I128], insert_opcode),
     // Iabs
-    // Some variants missing:
-    //   x64: https://github.com/bytecodealliance/wasmtime/issues/5466
-    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/5467
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Iabs, &[I8], &[I8], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Iabs, &[I16], &[I16], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Iabs, &[I32], &[I32], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Iabs, &[I64], &[I64], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Iabs, &[I128], &[I128], insert_opcode),
     // Smin
-    // smin.i128 is not implemented in some backends:
-    //   x64: https://github.com/bytecodealliance/wasmtime/issues/3370
-    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4313
     (Opcode::Smin, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Smin, &[I16, I16], &[I16], insert_opcode),
     (Opcode::Smin, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Smin, &[I64, I64], &[I64], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Smin, &[I128, I128], &[I128], insert_opcode),
     // Umin
     // umin.i128 is not implemented in some backends:
@@ -1075,6 +1100,7 @@ where
     u: &'r mut Unstructured<'data>,
     config: &'r Config,
     resources: Resources,
+    target_triple: Triple,
 }
 
 #[derive(Debug, Clone)]
@@ -1137,11 +1163,12 @@ impl<'r, 'data> FunctionGenerator<'r, 'data>
 where
     'data: 'r,
 {
-    pub fn new(u: &'r mut Unstructured<'data>, config: &'r Config) -> Self {
+    pub fn new(u: &'r mut Unstructured<'data>, config: &'r Config, target_triple: Triple) -> Self {
         Self {
             u,
             config,
             resources: Resources::default(),
+            target_triple,
         }
     }
 
@@ -1396,6 +1423,9 @@ where
     fn generate_instructions(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
         for _ in 0..self.param(&self.config.instructions_per_block)? {
             let (op, args, rets, inserter) = *self.u.choose(OPCODE_SIGNATURES)?;
+            if !valid_for_target(&self.target_triple, op, args, rets) {
+                return Err(arbitrary::Error::IncorrectFormat.into());
+            }
             inserter(self, builder, op, args, rets)?;
         }
 
