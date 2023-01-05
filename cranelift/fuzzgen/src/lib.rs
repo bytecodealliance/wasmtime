@@ -275,14 +275,14 @@ where
         Ok(ctx.func)
     }
 
-    pub fn generate_func(&mut self, target_triple: Triple) -> Result<Function> {
+    fn generate_func(&mut self, target_triple: Triple) -> Result<Function> {
         let func = FunctionGenerator::new(&mut self.u, &self.config, target_triple).generate()?;
         self.run_func_passes(func)
     }
 
     /// Generate a random set of cranelift flags.
     /// Only semantics preserving flags are considered
-    pub fn generate_flags(&mut self, target_arch: Architecture) -> Result<Flags> {
+    fn generate_flags(&mut self, target_arch: Architecture) -> Result<Flags> {
         let mut builder = settings::builder();
 
         let opt = self.u.choose(OptLevel::all())?;
