@@ -1978,7 +1978,7 @@ impl TermEnv {
                                 return None;
                             }
                         };
-                        let id = bindings.add_var(name, ty);
+                        let id = bindings.add_var(dbg!(name), ty);
                         Some((
                             Pattern::BindPattern(ty, id, Box::new(Pattern::Wildcard(ty))),
                             ty,
