@@ -4,7 +4,7 @@ target aarch64
 target s390x
 target riscv64 has_zbb=false
 target riscv64 has_zbb=true
-; x86_64 only supports vector iabs
+target x86_64
 
 function %iabs_i8(i8) -> i8 {
 block0(v0: i8):

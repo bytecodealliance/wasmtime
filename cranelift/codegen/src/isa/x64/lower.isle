@@ -1132,14 +1132,15 @@
 ;; `i64` and smaller.
 
 (rule -1 (lower (has_type (fits_in_64 ty) (iabs x)))
-      (let ((neg ProducesFlags (x64_neg_paired ty x))
+      (let ((src Gpr x)
+            (neg ProducesFlags (x64_neg_paired ty src))
             ;; Manually extract the result from the neg, then ignore
             ;; it below, since we need to pass it into the cmove
             ;; before we pass the cmove to with_flags_reg.
             (neg_result Gpr (produces_flags_get_reg neg))
             ;; When the neg instruction sets the sign flag, 
             ;; takes the original (non-negative) value.
-            (cmove ConsumesFlags (cmove ty (CC.S) x neg_result)))
+            (cmove ConsumesFlags (cmove ty (CC.S) src neg_result)))
         (with_flags_reg (produces_flags_ignore neg) cmove)))
 
 ;;;; Rules for `fabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
