@@ -105,6 +105,11 @@ pub fn lookup(triple: Triple) -> Result<Builder, LookupError> {
     }
 }
 
+/// The string names of all the supported, but possibly not enabled, architectures. The elements of
+/// this slice are suitable to be passed to the [lookup_by_name] function to obtain the default
+/// configuration for that architecture.
+pub const ALL_ARCHITECTURES: &[&str] = &["x86_64", "aarch64", "s390x", "riscv64"];
+
 /// Look for a supported ISA with the given `name`.
 /// Return a builder that can create a corresponding `TargetIsa`.
 pub fn lookup_by_name(name: &str) -> Result<Builder, LookupError> {
