@@ -145,10 +145,12 @@ fn insert_cmp(
     let rhs = builder.use_var(rhs);
 
     let res = if opcode == Opcode::Fcmp {
+        let cc = *fgen.u.choose(FloatCC::all())?;
+
         // Some FloatCC's are not implemented on AArch64, see:
         // https://github.com/bytecodealliance/wasmtime/issues/4850
-        let float_cc = if cfg!(target_arch = "aarch64") {
-            &[
+        if matches!(fgen.target_triple.architecture, Architecture::Aarch64(_))
+            && ![
                 FloatCC::Ordered,
                 FloatCC::Unordered,
                 FloatCC::Equal,
@@ -158,11 +160,11 @@ fn insert_cmp(
                 FloatCC::GreaterThan,
                 FloatCC::GreaterThanOrEqual,
             ]
-        } else {
-            FloatCC::all()
+            .contains(&cc)
+        {
+            return Err(arbitrary::Error::IncorrectFormat.into());
         };
 
-        let cc = *fgen.u.choose(float_cc)?;
         builder.ins().fcmp(cc, lhs, rhs)
     } else {
         let cc = *fgen.u.choose(IntCC::all())?;
