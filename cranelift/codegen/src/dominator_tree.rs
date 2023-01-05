@@ -655,15 +655,13 @@ mod tests {
         let mut cur = FuncCursor::new(&mut func);
 
         cur.insert_block(block0);
-        let target = cur.func.dfg.block_with_args(block2, &[]);
-        cur.ins().brnz(v0, target);
+        cur.ins().brnz(v0, block2, &[]);
         cur.ins().trap(TrapCode::User(0));
 
         cur.insert_block(block1);
         let v1 = cur.ins().iconst(I32, 1);
         let v2 = cur.ins().iadd(v0, v1);
-        let target = cur.func.dfg.block_with_args(block0, &[v2]);
-        cur.ins().jump(target);
+        cur.ins().jump(block0, &[v2]);
 
         cur.insert_block(block2);
         cur.ins().return_(&[v0]);
@@ -711,18 +709,14 @@ mod tests {
         let mut cur = FuncCursor::new(&mut func);
 
         cur.insert_block(block3);
-        let target = cur.func.dfg.block_with_args(block1, &[]);
-        let jmp_block3_block1 = cur.ins().jump(target);
+        let jmp_block3_block1 = cur.ins().jump(block1, &[]);
 
         cur.insert_block(block1);
-        let target = cur.func.dfg.block_with_args(block0, &[]);
-        let br_block1_block0 = cur.ins().brnz(cond, target);
-        let target = cur.func.dfg.block_with_args(block2, &[]);
-        let jmp_block1_block2 = cur.ins().jump(target);
+        let br_block1_block0 = cur.ins().brnz(cond, block0, &[]);
+        let jmp_block1_block2 = cur.ins().jump(block2, &[]);
 
         cur.insert_block(block2);
-        let target = cur.func.dfg.block_with_args(block0, &[]);
-        cur.ins().jump(target);
+        cur.ins().jump(block0, &[]);
 
         cur.insert_block(block0);
 
@@ -784,15 +778,13 @@ mod tests {
         let mut cur = FuncCursor::new(&mut func);
 
         cur.insert_block(block0);
-        let target = cur.func.dfg.block_with_args(block2, &[]);
-        let jmp02 = cur.ins().jump(target);
+        let jmp02 = cur.ins().jump(block2, &[]);
 
         cur.insert_block(block1);
         let trap = cur.ins().trap(TrapCode::User(5));
 
         cur.insert_block(block2);
-        let target = cur.func.dfg.block_with_args(block1, &[]);
-        let jmp21 = cur.ins().jump(target);
+        let jmp21 = cur.ins().jump(block1, &[]);
 
         let cfg = ControlFlowGraph::with_function(cur.func);
         let dt = DominatorTree::with_function(cur.func, &cfg);

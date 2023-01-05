@@ -236,7 +236,7 @@ fn fold_branch(pos: &mut FuncCursor, inst: ir::Inst, opcode: ir::Opcode) {
     };
 
     if (branch_if_zero && !truthiness) || (!branch_if_zero && truthiness) {
-        pos.func.dfg.replace(inst).jump(block);
+        pos.func.dfg.replace(inst).jump_(block);
         // remove the rest of the block to avoid verifier errors
         while let Some(next_inst) = pos.func.layout.next_inst(inst) {
             pos.func.layout.remove_inst(next_inst);

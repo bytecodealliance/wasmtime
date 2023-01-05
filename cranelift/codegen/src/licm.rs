@@ -93,11 +93,7 @@ fn create_pre_header(
     let mut pos = FuncCursor::new(func).at_top(header);
     pos.insert_block(pre_header);
     pos.next_inst();
-    let target = pos
-        .func
-        .dfg
-        .block_with_args(header, pre_header_args_value.as_slice(pool));
-    pos.ins().jump(target);
+    pos.ins().jump(header, pre_header_args_value.as_slice(pool));
 
     pre_header
 }

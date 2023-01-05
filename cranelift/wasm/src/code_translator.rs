@@ -3111,8 +3111,7 @@ fn canonicalise_then_jump(
 ) -> ir::Inst {
     let mut tmp_canonicalised = SmallVec::<[ir::Value; 16]>::new();
     let canonicalised = canonicalise_v128_values(&mut tmp_canonicalised, builder, params);
-    let target = builder.func.dfg.block_with_args(destination, canonicalised);
-    builder.ins().jump(target)
+    builder.ins().jump(destination, canonicalised)
 }
 
 /// The same but for a `brz` instruction.
@@ -3124,8 +3123,7 @@ fn canonicalise_then_brz(
 ) -> ir::Inst {
     let mut tmp_canonicalised = SmallVec::<[ir::Value; 16]>::new();
     let canonicalised = canonicalise_v128_values(&mut tmp_canonicalised, builder, params);
-    let target = builder.func.dfg.block_with_args(destination, canonicalised);
-    builder.ins().brz(cond, target)
+    builder.ins().brz(cond, destination, canonicalised)
 }
 
 /// The same but for a `brnz` instruction.
@@ -3137,8 +3135,7 @@ fn canonicalise_then_brnz(
 ) -> ir::Inst {
     let mut tmp_canonicalised = SmallVec::<[ir::Value; 16]>::new();
     let canonicalised = canonicalise_v128_values(&mut tmp_canonicalised, builder, params);
-    let target = builder.func.dfg.block_with_args(destination, canonicalised);
-    builder.ins().brnz(cond, target)
+    builder.ins().brnz(cond, destination, canonicalised)
 }
 
 /// A helper for popping and bitcasting a single value; since SIMD values can lose their type by

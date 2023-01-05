@@ -531,12 +531,12 @@ fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, block: Block, 
 
     match kind {
         BranchOrderKind::BrnzToBrz(cond_arg) => {
-            pos.func.dfg.replace(term_inst).jump(cond_dest);
-            pos.func.dfg.replace(cond_inst).brz(cond_arg, term_dest);
+            pos.func.dfg.replace(term_inst).jump_(cond_dest);
+            pos.func.dfg.replace(cond_inst).brz_(cond_arg, term_dest);
         }
         BranchOrderKind::BrzToBrnz(cond_arg) => {
-            pos.func.dfg.replace(term_inst).jump(cond_dest);
-            pos.func.dfg.replace(cond_inst).brnz(cond_arg, term_dest);
+            pos.func.dfg.replace(term_inst).jump_(cond_dest);
+            pos.func.dfg.replace(cond_inst).brnz_(cond_arg, term_dest);
         }
     }
 

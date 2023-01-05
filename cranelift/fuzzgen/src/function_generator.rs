@@ -1589,8 +1589,7 @@ where
             }
             BlockTerminator::Jump(target) => {
                 let args = self.generate_values_for_block(builder, target)?;
-                let target = builder.func.dfg.block_with_args(target, &args[..]);
-                builder.ins().jump(target);
+                builder.ins().jump(target, &args[..]);
             }
             BlockTerminator::Br(left, right) => {
                 let left_args = self.generate_values_for_block(builder, left)?;
@@ -1601,14 +1600,11 @@ where
                 let val = builder.use_var(self.get_variable_of_type(_type)?);
 
                 if bool::arbitrary(self.u)? {
-                    let target = builder.func.dfg.block_with_args(left, &left_args[..]);
-                    builder.ins().brz(val, target);
+                    builder.ins().brz(val, left, &left_args[..]);
                 } else {
-                    let target = builder.func.dfg.block_with_args(left, &left_args[..]);
-                    builder.ins().brnz(val, target);
+                    builder.ins().brnz(val, left, &left_args[..]);
                 }
-                let target = builder.func.dfg.block_with_args(right, &right_args[..]);
-                builder.ins().jump(target);
+                builder.ins().jump(right, &right_args[..]);
             }
             BlockTerminator::BrTable(default, targets) => {
                 // Create jump tables on demand

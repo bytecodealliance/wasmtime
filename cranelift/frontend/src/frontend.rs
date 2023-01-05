@@ -1151,8 +1151,7 @@ mod tests {
                 let tmp = builder.ins().iadd(arg1, arg2);
                 builder.def_var(z, tmp);
             }
-            let target = builder.func.dfg.block_with_args(block1, &[]);
-            builder.ins().jump(target);
+            builder.ins().jump(block1, &[]);
 
             builder.switch_to_block(block1);
             {
@@ -1163,11 +1162,9 @@ mod tests {
             }
             {
                 let arg = builder.use_var(y);
-                let target = builder.func.dfg.block_with_args(block3, &[]);
-                builder.ins().brnz(arg, target);
+                builder.ins().brnz(arg, block3, &[]);
             }
-            let target = builder.func.dfg.block_with_args(block2, &[]);
-            builder.ins().jump(target);
+            builder.ins().jump(block2, &[]);
 
             builder.switch_to_block(block2);
             if !lazy_seal {
@@ -1195,8 +1192,7 @@ mod tests {
                 let tmp = builder.ins().isub(arg1, arg2);
                 builder.def_var(y, tmp);
             }
-            let target = builder.func.dfg.block_with_args(block1, &[]);
-            builder.ins().jump(target);
+            builder.ins().jump(block1, &[]);
             if !lazy_seal {
                 builder.seal_block(block1);
             }
