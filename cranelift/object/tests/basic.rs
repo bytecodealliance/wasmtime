@@ -15,7 +15,7 @@ fn error_on_incompatible_sig_in_declare_function() {
         .finish(settings::Flags::new(flag_builder))
         .unwrap();
     let mut module =
-        ObjectModule::new(ObjectBuilder::new(isa, "foo", default_libcall_names()).unwrap());
+        ObjectModule::new(ObjectBuilder::new(&*isa, "foo", default_libcall_names()).unwrap());
     let mut sig = Signature {
         params: vec![AbiParam::new(types::I64)],
         returns: vec![],
@@ -66,7 +66,7 @@ fn panic_on_define_after_finalize() {
         .finish(settings::Flags::new(flag_builder))
         .unwrap();
     let mut module =
-        ObjectModule::new(ObjectBuilder::new(isa, "foo", default_libcall_names()).unwrap());
+        ObjectModule::new(ObjectBuilder::new(&*isa, "foo", default_libcall_names()).unwrap());
 
     define_simple_function(&mut module);
     define_simple_function(&mut module);
@@ -152,7 +152,7 @@ fn libcall_function() {
         .finish(settings::Flags::new(flag_builder))
         .unwrap();
     let mut module =
-        ObjectModule::new(ObjectBuilder::new(isa, "foo", default_libcall_names()).unwrap());
+        ObjectModule::new(ObjectBuilder::new(&*isa, "foo", default_libcall_names()).unwrap());
 
     let sig = Signature {
         params: vec![],
@@ -206,7 +206,7 @@ fn reject_nul_byte_symbol_for_func() {
         .finish(settings::Flags::new(flag_builder))
         .unwrap();
     let mut module =
-        ObjectModule::new(ObjectBuilder::new(isa, "foo", default_libcall_names()).unwrap());
+        ObjectModule::new(ObjectBuilder::new(&*isa, "foo", default_libcall_names()).unwrap());
 
     let sig = Signature {
         params: vec![],
@@ -228,7 +228,7 @@ fn reject_nul_byte_symbol_for_data() {
         .finish(settings::Flags::new(flag_builder))
         .unwrap();
     let mut module =
-        ObjectModule::new(ObjectBuilder::new(isa, "foo", default_libcall_names()).unwrap());
+        ObjectModule::new(ObjectBuilder::new(&*isa, "foo", default_libcall_names()).unwrap());
 
     let _ = module
         .declare_data(
