@@ -1,7 +1,7 @@
 [package]
 authors = ["The Cranelift Project Developers"]
 name = "cranelift-preopt"
-version = "0.92.0"
+version = "0.93.0"
 description = "Support for optimizations in Cranelift"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/cranelift-preopt"
