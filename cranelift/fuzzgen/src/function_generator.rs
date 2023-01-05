@@ -1177,10 +1177,14 @@ where
         let value_type = self.generate_type()?;
         // TODO: There are more argument purposes to be explored...
         let purpose = ArgumentPurpose::Normal;
-        let extension = match self.u.int_in_range(0..=2)? {
-            2 => ArgumentExtension::Sext,
-            1 => ArgumentExtension::Uext,
-            _ => ArgumentExtension::None,
+        let extension = if value_type.is_int() {
+            *self.u.choose(&[
+                ArgumentExtension::Sext,
+                ArgumentExtension::Uext,
+                ArgumentExtension::None,
+            ])?
+        } else {
+            ArgumentExtension::None
         };
 
         Ok(AbiParam {
