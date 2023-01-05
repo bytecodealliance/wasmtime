@@ -1443,10 +1443,9 @@ where
         for _ in 0..self.param(&self.config.instructions_per_block)? {
             let (op, args, rets, inserter) = *self.u.choose(OPCODE_SIGNATURES)?;
 
-            // We filter out targets that aren't supported by the target at this point instead of
-            // building a single vector of valid instructions at the beginning of function
-            // generation, as this lets us avoid invalidating the testing corpus when we enable or
-            // disable instructions for an architecture.
+            // We filter out instructions that aren't supported by the target at this point instead
+            // of building a single vector of valid instructions at the beginning of function
+            // generation, to avoid invalidating the corpus when instructions are enabled/disabled.
             if !valid_for_target(&self.target_triple, op, args, rets) {
                 return Err(arbitrary::Error::IncorrectFormat.into());
             }
