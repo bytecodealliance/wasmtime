@@ -55,7 +55,7 @@ impl fmt::Debug for FunctionWithIsa {
             }
         }
 
-        writeln!(f, "test compile\n")?;
+        writeln!(f, "test compile")?;
         writeln!(f, "target {}", self.isa.triple().architecture)?;
         writeln!(f, "{}", self.func)?;
 
@@ -65,6 +65,10 @@ impl fmt::Debug for FunctionWithIsa {
 
 impl<'a> Arbitrary<'a> for FunctionWithIsa {
     fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        // We filter out targets that aren't supported in the current build
+        // configuration after randomly choosing one, instead of randomly choosing
+        // a supported one, so that the same fuzz input works across different build
+        // configurations.
         let target = u.choose(isa::ALL_ARCHITECTURES)?;
         let builder = isa::lookup_by_name(target).map_err(|_| arbitrary::Error::IncorrectFormat)?;
 
@@ -316,7 +320,7 @@ where
             builder.set(flag_name, value.as_str())?;
         }
 
-        let supports_inline_probestack = || match target_arch {
+        let supports_inline_probestack = match target_arch {
             Architecture::X86_64 => true,
             Architecture::Aarch64(_) => true,
             _ => false,
@@ -324,7 +328,7 @@ where
 
         // Optionally test inline stackprobes on supported platforms
         // TODO: Test outlined stack probes.
-        if supports_inline_probestack() && bool::arbitrary(self.u)? {
+        if supports_inline_probestack && bool::arbitrary(self.u)? {
             builder.enable("enable_probestack")?;
             builder.set("probestack_strategy", "inline")?;
 

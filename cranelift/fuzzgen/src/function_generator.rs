@@ -149,6 +149,9 @@ fn insert_cmp(
 
         // Some FloatCC's are not implemented on AArch64, see:
         // https://github.com/bytecodealliance/wasmtime/issues/4850
+        // We filter out condition codes that aren't supported by the target at
+        // this point after randomly choosing one, instead of randomly choosing a
+        // supported one, to avoid invalidating the corpus when these get implemented.
         if matches!(fgen.target_triple.architecture, Architecture::Aarch64(_))
             && ![
                 FloatCC::Ordered,
@@ -254,7 +257,11 @@ type OpcodeInserter = fn(
     &'static [Type],
 ) -> Result<()>;
 
-/// Returns true when this OpcodeSignature is valid for the given target triple.
+/// Returns true if we believe this `OpcodeSignature` should compile correctly
+/// for the given target triple. We currently have a range of known issues
+/// with specific lowerings on specific backends, and we don't want to get
+/// fuzz bug reports for those. Over time our goal is to eliminate all of these
+/// exceptions.
 fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -> bool {
     macro_rules! exceptions {
         ( $(($($cases:pat),*)),* $(,)?) => {
@@ -465,7 +472,7 @@ type OpcodeSignature = (
 
 // TODO: Derive this from the `cranelift-meta` generator.
 #[rustfmt::skip]
-const OPCODE_SIGNATURES: &'static [OpcodeSignature] = &[
+const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::Nop, &[], &[], insert_opcode),
     // Iadd
     (Opcode::Iadd, &[I8, I8], &[I8], insert_opcode),
