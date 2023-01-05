@@ -107,9 +107,3 @@ name = "cranelift-icache"
 path = "fuzz_targets/cranelift-icache.rs"
 test = false
 doc = false
-
-[[bin]]
-name = "cranelift-compile"
-path = "fuzz_targets/cranelift-compile.rs"
-test = false
-doc = false
