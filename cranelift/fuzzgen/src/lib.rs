@@ -32,6 +32,20 @@ impl<'a> Arbitrary<'a> for SingleFunction {
     }
 }
 
+/// Print only non default flags.
+fn write_non_default_flags(f: &mut fmt::Formatter<'_>, flags: &settings::Flags) -> fmt::Result {
+    let default_flags = settings::Flags::new(settings::builder());
+    for (default, flag) in default_flags.iter().zip(flags.iter()) {
+        assert_eq!(default.name, flag.name);
+
+        if default.value_string() != flag.value_string() {
+            writeln!(f, "set {}={}", flag.name, flag.value_string())?;
+        }
+    }
+
+    Ok(())
+}
+
 /// A generated function with an ISA that targets one of cranelift's backends.
 pub struct FunctionWithIsa {
     /// TargetIsa to use when compiling this test case
@@ -45,15 +59,7 @@ impl fmt::Debug for FunctionWithIsa {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, ";; Compile test case\n")?;
 
-        // Print only non default flags
-        let default_flags = settings::Flags::new(settings::builder());
-        for (default, flag) in default_flags.iter().zip(self.isa.flags().iter()) {
-            assert_eq!(default.name, flag.name);
-
-            if default.value_string() != flag.value_string() {
-                writeln!(f, "set {}={}", flag.name, flag.value_string())?;
-            }
-        }
+        write_non_default_flags(f, self.isa.flags())?;
 
         writeln!(f, "test compile")?;
         writeln!(f, "target {}", self.isa.triple().architecture)?;
@@ -104,15 +110,7 @@ impl fmt::Debug for TestCase {
         writeln!(f, "test interpret")?;
         writeln!(f, "test run")?;
 
-        // Print only non default flags
-        let default_flags = Flags::new(settings::builder());
-        for (default, flag) in default_flags.iter().zip(self.isa.flags().iter()) {
-            assert_eq!(default.name, flag.name);
-
-            if default.value_string() != flag.value_string() {
-                writeln!(f, "set {}={}", flag.name, flag.value_string())?;
-            }
-        }
+        write_non_default_flags(f, self.isa.flags())?;
 
         writeln!(f, "target {}", self.isa.triple().architecture)?;
         writeln!(f, "{}", self.func)?;
