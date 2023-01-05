@@ -49,7 +49,7 @@ fn write_non_default_flags(f: &mut fmt::Formatter<'_>, flags: &settings::Flags) 
 /// A generated function with an ISA that targets one of cranelift's backends.
 pub struct FunctionWithIsa {
     /// TargetIsa to use when compiling this test case
-    pub isa: Box<dyn isa::TargetIsa>,
+    pub isa: isa::OwnedTargetIsa,
 
     /// Function under test
     pub func: Function,
@@ -96,7 +96,7 @@ impl<'a> Arbitrary<'a> for FunctionWithIsa {
 
 pub struct TestCase {
     /// TargetIsa to use when compiling this test case
-    pub isa: Box<dyn isa::TargetIsa>,
+    pub isa: isa::OwnedTargetIsa,
     /// Function under test
     pub func: Function,
     /// Generate multiple test inputs for each test case.

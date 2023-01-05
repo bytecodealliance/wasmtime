@@ -8,7 +8,7 @@ use crate::subtest::{Context, SubTest};
 use anyhow::Context as _;
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::Type;
-use cranelift_codegen::isa::TargetIsa;
+use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
 use cranelift_codegen::settings::{Configurable, Flags};
 use cranelift_codegen::{ir, settings};
 use cranelift_reader::TestCommand;
@@ -34,7 +34,7 @@ fn build_host_isa(
     infer_native_flags: bool,
     flags: settings::Flags,
     isa_flags: Vec<settings::Value>,
-) -> Box<dyn TargetIsa> {
+) -> OwnedTargetIsa {
     let mut builder = cranelift_native::builder_with_options(infer_native_flags)
         .expect("Unable to build a TargetIsa for the current host");
 

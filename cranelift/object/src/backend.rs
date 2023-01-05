@@ -2,7 +2,7 @@
 
 use anyhow::anyhow;
 use cranelift_codegen::entity::SecondaryMap;
-use cranelift_codegen::isa::TargetIsa;
+use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
 use cranelift_codegen::{self, ir, MachReloc};
 use cranelift_codegen::{
     binemit::{Addend, CodeOffset, Reloc},
@@ -25,8 +25,8 @@ use std::mem;
 use target_lexicon::PointerWidth;
 
 /// A builder for `ObjectModule`.
-pub struct ObjectBuilder<'a> {
-    isa: &'a dyn TargetIsa,
+pub struct ObjectBuilder {
+    isa: OwnedTargetIsa,
     binary_format: object::BinaryFormat,
     architecture: object::Architecture,
     flags: object::FileFlags,
@@ -36,7 +36,7 @@ pub struct ObjectBuilder<'a> {
     per_function_section: bool,
 }
 
-impl<'a> ObjectBuilder<'a> {
+impl ObjectBuilder {
     /// Create a new `ObjectBuilder` using the given Cranelift target, that
     /// can be passed to [`ObjectModule::new`].
     ///
@@ -45,7 +45,7 @@ impl<'a> ObjectBuilder<'a> {
     /// floating point instructions, and for stack probes. If you don't know what to use for this
     /// argument, use [cranelift_module::default_libcall_names]().
     pub fn new<V: Into<Vec<u8>>>(
-        isa: &'a dyn TargetIsa,
+        isa: OwnedTargetIsa,
         name: V,
         libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     ) -> ModuleResult<Self> {
@@ -123,8 +123,8 @@ impl<'a> ObjectBuilder<'a> {
 /// An `ObjectModule` implements `Module` and emits ".o" files using the `object` library.
 ///
 /// See the `ObjectBuilder` for a convenient way to construct `ObjectModule` instances.
-pub struct ObjectModule<'a> {
-    isa: &'a dyn TargetIsa,
+pub struct ObjectModule {
+    isa: OwnedTargetIsa,
     object: Object<'static>,
     declarations: ModuleDeclarations,
     functions: SecondaryMap<FuncId, Option<(SymbolId, bool)>>,
@@ -138,9 +138,9 @@ pub struct ObjectModule<'a> {
     anon_data_number: u64,
 }
 
-impl<'a> ObjectModule<'a> {
+impl ObjectModule {
     /// Create a new `ObjectModule` using the given Cranelift target.
-    pub fn new(builder: ObjectBuilder<'a>) -> Self {
+    pub fn new(builder: ObjectBuilder) -> Self {
         let mut object = Object::new(builder.binary_format, builder.architecture, builder.endian);
         object.flags = builder.flags;
         object.add_file_symbol(builder.name);
@@ -173,7 +173,7 @@ fn validate_symbol(name: &str) -> ModuleResult<()> {
     Ok(())
 }
 
-impl<'a> Module for ObjectModule<'a> {
+impl Module for ObjectModule {
     fn isa(&self) -> &dyn TargetIsa {
         &*self.isa
     }
@@ -485,7 +485,7 @@ impl<'a> Module for ObjectModule<'a> {
     }
 }
 
-impl<'a> ObjectModule<'a> {
+impl ObjectModule {
     /// Finalize all relocations and output an object.
     pub fn finish(mut self) -> ObjectProduct {
         let symbol_relocs = mem::take(&mut self.relocs);

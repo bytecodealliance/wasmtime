@@ -5,7 +5,7 @@ use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{
     ExternalName, Function, InstBuilder, Signature, UserExternalName, UserFuncName,
 };
-use cranelift_codegen::isa::TargetIsa;
+use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
 use cranelift_codegen::{ir, settings, CodegenError, Context};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_jit::{JITBuilder, JITModule};
@@ -86,7 +86,7 @@ impl TestFileCompiler {
     /// Build a [TestFileCompiler] from a [TargetIsa]. For functions to be runnable on the
     /// host machine, this [TargetIsa] must match the host machine's ISA (see
     /// [TestFileCompiler::with_host_isa]).
-    pub fn new(isa: Box<dyn TargetIsa>) -> Self {
+    pub fn new(isa: OwnedTargetIsa) -> Self {
         let builder = JITBuilder::with_isa(isa, cranelift_module::default_libcall_names());
         let module = JITModule::new(builder);
         let ctx = module.make_context();

@@ -8,6 +8,7 @@ use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::settings::FlagsOrIsa;
 use cranelift_codegen::timing;
 use cranelift_codegen::Context;
+use cranelift_reader::OwnedFlagsOrIsa;
 use cranelift_reader::{parse_sets_and_triple, parse_test, ParseOptions};
 use std::path::Path;
 use std::path::PathBuf;
@@ -46,10 +47,10 @@ pub struct Options {
 pub fn run(options: &Options) -> Result<()> {
     let parsed = parse_sets_and_triple(&options.settings, &options.target)?;
 
-    let mut module = match (&options.output, parsed.as_fisa().isa) {
-        (Some(output), Some(isa)) => {
+    let mut module = match (&options.output, &parsed) {
+        (Some(output), OwnedFlagsOrIsa::Isa(isa)) => {
             let builder = cranelift_object::ObjectBuilder::new(
-                isa,
+                isa.clone(),
                 output
                     .file_name()
                     .and_then(|s| s.to_str())

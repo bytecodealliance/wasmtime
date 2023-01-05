@@ -2,7 +2,7 @@
 
 pub use self::inst::{args, EmitInfo, EmitState, Inst};
 
-use super::TargetIsa;
+use super::{OwnedTargetIsa, TargetIsa};
 use crate::ir::{condcodes::IntCC, Function, Type};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv;
@@ -196,7 +196,7 @@ fn isa_constructor(
     triple: Triple,
     shared_flags: Flags,
     builder: shared_settings::Builder,
-) -> CodegenResult<Box<dyn TargetIsa>> {
+) -> CodegenResult<OwnedTargetIsa> {
     let isa_flags = x64_settings::Flags::new(&shared_flags, builder);
 
     // Check for compatibility between flags and ISA level
@@ -214,7 +214,7 @@ fn isa_constructor(
     }
 
     let backend = X64Backend::new_with_flags(triple, shared_flags, isa_flags);
-    Ok(Box::new(backend))
+    Ok(backend.wrapped())
 }
 
 #[cfg(test)]
