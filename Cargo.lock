@@ -3405,6 +3405,7 @@ version = "6.0.0"
 dependencies = [
  "anyhow",
  "cap-std",
+ "clap 3.2.8",
  "shuffling-allocator",
  "target-lexicon",
  "wasi-cap-std-sync",
