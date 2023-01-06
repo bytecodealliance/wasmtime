@@ -24,6 +24,7 @@ pub trait TableWallClockExt {
         &mut self,
         fd: u32,
     ) -> Result<&mut Box<dyn WasiWallClock + Send + Sync>, Error>;
+    fn delete_wall_clock(&mut self, fd: u32) -> Result<(), Error>;
 }
 impl TableWallClockExt for crate::table::Table {
     fn get_wall_clock(&self, fd: u32) -> Result<&(dyn WasiWallClock + Send + Sync), Error> {
@@ -36,6 +37,10 @@ impl TableWallClockExt for crate::table::Table {
     ) -> Result<&mut Box<dyn WasiWallClock + Send + Sync>, Error> {
         self.get_mut::<Box<dyn WasiWallClock + Send + Sync>>(fd)
     }
+    fn delete_wall_clock(&mut self, fd: u32) -> Result<(), Error> {
+        self.delete::<Box<dyn WasiWallClock + Send + Sync>>(fd)
+            .map(|_old| ())
+    }
 }
 
 pub trait TableMonotonicClockExt {
@@ -47,6 +52,7 @@ pub trait TableMonotonicClockExt {
         &mut self,
         fd: u32,
     ) -> Result<&mut Box<dyn WasiMonotonicClock + Send + Sync>, Error>;
+    fn delete_monotonic_clock(&mut self, fd: u32) -> Result<(), Error>;
 }
 impl TableMonotonicClockExt for crate::table::Table {
     fn get_monotonic_clock(
@@ -61,5 +67,9 @@ impl TableMonotonicClockExt for crate::table::Table {
         fd: u32,
     ) -> Result<&mut Box<dyn WasiMonotonicClock + Send + Sync>, Error> {
         self.get_mut::<Box<dyn WasiMonotonicClock + Send + Sync>>(fd)
+    }
+    fn delete_monotonic_clock(&mut self, fd: u32) -> Result<(), Error> {
+        self.delete::<Box<dyn WasiMonotonicClock + Send + Sync>>(fd)
+            .map(|_old| ())
     }
 }

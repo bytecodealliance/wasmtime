@@ -70,4 +70,15 @@ impl wasi_clocks::WasiClocks for WasiCtx {
             nanoseconds: res.subsec_nanos(),
         })
     }
+
+    async fn close_monotonic_clock(
+        &mut self,
+        clock: wasi_clocks::MonotonicClock,
+    ) -> anyhow::Result<()> {
+        Ok(self.table_mut().delete_monotonic_clock(clock)?)
+    }
+
+    async fn close_wall_clock(&mut self, clock: wasi_clocks::WallClock) -> anyhow::Result<()> {
+        Ok(self.table_mut().delete_wall_clock(clock)?)
+    }
 }

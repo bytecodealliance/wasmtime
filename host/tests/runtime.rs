@@ -330,3 +330,16 @@ async fn run_directory_list(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()>
     .await?
     .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
+
+async fn run_default_clocks(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+    wasi.command(
+        &mut store,
+        0 as host::Descriptor,
+        1 as host::Descriptor,
+        &[],
+        &[],
+        &[],
+    )
+    .await?;
+    Ok(())
+}
