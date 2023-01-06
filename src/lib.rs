@@ -4,11 +4,13 @@ use crate::bindings::{
     wasi_clocks, wasi_default_clocks, wasi_exit, wasi_filesystem, wasi_logging, wasi_poll,
     wasi_random, wasi_tcp,
 };
-use core::arch::wasm32::unreachable;
+use core::arch::wasm32::{self, unreachable};
 use core::cell::{Cell, RefCell, UnsafeCell};
+use core::cmp::min;
 use core::ffi::c_void;
-use core::mem::{self, forget, replace, size_of, ManuallyDrop, MaybeUninit};
-use core::ptr::{self, copy_nonoverlapping, null_mut};
+use core::hint::black_box;
+use core::mem::{align_of, forget, replace, size_of, ManuallyDrop, MaybeUninit};
+use core::ptr::{self, null_mut};
 use core::slice;
 use wasi::*;
 use wasi_poll::{WasiFuture, WasiStream};
@@ -302,7 +304,7 @@ pub extern "C" fn clock_res_get(id: Clockid, resolution: &mut Timestamp) -> Errn
             }
             CLOCKID_REALTIME => {
                 let res = wasi_clocks::wall_clock_resolution(state.default_wall_clock());
-                *resolution = u64::from(res.nanoseconds)
+                *resolution = Timestamp::from(res.nanoseconds)
                     .checked_add(res.seconds)
                     .and_then(|secs| secs.checked_mul(1_000_000_000))
                     .ok_or(ERRNO_OVERFLOW)?;
@@ -328,7 +330,7 @@ pub unsafe extern "C" fn clock_time_get(
             }
             CLOCKID_REALTIME => {
                 let res = wasi_clocks::wall_clock_now(state.default_wall_clock());
-                *time = u64::from(res.nanoseconds)
+                *time = Timestamp::from(res.nanoseconds)
                     .checked_add(res.seconds)
                     .and_then(|secs| secs.checked_mul(1_000_000_000))
                     .ok_or(ERRNO_OVERFLOW)?;
@@ -763,7 +765,8 @@ pub unsafe extern "C" fn fd_read(
 
                 // If this is a file, keep the current-position pointer up to date.
                 if let StreamType::File(file) = &streams.type_ {
-                    file.position.set(file.position.get() + data.len() as u64);
+                    file.position
+                        .set(file.position.get() + data.len() as wasi_filesystem::Filesize);
                 }
 
                 let len = data.len();
@@ -799,7 +802,7 @@ pub unsafe extern "C" fn fd_readdir(
     cookie: Dircookie,
     bufused: *mut Size,
 ) -> Errno {
-    let mut buf = core::slice::from_raw_parts_mut(buf, buf_len);
+    let mut buf = slice::from_raw_parts_mut(buf, buf_len);
     return State::with(|state| {
         // First determine if there's an entry in the dirent cache to use. This
         // is done to optimize the use case where a large directory is being
@@ -869,7 +872,7 @@ pub unsafe extern "C" fn fd_readdir(
 
             // Copy a `dirent` describing this entry into the destination `buf`,
             // truncating it if it doesn't fit entirely.
-            let bytes = core::slice::from_raw_parts(
+            let bytes = slice::from_raw_parts(
                 (&dirent as *const wasi::Dirent).cast::<u8>(),
                 size_of::<Dirent>(),
             );
@@ -883,11 +886,7 @@ pub unsafe extern "C" fn fd_readdir(
             // Note that this might be a 0-byte copy if the `dirent` was
             // truncated or fit entirely into the destination.
             let name_bytes_to_copy = buf.len().min(name.len());
-            core::ptr::copy_nonoverlapping(
-                name.as_ptr().cast(),
-                buf.as_mut_ptr(),
-                name_bytes_to_copy,
-            );
+            ptr::copy_nonoverlapping(name.as_ptr().cast(), buf.as_mut_ptr(), name_bytes_to_copy);
 
             buf = &mut buf[name_bytes_to_copy..];
 
@@ -910,7 +909,7 @@ pub unsafe extern "C" fn fd_readdir(
                 state.dirent_cache.for_fd.set(fd);
                 state.dirent_cache.cookie.set(cookie - 1);
                 state.dirent_cache.cached_dirent.set(dirent);
-                std::ptr::copy(
+                ptr::copy(
                     name.as_ptr().cast::<u8>(),
                     (*state.dirent_cache.path_data.get()).as_mut_ptr() as *mut u8,
                     name.len(),
@@ -945,7 +944,7 @@ pub unsafe extern "C" fn fd_readdir(
                     let ptr = (*(*self.state.dirent_cache.path_data.get()).as_ptr())
                         .as_ptr()
                         .cast();
-                    let buffer = core::slice::from_raw_parts(ptr, dirent.d_namlen as usize);
+                    let buffer = slice::from_raw_parts(ptr, dirent.d_namlen as usize);
                     Ok((dirent, buffer))
                 });
             }
@@ -969,7 +968,7 @@ pub unsafe extern "C" fn fd_readdir(
             // this iterator since the data for the name lives within state.
             let name = unsafe {
                 assert_eq!(name.as_ptr(), self.state.path_buf.get().cast());
-                core::slice::from_raw_parts(name.as_ptr().cast(), name.len())
+                slice::from_raw_parts(name.as_ptr().cast(), name.len())
             };
             Some(Ok((dirent, name)))
         }
@@ -1031,8 +1030,8 @@ pub unsafe extern "C" fn fd_seek(
             };
             stream.input.set(None);
             stream.output.set(None);
-            file.position.set(from as u64);
-            *newoffset = from as u64;
+            file.position.set(from as wasi_filesystem::Filesize);
+            *newoffset = from as wasi_filesystem::Filesize;
             Ok(())
         } else {
             Err(ERRNO_SPIPE)
@@ -1092,7 +1091,8 @@ pub unsafe extern "C" fn fd_write(
 
             // If this is a file, keep the current-position pointer up to date.
             if let StreamType::File(file) = &streams.type_ {
-                file.position.set(file.position.get() + u64::from(bytes));
+                file.position
+                    .set(file.position.get() + wasi_filesystem::Filesize::from(bytes));
             }
 
             *nwritten = bytes as usize;
@@ -1243,12 +1243,10 @@ pub unsafe extern "C" fn path_open(
     let path = slice::from_raw_parts(path_ptr, path_len);
     let at_flags = at_flags_from_lookupflags(dirflags);
     let o_flags = o_flags_from_oflags(oflags);
-    let flags = flags_from_descriptor_flags(fs_rights_base, fdflags);
+    let flags = descriptor_flags_from_flags(fs_rights_base, fdflags);
     let mode = wasi_filesystem::Mode::READABLE | wasi_filesystem::Mode::WRITEABLE;
 
     State::with_mut(|state| {
-        let desc = state.get_mut(fd)?;
-
         let file = state.get_dir(fd)?;
         let result = wasi_filesystem::open_at(file.fd, at_flags, path, o_flags, flags, mode)?;
         let desc = Descriptor::Streams(Streams {
@@ -1316,8 +1314,8 @@ pub unsafe extern "C" fn path_readlink(
         if use_state_buf {
             // Preview1 follows POSIX in truncating the returned path if it
             // doesn't fit.
-            let len = core::cmp::min(path.len(), buf_len);
-            copy_nonoverlapping(path.as_ptr().cast(), buf, len);
+            let len = min(path.len(), buf_len);
+            ptr::copy_nonoverlapping(path.as_ptr().cast(), buf, len);
         }
 
         // The returned string's memory was allocated in `buf`, so don't separately
@@ -1429,6 +1427,8 @@ impl From<wasi_tcp::Error> for Errno {
         use wasi_tcp::Error::*;
 
         match error {
+            // Use a black box to prevent the optimizer from generating a
+            // lookup table, which would require a static initializer.
             ConnectionAborted => black_box(ERRNO_CONNABORTED),
             ConnectionRefused => ERRNO_CONNREFUSED,
             ConnectionReset => ERRNO_CONNRESET,
@@ -1456,13 +1456,13 @@ pub unsafe extern "C" fn poll_oneoff(
     // and the other to store the bool results.
     //
     // First, we assert that this is possible:
-    assert!(mem::align_of::<Event>() >= mem::align_of::<WasiFuture>());
-    assert!(mem::align_of::<WasiFuture>() >= mem::align_of::<u8>());
+    assert!(align_of::<Event>() >= align_of::<WasiFuture>());
+    assert!(align_of::<WasiFuture>() >= align_of::<u8>());
     assert!(
-        unwrap(nsubscriptions.checked_mul(mem::size_of::<Event>()))
+        unwrap(nsubscriptions.checked_mul(size_of::<Event>()))
             > unwrap(
-                unwrap(nsubscriptions.checked_mul(mem::size_of::<WasiFuture>()))
-                    .checked_add(unwrap(nsubscriptions.checked_mul(mem::size_of::<u8>())))
+                unwrap(nsubscriptions.checked_mul(size_of::<WasiFuture>()))
+                    .checked_add(unwrap(nsubscriptions.checked_mul(size_of::<u8>())))
             )
     );
 
@@ -1472,7 +1472,7 @@ pub unsafe extern "C" fn poll_oneoff(
     State::with(|state| {
         state.register_buffer(
             results,
-            unwrap(nsubscriptions.checked_mul(mem::size_of::<bool>())),
+            unwrap(nsubscriptions.checked_mul(size_of::<bool>())),
         );
 
         let mut futures = Futures {
@@ -1552,7 +1552,7 @@ pub unsafe extern "C" fn poll_oneoff(
 
         assert!(vec.len() == nsubscriptions);
         assert_eq!(vec.as_ptr(), results);
-        mem::forget(vec);
+        forget(vec);
 
         drop(futures);
 
@@ -1746,7 +1746,7 @@ fn o_flags_from_oflags(flags: Oflags) -> wasi_filesystem::OFlags {
     o_flags
 }
 
-fn flags_from_descriptor_flags(
+fn descriptor_flags_from_flags(
     rights: Rights,
     fdflags: Fdflags,
 ) -> wasi_filesystem::DescriptorFlags {
@@ -1776,6 +1776,8 @@ impl From<wasi_filesystem::Errno> for Errno {
     #[inline(never)] // Disable inlining as this is bulky and relatively cold.
     fn from(err: wasi_filesystem::Errno) -> Errno {
         match err {
+            // Use a black box to prevent the optimizer from generating a
+            // lookup table, which would require a static initializer.
             wasi_filesystem::Errno::Toobig => black_box(ERRNO_2BIG),
             wasi_filesystem::Errno::Access => ERRNO_ACCES,
             wasi_filesystem::Errno::Addrinuse => ERRNO_ADDRINUSE,
@@ -1865,13 +1867,6 @@ impl From<wasi_filesystem::DescriptorType> for wasi::Filetype {
             wasi_filesystem::DescriptorType::Unknown => FILETYPE_UNKNOWN,
         }
     }
-}
-
-// A black box to prevent the optimizer from generating a lookup table
-// from the match above, which would require a static initializer.
-fn black_box(x: Errno) -> Errno {
-    core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst);
-    x
 }
 
 #[repr(C)]
@@ -1986,7 +1981,7 @@ struct File {
     fd: wasi_filesystem::Descriptor,
 
     /// The current-position pointer.
-    position: Cell<u64>,
+    position: Cell<wasi_filesystem::Filesize>,
 }
 
 const PAGE_SIZE: usize = 65536;
@@ -2156,7 +2151,7 @@ impl State {
 
     #[cold]
     fn new() -> &'static RefCell<State> {
-        let grew = core::arch::wasm32::memory_grow(0, 1);
+        let grew = wasm32::memory_grow(0, 1);
         if grew == usize::MAX {
             unreachable();
         }
@@ -2222,7 +2217,7 @@ impl State {
 
     fn descriptors(&self) -> &[Descriptor] {
         unsafe {
-            core::slice::from_raw_parts(
+            slice::from_raw_parts(
                 self.descriptors.as_ptr().cast(),
                 unwrap_result(usize::try_from(self.ndescriptors)),
             )
@@ -2231,7 +2226,7 @@ impl State {
 
     fn descriptors_mut(&mut self) -> &mut [Descriptor] {
         unsafe {
-            core::slice::from_raw_parts_mut(
+            slice::from_raw_parts_mut(
                 self.descriptors.as_mut_ptr().cast(),
                 unwrap_result(usize::try_from(self.ndescriptors)),
             )
