@@ -408,12 +408,12 @@ impl<'a> EgraphPass<'a> {
                 // Rewrite args of *all* instructions using the
                 // value-to-opt-value map.
                 cursor.func.dfg.resolve_aliases_in_arguments(inst);
-                for arg in cursor.func.dfg.inst_args_mut(inst) {
-                    let new_value = value_to_opt_value[*arg];
+                cursor.func.dfg.map_values(inst, |_, arg| {
+                    let new_value = value_to_opt_value[arg];
                     trace!("rewriting arg {} of inst {} to {}", arg, inst, new_value);
                     debug_assert_ne!(new_value, Value::reserved_value());
-                    *arg = new_value;
-                }
+                    new_value
+                });
 
                 // Build a context for optimization, with borrows of
                 // state. We can't invoke a method on `self` because
@@ -497,8 +497,9 @@ impl<'a> EgraphPass<'a> {
         // layout.
         for block in self.func.layout.blocks() {
             for inst in self.func.layout.block_insts(block) {
-                for &arg in self.func.dfg.inst_args(inst) {
-                    match self.func.dfg.value_def(arg) {
+                self.func
+                    .dfg
+                    .visit_values(inst, |arg| match self.func.dfg.value_def(arg) {
                         ValueDef::Result(i, _) => {
                             debug_assert!(self.func.layout.inst_block(i).is_some());
                         }
@@ -506,8 +507,7 @@ impl<'a> EgraphPass<'a> {
                             panic!("egraph union node {} still reachable at {}!", arg, inst);
                         }
                         _ => {}
-                    }
-                }
+                    })
             }
         }
     }

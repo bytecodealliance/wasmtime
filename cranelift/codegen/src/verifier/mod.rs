@@ -78,6 +78,7 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::fmt::{self, Display, Formatter};
+use core::ops::ControlFlow;
 
 /// A verifier error.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -562,8 +563,10 @@ impl<'a> Verifier<'a> {
     ) -> VerifierStepResult<()> {
         use crate::ir::instructions::InstructionData::*;
 
-        for &arg in self.func.dfg.inst_args(inst) {
-            self.verify_inst_arg(inst, arg, errors)?;
+        if let ControlFlow::Break(e) = self.func.dfg.try_visit_values(inst, |arg| {
+            if let Err(e) = self.verify_inst_arg(inst, arg, errors) {
+                return ControlFlow::Break(e);
+            }
 
             // All used values must be attached to something.
             let original = self.func.dfg.resolve_aliases(arg);
@@ -574,6 +577,10 @@ impl<'a> Verifier<'a> {
                     format!("argument {} -> {} is not attached", arg, original),
                 ));
             }
+
+            ControlFlow::Continue(())
+        }) {
+            return Err(e);
         }
 
         for &res in self.func.dfg.inst_results(inst) {

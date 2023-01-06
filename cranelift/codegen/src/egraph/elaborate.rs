@@ -6,8 +6,8 @@ use super::domtree::DomTreeWithChildren;
 use super::Stats;
 use crate::dominator_tree::DominatorTree;
 use crate::fx::FxHashSet;
-use crate::ir::ValueDef;
 use crate::ir::{Block, Function, Inst, Value};
+use crate::ir::{DataFlowGraph, ValueDef};
 use crate::loop_analysis::{Loop, LoopAnalysis, LoopLevel};
 use crate::scoped_hash_map::ScopedHashMap;
 use crate::trace;
@@ -15,7 +15,6 @@ use crate::unionfind::UnionFind;
 use alloc::vec::Vec;
 use cranelift_entity::{packed_option::ReservedValue, SecondaryMap};
 use smallvec::{smallvec, SmallVec};
-use std::ops::Add;
 
 pub(crate) struct Elaborator<'a> {
     func: &'a mut Function,
@@ -228,16 +227,11 @@ impl<'a> Elaborator<'a> {
                     // N.B.: at this point we know that the opcode is
                     // pure, so `pure_op_cost`'s precondition is
                     // satisfied.
-                    let cost = pure_op_cost(inst_data.opcode()).at_level(loop_level.level())
-                        + self
-                            .func
-                            .dfg
-                            .inst_args(inst)
-                            .iter()
-                            .map(|value| best[*value].0)
-                            // Can't use `.sum()` for `Cost` types; do
-                            // an explicit reduce instead.
-                            .fold(Cost::zero(), Cost::add);
+                    let cost = self.func.dfg.fold_values(
+                        inst,
+                        pure_op_cost(inst_data.opcode()).at_level(loop_level.level()),
+                        |cost, value| cost + best[value].0,
+                    );
                     best[value] = (cost, value);
                 }
             };
@@ -366,8 +360,15 @@ impl<'a> Elaborator<'a> {
                     // layout. First, enqueue all args to be
                     // elaborated. Push state to receive the results
                     // and later elab this inst.
-                    let args = self.func.dfg.inst_args(inst);
-                    let num_args = args.len();
+                    let start = self.elab_stack.len();
+
+                    self.func.dfg.visit_values(inst, |arg| {
+                        debug_assert_ne!(arg, Value::reserved_value());
+                        self.elab_stack
+                            .push(ElabStackEntry::Start { value: arg, before });
+                    });
+
+                    let num_args = self.elab_stack.len() - start;
                     self.elab_stack.push(ElabStackEntry::PendingInst {
                         inst,
                         result_idx,
@@ -375,13 +376,10 @@ impl<'a> Elaborator<'a> {
                         remat,
                         before,
                     });
-                    // Push args in reverse order so we process the
-                    // first arg first.
-                    for &arg in args.iter().rev() {
-                        debug_assert_ne!(arg, Value::reserved_value());
-                        self.elab_stack
-                            .push(ElabStackEntry::Start { value: arg, before });
-                    }
+
+                    // Reverse the new entries on the elaboration stack
+                    // so that we process the first argument first.
+                    self.elab_stack[start..].reverse();
                 }
 
                 &ElabStackEntry::PendingInst {
@@ -560,21 +558,10 @@ impl<'a> Elaborator<'a> {
                     self.func.layout.insert_inst(inst, before);
 
                     // Update the inst's arguments.
-                    let args_dest = self.func.dfg.inst_args_mut(inst);
-                    for (dest, val) in args_dest.iter_mut().zip(arg_values.iter()) {
-                        *dest = val.value;
-                    }
-
-                    let dfg = &mut self.func.dfg;
-                    if let Some(dest) = dfg.insts[inst].branch_destination_mut() {
-                        for (dest, val) in dest
-                            .args_slice_mut(&mut dfg.value_lists)
-                            .iter_mut()
-                            .zip(arg_values.iter())
-                        {
-                            *dest = val.value;
-                        }
-                    }
+                    let mut args = arg_values.iter();
+                    self.func
+                        .dfg
+                        .map_values(inst, |_, _| args.next().unwrap().value);
 
                     // Now that we've consumed the arg values, pop
                     // them off the stack.
@@ -619,33 +606,20 @@ impl<'a> Elaborator<'a> {
             let before = first_branch.unwrap_or(inst);
             trace!(" -> inserting before {}", before);
 
-            // For each arg of the inst, elaborate its value.
-            for i in 0..self.func.dfg.inst_args(inst).len() {
-                // Don't borrow across the below.
-                let arg = self.func.dfg.inst_args(inst)[i];
-                trace!(" -> arg {}", arg);
-                // Elaborate the arg, placing any newly-inserted insts
-                // before `before`. Get the updated value, which may
-                // be different than the original.
-                let arg = self.elaborate_eclass_use(arg, before);
-                trace!("   -> rewrote arg to {:?}", arg);
-                self.func.dfg.inst_args_mut(inst)[i] = arg.value;
-            }
-
-            if let Some(mut dest) = self.func.dfg.insts[inst].branch_destination() {
-                for i in 0..dest.args_slice(&self.func.dfg.value_lists).len() {
-                    // Don't borrow across the below.
-                    let arg = dest.args_slice(&self.func.dfg.value_lists)[i];
+            DataFlowGraph::map_values_with(
+                self,
+                |ctx| &mut ctx.func.dfg,
+                inst,
+                |ctx, arg| {
                     trace!(" -> arg {}", arg);
                     // Elaborate the arg, placing any newly-inserted insts
                     // before `before`. Get the updated value, which may
                     // be different than the original.
-                    let arg = self.elaborate_eclass_use(arg, before);
+                    let arg = ctx.elaborate_eclass_use(arg, before);
                     trace!("   -> rewrote arg to {:?}", arg);
-                    dest.args_slice_mut(&mut self.func.dfg.value_lists)[i] = arg.value;
-                }
-                *self.func.dfg.insts[inst].branch_destination_mut().unwrap() = dest;
-            }
+                    arg.value
+                },
+            );
 
             // We need to put the results of this instruction in the
             // map now.

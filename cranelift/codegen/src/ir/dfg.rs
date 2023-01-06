@@ -16,7 +16,7 @@ use crate::write::write_operands;
 use core::fmt;
 use core::iter;
 use core::mem;
-use core::ops::{Index, IndexMut};
+use core::ops::{ControlFlow, Index, IndexMut};
 use core::u16;
 
 use alloc::collections::BTreeMap;
@@ -676,6 +676,117 @@ impl DataFlowGraph {
             ir::ValueDef::Result(inst, _) => self.display_inst(inst),
             ir::ValueDef::Param(_, _) => panic!("value is not defined by an instruction"),
             ir::ValueDef::Union(_, _) => panic!("value is a union of two other values"),
+        }
+    }
+
+    /// Visit all values in an instruction. If an instruction includes references to blocks with
+    /// their arguments, this function will traverse those values as well; inst_args does not
+    /// include block arguments in the slice it returns.
+    pub fn visit_values<F>(&self, inst: Inst, mut body: F)
+    where
+        F: FnMut(Value),
+    {
+        self.inst_args(inst).iter().copied().for_each(&mut body);
+
+        if let Some(branch) = self.insts[inst].branch_destination() {
+            branch
+                .args_slice(&self.value_lists)
+                .iter()
+                .cloned()
+                .for_each(body);
+        }
+    }
+
+    /// Visit vall values in an instruction, allowing early exit via the [ControlFlow] return
+    /// type from the body function.
+    pub fn try_visit_values<F, B>(&self, inst: Inst, mut body: F) -> ControlFlow<B>
+    where
+        F: FnMut(Value) -> ControlFlow<B>,
+    {
+        self.inst_args(inst)
+            .iter()
+            .copied()
+            .try_for_each(&mut body)?;
+
+        if let Some(branch) = self.insts[inst].branch_destination() {
+            branch
+                .args_slice(&self.value_lists)
+                .iter()
+                .copied()
+                .try_for_each(body)?;
+        }
+
+        ControlFlow::Continue(())
+    }
+
+    /// Fold the values of an instruction.
+    pub fn fold_values<T, F>(&self, inst: Inst, mut acc: T, mut body: F) -> T
+    where
+        F: FnMut(T, Value) -> T,
+    {
+        acc = self.inst_args(inst).iter().copied().fold(acc, &mut body);
+
+        if let Some(branch) = self.insts[inst].branch_destination() {
+            acc = branch
+                .args_slice(&self.value_lists)
+                .iter()
+                .copied()
+                .fold(acc, body);
+        }
+
+        acc
+    }
+
+    /// Fold the values of an instruction.
+    pub fn try_fold_values<B, C, F>(&self, inst: Inst, mut acc: C, mut body: F) -> ControlFlow<B, C>
+    where
+        F: FnMut(C, Value) -> ControlFlow<B, C>,
+    {
+        acc = self
+            .inst_args(inst)
+            .iter()
+            .copied()
+            .try_fold(acc, &mut body)?;
+
+        if let Some(branch) = self.insts[inst].branch_destination() {
+            acc = branch
+                .args_slice(&self.value_lists)
+                .iter()
+                .copied()
+                .try_fold(acc, body)?;
+        }
+
+        ControlFlow::Continue(acc)
+    }
+
+    /// Map a function over all values in an instruction.
+    pub fn map_values<F>(&mut self, inst: Inst, body: F)
+    where
+        F: FnMut(&mut Self, Value) -> Value,
+    {
+        Self::map_values_with(self, |dfg| dfg, inst, body)
+    }
+
+    /// Map a function over all values in an instruction. This version of map_values is useful for
+    /// the case where the DFG is held within another structure, that needs to be used mutably
+    /// while mapping over the values.
+    pub fn map_values_with<T, P, F>(ctx: &mut T, prj: P, inst: Inst, mut body: F)
+    where
+        F: FnMut(&mut T, Value) -> Value,
+        P: Fn(&mut T) -> &mut Self,
+    {
+        for i in 0..prj(ctx).inst_args(inst).len() {
+            let arg = prj(ctx).inst_args(inst)[i];
+            prj(ctx).inst_args_mut(inst)[i] = body(ctx, arg);
+        }
+
+        if let Some(mut branch) = prj(ctx).insts[inst].branch_destination() {
+            // We aren't changing the size of the args list, so we won't need to write the branch
+            // back to the instruction.
+            for i in 0..branch.args_slice(&prj(ctx).value_lists).len() {
+                let arg = branch.args_slice(&prj(ctx).value_lists)[i];
+                branch.args_slice_mut(&mut prj(ctx).value_lists)[i] = body(ctx, arg);
+            }
         }
     }
 

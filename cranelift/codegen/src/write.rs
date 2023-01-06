@@ -10,6 +10,7 @@ use crate::packed_option::ReservedValue;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::fmt::{self, Write};
+use core::ops::ControlFlow;
 
 /// A `FuncWriter` used to decorate functions during printing.
 pub trait FuncWriter {
@@ -478,7 +479,7 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
     }?;
 
     let mut sep = "  ; ";
-    for &arg in dfg.inst_args(inst) {
+    if let ControlFlow::Break(e) = dfg.try_visit_values(inst, |arg| {
         if let ValueDef::Result(src, _) = dfg.value_def(arg) {
             let imm = match dfg.insts[src] {
                 UnaryImm { imm, .. } => imm.to_string(),
@@ -487,12 +488,19 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
                 UnaryConst {
                     constant_handle, ..
                 } => constant_handle.to_string(),
-                _ => continue,
+                _ => return ControlFlow::Continue(()),
             };
-            write!(w, "{}{} = {}", sep, arg, imm)?;
+            if let Err(e) = write!(w, "{}{} = {}", sep, arg, imm) {
+                return ControlFlow::Break(e);
+            }
             sep = ", ";
         }
+
+        ControlFlow::Continue(())
+    }) {
+        return Err(e);
     }
+
     Ok(())
 }
 

@@ -23,17 +23,10 @@ pub fn do_dce(func: &mut Function, domtree: &DominatorTree) {
                 if has_side_effect(pos.func, inst)
                     || any_inst_results_used(inst, &live, &pos.func.dfg)
                 {
-                    for arg in pos.func.dfg.inst_args(inst) {
-                        let v = pos.func.dfg.resolve_aliases(*arg);
+                    pos.func.dfg.visit_values(inst, |arg| {
+                        let v = pos.func.dfg.resolve_aliases(arg);
                         live[v.index()] = true;
-                    }
-
-                    if let Some(dest) = pos.func.dfg.insts[inst].branch_destination() {
-                        for arg in dest.args_slice(&pos.func.dfg.value_lists) {
-                            let v = pos.func.dfg.resolve_aliases(*arg);
-                            live[v.index()] = true;
-                        }
-                    }
+                    });
 
                     continue;
                 }

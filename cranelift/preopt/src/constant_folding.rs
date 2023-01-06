@@ -52,8 +52,8 @@ pub fn fold_constants(func: &mut ir::Function) {
                 Unary { opcode, arg } => {
                     fold_unary(&mut pos.func.dfg, inst, opcode, arg);
                 }
-                Branch { opcode, .. } => {
-                    fold_branch(&mut pos, inst, opcode);
+                Branch { opcode, arg, .. } => {
+                    fold_branch(&mut pos, inst, opcode, arg);
                 }
                 _ => {}
             }
@@ -215,18 +215,13 @@ fn fold_unary(dfg: &mut ir::DataFlowGraph, inst: ir::Inst, opcode: ir::Opcode, a
     }
 }
 
-fn fold_branch(pos: &mut FuncCursor, inst: ir::Inst, opcode: ir::Opcode) {
-    let (cond, block) = {
-        let values = pos.func.dfg.inst_args(inst);
-        let inst_data = &pos.func.dfg.insts[inst];
-        (
-            match resolve_value_to_imm(&pos.func.dfg, values[0]) {
-                Some(imm) => imm,
-                None => return,
-            },
-            inst_data.branch_destination().unwrap(),
-        )
+fn fold_branch(pos: &mut FuncCursor, inst: ir::Inst, opcode: ir::Opcode, cond: ir::Value) {
+    let cond = match resolve_value_to_imm(&pos.func.dfg, cond) {
+        Some(imm) => imm,
+        None => return,
     };
+
+    let block = pos.func.dfg.insts[inst].branch_destination().unwrap();
 
     let truthiness = cond.evaluate_truthiness();
     let branch_if_zero = match opcode {

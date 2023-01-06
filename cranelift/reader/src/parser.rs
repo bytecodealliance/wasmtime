@@ -26,6 +26,7 @@ use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_codegen::{settings, settings::Configurable, timing};
 use smallvec::SmallVec;
 use std::mem;
+use std::ops::ControlFlow;
 use std::str::FromStr;
 use std::{u16, u32};
 use target_lexicon::Triple;
@@ -1899,14 +1900,18 @@ impl<'a> Parser<'a> {
         // all references refer to a definition.
         for block in &ctx.function.layout {
             for inst in ctx.function.layout.block_insts(block) {
-                for value in ctx.function.dfg.inst_args(inst) {
-                    if !ctx.map.contains_value(*value) {
-                        return err!(
+                if let ControlFlow::Break(err) = ctx.function.dfg.try_visit_values(inst, |value| {
+                    if !ctx.map.contains_value(value) {
+                        return ControlFlow::Break(err!(
                             ctx.map.location(AnyEntity::Inst(inst)).unwrap(),
                             "undefined operand value {}",
                             value
-                        );
+                        ));
                     }
+
+                    ControlFlow::Continue(())
+                }) {
+                    return err;
                 }
             }
         }
