@@ -543,7 +543,7 @@ pub(crate) fn emit(
 
                 // Here, divisor == -1.
                 if !kind.is_div() {
-                    // x % -1 = 0; put the result into the destination, $rdx.
+                    // x % -1 = 0; put the result into the destination, $rax.
                     let done_label = sink.get_label();
 
                     let inst = Inst::imm(OperandSize::Size64, 0, Writable::from_reg(regs::rax()));
