@@ -946,6 +946,23 @@ impl Config {
         Ok(self)
     }
 
+    /// Disable caching.
+    ///
+    /// Every call to [`Module::new(my_wasm)`][crate::Module::new] will
+    /// recompile `my_wasm`, even when it is unchanged.
+    ///
+    /// By default, new configs do not have caching enabled. This method is only
+    /// useful for disabling a previous cache configuration.
+    ///
+    /// This method is only available when the `cache` feature of this crate is
+    /// enabled.
+    #[cfg(feature = "cache")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cache")))]
+    pub fn disable_cache(&mut self) -> &mut Self {
+        self.cache_config = CacheConfig::new_cache_disabled();
+        self
+    }
+
     /// Loads cache configuration from the system default path.
     ///
     /// This commit is the same as [`Config::cache_config_load`] except that it
