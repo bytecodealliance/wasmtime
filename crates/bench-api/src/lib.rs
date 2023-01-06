@@ -137,11 +137,12 @@ mod unsafe_send_sync;
 
 use crate::unsafe_send_sync::UnsafeSendSync;
 use anyhow::{Context, Result};
+use clap::Parser;
 use std::os::raw::{c_int, c_void};
 use std::slice;
 use std::{env, path::PathBuf};
 use target_lexicon::Triple;
-use wasmtime::{Config, Engine, Instance, Linker, Module, Store};
+use wasmtime::{Engine, Instance, Linker, Module, Store};
 use wasmtime_cli_flags::{CommonOptions, WasiModules};
 use wasmtime_wasi::{sync::WasiCtxBuilder, I32Exit, WasiCtx};
 
@@ -238,19 +239,23 @@ impl WasmBenchConfig {
         Ok(Some(stdin_path.into()))
     }
 
-    fn execution_flags(&self) -> Result<Option<CommonOptions>> {
-        if self.execution_flags_ptr.is_null() {
-            return Ok(None);
-        }
-
-        let execution_flags = unsafe {
-            std::slice::from_raw_parts(self.execution_flags_ptr, self.execution_flags_len)
+    fn execution_flags(&self) -> Result<CommonOptions> {
+        let flags = if self.execution_flags_ptr.is_null() {
+            ""
+        } else {
+            let execution_flags = unsafe {
+                std::slice::from_raw_parts(self.execution_flags_ptr, self.execution_flags_len)
+            };
+            std::str::from_utf8(execution_flags)
+                .context("given execution flags string is not valid UTF-8")?
         };
-        let execution_flags = std::str::from_utf8(execution_flags)
-            .context("given execution flags string is not valid UTF-8")?;
-
-        let options = CommonOptions::parse_from_str(execution_flags)?;
-        Ok(Some(options))
+        let options = CommonOptions::try_parse_from(
+            ["wasmtime"]
+                .into_iter()
+                .chain(flags.split(' ').filter(|s| !s.is_empty())),
+        )
+        .context("failed to parse options")?;
+        Ok(options)
     }
 }
 
@@ -420,7 +425,7 @@ struct HostState {
 
 impl BenchState {
     fn new(
-        options: Option<CommonOptions>,
+        options: CommonOptions,
         compilation_timer: *mut u8,
         compilation_start: extern "C" fn(*mut u8),
         compilation_end: extern "C" fn(*mut u8),
@@ -432,15 +437,9 @@ impl BenchState {
         execution_end: extern "C" fn(*mut u8),
         make_wasi_cx: impl FnMut() -> Result<WasiCtx> + 'static,
     ) -> Result<Self> {
-        let mut config = if let Some(o) = &options {
-            o.config(Some(&Triple::host().to_string()))?
-        } else {
-            Config::new()
-        };
-
+        let config = options.config(Some(&Triple::host().to_string()))?;
         // NB: always disable the compilation cache.
         config.disable_cache();
-
         let engine = Engine::new(&config)?;
         let mut linker = Linker::<HostState>::new(&engine);
 
@@ -459,17 +458,10 @@ impl BenchState {
             Ok(())
         })?;
 
-        let mut epoch_interruption = false;
-        let mut fuel = None;
-        if let Some(opts) = &options {
-            epoch_interruption = opts.epoch_interruption;
-            fuel = opts.fuel;
-        }
+        let epoch_interruption = options.epoch_interruption;
+        let fuel = options.fuel;
 
-        let wasi_modules = options
-            .map(|o| o.wasi_modules)
-            .flatten()
-            .unwrap_or(WasiModules::default());
+        let wasi_modules = options.wasi_modules.unwrap_or(WasiModules::default());
 
         if wasi_modules.wasi_common {
             wasmtime_wasi::add_to_linker(&mut linker, |cx| &mut cx.wasi)?;
