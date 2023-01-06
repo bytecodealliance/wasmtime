@@ -142,3 +142,11 @@ block0(v0: i8):
 ; run: %srem_imm_i8(-19) == -1
 ; run: %srem_imm_i8(0xC0) == -1
 ; run: %srem_imm_i8(0x80) == -2
+
+function %srem_with_bmask(i64, i8) -> i8 {
+block0(v0: i64, v1: i8):
+    v2 = bmask.i8 v0
+    v3 = srem v2, v1
+    return v3
+}
+; run: %srem_with_bmask(4352, -1) == 0

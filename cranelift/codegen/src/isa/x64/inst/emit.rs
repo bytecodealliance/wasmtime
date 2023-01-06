@@ -546,7 +546,7 @@ pub(crate) fn emit(
                     // x % -1 = 0; put the result into the destination, $rdx.
                     let done_label = sink.get_label();
 
-                    let inst = Inst::imm(OperandSize::Size64, 0, Writable::from_reg(regs::rdx()));
+                    let inst = Inst::imm(OperandSize::Size64, 0, Writable::from_reg(regs::rax()));
                     inst.emit(&[], sink, info, state);
 
                     let inst = Inst::jmp_known(done_label);
