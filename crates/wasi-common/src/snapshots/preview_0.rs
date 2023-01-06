@@ -533,12 +533,12 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
             .get_file_mut(u32::from(fd))?
             .get_cap_mut(FileCaps::READ)?;
 
-        let iovs: Vec<wiggle::UnsafeGuestSlice<u8>> = iovs
+        let iovs: Vec<wiggle::GuestPtr<[u8]>> = iovs
             .iter()
             .map(|iov_ptr| {
                 let iov_ptr = iov_ptr?;
                 let iov: types::Iovec = iov_ptr.read()?;
-                Ok(iov.buf.as_array(iov.buf_len).as_unsafe_slice_mut()?)
+                Ok(iov.buf.as_array(iov.buf_len))
             })
             .collect::<Result<_, Error>>()?;
 
@@ -560,24 +560,20 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
             .and_then(|s| Some(s.is_shared_memory()))
             .unwrap_or(false);
         let bytes_read: u64 = if is_shared_memory {
-            // Read into an intermediate buffer.
-            let total_available_size = iovs.iter().fold(0, |a, s| a + s.len());
-            let mut buffer = vec![0; total_available_size.min(MAX_SHARED_BUFFER_SIZE)];
-            let bytes_read = f.read_vectored(&mut [IoSliceMut::new(&mut buffer)]).await?;
-
-            // Copy the intermediate buffer into the Wasm shared memory--`iov`
-            // by `iov`.
-            let mut data_to_write = &buffer[0..];
-            for iov in iovs.into_iter() {
-                let len = data_to_write.len().min(iov.len());
-                iov.copy_from_slice(&data_to_write[0..len])?;
-                data_to_write = &data_to_write[len..];
-                if data_to_write.is_empty() {
-                    break;
-                }
+            // For shared memory, read into an intermediate buffer. Only the
+            // first iov will be filled and even then the read is capped by the
+            // `MAX_SHARED_BUFFER_SIZE`, so users are expected to re-call.
+            let iov = iovs.into_iter().next();
+            if let Some(iov) = iov {
+                let mut buffer = vec![0; (iov.len() as usize).min(MAX_SHARED_BUFFER_SIZE)];
+                let bytes_read = f.read_vectored(&mut [IoSliceMut::new(&mut buffer)]).await?;
+                iov.get_range(0..bytes_read.try_into()?)
+                    .expect("it should always be possible to slice the iov smaller")
+                    .copy_from_slice(&buffer[0..bytes_read.try_into()?])?;
+                bytes_read
+            } else {
+                todo!()
             }
-
-            bytes_read
         } else {
             // Convert all of the unsafe guest slices to safe ones--this uses
             // Wiggle's internal borrow checker to ensure no overlaps. We assume
@@ -610,12 +606,12 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
             .get_file_mut(u32::from(fd))?
             .get_cap_mut(FileCaps::READ | FileCaps::SEEK)?;
 
-        let iovs: Vec<wiggle::UnsafeGuestSlice<u8>> = iovs
+        let iovs: Vec<wiggle::GuestPtr<[u8]>> = iovs
             .iter()
             .map(|iov_ptr| {
                 let iov_ptr = iov_ptr?;
                 let iov: types::Iovec = iov_ptr.read()?;
-                Ok(iov.buf.as_array(iov.buf_len).as_unsafe_slice_mut()?)
+                Ok(iov.buf.as_array(iov.buf_len))
             })
             .collect::<Result<_, Error>>()?;
 
@@ -637,26 +633,22 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
             .and_then(|s| Some(s.is_shared_memory()))
             .unwrap_or(false);
         let bytes_read: u64 = if is_shared_memory {
-            // Read into an intermediate buffer.
-            let total_available_size = iovs.iter().fold(0, |a, s| a + s.len());
-            let mut buffer = vec![0; total_available_size.min(MAX_SHARED_BUFFER_SIZE)];
-            let bytes_read = f
-                .read_vectored_at(&mut [IoSliceMut::new(&mut buffer)], offset)
-                .await?;
-
-            // Copy the intermediate buffer into the Wasm shared memory--`iov`
-            // by `iov`.
-            let mut data_to_write = &buffer[0..];
-            for iov in iovs.into_iter() {
-                let len = data_to_write.len().min(iov.len());
-                iov.copy_from_slice(&data_to_write[0..len])?;
-                data_to_write = &data_to_write[len..];
-                if data_to_write.is_empty() {
-                    break;
-                }
+            // For shared memory, read into an intermediate buffer. Only the
+            // first iov will be filled and even then the read is capped by the
+            // `MAX_SHARED_BUFFER_SIZE`, so users are expected to re-call.
+            let iov = iovs.into_iter().next();
+            if let Some(iov) = iov {
+                let mut buffer = vec![0; (iov.len() as usize).min(MAX_SHARED_BUFFER_SIZE)];
+                let bytes_read = f
+                    .read_vectored_at(&mut [IoSliceMut::new(&mut buffer)], offset)
+                    .await?;
+                iov.get_range(0..bytes_read.try_into()?)
+                    .expect("it should always be possible to slice the iov smaller")
+                    .copy_from_slice(&buffer[0..bytes_read.try_into()?])?;
+                bytes_read
+            } else {
+                todo!()
             }
-
-            bytes_read
         } else {
             // Convert all of the unsafe guest slices to safe ones--this uses
             // Wiggle's internal borrow checker to ensure no overlaps. We assume
