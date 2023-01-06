@@ -11,7 +11,7 @@ use std::ops::Deref;
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 use wasmtime_environ::component::VariantInfo;
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct List {
     ty: types::List,
     values: Box<[Val]>,
@@ -57,7 +57,7 @@ impl fmt::Debug for List {
     }
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct Record {
     ty: types::Record,
     values: Box<[Val]>,
@@ -127,7 +127,7 @@ impl fmt::Debug for Record {
     }
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct Tuple {
     ty: types::Tuple,
     values: Box<[Val]>,
@@ -176,7 +176,7 @@ impl fmt::Debug for Tuple {
     }
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct Variant {
     ty: types::Variant,
     discriminant: u32,
@@ -284,7 +284,7 @@ impl fmt::Debug for Enum {
     }
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct Union {
     ty: types::Union,
     discriminant: u32,
@@ -336,7 +336,7 @@ impl fmt::Debug for Union {
     }
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct OptionVal {
     ty: types::OptionType,
     discriminant: u32,
@@ -378,7 +378,7 @@ impl fmt::Debug for OptionVal {
     }
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct ResultVal {
     ty: types::ResultType,
     discriminant: u32,
@@ -487,7 +487,7 @@ impl fmt::Debug for Flags {
 }
 
 /// Represents possible runtime values which a component function can either consume or produce
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 #[allow(missing_docs)]
 pub enum Val {
     Bool(bool),
@@ -1003,6 +1003,61 @@ impl Val {
         Ok(())
     }
 }
+
+impl PartialEq for Val {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            // This breaks conformance with IEEE-754 equality to simplify testing logic.
+            (Self::Float32(l), Self::Float32(r)) => l == r || (l.is_nan() && r.is_nan()),
+            (Self::Float32(_), _) => false,
+            (Self::Float64(l), Self::Float64(r)) => l == r || (l.is_nan() && r.is_nan()),
+            (Self::Float64(_), _) => false,
+
+            (Self::Bool(l), Self::Bool(r)) => l == r,
+            (Self::Bool(_), _) => false,
+            (Self::S8(l), Self::S8(r)) => l == r,
+            (Self::S8(_), _) => false,
+            (Self::U8(l), Self::U8(r)) => l == r,
+            (Self::U8(_), _) => false,
+            (Self::S16(l), Self::S16(r)) => l == r,
+            (Self::S16(_), _) => false,
+            (Self::U16(l), Self::U16(r)) => l == r,
+            (Self::U16(_), _) => false,
+            (Self::S32(l), Self::S32(r)) => l == r,
+            (Self::S32(_), _) => false,
+            (Self::U32(l), Self::U32(r)) => l == r,
+            (Self::U32(_), _) => false,
+            (Self::S64(l), Self::S64(r)) => l == r,
+            (Self::S64(_), _) => false,
+            (Self::U64(l), Self::U64(r)) => l == r,
+            (Self::U64(_), _) => false,
+            (Self::Char(l), Self::Char(r)) => l == r,
+            (Self::Char(_), _) => false,
+            (Self::String(l), Self::String(r)) => l == r,
+            (Self::String(_), _) => false,
+            (Self::List(l), Self::List(r)) => l == r,
+            (Self::List(_), _) => false,
+            (Self::Record(l), Self::Record(r)) => l == r,
+            (Self::Record(_), _) => false,
+            (Self::Tuple(l), Self::Tuple(r)) => l == r,
+            (Self::Tuple(_), _) => false,
+            (Self::Variant(l), Self::Variant(r)) => l == r,
+            (Self::Variant(_), _) => false,
+            (Self::Enum(l), Self::Enum(r)) => l == r,
+            (Self::Enum(_), _) => false,
+            (Self::Union(l), Self::Union(r)) => l == r,
+            (Self::Union(_), _) => false,
+            (Self::Option(l), Self::Option(r)) => l == r,
+            (Self::Option(_), _) => false,
+            (Self::Result(l), Self::Result(r)) => l == r,
+            (Self::Result(_), _) => false,
+            (Self::Flags(l), Self::Flags(r)) => l == r,
+            (Self::Flags(_), _) => false,
+        }
+    }
+}
+
+impl Eq for Val {}
 
 fn load_list(handle: &types::List, mem: &Memory, ptr: usize, len: usize) -> Result<Val> {
     let element_type = handle.ty();
