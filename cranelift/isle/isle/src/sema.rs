@@ -1115,8 +1115,12 @@ impl TypeEnv {
 
 #[derive(Clone, Debug, Default)]
 struct Bindings {
+    /// All bindings accumulated so far within the current rule, including let-
+    /// bindings which have gone out of scope.
     seen: Vec<BoundVar>,
+    /// Counter for unique scope IDs within this set of bindings.
     next_scope: usize,
+    /// Stack of the scope IDs for bindings which are currently in scope.
     in_scope: Vec<usize>,
 }
 
