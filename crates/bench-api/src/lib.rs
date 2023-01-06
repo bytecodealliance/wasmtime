@@ -241,18 +241,19 @@ impl WasmBenchConfig {
 
     fn execution_flags(&self) -> Result<CommonOptions> {
         let flags = if self.execution_flags_ptr.is_null() {
-            "--disable-cache".to_string()
+            ""
         } else {
             let execution_flags = unsafe {
                 std::slice::from_raw_parts(self.execution_flags_ptr, self.execution_flags_len)
             };
-            let execution_flags = std::str::from_utf8(execution_flags)
-                .context("given execution flags string is not valid UTF-8")?;
-            format!("--disable-cache {execution_flags}")
+            std::str::from_utf8(execution_flags)
+                .context("given execution flags string is not valid UTF-8")?
         };
 
+        // Note that the cache, while enabled by default on the CLI, should
+        // always be disabled here so the flag is unconditionally passed.
         let options = CommonOptions::try_parse_from(
-            ["wasmtime"]
+            ["wasmtime", "--disable-cache"]
                 .into_iter()
                 .chain(flags.split(' ').filter(|s| !s.is_empty())),
         )
@@ -440,7 +441,6 @@ impl BenchState {
         make_wasi_cx: impl FnMut() -> Result<WasiCtx> + 'static,
     ) -> Result<Self> {
         let config = options.config(Some(&Triple::host().to_string()))?;
-        // NB: do not configure a code cache.
         let engine = Engine::new(&config)?;
         let mut linker = Linker::<HostState>::new(&engine);
 
