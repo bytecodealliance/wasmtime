@@ -186,13 +186,13 @@ pub enum Advice {
 }
 
 pub struct FileStream {
-    // Which file are we streaming?
+    /// Which file are we streaming?
     file: Box<dyn WasiFile>,
 
-    // Where in the file are we?
+    /// Where in the file are we?
     position: u64,
 
-    // Reading or writing?
+    /// Reading or writing?
     reading: bool,
 }
 
@@ -337,7 +337,7 @@ impl WasiStream for FileStream {
     */
 
     async fn skip(&mut self, nelem: u64) -> Result<(u64, bool), Error> {
-        // For a zero-length request, don't do the 1 byte check below.
+        // For a zero-length request, don't do the 1-byte check below.
         if nelem == 0 {
             return self.file.read_at(&mut [], 0).await;
         }

@@ -611,7 +611,7 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
     async fn read_via_stream(
         &mut self,
         fd: wasi_filesystem::Descriptor,
-        offset: u64,
+        offset: wasi_filesystem::Filesize,
     ) -> HostResult<WasiStream, wasi_filesystem::Errno> {
         let f = self.table_mut().get_file_mut(fd).map_err(convert)?;
 
@@ -633,7 +633,7 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
     async fn write_via_stream(
         &mut self,
         fd: wasi_filesystem::Descriptor,
-        offset: u64,
+        offset: wasi_filesystem::Filesize,
     ) -> HostResult<WasiStream, wasi_filesystem::Errno> {
         let f = self.table_mut().get_file_mut(fd).map_err(convert)?;
 
