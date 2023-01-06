@@ -1,3 +1,0 @@
-# wasmtime-wasi-threads
-
-TODO
