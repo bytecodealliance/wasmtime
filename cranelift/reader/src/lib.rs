@@ -43,7 +43,7 @@ mod testcommand;
 mod testfile;
 
 use anyhow::{Error, Result};
-use cranelift_codegen::isa::{self, TargetIsa};
+use cranelift_codegen::isa::{self, OwnedTargetIsa};
 use cranelift_codegen::settings::{self, FlagsOrIsa};
 use std::str::FromStr;
 use target_lexicon::Triple;
@@ -52,7 +52,7 @@ use target_lexicon::Triple;
 #[allow(missing_docs)]
 pub enum OwnedFlagsOrIsa {
     Flags(settings::Flags),
-    Isa(Box<dyn TargetIsa>),
+    Isa(OwnedTargetIsa),
 }
 
 impl OwnedFlagsOrIsa {

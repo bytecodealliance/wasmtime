@@ -1,7 +1,7 @@
 //! Defines `JITModule`.
 
 use crate::{compiled_blob::CompiledBlob, memory::BranchProtection, memory::Memory};
-use cranelift_codegen::isa::TargetIsa;
+use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
 use cranelift_codegen::settings::Configurable;
 use cranelift_codegen::{self, ir, settings, MachReloc};
 use cranelift_codegen::{binemit::Reloc, CodegenError};
@@ -26,7 +26,7 @@ const READONLY_DATA_ALIGNMENT: u64 = 0x1;
 
 /// A builder for `JITModule`.
 pub struct JITBuilder {
-    isa: Box<dyn TargetIsa>,
+    isa: OwnedTargetIsa,
     symbols: HashMap<String, *const u8>,
     lookup_symbols: Vec<Box<dyn Fn(&str) -> Option<*const u8>>>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
@@ -67,7 +67,7 @@ impl JITBuilder {
     /// floating point instructions, and for stack probes. If you don't know what to use for this
     /// argument, use `cranelift_module::default_libcall_names()`.
     pub fn with_isa(
-        isa: Box<dyn TargetIsa>,
+        isa: OwnedTargetIsa,
         libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     ) -> Self {
         let symbols = HashMap::new();
@@ -153,7 +153,7 @@ struct GotUpdate {
 ///
 /// See the `JITBuilder` for a convenient way to construct `JITModule` instances.
 pub struct JITModule {
-    isa: Box<dyn TargetIsa>,
+    isa: OwnedTargetIsa,
     hotswap_enabled: bool,
     symbols: RefCell<HashMap<String, *const u8>>,
     lookup_symbols: Vec<Box<dyn Fn(&str) -> Option<*const u8>>>,
