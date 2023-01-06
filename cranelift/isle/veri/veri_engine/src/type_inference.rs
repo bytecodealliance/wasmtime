@@ -4,7 +4,6 @@ use std::hash::Hash;
 
 use cranelift_isle as isle;
 use isle::ast::{Decl, Defs};
-use isle::parser::parse;
 use isle::sema::{Sym, TermEnv, TypeEnv, VarId};
 use veri_annotation::parser_wrapper::{parse_annotations, AnnotationEnv};
 use veri_ir::Expr;
@@ -223,10 +222,6 @@ fn type_annotations_using_rule<'a>(
             parse_tree
                 .var_constraints
                 .insert(TypeExpr::Variable(lhs.type_var, rhs.type_var));
-
-            for (name, tyvar) in parse_tree.var_to_type_var_map.iter() {
-                println!("name: {}\ttyvar: {}", name, tyvar);
-            }
 
             let (solution, bv_unknown_width_sets) = solve_constraints(
                 parse_tree.concrete_constraints,
@@ -757,8 +752,6 @@ fn add_annotation_constraints(
         _ => todo!("expr {:#?} not yet implemented", expr),
     };
     tree.ty_vars.insert(e.clone(), t);
-    // dbg!(&t);
-    // dbg!(&e);
     (e, t)
 }
 
@@ -1304,25 +1297,22 @@ fn create_parse_tree_pattern(
             }
         }
         isle::sema::Pattern::BindPattern(_, var_id, subpat) => {
-            match **subpat {
-                isle::sema::Pattern::Wildcard(_) => (),
-                _ => unreachable!("expected wildcard bind pattern"),
-            };
             let sym = rule.vars[var_id.index()].name;
             let var = typeenv.syms[sym.index()].clone();
+            let subpat_node = create_parse_tree_pattern(rule, subpat, tree, typeenv, termenv);
             let type_var = tree.next_type_var;
             tree.next_type_var += 1;
             tree.var_to_type_var_map.insert(var.clone(), type_var);
 
-            // tree.var_constraints
-            //     .insert(TypeExpr::Variable(type_var, subpat_node.type_var));
+            tree.var_constraints
+                .insert(TypeExpr::Variable(type_var, subpat_node.type_var));
 
             let ident = format!("{}__{}", var, type_var);
             TypeVarNode {
                 ident,
-                construct: TypeVarConstruct::Var,
+                construct: TypeVarConstruct::BindPattern,
                 type_var,
-                children: vec![],
+                children: vec![subpat_node],
                 assertions: vec![],
             }
         }
