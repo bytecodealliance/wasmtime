@@ -83,8 +83,7 @@ impl BlockWithArgs {
 
     /// Replace the block for this BlockWithArgs.
     pub fn set_block(&mut self, block: Block, pool: &mut ValueListPool) {
-        let cell = self.values.get_mut(0, pool).unwrap();
-        *cell = Self::block_to_value(block);
+        *self.values.get_mut(0, pool).unwrap() = Self::block_to_value(block);
     }
 
     /// Append an argument to the block args.
