@@ -334,11 +334,21 @@ pub(crate) fn enc_br(rn: Reg) -> u32 {
     0b1101011_0000_11111_000000_00000_00000 | (machreg_to_gpr(rn) << 5)
 }
 
-pub(crate) fn enc_adr(off: i32, rd: Writable<Reg>) -> u32 {
+pub(crate) fn enc_adr_inst(opcode: u32, off: i32, rd: Writable<Reg>) -> u32 {
     let off = u32::try_from(off).unwrap();
     let immlo = off & 3;
     let immhi = (off >> 2) & ((1 << 19) - 1);
-    (0b00010000 << 24) | (immlo << 29) | (immhi << 5) | machreg_to_gpr(rd.to_reg())
+    opcode | (immlo << 29) | (immhi << 5) | machreg_to_gpr(rd.to_reg())
+}
+
+pub(crate) fn enc_adr(off: i32, rd: Writable<Reg>) -> u32 {
+    let opcode = 0b00010000 << 24;
+    enc_adr_inst(opcode, off, rd)
+}
+
+pub(crate) fn enc_adrp(off: i32, rd: Writable<Reg>) -> u32 {
+    let opcode = 0b10010000 << 24;
+    enc_adr_inst(opcode, off, rd)
 }
 
 fn enc_csel(rd: Writable<Reg>, rn: Reg, rm: Reg, cond: Cond, op: u32, o2: u32) -> u32 {
@@ -3143,6 +3153,12 @@ impl MachInstEmit for Inst {
                 assert!(off < (1 << 20));
                 sink.put4(enc_adr(off, rd));
             }
+            &Inst::Adrp { rd, off } => {
+                let rd = allocs.next_writable(rd);
+                assert!(off > -(1 << 20));
+                assert!(off < (1 << 20));
+                sink.put4(enc_adrp(off, rd));
+            }
             &Inst::Word4 { data } => {
                 sink.put4(data);
             }
@@ -3395,7 +3411,8 @@ impl MachInstEmit for Inst {
 
                 // adrp x0, <label>
                 sink.add_reloc(Reloc::Aarch64TlsGdAdrPage21, symbol, 0);
-                sink.put4(0x90000000);
+                let inst = Inst::Adrp { rd, off: 0 };
+                inst.emit(&[], sink, emit_info, state);
 
                 // add x0, x0, <label>
                 sink.add_reloc(Reloc::Aarch64TlsGdAddLo12Nc, symbol, 0);
