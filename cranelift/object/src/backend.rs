@@ -678,30 +678,38 @@ impl ObjectModule {
                     12,
                 )
             }
-            Reloc::Aarch64AdrGotPage21 => {
-                assert_eq!(
-                    self.object.format(),
-                    object::BinaryFormat::Elf,
-                    "Aarch64AdrGotPage21 is not supported for this file format"
-                );
-                (
+            Reloc::Aarch64AdrGotPage21 => match self.object.format() {
+                object::BinaryFormat::Elf => (
                     RelocationKind::Elf(object::elf::R_AARCH64_ADR_GOT_PAGE),
                     RelocationEncoding::Generic,
                     21,
-                )
-            }
-            Reloc::Aarch64Ld64GotLo12Nc => {
-                assert_eq!(
-                    self.object.format(),
-                    object::BinaryFormat::Elf,
-                    "Aarch64Ld64GotLo12Nc is not supported for this file format"
-                );
-                (
+                ),
+                object::BinaryFormat::MachO => (
+                    RelocationKind::MachO {
+                        value: object::macho::ARM64_RELOC_GOT_LOAD_PAGE21,
+                        relative: true,
+                    },
+                    RelocationEncoding::Generic,
+                    21,
+                ),
+                _ => unimplemented!("Aarch64AdrGotPage21 is not supported for this file format"),
+            },
+            Reloc::Aarch64Ld64GotLo12Nc => match self.object.format() {
+                object::BinaryFormat::Elf => (
                     RelocationKind::Elf(object::elf::R_AARCH64_LD64_GOT_LO12_NC),
                     RelocationEncoding::Generic,
                     12,
-                )
-            }
+                ),
+                object::BinaryFormat::MachO => (
+                    RelocationKind::MachO {
+                        value: object::macho::ARM64_RELOC_GOT_LOAD_PAGEOFF12,
+                        relative: true,
+                    },
+                    RelocationEncoding::Generic,
+                    12,
+                ),
+                _ => unimplemented!("Aarch64Ld64GotLo12Nc is not supported for this file format"),
+            },
             Reloc::S390xPCRel32Dbl => (RelocationKind::Relative, RelocationEncoding::S390xDbl, 32),
             Reloc::S390xPLTRel32Dbl => (
                 RelocationKind::PltRelative,
