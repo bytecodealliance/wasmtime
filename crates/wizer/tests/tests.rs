@@ -42,9 +42,6 @@ fn run_wasm(args: &[wasmtime::Val], expected: i32, wasm: &[u8]) -> Result<()> {
     let module =
         wasmtime::Module::new(store.engine(), wasm).context("Wasm test case failed to compile")?;
 
-    let dummy_module = wasmtime::Module::new(store.engine(), &wat::parse_str("(module)")?)?;
-    let dummy_instance = wasmtime::Instance::new(&mut store, &dummy_module, &[])?;
-
     let mut linker = wasmtime::Linker::new(&engine);
     linker
         .define_name("dummy_func", wasmtime::Func::wrap(&mut store, || {}))?
@@ -135,6 +132,31 @@ fn basic_memory() -> Result<()> {
     )
 }
 
+#[test]
+fn multi_memory() -> Result<()> {
+    run_wat(
+        &[],
+        42,
+        r#"
+(module
+  (memory $m1 1)
+  (memory $m2 1)
+  (func (export "wizer.initialize")
+    i32.const 0
+    i32.const 41
+    i32.store $m1 offset=1337
+    i32.const 0
+    i32.const 1
+    i32.store $m2 offset=1)
+  (func (export "run") (result i32)
+    i32.const 0
+    i32.load $m1 offset=1337
+    i32.const 0
+    i32.load $m2 offset=1
+    i32.add))
+"#,
+    )
+}
 #[test]
 fn reject_imported_memory() -> Result<()> {
     fails_wizening(

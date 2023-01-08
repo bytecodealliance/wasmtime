@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use std::rc::Rc;
 use wat::parse_str as wat_to_wasm;
 use wizer::Wizer;
@@ -41,8 +41,8 @@ fn run_wasm(args: &[wasmtime::Val], expected: i32, wasm: &[u8]) -> Result<()> {
         wasmtime::Module::new(store.engine(), wasm).context("Wasm test case failed to compile")?;
 
     let mut linker = wasmtime::Linker::new(&engine);
-    linker.func_wrap("foo", "bar", |_: i32| -> Result<i32, wasmtime::Trap> {
-        Err(wasmtime::Trap::new("shouldn't be called"))
+    linker.func_wrap("foo", "bar", |_: i32| -> Result<i32> {
+        Err(anyhow!("shouldn't be called"))
     })?;
 
     let instance = linker.instantiate(&mut store, &module)?;

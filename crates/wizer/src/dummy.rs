@@ -2,7 +2,7 @@
 //!
 //! Forked from `wasmtime/crates/fuzzing/src/oracles/dummy.rs`.
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use wasmtime::*;
 
 /// Create dummy imports for instantiating the module.
@@ -54,12 +54,12 @@ pub fn dummy_extern(store: &mut crate::Store, ty: ExternType, name: &str) -> Res
 pub fn dummy_func(store: &mut crate::Store, ty: FuncType, name: &str) -> Func {
     let name = name.to_string();
     Func::new(store, ty.clone(), move |_caller, _params, _results| {
-        Err(Trap::new(format!(
+        Err(anyhow!(
             "Error: attempted to call an unknown imported function: {}\n\
              \n\
              You cannot call arbitrary imported functions during Wizer initialization.",
             name,
-        )))
+        ))
     })
 }
 
