@@ -2795,7 +2795,7 @@ impl Inst {
                 offset,
             } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
-                format!("ldr {}, 8 ; b 12 ; data {:?} + {}", rd, name, offset)
+                format!("load_ext_name {rd}, {name:?}+{offset}")
             }
             &Inst::LoadAddr { rd, ref mem } => {
                 // TODO: we really should find a better way to avoid duplication of

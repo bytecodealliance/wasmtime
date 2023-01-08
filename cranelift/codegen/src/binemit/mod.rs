@@ -66,6 +66,17 @@ pub enum Reloc {
     /// This is equivalent to `R_AARCH64_TLSGD_ADD_LO12_NC` in the [aaelf64](https://github.com/ARM-software/abi-aa/blob/2bcab1e3b22d55170c563c3c7940134089176746/aaelf64/aaelf64.rst#relocations-for-thread-local-storage)
     Aarch64TlsGdAddLo12Nc,
 
+    /// AArch64 GOT Page
+    /// Set the immediate value of an ADRP to bits 32:12 of X; check that –232 <= X < 232
+    /// This is equivalent to `R_AARCH64_ADR_GOT_PAGE` (311) in the  [aaelf64](https://github.com/ARM-software/abi-aa/blob/2bcab1e3b22d55170c563c3c7940134089176746/aaelf64/aaelf64.rst#static-aarch64-relocations)
+    Aarch64AdrGotPage21,
+
+    /// AArch64 GOT Low bits
+
+    /// Set the LD/ST immediate field to bits 11:3 of X. No overflow check; check that X&7 = 0
+    /// This is equivalent to `R_AARCH64_LD64_GOT_LO12_NC` (312) in the  [aaelf64](https://github.com/ARM-software/abi-aa/blob/2bcab1e3b22d55170c563c3c7940134089176746/aaelf64/aaelf64.rst#static-aarch64-relocations)
+    Aarch64Ld64GotLo12Nc,
+
     /// procedure call.
     /// call symbol
     /// expands to the following assembly and relocation:
@@ -100,6 +111,8 @@ impl fmt::Display for Reloc {
             Self::MachOX86_64Tlv => write!(f, "MachOX86_64Tlv"),
             Self::Aarch64TlsGdAdrPage21 => write!(f, "Aarch64TlsGdAdrPage21"),
             Self::Aarch64TlsGdAddLo12Nc => write!(f, "Aarch64TlsGdAddLo12Nc"),
+            Self::Aarch64AdrGotPage21 => write!(f, "Aarch64AdrGotPage21"),
+            Self::Aarch64Ld64GotLo12Nc => write!(f, "Aarch64AdrGotLo12Nc"),
             Self::S390xTlsGd64 => write!(f, "TlsGd64"),
             Self::S390xTlsGdCall => write!(f, "TlsGdCall"),
         }

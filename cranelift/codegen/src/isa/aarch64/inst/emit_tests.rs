@@ -6084,11 +6084,11 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::Adrp {
-            rd: writable_xreg(0),
-            off: 10,
+            rd: writable_xreg(3),
+            off: 16,
         },
-        "400000D0",
-        "adrp x0, pc+40960",
+        "83000090",
+        "adrp x3, pc+65536",
     ));
 
     insns.push((

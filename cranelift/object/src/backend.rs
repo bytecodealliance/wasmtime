@@ -678,6 +678,30 @@ impl ObjectModule {
                     12,
                 )
             }
+            Reloc::Aarch64AdrGotPage21 => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::Elf,
+                    "Aarch64AdrGotPage21 is not supported for this file format"
+                );
+                (
+                    RelocationKind::Elf(object::elf::R_AARCH64_ADR_GOT_PAGE),
+                    RelocationEncoding::Generic,
+                    21,
+                )
+            }
+            Reloc::Aarch64Ld64GotLo12Nc => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::Elf,
+                    "Aarch64Ld64GotLo12Nc is not supported for this file format"
+                );
+                (
+                    RelocationKind::Elf(object::elf::R_AARCH64_LD64_GOT_LO12_NC),
+                    RelocationEncoding::Generic,
+                    12,
+                )
+            }
             Reloc::S390xPCRel32Dbl => (RelocationKind::Relative, RelocationEncoding::S390xDbl, 32),
             Reloc::S390xPLTRel32Dbl => (
                 RelocationKind::PltRelative,

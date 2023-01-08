@@ -14,7 +14,7 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   ldr x3, 8 ; b 12 ; data TestCase(%g) + 0
+;   load_ext_name x3, TestCase(%g)+0
 ;   blr x3
 ;   ldp fp, lr, [sp], #16
 ;   autiasp ; ret

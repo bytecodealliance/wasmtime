@@ -68,7 +68,7 @@ block3(v7: r64, v8: r64):
 ; block0:
 ;   str x0, [sp, #8]
 ;   str x1, [sp, #16]
-;   ldr x1, 8 ; b 12 ; data TestCase(%f) + 0
+;   load_ext_name x1, TestCase(%f)+0
 ;   blr x1
 ;   mov x15, sp
 ;   ldr x6, [sp, #8]
