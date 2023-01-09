@@ -1202,7 +1202,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                     .copy_from_slice(&buffer[0..bytes_read.try_into()?])?;
                 (bytes_read, ro_flags)
             } else {
-                return Ok(0);
+                return Ok((0, RoFlags::empty().into()));
             }
         } else {
             // Convert all of the unsafe guest slices to safe ones--this uses
