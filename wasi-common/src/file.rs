@@ -107,6 +107,18 @@ pub trait WasiFile: Send + Sync {
         false
     }
 
+    async fn append<'a>(&mut self, _bufs: &[u8]) -> Result<u64, Error> {
+        Err(Error::badf())
+    }
+
+    async fn append_vectored<'a>(&mut self, _bufs: &[std::io::IoSlice<'a>]) -> Result<u64, Error> {
+        Err(Error::badf())
+    }
+
+    fn is_append_vectored(&self) -> bool {
+        false
+    }
+
     async fn readable(&self) -> Result<(), Error>;
 
     async fn writable(&self) -> Result<(), Error>;
@@ -185,54 +197,45 @@ pub enum Advice {
     NoReuse,
 }
 
+enum FileStreamType {
+    /// Reading from a file, tracking our current position.
+    Read(u64),
+
+    /// Writing to a file, tracking our current position.
+    Write(u64),
+
+    /// Appending to a file.
+    Append,
+}
+
 pub struct FileStream {
     /// Which file are we streaming?
     file: Box<dyn WasiFile>,
 
-    /// Where in the file are we?
-    position: u64,
-
-    /// Reading or writing?
-    reading: bool,
+    /// What type of streaming are we doing?
+    type_: FileStreamType,
 }
 
 impl FileStream {
     pub fn new_reader(file: Box<dyn WasiFile>, position: u64) -> Self {
         Self {
             file,
-            position,
-            reading: true,
+            type_: FileStreamType::Read(position),
         }
     }
 
     pub fn new_writer(file: Box<dyn WasiFile>, position: u64) -> Self {
         Self {
             file,
-            position,
-            reading: false,
+            type_: FileStreamType::Write(position),
         }
     }
 
-    pub fn new_appender(_file: Box<dyn WasiFile>) -> Self {
-        todo!()
-    }
-
-    pub async fn seek(&mut self, pos: std::io::SeekFrom) -> Result<u64, Error> {
-        match pos {
-            std::io::SeekFrom::Start(pos) => self.position = pos,
-            std::io::SeekFrom::Current(pos) => {
-                self.position = self.position.wrapping_add(pos as i64 as u64)
-            }
-            std::io::SeekFrom::End(pos) => {
-                self.position = self
-                    .file
-                    .get_filestat()
-                    .await?
-                    .size
-                    .wrapping_add(pos as i64 as u64)
-            }
+    pub fn new_appender(file: Box<dyn WasiFile>) -> Self {
+        Self {
+            file,
+            type_: FileStreamType::Append,
         }
-        Ok(self.position)
     }
 }
 
@@ -241,17 +244,19 @@ impl WasiStream for FileStream {
     fn as_any(&self) -> &dyn Any {
         self
     }
+
     #[cfg(unix)]
     fn pollable_read(&self) -> Option<rustix::fd::BorrowedFd> {
-        if self.reading {
+        if let FileStreamType::Read(_) = self.type_ {
             self.file.pollable()
         } else {
             None
         }
     }
+
     #[cfg(unix)]
     fn pollable_write(&self) -> Option<rustix::fd::BorrowedFd> {
-        if self.reading {
+        if let FileStreamType::Read(_) = self.type_ {
             None
         } else {
             self.file.pollable()
@@ -260,15 +265,16 @@ impl WasiStream for FileStream {
 
     #[cfg(windows)]
     fn pollable_read(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
-        if self.reading {
+        if let FileStreamType::Read(_) = self.type_ {
             self.file.pollable()
         } else {
             None
         }
     }
+
     #[cfg(windows)]
     fn pollable_write(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
-        if self.reading {
+        if let FileStreamType::Read(_) = self.type_ {
             None
         } else {
             self.file.pollable()
@@ -276,53 +282,74 @@ impl WasiStream for FileStream {
     }
 
     async fn read(&mut self, buf: &mut [u8]) -> Result<(u64, bool), Error> {
-        if !self.reading {
-            return Err(Error::badf());
+        if let FileStreamType::Read(position) = &mut self.type_ {
+            let (n, end) = self.file.read_at(buf, *position).await?;
+            *position = position.wrapping_add(n);
+            Ok((n, end))
+        } else {
+            Err(Error::badf())
         }
-        let (n, end) = self.file.read_at(buf, self.position).await?;
-        self.position = self.position.wrapping_add(n);
-        Ok((n, end))
     }
+
     async fn read_vectored<'a>(
         &mut self,
         bufs: &mut [io::IoSliceMut<'a>],
     ) -> Result<(u64, bool), Error> {
-        if !self.reading {
-            return Err(Error::badf());
+        if let FileStreamType::Read(position) = &mut self.type_ {
+            let (n, end) = self.file.read_vectored_at(bufs, *position).await?;
+            *position = position.wrapping_add(n);
+            Ok((n, end))
+        } else {
+            Err(Error::badf())
         }
-        let (n, end) = self.file.read_vectored_at(bufs, self.position).await?;
-        self.position = self.position.wrapping_add(n);
-        Ok((n, end))
     }
+
     #[cfg(can_vector)]
     fn is_read_vectored_at(&self) -> bool {
-        if !self.reading {
-            return false;
+        if let FileStreamType::Read(_) = self.type_ {
+            self.file.is_read_vectored_at()
+        } else {
+            false
         }
-        self.file.is_read_vectored_at()
     }
+
     async fn write(&mut self, buf: &[u8]) -> Result<u64, Error> {
-        if self.reading {
-            return Err(Error::badf());
+        match &mut self.type_ {
+            FileStreamType::Write(position) => {
+                let n = self.file.write_at(buf, *position).await? as i64 as u64;
+                *position = position.wrapping_add(n);
+                Ok(n)
+            }
+            FileStreamType::Append => {
+                let n = self.file.append(buf).await? as i64 as u64;
+                Ok(n)
+            }
+            FileStreamType::Read(_) => Err(Error::badf()),
         }
-        let n = self.file.write_at(buf, self.position).await? as i64 as u64;
-        self.position = self.position.wrapping_add(n);
-        Ok(n)
     }
+
     async fn write_vectored<'a>(&mut self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
-        if self.reading {
-            return Err(Error::badf());
+        match &mut self.type_ {
+            FileStreamType::Write(position) => {
+                let n = self.file.write_vectored_at(bufs, *position).await? as i64 as u64;
+                *position = position.wrapping_add(n);
+                Ok(n)
+            }
+            FileStreamType::Append => {
+                let n = self.file.append_vectored(bufs).await? as i64 as u64;
+                Ok(n)
+            }
+            FileStreamType::Read(_) => Err(Error::badf()),
         }
-        let n = self.file.write_vectored_at(bufs, self.position).await? as i64 as u64;
-        self.position = self.position.wrapping_add(n);
-        Ok(n)
     }
+
     #[cfg(can_vector)]
     fn is_write_vectored_at(&self) -> bool {
-        if self.reading {
-            return false;
+        if let FileStreamType::Read(_) = self.type_ {
+            false
+        } else {
+            self.file.is_write_vectored_at()
         }
-        self.file.is_write_vectored_at()
     }
 
     // TODO: Optimize for file streams.
@@ -342,21 +369,18 @@ impl WasiStream for FileStream {
             return self.file.read_at(&mut [], 0).await;
         }
 
-        if !self.reading {
-            return Err(Error::badf());
+        if let FileStreamType::Read(position) = &mut self.type_ {
+            let new_position = position.checked_add(nelem).ok_or_else(Error::overflow)?;
+
+            let file_size = self.file.get_filestat().await?.size;
+
+            let short_by = new_position.saturating_sub(file_size);
+
+            *position = new_position - short_by;
+            Ok((nelem - short_by, false))
+        } else {
+            Err(Error::badf())
         }
-
-        let new_position = self
-            .position
-            .checked_add(nelem)
-            .ok_or_else(Error::overflow)?;
-
-        let file_size = self.file.get_filestat().await?.size;
-
-        let short_by = new_position.saturating_sub(file_size);
-
-        self.position = new_position - short_by;
-        Ok((nelem - short_by, false))
     }
 
     // TODO: Optimize for file streams.
@@ -371,23 +395,27 @@ impl WasiStream for FileStream {
     */
 
     async fn num_ready_bytes(&self) -> Result<u64, Error> {
-        if !self.reading {
-            return Err(Error::badf());
+        if let FileStreamType::Read(_) = self.type_ {
+            // Default to saying that no data is ready.
+            Ok(0)
+        } else {
+            Err(Error::badf())
         }
-        Ok(0)
     }
 
     async fn readable(&self) -> Result<(), Error> {
-        if !self.reading {
-            return Err(Error::badf());
+        if let FileStreamType::Read(_) = self.type_ {
+            self.file.readable().await
+        } else {
+            Err(Error::badf())
         }
-        self.file.readable().await
     }
 
     async fn writable(&self) -> Result<(), Error> {
-        if self.reading {
-            return Err(Error::badf());
+        if let FileStreamType::Read(_) = self.type_ {
+            Err(Error::badf())
+        } else {
+            self.file.writable().await
         }
-        self.file.writable().await
     }
 }

@@ -236,6 +236,41 @@ async fn run_file_read(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
+async fn run_file_append(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+    let dir = tempfile::tempdir()?;
+
+    std::fs::File::create(dir.path().join("bar.txt"))?
+        .write_all(b"'Twas brillig, and the slithy toves.\n")?;
+
+    let descriptor =
+        store
+            .data_mut()
+            .push_dir(Box::new(wasi_cap_std_sync::dir::Dir::from_cap_std(
+                Dir::from_std_file(std::fs::File::open(dir.path())?),
+            )))?;
+
+    wasi.command(
+        &mut store,
+        0 as host::Descriptor,
+        1 as host::Descriptor,
+        &[],
+        &[],
+        &[(descriptor, "/")],
+    )
+    .await?
+    .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))?;
+
+    let contents = std::fs::read(dir.path().join("bar.txt"))?;
+    assert_eq!(
+        std::str::from_utf8(&contents).unwrap(),
+        "'Twas brillig, and the slithy toves.\n\
+               Did gyre and gimble in the wabe;\n\
+               All mimsy were the borogoves,\n\
+               And the mome raths outgrabe.\n"
+    );
+    Ok(())
+}
+
 async fn run_exit_success(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     let r = wasi
         .command(

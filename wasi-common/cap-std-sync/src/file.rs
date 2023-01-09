@@ -140,6 +140,17 @@ impl WasiFile for File {
     fn is_write_vectored_at(&self) -> bool {
         self.0.is_write_vectored_at()
     }
+    async fn append<'a>(&mut self, buf: &[u8]) -> Result<u64, Error> {
+        let n = self.0.append(buf)?;
+        Ok(n.try_into()?)
+    }
+    async fn append_vectored<'a>(&mut self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
+        let n = self.0.append_vectored(bufs)?;
+        Ok(n.try_into()?)
+    }
+    fn is_append_vectored(&self) -> bool {
+        self.0.is_append_vectored()
+    }
     fn isatty(&mut self) -> bool {
         self.0.is_terminal()
     }
