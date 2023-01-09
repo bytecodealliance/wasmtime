@@ -5,8 +5,8 @@
 use anyhow::{anyhow, Result};
 use rand::Rng;
 use std::thread;
-use wasi_common::I32Exit;
 use wasmtime::{Caller, Linker, Module, SharedMemory, Store};
+use wasmtime_wasi::maybe_exit_on_error;
 
 // This name is a function export designated by the wasi-threads specification:
 // https://github.com/WebAssembly/wasi-threads/#detailed-design-discussion
@@ -63,15 +63,11 @@ impl<T: Clone + Send + 'static> WasiThreadsCtx<T> {
             );
             match thread_entry_point.call(&mut store, (wasi_thread_id, thread_start_arg)) {
                 Ok(_) => {}
-                Err(trap) => {
-                    if let Some(I32Exit(0)) = trap.downcast_ref::<I32Exit>() {
-                        log::trace!(
-                            "exited thread id = {} via `wasi::proc_exit` call",
-                            wasi_thread_id
-                        )
-                    } else {
-                        panic!("{}", fail(trap.to_string()))
-                    }
+                Err(e) => {
+                    log::trace!("exiting thread id = {} due to error", wasi_thread_id);
+                    let e = maybe_exit_on_error(e);
+                    eprintln!("Error: {:?}", e);
+                    std::process::exit(1);
                 }
             }
         })?;

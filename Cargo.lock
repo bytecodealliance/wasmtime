@@ -3747,6 +3747,7 @@ name = "wasmtime-wasi"
 version = "7.0.0"
 dependencies = [
  "anyhow",
+ "libc",
  "wasi-cap-std-sync",
  "wasi-common",
  "wasi-tokio",
@@ -3784,6 +3785,7 @@ dependencies = [
  "rand 0.8.5",
  "wasi-common",
  "wasmtime",
+ "wasmtime-wasi",
 ]
 
 [[package]]

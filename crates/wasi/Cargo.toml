@@ -13,6 +13,7 @@ include = ["src/**/*", "README.md", "LICENSE", "build.rs"]
 build = "build.rs"
 
 [dependencies]
+libc = "0.2.60"
 wasi-common = { workspace = true }
 wasi-cap-std-sync = { workspace = true, optional = true }
 wasi-tokio = { workspace = true, optional = true }
