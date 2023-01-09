@@ -101,6 +101,11 @@ impl BlockWithArgs {
         &mut self.values.as_mut_slice(pool)[1..]
     }
 
+    /// Remove the argument at ix from the argument list.
+    pub fn remove(&mut self, ix: usize, pool: &mut ValueListPool) {
+        self.values.remove(1 + ix, pool)
+    }
+
     /// Clear out the arguments list.
     pub fn clear(&mut self, pool: &mut ValueListPool) {
         self.values.truncate(1, pool)
