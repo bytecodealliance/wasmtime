@@ -35,7 +35,7 @@ pub unsafe extern "C" fn command(
     args_len: usize,
     env_vars: StrTupleList,
     preopens: PreopenList,
-) -> Result<(), ()> {
+) -> u32 {
     // TODO: ideally turning off `command` would remove this import and the
     // `*.wit` metadata entirely but doing that ergonomically will likely
     // require some form of `use` to avoid duplicating lots of `*.wit` bits.
@@ -88,7 +88,7 @@ pub unsafe extern "C" fn command(
         fn _start();
     }
     _start();
-    Ok(())
+    0
 }
 
 // We're avoiding static initializers, so replace the standard assert macros
@@ -1996,7 +1996,15 @@ const MAX_DESCRIPTORS: usize = 128;
 /// Maximum number of bytes to cache for a `wasi::Dirent` plus its path name.
 const DIRENT_CACHE: usize = 256;
 
+/// A canary value to detect memory corruption within `State`.
+const MAGIC: u32 = u32::from_le_bytes(*b"ugh!");
+
+#[repr(C)] // used for now to keep magic1 and magic2 at the start and end
 struct State {
+    /// A canary constant value located at the beginning of this structure to
+    /// try to catch memory corruption coming from the bottom.
+    magic1: u32,
+
     /// Used by `register_buffer` to coordinate allocations with
     /// `cabi_import_realloc`.
     buffer_ptr: Cell<*mut u8>,
@@ -2038,6 +2046,10 @@ struct State {
 
     /// The clock handle for `CLOCKID_REALTIME`.
     default_wall_clock: Cell<Option<Fd>>,
+
+    /// Another canary constant located at the end of the structure to catch
+    /// memory corruption coming from the bottom.
+    magic2: u32,
 }
 
 struct DirentCache {
@@ -2098,7 +2110,7 @@ const fn command_data_size() -> usize {
     start -= size_of::<DirentCache>();
 
     // Remove miscellaneous metadata also stored in state.
-    start -= 17 * size_of::<usize>();
+    start -= 21 * size_of::<usize>();
 
     // Everything else is the `command_data` allocation.
     start
@@ -2121,6 +2133,8 @@ impl State {
     fn with(f: impl FnOnce(&State) -> Result<(), Errno>) -> Errno {
         let ptr = State::ptr();
         let ptr = ptr.try_borrow().unwrap_or_else(|_| unreachable());
+        assert_eq!(ptr.magic1, MAGIC);
+        assert_eq!(ptr.magic2, MAGIC);
         let ret = f(&*ptr);
         match ret {
             Ok(()) => ERRNO_SUCCESS,
@@ -2131,6 +2145,8 @@ impl State {
     fn with_mut(f: impl FnOnce(&mut State) -> Result<(), Errno>) -> Errno {
         let ptr = State::ptr();
         let mut ptr = ptr.try_borrow_mut().unwrap_or_else(|_| unreachable());
+        assert_eq!(ptr.magic1, MAGIC);
+        assert_eq!(ptr.magic2, MAGIC);
         let ret = f(&mut *ptr);
         match ret {
             Ok(()) => ERRNO_SUCCESS,
@@ -2158,6 +2174,8 @@ impl State {
         let ret = (grew * PAGE_SIZE) as *mut RefCell<State>;
         let ret = unsafe {
             ret.write(RefCell::new(State {
+                magic1: MAGIC,
+                magic2: MAGIC,
                 buffer_ptr: Cell::new(null_mut()),
                 buffer_len: Cell::new(0),
                 ndescriptors: 0,
