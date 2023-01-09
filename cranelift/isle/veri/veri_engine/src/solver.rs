@@ -32,6 +32,22 @@ impl SolverCtx {
         name
     }
 
+    fn new_fresh_int(&mut self) -> String {
+        let name = format!("fresh{}", self.fresh_bits_idx);
+        self.fresh_bits_idx += 1;
+        self.additional_decls
+            .push((name.clone(), "Int".to_string()));
+        name
+    }
+
+    fn new_fresh_bool(&mut self) -> String {
+        let name = format!("fresh{}", self.fresh_bits_idx);
+        self.fresh_bits_idx += 1;
+        self.additional_decls
+            .push((name.clone(), "Bool".to_string()));
+        name
+    }
+
     // Extend with concrete source and destination sizes. Includes extracting relevant bits.
     fn extend_concrete(
         &mut self,
@@ -328,6 +344,11 @@ impl SolverCtx {
                 },
                 Terminal::True => "true".to_string(),
                 Terminal::False => "false".to_string(),
+                Terminal::Wildcard => match ty.unwrap() {
+                    Type::BitVector(_) => self.new_fresh_bits(self.bitwidth),
+                    Type::Int => self.new_fresh_int(),
+                    Type::Bool => self.new_fresh_bool(),
+                },
             },
             Expr::Unary(op, arg) => {
                 let op = match op {

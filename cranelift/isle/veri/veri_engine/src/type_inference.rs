@@ -15,7 +15,7 @@ use crate::REG_WIDTH;
 struct RuleParseTree<'a> {
     // a map of var name to type variable, where var could be
     // Pattern::Var or var used in Pattern::BindPattern
-    var_to_type_var_map: HashMap<String, u32>,
+    varid_to_type_var_map: HashMap<VarId, u32>,
     // bookkeeping that tells the next unused type var
     next_type_var: u32,
     // combined constraints from all nodes
@@ -35,6 +35,7 @@ struct RuleParseTree<'a> {
 pub enum TypeVarConstruct {
     Var,
     BindPattern,
+    Wildcard,
     Term(String),
     Const(i128),
     Let(Vec<String>),
@@ -137,7 +138,7 @@ fn type_annotations_using_rule<'a>(
     termenv: &'a TermEnv,
 ) -> Option<Solution> {
     let mut parse_tree = RuleParseTree {
-        var_to_type_var_map: HashMap::new(),
+        varid_to_type_var_map: HashMap::new(),
         next_type_var: 1,
         concrete_constraints: HashSet::new(),
         var_constraints: HashSet::new(),
@@ -871,18 +872,18 @@ fn add_rule_constraints(
             )))
         }
         TypeVarConstruct::BindPattern => {
-            assert_eq!(children.len(), 1);
-            tree.quantified_vars
-                .insert((curr.ident.clone(), curr.type_var));
-            tree.free_vars.insert((curr.ident.clone(), curr.type_var));
-            let var = veri_ir::Expr::Terminal(veri_ir::Terminal::Var(curr.ident.clone()));
+            assert_eq!(children.len(), 2);
+            // tree.quantified_vars
+            //     .insert((curr.ident.clone(), curr.type_var));
+            // tree.free_vars.insert((curr.ident.clone(), curr.type_var));
             tree.assumptions.push(veri_ir::Expr::Binary(
                 veri_ir::BinaryOp::Eq,
-                Box::new(var),
                 Box::new(children[0].clone()),
+                Box::new(children[1].clone()),
             ));
             Some(children[0].clone())
         }
+        TypeVarConstruct::Wildcard => Some(veri_ir::Expr::Terminal(veri_ir::Terminal::Wildcard)),
         TypeVarConstruct::Const(i) => Some(veri_ir::Expr::Terminal(veri_ir::Terminal::Const(
             *i,
             curr.type_var,
@@ -1280,8 +1281,8 @@ fn create_parse_tree_pattern(
             let ident = typeenv.syms[sym.index()].clone();
 
             let type_var = tree
-                .var_to_type_var_map
-                .entry(ident.clone())
+                .varid_to_type_var_map
+                .entry(var_id.clone())
                 .or_insert(tree.next_type_var);
             if *type_var == tree.next_type_var {
                 tree.next_type_var += 1;
@@ -1298,38 +1299,50 @@ fn create_parse_tree_pattern(
         }
         isle::sema::Pattern::BindPattern(_, var_id, subpat) => {
             let sym = rule.vars[var_id.index()].name;
-            let var = typeenv.syms[sym.index()].clone();
+            let var_ident = format!("{}_clif_{}", typeenv.syms[sym.index()], var_id.index());
+
+            let var_type_var = tree.next_type_var;
+            tree.next_type_var += 1;
+
+            tree.varid_to_type_var_map.insert(var_id.clone(), var_type_var);
+
+            let ident = format!("{}__{}", var_ident, var_type_var);
+            // this is a base case so there are no children
+            let var_node = TypeVarNode {
+                ident: ident.clone(),
+                construct: TypeVarConstruct::Var,
+                type_var: var_type_var,
+                children: vec![],
+                assertions: vec![],
+            };
+
             let subpat_node = create_parse_tree_pattern(rule, subpat, tree, typeenv, termenv);
+
             let type_var = tree.next_type_var;
             tree.next_type_var += 1;
-            tree.var_to_type_var_map.insert(var.clone(), type_var);
 
             tree.var_constraints
-                .insert(TypeExpr::Variable(type_var, subpat_node.type_var));
+                .insert(TypeExpr::Variable(var_type_var, subpat_node.type_var));
+            tree.var_constraints
+            .insert(TypeExpr::Variable(type_var, var_type_var));
 
-            let ident = format!("{}__{}", var, type_var);
+            let ident = format!("bind_{}", ident);
+
             TypeVarNode {
                 ident,
                 construct: TypeVarConstruct::BindPattern,
-                type_var,
-                children: vec![subpat_node],
+                type_var: type_var,
+                children: vec![var_node, subpat_node],
                 assertions: vec![],
             }
         }
         isle::sema::Pattern::Wildcard(_) => {
-            let mut name = String::from("wildcard");
-            let type_var = tree
-                .var_to_type_var_map
-                .entry(name.clone())
-                .or_insert(tree.next_type_var);
-            if *type_var == tree.next_type_var {
-                tree.next_type_var += 1;
-            }
-            let name = format!("{}__{}", name, *type_var);
+            let type_var = tree.next_type_var;
+            tree.next_type_var += 1;
             TypeVarNode {
-                ident: name,
-                construct: TypeVarConstruct::Var,
-                type_var: *type_var,
+                ident: String::from(""),
+                construct: TypeVarConstruct::Wildcard,
+                type_var: type_var,
                 children: vec![],
                 assertions: vec![],
             }
@@ -1434,8 +1447,8 @@ fn create_parse_tree_expr(
             }
 
             let type_var = tree
-                .var_to_type_var_map
-                .entry(ident.clone())
+                .varid_to_type_var_map
+                .entry(var_id.clone())
                 .or_insert(tree.next_type_var);
             if *type_var == tree.next_type_var {
                 tree.next_type_var += 1;
@@ -1492,7 +1505,7 @@ fn create_parse_tree_expr(
                 let ty_var = tree.next_type_var;
                 tree.next_type_var += 1;
 
-                tree.var_to_type_var_map.insert(var.clone(), ty_var);
+                tree.varid_to_type_var_map.insert(varid.clone(), ty_var);
                 children.push(subpat_node);
                 let var = format!("{}__{}", var, ty_var);
                 tree.quantified_vars.insert((var.clone(), ty_var));
