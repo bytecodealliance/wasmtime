@@ -1292,6 +1292,8 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
+    /// Typecheck both instructions that contain variable arguments like calls, and those that
+    /// include references to basic blocks with their arguments.
     fn typecheck_variable_args(
         &self,
         inst: Inst,
