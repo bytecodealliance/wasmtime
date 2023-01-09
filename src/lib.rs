@@ -76,6 +76,7 @@ pub unsafe extern "C" fn command(
                 type_: StreamType::File(File {
                     fd: preopen.descriptor,
                     position: Cell::new(0),
+                    append: false,
                 }),
             })));
         }
@@ -1091,8 +1092,13 @@ pub unsafe extern "C" fn fd_write(
 
             // If this is a file, keep the current-position pointer up to date.
             if let StreamType::File(file) = &streams.type_ {
-                file.position
-                    .set(file.position.get() + wasi_filesystem::Filesize::from(bytes));
+                // But don't update if we're in append mode. Strictly speaking,
+                // we should set the position to the new end of the file, but
+                // we don't have an API to do that atomically.
+                if !file.append {
+                    file.position
+                        .set(file.position.get() + wasi_filesystem::Filesize::from(bytes));
+                }
             }
 
             *nwritten = bytes as usize;
@@ -1245,6 +1251,7 @@ pub unsafe extern "C" fn path_open(
     let o_flags = o_flags_from_oflags(oflags);
     let flags = descriptor_flags_from_flags(fs_rights_base, fdflags);
     let mode = wasi_filesystem::Mode::READABLE | wasi_filesystem::Mode::WRITEABLE;
+    let append = fdflags & wasi::FDFLAGS_APPEND == wasi::FDFLAGS_APPEND;
 
     State::with_mut(|state| {
         let file = state.get_dir(fd)?;
@@ -1255,6 +1262,7 @@ pub unsafe extern "C" fn path_open(
             type_: StreamType::File(File {
                 fd: result,
                 position: Cell::new(0),
+                append,
             }),
         });
 
@@ -1928,7 +1936,11 @@ impl Streams {
                 // For files, we may have adjusted the position for seeking, so
                 // create a new stream.
                 StreamType::File(file) => {
-                    let output = wasi_filesystem::write_via_stream(file.fd, file.position.get())?;
+                    let output = if file.append {
+                        wasi_filesystem::append_via_stream(file.fd)?
+                    } else {
+                        wasi_filesystem::write_via_stream(file.fd, file.position.get())?
+                    };
                     self.output.set(Some(output));
                     Ok(output)
                 }
@@ -1982,6 +1994,9 @@ struct File {
 
     /// The current-position pointer.
     position: Cell<wasi_filesystem::Filesize>,
+
+    /// In append mode, all writes append to the file.
+    append: bool,
 }
 
 const PAGE_SIZE: usize = 65536;
