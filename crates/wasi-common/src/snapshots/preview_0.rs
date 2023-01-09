@@ -572,7 +572,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
                     .copy_from_slice(&buffer[0..bytes_read.try_into()?])?;
                 bytes_read
             } else {
-                todo!()
+                return Ok(0);
             }
         } else {
             // Convert all of the unsafe guest slices to safe ones--this uses
@@ -647,7 +647,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
                     .copy_from_slice(&buffer[0..bytes_read.try_into()?])?;
                 bytes_read
             } else {
-                todo!()
+                return Ok(0);
             }
         } else {
             // Convert all of the unsafe guest slices to safe ones--this uses
