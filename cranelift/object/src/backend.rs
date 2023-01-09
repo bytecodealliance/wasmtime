@@ -703,7 +703,7 @@ impl ObjectModule {
                 object::BinaryFormat::MachO => (
                     RelocationKind::MachO {
                         value: object::macho::ARM64_RELOC_GOT_LOAD_PAGEOFF12,
-                        relative: true,
+                        relative: false,
                     },
                     RelocationEncoding::Generic,
                     12,
