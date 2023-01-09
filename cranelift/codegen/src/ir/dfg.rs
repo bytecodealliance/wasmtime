@@ -679,6 +679,14 @@ impl DataFlowGraph {
         }
     }
 
+    /// Count the number of values used by this instruction.
+    pub fn count_values(&self, inst: Inst) -> usize {
+        self.inst_args(inst).len()
+            + self.insts[inst]
+                .branch_destination()
+                .map_or(0, |dest| dest.args_slice(&self.value_lists).len())
+    }
+
     /// Visit all values in an instruction. If an instruction includes references to blocks with
     /// their arguments, this function will traverse those values as well; inst_args does not
     /// include block arguments in the slice it returns.

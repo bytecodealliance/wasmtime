@@ -476,7 +476,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         let uses = |value| {
             trace!(" -> pushing args for {} onto stack", value);
             if let ValueDef::Result(src_inst, _) = f.dfg.value_def(value) {
-                Some(f.dfg.inst_args(src_inst).iter().copied())
+                Some(f.dfg.inst_values(src_inst))
             } else {
                 None
             }
@@ -496,7 +496,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
             // Iterate over all args of all instructions, noting an
             // additional use on each operand.
-            for &arg in f.dfg.inst_args(inst) {
+            for &arg in f.dfg.inst_values(inst) {
                 let arg = f.dfg.resolve_aliases(arg);
                 let old = value_ir_uses[arg];
                 if force_multiple {
@@ -1146,7 +1146,8 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         self.f.rel_srclocs()[ir_inst]
     }
 
-    /// Get the number of inputs to the given IR instruction.
+    /// Get the number of inputs to the given IR instruction. This is a count only of the arguments
+    /// to the instruction: block arguments will not be included in this count.
     pub fn num_inputs(&self, ir_inst: Inst) -> usize {
         self.f.dfg.inst_args(ir_inst).len()
     }
