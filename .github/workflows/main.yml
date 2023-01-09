@@ -135,6 +135,8 @@ jobs:
   checks:
     name: Check
     runs-on: ubuntu-latest
+    env:
+      CARGO_NDK_VERSION: 2.12.2
     steps:
     - uses: actions/checkout@v3
       with:
@@ -176,6 +178,18 @@ jobs:
     # TODO: We aren't building with default features since the `ittapi` crate fails to compile on freebsd.
     - run: rustup target add x86_64-unknown-freebsd
     - run: cargo check -p wasmtime --no-default-features --features cranelift,wat,async,cache --target x86_64-unknown-freebsd
+
+    # Check whether `wasmtime` cross-compiles to aarch64-linux-android
+    - run: rustup target add aarch64-linux-android
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v2
+    - uses: actions/cache@v3
+      with:
+        path: ${{ runner.tool_cache }}/cargo-ndk
+        key: cargo-ndk-bin-${{ env.CARGO_NDK_VERSION }}
+    - run: echo "${{ runner.tool_cache }}/cargo-ndk/bin" >> $GITHUB_PATH
+    - run: cargo install --root ${{ runner.tool_cache }}/cargo-ndk --version ${{ env.CARGO_NDK_VERSION }} cargo-ndk
+    - run: cargo ndk -t arm64-v8a check -p wasmtime
 
   # Check whether `wasmtime` cross-compiles to aarch64-pc-windows-msvc
   # We don't build nor test it because it lacks trap handling.
