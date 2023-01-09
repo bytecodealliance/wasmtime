@@ -139,21 +139,21 @@ fn multi_memory() -> Result<()> {
         42,
         r#"
 (module
-  (memory $m1 1)
-  (memory $m2 1)
-  (func (export "wizer.initialize")
-    i32.const 0
-    i32.const 41
-    i32.store $m1 offset=1337
-    i32.const 0
-    i32.const 1
-    i32.store $m2 offset=1)
-  (func (export "run") (result i32)
-    i32.const 0
-    i32.load $m1 offset=1337
-    i32.const 0
-    i32.load $m2 offset=1
-    i32.add))
+ (memory $m1 1)
+ (memory $m2 1)
+ (func (export "wizer.initialize")
+       i32.const 0
+       i32.const 41
+       i32.store $m1 offset=1337
+       i32.const 0
+       i32.const 1
+       i32.store $m2 offset=1337)
+ (func (export "run") (result i32)
+       i32.const 0
+       i32.load $m1 offset=1337
+       i32.const 0
+       i32.load $m2 offset=1337
+       i32.add))
 "#,
     )
 }
