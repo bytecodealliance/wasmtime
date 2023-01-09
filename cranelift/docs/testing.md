@@ -60,9 +60,9 @@ The `set` lines apply settings cumulatively:
     test legalizer
     set opt_level=best
     set is_pic=1
-    isa riscv64
+    target riscv64
     set is_pic=0
-    isa riscv32 supports_m=false
+    target riscv32 supports_m=false
 
     function %foo() {}
 ```
@@ -116,13 +116,13 @@ Example:
 
 ```
     function %r1() -> i32, f32 {
-    ebb1:
+    block1:
         v10 = iconst.i32 3
         v20 = f32const 0.0
         return v10, v20
     }
     ; sameln: function %r1() -> i32, f32 {
-    ; nextln: ebb0:
+    ; nextln: block0:
     ; nextln:     v10 = iconst.i32 3
     ; nextln:     v20 = f32const 0.0
     ; nextln:     return v10, v20
@@ -142,8 +142,8 @@ reported location of the error is verified:
     test verifier
 
     function %test(i32) {
-        ebb0(v0: i32):
-            jump ebb1       ; error: terminator
+        block0(v0: i32):
+            jump block1       ; error: terminator
             return
     }
 ```
@@ -169,17 +169,17 @@ command:
     function %nonsense(i32, i32) -> f32 {
     ; check: digraph %nonsense {
     ; regex: I=\binst\d+\b
-    ; check: label="{ebb0 | <$(BRZ=$I)>brz ebb2 | <$(JUMP=$I)>jump ebb1}"]
+    ; check: label="{block0 | <$(BRZ=$I)>brz block2 | <$(JUMP=$I)>jump block1}"]
 
-    ebb0(v0: i32, v1: i32):
-        brz v1, ebb2            ; unordered: ebb0:$BRZ -> ebb2
+    block0(v0: i32, v1: i32):
+        brz v1, block2            ; unordered: block0:$BRZ -> block2
         v2 = iconst.i32 0
-        jump ebb1(v2)           ; unordered: ebb0:$JUMP -> ebb1
+        jump block1(v2)           ; unordered: block0:$JUMP -> block1
 
-    ebb1(v5: i32):
+    block1(v5: i32):
         return v0
 
-    ebb2:
+    block2:
         v100 = f32const 0.0
         return v100
     }
@@ -194,14 +194,14 @@ Compute the dominator tree of each function and validate it against the
     test domtree
 
     function %test(i32) {
-        ebb0(v0: i32):
-            jump ebb1     ; dominates: ebb1
-        ebb1:
-            brz v0, ebb3  ; dominates: ebb3
-            jump ebb2     ; dominates: ebb2
-        ebb2:
-            jump ebb3
-        ebb3:
+        block0(v0: i32):
+            jump block1     ; dominates: block1
+        block1:
+            brz v0, block3  ; dominates: block3
+            jump block2     ; dominates: block2
+        block2:
+            jump block3
+        block3:
             return
     }
 ```
@@ -233,36 +233,6 @@ assigning registers and stack slots to all values.
 
 The resulting function is then run through filecheck.
 
-### `test binemit`
-
-Test the emission of binary machine code.
-
-The functions must contains instructions that are annotated with both encodings
-and value locations (registers or stack slots). For instructions that are
-annotated with a `bin:` directive, the emitted hexadecimal machine code for
-that instruction is compared to the directive:
-
-```
-    test binemit
-    isa riscv
-
-    function %int32() {
-    ebb0:
-        [-,%x5]             v0 = iconst.i32 1
-        [-,%x6]             v1 = iconst.i32 2
-        [R#0c,%x7]          v10 = iadd v0, v1       ; bin: 006283b3
-        [R#200c,%x8]        v11 = isub v0, v1       ; bin: 40628433
-        return
-    }
-```
-
-If any instructions are unencoded (indicated with a `[-]` encoding field), they
-will be encoded using the same mechanism as the legalizer uses. However,
-illegal instructions for the ISA won't be expanded into other instruction
-sequences. Instead the test will fail.
-
-Value locations must be present if they are required to compute the binary
-bits. Missing value locations will cause the test to crash.
 
 ### `test simple-gvn`
 
@@ -321,9 +291,9 @@ This test command allows several directives:
  - to check the result of a function, add a `run` directive and call the
  preceding function with a comparison (`==` or `!=`) (see `%bar` below)
  - for backwards compatibility, to check the result of a function with a
- `() -> b*` signature, only the `run` directive is required, with no
- invocation or comparison (see `%baz` below);  a `true` value is
- interpreted as a successful test execution, whereas a `false` value is
+ `() -> i*` signature, only the `run` directive is required, with no
+ invocation or comparison (see `%baz` below);  a non zero value is
+ interpreted as a successful test execution, whereas a zero value is
  interpreted as a failed test.
 
 Currently a `target` is required but is only used to indicate whether the host
@@ -353,24 +323,10 @@ Example:
     ; run: %bar(1) == 2
 
     ; legacy method of checking the results of a function
-    function %baz() -> b1 {
+    function %baz() -> i8 {
     block0:
-        v0 = bconst.b1 true
+        v0 = iconst.i8 1
         return v0
     }
     ; run
 ```
-
-#### Environment directives
-
-Some tests need additional resources to be provided by the filetest infrastructure.
-
-When any of the following directives is present the first argument of the function is *required* to be a `i64 vmctx`.
-The filetest infrastructure will then pass a pointer to the environment struct via this argument.
-
-The environment struct is essentially a list of pointers with info about the resources requested by the directives. These
-pointers are always 8 bytes, and laid out sequentially in memory. Even for 32 bit machines, where we only fill the first
-4 bytes of the pointer slot.
-
-Currently, we only support requesting heaps, however this is a generic mechanism that should
-be able to introduce any sort of environment support that we may need later. (e.g. tables, global values, external functions)
