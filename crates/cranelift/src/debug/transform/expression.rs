@@ -686,7 +686,6 @@ impl<'a, 'b> ValueLabelRangesBuilder<'a, 'b> {
             if range_start == range_end {
                 continue;
             }
-            assert!(range_start < range_end);
 
             // Find acceptable scope of ranges to intersect with.
             let i = match ranges.binary_search_by(|s| s.start.cmp(&range_start)) {
