@@ -26,7 +26,10 @@ fn main() {
     let wasi_adapter = fs::read(&wasi_adapter).unwrap();
 
     let mut cmd = Command::new("cargo");
-    cmd.arg("build")
+    // TODO: Remove +nightly once lambda-fairy/rust-errno#66 is released and
+    // rust-lang/rust#105395 reaches stable.
+    cmd.arg("+nightly")
+        .arg("build")
         .current_dir("..")
         .arg("--target=wasm32-wasi")
         .env("CARGO_TARGET_DIR", &out_dir)

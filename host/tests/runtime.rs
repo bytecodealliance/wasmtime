@@ -199,6 +199,25 @@ async fn run_stdin(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
+async fn run_poll_stdin(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+    store
+        .data_mut()
+        .set_stdin(Box::new(ReadPipe::new(Cursor::new(
+            "So rested he by the Tumtum tree",
+        ))));
+
+    wasi.command(
+        &mut store,
+        0 as host::WasiStream,
+        1 as host::WasiStream,
+        &[],
+        &[],
+        &[],
+    )
+    .await?
+    .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
+}
+
 async fn run_env(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     wasi.command(
         &mut store,

@@ -148,7 +148,6 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
 
     Ok(())
 }
-
 pub struct SyncSched {}
 impl SyncSched {
     pub fn new() -> Self {
