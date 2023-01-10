@@ -6,8 +6,7 @@ use super::domtree::DomTreeWithChildren;
 use super::Stats;
 use crate::dominator_tree::DominatorTree;
 use crate::fx::FxHashSet;
-use crate::ir::{Block, Function, Inst, Value};
-use crate::ir::{DataFlowGraph, ValueDef};
+use crate::ir::{Block, Function, Inst, Value, ValueDef};
 use crate::loop_analysis::{Loop, LoopAnalysis, LoopLevel};
 use crate::scoped_hash_map::ScopedHashMap;
 use crate::trace;
@@ -557,11 +556,9 @@ impl<'a> Elaborator<'a> {
                     self.func.layout.insert_inst(inst, before);
 
                     // Update the inst's arguments.
-                    let mut args = arg_values.iter();
                     self.func
                         .dfg
-                        .inst_values_mut(inst)
-                        .map(|_, _| args.next().unwrap().value);
+                        .overwrite_inst_values(inst, arg_values.into_iter().map(|ev| ev.value));
 
                     // Now that we've consumed the arg values, pop
                     // them off the stack.
@@ -581,6 +578,10 @@ impl<'a> Elaborator<'a> {
     fn elaborate_block(&mut self, idom: Option<Block>, block: Block) {
         trace!("elaborate_block: block {}", block);
         self.start_block(idom, block);
+
+        // Temporary buffer for elaborated values. This could potentially
+        // be shared across the entire pass by moving it onto self.
+        let mut elab_values = Vec::new();
 
         // Iterate over the side-effecting skeleton using the linked
         // list in Layout. We will insert instructions that are
@@ -606,17 +607,20 @@ impl<'a> Elaborator<'a> {
             let before = first_branch.unwrap_or(inst);
             trace!(" -> inserting before {}", before);
 
-            DataFlowGraph::inst_values_mut_with(self, |ctx| &mut ctx.func.dfg, inst).map(
-                |ctx, arg| {
-                    trace!(" -> arg {}", arg);
-                    // Elaborate the arg, placing any newly-inserted insts
-                    // before `before`. Get the updated value, which may
-                    // be different than the original.
-                    let arg = ctx.elaborate_eclass_use(arg, before);
-                    trace!("   -> rewrote arg to {:?}", arg);
-                    arg.value
-                },
-            );
+            elab_values.extend(self.func.dfg.inst_values(inst));
+            for arg in elab_values.iter_mut() {
+                trace!(" -> arg {}", *arg);
+                // Elaborate the arg, placing any newly-inserted insts
+                // before `before`. Get the updated value, which may
+                // be different than the original.
+                let new_arg = self.elaborate_eclass_use(*arg, before);
+                trace!("   -> rewrote arg to {:?}", new_arg);
+                *arg = new_arg.value
+            }
+            self.func
+                .dfg
+                .overwrite_inst_values(inst, elab_values.iter().copied());
+            elab_values.clear();
 
             // We need to put the results of this instruction in the
             // map now.

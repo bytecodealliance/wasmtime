@@ -496,7 +496,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
             // Iterate over all values used by all instructions, noting an
             // additional use on each operand. If an operand becomes Multiple,
-            for &arg in f.dfg.inst_values(inst) {
+            for arg in f.dfg.inst_values(inst) {
                 let arg = f.dfg.resolve_aliases(arg);
                 let old = value_ir_uses[arg];
                 if force_multiple {

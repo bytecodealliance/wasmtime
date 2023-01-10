@@ -500,11 +500,15 @@ fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, block: Block, 
 
             let prev_inst_data = &pos.func.dfg.insts[prev_inst];
 
-            if let Some(prev_dest) = prev_inst_data.branch_destination() {
+            let mut has_branch = false;
+            for prev_dest in prev_inst_data.branch_destination().into_iter() {
+                has_branch = true;
                 if prev_dest.block(&pos.func.dfg.value_lists) != next_block {
                     return;
                 }
-            } else {
+            }
+
+            if !has_branch {
                 return;
             }
 

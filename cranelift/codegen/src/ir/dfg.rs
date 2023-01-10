@@ -44,68 +44,6 @@ impl IndexMut<Inst> for Insts {
     }
 }
 
-/// A context for mutable operations on the values of an instruction.
-pub struct InstValuesMut<'a> {
-    ctx: &'a mut DataFlowGraph,
-    inst: Inst,
-}
-
-impl<'a> InstValuesMut<'a> {
-    /// Map a function over the values of the instruction.
-    pub fn map<F: FnMut(&mut DataFlowGraph, Value) -> Value>(&mut self, mut body: F) {
-        for i in 0..self.ctx.inst_args(self.inst).len() {
-            let arg = self.ctx.inst_args(self.inst)[i];
-            self.ctx.inst_args_mut(self.inst)[i] = body(self.ctx, arg);
-        }
-
-        if let Some(mut branch) = self.ctx.insts[self.inst].branch_destination() {
-            // We aren't changing the size of the args list, so we won't need to write the branch
-            // back to the instruction.
-            for i in 0..branch.args_slice(&self.ctx.value_lists).len() {
-                let arg = branch.args_slice(&self.ctx.value_lists)[i];
-                branch.args_slice_mut(&mut self.ctx.value_lists)[i] = body(self.ctx, arg);
-            }
-        }
-    }
-}
-
-/// A context for mutable operations on the values of an instruction, borrowing an outer context
-/// and using a projection function to fetch the DFG reference.
-pub struct InstValuesMutWith<'a, T, P> {
-    ctx: &'a mut T,
-    prj: P,
-    inst: Inst,
-}
-
-impl<'a, T, P> InstValuesMutWith<'a, T, P>
-where
-    P: Fn(&mut T) -> &mut DataFlowGraph,
-{
-    /// Fetch the DataFlowGraph from the context.
-    pub fn dfg(&mut self) -> &mut DataFlowGraph {
-        (self.prj)(self.ctx)
-    }
-
-    /// Map a function over the values of the instruction.
-    pub fn map<F: FnMut(&mut T, Value) -> Value>(&mut self, mut body: F) {
-        let inst = self.inst;
-
-        for i in 0..self.dfg().inst_args(inst).len() {
-            let arg = self.dfg().inst_args(inst)[i];
-            self.dfg().inst_args_mut(inst)[i] = body(self.ctx, arg);
-        }
-
-        if let Some(mut branch) = self.dfg().insts[inst].branch_destination() {
-            // We aren't changing the size of the args list, so we won't need to write the branch
-            // back to the instruction.
-            for i in 0..branch.args_slice(&self.dfg().value_lists).len() {
-                let arg = branch.args_slice(&self.dfg().value_lists)[i];
-                branch.args_slice_mut(&mut self.dfg().value_lists)[i] = body(self.ctx, arg);
-            }
-        }
-    }
-}
-
 /// A data flow graph defines all instructions and basic blocks in a function as well as
 /// the data flow dependencies between them. The DFG also tracks values which can be either
 /// instruction results or block parameters.
@@ -395,21 +333,14 @@ impl DataFlowGraph {
     /// For each argument of inst which is defined by an alias, replace the
     /// alias with the aliased value.
     pub fn resolve_aliases_in_arguments(&mut self, inst: Inst) {
-        for arg in self.insts[inst].arguments_mut(&mut self.value_lists) {
-            let resolved = resolve_aliases(&self.values, *arg);
-            if resolved != *arg {
-                *arg = resolved;
+        self.map_inst_values(inst, |dfg, arg| {
+            let resolved = resolve_aliases(&dfg.values, arg);
+            if resolved != arg {
+                resolved
+            } else {
+                arg
             }
-        }
-
-        if let Some(dest) = self.insts[inst].branch_destination_mut() {
-            for arg in dest.args_slice_mut(&mut self.value_lists) {
-                let resolved = resolve_aliases(&self.values, *arg);
-                if resolved != *arg {
-                    *arg = resolved;
-                }
-            }
-        }
+        });
     }
 
     /// Turn a value into an alias of another.
@@ -762,21 +693,42 @@ impl DataFlowGraph {
             .copied()
     }
 
-    /// Construct a visitor context for mutating the values of an instruction.
-    pub fn inst_values_mut<'a>(&mut self, inst: Inst) -> InstValuesMut<'_> {
-        InstValuesMut { ctx: self, inst }
+    /// Map a function over the values of the instruction.
+    pub fn map_inst_values<F>(&mut self, inst: Inst, mut body: F)
+    where
+        F: FnMut(&mut DataFlowGraph, Value) -> Value,
+    {
+        for i in 0..self.inst_args(inst).len() {
+            let arg = self.inst_args(inst)[i];
+            self.inst_args_mut(inst)[i] = body(self, arg);
+        }
+
+        for mut block in self.insts[inst].branch_destination().into_iter() {
+            // We aren't changing the size of the args list, so we won't need to write the branch
+            // back to the instruction.
+            for i in 0..block.args_slice(&self.value_lists).len() {
+                let arg = block.args_slice(&self.value_lists)[i];
+                block.args_slice_mut(&mut self.value_lists)[i] = body(self, arg);
+            }
+        }
     }
 
-    /// Construct a visitor context for mutating the values of an instruction.
-    pub fn inst_values_mut_with<T, P>(
-        ctx: &mut T,
-        prj: P,
-        inst: Inst,
-    ) -> InstValuesMutWith<'_, T, P>
+    /// Overwrite the instruction's value references with values from the iterator.
+    /// NOTE: the iterator provided is expected to yield at least as many values as the instruction
+    /// currently has.
+    pub fn overwrite_inst_values<I>(&mut self, inst: Inst, mut values: I)
     where
-        P: Fn(&mut T) -> &mut DataFlowGraph,
+        I: Iterator<Item = Value>,
     {
-        InstValuesMutWith { ctx, prj, inst }
+        for arg in self.inst_args_mut(inst) {
+            *arg = values.next().unwrap();
+        }
+
+        for mut block in self.insts[inst].branch_destination().into_iter() {
+            for arg in block.args_slice_mut(&mut self.value_lists) {
+                *arg = values.next().unwrap();
+            }
+        }
     }
 
     /// Get all value arguments on `inst` as a slice.
