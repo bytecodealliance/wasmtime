@@ -896,12 +896,7 @@ fn gen_format_constructor(format: &InstructionFormat, fmt: &mut Formatter) {
 ///
 /// The method will create and insert an instruction, then return the result values, or the
 /// instruction reference itself for instructions that don't have results.
-fn gen_inst_builder(
-    inst: &Instruction,
-    format: &InstructionFormat,
-    construct_blocks: bool,
-    fmt: &mut Formatter,
-) {
+fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Formatter) {
     // Construct method arguments.
     let mut args = vec![String::new()];
 
@@ -924,10 +919,10 @@ fn gen_inst_builder(
     let mut into_args = Vec::new();
     let mut block_args = Vec::new();
     for op in &inst.operands_in {
-        if construct_blocks && op.kind.is_block() {
-            args.push(format!("{}_block: {}", op.name, "ir::Block"));
+        if op.kind.is_block() {
+            args.push(format!("{}_label: {}", op.name, "ir::Block"));
             args_doc.push(format!(
-                "- {}_block: {}",
+                "- {}_label: {}",
                 op.name, "Destination basic block"
             ));
 
@@ -974,9 +969,8 @@ fn gen_inst_builder(
     };
 
     let proto = format!(
-        "{}{}{}({}) -> {}",
+        "{}{}({}) -> {}",
         inst.snake_name(),
-        if construct_blocks { "" } else { "_" },
         tmpl,
         args.join(", "),
         rtype
@@ -1012,7 +1006,7 @@ fn gen_inst_builder(
         for op in block_args {
             fmtln!(
                 fmt,
-                "let {} = self.data_flow_graph_mut().block_with_args({}_block, {}_args);",
+                "let {} = self.data_flow_graph_mut().block_with_args({}_label, {}_args);",
                 op.name,
                 op.name,
                 op.name
@@ -1535,15 +1529,7 @@ fn gen_builder(
     fmt.line("pub trait InstBuilder<'f>: InstBuilderBase<'f> {");
     fmt.indent(|fmt| {
         for inst in instructions.iter() {
-            // if any operands are block references with arguments, we generate a second version of
-            // the builder with an `_` suffix that takes those arguments directly.
-            if inst.operands_in.iter().any(|op| op.kind.is_block()) {
-                gen_inst_builder(inst, &*inst.format, /* construct_blocks */ false, fmt);
-            }
-
-            // by default, we accept a block and argument slice for a single BlockWithArgs operand
-            // in the builder function
-            gen_inst_builder(inst, &*inst.format, /* construct_blocks */ true, fmt);
+            gen_inst_builder(inst, &*inst.format, fmt);
 
             fmt.empty_line();
         }

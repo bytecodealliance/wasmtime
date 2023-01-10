@@ -3,7 +3,7 @@
 
 use cranelift_codegen::{
     cursor::{Cursor, FuncCursor},
-    ir::{self, dfg::ValueDef, InstBuilder},
+    ir::{self, dfg::ValueDef, instructions::Opcode, types, InstBuilder},
 };
 // use rustc_apfloat::{
 //     ieee::{Double, Single},
@@ -231,7 +231,10 @@ fn fold_branch(pos: &mut FuncCursor, inst: ir::Inst, opcode: ir::Opcode, cond: i
     };
 
     if (branch_if_zero && !truthiness) || (!branch_if_zero && truthiness) {
-        pos.func.dfg.replace(inst).jump_(block);
+        pos.func
+            .dfg
+            .replace(inst)
+            .Jump(Opcode::Jump, types::INVALID, block);
         // remove the rest of the block to avoid verifier errors
         while let Some(next_inst) = pos.func.layout.next_inst(inst) {
             pos.func.layout.remove_inst(next_inst);

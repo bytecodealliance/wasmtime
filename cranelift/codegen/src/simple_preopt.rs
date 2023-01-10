@@ -11,7 +11,7 @@ use crate::flowgraph::ControlFlowGraph;
 use crate::ir::{
     condcodes::{CondCode, IntCC},
     instructions::Opcode,
-    types::{I128, I32, I64},
+    types::{I128, I32, I64, INVALID},
     Block, DataFlowGraph, Function, Inst, InstBuilder, InstructionData, Type, Value,
 };
 use crate::isa::TargetIsa;
@@ -531,12 +531,24 @@ fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, block: Block, 
 
     match kind {
         BranchOrderKind::BrnzToBrz(cond_arg) => {
-            pos.func.dfg.replace(term_inst).jump_(cond_dest);
-            pos.func.dfg.replace(cond_inst).brz_(cond_arg, term_dest);
+            pos.func
+                .dfg
+                .replace(term_inst)
+                .Jump(Opcode::Jump, INVALID, cond_dest);
+            pos.func
+                .dfg
+                .replace(cond_inst)
+                .Branch(Opcode::Brz, INVALID, term_dest, cond_arg);
         }
         BranchOrderKind::BrzToBrnz(cond_arg) => {
-            pos.func.dfg.replace(term_inst).jump_(cond_dest);
-            pos.func.dfg.replace(cond_inst).brnz_(cond_arg, term_dest);
+            pos.func
+                .dfg
+                .replace(term_inst)
+                .Jump(Opcode::Jump, INVALID, cond_dest);
+            pos.func
+                .dfg
+                .replace(cond_inst)
+                .Branch(Opcode::Brnz, INVALID, term_dest, cond_arg);
         }
     }
 
