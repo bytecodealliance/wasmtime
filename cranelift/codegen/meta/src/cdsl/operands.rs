@@ -154,7 +154,7 @@ impl OperandKind {
     }
 
     pub(crate) fn is_block(&self) -> bool {
-        self.rust_type == "ir::BlockWithArgs"
+        self.rust_type == "ir::BlockCall"
     }
 }
 

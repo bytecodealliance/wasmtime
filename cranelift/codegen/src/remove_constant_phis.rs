@@ -6,7 +6,7 @@ use crate::fx::FxHashSet;
 use crate::ir;
 use crate::ir::instructions::BranchInfo;
 use crate::ir::Function;
-use crate::ir::{Block, BlockWithArgs, Inst, Value};
+use crate::ir::{Block, BlockCall, Inst, Value};
 use crate::timing;
 use arrayvec::ArrayVec;
 use bumpalo::Bump;
@@ -126,12 +126,7 @@ impl<'a> OutEdge<'a> {
     /// Returns `None` if this is an edge without any block arguments, which
     /// means we can ignore it for this analysis's purposes.
     #[inline]
-    fn new(
-        bump: &'a Bump,
-        dfg: &ir::DataFlowGraph,
-        inst: Inst,
-        block: BlockWithArgs,
-    ) -> Option<Self> {
+    fn new(bump: &'a Bump, dfg: &ir::DataFlowGraph, inst: Inst, block: BlockCall) -> Option<Self> {
         let inst_var_args = block.args_slice(&dfg.value_lists);
 
         // Skip edges without params.

@@ -7,8 +7,8 @@ use crate::value::{Value, ValueConversionKind, ValueError, ValueResult};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
-    types, AbiParam, Block, BlockWithArgs, ExternalName, FuncRef, Function, InstructionData,
-    Opcode, TrapCode, Type, Value as ValueRef,
+    types, AbiParam, Block, BlockCall, ExternalName, FuncRef, Function, InstructionData, Opcode,
+    TrapCode, Type, Value as ValueRef,
 };
 use log::trace;
 use smallvec::{smallvec, SmallVec};
@@ -235,7 +235,7 @@ where
     };
 
     // Retrieve an instruction's branch destination; expects the instruction to be a branch.
-    let branch = || -> BlockWithArgs { inst.branch_destination().unwrap() };
+    let branch = || -> BlockCall { inst.branch_destination().unwrap() };
 
     let continue_at = |block| {
         let block = branch();

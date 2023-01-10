@@ -17,7 +17,8 @@ fn define_control_flow(
     imm: &Immediates,
     entities: &EntityRefs,
 ) {
-    let block = &Operand::new("block", &entities.block).with_doc("Destination basic block");
+    let block =
+        &Operand::new("block_call", &entities.block_call).with_doc("Destination basic block");
     let label = &Operand::new("label", &entities.label).with_doc("Destination basic block");
 
     ig.push(

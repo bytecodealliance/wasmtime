@@ -11,11 +11,11 @@ fn new(format_field_name: &'static str, rust_type: &'static str, doc: &'static s
 }
 
 pub(crate) struct EntityRefs {
-    /// A reference to a basic block in the same function.
+    /// A reference to a basic block in the same function, with its arguments provided.
     /// This is primarily used in control flow instructions.
-    pub(crate) block: OperandKind,
+    pub(crate) block_call: OperandKind,
 
-    /// A reference to a basic block in the same function, without any arguments provided.
+    /// A reference to a basic block in the same function.
     /// This is primarily used in control flow instructions.
     pub(crate) label: OperandKind,
 
@@ -49,10 +49,10 @@ pub(crate) struct EntityRefs {
 impl EntityRefs {
     pub fn new() -> Self {
         Self {
-            block: new(
+            block_call: new(
                 "destination",
-                "ir::BlockWithArgs",
-                "a basic block in the same function.",
+                "ir::BlockCall",
+                "a basic block in the same function, with its arguments provided.",
             ),
 
             label: new(

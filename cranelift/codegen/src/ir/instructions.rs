@@ -47,14 +47,14 @@ pub type ValueListPool = entity::ListPool<Value>;
 /// be real Values.
 #[derive(Debug, Clone, Copy, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub struct BlockWithArgs {
+pub struct BlockCall {
     /// The underlying storage for the BlockWithArgs. The first element of the values EntityList is
     /// guaranteed to always be a Block encoded as a Value via BlockWithArgs::block_to_value.
     /// Consequently, the values entity list is never empty.
     values: entity::EntityList<Value>,
 }
 
-impl BlockWithArgs {
+impl BlockCall {
     // NOTE: the only uses of this function should be internal to BlockWithArgs. See the block
     // comment on BlockWithArgs for more context.
     fn value_to_block(val: Value) -> Block {
@@ -277,7 +277,7 @@ impl InstructionData {
     /// branch or jump.
     ///
     /// Multi-destination branches like `br_table` return `None`.
-    pub fn branch_destination(&self) -> Option<BlockWithArgs> {
+    pub fn branch_destination(&self) -> Option<BlockCall> {
         match *self {
             Self::Jump { destination, .. } | Self::Branch { destination, .. } => Some(destination),
             Self::BranchTable { .. } => None,
@@ -292,7 +292,7 @@ impl InstructionData {
     /// single destination branch or jump.
     ///
     /// Multi-destination branches like `br_table` return `None`.
-    pub fn branch_destination_mut(&mut self) -> Option<&mut BlockWithArgs> {
+    pub fn branch_destination_mut(&mut self) -> Option<&mut BlockCall> {
         match *self {
             Self::Jump {
                 ref mut destination,
@@ -446,7 +446,7 @@ pub enum BranchInfo {
     NotABranch,
 
     /// This is a branch or jump to a single destination block, possibly taking value arguments.
-    SingleDest(BlockWithArgs),
+    SingleDest(BlockCall),
 
     /// This is a jump table branch which can have many destination blocks and maybe one default block.
     Table(JumpTable, Option<Block>),

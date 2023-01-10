@@ -111,9 +111,12 @@ impl Formats {
                 .value()
                 .build(),
 
-            jump: Builder::new("Jump").imm(&entities.block).build(),
+            jump: Builder::new("Jump").imm(&entities.block_call).build(),
 
-            branch: Builder::new("Branch").value().imm(&entities.block).build(),
+            branch: Builder::new("Branch")
+                .value()
+                .imm(&entities.block_call)
+                .build(),
 
             branch_table: Builder::new("BranchTable")
                 .value()
