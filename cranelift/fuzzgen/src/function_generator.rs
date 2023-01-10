@@ -1334,10 +1334,8 @@ where
     ///
     /// `min_size`: Controls the amount of space that the address should have.
     ///
-    /// `max_offset`: Limits the offset from the stack slot.
-    ///
     /// `aligned`: When passed as true, the resulting address is guaranteed to be aligned
-    /// on an 8 byte boundry.
+    /// on an 8 byte boundary.
     ///
     /// Returns a valid address and the maximum possible offset that still respects `min_size`.
     fn generate_load_store_address(
