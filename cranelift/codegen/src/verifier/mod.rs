@@ -61,9 +61,9 @@ use crate::dbg::DisplayList;
 use crate::dominator_tree::DominatorTree;
 use crate::entity::SparseSet;
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
-use crate::ir;
 use crate::ir::entities::AnyEntity;
 use crate::ir::instructions::{BranchInfo, CallInfo, InstructionFormat, ResolvedConstraint};
+use crate::ir::{self, ArgumentExtension};
 use crate::ir::{
     types, ArgumentPurpose, Block, Constant, DynamicStackSlot, FuncRef, Function, GlobalValue,
     Inst, JumpTable, MemFlags, Opcode, SigRef, StackSlot, Type, Value, ValueDef, ValueList,
@@ -1648,45 +1648,57 @@ impl<'a> Verifier<'a> {
     }
 
     fn typecheck_function_signature(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
-        self.func
+        let params = self
+            .func
             .signature
             .params
             .iter()
             .enumerate()
-            .filter(|(_, &param)| param.value_type == types::INVALID)
-            .for_each(|(i, _)| {
+            .map(|p| (true, p));
+        let returns = self
+            .func
+            .signature
+            .returns
+            .iter()
+            .enumerate()
+            .map(|p| (false, p));
+
+        for (is_argument, (i, param)) in params.chain(returns) {
+            let is_return = !is_argument;
+            let item = if is_argument {
+                "Parameter"
+            } else {
+                "Return value"
+            };
+
+            if param.value_type == types::INVALID {
                 errors.report((
                     AnyEntity::Function,
-                    format!("Parameter at position {} has an invalid type", i),
+                    format!("{item} at position {i} has an invalid type"),
                 ));
-            });
+            }
 
-        self.func
-            .signature
-            .returns
-            .iter()
-            .enumerate()
-            .filter(|(_, &ret)| ret.value_type == types::INVALID)
-            .for_each(|(i, _)| {
-                errors.report((
-                    AnyEntity::Function,
-                    format!("Return value at position {} has an invalid type", i),
-                ))
-            });
-
-        self.func
-            .signature
-            .returns
-            .iter()
-            .enumerate()
-            .for_each(|(i, ret)| {
-                if let ArgumentPurpose::StructArgument(_) = ret.purpose {
+            if let ArgumentPurpose::StructArgument(_) = param.purpose {
+                if is_return {
                     errors.report((
                         AnyEntity::Function,
-                        format!("Return value at position {} can't be an struct argument", i),
+                        format!("{item} at position {i} can't be an struct argument"),
                     ))
                 }
-            });
+            }
+
+            let ty_allows_extension = param.value_type.is_int();
+            let has_extension = param.extension != ArgumentExtension::None;
+            if !ty_allows_extension && has_extension {
+                errors.report((
+                    AnyEntity::Function,
+                    format!(
+                        "{} at position {} has invalid extension {:?}",
+                        item, i, param.extension
+                    ),
+                ));
+            }
+        }
 
         if errors.has_error() {
             Err(())
