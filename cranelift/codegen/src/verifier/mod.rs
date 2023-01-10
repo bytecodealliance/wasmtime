@@ -563,7 +563,7 @@ impl<'a> Verifier<'a> {
     ) -> VerifierStepResult<()> {
         use crate::ir::instructions::InstructionData::*;
 
-        if let ControlFlow::Break(e) = self.func.dfg.try_visit_values(inst, |arg| {
+        if let ControlFlow::Break(e) = self.func.dfg.inst_values(inst).try_for_each(|arg| {
             if let Err(e) = self.verify_inst_arg(inst, arg, errors) {
                 return ControlFlow::Break(e);
             }

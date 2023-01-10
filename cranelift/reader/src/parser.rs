@@ -1900,17 +1900,19 @@ impl<'a> Parser<'a> {
         // all references refer to a definition.
         for block in &ctx.function.layout {
             for inst in ctx.function.layout.block_insts(block) {
-                if let ControlFlow::Break(err) = ctx.function.dfg.try_visit_values(inst, |value| {
-                    if !ctx.map.contains_value(value) {
-                        return ControlFlow::Break(err!(
-                            ctx.map.location(AnyEntity::Inst(inst)).unwrap(),
-                            "undefined operand value {}",
-                            value
-                        ));
-                    }
+                if let ControlFlow::Break(err) =
+                    ctx.function.dfg.inst_values(inst).try_for_each(|value| {
+                        if !ctx.map.contains_value(value) {
+                            return ControlFlow::Break(err!(
+                                ctx.map.location(AnyEntity::Inst(inst)).unwrap(),
+                                "undefined operand value {}",
+                                value
+                            ));
+                        }
 
-                    ControlFlow::Continue(())
-                }) {
+                        ControlFlow::Continue(())
+                    })
+                {
                     return err;
                 }
             }

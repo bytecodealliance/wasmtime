@@ -479,7 +479,7 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
     }?;
 
     let mut sep = "  ; ";
-    if let ControlFlow::Break(e) = dfg.try_visit_values(inst, |arg| {
+    if let ControlFlow::Break(e) = dfg.inst_values(inst).try_for_each(|arg| {
         if let ValueDef::Result(src, _) = dfg.value_def(arg) {
             let imm = match dfg.insts[src] {
                 UnaryImm { imm, .. } => imm.to_string(),

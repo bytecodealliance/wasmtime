@@ -408,7 +408,7 @@ impl<'a> EgraphPass<'a> {
                 // Rewrite args of *all* instructions using the
                 // value-to-opt-value map.
                 cursor.func.dfg.resolve_aliases_in_arguments(inst);
-                cursor.func.dfg.map_values(inst, |_, arg| {
+                cursor.func.dfg.inst_values_mut(inst).map(|_, arg| {
                     let new_value = value_to_opt_value[arg];
                     trace!("rewriting arg {} of inst {} to {}", arg, inst, new_value);
                     debug_assert_ne!(new_value, Value::reserved_value());
@@ -499,7 +499,8 @@ impl<'a> EgraphPass<'a> {
             for inst in self.func.layout.block_insts(block) {
                 self.func
                     .dfg
-                    .visit_values(inst, |arg| match self.func.dfg.value_def(arg) {
+                    .inst_values(inst)
+                    .for_each(|arg| match self.func.dfg.value_def(arg) {
                         ValueDef::Result(i, _) => {
                             debug_assert!(self.func.layout.inst_block(i).is_some());
                         }

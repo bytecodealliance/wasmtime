@@ -161,7 +161,7 @@ fn is_loop_invariant(inst: Inst, dfg: &DataFlowGraph, loop_values: &FxHashSet<Va
         return false;
     }
 
-    dfg.fold_values(inst, true, |acc, arg| {
+    dfg.inst_values(inst).fold(true, |acc, arg| {
         if !acc {
             return acc;
         }

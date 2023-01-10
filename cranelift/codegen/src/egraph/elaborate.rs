@@ -227,8 +227,7 @@ impl<'a> Elaborator<'a> {
                     // N.B.: at this point we know that the opcode is
                     // pure, so `pure_op_cost`'s precondition is
                     // satisfied.
-                    let cost = self.func.dfg.fold_values(
-                        inst,
+                    let cost = self.func.dfg.inst_values(inst).fold(
                         pure_op_cost(inst_data.opcode()).at_level(loop_level.level()),
                         |cost, value| cost + best[value].0,
                     );
@@ -362,7 +361,7 @@ impl<'a> Elaborator<'a> {
                     // and later elab this inst.
                     let start = self.elab_stack.len();
 
-                    self.func.dfg.visit_values(inst, |arg| {
+                    self.func.dfg.inst_values(inst).for_each(|arg| {
                         debug_assert_ne!(arg, Value::reserved_value());
                         self.elab_stack
                             .push(ElabStackEntry::Start { value: arg, before });
@@ -561,7 +560,8 @@ impl<'a> Elaborator<'a> {
                     let mut args = arg_values.iter();
                     self.func
                         .dfg
-                        .map_values(inst, |_, _| args.next().unwrap().value);
+                        .inst_values_mut(inst)
+                        .map(|_, _| args.next().unwrap().value);
 
                     // Now that we've consumed the arg values, pop
                     // them off the stack.
@@ -606,10 +606,7 @@ impl<'a> Elaborator<'a> {
             let before = first_branch.unwrap_or(inst);
             trace!(" -> inserting before {}", before);
 
-            DataFlowGraph::map_values_with(
-                self,
-                |ctx| &mut ctx.func.dfg,
-                inst,
+            DataFlowGraph::inst_values_mut_with(self, |ctx| &mut ctx.func.dfg, inst).map(
                 |ctx, arg| {
                     trace!(" -> arg {}", arg);
                     // Elaborate the arg, placing any newly-inserted insts

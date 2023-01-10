@@ -44,6 +44,164 @@ impl IndexMut<Inst> for Insts {
     }
 }
 
+/// A context for read-only operations on the values of an instruction.
+pub struct InstValues<'dfg> {
+    dfg: &'dfg DataFlowGraph,
+    inst: Inst,
+}
+
+impl<'dfg> InstValues<'dfg> {
+    /// Visit all values in an instruction. If an instruction includes references to blocks with
+    /// their arguments, this function will traverse those values as well; inst_args does not
+    /// include block arguments in the slice it returns.
+    pub fn for_each<F: FnMut(Value)>(&self, mut body: F) {
+        self.dfg
+            .inst_args(self.inst)
+            .iter()
+            .copied()
+            .for_each(&mut body);
+
+        if let Some(branch) = self.dfg.insts[self.inst].branch_destination() {
+            branch
+                .args_slice(&self.dfg.value_lists)
+                .iter()
+                .cloned()
+                .for_each(body);
+        }
+    }
+
+    /// Visit vall values in the instruction, allowing early exit via the [ControlFlow] return
+    /// type from the body function.
+    pub fn try_for_each<F, B>(&self, mut body: F) -> ControlFlow<B>
+    where
+        F: FnMut(Value) -> ControlFlow<B>,
+    {
+        self.dfg
+            .inst_args(self.inst)
+            .iter()
+            .copied()
+            .try_for_each(&mut body)?;
+
+        if let Some(branch) = self.dfg.insts[self.inst].branch_destination() {
+            branch
+                .args_slice(&self.dfg.value_lists)
+                .iter()
+                .copied()
+                .try_for_each(body)?;
+        }
+
+        ControlFlow::Continue(())
+    }
+
+    /// Fold the values of the instruction.
+    pub fn fold<T, F>(&self, mut acc: T, mut body: F) -> T
+    where
+        F: FnMut(T, Value) -> T,
+    {
+        acc = self
+            .dfg
+            .inst_args(self.inst)
+            .iter()
+            .copied()
+            .fold(acc, &mut body);
+
+        if let Some(branch) = self.dfg.insts[self.inst].branch_destination() {
+            acc = branch
+                .args_slice(&self.dfg.value_lists)
+                .iter()
+                .copied()
+                .fold(acc, body);
+        }
+
+        acc
+    }
+
+    /// Fold the values of the instruction.
+    pub fn try_fold<B, C, F>(&self, mut acc: C, mut body: F) -> ControlFlow<B, C>
+    where
+        F: FnMut(C, Value) -> ControlFlow<B, C>,
+    {
+        acc = self
+            .dfg
+            .inst_args(self.inst)
+            .iter()
+            .copied()
+            .try_fold(acc, &mut body)?;
+
+        if let Some(branch) = self.dfg.insts[self.inst].branch_destination() {
+            acc = branch
+                .args_slice(&self.dfg.value_lists)
+                .iter()
+                .copied()
+                .try_fold(acc, body)?;
+        }
+
+        ControlFlow::Continue(acc)
+    }
+}
+
+/// A context for mutable operations on the values of an instruction.
+pub struct InstValuesMut<'a> {
+    ctx: &'a mut DataFlowGraph,
+    inst: Inst,
+}
+
+impl<'a> InstValuesMut<'a> {
+    /// Map a function over the values of the instruction.
+    pub fn map<F: FnMut(&mut DataFlowGraph, Value) -> Value>(&mut self, mut body: F) {
+        for i in 0..self.ctx.inst_args(self.inst).len() {
+            let arg = self.ctx.inst_args(self.inst)[i];
+            self.ctx.inst_args_mut(self.inst)[i] = body(self.ctx, arg);
+        }
+
+        if let Some(mut branch) = self.ctx.insts[self.inst].branch_destination() {
+            // We aren't changing the size of the args list, so we won't need to write the branch
+            // back to the instruction.
+            for i in 0..branch.args_slice(&self.ctx.value_lists).len() {
+                let arg = branch.args_slice(&self.ctx.value_lists)[i];
+                branch.args_slice_mut(&mut self.ctx.value_lists)[i] = body(self.ctx, arg);
+            }
+        }
+    }
+}
+
+/// A context for mutable operations on the values of an instruction, borrowing an outer context
+/// and using a projection function to fetch the DFG reference.
+pub struct InstValuesMutWith<'a, T, P> {
+    ctx: &'a mut T,
+    prj: P,
+    inst: Inst,
+}
+
+impl<'a, T, P> InstValuesMutWith<'a, T, P>
+where
+    P: Fn(&mut T) -> &mut DataFlowGraph,
+{
+    /// Fetch the DataFlowGraph from the context.
+    pub fn dfg(&mut self) -> &mut DataFlowGraph {
+        (self.prj)(self.ctx)
+    }
+
+    /// Map a function over the values of the instruction.
+    pub fn map<F: FnMut(&mut T, Value) -> Value>(&mut self, mut body: F) {
+        let inst = self.inst;
+
+        for i in 0..self.dfg().inst_args(inst).len() {
+            let arg = self.dfg().inst_args(inst)[i];
+            self.dfg().inst_args_mut(inst)[i] = body(self.ctx, arg);
+        }
+
+        if let Some(mut branch) = self.dfg().insts[inst].branch_destination() {
+            // We aren't changing the size of the args list, so we won't need to write the branch
+            // back to the instruction.
+            for i in 0..branch.args_slice(&self.dfg().value_lists).len() {
+                let arg = branch.args_slice(&self.dfg().value_lists)[i];
+                branch.args_slice_mut(&mut self.dfg().value_lists)[i] = body(self.ctx, arg);
+            }
+        }
+    }
+}
+
 /// A data flow graph defines all instructions and basic blocks in a function as well as
 /// the data flow dependencies between them. The DFG also tracks values which can be either
 /// instruction results or block parameters.
@@ -687,115 +845,26 @@ impl DataFlowGraph {
                 .map_or(0, |dest| dest.args_slice(&self.value_lists).len())
     }
 
-    /// Visit all values in an instruction. If an instruction includes references to blocks with
-    /// their arguments, this function will traverse those values as well; inst_args does not
-    /// include block arguments in the slice it returns.
-    pub fn visit_values<F>(&self, inst: Inst, mut body: F)
-    where
-        F: FnMut(Value),
-    {
-        self.inst_args(inst).iter().copied().for_each(&mut body);
-
-        if let Some(branch) = self.insts[inst].branch_destination() {
-            branch
-                .args_slice(&self.value_lists)
-                .iter()
-                .cloned()
-                .for_each(body);
-        }
+    /// Construct a read-only visitor context for the values of this instruction.
+    pub fn inst_values(&self, inst: Inst) -> InstValues<'_> {
+        InstValues { dfg: self, inst }
     }
 
-    /// Visit vall values in an instruction, allowing early exit via the [ControlFlow] return
-    /// type from the body function.
-    pub fn try_visit_values<F, B>(&self, inst: Inst, mut body: F) -> ControlFlow<B>
-    where
-        F: FnMut(Value) -> ControlFlow<B>,
-    {
-        self.inst_args(inst)
-            .iter()
-            .copied()
-            .try_for_each(&mut body)?;
-
-        if let Some(branch) = self.insts[inst].branch_destination() {
-            branch
-                .args_slice(&self.value_lists)
-                .iter()
-                .copied()
-                .try_for_each(body)?;
-        }
-
-        ControlFlow::Continue(())
+    /// Construct a visitor context for mutating the values of an instruction.
+    pub fn inst_values_mut<'a>(&mut self, inst: Inst) -> InstValuesMut<'_> {
+        InstValuesMut { ctx: self, inst }
     }
 
-    /// Fold the values of an instruction.
-    pub fn fold_values<T, F>(&self, inst: Inst, mut acc: T, mut body: F) -> T
+    /// Construct a visitor context for mutating the values of an instruction.
+    pub fn inst_values_mut_with<T, P>(
+        ctx: &mut T,
+        prj: P,
+        inst: Inst,
+    ) -> InstValuesMutWith<'_, T, P>
     where
-        F: FnMut(T, Value) -> T,
+        P: Fn(&mut T) -> &mut DataFlowGraph,
     {
-        acc = self.inst_args(inst).iter().copied().fold(acc, &mut body);
-
-        if let Some(branch) = self.insts[inst].branch_destination() {
-            acc = branch
-                .args_slice(&self.value_lists)
-                .iter()
-                .copied()
-                .fold(acc, body);
-        }
-
-        acc
-    }
-
-    /// Fold the values of an instruction.
-    pub fn try_fold_values<B, C, F>(&self, inst: Inst, mut acc: C, mut body: F) -> ControlFlow<B, C>
-    where
-        F: FnMut(C, Value) -> ControlFlow<B, C>,
-    {
-        acc = self
-            .inst_args(inst)
-            .iter()
-            .copied()
-            .try_fold(acc, &mut body)?;
-
-        if let Some(branch) = self.insts[inst].branch_destination() {
-            acc = branch
-                .args_slice(&self.value_lists)
-                .iter()
-                .copied()
-                .try_fold(acc, body)?;
-        }
-
-        ControlFlow::Continue(acc)
-    }
-
-    /// Map a function over all values in an instruction.
-    pub fn map_values<F>(&mut self, inst: Inst, body: F)
-    where
-        F: FnMut(&mut Self, Value) -> Value,
-    {
-        Self::map_values_with(self, |dfg| dfg, inst, body)
-    }
-
-    /// Map a function over all values in an instruction. This version of map_values is useful for
-    /// the case where the DFG is held within another structure, that needs to be used mutably
-    /// while mapping over the values.
-    pub fn map_values_with<T, P, F>(ctx: &mut T, prj: P, inst: Inst, mut body: F)
-    where
-        F: FnMut(&mut T, Value) -> Value,
-        P: Fn(&mut T) -> &mut Self,
-    {
-        for i in 0..prj(ctx).inst_args(inst).len() {
-            let arg = prj(ctx).inst_args(inst)[i];
-            prj(ctx).inst_args_mut(inst)[i] = body(ctx, arg);
-        }
-
-        if let Some(mut branch) = prj(ctx).insts[inst].branch_destination() {
-            // We aren't changing the size of the args list, so we won't need to write the branch
-            // back to the instruction.
-            for i in 0..branch.args_slice(&prj(ctx).value_lists).len() {
-                let arg = branch.args_slice(&prj(ctx).value_lists)[i];
-                branch.args_slice_mut(&mut prj(ctx).value_lists)[i] = body(ctx, arg);
-            }
-        }
+        InstValuesMutWith { ctx, prj, inst }
     }
 
     /// Get all value arguments on `inst` as a slice.
