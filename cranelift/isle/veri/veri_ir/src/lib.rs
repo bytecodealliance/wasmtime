@@ -201,6 +201,9 @@ pub enum Expr {
     // Convert integer to bitvector with that value
     BVIntToBV(usize, Box<Expr>),
 
+    // Convert bitvector to integer with that value
+    BVToInt(Box<Expr>),
+
     // Zero extend, with static or dynamic width
     BVZeroExtTo(usize, Box<Expr>),
     BVZeroExtToVarWidth(Box<Expr>, Box<Expr>),

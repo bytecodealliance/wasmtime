@@ -118,6 +118,7 @@ pub Expr: Box<Expr> = {
         Box::new(Expr::Conditional(c, e1, e2, 0)),
 
     "(" "int2bv" <n:UNum> <v:Expr> ")" => Box::new(Expr::BVIntToBv(n, v, 0)),
+    "(" "bv2int" <v:Expr> ")" => Box::new(Expr::BVToInt(v, 0)),
     "(" "widthof" <v:Expr> ")" => Box::new(Expr::WidthOf(v, 0)),
 };
 

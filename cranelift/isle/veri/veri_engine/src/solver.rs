@@ -977,6 +977,12 @@ impl SolverCtx {
                     self.vir_expr_to_rsmt2_str(*x)
                 )
             }
+            Expr::BVToInt(x) => {
+                format!(
+                    "(bv2nat {})",
+                    self.vir_expr_to_rsmt2_str(*x)
+                )
+            }
             Expr::BVConvTo(y) => {
                 // For static convto, width constraints are handling during inference
                 self.vir_expr_to_rsmt2_str(*y)

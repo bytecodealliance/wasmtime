@@ -180,7 +180,7 @@
 
 ;; Get the bit width of a given type.
 ;;@ (spec (sig (args x) (ret))
-;;@     (assertions (= (x) (ret))))
+;;@     (assertions (= (ret) (int2bv 8 (x)))))
 (decl pure ty_bits (Type) u8)
 (extern constructor ty_bits ty_bits)
 

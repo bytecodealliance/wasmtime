@@ -760,6 +760,22 @@ fn add_annotation_constraints(
 
             (veri_ir::Expr::BVIntToBV(w, Box::new(ex)), t)
         }
+        annotation_ir::Expr::BVToInt(x, _) => {
+            let (ex, tx) = add_annotation_constraints(*x.clone(), tree, annotation_info);
+
+            let t = tree.next_type_var;
+            tree.next_type_var += 1;
+            dbg!(tx);
+            dbg!(t);
+
+            tree.bv_constraints
+                .insert(TypeExpr::Concrete(tx, annotation_ir::Type::BitVector));
+
+            tree.concrete_constraints
+                .insert(TypeExpr::Concrete(t, annotation_ir::Type::Int));
+
+            (veri_ir::Expr::BVToInt(Box::new(ex)), t)
+        }
         annotation_ir::Expr::Conditional(c, t, e, _) => {
             let (e1, t1) = add_annotation_constraints(*c, tree, annotation_info);
             let (e2, t2) = add_annotation_constraints(*t, tree, annotation_info);

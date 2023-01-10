@@ -14,14 +14,13 @@
       (to_bits u8))
 ))
 
-;; Helper for emitting `MInst.Extend` instructions.
- ;;@ (spec (sig (args a, b, c, d) (ret))
- ;;@     (assertions (if (b) {
- ;;@                     (= (ret) (sign_ext (d) (conv_to (c) (a))))
- ;;@                  } else { 
- ;;@                      (= (ret) (zero_ext (d) (conv_to (c) (a))))
- ;;@                  })
- ;;@     ))
+;;@ (spec (sig (args a, b, c, d) (ret))
+;;@     (assertions (if (b) {
+;;@                     (= (ret) (sign_ext (bv2int (d)) (conv_to (bv2int (c)) (a))))
+;;@                  } else { 
+;;@                      (= (ret) (zero_ext (bv2int (d)) (conv_to (bv2int (c)) (a))))
+;;@                  })
+;;@     ))
 (decl extend (Reg bool u8 u8) Reg)
 (rule (extend rn signed from_bits to_bits)
       (let ((dst WritableReg (temp_writable_reg $I64))

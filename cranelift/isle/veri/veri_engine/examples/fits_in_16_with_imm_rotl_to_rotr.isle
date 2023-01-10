@@ -16,13 +16,13 @@
 (decl zero_reg () Reg)
 (extern constructor zero_reg zero_reg)
 
- ;;@ (spec (sig (args a, b, c, d) (ret))
- ;;@     (assertions (if (b) {
- ;;@                     (= (ret) (sign_ext (d) (conv_to (c) (a))))
- ;;@                  } else { 
- ;;@                      (= (ret) (zero_ext (d) (conv_to (c) (a))))
- ;;@                  })
- ;;@     ))
+;;@ (spec (sig (args a, b, c, d) (ret))
+;;@     (assertions (if (b) {
+;;@                     (= (ret) (sign_ext (bv2int (d)) (conv_to (bv2int (c)) (a))))
+;;@                  } else { 
+;;@                      (= (ret) (zero_ext (bv2int (d)) (conv_to (bv2int (c)) (a))))
+;;@                  })
+;;@     ))
 (decl extend (Reg bool u8 u8) Reg)
 (extern constructor extend extend)
 
@@ -42,8 +42,8 @@
 (decl sub_imm (Type Reg Imm12) Reg)
 (extern constructor sub_imm sub_imm)
 
-;;@ (spec (sig (args x) (ret))
-;;@     (assertions (= (int2bv 12 (x)) (ret))))
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (ret) (zero_ext (12) (arg)))))
 (decl u8_into_imm12 (u8) Imm12)
 (extern constructor u8_into_imm12 u8_into_imm12)
 

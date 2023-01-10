@@ -204,6 +204,9 @@ pub enum Expr {
     // Convert integer to bitvector
     BVIntToBv(usize, Box<Expr>, u32),
 
+    // Convert bitvector to integer
+    BVToInt(Box<Expr>, u32),
+
     // Conversion to wider/narrower bits, without an explicit extend
     BVConvTo(Box<Width>, Box<Expr>, u32),
     // Allow the destination width to be symbolic.
@@ -259,6 +262,7 @@ impl Expr {
             | Expr::BVSignExtTo(_, _, t)
             | Expr::BVSignExtToVarWidth(_, _, t)
             | Expr::BVIntToBv(_, _, t)
+            | Expr::BVToInt(_, t)
             | Expr::BVConvTo(_, _, t)
             | Expr::BVConvToVarWidth(_, _, t)
             | Expr::Conditional(_, _, _, t)
