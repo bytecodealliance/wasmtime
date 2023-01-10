@@ -2,9 +2,9 @@ name: Rust
 
 on:
   push:
-    branches: [ "oct-3-rebase" ]
+    branches: [ "verify-main" ]
   pull_request:
-    branches: [ "oct-3-rebase" ]
+    branches: [ "verify-main" ]
 
 env:
   CARGO_TERM_COLOR: always
@@ -16,12 +16,23 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - uses: ./.github/actions/install-rust
-    - name: Build veri_engine
-      run: cargo build --verbose --manifest-path cranelift/isle/veri/veri_engine/Cargo.toml
-    - name: Test veri_engine
-      run: cargo test --verbose --manifest-path cranelift/isle/veri/veri_engine/Cargo.toml
-    - name: Build veri_annotation
-      run: cargo build --verbose --manifest-path cranelift/isle/veri/veri_annotation/Cargo.toml
-    - name: Test veri_annotation
-      run: cargo test --verbose --manifest-path cranelift/isle/veri/veri_annotation/Cargo.toml
+      with:
+        submodules: recursive
+    - uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+    - name: Install Rust
+      uses: ./.github/actions/install-rust
+    - name: Install Z3
+      uses: ./.github/actions/setup-z3
+    - name: Build
+      run: cargo build --verbose -p veri_ir -p veri_engine -p veri_annotation
+    - name: Test
+      # Single thread because Z3 is a memory hog 
+      run: cargo test -j 1 --verbose -p veri_ir -p veri_engine -p veri_annotation 
