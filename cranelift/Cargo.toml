@@ -46,6 +46,9 @@ thiserror = { workspace = true }
 walkdir = "2.2"
 anyhow = { workspace = true }
 clap = { workspace = true }
+similar = { workspace = true }
+toml = { workspace = true }
+serde = { workspace = true }
 
 [features]
 default = ["disas", "wasm", "cranelift-codegen/all-arch", "cranelift-codegen/trace-log", "souper-harvest"]

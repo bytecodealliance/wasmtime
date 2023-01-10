@@ -155,6 +155,8 @@ cranelift-bforest = { path = "cranelift/bforest", version = "0.93.0" }
 cranelift = { path = "cranelift/umbrella", version = "0.93.0" }
 
 winch-codegen = { path = "winch/codegen", version = "=0.4.0" }
+winch-filetests = { path = "winch/filetests" }
+winch-test-macros = { path = "winch/test-macros" }
 
 target-lexicon = { version = "0.12.3", default-features = false, features = ["std"] }
 anyhow = "1.0.22"
@@ -185,6 +187,9 @@ bitflags = "1.2"
 thiserror = "1.0.15"
 async-trait = "0.1.42"
 heck = "0.4"
+similar = "2.1.0"
+toml = "0.5.9"
+serde = "1.0.94"
 
 [features]
 default = [
