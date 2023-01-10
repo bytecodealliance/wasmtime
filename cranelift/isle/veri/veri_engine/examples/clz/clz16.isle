@@ -1,0 +1,80 @@
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (arg) (ret))))
+(decl lower (Inst) InstOutput)
+
+(type MInst
+  (enum
+    (BitRR
+        (op BitOp))
+    (Extend
+        (rd WritableReg)
+        (rn Reg)
+        (signed bool)
+        (from_bits u8)
+        (to_bits u8))
+))
+
+(type ALUOp
+  (enum
+    (Sub)
+))
+
+(type BitOp
+  (enum
+    (Clz)
+))
+
+(type Imm12 (primitive Imm12))
+
+(decl bit_rr (BitOp Type Reg) Reg)
+(extern constructor bit_rr bit_rr)
+
+(decl alu_rr_imm12 (ALUOp Type Reg Imm12) Reg)
+(extern constructor alu_rr_imm12 alu_rr_imm12)
+
+;;@ (spec (sig (args ty, reg, imm_arg) (ret))
+;;@     (assertions (= (-(reg) (sign_ext (regwidth) (imm_arg))) (ret))))
+(decl sub_imm (Type Reg Imm12) Reg)
+(rule (sub_imm ty x y) (alu_rr_imm12 (ALUOp.Sub) ty x y))
+
+;;@ (spec (sig (args ty, a) (ret))
+;;@     (assertions (= (ret) 
+;;@                    (if (= (ty) (32i0:isleType))
+;;@                        { (a64clz (32i0:isleType) (a)) }
+;;@                        else
+;;@                        { (a64clz (64i0:isleType) (a)) }
+;;@                    )
+;;@                 ),
+;;@                 (|| (= (ty) (32i0:isleType)) (= (ty) (64i0:isleType)))
+;;@     )
+;;@ )
+(decl a64_clz (Type Reg) Reg)
+(rule (a64_clz ty x) (bit_rr (BitOp.Clz) ty x))
+
+(decl extend (Reg bool u8 u8) Reg)
+(rule (extend rn signed from_bits to_bits)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.Extend dst rn signed from_bits to_bits))))
+        dst))
+
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (
+;;@          if (<= (32i0:isleType) (widthof (arg))) {
+;;@              (= (ret) (conv_to (regwidth) (arg)))
+;;@          } else {              
+;;@              (= (ret) (conv_to (regwidth) (zero_ext (32) (arg))))
+;;@          })
+;;@ ))
+(decl put_in_reg_zext32 (Value) Reg)
+(rule (put_in_reg_zext32 val @ (value_type (fits_in_32 ty)))
+      (extend val $false (ty_bits ty) 32))
+(rule (put_in_reg_zext32 val @ (value_type $I32)) val)
+(rule (put_in_reg_zext32 val @ (value_type $I64)) val)
+
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (ret) (zero_ext (12) (arg)))))
+(decl u8_into_imm12 (u8) Imm12)
+(extern constructor u8_into_imm12 u8_into_imm12)
+
+(rule (lower (has_type $I16 (clz x)))
+      (sub_imm $I32 (a64_clz $I32 (put_in_reg_zext32 x)) (u8_into_imm12 16)))

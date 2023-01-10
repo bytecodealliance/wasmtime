@@ -12,6 +12,7 @@ use std::collections::HashMap;
 pub struct TypeContext {
     pub tyvars: HashMap<Expr, u32>,
     pub tymap: HashMap<u32, Type>,
+    pub tyvals: HashMap<u32, i128>,
     // map of type var to set index
     pub bv_unknown_width_sets: HashMap<u32, u32>,
 }
@@ -185,6 +186,10 @@ pub enum Expr {
     // Opcode nodes
     Unary(UnaryOp, Box<Expr>),
     Binary(BinaryOp, Box<Expr>, Box<Expr>),
+
+    // Count leading zeros
+    CLZ(Box<Expr>),
+    A64CLZ(Box<Expr>, Box<Expr>),
 
     // ITE
     Conditional(Box<Expr>, Box<Expr>, Box<Expr>),

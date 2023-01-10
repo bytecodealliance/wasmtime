@@ -16,6 +16,8 @@ struct RuleParseTree<'a> {
     // a map of var name to type variable, where var could be
     // Pattern::Var or var used in Pattern::BindPattern
     varid_to_type_var_map: HashMap<VarId, u32>,
+    // a map of type var to value, if known
+    type_var_to_val_map: HashMap<u32, i128>,
     // bookkeeping that tells the next unused type var
     next_type_var: u32,
     // combined constraints from all nodes
@@ -139,6 +141,7 @@ fn type_annotations_using_rule<'a>(
 ) -> Option<Solution> {
     let mut parse_tree = RuleParseTree {
         varid_to_type_var_map: HashMap::new(),
+        type_var_to_val_map: HashMap::new(),
         next_type_var: 1,
         concrete_constraints: HashSet::new(),
         var_constraints: HashSet::new(),
@@ -275,6 +278,7 @@ fn type_annotations_using_rule<'a>(
                 tyctx: TypeContext {
                     tyvars: parse_tree.ty_vars.clone(),
                     tymap,
+                    tyvals: parse_tree.type_var_to_val_map,
                     bv_unknown_width_sets,
                 },
             })
@@ -314,6 +318,10 @@ fn add_annotation_constraints(
                 }
             }
             tree.next_type_var += 1;
+
+            // If constant is known, add the value to the tree. Useful for
+            // capturing isleTypes
+            tree.type_var_to_val_map.insert(t, c.value);
             (e, t)
         }
 
@@ -355,6 +363,25 @@ fn add_annotation_constraints(
             tree.next_type_var += 1;
             (
                 veri_ir::Expr::Binary(veri_ir::BinaryOp::Lte, Box::new(e1), Box::new(e2)),
+                t,
+            )
+        }
+
+        annotation_ir::Expr::Or(x, y, _) => {
+            let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
+            let (e2, t2) = add_annotation_constraints(*y, tree, annotation_info);
+            let t = tree.next_type_var;
+
+            tree.concrete_constraints
+                .insert(TypeExpr::Concrete(t, annotation_ir::Type::Bool));
+            tree.concrete_constraints
+                .insert(TypeExpr::Concrete(t1, annotation_ir::Type::Bool));
+            tree.concrete_constraints
+                .insert(TypeExpr::Concrete(t2, annotation_ir::Type::Bool));
+
+            tree.next_type_var += 1;
+            (
+                veri_ir::Expr::Binary(veri_ir::BinaryOp::Or, Box::new(e1), Box::new(e2)),
                 t,
             )
         }
@@ -750,6 +777,40 @@ fn add_annotation_constraints(
                 t,
             )
         }
+        annotation_ir::Expr::CLZ(x, _) => {
+            let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
+
+            let t = tree.next_type_var;
+            // TODO: currently we're making the return type of clz some
+            // bv with unspecified length. Since we include an equality check
+            // at the end of the clz operation, it's implied that we can only
+            // compare against other bv types (hopefully with known length)
+            tree.bv_constraints
+                .insert(TypeExpr::Concrete(t, annotation_ir::Type::BitVector));
+            tree.bv_constraints
+                .insert(TypeExpr::Concrete(t1, annotation_ir::Type::BitVector));
+            tree.var_constraints.insert(TypeExpr::Variable(t, t1));
+
+            tree.next_type_var += 1;
+            (veri_ir::Expr::CLZ(Box::new(e1)), t)
+        }
+        annotation_ir::Expr::A64CLZ(ty, x, _) => {
+            let (e0, t0) = add_annotation_constraints(*ty, tree, annotation_info);
+            let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
+
+            let t = tree.next_type_var;
+            tree.concrete_constraints.insert(TypeExpr::Concrete(
+                t,
+                annotation_ir::Type::BitVectorWithWidth(REG_WIDTH),
+            ));
+            tree.concrete_constraints
+                .insert(TypeExpr::Concrete(t0, annotation_ir::Type::Int));
+            tree.bv_constraints
+                .insert(TypeExpr::Concrete(t1, annotation_ir::Type::BitVector));
+
+            tree.next_type_var += 1;
+            (veri_ir::Expr::A64CLZ(Box::new(e0), Box::new(e1)), t)
+        }
         _ => todo!("expr {:#?} not yet implemented", expr),
     };
     tree.ty_vars.insert(e.clone(), t);
@@ -784,7 +845,7 @@ fn add_isle_constraints(
             "u64".to_owned(),
             annotation_ir::Type::BitVectorWithWidth(64),
         ),
-        ("u8".to_owned(), annotation_ir::Type::Int),
+        ("u8".to_owned(), annotation_ir::Type::BitVectorWithWidth(8)),
         // AVH TODO: needed for lower from rolt to small_rotr, but should rework.
         ("usize".to_owned(), annotation_ir::Type::BitVector),
         ("bool".to_owned(), annotation_ir::Type::Bool),
@@ -852,8 +913,8 @@ fn add_rule_constraints(
     annotation_env: &AnnotationEnv,
     annotation_infos: &mut Vec<AnnotationTypeInfo>,
 ) -> Option<veri_ir::Expr> {
-    // Only relate args to annotations for terms. For leaves, return immediately, for
-    // recursive definitions without annotations (like And and Let), recur.
+    // Only relate args to annotations for terms. For leaves, return immediately.
+    // For recursive definitions without annotations (like And and Let), recur.
     let mut children = vec![];
     for child in &mut curr.children {
         if let Some(e) = add_rule_constraints(tree, child, annotation_env, annotation_infos) {
@@ -884,10 +945,16 @@ fn add_rule_constraints(
             Some(children[0].clone())
         }
         TypeVarConstruct::Wildcard => Some(veri_ir::Expr::Terminal(veri_ir::Terminal::Wildcard)),
-        TypeVarConstruct::Const(i) => Some(veri_ir::Expr::Terminal(veri_ir::Terminal::Const(
-            *i,
-            curr.type_var,
-        ))),
+        TypeVarConstruct::Const(i) => {
+            // If constant is known, add the value to the tree. Useful for
+            // capturing isleTypes
+            tree.type_var_to_val_map.insert(curr.type_var, *i);
+
+            Some(veri_ir::Expr::Terminal(veri_ir::Terminal::Const(
+                *i,
+                curr.type_var,
+            )))
+        }
         TypeVarConstruct::And => {
             tree.quantified_vars
                 .insert((curr.ident.clone(), curr.type_var));
@@ -1354,6 +1421,8 @@ fn create_parse_tree_pattern(
             let val = match name.as_str() {
                 "I64" => 64,
                 "I32" => 32,
+                "I16" => 16,
+                "I8" => 8,
                 _ => todo!("{:?}", &name),
             };
             let name = format!("{}__{}", name, type_var);

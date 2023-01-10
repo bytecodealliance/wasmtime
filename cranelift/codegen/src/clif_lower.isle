@@ -1104,6 +1104,8 @@
     (inst_data (InstructionData.Unary (Opcode.Bitrev) x))
 )
 
+;;@ (spec (sig (args a) (ret))
+;;@     (assertions (= (ret) (clz (a)))))
 (decl clz (Value) Inst)
 (extractor
     (clz x)
