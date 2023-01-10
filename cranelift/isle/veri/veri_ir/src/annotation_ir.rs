@@ -176,6 +176,8 @@ pub enum Expr {
     BVNot(Box<Expr>, u32),
     CLZ(Box<Expr>, u32),
     A64CLZ(Box<Expr>, Box<Expr>, u32),
+    CLS(Box<Expr>, u32),
+    A64CLS(Box<Expr>, Box<Expr>, u32),    
 
     // Binary operators
     BVMul(Box<Expr>, Box<Expr>, u32),
@@ -242,6 +244,8 @@ impl Expr {
             | Expr::BVNot(_, t)
             | Expr::CLZ(_, t)
             | Expr::A64CLZ(_, _, t)
+            | Expr::CLS(_, t)
+            | Expr::A64CLS(_, _, t)            
             | Expr::And(_, _, t)
             | Expr::Or(_, _, t)
             | Expr::Imp(_, _, t)

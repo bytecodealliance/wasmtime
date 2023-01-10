@@ -190,6 +190,8 @@ pub enum Expr {
     // Count leading zeros
     CLZ(Box<Expr>),
     A64CLZ(Box<Expr>, Box<Expr>),
+    CLS(Box<Expr>),
+    A64CLS(Box<Expr>, Box<Expr>),    
 
     // ITE
     Conditional(Box<Expr>, Box<Expr>, Box<Expr>),

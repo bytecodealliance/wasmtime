@@ -1112,6 +1112,8 @@
     (inst_data (InstructionData.Unary (Opcode.Clz) x))
 )
 
+;;@ (spec (sig (args a) (ret))
+;;@     (assertions (= (ret) (cls (a)))))
 (decl cls (Value) Inst)
 (extractor
     (cls x)

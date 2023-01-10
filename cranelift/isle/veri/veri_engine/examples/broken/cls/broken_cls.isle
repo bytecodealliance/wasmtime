@@ -1,0 +1,33 @@
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (arg) (ret))))
+(decl lower (Inst) InstOutput)
+
+(type MInst
+  (enum
+    (BitRR
+        (op BitOp))
+))
+
+(type BitOp
+  (enum
+    (Cls)
+))
+
+(decl bit_rr (BitOp Type Reg) Reg)
+(extern constructor bit_rr bit_rr)
+
+;;@ (spec (sig (args ty, a) (ret))
+;;@     (assertions (= (ret) 
+;;@                    (if (= (ty) (32i0:isleType))
+;;@                        { (a64cls (32i0:isleType) (a)) }
+;;@                        else
+;;@                        { (a64cls (64i0:isleType) (a)) }
+;;@                    )
+;;@                 )
+;;@     )
+;;@ )
+(decl a64_cls (Type Reg) Reg)
+(rule (a64_cls ty x) (bit_rr (BitOp.Cls) ty x))
+
+(rule (lower (has_type ty (cls x)))
+      (a64_cls ty x))

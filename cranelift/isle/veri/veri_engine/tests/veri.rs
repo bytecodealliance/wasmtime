@@ -217,6 +217,90 @@ fn test_clz_broken() {
 }
 
 #[test]
+fn test_cls() {
+    test_from_file_with_filter(
+        "./examples/cls/cls.isle",
+        "cls".to_string(),
+        vec![
+            (Bitwidth::I1, VerificationResult::InapplicableRule),
+            (Bitwidth::I8, VerificationResult::InapplicableRule),
+            (Bitwidth::I16, VerificationResult::InapplicableRule),
+            (Bitwidth::I32, VerificationResult::Success),
+            (Bitwidth::I64, VerificationResult::Success),
+        ],
+    );
+
+    test_from_file_with_filter(
+        "./examples/cls/cls8.isle",
+        "cls".to_string(),
+        vec![
+            (Bitwidth::I1, VerificationResult::InapplicableRule),
+            (Bitwidth::I8, VerificationResult::Success),
+            (Bitwidth::I16, VerificationResult::InapplicableRule),
+            (Bitwidth::I32, VerificationResult::InapplicableRule),
+            (Bitwidth::I64, VerificationResult::InapplicableRule),
+        ],
+    );
+
+    test_from_file_with_filter(
+        "./examples/cls/cls16.isle",
+        "cls".to_string(),
+        vec![
+            (Bitwidth::I1, VerificationResult::InapplicableRule),
+            (Bitwidth::I8, VerificationResult::InapplicableRule),
+            (Bitwidth::I16, VerificationResult::Success),
+            (Bitwidth::I32, VerificationResult::InapplicableRule),
+            (Bitwidth::I64, VerificationResult::InapplicableRule),
+        ],
+    )
+}
+
+#[test]
+fn test_cls_broken() {
+    test_from_file_with_filter(
+        "./examples/broken/cls/broken_cls.isle",
+        "cls".to_string(),
+        vec![
+            (Bitwidth::I1, VerificationResult::Failure(Counterexample {})),
+            (Bitwidth::I8, VerificationResult::Failure(Counterexample {})),
+            (
+                Bitwidth::I16,
+                VerificationResult::Failure(Counterexample {}),
+            ),
+            (Bitwidth::I32, VerificationResult::Success),
+            (Bitwidth::I64, VerificationResult::Success),
+        ],
+    );
+
+    test_from_file_with_filter(
+        "./examples/broken/cls/broken_cls8.isle",
+        "cls".to_string(),
+        vec![
+            (Bitwidth::I1, VerificationResult::InapplicableRule),
+            (Bitwidth::I8, VerificationResult::Failure(Counterexample {})),
+            (Bitwidth::I16, VerificationResult::InapplicableRule),
+            (Bitwidth::I32, VerificationResult::InapplicableRule),
+            (Bitwidth::I64, VerificationResult::InapplicableRule),
+        ],
+    );
+
+    test_from_file_with_filter(
+        "./examples/broken/cls/broken_cls16.isle",
+        "cls".to_string(),
+        vec![
+            (Bitwidth::I1, VerificationResult::InapplicableRule),
+            (Bitwidth::I8, VerificationResult::InapplicableRule),
+            (
+                Bitwidth::I16,
+                VerificationResult::Failure(Counterexample {}),
+            ),
+            (Bitwidth::I32, VerificationResult::InapplicableRule),
+            (Bitwidth::I64, VerificationResult::InapplicableRule),
+        ],
+    )
+}
+
+#[test]
 fn test_small_rotr_to_shifts() {
     test_from_file_with_filter(
         "./examples/small_rotr_to_shifts.isle",
