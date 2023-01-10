@@ -16,7 +16,7 @@ use crate::write::write_operands;
 use core::fmt;
 use core::iter;
 use core::mem;
-use core::ops::{ControlFlow, Index, IndexMut};
+use core::ops::{Index, IndexMut};
 use core::u16;
 
 use alloc::collections::BTreeMap;
@@ -41,102 +41,6 @@ impl Index<Inst> for Insts {
 impl IndexMut<Inst> for Insts {
     fn index_mut(&mut self, inst: Inst) -> &mut InstructionData {
         self.0.index_mut(inst)
-    }
-}
-
-/// A context for read-only operations on the values of an instruction.
-pub struct InstValues<'dfg> {
-    dfg: &'dfg DataFlowGraph,
-    inst: Inst,
-}
-
-impl<'dfg> InstValues<'dfg> {
-    /// Visit all values in an instruction. If an instruction includes references to blocks with
-    /// their arguments, this function will traverse those values as well; inst_args does not
-    /// include block arguments in the slice it returns.
-    pub fn for_each<F: FnMut(Value)>(&self, mut body: F) {
-        self.dfg
-            .inst_args(self.inst)
-            .iter()
-            .copied()
-            .for_each(&mut body);
-
-        if let Some(branch) = self.dfg.insts[self.inst].branch_destination() {
-            branch
-                .args_slice(&self.dfg.value_lists)
-                .iter()
-                .cloned()
-                .for_each(body);
-        }
-    }
-
-    /// Visit vall values in the instruction, allowing early exit via the [ControlFlow] return
-    /// type from the body function.
-    pub fn try_for_each<F, B>(&self, mut body: F) -> ControlFlow<B>
-    where
-        F: FnMut(Value) -> ControlFlow<B>,
-    {
-        self.dfg
-            .inst_args(self.inst)
-            .iter()
-            .copied()
-            .try_for_each(&mut body)?;
-
-        if let Some(branch) = self.dfg.insts[self.inst].branch_destination() {
-            branch
-                .args_slice(&self.dfg.value_lists)
-                .iter()
-                .copied()
-                .try_for_each(body)?;
-        }
-
-        ControlFlow::Continue(())
-    }
-
-    /// Fold the values of the instruction.
-    pub fn fold<T, F>(&self, mut acc: T, mut body: F) -> T
-    where
-        F: FnMut(T, Value) -> T,
-    {
-        acc = self
-            .dfg
-            .inst_args(self.inst)
-            .iter()
-            .copied()
-            .fold(acc, &mut body);
-
-        if let Some(branch) = self.dfg.insts[self.inst].branch_destination() {
-            acc = branch
-                .args_slice(&self.dfg.value_lists)
-                .iter()
-                .copied()
-                .fold(acc, body);
-        }
-
-        acc
-    }
-
-    /// Fold the values of the instruction.
-    pub fn try_fold<B, C, F>(&self, mut acc: C, mut body: F) -> ControlFlow<B, C>
-    where
-        F: FnMut(C, Value) -> ControlFlow<B, C>,
-    {
-        acc = self
-            .dfg
-            .inst_args(self.inst)
-            .iter()
-            .copied()
-            .try_fold(acc, &mut body)?;
-
-        if let Some(branch) = self.dfg.insts[self.inst].branch_destination() {
-            acc = branch
-                .args_slice(&self.dfg.value_lists)
-                .iter()
-                .copied()
-                .try_fold(acc, body)?;
-        }
-
-        ControlFlow::Continue(acc)
     }
 }
 
@@ -846,8 +750,16 @@ impl DataFlowGraph {
     }
 
     /// Construct a read-only visitor context for the values of this instruction.
-    pub fn inst_values(&self, inst: Inst) -> InstValues<'_> {
-        InstValues { dfg: self, inst }
+    pub fn inst_values<'dfg>(&'dfg self, inst: Inst) -> impl Iterator<Item = Value> + 'dfg {
+        self.inst_args(inst)
+            .iter()
+            .chain(
+                self.insts[inst]
+                    .branch_destination()
+                    .into_iter()
+                    .flat_map(|branch| branch.args_slice(&self.value_lists).iter()),
+            )
+            .copied()
     }
 
     /// Construct a visitor context for mutating the values of an instruction.
