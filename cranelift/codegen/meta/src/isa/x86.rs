@@ -194,15 +194,15 @@ fn define_settings(shared: &SettingGroup) -> SettingGroup {
     // Intel Atom CPUs
     let atom = settings.add_preset("atom", "Atom microarchitecture.", preset!(has_ssse3));
     settings.add_preset("bonnell", "Bonnell microarchitecture.", preset!(atom));
-    let silvermont = settings.add_preset(
-        "silvermont",
+    let slm = settings.add_preset(
+        "slm",
         "Silvermont microarchitecture.",
         preset!(atom && has_sse42 && has_popcnt),
     );
     let goldmont = settings.add_preset(
         "goldmont",
         "Goldmont microarchitecture.",
-        preset!(silvermont),
+        preset!(slm),
     );
     settings.add_preset(
         "goldmont-plus",
