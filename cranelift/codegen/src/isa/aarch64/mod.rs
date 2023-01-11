@@ -19,9 +19,9 @@ use target_lexicon::{Aarch64Architecture, Architecture, OperatingSystem, Triple}
 
 // New backend:
 mod abi;
-pub(crate) mod inst;
+pub mod inst;
 mod lower;
-mod settings;
+pub mod settings;
 
 use inst::create_reg_env;
 

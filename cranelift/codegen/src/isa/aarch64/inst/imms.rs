@@ -1,7 +1,5 @@
 //! AArch64 ISA definitions: immediate constants.
 
-// Some variants are never constructed, but we still want them as options in the future.
-#[allow(dead_code)]
 use crate::ir::types::*;
 use crate::ir::Type;
 use crate::isa::aarch64::inst::{OperandSize, ScalarSize};
@@ -24,6 +22,7 @@ pub struct NZCV {
 }
 
 impl NZCV {
+    /// Create a new NZCV flags representation.
     pub fn new(n: bool, z: bool, c: bool, v: bool) -> NZCV {
         NZCV { n, z, c, v }
     }
@@ -45,6 +44,7 @@ pub struct UImm5 {
 }
 
 impl UImm5 {
+    /// Create an unsigned 5-bit immediate from u8.
     pub fn maybe_from_u8(value: u8) -> Option<UImm5> {
         if value < 32 {
             Some(UImm5 { value })
@@ -99,13 +99,17 @@ impl SImm7Scaled {
     }
 }
 
+/// Floating-point unit immediate left shift.
 #[derive(Clone, Copy, Debug)]
 pub struct FPULeftShiftImm {
+    /// Shift amount.
     pub amount: u8,
+    /// Lane size in bits.
     pub lane_size_in_bits: u8,
 }
 
 impl FPULeftShiftImm {
+    /// Create a floating-point unit immediate left shift from u8.
     pub fn maybe_from_u8(amount: u8, lane_size_in_bits: u8) -> Option<Self> {
         debug_assert!(lane_size_in_bits == 32 || lane_size_in_bits == 64);
         if amount < lane_size_in_bits {
@@ -118,6 +122,7 @@ impl FPULeftShiftImm {
         }
     }
 
+    /// Returns the encoding of the immediate.
     pub fn enc(&self) -> u32 {
         debug_assert!(self.lane_size_in_bits.is_power_of_two());
         debug_assert!(self.lane_size_in_bits > self.amount);
@@ -139,13 +144,17 @@ impl FPULeftShiftImm {
     }
 }
 
+/// Floating-point unit immediate right shift.
 #[derive(Clone, Copy, Debug)]
 pub struct FPURightShiftImm {
+    /// Shift amount.
     pub amount: u8,
+    /// Lane size in bits.
     pub lane_size_in_bits: u8,
 }
 
 impl FPURightShiftImm {
+    /// Create a floating-point unit immediate right shift from u8.
     pub fn maybe_from_u8(amount: u8, lane_size_in_bits: u8) -> Option<Self> {
         debug_assert!(lane_size_in_bits == 32 || lane_size_in_bits == 64);
         if amount > 0 && amount <= lane_size_in_bits {
@@ -158,6 +167,7 @@ impl FPURightShiftImm {
         }
     }
 
+    /// Returns encoding of the immediate.
     pub fn enc(&self) -> u32 {
         debug_assert_ne!(0, self.amount);
         // The encoding of the immediate follows the table below,
@@ -596,6 +606,7 @@ impl MoveWideConst {
         None
     }
 
+    /// Create a `MoveWideCosnt` from a given shift, if possible.
     pub fn maybe_with_shift(imm: u16, shift: u8) -> Option<MoveWideConst> {
         let shift_enc = shift / 16;
         if shift_enc > 3 {
@@ -608,6 +619,7 @@ impl MoveWideConst {
         }
     }
 
+    /// Create a zero immediate of this format.
     pub fn zero() -> MoveWideConst {
         MoveWideConst { bits: 0, shift: 0 }
     }
