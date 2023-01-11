@@ -184,25 +184,7 @@ fn define_settings(shared: &SettingGroup) -> SettingGroup {
 
     // Intel CPUs
 
-    settings.add_preset("i386", "i386 microarchitecture.", preset!());
-    settings.add_preset("i486", "i486 microarchitecture.", preset!());
-    settings.add_preset("i586", "i486 microarchitecture.", preset!());
-    settings.add_preset("pentium", "Pentium microarchitecture.", preset!());
-    settings.add_preset("i686", "i686 microarchitecture.", preset!());
-    settings.add_preset("pentium-mmx", "Pentium MMX microarchitecture.", preset!());
-    settings.add_preset("pentiumpro", "Pentium Pro microarchitecture.", preset!());
-    settings.add_preset("pentium-m", "Pentium M microarchitecture.", preset!());
-    settings.add_preset("pentium4", "Pentium 4 microarchitecture.", preset!());
-    settings.add_preset("pentium4m", "Pentium 4M microarchitecture.", preset!());
-
-    // Intel Quark
-    settings.add_preset("lakemont", "Lakemont microarchitecture.", preset!());
-
-    // Intel Core Duo
-    settings.add_preset("yonah", "Yonah microarchitecture.", preset!(has_sse3));
-
     // Netburst
-    settings.add_preset("prescott", "Prescott microarchitecture.", preset!(has_sse3));
     settings.add_preset("nocona", "Nocona microarchitecture.", preset!(has_sse3));
 
     // Intel Core 2 Solo/Duo
