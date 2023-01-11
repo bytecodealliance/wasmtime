@@ -37,37 +37,37 @@ pub type ValueListPool = entity::ListPool<Value>;
 /// this operation is not generally safe. However, as the two share the same underlying layout,
 /// they can be stored in the same value pool.
 ///
-/// BlockWithArgs makes use of this shared layout by storing all of its contents (a block and its
+/// BlockCall makes use of this shared layout by storing all of its contents (a block and its
 /// argument) in a single EntityList. This is a bit better than introducing a new entity type for
 /// the pair of a block name and the arguments entity list, as we don't pay any indirection penalty
 /// to get to the argument values -- they're stored in-line with the block in the same list.
 ///
-/// The BlockWithArgs::new function guarantees this layout by requiring a block argument that's
-/// written in as the first element of the EntityList. Any subsequent entries are always assumed to
-/// be real Values.
+/// The BlockCall::new function guarantees this layout by requiring a block argument that's written
+/// in as the first element of the EntityList. Any subsequent entries are always assumed to be real
+/// Values.
 #[derive(Debug, Clone, Copy, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct BlockCall {
-    /// The underlying storage for the BlockWithArgs. The first element of the values EntityList is
-    /// guaranteed to always be a Block encoded as a Value via BlockWithArgs::block_to_value.
+    /// The underlying storage for the BlockCall. The first element of the values EntityList is
+    /// guaranteed to always be a Block encoded as a Value via BlockCall::block_to_value.
     /// Consequently, the values entity list is never empty.
     values: entity::EntityList<Value>,
 }
 
 impl BlockCall {
-    // NOTE: the only uses of this function should be internal to BlockWithArgs. See the block
-    // comment on BlockWithArgs for more context.
+    // NOTE: the only uses of this function should be internal to BlockCall. See the block comment
+    // on BlockCall for more context.
     fn value_to_block(val: Value) -> Block {
         Block::from_u32(val.as_u32())
     }
 
-    // NOTE: the only uses of this function should be internal to BlockWithArgs. See the block
-    // comment on BlockWithArgs for more context.
+    // NOTE: the only uses of this function should be internal to BlockCall. See the block comment
+    // on BlockCall for more context.
     fn block_to_value(block: Block) -> Value {
         Value::from_u32(block.as_u32())
     }
 
-    /// Construct a BlockWithArgs with the given block and arguments.
+    /// Construct a BlockCall with the given block and arguments.
     pub fn new(block: Block, args: &[Value], pool: &mut ValueListPool) -> Self {
         let mut values = ValueList::default();
         values.push(Self::block_to_value(block), pool);
@@ -75,13 +75,13 @@ impl BlockCall {
         Self { values }
     }
 
-    /// Return the block for this BlockWithArgs.
+    /// Return the block for this BlockCall.
     pub fn block(&self, pool: &ValueListPool) -> Block {
         let val = self.values.first(pool).unwrap();
         Self::value_to_block(val)
     }
 
-    /// Replace the block for this BlockWithArgs.
+    /// Replace the block for this BlockCall.
     pub fn set_block(&mut self, block: Block, pool: &mut ValueListPool) {
         *self.values.get_mut(0, pool).unwrap() = Self::block_to_value(block);
     }

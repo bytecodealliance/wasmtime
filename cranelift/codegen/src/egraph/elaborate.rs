@@ -358,15 +358,7 @@ impl<'a> Elaborator<'a> {
                     // layout. First, enqueue all args to be
                     // elaborated. Push state to receive the results
                     // and later elab this inst.
-                    let start = self.elab_stack.len();
-
-                    self.func.dfg.inst_values(inst).for_each(|arg| {
-                        debug_assert_ne!(arg, Value::reserved_value());
-                        self.elab_stack
-                            .push(ElabStackEntry::Start { value: arg, before });
-                    });
-
-                    let num_args = self.elab_stack.len() - start;
+                    let num_args = self.func.dfg.inst_values(inst).count();
                     self.elab_stack.push(ElabStackEntry::PendingInst {
                         inst,
                         result_idx,
@@ -375,9 +367,13 @@ impl<'a> Elaborator<'a> {
                         before,
                     });
 
-                    // Reverse the new entries on the elaboration stack
-                    // so that we process the first argument first.
-                    self.elab_stack[start..].reverse();
+                    // Push args in reverse order so we process the
+                    // first arg first.
+                    for arg in self.func.dfg.inst_values(inst).rev() {
+                        debug_assert_ne!(arg, Value::reserved_value());
+                        self.elab_stack
+                            .push(ElabStackEntry::Start { value: arg, before });
+                    }
                 }
 
                 &ElabStackEntry::PendingInst {
@@ -575,13 +571,9 @@ impl<'a> Elaborator<'a> {
         }
     }
 
-    fn elaborate_block(&mut self, idom: Option<Block>, block: Block) {
+    fn elaborate_block(&mut self, elab_values: &mut Vec<Value>, idom: Option<Block>, block: Block) {
         trace!("elaborate_block: block {}", block);
         self.start_block(idom, block);
-
-        // Temporary buffer for elaborated values. This could potentially
-        // be shared across the entire pass by moving it onto self.
-        let mut elab_values = Vec::new();
 
         // Iterate over the side-effecting skeleton using the linked
         // list in Layout. We will insert instructions that are
@@ -615,12 +607,11 @@ impl<'a> Elaborator<'a> {
                 // be different than the original.
                 let new_arg = self.elaborate_eclass_use(*arg, before);
                 trace!("   -> rewrote arg to {:?}", new_arg);
-                *arg = new_arg.value
+                *arg = new_arg.value;
             }
             self.func
                 .dfg
-                .overwrite_inst_values(inst, elab_values.iter().copied());
-            elab_values.clear();
+                .overwrite_inst_values(inst, elab_values.drain(..));
 
             // We need to put the results of this instruction in the
             // map now.
@@ -646,13 +637,18 @@ impl<'a> Elaborator<'a> {
             block: root,
             idom: None,
         });
+
+        // A temporary workspace for elaborate_block, allocated here to maximize the use of the
+        // allocation.
+        let mut elab_values = Vec::new();
+
         while let Some(top) = self.block_stack.pop() {
             match top {
                 BlockStackEntry::Elaborate { block, idom } => {
                     self.block_stack.push(BlockStackEntry::Pop);
                     self.value_to_elaborated_value.increment_depth();
 
-                    self.elaborate_block(idom, block);
+                    self.elaborate_block(&mut elab_values, idom, block);
 
                     // Push children. We are doing a preorder
                     // traversal so we do this after processing this

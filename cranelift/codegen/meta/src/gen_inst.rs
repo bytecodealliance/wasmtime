@@ -945,7 +945,7 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
     }
 
     // We need to mutate `self` if this instruction accepts a value list, or will construct
-    // BlockWithArgs values.
+    // BlockCall values.
     if format.has_value_list || !block_args.is_empty() {
         args[0].push_str("mut self");
     } else {
@@ -1006,9 +1006,7 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
         for op in block_args {
             fmtln!(
                 fmt,
-                "let {} = self.data_flow_graph_mut().block_with_args({}_label, {}_args);",
-                op.name,
-                op.name,
+                "let {0} = self.data_flow_graph_mut().block_call({0}_label, {0}_args);",
                 op.name
             );
         }
@@ -1530,7 +1528,6 @@ fn gen_builder(
     fmt.indent(|fmt| {
         for inst in instructions.iter() {
             gen_inst_builder(inst, &*inst.format, fmt);
-
             fmt.empty_line();
         }
         for (i, format) in formats.iter().enumerate() {

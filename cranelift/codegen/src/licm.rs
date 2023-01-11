@@ -161,18 +161,13 @@ fn is_loop_invariant(inst: Inst, dfg: &DataFlowGraph, loop_values: &FxHashSet<Va
         return false;
     }
 
-    dfg.inst_values(inst).fold(true, |acc, arg| {
-        if !acc {
-            return acc;
-        }
-
+    for arg in dfg.inst_values(inst) {
         let arg = dfg.resolve_aliases(arg);
         if loop_values.contains(&arg) {
             return false;
         }
-
-        acc
-    })
+    }
+    true
 }
 
 /// Traverses a loop in reverse post-order from a header block and identify loop-invariant

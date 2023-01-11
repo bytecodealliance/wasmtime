@@ -26,7 +26,6 @@ use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_codegen::{settings, settings::Configurable, timing};
 use smallvec::SmallVec;
 use std::mem;
-use std::ops::ControlFlow;
 use std::str::FromStr;
 use std::{u16, u32};
 use target_lexicon::Triple;
@@ -1900,20 +1899,14 @@ impl<'a> Parser<'a> {
         // all references refer to a definition.
         for block in &ctx.function.layout {
             for inst in ctx.function.layout.block_insts(block) {
-                if let ControlFlow::Break(err) =
-                    ctx.function.dfg.inst_values(inst).try_for_each(|value| {
-                        if !ctx.map.contains_value(value) {
-                            return ControlFlow::Break(err!(
-                                ctx.map.location(AnyEntity::Inst(inst)).unwrap(),
-                                "undefined operand value {}",
-                                value
-                            ));
-                        }
-
-                        ControlFlow::Continue(())
-                    })
-                {
-                    return err;
+                for value in ctx.function.dfg.inst_values(inst) {
+                    if !ctx.map.contains_value(value) {
+                        return err!(
+                            ctx.map.location(AnyEntity::Inst(inst)).unwrap(),
+                            "undefined operand value {}",
+                            value
+                        );
+                    }
                 }
             }
         }
@@ -2589,7 +2582,7 @@ impl<'a> Parser<'a> {
                 // Parse the destination block number.
                 let block_num = self.match_block("expected jump destination block")?;
                 let args = self.parse_opt_value_list()?;
-                let destination = ctx.function.dfg.block_with_args(block_num, &args);
+                let destination = ctx.function.dfg.block_call(block_num, &args);
                 InstructionData::Jump {
                     opcode,
                     destination,
@@ -2600,7 +2593,7 @@ impl<'a> Parser<'a> {
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let block_num = self.match_block("expected branch destination block")?;
                 let args = self.parse_opt_value_list()?;
-                let destination = ctx.function.dfg.block_with_args(block_num, &args);
+                let destination = ctx.function.dfg.block_call(block_num, &args);
                 InstructionData::Branch {
                     opcode,
                     arg,

@@ -167,8 +167,8 @@ impl DataFlowGraph {
         self.blocks.is_valid(block)
     }
 
-    /// Make a BlockWithArgs, bundling together the block and its arguments.
-    pub fn block_with_args(&mut self, block: Block, args: &[Value]) -> BlockCall {
+    /// Make a BlockCall, bundling together the block and its arguments.
+    pub fn block_call(&mut self, block: Block, args: &[Value]) -> BlockCall {
         BlockCall::new(block, args, &mut self.value_lists)
     }
 
@@ -333,14 +333,7 @@ impl DataFlowGraph {
     /// For each argument of inst which is defined by an alias, replace the
     /// alias with the aliased value.
     pub fn resolve_aliases_in_arguments(&mut self, inst: Inst) {
-        self.map_inst_values(inst, |dfg, arg| {
-            let resolved = resolve_aliases(&dfg.values, arg);
-            if resolved != arg {
-                resolved
-            } else {
-                arg
-            }
-        });
+        self.map_inst_values(inst, |dfg, arg| resolve_aliases(&dfg.values, arg));
     }
 
     /// Turn a value into an alias of another.
@@ -672,16 +665,11 @@ impl DataFlowGraph {
         }
     }
 
-    /// Count the number of values used by this instruction.
-    pub fn count_values(&self, inst: Inst) -> usize {
-        self.inst_args(inst).len()
-            + self.insts[inst]
-                .branch_destination()
-                .map_or(0, |dest| dest.args_slice(&self.value_lists).len())
-    }
-
     /// Construct a read-only visitor context for the values of this instruction.
-    pub fn inst_values<'dfg>(&'dfg self, inst: Inst) -> impl Iterator<Item = Value> + 'dfg {
+    pub fn inst_values<'dfg>(
+        &'dfg self,
+        inst: Inst,
+    ) -> impl DoubleEndedIterator<Item = Value> + 'dfg {
         self.inst_args(inst)
             .iter()
             .chain(
