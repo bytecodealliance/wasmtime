@@ -847,14 +847,14 @@ pub unsafe extern "C" fn fd_readdir(
                 let dir = state.get_dir(fd)?;
                 iter = DirEntryIterator {
                     state,
-                    cookie: 0,
+                    cookie: wasi::DIRCOOKIE_START,
                     use_cache: false,
                     stream: DirEntryStream(wasi_filesystem::readdir(dir.fd)?),
                 };
 
                 // Skip to the entry that is requested by the `cookie`
                 // parameter.
-                for _ in 0..cookie {
+                for _ in wasi::DIRCOOKIE_START..cookie {
                     match iter.next() {
                         Some(Ok(_)) => {}
                         Some(Err(e)) => return Err(e),
@@ -2288,7 +2288,7 @@ impl State {
                 dirent_cache: DirentCache {
                     stream: Cell::new(None),
                     for_fd: Cell::new(0),
-                    cookie: Cell::new(0),
+                    cookie: Cell::new(wasi::DIRCOOKIE_START),
                     cached_dirent: Cell::new(wasi::Dirent {
                         d_next: 0,
                         d_ino: 0,
