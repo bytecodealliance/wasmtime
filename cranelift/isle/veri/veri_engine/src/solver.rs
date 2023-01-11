@@ -863,7 +863,7 @@ impl SolverCtx {
                 },
                 Terminal::True => "true".to_string(),
                 Terminal::False => "false".to_string(),
-                Terminal::Wildcard => match ty.unwrap() {
+                Terminal::Wildcard(_) => match ty.unwrap() {
                     Type::BitVector(_) => self.new_fresh_bits(self.bitwidth),
                     Type::Int => self.new_fresh_int(),
                     Type::Bool => self.new_fresh_bool(),
@@ -978,10 +978,7 @@ impl SolverCtx {
                 )
             }
             Expr::BVToInt(x) => {
-                format!(
-                    "(bv2nat {})",
-                    self.vir_expr_to_rsmt2_str(*x)
-                )
+                format!("(bv2nat {})", self.vir_expr_to_rsmt2_str(*x))
             }
             Expr::BVConvTo(y) => {
                 // For static convto, width constraints are handling during inference

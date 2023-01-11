@@ -37,7 +37,7 @@ struct RuleParseTree<'a> {
 pub enum TypeVarConstruct {
     Var,
     BindPattern,
-    Wildcard,
+    Wildcard(u32),
     Term(String),
     Const(i128),
     Let(Vec<String>),
@@ -765,8 +765,6 @@ fn add_annotation_constraints(
 
             let t = tree.next_type_var;
             tree.next_type_var += 1;
-            dbg!(tx);
-            dbg!(t);
 
             tree.bv_constraints
                 .insert(TypeExpr::Concrete(tx, annotation_ir::Type::BitVector));
@@ -950,9 +948,6 @@ fn add_rule_constraints(
         }
         TypeVarConstruct::BindPattern => {
             assert_eq!(children.len(), 2);
-            // tree.quantified_vars
-            //     .insert((curr.ident.clone(), curr.type_var));
-            // tree.free_vars.insert((curr.ident.clone(), curr.type_var));
             tree.assumptions.push(veri_ir::Expr::Binary(
                 veri_ir::BinaryOp::Eq,
                 Box::new(children[0].clone()),
@@ -960,7 +955,9 @@ fn add_rule_constraints(
             ));
             Some(children[0].clone())
         }
-        TypeVarConstruct::Wildcard => Some(veri_ir::Expr::Terminal(veri_ir::Terminal::Wildcard)),
+        TypeVarConstruct::Wildcard(i) => {
+            Some(veri_ir::Expr::Terminal(veri_ir::Terminal::Wildcard(*i)))
+        }
         TypeVarConstruct::Const(i) => {
             // If constant is known, add the value to the tree. Useful for
             // capturing isleTypes
@@ -1370,7 +1367,7 @@ fn create_parse_tree_pattern(
             if *type_var == tree.next_type_var {
                 tree.next_type_var += 1;
             }
-            let ident = format!("{}__{}", ident, *type_var);
+            let ident = format!("{}__clif{}__{}", ident, var_id.index(), *type_var);
             // this is a base case so there are no children
             TypeVarNode {
                 ident,
@@ -1382,32 +1379,42 @@ fn create_parse_tree_pattern(
         }
         isle::sema::Pattern::BindPattern(_, var_id, subpat) => {
             let sym = rule.vars[var_id.index()].name;
-            let var_ident = format!("{}_clif_{}", typeenv.syms[sym.index()], var_id.index());
 
-            let var_type_var = tree.next_type_var;
-            tree.next_type_var += 1;
+            let type_var = *tree
+                .varid_to_type_var_map
+                .entry(var_id.clone())
+                .or_insert(tree.next_type_var);
+            if type_var == tree.next_type_var {
+                tree.next_type_var += 1;
+            }
 
-            tree.varid_to_type_var_map.insert(var_id.clone(), var_type_var);
+            let ident = format!(
+                "{}__clif{}__{}",
+                typeenv.syms[sym.index()],
+                var_id.index(),
+                type_var
+            );
 
-            let ident = format!("{}__{}", var_ident, var_type_var);
             // this is a base case so there are no children
             let var_node = TypeVarNode {
                 ident: ident.clone(),
                 construct: TypeVarConstruct::Var,
-                type_var: var_type_var,
+                type_var: type_var,
                 children: vec![],
                 assertions: vec![],
             };
 
             let subpat_node = create_parse_tree_pattern(rule, subpat, tree, typeenv, termenv);
 
-            let type_var = tree.next_type_var;
+            let bind_type_var = tree.next_type_var;
             tree.next_type_var += 1;
 
             tree.var_constraints
-                .insert(TypeExpr::Variable(var_type_var, subpat_node.type_var));
+                .insert(TypeExpr::Variable(type_var, subpat_node.type_var));
             tree.var_constraints
-            .insert(TypeExpr::Variable(type_var, var_type_var));
+                .insert(TypeExpr::Variable(bind_type_var, type_var));
+            tree.var_constraints
+                .insert(TypeExpr::Variable(bind_type_var, subpat_node.type_var));
 
             let ident = format!("bind_{}", ident);
 
@@ -1423,8 +1430,8 @@ fn create_parse_tree_pattern(
             let type_var = tree.next_type_var;
             tree.next_type_var += 1;
             TypeVarNode {
-                ident: String::from(""),
-                construct: TypeVarConstruct::Wildcard,
+                ident: format!("wildcard__{}", type_var),
+                construct: TypeVarConstruct::Wildcard(type_var),
                 type_var: type_var,
                 children: vec![],
                 assertions: vec![],
@@ -1538,7 +1545,7 @@ fn create_parse_tree_expr(
             if *type_var == tree.next_type_var {
                 tree.next_type_var += 1;
             }
-            let ident = format!("{}__{}", ident, *type_var);
+            let ident = format!("{}__clif{}__{}", ident, var_id.index(), *type_var);
             // this is a base case so there are no children
             TypeVarNode {
                 ident,
@@ -1583,7 +1590,8 @@ fn create_parse_tree_expr(
         isle::sema::Expr::Let { bindings, body, .. } => {
             let mut children = vec![];
             let mut bound = vec![];
-            for (varid, sym, expr) in bindings {
+            for (varid, _, expr) in bindings {
+                let sym = rule.vars[varid.index()].name;
                 let var = typeenv.syms[sym.index()].clone();
                 let subpat_node = create_parse_tree_expr(rule, expr, tree, typeenv, termenv);
 
@@ -1592,9 +1600,9 @@ fn create_parse_tree_expr(
 
                 tree.varid_to_type_var_map.insert(varid.clone(), ty_var);
                 children.push(subpat_node);
-                let var = format!("{}__{}", var, ty_var);
-                tree.quantified_vars.insert((var.clone(), ty_var));
-                bound.push(var);
+                let ident = format!("{}__clif{}__{}", var, varid.index(), ty_var);
+                tree.quantified_vars.insert((ident.clone(), ty_var));
+                bound.push(ident);
             }
             let body = create_parse_tree_expr(rule, body, tree, typeenv, termenv);
             let body_var = body.type_var;

@@ -142,7 +142,7 @@ pub enum Terminal {
     Const(i128, u32),
     True,
     False,
-    Wildcard,
+    Wildcard(u32),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
