@@ -218,7 +218,24 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         &mut self,
         fd: wasi_filesystem::Descriptor,
     ) -> HostResult<(), wasi_filesystem::Errno> {
-        todo!()
+        let table = self.table();
+        if table.is::<Box<dyn WasiFile>>(fd) {
+            Ok(Ok(table
+                .get_file(fd)
+                .map_err(convert)?
+                .datasync()
+                .await
+                .map_err(convert)?))
+        } else if table.is::<Box<dyn WasiDir>>(fd) {
+            Ok(Ok(table
+                .get_dir(fd)
+                .map_err(convert)?
+                .datasync()
+                .await
+                .map_err(convert)?))
+        } else {
+            Err(wasi_filesystem::Errno::Badf.into())
+        }
     }
 
     async fn flags(
@@ -382,7 +399,24 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         &mut self,
         fd: wasi_filesystem::Descriptor,
     ) -> HostResult<(), wasi_filesystem::Errno> {
-        todo!()
+        let table = self.table();
+        if table.is::<Box<dyn WasiFile>>(fd) {
+            Ok(Ok(table
+                .get_file(fd)
+                .map_err(convert)?
+                .sync()
+                .await
+                .map_err(convert)?))
+        } else if table.is::<Box<dyn WasiDir>>(fd) {
+            Ok(Ok(table
+                .get_dir(fd)
+                .map_err(convert)?
+                .sync()
+                .await
+                .map_err(convert)?))
+        } else {
+            Err(wasi_filesystem::Errno::Badf.into())
+        }
     }
 
     async fn create_directory_at(

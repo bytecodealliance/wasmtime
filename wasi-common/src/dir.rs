@@ -27,6 +27,10 @@ pub trait WasiDir: Send + Sync {
         Err(Error::not_supported())
     }
 
+    async fn datasync(&self) -> Result<(), Error>;
+
+    async fn sync(&self) -> Result<(), Error>;
+
     async fn get_fdflags(&self) -> Result<FdFlags, Error> {
         Ok(FdFlags::empty())
     }

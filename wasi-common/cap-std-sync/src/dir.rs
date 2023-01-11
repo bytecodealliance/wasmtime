@@ -80,11 +80,6 @@ impl Dir {
         Ok(File::from_cap_std(f))
     }
 
-    pub fn get_fdflags(&self) -> Result<FdFlags, Error> {
-        let fdflags = get_fd_flags(&self.0)?;
-        Ok(fdflags)
-    }
-
     pub fn open_dir_(&self, symlink_follow: bool, path: &str) -> Result<Self, Error> {
         let d = if symlink_follow {
             self.0.open_dir(Path::new(path))?
@@ -133,6 +128,42 @@ impl WasiDir for Dir {
     async fn open_dir(&self, symlink_follow: bool, path: &str) -> Result<Box<dyn WasiDir>, Error> {
         let d = self.open_dir_(symlink_follow, path)?;
         Ok(Box::new(d))
+    }
+
+    async fn datasync(&self) -> Result<(), Error> {
+        #[cfg(unix)]
+        {
+            // We open directories with `O_PATH` which doesn't permit us to
+            // sync the handle we have, so we open `.` to get a new one.
+            Ok(self.0.open(std::path::Component::CurDir)?.sync_data()?)
+        }
+
+        #[cfg(windows)]
+        {
+            // Windows doesn't have any concept of ensuring that directory
+            // entries are sync'd. See
+            // https://github.com/WebAssembly/wasi-filesystem/issues/79
+            Ok(())
+        }
+    }
+
+    async fn sync(&self) -> Result<(), Error> {
+        #[cfg(unix)]
+        {
+            // As above, open `.` to get a new handle.
+            Ok(self.0.open(std::path::Component::CurDir)?.sync_all()?)
+        }
+
+        #[cfg(windows)]
+        {
+            // As above, see above.
+            Ok(())
+        }
+    }
+
+    async fn get_fdflags(&self) -> Result<FdFlags, Error> {
+        let fdflags = get_fd_flags(&self.0)?;
+        Ok(fdflags)
     }
 
     async fn create_dir(&self, path: &str) -> Result<(), Error> {

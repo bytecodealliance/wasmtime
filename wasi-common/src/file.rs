@@ -26,13 +26,9 @@ pub trait WasiFile: Send + Sync {
         Err(Error::badf())
     }
 
-    async fn datasync(&mut self) -> Result<(), Error> {
-        Ok(())
-    }
+    async fn datasync(&self) -> Result<(), Error>;
 
-    async fn sync(&mut self) -> Result<(), Error> {
-        Ok(())
-    }
+    async fn sync(&self) -> Result<(), Error>;
 
     async fn get_fdflags(&self) -> Result<FdFlags, Error> {
         Ok(FdFlags::empty())

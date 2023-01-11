@@ -107,10 +107,10 @@ macro_rules! wasi_file_impl {
             async fn try_clone(&mut self) -> Result<Box<dyn WasiFile>, Error> {
                 block_on_dummy_executor(|| self.0.try_clone())
             }
-            async fn datasync(&mut self) -> Result<(), Error> {
+            async fn datasync(&self) -> Result<(), Error> {
                 block_on_dummy_executor(|| self.0.datasync())
             }
-            async fn sync(&mut self) -> Result<(), Error> {
+            async fn sync(&self) -> Result<(), Error> {
                 block_on_dummy_executor(|| self.0.sync())
             }
             async fn get_filetype(&mut self) -> Result<FileType, Error> {

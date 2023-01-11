@@ -40,11 +40,11 @@ impl WasiFile for File {
         Ok(Box::new(Self(clone)))
     }
 
-    async fn datasync(&mut self) -> Result<(), Error> {
+    async fn datasync(&self) -> Result<(), Error> {
         self.0.sync_data()?;
         Ok(())
     }
-    async fn sync(&mut self) -> Result<(), Error> {
+    async fn sync(&self) -> Result<(), Error> {
         self.0.sync_all()?;
         Ok(())
     }
