@@ -1007,16 +1007,20 @@ impl Val {
 impl PartialEq for Val {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            // This breaks conformance with IEEE-754 equality to simplify testing logic.
+            // IEEE 754 equality considers NaN inequal to NaN and negative zero
+            // equal to positive zero, however we do the opposite here, because
+            // this logic is used by testing and fuzzing, which want to know
+            // whether two values are semantically the same, rather than
+            // numerically equal.
             (Self::Float32(l), Self::Float32(r)) => {
-                (l != 0.0 && l == r)
-                    || (l == 0 && l.to_bits() == r.to_bits())
+                (*l != 0.0 && l == r)
+                    || (*l == 0.0 && l.to_bits() == r.to_bits())
                     || (l.is_nan() && r.is_nan())
             }
             (Self::Float32(_), _) => false,
             (Self::Float64(l), Self::Float64(r)) => {
-                (l != 0.0 && l == r)
-                    || (l == 0 && l.to_bits() == r.to_bits())
+                (*l != 0.0 && l == r)
+                    || (*l == 0.0 && l.to_bits() == r.to_bits())
                     || (l.is_nan() && r.is_nan())
             }
             (Self::Float64(_), _) => false,
