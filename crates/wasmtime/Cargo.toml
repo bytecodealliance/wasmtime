@@ -12,6 +12,7 @@ rust-version.workspace = true
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "nightlydoc"]
+features = ["component-model"]
 
 [dependencies]
 wasmtime-runtime = { workspace = true }
