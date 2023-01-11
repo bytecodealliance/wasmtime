@@ -304,25 +304,22 @@ fn define_settings(shared: &SettingGroup) -> SettingGroup {
         "Canon Lake microarchitecture.",
         preset!(skylake && has_avx512f && has_avx512dq && has_avx512vl && has_avx512vbmi),
     );
-    let icelake = settings.add_preset(
-        "icelake",
-        "Ice Lake microarchitecture.",
-        preset!(cannonlake && has_avx512bitalg),
-    );
-    settings.add_preset(
+    let icelake_client = settings.add_preset(
         "icelake-client",
         "Ice Lake microarchitecture.",
         preset!(cannonlake && has_avx512bitalg),
     );
+    // LLVM doesn't use the name "icelake" but Cranelift did in the past; alias it
+    settings.add_preset("icelake", "Ice Lake microarchitecture", preset!(icelake_client));
     let icelake_server = settings.add_preset(
         "icelake-server",
         "Ice Lake (server) microarchitecture.",
-        preset!(icelake),
+        preset!(icelake_client),
     );
     settings.add_preset(
         "tigerlake",
         "Tiger Lake microarchitecture.",
-        preset!(icelake),
+        preset!(icelake_client),
     );
     let sapphire_rapids = settings.add_preset(
         "sapphirerapids",
