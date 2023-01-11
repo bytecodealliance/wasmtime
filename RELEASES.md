@@ -1,6 +1,6 @@
 --------------------------------------------------------------------------------
 
-## 5.0.0
+## 6.0.0
 
 Unreleased.
 
@@ -10,9 +10,58 @@ Unreleased.
 
 --------------------------------------------------------------------------------
 
-## 4.0.0
+## 5.0.0
 
 Unreleased.
+
+### Added
+
+* A `wasmtime::component::bingen!` macro has been added for generating bindings
+  from `*.wit` files. Note that WIT is still heavily in development so this is
+  more of a preview of what will be as opposed to a finished feature.
+  [#5317](https://github.com/bytecodealliance/wasmtime/pull/5317)
+  [#5397](https://github.com/bytecodealliance/wasmtime/pull/5397)
+
+* The `wasmtime settings` CLI command now has a `--json` option for
+  machine-readable output.
+  [#5411](https://github.com/bytecodealliance/wasmtime/pull/5411)
+
+* Wiggle-generated bindings can now generate the trait for either `&mut self` or
+  `&self`.
+  [#5428](https://github.com/bytecodealliance/wasmtime/pull/5428)
+
+* The `wiggle` crate has more convenience APIs for working with guest data
+  that resides in shared memory.
+  [#5471](https://github.com/bytecodealliance/wasmtime/pull/5471)
+  [#5475](https://github.com/bytecodealliance/wasmtime/pull/5475)
+
+### Changed
+
+* Cranelift's egraph support has been rewritten and updated. This functionality
+  is still gated behind a flag and may become the default in the next release.
+  [#5382](https://github.com/bytecodealliance/wasmtime/pull/5382)
+
+* The implementation of codegen for WebAssembly linear memory has changed
+  significantly internally in Cranelift, moving more responsibility to the
+  Wasmtime embedding rather than Cranelift itself. This should have no
+  user-visible change, however.
+  [#5386](https://github.com/bytecodealliance/wasmtime/pull/5386)
+
+* The `Val::Float32` and `Val::Float64` variants for components now store `f32`
+  and `f64` instead of the bit representation.
+  [#5510](https://github.com/bytecodealliance/wasmtime/pull/5510)
+
+### Fixed
+
+* Handling of DWARF debugging information in components with multiple modules
+  has been fixed to ensure the right info is used for each module.
+  [#5358](https://github.com/bytecodealliance/wasmtime/pull/5358)
+
+--------------------------------------------------------------------------------
+
+## 4.0.0
+
+Released 2022-12-20
 
 ### Added
 

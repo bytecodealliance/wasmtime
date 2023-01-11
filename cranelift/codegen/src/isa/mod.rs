@@ -53,7 +53,7 @@ use crate::machinst::{CompiledCode, CompiledCodeStencil, TextSectionBuilder, Unw
 use crate::settings;
 use crate::settings::SetResult;
 use crate::CodegenResult;
-use alloc::{boxed::Box, vec::Vec};
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::fmt;
 use core::fmt::{Debug, Formatter};
 use target_lexicon::{triple, Architecture, PointerWidth, Triple};
@@ -105,6 +105,11 @@ pub fn lookup(triple: Triple) -> Result<Builder, LookupError> {
     }
 }
 
+/// The string names of all the supported, but possibly not enabled, architectures. The elements of
+/// this slice are suitable to be passed to the [lookup_by_name] function to obtain the default
+/// configuration for that architecture.
+pub const ALL_ARCHITECTURES: &[&str] = &["x86_64", "aarch64", "s390x", "riscv64"];
+
 /// Look for a supported ISA with the given `name`.
 /// Return a builder that can create a corresponding `TargetIsa`.
 pub fn lookup_by_name(name: &str) -> Result<Builder, LookupError> {
@@ -137,14 +142,16 @@ impl fmt::Display for LookupError {
     }
 }
 
+/// The type of a polymorphic TargetISA object which is 'static.
+pub type OwnedTargetIsa = Arc<dyn TargetIsa>;
+
 /// Builder for a `TargetIsa`.
 /// Modify the ISA-specific settings before creating the `TargetIsa` trait object with `finish`.
 #[derive(Clone)]
 pub struct Builder {
     triple: Triple,
     setup: settings::Builder,
-    constructor:
-        fn(Triple, settings::Flags, settings::Builder) -> CodegenResult<Box<dyn TargetIsa>>,
+    constructor: fn(Triple, settings::Flags, settings::Builder) -> CodegenResult<OwnedTargetIsa>,
 }
 
 impl Builder {
@@ -164,7 +171,7 @@ impl Builder {
     /// flags are inconsistent or incompatible: for example, some
     /// platform-independent features, like general SIMD support, may
     /// need certain ISA extensions to be enabled.
-    pub fn finish(self, shared_flags: settings::Flags) -> CodegenResult<Box<dyn TargetIsa>> {
+    pub fn finish(self, shared_flags: settings::Flags) -> CodegenResult<OwnedTargetIsa> {
         (self.constructor)(self.triple, shared_flags, self.setup)
     }
 }
@@ -292,6 +299,14 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
 
     /// The function alignment required by this ISA.
     fn function_alignment(&self) -> u32;
+
+    /// Create a polymorphic TargetIsa from this specific implementation.
+    fn wrapped(self) -> OwnedTargetIsa
+    where
+        Self: Sized + 'static,
+    {
+        Arc::new(self)
+    }
 }
 
 /// Methods implemented for free for target ISA!

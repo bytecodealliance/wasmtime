@@ -23,9 +23,7 @@ unsafe fn test_directory_seek(dir_fd: wasi::Fd) {
 
     // Attempt to seek.
     assert_errno!(
-        wasi::fd_seek(fd, 0, wasi::WHENCE_CUR)
-            .expect_err("seek on a directory")
-            .raw_error(),
+        wasi::fd_seek(fd, 0, wasi::WHENCE_CUR).expect_err("seek on a directory"),
         wasi::ERRNO_BADF
     );
 

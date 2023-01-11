@@ -1389,7 +1389,10 @@ pub(crate) fn define(
         )
         .operands_in(vec![c, x, y])
         .operands_out(vec![a])
-        .other_side_effects(true),
+        .other_side_effects(true)
+        // We can de-duplicate spectre selects since the side effect is
+        // idempotent.
+        .side_effects_idempotent(true),
     );
 
     let c = &Operand::new("c", Any).with_doc("Controlling value to test");
@@ -1683,7 +1686,8 @@ pub(crate) fn define(
             )
             .operands_in(vec![x, y])
             .operands_out(vec![a])
-            .can_trap(true),
+            .can_trap(true)
+            .side_effects_idempotent(true),
         );
 
         ig.push(
@@ -1701,7 +1705,8 @@ pub(crate) fn define(
             )
             .operands_in(vec![x, y])
             .operands_out(vec![a])
-            .can_trap(true),
+            .can_trap(true)
+            .side_effects_idempotent(true),
         );
 
         ig.push(
@@ -1716,7 +1721,8 @@ pub(crate) fn define(
             )
             .operands_in(vec![x, y])
             .operands_out(vec![a])
-            .can_trap(true),
+            .can_trap(true)
+            .side_effects_idempotent(true),
         );
 
         ig.push(
@@ -1731,7 +1737,8 @@ pub(crate) fn define(
             )
             .operands_in(vec![x, y])
             .operands_out(vec![a])
-            .can_trap(true),
+            .can_trap(true)
+            .side_effects_idempotent(true),
         );
     }
 
@@ -1958,7 +1965,8 @@ pub(crate) fn define(
             )
             .operands_in(vec![x, y, code])
             .operands_out(vec![a])
-            .can_trap(true),
+            .can_trap(true)
+            .side_effects_idempotent(true),
         );
     }
 
@@ -3320,7 +3328,8 @@ pub(crate) fn define(
         )
         .operands_in(vec![x])
         .operands_out(vec![a])
-        .can_trap(true),
+        .can_trap(true)
+        .side_effects_idempotent(true),
     );
 
     ig.push(
@@ -3338,7 +3347,8 @@ pub(crate) fn define(
         )
         .operands_in(vec![x])
         .operands_out(vec![a])
-        .can_trap(true),
+        .can_trap(true)
+        .side_effects_idempotent(true),
     );
 
     let x = &Operand::new("x", Float);

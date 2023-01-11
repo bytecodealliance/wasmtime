@@ -13,8 +13,7 @@ unsafe fn test_path_open_create_existing(dir_fd: wasi::Fd) {
             0,
             0,
         )
-        .expect_err("trying to create a file that already exists")
-        .raw_error(),
+        .expect_err("trying to create a file that already exists"),
         wasi::ERRNO_EXIST
     );
     wasi::path_unlink_file(dir_fd, "file").expect("removing a file");

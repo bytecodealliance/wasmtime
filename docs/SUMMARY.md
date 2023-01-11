@@ -33,6 +33,7 @@
   - [.NET](./lang-dotnet.md)
   - [Go](./lang-go.md)
   - [Bash](./lang-bash.md)
+  - [Ruby](./lang-ruby.md)
 - [Using the `wasmtime` CLI](./cli.md)
   - [Installation](./cli-install.md)
   - [CLI Options](./cli-options.md)

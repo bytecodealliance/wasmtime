@@ -216,7 +216,7 @@ pub fn isa_builder(triple: Triple) -> IsaBuilder {
         constructor: |triple, shared_flags, builder| {
             let isa_flags = aarch64_settings::Flags::new(&shared_flags, builder);
             let backend = AArch64Backend::new_with_flags(triple, shared_flags, isa_flags);
-            Ok(Box::new(backend))
+            Ok(backend.wrapped())
         },
     }
 }

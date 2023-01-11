@@ -1,6 +1,6 @@
 test interpret
 test run
-; target aarch64
+target aarch64
 ; target s390x
 target x86_64
 target riscv64
@@ -135,3 +135,18 @@ block0(v0: i64, v1: i64):
 ; run: %umin_max_i64(2, 1) == [1, 2]
 ; run: %umin_max_i64(0x7fffffff, 0x80000000) == [0x7fffffff, 0x80000000]
 ; run: %umin_max_i64(0x7fffffffffffffff, 0x8000000000000000) == [0x7fffffffffffffff, 0x8000000000000000]
+
+; make sure that upper/uninitialized parts of operand registers do not leak
+; inside of the comparison
+function %umin_max_i32_trunc_to_i8(i32, i32) -> i8, i8 {
+block0(v0: i32, v1: i32):
+    v2 = ireduce.i8 v0
+    v3 = ireduce.i8 v1
+    v4 = umin.i8 v2, v3
+    v5 = umax.i8 v2, v3
+    return v4, v5
+}
+; run: %umin_max_i32_trunc_to_i8(1, 2) == [1, 2]
+; run: %umin_max_i32_trunc_to_i8(0xBB01, 0xAA02) == [1, 2]
+; run: %umin_max_i32_trunc_to_i8(0xBB02, 0xABCD0001) == [1, 2]
+; run: %umin_max_i32_trunc_to_i8(0x1234567f, 0x12345680) == [0x7f, 0x80]

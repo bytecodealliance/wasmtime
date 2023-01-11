@@ -61,6 +61,11 @@ pub fn run(path: &Path, wat: &str) -> Result<()> {
                 .map_err(|e| crate::pretty_anyhow_error(&e.func, e.inner))?;
             writeln!(&mut actual, "function {}:", func.name).unwrap();
             writeln!(&mut actual, "{}", code.disasm.as_ref().unwrap()).unwrap();
+        } else if config.optimize {
+            let mut ctx = cranelift_codegen::Context::for_function(func.clone());
+            ctx.optimize(isa)
+                .map_err(|e| crate::pretty_anyhow_error(&ctx.func, e))?;
+            writeln!(&mut actual, "{}", ctx.func.display()).unwrap();
         } else {
             writeln!(&mut actual, "{}", func.display()).unwrap();
         }
@@ -109,7 +114,9 @@ pub fn run(path: &Path, wat: &str) -> Result<()> {
                 }
             }))
             .collect();
-        std::fs::write(path, new_wat_lines.join("\n"))
+        let mut new_wat = new_wat_lines.join("\n");
+        new_wat.push('\n');
+        std::fs::write(path, new_wat)
             .with_context(|| format!("failed to write file: {}", path.display()))?;
         return Ok(());
     }

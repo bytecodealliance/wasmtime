@@ -484,6 +484,9 @@ pub struct BoundVar {
     pub name: Sym,
     /// The type of the value this variable is bound to.
     pub ty: TypeId,
+    /// A counter used to check whether this variable is still in scope during
+    /// semantic analysis. Not meaningful afterward.
+    scope: usize,
 }
 
 /// An `if-let` clause with a subpattern match on an expr after the
@@ -1112,19 +1115,46 @@ impl TypeEnv {
 
 #[derive(Clone, Debug, Default)]
 struct Bindings {
+    /// All bindings accumulated so far within the current rule, including let-
+    /// bindings which have gone out of scope.
     seen: Vec<BoundVar>,
+    /// Counter for unique scope IDs within this set of bindings.
+    next_scope: usize,
+    /// Stack of the scope IDs for bindings which are currently in scope.
+    in_scope: Vec<usize>,
 }
 
 impl Bindings {
+    fn enter_scope(&mut self) {
+        self.in_scope.push(self.next_scope);
+        self.next_scope += 1;
+    }
+
+    fn exit_scope(&mut self) {
+        self.in_scope.pop();
+    }
+
     fn add_var(&mut self, name: Sym, ty: TypeId) -> VarId {
         let id = VarId(self.seen.len());
-        log!("binding var {:?} as {:?} with type {:?}", name.0, id, ty);
-        self.seen.push(BoundVar { id, name, ty });
+        let var = BoundVar {
+            id,
+            name,
+            ty,
+            scope: *self
+                .in_scope
+                .last()
+                .expect("enter_scope should be called before add_var"),
+        };
+        log!("binding var {:?}", var);
+        self.seen.push(var);
         id
     }
 
     fn lookup(&self, name: Sym) -> Option<&BoundVar> {
-        self.seen.iter().rev().find(|binding| binding.name == name)
+        self.seen
+            .iter()
+            .rev()
+            .find(|binding| binding.name == name && self.in_scope.contains(&binding.scope))
     }
 }
 
@@ -1656,6 +1686,7 @@ impl TermEnv {
                 &ast::Def::Rule(ref rule) => {
                     let pos = rule.pos;
                     let mut bindings = Bindings::default();
+                    bindings.enter_scope();
 
                     let (sym, args) = if let ast::Pattern::Term { sym, args, .. } = &rule.pattern {
                         (sym, args)
@@ -1710,6 +1741,8 @@ impl TermEnv {
                         flags,
                         /* on_lhs */ false,
                     ));
+
+                    bindings.exit_scope();
 
                     let rid = RuleId(self.rules.len());
                     self.rules.push(Rule {
@@ -2299,7 +2332,7 @@ impl TermEnv {
                 ref body,
                 pos,
             } => {
-                let orig_binding_len = bindings.seen.len();
+                bindings.enter_scope();
 
                 // For each new binding...
                 let mut let_defs = vec![];
@@ -2340,7 +2373,7 @@ impl TermEnv {
                 let body_ty = body.ty();
 
                 // Pop the bindings.
-                bindings.seen.truncate(orig_binding_len);
+                bindings.exit_scope();
 
                 Some(Expr::Let {
                     ty: body_ty,

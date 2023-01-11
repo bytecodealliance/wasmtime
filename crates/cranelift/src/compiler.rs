@@ -10,7 +10,7 @@ use anyhow::{Context as _, Result};
 use cranelift_codegen::ir::{
     self, ExternalName, Function, InstBuilder, MemFlags, UserExternalName, UserFuncName, Value,
 };
-use cranelift_codegen::isa::TargetIsa;
+use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::Context;
 use cranelift_codegen::{settings, MachReloc, MachTrap};
@@ -68,7 +68,7 @@ impl Default for CompilerContext {
 /// the Wasm to Compiler IR, optimizing it and then translating to assembly.
 pub(crate) struct Compiler {
     contexts: Mutex<Vec<CompilerContext>>,
-    isa: Box<dyn TargetIsa>,
+    isa: OwnedTargetIsa,
     linkopts: LinkOptions,
     cache_store: Option<Arc<dyn CacheStore>>,
 }
@@ -103,7 +103,7 @@ impl Drop for Compiler {
 
 impl Compiler {
     pub(crate) fn new(
-        isa: Box<dyn TargetIsa>,
+        isa: OwnedTargetIsa,
         cache_store: Option<Arc<dyn CacheStore>>,
         linkopts: LinkOptions,
     ) -> Compiler {

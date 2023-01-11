@@ -25,7 +25,7 @@ unsafe fn test_readlink(dir_fd: wasi::Fd) {
     let err = wasi::path_readlink(dir_fd, "symlink", buf.as_mut_ptr(), buf.len())
         .err()
         .expect("readlink with too-small buffer should fail");
-    assert_errno!(err.raw_error(), wasi::ERRNO_RANGE);
+    assert_errno!(err, wasi::ERRNO_RANGE);
 
     // Clean up.
     wasi::path_unlink_file(dir_fd, "target").expect("removing a file");

@@ -11,8 +11,10 @@ block0(v0: i8, v1: i64, v2: i64):
 }
 
 ; block0:
-;   li a3,42
-;   select_reg a0,a1,a2##condition=(a0 eq a3)
+;   andi a3,a0,255
+;   li a4,42
+;   andi a5,a4,255
+;   select_reg a0,a1,a2##condition=(a3 eq a5)
 ;   ret
 
 function %g(i8) -> i8 {
@@ -62,8 +64,10 @@ block0(v0: i32, v1: i8, v2: i8):
 }
 
 ; block0:
-;   li a3,42
-;   select_reg a0,a1,a2##condition=(a0 eq a3)
+;   addiw a3,a0,0
+;   li a4,42
+;   addiw a5,a4,0
+;   select_reg a0,a1,a2##condition=(a3 eq a5)
 ;   ret
 
 function %i128_select(i8, i128, i128) -> i128 {

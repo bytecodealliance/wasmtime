@@ -1,5 +1,4 @@
 unsafe fn test_fd_filestat_get() {
-
     let stat = wasi::fd_filestat_get(libc::STDIN_FILENO as u32).expect("failed filestat 0");
     assert_eq!(stat.size, 0, "stdio size should be 0");
     assert_eq!(stat.atim, 0, "stdio atim should be 0");

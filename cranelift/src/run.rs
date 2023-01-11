@@ -3,7 +3,7 @@
 use crate::utils::{iterate_files, read_to_string};
 use anyhow::Result;
 use clap::Parser;
-use cranelift_codegen::isa::{CallConv, TargetIsa};
+use cranelift_codegen::isa::{CallConv, OwnedTargetIsa};
 use cranelift_filetests::TestFileCompiler;
 use cranelift_native::builder as host_isa_builder;
 use cranelift_reader::{parse_run_command, parse_test, Details, IsaSpec, ParseOptions};
@@ -105,7 +105,7 @@ fn run_file_contents(file_contents: String) -> Result<()> {
 }
 
 /// Build an ISA based on the current machine running this code (the host)
-fn create_target_isa(isa_spec: &IsaSpec) -> Result<Box<dyn TargetIsa>> {
+fn create_target_isa(isa_spec: &IsaSpec) -> Result<OwnedTargetIsa> {
     if let IsaSpec::None(flags) = isa_spec {
         // build an ISA for the current machine
         let builder = host_isa_builder().map_err(|s| anyhow::anyhow!("{}", s))?;

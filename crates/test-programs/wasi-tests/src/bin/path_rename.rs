@@ -12,8 +12,7 @@ unsafe fn test_path_rename(dir_fd: wasi::Fd) {
     // Check that source directory doesn't exist anymore
     assert_errno!(
         wasi::path_open(dir_fd, 0, "source", wasi::OFLAGS_DIRECTORY, 0, 0, 0)
-            .expect_err("opening a nonexistent path as a directory should fail")
-            .raw_error(),
+            .expect_err("opening a nonexistent path as a directory should fail"),
         wasi::ERRNO_NOENT
     );
 
@@ -41,8 +40,7 @@ unsafe fn test_path_rename(dir_fd: wasi::Fd) {
         // Check that source directory doesn't exist anymore
         assert_errno!(
             wasi::path_open(dir_fd, 0, "source", wasi::OFLAGS_DIRECTORY, 0, 0, 0)
-                .expect_err("opening a nonexistent path as a directory")
-                .raw_error(),
+                .expect_err("opening a nonexistent path as a directory"),
             wasi::ERRNO_NOENT
         );
 
@@ -72,8 +70,7 @@ unsafe fn test_path_rename(dir_fd: wasi::Fd) {
 
     assert_errno!(
         wasi::path_rename(dir_fd, "source", dir_fd, "target")
-            .expect_err("renaming directory to a nonempty directory")
-            .raw_error(),
+            .expect_err("renaming directory to a nonempty directory"),
         windows => wasi::ERRNO_ACCES,
         unix => wasi::ERRNO_NOTEMPTY
     );
@@ -85,8 +82,7 @@ unsafe fn test_path_rename(dir_fd: wasi::Fd) {
         // Try renaming dir to a file
         assert_errno!(
             wasi::path_rename(dir_fd, "source", dir_fd, "target/file")
-                .expect_err("renaming a directory to a file")
-                .raw_error(),
+                .expect_err("renaming a directory to a file"),
             wasi::ERRNO_NOTDIR
         );
         wasi::path_unlink_file(dir_fd, "target/file").expect("removing a file");
@@ -107,8 +103,7 @@ unsafe fn test_path_rename(dir_fd: wasi::Fd) {
     // Check that source file doesn't exist anymore
     assert_errno!(
         wasi::path_open(dir_fd, 0, "source", 0, 0, 0, 0)
-            .expect_err("opening a nonexistent path should fail")
-            .raw_error(),
+            .expect_err("opening a nonexistent path should fail"),
         wasi::ERRNO_NOENT
     );
 
@@ -131,9 +126,7 @@ unsafe fn test_path_rename(dir_fd: wasi::Fd) {
 
     // Check that source file doesn't exist anymore
     assert_errno!(
-        wasi::path_open(dir_fd, 0, "source", 0, 0, 0, 0)
-            .expect_err("opening a nonexistent path")
-            .raw_error(),
+        wasi::path_open(dir_fd, 0, "source", 0, 0, 0, 0).expect_err("opening a nonexistent path"),
         wasi::ERRNO_NOENT
     );
 
@@ -153,8 +146,7 @@ unsafe fn test_path_rename(dir_fd: wasi::Fd) {
 
     assert_errno!(
         wasi::path_rename(dir_fd, "source", dir_fd, "target")
-            .expect_err("renaming a file to existing directory should fail")
-            .raw_error(),
+            .expect_err("renaming a file to existing directory should fail"),
         windows => wasi::ERRNO_ACCES,
         unix => wasi::ERRNO_ISDIR
     );

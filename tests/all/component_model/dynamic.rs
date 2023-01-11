@@ -21,12 +21,12 @@ fn primitives() -> Result<()> {
         (Val::S64(-31415926535897), "s64", Param(Type::I64, Some(0))),
         (Val::U64(31415926535897), "u64", Param(Type::I64, Some(0))),
         (
-            Val::Float32(3.14159265_f32.to_bits()),
+            Val::Float32(3.14159265),
             "float32",
             Param(Type::F32, Some(0)),
         ),
         (
-            Val::Float64(3.14159265_f64.to_bits()),
+            Val::Float64(3.14159265),
             "float64",
             Param(Type::F64, Some(0)),
         ),
@@ -59,10 +59,7 @@ fn primitives() -> Result<()> {
     let err = func
         .call_and_post_return(
             &mut store,
-            &[
-                Val::Float64(3.14159265_f64.to_bits()),
-                Val::Float64(3.14159265_f64.to_bits()),
-            ],
+            &[Val::Float64(3.14159265), Val::Float64(3.14159265)],
             &mut output,
         )
         .unwrap_err();
@@ -135,7 +132,7 @@ fn lists() -> Result<()> {
         .new_val(Box::new([
             Val::U32(32343),
             Val::U32(79023439),
-            Val::Float32(3.14159265_f32.to_bits()),
+            Val::Float32(3.14159265),
         ]))
         .unwrap_err();
 
@@ -167,7 +164,7 @@ fn records() -> Result<()> {
     let inner_type = &ty.unwrap_record().fields().nth(2).unwrap().ty;
     let input = ty.unwrap_record().new_val([
         ("A", Val::U32(32343)),
-        ("B", Val::Float64(3.14159265_f64.to_bits())),
+        ("B", Val::Float64(3.14159265)),
         (
             "C",
             inner_type
@@ -186,7 +183,7 @@ fn records() -> Result<()> {
         .unwrap_record()
         .new_val([
             ("A", Val::S32(32343)),
-            ("B", Val::Float64(3.14159265_f64.to_bits())),
+            ("B", Val::Float64(3.14159265)),
             (
                 "C",
                 inner_type
@@ -204,7 +201,7 @@ fn records() -> Result<()> {
         .unwrap_record()
         .new_val([
             ("A", Val::U32(32343)),
-            ("B", Val::Float64(3.14159265_f64.to_bits())),
+            ("B", Val::Float64(3.14159265)),
             (
                 "C",
                 inner_type
@@ -224,10 +221,7 @@ fn records() -> Result<()> {
 
     let err = ty
         .unwrap_record()
-        .new_val([
-            ("A", Val::U32(32343)),
-            ("B", Val::Float64(3.14159265_f64.to_bits())),
-        ])
+        .new_val([("A", Val::U32(32343)), ("B", Val::Float64(3.14159265))])
         .unwrap_err();
 
     assert!(
@@ -259,7 +253,7 @@ fn variants() -> Result<()> {
     let ty = &func.params(&store)[0];
     let input = ty
         .unwrap_variant()
-        .new_val("B", Some(Val::Float64(3.14159265_f64.to_bits())))?;
+        .new_val("B", Some(Val::Float64(3.14159265)))?;
     let mut output = [Val::Bool(false)];
     func.call_and_post_return(&mut store, &[input.clone()], &mut output)?;
 
@@ -481,14 +475,14 @@ fn everything() -> Result<()> {
             "J",
             j_type
                 .unwrap_variant()
-                .new_val("L", Some(Val::Float64(3.14159265_f64.to_bits())))?,
+                .new_val("L", Some(Val::Float64(3.14159265)))?,
         ),
         ("P", Val::S8(42)),
         ("Q", Val::S16(4242)),
         ("R", Val::S32(42424242)),
         ("S", Val::S64(424242424242424242)),
-        ("T", Val::Float32(3.14159265_f32.to_bits())),
-        ("U", Val::Float64(3.14159265_f64.to_bits())),
+        ("T", Val::Float32(3.14159265)),
+        ("U", Val::Float64(3.14159265)),
         ("V", Val::String(Box::from("wow, nice types"))),
         ("W", Val::Char('🦀')),
         (
@@ -499,9 +493,7 @@ fn everything() -> Result<()> {
         ),
         (
             "Z",
-            z_type
-                .unwrap_union()
-                .new_val(1, Val::Float64(3.14159265_f64.to_bits()))?,
+            z_type.unwrap_union().new_val(1, Val::Float64(3.14159265))?,
         ),
         (
             "AA",

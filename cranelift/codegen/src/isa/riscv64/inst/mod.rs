@@ -407,12 +407,6 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::TrapIf { test, .. } => {
             collector.reg_use(test);
         }
-        &Inst::TrapFf { x, y, tmp, .. } => {
-            collector.reg_use(x);
-            collector.reg_use(y);
-            collector.reg_early_def(tmp);
-        }
-
         &Inst::Jal { .. } => {}
         &Inst::CondBr { kind, .. } => {
             collector.reg_use(kind.rs1);
@@ -459,11 +453,6 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(addr);
             collector.reg_use(src);
             collector.reg_def(rd);
-        }
-        &Inst::Fcmp { rd, rs1, rs2, .. } => {
-            collector.reg_use(rs1);
-            collector.reg_use(rs2);
-            collector.reg_early_def(rd);
         }
         &Inst::Select {
             ref dst,
@@ -1366,25 +1355,6 @@ impl Inst {
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!("{} {},{}", op.op_name(), rd, base,)
             }
-            &Inst::Fcmp {
-                rd,
-                cc,
-                ty,
-                rs1,
-                rs2,
-            } => {
-                let rs1 = format_reg(rs1, allocs);
-                let rs2 = format_reg(rs2, allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
-                format!(
-                    "f{}.{} {},{},{}",
-                    cc,
-                    if ty == F32 { "s" } else { "d" },
-                    rd,
-                    rs1,
-                    rs2,
-                )
-            }
             &Inst::Store {
                 to,
                 src,
@@ -1406,8 +1376,16 @@ impl Inst {
                 }
                 s
             }
-            &Inst::Ret { .. } => {
-                format!("ret")
+            &Inst::Ret { ref rets } => {
+                let mut s = "ret".to_string();
+                let mut empty_allocs = AllocationConsumer::default();
+                for ret in rets {
+                    use std::fmt::Write;
+                    let preg = format_reg(ret.preg, &mut empty_allocs);
+                    let vreg = format_reg(ret.vreg, allocs);
+                    write!(&mut s, " {}={}", vreg, preg).unwrap();
+                }
+                s
             }
 
             &MInst::Extend {
@@ -1447,22 +1425,6 @@ impl Inst {
                 let rs2 = format_reg(rs2, allocs);
                 format!("trap_ifc {}##({} {} {})", trap_code, rs1, cc, rs2)
             }
-            &MInst::TrapFf {
-                cc,
-                x,
-                y,
-                ty,
-                trap_code,
-                tmp,
-            } => format!(
-                "trap_ff_{} {} {},{}##tmp={} ty={}",
-                cc,
-                trap_code,
-                format_reg(x, allocs),
-                format_reg(y, allocs),
-                format_reg(tmp.to_reg(), allocs),
-                ty,
-            ),
             &MInst::Jal { dest, .. } => {
                 format!("{} {}", "j", dest)
             }

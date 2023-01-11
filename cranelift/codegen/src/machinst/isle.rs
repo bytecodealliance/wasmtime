@@ -548,6 +548,21 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         #[inline]
+        fn maybe_uextend(&mut self, value: Value) -> Option<Value> {
+            if let Some(def_inst) = self.def_inst(value) {
+                if let InstructionData::Unary {
+                    opcode: Opcode::Uextend,
+                    arg,
+                } = self.lower_ctx.data(def_inst)
+                {
+                    return Some(*arg);
+                }
+            }
+
+            Some(value)
+        }
+
+        #[inline]
         fn preg_to_reg(&mut self, preg: PReg) -> Reg {
             preg.into()
         }

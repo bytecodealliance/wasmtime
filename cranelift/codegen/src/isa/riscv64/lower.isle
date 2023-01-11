@@ -76,11 +76,8 @@
 ;;;; Rules for `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `i64` and smaller.
-(rule 1 (lower (has_type (fits_in_64 ty) (ineg x)))
-  (alu_rrr (AluOPRRR.Sub) (zero_reg) x))
-
-(rule 2 (lower (has_type $I128 (ineg x)))
-  (i128_sub (value_regs_zero) x))
+(rule (lower (has_type ty (ineg val)))
+  (neg ty val))
 
 ;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -615,8 +612,10 @@
   (gen_select ty (truthy_to_reg cty (normalize_cmp_value cty c)) x y))
 
 (rule 1
-  (lower (has_type ty (select (icmp cc a b) x y)))
-  (gen_select_reg cc a b x y))
+  (lower (has_type ty (select (icmp cc a b @ (value_type in_ty)) x y)))
+  (let ((a Reg (normalize_cmp_value in_ty a))
+        (b Reg (normalize_cmp_value in_ty b)))
+    (gen_select_reg cc a b x y)))
 
 ;;;;;  Rules for `bitselect`;;;;;;;;;
 
@@ -753,18 +752,10 @@
   (lower (icmp cc x @ (value_type ty) y))
   (lower_icmp cc x y ty))
 
-(decl gen_fcmp (FloatCC Value Value Type) Reg)
-(rule
-  (gen_fcmp cc x y ty)
-  (let
-    ((result WritableReg (temp_writable_reg $I64))
-      (_ Unit (emit (MInst.Fcmp cc result x y ty))))
-    (writable_reg_to_reg result)))
-
 ;;;;;  Rules for `fcmp`;;;;;;;;;
 (rule
   (lower (fcmp cc x @ (value_type ty) y))
-  (gen_fcmp cc x y ty))
+  (cmp_value (emit_fcmp cc ty x y)))
 
 ;;;;;  Rules for `func_addr`;;;;;;;;;
 (rule
@@ -869,7 +860,7 @@
 ;;; Rules for `iabs` ;;;;;;;;;;;;;
 (rule
   (lower (has_type (fits_in_64 ty) (iabs x)))
-  (lower_iabs x ty))
+  (lower_iabs ty x))
 
 ;;;; Rules for calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

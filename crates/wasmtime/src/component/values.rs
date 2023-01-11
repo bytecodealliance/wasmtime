@@ -487,7 +487,7 @@ impl fmt::Debug for Flags {
 }
 
 /// Represents possible runtime values which a component function can either consume or produce
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Clone)]
 #[allow(missing_docs)]
 pub enum Val {
     Bool(bool),
@@ -499,8 +499,8 @@ pub enum Val {
     U32(u32),
     S64(i64),
     U64(u64),
-    Float32(u32),
-    Float64(u64),
+    Float32(f32),
+    Float64(f64),
     Char(char),
     String(Box<str>),
     List(List),
@@ -560,8 +560,8 @@ impl Val {
             Type::U32 => Val::U32(u32::lift(store, options, next(src))?),
             Type::S64 => Val::S64(i64::lift(store, options, next(src))?),
             Type::U64 => Val::U64(u64::lift(store, options, next(src))?),
-            Type::Float32 => Val::Float32(u32::lift(store, options, next(src))?),
-            Type::Float64 => Val::Float64(u64::lift(store, options, next(src))?),
+            Type::Float32 => Val::Float32(f32::lift(store, options, next(src))?),
+            Type::Float64 => Val::Float64(f64::lift(store, options, next(src))?),
             Type::Char => Val::Char(char::lift(store, options, next(src))?),
             Type::String => {
                 Val::String(Box::<str>::lift(store, options, &[*next(src), *next(src)])?)
@@ -688,8 +688,8 @@ impl Val {
             Type::U32 => Val::U32(u32::load(mem, bytes)?),
             Type::S64 => Val::S64(i64::load(mem, bytes)?),
             Type::U64 => Val::U64(u64::load(mem, bytes)?),
-            Type::Float32 => Val::Float32(u32::load(mem, bytes)?),
-            Type::Float64 => Val::Float64(u64::load(mem, bytes)?),
+            Type::Float32 => Val::Float32(f32::load(mem, bytes)?),
+            Type::Float64 => Val::Float64(f64::load(mem, bytes)?),
             Type::Char => Val::Char(char::load(mem, bytes)?),
             Type::String => Val::String(Box::<str>::load(mem, bytes)?),
             Type::List(handle) => {
@@ -1003,6 +1003,61 @@ impl Val {
         Ok(())
     }
 }
+
+impl PartialEq for Val {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            // This breaks conformance with IEEE-754 equality to simplify testing logic.
+            (Self::Float32(l), Self::Float32(r)) => l == r || (l.is_nan() && r.is_nan()),
+            (Self::Float32(_), _) => false,
+            (Self::Float64(l), Self::Float64(r)) => l == r || (l.is_nan() && r.is_nan()),
+            (Self::Float64(_), _) => false,
+
+            (Self::Bool(l), Self::Bool(r)) => l == r,
+            (Self::Bool(_), _) => false,
+            (Self::S8(l), Self::S8(r)) => l == r,
+            (Self::S8(_), _) => false,
+            (Self::U8(l), Self::U8(r)) => l == r,
+            (Self::U8(_), _) => false,
+            (Self::S16(l), Self::S16(r)) => l == r,
+            (Self::S16(_), _) => false,
+            (Self::U16(l), Self::U16(r)) => l == r,
+            (Self::U16(_), _) => false,
+            (Self::S32(l), Self::S32(r)) => l == r,
+            (Self::S32(_), _) => false,
+            (Self::U32(l), Self::U32(r)) => l == r,
+            (Self::U32(_), _) => false,
+            (Self::S64(l), Self::S64(r)) => l == r,
+            (Self::S64(_), _) => false,
+            (Self::U64(l), Self::U64(r)) => l == r,
+            (Self::U64(_), _) => false,
+            (Self::Char(l), Self::Char(r)) => l == r,
+            (Self::Char(_), _) => false,
+            (Self::String(l), Self::String(r)) => l == r,
+            (Self::String(_), _) => false,
+            (Self::List(l), Self::List(r)) => l == r,
+            (Self::List(_), _) => false,
+            (Self::Record(l), Self::Record(r)) => l == r,
+            (Self::Record(_), _) => false,
+            (Self::Tuple(l), Self::Tuple(r)) => l == r,
+            (Self::Tuple(_), _) => false,
+            (Self::Variant(l), Self::Variant(r)) => l == r,
+            (Self::Variant(_), _) => false,
+            (Self::Enum(l), Self::Enum(r)) => l == r,
+            (Self::Enum(_), _) => false,
+            (Self::Union(l), Self::Union(r)) => l == r,
+            (Self::Union(_), _) => false,
+            (Self::Option(l), Self::Option(r)) => l == r,
+            (Self::Option(_), _) => false,
+            (Self::Result(l), Self::Result(r)) => l == r,
+            (Self::Result(_), _) => false,
+            (Self::Flags(l), Self::Flags(r)) => l == r,
+            (Self::Flags(_), _) => false,
+        }
+    }
+}
+
+impl Eq for Val {}
 
 fn load_list(handle: &types::List, mem: &Memory, ptr: usize, len: usize) -> Result<Val> {
     let element_type = handle.ty();

@@ -107,19 +107,12 @@
       (rs2 Reg)
       (cc IntCC)
       (trap_code TrapCode))
-    (TrapFf
-      (cc FloatCC)
-      (x Reg)
-      (y Reg)
-      (ty Type)
-      (tmp WritableReg)
-      (trap_code TrapCode))
 
     (Jal
       ;; (rd WritableReg) don't use
       (dest BranchTarget))
 
-     (CondBr
+    (CondBr
       (taken BranchTarget)
       (not_taken BranchTarget)
       (kind IntegerCompare))
@@ -203,14 +196,6 @@
       (p Reg)
       (x Reg)
       (t0 WritableReg))
-
-    ;; a float compare
-    (Fcmp
-      (cc FloatCC)
-      (rd WritableReg)
-      (rs1 Reg)
-      (rs2 Reg)
-      (ty Type))
 
     ;; select x or y base on condition
     (Select
@@ -689,7 +674,6 @@
     (None)
     (Tso)
 ))
-
 
 (type VecBranchTarget (primitive VecBranchTarget))
 (type BoxCallInfo (primitive BoxCallInfo))
@@ -1880,9 +1864,6 @@
 (decl lower_br_icmp (IntCC ValueRegs ValueRegs VecMachLabel Type) Unit)
 (extern constructor lower_br_icmp lower_br_icmp)
 
-(decl lower_br_fcmp (FloatCC Reg Reg VecMachLabel Type) Unit)
-(extern constructor lower_br_fcmp lower_br_fcmp)
-
 ;; int scalar zero regs.
 (decl int_zero_reg (Type) ValueRegs)
 (extern constructor int_zero_reg int_zero_reg)
@@ -1935,7 +1916,9 @@
 
 (rule 1
   (lower_branch (brz (fcmp cc a @ (value_type ty) b) _ _) targets)
-  (lower_br_fcmp (floatcc_inverse cc) a b targets ty))
+  (let ((then BranchTarget (label_to_br_target (vec_label_get targets 0)))
+        (else BranchTarget (label_to_br_target (vec_label_get targets 1))))
+    (emit_side_effect (cond_br (emit_fcmp (floatcc_inverse cc) ty a b) then else))))
 
 ;;;;
 (rule
@@ -1955,7 +1938,9 @@
 
 (rule 1
   (lower_branch (brnz (fcmp cc a @ (value_type ty) b) _ _) targets)
-  (lower_br_fcmp cc a b targets ty))
+  (let ((then BranchTarget (label_to_br_target (vec_label_get targets 0)))
+        (else BranchTarget (label_to_br_target (vec_label_get targets 1))))
+    (emit_side_effect (cond_br (emit_fcmp cc ty a b) then else))))
 
 ;;;
 (decl lower_br_table (Reg VecMachLabel) Unit)
@@ -2011,8 +1996,12 @@
       (step WritableReg (temp_writable_reg $I64))
       (_ Unit (emit (MInst.Rev8 rs step tmp rd))))
     (writable_reg_to_reg rd)))
+
 (decl pure has_zbkb () bool)
 (extern constructor has_zbkb has_zbkb)
+
+(decl pure has_zbb () bool)
+(extern constructor has_zbb has_zbb)
 
 (decl gen_brev8 (Reg Type) Reg)
 (rule 1
@@ -2038,21 +2027,39 @@
     ((tmp Reg (gen_bit_not y)))
     (alu_rrr (AluOPRRR.Xor) x tmp)))
 
-(decl lower_iabs (Reg Type) Reg)
-(rule
-  (lower_iabs r ty)
-  (let
-    ((tmp Reg (ext_int_if_need $true r ty))
-      (a Reg (gen_bit_not r))
-      (a2 Reg (alu_rr_imm12 (AluOPRRI.Addi) a (imm12_const 1))))
-    (gen_select_reg (IntCC.SignedLessThan) r (zero_reg) a2 r)))
+;; Negates x
+;; Equivalent to 0 - x
+(decl neg (Type ValueRegs) ValueRegs)
+(rule 1 (neg (fits_in_64 (ty_int ty)) val)
+  (value_reg
+    (alu_rrr (AluOPRRR.Sub) (zero_reg) (value_regs_get val 0))))
 
-(decl gen_trapff (FloatCC Reg Reg Type TrapCode) InstOutput)
-(rule
-  (gen_trapff cc a b ty trap_code)
-  (let
-    ((tmp WritableReg (temp_writable_reg $I64)))
-    (side_effect (SideEffectNoResult.Inst (MInst.TrapFf cc a b ty tmp trap_code)))))
+(rule 2 (neg $I128 val)
+  (i128_sub (value_regs_zero) val))
+
+
+;; Selects the greatest of two registers as signed values.
+(decl max (Type Reg Reg) Reg)
+(rule (max (fits_in_64 (ty_int ty)) x y)
+  (if-let $true (has_zbb))
+  (alu_rrr (AluOPRRR.Max) x y))
+
+(rule (max (fits_in_64 (ty_int ty)) x y)
+  (if-let $false (has_zbb))
+  (gen_select_reg (IntCC.SignedGreaterThan) x y x y))
+
+
+(decl lower_iabs (Type Reg) Reg)
+
+; I64 and lower
+; Generate the following code:
+;   sext.{b,h,w} a0, a0
+;   neg a1, a0
+;   max a0, a0, a1
+(rule (lower_iabs (fits_in_64 ty) val)
+  (let ((extended Reg (ext_int_if_need $true val ty))
+        (negated Reg (neg $I64 extended)))
+    (max $I64 extended negated)))
 
 (decl gen_trapif (Reg TrapCode) InstOutput)
 (rule
@@ -2163,3 +2170,159 @@
 
 (decl sp_reg () PReg)
 (extern constructor sp_reg sp_reg)
+
+
+;;;; Helpers for floating point comparisons ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl not (Reg) Reg)
+(rule (not x) (alu_rr_imm12 (AluOPRRI.Xori) x (imm_from_bits 1)))
+
+(decl emit_or (Reg Reg) Reg)
+(rule (emit_or x y) (alu_rrr (AluOPRRR.Or) x y))
+
+(decl emit_and (Reg Reg) Reg)
+(rule (emit_and x y) (alu_rrr (AluOPRRR.And) x y))
+
+(decl is_not_nan (Type Reg) Reg)
+(rule (is_not_nan ty a) (feq ty a a))
+
+(decl feq (Type Reg Reg) Reg)
+(rule (feq $F32 a b) (fpu_rrr (FpuOPRRR.FeqS) $I64 a b))
+(rule (feq $F64 a b) (fpu_rrr (FpuOPRRR.FeqD) $I64 a b))
+
+(decl flt (Type Reg Reg) Reg)
+(rule (flt $F32 a b) (fpu_rrr (FpuOPRRR.FltS) $I64 a b))
+(rule (flt $F64 a b) (fpu_rrr (FpuOPRRR.FltD) $I64 a b))
+
+(decl fle (Type Reg Reg) Reg)
+(rule (fle $F32 a b) (fpu_rrr (FpuOPRRR.FleS) $I64 a b))
+(rule (fle $F64 a b) (fpu_rrr (FpuOPRRR.FleD) $I64 a b))
+
+(decl fgt (Type Reg Reg) Reg)
+(rule (fgt ty a b) (flt ty b a))
+
+(decl fge (Type Reg Reg) Reg)
+(rule (fge ty a b) (fle ty b a))
+
+(decl ordered (Type Reg Reg) Reg)
+(rule (ordered ty a b) (emit_and (is_not_nan ty a) (is_not_nan ty b)))
+
+(type CmpResult (enum
+                  (Result
+                    (result Reg)
+                    (invert bool))))
+
+;; Wrapper for the common case when constructing comparison results. It assumes
+;; that the result isn't negated.
+(decl cmp_result (Reg) CmpResult)
+(rule (cmp_result result) (CmpResult.Result result $false))
+
+;; Wrapper for the case where it's more convenient to construct the negated
+;; version of the comparison.
+(decl cmp_result_invert (Reg) CmpResult)
+(rule (cmp_result_invert result) (CmpResult.Result result $true))
+
+;; Consume a CmpResult, producing a branch on its result.
+(decl cond_br (CmpResult BranchTarget BranchTarget) SideEffectNoResult)
+(rule (cond_br cmp then else)
+      (SideEffectNoResult.Inst
+        (MInst.CondBr then else (cmp_integer_compare cmp))))
+
+;; Construct an IntegerCompare value.
+(decl int_compare (IntCC Reg Reg) IntegerCompare)
+(extern constructor int_compare int_compare)
+
+;; Convert a comparison into a branch test.
+(decl cmp_integer_compare (CmpResult) IntegerCompare)
+
+(rule
+  (cmp_integer_compare (CmpResult.Result res $false))
+  (int_compare (IntCC.NotEqual) res (zero_reg)))
+
+(rule
+  (cmp_integer_compare (CmpResult.Result res $true))
+  (int_compare (IntCC.Equal) res (zero_reg)))
+
+;; Convert a comparison into a boolean value.
+(decl cmp_value (CmpResult) Reg)
+(rule (cmp_value (CmpResult.Result res $false)) res)
+(rule (cmp_value (CmpResult.Result res $true)) (not res))
+
+;; Compare two floating point numbers and return a zero/non-zero result.
+(decl emit_fcmp (FloatCC Type Reg Reg) CmpResult)
+
+;; a is not nan && b is not nan
+(rule
+  (emit_fcmp (FloatCC.Ordered) ty a b)
+  (cmp_result (ordered ty a b)))
+
+;; a is nan || b is nan
+;; == !(a is not nan && b is not nan)
+(rule
+  (emit_fcmp (FloatCC.Unordered) ty a b)
+  (cmp_result_invert (ordered ty a b)))
+
+;; a == b
+(rule
+  (emit_fcmp (FloatCC.Equal) ty a b)
+  (cmp_result (feq ty a b)))
+
+;; a != b
+;; == !(a == b)
+(rule
+  (emit_fcmp (FloatCC.NotEqual) ty a b)
+  (cmp_result_invert (feq ty a b)))
+
+;; a < b || a > b
+(rule
+  (emit_fcmp (FloatCC.OrderedNotEqual) ty a b)
+  (cmp_result (emit_or (flt ty a b) (fgt ty a b))))
+
+;; !(ordered a b) || a == b
+(rule
+  (emit_fcmp (FloatCC.UnorderedOrEqual) ty a b)
+  (cmp_result (emit_or (not (ordered ty a b)) (feq ty a b))))
+
+;; a < b
+(rule
+  (emit_fcmp (FloatCC.LessThan) ty a b)
+  (cmp_result (flt ty a b)))
+
+;; a <= b
+(rule
+  (emit_fcmp (FloatCC.LessThanOrEqual) ty a b)
+  (cmp_result (fle ty a b)))
+
+;; a > b
+(rule
+  (emit_fcmp (FloatCC.GreaterThan) ty a b)
+  (cmp_result (fgt ty a b)))
+
+;; a >= b
+(rule
+  (emit_fcmp (FloatCC.GreaterThanOrEqual) ty a b)
+  (cmp_result (fge ty a b)))
+
+;; !(ordered a b) || a < b
+;; == !(ordered a b && a >= b)
+(rule
+  (emit_fcmp (FloatCC.UnorderedOrLessThan) ty a b)
+  (cmp_result_invert (emit_and (ordered ty a b) (fge ty a b))))
+
+;; !(ordered a b) || a <= b
+;; == !(ordered a b && a > b)
+(rule
+  (emit_fcmp (FloatCC.UnorderedOrLessThanOrEqual) ty a b)
+  (cmp_result_invert (emit_and (ordered ty a b) (fgt ty a b))))
+
+;; !(ordered a b) || a > b
+;; == !(ordered a b && a <= b)
+(rule
+  (emit_fcmp (FloatCC.UnorderedOrGreaterThan) ty a b)
+  (cmp_result_invert (emit_and (ordered ty a b) (fle ty a b))))
+
+;; !(ordered a b) || a >= b
+;; == !(ordered a b && a < b)
+(rule
+  (emit_fcmp (FloatCC.UnorderedOrGreaterThanOrEqual) ty a b)
+  (cmp_result_invert (emit_and (ordered ty a b) (flt ty a b))))

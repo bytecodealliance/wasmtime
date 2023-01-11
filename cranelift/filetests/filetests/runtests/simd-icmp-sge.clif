@@ -1,4 +1,8 @@
 test interpret
+test run
+target x86_64
+target aarch64
+target s390x
 
 function %simd_icmp_sge_i8(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):
@@ -31,3 +35,14 @@ block0(v0: i64x2, v1: i64x2):
 ; run: %simd_icmp_sge_i64([-1 0], [-1 1]) == [-1 0]
 ; run: %simd_icmp_sge_i64([-5 1], [-1 1]) == [0 -1]
 ; run: %simd_icmp_sge_i64([0 0], [0 0]) == [-1 -1]
+
+
+function %icmp_sge_const_i16x8() -> i8 {
+block0:
+    v0 = vconst.i16x8 [-1 1 2 3 4 5 6 7]
+    v1 = vconst.i16x8 [-1 1 1 1 1 1 1 1]
+    v2 = icmp sge v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run: %icmp_sge_const_i16x8() == 1
