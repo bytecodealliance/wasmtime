@@ -457,6 +457,125 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
             )
         }
 
+        Architecture::Riscv64(_) => {
+            exceptions!(
+                // TODO
+                (Opcode::IaddCout),
+                // TODO
+                (Opcode::Udiv, &[I128, I128]),
+                // TODO
+                (Opcode::Sdiv, &[I128, I128]),
+                // TODO
+                (Opcode::Urem, &[I128, I128]),
+                // TODO
+                (Opcode::Srem, &[I128, I128]),
+                // TODO
+                (Opcode::Iabs, &[I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5497
+                (Opcode::Smin, &[I128, I128]),
+                (Opcode::Umin, &[I128, I128]),
+                (Opcode::Smax, &[I128, I128]),
+                (Opcode::Umax, &[I128, I128]),
+                // TODO
+                (Opcode::Bitselect, &[I128, I128, I128]),
+                // TODO
+                (Opcode::Bswap),
+                // https://github.com/bytecodealliance/wasmtime/issues/5523
+                (Opcode::Rotl, &[I128, I8]),
+                (Opcode::Rotl, &[I128, I16]),
+                (Opcode::Rotl, &[I128, I32]),
+                (Opcode::Rotl, &[I128, I64]),
+                (Opcode::Rotl, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5525
+                (Opcode::Sextend, &[I8], &[I128]),
+                (Opcode::Sextend, &[I16], &[I128]),
+                (Opcode::Sextend, &[I32], &[I128]),
+                (Opcode::Sextend, &[I64], &[I128]),
+                (Opcode::Sextend, &[I128], &[I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5525
+                (Opcode::Uextend, &[I8], &[I128]),
+                (Opcode::Uextend, &[I16], &[I128]),
+                (Opcode::Uextend, &[I32], &[I128]),
+                (Opcode::Uextend, &[I64], &[I128]),
+                (Opcode::Uextend, &[I128], &[I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5528
+                (Opcode::FcvtToUint, &[F32], &[I8]),
+                (Opcode::FcvtToUint, &[F32], &[I16]),
+                // TODO
+                (Opcode::FcvtToUint, &[F32], &[I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5528
+                (Opcode::FcvtToUint, &[F64], &[I8]),
+                (Opcode::FcvtToUint, &[F64], &[I16]),
+                // TODO
+                (Opcode::FcvtToUint, &[F64], &[I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5528
+                (Opcode::FcvtToUintSat, &[F32], &[I8]),
+                (Opcode::FcvtToUintSat, &[F32], &[I16]),
+                // TODO
+                (Opcode::FcvtToUintSat, &[F32], &[I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5528
+                (Opcode::FcvtToUintSat, &[F64], &[I8]),
+                (Opcode::FcvtToUintSat, &[F64], &[I16]),
+                // TODO
+                (Opcode::FcvtToUintSat, &[F64], &[I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5528
+                (Opcode::FcvtToSint, &[F32], &[I8]),
+                (Opcode::FcvtToSint, &[F32], &[I16]),
+                // TODO
+                (Opcode::FcvtToSint, &[F32], &[I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5528
+                (Opcode::FcvtToSint, &[F64], &[I8]),
+                (Opcode::FcvtToSint, &[F64], &[I16]),
+                // TODO
+                (Opcode::FcvtToSint, &[F64], &[I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5528
+                (Opcode::FcvtToSintSat, &[F32], &[I8]),
+                (Opcode::FcvtToSintSat, &[F32], &[I16]),
+                // TODO
+                (Opcode::FcvtToSintSat, &[F32], &[I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5528
+                (Opcode::FcvtToSintSat, &[F64], &[I8]),
+                (Opcode::FcvtToSintSat, &[F64], &[I16]),
+                // TODO
+                (Opcode::FcvtToSintSat, &[F64], &[I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5528
+                (Opcode::FcvtFromUint, &[I8], &[F32]),
+                (Opcode::FcvtFromUint, &[I8], &[F64]),
+                (Opcode::FcvtFromUint, &[I16], &[F32]),
+                (Opcode::FcvtFromUint, &[I16], &[F64]),
+                // TODO
+                (Opcode::FcvtFromUint, &[I128], &[F32]),
+                (Opcode::FcvtFromUint, &[I128], &[F64]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5528
+                (Opcode::FcvtFromSint, &[I8], &[F32]),
+                (Opcode::FcvtFromSint, &[I8], &[F64]),
+                (Opcode::FcvtFromSint, &[I16], &[F32]),
+                (Opcode::FcvtFromSint, &[I16], &[F64]),
+                // TODO
+                (Opcode::FcvtFromSint, &[I128], &[F32]),
+                (Opcode::FcvtFromSint, &[I128], &[F64]),
+                // TODO
+                (Opcode::SelectSpectreGuard, &[I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5526
+                (Opcode::SelectSpectreGuard, &[I64, I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5526
+                (Opcode::SelectSpectreGuard, &[I32, I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5526
+                (Opcode::SelectSpectreGuard, &[I16, I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5526
+                (Opcode::SelectSpectreGuard, &[I8, I128, I128]),
+                // TODO
+                (Opcode::BandNot, &[F32, F32]),
+                (Opcode::BandNot, &[F64, F64]),
+                // TODO
+                (Opcode::BorNot, &[F32, F32]),
+                (Opcode::BorNot, &[F64, F64]),
+                // TODO
+                (Opcode::BxorNot, &[F32, F32]),
+                (Opcode::BxorNot, &[F64, F64]),
+            )
+        }
+
         _ => true,
     }
 }
