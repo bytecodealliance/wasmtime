@@ -256,7 +256,7 @@ fn define_settings(shared: &SettingGroup) -> SettingGroup {
     let haswell = settings.add_preset(
         "haswell",
         "Haswell microarchitecture.",
-        preset!(nehalem && has_bmi1 && has_bmi2 && has_lzcnt),
+        preset!(ivy_bridge && has_avx2&& has_bmi1 && has_bmi2 && has_fma && has_lzcnt),
     );
     settings.add_preset(
         "core-avx2",
@@ -266,7 +266,7 @@ fn define_settings(shared: &SettingGroup) -> SettingGroup {
     let broadwell = settings.add_preset(
         "broadwell",
         "Broadwell microarchitecture.",
-        preset!(haswell && has_fma),
+        preset!(haswell),
     );
     let skylake = settings.add_preset("skylake", "Skylake microarchitecture.", preset!(broadwell));
     let knights_landing = settings.add_preset(
