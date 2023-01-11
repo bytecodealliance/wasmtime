@@ -4,7 +4,6 @@ use isle::sema::{TermEnv, TypeEnv};
 use std::path::PathBuf;
 
 pub mod interp;
-pub mod renaming;
 pub mod rule_tree;
 pub mod solver;
 pub mod termname;

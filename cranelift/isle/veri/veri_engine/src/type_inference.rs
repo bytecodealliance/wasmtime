@@ -1,11 +1,10 @@
-use std::any::Any;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
 use cranelift_isle as isle;
 use isle::ast::{Decl, Defs};
-use isle::sema::{Sym, TermEnv, TypeEnv, VarId};
-use veri_annotation::parser_wrapper::{parse_annotations, AnnotationEnv};
+use isle::sema::{TermEnv, TypeEnv, VarId};
+use veri_annotation::parser_wrapper::{AnnotationEnv};
 use veri_ir::Expr;
 use veri_ir::{annotation_ir, TypeContext};
 

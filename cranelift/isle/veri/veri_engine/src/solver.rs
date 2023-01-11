@@ -1,4 +1,3 @@
-use itertools::Itertools;
 /// Convert our internal Verification IR to an external SMT AST and pass
 /// queries to that solver.
 ///
@@ -6,7 +5,7 @@ use itertools::Itertools;
 use rsmt2::Solver;
 use std::collections::{HashMap, HashSet};
 use veri_ir::{
-    BinaryOp, Counterexample, Expr, RulePath, RuleSemantics, Terminal, Type, TypeContext, UnaryOp,
+    BinaryOp, Counterexample, Expr, RuleSemantics, Terminal, Type, TypeContext, UnaryOp,
     VerificationResult,
 };
 

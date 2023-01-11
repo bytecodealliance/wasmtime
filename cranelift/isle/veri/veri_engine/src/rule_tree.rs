@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::collections::HashMap;
 
 use crate::solver::run_solver;
@@ -9,7 +8,7 @@ use isle::sema::{Pattern, Rule, RuleId, TermEnv, TermId, TypeEnv};
 use itertools::Itertools;
 use veri_annotation::parser_wrapper::AnnotationEnv;
 use veri_ir::{
-    all_query_widths, BoundVar, RulePath, RuleSemantics, RuleTree, Type, UndefinedTerm,
+    all_query_widths, BoundVar, RuleSemantics, RulePath, RuleTree, UndefinedTerm,
     VerificationResult,
 };
 

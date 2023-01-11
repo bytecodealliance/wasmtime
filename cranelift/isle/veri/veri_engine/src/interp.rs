@@ -40,11 +40,11 @@ pub struct Context<'ctx> {
 
 impl<'ctx> Context<'ctx> {
     pub fn new(
-        termenv: &'ctx TermEnv,
-        typeenv: &'ctx TypeEnv,
-        annotation_env: &'ctx AnnotationEnv,
+        _termenv: &'ctx TermEnv,
+        _typeenv: &'ctx TypeEnv,
+        _annotation_env: &'ctx AnnotationEnv,
         typesols: &'ctx HashMap<RuleId, Solution>,
-        width: usize,
+        _width: usize,
     ) -> Context<'ctx> {
         Context {
             quantified_vars: vec![],
