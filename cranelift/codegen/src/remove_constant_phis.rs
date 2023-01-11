@@ -377,28 +377,24 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
                 continue;
             }
 
-            let mut block = func.dfg.insts[edge.inst].branch_destination().unwrap();
-            old_actuals.clear();
-            old_actuals.extend(block.args_slice(&func.dfg.value_lists));
-            let dst_summary = &summaries[edge.block];
+            let dfg = &mut func.dfg;
+            let block = dfg.insts[edge.inst].branch_destination_mut().unwrap();
+            old_actuals.extend(block.args_slice(&dfg.value_lists));
 
             // Check that the numbers of arguments make sense.
-            assert_eq!(dst_summary.formals.len(), old_actuals.len());
+            let formals = &summaries[edge.block].formals;
+            assert_eq!(formals.len(), old_actuals.len());
 
-            // Create a new value list.
-            block.clear(&mut func.dfg.value_lists);
-
-            // Copy the variable args (the actual block params) to the new
-            // list, filtering out redundant ones.
-            for (i, formal_i) in dst_summary.formals.iter().enumerate() {
-                let actual_i = old_actuals[i];
-                let is_redundant = state.get(*formal_i).is_one();
-                if !is_redundant {
-                    block.append_argument(actual_i, &mut func.dfg.value_lists);
-                }
-            }
-
-            *func.dfg.insts[edge.inst].branch_destination_mut().unwrap() = block;
+            // Copy the block params back into the list, filtering out redundant ones.
+            block.clear(&mut dfg.value_lists);
+            block.extend(
+                formals
+                    .iter()
+                    .zip(old_actuals.drain(..))
+                    .filter(|(formal_i, _)| !state.get(**formal_i).is_one())
+                    .map(|(_, actual_i)| actual_i),
+                &mut dfg.value_lists,
+            );
         }
     }
 

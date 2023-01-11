@@ -498,26 +498,16 @@ fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, block: Block, 
                 return;
             };
 
-            let prev_inst_data = &pos.func.dfg.insts[prev_inst];
-
-            let mut has_branch = false;
-            for prev_dest in prev_inst_data.branch_destination().into_iter() {
-                has_branch = true;
-                if prev_dest.block(&pos.func.dfg.value_lists) != next_block {
-                    return;
-                }
-            }
-
-            if !has_branch {
-                return;
-            }
-
-            match prev_inst_data {
+            match &pos.func.dfg.insts[prev_inst] {
                 &InstructionData::Branch {
                     opcode,
                     arg,
                     destination: cond_dest,
                 } => {
+                    if cond_dest.block(&pos.func.dfg.value_lists) != next_block {
+                        return;
+                    }
+
                     let kind = match opcode {
                         Opcode::Brz => BranchOrderKind::BrzToBrnz(arg),
                         Opcode::Brnz => BranchOrderKind::BrnzToBrz(arg),
