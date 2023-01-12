@@ -911,7 +911,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         // conditional branch; a conditional branch can be followed only by an
         // unconditional branch or fallthrough. Otherwise, if only one branch,
         // it may be an unconditional branch, a fallthrough, a return, or a
-        // trap. These conditions are verified by `is_ebb_basic()` during the
+        // trap. These conditions are verified by `is_block_basic()` during the
         // verifier pass.
         assert!(branches.len() <= 2);
         if branches.len() == 2 {
