@@ -61,7 +61,9 @@ pub unsafe trait GuestTypeTransparent<'a>: GuestType<'a> {}
 macro_rules! integer_primitives {
     ($([$ty:ident, $ty_atomic:ident],)*) => ($(
         impl<'a> GuestType<'a> for $ty {
+            #[inline]
             fn guest_size() -> u32 { mem::size_of::<Self>() as u32 }
+            #[inline]
             fn guest_align() -> usize { mem::align_of::<Self>() }
 
             #[inline]
@@ -122,7 +124,9 @@ macro_rules! integer_primitives {
 macro_rules! float_primitives {
     ($([$ty:ident, $ty_unsigned:ident, $ty_atomic:ident],)*) => ($(
         impl<'a> GuestType<'a> for $ty {
+            #[inline]
             fn guest_size() -> u32 { mem::size_of::<Self>() as u32 }
+            #[inline]
             fn guest_align() -> usize { mem::align_of::<Self>() }
 
             #[inline]
@@ -183,10 +187,12 @@ float_primitives! {
 
 // Support pointers-to-pointers where pointers are always 32-bits in wasm land
 impl<'a, T> GuestType<'a> for GuestPtr<'a, T> {
+    #[inline]
     fn guest_size() -> u32 {
         u32::guest_size()
     }
 
+    #[inline]
     fn guest_align() -> usize {
         u32::guest_align()
     }
@@ -206,10 +212,12 @@ impl<'a, T> GuestType<'a> for GuestPtr<'a, [T]>
 where
     T: GuestType<'a>,
 {
+    #[inline]
     fn guest_size() -> u32 {
         u32::guest_size() * 2
     }
 
+    #[inline]
     fn guest_align() -> usize {
         u32::guest_align()
     }

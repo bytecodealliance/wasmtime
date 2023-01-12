@@ -14,29 +14,34 @@ pub(super) fn define_handle(name: &witx::Id, h: &witx::HandleDatatype) -> TokenS
         pub struct #ident(u32);
 
         impl #ident {
+            #[inline]
             pub unsafe fn inner(&self) -> u32 {
                 self.0
             }
         }
 
         impl From<#ident> for u32 {
+            #[inline]
             fn from(e: #ident) -> u32 {
                 e.0
             }
         }
 
         impl From<#ident> for i32 {
+            #[inline]
             fn from(e: #ident) -> i32 {
                 e.0 as i32
             }
         }
 
         impl From<u32> for #ident {
+            #[inline]
             fn from(e: u32) -> #ident {
                 #ident(e)
             }
         }
         impl From<i32> for #ident {
+            #[inline]
             fn from(e: i32) -> #ident {
                 #ident(e as u32)
             }
@@ -49,18 +54,22 @@ pub(super) fn define_handle(name: &witx::Id, h: &witx::HandleDatatype) -> TokenS
         }
 
         impl<'a> wiggle::GuestType<'a> for #ident {
+            #[inline]
             fn guest_size() -> u32 {
                 #size
             }
 
+            #[inline]
             fn guest_align() -> usize {
                 #align
             }
 
+            #[inline]
             fn read(location: &wiggle::GuestPtr<'a, #ident>) -> Result<#ident, wiggle::GuestError> {
                 Ok(#ident(u32::read(&location.cast())?))
             }
 
+            #[inline]
             fn write(location: &wiggle::GuestPtr<'_, Self>, val: Self) -> Result<(), wiggle::GuestError> {
                 u32::write(&location.cast(), val.0)
             }

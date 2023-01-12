@@ -87,10 +87,12 @@ pub(super) fn define_struct(name: &witx::Id, s: &witx::RecordDatatype) -> TokenS
         }
 
         impl<'a> wiggle::GuestType<'a> for #ident #struct_lifetime {
+            #[inline]
             fn guest_size() -> u32 {
                 #size
             }
 
+            #[inline]
             fn guest_align() -> usize {
                 #align
             }
