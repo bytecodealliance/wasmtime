@@ -1344,7 +1344,6 @@ where
         min_size: u32,
         aligned: bool,
     ) -> Result<(Value, u32)> {
-        let alignment = 8;
         // TODO: Currently our only source of addresses is stack_addr, but we
         // should add global_value, symbol_value eventually
         let (addr, available_size) = {
@@ -1353,7 +1352,7 @@ where
             // stack_slot_with_size guarantees that slot_size >= min_size
             let max_offset = slot_size - min_size;
             let offset = if aligned {
-                self.u.int_in_range(0..=max_offset / alignment)? * alignment
+                self.u.int_in_range(0..=max_offset / min_size)? * min_size
             } else {
                 self.u.int_in_range(0..=max_offset)?
             };
