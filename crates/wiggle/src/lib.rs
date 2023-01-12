@@ -624,7 +624,7 @@ impl<'a, T> GuestPtr<'a, [T]> {
         // TODO: audit that this use of `std::ptr::copy` is safe with shared
         // memory (https://github.com/bytecodealliance/wasmtime/issues/4203)
         unsafe {
-            std::ptr::copy(guest_slice.as_ptr().cast::<T>(), vec.as_mut_ptr(), len);
+            std::ptr::copy(guest_slice.ptr.as_ptr().cast::<T>(), vec.as_mut_ptr(), len);
             vec.set_len(len);
         }
         Ok(vec)
