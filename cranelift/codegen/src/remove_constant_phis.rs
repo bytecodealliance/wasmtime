@@ -385,16 +385,19 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
             let formals = &summaries[edge.block].formals;
             assert_eq!(formals.len(), old_actuals.len());
 
-            // Copy the block params back into the list, filtering out redundant ones.
-            block.clear(&mut dfg.value_lists);
-            block.extend(
-                formals
-                    .iter()
-                    .zip(old_actuals.drain(..))
-                    .filter(|(formal_i, _)| !state.get(**formal_i).is_one())
-                    .map(|(_, actual_i)| actual_i),
-                &mut dfg.value_lists,
-            );
+            // Filter out redundant block arguments.
+            let mut formals = formals.iter();
+            old_actuals.retain(|_| {
+                let formal_i = formals.next().unwrap();
+                !state.get(*formal_i).is_one()
+            });
+
+            // Replace the block with a new one that only includes the non-redundant arguments.
+            // This leaks the value list from the old block,
+            // https://github.com/bytecodealliance/wasmtime/issues/5451 for more information.
+            let destination = block.block(&dfg.value_lists);
+            *block = BlockCall::new(destination, &old_actuals, &mut dfg.value_lists);
+            old_actuals.clear();
         }
     }
 
