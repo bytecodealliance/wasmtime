@@ -158,8 +158,6 @@ fn gen_arguments_method(formats: &[&InstructionFormat], fmt: &mut Formatter, is_
 /// - `pub fn opcode(&self) -> Opcode`
 /// - `pub fn arguments(&self, &pool) -> &[Value]`
 /// - `pub fn arguments_mut(&mut self, &pool) -> &mut [Value]`
-/// - `pub fn value_list(&self) -> Option<ir::ValueList>`
-/// - `pub fn value_list_mut(&mut self) -> Option<&mut ir::ValueList>`
 /// - `pub fn eq(&self, &other: Self, &pool) -> bool`
 /// - `pub fn hash<H: Hasher>(&self, state: &mut H, &pool)`
 fn gen_instruction_data_impl(formats: &[&InstructionFormat], fmt: &mut Formatter) {
@@ -211,51 +209,6 @@ fn gen_instruction_data_impl(formats: &[&InstructionFormat], fmt: &mut Formatter
         fmt.doc_comment(r#"Get mutable references to the value arguments to this
                         instruction."#);
         gen_arguments_method(formats, fmt, true);
-        fmt.empty_line();
-
-        fmt.doc_comment(r#"
-            The ValueList for the instruction.
-        "#);
-        fmt.line("pub fn value_list(&self) -> Option<ir::ValueList> {");
-        fmt.indent(|fmt| {
-            let mut m = Match::new("*self");
-
-            for format in formats {
-                if format.has_value_list {
-                    m.arm(format!("Self::{}", format.name),
-                    vec!["args", ".."],
-                    "Some(args)".to_string());
-                }
-            }
-
-            m.arm_no_fields("_", "None");
-
-            fmt.add_match(m);
-        });
-        fmt.line("}");
-        fmt.empty_line();
-
-        fmt.doc_comment(r#"
-            A mutable reference to the ValueList for this instruction, if it
-            has one.
-        "#);
-        fmt.line("pub fn value_list_mut(&mut self) -> Option<&mut ir::ValueList> {");
-        fmt.indent(|fmt| {
-            let mut m = Match::new("*self");
-
-            for format in formats {
-                if format.has_value_list {
-                    m.arm(format!("Self::{}", format.name),
-                    vec!["ref mut args", ".."],
-                    "Some(args)".to_string());
-                }
-            }
-
-            m.arm_no_fields("_", "None");
-
-            fmt.add_match(m);
-        });
-        fmt.line("}");
         fmt.empty_line();
 
         fmt.doc_comment(r#"

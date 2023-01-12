@@ -920,16 +920,6 @@ impl DataFlowGraph {
         })
     }
 
-    /// Append a new value argument to an instruction.
-    ///
-    /// Panics if the instruction doesn't support arguments.
-    pub fn append_inst_arg(&mut self, inst: Inst, new_arg: Value) {
-        self.insts[inst]
-            .value_list_mut()
-            .expect("the instruction doesn't have value arguments")
-            .push(new_arg, &mut self.value_lists);
-    }
-
     /// Clone an instruction, attaching new result `Value`s and
     /// returning them.
     pub fn clone_inst(&mut self, inst: Inst) -> Inst {
