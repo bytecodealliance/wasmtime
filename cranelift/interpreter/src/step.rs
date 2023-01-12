@@ -1162,9 +1162,27 @@ where
         Opcode::Iconcat => assign(Value::concat(arg(0)?, arg(1)?)?),
         Opcode::AtomicRmw => unimplemented!("AtomicRmw"),
         Opcode::AtomicCas => unimplemented!("AtomicCas"),
-        Opcode::AtomicLoad => unimplemented!("AtomicLoad"),
-        Opcode::AtomicStore => unimplemented!("AtomicStore"),
-        Opcode::Fence => unimplemented!("Fence"),
+        Opcode::AtomicLoad => {
+            let load_ty = inst_context.controlling_type().unwrap();
+            let addr = arg(0)?.into_int()? as u64;
+            // We are doing a regular load here, this isn't actually thread safe.
+            assign_or_memtrap(
+                Address::try_from(addr).and_then(|addr| state.checked_load(addr, load_ty)),
+            )
+        }
+        Opcode::AtomicStore => {
+            let val = arg(0)?;
+            let addr = arg(1)?.into_int()? as u64;
+            // We are doing a regular store here, this isn't actually thread safe.
+            continue_or_memtrap(
+                Address::try_from(addr).and_then(|addr| state.checked_store(addr, val)),
+            )
+        }
+        Opcode::Fence => {
+            // The interpreter always runs in a single threaded context, so we don't
+            // actually need to emit a fence here.
+            ControlFlow::Continue
+        }
         Opcode::WideningPairwiseDotProductS => {
             let ctrl_ty = types::I16X8;
             let new_type = ctrl_ty.merge_lanes().unwrap();

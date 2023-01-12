@@ -2,7 +2,6 @@ use crate::codegen::ir::{ArgumentExtension, ArgumentPurpose};
 use crate::config::Config;
 use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
-use cranelift::codegen::ir::immediates::Offset32;
 use cranelift::codegen::ir::instructions::InstructionFormat;
 use cranelift::codegen::ir::stackslot::StackSize;
 use cranelift::codegen::ir::{types::*, FuncRef, LibCall, UserExternalName, UserFuncName};
@@ -223,27 +222,73 @@ fn insert_load_store(
 ) -> Result<()> {
     let ctrl_type = *rets.first().or(args.first()).unwrap();
     let type_size = ctrl_type.bytes();
-    let (address, offset) = fgen.generate_load_store_address(builder, type_size)?;
 
-    // TODO: More advanced MemFlags
-    let flags = MemFlags::new();
+    // Should we generate an aligned address
+    let is_atomic = [Opcode::AtomicLoad, Opcode::AtomicStore].contains(&opcode);
+    let is_aarch64 = matches!(fgen.target_triple.architecture, Architecture::Aarch64(_));
+    let aligned = if is_atomic && is_aarch64 {
+        // AArch64 has issues with unaligned atomics.
+        // https://github.com/bytecodealliance/wasmtime/issues/5483
+        true
+    } else {
+        bool::arbitrary(fgen.u)?
+    };
+
+    let mut flags = MemFlags::new();
+    // Even if we picked an aligned address, we can always generate unaligned memflags
+    if aligned && bool::arbitrary(fgen.u)? {
+        flags.set_aligned();
+    }
+    // If the address is aligned, then we know it won't trap
+    if aligned && bool::arbitrary(fgen.u)? {
+        flags.set_notrap();
+    }
+
+    let (address, max_offset) = fgen.generate_load_store_address(builder, type_size, aligned)?;
+
+    // Pick an offset to pass into the load/store.
+    let offset = if aligned {
+        0
+    } else {
+        fgen.u.int_in_range(0..=max_offset)? as i32
+    }
+    .into();
 
     // The variable being loaded or stored into
     let var = fgen.get_variable_of_type(ctrl_type)?;
 
-    if opcode.can_store() {
-        let val = builder.use_var(var);
+    match opcode.format() {
+        InstructionFormat::LoadNoOffset => {
+            let (inst, dfg) = builder
+                .ins()
+                .LoadNoOffset(opcode, ctrl_type, flags, address);
 
-        builder
-            .ins()
-            .Store(opcode, ctrl_type, flags, offset, val, address);
-    } else {
-        let (inst, dfg) = builder
-            .ins()
-            .Load(opcode, ctrl_type, flags, offset, address);
+            let new_val = dfg.first_result(inst);
+            builder.def_var(var, new_val);
+        }
+        InstructionFormat::StoreNoOffset => {
+            let val = builder.use_var(var);
 
-        let new_val = dfg.first_result(inst);
-        builder.def_var(var, new_val);
+            builder
+                .ins()
+                .StoreNoOffset(opcode, ctrl_type, flags, val, address);
+        }
+        InstructionFormat::Store => {
+            let val = builder.use_var(var);
+
+            builder
+                .ins()
+                .Store(opcode, ctrl_type, flags, offset, val, address);
+        }
+        InstructionFormat::Load => {
+            let (inst, dfg) = builder
+                .ins()
+                .Load(opcode, ctrl_type, flags, offset, address);
+
+            let new_val = dfg.first_result(inst);
+            builder.def_var(var, new_val);
+        }
+        _ => unimplemented!(),
     }
 
     Ok(())
@@ -1038,6 +1083,8 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::Icmp, &[I32, I32], &[I8], insert_cmp),
     (Opcode::Icmp, &[I64, I64], &[I8], insert_cmp),
     (Opcode::Icmp, &[I128, I128], &[I8], insert_cmp),
+    // Fence
+    (Opcode::Fence, &[], &[], insert_opcode),
     // Stack Access
     (Opcode::StackStore, &[I8], &[], insert_stack_store),
     (Opcode::StackStore, &[I16], &[], insert_stack_store),
@@ -1077,6 +1124,11 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     // Opcode::Sload16x4
     // Opcode::Uload32x2
     // Opcode::Sload32x2
+    // AtomicLoad
+    (Opcode::AtomicLoad, &[], &[I8], insert_load_store),
+    (Opcode::AtomicLoad, &[], &[I16], insert_load_store),
+    (Opcode::AtomicLoad, &[], &[I32], insert_load_store),
+    (Opcode::AtomicLoad, &[], &[I64], insert_load_store),
     // Stores
     (Opcode::Store, &[I8], &[], insert_load_store),
     (Opcode::Store, &[I16], &[], insert_load_store),
@@ -1092,6 +1144,11 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::Istore16, &[I32], &[], insert_load_store),
     (Opcode::Istore16, &[I64], &[], insert_load_store),
     (Opcode::Istore32, &[I64], &[], insert_load_store),
+    // AtomicStore
+    (Opcode::AtomicStore, &[I8], &[], insert_load_store),
+    (Opcode::AtomicStore, &[I16], &[], insert_load_store),
+    (Opcode::AtomicStore, &[I32], &[], insert_load_store),
+    (Opcode::AtomicStore, &[I64], &[], insert_load_store),
     // Bitcast
     (Opcode::Bitcast, &[F32], &[I32], insert_bitcast),
     (Opcode::Bitcast, &[I32], &[F32], insert_bitcast),
@@ -1277,34 +1334,42 @@ where
     /// we don't run the risk of returning them from a function, which would make the fuzzer
     /// complain since they are different from the interpreter to the backend.
     ///
-    /// The address is not guaranteed to be valid, but there's a chance that it is.
+    /// `min_size`: Controls the amount of space that the address should have.
     ///
-    /// `min_size`: Controls the amount of space that the address should have.This is not
-    /// guaranteed to be respected
+    /// `aligned`: When passed as true, the resulting address is guaranteed to be aligned
+    /// on an 8 byte boundary.
+    ///
+    /// Returns a valid address and the maximum possible offset that still respects `min_size`.
     fn generate_load_store_address(
         &mut self,
         builder: &mut FunctionBuilder,
         min_size: u32,
-    ) -> Result<(Value, Offset32)> {
+        aligned: bool,
+    ) -> Result<(Value, u32)> {
         // TODO: Currently our only source of addresses is stack_addr, but we
         // should add global_value, symbol_value eventually
         let (addr, available_size) = {
             let (ss, slot_size) = self.stack_slot_with_size(min_size)?;
-            let max_offset = slot_size.saturating_sub(min_size);
-            let offset = self.u.int_in_range(0..=max_offset)? as i32;
-            let base_addr = builder.ins().stack_addr(I64, ss, offset);
-            let available_size = (slot_size as i32).saturating_sub(offset);
+
+            // stack_slot_with_size guarantees that slot_size >= min_size
+            let max_offset = slot_size - min_size;
+            let offset = if aligned {
+                self.u.int_in_range(0..=max_offset / min_size)? * min_size
+            } else {
+                self.u.int_in_range(0..=max_offset)?
+            };
+
+            let base_addr = builder.ins().stack_addr(I64, ss, offset as i32);
+            let available_size = slot_size.saturating_sub(offset);
             (base_addr, available_size)
         };
 
         // TODO: Insert a bunch of amode opcodes here to modify the address!
 
         // Now that we have an address and a size, we just choose a random offset to return to the
-        // caller. Try to preserve min_size bytes.
-        let max_offset = available_size.saturating_sub(min_size as i32);
-        let offset = self.u.int_in_range(0..=max_offset)? as i32;
-
-        Ok((addr, offset.into()))
+        // caller. Preserving min_size bytes.
+        let max_offset = available_size.saturating_sub(min_size);
+        Ok((addr, max_offset))
     }
 
     /// Get a variable of type `ty` from the current function
