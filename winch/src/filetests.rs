@@ -5,11 +5,12 @@ use clap::Parser;
 
 #[derive(Parser, Debug)]
 pub struct Options {
+    /// Passes extra arguments to `cargo test --package winch-filetests`. For example, to run a single
+    /// test, use `-- --test-threads 1 --test single_test_name`.
     #[clap(last = true, value_parser)]
     cargo_test_args: Vec<String>,
 }
 
-// DOIT: document the fact that this is a wrapper around cargo test for the filetests crate
 pub fn run(opts: &Options) -> Result<()> {
     Command::new("cargo")
         .arg("test")
