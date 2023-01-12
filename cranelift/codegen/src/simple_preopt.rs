@@ -805,19 +805,13 @@ mod simplify {
         }
     }
 
-    struct BranchOptInfo {
-        br_inst: Inst,
-        cmp_arg: Value,
-        new_opcode: Opcode,
-    }
-
     /// Fold comparisons into branch operations when possible.
     ///
     /// This matches against operations which compare against zero, then use the
     /// result in a `brz` or `brnz` branch. It folds those two operations into a
     /// single `brz` or `brnz`.
     fn branch_opt(pos: &mut FuncCursor, inst: Inst) {
-        let info = if let InstructionData::Branch {
+        let (cmp_arg, new_opcode) = if let InstructionData::Branch {
             opcode: br_opcode,
             arg: first_arg,
             ..
@@ -856,11 +850,7 @@ mod simplify {
                     _ => return,
                 };
 
-                BranchOptInfo {
-                    br_inst: inst,
-                    cmp_arg,
-                    new_opcode,
-                }
+                (cmp_arg, new_opcode)
             } else {
                 return;
             }
@@ -868,9 +858,9 @@ mod simplify {
             return;
         };
 
-        if let InstructionData::Branch { opcode, arg, .. } = &mut pos.func.dfg.insts[info.br_inst] {
-            *opcode = info.new_opcode;
-            *arg = info.cmp_arg;
+        if let InstructionData::Branch { opcode, arg, .. } = &mut pos.func.dfg.insts[inst] {
+            *opcode = new_opcode;
+            *arg = cmp_arg;
         } else {
             unreachable!();
         }
