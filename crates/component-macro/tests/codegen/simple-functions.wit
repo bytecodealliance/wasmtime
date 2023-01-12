@@ -9,8 +9,7 @@ interface simple {
   f6: func(a: u32, b: u32, c: u32) -> tuple<u32, u32, u32>
 }
 
-world the-world {
-  import imports: simple
-  export exports: simple
-  default export simple
+default world the-world {
+  import imports: self.simple
+  export exports: self.simple
 }

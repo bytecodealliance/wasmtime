@@ -7,8 +7,7 @@ interface anon {
   option-test: func() -> result<option<string>, error>
 }
 
-world the-world {
-  import imports: anon
-  export exports: anon
-  default export anon
+default world the-world {
+  import imports: self.anon
+  export exports: self.anon
 }

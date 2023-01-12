@@ -4,8 +4,7 @@ interface strings {
   c: func(a: string, b: string) -> string
 }
 
-world the-world {
-  import imports: strings
-  export exports: strings
-  default export strings
+default world the-world {
+  import imports: self.strings
+  export exports: self.strings
 }

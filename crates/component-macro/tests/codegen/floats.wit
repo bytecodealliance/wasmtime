@@ -5,8 +5,7 @@ interface floats {
   float64-result: func() -> float64
 }
 
-world the-world {
-  import imports: floats
-  export exports: floats
-  default export floats
+default world the-world {
+  import imports: self.floats
+  export exports: self.floats
 }
