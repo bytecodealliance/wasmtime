@@ -51,30 +51,50 @@ impl<'a> WasmtimeGuestMemory<'a> {
 }
 
 unsafe impl GuestMemory for WasmtimeGuestMemory<'_> {
+    #[inline]
     fn base(&self) -> &[UnsafeCell<u8>] {
         self.mem
     }
+
+    // Note that this implementation has special cases for shared memory
+    // specifically because no regions of a shared memory can ever be borrowed.
+    // In the shared memory cases `shared_borrow` and `mut_borrow` are never
+    // called so that can be used to optimize the other methods by quickly
+    // checking a flag before calling the more expensive borrow-checker methods.
+
+    #[inline]
     fn has_outstanding_borrows(&self) -> bool {
-        self.bc.has_outstanding_borrows()
+        !self.shared && self.bc.has_outstanding_borrows()
     }
+    #[inline]
     fn is_shared_borrowed(&self, r: Region) -> bool {
-        self.bc.is_shared_borrowed(r)
+        !self.shared && self.bc.is_shared_borrowed(r)
     }
+    #[inline]
     fn is_mut_borrowed(&self, r: Region) -> bool {
-        self.bc.is_mut_borrowed(r)
+        !self.shared && self.bc.is_mut_borrowed(r)
     }
+    #[inline]
     fn shared_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        debug_assert!(!self.shared);
         self.bc.shared_borrow(r)
     }
+    #[inline]
     fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        debug_assert!(!self.shared);
         self.bc.mut_borrow(r)
     }
+    #[inline]
     fn shared_unborrow(&self, h: BorrowHandle) {
+        debug_assert!(!self.shared);
         self.bc.shared_unborrow(h)
     }
+    #[inline]
     fn mut_unborrow(&self, h: BorrowHandle) {
+        debug_assert!(!self.shared);
         self.bc.mut_unborrow(h)
     }
+    #[inline]
     fn is_shared_memory(&self) -> bool {
         self.shared
     }

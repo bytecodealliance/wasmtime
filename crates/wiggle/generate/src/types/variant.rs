@@ -80,6 +80,7 @@ pub(super) fn define_variant(
         quote! {
             impl TryFrom<#tag_ty> for #ident {
                 type Error = wiggle::GuestError;
+                #[inline]
                 fn try_from(value: #tag_ty) -> Result<#ident, wiggle::GuestError> {
                     match value {
                         #(#tryfrom_repr_cases),*,
@@ -90,6 +91,7 @@ pub(super) fn define_variant(
 
             impl TryFrom<#abi_ty> for #ident {
                 type Error = wiggle::GuestError;
+                #[inline]
                 fn try_from(value: #abi_ty) -> Result<#ident, wiggle::GuestError> {
                     #ident::try_from(#tag_ty::try_from(value)?)
                 }
@@ -107,6 +109,7 @@ pub(super) fn define_variant(
         });
         quote! {
             impl From<#ident> for #tag_ty {
+                #[inline]
                 fn from(v: #ident) -> #tag_ty {
                     match v {
                         #(#from_repr_cases),*,
@@ -148,10 +151,12 @@ pub(super) fn define_variant(
         #enum_from
 
         impl<'a> wiggle::GuestType<'a> for #ident #enum_lifetime {
+            #[inline]
             fn guest_size() -> u32 {
                 #size
             }
 
+            #[inline]
             fn guest_align() -> usize {
                 #align
             }

@@ -42,6 +42,7 @@ pub(super) fn define_flags(
 
         impl TryFrom<#repr> for #ident {
             type Error = wiggle::GuestError;
+            #[inline]
             fn try_from(value: #repr) -> Result<Self, wiggle::GuestError> {
                 if #repr::from(!#ident::all()) & value != 0 {
                     Err(wiggle::GuestError::InvalidFlagValue(stringify!(#ident)))
@@ -53,22 +54,26 @@ pub(super) fn define_flags(
 
         impl TryFrom<#abi_repr> for #ident {
             type Error = wiggle::GuestError;
+            #[inline]
             fn try_from(value: #abi_repr) -> Result<Self, wiggle::GuestError> {
                 #ident::try_from(#repr::try_from(value)?)
             }
         }
 
         impl From<#ident> for #repr {
+            #[inline]
             fn from(e: #ident) -> #repr {
                 e.bits
             }
         }
 
         impl<'a> wiggle::GuestType<'a> for #ident {
+            #[inline]
             fn guest_size() -> u32 {
                 #repr::guest_size()
             }
 
+            #[inline]
             fn guest_align() -> usize {
                 #repr::guest_align()
             }

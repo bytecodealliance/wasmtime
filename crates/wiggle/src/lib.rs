@@ -610,10 +610,22 @@ impl<'a, T> GuestPtr<'a, [T]> {
         T: GuestTypeTransparent<'a> + Copy + 'a,
     {
         let guest_slice = self.as_unsafe_slice_mut()?;
-        let mut vec = Vec::with_capacity(guest_slice.ptr.len());
-        for offs in 0..guest_slice.ptr.len() {
-            let elem = self.get(offs as u32).expect("already validated the size");
-            vec.push(elem.read()?);
+        let len = guest_slice.ptr.len();
+        let mut vec = Vec::with_capacity(len);
+
+        // SAFETY: The `guest_slice` variable is already a valid pointer into
+        // the guest's memory, and it may or may not be a pointer into shared
+        // memory. We can't naively use `.to_vec(..)` which could introduce data
+        // races but all that needs to happen is to copy data into our local
+        // `vec` as all the data is `Copy` and transparent anyway. For this
+        // purpose the `ptr::copy` function should be sufficient for copying
+        // over all the data.
+        //
+        // TODO: audit that this use of `std::ptr::copy` is safe with shared
+        // memory (https://github.com/bytecodealliance/wasmtime/issues/4203)
+        unsafe {
+            std::ptr::copy(guest_slice.ptr.as_ptr().cast::<T>(), vec.as_mut_ptr(), len);
+            vec.set_len(len);
         }
         Ok(vec)
     }
