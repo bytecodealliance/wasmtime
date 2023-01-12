@@ -731,6 +731,29 @@ impl<'a> Inliner<'a> {
             AliasComponent(idx) => {
                 frame.components.push(frame.closed_over_component(idx));
             }
+
+            Export(item) => match item {
+                ComponentItem::Func(i) => {
+                    frame
+                        .component_funcs
+                        .push(frame.component_funcs[*i].clone());
+                }
+                ComponentItem::Module(i) => {
+                    frame.modules.push(frame.modules[*i].clone());
+                }
+                ComponentItem::Component(i) => {
+                    frame.components.push(frame.components[*i].clone());
+                }
+                ComponentItem::ComponentInstance(i) => {
+                    frame
+                        .component_instances
+                        .push(frame.component_instances[*i].clone());
+                }
+
+                // Type index spaces aren't maintained during this inlining pass
+                // so ignore this.
+                ComponentItem::Type(_) => {}
+            },
         }
 
         Ok(None)

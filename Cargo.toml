@@ -241,3 +241,13 @@ harness = false
 [[bench]]
 name = "wasi"
 harness = false
+
+[patch.crates-io]
+wasmparser = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'use-syntax-round-2' }
+wat = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'use-syntax-round-2' }
+wast = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'use-syntax-round-2' }
+wasm-encoder = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'use-syntax-round-2' }
+wit-parser = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'use-syntax-round-2' }
+wasmprinter = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'use-syntax-round-2' }
+wasm-smith = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'use-syntax-round-2' }
+wasm-mutate = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'use-syntax-round-2' }

@@ -11,7 +11,7 @@ pub enum TypeMode {
 }
 
 pub trait RustGenerator<'a> {
-    fn iface(&self) -> &'a Interface;
+    fn resolve(&self) -> &'a Resolve;
 
     fn push_str(&mut self, s: &str);
     fn info(&self, ty: TypeId) -> TypeInfo;
@@ -56,7 +56,7 @@ pub trait RustGenerator<'a> {
     fn print_tyid(&mut self, id: TypeId, mode: TypeMode) {
         let info = self.info(id);
         let lt = self.lifetime_for(&info, mode);
-        let ty = &self.iface().types[id];
+        let ty = &self.resolve().types[id];
         if ty.name.is_some() {
             let name = if lt.is_some() {
                 self.param_name(id)
@@ -68,13 +68,13 @@ pub trait RustGenerator<'a> {
             // If the type recursively owns data and it's a
             // variant/record/list, then we need to place the
             // lifetime parameter on the type as well.
-            if info.has_list && needs_generics(self.iface(), &ty.kind) {
+            if info.has_list && needs_generics(self.resolve(), &ty.kind) {
                 self.print_generics(lt);
             }
 
             return;
 
-            fn needs_generics(iface: &Interface, ty: &TypeDefKind) -> bool {
+            fn needs_generics(resolve: &Resolve, ty: &TypeDefKind) -> bool {
                 match ty {
                     TypeDefKind::Variant(_)
                     | TypeDefKind::Record(_)
@@ -87,9 +87,12 @@ pub trait RustGenerator<'a> {
                     | TypeDefKind::Enum(_)
                     | TypeDefKind::Tuple(_)
                     | TypeDefKind::Union(_) => true,
-                    TypeDefKind::Type(Type::Id(t)) => needs_generics(iface, &iface.types[*t].kind),
+                    TypeDefKind::Type(Type::Id(t)) => {
+                        needs_generics(resolve, &resolve.types[*t].kind)
+                    }
                     TypeDefKind::Type(Type::String) => true,
                     TypeDefKind::Type(_) => false,
+                    TypeDefKind::Unknown => unreachable!(),
                 }
             }
         }
@@ -150,6 +153,7 @@ pub trait RustGenerator<'a> {
             }
 
             TypeDefKind::Type(t) => self.print_ty(t, mode),
+            TypeDefKind::Unknown => unreachable!(),
         }
     }
 
@@ -214,7 +218,7 @@ pub trait RustGenerator<'a> {
             Type::Char => out.push_str("Char"),
             Type::String => out.push_str("String"),
             Type::Id(id) => {
-                let ty = &self.iface().types[*id];
+                let ty = &self.resolve().types[*id];
                 match &ty.name {
                     Some(name) => out.push_str(&name.to_upper_camel_case()),
                     None => match &ty.kind {
@@ -244,6 +248,7 @@ pub trait RustGenerator<'a> {
                         TypeDefKind::Variant(_) => out.push_str("Variant"),
                         TypeDefKind::Enum(_) => out.push_str("Enum"),
                         TypeDefKind::Union(_) => out.push_str("Union"),
+                        TypeDefKind::Unknown => unreachable!(),
                     },
                 }
             }
@@ -309,7 +314,7 @@ pub trait RustGenerator<'a> {
 
     fn param_name(&self, ty: TypeId) -> String {
         let info = self.info(ty);
-        let name = self.iface().types[ty]
+        let name = self.resolve().types[ty]
             .name
             .as_ref()
             .unwrap()
@@ -323,7 +328,7 @@ pub trait RustGenerator<'a> {
 
     fn result_name(&self, ty: TypeId) -> String {
         let info = self.info(ty);
-        let name = self.iface().types[ty]
+        let name = self.resolve().types[ty]
             .name
             .as_ref()
             .unwrap()

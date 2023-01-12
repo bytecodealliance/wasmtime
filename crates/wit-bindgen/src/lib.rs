@@ -29,8 +29,14 @@ use source::Source;
 struct Wasmtime {
     src: Source,
     opts: Opts,
-    imports: Vec<String>,
+    imports: Vec<Import>,
     exports: Exports,
+    types: Types,
+}
+
+enum Import {
+    Interface { snake: String },
+    Function { add_to_linker: String, sig: String },
 }
 
 #[derive(Default)]
@@ -50,163 +56,179 @@ pub struct Opts {
     /// Whether or not to use async rust functions and traits.
     pub async_: bool,
 
-    /// For a given wit interface and type name, generate a "trappable error type"
-    /// of the following Rust type name
-    pub trappable_error_type: Vec<(String, String, String)>,
+    /// A list of "trappable errors" which are used to replace the `E` in
+    /// `result<T, E>` found in WIT.
+    pub trappable_error_type: Vec<TrappableError>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TrappableError {
+    /// The name of the error in WIT that is being mapped.
+    pub wit_name: String,
+
+    /// The owner container of the error in WIT of the error that's being
+    /// mapped.
+    ///
+    /// This is, for example, the name of the WIT interface or the WIT world
+    /// which owns the type. If this is set to `None` then any error type with
+    /// `wit_name` is remapped to `rust_name`.
+    pub wit_owner: Option<String>,
+
+    /// The name, in Rust, of the error type to generate.
+    pub rust_name: String,
 }
 
 impl Opts {
-    pub fn generate(&self, world: &World) -> String {
+    pub fn generate(&self, resolve: &Resolve, world: WorldId) -> String {
         let mut r = Wasmtime::default();
         r.opts = self.clone();
-        r.generate(world)
+        r.generate(resolve, world)
     }
 }
 
 impl Wasmtime {
-    fn generate(&mut self, world: &World) -> String {
+    fn generate(&mut self, resolve: &Resolve, id: WorldId) -> String {
+        self.types.analyze(resolve, id);
+        let world = &resolve.worlds[id];
         for (name, import) in world.imports.iter() {
-            self.import(name, import);
+            self.import(resolve, name, import);
         }
         for (name, export) in world.exports.iter() {
-            self.export(name, export);
+            self.export(resolve, name, export);
         }
-        if let Some(iface) = &world.default {
-            self.export_default(&world.name, iface);
-        }
-        self.finish(world)
+        self.finish(resolve, id)
     }
 
-    fn import(&mut self, name: &str, iface: &Interface) {
-        let mut gen = InterfaceGenerator::new(self, iface, TypeMode::Owned);
-        gen.types();
-        gen.generate_trappable_error_types();
-        gen.generate_add_to_linker(name);
-
+    fn import(&mut self, resolve: &Resolve, name: &str, item: &WorldItem) {
         let snake = name.to_snake_case();
-        let module = &gen.src[..];
+        let mut gen = InterfaceGenerator::new(self, resolve, TypeMode::Owned);
+        let import = match item {
+            WorldItem::Function(func) => {
+                gen.generate_function_trait_sig(TypeOwner::None, &func);
+                let sig = mem::take(&mut gen.src).into();
+                gen.generate_add_function_to_linker(TypeOwner::None, &func, "linker");
+                let add_to_linker = gen.src.into();
+                Import::Function { sig, add_to_linker }
+            }
+            WorldItem::Interface(id) => {
+                gen.types(*id);
+                gen.generate_trappable_error_types(TypeOwner::Interface(*id));
+                gen.generate_add_to_linker(*id, name);
 
-        uwriteln!(
-            self.src,
-            "
-                #[allow(clippy::all)]
-                pub mod {snake} {{
-                    #[allow(unused_imports)]
-                    use wasmtime::component::__internal::anyhow;
+                let module = &gen.src[..];
 
-                    {module}
-                }}
-            "
-        );
+                uwriteln!(
+                    self.src,
+                    "
+                        #[allow(clippy::all)]
+                        pub mod {snake} {{
+                            #[allow(unused_imports)]
+                            use wasmtime::component::__internal::anyhow;
 
-        self.imports.push(snake);
+                            {module}
+                        }}
+                    "
+                );
+                Import::Interface { snake }
+            }
+        };
+
+        self.imports.push(import);
     }
 
-    fn export(&mut self, name: &str, iface: &Interface) {
-        let mut gen = InterfaceGenerator::new(self, iface, TypeMode::AllBorrowed("'a"));
-        gen.types();
-        gen.generate_trappable_error_types();
-
-        let camel = name.to_upper_camel_case();
-        uwriteln!(gen.src, "pub struct {camel} {{");
-        for func in iface.functions.iter() {
-            uwriteln!(
-                gen.src,
-                "{}: wasmtime::component::Func,",
-                func.name.to_snake_case()
-            );
-        }
-        uwriteln!(gen.src, "}}");
-
-        uwriteln!(gen.src, "impl {camel} {{");
-        uwrite!(
-            gen.src,
-            "
-                pub fn new(
-                    __exports: &mut wasmtime::component::ExportInstance<'_, '_>,
-                ) -> anyhow::Result<{camel}> {{
-            "
-        );
-        let fields = gen.extract_typed_functions();
-        for (name, getter) in fields.iter() {
-            uwriteln!(gen.src, "let {name} = {getter};");
-        }
-        uwriteln!(gen.src, "Ok({camel} {{");
-        for (name, _) in fields.iter() {
-            uwriteln!(gen.src, "{name},");
-        }
-        uwriteln!(gen.src, "}})");
-        uwriteln!(gen.src, "}}");
-        for func in iface.functions.iter() {
-            gen.define_rust_guest_export(Some(name), func);
-        }
-        uwriteln!(gen.src, "}}");
-
+    fn export(&mut self, resolve: &Resolve, name: &str, item: &WorldItem) {
         let snake = name.to_snake_case();
-        let module = &gen.src[..];
+        let mut gen = InterfaceGenerator::new(self, resolve, TypeMode::AllBorrowed("'a"));
+        let (ty, getter) = match item {
+            WorldItem::Function(func) => {
+                gen.define_rust_guest_export(None, func);
+                let body = mem::take(&mut gen.src).into();
+                let (_name, getter) = gen.extract_typed_function(func);
+                assert!(gen.src.is_empty());
+                self.exports.funcs.push(body);
+                (format!("wasmtime::component::Func"), getter)
+            }
+            WorldItem::Interface(id) => {
+                gen.types(*id);
+                gen.generate_trappable_error_types(TypeOwner::Interface(*id));
+                let iface = &resolve.interfaces[*id];
 
-        uwriteln!(
-            self.src,
-            "
-                #[allow(clippy::all)]
-                pub mod {snake} {{
-                    #[allow(unused_imports)]
-                    use wasmtime::component::__internal::anyhow;
+                let camel = name.to_upper_camel_case();
+                uwriteln!(gen.src, "pub struct {camel} {{");
+                for (_, func) in iface.functions.iter() {
+                    uwriteln!(
+                        gen.src,
+                        "{}: wasmtime::component::Func,",
+                        func.name.to_snake_case()
+                    );
+                }
+                uwriteln!(gen.src, "}}");
 
-                    {module}
-                }}
-            "
-        );
+                uwriteln!(gen.src, "impl {camel} {{");
+                uwrite!(
+                    gen.src,
+                    "
+                        pub fn new(
+                            __exports: &mut wasmtime::component::ExportInstance<'_, '_>,
+                        ) -> anyhow::Result<{camel}> {{
+                    "
+                );
+                let mut fields = Vec::new();
+                for (_, func) in iface.functions.iter() {
+                    let (name, getter) = gen.extract_typed_function(func);
+                    uwriteln!(gen.src, "let {name} = {getter};");
+                    fields.push(name);
+                }
+                uwriteln!(gen.src, "Ok({camel} {{");
+                for name in fields {
+                    uwriteln!(gen.src, "{name},");
+                }
+                uwriteln!(gen.src, "}})");
+                uwriteln!(gen.src, "}}");
+                for (_, func) in iface.functions.iter() {
+                    gen.define_rust_guest_export(Some(name), func);
+                }
+                uwriteln!(gen.src, "}}");
 
-        let getter = format!(
-            "\
-                {snake}::{camel}::new(
-                    &mut __exports.instance(\"{name}\")
-                        .ok_or_else(|| anyhow::anyhow!(\"exported instance `{name}` not present\"))?
-                )?\
-            "
-        );
-        let prev = self
-            .exports
-            .fields
-            .insert(snake.clone(), (format!("{snake}::{camel}"), getter));
+                let module = &gen.src[..];
+
+                uwriteln!(
+                    self.src,
+                    "
+                        #[allow(clippy::all)]
+                        pub mod {snake} {{
+                            #[allow(unused_imports)]
+                            use wasmtime::component::__internal::anyhow;
+
+                            {module}
+                        }}
+                    "
+                );
+
+                let getter = format!(
+                    "\
+                        {snake}::{camel}::new(
+                            &mut __exports.instance(\"{name}\")
+                                .ok_or_else(|| anyhow::anyhow!(\"exported instance `{name}` not present\"))?
+                        )?\
+                    "
+                );
+                self.exports.funcs.push(format!(
+                    "
+                        pub fn {snake}(&self) -> &{snake}::{camel} {{
+                            &self.{snake}
+                        }}
+                    "
+                ));
+                (format!("{snake}::{camel}"), getter)
+            }
+        };
+        let prev = self.exports.fields.insert(snake.clone(), (ty, getter));
         assert!(prev.is_none());
-        self.exports.funcs.push(format!(
-            "
-                pub fn {snake}(&self) -> &{snake}::{camel} {{
-                    &self.{snake}
-                }}
-            "
-        ));
     }
 
-    fn export_default(&mut self, _name: &str, iface: &Interface) {
-        let mut gen = InterfaceGenerator::new(self, iface, TypeMode::AllBorrowed("'a"));
-        gen.types();
-        gen.generate_trappable_error_types();
-        let fields = gen.extract_typed_functions();
-        for (name, getter) in fields {
-            let prev = gen
-                .gen
-                .exports
-                .fields
-                .insert(name, ("wasmtime::component::Func".to_string(), getter));
-            assert!(prev.is_none());
-        }
-
-        for func in iface.functions.iter() {
-            let prev = mem::take(&mut gen.src);
-            gen.define_rust_guest_export(None, func);
-            let func = mem::replace(&mut gen.src, prev);
-            gen.gen.exports.funcs.push(func.to_string());
-        }
-
-        let src = gen.src;
-        self.src.push_str(&src);
-    }
-
-    fn finish(&mut self, world: &World) -> String {
-        let camel = world.name.to_upper_camel_case();
+    fn finish(&mut self, resolve: &Resolve, world: WorldId) -> String {
+        let camel = resolve.worlds[world].name.to_upper_camel_case();
         uwriteln!(self.src, "pub struct {camel} {{");
         for (name, (ty, _)) in self.exports.fields.iter() {
             uwriteln!(self.src, "{name}: {ty},");
@@ -219,40 +241,43 @@ impl Wasmtime {
             ("", "", "", "")
         };
 
+        self.toplevel_import_trait(resolve, world);
+
         uwriteln!(self.src, "const _: () = {{");
         uwriteln!(self.src, "use wasmtime::component::__internal::anyhow;");
 
+        uwriteln!(self.src, "impl {camel} {{");
+        self.toplevel_add_to_linker(resolve, world);
         uwriteln!(
             self.src,
             "
-                impl {camel} {{
-                    /// Instantiates the provided `module` using the specified
-                    /// parameters, wrapping up the result in a structure that
-                    /// translates between wasm and the host.
-                    pub {async_} fn instantiate{async__}<T {send}>(
-                        mut store: impl wasmtime::AsContextMut<Data = T>,
-                        component: &wasmtime::component::Component,
-                        linker: &wasmtime::component::Linker<T>,
-                    ) -> anyhow::Result<(Self, wasmtime::component::Instance)> {{
-                        let instance = linker.instantiate{async__}(&mut store, component){await_}?;
-                        Ok((Self::new(store, &instance)?, instance))
-                    }}
+                /// Instantiates the provided `module` using the specified
+                /// parameters, wrapping up the result in a structure that
+                /// translates between wasm and the host.
+                pub {async_} fn instantiate{async__}<T {send}>(
+                    mut store: impl wasmtime::AsContextMut<Data = T>,
+                    component: &wasmtime::component::Component,
+                    linker: &wasmtime::component::Linker<T>,
+                ) -> anyhow::Result<(Self, wasmtime::component::Instance)> {{
+                    let instance = linker.instantiate{async__}(&mut store, component){await_}?;
+                    Ok((Self::new(store, &instance)?, instance))
+                }}
 
-                    /// Low-level creation wrapper for wrapping up the exports
-                    /// of the `instance` provided in this structure of wasm
-                    /// exports.
-                    ///
-                    /// This function will extract exports from the `instance`
-                    /// defined within `store` and wrap them all up in the
-                    /// returned structure which can be used to interact with
-                    /// the wasm module.
-                    pub fn new(
-                        mut store: impl wasmtime::AsContextMut,
-                        instance: &wasmtime::component::Instance,
-                    ) -> anyhow::Result<Self> {{
-                        let mut store = store.as_context_mut();
-                        let mut exports = instance.exports(&mut store);
-                        let mut __exports = exports.root();
+                /// Low-level creation wrapper for wrapping up the exports
+                /// of the `instance` provided in this structure of wasm
+                /// exports.
+                ///
+                /// This function will extract exports from the `instance`
+                /// defined within `store` and wrap them all up in the
+                /// returned structure which can be used to interact with
+                /// the wasm module.
+                pub fn new(
+                    mut store: impl wasmtime::AsContextMut,
+                    instance: &wasmtime::component::Instance,
+                ) -> anyhow::Result<Self> {{
+                    let mut store = store.as_context_mut();
+                    let mut exports = instance.exports(&mut store);
+                    let mut __exports = exports.root();
             ",
         );
         for (name, (_, get)) in self.exports.fields.iter() {
@@ -303,52 +328,130 @@ impl Wasmtime {
 }
 
 impl Wasmtime {
-    fn trappable_error_types<'a>(
-        &'a self,
-        iface: &'a Interface,
-    ) -> impl Iterator<Item = (&String, &TypeId, &String)> + 'a {
-        self.opts
-            .trappable_error_type
+    fn toplevel_import_trait(&mut self, resolve: &Resolve, world: WorldId) {
+        let mut functions = Vec::new();
+        for import in self.imports.iter() {
+            match import {
+                Import::Interface { .. } => continue,
+                Import::Function {
+                    sig,
+                    add_to_linker: _,
+                } => functions.push(sig),
+            }
+        }
+        if functions.is_empty() {
+            return;
+        }
+
+        let world_camel = resolve.worlds[world].name.to_upper_camel_case();
+        uwriteln!(self.src, "pub trait {world_camel}Imports {{");
+        for sig in functions {
+            self.src.push_str(sig);
+            self.src.push_str("\n");
+        }
+        uwriteln!(self.src, "}}");
+    }
+
+    fn toplevel_add_to_linker(&mut self, resolve: &Resolve, world: WorldId) {
+        if self.imports.is_empty() {
+            return;
+        }
+        let mut functions = Vec::new();
+        let mut interfaces = Vec::new();
+        for import in self.imports.iter() {
+            match import {
+                Import::Interface { snake } => interfaces.push(snake),
+                Import::Function {
+                    add_to_linker,
+                    sig: _,
+                } => functions.push(add_to_linker),
+            }
+        }
+
+        uwrite!(
+            self.src,
+            "
+                pub fn add_to_linker<T, U>(
+                    linker: &mut wasmtime::component::Linker<T>,
+                    get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+                ) -> anyhow::Result<()>
+                    where U: \
+            "
+        );
+        let world_camel = resolve.worlds[world].name.to_upper_camel_case();
+        let world_trait = format!("{world_camel}Imports");
+        for (i, name) in interfaces
             .iter()
-            .filter(|(interface_name, _, _)| iface.name == *interface_name)
-            .filter_map(|(_, wit_typename, rust_typename)| {
-                let wit_type = iface.type_lookup.get(wit_typename)?;
-                Some((wit_typename, wit_type, rust_typename))
+            .map(|n| format!("{n}::{}", n.to_upper_camel_case()))
+            .chain(if functions.is_empty() {
+                None
+            } else {
+                Some(world_trait.clone())
             })
+            .enumerate()
+        {
+            if i > 0 {
+                self.src.push_str(" + ");
+            }
+            self.src.push_str(&name);
+        }
+        self.src.push_str(",\n{\n");
+        for name in interfaces.iter() {
+            uwriteln!(self.src, "{name}::add_to_linker(linker, get)?;");
+        }
+        if !functions.is_empty() {
+            uwriteln!(self.src, "Self::add_root_to_linker(linker, get)?;");
+        }
+        uwriteln!(self.src, "Ok(())\n}}");
+        if functions.is_empty() {
+            return;
+        }
+
+        uwrite!(
+            self.src,
+            "
+                pub fn add_root_to_linker<T, U>(
+                    linker: &mut wasmtime::component::Linker<T>,
+                    get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+                ) -> anyhow::Result<()>
+                    where U: {world_trait}
+                {{
+                    let mut linker = linker.root();
+            ",
+        );
+        for add_to_linker in functions {
+            self.src.push_str(add_to_linker);
+            self.src.push_str("\n");
+        }
+        uwriteln!(self.src, "Ok(())\n}}");
     }
 }
 
 struct InterfaceGenerator<'a> {
     src: Source,
     gen: &'a mut Wasmtime,
-    iface: &'a Interface,
+    resolve: &'a Resolve,
     default_param_mode: TypeMode,
-    types: Types,
 }
 
 impl<'a> InterfaceGenerator<'a> {
     fn new(
         gen: &'a mut Wasmtime,
-        iface: &'a Interface,
+        resolve: &'a Resolve,
         default_param_mode: TypeMode,
     ) -> InterfaceGenerator<'a> {
-        let mut types = Types::default();
-        types.analyze(iface);
         InterfaceGenerator {
             src: Source::default(),
             gen,
-            iface,
-            types,
+            resolve,
             default_param_mode,
         }
     }
 
-    fn types(&mut self) {
-        for (id, ty) in self.iface.types.iter() {
-            let name = match &ty.name {
-                Some(name) => name,
-                None => continue,
-            };
+    fn types(&mut self, id: InterfaceId) {
+        for (name, id) in self.resolve.interfaces[id].types.iter() {
+            let id = *id;
+            let ty = &self.resolve.types[id];
             match &ty.kind {
                 TypeDefKind::Record(record) => self.type_record(id, name, record, &ty.docs),
                 TypeDefKind::Flags(flags) => self.type_flags(id, name, flags, &ty.docs),
@@ -362,6 +465,7 @@ impl<'a> InterfaceGenerator<'a> {
                 TypeDefKind::Type(t) => self.type_alias(id, name, t, &ty.docs),
                 TypeDefKind::Future(_) => todo!("generate for future"),
                 TypeDefKind::Stream(_) => todo!("generate for stream"),
+                TypeDefKind::Unknown => unreachable!(),
             }
         }
     }
@@ -790,33 +894,39 @@ impl<'a> InterfaceGenerator<'a> {
         }
     }
 
-    fn special_case_trappable_error(&self, results: &Results) -> Option<(Result_, String)> {
+    fn special_case_trappable_error(
+        &self,
+        owner: TypeOwner,
+        results: &Results,
+    ) -> Option<(&'a Result_, String)> {
         // We fillin a special trappable error type in the case when a function has just one
         // result, which is itself a `result<a, e>`, and the `e` is *not* a primitive
         // (i.e. defined in std) type, and matches the typename given by the user.
         let mut i = results.iter_types();
-        if i.len() == 1 {
-            match i.next().unwrap() {
-                Type::Id(id) => match &self.iface.types[*id].kind {
-                    TypeDefKind::Result(r) => match r.err {
-                        Some(Type::Id(error_typeid)) => self
-                            .gen
-                            .trappable_error_types(&self.iface)
-                            .find(|(_, wit_error_typeid, _)| error_typeid == **wit_error_typeid)
-                            .map(|(_, _, rust_errortype)| (r.clone(), rust_errortype.clone())),
-                        _ => None,
-                    },
-                    _ => None,
-                },
-                _ => None,
-            }
-        } else {
-            None
+        let id = match i.next()? {
+            Type::Id(id) => id,
+            _ => return None,
+        };
+        if i.next().is_some() {
+            return None;
         }
+        let result = match &self.resolve.types[*id].kind {
+            TypeDefKind::Result(r) => r,
+            _ => return None,
+        };
+        let error_typeid = match result.err? {
+            Type::Id(id) => id,
+            _ => return None,
+        };
+        self.trappable_error_types(owner)
+            .find(|(wit_error_typeid, _)| error_typeid == *wit_error_typeid)
+            .map(|(_, rust_errortype)| (result, rust_errortype))
     }
 
-    fn generate_add_to_linker(&mut self, name: &str) {
+    fn generate_add_to_linker(&mut self, id: InterfaceId, name: &str) {
+        let iface = &self.resolve.interfaces[id];
         let camel = name.to_upper_camel_case();
+        let owner = TypeOwner::Interface(id);
 
         if self.gen.opts.async_ {
             uwriteln!(self.src, "#[wasmtime::component::__internal::async_trait]")
@@ -824,47 +934,8 @@ impl<'a> InterfaceGenerator<'a> {
         // Generate the `pub trait` which represents the host functionality for
         // this import.
         uwriteln!(self.src, "pub trait {camel}: Sized {{");
-        for func in self.iface.functions.iter() {
-            self.rustdoc(&func.docs);
-
-            if self.gen.opts.async_ {
-                self.push_str("async ");
-            }
-            self.push_str("fn ");
-            self.push_str(&to_rust_ident(&func.name));
-            self.push_str("(&mut self, ");
-            for (name, param) in func.params.iter() {
-                let name = to_rust_ident(name);
-                self.push_str(&name);
-                self.push_str(": ");
-                self.print_ty(param, TypeMode::Owned);
-                self.push_str(",");
-            }
-            self.push_str(")");
-            self.push_str(" -> ");
-
-            if let Some((r, error_typename)) = self.special_case_trappable_error(&func.results) {
-                // Functions which have a single result `result<ok,err>` get special
-                // cased to use the host_wasmtime_rust::Error<err>, making it possible
-                // for them to trap or use `?` to propogate their errors
-                self.push_str("Result<");
-                if let Some(ok) = r.ok {
-                    self.print_ty(&ok, TypeMode::Owned);
-                } else {
-                    self.push_str("()");
-                }
-                self.push_str(",");
-                self.push_str(&error_typename);
-                self.push_str(">");
-            } else {
-                // All other functions get their return values wrapped in an anyhow::Result.
-                // Returning the anyhow::Error case can be used to trap.
-                self.push_str("anyhow::Result<");
-                self.print_result_ty(&func.results, TypeMode::Owned);
-                self.push_str(">");
-            }
-
-            self.push_str(";\n");
+        for (_, func) in iface.functions.iter() {
+            self.generate_function_trait_sig(owner, func);
         }
         uwriteln!(self.src, "}}");
 
@@ -885,25 +956,29 @@ impl<'a> InterfaceGenerator<'a> {
             "
         );
         uwriteln!(self.src, "let mut inst = linker.instance(\"{name}\")?;");
-        for func in self.iface.functions.iter() {
-            uwrite!(
-                self.src,
-                "inst.{}(\"{}\", ",
-                if self.gen.opts.async_ {
-                    "func_wrap_async"
-                } else {
-                    "func_wrap"
-                },
-                func.name
-            );
-            self.generate_guest_import_closure(func);
-            uwriteln!(self.src, ")?;")
+        for (_, func) in iface.functions.iter() {
+            self.generate_add_function_to_linker(owner, func, "inst");
         }
         uwriteln!(self.src, "Ok(())");
         uwriteln!(self.src, "}}");
     }
 
-    fn generate_guest_import_closure(&mut self, func: &Function) {
+    fn generate_add_function_to_linker(&mut self, owner: TypeOwner, func: &Function, linker: &str) {
+        uwrite!(
+            self.src,
+            "{linker}.{}(\"{}\", ",
+            if self.gen.opts.async_ {
+                "func_wrap_async"
+            } else {
+                "func_wrap"
+            },
+            func.name
+        );
+        self.generate_guest_import_closure(owner, func);
+        uwriteln!(self.src, ")?;")
+    }
+
+    fn generate_guest_import_closure(&mut self, owner: TypeOwner, func: &Function) {
         // Generate the closure that's passed to a `Linker`, the final piece of
         // codegen here.
         self.src
@@ -936,7 +1011,15 @@ impl<'a> InterfaceGenerator<'a> {
                    );
                    let _enter = span.enter();
                ",
-                self.iface.name, func.name,
+                match owner {
+                    TypeOwner::Interface(id) => self.resolve.interfaces[id]
+                        .name
+                        .as_deref()
+                        .unwrap_or("<no module>"),
+                    TypeOwner::World(id) => &self.resolve.worlds[id].name,
+                    TypeOwner::None => "<no owner>",
+                },
+                func.name,
             ));
         }
 
@@ -952,7 +1035,10 @@ impl<'a> InterfaceGenerator<'a> {
             uwrite!(self.src, ");\n");
         }
 
-        if self.special_case_trappable_error(&func.results).is_some() {
+        if self
+            .special_case_trappable_error(owner, &func.results)
+            .is_some()
+        {
             uwrite!(
                 self.src,
                 "match r {{
@@ -977,27 +1063,67 @@ impl<'a> InterfaceGenerator<'a> {
         }
     }
 
-    fn extract_typed_functions(&mut self) -> Vec<(String, String)> {
-        let prev = mem::take(&mut self.src);
-        let mut ret = Vec::new();
-        for func in self.iface.functions.iter() {
-            let snake = func.name.to_snake_case();
-            uwrite!(self.src, "*__exports.typed_func::<(");
-            for (_, ty) in func.params.iter() {
-                self.print_ty(ty, TypeMode::AllBorrowed("'_"));
-                self.push_str(", ");
-            }
-            self.src.push_str("), (");
-            for ty in func.results.iter_types() {
-                self.print_ty(ty, TypeMode::Owned);
-                self.push_str(", ");
-            }
-            self.src.push_str(")>(\"");
-            self.src.push_str(&func.name);
-            self.src.push_str("\")?.func()");
+    fn generate_function_trait_sig(&mut self, owner: TypeOwner, func: &Function) {
+        self.rustdoc(&func.docs);
 
-            ret.push((snake, mem::take(&mut self.src).to_string()));
+        if self.gen.opts.async_ {
+            self.push_str("async ");
         }
+        self.push_str("fn ");
+        self.push_str(&to_rust_ident(&func.name));
+        self.push_str("(&mut self, ");
+        for (name, param) in func.params.iter() {
+            let name = to_rust_ident(name);
+            self.push_str(&name);
+            self.push_str(": ");
+            self.print_ty(param, TypeMode::Owned);
+            self.push_str(",");
+        }
+        self.push_str(")");
+        self.push_str(" -> ");
+
+        if let Some((r, error_typename)) = self.special_case_trappable_error(owner, &func.results) {
+            // Functions which have a single result `result<ok,err>` get special
+            // cased to use the host_wasmtime_rust::Error<err>, making it possible
+            // for them to trap or use `?` to propogate their errors
+            self.push_str("Result<");
+            if let Some(ok) = r.ok {
+                self.print_ty(&ok, TypeMode::Owned);
+            } else {
+                self.push_str("()");
+            }
+            self.push_str(",");
+            self.push_str(&error_typename);
+            self.push_str(">");
+        } else {
+            // All other functions get their return values wrapped in an anyhow::Result.
+            // Returning the anyhow::Error case can be used to trap.
+            self.push_str("anyhow::Result<");
+            self.print_result_ty(&func.results, TypeMode::Owned);
+            self.push_str(">");
+        }
+
+        self.push_str(";\n");
+    }
+
+    fn extract_typed_function(&mut self, func: &Function) -> (String, String) {
+        let prev = mem::take(&mut self.src);
+        let snake = func.name.to_snake_case();
+        uwrite!(self.src, "*__exports.typed_func::<(");
+        for (_, ty) in func.params.iter() {
+            self.print_ty(ty, TypeMode::AllBorrowed("'_"));
+            self.push_str(", ");
+        }
+        self.src.push_str("), (");
+        for ty in func.results.iter_types() {
+            self.print_ty(ty, TypeMode::Owned);
+            self.push_str(", ");
+        }
+        self.src.push_str(")>(\"");
+        self.src.push_str(&func.name);
+        self.src.push_str("\")?.func()");
+
+        let ret = (snake, mem::take(&mut self.src).to_string());
         self.src = prev;
         return ret;
     }
@@ -1097,17 +1223,49 @@ impl<'a> InterfaceGenerator<'a> {
         self.src.push_str("}\n");
     }
 
-    fn generate_trappable_error_types(&mut self) {
-        for (wit_typename, wit_type, trappable_type) in self.gen.trappable_error_types(&self.iface)
-        {
-            let info = self.info(*wit_type);
+    fn trappable_error_types(
+        &self,
+        owner: TypeOwner,
+    ) -> impl Iterator<Item = (TypeId, String)> + '_ {
+        let resolve = self.resolve;
+        self.gen
+            .opts
+            .trappable_error_type
+            .iter()
+            .filter_map(move |trappable| {
+                if let Some(name) = &trappable.wit_owner {
+                    let owner_name = match owner {
+                        TypeOwner::Interface(id) => resolve.interfaces[id].name.as_deref()?,
+                        TypeOwner::World(id) => &resolve.worlds[id].name,
+                        TypeOwner::None => return None,
+                    };
+                    if owner_name != name {
+                        return None;
+                    }
+                }
+                let id = match owner {
+                    TypeOwner::Interface(id) => {
+                        *resolve.interfaces[id].types.get(&trappable.wit_name)?
+                    }
+                    // TODO: right now worlds can't have types defined within
+                    // them but that's just a temporary limitation of
+                    // `wit-parser`. Once that's filled in this should be
+                    // replaced with a type-lookup in the world.
+                    TypeOwner::World(_id) => unimplemented!(),
+                    TypeOwner::None => return None,
+                };
+
+                Some((id, trappable.rust_name.clone()))
+            })
+    }
+
+    fn generate_trappable_error_types(&mut self, owner: TypeOwner) {
+        for (wit_type, trappable_type) in self.trappable_error_types(owner).collect::<Vec<_>>() {
+            let info = self.info(wit_type);
             if self.lifetime_for(&info, TypeMode::Owned).is_some() {
-                panic!(
-                    "type {:?} in interface {:?} is not 'static",
-                    wit_typename, self.iface.name
-                )
+                panic!("wit error for {trappable_type} is not 'static")
             }
-            let abi_type = self.param_name(*wit_type);
+            let abi_type = self.param_name(wit_type);
 
             uwriteln!(
                 self.src,
@@ -1164,8 +1322,8 @@ impl<'a> InterfaceGenerator<'a> {
 }
 
 impl<'a> RustGenerator<'a> for InterfaceGenerator<'a> {
-    fn iface(&self) -> &'a Interface {
-        self.iface
+    fn resolve(&self) -> &'a Resolve {
+        self.resolve
     }
 
     fn default_param_mode(&self) -> TypeMode {
@@ -1177,6 +1335,6 @@ impl<'a> RustGenerator<'a> for InterfaceGenerator<'a> {
     }
 
     fn info(&self, ty: TypeId) -> TypeInfo {
-        self.types.get(ty)
+        self.gen.types.get(ty)
     }
 }
