@@ -458,7 +458,7 @@ impl<'a> Codegen<'a> {
                             write!(ctx.out, "{}if let ", &ctx.indent)?;
                             self.emit_constraint(ctx, *source, arm)?;
                             write!(ctx.out, " = ")?;
-                            self.emit_scrutinee(ctx, *source, arm.constraint)?;
+                            self.emit_source(ctx, *source, arm.constraint)?;
                         }
                     }
                     ctx.begin_block()?;
@@ -469,7 +469,7 @@ impl<'a> Codegen<'a> {
                 ControlFlow::Match { source, arms } => {
                     let scope = ctx.enter_scope();
                     write!(ctx.out, "{}match ", &ctx.indent)?;
-                    self.emit_scrutinee(ctx, *source, arms[0].constraint)?;
+                    self.emit_source(ctx, *source, arms[0].constraint)?;
                     ctx.begin_block()?;
                     for arm in arms.iter() {
                         let scope = ctx.enter_scope();
@@ -652,7 +652,7 @@ impl<'a> Codegen<'a> {
         }
     }
 
-    fn emit_scrutinee<W: Write>(
+    fn emit_source<W: Write>(
         &self,
         ctx: &mut BodyContext<W>,
         source: BindingId,
