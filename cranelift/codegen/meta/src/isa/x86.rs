@@ -164,52 +164,189 @@ fn define_settings(shared: &SettingGroup) -> SettingGroup {
     settings.add_predicate("use_bmi1", predicate!(has_bmi1));
     settings.add_predicate("use_lzcnt", predicate!(has_lzcnt));
 
-    // Presets corresponding to x86 CPUs.
+    let sse3 = settings.add_preset("sse3", "SSE3 and earlier.", preset!(has_sse3));
+    let ssse3 = settings.add_preset("ssse3", "SSSE3 and earlier.", preset!(sse3 && has_ssse3));
+    let sse41 = settings.add_preset("sse41", "SSE4.1 and earlier.", preset!(ssse3 && has_sse41));
+    let sse42 = settings.add_preset("sse42", "SSE4.2 and earlier.", preset!(sse41 && has_sse42));
 
+    // Presets corresponding to x86 CPUs.
+    // Features and architecture names are from LLVM's x86 presets:
+    // https://github.com/llvm/llvm-project/blob/d4493dd1ed58ac3f1eab0c4ca6e363e2b15bfd1c/llvm/lib/Target/X86/X86.td#L1300-L1643
     settings.add_preset(
         "baseline",
         "A baseline preset with no extensions enabled.",
         preset!(),
     );
+
+    // Intel CPUs
+
+    // Netburst
+    settings.add_preset("nocona", "Nocona microarchitecture.", preset!(sse3));
+
+    // Intel Core 2 Solo/Duo
+    settings.add_preset("core2", "Core 2 microarchitecture.", preset!(sse3));
+    settings.add_preset("penryn", "Penryn microarchitecture.", preset!(sse41));
+
+    // Intel Atom CPUs
+    let atom = settings.add_preset("atom", "Atom microarchitecture.", preset!(ssse3));
+    settings.add_preset("bonnell", "Bonnell microarchitecture.", preset!(atom));
+    let silvermont = settings.add_preset(
+        "silvermont",
+        "Silvermont microarchitecture.",
+        preset!(atom && sse42 && has_popcnt),
+    );
+    settings.add_preset("slm", "Silvermont microarchitecture.", preset!(silvermont));
+    let goldmont = settings.add_preset(
+        "goldmont",
+        "Goldmont microarchitecture.",
+        preset!(silvermont),
+    );
+    settings.add_preset(
+        "goldmont-plus",
+        "Goldmont Plus microarchitecture.",
+        preset!(goldmont),
+    );
+    let tremont = settings.add_preset("tremont", "Tremont microarchitecture.", preset!(goldmont));
+
+    let alderlake = settings.add_preset(
+        "alderlake",
+        "Alderlake microarchitecture.",
+        preset!(tremont && has_bmi1 && has_bmi2 && has_lzcnt && has_fma),
+    );
+    let sierra_forest = settings.add_preset(
+        "sierraforest",
+        "Sierra Forest microarchitecture.",
+        preset!(alderlake),
+    );
+    settings.add_preset(
+        "grandridge",
+        "Grandridge microarchitecture.",
+        preset!(sierra_forest),
+    );
     let nehalem = settings.add_preset(
         "nehalem",
         "Nehalem microarchitecture.",
-        preset!(has_sse3 && has_ssse3 && has_sse41 && has_sse42 && has_popcnt),
+        preset!(sse42 && has_popcnt),
+    );
+    settings.add_preset("corei7", "Core i7 microarchitecture.", preset!(nehalem));
+    let westmere = settings.add_preset("westmere", "Westmere microarchitecture.", preset!(nehalem));
+    let sandy_bridge = settings.add_preset(
+        "sandybridge",
+        "Sandy Bridge microarchitecture.",
+        preset!(westmere && has_avx),
+    );
+    settings.add_preset(
+        "corei7-avx",
+        "Core i7 AVX microarchitecture.",
+        preset!(sandy_bridge),
+    );
+    let ivy_bridge = settings.add_preset(
+        "ivybridge",
+        "Ivy Bridge microarchitecture.",
+        preset!(sandy_bridge),
+    );
+    settings.add_preset(
+        "core-avx-i",
+        "Intel Core CPU with 64-bit extensions.",
+        preset!(ivy_bridge),
     );
     let haswell = settings.add_preset(
         "haswell",
         "Haswell microarchitecture.",
-        preset!(nehalem && has_bmi1 && has_bmi2 && has_lzcnt),
+        preset!(ivy_bridge && has_avx2 && has_bmi1 && has_bmi2 && has_fma && has_lzcnt),
+    );
+    settings.add_preset(
+        "core-avx2",
+        "Intel Core CPU with AVX2 extensions.",
+        preset!(haswell),
     );
     let broadwell = settings.add_preset(
         "broadwell",
         "Broadwell microarchitecture.",
-        preset!(haswell && has_fma),
+        preset!(haswell),
     );
     let skylake = settings.add_preset("skylake", "Skylake microarchitecture.", preset!(broadwell));
+    let knights_landing = settings.add_preset(
+        "knl",
+        "Knights Landing microarchitecture.",
+        preset!(has_popcnt && has_avx512f && has_fma && has_bmi1 && has_bmi2 && has_lzcnt),
+    );
+    settings.add_preset(
+        "knm",
+        "Knights Mill microarchitecture.",
+        preset!(knights_landing),
+    );
+    let skylake_avx512 = settings.add_preset(
+        "skylake-avx512",
+        "Skylake AVX512 microarchitecture.",
+        preset!(broadwell && has_avx512f && has_avx512dq && has_avx512vl),
+    );
+    settings.add_preset(
+        "skx",
+        "Skylake AVX512 microarchitecture.",
+        preset!(skylake_avx512),
+    );
+    let cascadelake = settings.add_preset(
+        "cascadelake",
+        "Cascade Lake microarchitecture.",
+        preset!(skylake_avx512),
+    );
+    settings.add_preset(
+        "cooperlake",
+        "Cooper Lake mircoarchitecture.",
+        preset!(cascadelake),
+    );
     let cannonlake = settings.add_preset(
         "cannonlake",
         "Canon Lake microarchitecture.",
-        preset!(skylake),
+        preset!(skylake && has_avx512f && has_avx512dq && has_avx512vl && has_avx512vbmi),
     );
+    let icelake_client = settings.add_preset(
+        "icelake-client",
+        "Ice Lake microarchitecture.",
+        preset!(cannonlake && has_avx512bitalg),
+    );
+    // LLVM doesn't use the name "icelake" but Cranelift did in the past; alias it
     settings.add_preset(
         "icelake",
-        "Ice Lake microarchitecture.",
-        preset!(cannonlake),
+        "Ice Lake microarchitecture",
+        preset!(icelake_client),
     );
+    let icelake_server = settings.add_preset(
+        "icelake-server",
+        "Ice Lake (server) microarchitecture.",
+        preset!(icelake_client),
+    );
+    settings.add_preset(
+        "tigerlake",
+        "Tiger Lake microarchitecture.",
+        preset!(icelake_client),
+    );
+    let sapphire_rapids = settings.add_preset(
+        "sapphirerapids",
+        "Saphire Rapids microarchitecture.",
+        preset!(icelake_server),
+    );
+    settings.add_preset(
+        "raptorlake",
+        "Raptor Lake microarchitecture.",
+        preset!(alderlake),
+    );
+    settings.add_preset(
+        "meteorlake",
+        "Meteor Lake microarchitecture.",
+        preset!(alderlake),
+    );
+    settings.add_preset(
+        "graniterapids",
+        "Granite Rapids microarchitecture.",
+        preset!(sapphire_rapids),
+    );
+
     settings.add_preset(
         "znver1",
         "Zen (first generation) microarchitecture.",
-        preset!(
-            has_sse3
-                && has_ssse3
-                && has_sse41
-                && has_sse42
-                && has_popcnt
-                && has_bmi1
-                && has_bmi2
-                && has_lzcnt
-        ),
+        preset!(sse42 && has_popcnt && has_bmi1 && has_bmi2 && has_lzcnt),
     );
 
     settings.build()
