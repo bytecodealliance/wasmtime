@@ -327,11 +327,6 @@ fn define_settings(shared: &SettingGroup) -> SettingGroup {
         "Saphire Rapids microarchitecture.",
         preset!(icelake_server),
     );
-    let alderlake = settings.add_preset(
-        "alderlake",
-        "Alder Lake microarchitecture.",
-        preset!(tremont && has_fma && has_bmi1 && has_bmi2 && has_lzcnt),
-    );
     settings.add_preset(
         "raptorlake",
         "Raptor Lake microarchitecture.",
