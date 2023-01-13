@@ -191,11 +191,7 @@ enum HasControlFlow {
     Match(BindingId),
 
     /// Find rules which require both given binding sites to be in the same
-    /// equivalence class. If the same binding site is specified twice, then
-    /// for a single rule, either that site is not in any equivalence class, or
-    /// it obviously is in the same equivalence class as itself. This special
-    /// case is useful for finding rules which have any equality constraint at
-    /// all that involves the given binding site.
+    /// equivalence class.
     Equal(BindingId, BindingId),
 
     /// Find rules which must loop over the multiple values of the given
@@ -264,6 +260,51 @@ struct Score {
     state: BindingState,
 }
 
+impl Score {
+    /// Recompute this score. Returns whether this is a valid candidate; if
+    /// not, the score may not have been updated and the candidate should
+    /// be removed from further consideration. The `partition` callback is
+    /// evaluated lazily.
+    fn update(
+        &mut self,
+        state: BindingState,
+        partition: impl FnOnce() -> PartitionResults,
+    ) -> bool {
+        // Candidates which have already been matched in this partition must
+        // not be matched again. There's never anything to be gained from
+        // matching a binding site when you're in an evaluation path where you
+        // already know exactly what pattern that binding site matches. And
+        // without this check, we could go into an infinite loop: all rules in
+        // the current partition match the same pattern for this binding site,
+        // so matching on it doesn't reduce the number of rules to check and it
+        // doesn't make more binding sites available.
+        //
+        // Note that equality constraints never make a binding site `Matched`
+        // and are de-duplicated using more complicated equivalence-class
+        // checks instead.
+        if state == BindingState::Matched {
+            return false;
+        }
+        self.state = state;
+
+        // The score is not based solely on how many rules have this
+        // constraint, but on how many such rules can go into the same block
+        // without violating rule priority. This number can grow as higher-
+        // priority rules are removed from the partition, so we can't drop
+        // candidates just because this is zero. If some rule has this
+        // constraint, it will become viable in some later partition.
+        let partition = partition();
+        self.count = partition.valid;
+
+        // Only consider constraints that are present in some rule in the
+        // current partition. Note that as we partition the rule set into
+        // smaller groups, the number of rules which have a particular kind of
+        // constraint can never grow, so a candidate removed here doesn't need
+        // to be examined again in this partition.
+        partition.any_matched
+    }
+}
+
 /// A rule filter ([HasControlFlow]), plus temporary storage for the sort
 /// key used in `best_control_flow` to order these candidates. Keeping the
 /// temporary storage here lets us avoid repeated heap allocations.
@@ -277,7 +318,7 @@ struct Candidate {
 
 impl Candidate {
     /// Construct a candidate where the score is not set. The score will need
-    /// to be reset by `best_control_flow` before use.
+    /// to be reset by [Score::update] before use.
     fn new(kind: HasControlFlow) -> Self {
         Candidate {
             score: Score::default(),
@@ -299,7 +340,7 @@ struct EqualCandidate {
 
 impl EqualCandidate {
     /// Construct a candidate where the score is not set. The score will need
-    /// to be reset by `best_control_flow` before use.
+    /// to be reset by [Score::update] before use.
     fn new(source: BindingId) -> Self {
         EqualCandidate {
             score: Score::default(),
@@ -644,55 +685,20 @@ impl<'a> Decomposition<'a> {
             return None;
         }
 
-        let mut set_score = |score: &mut Score, kind| {
-            // This binding's state may have changed since we last looked at it.
-            let source = match kind {
-                HasControlFlow::Match(source) => source,
-                HasControlFlow::Equal(source, _) => source,
-                HasControlFlow::Loop(source) => source,
-            };
-            score.state = self.scope.ready[source.index()];
-
-            // Candidates which have already been matched in this partition
-            // must not be matched again. There's never anything to be gained
-            // from matching a binding site when you're in an evaluation path
-            // where you already know exactly what pattern that binding site
-            // matches. And without this check, we could go into an infinite
-            // loop: all rules in the current partition match the same pattern
-            // for this binding site, so matching on it doesn't reduce the
-            // number of rules to check and it doesn't make more binding sites
-            // available.
-            //
-            // Note that equality constraints never make a binding site
-            // `Matched` and are de-duplicated using more complicated
-            // equivalence-class checks instead.
-            if score.state == BindingState::Matched {
-                return false;
-            }
-
-            // The score is not based solely on how many rules have this
-            // constraint, but on how many such rules can go into the same
-            // block without violating rule priority. This number can grow
-            // as higher-priority rules are removed from the partition, so
-            // we can't drop candidates just because this is zero. If some
-            // rule has this constraint, it will become viable in some later
-            // partition.
-            let partition = kind.partition(self.rules, order);
-            score.count = partition.valid;
-
-            // Only consider constraints that are present in some rule in the
-            // current partition. Note that as we partition the rule set into
-            // smaller groups, the number of rules which have a particular
-            // kind of constraint can never grow, so a candidate removed here
-            // doesn't need to be examined again in this partition.
-            partition.any_matched
-        };
-
         // Remove false candidates, and recompute the candidate score for the
         // current set of rules in `order`.
-        self.scope
-            .candidates
-            .retain_mut(|candidate| set_score(&mut candidate.score, candidate.kind.0));
+        self.scope.candidates.retain_mut(|candidate| {
+            let kind = candidate.kind.0;
+            let source = match kind {
+                HasControlFlow::Match(source) => source,
+                HasControlFlow::Loop(source) => source,
+                HasControlFlow::Equal(..) => unreachable!(),
+            };
+            let state = self.scope.ready[source.index()];
+            candidate
+                .score
+                .update(state, || kind.partition(self.rules, order))
+        });
 
         // Find the best normal candidate.
         let mut best = self.scope.candidates.iter().max().cloned();
@@ -700,17 +706,22 @@ impl<'a> Decomposition<'a> {
         // Equality constraints are more complicated. We need to identify
         // some pair of binding sites which are constrained to be equal in at
         // least one rule in the current partition. We do this in two steps.
-        // First, find each single binding site which participates in an
+        // First, find each single binding site which participates in any
         // equality constraint in some rule. We compute the best-case `Score`
         // we could get, if there were another binding site where all the rules
         // constraining this binding site require it to be equal to that one.
         self.scope.equal_candidates.retain_mut(|candidate| {
             let source = candidate.source.0;
-            // The `Equal` case checks that both binding sites are in the same
-            // equivalence class. By specifying the same binding site twice,
-            // we're checking whether the binding site is in any equivalence
-            // class at all.
-            set_score(&mut candidate.score, HasControlFlow::Equal(source, source))
+            let state = self.scope.ready[source.index()];
+            candidate.score.update(state, || {
+                let matching = partition_in_place(order, |&idx| {
+                    self.rules.rules[idx].equals.find(source).is_some()
+                });
+                PartitionResults {
+                    any_matched: matching > 0,
+                    valid: respect_priority(self.rules, order, matching),
+                }
+            })
         });
 
         // Now that we know which single binding sites participate in any
