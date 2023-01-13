@@ -675,7 +675,8 @@ impl EmitState {
 pub struct EmitInfo(settings::Flags);
 
 impl EmitInfo {
-    pub(crate) fn new(flags: settings::Flags) -> Self {
+    /// Create a constant state for emission of instructions.
+    pub fn new(flags: settings::Flags) -> Self {
         Self(flags)
     }
 }

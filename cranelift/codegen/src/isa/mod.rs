@@ -64,7 +64,7 @@ use target_lexicon::{triple, Architecture, PointerWidth, Triple};
 pub mod x64;
 
 #[cfg(feature = "arm64")]
-pub(crate) mod aarch64;
+pub mod aarch64;
 
 #[cfg(feature = "riscv64")]
 pub mod riscv64;

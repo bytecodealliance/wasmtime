@@ -15,17 +15,17 @@ use regalloc2::{PRegSet, VReg};
 use smallvec::{smallvec, SmallVec};
 use std::string::{String, ToString};
 
-pub mod regs;
-pub use self::regs::*;
+pub(crate) mod regs;
+pub(crate) use self::regs::*;
 pub mod imms;
 pub use self::imms::*;
 pub mod args;
 pub use self::args::*;
-pub mod emit;
-pub use self::emit::*;
+pub(crate) mod emit;
+pub(crate) use self::emit::*;
 use crate::isa::aarch64::abi::AArch64MachineDeps;
 
-pub mod unwind;
+pub(crate) mod unwind;
 
 #[cfg(test)]
 mod emit_tests;
@@ -78,12 +78,19 @@ impl BitOp {
 /// the Inst enum.
 #[derive(Clone, Debug)]
 pub struct CallInfo {
+    /// Call destination.
     pub dest: ExternalName,
+    /// Arguments to the call instruction.
     pub uses: CallArgList,
+    /// Return values from the call instruction.
     pub defs: CallRetList,
+    /// Clobbers register set.
     pub clobbers: PRegSet,
+    /// Instruction opcode.
     pub opcode: Opcode,
+    /// Caller calling convention.
     pub caller_callconv: CallConv,
+    /// Callee calling convention.
     pub callee_callconv: CallConv,
 }
 
@@ -91,12 +98,19 @@ pub struct CallInfo {
 /// enum.
 #[derive(Clone, Debug)]
 pub struct CallIndInfo {
+    /// Function pointer for indirect call.
     pub rn: Reg,
+    /// Arguments to the call instruction.
     pub uses: SmallVec<[CallArgPair; 8]>,
+    /// Return values from the call instruction.
     pub defs: SmallVec<[CallRetPair; 8]>,
+    /// Clobbers register set.
     pub clobbers: PRegSet,
+    /// Instruction opcode.
     pub opcode: Opcode,
+    /// Caller calling convention.
     pub caller_callconv: CallConv,
+    /// Callee calling convention.
     pub callee_callconv: CallConv,
 }
 
@@ -104,7 +118,9 @@ pub struct CallIndInfo {
 /// enum.
 #[derive(Clone, Debug)]
 pub struct JTSequenceInfo {
+    /// Possible branch targets.
     pub targets: Vec<BranchTarget>,
+    /// Default branch target.
     pub default_target: BranchTarget,
 }
 
