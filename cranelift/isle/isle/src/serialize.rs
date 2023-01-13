@@ -21,7 +21,7 @@
 use std::cmp::Reverse;
 
 use crate::lexer::Pos;
-use crate::trie_again::{Binding, BindingId, Constraint, Overlap, Rule, RuleSet};
+use crate::trie_again::{Binding, BindingId, Constraint, Rule, RuleSet};
 use crate::DisjointSets;
 
 /// Decomposes the rule-set into a tree of [Block]s.
@@ -132,8 +132,9 @@ pub struct MatchArm {
 /// When evaluating the relationship between one rule in the selected set and
 /// one rule in the deferred set, there are two cases where we can keep a rule
 /// in the selected set:
-/// - The deferred rule is lower priority than the selected rule; or
-/// - The two rules don't overlap, meaning they can't match on the same inputs.
+/// 1. The deferred rule is lower priority than the selected rule; or
+/// 2. The two rules don't overlap, so they can't match on the same inputs.
+///
 /// In either case, if the selected rule matches then we know the deferred rule
 /// would not have been the one we wanted anyway; and if it doesn't match then
 /// the fall-through semantics of the code we generate will let us go on to
@@ -142,30 +143,30 @@ pub struct MatchArm {
 /// So a rule can stay in the selected set as long as it's in one of the above
 /// relationships with every rule in the deferred set.
 ///
-/// In practice only the priority matters. Checking overlap here doesn't change
-/// the output on any backend as of this writing. But I've measured and it
-/// hardly takes any time, so I'm leaving it in just in case somebody writes
-/// rules someday where it helps.
+/// Due to the overlap checking pass which occurs before codegen, we know that
+/// if two rules have the same priority, they do not overlap. So case 1 above
+/// can be expanded to when the deferred rule is lower _or equal_ priority
+/// to the selected rule. This much overlap checking is absolutely necessary:
+/// There are terms where codegen is impossible if we use only the unmodified
+/// case 1 and don't also check case 2.
+///
+/// Aside from the equal-priority case, though, case 2 does not seem to matter
+/// in practice. On the current backends, doing a full overlap check here does
+/// not change the generated code at all. So we don't bother.
+///
+/// Since this function never moves rules from the deferred set to the selected
+/// set, the returned partition-point is always less than or equal to the
+/// initial partition-point.
 fn respect_priority(rules: &RuleSet, order: &mut [usize], partition_point: usize) -> usize {
     let (selected, deferred) = order.split_at_mut(partition_point);
-    if deferred.is_empty() {
-        // In this case, `deferred.iter().all()` below will always return
-        // `true`, so `partition_in_place` will keep everything in the first
-        // partition. Short-circuit that.
-        return partition_point;
-    }
 
-    partition_in_place(selected, |&idx| {
-        let rule = &rules.rules[idx];
-        deferred.iter().all(|&idx| {
-            let other = &rules.rules[idx];
-            // Overlap checking takes some work, so check priority first. And
-            // if two rules have the same priority, we can assume they don't
-            // overlap since otherwise the earlier overlap checking phase would
-            // have already rejected this rule set.
-            rule.prio >= other.prio || rule.may_overlap(other) == Overlap::No
-        })
-    })
+    if let Some(max_deferred_prio) = deferred.iter().map(|&idx| rules.rules[idx].prio).max() {
+        partition_in_place(selected, |&idx| rules.rules[idx].prio >= max_deferred_prio)
+    } else {
+        // If the deferred set is empty, all selected rules are fine where
+        // they are.
+        partition_point
+    }
 }
 
 /// A query which can be tested against a [Rule] to see if that rule requires
@@ -275,8 +276,8 @@ struct Candidate {
 }
 
 impl Candidate {
-    /// Construct a candidate where the sort key is not set. The sort key will
-    /// need to be reset by `best_control_flow` before use.
+    /// Construct a candidate where the score is not set. The score will need
+    /// to be reset by `best_control_flow` before use.
     fn new(kind: HasControlFlow) -> Self {
         Candidate {
             score: Score::default(),
@@ -286,9 +287,9 @@ impl Candidate {
 }
 
 /// A single binding site to check for participation in equality constraints,
-/// plus temporary storage for the sort key used in `best_control_flow` to
-/// order these candidates. Keeping the temporary storage here lets us avoid
-/// repeated heap allocations.
+/// plus temporary storage for the score used in `best_control_flow` to order
+/// these candidates. Keeping the temporary storage here lets us avoid repeated
+/// heap allocations.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct EqualCandidate {
     score: Score,
@@ -297,8 +298,8 @@ struct EqualCandidate {
 }
 
 impl EqualCandidate {
-    /// Construct a candidate where the sort key is not set. The sort key will
-    /// need to be reset by `best_control_flow` before use.
+    /// Construct a candidate where the score is not set. The score will need
+    /// to be reset by `best_control_flow` before use.
     fn new(source: BindingId) -> Self {
         EqualCandidate {
             score: Score::default(),
@@ -653,14 +654,23 @@ impl<'a> Decomposition<'a> {
             score.state = self.scope.ready[source.index()];
 
             // Candidates which have already been matched in this partition
-            // must not be matched again. (Note that equality constraints are
-            // de-duplicated using more complicated equivalence-class checks
-            // instead.)
+            // must not be matched again. There's never anything to be gained
+            // from matching a binding site when you're in an evaluation path
+            // where you already know exactly what pattern that binding site
+            // matches. And without this check, we could go into an infinite
+            // loop: all rules in the current partition match the same pattern
+            // for this binding site, so matching on it doesn't reduce the
+            // number of rules to check and it doesn't make more binding sites
+            // available.
+            //
+            // Note that equality constraints never make a binding site
+            // `Matched` and are de-duplicated using more complicated
+            // equivalence-class checks instead.
             if score.state == BindingState::Matched {
                 return false;
             }
 
-            // The sort key is not based solely on how many rules have this
+            // The score is not based solely on how many rules have this
             // constraint, but on how many such rules can go into the same
             // block without violating rule priority. This number can grow
             // as higher-priority rules are removed from the partition, so
@@ -678,8 +688,8 @@ impl<'a> Decomposition<'a> {
             partition.any_matched
         };
 
-        // Remove false candidates, and recompute the candidate sort key for
-        // the current set of rules in `order`.
+        // Remove false candidates, and recompute the candidate score for the
+        // current set of rules in `order`.
         self.scope
             .candidates
             .retain_mut(|candidate| set_score(&mut candidate.score, candidate.kind.0));
