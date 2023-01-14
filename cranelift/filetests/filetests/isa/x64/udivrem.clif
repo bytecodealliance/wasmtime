@@ -1,0 +1,96 @@
+test compile precise-output
+target x86_64
+
+; Ideally these pairs of CLIF instructions should emit a single x86 instruction.
+
+function %udivrem_i8(i8, i8) -> i8, i8 {
+block0(v0: i8, v1: i8):
+  v2 = udiv v0, v1
+  v3 = urem v0, v1
+  return v2, v3
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movzbl  %dil, %eax
+;   div     %al, (none), %sil, %al, (none)
+;   movq    %rax, %rcx
+;   movzbl  %dil, %eax
+;   div     %al, (none), %sil, %al, (none)
+;   movq    %rax, %rdx
+;   shrq    $8, %rdx, %rdx
+;   movq    %rcx, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %udivrem_i16(i16, i16) -> i16, i16 {
+block0(v0: i16, v1: i16):
+  v2 = udiv v0, v1
+  v3 = urem v0, v1
+  return v2, v3
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    $0, %edx
+;   movq    %rdi, %rax
+;   div     %ax, %dx, %si, %ax, %dx
+;   movq    %rdi, %rcx
+;   movq    %rax, %r8
+;   movl    $0, %edx
+;   movq    %rcx, %rax
+;   div     %ax, %dx, %si, %ax, %dx
+;   movq    %r8, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %udivrem_i32(i32, i32) -> i32, i32 {
+block0(v0: i32, v1: i32):
+  v2 = udiv v0, v1
+  v3 = urem v0, v1
+  return v2, v3
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    $0, %edx
+;   movq    %rdi, %rax
+;   div     %eax, %edx, %esi, %eax, %edx
+;   movq    %rdi, %rcx
+;   movq    %rax, %r8
+;   movl    $0, %edx
+;   movq    %rcx, %rax
+;   div     %eax, %edx, %esi, %eax, %edx
+;   movq    %r8, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %udivrem_i64(i64, i64) -> i64, i64 {
+block0(v0: i64, v1: i64):
+  v2 = udiv v0, v1
+  v3 = urem v0, v1
+  return v2, v3
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    $0, %edx
+;   movq    %rdi, %rax
+;   div     %rax, %rdx, %rsi, %rax, %rdx
+;   movq    %rdi, %rcx
+;   movq    %rax, %r8
+;   movl    $0, %edx
+;   movq    %rcx, %rax
+;   div     %rax, %rdx, %rsi, %rax, %rdx
+;   movq    %r8, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
