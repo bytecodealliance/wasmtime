@@ -408,7 +408,7 @@ fn define_settings(shared: &SettingGroup) -> SettingGroup {
         "Zen (first generation) microarchitecture.",
         preset!(sse42 && has_popcnt && has_bmi1 && has_bmi2 && has_lzcnt && has_fma),
     );
-    settings.add_preset(
+    let znver2 = settings.add_preset(
         "znver2",
         "Zen (second generation) microarchitecture.",
         preset!(znver1),
@@ -416,7 +416,7 @@ fn define_settings(shared: &SettingGroup) -> SettingGroup {
     settings.add_preset(
         "znver3",
         "Zen (third generation) microarchitecture.",
-        preset!(znver1),
+        preset!(znver2),
     );
 
     // Generic
