@@ -293,7 +293,7 @@ fn define_settings(shared: &SettingGroup) -> SettingGroup {
     );
     settings.add_preset(
         "cooperlake",
-        "Cooper Lake mircoarchitecture.",
+        "Cooper Lake microarchitecture.",
         preset!(cascadelake),
     );
     let cannonlake = settings.add_preset(
@@ -366,7 +366,7 @@ fn define_settings(shared: &SettingGroup) -> SettingGroup {
     );
     let barcelona = settings.add_preset(
         "barcelona",
-        "Barcelona microarchtiecture.",
+        "Barcelona microarchitecture.",
         preset!(has_popcnt && has_lzcnt),
     );
     settings.add_preset(
