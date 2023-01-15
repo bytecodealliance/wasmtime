@@ -31,8 +31,8 @@ block2(v9: i32):
 ; check:      v8 = iadd v2, v3
 ; check:      brif v6, block2, block1(v8)
 
+
 ; check:  block2:
 ; check:      v10 = iconst.i32 1
 ; check:      v4 = iadd.i32 v1, v10
 ; check:      return v4
-
