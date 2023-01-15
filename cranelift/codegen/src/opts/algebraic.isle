@@ -372,3 +372,31 @@
 (rule (simplify
        (select ty (icmp _ (IntCC.UnsignedLessThanOrEqual) x y) x y))
       (umin ty x y))
+
+
+
+;; Transform vselect-of-icmp into {u,s}{min,max} instructions where possible.
+(rule (simplify
+       (vselect ty (icmp _ (IntCC.SignedGreaterThan) x y) x y))
+      (smax ty x y))
+(rule (simplify
+       (vselect ty (icmp _ (IntCC.SignedGreaterThanOrEqual) x y) x y))
+      (smax ty x y))
+(rule (simplify
+       (vselect ty (icmp _ (IntCC.UnsignedGreaterThan) x y) x y))
+      (umax ty x y))
+(rule (simplify
+       (vselect ty (icmp _ (IntCC.UnsignedGreaterThanOrEqual) x y) x y))
+      (umax ty x y))
+(rule (simplify
+       (vselect ty (icmp _ (IntCC.SignedLessThan) x y) x y))
+      (smin ty x y))
+(rule (simplify
+       (vselect ty (icmp _ (IntCC.SignedLessThanOrEqual) x y) x y))
+      (smin ty x y))
+(rule (simplify
+       (vselect ty (icmp _ (IntCC.UnsignedLessThan) x y) x y))
+      (umin ty x y))
+(rule (simplify
+       (vselect ty (icmp _ (IntCC.UnsignedLessThanOrEqual) x y) x y))
+      (umin ty x y))
