@@ -1,5 +1,5 @@
 test optimize
-set opt_level=none
+set opt_level=speed
 set use_egraphs=true
 target x86_64
 target aarch64
@@ -13,8 +13,8 @@ block0(v0: i32x4, v1: i32x4):
 }
 
 ; check: block0(v0: i32x4, v1: i32x4):
-; check:    v16 = smax v0, v1
-; check:    return v16
+; check:    v4 = smax v0, v1
+; check:    return v4
 
 
 function %vselect_sge_to_smax(i32x4, i32x4) -> i32x4 {
@@ -25,8 +25,8 @@ block0(v0: i32x4, v1: i32x4):
 }
 
 ; check: block0(v0: i32x4, v1: i32x4):
-; check:    v16 = smax v0, v1
-; check:    return v16
+; check:    v4 = smax v0, v1
+; check:    return v4
 
 
 function %vselect_ugt_to_umax(i32x4, i32x4) -> i32x4 {
@@ -37,8 +37,8 @@ block0(v0: i32x4, v1: i32x4):
 }
 
 ; check: block0(v0: i32x4, v1: i32x4):
-; check:    v16 = umax v0, v1
-; check:    return v16
+; check:    v4 = umax v0, v1
+; check:    return v4
 
 
 function %vselect_uge_to_umax(i32x4, i32x4) -> i32x4 {
@@ -49,8 +49,8 @@ block0(v0: i32x4, v1: i32x4):
 }
 
 ; check: block0(v0: i32x4, v1: i32x4):
-; check:    v16 = umax v0, v1
-; check:    return v16
+; check:    v4 = umax v0, v1
+; check:    return v4
 
 
 
@@ -62,8 +62,8 @@ block0(v0: i32x4, v1: i32x4):
 }
 
 ; check: block0(v0: i32x4, v1: i32x4):
-; check:    v16 = smin v0, v1
-; check:    return v16
+; check:    v4 = smin v0, v1
+; check:    return v4
 
 
 function %vselect_sle_to_smin(i32x4, i32x4) -> i32x4 {
@@ -74,8 +74,8 @@ block0(v0: i32x4, v1: i32x4):
 }
 
 ; check: block0(v0: i32x4, v1: i32x4):
-; check:    v16 = smin v0, v1
-; check:    return v16
+; check:    v4 = smin v0, v1
+; check:    return v4
 
 
 function %vselect_ult_to_umin(i32x4, i32x4) -> i32x4 {
@@ -86,8 +86,8 @@ block0(v0: i32x4, v1: i32x4):
 }
 
 ; check: block0(v0: i32x4, v1: i32x4):
-; check:    v16 = umin v0, v1
-; check:    return v16
+; check:    v4 = umin v0, v1
+; check:    return v4
 
 
 function %vselect_ule_to_umin(i32x4, i32x4) -> i32x4 {
@@ -98,8 +98,8 @@ block0(v0: i32x4, v1: i32x4):
 }
 
 ; check: block0(v0: i32x4, v1: i32x4):
-; check:    v16 = umin v0, v1
-; check:    return v16
+; check:    v4 = umin v0, v1
+; check:    return v4
 
 
 
@@ -111,6 +111,30 @@ block0(v0: i32x4, v1: i32x4, v2: i32x4, v3: i32x4):
 }
 
 ; check: block0(v0: i32x4, v1: i32x4, v2: i32x4, v3: i32x4):
-; check:    v11 = icmp ule v0, v1
-; check:    v5 = vselect v11, v2, v3
+; check:    v4 = icmp ule v0, v1
+; check:    v5 = vselect v4, v2, v3
 ; check:    return v5
+
+
+
+function %vselect_fcmp_gt_to_fmax_pseudo(f32x4, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32x4):
+    v2 = fcmp gt v0, v1
+    v3 = vselect v2, v0, v1
+    return v3
+}
+
+; check: block0(v0: f32x4, v1: f32x4):
+; check:    v4 = fmax_pseudo v0, v1
+; check:    return v4
+
+function %vselect_fcmp_lt_to_fmin_pseudo(f32x4, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32x4):
+    v2 = fcmp lt v0, v1
+    v3 = vselect v2, v0, v1
+    return v3
+}
+
+; check: block0(v0: f32x4, v1: f32x4):
+; check:    v4 = fmin_pseudo v0, v1
+; check:    return v4
