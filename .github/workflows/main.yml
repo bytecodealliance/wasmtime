@@ -50,7 +50,7 @@ jobs:
     name: Cargo vet
     runs-on: ubuntu-latest
     env:
-      CARGO_VET_VERSION: 0.3.0
+      CARGO_VET_VERSION: 0.3.1
     steps:
     - uses: actions/checkout@v3
       with:
