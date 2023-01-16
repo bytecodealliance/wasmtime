@@ -252,6 +252,22 @@ impl Inst {
         insts.unwrap_or_else(|| smallvec![Inst::LoadConst64 { rd, imm: value }])
     }
 
+    pub fn load_constant_and_add_u64<F: FnMut(Type) -> Writable<Reg>>(
+        rd: Writable<Reg>,
+        add: Reg,
+        value: u64,
+        alloc_tmp: &mut F,
+    ) -> SmallInstVec<Inst> {
+        let mut insts = Inst::load_constant_u64(rd, value, alloc_tmp);
+        insts.push(Inst::AluRRR {
+            alu_op: AluOPRRR::Add,
+            rd,
+            rs1: rd.to_reg(),
+            rs2: add,
+        });
+        insts
+    }
+
     pub(crate) fn construct_auipc_and_jalr(
         link: Option<Writable<Reg>>,
         tmp: Writable<Reg>,
@@ -1569,9 +1585,11 @@ impl MachInstLabelUse for LabelUse {
     /// Maximum PC-relative range (positive), inclusive.
     fn max_pos_range(self) -> CodeOffset {
         match self {
-            LabelUse::PCRelHi20 | LabelUse::Jal20 => ((1 << 19) - 1) * 2,
-            LabelUse::PCRel32 => Inst::imm_max() as CodeOffset,
-            LabelUse::B12 | LabelUse::PCRelLo12I => ((1 << 11) - 1) * 2,
+            LabelUse::Jal20 => ((1 << 19) - 1) * 2,
+            LabelUse::PCRelLo12I | LabelUse::PCRelHi20 | LabelUse::PCRel32 => {
+                Inst::imm_max() as CodeOffset
+            }
+            LabelUse::B12 => ((1 << 11) - 1) * 2,
         }
     }
 
