@@ -361,12 +361,16 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
         }
         &Inst::Load { rd, from, .. } => {
-            collector.reg_use(from.get_base_register());
             collector.reg_def(rd);
+            if let Some(reg) = from.get_base_register() {
+                collector.reg_use(reg);
+            }
         }
         &Inst::Store { to, src, .. } => {
-            collector.reg_use(to.get_base_register());
             collector.reg_use(src);
+            if let Some(reg) = to.get_base_register() {
+                collector.reg_use(reg);
+            }
         }
 
         &Inst::Args { ref args } => {
@@ -416,8 +420,10 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
         }
         &Inst::LoadAddr { rd, mem } => {
-            collector.reg_use(mem.get_base_register());
             collector.reg_early_def(rd);
+            if let Some(reg) = mem.get_base_register() {
+                collector.reg_use(reg);
+            }
         }
 
         &Inst::VirtualSPOffsetAdj { .. } => {}
@@ -1201,26 +1207,12 @@ impl Inst {
                 format!("{} {},{}", "lui", format_reg(rd.to_reg(), allocs), imm.bits)
             }
             &Inst::LoadConst32 { rd, imm } => {
-                use std::fmt::Write;
-
                 let rd = format_reg(rd.to_reg(), allocs);
-                let mut buf = String::new();
-                write!(&mut buf, "auipc {},0; ", rd).unwrap();
-                write!(&mut buf, "ld {},12({}); ", rd, rd).unwrap();
-                write!(&mut buf, "j {}; ", Inst::INSTRUCTION_SIZE + 4).unwrap();
-                write!(&mut buf, ".4byte 0x{:x}", imm).unwrap();
-                buf
+                format!("li {rd},0x{imm:x}")
             }
             &Inst::LoadConst64 { rd, imm } => {
-                use std::fmt::Write;
-
                 let rd = format_reg(rd.to_reg(), allocs);
-                let mut buf = String::new();
-                write!(&mut buf, "auipc {},0; ", rd).unwrap();
-                write!(&mut buf, "ld {},12({}); ", rd, rd).unwrap();
-                write!(&mut buf, "j {}; ", Inst::INSTRUCTION_SIZE + 8).unwrap();
-                write!(&mut buf, ".8byte 0x{:x}", imm).unwrap();
-                buf
+                format!("li {rd},0x{imm:x}")
             }
             &Inst::AluRRR {
                 alu_op,
@@ -1351,8 +1343,8 @@ impl Inst {
                 from,
                 flags: _flags,
             } => {
-                let base = from.to_string_with_alloc(allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
+                let base = from.to_string_with_alloc(allocs);
                 format!("{} {},{}", op.op_name(), rd, base,)
             }
             &Inst::Store {
@@ -1361,8 +1353,8 @@ impl Inst {
                 op,
                 flags: _flags,
             } => {
-                let base = to.to_string_with_alloc(allocs);
                 let src = format_reg(src, allocs);
+                let base = to.to_string_with_alloc(allocs);
                 format!("{} {},{}", op.op_name(), src, base,)
             }
             &Inst::Args { ref args } => {
@@ -1477,8 +1469,8 @@ impl Inst {
                 format!("load_sym {},{}{:+}", rd, name.display(None), offset)
             }
             &MInst::LoadAddr { ref rd, ref mem } => {
-                let rs = mem.to_addr(allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
+                let rs = mem.to_string_with_alloc(allocs);
                 format!("load_addr {},{}", rd, rs)
             }
             &MInst::VirtualSPOffsetAdj { amount } => {
@@ -1553,6 +1545,20 @@ pub enum LabelUse {
     /// is added to the current pc to give the target address. The
     /// conditional branch range is ±4 KiB.
     B12,
+
+    /// Equivalent to the `R_RISCV_PCREL_HI20` relocation, Allows setting
+    /// the immediate field of an `auipc` instruction.
+    ///
+    /// Since we currently don't support offsets in labels, this relocation has
+    /// an implicit offset of 4.
+    PCRelHi20,
+
+    /// Equivalent to the `R_RISCV_PCREL_LO12_I` relocation, Allows setting
+    /// the immediate field of I Type instructions such as `addi` or `lw`.
+    ///
+    /// Since we currently don't support offsets in labels, this relocation has
+    /// an implicit offset of 4.
+    PCRelLo12I,
 }
 
 impl MachInstLabelUse for LabelUse {
@@ -1563,9 +1569,9 @@ impl MachInstLabelUse for LabelUse {
     /// Maximum PC-relative range (positive), inclusive.
     fn max_pos_range(self) -> CodeOffset {
         match self {
-            LabelUse::Jal20 => ((1 << 19) - 1) * 2,
+            LabelUse::PCRelHi20 | LabelUse::Jal20 => ((1 << 19) - 1) * 2,
             LabelUse::PCRel32 => Inst::imm_max() as CodeOffset,
-            LabelUse::B12 => ((1 << 11) - 1) * 2,
+            LabelUse::B12 | LabelUse::PCRelLo12I => ((1 << 11) - 1) * 2,
         }
     }
 
@@ -1580,9 +1586,8 @@ impl MachInstLabelUse for LabelUse {
     /// Size of window into code needed to do the patch.
     fn patch_size(self) -> CodeOffset {
         match self {
-            LabelUse::Jal20 => 4,
+            LabelUse::Jal20 | LabelUse::B12 | LabelUse::PCRelHi20 | LabelUse::PCRelLo12I => 4,
             LabelUse::PCRel32 => 8,
-            LabelUse::B12 => 4,
         }
     }
 
@@ -1607,8 +1612,7 @@ impl MachInstLabelUse for LabelUse {
     /// Is a veneer supported for this label reference type?
     fn supports_veneer(self) -> bool {
         match self {
-            Self::B12 => true,
-            Self::Jal20 => true,
+            Self::Jal20 | Self::B12 => true,
             _ => false,
         }
     }
@@ -1616,8 +1620,7 @@ impl MachInstLabelUse for LabelUse {
     /// How large is the veneer, if supported?
     fn veneer_size(self) -> CodeOffset {
         match self {
-            Self::B12 => 8,
-            Self::Jal20 => 8,
+            Self::Jal20 | Self::B12 => 8,
             _ => unreachable!(),
         }
     }
@@ -1700,6 +1703,19 @@ impl LabelUse {
                     | ((offset >> 5 & 0b11_1111) << 25)
                     | ((offset >> 12 & 0b1) << 31);
                 buffer[0..4].clone_from_slice(&u32::to_le_bytes(insn | v));
+            }
+
+            LabelUse::PCRelHi20 => {
+                let offset = offset as u32 + 4;
+                let hi20 = offset & 0xFFFFF000;
+                let insn = (insn & 0xFFF) | hi20;
+                buffer[0..4].clone_from_slice(&u32::to_le_bytes(insn));
+            }
+
+            LabelUse::PCRelLo12I => {
+                let offset = (offset as u32 + 4) & 0xFFF;
+                let insn = (insn & 0xFFFFF) | (offset << 20);
+                buffer[0..4].clone_from_slice(&u32::to_le_bytes(insn));
             }
         }
     }

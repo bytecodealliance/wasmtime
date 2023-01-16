@@ -480,17 +480,35 @@ impl MachInstEmit for Inst {
             }
             &Inst::LoadConst32 { rd, imm } => {
                 let rd = allocs.next_writable(rd);
-                LoadConstant::U32(imm)
-                    .load_constant(rd, &mut |_| rd)
-                    .into_iter()
-                    .for_each(|inst| inst.emit(&[], sink, emit_info, state));
+                let label_data = sink.get_label();
+                let data = imm.to_le_bytes();
+
+                // Emit the constant into the pool
+                sink.defer_constant(label_data, 4, &data[..], u32::MAX);
+
+                let inst = Inst::Load {
+                    rd,
+                    op: LoadOP::Lw,
+                    flags: MemFlags::trusted(),
+                    from: AMode::Label(label_data),
+                };
+                inst.emit(&[], sink, emit_info, state);
             }
             &Inst::LoadConst64 { rd, imm } => {
                 let rd = allocs.next_writable(rd);
-                LoadConstant::U64(imm)
-                    .load_constant(rd, &mut |_| rd)
-                    .into_iter()
-                    .for_each(|inst| inst.emit(&[], sink, emit_info, state));
+                let label_data = sink.get_label();
+                let data = imm.to_le_bytes();
+
+                // Emit the constant into the pool
+                sink.defer_constant(label_data, 8, &data[..], u32::MAX);
+
+                let inst = Inst::Load {
+                    rd,
+                    op: LoadOP::Ld,
+                    flags: MemFlags::trusted(),
+                    from: AMode::Label(label_data),
+                };
+                inst.emit(&[], sink, emit_info, state);
             }
             &Inst::FpuRR {
                 frm,
@@ -603,80 +621,110 @@ impl MachInstEmit for Inst {
                 from,
                 flags,
             } => {
-                let x;
-                let base = from.get_base_register();
-                let base = allocs.next(base);
                 let rd = allocs.next_writable(rd);
-                let offset = from.get_offset_with_state(state);
-                if let Some(imm12) = Imm12::maybe_from_u64(offset as u64) {
-                    let srcloc = state.cur_srcloc();
-                    if !srcloc.is_default() && !flags.notrap() {
-                        // Register the offset at which the actual load instruction starts.
-                        sink.add_trap(TrapCode::HeapOutOfBounds);
+
+                match from {
+                    AMode::Label(target) => {
+                        // Get the current PC.
+                        sink.use_label_at_offset(sink.cur_offset(), target, LabelUse::PCRelHi20);
+                        let inst = Inst::Auipc {
+                            rd,
+                            imm: Imm20::from_bits(0),
+                        };
+                        inst.emit(&[], sink, emit_info, state);
+
+                        // Emit the actual load with a zero offset.
+                        // This later gets patched up
+                        sink.use_label_at_offset(sink.cur_offset(), target, LabelUse::PCRelLo12I);
+                        let inst = Inst::Load {
+                            rd,
+                            op,
+                            flags,
+                            from: AMode::RegOffset(rd.to_reg(), 0, I64),
+                        };
+                        inst.emit(&[], sink, emit_info, state);
                     }
-                    x = op.op_code()
-                        | reg_to_gpr_num(rd.to_reg()) << 7
-                        | op.funct3() << 12
-                        | reg_to_gpr_num(base) << 15
-                        | (imm12.as_u32()) << 20;
-                    sink.put4(x);
-                } else {
-                    let tmp = writable_spilltmp_reg();
-                    let mut insts =
-                        LoadConstant::U64(offset as u64).load_constant_and_add(tmp, base);
-                    let srcloc = state.cur_srcloc();
-                    if !srcloc.is_default() && !flags.notrap() {
-                        // Register the offset at which the actual load instruction starts.
-                        sink.add_trap(TrapCode::HeapOutOfBounds);
+                    from => {
+                        let base = allocs.next(from.get_base_register().unwrap());
+                        let offset = from.get_offset_with_state(state).unwrap();
+                        if let Some(imm12) = Imm12::maybe_from_u64(offset as u64) {
+                            let srcloc = state.cur_srcloc();
+                            if !srcloc.is_default() && !flags.notrap() {
+                                // Register the offset at which the actual load instruction starts.
+                                sink.add_trap(TrapCode::HeapOutOfBounds);
+                            }
+                            let inst = op.op_code()
+                                | reg_to_gpr_num(rd.to_reg()) << 7
+                                | op.funct3() << 12
+                                | reg_to_gpr_num(base) << 15
+                                | (imm12.as_u32()) << 20;
+                            sink.put4(inst);
+                        } else {
+                            let tmp = writable_spilltmp_reg();
+                            let mut insts =
+                                LoadConstant::U64(offset as u64).load_constant_and_add(tmp, base);
+                            let srcloc = state.cur_srcloc();
+                            if !srcloc.is_default() && !flags.notrap() {
+                                // Register the offset at which the actual load instruction starts.
+                                sink.add_trap(TrapCode::HeapOutOfBounds);
+                            }
+                            insts.push(Inst::Load {
+                                op,
+                                from: AMode::RegOffset(tmp.to_reg(), 0, I64),
+                                rd,
+                                flags,
+                            });
+                            insts
+                                .into_iter()
+                                .for_each(|inst| inst.emit(&[], sink, emit_info, state));
+                        }
                     }
-                    insts.push(Inst::Load {
-                        op,
-                        from: AMode::RegOffset(tmp.to_reg(), 0, I64),
-                        rd,
-                        flags,
-                    });
-                    insts
-                        .into_iter()
-                        .for_each(|inst| inst.emit(&[], sink, emit_info, state));
-                }
+                };
             }
             &Inst::Store { op, src, flags, to } => {
-                let base = allocs.next(to.get_base_register());
                 let src = allocs.next(src);
-                let offset = to.get_offset_with_state(state);
-                let x;
-                if let Some(imm12) = Imm12::maybe_from_u64(offset as u64) {
-                    let srcloc = state.cur_srcloc();
-                    if !srcloc.is_default() && !flags.notrap() {
-                        // Register the offset at which the actual load instruction starts.
-                        sink.add_trap(TrapCode::HeapOutOfBounds);
+
+                match to {
+                    AMode::Label(_target) => {
+                        unimplemented!("Store with label target is unimplemented!")
                     }
-                    x = op.op_code()
-                        | (imm12.as_u32() & 0x1f) << 7
-                        | op.funct3() << 12
-                        | reg_to_gpr_num(base) << 15
-                        | reg_to_gpr_num(src) << 20
-                        | (imm12.as_u32() >> 5) << 25;
-                    sink.put4(x);
-                } else {
-                    let tmp = writable_spilltmp_reg();
-                    let mut insts =
-                        LoadConstant::U64(offset as u64).load_constant_and_add(tmp, base);
-                    let srcloc = state.cur_srcloc();
-                    if !srcloc.is_default() && !flags.notrap() {
-                        // Register the offset at which the actual load instruction starts.
-                        sink.add_trap(TrapCode::HeapOutOfBounds);
+                    to => {
+                        let base = allocs.next(to.get_base_register().unwrap());
+                        let offset = to.get_offset_with_state(state).unwrap();
+                        if let Some(imm12) = Imm12::maybe_from_u64(offset as u64) {
+                            let srcloc = state.cur_srcloc();
+                            if !srcloc.is_default() && !flags.notrap() {
+                                // Register the offset at which the actual load instruction starts.
+                                sink.add_trap(TrapCode::HeapOutOfBounds);
+                            }
+                            let inst = op.op_code()
+                                | (imm12.as_u32() & 0x1f) << 7
+                                | op.funct3() << 12
+                                | reg_to_gpr_num(base) << 15
+                                | reg_to_gpr_num(src) << 20
+                                | (imm12.as_u32() >> 5) << 25;
+                            sink.put4(inst);
+                        } else {
+                            let tmp = writable_spilltmp_reg();
+                            let mut insts =
+                                LoadConstant::U64(offset as u64).load_constant_and_add(tmp, base);
+                            let srcloc = state.cur_srcloc();
+                            if !srcloc.is_default() && !flags.notrap() {
+                                // Register the offset at which the actual load instruction starts.
+                                sink.add_trap(TrapCode::HeapOutOfBounds);
+                            }
+                            insts.push(Inst::Store {
+                                op,
+                                to: AMode::RegOffset(tmp.to_reg(), 0, I64),
+                                flags,
+                                src,
+                            });
+                            insts
+                                .into_iter()
+                                .for_each(|inst| inst.emit(&[], sink, emit_info, state));
+                        }
                     }
-                    insts.push(Inst::Store {
-                        op,
-                        to: AMode::RegOffset(tmp.to_reg(), 0, I64),
-                        flags,
-                        src,
-                    });
-                    insts
-                        .into_iter()
-                        .for_each(|inst| inst.emit(&[], sink, emit_info, state));
-                }
+                };
             }
 
             &Inst::ReferenceCheck { rd, op, x } => {
@@ -1160,23 +1208,31 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::LoadAddr { rd, mem } => {
-                let base = mem.get_base_register();
-                let base = allocs.next(base);
                 let rd = allocs.next_writable(rd);
-                let offset = mem.get_offset_with_state(state);
-                if let Some(offset) = Imm12::maybe_from_u64(offset as u64) {
-                    Inst::AluRRImm12 {
-                        alu_op: AluOPRRI::Addi,
-                        rd,
-                        rs: base,
-                        imm12: offset,
+
+                match mem {
+                    AMode::Label(_target) => {
+                        unimplemented!("LoadAddr with label target is unimplemented!")
                     }
-                    .emit(&[], sink, emit_info, state);
-                } else {
-                    let insts = LoadConstant::U64(offset as u64).load_constant_and_add(rd, base);
-                    insts
-                        .into_iter()
-                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                    mem => {
+                        let base = allocs.next(mem.get_base_register().unwrap());
+                        let offset = mem.get_offset_with_state(state).unwrap();
+                        if let Some(offset) = Imm12::maybe_from_u64(offset as u64) {
+                            Inst::AluRRImm12 {
+                                alu_op: AluOPRRI::Addi,
+                                rd,
+                                rs: base,
+                                imm12: offset,
+                            }
+                            .emit(&[], sink, emit_info, state);
+                        } else {
+                            let insts =
+                                LoadConstant::U64(offset as u64).load_constant_and_add(rd, base);
+                            insts
+                                .into_iter()
+                                .for_each(|i| i.emit(&[], sink, emit_info, state));
+                        }
+                    }
                 }
             }
 

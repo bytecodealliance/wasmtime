@@ -42,14 +42,14 @@
 ;; function u0:0:
 ;; block0:
 ;;   uext.w a0,a0
-;;   auipc t0,0; ld t0,12(t0); j 12; .8byte 0xffff0004
+;;   li t0,0xffff0004
 ;;   add t2,a0,t0
 ;;   ult a3,t2,a0##ty=i64
 ;;   trap_if a3,heap_oob
 ;;   ld a3,8(a2)
 ;;   ld a2,0(a2)
 ;;   add a0,a2,a0
-;;   auipc a2,0; ld a2,12(a2); j 12; .8byte 0xffff0000
+;;   li a2,0xffff0000
 ;;   add a2,a0,a2
 ;;   ugt t2,t2,a3##ty=i64
 ;;   li a3,0
@@ -62,14 +62,14 @@
 ;; function u0:1:
 ;; block0:
 ;;   uext.w a0,a0
-;;   auipc t0,0; ld t0,12(t0); j 12; .8byte 0xffff0004
+;;   li t0,0xffff0004
 ;;   add t2,a0,t0
 ;;   ult a2,t2,a0##ty=i64
 ;;   trap_if a2,heap_oob
 ;;   ld a2,8(a1)
 ;;   ld a1,0(a1)
 ;;   add a0,a1,a0
-;;   auipc a1,0; ld a1,12(a1); j 12; .8byte 0xffff0000
+;;   li a1,0xffff0000
 ;;   add a1,a0,a1
 ;;   ugt t2,t2,a2##ty=i64
 ;;   li a2,0

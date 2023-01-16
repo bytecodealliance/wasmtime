@@ -76,6 +76,11 @@ pub struct Imm20 {
 
 impl Imm20 {
     #[inline]
+    pub fn zero() -> Self {
+        Self::from_bits(0)
+    }
+
+    #[inline]
     pub fn from_bits(bits: i32) -> Self {
         Self {
             bits: bits & 0xf_ffff,
