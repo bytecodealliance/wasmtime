@@ -365,8 +365,6 @@ impl Config {
     /// This option is `true` by default.
     ///
     /// [`WasmBacktrace`]: crate::WasmBacktrace
-    #[deprecated = "Backtraces will always be enabled in future Wasmtime releases; if this \
-                    causes problems for you, please file an issue."]
     pub fn wasm_backtrace(&mut self, enable: bool) -> &mut Self {
         self.wasm_backtrace = enable;
         self
