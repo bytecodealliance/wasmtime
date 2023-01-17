@@ -176,6 +176,7 @@ clap = { version = "3.2.0", features = ["color", "suggestions", "derive"] }
 hashbrown = "0.12"
 cap-std = "1.0.0"
 cap-rand = "1.0.0"
+capstone = "0.9.0"
 once_cell = "1.12.0"
 smallvec = { version = "1.6.1", features = ["union"] }
 io-lifetimes = { version = "1.0.0", default-features = false }

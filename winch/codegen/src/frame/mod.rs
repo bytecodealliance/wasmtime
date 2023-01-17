@@ -1,4 +1,4 @@
-use crate::abi::{align_to, local::LocalSlot, ty_size, ABIArg, ABISig, ABI};
+use crate::abi::{align_to, ty_size, ABIArg, ABISig, LocalSlot, ABI};
 use anyhow::Result;
 use smallvec::SmallVec;
 use std::ops::Range;

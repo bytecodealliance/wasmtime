@@ -10,6 +10,7 @@ mod abi;
 mod codegen;
 mod frame;
 pub mod isa;
+pub use isa::*;
 mod masm;
 mod regalloc;
 mod regset;

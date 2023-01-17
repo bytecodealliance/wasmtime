@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use core::fmt::Formatter;
-use cranelift_codegen::isa::CallConv;
+use cranelift_codegen::{isa::CallConv, settings, Final, MachBufferFinalized};
 use std::{
     error,
     fmt::{self, Debug, Display},
@@ -16,11 +16,11 @@ pub(crate) mod aarch64;
 
 pub(crate) mod reg;
 
-macro_rules! isa {
+macro_rules! isa_builder {
     ($name: ident, $cfg_terms: tt, $triple: ident) => {{
         #[cfg $cfg_terms]
         {
-            Ok(Box::new($name::isa_from($triple)))
+            Ok($name::isa_builder($triple))
         }
         #[cfg(not $cfg_terms)]
         {
@@ -29,23 +29,33 @@ macro_rules! isa {
     }};
 }
 
-/// Look for an ISA for the given target triple.
-//
-// The ISA, as it's currently implemented in Cranelift
-// needs a builder since it adds settings
-// depending on those available in the host architecture.
-// I'm intentionally skipping the builder for now.
-// The lookup method will return the ISA directly.
-//
-// Once features like SIMD are supported, returning a builder
-// will make more sense.
-pub fn lookup(triple: Triple) -> Result<Box<dyn TargetIsa>> {
+/// The target ISA builder.
+#[derive(Clone)]
+pub struct Builder {
+    /// The target triple.
+    triple: Triple,
+    /// The ISA settings builder.
+    settings: settings::Builder,
+    /// The Target ISA constructor.
+    constructor: fn(Triple, settings::Flags, settings::Builder) -> Result<Box<dyn TargetIsa>>,
+}
+
+impl Builder {
+    /// Create a TargetIsa by combining ISA-specific settings with the provided
+    /// shared flags.
+    pub fn build(self, shared_flags: settings::Flags) -> Result<Box<dyn TargetIsa>> {
+        (self.constructor)(self.triple, shared_flags, self.settings)
+    }
+}
+
+/// Look for an ISA builder for the given target triple.
+pub fn lookup(triple: Triple) -> Result<Builder> {
     match triple.architecture {
         Architecture::X86_64 => {
-            isa!(x64, (feature = "x64"), triple)
+            isa_builder!(x64, (feature = "x64"), triple)
         }
         Architecture::Aarch64 { .. } => {
-            isa!(aarch64, (feature = "arm64"), triple)
+            isa_builder!(aarch64, (feature = "arm64"), triple)
         }
 
         _ => Err(anyhow!(LookupError::Unsupported)),
@@ -87,7 +97,7 @@ pub trait TargetIsa: Send + Sync {
         sig: &FuncType,
         body: &FunctionBody,
         validator: FuncValidator<ValidatorResources>,
-    ) -> Result<Vec<String>>;
+    ) -> Result<MachBufferFinalized<Final>>;
 
     /// Get the default calling convention of the underlying target triple.
     fn call_conv(&self) -> CallConv {

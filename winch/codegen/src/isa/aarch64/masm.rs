@@ -3,6 +3,7 @@ use crate::{
     isa::reg::Reg,
     masm::{MacroAssembler as Masm, OperandSize, RegImm},
 };
+use cranelift_codegen::{Final, MachBufferFinalized};
 
 #[derive(Default)]
 pub(crate) struct MacroAssembler;
@@ -34,7 +35,7 @@ impl Masm for MacroAssembler {
         0u32
     }
 
-    fn finalize(&mut self) -> &[String] {
+    fn finalize(self) -> MachBufferFinalized<Final> {
         todo!()
     }
 
