@@ -111,6 +111,7 @@ impl Wasmtime {
                 Import::Function { sig, add_to_linker }
             }
             WorldItem::Interface(id) => {
+                gen.current_interface = Some(*id);
                 gen.types(*id);
                 gen.generate_trappable_error_types(TypeOwner::Interface(*id));
                 gen.generate_add_to_linker(*id, name);
@@ -149,6 +150,7 @@ impl Wasmtime {
                 (format!("wasmtime::component::Func"), getter)
             }
             WorldItem::Interface(id) => {
+                gen.current_interface = Some(*id);
                 gen.types(*id);
                 gen.generate_trappable_error_types(TypeOwner::Interface(*id));
                 let iface = &resolve.interfaces[*id];
@@ -432,6 +434,7 @@ struct InterfaceGenerator<'a> {
     gen: &'a mut Wasmtime,
     resolve: &'a Resolve,
     default_param_mode: TypeMode,
+    current_interface: Option<InterfaceId>,
 }
 
 impl<'a> InterfaceGenerator<'a> {
@@ -445,6 +448,7 @@ impl<'a> InterfaceGenerator<'a> {
             gen,
             resolve,
             default_param_mode,
+            current_interface: None,
         }
     }
 
@@ -1324,6 +1328,10 @@ impl<'a> InterfaceGenerator<'a> {
 impl<'a> RustGenerator<'a> for InterfaceGenerator<'a> {
     fn resolve(&self) -> &'a Resolve {
         self.resolve
+    }
+
+    fn current_interface(&self) -> Option<InterfaceId> {
+        self.current_interface
     }
 
     fn default_param_mode(&self) -> TypeMode {

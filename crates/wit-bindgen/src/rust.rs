@@ -16,6 +16,7 @@ pub trait RustGenerator<'a> {
     fn push_str(&mut self, s: &str);
     fn info(&self, ty: TypeId) -> TypeInfo;
     fn default_param_mode(&self) -> TypeMode;
+    fn current_interface(&self) -> Option<InterfaceId>;
 
     fn print_ty(&mut self, ty: &Type, mode: TypeMode) {
         match ty {
@@ -63,6 +64,22 @@ pub trait RustGenerator<'a> {
             } else {
                 self.result_name(id)
             };
+            if let TypeOwner::Interface(id) = ty.owner {
+                if let Some(name) = &self.resolve().interfaces[id].name {
+                    match self.current_interface() {
+                        Some(cur) if cur == id => {}
+                        Some(_other) => {
+                            self.push_str("super::");
+                            self.push_str(&name.to_snake_case());
+                            self.push_str("::");
+                        }
+                        None => {
+                            self.push_str(&name.to_snake_case());
+                            self.push_str("::");
+                        }
+                    }
+                }
+            }
             self.push_str(&name);
 
             // If the type recursively owns data and it's a
