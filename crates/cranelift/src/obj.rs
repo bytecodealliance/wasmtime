@@ -195,7 +195,7 @@ impl<'a> ModuleTextBuilder<'a> {
                                 size,
                                 kind,
                                 encoding,
-                                offset: r.offset.into(),
+                                offset: off + u64::from(r.offset),
                                 addend: r.addend,
                             },
                         )
