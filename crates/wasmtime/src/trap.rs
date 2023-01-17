@@ -98,7 +98,9 @@ pub(crate) fn from_runtime_box(
             error,
             needs_backtrace,
         } => {
-            debug_assert!(needs_backtrace == backtrace.is_some());
+            debug_assert!(
+                needs_backtrace == backtrace.is_some() || !store.engine().config().wasm_backtrace
+            );
             (error, None)
         }
         wasmtime_runtime::TrapReason::Jit(pc) => {
