@@ -495,7 +495,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             let force_multiple = f.dfg.inst_results(inst).len() > 1;
 
             // Iterate over all values used by all instructions, noting an
-            // additional use on each operand. If an operand becomes Multiple,
+            // additional use on each operand.
             for arg in f.dfg.inst_values(inst) {
                 let arg = f.dfg.resolve_aliases(arg);
                 let old = value_ir_uses[arg];
@@ -941,7 +941,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         for succ_idx in 0..self.vcode.block_order().succ_indices(block).len() {
             // Avoid immutable borrow by explicitly indexing.
             let (inst, succ) = self.vcode.block_order().succ_indices(block)[succ_idx];
-
             // Get branch args and convert to Regs.
             let branch_args = self.f.dfg.insts[inst]
                 .branch_destination()
