@@ -465,56 +465,25 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         // Once, Multiple} is part of what makes this pass more
         // efficient than a full indirect-use-counting pass.
 
-        let mut value_ir_uses: SecondaryMap<Value, ValueUseState> =
-            SecondaryMap::with_default(ValueUseState::Unused);
+        let mut value_ir_uses = SecondaryMap::with_default(ValueUseState::Unused);
 
         // Stack of iterators over Values as we do DFS to mark
-        // Multiple-state subtrees.
-        type StackVec<'a> = SmallVec<[std::slice::Iter<'a, Value>; 16]>;
-        let mut stack: StackVec = smallvec![];
+        // Multiple-state subtrees. The iterator type is whatever is
+        // returned by `uses` below.
+        let mut stack: SmallVec<[_; 16]> = smallvec![];
 
-        // Push args for a given inst onto the DFS stack.
-        let push_args_on_stack = |stack: &mut StackVec<'a>, value| {
+        // Find the args for the inst corresponding to the given value.
+        let uses = |value| {
             trace!(" -> pushing args for {} onto stack", value);
             if let ValueDef::Result(src_inst, _) = f.dfg.value_def(value) {
-                stack.push(f.dfg.inst_args(src_inst).iter());
+                Some(f.dfg.inst_args(src_inst).iter().copied())
+            } else {
+                None
             }
         };
 
         // Do a DFS through `value_ir_uses` to mark a subtree as
         // Multiple.
-        let mark_all_uses_as_multiple =
-            |value_ir_uses: &mut SecondaryMap<Value, ValueUseState>, stack: &mut StackVec<'a>| {
-                while let Some(iter) = stack.last_mut() {
-                    if let Some(&value) = iter.next() {
-                        let value = f.dfg.resolve_aliases(value);
-                        trace!(" -> DFS reaches {}", value);
-                        if value_ir_uses[value] == ValueUseState::Multiple {
-                            // Truncate DFS here: no need to go further,
-                            // as whole subtree must already be Multiple.
-                            #[cfg(debug_assertions)]
-                            {
-                                // With debug asserts, check one level
-                                // of that invariant at least.
-                                if let ValueDef::Result(src_inst, _) = f.dfg.value_def(value) {
-                                    debug_assert!(f.dfg.inst_args(src_inst).iter().all(|&arg| {
-                                        let arg = f.dfg.resolve_aliases(arg);
-                                        value_ir_uses[arg] == ValueUseState::Multiple
-                                    }));
-                                }
-                            }
-                            continue;
-                        }
-                        value_ir_uses[value] = ValueUseState::Multiple;
-                        trace!(" -> became Multiple");
-                        push_args_on_stack(stack, value);
-                    } else {
-                        // Empty iterator, discard.
-                        stack.pop();
-                    }
-                }
-            };
-
         for inst in f
             .layout
             .blocks()
@@ -526,7 +495,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             let force_multiple = f.dfg.inst_results(inst).len() > 1;
 
             // Iterate over all args of all instructions, noting an
-            // additional use on each operand. If an operand becomes Multiple,
+            // additional use on each operand.
             for &arg in f.dfg.inst_args(inst) {
                 let arg = f.dfg.resolve_aliases(arg);
                 let old = value_ir_uses[arg];
@@ -540,11 +509,39 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     value_ir_uses[arg].inc();
                 }
                 let new = value_ir_uses[arg];
-                trace!("arg {} used, old state {:?}, new {:?}", arg, old, new,);
+                trace!("arg {} used, old state {:?}, new {:?}", arg, old, new);
+
                 // On transition to Multiple, do DFS.
-                if old != ValueUseState::Multiple && new == ValueUseState::Multiple {
-                    push_args_on_stack(&mut stack, arg);
-                    mark_all_uses_as_multiple(&mut value_ir_uses, &mut stack);
+                if old == ValueUseState::Multiple || new != ValueUseState::Multiple {
+                    continue;
+                }
+                if let Some(iter) = uses(arg) {
+                    stack.push(iter);
+                }
+                while let Some(iter) = stack.last_mut() {
+                    if let Some(value) = iter.next() {
+                        let value = f.dfg.resolve_aliases(value);
+                        trace!(" -> DFS reaches {}", value);
+                        if value_ir_uses[value] == ValueUseState::Multiple {
+                            // Truncate DFS here: no need to go further,
+                            // as whole subtree must already be Multiple.
+                            // With debug asserts, check one level of
+                            // that invariant at least.
+                            debug_assert!(uses(value).into_iter().flatten().all(|arg| {
+                                let arg = f.dfg.resolve_aliases(arg);
+                                value_ir_uses[arg] == ValueUseState::Multiple
+                            }));
+                            continue;
+                        }
+                        value_ir_uses[value] = ValueUseState::Multiple;
+                        trace!(" -> became Multiple");
+                        if let Some(iter) = uses(value) {
+                            stack.push(iter);
+                        }
+                    } else {
+                        // Empty iterator, discard.
+                        stack.pop();
+                    }
                 }
             }
         }
