@@ -217,10 +217,13 @@ async fn run_file_read(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
 
     std::fs::File::create(dir.path().join("bar.txt"))?.write_all(b"And stood awhile in thought")?;
 
-    let dir = Dir::open_ambient_dir(dir.path(), ambient_authority())?;
-    let descriptor = store
-        .data_mut()
-        .push_dir(Box::new(wasi_cap_std_sync::dir::Dir::from_cap_std(dir)))?;
+    let open_dir = Dir::open_ambient_dir(dir.path(), ambient_authority())?;
+    let descriptor =
+        store
+            .data_mut()
+            .push_dir(Box::new(wasi_cap_std_sync::dir::Dir::from_cap_std(
+                open_dir,
+            )))?;
 
     wasi.command(
         &mut store,
@@ -240,11 +243,12 @@ async fn run_file_append(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     std::fs::File::create(dir.path().join("bar.txt"))?
         .write_all(b"'Twas brillig, and the slithy toves.\n")?;
 
+    let open_dir = Dir::open_ambient_dir(dir.path(), ambient_authority())?;
     let descriptor =
         store
             .data_mut()
             .push_dir(Box::new(wasi_cap_std_sync::dir::Dir::from_cap_std(
-                Dir::from_std_file(std::fs::File::open(dir.path())?),
+                open_dir,
             )))?;
 
     wasi.command(
@@ -345,11 +349,12 @@ async fn run_directory_list(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()>
     std::fs::File::create(dir.path().join("sub").join("wow.txt"))?;
     std::fs::File::create(dir.path().join("sub").join("yay.txt"))?;
 
+    let open_dir = Dir::open_ambient_dir(dir.path(), ambient_authority())?;
     let descriptor =
         store
             .data_mut()
             .push_dir(Box::new(wasi_cap_std_sync::dir::Dir::from_cap_std(
-                Dir::from_std_file(std::fs::File::open(dir.path())?),
+                open_dir,
             )))?;
 
     wasi.command(
