@@ -602,13 +602,10 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 // TODO
                 (Opcode::SelectSpectreGuard, &[I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/5526
-                (Opcode::SelectSpectreGuard, &[I64, I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5526
-                (Opcode::SelectSpectreGuard, &[I32, I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5526
-                (Opcode::SelectSpectreGuard, &[I16, I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5526
-                (Opcode::SelectSpectreGuard, &[I8, I128, I128]),
+                (Opcode::SelectSpectreGuard, &[_, I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5524
+                (Opcode::Select, &[I128]),
+                (Opcode::Select, &[_, I128, I128]),
                 // TODO
                 (Opcode::BandNot, &[F32, F32]),
                 (Opcode::BandNot, &[F64, F64]),
