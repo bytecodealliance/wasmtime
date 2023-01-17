@@ -466,85 +466,67 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
     }
 }
 
-enum BranchOrderKind {
-    BrzToBrnz(Value),
-    BrnzToBrz(Value),
-}
-
 /// Reorder branches to encourage fallthroughs.
 ///
 /// When a block ends with a conditional branch followed by an unconditional
 /// branch, this will reorder them if one of them is branching to the next Block
 /// layout-wise. The unconditional jump can then become a fallthrough.
 fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, block: Block, inst: Inst) {
-    let (term_inst, term_dest, cond_inst, cond_dest, kind) = match pos.func.dfg.insts[inst] {
-        InstructionData::Jump {
-            opcode: Opcode::Jump,
-            destination,
-        } => {
-            let next_block = if let Some(next_block) = pos.func.layout.next_block(block) {
-                next_block
-            } else {
-                return;
-            };
+    let (term_inst, term_dest, cond_inst, cond_dest, kind, cond_arg) =
+        match pos.func.dfg.insts[inst] {
+            InstructionData::Jump {
+                opcode: Opcode::Jump,
+                destination,
+            } => {
+                let next_block = if let Some(next_block) = pos.func.layout.next_block(block) {
+                    next_block
+                } else {
+                    return;
+                };
 
-            if destination.block(&pos.func.dfg.value_lists) == next_block {
-                return;
-            }
-
-            let prev_inst = if let Some(prev_inst) = pos.func.layout.prev_inst(inst) {
-                prev_inst
-            } else {
-                return;
-            };
-
-            match &pos.func.dfg.insts[prev_inst] {
-                &InstructionData::Branch {
-                    opcode,
-                    arg,
-                    destination: cond_dest,
-                } => {
-                    if cond_dest.block(&pos.func.dfg.value_lists) != next_block {
-                        return;
-                    }
-
-                    let kind = match opcode {
-                        Opcode::Brz => BranchOrderKind::BrzToBrnz(arg),
-                        Opcode::Brnz => BranchOrderKind::BrnzToBrz(arg),
-                        _ => panic!("unexpected opcode"),
-                    };
-
-                    (inst, destination, prev_inst, cond_dest, kind)
+                if destination.block(&pos.func.dfg.value_lists) == next_block {
+                    return;
                 }
-                _ => return,
+
+                let prev_inst = if let Some(prev_inst) = pos.func.layout.prev_inst(inst) {
+                    prev_inst
+                } else {
+                    return;
+                };
+
+                match &pos.func.dfg.insts[prev_inst] {
+                    &InstructionData::Branch {
+                        opcode,
+                        arg,
+                        destination: cond_dest,
+                    } => {
+                        if cond_dest.block(&pos.func.dfg.value_lists) != next_block {
+                            return;
+                        }
+
+                        let kind = match opcode {
+                            Opcode::Brz => Opcode::Brnz,
+                            Opcode::Brnz => Opcode::Brz,
+                            _ => panic!("unexpected opcode"),
+                        };
+
+                        (inst, destination, prev_inst, cond_dest, kind, arg)
+                    }
+                    _ => return,
+                }
             }
-        }
 
-        _ => return,
-    };
+            _ => return,
+        };
 
-    match kind {
-        BranchOrderKind::BrnzToBrz(cond_arg) => {
-            pos.func
-                .dfg
-                .replace(term_inst)
-                .Jump(Opcode::Jump, INVALID, cond_dest);
-            pos.func
-                .dfg
-                .replace(cond_inst)
-                .Branch(Opcode::Brz, INVALID, term_dest, cond_arg);
-        }
-        BranchOrderKind::BrzToBrnz(cond_arg) => {
-            pos.func
-                .dfg
-                .replace(term_inst)
-                .Jump(Opcode::Jump, INVALID, cond_dest);
-            pos.func
-                .dfg
-                .replace(cond_inst)
-                .Branch(Opcode::Brnz, INVALID, term_dest, cond_arg);
-        }
-    }
+    pos.func
+        .dfg
+        .replace(term_inst)
+        .Jump(Opcode::Jump, INVALID, cond_dest);
+    pos.func
+        .dfg
+        .replace(cond_inst)
+        .Branch(kind, INVALID, term_dest, cond_arg);
 
     cfg.recompute_block(pos.func, block);
 }
