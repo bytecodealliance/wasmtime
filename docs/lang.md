@@ -11,3 +11,4 @@ through a C API for a number of other languages too:
 * [Go](lang-go.md)
 * [Bash](lang-bash.md)
 * [Ruby](lang-ruby.md)
+* [Elixir](lang-elixir.md)
