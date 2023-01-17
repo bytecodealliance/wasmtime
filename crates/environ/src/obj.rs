@@ -48,7 +48,7 @@ pub const ELF_WASMTIME_ADDRMAP: &str = ".wasmtime.addrmap";
 /// encodes the ability to map an offset in the text section to the trap code
 /// that it corresponds to.
 ///
-/// This section is used at runtime to determine what flavor fo trap happened to
+/// This section is used at runtime to determine what flavor of trap happened to
 /// ensure that embedders and debuggers know the reason for the wasm trap. The
 /// encoding of this section is custom to Wasmtime and managed with helpers in
 /// the `object` crate:
@@ -63,7 +63,7 @@ pub const ELF_WASMTIME_ADDRMAP: &str = ".wasmtime.addrmap";
 ///
 /// This section is decoded by `lookup_trap_code` below which will read the
 /// section count, slice some bytes to get the various arrays, and then perform
-/// a binary search on the offsets array to find the an index corresponding to
+/// a binary search on the offsets array to find the index corresponding to
 /// the pc being looked up. If found the same index in the trap array (the array
 /// of bytes) is the trap code for that offset.
 ///
@@ -137,7 +137,7 @@ macro_rules! libcalls {
         }
 
         impl LibCall {
-            /// Returns the libcall corresponding to hte provided symbol name,
+            /// Returns the libcall corresponding to the provided symbol name,
             /// if one matches.
             pub fn from_str(s: &str) -> Option<LibCall> {
                 match s {

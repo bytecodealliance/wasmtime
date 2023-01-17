@@ -2,6 +2,7 @@
 
 use crate::generators::ModuleConfig;
 use arbitrary::{Arbitrary, Unstructured};
+use std::collections::HashMap;
 
 /// Choose between matching the host architecture or a cross-compilation target.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -56,18 +57,14 @@ impl CodegenSettings {
             // to have test case failures unrelated to codegen setting input
             // that fail on one architecture to fail on other architectures as
             // well.
-            let sse3 = u.arbitrary::<bool>()?;
-            let ssse3 = u.arbitrary::<bool>()?;
-            let sse4_1 = u.arbitrary::<bool>()?;
-            let sse4_2 = u.arbitrary::<bool>()?;
+            let new_flags = ["has_sse3", "has_ssse3", "has_sse41", "has_sse42"]
+                .into_iter()
+                .map(|name| Ok((name, u.arbitrary()?)))
+                .collect::<arbitrary::Result<HashMap<_, bool>>>()?;
 
             for (name, val) in flags {
-                match name.as_str() {
-                    "has_sse3" => *val = sse3.to_string(),
-                    "has_ssse3" => *val = ssse3.to_string(),
-                    "has_sse41" => *val = sse4_1.to_string(),
-                    "has_sse42" => *val = sse4_2.to_string(),
-                    _ => {}
+                if let Some(new_value) = new_flags.get(name.as_str()) {
+                    *val = new_value.to_string();
                 }
             }
         }

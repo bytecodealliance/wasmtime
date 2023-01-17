@@ -530,6 +530,8 @@ pub mod relocs {
     const TOINT_32: f32 = 1.0 / f32::EPSILON;
     const TOINT_64: f64 = 1.0 / f64::EPSILON;
 
+    // NB: replace with `round_ties_even` from libstd when it's stable as
+    // tracked by rust-lang/rust#96710
     pub extern "C" fn nearestf32(x: f32) -> f32 {
         // Rust doesn't have a nearest function; there's nearbyint, but it's not
         // stabilized, so do it manually.
