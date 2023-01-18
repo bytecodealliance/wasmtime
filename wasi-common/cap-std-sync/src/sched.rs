@@ -36,7 +36,7 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
                 // sources to complete successfully.
                 if let Ok(nbytes) = rwsub.stream.num_ready_bytes().await {
                     if nbytes != 0 {
-                        rwsub.complete(nbytes, RwEventFlags::empty());
+                        rwsub.complete(RwEventFlags::empty());
                         ready = true;
                         continue;
                     }
@@ -108,29 +108,20 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
         if ready {
             // Iterate through the stream subscriptions, skipping those that
             // were already completed due to being immediately available.
-            for ((rwsub, kind), pollfd) in poll
+            for ((rwsub, _kind), pollfd) in poll
                 .rw_subscriptions()
                 .filter(|(sub, _kind)| !sub.is_complete())
                 .zip(pollfds.into_iter())
             {
                 let revents = pollfd.revents();
-                let nbytes = match kind {
-                    RwSubscriptionKind::Read => {
-                        let ready = rwsub.stream.num_ready_bytes().await?;
-                        // If poll said it's ready, assume at least 1 byte is
-                        // ready, even if `num_ready_bytes` doesn't know.
-                        std::cmp::max(ready, 1)
-                    }
-                    RwSubscriptionKind::Write => 1,
-                };
                 if revents.contains(PollFlags::NVAL) {
                     rwsub.error(Error::badf());
                 } else if revents.contains(PollFlags::ERR) {
                     rwsub.error(Error::io());
                 } else if revents.contains(PollFlags::HUP) {
-                    rwsub.complete(nbytes, RwEventFlags::HANGUP);
+                    rwsub.complete(RwEventFlags::HANGUP);
                 } else {
-                    rwsub.complete(nbytes, RwEventFlags::empty());
+                    rwsub.complete(RwEventFlags::empty());
                 };
             }
         }

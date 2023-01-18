@@ -11,7 +11,7 @@ bitflags! {
 
 pub struct RwSubscription<'a> {
     pub stream: &'a dyn WasiStream,
-    status: Option<Result<(u64, RwEventFlags), Error>>,
+    status: Option<Result<RwEventFlags, Error>>,
 }
 
 impl<'a> RwSubscription<'a> {
@@ -21,13 +21,13 @@ impl<'a> RwSubscription<'a> {
             status: None,
         }
     }
-    pub fn complete(&mut self, size: u64, flags: RwEventFlags) {
-        self.status = Some(Ok((size, flags)))
+    pub fn complete(&mut self, flags: RwEventFlags) {
+        self.status = Some(Ok(flags))
     }
     pub fn error(&mut self, error: Error) {
         self.status = Some(Err(error))
     }
-    pub fn result(&mut self) -> Option<Result<(u64, RwEventFlags), Error>> {
+    pub fn result(&mut self) -> Option<Result<RwEventFlags, Error>> {
         self.status.take()
     }
     pub fn is_complete(&self) -> bool {
@@ -69,7 +69,7 @@ pub enum RwSubscriptionKind {
 
 #[derive(Debug)]
 pub enum SubscriptionResult {
-    ReadWrite(Result<(u64, RwEventFlags), Error>, RwSubscriptionKind),
+    ReadWrite(Result<RwEventFlags, Error>, RwSubscriptionKind),
     MonotonicClock(Result<(), Error>),
 }
 
