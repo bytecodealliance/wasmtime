@@ -584,8 +584,12 @@ impl SSABuilder {
             }
             // For a single destination appending a jump argument to the instruction
             // is sufficient.
-            BranchInfo::SingleDest(_, _) => {
-                func.dfg.append_inst_arg(branch, val);
+            BranchInfo::SingleDest(_) => {
+                let dfg = &mut func.dfg;
+                dfg.insts[branch]
+                    .branch_destination_mut()
+                    .unwrap()
+                    .append_argument(val, &mut dfg.value_lists);
                 None
             }
             BranchInfo::Table(mut jt, _default_block) => {
@@ -832,23 +836,23 @@ mod tests {
         assert_eq!(x_ssa, x_use3);
         assert_eq!(y_ssa, y_use3);
         match func.dfg.analyze_branch(brnz_block0_block2) {
-            BranchInfo::SingleDest(dest, jump_args) => {
-                assert_eq!(dest, block2);
-                assert_eq!(jump_args.len(), 0);
+            BranchInfo::SingleDest(dest) => {
+                assert_eq!(dest.block(&func.dfg.value_lists), block2);
+                assert_eq!(dest.args_slice(&func.dfg.value_lists).len(), 0);
             }
             _ => assert!(false),
         };
         match func.dfg.analyze_branch(jump_block0_block1) {
-            BranchInfo::SingleDest(dest, jump_args) => {
-                assert_eq!(dest, block1);
-                assert_eq!(jump_args.len(), 0);
+            BranchInfo::SingleDest(dest) => {
+                assert_eq!(dest.block(&func.dfg.value_lists), block1);
+                assert_eq!(dest.args_slice(&func.dfg.value_lists).len(), 0);
             }
             _ => assert!(false),
         };
         match func.dfg.analyze_branch(jump_block1_block2) {
-            BranchInfo::SingleDest(dest, jump_args) => {
-                assert_eq!(dest, block2);
-                assert_eq!(jump_args.len(), 0);
+            BranchInfo::SingleDest(dest) => {
+                assert_eq!(dest.block(&func.dfg.value_lists), block2);
+                assert_eq!(dest.args_slice(&func.dfg.value_lists).len(), 0);
             }
             _ => assert!(false),
         };

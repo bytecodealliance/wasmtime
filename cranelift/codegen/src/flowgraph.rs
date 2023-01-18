@@ -122,8 +122,8 @@ impl ControlFlowGraph {
     fn compute_block(&mut self, func: &Function, block: Block) {
         for inst in func.layout.block_likely_branches(block) {
             match func.dfg.analyze_branch(inst) {
-                BranchInfo::SingleDest(dest, _) => {
-                    self.add_edge(block, inst, dest);
+                BranchInfo::SingleDest(dest) => {
+                    self.add_edge(block, inst, dest.block(&func.dfg.value_lists));
                 }
                 BranchInfo::Table(jt, dest) => {
                     if let Some(dest) = dest {

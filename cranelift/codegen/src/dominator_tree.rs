@@ -353,7 +353,9 @@ impl DominatorTree {
     fn push_successors(&mut self, func: &Function, block: Block) {
         for inst in func.layout.block_likely_branches(block) {
             match func.dfg.analyze_branch(inst) {
-                BranchInfo::SingleDest(succ, _) => self.push_if_unseen(succ),
+                BranchInfo::SingleDest(succ) => {
+                    self.push_if_unseen(succ.block(&func.dfg.value_lists))
+                }
                 BranchInfo::Table(jt, dest) => {
                     for succ in func.jump_tables[jt].iter() {
                         self.push_if_unseen(*succ);

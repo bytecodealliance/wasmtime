@@ -3,7 +3,7 @@
 
 use cranelift_codegen::{
     cursor::{Cursor, FuncCursor},
-    ir::{self, dfg::ValueDef, InstBuilder},
+    ir::{self, dfg::ValueDef, instructions::Opcode, types, InstBuilder},
 };
 // use rustc_apfloat::{
 //     ieee::{Double, Single},
@@ -52,8 +52,12 @@ pub fn fold_constants(func: &mut ir::Function) {
                 Unary { opcode, arg } => {
                     fold_unary(&mut pos.func.dfg, inst, opcode, arg);
                 }
-                Branch { opcode, .. } => {
-                    fold_branch(&mut pos, inst, opcode);
+                Branch {
+                    opcode,
+                    arg,
+                    destination,
+                } => {
+                    fold_branch(&mut pos, inst, opcode, arg, destination);
                 }
                 _ => {}
             }
@@ -215,18 +219,16 @@ fn fold_unary(dfg: &mut ir::DataFlowGraph, inst: ir::Inst, opcode: ir::Opcode, a
     }
 }
 
-fn fold_branch(pos: &mut FuncCursor, inst: ir::Inst, opcode: ir::Opcode) {
-    let (cond, block, args) = {
-        let values = pos.func.dfg.inst_args(inst);
-        let inst_data = &pos.func.dfg.insts[inst];
-        (
-            match resolve_value_to_imm(&pos.func.dfg, values[0]) {
-                Some(imm) => imm,
-                None => return,
-            },
-            inst_data.branch_destination().unwrap(),
-            values[1..].to_vec(),
-        )
+fn fold_branch(
+    pos: &mut FuncCursor,
+    inst: ir::Inst,
+    opcode: ir::Opcode,
+    cond: ir::Value,
+    block: ir::BlockCall,
+) {
+    let cond = match resolve_value_to_imm(&pos.func.dfg, cond) {
+        Some(imm) => imm,
+        None => return,
     };
 
     let truthiness = cond.evaluate_truthiness();
@@ -237,7 +239,10 @@ fn fold_branch(pos: &mut FuncCursor, inst: ir::Inst, opcode: ir::Opcode) {
     };
 
     if (branch_if_zero && !truthiness) || (!branch_if_zero && truthiness) {
-        pos.func.dfg.replace(inst).jump(block, &args);
+        pos.func
+            .dfg
+            .replace(inst)
+            .Jump(Opcode::Jump, types::INVALID, block);
         // remove the rest of the block to avoid verifier errors
         while let Some(next_inst) = pos.func.layout.next_inst(inst) {
             pos.func.layout.remove_inst(next_inst);

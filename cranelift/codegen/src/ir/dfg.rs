@@ -7,8 +7,8 @@ use crate::ir::dynamic_type::{DynamicTypeData, DynamicTypes};
 use crate::ir::instructions::{BranchInfo, CallInfo, InstructionData};
 use crate::ir::{types, ConstantData, ConstantPool, Immediate};
 use crate::ir::{
-    Block, DynamicType, FuncRef, Inst, SigRef, Signature, Type, Value, ValueLabelAssignments,
-    ValueList, ValueListPool,
+    Block, BlockCall, DynamicType, FuncRef, Inst, SigRef, Signature, Type, Value,
+    ValueLabelAssignments, ValueList, ValueListPool,
 };
 use crate::ir::{ExtFuncData, RelSourceLoc};
 use crate::packed_option::ReservedValue;
@@ -165,6 +165,11 @@ impl DataFlowGraph {
     /// Returns `true` if the given block reference is valid.
     pub fn block_is_valid(&self, block: Block) -> bool {
         self.blocks.is_valid(block)
+    }
+
+    /// Make a BlockCall, bundling together the block and its arguments.
+    pub fn block_call(&mut self, block: Block, args: &[Value]) -> BlockCall {
+        BlockCall::new(block, args, &mut self.value_lists)
     }
 
     /// Get the total number of values.
@@ -328,12 +333,7 @@ impl DataFlowGraph {
     /// For each argument of inst which is defined by an alias, replace the
     /// alias with the aliased value.
     pub fn resolve_aliases_in_arguments(&mut self, inst: Inst) {
-        for arg in self.insts[inst].arguments_mut(&mut self.value_lists) {
-            let resolved = resolve_aliases(&self.values, *arg);
-            if resolved != *arg {
-                *arg = resolved;
-            }
-        }
+        self.map_inst_values(inst, |dfg, arg| resolve_aliases(&dfg.values, arg));
     }
 
     /// Turn a value into an alias of another.
@@ -665,6 +665,60 @@ impl DataFlowGraph {
         }
     }
 
+    /// Construct a read-only visitor context for the values of this instruction.
+    pub fn inst_values<'dfg>(
+        &'dfg self,
+        inst: Inst,
+    ) -> impl DoubleEndedIterator<Item = Value> + 'dfg {
+        self.inst_args(inst)
+            .iter()
+            .chain(
+                self.insts[inst]
+                    .branch_destination()
+                    .into_iter()
+                    .flat_map(|branch| branch.args_slice(&self.value_lists).iter()),
+            )
+            .copied()
+    }
+
+    /// Map a function over the values of the instruction.
+    pub fn map_inst_values<F>(&mut self, inst: Inst, mut body: F)
+    where
+        F: FnMut(&mut DataFlowGraph, Value) -> Value,
+    {
+        for i in 0..self.inst_args(inst).len() {
+            let arg = self.inst_args(inst)[i];
+            self.inst_args_mut(inst)[i] = body(self, arg);
+        }
+
+        for mut block in self.insts[inst].branch_destination().into_iter() {
+            // We aren't changing the size of the args list, so we won't need to write the branch
+            // back to the instruction.
+            for i in 0..block.args_slice(&self.value_lists).len() {
+                let arg = block.args_slice(&self.value_lists)[i];
+                block.args_slice_mut(&mut self.value_lists)[i] = body(self, arg);
+            }
+        }
+    }
+
+    /// Overwrite the instruction's value references with values from the iterator.
+    /// NOTE: the iterator provided is expected to yield at least as many values as the instruction
+    /// currently has.
+    pub fn overwrite_inst_values<I>(&mut self, inst: Inst, mut values: I)
+    where
+        I: Iterator<Item = Value>,
+    {
+        for arg in self.inst_args_mut(inst) {
+            *arg = values.next().unwrap();
+        }
+
+        for mut block in self.insts[inst].branch_destination().into_iter() {
+            for arg in block.args_slice_mut(&mut self.value_lists) {
+                *arg = values.next().unwrap();
+            }
+        }
+    }
+
     /// Get all value arguments on `inst` as a slice.
     pub fn inst_args(&self, inst: Inst) -> &[Value] {
         self.insts[inst].arguments(&self.value_lists)
@@ -866,16 +920,6 @@ impl DataFlowGraph {
         })
     }
 
-    /// Append a new value argument to an instruction.
-    ///
-    /// Panics if the instruction doesn't support arguments.
-    pub fn append_inst_arg(&mut self, inst: Inst, new_arg: Value) {
-        self.insts[inst]
-            .value_list_mut()
-            .expect("the instruction doesn't have value arguments")
-            .push(new_arg, &mut self.value_lists);
-    }
-
     /// Clone an instruction, attaching new result `Value`s and
     /// returning them.
     pub fn clone_inst(&mut self, inst: Inst) -> Inst {
@@ -933,7 +977,7 @@ impl DataFlowGraph {
 
     /// Check if `inst` is a branch.
     pub fn analyze_branch(&self, inst: Inst) -> BranchInfo {
-        self.insts[inst].analyze_branch(&self.value_lists)
+        self.insts[inst].analyze_branch()
     }
 
     /// Compute the type of an instruction result from opcode constraints and call signatures.

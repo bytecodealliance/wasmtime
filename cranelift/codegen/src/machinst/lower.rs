@@ -476,7 +476,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         let uses = |value| {
             trace!(" -> pushing args for {} onto stack", value);
             if let ValueDef::Result(src_inst, _) = f.dfg.value_def(value) {
-                Some(f.dfg.inst_args(src_inst).iter().copied())
+                Some(f.dfg.inst_values(src_inst))
             } else {
                 None
             }
@@ -494,9 +494,9 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             // could come in as Once on our two different results.
             let force_multiple = f.dfg.inst_results(inst).len() > 1;
 
-            // Iterate over all args of all instructions, noting an
+            // Iterate over all values used by all instructions, noting an
             // additional use on each operand.
-            for &arg in f.dfg.inst_args(inst) {
+            for arg in f.dfg.inst_values(inst) {
                 let arg = f.dfg.resolve_aliases(arg);
                 let old = value_ir_uses[arg];
                 if force_multiple {
@@ -911,7 +911,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         // conditional branch; a conditional branch can be followed only by an
         // unconditional branch or fallthrough. Otherwise, if only one branch,
         // it may be an unconditional branch, a fallthrough, a return, or a
-        // trap. These conditions are verified by `is_ebb_basic()` during the
+        // trap. These conditions are verified by `is_block_basic()` during the
         // verifier pass.
         assert!(branches.len() <= 2);
         if branches.len() == 2 {
@@ -942,7 +942,11 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             // Avoid immutable borrow by explicitly indexing.
             let (inst, succ) = self.vcode.block_order().succ_indices(block)[succ_idx];
             // Get branch args and convert to Regs.
-            let branch_args = self.f.dfg.inst_variable_args(inst);
+            let branch_args = self.f.dfg.insts[inst]
+                .branch_destination()
+                .into_iter()
+                .flat_map(|block| block.args_slice(&self.f.dfg.value_lists));
+
             let mut branch_arg_vregs: SmallVec<[Reg; 16]> = smallvec![];
             for &arg in branch_args {
                 let arg = self.f.dfg.resolve_aliases(arg);
@@ -1142,7 +1146,8 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         self.f.rel_srclocs()[ir_inst]
     }
 
-    /// Get the number of inputs to the given IR instruction.
+    /// Get the number of inputs to the given IR instruction. This is a count only of the Value
+    /// arguments to the instruction: block arguments will not be included in this count.
     pub fn num_inputs(&self, ir_inst: Inst) -> usize {
         self.f.dfg.inst_args(ir_inst).len()
     }

@@ -414,22 +414,15 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
         IntCompareImm { cond, arg, imm, .. } => write!(w, " {} {}, {}", cond, arg, imm),
         IntAddTrap { args, code, .. } => write!(w, " {}, {}, {}", args[0], args[1], code),
         FloatCompare { cond, args, .. } => write!(w, " {} {}, {}", cond, args[0], args[1]),
-        Jump {
-            destination,
-            ref args,
-            ..
-        } => {
-            write!(w, " {}", destination)?;
-            write_block_args(w, args.as_slice(pool))
+        Jump { destination, .. } => {
+            write!(w, " {}", destination.block(pool))?;
+            write_block_args(w, destination.args_slice(pool))
         }
         Branch {
-            destination,
-            ref args,
-            ..
+            arg, destination, ..
         } => {
-            let args = args.as_slice(pool);
-            write!(w, " {}, {}", args[0], destination)?;
-            write_block_args(w, &args[1..])
+            write!(w, " {}, {}", arg, destination.block(pool))?;
+            write_block_args(w, destination.args_slice(pool))
         }
         BranchTable {
             arg,
@@ -485,7 +478,7 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
     }?;
 
     let mut sep = "  ; ";
-    for &arg in dfg.inst_args(inst) {
+    for arg in dfg.inst_values(inst) {
         if let ValueDef::Result(src, _) = dfg.value_def(arg) {
             let imm = match dfg.insts[src] {
                 UnaryImm { imm, .. } => imm.to_string(),

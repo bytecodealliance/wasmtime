@@ -152,6 +152,10 @@ impl OperandKind {
             | OperandKindFields::VariableArgs => unreachable!(),
         }
     }
+
+    pub(crate) fn is_block(&self) -> bool {
+        self.rust_type == "ir::BlockCall"
+    }
 }
 
 impl Into<OperandKind> for &TypeVar {

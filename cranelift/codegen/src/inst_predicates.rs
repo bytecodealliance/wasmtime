@@ -164,10 +164,10 @@ pub(crate) fn visit_block_succs<F: FnMut(Inst, Block, bool)>(
 }
 
 fn visit_branch_targets<F: FnMut(Inst, Block, bool)>(f: &Function, inst: Inst, visit: &mut F) {
-    match f.dfg.insts[inst].analyze_branch(&f.dfg.value_lists) {
+    match f.dfg.insts[inst].analyze_branch() {
         BranchInfo::NotABranch => {}
-        BranchInfo::SingleDest(dest, _) => {
-            visit(inst, dest, false);
+        BranchInfo::SingleDest(dest) => {
+            visit(inst, dest.block(&f.dfg.value_lists), false);
         }
         BranchInfo::Table(table, maybe_dest) => {
             if let Some(dest) = maybe_dest {

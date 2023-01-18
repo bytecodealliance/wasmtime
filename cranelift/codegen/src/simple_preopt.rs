@@ -11,7 +11,7 @@ use crate::flowgraph::ControlFlowGraph;
 use crate::ir::{
     condcodes::{CondCode, IntCC},
     instructions::Opcode,
-    types::{I128, I32, I64},
+    types::{I128, I32, I64, INVALID},
     Block, DataFlowGraph, Function, Inst, InstBuilder, InstructionData, Type, Value,
 };
 use crate::isa::TargetIsa;
@@ -466,23 +466,17 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
     }
 }
 
-enum BranchOrderKind {
-    BrzToBrnz(Value),
-    BrnzToBrz(Value),
-}
-
 /// Reorder branches to encourage fallthroughs.
 ///
 /// When a block ends with a conditional branch followed by an unconditional
 /// branch, this will reorder them if one of them is branching to the next Block
 /// layout-wise. The unconditional jump can then become a fallthrough.
 fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, block: Block, inst: Inst) {
-    let (term_inst, term_inst_args, term_dest, cond_inst, cond_inst_args, cond_dest, kind) =
+    let (term_inst, term_dest, cond_inst, cond_dest, kind, cond_arg) =
         match pos.func.dfg.insts[inst] {
             InstructionData::Jump {
                 opcode: Opcode::Jump,
                 destination,
-                ref args,
             } => {
                 let next_block = if let Some(next_block) = pos.func.layout.next_block(block) {
                     next_block
@@ -490,7 +484,7 @@ fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, block: Block, 
                     return;
                 };
 
-                if destination == next_block {
+                if destination.block(&pos.func.dfg.value_lists) == next_block {
                     return;
                 }
 
@@ -500,42 +494,23 @@ fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, block: Block, 
                     return;
                 };
 
-                let prev_inst_data = &pos.func.dfg.insts[prev_inst];
-
-                if let Some(prev_dest) = prev_inst_data.branch_destination() {
-                    if prev_dest != next_block {
-                        return;
-                    }
-                } else {
-                    return;
-                }
-
-                match prev_inst_data {
-                    InstructionData::Branch {
+                match &pos.func.dfg.insts[prev_inst] {
+                    &InstructionData::Branch {
                         opcode,
-                        args: ref prev_args,
+                        arg,
                         destination: cond_dest,
                     } => {
-                        let cond_arg = {
-                            let args = pos.func.dfg.inst_args(prev_inst);
-                            args[0]
-                        };
+                        if cond_dest.block(&pos.func.dfg.value_lists) != next_block {
+                            return;
+                        }
 
                         let kind = match opcode {
-                            Opcode::Brz => BranchOrderKind::BrzToBrnz(cond_arg),
-                            Opcode::Brnz => BranchOrderKind::BrnzToBrz(cond_arg),
+                            Opcode::Brz => Opcode::Brnz,
+                            Opcode::Brnz => Opcode::Brz,
                             _ => panic!("unexpected opcode"),
                         };
 
-                        (
-                            inst,
-                            args.clone(),
-                            destination,
-                            prev_inst,
-                            prev_args.clone(),
-                            *cond_dest,
-                            kind,
-                        )
+                        (inst, destination, prev_inst, cond_dest, kind, arg)
                     }
                     _ => return,
                 }
@@ -544,31 +519,14 @@ fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, block: Block, 
             _ => return,
         };
 
-    let cond_args = cond_inst_args.as_slice(&pos.func.dfg.value_lists).to_vec();
-    let term_args = term_inst_args.as_slice(&pos.func.dfg.value_lists).to_vec();
-
-    match kind {
-        BranchOrderKind::BrnzToBrz(cond_arg) => {
-            pos.func
-                .dfg
-                .replace(term_inst)
-                .jump(cond_dest, &cond_args[1..]);
-            pos.func
-                .dfg
-                .replace(cond_inst)
-                .brz(cond_arg, term_dest, &term_args);
-        }
-        BranchOrderKind::BrzToBrnz(cond_arg) => {
-            pos.func
-                .dfg
-                .replace(term_inst)
-                .jump(cond_dest, &cond_args[1..]);
-            pos.func
-                .dfg
-                .replace(cond_inst)
-                .brnz(cond_arg, term_dest, &term_args);
-        }
-    }
+    pos.func
+        .dfg
+        .replace(term_inst)
+        .Jump(Opcode::Jump, INVALID, cond_dest);
+    pos.func
+        .dfg
+        .replace(cond_inst)
+        .Branch(kind, INVALID, term_dest, cond_arg);
 
     cfg.recompute_block(pos.func, block);
 }
@@ -578,7 +536,7 @@ mod simplify {
     use crate::ir::{
         dfg::ValueDef,
         immediates,
-        instructions::{Opcode, ValueList},
+        instructions::Opcode,
         types::{I16, I32, I8},
     };
     use std::marker::PhantomData;
@@ -829,30 +787,18 @@ mod simplify {
         }
     }
 
-    struct BranchOptInfo {
-        br_inst: Inst,
-        cmp_arg: Value,
-        args: ValueList,
-        new_opcode: Opcode,
-    }
-
     /// Fold comparisons into branch operations when possible.
     ///
     /// This matches against operations which compare against zero, then use the
     /// result in a `brz` or `brnz` branch. It folds those two operations into a
     /// single `brz` or `brnz`.
     fn branch_opt(pos: &mut FuncCursor, inst: Inst) {
-        let mut info = if let InstructionData::Branch {
+        let (cmp_arg, new_opcode) = if let InstructionData::Branch {
             opcode: br_opcode,
-            args: ref br_args,
+            arg: first_arg,
             ..
         } = pos.func.dfg.insts[inst]
         {
-            let first_arg = {
-                let args = pos.func.dfg.inst_args(inst);
-                args[0]
-            };
-
             let icmp_inst =
                 if let ValueDef::Result(icmp_inst, _) = pos.func.dfg.value_def(first_arg) {
                     icmp_inst
@@ -886,12 +832,7 @@ mod simplify {
                     _ => return,
                 };
 
-                BranchOptInfo {
-                    br_inst: inst,
-                    cmp_arg,
-                    args: br_args.clone(),
-                    new_opcode,
-                }
+                (cmp_arg, new_opcode)
             } else {
                 return;
             }
@@ -899,11 +840,11 @@ mod simplify {
             return;
         };
 
-        info.args.as_mut_slice(&mut pos.func.dfg.value_lists)[0] = info.cmp_arg;
-        if let InstructionData::Branch { ref mut opcode, .. } = pos.func.dfg.insts[info.br_inst] {
-            *opcode = info.new_opcode;
+        if let InstructionData::Branch { opcode, arg, .. } = &mut pos.func.dfg.insts[inst] {
+            *opcode = new_opcode;
+            *arg = cmp_arg;
         } else {
-            panic!();
+            unreachable!();
         }
     }
 }

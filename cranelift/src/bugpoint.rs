@@ -422,11 +422,9 @@ impl Mutator for ReplaceBlockParamWithConst {
         // Remove parameters in branching instructions that point to this block
         for pred in cfg.pred_iter(self.block) {
             let dfg = &mut func.dfg;
-            let inst = &mut dfg.insts[pred.inst];
-            let num_fixed_args = inst.opcode().constraints().num_fixed_value_arguments();
-            inst.value_list_mut()
-                .unwrap()
-                .remove(num_fixed_args + param_index, &mut dfg.value_lists);
+            for branch in dfg.insts[pred.inst].branch_destination_mut().into_iter() {
+                branch.remove(param_index, &mut dfg.value_lists);
+            }
         }
 
         if Some(self.block) == func.layout.entry_block() {

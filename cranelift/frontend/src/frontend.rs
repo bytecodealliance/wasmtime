@@ -111,7 +111,10 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
                 Some(dest_block) => {
                     // If the user has supplied jump arguments we must adapt the arguments of
                     // the destination block
-                    self.builder.declare_successor(dest_block, inst);
+                    self.builder.declare_successor(
+                        dest_block.block(&self.builder.func.dfg.value_lists),
+                        inst,
+                    );
                 }
                 None => {
                     // branch_destination() doesn't detect jump_tables
@@ -676,11 +679,14 @@ impl<'a> FunctionBuilder<'a> {
     /// **Note:** You are responsible for maintaining the coherence with the arguments of
     /// other jump instructions.
     pub fn change_jump_destination(&mut self, inst: Inst, new_dest: Block) {
-        let old_dest = self.func.dfg.insts[inst]
+        let dfg = &mut self.func.dfg;
+        let old_dest = dfg.insts[inst]
             .branch_destination_mut()
             .expect("you want to change the jump destination of a non-jump instruction");
-        self.func_ctx.ssa.remove_block_predecessor(*old_dest, inst);
-        *old_dest = new_dest;
+        self.func_ctx
+            .ssa
+            .remove_block_predecessor(old_dest.block(&dfg.value_lists), inst);
+        old_dest.set_block(new_dest, &mut dfg.value_lists);
         self.func_ctx.ssa.declare_block_predecessor(new_dest, inst);
     }
 

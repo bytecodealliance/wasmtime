@@ -284,7 +284,7 @@ impl FunctionStencil {
     pub fn change_branch_destination(&mut self, inst: Inst, new_dest: Block) {
         match self.dfg.insts[inst].branch_destination_mut() {
             None => (),
-            Some(inst_dest) => *inst_dest = new_dest,
+            Some(inst_dest) => inst_dest.set_block(new_dest, &mut self.dfg.value_lists),
         }
     }
 
@@ -295,8 +295,8 @@ impl FunctionStencil {
     /// rewrite the destinations of multi-destination branches like `br_table`.
     pub fn rewrite_branch_destination(&mut self, inst: Inst, old_dest: Block, new_dest: Block) {
         match self.dfg.analyze_branch(inst) {
-            BranchInfo::SingleDest(dest, ..) => {
-                if dest == old_dest {
+            BranchInfo::SingleDest(dest) => {
+                if dest.block(&self.dfg.value_lists) == old_dest {
                     self.change_branch_destination(inst, new_dest);
                 }
             }

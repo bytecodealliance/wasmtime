@@ -158,8 +158,6 @@ fn gen_arguments_method(formats: &[&InstructionFormat], fmt: &mut Formatter, is_
 /// - `pub fn opcode(&self) -> Opcode`
 /// - `pub fn arguments(&self, &pool) -> &[Value]`
 /// - `pub fn arguments_mut(&mut self, &pool) -> &mut [Value]`
-/// - `pub fn value_list(&self) -> Option<ir::ValueList>`
-/// - `pub fn value_list_mut(&mut self) -> Option<&mut ir::ValueList>`
 /// - `pub fn eq(&self, &other: Self, &pool) -> bool`
 /// - `pub fn hash<H: Hasher>(&self, state: &mut H, &pool)`
 fn gen_instruction_data_impl(formats: &[&InstructionFormat], fmt: &mut Formatter) {
@@ -211,51 +209,6 @@ fn gen_instruction_data_impl(formats: &[&InstructionFormat], fmt: &mut Formatter
         fmt.doc_comment(r#"Get mutable references to the value arguments to this
                         instruction."#);
         gen_arguments_method(formats, fmt, true);
-        fmt.empty_line();
-
-        fmt.doc_comment(r#"
-            The ValueList for the instruction.
-        "#);
-        fmt.line("pub fn value_list(&self) -> Option<ir::ValueList> {");
-        fmt.indent(|fmt| {
-            let mut m = Match::new("*self");
-
-            for format in formats {
-                if format.has_value_list {
-                    m.arm(format!("Self::{}", format.name),
-                    vec!["args", ".."],
-                    "Some(args)".to_string());
-                }
-            }
-
-            m.arm_no_fields("_", "None");
-
-            fmt.add_match(m);
-        });
-        fmt.line("}");
-        fmt.empty_line();
-
-        fmt.doc_comment(r#"
-            A mutable reference to the ValueList for this instruction, if it
-            has one.
-        "#);
-        fmt.line("pub fn value_list_mut(&mut self) -> Option<&mut ir::ValueList> {");
-        fmt.indent(|fmt| {
-            let mut m = Match::new("*self");
-
-            for format in formats {
-                if format.has_value_list {
-                    m.arm(format!("Self::{}", format.name),
-                    vec!["ref mut args", ".."],
-                    "Some(args)".to_string());
-                }
-            }
-
-            m.arm_no_fields("_", "None");
-
-            fmt.add_match(m);
-        });
-        fmt.line("}");
         fmt.empty_line();
 
         fmt.doc_comment(r#"
@@ -898,12 +851,7 @@ fn gen_format_constructor(format: &InstructionFormat, fmt: &mut Formatter) {
 /// instruction reference itself for instructions that don't have results.
 fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Formatter) {
     // Construct method arguments.
-    let mut args = vec![if format.has_value_list {
-        "mut self"
-    } else {
-        "self"
-    }
-    .to_string()];
+    let mut args = vec![String::new()];
 
     let mut args_doc = Vec::new();
     let mut rets_doc = Vec::new();
@@ -922,17 +870,39 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
 
     let mut tmpl_types = Vec::new();
     let mut into_args = Vec::new();
+    let mut block_args = Vec::new();
     for op in &inst.operands_in {
-        let t = if op.is_immediate() {
-            let t = format!("T{}", tmpl_types.len() + 1);
-            tmpl_types.push(format!("{}: Into<{}>", t, op.kind.rust_type));
-            into_args.push(op.name);
-            t
+        if op.kind.is_block() {
+            args.push(format!("{}_label: {}", op.name, "ir::Block"));
+            args_doc.push(format!(
+                "- {}_label: {}",
+                op.name, "Destination basic block"
+            ));
+
+            args.push(format!("{}_args: {}", op.name, "&[Value]"));
+            args_doc.push(format!("- {}_args: {}", op.name, "Block arguments"));
+
+            block_args.push(op);
         } else {
-            op.kind.rust_type.to_string()
-        };
-        args.push(format!("{}: {}", op.name, t));
-        args_doc.push(format!("- {}: {}", op.name, op.doc()));
+            let t = if op.is_immediate() {
+                let t = format!("T{}", tmpl_types.len() + 1);
+                tmpl_types.push(format!("{}: Into<{}>", t, op.kind.rust_type));
+                into_args.push(op.name);
+                t
+            } else {
+                op.kind.rust_type.to_string()
+            };
+            args.push(format!("{}: {}", op.name, t));
+            args_doc.push(format!("- {}: {}", op.name, op.doc()));
+        }
+    }
+
+    // We need to mutate `self` if this instruction accepts a value list, or will construct
+    // BlockCall values.
+    if format.has_value_list || !block_args.is_empty() {
+        args[0].push_str("mut self");
+    } else {
+        args[0].push_str("self");
     }
 
     for op in &inst.operands_out {
@@ -981,8 +951,17 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
     fmtln!(fmt, "fn {} {{", proto);
     fmt.indent(|fmt| {
         // Convert all of the `Into<>` arguments.
-        for arg in &into_args {
+        for arg in into_args {
             fmtln!(fmt, "let {} = {}.into();", arg, arg);
+        }
+
+        // Convert block references
+        for op in block_args {
+            fmtln!(
+                fmt,
+                "let {0} = self.data_flow_graph_mut().block_call({0}_label, {0}_args);",
+                op.name
+            );
         }
 
         // Arguments for instruction constructor.

@@ -161,9 +161,8 @@ fn is_loop_invariant(inst: Inst, dfg: &DataFlowGraph, loop_values: &FxHashSet<Va
         return false;
     }
 
-    let inst_args = dfg.inst_args(inst);
-    for arg in inst_args {
-        let arg = dfg.resolve_aliases(*arg);
+    for arg in dfg.inst_values(inst) {
+        let arg = dfg.resolve_aliases(arg);
         if loop_values.contains(&arg) {
             return false;
         }
