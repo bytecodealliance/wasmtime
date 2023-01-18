@@ -586,16 +586,19 @@ impl SSABuilder {
             // is sufficient.
             BranchInfo::SingleDest(_) => {
                 let dfg = &mut func.dfg;
-                dfg.insts[branch]
-                    .branch_destination_mut()
-                    .unwrap()
-                    .append_argument(val, &mut dfg.value_lists);
+                for dest in dfg.insts[branch].branch_destination_mut() {
+                    dest.append_argument(val, &mut dfg.value_lists);
+                }
                 None
             }
             BranchInfo::Conditional(block_then, block_else) => {
                 let dfg = &mut func.dfg;
                 if dest_block == block_then.block(&dfg.value_lists) {
-                    if let InstructionData::Brif { block_then, .. } = &mut dfg.insts[branch] {
+                    if let InstructionData::Brif {
+                        blocks: [block_then, _],
+                        ..
+                    } = &mut dfg.insts[branch]
+                    {
                         block_then.append_argument(val, &mut dfg.value_lists);
                     } else {
                         unreachable!();
@@ -603,7 +606,11 @@ impl SSABuilder {
                 }
 
                 if dest_block == block_else.block(&dfg.value_lists) {
-                    if let InstructionData::Brif { block_else, .. } = &mut dfg.insts[branch] {
+                    if let InstructionData::Brif {
+                        blocks: [_, block_else],
+                        ..
+                    } = &mut dfg.insts[branch]
+                    {
                         block_else.append_argument(val, &mut dfg.value_lists);
                     } else {
                         unreachable!();

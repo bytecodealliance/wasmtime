@@ -420,8 +420,7 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
         }
         Brif {
             arg,
-            block_then,
-            block_else,
+            blocks: [block_then, block_else],
             ..
         } => {
             write!(w, " {}, {}", arg, block_then.block(pool))?;

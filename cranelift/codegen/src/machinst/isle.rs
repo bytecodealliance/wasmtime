@@ -1,4 +1,4 @@
-use crate::ir::{Value, ValueList};
+use crate::ir::{BlockCall, Value, ValueList};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use smallvec::SmallVec;
@@ -22,6 +22,7 @@ pub type Unit = ();
 pub type ValueSlice = (ValueList, usize);
 pub type ValueArray2 = [Value; 2];
 pub type ValueArray3 = [Value; 3];
+pub type BlockArray2 = [BlockCall; 2];
 pub type WritableReg = Writable<Reg>;
 pub type VecRetPair = Vec<RetPair>;
 pub type VecMask = Vec<u8>;

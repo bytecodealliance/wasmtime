@@ -378,26 +378,27 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
             }
 
             let dfg = &mut func.dfg;
-            let block = dfg.insts[edge.inst].branch_destination_mut().unwrap();
-            old_actuals.extend(block.args_slice(&dfg.value_lists));
+            for block in dfg.insts[edge.inst].branch_destination_mut() {
+                old_actuals.extend(block.args_slice(&dfg.value_lists));
 
-            // Check that the numbers of arguments make sense.
-            let formals = &summaries[edge.block].formals;
-            assert_eq!(formals.len(), old_actuals.len());
+                // Check that the numbers of arguments make sense.
+                let formals = &summaries[edge.block].formals;
+                assert_eq!(formals.len(), old_actuals.len());
 
-            // Filter out redundant block arguments.
-            let mut formals = formals.iter();
-            old_actuals.retain(|_| {
-                let formal_i = formals.next().unwrap();
-                !state.get(*formal_i).is_one()
-            });
+                // Filter out redundant block arguments.
+                let mut formals = formals.iter();
+                old_actuals.retain(|_| {
+                    let formal_i = formals.next().unwrap();
+                    !state.get(*formal_i).is_one()
+                });
 
-            // Replace the block with a new one that only includes the non-redundant arguments.
-            // This leaks the value list from the old block,
-            // https://github.com/bytecodealliance/wasmtime/issues/5451 for more information.
-            let destination = block.block(&dfg.value_lists);
-            *block = BlockCall::new(destination, &old_actuals, &mut dfg.value_lists);
-            old_actuals.clear();
+                // Replace the block with a new one that only includes the non-redundant arguments.
+                // This leaks the value list from the old block,
+                // https://github.com/bytecodealliance/wasmtime/issues/5451 for more information.
+                let destination = block.block(&dfg.value_lists);
+                *block = BlockCall::new(destination, &old_actuals, &mut dfg.value_lists);
+                old_actuals.clear();
+            }
         }
     }
 

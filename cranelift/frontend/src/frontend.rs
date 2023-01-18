@@ -107,44 +107,44 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
         }
 
         if data.opcode().is_branch() {
-            match data.branch_destination() {
-                Some(dest_block) => {
+            let dests = data.branch_destination();
+            if dests.is_empty() {
+                // branch_destination() doesn't detect jump_tables
+                // If jump table we declare all entries successor
+                if let InstructionData::BranchTable {
+                    table, destination, ..
+                } = data
+                {
+                    // Unlike all other jumps/branches, jump tables are
+                    // capable of having the same successor appear
+                    // multiple times, so we must deduplicate.
+                    let mut unique = EntitySet::<Block>::new();
+                    for dest_block in self
+                        .builder
+                        .func
+                        .jump_tables
+                        .get(table)
+                        .expect("you are referencing an undeclared jump table")
+                        .iter()
+                        .filter(|&dest_block| unique.insert(*dest_block))
+                    {
+                        // Call `declare_block_predecessor` instead of `declare_successor` for
+                        // avoiding the borrow checker.
+                        self.builder
+                            .func_ctx
+                            .ssa
+                            .declare_block_predecessor(*dest_block, inst);
+                    }
+                    self.builder.declare_successor(destination, inst);
+                }
+            } else {
+                for dest_block in dests {
                     // If the user has supplied jump arguments we must adapt the arguments of
                     // the destination block
                     self.builder.declare_successor(
                         dest_block.block(&self.builder.func.dfg.value_lists),
                         inst,
                     );
-                }
-                None => {
-                    // branch_destination() doesn't detect jump_tables
-                    // If jump table we declare all entries successor
-                    if let InstructionData::BranchTable {
-                        table, destination, ..
-                    } = data
-                    {
-                        // Unlike all other jumps/branches, jump tables are
-                        // capable of having the same successor appear
-                        // multiple times, so we must deduplicate.
-                        let mut unique = EntitySet::<Block>::new();
-                        for dest_block in self
-                            .builder
-                            .func
-                            .jump_tables
-                            .get(table)
-                            .expect("you are referencing an undeclared jump table")
-                            .iter()
-                            .filter(|&dest_block| unique.insert(*dest_block))
-                        {
-                            // Call `declare_block_predecessor` instead of `declare_successor` for
-                            // avoiding the borrow checker.
-                            self.builder
-                                .func_ctx
-                                .ssa
-                                .declare_block_predecessor(*dest_block, inst);
-                        }
-                        self.builder.declare_successor(destination, inst);
-                    }
                 }
             }
         }
@@ -680,14 +680,13 @@ impl<'a> FunctionBuilder<'a> {
     /// other jump instructions.
     pub fn change_jump_destination(&mut self, inst: Inst, new_dest: Block) {
         let dfg = &mut self.func.dfg;
-        let old_dest = dfg.insts[inst]
-            .branch_destination_mut()
-            .expect("you want to change the jump destination of a non-jump instruction");
-        self.func_ctx
-            .ssa
-            .remove_block_predecessor(old_dest.block(&dfg.value_lists), inst);
-        old_dest.set_block(new_dest, &mut dfg.value_lists);
-        self.func_ctx.ssa.declare_block_predecessor(new_dest, inst);
+        for old_dest in dfg.insts[inst].branch_destination_mut() {
+            self.func_ctx
+                .ssa
+                .remove_block_predecessor(old_dest.block(&dfg.value_lists), inst);
+            old_dest.set_block(new_dest, &mut dfg.value_lists);
+            self.func_ctx.ssa.declare_block_predecessor(new_dest, inst);
+        }
     }
 
     /// Returns `true` if and only if the current `Block` is sealed and has no predecessors declared.

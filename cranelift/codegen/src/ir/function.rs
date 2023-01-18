@@ -277,17 +277,6 @@ impl FunctionStencil {
         self.dfg.collect_debug_info();
     }
 
-    /// Changes the destination of a jump or branch instruction.
-    /// Does nothing if called with a non-jump or non-branch instruction.
-    ///
-    /// Note that this method ignores multi-destination branches like `br_table`.
-    pub fn change_branch_destination(&mut self, inst: Inst, new_dest: Block) {
-        match self.dfg.insts[inst].branch_destination_mut() {
-            None => (),
-            Some(inst_dest) => inst_dest.set_block(new_dest, &mut self.dfg.value_lists),
-        }
-    }
-
     /// Rewrite the branch destination to `new_dest` if the destination matches `old_dest`.
     /// Does nothing if called with a non-jump or non-branch instruction.
     ///
@@ -297,13 +286,19 @@ impl FunctionStencil {
         match self.dfg.analyze_branch(inst) {
             BranchInfo::SingleDest(dest) => {
                 if dest.block(&self.dfg.value_lists) == old_dest {
-                    self.change_branch_destination(inst, new_dest);
+                    for block in self.dfg.insts[inst].branch_destination_mut() {
+                        block.set_block(new_dest, &mut self.dfg.value_lists)
+                    }
                 }
             }
 
             BranchInfo::Conditional(block_then, block_else) => {
                 if block_then.block(&self.dfg.value_lists) == old_dest {
-                    if let InstructionData::Brif { block_then, .. } = &mut self.dfg.insts[inst] {
+                    if let InstructionData::Brif {
+                        blocks: [block_then, _],
+                        ..
+                    } = &mut self.dfg.insts[inst]
+                    {
                         block_then.set_block(new_dest, &mut self.dfg.value_lists);
                     } else {
                         unreachable!();
@@ -311,7 +306,11 @@ impl FunctionStencil {
                 }
 
                 if block_else.block(&self.dfg.value_lists) == old_dest {
-                    if let InstructionData::Brif { block_else, .. } = &mut self.dfg.insts[inst] {
+                    if let InstructionData::Brif {
+                        blocks: [_, block_else],
+                        ..
+                    } = &mut self.dfg.insts[inst]
+                    {
                         block_else.set_block(new_dest, &mut self.dfg.value_lists);
                     } else {
                         unreachable!();

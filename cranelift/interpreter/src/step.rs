@@ -279,14 +279,13 @@ where
     // Interpret a Cranelift instruction.
     Ok(match inst.opcode() {
         Opcode::Jump => {
-            let block = inst.branch_destination().unwrap();
+            let block = inst.branch_destination()[0];
             continue_at(block)?
         }
         Opcode::Brif => {
             if let InstructionData::Brif {
                 arg,
-                block_then,
-                block_else,
+                blocks: [block_then, block_else],
                 ..
             } = inst
             {
@@ -305,7 +304,7 @@ where
             }
         }
         Opcode::Brz => {
-            let block = inst.branch_destination().unwrap();
+            let block = inst.branch_destination()[0];
             branch_when(
                 !arg(0)?
                     .convert(ValueConversionKind::ToBoolean)?
@@ -314,7 +313,7 @@ where
             )?
         }
         Opcode::Brnz => {
-            let block = inst.branch_destination().unwrap();
+            let block = inst.branch_destination()[0];
             branch_when(
                 arg(0)?
                     .convert(ValueConversionKind::ToBoolean)?

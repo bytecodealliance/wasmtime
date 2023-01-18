@@ -24,8 +24,8 @@ use crate::machinst::{isle::*, InputSourceInst};
 use crate::{
     binemit::CodeOffset,
     ir::{
-        immediates::*, types::*, AtomicRmwOp, ExternalName, Inst, InstructionData, MemFlags,
-        TrapCode, Value, ValueList,
+        immediates::*, types::*, AtomicRmwOp, BlockCall, ExternalName, Inst, InstructionData,
+        MemFlags, TrapCode, Value, ValueList,
     },
     isa::aarch64::abi::AArch64Caller,
     isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},

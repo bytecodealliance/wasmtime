@@ -589,8 +589,7 @@ impl<'a> Verifier<'a> {
             }
             Brif {
                 arg,
-                block_then,
-                block_else,
+                blocks: [block_then, block_else],
                 ..
             } => {
                 self.verify_value(inst, arg, errors)?;

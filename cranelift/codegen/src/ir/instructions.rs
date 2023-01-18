@@ -272,8 +272,7 @@ impl InstructionData {
             Self::Jump { destination, .. } => BranchInfo::SingleDest(destination),
             Self::Branch { destination, .. } => BranchInfo::SingleDest(destination),
             Self::Brif {
-                block_then,
-                block_else,
+                blocks: [block_then, block_else],
                 ..
             } => BranchInfo::Conditional(block_then, block_else),
             Self::BranchTable {
@@ -290,13 +289,19 @@ impl InstructionData {
     /// branch or jump.
     ///
     /// Multi-destination branches like `br_table` return `None`.
-    pub fn branch_destination(&self) -> Option<BlockCall> {
-        match *self {
-            Self::Jump { destination, .. } | Self::Branch { destination, .. } => Some(destination),
-            Self::BranchTable { .. } => None,
+    pub fn branch_destination(&self) -> &[BlockCall] {
+        match self {
+            Self::Jump {
+                ref destination, ..
+            }
+            | Self::Branch {
+                ref destination, ..
+            } => std::slice::from_ref(destination),
+            Self::Brif { blocks, .. } => blocks,
+            Self::BranchTable { .. } => &[],
             _ => {
                 debug_assert!(!self.opcode().is_branch());
-                None
+                &[]
             }
         }
     }
@@ -305,8 +310,8 @@ impl InstructionData {
     /// single destination branch or jump.
     ///
     /// Multi-destination branches like `br_table` return `None`.
-    pub fn branch_destination_mut(&mut self) -> Option<&mut BlockCall> {
-        match *self {
+    pub fn branch_destination_mut(&mut self) -> &mut [BlockCall] {
+        match self {
             Self::Jump {
                 ref mut destination,
                 ..
@@ -314,11 +319,12 @@ impl InstructionData {
             | Self::Branch {
                 ref mut destination,
                 ..
-            } => Some(destination),
-            Self::BranchTable { .. } => None,
+            } => std::slice::from_mut(destination),
+            Self::Brif { blocks, .. } => blocks,
+            Self::BranchTable { .. } => &mut [],
             _ => {
                 debug_assert!(!self.opcode().is_branch());
-                None
+                &mut []
             }
         }
     }

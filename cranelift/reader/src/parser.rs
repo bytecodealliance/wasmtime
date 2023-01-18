@@ -2605,8 +2605,7 @@ impl<'a> Parser<'a> {
                 InstructionData::Brif {
                     opcode,
                     arg,
-                    block_then,
-                    block_else,
+                    blocks: [block_then, block_else],
                 }
             }
             InstructionFormat::Branch => {
