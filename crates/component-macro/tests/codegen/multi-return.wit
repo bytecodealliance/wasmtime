@@ -6,8 +6,7 @@ interface multi-return {
   mre: func() -> (a: u32, b: float32)
 }
 
-world the-world {
-  import imports: multi-return
-  export exports: multi-return
-  default export multi-return
+default world the-world {
+  import imports: self.multi-return
+  export exports: self.multi-return
 }

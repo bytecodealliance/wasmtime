@@ -1,4 +1,4 @@
-world the-world {
+default world the-world {
   import imports: interface {
     y: func()
   }

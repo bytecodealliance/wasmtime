@@ -12,14 +12,12 @@ mod no_imports {
 
     wasmtime::component::bindgen!({
         inline: "
-            world no-imports {
+            default world no-imports {
                 export foo: interface {
                     foo: func()
                 }
 
-                default export interface {
-                    bar: func()
-                }
+                export bar: func()
             }
         ",
     });
@@ -59,14 +57,12 @@ mod one_import {
 
     wasmtime::component::bindgen!({
         inline: "
-            world one-import {
+            default world one-import {
                 import foo: interface {
                     foo: func()
                 }
 
-                default export interface {
-                    bar: func()
-                }
+                export bar: func()
             }
         ",
     });

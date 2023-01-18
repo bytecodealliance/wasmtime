@@ -32,8 +32,7 @@ interface integers {
   pair-ret: func() -> tuple<s64, u8>
 }
 
-world the-world {
-  import imports: integers
-  export exports: integers
-  default export integers
+default world the-world {
+  import imports: self.integers
+  export exports: self.integers
 }

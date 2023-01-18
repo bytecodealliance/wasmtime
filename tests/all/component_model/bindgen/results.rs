@@ -9,14 +9,12 @@ mod empty_error {
     use super::*;
     wasmtime::component::bindgen!({
         inline: "
-        world result-playground {
+        default world result-playground {
             import imports: interface {
                 empty-error: func(a: float64) -> result<float64>
             }
 
-            default export interface {
-                empty-error: func(a: float64) -> result<float64>
-            }
+            export empty-error: func(a: float64) -> result<float64>
         }",
     });
 
@@ -108,14 +106,12 @@ mod string_error {
     use super::*;
     wasmtime::component::bindgen!({
         inline: "
-        world result-playground {
+        default world result-playground {
             import imports: interface {
                 string-error: func(a: float64) -> result<float64, string>
             }
 
-            default export interface {
-                string-error: func(a: float64) -> result<float64, string>
-            }
+            export string-error: func(a: float64) -> result<float64, string>
         }",
     });
 
@@ -223,9 +219,9 @@ mod enum_error {
             enum e1 { a, b, c }
             enum-error: func(a: float64) -> result<float64, e1>
         }
-        world result-playground {
-            import imports: imports
-            default export interface {
+        default world result-playground {
+            import imports: self.imports
+            export foo: interface {
                 enum e1 { a, b, c }
                 enum-error: func(a: float64) -> result<float64, e1>
             }
@@ -273,10 +269,13 @@ mod enum_error {
                     (with "libc" (instance $libc))
                 ))
                 (func $f_enum_error
-                    (export "enum-error")
                     (param "a" float64)
                     (result (result float64 (error (enum "a" "b" "c"))))
                     (canon lift (core func $i "core_enum_error_export") (memory $libc "memory"))
+                )
+
+                (instance (export "foo")
+                    (export "enum-error" (func $f_enum_error))
                 )
             )
         "#
@@ -328,6 +327,7 @@ mod enum_error {
 
         assert_eq!(
             results
+                .foo()
                 .enum_error(&mut store, 0.0)
                 .expect("no trap")
                 .expect("no error returned"),
@@ -335,13 +335,18 @@ mod enum_error {
         );
 
         let e = results
+            .foo()
             .enum_error(&mut store, 1.0)
             .expect("no trap")
             .err()
             .expect("error returned");
-        assert_eq!(e, enum_error::E1::A);
+        assert_eq!(e, enum_error::foo::E1::A);
 
-        let e = results.enum_error(&mut store, 2.0).err().expect("trap");
+        let e = results
+            .foo()
+            .enum_error(&mut store, 2.0)
+            .err()
+            .expect("trap");
         assert_eq!(
             format!("{}", e.source().expect("trap message is stored in source")),
             "MyTrap"
@@ -361,9 +366,9 @@ mod record_error {
             record e2 { line: u32, col: u32 }
             record-error: func(a: float64) -> result<float64, e2>
         }
-        world result-playground {
-            import imports: imports
-            default export interface {
+        default world result-playground {
+            import imports: self.imports
+            export foo: interface {
                 record e2 { line: u32, col: u32 }
                 record-error: func(a: float64) -> result<float64, e2>
             }
@@ -411,10 +416,13 @@ mod record_error {
                     (with "libc" (instance $libc))
                 ))
                 (func $f_record_error
-                    (export "record-error")
                     (param "a" float64)
                     (result (result float64 (error (record (field "line" u32) (field "col" u32)))))
                     (canon lift (core func $i "core_record_error_export") (memory $libc "memory"))
+                )
+
+                (instance (export "foo")
+                    (export "record-error" (func $f_record_error))
                 )
             )
         "#
@@ -447,6 +455,7 @@ mod record_error {
 
         assert_eq!(
             results
+                .foo()
                 .record_error(&mut store, 0.0)
                 .expect("no trap")
                 .expect("no error returned"),
@@ -454,19 +463,24 @@ mod record_error {
         );
 
         let e = results
+            .foo()
             .record_error(&mut store, 1.0)
             .expect("no trap")
             .err()
             .expect("error returned");
         assert!(matches!(
             e,
-            record_error::E2 {
+            record_error::foo::E2 {
                 line: 420,
                 col: 1312
             }
         ));
 
-        let e = results.record_error(&mut store, 2.0).err().expect("trap");
+        let e = results
+            .foo()
+            .record_error(&mut store, 2.0)
+            .err()
+            .expect("trap");
         assert_eq!(
             format!("{}", e.source().expect("trap message is stored in source")),
             "record_error: trap"
@@ -486,9 +500,9 @@ mod variant_error {
             variant e3 { E1(e1), E2(e2) }
             variant-error: func(a: float64) -> result<float64, e3>
         }
-        world result-playground {
-            import imports: imports
-            default export interface {
+        default world result-playground {
+            import imports: self.imports
+            export foo: interface {
                 enum e1 { a, b, c }
                 record e2 { line: u32, col: u32 }
                 variant e3 { E1(e1), E2(e2) }
@@ -538,10 +552,13 @@ mod variant_error {
                     (with "libc" (instance $libc))
                 ))
                 (func $f_variant_error
-                    (export "variant-error")
                     (param "a" float64)
                     (result (result float64 (error (variant (case "E1" (enum "a" "b" "c")) (case "E2"(record (field "line" u32) (field "col" u32)))))))
                     (canon lift (core func $i "core_variant_error_export") (memory $libc "memory"))
+                )
+
+                (instance (export "foo")
+                    (export "variant-error" (func $f_variant_error))
                 )
             )
         "#
@@ -574,6 +591,7 @@ mod variant_error {
 
         assert_eq!(
             results
+                .foo()
                 .variant_error(&mut store, 0.0)
                 .expect("no trap")
                 .expect("no error returned"),
@@ -581,19 +599,24 @@ mod variant_error {
         );
 
         let e = results
+            .foo()
             .variant_error(&mut store, 1.0)
             .expect("no trap")
             .err()
             .expect("error returned");
         assert!(matches!(
             e,
-            variant_error::E3::E2(variant_error::E2 {
+            variant_error::foo::E3::E2(variant_error::foo::E2 {
                 line: 420,
                 col: 1312
             })
         ));
 
-        let e = results.variant_error(&mut store, 2.0).err().expect("trap");
+        let e = results
+            .foo()
+            .variant_error(&mut store, 2.0)
+            .err()
+            .expect("trap");
         assert_eq!(
             format!("{}", e.source().expect("trap message is stored in source")),
             "variant_error: trap"

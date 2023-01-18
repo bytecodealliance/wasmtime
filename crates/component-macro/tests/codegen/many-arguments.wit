@@ -44,8 +44,7 @@ interface manyarg {
   big-argument: func(x: big-struct)
 }
 
-world the-world {
-  import imports: manyarg
-  export exports: manyarg
-  default export manyarg
+default world the-world {
+  import imports: self.manyarg
+  export exports: self.manyarg
 }

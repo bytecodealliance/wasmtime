@@ -191,6 +191,9 @@ enum LocalInitializer<'data> {
     AliasComponentExport(ComponentInstanceIndex, &'data str),
     AliasModule(ClosedOverModule),
     AliasComponent(ClosedOverComponent),
+
+    // export section
+    Export(ComponentItem),
 }
 
 /// The "closure environment" of components themselves.
@@ -615,6 +618,9 @@ impl<'a, 'data> Translator<'a, 'data> {
                     let item = self.kind_to_item(export.kind, export.index);
                     let prev = self.result.exports.insert(export.name, item);
                     assert!(prev.is_none());
+                    self.result
+                        .initializers
+                        .push(LocalInitializer::Export(item));
                 }
             }
 

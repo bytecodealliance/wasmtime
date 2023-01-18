@@ -47,8 +47,7 @@ interface flegs {
   roundtrip-flag64: func(x: flag64) -> flag64
 }
 
-world the-flags {
-  import import-flags: flegs
-  export export-flags: flegs
-  default export flegs
+default world the-flags {
+  import import-flags: self.flegs
+  export export-flags: self.flegs
 }
