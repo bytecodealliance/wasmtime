@@ -450,6 +450,12 @@ criteria = "safe-to-deploy"
 version = "0.36.4"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[audits.rustix]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.36.7"
+notes = "The Bytecode Alliance is the author of this crate."
+
 [[audits.sha2]]
 who = "Benjamin Bouvier <public@benj.me>"
 criteria = "safe-to-deploy"
