@@ -19,7 +19,7 @@ Running `winch-tools test` will run all integration tests in the
 passed directly to `cargo test -p winch-filetests`. This will allow you to
 configure the tests to run based on your requirements. All tests in the
 `winch-filetests` crate get named in the following convention:
-`winch_filetests_${filename}`. This makes it possible to filter if you don't
+`winch_filetests_${filepath}`. This makes it possible to filter if you don't
 want to run the entire suite.
 
 If the output of Winch changes for a test in a run due to code updates, the test
@@ -40,6 +40,9 @@ in the following format:
   )
 )
 ```
+
+It is encouraged to use folders to organize tests. For example, tests targeting
+the x86_64 architecture can be placed in the `winch/filetests/filetests/x64`.
 
 The first block of comments are a TOML compatible configuration passed to Winch
 during compilation with a `!` at the start of each line. The body of the file

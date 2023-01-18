@@ -3971,6 +3971,7 @@ dependencies = [
 name = "winch-test-macros"
 version = "0.0.0"
 dependencies = [
+ "glob",
  "proc-macro2",
  "quote",
  "syn",
@@ -3984,6 +3985,7 @@ dependencies = [
  "capstone",
  "clap 3.2.8",
  "cranelift-codegen",
+ "glob",
  "serde",
  "similar",
  "target-lexicon",

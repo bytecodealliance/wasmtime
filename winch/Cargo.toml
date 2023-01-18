@@ -26,6 +26,7 @@ capstone = { workspace = true }
 similar = { workspace = true }
 toml = { workspace = true }
 serde = { workspace = true }
+glob = { workspace = true }
 
 [features]
 default = ["all-arch"]

@@ -127,7 +127,7 @@ mod test {
             return;
         }
 
-        if expected != actual {
+        if expected.trim() != actual.trim() {
             eprintln!(
                 "\n{}",
                 TextDiff::from_lines(expected, actual)

@@ -9,4 +9,4 @@
 ;;    1:	 4889e5               	mov	rbp, rsp
 ;;    4:	 48c7c02a000000       	mov	rax, 0x2a
 ;;    b:	 5d                   	pop	rbp
-;;    c:	 c3                   	ret	
+;;    c:	 c3                   	ret
