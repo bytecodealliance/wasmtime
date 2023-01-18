@@ -90,7 +90,15 @@ impl CompileCommand {
         // bytes with the current component model proposal.
         #[cfg(feature = "component-model")]
         {
-            if input.starts_with(b"\0asm\x0a\0\x01\0") {
+            if let Ok(wasmparser::Chunk::Parsed {
+                payload:
+                    wasmparser::Payload::Version {
+                        encoding: wasmparser::Encoding::Component,
+                        ..
+                    },
+                ..
+            }) = wasmparser::Parser::new(0).parse(&input, true)
+            {
                 fs::write(output, engine.precompile_component(&input)?)?;
                 return Ok(());
             }
