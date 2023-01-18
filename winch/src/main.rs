@@ -5,13 +5,16 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use cranelift_codegen::settings;
 use std::{fs, path::PathBuf, str::FromStr};
 use target_lexicon::Triple;
 use wasmtime_environ::{
     wasmparser::{types::Types, Parser as WasmParser, Validator},
     DefinedFuncIndex, FunctionBodyData, Module, ModuleEnvironment, Tunables,
 };
-use winch_codegen::isa::{self, TargetIsa};
+use winch_codegen::{lookup, TargetIsa};
+
+mod disasm;
 
 #[derive(Parser, Debug)]
 struct Options {
@@ -29,7 +32,9 @@ fn main() -> Result<()> {
         .with_context(|| format!("Failed to read input file {}", opt.input.display()))?;
     let bytes = wat::parse_bytes(&bytes)?;
     let triple = Triple::from_str(&opt.target)?;
-    let isa = isa::lookup(triple)?;
+    let shared_flags = settings::Flags::new(settings::builder());
+    let isa_builder = lookup(triple)?;
+    let isa = isa_builder.build(shared_flags)?;
     let mut validator = Validator::new();
     let parser = WasmParser::new(0);
     let mut types = Default::default();
@@ -65,9 +70,8 @@ fn compile(
     let buffer = isa
         .compile_function(&sig, &body, validator)
         .expect("Couldn't compile function");
-    for i in buffer {
-        println!("{}", i);
-    }
+
+    disasm::print(buffer.data(), isa)?;
 
     Ok(())
 }

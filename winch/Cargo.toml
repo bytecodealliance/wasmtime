@@ -20,6 +20,8 @@ anyhow = { workspace = true }
 wasmparser = { workspace = true }
 clap = { workspace = true }
 wat = { workspace = true }
+cranelift-codegen = { workspace = true }
+capstone = { workspace = true }
 
 [features]
 default = ["all-arch"]

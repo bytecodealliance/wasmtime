@@ -1,11 +1,12 @@
 use crate::abi::align_to;
-use crate::abi::{addressing_mode::Address, local::LocalSlot};
+use crate::abi::{Address, LocalSlot};
 use crate::isa::reg::Reg;
 use crate::regalloc::RegAlloc;
+use cranelift_codegen::{Final, MachBufferFinalized};
 use std::ops::Range;
 
 /// Operand size, in bits.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub(crate) enum OperandSize {
     /// 32 bits.
     S32,
@@ -89,8 +90,7 @@ pub(crate) trait MacroAssembler {
     fn push(&mut self, src: Reg) -> u32;
 
     /// Finalize the assembly and return the result.
-    // NOTE Interim, debug approach
-    fn finalize(&mut self) -> &[String];
+    fn finalize(self) -> MachBufferFinalized<Final>;
 
     /// Zero a particular register.
     fn zero(&mut self, reg: Reg);

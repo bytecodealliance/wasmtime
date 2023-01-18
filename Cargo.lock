@@ -3783,6 +3783,7 @@ name = "wasmtime-winch"
 version = "6.0.0"
 dependencies = [
  "anyhow",
+ "cranelift-codegen",
  "object",
  "target-lexicon",
  "wasmtime-environ",
@@ -3951,7 +3952,9 @@ name = "winch-tools"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "capstone",
  "clap 3.2.8",
+ "cranelift-codegen",
  "target-lexicon",
  "wasmparser",
  "wasmtime-environ",

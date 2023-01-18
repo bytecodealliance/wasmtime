@@ -5,7 +5,7 @@ use wasmtime_environ::{
     CompileError, DefinedFuncIndex, FuncIndex, FunctionBodyData, FunctionLoc, ModuleTranslation,
     ModuleTypes, PrimaryMap, Tunables, WasmFunctionInfo,
 };
-use winch_codegen::isa::TargetIsa;
+use winch_codegen::TargetIsa;
 
 pub(crate) struct Compiler {
     isa: Box<dyn TargetIsa>,
