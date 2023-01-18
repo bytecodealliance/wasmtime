@@ -35,6 +35,18 @@ fn main() {
     let status = cmd.status().unwrap();
     assert!(status.success());
 
+    let mut cmd = Command::new("cargo");
+    cmd.arg("build")
+        .current_dir("..")
+        .arg("--target=wasm32-wasi")
+        .arg("--package=wasi-tests")
+        .arg("--package=test-programs")
+        .env("CARGO_TARGET_DIR", &out_dir)
+        .env("CARGO_PROFILE_DEV_DEBUG", "1")
+        .env_remove("CARGO_ENCODED_RUSTFLAGS");
+    let status = cmd.status().unwrap();
+    assert!(status.success());
+
     for file in out_dir.join("wasm32-wasi/debug").read_dir().unwrap() {
         let file = file.unwrap().path();
         if file.extension().and_then(|s| s.to_str()) != Some("wasm") {
