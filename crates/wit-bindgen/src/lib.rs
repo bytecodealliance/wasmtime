@@ -397,6 +397,12 @@ impl Wasmtime {
             }
             self.src.push_str(&name);
         }
+        let maybe_send = if self.opts.async_ {
+            " + Send, T: Send"
+        } else {
+            ""
+        };
+        self.src.push_str(maybe_send);
         self.src.push_str(",\n{\n");
         for name in interfaces.iter() {
             uwriteln!(self.src, "{name}::add_to_linker(linker, get)?;");
@@ -416,7 +422,7 @@ impl Wasmtime {
                     linker: &mut wasmtime::component::Linker<T>,
                     get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
                 ) -> anyhow::Result<()>
-                    where U: {world_trait}
+                    where U: {world_trait}{maybe_send}
                 {{
                     let mut linker = linker.root();
             ",

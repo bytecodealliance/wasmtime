@@ -4,18 +4,20 @@ macro_rules! gentest {
             mod normal {
                 wasmtime::component::bindgen!($name in $path);
             }
-            // mod async_ {
-            //     wasmtime::component::bindgen!({
-            //         path: $path,
-            //         async: true,
-            //     });
-            // }
-            // mod tracing {
-            //     wasmtime::component::bindgen!({
-            //         path: $path,
-            //         tracing: true,
-            //     });
-            // }
+            mod async_ {
+                wasmtime::component::bindgen!({
+                    world: $name,
+                    path: $path,
+                    async: true,
+                });
+            }
+            mod tracing {
+                wasmtime::component::bindgen!({
+                    world: $name,
+                    path: $path,
+                    tracing: true,
+                });
+            }
         }
         // ...
     };
