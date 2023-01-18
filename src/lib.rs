@@ -1474,8 +1474,10 @@ pub unsafe extern "C" fn poll_oneoff(
             )
     );
 
+    // Store the future handles at the beginning, and the bool results at the
+    // end, so that we don't clobber the bool results when writting the events.
     let futures = out as *mut c_void as *mut WasiFuture;
-    let results = futures.add(nsubscriptions) as *mut c_void as *mut u8;
+    let results = out.add(nsubscriptions).cast::<u8>().sub(nsubscriptions);
 
     // Indefinite sleeping is not supported in preview1.
     if nsubscriptions == 0 {
