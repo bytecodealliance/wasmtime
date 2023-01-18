@@ -294,6 +294,11 @@ impl<'a> Arbitrary<'a> for Config {
             module_config: u.arbitrary()?,
         };
 
+        config
+            .wasmtime
+            .codegen
+            .maybe_disable_more_features(&config.module_config, u)?;
+
         // If using the pooling allocator, constrain the memory and module configurations
         // to the module limits.
         if let InstanceAllocationStrategy::Pooling(pooling) = &mut config.wasmtime.strategy {

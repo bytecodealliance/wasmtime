@@ -15,6 +15,8 @@
 
 use crate::{CompiledFunction, RelocationTarget};
 use anyhow::Result;
+use cranelift_codegen::binemit::Reloc;
+use cranelift_codegen::ir::LibCall;
 use cranelift_codegen::isa::{
     unwind::{systemv, UnwindInfo},
     TargetIsa,
@@ -24,6 +26,7 @@ use gimli::write::{Address, EhFrame, EndianVec, FrameTable, Writer};
 use gimli::RunTimeEndian;
 use object::write::{Object, SectionId, StandardSegment, Symbol, SymbolId, SymbolSection};
 use object::{Architecture, SectionKind, SymbolFlags, SymbolKind, SymbolScope};
+use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::ops::Range;
 use wasmtime_environ::FuncIndex;
@@ -52,6 +55,13 @@ pub struct ModuleTextBuilder<'a> {
     /// In-progress text section that we're using cranelift's `MachBuffer` to
     /// build to resolve relocations (calls) between functions.
     text: Box<dyn TextSectionBuilder>,
+
+    /// Symbols defined in the object for libcalls that relocations are applied
+    /// against.
+    ///
+    /// Note that this isn't typically used. It's only used for SSE-disabled
+    /// builds without SIMD on x86_64 right now.
+    libcall_symbols: HashMap<LibCall, SymbolId>,
 }
 
 impl<'a> ModuleTextBuilder<'a> {
@@ -76,6 +86,7 @@ impl<'a> ModuleTextBuilder<'a> {
             text_section,
             unwind_info: Default::default(),
             text: isa.text_section_builder(num_funcs),
+            libcall_symbols: HashMap::default(),
         }
     }
 
@@ -146,13 +157,49 @@ impl<'a> ModuleTextBuilder<'a> {
                     );
                 }
 
-                // At this time it's not expected that any libcall relocations
-                // are generated. Ideally we don't want relocations against
-                // libcalls anyway as libcalls should go through indirect
-                // `VMContext` tables to avoid needing to apply relocations at
-                // module-load time as well.
+                // Relocations against libcalls are not common at this time and
+                // are only used in non-default configurations that disable wasm
+                // SIMD, disable SSE features, and for wasm modules that still
+                // use floating point operations.
+                //
+                // Currently these relocations are all expected to be absolute
+                // 8-byte relocations so that's asserted here and then encoded
+                // directly into the object as a normal object relocation. This
+                // is processed at module load time to resolve the relocations.
                 RelocationTarget::LibCall(call) => {
-                    unimplemented!("cannot generate relocation against libcall {call:?}");
+                    let symbol = *self.libcall_symbols.entry(call).or_insert_with(|| {
+                        self.obj.add_symbol(Symbol {
+                            name: libcall_name(call).as_bytes().to_vec(),
+                            value: 0,
+                            size: 0,
+                            kind: SymbolKind::Text,
+                            scope: SymbolScope::Linkage,
+                            weak: false,
+                            section: SymbolSection::Undefined,
+                            flags: SymbolFlags::None,
+                        })
+                    });
+                    let (encoding, kind, size) = match r.reloc {
+                        Reloc::Abs8 => (
+                            object::RelocationEncoding::Generic,
+                            object::RelocationKind::Absolute,
+                            8,
+                        ),
+                        other => unimplemented!("unimplemented relocation kind {other:?}"),
+                    };
+                    self.obj
+                        .add_relocation(
+                            self.text_section,
+                            object::write::Relocation {
+                                symbol,
+                                size,
+                                kind,
+                                encoding,
+                                offset: off + u64::from(r.offset),
+                                addend: r.addend,
+                            },
+                        )
+                        .unwrap();
                 }
             };
         }
@@ -485,4 +532,20 @@ impl<'a> UnwindInfoBuilder<'a> {
             }
         }
     }
+}
+
+fn libcall_name(call: LibCall) -> &'static str {
+    use wasmtime_environ::obj::LibCall as LC;
+    let other = match call {
+        LibCall::FloorF32 => LC::FloorF32,
+        LibCall::FloorF64 => LC::FloorF64,
+        LibCall::NearestF32 => LC::NearestF32,
+        LibCall::NearestF64 => LC::NearestF64,
+        LibCall::CeilF32 => LC::CeilF32,
+        LibCall::CeilF64 => LC::CeilF64,
+        LibCall::TruncF32 => LC::TruncF32,
+        LibCall::TruncF64 => LC::TruncF64,
+        _ => panic!("unknown libcall to give a name to: {call:?}"),
+    };
+    other.symbol()
 }

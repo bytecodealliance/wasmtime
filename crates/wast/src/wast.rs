@@ -363,7 +363,7 @@ impl<T> WastContext<T> {
             let sp = directive.span();
             if log::log_enabled!(log::Level::Debug) {
                 let (line, col) = sp.linecol_in(wast);
-                log::debug!("failed directive on {}:{}:{}", filename, line + 1, col);
+                log::debug!("running directive on {}:{}:{}", filename, line + 1, col);
             }
             self.run_directive(directive)
                 .map_err(|e| match e.downcast() {
