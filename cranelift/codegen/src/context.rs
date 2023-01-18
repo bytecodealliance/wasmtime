@@ -185,18 +185,20 @@ impl Context {
         self.compute_domtree();
         self.eliminate_unreachable_code(isa)?;
 
-        if isa.flags().use_egraphs() || opt_level != OptLevel::None {
+        if opt_level != OptLevel::None {
             self.dce(isa)?;
         }
 
         self.remove_constant_phis(isa)?;
 
-        if isa.flags().use_egraphs() {
-            self.egraph_pass()?;
-        } else if opt_level != OptLevel::None && isa.flags().enable_alias_analysis() {
-            for _ in 0..2 {
-                self.replace_redundant_loads()?;
-                self.simple_gvn(isa)?;
+        if opt_level != OptLevel::None {
+            if isa.flags().use_egraphs() {
+                self.egraph_pass()?;
+            } else if isa.flags().enable_alias_analysis() {
+                for _ in 0..2 {
+                    self.replace_redundant_loads()?;
+                    self.simple_gvn(isa)?;
+                }
             }
         }
 
