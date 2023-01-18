@@ -1552,13 +1552,35 @@ pub unsafe extern "C" fn poll_oneoff(
                     }
                 }
 
-                EVENTTYPE_FD_READ => wasi_poll::subscribe_read(
-                    state.get_read_stream(subscription.u.u.fd_read.file_descriptor)?,
-                ),
+                EVENTTYPE_FD_READ => {
+                    match state.get_read_stream(subscription.u.u.fd_read.file_descriptor) {
+                        Ok(stream) => wasi_poll::subscribe_read(stream),
+                        // If the file descriptor isn't a stream, request a
+                        // future which completes immediately so that it'll
+                        // immediately fail.
+                        Err(ERRNO_BADF) => wasi_poll::subscribe_monotonic_clock(
+                            state.default_monotonic_clock(),
+                            0,
+                            false,
+                        ),
+                        Err(e) => return Err(e),
+                    }
+                }
 
-                EVENTTYPE_FD_WRITE => wasi_poll::subscribe_write(
-                    state.get_write_stream(subscription.u.u.fd_write.file_descriptor)?,
-                ),
+                EVENTTYPE_FD_WRITE => {
+                    match state.get_write_stream(subscription.u.u.fd_write.file_descriptor) {
+                        Ok(stream) => wasi_poll::subscribe_write(stream),
+                        // If the file descriptor isn't a stream, request a
+                        // future which completes immediately so that it'll
+                        // immediately fail.
+                        Err(ERRNO_BADF) => wasi_poll::subscribe_monotonic_clock(
+                            state.default_monotonic_clock(),
+                            0,
+                            false,
+                        ),
+                        Err(e) => return Err(e),
+                    }
+                }
 
                 _ => return Err(ERRNO_INVAL),
             });
