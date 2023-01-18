@@ -266,6 +266,7 @@ enum ComponentItemType {
     Func(TypeFuncIndex),
     Component(ComponentType),
     Instance(ComponentInstanceType),
+    Type(TypeDef),
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -621,6 +622,9 @@ impl<'a, 'data> Translator<'a, 'data> {
                     self.result
                         .initializers
                         .push(LocalInitializer::Export(item));
+                    if let ComponentItem::Type(ty) = item {
+                        self.types.push_component_typedef(ty);
+                    }
                 }
             }
 
@@ -775,7 +779,8 @@ impl<'a, 'data> Translator<'a, 'data> {
                 ComponentItem::ComponentInstance(i) => Some(ComponentItemType::Instance(
                     self.result.component_instances[i],
                 )),
-                ComponentItem::Module(_) | ComponentItem::Type(_) => None,
+                ComponentItem::Type(ty) => Some(ComponentItemType::Type(ty)),
+                ComponentItem::Module(_) => None,
             };
             map.insert(export.name, idx);
             if let Some(ty) = ty {
@@ -848,6 +853,9 @@ impl<'a, 'data> Translator<'a, 'data> {
             ComponentInstanceType::Index(ty) => {
                 let (_url, ty) = &self.types[ty].exports[name];
                 self.result.push_typedef(*ty);
+                if let TypeDef::Interface(_) = ty {
+                    self.types.push_component_typedef(*ty);
+                }
             }
 
             // An imported component was instantiated so the type of the aliased
@@ -856,6 +864,9 @@ impl<'a, 'data> Translator<'a, 'data> {
             ComponentInstanceType::InstantiatedIndex(ty) => {
                 let (_, ty) = self.types[ty].exports[name];
                 self.result.push_typedef(ty);
+                if let TypeDef::Interface(_) = ty {
+                    self.types.push_component_typedef(ty);
+                }
             }
 
             // A static nested component was instantiated which means that the
@@ -901,6 +912,9 @@ impl<'a, 'data> Translator<'a, 'data> {
                     }
                     ComponentItemType::Instance(ty) => {
                         self.result.component_instances.push(ty);
+                    }
+                    ComponentItemType::Type(ty) => {
+                        self.types.push_component_typedef(ty);
                     }
                 }
             }

@@ -683,9 +683,10 @@ impl<'a> Inliner<'a> {
                             TypeDef::Component(_) => {
                                 unimplemented!("aliasing component export of component import")
                             }
-                            TypeDef::Interface(_) => {
-                                unimplemented!("aliasing type export of component import")
-                            }
+
+                            // This is handled during the initial translation
+                            // pass and doesn't need further handling here.
+                            TypeDef::Interface(_) => {}
 
                             // not possible with valid components
                             TypeDef::CoreFunc(_) => unreachable!(),
