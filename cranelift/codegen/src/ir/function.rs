@@ -279,9 +279,6 @@ impl FunctionStencil {
 
     /// Rewrite the branch destination to `new_dest` if the destination matches `old_dest`.
     /// Does nothing if called with a non-jump or non-branch instruction.
-    ///
-    /// Unlike [change_branch_destination](FunctionStencil::change_branch_destination), this method
-    /// rewrite the destinations of multi-destination branches like `br_table`.
     pub fn rewrite_branch_destination(&mut self, inst: Inst, old_dest: Block, new_dest: Block) {
         match self.dfg.analyze_branch(inst) {
             BranchInfo::SingleDest(dest) => {
