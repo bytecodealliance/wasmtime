@@ -57,7 +57,7 @@ impl WasiPoll for WasiCtx {
                         when,
                         absolute,
                         Userdata::from(index as u64),
-                    )?;
+                    );
                 }
             }
         }

@@ -46,7 +46,7 @@ impl<'a> Poll<'a> {
         deadline: u64,
         absolute: bool,
         ud: Userdata,
-    ) -> Result<(), Error> {
+    ) {
         let deadline = if absolute {
             // Convert an absolute deadline to a relative one.
             deadline.saturating_sub(clock.now())
@@ -57,7 +57,6 @@ impl<'a> Poll<'a> {
             Subscription::MonotonicClock(MonotonicClockSubscription { clock, deadline }),
             ud,
         ));
-        Ok(())
     }
     pub fn subscribe_read(&mut self, stream: &'a dyn WasiStream, ud: Userdata) {
         self.subs.push((
