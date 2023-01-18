@@ -289,11 +289,10 @@ where
                 ..
             } = inst
             {
-                let condition = state
-                    .get_value(arg)
-                    .ok_or(StepError::UnknownValue(arg))?
-                    .into_bool()?;
-                let pool = &state.get_current_function().dfg.value_lists;
+                let arg = state.get_value(arg).ok_or(StepError::UnknownValue(arg))?;
+
+                let condition = arg.convert(ValueConversionKind::ToBoolean)?.into_bool()?;
+
                 if condition {
                     continue_at(block_then)?
                 } else {

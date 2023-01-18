@@ -4,7 +4,6 @@ use crate::dominator_tree::DominatorTree;
 use crate::fx::FxHashMap;
 use crate::fx::FxHashSet;
 use crate::ir;
-use crate::ir::instructions::BranchInfo;
 use crate::ir::Function;
 use crate::ir::{Block, BlockCall, Inst, Value};
 use crate::timing;
@@ -112,6 +111,9 @@ impl AbstractValue {
 struct OutEdge<'a> {
     /// An instruction that transfers control.
     inst: Inst,
+    /// The index into branch_destinations for this instruction that corresponds
+    /// to this edge.
+    branch_index: u8,
     /// The block that control is transferred to.
     block: Block,
     /// The arguments to that block.
@@ -126,7 +128,13 @@ impl<'a> OutEdge<'a> {
     /// Returns `None` if this is an edge without any block arguments, which
     /// means we can ignore it for this analysis's purposes.
     #[inline]
-    fn new(bump: &'a Bump, dfg: &ir::DataFlowGraph, inst: Inst, block: BlockCall) -> Option<Self> {
+    fn new(
+        bump: &'a Bump,
+        dfg: &ir::DataFlowGraph,
+        inst: Inst,
+        branch_index: usize,
+        block: BlockCall,
+    ) -> Option<Self> {
         let inst_var_args = block.args_slice(&dfg.value_lists);
 
         // Skip edges without params.
@@ -136,6 +144,7 @@ impl<'a> OutEdge<'a> {
 
         Some(OutEdge {
             inst,
+            branch_index: branch_index as u8,
             block: block.block(&dfg.value_lists),
             args: bump.alloc_slice_fill_iter(
                 inst_var_args
@@ -231,12 +240,8 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
         let mut summary = BlockSummary::new(&bump, formals);
 
         for inst in func.layout.block_insts(b) {
-            let idetails = &func.dfg.insts[inst];
-            // Note that multi-dest transfers (i.e., branch tables) don't
-            // carry parameters in our IR, so we only have to care about
-            // `SingleDest` here.
-            if let BranchInfo::SingleDest(dest) = idetails.analyze_branch() {
-                if let Some(edge) = OutEdge::new(&bump, &func.dfg, inst, dest) {
+            for (ix, dest) in func.dfg.insts[inst].branch_destination().iter().enumerate() {
+                if let Some(edge) = OutEdge::new(&bump, &func.dfg, inst, ix, *dest) {
                     summary.dests.push(edge);
                 }
             }
@@ -378,27 +383,28 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
             }
 
             let dfg = &mut func.dfg;
-            for block in dfg.insts[edge.inst].branch_destination_mut() {
-                old_actuals.extend(block.args_slice(&dfg.value_lists));
+            let block =
+                &mut dfg.insts[edge.inst].branch_destination_mut()[edge.branch_index as usize];
 
-                // Check that the numbers of arguments make sense.
-                let formals = &summaries[edge.block].formals;
-                assert_eq!(formals.len(), old_actuals.len());
+            old_actuals.extend(block.args_slice(&dfg.value_lists));
 
-                // Filter out redundant block arguments.
-                let mut formals = formals.iter();
-                old_actuals.retain(|_| {
-                    let formal_i = formals.next().unwrap();
-                    !state.get(*formal_i).is_one()
-                });
+            // Check that the numbers of arguments make sense.
+            let formals = &summaries[edge.block].formals;
+            assert_eq!(formals.len(), old_actuals.len());
 
-                // Replace the block with a new one that only includes the non-redundant arguments.
-                // This leaks the value list from the old block,
-                // https://github.com/bytecodealliance/wasmtime/issues/5451 for more information.
-                let destination = block.block(&dfg.value_lists);
-                *block = BlockCall::new(destination, &old_actuals, &mut dfg.value_lists);
-                old_actuals.clear();
-            }
+            // Filter out redundant block arguments.
+            let mut formals = formals.iter();
+            old_actuals.retain(|_| {
+                let formal_i = formals.next().unwrap();
+                !state.get(*formal_i).is_one()
+            });
+
+            // Replace the block with a new one that only includes the non-redundant arguments.
+            // This leaks the value list from the old block,
+            // https://github.com/bytecodealliance/wasmtime/issues/5451 for more information.
+            let destination = block.block(&dfg.value_lists);
+            *block = BlockCall::new(destination, &old_actuals, &mut dfg.value_lists);
+            old_actuals.clear();
         }
     }
 
