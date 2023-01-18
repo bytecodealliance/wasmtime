@@ -1,6 +1,6 @@
 test interpret
 test run
-set opt_level=speed_and_size
+set opt_level=speed
 set use_egraphs=true
 target aarch64
 
