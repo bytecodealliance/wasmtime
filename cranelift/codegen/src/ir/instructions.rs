@@ -285,10 +285,9 @@ impl InstructionData {
         }
     }
 
-    /// Get the single destination of this branch instruction, if it is a single destination
-    /// branch or jump.
+    /// Get the destinations of this instruction, if it's a branch.
     ///
-    /// Multi-destination branches like `br_table` return `None`.
+    /// `br_table` returns the empty slice.
     pub fn branch_destination(&self) -> &[BlockCall] {
         match self {
             Self::Jump {
@@ -306,10 +305,9 @@ impl InstructionData {
         }
     }
 
-    /// Get a mutable reference to the single destination of this branch instruction, if it is a
-    /// single destination branch or jump.
+    /// Get a mutable slice of the destinations of this instruction, if it's a branch.
     ///
-    /// Multi-destination branches like `br_table` return `None`.
+    /// `br_table` returns the empty slice.
     pub fn branch_destination_mut(&mut self) -> &mut [BlockCall] {
         match self {
             Self::Jump {
