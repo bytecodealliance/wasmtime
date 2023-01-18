@@ -495,9 +495,6 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         _mode: wasi_filesystem::Mode,
     ) -> HostResult<wasi_filesystem::Descriptor, wasi_filesystem::Errno> {
         let table = self.table_mut();
-        if !table.is::<Box<dyn WasiDir>>(fd) {
-            return Err(wasi_filesystem::Errno::Notdir.into());
-        }
         let dir = table.get_dir(fd).map_err(convert)?;
 
         let symlink_follow = contains(at_flags, wasi_filesystem::AtFlags::SYMLINK_FOLLOW);
