@@ -107,14 +107,27 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
         }
 
         if data.opcode().is_branch() {
-            let dests = data.branch_destination();
-            if dests.is_empty() {
-                // branch_destination() doesn't detect jump_tables
-                // If jump table we declare all entries successor
-                if let InstructionData::BranchTable {
-                    table, destination, ..
-                } = data
-                {
+            match self.builder.func.dfg.analyze_branch(inst) {
+                ir::instructions::BranchInfo::NotABranch => (),
+
+                ir::instructions::BranchInfo::SingleDest(dest) => {
+                    // If the user has supplied jump arguments we must adapt the arguments of
+                    // the destination block
+                    let block = dest.block(&self.builder.func.dfg.value_lists);
+                    self.builder.declare_successor(block, inst);
+                }
+
+                ir::instructions::BranchInfo::Conditional(branch_then, branch_else) => {
+                    let block_then = branch_then.block(&self.builder.func.dfg.value_lists);
+                    let block_else = branch_else.block(&self.builder.func.dfg.value_lists);
+
+                    self.builder.declare_successor(block_then, inst);
+                    if block_then != block_else {
+                        self.builder.declare_successor(block_else, inst);
+                    }
+                }
+
+                ir::instructions::BranchInfo::Table(table, destination) => {
                     // Unlike all other jumps/branches, jump tables are
                     // capable of having the same successor appear
                     // multiple times, so we must deduplicate.
@@ -136,15 +149,6 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
                             .declare_block_predecessor(*dest_block, inst);
                     }
                     self.builder.declare_successor(destination, inst);
-                }
-            } else {
-                for dest_block in dests {
-                    // If the user has supplied jump arguments we must adapt the arguments of
-                    // the destination block
-                    self.builder.declare_successor(
-                        dest_block.block(&self.builder.func.dfg.value_lists),
-                        inst,
-                    );
                 }
             }
         }

@@ -591,32 +591,13 @@ impl SSABuilder {
                 }
                 None
             }
-            BranchInfo::Conditional(block_then, block_else) => {
+            BranchInfo::Conditional(_, _) => {
                 let dfg = &mut func.dfg;
-                if dest_block == block_then.block(&dfg.value_lists) {
-                    if let InstructionData::Brif {
-                        blocks: [block_then, _],
-                        ..
-                    } = &mut dfg.insts[branch]
-                    {
-                        block_then.append_argument(val, &mut dfg.value_lists);
-                    } else {
-                        unreachable!();
+                for block in dfg.insts[branch].branch_destination_mut() {
+                    if block.block(&dfg.value_lists) == dest_block {
+                        block.append_argument(val, &mut dfg.value_lists);
                     }
                 }
-
-                if dest_block == block_else.block(&dfg.value_lists) {
-                    if let InstructionData::Brif {
-                        blocks: [_, block_else],
-                        ..
-                    } = &mut dfg.insts[branch]
-                    {
-                        block_else.append_argument(val, &mut dfg.value_lists);
-                    } else {
-                        unreachable!();
-                    }
-                }
-
                 None
             }
             BranchInfo::Table(mut jt, _default_block) => {
