@@ -832,14 +832,13 @@ impl Config {
     /// Configures the Cranelift code generator to use its
     /// "egraph"-based mid-end optimizer.
     ///
-    /// This optimizer is intended to replace the compiler's more
-    /// traditional pipeline of optimization passes with a unified
-    /// code-rewriting system. It is not yet on by default, but it is
-    /// intended to become the default in a future version. It may
-    /// result in faster code, at the cost of slightly more
-    /// compilation-time work.
+    /// This optimizer has replaced the compiler's more traditional
+    /// pipeline of optimization passes with a unified code-rewriting
+    /// system. It is on by default, but the traditional optimization
+    /// pass structure is still available for now (it is deprecrated and
+    /// will be removed in a future version).
     ///
-    /// The default value for this is `false`.
+    /// The default value for this is `true`.
     #[cfg(compiler)]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn cranelift_use_egraphs(&mut self, enable: bool) -> &mut Self {

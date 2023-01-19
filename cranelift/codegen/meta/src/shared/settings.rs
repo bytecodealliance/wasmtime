@@ -58,10 +58,12 @@ pub(crate) fn define() -> SettingGroup {
         "Enable egraph-based optimization.",
         r#"
             This enables an optimization phase that converts CLIF to an egraph (equivalence graph)
-            representation, performs various rewrites, and then converts it back. This can result in
-            better optimization, but is currently considered experimental.
+            representation, performs various rewrites, and then converts it back. This should result in
+            better optimization, but the traditional optimization pass structure is also still
+            available by setting this to `false`. The `false` setting will eventually be
+            deprecated and removed.
         "#,
-        false,
+        true,
     );
 
     settings.add_bool(

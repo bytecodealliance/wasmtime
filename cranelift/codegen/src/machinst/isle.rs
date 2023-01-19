@@ -16,7 +16,7 @@ pub use crate::machinst::{
     ABIArg, ABIArgSlot, InputSourceInst, Lower, LowerBackend, RealReg, Reg, RelocDistance, Sig,
     VCodeInst, Writable,
 };
-pub use crate::settings::TlsModel;
+pub use crate::settings::{OptLevel, TlsModel};
 
 pub type Unit = ();
 pub type ValueSlice = (ValueList, usize);
@@ -131,7 +131,9 @@ macro_rules! isle_lower_prelude_methods {
             // use. This lowers register pressure. (Only do this if we are
             // not using egraph-based compilation; the egraph framework
             // more efficiently rematerializes constants where needed.)
-            if !self.backend.flags().use_egraphs() {
+            if !(self.backend.flags().use_egraphs()
+                && self.backend.flags().opt_level() != OptLevel::None)
+            {
                 let inputs = self.lower_ctx.get_value_as_source_or_const(val);
                 if inputs.constant.is_some() {
                     let insn = match inputs.inst {
