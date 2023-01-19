@@ -1102,6 +1102,10 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
         impl #name {
             #constants
 
+            pub fn contains(&self, rhs: &Self) -> bool {
+                (self & rhs) == self
+            }
+
             pub fn as_array(&self) -> [u32; #count] {
                 #as_array
             }
