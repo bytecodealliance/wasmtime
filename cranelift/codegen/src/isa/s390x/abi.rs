@@ -275,7 +275,6 @@ impl ABIMachineSpec for S390xMachineDeps {
             } else if call_conv.extends_wasmtime() {
                 panic!("i128 args/return values not supported in the Wasmtime ABI");
             } else {
-                assert!(param.extension == ir::ArgumentExtension::None);
                 // We must pass this by implicit reference.
                 if args_or_rets == ArgsOrRets::Rets {
                     // For return values, just force them to memory.
