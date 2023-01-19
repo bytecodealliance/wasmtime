@@ -491,7 +491,9 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         } => {
             collector.reg_uses(x.regs());
             collector.reg_uses(y.regs());
-            collector.reg_defs(&dst[..]);
+            for d in dst.iter() {
+                collector.reg_early_def(d.clone());
+            }
         }
 
         &Inst::Csr { rd, rs, .. } => {
