@@ -502,6 +502,46 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
             )
         }
 
+        Architecture::S390x => {
+            exceptions!(
+                (Opcode::IaddCout),
+                (Opcode::Udiv, &[I128, I128]),
+                (Opcode::Sdiv, &[I128, I128]),
+                (Opcode::Urem, &[I128, I128]),
+                (Opcode::Srem, &[I128, I128]),
+                (Opcode::Smin),
+                (Opcode::Smax),
+                (Opcode::Umin),
+                (Opcode::Umax),
+                (Opcode::Band, &[F32, F32]),
+                (Opcode::Band, &[F64, F64]),
+                (Opcode::Bor, &[F32, F32]),
+                (Opcode::Bor, &[F64, F64]),
+                (Opcode::Bxor, &[F32, F32]),
+                (Opcode::Bxor, &[F64, F64]),
+                (Opcode::Bnot, &[F32, F32]),
+                (Opcode::Bnot, &[F64, F64]),
+                (Opcode::BandNot, &[F32, F32]),
+                (Opcode::BandNot, &[F64, F64]),
+                (Opcode::BorNot, &[F32, F32]),
+                (Opcode::BorNot, &[F64, F64]),
+                (Opcode::BxorNot, &[F32, F32]),
+                (Opcode::BxorNot, &[F64, F64]),
+                (Opcode::FcvtToUint, &[F32], &[I128]),
+                (Opcode::FcvtToUint, &[F64], &[I128]),
+                (Opcode::FcvtToUintSat, &[F32], &[I128]),
+                (Opcode::FcvtToUintSat, &[F64], &[I128]),
+                (Opcode::FcvtToSint, &[F32], &[I128]),
+                (Opcode::FcvtToSint, &[F64], &[I128]),
+                (Opcode::FcvtToSintSat, &[F32], &[I128]),
+                (Opcode::FcvtToSintSat, &[F64], &[I128]),
+                (Opcode::FcvtFromUint, &[I128], &[F32]),
+                (Opcode::FcvtFromUint, &[I128], &[F64]),
+                (Opcode::FcvtFromSint, &[I128], &[F32]),
+                (Opcode::FcvtFromSint, &[I128], &[F64]),
+            )
+        }
+
         Architecture::Riscv64(_) => {
             exceptions!(
                 // TODO

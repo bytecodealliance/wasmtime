@@ -2975,9 +2975,9 @@
 
 ;; Helper to compute the type of an implicitly extended argument/return value.
 (decl abi_ext_ty (ArgumentExtension Type) Type)
-(rule (abi_ext_ty (ArgumentExtension.None) ty) ty)
-(rule (abi_ext_ty (ArgumentExtension.Uext) _) $I64)
-(rule (abi_ext_ty (ArgumentExtension.Sext) _) $I64)
+(rule 0 (abi_ext_ty _ ty) ty)
+(rule 1 (abi_ext_ty (ArgumentExtension.Uext) (gpr32_ty _)) $I64)
+(rule 1 (abi_ext_ty (ArgumentExtension.Sext) (gpr32_ty _)) $I64)
 
 
 ;; Helpers for generating immediate values ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
