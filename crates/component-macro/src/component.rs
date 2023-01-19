@@ -1114,6 +1114,14 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
                 use std::ops::Not;
                 Self::default().not()
             }
+
+            pub fn contains(&self, other: Self) -> bool {
+                *self & other == other
+            }
+
+            pub fn intersects(&self, other: Self) -> bool {
+                *self & other != Self::empty()
+            }
         }
 
         impl std::cmp::PartialEq for #name {
