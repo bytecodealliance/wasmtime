@@ -4,7 +4,7 @@ use crate::bindings::{
     wasi_clocks, wasi_default_clocks, wasi_exit, wasi_filesystem, wasi_logging, wasi_poll,
     wasi_random, wasi_tcp,
 };
-use core::arch::wasm32::{self, unreachable};
+use core::arch::wasm32;
 use core::cell::{Cell, RefCell, UnsafeCell};
 use core::cmp::min;
 use core::ffi::c_void;
@@ -14,6 +14,9 @@ use core::ptr::{self, null_mut};
 use core::slice;
 use wasi::*;
 use wasi_poll::{WasiFuture, WasiStream};
+
+#[macro_use]
+mod macros;
 
 mod bindings {
     wit_bindgen_guest_rust::generate!({
@@ -40,7 +43,7 @@ pub unsafe extern "C" fn command(
     // `*.wit` metadata entirely but doing that ergonomically will likely
     // require some form of `use` to avoid duplicating lots of `*.wit` bits.
     if !cfg!(feature = "command") {
-        unreachable();
+        unreachable!("`command` called without the \"command\" feature");
     }
 
     State::with_mut(|state| {
@@ -50,7 +53,7 @@ pub unsafe extern "C" fn command(
         {
             let descriptors = state.descriptors_mut();
             if descriptors.len() < 3 {
-                unreachable();
+                unreachable!("insufficient memory for stdio descriptors");
             }
             descriptors[0] = Descriptor::Streams(Streams {
                 input: Cell::new(Some(stdin)),
@@ -92,26 +95,11 @@ pub unsafe extern "C" fn command(
     0
 }
 
-// We're avoiding static initializers, so replace the standard assert macros
-// with simpler implementations.
-macro_rules! assert {
-    ($cond:expr $(,)?) => {
-        if !$cond {
-            unreachable()
-        }
-    };
-}
-macro_rules! assert_eq {
-    ($left:expr, $right:expr $(,)?) => {
-        assert!($left == $right);
-    };
-}
-
 fn unwrap<T>(maybe: Option<T>) -> T {
     if let Some(value) = maybe {
         value
     } else {
-        unreachable()
+        unreachable!("unwrap failed")
     }
 }
 
@@ -119,7 +107,7 @@ fn unwrap_result<T, E>(result: Result<T, E>) -> T {
     if let Ok(value) = result {
         value
     } else {
-        unreachable()
+        unreachable!("unwrap result failed")
     }
 }
 
@@ -131,17 +119,17 @@ pub unsafe extern "C" fn cabi_import_realloc(
     new_size: usize,
 ) -> *mut u8 {
     if !old_ptr.is_null() || old_size != 0 {
-        unreachable();
+        unreachable!();
     }
     let mut ptr = null_mut::<u8>();
     State::with(|state| {
         ptr = state.buffer_ptr.replace(null_mut());
         if ptr.is_null() {
-            unreachable();
+            unreachable!();
         }
         let len = state.buffer_len.replace(0);
         if len < new_size {
-            unreachable();
+            unreachable!();
         }
         Ok(())
     });
@@ -167,7 +155,7 @@ pub unsafe extern "C" fn cabi_export_realloc(
     new_size: usize,
 ) -> *mut u8 {
     if !old_ptr.is_null() || old_size != 0 {
-        unreachable();
+        unreachable!();
     }
     let mut ret = null_mut::<u8>();
     State::with_mut(|state| {
@@ -180,11 +168,11 @@ pub unsafe extern "C" fn cabi_export_realloc(
         // "oom" as too much argument data tried to flow into the component.
         // Ideally this would have a better error message?
         if ptr + new_size > (*data).len() {
-            unreachable();
+            unreachable!("out of memory");
         }
         state.command_data_next = (ptr + new_size)
             .try_into()
-            .unwrap_or_else(|_| unreachable());
+            .unwrap_or_else(|_| unreachable!());
         ret = (*data).as_mut_ptr().add(ptr);
         Ok(())
     });
@@ -310,7 +298,7 @@ pub extern "C" fn clock_res_get(id: Clockid, resolution: &mut Timestamp) -> Errn
                     .and_then(|secs| secs.checked_mul(1_000_000_000))
                     .ok_or(ERRNO_OVERFLOW)?;
             }
-            _ => unreachable(),
+            _ => unreachable!(),
         }
         Ok(())
     })
@@ -336,7 +324,7 @@ pub unsafe extern "C" fn clock_time_get(
                     .and_then(|secs| secs.checked_mul(1_000_000_000))
                     .ok_or(ERRNO_OVERFLOW)?;
             }
-            _ => unreachable(),
+            _ => unreachable!(),
         }
         Ok(())
     })
@@ -371,7 +359,7 @@ pub unsafe extern "C" fn fd_advise(
 /// Note: This is similar to `posix_fallocate` in POSIX.
 #[no_mangle]
 pub unsafe extern "C" fn fd_allocate(fd: Fd, offset: Filesize, len: Filesize) -> Errno {
-    unreachable()
+    unreachable!("fd_allocate")
 }
 
 /// Close a file descriptor.
@@ -544,7 +532,7 @@ pub unsafe extern "C" fn fd_fdstat_set_rights(
     fs_rights_base: Rights,
     fs_rights_inheriting: Rights,
 ) -> Errno {
-    unreachable()
+    unreachable!()
 }
 
 /// Return the attributes of an open file.
@@ -1105,7 +1093,7 @@ pub unsafe extern "C" fn fd_write(
             Ok(())
         }
         Descriptor::StderrLog | Descriptor::StdoutLog => {
-            let context: [u8; 3] = [b'I', b'/', b'O'];
+            let context: [u8; 3] = byte_array::str!("I/O");
             wasi_logging::log(wasi_logging::Level::Info, &context, bytes);
             *nwritten = len;
             Ok(())
@@ -1274,7 +1262,7 @@ pub unsafe extern "C" fn path_open(
                 let recycle_desc = unwrap_result(state.get_mut(recycle_fd));
                 let next_closed = match recycle_desc {
                     Descriptor::Closed(next) => *next,
-                    _ => unreachable(),
+                    _ => unreachable!(),
                 };
                 *recycle_desc = desc;
                 state.closed = next_closed;
@@ -1588,7 +1576,7 @@ pub unsafe extern "C" fn poll_oneoff(
 
         let vec = wasi_poll::poll_oneoff(slice::from_raw_parts(futures.pointer, futures.length));
 
-        assert!(vec.len() == nsubscriptions);
+        assert_eq!(vec.len(), nsubscriptions);
         assert_eq!(vec.as_ptr(), results);
         forget(vec);
 
@@ -1636,7 +1624,7 @@ pub unsafe extern "C" fn poll_oneoff(
                                     flags = 0;
                                 }
                             },
-                            StreamType::Socket(_) => unreachable(), // TODO
+                            StreamType::Socket(_) => unreachable!(), // TODO
                             /*
                             StreamType::Socket(_) => match wasi_tcp::bytes_readable(todo!()) {
                                 Ok(result) => {
@@ -1666,7 +1654,7 @@ pub unsafe extern "C" fn poll_oneoff(
                                 flags = 0;
                             }
                         },
-                        _ => unreachable(),
+                        _ => unreachable!(),
                     }
                 }
                 2 => {
@@ -1679,7 +1667,7 @@ pub unsafe extern "C" fn poll_oneoff(
                                 nbytes = 1;
                                 flags = 0;
                             }
-                            StreamType::Socket(_) => unreachable(), // TODO
+                            StreamType::Socket(_) => unreachable!(), // TODO
                             /*
                             StreamType::Socket(_) => match wasi_tcp::bytes_writable(todo!()) {
                                 Ok(result) => {
@@ -1704,11 +1692,11 @@ pub unsafe extern "C" fn poll_oneoff(
                                 flags = 0;
                             }
                         },
-                        _ => unreachable(),
+                        _ => unreachable!(),
                     }
                 }
 
-                _ => unreachable(),
+                _ => unreachable!(),
             }
 
             *out.add(count) = Event {
@@ -1734,14 +1722,14 @@ pub unsafe extern "C" fn poll_oneoff(
 pub unsafe extern "C" fn proc_exit(rval: Exitcode) -> ! {
     let status = if rval == 0 { Ok(()) } else { Err(()) };
     wasi_exit::exit(status); // does not return
-    unreachable() // actually unreachable
+    unreachable!("host exit implementation didn't exit!") // actually unreachable
 }
 
 /// Send a signal to the process of the calling thread.
 /// Note: This is similar to `raise` in POSIX.
 #[no_mangle]
 pub unsafe extern "C" fn proc_raise(sig: Signal) -> Errno {
-    unreachable()
+    unreachable!()
 }
 
 /// Temporarily yield execution of the calling thread.
@@ -1788,7 +1776,7 @@ pub unsafe extern "C" fn sock_recv(
     ro_datalen: *mut Size,
     ro_flags: *mut Roflags,
 ) -> Errno {
-    unreachable()
+    unreachable!()
 }
 
 /// Send a message on a socket.
@@ -1802,14 +1790,14 @@ pub unsafe extern "C" fn sock_send(
     si_flags: Siflags,
     so_datalen: *mut Size,
 ) -> Errno {
-    unreachable()
+    unreachable!()
 }
 
 /// Shut down socket send and receive channels.
 /// Note: This is similar to `shutdown` in POSIX.
 #[no_mangle]
 pub unsafe extern "C" fn sock_shutdown(fd: Fd, how: Sdflags) -> Errno {
-    unreachable()
+    unreachable!()
 }
 
 fn at_flags_from_lookupflags(flags: Lookupflags) -> wasi_filesystem::AtFlags {
@@ -1953,7 +1941,7 @@ impl From<wasi_filesystem::DescriptorType> for wasi::Filetype {
             wasi_filesystem::DescriptorType::Fifo => FILETYPE_UNKNOWN,
             // TODO: Add a way to disginguish between FILETYPE_SOCKET_STREAM and
             // FILETYPE_SOCKET_DGRAM.
-            wasi_filesystem::DescriptorType::Socket => unreachable(),
+            wasi_filesystem::DescriptorType::Socket => unreachable!(),
             wasi_filesystem::DescriptorType::SymbolicLink => FILETYPE_SYMBOLIC_LINK,
             wasi_filesystem::DescriptorType::Unknown => FILETYPE_UNKNOWN,
         }
@@ -2060,7 +2048,7 @@ impl Drop for Descriptor {
                 }
                 match &stream.type_ {
                     StreamType::File(file) => wasi_filesystem::close(file.fd),
-                    StreamType::Socket(_) => unreachable(),
+                    StreamType::Socket(_) => unreachable!(),
                     StreamType::EmptyStdin | StreamType::Unknown => {}
                 }
             }
@@ -2230,7 +2218,7 @@ extern "C" {
 impl State {
     fn with(f: impl FnOnce(&State) -> Result<(), Errno>) -> Errno {
         let ptr = State::ptr();
-        let ptr = ptr.try_borrow().unwrap_or_else(|_| unreachable());
+        let ptr = ptr.try_borrow().unwrap_or_else(|_| unreachable!());
         assert_eq!(ptr.magic1, MAGIC);
         assert_eq!(ptr.magic2, MAGIC);
         let ret = f(&*ptr);
@@ -2242,7 +2230,7 @@ impl State {
 
     fn with_mut(f: impl FnOnce(&mut State) -> Result<(), Errno>) -> Errno {
         let ptr = State::ptr();
-        let mut ptr = ptr.try_borrow_mut().unwrap_or_else(|_| unreachable());
+        let mut ptr = ptr.try_borrow_mut().unwrap_or_else(|_| unreachable!());
         assert_eq!(ptr.magic1, MAGIC);
         assert_eq!(ptr.magic2, MAGIC);
         let ret = f(&mut *ptr);
@@ -2267,7 +2255,7 @@ impl State {
     fn new() -> &'static RefCell<State> {
         let grew = wasm32::memory_grow(0, 1);
         if grew == usize::MAX {
-            unreachable();
+            unreachable!();
         }
         let ret = (grew * PAGE_SIZE) as *mut RefCell<State>;
         let ret = unsafe {
@@ -2303,7 +2291,7 @@ impl State {
             &*ret
         };
         ret.try_borrow_mut()
-            .unwrap_or_else(|_| unreachable())
+            .unwrap_or_else(|_| unreachable!())
             .init();
         ret
     }
