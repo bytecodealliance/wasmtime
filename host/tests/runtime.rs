@@ -18,6 +18,14 @@ use wasmtime::{
 
 test_programs_macros::tests!();
 
+// FIXME: a bunch of these test cases are expected to fail, either by
+// returning an Err or by panicking. Rather than try to juggle the
+// intersection of catch_unwind and async, we use this boolean to
+// short-circuit a bunch of tests expected to blow up. Developers may change
+// this redefintion to `false` locally  to see if any of the failing tests
+// start passing as you add functionality.
+const EXPECT_FAIL: bool = true;
+
 async fn instantiate(path: &str) -> Result<(Store<WasiCtx>, Wasi)> {
     println!("{}", path);
 
@@ -459,7 +467,7 @@ async fn run_clock_time_get(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
 }
 
 async fn run_close_preopen(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }
@@ -467,7 +475,7 @@ async fn run_close_preopen(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
 }
 
 async fn run_dangling_fd(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL && cfg!(windows) {
         // TODO!
         return Ok(());
     }
@@ -475,7 +483,7 @@ async fn run_dangling_fd(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
 }
 
 async fn run_dangling_symlink(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }
@@ -483,7 +491,7 @@ async fn run_dangling_symlink(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
 }
 
 async fn run_directory_seek(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }
@@ -491,7 +499,7 @@ async fn run_directory_seek(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
 }
 
 async fn run_fd_advise(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }
@@ -499,7 +507,7 @@ async fn run_fd_advise(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
 }
 
 async fn run_fd_filestat_get(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }
@@ -507,7 +515,7 @@ async fn run_fd_filestat_get(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
 }
 
 async fn run_fd_filestat_set(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }
@@ -515,7 +523,7 @@ async fn run_fd_filestat_set(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
 }
 
 async fn run_fd_flags_set(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }
@@ -523,15 +531,11 @@ async fn run_fd_flags_set(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
 }
 
 async fn run_fd_readdir(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
-        // TODO!
-        return Ok(());
-    }
     run_with_temp_dir(store, wasi).await
 }
 
 async fn run_file_allocate(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }
@@ -539,15 +543,11 @@ async fn run_file_allocate(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
 }
 
 async fn run_file_pread_pwrite(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
-        // TODO!
-        return Ok(());
-    }
     run_with_temp_dir(store, wasi).await
 }
 
 async fn run_file_seek_tell(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }
@@ -559,15 +559,11 @@ async fn run_file_truncation(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
 }
 
 async fn run_file_unbuffered_write(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
-        // TODO!
-        return Ok(());
-    }
     run_with_temp_dir(store, wasi).await
 }
 
 async fn run_interesting_paths(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }
@@ -575,15 +571,11 @@ async fn run_interesting_paths(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> 
 }
 
 async fn run_isatty(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
-        // TODO!
-        return Ok(());
-    }
     run_with_temp_dir(store, wasi).await
 }
 
 async fn run_nofollow_errors(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }
@@ -591,15 +583,11 @@ async fn run_nofollow_errors(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
 }
 
 async fn run_path_exists(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
-        // TODO!
-        return Ok(());
-    }
     run_with_temp_dir(store, wasi).await
 }
 
 async fn run_path_filestat(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }
@@ -607,7 +595,7 @@ async fn run_path_filestat(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
 }
 
 async fn run_path_link(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }
@@ -615,7 +603,7 @@ async fn run_path_link(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
 }
 
 async fn run_path_open_create_existing(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }
@@ -623,7 +611,7 @@ async fn run_path_open_create_existing(store: Store<WasiCtx>, wasi: Wasi) -> Res
 }
 
 async fn run_path_open_dirfd_not_dir(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }
@@ -631,7 +619,7 @@ async fn run_path_open_dirfd_not_dir(store: Store<WasiCtx>, wasi: Wasi) -> Resul
 }
 
 async fn run_path_open_missing(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }
@@ -639,7 +627,7 @@ async fn run_path_open_missing(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> 
 }
 
 async fn run_path_open_read_without_rights(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }
@@ -647,7 +635,7 @@ async fn run_path_open_read_without_rights(store: Store<WasiCtx>, wasi: Wasi) ->
 }
 
 async fn run_path_rename(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }
@@ -655,7 +643,7 @@ async fn run_path_rename(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
 }
 
 async fn run_path_rename_dir_trailing_slashes(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }
@@ -663,7 +651,7 @@ async fn run_path_rename_dir_trailing_slashes(store: Store<WasiCtx>, wasi: Wasi)
 }
 
 async fn run_path_rename_file_trailing_slashes(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }
@@ -671,7 +659,7 @@ async fn run_path_rename_file_trailing_slashes(store: Store<WasiCtx>, wasi: Wasi
 }
 
 async fn run_path_symlink_trailing_slashes(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }
@@ -679,7 +667,7 @@ async fn run_path_symlink_trailing_slashes(store: Store<WasiCtx>, wasi: Wasi) ->
 }
 
 async fn run_poll_oneoff_files(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }
@@ -687,7 +675,7 @@ async fn run_poll_oneoff_files(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> 
 }
 
 async fn run_poll_oneoff_stdio(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }
@@ -695,7 +683,7 @@ async fn run_poll_oneoff_stdio(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> 
 }
 
 async fn run_readlink(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }
@@ -703,7 +691,7 @@ async fn run_readlink(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
 }
 
 async fn run_remove_directory_trailing_slashes(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }
@@ -711,7 +699,7 @@ async fn run_remove_directory_trailing_slashes(store: Store<WasiCtx>, wasi: Wasi
 }
 
 async fn run_remove_nonempty_directory(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }
@@ -719,7 +707,7 @@ async fn run_remove_nonempty_directory(store: Store<WasiCtx>, wasi: Wasi) -> Res
 }
 
 async fn run_renumber(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }
@@ -735,15 +723,11 @@ async fn run_stdio(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
 }
 
 async fn run_symlink_create(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
-        // TODO!
-        return Ok(());
-    }
     run_with_temp_dir(store, wasi).await
 }
 
 async fn run_symlink_filestat(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }
@@ -751,7 +735,7 @@ async fn run_symlink_filestat(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
 }
 
 async fn run_symlink_loop(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }
@@ -759,7 +743,7 @@ async fn run_symlink_loop(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
 }
 
 async fn run_truncation_rights(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }
@@ -767,7 +751,7 @@ async fn run_truncation_rights(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> 
 }
 
 async fn run_unlink_file_trailing_slashes(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
-    if true {
+    if EXPECT_FAIL {
         // TODO!
         return Ok(());
     }

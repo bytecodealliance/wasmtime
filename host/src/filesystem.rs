@@ -14,6 +14,7 @@ use wasi_common::{
     WasiDir, WasiFile,
 };
 
+// FIXME: guest rust bindgen should add this method to all flags.
 fn contains<T: BitAnd<Output = T> + Eq + Copy>(flags: T, flag: T) -> bool {
     (flags & flag) == flag
 }
@@ -424,7 +425,13 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         fd: wasi_filesystem::Descriptor,
         path: String,
     ) -> HostResult<(), wasi_filesystem::Errno> {
-        todo!()
+        let table = self.table();
+        Ok(Ok(table
+            .get_dir(fd)
+            .map_err(convert)?
+            .create_dir(&path)
+            .await
+            .map_err(convert)?))
     }
 
     async fn stat(
@@ -459,7 +466,17 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         at_flags: wasi_filesystem::AtFlags,
         path: String,
     ) -> HostResult<wasi_filesystem::DescriptorStat, wasi_filesystem::Errno> {
-        todo!()
+        let table = self.table();
+        Ok(Ok(table
+            .get_dir(fd)
+            .map_err(convert)?
+            .get_path_filestat(
+                &path,
+                contains(at_flags, wasi_filesystem::AtFlags::SYMLINK_FOLLOW),
+            )
+            .await
+            .map(wasi_filesystem::DescriptorStat::from)
+            .map_err(convert)?))
     }
 
     async fn set_times_at(
@@ -554,7 +571,13 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         fd: wasi_filesystem::Descriptor,
         path: String,
     ) -> HostResult<(), wasi_filesystem::Errno> {
-        todo!()
+        let table = self.table();
+        Ok(Ok(table
+            .get_dir(fd)
+            .map_err(convert)?
+            .remove_dir(&path)
+            .await
+            .map_err(convert)?))
     }
 
     async fn rename_at(
@@ -573,7 +596,13 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         old_path: String,
         new_path: String,
     ) -> HostResult<(), wasi_filesystem::Errno> {
-        todo!()
+        let table = self.table();
+        Ok(Ok(table
+            .get_dir(fd)
+            .map_err(convert)?
+            .symlink(&old_path, &new_path)
+            .await
+            .map_err(convert)?))
     }
 
     async fn unlink_file_at(
@@ -581,7 +610,13 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         fd: wasi_filesystem::Descriptor,
         path: String,
     ) -> HostResult<(), wasi_filesystem::Errno> {
-        todo!()
+        let table = self.table();
+        Ok(Ok(table
+            .get_dir(fd)
+            .map_err(convert)?
+            .unlink_file(&path)
+            .await
+            .map_err(convert)?))
     }
 
     async fn change_file_permissions_at(
