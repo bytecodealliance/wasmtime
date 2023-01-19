@@ -501,9 +501,11 @@ pub fn make_api_calls(api: generators::api::ApiCalls) {
 /// Executes the wast `test` spectest with the `config` specified.
 ///
 /// Ensures that spec tests pass regardless of the `Config`.
-pub fn spectest(mut fuzz_config: generators::Config, test: generators::SpecTest) {
+pub fn spectest(fuzz_config: generators::Config, test: generators::SpecTest) {
     crate::init_fuzzing();
-    fuzz_config.set_spectest_compliant();
+    if !fuzz_config.is_spectest_compliant() {
+        return;
+    }
     log::debug!("running {:?}", test.file);
     let mut wast_context = WastContext::new(fuzz_config.to_store());
     wast_context.register_spectest(false).unwrap();

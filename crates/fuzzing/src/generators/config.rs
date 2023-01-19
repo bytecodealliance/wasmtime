@@ -97,31 +97,45 @@ impl Config {
         self.module_config.generate(input, default_fuel)
     }
 
-    /// Indicates that this configuration should be spec-test-compliant,
-    /// disabling various features the spec tests assert are disabled.
-    pub fn set_spectest_compliant(&mut self) {
-        let config = &mut self.module_config.config;
-        config.memory64_enabled = false;
-        config.bulk_memory_enabled = true;
-        config.reference_types_enabled = true;
-        config.multi_value_enabled = true;
-        config.simd_enabled = true;
-        config.threads_enabled = false;
-        config.max_memories = 1;
-        config.max_tables = 5;
+    /// Tests whether this configuration is capable of running all spec tests.
+    pub fn is_spectest_compliant(&self) -> bool {
+        let config = &self.module_config.config;
 
-        if let InstanceAllocationStrategy::Pooling(pooling) = &mut self.wasmtime.strategy {
-            // Configure the lower bound of a number of limits to what's
-            // required to actually run the spec tests. Fuzz-generated inputs
-            // may have limits less than these thresholds which would cause the
-            // spec tests to fail which isn't particularly interesting.
-            pooling.instance_memories = 1;
-            pooling.instance_tables = pooling.instance_tables.max(5);
-            pooling.instance_table_elements = pooling.instance_table_elements.max(1_000);
-            pooling.instance_memory_pages = pooling.instance_memory_pages.max(900);
-            pooling.instance_count = pooling.instance_count.max(500);
-            pooling.instance_size = pooling.instance_size.max(64 * 1024);
+        // Check for wasm features that must be disabled to run spec tests
+        if config.memory64_enabled || config.threads_enabled {
+            return false;
         }
+
+        // Check for wasm features that must be enabled to run spec tests
+        if !config.bulk_memory_enabled
+            || !config.reference_types_enabled
+            || !config.multi_value_enabled
+            || !config.simd_enabled
+        {
+            return false;
+        }
+
+        // Make sure the runtime limits allow for the instantiation of all spec
+        // tests.
+        if config.max_memories < 1 || config.max_tables < 5 {
+            return false;
+        }
+
+        if let InstanceAllocationStrategy::Pooling(pooling) = &self.wasmtime.strategy {
+            // Check to see if any item limit is less than the required
+            // threshold to execute the spec tests.
+            if pooling.instance_memories < 1
+                || pooling.instance_tables < 5
+                || pooling.instance_table_elements < 1_000
+                || pooling.instance_memory_pages < 900
+                || pooling.instance_count < 500
+                || pooling.instance_size < 64 * 1024
+            {
+                return false;
+            }
+        }
+
+        true
     }
 
     /// Converts this to a `wasmtime::Config` object
