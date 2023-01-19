@@ -169,12 +169,11 @@ fn visit_branch_targets<F: FnMut(Inst, Block, bool)>(f: &Function, inst: Inst, v
         BranchInfo::SingleDest(dest) => {
             visit(inst, dest.block(&f.dfg.value_lists), false);
         }
-        BranchInfo::Table(table, maybe_dest) => {
-            if let Some(dest) = maybe_dest {
-                // The default block is reached via a direct conditional branch,
-                // so it is not part of the table.
-                visit(inst, dest, false);
-            }
+        BranchInfo::Table(table, dest) => {
+            // The default block is reached via a direct conditional branch,
+            // so it is not part of the table.
+            visit(inst, dest, false);
+
             for &dest in f.jump_tables[table].as_slice() {
                 visit(inst, dest, true);
             }

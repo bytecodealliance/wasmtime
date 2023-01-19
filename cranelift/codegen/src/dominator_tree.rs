@@ -360,9 +360,7 @@ impl DominatorTree {
                     for succ in func.jump_tables[jt].iter() {
                         self.push_if_unseen(*succ);
                     }
-                    if let Some(dest) = dest {
-                        self.push_if_unseen(dest);
-                    }
+                    self.push_if_unseen(dest);
                 }
                 BranchInfo::NotABranch => {}
             }

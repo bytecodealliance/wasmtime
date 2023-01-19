@@ -1304,18 +1304,16 @@ impl<'a> Verifier<'a> {
                 self.typecheck_variable_args_iterator(inst, iter, args, errors)?;
             }
             BranchInfo::Table(table, block) => {
-                if let Some(block) = block {
-                    let arg_count = self.func.dfg.num_block_params(block);
-                    if arg_count != 0 {
-                        return errors.nonfatal((
-                            inst,
-                            self.context(inst),
-                            format!(
-                                "takes no arguments, but had target {} with {} arguments",
-                                block, arg_count,
-                            ),
-                        ));
-                    }
+                let arg_count = self.func.dfg.num_block_params(block);
+                if arg_count != 0 {
+                    return errors.nonfatal((
+                        inst,
+                        self.context(inst),
+                        format!(
+                            "takes no arguments, but had target {} with {} arguments",
+                            block, arg_count,
+                        ),
+                    ));
                 }
                 for block in self.func.jump_tables[table].iter() {
                     let arg_count = self.func.dfg.num_block_params(*block);

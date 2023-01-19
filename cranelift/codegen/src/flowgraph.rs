@@ -126,9 +126,8 @@ impl ControlFlowGraph {
                     self.add_edge(block, inst, dest.block(&func.dfg.value_lists));
                 }
                 BranchInfo::Table(jt, dest) => {
-                    if let Some(dest) = dest {
-                        self.add_edge(block, inst, dest);
-                    }
+                    self.add_edge(block, inst, dest);
+
                     for dest in func.jump_tables[jt].iter() {
                         self.add_edge(block, inst, *dest);
                     }

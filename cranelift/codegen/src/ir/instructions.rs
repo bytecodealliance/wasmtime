@@ -273,7 +273,7 @@ impl InstructionData {
             Self::Branch { destination, .. } => BranchInfo::SingleDest(destination),
             Self::BranchTable {
                 table, destination, ..
-            } => BranchInfo::Table(table, Some(destination)),
+            } => BranchInfo::Table(table, destination),
             _ => {
                 debug_assert!(!self.opcode().is_branch());
                 BranchInfo::NotABranch
@@ -456,8 +456,8 @@ pub enum BranchInfo {
     /// This is a branch or jump to a single destination block, possibly taking value arguments.
     SingleDest(BlockCall),
 
-    /// This is a jump table branch which can have many destination blocks and maybe one default block.
-    Table(JumpTable, Option<Block>),
+    /// This is a jump table branch which can have many destination blocks and one default block.
+    Table(JumpTable, Block),
 }
 
 /// Information about call instructions.

@@ -308,7 +308,7 @@ impl FunctionStencil {
                     }
                 });
 
-                if default_dest == Some(old_dest) {
+                if default_dest == old_dest {
                     match &mut self.dfg.insts[inst] {
                         InstructionData::BranchTable { destination, .. } => {
                             *destination = new_dest;
