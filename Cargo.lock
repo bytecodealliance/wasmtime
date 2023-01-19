@@ -766,9 +766,12 @@ dependencies = [
  "log",
  "pretty_env_logger",
  "rayon",
+ "serde",
+ "similar",
  "target-lexicon",
  "termcolor",
  "thiserror",
+ "toml",
  "walkdir",
  "wat",
 ]
@@ -3950,6 +3953,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "winch-filetests"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "capstone",
+ "cranelift-codegen",
+ "serde",
+ "similar",
+ "target-lexicon",
+ "toml",
+ "wasmtime-environ",
+ "wat",
+ "winch-codegen",
+ "winch-test-macros",
+]
+
+[[package]]
+name = "winch-test-macros"
+version = "0.0.0"
+dependencies = [
+ "glob",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "winch-tools"
 version = "0.0.0"
 dependencies = [
@@ -3957,11 +3987,17 @@ dependencies = [
  "capstone",
  "clap 3.2.8",
  "cranelift-codegen",
+ "glob",
+ "serde",
+ "similar",
  "target-lexicon",
+ "toml",
  "wasmparser",
  "wasmtime-environ",
  "wat",
  "winch-codegen",
+ "winch-filetests",
+ "winch-test-macros",
 ]
 
 [[package]]

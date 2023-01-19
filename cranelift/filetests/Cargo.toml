@@ -26,10 +26,10 @@ num_cpus = "1.8.0"
 target-lexicon = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
-similar = "2.1.0"
+similar ={ workspace = true }
 wat.workspace = true
-toml = "0.5.9"
-serde = "1.0.94"
+toml = { workspace = true }
+serde = { workspace = true }
 cranelift-wasm.workspace = true
 wasmparser.workspace = true
 cranelift.workspace = true
