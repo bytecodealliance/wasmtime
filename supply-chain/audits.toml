@@ -506,6 +506,16 @@ intended to multiplex across the internal representation of a tinyvec,
 presumably. This trivially doesn't contain anything bad.
 """
 
+[[audits.tokio]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.18.1 -> 1.18.4"
+notes = """
+This looks to be a minor release primarily to fix a security-related Windows
+issue plus some reorganization around lazy initialization. Altogether nothing
+amiss here.
+"""
+
 [[audits.unicase]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
