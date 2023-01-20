@@ -34,7 +34,7 @@ features = [
 ]
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]
-ittapi = { version = "0.3.0", optional = true  }
+ittapi = { version = "0.3.3", optional = true  }
 
 [features]
 jitdump = ['wasmtime-jit-debug']
