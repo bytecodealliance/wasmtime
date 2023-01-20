@@ -2,7 +2,7 @@
 
 ## 5.0.0
 
-Unreleased.
+Released 2023-01-20.
 
 ### Added
 
