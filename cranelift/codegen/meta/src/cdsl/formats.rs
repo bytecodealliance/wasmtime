@@ -122,7 +122,6 @@ impl InstructionFormatBuilder {
             kind: operand_kind.clone(),
             member: operand_kind.rust_field_name,
         };
-
         self.0.imm_fields.push(field);
         self
     }
