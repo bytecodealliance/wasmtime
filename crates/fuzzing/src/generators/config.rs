@@ -116,8 +116,10 @@ impl Config {
         }
 
         // Make sure the runtime limits allow for the instantiation of all spec
-        // tests.
-        if config.max_memories < 1 || config.max_tables < 5 {
+        // tests. Note that the max memories must be precisely one since 0 won't
+        // instantiate spec tests and more than one is multi-memory which is
+        // disabled for spec tests.
+        if config.max_memories != 1 || config.max_tables < 5 {
             return false;
         }
 
