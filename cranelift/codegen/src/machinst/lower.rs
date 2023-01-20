@@ -941,21 +941,19 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         for succ_idx in 0..self.vcode.block_order().succ_indices(block).len() {
             // Avoid immutable borrow by explicitly indexing.
             let (inst, succ) = self.vcode.block_order().succ_indices(block)[succ_idx];
+
             // Get branch args and convert to Regs.
-
-            // TODO:
-            // let branch_args = self.f.dfg.insts[inst]
-            //     .branch_destination()
-            //     .into_iter()
-            //     .flat_map(|block| block.args_slice(&self.f.dfg.value_lists));
-
             let branch_args = match self.f.dfg.analyze_branch(inst) {
                 instructions::BranchInfo::NotABranch => unreachable!(),
                 instructions::BranchInfo::SingleDest(block) => {
                     block.args_slice(&self.f.dfg.value_lists)
                 }
                 instructions::BranchInfo::Conditional(then_block, else_block) => {
-                    // TODO: does succ_idx actually index the block of the instruction?
+                    // NOTE: `succ_idx == 0` implying that we're traversing the `then_block` is
+                    // enforced by the traversal order defined in `visit_block_succs`. Eventually
+                    // we should traverse the `branch_destination` slice instead of the result of
+                    // analyze_branch there, which would simplify computing the branch args
+                    // significantly.
                     if succ_idx == 0 {
                         then_block.args_slice(&self.f.dfg.value_lists)
                     } else {
