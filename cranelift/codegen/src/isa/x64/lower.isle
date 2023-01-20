@@ -1099,8 +1099,32 @@
 ;; while x86 does
 ;;
 ;;   pandn(x, y) = and(not(x), y)
-(rule (lower (has_type ty (band_not x y)))
+(rule 0 (lower (has_type ty (band_not x y)))
       (sse_and_not ty y x))
+
+
+(rule 1 (lower (has_type ty (band_not x y)))
+      (if (ty_int_ref_scalar_64 ty))
+      (x64_and ty 
+               x
+               (x64_not ty y)))
+
+
+;;;; Rules for `bxor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 0 (lower (has_type ty (bxor_not x y)))
+      (if (ty_int_ref_scalar_64 ty))
+      (x64_xor ty 
+               x
+               (x64_not ty y)))
+
+;;;; Rules for `bor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 0 (lower (has_type ty (bor_not x y)))
+      (if (ty_int_ref_scalar_64 ty))
+      (x64_or ty 
+               x
+               (x64_not ty y)))
 
 ;;;; Rules for `iabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
