@@ -66,8 +66,8 @@ block0(v0: i32):
 }
 
 ; block0:
-;   sext.w t2,a0
-;   slt a1,t2,zero
+;   sext.w a0,a0
+;   slt a1,a0,zero
 ;   sext.b1 a1,a1
 ;   ret
 
@@ -89,8 +89,8 @@ block0(v0: i16):
 }
 
 ; block0:
-;   sext.h t2,a0
-;   slt a1,t2,zero
+;   sext.h a0,a0
+;   slt a1,a0,zero
 ;   sext.b1 a1,a1
 ;   ret
 
@@ -112,8 +112,8 @@ block0(v0: i8):
 }
 
 ; block0:
-;   sext.b t2,a0
-;   slt a1,t2,zero
+;   sext.b a0,a0
+;   slt a1,a0,zero
 ;   sext.b1 a1,a1
 ;   ret
 
