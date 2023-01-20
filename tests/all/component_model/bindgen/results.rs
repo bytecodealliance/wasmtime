@@ -373,7 +373,9 @@ mod record_error {
                 record-error: func(a: float64) -> result<float64, e2>
             }
         }",
-        trappable_error_type: { imports::e2: TrappableE2 }
+        // Literal strings can be used for the interface and typename fields instead of
+        // identifiers, because wit identifiers arent always Rust identifiers.
+        trappable_error_type: { "imports"::"e2": TrappableE2 }
     });
 
     #[test]

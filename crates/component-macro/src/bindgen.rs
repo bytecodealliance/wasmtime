@@ -226,9 +226,23 @@ impl Parse for Opt {
 }
 
 fn trappable_error_field_parse(input: ParseStream<'_>) -> Result<(String, String, String)> {
-    let interface = input.parse::<Ident>()?.to_string();
+    // Accept a Rust identifier or a string literal. This is required
+    // because not all wit identifiers are Rust identifiers, so we can
+    // smuggle the invalid ones inside quotes.
+    fn ident_or_str(input: ParseStream<'_>) -> Result<String> {
+        let l = input.lookahead1();
+        if l.peek(syn::LitStr) {
+            Ok(input.parse::<syn::LitStr>()?.value())
+        } else if l.peek(syn::Ident) {
+            Ok(input.parse::<syn::Ident>()?.to_string())
+        } else {
+            Err(l.error())
+        }
+    }
+
+    let interface = ident_or_str(input)?;
     input.parse::<Token![::]>()?;
-    let type_ = input.parse::<Ident>()?.to_string();
+    let type_ = ident_or_str(input)?;
     input.parse::<Token![:]>()?;
     let rust_type = input.parse::<Ident>()?.to_string();
     Ok((interface, type_, rust_type))
