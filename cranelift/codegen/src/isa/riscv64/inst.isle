@@ -1028,7 +1028,7 @@
     ((tmp Reg (gen_extend r $true from_bits 64))
       (tmp2 Reg (alu_rrr (AluOPRRR.Slt) tmp (zero_reg)))
       (high Reg (gen_extend tmp2 $true 1 64)))
-    (value_regs (gen_move2 r $I64 $I64) high)))
+    (value_regs (gen_move2 tmp $I64 $I64) high)))
 
 
 ;;;; for I128 unsigned extend.
