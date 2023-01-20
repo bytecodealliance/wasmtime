@@ -841,6 +841,10 @@ impl Config {
     /// The default value for this is `true`.
     #[cfg(compiler)]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[deprecated(
+        since = "5.0.0",
+        note = "egraphs will be the default and this method will be removed in a future version."
+    )]
     pub fn cranelift_use_egraphs(&mut self, enable: bool) -> &mut Self {
         let val = if enable { "true" } else { "false" };
         self.compiler_config

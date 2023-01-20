@@ -141,6 +141,7 @@ impl Config {
     }
 
     /// Converts this to a `wasmtime::Config` object
+    #[allow(deprecated)] // Allow use of `cranelift_use_egraphs` below.
     pub fn to_wasmtime(&self) -> wasmtime::Config {
         crate::init_fuzzing();
         log::debug!("creating wasmtime config with {:#?}", self.wasmtime);
