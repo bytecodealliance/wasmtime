@@ -2887,18 +2887,10 @@
 
 ;; Rules for `brif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 2 (lower_branch (brif (icmp cc a b) _ _) (two_targets then else))
+(rule 2 (lower_branch (brif (maybe_uextend (icmp cc a b)) _ _) (two_targets then else))
         (emit_side_effect (jmp_cond_icmp (emit_cmp cc a b) then else)))
 
-(rule 2 (lower_branch (brif (fcmp cc a b) _ _) (two_targets then else))
-        (emit_side_effect (jmp_cond_fcmp (emit_fcmp cc a b) then else)))
-
-(rule 2 (lower_branch (brif (uextend (icmp cc a b)) _ _)
-                      (two_targets then else))
-        (emit_side_effect (jmp_cond_icmp (emit_cmp cc a b) then else)))
-
-(rule 2 (lower_branch (brif (uextend (fcmp cc a b)) _ _)
-                      (two_targets then else))
+(rule 2 (lower_branch (brif (maybe_uextend (fcmp cc a b)) _ _) (two_targets then else))
         (emit_side_effect (jmp_cond_fcmp (emit_fcmp cc a b) then else)))
 
 (rule 1 (lower_branch (brif val @ (value_type $I128) _ _)

@@ -2464,7 +2464,7 @@
 ;;; Rules for `brif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `brif` following `icmp`
-(rule (lower_branch (brif (icmp cc x @ (value_type ty) y) _ _) targets)
+(rule (lower_branch (brif (maybe_uextend (icmp cc x @ (value_type ty) y)) _ _) targets)
       (let ((comparison FlagsAndCC (lower_icmp_into_flags cc x y ty))
             (cond Cond (cond_code (flags_and_cc_cc comparison)))
             (taken BranchTarget (branch_target targets 0))
@@ -2476,7 +2476,7 @@
                                           (cond_br_cond cond))))))
 
 ;; `brif` following `fcmp`
-(rule (lower_branch (brif (fcmp cc x @ (value_type (ty_scalar_float ty)) y) _ _) targets)
+(rule (lower_branch (brif (maybe_uextend (fcmp cc x @ (value_type (ty_scalar_float ty)) y)) _ _) targets)
       (let ((cond Cond (fp_cond_code cc))
             (taken BranchTarget (branch_target targets 0))
             (not_taken BranchTarget (branch_target targets 1)))
