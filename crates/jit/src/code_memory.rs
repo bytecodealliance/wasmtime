@@ -273,13 +273,6 @@ impl CodeMemory {
             return Ok(());
         }
 
-        // Mmaps currently all start as readonly so before updating relocations
-        // the mapping needs to be made writable first. Note that this isn't
-        // reset back to readonly since the `make_executable` call, which
-        // happens after this, will implicitly remove the writable bit and leave
-        // it as just read/execute.
-        self.mmap.make_writable(self.text.clone())?;
-
         for (offset, libcall) in self.relocations.iter() {
             let offset = self.text.start + offset;
             let libcall = match libcall {
