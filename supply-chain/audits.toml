@@ -290,6 +290,18 @@ criteria = "safe-to-deploy"
 version = "0.4.1"
 notes = "Contains only unsafe code for interacting with the crate's intended purpose."
 
+[[audits.ittapi]]
+who = "Andrew Brown <andrew.brown@intel.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.1 -> 0.3.3"
+notes = "I am the author of this crate."
+
+[[audits.ittapi-sys]]
+who = "Andrew Brown <andrew.brown@intel.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.1 -> 0.3.3"
+notes = "Unsafe code is due to auto-generated bindings to a widely-deployed C library."
+
 [[audits.leb128]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
