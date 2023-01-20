@@ -1606,12 +1606,11 @@ impl MachInstEmit for Inst {
                                 val: &ValueRegs<Reg>,
                                 sink: &mut MachBuffer<Inst>,
                                 state: &mut EmitState| {
-                    let ty = if ty.bits() == 128 { I64 } else { ty };
                     let mut insts = SmallInstVec::new();
                     insts.push(Inst::Mov {
                         rd: dst[0],
                         rm: val.regs()[0],
-                        ty,
+                        ty: I64,
                     });
                     if ty.bits() == 128 {
                         insts.push(Inst::Mov {
