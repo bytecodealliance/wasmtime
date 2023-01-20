@@ -106,50 +106,48 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
             self.builder.func.set_srcloc(inst, self.builder.srcloc);
         }
 
-        if data.opcode().is_branch() {
-            match self.builder.func.dfg.analyze_branch(inst) {
-                ir::instructions::BranchInfo::NotABranch => (),
+        match self.builder.func.dfg.analyze_branch(inst) {
+            ir::instructions::BranchInfo::NotABranch => (),
 
-                ir::instructions::BranchInfo::SingleDest(dest) => {
-                    // If the user has supplied jump arguments we must adapt the arguments of
-                    // the destination block
-                    let block = dest.block(&self.builder.func.dfg.value_lists);
-                    self.builder.declare_successor(block, inst);
+            ir::instructions::BranchInfo::SingleDest(dest) => {
+                // If the user has supplied jump arguments we must adapt the arguments of
+                // the destination block
+                let block = dest.block(&self.builder.func.dfg.value_lists);
+                self.builder.declare_successor(block, inst);
+            }
+
+            ir::instructions::BranchInfo::Conditional(branch_then, branch_else) => {
+                let block_then = branch_then.block(&self.builder.func.dfg.value_lists);
+                let block_else = branch_else.block(&self.builder.func.dfg.value_lists);
+
+                self.builder.declare_successor(block_then, inst);
+                if block_then != block_else {
+                    self.builder.declare_successor(block_else, inst);
                 }
+            }
 
-                ir::instructions::BranchInfo::Conditional(branch_then, branch_else) => {
-                    let block_then = branch_then.block(&self.builder.func.dfg.value_lists);
-                    let block_else = branch_else.block(&self.builder.func.dfg.value_lists);
-
-                    self.builder.declare_successor(block_then, inst);
-                    if block_then != block_else {
-                        self.builder.declare_successor(block_else, inst);
-                    }
+            ir::instructions::BranchInfo::Table(table, destination) => {
+                // Unlike all other jumps/branches, jump tables are
+                // capable of having the same successor appear
+                // multiple times, so we must deduplicate.
+                let mut unique = EntitySet::<Block>::new();
+                for dest_block in self
+                    .builder
+                    .func
+                    .jump_tables
+                    .get(table)
+                    .expect("you are referencing an undeclared jump table")
+                    .iter()
+                    .filter(|&dest_block| unique.insert(*dest_block))
+                {
+                    // Call `declare_block_predecessor` instead of `declare_successor` for
+                    // avoiding the borrow checker.
+                    self.builder
+                        .func_ctx
+                        .ssa
+                        .declare_block_predecessor(*dest_block, inst);
                 }
-
-                ir::instructions::BranchInfo::Table(table, destination) => {
-                    // Unlike all other jumps/branches, jump tables are
-                    // capable of having the same successor appear
-                    // multiple times, so we must deduplicate.
-                    let mut unique = EntitySet::<Block>::new();
-                    for dest_block in self
-                        .builder
-                        .func
-                        .jump_tables
-                        .get(table)
-                        .expect("you are referencing an undeclared jump table")
-                        .iter()
-                        .filter(|&dest_block| unique.insert(*dest_block))
-                    {
-                        // Call `declare_block_predecessor` instead of `declare_successor` for
-                        // avoiding the borrow checker.
-                        self.builder
-                            .func_ctx
-                            .ssa
-                            .declare_block_predecessor(*dest_block, inst);
-                    }
-                    self.builder.declare_successor(destination, inst);
-                }
+                self.builder.declare_successor(destination, inst);
             }
         }
 
