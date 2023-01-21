@@ -2,7 +2,7 @@
 
 use crate::bindings::{
     wasi_clocks, wasi_default_clocks, wasi_exit, wasi_filesystem, wasi_logging, wasi_poll,
-    wasi_random, wasi_tcp,
+    wasi_random, wasi_stderr, wasi_tcp,
 };
 use core::arch::wasm32;
 use core::cell::{Cell, RefCell, UnsafeCell};
@@ -437,7 +437,7 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
             });
             Ok(())
         }
-        Descriptor::StdoutLog | Descriptor::StderrLog => {
+        Descriptor::Stderr => {
             let fs_filetype = FILETYPE_UNKNOWN;
             let fs_flags = 0;
             let fs_rights_base = !RIGHTS_FD_READ;
@@ -767,9 +767,7 @@ pub unsafe extern "C" fn fd_read(
                     Ok(())
                 }
             }
-            Descriptor::StdoutLog | Descriptor::StderrLog | Descriptor::Closed(_) => {
-                Err(ERRNO_BADF)
-            }
+            Descriptor::Stderr | Descriptor::Closed(_) => Err(ERRNO_BADF),
         }
     })
 }
@@ -1092,9 +1090,8 @@ pub unsafe extern "C" fn fd_write(
             *nwritten = bytes as usize;
             Ok(())
         }
-        Descriptor::StderrLog | Descriptor::StdoutLog => {
-            let context: [u8; 3] = byte_array::str!("I/O");
-            wasi_logging::log(wasi_logging::Level::Info, &context, bytes);
+        Descriptor::Stderr => {
+            wasi_stderr::print(bytes);
             *nwritten = len;
             Ok(())
         }
@@ -1957,14 +1954,8 @@ enum Descriptor {
     /// Input and/or output wasi-streams, along with stream metadata.
     Streams(Streams),
 
-    /// Initial state of fd 1 when `State` is created, representing that writes
-    /// to `fd_write` will go to a call to `log`. This is overwritten during
-    /// initialization in `command`.
-    StdoutLog,
-
-    /// Same as `StdoutLog` except for stderr. This is not overwritten during
-    /// `command`.
-    StderrLog,
+    /// Writes to `fd_write` will go to the `wasi-stderr` API.
+    Stderr,
 }
 
 /// Input and/or output wasi-streams, along with a stream type that
@@ -2052,7 +2043,7 @@ impl Drop for Descriptor {
                     StreamType::EmptyStdin | StreamType::Unknown => {}
                 }
             }
-            Descriptor::StdoutLog | Descriptor::StderrLog => {}
+            Descriptor::Stderr => {}
             Descriptor::Closed(_) => {}
         }
     }
@@ -2297,13 +2288,18 @@ impl State {
     }
 
     fn init(&mut self) {
+        // Set up a default stdin. This will be overridden when `command`
+        // is called.
         unwrap_result(self.push_desc(Descriptor::Streams(Streams {
             input: Cell::new(None),
             output: Cell::new(None),
             type_: StreamType::Unknown,
         })));
-        unwrap_result(self.push_desc(Descriptor::StdoutLog));
-        unwrap_result(self.push_desc(Descriptor::StderrLog));
+        // Set up a default stdout, writing to the stderr device. This will
+        // be overridden when `command` is called.
+        unwrap_result(self.push_desc(Descriptor::Stderr));
+        // Set up a default stderr.
+        unwrap_result(self.push_desc(Descriptor::Stderr));
     }
 
     fn push_desc(&mut self, desc: Descriptor) -> Result<Fd, Errno> {
@@ -2399,18 +2395,14 @@ impl State {
     fn get_read_stream(&self, fd: Fd) -> Result<WasiStream, Errno> {
         match self.get(fd)? {
             Descriptor::Streams(streams) => streams.get_read_stream(),
-            Descriptor::Closed(_) | Descriptor::StdoutLog | Descriptor::StderrLog => {
-                Err(ERRNO_BADF)
-            }
+            Descriptor::Closed(_) | Descriptor::Stderr => Err(ERRNO_BADF),
         }
     }
 
     fn get_write_stream(&self, fd: Fd) -> Result<WasiStream, Errno> {
         match self.get(fd)? {
             Descriptor::Streams(streams) => streams.get_write_stream(),
-            Descriptor::Closed(_) | Descriptor::StdoutLog | Descriptor::StderrLog => {
-                Err(ERRNO_BADF)
-            }
+            Descriptor::Closed(_) | Descriptor::Stderr => Err(ERRNO_BADF),
         }
     }
 
