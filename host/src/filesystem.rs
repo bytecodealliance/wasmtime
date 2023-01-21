@@ -179,15 +179,18 @@ impl From<wasi_common::file::FileType> for wasi_filesystem::DescriptorType {
 
 impl From<wasi_common::file::Filestat> for wasi_filesystem::DescriptorStat {
     fn from(stat: wasi_common::file::Filestat) -> Self {
-        fn timestamp(time: Option<std::time::SystemTime>) -> wasi_filesystem::Timestamp {
+        fn timestamp(time: Option<std::time::SystemTime>) -> wasi_filesystem::Datetime {
             time.map(|t| {
-                t.duration_since(SystemTime::UNIX_EPOCH)
-                    .unwrap()
-                    .as_nanos()
-                    .try_into()
-                    .unwrap()
+                let since = t.duration_since(SystemTime::UNIX_EPOCH).unwrap();
+                wasi_filesystem::Datetime {
+                    seconds: since.as_secs(),
+                    nanoseconds: since.subsec_nanos(),
+                }
             })
-            .unwrap_or(0)
+            .unwrap_or(wasi_filesystem::Datetime {
+                seconds: 0,
+                nanoseconds: 0,
+            })
         }
 
         Self {
