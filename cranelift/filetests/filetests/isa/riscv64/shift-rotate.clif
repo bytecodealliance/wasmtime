@@ -13,20 +13,22 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   andi a2,a2,127
-;   li a4,128
-;   sub a6,a4,a2
-;   srl t3,a0,a2
+;   andi a3,a2,63
+;   li a4,64
+;   sub a6,a4,a3
+;   srl t3,a0,a3
 ;   sll t0,a1,a6
-;   select_reg t2,zero,t0##condition=(a2 eq zero)
-;   or a3,t3,t2
-;   srl a4,a1,a2
+;   mv t1,a1
+;   select_reg t2,zero,t0##condition=(a3 eq zero)
+;   or a1,t3,t2
+;   srl a4,t1,a3
 ;   sll a5,a0,a6
-;   select_reg a7,zero,a5##condition=(a2 eq zero)
+;   select_reg a7,zero,a5##condition=(a3 eq zero)
 ;   or t4,a4,a7
 ;   li t1,64
-;   select_reg a0,t4,a3##condition=(a2 uge t1)
-;   select_reg a1,a3,t4##condition=(a2 uge t1)
+;   andi a2,a2,127
+;   select_reg a0,t4,a1##condition=(a2 uge t1)
+;   select_reg a1,a1,t4##condition=(a2 uge t1)
 ;   ret
 
 function %f0(i64, i64) -> i64 {
@@ -105,20 +107,22 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   andi a2,a2,127
-;   li a4,128
-;   sub a6,a4,a2
-;   sll t3,a0,a2
+;   andi a3,a2,63
+;   li a4,64
+;   sub a6,a4,a3
+;   sll t3,a0,a3
 ;   srl t0,a1,a6
-;   select_reg t2,zero,t0##condition=(a2 eq zero)
-;   or a3,t3,t2
-;   sll a4,a1,a2
+;   mv t1,a1
+;   select_reg t2,zero,t0##condition=(a3 eq zero)
+;   or a1,t3,t2
+;   sll a4,t1,a3
 ;   srl a5,a0,a6
-;   select_reg a7,zero,a5##condition=(a2 eq zero)
+;   select_reg a7,zero,a5##condition=(a3 eq zero)
 ;   or t4,a4,a7
 ;   li t1,64
-;   select_reg a0,t4,a3##condition=(a2 uge t1)
-;   select_reg a1,a3,t4##condition=(a2 uge t1)
+;   andi a2,a2,127
+;   select_reg a0,t4,a1##condition=(a2 uge t1)
+;   select_reg a1,a1,t4##condition=(a2 uge t1)
 ;   ret
 
 function %f4(i64, i64) -> i64 {
