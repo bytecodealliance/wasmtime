@@ -253,23 +253,20 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
 
     //
     fn gen_shamt(&mut self, ty: Type, shamt: Reg) -> ValueRegs {
+        let ty_bits = if ty.bits() > 64 { 64 } else { ty.bits() };
         let shamt = {
             let tmp = self.temp_writable_reg(I64);
             self.emit(&MInst::AluRRImm12 {
                 alu_op: AluOPRRI::Andi,
                 rd: tmp,
                 rs: shamt,
-                imm12: Imm12::from_bits(if ty.bits() >= 128 {
-                    63
-                } else {
-                    (ty.bits() - 1) as i16
-                }),
+                imm12: Imm12::from_bits((ty_bits - 1) as i16),
             });
             tmp.to_reg()
         };
         let len_sub_shamt = {
             let tmp = self.temp_writable_reg(I64);
-            self.emit(&MInst::load_imm12(tmp, Imm12::from_bits(ty.bits() as i16)));
+            self.emit(&MInst::load_imm12(tmp, Imm12::from_bits(ty_bits as i16)));
             let len_sub_shamt = self.temp_writable_reg(I64);
             self.emit(&MInst::AluRRR {
                 alu_op: AluOPRRR::Sub,

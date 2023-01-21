@@ -1125,8 +1125,9 @@
     (alu_rrr (AluOPRRR.Or) part1 part3)))
 
 
-;;;; construct shift amount
+;;;; construct shift amount.rotl on i128 will use shift to implement. So can call this function.
 ;;;; this will return shift amount and (ty_bits - "shift amount")
+;;;; if ty_bits is greater than 64 like i128, then shmat will fallback to 64.because We are 64 bit platform.
 (decl gen_shamt (Type Reg) ValueRegs)
 (extern constructor gen_shamt gen_shamt)
 
