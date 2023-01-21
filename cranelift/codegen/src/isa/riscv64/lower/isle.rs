@@ -259,7 +259,11 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
                 alu_op: AluOPRRI::Andi,
                 rd: tmp,
                 rs: shamt,
-                imm12: Imm12::from_bits((ty.bits() - 1) as i16),
+                imm12: Imm12::from_bits(if ty.bits() >= 128 {
+                    63
+                } else {
+                    (ty.bits() - 1) as i16
+                }),
             });
             tmp.to_reg()
         };
