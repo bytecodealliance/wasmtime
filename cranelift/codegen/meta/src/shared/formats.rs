@@ -114,9 +114,9 @@ impl Formats {
 
             jump: Builder::new("Jump").block().build(),
 
-            brif: Builder::new("Brif").value().block().block().build(),
-
             branch: Builder::new("Branch").value().block().build(),
+
+            brif: Builder::new("Brif").value().block().block().build(),
 
             branch_table: Builder::new("BranchTable")
                 .value()
