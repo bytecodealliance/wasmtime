@@ -1,0 +1,11 @@
+test interpret
+test run
+target riscv64
+
+function %a(i16, i128) -> i128 system_v {
+block0(v0: i16, v1: i128):
+    v2 = rotl v1, v0
+    return v2
+}
+
+; run: %a(64, 1095219937288) == 20203241887575960770402119057408
