@@ -157,29 +157,23 @@ pub(crate) fn visit_block_succs<F: FnMut(Inst, Block, bool)>(
     mut visit: F,
 ) {
     for inst in f.layout.block_likely_branches(block) {
-        if f.dfg.insts[inst].opcode().is_branch() {
-            visit_branch_targets(f, inst, &mut visit);
-        }
-    }
-}
+        match f.dfg.insts[inst].analyze_branch() {
+            BranchInfo::NotABranch => {}
+            BranchInfo::SingleDest(dest) => {
+                visit(inst, dest.block(&f.dfg.value_lists), false);
+            }
+            BranchInfo::Conditional(block_then, block_else) => {
+                visit(inst, block_then.block(&f.dfg.value_lists), false);
+                visit(inst, block_else.block(&f.dfg.value_lists), false);
+            }
+            BranchInfo::Table(table, dest) => {
+                // The default block is reached via a direct conditional branch,
+                // so it is not part of the table.
+                visit(inst, dest, false);
 
-fn visit_branch_targets<F: FnMut(Inst, Block, bool)>(f: &Function, inst: Inst, visit: &mut F) {
-    match f.dfg.insts[inst].analyze_branch() {
-        BranchInfo::NotABranch => {}
-        BranchInfo::SingleDest(dest) => {
-            visit(inst, dest.block(&f.dfg.value_lists), false);
-        }
-        BranchInfo::Conditional(block_then, block_else) => {
-            visit(inst, block_then.block(&f.dfg.value_lists), false);
-            visit(inst, block_else.block(&f.dfg.value_lists), false);
-        }
-        BranchInfo::Table(table, dest) => {
-            // The default block is reached via a direct conditional branch,
-            // so it is not part of the table.
-            visit(inst, dest, false);
-
-            for &dest in f.jump_tables[table].as_slice() {
-                visit(inst, dest, true);
+                for &dest in f.jump_tables[table].as_slice() {
+                    visit(inst, dest, true);
+                }
             }
         }
     }
