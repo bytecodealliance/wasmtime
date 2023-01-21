@@ -548,9 +548,9 @@ pub unsafe extern "C" fn fd_filestat_get(fd: Fd, buf: *mut Filestat) -> Errno {
             filetype,
             nlink: stat.nlink,
             size: stat.size,
-            atim: stat.atim,
-            mtim: stat.mtim,
-            ctim: stat.ctim,
+            atim: datetime_to_timestamp(stat.atim),
+            mtim: datetime_to_timestamp(stat.mtim),
+            ctim: datetime_to_timestamp(stat.ctim),
         };
         Ok(())
     })
@@ -580,7 +580,10 @@ pub unsafe extern "C" fn fd_filestat_set_times(
         if fst_flags & (FSTFLAGS_ATIM | FSTFLAGS_ATIM_NOW) == (FSTFLAGS_ATIM | FSTFLAGS_ATIM_NOW) {
             wasi_filesystem::NewTimestamp::Now
         } else if fst_flags & FSTFLAGS_ATIM == FSTFLAGS_ATIM {
-            wasi_filesystem::NewTimestamp::Timestamp(atim)
+            wasi_filesystem::NewTimestamp::Timestamp(wasi_filesystem::Datetime {
+                seconds: atim / 1_000_000_000,
+                nanoseconds: (atim % 1_000_000_000) as _,
+            })
         } else {
             wasi_filesystem::NewTimestamp::NoChange
         };
@@ -588,7 +591,10 @@ pub unsafe extern "C" fn fd_filestat_set_times(
         if fst_flags & (FSTFLAGS_MTIM | FSTFLAGS_MTIM_NOW) == (FSTFLAGS_MTIM | FSTFLAGS_MTIM_NOW) {
             wasi_filesystem::NewTimestamp::Now
         } else if fst_flags & FSTFLAGS_MTIM == FSTFLAGS_MTIM {
-            wasi_filesystem::NewTimestamp::Timestamp(mtim)
+            wasi_filesystem::NewTimestamp::Timestamp(wasi_filesystem::Datetime {
+                seconds: mtim / 1_000_000_000,
+                nanoseconds: (mtim % 1_000_000_000) as _,
+            })
         } else {
             wasi_filesystem::NewTimestamp::NoChange
         };
@@ -1139,9 +1145,9 @@ pub unsafe extern "C" fn path_filestat_get(
             filetype,
             nlink: stat.nlink,
             size: stat.size,
-            atim: stat.atim,
-            mtim: stat.mtim,
-            ctim: stat.ctim,
+            atim: datetime_to_timestamp(stat.atim),
+            mtim: datetime_to_timestamp(stat.mtim),
+            ctim: datetime_to_timestamp(stat.ctim),
         };
         Ok(())
     })
@@ -1163,7 +1169,10 @@ pub unsafe extern "C" fn path_filestat_set_times(
         if fst_flags & (FSTFLAGS_ATIM | FSTFLAGS_ATIM_NOW) == (FSTFLAGS_ATIM | FSTFLAGS_ATIM_NOW) {
             wasi_filesystem::NewTimestamp::Now
         } else if fst_flags & FSTFLAGS_ATIM == FSTFLAGS_ATIM {
-            wasi_filesystem::NewTimestamp::Timestamp(atim)
+            wasi_filesystem::NewTimestamp::Timestamp(wasi_filesystem::Datetime {
+                seconds: atim / 1_000_000_000,
+                nanoseconds: (atim % 1_000_000_000) as _,
+            })
         } else {
             wasi_filesystem::NewTimestamp::NoChange
         };
@@ -1171,7 +1180,10 @@ pub unsafe extern "C" fn path_filestat_set_times(
         if fst_flags & (FSTFLAGS_MTIM | FSTFLAGS_MTIM_NOW) == (FSTFLAGS_MTIM | FSTFLAGS_MTIM_NOW) {
             wasi_filesystem::NewTimestamp::Now
         } else if fst_flags & FSTFLAGS_MTIM == FSTFLAGS_MTIM {
-            wasi_filesystem::NewTimestamp::Timestamp(mtim)
+            wasi_filesystem::NewTimestamp::Timestamp(wasi_filesystem::Datetime {
+                seconds: mtim / 1_000_000_000,
+                nanoseconds: (mtim % 1_000_000_000) as _,
+            })
         } else {
             wasi_filesystem::NewTimestamp::NoChange
         };
@@ -1795,6 +1807,10 @@ pub unsafe extern "C" fn sock_send(
 #[no_mangle]
 pub unsafe extern "C" fn sock_shutdown(fd: Fd, how: Sdflags) -> Errno {
     unreachable!()
+}
+
+fn datetime_to_timestamp(datetime: wasi_filesystem::Datetime) -> Timestamp {
+    u64::from(datetime.nanoseconds).saturating_add(datetime.seconds.saturating_mul(1_000_000_000))
 }
 
 fn at_flags_from_lookupflags(flags: Lookupflags) -> wasi_filesystem::AtFlags {
