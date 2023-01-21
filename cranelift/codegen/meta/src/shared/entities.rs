@@ -19,11 +19,11 @@ pub(crate) struct EntityRefs {
     /// This is primarily used in control flow instructions.
     pub(crate) label: OperandKind,
 
-    /// A reference to a basic block in the same function.
+    /// A reference to a basic block in the same function, with its arguments provided.
     /// This is primarily used in control flow instructions.
     pub(crate) block_then: OperandKind,
 
-    /// A reference to a basic block in the same function.
+    /// A reference to a basic block in the same function, with its arguments provided.
     /// This is primarily used in control flow instructions.
     pub(crate) block_else: OperandKind,
 
