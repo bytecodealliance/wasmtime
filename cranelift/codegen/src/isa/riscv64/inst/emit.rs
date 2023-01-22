@@ -474,8 +474,6 @@ impl MachInstEmit for Inst {
                 // and we may exceed `Inst::worst_case_size`.
                 // for more information see https://github.com/bytecodealliance/wasmtime/pull/5612.
                 sink.put_data(&data[..]);
-                // safe to disable code length check.
-                start_off = sink.cur_offset();
             }
             &Inst::Lui { rd, ref imm } => {
                 let rd = allocs.next_writable(rd);
