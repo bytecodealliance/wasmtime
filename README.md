@@ -28,7 +28,7 @@
 
 ## Installation
 
-The Wasmtime CLI can be installed on Linux and macOS with a small install
+The Wasmtime CLI can be installed on Linux and macOS (locally) with a small install
 script:
 
 ```sh
