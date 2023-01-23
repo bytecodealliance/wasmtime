@@ -2,8 +2,9 @@ freebsd_instance:
   image_family: freebsd-13-0
   
 task:
+  env:
+    PATH: $HOME/.cargo/bin
   install_script: pkg install -y curl
   script: 
     - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    - set path=($PATH $HOME/.cargo/bin)
     - cargo build --release
