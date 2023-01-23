@@ -3,5 +3,5 @@ freebsd_instance:
   
 task:
   install_script: pkg install -y curl
-  script: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+  script: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
   #script: rustup install stable
