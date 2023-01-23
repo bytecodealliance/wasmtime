@@ -54,25 +54,35 @@ impl Types {
     }
 
     fn type_info_func(&mut self, resolve: &Resolve, func: &Function) {
+        let mut live = LiveTypes::default();
         for (_, ty) in func.params.iter() {
-            self.set_param_result_ty(
-                resolve,
-                ty,
-                TypeInfo {
-                    param: true,
-                    ..TypeInfo::default()
-                },
-            );
+            self.type_info(resolve, ty);
+            live.add_type(resolve, ty);
         }
+        for id in live.iter() {
+            self.type_info.get_mut(&id).unwrap().param = true;
+        }
+        let mut live = LiveTypes::default();
         for ty in func.results.iter_types() {
-            self.set_param_result_ty(
-                resolve,
-                ty,
-                TypeInfo {
-                    result: true,
-                    ..TypeInfo::default()
-                },
-            );
+            self.type_info(resolve, ty);
+            live.add_type(resolve, ty);
+        }
+        for id in live.iter() {
+            self.type_info.get_mut(&id).unwrap().result = true;
+        }
+
+        for ty in func.results.iter_types() {
+            let id = match ty {
+                Type::Id(id) => *id,
+                _ => continue,
+            };
+            let err = match &resolve.types[id].kind {
+                TypeDefKind::Result(Result_ { err, .. }) => err,
+                _ => continue,
+            };
+            if let Some(Type::Id(id)) = err {
+                self.type_info.get_mut(&id).unwrap().error = true;
+            }
         }
     }
 
@@ -149,77 +159,6 @@ impl Types {
         match ty {
             Some(ty) => self.type_info(resolve, ty),
             None => TypeInfo::default(),
-        }
-    }
-
-    fn set_param_result_id(&mut self, resolve: &Resolve, ty: TypeId, info: TypeInfo) {
-        match &resolve.types[ty].kind {
-            TypeDefKind::Record(r) => {
-                for field in r.fields.iter() {
-                    self.set_param_result_ty(resolve, &field.ty, info)
-                }
-            }
-            TypeDefKind::Tuple(t) => {
-                for ty in t.types.iter() {
-                    self.set_param_result_ty(resolve, ty, info)
-                }
-            }
-            TypeDefKind::Flags(_) => {}
-            TypeDefKind::Enum(_) => {}
-            TypeDefKind::Variant(v) => {
-                for case in v.cases.iter() {
-                    self.set_param_result_optional_ty(resolve, case.ty.as_ref(), info)
-                }
-            }
-            TypeDefKind::List(ty) | TypeDefKind::Type(ty) | TypeDefKind::Option(ty) => {
-                self.set_param_result_ty(resolve, ty, info)
-            }
-            TypeDefKind::Result(r) => {
-                self.set_param_result_optional_ty(resolve, r.ok.as_ref(), info);
-                let mut info2 = info;
-                info2.error = info.result;
-                self.set_param_result_optional_ty(resolve, r.err.as_ref(), info2);
-            }
-            TypeDefKind::Union(u) => {
-                for case in u.cases.iter() {
-                    self.set_param_result_ty(resolve, &case.ty, info)
-                }
-            }
-            TypeDefKind::Future(ty) => {
-                self.set_param_result_optional_ty(resolve, ty.as_ref(), info)
-            }
-            TypeDefKind::Stream(stream) => {
-                self.set_param_result_optional_ty(resolve, stream.element.as_ref(), info);
-                self.set_param_result_optional_ty(resolve, stream.end.as_ref(), info);
-            }
-            TypeDefKind::Unknown => unreachable!(),
-        }
-    }
-
-    fn set_param_result_ty(&mut self, resolve: &Resolve, ty: &Type, info: TypeInfo) {
-        match ty {
-            Type::Id(id) => {
-                self.type_id_info(resolve, *id);
-                let cur = self.type_info.get_mut(id).unwrap();
-                let prev = *cur;
-                *cur |= info;
-                if prev != *cur {
-                    self.set_param_result_id(resolve, *id, info);
-                }
-            }
-            _ => {}
-        }
-    }
-
-    fn set_param_result_optional_ty(
-        &mut self,
-        resolve: &Resolve,
-        ty: Option<&Type>,
-        info: TypeInfo,
-    ) {
-        match ty {
-            Some(ty) => self.set_param_result_ty(resolve, ty, info),
-            None => (),
         }
     }
 }
