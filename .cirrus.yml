@@ -6,5 +6,6 @@ task:
     PATH: $PATH:$HOME/.cargo/bin
   install_script: pkg install -y curl
   script: 
+    - git submodule update --init
     - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     - cargo build --release
