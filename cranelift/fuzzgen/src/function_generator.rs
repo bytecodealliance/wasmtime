@@ -556,11 +556,6 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (Opcode::Srem, &[I128, I128]),
                 // TODO
                 (Opcode::Iabs, &[I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5497
-                (Opcode::Smin, &[I128, I128]),
-                (Opcode::Umin, &[I128, I128]),
-                (Opcode::Smax, &[I128, I128]),
-                (Opcode::Umax, &[I128, I128]),
                 // TODO
                 (Opcode::Bitselect, &[I128, I128, I128]),
                 // TODO
@@ -571,18 +566,6 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (Opcode::Rotl, &[I128, I32]),
                 (Opcode::Rotl, &[I128, I64]),
                 (Opcode::Rotl, &[I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5525
-                (Opcode::Sextend, &[I8], &[I128]),
-                (Opcode::Sextend, &[I16], &[I128]),
-                (Opcode::Sextend, &[I32], &[I128]),
-                (Opcode::Sextend, &[I64], &[I128]),
-                (Opcode::Sextend, &[I128], &[I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5525
-                (Opcode::Uextend, &[I8], &[I128]),
-                (Opcode::Uextend, &[I16], &[I128]),
-                (Opcode::Uextend, &[I32], &[I128]),
-                (Opcode::Uextend, &[I64], &[I128]),
-                (Opcode::Uextend, &[I128], &[I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/5528
                 (Opcode::FcvtToUint, &[F32], &[I8]),
                 (Opcode::FcvtToUint, &[F32], &[I16]),
@@ -639,13 +622,6 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 // TODO
                 (Opcode::FcvtFromSint, &[I128], &[F32]),
                 (Opcode::FcvtFromSint, &[I128], &[F64]),
-                // TODO
-                (Opcode::SelectSpectreGuard, &[I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5526
-                (Opcode::SelectSpectreGuard, &[_, I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5524
-                (Opcode::Select, &[I128]),
-                (Opcode::Select, &[_, I128, I128]),
                 // TODO
                 (Opcode::BandNot, &[F32, F32]),
                 (Opcode::BandNot, &[F64, F64]),
