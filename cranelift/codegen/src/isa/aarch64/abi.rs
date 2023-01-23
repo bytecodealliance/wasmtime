@@ -430,7 +430,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         } else {
             let scratch2 = writable_tmp2_reg();
             assert_ne!(scratch2.to_reg(), from_reg);
-            // `gen_add_imm` is only ever called after register allocation has take place, and as a
+            // `gen_add_imm` is only ever called after register allocation has taken place, and as a
             // result it's ok to reuse the scratch2 register here. If that changes, we'll need to
             // plumb through a way to allocate temporary virtual registers
             insts.extend(Inst::load_constant(scratch2, imm.into(), &mut |_| scratch2));
