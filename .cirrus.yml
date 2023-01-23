@@ -16,3 +16,37 @@ task:
     - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     - cargo build --release
     - ./push-release.sh
+  upload_script: |
+    #!/usr/bin/env bash
+    if [[ "$CIRRUS_RELEASE" == "" ]]; then
+      CIRRUS_RELEASE=$(curl -sL https://api.github.com/repos/$CIRRUS_REPO_FULL_NAME/releases/tags/$CIRRUS_TAG | jq -r '.id')
+      if [[ "$CIRRUS_RELEASE" == "null" ]]; then
+        echo "Failed to find a release associated with this tag!"
+        exit 0
+      fi
+    fi
+    
+    if [[ "$GITHUB_TOKEN" == "" ]]; then
+      echo "Please provide GitHub access token via GITHUB_TOKEN environment variable!"
+      exit 1
+    fi
+    
+    file_content_type="application/octet-stream"
+    files_to_upload=(
+      target/release/wasmtime
+      README.md
+      LICENSE
+    )
+    
+    for fpath in $files_to_upload
+    do
+      echo "Uploading $fpath..."
+      name=$(basename "$fpath")
+      url_to_upload="https://uploads.github.com/repos/$CIRRUS_REPO_FULL_NAME/releases/$CIRRUS_RELEASE/assets?name=$name"
+      echo "Uploading to $url_to_upload"
+      curl -X POST \
+        --data-binary @$fpath \
+        --header "Authorization: token $GITHUB_TOKEN" \
+        --header "Content-Type: application/octet-stream" \
+        $url_to_upload
+    done
