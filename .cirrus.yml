@@ -6,16 +6,13 @@ task:
     PATH: $PATH:$HOME/.cargo/bin
     GITHUB_TOKEN: ENCRYPTED[78af20dcfc8b5d62df8898e3842f51b35db587f01377346375530a1feff1fefcf4ef4389f4fc69fdabbe557e4cc8d5d7]
   install_script: 
-    - pkg install -y curl
-    - pkg install -y bash
-    - pkg install -y git-tiny gohugo
+    - pkg install -y curl bash git-tiny gohugo jq
     - git submodule init
     - git submodule update
     - chmod 755 push-release.sh
   script: 
     - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     - cargo build --release
-    - ./push-release.sh
   upload_script: |
     #!/usr/bin/env bash
     if [[ "$CIRRUS_RELEASE" == "" ]]; then
