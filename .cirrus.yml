@@ -4,5 +4,5 @@ freebsd_instance:
 task:
   install_script: pkg install -y curl
   script: 
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    & cargo build --release
+    - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    - cargo build --release
