@@ -151,7 +151,7 @@ impl Mmap {
                     file: Some(Arc::new(file)),
                 };
 
-                // Protect the entire file as PAGE_READONLY to start (i.e.
+                // Protect the entire file as PAGE_WRITECOPY to start (i.e.
                 // remove the execute bit)
                 let mut old = 0;
                 if VirtualProtect(ret.ptr as *mut _, ret.len, PAGE_WRITECOPY, &mut old) == 0 {
