@@ -4,8 +4,10 @@ freebsd_instance:
 task:
   env:
     PATH: $PATH:$HOME/.cargo/bin
+  clone_script: |
+    git clone --recursive https://x-access-token:${CIRRUS_REPO_CLONE_TOKEN}@github.com/${CIRRUS_REPO_FULL_NAME}.git $CIRRUS_WORKING_DIR
+    git submodule update --init
   install_script: pkg install -y curl
   script: 
-    - git submodule update --init
     - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     - cargo build --release
