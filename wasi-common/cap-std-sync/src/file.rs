@@ -11,6 +11,8 @@ use wasi_common::{
     file::{Advice, FdFlags, FileType, Filestat, WasiFile},
     Error, ErrorExt,
 };
+#[cfg(windows)]
+use windows_sys::Win32::Foundation::ERROR_ACCESS_DENIED;
 
 pub struct File(cap_std::fs::File);
 
@@ -41,12 +43,31 @@ impl WasiFile for File {
     }
 
     async fn datasync(&self) -> Result<(), Error> {
-        self.0.sync_data()?;
-        Ok(())
+        match self.0.sync_data() {
+            Ok(()) => Ok(()),
+
+            // On Windows, `sync_data` uses `FlushFileBuffers` which fails
+            // with `ERROR_ACCESS_DENIED` if the file is not open for
+            // writing. Ignore this error, for POSIX compatibility.
+            #[cfg(windows)]
+            Err(e) if e.raw_os_error() == Some(ERROR_ACCESS_DENIED as _) => Ok(()),
+
+            Err(e) => Err(e.into()),
+        }
     }
+
     async fn sync(&self) -> Result<(), Error> {
-        self.0.sync_all()?;
-        Ok(())
+        match self.0.sync_all() {
+            Ok(()) => Ok(()),
+
+            // On Windows, `sync_all` uses `FlushFileBuffers` which fails
+            // with `ERROR_ACCESS_DENIED` if the file is not open for
+            // writing. Ignore this error, for POSIX compatibility.
+            #[cfg(windows)]
+            Err(e) if e.raw_os_error() == Some(ERROR_ACCESS_DENIED as _) => Ok(()),
+
+            Err(e) => Err(e.into()),
+        }
     }
     async fn get_filetype(&self) -> Result<FileType, Error> {
         let meta = self.0.metadata()?;

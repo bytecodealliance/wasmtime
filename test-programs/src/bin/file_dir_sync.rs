@@ -3,9 +3,12 @@ fn main() -> std::io::Result<()> {
     file.sync_all()?;
     file.sync_data()?;
 
-    let dir = std::fs::File::open(".")?;
+    /*
+     * TODO: Support opening directories with `File::open` on Windows.
+    let dir = cap_std::fs::Dir::open(".")?;
     dir.sync_all()?;
     dir.sync_data()?;
+    */
 
     Ok(())
 }

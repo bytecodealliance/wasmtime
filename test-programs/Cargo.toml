@@ -7,4 +7,5 @@ publish = false
 [dependencies]
 getrandom = "0.2.8"
 rustix = "0.36.6"
+cap-std = "1.0.3"
 wit-bindgen-guest-rust = { git = "https://github.com/bytecodealliance/wit-bindgen" }
