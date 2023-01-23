@@ -11,6 +11,7 @@ task:
     - pkg install -y git-tiny gohugo
     - git submodule init
     - git submodule update
+    - chmod 755 push-release.sh
   script: 
     - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     - cargo build --release
