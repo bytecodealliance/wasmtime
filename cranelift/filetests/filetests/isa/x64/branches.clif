@@ -394,3 +394,65 @@ block2:
 ;   popq    %rbp
 ;   ret
 
+function %brif_i8_icmp(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = icmp eq v0, v1
+  v3 = uextend.i32 v2
+  brif v3, block1, block2
+
+block1:
+  v4 = iconst.i32 1
+  return v4
+
+block2:
+  v5 = iconst.i32 2
+  return v5
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   cmpl    %esi, %edi
+;   jz      label1; j label2
+; block1:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   movl    $2, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %brif_i8_fcmp(f32, f32) -> i32 {
+block0(v0: f32, v1: f32):
+  v2 = fcmp eq v0, v1
+  v3 = uextend.i32 v2
+  brif v3, block1, block2
+
+block1:
+  v4 = iconst.i32 1
+  return v4
+
+block2:
+  v5 = iconst.i32 2
+  return v5
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   ucomiss %xmm1, %xmm0
+;   jp      label2
+;   jnz     label2; j label1
+; block1:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   movl    $2, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
