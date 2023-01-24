@@ -17,8 +17,7 @@ function u0:0(i64 vmctx, i64) fast {
                                 block0(v0: i64, v1: i64):
 @0019                               v2 = vconst.i8x16 [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
 @001b                               v3 = iconst.i32 0
-@001d                               brz v3, block2  ; v3 = 0
-@001d                               jump block3
+@001d                               brif v3, block3, block2  ; v3 = 0
 
                                 block3:
 @001f                               trap unreachable
@@ -30,8 +29,7 @@ function u0:0(i64 vmctx, i64) fast {
 @0027                               v7 = bitcast.i32x4 little v6
 @0027                               v8 = vhigh_bits.i32 v7
 @002a                               v9 = iconst.i32 0
-@002c                               brnz v9, block1  ; v9 = 0
-@002c                               jump block4
+@002c                               brif v9, block1, block4  ; v9 = 0
 
                                 block4:
 @002e                               call fn0(v0, v0)

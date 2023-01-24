@@ -44,14 +44,14 @@
 ;;   ldr x6, [x2, #8]
 ;;   sub x6, x6, #4
 ;;   subs xzr, x0, x6
-;;   b.ls label1 ; b label3
-;; block1:
-;;   ldr x8, [x2]
-;;   str w1, [x8, x0]
-;;   b label2
+;;   b.hi label1 ; b label2
 ;; block2:
-;;   ret
+;;   ldr x9, [x2]
+;;   str w1, [x9, x0]
+;;   b label3
 ;; block3:
+;;   ret
+;; block1:
 ;;   udf #0xc11f
 ;;
 ;; function u0:1:
@@ -59,12 +59,12 @@
 ;;   ldr x6, [x1, #8]
 ;;   sub x6, x6, #4
 ;;   subs xzr, x0, x6
-;;   b.ls label1 ; b label3
-;; block1:
-;;   ldr x8, [x1]
-;;   ldr w0, [x8, x0]
-;;   b label2
+;;   b.hi label1 ; b label2
 ;; block2:
-;;   ret
+;;   ldr x9, [x1]
+;;   ldr w0, [x9, x0]
+;;   b label3
 ;; block3:
+;;   ret
+;; block1:
 ;;   udf #0xc11f

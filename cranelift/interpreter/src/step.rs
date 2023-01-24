@@ -302,24 +302,6 @@ where
                 unreachable!()
             }
         }
-        Opcode::Brz => {
-            let block = inst.branch_destination()[0];
-            branch_when(
-                !arg(0)?
-                    .convert(ValueConversionKind::ToBoolean)?
-                    .into_bool()?,
-                block,
-            )?
-        }
-        Opcode::Brnz => {
-            let block = inst.branch_destination()[0];
-            branch_when(
-                arg(0)?
-                    .convert(ValueConversionKind::ToBoolean)?
-                    .into_bool()?,
-                block,
-            )?
-        }
         Opcode::BrTable => {
             if let InstructionData::BranchTable {
                 table, destination, ..
@@ -1297,9 +1279,10 @@ pub enum ControlFlow<'a, V> {
     /// Continue to the next available instruction, e.g.: in `nop`, we expect to resume execution
     /// at the instruction after it.
     Continue,
-    /// Jump to another block with the given parameters, e.g.: in `brz v0, block42, [v1, v2]`, if
-    /// the condition is true, we continue execution at the first instruction of `block42` with the
-    /// values in `v1` and `v2` filling in the block parameters.
+    /// Jump to another block with the given parameters, e.g.: in
+    /// `brif v0, block42(v1, v2), block97`, if the condition is true, we continue execution at the
+    /// first instruction of `block42` with the values in `v1` and `v2` filling in the block
+    /// parameters.
     ContinueAt(Block, SmallVec<[V; 1]>),
     /// Indicates a call the given [Function] with the supplied arguments.
     Call(&'a Function, SmallVec<[V; 1]>),

@@ -16,10 +16,9 @@ use smallvec::SmallVec;
 // "formal parameters" to mean the `Value`s listed in the block head, and
 // "actual parameters" to mean the `Value`s passed in a branch or a jump:
 //
-// block4(v16: i32, v18: i32):    <-- formal parameters
+// block4(v16: i32, v18: i32):            <-- formal parameters
 //   ...
-//   brnz v27, block7(v22, v24)   <-- actual parameters
-//   jump block6
+//   brif v27, block7(v22, v24), block6   <-- actual parameters
 
 // This transformation pass (conceptually) partitions all values in the
 // function into two groups:

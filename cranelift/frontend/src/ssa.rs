@@ -756,8 +756,7 @@ mod tests {
         //    x = 1;
         //    y = 2;
         //    z = x + y;
-        //    brnz y, block1;
-        //    jump block1;
+        //    brif y, block1, block1;
         // block1:
         //    z = x + z;
         //    jump block2;
@@ -794,13 +793,9 @@ mod tests {
         };
         ssa.def_var(z_var, z1_ssa, block0);
         let y_use2 = ssa.use_var(&mut func, y_var, I32, block0).0;
-        let brnz_block0_block2: Inst = {
+        let brif_block0_block2_block1: Inst = {
             let mut cur = FuncCursor::new(&mut func).at_bottom(block0);
-            cur.ins().brnz(y_use2, block2, &[])
-        };
-        let jump_block0_block1: Inst = {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(block0);
-            cur.ins().jump(block1, &[])
+            cur.ins().brif(y_use2, block2, &[], block1, &[])
         };
 
         assert_eq!(ssa.use_var(&mut func, x_var, I32, block0).0, x_ssa);
@@ -809,7 +804,7 @@ mod tests {
 
         // block1
         ssa.declare_block(block1);
-        ssa.declare_block_predecessor(block1, jump_block0_block1);
+        ssa.declare_block_predecessor(block1, brif_block0_block2_block1);
         ssa.seal_block(block1, &mut func);
 
         let x_use2 = ssa.use_var(&mut func, x_var, I32, block1).0;
@@ -830,7 +825,7 @@ mod tests {
 
         // block2
         ssa.declare_block(block2);
-        ssa.declare_block_predecessor(block2, brnz_block0_block2);
+        ssa.declare_block_predecessor(block2, brif_block0_block2_block1);
         ssa.declare_block_predecessor(block2, jump_block1_block2);
         ssa.seal_block(block2, &mut func);
         let x_use3 = ssa.use_var(&mut func, x_var, I32, block2).0;
@@ -843,17 +838,21 @@ mod tests {
 
         assert_eq!(x_ssa, x_use3);
         assert_eq!(y_ssa, y_use3);
-        match func.dfg.analyze_branch(brnz_block0_block2) {
-            BranchInfo::SingleDest(dest) => {
-                assert_eq!(dest.block(&func.dfg.value_lists), block2);
-                assert_eq!(dest.args_slice(&func.dfg.value_lists).len(), 0);
+        match func.dfg.analyze_branch(brif_block0_block2_block1) {
+            BranchInfo::Conditional(block_then, block_else) => {
+                assert_eq!(block_then.block(&func.dfg.value_lists), block2);
+                assert_eq!(block_then.args_slice(&func.dfg.value_lists).len(), 0);
+                assert_eq!(block_else.block(&func.dfg.value_lists), block1);
+                assert_eq!(block_else.args_slice(&func.dfg.value_lists).len(), 0);
             }
             _ => assert!(false),
         };
-        match func.dfg.analyze_branch(jump_block0_block1) {
-            BranchInfo::SingleDest(dest) => {
-                assert_eq!(dest.block(&func.dfg.value_lists), block1);
-                assert_eq!(dest.args_slice(&func.dfg.value_lists).len(), 0);
+        match func.dfg.analyze_branch(brif_block0_block2_block1) {
+            BranchInfo::Conditional(block_then, block_else) => {
+                assert_eq!(block_then.block(&func.dfg.value_lists), block2);
+                assert_eq!(block_then.args_slice(&func.dfg.value_lists).len(), 0);
+                assert_eq!(block_else.block(&func.dfg.value_lists), block1);
+                assert_eq!(block_else.args_slice(&func.dfg.value_lists).len(), 0);
             }
             _ => assert!(false),
         };
@@ -889,8 +888,7 @@ mod tests {
         //    jump block1
         // block1:
         //    z = z + y;
-        //    brnz y, block3;
-        //    jump block2;
+        //    brif y, block3, block2;
         // block2:
         //    z = z - x;
         //    return y
@@ -942,18 +940,14 @@ mod tests {
         ssa.def_var(z_var, z3, block1);
         let y4 = ssa.use_var(&mut func, y_var, I32, block1).0;
         assert_eq!(y4, y3);
-        let brnz_block1_block3 = {
+        let brif_block1_block3_block2 = {
             let mut cur = FuncCursor::new(&mut func).at_bottom(block1);
-            cur.ins().brnz(y4, block3, &[])
-        };
-        let jump_block1_block2 = {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(block1);
-            cur.ins().jump(block2, &[])
+            cur.ins().brif(y4, block3, &[], block2, &[])
         };
 
         // block2
         ssa.declare_block(block2);
-        ssa.declare_block_predecessor(block2, jump_block1_block2);
+        ssa.declare_block_predecessor(block2, brif_block1_block3_block2);
         ssa.seal_block(block2, &mut func);
         let z4 = ssa.use_var(&mut func, z_var, I32, block2).0;
         assert_eq!(z4, z3);
@@ -972,7 +966,7 @@ mod tests {
 
         // block3
         ssa.declare_block(block3);
-        ssa.declare_block_predecessor(block3, brnz_block1_block3);
+        ssa.declare_block_predecessor(block3, brif_block1_block3_block2);
         ssa.seal_block(block3, &mut func);
         let y6 = ssa.use_var(&mut func, y_var, I32, block3).0;
         assert_eq!(y6, y3);
@@ -1236,8 +1230,7 @@ mod tests {
         // block0:
         //    return;
         // block1:
-        //    brz x, block1;
-        //    jump block1;
+        //    brif x, block1, block1;
         let mut func = Function::new();
         let mut ssa = SSABuilder::default();
         let block0 = func.dfg.make_block();
@@ -1262,10 +1255,8 @@ mod tests {
             let mut cur = FuncCursor::new(&mut func).at_bottom(block1);
             let x_var = Variable::new(0);
             let x_val = ssa.use_var(&mut cur.func, x_var, I32, block1).0;
-            let brz = cur.ins().brz(x_val, block1, &[]);
-            let jump_block1_block1 = cur.ins().jump(block1, &[]);
-            ssa.declare_block_predecessor(block1, brz);
-            ssa.declare_block_predecessor(block1, jump_block1_block1);
+            let brif = cur.ins().brif(x_val, block1, &[], block1, &[]);
+            ssa.declare_block_predecessor(block1, brif);
         }
         ssa.seal_block(block1, &mut func);
 
@@ -1287,8 +1278,7 @@ mod tests {
         // block0:
         //    return;
         // block1:
-        //    brz x, block2;
-        //    jump block1;
+        //    brif x, block1, block2;
         // block2:
         //    jump block1;
         let mut func = Function::new();
@@ -1313,19 +1303,17 @@ mod tests {
 
         // block1
         ssa.declare_block(block1);
-        let brz = {
+        let brif = {
             let mut cur = FuncCursor::new(&mut func).at_bottom(block1);
             let x_var = Variable::new(0);
             let x_val = ssa.use_var(&mut cur.func, x_var, I32, block1).0;
-            let brz = cur.ins().brz(x_val, block2, &[]);
-            let jump_block1_block1 = cur.ins().jump(block1, &[]);
-            ssa.declare_block_predecessor(block1, jump_block1_block1);
-            brz
+            cur.ins().brif(x_val, block2, &[], block1, &[])
         };
 
         // block2
         ssa.declare_block(block2);
-        ssa.declare_block_predecessor(block2, brz);
+        ssa.declare_block_predecessor(block1, brif);
+        ssa.declare_block_predecessor(block2, brif);
         ssa.seal_block(block2, &mut func);
         let jump_block2_block1 = {
             let mut cur = FuncCursor::new(&mut func).at_bottom(block2);

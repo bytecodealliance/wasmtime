@@ -6,8 +6,7 @@ target riscv32
 function %critical_edge(i32, i32) -> i32 {
 
             block0(v0: i32, v7: i32):
-[SBzero#38]   brnz v7, block2(v0)
-[UJ#1b]       jump block1
+[SBzero#38]   brif v7, block2(v0), block1
 
             block1:
 [Iret#19]     return v0
@@ -16,8 +15,7 @@ function %critical_edge(i32, i32) -> i32 {
               v2 = iconst.i32 1
               v3 = iconst.i32 2
               v4 = iadd v2, v3
-[SBzero#18]   brz v1, block4(v1)
-[UJ#1b]       jump block3
+[SBzero#18]   brif v1, block3, block4(v1)
 
             block3:
               v5 = isub v1, v2
@@ -29,8 +27,7 @@ function %critical_edge(i32, i32) -> i32 {
 }
 ; sameln: function %critical_edge
 ; nextln: block0(v0: i32, v7: i32):
-; nextln:     brnz v7, block5(v0)
-; nextln:     jump block1
+; nextln:     brif v7, block5(v0), block1
 ; nextln: 
 ; nextln: block1:
 ; nextln:     return v0
@@ -42,8 +39,7 @@ function %critical_edge(i32, i32) -> i32 {
 ; nextln:     jump block2(v8)
 ; nextln: 
 ; nextln: block2(v1: i32):
-; nextln:     brz v1, block4(v1)
-; nextln:     jump block3
+; nextln:     brif v1, block3, block4(v1)
 ; nextln: 
 ; nextln: block3:
 ; nextln:     v5 = isub.i32 v1, v2

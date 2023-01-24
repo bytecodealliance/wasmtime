@@ -118,7 +118,6 @@ impl Into<AMode> for StackAMode {
 }
 
 /// risc-v always take two register to compare
-/// brz can be compare with zero register which has the value 0
 #[derive(Clone, Copy, Debug)]
 pub struct IntegerCompare {
     pub(crate) kind: IntCC,

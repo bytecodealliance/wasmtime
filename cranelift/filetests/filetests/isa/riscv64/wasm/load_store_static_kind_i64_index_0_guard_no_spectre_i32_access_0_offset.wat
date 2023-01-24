@@ -41,30 +41,30 @@
 ;; block0:
 ;;   lui a4,65536
 ;;   addi a4,a4,4092
-;;   ule a7,a0,a4##ty=i64
-;;   bne a7,zero,taken(label1),not_taken(label3)
-;; block1:
-;;   ld a6,0(a2)
-;;   add a6,a6,a0
-;;   sw a1,0(a6)
-;;   j label2
+;;   ugt a7,a0,a4##ty=i64
+;;   bne a7,zero,taken(label1),not_taken(label2)
 ;; block2:
-;;   ret
+;;   ld a7,0(a2)
+;;   add a7,a7,a0
+;;   sw a1,0(a7)
+;;   j label3
 ;; block3:
+;;   ret
+;; block1:
 ;;   udf##trap_code=heap_oob
 ;;
 ;; function u0:1:
 ;; block0:
 ;;   lui a4,65536
 ;;   addi a4,a4,4092
-;;   ule a7,a0,a4##ty=i64
-;;   bne a7,zero,taken(label1),not_taken(label3)
-;; block1:
-;;   ld a6,0(a1)
-;;   add a6,a6,a0
-;;   lw a0,0(a6)
-;;   j label2
+;;   ugt a7,a0,a4##ty=i64
+;;   bne a7,zero,taken(label1),not_taken(label2)
 ;; block2:
-;;   ret
+;;   ld a7,0(a1)
+;;   add a7,a7,a0
+;;   lw a0,0(a7)
+;;   j label3
 ;; block3:
+;;   ret
+;; block1:
 ;;   udf##trap_code=heap_oob

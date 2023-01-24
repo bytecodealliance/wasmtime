@@ -584,7 +584,7 @@ impl<'a> Verifier<'a> {
             MultiAry { ref args, .. } => {
                 self.verify_value_list(inst, args, errors)?;
             }
-            Jump { destination, .. } | Branch { destination, .. } => {
+            Jump { destination, .. } => {
                 self.verify_block(inst, destination.block(&self.func.dfg.value_lists), errors)?;
             }
             Brif {

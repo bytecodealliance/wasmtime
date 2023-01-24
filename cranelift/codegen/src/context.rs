@@ -285,7 +285,7 @@ impl Context {
 
     /// Perform pre-legalization rewrites on the function.
     pub fn preopt(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
-        do_preopt(&mut self.func, &mut self.cfg, isa);
+        do_preopt(&mut self.func, isa);
         self.verify_if(isa)?;
         Ok(())
     }

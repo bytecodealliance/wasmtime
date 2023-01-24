@@ -428,12 +428,6 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
             write!(w, ", {}", block_else.block(pool))?;
             write_block_args(w, block_else.args_slice(pool))
         }
-        Branch {
-            arg, destination, ..
-        } => {
-            write!(w, " {}, {}", arg, destination.block(pool))?;
-            write_block_args(w, destination.args_slice(pool))
-        }
         BranchTable {
             arg,
             destination,

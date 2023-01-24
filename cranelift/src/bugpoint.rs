@@ -423,7 +423,9 @@ impl Mutator for ReplaceBlockParamWithConst {
         for pred in cfg.pred_iter(self.block) {
             let dfg = &mut func.dfg;
             for branch in dfg.insts[pred.inst].branch_destination_mut().into_iter() {
-                branch.remove(param_index, &mut dfg.value_lists);
+                if branch.block(&dfg.value_lists) == self.block {
+                    branch.remove(param_index, &mut dfg.value_lists);
+                }
             }
         }
 

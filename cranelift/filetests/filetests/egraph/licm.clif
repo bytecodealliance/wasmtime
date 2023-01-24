@@ -14,8 +14,7 @@ block1(v2: i32):
     v6 = icmp eq v2, v5
     v7 = iconst.i32 1
     v8 = iadd.i32 v2, v7
-    brnz v6, block2(v4)
-    jump block1(v8)
+    brif v6, block2(v4), block1(v8)
 
 block2(v9: i32):
     return v9
@@ -30,8 +29,7 @@ block2(v9: i32):
 ; check:      v6 = icmp eq v2, v5
 ; check:      v3 = iconst.i32 1
 ; check:      v8 = iadd v2, v3
-; check:      brnz v6, block2
-; check:      jump block1(v8)
+; check:      brif v6, block2, block1(v8)
 
 ; check:  block2:
 ; check:      v10 = iconst.i32 1

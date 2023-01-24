@@ -175,7 +175,7 @@ pub(crate) fn visit_block_succs<F: FnMut(Inst, Block, bool)>(
     block: Block,
     mut visit: F,
 ) {
-    for inst in f.layout.block_likely_branches(block) {
+    if let Some(inst) = f.layout.last_inst(block) {
         match f.dfg.insts[inst].analyze_branch() {
             BranchInfo::NotABranch => {}
             BranchInfo::SingleDest(dest) => {

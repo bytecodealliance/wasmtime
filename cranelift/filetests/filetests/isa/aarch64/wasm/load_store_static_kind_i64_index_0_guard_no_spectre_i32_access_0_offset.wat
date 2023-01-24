@@ -41,26 +41,26 @@
 ;; block0:
 ;;   orr x5, xzr, #268435452
 ;;   subs xzr, x0, x5
-;;   b.ls label1 ; b label3
-;; block1:
-;;   ldr x7, [x2]
-;;   str w1, [x7, x0]
-;;   b label2
+;;   b.hi label1 ; b label2
 ;; block2:
-;;   ret
+;;   ldr x8, [x2]
+;;   str w1, [x8, x0]
+;;   b label3
 ;; block3:
+;;   ret
+;; block1:
 ;;   udf #0xc11f
 ;;
 ;; function u0:1:
 ;; block0:
 ;;   orr x5, xzr, #268435452
 ;;   subs xzr, x0, x5
-;;   b.ls label1 ; b label3
-;; block1:
-;;   ldr x7, [x1]
-;;   ldr w0, [x7, x0]
-;;   b label2
+;;   b.hi label1 ; b label2
 ;; block2:
-;;   ret
+;;   ldr x8, [x1]
+;;   ldr w0, [x8, x0]
+;;   b label3
 ;; block3:
+;;   ret
+;; block1:
 ;;   udf #0xc11f

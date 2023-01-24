@@ -270,7 +270,6 @@ impl InstructionData {
     pub fn analyze_branch(&self) -> BranchInfo {
         match *self {
             Self::Jump { destination, .. } => BranchInfo::SingleDest(destination),
-            Self::Branch { destination, .. } => BranchInfo::SingleDest(destination),
             Self::Brif {
                 blocks: [block_then, block_else],
                 ..
@@ -292,9 +291,6 @@ impl InstructionData {
         match self {
             Self::Jump {
                 ref destination, ..
-            }
-            | Self::Branch {
-                ref destination, ..
             } => std::slice::from_ref(destination),
             Self::Brif { blocks, .. } => blocks,
             Self::BranchTable { .. } => &[],
@@ -311,10 +307,6 @@ impl InstructionData {
     pub fn branch_destination_mut(&mut self) -> &mut [BlockCall] {
         match self {
             Self::Jump {
-                ref mut destination,
-                ..
-            }
-            | Self::Branch {
                 ref mut destination,
                 ..
             } => std::slice::from_mut(destination),

@@ -268,8 +268,7 @@ fn expand_cond_trap(
     //
     // Becomes:
     //
-    //     brz arg, new_block_resume
-    //     jump new_block_trap
+    //     brif arg, new_block_trap, new_block_resume
     //
     //   new_block_trap:
     //     trap
@@ -285,17 +284,17 @@ fn expand_cond_trap(
 
     // Replace trap instruction by the inverted condition.
     if trapz {
-        func.dfg.replace(inst).brnz(arg, new_block_resume, &[]);
+        func.dfg
+            .replace(inst)
+            .brif(arg, new_block_resume, &[], new_block_trap, &[]);
     } else {
-        func.dfg.replace(inst).brz(arg, new_block_resume, &[]);
+        func.dfg
+            .replace(inst)
+            .brif(arg, new_block_trap, &[], new_block_resume, &[]);
     }
 
-    // Add jump instruction after the inverted branch.
-    let mut pos = FuncCursor::new(func).after_inst(inst);
-    pos.use_srcloc(inst);
-    pos.ins().jump(new_block_trap, &[]);
-
     // Insert the new label and the unconditional trap terminator.
+    let mut pos = FuncCursor::new(func).after_inst(inst);
     pos.insert_block(new_block_trap);
 
     match opcode {

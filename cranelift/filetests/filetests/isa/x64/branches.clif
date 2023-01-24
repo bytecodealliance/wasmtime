@@ -4,8 +4,7 @@ target x86_64
 function %f0(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
   v2 = icmp eq v0, v1
-  brnz v2, block1
-  jump block2
+  brif v2, block1, block2
 
 block1:
   v3 = iconst.i32 1
@@ -35,8 +34,7 @@ block2:
 function %f1(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
   v2 = icmp eq v0, v1
-  brz v2, block1
-  jump block2
+  brif v2, block2, block1
 
 block1:
   v3 = iconst.i32 1
@@ -51,14 +49,14 @@ block2:
 ;   movq    %rsp, %rbp
 ; block0:
 ;   cmpl    %esi, %edi
-;   jnz     label1; j label2
+;   jz      label1; j label2
 ; block1:
-;   movl    $1, %eax
+;   movl    $2, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
 ; block2:
-;   movl    $2, %eax
+;   movl    $1, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -66,8 +64,7 @@ block2:
 function %f2(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
   v2 = icmp eq v0, v1
-  brnz v2, block1
-  jump block2
+  brif v2, block1, block2
 
 block1:
   v3 = iconst.i32 1
@@ -97,8 +94,7 @@ block2:
 function %f3(f32, f32) -> i32 {
 block0(v0: f32, v1: f32):
   v2 = fcmp eq v0, v1
-  brnz v2, block1
-  jump block2
+  brif v2, block1, block2
 
 block1:
   v3 = iconst.i32 1
@@ -129,38 +125,7 @@ block2:
 function %f4(f32, f32) -> i8 {
 block0(v0: f32, v1: f32):
   v2 = fcmp eq v0, v1
-  brz v2, block1
-  jump block2
-block1:
-  v3 = iconst.i8 1
-  return v3
-block2:
-  v4 = iconst.i8 0
-  return v4
-}
-
-;   pushq   %rbp
-;   movq    %rsp, %rbp
-; block0:
-;   ucomiss %xmm1, %xmm0
-;   jp      label1
-;   jnz     label1; j label2
-; block1:
-;   movl    $1, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
-; block2:
-;   xorl    %eax, %eax, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
-
-function %f4(f32, f32) -> i8 {
-block0(v0: f32, v1: f32):
-  v2 = fcmp ne v0, v1
-  brz v2, block1
-  jump block2
+  brif v2, block2, block1
 block1:
   v3 = iconst.i8 1
   return v3
@@ -176,16 +141,44 @@ block2:
 ;   jp      label2
 ;   jnz     label2; j label1
 ; block1:
-;   movl    $1, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
-; block2:
 ;   xorl    %eax, %eax, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; block2:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
+function %f4(f32, f32) -> i8 {
+block0(v0: f32, v1: f32):
+  v2 = fcmp ne v0, v1
+  brif v2, block2, block1
+block1:
+  v3 = iconst.i8 1
+  return v3
+block2:
+  v4 = iconst.i8 0
+  return v4
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   ucomiss %xmm1, %xmm0
+;   jp      label1
+;   jnz     label1; j label2
+; block1:
+;   xorl    %eax, %eax, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %f5(i32) -> i8 {
   jt0 = jump_table [block1, block2]
@@ -226,8 +219,7 @@ function %f6(i64) -> i8 {
 block0(v0: i64):
   v1 = iconst.i64 0
   v2 = icmp slt v0, v1
-  brnz v2, block1
-  jump block2
+  brif v2, block1, block2
 block1:
   v3 = iconst.i8 1
   return v3
@@ -256,8 +248,7 @@ function %f7(i32) -> i8 {
 block0(v0: i32):
   v1 = iconst.i32 0
   v2 = icmp slt v0, v1
-  brnz v2, block1
-  jump block2
+  brif v2, block1, block2
 block1:
   v3 = iconst.i8 1
   return v3
@@ -286,13 +277,11 @@ function %fflags(f32) {
 block200(v0: f32):
     v1 = f32const 0x34.0p0
     v2 = fcmp eq v0, v1
-    brnz v2, block201
-    jump block400
+    brif v2, block201, block400
 
 block400:
     v3 = fcmp ord v0, v1
-    brnz v3, block202
-    jump block201
+    brif v3, block202, block201
 
 block401:
     return
@@ -333,8 +322,7 @@ function %br_i8_icmp(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
   v2 = icmp eq v0, v1
   v3 = uextend.i32 v2
-  brnz v3, block1
-  jump block2
+  brif v3, block1, block2
 
 block1:
   v4 = iconst.i32 1
@@ -365,8 +353,7 @@ function %br_i8_fcmp(f32, f32) -> i32 {
 block0(v0: f32, v1: f32):
   v2 = fcmp eq v0, v1
   v3 = uextend.i32 v2
-  brnz v3, block1
-  jump block2
+  brif v3, block1, block2
 
 block1:
   v4 = iconst.i32 1

@@ -330,6 +330,7 @@ mod tests {
         let block1 = func.dfg.make_block();
         let block2 = func.dfg.make_block();
         let block3 = func.dfg.make_block();
+        let block4 = func.dfg.make_block();
         let cond = func.dfg.append_block_param(block0, types::I32);
 
         {
@@ -342,11 +343,13 @@ mod tests {
             cur.ins().jump(block2, &[]);
 
             cur.insert_block(block2);
-            cur.ins().brnz(cond, block1, &[]);
-            cur.ins().jump(block3, &[]);
+            cur.ins().brif(cond, block1, &[], block3, &[]);
 
             cur.insert_block(block3);
-            cur.ins().brnz(cond, block0, &[]);
+            cur.ins().brif(cond, block0, &[], block4, &[]);
+
+            cur.insert_block(block4);
+            cur.ins().return_(&[]);
         }
 
         let mut loop_analysis = LoopAnalysis::new();
@@ -385,31 +388,32 @@ mod tests {
         let block3 = func.dfg.make_block();
         let block4 = func.dfg.make_block();
         let block5 = func.dfg.make_block();
+        let block6 = func.dfg.make_block();
         let cond = func.dfg.append_block_param(block0, types::I32);
 
         {
             let mut cur = FuncCursor::new(&mut func);
 
             cur.insert_block(block0);
-            cur.ins().brnz(cond, block1, &[]);
-            cur.ins().jump(block3, &[]);
+            cur.ins().brif(cond, block1, &[], block3, &[]);
 
             cur.insert_block(block1);
             cur.ins().jump(block2, &[]);
 
             cur.insert_block(block2);
-            cur.ins().brnz(cond, block1, &[]);
-            cur.ins().jump(block5, &[]);
+            cur.ins().brif(cond, block1, &[], block5, &[]);
 
             cur.insert_block(block3);
             cur.ins().jump(block4, &[]);
 
             cur.insert_block(block4);
-            cur.ins().brnz(cond, block3, &[]);
-            cur.ins().jump(block5, &[]);
+            cur.ins().brif(cond, block3, &[], block5, &[]);
 
             cur.insert_block(block5);
-            cur.ins().brnz(cond, block0, &[]);
+            cur.ins().brif(cond, block0, &[], block6, &[]);
+
+            cur.insert_block(block6);
+            cur.ins().return_(&[]);
         }
 
         let mut loop_analysis = LoopAnalysis::new();

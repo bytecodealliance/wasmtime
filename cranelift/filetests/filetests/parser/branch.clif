@@ -52,32 +52,32 @@ block1(v92: i32, v93: f32):
 ; Branches with no arguments. The '()' empty argument list is optional.
 function %minimal(i32) {
 block0(v90: i32):
-    brz v90, block1
+    brif v90, block1, block1
 
 block1:
-    brnz v90, block1()
+    brif v90, block1(), block1()
 }
 ; sameln: function %minimal(i32) fast {
 ; nextln: block0(v90: i32):
-; nextln:     brz v90, block1
+; nextln:     brif v90, block1, block1
 ; nextln: 
 ; nextln: block1:
-; nextln:     brnz.i32 v90, block1
+; nextln:     brif.i32 v90, block1, block1
 ; nextln: }
 
 function %twoargs(i32, f32) {
 block0(v90: i32, v91: f32):
-    brz v90, block1(v90, v91)
+    brif v90, block1(v90, v91), block1(v90, v91)
 
 block1(v92: i32, v93: f32):
-    brnz v90, block0(v92, v93)
+    brif v90, block0(v92, v93), block0(v92, v93)
 }
 ; sameln: function %twoargs(i32, f32) fast {
 ; nextln: block0(v90: i32, v91: f32):
-; nextln:     brz v90, block1(v90, v91)
+; nextln:     brif v90, block1(v90, v91), block1(v90, v91)
 ; nextln: 
 ; nextln: block1(v92: i32, v93: f32):
-; nextln:     brnz.i32 v90, block0(v92, v93)
+; nextln:     brif.i32 v90, block0(v92, v93), block0(v92, v93)
 ; nextln: }
 
 function %jumptable(i32) {

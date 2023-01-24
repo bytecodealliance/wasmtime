@@ -18,8 +18,7 @@ block0(v0: i32, v1: i32):
     v4 = iconst.i32 71
     v5 = iconst.i32 72
     v8 = iconst.i32 73
-    brz v0, block1
-    jump block2(v8)
+    brif v0, block2(v8), block1
 
 block1:
     v2 = iadd v0, v3
@@ -34,8 +33,7 @@ block2(v9: i32):
 ; nextln: block0(v0: i32, v1: i32):
 ; nextln:     v4 = iconst.i32 71
 ; nextln:     v8 = iconst.i32 73
-; nextln:     brz v0, block1
-; nextln:     jump block2(v8)
+; nextln:     brif v0, block2(v8), block1
 ; nextln: 
 ; nextln: block1:
 ; nextln:     return v0

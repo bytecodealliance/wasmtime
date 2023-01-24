@@ -2904,41 +2904,6 @@
                           (jmp_cond (CC.NZ) then else))))
 
 
-;; Rules for `brz` and `brnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule 2 (lower_branch (brz (maybe_uextend (icmp cc a b)) _) (two_targets taken not_taken))
-      (let ((cmp IcmpCondResult (invert_icmp_cond_result (emit_cmp cc a b))))
-        (emit_side_effect (jmp_cond_icmp cmp taken not_taken))))
-
-(rule 2 (lower_branch (brz (maybe_uextend (fcmp cc a b)) _) (two_targets taken not_taken))
-      (let ((cmp FcmpCondResult (emit_fcmp (floatcc_inverse cc) a b)))
-        (emit_side_effect (jmp_cond_fcmp cmp taken not_taken))))
-
-(rule 1 (lower_branch (brz val @ (value_type $I128) _) (two_targets taken not_taken))
-      (emit_side_effect (jmp_cond_icmp (cmp_zero_i128 (CC.NZ) val) taken not_taken)))
-
-(rule 0 (lower_branch (brz val @ (value_type (ty_int_bool_or_ref)) _) (two_targets taken not_taken))
-      (emit_side_effect
-        (with_flags_side_effect (cmp_zero_int_bool_ref val)
-                                (jmp_cond (CC.Z) taken not_taken))))
-
-
-(rule 2 (lower_branch (brnz (maybe_uextend (icmp cc a b)) _) (two_targets taken not_taken))
-      (emit_side_effect (jmp_cond_icmp (emit_cmp cc a b) taken not_taken)))
-
-(rule 2 (lower_branch (brnz (maybe_uextend (fcmp cc a b)) _) (two_targets taken not_taken))
-      (let ((cmp FcmpCondResult (emit_fcmp cc a b)))
-        (emit_side_effect (jmp_cond_fcmp cmp taken not_taken))))
-
-(rule 1 (lower_branch (brnz val @ (value_type $I128) _) (two_targets taken not_taken))
-      (emit_side_effect (jmp_cond_icmp (cmp_zero_i128 (CC.Z) val) taken not_taken)))
-
-(rule 0 (lower_branch (brnz val @ (value_type (ty_int_bool_or_ref)) _) (two_targets taken not_taken))
-      (emit_side_effect
-        (with_flags_side_effect (cmp_zero_int_bool_ref val)
-                                (jmp_cond (CC.NZ) taken not_taken))))
-
-
 ;; Compare an I128 value to zero, returning a flags result suitable for making a
 ;; jump decision. The comparison is implemented as `(hi == 0) && (low == 0)`,
 ;; and the result can be interpreted as follows

@@ -62,16 +62,16 @@
 ;;   lgr %r5, %r7
 ;;   lg %r7, 8(%r5)
 ;;   clgr %r2, %r7
-;;   jgnh label1 ; jg label3
-;; block1:
-;;   ag %r4, 0(%r5)
-;;   llilh %r2, 65535
-;;   stc %r3, 0(%r2,%r4)
-;;   jg label2
+;;   jgh label1 ; jg label2
 ;; block2:
+;;   ag %r4, 0(%r5)
+;;   llilh %r5, 65535
+;;   stc %r3, 0(%r5,%r4)
+;;   jg label3
+;; block3:
 ;;   lmg %r7, %r15, 56(%r15)
 ;;   br %r14
-;; block3:
+;; block1:
 ;;   trap
 ;;
 ;; function u0:1:
@@ -85,13 +85,13 @@
 ;;   jle 6 ; trap
 ;;   lg %r2, 8(%r4)
 ;;   clgr %r5, %r2
-;;   jgnh label1 ; jg label3
-;; block1:
-;;   ag %r3, 0(%r4)
-;;   llilh %r5, 65535
-;;   llc %r2, 0(%r5,%r3)
-;;   jg label2
+;;   jgh label1 ; jg label2
 ;; block2:
-;;   br %r14
+;;   ag %r3, 0(%r4)
+;;   llilh %r2, 65535
+;;   llc %r2, 0(%r2,%r3)
+;;   jg label3
 ;; block3:
+;;   br %r14
+;; block1:
 ;;   trap

@@ -170,8 +170,7 @@ block1(v0: i8):
 
 function %fuzzgen_2(i16) -> i16, i16 system_v {
 block0(v0: i16):
-    brnz v0, block1(v0, v0)
-    jump block2(v0, v0)
+    brif v0, block1(v0, v0), block2(v0, v0)
 
 block1(v1: i16, v2: i16):
     brif v1, block2(v2, v2), block2(v2, v2)
