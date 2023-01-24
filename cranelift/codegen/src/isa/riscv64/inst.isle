@@ -1898,7 +1898,7 @@
             (hi Reg (value_regs_get regs 1)))
         (alu_rrr (AluOPRRR.Or) lo hi)))
 
-;;;;
+;; Default behavior for branching based on an input value.
 (rule
   (lower_branch (brif v @ (value_type ty) _ _) targets)
   (lower_brz_or_nz (IntCC.NotEqual) (normalize_cmp_value ty v) targets ty))
@@ -1910,10 +1910,12 @@
         (cmp Reg (gen_icmp (IntCC.NotEqual) v zero $I128)))
     (lower_brz_or_nz (IntCC.NotEqual) cmp targets $I64)))
 
+;; Branching on the result of an icmp
 (rule 1
   (lower_branch (brif (icmp cc a @ (value_type ty) b) _ _) targets)
   (lower_br_icmp cc a b targets ty))
 
+;; Branching on the result of an fcmp
 (rule 1
   (lower_branch (brif (fcmp cc a @ (value_type ty) b) _ _) targets)
   (let ((then BranchTarget (label_to_br_target (vec_label_get targets 0)))
