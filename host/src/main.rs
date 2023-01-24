@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use host::{add_to_linker, Wasi};
+use host::{add_to_linker, WasiCommand};
 use std::path::PathBuf;
 use wasi_cap_std_sync::WasiCtxBuilder;
 use wasmtime::{
@@ -34,7 +34,7 @@ async fn main() -> Result<()> {
             .build(),
     );
 
-    let (wasi, _instance) = Wasi::instantiate_async(&mut store, &component, &linker).await?;
+    let (wasi, _instance) = WasiCommand::instantiate_async(&mut store, &component, &linker).await?;
 
     let result: Result<(), ()> = wasi.command(&mut store, 0, 1, &[], &[], &[]).await?;
 

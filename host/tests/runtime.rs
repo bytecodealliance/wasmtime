@@ -1,7 +1,7 @@
 use anyhow::Result;
 use cap_rand::RngCore;
 use cap_std::{ambient_authority, fs::Dir, time::Duration};
-use host::{add_to_linker, Wasi, WasiCtx};
+use host::{add_to_linker, WasiCommand, WasiCtx};
 use std::{
     io::{Cursor, Write},
     sync::Mutex,
@@ -26,7 +26,7 @@ test_programs_macros::tests!();
 // start passing as you add functionality.
 const EXPECT_FAIL: bool = true;
 
-async fn instantiate(path: &str) -> Result<(Store<WasiCtx>, Wasi)> {
+async fn instantiate(path: &str) -> Result<(Store<WasiCtx>, WasiCommand)> {
     println!("{}", path);
 
     let mut config = Config::new();
@@ -41,11 +41,11 @@ async fn instantiate(path: &str) -> Result<(Store<WasiCtx>, Wasi)> {
 
     let mut store = Store::new(&engine, WasiCtxBuilder::new().build());
 
-    let (wasi, _instance) = Wasi::instantiate_async(&mut store, &component, &linker).await?;
+    let (wasi, _instance) = WasiCommand::instantiate_async(&mut store, &component, &linker).await?;
     Ok((store, wasi))
 }
 
-async fn run_hello_stdout(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_hello_stdout(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     wasi.command(
         &mut store,
         0 as host::WasiStream,
@@ -58,7 +58,7 @@ async fn run_hello_stdout(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
-async fn run_panic(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_panic(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     let r = wasi
         .command(
             &mut store,
@@ -83,7 +83,7 @@ async fn run_panic(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     Ok(())
 }
 
-async fn run_args(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_args(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     wasi.command(
         &mut store,
         0 as host::WasiStream,
@@ -96,7 +96,7 @@ async fn run_args(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
-async fn run_random(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_random(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     struct FakeRng;
 
     impl RngCore for FakeRng {
@@ -131,7 +131,7 @@ async fn run_random(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
-async fn run_time(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_time(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     struct FakeWallClock;
 
     impl WasiWallClock for FakeWallClock {
@@ -188,7 +188,7 @@ async fn run_time(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
-async fn run_stdin(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_stdin(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     store
         .data_mut()
         .set_stdin(Box::new(ReadPipe::new(Cursor::new(
@@ -207,7 +207,7 @@ async fn run_stdin(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
-async fn run_poll_stdin(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_poll_stdin(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     store
         .data_mut()
         .set_stdin(Box::new(ReadPipe::new(Cursor::new(
@@ -226,7 +226,7 @@ async fn run_poll_stdin(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
-async fn run_env(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_env(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     wasi.command(
         &mut store,
         0 as host::Descriptor,
@@ -239,7 +239,7 @@ async fn run_env(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
-async fn run_file_read(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_file_read(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     let dir = tempfile::tempdir()?;
 
     std::fs::File::create(dir.path().join("bar.txt"))?.write_all(b"And stood awhile in thought")?;
@@ -264,7 +264,7 @@ async fn run_file_read(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
-async fn run_file_append(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_file_append(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     let dir = tempfile::tempdir()?;
 
     std::fs::File::create(dir.path().join("bar.txt"))?
@@ -300,7 +300,7 @@ async fn run_file_append(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     Ok(())
 }
 
-async fn run_file_dir_sync(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_file_dir_sync(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     let dir = tempfile::tempdir()?;
 
     std::fs::File::create(dir.path().join("bar.txt"))?
@@ -326,7 +326,7 @@ async fn run_file_dir_sync(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> 
     .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
-async fn run_exit_success(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_exit_success(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     let r = wasi
         .command(
             &mut store,
@@ -343,7 +343,7 @@ async fn run_exit_success(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     Ok(())
 }
 
-async fn run_exit_default(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_exit_default(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     let r = wasi
         .command(
             &mut store,
@@ -358,7 +358,7 @@ async fn run_exit_default(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     Ok(())
 }
 
-async fn run_exit_failure(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_exit_failure(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     let r = wasi
         .command(
             &mut store,
@@ -375,7 +375,7 @@ async fn run_exit_failure(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     Ok(())
 }
 
-async fn run_exit_panic(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_exit_panic(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     let r = wasi
         .command(
             &mut store,
@@ -392,7 +392,7 @@ async fn run_exit_panic(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     Ok(())
 }
 
-async fn run_directory_list(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_directory_list(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     let dir = tempfile::tempdir()?;
 
     std::fs::File::create(dir.path().join("foo.txt"))?;
@@ -422,7 +422,7 @@ async fn run_directory_list(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()>
     .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
-async fn run_default_clocks(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_default_clocks(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     wasi.command(
         &mut store,
         0 as host::Descriptor,
@@ -435,7 +435,7 @@ async fn run_default_clocks(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()>
     .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
-async fn run_with_temp_dir(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_with_temp_dir(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     let dir = tempfile::tempdir()?;
 
     let open_dir = Dir::open_ambient_dir(dir.path(), ambient_authority())?;
@@ -458,15 +458,15 @@ async fn run_with_temp_dir(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> 
     .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
-async fn run_big_random_buf(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_big_random_buf(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_clock_time_get(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_clock_time_get(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_close_preopen(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_close_preopen(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
@@ -474,7 +474,7 @@ async fn run_close_preopen(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_dangling_fd(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_dangling_fd(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     if EXPECT_FAIL && cfg!(windows) {
         // TODO!
         return Ok(());
@@ -482,7 +482,7 @@ async fn run_dangling_fd(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_dangling_symlink(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_dangling_symlink(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
@@ -490,7 +490,7 @@ async fn run_dangling_symlink(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_directory_seek(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_directory_seek(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
@@ -498,7 +498,7 @@ async fn run_directory_seek(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_fd_advise(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_fd_advise(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
@@ -506,7 +506,7 @@ async fn run_fd_advise(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_fd_filestat_get(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_fd_filestat_get(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
@@ -514,7 +514,7 @@ async fn run_fd_filestat_get(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_fd_filestat_set(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_fd_filestat_set(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
@@ -522,7 +522,7 @@ async fn run_fd_filestat_set(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_fd_flags_set(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_fd_flags_set(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
@@ -530,11 +530,11 @@ async fn run_fd_flags_set(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_fd_readdir(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_fd_readdir(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_file_allocate(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_file_allocate(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
@@ -542,11 +542,11 @@ async fn run_file_allocate(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_file_pread_pwrite(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_file_pread_pwrite(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_file_seek_tell(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_file_seek_tell(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
@@ -554,15 +554,15 @@ async fn run_file_seek_tell(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_file_truncation(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_file_truncation(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_file_unbuffered_write(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_file_unbuffered_write(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_interesting_paths(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_interesting_paths(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
@@ -570,11 +570,11 @@ async fn run_interesting_paths(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> 
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_isatty(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_isatty(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_nofollow_errors(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_nofollow_errors(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
@@ -582,11 +582,11 @@ async fn run_nofollow_errors(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_path_exists(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_path_exists(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_path_filestat(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_path_filestat(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
@@ -594,7 +594,7 @@ async fn run_path_filestat(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_path_link(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_path_link(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
@@ -602,7 +602,7 @@ async fn run_path_link(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_path_open_create_existing(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_path_open_create_existing(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
@@ -610,7 +610,7 @@ async fn run_path_open_create_existing(store: Store<WasiCtx>, wasi: Wasi) -> Res
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_path_open_dirfd_not_dir(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_path_open_dirfd_not_dir(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
@@ -618,7 +618,7 @@ async fn run_path_open_dirfd_not_dir(store: Store<WasiCtx>, wasi: Wasi) -> Resul
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_path_open_missing(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_path_open_missing(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
@@ -626,7 +626,7 @@ async fn run_path_open_missing(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> 
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_path_open_read_without_rights(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_path_open_read_without_rights(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
@@ -634,7 +634,7 @@ async fn run_path_open_read_without_rights(store: Store<WasiCtx>, wasi: Wasi) ->
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_path_rename(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_path_rename(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
@@ -642,7 +642,10 @@ async fn run_path_rename(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_path_rename_dir_trailing_slashes(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_path_rename_dir_trailing_slashes(
+    store: Store<WasiCtx>,
+    wasi: WasiCommand,
+) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
@@ -650,7 +653,10 @@ async fn run_path_rename_dir_trailing_slashes(store: Store<WasiCtx>, wasi: Wasi)
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_path_rename_file_trailing_slashes(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_path_rename_file_trailing_slashes(
+    store: Store<WasiCtx>,
+    wasi: WasiCommand,
+) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
@@ -658,7 +664,7 @@ async fn run_path_rename_file_trailing_slashes(store: Store<WasiCtx>, wasi: Wasi
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_path_symlink_trailing_slashes(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_path_symlink_trailing_slashes(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
@@ -666,7 +672,7 @@ async fn run_path_symlink_trailing_slashes(store: Store<WasiCtx>, wasi: Wasi) ->
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_poll_oneoff_files(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_poll_oneoff_files(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
@@ -674,7 +680,7 @@ async fn run_poll_oneoff_files(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> 
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_poll_oneoff_stdio(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_poll_oneoff_stdio(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
@@ -682,7 +688,7 @@ async fn run_poll_oneoff_stdio(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> 
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_readlink(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_readlink(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
@@ -690,7 +696,10 @@ async fn run_readlink(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_remove_directory_trailing_slashes(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_remove_directory_trailing_slashes(
+    store: Store<WasiCtx>,
+    wasi: WasiCommand,
+) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
@@ -698,7 +707,7 @@ async fn run_remove_directory_trailing_slashes(store: Store<WasiCtx>, wasi: Wasi
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_remove_nonempty_directory(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_remove_nonempty_directory(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
@@ -706,7 +715,7 @@ async fn run_remove_nonempty_directory(store: Store<WasiCtx>, wasi: Wasi) -> Res
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_renumber(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_renumber(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
@@ -714,19 +723,19 @@ async fn run_renumber(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_sched_yield(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_sched_yield(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_stdio(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_stdio(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_symlink_create(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_symlink_create(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_symlink_filestat(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_symlink_filestat(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
@@ -734,7 +743,7 @@ async fn run_symlink_filestat(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_symlink_loop(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_symlink_loop(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
@@ -742,7 +751,7 @@ async fn run_symlink_loop(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_truncation_rights(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_truncation_rights(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
@@ -750,7 +759,7 @@ async fn run_truncation_rights(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> 
     run_with_temp_dir(store, wasi).await
 }
 
-async fn run_unlink_file_trailing_slashes(store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+async fn run_unlink_file_trailing_slashes(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     if EXPECT_FAIL {
         // TODO!
         return Ok(());
