@@ -113,7 +113,7 @@ struct OutEdge<'a> {
     inst: Inst,
     /// The index into branch_destinations for this instruction that corresponds
     /// to this edge.
-    branch_index: u8,
+    branch_index: u32,
     /// The block that control is transferred to.
     block: Block,
     /// The arguments to that block.
@@ -144,7 +144,7 @@ impl<'a> OutEdge<'a> {
 
         Some(OutEdge {
             inst,
-            branch_index: branch_index as u8,
+            branch_index: branch_index as u32,
             block: block.block(&dfg.value_lists),
             args: bump.alloc_slice_fill_iter(
                 inst_var_args
