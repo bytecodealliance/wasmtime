@@ -356,6 +356,10 @@ impl DominatorTree {
                 BranchInfo::SingleDest(succ) => {
                     self.push_if_unseen(succ.block(&func.dfg.value_lists))
                 }
+                BranchInfo::Conditional(block_then, block_else) => {
+                    self.push_if_unseen(block_then.block(&func.dfg.value_lists));
+                    self.push_if_unseen(block_else.block(&func.dfg.value_lists));
+                }
                 BranchInfo::Table(jt, dest) => {
                     for succ in func.jump_tables[jt].iter() {
                         self.push_if_unseen(*succ);

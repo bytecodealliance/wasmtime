@@ -98,6 +98,22 @@ function %jump_args2() {
         return
 }
 
+function %brif_args() {
+block0:
+    v0 = iconst.i16 10
+    v1 = iconst.i16 10
+    brif v0, block1(v1), block2(v1)
+    ; error: arg 0 (v1) has type i16, expected i64
+    ; error: mismatched argument count
+    ; error: arg 0 (v1) has type i16, expected f32
+
+block1(v2: i64):
+    return
+
+block2(v3: f32, v4: i8):
+    return
+}
+
 function %bad_extend() {
 block0:
     v0 = iconst.i32 10

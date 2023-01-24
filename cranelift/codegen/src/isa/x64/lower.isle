@@ -2885,6 +2885,25 @@
 (rule (lower_branch (jump _) (single_target target))
       (emit_side_effect (jmp_known target)))
 
+;; Rules for `brif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 2 (lower_branch (brif (maybe_uextend (icmp cc a b)) _ _) (two_targets then else))
+        (emit_side_effect (jmp_cond_icmp (emit_cmp cc a b) then else)))
+
+(rule 2 (lower_branch (brif (maybe_uextend (fcmp cc a b)) _ _) (two_targets then else))
+        (emit_side_effect (jmp_cond_fcmp (emit_fcmp cc a b) then else)))
+
+(rule 1 (lower_branch (brif val @ (value_type $I128) _ _)
+                      (two_targets then else))
+      (emit_side_effect (jmp_cond_icmp (cmp_zero_i128 (CC.Z) val) then else)))
+
+(rule (lower_branch (brif val @ (value_type (ty_int_bool_or_ref)) _ _)
+                    (two_targets then else))
+      (emit_side_effect (with_flags_side_effect
+                          (cmp_zero_int_bool_ref val)
+                          (jmp_cond (CC.NZ) then else))))
+
+
 ;; Rules for `brz` and `brnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 2 (lower_branch (brz (maybe_uextend (icmp cc a b)) _) (two_targets taken not_taken))

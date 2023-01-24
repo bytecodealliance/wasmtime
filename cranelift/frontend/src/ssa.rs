@@ -586,10 +586,18 @@ impl SSABuilder {
             // is sufficient.
             BranchInfo::SingleDest(_) => {
                 let dfg = &mut func.dfg;
-                dfg.insts[branch]
-                    .branch_destination_mut()
-                    .unwrap()
-                    .append_argument(val, &mut dfg.value_lists);
+                for dest in dfg.insts[branch].branch_destination_mut() {
+                    dest.append_argument(val, &mut dfg.value_lists);
+                }
+                None
+            }
+            BranchInfo::Conditional(_, _) => {
+                let dfg = &mut func.dfg;
+                for block in dfg.insts[branch].branch_destination_mut() {
+                    if block.block(&dfg.value_lists) == dest_block {
+                        block.append_argument(val, &mut dfg.value_lists);
+                    }
+                }
                 None
             }
             BranchInfo::Table(mut jt, _default_block) => {

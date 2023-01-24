@@ -7,8 +7,8 @@ use crate::value::{Value, ValueConversionKind, ValueError, ValueResult};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
-    types, AbiParam, Block, ExternalName, FuncRef, Function, InstructionData, Opcode, TrapCode,
-    Type, Value as ValueRef,
+    types, AbiParam, Block, BlockCall, ExternalName, FuncRef, Function, InstructionData, Opcode,
+    TrapCode, Type, Value as ValueRef,
 };
 use log::trace;
 use smallvec::{smallvec, SmallVec};
@@ -236,8 +236,7 @@ where
 
     // Retrieve an instruction's branch destination; expects the instruction to be a branch.
 
-    let continue_at = || {
-        let block = inst.branch_destination().unwrap();
+    let continue_at = |block: BlockCall| {
         let branch_args = state
             .collect_values(block.args_slice(&state.get_current_function().dfg.value_lists))
             .map_err(|v| StepError::UnknownValue(v))?;
@@ -248,9 +247,9 @@ where
     };
 
     // Based on `condition`, indicate where to continue the control flow.
-    let branch_when = |condition: bool| -> Result<ControlFlow<V>, StepError> {
+    let branch_when = |condition: bool, block| -> Result<ControlFlow<V>, StepError> {
         if condition {
-            continue_at()
+            continue_at(block)
         } else {
             Ok(ControlFlow::Continue)
         }
@@ -279,17 +278,48 @@ where
 
     // Interpret a Cranelift instruction.
     Ok(match inst.opcode() {
-        Opcode::Jump => continue_at()?,
-        Opcode::Brz => branch_when(
-            !arg(0)?
-                .convert(ValueConversionKind::ToBoolean)?
-                .into_bool()?,
-        )?,
-        Opcode::Brnz => branch_when(
-            arg(0)?
-                .convert(ValueConversionKind::ToBoolean)?
-                .into_bool()?,
-        )?,
+        Opcode::Jump => {
+            let block = inst.branch_destination()[0];
+            continue_at(block)?
+        }
+        Opcode::Brif => {
+            if let InstructionData::Brif {
+                arg,
+                blocks: [block_then, block_else],
+                ..
+            } = inst
+            {
+                let arg = state.get_value(arg).ok_or(StepError::UnknownValue(arg))?;
+
+                let condition = arg.convert(ValueConversionKind::ToBoolean)?.into_bool()?;
+
+                if condition {
+                    continue_at(block_then)?
+                } else {
+                    continue_at(block_else)?
+                }
+            } else {
+                unreachable!()
+            }
+        }
+        Opcode::Brz => {
+            let block = inst.branch_destination()[0];
+            branch_when(
+                !arg(0)?
+                    .convert(ValueConversionKind::ToBoolean)?
+                    .into_bool()?,
+                block,
+            )?
+        }
+        Opcode::Brnz => {
+            let block = inst.branch_destination()[0];
+            branch_when(
+                arg(0)?
+                    .convert(ValueConversionKind::ToBoolean)?
+                    .into_bool()?,
+                block,
+            )?
+        }
         Opcode::BrTable => {
             if let InstructionData::BranchTable {
                 table, destination, ..

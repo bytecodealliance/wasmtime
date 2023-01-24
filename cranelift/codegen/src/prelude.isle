@@ -34,6 +34,7 @@
 (type Type (primitive Type))
 (type Value (primitive Value))
 (type ValueList (primitive ValueList))
+(type BlockCall (primitive BlockCall))
 
 ;; ISLE representation of `&[Value]`.
 (type ValueSlice (primitive ValueSlice))

@@ -2588,6 +2588,26 @@ impl<'a> Parser<'a> {
                     destination,
                 }
             }
+            InstructionFormat::Brif => {
+                let arg = self.match_value("expected SSA value control operand")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let block_then = {
+                    let block_num = self.match_block("expected branch then block")?;
+                    let args = self.parse_opt_value_list()?;
+                    ctx.function.dfg.block_call(block_num, &args)
+                };
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let block_else = {
+                    let block_num = self.match_block("expected branch else block")?;
+                    let args = self.parse_opt_value_list()?;
+                    ctx.function.dfg.block_call(block_num, &args)
+                };
+                InstructionData::Brif {
+                    opcode,
+                    arg,
+                    blocks: [block_then, block_else],
+                }
+            }
             InstructionFormat::Branch => {
                 let arg = self.match_value("expected SSA value control operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;

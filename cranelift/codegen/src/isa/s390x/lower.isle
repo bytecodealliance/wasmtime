@@ -3750,6 +3750,17 @@
         (emit_side_effect (jt_sequence (lshl_imm $I64 idx 2) targets))))
 
 
+;;;; Rules for `brif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Two-way conditional branch on nonzero.  `targets` contains:
+;; - element 0: target if the condition is true (i.e. value is nonzero)
+;; - element 1: target if the condition is false (i.e. value is zero)
+(rule (lower_branch (brif val_cond _ _) targets)
+      (emit_side_effect (cond_br_bool (value_nonzero val_cond)
+                                      (vec_element targets 0)
+                                      (vec_element targets 1))))
+
+
 ;;;; Rules for `brz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Two-way conditional branch on zero.  `targets` contains:

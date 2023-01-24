@@ -271,6 +271,10 @@ impl InstructionData {
         match *self {
             Self::Jump { destination, .. } => BranchInfo::SingleDest(destination),
             Self::Branch { destination, .. } => BranchInfo::SingleDest(destination),
+            Self::Brif {
+                blocks: [block_then, block_else],
+                ..
+            } => BranchInfo::Conditional(block_then, block_else),
             Self::BranchTable {
                 table, destination, ..
             } => BranchInfo::Table(table, destination),
@@ -281,27 +285,31 @@ impl InstructionData {
         }
     }
 
-    /// Get the single destination of this branch instruction, if it is a single destination
-    /// branch or jump.
+    /// Get the destinations of this instruction, if it's a branch.
     ///
-    /// Multi-destination branches like `br_table` return `None`.
-    pub fn branch_destination(&self) -> Option<BlockCall> {
-        match *self {
-            Self::Jump { destination, .. } | Self::Branch { destination, .. } => Some(destination),
-            Self::BranchTable { .. } => None,
+    /// `br_table` returns the empty slice.
+    pub fn branch_destination(&self) -> &[BlockCall] {
+        match self {
+            Self::Jump {
+                ref destination, ..
+            }
+            | Self::Branch {
+                ref destination, ..
+            } => std::slice::from_ref(destination),
+            Self::Brif { blocks, .. } => blocks,
+            Self::BranchTable { .. } => &[],
             _ => {
                 debug_assert!(!self.opcode().is_branch());
-                None
+                &[]
             }
         }
     }
 
-    /// Get a mutable reference to the single destination of this branch instruction, if it is a
-    /// single destination branch or jump.
+    /// Get a mutable slice of the destinations of this instruction, if it's a branch.
     ///
-    /// Multi-destination branches like `br_table` return `None`.
-    pub fn branch_destination_mut(&mut self) -> Option<&mut BlockCall> {
-        match *self {
+    /// `br_table` returns the empty slice.
+    pub fn branch_destination_mut(&mut self) -> &mut [BlockCall] {
+        match self {
             Self::Jump {
                 ref mut destination,
                 ..
@@ -309,11 +317,12 @@ impl InstructionData {
             | Self::Branch {
                 ref mut destination,
                 ..
-            } => Some(destination),
-            Self::BranchTable { .. } => None,
+            } => std::slice::from_mut(destination),
+            Self::Brif { blocks, .. } => blocks,
+            Self::BranchTable { .. } => &mut [],
             _ => {
                 debug_assert!(!self.opcode().is_branch());
-                None
+                &mut []
             }
         }
     }
@@ -455,6 +464,9 @@ pub enum BranchInfo {
 
     /// This is a branch or jump to a single destination block, possibly taking value arguments.
     SingleDest(BlockCall),
+
+    /// This is a conditional branch
+    Conditional(BlockCall, BlockCall),
 
     /// This is a jump table branch which can have many destination blocks and one default block.
     Table(JumpTable, Block),
