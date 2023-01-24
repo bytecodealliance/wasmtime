@@ -16,6 +16,7 @@ task:
     #!/usr/bin/env bash
     if [[ "$CIRRUS_RELEASE" == "" ]]; then
       CIRRUS_RELEASE=$(curl -sL https://api.github.com/repos/$CIRRUS_REPO_FULL_NAME/releases/tags/$CIRRUS_TAG | jq -r '.id')
+      echo "https://api.github.com/repos/$CIRRUS_REPO_FULL_NAME/releases/tags/$CIRRUS_TAG"
       if [[ "$CIRRUS_RELEASE" == "null" ]]; then
         echo "Failed to find a release associated with this tag! ($CIRRUS_RELEASE)"
         exit 0
