@@ -140,6 +140,23 @@ block2:
 ; run: %brif_i8(-1) == 1
 ; run: %brif_i8(97) == 1
 
+function %brif_different_args(i8) -> i8 {
+block0(v0: i8):
+    brif v0, block1(v0, v0), block2(v0)
+
+block1(v1: i8, v2: i8):
+    v3 = iadd v1, v2
+    return v3
+
+block2(v4: i8):
+    return v4
+}
+
+; run: %brif_different_args(0) == 0
+; run: %brif_different_args(1) == 2
+; run: %brif_different_args(8) == 16
+; run: %brif_different_args(128) == 0
+
 function %fuzzgen_1() -> i8 system_v {
 block0:
     v1 = iconst.i8 35
