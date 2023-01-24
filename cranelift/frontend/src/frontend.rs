@@ -680,14 +680,14 @@ impl<'a> FunctionBuilder<'a> {
     ///
     /// **Note:** You are responsible for maintaining the coherence with the arguments of
     /// other jump instructions.
-    pub fn change_jump_destination(&mut self, inst: Inst, new_dest: Block) {
+    pub fn change_jump_destination(&mut self, inst: Inst, old_block: Block, new_block: Block) {
         let dfg = &mut self.func.dfg;
-        for old_dest in dfg.insts[inst].branch_destination_mut() {
-            self.func_ctx
-                .ssa
-                .remove_block_predecessor(old_dest.block(&dfg.value_lists), inst);
-            old_dest.set_block(new_dest, &mut dfg.value_lists);
-            self.func_ctx.ssa.declare_block_predecessor(new_dest, inst);
+        for block in dfg.insts[inst].branch_destination_mut() {
+            if block.block(&dfg.value_lists) == old_block {
+                self.func_ctx.ssa.remove_block_predecessor(old_block, inst);
+                block.set_block(new_block, &mut dfg.value_lists);
+                self.func_ctx.ssa.declare_block_predecessor(new_block, inst);
+            }
         }
     }
 
