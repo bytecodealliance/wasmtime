@@ -9,7 +9,6 @@ task:
     - pkg install -y curl bash git-tiny gohugo jq
     - git submodule init
     - git submodule update
-    - chmod 755 push-release.sh
   script: 
     - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     - cargo build --release
@@ -18,7 +17,7 @@ task:
     if [[ "$CIRRUS_RELEASE" == "" ]]; then
       CIRRUS_RELEASE=$(curl -sL https://api.github.com/repos/$CIRRUS_REPO_FULL_NAME/releases/tags/$CIRRUS_TAG | jq -r '.id')
       if [[ "$CIRRUS_RELEASE" == "null" ]]; then
-        echo "Failed to find a release associated with this tag!"
+        echo "Failed to find a release associated with this tag! ($CIRRUS_RELEASE)"
         exit 0
       fi
     fi
