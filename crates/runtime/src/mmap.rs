@@ -67,7 +67,7 @@ impl Mmap {
                 rustix::mm::mmap(
                     ptr::null_mut(),
                     len,
-                    rustix::mm::ProtFlags::READ,
+                    rustix::mm::ProtFlags::READ | rustix::mm::ProtFlags::WRITE,
                     rustix::mm::MapFlags::PRIVATE,
                     &file,
                     0,
@@ -109,12 +109,16 @@ impl Mmap {
                     .len();
                 let len = usize::try_from(len).map_err(|_| anyhow!("file too large to map"))?;
 
-                // Create a file mapping that allows PAGE_EXECUTE_READ which
-                // we'll be using for mapped text sections in ELF images later.
+                // Create a file mapping that allows PAGE_EXECUTE_WRITECOPY.
+                // This enables up-to these permissions but we won't leave all
+                // of these permissions active at all times. Execution is
+                // necessary for the generated code from Cranelift and the
+                // WRITECOPY part is needed for possibly resolving relocations,
+                // but otherwise writes don't happen.
                 let mapping = CreateFileMappingW(
                     file.as_raw_handle() as isize,
                     ptr::null_mut(),
-                    PAGE_EXECUTE_READ,
+                    PAGE_EXECUTE_WRITECOPY,
                     0,
                     0,
                     ptr::null(),
@@ -124,9 +128,16 @@ impl Mmap {
                         .context("failed to create file mapping");
                 }
 
-                // Create a view for the entire file using `FILE_MAP_EXECUTE`
-                // here so that we can later change the text section to execute.
-                let ptr = MapViewOfFile(mapping, FILE_MAP_READ | FILE_MAP_EXECUTE, 0, 0, len);
+                // Create a view for the entire file using all our requisite
+                // permissions so that we can change the virtual permissions
+                // later on.
+                let ptr = MapViewOfFile(
+                    mapping,
+                    FILE_MAP_READ | FILE_MAP_EXECUTE | FILE_MAP_COPY,
+                    0,
+                    0,
+                    len,
+                );
                 let err = io::Error::last_os_error();
                 CloseHandle(mapping);
                 if ptr.is_null() {
@@ -140,10 +151,10 @@ impl Mmap {
                     file: Some(Arc::new(file)),
                 };
 
-                // Protect the entire file as PAGE_READONLY to start (i.e.
+                // Protect the entire file as PAGE_WRITECOPY to start (i.e.
                 // remove the execute bit)
                 let mut old = 0;
-                if VirtualProtect(ret.ptr as *mut _, ret.len, PAGE_READONLY, &mut old) == 0 {
+                if VirtualProtect(ret.ptr as *mut _, ret.len, PAGE_WRITECOPY, &mut old) == 0 {
                     return Err(io::Error::last_os_error())
                         .context("failed change pages to `PAGE_READONLY`");
                 }
@@ -340,7 +351,6 @@ impl Mmap {
 
     /// Return the allocated memory as a mutable slice of u8.
     pub fn as_mut_slice(&mut self) -> &mut [u8] {
-        debug_assert!(!self.is_readonly());
         unsafe { slice::from_raw_parts_mut(self.ptr as *mut u8, self.len) }
     }
 
@@ -362,53 +372,6 @@ impl Mmap {
     /// Return whether any memory has been allocated.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
-    }
-
-    /// Returns whether the underlying mapping is readonly, meaning that
-    /// attempts to write will fault.
-    pub fn is_readonly(&self) -> bool {
-        self.file.is_some()
-    }
-
-    /// Makes the specified `range` within this `Mmap` to be read/write.
-    pub unsafe fn make_writable(&self, range: Range<usize>) -> Result<()> {
-        assert!(range.start <= self.len());
-        assert!(range.end <= self.len());
-        assert!(range.start <= range.end);
-        assert!(
-            range.start % crate::page_size() == 0,
-            "changing of protections isn't page-aligned",
-        );
-
-        let base = self.as_ptr().add(range.start) as *mut _;
-        let len = range.end - range.start;
-
-        // On Windows when we have a file mapping we need to specifically use
-        // `PAGE_WRITECOPY` to ensure that pages are COW'd into place because
-        // we don't want our modifications to go back to the original file.
-        #[cfg(windows)]
-        {
-            use std::io;
-            use windows_sys::Win32::System::Memory::*;
-
-            let mut old = 0;
-            let result = if self.file.is_some() {
-                VirtualProtect(base, len, PAGE_WRITECOPY, &mut old)
-            } else {
-                VirtualProtect(base, len, PAGE_READWRITE, &mut old)
-            };
-            if result == 0 {
-                return Err(io::Error::last_os_error().into());
-            }
-        }
-
-        #[cfg(not(windows))]
-        {
-            use rustix::mm::{mprotect, MprotectFlags};
-            mprotect(base, len, MprotectFlags::READ | MprotectFlags::WRITE)?;
-        }
-
-        Ok(())
     }
 
     /// Makes the specified `range` within this `Mmap` to be read/execute.
@@ -466,6 +429,39 @@ impl Mmap {
             };
 
             mprotect(base, len, flags)?;
+        }
+
+        Ok(())
+    }
+
+    /// Makes the specified `range` within this `Mmap` to be readonly.
+    pub unsafe fn make_readonly(&self, range: Range<usize>) -> Result<()> {
+        assert!(range.start <= self.len());
+        assert!(range.end <= self.len());
+        assert!(range.start <= range.end);
+        assert!(
+            range.start % crate::page_size() == 0,
+            "changing of protections isn't page-aligned",
+        );
+        let base = self.as_ptr().add(range.start) as *mut _;
+        let len = range.end - range.start;
+
+        #[cfg(windows)]
+        {
+            use std::io;
+            use windows_sys::Win32::System::Memory::*;
+
+            let mut old = 0;
+            let result = VirtualProtect(base, len, PAGE_READONLY, &mut old);
+            if result == 0 {
+                return Err(io::Error::last_os_error().into());
+            }
+        }
+
+        #[cfg(not(windows))]
+        {
+            use rustix::mm::{mprotect, MprotectFlags};
+            mprotect(base, len, MprotectFlags::READ)?;
         }
 
         Ok(())
