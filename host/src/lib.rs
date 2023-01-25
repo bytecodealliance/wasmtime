@@ -11,7 +11,8 @@ pub use wasi_common::{table::Table, WasiCtx};
 type HostResult<T, E> = anyhow::Result<Result<T, E>>;
 
 wasmtime::component::bindgen!({
-    path: "../wit/wasi.wit",
+    path: "../wit",
+    world: "wasi-command",
     tracing: true,
     async: true,
 });

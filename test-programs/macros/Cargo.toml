@@ -13,4 +13,4 @@ test = false
 quote = "1.0"
 
 [build-dependencies]
-wit-component = "0.3.2"
+wit-component = "0.4.2"
