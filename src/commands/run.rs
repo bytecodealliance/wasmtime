@@ -250,9 +250,6 @@ impl RunCommand {
         for address in &self.run.common.wasi.tcplisten {
             let stdlistener = std::net::TcpListener::bind(address)
                 .with_context(|| format!("failed to bind to address '{}'", address))?;
-
-            let _ = stdlistener.set_nonblocking(true)?;
-
             listeners.push(TcpListener::from_std(stdlistener))
         }
         Ok(listeners)
@@ -874,7 +871,6 @@ fn ctx_set_listenfd(mut num_fd: usize, builder: &mut WasiCtxBuilder) -> Result<u
 
     for i in 0..listenfd.len() {
         if let Some(stdlistener) = listenfd.take_tcp_listener(i)? {
-            let _ = stdlistener.set_nonblocking(true)?;
             let listener = TcpListener::from_std(stdlistener);
             builder.preopened_socket((3 + i) as _, listener)?;
             num_fd = 3 + i;
