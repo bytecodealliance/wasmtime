@@ -3,6 +3,8 @@
 //! This module is a work-in-progress and currently represents an incomplete and
 //! probably buggy implementation of the component model.
 
+#![cfg_attr(nightlydoc, doc(cfg(feature = "component-model")))]
+
 mod component;
 mod func;
 mod instance;
