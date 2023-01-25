@@ -237,7 +237,21 @@ impl CodeMemory {
         //   both the actual unwinding tables as well as the validity of the
         //   pointers we pass in itself.
         unsafe {
+            // First, if necessary, apply relocations. This can happen for
+            // things like libcalls which happen late in the lowering process
+            // that don't go through the Wasm-based libcalls layer that's
+            // indirected through the `VMContext`. Note that most modules won't
+            // have relocations, so this typically doesn't do anything.
             self.apply_relocations()?;
+
+            // Next freeze the contents of this image by making all of the
+            // memory readonly. Nothing after this point should ever be modified
+            // so commit everything. For a compiled-in-memory image this will
+            // mean IPIs to evict writable mappings from other cores. For
+            // loaded-from-disk images this shouldn't result in IPIs so long as
+            // there weren't any relocations because nothing should have
+            // otherwise written to the image at any point either.
+            self.mmap.make_readonly(0..self.mmap.len())?;
 
             let text = self.text();
 
@@ -248,9 +262,7 @@ impl CodeMemory {
             icache_coherence::clear_cache(text.as_ptr().cast(), text.len())
                 .expect("Failed cache clear");
 
-            // Switch the executable portion from read/write to
-            // read/execute, notably not using read/write/execute to prevent
-            // modifications.
+            // Switch the executable portion from readonly to read/execute.
             self.mmap
                 .make_executable(self.text.clone(), self.enable_branch_protection)
                 .expect("unable to make memory executable");

@@ -104,6 +104,14 @@ impl MmapVec {
         )
     }
 
+    /// Makes the specified `range` within this `mmap` to be read-only.
+    pub unsafe fn make_readonly(&self, range: Range<usize>) -> Result<()> {
+        assert!(range.start <= range.end);
+        assert!(range.end <= self.range.len());
+        self.mmap
+            .make_readonly(range.start + self.range.start..range.end + self.range.start)
+    }
+
     /// Returns the underlying file that this mmap is mapping, if present.
     pub fn original_file(&self) -> Option<&Arc<File>> {
         self.mmap.original_file()

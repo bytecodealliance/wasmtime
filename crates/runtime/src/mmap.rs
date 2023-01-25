@@ -434,6 +434,39 @@ impl Mmap {
         Ok(())
     }
 
+    /// Makes the specified `range` within this `Mmap` to be readonly.
+    pub unsafe fn make_readonly(&self, range: Range<usize>) -> Result<()> {
+        assert!(range.start <= self.len());
+        assert!(range.end <= self.len());
+        assert!(range.start <= range.end);
+        assert!(
+            range.start % crate::page_size() == 0,
+            "changing of protections isn't page-aligned",
+        );
+        let base = self.as_ptr().add(range.start) as *mut _;
+        let len = range.end - range.start;
+
+        #[cfg(windows)]
+        {
+            use std::io;
+            use windows_sys::Win32::System::Memory::*;
+
+            let mut old = 0;
+            let result = VirtualProtect(base, len, PAGE_READONLY, &mut old);
+            if result == 0 {
+                return Err(io::Error::last_os_error().into());
+            }
+        }
+
+        #[cfg(not(windows))]
+        {
+            use rustix::mm::{mprotect, MprotectFlags};
+            mprotect(base, len, MprotectFlags::READ)?;
+        }
+
+        Ok(())
+    }
+
     /// Returns the underlying file that this mmap is mapping, if present.
     pub fn original_file(&self) -> Option<&Arc<File>> {
         self.file.as_ref()
