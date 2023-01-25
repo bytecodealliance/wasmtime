@@ -2117,6 +2117,12 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::ReturnCall { .. } | Operator::ReturnCallIndirect { .. } => {
             return Err(wasm_unsupported!("proposed tail-call operator {:?}", op));
         }
+        Operator::MemoryDiscard { .. } => {
+            return Err(wasm_unsupported!(
+                "proposed memory-control operator {:?}",
+                op
+            ));
+        }
         Operator::I8x16RelaxedSwizzle
         | Operator::I32x4RelaxedTruncSatF32x4S
         | Operator::I32x4RelaxedTruncSatF32x4U
