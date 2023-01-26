@@ -616,6 +616,18 @@ macro_rules! isle_common_prelude_methods {
             cc.inverse()
         }
 
+        fn floatcc_unordered(&mut self, cc: &FloatCC) -> bool {
+            match *cc {
+                FloatCC::Unordered
+                | FloatCC::UnorderedOrEqual
+                | FloatCC::UnorderedOrLessThan
+                | FloatCC::UnorderedOrLessThanOrEqual
+                | FloatCC::UnorderedOrGreaterThan
+                | FloatCC::UnorderedOrGreaterThanOrEqual => true,
+                _ => false,
+            }
+        }
+
         #[inline]
         fn unpack_value_array_2(&mut self, arr: &ValueArray2) -> (Value, Value) {
             let [a, b] = *arr;

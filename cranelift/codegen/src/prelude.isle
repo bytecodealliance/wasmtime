@@ -225,6 +225,10 @@
 (decl floatcc_inverse (FloatCC) FloatCC)
 (extern constructor floatcc_inverse floatcc_inverse)
 
+;; True when this FloatCC involves an unordered comparison.
+(decl pure floatcc_unordered (FloatCC) bool)
+(extern constructor floatcc_unordered floatcc_unordered)
+
 ;;;; Helper Clif Extractors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; An extractor that only matches types that can fit in 16 bits.
