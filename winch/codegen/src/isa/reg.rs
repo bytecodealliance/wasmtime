@@ -33,7 +33,7 @@ impl Reg {
     }
 
     /// Get the encoding of the underlying register.
-    pub fn hw_enc(self) -> u8 {
+    pub const fn hw_enc(self) -> u8 {
         self.0.hw_enc() as u8
     }
 

@@ -1,6 +1,6 @@
 //! Assembler library implementation for x64.
 
-use crate::{abi::Address, isa::reg::Reg, masm::OperandSize};
+use crate::{isa::reg::Reg, masm::OperandSize};
 use cranelift_codegen::{
     isa::x64::{
         args::{
@@ -11,6 +11,8 @@ use cranelift_codegen::{
     },
     settings, Final, MachBuffer, MachBufferFinalized, MachInstEmit, Writable,
 };
+
+use super::address::Address;
 
 /// A x64 instruction operand.
 #[derive(Debug, Copy, Clone)]
@@ -95,14 +97,16 @@ impl Assembler {
         match &(src, dst) {
             (Reg(lhs), Reg(rhs)) => self.mov_rr(*lhs, *rhs, size),
             (Reg(lhs), Mem(addr)) => match addr {
-                Address::Base { base, imm } => self.mov_rm(*lhs, *base, *imm, size),
+                Address::Offset { base, offset: imm } => self.mov_rm(*lhs, *base, *imm, size),
             },
             (Imm(imm), Mem(addr)) => match addr {
-                Address::Base { base, imm: disp } => self.mov_im(*imm as u64, *base, *disp, size),
+                Address::Offset { base, offset: disp } => {
+                    self.mov_im(*imm as u64, *base, *disp, size)
+                }
             },
             (Imm(imm), Reg(reg)) => self.mov_ir(*imm as u64, *reg, size),
             (Mem(addr), Reg(reg)) => match addr {
-                Address::Base { base, imm } => self.mov_mr(*base, *imm, *reg, size),
+                Address::Offset { base, offset: imm } => self.mov_mr(*base, *imm, *reg, size),
             },
 
             _ => panic!(

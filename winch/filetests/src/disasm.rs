@@ -52,6 +52,18 @@ fn disassembler_for(isa: &dyn TargetIsa) -> Result<Capstone> {
             .build()
             .map_err(|e| anyhow::format_err!("{}", e))?,
 
+        Architecture::Aarch64 { .. } => {
+            let mut cs = Capstone::new()
+                .arm64()
+                .mode(arch::arm64::ArchMode::Arm)
+                .build()
+                .map_err(|e| anyhow::format_err!("{}", e))?;
+
+            cs.set_skipdata(true)
+                .map_err(|e| anyhow::format_err!("{}", e))?;
+            cs
+        }
+
         _ => bail!("Unsupported ISA"),
     };
 

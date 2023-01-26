@@ -1,8 +1,9 @@
 use super::{
+    address::Address,
     asm::{Assembler, Operand},
     regs::{rbp, rsp},
 };
-use crate::abi::{Address, LocalSlot};
+use crate::abi::LocalSlot;
 use crate::isa::reg::Reg;
 use crate::masm::{MacroAssembler as Masm, OperandSize, RegImm};
 use cranelift_codegen::{isa::x64::settings as x64_settings, settings, Final, MachBufferFinalized};
@@ -39,6 +40,8 @@ impl From<Address> for Operand {
 }
 
 impl Masm for MacroAssembler {
+    type Address = Address;
+
     fn prologue(&mut self) {
         let frame_pointer = rbp();
         let stack_pointer = rsp();
@@ -79,7 +82,7 @@ impl Masm for MacroAssembler {
             })
             .unwrap_or((rbp(), local.offset));
 
-        Address::base(reg, offset)
+        Address::offset(reg, offset)
     }
 
     fn store(&mut self, src: RegImm, dst: Address, size: OperandSize) {

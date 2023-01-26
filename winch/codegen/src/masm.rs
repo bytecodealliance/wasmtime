@@ -1,9 +1,8 @@
-use crate::abi::align_to;
-use crate::abi::{Address, LocalSlot};
+use crate::abi::{align_to, LocalSlot};
 use crate::isa::reg::Reg;
 use crate::regalloc::RegAlloc;
 use cranelift_codegen::{Final, MachBufferFinalized};
-use std::ops::Range;
+use std::{fmt::Debug, ops::Range};
 
 /// Operand size, in bits.
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -59,6 +58,9 @@ impl From<Reg> for RegImm {
 /// where needed, in the case of architectures that use a two-argument form.
 
 pub(crate) trait MacroAssembler {
+    /// The addressing mode.
+    type Address;
+
     /// Emit the function prologue.
     fn prologue(&mut self);
 
@@ -69,16 +71,16 @@ pub(crate) trait MacroAssembler {
     fn reserve_stack(&mut self, bytes: u32);
 
     /// Get the address of a local slot.
-    fn local_address(&mut self, local: &LocalSlot) -> Address;
+    fn local_address(&mut self, local: &LocalSlot) -> Self::Address;
 
     /// Get stack pointer offset.
     fn sp_offset(&mut self) -> u32;
 
     /// Perform a stack store.
-    fn store(&mut self, src: RegImm, dst: Address, size: OperandSize);
+    fn store(&mut self, src: RegImm, dst: Self::Address, size: OperandSize);
 
     /// Perform a stack load.
-    fn load(&mut self, src: Address, dst: Reg, size: OperandSize);
+    fn load(&mut self, src: Self::Address, dst: Reg, size: OperandSize);
 
     /// Perform a move.
     fn mov(&mut self, src: RegImm, dst: RegImm, size: OperandSize);
@@ -111,7 +113,7 @@ pub(crate) trait MacroAssembler {
             // Ensure that the start of the range is at least 4-byte aligned.
             assert!(mem.start % 4 == 0);
             let start = align_to(mem.start, word_size);
-            let addr = self.local_address(&LocalSlot::i32(start));
+            let addr: Self::Address = self.local_address(&LocalSlot::i32(start));
             self.store(RegImm::imm(0), addr, OperandSize::S32);
             // Ensure that the new start of the range, is word-size aligned.
             assert!(start % word_size == 0);
@@ -123,7 +125,7 @@ pub(crate) trait MacroAssembler {
 
         if slots == 1 {
             let slot = LocalSlot::i64(start + word_size);
-            let addr = self.local_address(&slot);
+            let addr: Self::Address = self.local_address(&slot);
             self.store(RegImm::imm(0), addr, OperandSize::S64);
         } else {
             // TODO
@@ -136,7 +138,7 @@ pub(crate) trait MacroAssembler {
 
             for step in (start..end).into_iter().step_by(word_size as usize) {
                 let slot = LocalSlot::i64(step + word_size);
-                let addr = self.local_address(&slot);
+                let addr: Self::Address = self.local_address(&slot);
                 self.store(zero, addr, OperandSize::S64);
             }
         }

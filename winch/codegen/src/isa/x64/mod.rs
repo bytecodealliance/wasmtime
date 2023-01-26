@@ -19,6 +19,7 @@ use wasmparser::{FuncType, FuncValidator, FunctionBody, ValidatorResources};
 use self::regs::ALL_GPR;
 
 mod abi;
+mod address;
 mod asm;
 mod masm;
 // Not all the fpr and gpr constructors are used at the moment;
