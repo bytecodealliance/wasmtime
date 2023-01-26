@@ -13,6 +13,13 @@ fn main() {
         "cargo:rustc-link-search=native={}",
         out_dir.to_str().unwrap()
     );
+
+    // Some specific flags to `wasm-ld` to inform the shape of this adapter.
+    // Notably we're importing memory from the main module and additionally our
+    // own module has no stack at all since it's specifically allocated at
+    // startup.
+    println!("cargo:rustc-link-arg=--import-memory");
+    println!("cargo:rustc-link-arg=-zstack-size=0");
 }
 
 /// This function will produce a wasm module which is itself an object file
