@@ -3149,6 +3149,7 @@ dependencies = [
  "cap-rand",
  "cap-std",
  "io-extras",
+ "log",
  "rustix",
  "thiserror",
  "tracing",

@@ -116,7 +116,7 @@ macro_rules! wasi_file_impl {
             async fn get_fdflags(&self) -> Result<FdFlags, Error> {
                 block_on_dummy_executor(|| self.0.get_fdflags())
             }
-            async fn set_fdflags(&self, fdflags: FdFlags) -> Result<(), Error> {
+            async fn set_fdflags(&mut self, fdflags: FdFlags) -> Result<(), Error> {
                 block_on_dummy_executor(|| self.0.set_fdflags(fdflags))
             }
             async fn get_filestat(&self) -> Result<Filestat, Error> {

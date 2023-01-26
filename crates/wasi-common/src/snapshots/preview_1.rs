@@ -189,11 +189,16 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         fd: types::Fd,
         flags: types::Fdflags,
     ) -> Result<(), Error> {
-        self.table()
-            .get_file(u32::from(fd))?
-            .get_cap(FileCaps::FDSTAT_SET_FLAGS)?
-            .set_fdflags(FdFlags::from(flags))
-            .await
+        if let Some(table) = self.table_mut() {
+            table
+                .get_file_mut(u32::from(fd))?
+                .get_cap_mut(FileCaps::FDSTAT_SET_FLAGS)?
+                .set_fdflags(FdFlags::from(flags))
+                .await
+        } else {
+            log::warn!("`fd_fdstat_set_flags` does not work with wasi-threads enabled; see https://github.com/bytecodealliance/wasmtime/issues/5643");
+            Err(Error::invalid_argument())
+        }
     }
 
     async fn fd_fdstat_set_rights(
@@ -1110,7 +1115,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             while copied < buf.len() {
                 let len = (buf.len() - copied).min(MAX_SHARED_BUFFER_SIZE as u32);
                 let mut tmp = vec![0; len as usize];
-                self.random.try_fill_bytes(&mut tmp)?;
+                self.random.lock().unwrap().try_fill_bytes(&mut tmp)?;
                 let dest = buf
                     .get_range(copied..copied + len)
                     .unwrap()
@@ -1122,7 +1127,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             // If the Wasm memory is non-shared, copy directly into the linear
             // memory.
             let mem = &mut buf.as_slice_mut()?.unwrap();
-            self.random.try_fill_bytes(mem)?;
+            self.random.lock().unwrap().try_fill_bytes(mem)?;
         }
         Ok(())
     }

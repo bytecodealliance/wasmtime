@@ -93,7 +93,7 @@ impl WasiFile for File {
         let fdflags = get_fd_flags(&*file)?;
         Ok(fdflags)
     }
-    async fn set_fdflags(&self, fdflags: FdFlags) -> Result<(), Error> {
+    async fn set_fdflags(&mut self, fdflags: FdFlags) -> Result<(), Error> {
         if fdflags.intersects(
             wasi_common::file::FdFlags::DSYNC
                 | wasi_common::file::FdFlags::SYNC
@@ -101,7 +101,7 @@ impl WasiFile for File {
         ) {
             return Err(Error::invalid_argument().context("cannot set DSYNC, SYNC, or RSYNC flag"));
         }
-        let mut file = self.0.write().unwrap();
+        let file = self.0.get_mut().unwrap();
         let set_fd_flags = (*file).new_set_fd_flags(to_sysif_fdflags(fdflags))?;
         (*file).set_fd_flags(set_fd_flags)?;
         Ok(())

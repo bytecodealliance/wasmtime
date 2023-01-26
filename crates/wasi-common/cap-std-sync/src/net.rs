@@ -98,7 +98,7 @@ macro_rules! wasi_listen_write_impl {
             }
             async fn sock_accept(&self, fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
                 let (stream, _) = self.0.accept()?;
-                let stream = <$stream>::from_cap_std(stream);
+                let mut stream = <$stream>::from_cap_std(stream);
                 stream.set_fdflags(fdflags).await?;
                 Ok(Box::new(stream))
             }
@@ -110,7 +110,7 @@ macro_rules! wasi_listen_write_impl {
                 let fdflags = get_fd_flags(&self.0)?;
                 Ok(fdflags)
             }
-            async fn set_fdflags(&self, fdflags: FdFlags) -> Result<(), Error> {
+            async fn set_fdflags(&mut self, fdflags: FdFlags) -> Result<(), Error> {
                 if fdflags == wasi_common::file::FdFlags::NONBLOCK {
                     self.0.set_nonblocking(true)?;
                 } else if fdflags.is_empty() {
@@ -197,7 +197,7 @@ macro_rules! wasi_stream_write_impl {
                 let fdflags = get_fd_flags(&self.0)?;
                 Ok(fdflags)
             }
-            async fn set_fdflags(&self, fdflags: FdFlags) -> Result<(), Error> {
+            async fn set_fdflags(&mut self, fdflags: FdFlags) -> Result<(), Error> {
                 if fdflags == wasi_common::file::FdFlags::NONBLOCK {
                     self.0.set_nonblocking(true)?;
                 } else if fdflags.is_empty() {

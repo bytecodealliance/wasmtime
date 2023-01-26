@@ -76,6 +76,22 @@ impl Table {
         }
     }
 
+    /// Get a mutable reference to a resource of a given type at a given index.
+    /// Only one such reference can be borrowed at any given time.
+    pub fn get_mut<T: Any>(&mut self, key: u32) -> Result<&mut T, Error> {
+        let entry = match self.0.get_mut().unwrap().map.get_mut(&key) {
+            Some(entry) => entry,
+            None => return Err(Error::badf().context("key not in table")),
+        };
+        let entry = match Arc::get_mut(entry) {
+            Some(entry) => entry,
+            None => return Err(Error::badf().context("cannot mutably borrow shared file")),
+        };
+        entry
+            .downcast_mut::<T>()
+            .ok_or_else(|| Error::badf().context("element is a different type"))
+    }
+
     /// Remove a resource at a given index from the table. Returns the resource
     /// if it was present.
     pub fn delete<T: Any + Send + Sync>(&self, key: u32) -> Option<Arc<T>> {

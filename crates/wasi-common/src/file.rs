@@ -64,7 +64,7 @@ pub trait WasiFile: Send + Sync {
         Ok(FdFlags::empty())
     }
 
-    async fn set_fdflags(&self, _flags: FdFlags) -> Result<(), Error> {
+    async fn set_fdflags(&mut self, _flags: FdFlags) -> Result<(), Error> {
         Err(Error::badf())
     }
 
@@ -217,10 +217,14 @@ pub struct Filestat {
 
 pub(crate) trait TableFileExt {
     fn get_file(&self, fd: u32) -> Result<Arc<FileEntry>, Error>;
+    fn get_file_mut(&mut self, fd: u32) -> Result<&mut FileEntry, Error>;
 }
 impl TableFileExt for crate::table::Table {
     fn get_file(&self, fd: u32) -> Result<Arc<FileEntry>, Error> {
         self.get(fd)
+    }
+    fn get_file_mut(&mut self, fd: u32) -> Result<&mut FileEntry, Error> {
+        self.get_mut(fd)
     }
 }
 
@@ -272,12 +276,17 @@ impl FileEntry {
 
 pub trait FileEntryExt {
     fn get_cap(&self, caps: FileCaps) -> Result<&dyn WasiFile, Error>;
+    fn get_cap_mut(&mut self, caps: FileCaps) -> Result<&mut dyn WasiFile, Error>;
 }
 
 impl FileEntryExt for FileEntry {
     fn get_cap(&self, caps: FileCaps) -> Result<&dyn WasiFile, Error> {
         self.capable_of(caps)?;
         Ok(&*self.file)
+    }
+    fn get_cap_mut(&mut self, caps: FileCaps) -> Result<&mut dyn WasiFile, Error> {
+        self.capable_of(caps)?;
+        Ok(&mut *self.file)
     }
 }
 
