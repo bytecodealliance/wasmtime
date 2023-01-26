@@ -2923,17 +2923,10 @@
                                 (jmp_cond (CC.Z) taken not_taken))))
 
 
-(rule 2 (lower_branch (brnz (icmp cc a b) _) (two_targets taken not_taken))
+(rule 2 (lower_branch (brnz (maybe_uextend (icmp cc a b)) _) (two_targets taken not_taken))
       (emit_side_effect (jmp_cond_icmp (emit_cmp cc a b) taken not_taken)))
 
-(rule 2 (lower_branch (brnz (fcmp cc a b) _) (two_targets taken not_taken))
-      (let ((cmp FcmpCondResult (emit_fcmp cc a b)))
-        (emit_side_effect (jmp_cond_fcmp cmp taken not_taken))))
-
-(rule 2 (lower_branch (brnz (uextend (icmp cc a b)) _) (two_targets taken not_taken))
-      (emit_side_effect (jmp_cond_icmp (emit_cmp cc a b) taken not_taken)))
-
-(rule 2 (lower_branch (brnz (uextend (fcmp cc a b)) _) (two_targets taken not_taken))
+(rule 2 (lower_branch (brnz (maybe_uextend (fcmp cc a b)) _) (two_targets taken not_taken))
       (let ((cmp FcmpCondResult (emit_fcmp cc a b)))
         (emit_side_effect (jmp_cond_fcmp cmp taken not_taken))))
 
