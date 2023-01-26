@@ -21,7 +21,7 @@ pub mod imms;
 pub use self::imms::*;
 pub mod args;
 pub use self::args::*;
-pub(crate) mod emit;
+pub mod emit;
 pub(crate) use self::emit::*;
 use crate::isa::aarch64::abi::AArch64MachineDeps;
 
