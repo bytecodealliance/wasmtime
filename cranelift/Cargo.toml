@@ -31,7 +31,6 @@ cranelift-filetests = { workspace = true }
 cranelift-module = { workspace = true }
 cranelift-object = { workspace = true }
 cranelift-jit = { workspace = true }
-cranelift-preopt = { workspace = true }
 cranelift = { workspace = true }
 filecheck = "0.5.0"
 log = { workspace = true }

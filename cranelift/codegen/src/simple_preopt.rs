@@ -1,8 +1,7 @@
 //! A pre-legalization rewriting pass.
 //!
 //! This module provides early-stage optimizations. The optimizations found
-//! should be useful for already well-optimized code. More general purpose
-//! early-stage optimizations can be found in the preopt crate.
+//! should be useful for already well-optimized code.
 
 use crate::cursor::{Cursor, FuncCursor};
 use crate::divconst_magic_numbers::{magic_s32, magic_s64, magic_u32, magic_u64};

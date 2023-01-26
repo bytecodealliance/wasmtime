@@ -599,7 +599,6 @@ dependencies = [
  "cranelift-jit",
  "cranelift-module",
  "cranelift-native",
- "cranelift-preopt",
  "cranelift-reader",
  "cranelift-wasm",
  "file-per-thread-logger",
@@ -714,13 +713,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cranelift-preopt"
-version = "0.93.0"
-dependencies = [
- "cranelift-codegen",
-]
-
-[[package]]
 name = "cranelift-reader"
 version = "0.93.0"
 dependencies = [
@@ -758,7 +750,6 @@ dependencies = [
  "cranelift-module",
  "cranelift-native",
  "cranelift-object",
- "cranelift-preopt",
  "cranelift-reader",
  "cranelift-wasm",
  "filecheck",

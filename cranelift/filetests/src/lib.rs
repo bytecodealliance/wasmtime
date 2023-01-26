@@ -45,7 +45,6 @@ mod test_interpret;
 mod test_legalizer;
 mod test_licm;
 mod test_optimize;
-mod test_preopt;
 mod test_print_cfg;
 mod test_run;
 mod test_safepoint;
@@ -122,7 +121,6 @@ fn new_subtest(parsed: &TestCommand) -> anyhow::Result<Box<dyn subtest::SubTest>
         "legalizer" => test_legalizer::subtest(parsed),
         "licm" => test_licm::subtest(parsed),
         "optimize" => test_optimize::subtest(parsed),
-        "preopt" => test_preopt::subtest(parsed),
         "print-cfg" => test_print_cfg::subtest(parsed),
         "run" => test_run::subtest(parsed),
         "safepoint" => test_safepoint::subtest(parsed),
