@@ -262,7 +262,7 @@ Test the instruction shrinking pass.
 The shrink pass is run on each function, and then results are run
 through filecheck.
 
-### `test preopt`
+### `test simple_preopt`
 
 Test the preopt pass.
 

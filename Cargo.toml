@@ -150,7 +150,6 @@ cranelift-reader = { path = "cranelift/reader", version = "0.93.0" }
 cranelift-filetests = { path = "cranelift/filetests" }
 cranelift-object = { path = "cranelift/object", version = "0.93.0" }
 cranelift-jit = { path = "cranelift/jit", version = "0.93.0" }
-cranelift-preopt = { path = "cranelift/preopt", version = "0.93.0" }
 cranelift-fuzzgen = { path = "cranelift/fuzzgen" }
 cranelift-bforest = { path = "cranelift/bforest", version = "0.93.0" }
 cranelift = { path = "cranelift/umbrella", version = "0.93.0" }
