@@ -19,6 +19,7 @@ use wasi_poll::{WasiFuture, WasiStream};
 mod macros;
 
 mod bindings {
+    #[cfg(feature = "command")]
     wit_bindgen_guest_rust::generate!({
         world: "wasi-command",
         no_std,
@@ -28,9 +29,18 @@ mod bindings {
         // manually below instead
         skip: ["command"],
     });
+
+    #[cfg(not(feature = "command"))]
+    wit_bindgen_guest_rust::generate!({
+        world: "wasi",
+        no_std,
+        raw_strings,
+        unchecked,
+    });
 }
 
 #[no_mangle]
+#[cfg(feature = "command")]
 pub unsafe extern "C" fn command(
     stdin: WasiStream,
     stdout: WasiStream,
@@ -39,13 +49,6 @@ pub unsafe extern "C" fn command(
     env_vars: StrTupleList,
     preopens: PreopenList,
 ) -> u32 {
-    // TODO: ideally turning off `command` would remove this import and the
-    // `*.wit` metadata entirely but doing that ergonomically will likely
-    // require some form of `use` to avoid duplicating lots of `*.wit` bits.
-    if !cfg!(feature = "command") {
-        unreachable!("`command` called without the \"command\" feature");
-    }
-
     State::with_mut(|state| {
         // Initialization of `State` automatically fills in some dummy
         // structures for fds 0, 1, and 2. Overwrite the stdin/stdout slots of 0
