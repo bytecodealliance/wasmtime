@@ -18,7 +18,7 @@ hashbrown = { workspace = true, optional = true }
 smallvec = { workspace = true }
 
 [dev-dependencies]
-similar ={ workspace = true }
+similar = { workspace = true }
 
 [features]
 default = ["std"]
