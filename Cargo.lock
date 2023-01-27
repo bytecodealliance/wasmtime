@@ -622,6 +622,7 @@ dependencies = [
  "cranelift-codegen",
  "hashbrown",
  "log",
+ "similar",
  "smallvec",
  "target-lexicon",
 ]

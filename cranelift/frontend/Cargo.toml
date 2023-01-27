@@ -17,6 +17,9 @@ log = { workspace = true }
 hashbrown = { workspace = true, optional = true }
 smallvec = { workspace = true }
 
+[dev-dependencies]
+similar ={ workspace = true }
+
 [features]
 default = ["std"]
 std = ["cranelift-codegen/std"]
