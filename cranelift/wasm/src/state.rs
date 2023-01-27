@@ -22,6 +22,9 @@ pub enum ElseData {
         /// instruction that needs to be fixed up to point to the new `else`
         /// block rather than the destination block after the `if...end`.
         branch_inst: Inst,
+
+        /// The placeholder block we're replacing.
+        placeholder: Block,
     },
 
     /// We have already allocated an `else` block.
@@ -43,9 +46,8 @@ pub enum ElseData {
 /// - `num_return_values`: number of values returned by the control block;
 /// - `original_stack_size`: size of the value stack at the beginning of the control block.
 ///
-/// Moreover, the `if` frame has the `branch_inst` field that points to the `brz` instruction
-/// separating the `true` and `false` branch. The `loop` frame has a `header` field that references
-/// the `Block` that contains the beginning of the body of the loop.
+/// The `loop` frame has a `header` field that references the `Block` that contains the beginning
+/// of the body of the loop.
 #[derive(Debug)]
 pub enum ControlStackFrame {
     If {
