@@ -469,8 +469,7 @@ fn populate_with_wasi(
         #[cfg(feature = "wasi-crypto")]
         {
             wasmtime_wasi_crypto::add_to_linker(linker, |host| {
-                host.wasi_crypto
-                    .as_mut()
+                std::sync::Arc::get_mut(host.wasi_crypto.as_mut().unwrap())
                     .expect("wasi-crypto is not implemented with multi-threading support")
             })?;
             store.data_mut().wasi_crypto = Some(std::sync::Arc::new(WasiCryptoCtx::new()));
@@ -485,8 +484,7 @@ fn populate_with_wasi(
         #[cfg(feature = "wasi-nn")]
         {
             wasmtime_wasi_nn::add_to_linker(linker, |host| {
-                host.wasi_nn
-                    .as_mut()
+                std::sync::Arc::get_mut(host.wasi_nn.as_mut().unwrap())
                     .expect("wasi-nn is not implemented with multi-threading support")
             })?;
             store.data_mut().wasi_nn = Some(std::sync::Arc::new(WasiNnCtx::new()?));
