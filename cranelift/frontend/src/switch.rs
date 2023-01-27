@@ -159,12 +159,14 @@ impl Switch {
         otherwise: Block,
         contiguous_case_ranges: &'a [ContiguousCaseRange],
     ) {
-        let blocks: Vec<_> = (0..contiguous_case_ranges.len() - 1)
-            .map(|_| bx.create_block())
-            .chain(std::iter::once(otherwise))
-            .collect();
+        let last_ix = contiguous_case_ranges.len() - 1;
+        for (ix, range) in contiguous_case_ranges.iter().rev().enumerate() {
+            let alternate = if ix == last_ix {
+                otherwise
+            } else {
+                bx.create_block()
+            };
 
-        for (range, alternate) in contiguous_case_ranges.iter().rev().zip(blocks) {
             if range.first_index == 0 {
                 assert_eq!(alternate, otherwise);
 
