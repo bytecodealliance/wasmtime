@@ -107,6 +107,12 @@ pub trait SubTest {
 
 /// Run filecheck on `text`, using directives extracted from `context`.
 pub fn run_filecheck(text: &str, context: &Context) -> anyhow::Result<()> {
+    log::debug!(
+        "Filecheck Input:\n\
+         =======================\n\
+         {text}\n\
+         ======================="
+    );
     let checker = build_filechecker(context)?;
     if checker
         .check(text, NO_VARIABLES)
