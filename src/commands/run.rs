@@ -5,7 +5,6 @@ use clap::Parser;
 use once_cell::sync::Lazy;
 use std::ffi::OsStr;
 use std::path::{Component, Path, PathBuf};
-use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use wasmtime::{Engine, Func, Linker, Module, Store, Val, ValType};
@@ -417,11 +416,11 @@ impl RunCommand {
 struct Host {
     wasi: Option<wasmtime_wasi::WasiCtx>,
     #[cfg(feature = "wasi-crypto")]
-    wasi_crypto: Option<Arc<WasiCryptoCtx>>,
+    wasi_crypto: Option<std::sync::Arc<WasiCryptoCtx>>,
     #[cfg(feature = "wasi-nn")]
-    wasi_nn: Option<Arc<WasiNnCtx>>,
+    wasi_nn: Option<std::sync::Arc<WasiNnCtx>>,
     #[cfg(feature = "wasi-threads")]
-    wasi_threads: Option<Arc<WasiThreadsCtx<Host>>>,
+    wasi_threads: Option<std::sync::Arc<WasiThreadsCtx<Host>>>,
 }
 
 /// Populates the given `Linker` with WASI APIs.
@@ -474,7 +473,7 @@ fn populate_with_wasi(
                     .as_mut()
                     .expect("wasi-crypto is not implemented with multi-threading support")
             })?;
-            store.data_mut().wasi_crypto = Some(Arc::new(WasiCryptoCtx::new()));
+            store.data_mut().wasi_crypto = Some(std::sync::Arc::new(WasiCryptoCtx::new()));
         }
     }
 
@@ -490,7 +489,7 @@ fn populate_with_wasi(
                     .as_mut()
                     .expect("wasi-nn is not implemented with multi-threading support")
             })?;
-            store.data_mut().wasi_nn = Some(Arc::new(WasiNnCtx::new()?));
+            store.data_mut().wasi_nn = Some(std::sync::Arc::new(WasiNnCtx::new()?));
         }
     }
 
@@ -504,8 +503,10 @@ fn populate_with_wasi(
             wasmtime_wasi_threads::add_to_linker(linker, store, &_module, |host| {
                 host.wasi_threads.as_ref().unwrap()
             })?;
-            store.data_mut().wasi_threads =
-                Some(Arc::new(WasiThreadsCtx::new(_module, linker.clone())));
+            store.data_mut().wasi_threads = Some(std::sync::Arc::new(WasiThreadsCtx::new(
+                _module,
+                linker.clone(),
+            )));
         }
     }
 
