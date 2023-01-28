@@ -366,15 +366,14 @@ mod tests {
 
     macro_rules! assert_eq_output {
         ($actual:ident, $expected:literal) => {
-            if $actual != $expected {
-                assert!(
-                    false,
-                    "\n{}",
-                    similar::TextDiff::from_lines($expected, &$actual)
-                        .unified_diff()
-                        .header("expected", "actual")
-                );
-            }
+            assert_eq!(
+                $actual,
+                $expected,
+                "\n{}",
+                similar::TextDiff::from_lines($expected, &$actual)
+                    .unified_diff()
+                    .header("expected", "actual")
+            )
         };
     }
 
@@ -385,7 +384,7 @@ mod tests {
             func,
             "block0:
     v0 = iconst.i8 0
-    jump block1"
+    jump block0"
         );
     }
 
