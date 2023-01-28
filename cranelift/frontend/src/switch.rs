@@ -114,6 +114,12 @@ impl Switch {
         otherwise: Block,
         contiguous_case_ranges: &'a [ContiguousCaseRange],
     ) {
+        // If no switch cases were added to begin with, we can just emit `jump otherwise`.
+        if contiguous_case_ranges.is_empty() {
+            bx.ins().jump(otherwise, &[]);
+            return;
+        }
+
         // Avoid allocation in the common case
         if contiguous_case_ranges.len() <= 3 {
             Self::build_search_branches(bx, val, otherwise, contiguous_case_ranges);
@@ -159,9 +165,8 @@ impl Switch {
         otherwise: Block,
         contiguous_case_ranges: &'a [ContiguousCaseRange],
     ) {
-        let last_ix = contiguous_case_ranges.len() - 1;
-        for (ix, range) in contiguous_case_ranges.iter().rev().enumerate() {
-            let alternate = if ix == last_ix {
+        for (ix, range) in contiguous_case_ranges.iter().enumerate().rev() {
+            let alternate = if ix == 0 {
                 otherwise
             } else {
                 bx.create_block()
@@ -343,6 +348,7 @@ mod tests {
                 let block = bx.create_block();
                 bx.switch_to_block(block);
                 let val = bx.ins().iconst(types::I8, 0);
+                #[allow(unused_mut)]
                 let mut switch = Switch::new();
                 $(
                     let block = bx.create_block();
@@ -370,6 +376,17 @@ mod tests {
                 );
             }
         };
+    }
+
+    #[test]
+    fn switch_empty() {
+        let func = setup!(0, []);
+        assert_eq_output!(
+            func,
+            "block0:
+    v0 = iconst.i8 0
+    jump block1"
+        );
     }
 
     #[test]
