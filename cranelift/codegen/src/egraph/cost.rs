@@ -90,7 +90,10 @@ pub(crate) fn pure_op_cost(op: Opcode) -> Cost {
         | Opcode::BorNot
         | Opcode::Bxor
         | Opcode::BxorNot
-        | Opcode::Bnot => Cost(2),
+        | Opcode::Bnot
+        | Opcode::Ishl
+        | Opcode::Ushr
+        | Opcode::Sshr => Cost(2),
         // Everything else (pure.)
         _ => Cost(3),
     }
