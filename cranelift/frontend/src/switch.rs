@@ -379,12 +379,12 @@ mod tests {
 
     #[test]
     fn switch_empty() {
-        let func = setup!(0, []);
+        let func = setup!(42, []);
         assert_eq_output!(
             func,
             "block0:
     v0 = iconst.i8 0
-    jump block0"
+    jump block42"
         );
     }
 
