@@ -754,6 +754,7 @@ dependencies = [
  "cranelift-reader",
  "cranelift-wasm",
  "filecheck",
+ "fxhash",
  "indicatif",
  "log",
  "pretty_env_logger",
