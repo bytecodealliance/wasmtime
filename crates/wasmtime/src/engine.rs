@@ -49,7 +49,7 @@ struct EngineInner {
     config: Config,
     #[cfg(compiler)]
     compiler: Box<dyn wasmtime_environ::Compiler>,
-    allocator: Box<dyn InstanceAllocator>,
+    allocator: Box<dyn InstanceAllocator + Send + Sync>,
     profiler: Box<dyn ProfilingAgent>,
     signatures: SignatureRegistry,
     epoch: AtomicU64,

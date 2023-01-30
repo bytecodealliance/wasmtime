@@ -16,8 +16,9 @@ use crate::{
     VMFunctionBody, VMSharedSignatureIndex,
 };
 use anyhow::Error;
+use anyhow::Result;
 use memoffset::offset_of;
-use std::alloc::Layout;
+use std::alloc::{self, Layout};
 use std::any::Any;
 use std::convert::TryFrom;
 use std::hash::Hash;
@@ -87,6 +88,13 @@ pub(crate) struct Instance {
     /// allocation, but some host-defined objects will store their state here.
     host_state: Box<dyn Any + Send + Sync>,
 
+    /// Instance of this instance within its `InstanceAllocator` trait
+    /// implementation.
+    ///
+    /// This is always 0 for the on-demand instance allocator and it's the
+    /// index of the slot in the pooling allocator.
+    index: usize,
+
     /// Additional context used by compiled wasm code. This field is last, and
     /// represents a dynamically-sized array that extends beyond the nominal
     /// end of the struct (similar to a flexible array member).
@@ -99,15 +107,19 @@ impl Instance {
     ///
     /// It is assumed the memory was properly aligned and the
     /// allocation was `alloc_size` in bytes.
-    unsafe fn new_at(
-        ptr: *mut Instance,
-        alloc_size: usize,
+    unsafe fn new(
         req: InstanceAllocationRequest,
+        index: usize,
         memories: PrimaryMap<DefinedMemoryIndex, Memory>,
         tables: PrimaryMap<DefinedTableIndex, Table>,
-    ) {
+    ) -> InstanceHandle {
         // The allocation must be *at least* the size required of `Instance`.
-        assert!(alloc_size >= Self::alloc_layout(req.runtime_info.offsets()).size());
+        let layout = Self::alloc_layout(req.runtime_info.offsets());
+        let ptr = alloc::alloc(layout);
+        if ptr.is_null() {
+            alloc::handle_alloc_error(layout);
+        }
+        let ptr = ptr.cast::<Instance>();
 
         let module = req.runtime_info.module();
         let dropped_elements = EntitySet::with_capacity(module.passive_elements.len());
@@ -117,6 +129,7 @@ impl Instance {
             ptr,
             Instance {
                 runtime_info: req.runtime_info.clone(),
+                index,
                 memories,
                 tables,
                 dropped_elements,
@@ -129,6 +142,7 @@ impl Instance {
         );
 
         (*ptr).initialize_vmctx(module, req.runtime_info.offsets(), req.store, req.imports);
+        InstanceHandle { instance: ptr }
     }
 
     /// Helper function to access various locations offset from our `*mut
@@ -1206,5 +1220,15 @@ impl InstanceHandle {
         InstanceHandle {
             instance: self.instance,
         }
+    }
+
+    /// Performs post-initialization of an instance after its handle has been
+    /// creqtaed and registered with a store.
+    ///
+    /// Failure of this function means that the instance still must persist
+    /// within the store since failure may indicate partial failure, or some
+    /// state could be referenced by other instances.
+    pub fn initialize(&mut self, module: &Module, is_bulk_memory: bool) -> Result<()> {
+        allocator::initialize_instance(self.instance_mut(), module, is_bulk_memory)
     }
 }
