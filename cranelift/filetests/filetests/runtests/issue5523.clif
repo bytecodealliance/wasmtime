@@ -1,6 +1,9 @@
 test interpret
 test run
 target riscv64
+target aarch64
+target s390x
+target x86_64
 
 function %a(i16, i128) -> i128 system_v {
 block0(v0: i16, v1: i128):

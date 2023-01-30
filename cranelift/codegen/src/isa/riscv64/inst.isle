@@ -1245,10 +1245,9 @@
       (high Reg (alu_rrr (AluOPRRR.Or) high_part1 high_part3))
       ;;
       (const64 Reg (load_u64_constant 64))
-      ;; right now we only rotate less than 64 bits.
       (shamt_128 Reg (alu_andi (value_regs_get y 0) 127)))
     ;; right now we only rotate less than 64 bits.
-    ;; if shamt is greater than 64 , we should switch low and high.
+    ;; if shamt is greater than or equal 64 , we should switch low and high.
     (value_regs
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high low)
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 low high)
@@ -1278,7 +1277,7 @@
       (const64 Reg (load_u64_constant 64))
       (shamt_128 Reg (alu_andi (value_regs_get y 0) 127)))
     ;; right now we only rotate less than 64 bits.
-    ;; if shamt is greater than 64 , we should switch low and high.
+    ;; if shamt is greater than or equal 64 , we should switch low and high.
     (value_regs
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high low)
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 low high)
