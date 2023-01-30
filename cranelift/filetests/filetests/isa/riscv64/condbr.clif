@@ -157,26 +157,7 @@ block1:
 ;   li a0,1
 ;   ret
 
-function %i128_brif_false(i128){
-block0(v0: i128):
-    brif v0, block1, block1
-
-block1:
-    nop
-    return
-}
-
-; block0:
-;   ne a0,[a0,a1],[zerozero]##ty=i128
-;   bne a0,zero,taken(label1),not_taken(label2)
-; block1:
-;   j label3
-; block2:
-;   j label3
-; block3:
-;   ret
-
-function %i128_brif_true(i128){
+function %i128_brif(i128){
 block0(v0: i128):
     brif v0, block1, block1
 
@@ -387,7 +368,7 @@ block1:
 
 
 
-function %i8_brif_false(i8){
+function %i8_brif(i8){
 block0(v0: i8):
     brif v0, block1, block1
 
@@ -406,26 +387,7 @@ block1:
 ; block3:
 ;   ret
 
-function %i8_brif_true(i8){
-block0(v0: i8):
-    brif v0, block1, block1
-
-block1:
-    nop
-    return
-}
-
-; block0:
-;   andi t2,a0,255
-;   bne t2,zero,taken(label1),not_taken(label2)
-; block1:
-;   j label3
-; block2:
-;   j label3
-; block3:
-;   ret
-
-function %i16_brif_false(i16){
+function %i16_brif(i16){
 block0(v0: i16):
     brif v0, block1, block1
 
@@ -446,28 +408,7 @@ block1:
 ; block3:
 ;   ret
 
-function %i16_brif_true(i16){
-block0(v0: i16):
-    brif v0, block1, block1
-
-block1:
-    nop
-    return
-}
-
-; block0:
-;   lui a1,16
-;   addi a1,a1,4095
-;   and a3,a0,a1
-;   bne a3,zero,taken(label1),not_taken(label2)
-; block1:
-;   j label3
-; block2:
-;   j label3
-; block3:
-;   ret
-
-function %i32_brif_false(i32){
+function %i32_brif(i32){
 block0(v0: i32):
     brif v0, block1, block1
 
@@ -486,44 +427,7 @@ block1:
 ; block3:
 ;   ret
 
-function %i32_brif_true(i32){
-block0(v0: i32):
-    brif v0, block1, block1
-
-block1:
-    nop
-    return
-}
-
-; block0:
-;   addiw t2,a0,0
-;   bne t2,zero,taken(label1),not_taken(label2)
-; block1:
-;   j label3
-; block2:
-;   j label3
-; block3:
-;   ret
-
-function %i64_brif_false(i64){
-block0(v0: i64):
-    brif v0, block1, block1
-
-block1:
-    nop
-    return
-}
-
-; block0:
-;   bne a0,zero,taken(label1),not_taken(label2)
-; block1:
-;   j label3
-; block2:
-;   j label3
-; block3:
-;   ret
-
-function %i64_brif_true(i64){
+function %i64_brif(i64){
 block0(v0: i64):
     brif v0, block1, block1
 
