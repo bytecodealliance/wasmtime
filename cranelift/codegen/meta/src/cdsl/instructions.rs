@@ -172,16 +172,16 @@ impl InstructionBuilder {
     }
 
     /// Mark this instruction as a block terminator.
-    pub fn terminator(mut self) -> Self {
+    pub fn terminates_block(mut self) -> Self {
         self.is_terminator = true;
         self
     }
 
     /// Mark this instruction as a branch instruction. This also implies that the instruction is a
     /// block terminator.
-    pub fn branch(mut self) -> Self {
+    pub fn branches(mut self) -> Self {
         self.is_branch = true;
-        self.terminator()
+        self.terminates_block()
     }
 
     /// Mark this instruction as a call instruction.
@@ -192,9 +192,9 @@ impl InstructionBuilder {
 
     /// Mark this instruction as a return instruction. This also implies that the instruction is a
     /// block terminator.
-    pub fn return_(mut self) -> Self {
+    pub fn returns(mut self) -> Self {
         self.is_return = true;
-        self.terminator()
+        self.terminates_block()
     }
 
     /// Mark this instruction as one that can load from memory.

@@ -34,7 +34,7 @@ fn define_control_flow(
             &formats.jump,
         )
         .operands_in(vec![block_call])
-        .branch(),
+        .branches(),
     );
 
     let ScalarTruthy = &TypeVar::new(
@@ -59,7 +59,7 @@ fn define_control_flow(
                 &formats.brif,
             )
             .operands_in(vec![c, block_then, block_else])
-            .branch(),
+            .branches(),
         );
     }
 
@@ -94,7 +94,7 @@ fn define_control_flow(
                 &formats.branch_table,
             )
             .operands_in(vec![x, label, JT])
-            .branch(),
+            .branches(),
         );
     }
 
@@ -129,7 +129,7 @@ fn define_control_flow(
             )
             .operands_in(vec![code])
             .can_trap()
-            .terminator(),
+            .terminates_block(),
         );
 
         let c = &Operand::new("c", ScalarTruthy).with_doc("Controlling value to test");
@@ -205,7 +205,7 @@ fn define_control_flow(
             &formats.multiary,
         )
         .operands_in(vec![rvals])
-        .return_(),
+        .returns(),
     );
 
     let FN = &Operand::new("FN", &entities.func_ref)
