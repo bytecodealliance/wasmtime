@@ -295,6 +295,7 @@ fn expand_cond_trap(
 
     // Insert the new label and the unconditional trap terminator.
     let mut pos = FuncCursor::new(func).after_inst(inst);
+    pos.use_srcloc(inst);
     pos.insert_block(new_block_trap);
 
     match opcode {
