@@ -13,7 +13,7 @@ use core::mem::{align_of, forget, replace, size_of, ManuallyDrop, MaybeUninit};
 use core::ptr::{self, null_mut};
 use core::slice;
 use wasi::*;
-use wasi_poll::{WasiFuture, WasiStream};
+use wasi_poll::{Pollable, WasiStream};
 
 #[macro_use]
 mod macros;
@@ -1408,24 +1408,24 @@ pub unsafe extern "C" fn path_unlink_file(fd: Fd, path_ptr: *const u8, path_len:
     })
 }
 
-struct Futures {
-    pointer: *mut WasiFuture,
+struct Pollables {
+    pointer: *mut Pollable,
     index: usize,
     length: usize,
 }
 
-impl Futures {
-    unsafe fn push(&mut self, future: WasiFuture) {
+impl Pollables {
+    unsafe fn push(&mut self, pollable: Pollable) {
         assert!(self.index < self.length);
-        *self.pointer.add(self.index) = future;
+        *self.pointer.add(self.index) = pollable;
         self.index += 1;
     }
 }
 
-impl Drop for Futures {
+impl Drop for Pollables {
     fn drop(&mut self) {
         for i in 0..self.index {
-            wasi_poll::drop_future(unsafe { *self.pointer.add(i) })
+            wasi_poll::drop_pollable(unsafe { *self.pointer.add(i) })
         }
     }
 }
@@ -1460,23 +1460,24 @@ pub unsafe extern "C" fn poll_oneoff(
 
     let subscriptions = slice::from_raw_parts(r#in, nsubscriptions);
 
-    // We're going to split the `nevents` buffer into two non-overlapping buffers: one to store the future handles,
-    // and the other to store the bool results.
+    // We're going to split the `nevents` buffer into two non-overlapping
+    // buffers: one to store the pollable handles, and the other to store
+    // the bool results.
     //
     // First, we assert that this is possible:
-    assert!(align_of::<Event>() >= align_of::<WasiFuture>());
-    assert!(align_of::<WasiFuture>() >= align_of::<u8>());
+    assert!(align_of::<Event>() >= align_of::<Pollable>());
+    assert!(align_of::<Pollable>() >= align_of::<u8>());
     assert!(
         unwrap(nsubscriptions.checked_mul(size_of::<Event>()))
             >= unwrap(
-                unwrap(nsubscriptions.checked_mul(size_of::<WasiFuture>()))
+                unwrap(nsubscriptions.checked_mul(size_of::<Pollable>()))
                     .checked_add(unwrap(nsubscriptions.checked_mul(size_of::<u8>())))
             )
     );
 
-    // Store the future handles at the beginning, and the bool results at the
+    // Store the pollable handles at the beginning, and the bool results at the
     // end, so that we don't clobber the bool results when writting the events.
-    let futures = out as *mut c_void as *mut WasiFuture;
+    let pollables = out as *mut c_void as *mut Pollable;
     let results = out.add(nsubscriptions).cast::<u8>().sub(nsubscriptions);
 
     // Indefinite sleeping is not supported in preview1.
@@ -1490,8 +1491,8 @@ pub unsafe extern "C" fn poll_oneoff(
             unwrap(nsubscriptions.checked_mul(size_of::<bool>())),
         );
 
-        let mut futures = Futures {
-            pointer: futures,
+        let mut pollables = Pollables {
+            pointer: pollables,
             index: 0,
             length: nsubscriptions,
         };
@@ -1500,7 +1501,7 @@ pub unsafe extern "C" fn poll_oneoff(
             const EVENTTYPE_CLOCK: u8 = wasi::EVENTTYPE_CLOCK.raw();
             const EVENTTYPE_FD_READ: u8 = wasi::EVENTTYPE_FD_READ.raw();
             const EVENTTYPE_FD_WRITE: u8 = wasi::EVENTTYPE_FD_WRITE.raw();
-            futures.push(match subscription.u.tag {
+            pollables.push(match subscription.u.tag {
                 EVENTTYPE_CLOCK => {
                     let clock = &subscription.u.u.clock;
                     let absolute = (clock.flags & SUBCLOCKFLAGS_SUBSCRIPTION_CLOCK_ABSTIME)
@@ -1556,7 +1557,7 @@ pub unsafe extern "C" fn poll_oneoff(
                     match state.get_read_stream(subscription.u.u.fd_read.file_descriptor) {
                         Ok(stream) => wasi_poll::subscribe_read(stream),
                         // If the file descriptor isn't a stream, request a
-                        // future which completes immediately so that it'll
+                        // pollable which completes immediately so that it'll
                         // immediately fail.
                         Err(ERRNO_BADF) => wasi_poll::subscribe_monotonic_clock(
                             state.default_monotonic_clock(),
@@ -1571,7 +1572,7 @@ pub unsafe extern "C" fn poll_oneoff(
                     match state.get_write_stream(subscription.u.u.fd_write.file_descriptor) {
                         Ok(stream) => wasi_poll::subscribe_write(stream),
                         // If the file descriptor isn't a stream, request a
-                        // future which completes immediately so that it'll
+                        // pollable which completes immediately so that it'll
                         // immediately fail.
                         Err(ERRNO_BADF) => wasi_poll::subscribe_monotonic_clock(
                             state.default_monotonic_clock(),
@@ -1586,13 +1587,14 @@ pub unsafe extern "C" fn poll_oneoff(
             });
         }
 
-        let vec = wasi_poll::poll_oneoff(slice::from_raw_parts(futures.pointer, futures.length));
+        let vec =
+            wasi_poll::poll_oneoff(slice::from_raw_parts(pollables.pointer, pollables.length));
 
         assert_eq!(vec.len(), nsubscriptions);
         assert_eq!(vec.as_ptr(), results);
         forget(vec);
 
-        drop(futures);
+        drop(pollables);
 
         let ready = subscriptions
             .iter()
