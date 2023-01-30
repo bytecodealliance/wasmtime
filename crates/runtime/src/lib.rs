@@ -56,8 +56,7 @@ pub use crate::instance::{
 };
 #[cfg(feature = "pooling-allocator")]
 pub use crate::instance::{
-    InstanceLimits, PoolingAllocationStrategy, PoolingInstanceAllocator,
-    PoolingInstanceAllocatorConfig,
+    InstanceLimits, PoolingInstanceAllocator, PoolingInstanceAllocatorConfig,
 };
 pub use crate::memory::{
     DefaultMemoryCreator, Memory, RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory,

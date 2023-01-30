@@ -83,25 +83,6 @@ impl Default for InstanceLimits {
     }
 }
 
-/// The allocation strategy to use for the pooling instance allocator.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PoolingAllocationStrategy {
-    /// Allocate from the next available instance.
-    NextAvailable,
-    /// Allocate from a random available instance.
-    Random,
-    /// Try to allocate an instance slot that was previously used for
-    /// the same module, potentially enabling faster instantiation by
-    /// reusing e.g. memory mappings.
-    ReuseAffinity,
-}
-
-impl Default for PoolingAllocationStrategy {
-    fn default() -> Self {
-        Self::ReuseAffinity
-    }
-}
-
 /// Represents a pool of maximal `Instance` structures.
 ///
 /// Each index in the pool provides enough space for a maximal `Instance`
@@ -142,7 +123,7 @@ impl InstancePool {
             mapping,
             instance_size,
             max_instances,
-            index_allocator: IndexAllocator::new(config.strategy, max_instances),
+            index_allocator: IndexAllocator::new(config.limits.count, config.max_unused_warm_slots),
             memories: MemoryPool::new(&config.limits, tunables)?,
             tables: TablePool::new(&config.limits)?,
             linear_memory_keep_resident: config.linear_memory_keep_resident,
@@ -248,7 +229,7 @@ impl InstancePool {
         // touched again until we write a fresh Instance in-place with
         // std::ptr::write in allocate() above.
 
-        self.index_allocator.free(SlotId(index));
+        self.index_allocator.free(SlotId(index as u32));
     }
 
     fn allocate_instance_resources(
@@ -546,7 +527,7 @@ impl InstancePool {
         // any sort of infinite loop since this should be the final operation
         // working with `module`.
         while let Some(index) = self.index_allocator.alloc_affine_and_clear_affinity(module) {
-            self.memories.clear_images(index.0);
+            self.memories.clear_images(index.index());
             self.index_allocator.free(index);
         }
     }
@@ -892,15 +873,10 @@ impl StackPool {
             page_size,
             async_stack_zeroing: config.async_stack_zeroing,
             async_stack_keep_resident: config.async_stack_keep_resident,
-            // We always use a `NextAvailable` strategy for stack
-            // allocation. We don't want or need an affinity policy
-            // here: stacks do not benefit from being allocated to the
-            // same compiled module with the same image (they always
-            // start zeroed just the same for everyone).
-            index_allocator: IndexAllocator::new(
-                PoolingAllocationStrategy::NextAvailable,
-                max_instances,
-            ),
+            // Note that `max_unused_warm_slots` is set to zero since stacks
+            // have no affinity so there's no need to keep intentionally unused
+            // warm slots around.
+            index_allocator: IndexAllocator::new(config.limits.count, 0),
         })
     }
 
@@ -965,7 +941,7 @@ impl StackPool {
             self.zero_stack(bottom_of_stack, stack_size);
         }
 
-        self.index_allocator.free(SlotId(index));
+        self.index_allocator.free(SlotId(index as u32));
     }
 
     fn zero_stack(&self, bottom: usize, size: usize) {
@@ -994,9 +970,8 @@ impl StackPool {
 /// construction.
 #[derive(Copy, Clone, Debug)]
 pub struct PoolingInstanceAllocatorConfig {
-    /// Allocation strategy to use for slot indexes in the pooling instance
-    /// allocator.
-    pub strategy: PoolingAllocationStrategy,
+    /// See [`PoolingAllocatorConfig::max_unused_warm_slots`] in `wasmtime`
+    pub max_unused_warm_slots: u32,
     /// The size, in bytes, of async stacks to allocate (not including the guard
     /// page).
     pub stack_size: usize,
@@ -1025,7 +1000,7 @@ pub struct PoolingInstanceAllocatorConfig {
 impl Default for PoolingInstanceAllocatorConfig {
     fn default() -> PoolingInstanceAllocatorConfig {
         PoolingInstanceAllocatorConfig {
-            strategy: Default::default(),
+            max_unused_warm_slots: 100,
             stack_size: 2 << 20,
             limits: InstanceLimits::default(),
             async_stack_zeroing: false,
@@ -1177,7 +1152,7 @@ mod test {
     #[test]
     fn test_instance_pool() -> Result<()> {
         let mut config = PoolingInstanceAllocatorConfig::default();
-        config.strategy = PoolingAllocationStrategy::NextAvailable;
+        config.max_unused_warm_slots = 0;
         config.limits = InstanceLimits {
             count: 3,
             tables: 1,
@@ -1199,10 +1174,7 @@ mod test {
         assert_eq!(instances.instance_size, 1008); // round 1000 up to alignment
         assert_eq!(instances.max_instances, 3);
 
-        assert_eq!(
-            instances.index_allocator.testing_freelist(),
-            [SlotId(0), SlotId(1), SlotId(2)]
-        );
+        assert_eq!(instances.index_allocator.testing_freelist(), []);
 
         let mut handles = Vec::new();
         let module = Arc::new(Module::default());
@@ -1248,7 +1220,7 @@ mod test {
 
         assert_eq!(
             instances.index_allocator.testing_freelist(),
-            [SlotId(2), SlotId(1), SlotId(0)]
+            [SlotId(0), SlotId(1), SlotId(2)]
         );
 
         Ok(())
@@ -1353,26 +1325,12 @@ mod test {
         assert_eq!(pool.max_instances, 10);
         assert_eq!(pool.page_size, native_page_size);
 
-        assert_eq!(
-            pool.index_allocator.testing_freelist(),
-            [
-                SlotId(0),
-                SlotId(1),
-                SlotId(2),
-                SlotId(3),
-                SlotId(4),
-                SlotId(5),
-                SlotId(6),
-                SlotId(7),
-                SlotId(8),
-                SlotId(9)
-            ],
-        );
+        assert_eq!(pool.index_allocator.testing_freelist(), []);
 
         let base = pool.mapping.as_ptr() as usize;
 
         let mut stacks = Vec::new();
-        for i in (0..10).rev() {
+        for i in 0..10 {
             let stack = pool.allocate().expect("allocation should succeed");
             assert_eq!(
                 ((stack.top().unwrap() as usize - base) / pool.stack_size) - 1,
@@ -1392,16 +1350,16 @@ mod test {
         assert_eq!(
             pool.index_allocator.testing_freelist(),
             [
-                SlotId(9),
-                SlotId(8),
-                SlotId(7),
-                SlotId(6),
-                SlotId(5),
-                SlotId(4),
-                SlotId(3),
-                SlotId(2),
+                SlotId(0),
                 SlotId(1),
-                SlotId(0)
+                SlotId(2),
+                SlotId(3),
+                SlotId(4),
+                SlotId(5),
+                SlotId(6),
+                SlotId(7),
+                SlotId(8),
+                SlotId(9)
             ],
         );
 
@@ -1475,7 +1433,7 @@ mod test {
     #[test]
     fn test_stack_zeroed() -> Result<()> {
         let config = PoolingInstanceAllocatorConfig {
-            strategy: PoolingAllocationStrategy::NextAvailable,
+            max_unused_warm_slots: 0,
             limits: InstanceLimits {
                 count: 1,
                 table_elements: 0,
@@ -1511,7 +1469,7 @@ mod test {
     #[test]
     fn test_stack_unzeroed() -> Result<()> {
         let config = PoolingInstanceAllocatorConfig {
-            strategy: PoolingAllocationStrategy::NextAvailable,
+            max_unused_warm_slots: 0,
             limits: InstanceLimits {
                 count: 1,
                 table_elements: 0,

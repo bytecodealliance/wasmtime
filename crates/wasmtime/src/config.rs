@@ -1713,16 +1713,60 @@ pub struct PoolingAllocationConfig {
 }
 
 #[cfg(feature = "pooling-allocator")]
-pub use wasmtime_runtime::PoolingAllocationStrategy;
-
-#[cfg(feature = "pooling-allocator")]
 impl PoolingAllocationConfig {
-    /// Configures the method by which slots in the pooling allocator are
-    /// allocated to instances
+    /// Configures the maximum number of "unused warm slots" to retain in the
+    /// pooling allocator.
     ///
-    /// This defaults to [`PoolingAllocationStrategy::ReuseAffinity`] .
-    pub fn strategy(&mut self, strategy: PoolingAllocationStrategy) -> &mut Self {
-        self.config.strategy = strategy;
+    /// The pooling allocator operates over slots to allocate from, and each
+    /// slot is considered "cold" if it's never been used before or "warm" if
+    /// it's been used by some module in the past. Slots in the pooling
+    /// allocator additionally track an "affinity" flag to a particular core
+    /// wasm module. When a module is instantiated into a slot then the slot is
+    /// considered affine to that module, even after the instance has been
+    /// dealloocated.
+    ///
+    /// When a new instance is created then a slot must be chosen, and the
+    /// current algorithm for selecting a slot is:
+    ///
+    /// * If there are slots that are affine to the module being instantiated,
+    ///   then the most recently used slot is selected to be allocated from.
+    ///   This is done to improve reuse of resources such as memory mappings and
+    ///   additionally try to benefit from temporal locality for things like
+    ///   caches.
+    ///
+    /// * Otherwise if there are more than N affine slots to other modules, then
+    ///   one of those affine slots is chosen to be allocated. The slot chosen
+    ///   is picked on a least-recently-used basis.
+    ///
+    /// * Finally, if there are less than N affine slots to other modules, then
+    ///   the non-affine slots are allocated from.
+    ///
+    /// This setting, `max_unused_warm_slots`, is the value for N in the above
+    /// algorithm. The purpose of this setting is to have a knob over the RSS
+    /// impact of "unused slots" for a long-running wasm server.
+    ///
+    /// If this setting is set to 0, for example, then affine slots are
+    /// aggressively resused on a least-recently-used basis. A "cold" slot is
+    /// only used if there are no affine slots available to allocate from. This
+    /// means that the set of slots used over the lifetime of a program is the
+    /// same as the maximum concurrent number of wasm instances.
+    ///
+    /// If this setting is set to infinity, however, then cold slots are
+    /// prioritized to be allocated from. This means that the set of slots used
+    /// over the lifetime of a program will approach
+    /// [`PoolingAllocationConfig::instance_count`], or the maximum number of
+    /// slots in the pooling allocator.
+    ///
+    /// Wasmtime does not aggressively decommit all resources associated with a
+    /// slot when the slot is not in use. For example the
+    /// [`PoolingAllocationConfig::linear_memory_keep_resident`] option can be
+    /// used to keep memory associated with a slot, even when it's not in use.
+    /// This means that the total set of used slots in the pooling instance
+    /// allocator can impact the overall RSS usage of a program.
+    ///
+    /// The default value for this option is 100.
+    pub fn max_unused_warm_slots(&mut self, max: u32) -> &mut Self {
+        self.config.max_unused_warm_slots = max;
         self
     }
 
