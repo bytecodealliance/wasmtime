@@ -19,8 +19,11 @@ use std::sync::{Arc, Mutex};
 pub struct WasiCtx(Arc<WasiCtxInner>);
 
 pub struct WasiCtxInner {
-    pub args: StringArray,
-    pub env: StringArray,
+pub args: StringArray,
+pub env: StringArray,
+    // TODO: this mutex should not be necessary, it forces threads to serialize
+    // their access to randomness unnecessarily
+    // (https://github.com/bytecodealliance/wasmtime/issues/5660).
     pub random: Mutex<Box<dyn RngCore + Send + Sync>>,
     pub clocks: WasiClocks,
     pub sched: Box<dyn WasiSched>,
