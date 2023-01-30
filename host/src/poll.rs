@@ -1,6 +1,6 @@
 use crate::{
     wasi_clocks,
-    wasi_poll::{self, Size, StreamError, WasiFuture, WasiPoll, WasiStream},
+    wasi_poll::{self, Pollable, Size, StreamError, WasiPoll, WasiStream},
     HostResult, WasiCtx,
 };
 use wasi_common::clocks::TableMonotonicClockExt;
@@ -14,9 +14,9 @@ fn convert(error: wasi_common::Error) -> anyhow::Error {
     }
 }
 
-/// A pseudo-future representation.
+/// A pollable resource table entry.
 #[derive(Copy, Clone)]
-enum Future {
+enum PollableEntry {
     /// Poll for read events.
     Read(WasiStream),
     /// Poll for write events.
@@ -27,12 +27,14 @@ enum Future {
 
 #[async_trait::async_trait]
 impl WasiPoll for WasiCtx {
-    async fn drop_future(&mut self, future: WasiFuture) -> anyhow::Result<()> {
-        self.table_mut().delete::<Future>(future).map_err(convert)?;
+    async fn drop_pollable(&mut self, pollable: Pollable) -> anyhow::Result<()> {
+        self.table_mut()
+            .delete::<PollableEntry>(pollable)
+            .map_err(convert)?;
         Ok(())
     }
 
-    async fn poll_oneoff(&mut self, futures: Vec<WasiFuture>) -> anyhow::Result<Vec<u8>> {
+    async fn poll_oneoff(&mut self, futures: Vec<Pollable>) -> anyhow::Result<Vec<u8>> {
         use wasi_common::sched::{Poll, Userdata};
 
         // Convert `futures` into `Poll` subscriptions.
@@ -40,17 +42,17 @@ impl WasiPoll for WasiCtx {
         let len = futures.len();
         for (index, future) in futures.into_iter().enumerate() {
             match *self.table().get(future).map_err(convert)? {
-                Future::Read(stream) => {
+                PollableEntry::Read(stream) => {
                     let wasi_stream: &dyn wasi_common::WasiStream =
                         self.table().get_stream(stream).map_err(convert)?;
                     poll.subscribe_read(wasi_stream, Userdata::from(index as u64));
                 }
-                Future::Write(stream) => {
+                PollableEntry::Write(stream) => {
                     let wasi_stream: &dyn wasi_common::WasiStream =
                         self.table().get_stream(stream).map_err(convert)?;
                     poll.subscribe_write(wasi_stream, Userdata::from(index as u64));
                 }
-                Future::MonotonicClock(clock, when, absolute) => {
+                PollableEntry::MonotonicClock(clock, when, absolute) => {
                     let wasi_clock = self.table().get_monotonic_clock(clock).map_err(convert)?;
                     poll.subscribe_monotonic_clock(
                         wasi_clock,
@@ -167,12 +169,16 @@ impl WasiPoll for WasiCtx {
         todo!()
     }
 
-    async fn subscribe_read(&mut self, stream: WasiStream) -> anyhow::Result<WasiFuture> {
-        Ok(self.table_mut().push(Box::new(Future::Read(stream)))?)
+    async fn subscribe_read(&mut self, stream: WasiStream) -> anyhow::Result<Pollable> {
+        Ok(self
+            .table_mut()
+            .push(Box::new(PollableEntry::Read(stream)))?)
     }
 
-    async fn subscribe_write(&mut self, stream: WasiStream) -> anyhow::Result<WasiFuture> {
-        Ok(self.table_mut().push(Box::new(Future::Write(stream)))?)
+    async fn subscribe_write(&mut self, stream: WasiStream) -> anyhow::Result<Pollable> {
+        Ok(self
+            .table_mut()
+            .push(Box::new(PollableEntry::Write(stream)))?)
     }
 
     async fn subscribe_monotonic_clock(
@@ -180,9 +186,11 @@ impl WasiPoll for WasiCtx {
         clock: wasi_clocks::MonotonicClock,
         when: wasi_clocks::Instant,
         absolute: bool,
-    ) -> anyhow::Result<WasiFuture> {
+    ) -> anyhow::Result<Pollable> {
         Ok(self
             .table_mut()
-            .push(Box::new(Future::MonotonicClock(clock, when, absolute)))?)
+            .push(Box::new(PollableEntry::MonotonicClock(
+                clock, when, absolute,
+            )))?)
     }
 }
