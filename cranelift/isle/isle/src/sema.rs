@@ -1744,6 +1744,18 @@ impl TermEnv {
 
                     bindings.exit_scope();
 
+                    let prio = if let Some(prio) = rule.prio {
+                        if flags.multi {
+                            tyenv.report_error(
+                                pos,
+                                "Cannot set rule priorities in multi-terms".to_string(),
+                            );
+                        }
+                        prio
+                    } else {
+                        0
+                    };
+
                     let rid = RuleId(self.rules.len());
                     self.rules.push(Rule {
                         id: rid,
@@ -1752,7 +1764,7 @@ impl TermEnv {
                         iflets,
                         rhs,
                         vars: bindings.seen,
-                        prio: rule.prio.unwrap_or(0),
+                        prio,
                         pos,
                     });
                 }
