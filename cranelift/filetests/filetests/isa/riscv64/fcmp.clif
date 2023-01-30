@@ -6,8 +6,7 @@ function %f0() {
 block0:
     v0 = f64const 0.0
     v1 = fcmp ult v0, v0
-    brz v1, block1
-    jump block1
+    brif v1, block1, block1
 
 block1:
     return
@@ -19,7 +18,7 @@ block1:
 ;   li a2,0
 ;   fmv.d.x ft5,a2
 ;   fle.d a5,ft5,ft1
-;   bne a5,zero,taken(label1),not_taken(label2)
+;   bne a5,zero,taken(label2),not_taken(label1)
 ; block1:
 ;   j label3
 ; block2:
@@ -31,8 +30,7 @@ function %f1() {
 block0:
     v0 = f64const 0.0
     v1 = fcmp ult v0, v0
-    brnz v1, block1
-    jump block1
+    brif v1, block1, block1
 
 block1:
     return

@@ -66,38 +66,6 @@ fn define_control_flow(
     }
 
     {
-        let c = &Operand::new("c", ScalarTruthy).with_doc("Controlling value to test");
-
-        ig.push(
-            Inst::new(
-                "brz",
-                r#"
-        Branch when zero.
-
-        Take the branch when ``c = 0``.
-        "#,
-                &formats.branch,
-            )
-            .operands_in(vec![c, block_call])
-            .is_branch(true),
-        );
-
-        ig.push(
-            Inst::new(
-                "brnz",
-                r#"
-        Branch when non-zero.
-
-        Take the branch when ``c != 0``.
-        "#,
-                &formats.branch,
-            )
-            .operands_in(vec![c, block_call])
-            .is_branch(true),
-        );
-    }
-
-    {
         let _i32 = &TypeVar::new(
             "i32",
             "A 32 bit scalar integer type",

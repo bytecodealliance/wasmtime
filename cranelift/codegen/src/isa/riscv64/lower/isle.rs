@@ -61,7 +61,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         }
     }
 
-    fn lower_brz_or_nz(
+    fn lower_cond_br(
         &mut self,
         cc: &IntCC,
         a: ValueRegs,

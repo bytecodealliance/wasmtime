@@ -21,8 +21,8 @@ block0(v0: i32, v1: r64, v2: i64):
 ; block0:
 ;   movl    8(%rdx), %r11d
 ;   cmpl    %r11d, %edi
-;   jb      label1; j label2
-; block1:
+;   jnb     label1; j label2
+; block2:
 ;   movl    %edi, %ecx
 ;   movq    0(%rdx), %rax
 ;   movq    %rax, %rdx
@@ -33,6 +33,6 @@ block0(v0: i32, v1: r64, v2: i64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; block2:
+; block1:
 ;   ud2 table_oob
 

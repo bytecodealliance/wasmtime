@@ -153,8 +153,7 @@ function %f(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = icmp eq v0, v1
   v3 = uextend.i32 v2
-  brnz v3, block1
-  jump block2
+  brif v3, block1, block2
 
 block1:
   v4 = iconst.i64 1
@@ -179,8 +178,7 @@ function %f(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = icmp eq v0, v1
   v3 = uextend.i32 v2
-  brnz v3, block1
-  jump block1
+  brif v3, block1, block1
 
 block1:
   v4 = iconst.i64 1
@@ -198,10 +196,9 @@ block1:
 ;   movz x0, #1
 ;   ret
 
-function %i128_brz(i128){
+function %i128_brif_false(i128){
 block0(v0: i128):
-    brz v0, block1
-    jump block1
+    brif v0, block1, block1
 
 block1:
     nop
@@ -210,7 +207,7 @@ block1:
 
 ; block0:
 ;   orr x3, x0, x1
-;   cbz x3, label1 ; b label2
+;   cbnz x3, label1 ; b label2
 ; block1:
 ;   b label3
 ; block2:
@@ -218,10 +215,9 @@ block1:
 ; block3:
 ;   ret
 
-function %i128_brnz(i128){
+function %i128_brif_true(i128){
 block0(v0: i128):
-    brnz v0, block1
-    jump block1
+    brif v0, block1, block1
 
 block1:
     nop
@@ -242,8 +238,7 @@ function %i128_bricmp_eq(i128, i128) {
 block0(v0: i128, v1: i128):
   v2 = icmp eq v0, v1
   v3 = uextend.i32 v2
-  brnz v3, block1
-  jump block1
+  brif v3, block1, block1
 
 block1:
   return
@@ -264,8 +259,7 @@ function %i128_bricmp_ne(i128, i128) {
 block0(v0: i128, v1: i128):
   v2 = icmp ne v0, v1
   v3 = uextend.i32 v2
-  brnz v3, block1
-  jump block1
+  brif v3, block1, block1
 
 block1:
   return
@@ -286,8 +280,7 @@ function %i128_bricmp_slt(i128, i128) {
 block0(v0: i128, v1: i128):
   v2 = icmp slt v0, v1
   v3 = uextend.i32 v2
-  brnz v3, block1
-  jump block1
+  brif v3, block1, block1
 
 block1:
   return
@@ -312,8 +305,7 @@ function %i128_bricmp_ult(i128, i128) {
 block0(v0: i128, v1: i128):
   v2 = icmp ult v0, v1
   v3 = uextend.i32 v2
-  brnz v3, block1
-  jump block1
+  brif v3, block1, block1
 
 block1:
   return
@@ -338,8 +330,7 @@ function %i128_bricmp_sle(i128, i128) {
 block0(v0: i128, v1: i128):
   v2 = icmp sle v0, v1
   v3 = uextend.i32 v2
-  brnz v3, block1
-  jump block1
+  brif v3, block1, block1
 
 block1:
   return
@@ -365,8 +356,7 @@ function %i128_bricmp_ule(i128, i128) {
 block0(v0: i128, v1: i128):
   v2 = icmp ule v0, v1
   v3 = uextend.i32 v2
-  brnz v3, block1
-  jump block1
+  brif v3, block1, block1
 
 block1:
   return
@@ -392,8 +382,7 @@ function %i128_bricmp_sgt(i128, i128) {
 block0(v0: i128, v1: i128):
   v2 = icmp sgt v0, v1
   v3 = uextend.i32 v2
-  brnz v3, block1
-  jump block1
+  brif v3, block1, block1
 
 block1:
   return
@@ -418,8 +407,7 @@ function %i128_bricmp_ugt(i128, i128) {
 block0(v0: i128, v1: i128):
   v2 = icmp ugt v0, v1
   v3 = uextend.i32 v2
-  brnz v3, block1
-  jump block1
+  brif v3, block1, block1
 
 block1:
   return
@@ -444,8 +432,7 @@ function %i128_bricmp_sge(i128, i128) {
 block0(v0: i128, v1: i128):
   v2 = icmp sge v0, v1
   v3 = uextend.i32 v2
-  brnz v3, block1
-  jump block1
+  brif v3, block1, block1
 
 block1:
   return
@@ -471,8 +458,7 @@ function %i128_bricmp_uge(i128, i128) {
 block0(v0: i128, v1: i128):
   v2 = icmp uge v0, v1
   v3 = uextend.i32 v2
-  brnz v3, block1
-  jump block1
+  brif v3, block1, block1
 
 block1:
   return

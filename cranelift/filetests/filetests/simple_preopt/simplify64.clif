@@ -45,14 +45,13 @@ block0(v0: i32):
 ; nextln:     return v3
 ; nextln: }
 
-function %brz_uextend(i32) {
+function %brif_false_uextend(i32) {
 block0(v0: i32):
     v3 = icmp_imm slt v0, 0
     v1 = uextend.i32 v3
     v2 = select v1, v1, v1
     trapz v1, user0
-    brz v1, block1
-    jump block2
+    brif v1, block2, block1
 
 block1:
     return
@@ -60,14 +59,13 @@ block1:
 block2:
     return
 }
-; sameln: function %brz_uextend
+; sameln: function %brif_false_uextend
 ; nextln: (v0: i32):
 ; nextln:    v3 = icmp_imm slt v0, 0
 ; nextln:    v1 = uextend.i32 v3
 ; nextln:    v2 = select v1, v1, v1
 ; nextln:    trapz v1, user0
-; nextln:    brnz v1, block2
-; nextln:    jump block1
+; nextln:    brif v1, block2, block1
 
 function %irsub_imm(i32) -> i32 {
 block0(v0: i32):

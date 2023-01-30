@@ -73,8 +73,7 @@ function u0:11335(i64 vmctx, i64, i32, i32, i32, i32, i32, i32, i32, i32) fast {
                                     v527 -> v10
                                     v537 -> v10
                                     v559 -> v10
-@4b665e                             brz v7, block2
-@4b665e                             jump block3
+@4b665e                             brif v7, block3, block2
 
                                 block3:
 @4b6684                             v438 = load.i64 notrap aligned readonly v0+504
@@ -226,12 +225,10 @@ function u0:11335(i64 vmctx, i64, i32, i32, i32, i32, i32, i32, i32, i32) fast {
 @4b6671                             v19 = icmp sle v18, v15
 @4b6671                             v20 = uextend.i32 v19
 @4b6672                             v21 = bor v17, v20
-@4b6674                             brnz v21, block9
-@4b6674                             jump block10
+@4b6674                             brif v21, block9, block10
 
                                 block10:
-@4b6679                             brz.i32 v18, block2
-@4b6679                             jump block11
+@4b6679                             brif.i32 v18, block11, block2
 
                                 block11:
 @4b667f                             v27 = isub.i32 v10, v18
@@ -271,14 +268,12 @@ function u0:11335(i64 vmctx, i64, i32, i32, i32, i32, i32, i32, i32, i32) fast {
 @4b6695                             v37 = iadd.i64 v438, v443
 @4b6695                             v38 = load.f32 little v37+68
 @4b6698                             v39 = fcmp.f32 gt v32, v38
-@4b669a                             brnz v39, block14
-@4b669a                             jump block15
+@4b669a                             brif v39, block14, block15
 
                                 block15:
 @4b66a0                             v44 = iadd.i32 v34, v116
 @4b66a7                             v47 = iadd.i32 v45, v468
-@4b66aa                             brnz v47, block12(v44, v47)
-@4b66aa                             jump block16
+@4b66aa                             brif v47, block12(v44, v47), block16
 
                                 block16:
 @4b66ac                             jump block2
@@ -289,8 +284,7 @@ function u0:11335(i64 vmctx, i64, i32, i32, i32, i32, i32, i32, i32, i32) fast {
                                 block13:
 @4b66be                             v50 = isub.i32 v10, v45
 @4b66c3                             v52 = icmp slt v50, v14
-@4b66c4                             brz v52, block22
-@4b66c4                             jump block23
+@4b66c4                             brif v52, block23, block22
 
                                 block23:
                                     v427 = ushr.i32 v14, v467
@@ -304,8 +298,7 @@ function u0:11335(i64 vmctx, i64, i32, i32, i32, i32, i32, i32, i32, i32) fast {
                                     v156 -> v59
                                     v157 -> v59
 @4b66d9                             v60 = isub.i32 v28, v34
-@4b66dd                             brz v60, block21
-@4b66dd                             jump block24
+@4b66dd                             brif v60, block24, block21
 
                                 block24:
 @4b66e3                             v64 = sshr.i32 v60, v93
@@ -334,8 +327,7 @@ function u0:11335(i64 vmctx, i64, i32, i32, i32, i32, i32, i32, i32, i32) fast {
 @4b6722                             v87 = bxor v72, v90
 @4b6723                             v88 = iadd v70, v87
 @4b6726                             v89 = select v83, v72, v88
-@4b6729                             brnz v89, block25(v85, v89)
-@4b6729                             jump block27
+@4b6729                             brif v89, block25(v85, v89), block27
 
                                 block27:
 @4b672b                             jump block26
@@ -345,8 +337,7 @@ function u0:11335(i64 vmctx, i64, i32, i32, i32, i32, i32, i32, i32, i32) fast {
 
                                 block22:
 @4b6733                             v91 = icmp.i32 eq v45, v90
-@4b6734                             brnz v91, block6
-@4b6734                             jump block28
+@4b6734                             brif v91, block6, block28
 
                                 block28:
                                     v430 = ushr.i32 v50, v467
@@ -360,8 +351,7 @@ function u0:11335(i64 vmctx, i64, i32, i32, i32, i32, i32, i32, i32, i32) fast {
                                     v151 -> v97
                                     v152 -> v97
 @4b6749                             v100 = isub.i32 v99, v28
-@4b674d                             brz v100, block19
-@4b674d                             jump block29
+@4b674d                             brif v100, block29, block19
 
                                 block29:
 @4b6753                             v104 = sshr.i32 v100, v93
@@ -390,8 +380,7 @@ function u0:11335(i64 vmctx, i64, i32, i32, i32, i32, i32, i32, i32, i32) fast {
 @4b6790                             v127 = bxor v112, v90
 @4b6791                             v128 = iadd v110, v127
 @4b6796                             v129 = select v123, v128, v112
-@4b6799                             brnz v129, block30(v125, v129)
-@4b6799                             jump block32
+@4b6799                             brif v129, block30(v125, v129), block32
 
                                 block32:
 @4b679b                             jump block31
@@ -432,25 +421,21 @@ function u0:11335(i64 vmctx, i64, i32, i32, i32, i32, i32, i32, i32, i32) fast {
                                     v232 -> v228
 @4b67c5                             v146 = isub.i32 v10, v143
 @4b67d2                             v153 = icmp ne v147, v150
-@4b67d3                             brz v153, block37
-@4b67d3                             jump block38
+@4b67d3                             brif v153, block38, block37
 
                                 block38:
 @4b67d9                             v158 = icmp.i32 eq v147, v155
-@4b67da                             brnz v158, block36
-@4b67da                             jump block39
+@4b67da                             brif v158, block36, block39
 
                                 block39:
 @4b67e0                             v161 = iadd.i32 v150, v116
 @4b67e3                             v162 = icmp eq v161, v147
-@4b67e4                             brnz v162, block35
-@4b67e4                             jump block40
+@4b67e4                             brif v162, block35, block40
 
                                 block40:
 @4b67ea                             v165 = iadd.i32 v147, v116
 @4b67ed                             v166 = icmp eq v165, v155
-@4b67ee                             brnz v166, block34
-@4b67ee                             jump block41
+@4b67ee                             brif v166, block34, block41
 
                                 block41:
 @4b67f6                             v168 = call fn0(v0, v0, v150, v147, v155)
@@ -470,8 +455,7 @@ function u0:11335(i64 vmctx, i64, i32, i32, i32, i32, i32, i32, i32, i32) fast {
 @4b681a                             v172 = iadd.i64 v438, v490
 @4b681a                             v173 = load.i32 little v172
                                     v180 -> v173
-@4b6821                             brz v169, block42
-@4b6821                             jump block43
+@4b6821                             brif v169, block43, block42
 
                                 block43:
 @4b6829                             v174 = call fn1(v0, v0, v150, v147, v169)
@@ -492,8 +476,7 @@ function u0:11335(i64 vmctx, i64, i32, i32, i32, i32, i32, i32, i32, i32) fast {
 @4b6848                             v185 = load.i32 little v184
                                     v190 -> v185
 @4b6853                             v186 = isub v183, v150
-@4b6856                             brz v186, block45
-@4b6856                             jump block46
+@4b6856                             brif v186, block46, block45
 
                                 block46:
 @4b685c                             v187 = isub.i32 v155, v186
@@ -518,21 +501,18 @@ function u0:11335(i64 vmctx, i64, i32, i32, i32, i32, i32, i32, i32, i32) fast {
 @4b6893                             v223 = iadd v192, v222
 @4b6896                             v224 = isub v223, v207
 @4b6897                             v225 = icmp slt v219, v224
-@4b6898                             brz v225, block47
-@4b6898                             jump block48
+@4b6898                             brif v225, block48, block47
 
                                 block48:
 @4b68aa                             call fn2(v0, v0, v228, v233, v234, v236, v143, v201, v246, v256)
-@4b68b9                             brnz.i32 v206, block7(v206, v215, v155, v234, v268)
-@4b68b9                             jump block49
+@4b68b9                             brif.i32 v206, block7(v206, v215, v155, v234, v268), block49
 
                                 block49:
 @4b68bb                             jump block2
 
                                 block47:
 @4b68ce                             call fn2(v0, v0, v234, v155, v268, v236, v215, v206, v246, v256)
-@4b68e1                             brnz.i32 v201, block7(v201, v143, v233, v228, v234)
-@4b68e1                             jump block50
+@4b68e1                             brif.i32 v201, block7(v201, v143, v233, v228, v234), block50
 
                                 block50:
 @4b68e3                             jump block2
@@ -542,13 +522,11 @@ function u0:11335(i64 vmctx, i64, i32, i32, i32, i32, i32, i32, i32, i32) fast {
 
                                 block8:
 @4b68eb                             v276 = icmp.i32 sgt v18, v14
-@4b68ec                             brz v276, block51
-@4b68ec                             jump block52
+@4b68ec                             brif v276, block52, block51
 
                                 block52:
 @4b68f2                             v278 = icmp.i32 eq v28, v99
-@4b68f3                             brnz v278, block2
-@4b68f3                             jump block53
+@4b68f3                             brif v278, block2, block53
 
                                 block53:
 @4b68f9                             v280 = isub.i32 v99, v28
@@ -566,15 +544,13 @@ function u0:11335(i64 vmctx, i64, i32, i32, i32, i32, i32, i32, i32, i32) fast {
 @4b690f                             store little v288, v289
 @4b6918                             v292 = iadd v283, v116
 @4b691b                             v293 = icmp.i32 ne v280, v292
-@4b691c                             brnz v293, block54(v292)
-@4b691c                             jump block56
+@4b691c                             brif v293, block54(v292), block56
 
                                 block56:
 @4b691e                             jump block55
 
                                 block55:
-@4b6922                             brz.i32 v292, block2
-@4b6922                             jump block57
+@4b6922                             brif.i32 v292, block57, block2
 
                                 block57:
 @4b6928                             v299 = iadd.i32 v99, v182
@@ -584,8 +560,7 @@ function u0:11335(i64 vmctx, i64, i32, i32, i32, i32, i32, i32, i32, i32) fast {
                                 block58(v302: i32, v305: i32, v310: i32, v324: i32):
                                     v409 -> v305
 @4b693a                             v303 = icmp.i32 eq v48, v302
-@4b693b                             brnz v303, block5
-@4b693b                             jump block60
+@4b693b                             brif v303, block5, block60
 
                                 block60:
 @4b6943                             v307 = iadd.i32 v302, v182
@@ -612,8 +587,7 @@ function u0:11335(i64 vmctx, i64, i32, i32, i32, i32, i32, i32, i32, i32) fast {
 @4b697e                             v327 = iadd.i32 v305, v182
 @4b6987                             v328 = select.i32 v319, v310, v312
 @4b698c                             v330 = icmp ne v328, v251
-@4b698d                             brnz v330, block58(v323, v327, v328, v325)
-@4b698d                             jump block61
+@4b698d                             brif v330, block58(v323, v327, v328, v325), block61
 
                                 block61:
 @4b698f                             jump block59
@@ -623,8 +597,7 @@ function u0:11335(i64 vmctx, i64, i32, i32, i32, i32, i32, i32, i32, i32) fast {
 
                                 block51:
 @4b6997                             v333 = icmp.i32 eq v48, v28
-@4b6998                             brnz v333, block2
-@4b6998                             jump block62
+@4b6998                             brif v333, block2, block62
 
                                 block62:
 @4b699e                             v335 = isub.i32 v28, v48
@@ -644,15 +617,13 @@ function u0:11335(i64 vmctx, i64, i32, i32, i32, i32, i32, i32, i32, i32) fast {
                                     v389 -> v347
                                     v388 -> v389
 @4b69c0                             v348 = icmp.i32 ne v335, v347
-@4b69c1                             brnz v348, block63(v347)
-@4b69c1                             jump block65
+@4b69c1                             brif v348, block63(v347), block65
 
                                 block65:
 @4b69c3                             jump block64
 
                                 block64:
-@4b69c7                             brz.i32 v347, block2
-@4b69c7                             jump block66
+@4b69c7                             brif.i32 v347, block66, block2
 
                                 block66:
 @4b69cd                             v352 = iadd.i32 v251, v347
@@ -666,8 +637,7 @@ function u0:11335(i64 vmctx, i64, i32, i32, i32, i32, i32, i32, i32, i32) fast {
                                 block67(v355: i32, v363: i32, v374: i32):
                                     v381 -> v374
 @4b69dd                             v357 = icmp eq v355, v99
-@4b69de                             brnz v357, block4
-@4b69de                             jump block69
+@4b69de                             brif v357, block4, block69
 
                                 block69:
 @4b69e4                             v528 = uextend.i64 v355
@@ -685,8 +655,7 @@ function u0:11335(i64 vmctx, i64, i32, i32, i32, i32, i32, i32, i32, i32) fast {
 @4b69f6                             v368 = fcmp gt v362, v367
 @4b69f6                             v369 = uextend.i32 v368
 @4b69f9                             v371 = bxor v369, v468
-@4b69fb                             brnz v371, block71
-@4b69fb                             jump block72
+@4b69fb                             brif v371, block71, block72
 
                                 block72:
 @4b6a01                             v538 = uextend.i64 v374
@@ -706,8 +675,7 @@ function u0:11335(i64 vmctx, i64, i32, i32, i32, i32, i32, i32, i32, i32) fast {
 @4b6a21                             v383 = iadd.i32 v374, v116
 @4b6a28                             v387 = iadd.i32 v385, v386
 @4b6a2b                             v390 = icmp ne v387, v389
-@4b6a2c                             brnz v390, block67(v393, v386, v383)
-@4b6a2c                             jump block73
+@4b6a2c                             brif v390, block67(v393, v386, v383), block73
 
                                 block73:
 @4b6a2e                             jump block68
@@ -724,8 +692,7 @@ function u0:11335(i64 vmctx, i64, i32, i32, i32, i32, i32, i32, i32, i32) fast {
 
                                 block5:
 @4b6a50                             v402 = icmp.i32 eq v251, v324
-@4b6a51                             brnz v402, block2
-@4b6a51                             jump block74
+@4b6a51                             brif v402, block2, block74
 
                                 block74:
 @4b6a57                             v405 = iadd.i32 v324, v182
@@ -745,8 +712,7 @@ function u0:11335(i64 vmctx, i64, i32, i32, i32, i32, i32, i32, i32, i32) fast {
 @4b6a74                             store little v414, v415
 @4b6a7d                             v418 = iadd v408, v182
 @4b6a80                             v419 = icmp.i32 ne v406, v418
-@4b6a81                             brnz v419, block75(v418)
-@4b6a81                             jump block77
+@4b6a81                             brif v419, block75(v418), block77
 
                                 block77:
 @4b6a83                             jump block76
@@ -756,8 +722,7 @@ function u0:11335(i64 vmctx, i64, i32, i32, i32, i32, i32, i32, i32, i32) fast {
 
                                 block4:
 @4b6a8b                             v423 = isub.i32 v352, v363
-@4b6a8f                             brz v423, block2
-@4b6a8f                             jump block78
+@4b6a8f                             brif v423, block78, block2
 
                                 block78:
 @4b6a97                             v426 = call fn1(v0, v0, v374, v363, v423)

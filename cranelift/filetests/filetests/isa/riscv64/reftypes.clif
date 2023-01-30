@@ -47,8 +47,7 @@ function %f4(r64, r64) -> r64, r64, r64 {
 block0(v0: r64, v1: r64):
     v2 = call fn0(v0)
     stack_store.r64 v0, ss0
-    brz v2, block1(v1, v0)
-    jump block2(v0, v1)
+    brif v2, block2(v0, v1), block1(v1, v0)
 
 block1(v3: r64, v4: r64):
     jump block3(v3, v4)
@@ -77,18 +76,18 @@ block3(v7: r64, v8: r64):
 ;   ld t4,8(nominal_sp)
 ;   sd t4,0(a1)
 ;   andi a1,a0,255
-;   beq a1,zero,taken(label1),not_taken(label3)
+;   bne a1,zero,taken(label1),not_taken(label3)
 ; block1:
 ;   j label2
 ; block2:
-;   mv a1,t4
-;   ld a0,16(nominal_sp)
+;   mv a0,t4
+;   ld a1,16(nominal_sp)
 ;   j label5
 ; block3:
 ;   j label4
 ; block4:
-;   mv a0,t4
-;   ld a1,16(nominal_sp)
+;   mv a1,t4
+;   ld a0,16(nominal_sp)
 ;   j label5
 ; block5:
 ;   load_addr a2,nsp+0

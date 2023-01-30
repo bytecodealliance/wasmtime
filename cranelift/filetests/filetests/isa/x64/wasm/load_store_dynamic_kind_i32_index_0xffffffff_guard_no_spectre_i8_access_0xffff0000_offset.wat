@@ -51,17 +51,17 @@
 ;;   jnb ; ud2 heap_oob ;
 ;;   movq    8(%rdx), %rax
 ;;   cmpq    %rax, %rdi
-;;   jbe     label1; j label3
-;; block1:
-;;   movq    0(%rdx), %rdi
-;;   addq    %rdi, const(0), %rdi
-;;   movb    %sil, 0(%rdi,%r11,1)
-;;   jmp     label2
+;;   jnbe    label1; j label2
 ;; block2:
+;;   movq    0(%rdx), %rax
+;;   addq    %rax, const(0), %rax
+;;   movb    %sil, 0(%rax,%r11,1)
+;;   jmp     label3
+;; block3:
 ;;   movq    %rbp, %rsp
 ;;   popq    %rbp
 ;;   ret
-;; block3:
+;; block1:
 ;;   ud2 heap_oob
 ;;
 ;; function u0:1:
@@ -76,15 +76,15 @@
 ;;   jnb ; ud2 heap_oob ;
 ;;   movq    8(%rsi), %rax
 ;;   cmpq    %rax, %rdi
-;;   jbe     label1; j label3
-;; block1:
-;;   movq    0(%rsi), %rsi
-;;   addq    %rsi, const(0), %rsi
-;;   movzbq  0(%rsi,%r11,1), %rax
-;;   jmp     label2
+;;   jnbe    label1; j label2
 ;; block2:
+;;   movq    0(%rsi), %rdi
+;;   addq    %rdi, const(0), %rdi
+;;   movzbq  0(%rdi,%r11,1), %rax
+;;   jmp     label3
+;; block3:
 ;;   movq    %rbp, %rsp
 ;;   popq    %rbp
 ;;   ret
-;; block3:
+;; block1:
 ;;   ud2 heap_oob

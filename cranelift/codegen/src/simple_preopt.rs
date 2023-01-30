@@ -6,12 +6,11 @@
 use crate::cursor::{Cursor, FuncCursor};
 use crate::divconst_magic_numbers::{magic_s32, magic_s64, magic_u32, magic_u64};
 use crate::divconst_magic_numbers::{MS32, MS64, MU32, MU64};
-use crate::flowgraph::ControlFlowGraph;
 use crate::ir::{
-    condcodes::{CondCode, IntCC},
+    condcodes::IntCC,
     instructions::Opcode,
-    types::{I128, I32, I64, INVALID},
-    Block, DataFlowGraph, Function, Inst, InstBuilder, InstructionData, Type, Value,
+    types::{I128, I32, I64},
+    DataFlowGraph, Function, Inst, InstBuilder, InstructionData, Type, Value,
 };
 use crate::isa::TargetIsa;
 use crate::timing;
@@ -465,71 +464,6 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
     }
 }
 
-/// Reorder branches to encourage fallthroughs.
-///
-/// When a block ends with a conditional branch followed by an unconditional
-/// branch, this will reorder them if one of them is branching to the next Block
-/// layout-wise. The unconditional jump can then become a fallthrough.
-fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, block: Block, inst: Inst) {
-    let (term_inst, term_dest, cond_inst, cond_dest, kind, cond_arg) =
-        match pos.func.dfg.insts[inst] {
-            InstructionData::Jump {
-                opcode: Opcode::Jump,
-                destination,
-            } => {
-                let next_block = if let Some(next_block) = pos.func.layout.next_block(block) {
-                    next_block
-                } else {
-                    return;
-                };
-
-                if destination.block(&pos.func.dfg.value_lists) == next_block {
-                    return;
-                }
-
-                let prev_inst = if let Some(prev_inst) = pos.func.layout.prev_inst(inst) {
-                    prev_inst
-                } else {
-                    return;
-                };
-
-                match &pos.func.dfg.insts[prev_inst] {
-                    &InstructionData::Branch {
-                        opcode,
-                        arg,
-                        destination: cond_dest,
-                    } => {
-                        if cond_dest.block(&pos.func.dfg.value_lists) != next_block {
-                            return;
-                        }
-
-                        let kind = match opcode {
-                            Opcode::Brz => Opcode::Brnz,
-                            Opcode::Brnz => Opcode::Brz,
-                            _ => panic!("unexpected opcode"),
-                        };
-
-                        (inst, destination, prev_inst, cond_dest, kind, arg)
-                    }
-                    _ => return,
-                }
-            }
-
-            _ => return,
-        };
-
-    pos.func
-        .dfg
-        .replace(term_inst)
-        .Jump(Opcode::Jump, INVALID, cond_dest);
-    pos.func
-        .dfg
-        .replace(cond_inst)
-        .Branch(kind, INVALID, term_dest, cond_arg);
-
-    cfg.recompute_block(pos.func, block);
-}
-
 mod simplify {
     use super::*;
     use crate::ir::{
@@ -789,12 +723,11 @@ mod simplify {
     /// Fold comparisons into branch operations when possible.
     ///
     /// This matches against operations which compare against zero, then use the
-    /// result in a `brz` or `brnz` branch. It folds those two operations into a
-    /// single `brz` or `brnz`.
+    /// result in a conditional branch.
     fn branch_opt(pos: &mut FuncCursor, inst: Inst) {
-        let (cmp_arg, new_opcode) = if let InstructionData::Branch {
-            opcode: br_opcode,
+        let (cmp_arg, new_then, new_else) = if let InstructionData::Brif {
             arg: first_arg,
+            blocks: [block_then, block_else],
             ..
         } = pos.func.dfg.insts[inst]
         {
@@ -817,21 +750,13 @@ mod simplify {
                     return;
                 }
 
-                // icmp_imm returns non-zero when the comparison is true. So, if
-                // we're branching on zero, we need to invert the condition.
-                let cond = match br_opcode {
-                    Opcode::Brz => cmp_cond.inverse(),
-                    Opcode::Brnz => cmp_cond,
+                let (new_then, new_else) = match cmp_cond {
+                    IntCC::Equal => (block_else, block_then),
+                    IntCC::NotEqual => (block_then, block_else),
                     _ => return,
                 };
 
-                let new_opcode = match cond {
-                    IntCC::Equal => Opcode::Brz,
-                    IntCC::NotEqual => Opcode::Brnz,
-                    _ => return,
-                };
-
-                (cmp_arg, new_opcode)
+                (cmp_arg, new_then, new_else)
             } else {
                 return;
             }
@@ -839,9 +764,10 @@ mod simplify {
             return;
         };
 
-        if let InstructionData::Branch { opcode, arg, .. } = &mut pos.func.dfg.insts[inst] {
-            *opcode = new_opcode;
+        if let InstructionData::Brif { arg, blocks, .. } = &mut pos.func.dfg.insts[inst] {
             *arg = cmp_arg;
+            blocks[0] = new_then;
+            blocks[1] = new_else;
         } else {
             unreachable!();
         }
@@ -849,14 +775,14 @@ mod simplify {
 }
 
 /// The main pre-opt pass.
-pub fn do_preopt(func: &mut Function, cfg: &mut ControlFlowGraph, isa: &dyn TargetIsa) {
+pub fn do_preopt(func: &mut Function, isa: &dyn TargetIsa) {
     let _tt = timing::preopt();
 
     let mut pos = FuncCursor::new(func);
     let native_word_width = isa.pointer_bytes() as u32;
     let mut optimizer = simplify::peephole_optimizer(isa);
 
-    while let Some(block) = pos.next_block() {
+    while let Some(_) = pos.next_block() {
         while let Some(inst) = pos.next_inst() {
             simplify::apply_all(&mut optimizer, &mut pos, inst, native_word_width);
 
@@ -865,8 +791,6 @@ pub fn do_preopt(func: &mut Function, cfg: &mut ControlFlowGraph, isa: &dyn Targ
                 do_divrem_transformation(&divrem_info, &mut pos, inst);
                 continue;
             }
-
-            branch_order(&mut pos, cfg, block, inst);
         }
     }
 }

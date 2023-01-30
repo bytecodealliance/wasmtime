@@ -8,9 +8,8 @@ pub(crate) struct Formats {
     pub(crate) binary: Rc<InstructionFormat>,
     pub(crate) binary_imm8: Rc<InstructionFormat>,
     pub(crate) binary_imm64: Rc<InstructionFormat>,
-    pub(crate) brif: Rc<InstructionFormat>,
-    pub(crate) branch: Rc<InstructionFormat>,
     pub(crate) branch_table: Rc<InstructionFormat>,
+    pub(crate) brif: Rc<InstructionFormat>,
     pub(crate) call: Rc<InstructionFormat>,
     pub(crate) call_indirect: Rc<InstructionFormat>,
     pub(crate) cond_trap: Rc<InstructionFormat>,
@@ -113,8 +112,6 @@ impl Formats {
                 .build(),
 
             jump: Builder::new("Jump").block().build(),
-
-            branch: Builder::new("Branch").value().block().build(),
 
             brif: Builder::new("Brif").value().block().block().build(),
 

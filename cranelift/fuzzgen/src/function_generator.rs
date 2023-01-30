@@ -1614,26 +1614,9 @@ where
                 let condbr_types = [I8, I16, I32, I64, I128];
                 let _type = *self.u.choose(&condbr_types[..])?;
                 let val = builder.use_var(self.get_variable_of_type(_type)?);
-
-                match self.u.int_in_range(0..=2)? {
-                    0 => {
-                        builder.ins().brnz(val, left, &left_args[..]);
-                        builder.ins().jump(right, &right_args[..]);
-                    }
-
-                    1 => {
-                        builder.ins().brz(val, left, &left_args[..]);
-                        builder.ins().jump(right, &right_args[..]);
-                    }
-
-                    2 => {
-                        builder
-                            .ins()
-                            .brif(val, left, &left_args[..], right, &right_args[..]);
-                    }
-
-                    _ => unreachable!(),
-                }
+                builder
+                    .ins()
+                    .brif(val, left, &left_args[..], right, &right_args[..]);
             }
             BlockTerminator::BrTable(default, targets) => {
                 // Create jump tables on demand
