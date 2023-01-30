@@ -27,6 +27,9 @@ impl EmitInfo {
 
 /// load constant by put the constant in the code stream.
 /// calculate the pc and using load instruction.
+/// This is only allow used in the emit stage.
+/// Because of those instruction must execute together.
+/// see https://github.com/bytecodealliance/wasmtime/pull/5612
 #[derive(Clone, Copy)]
 pub(crate) enum LoadConstant {
     U32(u32),
@@ -464,14 +467,13 @@ impl MachInstEmit for Inst {
                 x.emit(&[], sink, emit_info, state)
             }
             &Inst::RawData { ref data } => {
-                // emit_island if need, right now data is not very long.
-                let length = data.len() as CodeOffset;
-                if sink.island_needed(length) {
-                    sink.emit_island(length);
-                }
+                // Right now we only put a u32 or u64 in this instruction.
+                // It is not very long, no need to check if need `emit_island`.
+                // If data is very long , this is a bug because RawData is typecial
+                // use to load some data and rely on some positon in the code stream.
+                // and we may exceed `Inst::worst_case_size`.
+                // for more information see https://github.com/bytecodealliance/wasmtime/pull/5612.
                 sink.put_data(&data[..]);
-                // safe to disable code length check.
-                start_off = sink.cur_offset();
             }
             &Inst::Lui { rd, ref imm } => {
                 let rd = allocs.next_writable(rd);
