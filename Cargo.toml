@@ -89,7 +89,6 @@ members = [
   "crates/bench-api",
   "crates/c-api",
   "crates/cli-flags",
-  "crates/wasi-threads",
   "crates/environ/fuzz",
   "crates/jit-icache-coherence",
   "crates/winch",
