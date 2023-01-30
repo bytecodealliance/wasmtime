@@ -34,7 +34,7 @@ fn define_control_flow(
             &formats.jump,
         )
         .operands_in(vec![block_call])
-        .is_branch(),
+        .branch(),
     );
 
     let ScalarTruthy = &TypeVar::new(
@@ -59,7 +59,7 @@ fn define_control_flow(
                 &formats.brif,
             )
             .operands_in(vec![c, block_then, block_else])
-            .is_branch(),
+            .branch(),
         );
     }
 
@@ -94,7 +94,7 @@ fn define_control_flow(
                 &formats.branch_table,
             )
             .operands_in(vec![x, label, JT])
-            .is_branch(),
+            .branch(),
         );
     }
 
@@ -129,7 +129,7 @@ fn define_control_flow(
             )
             .operands_in(vec![code])
             .can_trap()
-            .is_terminator(),
+            .terminator(),
         );
 
         let c = &Operand::new("c", ScalarTruthy).with_doc("Controlling value to test");
@@ -205,7 +205,7 @@ fn define_control_flow(
             &formats.multiary,
         )
         .operands_in(vec![rvals])
-        .is_return(),
+        .return_(),
     );
 
     let FN = &Operand::new("FN", &entities.func_ref)
@@ -225,7 +225,7 @@ fn define_control_flow(
         )
         .operands_in(vec![FN, args])
         .operands_out(vec![rvals])
-        .is_call(),
+        .call(),
     );
 
     let SIG = &Operand::new("SIG", &entities.sig_ref).with_doc("function signature");
@@ -250,7 +250,7 @@ fn define_control_flow(
         )
         .operands_in(vec![SIG, callee, args])
         .operands_out(vec![rvals])
-        .is_call(),
+        .call(),
     );
 
     let FN = &Operand::new("FN", &entities.func_ref)

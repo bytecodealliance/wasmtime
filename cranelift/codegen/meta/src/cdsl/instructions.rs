@@ -172,33 +172,29 @@ impl InstructionBuilder {
     }
 
     /// Mark this instruction as a block terminator.
-    #[allow(clippy::wrong_self_convention)]
-    pub fn is_terminator(mut self) -> Self {
+    pub fn terminator(mut self) -> Self {
         self.is_terminator = true;
         self
     }
 
     /// Mark this instruction as a branch instruction. This also implies that the instruction is a
     /// block terminator.
-    #[allow(clippy::wrong_self_convention)]
-    pub fn is_branch(mut self) -> Self {
+    pub fn branch(mut self) -> Self {
         self.is_branch = true;
-        self.is_terminator()
+        self.terminator()
     }
 
     /// Mark this instruction as a call instruction.
-    #[allow(clippy::wrong_self_convention)]
-    pub fn is_call(mut self) -> Self {
+    pub fn call(mut self) -> Self {
         self.is_call = true;
         self
     }
 
     /// Mark this instruction as a return instruction. This also implies that the instruction is a
     /// block terminator.
-    #[allow(clippy::wrong_self_convention)]
-    pub fn is_return(mut self) -> Self {
+    pub fn return_(mut self) -> Self {
         self.is_return = true;
-        self.is_terminator()
+        self.terminator()
     }
 
     /// Mark this instruction as one that can load from memory.
