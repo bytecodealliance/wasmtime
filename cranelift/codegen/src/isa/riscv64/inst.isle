@@ -1246,7 +1246,7 @@
       ;;
       (const64 Reg (load_u64_constant 64))
       ;; right now we only rotate less than 64 bits.
-      (shamt_128 Reg (alu_andi (value_regs_get y 0)  127)))
+      (shamt_128 Reg (alu_andi (value_regs_get y 0) 127)))
     ;; right now we only rotate less than 64 bits.
     ;; if shamt is greater than 64 , we should switch low and high.
     (value_regs
@@ -1276,7 +1276,7 @@
 
       ;;
       (const64 Reg (load_u64_constant 64))
-      (shamt_128 Reg (alu_andi (value_regs_get y 0)  127)))
+      (shamt_128 Reg (alu_andi (value_regs_get y 0) 127)))
     ;; right now we only rotate less than 64 bits.
     ;; if shamt is greater than 64 , we should switch low and high.
     (value_regs
@@ -1302,7 +1302,7 @@
       (high Reg (alu_rrr (AluOPRRR.Or) high_part2 high_part3 ))
       ;;
       (const64 Reg (load_u64_constant 64))
-      (shamt_128 Reg (alu_andi (value_regs_get y 0)  127)))
+      (shamt_128 Reg (alu_andi (value_regs_get y 0) 127)))
     (value_regs
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 (zero_reg) low)
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 low high))))
@@ -1326,7 +1326,7 @@
 
       ;;
       (high Reg (alu_rrr (AluOPRRR.Srl) (value_regs_get x 1) shamt))
-      (shamt_128 Reg (alu_andi (value_regs_get y 0)  127)))
+      (shamt_128 Reg (alu_andi (value_regs_get y 0) 127)))
     (value_regs
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high low)
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 (zero_reg) high))))
@@ -1354,9 +1354,8 @@
       (const_neg_1 Reg (load_imm12 -1))
       ;;
       (high_replacement Reg (gen_select_reg (IntCC.SignedLessThan) (value_regs_get x 1) (zero_reg) const_neg_1 (zero_reg)))
-      (shamt_128 Reg (alu_andi (value_regs_get y 0)  127))
       (const64 Reg (load_u64_constant 64))
-      (shamt_128 Reg (alu_andi (value_regs_get y 0)  127)))
+      (shamt_128 Reg (alu_andi (value_regs_get y 0) 127)))
     (value_regs
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high low)
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high_replacement high))))
