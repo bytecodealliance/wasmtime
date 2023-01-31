@@ -13,9 +13,9 @@ edition.workspace = true
 
 [dependencies]
 wasmparser = { workspace = true }
-cranelift-codegen = { workspace = true, default-features = false }
+cranelift-codegen = { workspace = true }
 cranelift-entity = { workspace = true }
-cranelift-frontend = { workspace = true, default-features = false }
+cranelift-frontend = { workspace = true }
 wasmtime-types = { workspace = true }
 hashbrown = { workspace = true, optional = true }
 itertools = "0.10.0"
