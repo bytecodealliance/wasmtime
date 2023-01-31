@@ -18,8 +18,14 @@ pub struct WasiThreadsCtx<T> {
 }
 
 impl<T: Clone + Send + 'static> WasiThreadsCtx<T> {
-    pub fn new(module: Module, linker: Arc<Linker<T>>) -> Self {
-        Self { module, linker }
+    pub fn new(module: Module, linker: Arc<Linker<T>>) -> Result<Self> {
+        if !has_wasi_entry_point(&module) {
+            bail!(
+                "failed to find wasi-threads entry point function: {}",
+                WASI_ENTRY_POINT
+            );
+        }
+        Ok(Self { module, linker })
     }
 
     pub fn spawn(&self, host: T, thread_start_arg: i32) -> Result<i32> {
@@ -133,4 +139,15 @@ pub fn add_to_linker<T: Clone + Send + 'static>(
         "unable to link a shared memory import to the module; a `wasi-threads` \
          module should import a single shared memory as \"memory\""
     ))
+}
+
+fn has_wasi_entry_point(module: &Module) -> bool {
+    module
+        .get_export(WASI_ENTRY_POINT)
+        .and_then(|t| t.func().cloned())
+        .and_then(|t| {
+            let params: Vec<ValType> = t.params().collect();
+            Some(params == [ValType::I32, ValType::I32] && t.results().len() == 0)
+        })
+        .unwrap_or(false)
 }

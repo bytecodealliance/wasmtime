@@ -504,7 +504,7 @@ fn populate_with_wasi(
             store.data_mut().wasi_threads = Some(std::sync::Arc::new(WasiThreadsCtx::new(
                 _module,
                 std::sync::Arc::new(linker.clone()),
-            )));
+            )?));
         }
     }
 
