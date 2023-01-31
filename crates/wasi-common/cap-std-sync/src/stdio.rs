@@ -7,13 +7,7 @@ use std::convert::TryInto;
 use std::fs::File;
 use std::io;
 use std::io::{Read, Write};
-use std::sync::Arc;
 use system_interface::io::ReadReady;
-
-#[cfg(unix)]
-use wasi_common::file::BorrowedAsFd;
-#[cfg(windows)]
-use wasi_common::file::BorrowedAsRawHandleOrSocket;
 
 #[cfg(windows)]
 use io_extras::os::windows::{AsRawHandleOrSocket, RawHandleOrSocket};
@@ -39,13 +33,13 @@ impl WasiFile for Stdin {
     }
 
     #[cfg(unix)]
-    fn pollable(&self) -> Option<Arc<dyn AsFd + '_>> {
-        Some(Arc::new(BorrowedAsFd::new(&self.0)))
+    fn pollable(&self) -> Option<rustix::fd::BorrowedFd> {
+        Some(self.0.as_fd())
     }
 
     #[cfg(windows)]
-    fn pollable(&self) -> Option<Arc<dyn AsRawHandleOrSocket + '_>> {
-        Some(Arc::new(BorrowedAsRawHandleOrSocket::new(&self.0)))
+    fn pollable(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
+        Some(self.0.as_raw_handle_or_socket())
     }
 
     async fn get_filetype(&self) -> Result<FileType, Error> {
@@ -116,12 +110,12 @@ macro_rules! wasi_file_write_impl {
                 self
             }
             #[cfg(unix)]
-            fn pollable(&self) -> Option<Arc<dyn AsFd + '_>> {
-                Some(Arc::new(BorrowedAsFd::new(&self.0)))
+            fn pollable(&self) -> Option<rustix::fd::BorrowedFd> {
+                Some(self.0.as_fd())
             }
             #[cfg(windows)]
-            fn pollable(&self) -> Option<Arc<dyn AsRawHandleOrSocket + '_>> {
-                Some(Arc::new(BorrowedAsRawHandleOrSocket::new(&self.0)))
+            fn pollable(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
+                Some(self.0.as_raw_handle_or_socket())
             }
             async fn get_filetype(&self) -> Result<FileType, Error> {
                 if self.isatty() {

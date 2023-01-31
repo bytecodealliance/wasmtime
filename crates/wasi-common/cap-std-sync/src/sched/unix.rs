@@ -8,7 +8,7 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
     if poll.is_empty() {
         return Ok(());
     }
-    let mut poll_as_fds = Vec::new();
+    let mut pollfds = Vec::new();
     for s in poll.rw_subscriptions() {
         match s {
             Subscription::Read(f) => {
@@ -16,7 +16,7 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
                     .file
                     .pollable()
                     .ok_or(Error::invalid_argument().context("file is not pollable"))?;
-                poll_as_fds.push((fd, PollFlags::IN));
+                pollfds.push(PollFd::from_borrowed_fd(fd, PollFlags::IN));
             }
 
             Subscription::Write(f) => {
@@ -24,16 +24,11 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
                     .file
                     .pollable()
                     .ok_or(Error::invalid_argument().context("file is not pollable"))?;
-                poll_as_fds.push((fd, PollFlags::OUT));
+                pollfds.push(PollFd::from_borrowed_fd(fd, PollFlags::OUT));
             }
             Subscription::MonotonicClock { .. } => unreachable!(),
         }
     }
-
-    let mut pollfds = poll_as_fds
-        .iter()
-        .map(|(fd, events)| PollFd::from_borrowed_fd(fd.as_fd(), events.clone()))
-        .collect::<Vec<_>>();
 
     let ready = loop {
         let poll_timeout = if let Some(t) = poll.earliest_clock_deadline() {

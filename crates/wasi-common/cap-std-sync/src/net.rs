@@ -8,7 +8,6 @@ use io_lifetimes::{AsSocket, BorrowedSocket};
 use std::any::Any;
 use std::convert::TryInto;
 use std::io;
-use std::sync::Arc;
 #[cfg(unix)]
 use system_interface::fs::GetSetFdFlags;
 use system_interface::io::IoExt;
@@ -18,11 +17,6 @@ use wasi_common::{
     file::{FdFlags, FileType, RiFlags, RoFlags, SdFlags, SiFlags, WasiFile},
     Error, ErrorExt,
 };
-
-#[cfg(unix)]
-use wasi_common::file::BorrowedAsFd;
-#[cfg(windows)]
-use wasi_common::file::BorrowedAsRawHandleOrSocket;
 
 pub enum Socket {
     TcpListener(cap_std::net::TcpListener),
@@ -89,12 +83,12 @@ macro_rules! wasi_listen_write_impl {
                 self
             }
             #[cfg(unix)]
-            fn pollable(&self) -> Option<Arc<dyn AsFd + '_>> {
-                Some(Arc::new(BorrowedAsFd::new(&self.0)))
+            fn pollable(&self) -> Option<rustix::fd::BorrowedFd> {
+                Some(self.0.as_fd())
             }
             #[cfg(windows)]
-            fn pollable(&self) -> Option<Arc<dyn AsRawHandleOrSocket + '_>> {
-                Some(Arc::new(BorrowedAsRawHandleOrSocket::new(&self.0)))
+            fn pollable(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
+                Some(self.0.as_raw_handle_or_socket())
             }
             async fn sock_accept(&self, fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
                 let (stream, _) = self.0.accept()?;
@@ -182,12 +176,12 @@ macro_rules! wasi_stream_write_impl {
                 self
             }
             #[cfg(unix)]
-            fn pollable(&self) -> Option<Arc<dyn AsFd + '_>> {
-                Some(Arc::new(BorrowedAsFd::new(&self.0)))
+            fn pollable(&self) -> Option<rustix::fd::BorrowedFd> {
+                Some(self.0.as_fd())
             }
             #[cfg(windows)]
-            fn pollable(&self) -> Option<Arc<dyn AsRawHandleOrSocket + '_>> {
-                Some(Arc::new(BorrowedAsRawHandleOrSocket::new(&self.0)))
+            fn pollable(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
+                Some(self.0.as_raw_handle_or_socket())
             }
             async fn get_filetype(&self) -> Result<FileType, Error> {
                 Ok(FileType::SocketStream)

@@ -15,12 +15,12 @@ pub trait WasiFile: Send + Sync {
     async fn get_filetype(&self) -> Result<FileType, Error>;
 
     #[cfg(unix)]
-    fn pollable(&self) -> Option<Arc<dyn AsFd + '_>> {
+    fn pollable(&self) -> Option<rustix::fd::BorrowedFd> {
         None
     }
 
     #[cfg(windows)]
-    fn pollable(&self) -> Option<Arc<dyn AsRawHandleOrSocket + '_>> {
+    fn pollable(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
         None
     }
 
