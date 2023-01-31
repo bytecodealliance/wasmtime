@@ -144,6 +144,12 @@
 (rule (simplify (imul ty (iconst _ (simm32 2)) x))
       (iadd ty x x))
 
+;; x*c == x<<log2(c) when c is a power of two.
+(rule (simplify (imul ty x (iconst _ (imm64_power_of_two c))))
+      (ishl ty x (iconst ty (imm64 c))))
+(rule (simplify (imul ty (iconst _ (imm64_power_of_two c)) x))
+      (ishl ty x (iconst ty (imm64 c))))
+
 ;; x<<32>>32: uextend/sextend 32->64.
 (rule (simplify (ushr $I64 (ishl $I64 (uextend $I64 x @ (value_type $I32)) (iconst _ (simm32 32))) (iconst _ (simm32 32))))
       (uextend $I64 x))
@@ -151,7 +157,7 @@
 (rule (simplify (sshr $I64 (ishl $I64 (uextend $I64 x @ (value_type $I32)) (iconst _ (simm32 32))) (iconst _ (simm32 32))))
       (sextend $I64 x))
 
-;; TODO: strength reduction: mul/div to shifts
+;; TODO: strength reduction: div to shifts
 ;; TODO: div/rem by constants -> magic multiplications
 
 ;; Rematerialize ALU-op-with-imm and iconsts in each block where they're

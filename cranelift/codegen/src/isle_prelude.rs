@@ -344,6 +344,17 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn imm64_power_of_two(&mut self, x: Imm64) -> Option<u64> {
+            let x = i64::from(x);
+            let x = u64::try_from(x).ok()?;
+            if x.is_power_of_two() {
+                Some(x.trailing_zeros().into())
+            } else {
+                None
+            }
+        }
+
+        #[inline]
         fn u64_from_bool(&mut self, b: bool) -> u64 {
             if b {
                 u64::MAX

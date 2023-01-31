@@ -350,6 +350,10 @@
 (decl nonzero_u64_from_imm64 (u64) Imm64)
 (extern extractor nonzero_u64_from_imm64 nonzero_u64_from_imm64)
 
+;; If the given `Imm64` is a power-of-two, extract its log2 value.
+(decl imm64_power_of_two (u64) Imm64)
+(extern extractor imm64_power_of_two imm64_power_of_two)
+
 ;; Create a new Imm64.
 (decl pure imm64 (u64) Imm64)
 (extern constructor imm64 imm64)
@@ -452,4 +456,3 @@
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (convert Offset32 u32 offset32_to_u32)
-
