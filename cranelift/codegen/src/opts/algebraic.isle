@@ -138,6 +138,33 @@
 (rule (simplify (bnot ty (band t x y)))
       (bor ty (bnot ty x) (bnot ty y)))
 
+;; `or(and(x, y), not(y)) == or(x, not(y))`
+(rule (simplify (bor ty
+                     (band ty x y)
+                     z @ (bnot ty y)))
+      (bor ty x z))
+;; Duplicate the rule but swap the `bor` operands because `bor` is
+;; commutative. We could, of course, add a `simplify` rule to do the commutative
+;; swap for all `bor`s but this will bloat the e-graph with many e-nodes. It is
+;; cheaper to have additional rules, rather than additional e-nodes, because we
+;; amortize their cost via ISLE's smart codegen.
+(rule (simplify (bor ty
+                     z @ (bnot ty y)
+                     (band ty x y)))
+      (bor ty x z))
+
+;; `or(and(x, y), not(y)) == or(x, not(y))` specialized for constants, since
+;; otherwise we may not know that `z == not(y)` since we don't generally expand
+;; constants in the e-graph.
+;;
+;; (No need to duplicate for commutative `bor` for this constant version because
+;; we move constants to the right.)
+(rule (simplify (bor ty
+                     (band ty x (iconst ty (u64_from_imm64 y)))
+                     z @ (iconst ty (u64_from_imm64 zk))))
+      (if (u64_eq zk (u64_not y)))
+      (bor ty x z))
+
 ;; x*2 == 2*x == x+x.
 (rule (simplify (imul ty x (iconst _ (simm32 2))))
       (iadd ty x x))
