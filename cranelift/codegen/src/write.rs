@@ -415,18 +415,15 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
         IntAddTrap { args, code, .. } => write!(w, " {}, {}, {}", args[0], args[1], code),
         FloatCompare { cond, args, .. } => write!(w, " {} {}, {}", cond, args[0], args[1]),
         Jump { destination, .. } => {
-            write!(w, " {}", destination.block(pool))?;
-            write_block_args(w, destination.args_slice(pool))
+            write!(w, " {}", destination.display(pool))
         }
         Brif {
             arg,
             blocks: [block_then, block_else],
             ..
         } => {
-            write!(w, " {}, {}", arg, block_then.block(pool))?;
-            write_block_args(w, block_then.args_slice(pool))?;
-            write!(w, ", {}", block_else.block(pool))?;
-            write_block_args(w, block_else.args_slice(pool))
+            write!(w, " {}, {}", arg, block_then.display(pool))?;
+            write!(w, ", {}", block_else.display(pool))
         }
         BranchTable {
             arg,
@@ -498,15 +495,6 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
         }
     }
     Ok(())
-}
-
-/// Write block args using optional parantheses.
-fn write_block_args(w: &mut dyn Write, args: &[Value]) -> fmt::Result {
-    if args.is_empty() {
-        Ok(())
-    } else {
-        write!(w, "({})", DisplayValues(args))
-    }
 }
 
 /// Displayable slice of values.
