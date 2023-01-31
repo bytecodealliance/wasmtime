@@ -41,3 +41,35 @@ block0(v1: i8):
 ; check: v3 = iconst.i8 0
 ; check: return v3
 
+function %ishl() -> i8 {
+block0:
+    v0 = iconst.i8 1
+    v1 = iconst.i8 2
+    v2 = ishl v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 4
+; check: return v3
+
+function %ushr() -> i8 {
+block0:
+    v0 = iconst.i8 -1
+    v1 = iconst.i8 2
+    v2 = ushr v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 63
+; check: return v3
+
+function %sshr() -> i8 {
+block0:
+    v0 = iconst.i8 0xf0
+    v1 = iconst.i8 2
+    v2 = sshr v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 -4
+; check: return v3
