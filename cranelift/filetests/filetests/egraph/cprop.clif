@@ -23,24 +23,6 @@ block0:
 ; check: v3 = iconst.i16 0xfffe
 ; nextln: return v3
 
-function %f2(i8) -> i8 {
-block0(v1: i8):
-    v2 = icmp eq v1, v1
-    return v2
-}
-
-; check: v3 = iconst.i8 1
-; check: return v3
-
-function %f3(i8) -> i8 {
-block0(v1: i8):
-    v2 = icmp ne v1, v1
-    return v2
-}
-
-; check: v3 = iconst.i8 0
-; check: return v3
-
 function %ishl() -> i8 {
 block0:
     v0 = iconst.i8 1
@@ -73,3 +55,113 @@ block0:
 
 ; check: v3 = iconst.i8 -4
 ; check: return v3
+
+function %icmp_eq_i32() -> i8 {
+block0:
+    v0 = iconst.i32 1
+    v1 = iconst.i32 2
+    v2 = icmp eq v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 0
+; nextln: return v3
+
+function %icmp_ne_i32() -> i8 {
+block0:
+    v0 = iconst.i32 1
+    v1 = iconst.i32 2
+    v2 = icmp ne v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 1
+; nextln: return v3
+
+function %icmp_ult_i32() -> i8 {
+block0:
+    v0 = iconst.i32 1
+    v1 = iconst.i32 2
+    v2 = icmp ult v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 1
+; nextln: return v3
+
+function %icmp_ule_i32() -> i8 {
+block0:
+    v0 = iconst.i32 1
+    v1 = iconst.i32 2
+    v2 = icmp ule v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 1
+; nextln: return v3
+
+function %icmp_uge_i32() -> i8 {
+block0:
+    v0 = iconst.i32 1
+    v1 = iconst.i32 2
+    v2 = icmp uge v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 0
+; nextln: return v3
+
+function %icmp_ugt_i32() -> i8 {
+block0:
+    v0 = iconst.i32 1
+    v1 = iconst.i32 2
+    v2 = icmp ugt v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 0
+; nextln: return v3
+
+function %icmp_slt_i32() -> i8 {
+block0:
+    v0 = iconst.i32 -1
+    v1 = iconst.i32 2
+    v2 = icmp slt v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 1
+; nextln: return v3
+
+function %icmp_sle_i32() -> i8 {
+block0:
+    v0 = iconst.i32 -1
+    v1 = iconst.i32 2
+    v2 = icmp sle v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 1
+; nextln: return v3
+
+function %icmp_sge_i32() -> i8 {
+block0:
+    v0 = iconst.i32 -1
+    v1 = iconst.i32 2
+    v2 = icmp sge v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 0
+; nextln: return v3
+
+function %icmp_sgt_i32() -> i8 {
+block0:
+    v0 = iconst.i32 -1
+    v1 = iconst.i32 2
+    v2 = icmp sgt v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 0
+; nextln: return v3

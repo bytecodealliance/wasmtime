@@ -135,6 +135,28 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn imm64_icmp(&mut self, ty: Type, cc: &IntCC, x: Imm64, y: Imm64) -> Imm64 {
+            let shift = u32::checked_sub(64, ty.bits()).unwrap_or(0);
+            let mask = u64::MAX >> shift;
+            let x = (x.bits() as u64) & mask;
+            let y = (y.bits() as u64) & mask;
+            let sext = |v| ((v << shift) as i64) >> shift;
+            let result = match cc {
+                IntCC::Equal => x == y,
+                IntCC::NotEqual => x != y,
+                IntCC::UnsignedGreaterThanOrEqual => x >= y,
+                IntCC::UnsignedGreaterThan => x > y,
+                IntCC::UnsignedLessThanOrEqual => x <= y,
+                IntCC::UnsignedLessThan => x < y,
+                IntCC::SignedGreaterThanOrEqual => sext(x) >= sext(y),
+                IntCC::SignedGreaterThan => sext(x) > sext(y),
+                IntCC::SignedLessThanOrEqual => sext(x) <= sext(y),
+                IntCC::SignedLessThan => sext(x) < sext(y),
+            };
+            Imm64::new(result.into())
+        }
+
+        #[inline]
         fn ty_bits(&mut self, ty: Type) -> u8 {
             use std::convert::TryInto;
             ty.bits().try_into().unwrap()

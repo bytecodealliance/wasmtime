@@ -192,3 +192,21 @@ block0(v0: i64):
     return v4
     ; check: return v4
 }
+
+function %f2(i8) -> i8 {
+block0(v1: i8):
+    v2 = icmp eq v1, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 1
+; check: return v3
+
+function %f3(i8) -> i8 {
+block0(v1: i8):
+    v2 = icmp ne v1, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 0
+; check: return v3
