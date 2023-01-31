@@ -4,7 +4,7 @@
 
 use anyhow::{anyhow, Result};
 use rand::Rng;
-use std::thread;
+use std::sync::Arc;
 use wasmtime::{Caller, Linker, Module, SharedMemory, Store};
 use wasmtime_wasi::maybe_exit_on_error;
 
@@ -14,11 +14,11 @@ const WASI_ENTRY_POINT: &str = "wasi_thread_start";
 
 pub struct WasiThreadsCtx<T> {
     module: Module,
-    linker: Linker<T>,
+    linker: Arc<Linker<T>>,
 }
 
 impl<T: Clone + Send + 'static> WasiThreadsCtx<T> {
-    pub fn new(module: Module, linker: Linker<T>) -> Self {
+    pub fn new(module: Module, linker: Arc<Linker<T>>) -> Self {
         Self { module, linker }
     }
 
