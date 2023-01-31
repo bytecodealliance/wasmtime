@@ -1781,24 +1781,25 @@ impl MachInstEmit for Inst {
                 }
                 .emit(&[], sink, emit_info, state);
                 if out_type.bits() < 32 && is_signed {
-                    //
+                    // load value part mask.
                     Inst::load_constant_u32(
-                        writable_spilltmp_reg(),
+                        tmp,
                         if 16 == out_type.bits() {
                             (u16::MAX >> 1) as u64
                         } else {
                             // I8
                             (u8::MAX >> 1) as u64
                         },
-                        &mut |_| writable_spilltmp_reg2(),
+                        &mut |_| writable_spilltmp_reg(),
                     )
                     .into_iter()
                     .for_each(|x| x.emit(&[], sink, emit_info, state));
+                    // keep value part.
                     Inst::AluRRR {
                         alu_op: AluOPRRR::And,
-                        rd: writable_spilltmp_reg(),
+                        rd: tmp,
                         rs1: rd.to_reg(),
-                        rs2: spilltmp_reg(),
+                        rs2: tmp.to_reg(),
                     }
                     .emit(&[], sink, emit_info, state);
                     // extact sign bit.
@@ -1821,11 +1822,12 @@ impl MachInstEmit for Inst {
                         }),
                     }
                     .emit(&[], sink, emit_info, state);
+                    // make result,sign bit and value part.
                     Inst::AluRRR {
                         alu_op: AluOPRRR::Or,
                         rd: rd,
                         rs1: rd.to_reg(),
-                        rs2: spilltmp_reg(),
+                        rs2: tmp.to_reg(),
                     }
                     .emit(&[], sink, emit_info, state);
                 }
