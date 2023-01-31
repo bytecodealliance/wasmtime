@@ -34,8 +34,7 @@ fn define_control_flow(
             &formats.jump,
         )
         .operands_in(vec![block_call])
-        .is_terminator(true)
-        .is_branch(true),
+        .branches(),
     );
 
     let ScalarTruthy = &TypeVar::new(
@@ -60,8 +59,7 @@ fn define_control_flow(
                 &formats.brif,
             )
             .operands_in(vec![c, block_then, block_else])
-            .is_terminator(true)
-            .is_branch(true),
+            .branches(),
         );
     }
 
@@ -96,8 +94,7 @@ fn define_control_flow(
                 &formats.branch_table,
             )
             .operands_in(vec![x, label, JT])
-            .is_terminator(true)
-            .is_branch(true),
+            .branches(),
         );
     }
 
@@ -115,9 +112,9 @@ fn define_control_flow(
     "#,
             &formats.nullary,
         )
-        .other_side_effects(true)
-        .can_load(true)
-        .can_store(true),
+        .other_side_effects()
+        .can_load()
+        .can_store(),
     );
 
     {
@@ -131,8 +128,8 @@ fn define_control_flow(
                 &formats.trap,
             )
             .operands_in(vec![code])
-            .can_trap(true)
-            .is_terminator(true),
+            .can_trap()
+            .terminates_block(),
         );
 
         let c = &Operand::new("c", ScalarTruthy).with_doc("Controlling value to test");
@@ -147,7 +144,7 @@ fn define_control_flow(
                 &formats.cond_trap,
             )
             .operands_in(vec![c, code])
-            .can_trap(true),
+            .can_trap(),
         );
 
         ig.push(
@@ -161,7 +158,7 @@ fn define_control_flow(
                 &formats.trap,
             )
             .operands_in(vec![code])
-            .can_trap(true),
+            .can_trap(),
         );
 
         let c = &Operand::new("c", ScalarTruthy).with_doc("Controlling value to test");
@@ -176,7 +173,7 @@ fn define_control_flow(
                 &formats.cond_trap,
             )
             .operands_in(vec![c, code])
-            .can_trap(true),
+            .can_trap(),
         );
 
         ig.push(
@@ -190,7 +187,7 @@ fn define_control_flow(
                 &formats.cond_trap,
             )
             .operands_in(vec![c, code])
-            .can_trap(true),
+            .can_trap(),
         );
     }
 
@@ -208,8 +205,7 @@ fn define_control_flow(
             &formats.multiary,
         )
         .operands_in(vec![rvals])
-        .is_return(true)
-        .is_terminator(true),
+        .returns(),
     );
 
     let FN = &Operand::new("FN", &entities.func_ref)
@@ -229,7 +225,7 @@ fn define_control_flow(
         )
         .operands_in(vec![FN, args])
         .operands_out(vec![rvals])
-        .is_call(true),
+        .call(),
     );
 
     let SIG = &Operand::new("SIG", &entities.sig_ref).with_doc("function signature");
@@ -254,7 +250,7 @@ fn define_control_flow(
         )
         .operands_in(vec![SIG, callee, args])
         .operands_out(vec![rvals])
-        .is_call(true),
+        .call(),
     );
 
     let FN = &Operand::new("FN", &entities.func_ref)
@@ -675,7 +671,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -690,7 +686,7 @@ pub(crate) fn define(
             &formats.store,
         )
         .operands_in(vec![MemFlags, x, p, Offset])
-        .can_store(true),
+        .can_store(),
     );
 
     let iExt8 = &TypeVar::new(
@@ -713,7 +709,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -728,7 +724,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -742,7 +738,7 @@ pub(crate) fn define(
             &formats.store,
         )
         .operands_in(vec![MemFlags, x, p, Offset])
-        .can_store(true),
+        .can_store(),
     );
 
     let iExt16 = &TypeVar::new(
@@ -765,7 +761,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -780,7 +776,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -794,7 +790,7 @@ pub(crate) fn define(
             &formats.store,
         )
         .operands_in(vec![MemFlags, x, p, Offset])
-        .can_store(true),
+        .can_store(),
     );
 
     let iExt32 = &TypeVar::new(
@@ -817,7 +813,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -832,7 +828,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -846,7 +842,7 @@ pub(crate) fn define(
             &formats.store,
         )
         .operands_in(vec![MemFlags, x, p, Offset])
-        .can_store(true),
+        .can_store(),
     );
 
     let I16x8 = &TypeVar::new(
@@ -871,7 +867,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -885,7 +881,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     let I32x4 = &TypeVar::new(
@@ -910,7 +906,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -924,7 +920,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     let I64x2 = &TypeVar::new(
@@ -949,7 +945,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -963,7 +959,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     let x = &Operand::new("x", Mem).with_doc("Value to be stored");
@@ -988,7 +984,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![SS, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -1007,7 +1003,7 @@ pub(crate) fn define(
             &formats.stack_store,
         )
         .operands_in(vec![x, SS, Offset])
-        .can_store(true),
+        .can_store(),
     );
 
     ig.push(
@@ -1039,7 +1035,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![DSS])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -1054,7 +1050,7 @@ pub(crate) fn define(
             &formats.dynamic_stack_store,
         )
         .operands_in(vec![x, DSS])
-        .can_store(true),
+        .can_store(),
     );
 
     let GV = &Operand::new("GV", &entities.global_value);
@@ -1123,7 +1119,7 @@ pub(crate) fn define(
             &formats.nullary,
         )
         .operands_out(vec![addr])
-        .other_side_effects(true),
+        .other_side_effects(),
     );
 
     ig.push(
@@ -1135,7 +1131,7 @@ pub(crate) fn define(
             &formats.unary,
         )
         .operands_in(vec![addr])
-        .other_side_effects(true),
+        .other_side_effects(),
     );
 
     ig.push(
@@ -1379,10 +1375,10 @@ pub(crate) fn define(
         )
         .operands_in(vec![c, x, y])
         .operands_out(vec![a])
-        .other_side_effects(true)
+        .other_side_effects()
         // We can de-duplicate spectre selects since the side effect is
         // idempotent.
-        .side_effects_idempotent(true),
+        .side_effects_idempotent(),
     );
 
     let c = &Operand::new("c", Any).with_doc("Controlling value to test");
@@ -1676,8 +1672,8 @@ pub(crate) fn define(
             )
             .operands_in(vec![x, y])
             .operands_out(vec![a])
-            .can_trap(true)
-            .side_effects_idempotent(true),
+            .can_trap()
+            .side_effects_idempotent(),
         );
 
         ig.push(
@@ -1695,8 +1691,8 @@ pub(crate) fn define(
             )
             .operands_in(vec![x, y])
             .operands_out(vec![a])
-            .can_trap(true)
-            .side_effects_idempotent(true),
+            .can_trap()
+            .side_effects_idempotent(),
         );
 
         ig.push(
@@ -1711,8 +1707,8 @@ pub(crate) fn define(
             )
             .operands_in(vec![x, y])
             .operands_out(vec![a])
-            .can_trap(true)
-            .side_effects_idempotent(true),
+            .can_trap()
+            .side_effects_idempotent(),
         );
 
         ig.push(
@@ -1727,8 +1723,8 @@ pub(crate) fn define(
             )
             .operands_in(vec![x, y])
             .operands_out(vec![a])
-            .can_trap(true)
-            .side_effects_idempotent(true),
+            .can_trap()
+            .side_effects_idempotent(),
         );
     }
 
@@ -1955,8 +1951,8 @@ pub(crate) fn define(
             )
             .operands_in(vec![x, y, code])
             .operands_out(vec![a])
-            .can_trap(true)
-            .side_effects_idempotent(true),
+            .can_trap()
+            .side_effects_idempotent(),
         );
     }
 
@@ -3318,8 +3314,8 @@ pub(crate) fn define(
         )
         .operands_in(vec![x])
         .operands_out(vec![a])
-        .can_trap(true)
-        .side_effects_idempotent(true),
+        .can_trap()
+        .side_effects_idempotent(),
     );
 
     ig.push(
@@ -3337,8 +3333,8 @@ pub(crate) fn define(
         )
         .operands_in(vec![x])
         .operands_out(vec![a])
-        .can_trap(true)
-        .side_effects_idempotent(true),
+        .can_trap()
+        .side_effects_idempotent(),
     );
 
     let x = &Operand::new("x", Float);
@@ -3514,9 +3510,9 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, AtomicRmwOp, p, x])
         .operands_out(vec![a])
-        .can_load(true)
-        .can_store(true)
-        .other_side_effects(true),
+        .can_load()
+        .can_store()
+        .other_side_effects(),
     );
 
     ig.push(
@@ -3536,9 +3532,9 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, e, x])
         .operands_out(vec![a])
-        .can_load(true)
-        .can_store(true)
-        .other_side_effects(true),
+        .can_load()
+        .can_store()
+        .other_side_effects(),
     );
 
     ig.push(
@@ -3556,8 +3552,8 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p])
         .operands_out(vec![a])
-        .can_load(true)
-        .other_side_effects(true),
+        .can_load()
+        .other_side_effects(),
     );
 
     ig.push(
@@ -3574,8 +3570,8 @@ pub(crate) fn define(
             &formats.store_no_offset,
         )
         .operands_in(vec![MemFlags, x, p])
-        .can_store(true)
-        .other_side_effects(true),
+        .can_store()
+        .other_side_effects(),
     );
 
     ig.push(
@@ -3588,7 +3584,7 @@ pub(crate) fn define(
         "#,
             &formats.nullary,
         )
-        .other_side_effects(true),
+        .other_side_effects(),
     );
 
     let TxN = &TypeVar::new(
