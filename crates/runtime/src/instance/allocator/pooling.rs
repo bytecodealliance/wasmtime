@@ -970,7 +970,7 @@ impl StackPool {
 /// construction.
 #[derive(Copy, Clone, Debug)]
 pub struct PoolingInstanceAllocatorConfig {
-    /// See [`PoolingAllocatorConfig::max_unused_warm_slots`] in `wasmtime`
+    /// See `PoolingAllocatorConfig::max_unused_warm_slots` in `wasmtime`
     pub max_unused_warm_slots: u32,
     /// The size, in bytes, of async stacks to allocate (not including the guard
     /// page).
