@@ -296,9 +296,10 @@ impl FunctionStencil {
             }
 
             InstructionData::BranchTable { table, .. } => {
+                let pool = &mut self.dfg.value_lists;
                 for entry in self.dfg.jump_tables[*table].all_branches_mut() {
-                    if *entry == old_dest {
-                        *entry = new_dest;
+                    if entry.block(pool) == old_dest {
+                        entry.set_block(new_dest, pool);
                     }
                 }
             }

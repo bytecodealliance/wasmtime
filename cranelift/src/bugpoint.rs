@@ -422,7 +422,7 @@ impl Mutator for ReplaceBlockParamWithConst {
         // Remove parameters in branching instructions that point to this block
         for pred in cfg.pred_iter(self.block) {
             let dfg = &mut func.dfg;
-            for branch in dfg.insts[pred.inst].branch_destination_mut().into_iter() {
+            for branch in dfg.insts[pred.inst].branch_destination_mut(&mut dfg.jump_tables) {
                 if branch.block(&dfg.value_lists) == self.block {
                     branch.remove(param_index, &mut dfg.value_lists);
                 }
@@ -711,7 +711,7 @@ impl Mutator for MergeBlocks {
 
         // If the branch instruction that lead us to this block wasn't an unconditional jump, then
         // we have a conditional jump sequence that we should not break.
-        let branch_dests = func.dfg.insts[pred.inst].branch_destination();
+        let branch_dests = func.dfg.insts[pred.inst].branch_destination(&func.dfg.jump_tables);
         if branch_dests.len() != 1 {
             return Some((
                 func,

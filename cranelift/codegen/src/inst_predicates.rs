@@ -191,16 +191,18 @@ pub(crate) fn visit_block_succs<F: FnMut(Inst, Block, bool)>(
             }
 
             ir::InstructionData::BranchTable { table, .. } => {
+                let pool = &f.dfg.value_lists;
                 let table = &f.stencil.dfg.jump_tables[*table];
 
                 // The default block is reached via a direct conditional branch,
-                // so it is not part of the table. We visit the default block first
-                // explicitly, as some callers of visit_block_succs depend on that
-                // ordering.
-                visit(inst, table.default_block(), false);
+                // so it is not part of the table. We visit the default block
+                // first explicitly, to mirror the traversal order of
+                // `JumpTableData::all_branches`, and transitively the order of
+                // `InstructionData::branch_destination`.
+                visit(inst, table.default_block().block(pool), false);
 
-                for &dest in table.as_slice() {
-                    visit(inst, dest, true);
+                for dest in table.as_slice() {
+                    visit(inst, dest.block(pool), true);
                 }
             }
 

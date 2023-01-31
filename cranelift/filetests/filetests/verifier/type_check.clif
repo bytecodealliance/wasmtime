@@ -63,12 +63,10 @@ function %fn_call_incorrect_arg_type(i64) {
         return
 }
 
-; TODO: Should we instead just verify that jump tables contain no blocks that take arguments? This
-; error doesn't occur if no instruction uses the jump table.
 function %jump_table_args() {
     block0:
         v0 = iconst.i32 0
-        br_table v0, block2, [block1] ; error: takes no arguments, but had target block1 with 1 arguments
+        br_table v0, block2, [block1] ; error: mismatched argument count
 
     block1(v5: i32):
         return

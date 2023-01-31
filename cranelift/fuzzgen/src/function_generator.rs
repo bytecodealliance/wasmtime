@@ -1610,7 +1610,15 @@ where
             }
             BlockTerminator::BrTable(default, targets) => {
                 // Create jump tables on demand
-                let jt = builder.create_jump_table(JumpTableData::new(default, &targets));
+                let mut jt = Vec::with_capacity(targets.len());
+                for block in targets {
+                    let args = self.generate_values_for_block(builder, block)?;
+                    jt.push(builder.func.dfg.block_call(block, &args))
+                }
+
+                let args = self.generate_values_for_block(builder, default)?;
+                let jt_data = JumpTableData::new(builder.func.dfg.block_call(default, &args), &jt);
+                let jt = builder.create_jump_table(jt_data);
 
                 // br_table only supports I32
                 let val = builder.use_var(self.get_variable_of_type(I32)?);

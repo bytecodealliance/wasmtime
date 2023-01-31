@@ -304,13 +304,13 @@ impl InstructionData {
     /// Get the destinations of this instruction, if it's a branch.
     ///
     /// `br_table` returns the empty slice.
-    pub fn branch_destination(&self) -> &[BlockCall] {
+    pub fn branch_destination<'a>(&'a self, jump_tables: &'a ir::JumpTables) -> &[BlockCall] {
         match self {
             Self::Jump {
                 ref destination, ..
             } => std::slice::from_ref(destination),
-            Self::Brif { blocks, .. } => blocks,
-            Self::BranchTable { .. } => &[],
+            Self::Brif { blocks, .. } => blocks.as_slice(),
+            Self::BranchTable { table, .. } => jump_tables.get(*table).unwrap().all_branches(),
             _ => {
                 debug_assert!(!self.opcode().is_branch());
                 &[]
@@ -321,14 +321,19 @@ impl InstructionData {
     /// Get a mutable slice of the destinations of this instruction, if it's a branch.
     ///
     /// `br_table` returns the empty slice.
-    pub fn branch_destination_mut(&mut self) -> &mut [BlockCall] {
+    pub fn branch_destination_mut<'a>(
+        &'a mut self,
+        jump_tables: &'a mut ir::JumpTables,
+    ) -> &mut [BlockCall] {
         match self {
             Self::Jump {
                 ref mut destination,
                 ..
             } => std::slice::from_mut(destination),
-            Self::Brif { blocks, .. } => blocks,
-            Self::BranchTable { .. } => &mut [],
+            Self::Brif { blocks, .. } => blocks.as_mut_slice(),
+            Self::BranchTable { table, .. } => {
+                jump_tables.get_mut(*table).unwrap().all_branches_mut()
+            }
             _ => {
                 debug_assert!(!self.opcode().is_branch());
                 &mut []
