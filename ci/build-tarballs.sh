@@ -49,8 +49,6 @@ if [ "$platform" = "x86_64-windows" ]; then
   "$WIX/bin/light" -out dist/$bin_pkgname.msi target/wasmtime.wixobj -ext WixUtilExtension
   rm dist/$bin_pkgname.wixpdb
 elif [ "$platform" = "x86_64-mingw" ]; then
-  # FIXME: remove when https://github.com/rust-lang/rust/issues/107495 is fixed
-  chmod 0664 target/x86_64-pc-windows-gnu/release/libwasmtime.a
   cp target/x86_64-pc-windows-gnu/release/wasmtime.exe tmp/$bin_pkgname
   cp target/x86_64-pc-windows-gnu/release/{wasmtime.dll,libwasmtime.a,libwasmtime.dll.a} tmp/$api_pkgname/lib
   fmt=zip
@@ -59,24 +57,16 @@ elif [ "$platform" = "x86_64-macos" ]; then
   # directive than the default one that comes out of the linker when typically
   # doing `cargo build`. For more info see #984
   install_name_tool -id "@rpath/libwasmtime.dylib" target/release/libwasmtime.dylib
-  # FIXME: remove when https://github.com/rust-lang/rust/issues/107495 is fixed
-  sudo chmod 0664 target/release/libwasmtime.a
   cp target/release/wasmtime tmp/$bin_pkgname
   cp target/release/libwasmtime.{a,dylib} tmp/$api_pkgname/lib
 elif [ "$platform" = "aarch64-macos" ]; then
   install_name_tool -id "@rpath/libwasmtime.dylib" target/aarch64-apple-darwin/release/libwasmtime.dylib
-  # FIXME: remove when https://github.com/rust-lang/rust/issues/107495 is fixed
-  sudo chmod 0664 target/aarch64-apple-darwin/release/libwasmtime.a
   cp target/aarch64-apple-darwin/release/wasmtime tmp/$bin_pkgname
   cp target/aarch64-apple-darwin/release/libwasmtime.{a,dylib} tmp/$api_pkgname/lib
 elif [ "$target" = "" ]; then
-  # FIXME: remove when https://github.com/rust-lang/rust/issues/107495 is fixed
-  sudo chmod 0664 target/release/libwasmtime.a
   cp target/release/wasmtime tmp/$bin_pkgname
   cp target/release/libwasmtime.{a,so} tmp/$api_pkgname/lib
 else
-  # FIXME: remove when https://github.com/rust-lang/rust/issues/107495 is fixed
-  sudo chmod 0664 target/$target/release/libwasmtime.a
   cp target/$target/release/wasmtime tmp/$bin_pkgname
   cp target/$target/release/libwasmtime.{a,so} tmp/$api_pkgname/lib
 fi
