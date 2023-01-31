@@ -81,6 +81,30 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn u64_shl(&mut self, x: u64, y: u64) -> u64 {
+            x << y
+        }
+
+        #[inline]
+        fn imm64_ushr(&mut self, ty: Type, x: Imm64, y: Imm64) -> Imm64 {
+            let shift = u32::checked_sub(64, ty.bits()).unwrap_or(0);
+            let mask = u64::MAX >> shift;
+            let x = (x.bits() as u64) & mask;
+            let y = (y.bits() as u64) & mask;
+            Imm64::new((x >> y) as i64)
+        }
+
+        #[inline]
+        fn imm64_sshr(&mut self, ty: Type, x: Imm64, y: Imm64) -> Imm64 {
+            let shift = u32::checked_sub(64, ty.bits()).unwrap_or(0);
+            let mask = u64::MAX >> shift;
+            let x = (x.bits() as u64) & mask;
+            let y = (y.bits() as u64) & mask;
+            let sext = |v| ((v << shift) as i64) >> shift;
+            Imm64::new(sext(x) >> sext(y))
+        }
+
+        #[inline]
         fn u64_not(&mut self, x: u64) -> u64 {
             !x
         }
