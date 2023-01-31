@@ -160,6 +160,19 @@
 ;; TODO: strength reduction: div to shifts
 ;; TODO: div/rem by constants -> magic multiplications
 
+;; `(x >> k) << k` is the same as masking off the bottom `k` bits (regardless if
+;; this is a signed or unsigned shift right).
+(rule (simplify (ishl (fits_in_64 ty)
+                      (ushr ty x (iconst _ (u64_from_imm64 k)))
+                      (iconst _ (u64_from_imm64 k))))
+      (let ((mask u64 (u64_shl 0xFFFFFFFFFFFFFFFF k)))
+        (band ty x (iconst ty (imm64_masked ty mask)))))
+(rule (simplify (ishl (fits_in_64 ty)
+                      (sshr ty x (iconst _ (u64_from_imm64 k)))
+                      (iconst _ (u64_from_imm64 k))))
+      (let ((mask u64 (u64_shl 0xFFFFFFFFFFFFFFFF k)))
+        (band ty x (iconst ty (imm64_masked ty mask)))))
+
 ;; Rematerialize ALU-op-with-imm and iconsts in each block where they're
 ;; used. This is neutral (add-with-imm) or positive (iconst) for
 ;; register pressure, and these ops are very cheap.
