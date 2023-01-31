@@ -2,13 +2,10 @@
 name: Build
 on:
   push:
-    branches:
-    - main
-    tags:
-    - 'v*'
+    branches: [main]
+    tags-ignore: [dev]
   pull_request:
-    branches:
-    - 'release-*'
+    branches: ['main', 'release-*']
 
 defaults:
   run:
