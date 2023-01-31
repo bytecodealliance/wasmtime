@@ -20,3 +20,69 @@ block0:
   ; check: v2 = iconst.i64 0x9876_5432
   ; check: return v2  ; v2 = 0x9876_5432
 }
+
+function %unsigned_shift_right_shift_left_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 5
+    v2 = ushr v0, v1
+    v3 = ishl v2, v1
+    return v3
+    ; check: v4 = iconst.i8 224
+    ; check: v5 = band v0, v4
+    ; return v5
+}
+
+function %unsigned_shift_right_shift_left_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 5
+    v2 = ushr v0, v1
+    v3 = ishl v2, v1
+    return v3
+    ; check: v4 = iconst.i32 0xffff_ffe0
+    ; check: v5 = band v0, v4
+    ; return v5
+}
+
+function %unsigned_shift_right_shift_left_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 5
+    v2 = ushr v0, v1
+    v3 = ishl v2, v1
+    return v3
+    ; check: v4 = iconst.i64 -32
+    ; check: v5 = band v0, v4
+    ; return v5
+}
+
+function %signed_shift_right_shift_left_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 5
+    v2 = sshr v0, v1
+    v3 = ishl v2, v1
+    return v3
+    ; check: v4 = iconst.i8 224
+    ; check: v5 = band v0, v4
+    ; return v5
+}
+
+function %signed_shift_right_shift_left_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 5
+    v2 = sshr v0, v1
+    v3 = ishl v2, v1
+    return v3
+    ; check: v4 = iconst.i32 0xffff_ffe0
+    ; check: v5 = band v0, v4
+    ; return v5
+}
+
+function %signed_shift_right_shift_left_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 5
+    v2 = sshr v0, v1
+    v3 = ishl v2, v1
+    return v3
+    ; check: v4 = iconst.i64 -32
+    ; check: v5 = band v0, v4
+    ; return v5
+}
