@@ -51,10 +51,11 @@ impl<T: Clone + Send + 'static> WasiThreadsCtx<T> {
                     WASI_ENTRY_POINT
                 )));
 
-            // Start the thread's entry point; any failures are simply printed
-            // before exiting the thread. It may be necessary to handle failures
-            // here somehow, e.g., so that `pthread_join` can be notified if the
-            // user function traps for some reason (TODO).
+            // Start the thread's entry point. Any traps or calls to
+            // `proc_exit`, by specification, should end execution for all
+            // threads. This code uses `process::exit` to do so, which is what
+            // the user expects from the CLI but probably not in a Wasmtime
+            // embedding.
             log::trace!(
                 "spawned thread id = {}; calling start function `{}` with: {}",
                 wasi_thread_id,
@@ -62,7 +63,7 @@ impl<T: Clone + Send + 'static> WasiThreadsCtx<T> {
                 thread_start_arg
             );
             match thread_entry_point.call(&mut store, (wasi_thread_id, thread_start_arg)) {
-                Ok(_) => {}
+                Ok(_) => log::trace!("exiting thread id = {} normally", wasi_thread_id),
                 Err(e) => {
                     log::trace!("exiting thread id = {} due to error", wasi_thread_id);
                     let e = maybe_exit_on_error(e);
