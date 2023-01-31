@@ -1,0 +1,74 @@
+;; Test that our rewrite of `(x >> k) << k` into masking is correct.
+
+test interpret
+test run
+target aarch64
+target x86_64
+target riscv64
+target s390x
+
+function %unsigned_shift_right_shift_left_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 5
+    v2 = ushr v0, v1
+    v3 = ishl v2, v1
+    return v3
+}
+; run: %unsigned_shift_right_shift_left_i8(-1) == 0xe0
+; run: %unsigned_shift_right_shift_left_i8(0) == 0
+; run: %unsigned_shift_right_shift_left_i8(0xaa) == 0xa0
+
+function %unsigned_shift_right_shift_left_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 5
+    v2 = ushr v0, v1
+    v3 = ishl v2, v1
+    return v3
+}
+; run: %unsigned_shift_right_shift_left_i32(-1) == 0xffffffe0
+; run: %unsigned_shift_right_shift_left_i32(0) == 0
+; run: %unsigned_shift_right_shift_left_i32(0xaaaaaaaa) == 0xaaaaaaa0
+
+function %unsigned_shift_right_shift_left_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 5
+    v2 = ushr v0, v1
+    v3 = ishl v2, v1
+    return v3
+}
+; run: %unsigned_shift_right_shift_left_i64(-1) == 0xffffffffffffffe0
+; run: %unsigned_shift_right_shift_left_i64(0) == 0
+; run: %unsigned_shift_right_shift_left_i64(0xaaaaaaaaaaaaaaaa) == 0xaaaaaaaaaaaaaaa0
+
+function %signed_shift_right_shift_left_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 5
+    v2 = sshr v0, v1
+    v3 = ishl v2, v1
+    return v3
+}
+; run: %signed_shift_right_shift_left_i8(-1) == 0xe0
+; run: %signed_shift_right_shift_left_i8(0) == 0
+; run: %signed_shift_right_shift_left_i8(0xaa) == 0xa0
+
+function %signed_shift_right_shift_left_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 5
+    v2 = sshr v0, v1
+    v3 = ishl v2, v1
+    return v3
+}
+; run: %signed_shift_right_shift_left_i32(-1) == 0xffffffe0
+; run: %signed_shift_right_shift_left_i32(0) == 0
+; run: %signed_shift_right_shift_left_i32(0xaaaaaaaa) == 0xaaaaaaa0
+
+function %signed_shift_right_shift_left_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 5
+    v2 = sshr v0, v1
+    v3 = ishl v2, v1
+    return v3
+}
+; run: %signed_shift_right_shift_left_i64(-1) == 0xffffffffffffffe0
+; run: %signed_shift_right_shift_left_i64(0) == 0
+; run: %signed_shift_right_shift_left_i64(0xaaaaaaaaaaaaaaaa) == 0xaaaaaaaaaaaaaaa0
