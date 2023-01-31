@@ -50,7 +50,7 @@ if [ "$platform" = "x86_64-windows" ]; then
   rm dist/$bin_pkgname.wixpdb
 elif [ "$platform" = "x86_64-mingw" ]; then
   # FIXME: remove when https://github.com/rust-lang/rust/issues/107495 is fixed
-  sudo chmod 0664 target/x86_64-pc-windows-gnu/release/libwasmtime.a
+  chmod 0664 target/x86_64-pc-windows-gnu/release/libwasmtime.a
   cp target/x86_64-pc-windows-gnu/release/wasmtime.exe tmp/$bin_pkgname
   cp target/x86_64-pc-windows-gnu/release/{wasmtime.dll,libwasmtime.a,libwasmtime.dll.a} tmp/$api_pkgname/lib
   fmt=zip
