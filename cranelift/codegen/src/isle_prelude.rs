@@ -110,6 +110,11 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn u64_eq(&mut self, x: u64, y: u64) -> u64 {
+            u64::from(x == y)
+        }
+
+        #[inline]
         fn u64_is_zero(&mut self, value: u64) -> bool {
             0 == value
         }

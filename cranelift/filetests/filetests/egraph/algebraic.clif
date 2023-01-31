@@ -40,7 +40,7 @@ block0(v0: i32):
     return v3
     ; check: v4 = iconst.i32 0xffff_ffe0
     ; check: v5 = band v0, v4
-    ; return v5
+    ; check: return v5
 }
 
 function %unsigned_shift_right_shift_left_i64(i64) -> i64 {
@@ -85,4 +85,46 @@ block0(v0: i64):
     ; check: v4 = iconst.i64 -32
     ; check: v5 = band v0, v4
     ; return v5
+}
+
+function %or_and_y_with_not_y(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = band v0, v1
+    v3 = bnot v1
+    v4 = bor v2, v3
+    return v4
+    ; check: v5 = bor v0, v3
+    ; check: return v5
+}
+
+function %or_and_constant_with_not_constant(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 -4
+    v2 = band v0, v1
+    v3 = iconst.i8 3
+    v4 = bor v2, v3
+    return v4
+    ; check: v5 = bor v0, v3
+    ; check: return v5
+}
+
+function %or_and_y_with_not_y(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = band v0, v1
+    v3 = bnot v1
+    v4 = bor v3, v2
+    return v4
+    ; check: v5 = bor v0, v3
+    ; check: return v5
+}
+
+function %or_and_constant_with_not_constant(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 -4
+    v2 = band v0, v1
+    v3 = iconst.i8 3
+    v4 = bor v3, v2
+    return v4
+    ; check: v6 = bor v0, v3
+    ; check: return v6
 }
