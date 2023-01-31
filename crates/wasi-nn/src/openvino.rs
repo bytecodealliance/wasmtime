@@ -1,4 +1,5 @@
 //! Implements the wasi-nn API.
+
 use crate::api::{Backend, BackendError, BackendExecutionContext, BackendGraph};
 use crate::witx::types::{ExecutionTarget, GraphBuilderArray, Tensor, TensorType};
 use openvino::{InferenceError, Layout, Precision, SetupError, TensorDesc};
@@ -6,6 +7,9 @@ use std::sync::Arc;
 
 #[derive(Default)]
 pub(crate) struct OpenvinoBackend(Option<openvino::Core>);
+
+unsafe impl Send for OpenvinoBackend {}
+unsafe impl Sync for OpenvinoBackend {}
 
 impl Backend for OpenvinoBackend {
     fn name(&self) -> &str {
@@ -64,6 +68,9 @@ impl Backend for OpenvinoBackend {
 }
 
 struct OpenvinoGraph(Arc<openvino::CNNNetwork>, openvino::ExecutableNetwork);
+
+unsafe impl Send for OpenvinoGraph {}
+unsafe impl Sync for OpenvinoGraph {}
 
 impl BackendGraph for OpenvinoGraph {
     fn init_execution_context(&mut self) -> Result<Box<dyn BackendExecutionContext>, BackendError> {
