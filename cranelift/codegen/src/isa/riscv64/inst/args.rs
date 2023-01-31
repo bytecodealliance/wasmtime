@@ -327,7 +327,7 @@ impl FpuOPRR {
     }
 
     pub(crate) fn float_convert_2_int_op(from: Type, is_type_signed: bool, to: Type) -> Self {
-        let type_32 = to.bits() == 32;
+        let type_32 = to.bits() <= 32;
         match from {
             F32 => {
                 if is_type_signed {

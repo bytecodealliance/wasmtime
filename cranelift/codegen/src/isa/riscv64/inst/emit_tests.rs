@@ -2190,17 +2190,52 @@ fn riscv64_worst_case_instruction_size() {
         rs: fa0(),
         is_signed: true,
         in_type: F64,
-        out_type: I64,
-        is_sat: true,
+        out_type: I8,
+        is_sat: false,
         tmp: writable_a1(),
     });
-
     candidates.push(Inst::FcvtToInt {
         rd: writable_a0(),
         rs: fa0(),
         is_signed: true,
         in_type: F64,
-        out_type: I64,
+        out_type: I16,
+        is_sat: false,
+        tmp: writable_a1(),
+    });
+    candidates.push(Inst::FcvtToInt {
+        rd: writable_a0(),
+        rs: fa0(),
+        is_signed: true,
+        in_type: F32,
+        out_type: I8,
+        is_sat: false,
+        tmp: writable_a1(),
+    });
+    candidates.push(Inst::FcvtToInt {
+        rd: writable_a0(),
+        rs: fa0(),
+        is_signed: true,
+        in_type: F32,
+        out_type: I16,
+        is_sat: false,
+        tmp: writable_a1(),
+    });
+    candidates.push(Inst::FcvtToInt {
+        rd: writable_a0(),
+        rs: fa0(),
+        is_signed: true,
+        in_type: F64,
+        out_type: I8,
+        is_sat: false,
+        tmp: writable_a1(),
+    });
+    candidates.push(Inst::FcvtToInt {
+        rd: writable_a0(),
+        rs: fa0(),
+        is_signed: true,
+        in_type: F64,
+        out_type: I16,
         is_sat: false,
         tmp: writable_a1(),
     });

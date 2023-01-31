@@ -1781,6 +1781,58 @@ impl MachInstEmit for Inst {
                     rs,
                 }
                 .emit(&[], sink, emit_info, state);
+                if out_type.bits() < 32 && is_signed {
+                    // load value part mask.
+                    Inst::load_constant_u32(
+                        tmp,
+                        if 16 == out_type.bits() {
+                            (u16::MAX >> 1) as u64
+                        } else {
+                            // I8
+                            (u8::MAX >> 1) as u64
+                        },
+                        &mut |_| writable_spilltmp_reg(),
+                    )
+                    .into_iter()
+                    .for_each(|x| x.emit(&[], sink, emit_info, state));
+                    // keep value part.
+                    Inst::AluRRR {
+                        alu_op: AluOPRRR::And,
+                        rd: tmp,
+                        rs1: rd.to_reg(),
+                        rs2: tmp.to_reg(),
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    // extact sign bit.
+                    Inst::AluRRImm12 {
+                        alu_op: AluOPRRI::Srli,
+                        rd: rd,
+                        rs: rd.to_reg(),
+                        imm12: Imm12::from_bits(31),
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    Inst::AluRRImm12 {
+                        alu_op: AluOPRRI::Slli,
+                        rd: rd,
+                        rs: rd.to_reg(),
+                        imm12: Imm12::from_bits(if 16 == out_type.bits() {
+                            15
+                        } else {
+                            // I8
+                            7
+                        }),
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    // make result,sign bit and value part.
+                    Inst::AluRRR {
+                        alu_op: AluOPRRR::Or,
+                        rd: rd,
+                        rs1: rd.to_reg(),
+                        rs2: tmp.to_reg(),
+                    }
+                    .emit(&[], sink, emit_info, state);
+                }
+
                 // I already have the result,jump over.
                 Inst::Jal {
                     dest: BranchTarget::Label(label_jump_over),
