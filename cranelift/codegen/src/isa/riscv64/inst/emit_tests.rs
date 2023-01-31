@@ -2204,6 +2204,25 @@ fn riscv64_worst_case_instruction_size() {
         is_sat: false,
         tmp: writable_a1(),
     });
+    candidates.push(Inst::FcvtToInt {
+        rd: writable_a0(),
+        rs: fa0(),
+        is_signed: true,
+        in_type: F64,
+        out_type: I8,
+        is_sat: true,
+        tmp: writable_a1(),
+    });
+
+    candidates.push(Inst::FcvtToInt {
+        rd: writable_a0(),
+        rs: fa0(),
+        is_signed: true,
+        in_type: F64,
+        out_type: I8,
+        is_sat: false,
+        tmp: writable_a1(),
+    });
 
     candidates.push(Inst::FloatRound {
         op: FloatRoundOP::Trunc,
