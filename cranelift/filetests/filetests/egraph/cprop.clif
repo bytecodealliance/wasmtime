@@ -41,3 +41,13 @@ block0(v1: i8):
 ; check: v3 = iconst.i8 0
 ; check: return v3
 
+function %f4() -> i8 {
+block0:
+    v0 = iconst.i8 5
+    v1 = iconst.i8 6
+    v2 = icmp ult v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 1
+; check: return v3

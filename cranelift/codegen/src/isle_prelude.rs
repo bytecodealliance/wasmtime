@@ -86,6 +86,23 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn u64_icmp(&mut self, cc: &IntCC, x: u64, y: u64) -> u64 {
+            let result = match cc {
+                IntCC::Equal => x == y,
+                IntCC::NotEqual => x != y,
+                IntCC::SignedLessThan => (x as i64) < (y as i64),
+                IntCC::SignedGreaterThanOrEqual => (x as i64) >= (y as i64),
+                IntCC::SignedGreaterThan => (x as i64) > (y as i64),
+                IntCC::SignedLessThanOrEqual => (x as i64) <= (y as i64),
+                IntCC::UnsignedLessThan => x < y,
+                IntCC::UnsignedGreaterThanOrEqual => x >= y,
+                IntCC::UnsignedGreaterThan => x > y,
+                IntCC::UnsignedLessThanOrEqual => x <= y,
+            };
+            result.into()
+        }
+
+        #[inline]
         fn u64_is_zero(&mut self, value: u64) -> bool {
             0 == value
         }

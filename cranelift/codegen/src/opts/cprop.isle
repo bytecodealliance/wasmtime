@@ -55,6 +55,12 @@
             (iconst ty (u64_from_imm64 k))))
       (subsume (iconst ty (imm64_masked ty (u64_not k)))))
 
+(rule (simplify (icmp ty
+                      cc
+                      (iconst ty (u64_from_imm64 k1))
+                      (iconst ty (u64_from_imm64 k2))))
+      (subsume (iconst ty (imm64_masked ty (u64_icmp cc k1 k2)))))
+
 ;; Canonicalize via commutativity: push immediates to the right.
 ;;
 ;;   (op k x) --> (op x k)
