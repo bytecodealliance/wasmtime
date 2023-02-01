@@ -440,8 +440,7 @@ impl<'a> Parser<'a> {
             self.symbol()?;
             Ok(Pattern::Wildcard { pos })
         } else if self.is_sym() {
-            let s = self.symbol()?;
-            let var = self.str_to_ident(pos, &s)?;
+            let var = self.parse_ident()?;
             if self.is_at() {
                 self.at()?;
                 let subpat = Box::new(self.parse_pattern()?);
