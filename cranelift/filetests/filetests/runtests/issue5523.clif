@@ -1,5 +1,6 @@
 test interpret
 test run
+set enable_llvm_abi_extensions=true
 target riscv64
 target aarch64
 target s390x
