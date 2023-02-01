@@ -936,7 +936,8 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
 mod test {
     use super::*;
     use crate::{
-        CompiledModuleId, Imports, MemoryImage, StorePtr, VMFunctionBody, VMSharedSignatureIndex,
+        CompiledModuleId, Imports, MemoryImage, ModuleRuntimeInfo, StorePtr, VMFunctionBody,
+        VMSharedSignatureIndex,
     };
     use std::sync::Arc;
     use wasmtime_environ::{DefinedFuncIndex, DefinedMemoryIndex};
@@ -993,7 +994,7 @@ mod test {
             ..Default::default()
         };
 
-        let instances = InstancePool::new(
+        let instances = PoolingInstanceAllocator::new(
             &config,
             &Tunables {
                 static_memory_bound: 1,
@@ -1044,8 +1045,8 @@ mod test {
             _ => panic!("unexpected error"),
         };
 
-        for handle in handles.drain(..) {
-            instances.deallocate(&handle);
+        for mut handle in handles.drain(..) {
+            instances.deallocate(&mut handle);
         }
 
         assert_eq!(
@@ -1256,7 +1257,7 @@ mod test {
             },
         )
         .unwrap();
-        assert_eq!(pool.instances.memories.memory_size, 2 * 65536);
+        assert_eq!(pool.memories.memory_size, 2 * 65536);
     }
 
     #[cfg(all(unix, target_pointer_width = "64", feature = "async"))]
