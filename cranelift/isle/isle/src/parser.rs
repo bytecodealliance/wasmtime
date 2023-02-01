@@ -56,6 +56,17 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn eat<F: Fn(&Token) -> bool>(&mut self, f: F) -> Result<Option<Token>> {
+        if let Some(&(_pos, ref peek)) = self.lexer.peek() {
+            if !f(peek) {
+                return Ok(None);
+            }
+            Ok(Some(self.lexer.next()?.unwrap().1))
+        } else {
+            Err(self.error(self.lexer.pos(), "Unexpected EOF".to_string()))
+        }
+    }
+
     fn is<F: Fn(&Token) -> bool>(&self, f: F) -> bool {
         if let Some(&(_, ref peek)) = self.lexer.peek() {
             f(peek)
@@ -85,12 +96,6 @@ impl<'a> Parser<'a> {
     fn is_int(&self) -> bool {
         self.is(Token::is_int)
     }
-    fn is_sym_str(&self, s: &str) -> bool {
-        self.is(|tok| match tok {
-            &Token::Symbol(ref tok_s) if tok_s == s => true,
-            _ => false,
-        })
-    }
 
     fn is_const(&self) -> bool {
         self.is(|tok| match tok {
@@ -114,6 +119,14 @@ impl<'a> Parser<'a> {
             Token::Symbol(s) => Ok(s),
             _ => unreachable!(),
         }
+    }
+
+    fn eat_sym_str(&mut self, s: &str) -> Result<bool> {
+        self.eat(|tok| match tok {
+            &Token::Symbol(ref tok_s) if tok_s == s => true,
+            _ => false,
+        })
+        .map(|token| token.is_some())
     }
 
     fn int(&mut self) -> Result<i128> {
@@ -242,13 +255,11 @@ impl<'a> Parser<'a> {
     fn parse_typevalue(&mut self) -> Result<TypeValue> {
         let pos = self.pos();
         self.lparen()?;
-        if self.is_sym_str("primitive") {
-            self.symbol()?;
+        if self.eat_sym_str("primitive")? {
             let primitive_ident = self.parse_ident()?;
             self.rparen()?;
             Ok(TypeValue::Primitive(primitive_ident, pos))
-        } else if self.is_sym_str("enum") {
-            self.symbol()?;
+        } else if self.eat_sym_str("enum")? {
             let mut variants = vec![];
             while !self.is_rparen() {
                 let variant = self.parse_type_variant()?;
@@ -295,20 +306,17 @@ impl<'a> Parser<'a> {
     fn parse_decl(&mut self) -> Result<Decl> {
         let pos = self.pos();
 
-        let pure = if self.is_sym_str("pure") {
-            self.symbol()?;
+        let pure = if self.eat_sym_str("pure")? {
             true
         } else {
             false
         };
-        let multi = if self.is_sym_str("multi") {
-            self.symbol()?;
+        let multi = if self.eat_sym_str("multi")? {
             true
         } else {
             false
         };
-        let partial = if self.is_sym_str("partial") {
-            self.symbol()?;
+        let partial = if self.eat_sym_str("partial")? {
             true
         } else {
             false
@@ -338,17 +346,12 @@ impl<'a> Parser<'a> {
 
     fn parse_extern(&mut self) -> Result<Extern> {
         let pos = self.pos();
-        if self.is_sym_str("constructor") {
-            self.symbol()?;
-
+        if self.eat_sym_str("constructor")? {
             let term = self.parse_ident()?;
             let func = self.parse_ident()?;
             Ok(Extern::Constructor { term, func, pos })
-        } else if self.is_sym_str("extractor") {
-            self.symbol()?;
-
-            let infallible = if self.is_sym_str("infallible") {
-                self.symbol()?;
+        } else if self.eat_sym_str("extractor")? {
+            let infallible = if self.eat_sym_str("infallible")? {
                 true
             } else {
                 false
@@ -363,8 +366,7 @@ impl<'a> Parser<'a> {
                 pos,
                 infallible,
             })
-        } else if self.is_sym_str("const") {
-            self.symbol()?;
+        } else if self.eat_sym_str("const")? {
             let pos = self.pos();
             let name = self.parse_const()?;
             let ty = self.parse_ident()?;
@@ -436,8 +438,7 @@ impl<'a> Parser<'a> {
         } else if self.is_const() {
             let val = self.parse_const()?;
             Ok(Pattern::ConstPrim { val, pos })
-        } else if self.is_sym_str("_") {
-            self.symbol()?;
+        } else if self.eat_sym_str("_")? {
             Ok(Pattern::Wildcard { pos })
         } else if self.is_sym() {
             let var = self.parse_ident()?;
@@ -450,8 +451,7 @@ impl<'a> Parser<'a> {
             }
         } else if self.is_lparen() {
             self.lparen()?;
-            if self.is_sym_str("and") {
-                self.symbol()?;
+            if self.eat_sym_str("and")? {
                 let mut subpats = vec![];
                 while !self.is_rparen() {
                     subpats.push(self.parse_pattern()?);
@@ -476,13 +476,11 @@ impl<'a> Parser<'a> {
         let pos = self.pos();
         if self.is_lparen() {
             self.lparen()?;
-            let ret = if self.is_sym_str("if-let") {
-                self.symbol()?;
+            let ret = if self.eat_sym_str("if-let")? {
                 IfLetOrExpr::IfLet(self.parse_iflet()?)
-            } else if self.is_sym_str("if") {
+            } else if self.eat_sym_str("if")? {
                 // Shorthand form: `(if (x))` desugars to `(if-let _
                 // (x))`.
-                self.symbol()?;
                 IfLetOrExpr::IfLet(self.parse_iflet_if()?)
             } else {
                 IfLetOrExpr::Expr(self.parse_expr_inner_parens(pos)?)
@@ -518,11 +516,9 @@ impl<'a> Parser<'a> {
             let ret = self.parse_expr_inner_parens(pos)?;
             self.rparen()?;
             Ok(ret)
-        } else if self.is_sym_str("#t") {
-            self.symbol()?;
+        } else if self.eat_sym_str("#t")? {
             Ok(Expr::ConstInt { val: 1, pos })
-        } else if self.is_sym_str("#f") {
-            self.symbol()?;
+        } else if self.eat_sym_str("#f")? {
             Ok(Expr::ConstInt { val: 0, pos })
         } else if self.is_const() {
             let val = self.parse_const()?;
@@ -539,8 +535,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_expr_inner_parens(&mut self, pos: Pos) -> Result<Expr> {
-        if self.is_sym_str("let") {
-            self.symbol()?;
+        if self.eat_sym_str("let")? {
             self.lparen()?;
             let mut defs = vec![];
             while !self.is_rparen() {
