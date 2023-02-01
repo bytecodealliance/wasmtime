@@ -80,7 +80,7 @@ impl<T: Clone + Send + 'static> WasiThreadsCtx<T> {
             }));
 
             if let Err(e) = result {
-                eprintln!("Error: {:?}", e);
+                eprintln!("wasi-thread-{} panicked: {:?}", wasi_thread_id, e);
                 std::process::exit(1);
             }
         })?;
