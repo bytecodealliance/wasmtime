@@ -391,6 +391,8 @@ where
             }
         }
         Opcode::CallIndirect => unimplemented!("CallIndirect"),
+        Opcode::ReturnCall => unimplemented!("ReturnCall"),
+        Opcode::ReturnCallIndirect => unimplemented!("ReturnCallIndirect"),
         Opcode::FuncAddr => unimplemented!("FuncAddr"),
         Opcode::Load
         | Opcode::Uload8

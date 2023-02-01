@@ -22,6 +22,7 @@ use core::u16;
 use alloc::collections::BTreeMap;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
+use smallvec::SmallVec;
 
 /// Storage for instructions within the DFG.
 #[derive(Clone, PartialEq, Hash)]
@@ -797,43 +798,22 @@ impl DataFlowGraph {
     where
         I: Iterator<Item = Option<Value>>,
     {
-        let mut reuse = reuse.fuse();
-
         self.results[inst].clear(&mut self.value_lists);
 
-        // Get the call signature if this is a function call.
-        if let Some(sig) = self.call_signature(inst) {
-            // Create result values corresponding to the call return types.
-            debug_assert_eq!(
-                self.insts[inst].opcode().constraints().num_fixed_results(),
-                0
-            );
-            let num_results = self.signatures[sig].returns.len();
-            for res_idx in 0..num_results {
-                let ty = self.signatures[sig].returns[res_idx].value_type;
-                if let Some(Some(v)) = reuse.next() {
-                    debug_assert_eq!(self.value_type(v), ty, "Reused {} is wrong type", ty);
-                    self.attach_result(inst, v);
-                } else {
-                    self.append_result(inst, ty);
-                }
+        let mut reuse = reuse.fuse();
+        let result_tys: SmallVec<[_; 16]> = self.inst_result_types(inst, ctrl_typevar).collect();
+        let num_results = result_tys.len();
+
+        for ty in result_tys {
+            if let Some(Some(v)) = reuse.next() {
+                debug_assert_eq!(self.value_type(v), ty, "Reused {} is wrong type", ty);
+                self.attach_result(inst, v);
+            } else {
+                self.append_result(inst, ty);
             }
-            num_results
-        } else {
-            // Create result values corresponding to the opcode's constraints.
-            let constraints = self.insts[inst].opcode().constraints();
-            let num_results = constraints.num_fixed_results();
-            for res_idx in 0..num_results {
-                let ty = constraints.result_type(res_idx, ctrl_typevar);
-                if let Some(Some(v)) = reuse.next() {
-                    debug_assert_eq!(self.value_type(v), ty, "Reused {} is wrong type", ty);
-                    self.attach_result(inst, v);
-                } else {
-                    self.append_result(inst, ty);
-                }
-            }
-            num_results
         }
+
+        num_results
     }
 
     /// Create a `ReplaceBuilder` that will replace `inst` with a new instruction in place.
@@ -977,6 +957,84 @@ impl DataFlowGraph {
         }
     }
 
+    /// Like `call_signature` but returns none for tail call instructions.
+    fn non_tail_call_signature(&self, inst: Inst) -> Option<SigRef> {
+        let sig = self.call_signature(inst)?;
+        match self.insts[inst].opcode() {
+            ir::Opcode::ReturnCall | ir::Opcode::ReturnCallIndirect => None,
+            _ => Some(sig),
+        }
+    }
+
+    // Only for use by the verifier. Everyone else should just use
+    // `dfg.inst_results(inst).len()`.
+    pub(crate) fn num_expected_results_for_verifier(&self, inst: Inst) -> usize {
+        match self.non_tail_call_signature(inst) {
+            Some(sig) => self.signatures[sig].returns.len(),
+            None => {
+                let constraints = self.insts[inst].opcode().constraints();
+                constraints.num_fixed_results()
+            }
+        }
+    }
+
+    /// Get the result types of the given instruction.
+    pub fn inst_result_types<'a>(
+        &'a self,
+        inst: Inst,
+        ctrl_typevar: Type,
+    ) -> impl iter::ExactSizeIterator<Item = Type> + 'a {
+        return match self.non_tail_call_signature(inst) {
+            Some(sig) => InstResultTypes::Signature(self, sig, 0),
+            None => {
+                let constraints = self.insts[inst].opcode().constraints();
+                InstResultTypes::Constraints(constraints, ctrl_typevar, 0)
+            }
+        };
+
+        enum InstResultTypes<'a> {
+            Signature(&'a DataFlowGraph, SigRef, usize),
+            Constraints(ir::instructions::OpcodeConstraints, Type, usize),
+        }
+
+        impl Iterator for InstResultTypes<'_> {
+            type Item = Type;
+
+            fn next(&mut self) -> Option<Type> {
+                match self {
+                    InstResultTypes::Signature(dfg, sig, i) => {
+                        let param = dfg.signatures[*sig].returns.get(*i)?;
+                        *i += 1;
+                        Some(param.value_type)
+                    }
+                    InstResultTypes::Constraints(constraints, ctrl_ty, i) => {
+                        if *i < constraints.num_fixed_results() {
+                            let ty = constraints.result_type(*i, *ctrl_ty);
+                            *i += 1;
+                            Some(ty)
+                        } else {
+                            None
+                        }
+                    }
+                }
+            }
+
+            fn size_hint(&self) -> (usize, Option<usize>) {
+                let len = match self {
+                    InstResultTypes::Signature(dfg, sig, i) => {
+                        dfg.signatures[*sig].returns.len() - *i
+                    }
+                    InstResultTypes::Constraints(constraints, _, i) => {
+                        constraints.num_fixed_results() - *i
+                    }
+                };
+                (len, Some(len))
+            }
+        }
+
+        impl ExactSizeIterator for InstResultTypes<'_> {}
+    }
+
     /// Check if `inst` is a branch.
     pub fn analyze_branch(&self, inst: Inst) -> BranchInfo {
         self.insts[inst].analyze_branch()
@@ -995,20 +1053,7 @@ impl DataFlowGraph {
         result_idx: usize,
         ctrl_typevar: Type,
     ) -> Option<Type> {
-        let constraints = self.insts[inst].opcode().constraints();
-        let num_fixed_results = constraints.num_fixed_results();
-
-        if result_idx < num_fixed_results {
-            return Some(constraints.result_type(result_idx, ctrl_typevar));
-        }
-
-        // Not a fixed result, try to extract a return type from the call signature.
-        self.call_signature(inst).and_then(|sigref| {
-            self.signatures[sigref]
-                .returns
-                .get(result_idx - num_fixed_results)
-                .map(|&arg| arg.value_type)
-        })
+        self.inst_result_types(inst, ctrl_typevar).nth(result_idx)
     }
 
     /// Get the controlling type variable, or `INVALID` if `inst` isn't polymorphic.
@@ -1283,29 +1328,15 @@ impl DataFlowGraph {
         ctrl_typevar: Type,
         reuse: &[Value],
     ) -> usize {
-        // Get the call signature if this is a function call.
-        if let Some(sig) = self.call_signature(inst) {
-            assert_eq!(
-                self.insts[inst].opcode().constraints().num_fixed_results(),
-                0
-            );
-            for res_idx in 0..self.signatures[sig].returns.len() {
-                let ty = self.signatures[sig].returns[res_idx].value_type;
-                if let Some(v) = reuse.get(res_idx) {
-                    self.set_value_type_for_parser(*v, ty);
-                }
+        let mut reuse_iter = reuse.iter().copied();
+        let result_tys: SmallVec<[_; 16]> = self.inst_result_types(inst, ctrl_typevar).collect();
+        for ty in result_tys {
+            if ty.is_dynamic_vector() {
+                self.check_dynamic_type(ty)
+                    .unwrap_or_else(|| panic!("Use of undeclared dynamic type: {}", ty));
             }
-        } else {
-            let constraints = self.insts[inst].opcode().constraints();
-            for res_idx in 0..constraints.num_fixed_results() {
-                let ty = constraints.result_type(res_idx, ctrl_typevar);
-                if ty.is_dynamic_vector() {
-                    self.check_dynamic_type(ty)
-                        .unwrap_or_else(|| panic!("Use of undeclared dynamic type: {}", ty));
-                }
-                if let Some(v) = reuse.get(res_idx) {
-                    self.set_value_type_for_parser(*v, ty);
-                }
+            if let Some(v) = reuse_iter.next() {
+                self.set_value_type_for_parser(v, ty);
             }
         }
 

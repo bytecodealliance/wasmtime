@@ -253,6 +253,51 @@ fn define_control_flow(
         .call(),
     );
 
+    ig.push(
+        Inst::new(
+            "return_call",
+            r#"
+        Direct tail call.
+
+        Tail call a function which has been declared in the preamble. The
+        argument types must match the function's signature, the caller and
+        callee calling conventions must be the same, and must be a calling
+        convention that supports tail calls.
+
+        This instruction is a block terminator.
+        "#,
+            &formats.call,
+        )
+        .operands_in(vec![FN, args])
+        .returns()
+        .call(),
+    );
+
+    ig.push(
+        Inst::new(
+            "return_call_indirect",
+            r#"
+        Indirect tail call.
+
+        Call the function pointed to by `callee` with the given arguments. The
+        argument types must match the function's signature, the caller and
+        callee calling conventions must be the same, and must be a calling
+        convention that supports tail calls.
+
+        This instruction is a block terminator.
+
+        Note that this is different from WebAssembly's ``tail_call_indirect``;
+        the callee is a native address, rather than a table index. For
+        WebAssembly, `table_addr` and `load` are used to obtain a native address
+        from a table.
+        "#,
+            &formats.call_indirect,
+        )
+        .operands_in(vec![SIG, callee, args])
+        .returns()
+        .call(),
+    );
+
     let FN = &Operand::new("FN", &entities.func_ref)
         .with_doc("function to call, declared by `function`");
     let addr = &Operand::new("addr", iAddr);

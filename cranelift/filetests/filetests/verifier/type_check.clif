@@ -19,7 +19,7 @@ function %incorrect_arg_type(i32, i8) -> i32 {
 function %incorrect_return_type() -> f32 {
     block0:
         v0 = iconst.i32 1
-        return v0 ; error: arg 0 (v0) has type i32, must match function signature of f32
+        return v0 ; error: result 0 has type i32, must match function signature of f32
 }
 
 function %too_many_return_values() {
@@ -82,7 +82,7 @@ function %jump_args() {
         v0 = iconst.i16 10
         v3 = iconst.i64 20
         jump block1(v0, v3) ; error: arg 0 (v0) has type i16, expected i64
-                          ; error: arg 1 (v3) has type i64, expected i16
+                            ; error: arg 1 (v3) has type i64, expected i16
     block1(v10: i64, v11: i16):
         return
 }

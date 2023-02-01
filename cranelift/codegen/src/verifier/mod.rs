@@ -532,23 +532,15 @@ impl<'a> Verifier<'a> {
             ));
         }
 
-        let num_fixed_results = inst_data.opcode().constraints().num_fixed_results();
-        // var_results is 0 if we aren't a call instruction
-        let var_results = dfg
-            .call_signature(inst)
-            .map_or(0, |sig| dfg.signatures[sig].returns.len());
-        let total_results = num_fixed_results + var_results;
+        let expected_num_results = dfg.num_expected_results_for_verifier(inst);
 
         // All result values for multi-valued instructions are created
         let got_results = dfg.inst_results(inst).len();
-        if got_results != total_results {
+        if got_results != expected_num_results {
             return errors.fatal((
                 inst,
                 self.context(inst),
-                format!(
-                    "expected {} result values, found {}",
-                    total_results, got_results,
-                ),
+                format!("expected {expected_num_results} result values, found {got_results}"),
             ));
         }
 
@@ -1426,28 +1418,90 @@ impl<'a> Verifier<'a> {
     }
 
     fn typecheck_return(&self, inst: Inst, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
-        if self.func.dfg.insts[inst].opcode().is_return() {
-            let args = self.func.dfg.inst_variable_args(inst);
-            let expected_types = &self.func.signature.returns;
-            if args.len() != expected_types.len() {
-                return errors.nonfatal((
+        match self.func.dfg.insts[inst] {
+            ir::InstructionData::MultiAry {
+                opcode: Opcode::Return,
+                args,
+            } => {
+                let types = args
+                    .as_slice(&self.func.dfg.value_lists)
+                    .iter()
+                    .map(|v| self.func.dfg.value_type(*v));
+                self.typecheck_return_types(
+                    inst,
+                    types,
+                    errors,
+                    "arguments of return must match function signature",
+                )?;
+            }
+            ir::InstructionData::Call {
+                opcode: Opcode::ReturnCall,
+                func_ref,
+                ..
+            } => {
+                let sig_ref = self.func.dfg.ext_funcs[func_ref].signature;
+                self.typecheck_tail_call(inst, sig_ref, errors)?;
+            }
+            ir::InstructionData::CallIndirect {
+                opcode: Opcode::ReturnCallIndirect,
+                sig_ref,
+                ..
+            } => {
+                self.typecheck_tail_call(inst, sig_ref, errors)?;
+            }
+            inst => debug_assert!(!inst.opcode().is_return()),
+        }
+        Ok(())
+    }
+
+    fn typecheck_tail_call(
+        &self,
+        inst: Inst,
+        sig_ref: SigRef,
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult<()> {
+        let signature = &self.func.dfg.signatures[sig_ref];
+        let cc = signature.call_conv;
+        if !cc.supports_tail_calls() {
+            errors.report((
+                inst,
+                self.context(inst),
+                format!("calling convention `{cc}` does not support tail calls"),
+            ));
+        }
+        if cc != self.func.signature.call_conv {
+            errors.report((
+                inst,
+                self.context(inst),
+                "callee's calling convention must match caller",
+            ));
+        }
+        let types = signature.returns.iter().map(|param| param.value_type);
+        self.typecheck_return_types(inst, types, errors, "results of callee must match caller")?;
+        Ok(())
+    }
+
+    fn typecheck_return_types(
+        &self,
+        inst: Inst,
+        actual_types: impl ExactSizeIterator<Item = Type>,
+        errors: &mut VerifierErrors,
+        message: &str,
+    ) -> VerifierStepResult<()> {
+        let expected_types = &self.func.signature.returns;
+        if actual_types.len() != expected_types.len() {
+            return errors.nonfatal((inst, self.context(inst), message));
+        }
+        for (i, (actual_type, &expected_type)) in actual_types.zip(expected_types).enumerate() {
+            if actual_type != expected_type.value_type {
+                errors.report((
                     inst,
                     self.context(inst),
-                    "arguments of return must match function signature",
+                    format!(
+                        "result {i} has type {actual_type}, must match function signature of \
+                         {expected_type}"
+                    ),
                 ));
-            }
-            for (i, (&arg, &expected_type)) in args.iter().zip(expected_types).enumerate() {
-                let arg_type = self.func.dfg.value_type(arg);
-                if arg_type != expected_type.value_type {
-                    errors.report((
-                        inst,
-                        self.context(inst),
-                        format!(
-                            "arg {} ({}) has type {}, must match function signature of {}",
-                            i, arg, arg_type, expected_type
-                        ),
-                    ));
-                }
             }
         }
         Ok(())
