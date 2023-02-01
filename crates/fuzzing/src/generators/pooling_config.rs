@@ -6,7 +6,7 @@ use arbitrary::{Arbitrary, Unstructured};
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 #[allow(missing_docs)]
 pub struct PoolingAllocationConfig {
-    pub strategy: PoolingAllocationStrategy,
+    pub max_unused_warm_slots: u32,
     pub instance_count: u32,
     pub instance_memories: u32,
     pub instance_tables: u32,
@@ -24,7 +24,7 @@ impl PoolingAllocationConfig {
     pub fn to_wasmtime(&self) -> wasmtime::PoolingAllocationConfig {
         let mut cfg = wasmtime::PoolingAllocationConfig::default();
 
-        cfg.strategy(self.strategy.to_wasmtime())
+        cfg.max_unused_warm_slots(self.max_unused_warm_slots)
             .instance_count(self.instance_count)
             .instance_memories(self.instance_memories)
             .instance_tables(self.instance_tables)
@@ -48,43 +48,20 @@ impl<'a> Arbitrary<'a> for PoolingAllocationConfig {
         const MAX_MEMORY_PAGES: u64 = 160; // 10 MiB
         const MAX_SIZE: usize = 1 << 20; // 1 MiB
 
+        let instance_count = u.int_in_range(1..=MAX_COUNT)?;
+
         Ok(Self {
-            strategy: u.arbitrary()?,
+            max_unused_warm_slots: u.int_in_range(0..=instance_count + 10)?,
             instance_tables: u.int_in_range(0..=MAX_TABLES)?,
             instance_memories: u.int_in_range(0..=MAX_MEMORIES)?,
             instance_table_elements: u.int_in_range(0..=MAX_ELEMENTS)?,
             instance_memory_pages: u.int_in_range(0..=MAX_MEMORY_PAGES)?,
-            instance_count: u.int_in_range(1..=MAX_COUNT)?,
+            instance_count,
             instance_size: u.int_in_range(0..=MAX_SIZE)?,
             async_stack_zeroing: u.arbitrary()?,
             async_stack_keep_resident: u.int_in_range(0..=1 << 20)?,
             linear_memory_keep_resident: u.int_in_range(0..=1 << 20)?,
             table_keep_resident: u.int_in_range(0..=1 << 20)?,
         })
-    }
-}
-
-/// Configuration for `wasmtime::PoolingAllocationStrategy`.
-#[derive(Arbitrary, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum PoolingAllocationStrategy {
-    /// Use next available instance slot.
-    NextAvailable,
-    /// Use random instance slot.
-    Random,
-    /// Use an affinity-based strategy.
-    ReuseAffinity,
-}
-
-impl PoolingAllocationStrategy {
-    fn to_wasmtime(&self) -> wasmtime::PoolingAllocationStrategy {
-        match self {
-            PoolingAllocationStrategy::NextAvailable => {
-                wasmtime::PoolingAllocationStrategy::NextAvailable
-            }
-            PoolingAllocationStrategy::Random => wasmtime::PoolingAllocationStrategy::Random,
-            PoolingAllocationStrategy::ReuseAffinity => {
-                wasmtime::PoolingAllocationStrategy::ReuseAffinity
-            }
-        }
     }
 }

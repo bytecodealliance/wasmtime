@@ -305,7 +305,7 @@ impl ModuleMemoryImages {
 /// middle of it. Pictorially this data structure manages a virtual memory
 /// region that looks like:
 ///
-/// ```ignore
+/// ```text
 ///   +--------------------+-------------------+--------------+--------------+
 ///   |   anonymous        |      optional     |   anonymous  |    PROT_NONE |
 ///   |     zero           |       memory      |     zero     |     memory   |
@@ -333,7 +333,7 @@ impl ModuleMemoryImages {
 /// `accessible` limits are. Initially there is assumed to be no image in linear
 /// memory.
 ///
-/// When [`MemoryImageSlot::instantiate`] is called then the method will perform
+/// When `MemoryImageSlot::instantiate` is called then the method will perform
 /// a "synchronization" to take the image from its prior state to the new state
 /// for the image specified. The first instantiation for example will mmap the
 /// heap image into place. Upon reuse of a slot nothing happens except possibly
@@ -343,7 +343,7 @@ impl ModuleMemoryImages {
 /// A `MemoryImageSlot` is either `dirty` or it isn't. When a `MemoryImageSlot`
 /// is dirty then it is assumed that any memory beneath `self.accessible` could
 /// have any value. Instantiation cannot happen into a `dirty` slot, however, so
-/// the [`MemoryImageSlot::clear_and_remain_ready`] returns this memory back to
+/// the `MemoryImageSlot::clear_and_remain_ready` returns this memory back to
 /// its original state to mark `dirty = false`. This is done by resetting all
 /// anonymous memory back to zero and the image itself back to its initial
 /// contents.

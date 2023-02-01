@@ -56,8 +56,7 @@ pub use crate::instance::{
 };
 #[cfg(feature = "pooling-allocator")]
 pub use crate::instance::{
-    InstanceLimits, PoolingAllocationStrategy, PoolingInstanceAllocator,
-    PoolingInstanceAllocatorConfig,
+    InstanceLimits, PoolingInstanceAllocator, PoolingInstanceAllocatorConfig,
 };
 pub use crate::memory::{
     DefaultMemoryCreator, Memory, RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory,
@@ -156,7 +155,7 @@ pub unsafe trait Store {
 /// is chiefly needed for lazy initialization of various bits of
 /// instance state.
 ///
-/// When an instance is created, it holds an Arc<dyn ModuleRuntimeInfo>
+/// When an instance is created, it holds an `Arc<dyn ModuleRuntimeInfo>`
 /// so that it can get to signatures, metadata on functions, memory and
 /// funcref-table images, etc. All of these things are ordinarily known
 /// by the higher-level layers of Wasmtime. Specifically, the main
