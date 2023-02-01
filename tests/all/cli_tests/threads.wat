@@ -18,9 +18,10 @@
     (drop (call $__wasi_thread_spawn (i32.const 0)))
     (drop (call $__wasi_thread_spawn (i32.const 0)))
 
-    ;; Wasmtime has no `wait/notify` yet, so we just spin to allow the threads
-    ;; to do their work.
-    (local.set $i (i32.const 2000000))
+    ;; Spin to allow the threads to do their work. TODO: replace this with
+    ;; a loop over `wait` with `notify` instructions in the
+    ;; `wasi_thread_start` entry point.
+    (local.set $i (i32.const 4000000))
     (loop $again
       (local.set $i (i32.sub (local.get $i) (i32.const 1)))
       (br_if $again (i32.gt_s (local.get $i) (i32.const 0)))
