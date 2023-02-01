@@ -12,6 +12,9 @@ use wasmtime_cli_flags::{CommonOptions, WasiModules};
 use wasmtime_wasi::maybe_exit_on_error;
 use wasmtime_wasi::sync::{ambient_authority, Dir, TcpListener, WasiCtxBuilder};
 
+#[cfg(any(feature = "wasi-crypto", feature = "wasi-nn", feature = "wasi-threads"))]
+use std::sync::Arc;
+
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::WasiNnCtx;
 
@@ -416,11 +419,11 @@ impl RunCommand {
 struct Host {
     wasi: Option<wasmtime_wasi::WasiCtx>,
     #[cfg(feature = "wasi-crypto")]
-    wasi_crypto: Option<std::sync::Arc<WasiCryptoCtx>>,
+    wasi_crypto: Option<Arc<WasiCryptoCtx>>,
     #[cfg(feature = "wasi-nn")]
-    wasi_nn: Option<std::sync::Arc<WasiNnCtx>>,
+    wasi_nn: Option<Arc<WasiNnCtx>>,
     #[cfg(feature = "wasi-threads")]
-    wasi_threads: Option<std::sync::Arc<WasiThreadsCtx<Host>>>,
+    wasi_threads: Option<Arc<WasiThreadsCtx<Host>>>,
 }
 
 /// Populates the given `Linker` with WASI APIs.
@@ -469,10 +472,10 @@ fn populate_with_wasi(
         #[cfg(feature = "wasi-crypto")]
         {
             wasmtime_wasi_crypto::add_to_linker(linker, |host| {
-                std::sync::Arc::get_mut(host.wasi_crypto.as_mut().unwrap())
+                Arc::get_mut(host.wasi_crypto.as_mut().unwrap())
                     .expect("wasi-crypto is not implemented with multi-threading support")
             })?;
-            store.data_mut().wasi_crypto = Some(std::sync::Arc::new(WasiCryptoCtx::new()));
+            store.data_mut().wasi_crypto = Some(Arc::new(WasiCryptoCtx::new()));
         }
     }
 
@@ -484,10 +487,10 @@ fn populate_with_wasi(
         #[cfg(feature = "wasi-nn")]
         {
             wasmtime_wasi_nn::add_to_linker(linker, |host| {
-                std::sync::Arc::get_mut(host.wasi_nn.as_mut().unwrap())
+                Arc::get_mut(host.wasi_nn.as_mut().unwrap())
                     .expect("wasi-nn is not implemented with multi-threading support")
             })?;
-            store.data_mut().wasi_nn = Some(std::sync::Arc::new(WasiNnCtx::new()?));
+            store.data_mut().wasi_nn = Some(Arc::new(WasiNnCtx::new()?));
         }
     }
 
@@ -501,9 +504,9 @@ fn populate_with_wasi(
             wasmtime_wasi_threads::add_to_linker(linker, store, &_module, |host| {
                 host.wasi_threads.as_ref().unwrap()
             })?;
-            store.data_mut().wasi_threads = Some(std::sync::Arc::new(WasiThreadsCtx::new(
+            store.data_mut().wasi_threads = Some(Arc::new(WasiThreadsCtx::new(
                 _module,
-                std::sync::Arc::new(linker.clone()),
+                Arc::new(linker.clone()),
             )?));
         }
     }
