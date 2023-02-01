@@ -97,12 +97,12 @@ macro_rules! wasi_file_impl {
                 self
             }
             #[cfg(unix)]
-            fn pollable(&self) -> Option<Arc<dyn AsFd + '_>> {
-                self.0.pollable()
+            fn pollable(&self) -> Option<rustix::fd::BorrowedFd> {
+                Some(self.0.as_fd())
             }
             #[cfg(windows)]
-            fn pollable(&self) -> Option<Arc<dyn AsRawHandleOrSocket + '_>> {
-                self.0.pollable()
+            fn pollable(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
+                Some(self.0.as_raw_handle_or_socket())
             }
             async fn datasync(&self) -> Result<(), Error> {
                 block_on_dummy_executor(|| self.0.datasync())
