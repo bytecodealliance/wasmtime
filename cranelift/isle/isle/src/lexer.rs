@@ -258,16 +258,8 @@ impl<'a> Lexer<'a> {
                 // string-to-integer conversion.
                 let mut s = vec![];
                 while self.pos.offset < self.buf.len()
-                    && ((radix == 10
-                        && self.buf[self.pos.offset] >= b'0'
-                        && self.buf[self.pos.offset] <= b'9')
-                        || (radix == 16
-                            && ((self.buf[self.pos.offset] >= b'0'
-                                && self.buf[self.pos.offset] <= b'9')
-                                || (self.buf[self.pos.offset] >= b'a'
-                                    && self.buf[self.pos.offset] <= b'f')
-                                || (self.buf[self.pos.offset] >= b'A'
-                                    && self.buf[self.pos.offset] <= b'F')))
+                    && ((radix == 10 && self.buf[self.pos.offset].is_ascii_digit())
+                        || (radix == 16 && self.buf[self.pos.offset].is_ascii_hexdigit())
                         || self.buf[self.pos.offset] == b'_')
                 {
                     if self.buf[self.pos.offset] != b'_' {
