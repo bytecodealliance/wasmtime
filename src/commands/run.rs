@@ -430,7 +430,7 @@ struct Host {
 fn populate_with_wasi(
     linker: &mut Linker<Host>,
     store: &mut Store<Host>,
-    _module: Module,
+    module: Module,
     preopen_dirs: Vec<(String, Dir)>,
     argv: &[String],
     vars: &[(String, String)],
@@ -509,15 +509,19 @@ fn populate_with_wasi(
         }
         #[cfg(feature = "wasi-threads")]
         {
-            wasmtime_wasi_threads::add_to_linker(linker, store, &_module, |host| {
+            wasmtime_wasi_threads::add_to_linker(linker, store, &module, |host| {
                 host.wasi_threads.as_ref().unwrap()
             })?;
             store.data_mut().wasi_threads = Some(Arc::new(WasiThreadsCtx::new(
-                _module,
+                module,
                 Arc::new(linker.clone()),
             )?));
         }
     }
+
+    // Silence the unused warning for `module` as it is only used in the
+    // conditionally-compiled wasi-threads.
+    drop(&module);
 
     Ok(())
 }
