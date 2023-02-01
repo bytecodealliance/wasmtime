@@ -472,6 +472,13 @@ fn populate_with_wasi(
         #[cfg(feature = "wasi-crypto")]
         {
             wasmtime_wasi_crypto::add_to_linker(linker, |host| {
+                // This WASI proposal is currently not protected against
+                // concurrent access--i.e., when wasi-threads is actively
+                // spawning new threads, we cannot (yet) safely allow access and
+                // fail if more than one thread has `Arc`-references to the
+                // context. Once this proposal is updated (as wasi-common has
+                // been) to allow concurrent access, this `Arc::get_mut`
+                // limitation can be removed.
                 Arc::get_mut(host.wasi_crypto.as_mut().unwrap())
                     .expect("wasi-crypto is not implemented with multi-threading support")
             })?;
@@ -487,6 +494,7 @@ fn populate_with_wasi(
         #[cfg(feature = "wasi-nn")]
         {
             wasmtime_wasi_nn::add_to_linker(linker, |host| {
+                // See documentation for wasi-crypto for why this is needed.
                 Arc::get_mut(host.wasi_nn.as_mut().unwrap())
                     .expect("wasi-nn is not implemented with multi-threading support")
             })?;
