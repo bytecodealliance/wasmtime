@@ -45,10 +45,6 @@ struct Inner {
     /// matches `max_cold`, there are no more cold slots left.
     last_cold: u32,
 
-    /// The maximum number of cold slots that can be handed out, set to the
-    /// initial size of the index allocator.
-    max_cold: u32,
-
     /// The state of any given slot.
     ///
     /// Records indices in the above list (empty) or two lists (with affinity),
@@ -123,7 +119,6 @@ impl IndexAllocator {
     /// Create the default state for this strategy.
     pub fn new(max_instances: u32, max_unused_warm_slots: u32) -> Self {
         IndexAllocator(Mutex::new(Inner {
-            max_cold: max_instances,
             last_cold: 0,
             max_unused_warm_slots,
             unused_warm_slots: 0,
@@ -310,7 +305,7 @@ impl Inner {
     }
 
     fn pick_cold(&mut self) -> Option<SlotId> {
-        if self.last_cold == self.max_cold {
+        if (self.last_cold as usize) == self.slot_state.len() {
             None
         } else {
             let ret = Some(SlotId(self.last_cold));
