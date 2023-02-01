@@ -87,42 +87,98 @@ impl StorePtr {
 /// # Safety
 ///
 /// This trait is unsafe as it requires knowledge of Wasmtime's runtime internals to implement correctly.
-pub unsafe trait InstanceAllocator: Send + Sync {
+pub unsafe trait InstanceAllocator {
     /// Validates that a module is supported by the allocator.
     fn validate(&self, module: &Module, offsets: &VMOffsets<HostPtr>) -> Result<()> {
         drop((module, offsets));
         Ok(())
     }
 
-    /// Allocates an instance for the given allocation request.
+    /// Allocates a fresh `InstanceHandle` for the `req` given.
     ///
-    /// # Safety
+    /// This will allocate memories and tables internally from this allocator
+    /// and weave that altogether into a final and complete `InstanceHandle`
+    /// ready to be registered with a store.
     ///
-    /// This method is not inherently unsafe, but care must be made to ensure
-    /// pointers passed in the allocation request outlive the returned instance.
-    unsafe fn allocate(&self, req: InstanceAllocationRequest) -> Result<InstanceHandle>;
+    /// Note that the returned instance must still have `.initialize(..)` called
+    /// on it to complete the instantiation process.
+    fn allocate(&self, mut req: InstanceAllocationRequest) -> Result<InstanceHandle> {
+        let index = self.allocate_index(&req)?;
+        let module = req.runtime_info.module();
+        let mut memories =
+            PrimaryMap::with_capacity(module.memory_plans.len() - module.num_imported_memories);
+        let mut tables =
+            PrimaryMap::with_capacity(module.table_plans.len() - module.num_imported_tables);
 
-    /// Finishes the instantiation process started by an instance allocator.
+        let result = self
+            .allocate_memories(index, &mut req, &mut memories)
+            .and_then(|()| self.allocate_tables(index, &mut req, &mut tables));
+        if let Err(e) = result {
+            self.deallocate_memories(index, &mut memories);
+            self.deallocate_tables(index, &mut tables);
+            self.deallocate_index(index);
+            return Err(e);
+        }
+
+        unsafe { Ok(Instance::new(req, index, memories, tables)) }
+    }
+
+    /// Deallocates the provided instance.
     ///
-    /// # Safety
+    /// This will null-out the pointer within `handle` and otherwise reclaim
+    /// resources such as tables, memories, and the instance memory itself.
+    fn deallocate(&self, handle: &mut InstanceHandle) {
+        let index = handle.instance().index;
+        self.deallocate_memories(index, &mut handle.instance_mut().memories);
+        self.deallocate_tables(index, &mut handle.instance_mut().tables);
+        unsafe {
+            let layout = Instance::alloc_layout(handle.instance().offsets());
+            ptr::drop_in_place(handle.instance);
+            alloc::dealloc(handle.instance.cast(), layout);
+            handle.instance = std::ptr::null_mut();
+        }
+        self.deallocate_index(index);
+    }
+
+    /// Optionally allocates an allocator-defined index for the `req` provided.
     ///
-    /// This method is only safe to call immediately after an instance has been allocated.
-    unsafe fn initialize(
+    /// The return value here, if successful, is passed to the various methods
+    /// below for memory/table allocation/deallocation.
+    fn allocate_index(&self, req: &InstanceAllocationRequest) -> Result<usize>;
+
+    /// Deallocates indices allocated by `allocate_index`.
+    fn deallocate_index(&self, index: usize);
+
+    /// Attempts to allocate all defined linear memories for a module.
+    ///
+    /// Pushes all memories for `req` onto the `mems` storage provided which is
+    /// already appropriately allocated to contain all memories.
+    ///
+    /// Note that this is allowed to fail. Failure can additionally happen after
+    /// some memories have already been successfully allocated. All memories
+    /// pushed onto `mem` are guaranteed to one day make their way to
+    /// `deallocate_memories`.
+    fn allocate_memories(
         &self,
-        handle: &mut InstanceHandle,
-        module: &Module,
-        is_bulk_memory: bool,
+        index: usize,
+        req: &mut InstanceAllocationRequest,
+        mems: &mut PrimaryMap<DefinedMemoryIndex, Memory>,
     ) -> Result<()>;
 
-    /// Deallocates a previously allocated instance.
-    ///
-    /// # Safety
-    ///
-    /// This function is unsafe because there are no guarantees that the given handle
-    /// is the only owner of the underlying instance to deallocate.
-    ///
-    /// Use extreme care when deallocating an instance so that there are no dangling instance pointers.
-    unsafe fn deallocate(&self, handle: &InstanceHandle);
+    /// Deallocates all memories provided, optionally reclaiming resources for
+    /// the pooling allocator for example.
+    fn deallocate_memories(&self, index: usize, mems: &mut PrimaryMap<DefinedMemoryIndex, Memory>);
+
+    /// Same as `allocate_memories`, but for tables.
+    fn allocate_tables(
+        &self,
+        index: usize,
+        req: &mut InstanceAllocationRequest,
+        tables: &mut PrimaryMap<DefinedTableIndex, Table>,
+    ) -> Result<()>;
+
+    /// Same as `deallocate_memories`, but for tables.
+    fn deallocate_tables(&self, index: usize, tables: &mut PrimaryMap<DefinedTableIndex, Table>);
 
     /// Allocates a fiber stack for calling async functions on.
     #[cfg(feature = "async")]
@@ -338,7 +394,7 @@ fn check_init_bounds(instance: &mut Instance, module: &Module) -> Result<()> {
     Ok(())
 }
 
-fn initialize_instance(
+pub(super) fn initialize_instance(
     instance: &mut Instance,
     module: &Module,
     is_bulk_memory: bool,
@@ -378,57 +434,6 @@ impl OnDemandInstanceAllocator {
             stack_size,
         }
     }
-
-    fn create_tables(
-        store: &mut StorePtr,
-        runtime_info: &Arc<dyn ModuleRuntimeInfo>,
-    ) -> Result<PrimaryMap<DefinedTableIndex, Table>> {
-        let module = runtime_info.module();
-        let num_imports = module.num_imported_tables;
-        let mut tables: PrimaryMap<DefinedTableIndex, _> =
-            PrimaryMap::with_capacity(module.table_plans.len() - num_imports);
-        for (_, table) in module.table_plans.iter().skip(num_imports) {
-            tables.push(Table::new_dynamic(table, unsafe {
-                store
-                    .get()
-                    .expect("if module has table plans, store is not empty")
-            })?);
-        }
-        Ok(tables)
-    }
-
-    fn create_memories(
-        &self,
-        store: &mut StorePtr,
-        runtime_info: &Arc<dyn ModuleRuntimeInfo>,
-    ) -> Result<PrimaryMap<DefinedMemoryIndex, Memory>> {
-        let module = runtime_info.module();
-        let creator = self
-            .mem_creator
-            .as_deref()
-            .unwrap_or_else(|| &DefaultMemoryCreator);
-        let num_imports = module.num_imported_memories;
-        let mut memories: PrimaryMap<DefinedMemoryIndex, _> =
-            PrimaryMap::with_capacity(module.memory_plans.len() - num_imports);
-        for (memory_idx, plan) in module.memory_plans.iter().skip(num_imports) {
-            let defined_memory_idx = module
-                .defined_memory_index(memory_idx)
-                .expect("Skipped imports, should never be None");
-            let image = runtime_info.memory_image(defined_memory_idx)?;
-
-            memories.push(Memory::new_dynamic(
-                plan,
-                creator,
-                unsafe {
-                    store
-                        .get()
-                        .expect("if module has memory plans, store is not empty")
-                },
-                image,
-            )?);
-        }
-        Ok(memories)
-    }
 }
 
 impl Default for OnDemandInstanceAllocator {
@@ -441,59 +446,75 @@ impl Default for OnDemandInstanceAllocator {
     }
 }
 
-/// Allocate an instance containing a single memory.
-///
-/// In order to import a [`Memory`] into a WebAssembly instance, Wasmtime
-/// requires that memory to exist in its own instance. Here we bring to life
-/// such a "Frankenstein" instance with the only purpose of exporting a
-/// [`Memory`].
-pub unsafe fn allocate_single_memory_instance(
-    req: InstanceAllocationRequest,
-    memory: Memory,
-) -> Result<InstanceHandle> {
-    let mut memories = PrimaryMap::default();
-    memories.push(memory);
-    let tables = PrimaryMap::default();
-    let layout = Instance::alloc_layout(req.runtime_info.offsets());
-    let instance = alloc::alloc(layout) as *mut Instance;
-    Instance::new_at(instance, layout.size(), req, memories, tables);
-    Ok(InstanceHandle { instance })
-}
-
-/// Internal implementation of [`InstanceHandle`] deallocation.
-///
-/// See [`InstanceAllocator::deallocate()`] for more details.
-pub unsafe fn deallocate(handle: &InstanceHandle) {
-    let layout = Instance::alloc_layout(handle.instance().offsets());
-    ptr::drop_in_place(handle.instance);
-    alloc::dealloc(handle.instance.cast(), layout);
-}
-
 unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
-    unsafe fn allocate(&self, mut req: InstanceAllocationRequest) -> Result<InstanceHandle> {
-        let memories = self.create_memories(&mut req.store, &req.runtime_info)?;
-        let tables = Self::create_tables(&mut req.store, &req.runtime_info)?;
-        let layout = Instance::alloc_layout(req.runtime_info.offsets());
-        let instance_ptr = alloc::alloc(layout) as *mut Instance;
-
-        Instance::new_at(instance_ptr, layout.size(), req, memories, tables);
-
-        Ok(InstanceHandle {
-            instance: instance_ptr,
-        })
+    fn allocate_index(&self, _req: &InstanceAllocationRequest) -> Result<usize> {
+        Ok(0)
     }
 
-    unsafe fn initialize(
+    fn deallocate_index(&self, index: usize) {
+        assert_eq!(index, 0);
+    }
+
+    fn allocate_memories(
         &self,
-        handle: &mut InstanceHandle,
-        module: &Module,
-        is_bulk_memory: bool,
+        _index: usize,
+        req: &mut InstanceAllocationRequest,
+        memories: &mut PrimaryMap<DefinedMemoryIndex, Memory>,
     ) -> Result<()> {
-        initialize_instance(handle.instance_mut(), module, is_bulk_memory)
+        let module = req.runtime_info.module();
+        let creator = self
+            .mem_creator
+            .as_deref()
+            .unwrap_or_else(|| &DefaultMemoryCreator);
+        let num_imports = module.num_imported_memories;
+        for (memory_idx, plan) in module.memory_plans.iter().skip(num_imports) {
+            let defined_memory_idx = module
+                .defined_memory_index(memory_idx)
+                .expect("Skipped imports, should never be None");
+            let image = req.runtime_info.memory_image(defined_memory_idx)?;
+
+            memories.push(Memory::new_dynamic(
+                plan,
+                creator,
+                unsafe {
+                    req.store
+                        .get()
+                        .expect("if module has memory plans, store is not empty")
+                },
+                image,
+            )?);
+        }
+        Ok(())
     }
 
-    unsafe fn deallocate(&self, handle: &InstanceHandle) {
-        deallocate(handle)
+    fn deallocate_memories(
+        &self,
+        _index: usize,
+        _mems: &mut PrimaryMap<DefinedMemoryIndex, Memory>,
+    ) {
+        // normal destructors do cleanup here
+    }
+
+    fn allocate_tables(
+        &self,
+        _index: usize,
+        req: &mut InstanceAllocationRequest,
+        tables: &mut PrimaryMap<DefinedTableIndex, Table>,
+    ) -> Result<()> {
+        let module = req.runtime_info.module();
+        let num_imports = module.num_imported_tables;
+        for (_, table) in module.table_plans.iter().skip(num_imports) {
+            tables.push(Table::new_dynamic(table, unsafe {
+                req.store
+                    .get()
+                    .expect("if module has table plans, store is not empty")
+            })?);
+        }
+        Ok(())
+    }
+
+    fn deallocate_tables(&self, _index: usize, _tables: &mut PrimaryMap<DefinedTableIndex, Table>) {
+        // normal destructors do cleanup here
     }
 
     #[cfg(feature = "async")]

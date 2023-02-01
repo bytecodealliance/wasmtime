@@ -646,11 +646,11 @@ fn instance_too_large() -> Result<()> {
 
     let engine = Engine::new(&config)?;
     let expected = "\
-instance allocation for this module requires 224 bytes which exceeds the \
+instance allocation for this module requires 240 bytes which exceeds the \
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
- * 64.29% - 144 bytes - instance state management
- * 7.14% - 16 bytes - jit store state
+ * 66.67% - 160 bytes - instance state management
+ * 6.67% - 16 bytes - jit store state
 ";
     match Module::new(&engine, "(module)") {
         Ok(_) => panic!("should have failed to compile"),
@@ -664,11 +664,11 @@ configured maximum of 16 bytes; breakdown of allocation requirement:
     lots_of_globals.push_str(")");
 
     let expected = "\
-instance allocation for this module requires 1824 bytes which exceeds the \
+instance allocation for this module requires 1840 bytes which exceeds the \
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
- * 7.89% - 144 bytes - instance state management
- * 87.72% - 1600 bytes - defined globals
+ * 8.70% - 160 bytes - instance state management
+ * 86.96% - 1600 bytes - defined globals
 ";
     match Module::new(&engine, &lots_of_globals) {
         Ok(_) => panic!("should have failed to compile"),

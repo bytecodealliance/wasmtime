@@ -68,7 +68,7 @@ pub fn generate_global_export(
 pub fn generate_memory_export(
     store: &mut StoreOpaque,
     m: &MemoryType,
-    preallocation: Option<SharedMemory>,
+    preallocation: Option<&SharedMemory>,
 ) -> Result<wasmtime_runtime::ExportMemory> {
     let instance = create_memory(store, m, preallocation)?;
     Ok(store

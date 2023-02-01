@@ -317,8 +317,7 @@ impl Instance {
         // items from this instance into other instances should be ok when
         // those items are loaded and run we'll have all the metadata to
         // look at them.
-        store.engine().allocator().initialize(
-            &mut instance_handle,
+        instance_handle.initialize(
             compiled_module.module(),
             store.engine().config().features.bulk_memory,
         )?;

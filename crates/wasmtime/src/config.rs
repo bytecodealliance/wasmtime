@@ -1460,7 +1460,7 @@ impl Config {
         Ok(())
     }
 
-    pub(crate) fn build_allocator(&self) -> Result<Box<dyn InstanceAllocator>> {
+    pub(crate) fn build_allocator(&self) -> Result<Box<dyn InstanceAllocator + Send + Sync>> {
         #[cfg(feature = "async")]
         let stack_size = self.async_stack_size;
 

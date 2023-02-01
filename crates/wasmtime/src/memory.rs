@@ -885,9 +885,7 @@ impl SharedMemory {
     /// Construct a single-memory instance to provide a way to import
     /// [`SharedMemory`] into other modules.
     pub(crate) fn vmimport(&self, store: &mut StoreOpaque) -> wasmtime_runtime::VMMemoryImport {
-        let runtime_shared_memory = self.clone().0;
-        let export_memory =
-            generate_memory_export(store, &self.ty(), Some(runtime_shared_memory)).unwrap();
+        let export_memory = generate_memory_export(store, &self.ty(), Some(&self.0)).unwrap();
         VMMemoryImport {
             from: export_memory.definition,
             vmctx: export_memory.vmctx,
