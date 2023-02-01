@@ -968,10 +968,7 @@ impl DataFlowGraph {
 
     // Only for use by the verifier. Everyone else should just use
     // `dfg.inst_results(inst).len()`.
-    pub(crate) fn num_expected_results_for_verifier(
-        &self,
-        inst: Inst,
-    ) -> usize {
+    pub(crate) fn num_expected_results_for_verifier(&self, inst: Inst) -> usize {
         match self.non_tail_call_signature(inst) {
             Some(sig) => self.signatures[sig].returns.len(),
             None => {
