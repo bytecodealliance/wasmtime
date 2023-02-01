@@ -80,10 +80,10 @@ impl<'a> Parser<'a> {
         self.is(|tok| *tok == Token::At)
     }
     fn is_sym(&self) -> bool {
-        self.is(|tok| tok.is_sym())
+        self.is(Token::is_sym)
     }
     fn is_int(&self) -> bool {
-        self.is(|tok| tok.is_int())
+        self.is(Token::is_int)
     }
     fn is_sym_str(&self, s: &str) -> bool {
         self.is(|tok| match tok {
@@ -110,14 +110,14 @@ impl<'a> Parser<'a> {
     }
 
     fn symbol(&mut self) -> Result<String> {
-        match self.take(|tok| tok.is_sym())? {
+        match self.take(Token::is_sym)? {
             Token::Symbol(s) => Ok(s),
             _ => unreachable!(),
         }
     }
 
     fn int(&mut self) -> Result<i128> {
-        match self.take(|tok| tok.is_int())? {
+        match self.take(Token::is_int)? {
             Token::Int(i) => Ok(i),
             _ => unreachable!(),
         }
