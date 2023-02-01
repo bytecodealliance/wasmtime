@@ -384,15 +384,23 @@ impl List {
 
     #[cfg(test)]
     fn iter<'a>(
-        &self,
+        &'a self,
         states: &'a [SlotState],
         link: fn(&Unused) -> &Link,
     ) -> impl Iterator<Item = SlotId> + 'a {
         let mut cur = self.head;
+        let mut prev = None;
         std::iter::from_fn(move || {
+            if cur.is_none() {
+                assert_eq!(prev, self.tail);
+            }
             let ret = cur?;
             match &states[ret.index()] {
-                SlotState::UnusedWarm(u) => cur = link(u).next,
+                SlotState::UnusedWarm(u) => {
+                    assert_eq!(link(u).prev, prev);
+                    prev = Some(ret);
+                    cur = link(u).next
+                }
                 _ => unreachable!(),
             }
             Some(ret)
