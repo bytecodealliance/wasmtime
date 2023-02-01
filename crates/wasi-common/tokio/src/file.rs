@@ -6,7 +6,6 @@ use io_lifetimes::AsFd;
 use std::any::Any;
 use std::borrow::Borrow;
 use std::io;
-use std::sync::Arc;
 use wasi_common::{
     file::{Advice, FdFlags, FileType, Filestat, WasiFile},
     Error,
