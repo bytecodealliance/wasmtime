@@ -1,6 +1,5 @@
-use crate::linker::Definition;
-use crate::store::StoreOpaque;
-use crate::{signatures::SignatureCollection, Engine, Extern};
+use crate::linker::DefinitionType;
+use crate::{signatures::SignatureCollection, Engine};
 use anyhow::{anyhow, bail, Result};
 use wasmtime_environ::{
     EntityType, Global, Memory, ModuleTypes, SignatureIndex, Table, WasmFuncType, WasmType,
@@ -10,47 +9,10 @@ use wasmtime_runtime::VMSharedSignatureIndex;
 pub struct MatchCx<'a> {
     pub signatures: &'a SignatureCollection,
     pub types: &'a ModuleTypes,
-    pub store: &'a StoreOpaque,
     pub engine: &'a Engine,
 }
 
 impl MatchCx<'_> {
-    pub fn global(&self, expected: &Global, actual: &crate::Global) -> Result<()> {
-        global_ty(expected, actual.wasmtime_ty(self.store.store_data()))
-    }
-
-    pub fn table(&self, expected: &Table, actual: &crate::Table) -> Result<()> {
-        table_ty(
-            expected,
-            actual.wasmtime_ty(self.store.store_data()),
-            Some(actual.internal_size(self.store)),
-        )
-    }
-
-    pub fn memory(&self, expected: &Memory, actual: &crate::Memory) -> Result<()> {
-        memory_ty(
-            expected,
-            actual.wasmtime_ty(self.store.store_data()),
-            Some(actual.internal_size(self.store)),
-        )
-    }
-
-    pub fn shared_memory(&self, expected: &Memory, actual: &crate::SharedMemory) -> Result<()> {
-        memory_ty(expected, actual.ty().wasmtime_memory(), Some(actual.size()))
-    }
-
-    pub fn func(&self, expected: SignatureIndex, actual: &crate::Func) -> Result<()> {
-        self.vmshared_signature_index(expected, actual.sig_index(self.store.store_data()))
-    }
-
-    pub(crate) fn host_func(
-        &self,
-        expected: SignatureIndex,
-        actual: &crate::func::HostFunc,
-    ) -> Result<()> {
-        self.vmshared_signature_index(expected, actual.sig_index())
-    }
-
     pub fn vmshared_signature_index(
         &self,
         expected: SignatureIndex,
@@ -79,37 +41,29 @@ impl MatchCx<'_> {
     }
 
     /// Validates that the `expected` type matches the type of `actual`
-    pub fn extern_(&self, expected: &EntityType, actual: &Extern) -> Result<()> {
+    pub(crate) fn definition(&self, expected: &EntityType, actual: &DefinitionType) -> Result<()> {
         match expected {
             EntityType::Global(expected) => match actual {
-                Extern::Global(actual) => self.global(expected, actual),
+                DefinitionType::Global(actual) => global_ty(expected, actual),
                 _ => bail!("expected global, but found {}", actual.desc()),
             },
             EntityType::Table(expected) => match actual {
-                Extern::Table(actual) => self.table(expected, actual),
+                DefinitionType::Table(actual, cur_size) => {
+                    table_ty(expected, actual, Some(*cur_size))
+                }
                 _ => bail!("expected table, but found {}", actual.desc()),
             },
             EntityType::Memory(expected) => match actual {
-                Extern::Memory(actual) => self.memory(expected, actual),
-                Extern::SharedMemory(actual) => self.shared_memory(expected, actual),
+                DefinitionType::Memory(actual, cur_size) => {
+                    memory_ty(expected, actual, Some(*cur_size))
+                }
                 _ => bail!("expected memory, but found {}", actual.desc()),
             },
             EntityType::Function(expected) => match actual {
-                Extern::Func(actual) => self.func(*expected, actual),
+                DefinitionType::Func(actual) => self.vmshared_signature_index(*expected, *actual),
                 _ => bail!("expected func, but found {}", actual.desc()),
             },
             EntityType::Tag(_) => unimplemented!(),
-        }
-    }
-
-    /// Validates that the `expected` type matches the type of `actual`
-    pub(crate) fn definition(&self, expected: &EntityType, actual: &Definition) -> Result<()> {
-        match actual {
-            Definition::Extern(e) => self.extern_(expected, e),
-            Definition::HostFunc(f) => match expected {
-                EntityType::Function(expected) => self.host_func(*expected, f),
-                _ => bail!("expected {}, but found func", entity_desc(expected)),
-            },
         }
     }
 }

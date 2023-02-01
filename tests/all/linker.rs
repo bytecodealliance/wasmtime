@@ -56,36 +56,36 @@ fn link_twice_bad() -> Result<()> {
     // globals
     let ty = GlobalType::new(ValType::I32, Mutability::Const);
     let global = Global::new(&mut store, ty, Val::I32(0))?;
-    linker.define("g", "1", global.clone())?;
-    assert!(linker.define("g", "1", global.clone()).is_err());
+    linker.define(&mut store, "g", "1", global.clone())?;
+    assert!(linker.define(&mut store, "g", "1", global.clone()).is_err());
 
     let ty = GlobalType::new(ValType::I32, Mutability::Var);
     let global = Global::new(&mut store, ty, Val::I32(0))?;
-    linker.define("g", "2", global.clone())?;
-    assert!(linker.define("g", "2", global.clone()).is_err());
+    linker.define(&mut store, "g", "2", global.clone())?;
+    assert!(linker.define(&mut store, "g", "2", global.clone()).is_err());
 
     let ty = GlobalType::new(ValType::I64, Mutability::Const);
     let global = Global::new(&mut store, ty, Val::I64(0))?;
-    linker.define("g", "3", global.clone())?;
-    assert!(linker.define("g", "3", global.clone()).is_err());
+    linker.define(&mut store, "g", "3", global.clone())?;
+    assert!(linker.define(&mut store, "g", "3", global.clone()).is_err());
 
     // memories
     let ty = MemoryType::new(1, None);
     let memory = Memory::new(&mut store, ty)?;
-    linker.define("m", "", memory.clone())?;
-    assert!(linker.define("m", "", memory.clone()).is_err());
+    linker.define(&mut store, "m", "", memory.clone())?;
+    assert!(linker.define(&mut store, "m", "", memory.clone()).is_err());
     let ty = MemoryType::new(2, None);
     let memory = Memory::new(&mut store, ty)?;
-    assert!(linker.define("m", "", memory.clone()).is_err());
+    assert!(linker.define(&mut store, "m", "", memory.clone()).is_err());
 
     // tables
     let ty = TableType::new(ValType::FuncRef, 1, None);
     let table = Table::new(&mut store, ty, Val::FuncRef(None))?;
-    linker.define("t", "", table.clone())?;
-    assert!(linker.define("t", "", table.clone()).is_err());
+    linker.define(&mut store, "t", "", table.clone())?;
+    assert!(linker.define(&mut store, "t", "", table.clone()).is_err());
     let ty = TableType::new(ValType::FuncRef, 2, None);
     let table = Table::new(&mut store, ty, Val::FuncRef(None))?;
-    assert!(linker.define("t", "", table.clone()).is_err());
+    assert!(linker.define(&mut store, "t", "", table.clone()).is_err());
     Ok(())
 }
 
@@ -100,11 +100,8 @@ fn function_interposition() -> Result<()> {
     )?;
     for _ in 0..4 {
         let instance = linker.instantiate(&mut store, &module)?;
-        linker.define(
-            "red",
-            "green",
-            instance.get_export(&mut store, "green").unwrap().clone(),
-        )?;
+        let green = instance.get_export(&mut store, "green").unwrap().clone();
+        linker.define(&mut store, "red", "green", green)?;
         module = Module::new(
             store.engine(),
             r#"(module
@@ -137,11 +134,8 @@ fn function_interposition_renamed() -> Result<()> {
     )?;
     for _ in 0..4 {
         let instance = linker.instantiate(&mut store, &module)?;
-        linker.define(
-            "red",
-            "green",
-            instance.get_export(&mut store, "export").unwrap().clone(),
-        )?;
+        let export = instance.get_export(&mut store, "export").unwrap().clone();
+        linker.define(&mut store, "red", "green", export)?;
         module = Module::new(
             store.engine(),
             r#"(module
@@ -334,7 +328,7 @@ fn instance_pre() -> Result<()> {
     linker.func_wrap("", "", || {})?;
 
     let module = Module::new(&engine, r#"(module (import "" "" (func)))"#)?;
-    let instance_pre = linker.instantiate_pre(&mut Store::new(&engine, ()), &module)?;
+    let instance_pre = linker.instantiate_pre(&module)?;
     instance_pre.instantiate(&mut Store::new(&engine, ()))?;
     instance_pre.instantiate(&mut Store::new(&engine, ()))?;
 
@@ -344,7 +338,7 @@ fn instance_pre() -> Result<()> {
         GlobalType::new(ValType::I32, Mutability::Const),
         1.into(),
     )?;
-    linker.define("", "g", global)?;
+    linker.define(&mut store, "", "g", global)?;
 
     let module = Module::new(
         &engine,
@@ -353,7 +347,7 @@ fn instance_pre() -> Result<()> {
             (import "" "g" (global i32))
         )"#,
     )?;
-    let instance_pre = linker.instantiate_pre(&mut store, &module)?;
+    let instance_pre = linker.instantiate_pre(&module)?;
     instance_pre.instantiate(&mut store)?;
     instance_pre.instantiate(&mut store)?;
     Ok(())

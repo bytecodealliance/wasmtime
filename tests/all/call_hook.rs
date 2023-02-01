@@ -262,7 +262,7 @@ async fn call_linked_func_async() -> Result<(), Error> {
 
     let mut linker = Linker::new(&engine);
 
-    linker.define("host", "f", f)?;
+    linker.define(&mut store, "host", "f", f)?;
 
     let wat = r#"
         (module

@@ -24,32 +24,32 @@ pub fn link_spectest<T>(
 
     let ty = GlobalType::new(ValType::I32, Mutability::Const);
     let g = Global::new(&mut *store, ty, Val::I32(666))?;
-    linker.define("spectest", "global_i32", g)?;
+    linker.define(&mut *store, "spectest", "global_i32", g)?;
 
     let ty = GlobalType::new(ValType::I64, Mutability::Const);
     let g = Global::new(&mut *store, ty, Val::I64(666))?;
-    linker.define("spectest", "global_i64", g)?;
+    linker.define(&mut *store, "spectest", "global_i64", g)?;
 
     let ty = GlobalType::new(ValType::F32, Mutability::Const);
     let g = Global::new(&mut *store, ty, Val::F32(0x4426_8000))?;
-    linker.define("spectest", "global_f32", g)?;
+    linker.define(&mut *store, "spectest", "global_f32", g)?;
 
     let ty = GlobalType::new(ValType::F64, Mutability::Const);
     let g = Global::new(&mut *store, ty, Val::F64(0x4084_d000_0000_0000))?;
-    linker.define("spectest", "global_f64", g)?;
+    linker.define(&mut *store, "spectest", "global_f64", g)?;
 
     let ty = TableType::new(ValType::FuncRef, 10, Some(20));
     let table = Table::new(&mut *store, ty, Val::FuncRef(None))?;
-    linker.define("spectest", "table", table)?;
+    linker.define(&mut *store, "spectest", "table", table)?;
 
     let ty = MemoryType::new(1, Some(2));
     let memory = Memory::new(&mut *store, ty)?;
-    linker.define("spectest", "memory", memory)?;
+    linker.define(&mut *store, "spectest", "memory", memory)?;
 
     if use_shared_memory {
         let ty = MemoryType::shared(1, 1);
         let memory = Memory::new(&mut *store, ty)?;
-        linker.define("spectest", "shared_memory", memory)?;
+        linker.define(&mut *store, "spectest", "shared_memory", memory)?;
     }
 
     Ok(())

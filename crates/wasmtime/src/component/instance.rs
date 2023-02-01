@@ -1,6 +1,7 @@
 use crate::component::func::HostFunc;
 use crate::component::{Component, ComponentNamedList, Func, Lift, Lower, TypedFunc};
 use crate::instance::OwnedImports;
+use crate::linker::DefinitionType;
 use crate::store::{StoreOpaque, Stored};
 use crate::{AsContextMut, Module, StoreContextMut};
 use anyhow::{anyhow, Context, Result};
@@ -439,13 +440,13 @@ impl<'a> Instantiator<'a> {
         }
 
         let val = unsafe { crate::Extern::from_wasmtime_export(export, store) };
+        let ty = DefinitionType::from(store, &val);
         crate::types::matching::MatchCx {
-            store,
             engine: store.engine(),
             signatures: module.signatures(),
             types: module.types(),
         }
-        .extern_(&expected, &val)
+        .definition(&expected, &ty)
         .expect("unexpected typecheck failure");
     }
 }
