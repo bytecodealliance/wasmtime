@@ -8,8 +8,7 @@ function u0:2(i64 , i64) {
         v19 = iconst.i32 4
         v20 = icmp ne v18, v19
         v21 = uextend.i32 v20
-        brnz v21, block2
-        jump block4
+        brif v21, block2, block4
     block4:
         jump block1
     block2:

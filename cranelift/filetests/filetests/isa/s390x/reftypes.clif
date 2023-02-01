@@ -51,8 +51,7 @@ function %f4(r64, r64) -> r64, r64, r64 {
 block0(v0: r64, v1: r64):
     v2 = call fn0(v0)
     stack_store.r64 v0, ss0
-    brz v2, block1(v1, v0)
-    jump block2(v0, v1)
+    brif v2, block2(v0, v1), block1(v1, v0)
 
 block1(v3: r64, v4: r64):
     jump block3(v3, v4)
@@ -78,18 +77,18 @@ block3(v7: r64, v8: r64):
 ;   stg %r4, 0(%r5)
 ;   lbr %r2, %r2
 ;   chi %r2, 0
-;   jgnlh label1 ; jg label3
+;   jglh label1 ; jg label3
 ; block1:
 ;   jg label2
 ; block2:
-;   lgr %r3, %r4
-;   lg %r2, 176(%r15)
+;   lgr %r2, %r4
+;   lg %r3, 176(%r15)
 ;   jg label5
 ; block3:
 ;   jg label4
 ; block4:
-;   lgr %r2, %r4
-;   lg %r3, 176(%r15)
+;   lgr %r3, %r4
+;   lg %r2, 176(%r15)
 ;   jg label5
 ; block5:
 ;   la %r4, 160(%r15)

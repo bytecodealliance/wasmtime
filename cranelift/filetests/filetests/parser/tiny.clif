@@ -86,7 +86,7 @@ block0(v90: i32, v91: i32):
     v2 = icmp_imm sge v90, -12
     v3 = irsub_imm v91, 45
     v4 = icmp eq v90, v91
-    brnz v4, block0(v91, v90)
+    brif v4, block0(v91, v90), block0(v91, v90)
 }
 ; sameln: function %icmp(i32, i32) fast {
 ; nextln: block0(v90: i32, v91: i32):
@@ -95,7 +95,7 @@ block0(v90: i32, v91: i32):
 ; nextln:     v2 = icmp_imm sge v90, -12
 ; nextln:     v3 = irsub_imm v91, 45
 ; nextln:     v4 = icmp eq v90, v91
-; nextln:     brnz v4, block0(v91, v90)
+; nextln:     brif v4, block0(v91, v90), block0(v91, v90)
 ; nextln: }
 
 ; Floating condition codes.

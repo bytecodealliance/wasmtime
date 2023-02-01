@@ -34,6 +34,7 @@
 (type Type (primitive Type))
 (type Value (primitive Value))
 (type ValueList (primitive ValueList))
+(type BlockCall (primitive BlockCall))
 
 ;; ISLE representation of `&[Value]`.
 (type ValueSlice (primitive ValueSlice))
@@ -127,6 +128,15 @@
 
 (decl pure u64_xor (u64 u64) u64)
 (extern constructor u64_xor u64_xor)
+
+(decl pure u64_shl (u64 u64) u64)
+(extern constructor u64_shl u64_shl)
+
+(decl pure imm64_ushr (Type Imm64 Imm64) Imm64)
+(extern constructor imm64_ushr imm64_ushr)
+
+(decl pure imm64_sshr (Type Imm64 Imm64) Imm64)
+(extern constructor imm64_sshr imm64_sshr)
 
 (decl pure u64_not (u64) u64)
 (extern constructor u64_not u64_not)
@@ -223,6 +233,10 @@
 ;; Invert an FloatCC flag.
 (decl floatcc_inverse (FloatCC) FloatCC)
 (extern constructor floatcc_inverse floatcc_inverse)
+
+;; True when this FloatCC involves an unordered comparison.
+(decl pure floatcc_unordered (FloatCC) bool)
+(extern constructor floatcc_unordered floatcc_unordered)
 
 ;;;; Helper Clif Extractors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -345,6 +359,10 @@
 (decl nonzero_u64_from_imm64 (u64) Imm64)
 (extern extractor nonzero_u64_from_imm64 nonzero_u64_from_imm64)
 
+;; If the given `Imm64` is a power-of-two, extract its log2 value.
+(decl imm64_power_of_two (u64) Imm64)
+(extern extractor imm64_power_of_two imm64_power_of_two)
+
 ;; Create a new Imm64.
 (decl pure imm64 (u64) Imm64)
 (extern constructor imm64 imm64)
@@ -447,4 +465,3 @@
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (convert Offset32 u32 offset32_to_u32)
-

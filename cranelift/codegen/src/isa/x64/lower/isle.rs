@@ -20,7 +20,7 @@ use crate::{
         condcodes::{CondCode, FloatCC, IntCC},
         immediates::*,
         types::*,
-        Inst, InstructionData, MemFlags, Opcode, TrapCode, Value, ValueList,
+        BlockCall, Inst, InstructionData, MemFlags, Opcode, TrapCode, Value, ValueList,
     },
     isa::{
         unwind::UnwindInst,

@@ -169,12 +169,12 @@ command:
     function %nonsense(i32, i32) -> f32 {
     ; check: digraph %nonsense {
     ; regex: I=\binst\d+\b
-    ; check: label="{block0 | <$(BRZ=$I)>brz block2 | <$(JUMP=$I)>jump block1}"]
+    ; check: label="{block0 | <$(BRIF=$I)>brif v1, block1(v2), block2 }"]
 
     block0(v0: i32, v1: i32):
-        brz v1, block2            ; unordered: block0:$BRZ -> block2
         v2 = iconst.i32 0
-        jump block1(v2)           ; unordered: block0:$JUMP -> block1
+        brif v1, block1(v2), block2  ; unordered: block0:$BRIF -> block1
+                                     ; unordered: block0:$BRIF -> block2
 
     block1(v5: i32):
         return v0
@@ -195,10 +195,9 @@ Compute the dominator tree of each function and validate it against the
 
     function %test(i32) {
         block0(v0: i32):
-            jump block1     ; dominates: block1
+            jump block1              ; dominates: block1
         block1:
-            brz v0, block3  ; dominates: block3
-            jump block2     ; dominates: block2
+            brif v0, block2, block3  ; dominates: block2, block3
         block2:
             jump block3
         block3:
@@ -262,7 +261,7 @@ Test the instruction shrinking pass.
 The shrink pass is run on each function, and then results are run
 through filecheck.
 
-### `test preopt`
+### `test simple_preopt`
 
 Test the preopt pass.
 

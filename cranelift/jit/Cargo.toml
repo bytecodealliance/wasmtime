@@ -12,7 +12,7 @@ edition.workspace = true
 [dependencies]
 cranelift-module = { workspace = true }
 cranelift-native = { workspace = true }
-cranelift-codegen = { workspace = true, default-features = false, features = ["std"] }
+cranelift-codegen = { workspace = true, features = ["std"] }
 cranelift-entity = { workspace = true }
 anyhow = { workspace = true }
 region = "2.2.0"

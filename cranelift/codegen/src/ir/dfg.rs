@@ -691,9 +691,10 @@ impl DataFlowGraph {
             self.inst_args_mut(inst)[i] = body(self, arg);
         }
 
-        for mut block in self.insts[inst].branch_destination().into_iter() {
+        for block_ix in 0..self.insts[inst].branch_destination().len() {
             // We aren't changing the size of the args list, so we won't need to write the branch
             // back to the instruction.
+            let mut block = self.insts[inst].branch_destination()[block_ix];
             for i in 0..block.args_slice(&self.value_lists).len() {
                 let arg = block.args_slice(&self.value_lists)[i];
                 block.args_slice_mut(&mut self.value_lists)[i] = body(self, arg);
@@ -712,7 +713,8 @@ impl DataFlowGraph {
             *arg = values.next().unwrap();
         }
 
-        for mut block in self.insts[inst].branch_destination().into_iter() {
+        for block_ix in 0..self.insts[inst].branch_destination().len() {
+            let mut block = self.insts[inst].branch_destination()[block_ix];
             for arg in block.args_slice_mut(&mut self.value_lists) {
                 *arg = values.next().unwrap();
             }

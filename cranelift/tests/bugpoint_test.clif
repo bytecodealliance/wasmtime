@@ -421,8 +421,7 @@ block1:
     v118 = uextend.i32 v116
     v119 = icmp_imm eq v118, 0
     v121 = uextend.i32 v119
-    brz v121, block3
-    jump block2
+    brif v121, block2, block3
 
 block2:
     v122 = global_value.i64 gv0
@@ -437,8 +436,7 @@ block3:
     v130 = uextend.i32 v128
     v131 = icmp_imm eq v130, 0
     v133 = uextend.i32 v131
-    brz v133, block5
-    jump block4
+    brif v133, block4, block5
 
 block4:
     v134 = global_value.i64 gv2
@@ -453,8 +451,7 @@ block5:
     v142 = uextend.i32 v140
     v143 = icmp_imm eq v142, 0
     v145 = uextend.i32 v143
-    brz v145, block7
-    jump block6
+    brif v145, block6, block7
 
 block6:
     v146 = global_value.i64 gv4
@@ -477,8 +474,7 @@ block9:
     v154 = uextend.i32 v153
     v155 = icmp_imm eq v154, 0
     v157 = uextend.i32 v155
-    brz v157, block11
-    jump block10
+    brif v157, block10, block11
 
 block10:
     v158 = global_value.i64 gv6
@@ -501,8 +497,7 @@ block13:
     v166 = uextend.i32 v165
     v167 = icmp_imm eq v166, 0
     v169 = uextend.i32 v167
-    brz v169, block15
-    jump block14
+    brif v169, block14, block15
 
 block14:
     v170 = global_value.i64 gv8
@@ -522,8 +517,7 @@ block16:
     v179 = uextend.i32 v177
     v180 = icmp_imm eq v179, 0
     v182 = uextend.i32 v180
-    brz v182, block18
-    jump block17
+    brif v182, block17, block18
 
 block17:
     v183 = global_value.i64 gv10
@@ -543,8 +537,7 @@ block18:
     v195 = iadd_imm.i64 v12, 8
     v196 = load.i8 v195
     v197 = uextend.i32 v196
-    brz v197, block19
-    jump block164
+    brif v197, block164, block19
 
 block164:
     v198 = global_value.i64 gv12
@@ -564,8 +557,7 @@ block19:
     v208 = iadd_imm.i64 v13, 8
     v209 = load.i8 v208
     v210 = uextend.i32 v209
-    brz v210, block20
-    jump block163
+    brif v210, block163, block20
 
 block163:
     v211 = global_value.i64 gv13
@@ -577,8 +569,7 @@ block20:
     v216 = uextend.i32 v214
     v217 = icmp_imm eq v216, 0
     v219 = uextend.i32 v217
-    brz v219, block22
-    jump block21
+    brif v219, block21, block22
 
 block21:
     v220 = global_value.i64 gv14
@@ -598,8 +589,7 @@ block22:
     v232 = iadd_imm.i64 v16, 8
     v233 = load.i8 v232
     v234 = uextend.i32 v233
-    brz v234, block23
-    jump block162
+    brif v234, block162, block23
 
 block162:
     v235 = global_value.i64 gv16
@@ -626,8 +616,7 @@ block24:
     v251 = iadd_imm.i64 v19, 8
     v252 = load.i8 v251
     v253 = uextend.i32 v252
-    brz v253, block25
-    jump block161
+    brif v253, block161, block25
 
 block161:
     v254 = global_value.i64 gv17
@@ -665,8 +654,7 @@ block27:
     v277 = iadd_imm.i64 v24, 2
     v278 = load.i8 v277
     v279 = uextend.i32 v278
-    brz v279, block28
-    jump block160
+    brif v279, block160, block28
 
 block160:
     v280 = global_value.i64 gv18
@@ -683,8 +671,7 @@ block28:
     v288 = iadd_imm.i64 v25, 2
     v289 = load.i8 v288
     v290 = uextend.i32 v289
-    brz v290, block29
-    jump block159
+    brif v290, block159, block29
 
 block159:
     v291 = global_value.i64 gv19
@@ -704,8 +691,7 @@ block29:
     v301 = iadd_imm.i64 v26, 2
     v302 = load.i8 v301
     v303 = uextend.i32 v302
-    brz v303, block30
-    jump block158
+    brif v303, block158, block30
 
 block158:
     v304 = global_value.i64 gv20
@@ -722,8 +708,7 @@ block30:
     v312 = iadd_imm.i64 v27, 2
     v313 = load.i8 v312
     v314 = uextend.i32 v313
-    brz v314, block31
-    jump block157
+    brif v314, block157, block31
 
 block157:
     v315 = global_value.i64 gv21
@@ -754,8 +739,7 @@ block34:
 block35:
     v322 = iconst.i8 1
     v323 = uextend.i32 v322
-    brz v323, block42
-    jump block36
+    brif v323, block36, block42
 
 block36:
     v324 = iadd_imm.i64 v28, 8
@@ -772,8 +756,7 @@ block36:
     v334 = uextend.i32 v332
     v335 = icmp_imm eq v334, 0
     v337 = uextend.i32 v335
-    brz v337, block38
-    jump block37
+    brif v337, block37, block38
 
 block37:
     v338 = global_value.i64 gv22
@@ -819,8 +802,7 @@ block41:
 block42:
     v362 = iconst.i8 1
     v363 = uextend.i32 v362
-    brz v363, block49(v1007)
-    jump block43
+    brif v363, block43, block49(v1007)
 
 block43:
     v364 = iadd_imm.i64 v28, 8
@@ -837,8 +819,7 @@ block43:
     v374 = uextend.i32 v372
     v375 = icmp_imm eq v374, 0
     v377 = uextend.i32 v375
-    brz v377, block45
-    jump block44
+    brif v377, block44, block45
 
 block44:
     v378 = global_value.i64 gv25
@@ -894,8 +875,7 @@ block49(v1006: i16):
     v410 = iadd_imm.i64 v51, 8
     v411 = load.i8 v410
     v412 = uextend.i32 v411
-    brz v412, block50
-    jump block156
+    brif v412, block156, block50
 
 block156:
     v413 = global_value.i64 gv28
@@ -918,8 +898,7 @@ block50:
     v423 = iadd_imm.i64 v52, 8
     v424 = load.i8 v423
     v425 = uextend.i32 v424
-    brz v425, block51
-    jump block155
+    brif v425, block155, block51
 
 block155:
     v426 = global_value.i64 gv29
@@ -934,8 +913,7 @@ block51:
     v430 = iconst.i16 0xffff_ffff_ffff_8000
     v431 = icmp eq v429, v430
     v433 = uextend.i32 v431
-    brz v433, block52
-    jump block154
+    brif v433, block154, block52
 
 block154:
     v434 = global_value.i64 gv30
@@ -956,8 +934,7 @@ block52:
     v446 = iadd_imm.i64 v53, 8
     v447 = load.i8 v446
     v448 = uextend.i32 v447
-    brz v448, block53
-    jump block153
+    brif v448, block153, block53
 
 block153:
     v449 = global_value.i64 gv31
@@ -978,8 +955,7 @@ block53:
     v461 = iadd_imm.i64 v54, 8
     v462 = load.i8 v461
     v463 = uextend.i32 v462
-    brz v463, block54
-    jump block152
+    brif v463, block152, block54
 
 block152:
     v464 = global_value.i64 gv32
@@ -997,8 +973,7 @@ block54:
     v473 = iadd_imm.i64 v55, 8
     v474 = load.i8 v473
     v475 = uextend.i32 v474
-    brz v475, block55
-    jump block151
+    brif v475, block151, block55
 
 block151:
     v476 = global_value.i64 gv33
@@ -1026,8 +1001,7 @@ block56:
     v492 = iadd_imm.i64 v57, 2
     v493 = load.i8 v492
     v494 = uextend.i32 v493
-    brz v494, block57
-    jump block150
+    brif v494, block150, block57
 
 block150:
     v495 = global_value.i64 gv34
@@ -1044,8 +1018,7 @@ block57:
     v503 = iadd_imm.i64 v58, 2
     v504 = load.i8 v503
     v505 = uextend.i32 v504
-    brz v505, block58
-    jump block149
+    brif v505, block149, block58
 
 block149:
     v506 = global_value.i64 gv35
@@ -1062,8 +1035,7 @@ block58:
     v516 = iadd_imm.i64 v59, 8
     v517 = load.i8 v516
     v518 = uextend.i32 v517
-    brz v518, block59
-    jump block148
+    brif v518, block148, block59
 
 block148:
     v519 = global_value.i64 gv36
@@ -1082,8 +1054,7 @@ block59:
     v529 = iadd_imm.i64 v60, 8
     v530 = load.i8 v529
     v531 = uextend.i32 v530
-    brz v531, block60
-    jump block147
+    brif v531, block147, block60
 
 block147:
     v532 = global_value.i64 gv37
@@ -1101,8 +1072,7 @@ block60:
     v541 = iadd_imm.i64 v61, 8
     v542 = load.i8 v541
     v543 = uextend.i32 v542
-    brz v543, block61
-    jump block146
+    brif v543, block146, block61
 
 block146:
     v544 = global_value.i64 gv38
@@ -1156,8 +1126,7 @@ block62(v552: i32, v1009: i64, v1013: i64, v1016: i64, v1019: i64, v1022: i16, v
     v554 = iconst.i32 0
     v555 = icmp eq v553, v554
     v557 = uextend.i32 v555
-    brz v557, block63
-    jump block145
+    brif v557, block145, block63
 
 block145:
     v558 = global_value.i64 gv39
@@ -1171,8 +1140,7 @@ block63:
     v564 = iconst.i32 0
     v565 = icmp eq v563, v564
     v567 = uextend.i32 v565
-    brz v567, block64
-    jump block144
+    brif v567, block144, block64
 
 block144:
     v568 = global_value.i64 gv40
@@ -1185,8 +1153,7 @@ block64:
         v1011 -> v571
     v572 = iconst.i8 1
     v573 = uextend.i32 v572
-    brz v573, block68(v561)
-    jump block65
+    brif v573, block65, block68(v561)
 
 block65:
     v575 = iconst.i32 10
@@ -1194,8 +1161,7 @@ block65:
     v578 = uextend.i32 v576
     v579 = icmp_imm eq v578, 0
     v581 = uextend.i32 v579
-    brz v581, block67
-    jump block66
+    brif v581, block66, block67
 
 block66:
     v582 = global_value.i64 gv41
@@ -1216,8 +1182,7 @@ block68(v584: i32):
     v592 = iadd_imm.i64 v64, 1
     v593 = load.i8 v592
     v594 = uextend.i32 v593
-    brz v594, block69
-    jump block143
+    brif v594, block143, block69
 
 block143:
     v595 = global_value.i64 gv43
@@ -1228,8 +1193,7 @@ block69:
     v598 = load.i64 v3+8
     v599 = icmp.i64 ult v596, v598
     v601 = uextend.i32 v599
-    brnz v601, block70
-    jump block142
+    brif v601, block70, block142
 
 block142:
     v602 = global_value.i64 gv44
@@ -1251,8 +1215,7 @@ block70:
     v617 = iadd_imm.i64 v65, 8
     v618 = load.i8 v617
     v619 = uextend.i32 v618
-    brz v619, block71
-    jump block141
+    brif v619, block141, block71
 
 block141:
     v620 = global_value.i64 gv45
@@ -1274,8 +1237,7 @@ block71:
     v631 = iadd_imm.i64 v66, 8
     v632 = load.i8 v631
     v633 = uextend.i32 v632
-    brz v633, block72
-    jump block140
+    brif v633, block140, block72
 
 block140:
     v634 = global_value.i64 gv46
@@ -1292,8 +1254,7 @@ block72:
     v643 = iadd_imm.i64 v67, 8
     v644 = load.i8 v643
     v645 = uextend.i32 v644
-    brz v645, block73
-    jump block139
+    brif v645, block139, block73
 
 block139:
     v646 = global_value.i64 gv47
@@ -1305,8 +1266,7 @@ block73:
         v692 -> v647
     v649 = icmp ult v647, v648
     v651 = uextend.i32 v649
-    brz v651, block80
-    jump block74
+    brif v651, block74, block80
 
 block74:
     v652 = load.i32 v63
@@ -1320,8 +1280,7 @@ block74:
     v661 = iadd_imm.i64 v68, 8
     v662 = load.i8 v661
     v663 = uextend.i32 v662
-    brz v663, block75
-    jump block138
+    brif v663, block138, block75
 
 block138:
     v664 = global_value.i64 gv48
@@ -1351,8 +1310,7 @@ block76:
     v685 = iadd_imm.i64 v74, 8
     v686 = load.i8 v685
     v687 = uextend.i32 v686
-    brz v687, block77
-    jump block137
+    brif v687, block137, block77
 
 block137:
     v688 = global_value.i64 gv49
@@ -1374,14 +1332,12 @@ block80:
     v697 = uextend.i64 v696
     v698 = icmp.i64 ugt v695, v697
     v700 = uextend.i32 v698
-    brz v700, block96
-    jump block81
+    brif v700, block81, block96
 
 block81:
     v701 = iconst.i8 1
     v702 = uextend.i32 v701
-    brz v702, block88
-    jump block82
+    brif v702, block82, block88
 
 block82:
     v703 = global_value.i64 gv50
@@ -1397,8 +1353,7 @@ block82:
     v712 = uextend.i32 v710
     v713 = icmp_imm eq v712, 0
     v715 = uextend.i32 v713
-    brz v715, block84
-    jump block83
+    brif v715, block83, block84
 
 block83:
     v716 = global_value.i64 gv51
@@ -1444,8 +1399,7 @@ block87:
 block88:
     v740 = iconst.i8 1
     v741 = uextend.i32 v740
-    brz v741, block95(v1030, v1031, v1041, v1046, v1054, v1059)
-    jump block89
+    brif v741, block89, block95(v1030, v1031, v1041, v1046, v1054, v1059)
 
 block89:
     v742 = global_value.i64 gv54
@@ -1461,8 +1415,7 @@ block89:
     v751 = uextend.i32 v749
     v752 = icmp_imm eq v751, 0
     v754 = uextend.i32 v752
-    brz v754, block91
-    jump block90
+    brif v754, block90, block91
 
 block90:
     v755 = global_value.i64 gv55
@@ -1520,8 +1473,7 @@ block96:
     v789 = iadd_imm.i64 v95, 2
     v790 = load.i8 v789
     v791 = uextend.i32 v790
-    brz v791, block97
-    jump block136
+    brif v791, block136, block97
 
 block136:
     v792 = global_value.i64 gv58
@@ -1533,8 +1485,7 @@ block97:
     v795 = iconst.i32 0
     v796 = icmp eq v794, v795
     v798 = uextend.i32 v796
-    brz v798, block98
-    jump block135
+    brif v798, block135, block98
 
 block135:
     v799 = global_value.i64 gv59
@@ -1575,8 +1526,7 @@ block99(v804: i64, v1035: i64, v1037: i64, v1039: i64, v1044: i64, v1052: i16, v
     v812 = iadd_imm.i64 v96, 8
     v813 = load.i8 v812
     v814 = uextend.i32 v813
-    brz v814, block100
-    jump block134
+    brif v814, block134, block100
 
 block134:
     v815 = global_value.i64 gv60
@@ -1597,8 +1547,7 @@ block100:
     v825 = iadd_imm.i64 v97, 8
     v826 = load.i8 v825
     v827 = uextend.i32 v826
-    brz v827, block101
-    jump block133
+    brif v827, block133, block101
 
 block133:
     v828 = global_value.i64 gv61
@@ -1621,8 +1570,7 @@ block101:
     v838 = iadd_imm.i64 v98, 8
     v839 = load.i8 v838
     v840 = uextend.i32 v839
-    brz v840, block102
-    jump block132
+    brif v840, block132, block102
 
 block132:
     v841 = global_value.i64 gv62
@@ -1643,8 +1591,7 @@ block102:
     v851 = iadd_imm.i64 v99, 8
     v852 = load.i8 v851
     v853 = uextend.i32 v852
-    brz v853, block103
-    jump block131
+    brif v853, block131, block103
 
 block131:
     v854 = global_value.i64 gv63
@@ -1663,8 +1610,7 @@ block103:
     v865 = iadd_imm.i64 v100, 8
     v866 = load.i8 v865
     v867 = uextend.i32 v866
-    brz v867, block104
-    jump block130
+    brif v867, block130, block104
 
 block130:
     v868 = global_value.i64 gv64
@@ -1682,8 +1628,7 @@ block104:
     v877 = iadd_imm.i64 v101, 8
     v878 = load.i8 v877
     v879 = uextend.i32 v878
-    brz v879, block105
-    jump block129
+    brif v879, block129, block105
 
 block129:
     v880 = global_value.i64 gv65
@@ -1699,8 +1644,7 @@ block105:
         v1048 -> v883
     v884 = iconst.i8 1
     v885 = uextend.i32 v884
-    brz v885, block109(v855)
-    jump block106
+    brif v885, block106, block109(v855)
 
 block106:
     v887 = iconst.i64 10
@@ -1708,8 +1652,7 @@ block106:
     v890 = uextend.i32 v888
     v891 = icmp_imm eq v890, 0
     v893 = uextend.i32 v891
-    brz v893, block108
-    jump block107
+    brif v893, block107, block108
 
 block107:
     v894 = global_value.i64 gv66
@@ -1730,8 +1673,7 @@ block109(v896: i64):
     v904 = iadd_imm.i64 v102, 1
     v905 = load.i8 v904
     v906 = uextend.i32 v905
-    brz v906, block110
-    jump block128
+    brif v906, block128, block110
 
 block128:
     v907 = global_value.i64 gv68
@@ -1742,8 +1684,7 @@ block110:
     v910 = load.i64 v3+8
     v911 = icmp.i64 ult v908, v910
     v913 = uextend.i32 v911
-    brnz v913, block111
-    jump block127
+    brif v913, block111, block127
 
 block127:
     v914 = global_value.i64 gv69
@@ -1765,8 +1706,7 @@ block111:
     v929 = iadd_imm.i64 v103, 8
     v930 = load.i8 v929
     v931 = uextend.i32 v930
-    brz v931, block112
-    jump block126
+    brif v931, block126, block112
 
 block126:
     v932 = global_value.i64 gv70
@@ -1778,8 +1718,7 @@ block112:
         v1047 -> v933
     v936 = icmp.i64 ult v934, v935
     v938 = uextend.i32 v936
-    brz v938, block119
-    jump block113
+    brif v938, block113, block119
 
 block113:
     v940 = iconst.i64 1
@@ -1792,8 +1731,7 @@ block113:
     v947 = iadd_imm.i64 v104, 8
     v948 = load.i8 v947
     v949 = uextend.i32 v948
-    brz v949, block114
-    jump block125
+    brif v949, block125, block114
 
 block125:
     v950 = global_value.i64 gv71
@@ -1823,8 +1761,7 @@ block115:
     v971 = iadd_imm.i64 v110, 8
     v972 = load.i8 v971
     v973 = uextend.i32 v972
-    brz v973, block116
-    jump block123
+    brif v973, block123, block116
 
 block123:
     v974 = global_value.i64 gv72
@@ -1841,8 +1778,7 @@ block116:
     v983 = iadd_imm.i64 v111, 8
     v984 = load.i8 v983
     v985 = uextend.i32 v984
-    brz v985, block117
-    jump block122
+    brif v985, block122, block117
 
 block122:
     v986 = global_value.i64 gv73
@@ -1867,8 +1803,7 @@ block119:
     v1000 = iadd_imm.i64 v112, 2
     v1001 = load.i8 v1000
     v1002 = uextend.i32 v1001
-    brz v1002, block120
-    jump block121
+    brif v1002, block121, block120
 
 block121:
     v1003 = global_value.i64 gv74

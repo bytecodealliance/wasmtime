@@ -81,6 +81,30 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn u64_shl(&mut self, x: u64, y: u64) -> u64 {
+            x << y
+        }
+
+        #[inline]
+        fn imm64_ushr(&mut self, ty: Type, x: Imm64, y: Imm64) -> Imm64 {
+            let shift = u32::checked_sub(64, ty.bits()).unwrap_or(0);
+            let mask = u64::MAX >> shift;
+            let x = (x.bits() as u64) & mask;
+            let y = (y.bits() as u64) & mask;
+            Imm64::new((x >> y) as i64)
+        }
+
+        #[inline]
+        fn imm64_sshr(&mut self, ty: Type, x: Imm64, y: Imm64) -> Imm64 {
+            let shift = u32::checked_sub(64, ty.bits()).unwrap_or(0);
+            let mask = u64::MAX >> shift;
+            let x = (x.bits() as u64) & mask;
+            let y = (y.bits() as u64) & mask;
+            let sext = |v| ((v << shift) as i64) >> shift;
+            Imm64::new(sext(x) >> sext(y))
+        }
+
+        #[inline]
         fn u64_not(&mut self, x: u64) -> u64 {
             !x
         }
@@ -341,6 +365,17 @@ macro_rules! isle_common_prelude_methods {
         #[inline]
         fn u64_from_imm64(&mut self, imm: Imm64) -> u64 {
             imm.bits() as u64
+        }
+
+        #[inline]
+        fn imm64_power_of_two(&mut self, x: Imm64) -> Option<u64> {
+            let x = i64::from(x);
+            let x = u64::try_from(x).ok()?;
+            if x.is_power_of_two() {
+                Some(x.trailing_zeros().into())
+            } else {
+                None
+            }
         }
 
         #[inline]
@@ -616,6 +651,18 @@ macro_rules! isle_common_prelude_methods {
             cc.inverse()
         }
 
+        fn floatcc_unordered(&mut self, cc: &FloatCC) -> bool {
+            match *cc {
+                FloatCC::Unordered
+                | FloatCC::UnorderedOrEqual
+                | FloatCC::UnorderedOrLessThan
+                | FloatCC::UnorderedOrLessThanOrEqual
+                | FloatCC::UnorderedOrGreaterThan
+                | FloatCC::UnorderedOrGreaterThanOrEqual => true,
+                _ => false,
+            }
+        }
+
         #[inline]
         fn unpack_value_array_2(&mut self, arr: &ValueArray2) -> (Value, Value) {
             let [a, b] = *arr;
@@ -636,6 +683,17 @@ macro_rules! isle_common_prelude_methods {
         #[inline]
         fn pack_value_array_3(&mut self, a: Value, b: Value, c: Value) -> ValueArray3 {
             [a, b, c]
+        }
+
+        #[inline]
+        fn unpack_block_array_2(&mut self, arr: &BlockArray2) -> (BlockCall, BlockCall) {
+            let [a, b] = *arr;
+            (a, b)
+        }
+
+        #[inline]
+        fn pack_block_array_2(&mut self, a: BlockCall, b: BlockCall) -> BlockArray2 {
+            [a, b]
         }
     };
 }

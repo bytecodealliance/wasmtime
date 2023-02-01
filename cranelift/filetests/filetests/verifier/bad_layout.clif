@@ -8,7 +8,7 @@ function %test_1(i32) {
 function %test_2(i32) {
     block0(v0: i32):
         jump block2       ; error: a terminator instruction was encountered before the end of block0
-        brz v0, block3
+        brif v0, block2, block3
     block2:
         jump block3
     block3:

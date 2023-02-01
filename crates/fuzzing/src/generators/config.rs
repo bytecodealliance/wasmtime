@@ -311,6 +311,10 @@ impl<'a> Arbitrary<'a> for Config {
             module_config: u.arbitrary()?,
         };
 
+        // This is pulled from `u` by default via `wasm-smith`, but Wasmtime
+        // doesn't implement this yet, so forcibly always disable it.
+        config.module_config.config.tail_call_enabled = false;
+
         config
             .wasmtime
             .codegen

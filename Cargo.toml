@@ -150,7 +150,6 @@ cranelift-reader = { path = "cranelift/reader", version = "0.93.0" }
 cranelift-filetests = { path = "cranelift/filetests" }
 cranelift-object = { path = "cranelift/object", version = "0.93.0" }
 cranelift-jit = { path = "cranelift/jit", version = "0.93.0" }
-cranelift-preopt = { path = "cranelift/preopt", version = "0.93.0" }
 cranelift-fuzzgen = { path = "cranelift/fuzzgen" }
 cranelift-bforest = { path = "cranelift/bforest", version = "0.93.0" }
 cranelift = { path = "cranelift/umbrella", version = "0.93.0" }
@@ -161,14 +160,14 @@ winch-test-macros = { path = "winch/test-macros" }
 
 target-lexicon = { version = "0.12.3", default-features = false, features = ["std"] }
 anyhow = "1.0.22"
-wasmparser = "0.97.0"
-wat = "1.0.53"
-wast = "51.0.0"
-wasmprinter = "0.2.46"
-wasm-encoder = "0.21.0"
-wasm-smith = "0.11.11"
-wasm-mutate = "0.2.14"
-wit-parser = "0.4"
+wasmparser = "0.99.0"
+wat = "1.0.56"
+wast = "52.0.2"
+wasmprinter = "0.2.49"
+wasm-encoder = "0.22.0"
+wasm-smith = "0.12.0"
+wasm-mutate = "0.2.16"
+wit-parser = "0.4.1"
 windows-sys = "0.42.0"
 env_logger = "0.9"
 rustix = "0.36.7"

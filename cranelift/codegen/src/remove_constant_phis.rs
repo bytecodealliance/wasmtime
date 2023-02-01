@@ -4,7 +4,6 @@ use crate::dominator_tree::DominatorTree;
 use crate::fx::FxHashMap;
 use crate::fx::FxHashSet;
 use crate::ir;
-use crate::ir::instructions::BranchInfo;
 use crate::ir::Function;
 use crate::ir::{Block, BlockCall, Inst, Value};
 use crate::timing;
@@ -17,10 +16,9 @@ use smallvec::SmallVec;
 // "formal parameters" to mean the `Value`s listed in the block head, and
 // "actual parameters" to mean the `Value`s passed in a branch or a jump:
 //
-// block4(v16: i32, v18: i32):    <-- formal parameters
+// block4(v16: i32, v18: i32):            <-- formal parameters
 //   ...
-//   brnz v27, block7(v22, v24)   <-- actual parameters
-//   jump block6
+//   brif v27, block7(v22, v24), block6   <-- actual parameters
 
 // This transformation pass (conceptually) partitions all values in the
 // function into two groups:
@@ -112,6 +110,9 @@ impl AbstractValue {
 struct OutEdge<'a> {
     /// An instruction that transfers control.
     inst: Inst,
+    /// The index into branch_destinations for this instruction that corresponds
+    /// to this edge.
+    branch_index: u32,
     /// The block that control is transferred to.
     block: Block,
     /// The arguments to that block.
@@ -126,7 +127,13 @@ impl<'a> OutEdge<'a> {
     /// Returns `None` if this is an edge without any block arguments, which
     /// means we can ignore it for this analysis's purposes.
     #[inline]
-    fn new(bump: &'a Bump, dfg: &ir::DataFlowGraph, inst: Inst, block: BlockCall) -> Option<Self> {
+    fn new(
+        bump: &'a Bump,
+        dfg: &ir::DataFlowGraph,
+        inst: Inst,
+        branch_index: usize,
+        block: BlockCall,
+    ) -> Option<Self> {
         let inst_var_args = block.args_slice(&dfg.value_lists);
 
         // Skip edges without params.
@@ -136,6 +143,7 @@ impl<'a> OutEdge<'a> {
 
         Some(OutEdge {
             inst,
+            branch_index: branch_index as u32,
             block: block.block(&dfg.value_lists),
             args: bump.alloc_slice_fill_iter(
                 inst_var_args
@@ -231,12 +239,8 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
         let mut summary = BlockSummary::new(&bump, formals);
 
         for inst in func.layout.block_insts(b) {
-            let idetails = &func.dfg.insts[inst];
-            // Note that multi-dest transfers (i.e., branch tables) don't
-            // carry parameters in our IR, so we only have to care about
-            // `SingleDest` here.
-            if let BranchInfo::SingleDest(dest) = idetails.analyze_branch() {
-                if let Some(edge) = OutEdge::new(&bump, &func.dfg, inst, dest) {
+            for (ix, dest) in func.dfg.insts[inst].branch_destination().iter().enumerate() {
+                if let Some(edge) = OutEdge::new(&bump, &func.dfg, inst, ix, *dest) {
                     summary.dests.push(edge);
                 }
             }
@@ -378,7 +382,9 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
             }
 
             let dfg = &mut func.dfg;
-            let block = dfg.insts[edge.inst].branch_destination_mut().unwrap();
+            let block =
+                &mut dfg.insts[edge.inst].branch_destination_mut()[edge.branch_index as usize];
+
             old_actuals.extend(block.args_slice(&dfg.value_lists));
 
             // Check that the numbers of arguments make sense.

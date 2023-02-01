@@ -250,7 +250,7 @@ impl BlockLoweringOrder {
             let block_succ_end = block_succs.len();
             block_succ_range[block] = (block_succ_start, block_succ_end);
 
-            for inst in f.layout.block_likely_branches(block) {
+            if let Some(inst) = f.layout.last_inst(block) {
                 if f.dfg.insts[inst].opcode() == Opcode::Return {
                     // Implicit output edge for any return.
                     block_out_count[block] += 1;
@@ -276,7 +276,7 @@ impl BlockLoweringOrder {
         // could not be, in cases of br_table with no table and just a
         // default label, for example.)
         for block in f.layout.blocks() {
-            for inst in f.layout.block_likely_branches(block) {
+            if let Some(inst) = f.layout.last_inst(block) {
                 // If the block has a branch with any "fixed args"
                 // (not blockparam args) ...
                 if f.dfg.insts[inst].opcode().is_branch() && f.dfg.inst_fixed_args(inst).len() > 0 {
@@ -561,8 +561,8 @@ mod test {
             } else if succs.len() == 1 {
                 pos.ins().jump(blocks[succs[0]], &[]);
             } else if succs.len() == 2 {
-                pos.ins().brnz(arg0, blocks[succs[0]], &[]);
-                pos.ins().jump(blocks[succs[1]], &[]);
+                pos.ins()
+                    .brif(arg0, blocks[succs[0]], &[], blocks[succs[1]], &[]);
             } else {
                 panic!("Too many successors");
             }

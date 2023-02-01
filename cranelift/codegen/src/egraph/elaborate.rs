@@ -465,11 +465,7 @@ impl<'a> Elaborator<'a> {
                             ));
                             // Determine the instruction at which we
                             // insert in `data.hoist_block`.
-                            let before = self
-                                .func
-                                .layout
-                                .canonical_branch_inst(&self.func.dfg, data.hoist_block)
-                                .unwrap();
+                            let before = self.func.layout.last_inst(data.hoist_block).unwrap();
                             (data.scope_depth as usize, before, data.hoist_block)
                         };
 

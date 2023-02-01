@@ -159,8 +159,7 @@ mod tests {
 
         let mut pos = FuncCursor::new(&mut func);
         pos.insert_block(block0);
-        pos.ins().brnz(v0, block2, &[]);
-        pos.ins().jump(block1, &[]);
+        pos.ins().brif(v0, block2, &[], block1, &[]);
 
         pos.insert_block(block1);
         pos.ins().return_(&[]);

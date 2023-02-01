@@ -168,3 +168,49 @@ fn serialize_not_overly_massive() -> Result<()> {
 
     Ok(())
 }
+
+// This test specifically disables SSE4.1 in Cranelift which force wasm
+// instructions like `f32.ceil` to go through libcalls instead of using native
+// instructions. Note that SIMD is also disabled here because SIMD otherwise
+// requires SSE4.1 to be enabled.
+//
+// This test then also tests that loading modules through various means, e.g.
+// through precompiled artifacts, all works.
+#[test]
+#[cfg_attr(not(target_arch = "x86_64"), ignore)]
+fn missing_sse_and_floats_still_works() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_simd(false);
+    unsafe {
+        config.cranelift_flag_set("has_sse41", "false");
+    }
+    let engine = Engine::new(&config)?;
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (func (export "f32.ceil") (param f32) (result f32)
+                    local.get 0
+                    f32.ceil)
+            )
+        "#,
+    )?;
+    let bytes = module.serialize()?;
+    let module2 = unsafe { Module::deserialize(&engine, &bytes)? };
+    let tmpdir = tempfile::TempDir::new()?;
+    let path = tmpdir.path().join("module.cwasm");
+    std::fs::write(&path, &bytes)?;
+    let module3 = unsafe { Module::deserialize_file(&engine, &path)? };
+
+    for module in [module, module2, module3] {
+        let mut store = Store::new(&engine, ());
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let ceil = instance.get_typed_func::<f32, f32>(&mut store, "f32.ceil")?;
+
+        for f in [1.0, 2.3, -1.3] {
+            assert_eq!(ceil.call(&mut store, f)?, f.ceil());
+        }
+    }
+
+    Ok(())
+}

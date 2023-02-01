@@ -29,7 +29,6 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "cranelift-reader",
     "cranelift-serde",
     "cranelift-module",
-    "cranelift-preopt",
     "cranelift-frontend",
     "cranelift-wasm",
     "cranelift-native",
@@ -99,7 +98,6 @@ const PUBLIC_CRATES: &[&str] = &[
     "cranelift-reader",
     "cranelift-serde",
     "cranelift-module",
-    "cranelift-preopt",
     "cranelift-frontend",
     "cranelift-wasm",
     "cranelift-native",
@@ -111,6 +109,8 @@ const PUBLIC_CRATES: &[&str] = &[
     // patch releases as well
     "wasmtime-types",
 ];
+
+const C_HEADER_PATH: &str = "./crates/c-api/include/wasmtime.h";
 
 struct Workspace {
     version: String,
@@ -146,6 +146,8 @@ fn main() {
             for krate in crates.iter() {
                 bump_version(&krate, &crates, name == "bump-patch");
             }
+            // update C API version in wasmtime.h
+            update_capi_version();
             // update the lock file
             assert!(Command::new("cargo")
                 .arg("fetch")
@@ -337,6 +339,34 @@ fn bump_version(krate: &Crate, crates: &[Crate], patch: bool) {
     fs::write(&krate.manifest, new_manifest).unwrap();
 }
 
+fn update_capi_version() {
+    let version = read_crate(None, "./Cargo.toml".as_ref()).version;
+
+    let mut iter = version.split('.').map(|s| s.parse::<u32>().unwrap());
+    let major = iter.next().expect("major version");
+    let minor = iter.next().expect("minor version");
+    let patch = iter.next().expect("patch version");
+
+    let mut new_header = String::new();
+    let contents = fs::read_to_string(C_HEADER_PATH).unwrap();
+    for line in contents.lines() {
+        if line.starts_with("#define WASMTIME_VERSION \"") {
+            new_header.push_str(&format!("#define WASMTIME_VERSION \"{version}\""));
+        } else if line.starts_with("#define WASMTIME_VERSION_MAJOR") {
+            new_header.push_str(&format!("#define WASMTIME_VERSION_MAJOR {major}"));
+        } else if line.starts_with("#define WASMTIME_VERSION_MINOR") {
+            new_header.push_str(&format!("#define WASMTIME_VERSION_MINOR {minor}"));
+        } else if line.starts_with("#define WASMTIME_VERSION_PATCH") {
+            new_header.push_str(&format!("#define WASMTIME_VERSION_PATCH {patch}"));
+        } else {
+            new_header.push_str(line);
+        }
+        new_header.push_str("\n");
+    }
+
+    fs::write(&C_HEADER_PATH, new_header).unwrap();
+}
+
 /// Performs a major version bump increment on the semver version `version`.
 ///
 /// This function will perform a semver-major-version bump on the `version`
@@ -441,6 +471,8 @@ fn publish(krate: &Crate) -> bool {
 // directory registry generated from `cargo vendor` because the versions
 // referenced from `Cargo.toml` may not exist on crates.io.
 fn verify(crates: &[Crate]) {
+    verify_capi();
+
     drop(fs::remove_dir_all(".cargo"));
     drop(fs::remove_dir_all("vendor"));
     let vendor = Command::new("cargo")
@@ -501,5 +533,35 @@ fn verify(crates: &[Crate]) {
             "{\"files\":{}}",
         )
         .unwrap();
+    }
+
+    fn verify_capi() {
+        let version = read_crate(None, "./Cargo.toml".as_ref()).version;
+
+        let mut iter = version.split('.').map(|s| s.parse::<u32>().unwrap());
+        let major = iter.next().expect("major version");
+        let minor = iter.next().expect("minor version");
+        let patch = iter.next().expect("patch version");
+
+        let mut count = 0;
+        let contents = fs::read_to_string(C_HEADER_PATH).unwrap();
+        for line in contents.lines() {
+            if line.starts_with(&format!("#define WASMTIME_VERSION \"{version}\"")) {
+                count += 1;
+            } else if line.starts_with(&format!("#define WASMTIME_VERSION_MAJOR {major}")) {
+                count += 1;
+            } else if line.starts_with(&format!("#define WASMTIME_VERSION_MINOR {minor}")) {
+                count += 1;
+            } else if line.starts_with(&format!("#define WASMTIME_VERSION_PATCH {patch}")) {
+                count += 1;
+            }
+        }
+
+        assert!(
+            count == 4,
+            "invalid version macros in {}, should match \"{}\"",
+            C_HEADER_PATH,
+            version
+        );
     }
 }

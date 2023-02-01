@@ -11,8 +11,7 @@ function %f0(i64 vmctx, i32) -> i32 {
 block0(v0: i64, v1: i32):
     v2 = global_value.i64 gv1
     v3 = load.i32 v2+8
-    brz v2, block1
-    jump block2
+    brif v2, block2, block1
 
 block1:
     v4 = load.i32 v2+8

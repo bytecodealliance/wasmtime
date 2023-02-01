@@ -19,8 +19,7 @@ block0(v0: i8, v1: i32, v2: i32):
 
 function %f1(i8) -> i32 {
 block0(v0: i8):
-    brnz v0, block1
-    jump block2
+    brif v0, block1, block2
 block1:
     v1 = iconst.i32 1
     return v1
@@ -47,8 +46,7 @@ block2:
 
 function %f2(i8) -> i32 {
 block0(v0: i8):
-    brz v0, block1
-    jump block2
+    brif v0, block2, block1
 block1:
     v1 = iconst.i32 1
     return v1
@@ -61,14 +59,14 @@ block2:
 ;   movq    %rsp, %rbp
 ; block0:
 ;   testb   %dil, %dil
-;   jz      label1; j label2
+;   jnz     label1; j label2
 ; block1:
-;   movl    $1, %eax
+;   movl    $2, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
 ; block2:
-;   movl    $2, %eax
+;   movl    $1, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -78,8 +76,7 @@ block0(v0: i64):
   v1 = iconst.i32 1
   v2 = load.i32 v0
   v3 = icmp eq v1, v2
-  brnz v3, block1
-  jump block2
+  brif v3, block1, block2
 block1:
   v4 = iconst.i32 1
   return v4
@@ -110,8 +107,7 @@ block0(v0: i64):
   v1 = iconst.i32 1
   v2 = load.i32 v0
   v3 = icmp eq v2, v1
-  brnz v3, block1
-  jump block2
+  brif v3, block1, block2
 block1:
   v4 = iconst.i32 1
   return v4

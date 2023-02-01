@@ -42,16 +42,15 @@
 ;;   unwind StackAlloc { size: 0 }
 ;; block0:
 ;;   clgfi %r2, 268431359
-;;   jgnh label1 ; jg label3
-;; block1:
-;;   lgr %r5, %r2
-;;   ag %r5, 0(%r4)
-;;   lghi %r2, 4096
-;;   stc %r3, 0(%r2,%r5)
-;;   jg label2
+;;   jgh label1 ; jg label2
 ;; block2:
-;;   br %r14
+;;   ag %r2, 0(%r4)
+;;   lghi %r4, 4096
+;;   stc %r3, 0(%r4,%r2)
+;;   jg label3
 ;; block3:
+;;   br %r14
+;; block1:
 ;;   trap
 ;;
 ;; function u0:1:
@@ -59,14 +58,13 @@
 ;;   unwind StackAlloc { size: 0 }
 ;; block0:
 ;;   clgfi %r2, 268431359
-;;   jgnh label1 ; jg label3
-;; block1:
-;;   lgr %r5, %r2
-;;   ag %r5, 0(%r3)
-;;   lghi %r4, 4096
-;;   llc %r2, 0(%r4,%r5)
-;;   jg label2
+;;   jgh label1 ; jg label2
 ;; block2:
-;;   br %r14
+;;   ag %r2, 0(%r3)
+;;   lghi %r5, 4096
+;;   llc %r2, 0(%r5,%r2)
+;;   jg label3
 ;; block3:
+;;   br %r14
+;; block1:
 ;;   trap

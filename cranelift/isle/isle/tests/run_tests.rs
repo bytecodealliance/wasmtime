@@ -15,8 +15,12 @@ pub fn run_pass(filename: &str) {
 }
 
 pub fn run_fail(filename: &str) {
-    if build(filename).is_ok() {
-        panic!("test {} passed unexpectedly", filename);
+    match build(filename) {
+        Ok(_) => panic!("test {} passed unexpectedly", filename),
+        Err(err) => {
+            // Log the actual errors for use with `cargo test -- --nocapture`
+            println!("failed, as expected:\n{:?}", err);
+        }
     }
 }
 

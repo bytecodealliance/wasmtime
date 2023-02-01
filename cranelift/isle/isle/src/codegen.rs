@@ -1,12 +1,9 @@
 //! Generate Rust code from a series of Sequences.
 
-use crate::ir::{ExprInst, InstId, PatternInst, Value};
-use crate::log;
-use crate::sema::{ExternalSig, ReturnKind, TermEnv, TermId, Type, TypeEnv, TypeId, Variant};
-use crate::trie::{TrieEdge, TrieNode, TrieSymbol};
-use crate::{StableMap, StableSet};
-use std::borrow::Cow;
-use std::collections::BTreeMap;
+use crate::sema::{ExternalSig, ReturnKind, Sym, Term, TermEnv, TermId, Type, TypeEnv, TypeId};
+use crate::serialize::{Block, ControlFlow, EvalStep, MatchArm};
+use crate::trie_again::{Binding, BindingId, Constraint, RuleSet};
+use crate::StableSet;
 use std::fmt::Write;
 
 /// Options for code generation.
@@ -21,35 +18,78 @@ pub struct CodegenOptions {
 pub fn codegen(
     typeenv: &TypeEnv,
     termenv: &TermEnv,
-    tries: &BTreeMap<TermId, TrieNode>,
+    terms: &[(TermId, RuleSet)],
     options: &CodegenOptions,
 ) -> String {
-    Codegen::compile(typeenv, termenv, tries).generate_rust(options)
+    Codegen::compile(typeenv, termenv, terms).generate_rust(options)
 }
 
 #[derive(Clone, Debug)]
 struct Codegen<'a> {
     typeenv: &'a TypeEnv,
     termenv: &'a TermEnv,
-    functions_by_term: &'a BTreeMap<TermId, TrieNode>,
+    terms: &'a [(TermId, RuleSet)],
 }
 
-#[derive(Clone, Debug, Default)]
-struct BodyContext {
-    /// For each value: (is_ref, ty).
-    values: StableMap<Value, (bool, TypeId)>,
+struct BodyContext<'a, W> {
+    out: &'a mut W,
+    ruleset: &'a RuleSet,
+    indent: String,
+    is_ref: StableSet<BindingId>,
+    is_bound: StableSet<BindingId>,
+}
+
+impl<'a, W: Write> BodyContext<'a, W> {
+    fn new(out: &'a mut W, ruleset: &'a RuleSet) -> Self {
+        Self {
+            out,
+            ruleset,
+            indent: Default::default(),
+            is_ref: Default::default(),
+            is_bound: Default::default(),
+        }
+    }
+
+    fn enter_scope(&mut self) -> StableSet<BindingId> {
+        let new = self.is_bound.clone();
+        std::mem::replace(&mut self.is_bound, new)
+    }
+
+    fn begin_block(&mut self) -> std::fmt::Result {
+        self.indent.push_str("    ");
+        writeln!(self.out, " {{")
+    }
+
+    fn end_block(&mut self, scope: StableSet<BindingId>) -> std::fmt::Result {
+        self.is_bound = scope;
+        self.end_block_without_newline()?;
+        writeln!(self.out)
+    }
+
+    fn end_block_without_newline(&mut self) -> std::fmt::Result {
+        self.indent.truncate(self.indent.len() - 4);
+        write!(self.out, "{}}}", &self.indent)
+    }
+
+    fn set_ref(&mut self, binding: BindingId, is_ref: bool) {
+        if is_ref {
+            self.is_ref.insert(binding);
+        } else {
+            debug_assert!(!self.is_ref.contains(&binding));
+        }
+    }
 }
 
 impl<'a> Codegen<'a> {
     fn compile(
         typeenv: &'a TypeEnv,
         termenv: &'a TermEnv,
-        tries: &'a BTreeMap<TermId, TrieNode>,
+        terms: &'a [(TermId, RuleSet)],
     ) -> Codegen<'a> {
         Codegen {
             typeenv,
             termenv,
-            functions_by_term: tries,
+            terms,
         }
     }
 
@@ -59,7 +99,7 @@ impl<'a> Codegen<'a> {
         self.generate_header(&mut code, options);
         self.generate_ctx_trait(&mut code);
         self.generate_internal_types(&mut code);
-        self.generate_internal_term_constructors(&mut code);
+        self.generate_internal_term_constructors(&mut code).unwrap();
 
         code
     }
@@ -270,777 +310,454 @@ impl<'a> Codegen<'a> {
         }
     }
 
-    fn value_name(&self, value: &Value) -> String {
-        match value {
-            &Value::Pattern { inst, output } => format!("pattern{}_{}", inst.index(), output),
-            &Value::Expr { inst, output } => format!("expr{}_{}", inst.index(), output),
-        }
-    }
+    fn generate_internal_term_constructors(&self, code: &mut String) -> std::fmt::Result {
+        for &(termid, ref ruleset) in self.terms.iter() {
+            let root = crate::serialize::serialize(ruleset);
+            let mut ctx = BodyContext::new(code, ruleset);
 
-    fn ty_prim(&self, ty: TypeId) -> bool {
-        self.typeenv.types[ty.index()].is_prim()
-    }
-
-    fn value_binder(&self, value: &Value, is_ref: bool, ty: TypeId) -> String {
-        let prim = self.ty_prim(ty);
-        if prim || !is_ref {
-            format!("{}", self.value_name(value))
-        } else {
-            format!("ref {}", self.value_name(value))
-        }
-    }
-
-    fn value_by_ref(&self, value: &Value, ctx: &BodyContext) -> String {
-        let raw_name = self.value_name(value);
-        let &(is_ref, ty) = ctx.values.get(value).unwrap();
-        let prim = self.ty_prim(ty);
-        if is_ref || prim {
-            raw_name
-        } else {
-            format!("&{}", raw_name)
-        }
-    }
-
-    fn value_by_val(&self, value: &Value, ctx: &BodyContext) -> String {
-        let raw_name = self.value_name(value);
-        let &(is_ref, _) = ctx.values.get(value).unwrap();
-        if is_ref {
-            format!("{}.clone()", raw_name)
-        } else {
-            raw_name
-        }
-    }
-
-    fn define_val(&self, value: &Value, ctx: &mut BodyContext, is_ref: bool, ty: TypeId) {
-        let is_ref = !self.ty_prim(ty) && is_ref;
-        ctx.values.insert(value.clone(), (is_ref, ty));
-    }
-
-    fn const_int(&self, val: i128, ty: TypeId) -> String {
-        let is_bool = match &self.typeenv.types[ty.index()] {
-            &Type::Primitive(_, name, _) => &self.typeenv.syms[name.index()] == "bool",
-            _ => unreachable!(),
-        };
-        if is_bool {
-            format!("{}", val != 0)
-        } else {
-            let ty_name = self.type_name(ty, /* by_ref = */ false);
-            if ty_name == "i128" {
-                format!("{}i128", val)
-            } else {
-                format!("{}i128 as {}", val, ty_name)
-            }
-        }
-    }
-
-    fn generate_internal_term_constructors(&self, code: &mut String) {
-        for (&termid, trie) in self.functions_by_term {
             let termdata = &self.termenv.terms[termid.index()];
-
-            // Skip terms that are enum variants or that have external
-            // constructors/extractors.
-            if !termdata.has_constructor() || termdata.has_external_constructor() {
-                continue;
-            }
+            let term_name = &self.typeenv.syms[termdata.name.index()];
+            writeln!(ctx.out)?;
+            writeln!(
+                ctx.out,
+                "{}// Generated as internal constructor for term {}.",
+                &ctx.indent, term_name,
+            )?;
 
             let sig = termdata.constructor_sig(self.typeenv).unwrap();
+            writeln!(
+                ctx.out,
+                "{}pub fn {}<C: Context>(",
+                &ctx.indent, sig.func_name
+            )?;
 
-            let args = sig
-                .param_tys
-                .iter()
-                .enumerate()
-                .map(|(i, &ty)| format!("arg{}: {}", i, self.type_name(ty, true)))
-                .collect::<Vec<_>>()
-                .join(", ");
-            assert_eq!(sig.ret_tys.len(), 1);
+            writeln!(ctx.out, "{}    ctx: &mut C,", &ctx.indent)?;
+            for (i, &ty) in sig.param_tys.iter().enumerate() {
+                let (is_ref, sym) = self.ty(ty);
+                write!(ctx.out, "{}    arg{}: ", &ctx.indent, i)?;
+                write!(
+                    ctx.out,
+                    "{}{}",
+                    if is_ref { "&" } else { "" },
+                    &self.typeenv.syms[sym.index()]
+                )?;
+                if let Some(binding) = ctx.ruleset.find_binding(&Binding::Argument {
+                    index: i.try_into().unwrap(),
+                }) {
+                    ctx.set_ref(binding, is_ref);
+                }
+                writeln!(ctx.out, ",")?;
+            }
 
-            let ret = self.type_name(sig.ret_tys[0], false);
-            let ret = match sig.ret_kind {
-                ReturnKind::Iterator => format!("impl ContextIter<Context = C, Output = {}>", ret),
-                ReturnKind::Option => format!("Option<{}>", ret),
-                ReturnKind::Plain => ret,
+            write!(ctx.out, "{}) -> ", &ctx.indent)?;
+            let (_, ret) = self.ty(sig.ret_tys[0]);
+            let ret = &self.typeenv.syms[ret.index()];
+            match sig.ret_kind {
+                ReturnKind::Iterator => {
+                    write!(ctx.out, "impl ContextIter<Context = C, Output = {}>", ret)?
+                }
+                ReturnKind::Option => write!(ctx.out, "Option<{}>", ret)?,
+                ReturnKind::Plain => write!(ctx.out, "{}", ret)?,
             };
 
-            let term_name = &self.typeenv.syms[termdata.name.index()];
-            writeln!(
-                code,
-                "\n// Generated as internal constructor for term {}.",
-                term_name,
-            )
-            .unwrap();
-            writeln!(
-                code,
-                "pub fn {}<C: Context>(ctx: &mut C, {}) -> {} {{",
-                sig.func_name, args, ret,
-            )
-            .unwrap();
+            let scope = ctx.enter_scope();
+            ctx.begin_block()?;
 
             if sig.ret_kind == ReturnKind::Iterator {
-                writeln!(code, "let mut returns = ConstructorVec::new();").unwrap();
+                writeln!(
+                    ctx.out,
+                    "{}let mut returns = ConstructorVec::new();",
+                    &ctx.indent
+                )?;
             }
 
-            let mut body_ctx: BodyContext = Default::default();
-            let returned = self.generate_body(
-                code,
-                /* depth = */ 0,
-                trie,
-                "    ",
-                &mut body_ctx,
-                sig.ret_kind,
-            );
-            if !returned {
-                let ret_expr = match sig.ret_kind {
-                    ReturnKind::Plain => Cow::from(format!(
-                        "unreachable!(\"no rule matched for term {{}} at {{}}; should it be partial?\", {:?}, {:?})",
-                        term_name,
-                        termdata
-                            .decl_pos
-                            .pretty_print_line(&self.typeenv.filenames[..])
-                    )),
-                    ReturnKind::Option => Cow::from("None"),
-                    ReturnKind::Iterator => {
-                        Cow::from("ContextIterWrapper::from(returns.into_iter())")
+            self.emit_block(&mut ctx, &root, sig.ret_kind)?;
+
+            match (sig.ret_kind, root.steps.last()) {
+                    (ReturnKind::Iterator, _) => {
+                        writeln!(
+                            ctx.out,
+                            "{}return ContextIterWrapper::from(returns.into_iter());",
+                            &ctx.indent
+                        )?;
                     }
-                };
-                write!(code, "    return {};", ret_expr).unwrap();
-            }
+                    (_, Some(EvalStep { check: ControlFlow::Return { .. }, .. })) => {
+                        // If there's an outermost fallback, no need for another `return` statement.
+                    }
+                    (ReturnKind::Option, _) => {
+                        writeln!(ctx.out, "{}None", &ctx.indent)?
+                    }
+                    (ReturnKind::Plain, _) => {
+                        writeln!(ctx.out,
+                                "unreachable!(\"no rule matched for term {{}} at {{}}; should it be partial?\", {:?}, {:?})",
+                                term_name,
+                                termdata
+                                    .decl_pos
+                                    .pretty_print_line(&self.typeenv.filenames[..])
+                        )?
+                    }
+                }
 
-            writeln!(code, "}}").unwrap();
+            ctx.end_block(scope)?;
+        }
+        Ok(())
+    }
+
+    fn ty(&self, typeid: TypeId) -> (bool, Sym) {
+        match &self.typeenv.types[typeid.index()] {
+            &Type::Primitive(_, sym, _) => (false, sym),
+            &Type::Enum { name, .. } => (true, name),
         }
     }
 
-    fn generate_expr_inst(
+    fn emit_block<W: Write>(
         &self,
-        code: &mut String,
-        id: InstId,
-        inst: &ExprInst,
-        indent: &str,
-        ctx: &mut BodyContext,
-        returns: &mut Vec<(usize, String)>,
-    ) -> bool {
-        log!("generate_expr_inst: {:?}", inst);
-        let mut new_scope = false;
-        match inst {
-            &ExprInst::ConstInt { ty, val } => {
-                let value = Value::Expr {
-                    inst: id,
-                    output: 0,
-                };
-                self.define_val(&value, ctx, /* is_ref = */ false, ty);
-                let name = self.value_name(&value);
-                let ty_name = self.type_name(ty, /* by_ref = */ false);
-                writeln!(
-                    code,
-                    "{}let {}: {} = {};",
-                    indent,
-                    name,
-                    ty_name,
-                    self.const_int(val, ty)
-                )
-                .unwrap();
+        ctx: &mut BodyContext<W>,
+        block: &Block,
+        ret_kind: ReturnKind,
+    ) -> std::fmt::Result {
+        if !matches!(ret_kind, ReturnKind::Iterator) {
+            // Loops are only allowed if we're returning an iterator.
+            assert!(!block
+                .steps
+                .iter()
+                .any(|c| matches!(c.check, ControlFlow::Loop { .. })));
+
+            // Unless we're returning an iterator, a case which returns a result must be the last
+            // case in a block.
+            if let Some(result_pos) = block
+                .steps
+                .iter()
+                .position(|c| matches!(c.check, ControlFlow::Return { .. }))
+            {
+                assert_eq!(block.steps.len() - 1, result_pos);
             }
-            &ExprInst::ConstPrim { ty, val } => {
-                let value = Value::Expr {
-                    inst: id,
-                    output: 0,
-                };
-                self.define_val(&value, ctx, /* is_ref = */ false, ty);
-                let name = self.value_name(&value);
-                let ty_name = self.type_name(ty, /* by_ref = */ false);
-                writeln!(
-                    code,
-                    "{}let {}: {} = {};",
-                    indent,
-                    name,
-                    ty_name,
-                    self.typeenv.syms[val.index()],
-                )
-                .unwrap();
+        }
+
+        for case in block.steps.iter() {
+            for &expr in case.bind_order.iter() {
+                write!(ctx.out, "{}let v{} = ", &ctx.indent, expr.index())?;
+                self.emit_expr(ctx, expr)?;
+                writeln!(ctx.out, ";")?;
+                ctx.is_bound.insert(expr);
             }
-            &ExprInst::CreateVariant {
-                ref inputs,
-                ty,
-                variant,
-            } => {
-                let variantinfo = match &self.typeenv.types[ty.index()] {
-                    &Type::Primitive(..) => panic!("CreateVariant with primitive type"),
-                    &Type::Enum { ref variants, .. } => &variants[variant.index()],
-                };
-                let mut input_fields = vec![];
-                for ((input_value, _), field) in inputs.iter().zip(variantinfo.fields.iter()) {
-                    let field_name = &self.typeenv.syms[field.name.index()];
-                    let value_expr = self.value_by_val(input_value, ctx);
-                    input_fields.push(format!("{}: {}", field_name, value_expr));
+
+            match &case.check {
+                // Use a shorthand notation if there's only one match arm.
+                ControlFlow::Match { source, arms } if arms.len() == 1 => {
+                    let arm = &arms[0];
+                    let scope = ctx.enter_scope();
+                    match arm.constraint {
+                        Constraint::ConstInt { .. } | Constraint::ConstPrim { .. } => {
+                            write!(ctx.out, "{}if ", &ctx.indent)?;
+                            self.emit_expr(ctx, *source)?;
+                            write!(ctx.out, " == ")?;
+                            self.emit_constraint(ctx, *source, arm)?;
+                        }
+                        Constraint::Variant { .. } | Constraint::Some => {
+                            write!(ctx.out, "{}if let ", &ctx.indent)?;
+                            self.emit_constraint(ctx, *source, arm)?;
+                            write!(ctx.out, " = ")?;
+                            self.emit_source(ctx, *source, arm.constraint)?;
+                        }
+                    }
+                    ctx.begin_block()?;
+                    self.emit_block(ctx, &arm.body, ret_kind)?;
+                    ctx.end_block(scope)?;
                 }
 
-                let output = Value::Expr {
-                    inst: id,
-                    output: 0,
-                };
-                let outputname = self.value_name(&output);
-                let full_variant_name = format!(
-                    "{}::{}",
-                    self.type_name(ty, false),
-                    self.typeenv.syms[variantinfo.name.index()]
-                );
-                if input_fields.is_empty() {
-                    writeln!(
-                        code,
-                        "{}let {} = {};",
-                        indent, outputname, full_variant_name
-                    )
-                    .unwrap();
-                } else {
-                    writeln!(
-                        code,
-                        "{}let {} = {} {{",
-                        indent, outputname, full_variant_name
-                    )
-                    .unwrap();
-                    for input_field in input_fields {
-                        writeln!(code, "{}    {},", indent, input_field).unwrap();
+                ControlFlow::Match { source, arms } => {
+                    let scope = ctx.enter_scope();
+                    write!(ctx.out, "{}match ", &ctx.indent)?;
+                    self.emit_source(ctx, *source, arms[0].constraint)?;
+                    ctx.begin_block()?;
+                    for arm in arms.iter() {
+                        let scope = ctx.enter_scope();
+                        write!(ctx.out, "{}", &ctx.indent)?;
+                        self.emit_constraint(ctx, *source, arm)?;
+                        write!(ctx.out, " =>")?;
+                        ctx.begin_block()?;
+                        self.emit_block(ctx, &arm.body, ret_kind)?;
+                        ctx.end_block(scope)?;
                     }
-                    writeln!(code, "{}}};", indent).unwrap();
+                    // Always add a catchall, because we don't do exhaustiveness checking on the
+                    // match arms.
+                    writeln!(ctx.out, "{}_ => {{}}", &ctx.indent)?;
+                    ctx.end_block(scope)?;
                 }
-                self.define_val(&output, ctx, /* is_ref = */ false, ty);
-            }
-            &ExprInst::Construct {
-                ref inputs,
-                term,
-                infallible,
-                multi,
-                ..
-            } => {
-                let mut input_exprs = vec![];
-                for (input_value, input_ty) in inputs {
-                    let value_expr = if self.typeenv.types[input_ty.index()].is_prim() {
-                        self.value_by_val(input_value, ctx)
-                    } else {
-                        self.value_by_ref(input_value, ctx)
+
+                ControlFlow::Equal { a, b, body } => {
+                    let scope = ctx.enter_scope();
+                    write!(ctx.out, "{}if ", &ctx.indent)?;
+                    self.emit_expr(ctx, *a)?;
+                    write!(ctx.out, " == ")?;
+                    self.emit_expr(ctx, *b)?;
+                    ctx.begin_block()?;
+                    self.emit_block(ctx, body, ret_kind)?;
+                    ctx.end_block(scope)?;
+                }
+
+                ControlFlow::Loop { result, body } => {
+                    let source = match &ctx.ruleset.bindings[result.index()] {
+                        Binding::Iterator { source } => source,
+                        _ => unreachable!("Loop from a non-Iterator"),
                     };
-                    input_exprs.push(value_expr);
+                    let scope = ctx.enter_scope();
+                    write!(ctx.out, "{}let mut v{} = ", &ctx.indent, source.index())?;
+                    self.emit_expr(ctx, *source)?;
+                    writeln!(ctx.out, ";")?;
+                    write!(
+                        ctx.out,
+                        "{}while let Some(v{}) = v{}.next(ctx)",
+                        &ctx.indent,
+                        result.index(),
+                        source.index()
+                    )?;
+                    ctx.is_bound.insert(*result);
+                    ctx.begin_block()?;
+                    self.emit_block(ctx, body, ret_kind)?;
+                    ctx.end_block(scope)?;
                 }
 
-                let output = Value::Expr {
-                    inst: id,
-                    output: 0,
-                };
-                let outputname = self.value_name(&output);
-                let termdata = &self.termenv.terms[term.index()];
-                let sig = termdata.constructor_sig(self.typeenv).unwrap();
-                assert_eq!(input_exprs.len(), sig.param_tys.len());
-
-                if !multi {
-                    let fallible_try = if infallible { "" } else { "?" };
+                &ControlFlow::Return { pos, result } => {
                     writeln!(
-                        code,
-                        "{}let {} = {}(ctx, {}){};",
-                        indent,
-                        outputname,
-                        sig.full_name,
-                        input_exprs.join(", "),
-                        fallible_try,
-                    )
-                    .unwrap();
-                } else {
-                    writeln!(
-                        code,
-                        "{}let mut iter = {}(ctx, {});",
-                        indent,
-                        sig.full_name,
-                        input_exprs.join(", "),
-                    )
-                    .unwrap();
-                    writeln!(
-                        code,
-                        "{}while let Some({}) = iter.next(ctx) {{",
-                        indent, outputname,
-                    )
-                    .unwrap();
-                    new_scope = true;
+                        ctx.out,
+                        "{}// Rule at {}.",
+                        &ctx.indent,
+                        pos.pretty_print_line(&self.typeenv.filenames)
+                    )?;
+                    write!(ctx.out, "{}", &ctx.indent)?;
+                    match ret_kind {
+                        ReturnKind::Plain => write!(ctx.out, "return ")?,
+                        ReturnKind::Option => write!(ctx.out, "return Some(")?,
+                        ReturnKind::Iterator => write!(ctx.out, "returns.push(")?,
+                    }
+                    self.emit_expr(ctx, result)?;
+                    if ctx.is_ref.contains(&result) {
+                        write!(ctx.out, ".clone()")?;
+                    }
+                    match ret_kind {
+                        ReturnKind::Plain => writeln!(ctx.out, ";")?,
+                        ReturnKind::Option | ReturnKind::Iterator => writeln!(ctx.out, ");")?,
+                    }
                 }
-                self.define_val(&output, ctx, /* is_ref = */ false, termdata.ret_ty);
-            }
-            &ExprInst::Return {
-                index, ref value, ..
-            } => {
-                let value_expr = self.value_by_val(value, ctx);
-                returns.push((index, value_expr));
             }
         }
-
-        new_scope
+        Ok(())
     }
 
-    fn match_variant_binders(
-        &self,
-        variant: &Variant,
-        arg_tys: &[TypeId],
-        id: InstId,
-        ctx: &mut BodyContext,
-    ) -> Vec<String> {
-        arg_tys
-            .iter()
-            .zip(variant.fields.iter())
-            .enumerate()
-            .map(|(i, (&ty, field))| {
-                let value = Value::Pattern {
-                    inst: id,
-                    output: i,
-                };
-                let valuename = self.value_binder(&value, /* is_ref = */ true, ty);
-                let fieldname = &self.typeenv.syms[field.name.index()];
-                self.define_val(&value, ctx, /* is_ref = */ true, field.ty);
-                format!("{}: {}", fieldname, valuename)
-            })
-            .collect::<Vec<_>>()
-    }
+    fn emit_expr<W: Write>(&self, ctx: &mut BodyContext<W>, result: BindingId) -> std::fmt::Result {
+        if ctx.is_bound.contains(&result) {
+            return write!(ctx.out, "v{}", result.index());
+        }
 
-    /// Returns a `bool` indicating whether this pattern inst is
-    /// infallible, and the number of scopes opened.
-    fn generate_pattern_inst(
-        &self,
-        code: &mut String,
-        id: InstId,
-        inst: &PatternInst,
-        indent: &str,
-        ctx: &mut BodyContext,
-    ) -> (bool, usize) {
-        match inst {
-            &PatternInst::Arg { index, ty } => {
-                let output = Value::Pattern {
-                    inst: id,
-                    output: 0,
-                };
-                let outputname = self.value_name(&output);
-                let is_ref = match &self.typeenv.types[ty.index()] {
-                    &Type::Primitive(..) => false,
-                    _ => true,
-                };
-                writeln!(code, "{}let {} = arg{};", indent, outputname, index).unwrap();
-                self.define_val(
-                    &Value::Pattern {
-                        inst: id,
-                        output: 0,
-                    },
-                    ctx,
-                    is_ref,
-                    ty,
-                );
-                (true, 0)
+        let binding = &ctx.ruleset.bindings[result.index()];
+
+        let mut call =
+            |term: TermId,
+             parameters: &[BindingId],
+             get_sig: fn(&Term, &TypeEnv) -> Option<ExternalSig>| {
+                let termdata = &self.termenv.terms[term.index()];
+                let sig = get_sig(termdata, self.typeenv).unwrap();
+                if let &[ret_ty] = &sig.ret_tys[..] {
+                    let (is_ref, _) = self.ty(ret_ty);
+                    if is_ref {
+                        ctx.set_ref(result, true);
+                        write!(ctx.out, "&")?;
+                    }
+                }
+                write!(ctx.out, "{}(ctx", sig.full_name)?;
+                debug_assert_eq!(parameters.len(), sig.param_tys.len());
+                for (&parameter, &arg_ty) in parameters.iter().zip(sig.param_tys.iter()) {
+                    let (is_ref, _) = self.ty(arg_ty);
+                    write!(ctx.out, ", ")?;
+                    let (before, after) = match (is_ref, ctx.is_ref.contains(&parameter)) {
+                        (false, true) => ("", ".clone()"),
+                        (true, false) => ("&", ""),
+                        _ => ("", ""),
+                    };
+                    write!(ctx.out, "{}", before)?;
+                    self.emit_expr(ctx, parameter)?;
+                    write!(ctx.out, "{}", after)?;
+                }
+                write!(ctx.out, ")")
+            };
+
+        match binding {
+            &Binding::ConstInt { val, ty } => self.emit_int(ctx, val, ty),
+            Binding::ConstPrim { val } => write!(ctx.out, "{}", &self.typeenv.syms[val.index()]),
+            Binding::Argument { index } => write!(ctx.out, "arg{}", index.index()),
+            Binding::Extractor { term, parameter } => {
+                call(*term, std::slice::from_ref(parameter), Term::extractor_sig)
             }
-            &PatternInst::MatchEqual { ref a, ref b, .. } => {
-                let a = self.value_by_ref(a, ctx);
-                let b = self.value_by_ref(b, ctx);
-                writeln!(code, "{}if {} == {} {{", indent, a, b).unwrap();
-                (false, 1)
-            }
-            &PatternInst::MatchInt {
-                ref input,
-                int_val,
+            Binding::Constructor {
+                term, parameters, ..
+            } => call(*term, &parameters[..], Term::constructor_sig),
+
+            Binding::MakeVariant {
                 ty,
-                ..
-            } => {
-                let int_val = self.const_int(int_val, ty);
-                let input = self.value_by_val(input, ctx);
-                writeln!(code, "{}if {} == {}  {{", indent, input, int_val).unwrap();
-                (false, 1)
-            }
-            &PatternInst::MatchPrim { ref input, val, .. } => {
-                let input = self.value_by_val(input, ctx);
-                let sym = &self.typeenv.syms[val.index()];
-                writeln!(code, "{}if {} == {} {{", indent, input, sym).unwrap();
-                (false, 1)
-            }
-            &PatternInst::MatchVariant {
-                ref input,
-                input_ty,
                 variant,
-                ref arg_tys,
+                fields,
             } => {
-                let input = self.value_by_ref(input, ctx);
-                let variants = match &self.typeenv.types[input_ty.index()] {
-                    &Type::Primitive(..) => panic!("primitive type input to MatchVariant"),
-                    &Type::Enum { ref variants, .. } => variants,
+                let (name, variants) = match &self.typeenv.types[ty.index()] {
+                    Type::Enum { name, variants, .. } => (name, variants),
+                    _ => unreachable!("MakeVariant with primitive type"),
                 };
-                let ty_name = self.type_name(input_ty, /* is_ref = */ true);
                 let variant = &variants[variant.index()];
-                let variantname = &self.typeenv.syms[variant.name.index()];
-                let args = self.match_variant_binders(variant, &arg_tys[..], id, ctx);
-                let args = if args.is_empty() {
-                    "".to_string()
-                } else {
-                    format!("{{ {} }}", args.join(", "))
-                };
-                writeln!(
-                    code,
-                    "{}if let {}::{} {} = {} {{",
-                    indent, ty_name, variantname, args, input
-                )
-                .unwrap();
-                (false, 1)
-            }
-            &PatternInst::Extract {
-                ref inputs,
-                ref output_tys,
-                term,
-                infallible,
-                multi,
-                ..
-            } => {
-                let termdata = &self.termenv.terms[term.index()];
-                let sig = termdata.extractor_sig(self.typeenv).unwrap();
-
-                let input_values = inputs
-                    .iter()
-                    .map(|input| self.value_by_ref(input, ctx))
-                    .collect::<Vec<_>>();
-                let output_binders = output_tys
-                    .iter()
-                    .enumerate()
-                    .map(|(i, &ty)| {
-                        let output_val = Value::Pattern {
-                            inst: id,
-                            output: i,
-                        };
-                        self.define_val(&output_val, ctx, /* is_ref = */ false, ty);
-                        self.value_binder(&output_val, /* is_ref = */ false, ty)
-                    })
-                    .collect::<Vec<_>>();
-
-                let bind_pattern = format!(
-                    "{open_paren}{vars}{close_paren}",
-                    open_paren = if output_binders.len() == 1 { "" } else { "(" },
-                    vars = output_binders.join(", "),
-                    close_paren = if output_binders.len() == 1 { "" } else { ")" }
-                );
-                let etor_call = format!(
-                    "{name}(ctx, {args})",
-                    name = sig.full_name,
-                    args = input_values.join(", ")
-                );
-
-                if multi {
-                    writeln!(code, "{indent}let mut iter = {etor_call};").unwrap();
-                    writeln!(
-                        code,
-                        "{indent}while let Some({bind_pattern}) = iter.next(ctx) {{",
-                    )
-                    .unwrap();
-                    (false, 1)
-                } else if infallible {
-                    writeln!(code, "{indent}let {bind_pattern} = {etor_call};").unwrap();
-                    (true, 0)
-                } else {
-                    writeln!(code, "{indent}if let Some({bind_pattern}) = {etor_call} {{").unwrap();
-                    (false, 1)
+                write!(
+                    ctx.out,
+                    "{}::{}",
+                    &self.typeenv.syms[name.index()],
+                    &self.typeenv.syms[variant.name.index()]
+                )?;
+                if !fields.is_empty() {
+                    ctx.begin_block()?;
+                    for (field, value) in variant.fields.iter().zip(fields.iter()) {
+                        write!(
+                            ctx.out,
+                            "{}{}: ",
+                            &ctx.indent,
+                            &self.typeenv.syms[field.name.index()],
+                        )?;
+                        self.emit_expr(ctx, *value)?;
+                        if ctx.is_ref.contains(&value) {
+                            write!(ctx.out, ".clone()")?;
+                        }
+                        writeln!(ctx.out, ",")?;
+                    }
+                    ctx.end_block_without_newline()?;
                 }
+                Ok(())
             }
-            &PatternInst::Expr {
-                ref seq, output_ty, ..
-            } if seq.is_const_int().is_some() => {
-                let (ty, val) = seq.is_const_int().unwrap();
-                assert_eq!(ty, output_ty);
 
-                let output = Value::Pattern {
-                    inst: id,
-                    output: 0,
-                };
-                writeln!(
-                    code,
-                    "{}let {} = {};",
-                    indent,
-                    self.value_name(&output),
-                    self.const_int(val, ty),
-                )
-                .unwrap();
-                self.define_val(&output, ctx, /* is_ref = */ false, ty);
-                (true, 0)
+            &Binding::MatchSome { source } => {
+                self.emit_expr(ctx, source)?;
+                write!(ctx.out, "?")
             }
-            &PatternInst::Expr {
-                ref seq, output_ty, ..
-            } => {
-                let closure_name = format!("closure{}", id.index());
-                writeln!(code, "{}let mut {} = || {{", indent, closure_name).unwrap();
-                let subindent = format!("{}    ", indent);
-                let mut subctx = ctx.clone();
-                let mut returns = vec![];
-                for (id, inst) in seq.insts.iter().enumerate() {
-                    let id = InstId(id);
-                    let new_scope = self.generate_expr_inst(
-                        code,
-                        id,
-                        inst,
-                        &subindent,
-                        &mut subctx,
-                        &mut returns,
-                    );
-                    assert!(!new_scope);
-                }
-                assert_eq!(returns.len(), 1);
-                writeln!(code, "{}return Some({});", subindent, returns[0].1).unwrap();
-                writeln!(code, "{}}};", indent).unwrap();
+            &Binding::MatchTuple { source, field } => {
+                self.emit_expr(ctx, source)?;
+                write!(ctx.out, ".{}", field.index())
+            }
 
-                let output = Value::Pattern {
-                    inst: id,
-                    output: 0,
-                };
-                writeln!(
-                    code,
-                    "{}if let Some({}) = {}() {{",
-                    indent,
-                    self.value_binder(&output, /* is_ref = */ false, output_ty),
-                    closure_name
-                )
-                .unwrap();
-                self.define_val(&output, ctx, /* is_ref = */ false, output_ty);
-
-                (false, 1)
+            // These are not supposed to happen. If they do, make the generated code fail to compile
+            // so this is easier to debug than if we panic during codegen.
+            &Binding::MatchVariant { source, field, .. } => {
+                self.emit_expr(ctx, source)?;
+                write!(ctx.out, ".{} /*FIXME*/", field.index())
+            }
+            &Binding::Iterator { source } => {
+                self.emit_expr(ctx, source)?;
+                write!(ctx.out, ".next() /*FIXME*/")
             }
         }
     }
 
-    fn generate_body(
+    fn emit_source<W: Write>(
         &self,
-        code: &mut String,
-        depth: usize,
-        trie: &TrieNode,
-        indent: &str,
-        ctx: &mut BodyContext,
-        ret_kind: ReturnKind,
-    ) -> bool {
-        log!("generate_body:\n{}", trie.pretty());
-        let mut returned = false;
-        match trie {
-            &TrieNode::Empty => {}
-
-            &TrieNode::Leaf { ref output, .. } => {
-                writeln!(
-                    code,
-                    "{}// Rule at {}.",
-                    indent,
-                    output.pos.pretty_print_line(&self.typeenv.filenames[..])
-                )
-                .unwrap();
-
-                // If this is a leaf node, generate the ExprSequence and return.
-                let mut returns = vec![];
-                let mut scopes = 0;
-                let mut indent = indent.to_string();
-                let orig_indent = indent.clone();
-                for (id, inst) in output.insts.iter().enumerate() {
-                    let id = InstId(id);
-                    let new_scope =
-                        self.generate_expr_inst(code, id, inst, &indent[..], ctx, &mut returns);
-                    if new_scope {
-                        scopes += 1;
-                        indent.push_str("    ");
-                    }
-                }
-
-                assert_eq!(returns.len(), 1);
-                let (before, after) = match ret_kind {
-                    ReturnKind::Plain => ("return ", ""),
-                    ReturnKind::Option => ("return Some(", ")"),
-                    ReturnKind::Iterator => ("returns.push(", ")"),
-                };
-                writeln!(code, "{}{}{}{};", indent, before, returns[0].1, after).unwrap();
-
-                for _ in 0..scopes {
-                    writeln!(code, "{}}}", orig_indent).unwrap();
-                }
-
-                returned = ret_kind != ReturnKind::Iterator;
-            }
-
-            &TrieNode::Decision { ref edges } => {
-                // If this is a decision node, generate each match op
-                // in turn (in priority order). Gather together
-                // adjacent MatchVariant ops with the same input and
-                // disjoint variants in order to create a `match`
-                // rather than a chain of if-lets.
-
-                let mut i = 0;
-                while i < edges.len() {
-                    // Gather adjacent match variants so that we can turn these
-                    // into a `match` rather than a sequence of `if let`s.
-                    let mut last = i;
-                    let mut adjacent_variants = StableSet::new();
-                    let mut adjacent_variant_input = None;
-                    log!(
-                        "edge: prio = {:?}, symbol = {:?}",
-                        edges[i].prio,
-                        edges[i].symbol
-                    );
-                    while last < edges.len() {
-                        match &edges[last].symbol {
-                            &TrieSymbol::Match {
-                                op: PatternInst::MatchVariant { input, variant, .. },
-                            } => {
-                                if adjacent_variant_input.is_none() {
-                                    adjacent_variant_input = Some(input);
-                                }
-                                if adjacent_variant_input == Some(input)
-                                    && !adjacent_variants.contains(&variant)
-                                {
-                                    adjacent_variants.insert(variant);
-                                    last += 1;
-                                } else {
-                                    break;
-                                }
-                            }
-                            _ => {
-                                break;
-                            }
-                        }
-                    }
-
-                    // Now `edges[i..last]` is a run of adjacent `MatchVariants`
-                    // (possibly an empty one). Only use a `match` form if there
-                    // are at least two adjacent options.
-                    if last - i > 1 {
-                        self.generate_body_matches(
-                            code,
-                            depth,
-                            &edges[i..last],
-                            indent,
-                            ctx,
-                            ret_kind,
-                        );
-                        i = last;
-                        continue;
-                    } else {
-                        let &TrieEdge {
-                            ref symbol,
-                            ref node,
-                            ..
-                        } = &edges[i];
-                        i += 1;
-
-                        match symbol {
-                            &TrieSymbol::EndOfMatch => {
-                                returned = self.generate_body(
-                                    code,
-                                    depth + 1,
-                                    node,
-                                    indent,
-                                    ctx,
-                                    ret_kind,
-                                );
-                            }
-                            &TrieSymbol::Match { ref op } => {
-                                let id = InstId(depth);
-                                let (infallible, new_scopes) =
-                                    self.generate_pattern_inst(code, id, op, indent, ctx);
-                                let mut subindent = indent.to_string();
-                                for _ in 0..new_scopes {
-                                    subindent.push_str("    ");
-                                }
-                                let sub_returned = self.generate_body(
-                                    code,
-                                    depth + 1,
-                                    node,
-                                    &subindent[..],
-                                    ctx,
-                                    ret_kind,
-                                );
-                                for _ in 0..new_scopes {
-                                    writeln!(code, "{}}}", indent).unwrap();
-                                }
-                                if infallible && sub_returned {
-                                    returned = true;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
+        ctx: &mut BodyContext<W>,
+        source: BindingId,
+        constraint: Constraint,
+    ) -> std::fmt::Result {
+        if let Constraint::Variant { .. } = constraint {
+            if !ctx.is_ref.contains(&source) {
+                write!(ctx.out, "&")?;
             }
         }
-
-        returned
+        self.emit_expr(ctx, source)
     }
 
-    fn generate_body_matches(
+    fn emit_constraint<W: Write>(
         &self,
-        code: &mut String,
-        depth: usize,
-        edges: &[TrieEdge],
-        indent: &str,
-        ctx: &mut BodyContext,
-        ret_kind: ReturnKind,
-    ) {
-        let (input, input_ty) = match &edges[0].symbol {
-            &TrieSymbol::Match {
-                op:
-                    PatternInst::MatchVariant {
-                        input, input_ty, ..
-                    },
-            } => (input, input_ty),
-            _ => unreachable!(),
-        };
-        let (input_ty_sym, variants) = match &self.typeenv.types[input_ty.index()] {
-            &Type::Enum {
-                ref name,
-                ref variants,
-                ..
-            } => (name, variants),
-            _ => unreachable!(),
-        };
-        let input_ty_name = &self.typeenv.syms[input_ty_sym.index()];
-
-        // Emit the `match`.
-        writeln!(
-            code,
-            "{}match {} {{",
-            indent,
-            self.value_by_ref(&input, ctx)
-        )
-        .unwrap();
-
-        // Emit each case.
-        for &TrieEdge {
-            ref symbol,
-            ref node,
+        ctx: &mut BodyContext<W>,
+        source: BindingId,
+        arm: &MatchArm,
+    ) -> std::fmt::Result {
+        let MatchArm {
+            constraint,
+            bindings,
             ..
-        } in edges
-        {
-            let id = InstId(depth);
-            let (variant, arg_tys) = match symbol {
-                &TrieSymbol::Match {
-                    op:
-                        PatternInst::MatchVariant {
-                            variant,
-                            ref arg_tys,
-                            ..
-                        },
-                } => (variant, arg_tys),
-                _ => unreachable!(),
-            };
-
-            let variantinfo = &variants[variant.index()];
-            let variantname = &self.typeenv.syms[variantinfo.name.index()];
-            let fields = self.match_variant_binders(variantinfo, arg_tys, id, ctx);
-            let fields = if fields.is_empty() {
-                "".to_string()
-            } else {
-                format!("{{ {} }}", fields.join(", "))
-            };
-            writeln!(
-                code,
-                "{}    &{}::{} {} => {{",
-                indent, input_ty_name, variantname, fields,
-            )
-            .unwrap();
-            let subindent = format!("{}        ", indent);
-            self.generate_body(code, depth + 1, node, &subindent, ctx, ret_kind);
-            writeln!(code, "{}    }}", indent).unwrap();
+        } = arm;
+        for binding in bindings.iter() {
+            if let &Some(binding) = binding {
+                ctx.is_bound.insert(binding);
+            }
         }
+        match *constraint {
+            Constraint::ConstInt { val, ty } => self.emit_int(ctx, val, ty),
+            Constraint::ConstPrim { val } => {
+                write!(ctx.out, "{}", &self.typeenv.syms[val.index()])
+            }
+            Constraint::Variant { ty, variant, .. } => {
+                let (name, variants) = match &self.typeenv.types[ty.index()] {
+                    Type::Enum { name, variants, .. } => (name, variants),
+                    _ => unreachable!("Variant constraint on primitive type"),
+                };
+                let variant = &variants[variant.index()];
+                write!(
+                    ctx.out,
+                    "&{}::{}",
+                    &self.typeenv.syms[name.index()],
+                    &self.typeenv.syms[variant.name.index()]
+                )?;
+                if !bindings.is_empty() {
+                    ctx.begin_block()?;
+                    let mut skipped_some = false;
+                    for (&binding, field) in bindings.iter().zip(variant.fields.iter()) {
+                        if let Some(binding) = binding {
+                            write!(
+                                ctx.out,
+                                "{}{}: ",
+                                &ctx.indent,
+                                &self.typeenv.syms[field.name.index()]
+                            )?;
+                            let (is_ref, _) = self.ty(field.ty);
+                            if is_ref {
+                                ctx.set_ref(binding, true);
+                                write!(ctx.out, "ref ")?;
+                            }
+                            writeln!(ctx.out, "v{},", binding.index())?;
+                        } else {
+                            skipped_some = true;
+                        }
+                    }
+                    if skipped_some {
+                        writeln!(ctx.out, "{}..", &ctx.indent)?;
+                    }
+                    ctx.end_block_without_newline()?;
+                }
+                Ok(())
+            }
+            Constraint::Some => {
+                write!(ctx.out, "Some(")?;
+                if let Some(binding) = bindings[0] {
+                    ctx.set_ref(binding, ctx.is_ref.contains(&source));
+                    write!(ctx.out, "v{}", binding.index())?;
+                } else {
+                    write!(ctx.out, "_")?;
+                }
+                write!(ctx.out, ")")
+            }
+        }
+    }
 
-        // Always add a catchall, because we don't do exhaustiveness
-        // checking on the MatchVariants.
-        writeln!(code, "{}    _ => {{}}", indent).unwrap();
-
-        writeln!(code, "{}}}", indent).unwrap();
+    fn emit_int<W: Write>(
+        &self,
+        ctx: &mut BodyContext<W>,
+        val: i128,
+        ty: TypeId,
+    ) -> Result<(), std::fmt::Error> {
+        // For the kinds of situations where we use ISLE, magic numbers are
+        // much more likely to be understandable if they're in hex rather than
+        // decimal.
+        // TODO: use better type info (https://github.com/bytecodealliance/wasmtime/issues/5431)
+        if val < 0
+            && self.typeenv.types[ty.index()]
+                .name(self.typeenv)
+                .starts_with('i')
+        {
+            write!(ctx.out, "-{:#X}", -val)
+        } else {
+            write!(ctx.out, "{:#X}", val)
+        }
     }
 }

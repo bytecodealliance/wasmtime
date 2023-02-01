@@ -82,6 +82,18 @@ fn gen_instruction_data(formats: &[&InstructionFormat], fmt: &mut Formatter) {
                 } else if format.num_value_operands > 0 {
                     fmtln!(fmt, "args: [Value; {}],", format.num_value_operands);
                 }
+
+                match format.num_block_operands {
+                    0 => (),
+                    1 => fmt.line("destination: ir::BlockCall,"),
+                    2 => fmtln!(
+                        fmt,
+                        "blocks: [ir::BlockCall; {}],",
+                        format.num_block_operands
+                    ),
+                    n => panic!("Too many block operands in instruction: {}", n),
+                }
+
                 for field in &format.imm_fields {
                     fmtln!(fmt, "{}: {},", field.member, field.kind.rust_type);
                 }
@@ -248,6 +260,18 @@ fn gen_instruction_data_impl(formats: &[&InstructionFormat], fmt: &mut Formatter
                         None
                     };
 
+                    let blocks_eq = match format.num_block_operands {
+                        0 => None,
+                        1 => {
+                            members.push("destination");
+                            Some("destination1 == destination2")
+                        },
+                        _ => {
+                            members.push("blocks");
+                            Some("blocks1.iter().zip(blocks2.iter()).all(|(a, b)| a.block(pool) == b.block(pool))")
+                        }
+                    };
+
                     for field in &format.imm_fields {
                         members.push(field.member);
                     }
@@ -262,6 +286,9 @@ fn gen_instruction_data_impl(formats: &[&InstructionFormat], fmt: &mut Formatter
                         }
                         if let Some(args_eq) = args_eq {
                             fmtln!(fmt, "&& {}", args_eq);
+                        }
+                        if let Some(blocks_eq) = blocks_eq {
+                            fmtln!(fmt, "&& {}", blocks_eq);
                         }
                     });
                     fmtln!(fmt, "}");
@@ -304,6 +331,18 @@ fn gen_instruction_data_impl(formats: &[&InstructionFormat], fmt: &mut Formatter
                         ("&[]", "0")
                     };
 
+                    let blocks = match format.num_block_operands {
+                        0 => None,
+                        1 => {
+                            members.push("ref destination");
+                            Some(("std::slice::from_ref(destination)", "1"))
+                        }
+                        _ => {
+                            members.push("ref blocks");
+                            Some(("blocks", "blocks.len()"))
+                        }
+                    };
+
                     for field in &format.imm_fields {
                         members.push(field.member);
                     }
@@ -323,6 +362,21 @@ fn gen_instruction_data_impl(formats: &[&InstructionFormat], fmt: &mut Formatter
                             fmtln!(fmt, "::core::hash::Hash::hash(&arg, state);");
                         });
                         fmtln!(fmt, "}");
+
+                        if let Some((blocks, len)) = blocks {
+                            fmtln!(fmt, "::core::hash::Hash::hash(&{}, state);", len);
+                            fmtln!(fmt, "for &block in {} {{", blocks);
+                            fmt.indent(|fmt| {
+                                fmtln!(fmt, "::core::hash::Hash::hash(&block.block(pool), state);");
+                                fmtln!(fmt, "for &arg in block.args_slice(pool) {");
+                                fmt.indent(|fmt| {
+                                    fmtln!(fmt, "let arg = mapper(arg);");
+                                    fmtln!(fmt, "::core::hash::Hash::hash(&arg, state);");
+                                });
+                                fmtln!(fmt, "}");
+                            });
+                            fmtln!(fmt, "}");
+                        }
                     });
                     fmtln!(fmt, "}");
                 }
@@ -774,6 +828,19 @@ fn gen_member_inits(format: &InstructionFormat, fmt: &mut Formatter) {
         }
         fmtln!(fmt, "args: [{}],", args.join(", "));
     }
+
+    // Block operands
+    match format.num_block_operands {
+        0 => (),
+        1 => fmt.line("destination: block0"),
+        n => {
+            let mut blocks = Vec::new();
+            for i in 0..n {
+                blocks.push(format!("block{}", i));
+            }
+            fmtln!(fmt, "blocks: [{}],", blocks.join(", "));
+        }
+    }
 }
 
 /// Emit a method for creating and inserting an instruction format.
@@ -792,6 +859,9 @@ fn gen_format_constructor(format: &InstructionFormat, fmt: &mut Formatter) {
     for f in &format.imm_fields {
         args.push(format!("{}: {}", f.member, f.kind.rust_type));
     }
+
+    // Then the block operands.
+    args.extend((0..format.num_block_operands).map(|i| format!("block{}: ir::BlockCall", i)));
 
     // Then the value operands.
     if format.has_value_list {
@@ -1152,6 +1222,41 @@ fn gen_common_isle(
         fmt.empty_line();
     }
 
+    // Generate all of the block arrays we need for `InstructionData` as well as
+    // the constructors and extractors for them.
+    fmt.line(";;;; Block Arrays ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;");
+    fmt.empty_line();
+    let block_array_arities: BTreeSet<_> = formats
+        .iter()
+        .filter(|f| f.num_block_operands > 1)
+        .map(|f| f.num_block_operands)
+        .collect();
+    for n in block_array_arities {
+        fmtln!(fmt, ";; ISLE representation of `[BlockCall; {}]`.", n);
+        fmtln!(fmt, "(type BlockArray{} extern (enum))", n);
+        fmt.empty_line();
+
+        fmtln!(
+            fmt,
+            "(decl block_array_{0} ({1}) BlockArray{0})",
+            n,
+            (0..n).map(|_| "BlockCall").collect::<Vec<_>>().join(" ")
+        );
+
+        fmtln!(
+            fmt,
+            "(extern constructor block_array_{0} pack_block_array_{0})",
+            n
+        );
+
+        fmtln!(
+            fmt,
+            "(extern extractor infallible block_array_{0} unpack_block_array_{0})",
+            n
+        );
+        fmt.empty_line();
+    }
+
     // Generate the extern type declaration for `Opcode`.
     fmt.line(";;;; `Opcode` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;");
     fmt.empty_line();
@@ -1187,6 +1292,13 @@ fn gen_common_isle(
                 } else if format.num_value_operands > 1 {
                     write!(&mut s, " (args ValueArray{})", format.num_value_operands).unwrap();
                 }
+
+                match format.num_block_operands {
+                    0 => (),
+                    1 => write!(&mut s, " (destination BlockCall)").unwrap(),
+                    n => write!(&mut s, " (blocks BlockArray{})", n).unwrap(),
+                }
+
                 for field in &format.imm_fields {
                     write!(
                         &mut s,
@@ -1328,11 +1440,35 @@ fn gen_common_isle(
             let imm_operands: Vec<_> = inst
                 .operands_in
                 .iter()
-                .filter(|o| !o.is_value() && !o.is_varargs())
+                .filter(|o| !o.is_value() && !o.is_varargs() && !o.kind.is_block())
                 .collect();
-            assert_eq!(imm_operands.len(), inst.format.imm_fields.len());
+            assert_eq!(imm_operands.len(), inst.format.imm_fields.len(),);
             for op in imm_operands {
                 write!(&mut s, " {}", op.name).unwrap();
+            }
+
+            // Blocks.
+            let block_operands: Vec<_> = inst
+                .operands_in
+                .iter()
+                .filter(|o| o.kind.is_block())
+                .collect();
+            assert_eq!(block_operands.len(), inst.format.num_block_operands);
+            assert!(block_operands.len() <= 2);
+
+            if !block_operands.is_empty() {
+                if block_operands.len() == 1 {
+                    write!(&mut s, " {}", block_operands[0].name).unwrap();
+                } else {
+                    let blocks: Vec<_> = block_operands.iter().map(|o| o.name).collect();
+                    let blocks = blocks.join(" ");
+                    write!(
+                        &mut s,
+                        " (block_array_{} {})",
+                        inst.format.num_block_operands, blocks,
+                    )
+                    .unwrap();
+                }
             }
 
             s.push_str("))");
@@ -1400,11 +1536,31 @@ fn gen_common_isle(
                     .unwrap();
                 }
 
+                if inst.format.num_block_operands > 0 {
+                    let blocks: Vec<_> = inst
+                        .operands_in
+                        .iter()
+                        .filter(|o| o.kind.is_block())
+                        .map(|o| o.name)
+                        .collect();
+                    if inst.format.num_block_operands == 1 {
+                        write!(&mut s, " {}", blocks.first().unwrap(),).unwrap();
+                    } else {
+                        write!(
+                            &mut s,
+                            " (block_array_{} {})",
+                            inst.format.num_block_operands,
+                            blocks.join(" ")
+                        )
+                        .unwrap();
+                    }
+                }
+
                 // Immediates (non-value args).
                 for o in inst
                     .operands_in
                     .iter()
-                    .filter(|o| !o.is_value() && !o.is_varargs())
+                    .filter(|o| !o.is_value() && !o.is_varargs() && !o.kind.is_block())
                 {
                     write!(&mut s, " {}", o.name).unwrap();
                 }

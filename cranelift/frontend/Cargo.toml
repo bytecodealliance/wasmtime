@@ -11,11 +11,14 @@ readme = "README.md"
 edition.workspace = true
 
 [dependencies]
-cranelift-codegen = { workspace = true, default-features = false }
+cranelift-codegen = { workspace = true }
 target-lexicon = { workspace = true }
 log = { workspace = true }
 hashbrown = { workspace = true, optional = true }
 smallvec = { workspace = true }
+
+[dev-dependencies]
+similar = { workspace = true }
 
 [features]
 default = ["std"]

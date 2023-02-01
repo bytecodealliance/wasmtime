@@ -584,8 +584,17 @@ impl<'a> Verifier<'a> {
             MultiAry { ref args, .. } => {
                 self.verify_value_list(inst, args, errors)?;
             }
-            Jump { destination, .. } | Branch { destination, .. } => {
+            Jump { destination, .. } => {
                 self.verify_block(inst, destination.block(&self.func.dfg.value_lists), errors)?;
+            }
+            Brif {
+                arg,
+                blocks: [block_then, block_else],
+                ..
+            } => {
+                self.verify_value(inst, arg, errors)?;
+                self.verify_block(inst, block_then.block(&self.func.dfg.value_lists), errors)?;
+                self.verify_block(inst, block_else.block(&self.func.dfg.value_lists), errors)?;
             }
             BranchTable {
                 table, destination, ..
@@ -1302,6 +1311,25 @@ impl<'a> Verifier<'a> {
                     .map(|&v| self.func.dfg.value_type(v));
                 let args = block.args_slice(&self.func.dfg.value_lists);
                 self.typecheck_variable_args_iterator(inst, iter, args, errors)?;
+            }
+            BranchInfo::Conditional(block_then, block_else) => {
+                let iter = self
+                    .func
+                    .dfg
+                    .block_params(block_then.block(&self.func.dfg.value_lists))
+                    .iter()
+                    .map(|&v| self.func.dfg.value_type(v));
+                let args_then = block_then.args_slice(&self.func.dfg.value_lists);
+                self.typecheck_variable_args_iterator(inst, iter, args_then, errors)?;
+
+                let iter = self
+                    .func
+                    .dfg
+                    .block_params(block_else.block(&self.func.dfg.value_lists))
+                    .iter()
+                    .map(|&v| self.func.dfg.value_type(v));
+                let args_else = block_else.args_slice(&self.func.dfg.value_lists);
+                self.typecheck_variable_args_iterator(inst, iter, args_else, errors)?;
             }
             BranchInfo::Table(table, block) => {
                 let arg_count = self.func.dfg.num_block_params(block);

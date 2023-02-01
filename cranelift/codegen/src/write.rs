@@ -415,14 +415,15 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
         IntAddTrap { args, code, .. } => write!(w, " {}, {}, {}", args[0], args[1], code),
         FloatCompare { cond, args, .. } => write!(w, " {} {}, {}", cond, args[0], args[1]),
         Jump { destination, .. } => {
-            write!(w, " {}", destination.block(pool))?;
-            write_block_args(w, destination.args_slice(pool))
+            write!(w, " {}", destination.display(pool))
         }
-        Branch {
-            arg, destination, ..
+        Brif {
+            arg,
+            blocks: [block_then, block_else],
+            ..
         } => {
-            write!(w, " {}, {}", arg, destination.block(pool))?;
-            write_block_args(w, destination.args_slice(pool))
+            write!(w, " {}, {}", arg, block_then.display(pool))?;
+            write!(w, ", {}", block_else.display(pool))
         }
         BranchTable {
             arg,
@@ -496,15 +497,6 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
     Ok(())
 }
 
-/// Write block args using optional parantheses.
-fn write_block_args(w: &mut dyn Write, args: &[Value]) -> fmt::Result {
-    if args.is_empty() {
-        Ok(())
-    } else {
-        write!(w, "({})", DisplayValues(args))
-    }
-}
-
 /// Displayable slice of values.
 struct DisplayValues<'a>(&'a [Value]);
 
@@ -515,21 +507,6 @@ impl<'a> fmt::Display for DisplayValues<'a> {
                 write!(f, "{}", val)?;
             } else {
                 write!(f, ", {}", val)?;
-            }
-        }
-        Ok(())
-    }
-}
-
-struct DisplayValuesWithDelimiter<'a>(&'a [Value], char);
-
-impl<'a> fmt::Display for DisplayValuesWithDelimiter<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for (i, val) in self.0.iter().enumerate() {
-            if i == 0 {
-                write!(f, "{}", val)?;
-            } else {
-                write!(f, "{}{}", self.1, val)?;
             }
         }
         Ok(())

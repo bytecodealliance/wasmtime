@@ -1875,8 +1875,8 @@
 (decl int_zero_reg (Type) ValueRegs)
 (extern constructor int_zero_reg int_zero_reg)
 
-(decl lower_brz_or_nz (IntCC ValueRegs VecMachLabel Type) Unit)
-(extern constructor lower_brz_or_nz lower_brz_or_nz)
+(decl lower_cond_br (IntCC ValueRegs VecMachLabel Type) Unit)
+(extern constructor lower_cond_br lower_cond_br)
 
 ;; Normalize a value for comparision.
 ;;
@@ -1905,46 +1905,34 @@
             (hi Reg (value_regs_get regs 1)))
         (alu_rrr (AluOPRRR.Or) lo hi)))
 
-;;;;;
+;; Default behavior for branching based on an input value.
 (rule
-  (lower_branch (brz v @ (value_type ty) _) targets)
-  (lower_brz_or_nz (IntCC.Equal) (normalize_cmp_value ty v) targets ty))
+  (lower_branch (brif v @ (value_type ty) _ _) targets)
+  (lower_cond_br (IntCC.NotEqual) (normalize_cmp_value ty v) targets ty))
 
 ;; Special case for SI128 to reify the comparison value and branch on it.
 (rule 2
-  (lower_branch (brz v @ (value_type $I128) _) targets)
-  (let ((zero ValueRegs (value_regs (zero_reg) (zero_reg)))
-        (cmp Reg (gen_icmp (IntCC.Equal) v zero $I128)))
-    (lower_brz_or_nz (IntCC.NotEqual) cmp targets $I64)))
-
-(rule 1
-  (lower_branch (brz (icmp cc a @ (value_type ty) b) _) targets)
-  (lower_br_icmp (intcc_inverse cc) a b targets ty))
-
-(rule 1
-  (lower_branch (brz (fcmp cc a @ (value_type ty) b) _) targets)
-  (let ((then BranchTarget (label_to_br_target (vec_label_get targets 0)))
-        (else BranchTarget (label_to_br_target (vec_label_get targets 1))))
-    (emit_side_effect (cond_br (emit_fcmp (floatcc_inverse cc) ty a b) then else))))
-
-;;;;
-(rule
-  (lower_branch (brnz v @ (value_type ty) _) targets)
-  (lower_brz_or_nz (IntCC.NotEqual) (normalize_cmp_value ty v) targets ty))
-
-;; Special case for SI128 to reify the comparison value and branch on it.
-(rule 2
-  (lower_branch (brnz v @ (value_type $I128) _) targets)
+  (lower_branch (brif v @ (value_type $I128) _ _) targets)
   (let ((zero ValueRegs (value_regs (zero_reg) (zero_reg)))
         (cmp Reg (gen_icmp (IntCC.NotEqual) v zero $I128)))
-    (lower_brz_or_nz (IntCC.NotEqual) cmp targets $I64)))
+    (lower_cond_br (IntCC.NotEqual) cmp targets $I64)))
 
+;; Branching on the result of an icmp
 (rule 1
-  (lower_branch (brnz (icmp cc a @ (value_type ty) b) _) targets)
+  (lower_branch (brif (maybe_uextend (icmp cc a @ (value_type ty) b)) _ _) targets)
   (lower_br_icmp cc a b targets ty))
 
+;; Branching on the result of an fcmp
 (rule 1
-  (lower_branch (brnz (fcmp cc a @ (value_type ty) b) _) targets)
+  (lower_branch (brif (maybe_uextend (fcmp cc a @ (value_type ty) b)) _ _) targets)
+  (if-let $true (floatcc_unordered cc))
+  (let ((then BranchTarget (label_to_br_target (vec_label_get targets 0)))
+        (else BranchTarget (label_to_br_target (vec_label_get targets 1))))
+    (emit_side_effect (cond_br (emit_fcmp (floatcc_inverse cc) ty a b) else then))))
+
+(rule 1
+  (lower_branch (brif (maybe_uextend (fcmp cc a @ (value_type ty) b)) _ _) targets)
+  (if-let $false (floatcc_unordered cc))
   (let ((then BranchTarget (label_to_br_target (vec_label_get targets 0)))
         (else BranchTarget (label_to_br_target (vec_label_get targets 1))))
     (emit_side_effect (cond_br (emit_fcmp cc ty a b) then else))))

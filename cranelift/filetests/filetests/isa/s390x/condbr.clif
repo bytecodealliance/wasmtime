@@ -16,8 +16,7 @@ block0(v0: i64, v1: i64):
 function %f(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = icmp eq v0, v1
-  brnz v2, block1
-  jump block2
+  brif v2, block1, block2
 
 block1:
   v4 = iconst.i64 1
@@ -41,8 +40,7 @@ block2:
 function %f(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = icmp eq v0, v1
-  brnz v2, block1
-  jump block1
+  brif v2, block1, block1
 
 block1:
   v4 = iconst.i64 1

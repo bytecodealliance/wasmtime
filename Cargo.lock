@@ -599,7 +599,6 @@ dependencies = [
  "cranelift-jit",
  "cranelift-module",
  "cranelift-native",
- "cranelift-preopt",
  "cranelift-reader",
  "cranelift-wasm",
  "file-per-thread-logger",
@@ -623,6 +622,7 @@ dependencies = [
  "cranelift-codegen",
  "hashbrown",
  "log",
+ "similar",
  "smallvec",
  "target-lexicon",
 ]
@@ -714,13 +714,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cranelift-preopt"
-version = "0.93.0"
-dependencies = [
- "cranelift-codegen",
-]
-
-[[package]]
 name = "cranelift-reader"
 version = "0.93.0"
 dependencies = [
@@ -758,10 +751,10 @@ dependencies = [
  "cranelift-module",
  "cranelift-native",
  "cranelift-object",
- "cranelift-preopt",
  "cranelift-reader",
  "cranelift-wasm",
  "filecheck",
+ "fxhash",
  "indicatif",
  "log",
  "pretty_env_logger",
@@ -3257,18 +3250,18 @@ checksum = "d554b7f530dee5964d9a9468d95c1f8b8acae4f282807e7d27d4b03099a46744"
 
 [[package]]
 name = "wasm-encoder"
-version = "0.21.0"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29ab2fe77b325731603297debb4573e002d06ae0aa1f4dc108585c81961e0609"
+checksum = "ef126be0e14bdf355ac1a8b41afc89195289e5c7179f80118e3abddb472f0810"
 dependencies = [
  "leb128",
 ]
 
 [[package]]
 name = "wasm-mutate"
-version = "0.2.14"
+version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2f8b34ecab2aadb3a974fc96d38a37780793b1a44f9e681ed68f7e69757ca90"
+checksum = "dd32bdc265dba5092bf434475b12b9e54dd405938a487bdd86aa41873fbd8532"
 dependencies = [
  "egg",
  "log",
@@ -3280,9 +3273,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-smith"
-version = "0.11.11"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00e76ca2ad5d10fdcd08d9af00ac02585a1e53a60020b0eda8874922f5d49bff"
+checksum = "efa1d0e7cff965d746a1f559470bf4d9fbafd34fe11d4e34cfd0c382259bb986"
 dependencies = [
  "arbitrary",
  "flagset",
@@ -3332,9 +3325,9 @@ dependencies = [
 
 [[package]]
 name = "wasmparser"
-version = "0.97.0"
+version = "0.99.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b98123a0d2bacf9286239231b116cbd66c65d9b89793f7c9bba3a3ae7f1b15f3"
+checksum = "9ef3b717afc67f848f412d4f02c127dd3e35a0eecd58c684580414df4fde01d3"
 dependencies = [
  "indexmap",
  "url",
@@ -3351,9 +3344,9 @@ dependencies = [
 
 [[package]]
 name = "wasmprinter"
-version = "0.2.46"
+version = "0.2.49"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "595cca929e47a7bec3c941b5a8e133f51b17e6d9dd8c82ab97902196f5a07b42"
+checksum = "27c13dff901f9354fa9a6a877152d9c5642513645985635c9b83bcca99e40ea1"
 dependencies = [
  "anyhow",
  "wasmparser",
@@ -3505,7 +3498,7 @@ dependencies = [
  "wasmtime-wasi-crypto",
  "wasmtime-wasi-nn",
  "wasmtime-wast",
- "wast 51.0.0",
+ "wast 52.0.2",
  "wat",
  "windows-sys",
 ]
@@ -3779,7 +3772,7 @@ dependencies = [
  "anyhow",
  "log",
  "wasmtime",
- "wast 51.0.0",
+ "wast 52.0.2",
 ]
 
 [[package]]
@@ -3814,9 +3807,9 @@ dependencies = [
 
 [[package]]
 name = "wast"
-version = "51.0.0"
+version = "52.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1f621e6e9af96438d3e05f0699da5b1dae59f2df964a2982166aa9b03c5b599"
+checksum = "707a9fd59b0144c530f0a31f21737036ffea6ece492918cae0843dd09b6f9bc9"
 dependencies = [
  "leb128",
  "memchr",
@@ -3826,11 +3819,11 @@ dependencies = [
 
 [[package]]
 name = "wat"
-version = "1.0.53"
+version = "1.0.56"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5dd18c1168d7e8743d9b4f713c0203924f5dcc4a3983eb5e584de9614f9fccde"
+checksum = "91d73cbaa81acc2f8a3303e2289205c971d99c89245c2f56ab8765c4daabc2be"
 dependencies = [
- "wast 51.0.0",
+ "wast 52.0.2",
 ]
 
 [[package]]
@@ -4069,9 +4062,9 @@ dependencies = [
 
 [[package]]
 name = "wit-parser"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02cfa79275011530f37e0e164183c606bae1cdc466ea90bcd364d50605486a4d"
+checksum = "2e60c4242d4cf4394fac7587c0d96c39b3c0fb09e638815c3f244f6bb5356f04"
 dependencies = [
  "anyhow",
  "id-arena",

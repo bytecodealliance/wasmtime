@@ -13,8 +13,7 @@ block0(v0: i32):
 }
 
 ; check:  block0(v0: i32):
-; nextln:     brz v0, block2
-; nextln:     jump block1
+; nextln:     brif v0, block1, block2
 ; nextln: 
 ; nextln: block1 cold:
 ; nextln:     trap heap_oob
@@ -29,8 +28,7 @@ block0(v0: i32):
 }
 
 ; check:  block0(v0: i32):
-; nextln:     brnz v0, block2
-; nextln:     jump block1
+; nextln:     brif v0, block2, block1
 ; nextln: 
 ; nextln: block1 cold:
 ; nextln:     trap heap_oob

@@ -351,10 +351,14 @@ impl DominatorTree {
     /// post-order. Split-invariant means that if a block is split in two, we get the same
     /// post-order except for the insertion of the new block header at the split point.
     fn push_successors(&mut self, func: &Function, block: Block) {
-        for inst in func.layout.block_likely_branches(block) {
+        if let Some(inst) = func.layout.last_inst(block) {
             match func.dfg.analyze_branch(inst) {
                 BranchInfo::SingleDest(succ) => {
                     self.push_if_unseen(succ.block(&func.dfg.value_lists))
+                }
+                BranchInfo::Conditional(block_then, block_else) => {
+                    self.push_if_unseen(block_then.block(&func.dfg.value_lists));
+                    self.push_if_unseen(block_else.block(&func.dfg.value_lists));
                 }
                 BranchInfo::Table(jt, dest) => {
                     for succ in func.jump_tables[jt].iter() {
@@ -649,11 +653,14 @@ mod tests {
         let v0 = func.dfg.append_block_param(block0, I32);
         let block1 = func.dfg.make_block();
         let block2 = func.dfg.make_block();
+        let trap_block = func.dfg.make_block();
 
         let mut cur = FuncCursor::new(&mut func);
 
         cur.insert_block(block0);
-        cur.ins().brnz(v0, block2, &[]);
+        cur.ins().brif(v0, block2, &[], trap_block, &[]);
+
+        cur.insert_block(trap_block);
         cur.ins().trap(TrapCode::User(0));
 
         cur.insert_block(block1);
@@ -670,13 +677,13 @@ mod tests {
         // Fall-through-first, prune-at-source DFT:
         //
         // block0 {
-        //   brnz block2 {
+        //   brif block2 {
         //     trap
         //     block2 {
         //       return
         //     } block2
         // } block0
-        assert_eq!(dt.cfg_postorder(), &[block2, block0]);
+        assert_eq!(dt.cfg_postorder(), &[trap_block, block2, block0]);
 
         let v2_def = cur.func.dfg.value_def(v2).unwrap_inst();
         assert!(!dt.dominates(v2_def, block0, &cur.func.layout));
@@ -710,8 +717,7 @@ mod tests {
         let jmp_block3_block1 = cur.ins().jump(block1, &[]);
 
         cur.insert_block(block1);
-        let br_block1_block0 = cur.ins().brnz(cond, block0, &[]);
-        let jmp_block1_block2 = cur.ins().jump(block2, &[]);
+        let br_block1_block0_block2 = cur.ins().brif(cond, block0, &[], block2, &[]);
 
         cur.insert_block(block2);
         cur.ins().jump(block0, &[]);
@@ -726,7 +732,7 @@ mod tests {
         // block3 {
         //   block3:jump block1 {
         //     block1 {
-        //       block1:brnz block0 {
+        //       block1:brif block0 {
         //         block1:jump block2 {
         //           block2 {
         //             block2:jump block0 (seen)
@@ -734,7 +740,7 @@ mod tests {
         //         } block1:jump block2
         //         block0 {
         //         } block0
-        //       } block1:brnz block0
+        //       } block1:brif block0
         //     } block1
         //   } block3:jump block1
         // } block3
@@ -744,12 +750,16 @@ mod tests {
         assert_eq!(cur.func.layout.entry_block().unwrap(), block3);
         assert_eq!(dt.idom(block3), None);
         assert_eq!(dt.idom(block1).unwrap(), jmp_block3_block1);
-        assert_eq!(dt.idom(block2).unwrap(), jmp_block1_block2);
-        assert_eq!(dt.idom(block0).unwrap(), br_block1_block0);
+        assert_eq!(dt.idom(block2).unwrap(), br_block1_block0_block2);
+        assert_eq!(dt.idom(block0).unwrap(), br_block1_block0_block2);
 
-        assert!(dt.dominates(br_block1_block0, br_block1_block0, &cur.func.layout));
-        assert!(!dt.dominates(br_block1_block0, jmp_block3_block1, &cur.func.layout));
-        assert!(dt.dominates(jmp_block3_block1, br_block1_block0, &cur.func.layout));
+        assert!(dt.dominates(
+            br_block1_block0_block2,
+            br_block1_block0_block2,
+            &cur.func.layout
+        ));
+        assert!(!dt.dominates(br_block1_block0_block2, jmp_block3_block1, &cur.func.layout));
+        assert!(dt.dominates(jmp_block3_block1, br_block1_block0_block2, &cur.func.layout));
 
         assert_eq!(
             dt.rpo_cmp(block3, block3, &cur.func.layout),
@@ -761,7 +771,7 @@ mod tests {
             Ordering::Less
         );
         assert_eq!(
-            dt.rpo_cmp(jmp_block3_block1, jmp_block1_block2, &cur.func.layout),
+            dt.rpo_cmp(jmp_block3_block1, br_block1_block0_block2, &cur.func.layout),
             Ordering::Less
         );
     }

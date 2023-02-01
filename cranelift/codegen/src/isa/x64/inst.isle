@@ -362,7 +362,7 @@
        ;; One-way conditional branch: jcond cond target.
        ;;
        ;; This instruction is useful when we have conditional jumps depending on
-       ;; more than two conditions, see for instance the lowering of Brz/brnz
+       ;; more than two conditions, see for instance the lowering of Brif
        ;; with Fcmp inputs.
        ;;
        ;; A note of caution: in contexts where the branch target is another

@@ -97,7 +97,7 @@ impl<K: Hash + Eq, V> Index<&K> for StableMap<K, V> {
 /// Stores disjoint sets and provides efficient operations to merge two sets, and to find a
 /// representative member of a set given any member of that set. In this implementation, sets always
 /// have at least two members, and can only be formed by the `merge` operation.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct DisjointSets<T> {
     parent: HashMap<T, (T, u8)>,
 }
@@ -182,6 +182,26 @@ impl<T: Copy + std::fmt::Debug + Eq + Hash> DisjointSets<T> {
         }
     }
 
+    /// Returns whether the given items have both been merged into the same set. If either is not
+    /// part of any set, returns `false`.
+    ///
+    /// ```
+    /// let mut sets = cranelift_isle::DisjointSets::default();
+    /// sets.merge(1, 2);
+    /// sets.merge(1, 3);
+    /// sets.merge(2, 4);
+    /// sets.merge(5, 6);
+    /// assert!(sets.in_same_set(2, 3));
+    /// assert!(sets.in_same_set(1, 4));
+    /// assert!(sets.in_same_set(3, 4));
+    /// assert!(!sets.in_same_set(4, 5));
+    /// ```
+    pub fn in_same_set(&self, x: T, y: T) -> bool {
+        let x = self.find(x);
+        let y = self.find(y);
+        x.zip(y).filter(|(x, y)| x == y).is_some()
+    }
+
     /// Remove the set containing the given item, and return all members of that set. The set is
     /// returned in sorted order. This method takes time linear in the total size of all sets.
     ///
@@ -242,11 +262,10 @@ pub mod ast;
 pub mod codegen;
 pub mod compile;
 pub mod error;
-pub mod ir;
 pub mod lexer;
 mod log;
 pub mod overlap;
 pub mod parser;
 pub mod sema;
-pub mod trie;
+pub mod serialize;
 pub mod trie_again;
