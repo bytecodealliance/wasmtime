@@ -104,10 +104,10 @@ struct Unused {
     affinity: Option<CompiledModuleId>,
 
     /// Metadata about the linked list for all slots affine to `affinity`.
-    affine: Link,
+    affine_list_link: Link,
 
     /// Metadata within the `warm` list of the main allocator.
-    unused: Link,
+    unused_list_link: Link,
 }
 
 enum AllocMode {
@@ -210,18 +210,18 @@ impl IndexAllocator {
         // previously used. Afterwards append it to the linked list of all
         // unused and warm slots.
         inner.unused_warm_slots += 1;
-        let unused = inner
+        let unused_list_link = inner
             .warm
-            .append(index, &mut inner.slot_state, |s| &mut s.unused);
+            .append(index, &mut inner.slot_state, |s| &mut s.unused_list_link);
 
-        let affine = match module {
+        let affine_list_link = match module {
             // If this slot is affine to a particular module then append this
             // index to the linked list for the affine module. Otherwise insert
             // a new one-element linked list.
             Some(module) => match inner.module_affine.entry(module) {
                 Entry::Occupied(mut e) => e
                     .get_mut()
-                    .append(index, &mut inner.slot_state, |s| &mut s.affine),
+                    .append(index, &mut inner.slot_state, |s| &mut s.affine_list_link),
                 Entry::Vacant(v) => {
                     v.insert(List::new(index));
                     Link::default()
@@ -234,8 +234,8 @@ impl IndexAllocator {
 
         inner.slot_state[index.index()] = SlotState::UnusedWarm(Unused {
             affinity: module,
-            affine,
-            unused,
+            affine_list_link,
+            unused_list_link,
         });
     }
 
@@ -244,7 +244,10 @@ impl IndexAllocator {
     #[cfg(test)]
     pub(crate) fn testing_freelist(&self) -> Vec<SlotId> {
         let inner = self.0.lock().unwrap();
-        inner.warm.iter(&inner.slot_state, |s| &s.unused).collect()
+        inner
+            .warm
+            .iter(&inner.slot_state, |s| &s.unused_list_link)
+            .collect()
     }
 
     /// For testing only, get the list of all modules with at least
@@ -283,7 +286,7 @@ impl Inner {
         // the `warm` linked list.
         self.unused_warm_slots -= 1;
         self.warm
-            .remove(slot, &mut self.slot_state, |u| &mut u.unused);
+            .remove(slot, &mut self.slot_state, |u| &mut u.unused_list_link);
 
         // If this slot is affine to a module then additionally remove it from
         // that module's affinity linked list. Note that if the module's affine
@@ -296,7 +299,7 @@ impl Inner {
                 Entry::Vacant(_) => unreachable!(),
             };
             list.get_mut()
-                .remove(slot, &mut self.slot_state, |u| &mut u.affine);
+                .remove(slot, &mut self.slot_state, |u| &mut u.affine_list_link);
 
             if list.get_mut().head.is_none() {
                 list.remove();
