@@ -232,7 +232,7 @@ impl<'a> Lexer<'a> {
                 debug_assert!(!s.is_empty());
                 Ok(Some((start_pos, Token::Symbol(s.to_string()))))
             }
-            c if (c >= b'0' && c <= b'9') || c == b'-' => {
+            c @ b'0'..=b'9' | c @ b'-' => {
                 let start_pos = self.pos();
                 let neg = if c == b'-' {
                     self.advance_pos();
