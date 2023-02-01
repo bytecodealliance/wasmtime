@@ -45,7 +45,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn take<F: Fn(&Token) -> bool>(&mut self, f: F) -> Result<Token> {
+    fn expect<F: Fn(&Token) -> bool>(&mut self, f: F) -> Result<Token> {
         if let Some(&(pos, ref peek)) = self.lexer.peek() {
             if !f(peek) {
                 return Err(self.error(pos, format!("Unexpected token {:?}", peek)));
@@ -104,18 +104,18 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn lparen(&mut self) -> Result<()> {
-        self.take(|tok| *tok == Token::LParen).map(|_| ())
+    fn expect_lparen(&mut self) -> Result<()> {
+        self.expect(|tok| *tok == Token::LParen).map(|_| ())
     }
-    fn rparen(&mut self) -> Result<()> {
-        self.take(|tok| *tok == Token::RParen).map(|_| ())
+    fn expect_rparen(&mut self) -> Result<()> {
+        self.expect(|tok| *tok == Token::RParen).map(|_| ())
     }
-    fn at(&mut self) -> Result<()> {
-        self.take(|tok| *tok == Token::At).map(|_| ())
+    fn expect_at(&mut self) -> Result<()> {
+        self.expect(|tok| *tok == Token::At).map(|_| ())
     }
 
-    fn symbol(&mut self) -> Result<String> {
-        match self.take(Token::is_sym)? {
+    fn expect_symbol(&mut self) -> Result<String> {
+        match self.expect(Token::is_sym)? {
             Token::Symbol(s) => Ok(s),
             _ => unreachable!(),
         }
@@ -129,8 +129,8 @@ impl<'a> Parser<'a> {
         .map(|token| token.is_some())
     }
 
-    fn int(&mut self) -> Result<i128> {
-        match self.take(Token::is_int)? {
+    fn expect_int(&mut self) -> Result<i128> {
+        match self.expect(Token::is_int)? {
             Token::Int(i) => Ok(i),
             _ => unreachable!(),
         }
@@ -149,9 +149,9 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_def(&mut self) -> Result<Def> {
-        self.lparen()?;
+        self.expect_lparen()?;
         let pos = self.pos();
-        let def = match &self.symbol()?[..] {
+        let def = match &self.expect_symbol()?[..] {
             "pragma" => Def::Pragma(self.parse_pragma()?),
             "type" => Def::Type(self.parse_type()?),
             "decl" => Def::Decl(self.parse_decl()?),
@@ -163,7 +163,7 @@ impl<'a> Parser<'a> {
                 return Err(self.error(pos, format!("Unexpected identifier: {}", s)));
             }
         };
-        self.rparen()?;
+        self.expect_rparen()?;
         Ok(def)
     }
 
@@ -195,7 +195,7 @@ impl<'a> Parser<'a> {
 
     fn parse_ident(&mut self) -> Result<Ident> {
         let pos = self.pos();
-        let s = self.symbol()?;
+        let s = self.expect_symbol()?;
         self.str_to_ident(pos, &s)
     }
 
@@ -229,7 +229,7 @@ impl<'a> Parser<'a> {
         let mut is_nodebug = false;
 
         while self.lexer.peek().map_or(false, |(_pos, tok)| tok.is_sym()) {
-            let sym = self.symbol()?;
+            let sym = self.expect_symbol()?;
             if sym == "extern" {
                 is_extern = true;
             } else if sym == "nodebug" {
@@ -254,10 +254,10 @@ impl<'a> Parser<'a> {
 
     fn parse_typevalue(&mut self) -> Result<TypeValue> {
         let pos = self.pos();
-        self.lparen()?;
+        self.expect_lparen()?;
         if self.eat_sym_str("primitive")? {
             let primitive_ident = self.parse_ident()?;
-            self.rparen()?;
+            self.expect_rparen()?;
             Ok(TypeValue::Primitive(primitive_ident, pos))
         } else if self.eat_sym_str("enum")? {
             let mut variants = vec![];
@@ -265,7 +265,7 @@ impl<'a> Parser<'a> {
                 let variant = self.parse_type_variant()?;
                 variants.push(variant);
             }
-            self.rparen()?;
+            self.expect_rparen()?;
             Ok(TypeValue::Enum(variants, pos))
         } else {
             Err(self.error(pos, "Unknown type definition".to_string()))
@@ -283,23 +283,23 @@ impl<'a> Parser<'a> {
             })
         } else {
             let pos = self.pos();
-            self.lparen()?;
+            self.expect_lparen()?;
             let name = self.parse_ident()?;
             let mut fields = vec![];
             while !self.is_rparen() {
                 fields.push(self.parse_type_field()?);
             }
-            self.rparen()?;
+            self.expect_rparen()?;
             Ok(Variant { name, fields, pos })
         }
     }
 
     fn parse_type_field(&mut self) -> Result<Field> {
         let pos = self.pos();
-        self.lparen()?;
+        self.expect_lparen()?;
         let name = self.parse_ident()?;
         let ty = self.parse_ident()?;
-        self.rparen()?;
+        self.expect_rparen()?;
         Ok(Field { name, ty, pos })
     }
 
@@ -324,12 +324,12 @@ impl<'a> Parser<'a> {
 
         let term = self.parse_ident()?;
 
-        self.lparen()?;
+        self.expect_lparen()?;
         let mut arg_tys = vec![];
         while !self.is_rparen() {
             arg_tys.push(self.parse_ident()?);
         }
-        self.rparen()?;
+        self.expect_rparen()?;
 
         let ret_ty = self.parse_ident()?;
 
@@ -382,13 +382,13 @@ impl<'a> Parser<'a> {
 
     fn parse_etor(&mut self) -> Result<Extractor> {
         let pos = self.pos();
-        self.lparen()?;
+        self.expect_lparen()?;
         let term = self.parse_ident()?;
         let mut args = vec![];
         while !self.is_rparen() {
             args.push(self.parse_ident()?);
         }
-        self.rparen()?;
+        self.expect_rparen()?;
         let template = self.parse_pattern()?;
         Ok(Extractor {
             term,
@@ -402,7 +402,7 @@ impl<'a> Parser<'a> {
         let pos = self.pos();
         let prio = if self.is_int() {
             Some(
-                i64::try_from(self.int()?)
+                i64::try_from(self.expect_int()?)
                     .map_err(|err| self.error(pos, format!("Invalid rule priority: {}", err)))?,
             )
         } else {
@@ -432,7 +432,7 @@ impl<'a> Parser<'a> {
         let pos = self.pos();
         if self.is_int() {
             Ok(Pattern::ConstInt {
-                val: self.int()?,
+                val: self.expect_int()?,
                 pos,
             })
         } else if self.is_const() {
@@ -443,20 +443,20 @@ impl<'a> Parser<'a> {
         } else if self.is_sym() {
             let var = self.parse_ident()?;
             if self.is_at() {
-                self.at()?;
+                self.expect_at()?;
                 let subpat = Box::new(self.parse_pattern()?);
                 Ok(Pattern::BindPattern { var, subpat, pos })
             } else {
                 Ok(Pattern::Var { var, pos })
             }
         } else if self.is_lparen() {
-            self.lparen()?;
+            self.expect_lparen()?;
             if self.eat_sym_str("and")? {
                 let mut subpats = vec![];
                 while !self.is_rparen() {
                     subpats.push(self.parse_pattern()?);
                 }
-                self.rparen()?;
+                self.expect_rparen()?;
                 Ok(Pattern::And { subpats, pos })
             } else {
                 let sym = self.parse_ident()?;
@@ -464,7 +464,7 @@ impl<'a> Parser<'a> {
                 while !self.is_rparen() {
                     args.push(self.parse_pattern()?);
                 }
-                self.rparen()?;
+                self.expect_rparen()?;
                 Ok(Pattern::Term { sym, args, pos })
             }
         } else {
@@ -475,7 +475,7 @@ impl<'a> Parser<'a> {
     fn parse_iflet_or_expr(&mut self) -> Result<IfLetOrExpr> {
         let pos = self.pos();
         if self.is_lparen() {
-            self.lparen()?;
+            self.expect_lparen()?;
             let ret = if self.eat_sym_str("if-let")? {
                 IfLetOrExpr::IfLet(self.parse_iflet()?)
             } else if self.eat_sym_str("if")? {
@@ -485,7 +485,7 @@ impl<'a> Parser<'a> {
             } else {
                 IfLetOrExpr::Expr(self.parse_expr_inner_parens(pos)?)
             };
-            self.rparen()?;
+            self.expect_rparen()?;
             Ok(ret)
         } else {
             self.parse_expr().map(|expr| IfLetOrExpr::Expr(expr))
@@ -512,9 +512,9 @@ impl<'a> Parser<'a> {
     fn parse_expr(&mut self) -> Result<Expr> {
         let pos = self.pos();
         if self.is_lparen() {
-            self.lparen()?;
+            self.expect_lparen()?;
             let ret = self.parse_expr_inner_parens(pos)?;
-            self.rparen()?;
+            self.expect_rparen()?;
             Ok(ret)
         } else if self.eat_sym_str("#t")? {
             Ok(Expr::ConstInt { val: 1, pos })
@@ -527,7 +527,7 @@ impl<'a> Parser<'a> {
             let name = self.parse_ident()?;
             Ok(Expr::Var { name, pos })
         } else if self.is_int() {
-            let val = self.int()?;
+            let val = self.expect_int()?;
             Ok(Expr::ConstInt { val, pos })
         } else {
             Err(self.error(pos, "Invalid expression".into()))
@@ -536,13 +536,13 @@ impl<'a> Parser<'a> {
 
     fn parse_expr_inner_parens(&mut self, pos: Pos) -> Result<Expr> {
         if self.eat_sym_str("let")? {
-            self.lparen()?;
+            self.expect_lparen()?;
             let mut defs = vec![];
             while !self.is_rparen() {
                 let def = self.parse_letdef()?;
                 defs.push(def);
             }
-            self.rparen()?;
+            self.expect_rparen()?;
             let body = Box::new(self.parse_expr()?);
             Ok(Expr::Let { defs, body, pos })
         } else {
@@ -557,11 +557,11 @@ impl<'a> Parser<'a> {
 
     fn parse_letdef(&mut self) -> Result<LetDef> {
         let pos = self.pos();
-        self.lparen()?;
+        self.expect_lparen()?;
         let var = self.parse_ident()?;
         let ty = self.parse_ident()?;
         let val = Box::new(self.parse_expr()?);
-        self.rparen()?;
+        self.expect_rparen()?;
         Ok(LetDef { var, ty, val, pos })
     }
 
