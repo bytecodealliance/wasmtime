@@ -3,12 +3,6 @@ use bitflags::bitflags;
 use std::any::Any;
 use std::sync::{Arc, RwLock};
 
-#[cfg(unix)]
-use cap_std::io_lifetimes::{AsFd, BorrowedFd};
-
-#[cfg(windows)]
-use io_extras::os::windows::{AsRawHandleOrSocket, RawHandleOrSocket};
-
 #[wiggle::async_trait]
 pub trait WasiFile: Send + Sync {
     fn as_any(&self) -> &dyn Any;
@@ -323,40 +317,4 @@ pub enum Advice {
     WillNeed,
     DontNeed,
     NoReuse,
-}
-
-#[cfg(unix)]
-pub struct BorrowedAsFd<'a, T: AsFd>(&'a T);
-
-#[cfg(unix)]
-impl<'a, T: AsFd> BorrowedAsFd<'a, T> {
-    pub fn new(t: &'a T) -> Self {
-        BorrowedAsFd(t)
-    }
-}
-
-#[cfg(unix)]
-impl<T: AsFd> AsFd for BorrowedAsFd<'_, T> {
-    #[inline]
-    fn as_fd(&self) -> BorrowedFd {
-        self.0.as_fd()
-    }
-}
-
-#[cfg(windows)]
-pub struct BorrowedAsRawHandleOrSocket<'a, T: AsRawHandleOrSocket>(&'a T);
-
-#[cfg(windows)]
-impl<'a, T: AsRawHandleOrSocket> BorrowedAsRawHandleOrSocket<'a, T> {
-    pub fn new(t: &'a T) -> Self {
-        BorrowedAsRawHandleOrSocket(t)
-    }
-}
-
-#[cfg(windows)]
-impl<T: AsRawHandleOrSocket> AsRawHandleOrSocket for BorrowedAsRawHandleOrSocket<'_, T> {
-    #[inline]
-    fn as_raw_handle_or_socket(&self) -> RawHandleOrSocket {
-        self.0.as_raw_handle_or_socket()
-    }
 }
