@@ -540,8 +540,12 @@ fn populate_with_wasi(
         let max_request_config = std::env::var("WASI_HTTP_MAX_REQUESTS");
         match max_request_config {
             Ok(value) => match value.parse::<u32>() {
-                Ok(parsed) => { max_requests = parsed; },
-                Err(_) => { max_requests = 1; },
+                Ok(parsed) => {
+                    max_requests = parsed;
+                }
+                Err(_) => {
+                    max_requests = 1;
+                }
             },
             Err(_) => {
                 max_requests = 1;
@@ -554,10 +558,11 @@ fn populate_with_wasi(
             max_concurrent_requests,
         };
 
-        wasi_experimental_http_wasmtime::add_to_linker(linker, |host| host.wasi_experimental_http_wasmtime.as_ref().unwrap())?;
+        wasi_experimental_http_wasmtime::add_to_linker(linker, |host| {
+            host.wasi_experimental_http_wasmtime.as_ref().unwrap()
+        })?;
         store.data_mut().wasi_experimental_http_wasmtime = Some(http);
     }
-
 
     Ok(())
 }
