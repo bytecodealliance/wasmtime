@@ -1125,8 +1125,9 @@
     (alu_rrr (AluOPRRR.Or) part1 part3)))
 
 
-;;;; construct shift amount
+;;;; construct shift amount.rotl on i128 will use shift to implement. So can call this function.
 ;;;; this will return shift amount and (ty_bits - "shift amount")
+;;;; if ty_bits is greater than 64 like i128, then shmat will fallback to 64.because We are 64 bit platform.
 (decl gen_shamt (Type Reg) ValueRegs)
 (extern constructor gen_shamt gen_shamt)
 
@@ -1243,12 +1244,13 @@
       (high_part3 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) high_part2))
       (high Reg (alu_rrr (AluOPRRR.Or) high_part1 high_part3))
       ;;
-      (const64 Reg (load_u64_constant 64)))
+      (const64 Reg (load_u64_constant 64))
+      (shamt_128 Reg (alu_andi (value_regs_get y 0) 127)))
     ;; right now we only rotate less than 64 bits.
-    ;; if shamt is greater than 64 , we should switch low and high.
+    ;; if shamt is greater than or equal 64 , we should switch low and high.
     (value_regs
-      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt const64 high low)
-      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt const64 low high)
+      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high low)
+      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 low high)
     )))
 
 
@@ -1272,12 +1274,13 @@
       (high Reg (alu_rrr (AluOPRRR.Or) high_part1 high_part3))
 
       ;;
-      (const64 Reg (load_u64_constant 64)))
+      (const64 Reg (load_u64_constant 64))
+      (shamt_128 Reg (alu_andi (value_regs_get y 0) 127)))
     ;; right now we only rotate less than 64 bits.
-    ;; if shamt is greater than 64 , we should switch low and high.
+    ;; if shamt is greater than or equal 64 , we should switch low and high.
     (value_regs
-      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt const64 high low)
-      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt const64 low high)
+      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high low)
+      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 low high)
     )))
 
 
@@ -1297,10 +1300,11 @@
       (high_part3 Reg (alu_rrr (AluOPRRR.Sll) (value_regs_get x 1) shamt))
       (high Reg (alu_rrr (AluOPRRR.Or) high_part2 high_part3 ))
       ;;
-      (const64 Reg (load_u64_constant 64)))
+      (const64 Reg (load_u64_constant 64))
+      (shamt_128 Reg (alu_andi (value_regs_get y 0) 127)))
     (value_regs
-      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt const64 (zero_reg) low)
-      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt const64 low high))))
+      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 (zero_reg) low)
+      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 low high))))
 
 (decl lower_i128_ushr (ValueRegs ValueRegs) ValueRegs)
 (rule
@@ -1320,10 +1324,11 @@
       (const64 Reg (load_u64_constant 64))
 
       ;;
-      (high Reg (alu_rrr (AluOPRRR.Srl) (value_regs_get x 1) shamt)))
+      (high Reg (alu_rrr (AluOPRRR.Srl) (value_regs_get x 1) shamt))
+      (shamt_128 Reg (alu_andi (value_regs_get y 0) 127)))
     (value_regs
-      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt const64 high low)
-      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt const64 (zero_reg) high))))
+      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high low)
+      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 (zero_reg) high))))
 
 
 (decl lower_i128_sshr (ValueRegs ValueRegs) ValueRegs)
@@ -1347,10 +1352,12 @@
       ;;
       (const_neg_1 Reg (load_imm12 -1))
       ;;
-      (high_replacement Reg (gen_select_reg (IntCC.SignedLessThan) (value_regs_get x 1) (zero_reg) const_neg_1 (zero_reg))))
+      (high_replacement Reg (gen_select_reg (IntCC.SignedLessThan) (value_regs_get x 1) (zero_reg) const_neg_1 (zero_reg)))
+      (const64 Reg (load_u64_constant 64))
+      (shamt_128 Reg (alu_andi (value_regs_get y 0) 127)))
     (value_regs
-      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt const64 high low)
-      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt const64 high_replacement high))))
+      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high low)
+      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high_replacement high))))
 
 (decl load_imm12 (i32) Reg)
 (rule
