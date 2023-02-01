@@ -1,3 +1,4 @@
+use base64::Engine;
 use log::{debug, trace, warn};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -86,7 +87,7 @@ impl<'config> ModuleCacheEntry<'config> {
         state.hash(&mut hasher);
         let hash: [u8; 32] = hasher.0.finalize().into();
         // standard encoding uses '/' which can't be used for filename
-        let hash = base64::encode_config(&hash, base64::URL_SAFE_NO_PAD);
+        let hash = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&hash);
 
         if let Some(cached_val) = inner.get_data(&hash) {
             if let Some(val) = deserialize(state, cached_val) {
