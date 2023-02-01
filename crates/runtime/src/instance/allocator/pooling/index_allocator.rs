@@ -173,12 +173,17 @@ impl IndexAllocator {
                 // The opposite happens when we're above our threshold for the
                 // maximum number of warm slots, meaning that a warm slot is
                 // attempted to be picked from first with a cold slot following
-                // that.
+                // that. Note that the warm slot allocation in this case should
+                // only fail of `max_unused_warm_slots` is 0, otherwise
+                // `pick_warm` will always succeed.
                 AllocMode::AnySlot => {
                     if inner.unused_warm_slots < inner.max_unused_warm_slots {
                         inner.pick_cold().or_else(|| inner.pick_warm())
                     } else {
-                        inner.pick_warm().or_else(|| inner.pick_cold())
+                        inner.pick_warm().or_else(|| {
+                            debug_assert!(inner.max_unused_warm_slots == 0);
+                            inner.pick_cold()
+                        })
                     }
                 }
 
