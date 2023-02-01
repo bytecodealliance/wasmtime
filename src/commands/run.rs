@@ -505,6 +505,10 @@ fn populate_with_wasi(
     if wasi_modules.wasi_threads {
         #[cfg(not(feature = "wasi-threads"))]
         {
+            // Silence the unused warning for `module` as it is only used in the
+            // conditionally-compiled wasi-threads.
+            drop(&module);
+
             bail!("Cannot enable wasi-threads when the binary is not compiled with this feature.");
         }
         #[cfg(feature = "wasi-threads")]
@@ -518,10 +522,6 @@ fn populate_with_wasi(
             )?));
         }
     }
-
-    // Silence the unused warning for `module` as it is only used in the
-    // conditionally-compiled wasi-threads.
-    drop(&module);
 
     Ok(())
 }
