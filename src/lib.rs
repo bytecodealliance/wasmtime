@@ -1,15 +1,15 @@
 #![allow(unused_variables)] // TODO: remove this when more things are implemented
 
 use crate::bindings::{
-    wasi_clocks, wasi_default_clocks, wasi_exit, wasi_filesystem, wasi_logging, wasi_poll,
-    wasi_random, wasi_stderr, wasi_tcp,
+    wasi_clocks, wasi_default_clocks, wasi_exit, wasi_filesystem, wasi_poll, wasi_random,
+    wasi_stderr, wasi_tcp,
 };
 use core::arch::wasm32;
 use core::cell::{Cell, RefCell, UnsafeCell};
 use core::cmp::min;
 use core::ffi::c_void;
 use core::hint::black_box;
-use core::mem::{align_of, forget, replace, size_of, ManuallyDrop, MaybeUninit};
+use core::mem::{self, align_of, forget, replace, size_of, ManuallyDrop, MaybeUninit};
 use core::ptr::{self, null_mut};
 use core::slice;
 use wasi::*;
@@ -149,7 +149,7 @@ fn align_to(ptr: usize, align: usize) -> usize {
 /// traps when it runs out of data. This means that the total size of
 /// arguments/env/etc coming into a component is bounded by the current 64k
 /// (ish) limit. That's just an implementation limit though which can be lifted
-/// by dynamically calling `memory.grow` as necessary for more data.
+/// by dynamically calling the main module's allocator as necessary for more data.
 #[no_mangle]
 pub unsafe extern "C" fn cabi_export_realloc(
     old_ptr: *mut u8,
@@ -2265,11 +2265,25 @@ impl State {
 
     #[cold]
     fn new() -> &'static RefCell<State> {
-        let grew = wasm32::memory_grow(0, 1);
-        if grew == usize::MAX {
-            unreachable!();
+        #[link(wasm_import_module = "__main_module__")]
+        extern "C" {
+            fn cabi_realloc(
+                old_ptr: *mut u8,
+                old_len: usize,
+                align: usize,
+                new_len: usize,
+            ) -> *mut u8;
         }
-        let ret = (grew * PAGE_SIZE) as *mut RefCell<State>;
+
+        let ret = unsafe {
+            cabi_realloc(
+                ptr::null_mut(),
+                0,
+                mem::align_of::<RefCell<State>>(),
+                mem::size_of::<RefCell<State>>(),
+            ) as *mut RefCell<State>
+        };
+
         let ret = unsafe {
             ret.write(RefCell::new(State {
                 magic1: MAGIC,
