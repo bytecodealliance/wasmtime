@@ -134,9 +134,7 @@ impl RegAlloc {
                     .get_local(*index)
                     .expect("valid local at slot");
                 let addr = context.masm.local_address(&slot);
-                context
-                    .masm
-                    .store(RegImm::reg(self.scratch), addr, slot.ty.into());
+                context.masm.load(addr, self.scratch, slot.ty.into());
                 let offset = context.masm.push(self.scratch);
                 *v = Val::Memory(offset);
             }

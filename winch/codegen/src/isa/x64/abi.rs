@@ -40,6 +40,15 @@ impl ABI for X64ABI {
     }
 
     fn arg_base_offset(&self) -> u8 {
+        // Two 8-byte slots, one for the return address and another
+        // one for the frame pointer.
+        // ┌──────────┬───────── Argument base
+        // │   Ret    │
+        // │   Addr   │
+        // ├──────────┼
+        // │          │
+        // │   FP     │
+        // └──────────┴
         16
     }
 

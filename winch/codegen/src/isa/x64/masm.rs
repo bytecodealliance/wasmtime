@@ -124,6 +124,8 @@ impl Masm for MacroAssembler {
     }
 
     fn epilogue(&mut self, locals_size: u32) {
+        assert!(self.sp_offset == locals_size);
+
         let rsp = rsp();
         if locals_size > 0 {
             self.asm.add_ir(locals_size as i32, rsp, OperandSize::S64);

@@ -27,11 +27,6 @@ impl Reg {
         Self::new(PReg::new(enc, RegClass::Float))
     }
 
-    /// Get the class of the underlying register.
-    pub fn class(self) -> RegClass {
-        self.0.class()
-    }
-
     /// Get the encoding of the underlying register.
     pub fn hw_enc(self) -> u8 {
         self.0.hw_enc() as u8
