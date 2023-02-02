@@ -87,8 +87,10 @@ pub mod snapshots {
 /// understands the error. If the error is not an `I32Exit` or `Trap`, return
 /// the error back to the caller for it to decide what to do.
 ///
-/// Note: this function is designed for CLI usage of Wasmtime; embedders of
-/// Wasmtime may want different error handling.
+/// Note: this function is designed for usage where it is acceptable for
+/// Wasmtime failures to terminate the parent process, such as in the Wasmtime
+/// CLI; this would not be suitable for use in multi-tenant embeddings.
+#[cfg(feature = "exit")]
 pub fn maybe_exit_on_error(e: anyhow::Error) -> anyhow::Error {
     use std::process;
     use wasmtime::Trap;

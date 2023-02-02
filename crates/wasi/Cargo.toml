@@ -25,3 +25,4 @@ anyhow = { workspace = true }
 default = ["sync"]
 sync = ["wasi-cap-std-sync"]
 tokio = ["wasi-tokio", "wasmtime/async", "wiggle/wasmtime_async"]
+exit = []
