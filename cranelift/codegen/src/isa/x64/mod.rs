@@ -1,8 +1,8 @@
 //! X86_64-bit Instruction Set Architecture.
 
-use self::inst::EmitInfo;
+pub use self::inst::{args, EmitInfo, EmitState, Inst};
 
-use super::TargetIsa;
+use super::{OwnedTargetIsa, TargetIsa};
 use crate::ir::{condcodes::IntCC, Function, Type};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv;
@@ -23,7 +23,7 @@ mod abi;
 pub mod encoding;
 mod inst;
 mod lower;
-mod settings;
+pub mod settings;
 
 /// An X64 backend.
 pub(crate) struct X64Backend {
@@ -48,14 +48,13 @@ impl X64Backend {
     fn compile_vcode(
         &self,
         func: &Function,
-        flags: Flags,
     ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
         // This performs lowering to VCode, register-allocates the code, computes
         // block layout and finalizes branches. The result is ready for binary emission.
-        let emit_info = EmitInfo::new(flags.clone(), self.x64_flags.clone());
+        let emit_info = EmitInfo::new(self.flags.clone(), self.x64_flags.clone());
         let sigs = SigSet::new::<abi::X64ABIMachineSpec>(func, &self.flags)?;
         let abi = abi::X64Callee::new(&func, self, &self.x64_flags, &sigs)?;
-        compile::compile::<Self>(&func, flags, self, abi, &self.reg_env, emit_info, sigs)
+        compile::compile::<Self>(&func, self, abi, emit_info, sigs)
     }
 }
 
@@ -65,10 +64,13 @@ impl TargetIsa for X64Backend {
         func: &Function,
         want_disasm: bool,
     ) -> CodegenResult<CompiledCodeStencil> {
-        let flags = self.flags();
-        let (vcode, regalloc_result) = self.compile_vcode(func, flags.clone())?;
+        let (vcode, regalloc_result) = self.compile_vcode(func)?;
 
-        let emit_result = vcode.emit(&regalloc_result, want_disasm, flags.machine_code_cfg_info());
+        let emit_result = vcode.emit(
+            &regalloc_result,
+            want_disasm,
+            self.flags.machine_code_cfg_info(),
+        );
         let frame_size = emit_result.frame_size;
         let value_labels_ranges = emit_result.value_labels_ranges;
         let buffer = emit_result.buffer.finish();
@@ -94,6 +96,10 @@ impl TargetIsa for X64Backend {
 
     fn flags(&self) -> &Flags {
         &self.flags
+    }
+
+    fn machine_env(&self) -> &MachineEnv {
+        &self.reg_env
     }
 
     fn isa_flags(&self) -> Vec<shared_settings::Value> {
@@ -190,7 +196,7 @@ fn isa_constructor(
     triple: Triple,
     shared_flags: Flags,
     builder: shared_settings::Builder,
-) -> CodegenResult<Box<dyn TargetIsa>> {
+) -> CodegenResult<OwnedTargetIsa> {
     let isa_flags = x64_settings::Flags::new(&shared_flags, builder);
 
     // Check for compatibility between flags and ISA level
@@ -208,7 +214,7 @@ fn isa_constructor(
     }
 
     let backend = X64Backend::new_with_flags(triple, shared_flags, isa_flags);
-    Ok(Box::new(backend))
+    Ok(backend.wrapped())
 }
 
 #[cfg(test)]
@@ -255,23 +261,20 @@ mod test {
         let v0 = pos.ins().iconst(I32, 0x1234);
         pos.set_srcloc(SourceLoc::new(2));
         let v1 = pos.ins().iadd(arg0, v0);
-        pos.ins().brnz(v1, bb1, &[v1]);
-        pos.ins().jump(bb2, &[]);
+        pos.ins().brif(v1, bb1, &[v1], bb2, &[]);
 
         pos.insert_block(bb1);
         pos.set_srcloc(SourceLoc::new(3));
         let v2 = pos.ins().isub(v1, v0);
         pos.set_srcloc(SourceLoc::new(4));
         let v3 = pos.ins().iadd(v2, bb1_param);
-        pos.ins().brnz(v1, bb2, &[]);
-        pos.ins().jump(bb3, &[v3]);
+        pos.ins().brif(v1, bb2, &[], bb3, &[v3]);
 
         pos.func.layout.set_cold(bb2);
         pos.insert_block(bb2);
         pos.set_srcloc(SourceLoc::new(5));
         let v4 = pos.ins().iadd(v1, v0);
-        pos.ins().brnz(v4, bb2, &[]);
-        pos.ins().jump(bb1, &[v4]);
+        pos.ins().brif(v4, bb2, &[], bb1, &[v4]);
 
         pos.insert_block(bb3);
         pos.set_srcloc(SourceLoc::new(6));

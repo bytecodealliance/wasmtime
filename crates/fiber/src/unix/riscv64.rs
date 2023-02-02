@@ -92,17 +92,18 @@ asm_func!(
 asm_func!(
     "wasmtime_fiber_init",
     "
-      lla t0,wasmtime_fiber_start
+      lla t0,{}
       sd t0,-0x18(a0)  // ra,first should be wasmtime_fiber_start.
       sd a0,-0x20(a0)  // fp pointer.
-      sd a1,-0x28(a0)  // entry_point will load to s1. 
+      sd a1,-0x28(a0)  // entry_point will load to s1.
       sd a2,-0x30(a0)  // entry_arg0 will load to s2.
 
-      // 
+      //
       addi t0,a0,-0xe0
       sd t0,-0x10(a0)
       ret
     ",
+    sym super::wasmtime_fiber_start,
 );
 
 asm_func!(
@@ -118,8 +119,8 @@ asm_func!(
       0x06,          /* DW_OP_deref */ \
       0x08, 0xd0 ,   /* DW_OP_const1u 0xc8 */ \
       0x22           /* DW_OP_plus */
-         
-      
+
+
       .cfi_rel_offset ra,-0x8
       .cfi_rel_offset fp,-0x10
       .cfi_rel_offset s1,-0x18

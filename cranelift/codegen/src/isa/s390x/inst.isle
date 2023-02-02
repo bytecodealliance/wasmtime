@@ -1537,15 +1537,15 @@
 
 ;; Detect specific integer values
 
-(decl pure i64_nonequal (i64 i64) i64)
+(decl pure partial i64_nonequal (i64 i64) i64)
 (extern constructor i64_nonequal i64_nonequal)
 
-(decl pure i64_nonzero (i64) i64)
+(decl pure partial i64_nonzero (i64) i64)
 (rule (i64_nonzero x)
       (if (i64_nonequal x 0))
       x)
 
-(decl pure i64_not_neg1 (i64) i64)
+(decl pure partial i64_not_neg1 (i64) i64)
 (rule (i64_not_neg1 x)
       (if (i64_nonequal x -1))
       x)
@@ -1799,11 +1799,11 @@
 
 ;; Form the sum of two offset values, and check that the result is
 ;; a valid `MemArg::Symbol` offset (i.e. is even and fits into i32).
-(decl pure memarg_symbol_offset_sum (i64 i64) i32)
+(decl pure partial memarg_symbol_offset_sum (i64 i64) i32)
 (extern constructor memarg_symbol_offset_sum memarg_symbol_offset_sum)
 
 ;; Likewise, but just check a single offset value.
-(decl pure memarg_symbol_offset (i64) i32)
+(decl pure partial memarg_symbol_offset (i64) i32)
 (rule (memarg_symbol_offset x)
       (memarg_symbol_offset_sum x 0))
 
@@ -1837,7 +1837,7 @@
 
 ;; Test whether a `load` address will be lowered to a `MemArg::Symbol`.
 
-(decl pure load_sym (Inst) Inst)
+(decl pure partial load_sym (Inst) Inst)
 (rule (load_sym inst)
       (if-let (load _ (symbol_value (symbol_value_data _ (reloc_distance_near) sym_offset))
                     (i64_from_offset load_offset))
@@ -1845,7 +1845,7 @@
       (if (memarg_symbol_offset_sum sym_offset load_offset))
       inst)
 
-(decl pure uload16_sym (Inst) Inst)
+(decl pure partial uload16_sym (Inst) Inst)
 (rule (uload16_sym inst)
       (if-let (uload16 _ (symbol_value (symbol_value_data _ (reloc_distance_near) sym_offset))
                        (i64_from_offset load_offset))
@@ -2752,7 +2752,7 @@
 ;; Similarly, because we cannot allocate temp registers, if an instruction
 ;; requires matching source and destination registers, this needs to be handled
 ;; by the user.  Another helper to verify that constraint.
-(decl pure same_reg (WritableReg Reg) Reg)
+(decl pure partial same_reg (WritableReg Reg) Reg)
 (extern constructor same_reg same_reg)
 
 ;; Push a `MInst.AluRRR` instruction to a sequence.
@@ -2842,6 +2842,9 @@
 
 (decl preg_stack () PReg)
 (extern constructor preg_stack preg_stack)
+
+(decl preg_gpr_0 () PReg)
+(extern constructor preg_gpr_0 preg_gpr_0)
 
 ;; Copy the physical stack register into a virtual register.
 (decl sp () Reg)
@@ -2972,9 +2975,9 @@
 
 ;; Helper to compute the type of an implicitly extended argument/return value.
 (decl abi_ext_ty (ArgumentExtension Type) Type)
-(rule (abi_ext_ty (ArgumentExtension.None) ty) ty)
-(rule (abi_ext_ty (ArgumentExtension.Uext) _) $I64)
-(rule (abi_ext_ty (ArgumentExtension.Sext) _) $I64)
+(rule 0 (abi_ext_ty _ ty) ty)
+(rule 1 (abi_ext_ty (ArgumentExtension.Uext) (gpr32_ty _)) $I64)
+(rule 1 (abi_ext_ty (ArgumentExtension.Sext) (gpr32_ty _)) $I64)
 
 
 ;; Helpers for generating immediate values ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2983,49 +2986,49 @@
 (decl imm (Type u64) Reg)
 
 ;; 16-bit (or smaller) result type, any value
-(rule 5 (imm (fits_in_16 ty) n)
+(rule 7 (imm (fits_in_16 ty) n)
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.Mov32SImm16 dst (u64_as_i16 n)))))
         dst))
 
 ;; 32-bit result type, value fits in i16
-(rule 4 (imm (gpr32_ty ty) (i16_from_u64 n))
+(rule 6 (imm (gpr32_ty ty) (i16_from_u64 n))
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.Mov32SImm16 dst n))))
         dst))
 
 ;; 32-bit result type, any value
-(rule 3 (imm (gpr32_ty ty) n)
+(rule 5 (imm (gpr32_ty ty) n)
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.Mov32Imm dst (u64_as_u32 n)))))
         dst))
 
 ;; 64-bit result type, value fits in i16
-(rule 6 (imm (gpr64_ty ty) (i16_from_u64 n))
+(rule 4 (imm (gpr64_ty ty) (i16_from_u64 n))
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.Mov64SImm16 dst n))))
         dst))
 
 ;; 64-bit result type, value fits in i32
-(rule 2 (imm (gpr64_ty ty) (i32_from_u64 n))
+(rule 3 (imm (gpr64_ty ty) (i32_from_u64 n))
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.Mov64SImm32 dst n))))
         dst))
 
 ;; 64-bit result type, value fits in UImm16Shifted
-(rule 1 (imm (gpr64_ty ty) (uimm16shifted_from_u64 n))
+(rule 2 (imm (gpr64_ty ty) (uimm16shifted_from_u64 n))
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.Mov64UImm16Shifted dst n))))
         dst))
 
 ;; 64-bit result type, value fits in UImm32Shifted
-(rule 0 (imm (gpr64_ty ty) (uimm32shifted_from_u64 n))
+(rule 1 (imm (gpr64_ty ty) (uimm32shifted_from_u64 n))
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.Mov64UImm32Shifted dst n))))
         dst))
 
 ;; 64-bit result type, value with non-zero low-/high-parts.
-(rule 7 (imm (gpr64_ty ty) (and (u64_nonzero_hipart hi)
+(rule 0 (imm (gpr64_ty ty) (and (u64_nonzero_hipart hi)
                                 (u64_nonzero_lopart lo)))
       (insert_imm ty (imm ty hi) lo))
 
@@ -3414,7 +3417,7 @@
 ;; be written if the memory location still holds the old value in %r0.
 ;; The result should be passed to "casloop_result" or (in the case of
 ;; subword loops) to "casloop_rotate_result".
-(decl casloop_emit (VecMInstBuilder Type MemFlags Reg Reg) Reg)
+(decl casloop_emit (VecMInstBuilder Type MemFlags Reg Reg) PReg)
 (rule (casloop_emit ib ty flags aligned_addr val)
       (let (;; Construct a memory argument for the aligned word.
             (aligned_mem MemArg (memarg_reg_plus_off aligned_addr 0 0 flags))
@@ -3424,17 +3427,23 @@
             ;; Emit initial load followed by compare-and-swap loop.
             (_ Unit (emit_load (ty_ext32 ty) (casloop_val_reg) aligned_mem))
             (_ Unit (emit_loop ib (intcc_as_cond (IntCC.NotEqual)))))
-        result))
+
+        ;; push_atomic_cas above returns its destination register argument,
+        ;; cas_loop_val_reg, as its result. As cas_loop_val_reg is a writable
+        ;; version of `gpr 0`, we return that directly here as a physical
+        ;; register to avoid accidentally using it with a non-preg move
+        ;; instruction.
+        (preg_gpr_0)))
 
 ;; Compute the previous memory value after a (fullword) compare-and-swap loop.
 ;; In the big-endian case, the value is already correct, but may need to be
 ;; copied out of the hard register.  In the little-endian case, we need to
 ;; byte-swap since the compare-and-swap instruction is always big-endian.
-(decl casloop_result (Type MemFlags Reg) Reg)
+(decl casloop_result (Type MemFlags PReg) Reg)
 (rule 1 (casloop_result (ty_32_or_64 ty) (bigendian) result)
-      (copy_reg ty result))
+      (mov_preg result))
 (rule (casloop_result (ty_32_or_64 ty) (littleendian) result)
-      (bswap_reg ty result))
+      (bswap_reg ty (preg_to_reg result)))
 
 ;; Emit a fullword compare-and-swap loop, returning the previous memory value.
 (decl casloop (VecMInstBuilder Type MemFlags Reg Reg) Reg)

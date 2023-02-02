@@ -35,7 +35,7 @@ pub(crate) type Riscv64ABICaller = Caller<Riscv64MachineDeps>;
 /// This is the limit for the size of argument and return-value areas on the
 /// stack. We place a reasonable limit here to avoid integer overflow issues
 /// with 32-bit arithmetic: for now, 128 MB.
-static STACK_ARG_RET_SIZE_LIMIT: u64 = 128 * 1024 * 1024;
+static STACK_ARG_RET_SIZE_LIMIT: u32 = 128 * 1024 * 1024;
 
 /// Riscv64-specific ABI behavior. This struct just serves as an implementation
 /// point for the trait; it is never actually instantiated.
@@ -63,7 +63,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
         mut args: ArgsAccumulator<'_>,
-    ) -> CodegenResult<(i64, Option<usize>)>
+    ) -> CodegenResult<(u32, Option<usize>)>
     where
         I: IntoIterator<Item = &'a ir::AbiParam>,
     {
@@ -78,14 +78,14 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         let mut next_x_reg = x_start;
         let mut next_f_reg = f_start;
         // Stack space.
-        let mut next_stack: u64 = 0;
+        let mut next_stack: u32 = 0;
         let mut return_one_register_used = false;
 
         for param in params {
             if let ir::ArgumentPurpose::StructArgument(size) = param.purpose {
                 let offset = next_stack;
                 assert!(size % 8 == 0, "StructArgument size is not properly aligned");
-                next_stack += size as u64;
+                next_stack += size;
                 args.push(ABIArg::StructArg {
                     pointer: None,
                     offset: offset as i64,
@@ -135,7 +135,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     //
                     // Note that in all cases 16-byte stack alignment happens
                     // separately after all args.
-                    let size = (reg_ty.bits() / 8) as u64;
+                    let size = reg_ty.bits() / 8;
                     let size = if args_or_rets == ArgsOrRets::Rets && call_conv.extends_wasmtime() {
                         size
                     } else {
@@ -181,13 +181,13 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         } else {
             None
         };
-        next_stack = align_to(next_stack, Self::stack_align(call_conv) as u64);
+        next_stack = align_to(next_stack, Self::stack_align(call_conv));
         // To avoid overflow issues, limit the arg/return size to something
         // reasonable -- here, 128 MB.
         if next_stack > STACK_ARG_RET_SIZE_LIMIT {
             return Err(CodegenError::ImplLimitExceeded);
         }
-        CodegenResult::Ok((next_stack as i64, pos))
+        CodegenResult::Ok((next_stack, pos))
     }
 
     fn fp_to_arg_offset(_call_conv: isa::CallConv, _flags: &settings::Flags) -> i64 {
@@ -256,6 +256,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             insts.extend(Inst::load_constant_u32(
                 writable_spilltmp_reg2(),
                 imm as u64,
+                &mut |_| writable_spilltmp_reg2(),
             ));
             insts.push(Inst::AluRRR {
                 alu_op: AluOPRRR::Add,
@@ -360,9 +361,12 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         insts
     }
 
-    fn gen_probestack(frame_size: u32) -> SmallInstVec<Self::I> {
-        let mut insts = SmallVec::new();
-        insts.extend(Inst::load_constant_u32(writable_a0(), frame_size as u64));
+    fn gen_probestack(insts: &mut SmallInstVec<Self::I>, frame_size: u32) {
+        insts.extend(Inst::load_constant_u32(
+            writable_a0(),
+            frame_size as u64,
+            &mut |_| writable_a0(),
+        ));
         insts.push(Inst::Call {
             info: Box::new(CallInfo {
                 dest: ExternalName::LibCall(LibCall::Probestack),
@@ -377,7 +381,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 caller_callconv: CallConv::SystemV,
             }),
         });
-        insts
     }
     // Returns stack bytes used as well as instructions. Does not adjust
     // nominal SP offset; abi_impl generic code will do that.
@@ -527,19 +530,19 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         insts
     }
 
-    fn gen_memcpy(
+    fn gen_memcpy<F: FnMut(Type) -> Writable<Reg>>(
         call_conv: isa::CallConv,
         dst: Reg,
         src: Reg,
-        tmp: Writable<Reg>,
-        _tmp2: Writable<Reg>,
         size: usize,
+        mut alloc_tmp: F,
     ) -> SmallVec<[Self::I; 8]> {
         let mut insts = SmallVec::new();
         let arg0 = Writable::from_reg(x_reg(10));
         let arg1 = Writable::from_reg(x_reg(11));
         let arg2 = Writable::from_reg(x_reg(12));
-        insts.extend(Inst::load_constant_u64(tmp, size as u64).into_iter());
+        let tmp = alloc_tmp(Self::word_type());
+        insts.extend(Inst::load_constant_u64(tmp, size as u64, &mut alloc_tmp).into_iter());
         insts.push(Inst::Call {
             info: Box::new(CallInfo {
                 dest: ExternalName::LibCall(LibCall::Memcpy),
@@ -632,16 +635,16 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         || fixed_frame_storage_size > 0
     }
 
-    fn gen_inline_probestack(frame_size: u32, guard_size: u32) -> SmallInstVec<Self::I> {
+    fn gen_inline_probestack(insts: &mut SmallInstVec<Self::I>, frame_size: u32, guard_size: u32) {
         // Unroll at most n consecutive probes, before falling back to using a loop
         const PROBE_MAX_UNROLL: u32 = 3;
         // Number of probes that we need to perform
         let probe_count = align_to(frame_size, guard_size) / guard_size;
 
         if probe_count <= PROBE_MAX_UNROLL {
-            Self::gen_probestack_unroll(guard_size, probe_count)
+            Self::gen_probestack_unroll(insts, guard_size, probe_count)
         } else {
-            Self::gen_probestack_loop(guard_size, probe_count)
+            Self::gen_probestack_loop(insts, guard_size, probe_count)
         }
     }
 }
@@ -697,8 +700,8 @@ fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
 }
 
 impl Riscv64MachineDeps {
-    fn gen_probestack_unroll(guard_size: u32, probe_count: u32) -> SmallInstVec<Inst> {
-        let mut insts = SmallVec::with_capacity(probe_count as usize);
+    fn gen_probestack_unroll(insts: &mut SmallInstVec<Inst>, guard_size: u32, probe_count: u32) {
+        insts.reserve(probe_count as usize);
         for i in 0..probe_count {
             let offset = (guard_size * (i + 1)) as i64;
             insts.push(Self::gen_store_stack(
@@ -707,13 +710,13 @@ impl Riscv64MachineDeps {
                 I32,
             ));
         }
-        insts
     }
-    fn gen_probestack_loop(guard_size: u32, probe_count: u32) -> SmallInstVec<Inst> {
-        smallvec![Inst::StackProbeLoop {
+
+    fn gen_probestack_loop(insts: &mut SmallInstVec<Inst>, guard_size: u32, probe_count: u32) {
+        insts.push(Inst::StackProbeLoop {
             guard_size,
             probe_count,
             tmp: Writable::from_reg(x_reg(28)), // t3
-        }]
+        });
     }
 }

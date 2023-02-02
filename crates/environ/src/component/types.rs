@@ -335,6 +335,7 @@ pub struct ComponentTypesBuilder {
 struct TypeScope {
     core: PrimaryMap<TypeIndex, TypeDef>,
     component: PrimaryMap<ComponentTypeIndex, TypeDef>,
+    instances: PrimaryMap<ComponentInstanceIndex, TypeComponentInstanceIndex>,
 }
 
 macro_rules! intern_and_fill_flat_types {
@@ -553,13 +554,17 @@ impl ComponentTypesBuilder {
                 ComponentTypeDeclaration::Type(ty) => self.type_declaration_type(ty)?,
                 ComponentTypeDeclaration::CoreType(ty) => self.type_declaration_core_type(ty)?,
                 ComponentTypeDeclaration::Alias(alias) => self.type_declaration_alias(alias)?,
-                ComponentTypeDeclaration::Export { name, ty } => {
-                    let ty = self.component_type_ref(ty);
-                    result.exports.insert(name.to_string(), ty);
+                ComponentTypeDeclaration::Export { name, url, ty } => {
+                    let ty = self.type_declaration_define(ty);
+                    result
+                        .exports
+                        .insert(name.to_string(), (url.to_string(), ty));
                 }
                 ComponentTypeDeclaration::Import(import) => {
-                    let ty = self.component_type_ref(&import.ty);
-                    result.imports.insert(import.name.to_string(), ty);
+                    let ty = self.type_declaration_define(&import.ty);
+                    result
+                        .imports
+                        .insert(import.name.to_string(), (import.url.to_string(), ty));
                 }
             }
         }
@@ -581,9 +586,11 @@ impl ComponentTypesBuilder {
                 InstanceTypeDeclaration::Type(ty) => self.type_declaration_type(ty)?,
                 InstanceTypeDeclaration::CoreType(ty) => self.type_declaration_core_type(ty)?,
                 InstanceTypeDeclaration::Alias(alias) => self.type_declaration_alias(alias)?,
-                InstanceTypeDeclaration::Export { name, ty } => {
-                    let ty = self.component_type_ref(ty);
-                    result.exports.insert(name.to_string(), ty);
+                InstanceTypeDeclaration::Export { name, url, ty } => {
+                    let ty = self.type_declaration_define(ty);
+                    result
+                        .exports
+                        .insert(name.to_string(), (url.to_string(), ty));
                 }
             }
         }
@@ -623,9 +630,47 @@ impl ComponentTypesBuilder {
                 let ty = self.component_outer_type(*count, ComponentTypeIndex::from_u32(*index));
                 self.push_component_typedef(ty);
             }
+            ComponentAlias::InstanceExport {
+                kind: _,
+                instance_index,
+                name,
+            } => {
+                let ty = self.type_scopes.last().unwrap().instances
+                    [ComponentInstanceIndex::from_u32(*instance_index)];
+                let (_, ty) = self.component_types[ty].exports[*name];
+                self.push_component_typedef(ty);
+            }
             a => unreachable!("invalid alias {a:?}"),
         }
         Ok(())
+    }
+
+    fn type_declaration_define(&mut self, ty: &wasmparser::ComponentTypeRef) -> TypeDef {
+        let ty = self.component_type_ref(ty);
+        let scope = self.type_scopes.last_mut().unwrap();
+        match ty {
+            // If an import or an export within a component or instance type
+            // references an interface type itself then that creates a new type
+            // which is effectively an alias, so push the type information here.
+            TypeDef::Interface(_) => {
+                self.push_component_typedef(ty);
+            }
+
+            // When an import or an export references a component instance then
+            // that creates a "pseudo-instance" which type information is
+            // maintained about. This is later used during the `InstanceExport`
+            // alias within a type declaration.
+            TypeDef::ComponentInstance(ty) => {
+                scope.instances.push(ty);
+            }
+
+            // All other valid types are ignored since we don't need to maintain
+            // metadata about them here as index spaces are modified that we're
+            // not interested in.
+            _ => {}
+        }
+
+        ty
     }
 
     fn func_type(&mut self, ty: &wasmparser::ComponentFuncType<'_>) -> TypeFuncIndex {
@@ -971,9 +1016,9 @@ pub struct TypeModule {
 #[derive(Serialize, Deserialize, Default)]
 pub struct TypeComponent {
     /// The named values that this component imports.
-    pub imports: IndexMap<String, TypeDef>,
+    pub imports: IndexMap<String, (String, TypeDef)>,
     /// The named values that this component exports.
-    pub exports: IndexMap<String, TypeDef>,
+    pub exports: IndexMap<String, (String, TypeDef)>,
 }
 
 /// The type of a component instance in the component model, or an instantiated
@@ -983,7 +1028,7 @@ pub struct TypeComponent {
 #[derive(Serialize, Deserialize, Default)]
 pub struct TypeComponentInstance {
     /// The list of exports that this component has along with their types.
-    pub exports: IndexMap<String, TypeDef>,
+    pub exports: IndexMap<String, (String, TypeDef)>,
 }
 
 /// A component function type in the component model.

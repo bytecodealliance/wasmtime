@@ -14,8 +14,7 @@ block1(v1: i32):
     jump block2(v5, v5)
 
 block2(v10: i32, v11: i32):
-    brz v11, block4(v10)
-    jump block3
+    brif v11, block3, block4(v10)
 
 block3:
     v12 = iconst.i32 1
@@ -24,8 +23,7 @@ block3:
     jump block2(v10,v13)
 
 block4(v20: i32):
-    brz v20, block5(v20)
-    jump block1(v20)
+    brif v20, block1(v20), block5(v20)
 
 block5(v30: i32):
     return v30
@@ -46,16 +44,14 @@ block5(v30: i32):
 ; nextln:     jump block2(v5, v5)
 ; nextln: 
 ; nextln: block2(v10: i32, v11: i32):
-; nextln:     brz v11, block4(v10)
-; nextln:     jump block3
+; nextln:     brif v11, block3, block4(v10)
 ; nextln: 
 ; nextln: block3:
 ; nextln:     v13 = isub.i32 v11, v12
 ; nextln:     jump block2(v10, v13)
 ; nextln: 
 ; nextln: block4(v20: i32):
-; nextln:     brz v20, block5(v20)
-; nextln:     jump block1(v20)
+; nextln:     brif v20, block1(v20), block5(v20)
 ; nextln: 
 ; nextln: block5(v30: i32):
 ; nextln:     return v30

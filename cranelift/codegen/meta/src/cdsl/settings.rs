@@ -66,7 +66,7 @@ impl Setting {
     }
 }
 
-#[derive(Hash, PartialEq, Eq)]
+#[derive(Hash, PartialEq, Eq, Copy, Clone)]
 pub(crate) struct PresetIndex(usize);
 
 #[derive(Hash, PartialEq, Eq)]
@@ -181,7 +181,6 @@ struct ProtoSetting {
 pub(crate) enum PredicateNode {
     OwnedBool(BoolSettingIndex),
     SharedBool(&'static str, &'static str),
-    Not(Box<PredicateNode>),
     And(Box<PredicateNode>, Box<PredicateNode>),
 }
 
@@ -211,7 +210,6 @@ impl PredicateNode {
             PredicateNode::And(ref lhs, ref rhs) => {
                 format!("{} && {}", lhs.render(group), rhs.render(group))
             }
-            PredicateNode::Not(ref node) => format!("!({})", node.render(group)),
         }
     }
 }

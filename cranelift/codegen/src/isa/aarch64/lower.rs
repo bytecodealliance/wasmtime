@@ -7,7 +7,6 @@
 //!
 //! - Floating-point immediates (FIMM instruction).
 
-use super::lower_inst;
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::types::*;
 use crate::ir::Inst as IRInst;
@@ -16,7 +15,6 @@ use crate::isa::aarch64::inst::*;
 use crate::isa::aarch64::AArch64Backend;
 use crate::machinst::lower::*;
 use crate::machinst::{Reg, Writable};
-use crate::CodegenResult;
 use crate::{machinst::*, trace};
 use smallvec::{smallvec, SmallVec};
 
@@ -41,27 +39,6 @@ impl NarrowValueMode {
             NarrowValueMode::ZeroExtend64 => false,
         }
     }
-}
-
-/// Emits instruction(s) to generate the given constant value into newly-allocated
-/// temporary registers, returning these registers.
-fn generate_constant(ctx: &mut Lower<Inst>, ty: Type, c: u128) -> ValueRegs<Reg> {
-    let from_bits = ty_bits(ty);
-    let masked = if from_bits < 128 {
-        c & ((1u128 << from_bits) - 1)
-    } else {
-        c
-    };
-
-    let cst_copy = ctx.alloc_tmp(ty);
-    for inst in Inst::gen_constant(cst_copy, masked, ty, |ty| {
-        ctx.alloc_tmp(ty).only_reg().unwrap()
-    })
-    .into_iter()
-    {
-        ctx.emit(inst);
-    }
-    non_writable_value_regs(cst_copy)
 }
 
 /// Extends a register according to `narrow_mode`.
@@ -112,7 +89,20 @@ fn lower_value_to_regs(ctx: &mut Lower<Inst>, value: Value) -> (ValueRegs<Reg>, 
 
     let in_regs = if let Some(c) = inputs.constant {
         // Generate constants fresh at each use to minimize long-range register pressure.
-        generate_constant(ctx, ty, c as u128)
+        let from_bits = ty_bits(ty);
+        let c = if from_bits < 64 {
+            c & ((1u64 << from_bits) - 1)
+        } else {
+            c
+        };
+        match ty {
+            I8 | I16 | I32 | I64 | R32 | R64 => {
+                let cst_copy = ctx.alloc_tmp(ty);
+                lower_constant_u64(ctx, cst_copy.only_reg().unwrap(), c);
+                non_writable_value_regs(cst_copy)
+            }
+            _ => unreachable!(), // Only used for addresses.
+        }
     } else {
         ctx.put_value_in_regs(value)
     };
@@ -342,19 +332,18 @@ pub(crate) fn lower_pair_address(ctx: &mut Lower<Inst>, addr: Value, offset: i32
         zero_reg()
     };
 
-    let addr = ctx.alloc_tmp(I64).only_reg().unwrap();
-    ctx.emit(Inst::gen_move(addr, base_reg, I64));
-
     // We have the base register, if we have any others, we need to add them
-    lower_add_addends(ctx, addr, addends64, addends32);
+    let addr = lower_add_addends(ctx, base_reg, addends64, addends32);
 
     // Figure out what offset we should emit
-    let imm7 = SImm7Scaled::maybe_from_i64(offset, I64).unwrap_or_else(|| {
-        lower_add_immediate(ctx, addr, addr.to_reg(), offset);
-        SImm7Scaled::maybe_from_i64(0, I64).unwrap()
-    });
+    let (addr, imm7) = if let Some(imm7) = SImm7Scaled::maybe_from_i64(offset, I64) {
+        (addr, imm7)
+    } else {
+        let res = lower_add_immediate(ctx, addr, offset);
+        (res, SImm7Scaled::maybe_from_i64(0, I64).unwrap())
+    };
 
-    PairAMode::SignedOffset(addr.to_reg(), imm7)
+    PairAMode::SignedOffset(addr, imm7)
 }
 
 /// Lower the address of a load or store.
@@ -454,63 +443,48 @@ pub(crate) fn lower_address(
         return memarg;
     }
 
-    // Allocate the temp and shoehorn it into the AMode.
-    let addr = ctx.alloc_tmp(I64).only_reg().unwrap();
-    let (reg, memarg) = match memarg {
-        AMode::RegExtended { rn, rm, extendop } => (
-            rn,
-            AMode::RegExtended {
-                rn: addr.to_reg(),
-                rm,
-                extendop,
-            },
-        ),
-        AMode::RegOffset { rn, off, ty } => (
-            rn,
-            AMode::RegOffset {
-                rn: addr.to_reg(),
-                off,
-                ty,
-            },
-        ),
-        AMode::RegReg { rn, rm } => (
-            rm,
-            AMode::RegReg {
-                rn: addr.to_reg(),
-                rm: rn,
-            },
-        ),
-        AMode::UnsignedOffset { rn, uimm12 } => (
-            rn,
-            AMode::UnsignedOffset {
-                rn: addr.to_reg(),
-                uimm12,
-            },
-        ),
+    // Extract the first register from the memarg so that we can add all the
+    // immediate values to it.
+    let addr = match memarg {
+        AMode::RegExtended { rn, .. } => rn,
+        AMode::RegOffset { rn, .. } => rn,
+        AMode::RegReg { rm, .. } => rm,
+        AMode::UnsignedOffset { rn, .. } => rn,
         _ => unreachable!(),
     };
 
     // If there is any offset, load that first into `addr`, and add the `reg`
     // that we kicked out of the `AMode`; otherwise, start with that reg.
-    if offset != 0 {
-        lower_add_immediate(ctx, addr, reg, offset)
+    let addr = if offset != 0 {
+        lower_add_immediate(ctx, addr, offset)
     } else {
-        ctx.emit(Inst::gen_move(addr, reg, I64));
-    }
+        addr
+    };
 
     // Now handle reg64 and reg32-extended components.
-    lower_add_addends(ctx, addr, addends64, addends32);
+    let addr = lower_add_addends(ctx, addr, addends64, addends32);
 
-    memarg
+    // Shoehorn addr into the AMode.
+    match memarg {
+        AMode::RegExtended { rm, extendop, .. } => AMode::RegExtended {
+            rn: addr,
+            rm,
+            extendop,
+        },
+        AMode::RegOffset { off, ty, .. } => AMode::RegOffset { rn: addr, off, ty },
+        AMode::RegReg { rn, .. } => AMode::RegReg { rn: addr, rm: rn },
+        AMode::UnsignedOffset { uimm12, .. } => AMode::UnsignedOffset { rn: addr, uimm12 },
+        _ => unreachable!(),
+    }
 }
 
 fn lower_add_addends(
     ctx: &mut Lower<Inst>,
-    rd: Writable<Reg>,
+    init: Reg,
     addends64: AddressAddend64List,
     addends32: AddressAddend32List,
-) {
-    for reg in addends64 {
+) -> Reg {
+    let init = addends64.into_iter().fold(init, |prev, reg| {
         // If the register is the stack reg, we must move it to another reg
         // before adding it.
         let reg = if reg == stack_reg() {
@@ -520,30 +494,43 @@ fn lower_add_addends(
         } else {
             reg
         };
+
+        let rd = ctx.alloc_tmp(I64).only_reg().unwrap();
+
         ctx.emit(Inst::AluRRR {
             alu_op: ALUOp::Add,
             size: OperandSize::Size64,
             rd,
-            rn: rd.to_reg(),
+            rn: prev,
             rm: reg,
         });
-    }
-    for (reg, extendop) in addends32 {
+
+        rd.to_reg()
+    });
+
+    addends32.into_iter().fold(init, |prev, (reg, extendop)| {
         assert!(reg != stack_reg());
+
+        let rd = ctx.alloc_tmp(I64).only_reg().unwrap();
+
         ctx.emit(Inst::AluRRRExtend {
             alu_op: ALUOp::Add,
             size: OperandSize::Size64,
             rd,
-            rn: rd.to_reg(),
+            rn: prev,
             rm: reg,
             extendop,
         });
-    }
+
+        rd.to_reg()
+    })
 }
 
 /// Adds into `rd` a signed imm pattern matching the best instruction for it.
 // TODO: This function is duplicated in ctx.gen_add_imm
-fn lower_add_immediate(ctx: &mut Lower<Inst>, dst: Writable<Reg>, src: Reg, imm: i64) {
+fn lower_add_immediate(ctx: &mut Lower<Inst>, src: Reg, imm: i64) -> Reg {
+    let dst = ctx.alloc_tmp(I64).only_reg().unwrap();
+
     // If we can fit offset or -offset in an imm12, use an add-imm
     // Otherwise, lower the constant first then add.
     if let Some(imm12) = Imm12::maybe_from_u64(imm as u64) {
@@ -563,19 +550,22 @@ fn lower_add_immediate(ctx: &mut Lower<Inst>, dst: Writable<Reg>, src: Reg, imm:
             imm12,
         });
     } else {
-        lower_constant_u64(ctx, dst, imm as u64);
+        let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
+        lower_constant_u64(ctx, tmp, imm as u64);
         ctx.emit(Inst::AluRRR {
             alu_op: ALUOp::Add,
             size: OperandSize::Size64,
             rd: dst,
-            rn: dst.to_reg(),
+            rn: tmp.to_reg(),
             rm: src,
         });
     }
+
+    dst.to_reg()
 }
 
 pub(crate) fn lower_constant_u64(ctx: &mut Lower<Inst>, rd: Writable<Reg>, value: u64) {
-    for inst in Inst::load_constant(rd, value) {
+    for inst in Inst::load_constant(rd, value, &mut |ty| ctx.alloc_tmp(ty).only_reg().unwrap()) {
         ctx.emit(inst);
     }
 }
@@ -754,43 +744,17 @@ pub(crate) fn maybe_value_multi(
 impl LowerBackend for AArch64Backend {
     type MInst = Inst;
 
-    fn lower(&self, ctx: &mut Lower<Inst>, ir_inst: IRInst) -> CodegenResult<()> {
-        lower_inst::lower_insn_to_regs(ctx, ir_inst, &self.triple, &self.flags, &self.isa_flags)
+    fn lower(&self, ctx: &mut Lower<Inst>, ir_inst: IRInst) -> Option<InstOutput> {
+        isle::lower(ctx, self, ir_inst)
     }
 
-    fn lower_branch_group(
+    fn lower_branch(
         &self,
         ctx: &mut Lower<Inst>,
-        branches: &[IRInst],
+        ir_inst: IRInst,
         targets: &[MachLabel],
-    ) -> CodegenResult<()> {
-        // A block should end with at most two branches. The first may be a
-        // conditional branch; a conditional branch can be followed only by an
-        // unconditional branch or fallthrough. Otherwise, if only one branch,
-        // it may be an unconditional branch, a fallthrough, a return, or a
-        // trap. These conditions are verified by `is_ebb_basic()` during the
-        // verifier pass.
-        assert!(branches.len() <= 2);
-        if branches.len() == 2 {
-            let op1 = ctx.data(branches[1]).opcode();
-            assert!(op1 == Opcode::Jump);
-        }
-
-        if let Ok(()) = super::lower::isle::lower_branch(
-            ctx,
-            &self.triple,
-            &self.flags,
-            &self.isa_flags,
-            branches[0],
-            targets,
-        ) {
-            return Ok(());
-        }
-
-        unreachable!(
-            "implemented in ISLE: branch = `{}`",
-            ctx.dfg().display_inst(branches[0]),
-        );
+    ) -> Option<()> {
+        isle::lower_branch(ctx, self, ir_inst, targets)
     }
 
     fn maybe_pinned_reg(&self) -> Option<Reg> {

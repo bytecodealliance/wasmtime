@@ -33,7 +33,7 @@ impl Table {
         // NOTE: The performance of this new key calculation could be very bad once keys wrap
         // around.
         if self.map.len() == u32::MAX as usize {
-            return Err(Error::trap("table has no free keys"));
+            return Err(Error::trap(anyhow::Error::msg("table has no free keys")));
         }
         loop {
             let key = self.next_key;

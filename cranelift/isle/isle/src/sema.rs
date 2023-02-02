@@ -56,7 +56,7 @@ declare_id!(
 /// The type environment.
 ///
 /// Keeps track of which symbols and rules have which types.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct TypeEnv {
     /// Arena of input ISLE source filenames.
     ///
@@ -223,6 +223,17 @@ pub struct Term {
     pub kind: TermKind,
 }
 
+/// Flags from a term's declaration with `(decl ...)`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TermFlags {
+    /// Whether the term is marked as `pure`.
+    pub pure: bool,
+    /// Whether the term is marked as `multi`.
+    pub multi: bool,
+    /// Whether the term is marked as `partial`.
+    pub partial: bool,
+}
+
 /// The kind of a term.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TermKind {
@@ -234,10 +245,8 @@ pub enum TermKind {
     },
     /// A term declared via a `(decl ...)` form.
     Decl {
-        /// Whether the term is marked as `pure`.
-        pure: bool,
-        /// Whether the term is marked as `multi`.
-        multi: bool,
+        /// Flags from the term's declaration.
+        flags: TermFlags,
         /// The kind of this term's constructor, if any.
         constructor_kind: Option<ConstructorKind>,
         /// The kind of this term's extractor, if any.
@@ -279,6 +288,17 @@ pub enum ExtractorKind {
     },
 }
 
+/// How many values a function can return.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ReturnKind {
+    /// Exactly one return value.
+    Plain,
+    /// Zero or one return values.
+    Option,
+    /// Zero or more return values.
+    Iterator,
+}
+
 /// An external function signature.
 #[derive(Clone, Debug)]
 pub struct ExternalSig {
@@ -290,11 +310,8 @@ pub struct ExternalSig {
     pub param_tys: Vec<TypeId>,
     /// The types of this function signature's results.
     pub ret_tys: Vec<TypeId>,
-    /// Whether this signature is infallible or not.
-    pub infallible: bool,
-    /// "Multiplicity": does the function return multiple values (via
-    /// an iterator)?
-    pub multi: bool,
+    /// How many values can this function return?
+    pub ret_kind: ReturnKind,
 }
 
 impl Term {
@@ -372,20 +389,28 @@ impl Term {
     pub fn extractor_sig(&self, tyenv: &TypeEnv) -> Option<ExternalSig> {
         match &self.kind {
             TermKind::Decl {
-                multi,
+                flags,
                 extractor_kind:
                     Some(ExtractorKind::ExternalExtractor {
                         name, infallible, ..
                     }),
                 ..
-            } => Some(ExternalSig {
-                func_name: tyenv.syms[name.index()].clone(),
-                full_name: format!("C::{}", tyenv.syms[name.index()]),
-                param_tys: vec![self.ret_ty],
-                ret_tys: self.arg_tys.clone(),
-                infallible: *infallible && !*multi,
-                multi: *multi,
-            }),
+            } => {
+                let ret_kind = if flags.multi {
+                    ReturnKind::Iterator
+                } else if *infallible {
+                    ReturnKind::Plain
+                } else {
+                    ReturnKind::Option
+                };
+                Some(ExternalSig {
+                    func_name: tyenv.syms[name.index()].clone(),
+                    full_name: format!("C::{}", tyenv.syms[name.index()]),
+                    param_tys: vec![self.ret_ty],
+                    ret_tys: self.arg_tys.clone(),
+                    ret_kind,
+                })
+            }
             _ => None,
         }
     }
@@ -394,35 +419,33 @@ impl Term {
     pub fn constructor_sig(&self, tyenv: &TypeEnv) -> Option<ExternalSig> {
         match &self.kind {
             TermKind::Decl {
-                constructor_kind: Some(ConstructorKind::ExternalConstructor { name }),
-                multi,
-                pure,
-                ..
-            } => Some(ExternalSig {
-                func_name: tyenv.syms[name.index()].clone(),
-                full_name: format!("C::{}", tyenv.syms[name.index()]),
-                param_tys: self.arg_tys.clone(),
-                ret_tys: vec![self.ret_ty],
-                infallible: !pure && !*multi,
-                multi: *multi,
-            }),
-            TermKind::Decl {
-                constructor_kind: Some(ConstructorKind::InternalConstructor { .. }),
-                multi,
+                constructor_kind: Some(kind),
+                flags,
                 ..
             } => {
-                let name = format!("constructor_{}", tyenv.syms[self.name.index()]);
+                let (func_name, full_name) = match kind {
+                    ConstructorKind::InternalConstructor => {
+                        let name = format!("constructor_{}", tyenv.syms[self.name.index()]);
+                        (name.clone(), name)
+                    }
+                    ConstructorKind::ExternalConstructor { name } => (
+                        tyenv.syms[name.index()].clone(),
+                        format!("C::{}", tyenv.syms[name.index()]),
+                    ),
+                };
+                let ret_kind = if flags.multi {
+                    ReturnKind::Iterator
+                } else if flags.partial {
+                    ReturnKind::Option
+                } else {
+                    ReturnKind::Plain
+                };
                 Some(ExternalSig {
-                    func_name: name.clone(),
-                    full_name: name,
+                    func_name,
+                    full_name,
                     param_tys: self.arg_tys.clone(),
                     ret_tys: vec![self.ret_ty],
-                    // Internal constructors are always fallible, even
-                    // if not pure, because ISLE allows partial
-                    // matching at the toplevel (an entry point can
-                    // fail to rewrite).
-                    infallible: false,
-                    multi: *multi,
+                    ret_kind,
                 })
             }
             _ => None,
@@ -436,7 +459,9 @@ pub struct Rule {
     /// This rule's id.
     pub id: RuleId,
     /// The left-hand side pattern that this rule matches.
-    pub lhs: Pattern,
+    pub root_term: TermId,
+    /// Patterns to test against the root term's arguments.
+    pub args: Vec<Pattern>,
     /// Any subpattern "if-let" clauses.
     pub iflets: Vec<IfLet>,
     /// The right-hand side expression that this rule evaluates upon successful
@@ -459,6 +484,9 @@ pub struct BoundVar {
     pub name: Sym,
     /// The type of the value this variable is bound to.
     pub ty: TypeId,
+    /// A counter used to check whether this variable is still in scope during
+    /// semantic analysis. Not meaningful afterward.
+    scope: usize,
 }
 
 /// An `if-let` clause with a subpattern match on an expr after the
@@ -578,15 +606,6 @@ impl Pattern {
         }
     }
 
-    /// Get the root term of this pattern, if any.
-    pub fn root_term(&self) -> Option<TermId> {
-        match self {
-            &Pattern::Term(_, term, _) => Some(term),
-            &Pattern::BindPattern(_, _, ref subpat) => subpat.root_term(),
-            _ => None,
-        }
-    }
-
     /// Recursively visit every sub-pattern.
     pub fn visit<V: PatternVisitor>(
         &self,
@@ -632,7 +651,7 @@ impl Pattern {
                         panic!("Should have been expanded away")
                     }
                     TermKind::Decl {
-                        multi,
+                        flags,
                         extractor_kind: Some(ExtractorKind::ExternalExtractor { infallible, .. }),
                         ..
                     } => {
@@ -645,8 +664,8 @@ impl Pattern {
                             termdata.ret_ty,
                             output_tys,
                             term,
-                            *infallible && !*multi,
-                            *multi,
+                            *infallible && !flags.multi,
+                            flags.multi,
                         )
                     }
                 };
@@ -691,6 +710,7 @@ pub trait ExprVisitor {
         inputs: Vec<(Self::ExprId, TypeId)>,
         ty: TypeId,
         term: TermId,
+        pure: bool,
         infallible: bool,
         multi: bool,
     ) -> Self::ExprId;
@@ -744,30 +764,17 @@ impl Expr {
                         visitor.add_create_variant(arg_values_tys, ty, *variant)
                     }
                     TermKind::Decl {
-                        constructor_kind: Some(ConstructorKind::InternalConstructor),
-                        multi,
+                        constructor_kind: Some(_),
+                        flags,
                         ..
                     } => {
                         visitor.add_construct(
                             arg_values_tys,
                             ty,
                             term,
-                            /* infallible = */ false,
-                            *multi,
-                        )
-                    }
-                    TermKind::Decl {
-                        constructor_kind: Some(ConstructorKind::ExternalConstructor { .. }),
-                        pure,
-                        multi,
-                        ..
-                    } => {
-                        visitor.add_construct(
-                            arg_values_tys,
-                            ty,
-                            term,
-                            /* infallible = */ !pure,
-                            *multi,
+                            flags.pure,
+                            /* infallible = */ !flags.partial,
+                            flags.multi,
                         )
                     }
                     TermKind::Decl {
@@ -858,14 +865,10 @@ impl Rule {
         let mut vars = HashMap::new();
 
         // Visit the pattern, starting from the root input value.
-        if let &Pattern::Term(_, term, ref args) = &self.lhs {
-            let termdata = &termenv.terms[term.index()];
-            for (i, (subpat, &arg_ty)) in args.iter().zip(termdata.arg_tys.iter()).enumerate() {
-                let value = visitor.add_arg(i, arg_ty);
-                visitor.add_pattern(|visitor| subpat.visit(visitor, value, termenv, &mut vars));
-            }
-        } else {
-            unreachable!("Pattern must have a term at the root");
+        let termdata = &termenv.terms[self.root_term.index()];
+        for (i, (subpat, &arg_ty)) in self.args.iter().zip(termdata.arg_tys.iter()).enumerate() {
+            let value = visitor.add_arg(i, arg_ty);
+            visitor.add_pattern(|visitor| subpat.visit(visitor, value, termenv, &mut vars));
         }
 
         // Visit the `if-let` clauses, using `V::ExprVisitor` for the sub-exprs (right-hand sides).
@@ -898,7 +901,7 @@ macro_rules! unwrap_or_continue {
 
 impl TypeEnv {
     /// Construct the type environment from the AST.
-    pub fn from_ast(defs: &ast::Defs) -> Result<TypeEnv> {
+    pub fn from_ast(defs: &ast::Defs) -> Result<TypeEnv, Errors> {
         let mut tyenv = TypeEnv {
             filenames: defs.filenames.clone(),
             file_texts: defs.file_texts.clone(),
@@ -979,11 +982,15 @@ impl TypeEnv {
         Ok(tyenv)
     }
 
-    fn return_errors(&mut self) -> Result<()> {
-        match self.errors.len() {
-            0 => Ok(()),
-            1 => Err(self.errors.pop().unwrap()),
-            _ => Err(Error::Errors(std::mem::take(&mut self.errors))),
+    fn return_errors(&mut self) -> Result<(), Errors> {
+        if self.errors.is_empty() {
+            Ok(())
+        } else {
+            Err(Errors {
+                errors: std::mem::take(&mut self.errors),
+                filenames: self.filenames.clone(),
+                file_texts: self.file_texts.clone(),
+            })
         }
     }
 
@@ -1073,16 +1080,10 @@ impl TypeEnv {
     }
 
     fn error(&self, pos: Pos, msg: impl Into<String>) -> Error {
-        let e = Error::TypeError {
+        Error::TypeError {
             msg: msg.into(),
-            src: Source::new(
-                self.filenames[pos.file].clone(),
-                self.file_texts[pos.file].clone(),
-            ),
             span: Span::new_single(pos),
-        };
-        log!("{}", e);
-        e
+        }
     }
 
     fn report_error(&mut self, pos: Pos, msg: impl Into<String>) {
@@ -1114,25 +1115,52 @@ impl TypeEnv {
 
 #[derive(Clone, Debug, Default)]
 struct Bindings {
+    /// All bindings accumulated so far within the current rule, including let-
+    /// bindings which have gone out of scope.
     seen: Vec<BoundVar>,
+    /// Counter for unique scope IDs within this set of bindings.
+    next_scope: usize,
+    /// Stack of the scope IDs for bindings which are currently in scope.
+    in_scope: Vec<usize>,
 }
 
 impl Bindings {
+    fn enter_scope(&mut self) {
+        self.in_scope.push(self.next_scope);
+        self.next_scope += 1;
+    }
+
+    fn exit_scope(&mut self) {
+        self.in_scope.pop();
+    }
+
     fn add_var(&mut self, name: Sym, ty: TypeId) -> VarId {
         let id = VarId(self.seen.len());
-        log!("binding var {:?} as {:?} with type {:?}", name.0, id, ty);
-        self.seen.push(BoundVar { id, name, ty });
+        let var = BoundVar {
+            id,
+            name,
+            ty,
+            scope: *self
+                .in_scope
+                .last()
+                .expect("enter_scope should be called before add_var"),
+        };
+        log!("binding var {:?}", var);
+        self.seen.push(var);
         id
     }
 
     fn lookup(&self, name: Sym) -> Option<&BoundVar> {
-        self.seen.iter().rev().find(|binding| binding.name == name)
+        self.seen
+            .iter()
+            .rev()
+            .find(|binding| binding.name == name && self.in_scope.contains(&binding.scope))
     }
 }
 
 impl TermEnv {
     /// Construct the term environment from the AST and the type environment.
-    pub fn from_ast(tyenv: &mut TypeEnv, defs: &ast::Defs) -> Result<TermEnv> {
+    pub fn from_ast(tyenv: &mut TypeEnv, defs: &ast::Defs) -> Result<TermEnv, Errors> {
         let mut env = TermEnv {
             terms: vec![],
             term_map: StableMap::new(),
@@ -1180,6 +1208,13 @@ impl TermEnv {
                         );
                     }
 
+                    if decl.multi && decl.partial {
+                        tyenv.report_error(
+                            decl.pos,
+                            format!("Term '{}' can't be both multi and partial", decl.term.0),
+                        );
+                    }
+
                     let arg_tys = decl
                         .arg_tys
                         .iter()
@@ -1189,7 +1224,7 @@ impl TermEnv {
                                 ()
                             })
                         })
-                        .collect::<std::result::Result<Vec<_>, _>>();
+                        .collect::<Result<Vec<_>, _>>();
                     let arg_tys = match arg_tys {
                         Ok(a) => a,
                         Err(_) => {
@@ -1209,6 +1244,11 @@ impl TermEnv {
 
                     let tid = TermId(self.terms.len());
                     self.term_map.insert(name, tid);
+                    let flags = TermFlags {
+                        pure: decl.pure,
+                        multi: decl.multi,
+                        partial: decl.partial,
+                    };
                     self.terms.push(Term {
                         id: tid,
                         decl_pos: decl.pos,
@@ -1216,10 +1256,9 @@ impl TermEnv {
                         arg_tys,
                         ret_ty,
                         kind: TermKind::Decl {
+                            flags,
                             constructor_kind: None,
                             extractor_kind: None,
-                            pure: decl.pure,
-                            multi: decl.multi,
                         },
                     });
                 }
@@ -1377,12 +1416,12 @@ impl TermEnv {
                         continue;
                     }
                     TermKind::Decl {
-                        multi,
+                        flags,
                         extractor_kind,
                         ..
                     } => match extractor_kind {
                         None => {
-                            if *multi {
+                            if flags.multi {
                                 tyenv.report_error(
                                     ext.pos,
                                     "A term declared with `multi` cannot have an internal extractor.".to_string());
@@ -1647,30 +1686,33 @@ impl TermEnv {
                 &ast::Def::Rule(ref rule) => {
                     let pos = rule.pos;
                     let mut bindings = Bindings::default();
+                    bindings.enter_scope();
 
-                    let rule_term = match rule.pattern.root_term() {
-                        Some(name) => match self.get_term_by_name(tyenv, name) {
-                            Some(term) => term,
-                            None => {
-                                tyenv.report_error(
-                                    pos,
-                                    "Cannot define a rule for an unknown term".to_string(),
-                                );
-                                continue;
-                            }
-                        },
-                        None => {
-                            tyenv.report_error(
-                                pos,
-                                "Rule does not have a term at the root of its left-hand side"
-                                    .to_string(),
-                            );
-                            continue;
-                        }
+                    let (sym, args) = if let ast::Pattern::Term { sym, args, .. } = &rule.pattern {
+                        (sym, args)
+                    } else {
+                        tyenv.report_error(
+                            pos,
+                            "Rule does not have a term at the root of its left-hand side"
+                                .to_string(),
+                        );
+                        continue;
                     };
 
-                    let pure = match &self.terms[rule_term.index()].kind {
-                        &TermKind::Decl { pure, .. } => pure,
+                    let root_term = if let Some(term) = self.get_term_by_name(tyenv, sym) {
+                        term
+                    } else {
+                        tyenv.report_error(
+                            pos,
+                            "Cannot define a rule for an unknown term".to_string(),
+                        );
+                        continue;
+                    };
+
+                    let termdata = &self.terms[root_term.index()];
+
+                    let flags = match &termdata.kind {
+                        TermKind::Decl { flags, .. } => flags,
                         _ => {
                             tyenv.report_error(
                                 pos,
@@ -1681,37 +1723,48 @@ impl TermEnv {
                         }
                     };
 
-                    let (lhs, ty) = unwrap_or_continue!(self.translate_pattern(
-                        tyenv,
-                        rule_term,
-                        &rule.pattern,
-                        None,
-                        &mut bindings,
-                        /* is_root = */ true,
-                    ));
+                    termdata.check_args_count(args, tyenv, pos, sym);
+                    let args = self.translate_args(args, termdata, tyenv, &mut bindings);
+
                     let iflets = rule
                         .iflets
                         .iter()
                         .filter_map(|iflet| {
-                            self.translate_iflet(tyenv, rule_term, iflet, &mut bindings)
+                            self.translate_iflet(tyenv, iflet, &mut bindings, flags)
                         })
                         .collect();
                     let rhs = unwrap_or_continue!(self.translate_expr(
                         tyenv,
                         &rule.expr,
-                        Some(ty),
+                        Some(termdata.ret_ty),
                         &mut bindings,
-                        pure,
+                        flags,
+                        /* on_lhs */ false,
                     ));
+
+                    bindings.exit_scope();
+
+                    let prio = if let Some(prio) = rule.prio {
+                        if flags.multi {
+                            tyenv.report_error(
+                                pos,
+                                "Cannot set rule priorities in multi-terms".to_string(),
+                            );
+                        }
+                        prio
+                    } else {
+                        0
+                    };
 
                     let rid = RuleId(self.rules.len());
                     self.rules.push(Rule {
                         id: rid,
-                        lhs,
+                        root_term,
+                        args,
                         iflets,
                         rhs,
                         vars: bindings.seen,
-                        prio: rule.prio.unwrap_or(0),
+                        prio,
                         pos,
                     });
                 }
@@ -1798,11 +1851,9 @@ impl TermEnv {
     fn translate_pattern(
         &self,
         tyenv: &mut TypeEnv,
-        rule_term: TermId,
         pat: &ast::Pattern,
         expected_ty: Option<TypeId>,
         bindings: &mut Bindings,
-        is_root: bool,
     ) -> Option<(Pattern, TypeId)> {
         log!("translate_pattern: {:?}", pat);
         log!("translate_pattern: bindings = {:?}", bindings);
@@ -1858,11 +1909,9 @@ impl TermEnv {
                 for subpat in subpats {
                     let (subpat, ty) = unwrap_or_continue!(self.translate_pattern(
                         tyenv,
-                        rule_term,
-                        &*subpat,
+                        subpat,
                         expected_ty,
                         bindings,
-                        /* is_root = */ false,
                     ));
                     expected_ty = expected_ty.or(Some(ty));
 
@@ -1885,14 +1934,7 @@ impl TermEnv {
                 pos,
             } => {
                 // Do the subpattern first so we can resolve the type for sure.
-                let (subpat, ty) = self.translate_pattern(
-                    tyenv,
-                    rule_term,
-                    &*subpat,
-                    expected_ty,
-                    bindings,
-                    /* is_root = */ false,
-                )?;
+                let (subpat, ty) = self.translate_pattern(tyenv, subpat, expected_ty, bindings)?;
 
                 let name = tyenv.intern_mut(var);
                 if bindings.lookup(name).is_some() {
@@ -1984,11 +2026,9 @@ impl TermEnv {
                         {
                             return self.translate_pattern(
                                 tyenv,
-                                rule_term,
                                 &expanded_pattern,
                                 Some(expected_ty),
                                 bindings,
-                                /* is_root = */ false,
                             );
                         }
 
@@ -2004,11 +2044,9 @@ impl TermEnv {
 
                 termdata.check_args_count(args, tyenv, pos, sym);
 
+                // TODO: check that multi-extractors are only used in terms declared `multi`
+
                 match &termdata.kind {
-                    TermKind::Decl {
-                        constructor_kind: Some(ConstructorKind::InternalConstructor),
-                        ..
-                    } if is_root && tid == rule_term => {}
                     TermKind::EnumVariant { .. } => {}
                     TermKind::Decl {
                         extractor_kind: Some(ExtractorKind::ExternalExtractor { .. }),
@@ -2024,14 +2062,7 @@ impl TermEnv {
                         // substitutions.
                         log!("internal extractor macro args = {:?}", args);
                         let pat = template.subst_macro_args(&args)?;
-                        return self.translate_pattern(
-                            tyenv,
-                            rule_term,
-                            &pat,
-                            expected_ty,
-                            bindings,
-                            /* is_root = */ false,
-                        );
+                        return self.translate_pattern(tyenv, &pat, expected_ty, bindings);
                     }
                     TermKind::Decl {
                         extractor_kind: None,
@@ -2048,27 +2079,25 @@ impl TermEnv {
                     }
                 }
 
-                // Resolve subpatterns.
-                let subpats = args
-                    .iter()
-                    .zip(termdata.arg_tys.iter())
-                    .filter_map(|(arg, &arg_ty)| {
-                        self.translate_pattern(
-                            tyenv,
-                            rule_term,
-                            arg,
-                            Some(arg_ty),
-                            bindings,
-                            /* is_root = */ false,
-                        )
-                    })
-                    .map(|(subpat, _)| subpat)
-                    .collect();
-
+                let subpats = self.translate_args(args, termdata, tyenv, bindings);
                 Some((Pattern::Term(ty, tid, subpats), ty))
             }
             &ast::Pattern::MacroArg { .. } => unreachable!(),
         }
+    }
+
+    fn translate_args(
+        &self,
+        args: &Vec<ast::Pattern>,
+        termdata: &Term,
+        tyenv: &mut TypeEnv,
+        bindings: &mut Bindings,
+    ) -> Vec<Pattern> {
+        args.iter()
+            .zip(termdata.arg_tys.iter())
+            .filter_map(|(arg, &arg_ty)| self.translate_pattern(tyenv, arg, Some(arg_ty), bindings))
+            .map(|(subpat, _)| subpat)
+            .collect()
     }
 
     fn maybe_implicit_convert_expr(
@@ -2101,7 +2130,8 @@ impl TermEnv {
         expr: &ast::Expr,
         ty: Option<TypeId>,
         bindings: &mut Bindings,
-        pure: bool,
+        root_flags: &TermFlags,
+        on_lhs: bool,
     ) -> Option<Expr> {
         log!("translate_expr: {:?}", expr);
         match expr {
@@ -2144,7 +2174,14 @@ impl TermEnv {
                     if let Some(expanded_expr) =
                         self.maybe_implicit_convert_expr(tyenv, expr, ret_ty, ty.unwrap())
                     {
-                        return self.translate_expr(tyenv, &expanded_expr, ty, bindings, pure);
+                        return self.translate_expr(
+                            tyenv,
+                            &expanded_expr,
+                            ty,
+                            bindings,
+                            root_flags,
+                            on_lhs,
+                        );
                     }
 
                     tyenv.report_error(
@@ -2159,14 +2196,46 @@ impl TermEnv {
                     ret_ty
                 };
 
-                // Check that the term's constructor is pure.
-                if pure {
-                    if let TermKind::Decl { pure: false, .. } = &termdata.kind {
+                if let TermKind::Decl { flags, .. } = &termdata.kind {
+                    // On the left-hand side of a rule or in a pure term, only pure terms may be
+                    // used.
+                    let pure_required = on_lhs || root_flags.pure;
+                    if pure_required && !flags.pure {
                         tyenv.report_error(
                             pos,
                             format!(
                                 "Used non-pure constructor '{}' in pure expression context",
                                 sym.0
+                            ),
+                        );
+                    }
+
+                    // Multi-terms may only be used inside other multi-terms.
+                    if !root_flags.multi && flags.multi {
+                        tyenv.report_error(
+                            pos,
+                            format!(
+                                "Used multi-constructor '{}' but this rule is not in a multi-term",
+                                sym.0
+                            ),
+                        );
+                    }
+
+                    // Partial terms may always be used on the left-hand side of a rule. On the
+                    // right-hand side they may only be used inside other partial terms.
+                    let partial_allowed = on_lhs || root_flags.partial;
+                    if !partial_allowed && flags.partial {
+                        tyenv.report_error(
+                            pos,
+                            format!(
+                                "Rule can't use partial constructor '{}' on RHS; \
+                                try moving it to if-let{}",
+                                sym.0,
+                                if root_flags.multi {
+                                    ""
+                                } else {
+                                    " or make this rule's term partial too"
+                                }
                             ),
                         );
                     }
@@ -2179,7 +2248,7 @@ impl TermEnv {
                     .iter()
                     .zip(termdata.arg_tys.iter())
                     .filter_map(|(arg, &arg_ty)| {
-                        self.translate_expr(tyenv, arg, Some(arg_ty), bindings, pure)
+                        self.translate_expr(tyenv, arg, Some(arg_ty), bindings, root_flags, on_lhs)
                     })
                     .collect();
 
@@ -2202,7 +2271,14 @@ impl TermEnv {
                     if let Some(expanded_expr) =
                         self.maybe_implicit_convert_expr(tyenv, expr, bv.ty, ty.unwrap())
                     {
-                        return self.translate_expr(tyenv, &expanded_expr, ty, bindings, pure);
+                        return self.translate_expr(
+                            tyenv,
+                            &expanded_expr,
+                            ty,
+                            bindings,
+                            root_flags,
+                            on_lhs,
+                        );
                     }
 
                     tyenv.report_error(
@@ -2268,7 +2344,7 @@ impl TermEnv {
                 ref body,
                 pos,
             } => {
-                let orig_binding_len = bindings.seen.len();
+                bindings.enter_scope();
 
                 // For each new binding...
                 let mut let_defs = vec![];
@@ -2294,7 +2370,8 @@ impl TermEnv {
                         &def.val,
                         Some(tid),
                         bindings,
-                        pure
+                        root_flags,
+                        on_lhs,
                     )));
 
                     // Bind the var with the given type.
@@ -2303,11 +2380,12 @@ impl TermEnv {
                 }
 
                 // Evaluate the body, expecting the type of the overall let-expr.
-                let body = Box::new(self.translate_expr(tyenv, body, ty, bindings, pure)?);
+                let body =
+                    Box::new(self.translate_expr(tyenv, body, ty, bindings, root_flags, on_lhs)?);
                 let body_ty = body.ty();
 
                 // Pop the bindings.
-                bindings.seen.truncate(orig_binding_len);
+                bindings.exit_scope();
 
                 Some(Expr::Let {
                     ty: body_ty,
@@ -2321,22 +2399,22 @@ impl TermEnv {
     fn translate_iflet(
         &self,
         tyenv: &mut TypeEnv,
-        rule_term: TermId,
         iflet: &ast::IfLet,
         bindings: &mut Bindings,
+        root_flags: &TermFlags,
     ) -> Option<IfLet> {
-        // Translate the expr first. Ensure it's pure.
-        let rhs =
-            self.translate_expr(tyenv, &iflet.expr, None, bindings, /* pure = */ true)?;
-        let ty = rhs.ty();
-        let (lhs, _lhs_ty) = self.translate_pattern(
+        // Translate the expr first. The `if-let` and `if` forms are part of the left-hand side of
+        // the rule.
+        let rhs = self.translate_expr(
             tyenv,
-            rule_term,
-            &iflet.pattern,
-            Some(ty),
+            &iflet.expr,
+            None,
             bindings,
-            /* is_root = */ false,
+            root_flags,
+            /* on_lhs */ true,
         )?;
+        let ty = rhs.ty();
+        let (lhs, _lhs_ty) = self.translate_pattern(tyenv, &iflet.pattern, Some(ty), bindings)?;
 
         Some(IfLet { lhs, rhs })
     }

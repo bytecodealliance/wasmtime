@@ -8,10 +8,9 @@ target aarch64
 function %f0(i64 vmctx, i32) -> i32, i32, i32, i64, i64, i64 {
     gv0 = vmctx
     gv1 = load.i64 notrap readonly aligned gv0+8
-    heap0 = static gv1, bound 0x1_0000_0000, offset_guard 0x8000_0000, index_type i32
 
 block0(v0: i64, v1: i32):
-    v2 = heap_addr.i64 heap0, v1, 12, 0
+    v2 = global_value.i64 gv1
 
     ;; Initial load. This will not be reused by anything below, even
     ;; though it does access the same address.

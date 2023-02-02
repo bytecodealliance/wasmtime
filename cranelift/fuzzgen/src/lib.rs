@@ -7,9 +7,11 @@ use cranelift::codegen::data_value::DataValue;
 use cranelift::codegen::ir::types::*;
 use cranelift::codegen::ir::Function;
 use cranelift::codegen::Context;
+use cranelift::prelude::isa;
 use cranelift::prelude::*;
 use cranelift_native::builder_with_options;
 use std::fmt;
+use target_lexicon::{Architecture, Triple};
 
 mod config;
 mod function_generator;
@@ -24,15 +26,77 @@ pub struct SingleFunction(pub Function);
 impl<'a> Arbitrary<'a> for SingleFunction {
     fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
         FuzzGen::new(u)
-            .generate_func()
+            .generate_func(Triple::host())
             .map_err(|_| arbitrary::Error::IncorrectFormat)
             .map(Self)
     }
 }
 
+/// Print only non default flags.
+fn write_non_default_flags(f: &mut fmt::Formatter<'_>, flags: &settings::Flags) -> fmt::Result {
+    let default_flags = settings::Flags::new(settings::builder());
+    for (default, flag) in default_flags.iter().zip(flags.iter()) {
+        assert_eq!(default.name, flag.name);
+
+        if default.value_string() != flag.value_string() {
+            writeln!(f, "set {}={}", flag.name, flag.value_string())?;
+        }
+    }
+
+    Ok(())
+}
+
+/// A generated function with an ISA that targets one of cranelift's backends.
+pub struct FunctionWithIsa {
+    /// TargetIsa to use when compiling this test case
+    pub isa: isa::OwnedTargetIsa,
+
+    /// Function under test
+    pub func: Function,
+}
+
+impl fmt::Debug for FunctionWithIsa {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, ";; Compile test case\n")?;
+
+        write_non_default_flags(f, self.isa.flags())?;
+
+        writeln!(f, "test compile")?;
+        writeln!(f, "target {}", self.isa.triple().architecture)?;
+        writeln!(f, "{}", self.func)?;
+
+        Ok(())
+    }
+}
+
+impl<'a> Arbitrary<'a> for FunctionWithIsa {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        // We filter out targets that aren't supported in the current build
+        // configuration after randomly choosing one, instead of randomly choosing
+        // a supported one, so that the same fuzz input works across different build
+        // configurations.
+        let target = u.choose(isa::ALL_ARCHITECTURES)?;
+        let builder = isa::lookup_by_name(target).map_err(|_| arbitrary::Error::IncorrectFormat)?;
+
+        let mut gen = FuzzGen::new(u);
+        let flags = gen
+            .generate_flags(builder.triple().architecture)
+            .map_err(|_| arbitrary::Error::IncorrectFormat)?;
+        let isa = builder
+            .finish(flags)
+            .map_err(|_| arbitrary::Error::IncorrectFormat)?;
+
+        let func = gen
+            .generate_func(isa.triple().clone())
+            .map_err(|_| arbitrary::Error::IncorrectFormat)?;
+
+        Ok(FunctionWithIsa { isa, func })
+    }
+}
+
 pub struct TestCase {
-    /// [Flags] to use when compiling this test case
-    pub flags: Flags,
+    /// TargetIsa to use when compiling this test case
+    pub isa: isa::OwnedTargetIsa,
     /// Function under test
     pub func: Function,
     /// Generate multiple test inputs for each test case.
@@ -46,23 +110,10 @@ impl fmt::Debug for TestCase {
         writeln!(f, "test interpret")?;
         writeln!(f, "test run")?;
 
-        // Print only non default flags
-        let default_flags = Flags::new(settings::builder());
-        for (default, flag) in default_flags.iter().zip(self.flags.iter()) {
-            assert_eq!(default.name, flag.name);
+        write_non_default_flags(f, self.isa.flags())?;
 
-            if default.value_string() != flag.value_string() {
-                writeln!(f, "set {}={}", flag.name, flag.value_string())?;
-            }
-        }
-
-        writeln!(f, "target aarch64")?;
-        writeln!(f, "target s390x")?;
-        writeln!(f, "target riscv64")?;
-        writeln!(f, "target x86_64\n")?;
-
+        writeln!(f, "target {}", self.isa.triple().architecture)?;
         writeln!(f, "{}", self.func)?;
-
         writeln!(f, "; Note: the results in the below test cases are simply a placeholder and probably will be wrong\n")?;
 
         for input in self.inputs.iter() {
@@ -101,7 +152,7 @@ impl fmt::Debug for TestCase {
 impl<'a> Arbitrary<'a> for TestCase {
     fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
         FuzzGen::new(u)
-            .generate_test()
+            .generate_host_test()
             .map_err(|_| arbitrary::Error::IncorrectFormat)
     }
 }
@@ -224,14 +275,14 @@ where
         Ok(ctx.func)
     }
 
-    fn generate_func(&mut self) -> Result<Function> {
-        let func = FunctionGenerator::new(&mut self.u, &self.config).generate()?;
+    fn generate_func(&mut self, target_triple: Triple) -> Result<Function> {
+        let func = FunctionGenerator::new(&mut self.u, &self.config, target_triple).generate()?;
         self.run_func_passes(func)
     }
 
     /// Generate a random set of cranelift flags.
     /// Only semantics preserving flags are considered
-    fn generate_flags(&mut self) -> Result<Flags> {
+    fn generate_flags(&mut self, target_arch: Architecture) -> Result<Flags> {
         let mut builder = settings::builder();
 
         let opt = self.u.choose(OptLevel::all())?;
@@ -253,6 +304,7 @@ where
             "enable_incremental_compilation_cache_checks",
             "regalloc_checker",
             "enable_llvm_abi_extensions",
+            "use_egraphs",
         ];
         for flag_name in bool_settings {
             let enabled = self
@@ -266,10 +318,15 @@ where
             builder.set(flag_name, value.as_str())?;
         }
 
-        // Optionally test inline stackprobes on x86
-        // TODO: inline stack probes are not available on AArch64
+        let supports_inline_probestack = match target_arch {
+            Architecture::X86_64 => true,
+            Architecture::Aarch64(_) => true,
+            _ => false,
+        };
+
+        // Optionally test inline stackprobes on supported platforms
         // TODO: Test outlined stack probes.
-        if cfg!(target_arch = "x86_64") && bool::arbitrary(self.u)? {
+        if supports_inline_probestack && bool::arbitrary(self.u)? {
             builder.enable("enable_probestack")?;
             builder.set("probestack_strategy", "inline")?;
 
@@ -283,7 +340,7 @@ where
 
         // We need llvm ABI extensions for i128 values on x86, so enable it regardless of
         // what we picked above.
-        if cfg!(target_arch = "x86_64") {
+        if target_arch == Architecture::X86_64 {
             builder.enable("enable_llvm_abi_extensions")?;
         }
 
@@ -303,19 +360,20 @@ where
         Ok(Flags::new(builder))
     }
 
-    pub fn generate_test(mut self) -> Result<TestCase> {
+    pub fn generate_host_test(mut self) -> Result<TestCase> {
         // If we're generating test inputs as well as a function, then we're planning to execute
         // this function. That means that any function references in it need to exist. We don't yet
         // have infrastructure for generating multiple functions, so just don't generate funcrefs.
         self.config.funcrefs_per_function = 0..=0;
 
-        let flags = self.generate_flags()?;
-        let func = self.generate_func()?;
+        // TestCase is meant to be consumed by a runner, so we make the assumption here that we're
+        // generating a TargetIsa for the host.
+        let builder =
+            builder_with_options(true).expect("Unable to build a TargetIsa for the current host");
+        let flags = self.generate_flags(builder.triple().architecture)?;
+        let isa = builder.finish(flags)?;
+        let func = self.generate_func(isa.triple().clone())?;
         let inputs = self.generate_test_inputs(&func.signature)?;
-        Ok(TestCase {
-            flags,
-            func,
-            inputs,
-        })
+        Ok(TestCase { isa, func, inputs })
     }
 }

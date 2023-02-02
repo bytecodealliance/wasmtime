@@ -14,11 +14,13 @@ use std::string::String;
 
 /// An extenstion trait for converting `Writable{Xmm,Gpr}` to `Writable<Reg>`.
 pub trait ToWritableReg {
+    /// Convert `Writable{Xmm,Gpr}` to `Writable<Reg>`.
     fn to_writable_reg(&self) -> Writable<Reg>;
 }
 
 /// An extension trait for converting `Writable<Reg>` to `Writable{Xmm,Gpr}`.
 pub trait FromWritableReg: Sized {
+    /// Convert `Writable<Reg>` to `Writable{Xmm,Gpr}`.
     fn from_writable_reg(w: Writable<Reg>) -> Option<Self>;
 }
 
@@ -81,9 +83,11 @@ macro_rules! newtype_of_reg {
             }
         }
 
+        /// Writable Gpr.
         pub type $newtype_writable_reg = Writable<$newtype_reg>;
 
         #[allow(dead_code)] // Used by some newtypes and not others.
+        /// Optional writable Gpr.
         pub type $newtype_option_writable_reg = Option<Writable<$newtype_reg>>;
 
         impl ToWritableReg for $newtype_writable_reg {
@@ -132,7 +136,7 @@ macro_rules! newtype_of_reg {
             }
 
             #[allow(dead_code)] // Used by some newtypes and not others.
-            pub fn get_operands<F: Fn(VReg) -> VReg>(
+            pub(crate) fn get_operands<F: Fn(VReg) -> VReg>(
                 &self,
                 collector: &mut OperandCollector<'_, F>,
             ) {
@@ -181,7 +185,7 @@ macro_rules! newtype_of_reg {
             }
 
             #[allow(dead_code)] // Used by some newtypes and not others.
-            pub fn get_operands<F: Fn(VReg) -> VReg>(
+            pub(crate) fn get_operands<F: Fn(VReg) -> VReg>(
                 &self,
                 collector: &mut OperandCollector<'_, F>,
             ) {
@@ -256,7 +260,8 @@ newtype_of_reg!(
 pub use crate::isa::x64::lower::isle::generated_code::Amode;
 
 impl Amode {
-    pub(crate) fn imm_reg(simm32: u32, base: Reg) -> Self {
+    /// Create an immediate sign-extended and register addressing mode.
+    pub fn imm_reg(simm32: u32, base: Reg) -> Self {
         debug_assert!(base.class() == RegClass::Int);
         Self::ImmReg {
             simm32,
@@ -265,7 +270,8 @@ impl Amode {
         }
     }
 
-    pub(crate) fn imm_reg_reg_shift(simm32: u32, base: Gpr, index: Gpr, shift: u8) -> Self {
+    /// Create a sign-extended-32-to-64 with register and shift addressing mode.
+    pub fn imm_reg_reg_shift(simm32: u32, base: Gpr, index: Gpr, shift: u8) -> Self {
         debug_assert!(base.class() == RegClass::Int);
         debug_assert!(index.class() == RegClass::Int);
         debug_assert!(shift <= 3);
@@ -446,13 +452,21 @@ pub enum SyntheticAmode {
 
     /// A (virtual) offset to the "nominal SP" value, which will be recomputed as we push and pop
     /// within the function.
-    NominalSPOffset { simm32: u32 },
+    NominalSPOffset {
+        /// The nominal stack pointer value.
+        simm32: u32,
+    },
 
     /// A virtual offset to a constant that will be emitted in the constant section of the buffer.
     ConstantOffset(VCodeConstant),
 }
 
 impl SyntheticAmode {
+    /// Create a real addressing mode.
+    pub fn real(amode: Amode) -> Self {
+        Self::Real(amode)
+    }
+
     pub(crate) fn nominal_sp_offset(simm32: u32) -> Self {
         SyntheticAmode::NominalSPOffset { simm32 }
     }
@@ -544,20 +558,37 @@ impl PrettyPrint for SyntheticAmode {
 /// `simm32` is its sign-extension out to 64 bits.
 #[derive(Clone, Debug)]
 pub enum RegMemImm {
-    Reg { reg: Reg },
-    Mem { addr: SyntheticAmode },
-    Imm { simm32: u32 },
+    /// A register operand.
+    Reg {
+        /// The underlying register.
+        reg: Reg,
+    },
+    /// A memory operand.
+    Mem {
+        /// The memory address.
+        addr: SyntheticAmode,
+    },
+    /// An immediate operand.
+    Imm {
+        /// The immediate value.
+        simm32: u32,
+    },
 }
 
 impl RegMemImm {
-    pub(crate) fn reg(reg: Reg) -> Self {
+    /// Create a register operand.
+    pub fn reg(reg: Reg) -> Self {
         debug_assert!(reg.class() == RegClass::Int || reg.class() == RegClass::Float);
         Self::Reg { reg }
     }
-    pub(crate) fn mem(addr: impl Into<SyntheticAmode>) -> Self {
+
+    /// Create a memory operand.
+    pub fn mem(addr: impl Into<SyntheticAmode>) -> Self {
         Self::Mem { addr: addr.into() }
     }
-    pub(crate) fn imm(simm32: u32) -> Self {
+
+    /// Create an immediate operand.
+    pub fn imm(simm32: u32) -> Self {
         Self::Imm { simm32 }
     }
 
@@ -613,8 +644,16 @@ impl PrettyPrint for RegMemImm {
 /// An operand which is either an 8-bit integer immediate or a register.
 #[derive(Clone, Debug)]
 pub enum Imm8Reg {
-    Imm8 { imm: u8 },
-    Reg { reg: Reg },
+    /// 8-bit immediate operand.
+    Imm8 {
+        /// The 8-bit immediate value.
+        imm: u8,
+    },
+    /// A register operand.
+    Reg {
+        /// The underlying register.
+        reg: Reg,
+    },
 }
 
 impl From<u8> for Imm8Reg {
@@ -633,16 +672,27 @@ impl From<Reg> for Imm8Reg {
 /// 32, 64, or 128 bit value.
 #[derive(Clone, Debug)]
 pub enum RegMem {
-    Reg { reg: Reg },
-    Mem { addr: SyntheticAmode },
+    /// A register operand.
+    Reg {
+        /// The underlying register.
+        reg: Reg,
+    },
+    /// A memory operand.
+    Mem {
+        /// The memory address.
+        addr: SyntheticAmode,
+    },
 }
 
 impl RegMem {
-    pub(crate) fn reg(reg: Reg) -> Self {
+    /// Create a register operand.
+    pub fn reg(reg: Reg) -> Self {
         debug_assert!(reg.class() == RegClass::Int || reg.class() == RegClass::Float);
         Self::Reg { reg }
     }
-    pub(crate) fn mem(addr: impl Into<SyntheticAmode>) -> Self {
+
+    /// Create a memory operand.
+    pub fn mem(addr: impl Into<SyntheticAmode>) -> Self {
         Self::Mem { addr: addr.into() }
     }
     /// Asserts that in register mode, the reg class is the one that's expected.
@@ -698,12 +748,19 @@ impl PrettyPrint for RegMem {
 /// Some basic ALU operations.  TODO: maybe add Adc, Sbb.
 #[derive(Copy, Clone, PartialEq)]
 pub enum AluRmiROpcode {
+    /// Add operation.
     Add,
+    /// Add with carry.
     Adc,
+    /// Integer subtraction.
     Sub,
+    /// Integer subtraction with borrow.
     Sbb,
+    /// Bitwise AND operation.
     And,
+    /// Bitwise inclusive OR.
     Or,
+    /// Bitwise exclusive OR.
     Xor,
     /// The signless, non-extending (N x N -> N, for N in {32,64}) variant.
     Mul,
@@ -732,6 +789,7 @@ impl fmt::Display for AluRmiROpcode {
 }
 
 #[derive(Clone, PartialEq)]
+/// Unary operations requiring register or memory and register operands.
 pub enum UnaryRmROpcode {
     /// Bit-scan reverse.
     Bsr,
@@ -775,6 +833,7 @@ impl fmt::Display for UnaryRmROpcode {
 }
 
 #[derive(Clone, Copy, PartialEq)]
+/// Comparison operations.
 pub enum CmpOpcode {
     /// CMP instruction: compute `a - b` and set flags from result.
     Cmp,
@@ -805,6 +864,7 @@ pub(crate) enum InstructionSet {
 /// Some SSE operations requiring 2 operands r/m and r.
 #[derive(Clone, Copy, PartialEq)]
 #[allow(dead_code)] // some variants here aren't used just yet
+#[allow(missing_docs)]
 pub enum SseOpcode {
     Addps,
     Addpd,
@@ -1388,6 +1448,7 @@ impl fmt::Display for SseOpcode {
 }
 
 #[derive(Clone, PartialEq)]
+#[allow(missing_docs)]
 pub enum AvxOpcode {
     Vfmadd213ss,
     Vfmadd213sd,
@@ -1426,6 +1487,7 @@ impl fmt::Display for AvxOpcode {
 }
 
 #[derive(Clone, PartialEq)]
+#[allow(missing_docs)]
 pub enum Avx512Opcode {
     Vcvtudq2ps,
     Vpabsq,
@@ -1478,8 +1540,11 @@ impl fmt::Display for Avx512Opcode {
 #[allow(dead_code)]
 #[derive(Clone, PartialEq)]
 pub enum ExtKind {
+    /// No extension.
     None,
+    /// Sign-extend.
     SignExtend,
+    /// Zero-extend.
     ZeroExtend,
 }
 
@@ -1552,12 +1617,15 @@ impl fmt::Display for ExtMode {
 /// These indicate the form of a scalar shift/rotate: left, signed right, unsigned right.
 #[derive(Clone, Copy)]
 pub enum ShiftKind {
+    /// Left shift.
     ShiftLeft,
     /// Inserts zeros in the most significant bits.
     ShiftRightLogical,
     /// Replicates the sign bit in the most significant bits.
     ShiftRightArithmetic,
+    /// Left rotation.
     RotateLeft,
+    /// Right rotation.
     RotateRight,
 }
 
@@ -1580,12 +1648,16 @@ impl fmt::Display for ShiftKind {
     }
 }
 
-/// What kind of division or remainer instruction this is?
+/// What kind of division or remainder instruction this is?
 #[derive(Clone, Eq, PartialEq)]
 pub enum DivOrRemKind {
+    /// Signed division.
     SignedDiv,
+    /// Unsigned division.
     UnsignedDiv,
+    /// Signed remainder.
     SignedRem,
+    /// Unsigned remainder.
     UnsignedRem,
 }
 
@@ -1736,13 +1808,21 @@ impl fmt::Display for CC {
 /// whereas [FcmpImm] is used as an immediate.
 #[derive(Clone, Copy)]
 pub enum FcmpImm {
+    /// Equal comparison.
     Equal = 0x00,
+    /// Less than comparison.
     LessThan = 0x01,
+    /// Less than or equal comparison.
     LessThanOrEqual = 0x02,
+    /// Unordered.
     Unordered = 0x03,
+    /// Not equal comparison.
     NotEqual = 0x04,
+    /// Unordered of greater than or equal comparison.
     UnorderedOrGreaterThanOrEqual = 0x05,
+    /// Unordered or greater than comparison.
     UnorderedOrGreaterThan = 0x06,
+    /// Ordered.
     Ordered = 0x07,
 }
 
@@ -1776,9 +1856,13 @@ impl From<FloatCC> for FcmpImm {
 /// These two bits are not defined here and are implictly set to zero when encoded.
 #[derive(Clone, Copy)]
 pub enum RoundImm {
+    /// Round to nearest mode.
     RoundNearest = 0x00,
+    /// Round down mode.
     RoundDown = 0x01,
+    /// Round up mode.
     RoundUp = 0x02,
+    /// Round to zero mode.
     RoundZero = 0x03,
 }
 
@@ -1791,9 +1875,13 @@ impl RoundImm {
 /// An operand's size in bits.
 #[derive(Clone, Copy, PartialEq)]
 pub enum OperandSize {
+    /// 8-bit.
     Size8,
+    /// 16-bit.
     Size16,
+    /// 32-bit.
     Size32,
+    /// 64-bit.
     Size64,
 }
 

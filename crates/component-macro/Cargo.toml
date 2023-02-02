@@ -12,12 +12,25 @@ edition.workspace = true
 
 [lib]
 proc-macro = true
+test = false
+doctest = false
 
 [dependencies]
+anyhow = "1.0"
 proc-macro2 = "1.0"
 quote = "1.0"
 syn = { version = "1.0", features = ["extra-traits"] }
 wasmtime-component-util = { workspace = true }
+wasmtime-wit-bindgen = { workspace = true }
+wit-parser = { workspace = true }
 
 [badges]
 maintenance = { status = "actively-developed" }
+
+[dev-dependencies]
+wasmtime = { path = '../wasmtime', features = ['component-model'] }
+component-macro-test-helpers = { path = 'test-helpers' }
+tracing = { workspace = true }
+
+[features]
+async = []

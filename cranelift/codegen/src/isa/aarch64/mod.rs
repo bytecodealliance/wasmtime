@@ -19,10 +19,9 @@ use target_lexicon::{Aarch64Architecture, Architecture, OperatingSystem, Triple}
 
 // New backend:
 mod abi;
-pub(crate) mod inst;
+pub mod inst;
 mod lower;
-mod lower_inst;
-mod settings;
+pub mod settings;
 
 use inst::create_reg_env;
 
@@ -57,20 +56,11 @@ impl AArch64Backend {
     fn compile_vcode(
         &self,
         func: &Function,
-        flags: shared_settings::Flags,
     ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
-        let emit_info = EmitInfo::new(flags.clone());
+        let emit_info = EmitInfo::new(self.flags.clone());
         let sigs = SigSet::new::<abi::AArch64MachineDeps>(func, &self.flags)?;
         let abi = abi::AArch64Callee::new(func, self, &self.isa_flags, &sigs)?;
-        compile::compile::<AArch64Backend>(
-            func,
-            flags,
-            self,
-            abi,
-            &self.machine_env,
-            emit_info,
-            sigs,
-        )
+        compile::compile::<AArch64Backend>(func, self, abi, emit_info, sigs)
     }
 }
 
@@ -80,10 +70,13 @@ impl TargetIsa for AArch64Backend {
         func: &Function,
         want_disasm: bool,
     ) -> CodegenResult<CompiledCodeStencil> {
-        let flags = self.flags();
-        let (vcode, regalloc_result) = self.compile_vcode(func, flags.clone())?;
+        let (vcode, regalloc_result) = self.compile_vcode(func)?;
 
-        let emit_result = vcode.emit(&regalloc_result, want_disasm, flags.machine_code_cfg_info());
+        let emit_result = vcode.emit(
+            &regalloc_result,
+            want_disasm,
+            self.flags.machine_code_cfg_info(),
+        );
         let frame_size = emit_result.frame_size;
         let value_labels_ranges = emit_result.value_labels_ranges;
         let buffer = emit_result.buffer.finish();
@@ -117,6 +110,10 @@ impl TargetIsa for AArch64Backend {
 
     fn flags(&self) -> &shared_settings::Flags {
         &self.flags
+    }
+
+    fn machine_env(&self) -> &MachineEnv {
+        &self.machine_env
     }
 
     fn isa_flags(&self) -> Vec<shared_settings::Value> {
@@ -219,7 +216,7 @@ pub fn isa_builder(triple: Triple) -> IsaBuilder {
         constructor: |triple, shared_flags, builder| {
             let isa_flags = aarch64_settings::Flags::new(&shared_flags, builder);
             let backend = AArch64Backend::new_with_flags(triple, shared_flags, isa_flags);
-            Ok(Box::new(backend))
+            Ok(backend.wrapped())
         },
     }
 }
@@ -269,11 +266,11 @@ mod test {
         // on it to update:
         // > aarch64-linux-gnu-objdump -b binary -D <file> -m aarch64
         //
-        // 0:   d2824682        mov     x2, #0x1234                     // #4660
+        // 0:   52824682        mov     w2, #0x1234                     // #4660
         // 4:   0b020000        add     w0, w0, w2
         // 8:   d65f03c0        ret
 
-        let golden = vec![130, 70, 130, 210, 0, 0, 2, 11, 192, 3, 95, 214];
+        let golden = vec![130, 70, 130, 82, 0, 0, 2, 11, 192, 3, 95, 214];
 
         assert_eq!(code, &golden[..]);
     }
@@ -296,15 +293,12 @@ mod test {
         pos.insert_block(bb0);
         let v0 = pos.ins().iconst(I32, 0x1234);
         let v1 = pos.ins().iadd(arg0, v0);
-        pos.ins().brnz(v1, bb1, &[]);
-        pos.ins().jump(bb2, &[]);
+        pos.ins().brif(v1, bb1, &[], bb2, &[]);
         pos.insert_block(bb1);
-        pos.ins().brnz(v1, bb2, &[]);
-        pos.ins().jump(bb3, &[]);
+        pos.ins().brif(v1, bb2, &[], bb3, &[]);
         pos.insert_block(bb2);
         let v2 = pos.ins().iadd(v1, v0);
-        pos.ins().brnz(v2, bb2, &[]);
-        pos.ins().jump(bb1, &[]);
+        pos.ins().brif(v2, bb2, &[], bb1, &[]);
         pos.insert_block(bb3);
         let v3 = pos.ins().isub(v1, v0);
         pos.ins().return_(&[v3]);
@@ -327,24 +321,24 @@ mod test {
         // on it to update:
         // > aarch64-linux-gnu-objdump -b binary -D <file> -m aarch64
         //
-        //   0:   d2824689        mov     x9, #0x1234                     // #4660
+        //   0:   52824689        mov     w9, #0x1234                     // #4660
         //   4:   0b09000b        add     w11, w0, w9
         //   8:   2a0b03ea        mov     w10, w11
         //   c:   b50000aa        cbnz    x10, 0x20
-        //  10:   d282468c        mov     x12, #0x1234                    // #4660
+        //  10:   5282468c        mov     w12, #0x1234                    // #4660
         //  14:   0b0c016e        add     w14, w11, w12
         //  18:   2a0e03ed        mov     w13, w14
         //  1c:   b5ffffad        cbnz    x13, 0x10
         //  20:   2a0b03e0        mov     w0, w11
         //  24:   b5ffff60        cbnz    x0, 0x10
-        //  28:   d2824681        mov     x1, #0x1234                     // #4660
+        //  28:   52824681        mov     w1, #0x1234                     // #4660
         //  2c:   4b010160        sub     w0, w11, w1
         //  30:   d65f03c0        ret
 
         let golden = vec![
-            137, 70, 130, 210, 11, 0, 9, 11, 234, 3, 11, 42, 170, 0, 0, 181, 140, 70, 130, 210,
-            110, 1, 12, 11, 237, 3, 14, 42, 173, 255, 255, 181, 224, 3, 11, 42, 96, 255, 255, 181,
-            129, 70, 130, 210, 96, 1, 1, 75, 192, 3, 95, 214,
+            137, 70, 130, 82, 11, 0, 9, 11, 234, 3, 11, 42, 170, 0, 0, 181, 140, 70, 130, 82, 110,
+            1, 12, 11, 237, 3, 14, 42, 173, 255, 255, 181, 224, 3, 11, 42, 96, 255, 255, 181, 129,
+            70, 130, 82, 96, 1, 1, 75, 192, 3, 95, 214,
         ];
 
         assert_eq!(code, &golden[..]);
@@ -414,18 +408,17 @@ mod test {
         //  1c:   d61f00e0        br      x7
         //  20:   00000010        udf     #16
         //  24:   00000018        udf     #24
-        //  28:   d2800060        mov     x0, #0x3                        // #3
+        //  28:   52800060        mov     w0, #0x3                        // #3
         //  2c:   d65f03c0        ret
-        //  30:   d2800020        mov     x0, #0x1                        // #1
+        //  30:   52800020        mov     w0, #0x1                        // #1
         //  34:   d65f03c0        ret
-        //  38:   d2800040        mov     x0, #0x2                        // #2
+        //  38:   52800040        mov     w0, #0x2                        // #2
         //  3c:   d65f03c0        ret
 
         let golden = vec![
             31, 8, 0, 113, 34, 1, 0, 84, 232, 35, 128, 154, 159, 34, 3, 213, 135, 0, 0, 16, 232,
             88, 168, 184, 231, 0, 8, 139, 224, 0, 31, 214, 16, 0, 0, 0, 24, 0, 0, 0, 96, 0, 128,
-            210, 192, 3, 95, 214, 32, 0, 128, 210, 192, 3, 95, 214, 64, 0, 128, 210, 192, 3, 95,
-            214,
+            82, 192, 3, 95, 214, 32, 0, 128, 82, 192, 3, 95, 214, 64, 0, 128, 82, 192, 3, 95, 214,
         ];
 
         assert_eq!(code, &golden[..]);

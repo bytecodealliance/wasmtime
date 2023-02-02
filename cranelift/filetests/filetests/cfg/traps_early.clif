@@ -8,13 +8,13 @@ function %nonsense(i32) {
 
 block0(v1: i32):
     trap user0      ; error: terminator instruction was encountered before the end
-    brnz v1, block2   ; unordered: block0:inst1 -> block2
-    jump block1       ; unordered: block0:inst2 -> block1
+    brif v1, block2, block1   ; unordered: block0:inst1 -> block2
+                              ; unordered: block0:inst1 -> block1
 
 block1:
     v2 = iconst.i32 0
     v3 = iadd v1, v3
-    jump block0(v3)   ; unordered: block1:inst5 -> block0
+    jump block0(v3)   ; unordered: block1:inst4 -> block0
 
 block2:
     return v1

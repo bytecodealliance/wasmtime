@@ -11,8 +11,7 @@ unsafe fn test_remove_nonempty_directory(dir_fd: wasi::Fd) {
     // Test that attempting to unlink the first directory returns the expected error code.
     assert_errno!(
         wasi::path_remove_directory(dir_fd, "dir")
-            .expect_err("remove_directory on a directory should return ENOTEMPTY")
-            .raw_error(),
+            .expect_err("remove_directory on a directory should return ENOTEMPTY"),
         wasi::ERRNO_NOTEMPTY
     );
 

@@ -9,8 +9,7 @@ block0(v0: i32):
             v2 = iconst.i32 1
             v3 = iconst.i32 4
             v4 = iadd v2, v1
-[SBzero#18] brz v1, block2(v2)
-[UJ#1b]     jump block4(v4)
+[SBzero#18] brif v1, block4(v4), block2(v2)
 
          block2(v5: i32):
             v6 = iconst.i32 2
@@ -21,8 +20,7 @@ block0(v0: i32):
          block3(v9: i32):
             v10 = iadd v9, v5
             v11 = iadd.i32 v1, v4
-[SBzero#18] brz.i32 v1, block2(v9)
-[UJ#1b]   jump block6(v10)
+[SBzero#18] brif.i32 v1, block6(v10), block2(v9)
 
          block4(v12: i32):
             v13 = iconst.i32 3
@@ -32,14 +30,12 @@ block0(v0: i32):
 
          block5(v16: i32):
             v17 = iadd.i32 v14, v4
-[SBzero#18] brz.i32 v1, block4(v16)
-[UJ#1b]   jump block6(v16)
+[SBzero#18] brif.i32 v1, block6(v16), block4(v16)
 
          block6(v18: i32):
             v19 = iadd v18, v2
             v20 = iadd.i32 v2, v3
-[SBzero#18] brz.i32 v1, block1(v20)
-[UJ#1b]     jump block7
+[SBzero#18] brif.i32 v1, block7, block1(v20)
 
          block7:
 [Iret#19]   return v19
@@ -56,8 +52,7 @@ block0(v0: i32):
 ; nextln: 
 ; nextln: block1(v1: i32):
 ; nextln:     v4 = iadd.i32 v2, v1
-; nextln:     brz v1, block8(v2)
-; nextln:     jump block9(v4)
+; nextln:     brif v1, block9(v4), block8(v2)
 ; nextln: 
 ; nextln: block8(v21: i32):
 ; nextln:     v8 = iadd.i32 v6, v1
@@ -70,8 +65,7 @@ block0(v0: i32):
 ; nextln: 
 ; nextln: block3(v9: i32):
 ; nextln:     v10 = iadd v9, v5
-; nextln:     brz.i32 v1, block2(v9)
-; nextln:     jump block6(v10)
+; nextln:     brif.i32 v1, block6(v10), block2(v9)
 ; nextln: 
 ; nextln: block9(v22: i32):
 ; nextln:     v15 = iadd.i32 v4, v13
@@ -83,13 +77,11 @@ block0(v0: i32):
 ; nextln: 
 ; nextln: block5(v16: i32):
 ; nextln:     v17 = iadd.i32 v14, v4
-; nextln:     brz.i32 v1, block4(v16)
-; nextln:     jump block6(v16)
+; nextln:     brif.i32 v1, block6(v16), block4(v16)
 ; nextln: 
 ; nextln: block6(v18: i32):
 ; nextln:     v19 = iadd v18, v2
-; nextln:     brz.i32 v1, block1(v20)
-; nextln:     jump block7
+; nextln:     brif.i32 v1, block7, block1(v20)
 ; nextln: 
 ; nextln: block7:
 ; nextln:     return v19

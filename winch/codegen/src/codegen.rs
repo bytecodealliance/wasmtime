@@ -13,7 +13,7 @@ pub(crate) struct CodeGenContext<'a, M>
 where
     M: MacroAssembler,
 {
-    pub masm: M,
+    pub masm: &'a mut M,
     pub stack: Stack,
     pub frame: &'a Frame,
 }
@@ -22,7 +22,7 @@ impl<'a, M> CodeGenContext<'a, M>
 where
     M: MacroAssembler,
 {
-    pub fn new(masm: M, stack: Stack, frame: &'a Frame) -> Self {
+    pub fn new(masm: &'a mut M, stack: Stack, frame: &'a Frame) -> Self {
         Self { masm, stack, frame }
     }
 }
@@ -63,13 +63,12 @@ where
         &mut self,
         body: &mut BinaryReader<'a>,
         validator: FuncValidator<ValidatorResources>,
-    ) -> Result<Vec<String>> {
+    ) -> Result<()> {
         self.emit_start()
-            .and(self.emit_body(body, validator))
-            .and(self.emit_end())?;
-        let buf = self.context.masm.finalize();
-        let code = Vec::from(buf);
-        Ok(code)
+            .and_then(|_| self.emit_body(body, validator))
+            .and_then(|_| self.emit_end())?;
+
+        Ok(())
     }
 
     // TODO stack checks

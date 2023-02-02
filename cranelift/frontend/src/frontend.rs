@@ -8,10 +8,10 @@ use cranelift_codegen::ir;
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{
     types, AbiParam, Block, DataFlowGraph, DynamicStackSlot, DynamicStackSlotData, ExtFuncData,
-    ExternalName, FuncRef, Function, GlobalValue, GlobalValueData, Heap, HeapData, Inst,
-    InstBuilder, InstBuilderBase, InstructionData, JumpTable, JumpTableData, LibCall, MemFlags,
-    RelSourceLoc, SigRef, Signature, StackSlot, StackSlotData, Type, Value, ValueLabel,
-    ValueLabelAssignments, ValueLabelStart,
+    ExternalName, FuncRef, Function, GlobalValue, GlobalValueData, Inst, InstBuilder,
+    InstBuilderBase, InstructionData, JumpTable, JumpTableData, LibCall, MemFlags, RelSourceLoc,
+    SigRef, Signature, StackSlot, StackSlotData, Type, Value, ValueLabel, ValueLabelAssignments,
+    ValueLabelStart,
 };
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_codegen::packed_option::PackedOption;
@@ -106,43 +106,48 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
             self.builder.func.set_srcloc(inst, self.builder.srcloc);
         }
 
-        if data.opcode().is_branch() {
-            match data.branch_destination() {
-                Some(dest_block) => {
-                    // If the user has supplied jump arguments we must adapt the arguments of
-                    // the destination block
-                    self.builder.declare_successor(dest_block, inst);
+        match self.builder.func.dfg.analyze_branch(inst) {
+            ir::instructions::BranchInfo::NotABranch => (),
+
+            ir::instructions::BranchInfo::SingleDest(dest) => {
+                // If the user has supplied jump arguments we must adapt the arguments of
+                // the destination block
+                let block = dest.block(&self.builder.func.dfg.value_lists);
+                self.builder.declare_successor(block, inst);
+            }
+
+            ir::instructions::BranchInfo::Conditional(branch_then, branch_else) => {
+                let block_then = branch_then.block(&self.builder.func.dfg.value_lists);
+                let block_else = branch_else.block(&self.builder.func.dfg.value_lists);
+
+                self.builder.declare_successor(block_then, inst);
+                if block_then != block_else {
+                    self.builder.declare_successor(block_else, inst);
                 }
-                None => {
-                    // branch_destination() doesn't detect jump_tables
-                    // If jump table we declare all entries successor
-                    if let InstructionData::BranchTable {
-                        table, destination, ..
-                    } = data
-                    {
-                        // Unlike all other jumps/branches, jump tables are
-                        // capable of having the same successor appear
-                        // multiple times, so we must deduplicate.
-                        let mut unique = EntitySet::<Block>::new();
-                        for dest_block in self
-                            .builder
-                            .func
-                            .jump_tables
-                            .get(table)
-                            .expect("you are referencing an undeclared jump table")
-                            .iter()
-                            .filter(|&dest_block| unique.insert(*dest_block))
-                        {
-                            // Call `declare_block_predecessor` instead of `declare_successor` for
-                            // avoiding the borrow checker.
-                            self.builder
-                                .func_ctx
-                                .ssa
-                                .declare_block_predecessor(*dest_block, inst);
-                        }
-                        self.builder.declare_successor(destination, inst);
-                    }
+            }
+
+            ir::instructions::BranchInfo::Table(table, destination) => {
+                // Unlike all other jumps/branches, jump tables are
+                // capable of having the same successor appear
+                // multiple times, so we must deduplicate.
+                let mut unique = EntitySet::<Block>::new();
+                for dest_block in self
+                    .builder
+                    .func
+                    .jump_tables
+                    .get(table)
+                    .expect("you are referencing an undeclared jump table")
+                    .iter()
+                    .filter(|&dest_block| unique.insert(*dest_block))
+                {
+                    // Call `declare_block_predecessor` instead of `declare_successor` for
+                    // avoiding the borrow checker.
+                    self.builder
+                        .func_ctx
+                        .ssa
+                        .declare_block_predecessor(*dest_block, inst);
                 }
+                self.builder.declare_successor(destination, inst);
             }
         }
 
@@ -512,11 +517,6 @@ impl<'a> FunctionBuilder<'a> {
         self.func.create_global_value(data)
     }
 
-    /// Declares a heap accessible to the function.
-    pub fn create_heap(&mut self, data: HeapData) -> Heap {
-        self.func.create_heap(data)
-    }
-
     /// Returns an object with the [`InstBuilder`](cranelift_codegen::ir::InstBuilder)
     /// trait that allows to conveniently append an instruction to the current `Block` being built.
     pub fn ins<'short>(&'short mut self) -> FuncInstBuilder<'short, 'a> {
@@ -596,10 +596,11 @@ impl<'a> FunctionBuilder<'a> {
         }
     }
 
-    /// Declare that translation of the current function is complete. This
-    /// resets the state of the `FunctionBuilder` in preparation to be used
-    /// for another function.
-    pub fn finalize(&mut self) {
+    /// Declare that translation of the current function is complete.
+    ///
+    /// This resets the state of the `FunctionBuilderContext` in preparation to
+    /// be used for another function.
+    pub fn finalize(self) {
         // Check that all the `Block`s are filled and sealed.
         #[cfg(debug_assertions)]
         {
@@ -637,10 +638,6 @@ impl<'a> FunctionBuilder<'a> {
         // Clear the state (but preserve the allocated buffers) in preparation
         // for translation another function.
         self.func_ctx.clear();
-
-        // Reset srcloc and position to initial states.
-        self.srcloc = Default::default();
-        self.position = Default::default();
     }
 }
 
@@ -683,13 +680,15 @@ impl<'a> FunctionBuilder<'a> {
     ///
     /// **Note:** You are responsible for maintaining the coherence with the arguments of
     /// other jump instructions.
-    pub fn change_jump_destination(&mut self, inst: Inst, new_dest: Block) {
-        let old_dest = self.func.dfg[inst]
-            .branch_destination_mut()
-            .expect("you want to change the jump destination of a non-jump instruction");
-        self.func_ctx.ssa.remove_block_predecessor(*old_dest, inst);
-        *old_dest = new_dest;
-        self.func_ctx.ssa.declare_block_predecessor(new_dest, inst);
+    pub fn change_jump_destination(&mut self, inst: Inst, old_block: Block, new_block: Block) {
+        let dfg = &mut self.func.dfg;
+        for block in dfg.insts[inst].branch_destination_mut() {
+            if block.block(&dfg.value_lists) == old_block {
+                self.func_ctx.ssa.remove_block_predecessor(old_block, inst);
+                block.set_block(new_block, &mut dfg.value_lists);
+                self.func_ctx.ssa.declare_block_predecessor(new_block, inst);
+            }
+        }
     }
 
     /// Returns `true` if and only if the current `Block` is sealed and has no predecessors declared.
@@ -1164,9 +1163,8 @@ mod tests {
             }
             {
                 let arg = builder.use_var(y);
-                builder.ins().brnz(arg, block3, &[]);
+                builder.ins().brif(arg, block3, &[], block2, &[]);
             }
-            builder.ins().jump(block2, &[]);
 
             builder.switch_to_block(block2);
             if !lazy_seal {

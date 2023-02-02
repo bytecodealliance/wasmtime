@@ -7,8 +7,7 @@ target riscv64
 function %issue4996() -> i128, i64 system_v {
     block0:
         v5 = iconst.i8 0
-        brz v5, block3  ; v5 = 0
-        jump block1
+        brif v5, block1, block3  ; v5 = 0
     block1:
         v12 = iconst.i64 0
         v13 = uextend.i128 v12  ; v12 = 0

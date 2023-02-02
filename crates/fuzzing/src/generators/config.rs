@@ -97,34 +97,51 @@ impl Config {
         self.module_config.generate(input, default_fuel)
     }
 
-    /// Indicates that this configuration should be spec-test-compliant,
-    /// disabling various features the spec tests assert are disabled.
-    pub fn set_spectest_compliant(&mut self) {
-        let config = &mut self.module_config.config;
-        config.memory64_enabled = false;
-        config.bulk_memory_enabled = true;
-        config.reference_types_enabled = true;
-        config.multi_value_enabled = true;
-        config.simd_enabled = true;
-        config.threads_enabled = false;
-        config.max_memories = 1;
-        config.max_tables = 5;
+    /// Tests whether this configuration is capable of running all spec tests.
+    pub fn is_spectest_compliant(&self) -> bool {
+        let config = &self.module_config.config;
 
-        if let InstanceAllocationStrategy::Pooling(pooling) = &mut self.wasmtime.strategy {
-            // Configure the lower bound of a number of limits to what's
-            // required to actually run the spec tests. Fuzz-generated inputs
-            // may have limits less than these thresholds which would cause the
-            // spec tests to fail which isn't particularly interesting.
-            pooling.instance_memories = 1;
-            pooling.instance_tables = pooling.instance_tables.max(5);
-            pooling.instance_table_elements = pooling.instance_table_elements.max(1_000);
-            pooling.instance_memory_pages = pooling.instance_memory_pages.max(900);
-            pooling.instance_count = pooling.instance_count.max(500);
-            pooling.instance_size = pooling.instance_size.max(64 * 1024);
+        // Check for wasm features that must be disabled to run spec tests
+        if config.memory64_enabled || config.threads_enabled {
+            return false;
         }
+
+        // Check for wasm features that must be enabled to run spec tests
+        if !config.bulk_memory_enabled
+            || !config.reference_types_enabled
+            || !config.multi_value_enabled
+            || !config.simd_enabled
+        {
+            return false;
+        }
+
+        // Make sure the runtime limits allow for the instantiation of all spec
+        // tests. Note that the max memories must be precisely one since 0 won't
+        // instantiate spec tests and more than one is multi-memory which is
+        // disabled for spec tests.
+        if config.max_memories != 1 || config.max_tables < 5 {
+            return false;
+        }
+
+        if let InstanceAllocationStrategy::Pooling(pooling) = &self.wasmtime.strategy {
+            // Check to see if any item limit is less than the required
+            // threshold to execute the spec tests.
+            if pooling.instance_memories < 1
+                || pooling.instance_tables < 5
+                || pooling.instance_table_elements < 1_000
+                || pooling.instance_memory_pages < 900
+                || pooling.instance_count < 500
+                || pooling.instance_size < 64 * 1024
+            {
+                return false;
+            }
+        }
+
+        true
     }
 
     /// Converts this to a `wasmtime::Config` object
+    #[allow(deprecated)] // Allow use of `cranelift_use_egraphs` below.
     pub fn to_wasmtime(&self) -> wasmtime::Config {
         crate::init_fuzzing();
         log::debug!("creating wasmtime config with {:#?}", self.wasmtime);
@@ -140,6 +157,7 @@ impl Config {
             .native_unwind_info(self.wasmtime.native_unwind_info)
             .cranelift_nan_canonicalization(self.wasmtime.canonicalize_nans)
             .cranelift_opt_level(self.wasmtime.opt_level.to_wasmtime())
+            .cranelift_use_egraphs(self.wasmtime.use_egraphs)
             .consume_fuel(self.wasmtime.consume_fuel)
             .epoch_interruption(self.wasmtime.epoch_interruption)
             .memory_init_cow(self.wasmtime.memory_init_cow)
@@ -293,6 +311,15 @@ impl<'a> Arbitrary<'a> for Config {
             module_config: u.arbitrary()?,
         };
 
+        // This is pulled from `u` by default via `wasm-smith`, but Wasmtime
+        // doesn't implement this yet, so forcibly always disable it.
+        config.module_config.config.tail_call_enabled = false;
+
+        config
+            .wasmtime
+            .codegen
+            .maybe_disable_more_features(&config.module_config, u)?;
+
         // If using the pooling allocator, constrain the memory and module configurations
         // to the module limits.
         if let InstanceAllocationStrategy::Pooling(pooling) = &mut config.wasmtime.strategy {
@@ -308,6 +335,20 @@ impl<'a> Arbitrary<'a> for Config {
                 pooling.instance_memory_pages = cfg.max_memory_pages;
             } else {
                 cfg.max_memory_pages = pooling.instance_memory_pages;
+            }
+
+            // If traps are disallowed then memories must have at least one page
+            // of memory so if we still are only allowing 0 pages of memory then
+            // increase that to one here.
+            if cfg.disallow_traps {
+                if pooling.instance_memory_pages == 0 {
+                    pooling.instance_memory_pages = 1;
+                    cfg.max_memory_pages = 1;
+                }
+                // .. additionally update tables
+                if pooling.instance_table_elements == 0 {
+                    pooling.instance_table_elements = 1;
+                }
             }
 
             // Forcibly don't use the `CustomUnaligned` memory configuration
@@ -336,6 +377,7 @@ impl<'a> Arbitrary<'a> for Config {
 #[derive(Arbitrary, Clone, Debug, Eq, Hash, PartialEq)]
 pub struct WasmtimeConfig {
     opt_level: OptLevel,
+    use_egraphs: bool,
     debug_info: bool,
     canonicalize_nans: bool,
     interruptable: bool,

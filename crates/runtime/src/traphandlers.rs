@@ -10,7 +10,6 @@ use std::cell::{Cell, UnsafeCell};
 use std::mem::MaybeUninit;
 use std::ptr;
 use std::sync::Once;
-use wasmtime_environ::TrapCode;
 
 pub use self::backtrace::Backtrace;
 pub use self::tls::{tls_eager_initialize, TlsRestore};
@@ -112,7 +111,7 @@ pub unsafe fn raise_user_trap(error: Error, needs_backtrace: bool) -> ! {
 /// Only safe to call when wasm code is on the stack, aka `catch_traps` must
 /// have been previously called. Additionally no Rust destructors can be on the
 /// stack. They will be skipped and not executed.
-pub unsafe fn raise_lib_trap(trap: TrapCode) -> ! {
+pub unsafe fn raise_lib_trap(trap: wasmtime_environ::Trap) -> ! {
     raise_trap(TrapReason::Wasm(trap))
 }
 
@@ -153,7 +152,7 @@ pub enum TrapReason {
     Jit(usize),
 
     /// A trap raised from a wasm libcall
-    Wasm(TrapCode),
+    Wasm(wasmtime_environ::Trap),
 }
 
 impl TrapReason {
@@ -185,8 +184,8 @@ impl From<Error> for TrapReason {
     }
 }
 
-impl From<TrapCode> for TrapReason {
-    fn from(code: TrapCode) -> Self {
+impl From<wasmtime_environ::Trap> for TrapReason {
+    fn from(code: wasmtime_environ::Trap) -> Self {
         TrapReason::Wasm(code)
     }
 }

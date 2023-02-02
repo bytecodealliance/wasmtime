@@ -63,10 +63,6 @@ impl RelSourceLoc {
     }
 
     /// Creates a new `RelSourceLoc` based on the given base and offset.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the offset is smaller than the base.
     pub fn from_base_offset(base: SourceLoc, offset: SourceLoc) -> Self {
         if base.is_default() || offset.is_default() {
             Self::default()

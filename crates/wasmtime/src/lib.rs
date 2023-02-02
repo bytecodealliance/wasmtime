@@ -57,7 +57,7 @@
 //!     // afterwards we can fetch exports by name, as well as asserting the
 //!     // type signature of the function with `get_typed_func`.
 //!     let instance = Instance::new(&mut store, &module, &[host_hello.into()])?;
-//!     let hello = instance.get_typed_func::<(), (), _>(&mut store, "hello")?;
+//!     let hello = instance.get_typed_func::<(), ()>(&mut store, "hello")?;
 //!
 //!     // And finally we can call the wasm!
 //!     hello.call(&mut store, ())?;
@@ -168,7 +168,7 @@
 //!     // resolve the imports of the module using name-based resolution.
 //!     let mut store = Store::new(&engine, 0);
 //!     let instance = linker.instantiate(&mut store, &module)?;
-//!     let hello = instance.get_typed_func::<(), (), _>(&mut store, "hello")?;
+//!     let hello = instance.get_typed_func::<(), ()>(&mut store, "hello")?;
 //!     hello.call(&mut store, ())?;
 //!
 //!     Ok(())
@@ -373,7 +373,7 @@
 //!     "#,
 //! )?;
 //! let instance = Instance::new(&mut store, &module, &[log_str.into()])?;
-//! let foo = instance.get_typed_func::<(), (), _>(&mut store, "foo")?;
+//! let foo = instance.get_typed_func::<(), ()>(&mut store, "foo")?;
 //! foo.call(&mut store, ())?;
 //! # Ok(())
 //! # }

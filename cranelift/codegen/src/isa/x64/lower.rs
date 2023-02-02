@@ -7,13 +7,13 @@ use crate::ir::{types, ExternalName, Inst as IRInst, LibCall, Opcode, Type};
 use crate::isa::x64::abi::*;
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
-use crate::isa::{x64::settings as x64_settings, x64::X64Backend, CallConv};
+use crate::isa::{x64::X64Backend, CallConv};
 use crate::machinst::abi::SmallInstVec;
 use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::result::CodegenResult;
 use crate::settings::Flags;
-use smallvec::{smallvec, SmallVec};
+use smallvec::smallvec;
 use target_lexicon::Triple;
 
 //=============================================================================
@@ -41,27 +41,6 @@ fn matches_input(ctx: &mut Lower<Inst>, input: InsnInput, op: Opcode) -> Option<
     })
 }
 
-/// Emits instruction(s) to generate the given 64-bit constant value into a newly-allocated
-/// temporary register, returning that register.
-fn generate_constant(ctx: &mut Lower<Inst>, ty: Type, c: u64) -> ValueRegs<Reg> {
-    let from_bits = ty_bits(ty);
-    let masked = if from_bits < 64 {
-        c & ((1u64 << from_bits) - 1)
-    } else {
-        c
-    };
-
-    let cst_copy = ctx.alloc_tmp(ty);
-    for inst in Inst::gen_constant(cst_copy, masked as u128, ty, |ty| {
-        ctx.alloc_tmp(ty).only_reg().unwrap()
-    })
-    .into_iter()
-    {
-        ctx.emit(inst);
-    }
-    non_writable_value_regs(cst_copy)
-}
-
 /// Put the given input into possibly multiple registers, and mark it as used (side-effect).
 fn put_input_in_regs(ctx: &mut Lower<Inst>, spec: InsnInput) -> ValueRegs<Reg> {
     let ty = ctx.input_ty(spec.insn, spec.input);
@@ -69,7 +48,16 @@ fn put_input_in_regs(ctx: &mut Lower<Inst>, spec: InsnInput) -> ValueRegs<Reg> {
 
     if let Some(c) = input.constant {
         // Generate constants fresh at each use to minimize long-range register pressure.
-        generate_constant(ctx, ty, c)
+        let from_bits = ty_bits(ty);
+        let (size, c) = if from_bits < 64 {
+            (OperandSize::Size32, c & ((1u64 << from_bits) - 1))
+        } else {
+            (OperandSize::Size64, c)
+        };
+        assert!(is_int_or_ref_ty(ty)); // Only used for addresses.
+        let cst_copy = ctx.alloc_tmp(ty);
+        ctx.emit(Inst::imm(size, c, cst_copy.only_reg().unwrap()));
+        non_writable_value_regs(cst_copy)
     } else {
         ctx.put_input_in_regs(spec.insn, spec.input)
     }
@@ -306,310 +294,22 @@ fn lower_to_amode(ctx: &mut Lower<Inst>, spec: InsnInput, offset: i32) -> Amode 
 }
 
 //=============================================================================
-// Top-level instruction lowering entry point, for one instruction.
-
-/// Actually codegen an instruction's results into registers.
-fn lower_insn_to_regs(
-    ctx: &mut Lower<Inst>,
-    insn: IRInst,
-    flags: &Flags,
-    isa_flags: &x64_settings::Flags,
-    triple: &Triple,
-) -> CodegenResult<()> {
-    let outputs: SmallVec<[InsnOutput; 2]> = (0..ctx.num_outputs(insn))
-        .map(|i| InsnOutput { insn, output: i })
-        .collect();
-
-    if let Ok(()) = isle::lower(ctx, triple, flags, isa_flags, &outputs, insn) {
-        return Ok(());
-    }
-
-    let op = ctx.data(insn).opcode();
-    match op {
-        Opcode::Iconst
-        | Opcode::F32const
-        | Opcode::F64const
-        | Opcode::Null
-        | Opcode::Iadd
-        | Opcode::IaddIfcout
-        | Opcode::SaddSat
-        | Opcode::UaddSat
-        | Opcode::Isub
-        | Opcode::SsubSat
-        | Opcode::UsubSat
-        | Opcode::AvgRound
-        | Opcode::Band
-        | Opcode::Bor
-        | Opcode::Bxor
-        | Opcode::Imul
-        | Opcode::BandNot
-        | Opcode::Iabs
-        | Opcode::Smax
-        | Opcode::Umax
-        | Opcode::Smin
-        | Opcode::Umin
-        | Opcode::Bnot
-        | Opcode::Bitselect
-        | Opcode::Vselect
-        | Opcode::Ushr
-        | Opcode::Sshr
-        | Opcode::Ishl
-        | Opcode::Rotl
-        | Opcode::Rotr
-        | Opcode::Ineg
-        | Opcode::Trap
-        | Opcode::ResumableTrap
-        | Opcode::Clz
-        | Opcode::Ctz
-        | Opcode::Popcnt
-        | Opcode::Bitrev
-        | Opcode::Bswap
-        | Opcode::IsNull
-        | Opcode::IsInvalid
-        | Opcode::Uextend
-        | Opcode::Sextend
-        | Opcode::Ireduce
-        | Opcode::Debugtrap
-        | Opcode::WideningPairwiseDotProductS
-        | Opcode::Fadd
-        | Opcode::Fsub
-        | Opcode::Fmul
-        | Opcode::Fdiv
-        | Opcode::Fmin
-        | Opcode::Fmax
-        | Opcode::FminPseudo
-        | Opcode::FmaxPseudo
-        | Opcode::Sqrt
-        | Opcode::Fpromote
-        | Opcode::FvpromoteLow
-        | Opcode::Fdemote
-        | Opcode::Fvdemote
-        | Opcode::Fma
-        | Opcode::Icmp
-        | Opcode::Fcmp
-        | Opcode::Load
-        | Opcode::Uload8
-        | Opcode::Sload8
-        | Opcode::Uload16
-        | Opcode::Sload16
-        | Opcode::Uload32
-        | Opcode::Sload32
-        | Opcode::Sload8x8
-        | Opcode::Uload8x8
-        | Opcode::Sload16x4
-        | Opcode::Uload16x4
-        | Opcode::Sload32x2
-        | Opcode::Uload32x2
-        | Opcode::Store
-        | Opcode::Istore8
-        | Opcode::Istore16
-        | Opcode::Istore32
-        | Opcode::AtomicRmw
-        | Opcode::AtomicCas
-        | Opcode::AtomicLoad
-        | Opcode::AtomicStore
-        | Opcode::Fence
-        | Opcode::FuncAddr
-        | Opcode::SymbolValue
-        | Opcode::Return
-        | Opcode::Call
-        | Opcode::CallIndirect
-        | Opcode::GetFramePointer
-        | Opcode::GetStackPointer
-        | Opcode::GetReturnAddress
-        | Opcode::Select
-        | Opcode::SelectSpectreGuard
-        | Opcode::FcvtFromSint
-        | Opcode::FcvtLowFromSint
-        | Opcode::FcvtFromUint
-        | Opcode::FcvtToUint
-        | Opcode::FcvtToSint
-        | Opcode::FcvtToUintSat
-        | Opcode::FcvtToSintSat
-        | Opcode::IaddPairwise
-        | Opcode::UwidenHigh
-        | Opcode::UwidenLow
-        | Opcode::SwidenHigh
-        | Opcode::SwidenLow
-        | Opcode::Snarrow
-        | Opcode::Unarrow
-        | Opcode::Bitcast
-        | Opcode::Fabs
-        | Opcode::Fneg
-        | Opcode::Fcopysign
-        | Opcode::Ceil
-        | Opcode::Floor
-        | Opcode::Nearest
-        | Opcode::Trunc
-        | Opcode::StackAddr
-        | Opcode::Udiv
-        | Opcode::Urem
-        | Opcode::Sdiv
-        | Opcode::Srem
-        | Opcode::Umulhi
-        | Opcode::Smulhi
-        | Opcode::GetPinnedReg
-        | Opcode::SetPinnedReg
-        | Opcode::Vconst
-        | Opcode::Insertlane
-        | Opcode::Shuffle
-        | Opcode::Swizzle
-        | Opcode::Extractlane
-        | Opcode::ScalarToVector
-        | Opcode::Splat
-        | Opcode::VanyTrue
-        | Opcode::VallTrue
-        | Opcode::VhighBits
-        | Opcode::Iconcat
-        | Opcode::Isplit
-        | Opcode::TlsValue
-        | Opcode::SqmulRoundSat
-        | Opcode::Uunarrow
-        | Opcode::Nop
-        | Opcode::Bmask => {
-            let ty = if outputs.len() > 0 {
-                Some(ctx.output_ty(insn, 0))
-            } else {
-                None
-            };
-
-            unreachable!(
-                "implemented in ISLE: inst = `{}`, type = `{:?}`",
-                ctx.dfg().display_inst(insn),
-                ty
-            )
-        }
-
-        Opcode::DynamicStackAddr => unimplemented!("DynamicStackAddr"),
-
-        // Unimplemented opcodes below. These are not currently used by Wasm
-        // lowering or other known embeddings, but should be either supported or
-        // removed eventually
-        Opcode::ExtractVector => {
-            unimplemented!("ExtractVector not supported");
-        }
-
-        Opcode::Cls => unimplemented!("Cls not supported"),
-
-        Opcode::BorNot | Opcode::BxorNot => {
-            unimplemented!("or-not / xor-not opcodes not implemented");
-        }
-
-        Opcode::Vsplit | Opcode::Vconcat => {
-            unimplemented!("Vector split/concat ops not implemented.");
-        }
-
-        // Opcodes that should be removed by legalization. These should
-        // eventually be removed if/when we replace in-situ legalization with
-        // something better.
-        Opcode::Ifcmp | Opcode::Ffcmp => {
-            panic!("Should never reach ifcmp/ffcmp as isel root!");
-        }
-
-        Opcode::IaddImm
-        | Opcode::ImulImm
-        | Opcode::UdivImm
-        | Opcode::SdivImm
-        | Opcode::UremImm
-        | Opcode::SremImm
-        | Opcode::IrsubImm
-        | Opcode::IaddCin
-        | Opcode::IaddIfcin
-        | Opcode::IaddCout
-        | Opcode::IaddCarry
-        | Opcode::IaddIfcarry
-        | Opcode::IsubBin
-        | Opcode::IsubIfbin
-        | Opcode::IsubBout
-        | Opcode::IsubIfbout
-        | Opcode::IsubBorrow
-        | Opcode::IsubIfborrow
-        | Opcode::UaddOverflowTrap
-        | Opcode::BandImm
-        | Opcode::BorImm
-        | Opcode::BxorImm
-        | Opcode::RotlImm
-        | Opcode::RotrImm
-        | Opcode::IshlImm
-        | Opcode::UshrImm
-        | Opcode::SshrImm
-        | Opcode::IcmpImm
-        | Opcode::IfcmpImm => {
-            panic!("ALU+imm and ALU+carry ops should not appear here!");
-        }
-
-        Opcode::StackLoad
-        | Opcode::StackStore
-        | Opcode::DynamicStackStore
-        | Opcode::DynamicStackLoad => {
-            panic!("Direct stack memory access not supported; should have been legalized");
-        }
-
-        Opcode::GlobalValue => {
-            panic!("global_value should have been removed by legalization!");
-        }
-
-        Opcode::HeapAddr => {
-            panic!("heap_addr should have been removed by legalization!");
-        }
-
-        Opcode::TableAddr => {
-            panic!("table_addr should have been removed by legalization!");
-        }
-
-        Opcode::Trapz | Opcode::Trapnz | Opcode::ResumableTrapnz => {
-            panic!("trapz / trapnz / resumable_trapnz should have been removed by legalization!");
-        }
-
-        Opcode::Jump | Opcode::Brz | Opcode::Brnz | Opcode::BrTable => {
-            panic!("Branch opcode reached non-branch lowering logic!");
-        }
-    }
-}
-
-//=============================================================================
 // Lowering-backend trait implementation.
 
 impl LowerBackend for X64Backend {
     type MInst = Inst;
 
-    fn lower(&self, ctx: &mut Lower<Inst>, ir_inst: IRInst) -> CodegenResult<()> {
-        lower_insn_to_regs(ctx, ir_inst, &self.flags, &self.x64_flags, &self.triple)
+    fn lower(&self, ctx: &mut Lower<Inst>, ir_inst: IRInst) -> Option<InstOutput> {
+        isle::lower(ctx, self, ir_inst)
     }
 
-    fn lower_branch_group(
+    fn lower_branch(
         &self,
         ctx: &mut Lower<Inst>,
-        branches: &[IRInst],
+        ir_inst: IRInst,
         targets: &[MachLabel],
-    ) -> CodegenResult<()> {
-        // A block should end with at most two branches. The first may be a
-        // conditional branch; a conditional branch can be followed only by an
-        // unconditional branch or fallthrough. Otherwise, if only one branch,
-        // it may be an unconditional branch, a fallthrough, a return, or a
-        // trap. These conditions are verified by `is_ebb_basic()` during the
-        // verifier pass.
-        assert!(branches.len() <= 2);
-        if branches.len() == 2 {
-            let op1 = ctx.data(branches[1]).opcode();
-            assert!(op1 == Opcode::Jump);
-        }
-
-        if let Ok(()) = isle::lower_branch(
-            ctx,
-            &self.triple,
-            &self.flags,
-            &self.x64_flags,
-            branches[0],
-            targets,
-        ) {
-            return Ok(());
-        }
-
-        unreachable!(
-            "implemented in ISLE: branch = `{}`",
-            ctx.dfg().display_inst(branches[0]),
-        );
+    ) -> Option<()> {
+        isle::lower_branch(ctx, self, ir_inst, targets)
     }
 
     fn maybe_pinned_reg(&self) -> Option<Reg> {

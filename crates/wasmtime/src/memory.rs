@@ -1,12 +1,16 @@
 use crate::store::{StoreData, StoreOpaque, Stored};
 use crate::trampoline::generate_memory_export;
+use crate::Trap;
 use crate::{AsContext, AsContextMut, Engine, MemoryType, StoreContext, StoreContextMut};
 use anyhow::{bail, Result};
 use std::cell::UnsafeCell;
 use std::convert::TryFrom;
 use std::slice;
+use std::time::Instant;
 use wasmtime_environ::MemoryPlan;
 use wasmtime_runtime::{RuntimeLinearMemory, VMMemoryImport};
+
+pub use wasmtime_runtime::WaitResult;
 
 /// Error for out of bounds [`Memory`] access.
 #[derive(Debug)]
@@ -780,7 +784,7 @@ impl SharedMemory {
     /// the maximum limits of this memory. A
     /// [`ResourceLimiter`](crate::ResourceLimiter) is another example of
     /// preventing a memory to grow.
-    pub fn grow(&mut self, delta: u64) -> Result<u64> {
+    pub fn grow(&self, delta: u64) -> Result<u64> {
         match self.0.grow(delta, None)? {
             Some((old_size, _new_size)) => {
                 // For shared memory, the `VMMemoryDefinition` is updated inside
@@ -789,6 +793,87 @@ impl SharedMemory {
             }
             None => bail!("failed to grow memory by `{}`", delta),
         }
+    }
+
+    /// Equivalent of the WebAssembly `memory.atomic.notify` instruction for
+    /// this shared memory.
+    ///
+    /// This method allows embedders to notify threads blocked on the specified
+    /// `addr`, an index into wasm linear memory. Threads could include
+    /// wasm threads blocked on a `memory.atomic.wait*` instruction or embedder
+    /// threads blocked on [`SharedMemory::atomic_wait32`], for example.
+    ///
+    /// The `count` argument is the number of threads to wake up.
+    ///
+    /// This function returns the number of threads awoken.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if `addr` is not within bounds or
+    /// not aligned to a 4-byte boundary.
+    pub fn atomic_notify(&self, addr: u64, count: u32) -> Result<u32, Trap> {
+        self.0.atomic_notify(addr, count)
+    }
+
+    /// Equivalent of the WebAssembly `memory.atomic.wait32` instruction for
+    /// this shared memory.
+    ///
+    /// This method allows embedders to block the current thread until notified
+    /// via the `memory.atomic.notify` instruction or the
+    /// [`SharedMemory::atomic_notify`] method, enabling synchronization with
+    /// the wasm guest as desired.
+    ///
+    /// The `expected` argument is the expected 32-bit value to be stored at
+    /// the byte address `addr` specified. The `addr` specified is an index
+    /// into this linear memory.
+    ///
+    /// The optional `timeout` argument is the point in time after which the
+    /// calling thread is guaranteed to be woken up. Blocking will not occur
+    /// past this point.
+    ///
+    /// This function returns one of three possible values:
+    ///
+    /// * `WaitResult::Ok` - this function, loaded the value at `addr`, found
+    ///   it was equal to `expected`, and then blocked (all as one atomic
+    ///   operation). The thread was then awoken with a `memory.atomic.notify`
+    ///   instruction or the [`SharedMemory::atomic_notify`] method.
+    /// * `WaitResult::Mismatch` - the value at `addr` was loaded but was not
+    ///   equal to `expected` so the thread did not block and immediately
+    ///   returned.
+    /// * `WaitResult::TimedOut` - all the steps of `Ok` happened, except this
+    ///   thread was woken up due to a timeout.
+    ///
+    /// This function will not return due to spurious wakeups.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if `addr` is not within bounds or
+    /// not aligned to a 4-byte boundary.
+    pub fn atomic_wait32(
+        &self,
+        addr: u64,
+        expected: u32,
+        timeout: Option<Instant>,
+    ) -> Result<WaitResult, Trap> {
+        self.0.atomic_wait32(addr, expected, timeout)
+    }
+
+    /// Equivalent of the WebAssembly `memory.atomic.wait64` instruction for
+    /// this shared memory.
+    ///
+    /// For more information see [`SharedMemory::atomic_wait32`].
+    ///
+    /// # Errors
+    ///
+    /// Returns the same error as [`SharedMemory::atomic_wait32`] except that
+    /// the specified address must be 8-byte aligned instead of 4-byte aligned.
+    pub fn atomic_wait64(
+        &self,
+        addr: u64,
+        expected: u64,
+        timeout: Option<Instant>,
+    ) -> Result<WaitResult, Trap> {
+        self.0.atomic_wait64(addr, expected, timeout)
     }
 
     /// Return a reference to the [`Engine`] used to configure the shared
@@ -800,9 +885,7 @@ impl SharedMemory {
     /// Construct a single-memory instance to provide a way to import
     /// [`SharedMemory`] into other modules.
     pub(crate) fn vmimport(&self, store: &mut StoreOpaque) -> wasmtime_runtime::VMMemoryImport {
-        let runtime_shared_memory = self.clone().0;
-        let export_memory =
-            generate_memory_export(store, &self.ty(), Some(runtime_shared_memory)).unwrap();
+        let export_memory = generate_memory_export(store, &self.ty(), Some(&self.0)).unwrap();
         VMMemoryImport {
             from: export_memory.definition,
             vmctx: export_memory.vmctx,
@@ -824,7 +907,8 @@ impl SharedMemory {
             .unwrap();
         let shared_memory = memory
             .as_shared_memory()
-            .expect("unable to convert from a shared memory");
+            .expect("unable to convert from a shared memory")
+            .clone();
         Self(shared_memory, store.engine().clone())
     }
 }

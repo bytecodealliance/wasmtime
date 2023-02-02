@@ -1,8 +1,10 @@
 //! Parser for ISLE language.
 
 use crate::ast::*;
-use crate::error::*;
+use crate::error::{Error, Errors, Span};
 use crate::lexer::{Lexer, Pos, Token};
+
+type Result<T> = std::result::Result<T, Errors>;
 
 /// Parse the top-level ISLE definitions and return their AST.
 pub fn parse(lexer: Lexer) -> Result<Defs> {
@@ -32,14 +34,14 @@ impl<'a> Parser<'a> {
         Parser { lexer }
     }
 
-    fn error(&self, pos: Pos, msg: String) -> Error {
-        Error::ParseError {
-            msg,
-            src: Source::new(
-                self.lexer.filenames[pos.file].clone(),
-                self.lexer.file_texts[pos.file].clone(),
-            ),
-            span: Span::new_single(pos),
+    fn error(&self, pos: Pos, msg: String) -> Errors {
+        Errors {
+            errors: vec![Error::ParseError {
+                msg,
+                span: Span::new_single(pos),
+            }],
+            filenames: self.lexer.filenames.clone(),
+            file_texts: self.lexer.file_texts.clone(),
         }
     }
 
@@ -305,6 +307,12 @@ impl<'a> Parser<'a> {
         } else {
             false
         };
+        let partial = if self.is_sym_str("partial") {
+            self.symbol()?;
+            true
+        } else {
+            false
+        };
 
         let term = self.parse_ident()?;
 
@@ -323,6 +331,7 @@ impl<'a> Parser<'a> {
             ret_ty,
             pure,
             multi,
+            partial,
             pos,
         })
     }

@@ -454,7 +454,7 @@ impl<T> Store<T> {
         // single "default callee" for the entire `Store`. This is then used as
         // part of `Func::call` to guarantee that the `callee: *mut VMContext`
         // is never null.
-        let default_callee = unsafe {
+        let default_callee = {
             let module = Arc::new(wasmtime_environ::Module::default());
             let shim = BareModuleInfo::empty(module).into_traitobj();
             OnDemandInstanceAllocator::default()
@@ -766,10 +766,10 @@ impl<T> Store<T> {
     /// Note that at this time when fuel is entirely consumed it will cause
     /// wasm to trap. More usages of fuel are planned for the future.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// This function will panic if the store's [`Config`](crate::Config) did
-    /// not have fuel consumption enabled.
+    /// This function will return an error if fuel consumption is not enabled via
+    /// [`Config::consume_fuel`](crate::Config::consume_fuel).
     pub fn add_fuel(&mut self, fuel: u64) -> Result<()> {
         self.inner.add_fuel(fuel)
     }
@@ -790,9 +790,9 @@ impl<T> Store<T> {
     ///
     /// # Errors
     ///
-    /// This function will return an either either if fuel consumption via
-    /// [`Config`](crate::Config) is disabled or if `fuel` exceeds the amount
-    /// of remaining fuel within this store.
+    /// This function will return an error either if fuel consumption is not
+    /// enabled via [`Config::consume_fuel`](crate::Config::consume_fuel) or if
+    /// `fuel` exceeds the amount of remaining fuel within this store.
     pub fn consume_fuel(&mut self, fuel: u64) -> Result<u64> {
         self.inner.consume_fuel(fuel)
     }
@@ -2020,14 +2020,14 @@ impl Drop for StoreOpaque {
         unsafe {
             let allocator = self.engine.allocator();
             let ondemand = OnDemandInstanceAllocator::default();
-            for instance in self.instances.iter() {
+            for instance in self.instances.iter_mut() {
                 if instance.ondemand {
-                    ondemand.deallocate(&instance.handle);
+                    ondemand.deallocate(&mut instance.handle);
                 } else {
-                    allocator.deallocate(&instance.handle);
+                    allocator.deallocate(&mut instance.handle);
                 }
             }
-            ondemand.deallocate(&self.default_caller);
+            ondemand.deallocate(&mut self.default_caller);
 
             // See documentation for these fields on `StoreOpaque` for why they
             // must be dropped in this order.

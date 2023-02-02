@@ -3,15 +3,15 @@ use crate::store::{InstanceId, StoreOpaque, Stored};
 use crate::types::matching;
 use crate::{
     AsContextMut, Engine, Export, Extern, Func, Global, Memory, Module, SharedMemory,
-    StoreContextMut, Table, Trap, TypedFunc,
+    StoreContextMut, Table, TypedFunc,
 };
-use anyhow::{anyhow, bail, Context, Error, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use std::mem;
 use std::sync::Arc;
 use wasmtime_environ::{EntityType, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap, TableIndex};
 use wasmtime_runtime::{
-    Imports, InstanceAllocationRequest, InstantiationError, StorePtr, VMContext, VMFunctionBody,
-    VMFunctionImport, VMGlobalImport, VMMemoryImport, VMOpaqueContext, VMTableImport,
+    Imports, InstanceAllocationRequest, StorePtr, VMContext, VMFunctionBody, VMFunctionImport,
+    VMGlobalImport, VMMemoryImport, VMOpaqueContext, VMTableImport,
 };
 
 /// An instantiated WebAssembly module.
@@ -90,6 +90,8 @@ impl Instance {
     /// see why it failed, or bubble it upwards. If you'd like to specifically
     /// check for trap errors, you can use `error.downcast::<Trap>()`. For more
     /// about error handling see the [`Trap`] documentation.
+    ///
+    /// [`Trap`]: crate::Trap
     ///
     /// # Panics
     ///
@@ -315,20 +317,10 @@ impl Instance {
         // items from this instance into other instances should be ok when
         // those items are loaded and run we'll have all the metadata to
         // look at them.
-        store
-            .engine()
-            .allocator()
-            .initialize(
-                &mut instance_handle,
-                compiled_module.module(),
-                store.engine().config().features.bulk_memory,
-            )
-            .map_err(|e| -> Error {
-                match e {
-                    InstantiationError::Trap(trap) => Trap::from_env(trap).into(),
-                    other => other.into(),
-                }
-            })?;
+        instance_handle.initialize(
+            compiled_module.module(),
+            store.engine().config().features.bulk_memory,
+        )?;
 
         Ok((instance, compiled_module.module().start_func))
     }
@@ -457,21 +449,20 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `store` does not own this instance.
-    pub fn get_typed_func<Params, Results, S>(
+    pub fn get_typed_func<Params, Results>(
         &self,
-        mut store: S,
+        mut store: impl AsContextMut,
         name: &str,
     ) -> Result<TypedFunc<Params, Results>>
     where
         Params: crate::WasmParams,
         Results: crate::WasmResults,
-        S: AsContextMut,
     {
         let f = self
             .get_export(store.as_context_mut(), name)
             .and_then(|f| f.into_func())
             .ok_or_else(|| anyhow!("failed to find function export `{}`", name))?;
-        Ok(f.typed::<Params, Results, _>(store)
+        Ok(f.typed::<Params, Results>(store)
             .with_context(|| format!("failed to convert function `{}` to given type", name))?)
     }
 

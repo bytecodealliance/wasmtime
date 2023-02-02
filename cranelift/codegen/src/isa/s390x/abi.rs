@@ -184,7 +184,7 @@ fn get_vecreg_for_ret(idx: usize) -> Option<Reg> {
 /// This is the limit for the size of argument and return-value areas on the
 /// stack. We place a reasonable limit here to avoid integer overflow issues
 /// with 32-bit arithmetic: for now, 128 MB.
-static STACK_ARG_RET_SIZE_LIMIT: u64 = 128 * 1024 * 1024;
+static STACK_ARG_RET_SIZE_LIMIT: u32 = 128 * 1024 * 1024;
 
 /// The size of the register save area
 pub static REG_SAVE_AREA_SIZE: u32 = 160;
@@ -228,17 +228,17 @@ impl ABIMachineSpec for S390xMachineDeps {
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
         mut args: ArgsAccumulator<'_>,
-    ) -> CodegenResult<(i64, Option<usize>)>
+    ) -> CodegenResult<(u32, Option<usize>)>
     where
         I: IntoIterator<Item = &'a ir::AbiParam>,
     {
         let mut next_gpr = 0;
         let mut next_fpr = 0;
         let mut next_vr = 0;
-        let mut next_stack: u64 = 0;
+        let mut next_stack: u32 = 0;
 
         if args_or_rets == ArgsOrRets::Args {
-            next_stack = REG_SAVE_AREA_SIZE as u64;
+            next_stack = REG_SAVE_AREA_SIZE;
         }
 
         // In the SystemV ABI, the return area pointer is the first argument,
@@ -275,7 +275,6 @@ impl ABIMachineSpec for S390xMachineDeps {
             } else if call_conv.extends_wasmtime() {
                 panic!("i128 args/return values not supported in the Wasmtime ABI");
             } else {
-                assert!(param.extension == ir::ArgumentExtension::None);
                 // We must pass this by implicit reference.
                 if args_or_rets == ArgsOrRets::Rets {
                     // For return values, just force them to memory.
@@ -307,7 +306,7 @@ impl ABIMachineSpec for S390xMachineDeps {
             } else {
                 // Compute size. Every argument or return value takes a slot of
                 // at least 8 bytes, except for return values in the Wasmtime ABI.
-                let size = (ty_bits(param.value_type) / 8) as u64;
+                let size = (ty_bits(param.value_type) / 8) as u32;
                 let slot_size = if call_conv.extends_wasmtime() && args_or_rets == ArgsOrRets::Rets
                 {
                     size
@@ -401,11 +400,11 @@ impl ABIMachineSpec for S390xMachineDeps {
             match arg {
                 ABIArg::StructArg { offset, size, .. } => {
                     *offset = next_stack as i64;
-                    next_stack += *size;
+                    next_stack += *size as u32;
                 }
                 ABIArg::ImplicitPtrArg { offset, ty, .. } => {
                     *offset = next_stack as i64;
-                    next_stack += (ty_bits(*ty) / 8) as u64;
+                    next_stack += (ty_bits(*ty) / 8) as u32;
                 }
                 _ => {}
             }
@@ -417,7 +416,7 @@ impl ABIMachineSpec for S390xMachineDeps {
             return Err(CodegenError::ImplLimitExceeded);
         }
 
-        Ok((next_stack as i64, extra_arg))
+        Ok((next_stack, extra_arg))
     }
 
     fn fp_to_arg_offset(_call_conv: isa::CallConv, _flags: &settings::Flags) -> i64 {
@@ -569,13 +568,17 @@ impl ABIMachineSpec for S390xMachineDeps {
         SmallVec::new()
     }
 
-    fn gen_probestack(_: u32) -> SmallInstVec<Self::I> {
+    fn gen_probestack(_insts: &mut SmallInstVec<Self::I>, _: u32) {
         // TODO: implement if we ever require stack probes on an s390x host
         // (unlikely unless Lucet is ported)
-        smallvec![]
+        unimplemented!("Stack probing is unimplemented on S390x");
     }
 
-    fn gen_inline_probestack(_frame_size: u32, _guard_size: u32) -> SmallInstVec<Self::I> {
+    fn gen_inline_probestack(
+        _insts: &mut SmallInstVec<Self::I>,
+        _frame_size: u32,
+        _guard_size: u32,
+    ) {
         unimplemented!("Inline stack probing is unimplemented on S390x");
     }
 
@@ -748,13 +751,12 @@ impl ABIMachineSpec for S390xMachineDeps {
         unreachable!();
     }
 
-    fn gen_memcpy(
+    fn gen_memcpy<F: FnMut(Type) -> Writable<Reg>>(
         _call_conv: isa::CallConv,
         _dst: Reg,
         _src: Reg,
-        _tmp1: Writable<Reg>,
-        _tmp2: Writable<Reg>,
         _size: usize,
+        _alloc: F,
     ) -> SmallVec<[Self::I; 8]> {
         unimplemented!("StructArgs not implemented for S390X yet");
     }

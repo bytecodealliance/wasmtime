@@ -14,7 +14,7 @@ async fn run_smoke_test(store: &mut Store<()>, func: Func) {
 }
 
 async fn run_smoke_typed_test(store: &mut Store<()>, func: Func) {
-    let func = func.typed::<(), (), _>(&store).unwrap();
+    let func = func.typed::<(), ()>(&store).unwrap();
     func.call_async(&mut *store, ()).await.unwrap();
     func.call_async(&mut *store, ()).await.unwrap();
 }
@@ -269,6 +269,9 @@ async fn cancel_during_run() {
             *caller.data_mut() = 1;
             let dtor = SetOnDrop(caller);
             Box::new(async move {
+                // SetOnDrop is not destroyed when dropping the reference of it
+                // here. Instead, it is moved into the future where it's forced
+                // to live in and will be destroyed at the end of the future.
                 drop(&dtor);
                 tokio::task::yield_now().await;
                 Ok(())
@@ -545,8 +548,8 @@ async fn recursive_async() -> Result<()> {
         )",
     )?;
     let i = Instance::new_async(&mut store, &m, &[]).await?;
-    let overflow = i.get_typed_func::<(), (), _>(&mut store, "overflow")?;
-    let normal = i.get_typed_func::<(), (), _>(&mut store, "normal")?;
+    let overflow = i.get_typed_func::<(), ()>(&mut store, "overflow")?;
+    let normal = i.get_typed_func::<(), ()>(&mut store, "normal")?;
     let f2 = Func::wrap0_async(&mut store, move |mut caller| {
         Box::new(async move {
             // recursive async calls shouldn't immediately stack overflow...
@@ -600,7 +603,7 @@ async fn linker_module_command() -> Result<()> {
 
     linker.module_async(&mut store, "", &module1).await?;
     let instance = linker.instantiate_async(&mut store, &module2).await?;
-    let f = instance.get_typed_func::<(), i32, _>(&mut store, "get")?;
+    let f = instance.get_typed_func::<(), i32>(&mut store, "get")?;
     assert_eq!(f.call_async(&mut store, ()).await?, 0);
     assert_eq!(f.call_async(&mut store, ()).await?, 0);
 
@@ -638,7 +641,7 @@ async fn linker_module_reactor() -> Result<()> {
 
     linker.module_async(&mut store, "", &module1).await?;
     let instance = linker.instantiate_async(&mut store, &module2).await?;
-    let f = instance.get_typed_func::<(), i32, _>(&mut store, "get")?;
+    let f = instance.get_typed_func::<(), i32>(&mut store, "get")?;
     assert_eq!(f.call_async(&mut store, ()).await?, 0);
     assert_eq!(f.call_async(&mut store, ()).await?, 1);
 

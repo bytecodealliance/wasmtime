@@ -83,6 +83,8 @@ pub struct Decl {
     /// extractor or a constructor that matches multiple times, or
     /// produces multiple values.
     pub multi: bool,
+    /// Whether this term's constructor can fail to match.
+    pub partial: bool,
     pub pos: Pos,
 }
 
@@ -152,7 +154,6 @@ pub enum Pattern {
 impl Pattern {
     pub fn root_term(&self) -> Option<&Ident> {
         match self {
-            &Pattern::BindPattern { ref subpat, .. } => subpat.root_term(),
             &Pattern::Term { ref sym, .. } => Some(sym),
             _ => None,
         }

@@ -1,8 +1,9 @@
+use anyhow::Result;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmtime::*;
 
 #[test]
-fn host_always_has_some_stack() -> anyhow::Result<()> {
+fn host_always_has_some_stack() -> Result<()> {
     static HITS: AtomicUsize = AtomicUsize::new(0);
     // assume hosts always have at least 128k of stack
     const HOST_STACK: usize = 128 * 1024;
@@ -24,7 +25,7 @@ fn host_always_has_some_stack() -> anyhow::Result<()> {
     )?;
     let func = Func::wrap(&mut store, test_host_stack);
     let instance = Instance::new(&mut store, &module, &[func.into()])?;
-    let foo = instance.get_typed_func::<(), (), _>(&mut store, "foo")?;
+    let foo = instance.get_typed_func::<(), ()>(&mut store, "foo")?;
 
     // Make sure that our function traps and the trap says that the call stack
     // has been exhausted.
@@ -53,4 +54,36 @@ fn host_always_has_some_stack() -> anyhow::Result<()> {
         let mut space = [0u8; 1024];
         consume_some_stack(space.as_mut_ptr() as usize, stack.saturating_sub(1024))
     }
+}
+
+#[test]
+fn big_stack_works_ok() -> Result<()> {
+    const N: usize = 10000;
+
+    // Build a module with a function that uses a very large amount of stack space,
+    // modeled here by calling an i64-returning-function many times followed by
+    // adding them all into one i64.
+    //
+    // This should exercise the ability to consume multi-page stacks and
+    // only touch a few internals of it at a time.
+    let mut s = String::new();
+    s.push_str("(module\n");
+    s.push_str("(func (export \"\") (result i64)\n");
+    s.push_str("i64.const 0\n");
+    for _ in 0..N {
+        s.push_str("call $get\n");
+    }
+    for _ in 0..N {
+        s.push_str("i64.add\n");
+    }
+    s.push_str(")\n");
+    s.push_str("(func $get (result i64) i64.const 0)\n");
+    s.push_str(")\n");
+
+    let mut store = Store::<()>::default();
+    let module = Module::new(store.engine(), &s)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let func = instance.get_typed_func::<(), i64>(&mut store, "")?;
+    assert_eq!(func.call(&mut store, ())?, 0);
+    Ok(())
 }

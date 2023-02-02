@@ -7,8 +7,8 @@ use crate::value::{Value, ValueConversionKind, ValueError, ValueResult};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
-    types, AbiParam, Block, ExternalName, FuncRef, Function, InstructionData, Opcode, TrapCode,
-    Type, Value as ValueRef,
+    types, AbiParam, Block, BlockCall, ExternalName, FuncRef, Function, InstructionData, Opcode,
+    TrapCode, Type, Value as ValueRef,
 };
 use log::trace;
 use smallvec::{smallvec, SmallVec};
@@ -235,21 +235,24 @@ where
     };
 
     // Retrieve an instruction's branch destination; expects the instruction to be a branch.
-    let branch = || -> Block { inst.branch_destination().unwrap() };
+
+    let continue_at = |block: BlockCall| {
+        let branch_args = state
+            .collect_values(block.args_slice(&state.get_current_function().dfg.value_lists))
+            .map_err(|v| StepError::UnknownValue(v))?;
+        Ok(ControlFlow::ContinueAt(
+            block.block(&state.get_current_function().dfg.value_lists),
+            branch_args,
+        ))
+    };
 
     // Based on `condition`, indicate where to continue the control flow.
-    let branch_when = |condition: bool| -> Result<ControlFlow<V>, StepError> {
-        let branch_args = match inst {
-            InstructionData::Jump { .. } => args_range(0..),
-            InstructionData::Branch { .. } => args_range(1..),
-            _ => panic!("Unrecognized branch inst: {:?}", inst),
-        }?;
-
-        Ok(if condition {
-            ControlFlow::ContinueAt(branch(), branch_args)
+    let branch_when = |condition: bool, block| -> Result<ControlFlow<V>, StepError> {
+        if condition {
+            continue_at(block)
         } else {
-            ControlFlow::Continue
-        })
+            Ok(ControlFlow::Continue)
+        }
     };
 
     // Retrieve an instruction's trap code; expects the instruction to be a trap.
@@ -275,17 +278,30 @@ where
 
     // Interpret a Cranelift instruction.
     Ok(match inst.opcode() {
-        Opcode::Jump => ControlFlow::ContinueAt(branch(), args()?),
-        Opcode::Brz => branch_when(
-            !arg(0)?
-                .convert(ValueConversionKind::ToBoolean)?
-                .into_bool()?,
-        )?,
-        Opcode::Brnz => branch_when(
-            arg(0)?
-                .convert(ValueConversionKind::ToBoolean)?
-                .into_bool()?,
-        )?,
+        Opcode::Jump => {
+            let block = inst.branch_destination()[0];
+            continue_at(block)?
+        }
+        Opcode::Brif => {
+            if let InstructionData::Brif {
+                arg,
+                blocks: [block_then, block_else],
+                ..
+            } = inst
+            {
+                let arg = state.get_value(arg).ok_or(StepError::UnknownValue(arg))?;
+
+                let condition = arg.convert(ValueConversionKind::ToBoolean)?.into_bool()?;
+
+                if condition {
+                    continue_at(block_then)?
+                } else {
+                    continue_at(block_else)?
+                }
+            } else {
+                unreachable!()
+            }
+        }
         Opcode::BrTable => {
             if let InstructionData::BranchTable {
                 table, destination, ..
@@ -375,6 +391,8 @@ where
             }
         }
         Opcode::CallIndirect => unimplemented!("CallIndirect"),
+        Opcode::ReturnCall => unimplemented!("ReturnCall"),
+        Opcode::ReturnCallIndirect => unimplemented!("ReturnCallIndirect"),
         Opcode::FuncAddr => unimplemented!("FuncAddr"),
         Opcode::Load
         | Opcode::Uload8
@@ -484,36 +502,6 @@ where
         }
         Opcode::SymbolValue => unimplemented!("SymbolValue"),
         Opcode::TlsValue => unimplemented!("TlsValue"),
-        Opcode::HeapAddr => {
-            if let InstructionData::HeapAddr {
-                heap,
-                offset: imm_offset,
-                size,
-                ..
-            } = inst
-            {
-                let addr_ty = inst_context.controlling_type().unwrap();
-                let dyn_offset = arg(0)?.into_int()? as u64;
-                assign_or_memtrap({
-                    AddressSize::try_from(addr_ty).and_then(|addr_size| {
-                        // Attempt to build an address at the maximum possible offset
-                        // for this load. If address generation fails we know it's out of bounds.
-                        let bound_offset =
-                            (dyn_offset + u64::from(u32::from(imm_offset)) + u64::from(size))
-                                .saturating_sub(1);
-                        state.heap_address(addr_size, heap, bound_offset)?;
-
-                        // Build the actual address
-                        let mut addr = state.heap_address(addr_size, heap, dyn_offset)?;
-                        addr.offset += u64::from(u32::from(imm_offset));
-                        let dv = DataValue::try_from(addr)?;
-                        Ok(dv.into())
-                    })
-                })
-            } else {
-                unreachable!()
-            }
-        }
         Opcode::GetPinnedReg => assign(state.get_pinned_reg()),
         Opcode::SetPinnedReg => {
             let arg0 = arg(0)?;
@@ -568,32 +556,6 @@ where
             &arg(0)?,
             &imm_as_ctrl_ty()?,
         )?),
-        Opcode::Ifcmp | Opcode::IfcmpImm => {
-            let arg0 = arg(0)?;
-            let arg1 = match inst.opcode() {
-                Opcode::Ifcmp => arg(1)?,
-                Opcode::IfcmpImm => imm_as_ctrl_ty()?,
-                _ => unreachable!(),
-            };
-            state.clear_flags();
-            for f in &[
-                IntCC::Equal,
-                IntCC::NotEqual,
-                IntCC::SignedLessThan,
-                IntCC::SignedGreaterThanOrEqual,
-                IntCC::SignedGreaterThan,
-                IntCC::SignedLessThanOrEqual,
-                IntCC::UnsignedLessThan,
-                IntCC::UnsignedGreaterThanOrEqual,
-                IntCC::UnsignedGreaterThan,
-                IntCC::UnsignedLessThanOrEqual,
-            ] {
-                if icmp(ctrl_ty, *f, &arg0, &arg1)?.into_bool()? {
-                    state.set_iflag(*f);
-                }
-            }
-            ControlFlow::Continue
-        }
         Opcode::Smin => {
             if ctrl_ty.is_vector() {
                 let icmp = icmp(ctrl_ty, IntCC::SignedGreaterThan, &arg(1)?, &arg(0)?)?;
@@ -741,13 +703,11 @@ where
             Value::add(Value::add(arg(0)?, arg(1)?)?, Value::int(1, ctrl_ty)?)?,
             Value::add(arg(0)?, arg(1)?)?,
         ),
-        Opcode::IaddIfcin => unimplemented!("IaddIfcin"),
         Opcode::IaddCout => {
             let carry = arg(0)?.checked_add(arg(1)?)?.is_none();
             let sum = arg(0)?.add(arg(1)?)?;
             assign_multiple(&[sum, Value::bool(carry, false, types::I8)?])
         }
-        Opcode::IaddIfcout => unimplemented!("IaddIfcout"),
         Opcode::IaddCarry => {
             let mut sum = Value::add(arg(0)?, arg(1)?)?;
             let mut carry = arg(0)?.checked_add(arg(1)?)?.is_none();
@@ -759,7 +719,6 @@ where
 
             assign_multiple(&[sum, Value::bool(carry, false, types::I8)?])
         }
-        Opcode::IaddIfcarry => unimplemented!("IaddIfcarry"),
         Opcode::UaddOverflowTrap => {
             let sum = Value::add(arg(0)?, arg(1)?)?;
             let carry = Value::lt(&sum, &arg(0)?)? && Value::lt(&sum, &arg(1)?)?;
@@ -774,13 +733,11 @@ where
             Value::sub(arg(0)?, Value::add(arg(1)?, Value::int(1, ctrl_ty)?)?)?,
             Value::sub(arg(0)?, arg(1)?)?,
         ),
-        Opcode::IsubIfbin => unimplemented!("IsubIfbin"),
         Opcode::IsubBout => {
             let sum = Value::sub(arg(0)?, arg(1)?)?;
             let borrow = Value::lt(&arg(0)?, &arg(1)?)?;
             assign_multiple(&[sum, Value::bool(borrow, false, types::I8)?])
         }
-        Opcode::IsubIfbout => unimplemented!("IsubIfbout"),
         Opcode::IsubBorrow => {
             let rhs = if Value::into_bool(arg(2)?)? {
                 Value::add(arg(1)?, Value::int(1, ctrl_ty)?)?
@@ -791,7 +748,6 @@ where
             let sum = Value::sub(arg(0)?, rhs)?;
             assign_multiple(&[sum, Value::bool(borrow, false, types::I8)?])
         }
-        Opcode::IsubIfborrow => unimplemented!("IsubIfborrow"),
         Opcode::Band => binary(Value::and, arg(0)?, arg(1)?)?,
         Opcode::Bor => binary(Value::or, arg(0)?, arg(1)?)?,
         Opcode::Bxor => binary(Value::xor, arg(0)?, arg(1)?)?,
@@ -855,32 +811,6 @@ where
                     .collect::<ValueResult<SimdVec<V>>>()?),
                 ctrl_ty,
             )?)
-        }
-        Opcode::Ffcmp => {
-            let arg0 = arg(0)?;
-            let arg1 = arg(1)?;
-            state.clear_flags();
-            for f in &[
-                FloatCC::Ordered,
-                FloatCC::Unordered,
-                FloatCC::Equal,
-                FloatCC::NotEqual,
-                FloatCC::OrderedNotEqual,
-                FloatCC::UnorderedOrEqual,
-                FloatCC::LessThan,
-                FloatCC::LessThanOrEqual,
-                FloatCC::GreaterThan,
-                FloatCC::GreaterThanOrEqual,
-                FloatCC::UnorderedOrLessThan,
-                FloatCC::UnorderedOrLessThanOrEqual,
-                FloatCC::UnorderedOrGreaterThan,
-                FloatCC::UnorderedOrGreaterThanOrEqual,
-            ] {
-                if fcmp(*f, &arg0, &arg1)? {
-                    state.set_fflag(*f);
-                }
-            }
-            ControlFlow::Continue
         }
         Opcode::Fadd => binary(Value::add, arg(0)?, arg(1)?)?,
         Opcode::Fsub => binary(Value::sub, arg(0)?, arg(1)?)?,
@@ -1073,8 +1003,6 @@ where
             }
             assign(Value::int(result, ctrl_ty)?)
         }
-        Opcode::Vsplit => unimplemented!("Vsplit"),
-        Opcode::Vconcat => unimplemented!("Vconcat"),
         Opcode::Vselect => assign(vselect(&arg(0)?, &arg(1)?, &arg(2)?, ctrl_ty)?),
         Opcode::VanyTrue => {
             let lane_ty = ctrl_ty.lane_type();
@@ -1252,9 +1180,27 @@ where
         Opcode::Iconcat => assign(Value::concat(arg(0)?, arg(1)?)?),
         Opcode::AtomicRmw => unimplemented!("AtomicRmw"),
         Opcode::AtomicCas => unimplemented!("AtomicCas"),
-        Opcode::AtomicLoad => unimplemented!("AtomicLoad"),
-        Opcode::AtomicStore => unimplemented!("AtomicStore"),
-        Opcode::Fence => unimplemented!("Fence"),
+        Opcode::AtomicLoad => {
+            let load_ty = inst_context.controlling_type().unwrap();
+            let addr = arg(0)?.into_int()? as u64;
+            // We are doing a regular load here, this isn't actually thread safe.
+            assign_or_memtrap(
+                Address::try_from(addr).and_then(|addr| state.checked_load(addr, load_ty)),
+            )
+        }
+        Opcode::AtomicStore => {
+            let val = arg(0)?;
+            let addr = arg(1)?.into_int()? as u64;
+            // We are doing a regular store here, this isn't actually thread safe.
+            continue_or_memtrap(
+                Address::try_from(addr).and_then(|addr| state.checked_store(addr, val)),
+            )
+        }
+        Opcode::Fence => {
+            // The interpreter always runs in a single threaded context, so we don't
+            // actually need to emit a fence here.
+            ControlFlow::Continue
+        }
         Opcode::WideningPairwiseDotProductS => {
             let ctrl_ty = types::I16X8;
             let new_type = ctrl_ty.merge_lanes().unwrap();
@@ -1335,9 +1281,10 @@ pub enum ControlFlow<'a, V> {
     /// Continue to the next available instruction, e.g.: in `nop`, we expect to resume execution
     /// at the instruction after it.
     Continue,
-    /// Jump to another block with the given parameters, e.g.: in `brz v0, block42, [v1, v2]`, if
-    /// the condition is true, we continue execution at the first instruction of `block42` with the
-    /// values in `v1` and `v2` filling in the block parameters.
+    /// Jump to another block with the given parameters, e.g.: in
+    /// `brif v0, block42(v1, v2), block97`, if the condition is true, we continue execution at the
+    /// first instruction of `block42` with the values in `v1` and `v2` filling in the block
+    /// parameters.
     ContinueAt(Block, SmallVec<[V; 1]>),
     /// Indicates a call the given [Function] with the supplied arguments.
     Call(&'a Function, SmallVec<[V; 1]>),

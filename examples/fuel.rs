@@ -15,7 +15,7 @@ fn main() -> Result<()> {
     let instance = Instance::new(&mut store, &module, &[])?;
 
     // Invoke `fibonacci` export with higher and higher numbers until we exhaust our fuel.
-    let fibonacci = instance.get_typed_func::<i32, i32, _>(&mut store, "fibonacci")?;
+    let fibonacci = instance.get_typed_func::<i32, i32>(&mut store, "fibonacci")?;
     for n in 1.. {
         let fuel_before = store.fuel_consumed().unwrap();
         let output = match fibonacci.call(&mut store, n) {

@@ -29,7 +29,7 @@ pub(crate) type AArch64Caller = Caller<AArch64MachineDeps>;
 /// This is the limit for the size of argument and return-value areas on the
 /// stack. We place a reasonable limit here to avoid integer overflow issues
 /// with 32-bit arithmetic: for now, 128 MB.
-static STACK_ARG_RET_SIZE_LIMIT: u64 = 128 * 1024 * 1024;
+static STACK_ARG_RET_SIZE_LIMIT: u32 = 128 * 1024 * 1024;
 
 impl Into<AMode> for StackAMode {
     fn into(self) -> AMode {
@@ -94,7 +94,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
         mut args: ArgsAccumulator<'_>,
-    ) -> CodegenResult<(i64, Option<usize>)>
+    ) -> CodegenResult<(u32, Option<usize>)>
     where
         I: IntoIterator<Item = &'a ir::AbiParam>,
     {
@@ -116,7 +116,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
         let mut next_xreg = 0;
         let mut next_vreg = 0;
-        let mut next_stack: u64 = 0;
+        let mut next_stack: u32 = 0;
 
         let (max_per_class_reg_vals, mut remaining_reg_vals) = match args_or_rets {
             ArgsOrRets::Args => (8, 16), // x0-x7 and v0-v7
@@ -152,13 +152,13 @@ impl ABIMachineSpec for AArch64MachineDeps {
             if let ir::ArgumentPurpose::StructArgument(size) = param.purpose {
                 assert_eq!(args_or_rets, ArgsOrRets::Args);
                 let offset = next_stack as i64;
-                let size = size as u64;
+                let size = size;
                 assert!(size % 8 == 0, "StructArgument size is not properly aligned");
                 next_stack += size;
                 args.push(ABIArg::StructArg {
                     pointer: None,
                     offset,
-                    size,
+                    size: size as u64,
                     purpose: param.purpose,
                 });
                 continue;
@@ -282,7 +282,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             // Spill to the stack
 
             // Compute the stack slot's size.
-            let size = (ty_bits(param.value_type) / 8) as u64;
+            let size = (ty_bits(param.value_type) / 8) as u32;
 
             let size = if is_apple_cc
                 || (call_conv.extends_wasmtime() && args_or_rets == ArgsOrRets::Rets)
@@ -308,7 +308,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 // Build the stack locations from each slot
                 .scan(next_stack, |next_stack, ty| {
                     let slot_offset = *next_stack as i64;
-                    *next_stack += (ty_bits(ty) / 8) as u64;
+                    *next_stack += (ty_bits(ty) / 8) as u32;
 
                     Some((ty, slot_offset))
                 })
@@ -358,7 +358,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             return Err(CodegenError::ImplLimitExceeded);
         }
 
-        Ok((next_stack as i64, extra_arg))
+        Ok((next_stack, extra_arg))
     }
 
     fn fp_to_arg_offset(_call_conv: isa::CallConv, _flags: &settings::Flags) -> i64 {
@@ -430,7 +430,10 @@ impl ABIMachineSpec for AArch64MachineDeps {
         } else {
             let scratch2 = writable_tmp2_reg();
             assert_ne!(scratch2.to_reg(), from_reg);
-            insts.extend(Inst::load_constant(scratch2, imm.into()));
+            // `gen_add_imm` is only ever called after register allocation has taken place, and as a
+            // result it's ok to reuse the scratch2 register here. If that changes, we'll need to
+            // plumb through a way to allocate temporary virtual registers
+            insts.extend(Inst::load_constant(scratch2, imm.into(), &mut |_| scratch2));
             insts.push(Inst::AluRRRExtend {
                 alu_op: ALUOp::Add,
                 size: OperandSize::Size64,
@@ -515,7 +518,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
             ret.push(adj_inst);
         } else {
             let tmp = writable_spilltmp_reg();
-            let const_inst = Inst::load_constant(tmp, amount);
+            // `gen_sp_reg_adjust` is called after regalloc2, so it's acceptable to reuse `tmp` for
+            // intermediates in `load_constant`.
+            let const_inst = Inst::load_constant(tmp, amount, &mut |_| tmp);
             let adj_inst = Inst::AluRRRExtend {
                 alu_op,
                 size: OperandSize::Size64,
@@ -631,14 +636,58 @@ impl ABIMachineSpec for AArch64MachineDeps {
         insts
     }
 
-    fn gen_probestack(_: u32) -> SmallInstVec<Self::I> {
+    fn gen_probestack(_insts: &mut SmallInstVec<Self::I>, _: u32) {
         // TODO: implement if we ever require stack probes on an AArch64 host
         // (unlikely unless Lucet is ported)
-        smallvec![]
+        unimplemented!("Stack probing is unimplemented on AArch64");
     }
 
-    fn gen_inline_probestack(_frame_size: u32, _guard_size: u32) -> SmallInstVec<Self::I> {
-        unimplemented!("Inline stack probing is unimplemented on AArch64");
+    fn gen_inline_probestack(insts: &mut SmallInstVec<Self::I>, frame_size: u32, guard_size: u32) {
+        // The stack probe loop currently takes 6 instructions and each inline
+        // probe takes 2 (ish, these numbers sort of depend on the constants).
+        // Set this to 3 to keep the max size of the probe to 6 instructions.
+        const PROBE_MAX_UNROLL: u32 = 3;
+
+        let probe_count = align_to(frame_size, guard_size) / guard_size;
+        if probe_count <= PROBE_MAX_UNROLL {
+            // When manually unrolling stick an instruction that stores 0 at a
+            // constant offset relative to the stack pointer. This will
+            // turn into something like `movn tmp, #n ; stur xzr [sp, tmp]`.
+            //
+            // Note that this may actually store beyond the stack size for the
+            // last item but that's ok since it's unused stack space and if
+            // that faults accidentally we're so close to faulting it shouldn't
+            // make too much difference to fault there.
+            insts.reserve(probe_count as usize);
+            for i in 0..probe_count {
+                let offset = (guard_size * (i + 1)) as i64;
+                insts.push(Self::gen_store_stack(
+                    StackAMode::SPOffset(-offset, I8),
+                    zero_reg(),
+                    I32,
+                ));
+            }
+        } else {
+            // The non-unrolled version uses two temporary registers. The
+            // `start` contains the current offset from sp and counts downwards
+            // during the loop by increments of `guard_size`. The `end` is
+            // the size of the frame and where we stop.
+            //
+            // Note that this emission is all post-regalloc so it should be ok
+            // to use the temporary registers here as input/output as the loop
+            // itself is not allowed to use the registers.
+            let start = writable_spilltmp_reg();
+            let end = writable_tmp2_reg();
+            // `gen_inline_probestack` is called after regalloc2, so it's acceptable to reuse
+            // `start` and `end` as temporaries in load_constant.
+            insts.extend(Inst::load_constant(start, 0, &mut |_| start));
+            insts.extend(Inst::load_constant(end, frame_size.into(), &mut |_| end));
+            insts.push(Inst::StackProbeLoop {
+                start,
+                end: end.to_reg(),
+                step: Imm12::maybe_from_u64(guard_size.into()).unwrap(),
+            });
+        }
     }
 
     // Returns stack bytes used as well as instructions. Does not adjust
@@ -977,19 +1026,19 @@ impl ABIMachineSpec for AArch64MachineDeps {
         insts
     }
 
-    fn gen_memcpy(
+    fn gen_memcpy<F: FnMut(Type) -> Writable<Reg>>(
         call_conv: isa::CallConv,
         dst: Reg,
         src: Reg,
-        tmp: Writable<Reg>,
-        _tmp2: Writable<Reg>,
         size: usize,
+        mut alloc_tmp: F,
     ) -> SmallVec<[Self::I; 8]> {
         let mut insts = SmallVec::new();
         let arg0 = writable_xreg(0);
         let arg1 = writable_xreg(1);
         let arg2 = writable_xreg(2);
-        insts.extend(Inst::load_constant(tmp, size as u64).into_iter());
+        let tmp = alloc_tmp(Self::word_type());
+        insts.extend(Inst::load_constant(tmp, size as u64, &mut alloc_tmp));
         insts.push(Inst::Call {
             info: Box::new(CallInfo {
                 dest: ExternalName::LibCall(LibCall::Memcpy),

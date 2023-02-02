@@ -48,7 +48,7 @@ pub const ELF_WASMTIME_ADDRMAP: &str = ".wasmtime.addrmap";
 /// encodes the ability to map an offset in the text section to the trap code
 /// that it corresponds to.
 ///
-/// This section is used at runtime to determine what flavor fo trap happened to
+/// This section is used at runtime to determine what flavor of trap happened to
 /// ensure that embedders and debuggers know the reason for the wasm trap. The
 /// encoding of this section is custom to Wasmtime and managed with helpers in
 /// the `object` crate:
@@ -63,7 +63,7 @@ pub const ELF_WASMTIME_ADDRMAP: &str = ".wasmtime.addrmap";
 ///
 /// This section is decoded by `lookup_trap_code` below which will read the
 /// section count, slice some bytes to get the various arrays, and then perform
-/// a binary search on the offsets array to find the an index corresponding to
+/// a binary search on the offsets array to find the index corresponding to
 /// the pc being looked up. If found the same index in the trap array (the array
 /// of bytes) is the trap code for that offset.
 ///
@@ -119,3 +119,51 @@ pub const ELF_WASMTIME_INFO: &'static str = ".wasmtime.info";
 /// sometimes quite large (3MB seen for spidermonkey-compiled-to-wasm), can be
 /// paged in lazily from an mmap and is never paged in if we never reference it.
 pub const ELF_NAME_DATA: &'static str = ".name.wasm";
+
+/// This is the name of the section in the final ELF image that contains the
+/// concatenation of all the native DWARF information found in the original wasm
+/// files.
+///
+/// This concatenation is not intended to be read by external tools at this time
+/// and is instead indexed directly by relative indices stored in compilation
+/// metadata.
+pub const ELF_WASMTIME_DWARF: &str = ".wasmtime.dwarf";
+
+macro_rules! libcalls {
+    ($($rust:ident = $sym:tt)*) => (
+        #[allow(missing_docs)]
+        pub enum LibCall {
+            $($rust,)*
+        }
+
+        impl LibCall {
+            /// Returns the libcall corresponding to the provided symbol name,
+            /// if one matches.
+            pub fn from_str(s: &str) -> Option<LibCall> {
+                match s {
+                    $($sym => Some(LibCall::$rust),)*
+                    _ => None,
+                }
+            }
+
+            /// Returns the symbol name in object files associated with this
+            /// libcall.
+            pub fn symbol(&self) -> &'static str {
+                match self {
+                    $(LibCall::$rust => $sym,)*
+                }
+            }
+        }
+    )
+}
+
+libcalls! {
+    FloorF32 = "libcall_floor32"
+    FloorF64 = "libcall_floor64"
+    NearestF32 = "libcall_nearestf32"
+    NearestF64 = "libcall_nearestf64"
+    CeilF32 = "libcall_ceilf32"
+    CeilF64 = "libcall_ceilf64"
+    TruncF32 = "libcall_truncf32"
+    TruncF64 = "libcall_truncf64"
+}

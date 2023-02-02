@@ -2177,14 +2177,6 @@ fn riscv64_worst_case_instruction_size() {
     //there are all candidates potential generate a lot of bytes.
     let mut candidates: Vec<MInst> = vec![];
 
-    candidates.push(Inst::Fcmp {
-        rd: writable_a0(),
-        cc: FloatCC::UnorderedOrLessThanOrEqual,
-        ty: F64,
-        rs1: fa1(),
-        rs2: fa0(),
-    });
-
     candidates.push(Inst::IntSelect {
         dst: vec![writable_a0(), writable_a0()],
         ty: I128,
@@ -2198,17 +2190,52 @@ fn riscv64_worst_case_instruction_size() {
         rs: fa0(),
         is_signed: true,
         in_type: F64,
-        out_type: I64,
-        is_sat: true,
+        out_type: I8,
+        is_sat: false,
         tmp: writable_a1(),
     });
-
     candidates.push(Inst::FcvtToInt {
         rd: writable_a0(),
         rs: fa0(),
         is_signed: true,
         in_type: F64,
-        out_type: I64,
+        out_type: I16,
+        is_sat: false,
+        tmp: writable_a1(),
+    });
+    candidates.push(Inst::FcvtToInt {
+        rd: writable_a0(),
+        rs: fa0(),
+        is_signed: true,
+        in_type: F32,
+        out_type: I8,
+        is_sat: false,
+        tmp: writable_a1(),
+    });
+    candidates.push(Inst::FcvtToInt {
+        rd: writable_a0(),
+        rs: fa0(),
+        is_signed: true,
+        in_type: F32,
+        out_type: I16,
+        is_sat: false,
+        tmp: writable_a1(),
+    });
+    candidates.push(Inst::FcvtToInt {
+        rd: writable_a0(),
+        rs: fa0(),
+        is_signed: true,
+        in_type: F64,
+        out_type: I8,
+        is_sat: false,
+        tmp: writable_a1(),
+    });
+    candidates.push(Inst::FcvtToInt {
+        rd: writable_a0(),
+        rs: fa0(),
+        is_signed: true,
+        in_type: F64,
+        out_type: I16,
         is_sat: false,
         tmp: writable_a1(),
     });

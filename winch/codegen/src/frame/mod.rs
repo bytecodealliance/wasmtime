@@ -1,4 +1,4 @@
-use crate::abi::{align_to, local::LocalSlot, ty_size, ABIArg, ABISig, ABI};
+use crate::abi::{align_to, ty_size, ABIArg, ABISig, LocalSlot, ABI};
 use anyhow::Result;
 use smallvec::SmallVec;
 use std::ops::Range;
@@ -128,7 +128,7 @@ impl Frame {
         for _ in 0..local_count {
             let position = reader.original_position();
             let count = reader.read_var_u32()?;
-            let ty = reader.read_val_type()?;
+            let ty = reader.read()?;
             validator.define_locals(position, count, ty)?;
 
             let ty: ValType = ty.try_into()?;

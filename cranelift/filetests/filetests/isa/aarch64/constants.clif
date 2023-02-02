@@ -9,7 +9,7 @@ block0:
 }
 
 ; block0:
-;   movn x0, #0
+;   movz w0, #255
 ;   ret
 
 function %f() -> i16 {
@@ -19,7 +19,7 @@ block0:
 }
 
 ; block0:
-;   movz x0, #0
+;   movz w0, #0
 ;   ret
 
 function %f() -> i64 {
@@ -164,7 +164,7 @@ block0:
 }
 
 ; block0:
-;   movn x0, #0
+;   movn w0, #0
 ;   ret
 
 function %f() -> i32 {

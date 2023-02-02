@@ -43,7 +43,7 @@ impl RegAlloc {
 
         let dst = self.any_gpr(context);
         let val = context.stack.pop().expect("a value at stack top");
-        Self::move_val_to_reg(val, dst, &mut context.masm, context.frame, size);
+        Self::move_val_to_reg(val, dst, context.masm, context.frame, size);
         dst
     }
 
@@ -63,7 +63,7 @@ impl RegAlloc {
 
         let dst = self.gpr(context, named);
         let val = context.stack.pop().expect("a value at stack top");
-        Self::move_val_to_reg(val, dst, &mut context.masm, context.frame, size);
+        Self::move_val_to_reg(val, dst, context.masm, context.frame, size);
         dst
     }
 

@@ -1,6 +1,6 @@
 //! Support for a calling of an imported function.
 
-use crate::{Engine, FuncType, Trap, ValRaw};
+use crate::{Engine, FuncType, ValRaw};
 use anyhow::Result;
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr::NonNull;
@@ -56,7 +56,7 @@ unsafe extern "C" fn stub_fn<F>(
         // call-site, which gets unwrapped in `Trap::from_runtime` later on as we
         // convert from the internal `Trap` type to our own `Trap` type in this
         // crate.
-        Ok(Err(trap)) => Trap::raise(trap.into()),
+        Ok(Err(trap)) => crate::trap::raise(trap.into()),
 
         // And finally if the imported function panicked, then we trigger the
         // form of unwinding that's safe to jump over wasm code on all

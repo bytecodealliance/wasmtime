@@ -20,10 +20,9 @@ block2:
 ; run: %jump() == 1
 
 
-function %brz_i64(i64) -> i8 {
+function %brif_false__i64(i64) -> i8 {
 block0(v0: i64):
-    brz v0, block1
-    jump block2
+    brif v0, block2, block1
 
 block1:
     v1 = iconst.i8 1
@@ -33,17 +32,16 @@ block2:
     v2 = iconst.i8 0
     return v2
 }
-; run: %brz_i64(0) == 1
-; run: %brz_i64(1) == 0
-; run: %brz_i64(-1) == 0
-; run: %brz_i64(97) == 0
+; run: %brif_false__i64(0) == 1
+; run: %brif_false__i64(1) == 0
+; run: %brif_false__i64(-1) == 0
+; run: %brif_false__i64(97) == 0
 
-function %brz_i8_overflow(i8) -> i8 {
+function %brif_false__i8_overflow(i8) -> i8 {
 block0(v0: i8):
     v1 = iconst.i8 255
     v2 = iadd.i8 v0, v1
-    brz v2, block2
-    jump block1
+    brif v2, block1, block2
 
 block1:
     v3 = iconst.i8 1
@@ -54,18 +52,17 @@ block2:
     return v4
 }
 
-; run: %brz_i8_overflow(0) == 1
-; run: %brz_i8_overflow(1) == 0
-; run: %brz_i8_overflow(2) == 1
-; run: %brz_i8_overflow(98) == 1
-; run: %brz_i8_overflow(97) == 1
+; run: %brif_false__i8_overflow(0) == 1
+; run: %brif_false__i8_overflow(1) == 0
+; run: %brif_false__i8_overflow(2) == 1
+; run: %brif_false__i8_overflow(98) == 1
+; run: %brif_false__i8_overflow(97) == 1
 
-function %brz_i16_overflow(i16) -> i8 {
+function %brif_false__i16_overflow(i16) -> i8 {
 block0(v0: i16):
     v1 = iconst.i16 65535
     v2 = iadd v0, v1
-    brz v2, block2
-    jump block1
+    brif v2, block1, block2
 
 block1:
     v3 = iconst.i8 1
@@ -76,18 +73,17 @@ block2:
     return v4
 }
 
-; run: %brz_i16_overflow(0) == 1
-; run: %brz_i16_overflow(1) == 0
-; run: %brz_i16_overflow(2) == 1
-; run: %brz_i16_overflow(98) == 1
-; run: %brz_i16_overflow(97) == 1
+; run: %brif_false__i16_overflow(0) == 1
+; run: %brif_false__i16_overflow(1) == 0
+; run: %brif_false__i16_overflow(2) == 1
+; run: %brif_false__i16_overflow(98) == 1
+; run: %brif_false__i16_overflow(97) == 1
 
-function %brz_i32_overflow(i32) -> i8 {
+function %brif_false__i32_overflow(i32) -> i8 {
 block0(v0: i32):
     v1 = iconst.i32 4294967295
     v2 = iadd v0, v1
-    brz v2, block2
-    jump block1
+    brif v2, block1, block2
 
 block1:
     v3 = iconst.i8 1
@@ -98,16 +94,15 @@ block2:
     return v4
 }
 
-; run: %brz_i32_overflow(0) == 1
-; run: %brz_i32_overflow(1) == 0
-; run: %brz_i32_overflow(2) == 1
-; run: %brz_i32_overflow(98) == 1
-; run: %brz_i32_overflow(97) == 1
+; run: %brif_false__i32_overflow(0) == 1
+; run: %brif_false__i32_overflow(1) == 0
+; run: %brif_false__i32_overflow(2) == 1
+; run: %brif_false__i32_overflow(98) == 1
+; run: %brif_false__i32_overflow(97) == 1
 
-function %brz_i32(i32) -> i8 {
+function %brif_false__i32(i32) -> i8 {
 block0(v0: i32):
-    brz v0, block1
-    jump block2
+    brif v0, block2, block1
 
 block1:
     v1 = iconst.i8 1
@@ -117,14 +112,13 @@ block2:
     v2 = iconst.i8 0
     return v2
 }
-; run: %brz_i32(0) == 1
-; run: %brz_i32(1) == 0
-; run: %brz_i32(-1) == 0
+; run: %brif_false__i32(0) == 1
+; run: %brif_false__i32(1) == 0
+; run: %brif_false__i32(-1) == 0
 
-function %brz_i16(i16) -> i8 {
+function %brif_false__i16(i16) -> i8 {
 block0(v0: i16):
-    brz v0, block1
-    jump block2
+    brif v0, block2, block1
 
 block1:
     v1 = iconst.i8 1
@@ -134,14 +128,13 @@ block2:
     v2 = iconst.i8 0
     return v2
 }
-; run: %brz_i16(0) == 1
-; run: %brz_i16(1) == 0
-; run: %brz_i16(-1) == 0
+; run: %brif_false__i16(0) == 1
+; run: %brif_false__i16(1) == 0
+; run: %brif_false__i16(-1) == 0
 
-function %brz_i8(i8) -> i8 {
+function %brif_false__i8(i8) -> i8 {
 block0(v1: i8):
-    brz v1, block1
-    jump block2
+    brif v1, block2, block1
 
 block1:
     v2 = iconst.i8 1
@@ -151,14 +144,13 @@ block2:
     v3 = iconst.i8 0
     return v3
 }
-; run: %brz_i8(1) == 0
-; run: %brz_i8(0) == 1
+; run: %brif_false__i8(1) == 0
+; run: %brif_false__i8(0) == 1
 
 
-function %brnz_i64(i64) -> i8 {
+function %brif_true__i64(i64) -> i8 {
 block0(v0: i64):
-    brnz v0, block1
-    jump block2
+    brif v0, block1, block2
 
 block1:
     v1 = iconst.i8 1
@@ -168,14 +160,13 @@ block2:
     v2 = iconst.i8 0
     return v2
 }
-; run: %brnz_i64(0) == 0
-; run: %brnz_i64(1) == 1
-; run: %brnz_i64(-1) == 1
+; run: %brif_true__i64(0) == 0
+; run: %brif_true__i64(1) == 1
+; run: %brif_true__i64(-1) == 1
 
-function %brnz_i32(i32) -> i8 {
+function %brif_true__i32(i32) -> i8 {
 block0(v0: i32):
-    brnz v0, block1
-    jump block2
+    brif v0, block1, block2
 
 block1:
     v1 = iconst.i8 1
@@ -185,14 +176,13 @@ block2:
     v2 = iconst.i8 0
     return v2
 }
-; run: %brnz_i32(0) == 0
-; run: %brnz_i32(1) == 1
-; run: %brnz_i32(-1) == 1
+; run: %brif_true__i32(0) == 0
+; run: %brif_true__i32(1) == 1
+; run: %brif_true__i32(-1) == 1
 
-function %brnz_i16(i16) -> i8 {
+function %brif_true__i16(i16) -> i8 {
 block0(v0: i16):
-    brnz v0, block1
-    jump block2
+    brif v0, block1, block2
 
 block1:
     v1 = iconst.i8 1
@@ -202,14 +192,13 @@ block2:
     v2 = iconst.i8 0
     return v2
 }
-; run: %brnz_i16(0) == 0
-; run: %brnz_i16(1) == 1
-; run: %brnz_i16(-1) == 1
+; run: %brif_true__i16(0) == 0
+; run: %brif_true__i16(1) == 1
+; run: %brif_true__i16(-1) == 1
 
-function %brnz_i8(i8) -> i8 {
+function %brif_true__i8(i8) -> i8 {
 block0(v0: i8):
-    brnz v0, block1
-    jump block2
+    brif v0, block1, block2
 
 block1:
     v1 = iconst.i8 1
@@ -219,7 +208,7 @@ block2:
     v2 = iconst.i8 0
     return v2
 }
-; run: %brnz_i8(0) == 0
-; run: %brnz_i8(1) == 1
-; run: %brnz_i8(-1) == 1
-; run: %brnz_i8(97) == 1
+; run: %brif_true__i8(0) == 0
+; run: %brif_true__i8(1) == 1
+; run: %brif_true__i8(-1) == 1
+; run: %brif_true__i8(97) == 1

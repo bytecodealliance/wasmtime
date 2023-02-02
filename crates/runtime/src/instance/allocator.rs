@@ -2,29 +2,24 @@ use crate::imports::Imports;
 use crate::instance::{Instance, InstanceHandle, RuntimeMemoryCreator};
 use crate::memory::{DefaultMemoryCreator, Memory};
 use crate::table::Table;
-use crate::ModuleRuntimeInfo;
-use crate::Store;
-use anyhow::Result;
+use crate::{CompiledModuleId, ModuleRuntimeInfo, Store};
+use anyhow::{anyhow, bail, Result};
 use std::alloc;
 use std::any::Any;
 use std::convert::TryFrom;
 use std::ptr;
 use std::sync::Arc;
-use thiserror::Error;
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, HostPtr, InitMemory, MemoryInitialization,
-    MemoryInitializer, Module, PrimaryMap, TableInitialization, TableInitializer, TrapCode,
-    VMOffsets, WasmType, WASM_PAGE_SIZE,
+    MemoryInitializer, Module, PrimaryMap, TableInitialization, TableInitializer, Trap, VMOffsets,
+    WasmType, WASM_PAGE_SIZE,
 };
 
 #[cfg(feature = "pooling-allocator")]
 mod pooling;
 
 #[cfg(feature = "pooling-allocator")]
-pub use self::pooling::{
-    InstanceLimits, PoolingAllocationStrategy, PoolingInstanceAllocator,
-    PoolingInstanceAllocatorConfig,
-};
+pub use self::pooling::{InstanceLimits, PoolingInstanceAllocator, PoolingInstanceAllocatorConfig};
 
 /// Represents a request for a new runtime instance.
 pub struct InstanceAllocationRequest<'a> {
@@ -87,101 +82,107 @@ impl StorePtr {
     }
 }
 
-/// An link error while instantiating a module.
-#[derive(Error, Debug)]
-#[error("Link error: {0}")]
-pub struct LinkError(pub String);
-
-/// An error while instantiating a module.
-#[derive(Error, Debug)]
-pub enum InstantiationError {
-    /// Insufficient resources available for execution.
-    #[error("Insufficient resources: {0}")]
-    Resource(anyhow::Error),
-
-    /// A wasm link error occurred.
-    #[error("Failed to link module")]
-    Link(#[from] LinkError),
-
-    /// A trap ocurred during instantiation, after linking.
-    #[error("Trap occurred during instantiation")]
-    Trap(TrapCode),
-
-    /// A limit on how many instances are supported has been reached.
-    #[error("Limit of {0} concurrent instances has been reached")]
-    Limit(u32),
-}
-
-/// An error while creating a fiber stack.
-#[cfg(feature = "async")]
-#[derive(Error, Debug)]
-pub enum FiberStackError {
-    /// Insufficient resources available for the request.
-    #[error("Insufficient resources: {0}")]
-    Resource(anyhow::Error),
-    /// An error for when the allocator doesn't support fiber stacks.
-    #[error("fiber stacks are not supported by the allocator")]
-    NotSupported,
-    /// A limit on how many fibers are supported has been reached.
-    #[error("Limit of {0} concurrent fibers has been reached")]
-    Limit(u32),
-}
-
 /// Represents a runtime instance allocator.
 ///
 /// # Safety
 ///
 /// This trait is unsafe as it requires knowledge of Wasmtime's runtime internals to implement correctly.
-pub unsafe trait InstanceAllocator: Send + Sync {
+pub unsafe trait InstanceAllocator {
     /// Validates that a module is supported by the allocator.
-    fn validate(&self, module: &Module) -> Result<()> {
-        drop(module);
+    fn validate(&self, module: &Module, offsets: &VMOffsets<HostPtr>) -> Result<()> {
+        drop((module, offsets));
         Ok(())
     }
 
-    /// Adjusts the tunables prior to creation of any JIT compiler.
+    /// Allocates a fresh `InstanceHandle` for the `req` given.
     ///
-    /// This method allows the instance allocator control over tunables passed to a `wasmtime_jit::Compiler`.
-    fn adjust_tunables(&self, tunables: &mut wasmtime_environ::Tunables) {
-        drop(tunables);
+    /// This will allocate memories and tables internally from this allocator
+    /// and weave that altogether into a final and complete `InstanceHandle`
+    /// ready to be registered with a store.
+    ///
+    /// Note that the returned instance must still have `.initialize(..)` called
+    /// on it to complete the instantiation process.
+    fn allocate(&self, mut req: InstanceAllocationRequest) -> Result<InstanceHandle> {
+        let index = self.allocate_index(&req)?;
+        let module = req.runtime_info.module();
+        let mut memories =
+            PrimaryMap::with_capacity(module.memory_plans.len() - module.num_imported_memories);
+        let mut tables =
+            PrimaryMap::with_capacity(module.table_plans.len() - module.num_imported_tables);
+
+        let result = self
+            .allocate_memories(index, &mut req, &mut memories)
+            .and_then(|()| self.allocate_tables(index, &mut req, &mut tables));
+        if let Err(e) = result {
+            self.deallocate_memories(index, &mut memories);
+            self.deallocate_tables(index, &mut tables);
+            self.deallocate_index(index);
+            return Err(e);
+        }
+
+        unsafe { Ok(Instance::new(req, index, memories, tables)) }
     }
 
-    /// Allocates an instance for the given allocation request.
+    /// Deallocates the provided instance.
     ///
-    /// # Safety
-    ///
-    /// This method is not inherently unsafe, but care must be made to ensure
-    /// pointers passed in the allocation request outlive the returned instance.
-    unsafe fn allocate(
-        &self,
-        req: InstanceAllocationRequest,
-    ) -> Result<InstanceHandle, InstantiationError>;
+    /// This will null-out the pointer within `handle` and otherwise reclaim
+    /// resources such as tables, memories, and the instance memory itself.
+    fn deallocate(&self, handle: &mut InstanceHandle) {
+        let index = handle.instance().index;
+        self.deallocate_memories(index, &mut handle.instance_mut().memories);
+        self.deallocate_tables(index, &mut handle.instance_mut().tables);
+        unsafe {
+            let layout = Instance::alloc_layout(handle.instance().offsets());
+            ptr::drop_in_place(handle.instance);
+            alloc::dealloc(handle.instance.cast(), layout);
+            handle.instance = std::ptr::null_mut();
+        }
+        self.deallocate_index(index);
+    }
 
-    /// Finishes the instantiation process started by an instance allocator.
+    /// Optionally allocates an allocator-defined index for the `req` provided.
     ///
-    /// # Safety
-    ///
-    /// This method is only safe to call immediately after an instance has been allocated.
-    unsafe fn initialize(
-        &self,
-        handle: &mut InstanceHandle,
-        module: &Module,
-        is_bulk_memory: bool,
-    ) -> Result<(), InstantiationError>;
+    /// The return value here, if successful, is passed to the various methods
+    /// below for memory/table allocation/deallocation.
+    fn allocate_index(&self, req: &InstanceAllocationRequest) -> Result<usize>;
 
-    /// Deallocates a previously allocated instance.
+    /// Deallocates indices allocated by `allocate_index`.
+    fn deallocate_index(&self, index: usize);
+
+    /// Attempts to allocate all defined linear memories for a module.
     ///
-    /// # Safety
+    /// Pushes all memories for `req` onto the `mems` storage provided which is
+    /// already appropriately allocated to contain all memories.
     ///
-    /// This function is unsafe because there are no guarantees that the given handle
-    /// is the only owner of the underlying instance to deallocate.
-    ///
-    /// Use extreme care when deallocating an instance so that there are no dangling instance pointers.
-    unsafe fn deallocate(&self, handle: &InstanceHandle);
+    /// Note that this is allowed to fail. Failure can additionally happen after
+    /// some memories have already been successfully allocated. All memories
+    /// pushed onto `mem` are guaranteed to one day make their way to
+    /// `deallocate_memories`.
+    fn allocate_memories(
+        &self,
+        index: usize,
+        req: &mut InstanceAllocationRequest,
+        mems: &mut PrimaryMap<DefinedMemoryIndex, Memory>,
+    ) -> Result<()>;
+
+    /// Deallocates all memories provided, optionally reclaiming resources for
+    /// the pooling allocator for example.
+    fn deallocate_memories(&self, index: usize, mems: &mut PrimaryMap<DefinedMemoryIndex, Memory>);
+
+    /// Same as `allocate_memories`, but for tables.
+    fn allocate_tables(
+        &self,
+        index: usize,
+        req: &mut InstanceAllocationRequest,
+        tables: &mut PrimaryMap<DefinedTableIndex, Table>,
+    ) -> Result<()>;
+
+    /// Same as `deallocate_memories`, but for tables.
+    fn deallocate_tables(&self, index: usize, tables: &mut PrimaryMap<DefinedTableIndex, Table>);
 
     /// Allocates a fiber stack for calling async functions on.
     #[cfg(feature = "async")]
-    fn allocate_fiber_stack(&self) -> Result<wasmtime_fiber::FiberStack, FiberStackError>;
+    fn allocate_fiber_stack(&self) -> Result<wasmtime_fiber::FiberStack>;
 
     /// Deallocates a fiber stack that was previously allocated with `allocate_fiber_stack`.
     ///
@@ -190,12 +191,16 @@ pub unsafe trait InstanceAllocator: Send + Sync {
     /// The provided stack is required to have been allocated with `allocate_fiber_stack`.
     #[cfg(feature = "async")]
     unsafe fn deallocate_fiber_stack(&self, stack: &wasmtime_fiber::FiberStack);
+
+    /// Purges all lingering resources related to `module` from within this
+    /// allocator.
+    ///
+    /// Primarily present for the pooling allocator to remove mappings of
+    /// this module from slots in linear memory.
+    fn purge_module(&self, module: CompiledModuleId);
 }
 
-fn get_table_init_start(
-    init: &TableInitializer,
-    instance: &Instance,
-) -> Result<u32, InstantiationError> {
+fn get_table_init_start(init: &TableInitializer, instance: &Instance) -> Result<u32> {
     match init.base {
         Some(base) => {
             let val = unsafe {
@@ -206,20 +211,15 @@ fn get_table_init_start(
                 }
             };
 
-            init.offset.checked_add(val).ok_or_else(|| {
-                InstantiationError::Link(LinkError(
-                    "element segment global base overflows".to_owned(),
-                ))
-            })
+            init.offset
+                .checked_add(val)
+                .ok_or_else(|| anyhow!("element segment global base overflows"))
         }
         None => Ok(init.offset),
     }
 }
 
-fn check_table_init_bounds(
-    instance: &mut Instance,
-    module: &Module,
-) -> Result<(), InstantiationError> {
+fn check_table_init_bounds(instance: &mut Instance, module: &Module) -> Result<()> {
     match &module.table_initialization {
         TableInitialization::FuncTable { segments, .. }
         | TableInitialization::Segments { segments } => {
@@ -234,9 +234,7 @@ fn check_table_init_bounds(
                         // Initializer is in bounds
                     }
                     _ => {
-                        return Err(InstantiationError::Link(LinkError(
-                            "table out of bounds: elements segment does not fit".to_owned(),
-                        )))
+                        bail!("table out of bounds: elements segment does not fit")
                     }
                 }
             }
@@ -246,7 +244,7 @@ fn check_table_init_bounds(
     Ok(())
 }
 
-fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<(), InstantiationError> {
+fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
     // Note: if the module's table initializer state is in
     // FuncTable mode, we will lazily initialize tables based on
     // any statically-precomputed image of FuncIndexes, but there
@@ -258,15 +256,13 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<(), Ins
         TableInitialization::FuncTable { segments, .. }
         | TableInitialization::Segments { segments } => {
             for segment in segments {
-                instance
-                    .table_init_segment(
-                        segment.table_index,
-                        &segment.elements,
-                        get_table_init_start(segment, instance)?,
-                        0,
-                        segment.elements.len() as u32,
-                    )
-                    .map_err(InstantiationError::Trap)?;
+                instance.table_init_segment(
+                    segment.table_index,
+                    &segment.elements,
+                    get_table_init_start(segment, instance)?,
+                    0,
+                    segment.elements.len() as u32,
+                )?;
             }
         }
     }
@@ -274,10 +270,7 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<(), Ins
     Ok(())
 }
 
-fn get_memory_init_start(
-    init: &MemoryInitializer,
-    instance: &Instance,
-) -> Result<u64, InstantiationError> {
+fn get_memory_init_start(init: &MemoryInitializer, instance: &Instance) -> Result<u64> {
     match init.base {
         Some(base) => {
             let mem64 = instance.module().memory_plans[init.memory_index]
@@ -296,18 +289,15 @@ fn get_memory_init_start(
                 }
             };
 
-            init.offset.checked_add(val).ok_or_else(|| {
-                InstantiationError::Link(LinkError("data segment global base overflows".to_owned()))
-            })
+            init.offset
+                .checked_add(val)
+                .ok_or_else(|| anyhow!("data segment global base overflows"))
         }
         None => Ok(init.offset),
     }
 }
 
-fn check_memory_init_bounds(
-    instance: &Instance,
-    initializers: &[MemoryInitializer],
-) -> Result<(), InstantiationError> {
+fn check_memory_init_bounds(instance: &Instance, initializers: &[MemoryInitializer]) -> Result<()> {
     for init in initializers {
         let memory = instance.get_memory(init.memory_index);
         let start = get_memory_init_start(init, instance)?;
@@ -320,9 +310,7 @@ fn check_memory_init_bounds(
                 // Initializer is in bounds
             }
             _ => {
-                return Err(InstantiationError::Link(LinkError(
-                    "memory out of bounds: data segment does not fit".into(),
-                )))
+                bail!("memory out of bounds: data segment does not fit")
             }
         }
     }
@@ -330,7 +318,7 @@ fn check_memory_init_bounds(
     Ok(())
 }
 
-fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<(), InstantiationError> {
+fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<()> {
     let memory_size_in_pages =
         &|memory| (instance.get_memory(memory).current_length() as u64) / u64::from(WASM_PAGE_SIZE);
 
@@ -386,13 +374,13 @@ fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<(), I
         },
     );
     if !ok {
-        return Err(InstantiationError::Trap(TrapCode::HeapOutOfBounds));
+        return Err(Trap::MemoryOutOfBounds.into());
     }
 
     Ok(())
 }
 
-fn check_init_bounds(instance: &mut Instance, module: &Module) -> Result<(), InstantiationError> {
+fn check_init_bounds(instance: &mut Instance, module: &Module) -> Result<()> {
     check_table_init_bounds(instance, module)?;
 
     match &instance.module().memory_initialization {
@@ -406,11 +394,11 @@ fn check_init_bounds(instance: &mut Instance, module: &Module) -> Result<(), Ins
     Ok(())
 }
 
-fn initialize_instance(
+pub(super) fn initialize_instance(
     instance: &mut Instance,
     module: &Module,
     is_bulk_memory: bool,
-) -> Result<(), InstantiationError> {
+) -> Result<()> {
     // If bulk memory is not enabled, bounds check the data and element segments before
     // making any changes. With bulk memory enabled, initializers are processed
     // in-order and side effects are observed up to the point of an out-of-bounds
@@ -446,65 +434,6 @@ impl OnDemandInstanceAllocator {
             stack_size,
         }
     }
-
-    fn create_tables(
-        store: &mut StorePtr,
-        runtime_info: &Arc<dyn ModuleRuntimeInfo>,
-    ) -> Result<PrimaryMap<DefinedTableIndex, Table>, InstantiationError> {
-        let module = runtime_info.module();
-        let num_imports = module.num_imported_tables;
-        let mut tables: PrimaryMap<DefinedTableIndex, _> =
-            PrimaryMap::with_capacity(module.table_plans.len() - num_imports);
-        for (_, table) in module.table_plans.iter().skip(num_imports) {
-            tables.push(
-                Table::new_dynamic(table, unsafe {
-                    store
-                        .get()
-                        .expect("if module has table plans, store is not empty")
-                })
-                .map_err(InstantiationError::Resource)?,
-            );
-        }
-        Ok(tables)
-    }
-
-    fn create_memories(
-        &self,
-        store: &mut StorePtr,
-        runtime_info: &Arc<dyn ModuleRuntimeInfo>,
-    ) -> Result<PrimaryMap<DefinedMemoryIndex, Memory>, InstantiationError> {
-        let module = runtime_info.module();
-        let creator = self
-            .mem_creator
-            .as_deref()
-            .unwrap_or_else(|| &DefaultMemoryCreator);
-        let num_imports = module.num_imported_memories;
-        let mut memories: PrimaryMap<DefinedMemoryIndex, _> =
-            PrimaryMap::with_capacity(module.memory_plans.len() - num_imports);
-        for (memory_idx, plan) in module.memory_plans.iter().skip(num_imports) {
-            let defined_memory_idx = module
-                .defined_memory_index(memory_idx)
-                .expect("Skipped imports, should never be None");
-            let image = runtime_info
-                .memory_image(defined_memory_idx)
-                .map_err(|err| InstantiationError::Resource(err.into()))?;
-
-            memories.push(
-                Memory::new_dynamic(
-                    plan,
-                    creator,
-                    unsafe {
-                        store
-                            .get()
-                            .expect("if module has memory plans, store is not empty")
-                    },
-                    image,
-                )
-                .map_err(InstantiationError::Resource)?,
-            );
-        }
-        Ok(memories)
-    }
 }
 
 impl Default for OnDemandInstanceAllocator {
@@ -517,80 +446,91 @@ impl Default for OnDemandInstanceAllocator {
     }
 }
 
-/// Allocate an instance containing a single memory.
-///
-/// In order to import a [`Memory`] into a WebAssembly instance, Wasmtime
-/// requires that memory to exist in its own instance. Here we bring to life
-/// such a "Frankenstein" instance with the only purpose of exporting a
-/// [`Memory`].
-pub unsafe fn allocate_single_memory_instance(
-    req: InstanceAllocationRequest,
-    memory: Memory,
-) -> Result<InstanceHandle, InstantiationError> {
-    let mut memories = PrimaryMap::default();
-    memories.push(memory);
-    let tables = PrimaryMap::default();
-    let module = req.runtime_info.module();
-    let offsets = VMOffsets::new(HostPtr, module);
-    let layout = Instance::alloc_layout(&offsets);
-    let instance = alloc::alloc(layout) as *mut Instance;
-    Instance::new_at(instance, layout.size(), offsets, req, memories, tables);
-    Ok(InstanceHandle { instance })
-}
-
-/// Internal implementation of [`InstanceHandle`] deallocation.
-///
-/// See [`InstanceAllocator::deallocate()`] for more details.
-pub unsafe fn deallocate(handle: &InstanceHandle) {
-    let layout = Instance::alloc_layout(&handle.instance().offsets);
-    ptr::drop_in_place(handle.instance);
-    alloc::dealloc(handle.instance.cast(), layout);
-}
-
 unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
-    unsafe fn allocate(
+    fn allocate_index(&self, _req: &InstanceAllocationRequest) -> Result<usize> {
+        Ok(0)
+    }
+
+    fn deallocate_index(&self, index: usize) {
+        assert_eq!(index, 0);
+    }
+
+    fn allocate_memories(
         &self,
-        mut req: InstanceAllocationRequest,
-    ) -> Result<InstanceHandle, InstantiationError> {
-        let memories = self.create_memories(&mut req.store, &req.runtime_info)?;
-        let tables = Self::create_tables(&mut req.store, &req.runtime_info)?;
+        _index: usize,
+        req: &mut InstanceAllocationRequest,
+        memories: &mut PrimaryMap<DefinedMemoryIndex, Memory>,
+    ) -> Result<()> {
         let module = req.runtime_info.module();
-        let offsets = VMOffsets::new(HostPtr, module);
-        let layout = Instance::alloc_layout(&offsets);
-        let instance_ptr = alloc::alloc(layout) as *mut Instance;
+        let creator = self
+            .mem_creator
+            .as_deref()
+            .unwrap_or_else(|| &DefaultMemoryCreator);
+        let num_imports = module.num_imported_memories;
+        for (memory_idx, plan) in module.memory_plans.iter().skip(num_imports) {
+            let defined_memory_idx = module
+                .defined_memory_index(memory_idx)
+                .expect("Skipped imports, should never be None");
+            let image = req.runtime_info.memory_image(defined_memory_idx)?;
 
-        Instance::new_at(instance_ptr, layout.size(), offsets, req, memories, tables);
-
-        Ok(InstanceHandle {
-            instance: instance_ptr,
-        })
+            memories.push(Memory::new_dynamic(
+                plan,
+                creator,
+                unsafe {
+                    req.store
+                        .get()
+                        .expect("if module has memory plans, store is not empty")
+                },
+                image,
+            )?);
+        }
+        Ok(())
     }
 
-    unsafe fn initialize(
+    fn deallocate_memories(
         &self,
-        handle: &mut InstanceHandle,
-        module: &Module,
-        is_bulk_memory: bool,
-    ) -> Result<(), InstantiationError> {
-        initialize_instance(handle.instance_mut(), module, is_bulk_memory)
+        _index: usize,
+        _mems: &mut PrimaryMap<DefinedMemoryIndex, Memory>,
+    ) {
+        // normal destructors do cleanup here
     }
 
-    unsafe fn deallocate(&self, handle: &InstanceHandle) {
-        deallocate(handle)
+    fn allocate_tables(
+        &self,
+        _index: usize,
+        req: &mut InstanceAllocationRequest,
+        tables: &mut PrimaryMap<DefinedTableIndex, Table>,
+    ) -> Result<()> {
+        let module = req.runtime_info.module();
+        let num_imports = module.num_imported_tables;
+        for (_, table) in module.table_plans.iter().skip(num_imports) {
+            tables.push(Table::new_dynamic(table, unsafe {
+                req.store
+                    .get()
+                    .expect("if module has table plans, store is not empty")
+            })?);
+        }
+        Ok(())
+    }
+
+    fn deallocate_tables(&self, _index: usize, _tables: &mut PrimaryMap<DefinedTableIndex, Table>) {
+        // normal destructors do cleanup here
     }
 
     #[cfg(feature = "async")]
-    fn allocate_fiber_stack(&self) -> Result<wasmtime_fiber::FiberStack, FiberStackError> {
+    fn allocate_fiber_stack(&self) -> Result<wasmtime_fiber::FiberStack> {
         if self.stack_size == 0 {
-            return Err(FiberStackError::NotSupported);
+            bail!("fiber stacks are not supported by the allocator")
         }
 
-        wasmtime_fiber::FiberStack::new(self.stack_size)
-            .map_err(|e| FiberStackError::Resource(e.into()))
+        let stack = wasmtime_fiber::FiberStack::new(self.stack_size)?;
+        Ok(stack)
     }
 
     #[cfg(feature = "async")]
     unsafe fn deallocate_fiber_stack(&self, _stack: &wasmtime_fiber::FiberStack) {
         // The on-demand allocator has no further bookkeeping for fiber stacks
     }
+
+    fn purge_module(&self, _: CompiledModuleId) {}
 }

@@ -28,7 +28,7 @@
 
 ## Installation
 
-The Wasmtime CLI can be installed on Linux and macOS with a small install
+The Wasmtime CLI can be installed on Linux and macOS (locally) with a small install
 script:
 
 ```sh
@@ -108,7 +108,9 @@ Hello, world!
 ## Language Support
 
 You can use Wasmtime from a variety of different languages through embeddings of
-the implementation:
+the implementation.
+
+Languages supported by the Bytecode Alliance:
 
 * **[Rust]** - the [`wasmtime` crate]
 * **[C]** - the [`wasm.h`, `wasi.h`, and `wasmtime.h` headers][c-headers], [CMake](crates/c-api/CMakeLists.txt) or [`wasmtime` Conan package]
@@ -116,6 +118,11 @@ the implementation:
 * **[Python]** - the [`wasmtime` PyPI package]
 * **[.NET]** - the [`Wasmtime` NuGet package]
 * **[Go]** - the [`wasmtime-go` repository]
+* **[Ruby]** - the [`wasmtime` gem]
+
+Languages supported by the community:
+
+* **[Elixir]** - the [`wasmex` hex package]
 
 [Rust]: https://bytecodealliance.github.io/wasmtime/lang-rust.html
 [C]: https://bytecodealliance.github.io/wasmtime/examples-c-embed.html
@@ -130,6 +137,10 @@ the implementation:
 [wasmtime-cpp]: https://github.com/bytecodealliance/wasmtime-cpp
 [`wasmtime` Conan package]: https://conan.io/center/wasmtime
 [`wasmtime-cpp` Conan package]: https://conan.io/center/wasmtime-cpp
+[Ruby]: https://bytecodealliance.github.io/wasmtime/lang-ruby.html
+[`wasmtime` gem]: https://rubygems.org/gems/wasmtime
+[Elixir]: https://docs.wasmtime.dev/lang-elixir.html
+[`wasmex` hex package]: https://hex.pm/packages/wasmex
 
 ## Documentation
 

@@ -13,11 +13,12 @@ use crate::vmcontext::{
 };
 use crate::{
     ExportFunction, ExportGlobal, ExportMemory, ExportTable, Imports, ModuleRuntimeInfo, Store,
-    VMFunctionBody,
+    VMFunctionBody, VMSharedSignatureIndex,
 };
 use anyhow::Error;
+use anyhow::Result;
 use memoffset::offset_of;
-use std::alloc::Layout;
+use std::alloc::{self, Layout};
 use std::any::Any;
 use std::convert::TryFrom;
 use std::hash::Hash;
@@ -30,7 +31,7 @@ use wasmtime_environ::{
     packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex,
     GlobalInit, HostPtr, MemoryIndex, Module, PrimaryMap, SignatureIndex, TableIndex,
-    TableInitialization, TrapCode, VMOffsets, WasmType,
+    TableInitialization, Trap, VMOffsets, WasmType,
 };
 
 mod allocator;
@@ -61,9 +62,6 @@ pub(crate) struct Instance {
     /// functions, lazy initialization state, etc.
     runtime_info: Arc<dyn ModuleRuntimeInfo>,
 
-    /// Offsets in the `vmctx` region, precomputed from the `module` above.
-    offsets: VMOffsets<HostPtr>,
-
     /// WebAssembly linear memory data.
     ///
     /// This is where all runtime information about defined linear memories in
@@ -90,6 +88,13 @@ pub(crate) struct Instance {
     /// allocation, but some host-defined objects will store their state here.
     host_state: Box<dyn Any + Send + Sync>,
 
+    /// Instance of this instance within its `InstanceAllocator` trait
+    /// implementation.
+    ///
+    /// This is always 0 for the on-demand instance allocator and it's the
+    /// index of the slot in the pooling allocator.
+    index: usize,
+
     /// Additional context used by compiled wasm code. This field is last, and
     /// represents a dynamically-sized array that extends beyond the nominal
     /// end of the struct (similar to a flexible array member).
@@ -102,16 +107,19 @@ impl Instance {
     ///
     /// It is assumed the memory was properly aligned and the
     /// allocation was `alloc_size` in bytes.
-    unsafe fn new_at(
-        ptr: *mut Instance,
-        alloc_size: usize,
-        offsets: VMOffsets<HostPtr>,
+    unsafe fn new(
         req: InstanceAllocationRequest,
+        index: usize,
         memories: PrimaryMap<DefinedMemoryIndex, Memory>,
         tables: PrimaryMap<DefinedTableIndex, Table>,
-    ) {
+    ) -> InstanceHandle {
         // The allocation must be *at least* the size required of `Instance`.
-        assert!(alloc_size >= Self::alloc_layout(&offsets).size());
+        let layout = Self::alloc_layout(req.runtime_info.offsets());
+        let ptr = alloc::alloc(layout);
+        if ptr.is_null() {
+            alloc::handle_alloc_error(layout);
+        }
+        let ptr = ptr.cast::<Instance>();
 
         let module = req.runtime_info.module();
         let dropped_elements = EntitySet::with_capacity(module.passive_elements.len());
@@ -121,7 +129,7 @@ impl Instance {
             ptr,
             Instance {
                 runtime_info: req.runtime_info.clone(),
-                offsets,
+                index,
                 memories,
                 tables,
                 dropped_elements,
@@ -133,7 +141,8 @@ impl Instance {
             },
         );
 
-        (*ptr).initialize_vmctx(module, req.store, req.imports);
+        (*ptr).initialize_vmctx(module, req.runtime_info.offsets(), req.store, req.imports);
+        InstanceHandle { instance: ptr }
     }
 
     /// Helper function to access various locations offset from our `*mut
@@ -148,24 +157,28 @@ impl Instance {
         self.runtime_info.module()
     }
 
+    fn offsets(&self) -> &VMOffsets<HostPtr> {
+        self.runtime_info.offsets()
+    }
+
     /// Return the indexed `VMFunctionImport`.
     fn imported_function(&self, index: FuncIndex) -> &VMFunctionImport {
-        unsafe { &*self.vmctx_plus_offset(self.offsets.vmctx_vmfunction_import(index)) }
+        unsafe { &*self.vmctx_plus_offset(self.offsets().vmctx_vmfunction_import(index)) }
     }
 
     /// Return the index `VMTableImport`.
     fn imported_table(&self, index: TableIndex) -> &VMTableImport {
-        unsafe { &*self.vmctx_plus_offset(self.offsets.vmctx_vmtable_import(index)) }
+        unsafe { &*self.vmctx_plus_offset(self.offsets().vmctx_vmtable_import(index)) }
     }
 
     /// Return the indexed `VMMemoryImport`.
     fn imported_memory(&self, index: MemoryIndex) -> &VMMemoryImport {
-        unsafe { &*self.vmctx_plus_offset(self.offsets.vmctx_vmmemory_import(index)) }
+        unsafe { &*self.vmctx_plus_offset(self.offsets().vmctx_vmmemory_import(index)) }
     }
 
     /// Return the indexed `VMGlobalImport`.
     fn imported_global(&self, index: GlobalIndex) -> &VMGlobalImport {
-        unsafe { &*self.vmctx_plus_offset(self.offsets.vmctx_vmglobal_import(index)) }
+        unsafe { &*self.vmctx_plus_offset(self.offsets().vmctx_vmglobal_import(index)) }
     }
 
     /// Return the indexed `VMTableDefinition`.
@@ -183,7 +196,7 @@ impl Instance {
 
     /// Return the indexed `VMTableDefinition`.
     fn table_ptr(&self, index: DefinedTableIndex) -> *mut VMTableDefinition {
-        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_vmtable_definition(index)) }
+        unsafe { self.vmctx_plus_offset(self.offsets().vmctx_vmtable_definition(index)) }
     }
 
     /// Get a locally defined or imported memory.
@@ -193,6 +206,17 @@ impl Instance {
         } else {
             let import = self.imported_memory(index);
             unsafe { VMMemoryDefinition::load(import.from) }
+        }
+    }
+
+    /// Get a locally defined or imported memory.
+    pub(crate) fn get_runtime_memory(&mut self, index: MemoryIndex) -> &mut Memory {
+        if let Some(defined_index) = self.module().defined_memory_index(index) {
+            unsafe { &mut *self.get_defined_memory(defined_index) }
+        } else {
+            let import = self.imported_memory(index);
+            let ctx = unsafe { &mut *import.vmctx };
+            unsafe { &mut *ctx.instance_mut().get_defined_memory(import.index) }
         }
     }
 
@@ -210,7 +234,7 @@ impl Instance {
 
     /// Return the indexed `VMMemoryDefinition`.
     fn memory_ptr(&self, index: DefinedMemoryIndex) -> *mut VMMemoryDefinition {
-        unsafe { *self.vmctx_plus_offset(self.offsets.vmctx_vmmemory_pointer(index)) }
+        unsafe { *self.vmctx_plus_offset(self.offsets().vmctx_vmmemory_pointer(index)) }
     }
 
     /// Return the indexed `VMGlobalDefinition`.
@@ -220,7 +244,7 @@ impl Instance {
 
     /// Return the indexed `VMGlobalDefinition`.
     fn global_ptr(&self, index: DefinedGlobalIndex) -> *mut VMGlobalDefinition {
-        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_vmglobal_definition(index)) }
+        unsafe { self.vmctx_plus_offset(self.offsets().vmctx_vmglobal_definition(index)) }
     }
 
     /// Get a raw pointer to the global at the given index regardless whether it
@@ -240,17 +264,17 @@ impl Instance {
 
     /// Return a pointer to the interrupts structure
     pub fn runtime_limits(&self) -> *mut *const VMRuntimeLimits {
-        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_runtime_limits()) }
+        unsafe { self.vmctx_plus_offset(self.offsets().vmctx_runtime_limits()) }
     }
 
     /// Return a pointer to the global epoch counter used by this instance.
     pub fn epoch_ptr(&self) -> *mut *const AtomicU64 {
-        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_epoch_ptr()) }
+        unsafe { self.vmctx_plus_offset(self.offsets().vmctx_epoch_ptr()) }
     }
 
     /// Return a pointer to the `VMExternRefActivationsTable`.
     pub fn externref_activations_table(&self) -> *mut *mut VMExternRefActivationsTable {
-        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_externref_activations_table()) }
+        unsafe { self.vmctx_plus_offset(self.offsets().vmctx_externref_activations_table()) }
     }
 
     /// Gets a pointer to this instance's `Store` which was originally
@@ -265,14 +289,15 @@ impl Instance {
     /// store).
     #[inline]
     pub fn store(&self) -> *mut dyn Store {
-        let ptr = unsafe { *self.vmctx_plus_offset::<*mut dyn Store>(self.offsets.vmctx_store()) };
+        let ptr =
+            unsafe { *self.vmctx_plus_offset::<*mut dyn Store>(self.offsets().vmctx_store()) };
         assert!(!ptr.is_null());
         ptr
     }
 
     pub unsafe fn set_store(&mut self, store: Option<*mut dyn Store>) {
         if let Some(store) = store {
-            *self.vmctx_plus_offset(self.offsets.vmctx_store()) = store;
+            *self.vmctx_plus_offset(self.offsets().vmctx_store()) = store;
             *self.runtime_limits() = (*store).vmruntime_limits();
             *self.epoch_ptr() = (*store).epoch_ptr();
             *self.externref_activations_table() = (*store).externref_activations_table().0;
@@ -281,7 +306,7 @@ impl Instance {
                 mem::size_of::<*mut dyn Store>(),
                 mem::size_of::<[*mut (); 2]>()
             );
-            *self.vmctx_plus_offset::<[*mut (); 2]>(self.offsets.vmctx_store()) =
+            *self.vmctx_plus_offset::<[*mut (); 2]>(self.offsets().vmctx_store()) =
                 [ptr::null_mut(), ptr::null_mut()];
 
             *self.runtime_limits() = ptr::null_mut();
@@ -291,7 +316,7 @@ impl Instance {
     }
 
     pub(crate) unsafe fn set_callee(&mut self, callee: Option<NonNull<VMFunctionBody>>) {
-        *self.vmctx_plus_offset(self.offsets.vmctx_callee()) =
+        *self.vmctx_plus_offset(self.offsets().vmctx_callee()) =
             callee.map_or(ptr::null_mut(), |c| c.as_ptr());
     }
 
@@ -488,13 +513,15 @@ impl Instance {
         sig: SignatureIndex,
         into: *mut VMCallerCheckedAnyfunc,
     ) {
-        let type_index = self.runtime_info.signature(sig);
+        let type_index = unsafe {
+            let base: *const VMSharedSignatureIndex =
+                *self.vmctx_plus_offset(self.offsets().vmctx_signature_ids_array());
+            *base.add(sig.index())
+        };
 
         let (func_ptr, vmctx) = if let Some(def_index) = self.module().defined_func_index(index) {
             (
-                (self.runtime_info.image_base()
-                    + self.runtime_info.function_loc(def_index).start as usize)
-                    as *mut _,
+                self.runtime_info.function(def_index),
                 VMOpaqueContext::from_vmcontext(self.vmctx_ptr()),
             )
         } else {
@@ -558,7 +585,7 @@ impl Instance {
             let sig = func.signature;
             let anyfunc: *mut VMCallerCheckedAnyfunc = self
                 .vmctx_plus_offset::<VMCallerCheckedAnyfunc>(
-                    self.offsets.vmctx_anyfunc(func.anyfunc),
+                    self.offsets().vmctx_anyfunc(func.anyfunc),
                 );
             self.construct_anyfunc(index, sig, anyfunc);
 
@@ -580,7 +607,7 @@ impl Instance {
         dst: u32,
         src: u32,
         len: u32,
-    ) -> Result<(), TrapCode> {
+    ) -> Result<(), Trap> {
         // TODO: this `clone()` shouldn't be necessary but is used for now to
         // inform `rustc` that the lifetime of the elements here are
         // disconnected from the lifetime of `self`.
@@ -602,7 +629,7 @@ impl Instance {
         dst: u32,
         src: u32,
         len: u32,
-    ) -> Result<(), TrapCode> {
+    ) -> Result<(), Trap> {
         // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-table-init
 
         let table = unsafe { &mut *self.get_table(table_index) };
@@ -612,7 +639,7 @@ impl Instance {
             .and_then(|s| s.get(..usize::try_from(len).unwrap()))
         {
             Some(elements) => elements,
-            None => return Err(TrapCode::TableOutOfBounds),
+            None => return Err(Trap::TableOutOfBounds),
         };
 
         match table.element_type() {
@@ -662,7 +689,7 @@ impl Instance {
         src_index: MemoryIndex,
         src: u64,
         len: u64,
-    ) -> Result<(), TrapCode> {
+    ) -> Result<(), Trap> {
         // https://webassembly.github.io/reference-types/core/exec/instructions.html#exec-memory-copy
 
         let src_mem = self.get_memory(src_index);
@@ -684,8 +711,8 @@ impl Instance {
         Ok(())
     }
 
-    fn validate_inbounds(&self, max: usize, ptr: u64, len: u64) -> Result<usize, TrapCode> {
-        let oob = || TrapCode::HeapOutOfBounds;
+    fn validate_inbounds(&self, max: usize, ptr: u64, len: u64) -> Result<usize, Trap> {
+        let oob = || Trap::MemoryOutOfBounds;
         let end = ptr
             .checked_add(len)
             .and_then(|i| usize::try_from(i).ok())
@@ -708,7 +735,7 @@ impl Instance {
         dst: u64,
         val: u8,
         len: u64,
-    ) -> Result<(), TrapCode> {
+    ) -> Result<(), Trap> {
         let memory = self.get_memory(memory_index);
         let dst = self.validate_inbounds(memory.current_length(), dst, len)?;
 
@@ -738,7 +765,7 @@ impl Instance {
         dst: u64,
         src: u32,
         len: u32,
-    ) -> Result<(), TrapCode> {
+    ) -> Result<(), Trap> {
         let range = match self.module().passive_data_map.get(&data_index).cloned() {
             Some(range) if !self.dropped_data.contains(data_index) => range,
             _ => 0..0,
@@ -757,7 +784,7 @@ impl Instance {
         dst: u64,
         src: u32,
         len: u32,
-    ) -> Result<(), TrapCode> {
+    ) -> Result<(), Trap> {
         // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-memory-init
 
         let memory = self.get_memory(memory_index);
@@ -887,44 +914,49 @@ impl Instance {
     /// The `VMContext` memory is assumed to be uninitialized; any field
     /// that we need in a certain state will be explicitly written by this
     /// function.
-    unsafe fn initialize_vmctx(&mut self, module: &Module, store: StorePtr, imports: Imports) {
+    unsafe fn initialize_vmctx(
+        &mut self,
+        module: &Module,
+        offsets: &VMOffsets<HostPtr>,
+        store: StorePtr,
+        imports: Imports,
+    ) {
         assert!(std::ptr::eq(module, self.module().as_ref()));
 
-        *self.vmctx_plus_offset(self.offsets.vmctx_magic()) = VMCONTEXT_MAGIC;
+        *self.vmctx_plus_offset(offsets.vmctx_magic()) = VMCONTEXT_MAGIC;
         self.set_callee(None);
         self.set_store(store.as_raw());
 
         // Initialize shared signatures
         let signatures = self.runtime_info.signature_ids();
-        *self.vmctx_plus_offset(self.offsets.vmctx_signature_ids_array()) = signatures.as_ptr();
+        *self.vmctx_plus_offset(offsets.vmctx_signature_ids_array()) = signatures.as_ptr();
 
         // Initialize the built-in functions
-        *self.vmctx_plus_offset(self.offsets.vmctx_builtin_functions()) =
-            &VMBuiltinFunctionsArray::INIT;
+        *self.vmctx_plus_offset(offsets.vmctx_builtin_functions()) = &VMBuiltinFunctionsArray::INIT;
 
         // Initialize the imports
         debug_assert_eq!(imports.functions.len(), module.num_imported_funcs);
         ptr::copy_nonoverlapping(
             imports.functions.as_ptr(),
-            self.vmctx_plus_offset(self.offsets.vmctx_imported_functions_begin()),
+            self.vmctx_plus_offset(offsets.vmctx_imported_functions_begin()),
             imports.functions.len(),
         );
         debug_assert_eq!(imports.tables.len(), module.num_imported_tables);
         ptr::copy_nonoverlapping(
             imports.tables.as_ptr(),
-            self.vmctx_plus_offset(self.offsets.vmctx_imported_tables_begin()),
+            self.vmctx_plus_offset(offsets.vmctx_imported_tables_begin()),
             imports.tables.len(),
         );
         debug_assert_eq!(imports.memories.len(), module.num_imported_memories);
         ptr::copy_nonoverlapping(
             imports.memories.as_ptr(),
-            self.vmctx_plus_offset(self.offsets.vmctx_imported_memories_begin()),
+            self.vmctx_plus_offset(offsets.vmctx_imported_memories_begin()),
             imports.memories.len(),
         );
         debug_assert_eq!(imports.globals.len(), module.num_imported_globals);
         ptr::copy_nonoverlapping(
             imports.globals.as_ptr(),
-            self.vmctx_plus_offset(self.offsets.vmctx_imported_globals_begin()),
+            self.vmctx_plus_offset(offsets.vmctx_imported_globals_begin()),
             imports.globals.len(),
         );
 
@@ -935,7 +967,7 @@ impl Instance {
         // any state now.
 
         // Initialize the defined tables
-        let mut ptr = self.vmctx_plus_offset(self.offsets.vmctx_tables_begin());
+        let mut ptr = self.vmctx_plus_offset(offsets.vmctx_tables_begin());
         for i in 0..module.table_plans.len() - module.num_imported_tables {
             ptr::write(ptr, self.tables[DefinedTableIndex::new(i)].vmtable());
             ptr = ptr.add(1);
@@ -946,8 +978,8 @@ impl Instance {
         // time. Entries in `defined_memories` hold a pointer to a definition
         // (all memories) whereas the `owned_memories` hold the actual
         // definitions of memories owned (not shared) in the module.
-        let mut ptr = self.vmctx_plus_offset(self.offsets.vmctx_memories_begin());
-        let mut owned_ptr = self.vmctx_plus_offset(self.offsets.vmctx_owned_memories_begin());
+        let mut ptr = self.vmctx_plus_offset(offsets.vmctx_memories_begin());
+        let mut owned_ptr = self.vmctx_plus_offset(offsets.vmctx_owned_memories_begin());
         for i in 0..module.memory_plans.len() - module.num_imported_memories {
             let defined_memory_index = DefinedMemoryIndex::new(i);
             let memory_index = module.memory_index(defined_memory_index);
@@ -955,8 +987,8 @@ impl Instance {
                 let def_ptr = self.memories[defined_memory_index]
                     .as_shared_memory()
                     .unwrap()
-                    .vmmemory_ptr_mut();
-                ptr::write(ptr, def_ptr);
+                    .vmmemory_ptr();
+                ptr::write(ptr, def_ptr.cast_mut());
             } else {
                 ptr::write(owned_ptr, self.memories[defined_memory_index].vmmemory());
                 ptr::write(ptr, owned_ptr);
@@ -1188,5 +1220,15 @@ impl InstanceHandle {
         InstanceHandle {
             instance: self.instance,
         }
+    }
+
+    /// Performs post-initialization of an instance after its handle has been
+    /// creqtaed and registered with a store.
+    ///
+    /// Failure of this function means that the instance still must persist
+    /// within the store since failure may indicate partial failure, or some
+    /// state could be referenced by other instances.
+    pub fn initialize(&mut self, module: &Module, is_bulk_memory: bool) -> Result<()> {
+        allocator::initialize_instance(self.instance_mut(), module, is_bulk_memory)
     }
 }

@@ -1,7 +1,6 @@
 //! Parser for .clif files.
 
 use crate::error::{Location, ParseError, ParseResult};
-use crate::heap_command::{HeapCommand, HeapType};
 use crate::isaspec;
 use crate::lexer::{LexError, Lexer, LocatedError, LocatedToken, Token};
 use crate::run_command::{Comparison, Invocation, RunCommand};
@@ -19,9 +18,8 @@ use cranelift_codegen::ir::{self, UserExternalNameRef};
 use cranelift_codegen::ir::{
     AbiParam, ArgumentExtension, ArgumentPurpose, Block, Constant, ConstantData, DynamicStackSlot,
     DynamicStackSlotData, DynamicTypeData, ExtFuncData, ExternalName, FuncRef, Function,
-    GlobalValue, GlobalValueData, Heap, HeapData, HeapStyle, JumpTable, JumpTableData, MemFlags,
-    Opcode, SigRef, Signature, StackSlot, StackSlotData, StackSlotKind, Table, TableData, Type,
-    UserFuncName, Value,
+    GlobalValue, GlobalValueData, JumpTable, JumpTableData, MemFlags, Opcode, SigRef, Signature,
+    StackSlot, StackSlotData, StackSlotKind, Table, TableData, Type, UserFuncName, Value,
 };
 use cranelift_codegen::isa::{self, CallConv};
 use cranelift_codegen::packed_option::ReservedValue;
@@ -187,24 +185,6 @@ pub fn parse_run_command<'a>(text: &str, signature: &Signature) -> ParseResult<O
     }
 }
 
-/// Parse a CLIF comment `text` as a heap command.
-///
-/// Return:
-///  - `Ok(None)` if the comment is not intended to be a `HeapCommand` (i.e. does not start with `heap`
-///  - `Ok(Some(heap))` if the comment is intended as a `HeapCommand` and can be parsed to one
-///  - `Err` otherwise.
-pub fn parse_heap_command<'a>(text: &str) -> ParseResult<Option<HeapCommand>> {
-    let _tt = timing::parse_text();
-    // We remove leading spaces and semi-colons for convenience here instead of at the call sites
-    // since this function will be attempting to parse a HeapCommand from a CLIF comment.
-    let trimmed_text = text.trim_start_matches(|c| c == ' ' || c == ';');
-    let mut parser = Parser::new(trimmed_text);
-    match parser.token() {
-        Some(Token::Identifier("heap")) => parser.parse_heap_command().map(|c| Some(c)),
-        Some(_) | None => Ok(None),
-    }
-}
-
 pub struct Parser<'a> {
     lex: Lexer<'a>,
 
@@ -333,33 +313,6 @@ impl Context {
     fn check_gv(&self, gv: GlobalValue, loc: Location) -> ParseResult<()> {
         if !self.map.contains_gv(gv) {
             err!(loc, "undefined global value {}", gv)
-        } else {
-            Ok(())
-        }
-    }
-
-    // Allocate a heap slot.
-    fn add_heap(&mut self, heap: Heap, data: HeapData, loc: Location) -> ParseResult<()> {
-        self.map.def_heap(heap, loc)?;
-        while self.function.heaps.next_key().index() <= heap.index() {
-            self.function.create_heap(HeapData {
-                base: GlobalValue::reserved_value(),
-                min_size: Uimm64::new(0),
-                offset_guard_size: Uimm64::new(0),
-                style: HeapStyle::Static {
-                    bound: Uimm64::new(0),
-                },
-                index_type: INVALID,
-            });
-        }
-        self.function.heaps[heap] = data;
-        Ok(())
-    }
-
-    // Resolve a reference to a heap.
-    fn check_heap(&self, heap: Heap, loc: Location) -> ParseResult<()> {
-        if !self.map.contains_heap(heap) {
-            err!(loc, "undefined heap {}", heap)
         } else {
             Ok(())
         }
@@ -701,17 +654,6 @@ impl<'a> Parser<'a> {
             self.consume();
             if let Some(sigref) = SigRef::with_number(sigref) {
                 return Ok(sigref);
-            }
-        }
-        err!(self.loc, err_msg)
-    }
-
-    // Match and consume a heap reference.
-    fn match_heap(&mut self, err_msg: &str) -> ParseResult<Heap> {
-        if let Some(Token::Heap(heap)) = self.token() {
-            self.consume();
-            if let Some(heap) = Heap::with_number(heap) {
-                return Ok(heap);
             }
         }
         err!(self.loc, err_msg)
@@ -1526,11 +1468,6 @@ impl<'a> Parser<'a> {
                     self.parse_global_value_decl()
                         .and_then(|(gv, dat)| ctx.add_gv(gv, dat, self.loc))
                 }
-                Some(Token::Heap(..)) => {
-                    self.start_gathering_comments();
-                    self.parse_heap_decl()
-                        .and_then(|(heap, dat)| ctx.add_heap(heap, dat, self.loc))
-                }
                 Some(Token::Table(..)) => {
                     self.start_gathering_comments();
                     self.parse_table_decl()
@@ -1716,77 +1653,6 @@ impl<'a> Parser<'a> {
         self.claim_gathered_comments(gv);
 
         Ok((gv, data))
-    }
-
-    // Parse a heap decl.
-    //
-    // heap-decl ::= * Heap(heap) "=" heap-desc
-    // heap-desc ::= heap-style heap-base { "," heap-attr }
-    // heap-style ::= "static" | "dynamic"
-    // heap-base ::= GlobalValue(base)
-    // heap-attr ::= "min" Imm64(bytes)
-    //             | "bound" Imm64(bytes)
-    //             | "offset_guard" Imm64(bytes)
-    //             | "index_type" type
-    //
-    fn parse_heap_decl(&mut self) -> ParseResult<(Heap, HeapData)> {
-        let heap = self.match_heap("expected heap number: heap«n»")?;
-        self.match_token(Token::Equal, "expected '=' in heap declaration")?;
-
-        let style_name = self.match_any_identifier("expected 'static' or 'dynamic'")?;
-
-        // heap-desc ::= heap-style * heap-base { "," heap-attr }
-        // heap-base ::= * GlobalValue(base)
-        let base = match self.token() {
-            Some(Token::GlobalValue(base_num)) => match GlobalValue::with_number(base_num) {
-                Some(gv) => gv,
-                None => return err!(self.loc, "invalid global value number for heap base"),
-            },
-            _ => return err!(self.loc, "expected heap base"),
-        };
-        self.consume();
-
-        let mut data = HeapData {
-            base,
-            min_size: 0.into(),
-            offset_guard_size: 0.into(),
-            style: HeapStyle::Static { bound: 0.into() },
-            index_type: ir::types::I32,
-        };
-
-        // heap-desc ::= heap-style heap-base * { "," heap-attr }
-        while self.optional(Token::Comma) {
-            match self.match_any_identifier("expected heap attribute name")? {
-                "min" => {
-                    data.min_size = self.match_uimm64("expected integer min size")?;
-                }
-                "bound" => {
-                    data.style = match style_name {
-                        "dynamic" => HeapStyle::Dynamic {
-                            bound_gv: self.match_gv("expected gv bound")?,
-                        },
-                        "static" => HeapStyle::Static {
-                            bound: self.match_uimm64("expected integer bound")?,
-                        },
-                        t => return err!(self.loc, "unknown heap style '{}'", t),
-                    };
-                }
-                "offset_guard" => {
-                    data.offset_guard_size =
-                        self.match_uimm64("expected integer offset-guard size")?;
-                }
-                "index_type" => {
-                    data.index_type = self.match_type("expected index type")?;
-                }
-                t => return err!(self.loc, "unknown heap attribute '{}'", t),
-            }
-        }
-
-        // Collect any trailing comments.
-        self.token();
-        self.claim_gathered_comments(heap);
-
-        Ok((heap, data))
     }
 
     // Parse a table decl.
@@ -2033,8 +1899,8 @@ impl<'a> Parser<'a> {
         // all references refer to a definition.
         for block in &ctx.function.layout {
             for inst in ctx.function.layout.block_insts(block) {
-                for value in ctx.function.dfg.inst_args(inst) {
-                    if !ctx.map.contains_value(*value) {
+                for value in ctx.function.dfg.inst_values(inst) {
+                    if !ctx.map.contains_value(value) {
                         return err!(
                             ctx.map.location(AnyEntity::Inst(inst)).unwrap(),
                             "undefined operand value {}",
@@ -2442,86 +2308,6 @@ impl<'a> Parser<'a> {
         Ok(args)
     }
 
-    /// Parse a vmctx offset annotation
-    ///
-    /// vmctx-offset ::= "vmctx" "+" UImm64(offset)
-    fn parse_vmctx_offset(&mut self) -> ParseResult<Uimm64> {
-        self.match_token(Token::Identifier("vmctx"), "expected a 'vmctx' token")?;
-
-        // The '+' token here gets parsed as part of the integer text, so we can't just match_token it
-        // and `match_uimm64` doesn't support leading '+' tokens, so we can't use that either.
-        match self.token() {
-            Some(Token::Integer(text)) if text.starts_with('+') => {
-                self.consume();
-
-                text[1..]
-                    .parse()
-                    .map_err(|_| self.error("expected u64 decimal immediate"))
-            }
-            token => err!(
-                self.loc,
-                format!("Unexpected token {:?} after vmctx", token)
-            ),
-        }
-    }
-
-    /// Parse a CLIF heap command.
-    ///
-    /// heap-command ::= "heap" ":" heap-type { "," heap-attr }
-    /// heap-attr ::= "size" "=" UImm64(bytes)
-    fn parse_heap_command(&mut self) -> ParseResult<HeapCommand> {
-        self.match_token(Token::Identifier("heap"), "expected a 'heap:' command")?;
-        self.match_token(Token::Colon, "expected a ':' after heap command")?;
-
-        let mut heap_command = HeapCommand {
-            heap_type: self.parse_heap_type()?,
-            size: Uimm64::new(0),
-            ptr_offset: None,
-            bound_offset: None,
-        };
-
-        while self.optional(Token::Comma) {
-            let identifier = self.match_any_identifier("expected heap attribute name")?;
-            self.match_token(Token::Equal, "expected '=' after heap attribute name")?;
-
-            match identifier {
-                "size" => {
-                    heap_command.size = self.match_uimm64("expected integer size")?;
-                }
-                "ptr" => {
-                    heap_command.ptr_offset = Some(self.parse_vmctx_offset()?);
-                }
-                "bound" => {
-                    heap_command.bound_offset = Some(self.parse_vmctx_offset()?);
-                }
-                t => return err!(self.loc, "unknown heap attribute '{}'", t),
-            }
-        }
-
-        if heap_command.size == Uimm64::new(0) {
-            return err!(self.loc, self.error("Expected a heap size to be specified"));
-        }
-
-        Ok(heap_command)
-    }
-
-    /// Parse a heap type.
-    ///
-    /// heap-type ::= "static" | "dynamic"
-    fn parse_heap_type(&mut self) -> ParseResult<HeapType> {
-        match self.token() {
-            Some(Token::Identifier("static")) => {
-                self.consume();
-                Ok(HeapType::Static)
-            }
-            Some(Token::Identifier("dynamic")) => {
-                self.consume();
-                Ok(HeapType::Dynamic)
-            }
-            _ => Err(self.error("expected a heap type, e.g. static or dynamic")),
-        }
-    }
-
     /// Parse a CLIF run command.
     ///
     /// run-command ::= "run" [":" invocation comparison expected]
@@ -2796,21 +2582,30 @@ impl<'a> Parser<'a> {
                 // Parse the destination block number.
                 let block_num = self.match_block("expected jump destination block")?;
                 let args = self.parse_opt_value_list()?;
+                let destination = ctx.function.dfg.block_call(block_num, &args);
                 InstructionData::Jump {
                     opcode,
-                    destination: block_num,
-                    args: args.into_value_list(&[], &mut ctx.function.dfg.value_lists),
+                    destination,
                 }
             }
-            InstructionFormat::Branch => {
-                let ctrl_arg = self.match_value("expected SSA value control operand")?;
+            InstructionFormat::Brif => {
+                let arg = self.match_value("expected SSA value control operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
-                let block_num = self.match_block("expected branch destination block")?;
-                let args = self.parse_opt_value_list()?;
-                InstructionData::Branch {
+                let block_then = {
+                    let block_num = self.match_block("expected branch then block")?;
+                    let args = self.parse_opt_value_list()?;
+                    ctx.function.dfg.block_call(block_num, &args)
+                };
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let block_else = {
+                    let block_num = self.match_block("expected branch else block")?;
+                    let args = self.parse_opt_value_list()?;
+                    ctx.function.dfg.block_call(block_num, &args)
+                };
+                InstructionData::Brif {
                     opcode,
-                    destination: block_num,
-                    args: args.into_value_list(&[ctrl_arg], &mut ctx.function.dfg.value_lists),
+                    arg,
+                    blocks: [block_then, block_else],
                 }
             }
             InstructionFormat::BranchTable => {
@@ -2957,23 +2752,6 @@ impl<'a> Parser<'a> {
                     opcode,
                     arg,
                     dynamic_stack_slot: dss,
-                }
-            }
-            InstructionFormat::HeapAddr => {
-                let heap = self.match_heap("expected heap identifier")?;
-                ctx.check_heap(heap, self.loc)?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let arg = self.match_value("expected SSA value heap address")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let offset = self.match_uimm32("expected 32-bit integer offset")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let size = self.match_uimm8("expected 8-bit integer size")?;
-                InstructionData::HeapAddr {
-                    opcode,
-                    heap,
-                    arg,
-                    offset,
-                    size,
                 }
             }
             InstructionFormat::TableAddr => {
@@ -3355,25 +3133,6 @@ mod tests {
 
         assert_eq!(location.line_number, 3);
         assert_eq!(message, "duplicate entity: gv0");
-        assert!(!is_warning);
-    }
-
-    #[test]
-    fn duplicate_heap() {
-        let ParseError {
-            location,
-            message,
-            is_warning,
-        } = Parser::new(
-            "function %blocks() system_v {
-                heap0 = static gv0, min 0x1000, bound 0x10_0000, offset_guard 0x1000
-                heap0 = static gv0, min 0x1000, bound 0x10_0000, offset_guard 0x1000",
-        )
-        .parse_function()
-        .unwrap_err();
-
-        assert_eq!(location.line_number, 3);
-        assert_eq!(message, "duplicate entity: heap0");
         assert!(!is_warning);
     }
 
@@ -3781,45 +3540,6 @@ mod tests {
         assert!(parse("print", &sig(&[I32], &[I32])).is_err());
         assert!(parse("print:", &sig(&[], &[])).is_err());
         assert!(parse("run: ", &sig(&[], &[])).is_err());
-    }
-
-    #[test]
-    fn parse_heap_commands() {
-        fn parse(text: &str) -> ParseResult<HeapCommand> {
-            Parser::new(text).parse_heap_command()
-        }
-
-        // Check that we can parse and display the same set of heap commands.
-        fn assert_roundtrip(text: &str) {
-            assert_eq!(parse(text).unwrap().to_string(), text);
-        }
-
-        assert_roundtrip("heap: static, size=10");
-        assert_roundtrip("heap: dynamic, size=10");
-        assert_roundtrip("heap: static, size=10, ptr=vmctx+10");
-        assert_roundtrip("heap: static, size=10, bound=vmctx+11");
-        assert_roundtrip("heap: static, size=10, ptr=vmctx+10, bound=vmctx+10");
-        assert_roundtrip("heap: dynamic, size=10, ptr=vmctx+10");
-        assert_roundtrip("heap: dynamic, size=10, bound=vmctx+11");
-        assert_roundtrip("heap: dynamic, size=10, ptr=vmctx+10, bound=vmctx+10");
-
-        let static_heap = parse("heap: static, size=10, ptr=vmctx+8, bound=vmctx+2").unwrap();
-        assert_eq!(static_heap.size, Uimm64::new(10));
-        assert_eq!(static_heap.heap_type, HeapType::Static);
-        assert_eq!(static_heap.ptr_offset, Some(Uimm64::new(8)));
-        assert_eq!(static_heap.bound_offset, Some(Uimm64::new(2)));
-        let dynamic_heap = parse("heap: dynamic, size=0x10").unwrap();
-        assert_eq!(dynamic_heap.size, Uimm64::new(16));
-        assert_eq!(dynamic_heap.heap_type, HeapType::Dynamic);
-        assert_eq!(dynamic_heap.ptr_offset, None);
-        assert_eq!(dynamic_heap.bound_offset, None);
-
-        assert!(parse("heap: static").is_err());
-        assert!(parse("heap: dynamic").is_err());
-        assert!(parse("heap: static size=0").is_err());
-        assert!(parse("heap: dynamic size=0").is_err());
-        assert!(parse("heap: static, size=10, ptr=10").is_err());
-        assert!(parse("heap: static, size=10, bound=vmctx-10").is_err());
     }
 
     #[test]

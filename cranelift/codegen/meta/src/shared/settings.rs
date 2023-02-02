@@ -58,10 +58,12 @@ pub(crate) fn define() -> SettingGroup {
         "Enable egraph-based optimization.",
         r#"
             This enables an optimization phase that converts CLIF to an egraph (equivalence graph)
-            representation, performs various rewrites, and then converts it back. This can result in
-            better optimization, but is currently considered experimental.
+            representation, performs various rewrites, and then converts it back. This should result in
+            better optimization, but the traditional optimization pass structure is also still
+            available by setting this to `false`. The `false` setting will eventually be
+            deprecated and removed.
         "#,
-        false,
+        true,
     );
 
     settings.add_bool(
@@ -135,21 +137,6 @@ pub(crate) fn define() -> SettingGroup {
             This register is excluded from register allocation, and is completely under the control of
             the end-user. It is possible to read it via the get_pinned_reg instruction, and to set it
             with the set_pinned_reg instruction.
-        "#,
-        false,
-    );
-
-    settings.add_bool(
-        "use_pinned_reg_as_heap_base",
-        "Use the pinned register as the heap base.",
-        r#"
-            Enabling this requires the enable_pinned_reg setting to be set to true. It enables a custom
-            legalization of the `heap_addr` instruction so it will use the pinned register as the heap
-            base, instead of fetching it from a global value.
-
-            Warning! Enabling this means that the pinned register *must* be maintained to contain the
-            heap base address at all times, during the lifetime of a function. Using the pinned
-            register for other purposes when this is set is very likely to cause crashes.
         "#,
         false,
     );
@@ -273,7 +260,7 @@ pub(crate) fn define() -> SettingGroup {
         "enable_probestack",
         "Enable the use of stack probes for supported calling conventions.",
         "",
-        true,
+        false,
     );
 
     settings.add_bool(

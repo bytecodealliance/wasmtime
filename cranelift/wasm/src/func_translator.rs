@@ -170,7 +170,7 @@ fn parse_local_decls<FE: FuncEnvironment + ?Sized>(
         builder.set_srcloc(cur_srcloc(reader));
         let pos = reader.original_position();
         let count = reader.read_var_u32()?;
-        let ty = reader.read_val_type()?;
+        let ty = reader.read()?;
         validator.define_locals(pos, count, ty)?;
         declare_locals(builder, count, ty, &mut next_local, environ)?;
     }

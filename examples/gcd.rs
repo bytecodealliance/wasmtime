@@ -15,7 +15,7 @@ fn main() -> Result<()> {
     let instance = Instance::new(&mut store, &module, &[])?;
 
     // Invoke `gcd` export
-    let gcd = instance.get_typed_func::<(i32, i32), i32, _>(&mut store, "gcd")?;
+    let gcd = instance.get_typed_func::<(i32, i32), i32>(&mut store, "gcd")?;
 
     println!("gcd(6, 27) = {}", gcd.call(&mut store, (6, 27))?);
     Ok(())

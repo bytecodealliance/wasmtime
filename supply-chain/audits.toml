@@ -24,6 +24,15 @@ criteria = "safe-to-deploy"
 version = "1.1.4"
 notes = "I am the author of this crate."
 
+[[audits.arrayref]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+version = "0.3.6"
+notes = """
+Unsafe code, but its logic looks good to me. Necessary given what it is
+doing. Well tested, has quickchecks.
+"""
+
 [[audits.arrayvec]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
@@ -72,10 +81,22 @@ criteria = "safe-to-deploy"
 version = "0.26.0"
 notes = "The Bytecode Alliance is the author of this crate"
 
+[[audits.cap-fs-ext]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "1.0.1"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[audits.cap-primitives]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 version = "0.26.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.cap-primitives]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "1.0.1"
 notes = "The Bytecode Alliance is the author of this crate"
 
 [[audits.cap-rand]]
@@ -84,10 +105,22 @@ criteria = "safe-to-deploy"
 version = "0.26.0"
 notes = "The Bytecode Alliance is the author of this crate"
 
+[[audits.cap-rand]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "1.0.1"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[audits.cap-std]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 version = "0.26.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.cap-std]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "1.0.1"
 notes = "The Bytecode Alliance is the author of this crate"
 
 [[audits.cap-tempfile]]
@@ -96,10 +129,22 @@ criteria = "safe-to-run"
 version = "0.26.0"
 notes = "The Bytecode Alliance is the author of this crate"
 
+[[audits.cap-tempfile]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-run"
+version = "1.0.1"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[audits.cap-time-ext]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 version = "0.26.0"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.cap-time-ext]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "1.0.1"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[audits.cast]]
@@ -124,6 +169,18 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 version = "1.0.0"
 notes = "I am the author of this crate."
+
+[[audits.codespan-reporting]]
+who = "Jamey Sharp <jsharp@fastly.com>"
+criteria = "safe-to-deploy"
+version = "0.11.1"
+notes = "This library uses `forbid(unsafe_code)` and has no filesystem or network I/O."
+
+[[audits.constant_time_eq]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+version = "0.2.4"
+notes = "A few tiny blocks of `unsafe` but each of them is very obviously correct."
 
 [[audits.criterion]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -175,6 +232,22 @@ are only created when requested by the application, however, and otherwise
 only does its stated purpose.
 """
 
+[[audits.form_urlencoded]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "1.1.0"
+notes = """
+This is a small crate for working with url-encoded forms which doesn't have any
+more than what it says on the tin. Contains one `unsafe` block related to
+performance around utf-8 validation which is fairly easy to verify as correct.
+"""
+
+[[audits.fs-set-times]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.18.0"
+notes = "I am the author of this crate."
+
 [[audits.heck]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -187,6 +260,17 @@ criteria = "safe-to-deploy"
 version = "2.2.1"
 notes = "I am the author of this crate."
 
+[[audits.idna]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.3.0"
+notes = """
+This is a crate without unsafe code or usage of the standard library. The large
+size of this crate comes from the large generated unicode tables file. This
+crate is broadly used throughout the ecosystem and does not contain anything
+suspicious.
+"""
+
 [[audits.indexmap-nostd]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-run"
@@ -197,11 +281,41 @@ is otherwise certified. This doesn't contain unnecessary `unsafe` and
 additionally doesn't reach for ambient capabilities.
 """
 
+[[audits.io-extras]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.17.0"
+notes = "I am the author of this crate."
+
+[[audits.io-lifetimes]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "1.0.3"
+notes = "I am the author of this crate."
+
 [[audits.is-terminal]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 version = "0.3.0"
 notes = "Contains only unsafe code for interacting with the crate's intended purpose."
+
+[[audits.is-terminal]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.4.1"
+notes = "Contains only unsafe code for interacting with the crate's intended purpose."
+
+[[audits.ittapi]]
+who = "Andrew Brown <andrew.brown@intel.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.1 -> 0.3.3"
+notes = "I am the author of this crate."
+
+[[audits.ittapi-sys]]
+who = "Andrew Brown <andrew.brown@intel.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.1 -> 0.3.3"
+notes = "Unsafe code is due to auto-generated bindings to a widely-deployed C library."
 
 [[audits.leb128]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
@@ -231,6 +345,12 @@ but also contains some other minor fixes as well. Everything looks A-OK and
 as expected.
 """
 
+[[audits.linux-raw-sys]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.1.3"
+notes = "I am the author of this crate."
+
 [[audits.memfd]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -239,6 +359,15 @@ notes = """
 Does not interact with the system in any way than otherwise instructed to.
 Contains unsafe blocks but are encapsulated and required for the operation at
 hand.
+"""
+
+[[audits.memfd]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.6.2"
+notes = """
+The only changes from 0.6.1 were from my own PR which updated memfd to newer
+dependencies.
 """
 
 [[audits.memory_units]]
@@ -280,6 +409,26 @@ criteria = "safe-to-deploy"
 version = "1.0.0"
 notes = "I am the author of this crate."
 
+[[audits.percent-encoding]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "2.2.0"
+notes = """
+This crate is a single-file crate that does what it says on the tin. There are
+a few `unsafe` blocks related to utf-8 validation which are locally verifiable
+as correct and otherwise this crate is good to go.
+"""
+
+[[audits.pulldown-cmark]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.8.0"
+notes = """
+This crate has `unsafe` blocks and they're all related to SIMD-acceleration and
+are otherwise not doing other `unsafe` operations. Additionally the crate does
+not do anything other than markdown rendering as is expected.
+"""
+
 [[audits.regalloc2]]
 who = "Jamey Sharp <jsharp@fastly.com>"
 criteria = "safe-to-deploy"
@@ -304,11 +453,35 @@ criteria = "safe-to-deploy"
 delta = "0.4.1 -> 0.4.2"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[audits.regalloc2]]
+who = "Trevor Elliott <telliott@fastly.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.2 -> 0.5.0"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.regalloc2]]
+who = "Trevor Elliott <telliott@fastly.com>"
+criteria = "safe-to-deploy"
+delta = "0.5.0 -> 0.5.1"
+notes = "The Bytecode Alliance is the author of this crate."
+
 [[audits.rustc-demangle]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 version = "0.1.21"
 notes = "I am the author of this crate."
+
+[[audits.rustix]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.36.4"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.rustix]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.36.7"
+notes = "The Bytecode Alliance is the author of this crate."
 
 [[audits.sha2]]
 who = "Benjamin Bouvier <public@benj.me>"
@@ -333,6 +506,85 @@ who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 version = "0.23.0"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.system-interface]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.25.0"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.tinyvec]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "1.6.0"
+notes = """
+This crate, while it implements collections, does so without `std::*` APIs and
+without `unsafe`. Skimming the crate everything looks reasonable and what one
+would expect from idiomatic safe collections in Rust.
+"""
+
+[[audits.tinyvec_macros]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.1.0"
+notes = """
+This is a trivial crate which only contains a singular macro definition which is
+intended to multiplex across the internal representation of a tinyvec,
+presumably. This trivially doesn't contain anything bad.
+"""
+
+[[audits.tokio]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.18.1 -> 1.18.4"
+notes = """
+This looks to be a minor release primarily to fix a security-related Windows
+issue plus some reorganization around lazy initialization. Altogether nothing
+amiss here.
+"""
+
+[[audits.unicase]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "2.6.0"
+notes = """
+This crate contains no `unsafe` code and no unnecessary use of the standard
+library.
+"""
+
+[[audits.unicode-bidi]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.3.8"
+notes = """
+This crate has no unsafe code and does not use `std::*`. Skimming the crate it
+does not attempt to out of the bounds of what it's already supposed to be doing.
+"""
+
+[[audits.unicode-normalization]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.1.19"
+notes = """
+This crate contains one usage of `unsafe` which I have manually checked to see
+it as correct. This crate's size comes in large part due to the generated
+unicode tables that it contains. This crate is additionally widely used
+throughout the ecosystem and skimming the crate shows no usage of `std::*` APIs
+and nothing suspicious.
+"""
+
+[[audits.url]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "2.3.1"
+notes = """
+This crate contains no `unsafe` code and otherwise doesn't use any functionality
+it's not supposed to from `std` or such. This crate is the defacto standard for
+URL parsing in the Rust community with widespread usage to battle-test, harden,
+and suss out bugs. I've historically reviewed this crate in the past and it
+is similar to what it once was back then. Skimming over the crate there is
+nothing suspicious and it's everything you'd expect a Rust URL parser to be.
+"""
 
 [[audits.wasm-encoder]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -368,6 +620,24 @@ notes = "The Bytecode Alliance is the author of this crate."
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 version = "0.19.0"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wasm-encoder]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.20.0"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wasm-encoder]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.21.0"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wasm-encoder]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.22.0"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[audits.wasm-encoder]]
@@ -418,6 +688,30 @@ criteria = "safe-to-run"
 version = "0.2.11"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[audits.wasm-mutate]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+version = "0.2.12"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wasm-mutate]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+version = "0.2.13"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wasm-mutate]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+version = "0.2.14"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wasm-mutate]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+version = "0.2.16"
+notes = "The Bytecode Alliance is the author of this crate."
+
 [[audits.wasm-smith]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -460,6 +754,45 @@ criteria = "safe-to-run"
 version = "0.11.8"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[audits.wasm-smith]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+version = "0.11.9"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wasm-smith]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+version = "0.11.10"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wasm-smith]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+version = "0.11.11"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wasm-smith]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+version = "0.12.0"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wasmi]]
+who = "Robin Freyler <robin.freyler@gmail.com>"
+criteria = "safe-to-run"
+version = "0.20.0"
+notes = """
+I am the author of this crate. It contains unsafe Rust code.
+However, the crate does not read or write data from any parts of the filesystem,
+it does not install software upon compilation e.g. via build scripts,
+it does not connect to network endpoints and does not misuse system resources.
+
+If any of the above happens it is either by the user explicitly telling the
+crate to do so (it is an interpreter) or due to a bug or other unintended
+behavior.
+"""
+
 [[audits.wasmi_arena]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-run"
@@ -486,21 +819,6 @@ who = "Robin Freyler <robin.freyler@gmail.com>"
 criteria = "safe-to-run"
 version = "0.5.0"
 notes = "See notes for version 0.4.0"
-
-[[audits.wasmi]]
-who = "Robin Freyler <robin.freyler@gmail.com>"
-criteria = "safe-to-run"
-version = "0.20.0"
-notes = """
-I am the author of this crate. It contains unsafe Rust code.
-However, the crate does not read or write data from any parts of the filesystem,
-it does not install software upon compilation e.g. via build scripts,
-it does not connect to network endpoints and does not misuse system resources.
-
-If any of the above happens it is either by the user explicitly telling the
-crate to do so (it is an interpreter) or due to a bug or other unintended
-behavior.
-"""
 
 [[audits.wasmparser]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -548,6 +866,30 @@ notes = "The Bytecode Alliance is the author of this crate."
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 version = "0.94.0"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wasmparser]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.95.0"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wasmparser]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.96.0"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wasmparser]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.97.0"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wasmparser]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.99.0"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[audits.wasmparser-nostd]]
@@ -603,6 +945,30 @@ criteria = "safe-to-deploy"
 version = "0.2.43"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[audits.wasmprinter]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.2.44"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wasmprinter]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.2.45"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wasmprinter]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.2.46"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wasmprinter]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.2.49"
+notes = "The Bytecode Alliance is the author of this crate."
+
 [[audits.wast]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -651,6 +1017,24 @@ criteria = "safe-to-deploy"
 version = "49.0.0"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[audits.wast]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "50.0.0"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wast]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "51.0.0"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wast]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "52.0.2"
+notes = "The Bytecode Alliance is the author of this crate."
+
 [[audits.wat]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -684,6 +1068,102 @@ notes = "The Bytecode Alliance is the author of this crate."
 [[audits.wat]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
+version = "1.0.52"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wat]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "1.0.53"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wat]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "1.0.56"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wat]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
 delta = "1.0.48 -> 1.0.49"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.windows-sys]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.42.0"
+notes = "This is a Windows API bindings library maintained by Microsoft themselves."
+
+[[audits.windows_aarch64_gnullvm]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.42.0"
+notes = "This is a Windows API bindings library maintained by Microsoft themselves."
+
+[[audits.windows_aarch64_msvc]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.42.0"
+notes = "This is a Windows API bindings library maintained by Microsoft themselves."
+
+[[audits.windows_i686_gnu]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.42.0"
+notes = "This is a Windows API bindings library maintained by Microsoft themselves."
+
+[[audits.windows_i686_msvc]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.42.0"
+notes = "This is a Windows API bindings library maintained by Microsoft themselves."
+
+[[audits.windows_x86_64_gnu]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.42.0"
+notes = "This is a Windows API bindings library maintained by Microsoft themselves."
+
+[[audits.windows_x86_64_gnullvm]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.42.0"
+notes = "This is a Windows API bindings library maintained by Microsoft themselves."
+
+[[audits.windows_x86_64_msvc]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.42.0"
+notes = "This is a Windows API bindings library maintained by Microsoft themselves."
+
+[[audits.winx]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.34.0"
+notes = "I am the author of this crate."
+
+[[audits.wit-parser]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.3.0"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wit-parser]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.3.1"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wit-parser]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.4.0"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wit-parser]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.4.1"
 notes = "The Bytecode Alliance is the author of this crate."
 

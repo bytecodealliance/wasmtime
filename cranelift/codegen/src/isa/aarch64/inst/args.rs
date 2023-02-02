@@ -14,12 +14,13 @@ use std::string::String;
 #[derive(Clone, Copy, Debug)]
 #[repr(u8)]
 pub enum ShiftOp {
+    /// Logical shift left.
     LSL = 0b00,
-    #[allow(dead_code)]
+    /// Logical shift right.
     LSR = 0b01,
-    #[allow(dead_code)]
+    /// Arithmentic shift right.
     ASR = 0b10,
-    #[allow(dead_code)]
+    /// Rotate right.
     ROR = 0b11,
 }
 
@@ -61,11 +62,14 @@ impl ShiftOpShiftImm {
 /// A shift operator with an amount, guaranteed to be within range.
 #[derive(Copy, Clone, Debug)]
 pub struct ShiftOpAndAmt {
+    /// The shift operator.
     op: ShiftOp,
+    /// The shift operator amount.
     shift: ShiftOpShiftImm,
 }
 
 impl ShiftOpAndAmt {
+    /// Create a new shift operator with an amount.
     pub fn new(op: ShiftOp, shift: ShiftOpShiftImm) -> ShiftOpAndAmt {
         ShiftOpAndAmt { op, shift }
     }
@@ -85,14 +89,21 @@ impl ShiftOpAndAmt {
 #[derive(Clone, Copy, Debug)]
 #[repr(u8)]
 pub enum ExtendOp {
+    /// Unsigned extend byte.
     UXTB = 0b000,
+    /// Unsigned extend halfword.
     UXTH = 0b001,
+    /// Unsigned extend word.
     UXTW = 0b010,
+    /// Unsigned extend doubleword.
     UXTX = 0b011,
+    /// Signed extend byte.
     SXTB = 0b100,
+    /// Signed extend halfword.
     SXTH = 0b101,
+    /// Signed extend word.
     SXTW = 0b110,
-    #[allow(dead_code)]
+    /// Signed extend doubleword.
     SXTX = 0b111,
 }
 
@@ -137,7 +148,7 @@ impl AMode {
         }
     }
 
-    pub fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
+    pub(crate) fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
         // This should match `memarg_operands()`.
         match self {
             &AMode::Unscaled { rn, simm9 } => AMode::Unscaled {
@@ -191,13 +202,16 @@ impl AMode {
 /// A memory argument to a load/store-pair.
 #[derive(Clone, Debug)]
 pub enum PairAMode {
+    /// Signed, scaled 7-bit offset from a register.
     SignedOffset(Reg, SImm7Scaled),
+    /// Pre-increment register before address computation.
     SPPreIndexed(SImm7Scaled),
+    /// Post-increment register after address computation.
     SPPostIndexed(SImm7Scaled),
 }
 
 impl PairAMode {
-    pub fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
+    pub(crate) fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
         // Should match `pairmemarg_operands()`.
         match self {
             &PairAMode::SignedOffset(reg, simm7scaled) => {
@@ -216,21 +230,37 @@ impl PairAMode {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Cond {
+    /// Equal.
     Eq = 0,
+    /// Not equal.
     Ne = 1,
+    /// Unsigned greater than or equal to.
     Hs = 2,
+    /// Unsigned less than.
     Lo = 3,
+    /// Minus, negative.
     Mi = 4,
+    /// Positive or zero.
     Pl = 5,
+    /// Signed overflow.
     Vs = 6,
+    /// No signed overflow.
     Vc = 7,
+    /// Unsigned greater than.
     Hi = 8,
+    /// Unsigned less than or equal to.
     Ls = 9,
+    /// Signed greater or equal to.
     Ge = 10,
+    /// Signed less than.
     Lt = 11,
+    /// Signed greater than.
     Gt = 12,
+    /// Signed less than or equal.
     Le = 13,
+    /// Always executed.
     Al = 14,
+    /// Always executed.
     Nv = 15,
 }
 
@@ -491,7 +521,9 @@ impl PrettyPrint for BranchTarget {
 /// 64-bit variants of many instructions (and integer registers).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OperandSize {
+    /// 32-bit.
     Size32,
+    /// 64-bit.
     Size64,
 }
 
@@ -517,6 +549,7 @@ impl OperandSize {
         }
     }
 
+    /// Return the operand size in bits.
     pub fn bits(&self) -> u8 {
         match self {
             OperandSize::Size32 => 32,
@@ -539,6 +572,9 @@ impl OperandSize {
         }
     }
 
+    /// Register interpretation bit.
+    /// When 0, the register is interpreted as the 32-bit version.
+    /// When 1, the register is interpreted as the 64-bit version.
     pub fn sf_bit(&self) -> u32 {
         match self {
             OperandSize::Size32 => 0,
@@ -550,10 +586,15 @@ impl OperandSize {
 /// Type used to communicate the size of a scalar SIMD & FP operand.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ScalarSize {
+    /// 8-bit.
     Size8,
+    /// 16-bit.
     Size16,
+    /// 32-bit.
     Size32,
+    /// 64-bit.
     Size64,
+    /// 128-bit.
     Size128,
 }
 
@@ -578,6 +619,7 @@ impl ScalarSize {
         }
     }
 
+    /// Return the widened version of the scalar size.
     pub fn widen(&self) -> ScalarSize {
         match self {
             ScalarSize::Size8 => ScalarSize::Size16,
@@ -588,6 +630,7 @@ impl ScalarSize {
         }
     }
 
+    /// Return the narrowed version of the scalar size.
     pub fn narrow(&self) -> ScalarSize {
         match self {
             ScalarSize::Size8 => panic!("can't narrow 8-bits"),
@@ -602,12 +645,19 @@ impl ScalarSize {
 /// Type used to communicate the size of a vector operand.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VectorSize {
+    /// 8-bit, 8 lanes.
     Size8x8,
+    /// 8 bit, 16 lanes.
     Size8x16,
+    /// 16-bit, 4 lanes.
     Size16x4,
+    /// 16-bit, 8 lanes.
     Size16x8,
+    /// 32-bit, 2 lanes.
     Size32x2,
+    /// 32-bit, 4 lanes.
     Size32x4,
+    /// 64-bit, 2 lanes.
     Size64x2,
 }
 
@@ -644,6 +694,7 @@ impl VectorSize {
         }
     }
 
+    /// Returns true if the VectorSize is 128-bits.
     pub fn is_128bits(&self) -> bool {
         match self {
             VectorSize::Size8x8 => false,

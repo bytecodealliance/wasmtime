@@ -935,7 +935,16 @@
 
        ;; A dummy use, useful to keep a value alive.
        (DummyUse
-        (reg Reg))))
+        (reg Reg))
+
+       ;; Emits an inline stack probe loop.
+       ;;
+       ;; Note that this is emitted post-regalloc so `start` and `end` can be
+       ;; temporary registers such as the spilltmp and tmp2 registers. This also
+       ;; means that the internal codegen can't use these registers.
+       (StackProbeLoop (start WritableReg)
+                       (end Reg)
+                       (step Imm12))))
 
 ;; An ALU operation. This can be paired with several instruction formats
 ;; below (see `Inst`) in any combination.
@@ -1134,8 +1143,7 @@
         ;; [crate::isa::aarch64::abi](the ABI module) for more details.
         (NominalSPOffset
          (off i64)
-         (ty Type))
-))
+         (ty Type))))
 
 (type PairAMode extern (enum))
 (type FPUOpRI extern (enum))
@@ -1591,7 +1599,7 @@
 ))
 
 ;; Extractors for target features ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(decl pure sign_return_address_disabled () Unit)
+(decl pure partial sign_return_address_disabled () Unit)
 (extern constructor sign_return_address_disabled sign_return_address_disabled)
 
 (decl use_lse () Inst)
@@ -1599,13 +1607,19 @@
 
 ;; Extractor helpers for various immmediate constants ;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl pure imm_logic_from_u64 (Type u64) ImmLogic)
+(decl pure partial move_wide_const_from_u64 (Type u64) MoveWideConst)
+(extern constructor move_wide_const_from_u64 move_wide_const_from_u64)
+
+(decl pure partial move_wide_const_from_inverted_u64 (Type u64) MoveWideConst)
+(extern constructor move_wide_const_from_inverted_u64 move_wide_const_from_inverted_u64)
+
+(decl pure partial imm_logic_from_u64 (Type u64) ImmLogic)
 (extern constructor imm_logic_from_u64 imm_logic_from_u64)
 
-(decl pure imm_logic_from_imm64 (Type Imm64) ImmLogic)
+(decl pure partial imm_logic_from_imm64 (Type Imm64) ImmLogic)
 (extern constructor imm_logic_from_imm64 imm_logic_from_imm64)
 
-(decl pure imm_shift_from_imm64 (Type Imm64) ImmShift)
+(decl pure partial imm_shift_from_imm64 (Type Imm64) ImmShift)
 (extern constructor imm_shift_from_imm64 imm_shift_from_imm64)
 
 (decl imm_shift_from_u8 (u8) ImmShift)
@@ -1664,13 +1678,13 @@
 (decl imm12_from_negated_u64 (Imm12) u64)
 (extern extractor imm12_from_negated_u64 imm12_from_negated_u64)
 
-(decl pure lshr_from_u64 (Type u64) ShiftOpAndAmt)
+(decl pure partial lshr_from_u64 (Type u64) ShiftOpAndAmt)
 (extern constructor lshr_from_u64 lshr_from_u64)
 
-(decl pure lshl_from_imm64 (Type Imm64) ShiftOpAndAmt)
+(decl pure partial lshl_from_imm64 (Type Imm64) ShiftOpAndAmt)
 (extern constructor lshl_from_imm64 lshl_from_imm64)
 
-(decl pure lshl_from_u64 (Type u64) ShiftOpAndAmt)
+(decl pure partial lshl_from_u64 (Type u64) ShiftOpAndAmt)
 (extern constructor lshl_from_u64 lshl_from_u64)
 
 (decl integral_ty (Type) Type)
@@ -1679,10 +1693,10 @@
 (decl valid_atomic_transaction (Type) Type)
 (extern extractor valid_atomic_transaction valid_atomic_transaction)
 
-(decl pure is_zero_simm9 (SImm9) Unit)
+(decl pure partial is_zero_simm9 (SImm9) Unit)
 (extern constructor is_zero_simm9 is_zero_simm9)
 
-(decl pure is_zero_uimm12 (UImm12Scaled) Unit)
+(decl pure partial is_zero_uimm12 (UImm12Scaled) Unit)
 (extern constructor is_zero_uimm12 is_zero_uimm12)
 
 ;; Helper to go directly from a `Value`, when it's an `iconst`, to an `Imm12`.
@@ -1931,14 +1945,6 @@
         (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
          (MInst.AluRRR (ALUOp.AddS) (operand_size ty) dst src1 src2)
          dst)))
-
-;; Helper for emitting `adds` instructions, setting flags in ambient
-;; state. Used only for `iadd_ifcout`.
-(decl add_with_flags (Type Reg Reg) Reg)
-(rule (add_with_flags ty src1 src2)
-      (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.AluRRR (ALUOp.AddS) (operand_size ty) dst src1 src2))))
-        dst))
 
 ;; Helper for emitting `adc` instructions.
 (decl adc_paired (Type Reg Reg) ConsumesFlags)
@@ -2235,6 +2241,13 @@
       (let ((dst WritableReg (temp_writable_reg $I64)))
         (ConsumesFlags.ConsumesFlagsReturnsReg (MInst.CSet dst cond) dst)))
 
+;; Helper for constructing `cset` instructions, when the flags producer will
+;; also return a value.
+(decl cset_paired (Cond) ConsumesFlags)
+(rule (cset_paired cond)
+      (let ((dst WritableReg (temp_writable_reg $I64)))
+        (ConsumesFlags.ConsumesFlagsReturnsResultWithProducer (MInst.CSet dst cond) dst)))
+
 ;; Helper for constructing `csetm` instructions.
 (decl csetm (Cond) ConsumesFlags)
 (rule (csetm cond)
@@ -2279,6 +2292,9 @@
 
 (decl add_extend (Type Reg ExtendedValue) Reg)
 (rule (add_extend ty x y) (alu_rr_extend_reg (ALUOp.Add) ty x y))
+
+(decl add_extend_op (Type Reg Reg ExtendOp) Reg)
+(rule (add_extend_op ty x y extend) (alu_rrr_extend (ALUOp.Add) ty x y extend))
 
 (decl add_shift (Type Reg Reg ShiftOpAndAmt) Reg)
 (rule (add_shift ty x y z) (alu_rrr_shift (ALUOp.Add) ty x y z))
@@ -2737,6 +2753,15 @@
 ;; such as `I8` are either sign- or zero-extended.
 (decl imm (Type ImmExtend u64) Reg)
 
+;; Move wide immediate instructions; to simplify, we only match when we
+;; are zero-extending the value.
+(rule 3 (imm (integral_ty ty) (ImmExtend.Zero) k)
+      (if-let n (move_wide_const_from_u64 ty k))
+      (movz n (operand_size ty)))
+(rule 2 (imm (integral_ty (ty_32_or_64 ty)) (ImmExtend.Zero) k)
+      (if-let n (move_wide_const_from_inverted_u64 ty k))
+      (movn n (operand_size ty)))
+
 ;; Weird logical-instruction immediate in ORI using zero register; to simplify,
 ;; we only match when we are zero-extending the value.
 (rule 1 (imm (integral_ty ty) (ImmExtend.Zero) k)
@@ -2929,6 +2954,11 @@
 (rule (sink_load_into_amode ty x @ (load _ addr offset))
       (let ((_ Unit (sink_inst x)))
            (amode ty addr offset)))
+
+;; Lower a constant f32.
+(decl constant_f32 (u64) Reg)
+;; TODO: Port lower_constant_f32() to ISLE.
+(extern constructor constant_f32 constant_f32)
 
 ;; Lower a constant f64.
 (decl constant_f64 (u64) Reg)
@@ -3235,14 +3265,14 @@
       (fpu_to_int op src))
 (rule (fpu_to_int_cvt_sat op src $false (fits_in_16 out_ty))
       (let ((result Reg (fpu_to_int op src))
-            (max Reg (imm out_ty (ImmExtend.Zero) -1)))
+            (max Reg (imm out_ty (ImmExtend.Zero) (ty_mask out_ty))))
        (with_flags_reg
         (cmp (OperandSize.Size32) result max)
         (csel (Cond.Hi) max result))))
 (rule (fpu_to_int_cvt_sat op src $true (fits_in_16 out_ty))
       (let ((result Reg (fpu_to_int op src))
-            (max Reg (imm $I32 (ImmExtend.Sign) (signed_max out_ty)))
-            (min Reg (imm $I32 (ImmExtend.Sign) (signed_min out_ty)))
+            (max Reg (signed_max out_ty))
+            (min Reg (signed_min out_ty))
             (result Reg (with_flags_reg
                          (cmp (operand_size out_ty) result max)
                          (csel (Cond.Gt) max result)))
@@ -3251,13 +3281,13 @@
                          (csel (Cond.Lt) min result))))
        result))
 
-(decl signed_min (Type) u64)
-(rule (signed_min $I8) -128)
-(rule (signed_min $I16) -32768)
+(decl signed_min (Type) Reg)
+(rule (signed_min $I8) (imm $I8 (ImmExtend.Sign) 0x80))
+(rule (signed_min $I16) (imm $I16 (ImmExtend.Sign) 0x8000))
 
-(decl signed_max (Type) u64)
-(rule (signed_max $I8) 127)
-(rule (signed_max $I16) 32767)
+(decl signed_max (Type) Reg)
+(rule (signed_max $I8) (imm $I8 (ImmExtend.Sign) 0x7F))
+(rule (signed_max $I16) (imm $I16 (ImmExtend.Sign) 0x7FFF))
 
 (decl fpu_to_int (FpuToIntOp Reg) Reg)
 (rule (fpu_to_int op src)
@@ -3401,12 +3431,34 @@
             (_ Unit (emit (MInst.ElfTlsGetAddr name dst))))
         dst))
 
+;; A tuple of `ProducesFlags` and `IntCC`.
+(type FlagsAndCC (enum (FlagsAndCC (flags ProducesFlags)
+                                   (cc IntCC))))
+
+;; Helper constructor for `FlagsAndCC`.
+(decl flags_and_cc (ProducesFlags IntCC) FlagsAndCC)
+(rule (flags_and_cc flags cc) (FlagsAndCC.FlagsAndCC flags cc))
+
+;; Materialize a `FlagsAndCC` into a boolean `ValueRegs`.
+(decl flags_and_cc_to_bool (FlagsAndCC) ValueRegs)
+(rule (flags_and_cc_to_bool (FlagsAndCC.FlagsAndCC flags cc))
+      (with_flags flags (materialize_bool_result (cond_code cc))))
+
+;; Get the `ProducesFlags` out of a `FlagsAndCC`.
+(decl flags_and_cc_flags (FlagsAndCC) ProducesFlags)
+(rule (flags_and_cc_flags (FlagsAndCC.FlagsAndCC flags _cc)) flags)
+
+;; Get the `IntCC` out of a `FlagsAndCC`.
+(decl flags_and_cc_cc (FlagsAndCC) IntCC)
+(rule (flags_and_cc_cc (FlagsAndCC.FlagsAndCC _flags cc)) cc)
+
 ;; Helpers for lowering `icmp` sequences.
 ;; `lower_icmp` contains shared functionality for lowering `icmp`
 ;; sequences, which `lower_icmp_into_{reg,flags}` extend from.
-(decl lower_icmp (IntCC Value Value Type) ProducesFlags)
+(decl lower_icmp (IntCC Value Value Type) FlagsAndCC)
 (decl lower_icmp_into_reg (IntCC Value Value Type Type) ValueRegs)
-(decl lower_icmp_into_flags (IntCC Value Value Type) ProducesFlags)
+(decl lower_icmp_into_flags (IntCC Value Value Type) FlagsAndCC)
+(decl lower_icmp_const (IntCC Value u64 Type) FlagsAndCC)
 ;; For most cases, `lower_icmp_into_flags` is the same as `lower_icmp`,
 ;; except for some I128 cases (see below).
 (rule -1 (lower_icmp_into_flags cond x y ty) (lower_icmp cond x y ty))
@@ -3420,48 +3472,69 @@
        (vec_cmp rn rm in_ty cond)))
 
 ;; Determines the appropriate extend op given the value type and whether it is signed.
-(decl lower_icmp_extend (Type bool) ExtendOp)
-(rule (lower_icmp_extend $I8 $true) (ExtendOp.SXTB))
-(rule (lower_icmp_extend $I16 $true) (ExtendOp.SXTH))
-(rule (lower_icmp_extend $I8 $false) (ExtendOp.UXTB))
-(rule (lower_icmp_extend $I16 $false) (ExtendOp.UXTH))
+(decl lower_extend_op (Type bool) ExtendOp)
+(rule (lower_extend_op $I8 $true) (ExtendOp.SXTB))
+(rule (lower_extend_op $I16 $true) (ExtendOp.SXTH))
+(rule (lower_extend_op $I8 $false) (ExtendOp.UXTB))
+(rule (lower_extend_op $I16 $false) (ExtendOp.UXTH))
 
 ;; Integers <= 64-bits.
 (rule -2 (lower_icmp_into_reg cond rn rm in_ty out_ty)
       (if (ty_int_ref_scalar_64 in_ty))
       (let ((cc Cond (cond_code cond)))
-       (with_flags
-        (lower_icmp cond rn rm in_ty)
-        (materialize_bool_result cc))))
+        (flags_and_cc_to_bool (lower_icmp cond rn rm in_ty))))
 
 (rule 1 (lower_icmp cond rn rm (fits_in_16 ty))
       (if (signed_cond_code cond))
       (let ((rn Reg (put_in_reg_sext32 rn)))
-      (cmp_extend (operand_size ty) rn rm (lower_icmp_extend ty $true))))
+      (flags_and_cc (cmp_extend (operand_size ty) rn rm (lower_extend_op ty $true)) cond)))
 (rule -1 (lower_icmp cond rn (imm12_from_value rm) (fits_in_16 ty))
       (let ((rn Reg (put_in_reg_zext32 rn)))
-      (cmp_imm (operand_size ty) rn rm)))
+      (flags_and_cc (cmp_imm (operand_size ty) rn rm) cond)))
 (rule -2 (lower_icmp cond rn rm (fits_in_16 ty))
       (let ((rn Reg (put_in_reg_zext32 rn)))
-      (cmp_extend (operand_size ty) rn rm (lower_icmp_extend ty $false))))
-(rule -3 (lower_icmp cond rn (imm12_from_value rm) ty)
+      (flags_and_cc (cmp_extend (operand_size ty) rn rm (lower_extend_op ty $false)) cond)))
+(rule -3 (lower_icmp cond rn (u64_from_iconst c) ty)
       (if (ty_int_ref_scalar_64 ty))
-      (cmp_imm (operand_size ty) rn rm))
+      (lower_icmp_const cond rn c ty))
 (rule -4 (lower_icmp cond rn rm ty)
       (if (ty_int_ref_scalar_64 ty))
-      (cmp (operand_size ty) rn rm))
+      (flags_and_cc (cmp (operand_size ty) rn rm) cond))
+
+;; We get better encodings when testing against an immediate that's even instead
+;; of odd, so rewrite comparisons to use even immediates:
+;;
+;;         A >= B + 1
+;;     ==> A - 1 >= B
+;;     ==> A > B
+(rule (lower_icmp_const (IntCC.UnsignedGreaterThanOrEqual) a b ty)
+      (if (ty_int_ref_scalar_64 ty))
+      (if-let $true (u64_is_odd b))
+      (if-let (imm12_from_u64 imm) (u64_sub b 1))
+  (flags_and_cc (cmp_imm (operand_size ty) a imm) (IntCC.UnsignedGreaterThan)))
+(rule (lower_icmp_const (IntCC.SignedGreaterThanOrEqual) a b ty)
+      (if (ty_int_ref_scalar_64 ty))
+      (if-let $true (u64_is_odd b))
+      (if-let (imm12_from_u64 imm) (u64_sub b 1))
+  (flags_and_cc (cmp_imm (operand_size ty) a imm) (IntCC.SignedGreaterThan)))
+
+(rule -1 (lower_icmp_const cond rn (imm12_from_u64 c) ty)
+      (if (ty_int_ref_scalar_64 ty))
+  (flags_and_cc (cmp_imm (operand_size ty) rn c) cond))
+(rule -2 (lower_icmp_const cond rn c ty)
+      (if (ty_int_ref_scalar_64 ty))
+  (flags_and_cc (cmp (operand_size ty) rn (imm ty (ImmExtend.Zero) c)) cond))
+
 
 ;; 128-bit integers.
 (rule (lower_icmp_into_reg cond @ (IntCC.Equal) rn rm $I128 $I8)
       (let ((cc Cond (cond_code cond)))
-       (with_flags
-        (lower_icmp cond rn rm $I128)
-        (materialize_bool_result cc))))
+       (flags_and_cc_to_bool
+        (lower_icmp cond rn rm $I128))))
 (rule (lower_icmp_into_reg cond @ (IntCC.NotEqual) rn rm $I128 $I8)
       (let ((cc Cond (cond_code cond)))
-       (with_flags
-        (lower_icmp cond rn rm $I128)
-        (materialize_bool_result cc))))
+       (flags_and_cc_to_bool
+        (lower_icmp cond rn rm $I128))))
 
 ;; cmp lhs_lo, rhs_lo
 ;; ccmp lhs_hi, rhs_hi, #0, eq
@@ -3478,9 +3551,9 @@
         (nzcv $false $false $false $false) (Cond.Eq) cmp_inst)))
 
 (rule (lower_icmp (IntCC.Equal) lhs rhs $I128)
-      (lower_icmp_i128_eq_ne lhs rhs))
+      (flags_and_cc (lower_icmp_i128_eq_ne lhs rhs) (IntCC.Equal)))
 (rule (lower_icmp (IntCC.NotEqual) lhs rhs $I128)
-      (lower_icmp_i128_eq_ne lhs rhs))
+      (flags_and_cc (lower_icmp_i128_eq_ne lhs rhs) (IntCC.NotEqual)))
 
 ;; cmp      lhs_lo, rhs_lo
 ;; cset     tmp1, unsigned_cond
@@ -3553,8 +3626,9 @@
 ;; csetm res, ne
 (rule 3
       (lower_bmask out_ty (fits_in_16 in_ty) val)
-      (let ((mask_bits ImmLogic (imm_logic_from_u64 $I32 (ty_mask in_ty)))
-            (masked Reg (and_imm $I32 (value_regs_get val 0) mask_bits)))
+      ; This if-let can't fail due to ty_mask always producing 8/16 consecutive 1s.
+      (if-let mask_bits (imm_logic_from_u64 $I32 (ty_mask in_ty)))
+      (let ((masked Reg (and_imm $I32 (value_regs_get val 0) mask_bits)))
         (lower_bmask out_ty $I32 masked)))
 
 ;; Exceptional `lower_icmp_into_flags` rules.
@@ -3564,39 +3638,39 @@
       (let ((dst ValueRegs (lower_icmp_into_reg cond lhs rhs $I128 $I8))
             (dst Reg (value_regs_get dst 0))
             (tmp Reg (imm $I64 (ImmExtend.Sign) 1))) ;; mov tmp, #1
-       (cmp (OperandSize.Size64) dst tmp)))
+        (flags_and_cc (cmp (OperandSize.Size64) dst tmp) cond)))
 (rule (lower_icmp_into_flags cond @ (IntCC.UnsignedGreaterThanOrEqual) lhs rhs $I128)
       (let ((dst ValueRegs (lower_icmp_into_reg cond lhs rhs $I128 $I8))
             (dst Reg (value_regs_get dst 0))
             (tmp Reg (imm $I64 (ImmExtend.Zero) 1)))
-       (cmp (OperandSize.Size64) dst tmp)))
+        (flags_and_cc (cmp (OperandSize.Size64) dst tmp) cond)))
 (rule (lower_icmp_into_flags cond @ (IntCC.SignedLessThanOrEqual) lhs rhs $I128)
       (let ((dst ValueRegs (lower_icmp_into_reg cond lhs rhs $I128 $I8))
             (dst Reg (value_regs_get dst 0))
             (tmp Reg (imm $I64 (ImmExtend.Sign) 1)))
-       (cmp (OperandSize.Size64) tmp dst)))
+       (flags_and_cc (cmp (OperandSize.Size64) tmp dst) cond)))
 (rule (lower_icmp_into_flags cond @ (IntCC.UnsignedLessThanOrEqual) lhs rhs $I128)
       (let ((dst ValueRegs (lower_icmp_into_reg cond lhs rhs $I128 $I8))
             (dst Reg (value_regs_get dst 0))
             (tmp Reg (imm $I64 (ImmExtend.Zero) 1)))
-       (cmp (OperandSize.Size64) tmp dst)))
+        (flags_and_cc (cmp (OperandSize.Size64) tmp dst) cond)))
 ;; For strict comparisons, we compare with 0.
 (rule (lower_icmp_into_flags cond @ (IntCC.SignedGreaterThan) lhs rhs $I128)
       (let ((dst ValueRegs (lower_icmp_into_reg cond lhs rhs $I128 $I8))
             (dst Reg (value_regs_get dst 0)))
-       (cmp (OperandSize.Size64) dst (zero_reg))))
+        (flags_and_cc (cmp (OperandSize.Size64) dst (zero_reg)) cond)))
 (rule (lower_icmp_into_flags cond @ (IntCC.UnsignedGreaterThan) lhs rhs $I128)
       (let ((dst ValueRegs (lower_icmp_into_reg cond lhs rhs $I128 $I8))
             (dst Reg (value_regs_get dst 0)))
-       (cmp (OperandSize.Size64) dst (zero_reg))))
+        (flags_and_cc (cmp (OperandSize.Size64) dst (zero_reg)) cond)))
 (rule (lower_icmp_into_flags cond @ (IntCC.SignedLessThan) lhs rhs $I128)
       (let ((dst ValueRegs (lower_icmp_into_reg cond lhs rhs $I128 $I8))
             (dst Reg (value_regs_get dst 0)))
-       (cmp (OperandSize.Size64) (zero_reg) dst)))
+       (flags_and_cc (cmp (OperandSize.Size64) (zero_reg) dst) cond)))
 (rule (lower_icmp_into_flags cond @ (IntCC.UnsignedLessThan) lhs rhs $I128)
       (let ((dst ValueRegs (lower_icmp_into_reg cond lhs rhs $I128 $I8))
             (dst Reg (value_regs_get dst 0)))
-       (cmp (OperandSize.Size64) (zero_reg) dst)))
+       (flags_and_cc (cmp (OperandSize.Size64) (zero_reg) dst) cond)))
 
 ;; Helpers for generating select instruction sequences.
 (decl lower_select (ProducesFlags Cond Type Value Value) ValueRegs)
@@ -3674,15 +3748,15 @@
        (MInst.EmitIsland needed_space)))
 
 ;; Helper for emitting `br_table` sequences.
-(decl br_table_impl (u64 Reg VecMachLabel) InstOutput)
+(decl br_table_impl (u64 Reg VecMachLabel) Unit)
 (rule (br_table_impl (imm12_from_u64 jt_size) ridx targets)
       (let ((jt_info BoxJTSequenceInfo (targets_jt_info targets)))
-       (side_effect (with_flags_side_effect
+       (emit_side_effect (with_flags_side_effect
             (cmp_imm (OperandSize.Size32) ridx jt_size)
             (jt_sequence ridx jt_info)))))
 (rule -1 (br_table_impl jt_size ridx targets)
       (let ((jt_size Reg (imm $I64 (ImmExtend.Zero) jt_size))
             (jt_info BoxJTSequenceInfo (targets_jt_info targets)))
-       (side_effect (with_flags_side_effect
+       (emit_side_effect (with_flags_side_effect
             (cmp (OperandSize.Size32) ridx jt_size)
             (jt_sequence ridx jt_info)))))

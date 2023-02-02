@@ -12,7 +12,7 @@
 use crate::alias_analysis::AliasAnalysis;
 use crate::dce::do_dce;
 use crate::dominator_tree::DominatorTree;
-use crate::egraph::FuncEGraph;
+use crate::egraph::EgraphPass;
 use crate::flowgraph::ControlFlowGraph;
 use crate::ir::Function;
 use crate::isa::TargetIsa;
@@ -26,6 +26,7 @@ use crate::result::{CodegenResult, CompileResult};
 use crate::settings::{FlagsOrIsa, OptLevel};
 use crate::simple_gvn::do_simple_gvn;
 use crate::simple_preopt::do_preopt;
+use crate::trace;
 use crate::unreachable_code::eliminate_unreachable_code;
 use crate::verifier::{verify_context, VerifierErrors, VerifierResult};
 use crate::{timing, CompileError};
@@ -148,8 +149,17 @@ impl Context {
     ///
     /// Public only for testing purposes.
     pub fn optimize(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
+        log::debug!(
+            "Number of CLIF instructions to optimize: {}",
+            self.func.dfg.num_insts()
+        );
+        log::debug!(
+            "Number of CLIF blocks to optimize: {}",
+            self.func.dfg.num_blocks()
+        );
+
         let opt_level = isa.flags().opt_level();
-        log::trace!(
+        crate::trace!(
             "Optimizing (opt level {:?}):\n{}",
             opt_level,
             self.func.display()
@@ -175,25 +185,21 @@ impl Context {
         self.compute_domtree();
         self.eliminate_unreachable_code(isa)?;
 
-        if isa.flags().use_egraphs() || opt_level != OptLevel::None {
+        if opt_level != OptLevel::None {
             self.dce(isa)?;
         }
 
         self.remove_constant_phis(isa)?;
 
-        if isa.flags().use_egraphs() {
-            log::debug!(
-                "About to optimize with egraph phase:\n{}",
-                self.func.display()
-            );
-            self.compute_loop_analysis();
-            let mut eg = FuncEGraph::new(&self.func, &self.domtree, &self.loop_analysis, &self.cfg);
-            eg.elaborate(&mut self.func);
-            log::debug!("After egraph optimization:\n{}", self.func.display());
-            log::info!("egraph stats: {:?}", eg.stats);
-        } else if opt_level != OptLevel::None && isa.flags().enable_alias_analysis() {
-            self.replace_redundant_loads()?;
-            self.simple_gvn(isa)?;
+        if opt_level != OptLevel::None {
+            if isa.flags().use_egraphs() {
+                self.egraph_pass()?;
+            } else if isa.flags().enable_alias_analysis() {
+                for _ in 0..2 {
+                    self.replace_redundant_loads()?;
+                    self.simple_gvn(isa)?;
+                }
+            }
         }
 
         Ok(())
@@ -279,7 +285,7 @@ impl Context {
 
     /// Perform pre-legalization rewrites on the function.
     pub fn preopt(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
-        do_preopt(&mut self.func, &mut self.cfg, isa);
+        do_preopt(&mut self.func, isa);
         self.verify_if(isa)?;
         Ok(())
     }
@@ -356,8 +362,8 @@ impl Context {
     /// by a store instruction to the same instruction (so-called
     /// "store-to-load forwarding").
     pub fn replace_redundant_loads(&mut self) -> CodegenResult<()> {
-        let mut analysis = AliasAnalysis::new(&mut self.func, &self.domtree);
-        analysis.compute_and_update_aliases();
+        let mut analysis = AliasAnalysis::new(&self.func, &self.domtree);
+        analysis.compute_and_update_aliases(&mut self.func);
         Ok(())
     }
 
@@ -368,6 +374,26 @@ impl Context {
         out: &mut std::sync::mpsc::Sender<String>,
     ) -> CodegenResult<()> {
         do_souper_harvest(&self.func, out);
+        Ok(())
+    }
+
+    /// Run optimizations via the egraph infrastructure.
+    pub fn egraph_pass(&mut self) -> CodegenResult<()> {
+        trace!(
+            "About to optimize with egraph phase:\n{}",
+            self.func.display()
+        );
+        self.compute_loop_analysis();
+        let mut alias_analysis = AliasAnalysis::new(&self.func, &self.domtree);
+        let mut pass = EgraphPass::new(
+            &mut self.func,
+            &self.domtree,
+            &self.loop_analysis,
+            &mut alias_analysis,
+        );
+        pass.run();
+        log::info!("egraph stats: {:?}", pass.stats);
+        trace!("After egraph optimization:\n{}", self.func.display());
         Ok(())
     }
 }

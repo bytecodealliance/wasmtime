@@ -5,7 +5,7 @@ use crate::{
     AsContextMut, Caller, Engine, Extern, ExternType, Func, FuncType, ImportType, Instance,
     IntoFunc, Module, StoreContextMut, Val, ValRaw,
 };
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{bail, Context, Result};
 use log::warn;
 use std::collections::hash_map::{Entry, HashMap};
 #[cfg(feature = "async")]
@@ -263,15 +263,10 @@ impl<T> Linker<T> {
     #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn define_unknown_imports_as_traps(&mut self, module: &Module) -> anyhow::Result<()> {
         for import in module.imports() {
-            if self._get_by_import(&import).is_err() {
-                if let ExternType::Func(func_ty) = import.ty() {
-                    let err_msg = format!(
-                        "unknown import: `{}::{}` has not been defined",
-                        import.module(),
-                        import.name(),
-                    );
+            if let Err(import_err) = self._get_by_import(&import) {
+                if let ExternType::Func(func_ty) = import_err.ty() {
                     self.func_new(import.module(), import.name(), func_ty, move |_, _, _| {
-                        bail!("{err_msg}")
+                        bail!(import_err.clone());
                     })?;
                 }
             }
@@ -643,7 +638,7 @@ impl<T> Linker<T> {
     /// let module = Module::new(&engine, wat)?;
     /// linker.module(&mut store, "commander", &module)?;
     /// let run = linker.get_default(&mut store, "")?
-    ///     .typed::<(), (), _>(&store)?
+    ///     .typed::<(), ()>(&store)?
     ///     .clone();
     /// run.call(&mut store, ())?;
     /// run.call(&mut store, ())?;
@@ -664,7 +659,7 @@ impl<T> Linker<T> {
     /// let module = Module::new(&engine, wat)?;
     /// linker.module(&mut store, "", &module)?;
     /// let run = linker.get(&mut store, "", "run").unwrap().into_func().unwrap();
-    /// let count = run.typed::<(), i32, _>(&store)?.call(&mut store, ())?;
+    /// let count = run.typed::<(), i32>(&store)?.call(&mut store, ())?;
     /// assert_eq!(count, 0, "a Command should get a fresh instance on each invocation");
     ///
     /// # Ok(())
@@ -727,7 +722,7 @@ impl<T> Linker<T> {
 
                 if let Some(export) = instance.get_export(&mut store, "_initialize") {
                     if let Extern::Func(func) = export {
-                        func.typed::<(), (), _>(&store)
+                        func.typed::<(), ()>(&store)
                             .and_then(|f| f.call(&mut store, ()).map_err(Into::into))
                             .context("calling the Reactor initialization function")?;
                     }
@@ -793,7 +788,7 @@ impl<T> Linker<T> {
                 if let Some(export) = instance.get_export(&mut store, "_initialize") {
                     if let Extern::Func(func) = export {
                         let func = func
-                            .typed::<(), (), _>(&store)
+                            .typed::<(), ()>(&store)
                             .context("loading the Reactor initialization function")?;
                         func.call_async(&mut store, ())
                             .await
@@ -973,7 +968,9 @@ impl<T> Linker<T> {
     ///
     /// This method can fail because an import may not be found, or because
     /// instantiation itself may fail. For information on instantiation
-    /// failures see [`Instance::new`].
+    /// failures see [`Instance::new`]. If an import is not found, the error
+    /// may be downcast to an [`UnknownImportError`].
+    ///
     ///
     /// # Panics
     ///
@@ -1035,6 +1032,11 @@ impl<T> Linker<T> {
     /// returned [`InstancePre`] represents a ready-to-be-instantiated module,
     /// which can also be instantiated multiple times if desired.
     ///
+    /// # Errors
+    ///
+    /// Returns an error which may be downcast to an [`UnknownImportError`] if
+    /// the module has any unresolvable imports.
+    ///
     /// # Panics
     ///
     /// This method will panic if any item defined in this linker used by
@@ -1085,7 +1087,7 @@ impl<T> Linker<T> {
         let imports = module
             .imports()
             .map(|import| self._get_by_import(&import))
-            .collect::<Result<_>>()?;
+            .collect::<Result<_, _>>()?;
         unsafe { InstancePre::new(store, module, imports) }
     }
 
@@ -1166,20 +1168,11 @@ impl<T> Linker<T> {
         Some(unsafe { self._get_by_import(import).ok()?.to_extern(store) })
     }
 
-    fn _get_by_import(&self, import: &ImportType) -> anyhow::Result<Definition> {
-        fn undef_err(missing_import: &str) -> anyhow::Error {
-            anyhow!("unknown import: `{}` has not been defined", missing_import)
+    fn _get_by_import(&self, import: &ImportType) -> Result<Definition, UnknownImportError> {
+        match self._get(import.module(), import.name()) {
+            Some(item) => Ok(item.clone()),
+            None => Err(UnknownImportError::new(import)),
         }
-
-        if let Some(item) = self._get(import.module(), import.name()) {
-            return Ok(item.clone());
-        }
-
-        Err(undef_err(&format!(
-            "{}::{}",
-            import.module(),
-            import.name()
-        )))
     }
 
     /// Returns the "default export" of a module.
@@ -1294,3 +1287,51 @@ impl ModuleKind {
         }
     }
 }
+
+/// Error for an unresolvable import.
+///
+/// Returned - wrapped in an [`anyhow::Error`] - by [`Linker::instantiate`] and
+/// related methods for modules with unresolvable imports.
+#[derive(Clone, Debug)]
+pub struct UnknownImportError {
+    module: String,
+    name: String,
+    ty: ExternType,
+}
+
+impl UnknownImportError {
+    fn new(import: &ImportType) -> Self {
+        Self {
+            module: import.module().to_string(),
+            name: import.name().to_string(),
+            ty: import.ty(),
+        }
+    }
+
+    /// Returns the module name that the unknown import was expected to come from.
+    pub fn module(&self) -> &str {
+        &self.module
+    }
+
+    /// Returns the field name of the module that the unknown import was expected to come from.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns the type of the unknown import.
+    pub fn ty(&self) -> ExternType {
+        self.ty.clone()
+    }
+}
+
+impl std::fmt::Display for UnknownImportError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "unknown import: `{}::{}` has not been defined",
+            self.module, self.name,
+        )
+    }
+}
+
+impl std::error::Error for UnknownImportError {}

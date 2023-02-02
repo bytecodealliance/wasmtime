@@ -14,9 +14,6 @@ pub(crate) struct Immediates {
     /// counts on shift instructions.
     pub uimm8: OperandKind,
 
-    /// An unsigned 32-bit immediate integer operand.
-    pub uimm32: OperandKind,
-
     /// An unsigned 128-bit immediate integer operand.
     ///
     /// This operand is used to pass entire 128-bit vectors as immediates to instructions like
@@ -107,11 +104,6 @@ impl Immediates {
                 "ir::immediates::Uimm8",
                 "An 8-bit immediate unsigned integer.",
             ),
-            uimm32: new_imm(
-                "imm",
-                "ir::immediates::Uimm32",
-                "A 32-bit immediate unsigned integer.",
-            ),
             uimm128: new_imm(
                 "imm",
                 "ir::Immediate",
@@ -182,6 +174,7 @@ impl Immediates {
             },
 
             memflags: new_imm("flags", "ir::MemFlags", "Memory operation flags"),
+
             trapcode: {
                 let mut trapcode_values = HashMap::new();
                 trapcode_values.insert("stk_ovf", "StackOverflow");

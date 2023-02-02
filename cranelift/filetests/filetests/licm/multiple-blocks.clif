@@ -10,13 +10,11 @@ block1(v10: i32):
     v11 = iconst.i32 1
     v12 = iconst.i32 2
     v13 = iadd v11, v12
-    brz v10, block4(v10)
-    jump block2
+    brif v10, block2, block4(v10)
 
 block2:
     v15 = isub v10, v11
-    brz v15, block5(v15)
-    jump block3
+    brif v15, block3, block5(v15)
 
 block3:
     v14 = isub v10, v11
@@ -39,13 +37,11 @@ block5(v30: i32):
 ; nextln:     jump block1(v0)
 ; nextln: 
 ; nextln: block1(v10: i32):
-; nextln:     brz v10, block4(v10)
-; nextln:     jump block2
+; nextln:     brif v10, block2, block4(v10)
 ; nextln: 
 ; nextln: block2:
 ; nextln:     v15 = isub.i32 v10, v11
-; nextln:     brz v15, block5(v15)
-; nextln:     jump block3
+; nextln:     brif v15, block3, block5(v15)
 ; nextln: 
 ; nextln: block3:
 ; nextln:     v14 = isub.i32 v10, v11

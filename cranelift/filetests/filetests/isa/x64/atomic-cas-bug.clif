@@ -87,64 +87,53 @@ function u0:31(i64, i32, i32, i8, i8) -> i32, i32 system_v {
                                 block2:
 @0001                               v11 = stack_load.i8 ss3+1
 @0001                               v12 = uextend.i64 v11
-@0005                               brz v12, block15
-@0005                               jump block3
+@0005                               brif v12, block3, block15
 
                                 block3:
 @0001                               v13 = stack_load.i8 ss3+1
 @0001                               v14 = uextend.i64 v13
 @0005                               v15 = icmp_imm eq v14, 3
-@0005                               brnz v15, block27
-@0005                               jump block38
+@0005                               brif v15, block27, block38
 
                                 block38:
 @0005                               v16 = icmp_imm.i64 eq v14, 1
-@0005                               brnz v16, block29
-@0005                               jump block8
+@0005                               brif v16, block29, block8
 
                                 block4:
 @0001                               v17 = stack_load.i8 ss3+1
 @0001                               v18 = uextend.i64 v17
-@0005                               brz v18, block11
-@0005                               jump block3
+@0005                               brif v18, block3, block11
 
                                 block5:
 @0001                               v19 = stack_load.i8 ss3+1
 @0001                               v20 = uextend.i64 v19
 @0005                               v21 = icmp_imm eq v20, 2
-@0005                               brnz v21, block9
-@0005                               jump block39
+@0005                               brif v21, block9, block39
 
                                 block39:
-@0005                               brz.i64 v20, block19
-@0005                               jump block3
+@0005                               brif.i64 v20, block3, block19
 
                                 block6:
 @0001                               v22 = stack_load.i8 ss3+1
 @0001                               v23 = uextend.i64 v22
 @0005                               v24 = icmp_imm eq v23, 2
-@0005                               brnz v24, block13
-@0005                               jump block40
+@0005                               brif v24, block13, block40
 
                                 block40:
-@0005                               brz.i64 v23, block21
-@0005                               jump block3
+@0005                               brif.i64 v23, block3, block21
 
                                 block7:
 @0001                               v25 = stack_load.i8 ss3+1
 @0001                               v26 = uextend.i64 v25
 @0005                               v27 = icmp_imm eq v26, 4
-@0005                               brnz v27, block17
-@0005                               jump block41
+@0005                               brif v27, block17, block41
 
                                 block41:
 @0005                               v28 = icmp_imm.i64 eq v26, 2
-@0005                               brnz v28, block25
-@0005                               jump block42
+@0005                               brif v28, block25, block42
 
                                 block42:
-@0005                               brz.i64 v26, block23
-@0005                               jump block3
+@0005                               brif.i64 v26, block3, block23
 
                                 block8:
 @0007                               v29 = global_value.i64 gv0
@@ -266,8 +255,7 @@ function u0:31(i64, i32, i32, i8, i8) -> i32, i32 system_v {
                                 block32(v104: i32, v105: i8):
                                     v106 -> v104
                                     v110 -> v104
-@0045                               brz v105, block34
-@0045                               jump block33
+@0045                               brif v105, block33, block34
 
                                 block33:
 @0048                               stack_store.i32 v106, ss0+4

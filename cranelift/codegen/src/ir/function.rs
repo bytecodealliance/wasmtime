@@ -8,8 +8,8 @@ use crate::ir;
 use crate::ir::JumpTables;
 use crate::ir::{
     instructions::BranchInfo, Block, DynamicStackSlot, DynamicStackSlotData, DynamicType,
-    ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Heap, HeapData, Inst, InstructionData,
-    JumpTable, JumpTableData, Opcode, SigRef, StackSlot, StackSlotData, Table, TableData, Type,
+    ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Inst, InstructionData, JumpTable,
+    JumpTableData, Opcode, SigRef, StackSlot, StackSlotData, Table, TableData, Type,
 };
 use crate::ir::{DataFlowGraph, Layout, Signature};
 use crate::ir::{DynamicStackSlots, SourceLocs, StackSlots};
@@ -170,9 +170,6 @@ pub struct FunctionStencil {
     /// Global values referenced.
     pub global_values: PrimaryMap<ir::GlobalValue, ir::GlobalValueData>,
 
-    /// Heaps referenced.
-    pub heaps: PrimaryMap<ir::Heap, ir::HeapData>,
-
     /// Tables referenced.
     pub tables: PrimaryMap<ir::Table, ir::TableData>,
 
@@ -205,7 +202,6 @@ impl FunctionStencil {
         self.sized_stack_slots.clear();
         self.dynamic_stack_slots.clear();
         self.global_values.clear();
-        self.heaps.clear();
         self.tables.clear();
         self.jump_tables.clear();
         self.dfg.clear();
@@ -261,11 +257,6 @@ impl FunctionStencil {
             .concrete()
     }
 
-    /// Declares a heap accessible to the function.
-    pub fn create_heap(&mut self, data: HeapData) -> Heap {
-        self.heaps.push(data)
-    }
-
     /// Declares a table accessible to the function.
     pub fn create_table(&mut self, data: TableData) -> Table {
         self.tables.push(data)
@@ -286,27 +277,41 @@ impl FunctionStencil {
         self.dfg.collect_debug_info();
     }
 
-    /// Changes the destination of a jump or branch instruction.
-    /// Does nothing if called with a non-jump or non-branch instruction.
-    ///
-    /// Note that this method ignores multi-destination branches like `br_table`.
-    pub fn change_branch_destination(&mut self, inst: Inst, new_dest: Block) {
-        match self.dfg[inst].branch_destination_mut() {
-            None => (),
-            Some(inst_dest) => *inst_dest = new_dest,
-        }
-    }
-
     /// Rewrite the branch destination to `new_dest` if the destination matches `old_dest`.
     /// Does nothing if called with a non-jump or non-branch instruction.
-    ///
-    /// Unlike [change_branch_destination](FunctionStencil::change_branch_destination), this method
-    /// rewrite the destinations of multi-destination branches like `br_table`.
     pub fn rewrite_branch_destination(&mut self, inst: Inst, old_dest: Block, new_dest: Block) {
         match self.dfg.analyze_branch(inst) {
-            BranchInfo::SingleDest(dest, ..) => {
-                if dest == old_dest {
-                    self.change_branch_destination(inst, new_dest);
+            BranchInfo::SingleDest(dest) => {
+                if dest.block(&self.dfg.value_lists) == old_dest {
+                    for block in self.dfg.insts[inst].branch_destination_mut() {
+                        block.set_block(new_dest, &mut self.dfg.value_lists)
+                    }
+                }
+            }
+
+            BranchInfo::Conditional(block_then, block_else) => {
+                if block_then.block(&self.dfg.value_lists) == old_dest {
+                    if let InstructionData::Brif {
+                        blocks: [block_then, _],
+                        ..
+                    } = &mut self.dfg.insts[inst]
+                    {
+                        block_then.set_block(new_dest, &mut self.dfg.value_lists);
+                    } else {
+                        unreachable!();
+                    }
+                }
+
+                if block_else.block(&self.dfg.value_lists) == old_dest {
+                    if let InstructionData::Brif {
+                        blocks: [_, block_else],
+                        ..
+                    } = &mut self.dfg.insts[inst]
+                    {
+                        block_else.set_block(new_dest, &mut self.dfg.value_lists);
+                    } else {
+                        unreachable!();
+                    }
                 }
             }
 
@@ -317,8 +322,8 @@ impl FunctionStencil {
                     }
                 });
 
-                if default_dest == Some(old_dest) {
-                    match &mut self.dfg[inst] {
+                if default_dest == old_dest {
+                    match &mut self.dfg.insts[inst] {
                         InstructionData::BranchTable { destination, .. } => {
                             *destination = new_dest;
                         }
@@ -342,13 +347,13 @@ impl FunctionStencil {
         let inst_iter = self.layout.block_insts(block);
 
         // Ignore all instructions prior to the first branch.
-        let mut inst_iter = inst_iter.skip_while(|&inst| !dfg[inst].opcode().is_branch());
+        let mut inst_iter = inst_iter.skip_while(|&inst| !dfg.insts[inst].opcode().is_branch());
 
         // A conditional branch is permitted in a basic block only when followed
         // by a terminal jump instruction.
         if let Some(_branch) = inst_iter.next() {
             if let Some(next) = inst_iter.next() {
-                match dfg[next].opcode() {
+                match dfg.insts[next].opcode() {
                     Opcode::Jump => (),
                     _ => return Err((next, "post-branch instruction not jump")),
                 }
@@ -386,7 +391,7 @@ impl FunctionStencil {
             .zip(self.dfg.inst_results(src))
             .all(|(a, b)| self.dfg.value_type(*a) == self.dfg.value_type(*b)));
 
-        self.dfg[dst] = self.dfg[src];
+        self.dfg.insts[dst] = self.dfg.insts[src];
         self.layout.remove_inst(src);
     }
 
@@ -447,7 +452,6 @@ impl Function {
                 sized_stack_slots: StackSlots::new(),
                 dynamic_stack_slots: DynamicStackSlots::new(),
                 global_values: PrimaryMap::new(),
-                heaps: PrimaryMap::new(),
                 tables: PrimaryMap::new(),
                 jump_tables: PrimaryMap::new(),
                 dfg: DataFlowGraph::new(),

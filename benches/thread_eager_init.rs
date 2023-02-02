@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use wasmtime::*;
 
 fn measure_execution_time(c: &mut Criterion) {
-    // Baseline performance: a single measurment covers both initializing
+    // Baseline performance: a single measurement covers both initializing
     // thread local resources and executing the first call.
     //
     // The other two bench functions should sum to this duration.
@@ -55,7 +55,7 @@ fn duration_of_call(engine: &Engine, module: &Module) -> Duration {
     let mut store = Store::new(engine, ());
     let inst = Instance::new(&mut store, module, &[]).expect("instantiate");
     let f = inst.get_func(&mut store, "f").expect("get f");
-    let f = f.typed::<(), (), _>(&store).expect("type f");
+    let f = f.typed::<(), ()>(&store).expect("type f");
 
     let call = Instant::now();
     f.call(&mut store, ()).expect("call f");

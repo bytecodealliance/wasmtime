@@ -11,20 +11,19 @@ use crate::isa::s390x::inst::{
     MemArg, MemArgPair, RegPair, SymbolReloc, UImm12, UImm16Shifted, UImm32Shifted,
     WritableRegPair,
 };
-use crate::isa::s390x::settings::Flags as IsaFlags;
+use crate::isa::s390x::S390xBackend;
 use crate::machinst::isle::*;
 use crate::machinst::{MachLabel, Reg};
-use crate::settings::Flags;
 use crate::{
     ir::{
-        condcodes::*, immediates::*, types::*, ArgumentPurpose, AtomicRmwOp, Endianness, Inst,
-        InstructionData, KnownSymbol, LibCall, MemFlags, Opcode, TrapCode, Value, ValueList,
+        condcodes::*, immediates::*, types::*, ArgumentPurpose, AtomicRmwOp, BlockCall, Endianness,
+        Inst, InstructionData, KnownSymbol, LibCall, MemFlags, Opcode, TrapCode, Value, ValueList,
     },
     isa::unwind::UnwindInst,
     isa::CallConv,
     machinst::abi::ABIMachineSpec,
     machinst::{
-        ArgPair, CallArgList, CallArgPair, CallRetList, CallRetPair, InsnOutput, Lower, MachInst,
+        ArgPair, CallArgList, CallArgPair, CallRetList, CallRetPair, InstOutput, Lower, MachInst,
         VCodeConstant, VCodeConstantData,
     },
 };
@@ -35,7 +34,6 @@ use std::boxed::Box;
 use std::cell::Cell;
 use std::convert::TryFrom;
 use std::vec::Vec;
-use target_lexicon::Triple;
 
 /// Information describing a library call to be emitted.
 pub struct LibCallInfo {
@@ -58,44 +56,29 @@ type CallArgListBuilder = Cell<CallArgList>;
 /// The main entry point for lowering with ISLE.
 pub(crate) fn lower(
     lower_ctx: &mut Lower<MInst>,
-    triple: &Triple,
-    flags: &Flags,
-    isa_flags: &IsaFlags,
-    outputs: &[InsnOutput],
+    backend: &S390xBackend,
     inst: Inst,
-) -> Result<(), ()> {
-    lower_common(
-        lower_ctx,
-        triple,
-        flags,
-        isa_flags,
-        outputs,
-        inst,
-        |cx, insn| generated_code::constructor_lower(cx, insn),
-    )
+) -> Option<InstOutput> {
+    // TODO: reuse the ISLE context across lowerings so we can reuse its
+    // internal heap allocations.
+    let mut isle_ctx = IsleContext { lower_ctx, backend };
+    generated_code::constructor_lower(&mut isle_ctx, inst)
 }
 
 /// The main entry point for branch lowering with ISLE.
 pub(crate) fn lower_branch(
     lower_ctx: &mut Lower<MInst>,
-    triple: &Triple,
-    flags: &Flags,
-    isa_flags: &IsaFlags,
+    backend: &S390xBackend,
     branch: Inst,
     targets: &[MachLabel],
-) -> Result<(), ()> {
-    lower_common(
-        lower_ctx,
-        triple,
-        flags,
-        isa_flags,
-        &[],
-        branch,
-        |cx, insn| generated_code::constructor_lower_branch(cx, insn, &targets.to_vec()),
-    )
+) -> Option<()> {
+    // TODO: reuse the ISLE context across lowerings so we can reuse its
+    // internal heap allocations.
+    let mut isle_ctx = IsleContext { lower_ctx, backend };
+    generated_code::constructor_lower_branch(&mut isle_ctx, branch, &targets.to_vec())
 }
 
-impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
+impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     isle_lower_prelude_methods!();
 
     #[inline]
@@ -123,13 +106,13 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         builder.take()
     }
 
-    fn defs_init(&mut self, abi: &Sig) -> CallRetList {
+    fn defs_init(&mut self, abi: Sig) -> CallRetList {
         // Allocate writable registers for all retval regs, except for StructRet args.
         let mut defs = smallvec![];
-        for i in 0..self.lower_ctx.sigs()[*abi].num_rets() {
+        for i in 0..self.lower_ctx.sigs().num_rets(abi) {
             if let &ABIArg::Slots {
                 ref slots, purpose, ..
-            } = &self.lower_ctx.sigs()[*abi].get_ret(self.lower_ctx.sigs(), i)
+            } = &self.lower_ctx.sigs().get_ret(abi, i)
             {
                 if purpose == ArgumentPurpose::StructReturn {
                     continue;
@@ -165,20 +148,20 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         self.lower_ctx.sigs().abi_sig_for_sig_ref(sig_ref)
     }
 
-    fn abi_first_ret(&mut self, sig_ref: SigRef, abi: &Sig) -> usize {
+    fn abi_first_ret(&mut self, sig_ref: SigRef, abi: Sig) -> usize {
         // Return the index of the first actual return value, excluding
         // any StructReturn that might have been added to Sig.
         let sig = &self.lower_ctx.dfg().signatures[sig_ref];
-        self.lower_ctx.sigs()[*abi].num_rets() - sig.returns.len()
+        self.lower_ctx.sigs().num_rets(abi) - sig.returns.len()
     }
 
-    fn abi_lane_order(&mut self, abi: &Sig) -> LaneOrder {
-        lane_order_for_call_conv(self.lower_ctx.sigs()[*abi].call_conv())
+    fn abi_lane_order(&mut self, abi: Sig) -> LaneOrder {
+        lane_order_for_call_conv(self.lower_ctx.sigs()[abi].call_conv())
     }
 
-    fn abi_accumulate_outgoing_args_size(&mut self, abi: &Sig) -> Unit {
-        let off = self.lower_ctx.sigs()[*abi].sized_stack_arg_space()
-            + self.lower_ctx.sigs()[*abi].sized_stack_ret_space();
+    fn abi_accumulate_outgoing_args_size(&mut self, abi: Sig) -> Unit {
+        let off = self.lower_ctx.sigs()[abi].sized_stack_arg_space()
+            + self.lower_ctx.sigs()[abi].sized_stack_ret_space();
         self.lower_ctx
             .abi_mut()
             .accumulate_outgoing_args_size(off as u32);
@@ -186,14 +169,13 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
 
     fn abi_call_info(
         &mut self,
-        abi: &Sig,
+        abi: Sig,
         name: ExternalName,
         uses: &CallArgList,
         defs: &CallRetList,
         opcode: &Opcode,
     ) -> BoxCallInfo {
-        let clobbers =
-            self.lower_ctx.sigs()[*abi].call_clobbers::<S390xMachineDeps>(self.lower_ctx.sigs());
+        let clobbers = self.lower_ctx.sigs().call_clobbers::<S390xMachineDeps>(abi);
         Box::new(CallInfo {
             dest: name.clone(),
             uses: uses.clone(),
@@ -201,21 +183,20 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
             clobbers,
             opcode: *opcode,
             caller_callconv: self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()),
-            callee_callconv: self.lower_ctx.sigs()[*abi].call_conv(),
+            callee_callconv: self.lower_ctx.sigs()[abi].call_conv(),
             tls_symbol: None,
         })
     }
 
     fn abi_call_ind_info(
         &mut self,
-        abi: &Sig,
+        abi: Sig,
         target: Reg,
         uses: &CallArgList,
         defs: &CallRetList,
         opcode: &Opcode,
     ) -> BoxCallIndInfo {
-        let clobbers =
-            self.lower_ctx.sigs()[*abi].call_clobbers::<S390xMachineDeps>(self.lower_ctx.sigs());
+        let clobbers = self.lower_ctx.sigs().call_clobbers::<S390xMachineDeps>(abi);
         Box::new(CallIndInfo {
             rn: target,
             uses: uses.clone(),
@@ -223,7 +204,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
             clobbers,
             opcode: *opcode,
             caller_callconv: self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()),
-            callee_callconv: self.lower_ctx.sigs()[*abi].call_conv(),
+            callee_callconv: self.lower_ctx.sigs()[abi].call_conv(),
         })
     }
 
@@ -285,7 +266,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
 
     fn lib_call_info(&mut self, info: &LibCallInfo) -> BoxCallInfo {
         let caller_callconv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
-        let callee_callconv = CallConv::for_libcall(&self.flags, caller_callconv);
+        let callee_callconv = CallConv::for_libcall(&self.backend.flags, caller_callconv);
 
         // Clobbers are defined by the calling convention.  Remove defs from clobbers.
         let mut clobbers = S390xMachineDeps::get_regs_clobbered_by_call(callee_callconv);
@@ -312,7 +293,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
 
     #[inline]
     fn allow_div_traps(&mut self, _: Type) -> Option<()> {
-        if !self.flags.avoid_div_traps() {
+        if !self.backend.flags.avoid_div_traps() {
             Some(())
         } else {
             None
@@ -321,7 +302,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
 
     #[inline]
     fn mie2_enabled(&mut self, _: Type) -> Option<()> {
-        if self.isa_flags.has_mie2() {
+        if self.backend.isa_flags.has_mie2() {
             Some(())
         } else {
             None
@@ -330,7 +311,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
 
     #[inline]
     fn mie2_disabled(&mut self, _: Type) -> Option<()> {
-        if !self.isa_flags.has_mie2() {
+        if !self.backend.isa_flags.has_mie2() {
             Some(())
         } else {
             None
@@ -339,7 +320,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
 
     #[inline]
     fn vxrs_ext2_enabled(&mut self, _: Type) -> Option<()> {
-        if self.isa_flags.has_vxrs_ext2() {
+        if self.backend.isa_flags.has_vxrs_ext2() {
             Some(())
         } else {
             None
@@ -348,7 +329,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
 
     #[inline]
     fn vxrs_ext2_disabled(&mut self, _: Type) -> Option<()> {
-        if !self.isa_flags.has_vxrs_ext2() {
+        if !self.backend.isa_flags.has_vxrs_ext2() {
             Some(())
         } else {
             None
@@ -522,15 +503,13 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
     }
 
     #[inline]
-    fn lane_order(&mut self) -> Option<LaneOrder> {
-        Some(lane_order_for_call_conv(
-            self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()),
-        ))
+    fn lane_order(&mut self) -> LaneOrder {
+        lane_order_for_call_conv(self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()))
     }
 
     #[inline]
     fn be_lane_idx(&mut self, ty: Type, idx: u8) -> u8 {
-        match self.lane_order().unwrap() {
+        match self.lane_order() {
             LaneOrder::LittleEndian => ty.lane_count() as u8 - 1 - idx,
             LaneOrder::BigEndian => idx,
         }
@@ -538,7 +517,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
 
     #[inline]
     fn be_vec_const(&mut self, ty: Type, n: u128) -> u128 {
-        match self.lane_order().unwrap() {
+        match self.lane_order() {
             LaneOrder::LittleEndian => n,
             LaneOrder::BigEndian => {
                 let lane_count = ty.lane_count();
@@ -564,7 +543,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
 
     #[inline]
     fn shuffle_mask_from_u128(&mut self, idx: u128) -> (u128, u16) {
-        let bytes = match self.lane_order().unwrap() {
+        let bytes = match self.lane_order() {
             LaneOrder::LittleEndian => idx.to_be_bytes().map(|x| {
                 if x < 16 {
                     15 - x
@@ -586,7 +565,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         let inst = self.lower_ctx.dfg().value_def(val).inst()?;
         let constant = self.lower_ctx.get_constant(inst)?;
         let ty = self.lower_ctx.output_ty(inst, 0);
-        Some(zero_extend_to_u64(constant, self.ty_bits(ty).unwrap()))
+        Some(zero_extend_to_u64(constant, self.ty_bits(ty)))
     }
 
     #[inline]
@@ -594,7 +573,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         let inst = self.lower_ctx.dfg().value_def(val).inst()?;
         let constant = self.lower_ctx.get_constant(inst)?;
         let ty = self.lower_ctx.output_ty(inst, 0);
-        Some(zero_extend_to_u64(!constant, self.ty_bits(ty).unwrap()))
+        Some(zero_extend_to_u64(!constant, self.ty_bits(ty)))
     }
 
     #[inline]
@@ -616,7 +595,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         let inst = self.lower_ctx.dfg().value_def(val).inst()?;
         let constant = self.lower_ctx.get_constant(inst)?;
         let ty = self.lower_ctx.output_ty(inst, 0);
-        Some(sign_extend_to_u64(constant, self.ty_bits(ty).unwrap()))
+        Some(sign_extend_to_u64(constant, self.ty_bits(ty)))
     }
 
     #[inline]
@@ -957,6 +936,11 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
     #[inline]
     fn preg_stack(&mut self) -> PReg {
         stack_reg().to_real_reg().unwrap().into()
+    }
+
+    #[inline]
+    fn preg_gpr_0(&mut self) -> PReg {
+        gpr(0).to_real_reg().unwrap().into()
     }
 
     #[inline]

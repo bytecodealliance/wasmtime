@@ -28,7 +28,7 @@ pub fn do_int_divz_pass(fuzz: &mut FuzzGen, func: &mut Function) -> Result<()> {
 
 /// Returns true/false if this instruction can cause a `int_divz` trap
 fn can_int_divz(pos: &FuncCursor, inst: Inst) -> bool {
-    let opcode = pos.func.dfg[inst].opcode();
+    let opcode = pos.func.dfg.insts[inst].opcode();
 
     matches!(
         opcode,
@@ -38,7 +38,7 @@ fn can_int_divz(pos: &FuncCursor, inst: Inst) -> bool {
 
 /// Prepend instructions to inst to avoid `int_divz` traps
 fn insert_int_divz_sequence(pos: &mut FuncCursor, inst: Inst) {
-    let opcode = pos.func.dfg[inst].opcode();
+    let opcode = pos.func.dfg.insts[inst].opcode();
     let inst_args = pos.func.dfg.inst_args(inst);
     let (lhs, rhs) = (inst_args[0], inst_args[1]);
     assert_eq!(pos.func.dfg.value_type(lhs), pos.func.dfg.value_type(rhs));

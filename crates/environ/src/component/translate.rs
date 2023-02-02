@@ -191,6 +191,9 @@ enum LocalInitializer<'data> {
     AliasComponentExport(ComponentInstanceIndex, &'data str),
     AliasModule(ClosedOverModule),
     AliasComponent(ClosedOverComponent),
+
+    // export section
+    Export(ComponentItem),
 }
 
 /// The "closure environment" of components themselves.
@@ -263,6 +266,7 @@ enum ComponentItemType {
     Func(TypeFuncIndex),
     Component(ComponentType),
     Instance(ComponentInstanceType),
+    Type(TypeDef),
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -615,11 +619,17 @@ impl<'a, 'data> Translator<'a, 'data> {
                     let item = self.kind_to_item(export.kind, export.index);
                     let prev = self.result.exports.insert(export.name, item);
                     assert!(prev.is_none());
+                    self.result
+                        .initializers
+                        .push(LocalInitializer::Export(item));
+                    if let ComponentItem::Type(ty) = item {
+                        self.types.push_component_typedef(ty);
+                    }
                 }
             }
 
-            Payload::ComponentStartSection(s) => {
-                self.validator.component_start_section(&s)?;
+            Payload::ComponentStartSection { start, range } => {
+                self.validator.component_start_section(&start, &range)?;
                 unimplemented!("component start section");
             }
 
@@ -769,7 +779,8 @@ impl<'a, 'data> Translator<'a, 'data> {
                 ComponentItem::ComponentInstance(i) => Some(ComponentItemType::Instance(
                     self.result.component_instances[i],
                 )),
-                ComponentItem::Module(_) | ComponentItem::Type(_) => None,
+                ComponentItem::Type(ty) => Some(ComponentItemType::Type(ty)),
+                ComponentItem::Module(_) => None,
             };
             map.insert(export.name, idx);
             if let Some(ty) = ty {
@@ -840,14 +851,22 @@ impl<'a, 'data> Translator<'a, 'data> {
             // An imported component instance is being aliased, so the type of
             // the aliased item is directly available from the instance type.
             ComponentInstanceType::Index(ty) => {
-                self.result.push_typedef(self.types[ty].exports[name])
+                let (_url, ty) = &self.types[ty].exports[name];
+                self.result.push_typedef(*ty);
+                if let TypeDef::Interface(_) = ty {
+                    self.types.push_component_typedef(*ty);
+                }
             }
 
             // An imported component was instantiated so the type of the aliased
             // export is available through the type of the export on the
             // original component.
             ComponentInstanceType::InstantiatedIndex(ty) => {
-                self.result.push_typedef(self.types[ty].exports[name])
+                let (_, ty) = self.types[ty].exports[name];
+                self.result.push_typedef(ty);
+                if let TypeDef::Interface(_) = ty {
+                    self.types.push_component_typedef(ty);
+                }
             }
 
             // A static nested component was instantiated which means that the
@@ -893,6 +912,9 @@ impl<'a, 'data> Translator<'a, 'data> {
                     }
                     ComponentItemType::Instance(ty) => {
                         self.result.component_instances.push(ty);
+                    }
+                    ComponentItemType::Type(ty) => {
+                        self.types.push_component_typedef(ty);
                     }
                 }
             }

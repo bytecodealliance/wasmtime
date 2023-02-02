@@ -2,7 +2,6 @@ use crate::codegen::ir::{ArgumentExtension, ArgumentPurpose};
 use crate::config::Config;
 use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
-use cranelift::codegen::ir::immediates::Offset32;
 use cranelift::codegen::ir::instructions::InstructionFormat;
 use cranelift::codegen::ir::stackslot::StackSize;
 use cranelift::codegen::ir::{types::*, FuncRef, LibCall, UserExternalName, UserFuncName};
@@ -17,6 +16,7 @@ use cranelift::prelude::{
 };
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
+use target_lexicon::{Architecture, Triple};
 
 /// Generates a Vec with `len` elements comprised of `options`
 fn arbitrary_vec<T: Clone>(
@@ -70,33 +70,6 @@ fn insert_opcode(
         let var = fgen.get_variable_of_type(ty)?;
         builder.def_var(var, val);
     }
-    Ok(())
-}
-
-// `select_spectre_guard` is only implemented when preceded by a `icmp`
-// This ensures that we always insert it that way.
-fn insert_select_spectre_guard(
-    fgen: &mut FunctionGenerator,
-    builder: &mut FunctionBuilder,
-    _opcode: Opcode,
-    args: &'static [Type],
-    rets: &'static [Type],
-) -> Result<()> {
-    let icmp_ty = args[0];
-    let icmp_lhs = builder.use_var(fgen.get_variable_of_type(icmp_ty)?);
-    let icmp_rhs = builder.use_var(fgen.get_variable_of_type(icmp_ty)?);
-    let cc = *fgen.u.choose(IntCC::all())?;
-    let icmp_res = builder.ins().icmp(cc, icmp_lhs, icmp_rhs);
-
-    let select_lhs = builder.use_var(fgen.get_variable_of_type(args[1])?);
-    let select_rhs = builder.use_var(fgen.get_variable_of_type(args[2])?);
-    let select_res = builder
-        .ins()
-        .select_spectre_guard(icmp_res, select_lhs, select_rhs);
-
-    let var = fgen.get_variable_of_type(rets[0])?;
-    builder.def_var(var, select_res);
-
     Ok(())
 }
 
@@ -171,10 +144,15 @@ fn insert_cmp(
     let rhs = builder.use_var(rhs);
 
     let res = if opcode == Opcode::Fcmp {
+        let cc = *fgen.u.choose(FloatCC::all())?;
+
         // Some FloatCC's are not implemented on AArch64, see:
         // https://github.com/bytecodealliance/wasmtime/issues/4850
-        let float_cc = if cfg!(target_arch = "aarch64") {
-            &[
+        // We filter out condition codes that aren't supported by the target at
+        // this point after randomly choosing one, instead of randomly choosing a
+        // supported one, to avoid invalidating the corpus when these get implemented.
+        if matches!(fgen.target_triple.architecture, Architecture::Aarch64(_))
+            && ![
                 FloatCC::Ordered,
                 FloatCC::Unordered,
                 FloatCC::Equal,
@@ -184,11 +162,11 @@ fn insert_cmp(
                 FloatCC::GreaterThan,
                 FloatCC::GreaterThanOrEqual,
             ]
-        } else {
-            FloatCC::all()
+            .contains(&cc)
+        {
+            return Err(arbitrary::Error::IncorrectFormat.into());
         };
 
-        let cc = *fgen.u.choose(float_cc)?;
         builder.ins().fcmp(cc, lhs, rhs)
     } else {
         let cc = *fgen.u.choose(IntCC::all())?;
@@ -215,6 +193,26 @@ fn insert_const(
     Ok(())
 }
 
+fn insert_bitcast(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    _opcode: Opcode,
+    args: &'static [Type],
+    rets: &'static [Type],
+) -> Result<()> {
+    let from_var = fgen.get_variable_of_type(args[0])?;
+    let from_val = builder.use_var(from_var);
+
+    let to_var = fgen.get_variable_of_type(rets[0])?;
+
+    // TODO: We can generate little/big endian flags here.
+    let memflags = MemFlags::new();
+
+    let res = builder.ins().bitcast(rets[0], memflags, from_val);
+    builder.def_var(to_var, res);
+    Ok(())
+}
+
 fn insert_load_store(
     fgen: &mut FunctionGenerator,
     builder: &mut FunctionBuilder,
@@ -224,27 +222,73 @@ fn insert_load_store(
 ) -> Result<()> {
     let ctrl_type = *rets.first().or(args.first()).unwrap();
     let type_size = ctrl_type.bytes();
-    let (address, offset) = fgen.generate_load_store_address(builder, type_size)?;
 
-    // TODO: More advanced MemFlags
-    let flags = MemFlags::new();
+    // Should we generate an aligned address
+    let is_atomic = [Opcode::AtomicLoad, Opcode::AtomicStore].contains(&opcode);
+    let is_aarch64 = matches!(fgen.target_triple.architecture, Architecture::Aarch64(_));
+    let aligned = if is_atomic && is_aarch64 {
+        // AArch64 has issues with unaligned atomics.
+        // https://github.com/bytecodealliance/wasmtime/issues/5483
+        true
+    } else {
+        bool::arbitrary(fgen.u)?
+    };
+
+    let mut flags = MemFlags::new();
+    // Even if we picked an aligned address, we can always generate unaligned memflags
+    if aligned && bool::arbitrary(fgen.u)? {
+        flags.set_aligned();
+    }
+    // If the address is aligned, then we know it won't trap
+    if aligned && bool::arbitrary(fgen.u)? {
+        flags.set_notrap();
+    }
+
+    let (address, max_offset) = fgen.generate_load_store_address(builder, type_size, aligned)?;
+
+    // Pick an offset to pass into the load/store.
+    let offset = if aligned {
+        0
+    } else {
+        fgen.u.int_in_range(0..=max_offset)? as i32
+    }
+    .into();
 
     // The variable being loaded or stored into
     let var = fgen.get_variable_of_type(ctrl_type)?;
 
-    if opcode.can_store() {
-        let val = builder.use_var(var);
+    match opcode.format() {
+        InstructionFormat::LoadNoOffset => {
+            let (inst, dfg) = builder
+                .ins()
+                .LoadNoOffset(opcode, ctrl_type, flags, address);
 
-        builder
-            .ins()
-            .Store(opcode, ctrl_type, flags, offset, val, address);
-    } else {
-        let (inst, dfg) = builder
-            .ins()
-            .Load(opcode, ctrl_type, flags, offset, address);
+            let new_val = dfg.first_result(inst);
+            builder.def_var(var, new_val);
+        }
+        InstructionFormat::StoreNoOffset => {
+            let val = builder.use_var(var);
 
-        let new_val = dfg.first_result(inst);
-        builder.def_var(var, new_val);
+            builder
+                .ins()
+                .StoreNoOffset(opcode, ctrl_type, flags, val, address);
+        }
+        InstructionFormat::Store => {
+            let val = builder.use_var(var);
+
+            builder
+                .ins()
+                .Store(opcode, ctrl_type, flags, offset, val, address);
+        }
+        InstructionFormat::Load => {
+            let (inst, dfg) = builder
+                .ins()
+                .Load(opcode, ctrl_type, flags, offset, address);
+
+            let new_val = dfg.first_result(inst);
+            builder.def_var(var, new_val);
+        }
+        _ => unimplemented!(),
     }
 
     Ok(())
@@ -258,14 +302,352 @@ type OpcodeInserter = fn(
     &'static [Type],
 ) -> Result<()>;
 
-// TODO: Derive this from the `cranelift-meta` generator.
-#[rustfmt::skip]
-const OPCODE_SIGNATURES: &'static [(
+/// Returns true if we believe this `OpcodeSignature` should compile correctly
+/// for the given target triple. We currently have a range of known issues
+/// with specific lowerings on specific backends, and we don't want to get
+/// fuzz bug reports for those. Over time our goal is to eliminate all of these
+/// exceptions.
+fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -> bool {
+    macro_rules! exceptions {
+        ( $(($($cases:pat),*)),* $(,)?) => {
+            match (op, args, rets) {
+                $( ($($cases,)* ..) => false, )*
+                _ => true,
+            }
+        }
+    }
+
+    match triple.architecture {
+        Architecture::X86_64 => {
+            exceptions!(
+                (Opcode::IaddCout, &[I8, I8]),
+                (Opcode::IaddCout, &[I16, I16]),
+                (Opcode::IaddCout, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5468
+                (Opcode::Smulhi, &[I8, I8]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5468
+                (Opcode::Umulhi, &[I8, I8]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4756
+                (Opcode::Udiv, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4770
+                (Opcode::Sdiv, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5474
+                (Opcode::Urem, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5474
+                (Opcode::Srem, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5466
+                (Opcode::Iabs, &[I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/3370
+                (Opcode::Smin, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/3370
+                (Opcode::Umin, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/3370
+                (Opcode::Smax, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/3370
+                (Opcode::Umax, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4870
+                (Opcode::Band, &[F32, F32]),
+                (Opcode::Band, &[F64, F64]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4870
+                (Opcode::Bor, &[F32, F32]),
+                (Opcode::Bor, &[F64, F64]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4870
+                (Opcode::Bxor, &[F32, F32]),
+                (Opcode::Bxor, &[F64, F64]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4870
+                (Opcode::Bnot, &[F32, F32]),
+                (Opcode::Bnot, &[F64, F64]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5041
+                (Opcode::BandNot, &[I8, I8]),
+                (Opcode::BandNot, &[I16, I16]),
+                (Opcode::BandNot, &[I32, I32]),
+                (Opcode::BandNot, &[I64, I64]),
+                (Opcode::BandNot, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4870
+                (Opcode::BandNot, &[F32, F32]),
+                (Opcode::BandNot, &[F64, F64]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5041
+                (Opcode::BorNot, &[I8, I8]),
+                (Opcode::BorNot, &[I16, I16]),
+                (Opcode::BorNot, &[I32, I32]),
+                (Opcode::BorNot, &[I64, I64]),
+                (Opcode::BorNot, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4870
+                (Opcode::BorNot, &[F32, F32]),
+                (Opcode::BorNot, &[F64, F64]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5041
+                (Opcode::BxorNot, &[I8, I8]),
+                (Opcode::BxorNot, &[I16, I16]),
+                (Opcode::BxorNot, &[I32, I32]),
+                (Opcode::BxorNot, &[I64, I64]),
+                (Opcode::BxorNot, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4870
+                (Opcode::BxorNot, &[F32, F32]),
+                (Opcode::BxorNot, &[F64, F64]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5107
+                (Opcode::Cls, &[I8], &[I8]),
+                (Opcode::Cls, &[I16], &[I16]),
+                (Opcode::Cls, &[I32], &[I32]),
+                (Opcode::Cls, &[I64], &[I64]),
+                (Opcode::Cls, &[I128], &[I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5197
+                (Opcode::Bitselect, &[I8, I8, I8]),
+                (Opcode::Bitselect, &[I16, I16, I16]),
+                (Opcode::Bitselect, &[I32, I32, I32]),
+                (Opcode::Bitselect, &[I64, I64, I64]),
+                (Opcode::Bitselect, &[I128, I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4897
+                // https://github.com/bytecodealliance/wasmtime/issues/4899
+                (Opcode::FcvtToUint, &[F32], &[I8]),
+                (Opcode::FcvtToUint, &[F32], &[I16]),
+                (Opcode::FcvtToUint, &[F32], &[I128]),
+                (Opcode::FcvtToUint, &[F64], &[I8]),
+                (Opcode::FcvtToUint, &[F64], &[I16]),
+                (Opcode::FcvtToUint, &[F64], &[I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4897
+                // https://github.com/bytecodealliance/wasmtime/issues/4899
+                (Opcode::FcvtToUintSat, &[F32], &[I8]),
+                (Opcode::FcvtToUintSat, &[F32], &[I16]),
+                (Opcode::FcvtToUintSat, &[F32], &[I128]),
+                (Opcode::FcvtToUintSat, &[F64], &[I8]),
+                (Opcode::FcvtToUintSat, &[F64], &[I16]),
+                (Opcode::FcvtToUintSat, &[F64], &[I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4897
+                // https://github.com/bytecodealliance/wasmtime/issues/4899
+                (Opcode::FcvtToSint, &[F32], &[I8]),
+                (Opcode::FcvtToSint, &[F32], &[I16]),
+                (Opcode::FcvtToSint, &[F32], &[I128]),
+                (Opcode::FcvtToSint, &[F64], &[I8]),
+                (Opcode::FcvtToSint, &[F64], &[I16]),
+                (Opcode::FcvtToSint, &[F64], &[I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4897
+                // https://github.com/bytecodealliance/wasmtime/issues/4899
+                (Opcode::FcvtToSintSat, &[F32], &[I8]),
+                (Opcode::FcvtToSintSat, &[F32], &[I16]),
+                (Opcode::FcvtToSintSat, &[F32], &[I128]),
+                (Opcode::FcvtToSintSat, &[F64], &[I8]),
+                (Opcode::FcvtToSintSat, &[F64], &[I16]),
+                (Opcode::FcvtToSintSat, &[F64], &[I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4900
+                (Opcode::FcvtFromUint, &[I128], &[F32]),
+                (Opcode::FcvtFromUint, &[I128], &[F64]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4900
+                (Opcode::FcvtFromSint, &[I128], &[F32]),
+                (Opcode::FcvtFromSint, &[I128], &[F64]),
+            )
+        }
+
+        Architecture::Aarch64(_) => {
+            exceptions!(
+                (Opcode::IaddCout, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4864
+                (Opcode::Udiv, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4864
+                (Opcode::Sdiv, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5472
+                (Opcode::Urem, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5472
+                (Opcode::Srem, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5467
+                (Opcode::Iabs, &[I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4313
+                (Opcode::Smin, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4313
+                (Opcode::Umin, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4313
+                (Opcode::Smax, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4313
+                (Opcode::Umax, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4870
+                (Opcode::Band, &[F32, F32]),
+                (Opcode::Band, &[F64, F64]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4870
+                (Opcode::Bor, &[F32, F32]),
+                (Opcode::Bor, &[F64, F64]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4870
+                (Opcode::Bxor, &[F32, F32]),
+                (Opcode::Bxor, &[F64, F64]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4870
+                (Opcode::Bnot, &[F32, F32]),
+                (Opcode::Bnot, &[F64, F64]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4870
+                (Opcode::BandNot, &[F32, F32]),
+                (Opcode::BandNot, &[F64, F64]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4870
+                (Opcode::BorNot, &[F32, F32]),
+                (Opcode::BorNot, &[F64, F64]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4870
+                (Opcode::BxorNot, &[F32, F32]),
+                (Opcode::BxorNot, &[F64, F64]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5198
+                (Opcode::Bitselect, &[I128, I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4934
+                (Opcode::FcvtToUint, &[F32]),
+                (Opcode::FcvtToUint, &[F64]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4934
+                (Opcode::FcvtToUintSat, &[F32]),
+                (Opcode::FcvtToUintSat, &[F64]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4934
+                (Opcode::FcvtToSint, &[F32]),
+                (Opcode::FcvtToSint, &[F64]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4934
+                (Opcode::FcvtToSintSat, &[F32]),
+                (Opcode::FcvtToSintSat, &[F64]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4933
+                (Opcode::FcvtFromUint, &[I128], &[F32]),
+                (Opcode::FcvtFromUint, &[I128], &[F64]),
+                // https://github.com/bytecodealliance/wasmtime/issues/4933
+                (Opcode::FcvtFromSint, &[I128], &[F32]),
+                (Opcode::FcvtFromSint, &[I128], &[F64]),
+            )
+        }
+
+        Architecture::S390x => {
+            exceptions!(
+                (Opcode::IaddCout),
+                (Opcode::Udiv, &[I128, I128]),
+                (Opcode::Sdiv, &[I128, I128]),
+                (Opcode::Urem, &[I128, I128]),
+                (Opcode::Srem, &[I128, I128]),
+                (Opcode::Smin),
+                (Opcode::Smax),
+                (Opcode::Umin),
+                (Opcode::Umax),
+                (Opcode::Band, &[F32, F32]),
+                (Opcode::Band, &[F64, F64]),
+                (Opcode::Bor, &[F32, F32]),
+                (Opcode::Bor, &[F64, F64]),
+                (Opcode::Bxor, &[F32, F32]),
+                (Opcode::Bxor, &[F64, F64]),
+                (Opcode::Bnot, &[F32, F32]),
+                (Opcode::Bnot, &[F64, F64]),
+                (Opcode::BandNot, &[F32, F32]),
+                (Opcode::BandNot, &[F64, F64]),
+                (Opcode::BorNot, &[F32, F32]),
+                (Opcode::BorNot, &[F64, F64]),
+                (Opcode::BxorNot, &[F32, F32]),
+                (Opcode::BxorNot, &[F64, F64]),
+                (Opcode::FcvtToUint, &[F32], &[I128]),
+                (Opcode::FcvtToUint, &[F64], &[I128]),
+                (Opcode::FcvtToUintSat, &[F32], &[I128]),
+                (Opcode::FcvtToUintSat, &[F64], &[I128]),
+                (Opcode::FcvtToSint, &[F32], &[I128]),
+                (Opcode::FcvtToSint, &[F64], &[I128]),
+                (Opcode::FcvtToSintSat, &[F32], &[I128]),
+                (Opcode::FcvtToSintSat, &[F64], &[I128]),
+                (Opcode::FcvtFromUint, &[I128], &[F32]),
+                (Opcode::FcvtFromUint, &[I128], &[F64]),
+                (Opcode::FcvtFromSint, &[I128], &[F32]),
+                (Opcode::FcvtFromSint, &[I128], &[F64]),
+            )
+        }
+
+        Architecture::Riscv64(_) => {
+            exceptions!(
+                // TODO
+                (Opcode::IaddCout),
+                // TODO
+                (Opcode::Udiv, &[I128, I128]),
+                // TODO
+                (Opcode::Sdiv, &[I128, I128]),
+                // TODO
+                (Opcode::Urem, &[I128, I128]),
+                // TODO
+                (Opcode::Srem, &[I128, I128]),
+                // TODO
+                (Opcode::Iabs, &[I128]),
+                // TODO
+                (Opcode::Bitselect, &[I128, I128, I128]),
+                // TODO
+                (Opcode::Bswap),
+                // https://github.com/bytecodealliance/wasmtime/issues/5523
+                (Opcode::Rotl, &[I128, I8]),
+                (Opcode::Rotl, &[I128, I16]),
+                (Opcode::Rotl, &[I128, I32]),
+                (Opcode::Rotl, &[I128, I64]),
+                (Opcode::Rotl, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5528
+                (Opcode::FcvtToUint, &[F32], &[I8]),
+                (Opcode::FcvtToUint, &[F32], &[I16]),
+                // TODO
+                (Opcode::FcvtToUint, &[F32], &[I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5528
+                (Opcode::FcvtToUint, &[F64], &[I8]),
+                (Opcode::FcvtToUint, &[F64], &[I16]),
+                // TODO
+                (Opcode::FcvtToUint, &[F64], &[I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5528
+                (Opcode::FcvtToUintSat, &[F32], &[I8]),
+                (Opcode::FcvtToUintSat, &[F32], &[I16]),
+                // TODO
+                (Opcode::FcvtToUintSat, &[F32], &[I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5528
+                (Opcode::FcvtToUintSat, &[F64], &[I8]),
+                (Opcode::FcvtToUintSat, &[F64], &[I16]),
+                // TODO
+                (Opcode::FcvtToUintSat, &[F64], &[I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5528
+                (Opcode::FcvtToSint, &[F32], &[I8]),
+                (Opcode::FcvtToSint, &[F32], &[I16]),
+                // TODO
+                (Opcode::FcvtToSint, &[F32], &[I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5528
+                (Opcode::FcvtToSint, &[F64], &[I8]),
+                (Opcode::FcvtToSint, &[F64], &[I16]),
+                // TODO
+                (Opcode::FcvtToSint, &[F64], &[I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5528
+                (Opcode::FcvtToSintSat, &[F32], &[I8]),
+                (Opcode::FcvtToSintSat, &[F32], &[I16]),
+                // TODO
+                (Opcode::FcvtToSintSat, &[F32], &[I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5528
+                (Opcode::FcvtToSintSat, &[F64], &[I8]),
+                (Opcode::FcvtToSintSat, &[F64], &[I16]),
+                // TODO
+                (Opcode::FcvtToSintSat, &[F64], &[I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5528
+                (Opcode::FcvtFromUint, &[I8], &[F32]),
+                (Opcode::FcvtFromUint, &[I8], &[F64]),
+                (Opcode::FcvtFromUint, &[I16], &[F32]),
+                (Opcode::FcvtFromUint, &[I16], &[F64]),
+                // TODO
+                (Opcode::FcvtFromUint, &[I128], &[F32]),
+                (Opcode::FcvtFromUint, &[I128], &[F64]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5528
+                (Opcode::FcvtFromSint, &[I8], &[F32]),
+                (Opcode::FcvtFromSint, &[I8], &[F64]),
+                (Opcode::FcvtFromSint, &[I16], &[F32]),
+                (Opcode::FcvtFromSint, &[I16], &[F64]),
+                // TODO
+                (Opcode::FcvtFromSint, &[I128], &[F32]),
+                (Opcode::FcvtFromSint, &[I128], &[F64]),
+                // TODO
+                (Opcode::BandNot, &[F32, F32]),
+                (Opcode::BandNot, &[F64, F64]),
+                // TODO
+                (Opcode::BorNot, &[F32, F32]),
+                (Opcode::BorNot, &[F64, F64]),
+                // TODO
+                (Opcode::BxorNot, &[F32, F32]),
+                (Opcode::BxorNot, &[F64, F64]),
+            )
+        }
+
+        _ => true,
+    }
+}
+
+type OpcodeSignature = (
     Opcode,
     &'static [Type], // Args
     &'static [Type], // Rets
     OpcodeInserter,
-)] = &[
+);
+
+// TODO: Derive this from the `cranelift-meta` generator.
+#[rustfmt::skip]
+const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::Nop, &[], &[], insert_opcode),
     // Iadd
     (Opcode::Iadd, &[I8, I8], &[I8], insert_opcode),
@@ -273,6 +655,12 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Iadd, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Iadd, &[I64, I64], &[I64], insert_opcode),
     (Opcode::Iadd, &[I128, I128], &[I128], insert_opcode),
+    // IaddCout
+    (Opcode::IaddCout, &[I8, I8], &[I8, I8], insert_opcode),
+    (Opcode::IaddCout, &[I16, I16], &[I16, I8], insert_opcode),
+    (Opcode::IaddCout, &[I32, I32], &[I32, I8], insert_opcode),
+    (Opcode::IaddCout, &[I64, I64], &[I64, I8], insert_opcode),
+    (Opcode::IaddCout, &[I128, I128], &[I128, I8], insert_opcode),
     // Isub
     (Opcode::Isub, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Isub, &[I16, I16], &[I16], insert_opcode),
@@ -285,87 +673,75 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Imul, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Imul, &[I64, I64], &[I64], insert_opcode),
     (Opcode::Imul, &[I128, I128], &[I128], insert_opcode),
+    // Smulhi
+    (Opcode::Smulhi, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Smulhi, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Smulhi, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Smulhi, &[I64, I64], &[I64], insert_opcode),
+    // Umulhi
+    (Opcode::Umulhi, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Umulhi, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Umulhi, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Umulhi, &[I64, I64], &[I64], insert_opcode),
     // Udiv
     (Opcode::Udiv, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Udiv, &[I16, I16], &[I16], insert_opcode),
     (Opcode::Udiv, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Udiv, &[I64, I64], &[I64], insert_opcode),
-    // udiv.i128 not implemented in some backends:
-    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4756
-    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4864
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Udiv, &[I128, I128], &[I128], insert_opcode),
     // Sdiv
     (Opcode::Sdiv, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Sdiv, &[I16, I16], &[I16], insert_opcode),
     (Opcode::Sdiv, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Sdiv, &[I64, I64], &[I64], insert_opcode),
-    // sdiv.i128 not implemented in some backends:
-    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4770
-    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4864
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Sdiv, &[I128, I128], &[I128], insert_opcode),
+    // Urem
+    (Opcode::Urem, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Urem, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Urem, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Urem, &[I64, I64], &[I64], insert_opcode),
+    (Opcode::Urem, &[I128, I128], &[I128], insert_opcode),
+    // Srem
+    (Opcode::Srem, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Srem, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Srem, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Srem, &[I64, I64], &[I64], insert_opcode),
+    (Opcode::Srem, &[I128, I128], &[I128], insert_opcode),
     // Ineg
     (Opcode::Ineg, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Ineg, &[I16, I16], &[I16], insert_opcode),
     (Opcode::Ineg, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Ineg, &[I64, I64], &[I64], insert_opcode),
     (Opcode::Ineg, &[I128, I128], &[I128], insert_opcode),
+    // Iabs
+    (Opcode::Iabs, &[I8], &[I8], insert_opcode),
+    (Opcode::Iabs, &[I16], &[I16], insert_opcode),
+    (Opcode::Iabs, &[I32], &[I32], insert_opcode),
+    (Opcode::Iabs, &[I64], &[I64], insert_opcode),
+    (Opcode::Iabs, &[I128], &[I128], insert_opcode),
     // Smin
-    // smin not implemented in some backends:
-    //   x64: https://github.com/bytecodealliance/wasmtime/issues/3370
-    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4313
-    #[cfg(not(target_arch = "aarch64"))]
     (Opcode::Smin, &[I8, I8], &[I8], insert_opcode),
-    #[cfg(not(target_arch = "aarch64"))]
     (Opcode::Smin, &[I16, I16], &[I16], insert_opcode),
-    #[cfg(not(target_arch = "aarch64"))]
     (Opcode::Smin, &[I32, I32], &[I32], insert_opcode),
-    #[cfg(not(target_arch = "aarch64"))]
     (Opcode::Smin, &[I64, I64], &[I64], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Smin, &[I128, I128], &[I128], insert_opcode),
     // Umin
-    // umin not implemented in some backends:
-    //   x64: https://github.com/bytecodealliance/wasmtime/issues/3370
-    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4313
-    #[cfg(not(target_arch = "aarch64"))]
     (Opcode::Umin, &[I8, I8], &[I8], insert_opcode),
-    #[cfg(not(target_arch = "aarch64"))]
     (Opcode::Umin, &[I16, I16], &[I16], insert_opcode),
-    #[cfg(not(target_arch = "aarch64"))]
     (Opcode::Umin, &[I32, I32], &[I32], insert_opcode),
-    #[cfg(not(target_arch = "aarch64"))]
     (Opcode::Umin, &[I64, I64], &[I64], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Umin, &[I128, I128], &[I128], insert_opcode),
     // Smax
-    // smax not implemented in some backends:
-    //   x64: https://github.com/bytecodealliance/wasmtime/issues/3370
-    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4313
-    #[cfg(not(target_arch = "aarch64"))]
     (Opcode::Smax, &[I8, I8], &[I8], insert_opcode),
-    #[cfg(not(target_arch = "aarch64"))]
     (Opcode::Smax, &[I16, I16], &[I16], insert_opcode),
-    #[cfg(not(target_arch = "aarch64"))]
     (Opcode::Smax, &[I32, I32], &[I32], insert_opcode),
-    #[cfg(not(target_arch = "aarch64"))]
     (Opcode::Smax, &[I64, I64], &[I64], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Smax, &[I128, I128], &[I128], insert_opcode),
     // Umax
-    // umax not implemented in some backends:
-    //   x64: https://github.com/bytecodealliance/wasmtime/issues/3370
-    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4313
-    #[cfg(not(target_arch = "aarch64"))]
     (Opcode::Umax, &[I8, I8], &[I8], insert_opcode),
-    #[cfg(not(target_arch = "aarch64"))]
     (Opcode::Umax, &[I16, I16], &[I16], insert_opcode),
-    #[cfg(not(target_arch = "aarch64"))]
     (Opcode::Umax, &[I32, I32], &[I32], insert_opcode),
-    #[cfg(not(target_arch = "aarch64"))]
     (Opcode::Umax, &[I64, I64], &[I64], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Umax, &[I128, I128], &[I128], insert_opcode),
     // Rotr
     (Opcode::Rotr, &[I8, I8], &[I8], insert_opcode),
@@ -540,11 +916,7 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Band, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Band, &[I64, I64], &[I64], insert_opcode),
     (Opcode::Band, &[I128, I128], &[I128], insert_opcode),
-    // Float bitops are currently not supported:
-    // See: https://github.com/bytecodealliance/wasmtime/issues/4870
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Band, &[F32, F32], &[F32], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Band, &[F64, F64], &[F64], insert_opcode),
     // Bor
     (Opcode::Bor, &[I8, I8], &[I8], insert_opcode),
@@ -552,11 +924,7 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Bor, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Bor, &[I64, I64], &[I64], insert_opcode),
     (Opcode::Bor, &[I128, I128], &[I128], insert_opcode),
-    // Float bitops are currently not supported:
-    // See: https://github.com/bytecodealliance/wasmtime/issues/4870
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Bor, &[F32, F32], &[F32], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Bor, &[F64, F64], &[F64], insert_opcode),
     // Bxor
     (Opcode::Bxor, &[I8, I8], &[I8], insert_opcode),
@@ -564,11 +932,7 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Bxor, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Bxor, &[I64, I64], &[I64], insert_opcode),
     (Opcode::Bxor, &[I128, I128], &[I128], insert_opcode),
-    // Float bitops are currently not supported:
-    // See: https://github.com/bytecodealliance/wasmtime/issues/4870
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Bxor, &[F32, F32], &[F32], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Bxor, &[F64, F64], &[F64], insert_opcode),
     // Bnot
     (Opcode::Bnot, &[I8, I8], &[I8], insert_opcode),
@@ -576,65 +940,31 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Bnot, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Bnot, &[I64, I64], &[I64], insert_opcode),
     (Opcode::Bnot, &[I128, I128], &[I128], insert_opcode),
-    // Float bitops are currently not supported:
-    // See: https://github.com/bytecodealliance/wasmtime/issues/4870
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Bnot, &[F32, F32], &[F32], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Bnot, &[F64, F64], &[F64], insert_opcode),
     // BandNot
-    // Some Integer ops not supported on x86: https://github.com/bytecodealliance/wasmtime/issues/5041
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::BandNot, &[I8, I8], &[I8], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::BandNot, &[I16, I16], &[I16], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::BandNot, &[I32, I32], &[I32], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::BandNot, &[I64, I64], &[I64], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::BandNot, &[I128, I128], &[I128], insert_opcode),
-    // Float bitops are currently not supported:
-    // See: https://github.com/bytecodealliance/wasmtime/issues/4870
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::BandNot, &[F32, F32], &[F32], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::BandNot, &[F64, F64], &[F64], insert_opcode),
     // BorNot
-    // Some Integer ops not supported on x86: https://github.com/bytecodealliance/wasmtime/issues/5041
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::BorNot, &[I8, I8], &[I8], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::BorNot, &[I16, I16], &[I16], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::BorNot, &[I32, I32], &[I32], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::BorNot, &[I64, I64], &[I64], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::BorNot, &[I128, I128], &[I128], insert_opcode),
-    // Float bitops are currently not supported:
-    // See: https://github.com/bytecodealliance/wasmtime/issues/4870
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::BorNot, &[F32, F32], &[F32], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::BorNot, &[F64, F64], &[F64], insert_opcode),
     // BxorNot
-    // Some Integer ops not supported on x86: https://github.com/bytecodealliance/wasmtime/issues/5041
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::BxorNot, &[I8, I8], &[I8], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::BxorNot, &[I16, I16], &[I16], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::BxorNot, &[I32, I32], &[I32], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::BxorNot, &[I64, I64], &[I64], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::BxorNot, &[I128, I128], &[I128], insert_opcode),
-    // Float bitops are currently not supported:
-    // See: https://github.com/bytecodealliance/wasmtime/issues/4870
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::BxorNot, &[F32, F32], &[F32], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::BxorNot, &[F64, F64], &[F64], insert_opcode),
     // Bitrev
     (Opcode::Bitrev, &[I8], &[I8], insert_opcode),
@@ -649,17 +979,10 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Clz, &[I64], &[I64], insert_opcode),
     (Opcode::Clz, &[I128], &[I128], insert_opcode),
     // Cls
-    // cls not implemented in some backends:
-    //   x64: https://github.com/bytecodealliance/wasmtime/issues/5107
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Cls, &[I8], &[I8], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Cls, &[I16], &[I16], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Cls, &[I32], &[I32], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Cls, &[I64], &[I64], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Cls, &[I128], &[I128], insert_opcode),
     // Ctz
     (Opcode::Ctz, &[I8], &[I8], insert_opcode),
@@ -705,23 +1028,12 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Bswap, &[I64], &[I64], insert_opcode),
     (Opcode::Bswap, &[I128], &[I128], insert_opcode),
     // Bitselect
-    // TODO: Some ops disabled:
-    //   x64: https://github.com/bytecodealliance/wasmtime/issues/5197
-    //   AArch64: https://github.com/bytecodealliance/wasmtime/issues/5198
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Bitselect, &[I8, I8, I8], &[I8], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Bitselect, &[I16, I16, I16], &[I16], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Bitselect, &[I32, I32, I32], &[I32], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Bitselect, &[I64, I64, I64], &[I64], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Bitselect, &[I128, I128, I128], &[I128], insert_opcode),
     // Select
-    // TODO: Some ops disabled:
-    //   x64: https://github.com/bytecodealliance/wasmtime/issues/5199
-    //   AArch64: https://github.com/bytecodealliance/wasmtime/issues/5200
     (Opcode::Select, &[I8, I8, I8], &[I8], insert_opcode),
     (Opcode::Select, &[I8, I16, I16], &[I16], insert_opcode),
     (Opcode::Select, &[I8, I32, I32], &[I32], insert_opcode),
@@ -742,44 +1054,37 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Select, &[I64, I32, I32], &[I32], insert_opcode),
     (Opcode::Select, &[I64, I64, I64], &[I64], insert_opcode),
     (Opcode::Select, &[I64, I128, I128], &[I128], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Select, &[I128, I8, I8], &[I8], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Select, &[I128, I16, I16], &[I16], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Select, &[I128, I32, I32], &[I32], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Select, &[I128, I64, I64], &[I64], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Select, &[I128, I128, I128], &[I128], insert_opcode),
     // SelectSpectreGuard
-    // select_spectre_guard is only implemented on x86_64 and aarch64
-    // when a icmp is preceding it.
-    (Opcode::SelectSpectreGuard, &[I8, I8, I8], &[I8], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I8, I16, I16], &[I16], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I8, I32, I32], &[I32], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I8, I64, I64], &[I64], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I8, I128, I128], &[I128], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I16, I8, I8], &[I8], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I16, I16, I16], &[I16], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I16, I32, I32], &[I32], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I16, I64, I64], &[I64], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I16, I128, I128], &[I128], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I32, I8, I8], &[I8], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I32, I16, I16], &[I16], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I32, I32, I32], &[I32], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I32, I64, I64], &[I64], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I32, I128, I128], &[I128], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I64, I8, I8], &[I8], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I64, I16, I16], &[I16], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I64, I32, I32], &[I32], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I64, I64, I64], &[I64], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I64, I128, I128], &[I128], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I128, I8, I8], &[I8], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I128, I16, I16], &[I16], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I128, I32, I32], &[I32], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I128, I64, I64], &[I64], insert_select_spectre_guard),
-    (Opcode::SelectSpectreGuard, &[I128, I128, I128], &[I128], insert_select_spectre_guard),
+    (Opcode::SelectSpectreGuard, &[I8, I8, I8], &[I8], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I8, I16, I16], &[I16], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I8, I32, I32], &[I32], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I8, I64, I64], &[I64], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I8, I128, I128], &[I128], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I16, I8, I8], &[I8], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I16, I16, I16], &[I16], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I16, I32, I32], &[I32], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I16, I64, I64], &[I64], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I16, I128, I128], &[I128], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I32, I8, I8], &[I8], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I32, I16, I16], &[I16], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I32, I32, I32], &[I32], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I32, I64, I64], &[I64], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I32, I128, I128], &[I128], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I64, I8, I8], &[I8], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I64, I16, I16], &[I16], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I64, I32, I32], &[I32], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I64, I64, I64], &[I64], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I64, I128, I128], &[I128], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I128, I8, I8], &[I8], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I128, I16, I16], &[I16], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I128, I32, I32], &[I32], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I128, I64, I64], &[I64], insert_opcode),
+    (Opcode::SelectSpectreGuard, &[I128, I128, I128], &[I128], insert_opcode),
     // Fadd
     (Opcode::Fadd, &[F32, F32], &[F32], insert_opcode),
     (Opcode::Fadd, &[F64, F64], &[F64], insert_opcode),
@@ -831,121 +1136,75 @@ const OPCODE_SIGNATURES: &'static [(
     // Nearest
     (Opcode::Nearest, &[F32], &[F32], insert_opcode),
     (Opcode::Nearest, &[F64], &[F64], insert_opcode),
+    // Fpromote
+    (Opcode::Fpromote, &[F32], &[F64], insert_opcode),
+    // Fdemote
+    (Opcode::Fdemote, &[F64], &[F32], insert_opcode),
     // FcvtToUint
-    // TODO: Some ops disabled:
-    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4897
-    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4899
-    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4934
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::FcvtToUint, &[F32], &[I8], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::FcvtToUint, &[F32], &[I16], insert_opcode),
     (Opcode::FcvtToUint, &[F32], &[I32], insert_opcode),
     (Opcode::FcvtToUint, &[F32], &[I64], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::FcvtToUint, &[F32], &[I128], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::FcvtToUint, &[F64], &[I8], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::FcvtToUint, &[F64], &[I16], insert_opcode),
     (Opcode::FcvtToUint, &[F64], &[I32], insert_opcode),
     (Opcode::FcvtToUint, &[F64], &[I64], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::FcvtToUint, &[F64], &[I128], insert_opcode),
     // FcvtToUintSat
-    // TODO: Some ops disabled:
-    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4897
-    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4899
-    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4934
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::FcvtToUintSat, &[F32], &[I8], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::FcvtToUintSat, &[F32], &[I16], insert_opcode),
     (Opcode::FcvtToUintSat, &[F32], &[I32], insert_opcode),
     (Opcode::FcvtToUintSat, &[F32], &[I64], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::FcvtToUintSat, &[F32], &[I128], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::FcvtToUintSat, &[F64], &[I8], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::FcvtToUintSat, &[F64], &[I16], insert_opcode),
     (Opcode::FcvtToUintSat, &[F64], &[I32], insert_opcode),
     (Opcode::FcvtToUintSat, &[F64], &[I64], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::FcvtToUintSat, &[F64], &[I128], insert_opcode),
     // FcvtToSint
-    // TODO: Some ops disabled:
-    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4897
-    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4899
-    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4934
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::FcvtToSint, &[F32], &[I8], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::FcvtToSint, &[F32], &[I16], insert_opcode),
     (Opcode::FcvtToSint, &[F32], &[I32], insert_opcode),
     (Opcode::FcvtToSint, &[F32], &[I64], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::FcvtToSint, &[F32], &[I128], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::FcvtToSint, &[F64], &[I8], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::FcvtToSint, &[F64], &[I16], insert_opcode),
     (Opcode::FcvtToSint, &[F64], &[I32], insert_opcode),
     (Opcode::FcvtToSint, &[F64], &[I64], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::FcvtToSint, &[F64], &[I128], insert_opcode),
     // FcvtToSintSat
-    // TODO: Some ops disabled:
-    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4897
-    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4899
-    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4934
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::FcvtToSintSat, &[F32], &[I8], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::FcvtToSintSat, &[F32], &[I16], insert_opcode),
     (Opcode::FcvtToSintSat, &[F32], &[I32], insert_opcode),
     (Opcode::FcvtToSintSat, &[F32], &[I64], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::FcvtToSintSat, &[F32], &[I128], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::FcvtToSintSat, &[F64], &[I8], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::FcvtToSintSat, &[F64], &[I16], insert_opcode),
     (Opcode::FcvtToSintSat, &[F64], &[I32], insert_opcode),
     (Opcode::FcvtToSintSat, &[F64], &[I64], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::FcvtToSintSat, &[F64], &[I128], insert_opcode),
     // FcvtFromUint
-    // TODO: Some ops disabled:
-    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4900
-    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4933
     (Opcode::FcvtFromUint, &[I8], &[F32], insert_opcode),
     (Opcode::FcvtFromUint, &[I16], &[F32], insert_opcode),
     (Opcode::FcvtFromUint, &[I32], &[F32], insert_opcode),
     (Opcode::FcvtFromUint, &[I64], &[F32], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::FcvtFromUint, &[I128], &[F32], insert_opcode),
     (Opcode::FcvtFromUint, &[I8], &[F64], insert_opcode),
     (Opcode::FcvtFromUint, &[I16], &[F64], insert_opcode),
     (Opcode::FcvtFromUint, &[I32], &[F64], insert_opcode),
     (Opcode::FcvtFromUint, &[I64], &[F64], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::FcvtFromUint, &[I128], &[F64], insert_opcode),
     // FcvtFromSint
-    // TODO: Some ops disabled:
-    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4900
-    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4933
     (Opcode::FcvtFromSint, &[I8], &[F32], insert_opcode),
     (Opcode::FcvtFromSint, &[I16], &[F32], insert_opcode),
     (Opcode::FcvtFromSint, &[I32], &[F32], insert_opcode),
     (Opcode::FcvtFromSint, &[I64], &[F32], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::FcvtFromSint, &[I128], &[F32], insert_opcode),
     (Opcode::FcvtFromSint, &[I8], &[F64], insert_opcode),
     (Opcode::FcvtFromSint, &[I16], &[F64], insert_opcode),
     (Opcode::FcvtFromSint, &[I32], &[F64], insert_opcode),
     (Opcode::FcvtFromSint, &[I64], &[F64], insert_opcode),
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::FcvtFromSint, &[I128], &[F64], insert_opcode),
     // Fcmp
     (Opcode::Fcmp, &[F32, F32], &[I8], insert_cmp),
@@ -956,6 +1215,8 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Icmp, &[I32, I32], &[I8], insert_cmp),
     (Opcode::Icmp, &[I64, I64], &[I8], insert_cmp),
     (Opcode::Icmp, &[I128, I128], &[I8], insert_cmp),
+    // Fence
+    (Opcode::Fence, &[], &[], insert_opcode),
     // Stack Access
     (Opcode::StackStore, &[I8], &[], insert_stack_store),
     (Opcode::StackStore, &[I16], &[], insert_stack_store),
@@ -995,6 +1256,11 @@ const OPCODE_SIGNATURES: &'static [(
     // Opcode::Sload16x4
     // Opcode::Uload32x2
     // Opcode::Sload32x2
+    // AtomicLoad
+    (Opcode::AtomicLoad, &[], &[I8], insert_load_store),
+    (Opcode::AtomicLoad, &[], &[I16], insert_load_store),
+    (Opcode::AtomicLoad, &[], &[I32], insert_load_store),
+    (Opcode::AtomicLoad, &[], &[I64], insert_load_store),
     // Stores
     (Opcode::Store, &[I8], &[], insert_load_store),
     (Opcode::Store, &[I16], &[], insert_load_store),
@@ -1010,6 +1276,16 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Istore16, &[I32], &[], insert_load_store),
     (Opcode::Istore16, &[I64], &[], insert_load_store),
     (Opcode::Istore32, &[I64], &[], insert_load_store),
+    // AtomicStore
+    (Opcode::AtomicStore, &[I8], &[], insert_load_store),
+    (Opcode::AtomicStore, &[I16], &[], insert_load_store),
+    (Opcode::AtomicStore, &[I32], &[], insert_load_store),
+    (Opcode::AtomicStore, &[I64], &[], insert_load_store),
+    // Bitcast
+    (Opcode::Bitcast, &[F32], &[I32], insert_bitcast),
+    (Opcode::Bitcast, &[I32], &[F32], insert_bitcast),
+    (Opcode::Bitcast, &[F64], &[I64], insert_bitcast),
+    (Opcode::Bitcast, &[I64], &[F64], insert_bitcast),
     // Integer Consts
     (Opcode::Iconst, &[], &[I8], insert_const),
     (Opcode::Iconst, &[], &[I16], insert_const),
@@ -1039,6 +1315,7 @@ where
     u: &'r mut Unstructured<'data>,
     config: &'r Config,
     resources: Resources,
+    target_triple: Triple,
 }
 
 #[derive(Debug, Clone)]
@@ -1101,11 +1378,12 @@ impl<'r, 'data> FunctionGenerator<'r, 'data>
 where
     'data: 'r,
 {
-    pub fn new(u: &'r mut Unstructured<'data>, config: &'r Config) -> Self {
+    pub fn new(u: &'r mut Unstructured<'data>, config: &'r Config, target_triple: Triple) -> Self {
         Self {
             u,
             config,
             resources: Resources::default(),
+            target_triple,
         }
     }
 
@@ -1128,7 +1406,6 @@ where
     fn generate_type(&mut self) -> Result<Type> {
         // TODO: It would be nice if we could get these directly from cranelift
         let scalars = [
-            // IFLAGS, FFLAGS,
             I8, I16, I32, I64, I128, F32, F64,
             // R32, R64,
         ];
@@ -1142,10 +1419,14 @@ where
         let value_type = self.generate_type()?;
         // TODO: There are more argument purposes to be explored...
         let purpose = ArgumentPurpose::Normal;
-        let extension = match self.u.int_in_range(0..=2)? {
-            2 => ArgumentExtension::Sext,
-            1 => ArgumentExtension::Uext,
-            _ => ArgumentExtension::None,
+        let extension = if value_type.is_int() {
+            *self.u.choose(&[
+                ArgumentExtension::Sext,
+                ArgumentExtension::Uext,
+                ArgumentExtension::None,
+            ])?
+        } else {
+            ArgumentExtension::None
         };
 
         Ok(AbiParam {
@@ -1185,34 +1466,42 @@ where
     /// we don't run the risk of returning them from a function, which would make the fuzzer
     /// complain since they are different from the interpreter to the backend.
     ///
-    /// The address is not guaranteed to be valid, but there's a chance that it is.
+    /// `min_size`: Controls the amount of space that the address should have.
     ///
-    /// `min_size`: Controls the amount of space that the address should have.This is not
-    /// guaranteed to be respected
+    /// `aligned`: When passed as true, the resulting address is guaranteed to be aligned
+    /// on an 8 byte boundary.
+    ///
+    /// Returns a valid address and the maximum possible offset that still respects `min_size`.
     fn generate_load_store_address(
         &mut self,
         builder: &mut FunctionBuilder,
         min_size: u32,
-    ) -> Result<(Value, Offset32)> {
-        // TODO: Currently our only source of addresses is stack_addr, but we should
-        // add heap_addr, global_value, symbol_value eventually
+        aligned: bool,
+    ) -> Result<(Value, u32)> {
+        // TODO: Currently our only source of addresses is stack_addr, but we
+        // should add global_value, symbol_value eventually
         let (addr, available_size) = {
             let (ss, slot_size) = self.stack_slot_with_size(min_size)?;
-            let max_offset = slot_size.saturating_sub(min_size);
-            let offset = self.u.int_in_range(0..=max_offset)? as i32;
-            let base_addr = builder.ins().stack_addr(I64, ss, offset);
-            let available_size = (slot_size as i32).saturating_sub(offset);
+
+            // stack_slot_with_size guarantees that slot_size >= min_size
+            let max_offset = slot_size - min_size;
+            let offset = if aligned {
+                self.u.int_in_range(0..=max_offset / min_size)? * min_size
+            } else {
+                self.u.int_in_range(0..=max_offset)?
+            };
+
+            let base_addr = builder.ins().stack_addr(I64, ss, offset as i32);
+            let available_size = slot_size.saturating_sub(offset);
             (base_addr, available_size)
         };
 
         // TODO: Insert a bunch of amode opcodes here to modify the address!
 
         // Now that we have an address and a size, we just choose a random offset to return to the
-        // caller. Try to preserve min_size bytes.
-        let max_offset = available_size.saturating_sub(min_size as i32);
-        let offset = self.u.int_in_range(0..=max_offset)? as i32;
-
-        Ok((addr, offset.into()))
+        // caller. Preserving min_size bytes.
+        let max_offset = available_size.saturating_sub(min_size);
+        Ok((addr, max_offset))
     }
 
     /// Get a variable of type `ty` from the current function
@@ -1325,13 +1614,9 @@ where
                 let condbr_types = [I8, I16, I32, I64, I128];
                 let _type = *self.u.choose(&condbr_types[..])?;
                 let val = builder.use_var(self.get_variable_of_type(_type)?);
-
-                if bool::arbitrary(self.u)? {
-                    builder.ins().brz(val, left, &left_args[..]);
-                } else {
-                    builder.ins().brnz(val, left, &left_args[..]);
-                }
-                builder.ins().jump(right, &right_args[..]);
+                builder
+                    .ins()
+                    .brif(val, left, &left_args[..], right, &right_args[..]);
             }
             BlockTerminator::BrTable(default, targets) => {
                 // Create jump tables on demand
@@ -1361,6 +1646,14 @@ where
     fn generate_instructions(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
         for _ in 0..self.param(&self.config.instructions_per_block)? {
             let (op, args, rets, inserter) = *self.u.choose(OPCODE_SIGNATURES)?;
+
+            // We filter out instructions that aren't supported by the target at this point instead
+            // of building a single vector of valid instructions at the beginning of function
+            // generation, to avoid invalidating the corpus when instructions are enabled/disabled.
+            if !valid_for_target(&self.target_triple, op, args, rets) {
+                return Err(arbitrary::Error::IncorrectFormat.into());
+            }
+
             inserter(self, builder, op, args, rets)?;
         }
 

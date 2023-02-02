@@ -33,9 +33,9 @@ block0(v0: i64):
 }
 
 ; block0:
-;   lui t2,3
-;   addi t2,t2,57
-;   atomic_store.i64 t2,(a0)
+;   lui a1,3
+;   addi a1,a1,57
+;   atomic_store.i64 a1,(a0)
 ;   ret
 
 function %atomic_store_i32(i32, i64) {
@@ -69,8 +69,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   lui t2,3
-;   addi t2,t2,57
-;   atomic_store.i32 t2,(a0)
+;   lui a1,3
+;   addi a1,a1,57
+;   atomic_store.i32 a1,(a0)
 ;   ret
 

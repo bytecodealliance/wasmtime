@@ -118,7 +118,6 @@ impl Into<AMode> for StackAMode {
 }
 
 /// risc-v always take two register to compare
-/// brz can be compare with zero register which has the value 0
 #[derive(Clone, Copy, Debug)]
 pub struct IntegerCompare {
     pub(crate) kind: IntCC,
@@ -328,7 +327,7 @@ impl FpuOPRR {
     }
 
     pub(crate) fn float_convert_2_int_op(from: Type, is_type_signed: bool, to: Type) -> Self {
-        let type_32 = to.bits() == 32;
+        let type_32 = to.bits() <= 32;
         match from {
             F32 => {
                 if is_type_signed {

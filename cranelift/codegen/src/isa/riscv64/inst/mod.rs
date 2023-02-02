@@ -6,11 +6,10 @@
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
 pub use crate::ir::condcodes::IntCC;
-use crate::ir::types::{F32, F64, FFLAGS, I128, I16, I32, I64, I8, IFLAGS, R32, R64};
+use crate::ir::types::{F32, F64, I128, I16, I32, I64, I8, R32, R64};
 
 pub use crate::ir::{ExternalName, MemFlags, Opcode, SourceLoc, Type, ValueLabel};
 use crate::isa::CallConv;
-use crate::machinst::isle::WritableReg;
 use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
 
@@ -18,7 +17,7 @@ pub use crate::ir::condcodes::FloatCC;
 
 use alloc::vec::Vec;
 use regalloc2::{PRegSet, VReg};
-use smallvec::SmallVec;
+use smallvec::{smallvec, SmallVec};
 use std::boxed::Box;
 use std::string::{String, ToString};
 
@@ -194,44 +193,63 @@ impl Inst {
     pub(crate) fn load_imm12(rd: Writable<Reg>, imm: Imm12) -> Inst {
         Inst::AluRRImm12 {
             alu_op: AluOPRRI::Addi,
-            rd: rd,
+            rd,
             rs: zero_reg(),
             imm12: imm,
         }
     }
 
     /// Immediates can be loaded using lui and addi instructions.
-    fn load_const_imm(rd: Writable<Reg>, value: u64) -> Option<SmallInstVec<Inst>> {
+    fn load_const_imm<F: FnMut(Type) -> Writable<Reg>>(
+        rd: Writable<Reg>,
+        value: u64,
+        alloc_tmp: &mut F,
+    ) -> Option<SmallInstVec<Inst>> {
         Inst::generate_imm(value, |imm20, imm12| {
             let mut insts = SmallVec::new();
-            imm20.map(|x| insts.push(Inst::Lui { rd, imm: x }));
-            imm12.map(|x| {
-                let imm20_is_none = imm20.is_none();
-                let rs = if imm20_is_none {
-                    zero_reg()
-                } else {
-                    rd.to_reg()
-                };
+
+            let rs = if let Some(imm) = imm20 {
+                let rd = if imm12.is_some() { alloc_tmp(I64) } else { rd };
+                insts.push(Inst::Lui { rd, imm });
+                rd.to_reg()
+            } else {
+                zero_reg()
+            };
+
+            if let Some(imm12) = imm12 {
                 insts.push(Inst::AluRRImm12 {
                     alu_op: AluOPRRI::Addi,
                     rd,
                     rs,
-                    imm12: x,
+                    imm12,
                 })
-            });
+            }
 
             insts
         })
     }
 
-    pub(crate) fn load_constant_u32(rd: Writable<Reg>, value: u64) -> SmallInstVec<Inst> {
-        let insts = Inst::load_const_imm(rd, value);
-        insts.unwrap_or(LoadConstant::U32(value as u32).load_constant(rd))
+    pub(crate) fn load_constant_u32<F: FnMut(Type) -> Writable<Reg>>(
+        rd: Writable<Reg>,
+        value: u64,
+        alloc_tmp: &mut F,
+    ) -> SmallInstVec<Inst> {
+        let insts = Inst::load_const_imm(rd, value, alloc_tmp);
+        insts.unwrap_or_else(|| {
+            smallvec![Inst::LoadConst32 {
+                rd,
+                imm: value as u32
+            }]
+        })
     }
 
-    pub fn load_constant_u64(rd: Writable<Reg>, value: u64) -> SmallInstVec<Inst> {
-        let insts = Inst::load_const_imm(rd, value);
-        insts.unwrap_or(LoadConstant::U64(value).load_constant(rd))
+    pub fn load_constant_u64<F: FnMut(Type) -> Writable<Reg>>(
+        rd: Writable<Reg>,
+        value: u64,
+        alloc_tmp: &mut F,
+    ) -> SmallInstVec<Inst> {
+        let insts = Inst::load_const_imm(rd, value, alloc_tmp);
+        insts.unwrap_or_else(|| smallvec![Inst::LoadConst64 { rd, imm: value }])
     }
 
     pub(crate) fn construct_auipc_and_jalr(
@@ -255,13 +273,18 @@ impl Inst {
     }
 
     /// Create instructions that load a 32-bit floating-point constant.
-    pub fn load_fp_constant32(
+    pub fn load_fp_constant32<F: FnMut(Type) -> Writable<Reg>>(
         rd: Writable<Reg>,
         const_data: u32,
-        tmp: Writable<Reg>,
+        mut alloc_tmp: F,
     ) -> SmallVec<[Inst; 4]> {
         let mut insts = SmallVec::new();
-        insts.extend(Self::load_constant_u32(tmp, const_data as u64));
+        let tmp = alloc_tmp(I64);
+        insts.extend(Self::load_constant_u32(
+            tmp,
+            const_data as u64,
+            &mut alloc_tmp,
+        ));
         insts.push(Inst::FpuRR {
             frm: None,
             alu_op: FpuOPRR::move_x_to_f_op(F32),
@@ -272,13 +295,14 @@ impl Inst {
     }
 
     /// Create instructions that load a 64-bit floating-point constant.
-    pub fn load_fp_constant64(
+    pub fn load_fp_constant64<F: FnMut(Type) -> Writable<Reg>>(
         rd: Writable<Reg>,
         const_data: u64,
-        tmp: WritableReg,
+        mut alloc_tmp: F,
     ) -> SmallVec<[Inst; 4]> {
         let mut insts = SmallInstVec::new();
-        insts.extend(Self::load_constant_u64(tmp, const_data));
+        let tmp = alloc_tmp(I64);
+        insts.extend(Self::load_constant_u64(tmp, const_data, &mut alloc_tmp));
         insts.push(Inst::FpuRR {
             frm: None,
             alu_op: FpuOPRR::move_x_to_f_op(F64),
@@ -318,11 +342,10 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(index);
             collector.reg_early_def(tmp1);
         }
-        &Inst::BrTableCheck { index, .. } => {
-            collector.reg_use(index);
-        }
         &Inst::Auipc { rd, .. } => collector.reg_def(rd),
         &Inst::Lui { rd, .. } => collector.reg_def(rd),
+        &Inst::LoadConst32 { rd, .. } => collector.reg_def(rd),
+        &Inst::LoadConst64 { rd, .. } => collector.reg_def(rd),
         &Inst::AluRRR { rd, rs1, rs2, .. } => {
             collector.reg_use(rs1);
             collector.reg_use(rs2);
@@ -384,12 +407,6 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::TrapIf { test, .. } => {
             collector.reg_use(test);
         }
-        &Inst::TrapFf { x, y, tmp, .. } => {
-            collector.reg_use(x);
-            collector.reg_use(y);
-            collector.reg_early_def(tmp);
-        }
-
         &Inst::Jal { .. } => {}
         &Inst::CondBr { kind, .. } => {
             collector.reg_use(kind.rs1);
@@ -406,6 +423,10 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::VirtualSPOffsetAdj { .. } => {}
         &Inst::Mov { rd, rm, .. } => {
             collector.reg_use(rm);
+            collector.reg_def(rd);
+        }
+        &Inst::MovFromPReg { rd, rm } => {
+            debug_assert!([px_reg(2), px_reg(8)].contains(&rm));
             collector.reg_def(rd);
         }
         &Inst::Fence { .. } => {}
@@ -433,11 +454,6 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(src);
             collector.reg_def(rd);
         }
-        &Inst::Fcmp { rd, rs1, rs2, .. } => {
-            collector.reg_use(rs1);
-            collector.reg_use(rs2);
-            collector.reg_early_def(rd);
-        }
         &Inst::Select {
             ref dst,
             condition,
@@ -448,7 +464,9 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(condition);
             collector.reg_uses(x.regs());
             collector.reg_uses(y.regs());
-            collector.reg_defs(&dst[..]);
+            for d in dst.iter() {
+                collector.reg_early_def(d.clone());
+            }
         }
         &Inst::ReferenceCheck { rd, x, .. } => {
             collector.reg_use(x);
@@ -475,7 +493,9 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         } => {
             collector.reg_uses(x.regs());
             collector.reg_uses(y.regs());
-            collector.reg_defs(&dst[..]);
+            for d in dst.iter() {
+                collector.reg_early_def(d.clone());
+            }
         }
 
         &Inst::Csr { rd, rs, .. } => {
@@ -518,7 +538,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(test);
             collector.reg_uses(x.regs());
             collector.reg_uses(y.regs());
-            rd.iter().for_each(|r| collector.reg_def(*r));
+            rd.iter().for_each(|r| collector.reg_early_def(*r));
         }
         &Inst::RawData { .. } => {}
         &Inst::AtomicStore { src, p, .. } => {
@@ -657,7 +677,17 @@ impl MachInst for Inst {
     }
 
     fn is_included_in_clobbers(&self) -> bool {
-        true
+        match self {
+            &Inst::Args { .. } => false,
+            _ => true,
+        }
+    }
+
+    fn is_trap(&self) -> bool {
+        match self {
+            Self::Udf { .. } => true,
+            _ => false,
+        }
     }
 
     fn is_args(&self) -> bool {
@@ -673,9 +703,7 @@ impl MachInst for Inst {
             &Inst::CondBr { .. } => MachTerminator::Cond,
             &Inst::Jalr { .. } => MachTerminator::Uncond,
             &Inst::Ret { .. } => MachTerminator::Ret,
-            // BrTableCheck is a check before BrTable
-            // can lead transfer to default_.
-            &Inst::BrTable { .. } | &Inst::BrTableCheck { .. } => MachTerminator::Indirect,
+            &Inst::BrTable { .. } => MachTerminator::Indirect,
             _ => MachTerminator::None,
         }
     }
@@ -687,35 +715,6 @@ impl MachInst for Inst {
             ty,
         };
         x
-    }
-
-    fn gen_constant<F: FnMut(Type) -> Writable<Reg>>(
-        to_regs: ValueRegs<Writable<Reg>>,
-        value: u128,
-        ty: Type,
-        mut alloc_tmp: F,
-    ) -> SmallVec<[Inst; 4]> {
-        if (ty.bits() <= 64 && ty.is_int()) || ty == R32 || ty == R64 {
-            return Inst::load_constant_u64(to_regs.only_reg().unwrap(), value as u64);
-        };
-        match ty {
-            F32 => {
-                Inst::load_fp_constant32(to_regs.only_reg().unwrap(), value as u32, alloc_tmp(I64))
-            }
-            F64 => {
-                Inst::load_fp_constant64(to_regs.only_reg().unwrap(), value as u64, alloc_tmp(I64))
-            }
-            I128 => {
-                let mut insts = SmallInstVec::new();
-                insts.extend(Inst::load_constant_u64(
-                    to_regs.regs()[0],
-                    (value >> 64) as u64,
-                ));
-                insts.extend(Inst::load_constant_u64(to_regs.regs()[1], value as u64));
-                return insts;
-            }
-            _ => unreachable!("vector type not implemented now."),
-        }
     }
 
     fn gen_nop(preferred_size: usize) -> Inst {
@@ -738,8 +737,6 @@ impl MachInst for Inst {
             F32 => Ok((&[RegClass::Float], &[F32])),
             F64 => Ok((&[RegClass::Float], &[F64])),
             I128 => Ok((&[RegClass::Int, RegClass::Int], &[I64, I64])),
-            IFLAGS => Ok((&[RegClass::Int], &[IFLAGS])),
-            FFLAGS => Ok((&[RegClass::Int], &[FFLAGS])),
             _ => Err(CodegenError::Unsupported(format!(
                 "Unexpected SSA-value type: {}",
                 ty
@@ -755,7 +752,7 @@ impl MachInst for Inst {
 
     fn worst_case_size() -> CodeOffset {
         // calculate by test function riscv64_worst_case_instruction_size()
-        100
+        116
     }
 
     fn ref_type_regclass(_settings: &settings::Flags) -> RegClass {
@@ -1171,17 +1168,6 @@ impl Inst {
                 let dst = format_regs(&dst[..], allocs);
                 format!("{} {},{},{}##ty={}", op.op_name(), dst, x, y, ty,)
             }
-            &Inst::BrTableCheck {
-                index,
-                targets_len,
-                default_,
-            } => {
-                let index = format_reg(index, allocs);
-                format!(
-                    "br_table_check {}##targets_len={} default_={}",
-                    index, targets_len, default_
-                )
-            }
             &Inst::BrTable {
                 index,
                 tmp1,
@@ -1218,7 +1204,28 @@ impl Inst {
             &Inst::Lui { rd, ref imm } => {
                 format!("{} {},{}", "lui", format_reg(rd.to_reg(), allocs), imm.bits)
             }
+            &Inst::LoadConst32 { rd, imm } => {
+                use std::fmt::Write;
 
+                let rd = format_reg(rd.to_reg(), allocs);
+                let mut buf = String::new();
+                write!(&mut buf, "auipc {},0; ", rd).unwrap();
+                write!(&mut buf, "ld {},12({}); ", rd, rd).unwrap();
+                write!(&mut buf, "j {}; ", Inst::INSTRUCTION_SIZE + 4).unwrap();
+                write!(&mut buf, ".4byte 0x{:x}", imm).unwrap();
+                buf
+            }
+            &Inst::LoadConst64 { rd, imm } => {
+                use std::fmt::Write;
+
+                let rd = format_reg(rd.to_reg(), allocs);
+                let mut buf = String::new();
+                write!(&mut buf, "auipc {},0; ", rd).unwrap();
+                write!(&mut buf, "ld {},12({}); ", rd, rd).unwrap();
+                write!(&mut buf, "j {}; ", Inst::INSTRUCTION_SIZE + 8).unwrap();
+                write!(&mut buf, ".8byte 0x{:x}", imm).unwrap();
+                buf
+            }
             &Inst::AluRRR {
                 alu_op,
                 rd,
@@ -1352,25 +1359,6 @@ impl Inst {
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!("{} {},{}", op.op_name(), rd, base,)
             }
-            &Inst::Fcmp {
-                rd,
-                cc,
-                ty,
-                rs1,
-                rs2,
-            } => {
-                let rs1 = format_reg(rs1, allocs);
-                let rs2 = format_reg(rs2, allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
-                format!(
-                    "f{}.{} {},{},{}",
-                    cc,
-                    if ty == F32 { "s" } else { "d" },
-                    rd,
-                    rs1,
-                    rs2,
-                )
-            }
             &Inst::Store {
                 to,
                 src,
@@ -1392,8 +1380,16 @@ impl Inst {
                 }
                 s
             }
-            &Inst::Ret { .. } => {
-                format!("ret")
+            &Inst::Ret { ref rets } => {
+                let mut s = "ret".to_string();
+                let mut empty_allocs = AllocationConsumer::default();
+                for ret in rets {
+                    use std::fmt::Write;
+                    let preg = format_reg(ret.preg, &mut empty_allocs);
+                    let vreg = format_reg(ret.vreg, allocs);
+                    write!(&mut s, " {}={}", vreg, preg).unwrap();
+                }
+                s
             }
 
             &MInst::Extend {
@@ -1433,22 +1429,6 @@ impl Inst {
                 let rs2 = format_reg(rs2, allocs);
                 format!("trap_ifc {}##({} {} {})", trap_code, rs1, cc, rs2)
             }
-            &MInst::TrapFf {
-                cc,
-                x,
-                y,
-                ty,
-                trap_code,
-                tmp,
-            } => format!(
-                "trap_ff_{} {} {},{}##tmp={} ty={}",
-                cc,
-                trap_code,
-                format_reg(x, allocs),
-                format_reg(y, allocs),
-                format_reg(tmp.to_reg(), allocs),
-                ty,
-            ),
             &MInst::Jal { dest, .. } => {
                 format!("{} {}", "j", dest)
             }
@@ -1519,6 +1499,12 @@ impl Inst {
                     "mv"
                 };
                 format!("{} {},{}", v, rd, rm)
+            }
+            &MInst::MovFromPReg { rd, rm } => {
+                let rd = format_reg(rd.to_reg(), allocs);
+                debug_assert!([px_reg(2), px_reg(8)].contains(&rm));
+                let rm = reg_name(Reg::from(rm));
+                format!("mv {},{}", rd, rm)
             }
             &MInst::Fence { pred, succ } => {
                 format!(

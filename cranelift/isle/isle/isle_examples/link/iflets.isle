@@ -1,12 +1,12 @@
 (type u32 (primitive u32))
 
-(decl pure A (u32 u32) u32)
+(decl pure partial A (u32 u32) u32)
 (extern constructor A A)
 
 (decl B (u32 u32) u32)
 (extern extractor B B)
 
-(decl C (u32 u32 u32 u32) u32)
+(decl partial C (u32 u32 u32 u32) u32)
 
 (decl pure predicate () u32)
 (rule (predicate) 1)

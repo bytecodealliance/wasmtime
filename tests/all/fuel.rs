@@ -116,11 +116,7 @@ fn iloop() {
         let mut store = Store::new(&engine, ());
         store.add_fuel(10_000).unwrap();
         let error = Instance::new(&mut store, &module, &[]).err().unwrap();
-        assert!(
-            format!("{:?}", error).contains("all fuel consumed"),
-            "bad error: {}",
-            error
-        );
+        assert_eq!(error.downcast::<Trap>().unwrap(), Trap::OutOfFuel);
     }
 }
 
@@ -170,14 +166,9 @@ fn host_function_consumes_all() {
     });
 
     let instance = Instance::new(&mut store, &module, &[func.into()]).unwrap();
-    let export = instance
-        .get_typed_func::<(), (), _>(&mut store, "")
-        .unwrap();
+    let export = instance.get_typed_func::<(), ()>(&mut store, "").unwrap();
     let trap = export.call(&mut store, ()).unwrap_err();
-    assert!(
-        format!("{trap:?}").contains("all fuel consumed"),
-        "bad error: {trap:?}"
-    );
+    assert_eq!(trap.downcast::<Trap>().unwrap(), Trap::OutOfFuel);
 }
 
 #[test]
@@ -191,4 +182,44 @@ fn manual_edge_cases() {
     assert!(store.consume_fuel(u64::MAX).is_err());
     assert!(store.consume_fuel(i64::MAX as u64 + 1).is_err());
     assert_eq!(store.consume_fuel(i64::MAX as u64).unwrap(), 0);
+}
+
+#[test]
+fn unconditionally_trapping_memory_accesses_save_fuel_before_trapping() {
+    let mut config = Config::new();
+    config.consume_fuel(true);
+    config.static_memory_maximum_size(0x1_0000);
+
+    let engine = Engine::new(&config).unwrap();
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+              (memory 1 1)
+              (func (export "f") (param i32) (result i32)
+                local.get 0
+                local.get 0
+                i32.add
+                ;; This offset is larger than our memory max size and therefore
+                ;; will unconditionally trap.
+                i32.load8_s offset=0xffffffff))
+        "#,
+    )
+    .unwrap();
+
+    let mut store = Store::new(&engine, ());
+    store.add_fuel(1_000).unwrap();
+
+    let instance = Instance::new(&mut store, &module, &[]).unwrap();
+    let f = instance
+        .get_typed_func::<i32, i32>(&mut store, "f")
+        .unwrap();
+
+    let trap = f.call(&mut store, 0).unwrap_err();
+    assert_eq!(trap.downcast::<Trap>().unwrap(), Trap::MemoryOutOfBounds);
+
+    // The `i32.add` consumed some fuel before the unconditionally trapping
+    // memory access.
+    assert!(store.fuel_consumed().unwrap() > 0);
 }

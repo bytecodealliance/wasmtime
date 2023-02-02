@@ -31,6 +31,7 @@ mod store;
 mod table;
 mod threads;
 mod traps;
+mod wait_notify;
 mod wast;
 
 /// A helper to compile a module in a new store with reference types enabled.

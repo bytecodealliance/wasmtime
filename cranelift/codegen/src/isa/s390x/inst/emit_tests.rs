@@ -3,6 +3,7 @@ use crate::isa::s390x::inst::*;
 use crate::isa::s390x::settings as s390x_settings;
 use crate::settings;
 use alloc::vec::Vec;
+use smallvec::smallvec;
 
 #[cfg(test)]
 fn simm20_zero() -> SImm20 {
@@ -6365,30 +6366,6 @@ fn test_s390x_binemit() {
         },
         "C0117FFFFFFF41112000",
         "lgfi %r1, 2147483647 ; la %r1, 0(%r1,%r2)",
-    ));
-    insns.push((
-        Inst::LoadAddr {
-            rd: writable_gpr(1),
-            mem: MemArg::RegOffset {
-                reg: gpr(2),
-                off: -9223372036854775808,
-                flags: MemFlags::trusted(),
-            },
-        },
-        "A51C800041112000",
-        "llihh %r1, 32768 ; la %r1, 0(%r1,%r2)",
-    ));
-    insns.push((
-        Inst::LoadAddr {
-            rd: writable_gpr(1),
-            mem: MemArg::RegOffset {
-                reg: gpr(2),
-                off: 9223372036854775807,
-                flags: MemFlags::trusted(),
-            },
-        },
-        "C01E7FFFFFFFC019FFFFFFFF41112000",
-        "llihf %r1, 2147483647 ; iilf %r1, 4294967295 ; la %r1, 0(%r1,%r2)",
     ));
 
     insns.push((

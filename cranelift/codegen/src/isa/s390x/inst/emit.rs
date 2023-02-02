@@ -104,7 +104,15 @@ pub fn mem_finalize(
             } else {
                 let tmp = writable_spilltmp_reg();
                 assert!(base != tmp.to_reg());
-                insts.extend(Inst::load_constant64(tmp, off as u64));
+                if let Ok(imm) = i16::try_from(off) {
+                    insts.push(Inst::Mov64SImm16 { rd: tmp, imm });
+                } else if let Ok(imm) = i32::try_from(off) {
+                    insts.push(Inst::Mov64SImm32 { rd: tmp, imm });
+                } else {
+                    // The offset must be smaller than the stack frame size,
+                    // which the ABI code limits to 128 MB.
+                    unreachable!();
+                }
                 MemArg::reg_plus_reg(base, tmp.to_reg(), mem.get_flags())
             }
         }
@@ -2342,7 +2350,7 @@ impl Inst {
             }
             &Inst::MovPReg { rd, rm } => {
                 let rm: Reg = rm.into();
-                debug_assert!([regs::gpr(15)].contains(&rm));
+                debug_assert!([regs::gpr(0), regs::gpr(14), regs::gpr(15)].contains(&rm));
                 let rd = allocs.next_writable(rd);
                 Inst::Mov64 { rd, rm }.emit(&[], sink, emit_info, state);
             }

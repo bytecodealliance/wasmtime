@@ -6,7 +6,7 @@ use std::iter::FromIterator;
 use std::ops;
 use std::rc::Rc;
 
-use crate::cdsl::types::{LaneType, ReferenceType, SpecialType, ValueType};
+use crate::cdsl::types::{LaneType, ReferenceType, ValueType};
 
 const MAX_LANES: u16 = 256;
 const MAX_BITS: u16 = 128;
@@ -57,9 +57,6 @@ impl TypeVar {
         let mut builder = TypeSetBuilder::new();
 
         let (scalar_type, num_lanes) = match value_type {
-            ValueType::Special(special_type) => {
-                return TypeVar::new(name, doc, builder.specials(vec![special_type]).build());
-            }
             ValueType::Reference(ReferenceType(reference_type)) => {
                 let bits = reference_type as RangeBound;
                 return TypeVar::new(name, doc, builder.refs(bits..bits).build());
@@ -156,7 +153,6 @@ impl TypeVar {
         let ts = self.get_typeset();
 
         // Safety checks to avoid over/underflows.
-        assert!(ts.specials.is_empty(), "can't derive from special types");
         match derived_func {
             DerivedFunc::HalfWidth => {
                 assert!(
@@ -176,18 +172,6 @@ impl TypeVar {
                 assert!(
                     ts.floats.is_empty() || *ts.floats.iter().max().unwrap() < MAX_FLOAT_BITS,
                     "can't double all float types"
-                );
-            }
-            DerivedFunc::HalfVector => {
-                assert!(
-                    *ts.lanes.iter().min().unwrap() > 1,
-                    "can't halve a scalar type"
-                );
-            }
-            DerivedFunc::DoubleVector => {
-                assert!(
-                    *ts.lanes.iter().max().unwrap() < MAX_LANES,
-                    "can't double 256 lanes"
                 );
             }
             DerivedFunc::SplitLanes => {
@@ -247,12 +231,6 @@ impl TypeVar {
     }
     pub fn double_width(&self) -> TypeVar {
         self.derived(DerivedFunc::DoubleWidth)
-    }
-    pub fn half_vector(&self) -> TypeVar {
-        self.derived(DerivedFunc::HalfVector)
-    }
-    pub fn double_vector(&self) -> TypeVar {
-        self.derived(DerivedFunc::DoubleVector)
     }
     pub fn split_lanes(&self) -> TypeVar {
         self.derived(DerivedFunc::SplitLanes)
@@ -321,8 +299,6 @@ pub(crate) enum DerivedFunc {
     AsBool,
     HalfWidth,
     DoubleWidth,
-    HalfVector,
-    DoubleVector,
     SplitLanes,
     MergeLanes,
     DynamicToVector,
@@ -335,8 +311,6 @@ impl DerivedFunc {
             DerivedFunc::AsBool => "as_bool",
             DerivedFunc::HalfWidth => "half_width",
             DerivedFunc::DoubleWidth => "double_width",
-            DerivedFunc::HalfVector => "half_vector",
-            DerivedFunc::DoubleVector => "double_vector",
             DerivedFunc::SplitLanes => "split_lanes",
             DerivedFunc::MergeLanes => "merge_lanes",
             DerivedFunc::DynamicToVector => "dynamic_to_vector",
@@ -364,9 +338,6 @@ pub(crate) struct TypeVarParent {
 /// - The permitted range of boolean types.
 ///
 /// The ranges are inclusive from smallest bit-width to largest bit-width.
-///
-/// Finally, a type set can contain special types (derived from `SpecialType`)
-/// which can't appear as lane types.
 
 type RangeBound = u16;
 type Range = ops::Range<RangeBound>;
@@ -385,7 +356,6 @@ pub(crate) struct TypeSet {
     pub ints: NumSet,
     pub floats: NumSet,
     pub refs: NumSet,
-    pub specials: Vec<SpecialType>,
 }
 
 impl TypeSet {
@@ -395,7 +365,6 @@ impl TypeSet {
         ints: NumSet,
         floats: NumSet,
         refs: NumSet,
-        specials: Vec<SpecialType>,
     ) -> Self {
         Self {
             lanes,
@@ -403,7 +372,6 @@ impl TypeSet {
             ints,
             floats,
             refs,
-            specials,
         }
     }
 
@@ -411,7 +379,6 @@ impl TypeSet {
     pub fn size(&self) -> usize {
         self.lanes.len() * (self.ints.len() + self.floats.len() + self.refs.len())
             + self.dynamic_lanes.len() * (self.ints.len() + self.floats.len() + self.refs.len())
-            + self.specials.len()
     }
 
     /// Return the image of self across the derived function func.
@@ -421,8 +388,6 @@ impl TypeSet {
             DerivedFunc::AsBool => self.as_bool(),
             DerivedFunc::HalfWidth => self.half_width(),
             DerivedFunc::DoubleWidth => self.double_width(),
-            DerivedFunc::HalfVector => self.half_vector(),
-            DerivedFunc::DoubleVector => self.double_vector(),
             DerivedFunc::SplitLanes => self.half_width().double_vector(),
             DerivedFunc::MergeLanes => self.double_width().half_vector(),
             DerivedFunc::DynamicToVector => self.dynamic_to_vector(),
@@ -450,7 +415,6 @@ impl TypeSet {
         let mut copy = self.clone();
         copy.ints = NumSet::from_iter(self.ints.iter().filter(|&&x| x > 8).map(|&x| x / 2));
         copy.floats = NumSet::from_iter(self.floats.iter().filter(|&&x| x > 32).map(|&x| x / 2));
-        copy.specials = Vec::new();
         copy
     }
 
@@ -464,7 +428,6 @@ impl TypeSet {
                 .filter(|&&x| x < MAX_FLOAT_BITS)
                 .map(|&x| x * 2),
         );
-        copy.specials = Vec::new();
         copy
     }
 
@@ -472,7 +435,6 @@ impl TypeSet {
     fn half_vector(&self) -> TypeSet {
         let mut copy = self.clone();
         copy.lanes = NumSet::from_iter(self.lanes.iter().filter(|&&x| x > 1).map(|&x| x / 2));
-        copy.specials = Vec::new();
         copy
     }
 
@@ -485,7 +447,6 @@ impl TypeSet {
                 .filter(|&&x| x < MAX_LANES)
                 .map(|&x| x * 2),
         );
-        copy.specials = Vec::new();
         copy
     }
 
@@ -497,7 +458,6 @@ impl TypeSet {
                 .filter(|&&x| x < MAX_LANES)
                 .map(|&x| x),
         );
-        copy.specials = Vec::new();
         copy.dynamic_lanes = NumSet::new();
         copy
     }
@@ -522,9 +482,6 @@ impl TypeSet {
             for &bits in &self.floats {
                 ret.push(LaneType::float_from_bits(bits).to_dynamic(num_lanes));
             }
-        }
-        for &special in &self.specials {
-            ret.push(special.into());
         }
         ret
     }
@@ -572,12 +529,6 @@ impl fmt::Debug for TypeSet {
                 Vec::from_iter(self.refs.iter().map(|x| x.to_string())).join(", ")
             ));
         }
-        if !self.specials.is_empty() {
-            subsets.push(format!(
-                "specials={{{}}}",
-                Vec::from_iter(self.specials.iter().map(|x| x.to_string())).join(", ")
-            ));
-        }
 
         write!(fmt, "{})", subsets.join(", "))?;
         Ok(())
@@ -591,7 +542,6 @@ pub(crate) struct TypeSetBuilder {
     includes_scalars: bool,
     simd_lanes: Interval,
     dynamic_simd_lanes: Interval,
-    specials: Vec<SpecialType>,
 }
 
 impl TypeSetBuilder {
@@ -603,7 +553,6 @@ impl TypeSetBuilder {
             includes_scalars: true,
             simd_lanes: Interval::None,
             dynamic_simd_lanes: Interval::None,
-            specials: Vec::new(),
         }
     }
 
@@ -636,11 +585,6 @@ impl TypeSetBuilder {
         self.dynamic_simd_lanes = interval.into();
         self
     }
-    pub fn specials(mut self, specials: Vec<SpecialType>) -> Self {
-        assert!(self.specials.is_empty());
-        self.specials = specials;
-        self
-    }
 
     pub fn build(self) -> TypeSet {
         let min_lanes = if self.includes_scalars { 1 } else { 2 };
@@ -651,7 +595,6 @@ impl TypeSetBuilder {
             range_to_set(self.ints.to_range(8..MAX_BITS, None)),
             range_to_set(self.floats.to_range(32..64, None)),
             range_to_set(self.refs.to_range(32..64, None)),
-            self.specials,
         )
     }
 }
@@ -721,13 +664,11 @@ fn test_typevar_builder() {
     assert_eq!(type_set.lanes, num_set![1]);
     assert!(type_set.floats.is_empty());
     assert_eq!(type_set.ints, num_set![8, 16, 32, 64, 128]);
-    assert!(type_set.specials.is_empty());
 
     let type_set = TypeSetBuilder::new().floats(Interval::All).build();
     assert_eq!(type_set.lanes, num_set![1]);
     assert_eq!(type_set.floats, num_set![32, 64]);
     assert!(type_set.ints.is_empty());
-    assert!(type_set.specials.is_empty());
 
     let type_set = TypeSetBuilder::new()
         .floats(Interval::All)
@@ -737,7 +678,6 @@ fn test_typevar_builder() {
     assert_eq!(type_set.lanes, num_set![2, 4, 8, 16, 32, 64, 128, 256]);
     assert_eq!(type_set.floats, num_set![32, 64]);
     assert!(type_set.ints.is_empty());
-    assert!(type_set.specials.is_empty());
 
     let type_set = TypeSetBuilder::new()
         .floats(Interval::All)
@@ -747,7 +687,6 @@ fn test_typevar_builder() {
     assert_eq!(type_set.lanes, num_set![1, 2, 4, 8, 16, 32, 64, 128, 256]);
     assert_eq!(type_set.floats, num_set![32, 64]);
     assert!(type_set.ints.is_empty());
-    assert!(type_set.specials.is_empty());
 
     let type_set = TypeSetBuilder::new()
         .floats(Interval::All)
@@ -758,7 +697,6 @@ fn test_typevar_builder() {
     assert_eq!(type_set.floats, num_set![32, 64]);
     assert!(type_set.dynamic_lanes.is_empty());
     assert!(type_set.ints.is_empty());
-    assert!(type_set.specials.is_empty());
 
     let type_set = TypeSetBuilder::new()
         .ints(Interval::All)
@@ -773,7 +711,6 @@ fn test_typevar_builder() {
     assert_eq!(type_set.ints, num_set![8, 16, 32, 64, 128]);
     assert_eq!(type_set.floats, num_set![32, 64]);
     assert_eq!(type_set.lanes, num_set![1]);
-    assert!(type_set.specials.is_empty());
 
     let type_set = TypeSetBuilder::new()
         .floats(Interval::All)
@@ -787,13 +724,11 @@ fn test_typevar_builder() {
     assert_eq!(type_set.floats, num_set![32, 64]);
     assert_eq!(type_set.lanes, num_set![1]);
     assert!(type_set.ints.is_empty());
-    assert!(type_set.specials.is_empty());
 
     let type_set = TypeSetBuilder::new().ints(16..64).build();
     assert_eq!(type_set.lanes, num_set![1]);
     assert_eq!(type_set.ints, num_set![16, 32, 64]);
     assert!(type_set.floats.is_empty());
-    assert!(type_set.specials.is_empty());
 }
 
 #[test]
@@ -979,7 +914,6 @@ fn test_typevar_singleton() {
     assert_eq!(typevar.name, "i32");
     assert_eq!(typevar.type_set.ints, num_set![32]);
     assert!(typevar.type_set.floats.is_empty());
-    assert!(typevar.type_set.specials.is_empty());
     assert_eq!(typevar.type_set.lanes, num_set![1]);
 
     // Test f32x4.
@@ -991,5 +925,4 @@ fn test_typevar_singleton() {
     assert!(typevar.type_set.ints.is_empty());
     assert_eq!(typevar.type_set.floats, num_set![32]);
     assert_eq!(typevar.type_set.lanes, num_set![4]);
-    assert!(typevar.type_set.specials.is_empty());
 }

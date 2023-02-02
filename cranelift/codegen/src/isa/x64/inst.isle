@@ -126,6 +126,11 @@
                  (src GprMem)
                  (dst WritableGpr))
 
+       ;; Immediate store.
+       (MovImmM (size OperandSize)
+		(simm64 u64)
+		(dst SyntheticAmode))
+       
        ;; Integer stores: mov (b w l q) reg addr.
        (MovRM (size OperandSize) ;; 1, 2, 4, or 8
               (src Gpr)
@@ -357,7 +362,7 @@
        ;; One-way conditional branch: jcond cond target.
        ;;
        ;; This instruction is useful when we have conditional jumps depending on
-       ;; more than two conditions, see for instance the lowering of Brz/brnz
+       ;; more than two conditions, see for instance the lowering of Brif
        ;; with Fcmp inputs.
        ;;
        ;; A note of caution: in contexts where the branch target is another
@@ -513,7 +518,8 @@
        ;; A Coff TLS symbol access. Returns address of the TLS symbol in
        ;; `dst`, which is constrained to `rax`.
        (CoffTlsGetAddr (symbol ExternalName)
-                       (dst WritableGpr))
+                       (dst WritableGpr)
+                       (tmp WritableGpr))
 
        ;; An unwind pseudoinstruction describing the state of the machine at
        ;; this program point.
@@ -864,7 +870,7 @@
 ;; A helper to both check that the `Imm64` and `Offset32` values sum to less
 ;; than 32-bits AND return this summed `u32` value. Also, the `Imm64` will be
 ;; zero-extended from `Type` up to 64 bits. This is useful for `to_amode`.
-(decl pure sum_extend_fits_in_32_bits (Type Imm64 Offset32) u32)
+(decl pure partial sum_extend_fits_in_32_bits (Type Imm64 Offset32) u32)
 (extern constructor sum_extend_fits_in_32_bits sum_extend_fits_in_32_bits)
 
 ;;;; Amode lowering ;;;;
@@ -1530,6 +1536,8 @@
 (decl sse_xor_op (Type) SseOpcode)
 (rule 1 (sse_xor_op $F32X4) (SseOpcode.Xorps))
 (rule 1 (sse_xor_op $F64X2) (SseOpcode.Xorpd))
+(rule 1 (sse_xor_op $F32) (SseOpcode.Xorps))
+(rule 1 (sse_xor_op $F64) (SseOpcode.Xorpd))
 
 ;; Priority 0 because multi_lane overlaps with the previous two explicit type
 ;; patterns.
@@ -1563,22 +1571,10 @@
 ;; Helper for creating an SSE register holding an `i64x2` from two `i64` values.
 (decl make_i64x2_from_lanes (GprMem GprMem) Xmm)
 (rule (make_i64x2_from_lanes lo hi)
-      (let ((dst_xmm WritableXmm (temp_writable_xmm))
-            (dst_reg WritableReg dst_xmm)
-            (_ Unit (emit (MInst.XmmUninitializedValue dst_xmm)))
-            (_ Unit (emit (MInst.XmmRmRImm (SseOpcode.Pinsrd)
-                                           dst_reg
-                                           lo
-                                           dst_reg
-                                           0
-                                           (OperandSize.Size64))))
-            (_ Unit (emit (MInst.XmmRmRImm (SseOpcode.Pinsrd)
-                                           dst_reg
-                                           hi
-                                           dst_reg
-                                           1
-                                           (OperandSize.Size64)))))
-        dst_xmm))
+      (let ((dst Xmm (xmm_uninit_value))
+            (dst Xmm (x64_pinsrd dst lo 0 (OperandSize.Size64)))
+            (dst Xmm (x64_pinsrd dst hi 1 (OperandSize.Size64))))
+        dst))
 
 ;; Move a `RegMemImm.Reg` operand to an XMM register, if necessary.
 (decl mov_rmi_to_xmm (RegMemImm) XmmMemImm)
@@ -2130,6 +2126,15 @@
 (rule (x64_setcc cc)
       (let ((dst WritableGpr (temp_writable_gpr)))
         (ConsumesFlags.ConsumesFlagsReturnsReg
+         (MInst.Setcc cc dst)
+         dst)))
+
+;; Helper for creating `MInst.Setcc` instructions, when the flags producer will
+;; also return a value.
+(decl x64_setcc_paired (CC) ConsumesFlags)
+(rule (x64_setcc_paired cc)
+      (let ((dst WritableGpr (temp_writable_gpr)))
+        (ConsumesFlags.ConsumesFlagsReturnsResultWithProducer
          (MInst.Setcc cc dst)
          dst)))
 
@@ -3759,7 +3764,8 @@
 (decl coff_tls_get_addr (ExternalName) Gpr)
 (rule (coff_tls_get_addr name)
       (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.CoffTlsGetAddr name dst))))
+            (tmp WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.CoffTlsGetAddr name dst tmp))))
         dst))
 
 ;;;; sqmul_round_sat ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

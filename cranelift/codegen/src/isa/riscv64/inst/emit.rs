@@ -27,6 +27,9 @@ impl EmitInfo {
 
 /// load constant by put the constant in the code stream.
 /// calculate the pc and using load instruction.
+/// This is only allow used in the emit stage.
+/// Because of those instruction must execute together.
+/// see https://github.com/bytecodealliance/wasmtime/pull/5612
 #[derive(Clone, Copy)]
 pub(crate) enum LoadConstant {
     U32(u32),
@@ -53,11 +56,16 @@ impl LoadConstant {
         }
     }
 
-    pub(crate) fn load_constant(self, rd: Writable<Reg>) -> SmallInstVec<Inst> {
+    pub(crate) fn load_constant<F: FnMut(Type) -> Writable<Reg>>(
+        self,
+        rd: Writable<Reg>,
+        alloc_tmp: &mut F,
+    ) -> SmallInstVec<Inst> {
         let mut insts = SmallInstVec::new();
         // get current pc.
+        let pc = alloc_tmp(I64);
         insts.push(Inst::Auipc {
-            rd,
+            rd: pc,
             imm: Imm20 { bits: 0 },
         });
         // load
@@ -65,7 +73,7 @@ impl LoadConstant {
             rd,
             op: self.load_op(),
             flags: MemFlags::new(),
-            from: AMode::RegOffset(rd.to_reg(), 12, self.load_ty()),
+            from: AMode::RegOffset(pc.to_reg(), 12, self.load_ty()),
         });
         let data = self.to_le_bytes();
         // jump over.
@@ -78,10 +86,10 @@ impl LoadConstant {
 
     // load and perform an extra add.
     pub(crate) fn load_constant_and_add(self, rd: Writable<Reg>, rs: Reg) -> SmallInstVec<Inst> {
-        let mut insts = self.load_constant(rd);
+        let mut insts = self.load_constant(rd, &mut |_| rd);
         insts.push(Inst::AluRRR {
             alu_op: AluOPRRR::Add,
-            rd: rd,
+            rd,
             rs1: rd.to_reg(),
             rs2: rs,
         });
@@ -140,7 +148,7 @@ impl MachInstEmitState<Inst> for EmitState {
 impl Inst {
     /// construct a "imm - rs".
     pub(crate) fn construct_imm_sub_rs(rd: Writable<Reg>, imm: u64, rs: Reg) -> SmallInstVec<Inst> {
-        let mut insts = Inst::load_constant_u64(rd, imm);
+        let mut insts = Inst::load_constant_u64(rd, imm, &mut |_| rd);
         insts.push(Inst::AluRRR {
             alu_op: AluOPRRR::Sub,
             rd,
@@ -265,163 +273,6 @@ impl Inst {
         }
     }
 
-    pub(crate) fn lower_br_fcmp(
-        cc: FloatCC,
-        x: Reg,
-        y: Reg,
-        taken: BranchTarget,
-        not_taken: BranchTarget,
-        ty: Type,
-        tmp: Writable<Reg>,
-    ) -> SmallInstVec<Inst> {
-        assert!(tmp.to_reg().class() == RegClass::Int);
-        let mut insts = SmallInstVec::new();
-        let mut cc_args = FloatCCArgs::from_floatcc(cc);
-        let eq_op = if ty == F32 {
-            FpuOPRRR::FeqS
-        } else {
-            FpuOPRRR::FeqD
-        };
-        let lt_op = if ty == F32 {
-            FpuOPRRR::FltS
-        } else {
-            FpuOPRRR::FltD
-        };
-        let le_op = if ty == F32 {
-            FpuOPRRR::FleS
-        } else {
-            FpuOPRRR::FleD
-        };
-
-        // >=
-        if cc_args.has_and_clear(FloatCCArgs::GT | FloatCCArgs::EQ) {
-            insts.push(Inst::FpuRRR {
-                frm: None,
-                alu_op: le_op,
-                rd: tmp,
-                rs1: y, //  x and y order reversed.
-                rs2: x,
-            });
-            insts.push(Inst::CondBr {
-                taken: taken,
-                not_taken: BranchTarget::zero(),
-                kind: IntegerCompare {
-                    kind: IntCC::NotEqual,
-                    rs1: tmp.to_reg(),
-                    rs2: zero_reg(),
-                },
-            });
-        }
-
-        // <=
-        if cc_args.has_and_clear(FloatCCArgs::LT | FloatCCArgs::EQ) {
-            insts.push(Inst::FpuRRR {
-                frm: None,
-                alu_op: le_op,
-                rd: tmp,
-                rs1: x,
-                rs2: y,
-            });
-            insts.push(Inst::CondBr {
-                taken: taken,
-                not_taken: BranchTarget::zero(),
-                kind: IntegerCompare {
-                    kind: IntCC::NotEqual,
-                    rs1: tmp.to_reg(),
-                    rs2: zero_reg(),
-                },
-            });
-        }
-
-        // if eq
-        if cc_args.has_and_clear(FloatCCArgs::EQ) {
-            insts.push(Inst::FpuRRR {
-                frm: None,
-                alu_op: eq_op,
-                rd: tmp,
-                rs1: x,
-                rs2: y,
-            });
-            insts.push(Inst::CondBr {
-                taken: taken,
-                not_taken: BranchTarget::zero(),
-                kind: IntegerCompare {
-                    kind: IntCC::NotEqual,
-                    rs1: tmp.to_reg(),
-                    rs2: zero_reg(),
-                },
-            });
-        }
-        // if ne
-        if cc_args.has_and_clear(FloatCCArgs::NE) {
-            insts.push(Inst::FpuRRR {
-                frm: None,
-                alu_op: eq_op,
-                rd: tmp,
-                rs1: x,
-                rs2: y,
-            });
-            insts.push(Inst::CondBr {
-                taken: taken,
-                not_taken: BranchTarget::zero(),
-                kind: IntegerCompare {
-                    kind: IntCC::Equal,
-                    rs1: tmp.to_reg(),
-                    rs2: zero_reg(),
-                },
-            });
-        }
-
-        // if <
-        if cc_args.has_and_clear(FloatCCArgs::LT) {
-            insts.push(Inst::FpuRRR {
-                frm: None,
-                alu_op: lt_op,
-                rd: tmp,
-                rs1: x,
-                rs2: y,
-            });
-            insts.push(Inst::CondBr {
-                taken: taken,
-                not_taken: BranchTarget::zero(),
-                kind: IntegerCompare {
-                    kind: IntCC::NotEqual,
-                    rs1: tmp.to_reg(),
-                    rs2: zero_reg(),
-                },
-            });
-        }
-        // if gt
-        if cc_args.has_and_clear(FloatCCArgs::GT) {
-            insts.push(Inst::FpuRRR {
-                frm: None,
-                alu_op: lt_op,
-                rd: tmp,
-                rs1: y, // x and y order reversed.
-                rs2: x,
-            });
-            insts.push(Inst::CondBr {
-                taken,
-                not_taken: BranchTarget::zero(),
-                kind: IntegerCompare {
-                    kind: IntCC::NotEqual,
-                    rs1: tmp.to_reg(),
-                    rs2: zero_reg(),
-                },
-            });
-        }
-        // if unordered
-        if cc_args.has_and_clear(FloatCCArgs::UN) {
-            insts.extend(Inst::lower_float_unordered(tmp, ty, x, y, taken, not_taken));
-        } else {
-            //make sure we goto the not_taken.
-            //finally goto not_taken
-            insts.push(Inst::Jal { dest: not_taken });
-        }
-        // make sure we handle all cases.
-        assert!(cc_args.0 == 0);
-        insts
-    }
     pub(crate) fn lower_br_icmp(
         cc: IntCC,
         a: ValueRegs<Reg>,
@@ -616,19 +467,32 @@ impl MachInstEmit for Inst {
                 x.emit(&[], sink, emit_info, state)
             }
             &Inst::RawData { ref data } => {
-                // emit_island if need, right now data is not very long.
-                let length = data.len() as CodeOffset;
-                if sink.island_needed(length) {
-                    sink.emit_island(length);
-                }
+                // Right now we only put a u32 or u64 in this instruction.
+                // It is not very long, no need to check if need `emit_island`.
+                // If data is very long , this is a bug because RawData is typecial
+                // use to load some data and rely on some positon in the code stream.
+                // and we may exceed `Inst::worst_case_size`.
+                // for more information see https://github.com/bytecodealliance/wasmtime/pull/5612.
                 sink.put_data(&data[..]);
-                // safe to disable code length check.
-                start_off = sink.cur_offset();
             }
             &Inst::Lui { rd, ref imm } => {
                 let rd = allocs.next_writable(rd);
                 let x: u32 = 0b0110111 | reg_to_gpr_num(rd.to_reg()) << 7 | (imm.as_u32() << 12);
                 sink.put4(x);
+            }
+            &Inst::LoadConst32 { rd, imm } => {
+                let rd = allocs.next_writable(rd);
+                LoadConstant::U32(imm)
+                    .load_constant(rd, &mut |_| rd)
+                    .into_iter()
+                    .for_each(|inst| inst.emit(&[], sink, emit_info, state));
+            }
+            &Inst::LoadConst64 { rd, imm } => {
+                let rd = allocs.next_writable(rd);
+                LoadConstant::U64(imm)
+                    .load_constant(rd, &mut |_| rd)
+                    .into_iter()
+                    .for_each(|inst| inst.emit(&[], sink, emit_info, state));
             }
             &Inst::FpuRR {
                 frm,
@@ -930,7 +794,7 @@ impl MachInstEmit for Inst {
                     .emit(&[], sink, emit_info, state);
                 } else {
                     let tmp = writable_spilltmp_reg();
-                    let mut insts = Inst::load_constant_u64(tmp, amount as u64);
+                    let mut insts = Inst::load_constant_u64(tmp, amount as u64, &mut |_| tmp);
                     insts.push(Inst::AluRRR {
                         alu_op: AluOPRRR::Add,
                         rd: writable_stack_reg(),
@@ -1104,14 +968,61 @@ impl MachInstEmit for Inst {
                     }
                 }
             }
-            &Inst::BrTableCheck {
+
+            &Inst::MovFromPReg { rd, rm } => {
+                debug_assert!([px_reg(2), px_reg(8)].contains(&rm));
+                let rd = allocs.next_writable(rd);
+                let x = Inst::AluRRImm12 {
+                    alu_op: AluOPRRI::Ori,
+                    rd,
+                    rs: Reg::from(rm),
+                    imm12: Imm12::zero(),
+                };
+                x.emit(&[], sink, emit_info, state);
+            }
+
+            &Inst::BrTable {
                 index,
-                targets_len,
-                default_,
+                tmp1,
+                ref targets,
             } => {
                 let index = allocs.next(index);
-                // load
-                Inst::load_constant_u32(writable_spilltmp_reg(), targets_len as u64)
+                let tmp1 = allocs.next_writable(tmp1);
+                let tmp2 = writable_spilltmp_reg();
+
+                // The default target is passed in as the 0th element of `targets`
+                // separate it here for clarity.
+                let default_target = targets[0];
+                let targets = &targets[1..];
+
+                // We emit a bounds check on the index, if the index is larger than the number of
+                // jump table entries, we jump to the default block.  Otherwise we compute a jump
+                // offset by multiplying the index by 8 (the size of each entry) and then jump to
+                // that offset. Each jump table entry is a regular auipc+jalr which we emit sequentially.
+                //
+                // Build the following sequence:
+                // bounds_check:
+                //     li      tmp, n_labels
+                //     bltu    index, tmp, compute_target
+                // jump_to_default_block:
+                //     auipc   pc, 0
+                //     jalr    zero, pc, default_block
+                // compute_target:
+                //     auipc   pc, 0
+                //     slli    tmp, index, 3
+                //     add     pc, pc, tmp
+                //     jalr    zero, pc, 0x10
+                // jump_table:
+                //     ; This repeats for each entry in the jumptable
+                //     auipc   pc, 0
+                //     jalr    zero, pc, block_target
+
+                // Bounds check.
+                //
+                // Check if the index passed in is larger than the number of jumptable
+                // entries that we have. If it is, we fallthrough to a jump into the
+                // default block.
+                Inst::load_constant_u32(tmp2, targets.len() as u64, &mut |_| tmp2)
                     .iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
                 Inst::CondBr {
@@ -1120,81 +1031,85 @@ impl MachInstEmit for Inst {
                     kind: IntegerCompare {
                         kind: IntCC::UnsignedLessThan,
                         rs1: index,
-                        rs2: spilltmp_reg(),
+                        rs2: tmp2.to_reg(),
                     },
                 }
                 .emit(&[], sink, emit_info, state);
                 sink.use_label_at_offset(
                     sink.cur_offset(),
-                    default_.as_label().unwrap(),
+                    default_target.as_label().unwrap(),
                     LabelUse::PCRel32,
                 );
-                Inst::construct_auipc_and_jalr(None, writable_spilltmp_reg(), 0)
+                Inst::construct_auipc_and_jalr(None, tmp2, 0)
                     .iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
-            }
-            &Inst::BrTable {
-                index,
-                tmp1,
-                ref targets,
-            } => {
-                let index = allocs.next(index);
-                let tmp1 = allocs.next_writable(tmp1);
-                let mut insts = SmallInstVec::new();
-                // get current pc.
-                insts.push(Inst::Auipc {
+
+                // Compute the jump table offset.
+                // We need to emit a PC relative offset,
+
+                // Get the current PC.
+                Inst::Auipc {
                     rd: tmp1,
                     imm: Imm20::from_bits(0),
-                });
-                // t *= 8; very jump that I emit is 8 byte size.
-                insts.push(Inst::AluRRImm12 {
+                }
+                .emit(&[], sink, emit_info, state);
+
+                // Multiply the index by 8, since that is the size in
+                // bytes of each jump table entry
+                Inst::AluRRImm12 {
                     alu_op: AluOPRRI::Slli,
-                    rd: writable_spilltmp_reg(),
+                    rd: tmp2,
                     rs: index,
                     imm12: Imm12::from_bits(3),
-                });
-                // tmp1 += t
-                insts.push(Inst::AluRRR {
+                }
+                .emit(&[], sink, emit_info, state);
+
+                // Calculate the base of the jump, PC + the offset from above.
+                Inst::AluRRR {
                     alu_op: AluOPRRR::Add,
                     rd: tmp1,
                     rs1: tmp1.to_reg(),
-                    rs2: spilltmp_reg(),
-                });
-                insts.push(Inst::Jalr {
+                    rs2: tmp2.to_reg(),
+                }
+                .emit(&[], sink, emit_info, state);
+
+                // Jump to the middle of the jump table.
+                // We add a 16 byte offset here, since we used 4 instructions
+                // since the AUIPC that was used to get the PC.
+                Inst::Jalr {
                     rd: writable_zero_reg(),
                     base: tmp1.to_reg(),
-                    offset: Imm12::from_bits(16),
-                });
-
-                // here is all the jumps.
-                let mut need_label_use = vec![];
-                for t in targets {
-                    need_label_use.push((insts.len(), t.clone()));
-                    insts.extend(Inst::construct_auipc_and_jalr(
-                        None,
-                        writable_spilltmp_reg(),
-                        0,
-                    ));
+                    offset: Imm12::from_bits((4 * Inst::INSTRUCTION_SIZE) as i16),
                 }
-                // emit island if need.
-                let distance = (insts.len() * 4) as u32;
+                .emit(&[], sink, emit_info, state);
+
+                // Emit the jump table.
+                //
+                // Each entry is a aupc + jalr to the target block. We also start with a island
+                // if necessary.
+
+                // Each entry in the jump table is 2 instructions, so 8 bytes. Check if
+                // we need to emit a jump table here to support that jump.
+                let distance = (targets.len() * 2 * Inst::INSTRUCTION_SIZE as usize) as u32;
                 if sink.island_needed(distance) {
                     sink.emit_island(distance);
                 }
-                let mut need_label_use = &need_label_use[..];
-                insts.into_iter().enumerate().for_each(|(index, inst)| {
-                    if !need_label_use.is_empty() && need_label_use[0].0 == index {
-                        sink.use_label_at_offset(
-                            sink.cur_offset(),
-                            need_label_use[0].1.as_label().unwrap(),
-                            LabelUse::PCRel32,
-                        );
-                        need_label_use = &need_label_use[1..];
-                    }
-                    inst.emit(&[], sink, emit_info, state);
-                });
-                // emit the island before, so we can safely
-                // disable the worst-case-size check in this case.
+
+                // Emit the jumps back to back
+                for target in targets.iter() {
+                    sink.use_label_at_offset(
+                        sink.cur_offset(),
+                        target.as_label().unwrap(),
+                        LabelUse::PCRel32,
+                    );
+
+                    Inst::construct_auipc_and_jalr(None, tmp2, 0)
+                        .iter()
+                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                }
+
+                // We've just emitted an island that is safe up to *here*.
+                // Mark it as such so that we don't needlessly emit additional islands.
                 start_off = sink.cur_offset();
             }
 
@@ -1254,7 +1169,7 @@ impl MachInstEmit for Inst {
                 if let Some(offset) = Imm12::maybe_from_u64(offset as u64) {
                     Inst::AluRRImm12 {
                         alu_op: AluOPRRI::Addi,
-                        rd: rd,
+                        rd,
                         rs: base,
                         imm12: offset,
                     }
@@ -1265,42 +1180,6 @@ impl MachInstEmit for Inst {
                         .into_iter()
                         .for_each(|i| i.emit(&[], sink, emit_info, state));
                 }
-            }
-
-            &Inst::Fcmp {
-                rd,
-                cc,
-                ty,
-                rs1,
-                rs2,
-            } => {
-                let rs1 = allocs.next(rs1);
-                let rs2 = allocs.next(rs2);
-                let rd = allocs.next_writable(rd);
-                let label_true = sink.get_label();
-                let label_jump_over = sink.get_label();
-                Inst::lower_br_fcmp(
-                    cc,
-                    rs1,
-                    rs2,
-                    BranchTarget::Label(label_true),
-                    BranchTarget::zero(),
-                    ty,
-                    rd,
-                )
-                .iter()
-                .for_each(|i| i.emit(&[], sink, emit_info, state));
-                // here is not taken.
-                Inst::load_imm12(rd, Imm12::FALSE).emit(&[], sink, emit_info, state);
-                // jump over.
-                Inst::Jal {
-                    dest: BranchTarget::Label(label_jump_over),
-                }
-                .emit(&[], sink, emit_info, state);
-                // here is true
-                sink.bind_label(label_true);
-                Inst::load_imm12(rd, Imm12::TRUE).emit(&[], sink, emit_info, state);
-                sink.bind_label(label_jump_over);
             }
 
             &Inst::Select {
@@ -1729,12 +1608,11 @@ impl MachInstEmit for Inst {
                                 val: &ValueRegs<Reg>,
                                 sink: &mut MachBuffer<Inst>,
                                 state: &mut EmitState| {
-                    let ty = if ty.bits() == 128 { I64 } else { ty };
                     let mut insts = SmallInstVec::new();
                     insts.push(Inst::Mov {
                         rd: dst[0],
                         rm: val.regs()[0],
-                        ty,
+                        ty: I64,
                     });
                     if ty.bits() == 128 {
                         insts.push(Inst::Mov {
@@ -1835,50 +1713,62 @@ impl MachInstEmit for Inst {
                     let f32_bounds = f32_cvt_to_int_bounds(is_signed, out_type.bits() as u8);
                     let f64_bounds = f64_cvt_to_int_bounds(is_signed, out_type.bits() as u8);
                     if in_type == F32 {
-                        Inst::load_fp_constant32(
-                            tmp,
-                            f32_bits(f32_bounds.0),
-                            writable_spilltmp_reg(),
-                        )
+                        Inst::load_fp_constant32(tmp, f32_bits(f32_bounds.0), |_| {
+                            writable_spilltmp_reg()
+                        })
                     } else {
-                        Inst::load_fp_constant64(
-                            tmp,
-                            f64_bits(f64_bounds.0),
-                            writable_spilltmp_reg(),
-                        )
+                        Inst::load_fp_constant64(tmp, f64_bits(f64_bounds.0), |_| {
+                            writable_spilltmp_reg()
+                        })
                     }
                     .iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
-                    Inst::TrapFf {
-                        cc: FloatCC::LessThanOrEqual,
-                        x: rs,
-                        y: tmp.to_reg(),
-                        ty: in_type,
-                        tmp: rd,
+
+                    let le_op = if in_type == F32 {
+                        FpuOPRRR::FleS
+                    } else {
+                        FpuOPRRR::FleD
+                    };
+
+                    // rd := rs <= tmp
+                    Inst::FpuRRR {
+                        alu_op: le_op,
+                        frm: None,
+                        rd,
+                        rs1: rs,
+                        rs2: tmp.to_reg(),
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    Inst::TrapIf {
+                        test: rd.to_reg(),
                         trap_code: TrapCode::IntegerOverflow,
                     }
                     .emit(&[], sink, emit_info, state);
+
                     if in_type == F32 {
-                        Inst::load_fp_constant32(
-                            tmp,
-                            f32_bits(f32_bounds.1),
-                            writable_spilltmp_reg(),
-                        )
+                        Inst::load_fp_constant32(tmp, f32_bits(f32_bounds.1), |_| {
+                            writable_spilltmp_reg()
+                        })
                     } else {
-                        Inst::load_fp_constant64(
-                            tmp,
-                            f64_bits(f64_bounds.1),
-                            writable_spilltmp_reg(),
-                        )
+                        Inst::load_fp_constant64(tmp, f64_bits(f64_bounds.1), |_| {
+                            writable_spilltmp_reg()
+                        })
                     }
                     .iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
-                    Inst::TrapFf {
-                        cc: FloatCC::GreaterThanOrEqual,
-                        x: rs,
-                        y: tmp.to_reg(),
-                        ty: in_type,
-                        tmp: rd,
+
+                    // rd := rs >= tmp
+                    Inst::FpuRRR {
+                        alu_op: le_op,
+                        frm: None,
+                        rd,
+                        rs1: tmp.to_reg(),
+                        rs2: rs,
+                    }
+                    .emit(&[], sink, emit_info, state);
+
+                    Inst::TrapIf {
+                        test: rd.to_reg(),
                         trap_code: TrapCode::IntegerOverflow,
                     }
                     .emit(&[], sink, emit_info, state);
@@ -1891,6 +1781,58 @@ impl MachInstEmit for Inst {
                     rs,
                 }
                 .emit(&[], sink, emit_info, state);
+                if out_type.bits() < 32 && is_signed {
+                    // load value part mask.
+                    Inst::load_constant_u32(
+                        tmp,
+                        if 16 == out_type.bits() {
+                            (u16::MAX >> 1) as u64
+                        } else {
+                            // I8
+                            (u8::MAX >> 1) as u64
+                        },
+                        &mut |_| writable_spilltmp_reg(),
+                    )
+                    .into_iter()
+                    .for_each(|x| x.emit(&[], sink, emit_info, state));
+                    // keep value part.
+                    Inst::AluRRR {
+                        alu_op: AluOPRRR::And,
+                        rd: tmp,
+                        rs1: rd.to_reg(),
+                        rs2: tmp.to_reg(),
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    // extact sign bit.
+                    Inst::AluRRImm12 {
+                        alu_op: AluOPRRI::Srli,
+                        rd: rd,
+                        rs: rd.to_reg(),
+                        imm12: Imm12::from_bits(31),
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    Inst::AluRRImm12 {
+                        alu_op: AluOPRRI::Slli,
+                        rd: rd,
+                        rs: rd.to_reg(),
+                        imm12: Imm12::from_bits(if 16 == out_type.bits() {
+                            15
+                        } else {
+                            // I8
+                            7
+                        }),
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    // make result,sign bit and value part.
+                    Inst::AluRRR {
+                        alu_op: AluOPRRR::Or,
+                        rd: rd,
+                        rs1: rd.to_reg(),
+                        rs2: tmp.to_reg(),
+                    }
+                    .emit(&[], sink, emit_info, state);
+                }
+
                 // I already have the result,jump over.
                 Inst::Jal {
                     dest: BranchTarget::Label(label_jump_over),
@@ -1991,39 +1933,6 @@ impl MachInstEmit for Inst {
                 .emit(&[], sink, emit_info, state);
                 sink.bind_label(label_jump_over);
             }
-            &Inst::TrapFf {
-                cc,
-                x,
-                y,
-                ty,
-                trap_code,
-                tmp,
-            } => {
-                let x = allocs.next(x);
-                let y = allocs.next(y);
-                let tmp = allocs.next_writable(tmp);
-                let label_trap = sink.get_label();
-                let label_jump_over = sink.get_label();
-                Inst::lower_br_fcmp(
-                    cc,
-                    x,
-                    y,
-                    BranchTarget::Label(label_trap),
-                    BranchTarget::Label(label_jump_over),
-                    ty,
-                    tmp,
-                )
-                .iter()
-                .for_each(|i| i.emit(&[], sink, emit_info, state));
-                // trap
-                sink.bind_label(label_trap);
-                Inst::Udf {
-                    trap_code: trap_code,
-                }
-                .emit(&[], sink, emit_info, state);
-                sink.bind_label(label_jump_over);
-            }
-
             &Inst::Udf { trap_code } => {
                 sink.add_trap(trap_code);
                 if let Some(s) = state.take_stack_map() {
@@ -2160,35 +2069,45 @@ impl MachInstEmit for Inst {
                 }
                 // load max value need to round.
                 if ty == F32 {
-                    Inst::load_fp_constant32(
-                        f_tmp,
-                        max_value_need_round(ty) as u32,
-                        writable_spilltmp_reg(),
-                    )
+                    Inst::load_fp_constant32(f_tmp, max_value_need_round(ty) as u32, &mut |_| {
+                        writable_spilltmp_reg()
+                    })
                 } else {
-                    Inst::load_fp_constant64(
-                        f_tmp,
-                        max_value_need_round(ty),
-                        writable_spilltmp_reg(),
-                    )
+                    Inst::load_fp_constant64(f_tmp, max_value_need_round(ty), &mut |_| {
+                        writable_spilltmp_reg()
+                    })
                 }
                 .into_iter()
                 .for_each(|i| i.emit(&[], sink, emit_info, state));
 
                 // get abs value.
                 Inst::emit_fabs(rd, rs, ty).emit(&[], sink, emit_info, state);
-                Inst::lower_br_fcmp(
-                    FloatCC::GreaterThan,
-                    // abs value > max_value_need_round
-                    rd.to_reg(),
-                    f_tmp.to_reg(),
-                    BranchTarget::Label(label_x),
-                    BranchTarget::zero(),
-                    ty,
-                    int_tmp,
-                )
-                .into_iter()
-                .for_each(|i| i.emit(&[], sink, emit_info, state));
+
+                // branch if f_tmp < rd
+                Inst::FpuRRR {
+                    frm: None,
+                    alu_op: if ty == F32 {
+                        FpuOPRRR::FltS
+                    } else {
+                        FpuOPRRR::FltD
+                    },
+                    rd: int_tmp,
+                    rs1: f_tmp.to_reg(),
+                    rs2: rd.to_reg(),
+                }
+                .emit(&[], sink, emit_info, state);
+
+                Inst::CondBr {
+                    taken: BranchTarget::Label(label_x),
+                    not_taken: BranchTarget::zero(),
+                    kind: IntegerCompare {
+                        kind: IntCC::NotEqual,
+                        rs1: int_tmp.to_reg(),
+                        rs2: zero_reg(),
+                    },
+                }
+                .emit(&[], sink, emit_info, state);
+
                 //convert to int.
                 Inst::FpuRR {
                     alu_op: FpuOPRR::float_convert_2_int_op(ty, true, I64),
@@ -2843,10 +2762,14 @@ impl MachInstEmit for Inst {
                 tmp: guard_size_tmp,
             } => {
                 let step = writable_spilltmp_reg();
-                Inst::load_constant_u64(step, (guard_size as u64) * (probe_count as u64))
-                    .iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
-                Inst::load_constant_u64(guard_size_tmp, guard_size as u64)
+                Inst::load_constant_u64(
+                    step,
+                    (guard_size as u64) * (probe_count as u64),
+                    &mut |_| step,
+                )
+                .iter()
+                .for_each(|i| i.emit(&[], sink, emit_info, state));
+                Inst::load_constant_u64(guard_size_tmp, guard_size as u64, &mut |_| guard_size_tmp)
                     .iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
 

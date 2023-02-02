@@ -101,8 +101,8 @@ block0:
 }
 
 ; block0:
-;   movi v0.2d, #18374687579166474495
-;   fmov d0, d0
+;   movi v1.2d, #18374687579166474495
+;   fmov d0, d1
 ;   ret
 
 function %f10() -> i32x4 {

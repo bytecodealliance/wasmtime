@@ -7,7 +7,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
 use cranelift_codegen::data_value::DataValue;
-use cranelift_codegen::ir::{LibCall, TrapCode};
+use cranelift_codegen::ir::{Function, LibCall, TrapCode};
 use cranelift_filetests::function_runner::{TestFileCompiler, Trampoline};
 use cranelift_fuzzgen::*;
 use cranelift_interpreter::environment::FuncIndex;
@@ -139,9 +139,9 @@ fn run_in_host(trampoline: &Trampoline, args: &[DataValue]) -> RunResult {
     RunResult::Success(res)
 }
 
-fn build_interpreter(testcase: &TestCase) -> Interpreter {
+fn build_interpreter(func: &Function) -> Interpreter {
     let mut env = FunctionStore::default();
-    env.add(testcase.func.name.to_string(), &testcase.func);
+    env.add(func.name.to_string(), &func);
 
     let state = InterpreterState::default()
         .with_function_store(env)
@@ -166,7 +166,7 @@ static STATISTICS: Lazy<Statistics> = Lazy::new(Statistics::default);
 
 fuzz_target!(|testcase: TestCase| {
     // This is the default, but we should ensure that it wasn't accidentally turned off anywhere.
-    assert!(testcase.flags.enable_verifier());
+    assert!(testcase.isa.flags().enable_verifier());
 
     // Periodically print statistics
     let valid_inputs = STATISTICS.valid_inputs.fetch_add(1, Ordering::SeqCst);
@@ -174,7 +174,7 @@ fuzz_target!(|testcase: TestCase| {
         STATISTICS.print(valid_inputs);
     }
 
-    let mut compiler = TestFileCompiler::with_host_isa(testcase.flags.clone()).unwrap();
+    let mut compiler = TestFileCompiler::new(testcase.isa);
     compiler.declare_function(&testcase.func).unwrap();
     compiler.define_function(testcase.func.clone()).unwrap();
     compiler
@@ -188,7 +188,7 @@ fuzz_target!(|testcase: TestCase| {
 
         // We rebuild the interpreter every run so that we don't accidentally carry over any state
         // between runs, such as fuel remaining.
-        let mut interpreter = build_interpreter(&testcase);
+        let mut interpreter = build_interpreter(&testcase.func);
         let int_res = run_in_interpreter(&mut interpreter, args);
         match int_res {
             RunResult::Success(_) => {

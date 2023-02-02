@@ -4,12 +4,14 @@ use crate::subslice_range;
 use crate::unwind::UnwindRegistration;
 use anyhow::{anyhow, bail, Context, Result};
 use object::read::{File, Object, ObjectSection};
+use object::ObjectSymbol;
 use std::mem;
 use std::mem::ManuallyDrop;
 use std::ops::Range;
 use wasmtime_environ::obj;
 use wasmtime_environ::FunctionLoc;
 use wasmtime_jit_icache_coherence as icache_coherence;
+use wasmtime_runtime::libcalls;
 use wasmtime_runtime::{MmapVec, VMTrampoline};
 
 /// Management of executable memory within a `MmapVec`
@@ -24,6 +26,8 @@ pub struct CodeMemory {
     published: bool,
     enable_branch_protection: bool,
 
+    relocations: Vec<(usize, obj::LibCall)>,
+
     // Ranges within `self.mmap` of where the particular sections lie.
     text: Range<usize>,
     unwind: Range<usize>,
@@ -32,10 +36,7 @@ pub struct CodeMemory {
     address_map_data: Range<usize>,
     func_name_data: Range<usize>,
     info_data: Range<usize>,
-
-    /// Map of dwarf sections indexed by `gimli::SectionId` which points to the
-    /// range within `code_memory`'s mmap as to the contents of the section.
-    dwarf_sections: Vec<Range<usize>>,
+    dwarf: Range<usize>,
 }
 
 impl Drop for CodeMemory {
@@ -60,11 +61,10 @@ impl CodeMemory {
     /// The returned `CodeMemory` manages the internal `MmapVec` and the
     /// `publish` method is used to actually make the memory executable.
     pub fn new(mmap: MmapVec) -> Result<Self> {
-        use gimli::SectionId::*;
-
         let obj = File::parse(&mmap[..])
             .with_context(|| "failed to parse internal compilation artifact")?;
 
+        let mut relocations = Vec::new();
         let mut text = 0..0;
         let mut unwind = 0..0;
         let mut enable_branch_protection = None;
@@ -73,7 +73,7 @@ impl CodeMemory {
         let mut address_map_data = 0..0;
         let mut func_name_data = 0..0;
         let mut info_data = 0..0;
-        let mut dwarf_sections = Vec::new();
+        let mut dwarf = 0..0;
         for section in obj.sections() {
             let data = section.data()?;
             let name = section.name()?;
@@ -90,14 +90,6 @@ impl CodeMemory {
                 }
             }
 
-            let mut gimli = |id: gimli::SectionId| {
-                let idx = id as usize;
-                if dwarf_sections.len() <= idx {
-                    dwarf_sections.resize(idx + 1, 0..0);
-                }
-                dwarf_sections[idx] = range.clone();
-            };
-
             match name {
                 obj::ELF_WASM_BTI => match data.len() {
                     1 => enable_branch_protection = Some(data[0] != 0),
@@ -106,11 +98,28 @@ impl CodeMemory {
                 ".text" => {
                     text = range;
 
-                    // Double-check there are no relocations in the text section. At
-                    // this time relocations are not expected at all from loaded code
-                    // since everything should be resolved at compile time. Handling
-                    // must be added here, though, if relocations pop up.
-                    assert!(section.relocations().count() == 0);
+                    // The text section might have relocations for things like
+                    // libcalls which need to be applied, so handle those here.
+                    //
+                    // Note that only a small subset of possible relocations are
+                    // handled. Only those required by the compiler side of
+                    // things are processed.
+                    for (offset, reloc) in section.relocations() {
+                        assert_eq!(reloc.kind(), object::RelocationKind::Absolute);
+                        assert_eq!(reloc.encoding(), object::RelocationEncoding::Generic);
+                        assert_eq!(usize::from(reloc.size()), std::mem::size_of::<usize>());
+                        assert_eq!(reloc.addend(), 0);
+                        let sym = match reloc.target() {
+                            object::RelocationTarget::Symbol(id) => id,
+                            other => panic!("unknown relocation target {other:?}"),
+                        };
+                        let sym = obj.symbol_by_index(sym).unwrap().name().unwrap();
+                        let libcall = obj::LibCall::from_str(sym)
+                            .unwrap_or_else(|| panic!("unknown symbol relocation: {sym}"));
+
+                        let offset = usize::try_from(offset).unwrap();
+                        relocations.push((offset, libcall));
+                    }
                 }
                 UnwindRegistration::SECTION_NAME => unwind = range,
                 obj::ELF_WASM_DATA => wasm_data = range,
@@ -118,31 +127,7 @@ impl CodeMemory {
                 obj::ELF_WASMTIME_TRAPS => trap_data = range,
                 obj::ELF_NAME_DATA => func_name_data = range,
                 obj::ELF_WASMTIME_INFO => info_data = range,
-
-                // Register dwarf sections into the `dwarf_sections`
-                // array which is indexed by `gimli::SectionId`
-                ".debug_abbrev.wasm" => gimli(DebugAbbrev),
-                ".debug_addr.wasm" => gimli(DebugAddr),
-                ".debug_aranges.wasm" => gimli(DebugAranges),
-                ".debug_frame.wasm" => gimli(DebugFrame),
-                ".eh_frame.wasm" => gimli(EhFrame),
-                ".eh_frame_hdr.wasm" => gimli(EhFrameHdr),
-                ".debug_info.wasm" => gimli(DebugInfo),
-                ".debug_line.wasm" => gimli(DebugLine),
-                ".debug_line_str.wasm" => gimli(DebugLineStr),
-                ".debug_loc.wasm" => gimli(DebugLoc),
-                ".debug_loc_lists.wasm" => gimli(DebugLocLists),
-                ".debug_macinfo.wasm" => gimli(DebugMacinfo),
-                ".debug_macro.wasm" => gimli(DebugMacro),
-                ".debug_pub_names.wasm" => gimli(DebugPubNames),
-                ".debug_pub_types.wasm" => gimli(DebugPubTypes),
-                ".debug_ranges.wasm" => gimli(DebugRanges),
-                ".debug_rng_lists.wasm" => gimli(DebugRngLists),
-                ".debug_str.wasm" => gimli(DebugStr),
-                ".debug_str_offsets.wasm" => gimli(DebugStrOffsets),
-                ".debug_types.wasm" => gimli(DebugTypes),
-                ".debug_cu_index.wasm" => gimli(DebugCuIndex),
-                ".debug_tu_index.wasm" => gimli(DebugTuIndex),
+                obj::ELF_WASMTIME_DWARF => dwarf = range,
 
                 _ => log::debug!("ignoring section {name}"),
             }
@@ -158,9 +143,10 @@ impl CodeMemory {
             trap_data,
             address_map_data,
             func_name_data,
-            dwarf_sections,
+            dwarf,
             info_data,
             wasm_data,
+            relocations,
         })
     }
 
@@ -175,15 +161,9 @@ impl CodeMemory {
         &self.mmap[self.text.clone()]
     }
 
-    /// Returns the data in the corresponding dwarf section, or an empty slice
-    /// if the section wasn't present.
-    pub fn dwarf_section(&self, section: gimli::SectionId) -> &[u8] {
-        let range = self
-            .dwarf_sections
-            .get(section as usize)
-            .cloned()
-            .unwrap_or(0..0);
-        &self.mmap[range]
+    /// Returns the contents of the `ELF_WASMTIME_DWARF` section.
+    pub fn dwarf(&self) -> &[u8] {
+        &self.mmap[self.dwarf.clone()]
     }
 
     /// Returns the data in the `ELF_NAME_DATA` section.
@@ -257,6 +237,22 @@ impl CodeMemory {
         //   both the actual unwinding tables as well as the validity of the
         //   pointers we pass in itself.
         unsafe {
+            // First, if necessary, apply relocations. This can happen for
+            // things like libcalls which happen late in the lowering process
+            // that don't go through the Wasm-based libcalls layer that's
+            // indirected through the `VMContext`. Note that most modules won't
+            // have relocations, so this typically doesn't do anything.
+            self.apply_relocations()?;
+
+            // Next freeze the contents of this image by making all of the
+            // memory readonly. Nothing after this point should ever be modified
+            // so commit everything. For a compiled-in-memory image this will
+            // mean IPIs to evict writable mappings from other cores. For
+            // loaded-from-disk images this shouldn't result in IPIs so long as
+            // there weren't any relocations because nothing should have
+            // otherwise written to the image at any point either.
+            self.mmap.make_readonly(0..self.mmap.len())?;
+
             let text = self.text();
 
             // Clear the newly allocated code from cache if the processor requires it
@@ -266,9 +262,7 @@ impl CodeMemory {
             icache_coherence::clear_cache(text.as_ptr().cast(), text.len())
                 .expect("Failed cache clear");
 
-            // Switch the executable portion from read/write to
-            // read/execute, notably not using read/write/execute to prevent
-            // modifications.
+            // Switch the executable portion from readonly to read/execute.
             self.mmap
                 .make_executable(self.text.clone(), self.enable_branch_protection)
                 .expect("unable to make memory executable");
@@ -283,6 +277,28 @@ impl CodeMemory {
             self.register_unwind_info()?;
         }
 
+        Ok(())
+    }
+
+    unsafe fn apply_relocations(&mut self) -> Result<()> {
+        if self.relocations.is_empty() {
+            return Ok(());
+        }
+
+        for (offset, libcall) in self.relocations.iter() {
+            let offset = self.text.start + offset;
+            let libcall = match libcall {
+                obj::LibCall::FloorF32 => libcalls::relocs::floorf32 as usize,
+                obj::LibCall::FloorF64 => libcalls::relocs::floorf64 as usize,
+                obj::LibCall::NearestF32 => libcalls::relocs::nearestf32 as usize,
+                obj::LibCall::NearestF64 => libcalls::relocs::nearestf64 as usize,
+                obj::LibCall::CeilF32 => libcalls::relocs::ceilf32 as usize,
+                obj::LibCall::CeilF64 => libcalls::relocs::ceilf64 as usize,
+                obj::LibCall::TruncF32 => libcalls::relocs::truncf32 as usize,
+                obj::LibCall::TruncF64 => libcalls::relocs::truncf64 as usize,
+            };
+            *self.mmap.as_mut_ptr().add(offset).cast::<usize>() = libcall;
+        }
         Ok(())
     }
 

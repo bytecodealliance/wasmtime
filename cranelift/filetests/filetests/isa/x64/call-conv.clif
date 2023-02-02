@@ -130,8 +130,8 @@ block0(
 ;   movq    %rsi, %rdx
 ;   movq    %rdi, %rsi
 ;   movq    %rax, %rdi
-;   movq    16(%rbp), %r11
-;   movq    24(%rbp), %r10
+;   movq    16(%rbp), %r10
+;   movq    24(%rbp), %r11
 ;   movss   32(%rbp), %xmm9
 ;   movsd   40(%rbp), %xmm8
 ;   subq    %rsp, $144, %rsp
@@ -146,8 +146,8 @@ block0(
 ;   movsd   %xmm5, 88(%rsp)
 ;   movsd   %xmm6, 96(%rsp)
 ;   movsd   %xmm7, 104(%rsp)
-;   movq    %r11, 112(%rsp)
-;   movl    %r10d, 120(%rsp)
+;   movq    %r10, 112(%rsp)
+;   movl    %r11d, 120(%rsp)
 ;   movss   %xmm9, 128(%rsp)
 ;   movsd   %xmm8, 136(%rsp)
 ;   movq    %rdi, %r9

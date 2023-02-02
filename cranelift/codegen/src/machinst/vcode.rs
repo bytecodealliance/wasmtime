@@ -541,7 +541,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
             .sort_unstable_by_key(|(vreg, _, _, _)| *vreg);
     }
 
-    fn collect_operands(&mut self) {
+    fn collect_operands(&mut self, allocatable: PRegSet) {
         for (i, insn) in self.vcode.insts.iter().enumerate() {
             // Push operands from the instruction onto the operand list.
             //
@@ -555,9 +555,10 @@ impl<I: VCodeInst> VCodeBuilder<I> {
             // its register fields (which is slow, branchy code) once.
 
             let vreg_aliases = &self.vcode.vreg_aliases;
-            let mut op_collector = OperandCollector::new(&mut self.vcode.operands, |vreg| {
-                Self::resolve_vreg_alias_impl(vreg_aliases, vreg)
-            });
+            let mut op_collector =
+                OperandCollector::new(&mut self.vcode.operands, allocatable, |vreg| {
+                    Self::resolve_vreg_alias_impl(vreg_aliases, vreg)
+                });
             insn.get_operands(&mut op_collector);
             let (ops, clobbers) = op_collector.finish();
             self.vcode.operand_ranges.push(ops);
@@ -567,11 +568,25 @@ impl<I: VCodeInst> VCodeBuilder<I> {
             }
 
             if let Some((dst, src)) = insn.is_move() {
+                // We should never see non-virtual registers present in move
+                // instructions.
+                assert!(
+                    src.is_virtual(),
+                    "the real register {:?} was used as the source of a move instruction",
+                    src
+                );
+                assert!(
+                    dst.to_reg().is_virtual(),
+                    "the real register {:?} was used as the destination of a move instruction",
+                    dst.to_reg()
+                );
+
                 let src = Operand::reg_use(Self::resolve_vreg_alias_impl(vreg_aliases, src.into()));
                 let dst = Operand::reg_def(Self::resolve_vreg_alias_impl(
                     vreg_aliases,
                     dst.to_reg().into(),
                 ));
+
                 // Note that regalloc2 requires these in (src, dst) order.
                 self.vcode.is_move.insert(InsnIndex::new(i), (src, dst));
             }
@@ -586,14 +601,14 @@ impl<I: VCodeInst> VCodeBuilder<I> {
     }
 
     /// Build the final VCode.
-    pub fn build(mut self, vregs: VRegAllocator<I>) -> VCode<I> {
+    pub fn build(mut self, allocatable: PRegSet, vregs: VRegAllocator<I>) -> VCode<I> {
         self.vcode.vreg_types = vregs.vreg_types;
         self.vcode.reftyped_vregs = vregs.reftyped_vregs;
 
         if self.direction == VCodeBuildDirection::Backward {
             self.reverse_and_finalize();
         }
-        self.collect_operands();
+        self.collect_operands(allocatable);
 
         // Apply register aliases to the `reftyped_vregs` list since this list
         // will be returned directly to `regalloc2` eventually and all
@@ -662,6 +677,11 @@ impl<I: VCodeInst> VCode<I> {
     /// (self.num_blocks() - 1)`.
     pub fn num_blocks(&self) -> usize {
         self.block_ranges.len()
+    }
+
+    /// The number of lowered instructions.
+    pub fn num_insts(&self) -> usize {
+        self.insts.len()
     }
 
     /// Get the successors for a block.
@@ -1214,6 +1234,12 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
     }
 
     fn block_params(&self, block: BlockIndex) -> &[VReg] {
+        // As a special case we don't return block params for the entry block, as all the arguments
+        // will be defined by the `Inst::Args` instruction.
+        if block == self.entry {
+            return &[];
+        }
+
         let (start, end) = self.block_params_range[block.index()];
         let ret = &self.block_params[start as usize..end as usize];
         // Currently block params are never aliased to another vreg, but
@@ -1233,6 +1259,8 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
 
     fn is_ret(&self, insn: InsnIndex) -> bool {
         match self.insts[insn.index()].is_term() {
+            // We treat blocks terminated by an unconditional trap like a return for regalloc.
+            MachTerminator::None => self.insts[insn.index()].is_trap(),
             MachTerminator::Ret => true,
             _ => false,
         }

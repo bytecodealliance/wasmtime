@@ -16,6 +16,7 @@ pub struct Config {
     pub async_: AsyncConf,
     pub wasmtime: bool,
     pub tracing: TracingConf,
+    pub mutable: bool,
 }
 
 mod kw {
@@ -25,8 +26,10 @@ mod kw {
     syn::custom_keyword!(errors);
     syn::custom_keyword!(target);
     syn::custom_keyword!(wasmtime);
+    syn::custom_keyword!(mutable);
     syn::custom_keyword!(tracing);
     syn::custom_keyword!(disable_for);
+    syn::custom_keyword!(trappable);
 }
 
 #[derive(Debug, Clone)]
@@ -36,6 +39,7 @@ pub enum ConfigField {
     Async(AsyncConf),
     Wasmtime(bool),
     Tracing(TracingConf),
+    Mutable(bool),
 }
 
 impl Parse for ConfigField {
@@ -75,6 +79,10 @@ impl Parse for ConfigField {
             input.parse::<kw::tracing>()?;
             input.parse::<Token![:]>()?;
             Ok(ConfigField::Tracing(input.parse()?))
+        } else if lookahead.peek(kw::mutable) {
+            input.parse::<kw::mutable>()?;
+            input.parse::<Token![:]>()?;
+            Ok(ConfigField::Mutable(input.parse::<syn::LitBool>()?.value))
         } else {
             Err(lookahead.error())
         }
@@ -88,6 +96,7 @@ impl Config {
         let mut async_ = None;
         let mut wasmtime = None;
         let mut tracing = None;
+        let mut mutable = None;
         for f in fields {
             match f {
                 ConfigField::Witx(c) => {
@@ -120,6 +129,12 @@ impl Config {
                     }
                     tracing = Some(c);
                 }
+                ConfigField::Mutable(c) => {
+                    if mutable.is_some() {
+                        return Err(Error::new(err_loc, "duplicate `mutable` field"));
+                    }
+                    mutable = Some(c);
+                }
             }
         }
         Ok(Config {
@@ -130,6 +145,7 @@ impl Config {
             async_: async_.take().unwrap_or_default(),
             wasmtime: wasmtime.unwrap_or(true),
             tracing: tracing.unwrap_or_default(),
+            mutable: mutable.unwrap_or(true),
         })
     }
 
@@ -274,14 +290,14 @@ impl Parse for ErrorConf {
             content.parse_terminated(Parse::parse)?;
         let mut m = HashMap::new();
         for i in items {
-            match m.insert(i.abi_error.clone(), i.clone()) {
+            match m.insert(i.abi_error().clone(), i.clone()) {
                 None => {}
                 Some(prev_def) => {
                     return Err(Error::new(
-                        i.err_loc,
+                        *i.err_loc(),
                         format!(
                         "duplicate definition of rich error type for {:?}: previously defined at {:?}",
-                        i.abi_error, prev_def.err_loc,
+                        i.abi_error(), prev_def.err_loc(),
                     ),
                     ))
                 }
@@ -291,20 +307,23 @@ impl Parse for ErrorConf {
     }
 }
 
-#[derive(Clone)]
-pub struct ErrorConfField {
-    pub abi_error: Ident,
-    pub rich_error: syn::Path,
-    pub err_loc: Span,
+#[derive(Debug, Clone)]
+pub enum ErrorConfField {
+    Trappable(TrappableErrorConfField),
+    User(UserErrorConfField),
 }
-
-impl std::fmt::Debug for ErrorConfField {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ErrorConfField")
-            .field("abi_error", &self.abi_error)
-            .field("rich_error", &"(...)")
-            .field("err_loc", &self.err_loc)
-            .finish()
+impl ErrorConfField {
+    pub fn abi_error(&self) -> &Ident {
+        match self {
+            Self::Trappable(t) => &t.abi_error,
+            Self::User(u) => &u.abi_error,
+        }
+    }
+    pub fn err_loc(&self) -> &Span {
+        match self {
+            Self::Trappable(t) => &t.err_loc,
+            Self::User(u) => &u.err_loc,
+        }
     }
 }
 
@@ -313,12 +332,48 @@ impl Parse for ErrorConfField {
         let err_loc = input.span();
         let abi_error = input.parse::<Ident>()?;
         let _arrow: Token![=>] = input.parse()?;
-        let rich_error = input.parse::<syn::Path>()?;
-        Ok(ErrorConfField {
-            abi_error,
-            rich_error,
-            err_loc,
-        })
+
+        let lookahead = input.lookahead1();
+        if lookahead.peek(kw::trappable) {
+            let _ = input.parse::<kw::trappable>()?;
+            let rich_error = input.parse()?;
+            Ok(ErrorConfField::Trappable(TrappableErrorConfField {
+                abi_error,
+                rich_error,
+                err_loc,
+            }))
+        } else {
+            let rich_error = input.parse::<syn::Path>()?;
+            Ok(ErrorConfField::User(UserErrorConfField {
+                abi_error,
+                rich_error,
+                err_loc,
+            }))
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct TrappableErrorConfField {
+    pub abi_error: Ident,
+    pub rich_error: Ident,
+    pub err_loc: Span,
+}
+
+#[derive(Clone)]
+pub struct UserErrorConfField {
+    pub abi_error: Ident,
+    pub rich_error: syn::Path,
+    pub err_loc: Span,
+}
+
+impl std::fmt::Debug for UserErrorConfField {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ErrorConfField")
+            .field("abi_error", &self.abi_error)
+            .field("rich_error", &"(...)")
+            .field("err_loc", &self.err_loc)
+            .finish()
     }
 }
 
@@ -561,6 +616,12 @@ impl Parse for WasmtimeConfigField {
                 blocking: true,
                 functions: input.parse()?,
             })))
+        } else if lookahead.peek(kw::mutable) {
+            input.parse::<kw::mutable>()?;
+            input.parse::<Token![:]>()?;
+            Ok(WasmtimeConfigField::Core(ConfigField::Mutable(
+                input.parse::<syn::LitBool>()?.value,
+            )))
         } else {
             Err(lookahead.error())
         }

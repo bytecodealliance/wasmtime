@@ -40,22 +40,70 @@ fn is_load_with_defined_trapping(opcode: Opcode, data: &InstructionData) -> bool
 /// its value is unused?
 #[inline(always)]
 pub fn has_side_effect(func: &Function, inst: Inst) -> bool {
-    let data = &func.dfg[inst];
+    let data = &func.dfg.insts[inst];
     let opcode = data.opcode();
     trivially_has_side_effects(opcode) || is_load_with_defined_trapping(opcode, data)
+}
+
+/// Does the given instruction behave as a "pure" node with respect to
+/// aegraph semantics?
+///
+/// - Actual pure nodes (arithmetic, etc)
+/// - Loads with the `readonly` flag set
+pub fn is_pure_for_egraph(func: &Function, inst: Inst) -> bool {
+    let is_readonly_load = match func.dfg.insts[inst] {
+        InstructionData::Load {
+            opcode: Opcode::Load,
+            flags,
+            ..
+        } => flags.readonly() && flags.notrap(),
+        _ => false,
+    };
+    // Multi-value results do not play nicely with much of the egraph
+    // infrastructure. They are in practice used only for multi-return
+    // calls and some other odd instructions (e.g. iadd_cout) which,
+    // for now, we can afford to leave in place as opaque
+    // side-effecting ops. So if more than one result, then the inst
+    // is "not pure". Similarly, ops with zero results can be used
+    // only for their side-effects, so are never pure. (Or if they
+    // are, we can always trivially eliminate them with no effect.)
+    let has_one_result = func.dfg.inst_results(inst).len() == 1;
+
+    let op = func.dfg.insts[inst].opcode();
+
+    has_one_result && (is_readonly_load || (!op.can_load() && !trivially_has_side_effects(op)))
+}
+
+/// Can the given instruction be merged into another copy of itself?
+/// These instructions may have side-effects, but as long as we retain
+/// the first instance of the instruction, the second and further
+/// instances are redundant if they would produce the same trap or
+/// result.
+pub fn is_mergeable_for_egraph(func: &Function, inst: Inst) -> bool {
+    let op = func.dfg.insts[inst].opcode();
+    // We can only merge one-result operators due to the way that GVN
+    // is structured in the egraph implementation.
+    let has_one_result = func.dfg.inst_results(inst).len() == 1;
+    has_one_result
+        // Loads/stores are handled by alias analysis and not
+        // otherwise mergeable.
+        && !op.can_load()
+        && !op.can_store()
+        // Can only have idempotent side-effects.
+        && (!has_side_effect(func, inst) || op.side_effects_idempotent())
 }
 
 /// Does the given instruction have any side-effect as per [has_side_effect], or else is a load,
 /// but not the get_pinned_reg opcode?
 pub fn has_lowering_side_effect(func: &Function, inst: Inst) -> bool {
-    let op = func.dfg[inst].opcode();
+    let op = func.dfg.insts[inst].opcode();
     op != Opcode::GetPinnedReg && (has_side_effect(func, inst) || op.can_load())
 }
 
 /// Is the given instruction a constant value (`iconst`, `fconst`) that can be
 /// represented in 64 bits?
 pub fn is_constant_64bit(func: &Function, inst: Inst) -> Option<u64> {
-    let data = &func.dfg[inst];
+    let data = &func.dfg.insts[inst];
     if data.opcode() == Opcode::Null {
         return Some(0);
     }
@@ -69,7 +117,7 @@ pub fn is_constant_64bit(func: &Function, inst: Inst) -> Option<u64> {
 
 /// Get the address, offset, and access type from the given instruction, if any.
 pub fn inst_addr_offset_type(func: &Function, inst: Inst) -> Option<(Value, Offset32, Type)> {
-    let data = &func.dfg[inst];
+    let data = &func.dfg.insts[inst];
     match data {
         InstructionData::Load { arg, offset, .. } => {
             let ty = func.dfg.value_type(func.dfg.inst_results(inst)[0]);
@@ -93,7 +141,7 @@ pub fn inst_addr_offset_type(func: &Function, inst: Inst) -> Option<(Value, Offs
 
 /// Get the store data, if any, from an instruction.
 pub fn inst_store_data(func: &Function, inst: Inst) -> Option<Value> {
-    let data = &func.dfg[inst];
+    let data = &func.dfg.insts[inst];
     match data {
         InstructionData::Store { args, .. } | InstructionData::StoreNoOffset { args, .. } => {
             Some(args[0])
@@ -127,27 +175,24 @@ pub(crate) fn visit_block_succs<F: FnMut(Inst, Block, bool)>(
     block: Block,
     mut visit: F,
 ) {
-    for inst in f.layout.block_likely_branches(block) {
-        if f.dfg[inst].opcode().is_branch() {
-            visit_branch_targets(f, inst, &mut visit);
-        }
-    }
-}
-
-fn visit_branch_targets<F: FnMut(Inst, Block, bool)>(f: &Function, inst: Inst, visit: &mut F) {
-    match f.dfg[inst].analyze_branch(&f.dfg.value_lists) {
-        BranchInfo::NotABranch => {}
-        BranchInfo::SingleDest(dest, _) => {
-            visit(inst, dest, false);
-        }
-        BranchInfo::Table(table, maybe_dest) => {
-            if let Some(dest) = maybe_dest {
+    if let Some(inst) = f.layout.last_inst(block) {
+        match f.dfg.insts[inst].analyze_branch() {
+            BranchInfo::NotABranch => {}
+            BranchInfo::SingleDest(dest) => {
+                visit(inst, dest.block(&f.dfg.value_lists), false);
+            }
+            BranchInfo::Conditional(block_then, block_else) => {
+                visit(inst, block_then.block(&f.dfg.value_lists), false);
+                visit(inst, block_else.block(&f.dfg.value_lists), false);
+            }
+            BranchInfo::Table(table, dest) => {
                 // The default block is reached via a direct conditional branch,
                 // so it is not part of the table.
                 visit(inst, dest, false);
-            }
-            for &dest in f.jump_tables[table].as_slice() {
-                visit(inst, dest, true);
+
+                for &dest in f.jump_tables[table].as_slice() {
+                    visit(inst, dest, true);
+                }
             }
         }
     }

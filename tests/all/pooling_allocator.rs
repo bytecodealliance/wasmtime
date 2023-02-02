@@ -67,7 +67,7 @@ fn memory_limit() -> Result<()> {
     {
         let mut store = Store::new(&engine, ());
         let instance = Instance::new(&mut store, &module, &[])?;
-        let f = instance.get_typed_func::<(), i32, _>(&mut store, "f")?;
+        let f = instance.get_typed_func::<(), i32>(&mut store, "f")?;
 
         assert_eq!(f.call(&mut store, ()).expect("function should not trap"), 0);
         assert_eq!(f.call(&mut store, ()).expect("function should not trap"), 1);
@@ -149,7 +149,7 @@ fn memory_guard_page_trap() -> Result<()> {
         let mut store = Store::new(&engine, ());
         let instance = Instance::new(&mut store, &module, &[])?;
         let m = instance.get_memory(&mut store, "m").unwrap();
-        let f = instance.get_typed_func::<i32, (), _>(&mut store, "f")?;
+        let f = instance.get_typed_func::<i32, ()>(&mut store, "f")?;
 
         let trap = f
             .call(&mut store, 0)
@@ -273,7 +273,7 @@ fn table_limit() -> Result<()> {
     {
         let mut store = Store::new(&engine, ());
         let instance = Instance::new(&mut store, &module, &[])?;
-        let f = instance.get_typed_func::<(), i32, _>(&mut store, "f")?;
+        let f = instance.get_typed_func::<(), i32>(&mut store, "f")?;
 
         for i in 0..TABLE_ELEMENTS {
             assert_eq!(
@@ -428,7 +428,7 @@ fn instantiation_limit() -> Result<()> {
             Err(e) => assert_eq!(
                 e.to_string(),
                 format!(
-                    "Limit of {} concurrent instances has been reached",
+                    "maximum concurrent instance limit of {} reached",
                     INSTANCE_LIMIT
                 )
             ),
@@ -611,7 +611,7 @@ fn switch_image_and_non_image() -> Result<()> {
     let assert_zero = || -> Result<()> {
         let mut store = Store::new(&engine, ());
         let instance = Instance::new(&mut store, &module1, &[])?;
-        let func = instance.get_typed_func::<i32, i32, _>(&mut store, "load")?;
+        let func = instance.get_typed_func::<i32, i32>(&mut store, "load")?;
         assert_eq!(func.call(&mut store, 0)?, 0);
         Ok(())
     };
@@ -646,10 +646,11 @@ fn instance_too_large() -> Result<()> {
 
     let engine = Engine::new(&config)?;
     let expected = "\
-instance allocation for this module requires 336 bytes which exceeds the \
+instance allocation for this module requires 240 bytes which exceeds the \
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
- * 76.19% - 256 bytes - instance state management
+ * 66.67% - 160 bytes - instance state management
+ * 6.67% - 16 bytes - jit store state
 ";
     match Module::new(&engine, "(module)") {
         Ok(_) => panic!("should have failed to compile"),
@@ -663,11 +664,11 @@ configured maximum of 16 bytes; breakdown of allocation requirement:
     lots_of_globals.push_str(")");
 
     let expected = "\
-instance allocation for this module requires 1936 bytes which exceeds the \
+instance allocation for this module requires 1840 bytes which exceeds the \
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
- * 13.22% - 256 bytes - instance state management
- * 82.64% - 1600 bytes - defined globals
+ * 8.70% - 160 bytes - instance state management
+ * 86.96% - 1600 bytes - defined globals
 ";
     match Module::new(&engine, &lots_of_globals) {
         Ok(_) => panic!("should have failed to compile"),
@@ -719,10 +720,10 @@ fn dynamic_memory_pooling_allocator() -> Result<()> {
     let mut store = Store::new(&engine, ());
     let instance = Instance::new(&mut store, &module, &[])?;
 
-    let grow = instance.get_typed_func::<u32, i32, _>(&mut store, "grow")?;
-    let size = instance.get_typed_func::<(), u32, _>(&mut store, "size")?;
-    let i32_load = instance.get_typed_func::<u32, i32, _>(&mut store, "i32.load")?;
-    let i32_store = instance.get_typed_func::<(u32, i32), (), _>(&mut store, "i32.store")?;
+    let grow = instance.get_typed_func::<u32, i32>(&mut store, "grow")?;
+    let size = instance.get_typed_func::<(), u32>(&mut store, "size")?;
+    let i32_load = instance.get_typed_func::<u32, i32>(&mut store, "i32.load")?;
+    let i32_store = instance.get_typed_func::<(u32, i32), ()>(&mut store, "i32.store")?;
     let memory = instance.get_memory(&mut store, "memory").unwrap();
 
     // basic length 1 tests
@@ -757,7 +758,7 @@ fn dynamic_memory_pooling_allocator() -> Result<()> {
     // Re-instantiate in another store.
     store = Store::new(&engine, ());
     let instance = Instance::new(&mut store, &module, &[])?;
-    let i32_load = instance.get_typed_func::<u32, i32, _>(&mut store, "i32.load")?;
+    let i32_load = instance.get_typed_func::<u32, i32>(&mut store, "i32.load")?;
     let memory = instance.get_memory(&mut store, "memory").unwrap();
 
     // Technically this is out of bounds...
@@ -806,8 +807,8 @@ fn zero_memory_pages_disallows_oob() -> Result<()> {
     )?;
     let mut store = Store::new(&engine, ());
     let instance = Instance::new(&mut store, &module, &[])?;
-    let load32 = instance.get_typed_func::<i32, i32, _>(&mut store, "load")?;
-    let store32 = instance.get_typed_func::<i32, (), _>(&mut store, "store")?;
+    let load32 = instance.get_typed_func::<i32, i32>(&mut store, "load")?;
+    let store32 = instance.get_typed_func::<i32, ()>(&mut store, "store")?;
     for i in 0..31 {
         assert!(load32.call(&mut store, 1 << i).is_err());
         assert!(store32.call(&mut store, 1 << i).is_err());

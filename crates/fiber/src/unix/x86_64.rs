@@ -5,7 +5,7 @@
 // all the other bits. Documentation tries to reference various bits here and
 // there but try to make sure to read over everything before tweaking things!
 
-use wasmtime_asm_macros::{asm_func, asm_sym};
+use wasmtime_asm_macros::asm_func;
 
 // fn(top_of_stack(rdi): *mut u8)
 asm_func!(
@@ -58,7 +58,7 @@ asm_func!(
         //
         // The first 16 bytes of stack are reserved for metadata, so we start
         // storing values beneath that.
-        lea rax, ", asm_sym!("wasmtime_fiber_start"), "[rip]
+        lea rax, {start}[rip]
         mov -0x18[rdi], rax
         mov -0x20[rdi], rdi   // loaded into rbp during switch
         mov -0x28[rdi], rsi   // loaded into rbx during switch
@@ -73,6 +73,7 @@ asm_func!(
         mov -0x10[rdi], rax
         ret
     ",
+    start = sym super::wasmtime_fiber_start,
 );
 
 // This is a pretty special function that has no real signature. Its use is to

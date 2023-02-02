@@ -4,39 +4,14 @@ use cranelift_codegen::{
     cursor::{Cursor, FuncCursor},
     incremental_cache as icache,
     ir::{self, immediates::Imm64, ExternalName},
-    isa,
-    settings::{self, Configurable as _},
     Context,
 };
 use libfuzzer_sys::fuzz_target;
 
 use cranelift_fuzzgen::*;
-use target_lexicon::Triple;
 
-fuzz_target!(|func: SingleFunction| {
-    let mut func = func.0;
-
-    let flags = settings::Flags::new({
-        let mut builder = settings::builder();
-        // We need llvm ABI extensions for i128 values on x86
-        builder.set("enable_llvm_abi_extensions", "true").unwrap();
-
-        // This is the default, but we should ensure that it wasn't accidentally turned off anywhere.
-        builder.set("enable_verifier", "true").unwrap();
-
-        builder
-    });
-
-    let isa_builder = isa::lookup(Triple::host())
-        .map_err(|err| match err {
-            isa::LookupError::SupportDisabled => {
-                "support for architecture disabled at compile time"
-            }
-            isa::LookupError::Unsupported => "unsupported architecture",
-        })
-        .unwrap();
-
-    let isa = isa_builder.finish(flags).unwrap();
+fuzz_target!(|func: FunctionWithIsa| {
+    let FunctionWithIsa { mut func, isa } = func;
 
     let cache_key_hash = icache::compute_cache_key(&*isa, &mut func);
 
@@ -95,15 +70,15 @@ fuzz_target!(|func: SingleFunction| {
                 if let ir::InstructionData::UnaryImm {
                     opcode: ir::Opcode::Iconst,
                     imm,
-                } = cursor.func.dfg[inst]
+                } = cursor.func.dfg.insts[inst]
                 {
                     let imm = imm.bits();
-                    cursor.func.dfg[inst] = ir::InstructionData::UnaryImm {
+                    cursor.func.dfg.insts[inst] = ir::InstructionData::UnaryImm {
                         opcode: ir::Opcode::Iconst,
                         imm: Imm64::new(imm.checked_add(1).unwrap_or_else(|| imm - 1)),
                     };
                 } else {
-                    cursor.func.dfg[inst] = ir::InstructionData::UnaryImm {
+                    cursor.func.dfg.insts[inst] = ir::InstructionData::UnaryImm {
                         opcode: ir::Opcode::Iconst,
                         imm: Imm64::new(42),
                     };

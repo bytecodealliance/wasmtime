@@ -76,7 +76,7 @@ use cranelift_entity::{packed_option::PackedOption, EntityRef};
 /// For a given program point, the vector of last-store instruction
 /// indices for each disjoint category of abstract state.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct LastStores {
+pub struct LastStores {
     heap: PackedOption<Inst>,
     table: PackedOption<Inst>,
     vmctx: PackedOption<Inst>,
@@ -85,14 +85,14 @@ struct LastStores {
 
 impl LastStores {
     fn update(&mut self, func: &Function, inst: Inst) {
-        let opcode = func.dfg[inst].opcode();
+        let opcode = func.dfg.insts[inst].opcode();
         if has_memory_fence_semantics(opcode) {
             self.heap = inst.into();
             self.table = inst.into();
             self.vmctx = inst.into();
             self.other = inst.into();
         } else if opcode.can_store() {
-            if let Some(memflags) = func.dfg[inst].memflags() {
+            if let Some(memflags) = func.dfg.insts[inst].memflags() {
                 if memflags.heap() {
                     self.heap = inst.into();
                 } else if memflags.table() {
@@ -112,7 +112,7 @@ impl LastStores {
     }
 
     fn get_last_store(&self, func: &Function, inst: Inst) -> PackedOption<Inst> {
-        if let Some(memflags) = func.dfg[inst].memflags() {
+        if let Some(memflags) = func.dfg.insts[inst].memflags() {
             if memflags.heap() {
                 self.heap
             } else if memflags.table() {
@@ -122,7 +122,9 @@ impl LastStores {
             } else {
                 self.other
             }
-        } else if func.dfg[inst].opcode().can_load() || func.dfg[inst].opcode().can_store() {
+        } else if func.dfg.insts[inst].opcode().can_load()
+            || func.dfg.insts[inst].opcode().can_store()
+        {
             inst.into()
         } else {
             PackedOption::default()
@@ -179,9 +181,6 @@ struct MemoryLoc {
 
 /// An alias-analysis pass.
 pub struct AliasAnalysis<'a> {
-    /// The function we're analyzing.
-    func: &'a mut Function,
-
     /// The domtree for the function.
     domtree: &'a DominatorTree,
 
@@ -198,23 +197,22 @@ pub struct AliasAnalysis<'a> {
 
 impl<'a> AliasAnalysis<'a> {
     /// Perform an alias analysis pass.
-    pub fn new(func: &'a mut Function, domtree: &'a DominatorTree) -> AliasAnalysis<'a> {
+    pub fn new(func: &Function, domtree: &'a DominatorTree) -> AliasAnalysis<'a> {
         trace!("alias analysis: input is:\n{:?}", func);
         let mut analysis = AliasAnalysis {
-            func,
             domtree,
             block_input: FxHashMap::default(),
             mem_values: FxHashMap::default(),
         };
 
-        analysis.compute_block_input_states();
+        analysis.compute_block_input_states(func);
         analysis
     }
 
-    fn compute_block_input_states(&mut self) {
+    fn compute_block_input_states(&mut self, func: &Function) {
         let mut queue = vec![];
         let mut queue_set = FxHashSet::default();
-        let entry = self.func.layout.entry_block().unwrap();
+        let entry = func.layout.entry_block().unwrap();
         queue.push(entry);
         queue_set.insert(entry);
 
@@ -232,19 +230,13 @@ impl<'a> AliasAnalysis<'a> {
                 state
             );
 
-            for inst in self.func.layout.block_insts(block) {
-                state.update(self.func, inst);
+            for inst in func.layout.block_insts(block) {
+                state.update(func, inst);
                 trace!("after inst{}: state is {:?}", inst.index(), state);
             }
 
-            visit_block_succs(self.func, block, |_inst, succ, _from_table| {
-                let succ_first_inst = self
-                    .func
-                    .layout
-                    .block_insts(succ)
-                    .into_iter()
-                    .next()
-                    .unwrap();
+            visit_block_succs(func, block, |_inst, succ, _from_table| {
+                let succ_first_inst = func.layout.block_insts(succ).into_iter().next().unwrap();
                 let updated = match self.block_input.get_mut(&succ) {
                     Some(succ_state) => {
                         let old = succ_state.clone();
@@ -264,117 +256,145 @@ impl<'a> AliasAnalysis<'a> {
         }
     }
 
+    /// Get the starting state for a block.
+    pub fn block_starting_state(&self, block: Block) -> LastStores {
+        self.block_input
+            .get(&block)
+            .cloned()
+            .unwrap_or_else(|| LastStores::default())
+    }
+
+    /// Process one instruction. Meant to be invoked in program order
+    /// within a block, and ideally in RPO or at least some domtree
+    /// preorder for maximal reuse.
+    ///
+    /// Returns `true` if instruction was removed.
+    pub fn process_inst(
+        &mut self,
+        func: &mut Function,
+        state: &mut LastStores,
+        inst: Inst,
+    ) -> Option<Value> {
+        trace!(
+            "alias analysis: scanning at inst{} with state {:?} ({:?})",
+            inst.index(),
+            state,
+            func.dfg.insts[inst],
+        );
+
+        let replacing_value = if let Some((address, offset, ty)) = inst_addr_offset_type(func, inst)
+        {
+            let address = func.dfg.resolve_aliases(address);
+            let opcode = func.dfg.insts[inst].opcode();
+
+            if opcode.can_store() {
+                let store_data = inst_store_data(func, inst).unwrap();
+                let store_data = func.dfg.resolve_aliases(store_data);
+                let mem_loc = MemoryLoc {
+                    last_store: inst.into(),
+                    address,
+                    offset,
+                    ty,
+                    extending_opcode: get_ext_opcode(opcode),
+                };
+                trace!(
+                    "alias analysis: at inst{}: store with data v{} at loc {:?}",
+                    inst.index(),
+                    store_data.index(),
+                    mem_loc
+                );
+                self.mem_values.insert(mem_loc, (inst, store_data));
+
+                None
+            } else if opcode.can_load() {
+                let last_store = state.get_last_store(func, inst);
+                let load_result = func.dfg.inst_results(inst)[0];
+                let mem_loc = MemoryLoc {
+                    last_store,
+                    address,
+                    offset,
+                    ty,
+                    extending_opcode: get_ext_opcode(opcode),
+                };
+                trace!(
+                    "alias analysis: at inst{}: load with last_store inst{} at loc {:?}",
+                    inst.index(),
+                    last_store.map(|inst| inst.index()).unwrap_or(usize::MAX),
+                    mem_loc
+                );
+
+                // Is there a Value already known to be stored
+                // at this specific memory location?  If so,
+                // we can alias the load result to this
+                // already-known Value.
+                //
+                // Check if the definition dominates this
+                // location; it might not, if it comes from a
+                // load (stores will always dominate though if
+                // their `last_store` survives through
+                // meet-points to this use-site).
+                let aliased =
+                    if let Some((def_inst, value)) = self.mem_values.get(&mem_loc).cloned() {
+                        trace!(
+                            " -> sees known value v{} from inst{}",
+                            value.index(),
+                            def_inst.index()
+                        );
+                        if self.domtree.dominates(def_inst, inst, &func.layout) {
+                            trace!(
+                                " -> dominates; value equiv from v{} to v{} inserted",
+                                load_result.index(),
+                                value.index()
+                            );
+                            Some(value)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+
+                // Otherwise, we can keep *this* load around
+                // as a new equivalent value.
+                if aliased.is_none() {
+                    trace!(
+                        " -> inserting load result v{} at loc {:?}",
+                        load_result.index(),
+                        mem_loc
+                    );
+                    self.mem_values.insert(mem_loc, (inst, load_result));
+                }
+
+                aliased
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        state.update(func, inst);
+
+        replacing_value
+    }
+
     /// Make a pass and update known-redundant loads to aliased
     /// values. We interleave the updates with the memory-location
     /// tracking because resolving some aliases may expose others
     /// (e.g. in cases of double-indirection with two separate chains
     /// of loads).
-    pub fn compute_and_update_aliases(&mut self) {
-        let mut pos = FuncCursor::new(self.func);
+    pub fn compute_and_update_aliases(&mut self, func: &mut Function) {
+        let mut pos = FuncCursor::new(func);
 
         while let Some(block) = pos.next_block() {
-            let mut state = self
-                .block_input
-                .get(&block)
-                .cloned()
-                .unwrap_or_else(|| LastStores::default());
-
+            let mut state = self.block_starting_state(block);
             while let Some(inst) = pos.next_inst() {
-                trace!(
-                    "alias analysis: scanning at inst{} with state {:?} ({:?})",
-                    inst.index(),
-                    state,
-                    pos.func.dfg[inst],
-                );
-
-                if let Some((address, offset, ty)) = inst_addr_offset_type(pos.func, inst) {
-                    let address = pos.func.dfg.resolve_aliases(address);
-                    let opcode = pos.func.dfg[inst].opcode();
-
-                    if opcode.can_store() {
-                        let store_data = inst_store_data(pos.func, inst).unwrap();
-                        let store_data = pos.func.dfg.resolve_aliases(store_data);
-                        let mem_loc = MemoryLoc {
-                            last_store: inst.into(),
-                            address,
-                            offset,
-                            ty,
-                            extending_opcode: get_ext_opcode(opcode),
-                        };
-                        trace!(
-                            "alias analysis: at inst{}: store with data v{} at loc {:?}",
-                            inst.index(),
-                            store_data.index(),
-                            mem_loc
-                        );
-                        self.mem_values.insert(mem_loc, (inst, store_data));
-                    } else if opcode.can_load() {
-                        let last_store = state.get_last_store(pos.func, inst);
-                        let load_result = pos.func.dfg.inst_results(inst)[0];
-                        let mem_loc = MemoryLoc {
-                            last_store,
-                            address,
-                            offset,
-                            ty,
-                            extending_opcode: get_ext_opcode(opcode),
-                        };
-                        trace!(
-                            "alias analysis: at inst{}: load with last_store inst{} at loc {:?}",
-                            inst.index(),
-                            last_store.map(|inst| inst.index()).unwrap_or(usize::MAX),
-                            mem_loc
-                        );
-
-                        // Is there a Value already known to be stored
-                        // at this specific memory location?  If so,
-                        // we can alias the load result to this
-                        // already-known Value.
-                        //
-                        // Check if the definition dominates this
-                        // location; it might not, if it comes from a
-                        // load (stores will always dominate though if
-                        // their `last_store` survives through
-                        // meet-points to this use-site).
-                        let aliased = if let Some((def_inst, value)) =
-                            self.mem_values.get(&mem_loc).cloned()
-                        {
-                            trace!(
-                                " -> sees known value v{} from inst{}",
-                                value.index(),
-                                def_inst.index()
-                            );
-                            if self.domtree.dominates(def_inst, inst, &pos.func.layout) {
-                                trace!(
-                                    " -> dominates; value equiv from v{} to v{} inserted",
-                                    load_result.index(),
-                                    value.index()
-                                );
-
-                                pos.func.dfg.detach_results(inst);
-                                pos.func.dfg.change_to_alias(load_result, value);
-                                pos.remove_inst_and_step_back();
-                                true
-                            } else {
-                                false
-                            }
-                        } else {
-                            false
-                        };
-
-                        // Otherwise, we can keep *this* load around
-                        // as a new equivalent value.
-                        if !aliased {
-                            trace!(
-                                " -> inserting load result v{} at loc {:?}",
-                                load_result.index(),
-                                mem_loc
-                            );
-                            self.mem_values.insert(mem_loc, (inst, load_result));
-                        }
-                    }
+                if let Some(replaced_result) = self.process_inst(pos.func, &mut state, inst) {
+                    let result = pos.func.dfg.inst_results(inst)[0];
+                    pos.func.dfg.detach_results(inst);
+                    pos.func.dfg.change_to_alias(result, replaced_result);
+                    pos.remove_inst_and_step_back();
                 }
-
-                state.update(pos.func, inst);
             }
         }
     }

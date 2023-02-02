@@ -11,8 +11,7 @@ function u0:31() -> i32, i32 system_v {
                                     v1 = iconst.i32 0
                                     v2 = iconst.i32 0
 @0004                               v28 = iconst.i8 0
-@0005                               brnz v28, block25
-                                    jump block1
+@0005                               brif v28, block25, block1
 
                                 block1:
 @0005                               trap unreachable

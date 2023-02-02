@@ -8,7 +8,7 @@
 
 use crate::error::{Location, ParseError};
 use crate::testcommand::TestOption;
-use cranelift_codegen::isa::TargetIsa;
+use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
 use cranelift_codegen::settings::{Configurable, Flags, SetError};
 
 /// The ISA specifications in a `.clif` file.
@@ -19,7 +19,7 @@ pub enum IsaSpec {
 
     /// The parsed file does contain `isa` commands.
     /// Each `isa` command is used to configure a `TargetIsa` trait object.
-    Some(Vec<Box<dyn TargetIsa>>),
+    Some(Vec<OwnedTargetIsa>),
 }
 
 impl IsaSpec {

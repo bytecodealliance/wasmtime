@@ -3,8 +3,6 @@
 use anyhow::{anyhow, bail, Context as _, Result};
 use clap::Parser;
 use once_cell::sync::Lazy;
-use std::fs::File;
-use std::io::Read;
 use std::thread;
 use std::time::Duration;
 use std::{
@@ -29,6 +27,8 @@ fn parse_module(s: &OsStr) -> anyhow::Result<PathBuf> {
         Some("help") | Some("config") | Some("run") | Some("wast") | Some("compile") => {
             bail!("module name cannot be the same as a subcommand")
         }
+        #[cfg(unix)]
+        Some("-") => Ok(PathBuf::from("/dev/stdin")),
         _ => Ok(s.into()),
     }
 }
@@ -423,27 +423,12 @@ impl RunCommand {
     }
 
     fn load_module(&self, engine: &Engine, path: &Path) -> Result<Module> {
-        // Peek at the first few bytes of the file to figure out if this is
-        // something we can pass off to `deserialize_file` which is fastest if
-        // we don't actually read the whole file into memory. Note that this
-        // behavior is disabled by default, though, because it's not safe to
-        // pass arbitrary user input to this command with `--allow-precompiled`
-        let mut file =
-            File::open(path).with_context(|| format!("failed to open: {}", path.display()))?;
-        let mut magic = [0; 4];
-        if let Ok(()) = file.read_exact(&mut magic) {
-            if &magic == b"\x7fELF" {
-                if self.allow_precompiled {
-                    return unsafe { Module::deserialize_file(engine, path) };
-                }
-                bail!(
-                    "cannot load precompiled module `{}` unless --allow-precompiled is passed",
-                    path.display()
-                )
-            }
+        if self.allow_precompiled {
+            unsafe { Module::from_trusted_file(engine, path) }
+        } else {
+            Module::from_file(engine, path)
+                .context("if you're trying to run a precompiled module, pass --allow-precompiled")
         }
-
-        Module::from_file(engine, path)
     }
 }
 

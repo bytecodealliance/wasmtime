@@ -93,7 +93,8 @@ impl State {
             .unwrap_or_else(|| format!("wasm_module_{}", global_module_id));
 
         for (idx, func) in module.finished_functions() {
-            let (addr, len) = unsafe { ((*func).as_ptr().cast::<u8>(), (*func).len()) };
+            let addr = func.as_ptr();
+            let len = func.len();
             let method_name = super::debug_name(module, idx);
             log::trace!(
                 "new function {:?}::{:?} @ {:?}\n",

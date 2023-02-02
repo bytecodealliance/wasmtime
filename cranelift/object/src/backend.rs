@@ -2,7 +2,7 @@
 
 use anyhow::anyhow;
 use cranelift_codegen::entity::SecondaryMap;
-use cranelift_codegen::isa::TargetIsa;
+use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
 use cranelift_codegen::{self, ir, MachReloc};
 use cranelift_codegen::{
     binemit::{Addend, CodeOffset, Reloc},
@@ -26,7 +26,7 @@ use target_lexicon::PointerWidth;
 
 /// A builder for `ObjectModule`.
 pub struct ObjectBuilder {
-    isa: Box<dyn TargetIsa>,
+    isa: OwnedTargetIsa,
     binary_format: object::BinaryFormat,
     architecture: object::Architecture,
     flags: object::FileFlags,
@@ -45,7 +45,7 @@ impl ObjectBuilder {
     /// floating point instructions, and for stack probes. If you don't know what to use for this
     /// argument, use [cranelift_module::default_libcall_names]().
     pub fn new<V: Into<Vec<u8>>>(
-        isa: Box<dyn TargetIsa>,
+        isa: OwnedTargetIsa,
         name: V,
         libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     ) -> ModuleResult<Self> {
@@ -124,7 +124,7 @@ impl ObjectBuilder {
 ///
 /// See the `ObjectBuilder` for a convenient way to construct `ObjectModule` instances.
 pub struct ObjectModule {
-    isa: Box<dyn TargetIsa>,
+    isa: OwnedTargetIsa,
     object: Object<'static>,
     declarations: ModuleDeclarations,
     functions: SecondaryMap<FuncId, Option<(SymbolId, bool)>>,

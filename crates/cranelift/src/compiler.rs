@@ -10,7 +10,7 @@ use anyhow::{Context as _, Result};
 use cranelift_codegen::ir::{
     self, ExternalName, Function, InstBuilder, MemFlags, UserExternalName, UserFuncName, Value,
 };
-use cranelift_codegen::isa::TargetIsa;
+use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::Context;
 use cranelift_codegen::{settings, MachReloc, MachTrap};
@@ -32,7 +32,7 @@ use std::sync::{Arc, Mutex};
 use wasmparser::{FuncValidatorAllocations, FunctionBody};
 use wasmtime_environ::{
     AddressMapSection, CacheStore, CompileError, FilePos, FlagValue, FunctionBodyData, FunctionLoc,
-    InstructionAddressMap, ModuleTranslation, ModuleTypes, PtrSize, StackMapInformation, TrapCode,
+    InstructionAddressMap, ModuleTranslation, ModuleTypes, PtrSize, StackMapInformation, Trap,
     TrapEncodingBuilder, TrapInformation, Tunables, VMOffsets, WasmFunctionInfo,
 };
 
@@ -68,7 +68,7 @@ impl Default for CompilerContext {
 /// the Wasm to Compiler IR, optimizing it and then translating to assembly.
 pub(crate) struct Compiler {
     contexts: Mutex<Vec<CompilerContext>>,
-    isa: Box<dyn TargetIsa>,
+    isa: OwnedTargetIsa,
     linkopts: LinkOptions,
     cache_store: Option<Arc<dyn CacheStore>>,
 }
@@ -103,7 +103,7 @@ impl Drop for Compiler {
 
 impl Compiler {
     pub(crate) fn new(
-        isa: Box<dyn TargetIsa>,
+        isa: OwnedTargetIsa,
         cache_store: Option<Arc<dyn CacheStore>>,
         linkopts: LinkOptions,
     ) -> Compiler {
@@ -265,7 +265,12 @@ impl wasmtime_environ::Compiler for Compiler {
         context.func.stack_limit = Some(stack_limit);
         let FunctionBodyData { validator, body } = input;
         let mut validator = validator.into_validator(validator_allocations);
-        func_translator.translate_body(&mut validator, body, &mut context.func, &mut func_env)?;
+        func_translator.translate_body(
+            &mut validator,
+            body.clone(),
+            &mut context.func,
+            &mut func_env,
+        )?;
 
         let (_, code_buf) = compile_maybe_cached(&mut context, isa, cache_ctx.as_mut())?;
         // compile_maybe_cached returns the compiled_code but that borrow has the same lifetime as
@@ -766,7 +771,7 @@ impl Compiler {
             .ins()
             .call_indirect(new_sig, callee_value, &callee_args);
 
-        self.wasm_to_host_load_results(ty, &mut builder, values_vec_ptr_val);
+        self.wasm_to_host_load_results(ty, builder, values_vec_ptr_val);
 
         let func = self.finish_trampoline(&mut context, cache_ctx.as_mut(), isa)?;
         self.save_context(CompilerContext {
@@ -840,7 +845,7 @@ impl Compiler {
     fn wasm_to_host_load_results(
         &self,
         ty: &WasmFuncType,
-        builder: &mut FunctionBuilder,
+        mut builder: FunctionBuilder,
         values_vec_ptr_val: Value,
     ) {
         let isa = &*self.isa;
@@ -1003,18 +1008,18 @@ fn mach_trap_to_trap(trap: &MachTrap) -> TrapInformation {
     TrapInformation {
         code_offset: offset,
         trap_code: match code {
-            ir::TrapCode::StackOverflow => TrapCode::StackOverflow,
-            ir::TrapCode::HeapOutOfBounds => TrapCode::HeapOutOfBounds,
-            ir::TrapCode::HeapMisaligned => TrapCode::HeapMisaligned,
-            ir::TrapCode::TableOutOfBounds => TrapCode::TableOutOfBounds,
-            ir::TrapCode::IndirectCallToNull => TrapCode::IndirectCallToNull,
-            ir::TrapCode::BadSignature => TrapCode::BadSignature,
-            ir::TrapCode::IntegerOverflow => TrapCode::IntegerOverflow,
-            ir::TrapCode::IntegerDivisionByZero => TrapCode::IntegerDivisionByZero,
-            ir::TrapCode::BadConversionToInteger => TrapCode::BadConversionToInteger,
-            ir::TrapCode::UnreachableCodeReached => TrapCode::UnreachableCodeReached,
-            ir::TrapCode::Interrupt => TrapCode::Interrupt,
-            ir::TrapCode::User(ALWAYS_TRAP_CODE) => TrapCode::AlwaysTrapAdapter,
+            ir::TrapCode::StackOverflow => Trap::StackOverflow,
+            ir::TrapCode::HeapOutOfBounds => Trap::MemoryOutOfBounds,
+            ir::TrapCode::HeapMisaligned => Trap::HeapMisaligned,
+            ir::TrapCode::TableOutOfBounds => Trap::TableOutOfBounds,
+            ir::TrapCode::IndirectCallToNull => Trap::IndirectCallToNull,
+            ir::TrapCode::BadSignature => Trap::BadSignature,
+            ir::TrapCode::IntegerOverflow => Trap::IntegerOverflow,
+            ir::TrapCode::IntegerDivisionByZero => Trap::IntegerDivisionByZero,
+            ir::TrapCode::BadConversionToInteger => Trap::BadConversionToInteger,
+            ir::TrapCode::UnreachableCodeReached => Trap::UnreachableCodeReached,
+            ir::TrapCode::Interrupt => Trap::Interrupt,
+            ir::TrapCode::User(ALWAYS_TRAP_CODE) => Trap::AlwaysTrapAdapter,
 
             // these should never be emitted by wasmtime-cranelift
             ir::TrapCode::User(_) => unreachable!(),

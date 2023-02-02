@@ -36,6 +36,17 @@ impl Reg {
     pub fn hw_enc(self) -> u8 {
         self.0.hw_enc() as u8
     }
+
+    /// Get the physical register representation.
+    pub(super) fn inner(&self) -> PReg {
+        self.0
+    }
+}
+
+impl From<Reg> for cranelift_codegen::Reg {
+    fn from(reg: Reg) -> Self {
+        reg.inner().into()
+    }
 }
 
 impl std::fmt::Debug for Reg {

@@ -18,7 +18,7 @@ fn test_trap_return() -> Result<()> {
     let hello_func = Func::new(&mut store, hello_type, |_, _, _| bail!("test 123"));
 
     let instance = Instance::new(&mut store, &module, &[hello_func.into()])?;
-    let run_func = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
+    let run_func = instance.get_typed_func::<(), ()>(&mut store, "run")?;
 
     let e = run_func.call(&mut store, ()).unwrap_err();
     assert!(format!("{e:?}").contains("test 123"));
@@ -48,7 +48,7 @@ fn test_anyhow_error_return() -> Result<()> {
     });
 
     let instance = Instance::new(&mut store, &module, &[hello_func.into()])?;
-    let run_func = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
+    let run_func = instance.get_typed_func::<(), ()>(&mut store, "run")?;
 
     let e = run_func.call(&mut store, ()).unwrap_err();
     assert!(!e.to_string().contains("test 1234"));
@@ -86,7 +86,7 @@ fn test_trap_return_downcast() -> Result<()> {
     });
 
     let instance = Instance::new(&mut store, &module, &[hello_func.into()])?;
-    let run_func = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
+    let run_func = instance.get_typed_func::<(), ()>(&mut store, "run")?;
 
     let e = run_func
         .call(&mut store, ())
@@ -121,7 +121,7 @@ fn test_trap_trace() -> Result<()> {
 
     let module = Module::new(store.engine(), wat)?;
     let instance = Instance::new(&mut store, &module, &[])?;
-    let run_func = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
+    let run_func = instance.get_typed_func::<(), ()>(&mut store, "run")?;
 
     let e = run_func.call(&mut store, ()).unwrap_err();
 
@@ -196,7 +196,7 @@ fn test_trap_through_host() -> Result<()> {
         &module,
         &[host_func_a.into(), host_func_b.into()],
     )?;
-    let a = instance.get_typed_func::<(), (), _>(&mut store, "a")?;
+    let a = instance.get_typed_func::<(), ()>(&mut store, "a")?;
     let err = a.call(&mut store, ()).unwrap_err();
     let trace = err.downcast_ref::<WasmBacktrace>().unwrap().frames();
     assert_eq!(trace.len(), 3);
@@ -222,7 +222,7 @@ fn test_trap_backtrace_disabled() -> Result<()> {
 
     let module = Module::new(store.engine(), wat)?;
     let instance = Instance::new(&mut store, &module, &[])?;
-    let run_func = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
+    let run_func = instance.get_typed_func::<(), ()>(&mut store, "run")?;
 
     let e = run_func.call(&mut store, ()).unwrap_err();
     assert!(e.downcast_ref::<WasmBacktrace>().is_none());
@@ -245,7 +245,7 @@ fn test_trap_trace_cb() -> Result<()> {
 
     let module = Module::new(store.engine(), wat)?;
     let instance = Instance::new(&mut store, &module, &[fn_func.into()])?;
-    let run_func = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
+    let run_func = instance.get_typed_func::<(), ()>(&mut store, "run")?;
 
     let e = run_func.call(&mut store, ()).unwrap_err();
 
@@ -271,7 +271,7 @@ fn test_trap_stack_overflow() -> Result<()> {
 
     let module = Module::new(store.engine(), wat)?;
     let instance = Instance::new(&mut store, &module, &[])?;
-    let run_func = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
+    let run_func = instance.get_typed_func::<(), ()>(&mut store, "run")?;
 
     let e = run_func.call(&mut store, ()).unwrap_err();
 
@@ -301,7 +301,7 @@ fn trap_display_pretty() -> Result<()> {
 
     let module = Module::new(store.engine(), wat)?;
     let instance = Instance::new(&mut store, &module, &[])?;
-    let run_func = instance.get_typed_func::<(), (), _>(&mut store, "bar")?;
+    let run_func = instance.get_typed_func::<(), ()>(&mut store, "bar")?;
 
     let e = run_func.call(&mut store, ()).unwrap_err();
     assert_eq!(
@@ -345,7 +345,7 @@ fn trap_display_multi_module() -> Result<()> {
     "#;
     let module = Module::new(store.engine(), wat)?;
     let instance = Instance::new(&mut store, &module, &[bar])?;
-    let bar2 = instance.get_typed_func::<(), (), _>(&mut store, "bar2")?;
+    let bar2 = instance.get_typed_func::<(), ()>(&mut store, "bar2")?;
 
     let e = bar2.call(&mut store, ()).unwrap_err();
     assert_eq!(
@@ -405,12 +405,12 @@ fn rust_panic_import() -> Result<()> {
     let func = Func::new(&mut store, sig, |_, _, _| panic!("this is a panic"));
     let func2 = Func::wrap(&mut store, || panic!("this is another panic"));
     let instance = Instance::new(&mut store, &module, &[func.into(), func2.into()])?;
-    let func = instance.get_typed_func::<(), (), _>(&mut store, "foo")?;
+    let func = instance.get_typed_func::<(), ()>(&mut store, "foo")?;
     let err =
         panic::catch_unwind(AssertUnwindSafe(|| drop(func.call(&mut store, ())))).unwrap_err();
     assert_eq!(err.downcast_ref::<&'static str>(), Some(&"this is a panic"));
 
-    let func = instance.get_typed_func::<(), (), _>(&mut store, "bar")?;
+    let func = instance.get_typed_func::<(), ()>(&mut store, "bar")?;
     let err = panic::catch_unwind(AssertUnwindSafe(|| {
         drop(func.call(&mut store, ()));
     }))
@@ -468,7 +468,7 @@ fn rust_catch_panic_import() -> Result<()> {
     });
 
     let instance = Instance::new(&mut store, &module, &[panic.into(), catch_panic.into()])?;
-    let run = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
     let trap = run.call(&mut store, ()).unwrap_err();
     let trace = trap.downcast_ref::<WasmBacktrace>().unwrap().frames();
     assert_eq!(trace.len(), 1);
@@ -613,7 +613,7 @@ fn present_after_module_drop() -> Result<()> {
     let mut store = Store::<()>::default();
     let module = Module::new(store.engine(), r#"(func (export "foo") unreachable)"#)?;
     let instance = Instance::new(&mut store, &module, &[])?;
-    let func = instance.get_typed_func::<(), (), _>(&mut store, "foo")?;
+    let func = instance.get_typed_func::<(), ()>(&mut store, "foo")?;
 
     println!("asserting before we drop modules");
     assert_trap(func.call(&mut store, ()).unwrap_err());
@@ -790,7 +790,7 @@ fn hint_with_dwarf_info() -> Result<()> {
         "\
 error while executing at wasm backtrace:
     0:   0x1a - <unknown>!start
-note: using the `WASMTIME_BACKTRACE_DETAILS=1` environment variable to may show more debugging information
+note: using the `WASMTIME_BACKTRACE_DETAILS=1` environment variable may show more debugging information
 
 Caused by:
     wasm trap: wasm `unreachable` instruction executed\
@@ -811,13 +811,13 @@ fn multithreaded_traps() -> Result<()> {
     let instance = Instance::new(&mut store, &module, &[])?;
 
     assert!(instance
-        .get_typed_func::<(), (), _>(&mut store, "run")?
+        .get_typed_func::<(), ()>(&mut store, "run")?
         .call(&mut store, ())
         .is_err());
 
     let handle = std::thread::spawn(move || {
         assert!(instance
-            .get_typed_func::<(), (), _>(&mut store, "run")
+            .get_typed_func::<(), ()>(&mut store, "run")
             .unwrap()
             .call(&mut store, ())
             .is_err());
@@ -843,7 +843,7 @@ fn traps_without_address_map() -> Result<()> {
 
     let module = Module::new(store.engine(), wat)?;
     let instance = Instance::new(&mut store, &module, &[])?;
-    let run_func = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
+    let run_func = instance.get_typed_func::<(), ()>(&mut store, "run")?;
 
     let e = run_func.call(&mut store, ()).unwrap_err();
 
@@ -891,7 +891,7 @@ fn catch_trap_calling_across_stores() -> Result<()> {
             let data = ctx.data_mut();
             let func = data
                 .child_instance
-                .get_typed_func::<(), (), _>(&mut data.child_store, "trap")
+                .get_typed_func::<(), ()>(&mut data.child_store, "trap")
                 .expect("trap function should be exported");
 
             let trap = func.call(&mut data.child_store, ()).unwrap_err();
@@ -935,7 +935,7 @@ fn catch_trap_calling_across_stores() -> Result<()> {
 
     let parent_instance = linker.instantiate(&mut store, &parent_module)?;
 
-    let func = parent_instance.get_typed_func::<(), (), _>(&mut store, "run")?;
+    let func = parent_instance.get_typed_func::<(), ()>(&mut store, "run")?;
     func.call(store, ())?;
 
     Ok(())
@@ -994,7 +994,7 @@ async fn async_then_sync_trap() -> Result<()> {
 
         log::info!("Calling `c`...");
         let c = sync_instance
-            .get_typed_func::<(), (), _>(&mut *sync_store, "c")
+            .get_typed_func::<(), ()>(&mut *sync_store, "c")
             .unwrap();
         c.call(sync_store, ())?;
         Ok(())
@@ -1006,7 +1006,7 @@ async fn async_then_sync_trap() -> Result<()> {
 
     log::info!("Calling `a`...");
     let a = async_instance
-        .get_typed_func::<(), (), _>(&mut async_store, "a")
+        .get_typed_func::<(), ()>(&mut async_store, "a")
         .unwrap();
     let trap = a.call_async(&mut async_store, ()).await.unwrap_err();
 
@@ -1074,7 +1074,7 @@ async fn sync_then_async_trap() -> Result<()> {
 
         log::info!("Calling `c`...");
         let c = async_instance
-            .get_typed_func::<(), (), _>(&mut *async_store, "c")
+            .get_typed_func::<(), ()>(&mut *async_store, "c")
             .unwrap();
         tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current()
@@ -1087,7 +1087,7 @@ async fn sync_then_async_trap() -> Result<()> {
 
     log::info!("Calling `a`...");
     let a = sync_instance
-        .get_typed_func::<(), (), _>(&mut sync_store, "a")
+        .get_typed_func::<(), ()>(&mut sync_store, "a")
         .unwrap();
     let trap = a.call(&mut sync_store, ()).unwrap_err();
 
@@ -1097,5 +1097,91 @@ async fn sync_then_async_trap() -> Result<()> {
     assert_eq!(trace.len(), 1);
     assert_eq!(trace[0].func_name(), Some("c"));
 
+    Ok(())
+}
+
+#[test]
+fn standalone_backtrace() -> Result<()> {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+    let trace = WasmBacktrace::capture(&store);
+    assert!(trace.frames().is_empty());
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (import "" "" (func $host))
+                (func $foo (export "f") call $bar)
+                (func $bar call $host)
+            )
+        "#,
+    )?;
+    let func = Func::wrap(&mut store, |cx: Caller<'_, ()>| {
+        let trace = WasmBacktrace::capture(&cx);
+        assert_eq!(trace.frames().len(), 2);
+        let frame1 = &trace.frames()[0];
+        let frame2 = &trace.frames()[1];
+        assert_eq!(frame1.func_index(), 2);
+        assert_eq!(frame1.func_name(), Some("bar"));
+        assert_eq!(frame2.func_index(), 1);
+        assert_eq!(frame2.func_name(), Some("foo"));
+    });
+    let instance = Instance::new(&mut store, &module, &[func.into()])?;
+    let f = instance.get_typed_func::<(), ()>(&mut store, "f")?;
+    f.call(&mut store, ())?;
+    Ok(())
+}
+
+#[test]
+#[allow(deprecated)]
+fn standalone_backtrace_disabled() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_backtrace(false);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (import "" "" (func $host))
+                (func $foo (export "f") call $bar)
+                (func $bar call $host)
+            )
+        "#,
+    )?;
+    let func = Func::wrap(&mut store, |cx: Caller<'_, ()>| {
+        let trace = WasmBacktrace::capture(&cx);
+        assert_eq!(trace.frames().len(), 0);
+        let trace = WasmBacktrace::force_capture(&cx);
+        assert_eq!(trace.frames().len(), 2);
+    });
+    let instance = Instance::new(&mut store, &module, &[func.into()])?;
+    let f = instance.get_typed_func::<(), ()>(&mut store, "f")?;
+    f.call(&mut store, ())?;
+    Ok(())
+}
+
+#[test]
+fn host_return_error_no_backtrace() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_backtrace(false);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (import "" "" (func $host))
+                (func $foo (export "f") call $bar)
+                (func $bar call $host)
+            )
+        "#,
+    )?;
+    let func = Func::wrap(&mut store, |_cx: Caller<'_, ()>| -> Result<()> {
+        bail!("test")
+    });
+    let instance = Instance::new(&mut store, &module, &[func.into()])?;
+    let f = instance.get_typed_func::<(), ()>(&mut store, "f")?;
+    assert!(f.call(&mut store, ()).is_err());
     Ok(())
 }

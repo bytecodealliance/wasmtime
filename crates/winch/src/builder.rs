@@ -1,17 +1,30 @@
 use crate::compiler::Compiler;
 use anyhow::Result;
+use cranelift_codegen::settings;
 use std::sync::Arc;
 use target_lexicon::Triple;
 use wasmtime_environ::{CompilerBuilder, Setting};
 use winch_codegen::isa;
 
+/// Compiler builder.
 struct Builder {
+    /// Target triple.
     triple: Triple,
+    /// Shared flags builder.
+    shared_flags: settings::Builder,
+    /// ISA builder.
+    isa_builder: isa::Builder,
 }
 
 pub fn builder() -> Box<dyn CompilerBuilder> {
+    let triple = Triple::host();
     Box::new(Builder {
-        triple: Triple::host(),
+        triple: triple.clone(),
+        shared_flags: settings::builder(),
+        // TODO:
+        // Either refactor and re-use `cranelift-native::builder()` or come up with a similar
+        // mechanism to lookup the host's architecture ISA and infer native flags.
+        isa_builder: isa::lookup(triple).expect("host architecture is not supported"),
     })
 }
 
@@ -38,8 +51,10 @@ impl CompilerBuilder for Builder {
     }
 
     fn build(&self) -> Result<Box<dyn wasmtime_environ::Compiler>> {
-        let isa = isa::lookup(self.triple.clone())?;
-        Ok(Box::new(Compiler::new(isa)))
+        let flags = settings::Flags::new(self.shared_flags.clone());
+        Ok(Box::new(Compiler::new(
+            self.isa_builder.clone().build(flags)?,
+        )))
     }
 
     fn enable_incremental_compilation(

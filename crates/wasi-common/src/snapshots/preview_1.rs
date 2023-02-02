@@ -8,19 +8,24 @@ use crate::{
         subscription::{RwEventFlags, SubscriptionResult},
         Poll, Userdata,
     },
-    Error, ErrorExt, ErrorKind, I32Exit, SystemTimeSpec, WasiCtx,
+    I32Exit, SystemTimeSpec, WasiCtx,
 };
-use anyhow::{anyhow, Context, Result};
 use cap_std::time::{Duration, SystemClock};
 use std::convert::{TryFrom, TryInto};
 use std::io::{IoSlice, IoSliceMut};
-use std::ops::{Deref, DerefMut};
-use tracing::debug;
+use std::ops::Deref;
 use wiggle::GuestPtr;
+
+pub mod error;
+use error::{Error, ErrorExt};
+
+// Limit the size of intermediate buffers when copying to WebAssembly shared
+// memory.
+pub(crate) const MAX_SHARED_BUFFER_SIZE: usize = 1 << 16;
 
 wiggle::from_witx!({
     witx: ["$WASI_ROOT/phases/snapshot/witx/wasi_snapshot_preview1.witx"],
-    errors: { errno => Error },
+    errors: { errno => trappable Error },
     // Note: not every function actually needs to be async, however, nearly all of them do, and
     // keeping that set the same in this macro and the wasmtime_wiggle / lucet_wiggle macros is
     // tedious, and there is no cost to having a sync function be async in this case.
@@ -31,235 +36,6 @@ wiggle::from_witx!({
 impl wiggle::GuestErrorType for types::Errno {
     fn success() -> Self {
         Self::Success
-    }
-}
-
-impl types::UserErrorConversion for WasiCtx {
-    fn errno_from_error(&mut self, e: Error) -> Result<types::Errno> {
-        debug!("Error: {:?}", e);
-        let errno = e.try_into()?;
-        Ok(errno)
-    }
-}
-
-impl TryFrom<Error> for types::Errno {
-    type Error = Error;
-    fn try_from(e: Error) -> Result<types::Errno, Error> {
-        use types::Errno;
-        if e.is::<ErrorKind>() {
-            let e = e.downcast::<ErrorKind>().unwrap();
-            Ok(e.into())
-        } else if e.is::<std::io::Error>() {
-            let e = e.downcast::<std::io::Error>().unwrap();
-            e.try_into()
-        } else if e.is::<wiggle::GuestError>() {
-            let e = e.downcast::<wiggle::GuestError>().unwrap();
-            Ok(e.into())
-        } else if e.is::<std::num::TryFromIntError>() {
-            Ok(Errno::Overflow)
-        } else if e.is::<std::str::Utf8Error>() {
-            Ok(Errno::Ilseq)
-        } else {
-            Err(e)
-        }
-    }
-}
-
-impl From<ErrorKind> for types::Errno {
-    fn from(e: ErrorKind) -> types::Errno {
-        use types::Errno;
-        match e {
-            ErrorKind::TooBig => Errno::TooBig,
-            ErrorKind::Badf => Errno::Badf,
-            ErrorKind::Ilseq => Errno::Ilseq,
-            ErrorKind::Io => Errno::Io,
-            ErrorKind::Nametoolong => Errno::Nametoolong,
-            ErrorKind::Notdir => Errno::Notdir,
-            ErrorKind::Notsup => Errno::Notsup,
-            ErrorKind::Overflow => Errno::Overflow,
-            ErrorKind::Range => Errno::Range,
-            ErrorKind::Spipe => Errno::Spipe,
-            ErrorKind::Perm => Errno::Perm,
-        }
-    }
-}
-
-impl From<wiggle::GuestError> for types::Errno {
-    fn from(err: wiggle::GuestError) -> Self {
-        use wiggle::GuestError::*;
-        match err {
-            InvalidFlagValue { .. } => Self::Inval,
-            InvalidEnumValue { .. } => Self::Inval,
-            PtrOverflow { .. } => Self::Fault,
-            PtrOutOfBounds { .. } => Self::Fault,
-            PtrNotAligned { .. } => Self::Inval,
-            PtrBorrowed { .. } => Self::Fault,
-            InvalidUtf8 { .. } => Self::Ilseq,
-            TryFromIntError { .. } => Self::Overflow,
-            InFunc { err, .. } => types::Errno::from(*err),
-            SliceLengthsDiffer { .. } => Self::Fault,
-            BorrowCheckerOutOfHandles { .. } => Self::Fault,
-        }
-    }
-}
-
-impl TryFrom<std::io::Error> for types::Errno {
-    type Error = Error;
-    fn try_from(err: std::io::Error) -> Result<types::Errno, Error> {
-        #[cfg(unix)]
-        fn raw_error_code(err: &std::io::Error) -> Option<types::Errno> {
-            use rustix::io::Errno;
-            match Errno::from_io_error(err) {
-                Some(Errno::AGAIN) => Some(types::Errno::Again),
-                Some(Errno::PIPE) => Some(types::Errno::Pipe),
-                Some(Errno::PERM) => Some(types::Errno::Perm),
-                Some(Errno::NOENT) => Some(types::Errno::Noent),
-                Some(Errno::NOMEM) => Some(types::Errno::Nomem),
-                Some(Errno::TOOBIG) => Some(types::Errno::TooBig),
-                Some(Errno::IO) => Some(types::Errno::Io),
-                Some(Errno::BADF) => Some(types::Errno::Badf),
-                Some(Errno::BUSY) => Some(types::Errno::Busy),
-                Some(Errno::ACCESS) => Some(types::Errno::Acces),
-                Some(Errno::FAULT) => Some(types::Errno::Fault),
-                Some(Errno::NOTDIR) => Some(types::Errno::Notdir),
-                Some(Errno::ISDIR) => Some(types::Errno::Isdir),
-                Some(Errno::INVAL) => Some(types::Errno::Inval),
-                Some(Errno::EXIST) => Some(types::Errno::Exist),
-                Some(Errno::FBIG) => Some(types::Errno::Fbig),
-                Some(Errno::NOSPC) => Some(types::Errno::Nospc),
-                Some(Errno::SPIPE) => Some(types::Errno::Spipe),
-                Some(Errno::MFILE) => Some(types::Errno::Mfile),
-                Some(Errno::MLINK) => Some(types::Errno::Mlink),
-                Some(Errno::NAMETOOLONG) => Some(types::Errno::Nametoolong),
-                Some(Errno::NFILE) => Some(types::Errno::Nfile),
-                Some(Errno::NOTEMPTY) => Some(types::Errno::Notempty),
-                Some(Errno::LOOP) => Some(types::Errno::Loop),
-                Some(Errno::OVERFLOW) => Some(types::Errno::Overflow),
-                Some(Errno::ILSEQ) => Some(types::Errno::Ilseq),
-                Some(Errno::NOTSUP) => Some(types::Errno::Notsup),
-                Some(Errno::ADDRINUSE) => Some(types::Errno::Addrinuse),
-                Some(Errno::CANCELED) => Some(types::Errno::Canceled),
-                Some(Errno::ADDRNOTAVAIL) => Some(types::Errno::Addrnotavail),
-                Some(Errno::AFNOSUPPORT) => Some(types::Errno::Afnosupport),
-                Some(Errno::ALREADY) => Some(types::Errno::Already),
-                Some(Errno::CONNABORTED) => Some(types::Errno::Connaborted),
-                Some(Errno::CONNREFUSED) => Some(types::Errno::Connrefused),
-                Some(Errno::CONNRESET) => Some(types::Errno::Connreset),
-                Some(Errno::DESTADDRREQ) => Some(types::Errno::Destaddrreq),
-                Some(Errno::DQUOT) => Some(types::Errno::Dquot),
-                Some(Errno::HOSTUNREACH) => Some(types::Errno::Hostunreach),
-                Some(Errno::INPROGRESS) => Some(types::Errno::Inprogress),
-                Some(Errno::INTR) => Some(types::Errno::Intr),
-                Some(Errno::ISCONN) => Some(types::Errno::Isconn),
-                Some(Errno::MSGSIZE) => Some(types::Errno::Msgsize),
-                Some(Errno::NETDOWN) => Some(types::Errno::Netdown),
-                Some(Errno::NETRESET) => Some(types::Errno::Netreset),
-                Some(Errno::NETUNREACH) => Some(types::Errno::Netunreach),
-                Some(Errno::NOBUFS) => Some(types::Errno::Nobufs),
-                Some(Errno::NOPROTOOPT) => Some(types::Errno::Noprotoopt),
-                Some(Errno::NOTCONN) => Some(types::Errno::Notconn),
-                Some(Errno::NOTSOCK) => Some(types::Errno::Notsock),
-                Some(Errno::PROTONOSUPPORT) => Some(types::Errno::Protonosupport),
-                Some(Errno::PROTOTYPE) => Some(types::Errno::Prototype),
-                Some(Errno::STALE) => Some(types::Errno::Stale),
-                Some(Errno::TIMEDOUT) => Some(types::Errno::Timedout),
-
-                // On some platforms, these have the same value as other errno values.
-                #[allow(unreachable_patterns)]
-                Some(Errno::WOULDBLOCK) => Some(types::Errno::Again),
-                #[allow(unreachable_patterns)]
-                Some(Errno::OPNOTSUPP) => Some(types::Errno::Notsup),
-
-                _ => None,
-            }
-        }
-        #[cfg(windows)]
-        fn raw_error_code(err: &std::io::Error) -> Option<types::Errno> {
-            use windows_sys::Win32::Foundation;
-            use windows_sys::Win32::Networking::WinSock;
-
-            match err.raw_os_error().map(|code| code as u32) {
-                Some(Foundation::ERROR_BAD_ENVIRONMENT) => return Some(types::Errno::TooBig),
-                Some(Foundation::ERROR_FILE_NOT_FOUND) => return Some(types::Errno::Noent),
-                Some(Foundation::ERROR_PATH_NOT_FOUND) => return Some(types::Errno::Noent),
-                Some(Foundation::ERROR_TOO_MANY_OPEN_FILES) => return Some(types::Errno::Nfile),
-                Some(Foundation::ERROR_ACCESS_DENIED) => return Some(types::Errno::Acces),
-                Some(Foundation::ERROR_SHARING_VIOLATION) => return Some(types::Errno::Acces),
-                Some(Foundation::ERROR_PRIVILEGE_NOT_HELD) => return Some(types::Errno::Perm),
-                Some(Foundation::ERROR_INVALID_HANDLE) => return Some(types::Errno::Badf),
-                Some(Foundation::ERROR_INVALID_NAME) => return Some(types::Errno::Noent),
-                Some(Foundation::ERROR_NOT_ENOUGH_MEMORY) => return Some(types::Errno::Nomem),
-                Some(Foundation::ERROR_OUTOFMEMORY) => return Some(types::Errno::Nomem),
-                Some(Foundation::ERROR_DIR_NOT_EMPTY) => return Some(types::Errno::Notempty),
-                Some(Foundation::ERROR_NOT_READY) => return Some(types::Errno::Busy),
-                Some(Foundation::ERROR_BUSY) => return Some(types::Errno::Busy),
-                Some(Foundation::ERROR_NOT_SUPPORTED) => return Some(types::Errno::Notsup),
-                Some(Foundation::ERROR_FILE_EXISTS) => return Some(types::Errno::Exist),
-                Some(Foundation::ERROR_BROKEN_PIPE) => return Some(types::Errno::Pipe),
-                Some(Foundation::ERROR_BUFFER_OVERFLOW) => return Some(types::Errno::Nametoolong),
-                Some(Foundation::ERROR_NOT_A_REPARSE_POINT) => return Some(types::Errno::Inval),
-                Some(Foundation::ERROR_NEGATIVE_SEEK) => return Some(types::Errno::Inval),
-                Some(Foundation::ERROR_DIRECTORY) => return Some(types::Errno::Notdir),
-                Some(Foundation::ERROR_ALREADY_EXISTS) => return Some(types::Errno::Exist),
-                Some(Foundation::ERROR_STOPPED_ON_SYMLINK) => return Some(types::Errno::Loop),
-                Some(Foundation::ERROR_DIRECTORY_NOT_SUPPORTED) => {
-                    return Some(types::Errno::Isdir)
-                }
-                _ => {}
-            }
-
-            match err.raw_os_error() {
-                Some(WinSock::WSAEWOULDBLOCK) => Some(types::Errno::Again),
-                Some(WinSock::WSAECANCELLED) => Some(types::Errno::Canceled),
-                Some(WinSock::WSA_E_CANCELLED) => Some(types::Errno::Canceled),
-                Some(WinSock::WSAEBADF) => Some(types::Errno::Badf),
-                Some(WinSock::WSAEFAULT) => Some(types::Errno::Fault),
-                Some(WinSock::WSAEINVAL) => Some(types::Errno::Inval),
-                Some(WinSock::WSAEMFILE) => Some(types::Errno::Mfile),
-                Some(WinSock::WSAENAMETOOLONG) => Some(types::Errno::Nametoolong),
-                Some(WinSock::WSAENOTEMPTY) => Some(types::Errno::Notempty),
-                Some(WinSock::WSAELOOP) => Some(types::Errno::Loop),
-                Some(WinSock::WSAEOPNOTSUPP) => Some(types::Errno::Notsup),
-                Some(WinSock::WSAEADDRINUSE) => Some(types::Errno::Addrinuse),
-                Some(WinSock::WSAEACCES) => Some(types::Errno::Acces),
-                Some(WinSock::WSAEADDRNOTAVAIL) => Some(types::Errno::Addrnotavail),
-                Some(WinSock::WSAEAFNOSUPPORT) => Some(types::Errno::Afnosupport),
-                Some(WinSock::WSAEALREADY) => Some(types::Errno::Already),
-                Some(WinSock::WSAECONNABORTED) => Some(types::Errno::Connaborted),
-                Some(WinSock::WSAECONNREFUSED) => Some(types::Errno::Connrefused),
-                Some(WinSock::WSAECONNRESET) => Some(types::Errno::Connreset),
-                Some(WinSock::WSAEDESTADDRREQ) => Some(types::Errno::Destaddrreq),
-                Some(WinSock::WSAEDQUOT) => Some(types::Errno::Dquot),
-                Some(WinSock::WSAEHOSTUNREACH) => Some(types::Errno::Hostunreach),
-                Some(WinSock::WSAEINPROGRESS) => Some(types::Errno::Inprogress),
-                Some(WinSock::WSAEINTR) => Some(types::Errno::Intr),
-                Some(WinSock::WSAEISCONN) => Some(types::Errno::Isconn),
-                Some(WinSock::WSAEMSGSIZE) => Some(types::Errno::Msgsize),
-                Some(WinSock::WSAENETDOWN) => Some(types::Errno::Netdown),
-                Some(WinSock::WSAENETRESET) => Some(types::Errno::Netreset),
-                Some(WinSock::WSAENETUNREACH) => Some(types::Errno::Netunreach),
-                Some(WinSock::WSAENOBUFS) => Some(types::Errno::Nobufs),
-                Some(WinSock::WSAENOPROTOOPT) => Some(types::Errno::Noprotoopt),
-                Some(WinSock::WSAENOTCONN) => Some(types::Errno::Notconn),
-                Some(WinSock::WSAENOTSOCK) => Some(types::Errno::Notsock),
-                Some(WinSock::WSAEPROTONOSUPPORT) => Some(types::Errno::Protonosupport),
-                Some(WinSock::WSAEPROTOTYPE) => Some(types::Errno::Prototype),
-                Some(WinSock::WSAESTALE) => Some(types::Errno::Stale),
-                Some(WinSock::WSAETIMEDOUT) => Some(types::Errno::Timedout),
-                _ => None,
-            }
-        }
-
-        match raw_error_code(&err) {
-            Some(errno) => Ok(errno),
-            None => match err.kind() {
-                std::io::ErrorKind::NotFound => Ok(types::Errno::Noent),
-                std::io::ErrorKind::PermissionDenied => Ok(types::Errno::Perm),
-                std::io::ErrorKind::AlreadyExists => Ok(types::Errno::Exist),
-                std::io::ErrorKind::InvalidInput => Ok(types::Errno::Inval),
-                _ => Err(anyhow::anyhow!(err).context(format!("Unknown OS error"))),
-            },
-        }
     }
 }
 
@@ -311,7 +87,9 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 let now = self.clocks.system.now(precision).into_std();
                 let d = now
                     .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                    .map_err(|_| Error::trap("current time before unix epoch"))?;
+                    .map_err(|_| {
+                        Error::trap(anyhow::Error::msg("current time before unix epoch"))
+                    })?;
                 Ok(d.as_nanos().try_into()?)
             }
             types::Clockid::Monotonic => {
@@ -489,8 +267,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let set_mtim = fst_flags.contains(types::Fstflags::MTIM);
         let set_mtim_now = fst_flags.contains(types::Fstflags::MTIM_NOW);
 
-        let atim = systimespec(set_atim, atim, set_atim_now).context("atim")?;
-        let mtim = systimespec(set_mtim, mtim, set_mtim_now).context("mtim")?;
+        let atim = systimespec(set_atim, atim, set_atim_now).map_err(|e| e.context("atim"))?;
+        let mtim = systimespec(set_mtim, mtim, set_mtim_now).map_err(|e| e.context("mtim"))?;
 
         if table.is::<FileEntry>(fd) {
             table
@@ -521,23 +299,65 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .get_file_mut(u32::from(fd))?
             .get_cap_mut(FileCaps::READ)?;
 
-        let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> =
-            iovs.iter()
-                .map(|iov_ptr| {
-                    let iov_ptr = iov_ptr?;
-                    let iov: types::Iovec = iov_ptr.read()?;
-                    Ok(iov.buf.as_array(iov.buf_len).as_slice_mut()?.expect(
-                        "cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)",
-                    ))
-                })
+        let iovs: Vec<wiggle::GuestPtr<[u8]>> = iovs
+            .iter()
+            .map(|iov_ptr| {
+                let iov_ptr = iov_ptr?;
+                let iov: types::Iovec = iov_ptr.read()?;
+                Ok(iov.buf.as_array(iov.buf_len))
+            })
+            .collect::<Result<_, Error>>()?;
+
+        // If the first iov structure is from shared memory we can safely assume
+        // all the rest will be. We then read into memory based on the memory's
+        // shared-ness:
+        // - if not shared, we copy directly into the Wasm memory
+        // - if shared, we use an intermediate buffer; this avoids Rust unsafety
+        //   due to holding on to a `&mut [u8]` of Wasm memory when we cannot
+        //   guarantee the `&mut` exclusivity--other threads could be modifying
+        //   the data as this functions writes to it. Though likely there is no
+        //   issue with OS writing to io structs in multi-threaded scenarios,
+        //   since we do not know here if `&dyn WasiFile` does anything else
+        //   (e.g., read), we cautiously incur some performance overhead by
+        //   copying twice.
+        let is_shared_memory = iovs
+            .iter()
+            .next()
+            .and_then(|s| Some(s.is_shared_memory()))
+            .unwrap_or(false);
+        let bytes_read: u64 = if is_shared_memory {
+            // For shared memory, read into an intermediate buffer. Only the
+            // first iov will be filled and even then the read is capped by the
+            // `MAX_SHARED_BUFFER_SIZE`, so users are expected to re-call.
+            let iov = iovs.into_iter().next();
+            if let Some(iov) = iov {
+                let mut buffer = vec![0; (iov.len() as usize).min(MAX_SHARED_BUFFER_SIZE)];
+                let bytes_read = f.read_vectored(&mut [IoSliceMut::new(&mut buffer)]).await?;
+                iov.get_range(0..bytes_read.try_into()?)
+                    .expect("it should always be possible to slice the iov smaller")
+                    .copy_from_slice(&buffer[0..bytes_read.try_into()?])?;
+                bytes_read
+            } else {
+                return Ok(0);
+            }
+        } else {
+            // Convert all of the unsafe guest slices to safe ones--this uses
+            // Wiggle's internal borrow checker to ensure no overlaps. We assume
+            // here that, because the memory is not shared, there are no other
+            // threads to access it while it is written to.
+            let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> = iovs
+                .into_iter()
+                .map(|iov| Ok(iov.as_slice_mut()?.unwrap()))
                 .collect::<Result<_, Error>>()?;
 
-        let mut ioslices: Vec<IoSliceMut> = guest_slices
-            .iter_mut()
-            .map(|s| IoSliceMut::new(&mut *s))
-            .collect();
+            // Read directly into the Wasm memory.
+            let mut ioslices: Vec<IoSliceMut> = guest_slices
+                .iter_mut()
+                .map(|s| IoSliceMut::new(&mut *s))
+                .collect();
+            f.read_vectored(&mut ioslices).await?
+        };
 
-        let bytes_read = f.read_vectored(&mut ioslices).await?;
         Ok(types::Size::try_from(bytes_read)?)
     }
 
@@ -552,23 +372,67 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .get_file_mut(u32::from(fd))?
             .get_cap_mut(FileCaps::READ | FileCaps::SEEK)?;
 
-        let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> =
-            iovs.iter()
-                .map(|iov_ptr| {
-                    let iov_ptr = iov_ptr?;
-                    let iov: types::Iovec = iov_ptr.read()?;
-                    Ok(iov.buf.as_array(iov.buf_len).as_slice_mut()?.expect(
-                        "cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)",
-                    ))
-                })
+        let iovs: Vec<wiggle::GuestPtr<[u8]>> = iovs
+            .iter()
+            .map(|iov_ptr| {
+                let iov_ptr = iov_ptr?;
+                let iov: types::Iovec = iov_ptr.read()?;
+                Ok(iov.buf.as_array(iov.buf_len))
+            })
+            .collect::<Result<_, Error>>()?;
+
+        // If the first iov structure is from shared memory we can safely assume
+        // all the rest will be. We then read into memory based on the memory's
+        // shared-ness:
+        // - if not shared, we copy directly into the Wasm memory
+        // - if shared, we use an intermediate buffer; this avoids Rust unsafety
+        //   due to holding on to a `&mut [u8]` of Wasm memory when we cannot
+        //   guarantee the `&mut` exclusivity--other threads could be modifying
+        //   the data as this functions writes to it. Though likely there is no
+        //   issue with OS writing to io structs in multi-threaded scenarios,
+        //   since we do not know here if `&dyn WasiFile` does anything else
+        //   (e.g., read), we cautiously incur some performance overhead by
+        //   copying twice.
+        let is_shared_memory = iovs
+            .iter()
+            .next()
+            .and_then(|s| Some(s.is_shared_memory()))
+            .unwrap_or(false);
+        let bytes_read: u64 = if is_shared_memory {
+            // For shared memory, read into an intermediate buffer. Only the
+            // first iov will be filled and even then the read is capped by the
+            // `MAX_SHARED_BUFFER_SIZE`, so users are expected to re-call.
+            let iov = iovs.into_iter().next();
+            if let Some(iov) = iov {
+                let mut buffer = vec![0; (iov.len() as usize).min(MAX_SHARED_BUFFER_SIZE)];
+                let bytes_read = f
+                    .read_vectored_at(&mut [IoSliceMut::new(&mut buffer)], offset)
+                    .await?;
+                iov.get_range(0..bytes_read.try_into()?)
+                    .expect("it should always be possible to slice the iov smaller")
+                    .copy_from_slice(&buffer[0..bytes_read.try_into()?])?;
+                bytes_read
+            } else {
+                return Ok(0);
+            }
+        } else {
+            // Convert all of the unsafe guest slices to safe ones--this uses
+            // Wiggle's internal borrow checker to ensure no overlaps. We assume
+            // here that, because the memory is not shared, there are no other
+            // threads to access it while it is written to.
+            let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> = iovs
+                .into_iter()
+                .map(|iov| Ok(iov.as_slice_mut()?.unwrap()))
                 .collect::<Result<_, Error>>()?;
 
-        let mut ioslices: Vec<IoSliceMut> = guest_slices
-            .iter_mut()
-            .map(|s| IoSliceMut::new(&mut *s))
-            .collect();
+            // Read directly into the Wasm memory.
+            let mut ioslices: Vec<IoSliceMut> = guest_slices
+                .iter_mut()
+                .map(|s| IoSliceMut::new(&mut *s))
+                .collect();
+            f.read_vectored_at(&mut ioslices, offset).await?
+        };
 
-        let bytes_read = f.read_vectored_at(&mut ioslices, offset).await?;
         Ok(types::Size::try_from(bytes_read)?)
     }
 
@@ -582,16 +446,12 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .get_file_mut(u32::from(fd))?
             .get_cap_mut(FileCaps::WRITE)?;
 
-        let guest_slices: Vec<wiggle::GuestSlice<u8>> = ciovs
+        let guest_slices: Vec<wiggle::GuestCow<u8>> = ciovs
             .iter()
             .map(|iov_ptr| {
                 let iov_ptr = iov_ptr?;
                 let iov: types::Ciovec = iov_ptr.read()?;
-                Ok(iov
-                    .buf
-                    .as_array(iov.buf_len)
-                    .as_slice()?
-                    .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)"))
+                Ok(iov.buf.as_array(iov.buf_len).as_cow()?)
             })
             .collect::<Result<_, Error>>()?;
 
@@ -615,16 +475,12 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .get_file_mut(u32::from(fd))?
             .get_cap_mut(FileCaps::WRITE | FileCaps::SEEK)?;
 
-        let guest_slices: Vec<wiggle::GuestSlice<u8>> = ciovs
+        let guest_slices: Vec<wiggle::GuestCow<u8>> = ciovs
             .iter()
             .map(|iov_ptr| {
                 let iov_ptr = iov_ptr?;
                 let iov: types::Ciovec = iov_ptr.read()?;
-                Ok(iov
-                    .buf
-                    .as_array(iov.buf_len)
-                    .as_slice()?
-                    .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)"))
+                Ok(iov.buf.as_array(iov.buf_len).as_cow()?)
             })
             .collect::<Result<_, Error>>()?;
 
@@ -666,11 +522,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             if path_len < path_max_len as usize {
                 return Err(Error::name_too_long());
             }
-            let mut p_memory = path
-                .as_array(path_len as u32)
-                .as_slice_mut()?
-                .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
-            p_memory.copy_from_slice(path_bytes);
+            path.as_array(path_len as u32).copy_from_slice(path_bytes)?;
             Ok(())
         } else {
             Err(Error::not_supported())
@@ -803,7 +655,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         self.table()
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::CREATE_DIRECTORY)?
-            .create_dir(path.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)").deref())
+            .create_dir(path.as_cow()?.deref())
             .await
     }
 
@@ -818,7 +670,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::PATH_FILESTAT_GET)?
             .get_path_filestat(
-                path.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)").deref(),
+                path.as_cow()?.deref(),
                 flags.contains(types::Lookupflags::SYMLINK_FOLLOW),
             )
             .await?;
@@ -839,13 +691,13 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let set_mtim = fst_flags.contains(types::Fstflags::MTIM);
         let set_mtim_now = fst_flags.contains(types::Fstflags::MTIM_NOW);
 
-        let atim = systimespec(set_atim, atim, set_atim_now).context("atim")?;
-        let mtim = systimespec(set_mtim, mtim, set_mtim_now).context("mtim")?;
+        let atim = systimespec(set_atim, atim, set_atim_now).map_err(|e| e.context("atim"))?;
+        let mtim = systimespec(set_mtim, mtim, set_mtim_now).map_err(|e| e.context("mtim"))?;
         self.table()
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::PATH_FILESTAT_SET_TIMES)?
             .set_times(
-                path.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)").deref(),
+                path.as_cow()?.deref(),
                 atim,
                 mtim,
                 flags.contains(types::Lookupflags::SYMLINK_FOLLOW),
@@ -876,9 +728,9 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
         src_dir
             .hard_link(
-                src_path.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)").deref(),
+                src_path.as_cow()?.deref(),
                 target_dir.deref(),
-                target_path.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)").deref(),
+                target_path.as_cow()?.deref(),
             )
             .await
     }
@@ -904,7 +756,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
         let oflags = OFlags::from(&oflags);
         let fdflags = FdFlags::from(fdflags);
-        let path = path.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
+        let path = path.as_cow()?;
         if oflags.contains(OFlags::DIRECTORY) {
             if oflags.contains(OFlags::CREATE)
                 || oflags.contains(OFlags::EXCLUSIVE)
@@ -953,7 +805,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .table()
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::READLINK)?
-            .read_link(path.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)").deref())
+            .read_link(path.as_cow()?.deref())
             .await?
             .into_os_string()
             .into_string()
@@ -963,11 +815,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         if link_len > buf_len as usize {
             return Err(Error::range());
         }
-        let mut buf = buf
-            .as_array(link_len as u32)
-            .as_slice_mut()?
-            .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
-        buf.copy_from_slice(link_bytes);
+        buf.as_array(link_len as u32).copy_from_slice(link_bytes)?;
         Ok(link_len as types::Size)
     }
 
@@ -979,7 +827,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         self.table()
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::REMOVE_DIRECTORY)?
-            .remove_dir(path.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)").deref())
+            .remove_dir(path.as_cow()?.deref())
             .await
     }
 
@@ -999,9 +847,9 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .get_cap(DirCaps::RENAME_TARGET)?;
         src_dir
             .rename(
-                src_path.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)").deref(),
+                src_path.as_cow()?.deref(),
                 dest_dir.deref(),
-                dest_path.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)").deref(),
+                dest_path.as_cow()?.deref(),
             )
             .await
     }
@@ -1015,7 +863,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         self.table()
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::SYMLINK)?
-            .symlink(src_path.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)").deref(), dest_path.as_str()?.expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)").deref())
+            .symlink(src_path.as_cow()?.deref(), dest_path.as_cow()?.deref())
             .await
     }
 
@@ -1027,8 +875,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         self.table()
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::UNLINK_FILE)?
-            .unlink_file(path.as_str()?
-            .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)").deref())
+            .unlink_file(path.as_cow()?.deref())
             .await
     }
 
@@ -1189,7 +1036,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                         },
                         Err(e) => types::Event {
                             userdata,
-                            error: e.try_into().expect("non-trapping"),
+                            error: e.downcast().map_err(Error::trap)?,
                             type_,
                             fd_readwrite: fd_readwrite_empty(),
                         },
@@ -1209,7 +1056,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                         },
                         Err(e) => types::Event {
                             userdata,
-                            error: e.try_into()?,
+                            error: e.downcast().map_err(Error::trap)?,
                             type_,
                             fd_readwrite: fd_readwrite_empty(),
                         },
@@ -1221,7 +1068,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                         userdata,
                         error: match r {
                             Ok(()) => types::Errno::Success,
-                            Err(e) => e.try_into()?,
+                            Err(e) => e.downcast().map_err(Error::trap)?,
                         },
                         type_,
                         fd_readwrite: fd_readwrite_empty(),
@@ -1238,12 +1085,12 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         if status < 126 {
             I32Exit(status as i32).into()
         } else {
-            anyhow!("exit with invalid exit status outside of [0..126)")
+            anyhow::Error::msg("exit with invalid exit status outside of [0..126)")
         }
     }
 
     async fn proc_raise(&mut self, _sig: types::Signal) -> Result<(), Error> {
-        Err(Error::trap("proc_raise unsupported"))
+        Err(Error::trap(anyhow::Error::msg("proc_raise unsupported")))
     }
 
     async fn sched_yield(&mut self) -> Result<(), Error> {
@@ -1255,11 +1102,30 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         buf: &GuestPtr<'a, u8>,
         buf_len: types::Size,
     ) -> Result<(), Error> {
-        let mut buf = buf
-            .as_array(buf_len)
-            .as_slice_mut()?
-            .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
-        self.random.try_fill_bytes(buf.deref_mut())?;
+        let buf = buf.as_array(buf_len);
+        if buf.is_shared_memory() {
+            // If the Wasm memory is shared, copy to an intermediate buffer to
+            // avoid Rust unsafety (i.e., the called function could rely on
+            // `&mut [u8]`'s exclusive ownership which is not guaranteed due to
+            // potential access from other threads).
+            let mut copied: u32 = 0;
+            while copied < buf.len() {
+                let len = (buf.len() - copied).min(MAX_SHARED_BUFFER_SIZE as u32);
+                let mut tmp = vec![0; len as usize];
+                self.random.try_fill_bytes(&mut tmp)?;
+                let dest = buf
+                    .get_range(copied..copied + len)
+                    .unwrap()
+                    .as_unsafe_slice_mut()?;
+                dest.copy_from_slice(&tmp)?;
+                copied += len;
+            }
+        } else {
+            // If the Wasm memory is non-shared, copy directly into the linear
+            // memory.
+            let mem = &mut buf.as_slice_mut()?.unwrap();
+            self.random.try_fill_bytes(mem)?;
+        }
         Ok(())
     }
 
@@ -1295,25 +1161,68 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .get_file_mut(u32::from(fd))?
             .get_cap_mut(FileCaps::READ)?;
 
-        let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> =
-            ri_data
-                .iter()
-                .map(|iov_ptr| {
-                    let iov_ptr = iov_ptr?;
-                    let iov: types::Iovec = iov_ptr.read()?;
-                    Ok(iov.buf.as_array(iov.buf_len).as_slice_mut()?.expect(
-                        "cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)",
-                    ))
-                })
+        let iovs: Vec<wiggle::GuestPtr<[u8]>> = ri_data
+            .iter()
+            .map(|iov_ptr| {
+                let iov_ptr = iov_ptr?;
+                let iov: types::Iovec = iov_ptr.read()?;
+                Ok(iov.buf.as_array(iov.buf_len))
+            })
+            .collect::<Result<_, Error>>()?;
+
+        // If the first iov structure is from shared memory we can safely assume
+        // all the rest will be. We then read into memory based on the memory's
+        // shared-ness:
+        // - if not shared, we copy directly into the Wasm memory
+        // - if shared, we use an intermediate buffer; this avoids Rust unsafety
+        //   due to holding on to a `&mut [u8]` of Wasm memory when we cannot
+        //   guarantee the `&mut` exclusivity--other threads could be modifying
+        //   the data as this functions writes to it. Though likely there is no
+        //   issue with OS writing to io structs in multi-threaded scenarios,
+        //   since we do not know here if `&dyn WasiFile` does anything else
+        //   (e.g., read), we cautiously incur some performance overhead by
+        //   copying twice.
+        let is_shared_memory = iovs
+            .iter()
+            .next()
+            .and_then(|s| Some(s.is_shared_memory()))
+            .unwrap_or(false);
+        let (bytes_read, ro_flags) = if is_shared_memory {
+            // For shared memory, read into an intermediate buffer. Only the
+            // first iov will be filled and even then the read is capped by the
+            // `MAX_SHARED_BUFFER_SIZE`, so users are expected to re-call.
+            let iov = iovs.into_iter().next();
+            if let Some(iov) = iov {
+                let mut buffer = vec![0; (iov.len() as usize).min(MAX_SHARED_BUFFER_SIZE)];
+                let (bytes_read, ro_flags) = f
+                    .sock_recv(&mut [IoSliceMut::new(&mut buffer)], RiFlags::from(ri_flags))
+                    .await?;
+                iov.get_range(0..bytes_read.try_into()?)
+                    .expect("it should always be possible to slice the iov smaller")
+                    .copy_from_slice(&buffer[0..bytes_read.try_into()?])?;
+                (bytes_read, ro_flags)
+            } else {
+                return Ok((0, RoFlags::empty().into()));
+            }
+        } else {
+            // Convert all of the unsafe guest slices to safe ones--this uses
+            // Wiggle's internal borrow checker to ensure no overlaps. We assume
+            // here that, because the memory is not shared, there are no other
+            // threads to access it while it is written to.
+            let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> = iovs
+                .into_iter()
+                .map(|iov| Ok(iov.as_slice_mut()?.unwrap()))
                 .collect::<Result<_, Error>>()?;
 
-        let mut ioslices: Vec<IoSliceMut> = guest_slices
-            .iter_mut()
-            .map(|s| IoSliceMut::new(&mut *s))
-            .collect();
+            // Read directly into the Wasm memory.
+            let mut ioslices: Vec<IoSliceMut> = guest_slices
+                .iter_mut()
+                .map(|s| IoSliceMut::new(&mut *s))
+                .collect();
+            f.sock_recv(&mut ioslices, RiFlags::from(ri_flags)).await?
+        };
 
-        let (bytes_read, roflags) = f.sock_recv(&mut ioslices, RiFlags::from(ri_flags)).await?;
-        Ok((types::Size::try_from(bytes_read)?, roflags.into()))
+        Ok((types::Size::try_from(bytes_read)?, ro_flags.into()))
     }
 
     async fn sock_send<'a>(
@@ -1327,16 +1236,12 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .get_file_mut(u32::from(fd))?
             .get_cap_mut(FileCaps::WRITE)?;
 
-        let guest_slices: Vec<wiggle::GuestSlice<u8>> = si_data
+        let guest_slices: Vec<wiggle::GuestCow<u8>> = si_data
             .iter()
             .map(|iov_ptr| {
                 let iov_ptr = iov_ptr?;
                 let iov: types::Ciovec = iov_ptr.read()?;
-                Ok(iov
-                    .buf
-                    .as_array(iov.buf_len)
-                    .as_slice()?
-                    .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)"))
+                Ok(iov.buf.as_array(iov.buf_len).as_cow()?)
             })
             .collect::<Result<_, Error>>()?;
 

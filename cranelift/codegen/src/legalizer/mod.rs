@@ -19,13 +19,12 @@ use crate::ir::immediates::Imm64;
 use crate::ir::types::{I128, I64};
 use crate::ir::{self, InstBuilder, InstructionData, MemFlags, Value};
 use crate::isa::TargetIsa;
+use crate::trace;
 
 mod globalvalue;
-mod heap;
 mod table;
 
 use self::globalvalue::expand_global_value;
-use self::heap::expand_heap_addr;
 use self::table::expand_table_addr;
 
 fn imm_const(pos: &mut FuncCursor, arg: Value, imm: Imm64, is_signed: bool) -> Value {
@@ -46,13 +45,15 @@ fn imm_const(pos: &mut FuncCursor, arg: Value, imm: Imm64, is_signed: bool) -> V
 /// Perform a simple legalization by expansion of the function, without
 /// platform-specific transforms.
 pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa: &dyn TargetIsa) {
+    trace!("Pre-legalization function:\n{}", func.display());
+
     let mut pos = FuncCursor::new(func);
     let func_begin = pos.position();
     pos.set_position(func_begin);
     while let Some(_block) = pos.next_block() {
         let mut prev_pos = pos.position();
         while let Some(inst) = pos.next_inst() {
-            match pos.func.dfg[inst] {
+            match pos.func.dfg.insts[inst] {
                 // control flow
                 InstructionData::CondTrap {
                     opcode:
@@ -68,13 +69,6 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
                     opcode: ir::Opcode::GlobalValue,
                     global_value,
                 } => expand_global_value(inst, &mut pos.func, isa, global_value),
-                InstructionData::HeapAddr {
-                    opcode: ir::Opcode::HeapAddr,
-                    heap,
-                    arg,
-                    offset,
-                    size,
-                } => expand_heap_addr(inst, &mut pos.func, cfg, isa, heap, arg, offset, size),
                 InstructionData::StackLoad {
                     opcode: ir::Opcode::StackLoad,
                     stack_slot,
@@ -159,8 +153,7 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
                         | ir::Opcode::IrsubImm
                         | ir::Opcode::ImulImm
                         | ir::Opcode::SdivImm
-                        | ir::Opcode::SremImm
-                        | ir::Opcode::IfcmpImm => true,
+                        | ir::Opcode::SremImm => true,
                         _ => false,
                     };
 
@@ -216,10 +209,6 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
                         ir::Opcode::UremImm => {
                             replace.urem(arg, imm);
                         }
-                        // comparisons
-                        ir::Opcode::IfcmpImm => {
-                            replace.ifcmp(arg, imm);
-                        }
                         _ => prev_pos = pos.position(),
                     };
                 }
@@ -246,6 +235,8 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
             pos.set_position(prev_pos);
         }
     }
+
+    trace!("Post-legalization function:\n{}", func.display());
 }
 
 /// Custom expansion for conditional trap instructions.
@@ -257,6 +248,12 @@ fn expand_cond_trap(
     arg: ir::Value,
     code: ir::TrapCode,
 ) {
+    trace!(
+        "expanding conditional trap: {:?}: {}",
+        inst,
+        func.dfg.display_inst(inst)
+    );
+
     // Parse the instruction.
     let trapz = match opcode {
         ir::Opcode::Trapz => true,
@@ -271,8 +268,7 @@ fn expand_cond_trap(
     //
     // Becomes:
     //
-    //     brz arg, new_block_resume
-    //     jump new_block_trap
+    //     brif arg, new_block_trap, new_block_resume
     //
     //   new_block_trap:
     //     trap
@@ -283,19 +279,23 @@ fn expand_cond_trap(
     let new_block_trap = func.dfg.make_block();
     let new_block_resume = func.dfg.make_block();
 
+    // Trapping is a rare event, mark the trapping block as cold.
+    func.layout.set_cold(new_block_trap);
+
     // Replace trap instruction by the inverted condition.
     if trapz {
-        func.dfg.replace(inst).brnz(arg, new_block_resume, &[]);
+        func.dfg
+            .replace(inst)
+            .brif(arg, new_block_resume, &[], new_block_trap, &[]);
     } else {
-        func.dfg.replace(inst).brz(arg, new_block_resume, &[]);
+        func.dfg
+            .replace(inst)
+            .brif(arg, new_block_trap, &[], new_block_resume, &[]);
     }
 
-    // Add jump instruction after the inverted branch.
+    // Insert the new label and the unconditional trap terminator.
     let mut pos = FuncCursor::new(func).after_inst(inst);
     pos.use_srcloc(inst);
-    pos.ins().jump(new_block_trap, &[]);
-
-    // Insert the new label and the unconditional trap terminator.
     pos.insert_block(new_block_trap);
 
     match opcode {

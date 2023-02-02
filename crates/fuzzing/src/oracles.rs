@@ -306,19 +306,16 @@ pub fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -
     }
 
     let string = e.to_string();
-    // Also allow errors related to fuel consumption
-    if string.contains("all fuel consumed")
-        // Currently we instantiate with a `Linker` which can't instantiate
-        // every single module under the sun due to using name-based resolution
-        // rather than positional-based resolution
-        || string.contains("incompatible import type")
-    {
+    // Currently we instantiate with a `Linker` which can't instantiate
+    // every single module under the sun due to using name-based resolution
+    // rather than positional-based resolution
+    if string.contains("incompatible import type") {
         log::debug!("failed to instantiate: {}", string);
         return None;
     }
 
     // Also allow failures to instantiate as a result of hitting instance limits
-    if string.contains("concurrent instances has been reached") {
+    if string.contains("maximum concurrent instance limit") {
         log::debug!("failed to instantiate: {}", string);
         return None;
     }
@@ -504,12 +501,14 @@ pub fn make_api_calls(api: generators::api::ApiCalls) {
 /// Executes the wast `test` spectest with the `config` specified.
 ///
 /// Ensures that spec tests pass regardless of the `Config`.
-pub fn spectest(mut fuzz_config: generators::Config, test: generators::SpecTest) {
+pub fn spectest(fuzz_config: generators::Config, test: generators::SpecTest) {
     crate::init_fuzzing();
-    fuzz_config.set_spectest_compliant();
+    if !fuzz_config.is_spectest_compliant() {
+        return;
+    }
     log::debug!("running {:?}", test.file);
     let mut wast_context = WastContext::new(fuzz_config.to_store());
-    wast_context.register_spectest().unwrap();
+    wast_context.register_spectest(false).unwrap();
     wast_context
         .run_buffer(test.file, test.contents.as_bytes())
         .unwrap();

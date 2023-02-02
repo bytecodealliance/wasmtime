@@ -1,4 +1,6 @@
 test interpret
+test run
+target x86_64
 
 function %bnot_f32(f32) -> f32 {
 block0(v0: f32):

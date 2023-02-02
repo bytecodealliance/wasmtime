@@ -21,7 +21,7 @@ fn main() -> Result<()> {
     let instance = Instance::new(&mut store, &module, &[])?;
 
     // Invoke `fib` export
-    let fib = instance.get_typed_func::<i32, i32, _>(&mut store, "fib")?;
+    let fib = instance.get_typed_func::<i32, i32>(&mut store, "fib")?;
     println!("fib(6) = {}", fib.call(&mut store, 6)?);
     Ok(())
 }

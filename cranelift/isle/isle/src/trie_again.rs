@@ -1,9 +1,9 @@
 //! A strongly-normalizing intermediate representation for ISLE rules. This representation is chosen
 //! to closely reflect the operations we can implement in Rust, to make code generation easy.
-use crate::error::{Error, Source, Span};
+use crate::error::{Error, Span};
 use crate::lexer::Pos;
-use crate::sema::{self, RuleVisitor};
-use crate::DisjointSets;
+use crate::sema;
+use crate::{DisjointSets, StableSet};
 use std::collections::{hash_map::Entry, HashMap};
 
 /// A field index in a tuple or an enum variant.
@@ -12,9 +12,29 @@ pub struct TupleIndex(u8);
 /// A hash-consed identifier for a binding, stored in a [RuleSet].
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct BindingId(u16);
-/// A hash-consed identifier for an expression, stored in a [RuleSet].
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct ExprId(u16);
+
+impl std::convert::TryFrom<usize> for TupleIndex {
+    type Error = <u8 as std::convert::TryFrom<usize>>::Error;
+
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        Ok(TupleIndex(value.try_into()?))
+    }
+}
+
+impl std::convert::TryFrom<usize> for BindingId {
+    type Error = <u16 as std::convert::TryFrom<usize>>::Error;
+
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        Ok(BindingId(value.try_into()?))
+    }
+}
+
+impl TupleIndex {
+    /// Get the index of this field.
+    pub fn index(self) -> usize {
+        self.0.into()
+    }
+}
 
 impl BindingId {
     /// Get the index of this id.
@@ -23,28 +43,16 @@ impl BindingId {
     }
 }
 
-impl ExprId {
-    /// Get the index of this id.
-    pub fn index(self) -> usize {
-        self.0.into()
-    }
-}
-
-/// Expressions construct new values. Rust pattern matching can only destructure existing values,
-/// not call functions or construct new values. So `if-let` and external extractor invocations need
-/// to interrupt pattern matching in order to evaluate a suitable expression. These expressions are
-/// also used when evaluating the right-hand side of a rule.
+/// Bindings are anything which can be bound to a variable name in Rust. This includes expressions,
+/// such as constants or function calls; but it also includes names bound in pattern matches.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub enum Expr {
-    /// A binding from some sequence of pattern matches, used as an expression.
-    Binding {
-        /// Which binding site is being used as an expression?
-        source: BindingId,
-    },
+pub enum Binding {
     /// Evaluates to the given integer literal.
     ConstInt {
         /// The constant value.
         val: i128,
+        /// The constant's type. Unsigned types preserve the representation of `val`, not its value.
+        ty: sema::TypeId,
     },
     /// Evaluates to the given primitive Rust value.
     ConstPrim {
@@ -61,39 +69,36 @@ pub enum Expr {
         /// Which extractor should be called?
         term: sema::TermId,
         /// What expression should be passed to the extractor?
-        parameter: ExprId,
+        parameter: BindingId,
     },
     /// The result of calling an external constructor.
     Constructor {
         /// Which constructor should be called?
         term: sema::TermId,
         /// What expressions should be passed to the constructor?
-        parameters: Box<[ExprId]>,
+        parameters: Box<[BindingId]>,
+        /// For impure constructors, a unique number for each use of this term. Always 0 for pure
+        /// constructors.
+        instance: u32,
+    },
+    /// The result of getting one value from a multi-constructor or multi-extractor.
+    Iterator {
+        /// Which expression produced the iterator that this consumes?
+        source: BindingId,
     },
     /// The result of constructing an enum variant.
-    Variant {
+    MakeVariant {
         /// Which enum type should be constructed?
         ty: sema::TypeId,
         /// Which variant of that enum should be constructed?
         variant: sema::VariantId,
         /// What expressions should be provided for this variant's fields?
-        fields: Box<[ExprId]>,
+        fields: Box<[BindingId]>,
     },
-}
-
-/// Binding sites are the result of Rust pattern matching. This is the dual of an expression: while
-/// expressions build up values, bindings take values apart.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum Binding {
-    /// A match begins at the result of some expression that produces a Rust value.
-    Expr {
-        /// Which expression is being matched?
-        constructor: ExprId,
-    },
-    /// After some sequence of matches, we'll match one of the previous bindings against an enum
-    /// variant and produce a new binding from one of its fields. There must be a matching
-    /// [Constraint] for each `source`/`variant` pair that appears in a binding.
-    Variant {
+    /// Pattern-match one of the previous bindings against an enum variant and produce a new binding
+    /// from one of its fields. There must be a corresponding [Constraint::Variant] for each
+    /// `source`/`variant` pair that appears in some `MatchVariant` binding.
+    MatchVariant {
         /// Which binding is being matched?
         source: BindingId,
         /// Which enum variant are we pulling binding sites from? This is somewhat redundant with
@@ -105,17 +110,17 @@ pub enum Binding {
         /// get the field names.
         field: TupleIndex,
     },
-    /// After some sequence of matches, we'll match one of the previous bindings against
-    /// `Option::Some` and produce a new binding from its contents. (This currently only happens
-    /// with external extractors.)
-    Some {
+    /// Pattern-match one of the previous bindings against `Option::Some` and produce a new binding
+    /// from its contents. There must be a corresponding [Constraint::Some] for each `source` that
+    /// appears in a `MatchSome` binding. (This currently only happens with external extractors.)
+    MatchSome {
         /// Which binding is being matched?
         source: BindingId,
     },
-    /// After some sequence of matches, we'll match one of the previous bindings against a tuple and
-    /// produce a new binding from one of its fields. (This currently only happens with external
-    /// extractors.)
-    Tuple {
+    /// Pattern-match one of the previous bindings against a tuple and produce a new binding from
+    /// one of its fields. This is an irrefutable pattern match so there is no corresponding
+    /// [Constraint]. (This currently only happens with external extractors.)
+    MatchTuple {
         /// Which binding is being matched?
         source: BindingId,
         /// Which tuple field are we projecting out?
@@ -125,7 +130,7 @@ pub enum Binding {
 
 /// Pattern matches which can fail. Some binding sites are the result of successfully matching a
 /// constraint. A rule applies constraints to binding sites to determine whether the rule matches.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum Constraint {
     /// The value must match this enum variant.
     Variant {
@@ -142,6 +147,8 @@ pub enum Constraint {
     ConstInt {
         /// The constant value.
         val: i128,
+        /// The constant's type. Unsigned types preserve the representation of `val`, not its value.
+        ty: sema::TypeId,
     },
     /// The value must equal this Rust primitive value.
     ConstPrim {
@@ -152,25 +159,31 @@ pub enum Constraint {
     Some,
 }
 
-/// A term-rewriting rule. All [BindingId]s and [ExprId]s are only meaningful in the context of the
-/// [RuleSet] that contains this rule.
+/// A term-rewriting rule. All [BindingId]s are only meaningful in the context of the [RuleSet] that
+/// contains this rule.
 #[derive(Debug, Default)]
 pub struct Rule {
     /// Where was this rule defined?
     pub pos: Pos,
-    /// All of these bindings must match for this rule to apply. Note that within a single rule, if
-    /// a binding site must match two different constants, then the rule can never match.
+    /// All of these bindings must match the given constraints for this rule to apply. Note that
+    /// within a single rule, if a binding site must match two different constraints, then the rule
+    /// can never match.
     constraints: HashMap<BindingId, Constraint>,
     /// Sets of bindings which must be equal for this rule to match.
     pub equals: DisjointSets<BindingId>,
+    /// These bindings are from multi-terms which need to be evaluated in this rule.
+    pub iterators: StableSet<BindingId>,
     /// If other rules apply along with this one, the one with the highest numeric priority is
     /// evaluated. If multiple applicable rules have the same priority, that's an overlap error.
     pub prio: i64,
+    /// If this rule applies, these side effects should be evaluated before returning.
+    pub impure: Vec<BindingId>,
     /// If this rule applies, the top-level term should evaluate to this expression.
-    pub result: ExprId,
+    pub result: BindingId,
 }
 
 /// Records whether a given pair of rules can both match on some input.
+#[derive(Debug, Eq, PartialEq)]
 pub enum Overlap {
     /// There is no input on which this pair of rules can both match.
     No,
@@ -178,34 +191,31 @@ pub enum Overlap {
     Yes {
         /// True if every input accepted by one rule is also accepted by the other. This does not
         /// indicate which rule is more general and in fact the rules could match exactly the same
-        /// set of inputs. You can work out which by comparing the number of constraints in both
-        /// rules: The more general rule has fewer constraints.
+        /// set of inputs. You can work out which by comparing `total_constraints()` in both rules:
+        /// The more general rule has fewer constraints.
         subset: bool,
     },
 }
 
-/// A collection of [Rule]s, along with hash-consed [Binding]s and [Expr]s for all of them.
+/// A collection of [Rule]s, along with hash-consed [Binding]s for all of them.
 #[derive(Debug, Default)]
 pub struct RuleSet {
     /// The [Rule]s for a single [sema::Term].
     pub rules: Vec<Rule>,
     /// The bindings identified by [BindingId]s within rules.
     pub bindings: Vec<Binding>,
-    /// The expressions identified by [ExprId]s within rules.
-    pub exprs: Vec<Expr>,
+    /// Intern table for de-duplicating [Binding]s.
+    binding_map: HashMap<Binding, BindingId>,
 }
 
 /// Construct a [RuleSet] for each term in `termenv` that has rules.
-pub fn build(
-    termenv: &sema::TermEnv,
-    tyenv: &sema::TypeEnv,
-) -> (Vec<(sema::TermId, RuleSet)>, Vec<Error>) {
+pub fn build(termenv: &sema::TermEnv) -> (Vec<(sema::TermId, RuleSet)>, Vec<Error>) {
     let mut errors = Vec::new();
     let mut term = HashMap::new();
     for rule in termenv.rules.iter() {
-        term.entry(rule.lhs.root_term().unwrap())
+        term.entry(rule.root_term)
             .or_insert_with(RuleSetBuilder::default)
-            .add_rule(rule, termenv, tyenv, &mut errors);
+            .add_rule(rule, termenv, &mut errors);
     }
 
     // The `term` hash map may return terms in any order. Sort them to ensure that we produce the
@@ -218,6 +228,52 @@ pub fn build(
     result.sort_unstable_by_key(|(term, _)| *term);
 
     (result, errors)
+}
+
+impl RuleSet {
+    /// Returns the [BindingId] corresponding to the given [Binding] within this rule-set, if any.
+    pub fn find_binding(&self, binding: &Binding) -> Option<BindingId> {
+        self.binding_map.get(binding).copied()
+    }
+}
+
+impl Binding {
+    /// Returns the binding sites which must be evaluated before this binding.
+    pub fn sources(&self) -> &[BindingId] {
+        match self {
+            Binding::ConstInt { .. } => &[][..],
+            Binding::ConstPrim { .. } => &[][..],
+            Binding::Argument { .. } => &[][..],
+            Binding::Extractor { parameter, .. } => std::slice::from_ref(parameter),
+            Binding::Constructor { parameters, .. } => &parameters[..],
+            Binding::Iterator { source } => std::slice::from_ref(source),
+            Binding::MakeVariant { fields, .. } => &fields[..],
+            Binding::MatchVariant { source, .. } => std::slice::from_ref(source),
+            Binding::MatchSome { source } => std::slice::from_ref(source),
+            Binding::MatchTuple { source, .. } => std::slice::from_ref(source),
+        }
+    }
+}
+
+impl Constraint {
+    /// Return the nested [Binding]s from matching the given [Constraint] against the given [BindingId].
+    pub fn bindings_for(self, source: BindingId) -> Vec<Binding> {
+        match self {
+            // These constraints never introduce any bindings.
+            Constraint::ConstInt { .. } | Constraint::ConstPrim { .. } => vec![],
+            Constraint::Some => vec![Binding::MatchSome { source }],
+            Constraint::Variant {
+                variant, fields, ..
+            } => (0..fields.0)
+                .map(TupleIndex)
+                .map(|field| Binding::MatchVariant {
+                    source,
+                    variant,
+                    field,
+                })
+                .collect(),
+        }
+    }
 }
 
 impl Rule {
@@ -244,9 +300,12 @@ impl Rule {
         // For the purpose of overlap checking, equality constraints act like other constraints, in
         // that they can cause rules to not overlap. However, because we don't have a concrete
         // pattern to compare, the analysis to prove that is complicated. For now, we approximate
-        // the result. If `small` has any of these nonlinear constraints, conservatively report that
-        // it is not a subset of `big`.
-        let mut subset = small.equals.is_empty();
+        // the result. If either rule has nonlinear constraints, conservatively report that neither
+        // is a subset of the other. Note that this does not disagree with the doc comment for
+        // `Overlap::Yes { subset }` which says to use `total_constraints` to disambiguate, since if
+        // we return `subset: true` here, `equals` is empty for both rules, so `total_constraints()`
+        // equals `constraints.len()`.
+        let mut subset = small.equals.is_empty() && big.equals.is_empty();
 
         for (binding, a) in small.constraints.iter() {
             if let Some(b) = big.constraints.get(binding) {
@@ -264,6 +323,14 @@ impl Rule {
             }
         }
         Overlap::Yes { subset }
+    }
+
+    /// Returns the total number of binding sites which this rule constrains, with either a concrete
+    /// pattern or an equality constraint.
+    pub fn total_constraints(&self) -> usize {
+        // Because of `normalize_equivalence_classes`, these two sets don't overlap, so the size of
+        // the union is the sum of their sizes.
+        self.constraints.len() + self.equals.len()
     }
 
     /// Returns the constraint that the given binding site must satisfy for this rule to match, if
@@ -305,20 +372,14 @@ struct UnreachableError {
 #[derive(Debug, Default)]
 struct RuleSetBuilder {
     current_rule: Rule,
-    binding_map: HashMap<Binding, BindingId>,
-    expr_map: HashMap<Expr, ExprId>,
+    impure_instance: u32,
     unreachable: Vec<UnreachableError>,
     rules: RuleSet,
 }
 
 impl RuleSetBuilder {
-    fn add_rule(
-        &mut self,
-        rule: &sema::Rule,
-        termenv: &sema::TermEnv,
-        tyenv: &sema::TypeEnv,
-        errors: &mut Vec<Error>,
-    ) {
+    fn add_rule(&mut self, rule: &sema::Rule, termenv: &sema::TermEnv, errors: &mut Vec<Error>) {
+        self.impure_instance = 0;
         self.current_rule.pos = rule.pos;
         self.current_rule.prio = rule.prio;
         self.current_rule.result = rule.visit(self, termenv);
@@ -329,20 +390,17 @@ impl RuleSetBuilder {
             self.rules.rules.push(rule);
         } else {
             // If this rule can never match, drop it so it doesn't affect overlap checking.
-            errors.extend(self.unreachable.drain(..).map(|err| {
-                let src = Source::new(
-                    tyenv.filenames[err.pos.file].clone(),
-                    tyenv.file_texts[err.pos.file].clone(),
-                );
-                Error::UnreachableError {
-                    msg: format!(
-                        "rule requires binding to match both {:?} and {:?}",
-                        err.constraint_a, err.constraint_b
-                    ),
-                    src,
-                    span: Span::new_single(err.pos),
-                }
-            }))
+            errors.extend(
+                self.unreachable
+                    .drain(..)
+                    .map(|err| Error::UnreachableError {
+                        msg: format!(
+                            "rule requires binding to match both {:?} and {:?}",
+                            err.constraint_a, err.constraint_b
+                        ),
+                        span: Span::new_single(err.pos),
+                    }),
+            )
         }
     }
 
@@ -370,7 +428,7 @@ impl RuleSetBuilder {
         // First, find all the constraints that need to be copied to other binding sites in their
         // respective equivalence classes. Note: do not remove these constraints here! Yes, we'll
         // put them back later, but we rely on still having them around so that
-        // `set_constraint_or_error` can detect conflicting constraints.
+        // `set_constraint` can detect conflicting constraints.
         let mut deferred_constraints = Vec::new();
         for (&binding, &constraint) in self.current_rule.constraints.iter() {
             if let Some(root) = self.current_rule.equals.find_mut(binding) {
@@ -387,230 +445,157 @@ impl RuleSetBuilder {
             // Remove the entire equivalence class and instead add copies of this constraint to
             // every binding site in the class. If there are constraints on other binding sites in
             // this class, then when we try to copy this constraint to those binding sites,
-            // `set_constraint_or_error` will check that the constraints are equal and record an
-            // appropriate error otherwise.
+            // `set_constraint` will check that the constraints are equal and record an appropriate
+            // error otherwise.
             //
             // Later, we'll re-visit those other binding sites because they're still in
             // `deferred_constraints`, but `set` will be empty because we already deleted the
             // equivalence class the first time we encountered it.
             let set = self.current_rule.equals.remove_set_of(current);
-            match (constraint, set.split_first()) {
-                // If the equivalence class was empty we don't have to do anything.
-                (_, None) => continue,
+            if let Some((&base, rest)) = set.split_first() {
+                let mut defer = |this: &Self, binding| {
+                    // We're adding equality constraints to binding sites that may not have had
+                    // one already. If that binding site already had a concrete constraint, then
+                    // we need to "recursively" propagate that constraint through the new
+                    // equivalence class too.
+                    if let Some(constraint) = this.current_rule.get_constraint(binding) {
+                        deferred_constraints.push((binding, constraint));
+                    }
+                };
 
-                // If we removed an equivalence class with an enum variant constraint, make the
-                // fields of the variant equal instead. Create a binding for every field of every
-                // member of `set`. Arbitrarily pick one to set all the others equal to. If there
-                // are existing constraints on the new fields, copy those around the new equivalence
-                // classes too.
-                (
-                    Constraint::Variant {
-                        fields, variant, ..
-                    },
-                    Some((&base, rest)),
-                ) => {
-                    let base_fields =
-                        self.field_bindings(base, fields, variant, &mut deferred_constraints);
-                    for &binding in rest {
-                        for (&x, &y) in self
-                            .field_bindings(binding, fields, variant, &mut deferred_constraints)
-                            .iter()
-                            .zip(base_fields.iter())
-                        {
-                            self.current_rule.equals.merge(x, y);
-                        }
+                // If this constraint introduces nested binding sites, make the fields of those
+                // binding sites equal instead. Arbitrarily pick one member of `set` to set all the
+                // others equal to. If there are existing constraints on the new binding sites, copy
+                // those around the new equivalence classes too.
+                let base_fields = self.set_constraint(base, constraint);
+                base_fields.iter().for_each(|&x| defer(self, x));
+                for &b in rest {
+                    for (&x, y) in base_fields.iter().zip(self.set_constraint(b, constraint)) {
+                        defer(self, y);
+                        self.current_rule.equals.merge(x, y);
                     }
                 }
-
-                // These constraints don't introduce new binding sites.
-                (Constraint::ConstInt { .. } | Constraint::ConstPrim { .. }, _) => {}
-
-                // Currently, `Some` constraints are only introduced implicitly during the
-                // translation from `sema`, so there's no way to set the corresponding binding
-                // sites equal to each other. Instead, any equality constraints get applied on
-                // the results of matching `Some()` or tuple patterns.
-                (Constraint::Some, _) => unreachable!(),
-            }
-
-            for binding in set {
-                self.set_constraint_or_error(binding, constraint);
             }
         }
     }
 
-    fn field_bindings(
-        &mut self,
-        binding: BindingId,
-        fields: TupleIndex,
-        variant: sema::VariantId,
-        deferred_constraints: &mut Vec<(BindingId, Constraint)>,
-    ) -> Box<[BindingId]> {
-        (0..fields.0)
-            .map(TupleIndex)
-            .map(move |field| {
-                let binding = self.dedup_binding(Binding::Variant {
-                    source: binding,
-                    variant,
-                    field,
-                });
-                // We've just added an equality constraint to a binding site that may not have had
-                // one already. If that binding site already had a concrete constraint, then we need
-                // to "recursively" propagate that constraint through the new equivalence class too.
-                if let Some(constraint) = self.current_rule.get_constraint(binding) {
-                    deferred_constraints.push((binding, constraint));
-                }
-                binding
-            })
-            .collect()
-    }
-
     fn dedup_binding(&mut self, binding: Binding) -> BindingId {
-        if let Some(binding) = self.binding_map.get(&binding) {
+        if let Some(binding) = self.rules.binding_map.get(&binding) {
             *binding
         } else {
             let id = BindingId(self.rules.bindings.len().try_into().unwrap());
             self.rules.bindings.push(binding.clone());
-            self.binding_map.insert(binding, id);
+            self.rules.binding_map.insert(binding, id);
             id
         }
     }
 
-    fn dedup_expr(&mut self, expr: Expr) -> ExprId {
-        if let Some(expr) = self.expr_map.get(&expr) {
-            *expr
-        } else {
-            let id = ExprId(self.rules.exprs.len().try_into().unwrap());
-            self.rules.exprs.push(expr.clone());
-            self.expr_map.insert(expr, id);
-            id
-        }
-    }
-
-    fn set_constraint(&mut self, input: Binding, constraint: Constraint) -> BindingId {
-        let input = self.dedup_binding(input);
-        self.set_constraint_or_error(input, constraint);
-        input
-    }
-
-    fn set_constraint_or_error(&mut self, input: BindingId, constraint: Constraint) {
+    fn set_constraint(&mut self, input: BindingId, constraint: Constraint) -> Vec<BindingId> {
         if let Err(e) = self.current_rule.set_constraint(input, constraint) {
             self.unreachable.push(e);
         }
+        constraint
+            .bindings_for(input)
+            .into_iter()
+            .map(|binding| self.dedup_binding(binding))
+            .collect()
     }
 }
 
 impl sema::PatternVisitor for RuleSetBuilder {
-    /// The "identifier" this visitor uses for binding sites is a [Binding], not a [BindingId].
-    /// Either choice would work but this approach avoids adding bindings to the [RuleSet] if they
-    /// are never used in any rule.
-    type PatternId = Binding;
+    type PatternId = BindingId;
 
-    fn add_match_equal(&mut self, a: Binding, b: Binding, _ty: sema::TypeId) {
-        let a = self.dedup_binding(a);
-        let b = self.dedup_binding(b);
+    fn add_match_equal(&mut self, a: BindingId, b: BindingId, _ty: sema::TypeId) {
         // If both bindings represent the same binding site, they're implicitly equal.
         if a != b {
             self.current_rule.equals.merge(a, b);
         }
     }
 
-    fn add_match_int(&mut self, input: Binding, _ty: sema::TypeId, val: i128) {
-        self.set_constraint(input, Constraint::ConstInt { val });
+    fn add_match_int(&mut self, input: BindingId, ty: sema::TypeId, val: i128) {
+        let bindings = self.set_constraint(input, Constraint::ConstInt { val, ty });
+        debug_assert_eq!(bindings, &[]);
     }
 
-    fn add_match_prim(&mut self, input: Binding, _ty: sema::TypeId, val: sema::Sym) {
-        self.set_constraint(input, Constraint::ConstPrim { val });
+    fn add_match_prim(&mut self, input: BindingId, _ty: sema::TypeId, val: sema::Sym) {
+        let bindings = self.set_constraint(input, Constraint::ConstPrim { val });
+        debug_assert_eq!(bindings, &[]);
     }
 
     fn add_match_variant(
         &mut self,
-        input: Binding,
+        input: BindingId,
         input_ty: sema::TypeId,
         arg_tys: &[sema::TypeId],
         variant: sema::VariantId,
-    ) -> Vec<Binding> {
+    ) -> Vec<BindingId> {
         let fields = TupleIndex(arg_tys.len().try_into().unwrap());
-        let source = self.set_constraint(
+        self.set_constraint(
             input,
             Constraint::Variant {
                 fields,
                 ty: input_ty,
                 variant,
             },
-        );
-        (0..fields.0)
-            .map(TupleIndex)
-            .map(|field| Binding::Variant {
-                source,
-                variant,
-                field,
-            })
-            .collect()
+        )
     }
 
     fn add_extract(
         &mut self,
-        input: Binding,
+        input: BindingId,
         _input_ty: sema::TypeId,
         output_tys: Vec<sema::TypeId>,
         term: sema::TermId,
         infallible: bool,
-        _multi: bool,
-    ) -> Vec<Binding> {
-        // ISLE treats external extractors as patterns, but in this representation they're
-        // expressions, because Rust doesn't support calling functions during pattern matching. To
-        // glue the two representations together we have to introduce suitable adapter nodes.
-        let input = self.pattern_as_expr(input);
-        let input = self.dedup_expr(Expr::Extractor {
+        multi: bool,
+    ) -> Vec<BindingId> {
+        let source = self.dedup_binding(Binding::Extractor {
             term,
             parameter: input,
         });
-        let input = self.expr_as_pattern(input);
 
         // If the extractor is fallible, build a pattern and constraint for `Some`
-        let source = if infallible {
-            input
+        let source = if multi {
+            self.current_rule.iterators.insert(source);
+            self.dedup_binding(Binding::Iterator { source })
+        } else if infallible {
+            source
         } else {
-            let source = self.set_constraint(input, Constraint::Some);
-            Binding::Some { source }
+            let bindings = self.set_constraint(source, Constraint::Some);
+            debug_assert_eq!(bindings.len(), 1);
+            bindings[0]
         };
 
         // If the extractor has multiple outputs, create a separate binding for each
         match output_tys.len().try_into().unwrap() {
             0 => vec![],
             1 => vec![source],
-            outputs => {
-                let source = self.dedup_binding(source);
-                (0..outputs)
-                    .map(TupleIndex)
-                    .map(|field| Binding::Tuple { source, field })
-                    .collect()
-            }
+            outputs => (0..outputs)
+                .map(TupleIndex)
+                .map(|field| self.dedup_binding(Binding::MatchTuple { source, field }))
+                .collect(),
         }
     }
 }
 
 impl sema::ExprVisitor for RuleSetBuilder {
-    /// Unlike the `PatternVisitor` implementation, we use [ExprId] to identify intermediate
-    /// expressions, not [Expr]. Visited expressions are always used so we might as well deduplicate
-    /// them eagerly.
-    type ExprId = ExprId;
+    type ExprId = BindingId;
 
-    fn add_const_int(&mut self, _ty: sema::TypeId, val: i128) -> ExprId {
-        self.dedup_expr(Expr::ConstInt { val })
+    fn add_const_int(&mut self, ty: sema::TypeId, val: i128) -> BindingId {
+        self.dedup_binding(Binding::ConstInt { val, ty })
     }
 
-    fn add_const_prim(&mut self, _ty: sema::TypeId, val: sema::Sym) -> ExprId {
-        self.dedup_expr(Expr::ConstPrim { val })
+    fn add_const_prim(&mut self, _ty: sema::TypeId, val: sema::Sym) -> BindingId {
+        self.dedup_binding(Binding::ConstPrim { val })
     }
 
     fn add_create_variant(
         &mut self,
-        inputs: Vec<(ExprId, sema::TypeId)>,
+        inputs: Vec<(BindingId, sema::TypeId)>,
         ty: sema::TypeId,
         variant: sema::VariantId,
-    ) -> ExprId {
-        self.dedup_expr(Expr::Variant {
+    ) -> BindingId {
+        self.dedup_binding(Binding::MakeVariant {
             ty,
             variant,
             fields: inputs.into_iter().map(|(expr, _)| expr).collect(),
@@ -619,58 +604,80 @@ impl sema::ExprVisitor for RuleSetBuilder {
 
     fn add_construct(
         &mut self,
-        inputs: Vec<(ExprId, sema::TypeId)>,
+        inputs: Vec<(BindingId, sema::TypeId)>,
         _ty: sema::TypeId,
         term: sema::TermId,
-        _infallible: bool,
-        _multi: bool,
-    ) -> ExprId {
-        self.dedup_expr(Expr::Constructor {
+        pure: bool,
+        infallible: bool,
+        multi: bool,
+    ) -> BindingId {
+        let instance = if pure {
+            0
+        } else {
+            self.impure_instance += 1;
+            self.impure_instance
+        };
+        let source = self.dedup_binding(Binding::Constructor {
             term,
             parameters: inputs.into_iter().map(|(expr, _)| expr).collect(),
-        })
+            instance,
+        });
+
+        // If the constructor is fallible, build a pattern for `Some`, but not a constraint. If the
+        // constructor is on the right-hand side of a rule then its failure is not considered when
+        // deciding which rule to evaluate. Corresponding constraints are only added if this
+        // expression is subsequently used as a pattern; see `expr_as_pattern`.
+        let source = if multi {
+            self.current_rule.iterators.insert(source);
+            self.dedup_binding(Binding::Iterator { source })
+        } else if infallible {
+            source
+        } else {
+            self.dedup_binding(Binding::MatchSome { source })
+        };
+
+        if !pure {
+            self.current_rule.impure.push(source);
+        }
+
+        source
     }
 }
 
 impl sema::RuleVisitor for RuleSetBuilder {
     type PatternVisitor = Self;
     type ExprVisitor = Self;
-    type Expr = ExprId;
+    type Expr = BindingId;
 
-    fn add_arg(&mut self, index: usize, _ty: sema::TypeId) -> Binding {
-        // Arguments don't need to be pattern-matched to reference them, so they're expressions
+    fn add_arg(&mut self, index: usize, _ty: sema::TypeId) -> BindingId {
         let index = TupleIndex(index.try_into().unwrap());
-        let expr = self.dedup_expr(Expr::Argument { index });
-        Binding::Expr { constructor: expr }
+        self.dedup_binding(Binding::Argument { index })
     }
 
     fn add_pattern<F: FnOnce(&mut Self)>(&mut self, visitor: F) {
         visitor(self)
     }
 
-    fn add_expr<F>(&mut self, visitor: F) -> ExprId
+    fn add_expr<F>(&mut self, visitor: F) -> BindingId
     where
         F: FnOnce(&mut Self) -> sema::VisitedExpr<Self>,
     {
         visitor(self).value
     }
 
-    fn expr_as_pattern(&mut self, expr: ExprId) -> Binding {
-        if let &Expr::Binding { source: binding } = &self.rules.exprs[expr.index()] {
-            // Short-circuit wrapping a binding around an expr from another binding
-            self.rules.bindings[binding.index()]
-        } else {
-            Binding::Expr { constructor: expr }
+    fn expr_as_pattern(&mut self, expr: BindingId) -> BindingId {
+        let mut todo = vec![expr];
+        while let Some(expr) = todo.pop() {
+            let expr = &self.rules.bindings[expr.index()];
+            todo.extend_from_slice(expr.sources());
+            if let &Binding::MatchSome { source } = expr {
+                let _ = self.set_constraint(source, Constraint::Some);
+            }
         }
+        expr
     }
 
-    fn pattern_as_expr(&mut self, pattern: Binding) -> ExprId {
-        if let Binding::Expr { constructor } = pattern {
-            // Short-circuit wrapping an expr around a binding from another expr
-            constructor
-        } else {
-            let binding = self.dedup_binding(pattern);
-            self.dedup_expr(Expr::Binding { source: binding })
-        }
+    fn pattern_as_expr(&mut self, pattern: BindingId) -> BindingId {
+        pattern
     }
 }

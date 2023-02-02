@@ -14,43 +14,43 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn u8_as_u32(&mut self, x: u8) -> Option<u32> {
-            Some(x.into())
+        fn u8_as_u32(&mut self, x: u8) -> u32 {
+            x.into()
         }
 
         #[inline]
-        fn u8_as_u64(&mut self, x: u8) -> Option<u64> {
-            Some(x.into())
+        fn u8_as_u64(&mut self, x: u8) -> u64 {
+            x.into()
         }
 
         #[inline]
-        fn u16_as_u64(&mut self, x: u16) -> Option<u64> {
-            Some(x.into())
+        fn u16_as_u64(&mut self, x: u16) -> u64 {
+            x.into()
         }
 
         #[inline]
-        fn u32_as_u64(&mut self, x: u32) -> Option<u64> {
-            Some(x.into())
+        fn u32_as_u64(&mut self, x: u32) -> u64 {
+            x.into()
         }
 
         #[inline]
-        fn i64_as_u64(&mut self, x: i64) -> Option<u64> {
-            Some(x as u64)
+        fn i64_as_u64(&mut self, x: i64) -> u64 {
+            x as u64
         }
 
         #[inline]
-        fn u64_add(&mut self, x: u64, y: u64) -> Option<u64> {
-            Some(x.wrapping_add(y))
+        fn u64_add(&mut self, x: u64, y: u64) -> u64 {
+            x.wrapping_add(y)
         }
 
         #[inline]
-        fn u64_sub(&mut self, x: u64, y: u64) -> Option<u64> {
-            Some(x.wrapping_sub(y))
+        fn u64_sub(&mut self, x: u64, y: u64) -> u64 {
+            x.wrapping_sub(y)
         }
 
         #[inline]
-        fn u64_mul(&mut self, x: u64, y: u64) -> Option<u64> {
-            Some(x.wrapping_mul(y))
+        fn u64_mul(&mut self, x: u64, y: u64) -> u64 {
+            x.wrapping_mul(y)
         }
 
         #[inline]
@@ -66,23 +66,52 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn u64_and(&mut self, x: u64, y: u64) -> Option<u64> {
-            Some(x & y)
+        fn u64_and(&mut self, x: u64, y: u64) -> u64 {
+            x & y
         }
 
         #[inline]
-        fn u64_or(&mut self, x: u64, y: u64) -> Option<u64> {
-            Some(x | y)
+        fn u64_or(&mut self, x: u64, y: u64) -> u64 {
+            x | y
         }
 
         #[inline]
-        fn u64_xor(&mut self, x: u64, y: u64) -> Option<u64> {
-            Some(x ^ y)
+        fn u64_xor(&mut self, x: u64, y: u64) -> u64 {
+            x ^ y
         }
 
         #[inline]
-        fn u64_not(&mut self, x: u64) -> Option<u64> {
-            Some(!x)
+        fn u64_shl(&mut self, x: u64, y: u64) -> u64 {
+            x << y
+        }
+
+        #[inline]
+        fn imm64_ushr(&mut self, ty: Type, x: Imm64, y: Imm64) -> Imm64 {
+            let shift = u32::checked_sub(64, ty.bits()).unwrap_or(0);
+            let mask = u64::MAX >> shift;
+            let x = (x.bits() as u64) & mask;
+            let y = (y.bits() as u64) & mask;
+            Imm64::new((x >> y) as i64)
+        }
+
+        #[inline]
+        fn imm64_sshr(&mut self, ty: Type, x: Imm64, y: Imm64) -> Imm64 {
+            let shift = u32::checked_sub(64, ty.bits()).unwrap_or(0);
+            let mask = u64::MAX >> shift;
+            let x = (x.bits() as u64) & mask;
+            let y = (y.bits() as u64) & mask;
+            let sext = |v| ((v << shift) as i64) >> shift;
+            Imm64::new(sext(x) >> sext(y))
+        }
+
+        #[inline]
+        fn u64_not(&mut self, x: u64) -> u64 {
+            !x
+        }
+
+        #[inline]
+        fn u64_eq(&mut self, x: u64, y: u64) -> bool {
+            x == y
         }
 
         #[inline]
@@ -91,19 +120,46 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn u64_sextend_u32(&mut self, x: u64) -> Option<u64> {
-            Some(x as u32 as i32 as i64 as u64)
+        fn u64_is_odd(&mut self, x: u64) -> bool {
+            x & 1 == 1
         }
 
         #[inline]
-        fn u64_uextend_u32(&mut self, x: u64) -> Option<u64> {
-            Some(x & 0xffff_ffff)
+        fn u64_sextend_u32(&mut self, x: u64) -> u64 {
+            x as u32 as i32 as i64 as u64
         }
 
         #[inline]
-        fn ty_bits(&mut self, ty: Type) -> Option<u8> {
+        fn u64_uextend_u32(&mut self, x: u64) -> u64 {
+            x & 0xffff_ffff
+        }
+
+        #[inline]
+        fn imm64_icmp(&mut self, ty: Type, cc: &IntCC, x: Imm64, y: Imm64) -> Imm64 {
+            let shift = u32::checked_sub(64, ty.bits()).unwrap_or(0);
+            let mask = u64::MAX >> shift;
+            let x = (x.bits() as u64) & mask;
+            let y = (y.bits() as u64) & mask;
+            let sext = |v| ((v << shift) as i64) >> shift;
+            let result = match cc {
+                IntCC::Equal => x == y,
+                IntCC::NotEqual => x != y,
+                IntCC::UnsignedGreaterThanOrEqual => x >= y,
+                IntCC::UnsignedGreaterThan => x > y,
+                IntCC::UnsignedLessThanOrEqual => x <= y,
+                IntCC::UnsignedLessThan => x < y,
+                IntCC::SignedGreaterThanOrEqual => sext(x) >= sext(y),
+                IntCC::SignedGreaterThan => sext(x) > sext(y),
+                IntCC::SignedLessThanOrEqual => sext(x) <= sext(y),
+                IntCC::SignedLessThan => sext(x) < sext(y),
+            };
+            Imm64::new(result.into())
+        }
+
+        #[inline]
+        fn ty_bits(&mut self, ty: Type) -> u8 {
             use std::convert::TryInto;
-            Some(ty.bits().try_into().unwrap())
+            ty.bits().try_into().unwrap()
         }
 
         #[inline]
@@ -339,6 +395,17 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn imm64_power_of_two(&mut self, x: Imm64) -> Option<u64> {
+            let x = i64::from(x);
+            let x = u64::try_from(x).ok()?;
+            if x.is_power_of_two() {
+                Some(x.trailing_zeros().into())
+            } else {
+                None
+            }
+        }
+
+        #[inline]
         fn u64_from_bool(&mut self, b: bool) -> u64 {
             if b {
                 u64::MAX
@@ -500,8 +567,18 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn imm64(&mut self, x: u64) -> Option<Imm64> {
-            Some(Imm64::new(x as i64))
+        fn imm64(&mut self, x: u64) -> Imm64 {
+            Imm64::new(x as i64)
+        }
+
+        #[inline]
+        fn imm64_masked(&mut self, ty: Type, x: u64) -> Imm64 {
+            debug_assert!(ty.bits() <= 64);
+            // Careful: we can't do `(1 << bits) - 1` because that
+            // would overflow for `bits == 64`. Instead,
+            // right-shift an all-ones mask.
+            let mask = u64::MAX >> (64 - ty.bits());
+            Imm64::new((x & mask) as i64)
         }
 
         #[inline]
@@ -519,9 +596,9 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn offset32(&mut self, x: Offset32) -> Option<u32> {
+        fn offset32(&mut self, x: Offset32) -> u32 {
             let x: i32 = x.into();
-            Some(x as u32)
+            x as u32
         }
 
         #[inline]
@@ -579,6 +656,71 @@ macro_rules! isle_common_prelude_methods {
                 | IntCC::SignedLessThanOrEqual
                 | IntCC::SignedLessThan => Some(*cc),
             }
+        }
+
+        #[inline]
+        fn intcc_reverse(&mut self, cc: &IntCC) -> IntCC {
+            cc.reverse()
+        }
+
+        #[inline]
+        fn intcc_inverse(&mut self, cc: &IntCC) -> IntCC {
+            cc.inverse()
+        }
+
+        #[inline]
+        fn floatcc_reverse(&mut self, cc: &FloatCC) -> FloatCC {
+            cc.reverse()
+        }
+
+        #[inline]
+        fn floatcc_inverse(&mut self, cc: &FloatCC) -> FloatCC {
+            cc.inverse()
+        }
+
+        fn floatcc_unordered(&mut self, cc: &FloatCC) -> bool {
+            match *cc {
+                FloatCC::Unordered
+                | FloatCC::UnorderedOrEqual
+                | FloatCC::UnorderedOrLessThan
+                | FloatCC::UnorderedOrLessThanOrEqual
+                | FloatCC::UnorderedOrGreaterThan
+                | FloatCC::UnorderedOrGreaterThanOrEqual => true,
+                _ => false,
+            }
+        }
+
+        #[inline]
+        fn unpack_value_array_2(&mut self, arr: &ValueArray2) -> (Value, Value) {
+            let [a, b] = *arr;
+            (a, b)
+        }
+
+        #[inline]
+        fn pack_value_array_2(&mut self, a: Value, b: Value) -> ValueArray2 {
+            [a, b]
+        }
+
+        #[inline]
+        fn unpack_value_array_3(&mut self, arr: &ValueArray3) -> (Value, Value, Value) {
+            let [a, b, c] = *arr;
+            (a, b, c)
+        }
+
+        #[inline]
+        fn pack_value_array_3(&mut self, a: Value, b: Value, c: Value) -> ValueArray3 {
+            [a, b, c]
+        }
+
+        #[inline]
+        fn unpack_block_array_2(&mut self, arr: &BlockArray2) -> (BlockCall, BlockCall) {
+            let [a, b] = *arr;
+            (a, b)
+        }
+
+        #[inline]
+        fn pack_block_array_2(&mut self, a: BlockCall, b: BlockCall) -> BlockArray2 {
+            [a, b]
         }
     };
 }

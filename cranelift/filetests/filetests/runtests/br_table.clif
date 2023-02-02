@@ -40,3 +40,23 @@ block5(v5: i32):
 ; run: %br_table_i32(5) == 9
 ; run: %br_table_i32(6) == 10
 ; run: %br_table_i32(-1) == 3
+
+
+
+; RISC-V had a bug where having a br_table on a cold block would cause a segfault
+; See #5496 for more details.
+function %br_table_cold_block(i32) -> i32 system_v {
+    jt0 = jump_table []
+
+block0(v0: i32):
+    jump block1
+
+block1 cold:
+    br_table v0, block2, jt0
+
+block2:
+    v1 = iconst.i32 0
+    return v1
+}
+; run: %br_table_cold_block(0) == 0
+; run: %br_table_cold_block(1) == 0

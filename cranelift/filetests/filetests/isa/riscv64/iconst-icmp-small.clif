@@ -11,12 +11,12 @@ block0:
 }
 
 ; block0:
-;   lui t0,14
-;   addi t0,t0,3532
-;   lui a0,14
-;   addi a0,a0,3532
-;   uext.h a3,t0
-;   uext.h a5,a0
-;   ne a0,a3,a5##ty=i16
+;   lui t1,14
+;   addi t1,t1,3532
+;   lui a2,14
+;   addi a2,a2,3532
+;   uext.h a5,t1
+;   uext.h a7,a2
+;   ne a0,a5,a7##ty=i16
 ;   ret
 

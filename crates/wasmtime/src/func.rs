@@ -1,7 +1,7 @@
 use crate::store::{StoreData, StoreOpaque, Stored};
 use crate::{
     AsContext, AsContextMut, CallHook, Engine, Extern, FuncType, Instance, StoreContext,
-    StoreContextMut, Trap, Val, ValRaw, ValType,
+    StoreContextMut, Val, ValRaw, ValType,
 };
 use anyhow::{bail, Context as _, Error, Result};
 use std::future::Future;
@@ -95,7 +95,7 @@ use wasmtime_runtime::{
 /// // ... or we can make a static assertion about its signature and call it.
 /// // Our first call here can fail if the signatures don't match, and then the
 /// // second call can fail if the function traps (like the `match` above).
-/// let foo = foo.typed::<(), (), _>(&store)?;
+/// let foo = foo.typed::<(), ()>(&store)?;
 /// foo.call(&mut store, ())?;
 /// # Ok(())
 /// # }
@@ -130,7 +130,7 @@ use wasmtime_runtime::{
 ///     "#,
 /// )?;
 /// let instance = Instance::new(&mut store, &module, &[add.into()])?;
-/// let call_add_twice = instance.get_typed_func::<(), i32, _>(&mut store, "call_add_twice")?;
+/// let call_add_twice = instance.get_typed_func::<(), i32>(&mut store, "call_add_twice")?;
 ///
 /// assert_eq!(call_add_twice.call(&mut store, ())?, 10);
 /// # Ok(())
@@ -343,6 +343,8 @@ impl Func {
     ///
     /// For more information about errors in Wasmtime see the [`Trap`]
     /// documentation.
+    ///
+    /// [`Trap`]: crate::Trap
     #[cfg(compiler)]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn new<T>(
@@ -581,6 +583,8 @@ impl Func {
     /// For more information about errors in Wasmtime see the [`Trap`]
     /// documentation.
     ///
+    /// [`Trap`]: crate::Trap
+    ///
     /// # Examples
     ///
     /// First up we can see how simple wasm imports can be implemented, such
@@ -603,7 +607,7 @@ impl Func {
     ///     "#,
     /// )?;
     /// let instance = Instance::new(&mut store, &module, &[add.into()])?;
-    /// let foo = instance.get_typed_func::<(i32, i32), i32, _>(&mut store, "foo")?;
+    /// let foo = instance.get_typed_func::<(i32, i32), i32>(&mut store, "foo")?;
     /// assert_eq!(foo.call(&mut store, (1, 2))?, 3);
     /// # Ok(())
     /// # }
@@ -634,7 +638,7 @@ impl Func {
     ///     "#,
     /// )?;
     /// let instance = Instance::new(&mut store, &module, &[add.into()])?;
-    /// let foo = instance.get_typed_func::<(i32, i32), i32, _>(&mut store, "foo")?;
+    /// let foo = instance.get_typed_func::<(i32, i32), i32>(&mut store, "foo")?;
     /// assert_eq!(foo.call(&mut store, (1, 2))?, 3);
     /// assert!(foo.call(&mut store, (i32::max_value(), 1)).is_err());
     /// # Ok(())
@@ -672,7 +676,7 @@ impl Func {
     ///     "#,
     /// )?;
     /// let instance = Instance::new(&mut store, &module, &[debug.into()])?;
-    /// let foo = instance.get_typed_func::<(), (), _>(&mut store, "foo")?;
+    /// let foo = instance.get_typed_func::<(), ()>(&mut store, "foo")?;
     /// foo.call(&mut store, ())?;
     /// # Ok(())
     /// # }
@@ -720,7 +724,7 @@ impl Func {
     ///     "#,
     /// )?;
     /// let instance = Instance::new(&mut store, &module, &[log_str.into()])?;
-    /// let foo = instance.get_typed_func::<(), (), _>(&mut store, "foo")?;
+    /// let foo = instance.get_typed_func::<(), ()>(&mut store, "foo")?;
     /// foo.call(&mut store, ())?;
     /// # Ok(())
     /// # }
@@ -815,6 +819,8 @@ impl Func {
     ///
     /// Errors typically indicate that execution of WebAssembly was halted
     /// mid-way and did not complete after the error condition happened.
+    ///
+    /// [`Trap`]: crate::Trap
     ///
     /// # Panics
     ///
@@ -1178,10 +1184,6 @@ impl Func {
     /// function. This behaves the same way as `Params`, but just for the
     /// results of the function.
     ///
-    /// The `S` type parameter represents the method of passing in the store
-    /// context, and can typically be specified as simply `_` when calling this
-    /// function.
-    ///
     /// Translation between Rust types and WebAssembly types looks like:
     ///
     /// | WebAssembly | Rust                |
@@ -1232,7 +1234,7 @@ impl Func {
     /// // Note that this call can fail due to the typecheck not passing, but
     /// // in our case we statically know the module so we know this should
     /// // pass.
-    /// let typed = foo.typed::<(), (), _>(&store)?;
+    /// let typed = foo.typed::<(), ()>(&store)?;
     ///
     /// // Note that this can fail if the wasm traps at runtime.
     /// typed.call(&mut store, ())?;
@@ -1245,7 +1247,7 @@ impl Func {
     /// ```
     /// # use wasmtime::*;
     /// # fn foo(add: &Func, mut store: Store<()>) -> anyhow::Result<()> {
-    /// let typed = add.typed::<(i32, i64), f32, _>(&store)?;
+    /// let typed = add.typed::<(i32, i64), f32>(&store)?;
     /// assert_eq!(typed.call(&mut store, (1, 2))?, 3.0);
     /// # Ok(())
     /// # }
@@ -1256,18 +1258,20 @@ impl Func {
     /// ```
     /// # use wasmtime::*;
     /// # fn foo(add_with_overflow: &Func, mut store: Store<()>) -> anyhow::Result<()> {
-    /// let typed = add_with_overflow.typed::<(u32, u32), (u32, i32), _>(&store)?;
+    /// let typed = add_with_overflow.typed::<(u32, u32), (u32, i32)>(&store)?;
     /// let (result, overflow) = typed.call(&mut store, (u32::max_value(), 2))?;
     /// assert_eq!(result, 1);
     /// assert_eq!(overflow, 1);
     /// # Ok(())
     /// # }
     /// ```
-    pub fn typed<Params, Results, S>(&self, store: S) -> Result<TypedFunc<Params, Results>>
+    pub fn typed<Params, Results>(
+        &self,
+        store: impl AsContext,
+    ) -> Result<TypedFunc<Params, Results>>
     where
         Params: WasmParams,
         Results: WasmResults,
-        S: AsContext,
     {
         // Type-check that the params/results are all valid
         let ty = self.ty(store);
@@ -1307,7 +1311,7 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
         );
         exit_wasm(store, exit);
         store.0.call_hook(CallHook::ReturningFromWasm)?;
-        result.map_err(|t| Trap::from_runtime_box(store.0, t))
+        result.map_err(|t| crate::trap::from_runtime_box(store.0, t))
     }
 }
 
@@ -1722,24 +1726,23 @@ impl<T> Caller<'_, T> {
 
     /// Looks up an export from the caller's module by the `name` given.
     ///
-    /// Note that when accessing and calling exported functions, one should
-    /// adhere to the guidelines of the interface types proposal.  This method
-    /// is a temporary mechanism for accessing the caller's information until
-    /// interface types has been fully standardized and implemented. The
-    /// interface types proposal will obsolete this type and this will be
-    /// removed in the future at some point after interface types is
-    /// implemented. If you're relying on this method type it's recommended to
-    /// become familiar with interface types to ensure that your use case is
-    /// covered by the proposal.
+    /// This is a low-level function that's typically used to implement passing
+    /// of pointers or indices between core Wasm instances, where the callee
+    /// needs to consult the caller's exports to perform memory management and
+    /// resolve the references.
+    ///
+    /// For comparison, in components, the component model handles translating
+    /// arguments from one component instance to another and managing memory, so
+    /// that callees don't need to be aware of their callers, which promotes
+    /// virtualizability of APIs.
     ///
     /// # Return
     ///
-    /// If a memory or function export with the `name` provided was found, then it is
-    /// returned as a `Memory`. There are a number of situations, however, where
-    /// the memory or function may not be available:
+    /// If an export with the `name` provided was found, then it is returned as an
+    /// `Extern`. There are a number of situations, however, where the export may not
+    /// be available:
     ///
     /// * The caller instance may not have an export named `name`
-    /// * The export named `name` may not be an exported memory
     /// * There may not be a caller available, for example if `Func` was called
     ///   directly from host code.
     ///
@@ -1949,7 +1952,7 @@ macro_rules! impl_into_func {
 
                     match result {
                         CallResult::Ok(val) => val,
-                        CallResult::Trap(err) => Trap::raise(err),
+                        CallResult::Trap(err) => crate::trap::raise(err),
                         CallResult::Panic(panic) => wasmtime_runtime::resume_panic(panic),
                     }
                 }

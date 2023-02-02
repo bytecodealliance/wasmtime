@@ -21,16 +21,14 @@ unsafe fn test_remove_directory_trailing_slashes(dir_fd: wasi::Fd) {
     // Test that removing it with no trailing slash fails.
     assert_errno!(
         wasi::path_remove_directory(dir_fd, "file")
-            .expect_err("remove_directory without a trailing slash on a file should fail")
-            .raw_error(),
+            .expect_err("remove_directory without a trailing slash on a file should fail"),
         wasi::ERRNO_NOTDIR
     );
 
     // Test that removing it with a trailing slash fails.
     assert_errno!(
         wasi::path_remove_directory(dir_fd, "file/")
-            .expect_err("remove_directory with a trailing slash on a file should fail")
-            .raw_error(),
+            .expect_err("remove_directory with a trailing slash on a file should fail"),
         unix => wasi::ERRNO_NOTDIR,
         windows => wasi::ERRNO_NOENT
     );

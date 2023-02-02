@@ -53,7 +53,7 @@ fn main() -> Result<()> {
 
     // Next we poke around a bit to extract the `run` function from the module.
     println!("Extracting export...");
-    let run = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
 
     // And last but not least we can call it!
     println!("Calling export...");

@@ -7,6 +7,7 @@ use std::fmt;
 #[cfg(feature = "cache")]
 use std::path::Path;
 use std::sync::Arc;
+use target_lexicon::Architecture;
 use wasmparser::WasmFeatures;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
@@ -191,11 +192,17 @@ impl Config {
             ret.cranelift_debug_verifier(false);
             ret.cranelift_opt_level(OptLevel::Speed);
         }
+
         ret.wasm_reference_types(true);
         ret.wasm_multi_value(true);
         ret.wasm_bulk_memory(true);
         ret.wasm_simd(true);
         ret.wasm_backtrace_details(WasmBacktraceDetails::Environment);
+
+        // This is on-by-default in `wasmparser` since it's a stage 4+ proposal
+        // but it's not implemented in Wasmtime yet so disable it.
+        ret.features.tail_call = false;
+
         ret
     }
 
@@ -363,8 +370,6 @@ impl Config {
     /// This option is `true` by default.
     ///
     /// [`WasmBacktrace`]: crate::WasmBacktrace
-    #[deprecated = "Backtraces will always be enabled in future Wasmtime releases; if this \
-                    causes problems for you, please file an issue."]
     pub fn wasm_backtrace(&mut self, enable: bool) -> &mut Self {
         self.wasm_backtrace = enable;
         self
@@ -832,16 +837,19 @@ impl Config {
     /// Configures the Cranelift code generator to use its
     /// "egraph"-based mid-end optimizer.
     ///
-    /// This optimizer is intended to replace the compiler's more
-    /// traditional pipeline of optimization passes with a unified
-    /// code-rewriting system. It is not yet on by default, but it is
-    /// intended to become the default in a future version. It may
-    /// result in faster code, at the cost of slightly more
-    /// compilation-time work.
+    /// This optimizer has replaced the compiler's more traditional
+    /// pipeline of optimization passes with a unified code-rewriting
+    /// system. It is on by default, but the traditional optimization
+    /// pass structure is still available for now (it is deprecrated and
+    /// will be removed in a future version).
     ///
-    /// The default value for this is `false`.
+    /// The default value for this is `true`.
     #[cfg(compiler)]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[deprecated(
+        since = "5.0.0",
+        note = "egraphs will be the default and this method will be removed in a future version."
+    )]
     pub fn cranelift_use_egraphs(&mut self, enable: bool) -> &mut Self {
         let val = if enable { "true" } else { "false" };
         self.compiler_config
@@ -942,6 +950,23 @@ impl Config {
     pub fn cache_config_load(&mut self, path: impl AsRef<Path>) -> Result<&mut Self> {
         self.cache_config = CacheConfig::from_file(Some(path.as_ref()))?;
         Ok(self)
+    }
+
+    /// Disable caching.
+    ///
+    /// Every call to [`Module::new(my_wasm)`][crate::Module::new] will
+    /// recompile `my_wasm`, even when it is unchanged.
+    ///
+    /// By default, new configs do not have caching enabled. This method is only
+    /// useful for disabling a previous cache configuration.
+    ///
+    /// This method is only available when the `cache` feature of this crate is
+    /// enabled.
+    #[cfg(feature = "cache")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cache")))]
+    pub fn disable_cache(&mut self) -> &mut Self {
+        self.cache_config = CacheConfig::new_cache_disabled();
+        self
     }
 
     /// Loads cache configuration from the system default path.
@@ -1275,9 +1300,11 @@ impl Config {
         Ok(self)
     }
 
-    /// Configure wether wasmtime should compile a module using multiple threads.
+    /// Configure wether wasmtime should compile a module using multiple
+    /// threads.
     ///
-    /// Disabling this will result in a single thread being used to compile the wasm bytecode.
+    /// Disabling this will result in a single thread being used to compile
+    /// the wasm bytecode.
     ///
     /// By default parallel compilation is enabled.
     #[cfg(feature = "parallel-compilation")]
@@ -1433,7 +1460,7 @@ impl Config {
         Ok(())
     }
 
-    pub(crate) fn build_allocator(&self) -> Result<Box<dyn InstanceAllocator>> {
+    pub(crate) fn build_allocator(&self) -> Result<Box<dyn InstanceAllocator + Send + Sync>> {
         #[cfg(feature = "async")]
         let stack_size = self.async_stack_size;
 
@@ -1470,19 +1497,35 @@ impl Config {
         let mut compiler = match self.compiler_config.strategy {
             Strategy::Auto | Strategy::Cranelift => wasmtime_cranelift::builder(),
         };
+
         if let Some(target) = &self.compiler_config.target {
             compiler.target(target.clone())?;
         }
 
+        // If probestack is enabled for a target, Wasmtime will always use the
+        // inline strategy which doesn't require us to define a `__probestack`
+        // function or similar.
+        self.compiler_config
+            .settings
+            .insert("probestack_strategy".into(), "inline".into());
+
+        let host = target_lexicon::Triple::host();
+        let target = self.compiler_config.target.as_ref().unwrap_or(&host);
+
+        // On supported targets, we enable stack probing by default.
+        // This is required on Windows because of the way Windows
+        // commits its stacks, but it's also a good idea on other
+        // platforms to ensure guard pages are hit for large frame
+        // sizes.
+        if probestack_supported(target.architecture) {
+            self.compiler_config
+                .flags
+                .insert("enable_probestack".into());
+        }
+
         if self.native_unwind_info ||
-            // Windows always needs unwind info, since it is part of the ABI.
-            self
-                .compiler_config
-                .target
-                .as_ref()
-                .map_or(cfg!(target_os = "windows"), |target| {
-                    target.operating_system == target_lexicon::OperatingSystem::Windows
-                })
+             // Windows always needs unwind info, since it is part of the ABI.
+             target.operating_system == target_lexicon::OperatingSystem::Windows
         {
             if !self
                 .compiler_config
@@ -1670,16 +1713,60 @@ pub struct PoolingAllocationConfig {
 }
 
 #[cfg(feature = "pooling-allocator")]
-pub use wasmtime_runtime::PoolingAllocationStrategy;
-
-#[cfg(feature = "pooling-allocator")]
 impl PoolingAllocationConfig {
-    /// Configures the method by which slots in the pooling allocator are
-    /// allocated to instances
+    /// Configures the maximum number of "unused warm slots" to retain in the
+    /// pooling allocator.
     ///
-    /// This defaults to [`PoolingAllocationStrategy::ReuseAffinity`] .
-    pub fn strategy(&mut self, strategy: PoolingAllocationStrategy) -> &mut Self {
-        self.config.strategy = strategy;
+    /// The pooling allocator operates over slots to allocate from, and each
+    /// slot is considered "cold" if it's never been used before or "warm" if
+    /// it's been used by some module in the past. Slots in the pooling
+    /// allocator additionally track an "affinity" flag to a particular core
+    /// wasm module. When a module is instantiated into a slot then the slot is
+    /// considered affine to that module, even after the instance has been
+    /// dealloocated.
+    ///
+    /// When a new instance is created then a slot must be chosen, and the
+    /// current algorithm for selecting a slot is:
+    ///
+    /// * If there are slots that are affine to the module being instantiated,
+    ///   then the most recently used slot is selected to be allocated from.
+    ///   This is done to improve reuse of resources such as memory mappings and
+    ///   additionally try to benefit from temporal locality for things like
+    ///   caches.
+    ///
+    /// * Otherwise if there are more than N affine slots to other modules, then
+    ///   one of those affine slots is chosen to be allocated. The slot chosen
+    ///   is picked on a least-recently-used basis.
+    ///
+    /// * Finally, if there are less than N affine slots to other modules, then
+    ///   the non-affine slots are allocated from.
+    ///
+    /// This setting, `max_unused_warm_slots`, is the value for N in the above
+    /// algorithm. The purpose of this setting is to have a knob over the RSS
+    /// impact of "unused slots" for a long-running wasm server.
+    ///
+    /// If this setting is set to 0, for example, then affine slots are
+    /// aggressively resused on a least-recently-used basis. A "cold" slot is
+    /// only used if there are no affine slots available to allocate from. This
+    /// means that the set of slots used over the lifetime of a program is the
+    /// same as the maximum concurrent number of wasm instances.
+    ///
+    /// If this setting is set to infinity, however, then cold slots are
+    /// prioritized to be allocated from. This means that the set of slots used
+    /// over the lifetime of a program will approach
+    /// [`PoolingAllocationConfig::instance_count`], or the maximum number of
+    /// slots in the pooling allocator.
+    ///
+    /// Wasmtime does not aggressively decommit all resources associated with a
+    /// slot when the slot is not in use. For example the
+    /// [`PoolingAllocationConfig::linear_memory_keep_resident`] option can be
+    /// used to keep memory associated with a slot, even when it's not in use.
+    /// This means that the total set of used slots in the pooling instance
+    /// allocator can impact the overall RSS usage of a program.
+    ///
+    /// The default value for this option is 100.
+    pub fn max_unused_warm_slots(&mut self, max: u32) -> &mut Self {
+        self.config.max_unused_warm_slots = max;
         self
     }
 
@@ -1878,4 +1965,11 @@ impl PoolingAllocationConfig {
         self.config.limits.memory_pages = pages;
         self
     }
+}
+
+pub(crate) fn probestack_supported(arch: Architecture) -> bool {
+    matches!(
+        arch,
+        Architecture::X86_64 | Architecture::Aarch64(_) | Architecture::Riscv64(_)
+    )
 }

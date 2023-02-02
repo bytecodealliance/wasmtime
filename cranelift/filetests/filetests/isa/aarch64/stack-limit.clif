@@ -177,7 +177,7 @@ block0(v0: i64):
 
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
-;   movz w16, #6784 ; movk w16, w16, #6, LSL #16 ; add x16, x0, x16, UXTX ; ldr x16, [x16]
+;   movz w16, #6784 ; movk w16, w16, #6, LSL #16 ; ldr x16, [x0, x16, SXTX]
 ;   add x16, x16, #32
 ;   subs xzr, sp, x16, UXTX
 ;   b.hs 8 ; udf

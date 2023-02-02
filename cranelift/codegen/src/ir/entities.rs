@@ -368,32 +368,6 @@ impl SigRef {
     }
 }
 
-/// An opaque reference to a [heap](https://en.wikipedia.org/wiki/Memory_management#DYNAMIC).
-///
-/// Heaps are used to access dynamically allocated memory through
-/// [`heap_addr`](super::InstBuilder::heap_addr).
-///
-/// To create a heap, use [`FunctionBuilder::create_heap`](https://docs.rs/cranelift-frontend/*/cranelift_frontend/struct.FunctionBuilder.html#method.create_heap).
-///
-/// While the order is stable, it is arbitrary.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub struct Heap(u32);
-entity_impl!(Heap, "heap");
-
-impl Heap {
-    /// Create a new heap reference from its number.
-    ///
-    /// This method is for use by the parser.
-    pub fn with_number(n: u32) -> Option<Self> {
-        if n < u32::MAX {
-            Some(Self(n))
-        } else {
-            None
-        }
-    }
-}
-
 /// An opaque reference to a [WebAssembly
 /// table](https://developer.mozilla.org/en-US/docs/WebAssembly/Understanding_the_text_format#WebAssembly_tables).
 ///
@@ -449,8 +423,6 @@ pub enum AnyEntity {
     FuncRef(FuncRef),
     /// A function call signature.
     SigRef(SigRef),
-    /// A heap.
-    Heap(Heap),
     /// A table.
     Table(Table),
     /// A function's stack limit
@@ -472,7 +444,6 @@ impl fmt::Display for AnyEntity {
             Self::Constant(r) => r.fmt(f),
             Self::FuncRef(r) => r.fmt(f),
             Self::SigRef(r) => r.fmt(f),
-            Self::Heap(r) => r.fmt(f),
             Self::Table(r) => r.fmt(f),
             Self::StackLimit => write!(f, "stack_limit"),
         }
@@ -548,12 +519,6 @@ impl From<FuncRef> for AnyEntity {
 impl From<SigRef> for AnyEntity {
     fn from(r: SigRef) -> Self {
         Self::SigRef(r)
-    }
-}
-
-impl From<Heap> for AnyEntity {
-    fn from(r: Heap) -> Self {
-        Self::Heap(r)
     }
 }
 

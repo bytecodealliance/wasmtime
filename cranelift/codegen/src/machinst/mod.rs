@@ -100,24 +100,17 @@ pub trait MachInst: Clone + Debug {
     /// (ret/uncond/cond) and target if applicable.
     fn is_term(&self) -> MachTerminator;
 
+    /// Is this an unconditional trap?
+    fn is_trap(&self) -> bool;
+
     /// Is this an "args" pseudoinst?
     fn is_args(&self) -> bool;
 
     /// Should this instruction be included in the clobber-set?
-    fn is_included_in_clobbers(&self) -> bool {
-        true
-    }
+    fn is_included_in_clobbers(&self) -> bool;
 
     /// Generate a move.
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Self;
-
-    /// Generate a constant into a reg.
-    fn gen_constant<F: FnMut(Type) -> Writable<Reg>>(
-        to_regs: ValueRegs<Writable<Reg>>,
-        value: u128,
-        ty: Type,
-        alloc_tmp: F,
-    ) -> SmallVec<[Self; 4]>;
 
     /// Generate a dummy instruction that will keep a value alive but
     /// has no other purpose.
@@ -322,7 +315,7 @@ impl CompiledCodeStencil {
     /// Apply function parameters to finalize a stencil into its final form.
     pub fn apply_params(self, params: &FunctionParameters) -> CompiledCode {
         CompiledCode {
-            buffer: self.buffer.apply_params(params),
+            buffer: self.buffer.apply_base_srcloc(params.base_srcloc()),
             frame_size: self.frame_size,
             disasm: self.disasm,
             value_labels_ranges: self.value_labels_ranges,

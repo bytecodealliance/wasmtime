@@ -8,14 +8,13 @@ pub(crate) struct Formats {
     pub(crate) binary: Rc<InstructionFormat>,
     pub(crate) binary_imm8: Rc<InstructionFormat>,
     pub(crate) binary_imm64: Rc<InstructionFormat>,
-    pub(crate) branch: Rc<InstructionFormat>,
     pub(crate) branch_table: Rc<InstructionFormat>,
+    pub(crate) brif: Rc<InstructionFormat>,
     pub(crate) call: Rc<InstructionFormat>,
     pub(crate) call_indirect: Rc<InstructionFormat>,
     pub(crate) cond_trap: Rc<InstructionFormat>,
     pub(crate) float_compare: Rc<InstructionFormat>,
     pub(crate) func_addr: Rc<InstructionFormat>,
-    pub(crate) heap_addr: Rc<InstructionFormat>,
     pub(crate) int_compare: Rc<InstructionFormat>,
     pub(crate) int_compare_imm: Rc<InstructionFormat>,
     pub(crate) int_add_trap: Rc<InstructionFormat>,
@@ -112,17 +111,13 @@ impl Formats {
                 .value()
                 .build(),
 
-            jump: Builder::new("Jump").imm(&entities.block).varargs().build(),
+            jump: Builder::new("Jump").block().build(),
 
-            branch: Builder::new("Branch")
-                .value()
-                .imm(&entities.block)
-                .varargs()
-                .build(),
+            brif: Builder::new("Brif").value().block().block().build(),
 
             branch_table: Builder::new("BranchTable")
                 .value()
-                .imm(&entities.block)
+                .imm(&entities.label)
                 .imm(&entities.jump_table)
                 .build(),
 
@@ -196,14 +191,6 @@ impl Formats {
             dynamic_stack_store: Builder::new("DynamicStackStore")
                 .value()
                 .imm(&entities.dynamic_stack_slot)
-                .build(),
-
-            // Accessing a WebAssembly heap.
-            heap_addr: Builder::new("HeapAddr")
-                .imm(&entities.heap)
-                .value()
-                .imm_with_name("offset", &imm.uimm32)
-                .imm_with_name("size", &imm.uimm8)
                 .build(),
 
             // Accessing a WebAssembly table.

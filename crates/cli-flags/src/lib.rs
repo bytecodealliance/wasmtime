@@ -16,7 +16,7 @@
     )
 )]
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use clap::Parser;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -234,17 +234,6 @@ pub struct CommonOptions {
 }
 
 impl CommonOptions {
-    pub fn parse_from_str(s: &str) -> Result<Self> {
-        let parts = s.split(" ").filter(|s| !s.is_empty());
-        // The first argument is the name of the executable, which we don't use
-        // here, but have to provide because `clap` skips over it, and otherwise
-        // our first CLI flag will be ignored.
-        let parts = Some("wasmtime").into_iter().chain(parts);
-        let options =
-            Self::try_parse_from(parts).context("unable to parse options from passed flags")?;
-        Ok(options)
-    }
-
     pub fn init_logging(&self) {
         if self.disable_logging {
             return;
@@ -721,26 +710,6 @@ mod test {
                 wasi_nn: false,
                 wasi_crypto: false
             }
-        );
-    }
-
-    #[test]
-    fn test_parse_from_str() {
-        fn use_func(flags: &str) -> CommonOptions {
-            CommonOptions::parse_from_str(flags).unwrap()
-        }
-        fn use_clap_parser(flags: &[&str]) -> CommonOptions {
-            CommonOptions::try_parse_from(flags).unwrap()
-        }
-
-        assert_eq!(use_func(""), use_clap_parser(&[]));
-        assert_eq!(
-            use_func("--wasm-features=threads"),
-            use_clap_parser(&["foo", "--wasm-features=threads"])
-        );
-        assert_eq!(
-            use_func("--cranelift-set enable_simd=true"),
-            use_clap_parser(&["foo", "--cranelift-set", "enable_simd=true"])
         );
     }
 }

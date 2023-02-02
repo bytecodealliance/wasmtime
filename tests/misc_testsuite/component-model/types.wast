@@ -60,7 +60,7 @@
   (type (instance))
 
   (type (component
-    (import "" (func (type $empty)))
+    (import "x" (func (type $empty)))
     (import "y" (func))
     (import "z" (component))
 
@@ -71,7 +71,7 @@
   ))
 
   (type (instance
-    (export "" (func (type $empty)))
+    (export "x" (func (type $empty)))
     (export "y" (func))
     (export "z" (component))
 
@@ -97,7 +97,7 @@
 
   (component $C2
     (alias outer $C $f (core type $my_f))
-    (import "" (core module (type $m)))
+    (import "a" (core module (type $m)))
     (import "x" (core module
       (alias outer $C2 $my_f (type $my_f))
       (import "" "1" (func (type $my_f)))
@@ -246,3 +246,77 @@
     (type $t101 (list $t100))
   )
   "type nesting is too deep")
+
+(component
+  (type (instance
+    (export $x "x" (instance
+      (type $t u32)
+      (export "y" (type (eq $t)))
+    ))
+    (alias export $x "y" (type $t))
+    (export "my-y" (type (eq $t)))
+  ))
+
+  (type (component
+    (import "x" (instance $x
+      (type $t u32)
+      (export "y" (type (eq $t)))
+    ))
+    (alias export $x "y" (type $t))
+    (export "my-y" (type (eq $t)))
+  ))
+)
+
+(component
+  (type $t u32)
+  (export $t2 "t" (type $t))
+  (type $r (record (field "x" $t2)))
+  (export "r" (type $r))
+)
+
+(component
+  (component
+    (import "x" (instance $i
+      (type $i u32)
+      (export "i" (type (eq $i)))
+    ))
+    (alias export $i "i" (type $i))
+    (export "i" (type $i))
+  )
+)
+
+(component
+  (type $u u32)
+  (instance $i
+    (export "i" (type $u))
+  )
+  (alias export $i "i" (type $i))
+  (export "i" (type $i))
+)
+
+(component
+  (component $c
+    (type $t u32)
+    (export "t" (type $t))
+  )
+  (instance $c (instantiate $c))
+  (export "i" (type $c "t"))
+)
+
+(component
+  (component $c
+    (import "x" (component $c
+      (type $t u32)
+      (export "t" (type (eq $t)))
+    ))
+    (instance $c (instantiate $c))
+    (export "i" (type $c "t"))
+  )
+
+  (component $x
+    (type $t u32)
+    (export "t" (type $t))
+  )
+
+  (instance $c (instantiate $c (with "x" (component $x))))
+)

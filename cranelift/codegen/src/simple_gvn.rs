@@ -15,10 +15,9 @@ fn trivially_unsafe_for_gvn(opcode: Opcode) -> bool {
         || opcode.is_branch()
         || opcode.is_terminator()
         || opcode.is_return()
-        || opcode.can_trap()
-        || opcode.other_side_effects()
         || opcode.can_store()
-        || opcode.writes_cpu_flags()
+        || (opcode.can_trap() && !opcode.side_effects_idempotent())
+        || (opcode.other_side_effects() && !opcode.side_effects_idempotent())
 }
 
 /// Test that, if the specified instruction is a load, it doesn't have the `readonly` memflag.
@@ -39,14 +38,14 @@ struct HashKey<'a, 'f: 'a> {
 impl<'a, 'f: 'a> Hash for HashKey<'a, 'f> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         let pool = &self.pos.borrow().func.dfg.value_lists;
-        self.inst.hash(state, pool);
+        self.inst.hash(state, pool, |value| value);
         self.ty.hash(state);
     }
 }
 impl<'a, 'f: 'a> PartialEq for HashKey<'a, 'f> {
     fn eq(&self, other: &Self) -> bool {
         let pool = &self.pos.borrow().func.dfg.value_lists;
-        self.inst.eq(&other.inst, pool) && self.ty == other.ty
+        self.inst.eq(&other.inst, pool, |value| value) && self.ty == other.ty
     }
 }
 impl<'a, 'f: 'a> Eq for HashKey<'a, 'f> {}
@@ -97,7 +96,7 @@ pub fn do_simple_gvn(func: &mut Function, domtree: &mut DominatorTree) {
 
             let func = Ref::map(pos.borrow(), |pos| &pos.func);
 
-            let opcode = func.dfg[inst].opcode();
+            let opcode = func.dfg.insts[inst].opcode();
 
             if opcode.is_branch() && !opcode.is_terminator() {
                 scope_stack.push(func.layout.next_inst(inst).unwrap());
@@ -109,13 +108,13 @@ pub fn do_simple_gvn(func: &mut Function, domtree: &mut DominatorTree) {
             }
 
             // These are split up to separate concerns.
-            if is_load_and_not_readonly(&func.dfg[inst]) {
+            if is_load_and_not_readonly(&func.dfg.insts[inst]) {
                 continue;
             }
 
             let ctrl_typevar = func.dfg.ctrl_typevar(inst);
             let key = HashKey {
-                inst: func.dfg[inst],
+                inst: func.dfg.insts[inst],
                 ty: ctrl_typevar,
                 pos: &pos,
             };

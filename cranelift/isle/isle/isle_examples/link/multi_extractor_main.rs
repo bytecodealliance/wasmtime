@@ -1,5 +1,9 @@
 mod multi_extractor;
 
+use multi_extractor::ContextIter;
+
+pub(crate) type ConstructorVec<T> = Vec<T>;
+
 #[derive(Clone)]
 pub enum A {
     B,
@@ -33,14 +37,14 @@ impl multi_extractor::ContextIter for It {
 struct Context;
 impl multi_extractor::Context for Context {
     type e1_etor_iter = It;
-    fn e1_etor(&mut self, arg0: u32) -> Option<It> {
-        Some(It { i: 0, arg: arg0 })
+    fn e1_etor(&mut self, arg0: u32) -> It {
+        It { i: 0, arg: arg0 }
     }
 }
 
 fn main() {
     let mut ctx = Context;
-    let x = multi_extractor::constructor_Rule(&mut ctx, 0xf0);
-    let y = multi_extractor::constructor_Rule(&mut ctx, 0);
+    let x = multi_extractor::constructor_Rule(&mut ctx, 0xf0).next(&mut ctx);
+    let y = multi_extractor::constructor_Rule(&mut ctx, 0).next(&mut ctx);
     println!("x = {:?} y = {:?}", x, y);
 }

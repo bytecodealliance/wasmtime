@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-jit-icache-coherence"
-version = "3.0.0"
+version.workspace = true
 authors.workspace = true
 description = "Utilities for JIT icache maintenance"
 documentation = "https://docs.rs/jit-icache-coherence"
@@ -29,3 +29,5 @@ version = "0.2.42"
 # This feature enables such optimizations, but the resulting program will *only*
 # be safe to run on one-core systems.
 one-core = []
+[target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "freebsd", target_os = "android"))'.dependencies]
+libc = "0.2.42"

@@ -3,7 +3,6 @@
 
 #![cfg_attr(not(unix), allow(unused_imports, unused_variables))]
 
-use crate::InstantiationError;
 use crate::MmapVec;
 use anyhow::Result;
 use libc::c_void;
@@ -306,7 +305,7 @@ impl ModuleMemoryImages {
 /// middle of it. Pictorially this data structure manages a virtual memory
 /// region that looks like:
 ///
-/// ```ignore
+/// ```text
 ///   +--------------------+-------------------+--------------+--------------+
 ///   |   anonymous        |      optional     |   anonymous  |    PROT_NONE |
 ///   |     zero           |       memory      |     zero     |     memory   |
@@ -334,7 +333,7 @@ impl ModuleMemoryImages {
 /// `accessible` limits are. Initially there is assumed to be no image in linear
 /// memory.
 ///
-/// When [`MemoryImageSlot::instantiate`] is called then the method will perform
+/// When `MemoryImageSlot::instantiate` is called then the method will perform
 /// a "synchronization" to take the image from its prior state to the new state
 /// for the image specified. The first instantiation for example will mmap the
 /// heap image into place. Upon reuse of a slot nothing happens except possibly
@@ -344,7 +343,7 @@ impl ModuleMemoryImages {
 /// A `MemoryImageSlot` is either `dirty` or it isn't. When a `MemoryImageSlot`
 /// is dirty then it is assumed that any memory beneath `self.accessible` could
 /// have any value. Instantiation cannot happen into a `dirty` slot, however, so
-/// the [`MemoryImageSlot::clear_and_remain_ready`] returns this memory back to
+/// the `MemoryImageSlot::clear_and_remain_ready` returns this memory back to
 /// its original state to mark `dirty = false`. This is done by resetting all
 /// anonymous memory back to zero and the image itself back to its initial
 /// contents.
@@ -486,7 +485,7 @@ impl MemoryImageSlot {
         initial_size_bytes: usize,
         maybe_image: Option<&Arc<MemoryImage>>,
         style: &MemoryStyle,
-    ) -> Result<(), InstantiationError> {
+    ) -> Result<()> {
         assert!(!self.dirty);
         assert!(initial_size_bytes <= self.static_size);
 
@@ -499,22 +498,14 @@ impl MemoryImageSlot {
         // extent of the prior initialization image in order to preserve
         // resident memory that might come before or after the image.
         if self.image.as_ref() != maybe_image {
-            if let Some(image) = &self.image {
-                unsafe {
-                    image
-                        .remap_as_zeros_at(self.base)
-                        .map_err(|e| InstantiationError::Resource(e.into()))?;
-                }
-                self.image = None;
-            }
+            self.remove_image()?;
         }
 
         // The next order of business is to ensure that `self.accessible` is
         // appropriate. First up is to grow the read/write portion of memory if
         // it's not large enough to accommodate `initial_size_bytes`.
         if self.accessible < initial_size_bytes {
-            self.set_protection(self.accessible..initial_size_bytes, true)
-                .map_err(|e| InstantiationError::Resource(e.into()))?;
+            self.set_protection(self.accessible..initial_size_bytes, true)?;
             self.accessible = initial_size_bytes;
         }
 
@@ -529,8 +520,7 @@ impl MemoryImageSlot {
         if initial_size_bytes < self.accessible {
             match style {
                 MemoryStyle::Static { .. } => {
-                    self.set_protection(initial_size_bytes..self.accessible, false)
-                        .map_err(|e| InstantiationError::Resource(e.into()))?;
+                    self.set_protection(initial_size_bytes..self.accessible, false)?;
                     self.accessible = initial_size_bytes;
                 }
                 MemoryStyle::Dynamic { .. } => {}
@@ -549,9 +539,7 @@ impl MemoryImageSlot {
                 );
                 if image.len > 0 {
                     unsafe {
-                        image
-                            .map_at(self.base)
-                            .map_err(|e| InstantiationError::Resource(e.into()))?;
+                        image.map_at(self.base)?;
                     }
                 }
             }
@@ -562,6 +550,16 @@ impl MemoryImageSlot {
         // slot is required to be `clear_and_remain_ready`.
         self.dirty = true;
 
+        Ok(())
+    }
+
+    pub(crate) fn remove_image(&mut self) -> Result<()> {
+        if let Some(image) = &self.image {
+            unsafe {
+                image.remap_as_zeros_at(self.base)?;
+            }
+            self.image = None;
+        }
         Ok(())
     }
 

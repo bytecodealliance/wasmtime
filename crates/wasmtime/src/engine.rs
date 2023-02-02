@@ -49,7 +49,7 @@ struct EngineInner {
     config: Config,
     #[cfg(compiler)]
     compiler: Box<dyn wasmtime_environ::Compiler>,
-    allocator: Box<dyn InstanceAllocator>,
+    allocator: Box<dyn InstanceAllocator + Send + Sync>,
     profiler: Box<dyn ProfilingAgent>,
     signatures: SignatureRegistry,
     epoch: AtomicU64,
@@ -86,9 +86,9 @@ impl Engine {
 
         #[cfg(compiler)]
         let compiler = config.build_compiler()?;
+        drop(&mut config); // silence warnings without `cfg(compiler)`
 
         let allocator = config.build_allocator()?;
-        allocator.adjust_tunables(&mut config.tunables);
         let profiler = config.build_profiler()?;
 
         Ok(Engine {
@@ -359,6 +359,7 @@ impl Engine {
         flag: &str,
         value: &FlagValue,
     ) -> Result<(), String> {
+        let target = self.target();
         let ok = match flag {
             // These settings must all have be enabled, since their value
             // can affect the way the generated code performs or behaves at
@@ -366,14 +367,14 @@ impl Engine {
             "avoid_div_traps" => *value == FlagValue::Bool(true),
             "libcall_call_conv" => *value == FlagValue::Enum("isa_default".into()),
             "preserve_frame_pointers" => *value == FlagValue::Bool(true),
+            "enable_probestack" => *value == FlagValue::Bool(crate::config::probestack_supported(target.architecture)),
+            "probestack_strategy" => *value == FlagValue::Enum("inline".into()),
 
             // Features wasmtime doesn't use should all be disabled, since
             // otherwise if they are enabled it could change the behavior of
             // generated code.
             "enable_llvm_abi_extensions" => *value == FlagValue::Bool(false),
             "enable_pinned_reg" => *value == FlagValue::Bool(false),
-            "enable_probestack" => *value == FlagValue::Bool(false),
-            "probestack_strategy" => *value == FlagValue::Enum("outline".into()),
             "use_colocated_libcalls" => *value == FlagValue::Bool(false),
             "use_pinned_reg_as_heap_base" => *value == FlagValue::Bool(false),
 
@@ -389,7 +390,7 @@ impl Engine {
 
             // Windows requires unwind info as part of its ABI.
             "unwind_info" => {
-                if self.target().operating_system == target_lexicon::OperatingSystem::Windows {
+                if target.operating_system == target_lexicon::OperatingSystem::Windows {
                     *value == FlagValue::Bool(true)
                 } else {
                     return Ok(())
@@ -599,7 +600,7 @@ impl Engine {
         self.load_code(MmapVec::from_slice(bytes)?, expected)
     }
 
-    /// Like `load_code_bytes`, but crates a mmap from a file on disk.
+    /// Like `load_code_bytes`, but creates a mmap from a file on disk.
     pub(crate) fn load_code_file(
         &self,
         path: &Path,
@@ -613,7 +614,7 @@ impl Engine {
         )
     }
 
-    fn load_code(&self, mmap: MmapVec, expected: ObjectKind) -> Result<Arc<CodeMemory>> {
+    pub(crate) fn load_code(&self, mmap: MmapVec, expected: ObjectKind) -> Result<Arc<CodeMemory>> {
         serialization::check_compatible(self, &mmap, expected)?;
         let mut code = CodeMemory::new(mmap)?;
         code.publish()?;

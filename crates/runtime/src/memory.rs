@@ -3,16 +3,16 @@
 //! `RuntimeLinearMemory` is to WebAssembly linear memories what `Table` is to WebAssembly tables.
 
 use crate::mmap::Mmap;
+use crate::parking_spot::ParkingSpot;
 use crate::vmcontext::VMMemoryDefinition;
-use crate::MemoryImage;
-use crate::MemoryImageSlot;
-use crate::Store;
+use crate::{MemoryImage, MemoryImageSlot, Store, WaitResult};
 use anyhow::Error;
 use anyhow::{bail, format_err, Result};
 use std::convert::TryFrom;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
-use wasmtime_environ::{MemoryPlan, MemoryStyle, WASM32_MAX_PAGES, WASM64_MAX_PAGES};
+use std::time::Instant;
+use wasmtime_environ::{MemoryPlan, MemoryStyle, Trap, WASM32_MAX_PAGES, WASM64_MAX_PAGES};
 
 const WASM_PAGE_SIZE: usize = wasmtime_environ::WASM_PAGE_SIZE as usize;
 const WASM_PAGE_SIZE_U64: u64 = wasmtime_environ::WASM_PAGE_SIZE as u64;
@@ -150,8 +150,7 @@ pub trait RuntimeLinearMemory: Send + Sync {
     /// `RuntimeMemoryCreator::new_memory()`.
     fn needs_init(&self) -> bool;
 
-    /// For the pooling allocator, we must be able to downcast this trait to its
-    /// underlying structure.
+    /// Used for optional dynamic downcasting.
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
 }
 
@@ -432,7 +431,15 @@ impl RuntimeLinearMemory for StaticMemory {
 /// [thread proposal]:
 ///     https://github.com/WebAssembly/threads/blob/master/proposals/threads/Overview.md#webassemblymemoryprototypegrow
 #[derive(Clone)]
-pub struct SharedMemory(Arc<RwLock<SharedMemoryInner>>);
+pub struct SharedMemory(Arc<SharedMemoryInner>);
+
+struct SharedMemoryInner {
+    memory: RwLock<Box<dyn RuntimeLinearMemory>>,
+    spot: ParkingSpot,
+    ty: wasmtime_environ::Memory,
+    def: LongTermVMMemoryDefinition,
+}
+
 impl SharedMemory {
     /// Construct a new [`SharedMemory`].
     pub fn new(plan: MemoryPlan) -> Result<Self> {
@@ -457,17 +464,17 @@ impl SharedMemory {
             memory.as_any_mut().type_id() != std::any::TypeId::of::<SharedMemory>(),
             "cannot re-wrap a shared memory"
         );
-        let def = LongTermVMMemoryDefinition(memory.vmmemory());
-        Ok(Self(Arc::new(RwLock::new(SharedMemoryInner {
-            memory: memory,
+        Ok(Self(Arc::new(SharedMemoryInner {
             ty,
-            def,
-        }))))
+            spot: ParkingSpot::default(),
+            def: LongTermVMMemoryDefinition(memory.vmmemory()),
+            memory: RwLock::new(memory),
+        })))
     }
 
     /// Return the memory type for this [`SharedMemory`].
     pub fn ty(&self) -> wasmtime_environ::Memory {
-        self.0.read().unwrap().ty
+        self.0.ty
     }
 
     /// Convert this shared memory into a [`Memory`].
@@ -475,52 +482,19 @@ impl SharedMemory {
         Memory(Box::new(self))
     }
 
-    /// Return a mutable pointer to the shared memory's [VMMemoryDefinition].
-    pub fn vmmemory_ptr_mut(&mut self) -> *mut VMMemoryDefinition {
-        &self.0.read().unwrap().def.0 as *const _ as *mut _
-    }
-
     /// Return a pointer to the shared memory's [VMMemoryDefinition].
     pub fn vmmemory_ptr(&self) -> *const VMMemoryDefinition {
-        &self.0.read().unwrap().def.0 as *const _
-    }
-}
-
-struct SharedMemoryInner {
-    memory: Box<dyn RuntimeLinearMemory>,
-    ty: wasmtime_environ::Memory,
-    def: LongTermVMMemoryDefinition,
-}
-
-/// Shared memory needs some representation of a `VMMemoryDefinition` for
-/// JIT-generated code to access. This structure owns the base pointer and
-/// length to the actual memory and we share this definition across threads by:
-/// - never changing the base pointer; according to the specification, shared
-///   memory must be created with a known maximum size so it can be allocated
-///   once and never moved
-/// - carefully changing the length, using atomic accesses in both the runtime
-///   and JIT-generated code.
-struct LongTermVMMemoryDefinition(VMMemoryDefinition);
-unsafe impl Send for LongTermVMMemoryDefinition {}
-unsafe impl Sync for LongTermVMMemoryDefinition {}
-
-/// Proxy all calls through the [`RwLock`].
-impl RuntimeLinearMemory for SharedMemory {
-    fn byte_size(&self) -> usize {
-        self.0.read().unwrap().memory.byte_size()
+        &self.0.def.0
     }
 
-    fn maximum_byte_size(&self) -> Option<usize> {
-        self.0.read().unwrap().memory.maximum_byte_size()
-    }
-
-    fn grow(
-        &mut self,
+    /// Same as `RuntimeLinearMemory::grow`, except with `&self`.
+    pub fn grow(
+        &self,
         delta_pages: u64,
         store: Option<&mut dyn Store>,
     ) -> Result<Option<(usize, usize)>, Error> {
-        let mut inner = self.0.write().unwrap();
-        let result = inner.memory.grow(delta_pages, store)?;
+        let mut memory = self.0.memory.write().unwrap();
+        let result = memory.grow(delta_pages, store)?;
         if let Some((_old_size_in_bytes, new_size_in_bytes)) = result {
             // Store the new size to the `VMMemoryDefinition` for JIT-generated
             // code (and runtime functions) to access. No other code can be
@@ -541,7 +515,7 @@ impl RuntimeLinearMemory for SharedMemory {
             // https://github.com/WebAssembly/threads/issues/26#issuecomment-433930711).
             // In other words, some non-determinism is acceptable when using
             // `memory.size` on work being done by `memory.grow`.
-            inner
+            self.0
                 .def
                 .0
                 .current_length
@@ -550,8 +524,85 @@ impl RuntimeLinearMemory for SharedMemory {
         Ok(result)
     }
 
+    /// Implementation of `memory.atomic.notify` for this shared memory.
+    pub fn atomic_notify(&self, addr_index: u64, count: u32) -> Result<u32, Trap> {
+        validate_atomic_addr(&self.0.def.0, addr_index, 4, 4)?;
+        Ok(self.0.spot.unpark(addr_index, count))
+    }
+
+    /// Implementation of `memory.atomic.wait32` for this shared memory.
+    pub fn atomic_wait32(
+        &self,
+        addr_index: u64,
+        expected: u32,
+        timeout: Option<Instant>,
+    ) -> Result<WaitResult, Trap> {
+        let addr = validate_atomic_addr(&self.0.def.0, addr_index, 4, 4)?;
+        // SAFETY: `addr_index` was validated by `validate_atomic_addr` above.
+        assert!(std::mem::size_of::<AtomicU32>() == 4);
+        assert!(std::mem::align_of::<AtomicU32>() <= 4);
+        let atomic = unsafe { &*(addr as *const AtomicU32) };
+
+        // We want the sequential consistency of `SeqCst` to ensure that the `load` sees the value that the `notify` will/would see.
+        // All WASM atomic operations are also `SeqCst`.
+        let validate = || atomic.load(Ordering::SeqCst) == expected;
+
+        Ok(self.0.spot.park(addr_index, validate, timeout))
+    }
+
+    /// Implementation of `memory.atomic.wait64` for this shared memory.
+    pub fn atomic_wait64(
+        &self,
+        addr_index: u64,
+        expected: u64,
+        timeout: Option<Instant>,
+    ) -> Result<WaitResult, Trap> {
+        let addr = validate_atomic_addr(&self.0.def.0, addr_index, 8, 8)?;
+        // SAFETY: `addr_index` was validated by `validate_atomic_addr` above.
+        assert!(std::mem::size_of::<AtomicU64>() == 8);
+        assert!(std::mem::align_of::<AtomicU64>() <= 8);
+        let atomic = unsafe { &*(addr as *const AtomicU64) };
+
+        // We want the sequential consistency of `SeqCst` to ensure that the `load` sees the value that the `notify` will/would see.
+        // All WASM atomic operations are also `SeqCst`.
+        let validate = || atomic.load(Ordering::SeqCst) == expected;
+
+        Ok(self.0.spot.park(addr_index, validate, timeout))
+    }
+}
+
+/// Shared memory needs some representation of a `VMMemoryDefinition` for
+/// JIT-generated code to access. This structure owns the base pointer and
+/// length to the actual memory and we share this definition across threads by:
+/// - never changing the base pointer; according to the specification, shared
+///   memory must be created with a known maximum size so it can be allocated
+///   once and never moved
+/// - carefully changing the length, using atomic accesses in both the runtime
+///   and JIT-generated code.
+struct LongTermVMMemoryDefinition(VMMemoryDefinition);
+unsafe impl Send for LongTermVMMemoryDefinition {}
+unsafe impl Sync for LongTermVMMemoryDefinition {}
+
+/// Proxy all calls through the [`RwLock`].
+impl RuntimeLinearMemory for SharedMemory {
+    fn byte_size(&self) -> usize {
+        self.0.memory.read().unwrap().byte_size()
+    }
+
+    fn maximum_byte_size(&self) -> Option<usize> {
+        self.0.memory.read().unwrap().maximum_byte_size()
+    }
+
+    fn grow(
+        &mut self,
+        delta_pages: u64,
+        store: Option<&mut dyn Store>,
+    ) -> Result<Option<(usize, usize)>, Error> {
+        SharedMemory::grow(self, delta_pages, store)
+    }
+
     fn grow_to(&mut self, size: usize) -> Result<()> {
-        self.0.write().unwrap().memory.grow_to(size)
+        self.0.memory.write().unwrap().grow_to(size)
     }
 
     fn vmmemory(&mut self) -> VMMemoryDefinition {
@@ -563,7 +614,7 @@ impl RuntimeLinearMemory for SharedMemory {
     }
 
     fn needs_init(&self) -> bool {
-        self.0.read().unwrap().memory.needs_init()
+        self.0.memory.read().unwrap().needs_init()
     }
 
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
@@ -772,12 +823,78 @@ impl Memory {
 
     /// If the [Memory] is a [SharedMemory], unwrap it and return a clone to
     /// that shared memory.
-    pub fn as_shared_memory(&mut self) -> Option<SharedMemory> {
+    pub fn as_shared_memory(&mut self) -> Option<&mut SharedMemory> {
         let as_any = self.0.as_any_mut();
         if let Some(m) = as_any.downcast_mut::<SharedMemory>() {
-            Some(m.clone())
+            Some(m)
         } else {
             None
         }
     }
+
+    /// Implementation of `memory.atomic.notify` for all memories.
+    pub fn atomic_notify(&mut self, addr: u64, count: u32) -> Result<u32, Trap> {
+        match self.0.as_any_mut().downcast_mut::<SharedMemory>() {
+            Some(m) => m.atomic_notify(addr, count),
+            None => {
+                validate_atomic_addr(&self.vmmemory(), addr, 4, 4)?;
+                Ok(0)
+            }
+        }
+    }
+
+    /// Implementation of `memory.atomic.wait32` for all memories.
+    pub fn atomic_wait32(
+        &mut self,
+        addr: u64,
+        expected: u32,
+        deadline: Option<Instant>,
+    ) -> Result<WaitResult, Trap> {
+        match self.0.as_any_mut().downcast_mut::<SharedMemory>() {
+            Some(m) => m.atomic_wait32(addr, expected, deadline),
+            None => {
+                validate_atomic_addr(&self.vmmemory(), addr, 4, 4)?;
+                Err(Trap::AtomicWaitNonSharedMemory)
+            }
+        }
+    }
+
+    /// Implementation of `memory.atomic.wait64` for all memories.
+    pub fn atomic_wait64(
+        &mut self,
+        addr: u64,
+        expected: u64,
+        deadline: Option<Instant>,
+    ) -> Result<WaitResult, Trap> {
+        match self.0.as_any_mut().downcast_mut::<SharedMemory>() {
+            Some(m) => m.atomic_wait64(addr, expected, deadline),
+            None => {
+                validate_atomic_addr(&self.vmmemory(), addr, 8, 8)?;
+                Err(Trap::AtomicWaitNonSharedMemory)
+            }
+        }
+    }
+}
+
+/// In the configurations where bounds checks were elided in JIT code (because
+/// we are using static memories with virtual memory guard pages) this manual
+/// check is here so we don't segfault from Rust. For other configurations,
+/// these checks are required anyways.
+fn validate_atomic_addr(
+    def: &VMMemoryDefinition,
+    addr: u64,
+    access_size: u64,
+    access_alignment: u64,
+) -> Result<*mut u8, Trap> {
+    debug_assert!(access_alignment.is_power_of_two());
+    if !(addr % access_alignment == 0) {
+        return Err(Trap::HeapMisaligned);
+    }
+
+    let length = u64::try_from(def.current_length()).unwrap();
+    if !(addr.saturating_add(access_size) < length) {
+        return Err(Trap::MemoryOutOfBounds);
+    }
+
+    Ok(def.base.wrapping_add(addr as usize))
 }

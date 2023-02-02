@@ -2411,7 +2411,7 @@ fn run_export_with_internal_adapter() -> Result<()> {
     (func (export "add-five") (type $t) (canon lift (core func $m "add-five")))
   )
   (component $b
-    (import "interface-0.1.0" (instance $i
+    (import "interface-v1" (instance $i
       (export "add-five" (func (type $t)))))
     (core module $m
       (func $add-five (import "interface-0.1.0" "add-five") (param i32) (result i32))
@@ -2428,7 +2428,7 @@ fn run_export_with_internal_adapter() -> Result<()> {
     (export "run" (func 1))
   )
   (instance $a (instantiate $a))
-  (instance $b (instantiate $b (with "interface-0.1.0" (instance $a))))
+  (instance $b (instantiate $b (with "interface-v1" (instance $a))))
   (export "run" (func $b "run"))
 )
 "#;

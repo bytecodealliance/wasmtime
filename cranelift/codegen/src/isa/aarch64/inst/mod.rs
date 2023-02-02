@@ -1,7 +1,7 @@
 //! This module defines aarch64-specific machine instruction types.
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
-use crate::ir::types::{F32, F64, FFLAGS, I128, I16, I32, I64, I8, I8X16, IFLAGS, R32, R64};
+use crate::ir::types::{F32, F64, I128, I16, I32, I64, I8, I8X16, R32, R64};
 use crate::ir::{types, ExternalName, MemFlags, Opcode, Type};
 use crate::isa::CallConv;
 use crate::machinst::*;
@@ -15,17 +15,17 @@ use regalloc2::{PRegSet, VReg};
 use smallvec::{smallvec, SmallVec};
 use std::string::{String, ToString};
 
-pub mod regs;
-pub use self::regs::*;
+pub(crate) mod regs;
+pub(crate) use self::regs::*;
 pub mod imms;
 pub use self::imms::*;
 pub mod args;
 pub use self::args::*;
 pub mod emit;
-pub use self::emit::*;
+pub(crate) use self::emit::*;
 use crate::isa::aarch64::abi::AArch64MachineDeps;
 
-pub mod unwind;
+pub(crate) mod unwind;
 
 #[cfg(test)]
 mod emit_tests;
@@ -78,12 +78,19 @@ impl BitOp {
 /// the Inst enum.
 #[derive(Clone, Debug)]
 pub struct CallInfo {
+    /// Call destination.
     pub dest: ExternalName,
+    /// Arguments to the call instruction.
     pub uses: CallArgList,
+    /// Return values from the call instruction.
     pub defs: CallRetList,
+    /// Clobbers register set.
     pub clobbers: PRegSet,
+    /// Instruction opcode.
     pub opcode: Opcode,
+    /// Caller calling convention.
     pub caller_callconv: CallConv,
+    /// Callee calling convention.
     pub callee_callconv: CallConv,
 }
 
@@ -91,12 +98,19 @@ pub struct CallInfo {
 /// enum.
 #[derive(Clone, Debug)]
 pub struct CallIndInfo {
+    /// Function pointer for indirect call.
     pub rn: Reg,
+    /// Arguments to the call instruction.
     pub uses: SmallVec<[CallArgPair; 8]>,
+    /// Return values from the call instruction.
     pub defs: SmallVec<[CallRetPair; 8]>,
+    /// Clobbers register set.
     pub clobbers: PRegSet,
+    /// Instruction opcode.
     pub opcode: Opcode,
+    /// Caller calling convention.
     pub caller_callconv: CallConv,
+    /// Callee calling convention.
     pub callee_callconv: CallConv,
 }
 
@@ -104,7 +118,9 @@ pub struct CallIndInfo {
 /// enum.
 #[derive(Clone, Debug)]
 pub struct JTSequenceInfo {
+    /// Possible branch targets.
     pub targets: Vec<BranchTarget>,
+    /// Default branch target.
     pub default_target: BranchTarget,
 }
 
@@ -130,7 +146,11 @@ fn inst_size_test() {
 impl Inst {
     /// Create an instruction that loads a constant, using one of serveral options (MOVZ, MOVN,
     /// logical immediate, or constant pool).
-    pub fn load_constant(rd: Writable<Reg>, value: u64) -> SmallVec<[Inst; 4]> {
+    pub fn load_constant<F: FnMut(Type) -> Writable<Reg>>(
+        rd: Writable<Reg>,
+        value: u64,
+        alloc_tmp: &mut F,
+    ) -> SmallVec<[Inst; 4]> {
         // NB: this is duplicated in `lower/isle.rs` and `inst.isle` right now,
         // if modifications are made here before this is deleted after moving to
         // ISLE then those locations should be updated as well.
@@ -169,73 +189,65 @@ impl Inst {
             } else {
                 (4, OperandSize::Size64, !value)
             };
+
             // If the number of 0xffff half words is greater than the number of 0x0000 half words
             // it is more efficient to use `movn` for the first instruction.
             let first_is_inverted = count_zero_half_words(negated, num_half_words)
                 > count_zero_half_words(value, num_half_words);
+
             // Either 0xffff or 0x0000 half words can be skipped, depending on the first
             // instruction used.
             let ignored_halfword = if first_is_inverted { 0xffff } else { 0 };
-            let mut first_mov_emitted = false;
 
-            for i in 0..num_half_words {
-                let imm16 = (value >> (16 * i)) & 0xffff;
-                if imm16 != ignored_halfword {
-                    if !first_mov_emitted {
-                        first_mov_emitted = true;
-                        if first_is_inverted {
-                            let imm =
-                                MoveWideConst::maybe_with_shift(((!imm16) & 0xffff) as u16, i * 16)
-                                    .unwrap();
-                            insts.push(Inst::MovWide {
-                                op: MoveWideOp::MovN,
-                                rd,
-                                imm,
-                                size,
-                            });
-                        } else {
-                            let imm =
-                                MoveWideConst::maybe_with_shift(imm16 as u16, i * 16).unwrap();
-                            insts.push(Inst::MovWide {
-                                op: MoveWideOp::MovZ,
-                                rd,
-                                imm,
-                                size,
-                            });
-                        }
+            let halfwords: SmallVec<[_; 4]> = (0..num_half_words)
+                .filter_map(|i| {
+                    let imm16 = (value >> (16 * i)) & 0xffff;
+                    if imm16 == ignored_halfword {
+                        None
                     } else {
-                        let imm = MoveWideConst::maybe_with_shift(imm16 as u16, i * 16).unwrap();
-                        insts.push(Inst::MovK {
+                        Some((i, imm16))
+                    }
+                })
+                .collect();
+
+            let mut prev_result = None;
+            let last_index = halfwords.last().unwrap().0;
+            for (i, imm16) in halfwords {
+                let shift = i * 16;
+                let rd = if i == last_index { rd } else { alloc_tmp(I16) };
+
+                if let Some(rn) = prev_result {
+                    let imm = MoveWideConst::maybe_with_shift(imm16 as u16, shift).unwrap();
+                    insts.push(Inst::MovK { rd, rn, imm, size });
+                } else {
+                    if first_is_inverted {
+                        let imm =
+                            MoveWideConst::maybe_with_shift(((!imm16) & 0xffff) as u16, shift)
+                                .unwrap();
+                        insts.push(Inst::MovWide {
+                            op: MoveWideOp::MovN,
                             rd,
-                            rn: rd.to_reg(), // Redef the same virtual register.
+                            imm,
+                            size,
+                        });
+                    } else {
+                        let imm = MoveWideConst::maybe_with_shift(imm16 as u16, shift).unwrap();
+                        insts.push(Inst::MovWide {
+                            op: MoveWideOp::MovZ,
+                            rd,
                             imm,
                             size,
                         });
                     }
                 }
+
+                prev_result = Some(rd.to_reg());
             }
 
-            assert!(first_mov_emitted);
+            assert!(prev_result.is_some());
 
             insts
         }
-    }
-
-    /// Create instructions that load a 128-bit constant.
-    pub fn load_constant128(to_regs: ValueRegs<Writable<Reg>>, value: u128) -> SmallVec<[Inst; 4]> {
-        assert_eq!(to_regs.len(), 2, "Expected to load i128 into two registers");
-
-        let lower = value as u64;
-        let upper = (value >> 64) as u64;
-
-        let lower_reg = to_regs.regs()[0];
-        let upper_reg = to_regs.regs()[1];
-
-        let mut load_ins = Inst::load_constant(lower_reg, lower);
-        let load_upper = Inst::load_constant(upper_reg, upper);
-
-        load_ins.extend(load_upper.into_iter());
-        load_ins
     }
 
     /// Create instructions that load a 32-bit floating-point constant.
@@ -264,7 +276,7 @@ impl Inst {
             }]
         } else {
             let tmp = alloc_tmp(I32);
-            let mut insts = Inst::load_constant(tmp, const_data as u64);
+            let mut insts = Inst::load_constant(tmp, const_data as u64, &mut alloc_tmp);
 
             insts.push(Inst::MovToFpu {
                 rd,
@@ -304,7 +316,7 @@ impl Inst {
             Inst::load_fp_constant32(rd, const_data, alloc_tmp)
         } else if const_data & (u32::MAX as u64) == 0 {
             let tmp = alloc_tmp(I64);
-            let mut insts = Inst::load_constant(tmp, const_data);
+            let mut insts = Inst::load_constant(tmp, const_data, &mut alloc_tmp);
 
             insts.push(Inst::MovToFpu {
                 rd,
@@ -404,8 +416,9 @@ impl Inst {
                 size
             }]
         } else if let Some(imm) = widen_32_bit_pattern(pattern, lane_size) {
+            let tmp = alloc_tmp(types::I64X2);
             let mut insts = smallvec![Inst::VecDupImm {
-                rd,
+                rd: tmp,
                 imm,
                 invert: false,
                 size: VectorSize::Size64x2,
@@ -416,7 +429,7 @@ impl Inst {
             if !size.is_128bits() {
                 insts.push(Inst::FpuExtend {
                     rd,
-                    rn: rd.to_reg(),
+                    rn: tmp.to_reg(),
                     size: ScalarSize::Size64,
                 });
             }
@@ -426,7 +439,7 @@ impl Inst {
             smallvec![Inst::VecDupFPImm { rd, imm, size }]
         } else {
             let tmp = alloc_tmp(I64);
-            let mut insts = SmallVec::from(&Inst::load_constant(tmp, pattern)[..]);
+            let mut insts = SmallVec::from(&Inst::load_constant(tmp, pattern, &mut alloc_tmp)[..]);
 
             insts.push(Inst::VecDup {
                 rd,
@@ -655,25 +668,13 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(rm);
         }
         &Inst::MovFromPReg { rd, rm } => {
-            debug_assert!([
-                regs::fp_reg(),
-                regs::stack_reg(),
-                regs::link_reg(),
-                regs::pinned_reg()
-            ]
-            .contains(&rm.into()));
             debug_assert!(rd.to_reg().is_virtual());
             collector.reg_def(rd);
+            collector.reg_fixed_nonallocatable(rm);
         }
         &Inst::MovToPReg { rd, rm } => {
-            debug_assert!([
-                regs::fp_reg(),
-                regs::stack_reg(),
-                regs::link_reg(),
-                regs::pinned_reg()
-            ]
-            .contains(&rd.into()));
             debug_assert!(rm.is_virtual());
+            collector.reg_fixed_nonallocatable(rd);
             collector.reg_use(rm);
         }
         &Inst::MovK { rd, rn, .. } => {
@@ -1115,6 +1116,10 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::DummyUse { reg } => {
             collector.reg_use(reg);
         }
+        &Inst::StackProbeLoop { start, end, .. } => {
+            collector.reg_early_def(start);
+            collector.reg_use(end);
+        }
     }
 }
 
@@ -1154,9 +1159,17 @@ impl MachInst for Inst {
         // See the note in [crate::isa::aarch64::abi::is_caller_save_reg] for
         // more information on this ABI-implementation hack.
         match self {
+            &Inst::Args { .. } => false,
             &Inst::Call { ref info } => info.caller_callconv != info.callee_callconv,
             &Inst::CallInd { ref info } => info.caller_callconv != info.callee_callconv,
             _ => true,
+        }
+    }
+
+    fn is_trap(&self) -> bool {
+        match self {
+            Self::Udf { .. } => true,
+            _ => false,
         }
     }
 
@@ -1215,22 +1228,6 @@ impl MachInst for Inst {
         }
     }
 
-    fn gen_constant<F: FnMut(Type) -> Writable<Reg>>(
-        to_regs: ValueRegs<Writable<Reg>>,
-        value: u128,
-        ty: Type,
-        alloc_tmp: F,
-    ) -> SmallVec<[Inst; 4]> {
-        let to_reg = to_regs.only_reg();
-        match ty {
-            F64 => Inst::load_fp_constant64(to_reg.unwrap(), value as u64, alloc_tmp),
-            F32 => Inst::load_fp_constant32(to_reg.unwrap(), value as u32, alloc_tmp),
-            I8 | I16 | I32 | I64 | R32 | R64 => Inst::load_constant(to_reg.unwrap(), value as u64),
-            I128 => Inst::load_constant128(to_regs, value),
-            _ => panic!("Cannot generate constant for type: {}", ty),
-        }
-    }
-
     fn gen_dummy_use(reg: Reg) -> Inst {
         Inst::DummyUse { reg }
     }
@@ -1260,7 +1257,6 @@ impl MachInst for Inst {
                 Ok((&[RegClass::Float], &[I8X16]))
             }
             _ if ty.is_dynamic_vector() => Ok((&[RegClass::Float], &[I8X16])),
-            IFLAGS | FFLAGS => Ok((&[RegClass::Int], &[I64])),
             _ => Err(CodegenError::Unsupported(format!(
                 "Unexpected SSA-value type: {}",
                 ty
@@ -1568,10 +1564,12 @@ impl Inst {
             }
             &Inst::MovFromPReg { rd, rm } => {
                 let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size64, allocs);
+                allocs.next_fixed_nonallocatable(rm);
                 let rm = show_ireg_sized(rm.into(), OperandSize::Size64);
                 format!("mov {}, {}", rd, rm)
             }
             &Inst::MovToPReg { rd, rm } => {
+                allocs.next_fixed_nonallocatable(rd);
                 let rd = show_ireg_sized(rd.into(), OperandSize::Size64);
                 let rm = pretty_print_ireg(rm, OperandSize::Size64, allocs);
                 format!("mov {}, {}", rd, rm)
@@ -2675,7 +2673,16 @@ impl Inst {
                 }
                 s
             }
-            &Inst::Ret { .. } => "ret".to_string(),
+            &Inst::Ret { ref rets } => {
+                let mut s = "ret".to_string();
+                for ret in rets {
+                    use std::fmt::Write;
+                    let preg = pretty_print_reg(ret.preg, &mut empty_allocs);
+                    let vreg = pretty_print_reg(ret.vreg, allocs);
+                    write!(&mut s, " {}={}", vreg, preg).unwrap();
+                }
+                s
+            }
             &Inst::AuthenticatedRet { key, is_hint, .. } => {
                 let key = match key {
                     APIKey::A => "a",
@@ -2842,7 +2849,7 @@ impl Inst {
                     );
                 } else {
                     let tmp = writable_spilltmp_reg();
-                    for inst in Inst::load_constant(tmp, abs_offset).into_iter() {
+                    for inst in Inst::load_constant(tmp, abs_offset, &mut |_| tmp).into_iter() {
                         ret.push_str(
                             &inst.print_with_state(&mut EmitState::default(), &mut empty_allocs),
                         );
@@ -2895,6 +2902,12 @@ impl Inst {
             &Inst::DummyUse { reg } => {
                 let reg = pretty_print_reg(reg, allocs);
                 format!("dummy_use {}", reg)
+            }
+            &Inst::StackProbeLoop { start, end, step } => {
+                let start = pretty_print_reg(start.to_reg(), allocs);
+                let end = pretty_print_reg(end, allocs);
+                let step = step.pretty_print(0, allocs);
+                format!("stack_probe_loop {start}, {end}, {step}")
             }
         }
     }

@@ -244,14 +244,6 @@ impl Type {
         }
     }
 
-    /// Is this a CPU flags type?
-    pub fn is_flags(self) -> bool {
-        match self {
-            IFLAGS | FFLAGS => true,
-            _ => false,
-        }
-    }
-
     /// Is this a ref type?
     pub fn is_ref(self) -> bool {
         match self {
@@ -372,17 +364,6 @@ impl Type {
         Some(Self(self.0 - constants::VECTOR_BASE))
     }
 
-    /// Get a SIMD vector with half the number of lanes.
-    ///
-    /// There is no `double_vector()` method. Use `t.by(2)` instead.
-    pub fn half_vector(self) -> Option<Self> {
-        if self.is_vector() && !self.is_dynamic_vector() {
-            Some(Self(self.0 - 0x10))
-        } else {
-            None
-        }
-    }
-
     /// Split the lane width in half and double the number of lanes to maintain the same bit-width.
     ///
     /// If this is a scalar type of `n` bits, it produces a SIMD vector type of `(n/2)x2`.
@@ -399,7 +380,13 @@ impl Type {
     /// If this is a scalar type, it will return `None`.
     pub fn merge_lanes(self) -> Option<Self> {
         match self.double_width() {
-            Some(double_width) => double_width.half_vector(),
+            Some(double_width) => {
+                if double_width.is_vector() && !double_width.is_dynamic_vector() {
+                    Some(Self(double_width.0 - 0x10))
+                } else {
+                    None
+                }
+            }
             None => None,
         }
     }
@@ -453,12 +440,10 @@ impl Display for Type {
         } else if self.is_ref() {
             write!(f, "r{}", self.lane_bits())
         } else {
-            f.write_str(match *self {
-                IFLAGS => "iflags",
-                FFLAGS => "fflags",
+            match *self {
                 INVALID => panic!("INVALID encountered"),
                 _ => panic!("Unknown Type(0x{:x})", self.0),
-            })
+            }
         }
     }
 }
@@ -478,8 +463,6 @@ impl Debug for Type {
         } else {
             match *self {
                 INVALID => write!(f, "types::INVALID"),
-                IFLAGS => write!(f, "types::IFLAGS"),
-                FFLAGS => write!(f, "types::FFLAGS"),
                 _ => write!(f, "Type(0x{:x})", self.0),
             }
         }
@@ -501,10 +484,6 @@ mod tests {
     fn basic_scalars() {
         assert_eq!(INVALID, INVALID.lane_type());
         assert_eq!(0, INVALID.bits());
-        assert_eq!(IFLAGS, IFLAGS.lane_type());
-        assert_eq!(0, IFLAGS.bits());
-        assert_eq!(FFLAGS, FFLAGS.lane_type());
-        assert_eq!(0, FFLAGS.bits());
         assert_eq!(I8, I8.lane_type());
         assert_eq!(I16, I16.lane_type());
         assert_eq!(I32, I32.lane_type());
@@ -518,8 +497,6 @@ mod tests {
         assert_eq!(R64, R64.lane_type());
 
         assert_eq!(INVALID.lane_bits(), 0);
-        assert_eq!(IFLAGS.lane_bits(), 0);
-        assert_eq!(FFLAGS.lane_bits(), 0);
         assert_eq!(I8.lane_bits(), 8);
         assert_eq!(I16.lane_bits(), 16);
         assert_eq!(I32.lane_bits(), 32);
@@ -535,7 +512,6 @@ mod tests {
     fn typevar_functions() {
         assert_eq!(INVALID.half_width(), None);
         assert_eq!(INVALID.half_width(), None);
-        assert_eq!(FFLAGS.half_width(), None);
         assert_eq!(I8.half_width(), None);
         assert_eq!(I16.half_width(), Some(I8));
         assert_eq!(I32.half_width(), Some(I16));
@@ -546,8 +522,6 @@ mod tests {
         assert_eq!(F64.half_width(), Some(F32));
 
         assert_eq!(INVALID.double_width(), None);
-        assert_eq!(IFLAGS.double_width(), None);
-        assert_eq!(FFLAGS.double_width(), None);
         assert_eq!(I8.double_width(), Some(I16));
         assert_eq!(I16.double_width(), Some(I32));
         assert_eq!(I32.double_width(), Some(I64));
@@ -564,10 +538,6 @@ mod tests {
         assert_eq!(big.lane_bits(), 64);
         assert_eq!(big.lane_count(), 256);
         assert_eq!(big.bits(), 64 * 256);
-
-        assert_eq!(big.half_vector().unwrap().to_string(), "f64x128");
-        assert_eq!(I32.half_vector(), None);
-        assert_eq!(INVALID.half_vector(), None);
 
         // Check that the generated constants match the computed vector types.
         assert_eq!(I32.by(4), Some(I32X4));
@@ -587,7 +557,6 @@ mod tests {
         assert_eq!(I16X8XN.min_lane_count(), 8);
 
         // Change lane counts
-        assert_eq!(F64X4XN.half_vector(), None);
         assert_eq!(I8X8XN.by(2), None);
 
         // Conversions to and from vectors.
@@ -614,8 +583,6 @@ mod tests {
 
     #[test]
     fn format_scalars() {
-        assert_eq!(IFLAGS.to_string(), "iflags");
-        assert_eq!(FFLAGS.to_string(), "fflags");
         assert_eq!(I8.to_string(), "i8");
         assert_eq!(I16.to_string(), "i16");
         assert_eq!(I32.to_string(), "i32");

@@ -46,11 +46,6 @@ pub fn builder_with_options(infer_native_flags: bool) -> Result<isa::Builder, &'
         isa::LookupError::Unsupported => "unsupported architecture",
     })?;
 
-    #[cfg(target_arch = "x86")]
-    {
-        compile_error!("Unsupported architecture");
-    }
-
     #[cfg(target_arch = "x86_64")]
     {
         use cranelift_codegen::settings::Configurable;

@@ -30,7 +30,7 @@ fn main() -> Result<()> {
     linker.module(&mut store, "", &module)?;
     linker
         .get_default(&mut store, "")?
-        .typed::<(), (), _>(&store)?
+        .typed::<(), ()>(&store)?
         .call(&mut store, ())?;
 
     Ok(())

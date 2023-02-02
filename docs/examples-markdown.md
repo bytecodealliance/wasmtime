@@ -9,6 +9,12 @@ cargo new --bin rust_wasi_markdown_parser
 cd rust_wasi_markdown_parser
 ```
 
+Also, we need to add the `structopt` and `pulldown_cmark` crates to our project:
+
+```bash
+cargo add structopt pulldown_cmark
+```
+
 Then, we will open the `src/main.rs` and enter the following contents. Please see the comments to understand what our program will be doing.
 
 ## `src/main.rs`
@@ -50,7 +56,7 @@ wasmtime --dir . target/wasm32-wasi/debug/rust_wasi_markdown_parser.wasm -- ./ex
 
 Which should look like the following:
 
-```html 
+```html
 <h1>Hello!</h1>
 <p>I am example markdown for this demo!</p>
 ```

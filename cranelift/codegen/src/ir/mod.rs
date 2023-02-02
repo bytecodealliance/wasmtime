@@ -11,7 +11,6 @@ mod extfunc;
 mod extname;
 pub mod function;
 mod globalvalue;
-mod heap;
 pub mod immediates;
 pub mod instructions;
 pub mod jumptable;
@@ -37,7 +36,7 @@ pub use crate::ir::constant::{ConstantData, ConstantPool};
 pub use crate::ir::dfg::{DataFlowGraph, ValueDef};
 pub use crate::ir::dynamic_type::{dynamic_to_fixed, DynamicTypeData, DynamicTypes};
 pub use crate::ir::entities::{
-    Block, Constant, DynamicStackSlot, DynamicType, FuncRef, GlobalValue, Heap, Immediate, Inst,
+    Block, Constant, DynamicStackSlot, DynamicType, FuncRef, GlobalValue, Immediate, Inst,
     JumpTable, SigRef, StackSlot, Table, UserExternalNameRef, Value,
 };
 pub use crate::ir::extfunc::{
@@ -46,9 +45,8 @@ pub use crate::ir::extfunc::{
 pub use crate::ir::extname::{ExternalName, UserExternalName, UserFuncName};
 pub use crate::ir::function::{DisplayFunctionAnnotations, Function};
 pub use crate::ir::globalvalue::GlobalValueData;
-pub use crate::ir::heap::{HeapData, HeapStyle};
 pub use crate::ir::instructions::{
-    InstructionData, InstructionImms, Opcode, ValueList, ValueListPool, VariableArgs,
+    BlockCall, InstructionData, Opcode, ValueList, ValueListPool, VariableArgs,
 };
 pub use crate::ir::jumptable::JumpTableData;
 pub use crate::ir::known_symbol::KnownSymbol;

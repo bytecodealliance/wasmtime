@@ -17,8 +17,9 @@ fn define_control_flow(
     imm: &Immediates,
     entities: &EntityRefs,
 ) {
-    let block = &Operand::new("block", &entities.block).with_doc("Destination basic block");
-    let args = &Operand::new("args", &entities.varargs).with_doc("block arguments");
+    let block_call = &Operand::new("block_call", &entities.block_call)
+        .with_doc("Destination basic block, with its arguments provided");
+    let label = &Operand::new("label", &entities.label).with_doc("Destination basic block");
 
     ig.push(
         Inst::new(
@@ -32,9 +33,8 @@ fn define_control_flow(
         "#,
             &formats.jump,
         )
-        .operands_in(vec![block, args])
-        .is_terminator(true)
-        .is_branch(true),
+        .operands_in(vec![block_call])
+        .branches(),
     );
 
     let ScalarTruthy = &TypeVar::new(
@@ -45,33 +45,21 @@ fn define_control_flow(
 
     {
         let c = &Operand::new("c", ScalarTruthy).with_doc("Controlling value to test");
+        let block_then = &Operand::new("block_then", &entities.block_then).with_doc("Then block");
+        let block_else = &Operand::new("block_else", &entities.block_else).with_doc("Else block");
 
         ig.push(
             Inst::new(
-                "brz",
+                "brif",
                 r#"
-        Branch when zero.
+        Conditional branch when cond is non-zero.
 
-        Take the branch when ``c = 0``.
+        Take the ``then`` branch when ``c != 0``, and the ``else`` branch otherwise.
         "#,
-                &formats.branch,
+                &formats.brif,
             )
-            .operands_in(vec![c, block, args])
-            .is_branch(true),
-        );
-
-        ig.push(
-            Inst::new(
-                "brnz",
-                r#"
-        Branch when non-zero.
-
-        Take the branch when ``c != 0``.
-        "#,
-                &formats.branch,
-            )
-            .operands_in(vec![c, block, args])
-            .is_branch(true),
+            .operands_in(vec![c, block_then, block_else])
+            .branches(),
         );
     }
 
@@ -105,9 +93,8 @@ fn define_control_flow(
         "#,
                 &formats.branch_table,
             )
-            .operands_in(vec![x, block, JT])
-            .is_terminator(true)
-            .is_branch(true),
+            .operands_in(vec![x, label, JT])
+            .branches(),
         );
     }
 
@@ -125,9 +112,9 @@ fn define_control_flow(
     "#,
             &formats.nullary,
         )
-        .other_side_effects(true)
-        .can_load(true)
-        .can_store(true),
+        .other_side_effects()
+        .can_load()
+        .can_store(),
     );
 
     {
@@ -141,8 +128,8 @@ fn define_control_flow(
                 &formats.trap,
             )
             .operands_in(vec![code])
-            .can_trap(true)
-            .is_terminator(true),
+            .can_trap()
+            .terminates_block(),
         );
 
         let c = &Operand::new("c", ScalarTruthy).with_doc("Controlling value to test");
@@ -157,7 +144,7 @@ fn define_control_flow(
                 &formats.cond_trap,
             )
             .operands_in(vec![c, code])
-            .can_trap(true),
+            .can_trap(),
         );
 
         ig.push(
@@ -171,7 +158,7 @@ fn define_control_flow(
                 &formats.trap,
             )
             .operands_in(vec![code])
-            .can_trap(true),
+            .can_trap(),
         );
 
         let c = &Operand::new("c", ScalarTruthy).with_doc("Controlling value to test");
@@ -186,7 +173,7 @@ fn define_control_flow(
                 &formats.cond_trap,
             )
             .operands_in(vec![c, code])
-            .can_trap(true),
+            .can_trap(),
         );
 
         ig.push(
@@ -200,7 +187,7 @@ fn define_control_flow(
                 &formats.cond_trap,
             )
             .operands_in(vec![c, code])
-            .can_trap(true),
+            .can_trap(),
         );
     }
 
@@ -218,8 +205,7 @@ fn define_control_flow(
             &formats.multiary,
         )
         .operands_in(vec![rvals])
-        .is_return(true)
-        .is_terminator(true),
+        .returns(),
     );
 
     let FN = &Operand::new("FN", &entities.func_ref)
@@ -239,7 +225,7 @@ fn define_control_flow(
         )
         .operands_in(vec![FN, args])
         .operands_out(vec![rvals])
-        .is_call(true),
+        .call(),
     );
 
     let SIG = &Operand::new("SIG", &entities.sig_ref).with_doc("function signature");
@@ -264,7 +250,52 @@ fn define_control_flow(
         )
         .operands_in(vec![SIG, callee, args])
         .operands_out(vec![rvals])
-        .is_call(true),
+        .call(),
+    );
+
+    ig.push(
+        Inst::new(
+            "return_call",
+            r#"
+        Direct tail call.
+
+        Tail call a function which has been declared in the preamble. The
+        argument types must match the function's signature, the caller and
+        callee calling conventions must be the same, and must be a calling
+        convention that supports tail calls.
+
+        This instruction is a block terminator.
+        "#,
+            &formats.call,
+        )
+        .operands_in(vec![FN, args])
+        .returns()
+        .call(),
+    );
+
+    ig.push(
+        Inst::new(
+            "return_call_indirect",
+            r#"
+        Indirect tail call.
+
+        Call the function pointed to by `callee` with the given arguments. The
+        argument types must match the function's signature, the caller and
+        callee calling conventions must be the same, and must be a calling
+        convention that supports tail calls.
+
+        This instruction is a block terminator.
+
+        Note that this is different from WebAssembly's ``tail_call_indirect``;
+        the callee is a native address, rather than a table index. For
+        WebAssembly, `table_addr` and `load` are used to obtain a native address
+        from a table.
+        "#,
+            &formats.call_indirect,
+        )
+        .operands_in(vec![SIG, callee, args])
+        .returns()
+        .call(),
     );
 
     let FN = &Operand::new("FN", &entities.func_ref)
@@ -571,9 +602,6 @@ pub(crate) fn define(
     define_simd_arithmetic(&mut ig, formats, imm, entities);
 
     // Operand kind shorthands.
-    let iflags: &TypeVar = &ValueType::Special(types::Flag::IFlags.into()).into();
-    let fflags: &TypeVar = &ValueType::Special(types::Flag::FFlags.into()).into();
-
     let i8: &TypeVar = &ValueType::from(LaneType::from(types::Int::I8)).into();
     let f32_: &TypeVar = &ValueType::from(LaneType::from(types::Float::F32)).into();
     let f64_: &TypeVar = &ValueType::from(LaneType::from(types::Float::F64)).into();
@@ -688,7 +716,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -703,7 +731,7 @@ pub(crate) fn define(
             &formats.store,
         )
         .operands_in(vec![MemFlags, x, p, Offset])
-        .can_store(true),
+        .can_store(),
     );
 
     let iExt8 = &TypeVar::new(
@@ -726,7 +754,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -741,7 +769,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -755,7 +783,7 @@ pub(crate) fn define(
             &formats.store,
         )
         .operands_in(vec![MemFlags, x, p, Offset])
-        .can_store(true),
+        .can_store(),
     );
 
     let iExt16 = &TypeVar::new(
@@ -778,7 +806,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -793,7 +821,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -807,7 +835,7 @@ pub(crate) fn define(
             &formats.store,
         )
         .operands_in(vec![MemFlags, x, p, Offset])
-        .can_store(true),
+        .can_store(),
     );
 
     let iExt32 = &TypeVar::new(
@@ -830,7 +858,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -845,7 +873,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -859,7 +887,7 @@ pub(crate) fn define(
             &formats.store,
         )
         .operands_in(vec![MemFlags, x, p, Offset])
-        .can_store(true),
+        .can_store(),
     );
 
     let I16x8 = &TypeVar::new(
@@ -884,7 +912,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -898,7 +926,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     let I32x4 = &TypeVar::new(
@@ -923,7 +951,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -937,7 +965,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     let I64x2 = &TypeVar::new(
@@ -962,7 +990,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -976,7 +1004,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     let x = &Operand::new("x", Mem).with_doc("Value to be stored");
@@ -1001,7 +1029,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![SS, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -1020,7 +1048,7 @@ pub(crate) fn define(
             &formats.stack_store,
         )
         .operands_in(vec![x, SS, Offset])
-        .can_store(true),
+        .can_store(),
     );
 
     ig.push(
@@ -1052,7 +1080,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![DSS])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -1067,7 +1095,7 @@ pub(crate) fn define(
             &formats.dynamic_stack_store,
         )
         .operands_in(vec![x, DSS])
-        .can_store(true),
+        .can_store(),
     );
 
     let GV = &Operand::new("GV", &entities.global_value);
@@ -1121,40 +1149,6 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let HeapOffset = &TypeVar::new(
-        "HeapOffset",
-        "An unsigned heap offset",
-        TypeSetBuilder::new().ints(32..64).build(),
-    );
-
-    let H = &Operand::new("H", &entities.heap);
-    let index = &Operand::new("index", HeapOffset);
-    let Offset = &Operand::new("Offset", &imm.uimm32).with_doc("Static offset immediate in bytes");
-    let Size = &Operand::new("Size", &imm.uimm8).with_doc("Static size immediate in bytes");
-
-    ig.push(
-        Inst::new(
-            "heap_addr",
-            r#"
-        Bounds check and compute absolute address of ``index + Offset`` in heap memory.
-
-        Verify that the range ``index .. index + Offset + Size`` is in bounds for the
-        heap ``H``, and generate an absolute address that is safe to dereference.
-
-        1. If ``index + Offset + Size`` is less than or equal ot the heap bound, return an
-           absolute address corresponding to a byte offset of ``index + Offset`` from the
-           heap's base address.
-
-        2. If ``index + Offset + Size`` is greater than the heap bound, return the
-           ``NULL`` pointer or any other address that is guaranteed to generate a trap
-           when accessed.
-        "#,
-            &formats.heap_addr,
-        )
-        .operands_in(vec![H, index, Offset, Size])
-        .operands_out(vec![addr]),
-    );
-
     // Note this instruction is marked as having other side-effects, so GVN won't try to hoist it,
     // which would result in it being subject to spilling. While not hoisting would generally hurt
     // performance, since a computed value used many times may need to be regenerated before each
@@ -1170,7 +1164,7 @@ pub(crate) fn define(
             &formats.nullary,
         )
         .operands_out(vec![addr])
-        .other_side_effects(true),
+        .other_side_effects(),
     );
 
     ig.push(
@@ -1182,7 +1176,7 @@ pub(crate) fn define(
             &formats.unary,
         )
         .operands_in(vec![addr])
-        .other_side_effects(true),
+        .other_side_effects(),
     );
 
     ig.push(
@@ -1426,7 +1420,10 @@ pub(crate) fn define(
         )
         .operands_in(vec![c, x, y])
         .operands_out(vec![a])
-        .other_side_effects(true),
+        .other_side_effects()
+        // We can de-duplicate spectre selects since the side effect is
+        // idempotent.
+        .side_effects_idempotent(),
     );
 
     let c = &Operand::new("c", Any).with_doc("Controlling value to test");
@@ -1443,60 +1440,6 @@ pub(crate) fn define(
             &formats.ternary,
         )
         .operands_in(vec![c, x, y])
-        .operands_out(vec![a]),
-    );
-
-    let x = &Operand::new("x", TxN).with_doc("Vector to split");
-    let lo = &Operand::new("lo", &TxN.half_vector()).with_doc("Low-numbered lanes of `x`");
-    let hi = &Operand::new("hi", &TxN.half_vector()).with_doc("High-numbered lanes of `x`");
-
-    ig.push(
-        Inst::new(
-            "vsplit",
-            r#"
-        Split a vector into two halves.
-
-        Split the vector `x` into two separate values, each containing half of
-        the lanes from ``x``. The result may be two scalars if ``x`` only had
-        two lanes.
-        "#,
-            &formats.unary,
-        )
-        .operands_in(vec![x])
-        .operands_out(vec![lo, hi]),
-    );
-
-    let Any128 = &TypeVar::new(
-        "Any128",
-        "Any scalar or vector type with as most 128 lanes",
-        TypeSetBuilder::new()
-            .ints(Interval::All)
-            .floats(Interval::All)
-            .simd_lanes(1..128)
-            .includes_scalars(true)
-            .build(),
-    );
-
-    let x = &Operand::new("x", Any128).with_doc("Low-numbered lanes");
-    let y = &Operand::new("y", Any128).with_doc("High-numbered lanes");
-    let a = &Operand::new("a", &Any128.double_vector()).with_doc("Concatenation of `x` and `y`");
-
-    ig.push(
-        Inst::new(
-            "vconcat",
-            r#"
-        Vector concatenation.
-
-        Return a vector formed by concatenating ``x`` and ``y``. The resulting
-        vector type has twice as many lanes as each of the inputs. The lanes of
-        ``x`` appear as the low-numbered lanes, and the lanes of ``y`` become
-        the high-numbered lanes of ``a``.
-
-        It is possible to form a vector by concatenating two scalars.
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![x, y])
         .operands_out(vec![a]),
     );
 
@@ -1620,40 +1563,6 @@ pub(crate) fn define(
         )
         .operands_in(vec![Cond, x, Y])
         .operands_out(vec![a]),
-    );
-
-    let f = &Operand::new("f", iflags);
-    let x = &Operand::new("x", iB);
-    let y = &Operand::new("y", iB);
-
-    ig.push(
-        Inst::new(
-            "ifcmp",
-            r#"
-        Compare scalar integers and return flags.
-
-        Compare two scalar integer values and return integer CPU flags
-        representing the result.
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![x, y])
-        .operands_out(vec![f]),
-    );
-
-    ig.push(
-        Inst::new(
-            "ifcmp_imm",
-            r#"
-        Compare scalar integer to a constant and return flags.
-
-        Like `icmp_imm`, but returns integer CPU flags instead of testing
-        a specific condition code.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![x, Y])
-        .operands_out(vec![f]),
     );
 
     let a = &Operand::new("a", Int);
@@ -1808,7 +1717,8 @@ pub(crate) fn define(
             )
             .operands_in(vec![x, y])
             .operands_out(vec![a])
-            .can_trap(true),
+            .can_trap()
+            .side_effects_idempotent(),
         );
 
         ig.push(
@@ -1826,7 +1736,8 @@ pub(crate) fn define(
             )
             .operands_in(vec![x, y])
             .operands_out(vec![a])
-            .can_trap(true),
+            .can_trap()
+            .side_effects_idempotent(),
         );
 
         ig.push(
@@ -1841,7 +1752,8 @@ pub(crate) fn define(
             )
             .operands_in(vec![x, y])
             .operands_out(vec![a])
-            .can_trap(true),
+            .can_trap()
+            .side_effects_idempotent(),
         );
 
         ig.push(
@@ -1856,7 +1768,8 @@ pub(crate) fn define(
             )
             .operands_in(vec![x, y])
             .operands_out(vec![a])
-            .can_trap(true),
+            .can_trap()
+            .side_effects_idempotent(),
         );
     }
 
@@ -1994,11 +1907,6 @@ pub(crate) fn define(
     let b_in = &Operand::new("b_in", i8).with_doc("Input borrow flag");
     let b_out = &Operand::new("b_out", i8).with_doc("Output borrow flag");
 
-    let c_if_in = &Operand::new("c_in", iflags);
-    let c_if_out = &Operand::new("c_out", iflags);
-    let b_if_in = &Operand::new("b_in", iflags);
-    let b_if_out = &Operand::new("b_out", iflags);
-
     ig.push(
         Inst::new(
             "iadd_cin",
@@ -2017,27 +1925,6 @@ pub(crate) fn define(
             &formats.ternary,
         )
         .operands_in(vec![x, y, c_in])
-        .operands_out(vec![a]),
-    );
-
-    ig.push(
-        Inst::new(
-            "iadd_ifcin",
-            r#"
-        Add integers with carry in.
-
-        Same as `iadd` with an additional carry flag input. Computes:
-
-        ```text
-            a = x + y + c_{in} \pmod 2^B
-        ```
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.ternary,
-        )
-        .operands_in(vec![x, y, c_if_in])
         .operands_out(vec![a]),
     );
 
@@ -2065,28 +1952,6 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
-            "iadd_ifcout",
-            r#"
-        Add integers with carry out.
-
-        Same as `iadd` with an additional carry flag output.
-
-        ```text
-            a &= x + y \pmod 2^B \\
-            c_{out} &= x+y >= 2^B
-        ```
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a, c_if_out]),
-    );
-
-    ig.push(
-        Inst::new(
             "iadd_carry",
             r#"
         Add integers with carry in and out.
@@ -2105,28 +1970,6 @@ pub(crate) fn define(
         )
         .operands_in(vec![x, y, c_in])
         .operands_out(vec![a, c_out]),
-    );
-
-    ig.push(
-        Inst::new(
-            "iadd_ifcarry",
-            r#"
-        Add integers with carry in and out.
-
-        Same as `iadd` with an additional carry flag input and output.
-
-        ```text
-            a &= x + y + c_{in} \pmod 2^B \\
-            c_{out} &= x + y + c_{in} >= 2^B
-        ```
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.ternary,
-        )
-        .operands_in(vec![x, y, c_if_in])
-        .operands_out(vec![a, c_if_out]),
     );
 
     {
@@ -2153,7 +1996,8 @@ pub(crate) fn define(
             )
             .operands_in(vec![x, y, code])
             .operands_out(vec![a])
-            .can_trap(true),
+            .can_trap()
+            .side_effects_idempotent(),
         );
     }
 
@@ -2175,27 +2019,6 @@ pub(crate) fn define(
             &formats.ternary,
         )
         .operands_in(vec![x, y, b_in])
-        .operands_out(vec![a]),
-    );
-
-    ig.push(
-        Inst::new(
-            "isub_ifbin",
-            r#"
-        Subtract integers with borrow in.
-
-        Same as `isub` with an additional borrow flag input. Computes:
-
-        ```text
-            a = x - (y + b_{in}) \pmod 2^B
-        ```
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.ternary,
-        )
-        .operands_in(vec![x, y, b_if_in])
         .operands_out(vec![a]),
     );
 
@@ -2223,28 +2046,6 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
-            "isub_ifbout",
-            r#"
-        Subtract integers with borrow out.
-
-        Same as `isub` with an additional borrow flag output.
-
-        ```text
-            a &= x - y \pmod 2^B \\
-            b_{out} &= x < y
-        ```
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a, b_if_out]),
-    );
-
-    ig.push(
-        Inst::new(
             "isub_borrow",
             r#"
         Subtract integers with borrow in and out.
@@ -2263,28 +2064,6 @@ pub(crate) fn define(
         )
         .operands_in(vec![x, y, b_in])
         .operands_out(vec![a, b_out]),
-    );
-
-    ig.push(
-        Inst::new(
-            "isub_ifborrow",
-            r#"
-        Subtract integers with borrow in and out.
-
-        Same as `isub` with an additional borrow flag input and output.
-
-        ```text
-            a &= x - (y + b_{in}) \pmod 2^B \\
-            b_{out} &= x < y + b_{in}
-        ```
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.ternary,
-        )
-        .operands_in(vec![x, y, b_if_in])
-        .operands_out(vec![a, b_if_out]),
     );
 
     let bits = &TypeVar::new(
@@ -2797,23 +2576,6 @@ pub(crate) fn define(
         )
         .operands_in(vec![Cond, x, y])
         .operands_out(vec![a]),
-    );
-
-    let f = &Operand::new("f", fflags);
-
-    ig.push(
-        Inst::new(
-            "ffcmp",
-            r#"
-        Floating point comparison returning flags.
-
-        Compares two numbers like `fcmp`, but returns floating point CPU
-        flags instead of testing a specific condition.
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![x, y])
-        .operands_out(vec![f]),
     );
 
     let x = &Operand::new("x", Float);
@@ -3482,8 +3244,7 @@ pub(crate) fn define(
         - `f32` and `f64`. This may change in the future.
 
         The result type must have the same number of vector lanes as the input,
-        and the result lanes must not have fewer bits than the input lanes. If
-        the input and output types are the same, this is a no-op.
+        and the result lanes must not have fewer bits than the input lanes.
         "#,
             &formats.unary,
         )
@@ -3504,8 +3265,7 @@ pub(crate) fn define(
         - `f32` and `f64`. This may change in the future.
 
         The result type must have the same number of vector lanes as the input,
-        and the result lanes must not have more bits than the input lanes. If
-        the input and output types are the same, this is a no-op.
+        and the result lanes must not have more bits than the input lanes.
         "#,
             &formats.unary,
         )
@@ -3599,7 +3359,8 @@ pub(crate) fn define(
         )
         .operands_in(vec![x])
         .operands_out(vec![a])
-        .can_trap(true),
+        .can_trap()
+        .side_effects_idempotent(),
     );
 
     ig.push(
@@ -3617,7 +3378,8 @@ pub(crate) fn define(
         )
         .operands_in(vec![x])
         .operands_out(vec![a])
-        .can_trap(true),
+        .can_trap()
+        .side_effects_idempotent(),
     );
 
     let x = &Operand::new("x", Float);
@@ -3793,9 +3555,9 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, AtomicRmwOp, p, x])
         .operands_out(vec![a])
-        .can_load(true)
-        .can_store(true)
-        .other_side_effects(true),
+        .can_load()
+        .can_store()
+        .other_side_effects(),
     );
 
     ig.push(
@@ -3815,9 +3577,9 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, e, x])
         .operands_out(vec![a])
-        .can_load(true)
-        .can_store(true)
-        .other_side_effects(true),
+        .can_load()
+        .can_store()
+        .other_side_effects(),
     );
 
     ig.push(
@@ -3835,8 +3597,8 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p])
         .operands_out(vec![a])
-        .can_load(true)
-        .other_side_effects(true),
+        .can_load()
+        .other_side_effects(),
     );
 
     ig.push(
@@ -3853,8 +3615,8 @@ pub(crate) fn define(
             &formats.store_no_offset,
         )
         .operands_in(vec![MemFlags, x, p])
-        .can_store(true)
-        .other_side_effects(true),
+        .can_store()
+        .other_side_effects(),
     );
 
     ig.push(
@@ -3867,7 +3629,7 @@ pub(crate) fn define(
         "#,
             &formats.nullary,
         )
-        .other_side_effects(true),
+        .other_side_effects(),
     );
 
     let TxN = &TypeVar::new(

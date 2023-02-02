@@ -2,5 +2,6 @@
   "cfallin": ["isle"],
   "fitzgen": ["fuzzing", "isle", "wasmtime:ref-types"],
   "peterhuene": ["wasmtime:api", "wasmtime:c-api"],
-  "kubkon": ["wasi"]
+  "kubkon": ["wasi"],
+  "saulecabrera": ["winch"]
 }

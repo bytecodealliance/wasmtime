@@ -93,7 +93,7 @@ fn harvest_candidate_lhs(
     // Should we keep tracing through the given `val`? Only if it is defined
     // by an instruction that we can translate to Souper IR.
     let should_trace = |val| match func.dfg.value_def(val) {
-        ir::ValueDef::Result(inst, 0) => match func.dfg[inst].opcode() {
+        ir::ValueDef::Result(inst, 0) => match func.dfg.insts[inst].opcode() {
                 ir::Opcode::Iadd
                 | ir::Opcode::IaddImm
                 | ir::Opcode::IrsubImm
@@ -157,7 +157,7 @@ fn harvest_candidate_lhs(
                         // `iconst`s into souper operands here,
                         // when they are actually used.
                         match func.dfg.value_def(arg) {
-                            ir::ValueDef::Result(inst, 0) => match func.dfg[inst] {
+                            ir::ValueDef::Result(inst, 0) => match func.dfg.insts[inst] {
                                 ir::InstructionData::UnaryImm { opcode, imm } => {
                                     debug_assert_eq!(opcode, ir::Opcode::Iconst);
                                     let imm: i64 = imm.into();
@@ -179,7 +179,7 @@ fn harvest_candidate_lhs(
                     }
                 };
 
-                match (func.dfg[inst].opcode(), &func.dfg[inst]) {
+                match (func.dfg.insts[inst].opcode(), &func.dfg.insts[inst]) {
                     (ir::Opcode::Iadd, _) => {
                         let a = arg(allocs, 0);
                         let b = arg(allocs, 1);
@@ -387,7 +387,8 @@ fn harvest_candidate_lhs(
                         let a = arg(allocs, 0);
 
                         // While Cranelift allows any width condition for
-                        // `select`, Souper requires an `i1`.
+                        // `select` and checks it against `0`, Souper requires
+                        // an `i1`. So insert a `ne %x, 0` as needed.
                         let a = match a {
                             ast::Operand::Value(id) => match lhs.get_value(id).r#type {
                                 Some(ast::Type { width: 1 }) => a,
@@ -395,7 +396,14 @@ fn harvest_candidate_lhs(
                                     .assignment(
                                         None,
                                         Some(ast::Type { width: 1 }),
-                                        ast::Instruction::Trunc { a },
+                                        ast::Instruction::Ne {
+                                            a,
+                                            b: ast::Constant {
+                                                value: 0,
+                                                r#type: None,
+                                            }
+                                            .into(),
+                                        },
                                         vec![],
                                     )
                                     .into(),
@@ -528,9 +536,16 @@ fn souper_type_of(dfg: &ir::DataFlowGraph, val: ir::Value) -> Option<ast::Type> 
     let ty = dfg.value_type(val);
     assert!(ty.is_int());
     assert_eq!(ty.lane_count(), 1);
-    Some(ast::Type {
-        width: ty.bits().try_into().unwrap(),
-    })
+    let width = match dfg.value_def(val).inst() {
+        Some(inst)
+            if dfg.insts[inst].opcode() == ir::Opcode::IcmpImm
+                || dfg.insts[inst].opcode() == ir::Opcode::Icmp =>
+        {
+            1
+        }
+        _ => ty.bits().try_into().unwrap(),
+    };
+    Some(ast::Type { width })
 }
 
 #[derive(Debug)]
