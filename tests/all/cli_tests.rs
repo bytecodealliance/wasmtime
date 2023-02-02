@@ -488,8 +488,13 @@ fn run_threads() -> Result<()> {
         wasm.path().to_str().unwrap(),
     ])?;
 
-    assert!(stdout.contains("Hello _start"));
-    assert!(stdout.contains("Hello wasi_thread_start"));
-    assert!(stdout.contains("Hello done"));
+    assert!(
+        stdout
+            == "Called _start\n\
+    Running wasi_thread_start\n\
+    Running wasi_thread_start\n\
+    Running wasi_thread_start\n\
+    Done\n"
+    );
     Ok(())
 }
