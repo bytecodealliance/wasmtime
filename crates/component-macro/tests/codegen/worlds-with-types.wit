@@ -1,0 +1,14 @@
+interface i {
+  type t = u16
+}
+
+default world foo {
+  use self.i.{t as u}
+
+  type t = u32
+
+  record r {
+  }
+
+  export f: func() -> tuple<t, u, r>
+}
