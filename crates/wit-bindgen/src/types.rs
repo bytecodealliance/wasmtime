@@ -55,6 +55,9 @@ impl Types {
                         self.type_info_func(resolve, f, import);
                     }
                 }
+                WorldItem::Type(id) => {
+                    self.type_id_info(resolve, *id);
+                }
             }
         }
     }

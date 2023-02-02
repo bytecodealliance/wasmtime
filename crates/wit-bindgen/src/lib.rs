@@ -132,6 +132,7 @@ impl Wasmtime {
                 );
                 Import::Interface { snake }
             }
+            WorldItem::Type(_) => unreachable!(),
         };
 
         self.imports.push(import);
@@ -148,6 +149,12 @@ impl Wasmtime {
                 assert!(gen.src.is_empty());
                 self.exports.funcs.push(body);
                 (format!("wasmtime::component::Func"), getter)
+            }
+            WorldItem::Type(ty) => {
+                gen.define_type(name, *ty);
+                let body = mem::take(&mut gen.src);
+                self.src.push_str(&body);
+                return;
             }
             WorldItem::Interface(id) => {
                 gen.current_interface = Some(*id);
@@ -465,23 +472,26 @@ impl<'a> InterfaceGenerator<'a> {
 
     fn types(&mut self, id: InterfaceId) {
         for (name, id) in self.resolve.interfaces[id].types.iter() {
-            let id = *id;
-            let ty = &self.resolve.types[id];
-            match &ty.kind {
-                TypeDefKind::Record(record) => self.type_record(id, name, record, &ty.docs),
-                TypeDefKind::Flags(flags) => self.type_flags(id, name, flags, &ty.docs),
-                TypeDefKind::Tuple(tuple) => self.type_tuple(id, name, tuple, &ty.docs),
-                TypeDefKind::Enum(enum_) => self.type_enum(id, name, enum_, &ty.docs),
-                TypeDefKind::Variant(variant) => self.type_variant(id, name, variant, &ty.docs),
-                TypeDefKind::Option(t) => self.type_option(id, name, t, &ty.docs),
-                TypeDefKind::Result(r) => self.type_result(id, name, r, &ty.docs),
-                TypeDefKind::Union(u) => self.type_union(id, name, u, &ty.docs),
-                TypeDefKind::List(t) => self.type_list(id, name, t, &ty.docs),
-                TypeDefKind::Type(t) => self.type_alias(id, name, t, &ty.docs),
-                TypeDefKind::Future(_) => todo!("generate for future"),
-                TypeDefKind::Stream(_) => todo!("generate for stream"),
-                TypeDefKind::Unknown => unreachable!(),
-            }
+            self.define_type(name, *id);
+        }
+    }
+
+    fn define_type(&mut self, name: &str, id: TypeId) {
+        let ty = &self.resolve.types[id];
+        match &ty.kind {
+            TypeDefKind::Record(record) => self.type_record(id, name, record, &ty.docs),
+            TypeDefKind::Flags(flags) => self.type_flags(id, name, flags, &ty.docs),
+            TypeDefKind::Tuple(tuple) => self.type_tuple(id, name, tuple, &ty.docs),
+            TypeDefKind::Enum(enum_) => self.type_enum(id, name, enum_, &ty.docs),
+            TypeDefKind::Variant(variant) => self.type_variant(id, name, variant, &ty.docs),
+            TypeDefKind::Option(t) => self.type_option(id, name, t, &ty.docs),
+            TypeDefKind::Result(r) => self.type_result(id, name, r, &ty.docs),
+            TypeDefKind::Union(u) => self.type_union(id, name, u, &ty.docs),
+            TypeDefKind::List(t) => self.type_list(id, name, t, &ty.docs),
+            TypeDefKind::Type(t) => self.type_alias(id, name, t, &ty.docs),
+            TypeDefKind::Future(_) => todo!("generate for future"),
+            TypeDefKind::Stream(_) => todo!("generate for stream"),
+            TypeDefKind::Unknown => unreachable!(),
         }
     }
 
