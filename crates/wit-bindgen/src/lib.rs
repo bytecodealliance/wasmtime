@@ -265,6 +265,17 @@ impl Wasmtime {
                     Ok((Self::new(store, &instance)?, instance))
                 }}
 
+                /// Instantiates a pre-instantiated module using the specified
+                /// parameters, wrapping up the result in a structure that
+                /// translates between wasm and the host.
+                pub {async_} fn instantiate_pre<T {send}>(
+                    mut store: impl wasmtime::AsContextMut<Data = T>,
+                    instance_pre: &wasmtime::component::InstancePre<T>,
+                ) -> anyhow::Result<(Self, wasmtime::component::Instance)> {{
+                    let instance = instance_pre.instantiate{async__}(&mut store){await_}?;
+                    Ok((Self::new(store, &instance)?, instance))
+                }}
+
                 /// Low-level creation wrapper for wrapping up the exports
                 /// of the `instance` provided in this structure of wasm
                 /// exports.
