@@ -3,8 +3,6 @@ use smallvec::SmallVec;
 use std::ops::{Add, BitAnd, Not, Sub};
 use wasmparser::{FuncType, ValType};
 
-pub(crate) mod addressing_mode;
-pub(crate) use addressing_mode::*;
 pub(crate) mod local;
 pub(crate) use local::*;
 
