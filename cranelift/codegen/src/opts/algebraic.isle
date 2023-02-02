@@ -6,12 +6,6 @@
 ;; than a piece of the input or a new node that we construct; but we
 ;; can freely rewrite e.g. `x+y-y` to `x`.
 
-;; uextend/sextend of a constant.
-(rule (simplify (uextend $I64 (iconst $I32 (u64_from_imm64 imm))))
-      (iconst $I64 (imm64 (u64_uextend_u32 imm))))
-(rule (simplify (sextend $I64 (iconst $I32 (u64_from_imm64 imm))))
-      (iconst $I64 (imm64 (u64_sextend_u32 imm))))
-
 ;; x+0 == 0+x == x.
 (rule (simplify (iadd ty
                       x
@@ -46,11 +40,11 @@
 (rule (simplify (imul ty
                         x
                         (iconst ty (u64_from_imm64 0))))
-      (iconst ty (imm64 0)))
+      (subsume (iconst ty (imm64 0))))
 (rule (simplify (imul ty
                         (iconst ty (u64_from_imm64 0))
                         x))
-      (iconst ty (imm64 0)))
+      (subsume (iconst ty (imm64 0))))
 
 ;; x/1 == x.
 (rule (simplify (sdiv ty
@@ -111,21 +105,21 @@
       (subsume (iconst ty (imm64 0))))
 
 ;; x ^ not(x) == not(x) ^ x == -1.
-(rule (simplify (bxor $I32 x (bnot $I32 x))) (subsume (iconst $I32 (imm64 0xffff_ffff))))
-(rule (simplify (bxor $I32 (bnot $I32 x) x)) (subsume (iconst $I32 (imm64 0xffff_ffff))))
-(rule (simplify (bxor $I64 x (bnot $I64 x))) (subsume (iconst $I64 (imm64 0xffff_ffff_ffff_ffff))))
-(rule (simplify (bxor $I64 (bnot $I64 x) x)) (subsume (iconst $I64 (imm64 0xffff_ffff_ffff_ffff))))
+(rule (simplify (bxor (fits_in_64 ty) x (bnot ty x))) (subsume (iconst ty (imm64_masked ty 0xffff_ffff_ffff_ffff))))
+(rule (simplify (bxor (fits_in_64 ty) (bnot ty x) x)) (subsume (iconst ty (imm64_masked ty 0xffff_ffff_ffff_ffff))))
 
 ;; x & -1 == -1 & x == x & x == x.
-(rule (simplify (band ty x x)) x)
-(rule (simplify (band $I32 x (iconst $I32 (u64_from_imm64 0xffff_ffff)))) (subsume x))
-(rule (simplify (band $I32 (iconst $I32 (u64_from_imm64 0xffff_ffff)) x)) (subsume x))
-(rule (simplify (band $I64 x (iconst $I64 (u64_from_imm64 0xffff_ffff_ffff_ffff)))) (subsume x))
-(rule (simplify (band $I64 (iconst $I64 (u64_from_imm64 0xffff_ffff_ffff_ffff)) x)) (subsume x))
+(rule (simplify (band ty x x)) (subsume x))
+(rule (simplify (band ty x (iconst ty k)))
+      (if-let -1 (i64_sextend_imm64 ty k))
+      (subsume x))
+(rule (simplify (band ty (iconst ty k) x))
+      (if-let -1 (i64_sextend_imm64 ty k))
+      (subsume x))
 
 ;; x & 0 == 0 & x == 0.
-(rule (simplify (band ty x (iconst ty (u64_from_imm64 0)))) (iconst ty (imm64 0)))
-(rule (simplify (band ty (iconst ty (u64_from_imm64 0)) x)) (iconst ty (imm64 0)))
+(rule (simplify (band ty x (iconst ty (u64_from_imm64 0)))) (subsume (iconst ty (imm64 0))))
+(rule (simplify (band ty (iconst ty (u64_from_imm64 0)) x)) (subsume (iconst ty (imm64 0))))
 
 ;; not(not(x)) == x.
 (rule (simplify (bnot ty (bnot ty x))) (subsume x))
@@ -178,15 +172,30 @@
 (rule (simplify (imul ty (iconst _ (imm64_power_of_two c)) x))
       (ishl ty x (iconst ty (imm64 c))))
 
-;; x<<32>>32: uextend/sextend 32->64.
-(rule (simplify (ushr $I64 (ishl $I64 (uextend $I64 x @ (value_type $I32)) (iconst _ (simm32 32))) (iconst _ (simm32 32))))
-      (uextend $I64 x))
-
-(rule (simplify (sshr $I64 (ishl $I64 (uextend $I64 x @ (value_type $I32)) (iconst _ (simm32 32))) (iconst _ (simm32 32))))
-      (sextend $I64 x))
-
 ;; TODO: strength reduction: div to shifts
 ;; TODO: div/rem by constants -> magic multiplications
+
+
+;; For signed shifts, `(x << k) >> k` does sign-extension from width k to 2k.
+;; (It's more general than that, but that's the only case we can turn into sextend.)
+(rule (simplify (sshr wide (ishl _ (uextend _ x @ (value_type narrow)) (iconst _ shift)) (iconst _ shift)))
+      (if-let shift (imm64 (ty_bits_u64 narrow)))
+      (sextend wide x))
+(rule (simplify (sshr wide (ishl _ (sextend _ x @ (value_type narrow)) (iconst _ shift)) (iconst _ shift)))
+      (if-let shift (imm64 (ty_bits_u64 narrow)))
+      (sextend wide x))
+
+;; For unsigned shifts, `(x << k) >> k` is the same as masking out the top `k` bits.
+(rule (simplify (ushr (fits_in_64 ty)
+                      (ishl ty x (iconst _ k))
+                      (iconst _ k)))
+      (band ty x (iconst ty (imm64_ushr ty (imm64 (ty_mask ty)) k))))
+
+;; Masking out any of the top half of the bits of the result of `uextend` is a no-op.
+;; (This is like a cheap version of demanded-bits analysis.)
+(rule (simplify (band wide (uextend _ x @ (value_type narrow)) (iconst _ (u64_from_imm64 mask))))
+      (if-let $true (u64_eq (ty_mask narrow) (u64_and mask (ty_mask narrow))))
+      (uextend wide x))
 
 ;; `(x >> k) << k` is the same as masking off the bottom `k` bits (regardless if
 ;; this is a signed or unsigned shift right).
@@ -200,6 +209,7 @@
                       (iconst _ (u64_from_imm64 k))))
       (let ((mask u64 (u64_shl 0xFFFFFFFFFFFFFFFF k)))
         (band ty x (iconst ty (imm64_masked ty mask)))))
+
 
 ;; Rematerialize ALU-op-with-imm and iconsts in each block where they're
 ;; used. This is neutral (add-with-imm) or positive (iconst) for
