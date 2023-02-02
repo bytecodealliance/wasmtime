@@ -8,13 +8,14 @@ pub struct Types {
 
 #[derive(Default, Clone, Copy, Debug, PartialEq)]
 pub struct TypeInfo {
-    /// Whether or not this type is ever used (transitively) within the
-    /// parameter of a function.
-    pub param: bool,
+    /// Whether or not this type is ever used (transitively) within a borrowed
+    /// context, or a parameter to an export function.
+    pub borrowed: bool,
 
-    /// Whether or not this type is ever used (transitively) within the
-    /// result of a function.
-    pub result: bool,
+    /// Whether or not this type is ever used (transitively) within an owned
+    /// context, such as the result of an exported function or in the params or
+    /// results of an imported function.
+    pub owned: bool,
 
     /// Whether or not this type is ever used (transitively) within the
     /// error case in the result of a function.
@@ -26,8 +27,8 @@ pub struct TypeInfo {
 
 impl std::ops::BitOrAssign for TypeInfo {
     fn bitor_assign(&mut self, rhs: Self) {
-        self.param |= rhs.param;
-        self.result |= rhs.result;
+        self.borrowed |= rhs.borrowed;
+        self.owned |= rhs.owned;
         self.error |= rhs.error;
         self.has_list |= rhs.has_list;
     }
@@ -36,9 +37,14 @@ impl std::ops::BitOrAssign for TypeInfo {
 impl Types {
     pub fn analyze(&mut self, resolve: &Resolve, world: WorldId) {
         let world = &resolve.worlds[world];
-        for (_, item) in world.imports.iter().chain(world.exports.iter()) {
+        for (import, (_, item)) in world
+            .imports
+            .iter()
+            .map(|i| (true, i))
+            .chain(world.exports.iter().map(|i| (false, i)))
+        {
             match item {
-                WorldItem::Function(f) => self.type_info_func(resolve, f),
+                WorldItem::Function(f) => self.type_info_func(resolve, f, import),
                 WorldItem::Interface(id) => {
                     let iface = &resolve.interfaces[*id];
 
@@ -46,21 +52,26 @@ impl Types {
                         self.type_id_info(resolve, *t);
                     }
                     for (_, f) in iface.functions.iter() {
-                        self.type_info_func(resolve, f);
+                        self.type_info_func(resolve, f, import);
                     }
                 }
             }
         }
     }
 
-    fn type_info_func(&mut self, resolve: &Resolve, func: &Function) {
+    fn type_info_func(&mut self, resolve: &Resolve, func: &Function, import: bool) {
         let mut live = LiveTypes::default();
         for (_, ty) in func.params.iter() {
             self.type_info(resolve, ty);
             live.add_type(resolve, ty);
         }
         for id in live.iter() {
-            self.type_info.get_mut(&id).unwrap().param = true;
+            let info = self.type_info.get_mut(&id).unwrap();
+            if import {
+                info.owned = true;
+            } else {
+                info.borrowed = true;
+            }
         }
         let mut live = LiveTypes::default();
         for ty in func.results.iter_types() {
@@ -68,7 +79,7 @@ impl Types {
             live.add_type(resolve, ty);
         }
         for id in live.iter() {
-            self.type_info.get_mut(&id).unwrap().result = true;
+            self.type_info.get_mut(&id).unwrap().owned = true;
         }
 
         for ty in func.results.iter_types() {

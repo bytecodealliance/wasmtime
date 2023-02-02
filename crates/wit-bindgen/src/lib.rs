@@ -101,7 +101,7 @@ impl Wasmtime {
 
     fn import(&mut self, resolve: &Resolve, name: &str, item: &WorldItem) {
         let snake = name.to_snake_case();
-        let mut gen = InterfaceGenerator::new(self, resolve, TypeMode::Owned);
+        let mut gen = InterfaceGenerator::new(self, resolve);
         let import = match item {
             WorldItem::Function(func) => {
                 gen.generate_function_trait_sig(TypeOwner::None, &func);
@@ -139,7 +139,7 @@ impl Wasmtime {
 
     fn export(&mut self, resolve: &Resolve, name: &str, item: &WorldItem) {
         let snake = name.to_snake_case();
-        let mut gen = InterfaceGenerator::new(self, resolve, TypeMode::AllBorrowed("'a"));
+        let mut gen = InterfaceGenerator::new(self, resolve);
         let (ty, getter) = match item {
             WorldItem::Function(func) => {
                 gen.define_rust_guest_export(None, func);
@@ -450,21 +450,15 @@ struct InterfaceGenerator<'a> {
     src: Source,
     gen: &'a mut Wasmtime,
     resolve: &'a Resolve,
-    default_param_mode: TypeMode,
     current_interface: Option<InterfaceId>,
 }
 
 impl<'a> InterfaceGenerator<'a> {
-    fn new(
-        gen: &'a mut Wasmtime,
-        resolve: &'a Resolve,
-        default_param_mode: TypeMode,
-    ) -> InterfaceGenerator<'a> {
+    fn new(gen: &'a mut Wasmtime, resolve: &'a Resolve) -> InterfaceGenerator<'a> {
         InterfaceGenerator {
             src: Source::default(),
             gen,
             resolve,
-            default_param_mode,
             current_interface: None,
         }
     }
@@ -1349,10 +1343,6 @@ impl<'a> RustGenerator<'a> for InterfaceGenerator<'a> {
 
     fn current_interface(&self) -> Option<InterfaceId> {
         self.current_interface
-    }
-
-    fn default_param_mode(&self) -> TypeMode {
-        self.default_param_mode
     }
 
     fn push_str(&mut self, s: &str) {
