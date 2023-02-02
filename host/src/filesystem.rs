@@ -14,7 +14,7 @@ use wasi_common::{
     WasiDir, WasiFile,
 };
 
-// FIXME: guest rust bindgen should add this method to all flags.
+/// TODO: Remove once wasmtime #5589 lands.
 fn contains<T: BitAnd<Output = T> + Eq + Copy>(flags: T, flag: T) -> bool {
     (flags & flag) == flag
 }
@@ -26,53 +26,28 @@ fn convert(error: wasi_common::Error) -> anyhow::Error {
 
         match errno {
             Acces => Errno::Access,
-            Addrinuse => Errno::Addrinuse,
-            Addrnotavail => Errno::Addrnotavail,
-            Afnosupport => Errno::Afnosupport,
             Again => Errno::Again,
             Already => Errno::Already,
             Badf => Errno::Badf,
-            Badmsg => Errno::Badmsg,
             Busy => Errno::Busy,
-            Canceled => Errno::Canceled,
-            Child => Errno::Child,
-            Connaborted => Errno::Connaborted,
-            Connrefused => Errno::Connrefused,
-            Connreset => Errno::Connreset,
             Deadlk => Errno::Deadlk,
-            Destaddrreq => Errno::Destaddrreq,
             Dquot => Errno::Dquot,
             Exist => Errno::Exist,
-            Fault => Errno::Fault,
             Fbig => Errno::Fbig,
-            Hostunreach => Errno::Hostunreach,
-            Idrm => Errno::Idrm,
             Ilseq => Errno::Ilseq,
             Inprogress => Errno::Inprogress,
             Intr => Errno::Intr,
             Inval => Errno::Inval,
             Io => Errno::Io,
-            Isconn => Errno::Isconn,
             Isdir => Errno::Isdir,
             Loop => Errno::Loop,
-            Mfile => Errno::Mfile,
             Mlink => Errno::Mlink,
             Msgsize => Errno::Msgsize,
-            Multihop => Errno::Multihop,
             Nametoolong => Errno::Nametoolong,
-            Netdown => Errno::Netdown,
-            Netreset => Errno::Netreset,
-            Netunreach => Errno::Netunreach,
-            Nfile => Errno::Nfile,
-            Nobufs => Errno::Nobufs,
             Nodev => Errno::Nodev,
             Noent => Errno::Noent,
-            Noexec => Errno::Noexec,
             Nolck => Errno::Nolck,
-            Nolink => Errno::Nolink,
             Nomem => Errno::Nomem,
-            Nomsg => Errno::Nomsg,
-            Noprotoopt => Errno::Noprotoopt,
             Nospc => Errno::Nospc,
             Nosys => Errno::Nosys,
             Notdir => Errno::Notdir,
@@ -82,20 +57,20 @@ fn convert(error: wasi_common::Error) -> anyhow::Error {
             Notty => Errno::Notty,
             Nxio => Errno::Nxio,
             Overflow => Errno::Overflow,
-            Ownerdead => Errno::Ownerdead,
             Perm => Errno::Perm,
             Pipe => Errno::Pipe,
-            Range => Errno::Range,
             Rofs => Errno::Rofs,
             Spipe => Errno::Spipe,
-            Srch => Errno::Srch,
-            Stale => Errno::Stale,
-            Timedout => Errno::Timedout,
             Txtbsy => Errno::Txtbsy,
             Xdev => Errno::Xdev,
-            Success | Dom | Notcapable | Notsock | Proto | Protonosupport | Prototype | TooBig
-            | Notconn => {
+            Success | Notsock | Proto | Protonosupport | Prototype | TooBig | Notconn => {
                 return error.into();
+            }
+            Addrinuse | Addrnotavail | Afnosupport | Badmsg | Canceled | Connaborted
+            | Connrefused | Connreset | Destaddrreq | Fault | Hostunreach | Idrm | Isconn
+            | Mfile | Multihop | Netdown | Netreset | Netunreach | Nfile | Nobufs | Noexec
+            | Nolink | Nomsg | Noprotoopt | Ownerdead | Range | Srch | Stale | Timedout => {
+                panic!("Unexpected errno: {:?}", errno);
             }
         }
         .into()

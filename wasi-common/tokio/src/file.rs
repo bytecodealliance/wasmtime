@@ -219,8 +219,8 @@ macro_rules! wasi_file_impl {
                 }
             }
 
-            async fn sock_accept(&mut self, fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
-                block_on_dummy_executor(|| self.0.sock_accept(fdflags))
+            async fn accept(&mut self, fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
+                block_on_dummy_executor(|| self.0.accept(fdflags))
             }
         }
         #[cfg(windows)]

@@ -11,19 +11,19 @@ pub trait WasiConnection: Send + Sync {
 
     async fn sock_recv<'a>(
         &mut self,
-        _ri_data: &mut [std::io::IoSliceMut<'a>],
-        _ri_flags: RiFlags,
+        ri_data: &mut [std::io::IoSliceMut<'a>],
+        ri_flags: RiFlags,
     ) -> Result<(u64, RoFlags), Error>;
 
     async fn sock_send<'a>(
         &mut self,
-        _si_data: &[std::io::IoSlice<'a>],
-        _si_flags: SiFlags,
+        si_data: &[std::io::IoSlice<'a>],
+        si_flags: SiFlags,
     ) -> Result<u64, Error>;
 
     async fn sock_shutdown(&mut self, _how: SdFlags) -> Result<(), Error>;
 
-    fn set_nonblocking(&mut self, _flag: bool) -> Result<(), Error>;
+    fn set_nonblocking(&mut self, flag: bool) -> Result<(), Error>;
 
     async fn readable(&self) -> Result<(), Error>;
 

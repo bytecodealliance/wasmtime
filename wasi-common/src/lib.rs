@@ -63,6 +63,7 @@ pub mod random;
 pub mod sched;
 pub mod stream;
 pub mod table;
+pub mod tcp_listener;
 
 pub use cap_fs_ext::SystemTimeSpec;
 pub use cap_rand::RngCore;
@@ -76,3 +77,4 @@ pub use listener::WasiListener;
 pub use sched::{Poll, WasiSched};
 pub use stream::WasiStream;
 pub use table::Table;
+pub use tcp_listener::WasiTcpListener;

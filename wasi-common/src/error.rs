@@ -38,13 +38,11 @@ pub enum Errno {
     Badmsg,
     Busy,
     Canceled,
-    Child,
     Connaborted,
     Connrefused,
     Connreset,
     Deadlk,
     Destaddrreq,
-    Dom,
     Dquot,
     Exist,
     Fault,
@@ -102,7 +100,6 @@ pub enum Errno {
     Timedout,
     Txtbsy,
     Xdev,
-    Notcapable,
 }
 
 impl std::fmt::Display for Errno {

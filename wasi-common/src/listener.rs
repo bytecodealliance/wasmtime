@@ -1,6 +1,8 @@
+//! Socket listeners.
+
 use crate::connection::WasiConnection;
-/// Socket listeners.
 use crate::Error;
+use crate::WasiStream;
 use std::any::Any;
 
 /// A socket listener.
@@ -8,9 +10,12 @@ use std::any::Any;
 pub trait WasiListener: Send + Sync {
     fn as_any(&self) -> &dyn Any;
 
-    async fn sock_accept(&mut self, nonblocking: bool) -> Result<Box<dyn WasiConnection>, Error>;
+    async fn accept(
+        &mut self,
+        nonblocking: bool,
+    ) -> Result<(Box<dyn WasiConnection>, Box<dyn WasiStream>), Error>;
 
-    fn set_nonblocking(&mut self, _flag: bool) -> Result<(), Error>;
+    fn set_nonblocking(&mut self, flag: bool) -> Result<(), Error>;
 }
 
 pub trait TableListenerExt {

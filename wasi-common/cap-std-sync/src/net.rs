@@ -9,6 +9,8 @@ use io_lifetimes::{AsSocket, BorrowedSocket};
 use std::any::Any;
 use std::convert::TryInto;
 use std::io::{self, Read, Write};
+use std::net::SocketAddr;
+use std::sync::Arc;
 use system_interface::io::IoExt;
 use system_interface::io::IsReadWrite;
 use system_interface::io::ReadReady;
@@ -16,6 +18,7 @@ use wasi_common::{
     connection::{RiFlags, RoFlags, SdFlags, SiFlags, WasiConnection},
     listener::WasiListener,
     stream::WasiStream,
+    tcp_listener::WasiTcpListener,
     Error, ErrorExt,
 };
 
@@ -95,7 +98,7 @@ impl From<Connection> for Box<dyn WasiConnection> {
     }
 }
 
-macro_rules! wasi_listen_write_impl {
+macro_rules! wasi_listener_impl {
     ($ty:ty, $stream:ty) => {
         #[async_trait::async_trait]
         impl WasiListener for $ty {
@@ -103,14 +106,15 @@ macro_rules! wasi_listen_write_impl {
                 self
             }
 
-            async fn sock_accept(
+            async fn accept(
                 &mut self,
                 nonblocking: bool,
-            ) -> Result<Box<dyn WasiConnection>, Error> {
+            ) -> Result<(Box<dyn WasiConnection>, Box<dyn WasiStream>), Error> {
                 let (stream, _) = self.0.accept()?;
                 stream.set_nonblocking(nonblocking)?;
-                let stream = <$stream>::from_cap_std(stream);
-                Ok(Box::new(stream))
+                let connection = <$stream>::from_cap_std(stream);
+                let stream = connection.clone();
+                Ok((Box::new(connection), Box::new(stream)))
             }
 
             fn set_nonblocking(&mut self, flag: bool) -> Result<(), Error> {
@@ -144,6 +148,37 @@ macro_rules! wasi_listen_write_impl {
     };
 }
 
+macro_rules! wasi_tcp_listener_impl {
+    ($ty:ty, $stream:ty) => {
+        #[async_trait::async_trait]
+        impl WasiTcpListener for $ty {
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+
+            async fn accept(
+                &mut self,
+                nonblocking: bool,
+            ) -> Result<(Box<dyn WasiConnection>, Box<dyn WasiStream>, SocketAddr), Error> {
+                let (stream, addr) = self.0.accept()?;
+                stream.set_nonblocking(nonblocking)?;
+                let connection = <$stream>::from_cap_std(stream);
+                let stream = connection.clone();
+                Ok((Box::new(connection), Box::new(stream), addr))
+            }
+
+            fn set_nonblocking(&mut self, flag: bool) -> Result<(), Error> {
+                self.0.set_nonblocking(flag)?;
+                Ok(())
+            }
+
+            fn into_listener(self) -> Box<dyn WasiListener> {
+                Box::new(self)
+            }
+        }
+    };
+}
+
 pub struct TcpListener(cap_std::net::TcpListener);
 
 impl TcpListener {
@@ -151,7 +186,8 @@ impl TcpListener {
         TcpListener(cap_std)
     }
 }
-wasi_listen_write_impl!(TcpListener, TcpStream);
+wasi_listener_impl!(TcpListener, TcpStream);
+wasi_tcp_listener_impl!(TcpListener, TcpStream);
 
 #[cfg(unix)]
 pub struct UnixListener(cap_std::os::unix::net::UnixListener);
@@ -164,7 +200,7 @@ impl UnixListener {
 }
 
 #[cfg(unix)]
-wasi_listen_write_impl!(UnixListener, UnixStream);
+wasi_listener_impl!(UnixListener, UnixStream);
 
 macro_rules! wasi_stream_write_impl {
     ($ty:ty, $std_ty:ty) => {
@@ -235,7 +271,7 @@ macro_rules! wasi_stream_write_impl {
             }
 
             async fn readable(&self) -> Result<(), Error> {
-                if is_read_write(&self.0)?.0 {
+                if is_read_write(&*self.0)?.0 {
                     Ok(())
                 } else {
                     Err(Error::badf())
@@ -243,7 +279,7 @@ macro_rules! wasi_stream_write_impl {
             }
 
             async fn writable(&self) -> Result<(), Error> {
-                if is_read_write(&self.0)?.1 {
+                if is_read_write(&*self.0)?.1 {
                     Ok(())
                 } else {
                     Err(Error::badf())
@@ -316,7 +352,7 @@ macro_rules! wasi_stream_write_impl {
             ) -> Result<(u64, bool), Error> {
                 if let Some(writeable) = dst.pollable_write() {
                     let num = io::copy(
-                        &mut io::Read::take(&self.0, nelem),
+                        &mut io::Read::take(&*self.0, nelem),
                         &mut BorrowedWriteable::borrow(writeable),
                     )?;
                     Ok((num, num < nelem))
@@ -325,11 +361,11 @@ macro_rules! wasi_stream_write_impl {
                 }
             }
             async fn skip(&mut self, nelem: u64) -> Result<(u64, bool), Error> {
-                let num = io::copy(&mut io::Read::take(&self.0, nelem), &mut io::sink())?;
+                let num = io::copy(&mut io::Read::take(&*self.0, nelem), &mut io::sink())?;
                 Ok((num, num < nelem))
             }
             async fn write_repeated(&mut self, byte: u8, nelem: u64) -> Result<u64, Error> {
-                let num = io::copy(&mut io::Read::take(io::repeat(byte), nelem), &mut self.0)?;
+                let num = io::copy(&mut io::Read::take(io::repeat(byte), nelem), &mut &*self.0)?;
                 Ok(num)
             }
             async fn num_ready_bytes(&self) -> Result<u64, Error> {
@@ -337,14 +373,14 @@ macro_rules! wasi_stream_write_impl {
                 Ok(val)
             }
             async fn readable(&self) -> Result<(), Error> {
-                if is_read_write(&self.0)?.0 {
+                if is_read_write(&*self.0)?.0 {
                     Ok(())
                 } else {
                     Err(Error::badf())
                 }
             }
             async fn writable(&self) -> Result<(), Error> {
-                if is_read_write(&self.0)?.1 {
+                if is_read_write(&*self.0)?.1 {
                     Ok(())
                 } else {
                     Err(Error::badf())
@@ -376,23 +412,31 @@ macro_rules! wasi_stream_write_impl {
     };
 }
 
-pub struct TcpStream(cap_std::net::TcpStream);
+pub struct TcpStream(Arc<cap_std::net::TcpStream>);
 
 impl TcpStream {
     pub fn from_cap_std(socket: cap_std::net::TcpStream) -> Self {
-        TcpStream(socket)
+        Self(Arc::new(socket))
+    }
+
+    pub fn clone(&self) -> Self {
+        Self(Arc::clone(&self.0))
     }
 }
 
 wasi_stream_write_impl!(TcpStream, std::net::TcpStream);
 
 #[cfg(unix)]
-pub struct UnixStream(cap_std::os::unix::net::UnixStream);
+pub struct UnixStream(Arc<cap_std::os::unix::net::UnixStream>);
 
 #[cfg(unix)]
 impl UnixStream {
     pub fn from_cap_std(socket: cap_std::os::unix::net::UnixStream) -> Self {
-        UnixStream(socket)
+        Self(Arc::new(socket))
+    }
+
+    pub fn clone(&self) -> Self {
+        Self(Arc::clone(&self.0))
     }
 }
 
