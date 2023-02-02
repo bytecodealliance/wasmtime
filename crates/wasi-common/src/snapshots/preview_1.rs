@@ -197,7 +197,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 .await
         } else {
             log::warn!("`fd_fdstat_set_flags` does not work with wasi-threads enabled; see https://github.com/bytecodealliance/wasmtime/issues/5643");
-            Err(Error::invalid_argument())
+            Err(Error::not_supported())
         }
     }
 
