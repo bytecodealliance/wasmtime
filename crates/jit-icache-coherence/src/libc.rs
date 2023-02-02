@@ -126,7 +126,7 @@ fn riscv_flush_icache(start: u64, end: u64) -> Result<()> {
                 )
             } {
                 0 => { Ok(()) }
-                _ => Err(Error::last_os_error()),
+                _ => Err(std::io::Error::last_os_error()),
             }
         }
     }
