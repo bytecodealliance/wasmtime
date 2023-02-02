@@ -1159,7 +1159,7 @@ impl<'a> InterfaceGenerator<'a> {
         self.rustdoc(&func.docs);
         uwrite!(
             self.src,
-            "pub {async_} fn {}<S: wasmtime::AsContextMut>(&self, mut store: S, ",
+            "pub {async_} fn call_{}<S: wasmtime::AsContextMut>(&self, mut store: S, ",
             func.name.to_snake_case(),
         );
         for (i, param) in func.params.iter().enumerate() {

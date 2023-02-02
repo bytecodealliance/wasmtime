@@ -80,19 +80,22 @@ mod empty_error {
 
         assert_eq!(
             results
-                .empty_error(&mut store, 0.0)
+                .call_empty_error(&mut store, 0.0)
                 .expect("no trap")
                 .expect("no error returned"),
             0.0
         );
 
         results
-            .empty_error(&mut store, 1.0)
+            .call_empty_error(&mut store, 1.0)
             .expect("no trap")
             .err()
             .expect("() error returned");
 
-        let e = results.empty_error(&mut store, 2.0).err().expect("trap");
+        let e = results
+            .call_empty_error(&mut store, 2.0)
+            .err()
+            .expect("trap");
         assert_eq!(
             format!("{}", e.source().expect("trap message is stored in source")),
             "empty_error: trap"
@@ -188,20 +191,23 @@ mod string_error {
 
         assert_eq!(
             results
-                .string_error(&mut store, 0.0)
+                .call_string_error(&mut store, 0.0)
                 .expect("no trap")
                 .expect("no error returned"),
             0.0
         );
 
         let e = results
-            .string_error(&mut store, 1.0)
+            .call_string_error(&mut store, 1.0)
             .expect("no trap")
             .err()
             .expect("error returned");
         assert_eq!(e, "string_error: error");
 
-        let e = results.string_error(&mut store, 2.0).err().expect("trap");
+        let e = results
+            .call_string_error(&mut store, 2.0)
+            .err()
+            .expect("trap");
         assert_eq!(
             format!("{}", e.source().expect("trap message is stored in source")),
             "string_error: trap"
@@ -328,7 +334,7 @@ mod enum_error {
         assert_eq!(
             results
                 .foo()
-                .enum_error(&mut store, 0.0)
+                .call_enum_error(&mut store, 0.0)
                 .expect("no trap")
                 .expect("no error returned"),
             0.0
@@ -336,7 +342,7 @@ mod enum_error {
 
         let e = results
             .foo()
-            .enum_error(&mut store, 1.0)
+            .call_enum_error(&mut store, 1.0)
             .expect("no trap")
             .err()
             .expect("error returned");
@@ -344,7 +350,7 @@ mod enum_error {
 
         let e = results
             .foo()
-            .enum_error(&mut store, 2.0)
+            .call_enum_error(&mut store, 2.0)
             .err()
             .expect("trap");
         assert_eq!(
@@ -458,7 +464,7 @@ mod record_error {
         assert_eq!(
             results
                 .foo()
-                .record_error(&mut store, 0.0)
+                .call_record_error(&mut store, 0.0)
                 .expect("no trap")
                 .expect("no error returned"),
             0.0
@@ -466,7 +472,7 @@ mod record_error {
 
         let e = results
             .foo()
-            .record_error(&mut store, 1.0)
+            .call_record_error(&mut store, 1.0)
             .expect("no trap")
             .err()
             .expect("error returned");
@@ -480,7 +486,7 @@ mod record_error {
 
         let e = results
             .foo()
-            .record_error(&mut store, 2.0)
+            .call_record_error(&mut store, 2.0)
             .err()
             .expect("trap");
         assert_eq!(
@@ -594,7 +600,7 @@ mod variant_error {
         assert_eq!(
             results
                 .foo()
-                .variant_error(&mut store, 0.0)
+                .call_variant_error(&mut store, 0.0)
                 .expect("no trap")
                 .expect("no error returned"),
             0.0
@@ -602,7 +608,7 @@ mod variant_error {
 
         let e = results
             .foo()
-            .variant_error(&mut store, 1.0)
+            .call_variant_error(&mut store, 1.0)
             .expect("no trap")
             .err()
             .expect("error returned");
@@ -616,7 +622,7 @@ mod variant_error {
 
         let e = results
             .foo()
-            .variant_error(&mut store, 2.0)
+            .call_variant_error(&mut store, 2.0)
             .err()
             .expect("trap");
         assert_eq!(

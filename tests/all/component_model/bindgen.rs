@@ -46,8 +46,8 @@ mod no_imports {
         let linker = Linker::new(&engine);
         let mut store = Store::new(&engine, ());
         let (no_imports, _) = NoImports::instantiate(&mut store, &component, &linker)?;
-        no_imports.bar(&mut store)?;
-        no_imports.foo().foo(&mut store)?;
+        no_imports.call_bar(&mut store)?;
+        no_imports.foo().call_foo(&mut store)?;
         Ok(())
     }
 }
@@ -108,7 +108,7 @@ mod one_import {
         foo::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
         let mut store = Store::new(&engine, MyImports::default());
         let (one_import, _) = OneImport::instantiate(&mut store, &component, &linker)?;
-        one_import.bar(&mut store)?;
+        one_import.call_bar(&mut store)?;
         assert!(store.data().hit);
         Ok(())
     }
