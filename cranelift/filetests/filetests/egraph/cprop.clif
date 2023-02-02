@@ -34,6 +34,28 @@ block0:
 ; check: v3 = iconst.i8 4
 ; check: return v3
 
+function %ishl_i8_i16() -> i8 {
+block0:
+    v0 = iconst.i8 1
+    v1 = iconst.i16 0xf2
+    v2 = ishl v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 4
+; check: return v3
+
+function %ishl_i16_i8() -> i16 {
+block0:
+    v0 = iconst.i16 1
+    v1 = iconst.i8 0xf2
+    v2 = ishl v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i16 4
+; check: return v3
+
 function %ushr() -> i8 {
 block0:
     v0 = iconst.i8 -1
@@ -45,6 +67,28 @@ block0:
 ; check: v3 = iconst.i8 63
 ; check: return v3
 
+function %ushr_i8_i16() -> i8 {
+block0:
+    v0 = iconst.i8 -1
+    v1 = iconst.i16 0xf2
+    v2 = ushr v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 63
+; check: return v3
+
+function %ushr_i16_i8() -> i16 {
+block0:
+    v0 = iconst.i16 -1
+    v1 = iconst.i8 0xf2
+    v2 = ushr v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i16 0x3fff
+; check: return v3
+
 function %sshr() -> i8 {
 block0:
     v0 = iconst.i8 0xf0
@@ -53,7 +97,29 @@ block0:
     return v2
 }
 
-; check: v3 = iconst.i8 -4
+; check: v3 = iconst.i8 252
+; check: return v3
+
+function %sshr_i8_i16() -> i8 {
+block0:
+    v0 = iconst.i8 0xf0
+    v1 = iconst.i16 0xf2
+    v2 = sshr v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i8 252
+; check: return v3
+
+function %sshr_i16_i8() -> i16 {
+block0:
+    v0 = iconst.i16 0xfff0
+    v1 = iconst.i8 0xf2
+    v2 = sshr v0, v1
+    return v2
+}
+
+; check: v3 = iconst.i16 0xfffc
 ; check: return v3
 
 function %icmp_eq_i32() -> i8 {

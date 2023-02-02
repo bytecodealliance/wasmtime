@@ -191,15 +191,15 @@
 ;; `(x >> k) << k` is the same as masking off the bottom `k` bits (regardless if
 ;; this is a signed or unsigned shift right).
 (rule (simplify (ishl (fits_in_64 ty)
-                      (ushr ty x (iconst _ (u64_from_imm64 k)))
-                      (iconst _ (u64_from_imm64 k))))
-      (let ((mask u64 (u64_shl 0xFFFFFFFFFFFFFFFF k)))
-        (band ty x (iconst ty (imm64_masked ty mask)))))
+                      (ushr ty x (iconst _ k))
+                      (iconst _ k)))
+      (let ((mask Imm64 (imm64_shl ty (imm64 0xFFFF_FFFF_FFFF_FFFF) k)))
+        (band ty x (iconst ty mask))))
 (rule (simplify (ishl (fits_in_64 ty)
-                      (sshr ty x (iconst _ (u64_from_imm64 k)))
-                      (iconst _ (u64_from_imm64 k))))
-      (let ((mask u64 (u64_shl 0xFFFFFFFFFFFFFFFF k)))
-        (band ty x (iconst ty (imm64_masked ty mask)))))
+                      (sshr ty x (iconst _ k))
+                      (iconst _ k)))
+      (let ((mask Imm64 (imm64_shl ty (imm64 0xFFFF_FFFF_FFFF_FFFF) k)))
+        (band ty x (iconst ty mask))))
 
 ;; Rematerialize ALU-op-with-imm and iconsts in each block where they're
 ;; used. This is neutral (add-with-imm) or positive (iconst) for

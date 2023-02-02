@@ -56,18 +56,18 @@
       (subsume (iconst ty (imm64_masked ty (u64_not k)))))
 
 (rule (simplify (ishl (fits_in_64 ty)
-                      (iconst ty (u64_from_imm64 k1))
-                      (iconst ty (u64_from_imm64 k2))))
-      (subsume (iconst ty (imm64_masked ty (u64_shl k1 k2)))))
+                      (iconst ty k1)
+                      (iconst _ k2)))
+      (subsume (iconst ty (imm64_shl ty k1 k2))))
 
 (rule (simplify (ushr (fits_in_64 ty)
                       (iconst ty k1)
-                      (iconst ty k2)))
+                      (iconst _ k2)))
       (subsume (iconst ty (imm64_ushr ty k1 k2))))
 
 (rule (simplify (sshr (fits_in_64 ty)
                       (iconst ty k1)
-                      (iconst ty k2)))
+                      (iconst _ k2)))
       (subsume (iconst ty (imm64_sshr ty k1 k2))))
 
 (rule (simplify

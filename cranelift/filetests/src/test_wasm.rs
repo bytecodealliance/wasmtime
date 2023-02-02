@@ -24,6 +24,7 @@ pub fn run(path: &Path, wat: &str) -> Result<()> {
 
     let config: TestConfig =
         toml::from_str(&config_text).context("failed to parse the test configuration")?;
+    log::debug!("Wasm test config = {config:#?}");
 
     config
         .validate()

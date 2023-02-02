@@ -87,6 +87,17 @@ block0(v0: i64):
     ; return v5
 }
 
+function %signed_shift_right_shift_left_i8_mask_rhs(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 0xf5
+    v2 = sshr v0, v1
+    v3 = ishl v2, v1
+    return v3
+    ; check: v4 = iconst.i8 224
+    ; check: v5 = band v0, v4
+    ; return v5
+}
+
 function %or_and_y_with_not_y_i8(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
     v2 = band v0, v1

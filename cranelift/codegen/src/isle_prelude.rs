@@ -81,27 +81,42 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn u64_shl(&mut self, x: u64, y: u64) -> u64 {
-            x << y
+        fn imm64_shl(&mut self, ty: Type, x: Imm64, y: Imm64) -> Imm64 {
+            // Mask off any excess shift bits.
+            let shift_mask = (ty.bits() - 1) as u64;
+            let y = (y.bits() as u64) & shift_mask;
+
+            // Mask the result to `ty` bits.
+            let ty_mask = self.ty_mask(ty) as i64;
+            Imm64::new((x.bits() << y) & ty_mask)
         }
 
         #[inline]
         fn imm64_ushr(&mut self, ty: Type, x: Imm64, y: Imm64) -> Imm64 {
-            let shift = u32::checked_sub(64, ty.bits()).unwrap_or(0);
-            let mask = u64::MAX >> shift;
-            let x = (x.bits() as u64) & mask;
-            let y = (y.bits() as u64) & mask;
+            let ty_mask = self.ty_mask(ty);
+            let x = (x.bits() as u64) & ty_mask;
+
+            // Mask off any excess shift bits.
+            let shift_mask = (ty.bits() - 1) as u64;
+            let y = (y.bits() as u64) & shift_mask;
+
+            // NB: No need to mask off high bits because they are already zero.
             Imm64::new((x >> y) as i64)
         }
 
         #[inline]
         fn imm64_sshr(&mut self, ty: Type, x: Imm64, y: Imm64) -> Imm64 {
+            // Sign extend `x` from `ty.bits()`-width to the full 64 bits.
             let shift = u32::checked_sub(64, ty.bits()).unwrap_or(0);
-            let mask = u64::MAX >> shift;
-            let x = (x.bits() as u64) & mask;
-            let y = (y.bits() as u64) & mask;
-            let sext = |v| ((v << shift) as i64) >> shift;
-            Imm64::new(sext(x) >> sext(y))
+            let x = (x.bits() << shift) >> shift;
+
+            // Mask off any excess shift bits.
+            let shift_mask = (ty.bits() - 1) as i64;
+            let y = y.bits() & shift_mask;
+
+            // Mask off sign bits that aren't part of `ty`.
+            let ty_mask = self.ty_mask(ty) as i64;
+            Imm64::new((x >> y) & ty_mask)
         }
 
         #[inline]
@@ -179,14 +194,12 @@ macro_rules! isle_common_prelude_methods {
 
         #[inline]
         fn ty_mask(&mut self, ty: Type) -> u64 {
-            match ty.bits() {
-                1 => 1,
-                8 => 0xff,
-                16 => 0xffff,
-                32 => 0xffff_ffff,
-                64 => 0xffff_ffff_ffff_ffff,
-                _ => unimplemented!(),
-            }
+            let ty_bits = ty.bits();
+            debug_assert_ne!(ty_bits, 0);
+            let shift = 64_u64
+                .checked_sub(ty_bits.into())
+                .expect("unimplemented for > 64 bits");
+            u64::MAX >> shift
         }
 
         fn fits_in_16(&mut self, ty: Type) -> Option<Type> {
