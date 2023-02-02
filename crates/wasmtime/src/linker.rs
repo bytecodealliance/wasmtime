@@ -1118,7 +1118,7 @@ impl<T> Linker<T> {
     /// `.instantiate` API is used we can get fresh up-to-date type information
     /// for memories and their current size, if necessary.
     ///
-    /// Note that providing a `store` here is not rqeuired for correctness
+    /// Note that providing a `store` here is not required for correctness
     /// per-se. If one is not provided, such as the with the `instantiate_pre`
     /// API, then the type information used for memories and tables will reflect
     /// their size when inserted into the linker rather than their current size.
