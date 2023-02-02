@@ -15,7 +15,6 @@ pub trait RustGenerator<'a> {
 
     fn push_str(&mut self, s: &str);
     fn info(&self, ty: TypeId) -> TypeInfo;
-    fn default_param_mode(&self) -> TypeMode;
     fn current_interface(&self) -> Option<InterfaceId>;
 
     fn print_ty(&mut self, ty: &Type, mode: TypeMode) {
@@ -209,10 +208,10 @@ pub trait RustGenerator<'a> {
     fn modes_of(&self, ty: TypeId) -> Vec<(String, TypeMode)> {
         let info = self.info(ty);
         let mut result = Vec::new();
-        if info.param {
-            result.push((self.param_name(ty), self.default_param_mode()));
+        if info.borrowed {
+            result.push((self.param_name(ty), TypeMode::AllBorrowed("'a")));
         }
-        if info.result && (!info.param || self.uses_two_names(&info)) {
+        if info.owned && (!info.borrowed || self.uses_two_names(&info)) {
             result.push((self.result_name(ty), TypeMode::Owned));
         }
         return result;
@@ -358,13 +357,7 @@ pub trait RustGenerator<'a> {
     }
 
     fn uses_two_names(&self, info: &TypeInfo) -> bool {
-        info.has_list
-            && info.param
-            && info.result
-            && match self.default_param_mode() {
-                TypeMode::AllBorrowed(_) => true,
-                TypeMode::Owned => false,
-            }
+        info.has_list && info.borrowed && info.owned
     }
 
     fn lifetime_for(&self, info: &TypeInfo, mode: TypeMode) -> Option<&'static str> {
