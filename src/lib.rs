@@ -1430,9 +1430,9 @@ impl Drop for Pollables {
     }
 }
 
-impl From<wasi_tcp::Error> for Errno {
-    fn from(error: wasi_tcp::Error) -> Errno {
-        use wasi_tcp::Error::*;
+impl From<wasi_tcp::Errno> for Errno {
+    fn from(error: wasi_tcp::Errno) -> Errno {
+        use wasi_tcp::Errno::*;
 
         match error {
             // Use a black box to prevent the optimizer from generating a
@@ -1638,25 +1638,24 @@ pub unsafe extern "C" fn poll_oneoff(
                                     flags = 0;
                                 }
                             },
-                            StreamType::Socket(_) => unreachable!(), // TODO
-                            /*
-                            StreamType::Socket(_) => match wasi_tcp::bytes_readable(todo!()) {
-                                Ok(result) => {
-                                    error = ERRNO_SUCCESS;
-                                    nbytes = result.nbytes;
-                                    flags = if result.is_closed {
-                                        EVENTRWFLAGS_FD_READWRITE_HANGUP
-                                    } else {
-                                        0
-                                    };
+                            StreamType::Socket(connection) => {
+                                match wasi_tcp::bytes_readable(*connection) {
+                                    Ok(result) => {
+                                        error = ERRNO_SUCCESS;
+                                        nbytes = result.0;
+                                        flags = if result.1 {
+                                            EVENTRWFLAGS_FD_READWRITE_HANGUP
+                                        } else {
+                                            0
+                                        };
+                                    }
+                                    Err(e) => {
+                                        error = e.into();
+                                        nbytes = 0;
+                                        flags = 0;
+                                    }
                                 }
-                                Err(e) => {
-                                    error = e.into();
-                                    nbytes = 0;
-                                    flags = 0;
-                                }
-                            },
-                            */
+                            }
                             StreamType::EmptyStdin => {
                                 error = ERRNO_SUCCESS;
                                 nbytes = 0;
@@ -1681,25 +1680,24 @@ pub unsafe extern "C" fn poll_oneoff(
                                 nbytes = 1;
                                 flags = 0;
                             }
-                            StreamType::Socket(_) => unreachable!(), // TODO
-                            /*
-                            StreamType::Socket(_) => match wasi_tcp::bytes_writable(todo!()) {
-                                Ok(result) => {
-                                    error = ERRNO_SUCCESS;
-                                    nbytes = result.nbytes;
-                                    flags = if result.is_closed {
-                                        EVENTRWFLAGS_FD_READWRITE_HANGUP
-                                    } else {
-                                        0
-                                    };
+                            StreamType::Socket(connection) => {
+                                match wasi_tcp::bytes_writable(connection) {
+                                    Ok(result) => {
+                                        error = ERRNO_SUCCESS;
+                                        nbytes = result.0;
+                                        flags = if result.1 {
+                                            EVENTRWFLAGS_FD_READWRITE_HANGUP
+                                        } else {
+                                            0
+                                        };
+                                    }
+                                    Err(e) => {
+                                        error = e.into();
+                                        nbytes = 0;
+                                        flags = 0;
+                                    }
                                 }
-                                Err(e) => {
-                                    error = e.into();
-                                    nbytes = 0;
-                                    flags = 0;
-                                }
-                            },
-                            */
+                            }
                             StreamType::EmptyStdin => {
                                 error = ERRNO_BADF;
                                 nbytes = 0;
@@ -1875,55 +1873,29 @@ impl From<wasi_filesystem::Errno> for Errno {
         match err {
             // Use a black box to prevent the optimizer from generating a
             // lookup table, which would require a static initializer.
-            wasi_filesystem::Errno::Toobig => black_box(ERRNO_2BIG),
-            wasi_filesystem::Errno::Access => ERRNO_ACCES,
-            wasi_filesystem::Errno::Addrinuse => ERRNO_ADDRINUSE,
-            wasi_filesystem::Errno::Addrnotavail => ERRNO_ADDRNOTAVAIL,
-            wasi_filesystem::Errno::Afnosupport => ERRNO_AFNOSUPPORT,
+            wasi_filesystem::Errno::Access => black_box(ERRNO_ACCES),
             wasi_filesystem::Errno::Again => ERRNO_AGAIN,
             wasi_filesystem::Errno::Already => ERRNO_ALREADY,
-            wasi_filesystem::Errno::Badmsg => ERRNO_BADMSG,
             wasi_filesystem::Errno::Badf => ERRNO_BADF,
             wasi_filesystem::Errno::Busy => ERRNO_BUSY,
-            wasi_filesystem::Errno::Canceled => ERRNO_CANCELED,
-            wasi_filesystem::Errno::Child => ERRNO_CHILD,
-            wasi_filesystem::Errno::Connaborted => ERRNO_CONNABORTED,
-            wasi_filesystem::Errno::Connrefused => ERRNO_CONNREFUSED,
-            wasi_filesystem::Errno::Connreset => ERRNO_CONNRESET,
             wasi_filesystem::Errno::Deadlk => ERRNO_DEADLK,
-            wasi_filesystem::Errno::Destaddrreq => ERRNO_DESTADDRREQ,
             wasi_filesystem::Errno::Dquot => ERRNO_DQUOT,
             wasi_filesystem::Errno::Exist => ERRNO_EXIST,
-            wasi_filesystem::Errno::Fault => ERRNO_FAULT,
             wasi_filesystem::Errno::Fbig => ERRNO_FBIG,
-            wasi_filesystem::Errno::Hostunreach => ERRNO_HOSTUNREACH,
-            wasi_filesystem::Errno::Idrm => ERRNO_IDRM,
             wasi_filesystem::Errno::Ilseq => ERRNO_ILSEQ,
             wasi_filesystem::Errno::Inprogress => ERRNO_INPROGRESS,
             wasi_filesystem::Errno::Intr => ERRNO_INTR,
             wasi_filesystem::Errno::Inval => ERRNO_INVAL,
             wasi_filesystem::Errno::Io => ERRNO_IO,
-            wasi_filesystem::Errno::Isconn => ERRNO_ISCONN,
             wasi_filesystem::Errno::Isdir => ERRNO_ISDIR,
             wasi_filesystem::Errno::Loop => ERRNO_LOOP,
-            wasi_filesystem::Errno::Mfile => ERRNO_MFILE,
             wasi_filesystem::Errno::Mlink => ERRNO_MLINK,
             wasi_filesystem::Errno::Msgsize => ERRNO_MSGSIZE,
-            wasi_filesystem::Errno::Multihop => ERRNO_MULTIHOP,
             wasi_filesystem::Errno::Nametoolong => ERRNO_NAMETOOLONG,
-            wasi_filesystem::Errno::Netdown => ERRNO_NETDOWN,
-            wasi_filesystem::Errno::Netreset => ERRNO_NETRESET,
-            wasi_filesystem::Errno::Netunreach => ERRNO_NETUNREACH,
-            wasi_filesystem::Errno::Nfile => ERRNO_NFILE,
-            wasi_filesystem::Errno::Nobufs => ERRNO_NOBUFS,
             wasi_filesystem::Errno::Nodev => ERRNO_NODEV,
             wasi_filesystem::Errno::Noent => ERRNO_NOENT,
-            wasi_filesystem::Errno::Noexec => ERRNO_NOEXEC,
             wasi_filesystem::Errno::Nolck => ERRNO_NOLCK,
-            wasi_filesystem::Errno::Nolink => ERRNO_NOLINK,
             wasi_filesystem::Errno::Nomem => ERRNO_NOMEM,
-            wasi_filesystem::Errno::Nomsg => ERRNO_NOMSG,
-            wasi_filesystem::Errno::Noprotoopt => ERRNO_NOPROTOOPT,
             wasi_filesystem::Errno::Nospc => ERRNO_NOSPC,
             wasi_filesystem::Errno::Nosys => ERRNO_NOSYS,
             wasi_filesystem::Errno::Notdir => ERRNO_NOTDIR,
@@ -1933,15 +1905,10 @@ impl From<wasi_filesystem::Errno> for Errno {
             wasi_filesystem::Errno::Notty => ERRNO_NOTTY,
             wasi_filesystem::Errno::Nxio => ERRNO_NXIO,
             wasi_filesystem::Errno::Overflow => ERRNO_OVERFLOW,
-            wasi_filesystem::Errno::Ownerdead => ERRNO_OWNERDEAD,
             wasi_filesystem::Errno::Perm => ERRNO_PERM,
             wasi_filesystem::Errno::Pipe => ERRNO_PIPE,
-            wasi_filesystem::Errno::Range => ERRNO_RANGE,
             wasi_filesystem::Errno::Rofs => ERRNO_ROFS,
             wasi_filesystem::Errno::Spipe => ERRNO_SPIPE,
-            wasi_filesystem::Errno::Srch => ERRNO_SRCH,
-            wasi_filesystem::Errno::Stale => ERRNO_STALE,
-            wasi_filesystem::Errno::Timedout => ERRNO_TIMEDOUT,
             wasi_filesystem::Errno::Txtbsy => ERRNO_TXTBSY,
             wasi_filesystem::Errno::Xdev => ERRNO_XDEV,
         }
@@ -2044,8 +2011,8 @@ enum StreamType {
     /// Streaming data with a file.
     File(File),
 
-    /// Streaming data with a socket.
-    Socket(wasi_tcp::Socket),
+    /// Streaming data with a socket connection.
+    Socket(wasi_tcp::Connection),
 }
 
 impl Drop for Descriptor {
@@ -2400,7 +2367,7 @@ impl State {
     }
 
     #[allow(dead_code)] // until Socket is implemented
-    fn get_socket(&self, fd: Fd) -> Result<wasi_tcp::Socket, Errno> {
+    fn get_socket(&self, fd: Fd) -> Result<wasi_tcp::Connection, Errno> {
         match self.get(fd)? {
             Descriptor::Streams(Streams {
                 type_: StreamType::Socket(socket),
