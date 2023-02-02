@@ -125,6 +125,11 @@ impl<'a> Interpreter<'a> {
                         .set_all(function.dfg.inst_results(inst), returned_arguments);
                     maybe_inst = layout.next_inst(inst)
                 }
+                ControlFlow::ReturnCall(callee, args) => {
+                    self.state.pop_frame();
+                    let rets = self.call(callee, &args)?.unwrap_return();
+                    return Ok(ControlFlow::Return(rets.into()));
+                }
                 ControlFlow::Return(returned_values) => {
                     self.state.pop_frame();
                     return Ok(ControlFlow::Return(returned_values));

@@ -34,6 +34,15 @@ fn validate_signature_params(sig: &[AbiParam], args: &[impl Value]) -> bool {
         })
 }
 
+// Helper for summing a sequence of values.
+fn sum<V: Value>(head: V, tail: SmallVec<[V; 1]>) -> ValueResult<i128> {
+    let mut acc = head;
+    for t in tail {
+        acc = Value::add(acc, t)?;
+    }
+    acc.into_int()
+}
+
 /// Interpret a single Cranelift instruction. Note that program traps and interpreter errors are
 /// distinct: a program trap results in `Ok(Flow::Trap(...))` whereas an interpretation error (e.g.
 /// the types of two values are incompatible) results in `Err(...)`.
@@ -267,14 +276,75 @@ where
         }
     };
 
-    // Helper for summing a sequence of values.
-    fn sum<V: Value>(head: V, tail: SmallVec<[V; 1]>) -> ValueResult<i128> {
-        let mut acc = head;
-        for t in tail {
-            acc = Value::add(acc, t)?;
+    // Perform a call operation.
+    //
+    // The returned `ControlFlow` variant is determined by the given function
+    // argument, which should make either a `ControlFlow::Call` or a
+    // `ControlFlow::ReturnCall`.
+    let do_call = |make_ctrl_flow: fn(&'a Function, SmallVec<[V; 1]>) -> ControlFlow<'a, V>|
+     -> Result<ControlFlow<'a, V>, StepError> {
+        let func_ref = if let InstructionData::Call { func_ref, .. } = inst {
+            func_ref
+        } else {
+            unreachable!()
+        };
+
+        let curr_func = state.get_current_function();
+        let ext_data = curr_func
+            .dfg
+            .ext_funcs
+            .get(func_ref)
+            .ok_or(StepError::UnknownFunction(func_ref))?;
+
+        let signature = if let Some(sig) = curr_func.dfg.signatures.get(ext_data.signature) {
+            sig
+        } else {
+            return Ok(ControlFlow::Trap(CraneliftTrap::User(
+                TrapCode::BadSignature,
+            )));
+        };
+
+        let args = args()?;
+
+        // Check the types of the arguments. This is usually done by the verifier, but nothing
+        // guarantees that the user has ran that.
+        let args_match = validate_signature_params(&signature.params[..], &args[..]);
+        if !args_match {
+            return Ok(ControlFlow::Trap(CraneliftTrap::User(
+                TrapCode::BadSignature,
+            )));
         }
-        acc.into_int()
-    }
+
+        Ok(match ext_data.name {
+            // These functions should be registered in the regular function store
+            ExternalName::User(_) | ExternalName::TestCase(_) => {
+                let function = state
+                    .get_function(func_ref)
+                    .ok_or(StepError::UnknownFunction(func_ref))?;
+
+                make_ctrl_flow(function, args)
+            }
+            ExternalName::LibCall(libcall) => {
+                debug_assert_ne!(inst.opcode(), Opcode::ReturnCall, "Cannot tail call to libcalls");
+                let libcall_handler = state.get_libcall_handler();
+
+                // We don't transfer control to a libcall, we just execute it and return the results
+                let res = libcall_handler(libcall, args);
+                let res = match res {
+                    Err(trap) => return Ok(ControlFlow::Trap(CraneliftTrap::User(trap))),
+                    Ok(rets) => rets,
+                };
+
+                // Check that what the handler returned is what we expect.
+                if validate_signature_params(&signature.returns[..], &res[..]) {
+                    ControlFlow::Assign(res)
+                } else {
+                    ControlFlow::Trap(CraneliftTrap::User(TrapCode::BadSignature))
+                }
+            }
+            ExternalName::KnownSymbol(_) => unimplemented!(),
+        })
+    };
 
     // Interpret a Cranelift instruction.
     Ok(match inst.opcode() {
@@ -328,70 +398,9 @@ where
         Opcode::Trapnz => trap_when(arg(0)?.into_bool()?, CraneliftTrap::User(trap_code())),
         Opcode::ResumableTrapnz => trap_when(arg(0)?.into_bool()?, CraneliftTrap::Resumable),
         Opcode::Return => ControlFlow::Return(args()?),
-        Opcode::Call => {
-            let func_ref = if let InstructionData::Call { func_ref, .. } = inst {
-                func_ref
-            } else {
-                unreachable!()
-            };
-
-            let curr_func = state.get_current_function();
-            let ext_data = curr_func
-                .dfg
-                .ext_funcs
-                .get(func_ref)
-                .ok_or(StepError::UnknownFunction(func_ref))?;
-
-            let signature = if let Some(sig) = curr_func.dfg.signatures.get(ext_data.signature) {
-                sig
-            } else {
-                return Ok(ControlFlow::Trap(CraneliftTrap::User(
-                    TrapCode::BadSignature,
-                )));
-            };
-
-            let args = args()?;
-
-            // Check the types of the arguments. This is usually done by the verifier, but nothing
-            // guarantees that the user has ran that.
-            let args_match = validate_signature_params(&signature.params[..], &args[..]);
-            if !args_match {
-                return Ok(ControlFlow::Trap(CraneliftTrap::User(
-                    TrapCode::BadSignature,
-                )));
-            }
-
-            match ext_data.name {
-                // These functions should be registered in the regular function store
-                ExternalName::User(_) | ExternalName::TestCase(_) => {
-                    let function = state
-                        .get_function(func_ref)
-                        .ok_or(StepError::UnknownFunction(func_ref))?;
-
-                    ControlFlow::Call(function, args)
-                }
-                ExternalName::LibCall(libcall) => {
-                    let libcall_handler = state.get_libcall_handler();
-
-                    // We don't transfer control to a libcall, we just execute it and return the results
-                    let res = libcall_handler(libcall, args);
-                    let res = match res {
-                        Err(trap) => return Ok(ControlFlow::Trap(CraneliftTrap::User(trap))),
-                        Ok(rets) => rets,
-                    };
-
-                    // Check that what the handler returned is what we expect.
-                    if validate_signature_params(&signature.returns[..], &res[..]) {
-                        ControlFlow::Assign(res)
-                    } else {
-                        ControlFlow::Trap(CraneliftTrap::User(TrapCode::BadSignature))
-                    }
-                }
-                ExternalName::KnownSymbol(_) => unimplemented!(),
-            }
-        }
+        Opcode::Call => do_call(ControlFlow::Call)?,
         Opcode::CallIndirect => unimplemented!("CallIndirect"),
-        Opcode::ReturnCall => unimplemented!("ReturnCall"),
+        Opcode::ReturnCall => do_call(ControlFlow::ReturnCall)?,
         Opcode::ReturnCallIndirect => unimplemented!("ReturnCallIndirect"),
         Opcode::FuncAddr => unimplemented!("FuncAddr"),
         Opcode::Load
@@ -1288,6 +1297,8 @@ pub enum ControlFlow<'a, V> {
     ContinueAt(Block, SmallVec<[V; 1]>),
     /// Indicates a call the given [Function] with the supplied arguments.
     Call(&'a Function, SmallVec<[V; 1]>),
+    /// Indicates a tail call to the given [Function] with the supplied arguments.
+    ReturnCall(&'a Function, SmallVec<[V; 1]>),
     /// Return from the current function with the given parameters, e.g.: `return [v1, v2]`.
     Return(SmallVec<[V; 1]>),
     /// Stop with a program-generated trap; note that these are distinct from errors that may occur
