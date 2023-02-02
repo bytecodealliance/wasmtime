@@ -1,4 +1,4 @@
-use crate::linker::Definition;
+use crate::linker::{Definition, DefinitionType};
 use crate::store::{InstanceId, StoreOpaque, Stored};
 use crate::types::matching;
 use crate::{
@@ -157,7 +157,10 @@ impl Instance {
                 bail!("cross-`Store` instantiation is not currently supported");
             }
         }
-        typecheck(store, module, imports, |cx, ty, item| cx.extern_(ty, item))?;
+        typecheck(module, imports, |cx, ty, item| {
+            let item = DefinitionType::from(store, item);
+            cx.definition(ty, &item)
+        })?;
         let mut owned_imports = OwnedImports::new(module);
         for import in imports {
             owned_imports.push(import, store);
@@ -679,19 +682,8 @@ impl<T> InstancePre<T> {
     /// This method is unsafe as the `T` of the `InstancePre<T>` is not
     /// guaranteed to be the same as the `T` within the `Store`, the caller must
     /// verify that.
-    pub(crate) unsafe fn new(
-        store: &mut StoreOpaque,
-        module: &Module,
-        items: Vec<Definition>,
-    ) -> Result<InstancePre<T>> {
-        for import in items.iter() {
-            if !import.comes_from_same_store(store) {
-                bail!("cross-`Store` instantiation is not currently supported");
-            }
-        }
-        typecheck(store, module, &items, |cx, ty, item| {
-            cx.definition(ty, item)
-        })?;
+    pub(crate) unsafe fn new(module: &Module, items: Vec<Definition>) -> Result<InstancePre<T>> {
+        typecheck(module, &items, |cx, ty, item| cx.definition(ty, &item.ty()))?;
 
         let host_funcs = items
             .iter()
@@ -813,7 +805,6 @@ fn pre_instantiate_raw(
 }
 
 fn typecheck<I>(
-    store: &mut StoreOpaque,
     module: &Module,
     imports: &[I],
     check: impl Fn(&matching::MatchCx<'_>, &EntityType, &I) -> Result<()>,
@@ -826,8 +817,7 @@ fn typecheck<I>(
     let cx = matching::MatchCx {
         signatures: module.signatures(),
         types: module.types(),
-        store: store,
-        engine: store.engine(),
+        engine: module.engine(),
     };
     for ((name, field, expected_ty), actual) in env_module.imports().zip(imports) {
         check(&cx, &expected_ty, actual)

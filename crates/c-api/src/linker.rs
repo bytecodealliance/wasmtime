@@ -1,6 +1,6 @@
 use crate::{
     bad_utf8, handle_result, wasm_engine_t, wasm_functype_t, wasm_trap_t, wasmtime_error_t,
-    wasmtime_extern_t, wasmtime_module_t, CStoreContextMut,
+    wasmtime_extern_t, wasmtime_module_t, CStoreContext, CStoreContextMut,
 };
 use std::ffi::c_void;
 use std::mem::MaybeUninit;
@@ -41,6 +41,7 @@ macro_rules! to_str {
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_linker_define(
     linker: &mut wasmtime_linker_t,
+    store: CStoreContext<'_>,
     module: *const u8,
     module_len: usize,
     name: *const u8,
@@ -51,7 +52,7 @@ pub unsafe extern "C" fn wasmtime_linker_define(
     let module = to_str!(module, module_len);
     let name = to_str!(name, name_len);
     let item = item.to_extern();
-    handle_result(linker.define(module, name, item), |_linker| ())
+    handle_result(linker.define(&store, module, name, item), |_linker| ())
 }
 
 #[no_mangle]

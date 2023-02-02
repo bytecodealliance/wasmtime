@@ -544,45 +544,40 @@ pub fn table_ops(
         // test case.
         const MAX_GCS: usize = 5;
 
-        linker
-            .define(
-                "",
-                "gc",
-                // NB: use `Func::new` so that this can still compile on the old x86
-                // backend, where `IntoFunc` isn't implemented for multi-value
-                // returns.
-                Func::new(
-                    &mut store,
-                    FuncType::new(
-                        vec![],
-                        vec![ValType::ExternRef, ValType::ExternRef, ValType::ExternRef],
-                    ),
-                    {
-                        let num_dropped = num_dropped.clone();
-                        let expected_drops = expected_drops.clone();
-                        let num_gcs = num_gcs.clone();
-                        move |mut caller: Caller<'_, StoreLimits>, _params, results| {
-                            log::info!("table_ops: GC");
-                            if num_gcs.fetch_add(1, SeqCst) < MAX_GCS {
-                                caller.gc();
-                            }
+        // NB: use `Func::new` so that this can still compile on the old x86
+        // backend, where `IntoFunc` isn't implemented for multi-value
+        // returns.
+        let func = Func::new(
+            &mut store,
+            FuncType::new(
+                vec![],
+                vec![ValType::ExternRef, ValType::ExternRef, ValType::ExternRef],
+            ),
+            {
+                let num_dropped = num_dropped.clone();
+                let expected_drops = expected_drops.clone();
+                let num_gcs = num_gcs.clone();
+                move |mut caller: Caller<'_, StoreLimits>, _params, results| {
+                    log::info!("table_ops: GC");
+                    if num_gcs.fetch_add(1, SeqCst) < MAX_GCS {
+                        caller.gc();
+                    }
 
-                            let a = ExternRef::new(CountDrops(num_dropped.clone()));
-                            let b = ExternRef::new(CountDrops(num_dropped.clone()));
-                            let c = ExternRef::new(CountDrops(num_dropped.clone()));
+                    let a = ExternRef::new(CountDrops(num_dropped.clone()));
+                    let b = ExternRef::new(CountDrops(num_dropped.clone()));
+                    let c = ExternRef::new(CountDrops(num_dropped.clone()));
 
-                            log::info!("table_ops: make_refs() -> ({:p}, {:p}, {:p})", a, b, c);
+                    log::info!("table_ops: make_refs() -> ({:p}, {:p}, {:p})", a, b, c);
 
-                            expected_drops.fetch_add(3, SeqCst);
-                            results[0] = Some(a).into();
-                            results[1] = Some(b).into();
-                            results[2] = Some(c).into();
-                            Ok(())
-                        }
-                    },
-                ),
-            )
-            .unwrap();
+                    expected_drops.fetch_add(3, SeqCst);
+                    results[0] = Some(a).into();
+                    results[1] = Some(b).into();
+                    results[2] = Some(c).into();
+                    Ok(())
+                }
+            },
+        );
+        linker.define(&store, "", "gc", func).unwrap();
 
         linker
             .func_wrap("", "take_refs", {
@@ -624,37 +619,29 @@ pub fn table_ops(
             })
             .unwrap();
 
-        linker
-            .define(
-                "",
-                "make_refs",
-                // NB: use `Func::new` so that this can still compile on the old
-                // x86 backend, where `IntoFunc` isn't implemented for
-                // multi-value returns.
-                Func::new(
-                    &mut store,
-                    FuncType::new(
-                        vec![],
-                        vec![ValType::ExternRef, ValType::ExternRef, ValType::ExternRef],
-                    ),
-                    {
-                        let num_dropped = num_dropped.clone();
-                        let expected_drops = expected_drops.clone();
-                        move |_caller, _params, results| {
-                            log::info!("table_ops: make_refs");
-                            expected_drops.fetch_add(3, SeqCst);
-                            results[0] =
-                                Some(ExternRef::new(CountDrops(num_dropped.clone()))).into();
-                            results[1] =
-                                Some(ExternRef::new(CountDrops(num_dropped.clone()))).into();
-                            results[2] =
-                                Some(ExternRef::new(CountDrops(num_dropped.clone()))).into();
-                            Ok(())
-                        }
-                    },
-                ),
-            )
-            .unwrap();
+        // NB: use `Func::new` so that this can still compile on the old
+        // x86 backend, where `IntoFunc` isn't implemented for
+        // multi-value returns.
+        let func = Func::new(
+            &mut store,
+            FuncType::new(
+                vec![],
+                vec![ValType::ExternRef, ValType::ExternRef, ValType::ExternRef],
+            ),
+            {
+                let num_dropped = num_dropped.clone();
+                let expected_drops = expected_drops.clone();
+                move |_caller, _params, results| {
+                    log::info!("table_ops: make_refs");
+                    expected_drops.fetch_add(3, SeqCst);
+                    results[0] = Some(ExternRef::new(CountDrops(num_dropped.clone()))).into();
+                    results[1] = Some(ExternRef::new(CountDrops(num_dropped.clone()))).into();
+                    results[2] = Some(ExternRef::new(CountDrops(num_dropped.clone()))).into();
+                    Ok(())
+                }
+            },
+        );
+        linker.define(&store, "", "make_refs", func).unwrap();
 
         let instance = linker.instantiate(&mut store, &module).unwrap();
         let run = instance.get_func(&mut store, "run").unwrap();

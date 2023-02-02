@@ -138,16 +138,6 @@ impl Extern {
             Extern::Table(t) => store.store_data().contains(t.0),
         }
     }
-
-    pub(crate) fn desc(&self) -> &'static str {
-        match self {
-            Extern::Func(_) => "function",
-            Extern::Table(_) => "table",
-            Extern::Memory(_) => "memory",
-            Extern::SharedMemory(_) => "shared memory",
-            Extern::Global(_) => "global",
-        }
-    }
 }
 
 impl From<Func> for Extern {
@@ -233,8 +223,8 @@ impl Global {
     /// )?;
     ///
     /// let mut linker = Linker::new(&engine);
-    /// linker.define("", "i32-const", i32_const)?;
-    /// linker.define("", "f64-mut", f64_mut)?;
+    /// linker.define(&store, "", "i32-const", i32_const)?;
+    /// linker.define(&store, "", "f64-mut", f64_mut)?;
     ///
     /// let instance = linker.instantiate(&mut store, &module)?;
     /// // ...

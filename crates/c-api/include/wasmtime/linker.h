@@ -59,6 +59,7 @@ WASM_API_EXTERN void wasmtime_linker_allow_shadowing(wasmtime_linker_t* linker, 
  * \brief Defines a new item in this linker.
  *
  * \param linker the linker the name is being defined in.
+ * \param store the store that the `item` is owned by.
  * \param module the module name the item is defined under.
  * \param module_len the byte length of `module`
  * \param name the field name the item is defined under
@@ -73,6 +74,7 @@ WASM_API_EXTERN void wasmtime_linker_allow_shadowing(wasmtime_linker_t* linker, 
  */
 WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_define(
     wasmtime_linker_t *linker,
+    wasmtime_context_t *store,
     const char *module,
     size_t module_len,
     const char *name,
