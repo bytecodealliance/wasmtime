@@ -19,9 +19,8 @@ unsafe fn cstr_to_path<'a>(path: *const c_char) -> Option<&'a Path> {
     CStr::from_ptr(path).to_str().map(Path::new).ok()
 }
 
-fn cstr_to_string(c_char: *const c_char) -> String {
-    let cstr = unsafe { CStr::from_ptr(c_char) };
-    String::from_utf8_lossy(cstr.to_bytes()).to_string()
+unsafe fn cstr_to_str<'a>(s: *const c_char) -> Option<&'a str> {
+    CStr::from_ptr(s).to_str().ok()
 }
 
 unsafe fn open_file(path: *const c_char) -> Option<File> {
@@ -129,7 +128,7 @@ impl wasi_config_t {
             builder = builder.preopened_dir(dir, path)?;
         }
         for (fd_num, listener) in self.preopen_sockets {
-            builder = builder.preopened_socket(fd_num as u32, listener)?;
+            builder = builder.preopened_socket(fd_num, listener)?;
         }
         Ok(builder.build())
     }
@@ -285,9 +284,12 @@ pub unsafe extern "C" fn wasi_config_preopen_dir(
 pub unsafe extern "C" fn wasi_config_preopen_socket(
     config: &mut wasi_config_t,
     fd_num: u32,
-    tcplisten: *const c_char,
+    host_port: *const c_char,
 ) -> bool {
-    let address = &cstr_to_string(tcplisten);
+    let address = match cstr_to_str(host_port) {
+        Some(s) => s,
+        None => return false,
+    };
     let stdlistener = match std::net::TcpListener::bind(address) {
         Ok(listener) => listener,
         Err(_) => return false,
