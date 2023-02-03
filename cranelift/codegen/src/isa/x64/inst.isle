@@ -26,6 +26,15 @@
               (src1_dst SyntheticAmode)
               (src2 Gpr))
 
+       ;; Integer arithmetic binary op that relies on the VEX prefix.
+       ;; NOTE: we don't currently support emitting VEX instructions with memory
+       ;; arguments, so `src2` is artificially constrained to be a Gpr.
+       (AluRmRVex (size OperandSize)
+                  (op AluRmROpcode)
+                  (src1 Gpr)
+                  (src2 Gpr)
+                  (dst WritableGpr))
+
        ;; Instructions on general-purpose registers that only read src and
        ;; defines dst (dst is not modified). `bsr`, etc.
        (UnaryRmR (size OperandSize) ;; 2, 4, or 8
@@ -585,6 +594,9 @@
             Or
             Xor
             Mul))
+
+(type AluRmROpcode extern
+      (enum Andn))
 
 (type UnaryRmROpcode extern
       (enum Bsr
@@ -1836,6 +1848,18 @@
                  (AluRmiROpcode.Xor)
                  src1
                  src2))
+
+;; Helper for emitting `MInst.AluRmRVex` instructions.
+(decl alu_rm_r_vex (Type AluRmROpcode Gpr Gpr) Gpr)
+(rule (alu_rm_r_vex ty opcode src1 src2)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (size OperandSize (operand_size_of_type_32_64 ty))
+            (_ Unit (emit (MInst.AluRmRVex size opcode src1 src2 dst))))
+        dst))
+
+(decl x64_andn (Type Gpr Gpr) Gpr)
+(rule (x64_andn ty src1 src2)
+      (alu_rm_r_vex ty (AluRmROpcode.Andn) src1 src2))
 
 ;; Helper for emitting immediates with an `i64` value. Note that
 ;; integer constants in ISLE are always parsed as `i128`s; this enables

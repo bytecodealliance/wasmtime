@@ -283,6 +283,40 @@ pub(crate) fn emit(
             );
         }
 
+        Inst::AluRmRVex {
+            size,
+            op,
+            dst,
+            src1,
+            src2,
+        } => {
+            use AluRmROpcode::*;
+            let dst = allocs.next(dst.to_reg().to_reg());
+            let src1 = allocs.next(src1.to_reg());
+            let src2 = allocs.next(src2.to_reg());
+
+            let w = match size {
+                OperandSize::Size32 => false,
+                OperandSize::Size64 => true,
+
+                // the other cases would be rejected by isle constructors
+                _ => unreachable!(),
+            };
+
+            let opcode = match op {
+                Andn => 0xf2,
+            };
+
+            VexInstruction::new()
+                .map(OpcodeMap::_0F38)
+                .w(w)
+                .reg(dst.to_real_reg().unwrap().hw_enc())
+                .vvvv(src1.to_real_reg().unwrap().hw_enc())
+                .rm(src2.to_real_reg().unwrap().hw_enc())
+                .opcode(opcode)
+                .encode(sink);
+        }
+
         Inst::UnaryRmR { size, op, src, dst } => {
             let dst = allocs.next(dst.to_reg().to_reg());
             let rex_flags = RexFlags::from(*size);
