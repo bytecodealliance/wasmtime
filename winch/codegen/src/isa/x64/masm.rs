@@ -66,7 +66,7 @@ impl Masm for MacroAssembler {
             return;
         }
 
-        self.asm.sub_ir(bytes, rsp(), OperandSize::S64);
+        self.asm.sub_ir(bytes as i32, rsp(), OperandSize::S64);
         self.increment_sp(bytes);
     }
 
