@@ -290,12 +290,12 @@ pub unsafe extern "C" fn wasi_config_preopen_socket(
         Some(s) => s,
         None => return false,
     };
-    let stdlistener = match std::net::TcpListener::bind(address) {
+    let listener = match std::net::TcpListener::bind(address) {
         Ok(listener) => listener,
         Err(_) => return false,
     };
 
-    if let Err(_) = stdlistener.set_nonblocking(true) {
+    if let Err(_) = listener.set_nonblocking(true) {
         return false;
     }
 
@@ -306,7 +306,7 @@ pub unsafe extern "C" fn wasi_config_preopen_socket(
 
     (*config)
         .preopen_sockets
-        .insert(fd_num, TcpListener::from_std(stdlistener));
+        .insert(fd_num, TcpListener::from_std(listener));
 
     true
 }
