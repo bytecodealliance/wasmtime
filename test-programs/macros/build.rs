@@ -25,22 +25,28 @@ fn main() {
     println!("wasi adapter: {:?}", &wasi_adapter);
     let wasi_adapter = fs::read(&wasi_adapter).unwrap();
 
-    let mut cmd = Command::new("cargo");
-    cmd.arg("build")
-        .current_dir("..")
+    let mut cmd = Command::new("rustup");
+    cmd.arg("run")
+        .arg("nightly")
+        .arg("cargo")
+        .arg("build")
         .arg("--target=wasm32-wasi")
+        .current_dir("..")
         .env("CARGO_TARGET_DIR", &out_dir)
         .env("CARGO_PROFILE_DEV_DEBUG", "1")
         .env_remove("CARGO_ENCODED_RUSTFLAGS");
     let status = cmd.status().unwrap();
     assert!(status.success());
 
-    let mut cmd = Command::new("cargo");
-    cmd.arg("build")
-        .current_dir("..")
+    let mut cmd = Command::new("rustup");
+    cmd.arg("run")
+        .arg("nightly")
+        .arg("cargo")
+        .arg("build")
         .arg("--target=wasm32-wasi")
         .arg("--package=wasi-tests")
         .arg("--package=test-programs")
+        .current_dir("..")
         .env("CARGO_TARGET_DIR", &out_dir)
         .env("CARGO_PROFILE_DEV_DEBUG", "1")
         .env_remove("CARGO_ENCODED_RUSTFLAGS");

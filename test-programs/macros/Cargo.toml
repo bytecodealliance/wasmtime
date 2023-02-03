@@ -13,5 +13,4 @@ test = false
 quote = "1.0"
 
 [build-dependencies]
-# TODO: switch to release once https://github.com/bytecodealliance/wasm-tools/pull/900 has been released:
-wit-component = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "5ba052b9862466258f7e4d153823520ae8dabd88" }
+wit-component = "0.5.1"
