@@ -33,6 +33,25 @@ impl From<Reg> for RegMemImm {
     }
 }
 
+impl From<Reg> for WritableGpr {
+    fn from(reg: Reg) -> Self {
+        let writable = Writable::from_reg(reg.into());
+        WritableGpr::from_writable_reg(writable).expect("valid writable gpr")
+    }
+}
+
+impl From<Reg> for Gpr {
+    fn from(reg: Reg) -> Self {
+        Gpr::new(reg.into()).expect("valid gpr")
+    }
+}
+
+impl From<Reg> for GprMemImm {
+    fn from(reg: Reg) -> Self {
+        GprMemImm::new(reg.into()).expect("valid gpr")
+    }
+}
+
 impl From<OperandSize> for args::OperandSize {
     fn from(size: OperandSize) -> Self {
         match size {
@@ -74,8 +93,7 @@ impl Assembler {
 
     /// Push register.
     pub fn push_r(&mut self, reg: Reg) {
-        let src = GprMemImm::new(reg.into()).expect("valid gpr");
-        self.emit(Inst::Push64 { src });
+        self.emit(Inst::Push64 { src: reg.into() });
     }
 
     /// Pop to register.
@@ -118,25 +136,20 @@ impl Assembler {
 
     /// Register-to-register move.
     pub fn mov_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
-        let src = Gpr::new(src.into()).expect("valid gpr");
-        let dst = WritableGpr::from_writable_reg(Writable::from_reg(dst.into()))
-            .expect("valid writable gpr");
-
         self.emit(Inst::MovRR {
-            src,
-            dst,
+            src: src.into(),
+            dst: dst.into(),
             size: size.into(),
         });
     }
 
     /// Register-to-memory move.
     pub fn mov_rm(&mut self, src: Reg, base: Reg, disp: u32, size: OperandSize) {
-        let src = Gpr::new(src.into()).expect("valid gpr");
         let dst = Amode::imm_reg(disp, base.into());
 
         self.emit(Inst::MovRM {
             size: size.into(),
-            src,
+            src: src.into(),
             dst: SyntheticAmode::real(dst),
         });
     }
@@ -167,37 +180,34 @@ impl Assembler {
     pub fn mov_mr(&mut self, base: Reg, disp: u32, dst: Reg, size: OperandSize) {
         use OperandSize::S64;
 
-        let dst = WritableGpr::from_writable_reg(Writable::from_reg(dst.into()))
-            .expect("valid writable gpr");
         let amode = Amode::imm_reg(disp, base.into());
         let src = SyntheticAmode::real(amode);
 
         if size == S64 {
-            self.emit(Inst::Mov64MR { src, dst });
+            self.emit(Inst::Mov64MR {
+                src,
+                dst: dst.into(),
+            });
         } else {
             let reg_mem = RegMem::mem(src);
             self.emit(Inst::MovzxRmR {
                 ext_mode: ExtMode::LQ,
                 src: GprMem::new(reg_mem).expect("valid memory address"),
-                dst,
+                dst: dst.into(),
             });
         }
     }
 
     /// Subtact immediate register.
-    pub fn sub_ir(&mut self, imm: u32, dst: Reg, size: OperandSize) {
-        let writable = WritableGpr::from_writable_reg(Writable::from_reg(dst.into()))
-            .expect("valid writable gpr");
-        let src = Gpr::new(dst.into()).expect("valid gpr");
-
-        let imm = RegMemImm::imm(imm);
+    pub fn sub_ir(&mut self, imm: i32, dst: Reg, size: OperandSize) {
+        let imm = RegMemImm::imm(imm as u32);
 
         self.emit(Inst::AluRmiR {
             size: size.into(),
             op: AluRmiROpcode::Sub,
-            src1: src,
+            src1: dst.into(),
             src2: GprMemImm::new(imm).expect("valid immediate"),
-            dst: writable,
+            dst: dst.into(),
         });
     }
 
@@ -215,52 +225,36 @@ impl Assembler {
 
     /// Add immediate and register.
     pub fn add_ir(&mut self, imm: i32, dst: Reg, size: OperandSize) {
-        let writable = WritableGpr::from_writable_reg(Writable::from_reg(dst.into()))
-            .expect("valid writable gpr");
-        let src = Gpr::new(dst.into()).expect("valid gpr");
-
         let imm = RegMemImm::imm(imm as u32);
 
         self.emit(Inst::AluRmiR {
             size: size.into(),
             op: AluRmiROpcode::Add,
-            src1: src,
+            src1: dst.into(),
             src2: GprMemImm::new(imm).expect("valid immediate"),
-            dst: writable,
+            dst: dst.into(),
         });
     }
 
     /// Add register and register.
     pub fn add_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
-        let dest = WritableGpr::from_writable_reg(Writable::from_reg(dst.into()))
-            .expect("valid writable gpr");
-        let src1 = Gpr::new(dst.into()).expect("valid gpr");
-
-        let src2 = RegMemImm::reg(src.into());
-
         self.emit(Inst::AluRmiR {
             size: size.into(),
             op: AluRmiROpcode::Add,
-            src1,
-            src2: GprMemImm::new(src2).expect("valid gpr"),
-            dst: dest,
+            src1: dst.into(),
+            src2: src.into(),
+            dst: dst.into(),
         });
     }
 
     /// Logical exclusive or with registers.
     pub fn xor_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
-        let dest = WritableGpr::from_writable_reg(Writable::from_reg(dst.into()))
-            .expect("valid writable gpr");
-        let src1 = Gpr::new(dst.into()).expect("valid gpr");
-
-        let src2 = RegMemImm::reg(src.into());
-
         self.emit(Inst::AluRmiR {
             size: size.into(),
             op: AluRmiROpcode::Xor,
-            src1,
-            src2: GprMemImm::new(src2).expect("valid gpr"),
-            dst: dest,
+            src1: dst.into(),
+            src2: src.into(),
+            dst: dst.into(),
         });
     }
 }
