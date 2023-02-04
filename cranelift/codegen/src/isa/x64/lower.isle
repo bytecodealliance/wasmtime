@@ -285,9 +285,8 @@
 ;; while x86 does
 ;;
 ;;   pandn(x, y) = and(not(x), y)
-(rule 8 (lower (has_type ty (band x (bnot y))))
+(rule 8 (lower (has_type ty @ (multi_lane _bits _lane) (band x (bnot y))))
       (sse_and_not ty y x))
-
 
 (rule 9 (lower (has_type ty @ (use_bmi1 $true) (band x (bnot y))))
       (if (ty_int_ref_scalar_64 ty))
