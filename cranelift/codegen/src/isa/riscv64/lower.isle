@@ -209,8 +209,10 @@
 ;; forms early on.
 
 (rule 3 (lower (has_type (fits_in_64 ty) (band x (bnot y))))
+  (if-let $true (has_b))
   (gen_andn x y))
 (rule 4 (lower (has_type $I128 (band x (bnot y))))
+  (if-let $true (has_b))
   (let
     ((low Reg (gen_andn (value_regs_get x 0) (value_regs_get y 0)))
       (high Reg (gen_andn (value_regs_get x 1) (value_regs_get y 1))))
@@ -239,9 +241,11 @@
 ;; forms early on.
 
 (rule 3 (lower (has_type (fits_in_64 ty) (bor x (bnot y))))
+  (if-let $true (has_b))
   (gen_orn x y))
 
 (rule 4 (lower (has_type $I128 (bor x (bnot y))))
+  (if-let $true (has_b))
   (let
     ((low Reg (gen_orn (value_regs_get x 0) (value_regs_get y 0)))
       (high Reg (gen_orn (value_regs_get x 1) (value_regs_get y 1))))
@@ -264,20 +268,6 @@
   (lower_float_binary (AluOPRRR.Xor) x y $F32))
 (rule (lower (has_type $F64 (bxor x y)))
   (lower_float_binary (AluOPRRR.Xor) x y $F64))
-
-;; Specialized lowerings for `(bor x (bnot y))` which is additionally produced
-;; by Cranelift's `bor_not` instruction that is legalized into the simpler
-;; forms early on.
-
-(rule 3 (lower (has_type (fits_in_64 ty) (bxor x (bnot y))))
-  (gen_xor_not x y))
-(rule 4 (lower (has_type $I128 (bxor x (bnot y))))
-  (let
-    ((low Reg (gen_xor_not (value_regs_get x 0) (value_regs_get y 0)))
-      (high Reg (gen_xor_not (value_regs_get x 1) (value_regs_get y 1))))
-    (value_regs low high)
-  )
-)
 
 
 ;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
