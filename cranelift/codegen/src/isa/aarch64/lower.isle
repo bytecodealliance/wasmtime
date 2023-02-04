@@ -580,7 +580,7 @@
       (sub ty (zero_reg) x))
 
 ;; `i128`
-(rule 2 (lower (has_type $I128 (ineg x)))  
+(rule 2 (lower (has_type $I128 (ineg x)))
       (sub_i128 (value_regs_zero) x))
 
 ;; vectors.
@@ -2407,7 +2407,7 @@
 ;; sign extended. We then check if the output sign bit has flipped.
 (rule 0 (lower (has_type (fits_in_16 ty) (iadd_cout a b)))
       (let ((extend ExtendOp (lower_extend_op ty $true))
-            
+
             ;; Instead of emitting two `sxt{b,h}` we do one as an instruction and
             ;; the other as an extend operation in the `add` instruction.
             ;;
@@ -2417,7 +2417,7 @@
             ;; cset    out_carry, ne
             (a_sext Reg (put_in_reg_sext32 a))
             (out Reg (add_extend_op ty a_sext b extend))
-            (out_carry Reg (with_flags_reg 
+            (out_carry Reg (with_flags_reg
                   (cmp_extend (OperandSize.Size32) out out extend)
                   (cset (Cond.Ne)))))
       (output_pair

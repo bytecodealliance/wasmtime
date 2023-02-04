@@ -40,14 +40,14 @@
 (rule 2 (lower (has_type (fits_in_64 ty) (iadd (imm12_from_value x) y)))
   (alu_rr_imm12 (select_addi ty) y x))
 
-(rule 
+(rule
   (lower (has_type $I128 (iadd x y)))
   (let
     ( ;; low part.
       (low Reg (alu_add (value_regs_get x 0) (value_regs_get y 0)))
       ;; compute carry.
       (carry Reg (alu_rrr (AluOPRRR.SltU) low (value_regs_get y 0)))
-      ;; 
+      ;;
       (high_tmp Reg (alu_add (value_regs_get x 1) (value_regs_get y 1)))
       ;; add carry.
       (high Reg (alu_add high_tmp carry)))
@@ -158,19 +158,19 @@
     (alu_rrr (AluOPRRR.Remuw) (ext_int_if_need $false x ty) y2)))
 
 (rule -1 (lower (has_type (fits_in_16 ty) (srem x y)))
-  (let 
+  (let
     ((y2 Reg (ext_int_if_need $true y ty))
       (_ InstOutput (gen_div_by_zero y2)))
     (alu_rrr (AluOPRRR.Remw) (ext_int_if_need $true x ty) y2)))
 
 (rule (lower (has_type $I32 (srem x y)))
-  (let 
+  (let
     ((y2 Reg (ext_int_if_need $true y $I32))
       (_ InstOutput (gen_div_by_zero y2)))
    (alu_rrr (AluOPRRR.Remw) x y2)))
 
 (rule (lower (has_type $I32 (urem x y)))
-  (let 
+  (let
     ((y2 Reg (ext_int_if_need $false y $I32))
         (_ InstOutput (gen_div_by_zero y2)))
     (alu_rrr (AluOPRRR.Remuw) x y2)))
@@ -417,7 +417,7 @@
   (let
     ((low Reg (gen_orn (value_regs_get x 0) (value_regs_get y 0)))
       (high Reg (gen_orn (value_regs_get x 1) (value_regs_get y 1))))
-    (value_regs low high))) 
+    (value_regs low high)))
 
 
 ;;;; Rules for `cls` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -428,12 +428,12 @@
 
 
 ;;;; Rules for `fabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule 
+(rule
   (lower (has_type ty (fabs x)))
   (gen_fabs x ty))
 
 ;;;; Rules for `fneg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule 
+(rule
   (lower (has_type ty (fneg x)))
   (fpu_rrr (f_copy_neg_sign_op ty) ty x x))
 
@@ -458,35 +458,35 @@
 
 ;;;; Rules for `AtomicRMW` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule -1
-  ;; 
-  (lower 
+  ;;
+  (lower
     (has_type (valid_atomic_transaction ty) (atomic_rmw flags op addr x)))
   (gen_atomic (get_atomic_rmw_op ty op) addr x (atomic_amo)))
 
 ;;; for I8 and I16
 (rule 1
-  (lower 
+  (lower
     (has_type (valid_atomic_transaction (fits_in_16 ty)) (atomic_rmw flags op addr x)))
   (gen_atomic_rmw_loop op ty addr x))
 
 ;;;special for I8 and I16 max min etc.
 ;;;because I need uextend or sextend the value.
 (rule 2
-  (lower 
+  (lower
     (has_type (valid_atomic_transaction (fits_in_16 ty)) (atomic_rmw flags (is_atomic_rmw_max_etc op $true) addr x)))
   (gen_atomic_rmw_loop op ty addr (ext_int_if_need $true x ty)))
 
 
 (rule 2
   ;;
-  (lower 
+  (lower
     (has_type (valid_atomic_transaction (fits_in_16 ty)) (atomic_rmw flags (is_atomic_rmw_max_etc op $false) addr x)))
   ;;
   (gen_atomic_rmw_loop op ty addr (ext_int_if_need $false x ty)))
 
 ;;;;;  Rules for `AtomicRmwOp.Sub`
 (rule
-  (lower 
+  (lower
     (has_type (valid_atomic_transaction ty) (atomic_rmw flags (AtomicRmwOp.Sub) addr x)))
   (let
     ((tmp WritableReg (temp_writable_reg ty))
@@ -504,7 +504,7 @@
 
 ;;;;;  Rules for `AtomicRmwOp.Nand`
 (rule
-  (lower 
+  (lower
     (has_type (valid_atomic_transaction ty) (atomic_rmw flags (AtomicRmwOp.Nand) addr x)))
     (gen_atomic_rmw_loop (AtomicRmwOp.Nand) ty addr x))
 
@@ -512,13 +512,13 @@
 (extern extractor is_atomic_rmw_max_etc is_atomic_rmw_max_etc)
 
 ;;;;;  Rules for `atomic load`;;;;;;;;;;;;;;;;;
-(rule 
+(rule
   (lower (has_type (valid_atomic_transaction ty) (atomic_load flags p)))
   (gen_atomic_load p ty))
 
 
 ;;;;;  Rules for `atomic store`;;;;;;;;;;;;;;;;;
-(rule 
+(rule
   (lower (atomic_store flags src @ (value_type (valid_atomic_transaction ty)) p))
   (gen_atomic_store p ty src))
 
@@ -562,37 +562,37 @@
 
 
 ;;;;;  Rules for `for float arithmatic`
-(rule 
+(rule
   (lower (has_type ty (fadd x y)))
   (fpu_rrr (f_arithmatic_op ty (Opcode.Fadd)) ty x y))
-(rule 
+(rule
   (lower (has_type ty (fsub x y)))
   (fpu_rrr (f_arithmatic_op ty (Opcode.Fsub)) ty x y))
-(rule 
+(rule
   (lower (has_type ty (fmul x y)))
   (fpu_rrr (f_arithmatic_op ty (Opcode.Fmul)) ty x y))
-(rule 
+(rule
   (lower (has_type ty (fdiv x y)))
   (fpu_rrr (f_arithmatic_op ty (Opcode.Fdiv)) ty x y))
 
-(rule 
+(rule
   (lower (has_type ty (fmin x y)))
   (gen_float_select (FloatSelectOP.Min) x y ty))
 
-(rule 
+(rule
   (lower (has_type ty (fmin_pseudo x y)))
   (gen_float_select_pseudo (FloatSelectOP.Min) x y ty))
 
-(rule 
+(rule
   (lower (has_type ty (fmax x y)))
   (gen_float_select (FloatSelectOP.Max) x y ty))
 
-(rule 
+(rule
   (lower (has_type ty (fmax_pseudo x y)))
   (gen_float_select_pseudo (FloatSelectOP.Max) x y ty))
 
 ;;;;;  Rules for `stack_addr`;;;;;;;;;
-(rule 
+(rule
   (lower (stack_addr ss offset))
   (gen_stack_addr ss offset))
 
@@ -624,7 +624,7 @@
   (gen_bitselect ty c x y))
 
 ;;;;;  Rules for `isplit`;;;;;;;;;
-(rule 
+(rule
   (lower (isplit x))
   (let
     ((t1 Reg (gen_move2 (value_regs_get x 0) $I64 $I64))
@@ -632,7 +632,7 @@
     (output_pair t1 t2)))
 
 ;;;;;  Rules for `iconcat`;;;;;;;;;
-(rule 
+(rule
   (lower (has_type $I128 (iconcat x y)))
   (let
     ((t1 Reg (gen_move2 x $I64 $I64))
@@ -716,16 +716,16 @@
   (gen_load_128 p offset flags))
 
 ;;;;;  Rules for `istore8`;;;;;;;;;
-(rule 
+(rule
   (lower (istore8 flags x p offset))
   (gen_store p offset (StoreOP.Sb) flags x))
 ;;;;;  Rules for `istore16`;;;;;;;;;
-(rule 
+(rule
   (lower (istore16 flags x p offset))
   (gen_store p offset (StoreOP.Sh) flags x))
 
 ;;;;;  Rules for `istore32`;;;;;;;;;
-(rule 
+(rule
   (lower (istore32 flags x p offset))
   (gen_store p offset (StoreOP.Sw) flags x))
 
@@ -803,22 +803,22 @@
    (gen_moves v in_ty out))
 
 ;;;;;  Rules for `ceil`;;;;;;;;;
-(rule 
+(rule
   (lower (has_type ty (ceil x)))
   (gen_float_round (FloatRoundOP.Ceil) x ty)
 )
 
 ;;;;;  Rules for `floor`;;;;;;;;;
-(rule 
+(rule
   (lower (has_type ty (floor x)))
   (gen_float_round (FloatRoundOP.Floor) x ty))
 ;;;;;  Rules for `trunc`;;;;;;;;;
-(rule 
+(rule
   (lower (has_type ty (trunc x)))
   (gen_float_round (FloatRoundOP.Trunc) x ty))
 
 ;;;;;  Rules for `nearest`;;;;;;;;;
-(rule 
+(rule
   (lower (has_type ty (nearest x)))
   (gen_float_round (FloatRoundOP.Nearest) x ty))
 
