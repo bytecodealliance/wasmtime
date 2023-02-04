@@ -111,11 +111,13 @@
 (rule (simplify (bxor (fits_in_64 (ty_int ty)) (bnot ty x) x)) (subsume (iconst ty (imm64 (ty_mask ty)))))
 
 ;; x & -1 == -1 & x == x & x == x.
-(rule (simplify (band ty x x)) x)
-(rule (simplify (band $I32 x (iconst $I32 (u64_from_imm64 0xffff_ffff)))) (subsume x))
-(rule (simplify (band $I32 (iconst $I32 (u64_from_imm64 0xffff_ffff)) x)) (subsume x))
-(rule (simplify (band $I64 x (iconst $I64 (u64_from_imm64 0xffff_ffff_ffff_ffff)))) (subsume x))
-(rule (simplify (band $I64 (iconst $I64 (u64_from_imm64 0xffff_ffff_ffff_ffff)) x)) (subsume x))
+(rule (simplify (band ty x x)) (subsume x))
+(rule (simplify (band ty x (iconst ty k)))
+      (if-let -1 (i64_sextend_imm64 ty k))
+      (subsume x))
+(rule (simplify (band ty (iconst ty k) x))
+      (if-let -1 (i64_sextend_imm64 ty k))
+      (subsume x))
 
 ;; x & 0 == 0 & x == 0.
 (rule (simplify (band ty _ zero @ (iconst ty (u64_from_imm64 0)))) (subsume zero))
