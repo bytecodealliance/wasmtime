@@ -124,6 +124,7 @@ impl Inst {
             | Inst::Unwind { .. }
             | Inst::DummyUse { .. } => smallvec![],
 
+            Inst::AluRmRVex { op, .. } => op.available_from(),
             Inst::UnaryRmR { op, .. } => op.available_from(),
 
             // These use dynamic SSE opcodes.
@@ -745,6 +746,25 @@ impl PrettyPrint for Inst {
                     ljustify2(op.to_string(), suffix_lqb(*size)),
                     src2,
                     src1_dst,
+                )
+            }
+            Inst::AluRmRVex {
+                size,
+                op,
+                src1,
+                src2,
+                dst,
+            } => {
+                let size_bytes = size.to_bytes();
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes(), allocs);
+                let src1 = pretty_print_reg(src1.to_reg(), size_bytes, allocs);
+                let src2 = pretty_print_reg(src2.to_reg(), size_bytes, allocs);
+                format!(
+                    "{} {}, {}, {}",
+                    ljustify2(op.to_string(), String::new()),
+                    dst,
+                    src1,
+                    src2,
                 )
             }
             Inst::UnaryRmR { src, dst, op, size } => {
@@ -1753,6 +1773,13 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         Inst::AluRM { src1_dst, src2, .. } => {
             collector.reg_use(src2.to_reg());
             src1_dst.get_operands(collector);
+        }
+        Inst::AluRmRVex {
+            src1, src2, dst, ..
+        } => {
+            collector.reg_def(dst.to_writable_reg());
+            collector.reg_use(src1.to_reg());
+            collector.reg_use(src2.to_reg());
         }
         Inst::Not { src, dst, .. } => {
             collector.reg_use(src.to_reg());

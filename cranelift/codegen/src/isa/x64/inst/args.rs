@@ -745,7 +745,7 @@ impl PrettyPrint for RegMem {
     }
 }
 
-/// Some basic ALU operations.  TODO: maybe add Adc, Sbb.
+/// Some basic ALU operations.
 #[derive(Copy, Clone, PartialEq)]
 pub enum AluRmiROpcode {
     /// Add operation.
@@ -783,6 +783,36 @@ impl fmt::Debug for AluRmiROpcode {
 }
 
 impl fmt::Display for AluRmiROpcode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(self, f)
+    }
+}
+
+/// ALU operations that don't accept intermediates.
+#[derive(Copy, Clone, PartialEq)]
+pub enum AluRmROpcode {
+    /// And with negated second operand.
+    Andn,
+}
+
+impl AluRmROpcode {
+    pub(crate) fn available_from(&self) -> SmallVec<[InstructionSet; 2]> {
+        match self {
+            AluRmROpcode::Andn => smallvec![InstructionSet::BMI1],
+        }
+    }
+}
+
+impl fmt::Debug for AluRmROpcode {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        let name = match self {
+            AluRmROpcode::Andn => "andn",
+        };
+        write!(fmt, "{}", name)
+    }
+}
+
+impl fmt::Display for AluRmROpcode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Debug::fmt(self, f)
     }
