@@ -1,6 +1,11 @@
 
 # cargo-vet audits file
 
+[[audits.ahash]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+delta = "0.7.6 -> 0.8.2"
+
 [[audits.anyhow]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -254,6 +259,12 @@ criteria = "safe-to-deploy"
 version = "0.18.0"
 notes = "I am the author of this crate."
 
+[[audits.hashbrown]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+delta = "0.12.3 -> 0.13.1"
+notes = "The diff looks plausible. Much of it is low-level memory-layout code and I can't be 100% certain without a deeper dive into the implementation logic, but nothing looks actively malicious."
+
 [[audits.heck]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -384,6 +395,16 @@ notes = """
 This bump only changed from a function to an associated `const` and trivially
 contains no significant changes.
 """
+
+[[audits.object]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+delta = "0.29.0 -> 0.30.1"
+
+[[audits.once_cell]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+delta = "1.16.0 -> 1.17.0"
 
 [[audits.openvino]]
 who = "Matthew Tamayo-Rios <matthew@geekbeast.com>"
