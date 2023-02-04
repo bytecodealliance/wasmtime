@@ -1776,6 +1776,13 @@ pub unsafe extern "C" fn random_get(buf: *mut u8, buf_len: Size) -> Errno {
     })
 }
 
+/// Accept a new incoming connection.
+/// Note: This is similar to `accept` in POSIX.
+#[no_mangle]
+pub unsafe extern "C" fn sock_accept(fd: Fd, flags: Fdflags, connection: *mut Fd) -> Errno {
+    unreachable!()
+}
+
 /// Receive a message from a socket.
 /// Note: This is similar to `recv` in POSIX, though it also supports reading
 /// the data into multiple buffers in the manner of `readv`.
