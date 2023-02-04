@@ -140,33 +140,33 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn u64_sextend_u32(&mut self, x: u64) -> u64 {
-            x as u32 as i32 as i64 as u64
+        fn i64_sextend_imm64(&mut self, ty: Type, mut x: Imm64) -> i64 {
+            x.sign_extend_from_width(ty.bits());
+            x.bits()
         }
 
         #[inline]
-        fn u64_uextend_u32(&mut self, x: u64) -> u64 {
-            x & 0xffff_ffff
+        fn u64_uextend_imm64(&mut self, ty: Type, x: Imm64) -> u64 {
+            (x.bits() as u64) & self.ty_mask(ty)
         }
 
         #[inline]
         fn imm64_icmp(&mut self, ty: Type, cc: &IntCC, x: Imm64, y: Imm64) -> Imm64 {
-            let shift = u32::checked_sub(64, ty.bits()).unwrap_or(0);
-            let mask = u64::MAX >> shift;
-            let x = (x.bits() as u64) & mask;
-            let y = (y.bits() as u64) & mask;
-            let sext = |v| ((v << shift) as i64) >> shift;
+            let ux = self.u64_uextend_imm64(ty, x);
+            let uy = self.u64_uextend_imm64(ty, y);
+            let sx = self.i64_sextend_imm64(ty, x);
+            let sy = self.i64_sextend_imm64(ty, y);
             let result = match cc {
-                IntCC::Equal => x == y,
-                IntCC::NotEqual => x != y,
-                IntCC::UnsignedGreaterThanOrEqual => x >= y,
-                IntCC::UnsignedGreaterThan => x > y,
-                IntCC::UnsignedLessThanOrEqual => x <= y,
-                IntCC::UnsignedLessThan => x < y,
-                IntCC::SignedGreaterThanOrEqual => sext(x) >= sext(y),
-                IntCC::SignedGreaterThan => sext(x) > sext(y),
-                IntCC::SignedLessThanOrEqual => sext(x) <= sext(y),
-                IntCC::SignedLessThan => sext(x) < sext(y),
+                IntCC::Equal => ux == uy,
+                IntCC::NotEqual => ux != uy,
+                IntCC::UnsignedGreaterThanOrEqual => ux >= uy,
+                IntCC::UnsignedGreaterThan => ux > uy,
+                IntCC::UnsignedLessThanOrEqual => ux <= uy,
+                IntCC::UnsignedLessThan => ux < uy,
+                IntCC::SignedGreaterThanOrEqual => sx >= sy,
+                IntCC::SignedGreaterThan => sx > sy,
+                IntCC::SignedLessThanOrEqual => sx <= sy,
+                IntCC::SignedLessThan => sx < sy,
             };
             Imm64::new(result.into())
         }
@@ -586,12 +586,7 @@ macro_rules! isle_common_prelude_methods {
 
         #[inline]
         fn imm64_masked(&mut self, ty: Type, x: u64) -> Imm64 {
-            debug_assert!(ty.bits() <= 64);
-            // Careful: we can't do `(1 << bits) - 1` because that
-            // would overflow for `bits == 64`. Instead,
-            // right-shift an all-ones mask.
-            let mask = u64::MAX >> (64 - ty.bits());
-            Imm64::new((x & mask) as i64)
+            Imm64::new((x & self.ty_mask(ty)) as i64)
         }
 
         #[inline]

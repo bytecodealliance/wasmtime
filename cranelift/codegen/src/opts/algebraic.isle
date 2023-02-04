@@ -6,12 +6,6 @@
 ;; than a piece of the input or a new node that we construct; but we
 ;; can freely rewrite e.g. `x+y-y` to `x`.
 
-;; uextend/sextend of a constant.
-(rule (simplify (uextend $I64 (iconst $I32 (u64_from_imm64 imm))))
-      (iconst $I64 (imm64 (u64_uextend_u32 imm))))
-(rule (simplify (sextend $I64 (iconst $I32 (u64_from_imm64 imm))))
-      (iconst $I64 (imm64 (u64_sextend_u32 imm))))
-
 ;; x+0 == 0+x == x.
 (rule (simplify (iadd ty
                       x
