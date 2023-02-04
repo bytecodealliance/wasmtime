@@ -269,6 +269,32 @@
         (value_gprs (x64_and $I64 x_lo y_lo)
                     (x64_and $I64 x_hi y_hi))))
 
+;; Specialized lowerings for `(band x (bnot y))` which is additionally produced
+;; by Cranelift's `band_not` instruction that is legalized into the simpler
+;; forms early on.
+
+(decl sse_and_not (Type Xmm XmmMem) Xmm)
+(rule (sse_and_not $F32X4 x y) (x64_andnps x y))
+(rule (sse_and_not $F64X2 x y) (x64_andnpd x y))
+(rule -1 (sse_and_not (multi_lane _bits _lanes) x y) (x64_pandn x y))
+
+;; Note the flipping of operands below as we're match
+;;
+;;   (band x (bnot y))
+;;
+;; while x86 does
+;;
+;;   pandn(x, y) = and(not(x), y)
+(rule 8 (lower (has_type ty (band x (bnot y))))
+      (sse_and_not ty y x))
+
+
+(rule 9 (lower (has_type ty @ (use_bmi1 $true) (band x (bnot y))))
+      (if (ty_int_ref_scalar_64 ty))
+      ;; the first argument is the one that gets inverted with andn
+      (x64_andn ty y x))
+
+
 ;;;; Rules for `bor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `{i,b}64` and smaller.
@@ -1084,36 +1110,6 @@
                             0x50
                             (OperandSize.Size32))))
         (x64_pmuludq x2 y2)))
-
-;;;; Rules for `band_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(decl sse_and_not (Type Xmm XmmMem) Xmm)
-(rule (sse_and_not $F32X4 x y) (x64_andnps x y))
-(rule (sse_and_not $F64X2 x y) (x64_andnpd x y))
-(rule -1 (sse_and_not (multi_lane _bits _lanes) x y) (x64_pandn x y))
-
-;; Note the flipping of operands below. CLIF specifies
-;;
-;;   band_not(x, y) = and(x, not(y))
-;;
-;; while x86 does
-;;
-;;   pandn(x, y) = and(not(x), y)
-(rule 0 (lower (has_type ty (band_not x y)))
-      (sse_and_not ty y x))
-
-
-(rule 1 (lower (has_type ty @ (use_bmi1 $false) (band_not x y)))
-      (if (ty_int_ref_scalar_64 ty))
-      (x64_and ty
-               x
-               (x64_not ty y)))
-
-(rule 1 (lower (has_type ty @ (use_bmi1 $true) (band_not x y)))
-      (if (ty_int_ref_scalar_64 ty))
-      ;; the first argument is the one that gets inverted with andn
-      (x64_andn ty y x))
-
 
 ;;;; Rules for `bxor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

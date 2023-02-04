@@ -204,6 +204,18 @@
 (rule (lower (has_type $F64 (band x y)))
   (lower_float_binary (AluOPRRR.And) x y $F64))
 
+;; Specialized lowerings for `(band x (bnot y))` which is additionally produced
+;; by Cranelift's `band_not` instruction that is legalized into the simpler
+;; forms early on.
+
+(rule 3 (lower (has_type (fits_in_64 ty) (band x (bnot y))))
+  (gen_andn x y))
+(rule 4 (lower (has_type $I128 (band x (bnot y))))
+  (let
+    ((low Reg (gen_andn (value_regs_get x 0) (value_regs_get y 0)))
+      (high Reg (gen_andn (value_regs_get x 1) (value_regs_get y 1))))
+    (value_regs low high)))
+
 
 ;;;; Rules for `or` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule -1 (lower (has_type (fits_in_64 ty) (bor x y)))
@@ -288,15 +300,6 @@
 (rule (lower (has_type out (sextend x @ (value_type in))))
   (lower_extend x $true (ty_bits in) (ty_bits out)))
 
-
-;;;; Rules for `band_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type (fits_in_64 ty) (band_not x y)))
-  (gen_andn x y))
-(rule 1 (lower (has_type $I128 (band_not x y)))
-  (let
-    ((low Reg (gen_andn (value_regs_get x 0) (value_regs_get y 0)))
-      (high Reg (gen_andn (value_regs_get x 1) (value_regs_get y 1))))
-    (value_regs low high)))
 
 ;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (popcnt x)))

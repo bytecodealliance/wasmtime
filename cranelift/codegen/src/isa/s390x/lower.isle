@@ -983,6 +983,18 @@
 (rule 0 (lower (has_type (vr128_ty ty) (band x y)))
       (vec_and ty x y))
 
+;; Specialized lowerings for `(band x (bnot y))` which is additionally produced
+;; by Cranelift's `band_not` instruction that is legalized into the simpler
+;; forms early on.
+
+;; z15 version using a single instruction.
+(rule 7 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (band x (bnot y))))
+      (and_not_reg ty x y))
+
+;; And-not two vector registers.
+(rule 8 (lower (has_type (vr128_ty ty) (band x (bnot y))))
+      (vec_and_not ty x y))
+
 ;;;; Rules for `bor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Or two registers.
@@ -1031,21 +1043,6 @@
 ;; Xor two vector registers.
 (rule 0 (lower (has_type (vr128_ty ty) (bxor x y)))
       (vec_xor ty x y))
-
-
-;;;; Rules for `band_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; z15 version using a single instruction.
-(rule 2 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (band_not x y)))
-      (and_not_reg ty x y))
-
-;; z14 version using XOR with -1.
-(rule 1 (lower (has_type (and (mie2_disabled) (fits_in_64 ty)) (band_not x y)))
-      (and_reg ty x (not_reg ty y)))
-
-;; And-not two vector registers.
-(rule (lower (has_type (vr128_ty ty) (band_not x y)))
-      (vec_and_not ty x y))
 
 
 ;;;; Rules for `bor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

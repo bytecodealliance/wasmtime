@@ -1065,6 +1065,21 @@
 (rule -2 (lower (has_type (ty_vec128 ty) (band x y)))
       (and_vec x y (vector_size ty)))
 
+;; Specialized lowerings for `(band x (bnot y))` which is additionally produced
+;; by Cranelift's `band_not` instruction that is legalized into the simpler
+;; forms early on.
+
+(rule 1 (lower (has_type (fits_in_32 ty) (band x (bnot y))))
+      (alu_rs_imm_logic (ALUOp.AndNot) ty x y))
+
+(rule 2 (lower (has_type $I64 (band x (bnot y))))
+      (alu_rs_imm_logic (ALUOp.AndNot) $I64 x y))
+
+(rule 2 (lower (has_type $I128 (band x (bnot y)))) (i128_alu_bitop (ALUOp.AndNot) $I64 x y))
+
+(rule 3 (lower (has_type (ty_vec128 ty) (band x (bnot y))))
+      (bic_vec x y (vector_size ty)))
+
 ;;;; Rules for `bor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule -1 (lower (has_type (fits_in_32 ty) (bor x y)))
@@ -1090,19 +1105,6 @@
 
 (rule -2 (lower (has_type (ty_vec128 ty) (bxor x y)))
       (eor_vec x y (vector_size ty)))
-
-;;;; Rules for `band_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule -1 (lower (has_type (fits_in_32 ty) (band_not x y)))
-      (alu_rs_imm_logic (ALUOp.AndNot) ty x y))
-
-(rule (lower (has_type $I64 (band_not x y)))
-      (alu_rs_imm_logic (ALUOp.AndNot) $I64 x y))
-
-(rule (lower (has_type $I128 (band_not x y))) (i128_alu_bitop (ALUOp.AndNot) $I64 x y))
-
-(rule -2 (lower (has_type (ty_vec128 ty) (band_not x y)))
-      (bic_vec x y (vector_size ty)))
 
 ;;;; Rules for `bor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

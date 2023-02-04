@@ -224,6 +224,20 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
                     pos.func.dfg.replace(inst).icmp(cond, arg, imm);
                 }
 
+                // Legalize the fused bitwise-plus-not instructions into simpler
+                // instructions to assist with optimizations. Lowering will
+                // pattern match this sequence regardless when architectures
+                // support the instruction natively.
+                InstructionData::Binary { opcode, args } => {
+                    match opcode {
+                        ir::Opcode::BandNot => {
+                            let neg = pos.ins().bnot(args[1]);
+                            pos.func.dfg.replace(inst).band(args[0], neg);
+                        }
+                        _ => prev_pos = pos.position(),
+                    };
+                }
+
                 _ => {
                     prev_pos = pos.position();
                     continue;
