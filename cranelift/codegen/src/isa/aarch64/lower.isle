@@ -1118,15 +1118,17 @@
 (rule -2 (lower (has_type (ty_vec128 ty) (bxor x y)))
       (eor_vec x y (vector_size ty)))
 
-;;;; Rules for `bxor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Specialized lowerings for `(bxor x (bnot y))` which is additionally produced
+;; by Cranelift's `bxor_not` instruction that is legalized into the simpler
+;; forms early on.
 
-(rule -1 (lower (has_type (fits_in_32 ty) (bxor_not x y)))
+(rule 1 (lower (has_type (fits_in_32 ty) (bxor x (bnot y))))
       (alu_rs_imm_logic (ALUOp.EorNot) $I32 x y))
 
-(rule (lower (has_type $I64 (bxor_not x y)))
+(rule 2 (lower (has_type $I64 (bxor x (bnot y))))
       (alu_rs_imm_logic (ALUOp.EorNot) $I64 x y))
 
-(rule (lower (has_type $I128 (bxor_not x y))) (i128_alu_bitop (ALUOp.EorNot) $I64 x y))
+(rule 3 (lower (has_type $I128 (bxor x (bnot y)))) (i128_alu_bitop (ALUOp.EorNot) $I64 x y))
 
 ;;;; Rules for `ishl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

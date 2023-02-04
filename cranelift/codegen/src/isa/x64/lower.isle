@@ -1111,14 +1111,6 @@
                             (OperandSize.Size32))))
         (x64_pmuludq x2 y2)))
 
-;;;; Rules for `bxor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule 0 (lower (has_type ty (bxor_not x y)))
-      (if (ty_int_ref_scalar_64 ty))
-      (x64_xor ty
-               x
-               (x64_not ty y)))
-
 ;;;; Rules for `iabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I8X16 (iabs x)))

@@ -1056,19 +1056,16 @@
 (rule 0 (lower (has_type (vr128_ty ty) (bxor x y)))
       (vec_xor ty x y))
 
-
-;;;; Rules for `bxor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Specialized lowerings for `(bxor x (bnot y))` which is additionally produced
+;; by Cranelift's `bxor_not` instruction that is legalized into the simpler
+;; forms early on.
 
 ;; z15 version using a single instruction.
-(rule 2 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (bxor_not x y)))
+(rule 5 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (bxor x (bnot y))))
       (not_xor_reg ty x y))
 
-;; z14 version using XOR with -1.
-(rule 1 (lower (has_type (and (mie2_disabled) (fits_in_64 ty)) (bxor_not x y)))
-      (not_reg ty (xor_reg ty x y)))
-
 ;; Xor-not two vector registers.
-(rule (lower (has_type (vr128_ty ty) (bxor_not x y)))
+(rule 6 (lower (has_type (vr128_ty ty) (bxor x (bnot y))))
       (vec_not_xor ty x y))
 
 
