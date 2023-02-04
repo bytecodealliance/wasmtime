@@ -234,6 +234,10 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
                             let neg = pos.ins().bnot(args[1]);
                             pos.func.dfg.replace(inst).band(args[0], neg);
                         }
+                        ir::Opcode::BorNot => {
+                            let neg = pos.ins().bnot(args[1]);
+                            pos.func.dfg.replace(inst).bor(args[0], neg);
+                        }
                         _ => prev_pos = pos.position(),
                     };
                 }

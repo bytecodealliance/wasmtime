@@ -1093,6 +1093,18 @@
 (rule -2 (lower (has_type (ty_vec128 ty) (bor x y)))
       (orr_vec x y (vector_size ty)))
 
+;; Specialized lowerings for `(bor x (bnot y))` which is additionally produced
+;; by Cranelift's `bor_not` instruction that is legalized into the simpler
+;; forms early on.
+
+(rule 1 (lower (has_type (fits_in_32 ty) (bor x (bnot y))))
+      (alu_rs_imm_logic (ALUOp.OrrNot) ty x y))
+
+(rule 2 (lower (has_type $I64 (bor x (bnot y))))
+      (alu_rs_imm_logic (ALUOp.OrrNot) $I64 x y))
+
+(rule 3 (lower (has_type $I128 (bor x (bnot y)))) (i128_alu_bitop (ALUOp.OrrNot) $I64 x y))
+
 ;;;; Rules for `bxor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule -1 (lower (has_type (fits_in_32 ty) (bxor x y)))
@@ -1105,16 +1117,6 @@
 
 (rule -2 (lower (has_type (ty_vec128 ty) (bxor x y)))
       (eor_vec x y (vector_size ty)))
-
-;;;; Rules for `bor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule -1 (lower (has_type (fits_in_32 ty) (bor_not x y)))
-      (alu_rs_imm_logic (ALUOp.OrrNot) ty x y))
-
-(rule (lower (has_type $I64 (bor_not x y)))
-      (alu_rs_imm_logic (ALUOp.OrrNot) $I64 x y))
-
-(rule (lower (has_type $I128 (bor_not x y))) (i128_alu_bitop (ALUOp.OrrNot) $I64 x y))
 
 ;;;; Rules for `bxor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
