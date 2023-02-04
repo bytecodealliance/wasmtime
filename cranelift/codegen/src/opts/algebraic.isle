@@ -105,10 +105,10 @@
       (subsume (iconst ty (imm64 0))))
 
 ;; x ^ not(x) == not(x) ^ x == -1.
-(rule (simplify (bxor $I32 x (bnot $I32 x))) (subsume (iconst $I32 (imm64 0xffff_ffff))))
-(rule (simplify (bxor $I32 (bnot $I32 x) x)) (subsume (iconst $I32 (imm64 0xffff_ffff))))
-(rule (simplify (bxor $I64 x (bnot $I64 x))) (subsume (iconst $I64 (imm64 0xffff_ffff_ffff_ffff))))
-(rule (simplify (bxor $I64 (bnot $I64 x) x)) (subsume (iconst $I64 (imm64 0xffff_ffff_ffff_ffff))))
+;; This identity also holds for non-integer types, vectors, and wider types.
+;; But `iconst` is only valid for integers up to 64 bits wide.
+(rule (simplify (bxor (fits_in_64 (ty_int ty)) x (bnot ty x))) (subsume (iconst ty (imm64 (ty_mask ty)))))
+(rule (simplify (bxor (fits_in_64 (ty_int ty)) (bnot ty x) x)) (subsume (iconst ty (imm64 (ty_mask ty)))))
 
 ;; x & -1 == -1 & x == x & x == x.
 (rule (simplify (band ty x x)) x)
