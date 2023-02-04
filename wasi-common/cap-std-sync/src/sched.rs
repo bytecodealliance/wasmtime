@@ -80,7 +80,8 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
                     .try_into()
                     .map_err(|_| Error::overflow().context("poll timeout"))?
             } else {
-                std::os::raw::c_int::max_value()
+                // A negative value requests an infinite timeout.
+                -1
             };
             tracing::debug!(
                 poll_timeout = tracing::field::debug(poll_timeout),
