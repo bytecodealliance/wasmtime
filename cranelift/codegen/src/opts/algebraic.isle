@@ -281,3 +281,11 @@
 (rule (simplify
        (icmp (ty_int ty) (IntCC.SignedLessThanOrEqual) x x))
       (iconst ty (imm64 1)))
+
+;; (x ^ -1) and (-1 ^ x) can be replaced with the `bnot` instruction
+(rule (simplify (bxor ty (iconst ty k) x))
+  (if-let -1 (i64_sextend_imm64 ty k))
+  (bnot ty x))
+(rule (simplify (bxor ty x (iconst ty k)))
+  (if-let -1 (i64_sextend_imm64 ty k))
+  (bnot ty x))
