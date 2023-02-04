@@ -63,7 +63,7 @@ impl<'a> Parser<'a> {
             }
             Ok(Some(self.lexer.next()?.unwrap().1))
         } else {
-            Err(self.error(self.lexer.pos(), "Unexpected EOF".to_string()))
+            Ok(None) // EOF
         }
     }
 
@@ -306,21 +306,9 @@ impl<'a> Parser<'a> {
     fn parse_decl(&mut self) -> Result<Decl> {
         let pos = self.pos();
 
-        let pure = if self.eat_sym_str("pure")? {
-            true
-        } else {
-            false
-        };
-        let multi = if self.eat_sym_str("multi")? {
-            true
-        } else {
-            false
-        };
-        let partial = if self.eat_sym_str("partial")? {
-            true
-        } else {
-            false
-        };
+        let pure = self.eat_sym_str("pure")?;
+        let multi = self.eat_sym_str("multi")?;
+        let partial = self.eat_sym_str("partial")?;
 
         let term = self.parse_ident()?;
 
@@ -351,11 +339,7 @@ impl<'a> Parser<'a> {
             let func = self.parse_ident()?;
             Ok(Extern::Constructor { term, func, pos })
         } else if self.eat_sym_str("extractor")? {
-            let infallible = if self.eat_sym_str("infallible")? {
-                true
-            } else {
-                false
-            };
+            let infallible = self.eat_sym_str("infallible")?;
 
             let term = self.parse_ident()?;
             let func = self.parse_ident()?;
