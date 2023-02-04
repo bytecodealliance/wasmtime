@@ -38,13 +38,13 @@
 
 ;; x*0 == 0*x == x.
 (rule (simplify (imul ty
-                        x
-                        (iconst ty (u64_from_imm64 0))))
-      (iconst ty (imm64 0)))
+                      _
+                      zero @ (iconst ty (u64_from_imm64 0))))
+      (subsume zero))
 (rule (simplify (imul ty
-                        (iconst ty (u64_from_imm64 0))
-                        x))
-      (iconst ty (imm64 0)))
+                      zero @ (iconst ty (u64_from_imm64 0))
+                      _))
+      (subsume zero))
 
 ;; x/1 == x.
 (rule (simplify (sdiv ty
@@ -118,8 +118,8 @@
 (rule (simplify (band $I64 (iconst $I64 (u64_from_imm64 0xffff_ffff_ffff_ffff)) x)) (subsume x))
 
 ;; x & 0 == 0 & x == 0.
-(rule (simplify (band ty x (iconst ty (u64_from_imm64 0)))) (iconst ty (imm64 0)))
-(rule (simplify (band ty (iconst ty (u64_from_imm64 0)) x)) (iconst ty (imm64 0)))
+(rule (simplify (band ty _ zero @ (iconst ty (u64_from_imm64 0)))) (subsume zero))
+(rule (simplify (band ty zero @ (iconst ty (u64_from_imm64 0)) _)) (subsume zero))
 
 ;; not(not(x)) == x.
 (rule (simplify (bnot ty (bnot ty x))) (subsume x))
