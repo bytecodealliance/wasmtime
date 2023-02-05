@@ -1,4 +1,5 @@
 test compile precise-output
+set opt_level=speed
 target x86_64 has_bmi1
 
 function %f1(i8, i8) -> i8 {
@@ -11,6 +12,22 @@ block0(v0: i8, v1: i8):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   andn    %eax, %esi, %edi
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+
+function %reversed_operands(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = bnot v0
+    v3 = band v2, v1
+    return v3
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   andn    %eax, %edi, %esi
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

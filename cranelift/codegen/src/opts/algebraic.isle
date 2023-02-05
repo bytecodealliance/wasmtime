@@ -286,3 +286,19 @@
 (rule (simplify (bxor ty x (iconst ty k)))
   (if-let -1 (i64_sextend_imm64 ty k))
   (bnot ty x))
+
+;; Canonicalize nested `bnot` operands in band/bor/bxor to be on the right hand
+;; side instead of the lft hand side
+;;
+;;   (band (bnot y) x) --> (band x (bnot y))
+;;
+;; Architectures frequently have an instruction for the latter operation
+;; and instead of having pattern-matches in all backends for bnot on either side
+;; it's ideally simpler to move the bnot to the right so each backend only
+;; has one pattern.
+(rule (simplify (bor ty y @ (bnot ty _) x))
+      (bor ty x y))
+(rule (simplify (band ty y @ (bnot ty _) x))
+      (band ty x y))
+(rule (simplify (bxor ty y @ (bnot ty _) x))
+      (bxor ty x y))
