@@ -560,12 +560,6 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (Opcode::Bitselect, &[I128, I128, I128]),
                 // TODO
                 (Opcode::Bswap),
-                // https://github.com/bytecodealliance/wasmtime/issues/5523
-                (Opcode::Rotl, &[I128, I8]),
-                (Opcode::Rotl, &[I128, I16]),
-                (Opcode::Rotl, &[I128, I32]),
-                (Opcode::Rotl, &[I128, I64]),
-                (Opcode::Rotl, &[I128, I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/5528
                 (Opcode::FcvtToUint, &[F32], &[I8]),
                 (Opcode::FcvtToUint, &[F32], &[I16]),
