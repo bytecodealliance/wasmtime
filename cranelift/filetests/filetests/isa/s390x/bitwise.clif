@@ -366,9 +366,8 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   lgr %r5, %r3
-;   xilf %r5, 4294967295
-;   nr %r2, %r5
+;   xilf %r3, 4294967295
+;   nr %r2, %r3
 ;   br %r14
 
 function %band_not_i16(i16, i16) -> i16 {
@@ -378,9 +377,8 @@ block0(v0: i16, v1: i16):
 }
 
 ; block0:
-;   lgr %r5, %r3
-;   xilf %r5, 4294967295
-;   nr %r2, %r5
+;   xilf %r3, 4294967295
+;   nr %r2, %r3
 ;   br %r14
 
 function %band_not_i8(i8, i8) -> i8 {
@@ -390,9 +388,8 @@ block0(v0: i8, v1: i8):
 }
 
 ; block0:
-;   lgr %r5, %r3
-;   xilf %r5, 4294967295
-;   nr %r2, %r5
+;   xilf %r3, 4294967295
+;   nr %r2, %r3
 ;   br %r14
 
 function %bor_not_i128(i128, i128) -> i128 {
@@ -427,9 +424,8 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   lgr %r5, %r3
-;   xilf %r5, 4294967295
-;   or %r2, %r5
+;   xilf %r3, 4294967295
+;   or %r2, %r3
 ;   br %r14
 
 function %bor_not_i16(i16, i16) -> i16 {
@@ -439,9 +435,8 @@ block0(v0: i16, v1: i16):
 }
 
 ; block0:
-;   lgr %r5, %r3
-;   xilf %r5, 4294967295
-;   or %r2, %r5
+;   xilf %r3, 4294967295
+;   or %r2, %r3
 ;   br %r14
 
 function %bor_not_i8(i8, i8) -> i8 {
@@ -451,9 +446,8 @@ block0(v0: i8, v1: i8):
 }
 
 ; block0:
-;   lgr %r5, %r3
-;   xilf %r5, 4294967295
-;   or %r2, %r5
+;   xilf %r3, 4294967295
+;   or %r2, %r3
 ;   br %r14
 
 function %bxor_not_i128(i128, i128) -> i128 {
@@ -476,9 +470,9 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
+;   xilf %r3, 4294967295
+;   xihf %r3, 4294967295
 ;   xgr %r2, %r3
-;   xilf %r2, 4294967295
-;   xihf %r2, 4294967295
 ;   br %r14
 
 function %bxor_not_i32(i32, i32) -> i32 {
@@ -488,8 +482,8 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
+;   xilf %r3, 4294967295
 ;   xr %r2, %r3
-;   xilf %r2, 4294967295
 ;   br %r14
 
 function %bxor_not_i16(i16, i16) -> i16 {
@@ -499,8 +493,8 @@ block0(v0: i16, v1: i16):
 }
 
 ; block0:
+;   xilf %r3, 4294967295
 ;   xr %r2, %r3
-;   xilf %r2, 4294967295
 ;   br %r14
 
 function %bxor_not_i8(i8, i8) -> i8 {
@@ -510,8 +504,8 @@ block0(v0: i8, v1: i8):
 }
 
 ; block0:
+;   xilf %r3, 4294967295
 ;   xr %r2, %r3
-;   xilf %r2, 4294967295
 ;   br %r14
 
 function %bnot_i128(i128) -> i128 {

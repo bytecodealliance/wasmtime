@@ -1950,31 +1950,13 @@
 
 ;;;
 (decl gen_andn (Reg Reg) Reg)
-(rule 1
-  (gen_andn rs1 rs2)
-  (if-let $true (has_b))
+(rule 1 (gen_andn rs1 rs2)
   (alu_rrr (AluOPRRR.Andn) rs1 rs2))
-
-(rule
-  (gen_andn rs1 rs2)
-  (if-let $false (has_b))
-  (let
-    ((tmp Reg (gen_bit_not rs2)))
-    (alu_and rs1 tmp)))
 
 ;;;
 (decl gen_orn (Reg Reg) Reg)
-(rule 1
-  (gen_orn rs1 rs2 )
-  (if-let $true (has_b))
+(rule 1 (gen_orn rs1 rs2)
   (alu_rrr (AluOPRRR.Orn) rs1 rs2))
-
-(rule
-  (gen_orn rs1 rs2)
-  (if-let $false (has_b))
-  (let
-    ((tmp Reg (gen_bit_not rs2)))
-    (alu_rrr (AluOPRRR.Or) rs1 tmp)))
 
 (decl gen_rev8 (Reg) Reg)
 (rule 1
@@ -2013,14 +1995,6 @@
       (rd WritableReg (temp_writable_reg $I64))
       (_ Unit (emit (MInst.Brev8 rs ty step tmp tmp2 rd))))
     (writable_reg_to_reg rd)))
-
-;;; x ^ ~y
-(decl gen_xor_not (Reg Reg) Reg)
-(rule
-  (gen_xor_not x y)
-  (let
-    ((tmp Reg (gen_bit_not y)))
-    (alu_rrr (AluOPRRR.Xor) x tmp)))
 
 ;; Negates x
 ;; Equivalent to 0 - x

@@ -631,9 +631,9 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   not a2,a2
-;   and a0,a0,a2
+;   not a4,a2
 ;   not a6,a3
+;   and a0,a0,a4
 ;   and a1,a1,a6
 ;   ret
 
@@ -645,9 +645,9 @@ block0(v0: i64):
 }
 
 ; block0:
-;   li t2,4
-;   not a1,t2
-;   and a0,a0,a1
+;   li a1,4
+;   not a2,a1
+;   and a0,a0,a2
 ;   ret
 
 function %band_not_i64_constant_shift(i64, i64) -> i64 {
@@ -660,8 +660,8 @@ block0(v0: i64, v1: i64):
 
 ; block0:
 ;   slli a2,a1,4
-;   not a1,a2
-;   and a0,a0,a1
+;   not a2,a2
+;   and a0,a0,a2
 ;   ret
 
 function %bor_not_i32(i32, i32) -> i32 {
@@ -693,9 +693,9 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   not a2,a2
-;   or a0,a0,a2
+;   not a4,a2
 ;   not a6,a3
+;   or a0,a0,a4
 ;   or a1,a1,a6
 ;   ret
 
@@ -707,9 +707,9 @@ block0(v0: i64):
 }
 
 ; block0:
-;   li t2,4
-;   not a1,t2
-;   or a0,a0,a1
+;   li a1,4
+;   not a2,a1
+;   or a0,a0,a2
 ;   ret
 
 function %bor_not_i64_constant_shift(i64, i64) -> i64 {
@@ -722,8 +722,8 @@ block0(v0: i64, v1: i64):
 
 ; block0:
 ;   slli a2,a1,4
-;   not a1,a2
-;   or a0,a0,a1
+;   not a2,a2
+;   or a0,a0,a2
 ;   ret
 
 function %bxor_not_i32(i32, i32) -> i32 {
@@ -755,9 +755,9 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   not a2,a2
-;   xor a0,a0,a2
+;   not a4,a2
 ;   not a6,a3
+;   xor a0,a0,a4
 ;   xor a1,a1,a6
 ;   ret
 
@@ -769,9 +769,9 @@ block0(v0: i64):
 }
 
 ; block0:
-;   li t2,4
-;   not a1,t2
-;   xor a0,a0,a1
+;   li a1,4
+;   not a2,a1
+;   xor a0,a0,a2
 ;   ret
 
 function %bxor_not_i64_constant_shift(i64, i64) -> i64 {
@@ -784,8 +784,8 @@ block0(v0: i64, v1: i64):
 
 ; block0:
 ;   slli a2,a1,4
-;   not a1,a2
-;   xor a0,a0,a1
+;   not a2,a2
+;   xor a0,a0,a2
 ;   ret
 
 function %ishl_i128_i8(i128, i8) -> i128 {

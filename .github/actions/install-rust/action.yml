@@ -18,11 +18,6 @@ runs:
     - name: Install Rust
       shell: bash
       run: |
-
-        if [[ "${{ runner.os }}" = "Windows" ]]; then
-          rustup self update
-        fi
-
         rustup set profile minimal
         rustup update "${{ inputs.toolchain }}" --no-self-update
         rustup default "${{ inputs.toolchain }}"

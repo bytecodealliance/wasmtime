@@ -269,6 +269,36 @@
         (value_gprs (x64_and $I64 x_lo y_lo)
                     (x64_and $I64 x_hi y_hi))))
 
+;; Specialized lowerings for `(band x (bnot y))` which is additionally produced
+;; by Cranelift's `band_not` instruction that is legalized into the simpler
+;; forms early on.
+
+(decl sse_and_not (Type Xmm XmmMem) Xmm)
+(rule (sse_and_not $F32X4 x y) (x64_andnps x y))
+(rule (sse_and_not $F64X2 x y) (x64_andnpd x y))
+(rule -1 (sse_and_not (multi_lane _bits _lanes) x y) (x64_pandn x y))
+
+;; Note the flipping of operands below as we're match
+;;
+;;   (band x (bnot y))
+;;
+;; while x86 does
+;;
+;;   pandn(x, y) = and(not(x), y)
+(rule 8 (lower (has_type ty @ (multi_lane _bits _lane) (band x (bnot y))))
+      (sse_and_not ty y x))
+(rule 9 (lower (has_type ty @ (multi_lane _bits _lane) (band (bnot y) x)))
+      (sse_and_not ty y x))
+
+(rule 10 (lower (has_type ty @ (use_bmi1 $true) (band x (bnot y))))
+      (if (ty_int_ref_scalar_64 ty))
+      ;; the first argument is the one that gets inverted with andn
+      (x64_andn ty y x))
+(rule 11 (lower (has_type ty @ (use_bmi1 $true) (band (bnot y) x)))
+      (if (ty_int_ref_scalar_64 ty))
+      (x64_andn ty y x))
+
+
 ;;;; Rules for `bor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `{i,b}64` and smaller.
@@ -1085,52 +1115,6 @@
                             (OperandSize.Size32))))
         (x64_pmuludq x2 y2)))
 
-;;;; Rules for `band_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(decl sse_and_not (Type Xmm XmmMem) Xmm)
-(rule (sse_and_not $F32X4 x y) (x64_andnps x y))
-(rule (sse_and_not $F64X2 x y) (x64_andnpd x y))
-(rule -1 (sse_and_not (multi_lane _bits _lanes) x y) (x64_pandn x y))
-
-;; Note the flipping of operands below. CLIF specifies
-;;
-;;   band_not(x, y) = and(x, not(y))
-;;
-;; while x86 does
-;;
-;;   pandn(x, y) = and(not(x), y)
-(rule 0 (lower (has_type ty (band_not x y)))
-      (sse_and_not ty y x))
-
-
-(rule 1 (lower (has_type ty @ (use_bmi1 $false) (band_not x y)))
-      (if (ty_int_ref_scalar_64 ty))
-      (x64_and ty 
-               x
-               (x64_not ty y)))
-
-(rule 1 (lower (has_type ty @ (use_bmi1 $true) (band_not x y)))
-      (if (ty_int_ref_scalar_64 ty))
-      ;; the first argument is the one that gets inverted with andn
-      (x64_andn ty y x))
-
-
-;;;; Rules for `bxor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule 0 (lower (has_type ty (bxor_not x y)))
-      (if (ty_int_ref_scalar_64 ty))
-      (x64_xor ty 
-               x
-               (x64_not ty y)))
-
-;;;; Rules for `bor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule 0 (lower (has_type ty (bor_not x y)))
-      (if (ty_int_ref_scalar_64 ty))
-      (x64_or ty 
-               x
-               (x64_not ty y)))
-
 ;;;; Rules for `iabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I8X16 (iabs x)))
@@ -1167,7 +1151,7 @@
             ;; it below, since we need to pass it into the cmove
             ;; before we pass the cmove to with_flags_reg.
             (neg_result Gpr (produces_flags_get_reg neg))
-            ;; When the neg instruction sets the sign flag, 
+            ;; When the neg instruction sets the sign flag,
             ;; takes the original (non-negative) value.
             (cmove ConsumesFlags (cmove ty (CC.S) src neg_result)))
         (with_flags_reg (produces_flags_ignore neg) cmove)))
@@ -3586,7 +3570,7 @@
                                          (u8_from_uimm8 lane))))
       (x64_pshufd val lane (OperandSize.Size32)))
 
-;; This is the only remaining case for F64X2 
+;; This is the only remaining case for F64X2
 (rule 1 (lower (has_type $F64 (extractlane val @ (value_type (ty_vec128 ty))
                                          (u8_from_uimm8 1))))
       ;; 0xee == 0b11_10_11_10
