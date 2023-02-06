@@ -990,9 +990,13 @@
 ;; z15 version using a single instruction.
 (rule 7 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (band x (bnot y))))
       (and_not_reg ty x y))
+(rule 8 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (band (bnot y) x)))
+      (and_not_reg ty x y))
 
 ;; And-not two vector registers.
-(rule 8 (lower (has_type (vr128_ty ty) (band x (bnot y))))
+(rule 9 (lower (has_type (vr128_ty ty) (band x (bnot y))))
+      (vec_and_not ty x y))
+(rule 10 (lower (has_type (vr128_ty ty) (band (bnot y) x)))
       (vec_and_not ty x y))
 
 ;;;; Rules for `bor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1028,9 +1032,13 @@
 ;; z15 version using a single instruction.
 (rule 7 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (bor x (bnot y))))
       (or_not_reg ty x y))
+(rule 8 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (bor (bnot y) x)))
+      (or_not_reg ty x y))
 
 ;; Or-not two vector registers.
-(rule 8 (lower (has_type (vr128_ty ty) (bor x (bnot y))))
+(rule 9 (lower (has_type (vr128_ty ty) (bor x (bnot y))))
+      (vec_or_not ty x y))
+(rule 10 (lower (has_type (vr128_ty ty) (bor (bnot y) x)))
       (vec_or_not ty x y))
 
 
@@ -1063,9 +1071,13 @@
 ;; z15 version using a single instruction.
 (rule 5 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (bxor x (bnot y))))
       (not_xor_reg ty x y))
+(rule 6 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (bxor (bnot y) x)))
+      (not_xor_reg ty x y))
 
 ;; Xor-not two vector registers.
-(rule 6 (lower (has_type (vr128_ty ty) (bxor x (bnot y))))
+(rule 7 (lower (has_type (vr128_ty ty) (bxor x (bnot y))))
+      (vec_not_xor ty x y))
+(rule 8 (lower (has_type (vr128_ty ty) (bxor (bnot y) x)))
       (vec_not_xor ty x y))
 
 

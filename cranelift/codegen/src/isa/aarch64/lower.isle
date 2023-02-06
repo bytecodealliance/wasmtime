@@ -1068,10 +1068,15 @@
 
 (rule 1 (lower (has_type (fits_in_64 ty) (band x (bnot y))))
       (alu_rs_imm_logic (ALUOp.AndNot) ty x y))
+(rule 2 (lower (has_type (fits_in_64 ty) (band (bnot y) x)))
+      (alu_rs_imm_logic (ALUOp.AndNot) ty x y))
 
-(rule 2 (lower (has_type $I128 (band x (bnot y)))) (i128_alu_bitop (ALUOp.AndNot) $I64 x y))
+(rule 3 (lower (has_type $I128 (band x (bnot y)))) (i128_alu_bitop (ALUOp.AndNot) $I64 x y))
+(rule 4 (lower (has_type $I128 (band (bnot y) x))) (i128_alu_bitop (ALUOp.AndNot) $I64 x y))
 
-(rule 3 (lower (has_type (ty_vec128 ty) (band x (bnot y))))
+(rule 5 (lower (has_type (ty_vec128 ty) (band x (bnot y))))
+      (bic_vec x y (vector_size ty)))
+(rule 6 (lower (has_type (ty_vec128 ty) (band (bnot y) x)))
       (bic_vec x y (vector_size ty)))
 
 ;;;; Rules for `bor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1090,8 +1095,11 @@
 
 (rule 1 (lower (has_type (fits_in_64 ty) (bor x (bnot y))))
       (alu_rs_imm_logic (ALUOp.OrrNot) ty x y))
+(rule 2 (lower (has_type (fits_in_64 ty) (bor (bnot y) x)))
+      (alu_rs_imm_logic (ALUOp.OrrNot) ty x y))
 
-(rule 2 (lower (has_type $I128 (bor x (bnot y)))) (i128_alu_bitop (ALUOp.OrrNot) $I64 x y))
+(rule 3 (lower (has_type $I128 (bor x (bnot y)))) (i128_alu_bitop (ALUOp.OrrNot) $I64 x y))
+(rule 4 (lower (has_type $I128 (bor (bnot y) x))) (i128_alu_bitop (ALUOp.OrrNot) $I64 x y))
 
 ;;;; Rules for `bxor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1109,8 +1117,11 @@
 
 (rule 1 (lower (has_type (fits_in_64 ty) (bxor x (bnot y))))
       (alu_rs_imm_logic (ALUOp.EorNot) ty x y))
+(rule 2 (lower (has_type (fits_in_64 ty) (bxor (bnot y) x)))
+      (alu_rs_imm_logic (ALUOp.EorNot) ty x y))
 
-(rule 2 (lower (has_type $I128 (bxor x (bnot y)))) (i128_alu_bitop (ALUOp.EorNot) $I64 x y))
+(rule 3 (lower (has_type $I128 (bxor x (bnot y)))) (i128_alu_bitop (ALUOp.EorNot) $I64 x y))
+(rule 4 (lower (has_type $I128 (bxor (bnot y) x))) (i128_alu_bitop (ALUOp.EorNot) $I64 x y))
 
 ;;;; Rules for `ishl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -287,10 +287,15 @@
 ;;   pandn(x, y) = and(not(x), y)
 (rule 8 (lower (has_type ty @ (multi_lane _bits _lane) (band x (bnot y))))
       (sse_and_not ty y x))
+(rule 9 (lower (has_type ty @ (multi_lane _bits _lane) (band (bnot y)x )))
+      (sse_and_not ty y x))
 
-(rule 9 (lower (has_type ty @ (use_bmi1 $true) (band x (bnot y))))
+(rule 10 (lower (has_type ty @ (use_bmi1 $true) (band x (bnot y))))
       (if (ty_int_ref_scalar_64 ty))
       ;; the first argument is the one that gets inverted with andn
+      (x64_andn ty y x))
+(rule 11 (lower (has_type ty @ (use_bmi1 $true) (band (bnot y) x)))
+      (if (ty_int_ref_scalar_64 ty))
       (x64_andn ty y x))
 
 
