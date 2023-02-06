@@ -1,7 +1,7 @@
 #![allow(unused_variables)] // TODO: remove this when more things are implemented
 
 use crate::bindings::{
-    wasi_clocks, wasi_default_clocks, wasi_exit, wasi_filesystem, wasi_poll, wasi_random,
+    wasi_clocks, wasi_default_clocks, wasi_exit, wasi_filesystem, wasi_io, wasi_poll, wasi_random,
     wasi_stderr, wasi_tcp,
 };
 use core::arch::wasm32;
@@ -13,7 +13,7 @@ use core::mem::{self, align_of, forget, replace, size_of, ManuallyDrop, MaybeUni
 use core::ptr::{self, null_mut};
 use core::slice;
 use wasi::*;
-use wasi_poll::{Pollable, WasiStream};
+use wasi_poll::{InputStream, OutputStream, Pollable};
 
 #[macro_use]
 mod macros;
@@ -42,8 +42,8 @@ mod bindings {
 #[no_mangle]
 #[cfg(feature = "command")]
 pub unsafe extern "C" fn command(
-    stdin: WasiStream,
-    stdout: WasiStream,
+    stdin: InputStream,
+    stdout: OutputStream,
     args_ptr: *const WasmStr,
     args_len: usize,
     env_vars: StrTupleList,
@@ -753,10 +753,9 @@ pub unsafe extern "C" fn fd_read(
             Descriptor::Streams(streams) => {
                 let wasi_stream = streams.get_read_stream()?;
 
-                let read_len = unwrap_result(u32::try_from(len));
+                let read_len = unwrap_result(u64::try_from(len));
                 let wasi_stream = streams.get_read_stream()?;
-                let (data, end) =
-                    wasi_poll::read_stream(wasi_stream, read_len).map_err(|_| ERRNO_IO)?;
+                let (data, end) = wasi_io::read(wasi_stream, read_len).map_err(|_| ERRNO_IO)?;
 
                 assert_eq!(data.as_ptr(), ptr);
                 assert!(data.len() <= len);
@@ -1083,7 +1082,7 @@ pub unsafe extern "C" fn fd_write(
     State::with(|state| match state.get(fd)? {
         Descriptor::Streams(streams) => {
             let wasi_stream = streams.get_write_stream()?;
-            let bytes = wasi_poll::write_stream(wasi_stream, bytes).map_err(|_| ERRNO_IO)?;
+            let bytes = wasi_io::write(wasi_stream, bytes).map_err(|_| ERRNO_IO)?;
 
             // If this is a file, keep the current-position pointer up to date.
             if let StreamType::File(file) = &streams.type_ {
@@ -1958,10 +1957,10 @@ enum Descriptor {
 /// type-specific operations like seeking.
 struct Streams {
     /// The output stream, if present.
-    input: Cell<Option<WasiStream>>,
+    input: Cell<Option<InputStream>>,
 
     /// The input stream, if present.
-    output: Cell<Option<WasiStream>>,
+    output: Cell<Option<OutputStream>>,
 
     /// Information about the source of the stream.
     type_: StreamType,
@@ -1969,7 +1968,7 @@ struct Streams {
 
 impl Streams {
     /// Return the input stream, initializing it on the fly if needed.
-    fn get_read_stream(&self) -> Result<WasiStream, Errno> {
+    fn get_read_stream(&self) -> Result<InputStream, Errno> {
         match &self.input.get() {
             Some(wasi_stream) => Ok(*wasi_stream),
             None => match &self.type_ {
@@ -1986,7 +1985,7 @@ impl Streams {
     }
 
     /// Return the output stream, initializing it on the fly if needed.
-    fn get_write_stream(&self) -> Result<WasiStream, Errno> {
+    fn get_write_stream(&self) -> Result<OutputStream, Errno> {
         match &self.output.get() {
             Some(wasi_stream) => Ok(*wasi_stream),
             None => match &self.type_ {
@@ -2027,10 +2026,10 @@ impl Drop for Descriptor {
         match self {
             Descriptor::Streams(stream) => {
                 if let Some(input) = stream.input.get() {
-                    wasi_poll::drop_stream(input);
+                    wasi_io::drop_input_stream(input);
                 }
                 if let Some(output) = stream.output.get() {
-                    wasi_poll::drop_stream(output);
+                    wasi_io::drop_output_stream(output);
                 }
                 match &stream.type_ {
                     StreamType::File(file) => wasi_filesystem::close(file.fd),
@@ -2401,14 +2400,14 @@ impl State {
         self.get_stream_with_error(fd, ERRNO_SPIPE)
     }
 
-    fn get_read_stream(&self, fd: Fd) -> Result<WasiStream, Errno> {
+    fn get_read_stream(&self, fd: Fd) -> Result<InputStream, Errno> {
         match self.get(fd)? {
             Descriptor::Streams(streams) => streams.get_read_stream(),
             Descriptor::Closed(_) | Descriptor::Stderr => Err(ERRNO_BADF),
         }
     }
 
-    fn get_write_stream(&self, fd: Fd) -> Result<WasiStream, Errno> {
+    fn get_write_stream(&self, fd: Fd) -> Result<OutputStream, Errno> {
         match self.get(fd)? {
             Descriptor::Streams(streams) => streams.get_write_stream(),
             Descriptor::Closed(_) | Descriptor::Stderr => Err(ERRNO_BADF),
