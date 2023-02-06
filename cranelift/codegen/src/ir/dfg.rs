@@ -907,6 +907,34 @@ impl DataFlowGraph {
     pub fn clone_inst(&mut self, inst: Inst) -> Inst {
         // First, add a clone of the InstructionData.
         let inst_data = self.insts[inst].clone();
+        // If the `inst_data` has a reference to a ValueList, clone it
+        // as well, because we can't share these (otherwise mutating
+        // one would affect the other).
+        let inst_data = match inst_data {
+            InstructionData::MultiAry { opcode, args } => InstructionData::MultiAry {
+                opcode,
+                args: args.deep_clone(&mut self.value_lists),
+            },
+            InstructionData::Call {
+                opcode,
+                func_ref,
+                args,
+            } => InstructionData::Call {
+                opcode,
+                func_ref,
+                args: args.deep_clone(&mut self.value_lists),
+            },
+            InstructionData::CallIndirect {
+                opcode,
+                args,
+                sig_ref,
+            } => InstructionData::CallIndirect {
+                opcode,
+                sig_ref,
+                args: args.deep_clone(&mut self.value_lists),
+            },
+            inst => inst,
+        };
         let new_inst = self.make_inst(inst_data);
         // Get the controlling type variable.
         let ctrl_typevar = self.ctrl_typevar(inst);
@@ -1619,5 +1647,26 @@ mod tests {
 
         assert_eq!(pos.func.dfg.resolve_aliases(c2), c2);
         assert_eq!(pos.func.dfg.resolve_aliases(c), c2);
+    }
+
+    #[test]
+    fn cloning() {
+        use crate::ir::InstBuilder;
+
+        let mut func = Function::new();
+        let mut sig = Signature::new(crate::isa::CallConv::SystemV);
+        sig.params.push(ir::AbiParam::new(types::I32));
+        let sig = func.import_signature(sig);
+        let block0 = func.dfg.make_block();
+        let mut pos = FuncCursor::new(&mut func);
+        pos.insert_block(block0);
+        let v1 = pos.ins().iconst(types::I32, 0);
+        let v2 = pos.ins().iconst(types::I32, 1);
+        let call_inst = pos.ins().call_indirect(sig, v1, &[v1]);
+        let func = pos.func;
+
+        let call_inst_dup = func.dfg.clone_inst(call_inst);
+        func.dfg.inst_args_mut(call_inst)[0] = v2;
+        assert_eq!(v1, func.dfg.inst_args(call_inst_dup)[0]);
     }
 }
