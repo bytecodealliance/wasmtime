@@ -25,6 +25,7 @@ fn main() {
     println!("wasi adapter: {:?}", &wasi_adapter);
     let wasi_adapter = fs::read(&wasi_adapter).unwrap();
 
+    println!("cargo:rerun-if-changed=..");
     let mut cmd = Command::new("rustup");
     cmd.arg("run")
         .arg("nightly")
