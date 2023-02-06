@@ -60,10 +60,6 @@ fn run(
                 builder = builder.env(var, val)?;
             }
 
-            // tokio does not yet support the sync family of fdflags, because cap-std-sync
-            // does not.
-            builder = builder.env("NO_FDFLAGS_SYNC_SUPPORT", "1")?;
-
             let mut store = Store::new(&engine, builder.build());
 
             let instance = linker.instantiate_async(&mut store, &module).await?;
