@@ -1,12 +1,11 @@
 use crate::clocks::WasiMonotonicClock;
-use crate::stream::WasiStream;
+use crate::stream::{InputStream, OutputStream};
 use crate::Error;
 pub mod subscription;
 pub use cap_std::time::Duration;
 
 pub use subscription::{
-    MonotonicClockSubscription, RwEventFlags, RwSubscription, RwSubscriptionKind, Subscription,
-    SubscriptionResult,
+    MonotonicClockSubscription, RwEventFlags, RwSubscription, Subscription, SubscriptionResult,
 };
 
 #[async_trait::async_trait]
@@ -58,15 +57,15 @@ impl<'a> Poll<'a> {
             ud,
         ));
     }
-    pub fn subscribe_read(&mut self, stream: &'a dyn WasiStream, ud: Userdata) {
+    pub fn subscribe_read(&mut self, stream: &'a dyn InputStream, ud: Userdata) {
         self.subs.push((
-            Subscription::ReadWrite(RwSubscription::new(stream), RwSubscriptionKind::Read),
+            Subscription::ReadWrite(RwSubscription::new_input(stream)),
             ud,
         ));
     }
-    pub fn subscribe_write(&mut self, stream: &'a dyn WasiStream, ud: Userdata) {
+    pub fn subscribe_write(&mut self, stream: &'a dyn OutputStream, ud: Userdata) {
         self.subs.push((
-            Subscription::ReadWrite(RwSubscription::new(stream), RwSubscriptionKind::Write),
+            Subscription::ReadWrite(RwSubscription::new_output(stream)),
             ud,
         ));
     }
@@ -87,11 +86,9 @@ impl<'a> Poll<'a> {
             })
             .min_by(|a, b| a.deadline.cmp(&b.deadline))
     }
-    pub fn rw_subscriptions<'b>(
-        &'b mut self,
-    ) -> impl Iterator<Item = (&'b mut RwSubscription<'a>, RwSubscriptionKind)> {
-        self.subs.iter_mut().filter_map(|(s, _ud)| match s {
-            Subscription::ReadWrite(sub, kind) => Some((sub, *kind)),
+    pub fn rw_subscriptions<'b>(&'b mut self) -> impl Iterator<Item = &'b mut RwSubscription<'a>> {
+        self.subs.iter_mut().filter_map(|sub| match &mut sub.0 {
+            Subscription::ReadWrite(rwsub) => Some(rwsub),
             _ => None,
         })
     }

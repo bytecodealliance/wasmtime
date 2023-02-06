@@ -75,6 +75,6 @@ pub use error::{Errno, Error, ErrorExt, I32Exit};
 pub use file::WasiFile;
 pub use listener::WasiListener;
 pub use sched::{Poll, WasiSched};
-pub use stream::WasiStream;
+pub use stream::{InputStream, OutputStream};
 pub use table::Table;
 pub use tcp_listener::WasiTcpListener;

@@ -2,7 +2,7 @@ use anyhow::Result;
 use cap_rand::RngCore;
 use cap_std::{ambient_authority, fs::Dir, time::Duration};
 use host::wasi_filesystem::Descriptor;
-use host::wasi_poll::WasiStream;
+use host::wasi_io::{InputStream, OutputStream};
 use host::{add_to_linker, WasiCommand, WasiCtx};
 use std::{
     io::{Cursor, Write},
@@ -50,8 +50,8 @@ async fn instantiate(path: &str) -> Result<(Store<WasiCtx>, WasiCommand)> {
 async fn run_hello_stdout(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     wasi.command(
         &mut store,
-        0 as WasiStream,
-        1 as WasiStream,
+        0 as InputStream,
+        1 as OutputStream,
         &["gussie", "sparky", "willa"],
         &[],
         &[],
@@ -64,8 +64,8 @@ async fn run_panic(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     let r = wasi
         .command(
             &mut store,
-            0 as WasiStream,
-            1 as WasiStream,
+            0 as InputStream,
+            1 as OutputStream,
             &[
                 "diesel",
                 "the",
@@ -88,8 +88,8 @@ async fn run_panic(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
 async fn run_args(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     wasi.command(
         &mut store,
-        0 as WasiStream,
-        1 as WasiStream,
+        0 as InputStream,
+        1 as OutputStream,
         &["hello", "this", "", "is an argument", "with 🚩 emoji"],
         &[],
         &[],
@@ -121,9 +121,16 @@ async fn run_random(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> 
 
     store.data_mut().random = Box::new(FakeRng);
 
-    wasi.command(&mut store, 0 as WasiStream, 1 as WasiStream, &[], &[], &[])
-        .await?
-        .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
+    wasi.command(
+        &mut store,
+        0 as InputStream,
+        1 as OutputStream,
+        &[],
+        &[],
+        &[],
+    )
+    .await?
+    .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
 async fn run_time(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
@@ -171,9 +178,16 @@ async fn run_time(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
     store.data_mut().clocks.default_monotonic_clock =
         Box::new(FakeMonotonicClock { now: Mutex::new(0) });
 
-    wasi.command(&mut store, 0 as WasiStream, 1 as WasiStream, &[], &[], &[])
-        .await?
-        .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
+    wasi.command(
+        &mut store,
+        0 as InputStream,
+        1 as OutputStream,
+        &[],
+        &[],
+        &[],
+    )
+    .await?
+    .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
 async fn run_stdin(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
@@ -183,9 +197,16 @@ async fn run_stdin(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
             "So rested he by the Tumtum tree",
         ))));
 
-    wasi.command(&mut store, 0 as WasiStream, 1 as WasiStream, &[], &[], &[])
-        .await?
-        .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
+    wasi.command(
+        &mut store,
+        0 as InputStream,
+        1 as OutputStream,
+        &[],
+        &[],
+        &[],
+    )
+    .await?
+    .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
 async fn run_poll_stdin(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
@@ -195,9 +216,16 @@ async fn run_poll_stdin(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<
             "So rested he by the Tumtum tree",
         ))));
 
-    wasi.command(&mut store, 0 as WasiStream, 1 as WasiStream, &[], &[], &[])
-        .await?
-        .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
+    wasi.command(
+        &mut store,
+        0 as InputStream,
+        1 as OutputStream,
+        &[],
+        &[],
+        &[],
+    )
+    .await?
+    .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
 async fn run_env(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
@@ -415,8 +443,8 @@ async fn run_with_temp_dir(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Resu
 
     wasi.command(
         &mut store,
-        0 as WasiStream,
-        1 as WasiStream,
+        0 as InputStream,
+        1 as OutputStream,
         &["program", "/foo"],
         &[],
         &[(descriptor, "/foo")],

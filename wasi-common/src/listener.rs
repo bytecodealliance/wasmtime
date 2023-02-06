@@ -2,7 +2,7 @@
 
 use crate::connection::WasiConnection;
 use crate::Error;
-use crate::WasiStream;
+use crate::{InputStream, OutputStream};
 use std::any::Any;
 
 /// A socket listener.
@@ -13,7 +13,14 @@ pub trait WasiListener: Send + Sync {
     async fn accept(
         &mut self,
         nonblocking: bool,
-    ) -> Result<(Box<dyn WasiConnection>, Box<dyn WasiStream>), Error>;
+    ) -> Result<
+        (
+            Box<dyn WasiConnection>,
+            Box<dyn InputStream>,
+            Box<dyn OutputStream>,
+        ),
+        Error,
+    >;
 
     fn set_nonblocking(&mut self, flag: bool) -> Result<(), Error>;
 }

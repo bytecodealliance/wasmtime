@@ -1,14 +1,15 @@
 use crate::{
     wasi_clocks,
-    wasi_poll::{self, Pollable, Size, StreamError, WasiPoll, WasiStream},
-    HostResult, WasiCtx,
+    wasi_io::{InputStream, OutputStream, StreamError},
+    wasi_poll::{Pollable, WasiPoll},
+    WasiCtx,
 };
 use wasi_common::clocks::TableMonotonicClockExt;
 use wasi_common::stream::TableStreamExt;
 
 fn convert(error: wasi_common::Error) -> anyhow::Error {
     if let Some(_errno) = error.downcast_ref() {
-        anyhow::Error::new(wasi_poll::StreamError {})
+        anyhow::Error::new(StreamError {})
     } else {
         error.into()
     }
@@ -18,9 +19,9 @@ fn convert(error: wasi_common::Error) -> anyhow::Error {
 #[derive(Copy, Clone)]
 enum PollableEntry {
     /// Poll for read events.
-    Read(WasiStream),
+    Read(InputStream),
     /// Poll for write events.
-    Write(WasiStream),
+    Write(OutputStream),
     /// Poll for a monotonic-clock timer.
     MonotonicClock(wasi_clocks::MonotonicClock, wasi_clocks::Instant, bool),
 }
@@ -43,13 +44,13 @@ impl WasiPoll for WasiCtx {
         for (index, future) in futures.into_iter().enumerate() {
             match *self.table().get(future).map_err(convert)? {
                 PollableEntry::Read(stream) => {
-                    let wasi_stream: &dyn wasi_common::WasiStream =
-                        self.table().get_stream(stream).map_err(convert)?;
+                    let wasi_stream: &dyn wasi_common::InputStream =
+                        self.table().get_input_stream(stream).map_err(convert)?;
                     poll.subscribe_read(wasi_stream, Userdata::from(index as u64));
                 }
                 PollableEntry::Write(stream) => {
-                    let wasi_stream: &dyn wasi_common::WasiStream =
-                        self.table().get_stream(stream).map_err(convert)?;
+                    let wasi_stream: &dyn wasi_common::OutputStream =
+                        self.table().get_output_stream(stream).map_err(convert)?;
                     poll.subscribe_write(wasi_stream, Userdata::from(index as u64));
                 }
                 PollableEntry::MonotonicClock(clock, when, absolute) => {
@@ -75,107 +76,13 @@ impl WasiPoll for WasiCtx {
         Ok(results)
     }
 
-    async fn drop_stream(&mut self, stream: WasiStream) -> anyhow::Result<()> {
-        self.table_mut()
-            .delete::<Box<dyn wasi_common::WasiStream>>(stream)
-            .map_err(convert)?;
-        Ok(())
-    }
-
-    async fn read_stream(
-        &mut self,
-        stream: WasiStream,
-        len: Size,
-    ) -> HostResult<(Vec<u8>, bool), StreamError> {
-        let s: &mut Box<dyn wasi_common::WasiStream> =
-            self.table_mut().get_stream_mut(stream).map_err(convert)?;
-
-        let mut buffer = vec![0; len.try_into().unwrap()];
-
-        let (bytes_read, end) = s.read(&mut buffer).await.map_err(convert)?;
-
-        buffer.truncate(bytes_read as usize);
-
-        Ok(Ok((buffer, end)))
-    }
-
-    async fn write_stream(
-        &mut self,
-        stream: WasiStream,
-        bytes: Vec<u8>,
-    ) -> HostResult<Size, StreamError> {
-        let s: &mut Box<dyn wasi_common::WasiStream> =
-            self.table_mut().get_stream_mut(stream).map_err(convert)?;
-
-        let bytes_written: u64 = s.write(&bytes).await.map_err(convert)?;
-
-        Ok(Ok(Size::try_from(bytes_written).unwrap()))
-    }
-
-    async fn skip_stream(
-        &mut self,
-        stream: WasiStream,
-        len: u64,
-    ) -> HostResult<(u64, bool), StreamError> {
-        let s: &mut Box<dyn wasi_common::WasiStream> =
-            self.table_mut().get_stream_mut(stream).map_err(convert)?;
-
-        let (bytes_skipped, end) = s.skip(len).await.map_err(convert)?;
-
-        Ok(Ok((bytes_skipped, end)))
-    }
-
-    async fn write_repeated_stream(
-        &mut self,
-        stream: WasiStream,
-        byte: u8,
-        len: u64,
-    ) -> HostResult<u64, StreamError> {
-        let s: &mut Box<dyn wasi_common::WasiStream> =
-            self.table_mut().get_stream_mut(stream).map_err(convert)?;
-
-        let bytes_written: u64 = s.write_repeated(byte, len).await.map_err(convert)?;
-
-        Ok(Ok(bytes_written))
-    }
-
-    async fn splice_stream(
-        &mut self,
-        _src: WasiStream,
-        _dst: WasiStream,
-        _len: u64,
-    ) -> HostResult<(u64, bool), StreamError> {
-        // TODO: We can't get two streams at the same time because they both
-        // carry the exclusive lifetime of `self`. When [`get_many_mut`] is
-        // stabilized, that could allow us to add a `get_many_stream_mut` or
-        // so which lets us do this.
-        //
-        // [`get_many_mut`]: https://doc.rust-lang.org/stable/std/collections/hash_map/struct.HashMap.html#method.get_many_mut
-        /*
-        let s: &mut Box<dyn wasi_common::WasiStream> = self
-            .table_mut()
-            .get_stream_mut(src)
-            .map_err(convert)?;
-        let d: &mut Box<dyn wasi_common::WasiStream> = self
-            .table_mut()
-            .get_stream_mut(dst)
-            .map_err(convert)?;
-
-        let bytes_spliced: u64 = s.splice(&mut **d, len).await.map_err(convert)?;
-
-        Ok(bytes_spliced)
-        */
-
-        todo!()
-    }
-
-    async fn subscribe_read(&mut self, stream: WasiStream) -> anyhow::Result<Pollable> {
+    async fn subscribe_read(&mut self, stream: InputStream) -> anyhow::Result<Pollable> {
         Ok(self
             .table_mut()
             .push(Box::new(PollableEntry::Read(stream)))?)
     }
 
-    async fn subscribe_write(&mut self, stream: WasiStream) -> anyhow::Result<Pollable> {
+    async fn subscribe_write(&mut self, stream: OutputStream) -> anyhow::Result<Pollable> {
         Ok(self
             .table_mut()
             .push(Box::new(PollableEntry::Write(stream)))?)

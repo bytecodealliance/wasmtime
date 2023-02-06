@@ -7,8 +7,8 @@
 //! Some convenience constructors are included for common backing types like `Vec<u8>` and `String`,
 //! but the virtual pipes can be instantiated with any `Read` or `Write` type.
 //!
-use crate::stream::WasiStream;
-use crate::{Error, ErrorExt};
+use crate::stream::{InputStream, OutputStream};
+use crate::Error;
 use std::any::Any;
 use std::convert::TryInto;
 use std::io::{self, Read, Write};
@@ -106,7 +106,7 @@ impl From<&str> for ReadPipe<io::Cursor<String>> {
 }
 
 #[async_trait::async_trait]
-impl<R: Read + ReadReady + Any + Send + Sync> WasiStream for ReadPipe<R> {
+impl<R: Read + ReadReady + Any + Send + Sync> InputStream for ReadPipe<R> {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -124,17 +124,6 @@ impl<R: Read + ReadReady + Any + Send + Sync> WasiStream for ReadPipe<R> {
         }
     }
 
-    // TODO: Optimize for pipes.
-    /*
-    async fn splice(
-        &mut self,
-        dst: &mut dyn WasiStream,
-        nelem: u64,
-    ) -> Result<u64, Error> {
-        todo!()
-    }
-    */
-
     async fn skip(&mut self, nelem: u64) -> Result<(u64, bool), Error> {
         let num = io::copy(
             &mut io::Read::take(&mut *self.borrow(), nelem),
@@ -145,10 +134,6 @@ impl<R: Read + ReadReady + Any + Send + Sync> WasiStream for ReadPipe<R> {
 
     async fn readable(&self) -> Result<(), Error> {
         Ok(())
-    }
-
-    async fn writable(&self) -> Result<(), Error> {
-        Err(Error::badf())
     }
 }
 
@@ -223,7 +208,7 @@ impl WritePipe<io::Cursor<Vec<u8>>> {
 }
 
 #[async_trait::async_trait]
-impl<W: Write + Any + Send + Sync> WasiStream for WritePipe<W> {
+impl<W: Write + Any + Send + Sync> OutputStream for WritePipe<W> {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -237,7 +222,7 @@ impl<W: Write + Any + Send + Sync> WasiStream for WritePipe<W> {
     /*
     async fn splice(
         &mut self,
-        dst: &mut dyn WasiStream,
+        src: &mut dyn InputStream,
         nelem: u64,
     ) -> Result<u64, Error> {
         todo!()
@@ -250,10 +235,6 @@ impl<W: Write + Any + Send + Sync> WasiStream for WritePipe<W> {
             &mut *self.borrow(),
         )?;
         Ok(num)
-    }
-
-    async fn readable(&self) -> Result<(), Error> {
-        Err(Error::badf())
     }
 
     async fn writable(&self) -> Result<(), Error> {

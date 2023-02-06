@@ -3,7 +3,7 @@ use crate::dir::WasiDir;
 use crate::file::WasiFile;
 use crate::listener::WasiListener;
 use crate::sched::WasiSched;
-use crate::stream::WasiStream;
+use crate::stream::{InputStream, OutputStream};
 use crate::table::Table;
 use crate::Error;
 use cap_rand::RngCore;
@@ -38,7 +38,11 @@ impl WasiCtx {
         self.table_mut().insert_at(fd, Box::new(file));
     }
 
-    pub fn insert_stream(&mut self, fd: u32, stream: Box<dyn WasiStream>) {
+    pub fn insert_input_stream(&mut self, fd: u32, stream: Box<dyn InputStream>) {
+        self.table_mut().insert_at(fd, Box::new(stream));
+    }
+
+    pub fn insert_output_stream(&mut self, fd: u32, stream: Box<dyn OutputStream>) {
         self.table_mut().insert_at(fd, Box::new(stream));
     }
 
@@ -66,15 +70,15 @@ impl WasiCtx {
         &mut self.table
     }
 
-    pub fn set_stdin(&mut self, s: Box<dyn WasiStream>) {
-        self.insert_stream(0, s);
+    pub fn set_stdin(&mut self, s: Box<dyn InputStream>) {
+        self.insert_input_stream(0, s);
     }
 
-    pub fn set_stdout(&mut self, s: Box<dyn WasiStream>) {
-        self.insert_stream(1, s);
+    pub fn set_stdout(&mut self, s: Box<dyn OutputStream>) {
+        self.insert_output_stream(1, s);
     }
 
-    pub fn set_stderr(&mut self, s: Box<dyn WasiStream>) {
-        self.insert_stream(2, s);
+    pub fn set_stderr(&mut self, s: Box<dyn OutputStream>) {
+        self.insert_output_stream(2, s);
     }
 }

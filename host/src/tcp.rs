@@ -1,7 +1,7 @@
 #![allow(unused_variables)]
 
 use crate::{
-    wasi_poll::WasiStream,
+    wasi_poll::{InputStream, OutputStream},
     wasi_tcp::{
         Connection, ConnectionFlags, Errno, IoSize, IpSocketAddress, Ipv4SocketAddress,
         Ipv6SocketAddress, Listener, ListenerFlags, Network, TcpListener, WasiTcp,
@@ -84,7 +84,7 @@ impl WasiTcp for WasiCtx {
         &mut self,
         listener: Listener,
         flags: ConnectionFlags,
-    ) -> HostResult<(Connection, WasiStream), Errno> {
+    ) -> HostResult<(Connection, InputStream, OutputStream), Errno> {
         let table = self.table_mut();
         let l = table.get_listener_mut(listener)?;
 
@@ -95,19 +95,20 @@ impl WasiTcp for WasiCtx {
             todo!()
         }
 
-        let (connection, stream) = l.accept(nonblocking).await?;
+        let (connection, input_stream, output_stream) = l.accept(nonblocking).await?;
 
         let connection = table.push(Box::new(connection)).map_err(convert)?;
-        let stream = table.push(Box::new(stream)).map_err(convert)?;
+        let input_stream = table.push(Box::new(input_stream)).map_err(convert)?;
+        let output_stream = table.push(Box::new(output_stream)).map_err(convert)?;
 
-        Ok(Ok((connection, stream)))
+        Ok(Ok((connection, input_stream, output_stream)))
     }
 
     async fn accept_tcp(
         &mut self,
         listener: TcpListener,
         flags: ConnectionFlags,
-    ) -> HostResult<(Connection, WasiStream, IpSocketAddress), Errno> {
+    ) -> HostResult<(Connection, InputStream, OutputStream, IpSocketAddress), Errno> {
         let table = self.table_mut();
         let l = table.get_tcp_listener_mut(listener)?;
 
@@ -118,12 +119,13 @@ impl WasiTcp for WasiCtx {
             todo!()
         }
 
-        let (connection, stream, addr) = l.accept(nonblocking).await?;
+        let (connection, input_stream, output_stream, addr) = l.accept(nonblocking).await?;
 
         let connection = table.push(Box::new(connection)).map_err(convert)?;
-        let stream = table.push(Box::new(stream)).map_err(convert)?;
+        let input_stream = table.push(Box::new(input_stream)).map_err(convert)?;
+        let output_stream = table.push(Box::new(output_stream)).map_err(convert)?;
 
-        Ok(Ok((connection, stream, addr.into())))
+        Ok(Ok((connection, input_stream, output_stream, addr.into())))
     }
 
     async fn connect(
@@ -132,7 +134,7 @@ impl WasiTcp for WasiCtx {
         local_address: IpSocketAddress,
         remote_address: IpSocketAddress,
         flags: ConnectionFlags,
-    ) -> HostResult<(Connection, WasiStream), Errno> {
+    ) -> HostResult<(Connection, InputStream, OutputStream), Errno> {
         todo!()
     }
 

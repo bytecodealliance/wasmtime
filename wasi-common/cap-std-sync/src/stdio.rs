@@ -10,7 +10,10 @@ use io_extras::os::windows::{AsHandleOrSocket, BorrowedHandleOrSocket};
 use io_lifetimes::{AsFd, BorrowedFd};
 #[cfg(windows)]
 use io_lifetimes::{AsHandle, BorrowedHandle};
-use wasi_common::{stream::WasiStream, Error, ErrorExt};
+use wasi_common::{
+    stream::{InputStream, OutputStream},
+    Error, ErrorExt,
+};
 
 pub struct Stdin(std::io::Stdin);
 
@@ -19,7 +22,7 @@ pub fn stdin() -> Stdin {
 }
 
 #[async_trait::async_trait]
-impl WasiStream for Stdin {
+impl InputStream for Stdin {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -56,27 +59,6 @@ impl WasiStream for Stdin {
     fn is_read_vectored(&self) {
         Read::is_read_vectored(&mut self.0)
     }
-    async fn write(&mut self, _buf: &[u8]) -> Result<u64, Error> {
-        Err(Error::badf())
-    }
-    async fn write_vectored<'a>(&mut self, _bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
-        Err(Error::badf())
-    }
-    #[cfg(can_vector)]
-    fn is_write_vectored(&self) {
-        false
-    }
-
-    // TODO: Optimize for stdio streams.
-    /*
-    async fn splice(
-        &mut self,
-        dst: &mut dyn WasiStream,
-        nelem: u64,
-    ) -> Result<u64, Error> {
-        todo!()
-    }
-    */
 
     async fn skip(&mut self, nelem: u64) -> Result<(u64, bool), Error> {
         let num = io::copy(&mut io::Read::take(&mut self.0, nelem), &mut io::sink())?;
@@ -89,10 +71,6 @@ impl WasiStream for Stdin {
 
     async fn readable(&self) -> Result<(), Error> {
         Err(Error::badf())
-    }
-
-    async fn writable(&self) -> Result<(), Error> {
-        Ok(())
     }
 }
 #[cfg(windows)]
@@ -118,7 +96,7 @@ impl AsFd for Stdin {
 macro_rules! wasi_file_write_impl {
     ($ty:ty, $ident:ident) => {
         #[async_trait::async_trait]
-        impl WasiStream for $ty {
+        impl OutputStream for $ty {
             fn as_any(&self) -> &dyn Any {
                 self
             }
@@ -132,19 +110,6 @@ macro_rules! wasi_file_write_impl {
                 Some(self.0.as_handle_or_socket())
             }
 
-            async fn read(&mut self, _buf: &mut [u8]) -> Result<(u64, bool), Error> {
-                Err(Error::badf())
-            }
-            async fn read_vectored<'a>(
-                &mut self,
-                _bufs: &mut [io::IoSliceMut<'a>],
-            ) -> Result<(u64, bool), Error> {
-                Err(Error::badf())
-            }
-            #[cfg(can_vector)]
-            fn is_read_vectored(&self) {
-                false
-            }
             async fn write(&mut self, buf: &[u8]) -> Result<u64, Error> {
                 let n = Write::write(&mut self.0, buf)?;
                 Ok(n.try_into()?)
@@ -161,7 +126,7 @@ macro_rules! wasi_file_write_impl {
             /*
             async fn splice(
                 &mut self,
-                dst: &mut dyn WasiStream,
+                src: &mut dyn InputStream,
                 nelem: u64,
             ) -> Result<u64, Error> {
                 todo!()
@@ -171,10 +136,6 @@ macro_rules! wasi_file_write_impl {
             async fn write_repeated(&mut self, byte: u8, nelem: u64) -> Result<u64, Error> {
                 let num = io::copy(&mut io::Read::take(io::repeat(byte), nelem), &mut self.0)?;
                 Ok(num)
-            }
-
-            async fn readable(&self) -> Result<(), Error> {
-                Err(Error::badf())
             }
 
             async fn writable(&self) -> Result<(), Error> {

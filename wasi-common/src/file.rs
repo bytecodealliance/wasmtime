@@ -1,4 +1,4 @@
-use crate::{Error, ErrorExt, SystemTimeSpec, WasiStream};
+use crate::{Error, ErrorExt, InputStream, OutputStream, SystemTimeSpec};
 use bitflags::bitflags;
 use std::any::Any;
 use std::io;
@@ -236,7 +236,7 @@ impl FileStream {
 }
 
 #[async_trait::async_trait]
-impl WasiStream for FileStream {
+impl InputStream for FileStream {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -250,30 +250,12 @@ impl WasiStream for FileStream {
         }
     }
 
-    #[cfg(unix)]
-    fn pollable_write(&self) -> Option<rustix::fd::BorrowedFd> {
-        if let FileStreamType::Read(_) = self.type_ {
-            None
-        } else {
-            self.file.pollable()
-        }
-    }
-
     #[cfg(windows)]
     fn pollable_read(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
         if let FileStreamType::Read(_) = self.type_ {
             self.file.pollable()
         } else {
             None
-        }
-    }
-
-    #[cfg(windows)]
-    fn pollable_write(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
-        if let FileStreamType::Read(_) = self.type_ {
-            None
-        } else {
-            self.file.pollable()
         }
     }
 
@@ -306,6 +288,68 @@ impl WasiStream for FileStream {
             self.file.is_read_vectored_at()
         } else {
             false
+        }
+    }
+
+    async fn skip(&mut self, nelem: u64) -> Result<(u64, bool), Error> {
+        // For a zero-length request, don't do the 1-byte check below.
+        if nelem == 0 {
+            return self.file.read_at(&mut [], 0).await;
+        }
+
+        if let FileStreamType::Read(position) = &mut self.type_ {
+            let new_position = position.checked_add(nelem).ok_or_else(Error::overflow)?;
+
+            let file_size = self.file.get_filestat().await?.size;
+
+            let short_by = new_position.saturating_sub(file_size);
+
+            *position = new_position - short_by;
+            Ok((nelem - short_by, false))
+        } else {
+            Err(Error::badf())
+        }
+    }
+
+    async fn num_ready_bytes(&self) -> Result<u64, Error> {
+        if let FileStreamType::Read(_) = self.type_ {
+            // Default to saying that no data is ready.
+            Ok(0)
+        } else {
+            Err(Error::badf())
+        }
+    }
+
+    async fn readable(&self) -> Result<(), Error> {
+        if let FileStreamType::Read(_) = self.type_ {
+            self.file.readable().await
+        } else {
+            Err(Error::badf())
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl OutputStream for FileStream {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    #[cfg(unix)]
+    fn pollable_write(&self) -> Option<rustix::fd::BorrowedFd> {
+        if let FileStreamType::Read(_) = self.type_ {
+            None
+        } else {
+            self.file.pollable()
+        }
+    }
+
+    #[cfg(windows)]
+    fn pollable_write(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
+        if let FileStreamType::Read(_) = self.type_ {
+            None
+        } else {
+            self.file.pollable()
         }
     }
 
@@ -352,32 +396,12 @@ impl WasiStream for FileStream {
     /*
     async fn splice(
         &mut self,
-        dst: &mut dyn WasiStream,
+        src: &mut dyn InputStream,
         nelem: u64,
     ) -> Result<u64, Error> {
         todo!()
     }
     */
-
-    async fn skip(&mut self, nelem: u64) -> Result<(u64, bool), Error> {
-        // For a zero-length request, don't do the 1-byte check below.
-        if nelem == 0 {
-            return self.file.read_at(&mut [], 0).await;
-        }
-
-        if let FileStreamType::Read(position) = &mut self.type_ {
-            let new_position = position.checked_add(nelem).ok_or_else(Error::overflow)?;
-
-            let file_size = self.file.get_filestat().await?.size;
-
-            let short_by = new_position.saturating_sub(file_size);
-
-            *position = new_position - short_by;
-            Ok((nelem - short_by, false))
-        } else {
-            Err(Error::badf())
-        }
-    }
 
     // TODO: Optimize for file streams.
     /*
@@ -389,23 +413,6 @@ impl WasiStream for FileStream {
         todo!()
     }
     */
-
-    async fn num_ready_bytes(&self) -> Result<u64, Error> {
-        if let FileStreamType::Read(_) = self.type_ {
-            // Default to saying that no data is ready.
-            Ok(0)
-        } else {
-            Err(Error::badf())
-        }
-    }
-
-    async fn readable(&self) -> Result<(), Error> {
-        if let FileStreamType::Read(_) = self.type_ {
-            self.file.readable().await
-        } else {
-            Err(Error::badf())
-        }
-    }
 
     async fn writable(&self) -> Result<(), Error> {
         if let FileStreamType::Read(_) = self.type_ {

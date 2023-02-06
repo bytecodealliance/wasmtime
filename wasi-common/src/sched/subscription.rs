@@ -1,5 +1,5 @@
 use crate::clocks::WasiMonotonicClock;
-use crate::stream::WasiStream;
+use crate::stream::{InputStream, OutputStream};
 use crate::Error;
 use bitflags::bitflags;
 
@@ -9,15 +9,26 @@ bitflags! {
     }
 }
 
+pub enum RwStream<'a> {
+    Read(&'a dyn InputStream),
+    Write(&'a dyn OutputStream),
+}
+
 pub struct RwSubscription<'a> {
-    pub stream: &'a dyn WasiStream,
+    pub stream: RwStream<'a>,
     status: Option<Result<RwEventFlags, Error>>,
 }
 
 impl<'a> RwSubscription<'a> {
-    pub fn new(stream: &'a dyn WasiStream) -> Self {
+    pub fn new_input(stream: &'a dyn InputStream) -> Self {
         Self {
-            stream,
+            stream: RwStream::Read(stream),
+            status: None,
+        }
+    }
+    pub fn new_output(stream: &'a dyn OutputStream) -> Self {
+        Self {
+            stream: RwStream::Write(stream),
             status: None,
         }
     }
@@ -57,28 +68,22 @@ impl<'a> MonotonicClockSubscription<'a> {
 }
 
 pub enum Subscription<'a> {
-    ReadWrite(RwSubscription<'a>, RwSubscriptionKind),
+    ReadWrite(RwSubscription<'a>),
     MonotonicClock(MonotonicClockSubscription<'a>),
-}
-
-#[derive(Copy, Clone, Debug)]
-pub enum RwSubscriptionKind {
-    Read,
-    Write,
 }
 
 #[derive(Debug)]
 pub enum SubscriptionResult {
-    ReadWrite(Result<RwEventFlags, Error>, RwSubscriptionKind),
+    ReadWrite(Result<RwEventFlags, Error>),
     MonotonicClock(Result<(), Error>),
 }
 
 impl SubscriptionResult {
     pub fn from_subscription(s: Subscription) -> Option<SubscriptionResult> {
         match s {
-            Subscription::ReadWrite(mut s, kind) => s
-                .result()
-                .map(|sub| SubscriptionResult::ReadWrite(sub, kind)),
+            Subscription::ReadWrite(mut s) => {
+                s.result().map(|sub| SubscriptionResult::ReadWrite(sub))
+            }
             Subscription::MonotonicClock(s) => s.result().map(SubscriptionResult::MonotonicClock),
         }
     }

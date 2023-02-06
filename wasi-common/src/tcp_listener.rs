@@ -3,7 +3,7 @@
 use crate::connection::WasiConnection;
 use crate::Error;
 use crate::WasiListener;
-use crate::WasiStream;
+use crate::{InputStream, OutputStream};
 use std::any::Any;
 use std::net::SocketAddr;
 
@@ -15,7 +15,15 @@ pub trait WasiTcpListener: Send + Sync {
     async fn accept(
         &mut self,
         nonblocking: bool,
-    ) -> Result<(Box<dyn WasiConnection>, Box<dyn WasiStream>, SocketAddr), Error>;
+    ) -> Result<
+        (
+            Box<dyn WasiConnection>,
+            Box<dyn InputStream>,
+            Box<dyn OutputStream>,
+            SocketAddr,
+        ),
+        Error,
+    >;
 
     fn set_nonblocking(&mut self, flag: bool) -> Result<(), Error>;
 

@@ -1,7 +1,7 @@
 use rustix::io::{PollFd, PollFlags};
 use std::thread;
 use std::time::Duration;
-use wasi_common::sched::subscription::{RwEventFlags, RwSubscriptionKind};
+use wasi_common::sched::subscription::{RwEventFlags, RwStream};
 use wasi_common::{
     sched::{Poll, WasiSched},
     Error, ErrorExt,
@@ -12,11 +12,11 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
     // separately below.
     let mut ready = false;
     let mut pollfds = Vec::new();
-    for (rwsub, kind) in poll.rw_subscriptions() {
-        match kind {
-            RwSubscriptionKind::Read => {
+    for rwsub in poll.rw_subscriptions() {
+        match rwsub.stream {
+            RwStream::Read(stream) => {
                 // Poll things that can be polled.
-                if let Some(fd) = rwsub.stream.pollable_read() {
+                if let Some(fd) = stream.pollable_read() {
                     #[cfg(unix)]
                     {
                         pollfds.push(PollFd::from_borrowed_fd(fd, PollFlags::IN));
@@ -34,7 +34,7 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
 
                 // Allow in-memory buffers or other immediately-available
                 // sources to complete successfully.
-                if let Ok(nbytes) = rwsub.stream.num_ready_bytes().await {
+                if let Ok(nbytes) = stream.num_ready_bytes().await {
                     if nbytes != 0 {
                         rwsub.complete(RwEventFlags::empty());
                         ready = true;
@@ -45,8 +45,8 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
                 return Err(Error::invalid_argument().context("stream is not pollable for reading"));
             }
 
-            RwSubscriptionKind::Write => {
-                let fd = rwsub.stream.pollable_write().ok_or(
+            RwStream::Write(stream) => {
+                let fd = stream.pollable_write().ok_or(
                     Error::invalid_argument().context("stream is not pollable for writing"),
                 )?;
 
@@ -98,22 +98,13 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
             }
         }
 
-        assert_eq!(
-            poll.rw_subscriptions()
-                .filter(|(sub, _kind)| !sub.is_complete())
-                .count(),
-            pollfds.len()
-        );
+        assert_eq!(poll.rw_subscriptions().count(), pollfds.len());
 
         // If the OS `poll` returned events, record them.
         if ready {
             // Iterate through the stream subscriptions, skipping those that
             // were already completed due to being immediately available.
-            for ((rwsub, _kind), pollfd) in poll
-                .rw_subscriptions()
-                .filter(|(sub, _kind)| !sub.is_complete())
-                .zip(pollfds.into_iter())
-            {
+            for (rwsub, pollfd) in poll.rw_subscriptions().zip(pollfds.into_iter()) {
                 let revents = pollfd.revents();
                 if revents.contains(PollFlags::NVAL) {
                     rwsub.error(Error::badf());
