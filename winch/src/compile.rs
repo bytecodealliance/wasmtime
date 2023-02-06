@@ -56,7 +56,7 @@ fn compile(
 ) -> Result<()> {
     let index = module.func_index(f.0);
     let sig = types
-        .func_type_at(index.as_u32())
+        .function_at(index.as_u32())
         .expect(&format!("function type at index {:?}", index.as_u32()));
     let FunctionBodyData { body, validator } = f.1;
     let validator = validator.into_validator(Default::default());
@@ -64,6 +64,7 @@ fn compile(
         .compile_function(&sig, &body, validator)
         .expect("Couldn't compile function");
 
+    println!("Disassembly for function: {}", index.as_u32());
     disasm(buffer.data(), isa)?
         .iter()
         .for_each(|s| println!("{}", s));
