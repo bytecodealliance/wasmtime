@@ -430,6 +430,9 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
             if flags.contains(wasi_filesystem::DescriptorFlags::SYNC) {
                 fs_flags |= FDFLAGS_SYNC;
             }
+            if file.append {
+                fs_flags |= FDFLAGS_APPEND;
+            }
             let fs_rights_inheriting = fs_rights_base;
 
             stat.write(Fdstat {
