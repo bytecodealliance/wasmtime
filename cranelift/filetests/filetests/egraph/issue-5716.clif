@@ -11,6 +11,7 @@
 
 test compile
 set opt_level=speed_and_size
+target aarch64
 
 function u0:33() system_v {
 ss0 = explicit_slot 32
