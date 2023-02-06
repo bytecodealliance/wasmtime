@@ -6,7 +6,51 @@ Unreleased.
 
 ### Added
 
+* Wasmtime's built-in cache can now be disabled after being enabled previously.
+  [#5542](https://github.com/bytecodealliance/wasmtime/pull/5542)
+
+* Older x86\_64 CPUs, without SSE4.1 for example, are now supported when the
+  wasm SIMD proposal is disabled.
+  [#5567](https://github.com/bytecodealliance/wasmtime/pull/5567)
+
+* The Wasmtime C API now has `WASMTIME_VERSION_*` macros defined in its header
+  files.
+  [#5651](https://github.com/bytecodealliance/wasmtime/pull/5651)
+
+* The `wasmtime` CLI executable as part of Wasmtime's precompiled release
+  artifacts now has the `all-arch` feature enabled.
+  [#5657](https://github.com/bytecodealliance/wasmtime/pull/5657)
+
 ### Changed
+
+* Equality of `wasmtime::component::Val::Float{32,64}` now considers NaNs as
+  equal for assistance when fuzzing.
+  [#5535](https://github.com/bytecodealliance/wasmtime/pull/5535)
+
+* WIT syntax supported by `wasmtime::component::bindgen!` has been updated in
+  addition to the generated code being updated.
+  [#5565](https://github.com/bytecodealliance/wasmtime/pull/5565)
+  [#5692](https://github.com/bytecodealliance/wasmtime/pull/5692)
+  [#5694](https://github.com/bytecodealliance/wasmtime/pull/5694)
+
+* Cranelift's egraph-based optimization framework is now enabled by default.
+  [#5587](https://github.com/bytecodealliance/wasmtime/pull/5587)
+
+* The old `PoolingAllocationStrategy` type has been removed in favor of a more
+  flexible configuration via a new option
+  `PoolingAllocationConfig::max_unused_warm_slots` which is more flexible and
+  subsumes the previous use cases for each strategy.
+  [#5661](https://github.com/bytecodealliance/wasmtime/pull/5661)
+
+* Creation of `InstancePre` through `Linker::instantiate_pre` no longer requires
+  a `Store` to be provided. Instead a `Store`-related argument is now required
+  on `Linker::define`-style APIs instead.
+  [#5683](https://github.com/bytecodealliance/wasmtime/pull/5683)
+
+### Fixed
+
+* Compilation for FreeBSD on x86\_64 and AArch64 has been fixed.
+  [#5606](https://github.com/bytecodealliance/wasmtime/pull/5606)
 
 --------------------------------------------------------------------------------
 
