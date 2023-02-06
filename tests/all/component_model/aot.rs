@@ -62,7 +62,7 @@ fn mildly_more_interesting() -> Result<()> {
     let component = unsafe { Component::deserialize(&engine, &component)? };
     let mut store = Store::new(&engine, ());
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
-    let func = instance.get_typed_func::<(), (u32,), _>(&mut store, "a")?;
+    let func = instance.get_typed_func::<(), (u32,)>(&mut store, "a")?;
     assert_eq!(func.call(&mut store, ())?, (103,));
 
     Ok(())

@@ -28,13 +28,13 @@ async fn smoke() -> Result<()> {
         .instantiate_async(&mut store, &component)
         .await?;
 
-    let thunk = instance.get_typed_func::<(), (), _>(&mut store, "thunk")?;
+    let thunk = instance.get_typed_func::<(), ()>(&mut store, "thunk")?;
 
     thunk.call_async(&mut store, ()).await?;
     thunk.post_return_async(&mut store).await?;
 
     let err = instance
-        .get_typed_func::<(), (), _>(&mut store, "thunk-trap")?
+        .get_typed_func::<(), ()>(&mut store, "thunk-trap")?
         .call_async(&mut store, ())
         .await
         .unwrap_err();
@@ -79,7 +79,7 @@ async fn smoke_func_wrap() -> Result<()> {
 
     let instance = linker.instantiate_async(&mut store, &component).await?;
 
-    let thunk = instance.get_typed_func::<(), (), _>(&mut store, "thunk")?;
+    let thunk = instance.get_typed_func::<(), ()>(&mut store, "thunk")?;
 
     thunk.call_async(&mut store, ()).await?;
     thunk.post_return_async(&mut store).await?;
