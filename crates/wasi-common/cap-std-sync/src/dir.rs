@@ -2,7 +2,6 @@ use crate::file::{filetype_from, File};
 use cap_fs_ext::{DirEntryExt, DirExt, MetadataExt, SystemTimeSpec};
 use std::any::Any;
 use std::path::{Path, PathBuf};
-use system_interface::fs::GetSetFdFlags;
 use wasi_common::{
     dir::{ReaddirCursor, ReaddirEntity, WasiDir},
     file::{FdFlags, FileType, Filestat, OFlags, WasiFile},
@@ -59,24 +58,23 @@ impl Dir {
         } else {
             opts.follow(FollowSymlinks::No);
         }
-        // the DSYNC, SYNC, and RSYNC flags are ignored! We do not
-        // have support for them in cap-std yet.
-        // ideally OpenOptions would just support this though:
-        // https://github.com/bytecodealliance/cap-std/issues/146
-        if fdflags.intersects(
-            wasi_common::file::FdFlags::DSYNC
-                | wasi_common::file::FdFlags::SYNC
-                | wasi_common::file::FdFlags::RSYNC,
-        ) {
-            return Err(Error::not_supported().context("SYNC family of FdFlags"));
+
+        use cap_fs_ext::OpenOptionsSyncExt;
+        if fdflags.contains(wasi_common::file::FdFlags::DSYNC) {
+            opts.dsync(true);
+        }
+        if fdflags.contains(wasi_common::file::FdFlags::SYNC) {
+            opts.sync(true);
+        }
+        if fdflags.contains(wasi_common::file::FdFlags::RSYNC) {
+            opts.rsync(true);
+        }
+        if fdflags.contains(wasi_common::file::FdFlags::NONBLOCK) {
+            opts.nonblock(true);
         }
 
-        let mut f = self.0.open_with(Path::new(path), &opts)?;
-        // NONBLOCK does not have an OpenOption either, but we can patch that on with set_fd_flags:
-        if fdflags.contains(wasi_common::file::FdFlags::NONBLOCK) {
-            let set_fd_flags = f.new_set_fd_flags(system_interface::fs::FdFlags::NONBLOCK)?;
-            f.set_fd_flags(set_fd_flags)?;
-        }
+        let f = self.0.open_with(Path::new(path), &opts)?;
+
         Ok(File::from_cap_std(f))
     }
 
