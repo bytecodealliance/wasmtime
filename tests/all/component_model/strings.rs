@@ -179,7 +179,7 @@ fn test_roundtrip(engine: &Engine, src: &str, dst: &str) -> Result<()> {
         },
     )?;
     let instance = linker.instantiate(&mut store, &component)?;
-    let func = instance.get_typed_func::<(String,), (String,), _>(&mut store, "echo")?;
+    let func = instance.get_typed_func::<(String,), (String,)>(&mut store, "echo")?;
 
     for string in STRINGS {
         println!("testing string {string:?}");
@@ -317,7 +317,7 @@ fn test_ptr_overflow(engine: &Engine, src: &str, dst: &str) -> Result<()> {
     let mut test_overflow = |size: u32| -> Result<()> {
         println!("src={src} dst={dst} size={size:#x}");
         let instance = Linker::new(engine).instantiate(&mut store, &component)?;
-        let func = instance.get_typed_func::<(u32,), (), _>(&mut store, "f")?;
+        let func = instance.get_typed_func::<(u32,), ()>(&mut store, "f")?;
         let trap = func
             .call(&mut store, (size,))
             .unwrap_err()
@@ -420,7 +420,7 @@ fn test_realloc_oob(engine: &Engine, src: &str, dst: &str) -> Result<()> {
     let mut store = Store::new(engine, ());
 
     let instance = Linker::new(engine).instantiate(&mut store, &component)?;
-    let func = instance.get_typed_func::<(), (), _>(&mut store, "f")?;
+    let func = instance.get_typed_func::<(), ()>(&mut store, "f")?;
     let trap = func.call(&mut store, ()).unwrap_err().downcast::<Trap>()?;
     assert_eq!(trap, Trap::UnreachableCodeReached);
     Ok(())
@@ -570,7 +570,7 @@ fn test_raw_when_encoded(
     let mut store = Store::new(engine, ());
 
     let instance = Linker::new(engine).instantiate(&mut store, &component)?;
-    let func = instance.get_typed_func::<(&[u8], u32), (), _>(&mut store, "f")?;
+    let func = instance.get_typed_func::<(&[u8], u32), ()>(&mut store, "f")?;
     match func.call(&mut store, (bytes, len)) {
         Ok(_) => Ok(None),
         Err(e) => Ok(Some(e)),

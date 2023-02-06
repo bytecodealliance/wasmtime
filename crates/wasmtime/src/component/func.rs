@@ -185,7 +185,7 @@ impl Func {
     /// # use wasmtime::component::Func;
     /// # use wasmtime::Store;
     /// # fn foo(func: &Func, store: &mut Store<()>) -> anyhow::Result<()> {
-    /// let typed = func.typed::<(), (), _>(&store)?;
+    /// let typed = func.typed::<(), ()>(&store)?;
     /// typed.call(store, ())?;
     /// # Ok(())
     /// # }
@@ -198,7 +198,7 @@ impl Func {
     /// # use wasmtime::component::Func;
     /// # use wasmtime::Store;
     /// # fn foo(func: &Func, mut store: Store<()>) -> anyhow::Result<()> {
-    /// let typed = func.typed::<(&str,), (String,), _>(&store)?;
+    /// let typed = func.typed::<(&str,), (String,)>(&store)?;
     /// let ret = typed.call(&mut store, ("Hello, ",))?.0;
     /// println!("returned string was: {}", ret);
     /// # Ok(())
@@ -211,17 +211,16 @@ impl Func {
     /// # use wasmtime::component::Func;
     /// # use wasmtime::Store;
     /// # fn foo(func: &Func, mut store: Store<()>) -> anyhow::Result<()> {
-    /// let typed = func.typed::<(u32, Option<&str>, &[u8]), (bool,), _>(&store)?;
+    /// let typed = func.typed::<(u32, Option<&str>, &[u8]), (bool,)>(&store)?;
     /// let ok: bool = typed.call(&mut store, (1, Some("hello"), b"bytes!"))?.0;
     /// println!("return value was: {ok}");
     /// # Ok(())
     /// # }
     /// ```
-    pub fn typed<Params, Return, S>(&self, store: S) -> Result<TypedFunc<Params, Return>>
+    pub fn typed<Params, Return>(&self, store: impl AsContext) -> Result<TypedFunc<Params, Return>>
     where
         Params: ComponentNamedList + Lower,
         Return: ComponentNamedList + Lift,
-        S: AsContext,
     {
         self._typed(store.as_context().0)
     }

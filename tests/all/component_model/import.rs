@@ -136,7 +136,7 @@ fn simple() -> Result<()> {
     )?;
     let instance = linker.instantiate(&mut store, &component)?;
     instance
-        .get_typed_func::<(), (), _>(&mut store, "call")?
+        .get_typed_func::<(), ()>(&mut store, "call")?
         .call(&mut store, ())?;
     assert_eq!(store.data().as_ref().unwrap(), "hello world");
 
@@ -254,7 +254,7 @@ fn attempt_to_leave_during_malloc() -> Result<()> {
     // happens if we try to leave the instance.
     let trap = linker
         .instantiate(&mut store, &component)?
-        .get_typed_func::<(), (), _>(&mut store, "run")?
+        .get_typed_func::<(), ()>(&mut store, "run")?
         .call(&mut store, ())
         .unwrap_err();
     assert!(
@@ -290,7 +290,7 @@ fn attempt_to_leave_during_malloc() -> Result<()> {
     // trap.
     let trap = linker
         .instantiate(&mut store, &component)?
-        .get_typed_func::<(&str,), (), _>(&mut store, "take-string")?
+        .get_typed_func::<(&str,), ()>(&mut store, "take-string")?
         .call(&mut store, ("x",))
         .unwrap_err();
     assert!(
@@ -347,7 +347,7 @@ fn attempt_to_reenter_during_host() -> Result<()> {
         },
     )?;
     let instance = linker.instantiate(&mut store, &component)?;
-    let func = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
+    let func = instance.get_typed_func::<(), ()>(&mut store, "run")?;
     store.data_mut().func = Some(func);
     func.call(&mut store, ())?;
 
@@ -576,7 +576,7 @@ fn stack_and_heap_args_and_rets() -> Result<()> {
     )?;
     let instance = linker.instantiate(&mut store, &component)?;
     instance
-        .get_typed_func::<(), (), _>(&mut store, "run")?
+        .get_typed_func::<(), ()>(&mut store, "run")?
         .call(&mut store, ())?;
 
     // Next, test the dynamic API
@@ -723,7 +723,7 @@ fn bad_import_alignment() -> Result<()> {
 
     let trap = linker
         .instantiate(&mut store, &component)?
-        .get_typed_func::<(), (), _>(&mut store, "unaligned-retptr")?
+        .get_typed_func::<(), ()>(&mut store, "unaligned-retptr")?
         .call(&mut store, ())
         .unwrap_err();
     assert!(
@@ -733,7 +733,7 @@ fn bad_import_alignment() -> Result<()> {
     );
     let trap = linker
         .instantiate(&mut store, &component)?
-        .get_typed_func::<(), (), _>(&mut store, "unaligned-argptr")?
+        .get_typed_func::<(), ()>(&mut store, "unaligned-argptr")?
         .call(&mut store, ())
         .unwrap_err();
     assert!(
@@ -787,7 +787,7 @@ fn no_actual_wasm_code() -> Result<()> {
     )?;
 
     let instance = linker.instantiate(&mut store, &component)?;
-    let thunk = instance.get_typed_func::<(), (), _>(&mut store, "thunk")?;
+    let thunk = instance.get_typed_func::<(), ()>(&mut store, "thunk")?;
 
     assert_eq!(*store.data(), 0);
     thunk.call(&mut store, ())?;

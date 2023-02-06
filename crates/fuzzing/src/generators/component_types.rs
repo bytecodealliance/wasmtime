@@ -173,7 +173,7 @@ macro_rules! define_static_api_test {
             let mut store: Store<Box<dyn Any>> = Store::new(&engine, Box::new(()));
             let instance = linker.instantiate(&mut store, &component).unwrap();
             let func = instance
-                .get_typed_func::<($($param,)*), R, _>(&mut store, EXPORT_FUNCTION)
+                .get_typed_func::<($($param,)*), R>(&mut store, EXPORT_FUNCTION)
                 .unwrap();
 
             while input.arbitrary()? {

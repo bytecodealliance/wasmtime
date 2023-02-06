@@ -165,7 +165,7 @@ fn thread_options_through_inner() -> Result<()> {
         .func_wrap("hostfn", |_, (param,): (u32,)| Ok((param.to_string(),)))?;
     let instance = linker.instantiate(&mut store, &component)?;
     let result = instance
-        .get_typed_func::<(u32,), (WasmStr,), _>(&mut store, "run")?
+        .get_typed_func::<(u32,), (WasmStr,)>(&mut store, "run")?
         .call(&mut store, (43,))?
         .0;
     assert_eq!(result.to_str(&store)?, "42");
