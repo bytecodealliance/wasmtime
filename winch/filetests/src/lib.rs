@@ -112,9 +112,9 @@ mod test {
 
         let binding = body_inputs
             .into_iter()
-            .flat_map(|func| compile(&*isa, module, types, func))
+            .map(|func| compile(&*isa, module, types, func).join("\n"))
             .collect::<Vec<String>>()
-            .join("\n");
+            .join("\n\n");
         let actual = binding.as_str();
 
         if std::env::var("WINCH_TEST_BLESS").unwrap_or_default() == "1" {
@@ -151,7 +151,7 @@ mod test {
     ) -> Vec<String> {
         let index = module.func_index(f.0);
         let sig = types
-            .func_type_at(index.as_u32())
+            .function_at(index.as_u32())
             .expect(&format!("function type at index {:?}", index.as_u32()));
         let FunctionBodyData { body, validator } = f.1;
         let validator = validator.into_validator(Default::default());
