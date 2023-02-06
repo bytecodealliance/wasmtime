@@ -65,6 +65,12 @@ notes = "I am the author of this crate."
 
 [[audits.base64]]
 who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+version = "0.21.0"
+notes = "This crate has no dependencies, no build.rs, and contains no unsafe code."
+
+[[audits.base64]]
+who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-run"
 version = "0.21.0"
 notes = "This crate has no dependencies, no build.rs, and contains no unsafe code."
