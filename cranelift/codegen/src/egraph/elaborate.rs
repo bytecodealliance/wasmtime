@@ -278,6 +278,14 @@ impl<'a> Elaborator<'a> {
                         before
                     );
 
+                    // Get the best option; we use `value` (latest
+                    // value) here so we have a full view of the
+                    // eclass.
+                    trace!("looking up best value for {}", value);
+                    let (_, best_value) = self.value_to_best_value[value];
+                    debug_assert_ne!(best_value, Value::reserved_value());
+                    trace!("elaborate: value {} -> best {}", value, best_value);
+
                     let remat = if let Some(elab_val) =
                         self.value_to_elaborated_value.get(&canonical_value)
                     {
@@ -287,7 +295,7 @@ impl<'a> Elaborator<'a> {
                         // from another block. If so, ignore the hit
                         // and recompute below.
                         let remat = elab_val.in_block != self.cur_block
-                            && self.remat_values.contains(&canonical_value);
+                            && self.remat_values.contains(&best_value);
                         if !remat {
                             trace!("elaborate: value {} -> {:?}", value, elab_val);
                             self.stats.elaborate_memoize_hit += 1;
@@ -304,19 +312,11 @@ impl<'a> Elaborator<'a> {
                         // Value not available; but still look up
                         // whether it's been flagged for remat because
                         // this affects placement.
-                        let remat = self.remat_values.contains(&canonical_value);
+                        let remat = self.remat_values.contains(&best_value);
                         trace!(" -> not present in map; remat = {}", remat);
                         remat
                     };
                     self.stats.elaborate_memoize_miss += 1;
-
-                    // Get the best option; we use `value` (latest
-                    // value) here so we have a full view of the
-                    // eclass.
-                    trace!("looking up best value for {}", value);
-                    let (_, best_value) = self.value_to_best_value[value];
-                    debug_assert_ne!(best_value, Value::reserved_value());
-                    trace!("elaborate: value {} -> best {}", value, best_value,);
 
                     // Now resolve the value to its definition to see
                     // how we can compute it.
