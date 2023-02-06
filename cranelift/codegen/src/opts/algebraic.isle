@@ -101,7 +101,7 @@
       (subsume x))
 
 ;; x ^ x == 0.
-(rule (simplify (bxor (fits_in_64 ty) x x))
+(rule (simplify (bxor (fits_in_64 (ty_int ty)) x x))
       (subsume (iconst ty (imm64 0))))
 
 ;; x ^ not(x) == not(x) ^ x == -1.
@@ -167,6 +167,9 @@
       (iadd ty x x))
 
 ;; x*c == x<<log2(c) when c is a power of two.
+;; Note that the type of `iconst` must be the same as the type of `imul`,
+;; so these rules can only fire in situations where it's safe to construct an
+;; `iconst` of that type.
 (rule (simplify (imul ty x (iconst _ (imm64_power_of_two c))))
       (ishl ty x (iconst ty (imm64 c))))
 (rule (simplify (imul ty (iconst _ (imm64_power_of_two c)) x))
@@ -252,34 +255,34 @@
 ;; `x == x` is always true for integers; `x != x` is false. Strict
 ;; inequalities are false, and loose inequalities are true.
 (rule (simplify
-       (icmp (ty_int ty) (IntCC.Equal) x x))
+       (icmp (fits_in_64 (ty_int ty)) (IntCC.Equal) x x))
       (iconst ty (imm64 1)))
 (rule (simplify
-       (icmp (ty_int ty) (IntCC.NotEqual) x x))
+       (icmp (fits_in_64 (ty_int ty)) (IntCC.NotEqual) x x))
       (iconst ty (imm64 0)))
 (rule (simplify
-       (icmp (ty_int ty) (IntCC.UnsignedGreaterThan) x x))
+       (icmp (fits_in_64 (ty_int ty)) (IntCC.UnsignedGreaterThan) x x))
       (iconst ty (imm64 0)))
 (rule (simplify
-       (icmp (ty_int ty) (IntCC.UnsignedGreaterThanOrEqual) x x))
+       (icmp (fits_in_64 (ty_int ty)) (IntCC.UnsignedGreaterThanOrEqual) x x))
       (iconst ty (imm64 1)))
 (rule (simplify
-       (icmp (ty_int ty) (IntCC.SignedGreaterThan) x x))
+       (icmp (fits_in_64 (ty_int ty)) (IntCC.SignedGreaterThan) x x))
       (iconst ty (imm64 0)))
 (rule (simplify
-       (icmp (ty_int ty) (IntCC.SignedGreaterThanOrEqual) x x))
+       (icmp (fits_in_64 (ty_int ty)) (IntCC.SignedGreaterThanOrEqual) x x))
       (iconst ty (imm64 1)))
 (rule (simplify
-       (icmp (ty_int ty) (IntCC.UnsignedLessThan) x x))
+       (icmp (fits_in_64 (ty_int ty)) (IntCC.UnsignedLessThan) x x))
       (iconst ty (imm64 0)))
 (rule (simplify
-       (icmp (ty_int ty) (IntCC.UnsignedLessThanOrEqual) x x))
+       (icmp (fits_in_64 (ty_int ty)) (IntCC.UnsignedLessThanOrEqual) x x))
       (iconst ty (imm64 1)))
 (rule (simplify
-       (icmp (ty_int ty) (IntCC.SignedLessThan) x x))
+       (icmp (fits_in_64 (ty_int ty)) (IntCC.SignedLessThan) x x))
       (iconst ty (imm64 0)))
 (rule (simplify
-       (icmp (ty_int ty) (IntCC.SignedLessThanOrEqual) x x))
+       (icmp (fits_in_64 (ty_int ty)) (IntCC.SignedLessThanOrEqual) x x))
       (iconst ty (imm64 1)))
 
 ;; (x ^ -1) can be replaced with the `bnot` instruction
