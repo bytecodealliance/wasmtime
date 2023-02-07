@@ -26,6 +26,7 @@ tracing = { workspace = true }
 cap-std = { workspace = true }
 cap-rand = { workspace = true }
 bitflags = { workspace = true }
+log = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["fs"] }

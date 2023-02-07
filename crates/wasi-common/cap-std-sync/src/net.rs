@@ -86,22 +86,21 @@ macro_rules! wasi_listen_write_impl {
             fn pollable(&self) -> Option<rustix::fd::BorrowedFd> {
                 Some(self.0.as_fd())
             }
-
             #[cfg(windows)]
             fn pollable(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
                 Some(self.0.as_raw_handle_or_socket())
             }
-            async fn sock_accept(&mut self, fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
+            async fn sock_accept(&self, fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
                 let (stream, _) = self.0.accept()?;
                 let mut stream = <$stream>::from_cap_std(stream);
                 stream.set_fdflags(fdflags).await?;
                 Ok(Box::new(stream))
             }
-            async fn get_filetype(&mut self) -> Result<FileType, Error> {
+            async fn get_filetype(&self) -> Result<FileType, Error> {
                 Ok(FileType::SocketStream)
             }
             #[cfg(unix)]
-            async fn get_fdflags(&mut self) -> Result<FdFlags, Error> {
+            async fn get_fdflags(&self) -> Result<FdFlags, Error> {
                 let fdflags = get_fd_flags(&self.0)?;
                 Ok(fdflags)
             }
@@ -117,7 +116,7 @@ macro_rules! wasi_listen_write_impl {
                 }
                 Ok(())
             }
-            async fn num_ready_bytes(&self) -> Result<u64, Error> {
+            fn num_ready_bytes(&self) -> Result<u64, Error> {
                 Ok(1)
             }
         }
@@ -180,16 +179,15 @@ macro_rules! wasi_stream_write_impl {
             fn pollable(&self) -> Option<rustix::fd::BorrowedFd> {
                 Some(self.0.as_fd())
             }
-
             #[cfg(windows)]
             fn pollable(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
                 Some(self.0.as_raw_handle_or_socket())
             }
-            async fn get_filetype(&mut self) -> Result<FileType, Error> {
+            async fn get_filetype(&self) -> Result<FileType, Error> {
                 Ok(FileType::SocketStream)
             }
             #[cfg(unix)]
-            async fn get_fdflags(&mut self) -> Result<FdFlags, Error> {
+            async fn get_fdflags(&self) -> Result<FdFlags, Error> {
                 let fdflags = get_fd_flags(&self.0)?;
                 Ok(fdflags)
             }
@@ -206,23 +204,23 @@ macro_rules! wasi_stream_write_impl {
                 Ok(())
             }
             async fn read_vectored<'a>(
-                &mut self,
+                &self,
                 bufs: &mut [io::IoSliceMut<'a>],
             ) -> Result<u64, Error> {
                 use std::io::Read;
                 let n = Read::read_vectored(&mut &*self.as_socketlike_view::<$std_ty>(), bufs)?;
                 Ok(n.try_into()?)
             }
-            async fn write_vectored<'a>(&mut self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
+            async fn write_vectored<'a>(&self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
                 use std::io::Write;
                 let n = Write::write_vectored(&mut &*self.as_socketlike_view::<$std_ty>(), bufs)?;
                 Ok(n.try_into()?)
             }
-            async fn peek(&mut self, buf: &mut [u8]) -> Result<u64, Error> {
+            async fn peek(&self, buf: &mut [u8]) -> Result<u64, Error> {
                 let n = self.0.peek(buf)?;
                 Ok(n.try_into()?)
             }
-            async fn num_ready_bytes(&self) -> Result<u64, Error> {
+            fn num_ready_bytes(&self) -> Result<u64, Error> {
                 let val = self.as_socketlike_view::<$std_ty>().num_ready_bytes()?;
                 Ok(val)
             }
@@ -244,7 +242,7 @@ macro_rules! wasi_stream_write_impl {
             }
 
             async fn sock_recv<'a>(
-                &mut self,
+                &self,
                 ri_data: &mut [std::io::IoSliceMut<'a>],
                 ri_flags: RiFlags,
             ) -> Result<(u64, RoFlags), Error> {
@@ -272,7 +270,7 @@ macro_rules! wasi_stream_write_impl {
             }
 
             async fn sock_send<'a>(
-                &mut self,
+                &self,
                 si_data: &[std::io::IoSlice<'a>],
                 si_flags: SiFlags,
             ) -> Result<u64, Error> {
@@ -284,7 +282,7 @@ macro_rules! wasi_stream_write_impl {
                 Ok(n as u64)
             }
 
-            async fn sock_shutdown(&mut self, how: SdFlags) -> Result<(), Error> {
+            async fn sock_shutdown(&self, how: SdFlags) -> Result<(), Error> {
                 let how = if how == SdFlags::RD | SdFlags::WR {
                     cap_std::net::Shutdown::Both
                 } else if how == SdFlags::RD {

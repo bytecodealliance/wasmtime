@@ -1,0 +1,23 @@
+[package]
+name = "wasmtime-wasi-threads"
+version.workspace = true
+authors.workspace = true
+description = "Wasmtime implementation of the wasi-threads API"
+documentation = "https://docs.rs/wasmtime-wasi-nn"
+license = "Apache-2.0 WITH LLVM-exception"
+categories = ["wasm", "parallelism", "threads"]
+keywords = ["webassembly", "wasm", "neural-network"]
+repository = "https://github.com/bytecodealliance/wasmtime"
+readme = "README.md"
+edition.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+log = { workspace = true }
+rand = "0.8"
+wasi-common = { workspace = true }
+wasmtime = { workspace = true }
+wasmtime-wasi = { workspace = true, features = ["exit"] }
+
+[badges]
+maintenance = { status = "experimental" }

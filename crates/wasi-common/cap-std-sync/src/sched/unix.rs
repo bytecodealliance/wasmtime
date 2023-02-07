@@ -55,7 +55,7 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
             let revents = pollfd.revents();
             let (nbytes, rwsub) = match rwsub {
                 Subscription::Read(sub) => {
-                    let ready = sub.file.num_ready_bytes().await?;
+                    let ready = sub.file.num_ready_bytes()?;
                     (std::cmp::max(ready, 1), sub)
                 }
                 Subscription::Write(sub) => (0, sub),

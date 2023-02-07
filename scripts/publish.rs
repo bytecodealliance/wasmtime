@@ -64,8 +64,9 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasi-tokio",
     // other misc wasmtime crates
     "wasmtime-wasi",
-    "wasmtime-wasi-nn",
     "wasmtime-wasi-crypto",
+    "wasmtime-wasi-nn",
+    "wasmtime-wasi-threads",
     "wasmtime-wast",
     "wasmtime-cli-flags",
     "wasmtime-cli",
@@ -84,8 +85,9 @@ const PUBLIC_CRATES: &[&str] = &[
     // patch releases.
     "wasmtime",
     "wasmtime-wasi",
-    "wasmtime-wasi-nn",
     "wasmtime-wasi-crypto",
+    "wasmtime-wasi-nn",
+    "wasmtime-wasi-threads",
     "wasmtime-cli",
     // all cranelift crates are considered "public" in that they can't
     // have breaking API changes in patch releases

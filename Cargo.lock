@@ -3149,6 +3149,7 @@ dependencies = [
  "cap-rand",
  "cap-std",
  "io-extras",
+ "log",
  "rustix",
  "thiserror",
  "tracing",
@@ -3506,6 +3507,7 @@ dependencies = [
  "wasmtime-wasi",
  "wasmtime-wasi-crypto",
  "wasmtime-wasi-nn",
+ "wasmtime-wasi-threads",
  "wasmtime-wast",
  "wast 52.0.2",
  "wat",
@@ -3746,6 +3748,7 @@ name = "wasmtime-wasi"
 version = "7.0.0"
 dependencies = [
  "anyhow",
+ "libc",
  "wasi-cap-std-sync",
  "wasi-common",
  "wasi-tokio",
@@ -3772,6 +3775,18 @@ dependencies = [
  "thiserror",
  "walkdir",
  "wiggle",
+]
+
+[[package]]
+name = "wasmtime-wasi-threads"
+version = "7.0.0"
+dependencies = [
+ "anyhow",
+ "log",
+ "rand 0.8.5",
+ "wasi-common",
+ "wasmtime",
+ "wasmtime-wasi",
 ]
 
 [[package]]

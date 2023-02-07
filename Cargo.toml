@@ -28,13 +28,13 @@ wasmtime-cli-flags = { workspace = true }
 wasmtime-cranelift = { workspace = true }
 wasmtime-environ = { workspace = true }
 wasmtime-wast = { workspace = true }
-wasmtime-wasi = { workspace = true }
+wasmtime-wasi = { workspace = true, features = ["exit"] }
 wasmtime-wasi-crypto = { workspace = true, optional = true }
 wasmtime-wasi-nn = { workspace = true, optional = true }
+wasmtime-wasi-threads = { workspace = true, optional = true }
 clap = { workspace = true, features = ["color", "suggestions", "derive"] }
 anyhow = { workspace = true }
 target-lexicon = { workspace = true }
-libc = "0.2.60"
 humantime = "2.0.0"
 once_cell = { workspace = true }
 listenfd = "1.0.0"
@@ -68,6 +68,7 @@ wasmtime-component-util = { workspace = true }
 component-macro-test = { path = "crates/misc/component-macro-test" }
 component-test-util = { workspace = true }
 bstr = "0.2.17"
+libc = "0.2.60"
 
 [target.'cfg(windows)'.dev-dependencies]
 windows-sys = { workspace = true, features = ["Win32_System_Memory"] }
@@ -124,6 +125,7 @@ wasmtime-wast = { path = "crates/wast", version = "=7.0.0" }
 wasmtime-wasi = { path = "crates/wasi", version = "7.0.0" }
 wasmtime-wasi-crypto = { path = "crates/wasi-crypto", version = "7.0.0" }
 wasmtime-wasi-nn = { path = "crates/wasi-nn", version = "7.0.0" }
+wasmtime-wasi-threads = { path = "crates/wasi-threads", version = "7.0.0" }
 wasmtime-component-util = { path = "crates/component-util", version = "=7.0.0" }
 wasmtime-component-macro = { path = "crates/component-macro", version = "=7.0.0" }
 wasmtime-asm-macros = { path = "crates/asm-macros", version = "=7.0.0" }
@@ -205,6 +207,7 @@ jitdump = ["wasmtime/jitdump"]
 vtune = ["wasmtime/vtune"]
 wasi-crypto = ["dep:wasmtime-wasi-crypto"]
 wasi-nn = ["dep:wasmtime-wasi-nn"]
+wasi-threads = ["dep:wasmtime-wasi-threads"]
 pooling-allocator = ["wasmtime/pooling-allocator", "wasmtime-cli-flags/pooling-allocator"]
 all-arch = ["wasmtime/all-arch"]
 posix-signals-on-macos = ["wasmtime/posix-signals-on-macos"]
