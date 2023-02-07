@@ -123,6 +123,15 @@ impl BlockCall {
     pub fn display<'a>(&self, pool: &'a ValueListPool) -> DisplayBlockCall<'a> {
         DisplayBlockCall { block: *self, pool }
     }
+
+    /// Deep-clone the underlying list in the same pool. The returned
+    /// list will have identical contents but changes to this list
+    /// will not change its contents or vice-versa.
+    pub fn deep_clone(&self, pool: &mut ValueListPool) -> Self {
+        Self {
+            values: self.values.deep_clone(pool),
+        }
+    }
 }
 
 /// Wrapper for the context needed to display a [BlockCall] value.
