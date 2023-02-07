@@ -10,7 +10,7 @@ edition.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
-base64 = "0.13.0"
+base64 = "0.21.0"
 bincode = "1.1.4"
 directories-next = "2.0"
 file-per-thread-logger = "0.1.1"
