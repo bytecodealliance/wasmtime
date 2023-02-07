@@ -49,14 +49,16 @@ fn fdstats_assert_eq(left: wasi::Fdstat, right: wasi::Fdstat) {
         left.fs_filetype, right.fs_filetype,
         "fs_filetype should be equal"
     );
-    assert_eq!(
-        left.fs_rights_base, right.fs_rights_base,
-        "fs_rights_base should be equal"
-    );
-    assert_eq!(
-        left.fs_rights_inheriting, right.fs_rights_inheriting,
-        "fs_rights_inheriting should be equal"
-    );
+    if TESTCONFIG.support_rights_readback() {
+        assert_eq!(
+            left.fs_rights_base, right.fs_rights_base,
+            "fs_rights_base should be equal"
+        );
+        assert_eq!(
+            left.fs_rights_inheriting, right.fs_rights_inheriting,
+            "fs_rights_inheriting should be equal"
+        );
+    }
 }
 
 unsafe fn check_rights(orig_fd: wasi::Fd, link_fd: wasi::Fd) {

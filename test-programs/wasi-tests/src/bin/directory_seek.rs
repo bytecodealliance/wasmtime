@@ -1,5 +1,5 @@
 use std::{env, process};
-use wasi_tests::{assert_errno, open_scratch_directory};
+use wasi_tests::{assert_errno, open_scratch_directory, TESTCONFIG};
 
 unsafe fn test_directory_seek(dir_fd: wasi::Fd) {
     // Create a directory in the scratch directory.
@@ -34,11 +34,13 @@ unsafe fn test_directory_seek(dir_fd: wasi::Fd) {
         wasi::FILETYPE_DIRECTORY,
         "expected the scratch directory to be a directory",
     );
-    assert_eq!(
-        (fdstat.fs_rights_base & wasi::RIGHTS_FD_SEEK),
-        0,
-        "directory does NOT have the seek right",
-    );
+    if TESTCONFIG.support_rights_readback() {
+        assert_eq!(
+            (fdstat.fs_rights_base & wasi::RIGHTS_FD_SEEK),
+            0,
+            "directory does NOT have the seek right",
+        );
+    }
 
     // Clean up.
     wasi::fd_close(fd).expect("failed to close fd");

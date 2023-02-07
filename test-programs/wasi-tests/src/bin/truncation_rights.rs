@@ -1,5 +1,5 @@
 use std::{env, process};
-use wasi_tests::{assert_errno, create_file, open_scratch_directory};
+use wasi_tests::{assert_errno, create_file, open_scratch_directory, TESTCONFIG};
 
 unsafe fn test_truncation_rights(dir_fd: wasi::Fd) {
     // Create a file in the scratch directory.
@@ -13,18 +13,22 @@ unsafe fn test_truncation_rights(dir_fd: wasi::Fd) {
         wasi::FILETYPE_DIRECTORY,
         "expected the scratch directory to be a directory",
     );
-    assert_eq!(
-        dir_fdstat.fs_flags, 0,
-        "expected the scratch directory to have no special flags",
-    );
-    assert_eq!(
-        dir_fdstat.fs_rights_base & wasi::RIGHTS_FD_FILESTAT_SET_SIZE,
-        0,
-        "directories shouldn't have the fd_filestat_set_size right",
-    );
+    if TESTCONFIG.support_rights_readback() {
+        assert_eq!(
+            dir_fdstat.fs_flags, 0,
+            "expected the scratch directory to have no special flags",
+        );
+        assert_eq!(
+            dir_fdstat.fs_rights_base & wasi::RIGHTS_FD_FILESTAT_SET_SIZE,
+            0,
+            "directories shouldn't have the fd_filestat_set_size right",
+        );
+    }
 
     // If we have the right to set sizes from paths, test that it works.
-    if (dir_fdstat.fs_rights_base & wasi::RIGHTS_PATH_FILESTAT_SET_SIZE) == 0 {
+    if TESTCONFIG.support_rights_readback()
+        && (dir_fdstat.fs_rights_base & wasi::RIGHTS_PATH_FILESTAT_SET_SIZE) == 0
+    {
         eprintln!("implementation doesn't support setting file sizes, skipping");
     } else {
         // Test that we can truncate the file.

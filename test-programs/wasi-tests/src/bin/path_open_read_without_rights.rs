@@ -1,23 +1,27 @@
 use std::{env, process};
-use wasi_tests::{assert_errno, create_file, drop_rights, fd_get_rights, open_scratch_directory};
+use wasi_tests::{
+    assert_errno, create_file, drop_rights, fd_get_rights, open_scratch_directory, TESTCONFIG,
+};
 
 const TEST_FILENAME: &'static str = "file";
 
 unsafe fn try_read_file(dir_fd: wasi::Fd) {
     let fd = wasi::path_open(dir_fd, 0, TEST_FILENAME, 0, 0, 0, 0).expect("opening the file");
 
-    // Check that we don't have the right to exeucute fd_read
-    let (rbase, rinher) = fd_get_rights(fd);
-    assert_eq!(
-        rbase & wasi::RIGHTS_FD_READ,
-        0,
-        "should not have base RIGHTS_FD_READ"
-    );
-    assert_eq!(
-        rinher & wasi::RIGHTS_FD_READ,
-        0,
-        "should not have inheriting RIGHTS_FD_READ"
-    );
+    if TESTCONFIG.support_rights_readback() {
+        // Check that we don't have the right to exeucute fd_read
+        let (rbase, rinher) = fd_get_rights(fd);
+        assert_eq!(
+            rbase & wasi::RIGHTS_FD_READ,
+            0,
+            "should not have base RIGHTS_FD_READ"
+        );
+        assert_eq!(
+            rinher & wasi::RIGHTS_FD_READ,
+            0,
+            "should not have inheriting RIGHTS_FD_READ"
+        );
+    }
 
     let contents = &mut [0u8; 1];
     let iovec = wasi::Iovec {

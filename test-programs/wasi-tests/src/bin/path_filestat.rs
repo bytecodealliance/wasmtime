@@ -33,16 +33,19 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
     );
 
     fdstat = wasi::fd_fdstat_get(file_fd).expect("fd_fdstat_get");
-    assert_eq!(
-        fdstat.fs_rights_base & wasi::RIGHTS_PATH_FILESTAT_GET,
-        0,
-        "files shouldn't have rights for path_* syscalls even if manually given",
-    );
-    assert_eq!(
-        fdstat.fs_rights_inheriting & wasi::RIGHTS_PATH_FILESTAT_GET,
-        0,
-        "files shouldn't have rights for path_* syscalls even if manually given",
-    );
+
+    if TESTCONFIG.support_rights_readback() {
+        assert_eq!(
+            fdstat.fs_rights_base & wasi::RIGHTS_PATH_FILESTAT_GET,
+            0,
+            "files shouldn't have rights for path_* syscalls even if manually given",
+        );
+        assert_eq!(
+            fdstat.fs_rights_inheriting & wasi::RIGHTS_PATH_FILESTAT_GET,
+            0,
+            "files shouldn't have rights for path_* syscalls even if manually given",
+        );
+    }
     assert_eq!(
         fdstat.fs_flags & wasi::FDFLAGS_APPEND,
         wasi::FDFLAGS_APPEND,

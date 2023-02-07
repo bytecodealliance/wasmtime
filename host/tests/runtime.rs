@@ -446,7 +446,7 @@ async fn run_with_temp_dir(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Resu
         0 as InputStream,
         1 as OutputStream,
         &["program", "/foo"],
-        &[],
+        &[("NO_RIGHTS_READBACK_SUPPORT", "1")],
         &[(descriptor, "/foo")],
     )
     .await?
