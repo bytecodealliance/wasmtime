@@ -92,11 +92,6 @@ impl Value {
 /// the `Value` of such instructions, use [`inst_results`](super::DataFlowGraph::inst_results) or
 /// its analogue in `cranelift_frontend::FuncBuilder`.
 ///
-/// If you look around the API, you can find many inventive uses for `Inst`,
-/// such as [annotating specific instructions with a comment][inst_comment]
-/// or [performing reflection at compile time](super::DataFlowGraph::analyze_branch)
-/// on the type of instruction.
-///
 /// [inst_comment]: https://github.com/bjorn3/rustc_codegen_cranelift/blob/0f8814fd6da3d436a90549d4bb19b94034f2b19c/src/pretty_clif.rs
 ///
 /// While the order is stable, it is arbitrary and does not necessarily resemble the layout order.

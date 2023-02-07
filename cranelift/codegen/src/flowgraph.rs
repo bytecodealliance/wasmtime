@@ -22,8 +22,7 @@
 
 use crate::bforest;
 use crate::entity::SecondaryMap;
-use crate::ir::instructions::BranchInfo;
-use crate::ir::{Block, Function, Inst};
+use crate::ir::{self, Block, Function, Inst};
 use crate::timing;
 use core::mem;
 
@@ -118,22 +117,31 @@ impl ControlFlowGraph {
 
     fn compute_block(&mut self, func: &Function, block: Block) {
         if let Some(inst) = func.layout.last_inst(block) {
-            match func.dfg.analyze_branch(inst) {
-                BranchInfo::SingleDest(dest) => {
+            match func.dfg.insts[inst] {
+                ir::InstructionData::Jump {
+                    destination: dest, ..
+                } => {
                     self.add_edge(block, inst, dest.block(&func.dfg.value_lists));
                 }
-                BranchInfo::Conditional(block_then, block_else) => {
+                ir::InstructionData::Brif {
+                    blocks: [block_then, block_else],
+                    ..
+                } => {
                     self.add_edge(block, inst, block_then.block(&func.dfg.value_lists));
                     self.add_edge(block, inst, block_else.block(&func.dfg.value_lists));
                 }
-                BranchInfo::Table(jt, dest) => {
+                ir::InstructionData::BranchTable {
+                    table: jt,
+                    destination: dest,
+                    ..
+                } => {
                     self.add_edge(block, inst, dest);
 
                     for dest in func.jump_tables[jt].iter() {
                         self.add_edge(block, inst, *dest);
                     }
                 }
-                BranchInfo::NotABranch => {}
+                _ => {}
             }
         }
     }

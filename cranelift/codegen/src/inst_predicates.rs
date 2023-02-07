@@ -1,7 +1,6 @@
 //! Instruction predicates/properties, shared by various analyses.
 use crate::ir::immediates::Offset32;
-use crate::ir::instructions::BranchInfo;
-use crate::ir::{Block, DataFlowGraph, Function, Inst, InstructionData, Opcode, Type, Value};
+use crate::ir::{self, Block, DataFlowGraph, Function, Inst, InstructionData, Opcode, Type, Value};
 use cranelift_entity::EntityRef;
 
 /// Preserve instructions with used result values.
@@ -176,16 +175,26 @@ pub(crate) fn visit_block_succs<F: FnMut(Inst, Block, bool)>(
     mut visit: F,
 ) {
     if let Some(inst) = f.layout.last_inst(block) {
-        match f.dfg.insts[inst].analyze_branch() {
-            BranchInfo::NotABranch => {}
-            BranchInfo::SingleDest(dest) => {
+        match f.dfg.insts[inst] {
+            ir::InstructionData::Jump {
+                destination: dest, ..
+            } => {
                 visit(inst, dest.block(&f.dfg.value_lists), false);
             }
-            BranchInfo::Conditional(block_then, block_else) => {
+
+            ir::InstructionData::Brif {
+                blocks: [block_then, block_else],
+                ..
+            } => {
                 visit(inst, block_then.block(&f.dfg.value_lists), false);
                 visit(inst, block_else.block(&f.dfg.value_lists), false);
             }
-            BranchInfo::Table(table, dest) => {
+
+            ir::InstructionData::BranchTable {
+                table,
+                destination: dest,
+                ..
+            } => {
                 // The default block is reached via a direct conditional branch,
                 // so it is not part of the table.
                 visit(inst, dest, false);
@@ -194,6 +203,8 @@ pub(crate) fn visit_block_succs<F: FnMut(Inst, Block, bool)>(
                     visit(inst, dest, true);
                 }
             }
+
+            _ => {}
         }
     }
 }

@@ -106,17 +106,20 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
             self.builder.func.set_srcloc(inst, self.builder.srcloc);
         }
 
-        match self.builder.func.dfg.analyze_branch(inst) {
-            ir::instructions::BranchInfo::NotABranch => (),
-
-            ir::instructions::BranchInfo::SingleDest(dest) => {
+        match self.builder.func.dfg.insts[inst] {
+            ir::InstructionData::Jump {
+                destination: dest, ..
+            } => {
                 // If the user has supplied jump arguments we must adapt the arguments of
                 // the destination block
                 let block = dest.block(&self.builder.func.dfg.value_lists);
                 self.builder.declare_successor(block, inst);
             }
 
-            ir::instructions::BranchInfo::Conditional(branch_then, branch_else) => {
+            ir::InstructionData::Brif {
+                blocks: [branch_then, branch_else],
+                ..
+            } => {
                 let block_then = branch_then.block(&self.builder.func.dfg.value_lists);
                 let block_else = branch_else.block(&self.builder.func.dfg.value_lists);
 
@@ -126,7 +129,9 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
                 }
             }
 
-            ir::instructions::BranchInfo::Table(table, destination) => {
+            ir::InstructionData::BranchTable {
+                table, destination, ..
+            } => {
                 // Unlike all other jumps/branches, jump tables are
                 // capable of having the same successor appear
                 // multiple times, so we must deduplicate.
@@ -149,6 +154,8 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
                 }
                 self.builder.declare_successor(destination, inst);
             }
+
+            _ => {}
         }
 
         if data.opcode().is_terminator() {

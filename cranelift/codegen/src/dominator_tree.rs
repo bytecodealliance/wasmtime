@@ -2,8 +2,7 @@
 
 use crate::entity::SecondaryMap;
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
-use crate::ir::instructions::BranchInfo;
-use crate::ir::{Block, ExpandedProgramPoint, Function, Inst, Layout, ProgramOrder, Value};
+use crate::ir::{self, Block, ExpandedProgramPoint, Function, Inst, Layout, ProgramOrder, Value};
 use crate::packed_option::PackedOption;
 use crate::timing;
 use alloc::vec::Vec;
@@ -352,21 +351,28 @@ impl DominatorTree {
     /// post-order except for the insertion of the new block header at the split point.
     fn push_successors(&mut self, func: &Function, block: Block) {
         if let Some(inst) = func.layout.last_inst(block) {
-            match func.dfg.analyze_branch(inst) {
-                BranchInfo::SingleDest(succ) => {
-                    self.push_if_unseen(succ.block(&func.dfg.value_lists))
-                }
-                BranchInfo::Conditional(block_then, block_else) => {
+            match func.dfg.insts[inst] {
+                ir::InstructionData::Jump {
+                    destination: succ, ..
+                } => self.push_if_unseen(succ.block(&func.dfg.value_lists)),
+                ir::InstructionData::Brif {
+                    blocks: [block_then, block_else],
+                    ..
+                } => {
                     self.push_if_unseen(block_then.block(&func.dfg.value_lists));
                     self.push_if_unseen(block_else.block(&func.dfg.value_lists));
                 }
-                BranchInfo::Table(jt, dest) => {
+                ir::InstructionData::BranchTable {
+                    table: jt,
+                    destination: dest,
+                    ..
+                } => {
                     for succ in func.jump_tables[jt].iter() {
                         self.push_if_unseen(*succ);
                     }
                     self.push_if_unseen(dest);
                 }
-                BranchInfo::NotABranch => {}
+                _ => {}
             }
         }
     }

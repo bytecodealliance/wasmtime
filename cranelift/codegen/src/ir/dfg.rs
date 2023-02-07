@@ -4,7 +4,7 @@ use crate::entity::{self, PrimaryMap, SecondaryMap};
 use crate::ir;
 use crate::ir::builder::ReplaceBuilder;
 use crate::ir::dynamic_type::{DynamicTypeData, DynamicTypes};
-use crate::ir::instructions::{BranchInfo, CallInfo, InstructionData};
+use crate::ir::instructions::{CallInfo, InstructionData};
 use crate::ir::{types, ConstantData, ConstantPool, Immediate};
 use crate::ir::{
     Block, BlockCall, DynamicType, FuncRef, Inst, SigRef, Signature, Type, Value,
@@ -1033,11 +1033,6 @@ impl DataFlowGraph {
         }
 
         impl ExactSizeIterator for InstResultTypes<'_> {}
-    }
-
-    /// Check if `inst` is a branch.
-    pub fn analyze_branch(&self, inst: Inst) -> BranchInfo {
-        self.insts[inst].analyze_branch()
     }
 
     /// Compute the type of an instruction result from opcode constraints and call signatures.
