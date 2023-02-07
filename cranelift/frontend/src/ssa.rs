@@ -618,7 +618,7 @@ impl SSABuilder {
                     jt = func.create_jump_table(copied);
                 }
 
-                // Redo the match from, but this time capture mutable references
+                // Redo the match from above, but this time capture mutable references
                 match &mut func.dfg.insts[branch] {
                     InstructionData::BranchTable {
                         destination, table, ..
