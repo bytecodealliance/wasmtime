@@ -20,7 +20,7 @@
 //      memories: [*mut VMMemoryDefinition; module.num_defined_memories],
 //      owned_memories: [VMMemoryDefinition; module.num_owned_memories],
 //      globals: [VMGlobalDefinition; module.num_defined_globals],
-//      anyfuncs: [VMCallerCheckedAnyfunc; module.num_escaped_funcs],
+//      anyfuncs: [VMCallerCheckedFuncRef; module.num_escaped_funcs],
 // }
 
 use crate::{
@@ -101,26 +101,26 @@ pub trait PtrSize {
     /// The offset of the `func_ptr` field.
     #[allow(clippy::erasing_op)]
     #[inline]
-    fn vmcaller_checked_anyfunc_func_ptr(&self) -> u8 {
+    fn vmcaller_checked_func_ref_func_ptr(&self) -> u8 {
         0 * self.size()
     }
 
     /// The offset of the `type_index` field.
     #[allow(clippy::identity_op)]
     #[inline]
-    fn vmcaller_checked_anyfunc_type_index(&self) -> u8 {
+    fn vmcaller_checked_func_ref_type_index(&self) -> u8 {
         1 * self.size()
     }
 
     /// The offset of the `vmctx` field.
     #[inline]
-    fn vmcaller_checked_anyfunc_vmctx(&self) -> u8 {
+    fn vmcaller_checked_func_ref_vmctx(&self) -> u8 {
         2 * self.size()
     }
 
-    /// Return the size of `VMCallerCheckedAnyfunc`.
+    /// Return the size of `VMCallerCheckedFuncRef`.
     #[inline]
-    fn size_of_vmcaller_checked_anyfunc(&self) -> u8 {
+    fn size_of_vmcaller_checked_func_ref(&self) -> u8 {
         3 * self.size()
     }
 
@@ -233,7 +233,7 @@ pub struct VMOffsetsFields<P> {
     pub num_owned_memories: u32,
     /// The number of defined globals in the module.
     pub num_defined_globals: u32,
-    /// The number of escaped functions in the module, the size of the anyfunc
+    /// The number of escaped functions in the module, the size of the funcref
     /// array.
     pub num_escaped_funcs: u32,
 }
@@ -428,7 +428,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
                 = cmul(ret.num_defined_globals, ret.ptr.size_of_vmglobal_definition()),
             size(defined_anyfuncs) = cmul(
                 ret.num_escaped_funcs,
-                ret.ptr.size_of_vmcaller_checked_anyfunc(),
+                ret.ptr.size_of_vmcaller_checked_func_ref(),
             ),
         }
 
@@ -749,14 +749,14 @@ impl<P: PtrSize> VMOffsets<P> {
             + index.as_u32() * u32::from(self.ptr.size_of_vmglobal_definition())
     }
 
-    /// Return the offset to the `VMCallerCheckedAnyfunc` for the given function
+    /// Return the offset to the `VMCallerCheckedFuncRef` for the given function
     /// index (either imported or defined).
     #[inline]
     pub fn vmctx_anyfunc(&self, index: AnyfuncIndex) -> u32 {
         assert!(!index.is_reserved_value());
         assert!(index.as_u32() < self.num_escaped_funcs);
         self.vmctx_anyfuncs_begin()
-            + index.as_u32() * u32::from(self.ptr.size_of_vmcaller_checked_anyfunc())
+            + index.as_u32() * u32::from(self.ptr.size_of_vmcaller_checked_func_ref())
     }
 
     /// Return the offset to the `body` field in `*const VMFunctionBody` index `index`.

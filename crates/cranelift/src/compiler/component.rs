@@ -95,7 +95,7 @@ impl ComponentCompiler for Compiler {
             None => builder.ins().iconst(pointer_type, 0),
         });
 
-        // realloc: *mut VMCallerCheckedAnyfunc
+        // realloc: *mut VMCallerCheckedFuncRef
         host_sig.params.push(ir::AbiParam::new(pointer_type));
         callee_args.push(match realloc {
             Some(idx) => builder.ins().load(

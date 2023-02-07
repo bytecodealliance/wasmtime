@@ -11,7 +11,7 @@ use std::pin::Pin;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_runtime::{
-    ExportFunction, InstanceHandle, VMCallerCheckedAnyfunc, VMContext, VMFunctionBody,
+    ExportFunction, InstanceHandle, VMCallerCheckedFuncRef, VMContext, VMFunctionBody,
     VMFunctionImport, VMHostFuncContext, VMOpaqueContext, VMSharedSignatureIndex, VMTrampoline,
 };
 
@@ -497,7 +497,7 @@ impl Func {
 
     pub(crate) unsafe fn from_caller_checked_anyfunc(
         store: &mut StoreOpaque,
-        raw: *mut VMCallerCheckedAnyfunc,
+        raw: *mut VMCallerCheckedFuncRef,
     ) -> Option<Func> {
         let anyfunc = NonNull::new(raw)?;
         debug_assert!(anyfunc.as_ref().type_index != VMSharedSignatureIndex::default());
@@ -891,7 +891,7 @@ impl Func {
 
     pub(crate) unsafe fn call_unchecked_raw<T>(
         store: &mut StoreContextMut<'_, T>,
-        anyfunc: NonNull<VMCallerCheckedAnyfunc>,
+        anyfunc: NonNull<VMCallerCheckedFuncRef>,
         trampoline: VMTrampoline,
         params_and_returns: *mut ValRaw,
     ) -> Result<()> {
@@ -1066,7 +1066,7 @@ impl Func {
     pub(crate) fn caller_checked_anyfunc(
         &self,
         store: &StoreOpaque,
-    ) -> NonNull<VMCallerCheckedAnyfunc> {
+    ) -> NonNull<VMCallerCheckedFuncRef> {
         store.store_data()[self.0].export().anyfunc
     }
 

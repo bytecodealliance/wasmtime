@@ -1586,21 +1586,21 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<ir::Inst> {
         let pointer_type = self.pointer_type();
 
-        // Get the anyfunc pointer (the funcref) from the table.
-        let anyfunc_ptr = self.get_or_init_funcref_table_elem(builder, table_index, table, callee);
+        // Get the funcref pointer from the table.
+        let funcref_ptr = self.get_or_init_funcref_table_elem(builder, table_index, table, callee);
 
         // Check for whether the table element is null, and trap if so.
         builder
             .ins()
-            .trapz(anyfunc_ptr, ir::TrapCode::IndirectCallToNull);
+            .trapz(funcref_ptr, ir::TrapCode::IndirectCallToNull);
 
-        // Dereference anyfunc pointer to get the function address.
+        // Dereference the funcref pointer to get the function address.
         let mem_flags = ir::MemFlags::trusted();
         let func_addr = builder.ins().load(
             pointer_type,
             mem_flags,
-            anyfunc_ptr,
-            i32::from(self.offsets.ptr.vmcaller_checked_anyfunc_func_ptr()),
+            funcref_ptr,
+            i32::from(self.offsets.ptr.vmcaller_checked_func_ref_func_ptr()),
         );
 
         // If necessary, check the signature.
@@ -1612,7 +1612,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 let base = builder.ins().global_value(pointer_type, vmctx);
 
                 // Load the caller ID. This requires loading the
-                // `*mut VMCallerCheckedAnyfunc` base pointer from `VMContext`
+                // `*mut VMCallerCheckedFuncRef` base pointer from `VMContext`
                 // and then loading, based on `SignatureIndex`, the
                 // corresponding entry.
                 let mem_flags = ir::MemFlags::trusted().with_readonly();
@@ -1635,8 +1635,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 let callee_sig_id = builder.ins().load(
                     sig_id_type,
                     mem_flags,
-                    anyfunc_ptr,
-                    i32::from(self.offsets.ptr.vmcaller_checked_anyfunc_type_index()),
+                    funcref_ptr,
+                    i32::from(self.offsets.ptr.vmcaller_checked_func_ref_type_index()),
                 );
 
                 // Check that they match.
@@ -1657,8 +1657,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let vmctx = builder.ins().load(
             pointer_type,
             mem_flags,
-            anyfunc_ptr,
-            i32::from(self.offsets.ptr.vmcaller_checked_anyfunc_vmctx()),
+            funcref_ptr,
+            i32::from(self.offsets.ptr.vmcaller_checked_func_ref_vmctx()),
         );
         real_call_args.push(vmctx);
         real_call_args.push(caller_vmctx);

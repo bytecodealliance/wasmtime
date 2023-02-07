@@ -50,7 +50,7 @@ struct CompiledComponentInfo {
     /// section of `code_memory`.
     ///
     /// These trampolines are the function pointer within the
-    /// `VMCallerCheckedAnyfunc` and will delegate indirectly to a host function
+    /// `VMCallerCheckedFuncRef` and will delegate indirectly to a host function
     /// pointer when called.
     lowerings: PrimaryMap<LoweredIndex, FunctionLoc>,
 

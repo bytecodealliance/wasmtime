@@ -7,7 +7,7 @@ use crate::externref::VMExternRefActivationsTable;
 use crate::memory::{Memory, RuntimeMemoryCreator};
 use crate::table::{Table, TableElement, TableElementType};
 use crate::vmcontext::{
-    VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMContext, VMFunctionImport,
+    VMBuiltinFunctionsArray, VMCallerCheckedFuncRef, VMContext, VMFunctionImport,
     VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext,
     VMRuntimeLimits, VMTableDefinition, VMTableImport, VMCONTEXT_MAGIC,
 };
@@ -334,7 +334,7 @@ impl Instance {
 
     fn get_exported_func(&mut self, index: FuncIndex) -> ExportFunction {
         let anyfunc = self.get_caller_checked_anyfunc(index).unwrap();
-        let anyfunc = NonNull::new(anyfunc as *const VMCallerCheckedAnyfunc as *mut _).unwrap();
+        let anyfunc = NonNull::new(anyfunc as *const VMCallerCheckedFuncRef as *mut _).unwrap();
         ExportFunction { anyfunc }
     }
 
@@ -498,7 +498,7 @@ impl Instance {
         Layout::from_size_align(size, align).unwrap()
     }
 
-    /// Construct a new VMCallerCheckedAnyfunc for the given function
+    /// Construct a new VMCallerCheckedFuncRef for the given function
     /// (imported or defined in this module) and store into the given
     /// location. Used during lazy initialization.
     ///
@@ -511,7 +511,7 @@ impl Instance {
         &mut self,
         index: FuncIndex,
         sig: SignatureIndex,
-        into: *mut VMCallerCheckedAnyfunc,
+        into: *mut VMCallerCheckedFuncRef,
     ) {
         let type_index = unsafe {
             let base: *const VMSharedSignatureIndex =
@@ -532,7 +532,7 @@ impl Instance {
         // Safety: we have a `&mut self`, so we have exclusive access
         // to this Instance.
         unsafe {
-            *into = VMCallerCheckedAnyfunc {
+            *into = VMCallerCheckedFuncRef {
                 vmctx,
                 type_index,
                 func_ptr: NonNull::new(func_ptr).expect("Non-null function pointer"),
@@ -540,7 +540,7 @@ impl Instance {
         }
     }
 
-    /// Get a `&VMCallerCheckedAnyfunc` for the given `FuncIndex`.
+    /// Get a `&VMCallerCheckedFuncRef` for the given `FuncIndex`.
     ///
     /// Returns `None` if the index is the reserved index value.
     ///
@@ -549,7 +549,7 @@ impl Instance {
     pub(crate) fn get_caller_checked_anyfunc(
         &mut self,
         index: FuncIndex,
-    ) -> Option<*mut VMCallerCheckedAnyfunc> {
+    ) -> Option<*mut VMCallerCheckedFuncRef> {
         if index == FuncIndex::reserved_value() {
             return None;
         }
@@ -583,8 +583,8 @@ impl Instance {
             // all!
             let func = &self.module().functions[index];
             let sig = func.signature;
-            let anyfunc: *mut VMCallerCheckedAnyfunc = self
-                .vmctx_plus_offset::<VMCallerCheckedAnyfunc>(
+            let anyfunc: *mut VMCallerCheckedFuncRef = self
+                .vmctx_plus_offset::<VMCallerCheckedFuncRef>(
                     self.offsets().vmctx_anyfunc(func.anyfunc),
                 );
             self.construct_anyfunc(index, sig, anyfunc);
@@ -1034,7 +1034,7 @@ impl Instance {
                 }
                 GlobalInit::RefFunc(f) => {
                     *(*to).as_anyfunc_mut() = self.get_caller_checked_anyfunc(f).unwrap()
-                        as *const VMCallerCheckedAnyfunc;
+                        as *const VMCallerCheckedFuncRef;
                 }
                 GlobalInit::RefNullConst => match global.wasm_ty {
                     // `VMGlobalDefinition::new()` already zeroed out the bits

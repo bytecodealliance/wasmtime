@@ -56,7 +56,7 @@
 
 use crate::externref::VMExternRef;
 use crate::table::{Table, TableElementType};
-use crate::vmcontext::{VMCallerCheckedAnyfunc, VMContext};
+use crate::vmcontext::{VMCallerCheckedFuncRef, VMContext};
 use crate::TrapReason;
 use anyhow::Result;
 use std::mem;
@@ -198,14 +198,14 @@ unsafe fn table_grow(
     vmctx: *mut VMContext,
     table_index: u32,
     delta: u32,
-    // NB: we don't know whether this is a pointer to a `VMCallerCheckedAnyfunc`
+    // NB: we don't know whether this is a pointer to a `VMCallerCheckedFuncRef`
     // or is a `VMExternRef` until we look at the table type.
     init_value: *mut u8,
 ) -> Result<u32> {
     let instance = (*vmctx).instance_mut();
     let table_index = TableIndex::from_u32(table_index);
     let element = match instance.table_element_type(table_index) {
-        TableElementType::Func => (init_value as *mut VMCallerCheckedAnyfunc).into(),
+        TableElementType::Func => (init_value as *mut VMCallerCheckedFuncRef).into(),
         TableElementType::Extern => {
             let init_value = if init_value.is_null() {
                 None
@@ -230,7 +230,7 @@ unsafe fn table_fill(
     table_index: u32,
     dst: u32,
     // NB: we don't know whether this is a `VMExternRef` or a pointer to a
-    // `VMCallerCheckedAnyfunc` until we look at the table's element type.
+    // `VMCallerCheckedFuncRef` until we look at the table's element type.
     val: *mut u8,
     len: u32,
 ) -> Result<(), Trap> {
@@ -239,7 +239,7 @@ unsafe fn table_fill(
     let table = &mut *instance.get_table(table_index);
     match table.element_type() {
         TableElementType::Func => {
-            let val = val as *mut VMCallerCheckedAnyfunc;
+            let val = val as *mut VMCallerCheckedFuncRef;
             table.fill(dst, val.into(), len)
         }
         TableElementType::Extern => {
