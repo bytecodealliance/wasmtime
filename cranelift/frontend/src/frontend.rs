@@ -155,7 +155,7 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
                 self.builder.declare_successor(*destination, inst);
             }
 
-            _ => {}
+            inst => debug_assert!(!inst.opcode().is_branch()),
         }
 
         if data.opcode().is_terminator() {

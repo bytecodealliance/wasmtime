@@ -1358,7 +1358,7 @@ impl<'a> Verifier<'a> {
                     }
                 }
             }
-            _ => {}
+            inst => debug_assert!(!inst.opcode().is_branch()),
         }
 
         match self.func.dfg.insts[inst].analyze_call(&self.func.dfg.value_lists) {
