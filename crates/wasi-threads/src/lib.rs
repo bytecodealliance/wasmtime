@@ -27,6 +27,12 @@ impl<T: Clone + Send + 'static> WasiThreadsCtx<T> {
                 WASI_ENTRY_POINT
             );
         }
+        if let Err(err) = linker.instantiate_pre(&module) {
+            bail!(
+                "wasi-threads will not be able to instantiate the passed module: {:?}",
+                err
+            );
+        }
         Ok(Self { module, linker })
     }
 
@@ -44,15 +50,10 @@ impl<T: Clone + Send + 'static> WasiThreadsCtx<T> {
                 // Each new instance is created in its own store.
                 let mut store = Store::new(&module.engine(), host);
 
-                // Ideally, we would have already checked much earlier (e.g.,
-                // `new`) whether the module can be instantiated. Because
-                // `Linker::instantiate_pre` requires a `Store` and that is only
-                // available now. TODO:
-                // https://github.com/bytecodealliance/wasmtime/issues/5675.
-                let instance = linker.instantiate(&mut store, &module).expect(&format!(
-                    "wasi-thread-{} exited unsuccessfully: failed to instantiate",
-                    wasi_thread_id
-                ));
+                // We have checked during construction that the module can be
+                // instantiated and an entry point exists with the correct
+                // signature--these calls should not fail.
+                let instance = linker.instantiate(&mut store, &module).unwrap();
                 let thread_entry_point = instance
                     .get_typed_func::<(i32, i32), ()>(&mut store, WASI_ENTRY_POINT)
                     .unwrap();
