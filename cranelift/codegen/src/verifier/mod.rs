@@ -62,7 +62,7 @@ use crate::dominator_tree::DominatorTree;
 use crate::entity::SparseSet;
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::ir::entities::AnyEntity;
-use crate::ir::instructions::{BranchInfo, CallInfo, InstructionFormat, ResolvedConstraint};
+use crate::ir::instructions::{CallInfo, InstructionFormat, ResolvedConstraint};
 use crate::ir::{self, ArgumentExtension};
 use crate::ir::{
     types, ArgumentPurpose, Block, Constant, DynamicStackSlot, FuncRef, Function, GlobalValue,
@@ -1293,8 +1293,10 @@ impl<'a> Verifier<'a> {
         inst: Inst,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
-        match self.func.dfg.analyze_branch(inst) {
-            BranchInfo::SingleDest(block) => {
+        match self.func.dfg.insts[inst] {
+            ir::InstructionData::Jump {
+                destination: block, ..
+            } => {
                 let iter = self
                     .func
                     .dfg
@@ -1304,7 +1306,10 @@ impl<'a> Verifier<'a> {
                 let args = block.args_slice(&self.func.dfg.value_lists);
                 self.typecheck_variable_args_iterator(inst, iter, args, errors)?;
             }
-            BranchInfo::Conditional(block_then, block_else) => {
+            ir::InstructionData::Brif {
+                blocks: [block_then, block_else],
+                ..
+            } => {
                 let iter = self
                     .func
                     .dfg
@@ -1323,7 +1328,11 @@ impl<'a> Verifier<'a> {
                 let args_else = block_else.args_slice(&self.func.dfg.value_lists);
                 self.typecheck_variable_args_iterator(inst, iter, args_else, errors)?;
             }
-            BranchInfo::Table(table, block) => {
+            ir::InstructionData::BranchTable {
+                table,
+                destination: block,
+                ..
+            } => {
                 let arg_count = self.func.dfg.num_block_params(block);
                 if arg_count != 0 {
                     return errors.nonfatal((
@@ -1349,7 +1358,7 @@ impl<'a> Verifier<'a> {
                     }
                 }
             }
-            BranchInfo::NotABranch => {}
+            _ => {}
         }
 
         match self.func.dfg.insts[inst].analyze_call(&self.func.dfg.value_lists) {

@@ -20,7 +20,7 @@ use crate::ir::{
     self,
     condcodes::{FloatCC, IntCC},
     trapcode::TrapCode,
-    types, Block, FuncRef, JumpTable, MemFlags, SigRef, StackSlot, Type, Value,
+    types, Block, FuncRef, MemFlags, SigRef, StackSlot, Type, Value,
 };
 
 /// Some instructions use an external list of argument values because there is not enough space in
@@ -292,27 +292,6 @@ impl Default for VariableArgs {
 /// Avoid large matches on instruction formats by using the methods defined here to examine
 /// instructions.
 impl InstructionData {
-    /// Return information about the destination of a branch or jump instruction.
-    ///
-    /// Any instruction that can transfer control to another block reveals its possible destinations
-    /// here.
-    pub fn analyze_branch(&self) -> BranchInfo {
-        match *self {
-            Self::Jump { destination, .. } => BranchInfo::SingleDest(destination),
-            Self::Brif {
-                blocks: [block_then, block_else],
-                ..
-            } => BranchInfo::Conditional(block_then, block_else),
-            Self::BranchTable {
-                table, destination, ..
-            } => BranchInfo::Table(table, destination),
-            _ => {
-                debug_assert!(!self.opcode().is_branch());
-                BranchInfo::NotABranch
-            }
-        }
-    }
-
     /// Get the destinations of this instruction, if it's a branch.
     ///
     /// `br_table` returns the empty slice.
@@ -474,23 +453,6 @@ impl InstructionData {
             _ => {}
         }
     }
-}
-
-/// Information about branch and jump instructions.
-pub enum BranchInfo {
-    /// This is not a branch or jump instruction.
-    /// This instruction will not transfer control to another block in the function, but it may still
-    /// affect control flow by returning or trapping.
-    NotABranch,
-
-    /// This is a branch or jump to a single destination block, possibly taking value arguments.
-    SingleDest(BlockCall),
-
-    /// This is a conditional branch
-    Conditional(BlockCall, BlockCall),
-
-    /// This is a jump table branch which can have many destination blocks and one default block.
-    Table(JumpTable, Block),
 }
 
 /// Information about call instructions.

@@ -9,9 +9,9 @@ use crate::entity::SecondaryMap;
 use crate::fx::{FxHashMap, FxHashSet};
 use crate::inst_predicates::{has_lowering_side_effect, is_constant_64bit};
 use crate::ir::{
-    instructions, ArgumentPurpose, Block, Constant, ConstantData, DataFlowGraph, ExternalName,
-    Function, GlobalValue, GlobalValueData, Immediate, Inst, InstructionData, MemFlags, Opcode,
-    RelSourceLoc, Type, Value, ValueDef, ValueLabelAssignments, ValueLabelStart,
+    ArgumentPurpose, Block, Constant, ConstantData, DataFlowGraph, ExternalName, Function,
+    GlobalValue, GlobalValueData, Immediate, Inst, InstructionData, MemFlags, Opcode, RelSourceLoc,
+    Type, Value, ValueDef, ValueLabelAssignments, ValueLabelStart,
 };
 use crate::machinst::{
     writable_value_regs, BlockIndex, BlockLoweringOrder, Callee, LoweredBlock, MachLabel, Reg,
@@ -943,17 +943,18 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             let (inst, succ) = self.vcode.block_order().succ_indices(block)[succ_idx];
 
             // Get branch args and convert to Regs.
-            let branch_args = match self.f.dfg.analyze_branch(inst) {
-                instructions::BranchInfo::NotABranch => unreachable!(),
-                instructions::BranchInfo::SingleDest(block) => {
-                    block.args_slice(&self.f.dfg.value_lists)
-                }
-                instructions::BranchInfo::Conditional(then_block, else_block) => {
+            let branch_args = match self.f.dfg.insts[inst] {
+                InstructionData::Jump {
+                    destination: block, ..
+                } => block.args_slice(&self.f.dfg.value_lists),
+                InstructionData::Brif {
+                    blocks: [then_block, else_block],
+                    ..
+                } => {
                     // NOTE: `succ_idx == 0` implying that we're traversing the `then_block` is
                     // enforced by the traversal order defined in `visit_block_succs`. Eventually
-                    // we should traverse the `branch_destination` slice instead of the result of
-                    // analyze_branch there, which would simplify computing the branch args
-                    // significantly.
+                    // we should traverse the `branch_destination` slice there, which would
+                    // simplify computing the branch args significantly.
                     if succ_idx == 0 {
                         then_block.args_slice(&self.f.dfg.value_lists)
                     } else {
@@ -961,7 +962,8 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                         else_block.args_slice(&self.f.dfg.value_lists)
                     }
                 }
-                instructions::BranchInfo::Table(_, _) => &[],
+                InstructionData::BranchTable { .. } => &[],
+                _ => unreachable!(),
             };
             let mut branch_arg_vregs: SmallVec<[Reg; 16]> = smallvec![];
             for &arg in branch_args {

@@ -4,15 +4,12 @@
 //! instructions.
 
 use crate::entity::{PrimaryMap, SecondaryMap};
-use crate::ir;
-use crate::ir::JumpTables;
 use crate::ir::{
-    instructions::BranchInfo, Block, DynamicStackSlot, DynamicStackSlotData, DynamicType,
-    ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Inst, InstructionData, JumpTable,
-    JumpTableData, Opcode, SigRef, StackSlot, StackSlotData, Table, TableData, Type,
+    self, Block, DataFlowGraph, DynamicStackSlot, DynamicStackSlotData, DynamicStackSlots,
+    DynamicType, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Inst, InstructionData,
+    JumpTable, JumpTableData, JumpTables, Layout, Opcode, SigRef, Signature, SourceLocs, StackSlot,
+    StackSlotData, StackSlots, Table, TableData, Type,
 };
-use crate::ir::{DataFlowGraph, Layout, Signature};
-use crate::ir::{DynamicStackSlots, SourceLocs, StackSlots};
 use crate::isa::CallConv;
 use crate::value_label::ValueLabelsRanges;
 use crate::write::write_function;
@@ -280,8 +277,10 @@ impl FunctionStencil {
     /// Rewrite the branch destination to `new_dest` if the destination matches `old_dest`.
     /// Does nothing if called with a non-jump or non-branch instruction.
     pub fn rewrite_branch_destination(&mut self, inst: Inst, old_dest: Block, new_dest: Block) {
-        match self.dfg.analyze_branch(inst) {
-            BranchInfo::SingleDest(dest) => {
+        match self.dfg.insts[inst] {
+            InstructionData::Jump {
+                destination: dest, ..
+            } => {
                 if dest.block(&self.dfg.value_lists) == old_dest {
                     for block in self.dfg.insts[inst].branch_destination_mut() {
                         block.set_block(new_dest, &mut self.dfg.value_lists)
@@ -289,7 +288,10 @@ impl FunctionStencil {
                 }
             }
 
-            BranchInfo::Conditional(block_then, block_else) => {
+            InstructionData::Brif {
+                blocks: [block_then, block_else],
+                ..
+            } => {
                 if block_then.block(&self.dfg.value_lists) == old_dest {
                     if let InstructionData::Brif {
                         blocks: [block_then, _],
@@ -315,7 +317,11 @@ impl FunctionStencil {
                 }
             }
 
-            BranchInfo::Table(table, default_dest) => {
+            InstructionData::BranchTable {
+                table,
+                destination: default_dest,
+                ..
+            } => {
                 self.jump_tables[table].iter_mut().for_each(|entry| {
                     if *entry == old_dest {
                         *entry = new_dest;
@@ -335,7 +341,7 @@ impl FunctionStencil {
                 }
             }
 
-            BranchInfo::NotABranch => {}
+            _ => {}
         }
     }
 
