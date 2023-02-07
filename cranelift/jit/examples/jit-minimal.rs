@@ -84,7 +84,7 @@ fn main() {
     let code_b = module.get_finalized_function(func_b);
 
     // Cast it to a rust function pointer type.
-    let ptr_b = unsafe { mem::transmute::<_, fn() -> u32>(code_b) };
+    let ptr_b = unsafe { mem::transmute::<_, extern "C" fn() -> u32>(code_b) };
 
     // Call it!
     let res = ptr_b();
