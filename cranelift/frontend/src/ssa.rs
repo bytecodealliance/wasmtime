@@ -598,7 +598,7 @@ impl SSABuilder {
             } => {
                 // In the case of a jump table, the situation is tricky because br_table doesn't
                 // support arguments. We have to split the critical edge.
-                let middle_block = dfg.blocks.make_block();
+                let middle_block = dfg.blocks.add();
                 func.stencil.layout.append_block(middle_block);
 
                 let table = &mut func.stencil.jump_tables[*jt];

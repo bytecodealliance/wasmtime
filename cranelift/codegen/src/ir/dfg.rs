@@ -52,7 +52,7 @@ pub struct Blocks(PrimaryMap<Block, BlockData>);
 
 impl Blocks {
     /// Create a new basic block.
-    pub fn make_block(&mut self) -> Block {
+    pub fn add(&mut self) -> Block {
         self.0.push(BlockData::new())
     }
 
@@ -68,15 +68,19 @@ impl Blocks {
     pub fn is_valid(&self, block: Block) -> bool {
         self.0.is_valid(block)
     }
+}
 
-    /// Get the number of parameters on `block`.
-    pub fn num_block_params(&self, block: Block, pool: &ValueListPool) -> usize {
-        self.0[block].params.len(pool)
+impl Index<Block> for Blocks {
+    type Output = BlockData;
+
+    fn index(&self, block: Block) -> &BlockData {
+        &self.0[block]
     }
+}
 
-    /// Get the parameters on `block`.
-    pub fn block_params<'a>(&self, block: Block, pool: &'a ValueListPool) -> &'a [Value] {
-        self.0[block].params.as_slice(pool)
+impl IndexMut<Block> for Blocks {
+    fn index_mut(&mut self, block: Block) -> &mut BlockData {
+        &mut self.0[block]
     }
 }
 
@@ -1119,17 +1123,17 @@ impl DataFlowGraph {
 impl DataFlowGraph {
     /// Create a new basic block.
     pub fn make_block(&mut self) -> Block {
-        self.blocks.make_block()
+        self.blocks.add()
     }
 
     /// Get the number of parameters on `block`.
     pub fn num_block_params(&self, block: Block) -> usize {
-        self.blocks.num_block_params(block, &self.value_lists)
+        self.blocks[block].params(&self.value_lists).len()
     }
 
     /// Get the parameters on `block`.
     pub fn block_params(&self, block: Block) -> &[Value] {
-        self.blocks.block_params(block, &self.value_lists)
+        self.blocks[block].params(&self.value_lists)
     }
 
     /// Get the types of the parameters on `block`.
@@ -1289,7 +1293,7 @@ impl DataFlowGraph {
 /// match the function arguments.
 #[derive(Clone, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-struct BlockData {
+pub struct BlockData {
     /// List of parameters to this block.
     params: ValueList,
 }
@@ -1299,6 +1303,11 @@ impl BlockData {
         Self {
             params: ValueList::new(),
         }
+    }
+
+    /// Get the parameters on `block`.
+    pub fn params<'a>(&self, pool: &'a ValueListPool) -> &'a [Value] {
+        self.params.as_slice(pool)
     }
 }
 
