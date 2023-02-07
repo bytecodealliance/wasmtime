@@ -15,9 +15,7 @@ use cranelift_codegen::cursor::{Cursor, FuncCursor};
 use cranelift_codegen::entity::{EntityList, EntitySet, ListPool, SecondaryMap};
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};
 use cranelift_codegen::ir::types::{F32, F64, I128, I64};
-use cranelift_codegen::ir::{
-    Block, Function, Inst, InstBuilder, InstructionData, JumpTableData, Type, Value,
-};
+use cranelift_codegen::ir::{Block, Function, Inst, InstBuilder, InstructionData, Type, Value};
 use cranelift_codegen::packed_option::PackedOption;
 
 /// Structure containing the data relevant the construction of SSA for a given function.
@@ -577,58 +575,41 @@ impl SSABuilder {
         dest_block: Block,
         val: Value,
     ) -> Option<(Block, Inst)> {
-        match &func.dfg.insts[branch] {
+        let dfg = &mut func.stencil.dfg;
+        match &mut dfg.insts[branch] {
             // For a single destination appending a jump argument to the instruction
             // is sufficient.
-            InstructionData::Jump { .. } => {
-                let dfg = &mut func.dfg;
-                for dest in dfg.insts[branch].branch_destination_mut() {
-                    dest.append_argument(val, &mut dfg.value_lists);
-                }
+            InstructionData::Jump { destination, .. } => {
+                destination.append_argument(val, &mut dfg.value_lists);
                 None
             }
-            InstructionData::Brif { .. } => {
-                let dfg = &mut func.dfg;
-                for block in dfg.insts[branch].branch_destination_mut() {
+            InstructionData::Brif { blocks, .. } => {
+                for block in blocks {
                     if block.block(&dfg.value_lists) == dest_block {
                         block.append_argument(val, &mut dfg.value_lists);
                     }
                 }
                 None
             }
-            InstructionData::BranchTable { table: mut jt, .. } => {
+            InstructionData::BranchTable {
+                table: jt,
+                destination,
+                ..
+            } => {
                 // In the case of a jump table, the situation is tricky because br_table doesn't
                 // support arguments. We have to split the critical edge.
-                let middle_block = func.dfg.make_block();
-                func.layout.append_block(middle_block);
+                let middle_block = dfg.blocks.make_block();
+                func.stencil.layout.append_block(middle_block);
 
-                let table = &func.jump_tables[jt];
-                let mut copied = JumpTableData::with_capacity(table.len());
-                let mut changed = false;
-                for &destination in table.iter() {
-                    if destination == dest_block {
-                        copied.push_entry(middle_block);
-                        changed = true;
-                    } else {
-                        copied.push_entry(destination);
+                let table = &mut func.stencil.jump_tables[*jt];
+                for block in table.iter_mut() {
+                    if *block == dest_block {
+                        *block = middle_block;
                     }
                 }
 
-                if changed {
-                    jt = func.create_jump_table(copied);
-                }
-
-                // Redo the match from above, but this time capture mutable references
-                match &mut func.dfg.insts[branch] {
-                    InstructionData::BranchTable {
-                        destination, table, ..
-                    } => {
-                        if *destination == dest_block {
-                            *destination = middle_block;
-                        }
-                        *table = jt;
-                    }
-                    _ => unreachable!(),
+                if *destination == dest_block {
+                    *destination = middle_block;
                 }
 
                 let mut cur = FuncCursor::new(func).at_bottom(middle_block);
