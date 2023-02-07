@@ -175,7 +175,7 @@ pub(crate) fn visit_block_succs<F: FnMut(Inst, Block, bool)>(
     mut visit: F,
 ) {
     if let Some(inst) = f.layout.last_inst(block) {
-        match f.dfg.insts[inst] {
+        match &f.dfg.insts[inst] {
             ir::InstructionData::Jump {
                 destination: dest, ..
             } => {
@@ -197,9 +197,9 @@ pub(crate) fn visit_block_succs<F: FnMut(Inst, Block, bool)>(
             } => {
                 // The default block is reached via a direct conditional branch,
                 // so it is not part of the table.
-                visit(inst, dest, false);
+                visit(inst, *dest, false);
 
-                for &dest in f.jump_tables[table].as_slice() {
+                for &dest in f.jump_tables[*table].as_slice() {
                     visit(inst, dest, true);
                 }
             }

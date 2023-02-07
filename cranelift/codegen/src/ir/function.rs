@@ -277,14 +277,12 @@ impl FunctionStencil {
     /// Rewrite the branch destination to `new_dest` if the destination matches `old_dest`.
     /// Does nothing if called with a non-jump or non-branch instruction.
     pub fn rewrite_branch_destination(&mut self, inst: Inst, old_dest: Block, new_dest: Block) {
-        match self.dfg.insts[inst] {
+        match &mut self.dfg.insts[inst] {
             InstructionData::Jump {
                 destination: dest, ..
             } => {
                 if dest.block(&self.dfg.value_lists) == old_dest {
-                    for block in self.dfg.insts[inst].branch_destination_mut() {
-                        block.set_block(new_dest, &mut self.dfg.value_lists)
-                    }
+                    dest.set_block(new_dest, &mut self.dfg.value_lists)
                 }
             }
 
@@ -293,27 +291,11 @@ impl FunctionStencil {
                 ..
             } => {
                 if block_then.block(&self.dfg.value_lists) == old_dest {
-                    if let InstructionData::Brif {
-                        blocks: [block_then, _],
-                        ..
-                    } = &mut self.dfg.insts[inst]
-                    {
-                        block_then.set_block(new_dest, &mut self.dfg.value_lists);
-                    } else {
-                        unreachable!();
-                    }
+                    block_then.set_block(new_dest, &mut self.dfg.value_lists);
                 }
 
                 if block_else.block(&self.dfg.value_lists) == old_dest {
-                    if let InstructionData::Brif {
-                        blocks: [_, block_else],
-                        ..
-                    } = &mut self.dfg.insts[inst]
-                    {
-                        block_else.set_block(new_dest, &mut self.dfg.value_lists);
-                    } else {
-                        unreachable!();
-                    }
+                    block_else.set_block(new_dest, &mut self.dfg.value_lists);
                 }
             }
 
@@ -322,22 +304,14 @@ impl FunctionStencil {
                 destination: default_dest,
                 ..
             } => {
-                self.jump_tables[table].iter_mut().for_each(|entry| {
+                self.jump_tables[*table].iter_mut().for_each(|entry| {
                     if *entry == old_dest {
                         *entry = new_dest;
                     }
                 });
 
-                if default_dest == old_dest {
-                    match &mut self.dfg.insts[inst] {
-                        InstructionData::BranchTable { destination, .. } => {
-                            *destination = new_dest;
-                        }
-                        _ => panic!(
-                            "Unexpected instruction {} having default destination",
-                            self.dfg.display_inst(inst)
-                        ),
-                    }
+                if *default_dest == old_dest {
+                    *default_dest = new_dest;
                 }
             }
 

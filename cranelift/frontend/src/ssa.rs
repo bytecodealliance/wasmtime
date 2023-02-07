@@ -577,7 +577,7 @@ impl SSABuilder {
         dest_block: Block,
         val: Value,
     ) -> Option<(Block, Inst)> {
-        match func.dfg.insts[branch] {
+        match &func.dfg.insts[branch] {
             // For a single destination appending a jump argument to the instruction
             // is sufficient.
             InstructionData::Jump { .. } => {

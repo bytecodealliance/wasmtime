@@ -117,7 +117,7 @@ impl ControlFlowGraph {
 
     fn compute_block(&mut self, func: &Function, block: Block) {
         if let Some(inst) = func.layout.last_inst(block) {
-            match func.dfg.insts[inst] {
+            match &func.dfg.insts[inst] {
                 ir::InstructionData::Jump {
                     destination: dest, ..
                 } => {
@@ -135,9 +135,9 @@ impl ControlFlowGraph {
                     destination: dest,
                     ..
                 } => {
-                    self.add_edge(block, inst, dest);
+                    self.add_edge(block, inst, *dest);
 
-                    for dest in func.jump_tables[jt].iter() {
+                    for dest in func.jump_tables[*jt].iter() {
                         self.add_edge(block, inst, *dest);
                     }
                 }
