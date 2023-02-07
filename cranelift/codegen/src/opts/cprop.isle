@@ -110,6 +110,10 @@
        (bxor ty k @ (iconst ty _) x))
       (bxor ty x k))
 
+(rule (simplify
+       (icmp ty cc k @ (iconst _ _) x))
+      (icmp ty (intcc_reverse cc) x k))
+
 ;; Canonicalize via associativity: reassociate to a right-heavy tree
 ;; for constants.
 ;;
