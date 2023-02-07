@@ -95,7 +95,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use wasmtime_runtime::{
     InstanceAllocationRequest, InstanceAllocator, InstanceHandle, ModuleInfo,
-    OnDemandInstanceAllocator, SignalHandler, StorePtr, VMCallerCheckedAnyfunc, VMContext,
+    OnDemandInstanceAllocator, SignalHandler, StorePtr, VMCallerCheckedFuncRef, VMContext,
     VMExternRef, VMExternRefActivationsTable, VMRuntimeLimits, VMSharedSignatureIndex,
     VMTrampoline,
 };
@@ -1263,7 +1263,7 @@ impl StoreOpaque {
     /// `self.host_trampolines` we lazily populate `self.host_trampolines` by
     /// iterating over `self.store_data().funcs`, inserting trampolines as we
     /// go. If we find the right trampoline then it's returned.
-    pub fn lookup_trampoline(&mut self, anyfunc: &VMCallerCheckedAnyfunc) -> VMTrampoline {
+    pub fn lookup_trampoline(&mut self, anyfunc: &VMCallerCheckedFuncRef) -> VMTrampoline {
         // First try to see if the `anyfunc` belongs to any module. Each module
         // has its own map of trampolines-per-type-index and the code pointer in
         // the `anyfunc` will enable us to quickly find a module.

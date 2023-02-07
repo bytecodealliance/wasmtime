@@ -3,7 +3,7 @@ use crate::StoreContextMut;
 use anyhow::{bail, Result};
 use std::ptr::NonNull;
 use wasmtime_environ::component::StringEncoding;
-use wasmtime_runtime::{VMCallerCheckedAnyfunc, VMMemoryDefinition};
+use wasmtime_runtime::{VMCallerCheckedFuncRef, VMMemoryDefinition};
 
 /// Runtime representation of canonical ABI options in the component model.
 ///
@@ -30,7 +30,7 @@ pub struct Options {
     /// function.
     ///
     /// Safely using this pointer has the same restrictions as `memory` above.
-    realloc: Option<NonNull<VMCallerCheckedAnyfunc>>,
+    realloc: Option<NonNull<VMCallerCheckedFuncRef>>,
 
     /// The encoding used for strings, if found.
     ///
@@ -57,7 +57,7 @@ impl Options {
     pub unsafe fn new(
         store_id: StoreId,
         memory: Option<NonNull<VMMemoryDefinition>>,
-        realloc: Option<NonNull<VMCallerCheckedAnyfunc>>,
+        realloc: Option<NonNull<VMCallerCheckedFuncRef>>,
         string_encoding: StringEncoding,
     ) -> Options {
         Options {

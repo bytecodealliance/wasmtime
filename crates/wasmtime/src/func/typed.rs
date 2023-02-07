@@ -6,7 +6,7 @@ use std::marker;
 use std::mem::{self, MaybeUninit};
 use std::ptr;
 use wasmtime_runtime::{
-    VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMOpaqueContext, VMSharedSignatureIndex,
+    VMCallerCheckedFuncRef, VMContext, VMFunctionBody, VMOpaqueContext, VMSharedSignatureIndex,
 };
 
 /// A statically typed WebAssembly function.
@@ -130,7 +130,7 @@ where
 
     pub(crate) unsafe fn call_raw<T>(
         store: &mut StoreContextMut<'_, T>,
-        func: ptr::NonNull<VMCallerCheckedAnyfunc>,
+        func: ptr::NonNull<VMCallerCheckedFuncRef>,
         params: Params,
     ) -> Result<Results> {
         // double-check that params/results match for this function's type in
@@ -409,7 +409,7 @@ unsafe impl WasmTy for Option<ExternRef> {
 }
 
 unsafe impl WasmTy for Option<Func> {
-    type Abi = *mut wasmtime_runtime::VMCallerCheckedAnyfunc;
+    type Abi = *mut wasmtime_runtime::VMCallerCheckedFuncRef;
 
     #[inline]
     fn valtype() -> ValType {

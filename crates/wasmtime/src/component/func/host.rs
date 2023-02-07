@@ -15,7 +15,7 @@ use wasmtime_environ::component::{
 use wasmtime_runtime::component::{
     InstanceFlags, VMComponentContext, VMLowering, VMLoweringCallee,
 };
-use wasmtime_runtime::{VMCallerCheckedAnyfunc, VMMemoryDefinition, VMOpaqueContext};
+use wasmtime_runtime::{VMCallerCheckedFuncRef, VMMemoryDefinition, VMOpaqueContext};
 
 pub struct HostFunc {
     entrypoint: VMLoweringCallee,
@@ -43,7 +43,7 @@ impl HostFunc {
         data: *mut u8,
         flags: InstanceFlags,
         memory: *mut VMMemoryDefinition,
-        realloc: *mut VMCallerCheckedAnyfunc,
+        realloc: *mut VMCallerCheckedFuncRef,
         string_encoding: StringEncoding,
         storage: *mut ValRaw,
         storage_len: usize,
@@ -150,7 +150,7 @@ unsafe fn call_host<T, Params, Return, F>(
     cx: *mut VMOpaqueContext,
     mut flags: InstanceFlags,
     memory: *mut VMMemoryDefinition,
-    realloc: *mut VMCallerCheckedAnyfunc,
+    realloc: *mut VMCallerCheckedFuncRef,
     string_encoding: StringEncoding,
     storage: &mut [ValRaw],
     closure: F,
@@ -280,7 +280,7 @@ unsafe fn call_host_dynamic<T, F>(
     cx: *mut VMOpaqueContext,
     mut flags: InstanceFlags,
     memory: *mut VMMemoryDefinition,
-    realloc: *mut VMCallerCheckedAnyfunc,
+    realloc: *mut VMCallerCheckedFuncRef,
     string_encoding: StringEncoding,
     storage: &mut [ValRaw],
     closure: F,
@@ -398,7 +398,7 @@ extern "C" fn dynamic_entrypoint<T, F>(
     data: *mut u8,
     flags: InstanceFlags,
     memory: *mut VMMemoryDefinition,
-    realloc: *mut VMCallerCheckedAnyfunc,
+    realloc: *mut VMCallerCheckedFuncRef,
     string_encoding: StringEncoding,
     storage: *mut ValRaw,
     storage_len: usize,

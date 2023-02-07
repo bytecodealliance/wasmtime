@@ -809,7 +809,7 @@ pub struct Module {
     pub num_imported_globals: usize,
 
     /// Number of functions that "escape" from this module may need to have a
-    /// `VMCallerCheckedAnyfunc` constructed for them.
+    /// `VMCallerCheckedFuncRef` constructed for them.
     ///
     /// This is also the number of functions in the `functions` array below with
     /// an `anyfunc` index (and is the maximum anyfunc index).

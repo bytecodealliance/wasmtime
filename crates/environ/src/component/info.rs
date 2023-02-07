@@ -184,7 +184,7 @@ pub enum GlobalInitializer {
     /// A core wasm function was "generated" via `canon lower` of a function
     /// that was `canon lift`'d in the same component, meaning that the function
     /// always traps. This is recorded within the `VMComponentContext` as a new
-    /// `VMCallerCheckedAnyfunc` that's available for use.
+    /// `VMCallerCheckedFuncRef` that's available for use.
     AlwaysTrap(AlwaysTrap),
 
     /// A core wasm linear memory is going to be saved into the
@@ -213,7 +213,7 @@ pub enum GlobalInitializer {
     SaveModuleImport(RuntimeImportIndex),
 
     /// Similar to `ExtractMemory` and friends and indicates that a
-    /// `VMCallerCheckedAnyfunc` needs to be initialized for a transcoder
+    /// `VMCallerCheckedFuncRef` needs to be initialized for a transcoder
     /// function and this will later be used to instantiate an adapter module.
     Transcoder(Transcoder),
 }
@@ -469,7 +469,7 @@ pub enum StringEncoding {
 pub struct Transcoder {
     /// The index of the transcoder being defined and initialized.
     ///
-    /// This indicates which `VMCallerCheckedAnyfunc` slot is written to in a
+    /// This indicates which `VMCallerCheckedFuncRef` slot is written to in a
     /// `VMComponentContext`.
     pub index: RuntimeTranscoderIndex,
     /// The transcoding operation being performed.

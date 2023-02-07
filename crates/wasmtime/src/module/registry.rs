@@ -11,7 +11,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 use wasmtime_jit::CodeMemory;
-use wasmtime_runtime::{ModuleInfo, VMCallerCheckedAnyfunc, VMTrampoline};
+use wasmtime_runtime::{ModuleInfo, VMCallerCheckedFuncRef, VMTrampoline};
 
 /// Used for registering modules with a store.
 ///
@@ -125,7 +125,7 @@ impl ModuleRegistry {
     }
 
     /// Looks up a trampoline from an anyfunc.
-    pub fn lookup_trampoline(&self, anyfunc: &VMCallerCheckedAnyfunc) -> Option<VMTrampoline> {
+    pub fn lookup_trampoline(&self, anyfunc: &VMCallerCheckedFuncRef) -> Option<VMTrampoline> {
         let (code, _offset) = self.code(anyfunc.func_ptr.as_ptr() as usize)?;
         code.code.signatures().trampoline(anyfunc.type_index)
     }

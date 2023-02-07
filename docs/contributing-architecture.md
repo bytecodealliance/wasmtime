@@ -409,7 +409,7 @@ next.
 
 WebAssembly tables contain reference types, currently either `funcref` or
 `externref`. A `funcref` in Wasmtime is represented as `*mut
-VMCallerCheckedAnyfunc` and an `externref` is represented as `VMExternRef`
+VMCallerCheckedFuncRef` and an `externref` is represented as `VMExternRef`
 (which is internally `*mut VMExternData`). Tables are consequently represented
 as vectors of pointers.  Table storage memory management by default goes through
 Rust's `Vec` which uses `malloc` and friends for memory. With the pooling
