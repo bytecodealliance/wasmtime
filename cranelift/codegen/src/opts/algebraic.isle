@@ -289,3 +289,47 @@
 (rule (simplify (bxor ty x (iconst ty k)))
   (if-let -1 (i64_sextend_imm64 ty k))
   (bnot ty x))
+
+
+;; Masking the result of a comparison with 1 always results in the comparison
+;; itself. Note that comparisons in wasm may sometimes be hidden behind
+;; extensions.
+(rule (simplify
+       (band (ty_int _)
+             cmp @ (icmp _ _ _ _)
+             (iconst _ (u64_from_imm64 1))))
+      cmp)
+(rule (simplify
+       (band (ty_int _)
+             extend @ (uextend _ (icmp _ _ _ _))
+             (iconst _ (u64_from_imm64 1))))
+      extend)
+
+;; `x < 0` is always false for unsigned integers, and `x >= 0` is always true
+;; for unsigned integers, along with their reversals.
+(rule (simplify
+       (icmp (fits_in_64 (ty_int ty))
+             (IntCC.UnsignedLessThan)
+             _
+             (iconst _ (u64_from_imm64 0))))
+      (iconst ty (imm64 0)))
+(rule (simplify
+       (icmp (fits_in_64 (ty_int ty))
+             (IntCC.UnsignedGreaterThanOrEqual)
+             _
+             (iconst _ (u64_from_imm64 0))))
+      (iconst ty (imm64 1)))
+
+;; 32-bit integers zero-extended to 64-bit integers are never negative
+(rule (simplify
+       (icmp (ty_int ty)
+             (IntCC.SignedLessThan)
+             (uextend $I64 x @ (value_type $I32))
+             (iconst _ (u64_from_imm64 0))))
+      (iconst ty (imm64 0)))
+(rule (simplify
+       (icmp (ty_int ty)
+             (IntCC.SignedGreaterThanOrEqual)
+             (uextend $I64 x @ (value_type $I32))
+             (iconst _ (u64_from_imm64 0))))
+      (iconst ty (imm64 1)))

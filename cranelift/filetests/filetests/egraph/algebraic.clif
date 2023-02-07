@@ -251,3 +251,89 @@ block0(v1: i64):
 
 ; check: v5 = bnot v1
 ; check: return v5
+
+function %mask_icmp_result(i64, i64) -> i8 {
+block0(v1: i64, v2: i64):
+    v3 = icmp ult v1, v2
+    v4 = iconst.i8 1
+    v5 = band v3, v4
+    return v5
+}
+
+; check: v3 = icmp ult v1, v2
+; check: return v3
+
+function %mask_icmp_extend_result(i64, i64) -> i64 {
+block0(v1: i64, v2: i64):
+    v3 = icmp ult v1, v2
+    v4 = uextend.i64 v3
+    v5 = iconst.i64 1
+    v6 = band v4, v5
+    return v6
+}
+
+; check: v3 = icmp ult v1, v2
+; check: v4 = uextend.i64 v3
+; check: return v4
+
+function %ult_zero_always_false(i64) -> i8 {
+block0(v1: i64):
+    v2 = iconst.i64 0
+    v3 = icmp ult v1, v2
+    return v3
+}
+
+; check: v4 = iconst.i8 0
+; check: return v4
+
+function %ugt_zero_always_false(i64) -> i8 {
+block0(v1: i64):
+    v2 = iconst.i64 0
+    v3 = icmp ugt v2, v1
+    return v3
+}
+
+; check: v5 = iconst.i8 0
+; check: return v5
+
+function %uge_zero_always_false(i64) -> i8 {
+block0(v1: i64):
+    v2 = iconst.i64 0
+    v3 = icmp uge v1, v2
+    return v3
+}
+
+; check: v4 = iconst.i8 1
+; check: return v4
+
+function %ule_zero_always_false(i64) -> i8 {
+block0(v1: i64):
+    v2 = iconst.i64 0
+    v3 = icmp ule v2, v1
+    return v3
+}
+
+; check: v5 = iconst.i8 1
+; check: return v5
+
+function %extend_always_above_zero(i32) -> i8 {
+block0(v1: i32):
+    v2 = uextend.i64 v1
+    v3 = iconst.i64 0
+    v4 = icmp slt v2, v3
+    return v4
+}
+
+; check: v5 = iconst.i8 0
+; check: return v5
+
+function %extend_always_above_zero2(i32) -> i8 {
+block0(v1: i32):
+    v2 = uextend.i64 v1
+    v3 = iconst.i64 0
+    v4 = icmp sge v2, v3
+    return v4
+}
+
+; check: v5 = iconst.i8 1
+; check: return v5
