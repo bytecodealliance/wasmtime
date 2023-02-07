@@ -12,7 +12,7 @@ use cranelift_codegen::{
     settings, Final, MachBuffer, MachBufferFinalized, MachInstEmit, Writable,
 };
 
-use super::address::Address;
+use super::{address::Address, regs};
 
 /// A x64 instruction operand.
 #[derive(Debug, Copy, Clone)]
@@ -21,8 +21,8 @@ pub(crate) enum Operand {
     Reg(Reg),
     /// Memory address.
     Mem(Address),
-    /// Immediate.
-    Imm(i32),
+    /// Signed 64-bit immediate.
+    Imm(i64),
 }
 
 // Conversions between winch-codegen x64 types and cranelift-codegen x64 types.
@@ -198,6 +198,37 @@ impl Assembler {
         }
     }
 
+    /// Subtract instruction variants.
+    pub fn sub(&mut self, src: Operand, dst: Operand, size: OperandSize) {
+        match &(src, dst) {
+            (Operand::Imm(imm), Operand::Reg(dst)) => {
+                if let Ok(val) = i32::try_from(*imm) {
+                    self.sub_ir(val, *dst, size)
+                } else {
+                    let scratch = regs::scratch();
+                    self.mov_ir(*imm as u64, scratch, size);
+                    self.sub_rr(scratch, *dst, size);
+                }
+            }
+            (Operand::Reg(src), Operand::Reg(dst)) => self.sub_rr(*src, *dst, size),
+            _ => panic!(
+                "Invalid operand combination for sub; src = {:?} dst = {:?}",
+                src, dst
+            ),
+        }
+    }
+
+    /// Subtract register and register
+    pub fn sub_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        self.emit(Inst::AluRmiR {
+            size: size.into(),
+            op: AluRmiROpcode::Sub,
+            src1: dst.into(),
+            src2: src.into(),
+            dst: dst.into(),
+        });
+    }
+
     /// Subtact immediate register.
     pub fn sub_ir(&mut self, imm: i32, dst: Reg, size: OperandSize) {
         let imm = RegMemImm::imm(imm as u32);
@@ -214,7 +245,15 @@ impl Assembler {
     /// Add instruction variants.
     pub fn add(&mut self, src: Operand, dst: Operand, size: OperandSize) {
         match &(src, dst) {
-            (Operand::Imm(imm), Operand::Reg(dst)) => self.add_ir(*imm, *dst, size),
+            (Operand::Imm(imm), Operand::Reg(dst)) => {
+                if let Ok(val) = i32::try_from(*imm) {
+                    self.add_ir(val, *dst, size)
+                } else {
+                    let scratch = regs::scratch();
+                    self.mov_ir(*imm as u64, scratch, size);
+                    self.add_rr(scratch, *dst, size);
+                }
+            }
             (Operand::Reg(src), Operand::Reg(dst)) => self.add_rr(*src, *dst, size),
             _ => panic!(
                 "Invalid operand combination for add; src = {:?} dst = {:?}",

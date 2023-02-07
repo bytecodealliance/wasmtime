@@ -6,6 +6,8 @@ use std::collections::VecDeque;
 pub(crate) enum Val {
     /// I32 Constant.
     I32(i32),
+    /// I64 Constant.
+    I64(i64),
     /// A register.
     Reg(Reg),
     /// A local slot.
@@ -18,6 +20,11 @@ impl Val {
     /// Create a new I32 constant value.
     pub fn i32(v: i32) -> Self {
         Self::I32(v)
+    }
+
+    /// Create a new I64 constant value.
+    pub fn i64(v: i64) -> Self {
+        Self::I64(v)
     }
 
     /// Create a new Reg value.
@@ -60,10 +67,29 @@ impl Val {
         }
     }
 
+    /// Get the integer representation of the value.
+    ///
+    /// # Panics
+    /// This method will panic if the value is not an i64.
+    pub fn get_i64(&self) -> i64 {
+        match self {
+            Self::I64(v) => *v,
+            v => panic!("expected value {:?} to be i64", v),
+        }
+    }
+
     /// Check whether the value is an i32 constant.
     pub fn is_i32_const(&self) -> bool {
         match *self {
             Self::I32(_) => true,
+            _ => false,
+        }
+    }
+
+    /// Check whether the value is an i64 constant.
+    pub fn is_i64_const(&self) -> bool {
+        match *self {
+            Self::I64(_) => true,
             _ => false,
         }
     }
@@ -89,7 +115,7 @@ impl Stack {
     }
 
     /// Peek into the top in the stack.
-    pub fn peek(&mut self) -> Option<&Val> {
+    pub fn peek(&self) -> Option<&Val> {
         self.inner.back()
     }
 
@@ -98,11 +124,20 @@ impl Stack {
         self.inner.pop_back()
     }
 
-    /// Pops the element at the top of the stack if it is a const;
+    /// Pops the element at the top of the stack if it is an i32 const;
     /// returns `None` otherwise.
     pub fn pop_i32_const(&mut self) -> Option<i32> {
         match self.peek() {
             Some(v) => v.is_i32_const().then(|| self.pop().unwrap().get_i32()),
+            _ => None,
+        }
+    }
+
+    /// Pops the element at the top of the stack if it is an i64 const;
+    /// returns `None` otherwise.
+    pub fn pop_i64_const(&mut self) -> Option<i64> {
+        match self.peek() {
+            Some(v) => v.is_i64_const().then(|| self.pop().unwrap().get_i64()),
             _ => None,
         }
     }

@@ -10,45 +10,6 @@ use crate::stack::Val;
 use wasmparser::ValType;
 use wasmparser::VisitOperator;
 
-impl<'a, M> CodeGen<'a, M>
-where
-    M: MacroAssembler,
-{
-    fn add_imm_i32(&mut self) {
-        let val = self
-            .context
-            .stack
-            .pop_i32_const()
-            .expect("i32 constant at stack top");
-        let reg = self
-            .regalloc
-            .pop_to_reg(&mut self.context, OperandSize::S32);
-
-        let dst = RegImm::reg(reg);
-        self.context
-            .masm
-            .add(dst, dst, RegImm::imm(val), OperandSize::S32);
-        self.context.stack.push(Val::reg(reg));
-    }
-
-    fn add_i32(&mut self) {
-        let src = self
-            .regalloc
-            .pop_to_reg(&mut self.context, OperandSize::S32);
-        let dst = self
-            .regalloc
-            .pop_to_reg(&mut self.context, OperandSize::S32);
-
-        let lhs = RegImm::reg(dst);
-        self.context
-            .masm
-            .add(lhs, lhs, RegImm::reg(src), OperandSize::S32);
-
-        self.regalloc.free_gpr(src);
-        self.context.stack.push(Val::reg(dst));
-    }
-}
-
 /// A macro to define unsupported WebAssembly operators.
 ///
 /// This macro calls itself recursively;
@@ -71,7 +32,11 @@ macro_rules! def_unsupported {
     };
 
     (emit I32Const $($rest:tt)*) => {};
+    (emit I64Const $($rest:tt)*) => {};
     (emit I32Add $($rest:tt)*) => {};
+    (emit I64Add $($rest:tt)*) => {};
+    (emit I32Sub $($rest:tt)*) => {};
+    (emit I64Sub $($rest:tt)*) => {};
     (emit LocalGet $($rest:tt)*) => {};
     (emit LocalSet $($rest:tt)*) => {};
     (emit End $($rest:tt)*) => {};
@@ -89,19 +54,36 @@ where
         self.context.stack.push(Val::i32(val));
     }
 
-    fn visit_i32_add(&mut self) {
-        let is_const = self
-            .context
-            .stack
-            .peek()
-            .expect("value at stack top")
-            .is_i32_const();
+    fn visit_i64_const(&mut self, val: i64) {
+        self.context.stack.push(Val::i64(val));
+    }
 
-        if is_const {
-            self.add_imm_i32();
-        } else {
-            self.add_i32();
-        }
+    fn visit_i32_add(&mut self) {
+        self.context
+            .i32_binop(&mut self.regalloc, &mut |masm: &mut M, dst, src, size| {
+                masm.add(dst, dst, src, size);
+            });
+    }
+
+    fn visit_i64_add(&mut self) {
+        self.context
+            .i64_binop(&mut self.regalloc, &mut |masm: &mut M, dst, src, size| {
+                masm.add(dst, dst, src, size);
+            });
+    }
+
+    fn visit_i32_sub(&mut self) {
+        self.context
+            .i32_binop(&mut self.regalloc, &mut |masm: &mut M, dst, src, size| {
+                masm.sub(dst, dst, src, size);
+            });
+    }
+
+    fn visit_i64_sub(&mut self) {
+        self.context
+            .i64_binop(&mut self.regalloc, &mut |masm: &mut M, dst, src, size| {
+                masm.sub(dst, dst, src, size);
+            });
     }
 
     fn visit_end(&mut self) {}

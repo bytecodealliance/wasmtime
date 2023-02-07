@@ -19,8 +19,8 @@ pub(crate) enum Operand {
     Reg(Reg),
     /// Memory address.
     Mem(Address),
-    /// Immediate.
-    Imm(i32),
+    /// 64-bit signed immediate.
+    Imm(i64),
 }
 
 // Conversions between winch-codegen aarch64 types and cranelift-codegen

@@ -143,6 +143,10 @@ impl Masm for MacroAssembler {
         self.asm.add(rhs.into(), lhs.into(), dst.into(), size);
     }
 
+    fn sub(&mut self, _dst: RegImm, _lhs: RegImm, _rhs: RegImm, _size: OperandSize) {
+        todo!()
+    }
+
     fn zero(&mut self, reg: Reg) {
         self.asm.load_constant(0, reg);
     }

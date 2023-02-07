@@ -1,19 +1,20 @@
 ;;! target = "x86_64"
 
 (module
-  (export "main" (func $main))
-
-  (func $main (result i32)
+    (func (result i32)
         (local $foo i32)  
         (local $bar i32)
+
         (i32.const 10)
         (local.set $foo)
+
         (i32.const 20)
         (local.set $bar)
 
         (local.get $foo)
         (local.get $bar)
-        i32.add)
+        i32.sub
+    )
 )
 ;;    0:	 55                   	push	rbp
 ;;    1:	 4889e5               	mov	rbp, rsp
@@ -25,7 +26,7 @@
 ;;   1e:	 890424               	mov	dword ptr [rsp], eax
 ;;   21:	 8b0424               	mov	eax, dword ptr [rsp]
 ;;   24:	 8b4c2404             	mov	ecx, dword ptr [rsp + 4]
-;;   28:	 01c1                 	add	ecx, eax
+;;   28:	 29c1                 	sub	ecx, eax
 ;;   2a:	 4889c8               	mov	rax, rcx
 ;;   2d:	 4883c408             	add	rsp, 8
 ;;   31:	 5d                   	pop	rbp
