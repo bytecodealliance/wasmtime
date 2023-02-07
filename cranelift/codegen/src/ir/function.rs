@@ -7,7 +7,7 @@ use crate::entity::{PrimaryMap, SecondaryMap};
 use crate::ir::{
     self, Block, DataFlowGraph, DynamicStackSlot, DynamicStackSlotData, DynamicStackSlots,
     DynamicType, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Inst, InstructionData,
-    JumpTable, JumpTableData, JumpTables, Layout, Opcode, SigRef, Signature, SourceLocs, StackSlot,
+    JumpTable, JumpTableData, Layout, Opcode, SigRef, Signature, SourceLocs, StackSlot,
     StackSlotData, StackSlots, Table, TableData, Type,
 };
 use crate::isa::CallConv;
@@ -170,9 +170,6 @@ pub struct FunctionStencil {
     /// Tables referenced.
     pub tables: PrimaryMap<ir::Table, ir::TableData>,
 
-    /// Jump tables used in this function.
-    pub jump_tables: JumpTables,
-
     /// Data flow graph containing the primary definition of all instructions, blocks and values.
     pub dfg: DataFlowGraph,
 
@@ -200,7 +197,6 @@ impl FunctionStencil {
         self.dynamic_stack_slots.clear();
         self.global_values.clear();
         self.tables.clear();
-        self.jump_tables.clear();
         self.dfg.clear();
         self.layout.clear();
         self.srclocs.clear();
@@ -209,7 +205,7 @@ impl FunctionStencil {
 
     /// Creates a jump table in the function, to be used by `br_table` instructions.
     pub fn create_jump_table(&mut self, data: JumpTableData) -> JumpTable {
-        self.jump_tables.push(data)
+        self.dfg.jump_tables.push(data)
     }
 
     /// Creates a sized stack slot in the function, to be used by `stack_load`, `stack_store`
@@ -304,7 +300,7 @@ impl FunctionStencil {
                 destination: default_dest,
                 ..
             } => {
-                self.jump_tables[*table].iter_mut().for_each(|entry| {
+                self.dfg.jump_tables[*table].iter_mut().for_each(|entry| {
                     if *entry == old_dest {
                         *entry = new_dest;
                     }
@@ -433,7 +429,6 @@ impl Function {
                 dynamic_stack_slots: DynamicStackSlots::new(),
                 global_values: PrimaryMap::new(),
                 tables: PrimaryMap::new(),
-                jump_tables: PrimaryMap::new(),
                 dfg: DataFlowGraph::new(),
                 layout: Layout::new(),
                 srclocs: SecondaryMap::new(),

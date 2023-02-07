@@ -82,7 +82,7 @@ pub trait FuncWriter {
             }
         }
 
-        for (jt, jt_data) in &func.jump_tables {
+        for (jt, jt_data) in &func.stencil.dfg.jump_tables {
             any = true;
             self.write_entity_definition(w, func, jt.into(), jt_data)?;
         }

@@ -5,12 +5,11 @@ use crate::ir;
 use crate::ir::builder::ReplaceBuilder;
 use crate::ir::dynamic_type::{DynamicTypeData, DynamicTypes};
 use crate::ir::instructions::{CallInfo, InstructionData};
-use crate::ir::{types, ConstantData, ConstantPool, Immediate};
 use crate::ir::{
-    Block, BlockCall, DynamicType, FuncRef, Inst, SigRef, Signature, Type, Value,
+    types, Block, BlockCall, ConstantData, ConstantPool, DynamicType, ExtFuncData, FuncRef,
+    Immediate, Inst, JumpTables, RelSourceLoc, SigRef, Signature, Type, Value,
     ValueLabelAssignments, ValueList, ValueListPool,
 };
-use crate::ir::{ExtFuncData, RelSourceLoc};
 use crate::packed_option::ReservedValue;
 use crate::write::write_operands;
 use core::fmt;
@@ -144,6 +143,9 @@ pub struct DataFlowGraph {
 
     /// Stores large immediates that otherwise will not fit on InstructionData
     pub immediates: PrimaryMap<Immediate, ConstantData>,
+
+    /// Jump tables used in this function.
+    pub jump_tables: JumpTables,
 }
 
 impl DataFlowGraph {
@@ -162,6 +164,7 @@ impl DataFlowGraph {
             values_labels: None,
             constants: ConstantPool::new(),
             immediates: PrimaryMap::new(),
+            jump_tables: JumpTables::new(),
         }
     }
 
@@ -179,6 +182,7 @@ impl DataFlowGraph {
         self.values_labels = None;
         self.constants.clear();
         self.immediates.clear();
+        self.jump_tables.clear();
     }
 
     /// Get the total number of instructions created in this function, whether they are currently
