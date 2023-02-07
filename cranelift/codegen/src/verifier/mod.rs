@@ -1293,7 +1293,7 @@ impl<'a> Verifier<'a> {
         inst: Inst,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
-        match self.func.dfg.insts[inst] {
+        match &self.func.dfg.insts[inst] {
             ir::InstructionData::Jump {
                 destination: block, ..
             } => {
@@ -1333,7 +1333,7 @@ impl<'a> Verifier<'a> {
                 destination: block,
                 ..
             } => {
-                let arg_count = self.func.dfg.num_block_params(block);
+                let arg_count = self.func.dfg.num_block_params(*block);
                 if arg_count != 0 {
                     return errors.nonfatal((
                         inst,
@@ -1344,7 +1344,7 @@ impl<'a> Verifier<'a> {
                         ),
                     ));
                 }
-                for block in self.func.jump_tables[table].iter() {
+                for block in self.func.jump_tables[*table].iter() {
                     let arg_count = self.func.dfg.num_block_params(*block);
                     if arg_count != 0 {
                         return errors.nonfatal((

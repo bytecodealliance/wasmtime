@@ -943,7 +943,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             let (inst, succ) = self.vcode.block_order().succ_indices(block)[succ_idx];
 
             // Get branch args and convert to Regs.
-            let branch_args = match self.f.dfg.insts[inst] {
+            let branch_args = match &self.f.dfg.insts[inst] {
                 InstructionData::Jump {
                     destination: block, ..
                 } => block.args_slice(&self.f.dfg.value_lists),

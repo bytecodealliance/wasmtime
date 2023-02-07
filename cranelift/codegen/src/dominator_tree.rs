@@ -351,7 +351,7 @@ impl DominatorTree {
     /// post-order except for the insertion of the new block header at the split point.
     fn push_successors(&mut self, func: &Function, block: Block) {
         if let Some(inst) = func.layout.last_inst(block) {
-            match func.dfg.insts[inst] {
+            match &func.dfg.insts[inst] {
                 ir::InstructionData::Jump {
                     destination: succ, ..
                 } => self.push_if_unseen(succ.block(&func.dfg.value_lists)),
@@ -367,10 +367,10 @@ impl DominatorTree {
                     destination: dest,
                     ..
                 } => {
-                    for succ in func.jump_tables[jt].iter() {
+                    for succ in func.jump_tables[*jt].iter() {
                         self.push_if_unseen(*succ);
                     }
-                    self.push_if_unseen(dest);
+                    self.push_if_unseen(*dest);
                 }
                 _ => {}
             }

@@ -106,7 +106,7 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
             self.builder.func.set_srcloc(inst, self.builder.srcloc);
         }
 
-        match self.builder.func.dfg.insts[inst] {
+        match &self.builder.func.dfg.insts[inst] {
             ir::InstructionData::Jump {
                 destination: dest, ..
             } => {
@@ -140,7 +140,7 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
                     .builder
                     .func
                     .jump_tables
-                    .get(table)
+                    .get(*table)
                     .expect("you are referencing an undeclared jump table")
                     .iter()
                     .filter(|&dest_block| unique.insert(*dest_block))
@@ -152,7 +152,7 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
                         .ssa
                         .declare_block_predecessor(*dest_block, inst);
                 }
-                self.builder.declare_successor(destination, inst);
+                self.builder.declare_successor(*destination, inst);
             }
 
             _ => {}
