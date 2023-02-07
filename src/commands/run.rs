@@ -180,7 +180,7 @@ impl RunCommand {
         // Read the wasm module binary either as `*.wat` or a raw binary.
         let module = self.load_module(linker.engine(), &self.module)?;
 
-        let mut host = Host::default();
+        let host = Host::default();
         let mut store = Store::new(&engine, host);
         populate_with_wasi(
             &mut linker,
