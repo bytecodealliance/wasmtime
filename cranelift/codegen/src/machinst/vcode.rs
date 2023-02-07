@@ -27,7 +27,7 @@ use crate::trace;
 use crate::CodegenError;
 use crate::ValueLocRange;
 use regalloc2::{
-    Edit, Function as RegallocFunction, InstOrEdit, InstRange, Operand, OperandKind, PReg, PRegSet,
+    Edit, Function as RegallocFunction, InstOrEdit, InstRange, Operand, OperandKind, PRegSet,
     RegClass, VReg,
 };
 
@@ -1314,10 +1314,6 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
             self.assert_not_vreg_alias(*vreg);
         }
         &self.debug_value_labels[..]
-    }
-
-    fn is_pinned_vreg(&self, vreg: VReg) -> Option<PReg> {
-        pinned_vreg_to_preg(vreg)
     }
 
     fn spillslot_size(&self, regclass: RegClass) -> usize {
