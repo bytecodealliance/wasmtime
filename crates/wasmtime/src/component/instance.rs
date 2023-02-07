@@ -16,6 +16,8 @@ use wasmtime_environ::component::{
 use wasmtime_environ::{EntityIndex, EntityType, Global, GlobalInit, PrimaryMap, WasmType};
 use wasmtime_runtime::component::{ComponentInstance, OwnedComponentInstance};
 
+use super::component::AllCallFuncPointers;
+
 /// An instantiated component.
 ///
 /// This is similar to [`crate::Instance`] except that it represents an
@@ -311,14 +313,23 @@ impl<'a> Instantiator<'a> {
             RuntimeImport::Func(func) => func,
             _ => unreachable!(),
         };
+        let AllCallFuncPointers {
+            wasm_call,
+            array_call,
+            native_call,
+        } = self.component.lowering_ptrs(import.index);
+        let type_index = self
+            .component
+            .signatures()
+            .shared_signature(import.canonical_abi)
+            .expect("found unregistered signature");
         self.data.state.set_lowering(
             import.index,
             func.lowering(),
-            self.component.lowering_ptr(import.index),
-            self.component
-                .signatures()
-                .shared_signature(import.canonical_abi)
-                .expect("found unregistered signature"),
+            wasm_call,
+            native_call,
+            array_call,
+            type_index,
         );
 
         // The `func` provided here must be retained within the `Store` itself
@@ -332,24 +343,38 @@ impl<'a> Instantiator<'a> {
     }
 
     fn always_trap(&mut self, trap: &AlwaysTrap) {
-        self.data.state.set_always_trap(
-            trap.index,
-            self.component.always_trap_ptr(trap.index),
-            self.component
-                .signatures()
-                .shared_signature(trap.canonical_abi)
-                .expect("found unregistered signature"),
-        );
+        let AllCallFuncPointers {
+            wasm_call,
+            array_call,
+            native_call,
+        } = self.component.always_trap_ptrs(trap.index);
+        let signature = self
+            .component
+            .signatures()
+            .shared_signature(trap.canonical_abi)
+            .expect("found unregistered signature");
+        self.data
+            .state
+            .set_always_trap(trap.index, wasm_call, native_call, array_call, signature);
     }
 
     fn transcoder(&mut self, transcoder: &Transcoder) {
+        let AllCallFuncPointers {
+            wasm_call,
+            array_call,
+            native_call,
+        } = self.component.transcoder_ptrs(transcoder.index);
+        let signature = self
+            .component
+            .signatures()
+            .shared_signature(transcoder.signature)
+            .expect("found unregistered signature");
         self.data.state.set_transcoder(
             transcoder.index,
-            self.component.transcoder_ptr(transcoder.index),
-            self.component
-                .signatures()
-                .shared_signature(transcoder.signature)
-                .expect("found unregistered signature"),
+            wasm_call,
+            native_call,
+            array_call,
+            signature,
         );
     }
 

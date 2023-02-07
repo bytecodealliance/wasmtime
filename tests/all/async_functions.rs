@@ -539,6 +539,7 @@ async fn resume_separate_thread3() {
 
 #[tokio::test]
 async fn recursive_async() -> Result<()> {
+    let _ = env_logger::try_init();
     let mut store = async_store();
     let m = Module::new(
         store.engine(),

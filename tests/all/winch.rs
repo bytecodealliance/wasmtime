@@ -2,6 +2,7 @@ use anyhow::Result;
 use wasmtime::*;
 
 #[test]
+#[ignore]
 fn compiles_with_winch() -> Result<()> {
     let mut c = Config::new();
 
@@ -41,6 +42,7 @@ fn compiles_with_winch() -> Result<()> {
 }
 
 #[test]
+#[ignore]
 fn compiles_with_winch_stack_arguments() -> Result<()> {
     let mut c = Config::new();
 

@@ -59,12 +59,12 @@ where
 
     /// Emit the host to wasm trampoline.
     pub fn emit_host_to_wasm(&mut self, ty: &FuncType) {
-        // The host to wasm trampoline is currently hard coded (see
-        // vmcontext.rs in the wasmtime-runtime crate, VMTrampoline).
-        // The first two parameters are VMContexts (not used at this
-        // time). The third parameter is the function pointer to call.
-        // The fourth parameter is an address to storage space for
-        // both the return value and the arguments to the function.
+        // The host to wasm trampoline is currently hard coded (see vmcontext.rs
+        // in the wasmtime-runtime crate, `VMArrayCallFunction`).  The first two
+        // parameters are VMContexts (not used at this time). The third
+        // parameter is the function pointer to call.  The fourth parameter is
+        // an address to storage space for both the return value and the
+        // arguments to the function.
         let trampoline_ty = FuncType::new(
             vec![ValType::I64, ValType::I64, ValType::I64, ValType::I64],
             vec![],

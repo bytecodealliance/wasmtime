@@ -1,6 +1,13 @@
 
 # cargo-vet imports lock
 
+[[publisher.bumpalo]]
+version = "3.12.0"
+when = "2023-01-17"
+user-id = 696
+user-login = "fitzgen"
+user-name = "Nick Fitzgerald"
+
 [[publisher.wasm-mutate]]
 version = "0.2.23"
 when = "2023-04-13"

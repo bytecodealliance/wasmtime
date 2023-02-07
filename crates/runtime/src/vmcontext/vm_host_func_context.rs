@@ -2,34 +2,32 @@
 //!
 //! Keep in sync with `wasmtime_environ::VMHostFuncOffsets`.
 
-use wasmtime_environ::VM_HOST_FUNC_MAGIC;
+use crate::VMCallerCheckedFuncRef;
 
-use super::{VMCallerCheckedFuncRef, VMFunctionBody, VMOpaqueContext, VMSharedSignatureIndex};
-use std::{
-    any::Any,
-    ptr::{self, NonNull},
-};
+use super::VMOpaqueContext;
+use std::any::Any;
+use wasmtime_environ::{VM_ARRAY_CALL_HOST_FUNC_MAGIC, VM_NATIVE_CALL_HOST_FUNC_MAGIC};
 
-/// The `VM*Context` for host functions.
+/// The `VM*Context` for array-call host functions.
 ///
-/// Its `magic` field must always be `wasmtime_environ::VM_HOST_FUNC_MAGIC`, and
-/// this is how you can determine whether a `VM*Context` is a
-/// `VMHostFuncContext` versus a different kind of context.
+/// Its `magic` field must always be
+/// `wasmtime_environ::VM_ARRAY_CALL_HOST_FUNC_MAGIC`, and this is how you can
+/// determine whether a `VM*Context` is a `VMArrayCallHostFuncContext` versus a
+/// different kind of context.
 #[repr(C)]
-pub struct VMHostFuncContext {
+pub struct VMArrayCallHostFuncContext {
     magic: u32,
     // _padding: u32, // (on 64-bit systems)
-    pub(crate) host_func: NonNull<VMFunctionBody>,
-    wasm_to_host_trampoline: VMCallerCheckedFuncRef,
+    pub(crate) funcref: VMCallerCheckedFuncRef,
     host_state: Box<dyn Any + Send + Sync>,
 }
 
 // Declare that this type is send/sync, it's the responsibility of
 // `VMHostFuncContext::new` callers to uphold this guarantee.
-unsafe impl Send for VMHostFuncContext {}
-unsafe impl Sync for VMHostFuncContext {}
+unsafe impl Send for VMArrayCallHostFuncContext {}
+unsafe impl Sync for VMArrayCallHostFuncContext {}
 
-impl VMHostFuncContext {
+impl VMArrayCallHostFuncContext {
     /// Create the context for the given host function.
     ///
     /// # Safety
@@ -37,44 +35,108 @@ impl VMHostFuncContext {
     /// The `host_func` must be a pointer to a host (not Wasm) function and it
     /// must be `Send` and `Sync`.
     pub unsafe fn new(
-        host_func: NonNull<VMFunctionBody>,
-        signature: VMSharedSignatureIndex,
+        funcref: VMCallerCheckedFuncRef,
         host_state: Box<dyn Any + Send + Sync>,
-    ) -> Box<VMHostFuncContext> {
-        let wasm_to_host_trampoline = VMCallerCheckedFuncRef {
-            func_ptr: NonNull::new(crate::trampolines::wasm_to_host_trampoline as _).unwrap(),
-            type_index: signature,
-            vmctx: ptr::null_mut(),
-        };
-        let mut ctx = Box::new(VMHostFuncContext {
-            magic: wasmtime_environ::VM_HOST_FUNC_MAGIC,
-            host_func,
-            wasm_to_host_trampoline,
+    ) -> Box<VMArrayCallHostFuncContext> {
+        debug_assert!(funcref.vmctx.is_null());
+        let mut ctx = Box::new(VMArrayCallHostFuncContext {
+            magic: wasmtime_environ::VM_ARRAY_CALL_HOST_FUNC_MAGIC,
+            funcref,
             host_state,
         });
-        ctx.wasm_to_host_trampoline.vmctx =
-            VMOpaqueContext::from_vm_host_func_context(&*ctx as *const _ as *mut _);
+        ctx.funcref.vmctx = VMOpaqueContext::from_vm_array_call_host_func_context(&mut *ctx);
         ctx
     }
 
-    /// Get the Wasm-to-host trampoline for this host function context.
-    pub fn wasm_to_host_trampoline(&self) -> NonNull<VMCallerCheckedFuncRef> {
-        NonNull::from(&self.wasm_to_host_trampoline)
-    }
-
     /// Get the host state for this host function context.
+    #[inline]
     pub fn host_state(&self) -> &(dyn Any + Send + Sync) {
         &*self.host_state
     }
-}
 
-impl VMHostFuncContext {
+    /// Get this context's funcref.
+    #[inline]
+    pub fn funcref(&self) -> &VMCallerCheckedFuncRef {
+        &self.funcref
+    }
+
     /// Helper function to cast between context types using a debug assertion to
     /// protect against some mistakes.
     #[inline]
-    pub unsafe fn from_opaque(opaque: *mut VMOpaqueContext) -> *mut VMHostFuncContext {
+    pub unsafe fn from_opaque(opaque: *mut VMOpaqueContext) -> *mut VMArrayCallHostFuncContext {
         // See comments in `VMContext::from_opaque` for this debug assert
-        debug_assert_eq!((*opaque).magic, VM_HOST_FUNC_MAGIC);
+        debug_assert_eq!((*opaque).magic, VM_ARRAY_CALL_HOST_FUNC_MAGIC);
+        opaque.cast()
+    }
+}
+
+/// The `VM*Context` for native-call host functions.
+///
+/// Its `magic` field must always be
+/// `wasmtime_environ::VM_NATIVE_CALL_HOST_FUNC_MAGIC`, and this is how you can
+/// determine whether a `VM*Context` is a `VMNativeCallHostFuncContext` versus a
+/// different kind of context.
+#[repr(C)]
+pub struct VMNativeCallHostFuncContext {
+    magic: u32,
+    // _padding: u32, // (on 64-bit systems)
+    funcref: VMCallerCheckedFuncRef,
+    host_state: Box<dyn Any + Send + Sync>,
+}
+
+#[test]
+fn vmnative_call_host_func_context_offsets() {
+    use memoffset::offset_of;
+    use wasmtime_environ::{HostPtr, PtrSize};
+    assert_eq!(
+        usize::from(HostPtr.vmnative_call_host_func_context_funcref()),
+        offset_of!(VMNativeCallHostFuncContext, funcref)
+    );
+}
+
+// Declare that this type is send/sync, it's the responsibility of
+// `VMHostFuncContext::new` callers to uphold this guarantee.
+unsafe impl Send for VMNativeCallHostFuncContext {}
+unsafe impl Sync for VMNativeCallHostFuncContext {}
+
+impl VMNativeCallHostFuncContext {
+    /// Create the context for the given host function.
+    ///
+    /// # Safety
+    ///
+    /// The `host_func` must be a pointer to a host (not Wasm) function and it
+    /// must be `Send` and `Sync`.
+    pub unsafe fn new(
+        funcref: VMCallerCheckedFuncRef,
+        host_state: Box<dyn Any + Send + Sync>,
+    ) -> Box<VMNativeCallHostFuncContext> {
+        let mut ctx = Box::new(VMNativeCallHostFuncContext {
+            magic: wasmtime_environ::VM_NATIVE_CALL_HOST_FUNC_MAGIC,
+            funcref,
+            host_state,
+        });
+        ctx.funcref.vmctx = VMOpaqueContext::from_vm_native_call_host_func_context(&mut *ctx);
+        ctx
+    }
+
+    /// Get the host state for this host function context.
+    #[inline]
+    pub fn host_state(&self) -> &(dyn Any + Send + Sync) {
+        &*self.host_state
+    }
+
+    /// Get this context's funcref.
+    #[inline]
+    pub fn funcref(&self) -> &VMCallerCheckedFuncRef {
+        &self.funcref
+    }
+
+    /// Helper function to cast between context types using a debug assertion to
+    /// protect against some mistakes.
+    #[inline]
+    pub unsafe fn from_opaque(opaque: *mut VMOpaqueContext) -> *mut VMNativeCallHostFuncContext {
+        // See comments in `VMContext::from_opaque` for this debug assert
+        debug_assert_eq!((*opaque).magic, VM_NATIVE_CALL_HOST_FUNC_MAGIC);
         opaque.cast()
     }
 }

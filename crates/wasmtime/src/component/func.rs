@@ -12,7 +12,7 @@ use wasmtime_environ::component::{
     CanonicalAbiInfo, CanonicalOptions, ComponentTypes, CoreDef, RuntimeComponentInstanceIndex,
     TypeFuncIndex, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
 };
-use wasmtime_runtime::{Export, ExportFunction, VMTrampoline};
+use wasmtime_runtime::{Export, ExportFunction};
 
 /// A helper macro to safely map `MaybeUninit<T>` to `MaybeUninit<U>` where `U`
 /// is a field projection within `T`.
@@ -92,14 +92,13 @@ pub struct Func(Stored<FuncData>);
 
 #[doc(hidden)]
 pub struct FuncData {
-    trampoline: VMTrampoline,
     export: ExportFunction,
     ty: TypeFuncIndex,
     types: Arc<ComponentTypes>,
     options: Options,
     instance: Instance,
     component_instance: RuntimeComponentInstanceIndex,
-    post_return: Option<(ExportFunction, VMTrampoline)>,
+    post_return: Option<ExportFunction>,
     post_return_arg: Option<ValRaw>,
 }
 
@@ -116,20 +115,17 @@ impl Func {
             Export::Function(f) => f,
             _ => unreachable!(),
         };
-        let trampoline = store.lookup_trampoline(unsafe { export.anyfunc.as_ref() });
         let memory = options
             .memory
             .map(|i| NonNull::new(data.instance().runtime_memory(i)).unwrap());
         let realloc = options.realloc.map(|i| data.instance().runtime_realloc(i));
         let post_return = options.post_return.map(|i| {
             let anyfunc = data.instance().runtime_post_return(i);
-            let trampoline = store.lookup_trampoline(unsafe { anyfunc.as_ref() });
-            (ExportFunction { anyfunc }, trampoline)
+            ExportFunction { anyfunc }
         });
         let component_instance = options.instance;
         let options = unsafe { Options::new(store.id(), memory, realloc, options.string_encoding) };
         Func(store.store_data_mut().insert(FuncData {
-            trampoline,
             export,
             options,
             ty,
@@ -419,7 +415,6 @@ impl Func {
         LowerReturn: Copy,
     {
         let FuncData {
-            trampoline,
             export,
             options,
             instance,
@@ -476,8 +471,8 @@ impl Func {
             crate::Func::call_unchecked_raw(
                 store,
                 export.anyfunc,
-                trampoline,
                 space.as_mut_ptr().cast(),
+                mem::size_of_val(space) / mem::size_of::<ValRaw>(),
             )?;
 
             // Note that `.assume_init_ref()` here is unsafe but we're relying
@@ -619,12 +614,12 @@ impl Func {
             // Note that if this traps (returns an error) this function
             // intentionally leaves the instance in a "poisoned" state where it
             // can no longer be entered because `may_enter` is `false`.
-            if let Some((func, trampoline)) = post_return {
+            if let Some(func) = post_return {
                 crate::Func::call_unchecked_raw(
                     &mut store,
                     func.anyfunc,
-                    trampoline,
                     &post_return_arg as *const ValRaw as *mut ValRaw,
+                    1,
                 )?;
             }
 
