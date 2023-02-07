@@ -910,31 +910,7 @@ impl DataFlowGraph {
         // If the `inst_data` has a reference to a ValueList, clone it
         // as well, because we can't share these (otherwise mutating
         // one would affect the other).
-        let inst_data = match inst_data {
-            InstructionData::MultiAry { opcode, args } => InstructionData::MultiAry {
-                opcode,
-                args: args.deep_clone(&mut self.value_lists),
-            },
-            InstructionData::Call {
-                opcode,
-                func_ref,
-                args,
-            } => InstructionData::Call {
-                opcode,
-                func_ref,
-                args: args.deep_clone(&mut self.value_lists),
-            },
-            InstructionData::CallIndirect {
-                opcode,
-                args,
-                sig_ref,
-            } => InstructionData::CallIndirect {
-                opcode,
-                sig_ref,
-                args: args.deep_clone(&mut self.value_lists),
-            },
-            inst => inst,
-        };
+        let inst_data = inst_data.deep_clone(&mut self.value_lists);
         let new_inst = self.make_inst(inst_data);
         // Get the controlling type variable.
         let ctrl_typevar = self.ctrl_typevar(inst);
