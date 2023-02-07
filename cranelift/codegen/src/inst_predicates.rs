@@ -204,7 +204,7 @@ pub(crate) fn visit_block_succs<F: FnMut(Inst, Block, bool)>(
                 }
             }
 
-            inst => assert!(!inst.opcode().is_branch()),
+            inst => debug_assert!(!inst.opcode().is_branch()),
         }
     }
 }

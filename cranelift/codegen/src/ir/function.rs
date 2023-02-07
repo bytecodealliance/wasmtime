@@ -341,7 +341,7 @@ impl FunctionStencil {
                 }
             }
 
-            inst => assert!(!inst.opcode().is_branch()),
+            inst => debug_assert!(!inst.opcode().is_branch()),
         }
     }
 
