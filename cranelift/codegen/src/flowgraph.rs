@@ -141,7 +141,7 @@ impl ControlFlowGraph {
                         self.add_edge(block, inst, *dest);
                     }
                 }
-                _ => {}
+                inst => assert!(!inst.opcode().is_branch()),
             }
         }
     }

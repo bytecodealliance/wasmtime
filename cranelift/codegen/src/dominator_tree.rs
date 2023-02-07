@@ -372,7 +372,7 @@ impl DominatorTree {
                     }
                     self.push_if_unseen(dest);
                 }
-                _ => {}
+                inst => assert!(!inst.opcode().is_branch()),
             }
         }
     }
