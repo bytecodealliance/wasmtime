@@ -213,7 +213,6 @@ impl Context {
     ///
     /// Returns information about the function's code and read-only data.
     pub fn compile(&mut self, isa: &dyn TargetIsa) -> CompileResult<&CompiledCode> {
-        let _tt = timing::compile();
         let stencil = self.compile_stencil(isa).map_err(|error| CompileError {
             inner: error,
             func: &self.func,
