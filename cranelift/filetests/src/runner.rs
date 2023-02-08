@@ -369,11 +369,7 @@ impl TestRunner {
     }
 
     /// Scan pushed directories for tests and run specified passes from commandline on them.
-    pub fn run_passes(
-        &mut self,
-        passes: &[String],
-        target: &str,
-    ) -> anyhow::Result<()> {
+    pub fn run_passes(&mut self, passes: &[String], target: &str) -> anyhow::Result<()> {
         self.scan_dirs(IsPass::Pass);
         self.schedule_pass_job(passes, target);
         self.report_slow_tests();
