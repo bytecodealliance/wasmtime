@@ -21,7 +21,7 @@ pub fn eliminate_unreachable_code(
 ) {
     let _tt = timing::unreachable_code();
     let mut pos = FuncCursor::new(func);
-    let mut used_tables = EntitySet::with_capacity(pos.func.jump_tables.len());
+    let mut used_tables = EntitySet::with_capacity(pos.func.stencil.dfg.jump_tables.len());
     while let Some(block) = pos.next_block() {
         if domtree.is_reachable(block) {
             let inst = pos.func.layout.last_inst(block).unwrap();
@@ -50,7 +50,7 @@ pub fn eliminate_unreachable_code(
         pos.func.layout.remove_block(block);
     }
 
-    for (table, jt_data) in func.jump_tables.iter_mut() {
+    for (table, jt_data) in func.stencil.dfg.jump_tables.iter_mut() {
         if !used_tables.contains(table) {
             jt_data.clear();
         }

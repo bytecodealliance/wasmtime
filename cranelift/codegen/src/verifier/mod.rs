@@ -447,7 +447,7 @@ impl<'a> Verifier<'a> {
     }
 
     fn verify_jump_tables(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
-        for (jt, jt_data) in &self.func.jump_tables {
+        for (jt, jt_data) in &self.func.stencil.dfg.jump_tables {
             for &block in jt_data.iter() {
                 self.verify_block(jt, block, errors)?;
             }
@@ -854,7 +854,7 @@ impl<'a> Verifier<'a> {
         j: JumpTable,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
-        if !self.func.jump_tables.is_valid(j) {
+        if !self.func.stencil.dfg.jump_tables.is_valid(j) {
             errors.nonfatal((
                 inst,
                 self.context(inst),
@@ -1344,7 +1344,7 @@ impl<'a> Verifier<'a> {
                         ),
                     ));
                 }
-                for block in self.func.jump_tables[*table].iter() {
+                for block in self.func.stencil.dfg.jump_tables[*table].iter() {
                     let arg_count = self.func.dfg.num_block_params(*block);
                     if arg_count != 0 {
                         return errors.nonfatal((

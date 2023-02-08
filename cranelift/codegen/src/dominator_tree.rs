@@ -367,7 +367,7 @@ impl DominatorTree {
                     destination: dest,
                     ..
                 } => {
-                    for succ in func.jump_tables[*jt].iter() {
+                    for succ in func.stencil.dfg.jump_tables[*jt].iter() {
                         self.push_if_unseen(*succ);
                     }
                     self.push_if_unseen(*dest);

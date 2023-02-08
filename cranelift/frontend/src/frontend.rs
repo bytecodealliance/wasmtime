@@ -139,6 +139,8 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
                 for dest_block in self
                     .builder
                     .func
+                    .stencil
+                    .dfg
                     .jump_tables
                     .get(*table)
                     .expect("you are referencing an undeclared jump table")

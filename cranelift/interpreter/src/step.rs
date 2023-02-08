@@ -377,7 +377,7 @@ where
                 table, destination, ..
             } = inst
             {
-                let jt_data = &state.get_current_function().jump_tables[table];
+                let jt_data = &state.get_current_function().stencil.dfg.jump_tables[table];
 
                 // Convert to usize to remove negative indexes from the following operations
                 let jump_target = usize::try_from(arg(0)?.into_int()?)

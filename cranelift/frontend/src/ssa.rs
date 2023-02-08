@@ -601,7 +601,7 @@ impl SSABuilder {
                 let middle_block = dfg.blocks.add();
                 func.stencil.layout.append_block(middle_block);
 
-                let table = &mut func.stencil.jump_tables[*jt];
+                let table = &mut dfg.jump_tables[*jt];
                 for block in table.iter_mut() {
                     if *block == dest_block {
                         *block = middle_block;

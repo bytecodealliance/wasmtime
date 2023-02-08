@@ -137,7 +137,7 @@ impl ControlFlowGraph {
                 } => {
                     self.add_edge(block, inst, *dest);
 
-                    for dest in func.jump_tables[*jt].iter() {
+                    for dest in func.stencil.dfg.jump_tables[*jt].iter() {
                         self.add_edge(block, inst, *dest);
                     }
                 }

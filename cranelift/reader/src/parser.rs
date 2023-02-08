@@ -393,10 +393,10 @@ impl Context {
     // Allocate a new jump table.
     fn add_jt(&mut self, jt: JumpTable, data: JumpTableData, loc: Location) -> ParseResult<()> {
         self.map.def_jt(jt, loc)?;
-        while self.function.jump_tables.next_key().index() <= jt.index() {
+        while self.function.stencil.dfg.jump_tables.next_key().index() <= jt.index() {
             self.function.create_jump_table(JumpTableData::new());
         }
-        self.function.jump_tables[jt] = data;
+        self.function.stencil.dfg.jump_tables[jt] = data;
         Ok(())
     }
 
