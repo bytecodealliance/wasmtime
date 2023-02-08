@@ -3,6 +3,8 @@
 //! This modules provides facilities for timing the execution of individual compilation passes.
 
 use core::fmt;
+use std::any::Any;
+use std::boxed::Box;
 use std::cell::{Cell, RefCell};
 use std::mem;
 use std::time::{Duration, Instant};
@@ -18,18 +20,24 @@ use std::time::{Duration, Instant};
 // - A public function per pass used to start the timing of that pass.
 macro_rules! define_passes {
     ($($pass:ident: $desc:expr,)+) => {
+        /// A single profiled pass.
         #[allow(non_camel_case_types)]
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-        enum Pass { $($pass,)+ None}
+        pub enum Pass {
+            $(#[doc=$desc] $pass,)+
+            /// No active pass.
+            None,
+        }
 
-        const NUM_PASSES: usize = Pass::None as usize;
+        /// The amount of profiled passes.
+        pub const NUM_PASSES: usize = Pass::None as usize;
 
         const DESCRIPTIONS: [&str; NUM_PASSES] = [ $($desc),+ ];
 
         $(
             #[doc=$desc]
             #[must_use]
-            pub fn $pass() -> TimingToken {
+            pub fn $pass() -> Box<dyn Any> {
                 start_pass(Pass::$pass)
             }
         )+
@@ -73,7 +81,7 @@ define_passes! {
 }
 
 impl Pass {
-    pub fn idx(self) -> usize {
+    fn idx(self) -> usize {
         self as usize
     }
 }
@@ -87,12 +95,42 @@ impl fmt::Display for Pass {
     }
 }
 
+/// A profiler.
+pub trait Profiler {
+    /// Start a profiling pass.
+    ///
+    /// Will return a token which when dropped indicates the end of the pass.
+    ///
+    /// Multiple passes can be active at the same time, but they must be started and stopped in a
+    /// LIFO fashion.
+    fn start_pass(&self, pass: Pass) -> Box<dyn Any>;
+}
+
+// Information about passes in a single thread.
+thread_local! {
+    static PROFILER: RefCell<Box<dyn Profiler>> = RefCell::new(Box::new(DefaultProfiler));
+}
+
+/// Set the profiler for the current thread.
+///
+/// Returns the old profiler.
+pub fn set_thread_profiler(new_profiler: Box<dyn Profiler>) -> Box<dyn Profiler> {
+    PROFILER.with(|profiler| std::mem::replace(&mut *profiler.borrow_mut(), new_profiler))
+}
+
+/// Start timing `pass` as a child of the currently running pass, if any.
+///
+/// This function is called by the publicly exposed pass functions.
+fn start_pass(pass: Pass) -> Box<dyn Any> {
+    PROFILER.with(|profiler| profiler.borrow().start_pass(pass))
+}
+
 /// A timing token is responsible for timing the currently running pass. Timing starts when it
 /// is created and ends when it is dropped.
 ///
 /// Multiple passes can be active at the same time, but they must be started and stopped in a
 /// LIFO fashion.
-pub struct TimingToken {
+struct DefaultTimingToken {
     /// Start time for this pass.
     start: Instant,
 
@@ -176,21 +214,23 @@ thread_local! {
     static PASS_TIME: RefCell<PassTimes> = RefCell::new(Default::default());
 }
 
-/// Start timing `pass` as a child of the currently running pass, if any.
-///
-/// This function is called by the publicly exposed pass functions.
-fn start_pass(pass: Pass) -> TimingToken {
-    let prev = CURRENT_PASS.with(|p| p.replace(pass));
-    log::debug!("timing: Starting {}, (during {})", pass, prev);
-    TimingToken {
-        start: Instant::now(),
-        pass,
-        prev,
+/// The default profiler. You can get the results using [`take_current`].
+pub struct DefaultProfiler;
+
+impl Profiler for DefaultProfiler {
+    fn start_pass(&self, pass: Pass) -> Box<dyn Any> {
+        let prev = CURRENT_PASS.with(|p| p.replace(pass));
+        log::debug!("timing: Starting {}, (during {})", pass, prev);
+        Box::new(DefaultTimingToken {
+            start: Instant::now(),
+            pass,
+            prev,
+        })
     }
 }
 
 /// Dropping a timing token indicated the end of the pass.
-impl Drop for TimingToken {
+impl Drop for DefaultTimingToken {
     fn drop(&mut self) {
         let duration = self.start.elapsed();
         log::debug!("timing: Ending {}", self.pass);
@@ -207,6 +247,8 @@ impl Drop for TimingToken {
 }
 
 /// Take the current accumulated pass timings and reset the timings for the current thread.
+///
+/// Only applies when [`DefaultProfiler`] is used.
 pub fn take_current() -> PassTimes {
     PASS_TIME.with(|rc| mem::take(&mut *rc.borrow_mut()))
 }
