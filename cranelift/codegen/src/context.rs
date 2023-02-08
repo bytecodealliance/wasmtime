@@ -379,6 +379,8 @@ impl Context {
 
     /// Run optimizations via the egraph infrastructure.
     pub fn egraph_pass(&mut self) -> CodegenResult<()> {
+        let _tt = timing::egraph();
+
         trace!(
             "About to optimize with egraph phase:\n{}",
             self.func.display()
