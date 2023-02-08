@@ -45,6 +45,45 @@ impl IndexMut<Inst> for Insts {
     }
 }
 
+/// Storage for basic blocks within the DFG.
+#[derive(Clone, PartialEq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct Blocks(PrimaryMap<Block, BlockData>);
+
+impl Blocks {
+    /// Create a new basic block.
+    pub fn add(&mut self) -> Block {
+        self.0.push(BlockData::new())
+    }
+
+    /// Get the total number of basic blocks created in this function, whether they are
+    /// currently inserted in the layout or not.
+    ///
+    /// This is intended for use with `SecondaryMap::with_capacity`.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Returns `true` if the given block reference is valid.
+    pub fn is_valid(&self, block: Block) -> bool {
+        self.0.is_valid(block)
+    }
+}
+
+impl Index<Block> for Blocks {
+    type Output = BlockData;
+
+    fn index(&self, block: Block) -> &BlockData {
+        &self.0[block]
+    }
+}
+
+impl IndexMut<Block> for Blocks {
+    fn index_mut(&mut self, block: Block) -> &mut BlockData {
+        &mut self.0[block]
+    }
+}
+
 /// A data flow graph defines all instructions and basic blocks in a function as well as
 /// the data flow dependencies between them. The DFG also tracks values which can be either
 /// instruction results or block parameters.
@@ -70,7 +109,7 @@ pub struct DataFlowGraph {
     ///
     /// This map is not in program order. That is handled by `Layout`, and so is the sequence of
     /// instructions contained in each block.
-    blocks: PrimaryMap<Block, BlockData>,
+    pub blocks: Blocks,
 
     /// Dynamic types created.
     pub dynamic_types: DynamicTypes,
@@ -113,7 +152,7 @@ impl DataFlowGraph {
         Self {
             insts: Insts(PrimaryMap::new()),
             results: SecondaryMap::new(),
-            blocks: PrimaryMap::new(),
+            blocks: Blocks(PrimaryMap::new()),
             dynamic_types: DynamicTypes::new(),
             value_lists: ValueListPool::new(),
             values: PrimaryMap::new(),
@@ -130,7 +169,7 @@ impl DataFlowGraph {
     pub fn clear(&mut self) {
         self.insts.0.clear();
         self.results.clear();
-        self.blocks.clear();
+        self.blocks.0.clear();
         self.dynamic_types.clear();
         self.value_lists.clear();
         self.values.clear();
@@ -1084,17 +1123,17 @@ impl DataFlowGraph {
 impl DataFlowGraph {
     /// Create a new basic block.
     pub fn make_block(&mut self) -> Block {
-        self.blocks.push(BlockData::new())
+        self.blocks.add()
     }
 
     /// Get the number of parameters on `block`.
     pub fn num_block_params(&self, block: Block) -> usize {
-        self.blocks[block].params.len(&self.value_lists)
+        self.blocks[block].params(&self.value_lists).len()
     }
 
     /// Get the parameters on `block`.
     pub fn block_params(&self, block: Block) -> &[Value] {
-        self.blocks[block].params.as_slice(&self.value_lists)
+        self.blocks[block].params(&self.value_lists)
     }
 
     /// Get the types of the parameters on `block`.
@@ -1250,7 +1289,7 @@ impl DataFlowGraph {
 /// match the function arguments.
 #[derive(Clone, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-struct BlockData {
+pub struct BlockData {
     /// List of parameters to this block.
     params: ValueList,
 }
@@ -1260,6 +1299,11 @@ impl BlockData {
         Self {
             params: ValueList::new(),
         }
+    }
+
+    /// Get the parameters on `block`.
+    pub fn params<'a>(&self, pool: &'a ValueListPool) -> &'a [Value] {
+        self.params.as_slice(pool)
     }
 }
 
