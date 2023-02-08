@@ -22,7 +22,8 @@
 
 use crate::bforest;
 use crate::entity::SecondaryMap;
-use crate::ir::{self, Block, Function, Inst};
+use crate::inst_predicates;
+use crate::ir::{Block, Function, Inst};
 use crate::timing;
 use core::mem;
 
@@ -116,34 +117,9 @@ impl ControlFlowGraph {
     }
 
     fn compute_block(&mut self, func: &Function, block: Block) {
-        if let Some(inst) = func.layout.last_inst(block) {
-            match &func.dfg.insts[inst] {
-                ir::InstructionData::Jump {
-                    destination: dest, ..
-                } => {
-                    self.add_edge(block, inst, dest.block(&func.dfg.value_lists));
-                }
-                ir::InstructionData::Brif {
-                    blocks: [block_then, block_else],
-                    ..
-                } => {
-                    self.add_edge(block, inst, block_then.block(&func.dfg.value_lists));
-                    self.add_edge(block, inst, block_else.block(&func.dfg.value_lists));
-                }
-                ir::InstructionData::BranchTable {
-                    table: jt,
-                    destination: dest,
-                    ..
-                } => {
-                    self.add_edge(block, inst, *dest);
-
-                    for dest in func.stencil.dfg.jump_tables[*jt].iter() {
-                        self.add_edge(block, inst, *dest);
-                    }
-                }
-                inst => debug_assert!(!inst.opcode().is_branch()),
-            }
-        }
+        inst_predicates::visit_block_succs(func, block, |inst, dest, _| {
+            self.add_edge(block, inst, dest);
+        });
     }
 
     fn invalidate_block_successors(&mut self, block: Block) {
