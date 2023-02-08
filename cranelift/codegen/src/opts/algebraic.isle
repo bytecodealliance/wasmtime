@@ -104,22 +104,28 @@
 (rule (simplify (bxor (fits_in_64 (ty_int ty)) x x))
       (subsume (iconst ty (imm64 0))))
 
-;; x ^ not(x) == not(x) ^ x == -1.
-(rule (simplify (bxor $I32 x (bnot $I32 x))) (subsume (iconst $I32 (imm64 0xffff_ffff))))
-(rule (simplify (bxor $I32 (bnot $I32 x) x)) (subsume (iconst $I32 (imm64 0xffff_ffff))))
-(rule (simplify (bxor $I64 x (bnot $I64 x))) (subsume (iconst $I64 (imm64 0xffff_ffff_ffff_ffff))))
-(rule (simplify (bxor $I64 (bnot $I64 x) x)) (subsume (iconst $I64 (imm64 0xffff_ffff_ffff_ffff))))
+;; x ^ not(x) == not(x) ^ x == x | not(x) == not(x) | x == -1.
+;; This identity also holds for non-integer types, vectors, and wider types.
+;; But `iconst` is only valid for integers up to 64 bits wide.
+(rule (simplify (bxor (fits_in_64 (ty_int ty)) x (bnot ty x))) (subsume (iconst ty (imm64 (ty_mask ty)))))
+(rule (simplify (bxor (fits_in_64 (ty_int ty)) (bnot ty x) x)) (subsume (iconst ty (imm64 (ty_mask ty)))))
+(rule (simplify (bor (fits_in_64 (ty_int ty)) x (bnot ty x))) (subsume (iconst ty (imm64 (ty_mask ty)))))
+(rule (simplify (bor (fits_in_64 (ty_int ty)) (bnot ty x) x)) (subsume (iconst ty (imm64 (ty_mask ty)))))
 
 ;; x & -1 == -1 & x == x & x == x.
-(rule (simplify (band ty x x)) x)
-(rule (simplify (band $I32 x (iconst $I32 (u64_from_imm64 0xffff_ffff)))) (subsume x))
-(rule (simplify (band $I32 (iconst $I32 (u64_from_imm64 0xffff_ffff)) x)) (subsume x))
-(rule (simplify (band $I64 x (iconst $I64 (u64_from_imm64 0xffff_ffff_ffff_ffff)))) (subsume x))
-(rule (simplify (band $I64 (iconst $I64 (u64_from_imm64 0xffff_ffff_ffff_ffff)) x)) (subsume x))
+(rule (simplify (band ty x x)) (subsume x))
+(rule (simplify (band ty x (iconst ty k)))
+      (if-let -1 (i64_sextend_imm64 ty k))
+      (subsume x))
+(rule (simplify (band ty (iconst ty k) x))
+      (if-let -1 (i64_sextend_imm64 ty k))
+      (subsume x))
 
-;; x & 0 == 0 & x == 0.
+;; x & 0 == 0 & x == x & not(x) == not(x) & x == 0.
 (rule (simplify (band ty _ zero @ (iconst ty (u64_from_imm64 0)))) (subsume zero))
 (rule (simplify (band ty zero @ (iconst ty (u64_from_imm64 0)) _)) (subsume zero))
+(rule (simplify (band (fits_in_64 (ty_int ty)) x (bnot ty x))) (subsume (iconst ty (imm64 0))))
+(rule (simplify (band (fits_in_64 (ty_int ty)) (bnot ty x) x)) (subsume (iconst ty (imm64 0))))
 
 ;; not(not(x)) == x.
 (rule (simplify (bnot ty (bnot ty x))) (subsume x))
