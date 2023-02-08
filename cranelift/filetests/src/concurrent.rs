@@ -82,14 +82,16 @@ impl ConcurrentRunner {
 
     /// Join all the worker threads.
     /// Transfer pass timings from the worker threads to the current thread.
-    pub fn join(&mut self) {
+    pub fn join(&mut self) -> timing::PassTimes {
         assert!(self.request_tx.is_none(), "must shutdown before join");
+        let mut pass_times = timing::PassTimes::default();
         for h in self.handles.drain(..) {
             match h.join() {
-                Ok(t) => timing::add_to_current(&t),
+                Ok(t) => pass_times.add(&t),
                 Err(e) => println!("worker panicked: {:?}", e),
             }
         }
+        pass_times
     }
 
     /// Add a new job to the queues.

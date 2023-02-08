@@ -119,6 +119,14 @@ pub struct PassTimes {
 }
 
 impl PassTimes {
+    /// Add `other` to the timings of this `PassTimes`.
+    pub fn add(&mut self, other: &Self) {
+        for (a, b) in self.pass.iter_mut().zip(&other.pass[..]) {
+            a.total += b.total;
+            a.child += b.child;
+        }
+    }
+
     /// Returns the total amount of time taken by all the passes measured.
     pub fn total(&self) -> Duration {
         self.pass.iter().map(|p| p.total - p.child).sum()
@@ -200,17 +208,7 @@ impl Drop for TimingToken {
 
 /// Take the current accumulated pass timings and reset the timings for the current thread.
 pub fn take_current() -> PassTimes {
-    PASS_TIME.with(|rc| mem::replace(&mut *rc.borrow_mut(), Default::default()))
-}
-
-/// Add `timings` to the accumulated timings for the current thread.
-pub fn add_to_current(times: &PassTimes) {
-    PASS_TIME.with(|rc| {
-        for (a, b) in rc.borrow_mut().pass.iter_mut().zip(&times.pass[..]) {
-            a.total += b.total;
-            a.child += b.child;
-        }
-    })
+    PASS_TIME.with(|rc| mem::take(&mut *rc.borrow_mut()))
 }
 
 #[cfg(test)]

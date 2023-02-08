@@ -5,7 +5,6 @@
 
 use crate::concurrent::{ConcurrentRunner, Reply};
 use crate::runone;
-use cranelift_codegen::timing;
 use std::error::Error;
 use std::ffi::OsStr;
 use std::fmt::{self, Display};
@@ -298,9 +297,9 @@ impl TestRunner {
                     None => break,
                 }
             }
-            conc.join();
+            let pass_times = conc.join();
             if self.report_times {
-                println!("{}", timing::take_current());
+                println!("{}", pass_times);
             }
         }
     }
