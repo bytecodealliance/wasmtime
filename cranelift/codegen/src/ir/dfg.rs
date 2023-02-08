@@ -1144,9 +1144,7 @@ impl DataFlowGraph {
     /// Append a parameter with type `ty` to `block`.
     pub fn append_block_param(&mut self, block: Block, ty: Type) -> Value {
         let param = self.values.next_key();
-        let num = self.blocks.0[block]
-            .params
-            .push(param, &mut self.value_lists);
+        let num = self.blocks[block].params.push(param, &mut self.value_lists);
         debug_assert!(num <= u16::MAX as usize, "Too many parameters on block");
         self.make_value(ValueData::Param {
             ty,
@@ -1170,10 +1168,10 @@ impl DataFlowGraph {
             } else {
                 panic!("{} must be a block parameter", val);
             };
-        self.blocks.0[block]
+        self.blocks[block]
             .params
             .swap_remove(num as usize, &mut self.value_lists);
-        if let Some(last_arg_val) = self.blocks.0[block]
+        if let Some(last_arg_val) = self.blocks[block]
             .params
             .get(num as usize, &self.value_lists)
         {
@@ -1202,11 +1200,11 @@ impl DataFlowGraph {
             } else {
                 panic!("{} must be a block parameter", val);
             };
-        self.blocks.0[block]
+        self.blocks[block]
             .params
             .remove(num as usize, &mut self.value_lists);
         for index in num..(self.num_block_params(block) as u16) {
-            let packed = &mut self.values[self.blocks.0[block]
+            let packed = &mut self.values[self.blocks[block]
                 .params
                 .get(index as usize, &self.value_lists)
                 .unwrap()];
@@ -1218,7 +1216,7 @@ impl DataFlowGraph {
                 }
                 _ => panic!(
                     "{} must be a block parameter",
-                    self.blocks.0[block]
+                    self.blocks[block]
                         .params
                         .get(index as usize, &self.value_lists)
                         .unwrap()
@@ -1234,9 +1232,7 @@ impl DataFlowGraph {
     /// In almost all cases, you should be using `append_block_param()` instead of this method.
     pub fn attach_block_param(&mut self, block: Block, param: Value) {
         debug_assert!(!self.value_is_attached(param));
-        let num = self.blocks.0[block]
-            .params
-            .push(param, &mut self.value_lists);
+        let num = self.blocks[block].params.push(param, &mut self.value_lists);
         debug_assert!(num <= u16::MAX as usize, "Too many parameters on block");
         let ty = self.value_type(param);
         self.values[param] = ValueData::Param {
@@ -1270,7 +1266,7 @@ impl DataFlowGraph {
             block,
         });
 
-        self.blocks.0[block]
+        self.blocks[block]
             .params
             .as_mut_slice(&mut self.value_lists)[num as usize] = new_arg;
         new_arg
@@ -1282,7 +1278,7 @@ impl DataFlowGraph {
     /// is to put them back on the same block with `attach_block_param()` or change them into aliases
     /// with `change_to_alias()`.
     pub fn detach_block_params(&mut self, block: Block) -> ValueList {
-        self.blocks.0[block].params.take()
+        self.blocks[block].params.take()
     }
 }
 
@@ -1395,7 +1391,7 @@ impl DataFlowGraph {
     /// create parameters with specific values.
     #[cold]
     pub fn append_block_param_for_parser(&mut self, block: Block, ty: Type, val: Value) {
-        let num = self.blocks.0[block].params.push(val, &mut self.value_lists);
+        let num = self.blocks[block].params.push(val, &mut self.value_lists);
         assert!(num <= u16::MAX as usize, "Too many parameters on block");
         self.values[val] = ValueData::Param {
             ty,
