@@ -24,7 +24,6 @@
 
 pub use crate::function_runner::TestFileCompiler;
 use crate::runner::TestRunner;
-use cranelift_codegen::timing;
 use cranelift_reader::TestCommand;
 use std::path::Path;
 
@@ -89,7 +88,7 @@ pub fn run_passes(
     target: &str,
     file: &str,
 ) -> anyhow::Result<()> {
-    let mut runner = TestRunner::new(verbose, /* report_times */ false);
+    let mut runner = TestRunner::new(verbose, report_times);
 
     let path = Path::new(file);
     if path == Path::new("-") || path.is_file() {
@@ -98,11 +97,8 @@ pub fn run_passes(
         runner.push_dir(path);
     }
 
-    let result = runner.run_passes(passes, target);
-    if report_times {
-        println!("{}", timing::take_current());
-    }
-    result
+    runner.start_threads();
+    runner.run_passes(passes, target)
 }
 
 /// Create a new subcommand trait object to match `parsed.command`.

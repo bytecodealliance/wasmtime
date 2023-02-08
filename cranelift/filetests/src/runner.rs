@@ -377,6 +377,7 @@ impl TestRunner {
         self.scan_dirs(IsPass::Pass);
         self.schedule_pass_job(passes, target);
         self.report_slow_tests();
+        self.drain_threads();
 
         println!("{} tests", self.tests.len());
         match self.errors {
