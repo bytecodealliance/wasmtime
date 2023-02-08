@@ -84,14 +84,19 @@ impl Pass {
     fn idx(self) -> usize {
         self as usize
     }
+
+    /// Description of the pass.
+    pub fn description(self) -> &'static str {
+        match DESCRIPTIONS.get(self.idx()) {
+            Some(s) => s,
+            None => "<no pass>",
+        }
+    }
 }
 
 impl fmt::Display for Pass {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match DESCRIPTIONS.get(self.idx()) {
-            Some(s) => f.write_str(s),
-            None => f.write_str("<no pass>"),
-        }
+        f.write_str(self.description())
     }
 }
 
