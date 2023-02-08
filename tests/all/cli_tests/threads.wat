@@ -6,7 +6,7 @@
     (func $__wasi_fd_write (param i32 i32 i32 i32) (result i32)))
   (import "wasi_snapshot_preview1" "proc_exit"
     (func $__wasi_proc_exit (param i32)))
-  (import "wasi" "thread_spawn"
+  (import "wasi" "thread-spawn"
     (func $__wasi_thread_spawn (param i32) (result i32)))
 
   (func (export "_start")
