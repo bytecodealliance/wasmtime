@@ -112,7 +112,7 @@ pub fn add_to_linker<T: Clone + Send + 'static>(
 ) -> anyhow::Result<SharedMemory> {
     linker.func_wrap(
         "wasi",
-        "thread_spawn",
+        "thread-spawn",
         move |mut caller: Caller<'_, T>, start_arg: i32| -> i32 {
             log::trace!("new thread requested via `wasi::thread_spawn` call");
             let host = caller.data().clone();
