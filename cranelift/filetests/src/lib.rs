@@ -27,7 +27,6 @@ use crate::runner::TestRunner;
 use cranelift_codegen::timing;
 use cranelift_reader::TestCommand;
 use std::path::Path;
-use std::time;
 
 mod concurrent;
 pub mod function_runner;
@@ -63,7 +62,7 @@ mod test_wasm;
 /// Directories are scanned recursively for test cases ending in `.clif`. These test cases are
 /// executed on background threads.
 ///
-pub fn run(verbose: bool, report_times: bool, files: &[String]) -> anyhow::Result<time::Duration> {
+pub fn run(verbose: bool, report_times: bool, files: &[String]) -> anyhow::Result<()> {
     let mut runner = TestRunner::new(verbose, report_times);
 
     for path in files.iter().map(Path::new) {
@@ -89,7 +88,7 @@ pub fn run_passes(
     passes: &[String],
     target: &str,
     file: &str,
-) -> anyhow::Result<time::Duration> {
+) -> anyhow::Result<()> {
     let mut runner = TestRunner::new(verbose, /* report_times */ false);
 
     let path = Path::new(file);

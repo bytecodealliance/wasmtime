@@ -354,8 +354,7 @@ impl TestRunner {
     }
 
     /// Scan pushed directories for tests and run them.
-    pub fn run(&mut self) -> anyhow::Result<time::Duration> {
-        let started = time::Instant::now();
+    pub fn run(&mut self) -> anyhow::Result<()> {
         self.scan_dirs(IsPass::NotPass);
         self.schedule_jobs();
         self.report_slow_tests();
@@ -363,7 +362,7 @@ impl TestRunner {
 
         println!("{} tests", self.tests.len());
         match self.errors {
-            0 => Ok(started.elapsed()),
+            0 => Ok(()),
             1 => anyhow::bail!("1 failure"),
             n => anyhow::bail!("{} failures", n),
         }
@@ -374,15 +373,14 @@ impl TestRunner {
         &mut self,
         passes: &[String],
         target: &str,
-    ) -> anyhow::Result<time::Duration> {
-        let started = time::Instant::now();
+    ) -> anyhow::Result<()> {
         self.scan_dirs(IsPass::Pass);
         self.schedule_pass_job(passes, target);
         self.report_slow_tests();
 
         println!("{} tests", self.tests.len());
         match self.errors {
-            0 => Ok(started.elapsed()),
+            0 => Ok(()),
             1 => anyhow::bail!("1 failure"),
             n => anyhow::bail!("{} failures", n),
         }
