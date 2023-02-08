@@ -364,6 +364,9 @@ impl Wasmtime {
         }
 
         let world_camel = resolve.worlds[world].name.to_upper_camel_case();
+        if self.opts.async_ {
+            uwriteln!(self.src, "#[wasmtime::component::__internal::async_trait]")
+        }
         uwriteln!(self.src, "pub trait {world_camel}Imports {{");
         for sig in functions {
             self.src.push_str(sig);
