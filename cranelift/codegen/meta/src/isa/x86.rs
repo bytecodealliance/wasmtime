@@ -293,7 +293,7 @@ fn define_settings(shared: &SettingGroup) -> SettingGroup {
     );
     settings.add_preset(
         "cooperlake",
-        "Cooper Lake mircoarchitecture.",
+        "Cooper Lake microarchitecture.",
         preset!(cascadelake),
     );
     let cannonlake = settings.add_preset(
@@ -343,10 +343,99 @@ fn define_settings(shared: &SettingGroup) -> SettingGroup {
         preset!(sapphire_rapids),
     );
 
+    // AMD CPUs
+
+    settings.add_preset("opteron", "Opteron microarchitecture.", preset!());
+    settings.add_preset("k8", "K8 Hammer microarchitecture.", preset!());
+    settings.add_preset("athlon64", "Athlon64 microarchitecture.", preset!());
+    settings.add_preset("athlon-fx", "Athlon FX microarchitecture.", preset!());
     settings.add_preset(
+        "opteron-sse3",
+        "Opteron microarchitecture with support for SSE3 instructions.",
+        preset!(sse3),
+    );
+    settings.add_preset(
+        "k8-sse3",
+        "K8 Hammer microarchitecture with support for SSE3 instructions.",
+        preset!(sse3),
+    );
+    settings.add_preset(
+        "athlon64-sse3",
+        "Athlon 64 microarchitecture with support for SSE3 instructions.",
+        preset!(sse3),
+    );
+    let barcelona = settings.add_preset(
+        "barcelona",
+        "Barcelona microarchitecture.",
+        preset!(has_popcnt && has_lzcnt),
+    );
+    settings.add_preset(
+        "amdfam10",
+        "AMD Family 10h microarchitecture",
+        preset!(barcelona),
+    );
+
+    let btver1 = settings.add_preset(
+        "btver1",
+        "Bobcat microarchitecture.",
+        preset!(ssse3 && has_lzcnt && has_popcnt),
+    );
+    settings.add_preset(
+        "btver2",
+        "Jaguar microarchitecture.",
+        preset!(btver1 && has_avx && has_bmi1),
+    );
+
+    let bdver1 = settings.add_preset(
+        "bdver1",
+        "Bulldozer microarchitecture",
+        preset!(has_lzcnt && has_popcnt && ssse3),
+    );
+    let bdver2 = settings.add_preset(
+        "bdver2",
+        "Piledriver microarchitecture.",
+        preset!(bdver1 && has_bmi1),
+    );
+    let bdver3 = settings.add_preset("bdver3", "Steamroller microarchitecture.", preset!(bdver2));
+    settings.add_preset(
+        "bdver4",
+        "Excavator microarchitecture.",
+        preset!(bdver3 && has_avx2 && has_bmi2),
+    );
+
+    let znver1 = settings.add_preset(
         "znver1",
         "Zen (first generation) microarchitecture.",
-        preset!(sse42 && has_popcnt && has_bmi1 && has_bmi2 && has_lzcnt),
+        preset!(sse42 && has_popcnt && has_bmi1 && has_bmi2 && has_lzcnt && has_fma),
+    );
+    let znver2 = settings.add_preset(
+        "znver2",
+        "Zen (second generation) microarchitecture.",
+        preset!(znver1),
+    );
+    settings.add_preset(
+        "znver3",
+        "Zen (third generation) microarchitecture.",
+        preset!(znver2),
+    );
+
+    // Generic
+
+    settings.add_preset("x86-64", "Generic x86-64 microarchitecture.", preset!());
+    let x86_64_v2 = settings.add_preset(
+        "x86-64-v2",
+        "Generic x86-64 (V2) microarchitecture.",
+        preset!(sse42 && has_popcnt),
+    );
+    let x86_64_v3 = settings.add_preset(
+        "x84_64_v3",
+        "Generic x86_64 (V3) microarchitecture.",
+        preset!(x86_64_v2 && has_bmi1 && has_bmi2 && has_fma && has_lzcnt && has_avx2),
+    );
+    settings.add_preset(
+        "x86_64_v4",
+        "Generic x86_64 (V4) microarchitecture.",
+        preset!(x86_64_v3 && has_avx512dq && has_avx512vl),
     );
 
     settings.build()
