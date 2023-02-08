@@ -17,22 +17,20 @@ use std::time::{Duration, Instant};
 // - A const array of pass descriptions.
 // - A public function per pass used to start the timing of that pass.
 macro_rules! define_passes {
-    { $enum:ident, $num_passes:ident, $descriptions:ident;
-      $($pass:ident: $desc:expr,)+
-    } => {
+    ($($pass:ident: $desc:expr,)+) => {
         #[allow(non_camel_case_types)]
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-        enum $enum { $($pass,)+ None}
+        enum Pass { $($pass,)+ None}
 
-        const $num_passes: usize = $enum::None as usize;
+        const NUM_PASSES: usize = Pass::None as usize;
 
-        const $descriptions: [&str; $num_passes] = [ $($desc),+ ];
+        const DESCRIPTIONS: [&str; NUM_PASSES] = [ $($desc),+ ];
 
         $(
             #[doc=$desc]
             #[must_use]
             pub fn $pass() -> TimingToken {
-                start_pass($enum::$pass)
+                start_pass(Pass::$pass)
             }
         )+
     }
@@ -40,8 +38,6 @@ macro_rules! define_passes {
 
 // Pass definitions.
 define_passes! {
-    Pass, NUM_PASSES, DESCRIPTIONS;
-
     // All these are used in other crates but defined here so they appear in the unified
     // `PassTimes` output.
     process_file: "Processing test file",
