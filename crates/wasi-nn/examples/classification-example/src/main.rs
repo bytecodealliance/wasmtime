@@ -1,6 +1,6 @@
-use std::convert::TryInto;
 use std::fs;
-use wasi_nn;
+
+wit_bindgen_rust::import!("spec/wasi-nn.wit.md");
 
 pub fn main() {
     let xml = fs::read_to_string("fixture/model.xml").unwrap();
@@ -9,52 +9,48 @@ pub fn main() {
     let weights = fs::read("fixture/model.bin").unwrap();
     println!("Read graph weights, size in bytes: {}", weights.len());
 
-    let graph = unsafe {
-        wasi_nn::load(
-            &[&xml.into_bytes(), &weights],
-            wasi_nn::GRAPH_ENCODING_OPENVINO,
-            wasi_nn::EXECUTION_TARGET_CPU,
-        )
-        .unwrap()
-    };
-    println!("Loaded graph into wasi-nn with ID: {}", graph);
+    let graph = wasi_nn::load(
+        &[&xml.into_bytes(), &weights],
+        wasi_nn::GraphEncoding::Openvino,
+        wasi_nn::ExecutionTarget::Cpu,
+    )
+    .unwrap();
+    println!("Loaded graph into wasi-nn with ID: {}", graph.as_raw());
 
-    let context = unsafe { wasi_nn::init_execution_context(graph).unwrap() };
-    println!("Created wasi-nn execution context with ID: {}", context);
+    let context = wasi_nn::init_execution_context(&graph).unwrap();
+    println!(
+        "Created wasi-nn execution context with ID: {}",
+        context.as_raw()
+    );
 
     // Load a tensor that precisely matches the graph input tensor (see
     // `fixture/frozen_inference_graph.xml`).
     let tensor_data = fs::read("fixture/tensor.bgr").unwrap();
     println!("Read input tensor, size in bytes: {}", tensor_data.len());
-    let tensor = wasi_nn::Tensor {
+    let tensor = wasi_nn::TensorParam {
         dimensions: &[1, 3, 224, 224],
-        r#type: wasi_nn::TENSOR_TYPE_F32,
+        tensor_type: wasi_nn::TensorType::Fp32,
         data: &tensor_data,
     };
-    unsafe {
-        wasi_nn::set_input(context, 0, tensor).unwrap();
-    }
+    wasi_nn::set_input(&context, 0, tensor).unwrap();
 
     // Execute the inference.
-    unsafe {
-        wasi_nn::compute(context).unwrap();
-    }
+    wasi_nn::compute(&context).unwrap();
     println!("Executed graph inference");
 
     // Retrieve the output.
-    let mut output_buffer = vec![0f32; 1001];
-    unsafe {
-        wasi_nn::get_output(
-            context,
-            0,
-            &mut output_buffer[..] as *mut [f32] as *mut u8,
-            (output_buffer.len() * 4).try_into().unwrap(),
+    let output = wasi_nn::get_output(&context, 0).unwrap();
+    let data: Vec<u8> = output.data;
+    // XXX is this safe wrt alignment?
+    let f32s: &[f32] = unsafe {
+        std::slice::from_raw_parts(
+            data.as_ptr() as *const f32,
+            data.len() / std::mem::size_of::<f32>(),
         )
-        .unwrap();
-    }
+    };
     println!(
         "Found results, sorted top 5: {:?}",
-        &sort_results(&output_buffer)[..5]
+        &sort_results(f32s)[..5]
     )
 }
 

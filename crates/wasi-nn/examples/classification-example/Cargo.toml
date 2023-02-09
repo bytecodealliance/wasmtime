@@ -7,7 +7,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-wasi-nn = "0.1.0"
+wit-bindgen-rust = { git = "https://github.com/bytecodealliance/wit-bindgen", rev = "a79a4be33d76ddf62839ba71602c26a96610ef7c" }
 
 # This crate is built with the wasm32-wasi target, so it's separate
 # from the main Wasmtime build, so use this directive to exclude it
