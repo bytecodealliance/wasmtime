@@ -13,6 +13,8 @@ pub struct WasiCtx {
     pub clocks: WasiClocks,
     pub sched: Box<dyn WasiSched>,
     pub table: Table,
+    pub env: Vec<(String, String)>,
+    pub preopens: Vec<(u32, String)>,
 }
 
 impl WasiCtx {
@@ -27,6 +29,8 @@ impl WasiCtx {
             clocks,
             sched,
             table,
+            env: Vec::new(),
+            preopens: Vec::new(),
         };
         s.set_stdin(Box::new(crate::pipe::ReadPipe::new(std::io::empty())));
         s.set_stdout(Box::new(crate::pipe::WritePipe::new(std::io::sink())));
@@ -80,5 +84,15 @@ impl WasiCtx {
 
     pub fn set_stderr(&mut self, s: Box<dyn OutputStream>) {
         self.insert_output_stream(2, s);
+    }
+
+    pub fn push_env(&mut self, name: &str, value: &str) {
+        self.env.push((name.to_owned(), value.to_owned()))
+    }
+
+    pub fn push_preopened_dir(&mut self, dir: Box<dyn WasiDir>, path: &str) -> anyhow::Result<()> {
+        let fd = self.push_dir(dir)?;
+        self.preopens.push((fd, path.to_owned()));
+        Ok(())
     }
 }
