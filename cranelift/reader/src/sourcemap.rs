@@ -227,7 +227,6 @@ mod tests {
         let tf = parse_test(
             "function %detail() {
                                ss10 = explicit_slot 13
-                               jt10 = jump_table [block0]
                              block0(v4: i32, v7: i32):
                                v10 = iadd v4, v7
                              }",
@@ -239,7 +238,6 @@ mod tests {
         assert_eq!(map.lookup_str("v0"), None);
         assert_eq!(map.lookup_str("ss1"), None);
         assert_eq!(map.lookup_str("ss10").unwrap().to_string(), "ss10");
-        assert_eq!(map.lookup_str("jt10").unwrap().to_string(), "jt10");
         assert_eq!(map.lookup_str("block0").unwrap().to_string(), "block0");
         assert_eq!(map.lookup_str("v4").unwrap().to_string(), "v4");
         assert_eq!(map.lookup_str("v7").unwrap().to_string(), "v7");

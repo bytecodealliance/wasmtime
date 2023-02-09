@@ -3,10 +3,8 @@ set unwind_info=false
 target aarch64
 
 function %f(i32) -> i32 {
-  jt0 = jump_table [block1, block2, block3]
-
 block0(v0: i32):
-  br_table v0, block4, jt0
+  br_table v0, block4, [block1, block2, block3]
 
 block1:
   v1 = iconst.i32 1

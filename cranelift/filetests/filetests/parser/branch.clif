@@ -81,11 +81,8 @@ block1(v92: i32, v93: f32):
 ; nextln: }
 
 function %jumptable(i32) {
-    jt200 = jump_table []
-    jt2 = jump_table [block10, block40, block20, block30]
-
 block10(v3: i32):
-    br_table v3, block50, jt2
+    br_table v3, block50, [block10, block40, block20, block30]
 
 block20:
     trap user2
@@ -97,10 +94,8 @@ block50:
     trap user1    
 }
 ; sameln: function %jumptable(i32) fast {
-; check:      jt2 = jump_table [block10, block40, block20, block30]
-; check:      jt200 = jump_table []
 ; check:  block10(v3: i32):
-; nextln:     br_table v3, block50, jt2
+; nextln:     br_table v3, block50, [block10, block40, block20, block30]
 ; nextln: 
 ; nextln: block20:
 ; nextln:     trap user2

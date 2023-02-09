@@ -985,10 +985,9 @@ mod tests {
         // Here is the pseudo-program we want to translate:
         //
         // function %f {
-        // jt = jump_table [block2, block1]
         // block0:
         //    x = 1;
-        //    br_table x, block2, jt
+        //    br_table x, block2, [block2, block1]
         // block1:
         //    x = 2
         //    jump block2

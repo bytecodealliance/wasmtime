@@ -11,7 +11,6 @@ function u0:0(i64 vmctx, i64) fast {
     gv2 = load.i64 notrap aligned gv1
     sig0 = (i64 vmctx, i64) fast
     fn0 = colocated u0:2 sig0
-    jt0 = jump_table [block1]
     stack_limit = gv2
 
                                 block0(v0: i64, v1: i64):
@@ -33,7 +32,7 @@ function u0:0(i64 vmctx, i64) fast {
 
                                 block4:
 @002e                               call fn0(v0, v0)
-@0030                               br_table v8, block1, jt0
+@0030                               br_table v8, block1, [block1]
 
                                 block1:
 @0036                               return

@@ -181,10 +181,8 @@ block2:
 ;   ret
 
 function %f5(i32) -> i8 {
-  jt0 = jump_table [block1, block2]
-
 block0(v0: i32):
-  br_table v0, block1, jt0
+  br_table v0, block1, [block1, block2]
 
 block1:
   v1 = iconst.i8 1
