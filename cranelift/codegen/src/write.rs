@@ -82,11 +82,6 @@ pub trait FuncWriter {
             }
         }
 
-        for (jt, jt_data) in &func.stencil.dfg.jump_tables {
-            any = true;
-            self.write_entity_definition(w, func, jt.into(), jt_data)?;
-        }
-
         for (&cref, cval) in func.dfg.constants.iter() {
             any = true;
             self.write_entity_definition(w, func, cref.into(), cval)?;
@@ -377,6 +372,7 @@ fn write_instruction(
 /// Write the operands of `inst` to `w` with a prepended space.
 pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt::Result {
     let pool = &dfg.value_lists;
+    let jump_tables = &dfg.jump_tables;
     use crate::ir::instructions::InstructionData::*;
     match dfg.insts[inst] {
         AtomicRmw { op, args, .. } => write!(w, " {} {}, {}", op, args[0], args[1]),
@@ -430,7 +426,7 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
             destination,
             table,
             ..
-        } => write!(w, " {}, {}, {}", arg, destination, table),
+        } => write!(w, " {}, {}, {}", arg, destination, jump_tables[table]),
         Call {
             func_ref, ref args, ..
         } => write!(w, " {}({})", func_ref, DisplayValues(args.as_slice(pool))),

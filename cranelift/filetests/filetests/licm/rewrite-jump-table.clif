@@ -2,11 +2,10 @@ test licm
 target aarch64
 
 function %rewrite_jump_table() {
-    jt0 = jump_table [block1, block2]
 
     block0:
         v0 = iconst.i32 1
-        br_table v0, block1, jt0
+        br_table v0, block1, [block1, block2]
 
     block1:
         return
@@ -17,7 +16,6 @@ function %rewrite_jump_table() {
 }
 
 ; sameln: function
-; nextln: jt0 = jump_table [block1, block3]
 ; check: block3:
 ; nextln: v4 = iconst.i8 0
 ; nextln: jump block2

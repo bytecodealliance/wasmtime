@@ -18,8 +18,8 @@ use cranelift_codegen::ir::{self, UserExternalNameRef};
 use cranelift_codegen::ir::{
     AbiParam, ArgumentExtension, ArgumentPurpose, Block, Constant, ConstantData, DynamicStackSlot,
     DynamicStackSlotData, DynamicTypeData, ExtFuncData, ExternalName, FuncRef, Function,
-    GlobalValue, GlobalValueData, JumpTable, JumpTableData, MemFlags, Opcode, SigRef, Signature,
-    StackSlot, StackSlotData, StackSlotKind, Table, TableData, Type, UserFuncName, Value,
+    GlobalValue, GlobalValueData, JumpTableData, MemFlags, Opcode, SigRef, Signature, StackSlot,
+    StackSlotData, StackSlotKind, Table, TableData, Type, UserFuncName, Value,
 };
 use cranelift_codegen::isa::{self, CallConv};
 use cranelift_codegen::packed_option::ReservedValue;
@@ -390,25 +390,6 @@ impl Context {
         }
     }
 
-    // Allocate a new jump table.
-    fn add_jt(&mut self, jt: JumpTable, data: JumpTableData, loc: Location) -> ParseResult<()> {
-        self.map.def_jt(jt, loc)?;
-        while self.function.stencil.dfg.jump_tables.next_key().index() <= jt.index() {
-            self.function.create_jump_table(JumpTableData::new());
-        }
-        self.function.stencil.dfg.jump_tables[jt] = data;
-        Ok(())
-    }
-
-    // Resolve a reference to a jump table.
-    fn check_jt(&self, jt: JumpTable, loc: Location) -> ParseResult<()> {
-        if !self.map.contains_jt(jt) {
-            err!(loc, "undefined jump table {}", jt)
-        } else {
-            Ok(())
-        }
-    }
-
     // Allocate a new constant.
     fn add_constant(
         &mut self,
@@ -668,17 +649,6 @@ impl<'a> Parser<'a> {
             }
         }
         err!(self.loc, err_msg)
-    }
-
-    // Match and consume a jump table reference.
-    fn match_jt(&mut self) -> ParseResult<JumpTable> {
-        if let Some(Token::JumpTable(jt)) = self.token() {
-            self.consume();
-            if let Some(jt) = JumpTable::with_number(jt) {
-                return Ok(jt);
-            }
-        }
-        err!(self.loc, "expected jump table number: jt«n»")
     }
 
     // Match and consume a constant reference.
@@ -1484,11 +1454,6 @@ impl<'a> Parser<'a> {
                     self.parse_function_decl(ctx)
                         .and_then(|(fn_, dat)| ctx.add_fn(fn_, dat, self.loc))
                 }
-                Some(Token::JumpTable(..)) => {
-                    self.start_gathering_comments();
-                    self.parse_jump_table_decl()
-                        .and_then(|(jt, dat)| ctx.add_jt(jt, dat, self.loc))
-                }
                 Some(Token::Constant(..)) => {
                     self.start_gathering_comments();
                     self.parse_constant_decl()
@@ -1798,18 +1763,15 @@ impl<'a> Parser<'a> {
         Ok((fn_, data))
     }
 
-    // Parse a jump table decl.
+    // Parse a jump table literal.
     //
-    // jump-table-decl ::= * JumpTable(jt) "=" "jump_table" "[" jt-entry {"," jt-entry} "]"
-    fn parse_jump_table_decl(&mut self) -> ParseResult<(JumpTable, JumpTableData)> {
-        let jt = self.match_jt()?;
-        self.match_token(Token::Equal, "expected '=' in jump_table decl")?;
-        self.match_identifier("jump_table", "expected 'jump_table'")?;
+    // jump-table-lit ::= "[" block {"," block } "]"
+    //                  | "[]"
+    fn parse_jump_table(&mut self) -> ParseResult<JumpTableData> {
         self.match_token(Token::LBracket, "expected '[' before jump table contents")?;
 
         let mut data = JumpTableData::new();
 
-        // jump-table-decl ::= JumpTable(jt) "=" "jump_table" "[" * Block(dest) {"," Block(dest)} "]"
         match self.token() {
             Some(Token::Block(dest)) => {
                 self.consume();
@@ -1837,11 +1799,7 @@ impl<'a> Parser<'a> {
 
         self.consume();
 
-        // Collect any trailing comments.
-        self.token();
-        self.claim_gathered_comments(jt);
-
-        Ok((jt, data))
+        Ok(data)
     }
 
     // Parse a constant decl.
@@ -2613,8 +2571,8 @@ impl<'a> Parser<'a> {
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let block_num = self.match_block("expected branch destination block")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
-                let table = self.match_jt()?;
-                ctx.check_jt(table, self.loc)?;
+                let table_data = self.parse_jump_table()?;
+                let table = ctx.function.dfg.jump_tables.push(table_data);
                 InstructionData::BranchTable {
                     opcode,
                     arg,

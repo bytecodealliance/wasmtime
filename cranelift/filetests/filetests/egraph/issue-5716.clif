@@ -17,7 +17,6 @@ function u0:33() system_v {
 ss0 = explicit_slot 32
 sig0 = (i64, i64, i64, i64, i64) -> i64, i64 system_v
 fn0 = colocated u0:0 sig0
-jt0 = jump_table [block36, block38]
 block0:
   v80 = iconst.i32 0
   v91 = iconst.i64 0
@@ -28,7 +27,7 @@ block0:
   v237 = iconst.i64 0
   v238, v239 = call fn0(v236, v237, v91, v92, v235) ; v236 = 0, v237 = 0, v91 = 0, v92 = 0, v235 = 0
   v97 = iadd v238, v96 ; v96 = 0
-  br_table v80, block37, jt0 ; v80 = 0
+  br_table v80, block37, [block36, block38] ; v80 = 0
 block36:
   trap user0
 block37:

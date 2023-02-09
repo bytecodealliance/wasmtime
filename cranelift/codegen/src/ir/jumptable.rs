@@ -81,7 +81,7 @@ impl JumpTableData {
 
 impl Display for JumpTableData {
     fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
-        write!(fmt, "jump_table [")?;
+        write!(fmt, "[")?;
         match self.table.first() {
             None => (),
             Some(first) => write!(fmt, "{}", first)?,

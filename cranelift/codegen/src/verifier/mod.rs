@@ -446,15 +446,6 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    fn verify_jump_tables(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
-        for (jt, jt_data) in &self.func.stencil.dfg.jump_tables {
-            for &block in jt_data.iter() {
-                self.verify_block(jt, block, errors)?;
-            }
-        }
-        Ok(())
-    }
-
     /// Check that the given block can be encoded as a BB, by checking that only
     /// branching instructions are ending the block.
     fn encodable_as_bb(&self, block: Block, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
@@ -861,6 +852,9 @@ impl<'a> Verifier<'a> {
                 format!("invalid jump table reference {}", j),
             ))
         } else {
+            for &block in self.func.stencil.dfg.jump_tables[j].as_slice() {
+                self.verify_block(inst, block, errors)?;
+            }
             Ok(())
         }
     }
@@ -1792,7 +1786,6 @@ impl<'a> Verifier<'a> {
     pub fn run(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         self.verify_global_values(errors)?;
         self.verify_tables(errors)?;
-        self.verify_jump_tables(errors)?;
         self.typecheck_entry_block_params(errors)?;
         self.check_entry_not_cold(errors)?;
         self.typecheck_function_signature(errors)?;

@@ -34,7 +34,6 @@ function u0:31(i64, i32, i32, i8, i8) -> i32, i32 system_v {
     fn3 = colocated u0:11 sig3
     fn4 = u0:110 sig4
     fn5 = u0:110 sig5
-    jt0 = jump_table [block2, block4, block5, block6, block7]
 
                                 block0(v0: i64, v1: i32, v2: i32, v3: i8, v4: i8):
                                     v34 -> v0
@@ -82,7 +81,7 @@ function u0:31(i64, i32, i32, i8, i8) -> i32, i32 system_v {
 @0005                               jump block37
 
                                 block37:
-@0005                               br_table v10, block36, jt0
+@0005                               br_table v10, block36, [block2, block4, block5, block6, block7]
 
                                 block2:
 @0001                               v11 = stack_load.i8 ss3+1

@@ -7,10 +7,8 @@ target s390x
 target riscv64
 
 function %br_table_i32(i32) -> i32 {
-  jt0 = jump_table [block1, block2, block2, block3]
-
 block0(v0: i32):
-  br_table v0, block4, jt0
+  br_table v0, block4, [block1, block2, block2, block3]
 
 block1:
   v1 = iconst.i32 1
@@ -46,13 +44,11 @@ block5(v5: i32):
 ; RISC-V had a bug where having a br_table on a cold block would cause a segfault
 ; See #5496 for more details.
 function %br_table_cold_block(i32) -> i32 system_v {
-    jt0 = jump_table []
-
 block0(v0: i32):
     jump block1
 
 block1 cold:
-    br_table v0, block2, jt0
+    br_table v0, block2, []
 
 block2:
     v1 = iconst.i32 0
