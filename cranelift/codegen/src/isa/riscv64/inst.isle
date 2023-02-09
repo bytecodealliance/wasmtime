@@ -1942,7 +1942,7 @@
 (extern constructor lower_br_table lower_br_table)
 
 (rule
-  (lower_branch (br_table index _ _) targets)
+  (lower_branch (br_table index _) targets)
   (lower_br_table index targets))
 
 (decl load_ra () Reg)

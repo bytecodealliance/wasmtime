@@ -19,7 +19,6 @@ fn define_control_flow(
 ) {
     let block_call = &Operand::new("block_call", &entities.block_call)
         .with_doc("Destination basic block, with its arguments provided");
-    let label = &Operand::new("label", &entities.label).with_doc("Destination basic block");
 
     ig.push(
         Inst::new(
@@ -93,7 +92,7 @@ fn define_control_flow(
         "#,
                 &formats.branch_table,
             )
-            .operands_in(vec![x, label, JT])
+            .operands_in(vec![x, JT])
             .branches(),
         );
     }

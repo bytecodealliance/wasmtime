@@ -129,9 +129,7 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
                 }
             }
 
-            ir::InstructionData::BranchTable {
-                table, destination, ..
-            } => {
+            ir::InstructionData::BranchTable { table, .. } => {
                 // Unlike all other jumps/branches, jump tables are
                 // capable of having the same successor appear
                 // multiple times, so we must deduplicate.
@@ -154,7 +152,6 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
                         .ssa
                         .declare_block_predecessor(*dest_block, inst);
                 }
-                self.builder.declare_successor(*destination, inst);
             }
 
             inst => debug_assert!(!inst.opcode().is_branch()),

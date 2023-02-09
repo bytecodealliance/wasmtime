@@ -2942,7 +2942,7 @@
 
 ;; Rules for `br_table` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower_branch (br_table idx @ (value_type ty) _ _) (jump_table_targets default_target jt_targets))
+(rule (lower_branch (br_table idx @ (value_type ty) _) (jump_table_targets default_target jt_targets))
       (emit_side_effect (jmp_table_seq ty idx default_target jt_targets)))
 
 ;; Rules for `select_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

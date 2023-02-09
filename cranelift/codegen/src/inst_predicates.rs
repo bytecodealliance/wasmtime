@@ -190,16 +190,14 @@ pub(crate) fn visit_block_succs<F: FnMut(Inst, Block, bool)>(
                 visit(inst, block_else.block(&f.dfg.value_lists), false);
             }
 
-            ir::InstructionData::BranchTable {
-                table,
-                destination: dest,
-                ..
-            } => {
+            ir::InstructionData::BranchTable { table, .. } => {
+                let table = &f.stencil.dfg.jump_tables[*table];
+
                 // The default block is reached via a direct conditional branch,
                 // so it is not part of the table.
-                visit(inst, *dest, false);
+                visit(inst, table.default_block(), false);
 
-                for &dest in f.stencil.dfg.jump_tables[*table].as_slice() {
+                for &dest in table.table_slice() {
                     visit(inst, dest, true);
                 }
             }

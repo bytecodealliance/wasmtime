@@ -1614,12 +1614,12 @@ where
             }
             BlockTerminator::BrTable(default, targets) => {
                 // Create jump tables on demand
-                let jt = builder.create_jump_table(JumpTableData::with_blocks(targets));
+                let jt = builder.create_jump_table(JumpTableData::with_blocks(default, targets));
 
                 // br_table only supports I32
                 let val = builder.use_var(self.get_variable_of_type(I32)?);
 
-                builder.ins().br_table(val, default, jt);
+                builder.ins().br_table(val, jt);
             }
             BlockTerminator::Switch(_type, default, entries) => {
                 let mut switch = Switch::new();
