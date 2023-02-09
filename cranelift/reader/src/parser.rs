@@ -3038,25 +3038,6 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_jt() {
-        let ParseError {
-            location,
-            message,
-            is_warning,
-        } = Parser::new(
-            "function %blocks() system_v {
-                jt0 = jump_table []
-                jt0 = jump_table []",
-        )
-        .parse_function()
-        .unwrap_err();
-
-        assert_eq!(location.line_number, 3);
-        assert_eq!(message, "duplicate entity: jt0");
-        assert!(!is_warning);
-    }
-
-    #[test]
     fn duplicate_ss() {
         let ParseError {
             location,
@@ -3140,8 +3121,6 @@ mod tests {
                          function %comment() system_v { ; decl
                             ss10  = explicit_slot 13 ; stackslot.
                             ; Still stackslot.
-                            jt10 = jump_table [block0]
-                            ; Jumptable
                          block0: ; Basic block
                          trap user42; Instruction
                          } ; Trailing.
@@ -3150,7 +3129,7 @@ mod tests {
         .parse_function()
         .unwrap();
         assert_eq!(func.name.to_string(), "%comment");
-        assert_eq!(comments.len(), 8); // no 'before' comment.
+        assert_eq!(comments.len(), 7); // no 'before' comment.
         assert_eq!(
             comments[0],
             Comment {
@@ -3161,16 +3140,14 @@ mod tests {
         assert_eq!(comments[1].entity.to_string(), "ss10");
         assert_eq!(comments[2].entity.to_string(), "ss10");
         assert_eq!(comments[2].text, "; Still stackslot.");
-        assert_eq!(comments[3].entity.to_string(), "jt10");
-        assert_eq!(comments[3].text, "; Jumptable");
-        assert_eq!(comments[4].entity.to_string(), "block0");
-        assert_eq!(comments[4].text, "; Basic block");
+        assert_eq!(comments[3].entity.to_string(), "block0");
+        assert_eq!(comments[3].text, "; Basic block");
 
-        assert_eq!(comments[5].entity.to_string(), "inst0");
-        assert_eq!(comments[5].text, "; Instruction");
+        assert_eq!(comments[4].entity.to_string(), "inst0");
+        assert_eq!(comments[4].text, "; Instruction");
 
+        assert_eq!(comments[5].entity, AnyEntity::Function);
         assert_eq!(comments[6].entity, AnyEntity::Function);
-        assert_eq!(comments[7].entity, AnyEntity::Function);
     }
 
     #[test]
