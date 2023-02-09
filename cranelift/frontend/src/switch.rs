@@ -415,7 +415,8 @@ mod tests {
     fn switch_bool() {
         let func = setup!(0, [0, 1,]);
         assert_eq_output!(
-            func,"block0:
+            func,
+            "block0:
     v0 = iconst.i8 0
     v1 = uextend.i32 v0  ; v0 = 0
     br_table v1, block0, [block1, block2]"
