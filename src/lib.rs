@@ -28,7 +28,7 @@ mod bindings {
         unchecked,
         // The generated definition of command will pull in std, so we are defining it
         // manually below instead
-        skip: ["command"],
+        skip: ["command", "get-preopens", "get-environment"],
     });
 
     #[cfg(not(feature = "command"))]
@@ -37,6 +37,7 @@ mod bindings {
         no_std,
         raw_strings,
         unchecked,
+        skip: ["get-preopens", "get-environment"],
     });
 }
 
@@ -47,8 +48,6 @@ pub unsafe extern "C" fn command(
     stdout: OutputStream,
     args_ptr: *const WasmStr,
     args_len: usize,
-    env_vars: StrTupleList,
-    preopens: PreopenList,
 ) -> u32 {
     State::with_mut(|state| {
         // Initialization of `State` automatically fills in some dummy
@@ -71,24 +70,6 @@ pub unsafe extern "C" fn command(
             });
         }
         state.args = Some(slice::from_raw_parts(args_ptr, args_len));
-        state.env_vars = Some(slice::from_raw_parts(env_vars.base, env_vars.len));
-
-        let preopens = slice::from_raw_parts(preopens.base, preopens.len);
-        state.preopens = Some(preopens);
-
-        for preopen in preopens {
-            state
-                .push_desc(Descriptor::Streams(Streams {
-                    input: Cell::new(None),
-                    output: Cell::new(None),
-                    type_: StreamType::File(File {
-                        fd: preopen.descriptor,
-                        position: Cell::new(0),
-                        append: false,
-                    }),
-                }))
-                .trapping_unwrap();
-        }
 
         Ok(())
     });
@@ -290,25 +271,23 @@ pub unsafe extern "C" fn args_sizes_get(argc: *mut Size, argv_buf_size: *mut Siz
 #[no_mangle]
 pub unsafe extern "C" fn environ_get(environ: *mut *mut u8, environ_buf: *mut u8) -> Errno {
     State::with(|state| {
-        if let Some(list) = state.env_vars {
-            let mut offsets = environ;
-            let mut buffer = environ_buf;
-            for pair in list {
-                ptr::write(offsets, buffer);
-                offsets = offsets.add(1);
+        let mut offsets = environ;
+        let mut buffer = environ_buf;
+        for var in state.get_environment() {
+            ptr::write(offsets, buffer);
+            offsets = offsets.add(1);
 
-                ptr::copy_nonoverlapping(pair.key.ptr, buffer, pair.key.len);
-                buffer = buffer.add(pair.key.len);
+            ptr::copy_nonoverlapping(var.key.ptr, buffer, var.key.len);
+            buffer = buffer.add(var.key.len);
 
-                ptr::write(buffer, b'=');
-                buffer = buffer.add(1);
+            ptr::write(buffer, b'=');
+            buffer = buffer.add(1);
 
-                ptr::copy_nonoverlapping(pair.value.ptr, buffer, pair.value.len);
-                buffer = buffer.add(pair.value.len);
+            ptr::copy_nonoverlapping(var.value.ptr, buffer, var.value.len);
+            buffer = buffer.add(var.value.len);
 
-                ptr::write(buffer, 0);
-                buffer = buffer.add(1);
-            }
+            ptr::write(buffer, 0);
+            buffer = buffer.add(1);
         }
 
         Ok(())
@@ -326,19 +305,15 @@ pub unsafe extern "C" fn environ_sizes_get(
         AllocationState::StackAllocated | AllocationState::StateAllocated
     ) {
         State::with(|state| {
-            if let Some(list) = state.env_vars {
-                *environc = list.len();
-                *environ_buf_size = {
-                    let mut sum = 0;
-                    for pair in list {
-                        sum += pair.key.len + pair.value.len + 2;
-                    }
-                    sum
-                };
-            } else {
-                *environc = 0;
-                *environ_buf_size = 0;
-            }
+            let vars = state.get_environment();
+            *environc = vars.len();
+            *environ_buf_size = {
+                let mut sum = 0;
+                for var in vars {
+                    sum += var.key.len + var.value.len + 2;
+                }
+                sum
+            };
 
             Ok(())
         })
@@ -729,10 +704,6 @@ pub unsafe extern "C" fn fd_pread(
     })
 }
 
-fn get_preopen(state: &State, fd: Fd) -> Option<&Preopen> {
-    state.preopens?.get(fd.checked_sub(3)? as usize)
-}
-
 /// Return a description of the given preopened file descriptor.
 #[no_mangle]
 pub unsafe extern "C" fn fd_prestat_get(fd: Fd, buf: *mut Prestat) -> Errno {
@@ -741,7 +712,7 @@ pub unsafe extern "C" fn fd_prestat_get(fd: Fd, buf: *mut Prestat) -> Errno {
         AllocationState::StackAllocated | AllocationState::StateAllocated
     ) {
         State::with(|state| {
-            if let Some(preopen) = get_preopen(state, fd) {
+            if let Some(preopen) = state.get_preopen(fd) {
                 buf.write(Prestat {
                     tag: 0,
                     u: PrestatU {
@@ -765,7 +736,7 @@ pub unsafe extern "C" fn fd_prestat_get(fd: Fd, buf: *mut Prestat) -> Errno {
 #[no_mangle]
 pub unsafe extern "C" fn fd_prestat_dir_name(fd: Fd, path: *mut u8, path_len: Size) -> Errno {
     State::with(|state| {
-        if let Some(preopen) = get_preopen(state, fd) {
+        if let Some(preopen) = state.get_preopen(fd) {
             if preopen.path.len < path_len as usize {
                 Err(ERRNO_NAMETOOLONG)
             } else {
@@ -1074,7 +1045,7 @@ pub unsafe extern "C" fn fd_renumber(fd: Fd, to: Fd) -> Errno {
 
         // Ensure the table is big enough to contain `to`. Do this before
         // looking up `fd` as it can fail due to `NOMEM`.
-        while Fd::from(state.ndescriptors) <= to {
+        while Fd::from(state.ndescriptors.get()) <= to {
             let old_closed = state.closed;
             let new_closed = state.push_desc(Descriptor::Closed(old_closed))?;
             state.closed = Some(new_closed);
@@ -2202,8 +2173,8 @@ struct State {
 
     /// Storage of mapping from preview1 file descriptors to preview2 file
     /// descriptors.
-    ndescriptors: u16,
-    descriptors: MaybeUninit<[Descriptor; MAX_DESCRIPTORS]>,
+    ndescriptors: Cell<u16>,
+    descriptors: UnsafeCell<MaybeUninit<[Descriptor; MAX_DESCRIPTORS]>>,
 
     /// Points to the head of a free-list of closed file descriptors.
     closed: Option<Fd>,
@@ -2221,11 +2192,11 @@ struct State {
     /// Arguments passed to the `command` entrypoint
     args: Option<&'static [WasmStr]>,
 
-    /// Environment variables passed to the `command` entrypoint
-    env_vars: Option<&'static [StrTuple]>,
+    /// Environment variables
+    env_vars: Cell<Option<&'static [StrTuple]>>,
 
-    /// Preopened directories passed to the `command` entrypoint
-    preopens: Option<&'static [Preopen]>,
+    /// Preopened directories
+    preopens: Cell<Option<&'static [Preopen]>>,
 
     /// Cache for the `fd_readdir` call for a final `wasi::Dirent` plus path
     /// name that didn't fit into the caller's buffer.
@@ -2402,14 +2373,14 @@ impl State {
                 magic1: MAGIC,
                 magic2: MAGIC,
                 import_alloc: ImportAlloc::new(),
-                ndescriptors: 0,
                 closed: None,
-                descriptors: MaybeUninit::uninit(),
+                ndescriptors: Cell::new(0),
+                descriptors: UnsafeCell::new(MaybeUninit::uninit()),
                 path_buf: UnsafeCell::new(MaybeUninit::uninit()),
                 long_lived_arena: BumpArena::new(),
                 args: None,
-                env_vars: None,
-                preopens: None,
+                env_vars: Cell::new(None),
+                preopens: Cell::new(None),
                 dirent_cache: DirentCache {
                     stream: Cell::new(None),
                     for_fd: Cell::new(0),
@@ -2449,24 +2420,25 @@ impl State {
         self.push_desc(Descriptor::Stderr).trapping_unwrap();
     }
 
-    fn push_desc(&mut self, desc: Descriptor) -> Result<Fd, Errno> {
+    fn push_desc(&self, desc: Descriptor) -> Result<Fd, Errno> {
         unsafe {
-            let descriptors = self.descriptors.as_mut_ptr();
-            let ndescriptors = usize::try_from(self.ndescriptors).trapping_unwrap();
+            let descriptors = (*self.descriptors.get()).as_mut_ptr();
+            let ndescriptors = usize::try_from(self.ndescriptors.get()).trapping_unwrap();
             if ndescriptors >= (*descriptors).len() {
                 return Err(ERRNO_NOMEM);
             }
             ptr::addr_of_mut!((*descriptors)[ndescriptors]).write(desc);
-            self.ndescriptors += 1;
-            Ok(Fd::from(self.ndescriptors - 1))
+            self.ndescriptors
+                .set(u16::try_from(ndescriptors + 1).trapping_unwrap());
+            Ok(Fd::from(u32::try_from(ndescriptors).trapping_unwrap()))
         }
     }
 
     fn descriptors(&self) -> &[Descriptor] {
         unsafe {
             slice::from_raw_parts(
-                self.descriptors.as_ptr().cast(),
-                usize::try_from(self.ndescriptors).trapping_unwrap(),
+                (*self.descriptors.get()).as_ptr().cast(),
+                usize::try_from(self.ndescriptors.get()).trapping_unwrap(),
             )
         }
     }
@@ -2474,8 +2446,8 @@ impl State {
     fn descriptors_mut(&mut self) -> &mut [Descriptor] {
         unsafe {
             slice::from_raw_parts_mut(
-                self.descriptors.as_mut_ptr().cast(),
-                usize::try_from(self.ndescriptors).trapping_unwrap(),
+                (*self.descriptors.get()).as_mut_ptr().cast(),
+                usize::try_from(self.ndescriptors.get()).trapping_unwrap(),
             )
         }
     }
@@ -2581,5 +2553,66 @@ impl State {
         let clock = wasi_default_clocks::default_monotonic_clock();
         self.default_monotonic_clock.set(Some(clock));
         clock
+    }
+
+    fn get_environment(&self) -> &[StrTuple] {
+        if self.env_vars.get().is_none() {
+            #[link(wasm_import_module = "wasi-environment")]
+            extern "C" {
+                #[link_name = "get-environment"]
+                fn get_environment_import(rval: *mut StrTupleList);
+            }
+            let mut list = StrTupleList {
+                base: std::ptr::null(),
+                len: 0,
+            };
+            /* TODO alloc behavior set to arena for following call: */
+            unsafe { get_environment_import(&mut list as *mut _) };
+            self.env_vars.set(Some(unsafe {
+                /* allocation comes from long lived arena, so it is safe to
+                 * cast this to a &'static slice: */
+                std::slice::from_raw_parts(list.base, list.len)
+            }));
+        }
+        self.env_vars.get().trapping_unwrap()
+    }
+
+    fn get_preopens(&self) -> &[Preopen] {
+        if self.env_vars.get().is_none() {
+            #[link(wasm_import_module = "wasi-filesystem")]
+            extern "C" {
+                #[link_name = "get-preopens"]
+                fn get_preopens_import(rval: *mut PreopenList);
+            }
+            let mut list = PreopenList {
+                base: std::ptr::null(),
+                len: 0,
+            };
+            /* TODO alloc behavior set to arena for following call: */
+            unsafe { get_preopens_import(&mut list as *mut _) };
+            let preopens: &'static [Preopen] = unsafe {
+                /* allocation comes from long lived arena, so it is safe to
+                 * cast this to a &'static slice: */
+                std::slice::from_raw_parts(list.base, list.len)
+            };
+            for preopen in preopens {
+                self.push_desc(Descriptor::Streams(Streams {
+                    input: Cell::new(None),
+                    output: Cell::new(None),
+                    type_: StreamType::File(File {
+                        fd: preopen.descriptor,
+                        position: Cell::new(0),
+                        append: false,
+                    }),
+                }))
+                .trapping_unwrap();
+            }
+            self.preopens.set(Some(preopens));
+        }
+        self.preopens.get().trapping_unwrap()
+    }
+
+    fn get_preopen(&self, fd: Fd) -> Option<&Preopen> {
+        self.get_preopens().get(fd.checked_sub(3)? as usize)
     }
 }
