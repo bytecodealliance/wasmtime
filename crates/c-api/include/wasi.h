@@ -40,6 +40,43 @@ extern "C" {
 WASI_DECLARE_OWN(config)
 
 /**
+ * \typedef wasi_read_pipe_t
+ * \brief Convenience alias for #wasi_read_pipe_t
+ *
+ * \struct wasi_read_pipe_t
+ * \brief Reader end of a bounded FIFO buffer
+ * 
+ * An instance using fd_read on an empty pipe with succeeded but with 0 bytes read.
+ * The effect depends on the implementation. For example, Rust's
+ * `std::io::Read::read` returns Ok(0), while `read_exact` returns Err
+ * 
+ * It is safe to move a #wasi_read_pipe_t to any thread at any time.
+ *
+ * \fn void wasi_read_pipe_delete(wasi_read_pipe_t *);
+ * \brief Deletes a read pipe.
+ */
+WASI_DECLARE_OWN(read_pipe)
+
+/**
+ * \typedef wasi_write_pipe_t
+ * \brief Convenience alias for #wasi_write_pipe_t
+ *
+ * \struct wasi_write_pipe_t
+ * \brief Writer end of a bounded FIFO buffer
+ * 
+ * An instance using fd_write on a full pipe with succeeded but with 0 bytes written.
+ * The effect depends on the implementation. For example, Rust's
+ * `std::io::Write::write` returns Ok(0), while `write_all` returns Err.
+ * Therefore `println!` will panic.
+ * 
+ * It is safe to move a #wasi_write_pipe_t to any thread at any time.
+ *
+ * \fn void wasi_write_pipe_delete(wasi_write_pipe_t *);
+ * \brief Deletes a read pipe.
+ */
+WASI_DECLARE_OWN(write_pipe)
+
+/**
  * \brief Creates a new empty configuration object.
  *
  * The caller is expected to deallocate the returned configuration
@@ -105,6 +142,16 @@ WASI_API_EXTERN bool wasi_config_set_stdin_file(wasi_config_t* config, const cha
 WASI_API_EXTERN void wasi_config_set_stdin_bytes(wasi_config_t* config, wasm_byte_vec_t* binary);
 
 /**
+ * \brief Configures standard input to be taken from the specified pipe.
+ *
+ * By default WASI programs have no stdin, but this configures the paired
+ * #wasi_write_pipe_t to be used as stdin for this configuration.
+ * 
+ * This function takes ownership of the `read_pipe` argument.
+ */
+WASI_API_EXTERN void wasi_config_set_stdin_pipe(wasi_config_t* config, own wasi_read_pipe_t* read_pipe);
+
+/**
  * \brief Configures this process's own stdin stream to be used as stdin for
  * this WASI configuration.
  */
@@ -122,13 +169,23 @@ WASI_API_EXTERN void wasi_config_inherit_stdin(wasi_config_t* config);
 WASI_API_EXTERN bool wasi_config_set_stdout_file(wasi_config_t* config, const char* path);
 
 /**
+ * \brief Configures standard output to be taken from the specified pipe.
+ *
+ * By default WASI programs have no stdout, but this configures the paired
+ * #wasi_read_pipe_t to be used as stdout for this configuration.
+ * 
+ * This function takes ownership of the `write_pipe` argument.
+ */
+WASI_API_EXTERN void wasi_config_set_stdout_pipe(wasi_config_t* config, own wasi_write_pipe_t* write_pipe);
+
+/**
  * \brief Configures this process's own stdout stream to be used as stdout for
  * this WASI configuration.
  */
 WASI_API_EXTERN void wasi_config_inherit_stdout(wasi_config_t* config);
 
 /**
- * \brief Configures standard output to be written to the specified file.
+ * \brief Configures standard error to be written to the specified file.
  *
  * By default WASI programs have no stderr, but this configures the specified
  * file to be used as stderr.
@@ -137,6 +194,16 @@ WASI_API_EXTERN void wasi_config_inherit_stdout(wasi_config_t* config);
  * returned. Otherwise `true` is returned.
  */
 WASI_API_EXTERN bool wasi_config_set_stderr_file(wasi_config_t* config, const char* path);
+
+/**
+ * \brief Configures standard error to be taken from the specified pipe.
+ *
+ * By default WASI programs have no stderr, but this configures the paired
+ * #wasi_read_pipe_t to be used as stderr for this configuration.
+ * 
+ * This function takes ownership of the `write_pipe` argument.
+ */
+WASI_API_EXTERN void wasi_config_set_stderr_pipe(wasi_config_t* config, own wasi_write_pipe_t* write_pipe);
 
 /**
  * \brief Configures this process's own stderr stream to be used as stderr for
@@ -155,6 +222,36 @@ WASI_API_EXTERN void wasi_config_inherit_stderr(wasi_config_t* config);
  * `guest_path` is the name by which it will be known in wasm.
  */
 WASI_API_EXTERN bool wasi_config_preopen_dir(wasi_config_t* config, const char* path, const char* guest_path);
+
+/**
+ * \brief Creates a new empty pipe pair.
+ *
+ * `limit` is maximum pipe size. Use `SIZE_MAX` for practically unbounded pipe.
+ * 
+ * The caller is expected to deallocate both returned pipes.
+ */
+WASI_API_EXTERN void wasi_pipe_new(size_t limit, own wasi_read_pipe_t** ret_read_pipe, own wasi_write_pipe_t** ret_write_pipe);
+
+/**
+ * \brief Returns the number of bytes readable from a given pipe.
+ */
+WASM_API_EXTERN size_t wasi_read_pipe_len(const wasi_read_pipe_t* read_pipe);
+
+/**
+ * \brief Reads from a pipe into a memory slice.
+ * 
+ * `buf` is a memory slice of `buf_len` bytes.
+ * Returns the number of bytes written to `buf`. 0 if the pipe is empty.
+ */
+WASM_API_EXTERN size_t wasi_read_pipe_read(wasi_read_pipe_t* read_pipe, void* buf, size_t buf_len);
+
+/**
+ * \brief Writes to a pipe from a vector of bytes.
+ * 
+ * `buf` is a memory slice of `buf_len` bytes.
+ * Returns the number of bytes read form `buf`. 0 if the pipe reached its capacity.
+ */
+WASM_API_EXTERN size_t wasi_write_pipe_write(wasi_write_pipe_t* write_pipe, const void* buf, size_t buf_len);
 
 #undef own
 
