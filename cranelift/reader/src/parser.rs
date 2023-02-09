@@ -1770,12 +1770,12 @@ impl<'a> Parser<'a> {
     fn parse_jump_table(&mut self, def: Block) -> ParseResult<JumpTableData> {
         self.match_token(Token::LBracket, "expected '[' before jump table contents")?;
 
-        let mut data = JumpTableData::new(def);
+        let mut data = Vec::new();
 
         match self.token() {
             Some(Token::Block(dest)) => {
                 self.consume();
-                data.push_entry(dest);
+                data.push(dest);
 
                 loop {
                     match self.token() {
@@ -1783,7 +1783,7 @@ impl<'a> Parser<'a> {
                             self.consume();
                             if let Some(Token::Block(dest)) = self.token() {
                                 self.consume();
-                                data.push_entry(dest);
+                                data.push(dest);
                             } else {
                                 return err!(self.loc, "expected jump_table entry");
                             }
@@ -1799,7 +1799,7 @@ impl<'a> Parser<'a> {
 
         self.consume();
 
-        Ok(data)
+        Ok(JumpTableData::new(def, data))
     }
 
     // Parse a constant decl.

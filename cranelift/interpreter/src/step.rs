@@ -379,7 +379,7 @@ where
                 // Convert to usize to remove negative indexes from the following operations
                 let jump_target = usize::try_from(arg(0)?.into_int()?)
                     .ok()
-                    .and_then(|i| jt_data.table_slice().get(i))
+                    .and_then(|i| jt_data.as_slice().get(i))
                     .copied()
                     .unwrap_or(jt_data.default_block());
 

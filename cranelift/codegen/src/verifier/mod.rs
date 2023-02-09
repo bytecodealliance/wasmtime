@@ -849,7 +849,7 @@ impl<'a> Verifier<'a> {
                 format!("invalid jump table reference {}", j),
             ))
         } else {
-            for &block in self.func.stencil.dfg.jump_tables[j].iter() {
+            for &block in self.func.stencil.dfg.jump_tables[j].all_branches() {
                 self.verify_block(inst, block, errors)?;
             }
             Ok(())
@@ -1320,7 +1320,7 @@ impl<'a> Verifier<'a> {
                 self.typecheck_variable_args_iterator(inst, iter, args_else, errors)?;
             }
             ir::InstructionData::BranchTable { table, .. } => {
-                for block in self.func.stencil.dfg.jump_tables[*table].iter() {
+                for block in self.func.stencil.dfg.jump_tables[*table].all_branches() {
                     let arg_count = self.func.dfg.num_block_params(*block);
                     if arg_count != 0 {
                         return errors.nonfatal((

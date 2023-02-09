@@ -26,13 +26,8 @@ pub struct JumpTableData {
 }
 
 impl JumpTableData {
-    /// Create a new empty jump table.
-    pub fn new(def: Block) -> Self {
-        Self { table: vec![def] }
-    }
-
     /// Create a new jump table with the provided blocks
-    pub fn with_blocks(def: Block, mut table: Vec<Block>) -> Self {
+    pub fn new(def: Block, mut table: Vec<Block>) -> Self {
         table.push(def);
         Self { table }
     }
@@ -42,56 +37,44 @@ impl JumpTableData {
         *self.table.last().unwrap()
     }
 
-    /// Get the number of table entries.
-    pub fn len(&self) -> usize {
-        self.table.len() - 1
+    /// Mutable access to the default block of this jump table.
+    pub fn default_block_mut(&mut self) -> &mut Block {
+        self.table.last_mut().unwrap()
     }
 
-    /// Append a table entry.
-    pub fn push_entry(&mut self, dest: Block) {
-        let last = self.table.len();
-        self.table.push(dest);
-
-        // Ensure that the default block stays as the final element in the table.
-        self.table.swap(last - 1, last);
-    }
-
-    /// Checks if any of the entries branch to `block`. The default block will be considered when
-    /// checking for a possible branch.
-    pub fn branches_to(&self, block: Block) -> bool {
-        self.table.iter().any(|target_block| *target_block == block)
-    }
-
-    /// Access the jump table as a slice, excluding the default block.
-    pub fn table_slice(&self) -> &[Block] {
-        let last = self.len();
-        &self.table.as_slice()[0..last]
-    }
-
-    /// Access the jump table as a slice, excluding the default block.
-    pub fn table_slice_mut(&mut self) -> &mut [Block] {
-        let last = self.len();
-        &mut self.table.as_mut_slice()[0..last]
-    }
-
-    /// Access the entire jump table as a slice.
-    pub fn as_slice(&self) -> &[Block] {
+    /// The jump table and default block as a single slice. The default block will always be last.
+    pub fn all_branches(&self) -> &[Block] {
         self.table.as_slice()
     }
 
-    /// Access the whole table as a mutable slice, excluding the default block.
-    pub fn as_mut_slice(&mut self) -> &mut [Block] {
+    /// The jump table and default block as a single mutable slice. The default block will always
+    /// be last.
+    pub fn all_branches_mut(&mut self) -> &mut [Block] {
         self.table.as_mut_slice()
     }
 
-    /// Returns an iterator over the table.
-    pub fn iter(&self) -> Iter<Block> {
-        self.table.iter()
+    /// Access the jump table as a slice. This excludes the default block.
+    pub fn as_slice(&self) -> &[Block] {
+        let last = self.table.len() - 1;
+        &self.table.as_slice()[0..last]
     }
 
-    /// Returns an iterator that allows modifying each value, including the default block.
+    /// Access the jump table as a mutable slice. This excludes the default block.
+    pub fn as_mut_slice(&mut self) -> &mut [Block] {
+        let last = self.table.len() - 1;
+        &mut self.table.as_mut_slice()[0..last]
+    }
+
+    /// Returns an iterator to the jump table, excluding the default block.
+    #[deprecated(since = "0.7.0", note = "please use `.as_slice()` instead")]
+    pub fn iter(&self) -> Iter<Block> {
+        self.as_slice().iter()
+    }
+
+    /// Returns an iterator that allows modifying each value, excluding the default block.
+    #[deprecated(since = "0.7.0", note = "please use `.as_mut_slice()` instead")]
     pub fn iter_mut(&mut self) -> IterMut<Block> {
-        self.table.iter_mut()
+        self.as_mut_slice().iter_mut()
     }
 
     /// Clears all entries in this jump table, except for the default block.
@@ -103,7 +86,7 @@ impl JumpTableData {
 impl Display for JumpTableData {
     fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
         write!(fmt, "{}, [", self.default_block())?;
-        if let Some((first, rest)) = self.table_slice().split_first() {
+        if let Some((first, rest)) = self.as_slice().split_first() {
             write!(fmt, "{}", first)?;
             for block in rest {
                 write!(fmt, ", {}", block)?;
@@ -124,18 +107,17 @@ mod tests {
     fn empty() {
         let def = Block::new(0);
 
-        let jt = JumpTableData::new(def);
+        let jt = JumpTableData::new(def, vec![]);
 
-        assert_eq!(jt.table_slice().get(0), None);
+        assert_eq!(jt.all_branches().get(0), Some(&def));
 
-        assert_eq!(jt.as_slice().get(0), Some(&def));
+        assert_eq!(jt.as_slice().get(0), None);
         assert_eq!(jt.as_slice().get(10), None);
 
         assert_eq!(jt.to_string(), "block0, []");
 
-        assert_eq!(jt.as_slice(), [def]);
-
-        assert_eq!(jt.table_slice(), []);
+        assert_eq!(jt.all_branches(), [def]);
+        assert_eq!(jt.as_slice(), []);
     }
 
     #[test]
@@ -144,19 +126,12 @@ mod tests {
         let e1 = Block::new(1);
         let e2 = Block::new(2);
 
-        let mut jt = JumpTableData::new(def);
-
-        jt.push_entry(e1);
-        jt.push_entry(e2);
-        jt.push_entry(e1);
+        let mut jt = JumpTableData::new(def, vec![e1, e2, e1]);
 
         assert_eq!(jt.default_block(), def);
         assert_eq!(jt.to_string(), "block0, [block1, block2, block1]");
 
-        assert_eq!(jt.as_slice(), [e1, e2, e1, def]);
-        assert_eq!(jt.table_slice(), [e1, e2, e1]);
-
-        jt.clear();
-        assert_eq!(jt.default_block(), def);
+        assert_eq!(jt.all_branches(), [e1, e2, e1, def]);
+        assert_eq!(jt.as_slice(), [e1, e2, e1]);
     }
 }

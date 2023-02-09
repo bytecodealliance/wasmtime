@@ -597,8 +597,7 @@ impl SSABuilder {
                 let middle_block = dfg.blocks.add();
                 func.stencil.layout.append_block(middle_block);
 
-                let table = &mut dfg.jump_tables[*jt];
-                for block in table.iter_mut() {
+                for block in dfg.jump_tables[*jt].all_branches_mut() {
                     if *block == dest_block {
                         *block = middle_block;
                     }
@@ -993,9 +992,6 @@ mod tests {
         let block0 = func.dfg.make_block();
         let block1 = func.dfg.make_block();
         let block2 = func.dfg.make_block();
-        let mut jump_table = JumpTableData::new(block2);
-        jump_table.push_entry(block2);
-        jump_table.push_entry(block1);
         {
             let mut cur = FuncCursor::new(&mut func);
             cur.insert_block(block0);
@@ -1014,6 +1010,7 @@ mod tests {
         ssa.def_var(x_var, x1, block0);
         ssa.use_var(&mut func, x_var, I32, block0).0;
         let br_table = {
+            let jump_table = JumpTableData::new(block2, vec![block2, block1]);
             let jt = func.create_jump_table(jump_table);
             let mut cur = FuncCursor::new(&mut func).at_bottom(block0);
             cur.ins().br_table(x1, jt)

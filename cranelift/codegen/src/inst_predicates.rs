@@ -197,7 +197,7 @@ pub(crate) fn visit_block_succs<F: FnMut(Inst, Block, bool)>(
                 // so it is not part of the table.
                 visit(inst, table.default_block(), false);
 
-                for &dest in table.table_slice() {
+                for &dest in table.as_slice() {
                     visit(inst, dest, true);
                 }
             }

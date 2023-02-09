@@ -296,11 +296,11 @@ impl FunctionStencil {
             }
 
             InstructionData::BranchTable { table, .. } => {
-                self.dfg.jump_tables[*table].iter_mut().for_each(|entry| {
+                for entry in self.dfg.jump_tables[*table].all_branches_mut() {
                     if *entry == old_dest {
                         *entry = new_dest;
                     }
-                });
+                }
             }
 
             inst => debug_assert!(!inst.opcode().is_branch()),
