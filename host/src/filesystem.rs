@@ -4,9 +4,9 @@ use crate::wasi_poll::{InputStream, OutputStream};
 use crate::{wasi_filesystem, HostResult, WasiCtx};
 use std::{
     io::{IoSlice, IoSliceMut},
-    ops::BitAnd,
+    ops::{BitAnd, Deref},
     sync::Mutex,
-    time::SystemTime,
+    time::{Duration, SystemTime},
 };
 use wasi_common::{
     dir::{ReaddirCursor, ReaddirIterator, TableDirExt},
@@ -181,6 +181,33 @@ impl From<wasi_common::file::Filestat> for wasi_filesystem::DescriptorStat {
     }
 }
 
+impl From<wasi_filesystem::Advice> for wasi_common::file::Advice {
+    fn from(advice: wasi_filesystem::Advice) -> Self {
+        match advice {
+            wasi_filesystem::Advice::Normal => wasi_common::file::Advice::Normal,
+            wasi_filesystem::Advice::Sequential => wasi_common::file::Advice::Sequential,
+            wasi_filesystem::Advice::Random => wasi_common::file::Advice::Random,
+            wasi_filesystem::Advice::WillNeed => wasi_common::file::Advice::WillNeed,
+            wasi_filesystem::Advice::DontNeed => wasi_common::file::Advice::DontNeed,
+            wasi_filesystem::Advice::NoReuse => wasi_common::file::Advice::NoReuse,
+        }
+    }
+}
+
+fn system_time_spec_from_timestamp(
+    t: wasi_filesystem::NewTimestamp,
+) -> Option<wasi_common::SystemTimeSpec> {
+    match t {
+        wasi_filesystem::NewTimestamp::NoChange => None,
+        wasi_filesystem::NewTimestamp::Now => Some(wasi_common::SystemTimeSpec::SymbolicNow),
+        wasi_filesystem::NewTimestamp::Timestamp(datetime) => Some(
+            wasi_common::SystemTimeSpec::Absolute(cap_std::time::SystemTime::from_std(
+                SystemTime::UNIX_EPOCH + Duration::new(datetime.seconds, datetime.nanoseconds),
+            )),
+        ),
+    }
+}
+
 #[async_trait::async_trait]
 impl wasi_filesystem::WasiFilesystem for WasiCtx {
     async fn fadvise(
@@ -190,7 +217,11 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         len: wasi_filesystem::Filesize,
         advice: wasi_filesystem::Advice,
     ) -> HostResult<(), wasi_filesystem::Errno> {
-        todo!()
+        let f = self.table_mut().get_file_mut(fd).map_err(convert)?;
+        f.advise(offset, len, advice.into())
+            .await
+            .map_err(convert)?;
+        Ok(Ok(()))
     }
 
     async fn datasync(
@@ -268,7 +299,8 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         fd: wasi_filesystem::Descriptor,
         flags: wasi_filesystem::DescriptorFlags,
     ) -> HostResult<(), wasi_filesystem::Errno> {
-        todo!()
+        // FIXME
+        Err(wasi_filesystem::Errno::Notsup.into())
     }
 
     async fn set_size(
@@ -276,7 +308,9 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         fd: wasi_filesystem::Descriptor,
         size: wasi_filesystem::Filesize,
     ) -> HostResult<(), wasi_filesystem::Errno> {
-        todo!()
+        let f = self.table_mut().get_file_mut(fd).map_err(convert)?;
+        f.set_filestat_size(size).await.map_err(convert)?;
+        Ok(Ok(()))
     }
 
     async fn set_times(
@@ -285,7 +319,27 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         atim: wasi_filesystem::NewTimestamp,
         mtim: wasi_filesystem::NewTimestamp,
     ) -> HostResult<(), wasi_filesystem::Errno> {
-        todo!()
+        let atim = system_time_spec_from_timestamp(atim);
+        let mtim = system_time_spec_from_timestamp(mtim);
+
+        let table = self.table_mut();
+        if table.is::<Box<dyn WasiFile>>(fd) {
+            Ok(Ok(table
+                .get_file_mut(fd)
+                .expect("checked entry is a file")
+                .set_times(atim, mtim)
+                .await
+                .map_err(convert)?))
+        } else if table.is::<Box<dyn WasiDir>>(fd) {
+            Ok(Ok(table
+                .get_dir(fd)
+                .expect("checked entry is a dir")
+                .set_times(".", atim, mtim, false)
+                .await
+                .map_err(convert)?))
+        } else {
+            Err(wasi_filesystem::Errno::Badf.into())
+        }
     }
 
     async fn pread(
@@ -465,18 +519,40 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         atim: wasi_filesystem::NewTimestamp,
         mtim: wasi_filesystem::NewTimestamp,
     ) -> HostResult<(), wasi_filesystem::Errno> {
-        todo!()
+        let table = self.table();
+        Ok(Ok(table
+            .get_dir(fd)
+            .map_err(convert)?
+            .set_times(
+                &path,
+                system_time_spec_from_timestamp(atim),
+                system_time_spec_from_timestamp(mtim),
+                contains(at_flags, wasi_filesystem::AtFlags::SYMLINK_FOLLOW),
+            )
+            .await
+            .map_err(convert)?))
     }
 
     async fn link_at(
         &mut self,
         fd: wasi_filesystem::Descriptor,
+        // TODO delete the at flags from this function
         old_at_flags: wasi_filesystem::AtFlags,
         old_path: String,
         new_descriptor: wasi_filesystem::Descriptor,
         new_path: String,
     ) -> HostResult<(), wasi_filesystem::Errno> {
-        todo!()
+        let table = self.table();
+        let old_dir = table.get_dir(fd).map_err(convert)?;
+        let new_dir = table.get_dir(new_descriptor).map_err(convert)?;
+        if contains(old_at_flags, wasi_filesystem::AtFlags::SYMLINK_FOLLOW) {
+            return Ok(Err(wasi_filesystem::Errno::Inval));
+        }
+        old_dir
+            .hard_link(&old_path, new_dir.deref(), &new_path)
+            .await
+            .map_err(convert)?;
+        Ok(Ok(()))
     }
 
     async fn open_at(
@@ -541,7 +617,13 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         fd: wasi_filesystem::Descriptor,
         path: String,
     ) -> HostResult<String, wasi_filesystem::Errno> {
-        todo!()
+        let table = self.table();
+        let dir = table.get_dir(fd).map_err(convert)?;
+        let link = dir.read_link(&path).await.map_err(convert)?;
+        Ok(link
+            .into_os_string()
+            .into_string()
+            .map_err(|_| wasi_filesystem::Errno::Ilseq))
     }
 
     async fn remove_directory_at(
@@ -565,7 +647,14 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         new_fd: wasi_filesystem::Descriptor,
         new_path: String,
     ) -> HostResult<(), wasi_filesystem::Errno> {
-        todo!()
+        let table = self.table();
+        let old_dir = table.get_dir(fd).map_err(convert)?;
+        let new_dir = table.get_dir(new_fd).map_err(convert)?;
+        old_dir
+            .rename(&old_path, new_dir.deref(), &new_path)
+            .await
+            .map_err(convert)?;
+        Ok(Ok(()))
     }
 
     async fn symlink_at(
