@@ -252,12 +252,6 @@ pub enum ArgumentPurpose {
     /// used as a base pointer for `vmctx` global values.
     VMContext,
 
-    /// A signature identifier.
-    ///
-    /// This is a special-purpose argument used to identify the calling convention expected by the
-    /// caller in an indirect call. The callee can verify that the expected signature ID matches.
-    SignatureId,
-
     /// A stack limit pointer.
     ///
     /// This is a pointer to a stack limit. It is used to check the current stack pointer
@@ -272,7 +266,6 @@ impl fmt::Display for ArgumentPurpose {
             Self::StructArgument(size) => return write!(f, "sarg({})", size),
             Self::StructReturn => "sret",
             Self::VMContext => "vmctx",
-            Self::SignatureId => "sigid",
             Self::StackLimit => "stack_limit",
         })
     }
@@ -285,7 +278,6 @@ impl FromStr for ArgumentPurpose {
             "normal" => Ok(Self::Normal),
             "sret" => Ok(Self::StructReturn),
             "vmctx" => Ok(Self::VMContext),
-            "sigid" => Ok(Self::SignatureId),
             "stack_limit" => Ok(Self::StackLimit),
             _ if s.starts_with("sarg(") => {
                 if !s.ends_with(")") {
@@ -392,7 +384,6 @@ mod tests {
             (ArgumentPurpose::Normal, "normal"),
             (ArgumentPurpose::StructReturn, "sret"),
             (ArgumentPurpose::VMContext, "vmctx"),
-            (ArgumentPurpose::SignatureId, "sigid"),
             (ArgumentPurpose::StackLimit, "stack_limit"),
             (ArgumentPurpose::StructArgument(42), "sarg(42)"),
         ];

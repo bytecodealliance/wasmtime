@@ -351,7 +351,7 @@ paramlist    : param { "," param }
 retlist      : paramlist
 param        : type [paramext] [paramspecial]
 paramext     : "uext" | "sext"
-paramspecial : "sarg" ( num ) | "sret" | "vmctx" | "sigid" | "stack_limit"
+paramspecial : "sarg" ( num ) | "sret" | "vmctx" | "stack_limit"
 callconv     : "fast" | "cold" | "system_v" | "windows_fastcall"
              | "wasmtime_system_v" | "wasmtime_fastcall"
              | "apple_aarch64" | "wasmtime_apple_aarch64"
@@ -366,12 +366,9 @@ system, a function's calling convention is only fully determined by a
 
 | Name      | Description |
 | ----------| ----------  |
+| sarg      | pointer to a struct argument of the given size |
 | sret      | pointer to a return value in memory |
-| link      | return address |
-| fp        | the initial value of the frame pointer |
-| csr       | callee-saved register |
 | vmctx     | VM context pointer, which may contain pointers to heaps etc. |
-| sigid     | signature id, for checking caller/callee signature compatibility |
 | stack_limit | limit value for the size of the stack |
 
 | Name      | Description |
