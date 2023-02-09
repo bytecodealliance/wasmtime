@@ -11,6 +11,7 @@ use core::fmt::Display;
 use cranelift_codegen::binemit::{CodeOffset, Reloc};
 use cranelift_codegen::entity::{entity_impl, PrimaryMap};
 use cranelift_codegen::ir::Function;
+use cranelift_codegen::settings::SetError;
 use cranelift_codegen::{binemit, MachReloc};
 use cranelift_codegen::{ir, isa, CodegenError, CompileError, Context};
 use std::borrow::ToOwned;
@@ -239,6 +240,9 @@ pub enum ModuleError {
 
     /// Wraps a generic error from a backend
     Backend(anyhow::Error),
+
+    /// Wraps an error from a flag definition.
+    Flag(SetError),
 }
 
 impl<'a> From<CompileError<'a>> for ModuleError {
@@ -260,6 +264,7 @@ impl std::error::Error for ModuleError {
             Self::Compilation(source) => Some(source),
             Self::Allocation { err: source, .. } => Some(source),
             Self::Backend(source) => Some(&**source),
+            Self::Flag(source) => Some(source),
         }
     }
 }
@@ -297,6 +302,7 @@ impl std::fmt::Display for ModuleError {
                 write!(f, "Allocation error: {}: {}", message, err)
             }
             Self::Backend(err) => write!(f, "Backend error: {}", err),
+            Self::Flag(err) => write!(f, "Flag error: {}", err),
         }
     }
 }
@@ -304,6 +310,12 @@ impl std::fmt::Display for ModuleError {
 impl std::convert::From<CodegenError> for ModuleError {
     fn from(source: CodegenError) -> Self {
         Self::Compilation { 0: source }
+    }
+}
+
+impl std::convert::From<SetError> for ModuleError {
+    fn from(source: SetError) -> Self {
+        Self::Flag { 0: source }
     }
 }
 
