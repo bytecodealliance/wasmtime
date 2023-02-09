@@ -43,7 +43,24 @@ impl JITBuilder {
     pub fn new(
         libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     ) -> ModuleResult<Self> {
+        Self::with_flags(&[], libcall_names)
+    }
+
+    /// Create a new `JITBuilder` with the given flags.
+    ///
+    /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s `ir::LibCall`
+    /// enum to symbols. LibCalls are inserted in the IR as part of the legalization for certain
+    /// floating point instructions, and for stack probes. If you don't know what to use for this
+    /// argument, use `cranelift_module::default_libcall_names()`.
+    pub fn with_flags(
+        flags: &[(&str, &str)],
+        libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
+    ) -> ModuleResult<Self> {
         let mut flag_builder = settings::builder();
+        for (name, value) in flags {
+            flag_builder.set(name, value)?;
+        }
+
         // On at least AArch64, "colocated" calls use shorter-range relocations,
         // which might not reach all definitions; we can't handle that here, so
         // we require long-range relocation types.
@@ -59,8 +76,8 @@ impl JITBuilder {
     /// Create a new `JITBuilder` with an arbitrary target. This is mainly
     /// useful for testing.
     ///
-    /// To create a `JITBuilder` for native use, use the `new` constructor
-    /// instead.
+    /// To create a `JITBuilder` for native use, use the `new` or `with_flags`
+    /// constructors instead.
     ///
     /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s `ir::LibCall`
     /// enum to symbols. LibCalls are inserted in the IR as part of the legalization for certain
