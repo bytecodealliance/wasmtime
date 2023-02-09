@@ -18,8 +18,8 @@ pub(crate) enum OperandSize {
 pub(crate) enum RegImm {
     /// A register.
     Reg(Reg),
-    /// An immediate.
-    Imm(i32),
+    /// 64-bit signed immediate.
+    Imm(i64),
 }
 
 impl RegImm {
@@ -29,7 +29,7 @@ impl RegImm {
     }
 
     /// Immediate constructor.
-    pub fn imm(imm: i32) -> Self {
+    pub fn imm(imm: i64) -> Self {
         RegImm::Imm(imm)
     }
 }
@@ -87,6 +87,9 @@ pub(crate) trait MacroAssembler {
 
     /// Perform add operation.
     fn add(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize);
+
+    /// Perform subtraction operation.
+    fn sub(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize);
 
     /// Push the register to the stack, returning the offset.
     fn push(&mut self, src: Reg) -> u32;

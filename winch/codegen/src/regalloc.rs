@@ -76,7 +76,8 @@ impl RegAlloc {
     ) {
         match src {
             Val::Reg(src) => masm.mov(RegImm::reg(src), RegImm::reg(dst), size),
-            Val::I32(imm) => masm.mov(RegImm::imm(imm), RegImm::reg(dst), size),
+            Val::I32(imm) => masm.mov(RegImm::imm(imm.into()), RegImm::reg(dst), size),
+            Val::I64(imm) => masm.mov(RegImm::imm(imm), RegImm::reg(dst), size),
             Val::Local(index) => {
                 let slot = frame
                     .get_local(index)

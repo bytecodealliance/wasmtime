@@ -1,9 +1,9 @@
 use crate::{
     abi::{ABISig, ABI},
     frame::Frame,
-    masm::{MacroAssembler, OperandSize},
+    masm::{MacroAssembler, OperandSize, RegImm},
     regalloc::RegAlloc,
-    stack::Stack,
+    stack::{Stack, Val},
 };
 use anyhow::Result;
 use wasmparser::{BinaryReader, FuncValidator, ValType, ValidatorResources, VisitOperator};
@@ -22,8 +22,66 @@ impl<'a, M> CodeGenContext<'a, M>
 where
     M: MacroAssembler,
 {
+    /// Create a new code generation context.
     pub fn new(masm: &'a mut M, stack: Stack, frame: &'a Frame) -> Self {
         Self { masm, stack, frame }
+    }
+
+    /// Prepares arguments for emitting an i32 binary operation.
+    pub fn i32_binop<F>(&mut self, regalloc: &mut RegAlloc, emit: &mut F)
+    where
+        F: FnMut(&mut M, RegImm, RegImm, OperandSize),
+    {
+        let top = self.stack.peek().expect("value at stack top");
+
+        if top.is_i32_const() {
+            let val = self
+                .stack
+                .pop_i32_const()
+                .expect("i32 const value at stack top");
+            let reg = regalloc.pop_to_reg(self, OperandSize::S32);
+            emit(
+                &mut self.masm,
+                RegImm::reg(reg),
+                RegImm::imm(val as i64),
+                OperandSize::S32,
+            );
+            self.stack.push(Val::reg(reg));
+        } else {
+            let src = regalloc.pop_to_reg(self, OperandSize::S32);
+            let dst = regalloc.pop_to_reg(self, OperandSize::S32);
+            emit(&mut self.masm, dst.into(), src.into(), OperandSize::S32);
+            regalloc.free_gpr(src);
+            self.stack.push(Val::reg(dst));
+        }
+    }
+
+    /// Prepares arguments for emitting an i64 binary operation.
+    pub fn i64_binop<F>(&mut self, regalloc: &mut RegAlloc, emit: &mut F)
+    where
+        F: FnMut(&mut M, RegImm, RegImm, OperandSize),
+    {
+        let top = self.stack.peek().expect("value at stack top");
+        if top.is_i64_const() {
+            let val = self
+                .stack
+                .pop_i64_const()
+                .expect("i64 const value at stack top");
+            let reg = regalloc.pop_to_reg(self, OperandSize::S64);
+            emit(
+                &mut self.masm,
+                RegImm::reg(reg),
+                RegImm::imm(val),
+                OperandSize::S64,
+            );
+            self.stack.push(Val::reg(reg));
+        } else {
+            let src = regalloc.pop_to_reg(self, OperandSize::S64);
+            let dst = regalloc.pop_to_reg(self, OperandSize::S64);
+            emit(&mut self.masm, dst.into(), src.into(), OperandSize::S64);
+            regalloc.free_gpr(src);
+            self.stack.push(Val::reg(dst));
+        }
     }
 }
 

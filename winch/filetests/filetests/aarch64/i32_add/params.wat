@@ -1,12 +1,11 @@
 ;;! target = "aarch64"
 
 (module
-  (export "main" (func $main))
-
-  (func $main (param i32) (param i32) (result i32)
-        (local.get 0)
-        (local.get 1)
-        i32.add)
+    (func (param i32) (param i32) (result i32)
+	(local.get 0)
+	(local.get 1)
+	(i32.add)
+    )
 )
 ;;    0:	 fd7bbfa9             	stp	x29, x30, [sp, #-0x10]!
 ;;    4:	 fd030091             	mov	x29, sp
