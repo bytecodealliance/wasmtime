@@ -107,7 +107,7 @@ mod tests {
         assert_eq!(jt.as_slice().get(0), None);
         assert_eq!(jt.as_slice().get(10), None);
 
-        assert_eq!(jt.to_string(), "jump_table []");
+        assert_eq!(jt.to_string(), "[]");
 
         let v = jt.as_slice();
         assert_eq!(v, []);
@@ -124,7 +124,7 @@ mod tests {
         jt.push_entry(e2);
         jt.push_entry(e1);
 
-        assert_eq!(jt.to_string(), "jump_table [block1, block2, block1]");
+        assert_eq!(jt.to_string(), "[block1, block2, block1]");
 
         let v = jt.as_slice();
         assert_eq!(v, [e1, e2, e1]);
