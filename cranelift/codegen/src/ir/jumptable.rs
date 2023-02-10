@@ -126,7 +126,7 @@ mod tests {
         let e1 = Block::new(1);
         let e2 = Block::new(2);
 
-        let mut jt = JumpTableData::new(def, vec![e1, e2, e1]);
+        let jt = JumpTableData::new(def, vec![e1, e2, e1]);
 
         assert_eq!(jt.default_block(), def);
         assert_eq!(jt.to_string(), "block0, [block1, block2, block1]");
