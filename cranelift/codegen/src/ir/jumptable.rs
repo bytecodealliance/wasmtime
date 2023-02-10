@@ -66,13 +66,13 @@ impl JumpTableData {
     }
 
     /// Returns an iterator to the jump table, excluding the default block.
-    #[deprecated(since = "0.7.0", note = "please use `.as_slice()` instead")]
+    #[deprecated(since = "7.0.0", note = "please use `.as_slice()` instead")]
     pub fn iter(&self) -> Iter<Block> {
         self.as_slice().iter()
     }
 
     /// Returns an iterator that allows modifying each value, excluding the default block.
-    #[deprecated(since = "0.7.0", note = "please use `.as_mut_slice()` instead")]
+    #[deprecated(since = "7.0.0", note = "please use `.as_mut_slice()` instead")]
     pub fn iter_mut(&mut self) -> IterMut<Block> {
         self.as_mut_slice().iter_mut()
     }
