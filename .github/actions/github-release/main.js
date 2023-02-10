@@ -54,7 +54,7 @@ async function runOnce() {
             force: true,
         });
       } catch (e) {
-        console.log("ERROR: ", JSON.stringify(e, null, 2));
+        console.log("ERROR: ", JSON.stringify(e.data, null, 2));
         core.info(`creating dev tag`);
         try {
           await octokit.git.createTag({
@@ -68,6 +68,7 @@ async function runOnce() {
         } catch (e) {
           // we might race with others, so assume someone else has created the
           // tag by this point.
+          console.log("failed to create tag: ", JSON.stringify(e.data, null, 2));
         }
       }
 

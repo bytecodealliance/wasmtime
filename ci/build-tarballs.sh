@@ -21,8 +21,8 @@ mkdir tmp
 mkdir -p dist
 
 tag=dev
-if [[ $GITHUB_REF == refs/tags/v* ]]; then
-  tag=${GITHUB_REF:10}
+if [[ $GITHUB_REF == refs/heads/release-* ]]; then
+  tag=v${GITHUB_REF:19}
 fi
 
 bin_pkgname=wasmtime-$tag-$platform
