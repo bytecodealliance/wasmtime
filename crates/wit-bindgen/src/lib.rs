@@ -132,7 +132,12 @@ impl Wasmtime {
                 );
                 Import::Interface { snake }
             }
-            WorldItem::Type(_) => unreachable!(),
+            WorldItem::Type(ty) => {
+                gen.define_type(name, *ty);
+                let body = mem::take(&mut gen.src);
+                self.src.push_str(&body);
+                return;
+            }
         };
 
         self.imports.push(import);
@@ -150,12 +155,7 @@ impl Wasmtime {
                 self.exports.funcs.push(body);
                 (format!("wasmtime::component::Func"), getter)
             }
-            WorldItem::Type(ty) => {
-                gen.define_type(name, *ty);
-                let body = mem::take(&mut gen.src);
-                self.src.push_str(&body);
-                return;
-            }
+            WorldItem::Type(_) => unreachable!(),
             WorldItem::Interface(id) => {
                 gen.current_interface = Some(*id);
                 gen.types(*id);
