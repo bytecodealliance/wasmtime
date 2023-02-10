@@ -2,7 +2,7 @@ name: Publish Artifacts
 on:
   push:
     branches: [main]
-    #tags-ignore: [dev]
+    tags-ignore: [dev]
 
 permissions:
   contents: write
@@ -35,7 +35,7 @@ jobs:
       uses: JamesIves/github-pages-deploy-action@v4
       with:
         folder: ./gh-pages/gh-pages
-          #if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      if: github.ref == 'refs/heads/main'
 
     - run: npm install --production
       working-directory: .github/actions/github-release

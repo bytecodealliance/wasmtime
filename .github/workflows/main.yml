@@ -10,8 +10,6 @@ on:
     # This is an alternative to using `merge_group:` which doesn't work at the
     # time of this writing.
     branches: ['gh-readonly-queue/main/*']
-    # Run CI on all tags
-    tags-ignore: [dev]
 
 defaults:
   run:
@@ -35,6 +33,10 @@ jobs:
     - uses: ./.github/actions/install-rust
     - run: rustup component add rustfmt
     - run: cargo fmt --all -- --check
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure()
+      env:
+        GH_TOKEN: ${{ github.token }}
 
   # Lint dependency graph for security advisories, duplicate versions, and
   # incompatible licences
@@ -52,6 +54,10 @@ jobs:
         mv cargo-deny-*-x86_64-unknown-linux-musl/cargo-deny cargo-deny
         echo `pwd` >> $GITHUB_PATH
     - run: cargo deny check bans licenses
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure()
+      env:
+        GH_TOKEN: ${{ github.token }}
 
   # Ensure dependencies are vetted. See https://mozilla.github.io/cargo-vet/
   cargo_vet:
@@ -71,6 +77,10 @@ jobs:
     - run: echo "${{ runner.tool_cache }}/cargo-vet/bin" >> $GITHUB_PATH
     - run: cargo install --root ${{ runner.tool_cache }}/cargo-vet --version ${{ env.CARGO_VET_VERSION }} cargo-vet
     - run: cargo vet --locked
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure()
+      env:
+        GH_TOKEN: ${{ github.token }}
 
   determine:
     name: Determine CI jobs to run
@@ -158,6 +168,10 @@ jobs:
       with:
         name: gh-pages
         path: gh-pages.tar.gz
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure()
+      env:
+        GH_TOKEN: ${{ github.token }}
 
   # Quick checks of various feature combinations and whether things
   # compile. The goal here isn't to run tests, mostly just serve as a
@@ -222,6 +236,10 @@ jobs:
     - run: echo "${{ runner.tool_cache }}/cargo-ndk/bin" >> $GITHUB_PATH
     - run: cargo install --root ${{ runner.tool_cache }}/cargo-ndk --version ${{ env.CARGO_NDK_VERSION }} cargo-ndk
     - run: cargo ndk -t arm64-v8a check -p wasmtime
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure()
+      env:
+        GH_TOKEN: ${{ github.token }}
 
   # Check whether `wasmtime` cross-compiles to aarch64-pc-windows-msvc
   # We don't build nor test it because it lacks trap handling.
@@ -238,6 +256,10 @@ jobs:
     - uses: ./.github/actions/install-rust
     - run: rustup target add aarch64-pc-windows-msvc
     - run: cargo check -p wasmtime --target aarch64-pc-windows-msvc
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure()
+      env:
+        GH_TOKEN: ${{ github.token }}
 
   fuzz_targets:
     needs: determine
@@ -262,6 +284,10 @@ jobs:
     - run: cargo fuzz build --dev -s none
     # Check that the ISLE fuzz targets build too.
     - run: cargo fuzz build --dev -s none --fuzz-dir ./cranelift/isle/fuzz
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure()
+      env:
+        GH_TOKEN: ${{ github.token }}
 
   # Perform all tests (debug mode) for `wasmtime`. This runs stable/beta/nightly
   # channels of Rust as well as macOS/Linux/Windows.
@@ -361,6 +387,10 @@ jobs:
       if: matrix.os == 'ubuntu-latest' && matrix.target == ''
       env:
         RUST_BACKTRACE: 1
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure()
+      env:
+        GH_TOKEN: ${{ github.token }}
 
   # Build and test the wasi-nn module.
   test_wasi_nn:
@@ -378,6 +408,10 @@ jobs:
       - run: ./ci/run-wasi-nn-example.sh
         env:
           RUST_BACKTRACE: 1
+      - run: gh run cancel ${{ github.run_id }}
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   # Build and test the wasi-crypto module.
   test_wasi_crypto:
@@ -394,6 +428,10 @@ jobs:
     - run: ./ci/run-wasi-crypto-example.sh
       env:
         RUST_BACKTRACE: 1
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure()
+      env:
+        GH_TOKEN: ${{ github.token }}
 
   bench:
     needs: determine
@@ -409,7 +447,7 @@ jobs:
     - run: cargo test --benches --release
 
   # Verify that cranelift's code generation is deterministic
-  meta_determinist_check:
+  meta_deterministic_check:
     needs: determine
     if: needs.determine.outputs.run-full
     name: Meta deterministic check
@@ -421,6 +459,10 @@ jobs:
     - uses: ./.github/actions/install-rust
     - run: cd cranelift/codegen && cargo build --features all-arch
     - run: ci/ensure_deterministic_build.sh
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure()
+      env:
+        GH_TOKEN: ${{ github.token }}
 
   verify-publish:
     needs: determine
@@ -441,6 +483,10 @@ jobs:
     - run: ./publish verify
     # Make sure we can bump version numbers for the next release
     - run: ./publish bump
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure()
+      env:
+        GH_TOKEN: ${{ github.token }}
 
   # Perform release builds of `wasmtime` and `libwasmtime.so`. Builds on
   # Windows/Mac/Linux, and artifacts are uploaded after the build is finished.
@@ -511,11 +557,29 @@ jobs:
       with:
         name: bins-${{ matrix.build }}
         path: dist
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure()
+      env:
+        GH_TOKEN: ${{ github.token }}
 
   ci-status:
     name: Record the result of testing and building steps
     runs-on: ubuntu-latest
-    needs: [test, build]
+    needs:
+      - test
+      - build
+      - rustfmt
+      - cargo_deny
+      - cargo_vet
+      - doc
+      - checks
+      - checks_winarm64
+      - fuzz_targets
+      - test_wasi_nn
+      - test_wasi_crypto
+      - bench
+      - meta_deterministic_check
+      - verify-publish
     if: always()
     steps:
       - name: Successful test and build
