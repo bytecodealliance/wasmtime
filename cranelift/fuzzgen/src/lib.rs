@@ -4,16 +4,18 @@ use crate::settings::{Flags, OptLevel};
 use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
 use cranelift::codegen::data_value::DataValue;
-use cranelift::codegen::ir::types::*;
 use cranelift::codegen::ir::Function;
+use cranelift::codegen::ir::{types::*, UserFuncName};
 use cranelift::codegen::Context;
 use cranelift::prelude::isa;
 use cranelift::prelude::*;
+use cranelift_arbitrary::CraneliftArbitrary;
 use cranelift_native::builder_with_options;
 use std::fmt;
 use target_lexicon::{Architecture, Triple};
 
 mod config;
+mod cranelift_arbitrary;
 mod function_generator;
 mod passes;
 
@@ -276,7 +278,15 @@ where
     }
 
     fn generate_func(&mut self, target_triple: Triple) -> Result<Function> {
-        let func = FunctionGenerator::new(&mut self.u, &self.config, target_triple).generate()?;
+        let max_params = self.u.int_in_range(self.config.signature_params.clone())?;
+        let max_rets = self.u.int_in_range(self.config.signature_rets.clone())?;
+        let sig = self.u.signature(max_params, max_rets)?;
+
+        // Function name must be in a different namespace than TESTFILE_NAMESPACE (0)
+        let fname = UserFuncName::user(1, 0);
+
+        let func = FunctionGenerator::new(&mut self.u, &self.config, target_triple, fname, sig)
+            .generate()?;
         self.run_func_passes(func)
     }
 

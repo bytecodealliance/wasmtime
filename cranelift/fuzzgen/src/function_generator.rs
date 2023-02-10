@@ -1,12 +1,12 @@
-use crate::codegen::ir::{ArgumentExtension, ArgumentPurpose};
 use crate::config::Config;
+use crate::cranelift_arbitrary::CraneliftArbitrary;
 use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
 use cranelift::codegen::ir::instructions::InstructionFormat;
 use cranelift::codegen::ir::stackslot::StackSize;
 use cranelift::codegen::ir::{types::*, FuncRef, LibCall, UserExternalName, UserFuncName};
 use cranelift::codegen::ir::{
-    AbiParam, Block, ExternalName, Function, Opcode, Signature, StackSlot, Type, Value,
+    Block, ExternalName, Function, Opcode, Signature, StackSlot, Type, Value,
 };
 use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Switch, Variable};
@@ -1297,6 +1297,8 @@ where
     config: &'r Config,
     resources: Resources,
     target_triple: Triple,
+    name: UserFuncName,
+    signature: Signature,
 }
 
 #[derive(Debug, Clone)]
@@ -1359,12 +1361,20 @@ impl<'r, 'data> FunctionGenerator<'r, 'data>
 where
     'data: 'r,
 {
-    pub fn new(u: &'r mut Unstructured<'data>, config: &'r Config, target_triple: Triple) -> Self {
+    pub fn new(
+        u: &'r mut Unstructured<'data>,
+        config: &'r Config,
+        target_triple: Triple,
+        name: UserFuncName,
+        signature: Signature,
+    ) -> Self {
         Self {
             u,
             config,
             resources: Resources::default(),
             target_triple,
+            name,
+            signature,
         }
     }
 
@@ -1373,63 +1383,10 @@ where
         Ok(self.u.int_in_range(param.clone())?)
     }
 
-    fn generate_callconv(&mut self) -> Result<CallConv> {
-        // TODO: Generate random CallConvs per target
-        Ok(CallConv::SystemV)
-    }
-
     fn system_callconv(&mut self) -> CallConv {
         // TODO: This currently only runs on linux, so this is the only choice
         // We should improve this once we generate flags and targets
         CallConv::SystemV
-    }
-
-    fn generate_type(&mut self) -> Result<Type> {
-        // TODO: It would be nice if we could get these directly from cranelift
-        let scalars = [
-            I8, I16, I32, I64, I128, F32, F64,
-            // R32, R64,
-        ];
-        // TODO: vector types
-
-        let ty = self.u.choose(&scalars[..])?;
-        Ok(*ty)
-    }
-
-    fn generate_abi_param(&mut self) -> Result<AbiParam> {
-        let value_type = self.generate_type()?;
-        // TODO: There are more argument purposes to be explored...
-        let purpose = ArgumentPurpose::Normal;
-        let extension = if value_type.is_int() {
-            *self.u.choose(&[
-                ArgumentExtension::Sext,
-                ArgumentExtension::Uext,
-                ArgumentExtension::None,
-            ])?
-        } else {
-            ArgumentExtension::None
-        };
-
-        Ok(AbiParam {
-            value_type,
-            purpose,
-            extension,
-        })
-    }
-
-    fn generate_signature(&mut self) -> Result<Signature> {
-        let callconv = self.generate_callconv()?;
-        let mut sig = Signature::new(callconv);
-
-        for _ in 0..self.param(&self.config.signature_params)? {
-            sig.params.push(self.generate_abi_param()?);
-        }
-
-        for _ in 0..self.param(&self.config.signature_rets)? {
-            sig.returns.push(self.generate_abi_param()?);
-        }
-
-        Ok(sig)
     }
 
     /// Finds a stack slot with size of at least n bytes
@@ -1660,7 +1617,9 @@ where
                         index: func_index,
                     });
                 let name = ExternalName::User(user_func_ref);
-                let signature = self.generate_signature()?;
+                let max_param = self.param(&self.config.signature_params)?;
+                let max_rets = self.param(&self.config.signature_rets)?;
+                let signature = self.u.signature(max_param, max_rets)?;
                 (name, signature)
             } else {
                 let libcall = *self.u.choose(ALLOWED_LIBCALLS)?;
@@ -1727,7 +1686,7 @@ where
     }
 
     /// Creates a random amount of blocks in this function
-    fn generate_blocks(&mut self, builder: &mut FunctionBuilder, sig: &Signature) -> Result<()> {
+    fn generate_blocks(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
         let extra_block_count = self.param(&self.config.blocks_per_function)?;
 
         // We must always have at least one block, so we generate the "extra" blocks and add 1 for
@@ -1751,7 +1710,10 @@ where
                 // a random signature;
                 if is_entry {
                     builder.append_block_params_for_function_params(block);
-                    Ok((block, sig.params.iter().map(|a| a.value_type).collect()))
+                    Ok((
+                        block,
+                        self.signature.params.iter().map(|a| a.value_type).collect(),
+                    ))
                 } else {
                     let sig = self.generate_block_signature()?;
                     sig.iter().for_each(|ty| {
@@ -1882,7 +1844,7 @@ where
 
         let mut params = Vec::with_capacity(param_count);
         for _ in 0..param_count {
-            params.push(self.generate_type()?);
+            params.push(self.u._type()?);
         }
         Ok(params)
     }
@@ -1902,7 +1864,7 @@ where
 
         // Create a pool of vars that are going to be used in this function
         for _ in 0..self.param(&self.config.vars_per_function)? {
-            let ty = self.generate_type()?;
+            let ty = self.u._type()?;
             let value = self.generate_const(builder, ty)?;
             vars.push((ty, value));
         }
@@ -1930,15 +1892,12 @@ where
     /// Because we generate all blocks and variables up front we already know everything that
     /// we need when generating instructions (i.e. jump targets / variables)
     pub fn generate(mut self) -> Result<Function> {
-        let sig = self.generate_signature()?;
-
         let mut fn_builder_ctx = FunctionBuilderContext::new();
-        // function name must be in a different namespace than TESTFILE_NAMESPACE (0)
-        let mut func = Function::with_name_signature(UserFuncName::user(1, 0), sig.clone());
+        let mut func = Function::with_name_signature(self.name.clone(), self.signature.clone());
 
         let mut builder = FunctionBuilder::new(&mut func, &mut fn_builder_ctx);
 
-        self.generate_blocks(&mut builder, &sig)?;
+        self.generate_blocks(&mut builder)?;
 
         // Function preamble
         self.generate_funcrefs(&mut builder)?;
