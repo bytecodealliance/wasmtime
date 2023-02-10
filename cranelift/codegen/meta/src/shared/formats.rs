@@ -117,7 +117,6 @@ impl Formats {
 
             branch_table: Builder::new("BranchTable")
                 .value()
-                .imm(&entities.label)
                 .imm(&entities.jump_table)
                 .build(),
 

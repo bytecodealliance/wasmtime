@@ -295,19 +295,11 @@ impl FunctionStencil {
                 }
             }
 
-            InstructionData::BranchTable {
-                table,
-                destination: default_dest,
-                ..
-            } => {
-                self.dfg.jump_tables[*table].iter_mut().for_each(|entry| {
+            InstructionData::BranchTable { table, .. } => {
+                for entry in self.dfg.jump_tables[*table].all_branches_mut() {
                     if *entry == old_dest {
                         *entry = new_dest;
                     }
-                });
-
-                if *default_dest == old_dest {
-                    *default_dest = new_dest;
                 }
             }
 

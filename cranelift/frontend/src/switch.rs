@@ -220,7 +220,7 @@ impl Switch {
             "Jump tables bigger than 2^32-1 are not yet supported"
         );
 
-        let jt_data = JumpTableData::with_blocks(Vec::from(blocks));
+        let jt_data = JumpTableData::new(otherwise, Vec::from(blocks));
         let jump_table = bx.create_jump_table(jt_data);
 
         let discr = if first_index == 0 {
@@ -256,7 +256,7 @@ impl Switch {
             _ => discr,
         };
 
-        bx.ins().br_table(discr, otherwise, jump_table);
+        bx.ins().br_table(discr, jump_table);
     }
 
     /// Build the switch

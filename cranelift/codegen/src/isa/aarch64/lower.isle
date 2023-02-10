@@ -2515,7 +2515,7 @@
 
 ;; `targets` contains the default target with the list of branch targets
 ;; concatenated.
-(rule (lower_branch (br_table idx _ _) targets)
+(rule (lower_branch (br_table idx _) targets)
       (let ((jt_size u32 (targets_jt_size targets))
             (_ InstOutput (side_effect
                   (emit_island (targets_jt_space targets))))

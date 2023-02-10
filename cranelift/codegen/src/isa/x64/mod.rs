@@ -408,11 +408,10 @@ mod test {
         let mut pos = FuncCursor::new(&mut func);
 
         pos.insert_block(bb0);
-        let mut jt_data = JumpTableData::new();
-        jt_data.push_entry(bb1);
-        jt_data.push_entry(bb2);
-        let jt = pos.func.create_jump_table(jt_data);
-        pos.ins().br_table(arg0, bb3, jt);
+        let jt = pos
+            .func
+            .create_jump_table(JumpTableData::new(bb3, vec![bb1, bb2]));
+        pos.ins().br_table(arg0, jt);
 
         pos.insert_block(bb1);
         let v1 = pos.ins().iconst(I32, 1);

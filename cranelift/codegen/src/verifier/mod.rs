@@ -579,10 +579,7 @@ impl<'a> Verifier<'a> {
                 self.verify_block(inst, block_then.block(&self.func.dfg.value_lists), errors)?;
                 self.verify_block(inst, block_else.block(&self.func.dfg.value_lists), errors)?;
             }
-            BranchTable {
-                table, destination, ..
-            } => {
-                self.verify_block(inst, destination, errors)?;
+            BranchTable { table, .. } => {
                 self.verify_jump_table(inst, table, errors)?;
             }
             Call {
@@ -852,7 +849,7 @@ impl<'a> Verifier<'a> {
                 format!("invalid jump table reference {}", j),
             ))
         } else {
-            for &block in self.func.stencil.dfg.jump_tables[j].as_slice() {
+            for &block in self.func.stencil.dfg.jump_tables[j].all_branches() {
                 self.verify_block(inst, block, errors)?;
             }
             Ok(())
@@ -1322,23 +1319,8 @@ impl<'a> Verifier<'a> {
                 let args_else = block_else.args_slice(&self.func.dfg.value_lists);
                 self.typecheck_variable_args_iterator(inst, iter, args_else, errors)?;
             }
-            ir::InstructionData::BranchTable {
-                table,
-                destination: block,
-                ..
-            } => {
-                let arg_count = self.func.dfg.num_block_params(*block);
-                if arg_count != 0 {
-                    return errors.nonfatal((
-                        inst,
-                        self.context(inst),
-                        format!(
-                            "takes no arguments, but had target {} with {} arguments",
-                            block, arg_count,
-                        ),
-                    ));
-                }
-                for block in self.func.stencil.dfg.jump_tables[*table].iter() {
+            ir::InstructionData::BranchTable { table, .. } => {
+                for block in self.func.stencil.dfg.jump_tables[*table].all_branches() {
                     let arg_count = self.func.dfg.num_block_params(*block);
                     if arg_count != 0 {
                         return errors.nonfatal((

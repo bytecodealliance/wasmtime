@@ -1767,15 +1767,15 @@ impl<'a> Parser<'a> {
     //
     // jump-table-lit ::= "[" block {"," block } "]"
     //                  | "[]"
-    fn parse_jump_table(&mut self) -> ParseResult<JumpTableData> {
+    fn parse_jump_table(&mut self, def: Block) -> ParseResult<JumpTableData> {
         self.match_token(Token::LBracket, "expected '[' before jump table contents")?;
 
-        let mut data = JumpTableData::new();
+        let mut data = Vec::new();
 
         match self.token() {
             Some(Token::Block(dest)) => {
                 self.consume();
-                data.push_entry(dest);
+                data.push(dest);
 
                 loop {
                     match self.token() {
@@ -1783,7 +1783,7 @@ impl<'a> Parser<'a> {
                             self.consume();
                             if let Some(Token::Block(dest)) = self.token() {
                                 self.consume();
-                                data.push_entry(dest);
+                                data.push(dest);
                             } else {
                                 return err!(self.loc, "expected jump_table entry");
                             }
@@ -1799,7 +1799,7 @@ impl<'a> Parser<'a> {
 
         self.consume();
 
-        Ok(data)
+        Ok(JumpTableData::new(def, data))
     }
 
     // Parse a constant decl.
@@ -2571,14 +2571,9 @@ impl<'a> Parser<'a> {
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let block_num = self.match_block("expected branch destination block")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
-                let table_data = self.parse_jump_table()?;
+                let table_data = self.parse_jump_table(block_num)?;
                 let table = ctx.function.dfg.jump_tables.push(table_data);
-                InstructionData::BranchTable {
-                    opcode,
-                    arg,
-                    destination: block_num,
-                    table,
-                }
+                InstructionData::BranchTable { opcode, arg, table }
             }
             InstructionFormat::TernaryImm8 => {
                 let lhs = self.match_value("expected SSA value first operand")?;

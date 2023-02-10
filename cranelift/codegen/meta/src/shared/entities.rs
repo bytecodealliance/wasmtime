@@ -15,10 +15,6 @@ pub(crate) struct EntityRefs {
     /// This is primarily used in control flow instructions.
     pub(crate) block_call: OperandKind,
 
-    /// A reference to a basic block in the same function.
-    /// This is primarily used in control flow instructions.
-    pub(crate) label: OperandKind,
-
     /// A reference to a basic block in the same function, with its arguments provided.
     /// This is primarily used in control flow instructions.
     pub(crate) block_then: OperandKind,
@@ -61,12 +57,6 @@ impl EntityRefs {
                 "destination",
                 "ir::BlockCall",
                 "a basic block in the same function, with its arguments provided.",
-            ),
-
-            label: new(
-                "destination",
-                "ir::Block",
-                "a basic block in the same function.",
             ),
 
             block_then: new(

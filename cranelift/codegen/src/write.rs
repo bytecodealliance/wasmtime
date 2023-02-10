@@ -421,12 +421,7 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
             write!(w, " {}, {}", arg, block_then.display(pool))?;
             write!(w, ", {}", block_else.display(pool))
         }
-        BranchTable {
-            arg,
-            destination,
-            table,
-            ..
-        } => write!(w, " {}, {}, {}", arg, destination, jump_tables[table]),
+        BranchTable { arg, table, .. } => write!(w, " {}, {}", arg, jump_tables[table]),
         Call {
             func_ref, ref args, ..
         } => write!(w, " {}({})", func_ref, DisplayValues(args.as_slice(pool))),

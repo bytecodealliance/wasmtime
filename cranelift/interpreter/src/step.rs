@@ -373,10 +373,7 @@ where
             }
         }
         Opcode::BrTable => {
-            if let InstructionData::BranchTable {
-                table, destination, ..
-            } = inst
-            {
+            if let InstructionData::BranchTable { table, .. } = inst {
                 let jt_data = &state.get_current_function().stencil.dfg.jump_tables[table];
 
                 // Convert to usize to remove negative indexes from the following operations
@@ -384,7 +381,7 @@ where
                     .ok()
                     .and_then(|i| jt_data.as_slice().get(i))
                     .copied()
-                    .unwrap_or(destination);
+                    .unwrap_or(jt_data.default_block());
 
                 ControlFlow::ContinueAt(jump_target, SmallVec::new())
             } else {

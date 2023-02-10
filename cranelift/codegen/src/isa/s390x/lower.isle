@@ -3725,7 +3725,7 @@
 
 ;; Jump table.  `targets` contains the default target followed by the
 ;; list of branch targets per index value.
-(rule (lower_branch (br_table val_idx _ _) targets)
+(rule (lower_branch (br_table val_idx _) targets)
       (let ((idx Reg (put_in_reg_zext64 val_idx))
             ;; Bounds-check the index and branch to default.
             ;; This is an internal branch that is not a terminator insn.
