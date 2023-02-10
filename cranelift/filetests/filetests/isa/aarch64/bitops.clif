@@ -924,3 +924,26 @@ block0(v0: i128, v1: i128):
 ;   csel x1, x15, x7, ne
 ;   ret
 
+function %bnot_of_bxor(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = bxor v0, v1
+  v3 = bnot v2
+  return v3
+}
+
+; block0:
+;   eon w0, w0, w1
+;   ret
+
+function %bnot_of_bxor(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+  v2 = bxor v0, v1
+  v3 = bnot v2
+  return v3
+}
+
+; block0:
+;   eon x0, x0, x2
+;   eon x1, x1, x3
+;   ret
+
