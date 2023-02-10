@@ -1,10 +1,18 @@
 name: CI
 on:
-  push:
-    branches: [main]
-    tags-ignore: [dev]
+  # Run CI for PRs to `main` and to release branches.
   pull_request:
-    branches: ['main', 'release-*']
+    branches:
+    - main
+    - 'release-*'
+
+  push:
+    # This is an alternative to using `merge_group:` which doesn't work at the
+    # time of this writing.
+    branches: ['gh-readonly-queue/main/*']
+    # Run CI on all tags
+    tags-ignore: [dev]
+
 defaults:
   run:
     shell: bash
@@ -64,7 +72,41 @@ jobs:
     - run: cargo install --root ${{ runner.tool_cache }}/cargo-vet --version ${{ env.CARGO_VET_VERSION }} cargo-vet
     - run: cargo vet --locked
 
+  determine:
+    name: Determine CI jobs to run
+    runs-on: ubuntu-latest
+    outputs:
+      run-full: ${{ steps.calculate.outputs.run-full }}
+      test-matrix: ${{ steps.calculate.outputs.test-matrix }}
+    steps:
+    - uses: actions/checkout@v3
+    - id: calculate
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        touch commits.log names.log
+        if [ "${{ github.event_name }}" != "pull_request" ]; then
+          run_full=true
+          echo run-full=true >> $GITHUB_OUTPUT
+        else
+          pr=${{ github.event.number }}
+          gh pr view $pr --json commits | tee commits.log
+          gh pr diff $pr --name-only | tee names.log
+          if [ "${{ github.base_ref }}" != "main" ]; then
+            run_full=true
+            echo run-full=true >> $GITHUB_OUTPUT
+          elif grep -q 'prtest:full' commits.log; then
+            run_full=true
+            echo run-full=true >> $GITHUB_OUTPUT
+          fi
+        fi
+        matrix="$(node ./ci/build-test-matrix.js ./commits.log ./names.log $run_full)"
+        echo "test-matrix={\"include\":$(echo $matrix)}" >> $GITHUB_OUTPUT
+        echo "$matrix"
+
   doc:
+    needs: determine
+    if: needs.determine.outputs.run-full
     name: Doc build
     runs-on: ubuntu-latest
     env:
@@ -133,6 +175,8 @@ jobs:
   # compile. The goal here isn't to run tests, mostly just serve as a
   # double-check that Rust code compiles and is likely to work everywhere else.
   checks:
+    needs: determine
+    if: needs.determine.outputs.run-full
     name: Check
     runs-on: ubuntu-latest
     env:
@@ -195,6 +239,8 @@ jobs:
   # We don't build nor test it because it lacks trap handling.
   # Tracking issue: https://github.com/bytecodealliance/wasmtime/issues/4992
   checks_winarm64:
+    needs: determine
+    if: needs.determine.outputs.run-full
     name: Check Windows ARM64
     runs-on: windows-latest
     steps:
@@ -206,6 +252,8 @@ jobs:
     - run: cargo check -p wasmtime --target aarch64-pc-windows-msvc
 
   fuzz_targets:
+    needs: determine
+    if: needs.determine.outputs.run-full
     name: Fuzz Targets
     runs-on: ubuntu-latest
     steps:
@@ -230,37 +278,13 @@ jobs:
   # Perform all tests (debug mode) for `wasmtime`. This runs stable/beta/nightly
   # channels of Rust as well as macOS/Linux/Windows.
   test:
-    name: Test
+    needs: determine
+    name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     env:
       QEMU_BUILD_VERSION: 6.1.0
     strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-          # defaults to x86_64-apple-darwin
-          - os: macos-latest
-          - os: windows-latest
-          - os: windows-latest
-            target: x86_64-pc-windows-gnu
-          - os: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-            gcc_package: gcc-aarch64-linux-gnu
-            gcc: aarch64-linux-gnu-gcc
-            qemu: qemu-aarch64 -L /usr/aarch64-linux-gnu
-            qemu_target: aarch64-linux-user
-          - os: ubuntu-latest
-            target: s390x-unknown-linux-gnu
-            gcc_package: gcc-s390x-linux-gnu
-            gcc: s390x-linux-gnu-gcc
-            qemu: qemu-s390x -L /usr/s390x-linux-gnu
-            qemu_target: s390x-linux-user
-          - os: ubuntu-latest
-            target: riscv64gc-unknown-linux-gnu
-            gcc_package: gcc-riscv64-linux-gnu
-            gcc: riscv64-linux-gnu-gcc
-            qemu: qemu-riscv64 -L /usr/riscv64-linux-gnu
-            qemu_target: riscv64-linux-user
+      matrix: ${{ fromJson(needs.determine.outputs.test-matrix) }}
     steps:
     - uses: actions/checkout@v3
       with:
@@ -352,6 +376,8 @@ jobs:
 
   # Build and test the wasi-nn module.
   test_wasi_nn:
+    needs: determine
+    if: needs.determine.outputs.run-full
     name: Test wasi-nn module
     runs-on: ubuntu-20.04 # TODO: remove pin when fixed (#5408)
     steps:
@@ -367,6 +393,8 @@ jobs:
 
   # Build and test the wasi-crypto module.
   test_wasi_crypto:
+    needs: determine
+    if: needs.determine.outputs.run-full
     name: Test wasi-crypto module
     runs-on: ubuntu-latest
     steps:
@@ -380,6 +408,8 @@ jobs:
         RUST_BACKTRACE: 1
 
   bench:
+    needs: determine
+    if: needs.determine.outputs.run-full
     name: Run benchmarks
     runs-on: ubuntu-latest
     steps:
@@ -392,6 +422,8 @@ jobs:
 
   # Verify that cranelift's code generation is deterministic
   meta_determinist_check:
+    needs: determine
+    if: needs.determine.outputs.run-full
     name: Meta deterministic check
     runs-on: ubuntu-latest
     steps:
@@ -403,7 +435,8 @@ jobs:
     - run: ci/ensure_deterministic_build.sh
 
   verify-publish:
-    if: github.repository == 'bytecodealliance/wasmtime'
+    needs: determine
+    if: github.repository == 'bytecodealliance/wasmtime' && needs.determine.outputs.run-full
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -420,3 +453,100 @@ jobs:
     - run: ./publish verify
     # Make sure we can bump version numbers for the next release
     - run: ./publish bump
+
+  # Perform release builds of `wasmtime` and `libwasmtime.so`. Builds on
+  # Windows/Mac/Linux, and artifacts are uploaded after the build is finished.
+  # Note that we also run tests here to test exactly what we're deploying.
+  build:
+    needs: determine
+    if: needs.determine.outputs.run-full
+    name: Build wasmtime
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+        - build: x86_64-linux
+          os: ubuntu-latest
+        - build: x86_64-macos
+          os: macos-latest
+        - build: aarch64-macos
+          os: macos-latest
+          target: aarch64-apple-darwin
+        - build: x86_64-windows
+          os: windows-latest
+        - build: x86_64-mingw
+          os: windows-latest
+          target: x86_64-pc-windows-gnu
+        - build: aarch64-linux
+          os: ubuntu-latest
+          target: aarch64-unknown-linux-gnu
+        - build: s390x-linux
+          os: ubuntu-latest
+          target: s390x-unknown-linux-gnu
+        - build: riscv64gc-linux
+          os: ubuntu-latest
+          target: riscv64gc-unknown-linux-gnu
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+      # Note that the usage of this nightly toolchain is temporary until it
+      # rides to stable. After this nightly version becomes stable (Rust 1.69.0)
+      # then this should switch back to using stable by deleting the `with` and
+      # `toolchain` options.
+      with:
+        toolchain: nightly-2023-01-31
+    # On one builder produce the source tarball since there's no need to produce
+    # it everywhere
+    - run: ./ci/build-src-tarball.sh
+      if: matrix.build == 'x86_64-linux'
+    - uses: ./.github/actions/binary-compatible-builds
+      with:
+        name: ${{ matrix.build }}
+    - run: |
+        echo CARGO_BUILD_TARGET=${{ matrix.target }} >> $GITHUB_ENV
+        rustup target add ${{ matrix.target }}
+      if: matrix.target != ''
+
+    # Build `wasmtime` and executables. Note that we include `all-arch` so our
+    # release artifacts can be used to compile `.cwasm`s for other targets.
+    - run: $CENTOS cargo build --release --bin wasmtime --features all-arch
+
+    # Build `libwasmtime.so`
+    - run: $CENTOS cargo build --release --manifest-path crates/c-api/Cargo.toml
+
+    # Assemble release artifats appropriate for this platform, then upload them
+    # unconditionally to this workflow's files so we have a copy of them.
+    - run: ./ci/build-tarballs.sh "${{ matrix.build }}" "${{ matrix.target }}"
+    - uses: actions/upload-artifact@v3
+      with:
+        name: bins-${{ matrix.build }}
+        path: dist
+
+    # ... and if this was an actual push (tag or `main`) then we publish a
+    # new release. This'll automatically publish a tag release or update `dev`
+    # with this `sha`. Note that `continue-on-error` is set here so if this hits
+    # a bug we can go back and fetch and upload the release ourselves.
+    - run: cd .github/actions/github-release && npm install --production
+    - name: Publish Release
+      uses: ./.github/actions/github-release
+      # We only publish for main or a version tag, not `release-*` branches
+      if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) && github.repository == 'bytecodealliance/wasmtime'
+      with:
+        files: "dist/*"
+        token: ${{ secrets.GITHUB_TOKEN }}
+      continue-on-error: true
+
+  ci-status:
+    name: Record the result of testing and building steps
+    runs-on: ubuntu-latest
+    needs: [test, build]
+    if: always()
+    steps:
+      - name: Successful test and build
+        if: ${{ !(contains(needs.*.result, 'failure')) }}
+        run: exit 0
+      - name: Failing test and build
+        if: ${{ contains(needs.*.result, 'failure') }}
+        run: exit 1
