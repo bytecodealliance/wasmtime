@@ -238,19 +238,34 @@
 
 ;;;; Rules for `umax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Unsigned maximum of two scalar integers - expand to icmp + select.
+(rule 1 (lower (has_type (ty_int ty) (umax x y)))
+      (let ((cond ProducesBool (icmp_val $false (IntCC.UnsignedLessThan) x y)))
+        (select_bool_reg ty cond y x)))
+
 ;; Unsigned maximum of two vector registers.
-(rule (lower (has_type (ty_vec128 ty) (umax x y)))
+(rule 0 (lower (has_type (ty_vec128 ty) (umax x y)))
       (vec_umax ty x y))
 
 
 ;;;; Rules for `umin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Unsigned minimum of two scalar integers - expand to icmp + select.
+(rule 1 (lower (has_type (ty_int ty) (umin x y)))
+      (let ((cond ProducesBool (icmp_val $false (IntCC.UnsignedGreaterThan) x y)))
+        (select_bool_reg ty cond y x)))
+
 ;; Unsigned minimum of two vector registers.
-(rule (lower (has_type (ty_vec128 ty) (umin x y)))
+(rule 0 (lower (has_type (ty_vec128 ty) (umin x y)))
       (vec_umin ty x y))
 
 
 ;;;; Rules for `smax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Signed maximum of two scalar integers - expand to icmp + select.
+(rule 1 (lower (has_type (ty_int ty) (smax x y)))
+      (let ((cond ProducesBool (icmp_val $false (IntCC.SignedLessThan) x y)))
+        (select_bool_reg ty cond y x)))
 
 ;; Signed maximum of two vector registers.
 (rule (lower (has_type (ty_vec128 ty) (smax x y)))
@@ -258,6 +273,11 @@
 
 
 ;;;; Rules for `smin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Signed minimum of two scalar integers - expand to icmp + select.
+(rule 1 (lower (has_type (ty_int ty) (smin x y)))
+      (let ((cond ProducesBool (icmp_val $false (IntCC.SignedGreaterThan) x y)))
+        (select_bool_reg ty cond y x)))
 
 ;; Signed minimum of two vector registers.
 (rule (lower (has_type (ty_vec128 ty) (smin x y)))
