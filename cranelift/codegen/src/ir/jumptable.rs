@@ -17,7 +17,9 @@ use serde::{Deserialize, Serialize};
 ///
 /// The default block for the jump table is stored as the last element of the underlying vector,
 /// and is not included in the length of the jump table. It can be accessed through the
-/// `default_block` function. The default block is iterated via the `iter` and `iter_mut` methods.
+/// `default_block` and `default_block_mut` functions. All blocks may be iterated using the
+/// `all_branches` and `all_branches_mut` functions, which will both iterate over the default block
+/// last.
 #[derive(Clone, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct JumpTableData {
