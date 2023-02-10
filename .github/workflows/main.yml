@@ -159,18 +159,6 @@ jobs:
         name: gh-pages
         path: gh-pages.tar.gz
 
-    # If this is a push to the main branch push to the `gh-pages` using a
-    # deploy key. Note that a deploy key is necessary for now because otherwise
-    # using the default token for github actions doesn't actually trigger a page
-    # rebuild.
-    - name: Push to gh-pages
-      run: curl -LsSf https://git.io/fhJ8n | rustc - && (cd gh-pages && ../rust_out)
-      env:
-        GITHUB_DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
-        BUILD_REPOSITORY_ID: ${{ github.repository }}
-        BUILD_SOURCEVERSION: ${{ github.sha }}
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'bytecodealliance/wasmtime'
-
   # Quick checks of various feature combinations and whether things
   # compile. The goal here isn't to run tests, mostly just serve as a
   # double-check that Rust code compiles and is likely to work everywhere else.
@@ -523,20 +511,6 @@ jobs:
       with:
         name: bins-${{ matrix.build }}
         path: dist
-
-    # ... and if this was an actual push (tag or `main`) then we publish a
-    # new release. This'll automatically publish a tag release or update `dev`
-    # with this `sha`. Note that `continue-on-error` is set here so if this hits
-    # a bug we can go back and fetch and upload the release ourselves.
-    - run: cd .github/actions/github-release && npm install --production
-    - name: Publish Release
-      uses: ./.github/actions/github-release
-      # We only publish for main or a version tag, not `release-*` branches
-      if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) && github.repository == 'bytecodealliance/wasmtime'
-      with:
-        files: "dist/*"
-        token: ${{ secrets.GITHUB_TOKEN }}
-      continue-on-error: true
 
   ci-status:
     name: Record the result of testing and building steps
