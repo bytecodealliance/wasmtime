@@ -80,6 +80,41 @@ WASM_API_EXTERN wasmtime_store_t *wasmtime_store_new(
 WASM_API_EXTERN wasmtime_context_t *wasmtime_store_context(wasmtime_store_t *store);
 
 /**
+ * \brief Provides limits for a store. Used by hosts to limit resource
+ * consumption of instances.
+ *
+ * \param memory_size the maximum number of bytes a linear memory can grow to.
+ * Growing a linear memory beyond this limit will fail. By default,
+ * linear memory will not be limited.
+ * \param table_elements the maximum number of elements in a table.
+ * Growing a table beyond this limit will fail. By default, table elements
+ * will not be limited.
+ * \param instances the maximum number of instances that can be created
+ * for a Store. Module instantiation will fail if this limit is exceeded.
+ * This value defaults to 10,000.
+ * \param tables the maximum number of tables that can be created for a Store.
+ * Module instantiation will fail if this limit is exceeded. This value
+ * defaults to 10,000.
+ * \param memories the maximum number of linear memories that can be created
+ * for a Store. Instantiation will fail with an error if this limit is exceeded.
+ * This value defaults to 10,000.
+ *
+ * Use null for the parameters that should be kept on default values.
+ *
+ * Note that the limits are only used to limit the creation/growth of
+ * resources in the future, this does not retroactively attempt to apply
+ * limits to the store.
+ */
+WASM_API_EXTERN void wasmtime_store_limiter(
+        wasmtime_store_t *store,
+        size_t memory_size,
+        uint32_t table_elements,
+        size_t instances,
+        size_t tables,
+        size_t memories
+);
+
+/**
  * \brief Deletes a store.
  */
 WASM_API_EXTERN void wasmtime_store_delete(wasmtime_store_t *store);

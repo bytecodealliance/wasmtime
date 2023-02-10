@@ -2,7 +2,9 @@ use crate::{wasm_engine_t, wasmtime_error_t, wasmtime_val_t, ForeignData};
 use std::cell::UnsafeCell;
 use std::ffi::c_void;
 use std::sync::Arc;
-use wasmtime::{AsContext, AsContextMut, Store, StoreContext, StoreContextMut, Val};
+use wasmtime::{
+    AsContext, AsContextMut, Store, StoreContext, StoreContextMut, StoreLimitsBuilder, Val,
+};
 
 /// This representation of a `Store` is used to implement the `wasm.h` API.
 ///
@@ -102,6 +104,34 @@ pub extern "C" fn wasmtime_store_new(
 #[no_mangle]
 pub extern "C" fn wasmtime_store_context(store: &mut wasmtime_store_t) -> CStoreContextMut<'_> {
     store.store.as_context_mut()
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_store_limiter(
+    store: &mut wasmtime_store_t,
+    memory_size: Option<usize>,
+    table_elements: Option<u32>,
+    instances: Option<usize>,
+    tables: Option<usize>,
+    memories: Option<usize>,
+) {
+    let mut limiter = StoreLimitsBuilder::new();
+    if let Some(memory_size) = memory_size {
+        limiter.memory_size(memory_size);
+    }
+    if let Some(table_elements) = table_elements {
+        limiter.table_elements(table_elements);
+    }
+    if let Some(instances) = instances {
+        limiter.instances(instances)
+    }
+    if let Some(tables) = tables {
+        limiter.tables(tables)
+    }
+    if let Some(memories) = memories {
+        limiter.memories(memories)
+    }
+    store.store.limiter(|state| &mut state.limits);
 }
 
 #[no_mangle]
