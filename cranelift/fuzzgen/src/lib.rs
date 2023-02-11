@@ -21,19 +21,6 @@ mod passes;
 
 pub type TestCaseInput = Vec<DataValue>;
 
-/// Simple wrapper to generate a single Cranelift `Function`.
-#[derive(Debug)]
-pub struct SingleFunction(pub Function);
-
-impl<'a> Arbitrary<'a> for SingleFunction {
-    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
-        FuzzGen::new(u)
-            .generate_func(Triple::host())
-            .map_err(|_| arbitrary::Error::IncorrectFormat)
-            .map(Self)
-    }
-}
-
 /// Print only non default flags.
 fn write_non_default_flags(f: &mut fmt::Formatter<'_>, flags: &settings::Flags) -> fmt::Result {
     let default_flags = settings::Flags::new(settings::builder());
