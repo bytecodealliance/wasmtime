@@ -2,6 +2,7 @@ use crate::config::Config;
 use crate::cranelift_arbitrary::CraneliftArbitrary;
 use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
+use cranelift::codegen::data_value::DataValue;
 use cranelift::codegen::ir::instructions::InstructionFormat;
 use cranelift::codegen::ir::stackslot::StackSize;
 use cranelift::codegen::ir::{types::*, FuncRef, LibCall, UserExternalName, UserFuncName};
@@ -1451,31 +1452,18 @@ where
 
     /// Generates an instruction(`iconst`/`fconst`/etc...) to introduce a constant value
     fn generate_const(&mut self, builder: &mut FunctionBuilder, ty: Type) -> Result<Value> {
-        Ok(match ty {
-            I128 => {
-                // See: https://github.com/bytecodealliance/wasmtime/issues/2906
-                let hi = builder.ins().iconst(I64, self.u.arbitrary::<i64>()?);
-                let lo = builder.ins().iconst(I64, self.u.arbitrary::<i64>()?);
+        Ok(match self.u.datavalue(ty)? {
+            DataValue::I8(i) => builder.ins().iconst(ty, i as i64),
+            DataValue::I16(i) => builder.ins().iconst(ty, i as i64),
+            DataValue::I32(i) => builder.ins().iconst(ty, i as i64),
+            DataValue::I64(i) => builder.ins().iconst(ty, i as i64),
+            DataValue::I128(i) => {
+                let hi = builder.ins().iconst(I64, (i >> 64) as i64);
+                let lo = builder.ins().iconst(I64, i as i64);
                 builder.ins().iconcat(lo, hi)
             }
-            ty if ty.is_int() => {
-                let imm64 = match ty {
-                    I8 => self.u.arbitrary::<i8>()? as i64,
-                    I16 => self.u.arbitrary::<i16>()? as i64,
-                    I32 => self.u.arbitrary::<i32>()? as i64,
-                    I64 => self.u.arbitrary::<i64>()?,
-                    _ => unreachable!(),
-                };
-                builder.ins().iconst(ty, imm64)
-            }
-            // f{32,64}::arbitrary does not generate a bunch of important values
-            // such as Signaling NaN's / NaN's with payload, so generate floats from integers.
-            F32 => builder
-                .ins()
-                .f32const(f32::from_bits(u32::arbitrary(self.u)?)),
-            F64 => builder
-                .ins()
-                .f64const(f64::from_bits(u64::arbitrary(self.u)?)),
+            DataValue::F32(f) => builder.ins().f32const(f),
+            DataValue::F64(f) => builder.ins().f64const(f),
             _ => unimplemented!(),
         })
     }

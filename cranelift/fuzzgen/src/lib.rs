@@ -178,27 +178,6 @@ where
         }
     }
 
-    fn generate_datavalue(&mut self, ty: Type) -> Result<DataValue> {
-        Ok(match ty {
-            ty if ty.is_int() => {
-                let imm = match ty {
-                    I8 => self.u.arbitrary::<i8>()? as i128,
-                    I16 => self.u.arbitrary::<i16>()? as i128,
-                    I32 => self.u.arbitrary::<i32>()? as i128,
-                    I64 => self.u.arbitrary::<i64>()? as i128,
-                    I128 => self.u.arbitrary::<i128>()?,
-                    _ => unreachable!(),
-                };
-                DataValue::from_integer(imm, ty)?
-            }
-            // f{32,64}::arbitrary does not generate a bunch of important values
-            // such as Signaling NaN's / NaN's with payload, so generate floats from integers.
-            F32 => DataValue::F32(Ieee32::with_bits(u32::arbitrary(self.u)?)),
-            F64 => DataValue::F64(Ieee64::with_bits(u64::arbitrary(self.u)?)),
-            _ => unimplemented!(),
-        })
-    }
-
     fn generate_test_inputs(mut self, signature: &Signature) -> Result<Vec<TestCaseInput>> {
         let mut inputs = Vec::new();
 
@@ -211,7 +190,7 @@ where
             let test_args = signature
                 .params
                 .iter()
-                .map(|p| self.generate_datavalue(p.value_type))
+                .map(|p| self.u.datavalue(p.value_type))
                 .collect::<Result<TestCaseInput>>()?;
 
             inputs.push(test_args);
