@@ -41,6 +41,14 @@ impl UserFuncName {
     pub fn user(namespace: u32, index: u32) -> Self {
         Self::User(UserExternalName::new(namespace, index))
     }
+
+    /// Get a `UserExternalName` if this is a user-defined name.
+    pub fn get_user(&self) -> Option<&UserExternalName> {
+        match self {
+            UserFuncName::User(user) => Some(user),
+            UserFuncName::Testcase(_) => None,
+        }
+    }
 }
 
 impl Default for UserFuncName {

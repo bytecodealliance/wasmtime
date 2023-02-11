@@ -8,6 +8,8 @@ pub struct Config {
     /// so we allow the fuzzer to control this by feeding us more or less bytes.
     /// The upper bound here is to prevent too many inputs that cause long test times
     pub max_test_case_inputs: usize,
+    // Number of functions that we generate per testcase
+    pub testcase_funcs: RangeInclusive<usize>,
     pub signature_params: RangeInclusive<usize>,
     pub signature_rets: RangeInclusive<usize>,
     pub instructions_per_block: RangeInclusive<usize>,
@@ -29,9 +31,6 @@ pub struct Config {
     /// The size of the range is controlled by `switch_max_range_size`.
     pub switch_cases: RangeInclusive<usize>,
     pub switch_max_range_size: RangeInclusive<usize>,
-
-    /// Number of distinct functions in the same testsuite that we allow calling per function.
-    pub usercalls: RangeInclusive<usize>,
 
     /// Stack slots.
     /// The combination of these two determines stack usage per function
@@ -70,6 +69,7 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             max_test_case_inputs: 100,
+            testcase_funcs: 1..=8,
             signature_params: 0..=16,
             signature_rets: 0..=16,
             instructions_per_block: 0..=64,
@@ -80,7 +80,6 @@ impl Default for Config {
             switch_cases: 0..=64,
             // Ranges smaller than 2 don't make sense.
             switch_max_range_size: 2..=32,
-            usercalls: 0..=8,
             static_stack_slots_per_function: 0..=8,
             static_stack_slot_size: 0..=128,
             // We need the mix of sizes that allows us to:
