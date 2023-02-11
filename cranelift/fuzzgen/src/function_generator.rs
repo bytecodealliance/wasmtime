@@ -1280,16 +1280,6 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::Call, &[], &[], insert_call),
 ];
 
-/// These libcalls need a interpreter implementation in `cranelift-fuzzgen.rs`
-const ALLOWED_LIBCALLS: &'static [LibCall] = &[
-    LibCall::CeilF32,
-    LibCall::CeilF64,
-    LibCall::FloorF32,
-    LibCall::FloorF64,
-    LibCall::TruncF32,
-    LibCall::TruncF64,
-];
-
 pub struct FunctionGenerator<'r, 'data>
 where
     'data: 'r,
@@ -1328,6 +1318,8 @@ struct Resources {
     block_terminators: Vec<BlockTerminator>,
     func_refs: Vec<(Signature, FuncRef)>,
     stack_slots: Vec<(StackSlot, StackSize)>,
+    usercalls: Vec<(UserExternalName, Signature)>,
+    libcalls: Vec<LibCall>,
 }
 
 impl Resources {
@@ -1368,11 +1360,17 @@ where
         target_triple: Triple,
         name: UserFuncName,
         signature: Signature,
+        usercalls: Vec<(UserExternalName, Signature)>,
+        libcalls: Vec<LibCall>,
     ) -> Self {
         Self {
             u,
             config,
-            resources: Resources::default(),
+            resources: Resources {
+                usercalls,
+                libcalls,
+                ..Resources::default()
+            },
             target_triple,
             name,
             signature,
@@ -1595,36 +1593,38 @@ where
     }
 
     fn generate_funcrefs(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
-        let count = self.param(&self.config.funcrefs_per_function)?;
-        for func_index in 0..count.try_into().unwrap() {
-            let (ext_name, sig) = if self.u.arbitrary::<bool>()? {
-                let user_func_ref = builder
-                    .func
-                    .declare_imported_user_function(UserExternalName {
-                        namespace: 0,
-                        index: func_index,
-                    });
+        let usercalls: Vec<(ExternalName, Signature)> = self
+            .resources
+            .usercalls
+            .iter()
+            .map(|(name, signature)| {
+                let user_func_ref = builder.func.declare_imported_user_function(name.clone());
                 let name = ExternalName::User(user_func_ref);
-                let max_param = self.param(&self.config.signature_params)?;
-                let max_rets = self.param(&self.config.signature_rets)?;
-                let signature = self.u.signature(max_param, max_rets)?;
-                (name, signature)
-            } else {
-                let libcall = *self.u.choose(ALLOWED_LIBCALLS)?;
-                // TODO: Use [CallConv::for_libcall] once we generate flags.
-                let callconv = self.system_callconv();
-                let signature = libcall.signature(callconv);
-                (ExternalName::LibCall(libcall), signature)
-            };
+                (name, signature.clone())
+            })
+            .collect();
 
-            let sig_ref = builder.import_signature(sig.clone());
+        let lib_callconv = self.system_callconv();
+        let libcalls: Vec<(ExternalName, Signature)> = self
+            .resources
+            .libcalls
+            .iter()
+            .map(|libcall| {
+                let signature = libcall.signature(lib_callconv);
+                let name = ExternalName::LibCall(*libcall);
+                (name, signature)
+            })
+            .collect();
+
+        for (name, signature) in usercalls.into_iter().chain(libcalls) {
+            let sig_ref = builder.import_signature(signature.clone());
             let func_ref = builder.import_function(ExtFuncData {
-                name: ext_name,
+                name,
                 signature: sig_ref,
                 colocated: self.u.arbitrary()?,
             });
 
-            self.resources.func_refs.push((sig, func_ref));
+            self.resources.func_refs.push((signature, func_ref));
         }
 
         Ok(())

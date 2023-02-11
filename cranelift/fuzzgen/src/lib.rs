@@ -4,8 +4,8 @@ use crate::settings::{Flags, OptLevel};
 use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
 use cranelift::codegen::data_value::DataValue;
-use cranelift::codegen::ir::Function;
-use cranelift::codegen::ir::{types::*, UserFuncName};
+use cranelift::codegen::ir::{types::*, UserExternalName, UserFuncName};
+use cranelift::codegen::ir::{Function, LibCall};
 use cranelift::codegen::Context;
 use cranelift::prelude::isa;
 use cranelift::prelude::*;
@@ -18,6 +18,16 @@ mod config;
 mod cranelift_arbitrary;
 mod function_generator;
 mod passes;
+
+/// These libcalls need a interpreter implementation in `cranelift-fuzzgen.rs`
+const ALLOWED_LIBCALLS: &'static [LibCall] = &[
+    LibCall::CeilF32,
+    LibCall::CeilF64,
+    LibCall::FloorF32,
+    LibCall::FloorF64,
+    LibCall::TruncF32,
+    LibCall::TruncF64,
+];
 
 pub type TestCaseInput = Vec<DataValue>;
 
@@ -251,8 +261,31 @@ where
         // Function name must be in a different namespace than TESTFILE_NAMESPACE (0)
         let fname = UserFuncName::user(1, 0);
 
-        let func = FunctionGenerator::new(&mut self.u, &self.config, target_triple, fname, sig)
-            .generate()?;
+        // Generate the external functions that we allow calling in this function.
+        let usercalls = (0..self.u.int_in_range(self.config.usercalls.clone())?)
+            .map(|i| {
+                let max_params = self.u.int_in_range(self.config.signature_params.clone())?;
+                let max_rets = self.u.int_in_range(self.config.signature_rets.clone())?;
+                let sig = self.u.signature(max_params, max_rets)?;
+                let name = UserExternalName {
+                    namespace: 2,
+                    index: i as u32,
+                };
+                Ok((name, sig))
+            })
+            .collect::<Result<Vec<(UserExternalName, Signature)>>>()?;
+
+        let func = FunctionGenerator::new(
+            &mut self.u,
+            &self.config,
+            target_triple,
+            fname,
+            sig,
+            usercalls,
+            ALLOWED_LIBCALLS.to_vec(),
+        )
+        .generate()?;
+
         self.run_func_passes(func)
     }
 
@@ -339,8 +372,9 @@ where
     pub fn generate_host_test(mut self) -> Result<TestCase> {
         // If we're generating test inputs as well as a function, then we're planning to execute
         // this function. That means that any function references in it need to exist. We don't yet
-        // have infrastructure for generating multiple functions, so just don't generate funcrefs.
-        self.config.funcrefs_per_function = 0..=0;
+        // have infrastructure for generating multiple functions, so just don't generate user call
+        // function references.
+        self.config.usercalls = 0..=0;
 
         // TestCase is meant to be consumed by a runner, so we make the assumption here that we're
         // generating a TargetIsa for the host.
