@@ -242,6 +242,50 @@ impl Assembler {
         });
     }
 
+    /// Signed multiplication instruction.
+    pub fn mul(&mut self, src: Operand, dst: Operand, size: OperandSize) {
+        match &(src, dst) {
+            (Operand::Imm(imm), Operand::Reg(dst)) => {
+                if let Ok(val) = i32::try_from(*imm) {
+                    self.mul_ir(val, *dst, size);
+                } else {
+                    let scratch = regs::scratch();
+                    self.mov_ir(*imm as u64, scratch, size);
+                    self.mul_rr(scratch, *dst, size);
+                }
+            }
+            (Operand::Reg(src), Operand::Reg(dst)) => self.mul_rr(*src, *dst, size),
+            _ => panic!(
+                "Invalid operand combination for mul; src = {:?} dst = {:?}",
+                src, dst
+            ),
+        }
+    }
+
+    /// Multiply immediate and register.
+    pub fn mul_ir(&mut self, imm: i32, dst: Reg, size: OperandSize) {
+        let imm = RegMemImm::imm(imm as u32);
+
+        self.emit(Inst::AluRmiR {
+            size: size.into(),
+            op: AluRmiROpcode::Mul,
+            src1: dst.into(),
+            src2: GprMemImm::new(imm).expect("valid immediate"),
+            dst: dst.into(),
+        });
+    }
+
+    /// Multiply register and register.
+    pub fn mul_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        self.emit(Inst::AluRmiR {
+            size: size.into(),
+            op: AluRmiROpcode::Mul,
+            src1: dst.into(),
+            src2: src.into(),
+            dst: dst.into(),
+        });
+    }
+
     /// Add instruction variants.
     pub fn add(&mut self, src: Operand, dst: Operand, size: OperandSize) {
         match &(src, dst) {

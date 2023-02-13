@@ -139,6 +139,19 @@ impl Masm for MacroAssembler {
         self.asm.sub(src, dst, size);
     }
 
+    fn mul(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
+        let (src, dst): (Operand, Operand) = if dst == lhs {
+            (rhs.into(), dst.into())
+        } else {
+            panic!(
+                "the destination and first source argument must be the same, dst={:?}, lhs={:?}",
+                dst, lhs
+            );
+        };
+
+        self.asm.mul(src, dst, size);
+    }
+
     fn epilogue(&mut self, locals_size: u32) {
         assert!(self.sp_offset == locals_size);
 

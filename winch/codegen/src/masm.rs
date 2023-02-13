@@ -91,6 +91,9 @@ pub(crate) trait MacroAssembler {
     /// Perform subtraction operation.
     fn sub(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize);
 
+    /// Perform multiplication operation.
+    fn mul(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize);
+
     /// Push the register to the stack, returning the offset.
     fn push(&mut self, src: Reg) -> u32;
 

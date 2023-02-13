@@ -147,6 +147,10 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
+    fn mul(&mut self, _dst: RegImm, _lhs: RegImm, _rhs: RegImm, _size: OperandSize) {
+        todo!()
+    }
+
     fn zero(&mut self, reg: Reg) {
         self.asm.load_constant(0, reg);
     }
