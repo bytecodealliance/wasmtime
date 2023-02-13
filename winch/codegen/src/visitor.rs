@@ -36,6 +36,8 @@ macro_rules! def_unsupported {
     (emit I32Add $($rest:tt)*) => {};
     (emit I64Add $($rest:tt)*) => {};
     (emit I32Sub $($rest:tt)*) => {};
+    (emit I32Mul $($rest:tt)*) => {};
+    (emit I64Mul $($rest:tt)*) => {};
     (emit I64Sub $($rest:tt)*) => {};
     (emit LocalGet $($rest:tt)*) => {};
     (emit LocalSet $($rest:tt)*) => {};
@@ -83,6 +85,20 @@ where
         self.context
             .i64_binop(&mut self.regalloc, &mut |masm: &mut M, dst, src, size| {
                 masm.sub(dst, dst, src, size);
+            });
+    }
+
+    fn visit_i32_mul(&mut self) {
+        self.context
+            .i32_binop(&mut self.regalloc, &mut |masm: &mut M, dst, src, size| {
+                masm.mul(dst, dst, src, size);
+            });
+    }
+
+    fn visit_i64_mul(&mut self) {
+        self.context
+            .i64_binop(&mut self.regalloc, &mut |masm: &mut M, dst, src, size| {
+                masm.mul(dst, dst, src, size);
             });
     }
 
