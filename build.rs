@@ -28,18 +28,18 @@ fn main() {
 /// ```rust
 /// std::arch::global_asm!(
 ///     "
-///         .globaltype internal_global_ptr, i32
-///         internal_global_ptr:
+///         .globaltype internal_state_ptr, i32
+///         internal_state_ptr:
 ///     "
 /// );
 ///
 /// #[no_mangle]
-/// extern "C" fn get_global_ptr() -> *mut u8 {
+/// extern "C" fn get_state_ptr() -> *mut u8 {
 ///     unsafe {
 ///         let ret: *mut u8;
 ///         std::arch::asm!(
 ///             "
-///                 global.get internal_global_ptr
+///                 global.get internal_state_ptr
 ///             ",
 ///             out(local) ret,
 ///             options(nostack, readonly)
@@ -49,18 +49,20 @@ fn main() {
 /// }
 ///
 /// #[no_mangle]
-/// extern "C" fn set_global_ptr(val: *mut u8) {
+/// extern "C" fn set_state_ptr(val: *mut u8) {
 ///     unsafe {
 ///         std::arch::asm!(
 ///             "
 ///                 local.get {}
-///                 global.set internal_global_ptr
+///                 global.set internal_state_ptr
 ///             ",
 ///             in(local) val,
 ///             options(nostack, readonly)
 ///         );
 ///     }
 /// }
+///
+/// // And likewise for `allocation_state`, `get_allocation_state`, and `set_allocation_state`
 /// ```
 ///
 /// The main trickiness here is getting the `reloc.CODE` and `linking` sections
@@ -80,10 +82,21 @@ fn build_raw_intrinsics() -> Vec<u8> {
     let mut funcs = FunctionSection::new();
     funcs.function(0);
     funcs.function(1);
+    funcs.function(0);
+    funcs.function(1);
     module.section(&funcs);
 
     // Declare the globals.
     let mut globals = GlobalSection::new();
+    // internal_state_ptr
+    globals.global(
+        GlobalType {
+            val_type: ValType::I32,
+            mutable: true,
+        },
+        &ConstExpr::i32_const(0),
+    );
+    // allocation_state
     globals.global(
         GlobalType {
             val_type: ValType::I32,
@@ -98,50 +111,45 @@ fn build_raw_intrinsics() -> Vec<u8> {
     // later. At this time `wasm-encoder` doesn't give enough functionality to
     // use the high-level APIs. so everything is done manually here.
     //
-    // First the function body is created and then it's appended into a code
-    // section.
+    // First the function bodies are created and then they're appended into a
+    // code section.
 
     let mut code = Vec::new();
-    2u32.encode(&mut code);
+    4u32.encode(&mut code); // number of functions
 
-    // get_global_ptr
-    let global_offset0 = {
+    let global_get = 0x23;
+    let global_set = 0x24;
+
+    let encode = |code: &mut _, global, instruction| {
+        assert!(global < 0x7F);
+
         let mut body = Vec::new();
         0u32.encode(&mut body); // no locals
+        if instruction == global_set {
+            LocalGet(0).encode(&mut body);
+        }
         let global_offset = body.len() + 1;
-        // global.get 0 ;; but with maximal encoding of the 0
-        body.extend_from_slice(&[0x23, 0x80, 0x80, 0x80, 0x80, 0x00]);
+        // global.get $global ;; but with maximal encoding of $global
+        body.extend_from_slice(&[instruction, 0x80u8 + global, 0x80, 0x80, 0x80, 0x00]);
         End.encode(&mut body);
-        body.len().encode(&mut code); // length of the function
+        body.len().encode(code); // length of the function
         let offset = code.len() + global_offset;
         code.extend_from_slice(&body); // the function itself
         offset
     };
 
-    // set_global_ptr
-    let global_offset1 = {
-        let mut body = Vec::new();
-        0u32.encode(&mut body); // no locals
-        LocalGet(0).encode(&mut body);
-        let global_offset = body.len() + 1;
-        // global.set 0 ;; but with maximal encoding of the 0
-        body.extend_from_slice(&[0x24, 0x80, 0x80, 0x80, 0x80, 0x00]);
-        End.encode(&mut body);
-        body.len().encode(&mut code); // length of the function
-        let offset = code.len() + global_offset;
-        code.extend_from_slice(&body); // the function itself
-        offset
-    };
+    let internal_state_ptr_ref1 = encode(&mut code, 0, global_get); // get_state_ptr
+    let internal_state_ptr_ref2 = encode(&mut code, 0, global_set); // set_state_ptr
+    let allocation_state_ref1 = encode(&mut code, 1, global_get); // get_allocation_state
+    let allocation_state_ref2 = encode(&mut code, 1, global_set); // set_allocation_state
 
     module.section(&RawSection {
         id: SectionId::Code as u8,
         data: &code,
     });
 
-    // Here the linking section is constructed. There are two symbols described
-    // here, one for the function that we injected and one for the global
-    // that was injected. The injected global here is referenced in the
-    // relocations below.
+    // Here the linking section is constructed. There is one symbol for each function and global. The injected
+    // globals here are referenced in the relocations below.
     //
     // More information about this format is at
     // https://github.com/WebAssembly/tool-conventions/blob/main/Linking.md
@@ -151,22 +159,37 @@ fn build_raw_intrinsics() -> Vec<u8> {
 
         linking.push(0x08); // `WASM_SYMBOL_TABLE`
         let mut subsection = Vec::new();
-        3u32.encode(&mut subsection); // 3 symbols (2 functions + 1 global)
+        6u32.encode(&mut subsection); // 6 symbols (4 functions + 2 globals)
 
         subsection.push(0x00); // SYMTAB_FUNCTION
         0x00.encode(&mut subsection); // flags
         0u32.encode(&mut subsection); // function index
-        "get_global_ptr".encode(&mut subsection); // symbol name
+        "get_state_ptr".encode(&mut subsection); // symbol name
 
         subsection.push(0x00); // SYMTAB_FUNCTION
         0x00.encode(&mut subsection); // flags
         1u32.encode(&mut subsection); // function index
-        "set_global_ptr".encode(&mut subsection); // symbol name
+        "set_state_ptr".encode(&mut subsection); // symbol name
+
+        subsection.push(0x00); // SYMTAB_FUNCTION
+        0x00.encode(&mut subsection); // flags
+        2u32.encode(&mut subsection); // function index
+        "get_allocation_state".encode(&mut subsection); // symbol name
+
+        subsection.push(0x00); // SYMTAB_FUNCTION
+        0x00.encode(&mut subsection); // flags
+        3u32.encode(&mut subsection); // function index
+        "set_allocation_state".encode(&mut subsection); // symbol name
 
         subsection.push(0x02); // SYMTAB_GLOBAL
-        0x02.encode(&mut subsection); // flags
+        0x02.encode(&mut subsection); // flags (WASM_SYM_BINDING_LOCAL)
         0u32.encode(&mut subsection); // global index
-        "internal_global_ptr".encode(&mut subsection); // symbol name
+        "internal_state_ptr".encode(&mut subsection); // symbol name
+
+        subsection.push(0x02); // SYMTAB_GLOBAL
+        0x00.encode(&mut subsection); // flags
+        1u32.encode(&mut subsection); // global index
+        "allocation_state".encode(&mut subsection); // symbol name
 
         subsection.encode(&mut linking);
         module.section(&CustomSection {
@@ -175,20 +198,28 @@ fn build_raw_intrinsics() -> Vec<u8> {
         });
     }
 
-    // A `reloc.CODE` section is appended here with two relocations for the
-    // two `global`-referencing instructions that were added.
+    // A `reloc.CODE` section is appended here with relocations for the
+    // `global`-referencing instructions that were added.
     {
         let mut reloc = Vec::new();
         3u32.encode(&mut reloc); // target section (code is the 4th section, 3 when 0-indexed)
-        2u32.encode(&mut reloc); // 2 relocations
+        4u32.encode(&mut reloc); // 4 relocations
 
         reloc.push(0x07); // R_WASM_GLOBAL_INDEX_LEB
-        global_offset0.encode(&mut reloc); // offset
-        2u32.encode(&mut reloc); // symbol index
+        internal_state_ptr_ref1.encode(&mut reloc); // offset
+        4u32.encode(&mut reloc); // symbol index
 
         reloc.push(0x07); // R_WASM_GLOBAL_INDEX_LEB
-        global_offset1.encode(&mut reloc); // offset
-        2u32.encode(&mut reloc); // symbol index
+        internal_state_ptr_ref2.encode(&mut reloc); // offset
+        4u32.encode(&mut reloc); // symbol index
+
+        reloc.push(0x07); // R_WASM_GLOBAL_INDEX_LEB
+        allocation_state_ref1.encode(&mut reloc); // offset
+        5u32.encode(&mut reloc); // symbol index
+
+        reloc.push(0x07); // R_WASM_GLOBAL_INDEX_LEB
+        allocation_state_ref2.encode(&mut reloc); // offset
+        5u32.encode(&mut reloc); // symbol index
 
         module.section(&CustomSection {
             name: "reloc.CODE",
@@ -219,15 +250,19 @@ fn build_archive(wasm: &[u8]) -> Vec<u8> {
     //   the entire archive, for which object has the symbol
     // * N nul-delimited strings for each symbol
     //
-    // Here we're building an archive with just one symbol so it's a bit
+    // Here we're building an archive with just a few symbols so it's a bit
     // easier. Note though we don't know the offset of our `intrinsics.o` up
     // front so it's left as 0 for now and filled in later.
     let mut symbol_table = Vec::new();
-    symbol_table.extend_from_slice(bytes_of(&U32Bytes::new(BigEndian, 2)));
-    symbol_table.extend_from_slice(bytes_of(&U32Bytes::new(BigEndian, 0)));
-    symbol_table.extend_from_slice(bytes_of(&U32Bytes::new(BigEndian, 0)));
-    symbol_table.extend_from_slice(b"get_global_ptr\0");
-    symbol_table.extend_from_slice(b"set_global_ptr\0");
+    symbol_table.extend_from_slice(bytes_of(&U32Bytes::new(BigEndian, 5)));
+    for _ in 0..5 {
+        symbol_table.extend_from_slice(bytes_of(&U32Bytes::new(BigEndian, 0)));
+    }
+    symbol_table.extend_from_slice(b"get_state_ptr\0");
+    symbol_table.extend_from_slice(b"set_state_ptr\0");
+    symbol_table.extend_from_slice(b"get_allocation_state\0");
+    symbol_table.extend_from_slice(b"set_allocation_state\0");
+    symbol_table.extend_from_slice(b"allocation_state\0");
 
     archive.extend_from_slice(bytes_of(&object::archive::Header {
         name: *b"/               ",
@@ -244,7 +279,7 @@ fn build_archive(wasm: &[u8]) -> Vec<u8> {
     let symtab_offset = archive.len();
     archive.extend_from_slice(&symbol_table);
 
-    // All archive memberes must start on even offsets
+    // All archive members must start on even offsets
     if archive.len() & 1 == 1 {
         archive.push(0x00);
     }
@@ -252,14 +287,12 @@ fn build_archive(wasm: &[u8]) -> Vec<u8> {
     // Now that we have the starting offset of the `intrinsics.o` file go back
     // and fill in the offset within the symbol table generated earlier.
     let member_offset = archive.len();
-    archive[symtab_offset + 4..][..4].copy_from_slice(bytes_of(&U32Bytes::new(
-        BigEndian,
-        member_offset.try_into().unwrap(),
-    )));
-    archive[symtab_offset + 8..][..4].copy_from_slice(bytes_of(&U32Bytes::new(
-        BigEndian,
-        member_offset.try_into().unwrap(),
-    )));
+    for index in 1..6 {
+        archive[symtab_offset + (index * 4)..][..4].copy_from_slice(bytes_of(&U32Bytes::new(
+            BigEndian,
+            member_offset.try_into().unwrap(),
+        )));
+    }
 
     archive.extend_from_slice(object::bytes_of(&object::archive::Header {
         name: *b"intrinsics.o    ",

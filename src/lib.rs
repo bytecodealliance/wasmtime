@@ -263,23 +263,32 @@ pub unsafe extern "C" fn environ_sizes_get(
     environc: *mut Size,
     environ_buf_size: *mut Size,
 ) -> Errno {
-    State::with(|state| {
-        if let Some(list) = state.env_vars {
-            *environc = list.len();
-            *environ_buf_size = {
-                let mut sum = 0;
-                for pair in list {
-                    sum += pair.key.len + pair.value.len + 2;
-                }
-                sum
-            };
-        } else {
-            *environc = 0;
-            *environ_buf_size = 0;
-        }
+    if matches!(
+        get_allocation_state(),
+        AllocationState::StackAllocated | AllocationState::StateAllocated
+    ) {
+        State::with(|state| {
+            if let Some(list) = state.env_vars {
+                *environc = list.len();
+                *environ_buf_size = {
+                    let mut sum = 0;
+                    for pair in list {
+                        sum += pair.key.len + pair.value.len + 2;
+                    }
+                    sum
+                };
+            } else {
+                *environc = 0;
+                *environ_buf_size = 0;
+            }
 
-        Ok(())
-    })
+            Ok(())
+        })
+    } else {
+        *environc = 0;
+        *environ_buf_size = 0;
+        ERRNO_SUCCESS
+    }
 }
 
 /// Return the resolution of a clock.
@@ -315,22 +324,30 @@ pub unsafe extern "C" fn clock_time_get(
     _precision: Timestamp,
     time: &mut Timestamp,
 ) -> Errno {
-    State::with(|state| {
-        match id {
-            CLOCKID_MONOTONIC => {
-                *time = wasi_clocks::monotonic_clock_now(state.default_monotonic_clock());
+    if matches!(
+        get_allocation_state(),
+        AllocationState::StackAllocated | AllocationState::StateAllocated
+    ) {
+        State::with(|state| {
+            match id {
+                CLOCKID_MONOTONIC => {
+                    *time = wasi_clocks::monotonic_clock_now(state.default_monotonic_clock());
+                }
+                CLOCKID_REALTIME => {
+                    let res = wasi_clocks::wall_clock_now(state.default_wall_clock());
+                    *time = Timestamp::from(res.nanoseconds)
+                        .checked_add(res.seconds)
+                        .and_then(|secs| secs.checked_mul(1_000_000_000))
+                        .ok_or(ERRNO_OVERFLOW)?;
+                }
+                _ => unreachable!(),
             }
-            CLOCKID_REALTIME => {
-                let res = wasi_clocks::wall_clock_now(state.default_wall_clock());
-                *time = Timestamp::from(res.nanoseconds)
-                    .checked_add(res.seconds)
-                    .and_then(|secs| secs.checked_mul(1_000_000_000))
-                    .ok_or(ERRNO_OVERFLOW)?;
-            }
-            _ => unreachable!(),
-        }
-        Ok(())
-    })
+            Ok(())
+        })
+    } else {
+        *time = Timestamp::from(0u64);
+        ERRNO_SUCCESS
+    }
 }
 
 /// Provide file advisory information on a file descriptor.
@@ -661,22 +678,29 @@ fn get_preopen(state: &State, fd: Fd) -> Option<&Preopen> {
 /// Return a description of the given preopened file descriptor.
 #[no_mangle]
 pub unsafe extern "C" fn fd_prestat_get(fd: Fd, buf: *mut Prestat) -> Errno {
-    State::with(|state| {
-        if let Some(preopen) = get_preopen(state, fd) {
-            buf.write(Prestat {
-                tag: 0,
-                u: PrestatU {
-                    dir: PrestatDir {
-                        pr_name_len: preopen.path.len,
+    if matches!(
+        get_allocation_state(),
+        AllocationState::StackAllocated | AllocationState::StateAllocated
+    ) {
+        State::with(|state| {
+            if let Some(preopen) = get_preopen(state, fd) {
+                buf.write(Prestat {
+                    tag: 0,
+                    u: PrestatU {
+                        dir: PrestatDir {
+                            pr_name_len: preopen.path.len,
+                        },
                     },
-                },
-            });
+                });
 
-            Ok(())
-        } else {
-            Err(ERRNO_BADF)
-        }
-    })
+                Ok(())
+            } else {
+                Err(ERRNO_BADF)
+            }
+        })
+    } else {
+        ERRNO_BADF
+    }
 }
 
 /// Return a description of the given preopened file descriptor.
@@ -1445,7 +1469,8 @@ impl From<wasi_tcp::Errno> for Errno {
             HostUnreachable => ERRNO_HOSTUNREACH,
             NetworkDown => ERRNO_NETDOWN,
             NetworkUnreachable => ERRNO_NETUNREACH,
-            Timeout => ERRNO_TIMEDOUT,
+            Timedout => ERRNO_TIMEDOUT,
+            _ => unreachable!(),
         }
     }
 }
@@ -1763,19 +1788,26 @@ pub unsafe extern "C" fn sched_yield() -> Errno {
 /// number generator, rather than to provide the random data directly.
 #[no_mangle]
 pub unsafe extern "C" fn random_get(buf: *mut u8, buf_len: Size) -> Errno {
-    State::with(|state| {
-        state.register_buffer(buf, buf_len);
+    if matches!(
+        get_allocation_state(),
+        AllocationState::StackAllocated | AllocationState::StateAllocated
+    ) {
+        State::with(|state| {
+            state.register_buffer(buf, buf_len);
 
-        assert_eq!(buf_len as u32 as Size, buf_len);
-        let result = wasi_random::get_random_bytes(buf_len as u32);
-        assert_eq!(result.as_ptr(), buf);
+            assert_eq!(buf_len as u32 as Size, buf_len);
+            let result = wasi_random::get_random_bytes(buf_len as u32);
+            assert_eq!(result.as_ptr(), buf);
 
-        // The returned buffer's memory was allocated in `buf`, so don't separately
-        // free it.
-        forget(result);
+            // The returned buffer's memory was allocated in `buf`, so don't separately
+            // free it.
+            forget(result);
 
-        Ok(())
-    })
+            Ok(())
+        })
+    } else {
+        ERRNO_SUCCESS
+    }
 }
 
 /// Accept a new incoming connection.
@@ -2197,10 +2229,22 @@ const _: () = {
     let _size_assert: [(); PAGE_SIZE] = [(); size_of::<RefCell<State>>()];
 };
 
+#[allow(unused)]
+#[repr(i32)]
+enum AllocationState {
+    StackUnallocated,
+    StackAllocating,
+    StackAllocated,
+    StateAllocating,
+    StateAllocated,
+}
+
 #[allow(improper_ctypes)]
 extern "C" {
-    fn get_global_ptr() -> *const RefCell<State>;
-    fn set_global_ptr(a: *const RefCell<State>);
+    fn get_state_ptr() -> *const RefCell<State>;
+    fn set_state_ptr(state: *const RefCell<State>);
+    fn get_allocation_state() -> AllocationState;
+    fn set_allocation_state(state: AllocationState);
 }
 
 impl State {
@@ -2230,10 +2274,10 @@ impl State {
 
     fn ptr() -> &'static RefCell<State> {
         unsafe {
-            let mut ptr = get_global_ptr();
+            let mut ptr = get_state_ptr();
             if ptr.is_null() {
                 ptr = State::new();
-                set_global_ptr(ptr);
+                set_state_ptr(ptr);
             }
             &*ptr
         }
@@ -2251,6 +2295,13 @@ impl State {
             ) -> *mut u8;
         }
 
+        assert!(matches!(
+            unsafe { get_allocation_state() },
+            AllocationState::StackAllocated
+        ));
+
+        unsafe { set_allocation_state(AllocationState::StateAllocating) };
+
         let ret = unsafe {
             cabi_realloc(
                 ptr::null_mut(),
@@ -2259,6 +2310,8 @@ impl State {
                 mem::size_of::<RefCell<State>>(),
             ) as *mut RefCell<State>
         };
+
+        unsafe { set_allocation_state(AllocationState::StateAllocated) };
 
         let ret = unsafe {
             ret.write(RefCell::new(State {
