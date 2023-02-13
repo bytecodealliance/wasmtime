@@ -6,6 +6,12 @@
 ;; than a piece of the input or a new node that we construct; but we
 ;; can freely rewrite e.g. `x+y-y` to `x`.
 
+;; Chained `uextend` and `sextend`.
+(rule (simplify (uextend ty (uextend _intermediate_ty x)))
+      (uextend ty x))
+(rule (simplify (sextend ty (sextend _intermediate_ty x)))
+      (sextend ty x))
+
 ;; x+0 == 0+x == x.
 (rule (simplify (iadd ty
                       x
