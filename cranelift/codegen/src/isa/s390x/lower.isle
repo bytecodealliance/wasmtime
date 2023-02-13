@@ -956,6 +956,15 @@
 (rule (lower (has_type (vr128_ty ty) (bnot x)))
       (vec_not ty x))
 
+;; With z15 (bnot (bxor ...)) can be a single instruction, similar to the
+;; (bxor _ (bnot _)) lowering.
+(rule 3 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (bnot (bxor x y))))
+      (not_xor_reg ty x y))
+
+;; Combine a not/xor operation of vector types into one.
+(rule 4 (lower (has_type (vr128_ty ty) (bnot (bxor x y))))
+      (vec_not_xor ty x y))
+
 
 ;;;; Rules for `band` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

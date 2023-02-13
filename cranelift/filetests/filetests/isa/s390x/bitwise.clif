@@ -632,3 +632,40 @@ block0(v0: i8, v1: i8, v2: i8):
 ;   or %r2, %r3
 ;   br %r14
 
+function %bnot_of_bxor(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = bxor v0, v1
+  v3 = bnot v2
+  return v3
+}
+
+; block0:
+;   xr %r2, %r3
+;   xilf %r2, 4294967295
+;   br %r14
+
+function %bnot_of_bxor(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+  v2 = bxor v0, v1
+  v3 = bnot v2
+  return v3
+}
+
+; block0:
+;   vl %v1, 0(%r3)
+;   vl %v3, 0(%r4)
+;   vnx %v6, %v1, %v3
+;   vst %v6, 0(%r2)
+;   br %r14
+
+function %bnot_of_bxor(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = bxor v0, v1
+  v3 = bnot v2
+  return v3
+}
+
+; block0:
+;   vnx %v24, %v24, %v25
+;   br %r14
+

@@ -1052,6 +1052,11 @@
 (rule -2 (lower (has_type (ty_vec128 ty) (bnot x)))
       (not x (vector_size ty)))
 
+;; Special-cases for fusing a bnot with bxor
+(rule 2 (lower (has_type (fits_in_64 ty) (bnot (bxor x y))))
+      (alu_rs_imm_logic (ALUOp.EorNot) ty x y))
+(rule 3 (lower (has_type $I128 (bnot (bxor x y)))) (i128_alu_bitop (ALUOp.EorNot) $I64 x y))
+
 ;;;; Rules for `band` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule -1 (lower (has_type (fits_in_64 ty) (band x y)))
