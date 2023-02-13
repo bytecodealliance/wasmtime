@@ -1799,7 +1799,7 @@ impl<'a> Parser<'a> {
 
         self.consume();
 
-        Ok(JumpTableData::new(def, data))
+        Ok(JumpTableData::new(def, &data))
     }
 
     // Parse a constant decl.

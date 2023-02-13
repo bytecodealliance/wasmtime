@@ -534,7 +534,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                     frame.set_branched_to_exit();
                     frame.br_destination()
                 };
-                let jt = builder.create_jump_table(JumpTableData::new(block, data));
+                let jt = builder.create_jump_table(JumpTableData::new(block, &data));
                 builder.ins().br_table(val, jt);
             } else {
                 // Here we have jump arguments, but Cranelift's br_table doesn't support them
@@ -562,7 +562,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                         *entry.insert(block)
                     }
                 };
-                let jt = builder.create_jump_table(JumpTableData::new(default_branch_block, data));
+                let jt = builder.create_jump_table(JumpTableData::new(default_branch_block, &data));
                 builder.ins().br_table(val, jt);
                 for (depth, dest_block) in dest_block_sequence {
                     builder.switch_to_block(dest_block);

@@ -1614,7 +1614,7 @@ where
             }
             BlockTerminator::BrTable(default, targets) => {
                 // Create jump tables on demand
-                let jt = builder.create_jump_table(JumpTableData::new(default, targets));
+                let jt = builder.create_jump_table(JumpTableData::new(default, &targets));
 
                 // br_table only supports I32
                 let val = builder.use_var(self.get_variable_of_type(I32)?);
