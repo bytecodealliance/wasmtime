@@ -20,7 +20,7 @@ mod macros;
 
 mod bindings {
     #[cfg(feature = "command")]
-    wit_bindgen_guest_rust::generate!({
+    wit_bindgen::generate!({
         world: "wasi-command",
         no_std,
         raw_strings,
@@ -31,7 +31,7 @@ mod bindings {
     });
 
     #[cfg(not(feature = "command"))]
-    wit_bindgen_guest_rust::generate!({
+    wit_bindgen::generate!({
         world: "wasi",
         no_std,
         raw_strings,
