@@ -15,11 +15,10 @@ use serde::{Deserialize, Serialize};
 ///
 /// All jump tables use 0-based indexing and are densely populated.
 ///
-/// The default block for the jump table is stored as the last element of the underlying vector,
-/// and is not included in the length of the jump table. It can be accessed through the
-/// `default_block` and `default_block_mut` functions. All blocks may be iterated using the
-/// `all_branches` and `all_branches_mut` functions, which will both iterate over the default block
-/// last.
+/// The default block for the jump table is stored as the first element of the underlying vector.
+/// It can be accessed through the `default_block` and `default_block_mut` functions. All blocks
+/// may be iterated using the `all_branches` and `all_branches_mut` functions, which will both
+/// iterate over the default block first.
 #[derive(Clone, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct JumpTableData {
@@ -29,42 +28,41 @@ pub struct JumpTableData {
 
 impl JumpTableData {
     /// Create a new jump table with the provided blocks
-    pub fn new(def: Block, mut table: Vec<Block>) -> Self {
-        table.push(def);
-        Self { table }
+    pub fn new(def: Block, table: &[Block]) -> Self {
+        Self {
+            table: std::iter::once(def).chain(table.iter().copied()).collect(),
+        }
     }
 
     /// Fetch the default block for this jump table.
     pub fn default_block(&self) -> Block {
-        *self.table.last().unwrap()
+        *self.table.first().unwrap()
     }
 
     /// Mutable access to the default block of this jump table.
     pub fn default_block_mut(&mut self) -> &mut Block {
-        self.table.last_mut().unwrap()
+        self.table.first_mut().unwrap()
     }
 
-    /// The jump table and default block as a single slice. The default block will always be last.
+    /// The jump table and default block as a single slice. The default block will always be first.
     pub fn all_branches(&self) -> &[Block] {
         self.table.as_slice()
     }
 
     /// The jump table and default block as a single mutable slice. The default block will always
-    /// be last.
+    /// be first.
     pub fn all_branches_mut(&mut self) -> &mut [Block] {
         self.table.as_mut_slice()
     }
 
     /// Access the jump table as a slice. This excludes the default block.
     pub fn as_slice(&self) -> &[Block] {
-        let last = self.table.len() - 1;
-        &self.table.as_slice()[0..last]
+        &self.table.as_slice()[1..]
     }
 
     /// Access the jump table as a mutable slice. This excludes the default block.
     pub fn as_mut_slice(&mut self) -> &mut [Block] {
-        let last = self.table.len() - 1;
-        &mut self.table.as_mut_slice()[0..last]
+        &mut self.table.as_mut_slice()[1..]
     }
 
     /// Returns an iterator to the jump table, excluding the default block.
@@ -81,7 +79,7 @@ impl JumpTableData {
 
     /// Clears all entries in this jump table, except for the default block.
     pub fn clear(&mut self) {
-        self.table.drain(0..self.table.len() - 1);
+        self.table.drain(1..);
     }
 }
 
@@ -109,7 +107,7 @@ mod tests {
     fn empty() {
         let def = Block::new(0);
 
-        let jt = JumpTableData::new(def, vec![]);
+        let jt = JumpTableData::new(def, &[]);
 
         assert_eq!(jt.all_branches().get(0), Some(&def));
 
@@ -128,12 +126,12 @@ mod tests {
         let e1 = Block::new(1);
         let e2 = Block::new(2);
 
-        let jt = JumpTableData::new(def, vec![e1, e2, e1]);
+        let jt = JumpTableData::new(def, &[e1, e2, e1]);
 
         assert_eq!(jt.default_block(), def);
         assert_eq!(jt.to_string(), "block0, [block1, block2, block1]");
 
-        assert_eq!(jt.all_branches(), [e1, e2, e1, def]);
+        assert_eq!(jt.all_branches(), [def, e1, e2, e1]);
         assert_eq!(jt.as_slice(), [e1, e2, e1]);
     }
 }

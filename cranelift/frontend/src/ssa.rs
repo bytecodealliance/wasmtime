@@ -1010,7 +1010,7 @@ mod tests {
         ssa.def_var(x_var, x1, block0);
         ssa.use_var(&mut func, x_var, I32, block0).0;
         let br_table = {
-            let jump_table = JumpTableData::new(block2, vec![block2, block1]);
+            let jump_table = JumpTableData::new(block2, &[block2, block1]);
             let jt = func.create_jump_table(jump_table);
             let mut cur = FuncCursor::new(&mut func).at_bottom(block0);
             cur.ins().br_table(x1, jt)

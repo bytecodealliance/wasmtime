@@ -363,7 +363,7 @@ mod test {
         pos.insert_block(bb0);
         let jt = pos
             .func
-            .create_jump_table(JumpTableData::new(bb3, vec![bb1, bb2]));
+            .create_jump_table(JumpTableData::new(bb3, &[bb1, bb2]));
         pos.ins().br_table(arg0, jt);
 
         pos.insert_block(bb1);
