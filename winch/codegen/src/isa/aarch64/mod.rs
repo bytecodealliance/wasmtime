@@ -10,9 +10,8 @@ use crate::{
     stack::Stack,
 };
 use anyhow::Result;
-use cranelift_codegen::{
-    isa::aarch64::settings as aarch64_settings, settings::Flags, Final, MachBufferFinalized,
-};
+use cranelift_codegen::settings::{self, Flags};
+use cranelift_codegen::{isa::aarch64::settings as aarch64_settings, Final, MachBufferFinalized};
 use masm::MacroAssembler as Aarch64Masm;
 use target_lexicon::Triple;
 use wasmparser::{FuncType, FuncValidator, FunctionBody, ValidatorResources};
@@ -66,6 +65,14 @@ impl TargetIsa for Aarch64 {
 
     fn triple(&self) -> &Triple {
         &self.triple
+    }
+
+    fn flags(&self) -> &settings::Flags {
+        &self.shared_flags
+    }
+
+    fn isa_flags(&self) -> Vec<settings::Value> {
+        self.isa_flags.iter().collect()
     }
 
     fn compile_function(

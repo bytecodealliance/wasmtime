@@ -10,9 +10,8 @@ use crate::{
     regset::RegSet,
 };
 use anyhow::Result;
-use cranelift_codegen::{
-    isa::x64::settings as x64_settings, settings::Flags, Final, MachBufferFinalized,
-};
+use cranelift_codegen::settings::{self, Flags};
+use cranelift_codegen::{isa::x64::settings as x64_settings, Final, MachBufferFinalized};
 use target_lexicon::Triple;
 use wasmparser::{FuncType, FuncValidator, FunctionBody, ValidatorResources};
 
@@ -71,6 +70,14 @@ impl TargetIsa for X64 {
 
     fn triple(&self) -> &Triple {
         &self.triple
+    }
+
+    fn flags(&self) -> &settings::Flags {
+        &self.shared_flags
+    }
+
+    fn isa_flags(&self) -> Vec<settings::Value> {
+        self.isa_flags.iter().collect()
     }
 
     fn compile_function(

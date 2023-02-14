@@ -45,7 +45,9 @@ impl wasmtime_environ::Compiler for Compiler {
         _tunables: &Tunables,
         _resolve_reloc: &dyn Fn(usize, FuncIndex) -> usize,
     ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
-        todo!()
+        drop(&self.linkopts);
+        assert!(_funcs.is_empty());
+        Ok(Vec::new())
     }
 
     fn emit_trampoline_obj(
@@ -62,11 +64,11 @@ impl wasmtime_environ::Compiler for Compiler {
     }
 
     fn flags(&self) -> std::collections::BTreeMap<String, wasmtime_environ::FlagValue> {
-        todo!()
+        wasmtime_cranelift_shared::clif_flags_to_wasmtime(self.isa.flags().iter())
     }
 
     fn isa_flags(&self) -> std::collections::BTreeMap<String, wasmtime_environ::FlagValue> {
-        todo!()
+        wasmtime_cranelift_shared::clif_flags_to_wasmtime(self.isa.isa_flags())
     }
 
     fn is_branch_protection_enabled(&self) -> bool {
