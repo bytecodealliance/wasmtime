@@ -122,6 +122,17 @@ pub mod trampolines {
                         Err(panic) => crate::traphandlers::resume_panic(panic),
                     }
                 }
+
+                // This works around a `rustc` bug where compiling with LTO
+                // will sometimes strip out some of these symbols resulting
+                // in a linking failure.
+                #[allow(non_upper_case_globals)]
+                #[used]
+                static [<impl_ $name _ref>]: unsafe extern "C" fn(
+                    *mut VMContext,
+                    $( $pname : libcall!(@ty $param), )*
+                ) $( -> libcall!(@ty $result))? = [<impl_ $name>];
+
             )*
         }};
 
