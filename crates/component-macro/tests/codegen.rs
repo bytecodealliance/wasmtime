@@ -1,20 +1,22 @@
 macro_rules! gentest {
     ($id:ident $name:tt $path:tt) => {
         mod $id {
+            mod sugar {
+                wasmtime::component::bindgen!(in $path);
+            }
             mod normal {
                 wasmtime::component::bindgen!($name in $path);
             }
             mod async_ {
                 wasmtime::component::bindgen!({
-                    world: $name,
                     path: $path,
                     async: true,
                 });
             }
             mod tracing {
                 wasmtime::component::bindgen!({
-                    world: $name,
                     path: $path,
+                    world: $name,
                     tracing: true,
                 });
             }
