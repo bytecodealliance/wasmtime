@@ -84,7 +84,7 @@ pub(crate) use self::store::ComponentStoreData;
 /// use wasmtime::component::*;
 /// use wasmtime::{Config, Engine, Store};
 ///
-/// bindgen!("my-component");
+/// bindgen!();
 ///
 /// struct MyState {
 ///     name: String,
@@ -170,7 +170,7 @@ pub(crate) use self::store::ComponentStoreData;
 /// use wasmtime::component::*;
 /// use wasmtime::{Config, Engine, Store};
 ///
-/// bindgen!("my-component");
+/// bindgen!();
 ///
 /// struct MyState {
 ///     // ...
@@ -223,6 +223,11 @@ pub(crate) use self::store::ComponentStoreData;
 ///
 /// ```rust,ignore
 /// // Parse the `wit/` folder adjacent to this crate's `Cargo.toml` and look
+/// // for a `default world` in its documents. There must be exactly one
+/// // `default world` for this to succeed.
+/// bindgen!();
+///
+/// // Parse the `wit/` folder adjacent to this crate's `Cargo.toml` and look
 /// // for the document `foo`, which must have a `default world` contained
 /// // within it.
 /// bindgen!("foo");
@@ -232,6 +237,7 @@ pub(crate) use self::store::ComponentStoreData;
 /// bindgen!("foo.bar");
 ///
 /// // Parse the folder `other/wit/folder` adjacent to `Cargo.toml`.
+/// bindgen!(in "other/wit/folder");
 /// bindgen!("foo" in "other/wit/folder");
 /// bindgen!("foo.bar" in "other/wit/folder");
 ///
@@ -245,8 +251,9 @@ pub(crate) use self::store::ComponentStoreData;
 /// ```rust,ignore
 /// bindgen!({
 ///     world: "foo", // or "foo.bar", same as in `bindgen!("foo")`
+///                   // not needed if `path` has one `default world`
 ///
-///     // same as in `bindgen!("foo" in "other/wit/folder")
+///     // same as in `bindgen!(in "other/wit/folder")
 ///     path: "other/wit/folder",
 ///
 ///     // Instead of `path` the WIT document can be provided inline if
