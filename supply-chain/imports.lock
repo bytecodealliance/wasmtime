@@ -210,6 +210,16 @@ who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
 delta = "0.5.4 -> 0.5.7"
 
+[[audits.mozilla.audits.memoffset]]
+who = "Gabriele Svelto <gsvelto@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "0.6.5 -> 0.7.1"
+
+[[audits.mozilla.audits.miniz_oxide]]
+who = "Mike Hommey <mh+mozilla@glandium.org>"
+criteria = "safe-to-deploy"
+delta = "0.5.3 -> 0.6.2"
+
 [[audits.mozilla.audits.num-integer]]
 who = "Josh Stone <jistone@redhat.com>"
 criteria = "safe-to-deploy"
