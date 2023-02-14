@@ -161,9 +161,9 @@ impl Builder {
     }
 
     /// Extract contents of builder once everything is configured.
-    pub fn state_for(self, name: &str) -> Box<[u8]> {
+    pub fn state_for(&self, name: &str) -> &[u8] {
         assert_eq!(name, self.template.name);
-        self.bytes
+        &self.bytes
     }
 
     /// Iterates the available settings in the builder.

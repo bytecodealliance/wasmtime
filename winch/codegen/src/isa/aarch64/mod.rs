@@ -25,15 +25,15 @@ mod regs;
 
 /// Create an ISA from the given triple.
 pub(crate) fn isa_builder(triple: Triple) -> Builder {
-    Builder {
+    Builder::new(
         triple,
-        settings: aarch64_settings::builder(),
-        constructor: |triple, shared_flags, settings| {
+        aarch64_settings::builder(),
+        |triple, shared_flags, settings| {
             let isa_flags = aarch64_settings::Flags::new(&shared_flags, settings);
             let isa = Aarch64::new(triple, shared_flags, isa_flags);
             Ok(Box::new(isa))
         },
-    }
+    )
 }
 
 /// Aarch64 ISA.

@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 use core::fmt::Formatter;
-use cranelift_codegen::{isa::CallConv, settings, Final, MachBufferFinalized};
+use cranelift_codegen::isa::{CallConv, IsaBuilder};
+use cranelift_codegen::{Final, MachBufferFinalized};
 use std::{
     error,
     fmt::{self, Debug, Display},
@@ -29,24 +30,7 @@ macro_rules! isa_builder {
     }};
 }
 
-/// The target ISA builder.
-#[derive(Clone)]
-pub struct Builder {
-    /// The target triple.
-    triple: Triple,
-    /// The ISA settings builder.
-    settings: settings::Builder,
-    /// The Target ISA constructor.
-    constructor: fn(Triple, settings::Flags, settings::Builder) -> Result<Box<dyn TargetIsa>>,
-}
-
-impl Builder {
-    /// Create a TargetIsa by combining ISA-specific settings with the provided
-    /// shared flags.
-    pub fn build(self, shared_flags: settings::Flags) -> Result<Box<dyn TargetIsa>> {
-        (self.constructor)(self.triple, shared_flags, self.settings)
-    }
-}
+pub type Builder = IsaBuilder<Result<Box<dyn TargetIsa>>>;
 
 /// Look for an ISA builder for the given target triple.
 pub fn lookup(triple: Triple) -> Result<Builder> {

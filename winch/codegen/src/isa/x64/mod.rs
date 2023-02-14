@@ -30,17 +30,17 @@ mod regs;
 
 /// Create an ISA builder.
 pub(crate) fn isa_builder(triple: Triple) -> Builder {
-    Builder {
+    Builder::new(
         triple,
-        settings: x64_settings::builder(),
-        constructor: |triple, shared_flags, settings| {
+        x64_settings::builder(),
+        |triple, shared_flags, settings| {
             // TODO: Once enabling/disabling flags is allowed, and once features like SIMD are supported
             // ensure compatibility between shared flags and ISA flags.
             let isa_flags = x64_settings::Flags::new(&shared_flags, settings);
             let isa = X64::new(triple, shared_flags, isa_flags);
             Ok(Box::new(isa))
         },
-    }
+    )
 }
 
 /// x64 ISA.
