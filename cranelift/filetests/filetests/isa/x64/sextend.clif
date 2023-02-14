@@ -7,6 +7,7 @@ block0(v0: i8):
   return v1
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -14,4 +15,13 @@ block0(v0: i8):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   movsbq %dil, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 

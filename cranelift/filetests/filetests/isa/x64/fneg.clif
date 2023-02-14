@@ -7,6 +7,7 @@ block0(v0: f32):
   return v1
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -16,6 +17,17 @@ block0(v0: f32):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   movl $0x80000000, %eax
+;   movd %eax, %xmm4
+;   xorps %xmm4, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %f2(f64) -> f64 {
 block0(v0: f64):
@@ -23,6 +35,7 @@ block0(v0: f64):
   return v1
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -32,6 +45,17 @@ block0(v0: f64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   movabsq $9223372036854775808, %rax
+;   movq %rax, %xmm4
+;   xorpd %xmm4, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %f3(f32x4) -> f32x4 {
 block0(v0: f32x4):
@@ -39,6 +63,7 @@ block0(v0: f32x4):
   return v1
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -48,6 +73,17 @@ block0(v0: f32x4):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   pcmpeqd %xmm3, %xmm3
+;   pslld $0x1f, %xmm3
+;   xorps %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %f4(f64x2) -> f64x2 {
 block0(v0: f64x2):
@@ -55,6 +91,7 @@ block0(v0: f64x2):
   return v1
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -64,4 +101,15 @@ block0(v0: f64x2):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   pcmpeqd %xmm3, %xmm3
+;   psllq $0x3f, %xmm3
+;   xorpd %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 

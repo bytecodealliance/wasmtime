@@ -8,8 +8,15 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
+; VCode:
 ; block0:
 ;   subs xzr, x0, x1
+;   cset x0, eq
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, x1
 ;   cset x0, eq
 ;   ret
 
@@ -19,9 +26,17 @@ block0(v0: i128, v1: i128):
   return v2
 }
 
+; VCode:
 ; block0:
 ;   subs xzr, x0, x2
 ;   ccmp x1, x3, #nzcv, eq
+;   cset x0, eq
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, x2
+;   ccmp x1, x3, #0, eq
 ;   cset x0, eq
 ;   ret
 
@@ -31,9 +46,17 @@ block0(v0: i128, v1: i128):
   return v2
 }
 
+; VCode:
 ; block0:
 ;   subs xzr, x0, x2
 ;   ccmp x1, x3, #nzcv, eq
+;   cset x0, ne
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, x2
+;   ccmp x1, x3, #0, eq
 ;   cset x0, ne
 ;   ret
 
@@ -43,10 +66,20 @@ block0(v0: i128, v1: i128):
   return v2
 }
 
+; VCode:
 ; block0:
 ;   subs xzr, x0, x2
 ;   cset x6, lo
 ;   subs xzr, x1, x3
+;   cset x9, lt
+;   csel x0, x6, x9, eq
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, x2
+;   cset x6, lo
+;   cmp x1, x3
 ;   cset x9, lt
 ;   csel x0, x6, x9, eq
 ;   ret
@@ -57,10 +90,20 @@ block0(v0: i128, v1: i128):
   return v2
 }
 
+; VCode:
 ; block0:
 ;   subs xzr, x0, x2
 ;   cset x6, lo
 ;   subs xzr, x1, x3
+;   cset x9, lo
+;   csel x0, x6, x9, eq
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, x2
+;   cset x6, lo
+;   cmp x1, x3
 ;   cset x9, lo
 ;   csel x0, x6, x9, eq
 ;   ret
@@ -71,10 +114,20 @@ block0(v0: i128, v1: i128):
   return v2
 }
 
+; VCode:
 ; block0:
 ;   subs xzr, x0, x2
 ;   cset x6, ls
 ;   subs xzr, x1, x3
+;   cset x9, le
+;   csel x0, x6, x9, eq
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, x2
+;   cset x6, ls
+;   cmp x1, x3
 ;   cset x9, le
 ;   csel x0, x6, x9, eq
 ;   ret
@@ -85,10 +138,20 @@ block0(v0: i128, v1: i128):
   return v2
 }
 
+; VCode:
 ; block0:
 ;   subs xzr, x0, x2
 ;   cset x6, ls
 ;   subs xzr, x1, x3
+;   cset x9, ls
+;   csel x0, x6, x9, eq
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, x2
+;   cset x6, ls
+;   cmp x1, x3
 ;   cset x9, ls
 ;   csel x0, x6, x9, eq
 ;   ret
@@ -99,10 +162,20 @@ block0(v0: i128, v1: i128):
   return v2
 }
 
+; VCode:
 ; block0:
 ;   subs xzr, x0, x2
 ;   cset x6, hi
 ;   subs xzr, x1, x3
+;   cset x9, gt
+;   csel x0, x6, x9, eq
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, x2
+;   cset x6, hi
+;   cmp x1, x3
 ;   cset x9, gt
 ;   csel x0, x6, x9, eq
 ;   ret
@@ -113,10 +186,20 @@ block0(v0: i128, v1: i128):
   return v2
 }
 
+; VCode:
 ; block0:
 ;   subs xzr, x0, x2
 ;   cset x6, hi
 ;   subs xzr, x1, x3
+;   cset x9, hi
+;   csel x0, x6, x9, eq
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, x2
+;   cset x6, hi
+;   cmp x1, x3
 ;   cset x9, hi
 ;   csel x0, x6, x9, eq
 ;   ret
@@ -127,10 +210,20 @@ block0(v0: i128, v1: i128):
   return v2
 }
 
+; VCode:
 ; block0:
 ;   subs xzr, x0, x2
 ;   cset x6, hs
 ;   subs xzr, x1, x3
+;   cset x9, ge
+;   csel x0, x6, x9, eq
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, x2
+;   cset x6, hs
+;   cmp x1, x3
 ;   cset x9, ge
 ;   csel x0, x6, x9, eq
 ;   ret
@@ -141,10 +234,20 @@ block0(v0: i128, v1: i128):
   return v2
 }
 
+; VCode:
 ; block0:
 ;   subs xzr, x0, x2
 ;   cset x6, hs
 ;   subs xzr, x1, x3
+;   cset x9, hs
+;   csel x0, x6, x9, eq
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, x2
+;   cset x6, hs
+;   cmp x1, x3
 ;   cset x9, hs
 ;   csel x0, x6, x9, eq
 ;   ret
@@ -164,6 +267,7 @@ block2:
   return v5
 }
 
+; VCode:
 ; block0:
 ;   subs xzr, x0, x1
 ;   b.eq label1 ; b label2
@@ -172,6 +276,17 @@ block2:
 ;   ret
 ; block2:
 ;   movz x0, #2
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, x1
+;   b.ne #0x10
+; block1: ; offset 0x8
+;   mov x0, #1
+;   ret
+; block2: ; offset 0x10
+;   mov x0, #2
 ;   ret
 
 function %f(i64, i64) -> i64 {
@@ -185,6 +300,7 @@ block1:
   return v4
 }
 
+; VCode:
 ; block0:
 ;   subs xzr, x0, x1
 ;   b.eq label1 ; b label2
@@ -194,6 +310,13 @@ block1:
 ;   b label3
 ; block3:
 ;   movz x0, #1
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, x1
+; block1: ; offset 0x4
+;   mov x0, #1
 ;   ret
 
 function %i128_brif_false(i128){
@@ -205,6 +328,7 @@ block1:
     return
 }
 
+; VCode:
 ; block0:
 ;   orr x3, x0, x1
 ;   cbnz x3, label1 ; b label2
@@ -213,6 +337,12 @@ block1:
 ; block2:
 ;   b label3
 ; block3:
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   orr x3, x0, x1
+; block1: ; offset 0x4
 ;   ret
 
 function %i128_brif_true(i128){
@@ -224,6 +354,7 @@ block1:
     return
 }
 
+; VCode:
 ; block0:
 ;   orr x3, x0, x1
 ;   cbnz x3, label1 ; b label2
@@ -232,6 +363,12 @@ block1:
 ; block2:
 ;   b label3
 ; block3:
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   orr x3, x0, x1
+; block1: ; offset 0x4
 ;   ret
 
 function %i128_bricmp_eq(i128, i128) {
@@ -244,6 +381,7 @@ block1:
   return
 }
 
+; VCode:
 ; block0:
 ;   subs xzr, x0, x2
 ;   ccmp x1, x3, #nzcv, eq
@@ -253,6 +391,13 @@ block1:
 ; block2:
 ;   b label3
 ; block3:
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, x2
+;   ccmp x1, x3, #0, eq
+; block1: ; offset 0x8
 ;   ret
 
 function %i128_bricmp_ne(i128, i128) {
@@ -265,6 +410,7 @@ block1:
   return
 }
 
+; VCode:
 ; block0:
 ;   subs xzr, x0, x2
 ;   ccmp x1, x3, #nzcv, eq
@@ -274,6 +420,13 @@ block1:
 ; block2:
 ;   b label3
 ; block3:
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, x2
+;   ccmp x1, x3, #0, eq
+; block1: ; offset 0x8
 ;   ret
 
 function %i128_bricmp_slt(i128, i128) {
@@ -286,6 +439,7 @@ block1:
   return
 }
 
+; VCode:
 ; block0:
 ;   subs xzr, x0, x2
 ;   cset x6, lo
@@ -300,6 +454,17 @@ block1:
 ;   b label3
 ; block3:
 ;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, x2
+;   cset x6, lo
+;   cmp x1, x3
+;   cset x9, lt
+;   csel x11, x6, x9, eq
+;   cmp xzr, x11
+; block1: ; offset 0x18
+;   ret
 
 function %i128_bricmp_ult(i128, i128) {
 block0(v0: i128, v1: i128):
@@ -311,6 +476,7 @@ block1:
   return
 }
 
+; VCode:
 ; block0:
 ;   subs xzr, x0, x2
 ;   cset x6, lo
@@ -325,6 +491,17 @@ block1:
 ;   b label3
 ; block3:
 ;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, x2
+;   cset x6, lo
+;   cmp x1, x3
+;   cset x9, lo
+;   csel x11, x6, x9, eq
+;   cmp xzr, x11
+; block1: ; offset 0x18
+;   ret
 
 function %i128_bricmp_sle(i128, i128) {
 block0(v0: i128, v1: i128):
@@ -336,6 +513,7 @@ block1:
   return
 }
 
+; VCode:
 ; block0:
 ;   subs xzr, x0, x2
 ;   cset x6, ls
@@ -351,6 +529,18 @@ block1:
 ;   b label3
 ; block3:
 ;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, x2
+;   cset x6, ls
+;   cmp x1, x3
+;   cset x9, le
+;   csel x11, x6, x9, eq
+;   mov w13, #1
+;   cmp x13, x11
+; block1: ; offset 0x1c
+;   ret
 
 function %i128_bricmp_ule(i128, i128) {
 block0(v0: i128, v1: i128):
@@ -362,6 +552,7 @@ block1:
   return
 }
 
+; VCode:
 ; block0:
 ;   subs xzr, x0, x2
 ;   cset x6, ls
@@ -377,6 +568,18 @@ block1:
 ;   b label3
 ; block3:
 ;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, x2
+;   cset x6, ls
+;   cmp x1, x3
+;   cset x9, ls
+;   csel x11, x6, x9, eq
+;   mov x13, #1
+;   cmp x13, x11
+; block1: ; offset 0x1c
+;   ret
 
 function %i128_bricmp_sgt(i128, i128) {
 block0(v0: i128, v1: i128):
@@ -388,6 +591,7 @@ block1:
   return
 }
 
+; VCode:
 ; block0:
 ;   subs xzr, x0, x2
 ;   cset x6, hi
@@ -402,6 +606,17 @@ block1:
 ;   b label3
 ; block3:
 ;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, x2
+;   cset x6, hi
+;   cmp x1, x3
+;   cset x9, gt
+;   csel x11, x6, x9, eq
+;   cmp x11, xzr
+; block1: ; offset 0x18
+;   ret
 
 function %i128_bricmp_ugt(i128, i128) {
 block0(v0: i128, v1: i128):
@@ -413,6 +628,7 @@ block1:
   return
 }
 
+; VCode:
 ; block0:
 ;   subs xzr, x0, x2
 ;   cset x6, hi
@@ -427,6 +643,17 @@ block1:
 ;   b label3
 ; block3:
 ;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, x2
+;   cset x6, hi
+;   cmp x1, x3
+;   cset x9, hi
+;   csel x11, x6, x9, eq
+;   cmp x11, xzr
+; block1: ; offset 0x18
+;   ret
 
 function %i128_bricmp_sge(i128, i128) {
 block0(v0: i128, v1: i128):
@@ -438,6 +665,7 @@ block1:
   return
 }
 
+; VCode:
 ; block0:
 ;   subs xzr, x0, x2
 ;   cset x6, hs
@@ -453,6 +681,18 @@ block1:
 ;   b label3
 ; block3:
 ;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, x2
+;   cset x6, hs
+;   cmp x1, x3
+;   cset x9, ge
+;   csel x11, x6, x9, eq
+;   mov w13, #1
+;   cmp x11, x13
+; block1: ; offset 0x1c
+;   ret
 
 function %i128_bricmp_uge(i128, i128) {
 block0(v0: i128, v1: i128):
@@ -464,6 +704,7 @@ block1:
   return
 }
 
+; VCode:
 ; block0:
 ;   subs xzr, x0, x2
 ;   cset x6, hs
@@ -478,5 +719,17 @@ block1:
 ; block2:
 ;   b label3
 ; block3:
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, x2
+;   cset x6, hs
+;   cmp x1, x3
+;   cset x9, hs
+;   csel x11, x6, x9, eq
+;   mov x13, #1
+;   cmp x11, x13
+; block1: ; offset 0x1c
 ;   ret
 

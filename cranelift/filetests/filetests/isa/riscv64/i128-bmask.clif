@@ -8,11 +8,23 @@ block0(v0: i128):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   or a0,a0,a1
 ;   li a2,-1
 ;   select_reg a1,zero,a2##condition=(zero eq a0)
 ;   mv a0,a1
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   or a0, a0, a1
+;   addi a2, zero, -1
+;   beq zero, a0, 0xc
+;   ori a1, a2, 0
+;   j 8
+;   ori a1, zero, 0
+;   ori a0, a1, 0
 ;   ret
 
 function %bmask_i128_i64(i128) -> i64 {
@@ -21,10 +33,21 @@ block0(v0: i128):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   or a0,a0,a1
 ;   li a2,-1
 ;   select_reg a0,zero,a2##condition=(zero eq a0)
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   or a0, a0, a1
+;   addi a2, zero, -1
+;   beq zero, a0, 0xc
+;   ori a0, a2, 0
+;   j 8
+;   ori a0, zero, 0
 ;   ret
 
 function %bmask_i128_i32(i128) -> i32 {
@@ -33,10 +56,21 @@ block0(v0: i128):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   or a0,a0,a1
 ;   li a2,-1
 ;   select_reg a0,zero,a2##condition=(zero eq a0)
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   or a0, a0, a1
+;   addi a2, zero, -1
+;   beq zero, a0, 0xc
+;   ori a0, a2, 0
+;   j 8
+;   ori a0, zero, 0
 ;   ret
 
 function %bmask_i128_i16(i128) -> i16 {
@@ -45,10 +79,21 @@ block0(v0: i128):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   or a0,a0,a1
 ;   li a2,-1
 ;   select_reg a0,zero,a2##condition=(zero eq a0)
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   or a0, a0, a1
+;   addi a2, zero, -1
+;   beq zero, a0, 0xc
+;   ori a0, a2, 0
+;   j 8
+;   ori a0, zero, 0
 ;   ret
 
 function %bmask_i128_i8(i128) -> i8 {
@@ -57,10 +102,21 @@ block0(v0: i128):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   or a0,a0,a1
 ;   li a2,-1
 ;   select_reg a0,zero,a2##condition=(zero eq a0)
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   or a0, a0, a1
+;   addi a2, zero, -1
+;   beq zero, a0, 0xc
+;   ori a0, a2, 0
+;   j 8
+;   ori a0, zero, 0
 ;   ret
 
 function %bmask_i64_i128(i64) -> i128 {
@@ -69,10 +125,21 @@ block0(v0: i64):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   li t2,-1
 ;   select_reg a1,zero,t2##condition=(zero eq a0)
 ;   mv a0,a1
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi t2, zero, -1
+;   beq zero, a0, 0xc
+;   ori a1, t2, 0
+;   j 8
+;   ori a1, zero, 0
+;   ori a0, a1, 0
 ;   ret
 
 function %bmask_i32_i128(i32) -> i128 {
@@ -81,11 +148,22 @@ block0(v0: i32):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   addiw t2,a0,0
 ;   li a1,-1
 ;   select_reg a1,zero,a1##condition=(zero eq t2)
 ;   mv a0,a1
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   sext.w t2, a0
+;   addi a1, zero, -1
+;   beq zero, t2, 8
+;   j 8
+;   ori a1, zero, 0
+;   ori a0, a1, 0
 ;   ret
 
 function %bmask_i16_i128(i16) -> i128 {
@@ -94,6 +172,7 @@ block0(v0: i16):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   lui a1,16
 ;   addi a1,a1,4095
@@ -102,6 +181,19 @@ block0(v0: i16):
 ;   select_reg a1,zero,a5##condition=(zero eq a3)
 ;   mv a0,a1
 ;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a1, 0x10
+;   addi a1, a1, -1
+;   and a3, a0, a1
+;   addi a5, zero, -1
+;   beq zero, a3, 0xc
+;   ori a1, a5, 0
+;   j 8
+;   ori a1, zero, 0
+;   ori a0, a1, 0
+;   ret
 
 function %bmask_i8_i128(i8) -> i128 {
 block0(v0: i8):
@@ -109,10 +201,21 @@ block0(v0: i8):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   andi t2,a0,255
 ;   li a1,-1
 ;   select_reg a1,zero,a1##condition=(zero eq t2)
 ;   mv a0,a1
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   andi t2, a0, 0xff
+;   addi a1, zero, -1
+;   beq zero, t2, 8
+;   j 8
+;   ori a1, zero, 0
+;   ori a0, a1, 0
 ;   ret
 

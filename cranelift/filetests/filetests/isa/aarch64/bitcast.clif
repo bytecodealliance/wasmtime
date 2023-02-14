@@ -7,7 +7,13 @@ block0(v0: f32):
   return v1
 }
 
+; VCode:
 ; block0:
+;   mov w0, v0.s[0]
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   mov w0, v0.s[0]
 ;   ret
 
@@ -17,7 +23,13 @@ block0(v0: i32):
   return v1
 }
 
+; VCode:
 ; block0:
+;   fmov s0, w0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   fmov s0, w0
 ;   ret
 
@@ -27,7 +39,13 @@ block0(v0: f64):
   return v1
 }
 
+; VCode:
 ; block0:
+;   mov x0, v0.d[0]
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   mov x0, v0.d[0]
 ;   ret
 
@@ -37,7 +55,13 @@ block0(v0: i64):
   return v1
 }
 
+; VCode:
 ; block0:
+;   fmov d0, x0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   fmov d0, x0
 ;   ret
 

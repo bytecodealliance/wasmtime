@@ -9,9 +9,17 @@ block0:
   return v1
 }
 
+; VCode:
 ; block0:
 ;   movz x1, #1
 ;   movk x1, x1, #1, LSL #48
+;   dup v0.2d, x1
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x1, #1
+;   movk x1, #1, lsl #48
 ;   dup v0.2d, x1
 ;   ret
 
@@ -23,8 +31,15 @@ block0:
   return v2
 }
 
+; VCode:
 ; block0:
 ;   movz x1, #42679
+;   dup v0.8h, w1
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x1, #0xa6b7
 ;   dup v0.8h, w1
 ;   ret
 
@@ -34,9 +49,19 @@ block0(v0: i32, v1: i8x16, v2: i8x16):
    return v3
 }
 
+; VCode:
 ; block0:
 ;   subs wzr, w0, wzr
 ;   vcsel v0.16b, v0.16b, v1.16b, ne (if-then-else diamond)
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp w0, wzr
+;   b.ne #0x10
+;   mov v0.16b, v1.16b
+;   b #0x14
+;   mov v0.16b, v0.16b
 ;   ret
 
 function %f5(i64) -> i8x16 {
@@ -46,8 +71,14 @@ block0(v0: i64):
   return v2
 }
 
+; VCode:
 ; block0:
 ;   ld1r { v0.16b }, [x0]
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   ld1r {v0.16b}, [x0]
 ;   ret
 
 function %f6(i64, i64) -> i8x16, i8x16 {
@@ -59,9 +90,16 @@ block0(v0: i64, v1: i64):
   return v4, v5
 }
 
+; VCode:
 ; block0:
 ;   ld1r { v0.16b }, [x0]
 ;   ld1r { v1.16b }, [x1]
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   ld1r {v0.16b}, [x0]
+;   ld1r {v1.16b}, [x1]
 ;   ret
 
 function %f7(i64, i64) -> i8x16, i8x16 {
@@ -73,9 +111,17 @@ block0(v0: i64, v1: i64):
   return v4, v5
 }
 
+; VCode:
 ; block0:
 ;   ldrb w5, [x0]
 ;   ld1r { v0.16b }, [x1]
+;   dup v1.16b, w5
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   ldrb w5, [x0]
+;   ld1r {v0.16b}, [x1]
 ;   dup v1.16b, w5
 ;   ret
 
@@ -87,7 +133,15 @@ block0(v0: i64, v1: i64):
   return v3, v4
 }
 
+; VCode:
 ; block0:
+;   ldrb w5, [x0]
+;   dup v0.16b, w5
+;   dup v1.16b, w5
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   ldrb w5, [x0]
 ;   dup v0.16b, w5
 ;   dup v1.16b, w5
@@ -100,8 +154,15 @@ block0:
   return v1
 }
 
+; VCode:
 ; block0:
 ;   movi v1.2d, #18374687579166474495
+;   fmov d0, d1
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   movi v1.2d, #0xff0000ffff0000ff
 ;   fmov d0, d1
 ;   ret
 
@@ -112,8 +173,14 @@ block0:
   return v1
 }
 
+; VCode:
 ; block0:
 ;   mvni v0.4s, #15, MSL #16
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   mvni v0.4s, #0xf, msl #16
 ;   ret
 
 function %f11() -> f32x4 {
@@ -123,7 +190,13 @@ block0:
   return v1
 }
 
+; VCode:
 ; block0:
 ;   fmov v0.4s, #1.3125
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   fmov v0.4s, #1.31250000
 ;   ret
 

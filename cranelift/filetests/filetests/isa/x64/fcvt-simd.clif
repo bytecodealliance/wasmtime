@@ -8,6 +8,7 @@ block0(v0: i32x4):
   return v1
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -15,4 +16,13 @@ block0(v0: i32x4):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   vcvtudq2ps %xmm0, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 

@@ -10,7 +10,16 @@ block1:
   return v0, v1, v2, v3
 }
 
+; VCode:
 ; block0:
+;   lghi %r2, 1
+;   lghi %r3, 2
+;   lghi %r4, 3
+;   lghi %r5, 4
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   lghi %r2, 1
 ;   lghi %r3, 2
 ;   lghi %r4, 3
@@ -28,6 +37,7 @@ block1:
   return v0, v1, v2, v3, v4, v5
 }
 
+; VCode:
 ;   stmg %r7, %r15, 56(%r15)
 ; block0:
 ;   lghi %r4, 1
@@ -42,6 +52,22 @@ block1:
 ;   lgr %r2, %r14
 ;   lmg %r7, %r15, 56(%r15)
 ;   br %r14
+; 
+; Disassembled:
+;   stmg %r7, %r15, 0x38(%r15)
+; block0: ; offset 0x6
+;   lghi %r4, 1
+;   lgr %r14, %r4
+;   lghi %r3, 2
+;   lghi %r4, 3
+;   lghi %r5, 4
+;   lghi %r7, 5
+;   lghi %r9, 6
+;   stg %r7, 0(%r2)
+;   stg %r9, 8(%r2)
+;   lgr %r2, %r14
+;   lmg %r7, %r15, 0x38(%r15)
+;   br %r14
 
 function %f3() -> f64, f64, f64, f64 {
 block1:
@@ -52,11 +78,38 @@ block1:
   return v0, v1, v2, v3
 }
 
+; VCode:
 ; block0:
 ;   bras %r1, 12 ; data.f64 0 ; ld %f0, 0(%r1)
 ;   bras %r1, 12 ; data.f64 1 ; ld %f2, 0(%r1)
 ;   bras %r1, 12 ; data.f64 2 ; ld %f4, 0(%r1)
 ;   bras %r1, 12 ; data.f64 3 ; ld %f6, 0(%r1)
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   bras %r1, 0xc
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   ld %f0, 0(%r1)
+;   bras %r1, 0x1c
+;   sur %f15, %f0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   ld %f2, 0(%r1)
+;   bras %r1, 0x2c
+;   sth %r0, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   ld %f4, 0(%r1)
+;   bras %r1, 0x3c
+;   sth %r0, 0(%r8)
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   ld %f6, 0(%r1)
 ;   br %r14
 
 function %f4() -> f64, f64, f64, f64, f64, f64 {
@@ -70,6 +123,7 @@ block1:
   return v0, v1, v2, v3, v4, v5
 }
 
+; VCode:
 ; block0:
 ;   bras %r1, 12 ; data.f64 0 ; ld %f0, 0(%r1)
 ;   bras %r1, 12 ; data.f64 1 ; ld %f2, 0(%r1)
@@ -77,6 +131,44 @@ block1:
 ;   bras %r1, 12 ; data.f64 3 ; ld %f6, 0(%r1)
 ;   bras %r1, 12 ; data.f64 4 ; vleg %v18, 0(%r1), 0
 ;   bras %r1, 12 ; data.f64 5 ; vleg %v20, 0(%r1), 0
+;   vsteg %v18, 0(%r2), 0
+;   vsteg %v20, 8(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   bras %r1, 0xc
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   ld %f0, 0(%r1)
+;   bras %r1, 0x1c
+;   sur %f15, %f0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   ld %f2, 0(%r1)
+;   bras %r1, 0x2c
+;   sth %r0, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   ld %f4, 0(%r1)
+;   bras %r1, 0x3c
+;   sth %r0, 0(%r8)
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   ld %f6, 0(%r1)
+;   bras %r1, 0x4c
+;   sth %r1, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   vleg %v18, 0(%r1), 0
+;   bras %r1, 0x5e
+;   sth %r1, 0(%r4)
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   vleg %v20, 0(%r1), 0
 ;   vsteg %v18, 0(%r2), 0
 ;   vsteg %v20, 8(%r2), 0
 ;   br %r14

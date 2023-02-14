@@ -8,6 +8,7 @@ block0(v0: i32x4, v1: i32x4):
     return v2
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -17,6 +18,17 @@ block0(v0: i32x4, v1: i32x4):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   pcmpeqd %xmm1, %xmm0
+;   pcmpeqd %xmm5, %xmm5
+;   pxor %xmm5, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %icmp_ugt_i32x4(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):
@@ -24,6 +36,7 @@ block0(v0: i32x4, v1: i32x4):
     return v2
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -34,6 +47,18 @@ block0(v0: i32x4, v1: i32x4):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   pmaxud %xmm1, %xmm0
+;   pcmpeqd %xmm1, %xmm0
+;   pcmpeqd %xmm7, %xmm7
+;   pxor %xmm7, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %icmp_sge_i16x8(i16x8, i16x8) -> i16x8 {
 block0(v0: i16x8, v1: i16x8):
@@ -41,6 +66,7 @@ block0(v0: i16x8, v1: i16x8):
     return v2
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -50,6 +76,17 @@ block0(v0: i16x8, v1: i16x8):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   movdqa %xmm0, %xmm3
+;   pmaxsw %xmm1, %xmm3
+;   pcmpeqw %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %icmp_uge_i8x16(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):
@@ -57,6 +94,7 @@ block0(v0: i8x16, v1: i8x16):
     return v2
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -66,4 +104,15 @@ block0(v0: i8x16, v1: i8x16):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   movdqa %xmm0, %xmm3
+;   pmaxub %xmm1, %xmm3
+;   pcmpeqb %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 

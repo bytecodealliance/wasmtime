@@ -16,6 +16,7 @@ block0(v0: i32, v1: r64, v2: i64):
     return
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -35,4 +36,25 @@ block0(v0: i32, v1: r64, v2: i64):
 ;   ret
 ; block1:
 ;   ud2 table_oob
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   movl 8(%rdx), %r11d
+;   cmpl %r11d, %edi
+;   jae 0x2b
+; block1: ; offset 0x11
+;   movl %edi, %ecx
+;   movq (%rdx), %rax
+;   movq %rax, %rdx
+;   addq %rcx, %rdx
+;   cmpl %r11d, %edi
+;   cmovaeq %rax, %rdx
+;   movq %rsi, (%rdx)
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block2: ; offset 0x2b
+;   ud2 ; trap: table_oob
 

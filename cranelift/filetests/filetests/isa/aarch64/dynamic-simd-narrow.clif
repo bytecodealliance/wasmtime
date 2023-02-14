@@ -14,9 +14,17 @@ block0(v0: i16):
   return v3
 }
 
+; VCode:
 ; block0:
 ;   dup v3.4h, w0
 ;   mov v3.d[1], v3.d[1], v3.d[0]
+;   sqxtn v0.8b, v3.8h
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   dup v3.4h, w0
+;   mov v3.d[1], v3.d[0]
 ;   sqxtn v0.8b, v3.8h
 ;   ret
 
@@ -33,10 +41,18 @@ block0(v0: i16):
   return v3
 }
 
+; VCode:
 ; block0:
 ;   dup v5.8h, w0
 ;   sqxtn v0.8b, v5.8h
 ;   sqxtn2 v0.16b, v0.16b, v5.8h
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   dup v5.8h, w0
+;   sqxtn v0.8b, v5.8h
+;   sqxtn2 v0.16b, v5.8h
 ;   ret
 
 function %snarrow_i32x2(i32) -> i16x4 {
@@ -52,9 +68,17 @@ block0(v0: i32):
   return v3
 }
 
+; VCode:
 ; block0:
 ;   dup v3.2s, w0
 ;   mov v3.d[1], v3.d[1], v3.d[0]
+;   sqxtn v0.4h, v3.4s
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   dup v3.2s, w0
+;   mov v3.d[1], v3.d[0]
 ;   sqxtn v0.4h, v3.4s
 ;   ret
 
@@ -71,10 +95,18 @@ block0(v0: i32):
   return v3
 }
 
+; VCode:
 ; block0:
 ;   dup v5.4s, w0
 ;   sqxtn v0.4h, v5.4s
 ;   sqxtn2 v0.8h, v0.8h, v5.4s
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   dup v5.4s, w0
+;   sqxtn v0.4h, v5.4s
+;   sqxtn2 v0.8h, v5.4s
 ;   ret
 
 function %snarrow_i64x2(i64) -> i32x4 {
@@ -90,10 +122,18 @@ block0(v0: i64):
   return v3
 }
 
+; VCode:
 ; block0:
 ;   dup v5.2d, x0
 ;   sqxtn v0.2s, v5.2d
 ;   sqxtn2 v0.4s, v0.4s, v5.2d
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   dup v5.2d, x0
+;   sqxtn v0.2s, v5.2d
+;   sqxtn2 v0.4s, v5.2d
 ;   ret
 
 function %unarrow_i16x4(i16) -> i8x8 {
@@ -109,9 +149,17 @@ block0(v0: i16):
   return v3
 }
 
+; VCode:
 ; block0:
 ;   dup v3.4h, w0
 ;   mov v3.d[1], v3.d[1], v3.d[0]
+;   sqxtun v0.8b, v3.8h
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   dup v3.4h, w0
+;   mov v3.d[1], v3.d[0]
 ;   sqxtun v0.8b, v3.8h
 ;   ret
 
@@ -128,10 +176,18 @@ block0(v0: i16):
   return v3
 }
 
+; VCode:
 ; block0:
 ;   dup v5.8h, w0
 ;   sqxtun v0.8b, v5.8h
 ;   sqxtun2 v0.16b, v0.16b, v5.8h
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   dup v5.8h, w0
+;   sqxtun v0.8b, v5.8h
+;   sqxtun2 v0.16b, v5.8h
 ;   ret
 
 function %unarrow_i32x2(i32) -> i16x4 {
@@ -147,9 +203,17 @@ block0(v0: i32):
   return v3
 }
 
+; VCode:
 ; block0:
 ;   dup v3.2s, w0
 ;   mov v3.d[1], v3.d[1], v3.d[0]
+;   sqxtun v0.4h, v3.4s
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   dup v3.2s, w0
+;   mov v3.d[1], v3.d[0]
 ;   sqxtun v0.4h, v3.4s
 ;   ret
 
@@ -166,10 +230,18 @@ block0(v0: i32):
   return v3
 }
 
+; VCode:
 ; block0:
 ;   dup v5.4s, w0
 ;   sqxtun v0.4h, v5.4s
 ;   sqxtun2 v0.8h, v0.8h, v5.4s
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   dup v5.4s, w0
+;   sqxtun v0.4h, v5.4s
+;   sqxtun2 v0.8h, v5.4s
 ;   ret
 
 function %unarrow_i64x2(i64) -> i32x4 {
@@ -185,10 +257,18 @@ block0(v0: i64):
   return v3
 }
 
+; VCode:
 ; block0:
 ;   dup v5.2d, x0
 ;   sqxtun v0.2s, v5.2d
 ;   sqxtun2 v0.4s, v0.4s, v5.2d
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   dup v5.2d, x0
+;   sqxtun v0.2s, v5.2d
+;   sqxtun2 v0.4s, v5.2d
 ;   ret
 
 function %uunarrow_i16x4(i16) -> i8x8 {
@@ -204,9 +284,17 @@ block0(v0: i16):
   return v3
 }
 
+; VCode:
 ; block0:
 ;   dup v3.4h, w0
 ;   mov v3.d[1], v3.d[1], v3.d[0]
+;   uqxtn v0.8b, v3.8h
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   dup v3.4h, w0
+;   mov v3.d[1], v3.d[0]
 ;   uqxtn v0.8b, v3.8h
 ;   ret
 
@@ -223,10 +311,18 @@ block0(v0: i16):
   return v3
 }
 
+; VCode:
 ; block0:
 ;   dup v5.8h, w0
 ;   uqxtn v0.8b, v5.8h
 ;   uqxtn2 v0.16b, v0.16b, v5.8h
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   dup v5.8h, w0
+;   uqxtn v0.8b, v5.8h
+;   uqxtn2 v0.16b, v5.8h
 ;   ret
 
 function %uunarrow_i32x2(i32) -> i16x4 {
@@ -242,9 +338,17 @@ block0(v0: i32):
   return v3
 }
 
+; VCode:
 ; block0:
 ;   dup v3.2s, w0
 ;   mov v3.d[1], v3.d[1], v3.d[0]
+;   uqxtn v0.4h, v3.4s
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   dup v3.2s, w0
+;   mov v3.d[1], v3.d[0]
 ;   uqxtn v0.4h, v3.4s
 ;   ret
 
@@ -261,10 +365,18 @@ block0(v0: i32):
   return v3
 }
 
+; VCode:
 ; block0:
 ;   dup v5.4s, w0
 ;   uqxtn v0.4h, v5.4s
 ;   uqxtn2 v0.8h, v0.8h, v5.4s
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   dup v5.4s, w0
+;   uqxtn v0.4h, v5.4s
+;   uqxtn2 v0.8h, v5.4s
 ;   ret
 
 function %uunarrow_i64x2(i64) -> i32x4 {
@@ -280,9 +392,17 @@ block0(v0: i64):
   return v3
 }
 
+; VCode:
 ; block0:
 ;   dup v5.2d, x0
 ;   uqxtn v0.2s, v5.2d
 ;   uqxtn2 v0.4s, v0.4s, v5.2d
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   dup v5.2d, x0
+;   uqxtn v0.2s, v5.2d
+;   uqxtn2 v0.4s, v5.2d
 ;   ret
 

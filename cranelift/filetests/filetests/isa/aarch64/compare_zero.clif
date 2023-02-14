@@ -10,7 +10,13 @@ block0(v0: i8x16):
   return v3
 }
 
+; VCode:
 ; block0:
+;   cmeq v0.16b, v0.16b, #0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   cmeq v0.16b, v0.16b, #0
 ;   ret
 
@@ -21,7 +27,13 @@ block0(v0: i8x16):
   return v2
 }
 
+; VCode:
 ; block0:
+;   cmeq v0.16b, v0.16b, #0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   cmeq v0.16b, v0.16b, #0
 ;   ret
 
@@ -33,7 +45,13 @@ block0(v0: i16x8):
   return v3
 }
 
+; VCode:
 ; block0:
+;   cmeq v0.8h, v0.8h, #0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   cmeq v0.8h, v0.8h, #0
 ;   ret
 
@@ -44,7 +62,13 @@ block0(v0: i16x8):
   return v2
 }
 
+; VCode:
 ; block0:
+;   cmeq v0.8h, v0.8h, #0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   cmeq v0.8h, v0.8h, #0
 ;   ret
 
@@ -56,7 +80,14 @@ block0(v0: i32x4):
   return v3
 }
 
+; VCode:
 ; block0:
+;   cmeq v2.4s, v0.4s, #0
+;   mvn v0.16b, v2.16b
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   cmeq v2.4s, v0.4s, #0
 ;   mvn v0.16b, v2.16b
 ;   ret
@@ -68,7 +99,14 @@ block0(v0: i32x4):
   return v2
 }
 
+; VCode:
 ; block0:
+;   cmeq v2.4s, v0.4s, #0
+;   mvn v0.16b, v2.16b
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   cmeq v2.4s, v0.4s, #0
 ;   mvn v0.16b, v2.16b
 ;   ret
@@ -81,7 +119,14 @@ block0(v0: i64x2):
   return v3
 }
 
+; VCode:
 ; block0:
+;   cmeq v2.2d, v0.2d, #0
+;   mvn v0.16b, v2.16b
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   cmeq v2.2d, v0.2d, #0
 ;   mvn v0.16b, v2.16b
 ;   ret
@@ -93,7 +138,14 @@ block0(v0: i64x2):
   return v2
 }
 
+; VCode:
 ; block0:
+;   cmeq v2.2d, v0.2d, #0
+;   mvn v0.16b, v2.16b
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   cmeq v2.2d, v0.2d, #0
 ;   mvn v0.16b, v2.16b
 ;   ret
@@ -106,7 +158,13 @@ block0(v0: i8x16):
   return v3
 }
 
+; VCode:
 ; block0:
+;   cmle v0.16b, v0.16b, #0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   cmle v0.16b, v0.16b, #0
 ;   ret
 
@@ -117,7 +175,13 @@ block0(v0: i8x16):
   return v2
 }
 
+; VCode:
 ; block0:
+;   cmle v0.16b, v0.16b, #0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   cmle v0.16b, v0.16b, #0
 ;   ret
 
@@ -129,7 +193,13 @@ block0(v0: i16x8):
   return v3
 }
 
+; VCode:
 ; block0:
+;   cmge v0.8h, v0.8h, #0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   cmge v0.8h, v0.8h, #0
 ;   ret
 
@@ -140,7 +210,13 @@ block0(v0: i16x8):
   return v2
 }
 
+; VCode:
 ; block0:
+;   cmge v0.8h, v0.8h, #0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   cmge v0.8h, v0.8h, #0
 ;   ret
 
@@ -152,7 +228,13 @@ block0(v0: i32x4):
   return v3
 }
 
+; VCode:
 ; block0:
+;   cmge v0.4s, v0.4s, #0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   cmge v0.4s, v0.4s, #0
 ;   ret
 
@@ -163,7 +245,13 @@ block0(v0: i32x4):
   return v2
 }
 
+; VCode:
 ; block0:
+;   cmge v0.4s, v0.4s, #0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   cmge v0.4s, v0.4s, #0
 ;   ret
 
@@ -175,7 +263,13 @@ block0(v0: i64x2):
   return v3
 }
 
+; VCode:
 ; block0:
+;   cmle v0.2d, v0.2d, #0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   cmle v0.2d, v0.2d, #0
 ;   ret
 
@@ -186,7 +280,13 @@ block0(v0: i64x2):
   return v2
 }
 
+; VCode:
 ; block0:
+;   cmle v0.2d, v0.2d, #0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   cmle v0.2d, v0.2d, #0
 ;   ret
 
@@ -198,7 +298,13 @@ block0(v0: i8x16):
   return v3
 }
 
+; VCode:
 ; block0:
+;   cmlt v0.16b, v0.16b, #0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   cmlt v0.16b, v0.16b, #0
 ;   ret
 
@@ -209,7 +315,13 @@ block0(v0: i8x16):
   return v2
 }
 
+; VCode:
 ; block0:
+;   cmlt v0.16b, v0.16b, #0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   cmlt v0.16b, v0.16b, #0
 ;   ret
 
@@ -221,7 +333,13 @@ block0(v0: i16x8):
   return v3
 }
 
+; VCode:
 ; block0:
+;   cmgt v0.8h, v0.8h, #0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   cmgt v0.8h, v0.8h, #0
 ;   ret
 
@@ -232,7 +350,13 @@ block0(v0: i16x8):
   return v2
 }
 
+; VCode:
 ; block0:
+;   cmgt v0.8h, v0.8h, #0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   cmgt v0.8h, v0.8h, #0
 ;   ret
 
@@ -244,7 +368,13 @@ block0(v0: i32x4):
   return v3
 }
 
+; VCode:
 ; block0:
+;   cmgt v0.4s, v0.4s, #0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   cmgt v0.4s, v0.4s, #0
 ;   ret
 
@@ -255,7 +385,13 @@ block0(v0: i32x4):
   return v2
 }
 
+; VCode:
 ; block0:
+;   cmgt v0.4s, v0.4s, #0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   cmgt v0.4s, v0.4s, #0
 ;   ret
 
@@ -267,7 +403,13 @@ block0(v0: i64x2):
   return v3
 }
 
+; VCode:
 ; block0:
+;   cmlt v0.2d, v0.2d, #0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   cmlt v0.2d, v0.2d, #0
 ;   ret
 
@@ -278,7 +420,13 @@ block0(v0: i64x2):
   return v2
 }
 
+; VCode:
 ; block0:
+;   cmlt v0.2d, v0.2d, #0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   cmlt v0.2d, v0.2d, #0
 ;   ret
 
@@ -290,7 +438,13 @@ block0(v0: f32x4):
   return v3
 }
 
+; VCode:
 ; block0:
+;   fcmeq v0.4s, v0.4s, #0.0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   fcmeq v0.4s, v0.4s, #0.0
 ;   ret
 
@@ -301,7 +455,13 @@ block0(v0: f32x4):
   return v2
 }
 
+; VCode:
 ; block0:
+;   fcmeq v0.4s, v0.4s, #0.0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   fcmeq v0.4s, v0.4s, #0.0
 ;   ret
 
@@ -313,7 +473,13 @@ block0(v0: f64x2):
   return v3
 }
 
+; VCode:
 ; block0:
+;   fcmeq v0.2d, v0.2d, #0.0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   fcmeq v0.2d, v0.2d, #0.0
 ;   ret
 
@@ -324,7 +490,13 @@ block0(v0: f64x2):
   return v2
 }
 
+; VCode:
 ; block0:
+;   fcmeq v0.2d, v0.2d, #0.0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   fcmeq v0.2d, v0.2d, #0.0
 ;   ret
 
@@ -336,7 +508,14 @@ block0(v0: f64x2):
   return v3
 }
 
+; VCode:
 ; block0:
+;   fcmeq v2.2d, v0.2d, #0.0
+;   mvn v0.16b, v2.16b
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   fcmeq v2.2d, v0.2d, #0.0
 ;   mvn v0.16b, v2.16b
 ;   ret
@@ -348,7 +527,14 @@ block0(v0: f64x2):
   return v2
 }
 
+; VCode:
 ; block0:
+;   fcmeq v2.2d, v0.2d, #0.0
+;   mvn v0.16b, v2.16b
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   fcmeq v2.2d, v0.2d, #0.0
 ;   mvn v0.16b, v2.16b
 ;   ret
@@ -361,7 +547,14 @@ block0(v0: f32x4):
   return v3
 }
 
+; VCode:
 ; block0:
+;   fcmeq v2.4s, v0.4s, #0.0
+;   mvn v0.16b, v2.16b
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   fcmeq v2.4s, v0.4s, #0.0
 ;   mvn v0.16b, v2.16b
 ;   ret
@@ -373,7 +566,14 @@ block0(v0: f32x4):
   return v2
 }
 
+; VCode:
 ; block0:
+;   fcmeq v2.4s, v0.4s, #0.0
+;   mvn v0.16b, v2.16b
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   fcmeq v2.4s, v0.4s, #0.0
 ;   mvn v0.16b, v2.16b
 ;   ret
@@ -386,7 +586,13 @@ block0(v0: f32x4):
   return v3
 }
 
+; VCode:
 ; block0:
+;   fcmle v0.4s, v0.4s, #0.0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   fcmle v0.4s, v0.4s, #0.0
 ;   ret
 
@@ -397,7 +603,13 @@ block0(v0: f32x4):
   return v2
 }
 
+; VCode:
 ; block0:
+;   fcmle v0.4s, v0.4s, #0.0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   fcmle v0.4s, v0.4s, #0.0
 ;   ret
 
@@ -409,7 +621,13 @@ block0(v0: f64x2):
   return v3
 }
 
+; VCode:
 ; block0:
+;   fcmge v0.2d, v0.2d, #0.0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   fcmge v0.2d, v0.2d, #0.0
 ;   ret
 
@@ -420,7 +638,13 @@ block0(v0: f64x2):
   return v2
 }
 
+; VCode:
 ; block0:
+;   fcmge v0.2d, v0.2d, #0.0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   fcmge v0.2d, v0.2d, #0.0
 ;   ret
 
@@ -432,7 +656,13 @@ block0(v0: f64x2):
   return v3
 }
 
+; VCode:
 ; block0:
+;   fcmge v0.2d, v0.2d, #0.0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   fcmge v0.2d, v0.2d, #0.0
 ;   ret
 
@@ -443,7 +673,13 @@ block0(v0: f64x2):
   return v2
 }
 
+; VCode:
 ; block0:
+;   fcmge v0.2d, v0.2d, #0.0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   fcmge v0.2d, v0.2d, #0.0
 ;   ret
 
@@ -455,7 +691,13 @@ block0(v0: f32x4):
   return v3
 }
 
+; VCode:
 ; block0:
+;   fcmle v0.4s, v0.4s, #0.0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   fcmle v0.4s, v0.4s, #0.0
 ;   ret
 
@@ -466,7 +708,13 @@ block0(v0: f32x4):
   return v2
 }
 
+; VCode:
 ; block0:
+;   fcmle v0.4s, v0.4s, #0.0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   fcmle v0.4s, v0.4s, #0.0
 ;   ret
 
@@ -478,7 +726,13 @@ block0(v0: f32x4):
   return v3
 }
 
+; VCode:
 ; block0:
+;   fcmlt v0.4s, v0.4s, #0.0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   fcmlt v0.4s, v0.4s, #0.0
 ;   ret
 
@@ -489,7 +743,13 @@ block0(v0: f32x4):
   return v2
 }
 
+; VCode:
 ; block0:
+;   fcmlt v0.4s, v0.4s, #0.0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   fcmlt v0.4s, v0.4s, #0.0
 ;   ret
 
@@ -501,7 +761,13 @@ block0(v0: f64x2):
   return v3
 }
 
+; VCode:
 ; block0:
+;   fcmgt v0.2d, v0.2d, #0.0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   fcmgt v0.2d, v0.2d, #0.0
 ;   ret
 
@@ -512,7 +778,13 @@ block0(v0: f64x2):
   return v2
 }
 
+; VCode:
 ; block0:
+;   fcmgt v0.2d, v0.2d, #0.0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   fcmgt v0.2d, v0.2d, #0.0
 ;   ret
 
@@ -524,7 +796,13 @@ block0(v0: f64x2):
   return v3
 }
 
+; VCode:
 ; block0:
+;   fcmgt v0.2d, v0.2d, #0.0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   fcmgt v0.2d, v0.2d, #0.0
 ;   ret
 
@@ -535,7 +813,13 @@ block0(v0: f64x2):
   return v2
 }
 
+; VCode:
 ; block0:
+;   fcmgt v0.2d, v0.2d, #0.0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   fcmgt v0.2d, v0.2d, #0.0
 ;   ret
 
@@ -547,7 +831,13 @@ block0(v0: f32x4):
   return v3
 }
 
+; VCode:
 ; block0:
+;   fcmlt v0.4s, v0.4s, #0.0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   fcmlt v0.4s, v0.4s, #0.0
 ;   ret
 
@@ -558,6 +848,13 @@ block0(v0: f32x4):
   return v2
 }
 
+; VCode:
 ; block0:
 ;   fcmlt v0.4s, v0.4s, #0.0
 ;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   fcmlt v0.4s, v0.4s, #0.0
+;   ret
+

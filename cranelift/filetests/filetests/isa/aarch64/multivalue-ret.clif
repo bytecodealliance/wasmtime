@@ -9,8 +9,15 @@ block1:
   return v0, v1
 }
 
+; VCode:
 ; block0:
 ;   movz x0, #1
 ;   movz x1, #2
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x0, #1
+;   mov x1, #2
 ;   ret
 

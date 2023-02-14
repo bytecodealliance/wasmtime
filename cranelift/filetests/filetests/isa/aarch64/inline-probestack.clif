@@ -15,6 +15,7 @@ block0:
   return v1
 }
 
+; VCode:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ;   sub sp, sp, #2048
@@ -22,6 +23,16 @@ block0:
 ;   mov x0, sp
 ;   add sp, sp, #2048
 ;   ldp fp, lr, [sp], #16
+;   ret
+; 
+; Disassembled:
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x800
+; block0: ; offset 0xc
+;   mov x0, sp
+;   add sp, sp, #0x800
+;   ldp x29, x30, [sp], #0x10
 ;   ret
 
 function %unrolled() -> i64 system_v {
@@ -32,6 +43,7 @@ block0:
   return v1
 }
 
+; VCode:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ;   movn x16, #4095 ; str wzr, [sp, x16, SXTX]
@@ -43,6 +55,22 @@ block0:
 ;   add sp, sp, #12288
 ;   ldp fp, lr, [sp], #16
 ;   ret
+; 
+; Disassembled:
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   mov x16, #-0x1000
+;   str wzr, [sp, x16, sxtx]
+;   mov x16, #-0x2000
+;   str wzr, [sp, x16, sxtx]
+;   mov x16, #-0x3000
+;   str wzr, [sp, x16, sxtx]
+;   sub sp, sp, #3, lsl #12
+; block0: ; offset 0x24
+;   mov x0, sp
+;   add sp, sp, #3, lsl #12
+;   ldp x29, x30, [sp], #0x10
+;   ret
 
 function %large() -> i64 system_v {
 ss0 = explicit_slot 100000
@@ -52,6 +80,7 @@ block0:
   return v1
 }
 
+; VCode:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ;   movz x16, #0
@@ -67,5 +96,26 @@ block0:
 ;   movk w16, w16, #1, LSL #16
 ;   add sp, sp, x16, UXTX
 ;   ldp fp, lr, [sp], #16
+;   ret
+; 
+; Disassembled:
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   mov x16, #0
+;   mov w17, #0x86a0
+;   movk w17, #1, lsl #16
+;   sub x16, x16, #1, lsl #12
+;   str wzr, [sp, x16]
+;   cmn x16, x17
+;   b.gt #0x14
+;   mov w16, #0x86a0
+;   movk w16, #1, lsl #16
+;   sub sp, sp, x16
+; block0: ; offset 0x30
+;   mov x0, sp
+;   mov w16, #0x86a0
+;   movk w16, #1, lsl #16
+;   add sp, sp, x16
+;   ldp x29, x30, [sp], #0x10
 ;   ret
 

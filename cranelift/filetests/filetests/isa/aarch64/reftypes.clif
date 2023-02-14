@@ -7,7 +7,12 @@ block0(v0: r64):
   return v0
 }
 
+; VCode:
 ; block0:
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   ret
 
 function %f1(r64) -> i8 {
@@ -16,8 +21,15 @@ block0(v0: r64):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   subs xzr, x0, #0
+;   cset x0, eq
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, #0
 ;   cset x0, eq
 ;   ret
 
@@ -27,8 +39,15 @@ block0(v0: r64):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   adds xzr, x0, #1
+;   cset x0, eq
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmn x0, #1
 ;   cset x0, eq
 ;   ret
 
@@ -38,8 +57,14 @@ block0:
   return v0
 }
 
+; VCode:
 ; block0:
 ;   movz x0, #0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x0, #0
 ;   ret
 
 function %f4(r64, r64) -> r64, r64, r64 {
@@ -62,6 +87,7 @@ block3(v7: r64, v8: r64):
     return v7, v8, v9
 }
 
+; VCode:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ;   sub sp, sp, #32
@@ -92,5 +118,36 @@ block3(v7: r64, v8: r64):
 ;   ldr x2, [x2]
 ;   add sp, sp, #32
 ;   ldp fp, lr, [sp], #16
+;   ret
+; 
+; Disassembled:
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x20
+; block0: ; offset 0xc
+;   stur x0, [sp, #8]
+;   stur x1, [sp, #0x10]
+;   ldr x1, #0x1c
+;   b #0x24
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %f 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   blr x1
+;   mov x15, sp
+;   ldur x6, [sp, #8]
+;   str x6, [x15]
+;   uxtb w0, w0
+;   cbz x0, #0x48
+; block1: ; offset 0x3c
+;   mov x0, x6
+;   ldur x1, [sp, #0x10]
+;   b #0x50
+; block2: ; offset 0x48
+;   mov x1, x6
+;   ldur x0, [sp, #0x10]
+; block3: ; offset 0x50
+;   mov x2, sp
+;   ldr x2, [x2]
+;   add sp, sp, #0x20
+;   ldp x29, x30, [sp], #0x10
 ;   ret
 

@@ -7,6 +7,7 @@ block0(v0: f32):
   return v1
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -14,6 +15,15 @@ block0(v0: f32):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   movd %xmm0, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %f2(i32) -> f32 {
 block0(v0: i32):
@@ -21,6 +31,7 @@ block0(v0: i32):
   return v1
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -28,6 +39,15 @@ block0(v0: i32):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   movd %edi, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %f3(f64) -> i64 {
 block0(v0: f64):
@@ -35,6 +55,7 @@ block0(v0: f64):
   return v1
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -42,6 +63,15 @@ block0(v0: f64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   movq %xmm0, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %f4(i64) -> f64 {
 block0(v0: i64):
@@ -49,6 +79,7 @@ block0(v0: i64):
   return v1
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -56,4 +87,13 @@ block0(v0: i64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   movq %rdi, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 

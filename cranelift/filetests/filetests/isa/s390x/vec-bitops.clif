@@ -7,7 +7,13 @@ block0(v0: i64x2):
     return v1
 }
 
+; VCode:
 ; block0:
+;   vpopctg %v24, %v24
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   vpopctg %v24, %v24
 ;   br %r14
 
@@ -17,7 +23,13 @@ block0(v0: i32x4):
     return v1
 }
 
+; VCode:
 ; block0:
+;   vpopctf %v24, %v24
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   vpopctf %v24, %v24
 ;   br %r14
 
@@ -27,7 +39,13 @@ block0(v0: i16x8):
     return v1
 }
 
+; VCode:
 ; block0:
+;   vpopcth %v24, %v24
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   vpopcth %v24, %v24
 ;   br %r14
 
@@ -37,7 +55,13 @@ block0(v0: i8x16):
     return v1
 }
 
+; VCode:
 ; block0:
+;   vpopctb %v24, %v24
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   vpopctb %v24, %v24
 ;   br %r14
 

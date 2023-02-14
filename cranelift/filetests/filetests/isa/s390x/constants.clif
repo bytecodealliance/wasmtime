@@ -7,7 +7,13 @@ block0:
   return v0
 }
 
+; VCode:
 ; block0:
+;   lhi %r2, -1
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   lhi %r2, -1
 ;   br %r14
 
@@ -17,7 +23,13 @@ block0:
   return v0
 }
 
+; VCode:
 ; block0:
+;   lhi %r2, 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   lhi %r2, 0
 ;   br %r14
 
@@ -27,7 +39,13 @@ block0:
   return v0
 }
 
+; VCode:
 ; block0:
+;   lghi %r2, 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   lghi %r2, 0
 ;   br %r14
 
@@ -37,8 +55,14 @@ block0:
   return v0
 }
 
+; VCode:
 ; block0:
 ;   lgfi %r2, 65535
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   lgfi %r2, 0xffff
 ;   br %r14
 
 function %f() -> i64 {
@@ -47,8 +71,14 @@ block0:
   return v0
 }
 
+; VCode:
 ; block0:
 ;   llilh %r2, 65535
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   llilh %r2, 0xffff
 ;   br %r14
 
 function %f() -> i64 {
@@ -57,8 +87,14 @@ block0:
   return v0
 }
 
+; VCode:
 ; block0:
 ;   llihl %r2, 65535
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   llihl %r2, 0xffff
 ;   br %r14
 
 function %f() -> i64 {
@@ -67,8 +103,14 @@ block0:
   return v0
 }
 
+; VCode:
 ; block0:
 ;   llihh %r2, 65535
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   llihh %r2, 0xffff
 ;   br %r14
 
 function %f() -> i64 {
@@ -77,7 +119,13 @@ block0:
   return v0
 }
 
+; VCode:
 ; block0:
+;   lghi %r2, -1
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   lghi %r2, -1
 ;   br %r14
 
@@ -87,8 +135,14 @@ block0:
   return v0
 }
 
+; VCode:
 ; block0:
 ;   lgfi %r2, -65536
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   lgfi %r2, -0x10000
 ;   br %r14
 
 function %f() -> i64 {
@@ -97,9 +151,16 @@ block0:
   return v0
 }
 
+; VCode:
 ; block0:
 ;   llihf %r2, 4081840291
 ;   iilf %r2, 303169594
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   llihf %r2, 0xf34bf0a3
+;   iilf %r2, 0x1212003a
 ;   br %r14
 
 function %f() -> i64 {
@@ -108,9 +169,16 @@ block0:
   return v0
 }
 
+; VCode:
 ; block0:
 ;   llihh %r2, 4841
 ;   iilh %r2, 7924
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   llihh %r2, 0x12e9
+;   iilh %r2, 0x1ef4
 ;   br %r14
 
 function %f() -> i32 {
@@ -119,7 +187,13 @@ block0:
   return v0
 }
 
+; VCode:
 ; block0:
+;   lhi %r2, -1
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   lhi %r2, -1
 ;   br %r14
 

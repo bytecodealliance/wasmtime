@@ -10,6 +10,7 @@ block0(v0: i64, v1: i32, v2: i32):
     return v7
 }
 
+; VCode:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ;   str x28, [sp, #-16]!
@@ -26,5 +27,28 @@ block0(v0: i64, v1: i32, v2: i32):
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
 ;   ldp fp, lr, [sp], #16
+;   ret
+; 
+; Disassembled:
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   str x28, [sp, #-0x10]!
+;   stp x26, x27, [sp, #-0x10]!
+;   stp x24, x25, [sp, #-0x10]!
+; block0: ; offset 0x14
+;   mov x25, x0
+;   mov x26, x1
+;   mov x28, x2
+;   ldaxr w27, [x25]
+;   cmp x27, x26
+;   b.ne #0x34
+;   stlxr w24, w28, [x25]
+;   cbnz x24, #0x20
+;   cmp w27, w26
+;   cset x0, eq
+;   ldp x24, x25, [sp], #0x10
+;   ldp x26, x27, [sp], #0x10
+;   ldr x28, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
 ;   ret
 

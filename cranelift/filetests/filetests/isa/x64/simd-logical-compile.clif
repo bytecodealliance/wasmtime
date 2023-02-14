@@ -8,6 +8,7 @@ block0(v0: i32x4):
     return v1
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -16,6 +17,16 @@ block0(v0: i32x4):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   pcmpeqd %xmm2, %xmm2
+;   pxor %xmm2, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %vany_true_i32x4(i32x4) -> i8 {
 block0(v0: i32x4):
@@ -23,6 +34,7 @@ block0(v0: i32x4):
     return v1
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -31,6 +43,16 @@ block0(v0: i32x4):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   ptest %xmm0, %xmm0
+;   setne %al
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %vall_true_i64x2(i64x2) -> i8 {
 block0(v0: i64x2):
@@ -38,6 +60,7 @@ block0(v0: i64x2):
     return v1
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -49,4 +72,17 @@ block0(v0: i64x2):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   pxor %xmm2, %xmm2
+;   movdqa %xmm0, %xmm4
+;   pcmpeqq %xmm2, %xmm4
+;   ptest %xmm4, %xmm4
+;   sete %al
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 

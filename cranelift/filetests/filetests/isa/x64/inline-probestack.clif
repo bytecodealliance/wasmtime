@@ -15,6 +15,7 @@ block0:
   return v1
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ;   subq    %rsp, $2048, %rsp
@@ -24,6 +25,17 @@ block0:
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x800, %rsp
+; block0: ; offset 0xb
+;   leaq (%rsp), %rax
+;   addq $0x800, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %unrolled() -> i64 system_v {
 ss0 = explicit_slot 12288
@@ -33,6 +45,7 @@ block0:
   return v1
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ;   movl    %esp, -4096(%rsp)
@@ -45,6 +58,20 @@ block0:
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   movl %esp, -0x1000(%rsp)
+;   movl %esp, -0x2000(%rsp)
+;   movl %esp, -0x3000(%rsp)
+;   subq $0x3000, %rsp
+; block0: ; offset 0x20
+;   leaq (%rsp), %rax
+;   addq $0x3000, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %large() -> i64 system_v {
 ss0 = explicit_slot 100000
@@ -54,6 +81,7 @@ block0:
   return v1
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ;   stack_probe_loop %r11, frame_size=100000, guard_size=4096
@@ -64,3 +92,22 @@ block0:
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   movq %rsp, %r11
+;   subq $0x19000, %r11
+;   subq $0x1000, %rsp
+;   movl %esp, (%rsp)
+;   cmpq %rsp, %r11
+;   jne 0xe
+;   addq $0x19000, %rsp
+;   subq $0x186a0, %rsp
+; block0: ; offset 0x2f
+;   leaq (%rsp), %rax
+;   addq $0x186a0, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

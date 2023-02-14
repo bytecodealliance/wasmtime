@@ -12,12 +12,27 @@ block0:
     return v2
 }
 
+; VCode:
 ; block0:
 ;   movi v30.16b, #0
 ;   movz x4, #1
 ;   fmov s31, w4
 ;   ldr q3, pc+8 ; b 20 ; data.f128 0x11000000000000000000000000000000
 ;   tbl v0.16b, { v30.16b, v31.16b }, v3.16b
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   movi v30.16b, #0
+;   mov x4, #1
+;   fmov s31, w4
+;   ldr q3, #0x14
+;   b #0x24
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   add w0, w0, #0
+;   tbl v0.16b, {v30.16b, v31.16b}, v3.16b
 ;   ret
 
 function %shuffle_same_ssa_value() -> i8x16 {
@@ -27,12 +42,27 @@ block0:
     return v2
 }
 
+; VCode:
 ; block0:
 ;   movz x3, #1
 ;   fmov s31, w3
 ;   ldr q2, pc+8 ; b 20 ; data.f128 0x13000000000000000000000000000000
 ;   mov v30.16b, v31.16b
 ;   tbl v0.16b, { v30.16b, v31.16b }, v2.16b
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x3, #1
+;   fmov s31, w3
+;   ldr q2, #0x10
+;   b #0x20
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   sbfx w0, w0, #0, #1
+;   mov v30.16b, v31.16b
+;   tbl v0.16b, {v30.16b, v31.16b}, v2.16b
 ;   ret
 
 function %swizzle() -> i8x16 {
@@ -43,10 +73,28 @@ block0:
     return v2
 }
 
+; VCode:
 ; block0:
 ;   ldr q2, pc+8 ; b 20 ; data.f128 0x0f0e0d0c0b0a09080706050403020100
 ;   ldr q3, pc+8 ; b 20 ; data.f128 0x0f0e0d0c0b0a09080706050403020100
 ;   tbl v0.16b, { v2.16b }, v3.16b
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   ldr q2, #8
+;   b #0x18
+;   .byte 0x00, 0x01, 0x02, 0x03
+;   .byte 0x04, 0x05, 0x06, 0x07
+;   add w8, w8, w10, lsl #2
+;   .byte 0x0c, 0x0d, 0x0e, 0x0f
+;   ldr q3, #0x20
+;   b #0x30
+;   .byte 0x00, 0x01, 0x02, 0x03
+;   .byte 0x04, 0x05, 0x06, 0x07
+;   add w8, w8, w10, lsl #2
+;   .byte 0x0c, 0x0d, 0x0e, 0x0f
+;   tbl v0.16b, {v2.16b}, v3.16b
 ;   ret
 
 function %splat_i8(i8) -> i8x16 {
@@ -55,7 +103,13 @@ block0(v0: i8):
     return v1
 }
 
+; VCode:
 ; block0:
+;   dup v0.16b, w0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   dup v0.16b, w0
 ;   ret
 
@@ -66,8 +120,14 @@ block0:
     return v1
 }
 
+; VCode:
 ; block0:
 ;   movi v0.16b, #255
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   movi v0.16b, #0xff
 ;   ret
 
 function %splat_i32(i32) -> i32x4 {
@@ -76,7 +136,13 @@ block0(v0: i32):
     return v1
 }
 
+; VCode:
 ; block0:
+;   dup v0.4s, w0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   dup v0.4s, w0
 ;   ret
 
@@ -86,7 +152,13 @@ block0(v0: f64):
     return v1
 }
 
+; VCode:
 ; block0:
+;   dup v0.2d, v0.d[0]
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   dup v0.2d, v0.d[0]
 ;   ret
 
@@ -97,7 +169,14 @@ block0(v0: i64):
     return v2
 }
 
+; VCode:
 ; block0:
+;   ldr w3, [x0]
+;   fmov s0, w3
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   ldr w3, [x0]
 ;   fmov s0, w3
 ;   ret
@@ -108,7 +187,13 @@ block0(v0: i32):
     return v1
 }
 
+; VCode:
 ; block0:
+;   fmov s0, w0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   fmov s0, w0
 ;   ret
 
@@ -118,7 +203,13 @@ block0(v0: f32):
     return v1
 }
 
+; VCode:
 ; block0:
+;   fmov s0, s0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   fmov s0, s0
 ;   ret
 
