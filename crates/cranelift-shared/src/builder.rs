@@ -53,9 +53,12 @@ where
         .set("enable_probestack", "false")
         .expect("should be valid flag");
 
+    let mut isa_flags = lookup(Triple::host()).expect("host machine is not a supported target");
+    cranelift_native::infer_native_flags(&mut isa_flags).unwrap();
+
     Box::new(Builder {
         flags,
-        isa_flags: lookup(Triple::host()).expect("host machine is not a supported target"),
+        isa_flags,
         linkopts: LinkOptions::default(),
         cache_store: None,
         lookup,
