@@ -1,32 +1,76 @@
 use anyhow::Result;
 use object::write::{Object, SymbolId};
 use std::any::Any;
+use std::sync::Mutex;
+use wasmparser::FuncValidatorAllocations;
 use wasmtime_environ::{
-    CompileError, DefinedFuncIndex, FuncIndex, FunctionBodyData, FunctionLoc, ModuleTranslation,
-    ModuleTypes, PrimaryMap, Tunables, WasmFunctionInfo,
+    CompileError, DefinedFuncIndex, FilePos, FuncIndex, FunctionBodyData, FunctionLoc,
+    ModuleTranslation, ModuleTypes, PrimaryMap, Tunables, WasmFunctionInfo,
 };
 use winch_codegen::TargetIsa;
 
 pub(crate) struct Compiler {
     isa: Box<dyn TargetIsa>,
+    allocations: Mutex<Vec<FuncValidatorAllocations>>,
 }
 
 impl Compiler {
     pub fn new(isa: Box<dyn TargetIsa>) -> Self {
-        Self { isa }
+        Self {
+            isa,
+            allocations: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn take_allocations(&self) -> FuncValidatorAllocations {
+        self.allocations
+            .lock()
+            .unwrap()
+            .pop()
+            .unwrap_or_else(Default::default)
+    }
+
+    fn save_allocations(&self, allocs: FuncValidatorAllocations) {
+        self.allocations.lock().unwrap().push(allocs)
     }
 }
 
 impl wasmtime_environ::Compiler for Compiler {
     fn compile_function(
         &self,
-        _translation: &ModuleTranslation<'_>,
-        _index: DefinedFuncIndex,
-        _data: FunctionBodyData<'_>,
-        _tunables: &Tunables,
+        translation: &ModuleTranslation<'_>,
+        index: DefinedFuncIndex,
+        data: FunctionBodyData<'_>,
+        tunables: &Tunables,
         _types: &ModuleTypes,
     ) -> Result<(WasmFunctionInfo, Box<dyn Any + Send>), CompileError> {
-        todo!()
+        let index = translation.module.func_index(index);
+        let sig = translation.get_types().function_at(index.as_u32()).unwrap();
+        let FunctionBodyData { body, validator } = data;
+        let start_srcloc = FilePos::new(
+            body.get_binary_reader()
+                .original_position()
+                .try_into()
+                .unwrap(),
+        );
+        let mut validator = validator.into_validator(self.take_allocations());
+        let buffer = self
+            .isa
+            .compile_function(&sig, &body, &mut validator)
+            .map_err(|e| CompileError::Codegen(format!("{e:?}")));
+        self.save_allocations(validator.into_allocations());
+        let buffer = buffer?;
+
+        // TODO: this should probably get plumbed into winch
+        drop(tunables);
+
+        Ok((
+            WasmFunctionInfo {
+                start_srcloc,
+                stack_maps: Box::new([]),
+            },
+            Box::new(buffer),
+        ))
     }
 
     fn compile_host_to_wasm_trampoline(
