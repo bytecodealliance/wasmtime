@@ -320,3 +320,17 @@
 
   (instance $c (instantiate $c (with "x" (component $x))))
 )
+
+(component
+  (type $t1 u64)
+  (import "a" (type $t2 (eq $t1)))
+  (import "b" (type $t3 (eq $t2)))
+)
+
+(component
+  (import "a" (instance
+    (type $t1 u64)
+    (export $t2 "a" (type (eq $t1)))
+    (export "b" (type (eq $t2)))
+  ))
+)

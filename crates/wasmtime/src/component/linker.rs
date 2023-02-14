@@ -134,8 +134,7 @@ impl<T> Linker<T> {
             let import = self
                 .strings
                 .lookup(name)
-                .and_then(|name| self.map.get(&name))
-                .ok_or_else(|| anyhow!("import `{name}` not defined"))?;
+                .and_then(|name| self.map.get(&name));
             cx.definition(ty, import)
                 .with_context(|| format!("import `{name}` has the wrong type"))?;
         }

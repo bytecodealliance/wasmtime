@@ -484,7 +484,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                 for import in s {
                     let import = import?;
                     let ty = self.types.component_type_ref(&import.ty);
-                    self.result.push_typedef(ty);
+                    self.push_typedef(ty);
                     self.result
                         .initializers
                         .push(LocalInitializer::Import(import.name, ty));
@@ -687,6 +687,28 @@ impl<'a, 'data> Translator<'a, 'data> {
         Ok(Action::KeepGoing)
     }
 
+    fn push_typedef(&mut self, ty: TypeDef) {
+        match ty {
+            TypeDef::ComponentInstance(idx) => {
+                self.result
+                    .component_instances
+                    .push(ComponentInstanceType::Index(idx));
+            }
+            TypeDef::ComponentFunc(idx) => {
+                self.result.component_funcs.push(idx);
+            }
+            TypeDef::Component(idx) => {
+                self.result.components.push(ComponentType::Index(idx));
+            }
+            TypeDef::Interface(_) => {
+                self.types.push_component_typedef(ty);
+            }
+
+            // not processed here
+            TypeDef::CoreFunc(_) | TypeDef::Module(_) => {}
+        }
+    }
+
     fn instantiate_module(
         &mut self,
         module: ModuleIndex,
@@ -852,10 +874,7 @@ impl<'a, 'data> Translator<'a, 'data> {
             // the aliased item is directly available from the instance type.
             ComponentInstanceType::Index(ty) => {
                 let (_url, ty) = &self.types[ty].exports[name];
-                self.result.push_typedef(*ty);
-                if let TypeDef::Interface(_) = ty {
-                    self.types.push_component_typedef(*ty);
-                }
+                self.push_typedef(*ty);
             }
 
             // An imported component was instantiated so the type of the aliased
@@ -863,10 +882,7 @@ impl<'a, 'data> Translator<'a, 'data> {
             // original component.
             ComponentInstanceType::InstantiatedIndex(ty) => {
                 let (_, ty) = self.types[ty].exports[name];
-                self.result.push_typedef(ty);
-                if let TypeDef::Interface(_) = ty {
-                    self.types.push_component_typedef(ty);
-                }
+                self.push_typedef(ty);
             }
 
             // A static nested component was instantiated which means that the
@@ -1023,25 +1039,5 @@ impl<'a, 'data> Translator<'a, 'data> {
             }
         }
         return ret;
-    }
-}
-
-impl Translation<'_> {
-    fn push_typedef(&mut self, ty: TypeDef) {
-        match ty {
-            TypeDef::ComponentInstance(idx) => {
-                self.component_instances
-                    .push(ComponentInstanceType::Index(idx));
-            }
-            TypeDef::ComponentFunc(idx) => {
-                self.component_funcs.push(idx);
-            }
-            TypeDef::Component(idx) => {
-                self.components.push(ComponentType::Index(idx));
-            }
-
-            // not processed here
-            TypeDef::Interface(_) | TypeDef::CoreFunc(_) | TypeDef::Module(_) => {}
-        }
     }
 }
