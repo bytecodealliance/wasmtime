@@ -307,6 +307,12 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     {
         Arc::new(self)
     }
+
+    /// Generate a `Capstone` context for disassembling bytecode for this architecture.
+    #[cfg(feature = "disas")]
+    fn to_capstone(&self) -> Result<capstone::Capstone, capstone::Error> {
+        Err(capstone::Error::UnsupportedArch)
+    }
 }
 
 /// Methods implemented for free for target ISA!

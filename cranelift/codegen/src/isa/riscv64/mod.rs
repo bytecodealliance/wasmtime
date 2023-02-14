@@ -169,6 +169,26 @@ impl TargetIsa for Riscv64Backend {
     fn function_alignment(&self) -> u32 {
         4
     }
+
+    #[cfg(feature = "disas")]
+    fn to_capstone(&self) -> Result<capstone::Capstone, capstone::Error> {
+        use capstone::prelude::*;
+
+        match self.triple().architecture {
+            Architecture::Riscv64 { .. } => {
+                let mut cs = Capstone::new()
+                    .riscv()
+                    .mode(arch::riscv::ArchMode::RiscV64)
+                    .build()?;
+                // Similar to AArch64, RISC-V uses inline constants rather than a separate
+                // constant pool. We want to skip dissasembly over inline constants instead
+                // of stopping on invalid bytes.
+                cs.set_skipdata(true)?;
+                Ok(cs)
+            }
+            _ => Err(capstone::Error::UnsupportedArch),
+        }
+    }
 }
 
 impl fmt::Display for Riscv64Backend {

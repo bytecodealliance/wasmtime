@@ -20,7 +20,7 @@ harness = false
 
 [dependencies]
 cfg-if = "1.0"
-cranelift-codegen = { workspace = true }
+cranelift-codegen = { workspace = true, features = ["disas"] }
 cranelift-entity = { workspace = true }
 cranelift-interpreter = { workspace = true }
 cranelift-reader = { workspace = true }

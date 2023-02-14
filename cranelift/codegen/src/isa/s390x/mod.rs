@@ -170,6 +170,19 @@ impl TargetIsa for S390xBackend {
     fn function_alignment(&self) -> u32 {
         4
     }
+
+    #[cfg(feature = "disas")]
+    fn to_capstone(&self) -> Result<capstone::Capstone, capstone::Error> {
+        use capstone::prelude::*;
+
+        match self.triple().architecture {
+            Architecture::S390x { .. } => Capstone::new()
+                .sysz()
+                .mode(arch::sysz::ArchMode::Default)
+                .build(),
+            _ => Err(capstone::Error::UnsupportedArch),
+        }
+    }
 }
 
 impl fmt::Display for S390xBackend {

@@ -10,13 +10,14 @@ publish = false
 edition.workspace = true
 
 [dependencies]
-cranelift-codegen = { workspace = true, features = ["testing_hooks"] }
+cranelift-codegen = { workspace = true, features = ["testing_hooks", "disas"] }
 cranelift-frontend = { workspace = true }
 cranelift-interpreter = { workspace = true }
 cranelift-native = { workspace = true }
 cranelift-reader = { workspace = true }
 cranelift-jit = { workspace = true, features = ["selinux-fix"] }
 cranelift-module = { workspace = true }
+capstone = { workspace = true }
 file-per-thread-logger = "0.1.2"
 filecheck = "0.5.0"
 gimli = { workspace = true }

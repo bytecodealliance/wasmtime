@@ -548,9 +548,11 @@ dependencies = [
 name = "cranelift-codegen"
 version = "0.94.0"
 dependencies = [
+ "anyhow",
  "arrayvec",
  "bincode",
  "bumpalo",
+ "capstone",
  "cranelift-bforest",
  "cranelift-codegen-meta",
  "cranelift-codegen-shared",
@@ -592,6 +594,7 @@ name = "cranelift-filetests"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "capstone",
  "cranelift",
  "cranelift-codegen",
  "cranelift-frontend",

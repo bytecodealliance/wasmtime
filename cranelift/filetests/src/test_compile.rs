@@ -5,6 +5,9 @@
 use crate::subtest::{run_filecheck, Context, SubTest};
 use anyhow::{bail, Result};
 use cranelift_codegen::ir;
+use cranelift_codegen::ir::function::FunctionParameters;
+use cranelift_codegen::isa;
+use cranelift_codegen::CompiledCode;
 use cranelift_reader::{TestCommand, TestOption};
 use log::info;
 use similar::TextDiff;
@@ -48,6 +51,7 @@ impl SubTest for TestCompile {
 
     fn run(&self, func: Cow<ir::Function>, context: &Context) -> Result<()> {
         let isa = context.isa.expect("compile needs an ISA");
+        let params = func.params.clone();
         let mut comp_ctx = cranelift_codegen::Context::for_function(func.into_owned());
 
         // With `MachBackend`s, we need to explicitly request dissassembly results.
@@ -63,15 +67,25 @@ impl SubTest for TestCompile {
         info!("Generated {} bytes of code:\n{}", total_size, disasm);
 
         if self.precise_output {
-            check_precise_output(&disasm, context)
+            check_precise_output(isa, params, &compiled_code, context)
         } else {
             run_filecheck(&disasm, context)
         }
     }
 }
 
-fn check_precise_output(text: &str, context: &Context) -> Result<()> {
-    let actual = text.lines().collect::<Vec<_>>();
+fn check_precise_output(
+    isa: &dyn isa::TargetIsa,
+    params: FunctionParameters,
+    compiled_code: &CompiledCode,
+    context: &Context,
+) -> Result<()> {
+    let cs = isa
+        .to_capstone()
+        .map_err(|e| anyhow::format_err!("{}", e))?;
+    let buf = compiled_code.buffer.disassemble(Some(&params), &cs)?;
+
+    let actual: Vec<_> = buf.lines().collect();
 
     // Use the comments after the function to build the test expectation.
     let expected = context

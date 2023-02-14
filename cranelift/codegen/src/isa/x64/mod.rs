@@ -171,6 +171,24 @@ impl TargetIsa for X64Backend {
     fn function_alignment(&self) -> u32 {
         16
     }
+
+    #[cfg(feature = "disas")]
+    fn to_capstone(&self) -> Result<capstone::Capstone, capstone::Error> {
+        use capstone::prelude::*;
+        use target_lexicon::Architecture;
+
+        match self.triple().architecture {
+            Architecture::X86_32(_) => Capstone::new()
+                .x86()
+                .mode(arch::x86::ArchMode::Mode32)
+                .build(),
+            Architecture::X86_64 => Capstone::new()
+                .x86()
+                .mode(arch::x86::ArchMode::Mode64)
+                .build(),
+            _ => Err(capstone::Error::UnsupportedArch),
+        }
+    }
 }
 
 impl fmt::Display for X64Backend {
