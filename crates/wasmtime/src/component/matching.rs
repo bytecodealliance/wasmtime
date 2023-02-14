@@ -14,22 +14,23 @@ pub struct TypeChecker<'a> {
 }
 
 impl TypeChecker<'_> {
-    pub fn definition(&self, expected: &TypeDef, actual: &Definition) -> Result<()> {
+    pub fn definition(&self, expected: &TypeDef, actual: Option<&Definition>) -> Result<()> {
         match *expected {
             TypeDef::Module(t) => match actual {
-                Definition::Module(actual) => self.module(&self.types[t], actual),
-                _ => bail!("expected module found {}", actual.desc()),
+                Some(Definition::Module(actual)) => self.module(&self.types[t], actual),
+                _ => bail!("expected module found {}", desc(actual)),
             },
             TypeDef::ComponentInstance(t) => match actual {
-                Definition::Instance(actual) => self.instance(&self.types[t], actual),
-                _ => bail!("expected instance found {}", actual.desc()),
+                Some(Definition::Instance(actual)) => self.instance(&self.types[t], Some(actual)),
+                None => self.instance(&self.types[t], None),
+                _ => bail!("expected instance found {}", desc(actual)),
             },
             TypeDef::ComponentFunc(t) => match actual {
-                Definition::Func(actual) => self.func(t, actual),
-                _ => bail!("expected func found {}", actual.desc()),
+                Some(Definition::Func(actual)) => self.func(t, actual),
+                _ => bail!("expected func found {}", desc(actual)),
             },
-            TypeDef::Component(_) => bail!("expected component found {}", actual.desc()),
-            TypeDef::Interface(_) => bail!("expected type found {}", actual.desc()),
+            TypeDef::Component(_) => bail!("expected component found {}", desc(actual)),
+            TypeDef::Interface(_) => bail!("expected type found {}", desc(actual)),
 
             // not possible for valid components to import
             TypeDef::CoreFunc(_) => unreachable!(),
@@ -67,7 +68,7 @@ impl TypeChecker<'_> {
         Ok(())
     }
 
-    fn instance(&self, expected: &TypeComponentInstance, actual: &NameMap) -> Result<()> {
+    fn instance(&self, expected: &TypeComponentInstance, actual: Option<&NameMap>) -> Result<()> {
         // Like modules, every export in the expected type must be present in
         // the actual type. It's ok, though, to have extra exports in the actual
         // type.
@@ -81,8 +82,7 @@ impl TypeChecker<'_> {
             let actual = self
                 .strings
                 .lookup(name)
-                .and_then(|name| actual.get(&name))
-                .ok_or_else(|| anyhow!("instance export `{name}` not defined"))?;
+                .and_then(|name| actual?.get(&name));
             self.definition(expected, actual)
                 .with_context(|| format!("instance export `{name}` has the wrong type"))?;
         }
@@ -91,6 +91,13 @@ impl TypeChecker<'_> {
 
     fn func(&self, expected: TypeFuncIndex, actual: &HostFunc) -> Result<()> {
         actual.typecheck(expected, self.types)
+    }
+}
+
+fn desc(def: Option<&Definition>) -> &'static str {
+    match def {
+        Some(def) => def.desc(),
+        None => "nothing",
     }
 }
 
