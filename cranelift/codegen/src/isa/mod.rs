@@ -357,24 +357,6 @@ impl<'a> dyn TargetIsa + 'a {
         }
     }
 
-    /// Returns the code (text) section alignment for this ISA.
-    pub fn code_section_alignment(&self) -> u64 {
-        use target_lexicon::*;
-        match (self.triple().operating_system, self.triple().architecture) {
-            (
-                OperatingSystem::MacOSX { .. }
-                | OperatingSystem::Darwin
-                | OperatingSystem::Ios
-                | OperatingSystem::Tvos,
-                Architecture::Aarch64(..),
-            ) => 0x4000,
-            // 64 KB is the maximal page size (i.e. memory translation granule size)
-            // supported by the architecture and is used on some platforms.
-            (_, Architecture::Aarch64(..)) => 0x10000,
-            _ => 0x1000,
-        }
-    }
-
     /// Returns the minimum symbol alignment for this ISA.
     pub fn symbol_alignment(&self) -> u64 {
         match self.triple().architecture {

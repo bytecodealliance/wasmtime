@@ -267,7 +267,22 @@ pub trait Compiler: Send + Sync {
     /// compilation target. Note that this may be an upper-bound where the
     /// alignment is larger than necessary for some platforms since it may
     /// depend on the platform's runtime configuration.
-    fn page_size_align(&self) -> u64;
+    fn page_size_align(&self) -> u64 {
+        use target_lexicon::*;
+        match (self.triple().operating_system, self.triple().architecture) {
+            (
+                OperatingSystem::MacOSX { .. }
+                | OperatingSystem::Darwin
+                | OperatingSystem::Ios
+                | OperatingSystem::Tvos,
+                Architecture::Aarch64(..),
+            ) => 0x4000,
+            // 64 KB is the maximal page size (i.e. memory translation granule size)
+            // supported by the architecture and is used on some platforms.
+            (_, Architecture::Aarch64(..)) => 0x10000,
+            _ => 0x1000,
+        }
+    }
 
     /// Returns a list of configured settings for this compiler.
     fn flags(&self) -> BTreeMap<String, FlagValue>;

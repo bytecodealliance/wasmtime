@@ -115,6 +115,10 @@ impl Compiler {
         }
     }
 
+    pub fn isa(&self) -> &dyn TargetIsa {
+        &*self.isa
+    }
+
     fn take_context(&self) -> CompilerContext {
         let candidate = self.contexts.lock().unwrap().pop();
         candidate
@@ -360,7 +364,7 @@ impl wasmtime_environ::Compiler for Compiler {
         tunables: &Tunables,
         resolve_reloc: &dyn Fn(usize, FuncIndex) -> usize,
     ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
-        let mut builder = ModuleTextBuilder::new(obj, &*self.isa, funcs.len());
+        let mut builder = ModuleTextBuilder::new(obj, self, funcs.len());
         if self.linkopts.force_jump_veneers {
             builder.force_veneers();
         }
@@ -401,7 +405,7 @@ impl wasmtime_environ::Compiler for Compiler {
     ) -> Result<(FunctionLoc, FunctionLoc)> {
         let host_to_wasm = self.host_to_wasm_trampoline(ty)?;
         let wasm_to_host = self.wasm_to_host_trampoline(ty, host_fn)?;
-        let mut builder = ModuleTextBuilder::new(obj, &*self.isa, 2);
+        let mut builder = ModuleTextBuilder::new(obj, self, 2);
         let (_, a) = builder.append_func("host_to_wasm", &host_to_wasm, |_| unreachable!());
         let (_, b) = builder.append_func("wasm_to_host", &wasm_to_host, |_| unreachable!());
         let a = FunctionLoc {
@@ -418,10 +422,6 @@ impl wasmtime_environ::Compiler for Compiler {
 
     fn triple(&self) -> &target_lexicon::Triple {
         self.isa.triple()
-    }
-
-    fn page_size_align(&self) -> u64 {
-        self.isa.code_section_alignment()
     }
 
     fn flags(&self) -> BTreeMap<String, FlagValue> {

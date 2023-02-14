@@ -13,6 +13,7 @@
 //! function body, the imported wasm function do not. The trampolines symbol
 //! names have format "_trampoline_N", where N is `SignatureIndex`.
 
+use crate::compiler::Compiler;
 use crate::{CompiledFunction, RelocationTarget};
 use anyhow::Result;
 use cranelift_codegen::binemit::Reloc;
@@ -29,7 +30,7 @@ use object::{Architecture, SectionKind, SymbolFlags, SymbolKind, SymbolScope};
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::ops::Range;
-use wasmtime_environ::FuncIndex;
+use wasmtime_environ::{Compiler as _, FuncIndex};
 
 const TEXT_SECTION_NAME: &[u8] = b".text";
 
@@ -43,6 +44,7 @@ pub struct ModuleTextBuilder<'a> {
     /// The target that we're compiling for, used to query target-specific
     /// information as necessary.
     isa: &'a dyn TargetIsa,
+    compiler: &'a Compiler,
 
     /// The object file that we're generating code into.
     obj: &'a mut Object<'static>,
@@ -71,7 +73,11 @@ impl<'a> ModuleTextBuilder<'a> {
     /// any unwinding or such information as necessary. The `num_funcs`
     /// parameter indicates the number of times the `append_func` function will
     /// be called. The `finish` function will panic if this contract is not met.
-    pub fn new(obj: &'a mut Object<'static>, isa: &'a dyn TargetIsa, num_funcs: usize) -> Self {
+    pub(crate) fn new(
+        obj: &'a mut Object<'static>,
+        compiler: &'a Compiler,
+        num_funcs: usize,
+    ) -> Self {
         // Entire code (functions and trampolines) will be placed
         // in the ".text" section.
         let text_section = obj.add_section(
@@ -81,11 +87,12 @@ impl<'a> ModuleTextBuilder<'a> {
         );
 
         Self {
-            isa,
+            isa: compiler.isa(),
+            compiler,
             obj,
             text_section,
             unwind_info: Default::default(),
-            text: isa.text_section_builder(num_funcs),
+            text: compiler.isa().text_section_builder(num_funcs),
             libcall_symbols: HashMap::default(),
         }
     }
@@ -236,11 +243,11 @@ impl<'a> ModuleTextBuilder<'a> {
         let text = self.text.finish();
         self.obj
             .section_mut(self.text_section)
-            .set_data(text, self.isa.code_section_alignment());
+            .set_data(text, self.compiler.page_size_align());
 
         // Append the unwind information for all our functions, if necessary.
         self.unwind_info
-            .append_section(self.isa, self.obj, self.text_section);
+            .append_section(self.compiler, self.obj, self.text_section);
     }
 }
 
@@ -333,12 +340,12 @@ impl<'a> UnwindInfoBuilder<'a> {
     /// section immediately.
     ///
     /// The `text_section`'s section identifier is passed into this function.
-    fn append_section(&self, isa: &dyn TargetIsa, obj: &mut Object<'_>, text_section: SectionId) {
+    fn append_section(&self, compiler: &Compiler, obj: &mut Object<'_>, text_section: SectionId) {
         // This write will align the text section to a page boundary and then
         // return the offset at that point. This gives us the full size of the
         // text section at that point, after alignment.
         let text_section_size =
-            obj.append_section_data(text_section, &[], isa.code_section_alignment());
+            obj.append_section_data(text_section, &[], compiler.page_size_align());
 
         if self.windows_xdata.len() > 0 {
             assert!(self.systemv_unwind_info.len() == 0);
@@ -356,7 +363,7 @@ impl<'a> UnwindInfoBuilder<'a> {
             let segment = obj.segment_name(StandardSegment::Data).to_vec();
             let section_id =
                 obj.add_section(segment, b".eh_frame".to_vec(), SectionKind::ReadOnlyData);
-            self.write_systemv_unwind_info(isa, obj, section_id, text_section_size)
+            self.write_systemv_unwind_info(compiler.isa(), obj, section_id, text_section_size)
         }
     }
 

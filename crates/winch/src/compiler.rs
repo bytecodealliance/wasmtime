@@ -61,10 +61,6 @@ impl wasmtime_environ::Compiler for Compiler {
         self.isa.triple()
     }
 
-    fn page_size_align(&self) -> u64 {
-        todo!()
-    }
-
     fn flags(&self) -> std::collections::BTreeMap<String, wasmtime_environ::FlagValue> {
         todo!()
     }
