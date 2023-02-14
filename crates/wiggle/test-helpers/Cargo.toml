@@ -20,7 +20,7 @@ anyhow = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3.1", default-features = false, features = ['fmt'] }
-env_logger = "0.9"
+env_logger = { workspace = true }
 
 [badges]
 maintenance = { status = "actively-developed" }

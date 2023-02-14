@@ -39,4 +39,8 @@ skip-tree = [
     # This is somewhat unmaintained at this point and seems to pull in an old
     # version of `env_logger`, so ignore it.
     { name = "pretty_env_logger", depth = 20 },
+
+    # They want to publish version 2.0 to upgrade `hashbrown` so in the meantime
+    # it is duplicated for us.
+    { name = "indexmap", depth = 2 },
 ]
