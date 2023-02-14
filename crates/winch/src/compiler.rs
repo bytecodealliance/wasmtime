@@ -72,7 +72,7 @@ impl wasmtime_environ::Compiler for Compiler {
     }
 
     fn is_branch_protection_enabled(&self) -> bool {
-        todo!()
+        self.isa.is_branch_protection_enabled()
     }
 
     #[cfg(feature = "component-model")]

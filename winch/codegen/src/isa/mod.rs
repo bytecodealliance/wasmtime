@@ -83,6 +83,11 @@ pub trait TargetIsa: Send + Sync {
     /// Get the ISA-dependent flag values that were used to make this trait object.
     fn isa_flags(&self) -> Vec<settings::Value>;
 
+    /// Get a flag indicating whether branch protection is enabled.
+    fn is_branch_protection_enabled(&self) -> bool {
+        false
+    }
+
     fn compile_function(
         &self,
         sig: &FuncType,

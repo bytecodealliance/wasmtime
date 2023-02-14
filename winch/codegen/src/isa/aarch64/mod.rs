@@ -75,6 +75,10 @@ impl TargetIsa for Aarch64 {
         self.isa_flags.iter().collect()
     }
 
+    fn is_branch_protection_enabled(&self) -> bool {
+        self.isa_flags.use_bti()
+    }
+
     fn compile_function(
         &self,
         sig: &FuncType,
