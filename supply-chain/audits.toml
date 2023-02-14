@@ -1,6 +1,15 @@
 
 # cargo-vet audits file
 
+[[audits.addr2line]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.17.0 -> 0.19.0"
+notes = """
+This is a minor update for addr2line which looks to mainly update its
+dependencies and refactor existing code to expose more functionality and such.
+"""
+
 [[audits.ahash]]
 who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
@@ -62,6 +71,16 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 version = "0.3.66"
 notes = "I am the author of this crate."
+
+[[audits.backtrace]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+delta = "0.3.66 -> 0.3.67"
+notes = """
+This change introduced a new means of learning the current exe by parsing
+Linux-specific constructs and does not constitute any major changes to the
+crate.
+"""
 
 [[audits.base64]]
 who = "Pat Hickey <phickey@fastly.com>"
@@ -307,6 +326,16 @@ criteria = "safe-to-deploy"
 delta = "0.18.0 -> 0.18.1"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[audits.gimli]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.26.1 -> 0.27.0"
+notes = """
+This is a standard update to gimli for more DWARF support for more platforms,
+more features, etc. Some minor `unsafe` code was added that does not appear
+incorrect. Otherwise looks like someone probably ran clippy and/or rustfmt.
+"""
+
 [[audits.hashbrown]]
 who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
@@ -458,6 +487,12 @@ The only changes from 0.6.1 were from my own PR which updated memfd to newer
 dependencies.
 """
 
+[[audits.memoffset]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.7.1 -> 0.8.0"
+notes = "This was a small update to the crate which has to do with Rust language features and compiler versions, no substantial changes."
+
 [[audits.memory_units]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-run"
@@ -465,6 +500,16 @@ delta = "0.3.0 -> 0.4.0"
 notes = """
 This bump only changed from a function to an associated `const` and trivially
 contains no significant changes.
+"""
+
+[[audits.miniz_oxide]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+delta = "0.5.1 -> 0.5.3"
+notes = """
+This looks to be a minor update to the crate to remove some `unsafe` code,
+update Rust stylistic conventions, and perhaps some clippy lints. No major
+changes.
 """
 
 [[audits.object]]
