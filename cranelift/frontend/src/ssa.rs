@@ -544,28 +544,23 @@ impl SSABuilder {
             // There is disagreement in the predecessors on which value to use so we have
             // to keep the block argument.
             let mut preds = self.ssa_blocks[dest_block].predecessors;
+            let dfg = &mut func.stencil.dfg;
             for (idx, &val) in results.as_slice().iter().enumerate() {
                 let pred = preds.get_mut(idx, &mut self.inst_pool).unwrap();
                 let branch = *pred;
-                Self::append_jump_argument(func, branch, dest_block, val)
+
+                let dests = dfg.insts[branch].branch_destination_mut(&mut dfg.jump_tables);
+                assert!(
+                    !dests.is_empty(),
+                    "you have declared a non-branch instruction as a predecessor to a block!"
+                );
+                for block in dests {
+                    if block.block(&dfg.value_lists) == dest_block {
+                        block.append_argument(val, &mut dfg.value_lists);
+                    }
+                }
             }
             sentinel
-        }
-    }
-
-    /// Appends a jump argument to a jump instruction, returns block created in case of
-    /// critical edge splitting.
-    fn append_jump_argument(func: &mut Function, branch: Inst, dest_block: Block, val: Value) {
-        let dfg = &mut func.stencil.dfg;
-        let dests = dfg.insts[branch].branch_destination_mut(&mut dfg.jump_tables);
-        assert!(
-            !dests.is_empty(),
-            "you have declared a non-branch instruction as a predecessor to a block!"
-        );
-        for block in dests {
-            if block.block(&dfg.value_lists) == dest_block {
-                block.append_argument(val, &mut dfg.value_lists);
-            }
         }
     }
 
