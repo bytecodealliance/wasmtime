@@ -1,6 +1,6 @@
 #![allow(unused_variables)]
 
-use crate::wasi_poll::{InputStream, OutputStream};
+use crate::wasi_io::{InputStream, OutputStream};
 use crate::{wasi_filesystem, HostResult, WasiCtx};
 use std::{
     io::{IoSlice, IoSliceMut},
@@ -345,12 +345,12 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
     async fn pread(
         &mut self,
         fd: wasi_filesystem::Descriptor,
-        len: wasi_filesystem::Size,
+        len: wasi_filesystem::Filesize,
         offset: wasi_filesystem::Filesize,
     ) -> HostResult<(Vec<u8>, bool), wasi_filesystem::Errno> {
         let f = self.table_mut().get_file_mut(fd).map_err(convert)?;
 
-        let mut buffer = vec![0; len.try_into().unwrap()];
+        let mut buffer = vec![0; len.try_into().unwrap_or(usize::MAX)];
 
         let (bytes_read, end) = f
             .read_vectored_at(&mut [IoSliceMut::new(&mut buffer)], offset)
@@ -367,7 +367,7 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         fd: wasi_filesystem::Descriptor,
         buf: Vec<u8>,
         offset: wasi_filesystem::Filesize,
-    ) -> HostResult<wasi_filesystem::Size, wasi_filesystem::Errno> {
+    ) -> HostResult<wasi_filesystem::Filesize, wasi_filesystem::Errno> {
         let f = self.table_mut().get_file_mut(fd).map_err(convert)?;
 
         let bytes_written = f
@@ -375,7 +375,9 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
             .await
             .map_err(convert)?;
 
-        Ok(Ok(wasi_filesystem::Size::try_from(bytes_written).unwrap()))
+        Ok(Ok(
+            wasi_filesystem::Filesize::try_from(bytes_written).unwrap()
+        ))
     }
 
     async fn readdir(
@@ -417,7 +419,7 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         })))
     }
 
-    async fn close_dir_entry_stream(
+    async fn drop_dir_entry_stream(
         &mut self,
         stream: wasi_filesystem::DirEntryStream,
     ) -> anyhow::Result<()> {
@@ -600,7 +602,7 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         }
     }
 
-    async fn close(&mut self, fd: wasi_filesystem::Descriptor) -> anyhow::Result<()> {
+    async fn drop_descriptor(&mut self, fd: wasi_filesystem::Descriptor) -> anyhow::Result<()> {
         let table = self.table_mut();
         // TODO: `WasiCtx` no longer keeps track of which directories are preopens, so we currently have no way
         // of preventing them from being closed.  Is that a problem?

@@ -1,6 +1,6 @@
 use crate::{
-    wasi_clocks,
     wasi_io::{InputStream, OutputStream, StreamError},
+    wasi_monotonic_clock::{Instant, MonotonicClock},
     wasi_poll::{Pollable, WasiPoll},
     WasiCtx,
 };
@@ -17,13 +17,13 @@ fn convert(error: wasi_common::Error) -> anyhow::Error {
 
 /// A pollable resource table entry.
 #[derive(Copy, Clone)]
-enum PollableEntry {
+pub(crate) enum PollableEntry {
     /// Poll for read events.
     Read(InputStream),
     /// Poll for write events.
     Write(OutputStream),
     /// Poll for a monotonic-clock timer.
-    MonotonicClock(wasi_clocks::MonotonicClock, wasi_clocks::Instant, bool),
+    MonotonicClock(MonotonicClock, Instant, bool),
 }
 
 #[async_trait::async_trait]
@@ -74,30 +74,5 @@ impl WasiPoll for WasiCtx {
             results[u64::from(data) as usize] = u8::from(true);
         }
         Ok(results)
-    }
-
-    async fn subscribe_read(&mut self, stream: InputStream) -> anyhow::Result<Pollable> {
-        Ok(self
-            .table_mut()
-            .push(Box::new(PollableEntry::Read(stream)))?)
-    }
-
-    async fn subscribe_write(&mut self, stream: OutputStream) -> anyhow::Result<Pollable> {
-        Ok(self
-            .table_mut()
-            .push(Box::new(PollableEntry::Write(stream)))?)
-    }
-
-    async fn subscribe_monotonic_clock(
-        &mut self,
-        clock: wasi_clocks::MonotonicClock,
-        when: wasi_clocks::Instant,
-        absolute: bool,
-    ) -> anyhow::Result<Pollable> {
-        Ok(self
-            .table_mut()
-            .push(Box::new(PollableEntry::MonotonicClock(
-                clock, when, absolute,
-            )))?)
     }
 }

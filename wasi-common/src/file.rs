@@ -405,9 +405,8 @@ impl OutputStream for FileStream {
 
     // TODO: Optimize for file streams.
     /*
-    async fn write_repeated(
+    async fn write_zeroes(
         &mut self,
-        byte: u8,
         nelem: u64,
     ) -> Result<u64, Error> {
         todo!()

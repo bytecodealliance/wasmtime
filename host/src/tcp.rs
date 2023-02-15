@@ -1,7 +1,7 @@
 #![allow(unused_variables)]
 
 use crate::{
-    wasi_poll::{InputStream, OutputStream},
+    wasi_io::{InputStream, OutputStream},
     wasi_tcp::{
         Connection, ConnectionFlags, Errno, IoSize, IpSocketAddress, Ipv4SocketAddress,
         Ipv6SocketAddress, Listener, ListenerFlags, Network, TcpListener, WasiTcp,
