@@ -285,7 +285,7 @@ block0(v0: f64):
 }
 
 ; block0:
-;   ledbra %f0, %f0, 0
+;   ledbra %f0, 0, %f0, 0
 ;   br %r14
 
 function %ceil_f32(f32) -> f32 {
@@ -295,7 +295,7 @@ block0(v0: f32):
 }
 
 ; block0:
-;   fiebr %f0, %f0, 6
+;   fiebr %f0, 6, %f0
 ;   br %r14
 
 function %ceil_f64(f64) -> f64 {
@@ -305,7 +305,7 @@ block0(v0: f64):
 }
 
 ; block0:
-;   fidbr %f0, %f0, 6
+;   fidbr %f0, 6, %f0
 ;   br %r14
 
 function %floor_f32(f32) -> f32 {
@@ -315,7 +315,7 @@ block0(v0: f32):
 }
 
 ; block0:
-;   fiebr %f0, %f0, 7
+;   fiebr %f0, 7, %f0
 ;   br %r14
 
 function %floor_f64(f64) -> f64 {
@@ -325,7 +325,7 @@ block0(v0: f64):
 }
 
 ; block0:
-;   fidbr %f0, %f0, 7
+;   fidbr %f0, 7, %f0
 ;   br %r14
 
 function %trunc_f32(f32) -> f32 {
@@ -335,7 +335,7 @@ block0(v0: f32):
 }
 
 ; block0:
-;   fiebr %f0, %f0, 5
+;   fiebr %f0, 5, %f0
 ;   br %r14
 
 function %trunc_f64(f64) -> f64 {
@@ -345,7 +345,7 @@ block0(v0: f64):
 }
 
 ; block0:
-;   fidbr %f0, %f0, 5
+;   fidbr %f0, 5, %f0
 ;   br %r14
 
 function %nearest_f32(f32) -> f32 {
@@ -355,7 +355,7 @@ block0(v0: f32):
 }
 
 ; block0:
-;   fiebr %f0, %f0, 4
+;   fiebr %f0, 4, %f0
 ;   br %r14
 
 function %nearest_f64(f64) -> f64 {
@@ -365,7 +365,7 @@ block0(v0: f64):
 }
 
 ; block0:
-;   fidbr %f0, %f0, 4
+;   fidbr %f0, 4, %f0
 ;   br %r14
 
 function %fma_f32(f32, f32, f32) -> f32 {
@@ -732,7 +732,7 @@ block0(v0: i8):
 ;   llgcr %r4, %r2
 ;   ldgr %f4, %r4
 ;   wcdlgb %f6, %f4, 0, 3
-;   ledbra %f0, %f6, 4
+;   ledbra %f0, 4, %f6, 0
 ;   br %r14
 
 function %fcvt_from_sint_i8_f32(i8) -> f32 {
@@ -745,7 +745,7 @@ block0(v0: i8):
 ;   lgbr %r4, %r2
 ;   ldgr %f4, %r4
 ;   wcdgb %f6, %f4, 0, 3
-;   ledbra %f0, %f6, 4
+;   ledbra %f0, 4, %f6, 0
 ;   br %r14
 
 function %fcvt_from_uint_i16_f32(i16) -> f32 {
@@ -758,7 +758,7 @@ block0(v0: i16):
 ;   llghr %r4, %r2
 ;   ldgr %f4, %r4
 ;   wcdlgb %f6, %f4, 0, 3
-;   ledbra %f0, %f6, 4
+;   ledbra %f0, 4, %f6, 0
 ;   br %r14
 
 function %fcvt_from_sint_i16_f32(i16) -> f32 {
@@ -771,7 +771,7 @@ block0(v0: i16):
 ;   lghr %r4, %r2
 ;   ldgr %f4, %r4
 ;   wcdgb %f6, %f4, 0, 3
-;   ledbra %f0, %f6, 4
+;   ledbra %f0, 4, %f6, 0
 ;   br %r14
 
 function %fcvt_from_uint_i32_f32(i32) -> f32 {
@@ -784,7 +784,7 @@ block0(v0: i32):
 ;   llgfr %r4, %r2
 ;   ldgr %f4, %r4
 ;   wcdlgb %f6, %f4, 0, 3
-;   ledbra %f0, %f6, 4
+;   ledbra %f0, 4, %f6, 0
 ;   br %r14
 
 function %fcvt_from_sint_i32_f32(i32) -> f32 {
@@ -797,7 +797,7 @@ block0(v0: i32):
 ;   lgfr %r4, %r2
 ;   ldgr %f4, %r4
 ;   wcdgb %f6, %f4, 0, 3
-;   ledbra %f0, %f6, 4
+;   ledbra %f0, 4, %f6, 0
 ;   br %r14
 
 function %fcvt_from_uint_i64_f32(i64) -> f32 {
@@ -809,7 +809,7 @@ block0(v0: i64):
 ; block0:
 ;   ldgr %f2, %r2
 ;   wcdlgb %f4, %f2, 0, 3
-;   ledbra %f0, %f4, 4
+;   ledbra %f0, 4, %f4, 0
 ;   br %r14
 
 function %fcvt_from_sint_i64_f32(i64) -> f32 {
@@ -821,7 +821,7 @@ block0(v0: i64):
 ; block0:
 ;   ldgr %f2, %r2
 ;   wcdgb %f4, %f2, 0, 3
-;   ledbra %f0, %f4, 4
+;   ledbra %f0, 4, %f4, 0
 ;   br %r14
 
 function %fcvt_from_uint_i8_f64(i8) -> f64 {

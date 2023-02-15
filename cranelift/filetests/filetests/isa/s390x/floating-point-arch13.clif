@@ -386,7 +386,7 @@ block0(v0: i64):
 ; block0:
 ;   ldgr %f2, %r2
 ;   wcdlgb %f4, %f2, 0, 3
-;   ledbra %f0, %f4, 4
+;   ledbra %f0, 4, %f4, 0
 ;   br %r14
 
 function %fcvt_from_sint_i64_f32(i64) -> f32 {
@@ -398,7 +398,7 @@ block0(v0: i64):
 ; block0:
 ;   ldgr %f2, %r2
 ;   wcdgb %f4, %f2, 0, 3
-;   ledbra %f0, %f4, 4
+;   ledbra %f0, 4, %f4, 0
 ;   br %r14
 
 function %fcvt_from_uint_i8_f64(i8) -> f64 {

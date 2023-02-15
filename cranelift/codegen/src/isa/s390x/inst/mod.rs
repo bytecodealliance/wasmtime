@@ -2359,11 +2359,16 @@ impl Inst {
                 let (rn, rn_fpr) = pretty_print_fpr(rn, allocs);
                 if opcode_fpr.is_some() && rd_fpr.is_some() && rn_fpr.is_some() {
                     format!(
-                        "{} {}, {}, {}",
+                        "{} {}, {}, {}{}",
                         opcode_fpr.unwrap(),
                         rd_fpr.unwrap(),
+                        mode,
                         rn_fpr.unwrap(),
-                        mode
+                        if opcode_fpr.unwrap().ends_with('a') {
+                            ", 0"
+                        } else {
+                            ""
+                        }
                     )
                 } else if opcode.starts_with('w') {
                     format!(
