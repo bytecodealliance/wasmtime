@@ -1,8 +1,8 @@
 #![allow(unused_variables)] // TODO: remove this when more things are implemented
 
 use crate::bindings::{
-    wasi_clocks, wasi_default_clocks, wasi_exit, wasi_filesystem, wasi_io, wasi_poll, wasi_random,
-    wasi_stderr, wasi_tcp,
+    wasi_default_clocks, wasi_exit, wasi_filesystem, wasi_io, wasi_monotonic_clock, wasi_poll,
+    wasi_random, wasi_stderr, wasi_tcp, wasi_wall_clock,
 };
 use core::arch::wasm32;
 use core::cell::{Cell, RefCell, UnsafeCell};
@@ -13,7 +13,8 @@ use core::mem::{self, align_of, forget, replace, size_of, ManuallyDrop, MaybeUni
 use core::ptr::{self, null_mut};
 use core::slice;
 use wasi::*;
-use wasi_poll::{InputStream, OutputStream, Pollable};
+use wasi_io::{InputStream, OutputStream};
+use wasi_poll::Pollable;
 
 #[macro_use]
 mod macros;
@@ -311,11 +312,11 @@ pub extern "C" fn clock_res_get(id: Clockid, resolution: &mut Timestamp) -> Errn
     State::with(|state| {
         match id {
             CLOCKID_MONOTONIC => {
-                let res = wasi_clocks::monotonic_clock_resolution(state.default_monotonic_clock());
+                let res = wasi_monotonic_clock::resolution(state.default_monotonic_clock());
                 *resolution = res;
             }
             CLOCKID_REALTIME => {
-                let res = wasi_clocks::wall_clock_resolution(state.default_wall_clock());
+                let res = wasi_wall_clock::resolution(state.default_wall_clock());
                 *resolution = Timestamp::from(res.nanoseconds)
                     .checked_add(res.seconds)
                     .and_then(|secs| secs.checked_mul(1_000_000_000))
@@ -342,10 +343,10 @@ pub unsafe extern "C" fn clock_time_get(
         State::with(|state| {
             match id {
                 CLOCKID_MONOTONIC => {
-                    *time = wasi_clocks::monotonic_clock_now(state.default_monotonic_clock());
+                    *time = wasi_monotonic_clock::now(state.default_monotonic_clock());
                 }
                 CLOCKID_REALTIME => {
-                    let res = wasi_clocks::wall_clock_now(state.default_wall_clock());
+                    let res = wasi_wall_clock::now(state.default_wall_clock());
                     *time = Timestamp::from(res.nanoseconds)
                         .checked_add(res.seconds)
                         .and_then(|secs| secs.checked_mul(1_000_000_000))
@@ -665,9 +666,8 @@ pub unsafe extern "C" fn fd_pread(
         let len = (*iovs_ptr).buf_len;
         state.register_buffer(ptr, len);
 
-        let read_len = u32::try_from(len).trapping_unwrap();
         let file = state.get_file(fd)?;
-        let (data, end) = wasi_filesystem::pread(file.fd, read_len, offset)?;
+        let (data, end) = wasi_filesystem::pread(file.fd, len as u64, offset)?;
         assert_eq!(data.as_ptr(), ptr);
         assert!(data.len() <= len);
 
@@ -1557,13 +1557,13 @@ pub unsafe extern "C" fn poll_oneoff(
                         CLOCKID_REALTIME => {
                             let timeout = if absolute {
                                 // Convert `clock.timeout` to `Datetime`.
-                                let mut datetime = wasi_clocks::Datetime {
+                                let mut datetime = wasi_wall_clock::Datetime {
                                     seconds: clock.timeout / 1_000_000_000,
                                     nanoseconds: (clock.timeout % 1_000_000_000) as _,
                                 };
 
                                 // Subtract `now`.
-                                let now = wasi_clocks::wall_clock_now(state.default_wall_clock());
+                                let now = wasi_wall_clock::now(state.default_wall_clock());
                                 datetime.seconds -= now.seconds;
                                 if datetime.nanoseconds < now.nanoseconds {
                                     datetime.seconds -= 1;
@@ -1583,14 +1583,14 @@ pub unsafe extern "C" fn poll_oneoff(
                                 clock.timeout
                             };
 
-                            wasi_poll::subscribe_monotonic_clock(
+                            wasi_monotonic_clock::subscribe(
                                 state.default_monotonic_clock(),
                                 timeout,
                                 false,
                             )
                         }
 
-                        CLOCKID_MONOTONIC => wasi_poll::subscribe_monotonic_clock(
+                        CLOCKID_MONOTONIC => wasi_monotonic_clock::subscribe(
                             state.default_monotonic_clock(),
                             clock.timeout,
                             absolute,
@@ -1602,11 +1602,11 @@ pub unsafe extern "C" fn poll_oneoff(
 
                 EVENTTYPE_FD_READ => {
                     match state.get_read_stream(subscription.u.u.fd_read.file_descriptor) {
-                        Ok(stream) => wasi_poll::subscribe_read(stream),
+                        Ok(stream) => wasi_io::subscribe_read(stream),
                         // If the file descriptor isn't a stream, request a
                         // pollable which completes immediately so that it'll
                         // immediately fail.
-                        Err(ERRNO_BADF) => wasi_poll::subscribe_monotonic_clock(
+                        Err(ERRNO_BADF) => wasi_monotonic_clock::subscribe(
                             state.default_monotonic_clock(),
                             0,
                             false,
@@ -1617,11 +1617,11 @@ pub unsafe extern "C" fn poll_oneoff(
 
                 EVENTTYPE_FD_WRITE => {
                     match state.get_write_stream(subscription.u.u.fd_write.file_descriptor) {
-                        Ok(stream) => wasi_poll::subscribe_write(stream),
+                        Ok(stream) => wasi_io::subscribe(stream),
                         // If the file descriptor isn't a stream, request a
                         // pollable which completes immediately so that it'll
                         // immediately fail.
-                        Err(ERRNO_BADF) => wasi_poll::subscribe_monotonic_clock(
+                        Err(ERRNO_BADF) => wasi_monotonic_clock::subscribe(
                             state.default_monotonic_clock(),
                             0,
                             false,
@@ -2091,7 +2091,7 @@ impl Drop for Descriptor {
                     wasi_io::drop_output_stream(output);
                 }
                 match &stream.type_ {
-                    StreamType::File(file) => wasi_filesystem::close(file.fd),
+                    StreamType::File(file) => wasi_filesystem::drop_descriptor(file.fd),
                     StreamType::Socket(_) => unreachable!(),
                     StreamType::EmptyStdin | StreamType::Unknown => {}
                 }
@@ -2194,7 +2194,7 @@ struct DirEntryStream(wasi_filesystem::DirEntryStream);
 
 impl Drop for DirEntryStream {
     fn drop(&mut self) {
-        wasi_filesystem::close_dir_entry_stream(self.0);
+        wasi_filesystem::drop_dir_entry_stream(self.0);
     }
 }
 
