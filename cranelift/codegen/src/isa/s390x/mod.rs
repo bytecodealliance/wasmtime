@@ -87,7 +87,7 @@ impl TargetIsa for S390xBackend {
         Ok(CompiledCodeStencil {
             buffer,
             frame_size,
-            disasm: emit_result.disasm,
+            vcode: emit_result.disasm,
             value_labels_ranges,
             sized_stackslot_offsets,
             dynamic_stackslot_offsets,

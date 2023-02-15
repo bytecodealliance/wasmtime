@@ -1467,61 +1467,6 @@ impl<T: CompilePhase> MachBufferFinalized<T> {
     pub fn call_sites(&self) -> &[MachCallSite] {
         &self.call_sites[..]
     }
-
-    /// Get the disassembly of the buffer, using the given capstone context.
-    #[cfg(feature = "disas")]
-    pub fn disassemble(
-        &self,
-        params: Option<&crate::ir::function::FunctionParameters>,
-        cs: &capstone::Capstone,
-    ) -> Result<String, anyhow::Error> {
-        use std::fmt::Write;
-
-        let mut buf = String::new();
-
-        let relocs = self.relocs.as_slice();
-        let traps = self.traps.as_slice();
-
-        let insns = cs.disasm_all(&self.data, 0x0).map_err(map_caperr)?;
-        for i in insns.iter() {
-            write!(buf, "  ")?;
-
-            let op_str = i.op_str().unwrap_or("");
-            if let Some(s) = i.mnemonic() {
-                write!(buf, "{}", s)?;
-                if !op_str.is_empty() {
-                    write!(buf, " ")?;
-                }
-            }
-
-            write!(buf, "{}", op_str)?;
-
-            let end = i.address() + i.bytes().len() as u64;
-            let contains = |off| i.address() <= off && off < end;
-
-            if let Some(reloc) = relocs.iter().find(|reloc| contains(reloc.offset as u64)) {
-                write!(
-                    buf,
-                    " ; reloc_external {} {} {}",
-                    reloc.kind,
-                    reloc.name.display(params),
-                    reloc.addend,
-                )?;
-            }
-
-            if let Some(trap) = traps.iter().find(|trap| contains(trap.offset as u64)) {
-                write!(buf, " ; trap: {}", trap.code)?;
-            }
-
-            writeln!(buf)?;
-        }
-
-        return Ok(buf);
-
-        fn map_caperr(err: capstone::Error) -> anyhow::Error {
-            anyhow::format_err!("{}", err)
-        }
-    }
 }
 
 /// A constant that is deferred to the next constant-pool opportunity.

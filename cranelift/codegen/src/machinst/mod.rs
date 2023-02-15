@@ -287,7 +287,7 @@ pub struct CompiledCodeBase<T: CompilePhase> {
     /// Size of stack frame, in bytes.
     pub frame_size: u32,
     /// Disassembly, if requested.
-    pub disasm: Option<String>,
+    pub vcode: Option<String>,
     /// Debug info: value labels to registers/stackslots at code offsets.
     pub value_labels_ranges: ValueLabelsRanges,
     /// Debug info: stackslots to stack pointer offsets.
@@ -317,7 +317,7 @@ impl CompiledCodeStencil {
         CompiledCode {
             buffer: self.buffer.apply_base_srcloc(params.base_srcloc()),
             frame_size: self.frame_size,
-            disasm: self.disasm,
+            vcode: self.vcode,
             value_labels_ranges: self.value_labels_ranges,
             sized_stackslot_offsets: self.sized_stackslot_offsets,
             dynamic_stackslot_offsets: self.dynamic_stackslot_offsets,
@@ -339,6 +339,61 @@ impl<T: CompilePhase> CompiledCodeBase<T> {
     /// Returns a reference to the machine code generated for this function compilation.
     pub fn code_buffer(&self) -> &[u8] {
         self.buffer.data()
+    }
+
+    /// Get the disassembly of the buffer, using the given capstone context.
+    #[cfg(feature = "disas")]
+    pub fn disassemble(
+        &self,
+        params: Option<&crate::ir::function::FunctionParameters>,
+        cs: &capstone::Capstone,
+    ) -> Result<String, anyhow::Error> {
+        use std::fmt::Write;
+
+        let mut buf = String::new();
+
+        let relocs = self.buffer.relocs();
+        let traps = self.buffer.traps();
+
+        let insns = cs.disasm_all(self.buffer.data(), 0x0).map_err(map_caperr)?;
+        for i in insns.iter() {
+            write!(buf, "  ")?;
+
+            let op_str = i.op_str().unwrap_or("");
+            if let Some(s) = i.mnemonic() {
+                write!(buf, "{}", s)?;
+                if !op_str.is_empty() {
+                    write!(buf, " ")?;
+                }
+            }
+
+            write!(buf, "{}", op_str)?;
+
+            let end = i.address() + i.bytes().len() as u64;
+            let contains = |off| i.address() <= off && off < end;
+
+            if let Some(reloc) = relocs.iter().find(|reloc| contains(reloc.offset as u64)) {
+                write!(
+                    buf,
+                    " ; reloc_external {} {} {}",
+                    reloc.kind,
+                    reloc.name.display(params),
+                    reloc.addend,
+                )?;
+            }
+
+            if let Some(trap) = traps.iter().find(|trap| contains(trap.offset as u64)) {
+                write!(buf, " ; trap: {}", trap.code)?;
+            }
+
+            writeln!(buf)?;
+        }
+
+        return Ok(buf);
+
+        fn map_caperr(err: capstone::Error) -> anyhow::Error {
+            anyhow::format_err!("{}", err)
+        }
     }
 }
 

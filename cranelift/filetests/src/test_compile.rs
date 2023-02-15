@@ -62,7 +62,7 @@ impl SubTest for TestCompile {
             .map_err(|e| crate::pretty_anyhow_error(&e.func, e.inner))?;
         let total_size = compiled_code.code_info().total_size;
 
-        let disasm = compiled_code.disasm.as_ref().unwrap();
+        let disasm = compiled_code.vcode.as_ref().unwrap();
 
         info!("Generated {} bytes of code:\n{}", total_size, disasm);
 
@@ -83,7 +83,7 @@ fn check_precise_output(
     let cs = isa
         .to_capstone()
         .map_err(|e| anyhow::format_err!("{}", e))?;
-    let buf = compiled_code.buffer.disassemble(Some(params), &cs)?;
+    let buf = compiled_code.disassemble(Some(params), &cs)?;
 
     let actual: Vec<_> = buf.lines().collect();
 
