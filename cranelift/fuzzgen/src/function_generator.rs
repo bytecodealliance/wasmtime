@@ -1828,10 +1828,9 @@ where
                         let default = next_block;
 
                         let target_count = self.param(&self.config.jump_table_entries)?;
-                        let mut targets = Vec::with_capacity(target_count);
-                        for _ in 0..target_count {
-                            targets.push(self.generate_target_block(block)?);
-                        }
+                        let targets = Result::from_iter(
+                            (0..target_count).map(|_| self.generate_target_block(block)),
+                        )?;
 
                         BlockTerminator::BrTable(default, targets)
                     }
