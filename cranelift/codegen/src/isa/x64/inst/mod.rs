@@ -762,9 +762,9 @@ impl PrettyPrint for Inst {
                 format!(
                     "{} {}, {}, {}",
                     ljustify2(op.to_string(), String::new()),
-                    dst,
-                    src1,
                     src2,
+                    src1,
+                    dst,
                 )
             }
             Inst::UnaryRmR { src, dst, op, size } => {

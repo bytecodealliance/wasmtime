@@ -40,7 +40,7 @@
 ;; block0:
 ;;   jmp     label1
 ;; block1:
-;;   andn    %eax, %esi, %edi
+;;   andn    %edi, %esi, %eax
 ;;   movq    %rbp, %rsp
 ;;   popq    %rbp
 ;;   ret
