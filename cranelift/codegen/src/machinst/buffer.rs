@@ -1487,7 +1487,10 @@ impl<T: CompilePhase> MachBufferFinalized<T> {
             write!(buf, "  ")?;
 
             if let Some(s) = i.mnemonic() {
-                write!(buf, "{}\t", s)?;
+                write!(buf, "{}", s)?;
+                if i.op_str().is_some() {
+                    write!(buf, " ")?;
+                }
             }
 
             if let Some(s) = i.op_str() {
@@ -1511,7 +1514,7 @@ impl<T: CompilePhase> MachBufferFinalized<T> {
                 write!(buf, " ; trap: {}", trap.code)?;
             }
 
-            writeln!(buf, "")?;
+            writeln!(buf)?;
         }
 
         return Ok(buf);

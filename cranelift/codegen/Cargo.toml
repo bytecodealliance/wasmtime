@@ -58,7 +58,7 @@ std = []
 core = []
 
 # Enable the `to_capstone` method on TargetIsa, for constructing a Capstone
-# context.
+# context, and the `disassemble` method on `MachBufferFinalized`.
 disas = ["anyhow", "capstone"]
 
 # This enables some additional functions useful for writing tests, but which

@@ -199,33 +199,17 @@ impl TargetIsa for AArch64Backend {
     #[cfg(feature = "disas")]
     fn to_capstone(&self) -> Result<capstone::Capstone, capstone::Error> {
         use capstone::prelude::*;
-
-        match self.triple().architecture {
-            Architecture::Arm(arm) => {
-                if arm.is_thumb() {
-                    Capstone::new()
-                        .arm()
-                        .mode(arch::arm::ArchMode::Thumb)
-                        .build()
-                } else {
-                    Capstone::new().arm().mode(arch::arm::ArchMode::Arm).build()
-                }
-            }
-            Architecture::Aarch64 { .. } => {
-                let mut cs = Capstone::new()
-                    .arm64()
-                    .mode(arch::arm64::ArchMode::Arm)
-                    .build()?;
-                // AArch64 uses inline constants rather than a separate constant pool right now.
-                // Without this option, Capstone will stop disassembling as soon as it sees
-                // an inline constant that is not also a valid instruction. With this option,
-                // Capstone will print a `.byte` directive with the bytes of the inline constant
-                // and continue to the next instruction.
-                cs.set_skipdata(true)?;
-                Ok(cs)
-            }
-            _ => Err(capstone::Error::UnsupportedArch),
-        }
+        let mut cs = Capstone::new()
+            .arm64()
+            .mode(arch::arm64::ArchMode::Arm)
+            .build()?;
+        // AArch64 uses inline constants rather than a separate constant pool right now.
+        // Without this option, Capstone will stop disassembling as soon as it sees
+        // an inline constant that is not also a valid instruction. With this option,
+        // Capstone will print a `.byte` directive with the bytes of the inline constant
+        // and continue to the next instruction.
+        cs.set_skipdata(true)?;
+        Ok(cs)
     }
 }
 

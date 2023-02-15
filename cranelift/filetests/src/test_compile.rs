@@ -67,7 +67,7 @@ impl SubTest for TestCompile {
         info!("Generated {} bytes of code:\n{}", total_size, disasm);
 
         if self.precise_output {
-            check_precise_output(isa, params, &compiled_code, context)
+            check_precise_output(isa, &params, &compiled_code, context)
         } else {
             run_filecheck(&disasm, context)
         }
@@ -76,7 +76,7 @@ impl SubTest for TestCompile {
 
 fn check_precise_output(
     isa: &dyn isa::TargetIsa,
-    params: FunctionParameters,
+    params: &FunctionParameters,
     compiled_code: &CompiledCode,
     context: &Context,
 ) -> Result<()> {
