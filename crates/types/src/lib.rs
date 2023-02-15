@@ -172,6 +172,15 @@ impl TryFrom<wasmparser::FuncType> for WasmFuncType {
     }
 }
 
+impl From<WasmFuncType> for wasmparser::FuncType {
+    fn from(ty: WasmFuncType) -> wasmparser::FuncType {
+        wasmparser::FuncType::new(
+            ty.params().iter().copied().map(Into::into),
+            ty.returns().iter().copied().map(Into::into),
+        )
+    }
+}
+
 /// Index type of a function (imported or defined) inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct FuncIndex(u32);

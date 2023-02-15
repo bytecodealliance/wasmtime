@@ -79,23 +79,26 @@ impl wasmtime_environ::Compiler for Compiler {
 
     fn compile_host_to_wasm_trampoline(
         &self,
-        _ty: &wasmtime_environ::WasmFuncType,
+        ty: &wasmtime_environ::WasmFuncType,
     ) -> Result<Box<dyn Any + Send>, CompileError> {
-        todo!()
+        let buffer = self
+            .isa
+            .compile_trampoline(ty)
+            .map_err(|e| CompileError::Codegen(format!("{:?}", e)))?;
+
+        Ok(Box::new(CompiledFunction(buffer)))
     }
 
     fn append_code(
         &self,
         obj: &mut Object<'static>,
         funcs: &[(String, Box<dyn Any + Send>)],
-        tunables: &Tunables,
+        _tunables: &Tunables,
         resolve_reloc: &dyn Fn(usize, FuncIndex) -> usize,
     ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
         let mut builder =
             ModuleTextBuilder::new(obj, self, self.isa.text_section_builder(funcs.len()));
-        if self.linkopts.force_jump_veneers {
-            builder.force_veneers();
-        }
+
         let mut ret = Vec::with_capacity(funcs.len());
         for (i, (sym, func)) in funcs.iter().enumerate() {
             let func = &func.downcast_ref::<CompiledFunction>().unwrap().0;
@@ -106,7 +109,7 @@ impl wasmtime_environ::Compiler for Compiler {
             assert!(func.relocs().is_empty());
             assert!(func.traps().is_empty());
             assert!(func.stack_maps().is_empty());
-            assert!(func.call_sites().is_empty());
+            // assert!(func.call_sites().is_empty());
 
             let (sym, range) = builder.append_func(
                 &sym,
@@ -116,7 +119,7 @@ impl wasmtime_environ::Compiler for Compiler {
                 &[],
                 |idx| resolve_reloc(i, idx),
             );
-            builder.append_padding(self.linkopts.padding_between_functions);
+
             let info = FunctionLoc {
                 start: u32::try_from(range.start).unwrap(),
                 length: u32::try_from(range.end - range.start).unwrap(),

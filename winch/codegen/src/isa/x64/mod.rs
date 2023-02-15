@@ -18,6 +18,7 @@ use anyhow::Result;
 use cranelift_codegen::settings::{self, Flags};
 use cranelift_codegen::{isa::x64::settings as x64_settings, Final, MachBufferFinalized};
 use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
+use cranelift_wasm::WasmFuncType;
 use target_lexicon::Triple;
 use wasmparser::{FuncType, FuncValidator, FunctionBody, ValidatorResources};
 

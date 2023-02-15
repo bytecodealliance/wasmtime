@@ -4026,6 +4026,7 @@ version = "0.6.0"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
+ "cranelift-wasm",
  "gimli",
  "regalloc2",
  "smallvec",
@@ -4078,6 +4079,7 @@ dependencies = [
  "capstone",
  "clap",
  "cranelift-codegen",
+ "cranelift-wasm",
  "glob",
  "serde",
  "similar",
