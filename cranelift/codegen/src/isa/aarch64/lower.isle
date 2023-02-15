@@ -2617,6 +2617,249 @@
 (rule (lower (has_type (fits_in_64 ty) (uadd_overflow_trap a b tc)))
       (trap_if_overflow (add_with_flags_paired ty a b) tc))
 
+;;;; Helpers for `*_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; when true, sign extend, otherwise zero extend
+(decl put_in_reg_ext32 (Value bool) Reg)
+(rule (put_in_reg_ext32 val $true)
+      (put_in_reg_sext32 val))
+(rule (put_in_reg_ext32 val $false)
+      (put_in_reg_zext32 val))
+
+;; For values smaller than a register, we emit a normal op with both arguments
+;; zero/sign extended. We then check if the output is the same as itself zero/sign extended.
+(decl overflow_op_small (Type Value Value bool ALUOp) InstOutput)
+(rule (overflow_op_small ty a b sext alu_op)
+      (let ((extend ExtendOp (lower_extend_op ty sext))
+
+            ;; Instead of emitting two `{u,s}xt{b,h}` we do one as an instruction and
+            ;; the other as an extend operation in the alu_op.
+            ;;
+            ;; uxtb    a_ext, a
+            ;; alu_op  out, a_ext, b, {u,s}xtb
+            ;; cmp     out, out, {u,s}xtb
+            ;; cset    out_of, ne
+            (a_ext Reg (put_in_reg_ext32 a sext))
+            (out Reg (alu_rrr_extend alu_op ty a_ext b extend))
+            (out_of Reg (with_flags_reg 
+                  (cmp_extend (OperandSize.Size32) out out extend)
+                  (cset (Cond.Ne)))))
+      (output_pair
+            (value_reg out)
+            (value_reg out_of))))
+
+;; For register sized op's we just emit a op+cset, without further masking.
+;;
+;; op out, a, b
+;; cset out_of, cond
+(decl overflow_op_normal (Type Value Value ALUOp Cond) InstOutput)
+(rule (overflow_op_normal ty a b alu_op cond)
+      (let ((out ValueRegs
+              (with_flags
+                  (alu_rrr_with_flags_paired ty a b alu_op)
+                  (cset_paired cond))))
+      (output_pair
+            (value_regs_get out 0)
+            (value_regs_get out 1))))
+
+;; For 128bit integers we emit, for example, add+adcs+cset
+(decl overflow_op_128 (Value Value ALUOp ALUOp Cond) InstOutput)
+(rule (overflow_op_128 x y alu_op1 alu_op2 cond)
+      (let
+          ;; Get the high/low registers for `x`.
+          ((x_regs ValueRegs x)
+           (x_lo Reg (value_regs_get x_regs 0))
+           (x_hi Reg (value_regs_get x_regs 1))
+
+           ;; Get the high/low registers for `y`.
+           (y_regs ValueRegs y)
+           (y_lo Reg (value_regs_get y_regs 0))
+           (y_hi Reg (value_regs_get y_regs 1)))
+        ;; cannot use the with_flags helper here but it should be fine right now
+        (let    
+            ((lo Reg (alu_rrr alu_op1 $I64 x_lo y_lo))
+             (hi Reg (alu_rrr alu_op2 $I64 x_hi y_hi))
+             (of WritableReg (let 
+                                    ((dst WritableReg (temp_writable_reg $I64))
+                                    (_ Unit (emit (MInst.CSet dst cond))))
+                              dst)
+            ))
+            (output_pair
+                  (value_regs lo hi)
+                  (writable_reg_to_reg of))))
+)
+
+;;;; Rules for `uadd_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; For values smaller than a register, we do a normal `add` with both arguments
+;; zero extended. We then check if the output is the same as itself zero extended.
+(rule 1 (lower (has_type (fits_in_16 ty) (uadd_overflow a b)))
+      (overflow_op_small ty a b $false (ALUOp.Add)))
+
+;; For register sized add's we just emit a adds+cset, without further masking.
+(rule 2 (lower (has_type (ty_32_or_64 ty) (uadd_overflow a b)))
+      (overflow_op_normal ty a b (ALUOp.AddS) (Cond.Hs)))
+
+;; For 128bit integers we emit add+adcs+cset
+(rule 0 (lower (has_type $I128 (uadd_overflow x y)))
+      (overflow_op_128 x y (ALUOp.AddS) (ALUOp.AdcS) (Cond.Hs)))
+
+;;;; Rules for `sadd_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; sxt{b,h} a_ext, a
+;; add out, a_ext, b, sxt{b,h}
+;; cmp out, out, sxt{b,h}
+;; cset of, ne
+(rule 1 (lower (has_type (fits_in_16 ty) (sadd_overflow a b)))
+      (overflow_op_small ty a b $true (ALUOp.Add)))
+
+;; adds a, b
+;; cset of, vs
+(rule 2 (lower (has_type (ty_32_or_64 ty) (sadd_overflow a b)))
+      (overflow_op_normal ty a b (ALUOp.AddS) (Cond.Vs)))
+
+;; adds x_lo, y_lo
+;; addcs x_hi, y_hi
+;; cset of, vs
+(rule 0 (lower (has_type $I128 (sadd_overflow x y)))
+      (overflow_op_128 x y (ALUOp.AddS) (ALUOp.AdcS) (Cond.Vs)))
+
+;;;; Rules for `usub_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; uxt{b,h} a_ext, a
+;; sub out, a_ext, b, ext{b,h}
+;; cmp out, out, uxt{b,h}
+;; cset of, ne
+(rule 1 (lower (has_type (fits_in_16 ty) (usub_overflow a b)))
+      (overflow_op_small ty a b $false (ALUOp.Sub)))
+
+;; subs a, b
+;; cset of, lo
+(rule 2 (lower (has_type (ty_32_or_64 ty) (usub_overflow a b)))
+      (overflow_op_normal ty a b (ALUOp.SubS) (Cond.Lo)))
+
+;; subs x_lo, y_lo
+;; sbcs x_hi, y_hi
+;; cset of, lo
+(rule 0 (lower (has_type $I128 (usub_overflow x y)))
+      (overflow_op_128 x y (ALUOp.SubS) (ALUOp.SbcS) (Cond.Lo)))
+
+;;;; Rules for `ssub_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; sxt{b,h} a_ext, a
+;; sub out, a_ext, b, sxt{b,h}
+;; cmp out, out, sxt{b,h}
+;; cset of, ne
+(rule 1 (lower (has_type (fits_in_16 ty) (ssub_overflow a b)))
+      (overflow_op_small ty a b $true (ALUOp.Sub)))
+
+;; subs a, b
+;; cset of, vs
+(rule 2 (lower (has_type (ty_32_or_64 ty) (ssub_overflow a b)))
+      (overflow_op_normal ty a b (ALUOp.SubS) (Cond.Vs)))
+
+;; subs x_lo, y_lo
+;; sbcs x_hi, y_hi
+;; cset of, vs
+(rule 0 (lower (has_type $I128 (ssub_overflow x y)))
+      (overflow_op_128 x y (ALUOp.SubS) (ALUOp.SbcS) (Cond.Vs)))
+
+;;;; Rules for `umul_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; uxt{b,h} a_ext, a
+;; uxt{b,h} b_ext, b
+;; mul out, a_ext, b_ext
+;; cmp out, out, uxt{b,h}
+;; cset of, ne
+(rule 1 (lower (has_type (fits_in_16 ty) (umul_overflow a b)))
+       (let ((extend ExtendOp (lower_extend_op ty $false))
+
+             (a_uext Reg (put_in_reg_zext32 a))
+             (b_uext Reg (put_in_reg_zext32 b))
+             (out Reg (madd ty a_uext b_uext (zero_reg)))
+             (out_of Reg (with_flags_reg 
+                   (cmp_extend (OperandSize.Size32) out out extend)
+                   (cset (Cond.Ne)))))
+       (output_pair
+             (value_reg out)
+             (value_reg out_of))))
+
+;; umull out, a, b
+;; cmp out, out, uxtw
+;; cset of, ne
+(rule 2 (lower (has_type $I32 (umul_overflow a b)))
+       (let (
+             (out Reg (umaddl a b (zero_reg)))
+             (out_of Reg (with_flags_reg 
+                   (cmp_extend (OperandSize.Size64) out out (ExtendOp.UXTW))
+                   (cset (Cond.Ne)))))
+       (output_pair
+             (value_reg out)
+             (value_reg out_of))))
+
+;; mul out, a, b
+;; umulh tmp, a, b
+;; cmp tmp, #0
+;; cset of, ne
+(rule 2 (lower (has_type $I64 (umul_overflow a b)))
+       (let (
+             (out Reg (madd $I64 a b (zero_reg)))
+             (tmp Reg (umulh $I64 a b))
+             (out_of Reg (with_flags_reg 
+                   (cmp64_imm tmp (u8_into_imm12 0))
+                   (cset (Cond.Ne)))))
+       (output_pair
+             (value_reg out)
+             (value_reg out_of))))
+
+;;;; Rules for `smul_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; sxt{b,h} a_ext, a
+;; sxt{b,h} b_ext, b
+;; mul out, a_ext, b_ext
+;; cmp out, out, sxt{b,h}
+;; cset of, ne
+(rule 1 (lower (has_type (fits_in_16 ty) (smul_overflow a b)))
+       (let ((extend ExtendOp (lower_extend_op ty $true))
+
+             (a_sext Reg (put_in_reg_sext32 a))
+             (b_sext Reg (put_in_reg_sext32 b))
+             (out Reg (madd ty a_sext b_sext (zero_reg)))
+             (out_of Reg (with_flags_reg 
+                   (cmp_extend (OperandSize.Size32) out out extend)
+                   (cset (Cond.Ne)))))
+       (output_pair
+             (value_reg out)
+             (value_reg out_of))))
+
+;; smull out, a, b
+;; cmp out, out, sxtw
+;; cset of, ne
+(rule 2 (lower (has_type $I32 (smul_overflow a b)))
+       (let (
+             (out Reg (smaddl a b (zero_reg)))
+             (out_of Reg (with_flags_reg 
+                   (cmp_extend (OperandSize.Size64) out out (ExtendOp.SXTW))
+                   (cset (Cond.Ne)))))
+       (output_pair
+             (value_reg out)
+             (value_reg out_of))))
+
+;; mul out, a, b
+;; smulh tmp, a, b
+;; cmp tmp, out, ASR #63
+;; cset of, ne
+(rule 2 (lower (has_type $I64 (smul_overflow a b)))
+       (let (
+             (out Reg (madd $I64 a b (zero_reg)))
+             (tmp Reg (smulh $I64 a b))
+             (out_of Reg (with_flags_reg 
+                   (cmp_rr_shift_asr (OperandSize.Size64) tmp out 63)
+                   (cset (Cond.Ne)))))
+       (output_pair
+             (value_reg out)
+             (value_reg out_of))))
+
 ;;; Rules for `tls_value` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (tls_model (TlsModel.ElfGd)) (tls_value (symbol_value_data name _ _))))

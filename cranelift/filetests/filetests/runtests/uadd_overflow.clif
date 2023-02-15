@@ -1,6 +1,7 @@
 test interpret
 test run
 target x86_64
+target aarch64
 
 function %uaddof_i64(i64, i64) -> i64 {
 block0(v0: i64,v1: i64):
