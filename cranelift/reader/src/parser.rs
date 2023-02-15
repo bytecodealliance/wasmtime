@@ -97,6 +97,8 @@ pub struct ParseOptions<'a> {
     pub default_calling_convention: CallConv,
     /// Default for unwind-info setting (enabled or disabled).
     pub unwind_info: bool,
+    /// Default for machine_code_cfg_info setting (enabled or disabled).
+    pub machine_code_cfg_info: bool,
 }
 
 impl Default for ParseOptions<'_> {
@@ -106,6 +108,7 @@ impl Default for ParseOptions<'_> {
             target: None,
             default_calling_convention: CallConv::Fast,
             unwind_info: false,
+            machine_code_cfg_info: false,
         }
     }
 }
@@ -1046,9 +1049,24 @@ impl<'a> Parser<'a> {
         let mut targets = Vec::new();
         let mut flag_builder = settings::builder();
 
-        let unwind_info = if options.unwind_info { "true" } else { "false" };
+        let bool_to_str = |val: bool| {
+            if val {
+                "true"
+            } else {
+                "false"
+            }
+        };
+
+        // default to enabling cfg info
         flag_builder
-            .set("unwind_info", unwind_info)
+            .set(
+                "machine_code_cfg_info",
+                bool_to_str(options.machine_code_cfg_info),
+            )
+            .expect("machine_code_cfg_info option should be present");
+
+        flag_builder
+            .set("unwind_info", bool_to_str(options.unwind_info))
             .expect("unwind_info option should be present");
 
         while let Some(Token::Identifier(command)) = self.token() {

@@ -38,6 +38,7 @@ pub fn run(
     let options = ParseOptions {
         target,
         passes,
+        machine_code_cfg_info: true,
         ..ParseOptions::default()
     };
 

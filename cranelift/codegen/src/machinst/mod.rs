@@ -354,9 +354,19 @@ impl<T: CompilePhase> CompiledCodeBase<T> {
 
         let relocs = self.buffer.relocs();
         let traps = self.buffer.traps();
+        let labels = self.bb_starts.as_slice();
 
         let insns = cs.disasm_all(self.buffer.data(), 0x0).map_err(map_caperr)?;
         for i in insns.iter() {
+            if let Some((n, off)) = labels
+                .iter()
+                .copied()
+                .enumerate()
+                .find(|(_, val)| *val == i.address() as u32)
+            {
+                writeln!(buf, "block{}: ; offset 0x{:x}", n, off)?;
+            }
+
             write!(buf, "  ")?;
 
             let op_str = i.op_str().unwrap_or("");
