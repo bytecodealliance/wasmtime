@@ -361,6 +361,10 @@
 (decl ty_int_ref_64 (Type) Type)
 (extern extractor ty_int_ref_64 ty_int_ref_64)
 
+;; An extractor that matches int or reference types bigger than 16 bits but at most 64 bits.
+(decl ty_int_ref_16_to_64 (Type) Type)
+(extern extractor ty_int_ref_16_to_64 ty_int_ref_16_to_64)
+
 ;; An extractor that only matches integers.
 (decl ty_int (Type) Type)
 (extern extractor ty_int ty_int)

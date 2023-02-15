@@ -111,6 +111,90 @@
         (output_pair (value_regs_get results 0)
                      (value_regs_get results 1))))
 
+;;;; Helpers for `*_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl construct_overflow_op (CC ProducesFlags) InstOutput)
+(rule (construct_overflow_op cc inst)
+      (let ((results ValueRegs (with_flags inst
+                                           (x64_setcc_paired cc))))
+        (output_pair (value_regs_get results 0)
+                     (value_regs_get results 1))))
+
+(decl construct_overflow_op_alu (Type CC AluRmiROpcode Gpr GprMemImm) InstOutput)
+(rule (construct_overflow_op_alu ty cc alu_op src1 src2)
+      (construct_overflow_op cc (x64_alurmi_with_flags_paired alu_op ty src1 src2)))
+
+;; This essentially creates
+;; alu_<op1> x_lo, y_lo
+;; alu_<op2> x_hi, y_hi
+;; set<cc> r8
+(decl construct_overflow_op_alu_128 (CC AluRmiROpcode AluRmiROpcode Value Value) InstOutput)
+(rule (construct_overflow_op_alu_128 cc op1 op2 x y)
+      ;; Get the high/low registers for `x`.
+      (let ((x_regs ValueRegs x)
+            (x_lo Gpr (value_regs_get_gpr x_regs 0))
+            (x_hi Gpr (value_regs_get_gpr x_regs 1)))
+        ;; Get the high/low registers for `y`.
+        (let ((y_regs ValueRegs y)
+              (y_lo Gpr (value_regs_get_gpr y_regs 0))
+              (y_hi Gpr (value_regs_get_gpr y_regs 1)))
+          (let    ((lo Gpr (alu_rmi_r $I64 op1 x_lo y_lo))
+                   (hi Gpr (alu_rmi_r $I64 op2 x_hi y_hi))
+                   (of WritableGpr (let ((dst WritableGpr (temp_writable_gpr))
+                              (_ Unit (emit (MInst.Setcc cc dst))))
+                              dst
+                   )))
+                  (output_pair      (value_regs (gpr_to_reg lo)
+                                                (gpr_to_reg hi))
+                                    (writable_reg_to_reg (writable_gpr_to_reg of)))))))
+
+;;;; Rules for `uadd_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 1 (lower (uadd_overflow x y @ (value_type (fits_in_64 ty))))
+      (construct_overflow_op_alu ty (CC.B) (AluRmiROpcode.Add) x y))
+
+;; i128 gets lowered into adc and add
+(rule 0 (lower (uadd_overflow x y @ (value_type $I128)))
+        (construct_overflow_op_alu_128 (CC.B) (AluRmiROpcode.Add) (AluRmiROpcode.Adc) x y))
+
+;;;; Rules for `sadd_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 1 (lower (sadd_overflow x y @ (value_type (fits_in_64 ty))))
+      (construct_overflow_op_alu ty (CC.O) (AluRmiROpcode.Add) x y))
+
+(rule 0 (lower (sadd_overflow x y @ (value_type $I128)))
+        (construct_overflow_op_alu_128 (CC.O) (AluRmiROpcode.Add) (AluRmiROpcode.Adc) x y))
+
+;;;; Rules for `usub_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 1 (lower (usub_overflow x y @ (value_type (fits_in_64 ty))))
+      (construct_overflow_op_alu ty (CC.B) (AluRmiROpcode.Sub) x y))
+
+(rule 0 (lower (usub_overflow x y @ (value_type $I128)))
+        (construct_overflow_op_alu_128 (CC.B) (AluRmiROpcode.Sub) (AluRmiROpcode.Sbb) x y))
+
+;;;; Rules for `ssub_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 1 (lower (ssub_overflow x y @ (value_type (fits_in_64 ty))))
+      (construct_overflow_op_alu ty (CC.O) (AluRmiROpcode.Sub) x y))
+
+(rule 0 (lower (ssub_overflow x y @ (value_type $I128)))
+        (construct_overflow_op_alu_128 (CC.O) (AluRmiROpcode.Sub) (AluRmiROpcode.Sbb) x y))
+
+;;;; Rules for `umul_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 2 (lower (umul_overflow x y @ (value_type (fits_in_64 ty))))
+      (construct_overflow_op (CC.O) (x64_umullo_with_flags_paired ty x y)))
+
+;;;; Rules for `smul_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 2 (lower (smul_overflow x y @ (value_type (ty_int_ref_16_to_64 ty))))
+      (construct_overflow_op_alu ty (CC.O) (AluRmiROpcode.Mul) x y))
+
+;; there is no 8bit imul with an immediate operand so we need to put it in a register or memory
+(rule 1 (lower (smul_overflow x y @ (value_type $I8)))
+      (construct_overflow_op (CC.O) (x64_alurmi_with_flags_paired (AluRmiROpcode.Mul) $I8 x (reg_mem_to_reg_mem_imm (put_in_reg_mem y)))))
+
 ;;;; Rules for `sadd_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (multi_lane 8 16)

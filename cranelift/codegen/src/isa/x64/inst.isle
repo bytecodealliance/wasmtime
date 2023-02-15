@@ -14,14 +14,14 @@
        ;; Integer instructions.
 
        ;; Integer arithmetic/bit-twiddling.
-       (AluRmiR (size OperandSize) ;; 4 or 8
+       (AluRmiR (size OperandSize) ;; 1, 2, 4 or 8
                 (op AluRmiROpcode)
                 (src1 Gpr)
                 (src2 GprMemImm)
                 (dst WritableGpr))
 
        ;; Integer arithmetic read-modify-write on memory.
-       (AluRM (size OperandSize) ;; 4 or 8
+       (AluRM (size OperandSize) ;; 1, 2, 4 or 8
               (op AluRmiROpcode)
               (src1_dst SyntheticAmode)
               (src2 Gpr))
@@ -85,6 +85,12 @@
               (src2 GprMem)
               (dst_lo WritableGpr)
               (dst_hi WritableGpr))
+
+       ;; x64 'mul' instruction but it only outputs the low half
+       (UMulLo    (size OperandSize)
+                  (src1 Gpr)
+                  (src2 GprMem)
+                  (dst WritableGpr))
 
        ;; A synthetic instruction sequence used as part of the lowering of the
        ;; `srem` instruction which returns 0 if the divisor is -1 and
@@ -2118,6 +2124,17 @@
                         dst)
          dst)))
 
+(decl x64_alurmi_with_flags_paired (AluRmiROpcode Type Gpr GprMemImm) ProducesFlags)
+(rule (x64_alurmi_with_flags_paired opc (fits_in_64 ty) src1 src2)
+      (let ((dst WritableGpr (temp_writable_gpr)))
+        (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
+         (MInst.AluRmiR (raw_operand_size_of_type ty)
+                        opc
+                        src1
+                        src2
+                        dst)
+         dst)))
+
 ;; Helper for creating `adc` instructions.
 (decl x64_adc_paired (Type Gpr GprMemImm) ConsumesFlags)
 (rule (x64_adc_paired ty src1 src2)
@@ -2169,6 +2186,24 @@
                  (AluRmiROpcode.Mul)
                  src1
                  src2))
+
+;; Helper for creating `umullo` instructions.
+(decl x64_umullo (Type Gpr GprMem) Gpr)
+(rule (x64_umullo ty src1 src2)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (size OperandSize (raw_operand_size_of_type ty))
+            (_ Unit (emit (MInst.UMulLo size src1 src2 dst))))
+        dst))
+
+(decl x64_umullo_with_flags_paired (Type Gpr GprMem) ProducesFlags)
+(rule (x64_umullo_with_flags_paired ty src1 src2)
+      (let ((dst WritableGpr (temp_writable_gpr)))
+           (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
+                 (MInst.UMulLo (raw_operand_size_of_type ty)
+                               src1
+                               src2
+                               dst)
+                  dst)))
 
 ;; Helper for emitting `and` instructions.
 (decl x64_and (Type Gpr GprMemImm) Gpr)
