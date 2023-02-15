@@ -83,7 +83,7 @@ fn check_precise_output(
     let cs = isa
         .to_capstone()
         .map_err(|e| anyhow::format_err!("{}", e))?;
-    let buf = compiled_code.buffer.disassemble(Some(&params), &cs)?;
+    let buf = compiled_code.buffer.disassemble(Some(params), &cs)?;
 
     let actual: Vec<_> = buf.lines().collect();
 
