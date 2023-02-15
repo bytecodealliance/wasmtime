@@ -42,7 +42,7 @@ block0(v0: i64):
 ;   subs xzr, sp, x0, UXTX
 ;   b.hs 8 ; udf
 ; block0:
-;   ldr x2, 8 ; b 12 ; data TestCase(%foo) + 0
+;   load_ext_name x2, TestCase(%foo)+0
 ;   blr x2
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -65,7 +65,7 @@ block0(v0: i64):
 ;   subs xzr, sp, x16, UXTX
 ;   b.hs 8 ; udf
 ; block0:
-;   ldr x2, 8 ; b 12 ; data TestCase(%foo) + 0
+;   load_ext_name x2, TestCase(%foo)+0
 ;   blr x2
 ;   ldp fp, lr, [sp], #16
 ;   ret

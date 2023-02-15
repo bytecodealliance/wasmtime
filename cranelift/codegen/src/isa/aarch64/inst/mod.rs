@@ -1080,7 +1080,7 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             }
             CondBrKind::Cond(_) => {}
         },
-        &Inst::Adr { rd, .. } => {
+        &Inst::Adr { rd, .. } | &Inst::Adrp { rd, .. } => {
             collector.reg_def(rd);
         }
         &Inst::Word4 { .. } | &Inst::Word8 { .. } => {}
@@ -2745,6 +2745,12 @@ impl Inst {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
                 format!("adr {}, pc+{}", rd, off)
             }
+            &Inst::Adrp { rd, off } => {
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                // This instruction addresses 4KiB pages, so multiply it by the page size.
+                let byte_offset = off * 4096;
+                format!("adrp {}, pc+{}", rd, byte_offset)
+            }
             &Inst::Word4 { data } => format!("data.i32 {}", data),
             &Inst::Word8 { data } => format!("data.i64 {}", data),
             &Inst::JTSequence {
@@ -2789,7 +2795,7 @@ impl Inst {
                 offset,
             } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
-                format!("ldr {}, 8 ; b 12 ; data {:?} + {}", rd, name, offset)
+                format!("load_ext_name {rd}, {name:?}+{offset}")
             }
             &Inst::LoadAddr { rd, ref mem } => {
                 // TODO: we really should find a better way to avoid duplication of

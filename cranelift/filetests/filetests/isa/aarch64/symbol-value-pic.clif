@@ -1,5 +1,6 @@
 test compile precise-output
 set unwind_info=false
+set is_pic
 target aarch64
 
 function %f() -> i64 {

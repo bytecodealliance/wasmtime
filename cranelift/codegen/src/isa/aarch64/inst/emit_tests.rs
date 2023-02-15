@@ -6074,6 +6074,24 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
+        Inst::Adrp {
+            rd: writable_xreg(8),
+            off: 0,
+        },
+        "08000090",
+        "adrp x8, pc+0",
+    ));
+
+    insns.push((
+        Inst::Adrp {
+            rd: writable_xreg(3),
+            off: 16,
+        },
+        "83000090",
+        "adrp x3, pc+65536",
+    ));
+
+    insns.push((
         Inst::FpuMove64 {
             rd: writable_vreg(8),
             rn: vreg(4),

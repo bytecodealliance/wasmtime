@@ -852,6 +852,11 @@
         (rd WritableReg)
         ;; Offset in range -2^20 .. 2^20.
         (off i32))
+      
+       ;; Compute the address (using a PC-relative offset) of a 4KB page.
+       (Adrp
+        (rd WritableReg)
+        (off i32))
 
        ;; Raw 32-bit word, used for inline constants and jump-table entries.
        (Word4

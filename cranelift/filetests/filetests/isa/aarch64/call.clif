@@ -14,7 +14,7 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   ldr x3, 8 ; b 12 ; data TestCase(%g) + 0
+;   load_ext_name x3, TestCase(%g)+0
 ;   blr x3
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -30,7 +30,7 @@ block0(v0: i32):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   ldr x3, 8 ; b 12 ; data TestCase(%g) + 0
+;   load_ext_name x3, TestCase(%g)+0
 ;   blr x3
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -54,7 +54,7 @@ block0(v0: i32):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   ldr x3, 8 ; b 12 ; data TestCase(%g) + 0
+;   load_ext_name x3, TestCase(%g)+0
 ;   blr x3
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -91,7 +91,7 @@ block0(v0: i8):
 ;   movz w6, #42
 ;   movz w7, #42
 ;   strb w8, [sp]
-;   ldr x8, 8 ; b 12 ; data TestCase(%g) + 0
+;   load_ext_name x8, TestCase(%g)+0
 ;   blr x8
 ;   add sp, sp, #16
 ;   virtual_sp_offset_adjust -16
@@ -140,24 +140,24 @@ block0:
 ;   mov fp, sp
 ;   sub sp, sp, #48
 ; block0:
-;   ldr x9, 8 ; b 12 ; data TestCase(%g0) + 0
+;   load_ext_name x9, TestCase(%g0)+0
 ;   blr x9
 ;   str q0, [sp, #32]
-;   ldr x9, 8 ; b 12 ; data TestCase(%g1) + 0
+;   load_ext_name x9, TestCase(%g1)+0
 ;   blr x9
 ;   str q0, [sp, #16]
-;   ldr x9, 8 ; b 12 ; data TestCase(%g1) + 0
+;   load_ext_name x9, TestCase(%g1)+0
 ;   blr x9
 ;   str q0, [sp]
-;   ldr x9, 8 ; b 12 ; data TestCase(%g2) + 0
+;   load_ext_name x9, TestCase(%g2)+0
 ;   blr x9
-;   ldr x10, 8 ; b 12 ; data TestCase(%g3) + 0
+;   load_ext_name x10, TestCase(%g3)+0
 ;   ldr q0, [sp, #32]
 ;   blr x10
-;   ldr x11, 8 ; b 12 ; data TestCase(%g4) + 0
+;   load_ext_name x11, TestCase(%g4)+0
 ;   ldr q0, [sp, #16]
 ;   blr x11
-;   ldr x12, 8 ; b 12 ; data TestCase(%g4) + 0
+;   load_ext_name x12, TestCase(%g4)+0
 ;   ldr q0, [sp]
 ;   blr x12
 ;   add sp, sp, #48
@@ -184,24 +184,24 @@ block0:
 ;   mov fp, sp
 ;   sub sp, sp, #48
 ; block0:
-;   ldr x9, 8 ; b 12 ; data TestCase(%g0) + 0
+;   load_ext_name x9, TestCase(%g0)+0
 ;   blr x9
 ;   str q0, [sp, #32]
-;   ldr x9, 8 ; b 12 ; data TestCase(%g0) + 0
+;   load_ext_name x9, TestCase(%g0)+0
 ;   blr x9
 ;   str q0, [sp, #16]
-;   ldr x9, 8 ; b 12 ; data TestCase(%g0) + 0
+;   load_ext_name x9, TestCase(%g0)+0
 ;   blr x9
 ;   str q0, [sp]
-;   ldr x9, 8 ; b 12 ; data TestCase(%g1) + 0
+;   load_ext_name x9, TestCase(%g1)+0
 ;   blr x9
-;   ldr x10, 8 ; b 12 ; data TestCase(%g2) + 0
+;   load_ext_name x10, TestCase(%g2)+0
 ;   ldr q0, [sp, #32]
 ;   blr x10
-;   ldr x11, 8 ; b 12 ; data TestCase(%g2) + 0
+;   load_ext_name x11, TestCase(%g2)+0
 ;   ldr q0, [sp, #16]
 ;   blr x11
-;   ldr x12, 8 ; b 12 ; data TestCase(%g2) + 0
+;   load_ext_name x12, TestCase(%g2)+0
 ;   ldr q0, [sp]
 ;   blr x12
 ;   add sp, sp, #48
@@ -232,24 +232,24 @@ block0:
 ;   mov fp, sp
 ;   sub sp, sp, #48
 ; block0:
-;   ldr x9, 8 ; b 12 ; data TestCase(%g0) + 0
+;   load_ext_name x9, TestCase(%g0)+0
 ;   blr x9
 ;   str q0, [sp, #32]
-;   ldr x9, 8 ; b 12 ; data TestCase(%g1) + 0
+;   load_ext_name x9, TestCase(%g1)+0
 ;   blr x9
 ;   str q0, [sp, #16]
-;   ldr x9, 8 ; b 12 ; data TestCase(%g2) + 0
+;   load_ext_name x9, TestCase(%g2)+0
 ;   blr x9
 ;   str q0, [sp]
-;   ldr x9, 8 ; b 12 ; data TestCase(%g3) + 0
+;   load_ext_name x9, TestCase(%g3)+0
 ;   blr x9
-;   ldr x10, 8 ; b 12 ; data TestCase(%g4) + 0
+;   load_ext_name x10, TestCase(%g4)+0
 ;   ldr q0, [sp, #32]
 ;   blr x10
-;   ldr x11, 8 ; b 12 ; data TestCase(%g5) + 0
+;   load_ext_name x11, TestCase(%g5)+0
 ;   ldr q0, [sp, #16]
 ;   blr x11
-;   ldr x12, 8 ; b 12 ; data TestCase(%g6) + 0
+;   load_ext_name x12, TestCase(%g6)+0
 ;   ldr q0, [sp]
 ;   blr x12
 ;   add sp, sp, #48
@@ -282,7 +282,7 @@ block0(v0: i64):
 ;   mov x1, x0
 ;   movz x0, #42
 ;   movz x2, #42
-;   ldr x6, 8 ; b 12 ; data TestCase(%f11) + 0
+;   load_ext_name x6, TestCase(%f11)+0
 ;   blr x6
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -313,7 +313,7 @@ block0(v0: i64):
 ;   mov x2, x0
 ;   movz x3, #42
 ;   movz x0, #42
-;   ldr x6, 8 ; b 12 ; data TestCase(%f12) + 0
+;   load_ext_name x6, TestCase(%f12)+0
 ;   blr x6
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -344,7 +344,7 @@ block0(v0: i64):
 ;   mov x1, x0
 ;   movz x2, #42
 ;   movz x0, #42
-;   ldr x6, 8 ; b 12 ; data TestCase(%f13) + 0
+;   load_ext_name x6, TestCase(%f13)+0
 ;   blr x6
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -380,7 +380,7 @@ block0(v0: i128, v1: i64):
 ;   mov x4, x0
 ;   str x1, [sp, #8]
 ;   mov x5, x1
-;   ldr x10, 8 ; b 12 ; data TestCase(%f14) + 0
+;   load_ext_name x10, TestCase(%f14)+0
 ;   mov x0, x4
 ;   mov x2, x4
 ;   mov x1, x5
@@ -422,7 +422,7 @@ block0(v0: i128, v1: i64):
 ;   mov x4, x0
 ;   str x1, [sp, #8]
 ;   mov x5, x1
-;   ldr x10, 8 ; b 12 ; data TestCase(%f15) + 0
+;   load_ext_name x10, TestCase(%f15)+0
 ;   mov x0, x4
 ;   mov x2, x4
 ;   mov x1, x5
@@ -472,7 +472,7 @@ block0(v0: i64):
 ;   mov fp, sp
 ; block0:
 ;   mov x8, x0
-;   ldr x3, 8 ; b 12 ; data TestCase(%g) + 0
+;   load_ext_name x3, TestCase(%g)+0
 ;   blr x3
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -490,7 +490,7 @@ block0(v0: i64):
 ;   str x24, [sp, #-16]!
 ; block0:
 ;   mov x24, x8
-;   ldr x4, 8 ; b 12 ; data TestCase(%g) + 0
+;   load_ext_name x4, TestCase(%g)+0
 ;   blr x4
 ;   mov x8, x24
 ;   ldr x24, [sp], #16

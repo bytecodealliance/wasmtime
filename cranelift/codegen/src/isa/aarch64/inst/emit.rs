@@ -334,11 +334,21 @@ pub(crate) fn enc_br(rn: Reg) -> u32 {
     0b1101011_0000_11111_000000_00000_00000 | (machreg_to_gpr(rn) << 5)
 }
 
-pub(crate) fn enc_adr(off: i32, rd: Writable<Reg>) -> u32 {
+pub(crate) fn enc_adr_inst(opcode: u32, off: i32, rd: Writable<Reg>) -> u32 {
     let off = u32::try_from(off).unwrap();
     let immlo = off & 3;
     let immhi = (off >> 2) & ((1 << 19) - 1);
-    (0b00010000 << 24) | (immlo << 29) | (immhi << 5) | machreg_to_gpr(rd.to_reg())
+    opcode | (immlo << 29) | (immhi << 5) | machreg_to_gpr(rd.to_reg())
+}
+
+pub(crate) fn enc_adr(off: i32, rd: Writable<Reg>) -> u32 {
+    let opcode = 0b00010000 << 24;
+    enc_adr_inst(opcode, off, rd)
+}
+
+pub(crate) fn enc_adrp(off: i32, rd: Writable<Reg>) -> u32 {
+    let opcode = 0b10010000 << 24;
+    enc_adr_inst(opcode, off, rd)
 }
 
 fn enc_csel(rd: Writable<Reg>, rn: Reg, rm: Reg, cond: Cond, op: u32, o2: u32) -> u32 {
@@ -3143,6 +3153,12 @@ impl MachInstEmit for Inst {
                 assert!(off < (1 << 20));
                 sink.put4(enc_adr(off, rd));
             }
+            &Inst::Adrp { rd, off } => {
+                let rd = allocs.next_writable(rd);
+                assert!(off > -(1 << 20));
+                assert!(off < (1 << 20));
+                sink.put4(enc_adrp(off, rd));
+            }
             &Inst::Word4 { data } => {
                 sink.put4(data);
             }
@@ -3250,20 +3266,52 @@ impl MachInstEmit for Inst {
                 offset,
             } => {
                 let rd = allocs.next_writable(rd);
-                let inst = Inst::ULoad64 {
-                    rd,
-                    mem: AMode::Label {
-                        label: MemLabel::PCRel(8),
-                    },
-                    flags: MemFlags::trusted(),
-                };
-                inst.emit(&[], sink, emit_info, state);
-                let inst = Inst::Jump {
-                    dest: BranchTarget::ResolvedOffset(12),
-                };
-                inst.emit(&[], sink, emit_info, state);
-                sink.add_reloc(Reloc::Abs8, name, offset);
-                sink.put8(0);
+
+                if emit_info.0.is_pic() {
+                    // See this CE Example for the variations of this with and without BTI & PAUTH
+                    // https://godbolt.org/z/ncqjbbvvn
+                    //
+                    // Emit the following code:
+                    //   adrp    rd, :got:X
+                    //   ldr     rd, [rd, :got_lo12:X]
+
+                    // adrp rd, symbol
+                    sink.add_reloc(Reloc::Aarch64AdrGotPage21, name, 0);
+                    let inst = Inst::Adrp { rd, off: 0 };
+                    inst.emit(&[], sink, emit_info, state);
+
+                    // ldr rd, [rd, :got_lo12:X]
+                    sink.add_reloc(Reloc::Aarch64Ld64GotLo12Nc, name, 0);
+                    let inst = Inst::ULoad64 {
+                        rd,
+                        mem: AMode::reg(rd.to_reg()),
+                        flags: MemFlags::trusted(),
+                    };
+                    inst.emit(&[], sink, emit_info, state);
+                } else {
+                    // With absolute offsets we set up a load from a preallocated space, and then jump
+                    // over it.
+                    //
+                    // Emit the following code:
+                    //   ldr     rd, #8
+                    //   b       #0x10
+                    //   <8 byte space>
+
+                    let inst = Inst::ULoad64 {
+                        rd,
+                        mem: AMode::Label {
+                            label: MemLabel::PCRel(8),
+                        },
+                        flags: MemFlags::trusted(),
+                    };
+                    inst.emit(&[], sink, emit_info, state);
+                    let inst = Inst::Jump {
+                        dest: BranchTarget::ResolvedOffset(12),
+                    };
+                    inst.emit(&[], sink, emit_info, state);
+                    sink.add_reloc(Reloc::Abs8, name, offset);
+                    sink.put8(0);
+                }
             }
             &Inst::LoadAddr { rd, ref mem } => {
                 let rd = allocs.next_writable(rd);
@@ -3395,7 +3443,8 @@ impl MachInstEmit for Inst {
 
                 // adrp x0, <label>
                 sink.add_reloc(Reloc::Aarch64TlsGdAdrPage21, symbol, 0);
-                sink.put4(0x90000000);
+                let inst = Inst::Adrp { rd, off: 0 };
+                inst.emit(&[], sink, emit_info, state);
 
                 // add x0, x0, <label>
                 sink.add_reloc(Reloc::Aarch64TlsGdAddLo12Nc, symbol, 0);
