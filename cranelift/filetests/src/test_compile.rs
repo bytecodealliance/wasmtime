@@ -62,14 +62,14 @@ impl SubTest for TestCompile {
             .map_err(|e| crate::pretty_anyhow_error(&e.func, e.inner))?;
         let total_size = compiled_code.code_info().total_size;
 
-        let disasm = compiled_code.vcode.as_ref().unwrap();
+        let vcode = compiled_code.vcode.as_ref().unwrap();
 
-        info!("Generated {} bytes of code:\n{}", total_size, disasm);
+        info!("Generated {} bytes of code:\n{}", total_size, vcode);
 
         if self.precise_output {
             check_precise_output(isa, &params, &compiled_code, context)
         } else {
-            run_filecheck(&disasm, context)
+            run_filecheck(&vcode, context)
         }
     }
 }
@@ -83,9 +83,14 @@ fn check_precise_output(
     let cs = isa
         .to_capstone()
         .map_err(|e| anyhow::format_err!("{}", e))?;
-    let buf = compiled_code.disassemble(Some(params), &cs)?;
+    let dis = compiled_code.disassemble(Some(params), &cs)?;
 
-    let actual: Vec<_> = buf.lines().collect();
+    let actual = Vec::from_iter(
+        std::iter::once("VCode:")
+            .chain(compiled_code.vcode.as_ref().unwrap().lines())
+            .chain(["", "Disassembled:"])
+            .chain(dis.lines()),
+    );
 
     // Use the comments after the function to build the test expectation.
     let expected = context
