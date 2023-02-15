@@ -133,8 +133,8 @@ macro_rules! wasi_file_write_impl {
             }
             */
 
-            async fn write_repeated(&mut self, byte: u8, nelem: u64) -> Result<u64, Error> {
-                let num = io::copy(&mut io::Read::take(io::repeat(byte), nelem), &mut self.0)?;
+            async fn write_zeroes(&mut self, nelem: u64) -> Result<u64, Error> {
+                let num = io::copy(&mut io::Read::take(io::repeat(0), nelem), &mut self.0)?;
                 Ok(num)
             }
 

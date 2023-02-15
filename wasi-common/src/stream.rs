@@ -135,12 +135,12 @@ pub trait OutputStream: Send + Sync {
     }
 
     /// Repeatedly write a byte to a stream.
-    async fn write_repeated(&mut self, byte: u8, nelem: u64) -> Result<u64, Error> {
+    async fn write_zeroes(&mut self, nelem: u64) -> Result<u64, Error> {
         let mut nwritten = 0;
 
         // TODO: Optimize by writing more than one byte at a time.
         for _ in 0..nelem {
-            let num = self.write(&[byte]).await?;
+            let num = self.write(&[0]).await?;
             if num == 0 {
                 break;
             }

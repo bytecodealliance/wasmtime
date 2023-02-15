@@ -1,5 +1,7 @@
 use crate::{
+    poll::PollableEntry,
     wasi_io::{InputStream, OutputStream, StreamError, WasiIo},
+    wasi_poll::Pollable,
     HostResult, WasiCtx,
 };
 use wasi_common::stream::TableStreamExt;
@@ -77,10 +79,9 @@ impl WasiIo for WasiCtx {
         Ok(Ok((bytes_skipped, end)))
     }
 
-    async fn write_repeated(
+    async fn write_zeroes(
         &mut self,
         stream: OutputStream,
-        byte: u8,
         len: u64,
     ) -> HostResult<u64, StreamError> {
         let s: &mut Box<dyn wasi_common::OutputStream> = self
@@ -88,7 +89,7 @@ impl WasiIo for WasiCtx {
             .get_output_stream_mut(stream)
             .map_err(convert)?;
 
-        let bytes_written: u64 = s.write_repeated(byte, len).await.map_err(convert)?;
+        let bytes_written: u64 = s.write_zeroes(len).await.map_err(convert)?;
 
         Ok(Ok(bytes_written))
     }
@@ -150,5 +151,17 @@ impl WasiIo for WasiCtx {
         */
 
         todo!()
+    }
+
+    async fn subscribe_read(&mut self, stream: InputStream) -> anyhow::Result<Pollable> {
+        Ok(self
+            .table_mut()
+            .push(Box::new(PollableEntry::Read(stream)))?)
+    }
+
+    async fn subscribe(&mut self, stream: OutputStream) -> anyhow::Result<Pollable> {
+        Ok(self
+            .table_mut()
+            .push(Box::new(PollableEntry::Write(stream)))?)
     }
 }

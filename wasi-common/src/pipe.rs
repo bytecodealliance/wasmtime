@@ -229,9 +229,9 @@ impl<W: Write + Any + Send + Sync> OutputStream for WritePipe<W> {
     }
     */
 
-    async fn write_repeated(&mut self, byte: u8, nelem: u64) -> Result<u64, Error> {
+    async fn write_zeroes(&mut self, nelem: u64) -> Result<u64, Error> {
         let num = io::copy(
-            &mut io::Read::take(io::repeat(byte), nelem),
+            &mut io::Read::take(io::repeat(0), nelem),
             &mut *self.borrow(),
         )?;
         Ok(num)
