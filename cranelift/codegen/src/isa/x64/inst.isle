@@ -227,8 +227,24 @@
          (mask Xmm)
          (dst WritableXmm))
 
-       ;; XMM (scalar or vector) binary op that relies on the VEX prefix.
-       (XmmRmRVex (op AvxOpcode)
+       ;; XMM (scalar or vector) binary op that relies on the VEX prefix and
+       ;; has two inputs.
+       (XmmRmiRVex (op AvxOpcode)
+                   (src1 Xmm)
+                   (src2 XmmMemImm)
+                   (dst WritableXmm))
+
+       ;; XMM (scalar or vector) ternary op that relies on the VEX prefix and
+       ;; has two dynamic inputs plus one immediate input.
+       (XmmRmRImmVex (op AvxOpcode)
+                     (src1 Xmm)
+                     (src2 XmmMem)
+                     (dst WritableXmm)
+                     (imm u8))
+
+       ;; XMM (scalar or vector) ternary op that relies on the VEX prefix and
+       ;; has three dynamic inputs.
+       (XmmRmRVex3 (op AvxOpcode)
                    (src1 Xmm)
                    (src2 Xmm)
                    (src3 XmmMem)
@@ -1132,11 +1148,16 @@
 (decl cc_nz_or_z (CC) CC)
 (extern extractor cc_nz_or_z cc_nz_or_z)
 
-(type AvxOpcode extern
+(type AvxOpcode
       (enum Vfmadd213ss
             Vfmadd213sd
             Vfmadd213ps
-            Vfmadd213pd))
+            Vfmadd213pd
+            Vminps
+            Vorps
+            Vandnps
+            Vcmpps
+            Vpsrld))
 
 (type Avx512Opcode extern
       (enum Vcvtudq2ps
@@ -1225,6 +1246,10 @@
 ;; Convert an `Xmm` into an `XmmMemImm`.
 (decl xmm_to_xmm_mem_imm (Xmm) XmmMemImm)
 (extern constructor xmm_to_xmm_mem_imm xmm_to_xmm_mem_imm)
+
+;; Convert an `XmmMem` into an `XmmMemImm`.
+(decl xmm_mem_to_xmm_mem_imm (XmmMem) XmmMemImm)
+(extern constructor xmm_mem_to_xmm_mem_imm xmm_mem_to_xmm_mem_imm)
 
 ;; Allocate a new temporary GPR register.
 (decl temp_writable_gpr () WritableGpr)
@@ -1437,6 +1462,9 @@
 
 (decl use_sse41 (bool) Type)
 (extern extractor infallible use_sse41 use_sse41)
+
+(decl pure has_avx () bool)
+(extern constructor has_avx has_avx)
 
 ;;;; Helpers for Merging and Sinking Immediates/Loads  ;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2281,8 +2309,11 @@
 
 ;; Helper for creating `orps` instructions.
 (decl x64_orps (Xmm XmmMem) Xmm)
-(rule (x64_orps src1 src2)
+(rule 0 (x64_orps src1 src2)
       (xmm_rm_r (SseOpcode.Orps) src1 src2))
+(rule 1 (x64_orps src1 src2)
+      (if-let $true (has_avx))
+      (xmm_rmir_vex (AvxOpcode.Vorps) src1 src2))
 
 ;; Helper for creating `orpd` instructions.
 (decl x64_orpd (Xmm XmmMem) Xmm)
@@ -2356,8 +2387,11 @@
 
 ;; Helper for creating `andnps` instructions.
 (decl x64_andnps (Xmm XmmMem) Xmm)
-(rule (x64_andnps src1 src2)
+(rule 0 (x64_andnps src1 src2)
       (xmm_rm_r (SseOpcode.Andnps) src1 src2))
+(rule 1 (x64_andnps src1 src2)
+      (if-let $true (has_avx))
+      (xmm_rmir_vex (AvxOpcode.Vandnps) src1 src2))
 
 ;; Helper for creating `andnpd` instructions.
 (decl x64_andnpd (Xmm XmmMem) Xmm)
@@ -2598,12 +2632,18 @@
 (rule (x64_cmpp $F64X2 x y imm) (x64_cmppd x y imm))
 
 (decl x64_cmpps (Xmm XmmMem FcmpImm) Xmm)
-(rule (x64_cmpps src1 src2 imm)
+(rule 0 (x64_cmpps src1 src2 imm)
       (xmm_rm_r_imm (SseOpcode.Cmpps)
                     src1
                     src2
                     (encode_fcmp_imm imm)
                     (OperandSize.Size32)))
+(rule 1 (x64_cmpps src1 src2 imm)
+      (if-let $true (has_avx))
+      (xmm_rmr_imm_vex (AvxOpcode.Vcmpps)
+                       src1
+                       src2
+                       (encode_fcmp_imm imm)))
 
 ;; Note that `Size32` is intentional despite this being used for 64-bit
 ;; operations, since this presumably induces the correct encoding of the
@@ -2854,8 +2894,11 @@
 
 ;; Helper for creating `psrld` instructions.
 (decl x64_psrld (Xmm XmmMemImm) Xmm)
-(rule (x64_psrld src1 src2)
+(rule 0 (x64_psrld src1 src2)
       (xmm_rmi_xmm (SseOpcode.Psrld) src1 src2))
+(rule 1 (x64_psrld src1 src2)
+      (if-let $true (has_avx))
+      (xmm_rmir_vex (AvxOpcode.Vpsrld) src1 src2))
 
 ;; Helper for creating `psrlq` instructions.
 (decl x64_psrlq (Xmm XmmMemImm) Xmm)
@@ -3066,10 +3109,11 @@
 
 ;; Helper for creating `minps` instructions.
 (decl x64_minps (Xmm Xmm) Xmm)
-(rule (x64_minps x y)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmR (SseOpcode.Minps) x y dst))))
-        dst))
+(rule 0 (x64_minps x y)
+      (xmm_rm_r (SseOpcode.Minps) x y))
+(rule 1 (x64_minps x y)
+      (if-let $true (has_avx))
+      (xmm_rmir_vex (AvxOpcode.Vminps) x y))
 
 ;; Helper for creating `minpd` instructions.
 (decl x64_minpd (Xmm Xmm) Xmm)
@@ -3098,14 +3142,24 @@
 
 
 ;; Helper for creating `MInst.XmmRmRVex` instructions.
-(decl xmm_rmr_vex (AvxOpcode Xmm Xmm XmmMem) Xmm)
-(rule (xmm_rmr_vex op src1 src2 src3)
+(decl xmm_rmir_vex (AvxOpcode Xmm XmmMemImm) Xmm)
+(rule (xmm_rmir_vex op src1 src2)
       (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmRVex op
-                                           src1
-                                           src2
-                                           src3
-                                           dst))))
+            (_ Unit (emit (MInst.XmmRmiRVex op src1 src2 dst))))
+        dst))
+
+;; Helper for creating `MInst.XmmRmRImmVex` instructions.
+(decl xmm_rmr_imm_vex (AvxOpcode Xmm XmmMem u8) Xmm)
+(rule (xmm_rmr_imm_vex op src1 src2 imm)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmRmRImmVex op src1 src2 dst imm))))
+        dst))
+
+;; Helper for creating `MInst.XmmRmRVex3` instructions.
+(decl xmm_rmr_vex3 (AvxOpcode Xmm Xmm XmmMem) Xmm)
+(rule (xmm_rmr_vex3 op src1 src2 src3)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmRmRVex3 op src1 src2 src3 dst))))
         dst))
 
 ;; Helper for creating `vfmadd213ss` instructions.
@@ -3113,28 +3167,28 @@
 ; but we don't support VEX memory encodings yet
 (decl x64_vfmadd213ss (Xmm Xmm Xmm) Xmm)
 (rule (x64_vfmadd213ss x y z)
-      (xmm_rmr_vex (AvxOpcode.Vfmadd213ss) x y z))
+      (xmm_rmr_vex3 (AvxOpcode.Vfmadd213ss) x y z))
 
 ;; Helper for creating `vfmadd213sd` instructions.
 ; TODO: This should have the (Xmm Xmm XmmMem) signature
 ; but we don't support VEX memory encodings yet
 (decl x64_vfmadd213sd (Xmm Xmm Xmm) Xmm)
 (rule (x64_vfmadd213sd x y z)
-      (xmm_rmr_vex (AvxOpcode.Vfmadd213sd) x y z))
+      (xmm_rmr_vex3 (AvxOpcode.Vfmadd213sd) x y z))
 
 ;; Helper for creating `vfmadd213ps` instructions.
 ; TODO: This should have the (Xmm Xmm XmmMem) signature
 ; but we don't support VEX memory encodings yet
 (decl x64_vfmadd213ps (Xmm Xmm Xmm) Xmm)
 (rule (x64_vfmadd213ps x y z)
-      (xmm_rmr_vex (AvxOpcode.Vfmadd213ps) x y z))
+      (xmm_rmr_vex3 (AvxOpcode.Vfmadd213ps) x y z))
 
 ;; Helper for creating `vfmadd213pd` instructions.
 ; TODO: This should have the (Xmm Xmm XmmMem) signature
 ; but we don't support VEX memory encodings yet
 (decl x64_vfmadd213pd (Xmm Xmm Xmm) Xmm)
 (rule (x64_vfmadd213pd x y z)
-      (xmm_rmr_vex (AvxOpcode.Vfmadd213pd) x y z))
+      (xmm_rmr_vex3 (AvxOpcode.Vfmadd213pd) x y z))
 
 
 ;; Helper for creating `sqrtss` instructions.
@@ -3832,6 +3886,7 @@
 (convert RegMemImm XmmMemImm mov_rmi_to_xmm)
 (convert Xmm XmmMem xmm_to_xmm_mem)
 (convert Xmm XmmMemImm xmm_to_xmm_mem_imm)
+(convert XmmMem XmmMemImm xmm_mem_to_xmm_mem_imm)
 (convert XmmMem RegMem xmm_mem_to_reg_mem)
 (convert WritableXmm Xmm writable_xmm_to_xmm)
 (convert WritableXmm WritableReg writable_xmm_to_reg)

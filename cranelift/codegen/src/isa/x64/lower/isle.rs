@@ -186,6 +186,11 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
+    fn has_avx(&mut self) -> bool {
+        self.backend.x64_flags.has_avx()
+    }
+
+    #[inline]
     fn avx512vl_enabled(&mut self, _: Type) -> bool {
         self.backend.x64_flags.use_avx512vl_simd()
     }
@@ -433,6 +438,11 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     #[inline]
     fn xmm_to_xmm_mem_imm(&mut self, r: Xmm) -> XmmMemImm {
         r.into()
+    }
+
+    #[inline]
+    fn xmm_mem_to_xmm_mem_imm(&mut self, r: &XmmMem) -> XmmMemImm {
+        r.clone().into()
     }
 
     #[inline]

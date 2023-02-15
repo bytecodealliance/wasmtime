@@ -1,6 +1,6 @@
 test compile precise-output
 set enable_simd
-target x86_64 skylake
+target x86_64
 
 function %mask_from_icmp(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):

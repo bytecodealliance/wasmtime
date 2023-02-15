@@ -8,7 +8,7 @@ use crate::isa::x64::encoding::rex::{
     low8_will_sign_extend_to_32, low8_will_sign_extend_to_64, reg_enc, LegacyPrefixes, OpcodeMap,
     RexFlags,
 };
-use crate::isa::x64::encoding::vex::{VexInstruction, VexVectorLength};
+use crate::isa::x64::encoding::vex::{RegisterOrAmode, VexInstruction, VexVectorLength};
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
 use crate::machinst::{inst_common, MachBuffer, MachInstEmit, MachLabel, Reg, Writable};
@@ -121,6 +121,7 @@ pub(crate) fn emit(
             InstructionSet::BMI1 => info.isa_flags.use_bmi1(),
             InstructionSet::BMI2 => info.isa_flags.has_bmi2(),
             InstructionSet::FMA => info.isa_flags.has_fma(),
+            InstructionSet::AVX => info.isa_flags.has_avx(),
             InstructionSet::AVX512BITALG => info.isa_flags.has_avx512bitalg(),
             InstructionSet::AVX512DQ => info.isa_flags.has_avx512dq(),
             InstructionSet::AVX512F => info.isa_flags.has_avx512f(),
@@ -1991,7 +1992,94 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::XmmRmRVex {
+        Inst::XmmRmiRVex {
+            op,
+            src1,
+            src2,
+            dst,
+        } => {
+            let dst = allocs.next(dst.to_reg().to_reg());
+            let src1 = allocs.next(src1.to_reg());
+            let src2 = src2.clone().to_reg_mem_imm().with_allocs(allocs);
+
+            let src2 = match src2 {
+                // For opcodes where one of the operands is an immediate the
+                // encoding is a bit different, notably the usage of
+                // `opcode_ext`, so handle that specially here.
+                RegMemImm::Imm { simm32 } => {
+                    let (opcode, opcode_ext, prefix) = match op {
+                        AvxOpcode::Vpsrld => (0x72, 2, LegacyPrefixes::_66),
+                        _ => todo!(),
+                    };
+                    VexInstruction::new()
+                        .length(VexVectorLength::V128)
+                        .prefix(prefix)
+                        .map(OpcodeMap::_0F)
+                        .opcode(opcode)
+                        .opcode_ext(opcode_ext)
+                        .vvvv(dst.to_real_reg().unwrap().hw_enc())
+                        .prefix(LegacyPrefixes::_66)
+                        .rm(src1.to_real_reg().unwrap().hw_enc())
+                        .imm(simm32.try_into().unwrap())
+                        .encode(sink);
+                    return;
+                }
+                RegMemImm::Reg { reg } => {
+                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
+                }
+                RegMemImm::Mem { addr } => RegisterOrAmode::Amode(addr.finalize(state, sink)),
+            };
+            let (prefix, opcode) = match op {
+                AvxOpcode::Vminps => (LegacyPrefixes::None, 0x5D),
+                AvxOpcode::Vandnps => (LegacyPrefixes::None, 0x55),
+                AvxOpcode::Vorps => (LegacyPrefixes::None, 0x56),
+                AvxOpcode::Vpsrld => (LegacyPrefixes::_66, 0xD2),
+                _ => todo!(),
+            };
+            VexInstruction::new()
+                .length(VexVectorLength::V128)
+                .prefix(prefix)
+                .opcode(opcode)
+                .map(OpcodeMap::_0F)
+                .reg(dst.to_real_reg().unwrap().hw_enc())
+                .vvvv(src1.to_real_reg().unwrap().hw_enc())
+                .rm(src2)
+                .encode(sink);
+        }
+
+        Inst::XmmRmRImmVex {
+            op,
+            src1,
+            src2,
+            dst,
+            imm,
+        } => {
+            let dst = allocs.next(dst.to_reg().to_reg());
+            let src1 = allocs.next(src1.to_reg());
+            let src2 = src2.clone().to_reg_mem().with_allocs(allocs);
+
+            let (w, opcode) = match op {
+                AvxOpcode::Vcmpps => (false, 0xC2),
+                _ => unreachable!(),
+            };
+
+            match src2 {
+                RegMem::Reg { reg: src } => VexInstruction::new()
+                    .length(VexVectorLength::V128)
+                    .prefix(LegacyPrefixes::None)
+                    .map(OpcodeMap::_0F)
+                    .w(w)
+                    .opcode(opcode)
+                    .reg(dst.to_real_reg().unwrap().hw_enc())
+                    .rm(src.to_real_reg().unwrap().hw_enc())
+                    .vvvv(src1.to_real_reg().unwrap().hw_enc())
+                    .imm(*imm)
+                    .encode(sink),
+                _ => todo!(),
+            };
+        }
+
+        Inst::XmmRmRVex3 {
             op,
             src1,
             src2,
@@ -2009,6 +2097,7 @@ pub(crate) fn emit(
                 AvxOpcode::Vfmadd213sd => (true, 0xA9),
                 AvxOpcode::Vfmadd213ps => (false, 0xA8),
                 AvxOpcode::Vfmadd213pd => (true, 0xA8),
+                _ => unreachable!(),
             };
 
             match src3 {
