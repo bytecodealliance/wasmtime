@@ -1,7 +1,43 @@
 test interpret
 test run
+set enable_llvm_abi_extensions=true
 target x86_64
 target aarch64
+
+function %ssubof_i128(i128, i128) -> i128 {
+block0(v0: i128,v1: i128):
+    v2, v3 = ssub_overflow v0, v1
+    return v2
+}
+; run: %ssubof_i128(0, 0) == 0
+; run: %ssubof_i128(0, 1) == -1
+; run: %ssubof_i128(-1, 0) == -1
+; run: %ssubof_i128(-1, 1) == -2
+; run: %ssubof_i128(-1, -2) == 1
+; run: %ssubof_i128(0x00000000_00000001_00000000_00000000, 1) == 0xFFFFFFFF_FFFFFFFF
+; run: %ssubof_i128(0x7FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF) == 0
+; run: %ssubof_i128(0x7FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF, 0x80000000_00000000_00000000_00000000) == -1
+; run: %ssubof_i128(0x7FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF, 0x80000000_00000000_00000000_00000001) == -2
+
+
+function %ssubof_i128b(i128, i128) -> i8 {
+block0(v0: i128,v1: i128):
+    v2, v3 = ssub_overflow v0, v1
+    return v3
+}
+; run: %ssubof_i128b(0, 0) == 0
+; run: %ssubof_i128b(0, 1) == 0
+; run: %ssubof_i128b(-1, 0) == 0
+; run: %ssubof_i128b(-1, 1) == 0
+; run: %ssubof_i128b(-1, -2) == 0
+; run: %ssubof_i128b(0x00000000_00000001_00000000_00000000, 1) == 0
+; run: %ssubof_i128b(0x7FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF) == 0
+; run: %ssubof_i128b(0x7FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF, 0x80000000_00000000_00000000_00000000) == 1
+; run: %ssubof_i128b(0, 0x80000000_00000000_00000000_00000000) == 1
+; run: %ssubof_i128b(0x7FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF, 0x80000000_00000000_00000000_00000000) == 1
+; run: %ssubof_i128b(0x7FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF, 0x80000000_00000000_00000000_00000001) == 1
+; run: %ssubof_i128b(0x80000000_00000000_00000000_00000000, 1) == 1
+; run: %ssubof_i128b(0x80000000_00000000_00000000_00000001, 1) == 0
 
 function %ssubof_i64(i64, i64) -> i64 {
 block0(v0: i64,v1: i64):
@@ -31,8 +67,9 @@ block0(v0: i64,v1: i64):
 ; run: %ssubof_i64b(-1, -2) == 0
 ; run: %ssubof_i64b(0x7FFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF) == 0
 ; run: %ssubof_i64b(0x7FFFFFFF_FFFFFFFF, 0x80000000_00000000) == 1
-; run: %ssubof_i64b(0x80000000_00000000, 0x00000000_00000001) == 1
-; run: %ssubof_i64b(0x80000000_00000001, 0x00000000_00000001) == 0
+; run: %ssubof_i64b(0, 0x80000000_00000000) == 1
+; run: %ssubof_i64b(0x80000000_00000000, 1) == 1
+; run: %ssubof_i64b(0x80000000_00000001, 1) == 0
 ; run: %ssubof_i64b(0x01234567_89ABCDEF, 0xFEDCBA98_76543210) == 0
 ; run: %ssubof_i64b(0xFEDCBA98_76543220, 0x01234567_89ABCDEF) == 0
 
@@ -57,6 +94,7 @@ block0(v0: i8, v1: i8):
 ; run: %ssubof_i8b(100, 20) == 0
 ; run: %ssubof_i8b(100, -20) == 0
 ; run: %ssubof_i8b(127, -128) == 1
+; run: %ssubof_i8b(0, 0x80) == 1
 ; run: %ssubof_i8b(0x80, 0x80) == 0
 ; run: %ssubof_i8b(0x80, 0x01) == 1
 ; run: %ssubof_i8b(0x7F, 0xFF) == 1
@@ -82,6 +120,7 @@ block0(v0: i16, v1: i16):
 ; run: %ssubof_i16b(0, 1) == 0
 ; run: %ssubof_i16b(100, 20) == 0
 ; run: %ssubof_i16b(0xFFFF, 0xFFFF) == 0
+; run: %ssubof_i16b(0, 0x8000) == 1
 ; run: %ssubof_i16b(0x8000, 0x0001) == 1
 ; run: %ssubof_i16b(0x8000, 0xFFFF) == 0
 ; run: %ssubof_i16b(0x7FFF, 0xFFFF) == 1
@@ -108,6 +147,7 @@ block0(v0: i32, v1: i32):
 ; run: %ssubof_i32b(0, 1) == 0
 ; run: %ssubof_i32b(100, 20) == 0
 ; run: %ssubof_i32b(0xFFFF_FFFF, 0xFFFF_FFFF) == 0
+; run: %ssubof_i32b(0, 0x8000_0000) == 1
 ; run: %ssubof_i32b(0x8000_0000, 0x0000_0001) == 1
 ; run: %ssubof_i32b(0x8000_0000, 0xFFFF_FFFF) == 0
 ; run: %ssubof_i32b(0x7FFF_FFFF, 0xFFFF_FFFF) == 1
