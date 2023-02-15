@@ -720,25 +720,20 @@ impl Mutator for MergeBlocks {
             ));
         }
 
-        let branch_args = Vec::from_iter(
-            branch_dests[0]
-                .args_slice(&func.dfg.value_lists)
-                .iter()
-                .copied(),
-        );
-        assert_eq!(func.dfg.block_params(block).len(), branch_args.len());
+        let branch_args = branch_dests[0].args_slice(&func.dfg.value_lists).to_vec();
 
-        // If there were any block parameters in block, then the last instruction in pred will
-        // fill these parameters. Make the block params aliases of the terminator arguments.
-        for (block_param, arg) in func
+        // TODO: should we free the entity list associated with the block params?
+        let block_params = func
             .dfg
             .detach_block_params(block)
             .as_slice(&func.dfg.value_lists)
-            .iter()
-            .cloned()
-            .zip(branch_args)
-            .collect::<Vec<_>>()
-        {
+            .to_vec();
+
+        assert_eq!(block_params.len(), branch_args.len());
+
+        // If there were any block parameters in block, then the last instruction in pred will
+        // fill these parameters. Make the block params aliases of the terminator arguments.
+        for (block_param, arg) in block_params.into_iter().zip(branch_args) {
             if block_param != arg {
                 func.dfg.change_to_alias(block_param, arg);
             }
