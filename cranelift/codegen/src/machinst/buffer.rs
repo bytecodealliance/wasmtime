@@ -1486,16 +1486,15 @@ impl<T: CompilePhase> MachBufferFinalized<T> {
         for i in insns.iter() {
             write!(buf, "  ")?;
 
+            let op_str = i.op_str().unwrap_or("");
             if let Some(s) = i.mnemonic() {
                 write!(buf, "{}", s)?;
-                if i.op_str().is_some() {
+                if !op_str.is_empty() {
                     write!(buf, " ")?;
                 }
             }
 
-            if let Some(s) = i.op_str() {
-                write!(buf, "{}", s)?;
-            }
+            write!(buf, "{}", op_str)?;
 
             let end = i.address() + i.bytes().len() as u64;
             let contains = |off| i.address() <= off && off < end;
