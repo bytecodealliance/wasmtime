@@ -174,10 +174,14 @@ impl TargetIsa for S390xBackend {
     #[cfg(feature = "disas")]
     fn to_capstone(&self) -> Result<capstone::Capstone, capstone::Error> {
         use capstone::prelude::*;
-        Capstone::new()
+        let mut cs = Capstone::new()
             .sysz()
             .mode(arch::sysz::ArchMode::Default)
-            .build()
+            .build()?;
+
+        cs.set_skipdata(true)?;
+
+        Ok(cs)
     }
 }
 
