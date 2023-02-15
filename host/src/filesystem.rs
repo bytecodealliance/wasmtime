@@ -375,7 +375,9 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
             .await
             .map_err(convert)?;
 
-        Ok(Ok(wasi_filesystem::Filesize::try_from(bytes_written).unwrap()))
+        Ok(Ok(
+            wasi_filesystem::Filesize::try_from(bytes_written).unwrap()
+        ))
     }
 
     async fn readdir(
