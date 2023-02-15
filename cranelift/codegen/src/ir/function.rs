@@ -6,9 +6,9 @@
 use crate::entity::{PrimaryMap, SecondaryMap};
 use crate::ir::{
     self, Block, DataFlowGraph, DynamicStackSlot, DynamicStackSlotData, DynamicStackSlots,
-    DynamicType, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Inst, InstructionData,
-    JumpTable, JumpTableData, Layout, Opcode, SigRef, Signature, SourceLocs, StackSlot,
-    StackSlotData, StackSlots, Table, TableData, Type,
+    DynamicType, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Inst, JumpTable,
+    JumpTableData, Layout, Opcode, SigRef, Signature, SourceLocs, StackSlot, StackSlotData,
+    StackSlots, Table, TableData, Type,
 };
 use crate::isa::CallConv;
 use crate::value_label::ValueLabelsRanges;
