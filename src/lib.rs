@@ -76,15 +76,17 @@ pub unsafe extern "C" fn command(
         state.preopens = Some(preopens);
 
         for preopen in preopens {
-            unwrap_result(state.push_desc(Descriptor::Streams(Streams {
-                input: Cell::new(None),
-                output: Cell::new(None),
-                type_: StreamType::File(File {
-                    fd: preopen.descriptor,
-                    position: Cell::new(0),
-                    append: false,
-                }),
-            })));
+            state
+                .push_desc(Descriptor::Streams(Streams {
+                    input: Cell::new(None),
+                    output: Cell::new(None),
+                    type_: StreamType::File(File {
+                        fd: preopen.descriptor,
+                        position: Cell::new(0),
+                        append: false,
+                    }),
+                }))
+                .trapping_unwrap();
         }
 
         Ok(())
@@ -98,19 +100,28 @@ pub unsafe extern "C" fn command(
     0
 }
 
-fn unwrap<T>(maybe: Option<T>) -> T {
-    if let Some(value) = maybe {
-        value
-    } else {
-        unreachable!("unwrap failed")
+// The unwrap/expect methods in std pull panic when they fail, which pulls
+// in unwinding machinery that we can't use in the adapter. Instead, use this
+// extension trait to get postfixed upwrap on Option and Result.
+trait TrappingUnwrap<T> {
+    fn trapping_unwrap(self) -> T;
+}
+
+impl<T> TrappingUnwrap<T> for Option<T> {
+    fn trapping_unwrap(self) -> T {
+        match self {
+            Some(t) => t,
+            None => unreachable!(),
+        }
     }
 }
 
-fn unwrap_result<T, E>(result: Result<T, E>) -> T {
-    if let Ok(value) = result {
-        value
-    } else {
-        unreachable!("unwrap result failed")
+impl<T, E> TrappingUnwrap<T> for Result<T, E> {
+    fn trapping_unwrap(self) -> T {
+        match self {
+            Ok(t) => t,
+            Err(_) => unreachable!(),
+        }
     }
 }
 
@@ -164,7 +175,7 @@ pub unsafe extern "C" fn cabi_export_realloc(
     State::with_mut(|state| {
         let data = state.command_data.as_mut_ptr();
         let ptr = align_to(
-            unwrap_result(usize::try_from(state.command_data_next)),
+            usize::try_from(state.command_data_next).trapping_unwrap(),
             align,
         );
 
@@ -654,7 +665,7 @@ pub unsafe extern "C" fn fd_pread(
         let len = (*iovs_ptr).buf_len;
         state.register_buffer(ptr, len);
 
-        let read_len = unwrap_result(u32::try_from(len));
+        let read_len = u32::try_from(len).trapping_unwrap();
         let file = state.get_file(fd)?;
         let (data, end) = wasi_filesystem::pread(file.fd, read_len, offset)?;
         assert_eq!(data.as_ptr(), ptr);
@@ -780,7 +791,7 @@ pub unsafe extern "C" fn fd_read(
             Descriptor::Streams(streams) => {
                 let wasi_stream = streams.get_read_stream()?;
 
-                let read_len = unwrap_result(u64::try_from(len));
+                let read_len = u64::try_from(len).trapping_unwrap();
                 let wasi_stream = streams.get_read_stream()?;
                 let (data, end) = wasi_io::read(wasi_stream, read_len).map_err(|_| ERRNO_IO)?;
 
@@ -983,7 +994,7 @@ pub unsafe extern "C" fn fd_readdir(
             let dirent = wasi::Dirent {
                 d_next: self.cookie,
                 d_ino: ino.unwrap_or(0),
-                d_namlen: unwrap_result(u32::try_from(name.len())),
+                d_namlen: u32::try_from(name.len()).trapping_unwrap(),
                 d_type: type_.into(),
             };
             // Extend the lifetime of `name` to the `self.state` lifetime for
@@ -1021,7 +1032,7 @@ pub unsafe extern "C" fn fd_renumber(fd: Fd, to: Fd) -> Errno {
         let fd_desc = state.get_mut(fd)?;
         let desc = replace(fd_desc, Descriptor::Closed(closed));
 
-        let to_desc = unwrap_result(state.get_mut(to));
+        let to_desc = state.get_mut(to).trapping_unwrap();
         *to_desc = desc;
         state.closed = Some(fd);
         Ok(())
@@ -1297,7 +1308,7 @@ pub unsafe extern "C" fn path_open(
             None => state.push_desc(desc)?,
             // `recycle_fd` is a free fd.
             Some(recycle_fd) => {
-                let recycle_desc = unwrap_result(state.get_mut(recycle_fd));
+                let recycle_desc = state.get_mut(recycle_fd).trapping_unwrap();
                 let next_closed = match recycle_desc {
                     Descriptor::Closed(next) => *next,
                     _ => unreachable!(),
@@ -1495,11 +1506,18 @@ pub unsafe extern "C" fn poll_oneoff(
     assert!(align_of::<Event>() >= align_of::<Pollable>());
     assert!(align_of::<Pollable>() >= align_of::<u8>());
     assert!(
-        unwrap(nsubscriptions.checked_mul(size_of::<Event>()))
-            >= unwrap(
-                unwrap(nsubscriptions.checked_mul(size_of::<Pollable>()))
-                    .checked_add(unwrap(nsubscriptions.checked_mul(size_of::<u8>())))
-            )
+        nsubscriptions
+            .checked_mul(size_of::<Event>())
+            .trapping_unwrap()
+            >= nsubscriptions
+                .checked_mul(size_of::<Pollable>())
+                .trapping_unwrap()
+                .checked_add(
+                    nsubscriptions
+                        .checked_mul(size_of::<u8>())
+                        .trapping_unwrap()
+                )
+                .trapping_unwrap()
     );
 
     // Store the pollable handles at the beginning, and the bool results at the
@@ -1515,7 +1533,9 @@ pub unsafe extern "C" fn poll_oneoff(
     State::with(|state| {
         state.register_buffer(
             results,
-            unwrap(nsubscriptions.checked_mul(size_of::<bool>())),
+            nsubscriptions
+                .checked_mul(size_of::<bool>())
+                .trapping_unwrap(),
         );
 
         let mut pollables = Pollables {
@@ -1646,7 +1666,9 @@ pub unsafe extern "C" fn poll_oneoff(
 
                 1 => {
                     type_ = EVENTTYPE_FD_READ;
-                    let desc = unwrap_result(state.get(subscription.u.u.fd_read.file_descriptor));
+                    let desc = state
+                        .get(subscription.u.u.fd_read.file_descriptor)
+                        .trapping_unwrap();
                     match desc {
                         Descriptor::Streams(streams) => match &streams.type_ {
                             StreamType::File(file) => match wasi_filesystem::stat(file.fd) {
@@ -1699,7 +1721,9 @@ pub unsafe extern "C" fn poll_oneoff(
                 }
                 2 => {
                     type_ = EVENTTYPE_FD_WRITE;
-                    let desc = unwrap_result(state.get(subscription.u.u.fd_read.file_descriptor));
+                    let desc = state
+                        .get(subscription.u.u.fd_read.file_descriptor)
+                        .trapping_unwrap();
                     match desc {
                         Descriptor::Streams(streams) => match streams.type_ {
                             StreamType::File(_) | StreamType::Unknown => {
@@ -2354,22 +2378,23 @@ impl State {
     fn init(&mut self) {
         // Set up a default stdin. This will be overridden when `command`
         // is called.
-        unwrap_result(self.push_desc(Descriptor::Streams(Streams {
+        self.push_desc(Descriptor::Streams(Streams {
             input: Cell::new(None),
             output: Cell::new(None),
             type_: StreamType::Unknown,
-        })));
+        }))
+        .trapping_unwrap();
         // Set up a default stdout, writing to the stderr device. This will
         // be overridden when `command` is called.
-        unwrap_result(self.push_desc(Descriptor::Stderr));
+        self.push_desc(Descriptor::Stderr).trapping_unwrap();
         // Set up a default stderr.
-        unwrap_result(self.push_desc(Descriptor::Stderr));
+        self.push_desc(Descriptor::Stderr).trapping_unwrap();
     }
 
     fn push_desc(&mut self, desc: Descriptor) -> Result<Fd, Errno> {
         unsafe {
             let descriptors = self.descriptors.as_mut_ptr();
-            let ndescriptors = unwrap_result(usize::try_from(self.ndescriptors));
+            let ndescriptors = usize::try_from(self.ndescriptors).trapping_unwrap();
             if ndescriptors >= (*descriptors).len() {
                 return Err(ERRNO_NOMEM);
             }
@@ -2383,7 +2408,7 @@ impl State {
         unsafe {
             slice::from_raw_parts(
                 self.descriptors.as_ptr().cast(),
-                unwrap_result(usize::try_from(self.ndescriptors)),
+                usize::try_from(self.ndescriptors).trapping_unwrap(),
             )
         }
     }
@@ -2392,20 +2417,20 @@ impl State {
         unsafe {
             slice::from_raw_parts_mut(
                 self.descriptors.as_mut_ptr().cast(),
-                unwrap_result(usize::try_from(self.ndescriptors)),
+                usize::try_from(self.ndescriptors).trapping_unwrap(),
             )
         }
     }
 
     fn get(&self, fd: Fd) -> Result<&Descriptor, Errno> {
         self.descriptors()
-            .get(unwrap_result(usize::try_from(fd)))
+            .get(usize::try_from(fd).trapping_unwrap())
             .ok_or(ERRNO_BADF)
     }
 
     fn get_mut(&mut self, fd: Fd) -> Result<&mut Descriptor, Errno> {
         self.descriptors_mut()
-            .get_mut(unwrap_result(usize::try_from(fd)))
+            .get_mut(usize::try_from(fd).trapping_unwrap())
             .ok_or(ERRNO_BADF)
     }
 
