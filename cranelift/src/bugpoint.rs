@@ -709,32 +709,31 @@ impl Mutator for MergeBlocks {
 
         let pred = cfg.pred_iter(block).next().unwrap();
 
-        // If the branch instruction that lead us to this block is preceded by another branch
-        // instruction, then we have a conditional jump sequence that we should not break by
-        // replacing the second instruction by more of them.
-        if let Some(pred_pred_inst) = func.layout.prev_inst(pred.inst) {
-            if func.dfg.insts[pred_pred_inst].opcode().is_branch() {
-                return Some((
-                    func,
-                    format!("did nothing for {}", block),
-                    ProgressStatus::Skip,
-                ));
-            }
+        // If the branch instruction that lead us to this block wasn't an unconditional jump, then
+        // we have a conditional jump sequence that we should not break.
+        let branch_dests = func.dfg.insts[pred.inst].branch_destination();
+        if branch_dests.len() != 1 {
+            return Some((
+                func,
+                format!("did nothing for {}", block),
+                ProgressStatus::Skip,
+            ));
         }
 
-        assert!(func.dfg.block_params(block).len() == func.dfg.inst_variable_args(pred.inst).len());
+        let branch_args = branch_dests[0].args_slice(&func.dfg.value_lists).to_vec();
 
-        // If there were any block parameters in block, then the last instruction in pred will
-        // fill these parameters. Make the block params aliases of the terminator arguments.
-        for (block_param, arg) in func
+        // TODO: should we free the entity list associated with the block params?
+        let block_params = func
             .dfg
             .detach_block_params(block)
             .as_slice(&func.dfg.value_lists)
-            .iter()
-            .cloned()
-            .zip(func.dfg.inst_variable_args(pred.inst).iter().cloned())
-            .collect::<Vec<_>>()
-        {
+            .to_vec();
+
+        assert_eq!(block_params.len(), branch_args.len());
+
+        // If there were any block parameters in block, then the last instruction in pred will
+        // fill these parameters. Make the block params aliases of the terminator arguments.
+        for (block_param, arg) in block_params.into_iter().zip(branch_args) {
             if block_param != arg {
                 func.dfg.change_to_alias(block_param, arg);
             }
