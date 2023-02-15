@@ -1568,7 +1568,7 @@ impl Inst {
 
                 let (opcode_rx, opcode_rxy) = match alu_op {
                     ALUOp::Add32 => (Some(0x5a), Some(0xe35a)),        // A(Y)
-                    ALUOp::Add32Ext16 => (Some(0x4a), Some(0xe34a)),   // AH(Y)
+                    ALUOp::Add32Ext16 => (Some(0x4a), Some(0xe37a)),   // AH(Y)
                     ALUOp::Add64 => (None, Some(0xe308)),              // AG
                     ALUOp::Add64Ext16 => (None, Some(0xe338)),         // AGH
                     ALUOp::Add64Ext32 => (None, Some(0xe318)),         // AGF

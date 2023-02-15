@@ -587,7 +587,7 @@ fn test_s390x_binemit() {
                 flags: MemFlags::trusted(),
             },
         },
-        "E3102000004A",
+        "E3102000007A",
         "ahy %r1, 0(%r2)",
     ));
     insns.push((
@@ -7999,7 +7999,7 @@ fn test_s390x_binemit() {
             rn: vr(12),
         },
         "B344008C",
-        "ledbra %f8, %f12, 0",
+        "ledbra %f8, 0, %f12, 0",
     ));
     insns.push((
         Inst::FpuRound {
@@ -8029,7 +8029,7 @@ fn test_s390x_binemit() {
             rn: vr(12),
         },
         "B357708C",
-        "fiebr %f8, %f12, 7",
+        "fiebr %f8, 7, %f12",
     ));
     insns.push((
         Inst::FpuRound {
@@ -8039,7 +8039,7 @@ fn test_s390x_binemit() {
             rn: vr(12),
         },
         "B35F708C",
-        "fidbr %f8, %f12, 7",
+        "fidbr %f8, 7, %f12",
     ));
     insns.push((
         Inst::FpuRound {
@@ -8049,7 +8049,7 @@ fn test_s390x_binemit() {
             rn: vr(12),
         },
         "B357608C",
-        "fiebr %f8, %f12, 6",
+        "fiebr %f8, 6, %f12",
     ));
     insns.push((
         Inst::FpuRound {
@@ -8059,7 +8059,7 @@ fn test_s390x_binemit() {
             rn: vr(12),
         },
         "B35F608C",
-        "fidbr %f8, %f12, 6",
+        "fidbr %f8, 6, %f12",
     ));
     insns.push((
         Inst::FpuRound {
@@ -8069,7 +8069,7 @@ fn test_s390x_binemit() {
             rn: vr(12),
         },
         "B357508C",
-        "fiebr %f8, %f12, 5",
+        "fiebr %f8, 5, %f12",
     ));
     insns.push((
         Inst::FpuRound {
@@ -8079,7 +8079,7 @@ fn test_s390x_binemit() {
             rn: vr(12),
         },
         "B35F508C",
-        "fidbr %f8, %f12, 5",
+        "fidbr %f8, 5, %f12",
     ));
     insns.push((
         Inst::FpuRound {
@@ -8089,7 +8089,7 @@ fn test_s390x_binemit() {
             rn: vr(12),
         },
         "B357408C",
-        "fiebr %f8, %f12, 4",
+        "fiebr %f8, 4, %f12",
     ));
     insns.push((
         Inst::FpuRound {
@@ -8099,7 +8099,7 @@ fn test_s390x_binemit() {
             rn: vr(12),
         },
         "B35F408C",
-        "fidbr %f8, %f12, 4",
+        "fidbr %f8, 4, %f12",
     ));
     insns.push((
         Inst::FpuRound {
