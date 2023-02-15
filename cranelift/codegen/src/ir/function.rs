@@ -273,38 +273,10 @@ impl FunctionStencil {
     /// Rewrite the branch destination to `new_dest` if the destination matches `old_dest`.
     /// Does nothing if called with a non-jump or non-branch instruction.
     pub fn rewrite_branch_destination(&mut self, inst: Inst, old_dest: Block, new_dest: Block) {
-        match &mut self.dfg.insts[inst] {
-            InstructionData::Jump {
-                destination: dest, ..
-            } => {
-                if dest.block(&self.dfg.value_lists) == old_dest {
-                    dest.set_block(new_dest, &mut self.dfg.value_lists)
-                }
+        for dest in self.dfg.insts[inst].branch_destination_mut(&mut self.dfg.jump_tables) {
+            if dest.block(&self.dfg.value_lists) == old_dest {
+                dest.set_block(new_dest, &mut self.dfg.value_lists)
             }
-
-            InstructionData::Brif {
-                blocks: [block_then, block_else],
-                ..
-            } => {
-                if block_then.block(&self.dfg.value_lists) == old_dest {
-                    block_then.set_block(new_dest, &mut self.dfg.value_lists);
-                }
-
-                if block_else.block(&self.dfg.value_lists) == old_dest {
-                    block_else.set_block(new_dest, &mut self.dfg.value_lists);
-                }
-            }
-
-            InstructionData::BranchTable { table, .. } => {
-                let pool = &mut self.dfg.value_lists;
-                for entry in self.dfg.jump_tables[*table].all_branches_mut() {
-                    if entry.block(pool) == old_dest {
-                        entry.set_block(new_dest, pool);
-                    }
-                }
-            }
-
-            inst => debug_assert!(!inst.opcode().is_branch()),
         }
     }
 

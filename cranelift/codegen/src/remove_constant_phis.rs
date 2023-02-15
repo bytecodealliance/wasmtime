@@ -241,7 +241,7 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
         for inst in func.layout.block_insts(b) {
             for (ix, dest) in func.dfg.insts[inst]
                 .branch_destination(&func.dfg.jump_tables)
-                .into_iter()
+                .iter()
                 .enumerate()
             {
                 if let Some(edge) = OutEdge::new(&bump, &func.dfg, inst, ix, *dest) {

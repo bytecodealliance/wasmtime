@@ -199,6 +199,11 @@ pub(crate) fn visit_block_succs<F: FnMut(Inst, Block, bool)>(
                 // first explicitly, to mirror the traversal order of
                 // `JumpTableData::all_branches`, and transitively the order of
                 // `InstructionData::branch_destination`.
+                //
+                // Additionally, this case is why we are unable to replace this
+                // whole function with a loop over `branch_destination`: we need
+                // to report which branch targets come from the table vs the
+                // default.
                 visit(inst, table.default_block().block(pool), false);
 
                 for dest in table.as_slice() {
