@@ -10,6 +10,7 @@ block0(v0: i32):
     return v0, v1
 }
 
+; VCode:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ;   str x24, [sp, #-16]!
@@ -28,5 +29,29 @@ block0(v0: i32):
 ;   ldp d14, d15, [sp], #16
 ;   ldr x24, [sp], #16
 ;   ldp fp, lr, [sp], #16
+;   ret
+; 
+; Disassembled:
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   str x24, [sp, #-0x10]!
+;   stp d14, d15, [sp, #-0x10]!
+;   stp d12, d13, [sp, #-0x10]!
+;   stp d10, d11, [sp, #-0x10]!
+;   stp d8, d9, [sp, #-0x10]!
+; block0: ; offset 0x1c
+;   mov x24, x0
+;   adrp x0, #0 ; reloc_external Aarch64TlsGdAdrPage21 u1:0 0
+;   add x0, x0, #0 ; reloc_external Aarch64TlsGdAddLo12Nc u1:0 0
+;   bl #0x28 ; reloc_external Call %ElfTlsGetAddr 0
+;   nop
+;   mov x1, x0
+;   mov x0, x24
+;   ldp d8, d9, [sp], #0x10
+;   ldp d10, d11, [sp], #0x10
+;   ldp d12, d13, [sp], #0x10
+;   ldp d14, d15, [sp], #0x10
+;   ldr x24, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
 ;   ret
 

@@ -12,6 +12,7 @@ block1:
     return
 }
 
+; VCode:
 ; block0:
 ;   li t1,0
 ;   fmv.d.x ft1,t1
@@ -25,6 +26,16 @@ block1:
 ;   j label3
 ; block3:
 ;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   mv t1, zero
+;   fmv.d.x ft1, t1
+;   mv a2, zero
+;   fmv.d.x ft5, a2
+;   fle.d a5, ft5, ft1
+; block1: ; offset 0x14
+;   ret
 
 function %f1() {
 block0:
@@ -36,6 +47,7 @@ block1:
     return
 }
 
+; VCode:
 ; block0:
 ;   li t1,0
 ;   fmv.d.x ft1,t1
@@ -48,5 +60,15 @@ block1:
 ; block2:
 ;   j label3
 ; block3:
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   mv t1, zero
+;   fmv.d.x ft1, t1
+;   mv a2, zero
+;   fmv.d.x ft5, a2
+;   fle.d a5, ft5, ft1
+; block1: ; offset 0x14
 ;   ret
 

@@ -8,6 +8,7 @@ block0:
     return v0
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -15,6 +16,15 @@ block0:
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   movq %rbp, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %sp() -> i64 {
 block0:
@@ -22,6 +32,7 @@ block0:
     return v0
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -29,6 +40,15 @@ block0:
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   movq %rsp, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %return_address() -> i64 {
 block0:
@@ -36,6 +56,7 @@ block0:
     return v0
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -44,4 +65,14 @@ block0:
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   movq %rbp, %rsi
+;   movq 8(%rsi), %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 

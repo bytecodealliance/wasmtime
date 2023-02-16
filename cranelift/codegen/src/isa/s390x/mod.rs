@@ -87,7 +87,7 @@ impl TargetIsa for S390xBackend {
         Ok(CompiledCodeStencil {
             buffer,
             frame_size,
-            disasm: emit_result.disasm,
+            vcode: emit_result.disasm,
             value_labels_ranges,
             sized_stackslot_offsets,
             dynamic_stackslot_offsets,
@@ -169,6 +169,19 @@ impl TargetIsa for S390xBackend {
 
     fn function_alignment(&self) -> u32 {
         4
+    }
+
+    #[cfg(feature = "disas")]
+    fn to_capstone(&self) -> Result<capstone::Capstone, capstone::Error> {
+        use capstone::prelude::*;
+        let mut cs = Capstone::new()
+            .sysz()
+            .mode(arch::sysz::ArchMode::Default)
+            .build()?;
+
+        cs.set_skipdata(true)?;
+
+        Ok(cs)
     }
 }
 

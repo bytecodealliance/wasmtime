@@ -7,7 +7,15 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
+; VCode:
 ; block0:
+;   clgr %r2, %r3
+;   lhi %r2, 0
+;   lochie %r2, 1
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   clgr %r2, %r3
 ;   lhi %r2, 0
 ;   lochie %r2, 1
@@ -27,6 +35,7 @@ block2:
   return v5
 }
 
+; VCode:
 ; block0:
 ;   clgr %r2, %r3
 ;   jge label1 ; jg label2
@@ -34,6 +43,17 @@ block2:
 ;   lghi %r2, 1
 ;   br %r14
 ; block2:
+;   lghi %r2, 2
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   clgr %r2, %r3
+;   jgne 0x10
+; block1: ; offset 0xa
+;   lghi %r2, 1
+;   br %r14
+; block2: ; offset 0x10
 ;   lghi %r2, 2
 ;   br %r14
 
@@ -47,6 +67,7 @@ block1:
   return v4
 }
 
+; VCode:
 ; block0:
 ;   clgr %r2, %r3
 ;   jge label1 ; jg label2
@@ -55,6 +76,13 @@ block1:
 ; block2:
 ;   jg label3
 ; block3:
+;   lghi %r2, 1
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   clgr %r2, %r3
+; block1: ; offset 0x4
 ;   lghi %r2, 1
 ;   br %r14
 

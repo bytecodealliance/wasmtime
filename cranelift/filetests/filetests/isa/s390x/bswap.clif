@@ -7,7 +7,13 @@ block0(v0: i64):
     return v1
 }
 
+; VCode:
 ; block0:
+;   lrvgr %r2, %r2
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   lrvgr %r2, %r2
 ;   br %r14
 
@@ -17,7 +23,13 @@ block0(v0: i32):
     return v1
 }
 
+; VCode:
 ; block0:
+;   lrvr %r2, %r2
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   lrvr %r2, %r2
 ;   br %r14
 
@@ -27,8 +39,15 @@ block0(v0: i16):
     return v1
 }
 
+; VCode:
 ; block0:
 ;   lrvr %r4, %r2
 ;   srlk %r2, %r4, 16
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   lrvr %r4, %r2
+;   srlk %r2, %r4, 0x10
 ;   br %r14
 

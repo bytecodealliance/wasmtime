@@ -7,12 +7,28 @@ block0(v0: i8x16):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   sshr v2.16b, v0.16b, #7
 ;   movz x5, #513
 ;   movk x5, x5, #2052, LSL #16
 ;   movk x5, x5, #8208, LSL #32
 ;   movk x5, x5, #32832, LSL #48
+;   dup v16.2d, x5
+;   and v22.16b, v2.16b, v16.16b
+;   ext v24.16b, v22.16b, v22.16b, #8
+;   zip1 v26.16b, v22.16b, v24.16b
+;   addv h28, v26.8h
+;   umov w0, v28.h[0]
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   sshr v2.16b, v0.16b, #7
+;   mov x5, #0x201
+;   movk x5, #0x804, lsl #16
+;   movk x5, #0x2010, lsl #32
+;   movk x5, #0x8040, lsl #48
 ;   dup v16.2d, x5
 ;   and v22.16b, v2.16b, v16.16b
 ;   ext v24.16b, v22.16b, v22.16b, #8
@@ -27,12 +43,28 @@ block0(v0: i8x16):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   sshr v2.16b, v0.16b, #7
 ;   movz x5, #513
 ;   movk x5, x5, #2052, LSL #16
 ;   movk x5, x5, #8208, LSL #32
 ;   movk x5, x5, #32832, LSL #48
+;   dup v16.2d, x5
+;   and v22.16b, v2.16b, v16.16b
+;   ext v24.16b, v22.16b, v22.16b, #8
+;   zip1 v26.16b, v22.16b, v24.16b
+;   addv h28, v26.8h
+;   umov w0, v28.h[0]
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   sshr v2.16b, v0.16b, #7
+;   mov x5, #0x201
+;   movk x5, #0x804, lsl #16
+;   movk x5, #0x2010, lsl #32
+;   movk x5, #0x8040, lsl #48
 ;   dup v16.2d, x5
 ;   and v22.16b, v2.16b, v16.16b
 ;   ext v24.16b, v22.16b, v22.16b, #8
@@ -47,9 +79,24 @@ block0(v0: i16x8):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   sshr v2.8h, v0.8h, #15
 ;   ldr q4, pc+8 ; b 20 ; data.f128 0x00800040002000100008000400020001
+;   and v6.16b, v2.16b, v4.16b
+;   addv h16, v6.8h
+;   umov w0, v16.h[0]
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   sshr v2.8h, v0.8h, #0xf
+;   ldr q4, #0xc
+;   b #0x1c
+;   .byte 0x01, 0x00, 0x02, 0x00
+;   .byte 0x04, 0x00, 0x08, 0x00
+;   .byte 0x10, 0x00, 0x20, 0x00
+;   .byte 0x40, 0x00, 0x80, 0x00
 ;   and v6.16b, v2.16b, v4.16b
 ;   addv h16, v6.8h
 ;   umov w0, v16.h[0]
@@ -61,9 +108,24 @@ block0(v0: i32x4):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   sshr v2.4s, v0.4s, #31
 ;   ldr q4, pc+8 ; b 20 ; data.f128 0x00000008000000040000000200000001
+;   and v6.16b, v2.16b, v4.16b
+;   addv s16, v6.4s
+;   mov w0, v16.s[0]
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   sshr v2.4s, v0.4s, #0x1f
+;   ldr q4, #0xc
+;   b #0x1c
+;   .byte 0x01, 0x00, 0x00, 0x00
+;   .byte 0x02, 0x00, 0x00, 0x00
+;   .byte 0x04, 0x00, 0x00, 0x00
+;   .byte 0x08, 0x00, 0x00, 0x00
 ;   and v6.16b, v2.16b, v4.16b
 ;   addv s16, v6.4s
 ;   mov w0, v16.s[0]
@@ -75,11 +137,21 @@ block0(v0: i64x2):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   mov x2, v0.d[1]
 ;   mov x4, v0.d[0]
 ;   lsr x6, x2, #63
 ;   lsr x8, x4, #63
 ;   add x0, x8, x6, LSL 1
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x2, v0.d[1]
+;   mov x4, v0.d[0]
+;   lsr x6, x2, #0x3f
+;   lsr x8, x4, #0x3f
+;   add x0, x8, x6, lsl #1
 ;   ret
 

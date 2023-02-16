@@ -12,8 +12,15 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
+; VCode:
 ; block0:
 ;   ncgrk %r2, %r2, %r3
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xb9, 0xe5
+;   lper %f2, %f2
 ;   br %r14
 
 function %band_not_i32(i32, i32) -> i32 {
@@ -22,8 +29,15 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
+; VCode:
 ; block0:
 ;   ncrk %r2, %r2, %r3
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xb9, 0xf5
+;   lper %f2, %f2
 ;   br %r14
 
 function %band_not_i16(i16, i16) -> i16 {
@@ -32,8 +46,15 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
+; VCode:
 ; block0:
 ;   ncrk %r2, %r2, %r3
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xb9, 0xf5
+;   lper %f2, %f2
 ;   br %r14
 
 function %band_not_i8(i8, i8) -> i8 {
@@ -42,8 +63,15 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
+; VCode:
 ; block0:
 ;   ncrk %r2, %r2, %r3
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xb9, 0xf5
+;   lper %f2, %f2
 ;   br %r14
 
 function %bor_not_i64(i64, i64) -> i64 {
@@ -52,8 +80,15 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
+; VCode:
 ; block0:
 ;   ocgrk %r2, %r2, %r3
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xb9, 0x65
+;   lper %f2, %f2
 ;   br %r14
 
 function %bor_not_i32(i32, i32) -> i32 {
@@ -62,8 +97,15 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
+; VCode:
 ; block0:
 ;   ocrk %r2, %r2, %r3
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xb9, 0x75
+;   lper %f2, %f2
 ;   br %r14
 
 function %bor_not_i16(i16, i16) -> i16 {
@@ -72,8 +114,15 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
+; VCode:
 ; block0:
 ;   ocrk %r2, %r2, %r3
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xb9, 0x75
+;   lper %f2, %f2
 ;   br %r14
 
 function %bor_not_i8(i8, i8) -> i8 {
@@ -82,8 +131,15 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
+; VCode:
 ; block0:
 ;   ocrk %r2, %r2, %r3
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xb9, 0x75
+;   lper %f2, %f2
 ;   br %r14
 
 function %bxor_not_i64(i64, i64) -> i64 {
@@ -92,8 +148,15 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
+; VCode:
 ; block0:
 ;   nxgrk %r2, %r2, %r3
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xb9, 0x67
+;   lper %f2, %f2
 ;   br %r14
 
 function %bxor_not_i32(i32, i32) -> i32 {
@@ -102,8 +165,15 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
+; VCode:
 ; block0:
 ;   nxrk %r2, %r2, %r3
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xb9, 0x77
+;   lper %f2, %f2
 ;   br %r14
 
 function %bxor_not_i16(i16, i16) -> i16 {
@@ -112,8 +182,15 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
+; VCode:
 ; block0:
 ;   nxrk %r2, %r2, %r3
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xb9, 0x77
+;   lper %f2, %f2
 ;   br %r14
 
 function %bxor_not_i8(i8, i8) -> i8 {
@@ -122,8 +199,15 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
+; VCode:
 ; block0:
 ;   nxrk %r2, %r2, %r3
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xb9, 0x77
+;   lper %f2, %f2
 ;   br %r14
 
 function %bnot_i64(i64) -> i64 {
@@ -132,8 +216,15 @@ block0(v0: i64):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   nogrk %r2, %r2, %r2
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xb9, 0x66
+;   lpdr %f2, %f2
 ;   br %r14
 
 function %bnot_i32(i32) -> i32 {
@@ -142,8 +233,15 @@ block0(v0: i32):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   nork %r2, %r2, %r2
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xb9, 0x76
+;   lpdr %f2, %f2
 ;   br %r14
 
 function %bnot_i16(i16) -> i16 {
@@ -152,8 +250,15 @@ block0(v0: i16):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   nork %r2, %r2, %r2
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xb9, 0x76
+;   lpdr %f2, %f2
 ;   br %r14
 
 function %bnot_i8(i8) -> i8 {
@@ -162,8 +267,15 @@ block0(v0: i8):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   nork %r2, %r2, %r2
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xb9, 0x76
+;   lpdr %f2, %f2
 ;   br %r14
 
 function %bitselect_i64(i64, i64, i64) -> i64 {
@@ -172,9 +284,18 @@ block0(v0: i64, v1: i64, v2: i64):
   return v3
 }
 
+; VCode:
 ; block0:
 ;   ngr %r3, %r2
 ;   ncgrk %r4, %r4, %r2
+;   ogrk %r2, %r4, %r3
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   ngr %r3, %r2
+;   .byte 0xb9, 0xe5
+;   lpdr %f4, %f4
 ;   ogrk %r2, %r4, %r3
 ;   br %r14
 
@@ -184,9 +305,18 @@ block0(v0: i32, v1: i32, v2: i32):
   return v3
 }
 
+; VCode:
 ; block0:
 ;   nr %r3, %r2
 ;   ncrk %r4, %r4, %r2
+;   ork %r2, %r4, %r3
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   nr %r3, %r2
+;   .byte 0xb9, 0xf5
+;   lpdr %f4, %f4
 ;   ork %r2, %r4, %r3
 ;   br %r14
 
@@ -196,9 +326,18 @@ block0(v0: i16, v1: i16, v2: i16):
   return v3
 }
 
+; VCode:
 ; block0:
 ;   nr %r3, %r2
 ;   ncrk %r4, %r4, %r2
+;   ork %r2, %r4, %r3
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   nr %r3, %r2
+;   .byte 0xb9, 0xf5
+;   lpdr %f4, %f4
 ;   ork %r2, %r4, %r3
 ;   br %r14
 
@@ -208,9 +347,18 @@ block0(v0: i8, v1: i8, v2: i8):
   return v3
 }
 
+; VCode:
 ; block0:
 ;   nr %r3, %r2
 ;   ncrk %r4, %r4, %r2
+;   ork %r2, %r4, %r3
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   nr %r3, %r2
+;   .byte 0xb9, 0xf5
+;   lpdr %f4, %f4
 ;   ork %r2, %r4, %r3
 ;   br %r14
 

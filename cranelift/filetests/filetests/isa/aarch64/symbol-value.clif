@@ -10,7 +10,16 @@ block0:
   return v0
 }
 
+; VCode:
 ; block0:
 ;   load_ext_name x0, TestCase(%my_global)+0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   ldr x0, #8
+;   b #0x10
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %my_global 0
+;   .byte 0x00, 0x00, 0x00, 0x00
 ;   ret
 

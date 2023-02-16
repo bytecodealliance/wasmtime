@@ -11,8 +11,15 @@ block0(v0: i64):
     return v1
 }
 
+; VCode:
 ; block0:
 ;   popcnt %r2, %r2, 8
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xb9, 0xe1
+;   .byte 0x80, 0x22
 ;   br %r14
 
 function %popcnt_i32(i32) -> i32 {
@@ -21,9 +28,17 @@ block0(v0: i32):
     return v1
 }
 
+; VCode:
 ; block0:
 ;   llgfr %r4, %r2
 ;   popcnt %r2, %r4, 8
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   llgfr %r4, %r2
+;   .byte 0xb9, 0xe1
+;   .byte 0x80, 0x24
 ;   br %r14
 
 function %popcnt_i16(i16) -> i16 {
@@ -32,9 +47,17 @@ block0(v0: i16):
     return v1
 }
 
+; VCode:
 ; block0:
 ;   llghr %r4, %r2
 ;   popcnt %r2, %r4, 8
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   llghr %r4, %r2
+;   .byte 0xb9, 0xe1
+;   .byte 0x80, 0x24
 ;   br %r14
 
 function %popcnt_i8(i8) -> i8 {
@@ -43,7 +66,13 @@ block0(v0: i8):
     return v1
 }
 
+; VCode:
 ; block0:
+;   popcnt %r2, %r2
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   popcnt %r2, %r2
 ;   br %r14
 

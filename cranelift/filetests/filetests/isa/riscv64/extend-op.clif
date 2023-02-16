@@ -10,9 +10,17 @@ block0(v0: i8):
   return v3
 }
 
+; VCode:
 ; block0:
 ;   sext.b a0,a0
 ;   addi a0,a0,42
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   slli a0, a0, 0x38
+;   srai a0, a0, 0x38
+;   addi a0, a0, 0x2a
 ;   ret
 
 function %f2(i8, i64) -> i64 {
@@ -22,9 +30,17 @@ block0(v0: i8, v1: i64):
   return v3
 }
 
+; VCode:
 ; block0:
 ;   sext.b a2,a0
 ;   add a0,a2,a1
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   slli a2, a0, 0x38
+;   srai a2, a2, 0x38
+;   add a0, a2, a1
 ;   ret
 
 function %i128_uextend_i64(i64) -> i128 {
@@ -33,8 +49,14 @@ block0(v0: i64):
     return v1
 }
 
+; VCode:
 ; block0:
 ;   li a1,0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   mv a1, zero
 ;   ret
 
 function %i128_sextend_i64(i64) -> i128 {
@@ -43,9 +65,17 @@ block0(v0: i64):
     return v1
 }
 
+; VCode:
 ; block0:
 ;   slt t2,a0,zero
 ;   sext.b1 a1,t2
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   sltz t2, a0
+;   slli a1, t2, 0x3f
+;   srai a1, a1, 0x3f
 ;   ret
 
 function %i128_uextend_i32(i32) -> i128 {
@@ -54,9 +84,17 @@ block0(v0: i32):
     return v1
 }
 
+; VCode:
 ; block0:
 ;   uext.w a0,a0
 ;   li a1,0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   slli a0, a0, 0x20
+;   srli a0, a0, 0x20
+;   mv a1, zero
 ;   ret
 
 function %i128_sextend_i32(i32) -> i128 {
@@ -65,10 +103,20 @@ block0(v0: i32):
     return v1
 }
 
+; VCode:
 ; block0:
 ;   sext.w a0,a0
 ;   slt a1,a0,zero
 ;   sext.b1 a1,a1
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   slli a0, a0, 0x20
+;   srai a0, a0, 0x20
+;   sltz a1, a0
+;   slli a1, a1, 0x3f
+;   srai a1, a1, 0x3f
 ;   ret
 
 function %i128_uextend_i16(i16) -> i128 {
@@ -77,9 +125,17 @@ block0(v0: i16):
     return v1
 }
 
+; VCode:
 ; block0:
 ;   uext.h a0,a0
 ;   li a1,0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   slli a0, a0, 0x30
+;   srli a0, a0, 0x30
+;   mv a1, zero
 ;   ret
 
 function %i128_sextend_i16(i16) -> i128 {
@@ -88,10 +144,20 @@ block0(v0: i16):
     return v1
 }
 
+; VCode:
 ; block0:
 ;   sext.h a0,a0
 ;   slt a1,a0,zero
 ;   sext.b1 a1,a1
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   slli a0, a0, 0x30
+;   srai a0, a0, 0x30
+;   sltz a1, a0
+;   slli a1, a1, 0x3f
+;   srai a1, a1, 0x3f
 ;   ret
 
 function %i128_uextend_i8(i8) -> i128 {
@@ -100,9 +166,16 @@ block0(v0: i8):
     return v1
 }
 
+; VCode:
 ; block0:
 ;   uext.b a0,a0
 ;   li a1,0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   andi a0, a0, 0xff
+;   mv a1, zero
 ;   ret
 
 function %i128_sextend_i8(i8) -> i128 {
@@ -111,9 +184,19 @@ block0(v0: i8):
     return v1
 }
 
+; VCode:
 ; block0:
 ;   sext.b a0,a0
 ;   slt a1,a0,zero
 ;   sext.b1 a1,a1
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   slli a0, a0, 0x38
+;   srai a0, a0, 0x38
+;   sltz a1, a0
+;   slli a1, a1, 0x3f
+;   srai a1, a1, 0x3f
 ;   ret
 

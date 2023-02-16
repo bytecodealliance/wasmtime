@@ -91,7 +91,7 @@ impl TargetIsa for Riscv64Backend {
         Ok(CompiledCodeStencil {
             buffer,
             frame_size,
-            disasm: emit_result.disasm,
+            vcode: emit_result.disasm,
             value_labels_ranges,
             sized_stackslot_offsets,
             dynamic_stackslot_offsets,
@@ -168,6 +168,20 @@ impl TargetIsa for Riscv64Backend {
 
     fn function_alignment(&self) -> u32 {
         4
+    }
+
+    #[cfg(feature = "disas")]
+    fn to_capstone(&self) -> Result<capstone::Capstone, capstone::Error> {
+        use capstone::prelude::*;
+        let mut cs = Capstone::new()
+            .riscv()
+            .mode(arch::riscv::ArchMode::RiscV64)
+            .build()?;
+        // Similar to AArch64, RISC-V uses inline constants rather than a separate
+        // constant pool. We want to skip dissasembly over inline constants instead
+        // of stopping on invalid bytes.
+        cs.set_skipdata(true)?;
+        Ok(cs)
     }
 }
 

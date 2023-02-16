@@ -27,6 +27,7 @@ block5(v5: i32):
   return v6
 }
 
+; VCode:
 ; block0:
 ;   emit_island 44
 ;   subs wzr, w0, #3
@@ -52,6 +53,37 @@ block5(v5: i32):
 ; block8:
 ;   b label9
 ; block9:
+;   add w0, w0, w5
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp w0, #3
+;   b.hs #0x2c
+;   csel x15, xzr, x0, hs
+;   csdb
+;   adr x14, #0x20
+;   ldrsw x15, [x14, w15, uxtw #2]
+;   add x14, x14, x15
+;   br x14
+;   .byte 0x14, 0x00, 0x00, 0x00
+;   .byte 0x1c, 0x00, 0x00, 0x00
+;   .byte 0x24, 0x00, 0x00, 0x00
+; block1: ; offset 0x2c
+;   mov w5, #4
+; block2: ; offset 0x30
+;   b #0x48
+; block3: ; offset 0x34
+;   mov w5, #1
+; block4: ; offset 0x38
+;   b #0x48
+; block5: ; offset 0x3c
+;   mov w5, #2
+; block6: ; offset 0x40
+;   b #0x48
+; block7: ; offset 0x44
+;   mov w5, #3
+; block8: ; offset 0x48
 ;   add w0, w0, w5
 ;   ret
 

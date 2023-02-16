@@ -11,7 +11,12 @@ block0(v0: i64x2):
   return v1
 }
 
+; VCode:
 ; block0:
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   br %r14
 
 function %bitcast_i64x2_i32x4(i64x2) -> i32x4 {
@@ -20,10 +25,18 @@ block0(v0: i64x2):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   vpdi %v2, %v24, %v24, 4
 ;   vpdi %v4, %v2, %v2, 4
 ;   verllg %v24, %v4, 32
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vpdi %v2, %v24, %v24, 4
+;   vpdi %v4, %v2, %v2, 4
+;   verllg %v24, %v4, 0x20
 ;   br %r14
 
 function %bitcast_i64x2_i32x4(i64x2) -> i32x4 wasmtime_system_v {
@@ -32,10 +45,18 @@ block0(v0: i64x2):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   vpdi %v2, %v24, %v24, 4
 ;   vpdi %v4, %v2, %v2, 4
 ;   verllg %v24, %v4, 32
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vpdi %v2, %v24, %v24, 4
+;   vpdi %v4, %v2, %v2, 4
+;   verllg %v24, %v4, 0x20
 ;   br %r14
 
 function %bitcast_i64x2_i32x4(i64x2) -> i32x4 wasmtime_system_v {
@@ -44,7 +65,12 @@ block0(v0: i64x2):
   return v1
 }
 
+; VCode:
 ; block0:
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   br %r14
 
 function %bitcast_i64x2_f64x2(i64x2) -> f64x2 {
@@ -53,7 +79,12 @@ block0(v0: i64x2):
   return v1
 }
 
+; VCode:
 ; block0:
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   br %r14
 
 function %bitcast_i64x2_f64x2(i64x2) -> f64x2 {
@@ -62,7 +93,12 @@ block0(v0: i64x2):
   return v1
 }
 
+; VCode:
 ; block0:
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   br %r14
 
 function %bitcast_i64x2_f64x2(i64x2) -> f64x2 wasmtime_system_v {
@@ -71,6 +107,11 @@ block0(v0: i64x2):
   return v1
 }
 
+; VCode:
 ; block0:
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   br %r14
 

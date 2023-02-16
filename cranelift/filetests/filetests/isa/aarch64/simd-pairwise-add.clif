@@ -9,7 +9,13 @@ block0(v0: i8x16):
   return v3
 }
 
+; VCode:
 ; block0:
+;   saddlp v0.8h, v0.16b
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   saddlp v0.8h, v0.16b
 ;   ret
 
@@ -21,7 +27,13 @@ block0(v0: i16x8):
   return v3
 }
 
+; VCode:
 ; block0:
+;   saddlp v0.4s, v0.8h
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   saddlp v0.4s, v0.8h
 ;   ret
 
@@ -33,7 +45,13 @@ block0(v0: i8x16):
   return v3
 }
 
+; VCode:
 ; block0:
+;   uaddlp v0.8h, v0.16b
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   uaddlp v0.8h, v0.16b
 ;   ret
 
@@ -45,7 +63,13 @@ block0(v0: i16x8):
   return v3
 }
 
+; VCode:
 ; block0:
+;   uaddlp v0.4s, v0.8h
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   uaddlp v0.4s, v0.8h
 ;   ret
 

@@ -8,6 +8,7 @@ block0(v0: i32):
     return v2
 }
 
+; VCode:
 ; block0:
 ;   li t2,127
 ;   uext.w a1,a0
@@ -15,6 +16,19 @@ block0(v0: i32):
 ;   add a0,a1,a3
 ;   srli a7,a0,32
 ;   trap_if a7,user0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi t2, zero, 0x7f
+;   slli a1, a0, 0x20
+;   srli a1, a1, 0x20
+;   slli a3, t2, 0x20
+;   srli a3, a3, 0x20
+;   add a0, a1, a3
+;   srli a7, a0, 0x20
+;   beqz a7, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
 ;   ret
 
 function %f1(i32) -> i32 {
@@ -24,6 +38,7 @@ block0(v0: i32):
     return v2
 }
 
+; VCode:
 ; block0:
 ;   li t2,127
 ;   uext.w a1,t2
@@ -32,6 +47,19 @@ block0(v0: i32):
 ;   srli a7,a0,32
 ;   trap_if a7,user0
 ;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi t2, zero, 0x7f
+;   slli a1, t2, 0x20
+;   srli a1, a1, 0x20
+;   slli a3, a0, 0x20
+;   srli a3, a3, 0x20
+;   add a0, a1, a3
+;   srli a7, a0, 0x20
+;   beqz a7, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
+;   ret
 
 function %f2(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -39,12 +67,25 @@ block0(v0: i32, v1: i32):
     return v2
 }
 
+; VCode:
 ; block0:
 ;   uext.w a0,a0
 ;   uext.w a2,a1
 ;   add a0,a0,a2
 ;   srli a6,a0,32
 ;   trap_if a6,user0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   slli a0, a0, 0x20
+;   srli a0, a0, 0x20
+;   slli a2, a1, 0x20
+;   srli a2, a2, 0x20
+;   add a0, a0, a2
+;   srli a6, a0, 0x20
+;   beqz a6, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
 ;   ret
 
 function %f3(i64) -> i64 {
@@ -54,12 +95,26 @@ block0(v0: i64):
     return v2
 }
 
+; VCode:
 ; block0:
 ;   mv a4,a0
 ;   li t2,127
 ;   add a0,a4,t2
 ;   ult a3,a0,a4##ty=i64
 ;   trap_if a3,user0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   ori a4, a0, 0
+;   addi t2, zero, 0x7f
+;   add a0, a4, t2
+;   bgeu a0, a4, 0xc
+;   addi a3, zero, 1
+;   j 8
+;   mv a3, zero
+;   beqz a3, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
 ;   ret
 
 function %f3(i64) -> i64 {
@@ -69,11 +124,24 @@ block0(v0: i64):
     return v2
 }
 
+; VCode:
 ; block0:
 ;   li t2,127
 ;   add a0,t2,a0
 ;   ult a3,a0,t2##ty=i64
 ;   trap_if a3,user0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi t2, zero, 0x7f
+;   add a0, t2, a0
+;   bgeu a0, t2, 0xc
+;   addi a3, zero, 1
+;   j 8
+;   mv a3, zero
+;   beqz a3, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
 ;   ret
 
 function %f4(i64, i64) -> i64 {
@@ -82,11 +150,25 @@ block0(v0: i64, v1: i64):
     return v2
 }
 
+; VCode:
 ; block0:
 ;   add a1,a0,a1
 ;   mv a3,a1
 ;   ult a2,a3,a0##ty=i64
 ;   mv a0,a3
 ;   trap_if a2,user0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   add a1, a0, a1
+;   ori a3, a1, 0
+;   bgeu a3, a0, 0xc
+;   addi a2, zero, 1
+;   j 8
+;   mv a2, zero
+;   ori a0, a3, 0
+;   beqz a2, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
 ;   ret
 

@@ -9,8 +9,15 @@ block0(v0: i32, v1: i32, v2: i64, v3: i64):
     return v6
 }
 
+; VCode:
 ; block0:
 ;   subs wzr, w0, w1
+;   csel x0, x2, x3, eq
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp w0, w1
 ;   csel x0, x2, x3, eq
 ;   ret
 
@@ -22,7 +29,14 @@ block0(v0: f32, v1: f32, v2: i64, v3: i64):
     return v6
 }
 
+; VCode:
 ; block0:
+;   fcmp s0, s1
+;   csel x0, x0, x1, eq
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   fcmp s0, s1
 ;   csel x0, x0, x1, eq
 ;   ret

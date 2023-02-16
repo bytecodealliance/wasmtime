@@ -8,8 +8,15 @@ block0(v0: i64):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   subs xzr, x0, #0
+;   csetm x0, ne
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, #0
 ;   csetm x0, ne
 ;   ret
 
@@ -19,8 +26,15 @@ block0(v0: i64):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   subs xzr, x0, #0
+;   csetm x0, ne
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, #0
 ;   csetm x0, ne
 ;   ret
 
@@ -30,8 +44,15 @@ block0(v0: i64):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   subs xzr, x0, #0
+;   csetm x0, ne
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, #0
 ;   csetm x0, ne
 ;   ret
 
@@ -41,8 +62,15 @@ block0(v0: i64):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   subs xzr, x0, #0
+;   csetm x0, ne
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, #0
 ;   csetm x0, ne
 ;   ret
 
@@ -52,8 +80,15 @@ block0(v0: i32):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   subs wzr, w0, #0
+;   csetm x0, ne
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp w0, #0
 ;   csetm x0, ne
 ;   ret
 
@@ -63,8 +98,15 @@ block0(v0: i32):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   subs wzr, w0, #0
+;   csetm x0, ne
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp w0, #0
 ;   csetm x0, ne
 ;   ret
 
@@ -74,8 +116,15 @@ block0(v0: i32):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   subs wzr, w0, #0
+;   csetm x0, ne
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp w0, #0
 ;   csetm x0, ne
 ;   ret
 
@@ -85,8 +134,15 @@ block0(v0: i32):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   subs wzr, w0, #0
+;   csetm x0, ne
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp w0, #0
 ;   csetm x0, ne
 ;   ret
 
@@ -96,9 +152,17 @@ block0(v0: i16):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   and w2, w0, #65535
 ;   subs wzr, w2, #0
+;   csetm x0, ne
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   and w2, w0, #0xffff
+;   cmp w2, #0
 ;   csetm x0, ne
 ;   ret
 
@@ -108,9 +172,17 @@ block0(v0: i16):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   and w2, w0, #65535
 ;   subs wzr, w2, #0
+;   csetm x0, ne
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   and w2, w0, #0xffff
+;   cmp w2, #0
 ;   csetm x0, ne
 ;   ret
 
@@ -120,9 +192,17 @@ block0(v0: i16):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   and w2, w0, #65535
 ;   subs wzr, w2, #0
+;   csetm x0, ne
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   and w2, w0, #0xffff
+;   cmp w2, #0
 ;   csetm x0, ne
 ;   ret
 
@@ -132,9 +212,17 @@ block0(v0: i16):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   and w2, w0, #65535
 ;   subs wzr, w2, #0
+;   csetm x0, ne
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   and w2, w0, #0xffff
+;   cmp w2, #0
 ;   csetm x0, ne
 ;   ret
 
@@ -144,9 +232,17 @@ block0(v0: i8):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   and w2, w0, #255
 ;   subs wzr, w2, #0
+;   csetm x0, ne
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   and w2, w0, #0xff
+;   cmp w2, #0
 ;   csetm x0, ne
 ;   ret
 
@@ -156,9 +252,17 @@ block0(v0: i8):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   and w2, w0, #255
 ;   subs wzr, w2, #0
+;   csetm x0, ne
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   and w2, w0, #0xff
+;   cmp w2, #0
 ;   csetm x0, ne
 ;   ret
 
@@ -168,9 +272,17 @@ block0(v0: i8):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   and w2, w0, #255
 ;   subs wzr, w2, #0
+;   csetm x0, ne
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   and w2, w0, #0xff
+;   cmp w2, #0
 ;   csetm x0, ne
 ;   ret
 
@@ -180,9 +292,17 @@ block0(v0: i8):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   and w2, w0, #255
 ;   subs wzr, w2, #0
+;   csetm x0, ne
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   and w2, w0, #0xff
+;   cmp w2, #0
 ;   csetm x0, ne
 ;   ret
 
@@ -192,9 +312,18 @@ block0(v0: i128):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   orr x3, x0, x1
 ;   subs xzr, x3, #0
+;   csetm x1, ne
+;   mov x0, x1
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   orr x3, x0, x1
+;   cmp x3, #0
 ;   csetm x1, ne
 ;   mov x0, x1
 ;   ret
@@ -205,9 +334,17 @@ block0(v0: i128):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   orr x3, x0, x1
 ;   subs xzr, x3, #0
+;   csetm x0, ne
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   orr x3, x0, x1
+;   cmp x3, #0
 ;   csetm x0, ne
 ;   ret
 
@@ -217,9 +354,17 @@ block0(v0: i128):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   orr x3, x0, x1
 ;   subs xzr, x3, #0
+;   csetm x0, ne
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   orr x3, x0, x1
+;   cmp x3, #0
 ;   csetm x0, ne
 ;   ret
 
@@ -229,9 +374,17 @@ block0(v0: i128):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   orr x3, x0, x1
 ;   subs xzr, x3, #0
+;   csetm x0, ne
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   orr x3, x0, x1
+;   cmp x3, #0
 ;   csetm x0, ne
 ;   ret
 
@@ -241,9 +394,17 @@ block0(v0: i128):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   orr x3, x0, x1
 ;   subs xzr, x3, #0
+;   csetm x0, ne
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   orr x3, x0, x1
+;   cmp x3, #0
 ;   csetm x0, ne
 ;   ret
 
@@ -253,8 +414,16 @@ block0(v0: i64):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   subs xzr, x0, #0
+;   csetm x1, ne
+;   mov x0, x1
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, #0
 ;   csetm x1, ne
 ;   mov x0, x1
 ;   ret
@@ -265,8 +434,16 @@ block0(v0: i32):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   subs wzr, w0, #0
+;   csetm x1, ne
+;   mov x0, x1
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp w0, #0
 ;   csetm x1, ne
 ;   mov x0, x1
 ;   ret
@@ -277,9 +454,18 @@ block0(v0: i16):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   and w2, w0, #65535
 ;   subs wzr, w2, #0
+;   csetm x1, ne
+;   mov x0, x1
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   and w2, w0, #0xffff
+;   cmp w2, #0
 ;   csetm x1, ne
 ;   mov x0, x1
 ;   ret
@@ -290,9 +476,18 @@ block0(v0: i8):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   and w2, w0, #255
 ;   subs wzr, w2, #0
+;   csetm x1, ne
+;   mov x0, x1
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   and w2, w0, #0xff
+;   cmp w2, #0
 ;   csetm x1, ne
 ;   mov x0, x1
 ;   ret

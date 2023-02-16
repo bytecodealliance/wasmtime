@@ -6,8 +6,13 @@ block0:
   trap user0
 }
 
+; VCode:
 ; block0:
 ;   udf #0xc11f
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
 
 function %trap_iadd_ifcout(i64, i64) {
 block0(v0: i64, v1: i64):
@@ -15,8 +20,16 @@ block0(v0: i64, v1: i64):
   return
 }
 
+; VCode:
 ; block0:
 ;   adds x3, x0, x1
 ;   b.lo 8 ; udf
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   adds x3, x0, x1
+;   b.lo #0xc
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
 ;   ret
 

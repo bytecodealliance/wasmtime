@@ -7,6 +7,7 @@ block0(v0: i64):
     return v1
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -33,6 +34,34 @@ block0(v0: i64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   movq %rdi, %rcx
+;   shrq $1, %rdi
+;   movq %rcx, %r8
+;   movabsq $0x7777777777777777, %rdx
+;   andq %rdx, %rdi
+;   subq %rdi, %r8
+;   shrq $1, %rdi
+;   andq %rdx, %rdi
+;   subq %rdi, %r8
+;   shrq $1, %rdi
+;   andq %rdx, %rdi
+;   subq %rdi, %r8
+;   movq %r8, %rax
+;   shrq $4, %rax
+;   addq %r8, %rax
+;   movabsq $0xf0f0f0f0f0f0f0f, %r11
+;   andq %r11, %rax
+;   movabsq $0x101010101010101, %rcx
+;   imulq %rcx, %rax
+;   shrq $0x38, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %popcnt64load(i64) -> i64 {
 block0(v0: i64):
@@ -41,6 +70,7 @@ block0(v0: i64):
     return v2
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -67,6 +97,34 @@ block0(v0: i64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   movq (%rdi), %rdx ; trap: heap_oob
+;   movq %rdx, %rcx
+;   shrq $1, %rcx
+;   movabsq $0x7777777777777777, %r8
+;   andq %r8, %rcx
+;   subq %rcx, %rdx
+;   shrq $1, %rcx
+;   andq %r8, %rcx
+;   subq %rcx, %rdx
+;   shrq $1, %rcx
+;   andq %r8, %rcx
+;   subq %rcx, %rdx
+;   movq %rdx, %rax
+;   shrq $4, %rax
+;   addq %rdx, %rax
+;   movabsq $0xf0f0f0f0f0f0f0f, %rsi
+;   andq %rsi, %rax
+;   movabsq $0x101010101010101, %rdx
+;   imulq %rdx, %rax
+;   shrq $0x38, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %popcnt32(i32) -> i32 {
 block0(v0: i32):
@@ -74,6 +132,7 @@ block0(v0: i32):
     return v1
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -98,6 +157,32 @@ block0(v0: i32):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   movq %rdi, %rax
+;   shrl $1, %edi
+;   movl $0x77777777, %edx
+;   andl %edx, %edi
+;   movq %rax, %r8
+;   subl %edi, %r8d
+;   shrl $1, %edi
+;   andl %edx, %edi
+;   subl %edi, %r8d
+;   shrl $1, %edi
+;   andl %edx, %edi
+;   subl %edi, %r8d
+;   movq %r8, %rax
+;   shrl $4, %eax
+;   addl %r8d, %eax
+;   andl $0xf0f0f0f, %eax
+;   imull $0x1010101, %eax, %eax
+;   shrl $0x18, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %popcnt32load(i64) -> i32 {
 block0(v0: i64):
@@ -106,6 +191,7 @@ block0(v0: i64):
     return v2
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -130,4 +216,30 @@ block0(v0: i64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   movl (%rdi), %edx ; trap: heap_oob
+;   movq %rdx, %rcx
+;   shrl $1, %ecx
+;   movl $0x77777777, %r8d
+;   andl %r8d, %ecx
+;   subl %ecx, %edx
+;   shrl $1, %ecx
+;   andl %r8d, %ecx
+;   subl %ecx, %edx
+;   shrl $1, %ecx
+;   andl %r8d, %ecx
+;   subl %ecx, %edx
+;   movq %rdx, %rax
+;   shrl $4, %eax
+;   addl %edx, %eax
+;   andl $0xf0f0f0f, %eax
+;   imull $0x1010101, %eax, %eax
+;   shrl $0x18, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 

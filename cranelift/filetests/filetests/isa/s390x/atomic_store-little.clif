@@ -7,9 +7,16 @@ block0(v0: i64, v1: i64):
   return
 }
 
+; VCode:
 ; block0:
 ;   strvg %r2, 0(%r3)
 ;   bcr 14, 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   strvg %r2, 0(%r3)
+;   bnor %r0
 ;   br %r14
 
 function %atomic_store_i64_sym(i64) {
@@ -20,9 +27,17 @@ block0(v0: i64):
   return
 }
 
+; VCode:
 ; block0:
 ;   larl %r1, %sym + 0 ; strvg %r2, 0(%r1)
 ;   bcr 14, 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   larl %r1, 0 ; reloc_external PCRel32Dbl %sym 2
+;   strvg %r2, 0(%r1)
+;   bnor %r0
 ;   br %r14
 
 function %atomic_store_imm_i64(i64) {
@@ -32,10 +47,18 @@ block0(v0: i64):
   return
 }
 
+; VCode:
 ; block0:
 ;   lghi %r4, 12345
 ;   strvg %r4, 0(%r2)
 ;   bcr 14, 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   lghi %r4, 0x3039
+;   strvg %r4, 0(%r2)
+;   bnor %r0
 ;   br %r14
 
 function %atomic_store_i32(i32, i64) {
@@ -44,9 +67,16 @@ block0(v0: i32, v1: i64):
   return
 }
 
+; VCode:
 ; block0:
 ;   strv %r2, 0(%r3)
 ;   bcr 14, 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   strv %r2, 0(%r3)
+;   bnor %r0
 ;   br %r14
 
 function %atomic_store_i32_sym(i32) {
@@ -57,9 +87,17 @@ block0(v0: i32):
   return
 }
 
+; VCode:
 ; block0:
 ;   larl %r1, %sym + 0 ; strv %r2, 0(%r1)
 ;   bcr 14, 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   larl %r1, 0 ; reloc_external PCRel32Dbl %sym 2
+;   strv %r2, 0(%r1)
+;   bnor %r0
 ;   br %r14
 
 function %atomic_store_imm_i32(i64) {
@@ -69,10 +107,18 @@ block0(v0: i64):
   return
 }
 
+; VCode:
 ; block0:
 ;   lhi %r4, 12345
 ;   strv %r4, 0(%r2)
 ;   bcr 14, 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   lhi %r4, 0x3039
+;   strv %r4, 0(%r2)
+;   bnor %r0
 ;   br %r14
 
 function %atomic_store_i16(i16, i64) {
@@ -81,9 +127,16 @@ block0(v0: i16, v1: i64):
   return
 }
 
+; VCode:
 ; block0:
 ;   strvh %r2, 0(%r3)
 ;   bcr 14, 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   strvh %r2, 0(%r3)
+;   bnor %r0
 ;   br %r14
 
 function %atomic_store_i16_sym(i16) {
@@ -94,9 +147,17 @@ block0(v0: i16):
   return
 }
 
+; VCode:
 ; block0:
 ;   larl %r1, %sym + 0 ; strvh %r2, 0(%r1)
 ;   bcr 14, 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   larl %r1, 0 ; reloc_external PCRel32Dbl %sym 2
+;   strvh %r2, 0(%r1)
+;   bnor %r0
 ;   br %r14
 
 function %atomic_store_imm_i16(i64) {
@@ -106,9 +167,16 @@ block0(v0: i64):
   return
 }
 
+; VCode:
 ; block0:
 ;   mvhhi 0(%r2), 14640
 ;   bcr 14, 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   mvhhi 0(%r2), 0x3930
+;   bnor %r0
 ;   br %r14
 
 function %atomic_store_i8(i8, i64) {
@@ -117,9 +185,16 @@ block0(v0: i8, v1: i64):
   return
 }
 
+; VCode:
 ; block0:
 ;   stc %r2, 0(%r3)
 ;   bcr 14, 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   stc %r2, 0(%r3)
+;   bnor %r0
 ;   br %r14
 
 function %atomic_store_imm_i8(i64) {
@@ -129,8 +204,15 @@ block0(v0: i64):
   return
 }
 
+; VCode:
 ; block0:
 ;   mvi 0(%r2), 123
 ;   bcr 14, 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   mvi 0(%r2), 0x7b
+;   bnor %r0
 ;   br %r14
 

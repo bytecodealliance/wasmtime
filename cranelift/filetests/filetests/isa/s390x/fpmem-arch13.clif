@@ -7,8 +7,16 @@ block0(v0: i64):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   vlebrg %v0, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe6, 0x00
+;   lpdr %f0, %f0
+;   .byte 0x00, 0x02
 ;   br %r14
 
 function %load_f32_little(i64) -> f32 {
@@ -17,8 +25,16 @@ block0(v0: i64):
   return v1
 }
 
+; VCode:
 ; block0:
 ;   vlebrf %v0, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe6, 0x00
+;   lpdr %f0, %f0
+;   .byte 0x00, 0x03
 ;   br %r14
 
 function %store_f64_little(f64, i64) {
@@ -27,8 +43,16 @@ block0(v0: f64, v1: i64):
   return
 }
 
+; VCode:
 ; block0:
 ;   vstebrg %v0, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe6, 0x00
+;   lpdr %f0, %f0
+;   .byte 0x00, 0x0a
 ;   br %r14
 
 function %store_f32_little(f32, i64) {
@@ -37,7 +61,15 @@ block0(v0: f32, v1: i64):
   return
 }
 
+; VCode:
 ; block0:
 ;   vstebrf %v0, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe6, 0x00
+;   lpdr %f0, %f0
+;   .byte 0x00, 0x0b
 ;   br %r14
 

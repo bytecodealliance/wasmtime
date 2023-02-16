@@ -7,7 +7,13 @@ block0(v0: i64):
   return v1
 }
 
+; VCode:
 ; block0:
+;   lrvg %r2, 0(%r2)
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   lrvg %r2, 0(%r2)
 ;   br %r14
 
@@ -19,8 +25,15 @@ block0:
   return v1
 }
 
+; VCode:
 ; block0:
 ;   larl %r1, %sym + 0 ; lrvg %r2, 0(%r1)
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   larl %r1, 0 ; reloc_external PCRel32Dbl %sym 2
+;   lrvg %r2, 0(%r1)
 ;   br %r14
 
 function %uload8_i64(i64) -> i64 {
@@ -29,7 +42,13 @@ block0(v0: i64):
   return v1
 }
 
+; VCode:
 ; block0:
+;   llgc %r2, 0(%r2)
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   llgc %r2, 0(%r2)
 ;   br %r14
 
@@ -39,7 +58,13 @@ block0(v0: i64):
   return v1
 }
 
+; VCode:
 ; block0:
+;   lgb %r2, 0(%r2)
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   lgb %r2, 0(%r2)
 ;   br %r14
 
@@ -49,7 +74,14 @@ block0(v0: i64):
   return v1
 }
 
+; VCode:
 ; block0:
+;   lrvh %r4, 0(%r2)
+;   llghr %r2, %r4
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   lrvh %r4, 0(%r2)
 ;   llghr %r2, %r4
 ;   br %r14
@@ -62,8 +94,16 @@ block0:
   return v1
 }
 
+; VCode:
 ; block0:
 ;   larl %r1, %sym + 0 ; lrvh %r2, 0(%r1)
+;   llghr %r2, %r2
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   larl %r1, 0 ; reloc_external PCRel32Dbl %sym 2
+;   lrvh %r2, 0(%r1)
 ;   llghr %r2, %r2
 ;   br %r14
 
@@ -73,7 +113,14 @@ block0(v0: i64):
   return v1
 }
 
+; VCode:
 ; block0:
+;   lrvh %r4, 0(%r2)
+;   lghr %r2, %r4
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   lrvh %r4, 0(%r2)
 ;   lghr %r2, %r4
 ;   br %r14
@@ -86,8 +133,16 @@ block0:
   return v1
 }
 
+; VCode:
 ; block0:
 ;   larl %r1, %sym + 0 ; lrvh %r2, 0(%r1)
+;   lghr %r2, %r2
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   larl %r1, 0 ; reloc_external PCRel32Dbl %sym 2
+;   lrvh %r2, 0(%r1)
 ;   lghr %r2, %r2
 ;   br %r14
 
@@ -97,7 +152,14 @@ block0(v0: i64):
   return v1
 }
 
+; VCode:
 ; block0:
+;   lrv %r4, 0(%r2)
+;   llgfr %r2, %r4
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   lrv %r4, 0(%r2)
 ;   llgfr %r2, %r4
 ;   br %r14
@@ -110,8 +172,16 @@ block0:
   return v1
 }
 
+; VCode:
 ; block0:
 ;   larl %r1, %sym + 0 ; lrv %r2, 0(%r1)
+;   llgfr %r2, %r2
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   larl %r1, 0 ; reloc_external PCRel32Dbl %sym 2
+;   lrv %r2, 0(%r1)
 ;   llgfr %r2, %r2
 ;   br %r14
 
@@ -121,7 +191,14 @@ block0(v0: i64):
   return v1
 }
 
+; VCode:
 ; block0:
+;   lrv %r4, 0(%r2)
+;   lgfr %r2, %r4
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   lrv %r4, 0(%r2)
 ;   lgfr %r2, %r4
 ;   br %r14
@@ -134,8 +211,16 @@ block0:
   return v1
 }
 
+; VCode:
 ; block0:
 ;   larl %r1, %sym + 0 ; lrv %r2, 0(%r1)
+;   lgfr %r2, %r2
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   larl %r1, 0 ; reloc_external PCRel32Dbl %sym 2
+;   lrv %r2, 0(%r1)
 ;   lgfr %r2, %r2
 ;   br %r14
 
@@ -145,7 +230,13 @@ block0(v0: i64):
   return v1
 }
 
+; VCode:
 ; block0:
+;   lrv %r2, 0(%r2)
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   lrv %r2, 0(%r2)
 ;   br %r14
 
@@ -157,8 +248,15 @@ block0:
   return v1
 }
 
+; VCode:
 ; block0:
 ;   larl %r1, %sym + 0 ; lrv %r2, 0(%r1)
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   larl %r1, 0 ; reloc_external PCRel32Dbl %sym 2
+;   lrv %r2, 0(%r1)
 ;   br %r14
 
 function %uload8_i32(i64) -> i32 {
@@ -167,7 +265,13 @@ block0(v0: i64):
   return v1
 }
 
+; VCode:
 ; block0:
+;   llc %r2, 0(%r2)
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   llc %r2, 0(%r2)
 ;   br %r14
 
@@ -177,7 +281,13 @@ block0(v0: i64):
   return v1
 }
 
+; VCode:
 ; block0:
+;   lb %r2, 0(%r2)
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   lb %r2, 0(%r2)
 ;   br %r14
 
@@ -187,7 +297,14 @@ block0(v0: i64):
   return v1
 }
 
+; VCode:
 ; block0:
+;   lrvh %r4, 0(%r2)
+;   llhr %r2, %r4
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   lrvh %r4, 0(%r2)
 ;   llhr %r2, %r4
 ;   br %r14
@@ -200,8 +317,16 @@ block0:
   return v1
 }
 
+; VCode:
 ; block0:
 ;   larl %r1, %sym + 0 ; lrvh %r2, 0(%r1)
+;   llhr %r2, %r2
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   larl %r1, 0 ; reloc_external PCRel32Dbl %sym 2
+;   lrvh %r2, 0(%r1)
 ;   llhr %r2, %r2
 ;   br %r14
 
@@ -211,7 +336,14 @@ block0(v0: i64):
   return v1
 }
 
+; VCode:
 ; block0:
+;   lrvh %r4, 0(%r2)
+;   lhr %r2, %r4
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   lrvh %r4, 0(%r2)
 ;   lhr %r2, %r4
 ;   br %r14
@@ -224,8 +356,16 @@ block0:
   return v1
 }
 
+; VCode:
 ; block0:
 ;   larl %r1, %sym + 0 ; lrvh %r2, 0(%r1)
+;   lhr %r2, %r2
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   larl %r1, 0 ; reloc_external PCRel32Dbl %sym 2
+;   lrvh %r2, 0(%r1)
 ;   lhr %r2, %r2
 ;   br %r14
 
@@ -235,7 +375,13 @@ block0(v0: i64):
   return v1
 }
 
+; VCode:
 ; block0:
+;   lrvh %r2, 0(%r2)
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   lrvh %r2, 0(%r2)
 ;   br %r14
 
@@ -247,8 +393,15 @@ block0:
   return v1
 }
 
+; VCode:
 ; block0:
 ;   larl %r1, %sym + 0 ; lrvh %r2, 0(%r1)
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   larl %r1, 0 ; reloc_external PCRel32Dbl %sym 2
+;   lrvh %r2, 0(%r1)
 ;   br %r14
 
 function %uload8_i16(i64) -> i16 {
@@ -257,7 +410,13 @@ block0(v0: i64):
   return v1
 }
 
+; VCode:
 ; block0:
+;   llc %r2, 0(%r2)
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   llc %r2, 0(%r2)
 ;   br %r14
 
@@ -267,7 +426,13 @@ block0(v0: i64):
   return v1
 }
 
+; VCode:
 ; block0:
+;   lb %r2, 0(%r2)
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   lb %r2, 0(%r2)
 ;   br %r14
 
@@ -277,7 +442,13 @@ block0(v0: i64):
   return v1
 }
 
+; VCode:
 ; block0:
+;   llc %r2, 0(%r2)
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   llc %r2, 0(%r2)
 ;   br %r14
 

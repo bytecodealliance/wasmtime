@@ -9,6 +9,7 @@ block0(v0: i8x16):
   return v3
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -19,6 +20,27 @@ block0(v0: i8x16):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   movdqa %xmm0, %xmm4
+;   movdqu 0x10(%rip), %xmm0
+;   movdqa %xmm4, %xmm5
+;   pmaddubsw %xmm5, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   addb %al, (%rax)
+;   addl %eax, (%rcx)
+;   addl %eax, (%rcx)
+;   addl %eax, (%rcx)
+;   addl %eax, (%rcx)
+;   addl %eax, (%rcx)
+;   addl %eax, (%rcx)
+;   addl %eax, (%rcx)
+;   addl %eax, (%rcx)
 
 function %fn2(i16x8) -> i32x4 {
 block0(v0: i16x8):
@@ -28,6 +50,7 @@ block0(v0: i16x8):
   return v3
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -36,6 +59,29 @@ block0(v0: i16x8):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   movdqu 0x14(%rip), %xmm2
+;   pmaddwd %xmm2, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rcx)
+;   addb %al, (%rcx)
+;   addb %al, (%rcx)
+;   addb %al, (%rcx)
+;   addb %al, (%rcx)
+;   addb %al, (%rcx)
+;   addb %al, (%rcx)
+;   addb %al, (%rcx)
 
 function %fn3(i8x16) -> i16x8 {
 block0(v0: i8x16):
@@ -45,6 +91,7 @@ block0(v0: i8x16):
   return v3
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -53,6 +100,29 @@ block0(v0: i8x16):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   movdqu 0x14(%rip), %xmm2
+;   pmaddubsw %xmm2, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addl %eax, (%rcx)
+;   addl %eax, (%rcx)
+;   addl %eax, (%rcx)
+;   addl %eax, (%rcx)
+;   addl %eax, (%rcx)
+;   addl %eax, (%rcx)
+;   addl %eax, (%rcx)
+;   addl %eax, (%rcx)
 
 function %fn4(i16x8) -> i32x4 {
 block0(v0: i16x8):
@@ -62,6 +132,7 @@ block0(v0: i16x8):
   return v3
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -74,4 +145,38 @@ block0(v0: i16x8):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   movdqu 0x24(%rip), %xmm2
+;   pxor %xmm2, %xmm0
+;   movdqu 0x28(%rip), %xmm6
+;   pmaddwd %xmm6, %xmm0
+;   movdqu 0x2b(%rip), %xmm10
+;   paddd %xmm10, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   addb %al, (%rax)
+;   addb $0x80, (%rax)
+;   addb %al, -0x7fff8000(%rax)
+;   addb %al, -0x7fff8000(%rax)
+;   addl %eax, (%rax)
+;   addl %eax, (%rax)
+;   addl %eax, (%rax)
+;   addl %eax, (%rax)
+;   addl %eax, (%rax)
+;   addl %eax, (%rax)
+;   addl %eax, (%rax)
+;   addl %eax, (%rax)
+;   addb %al, (%rax)
+;   addl %eax, (%rax)
+;   addb %al, (%rax)
+;   addl %eax, (%rax)
+;   addb %al, (%rax)
+;   addl %eax, (%rax)
+;   addb %al, (%rax)
+;   addl %eax, (%rax)
 

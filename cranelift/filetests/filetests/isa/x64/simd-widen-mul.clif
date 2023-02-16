@@ -12,6 +12,7 @@ block0(v0: i8x16, v1: i8x16):
     return v4
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -25,6 +26,21 @@ block0(v0: i8x16, v1: i8x16):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   movdqa %xmm0, %xmm3
+;   palignr $8, %xmm0, %xmm3
+;   pmovsxbw %xmm3, %xmm0
+;   movdqa %xmm1, %xmm7
+;   palignr $8, %xmm1, %xmm7
+;   pmovsxbw %xmm7, %xmm9
+;   pmullw %xmm9, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %imul_swiden_hi_i16x8(i16x8, i16x8) -> i32x4 {
 block0(v0: i16x8, v1: i16x8):
@@ -34,6 +50,7 @@ block0(v0: i16x8, v1: i16x8):
     return v4
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -47,6 +64,21 @@ block0(v0: i16x8, v1: i16x8):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   movdqa %xmm0, %xmm5
+;   pmullw %xmm1, %xmm5
+;   movdqa %xmm5, %xmm6
+;   movdqa %xmm0, %xmm5
+;   pmulhw %xmm1, %xmm5
+;   movdqa %xmm6, %xmm0
+;   punpckhwd %xmm5, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %imul_swiden_hi_i32x4(i32x4, i32x4) -> i64x2 {
 block0(v0: i32x4, v1: i32x4):
@@ -56,6 +88,7 @@ block0(v0: i32x4, v1: i32x4):
     return v4
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -65,6 +98,17 @@ block0(v0: i32x4, v1: i32x4):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   pshufd $0xfa, %xmm0, %xmm0
+;   pshufd $0xfa, %xmm1, %xmm5
+;   pmuldq %xmm5, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %imul_swiden_low_i8x16(i8x16, i8x16) -> i16x8 {
 block0(v0: i8x16, v1: i8x16):
@@ -74,6 +118,7 @@ block0(v0: i8x16, v1: i8x16):
     return v4
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -83,6 +128,17 @@ block0(v0: i8x16, v1: i8x16):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   pmovsxbw %xmm0, %xmm0
+;   pmovsxbw %xmm1, %xmm5
+;   pmullw %xmm5, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %imul_swiden_low_i16x8(i16x8, i16x8) -> i32x4 {
 block0(v0: i16x8, v1: i16x8):
@@ -92,6 +148,7 @@ block0(v0: i16x8, v1: i16x8):
     return v4
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -105,6 +162,21 @@ block0(v0: i16x8, v1: i16x8):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   movdqa %xmm0, %xmm5
+;   pmullw %xmm1, %xmm5
+;   movdqa %xmm5, %xmm6
+;   movdqa %xmm0, %xmm5
+;   pmulhw %xmm1, %xmm5
+;   movdqa %xmm6, %xmm0
+;   punpcklwd %xmm5, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %imul_swiden_low_i32x4(i32x4, i32x4) -> i64x2 {
 block0(v0: i32x4, v1: i32x4):
@@ -114,6 +186,7 @@ block0(v0: i32x4, v1: i32x4):
     return v4
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -123,6 +196,17 @@ block0(v0: i32x4, v1: i32x4):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   pshufd $0x50, %xmm0, %xmm0
+;   pshufd $0x50, %xmm1, %xmm5
+;   pmuldq %xmm5, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %imul_uwiden_hi_i8x16(i8x16, i8x16) -> i16x8 {
 block0(v0: i8x16, v1: i8x16):
@@ -132,6 +216,7 @@ block0(v0: i8x16, v1: i8x16):
     return v4
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -145,6 +230,21 @@ block0(v0: i8x16, v1: i8x16):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   movdqa %xmm0, %xmm3
+;   palignr $8, %xmm0, %xmm3
+;   pmovzxbw %xmm3, %xmm0
+;   movdqa %xmm1, %xmm7
+;   palignr $8, %xmm1, %xmm7
+;   pmovzxbw %xmm7, %xmm9
+;   pmullw %xmm9, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %imul_uwiden_hi_i16x8(i16x8, i16x8) -> i32x4 {
 block0(v0: i16x8, v1: i16x8):
@@ -154,6 +254,7 @@ block0(v0: i16x8, v1: i16x8):
     return v4
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -167,6 +268,21 @@ block0(v0: i16x8, v1: i16x8):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   movdqa %xmm0, %xmm5
+;   pmullw %xmm1, %xmm5
+;   movdqa %xmm5, %xmm6
+;   movdqa %xmm0, %xmm5
+;   pmulhuw %xmm1, %xmm5
+;   movdqa %xmm6, %xmm0
+;   punpckhwd %xmm5, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %imul_uwiden_hi_i32x4(i32x4, i32x4) -> i64x2 {
 block0(v0: i32x4, v1: i32x4):
@@ -176,6 +292,7 @@ block0(v0: i32x4, v1: i32x4):
     return v4
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -185,6 +302,17 @@ block0(v0: i32x4, v1: i32x4):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   pshufd $0xfa, %xmm0, %xmm0
+;   pshufd $0xfa, %xmm1, %xmm5
+;   pmuludq %xmm5, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %imul_uwiden_low_i8x16(i8x16, i8x16) -> i16x8 {
 block0(v0: i8x16, v1: i8x16):
@@ -194,6 +322,7 @@ block0(v0: i8x16, v1: i8x16):
     return v4
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -203,6 +332,17 @@ block0(v0: i8x16, v1: i8x16):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   pmovzxbw %xmm0, %xmm0
+;   pmovzxbw %xmm1, %xmm5
+;   pmullw %xmm5, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %imul_uwiden_low_i16x8(i16x8, i16x8) -> i32x4 {
 block0(v0: i16x8, v1: i16x8):
@@ -212,6 +352,7 @@ block0(v0: i16x8, v1: i16x8):
     return v4
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -225,6 +366,21 @@ block0(v0: i16x8, v1: i16x8):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   movdqa %xmm0, %xmm5
+;   pmullw %xmm1, %xmm5
+;   movdqa %xmm5, %xmm6
+;   movdqa %xmm0, %xmm5
+;   pmulhuw %xmm1, %xmm5
+;   movdqa %xmm6, %xmm0
+;   punpcklwd %xmm5, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %imul_uwiden_low_i32x4(i32x4, i32x4) -> i64x2 {
 block0(v0: i32x4, v1: i32x4):
@@ -234,6 +390,7 @@ block0(v0: i32x4, v1: i32x4):
     return v4
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -243,4 +400,15 @@ block0(v0: i32x4, v1: i32x4):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0: ; offset 0x4
+;   pshufd $0x50, %xmm0, %xmm0
+;   pshufd $0x50, %xmm1, %xmm5
+;   pmuludq %xmm5, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
