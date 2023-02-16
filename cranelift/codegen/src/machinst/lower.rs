@@ -908,10 +908,10 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             targets,
         );
         // When considering code-motion opportunities, consider the current
-        // program point to be the first branch.
+        // program point to be this branch.
         self.cur_inst = Some(branch);
-        // Lower the first branch in ISLE.  This will automatically handle
-        // the second branch (if any) by emitting a two-way conditional branch.
+
+        // Lower the branch in ISLE.
         backend
             .lower_branch(self, branch, targets)
             .unwrap_or_else(|| {
@@ -963,7 +963,8 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         let mut last_inst = None;
         for &(inst, succ) in self.vcode.block_order().succ_indices(bindex) {
             // Basic blocks may end in a single branch instruction, but those instructions may have
-            // multiple destinations.
+            // multiple destinations. As such, all `inst` values in `succ_indices` must be the
+            // same, or this basic block would have multiple branch instructions present.
             debug_assert!(last_inst.map_or(true, |prev| prev == inst));
             last_inst = Some(inst);
             targets.push(MachLabel::from_block(succ));
