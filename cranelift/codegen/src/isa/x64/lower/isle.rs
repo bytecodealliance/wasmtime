@@ -259,6 +259,10 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         ty.lane_bits() - 1
     }
 
+    fn shift_amount_masked(&mut self, ty: Type, val: Imm64) -> u32 {
+        (val.bits() as u32) & self.shift_mask(ty)
+    }
+
     #[inline]
     fn simm32_from_value(&mut self, val: Value) -> Option<GprMemImm> {
         let inst = self.lower_ctx.dfg().value_def(val).inst()?;

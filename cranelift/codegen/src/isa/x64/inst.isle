@@ -1455,6 +1455,10 @@
 (decl shift_mask (Type) u32)
 (extern constructor shift_mask shift_mask)
 
+;; Mask a constant with the type's shift mask
+(decl shift_amount_masked (Type Imm64) u32)
+(extern constructor shift_amount_masked shift_amount_masked)
+
 ;; Extract a constant `GprMemImm.Imm` from a value operand.
 (decl simm32_from_value (GprMemImm) Value)
 (extern extractor simm32_from_value simm32_from_value)
