@@ -7,7 +7,7 @@ use crate::dominator_tree::DominatorTree;
 use crate::egraph::domtree::DomTreeWithChildren;
 use crate::egraph::elaborate::Elaborator;
 use crate::fx::FxHashSet;
-use crate::inst_predicates::{is_mergeable_for_egraph, is_pure_for_egraph};
+use crate::inst_predicates::is_pure_for_egraph;
 use crate::ir::{
     DataFlowGraph, Function, Inst, InstructionData, Type, Value, ValueDef, ValueListPool,
 };
@@ -285,41 +285,10 @@ where
     fn optimize_skeleton_inst(&mut self, inst: Inst) -> bool {
         self.stats.skeleton_inst += 1;
 
-        // First, can we try to deduplicate? We need to keep some copy
-        // of the instruction around because it's side-effecting, but
-        // we may be able to reuse an earlier instance of it.
-        if is_mergeable_for_egraph(self.func, inst) {
-            let result = self.func.dfg.inst_results(inst)[0];
-            trace!(" -> mergeable side-effecting op {}", inst);
-            let inst = NewOrExistingInst::Existing(inst);
-            let gvn_context = GVNContext {
-                union_find: self.eclasses,
-                value_lists: &self.func.dfg.value_lists,
-            };
-
-            // Does this instruction already exist? If so, add entries to
-            // the value-map to rewrite uses of its results to the results
-            // of the original (existing) instruction. If not, optimize
-            // the new instruction.
-            let key = inst.get_inst_key(&self.func.dfg);
-            if let Some(&orig_result) = self.gvn_map.get(&key, &gvn_context) {
-                // Hit in GVN map -- reuse value.
-                self.value_to_opt_value[result] = orig_result;
-                self.eclasses.union(orig_result, result);
-                trace!(" -> merges result {} to {}", result, orig_result);
-                true
-            } else {
-                // Otherwise, insert it into the value-map.
-                self.value_to_opt_value[result] = result;
-                self.gvn_map.insert(key, result, &gvn_context);
-                trace!(" -> inserts as new (no GVN)");
-                false
-            }
-        }
-        // Otherwise, if a load or store, process it with the alias
-        // analysis to see if we can optimize it (rewrite in terms of
-        // an earlier load or stored value).
-        else if let Some(new_result) =
+        // If a load or store, process it with the alias analysis to see
+        // if we can optimize it (rewrite in terms of an earlier load or
+        // stored value).
+        if let Some(new_result) =
             self.alias_analysis
                 .process_inst(self.func, self.alias_analysis_state, inst)
         {
