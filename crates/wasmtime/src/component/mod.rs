@@ -21,7 +21,9 @@ pub use self::func::{
 pub use self::instance::{ExportInstance, Exports, Instance, InstancePre};
 pub use self::linker::{Linker, LinkerInstance};
 pub use self::types::Type;
-pub use self::values::Val;
+pub use self::values::{
+    Enum, Flags, List, OptionVal, Record, ResultVal, Tuple, Union, Val, Variant,
+};
 pub use wasmtime_component_macro::{flags, ComponentType, Lift, Lower};
 
 // These items are expected to be used by an eventual
