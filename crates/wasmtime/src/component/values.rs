@@ -11,6 +11,7 @@ use std::ops::Deref;
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 use wasmtime_environ::component::VariantInfo;
 
+/// Represents runtime list values
 #[derive(PartialEq, Eq, Clone)]
 pub struct List {
     ty: types::List,
@@ -57,6 +58,7 @@ impl fmt::Debug for List {
     }
 }
 
+/// Represents runtime record values
 #[derive(PartialEq, Eq, Clone)]
 pub struct Record {
     ty: types::Record,
@@ -127,6 +129,7 @@ impl fmt::Debug for Record {
     }
 }
 
+/// Represents runtime tuple values
 #[derive(PartialEq, Eq, Clone)]
 pub struct Tuple {
     ty: types::Tuple,
@@ -176,6 +179,7 @@ impl fmt::Debug for Tuple {
     }
 }
 
+/// Represents runtime variant values
 #[derive(PartialEq, Eq, Clone)]
 pub struct Variant {
     ty: types::Variant,
@@ -246,6 +250,7 @@ impl fmt::Debug for Variant {
     }
 }
 
+/// Represents runtime enum values
 #[derive(PartialEq, Eq, Clone)]
 pub struct Enum {
     ty: types::Enum,
@@ -284,6 +289,7 @@ impl fmt::Debug for Enum {
     }
 }
 
+/// Represents runtime union values
 #[derive(PartialEq, Eq, Clone)]
 pub struct Union {
     ty: types::Union,
@@ -336,6 +342,7 @@ impl fmt::Debug for Union {
     }
 }
 
+/// Represents runtime option values
 #[derive(PartialEq, Eq, Clone)]
 pub struct OptionVal {
     ty: types::OptionType,
@@ -378,6 +385,7 @@ impl fmt::Debug for OptionVal {
     }
 }
 
+/// Represents runtime result values
 #[derive(PartialEq, Eq, Clone)]
 pub struct ResultVal {
     ty: types::ResultType,
@@ -425,6 +433,7 @@ impl fmt::Debug for ResultVal {
     }
 }
 
+/// Represents runtime flag values
 #[derive(PartialEq, Eq, Clone)]
 pub struct Flags {
     ty: types::Flags,
