@@ -287,6 +287,7 @@ fn verify_format(inst_name: &str, operands_in: &[Operand], format: &InstructionF
     // - its number and names of input immediate operands,
     // - whether it has a value list or not.
     let mut num_values = 0;
+    let mut num_blocks = 0;
     let mut num_immediates = 0;
 
     for operand in operands_in.iter() {
@@ -301,7 +302,9 @@ fn verify_format(inst_name: &str, operands_in: &[Operand], format: &InstructionF
         if operand.is_value() {
             num_values += 1;
         }
-        if operand.is_immediate_or_entityref() {
+        if operand.kind.is_block() {
+            num_blocks += 1;
+        } else if operand.is_immediate_or_entityref() {
             if let Some(format_field) = format.imm_fields.get(num_immediates) {
                 assert_eq!(
                     format_field.kind.rust_field_name,
@@ -323,6 +326,13 @@ fn verify_format(inst_name: &str, operands_in: &[Operand], format: &InstructionF
         "inst {} doesn't have as many value input operands as its format {} declares; you may need \
          to use a different format.",
         inst_name, format.name
+    );
+
+    assert_eq!(
+        num_blocks, format.num_block_operands,
+        "inst {} doesn't have as many block input operands as its format {} declares; you may need \
+        to use a different format.",
+        inst_name, format.name,
     );
 
     assert_eq!(

@@ -942,29 +942,13 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             // Avoid immutable borrow by explicitly indexing.
             let (inst, succ) = self.vcode.block_order().succ_indices(block)[succ_idx];
 
-            // Get branch args and convert to Regs.
-            let branch_args = match &self.f.dfg.insts[inst] {
-                InstructionData::Jump {
-                    destination: block, ..
-                } => block.args_slice(&self.f.dfg.value_lists),
-                InstructionData::Brif {
-                    blocks: [then_block, else_block],
-                    ..
-                } => {
-                    // NOTE: `succ_idx == 0` implying that we're traversing the `then_block` is
-                    // enforced by the traversal order defined in `visit_block_succs`. Eventually
-                    // we should traverse the `branch_destination` slice there, which would
-                    // simplify computing the branch args significantly.
-                    if succ_idx == 0 {
-                        then_block.args_slice(&self.f.dfg.value_lists)
-                    } else {
-                        assert!(succ_idx == 1);
-                        else_block.args_slice(&self.f.dfg.value_lists)
-                    }
-                }
-                InstructionData::BranchTable { .. } => &[],
-                _ => unreachable!(),
-            };
+            // The use of `succ_idx` to index `branch_destination` is valid on the assumption that
+            // the traversal order defined in `visit_block_succs` mirrors the order returned by
+            // `branch_destination`. If that assumption is violated, the branch targets returned
+            // here will not match the clif.
+            let branches = self.f.dfg.insts[inst].branch_destination(&self.f.dfg.jump_tables);
+            let branch_args = branches[succ_idx].args_slice(&self.f.dfg.value_lists);
+
             let mut branch_arg_vregs: SmallVec<[Reg; 16]> = smallvec![];
             for &arg in branch_args {
                 let arg = self.f.dfg.resolve_aliases(arg);

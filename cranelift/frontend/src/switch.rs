@@ -220,7 +220,13 @@ impl Switch {
             "Jump tables bigger than 2^32-1 are not yet supported"
         );
 
-        let jt_data = JumpTableData::new(otherwise, blocks);
+        let jt_data = JumpTableData::new(
+            bx.func.dfg.block_call(otherwise, &[]),
+            &blocks
+                .iter()
+                .map(|block| bx.func.dfg.block_call(*block, &[]))
+                .collect::<Vec<_>>(),
+        );
         let jump_table = bx.create_jump_table(jt_data);
 
         let discr = if first_index == 0 {

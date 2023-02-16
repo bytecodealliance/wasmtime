@@ -7,7 +7,6 @@ use crate::ir;
 use crate::ir::Function;
 use crate::ir::{Block, BlockCall, Inst, Value};
 use crate::timing;
-use arrayvec::ArrayVec;
 use bumpalo::Bump;
 use cranelift_entity::SecondaryMap;
 use smallvec::SmallVec;
@@ -171,9 +170,10 @@ struct BlockSummary<'a> {
     /// We don't bother to include transfers that pass zero parameters
     /// since that makes more work for the solver for no purpose.
     ///
-    /// Note that, because blocks used with `br_table`s cannot have block
-    /// arguments, there are at most two outgoing edges from these blocks.
-    dests: ArrayVec<OutEdge<'a>, 2>,
+    /// We optimize for the case where a branch instruction has up to two
+    /// outgoing edges, as unconditional jumps and conditional branches are
+    /// more prominent than br_table.
+    dests: SmallVec<[OutEdge<'a>; 2]>,
 }
 
 impl<'a> BlockSummary<'a> {
@@ -239,7 +239,11 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
         let mut summary = BlockSummary::new(&bump, formals);
 
         for inst in func.layout.block_insts(b) {
-            for (ix, dest) in func.dfg.insts[inst].branch_destination().iter().enumerate() {
+            for (ix, dest) in func.dfg.insts[inst]
+                .branch_destination(&func.dfg.jump_tables)
+                .iter()
+                .enumerate()
+            {
                 if let Some(edge) = OutEdge::new(&bump, &func.dfg, inst, ix, *dest) {
                     summary.dests.push(edge);
                 }
@@ -382,8 +386,8 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
             }
 
             let dfg = &mut func.dfg;
-            let block =
-                &mut dfg.insts[edge.inst].branch_destination_mut()[edge.branch_index as usize];
+            let dests = dfg.insts[edge.inst].branch_destination_mut(&mut dfg.jump_tables);
+            let block = &mut dests[edge.branch_index as usize];
 
             old_actuals.extend(block.args_slice(&dfg.value_lists));
 

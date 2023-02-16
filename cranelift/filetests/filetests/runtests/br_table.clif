@@ -56,3 +56,47 @@ block2:
 }
 ; run: %br_table_cold_block(0) == 0
 ; run: %br_table_cold_block(1) == 0
+
+function %br_table_i32_inline(i32) -> i32 {
+block0(v0: i32):
+  v1 = iconst.i32 1
+  v2 = iconst.i32 2
+  v3 = iconst.i32 3
+  v4 = iconst.i32 4
+  br_table v0, block1(v4), [block1(v1), block1(v2), block1(v2), block1(v3)]
+
+block1(v5: i32):
+  return v5
+}
+
+; run: %br_table_i32_inline(0) == 1
+; run: %br_table_i32_inline(1) == 2
+; run: %br_table_i32_inline(2) == 2
+; run: %br_table_i32_inline(3) == 3
+; run: %br_table_i32_inline(4) == 4
+; run: %br_table_i32_inline(297) == 4
+; run: %br_table_i32_inline(65535) == 4
+
+function %br_table_i32_inline_varied(i32) -> i32 {
+block0(v0: i32):
+  v1 = iconst.i32 1
+  v2 = iconst.i32 2
+  v3 = iconst.i32 3
+  v4 = iconst.i32 4
+  br_table v0, block1(v4), [block1(v1), block2(v2, v4), block2(v4, v3), block1(v3)]
+
+block2(v6: i32, v7: i32):
+  v8 = iadd v6, v7
+  jump block1(v8)
+
+block1(v5: i32):
+  return v5
+}
+
+; run: %br_table_i32_inline_varied(0) == 1
+; run: %br_table_i32_inline_varied(1) == 6
+; run: %br_table_i32_inline_varied(2) == 7
+; run: %br_table_i32_inline_varied(3) == 3
+; run: %br_table_i32_inline_varied(4) == 4
+; run: %br_table_i32_inline_varied(297) == 4
+; run: %br_table_i32_inline_varied(65535) == 4

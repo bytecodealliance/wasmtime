@@ -849,8 +849,9 @@ impl<'a> Verifier<'a> {
                 format!("invalid jump table reference {}", j),
             ))
         } else {
-            for &block in self.func.stencil.dfg.jump_tables[j].all_branches() {
-                self.verify_block(inst, block, errors)?;
+            let pool = &self.func.stencil.dfg.value_lists;
+            for block in self.func.stencil.dfg.jump_tables[j].all_branches() {
+                self.verify_block(inst, block.block(pool), errors)?;
             }
             Ok(())
         }
@@ -1285,53 +1286,19 @@ impl<'a> Verifier<'a> {
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
         match &self.func.dfg.insts[inst] {
-            ir::InstructionData::Jump {
-                destination: block, ..
-            } => {
-                let iter = self
-                    .func
-                    .dfg
-                    .block_params(block.block(&self.func.dfg.value_lists))
-                    .iter()
-                    .map(|&v| self.func.dfg.value_type(v));
-                let args = block.args_slice(&self.func.dfg.value_lists);
-                self.typecheck_variable_args_iterator(inst, iter, args, errors)?;
+            ir::InstructionData::Jump { destination, .. } => {
+                self.typecheck_block_call(inst, destination, errors)?;
             }
             ir::InstructionData::Brif {
                 blocks: [block_then, block_else],
                 ..
             } => {
-                let iter = self
-                    .func
-                    .dfg
-                    .block_params(block_then.block(&self.func.dfg.value_lists))
-                    .iter()
-                    .map(|&v| self.func.dfg.value_type(v));
-                let args_then = block_then.args_slice(&self.func.dfg.value_lists);
-                self.typecheck_variable_args_iterator(inst, iter, args_then, errors)?;
-
-                let iter = self
-                    .func
-                    .dfg
-                    .block_params(block_else.block(&self.func.dfg.value_lists))
-                    .iter()
-                    .map(|&v| self.func.dfg.value_type(v));
-                let args_else = block_else.args_slice(&self.func.dfg.value_lists);
-                self.typecheck_variable_args_iterator(inst, iter, args_else, errors)?;
+                self.typecheck_block_call(inst, block_then, errors)?;
+                self.typecheck_block_call(inst, block_else, errors)?;
             }
             ir::InstructionData::BranchTable { table, .. } => {
                 for block in self.func.stencil.dfg.jump_tables[*table].all_branches() {
-                    let arg_count = self.func.dfg.num_block_params(*block);
-                    if arg_count != 0 {
-                        return errors.nonfatal((
-                            inst,
-                            self.context(inst),
-                            format!(
-                                "takes no arguments, but had target {} with {} arguments",
-                                block, arg_count,
-                            ),
-                        ));
-                    }
+                    self.typecheck_block_call(inst, block, errors)?;
                 }
             }
             inst => debug_assert!(!inst.opcode().is_branch()),
@@ -1356,6 +1323,23 @@ impl<'a> Verifier<'a> {
             CallInfo::NotACall => {}
         }
         Ok(())
+    }
+
+    fn typecheck_block_call(
+        &self,
+        inst: Inst,
+        block: &ir::BlockCall,
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult<()> {
+        let pool = &self.func.dfg.value_lists;
+        let iter = self
+            .func
+            .dfg
+            .block_params(block.block(pool))
+            .iter()
+            .map(|&v| self.func.dfg.value_type(v));
+        let args = block.args_slice(pool);
+        self.typecheck_variable_args_iterator(inst, iter, args, errors)
     }
 
     fn typecheck_variable_args_iterator<I: Iterator<Item = Type>>(

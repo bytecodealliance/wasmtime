@@ -526,7 +526,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                         frame.set_branched_to_exit();
                         frame.br_destination()
                     };
-                    data.push(block);
+                    data.push(builder.func.dfg.block_call(block, &[]));
                 }
                 let block = {
                     let i = state.control_stack.len() - 1 - (default as usize);
@@ -534,6 +534,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                     frame.set_branched_to_exit();
                     frame.br_destination()
                 };
+                let block = builder.func.dfg.block_call(block, &[]);
                 let jt = builder.create_jump_table(JumpTableData::new(block, &data));
                 builder.ins().br_table(val, jt);
             } else {
@@ -552,7 +553,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                             *entry.insert(block)
                         }
                     };
-                    data.push(branch_block);
+                    data.push(builder.func.dfg.block_call(branch_block, &[]));
                 }
                 let default_branch_block = match dest_block_map.entry(default as usize) {
                     hash_map::Entry::Occupied(entry) => *entry.get(),
@@ -562,6 +563,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                         *entry.insert(block)
                     }
                 };
+                let default_branch_block = builder.func.dfg.block_call(default_branch_block, &[]);
                 let jt = builder.create_jump_table(JumpTableData::new(default_branch_block, &data));
                 builder.ins().br_table(val, jt);
                 for (depth, dest_block) in dest_block_sequence {

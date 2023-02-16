@@ -18,15 +18,6 @@ use std::collections::HashMap;
 use std::ops::RangeInclusive;
 use target_lexicon::{Architecture, Triple};
 
-/// Generates a Vec with `len` elements comprised of `options`
-fn arbitrary_vec<T: Clone>(
-    u: &mut Unstructured,
-    len: usize,
-    options: &[T],
-) -> arbitrary::Result<Vec<T>> {
-    (0..len).map(|_| u.choose(options).cloned()).collect()
-}
-
 type BlockSignature = Vec<Type>;
 
 fn insert_opcode(
@@ -1610,7 +1601,15 @@ where
             }
             BlockTerminator::BrTable(default, targets) => {
                 // Create jump tables on demand
-                let jt = builder.create_jump_table(JumpTableData::new(default, &targets));
+                let mut jt = Vec::with_capacity(targets.len());
+                for block in targets {
+                    let args = self.generate_values_for_block(builder, block)?;
+                    jt.push(builder.func.dfg.block_call(block, &args))
+                }
+
+                let args = self.generate_values_for_block(builder, default)?;
+                let jt_data = JumpTableData::new(builder.func.dfg.block_call(default, &args), &jt);
+                let jt = builder.create_jump_table(jt_data);
 
                 // br_table only supports I32
                 let val = builder.use_var(self.get_variable_of_type(I32)?);
@@ -1799,21 +1798,21 @@ where
                     // If we have more than one block we can allow terminators that target blocks.
                     // TODO: We could add some kind of BrReturn here, to explore edges where we
                     // exit in the middle of the function
-                    valid_terminators
-                        .extend_from_slice(&[BlockTerminatorKind::Jump, BlockTerminatorKind::Br]);
-                }
-
-                // BrTable and the Switch interface only allow targeting blocks without params
-                // we also need to ensure that the next block has no params, since that one is
-                // guaranteed to be picked in either case.
-                if has_paramless_targets && next_block_is_paramless {
                     valid_terminators.extend_from_slice(&[
+                        BlockTerminatorKind::Jump,
+                        BlockTerminatorKind::Br,
                         BlockTerminatorKind::BrTable,
-                        BlockTerminatorKind::Switch,
                     ]);
                 }
 
-                let terminator = self.u.choose(&valid_terminators[..])?;
+                // As the Switch interface only allows targeting blocks without params we need
+                // to ensure that the next block has no params, since that one is guaranteed to be
+                // picked in either case.
+                if has_paramless_targets && next_block_is_paramless {
+                    valid_terminators.push(BlockTerminatorKind::Switch);
+                }
+
+                let terminator = self.u.choose(&valid_terminators)?;
 
                 // Choose block targets for the terminators that we picked above
                 Ok(match terminator {
@@ -1829,10 +1828,8 @@ where
                         let default = next_block;
 
                         let target_count = self.param(&self.config.jump_table_entries)?;
-                        let targets = arbitrary_vec(
-                            self.u,
-                            target_count,
-                            self.resources.forward_blocks_without_params(block),
+                        let targets = Result::from_iter(
+                            (0..target_count).map(|_| self.generate_target_block(block)),
                         )?;
 
                         BlockTerminator::BrTable(default, targets)

@@ -79,7 +79,8 @@ fn define_control_flow(
 
         Use ``x`` as an unsigned index into the jump table ``JT``. If a jump
         table entry is found, branch to the corresponding block. If no entry was
-        found or the index is out-of-bounds, branch to the given default block.
+        found or the index is out-of-bounds, branch to the default block of the
+        table.
 
         Note that this branch instruction can't pass arguments to the targeted
         blocks. Split critical edges as needed to work around this.
