@@ -448,7 +448,7 @@ jobs:
     - run: |
         sudo apt-get update && sudo apt-get install -y gdb lldb llvm
         cargo test test_debug_dwarf -- --ignored --test-threads 1
-      if: matrix.os == 'ubuntu-latest' && matrix.target == ''
+      if: matrix.os == 'ubuntu-latest' && matrix.target == ''&& needs.determine.outputs.run-full
       env:
         RUST_BACKTRACE: 1
 
