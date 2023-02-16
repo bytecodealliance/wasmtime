@@ -36,7 +36,8 @@ const array = [
   {
     "os": "ubuntu-latest",
     "name": "Test Linux x86_64",
-    "filter": "linux-x64"
+    "filter": "linux-x64",
+    "isa": "x64"
   },
   {
     "os": "macos-latest",
