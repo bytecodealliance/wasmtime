@@ -26,9 +26,10 @@ block0(v0: i64, v1: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movq (%rsi), %r9 ; trap: heap_oob
 ;   cmpq %r9, %rdi
 ;   sete %r10b
@@ -68,9 +69,10 @@ block0(v0: f64, v1: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movsd (%rdi), %xmm9 ; trap: heap_oob
 ;   ucomisd %xmm9, %xmm0
 ;   setnp %dil

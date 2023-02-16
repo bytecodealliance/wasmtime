@@ -26,12 +26,13 @@ block0:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   ori s0, sp, 0
 ;   addi sp, sp, -0x10
-; block0: ; offset 0x14
+; block1: ; offset 0x14
 ;   mv a0, sp
 ;   addi sp, sp, 0x10
 ;   ld ra, 8(sp)
@@ -66,6 +67,7 @@ block0:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
@@ -81,7 +83,7 @@ block0:
 ;   lui t6, 0xfffe8
 ;   addi t6, t6, -0x6b0
 ;   add sp, t6, sp
-; block0: ; offset 0x3c
+; block1: ; offset 0x3c
 ;   mv a0, sp
 ;   lui t6, 0x18
 ;   addi t6, t6, 0x6b0
@@ -115,12 +117,13 @@ block0:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   ori s0, sp, 0
 ;   addi sp, sp, -0x10
-; block0: ; offset 0x14
+; block1: ; offset 0x14
 ;   mv t1, sp
 ;   ld a0, 0(t1)
 ;   addi sp, sp, 0x10
@@ -157,6 +160,7 @@ block0:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
@@ -172,7 +176,7 @@ block0:
 ;   lui t6, 0xfffe8
 ;   addi t6, t6, -0x6b0
 ;   add sp, t6, sp
-; block0: ; offset 0x3c
+; block1: ; offset 0x3c
 ;   mv t1, sp
 ;   ld a0, 0(t1)
 ;   lui t6, 0x18
@@ -207,12 +211,13 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   ori s0, sp, 0
 ;   addi sp, sp, -0x10
-; block0: ; offset 0x14
+; block1: ; offset 0x14
 ;   mv t2, sp
 ;   sd a0, 0(t2)
 ;   addi sp, sp, 0x10
@@ -249,6 +254,7 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
@@ -264,7 +270,7 @@ block0(v0: i64):
 ;   lui t6, 0xfffe8
 ;   addi t6, t6, -0x6b0
 ;   add sp, t6, sp
-; block0: ; offset 0x3c
+; block1: ; offset 0x3c
 ;   mv t2, sp
 ;   sd a0, 0(t2)
 ;   lui t6, 0x18
@@ -610,6 +616,7 @@ block0(v0: i8):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
@@ -626,7 +633,7 @@ block0(v0: i8):
 ;   sd s10, -0x50(sp)
 ;   sd s11, -0x58(sp)
 ;   addi sp, sp, -0x500
-; block0: ; offset 0x40
+; block1: ; offset 0x40
 ;   sd a0, 0x3e8(sp)
 ;   addi t3, zero, 2
 ;   addi t1, t3, 1
@@ -818,12 +825,13 @@ block0(v0: i128):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   ori s0, sp, 0
 ;   addi sp, sp, -0x10
-; block0: ; offset 0x14
+; block1: ; offset 0x14
 ;   ori a2, a0, 0
 ;   mv a0, sp
 ;   sd a2, 0(a0)
@@ -861,12 +869,13 @@ block0(v0: i128):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   ori s0, sp, 0
 ;   addi sp, sp, -0x20
-; block0: ; offset 0x14
+; block1: ; offset 0x14
 ;   ori a2, a0, 0
 ;   addi a0, sp, 0x20
 ;   sd a2, 0(a0)
@@ -907,6 +916,7 @@ block0(v0: i128):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
@@ -922,7 +932,7 @@ block0(v0: i128):
 ;   lui t6, 0xfffe8
 ;   addi t6, t6, -0x6b0
 ;   add sp, t6, sp
-; block0: ; offset 0x3c
+; block1: ; offset 0x3c
 ;   ori a2, a0, 0
 ;   mv a0, sp
 ;   sd a2, 0(a0)
@@ -960,12 +970,13 @@ block0:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   ori s0, sp, 0
 ;   addi sp, sp, -0x10
-; block0: ; offset 0x14
+; block1: ; offset 0x14
 ;   mv t2, sp
 ;   ld a0, 0(t2)
 ;   ld a1, 8(t2)
@@ -1001,12 +1012,13 @@ block0:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   ori s0, sp, 0
 ;   addi sp, sp, -0x20
-; block0: ; offset 0x14
+; block1: ; offset 0x14
 ;   addi t2, sp, 0x20
 ;   ld a0, 0(t2)
 ;   ld a1, 8(t2)
@@ -1045,6 +1057,7 @@ block0:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
@@ -1060,7 +1073,7 @@ block0:
 ;   lui t6, 0xfffe8
 ;   addi t6, t6, -0x6b0
 ;   add sp, t6, sp
-; block0: ; offset 0x3c
+; block1: ; offset 0x3c
 ;   mv t2, sp
 ;   ld a0, 0(t2)
 ;   ld a1, 8(t2)

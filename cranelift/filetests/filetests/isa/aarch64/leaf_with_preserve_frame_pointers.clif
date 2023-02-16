@@ -18,9 +18,10 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-; block0: ; offset 0x8
+; block1: ; offset 0x8
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
 

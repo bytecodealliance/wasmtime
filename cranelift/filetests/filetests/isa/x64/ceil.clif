@@ -17,9 +17,10 @@ block0(v0: f32):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   roundss $2, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -41,9 +42,10 @@ block0(v0: f64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   roundsd $2, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -65,9 +67,10 @@ block0(v0: f32x4):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   roundps $2, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -89,9 +92,10 @@ block0(v0: f64x2):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   roundpd $2, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp

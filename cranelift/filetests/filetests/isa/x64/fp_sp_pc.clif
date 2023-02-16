@@ -18,9 +18,10 @@ block0:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movq %rbp, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -42,9 +43,10 @@ block0:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movq %rsp, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -67,9 +69,10 @@ block0:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movq %rbp, %rsi
 ;   movq 8(%rsi), %rax
 ;   movq %rbp, %rsp

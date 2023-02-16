@@ -26,10 +26,11 @@ block0:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   sub sp, sp, #0x800
-; block0: ; offset 0xc
+; block1: ; offset 0xc
 ;   mov x0, sp
 ;   add sp, sp, #0x800
 ;   ldp x29, x30, [sp], #0x10
@@ -57,6 +58,7 @@ block0:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   mov x16, #-0x1000
@@ -66,7 +68,7 @@ block0:
 ;   mov x16, #-0x3000
 ;   str wzr, [sp, x16, sxtx]
 ;   sub sp, sp, #3, lsl #12
-; block0: ; offset 0x24
+; block1: ; offset 0x24
 ;   mov x0, sp
 ;   add sp, sp, #3, lsl #12
 ;   ldp x29, x30, [sp], #0x10
@@ -99,6 +101,7 @@ block0:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   mov x16, #0
@@ -111,7 +114,7 @@ block0:
 ;   mov w16, #0x86a0
 ;   movk w16, #1, lsl #16
 ;   sub sp, sp, x16
-; block0: ; offset 0x30
+; block1: ; offset 0x30
 ;   mov x0, sp
 ;   mov w16, #0x86a0
 ;   movk w16, #1, lsl #16

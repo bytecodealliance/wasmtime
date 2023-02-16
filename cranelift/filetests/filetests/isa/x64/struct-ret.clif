@@ -20,9 +20,10 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movq %rdi, %rax
 ;   movl $0x2a, %edx
 ;   movq %rdx, (%rdi) ; trap: heap_oob
@@ -51,9 +52,10 @@ block0(v0: i64, v1: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movq %rsi, %rdi
 ;   movabsq $0, %rdx ; reloc_external Abs8 %f2 0
 ;   callq *%rdx
@@ -87,11 +89,12 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ;   subq $0x10, %rsp
 ;   movq %r15, (%rsp)
-; block0: ; offset 0xc
+; block1: ; offset 0xc
 ;   movq %rdi, %r15
 ;   movabsq $0, %rdx ; reloc_external Abs8 %f4 0
 ;   callq *%rdx

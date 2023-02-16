@@ -18,9 +18,10 @@ block0(v0: i8, v1: i8):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   andnl %edi, %esi, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -43,9 +44,10 @@ block0(v0: i8, v1: i8):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   andnl %esi, %edi, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp

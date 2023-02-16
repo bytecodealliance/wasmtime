@@ -24,10 +24,11 @@ block0:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   sub sp, sp, #0x10
-; block0: ; offset 0xc
+; block1: ; offset 0xc
 ;   mov x1, sp
 ;   mov x2, #1
 ;   str x2, [x1]
@@ -58,10 +59,11 @@ block0:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   sub sp, sp, #0x10
-; block0: ; offset 0xc
+; block1: ; offset 0xc
 ;   mov x1, sp
 ;   mov x2, #1
 ;   str x2, [x1]
@@ -93,10 +95,11 @@ block0(v0: i32):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   sub sp, sp, #0x10
-; block0: ; offset 0xc
+; block1: ; offset 0xc
 ;   dup v3.4s, w0
 ;   mov x3, sp
 ;   str q3, [x3]
@@ -127,10 +130,11 @@ block0:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   sub sp, sp, #0x10
-; block0: ; offset 0xc
+; block1: ; offset 0xc
 ;   mov x2, sp
 ;   ldr q0, [x2]
 ;   add sp, sp, #0x10
@@ -161,10 +165,11 @@ block0(v0: i32):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   sub sp, sp, #0x10
-; block0: ; offset 0xc
+; block1: ; offset 0xc
 ;   dup v3.4s, w0
 ;   mov x3, sp
 ;   str q3, [x3]
@@ -193,10 +198,11 @@ block0:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   sub sp, sp, #0x10
-; block0: ; offset 0xc
+; block1: ; offset 0xc
 ;   mov x0, sp
 ;   add sp, sp, #0x10
 ;   ldp x29, x30, [sp], #0x10

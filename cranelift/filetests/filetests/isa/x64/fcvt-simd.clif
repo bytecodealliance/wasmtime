@@ -18,9 +18,10 @@ block0(v0: i32x4):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   vcvtudq2ps %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp

@@ -19,9 +19,10 @@ block0(v0: i32x4):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   pcmpeqd %xmm2, %xmm2
 ;   pxor %xmm2, %xmm0
 ;   movq %rbp, %rsp
@@ -45,9 +46,10 @@ block0(v0: i32x4):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   ptest %xmm0, %xmm0
 ;   setne %al
 ;   movq %rbp, %rsp
@@ -74,9 +76,10 @@ block0(v0: i64x2):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   pxor %xmm2, %xmm2
 ;   movdqa %xmm0, %xmm4
 ;   pcmpeqq %xmm2, %xmm4

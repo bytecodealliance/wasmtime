@@ -32,6 +32,7 @@ block0(v0: i32):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   str x24, [sp, #-0x10]!
@@ -39,7 +40,7 @@ block0(v0: i32):
 ;   stp d12, d13, [sp, #-0x10]!
 ;   stp d10, d11, [sp, #-0x10]!
 ;   stp d8, d9, [sp, #-0x10]!
-; block0: ; offset 0x1c
+; block1: ; offset 0x1c
 ;   mov x24, x0
 ;   adrp x0, #0 ; reloc_external Aarch64TlsGdAdrPage21 u1:0 0
 ;   add x0, x0, #0 ; reloc_external Aarch64TlsGdAddLo12Nc u1:0 0

@@ -19,9 +19,10 @@ block0(v0: f32):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movl $0x80000000, %eax
 ;   movd %eax, %xmm4
 ;   xorps %xmm4, %xmm0
@@ -47,9 +48,10 @@ block0(v0: f64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movabsq $9223372036854775808, %rax
 ;   movq %rax, %xmm4
 ;   xorpd %xmm4, %xmm0
@@ -75,9 +77,10 @@ block0(v0: f32x4):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   pcmpeqd %xmm3, %xmm3
 ;   pslld $0x1f, %xmm3
 ;   xorps %xmm3, %xmm0
@@ -103,9 +106,10 @@ block0(v0: f64x2):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   pcmpeqd %xmm3, %xmm3
 ;   psllq $0x3f, %xmm3
 ;   xorpd %xmm3, %xmm0

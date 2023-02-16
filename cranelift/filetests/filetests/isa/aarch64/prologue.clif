@@ -153,13 +153,14 @@ block0(v0: f64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   stp d14, d15, [sp, #-0x10]!
 ;   stp d12, d13, [sp, #-0x10]!
 ;   stp d10, d11, [sp, #-0x10]!
 ;   stp d8, d9, [sp, #-0x10]!
-; block0: ; offset 0x18
+; block1: ; offset 0x18
 ;   fadd d23, d0, d0
 ;   fadd d24, d0, d0
 ;   fadd d25, d0, d0
@@ -323,11 +324,12 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   str x28, [sp, #-0x10]!
 ;   stp x21, x27, [sp, #-0x10]!
-; block0: ; offset 0x10
+; block1: ; offset 0x10
 ;   add x5, x0, x0
 ;   add x6, x0, x5
 ;   add x7, x0, x6

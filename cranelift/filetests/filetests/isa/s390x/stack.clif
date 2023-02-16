@@ -19,8 +19,9 @@ block0:
 ;   br %r14
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   aghi %r15, -8
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   la %r2, 0(%r15)
 ;   aghi %r15, 8
 ;   br %r14
@@ -42,8 +43,9 @@ block0:
 ;   br %r14
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   agfi %r15, -0x186a8
-; block0: ; offset 0x6
+; block1: ; offset 0x6
 ;   la %r2, 0(%r15)
 ;   agfi %r15, 0x186a8
 ;   br %r14
@@ -65,8 +67,9 @@ block0:
 ;   br %r14
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   aghi %r15, -8
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   la %r3, 0(%r15)
 ;   lg %r2, 0(%r3)
 ;   aghi %r15, 8
@@ -90,8 +93,9 @@ block0:
 ;   br %r14
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   agfi %r15, -0x186a8
-; block0: ; offset 0x6
+; block1: ; offset 0x6
 ;   la %r3, 0(%r15)
 ;   lg %r2, 0(%r3)
 ;   agfi %r15, 0x186a8
@@ -114,8 +118,9 @@ block0(v0: i64):
 ;   br %r14
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   aghi %r15, -8
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   la %r4, 0(%r15)
 ;   stg %r2, 0(%r4)
 ;   aghi %r15, 8
@@ -139,8 +144,9 @@ block0(v0: i64):
 ;   br %r14
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   agfi %r15, -0x186a8
-; block0: ; offset 0x6
+; block1: ; offset 0x6
 ;   la %r4, 0(%r15)
 ;   stg %r2, 0(%r4)
 ;   agfi %r15, 0x186a8

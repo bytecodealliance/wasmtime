@@ -173,6 +173,7 @@ block0(v0: f64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
@@ -189,7 +190,7 @@ block0(v0: f64):
 ;   fsd fs10, -0x50(sp)
 ;   fsd fs11, -0x58(sp)
 ;   addi sp, sp, -0x60
-; block0: ; offset 0x40
+; block1: ; offset 0x40
 ;   fadd.d ft3, fa0, fa0
 ;   fadd.d ft4, fa0, fa0
 ;   fadd.d ft5, fa0, fa0
@@ -377,6 +378,7 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
@@ -388,7 +390,7 @@ block0(v0: i64):
 ;   sd s9, -0x28(sp)
 ;   sd s10, -0x30(sp)
 ;   addi sp, sp, -0x30
-; block0: ; offset 0x2c
+; block1: ; offset 0x2c
 ;   add t3, a0, a0
 ;   add t4, a0, t3
 ;   add t0, a0, t4

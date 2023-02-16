@@ -17,9 +17,10 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   lzcntq %rdi, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -41,9 +42,10 @@ block0(v0: i32):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   lzcntl %edi, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp

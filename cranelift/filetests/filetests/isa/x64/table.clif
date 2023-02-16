@@ -38,13 +38,14 @@ block0(v0: i32, v1: r64, v2: i64):
 ;   ud2 table_oob
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movl 8(%rdx), %r11d
 ;   cmpl %r11d, %edi
 ;   jae 0x2b
-; block1: ; offset 0x11
+; block2: ; offset 0x11
 ;   movl %edi, %ecx
 ;   movq (%rdx), %rax
 ;   movq %rax, %rdx
@@ -55,6 +56,6 @@ block0(v0: i32, v1: r64, v2: i64):
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-; block2: ; offset 0x2b
+; block3: ; offset 0x2b
 ;   ud2 ; trap: table_oob
 

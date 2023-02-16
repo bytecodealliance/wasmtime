@@ -89,8 +89,9 @@ block0(v0: i64, v1: i8, v2: i8, v3: i64):
 ;   br %r14
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stmg %r10, %r15, 0x50(%r15)
-; block0: ; offset 0x6
+; block1: ; offset 0x6
 ;   lgr %r10, %r3
 ;   sllk %r3, %r5, 3
 ;   nill %r5, 0xfffc

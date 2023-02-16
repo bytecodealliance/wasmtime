@@ -64,12 +64,13 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   cmp sp, x0
 ;   b.hs #0x14
 ;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
-; block0: ; offset 0x14
+; block1: ; offset 0x14
 ;   ldr x2, #0x1c
 ;   b #0x24
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %foo 0
@@ -103,6 +104,7 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   ldur x16, [x0]
@@ -110,7 +112,7 @@ block0(v0: i64):
 ;   cmp sp, x16
 ;   b.hs #0x1c
 ;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
-; block0: ; offset 0x1c
+; block1: ; offset 0x1c
 ;   ldr x2, #0x24
 ;   b #0x2c
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %foo 0
@@ -138,6 +140,7 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   add x16, x0, #0xb0
@@ -145,7 +148,7 @@ block0(v0: i64):
 ;   b.hs #0x18
 ;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
 ;   sub sp, sp, #0xb0
-; block0: ; offset 0x1c
+; block1: ; offset 0x1c
 ;   add sp, sp, #0xb0
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
@@ -177,6 +180,7 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   cmp sp, x0
@@ -191,7 +195,7 @@ block0(v0: i64):
 ;   mov w16, #0x1a80
 ;   movk w16, #6, lsl #16
 ;   sub sp, sp, x16
-; block0: ; offset 0x38
+; block1: ; offset 0x38
 ;   mov w16, #0x1a80
 ;   movk w16, #6, lsl #16
 ;   add sp, sp, x16
@@ -223,6 +227,7 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   ldur x16, [x0]
@@ -232,7 +237,7 @@ block0(v0: i64):
 ;   b.hs #0x20
 ;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
 ;   sub sp, sp, #0x20
-; block0: ; offset 0x24
+; block1: ; offset 0x24
 ;   add sp, sp, #0x20
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
@@ -270,6 +275,7 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   ldur x16, [x0]
@@ -286,7 +292,7 @@ block0(v0: i64):
 ;   mov w16, #0x1a80
 ;   movk w16, #6, lsl #16
 ;   sub sp, sp, x16
-; block0: ; offset 0x40
+; block1: ; offset 0x40
 ;   mov w16, #0x1a80
 ;   movk w16, #6, lsl #16
 ;   add sp, sp, x16
@@ -316,6 +322,7 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   mov w16, #0x1a80
@@ -326,7 +333,7 @@ block0(v0: i64):
 ;   b.hs #0x24
 ;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
 ;   sub sp, sp, #0x20
-; block0: ; offset 0x28
+; block1: ; offset 0x28
 ;   add sp, sp, #0x20
 ;   ldp x29, x30, [sp], #0x10
 ;   ret

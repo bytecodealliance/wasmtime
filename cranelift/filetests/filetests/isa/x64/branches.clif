@@ -33,17 +33,18 @@ block2:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   cmpl %esi, %edi
 ;   jne 0x16
-; block1: ; offset 0xc
+; block2: ; offset 0xc
 ;   movl $1, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-; block2: ; offset 0x16
+; block3: ; offset 0x16
 ;   movl $2, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -81,17 +82,18 @@ block2:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   cmpl %esi, %edi
 ;   jne 0x16
-; block1: ; offset 0xc
+; block2: ; offset 0xc
 ;   movl $2, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-; block2: ; offset 0x16
+; block3: ; offset 0x16
 ;   movl $1, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -129,17 +131,18 @@ block2:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   cmpl %esi, %edi
 ;   jne 0x16
-; block1: ; offset 0xc
+; block2: ; offset 0xc
 ;   movl $1, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-; block2: ; offset 0x16
+; block3: ; offset 0x16
 ;   movl $2, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -178,18 +181,19 @@ block2:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   ucomiss %xmm1, %xmm0
 ;   jp 0x1d
 ;   jne 0x1d
-; block1: ; offset 0x13
+; block2: ; offset 0x13
 ;   movl $1, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-; block2: ; offset 0x1d
+; block3: ; offset 0x1d
 ;   movl $2, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -226,18 +230,19 @@ block2:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   ucomiss %xmm1, %xmm0
 ;   jp 0x1a
 ;   jne 0x1a
-; block1: ; offset 0x13
+; block2: ; offset 0x13
 ;   xorl %eax, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-; block2: ; offset 0x1a
+; block3: ; offset 0x1a
 ;   movl $1, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -274,18 +279,19 @@ block2:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   ucomiss %xmm1, %xmm0
 ;   jp 0x13
 ;   je 0x1a
-; block1: ; offset 0x13
+; block2: ; offset 0x13
 ;   xorl %eax, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-; block2: ; offset 0x1a
+; block3: ; offset 0x1a
 ;   movl $1, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -326,9 +332,10 @@ block2:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   cmpl $2, %edi
 ;   jae 0x34
 ;   movl %edi, %r9d
@@ -342,12 +349,12 @@ block2:
 ;   addb %al, (%rax)
 ;   adcb (%rax), %al
 ;   addb %al, (%rax)
-; block1: ; offset 0x34
+; block2: ; offset 0x34
 ;   movl $1, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-; block2: ; offset 0x3e
+; block3: ; offset 0x3e
 ;   xorl %eax, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -384,17 +391,18 @@ block2:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   cmpq $0, %rdi
 ;   jge 0x18
-; block1: ; offset 0xe
+; block2: ; offset 0xe
 ;   movl $1, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-; block2: ; offset 0x18
+; block3: ; offset 0x18
 ;   xorl %eax, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -431,17 +439,18 @@ block2:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   cmpl $0, %edi
 ;   jge 0x17
-; block1: ; offset 0xd
+; block2: ; offset 0xd
 ;   movl $1, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-; block2: ; offset 0x17
+; block3: ; offset 0x17
 ;   xorl %eax, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -493,22 +502,23 @@ block202:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movl $0x42500000, %edx
 ;   movd %edx, %xmm6
 ;   ucomiss %xmm6, %xmm0
 ;   jp 0x1c
 ;   je 0x33
-; block1: ; offset 0x1c
+; block2: ; offset 0x1c
 ;   movl $0x42500000, %r11d
 ;   movd %r11d, %xmm10
 ;   ucomiss %xmm10, %xmm0
 ;   jp 0x33
-; block2: ; offset 0x31
+; block3: ; offset 0x31
 ;   ud2 ; trap: heap_oob
-; block3: ; offset 0x33
+; block4: ; offset 0x33
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -546,17 +556,18 @@ block2:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   cmpl %esi, %edi
 ;   jne 0x16
-; block1: ; offset 0xc
+; block2: ; offset 0xc
 ;   movl $1, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-; block2: ; offset 0x16
+; block3: ; offset 0x16
 ;   movl $2, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -596,18 +607,19 @@ block2:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   ucomiss %xmm1, %xmm0
 ;   jp 0x1d
 ;   jne 0x1d
-; block1: ; offset 0x13
+; block2: ; offset 0x13
 ;   movl $1, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-; block2: ; offset 0x1d
+; block3: ; offset 0x1d
 ;   movl $2, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -646,17 +658,18 @@ block2:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   cmpl %esi, %edi
 ;   jne 0x16
-; block1: ; offset 0xc
+; block2: ; offset 0xc
 ;   movl $1, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-; block2: ; offset 0x16
+; block3: ; offset 0x16
 ;   movl $2, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -696,18 +709,19 @@ block2:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   ucomiss %xmm1, %xmm0
 ;   jp 0x1d
 ;   jne 0x1d
-; block1: ; offset 0x13
+; block2: ; offset 0x13
 ;   movl $1, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-; block2: ; offset 0x1d
+; block3: ; offset 0x1d
 ;   movl $2, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp

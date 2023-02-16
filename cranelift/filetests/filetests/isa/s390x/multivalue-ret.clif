@@ -54,8 +54,9 @@ block1:
 ;   br %r14
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stmg %r7, %r15, 0x38(%r15)
-; block0: ; offset 0x6
+; block1: ; offset 0x6
 ;   lghi %r4, 1
 ;   lgr %r14, %r4
 ;   lghi %r3, 2

@@ -232,12 +232,13 @@ block0(v0: i64, v1: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   str x28, [sp, #-0x10]!
 ;   stp x26, x27, [sp, #-0x10]!
 ;   stp x24, x25, [sp, #-0x10]!
-; block0: ; offset 0x14
+; block1: ; offset 0x14
 ;   mov x25, x0
 ;   mov x26, x1
 ;   ldaxr x27, [x25]
@@ -274,12 +275,13 @@ block0(v0: i64, v1: i32):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   str x28, [sp, #-0x10]!
 ;   stp x26, x27, [sp, #-0x10]!
 ;   stp x24, x25, [sp, #-0x10]!
-; block0: ; offset 0x14
+; block1: ; offset 0x14
 ;   mov x25, x0
 ;   mov x26, x1
 ;   ldaxr w27, [x25]
@@ -316,12 +318,13 @@ block0(v0: i64, v1: i16):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   str x28, [sp, #-0x10]!
 ;   stp x26, x27, [sp, #-0x10]!
 ;   stp x24, x25, [sp, #-0x10]!
-; block0: ; offset 0x14
+; block1: ; offset 0x14
 ;   mov x25, x0
 ;   mov x26, x1
 ;   ldaxrh w27, [x25]
@@ -358,12 +361,13 @@ block0(v0: i64, v1: i8):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   str x28, [sp, #-0x10]!
 ;   stp x26, x27, [sp, #-0x10]!
 ;   stp x24, x25, [sp, #-0x10]!
-; block0: ; offset 0x14
+; block1: ; offset 0x14
 ;   mov x25, x0
 ;   mov x26, x1
 ;   ldaxrb w27, [x25]

@@ -92,8 +92,9 @@ block0(v0: i32, v1: i32):
 ;   br %r14
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stmg %r7, %r15, 0x38(%r15)
-; block0: ; offset 0x6
+; block1: ; offset 0x6
 ;   lgfr %r5, %r2
 ;   lgr %r7, %r5
 ;   cite %r3, 0 ; trap: int_divz
@@ -379,8 +380,9 @@ block0(v0: i16, v1: i16):
 ;   br %r14
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stmg %r8, %r15, 0x40(%r15)
-; block0: ; offset 0x6
+; block1: ; offset 0x6
 ;   lgr %r4, %r3
 ;   lhi %r5, 0
 ;   lgr %r8, %r5
@@ -446,8 +448,9 @@ block0(v0: i8, v1: i8):
 ;   br %r14
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stmg %r8, %r15, 0x40(%r15)
-; block0: ; offset 0x6
+; block1: ; offset 0x6
 ;   lgr %r4, %r3
 ;   lhi %r5, 0
 ;   lgr %r8, %r5
@@ -670,8 +673,9 @@ block0(v0: i16, v1: i16):
 ;   br %r14
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stmg %r8, %r15, 0x40(%r15)
-; block0: ; offset 0x6
+; block1: ; offset 0x6
 ;   lgr %r4, %r3
 ;   lhi %r5, 0
 ;   lgr %r8, %r5
@@ -706,8 +710,9 @@ block0(v0: i8, v1: i8):
 ;   br %r14
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stmg %r8, %r15, 0x40(%r15)
-; block0: ; offset 0x6
+; block1: ; offset 0x6
 ;   lgr %r4, %r3
 ;   lhi %r5, 0
 ;   lgr %r8, %r5

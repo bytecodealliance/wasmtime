@@ -121,10 +121,11 @@ block3(v7: r64, v8: r64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   sub sp, sp, #0x20
-; block0: ; offset 0xc
+; block1: ; offset 0xc
 ;   stur x0, [sp, #8]
 ;   stur x1, [sp, #0x10]
 ;   ldr x1, #0x1c
@@ -137,14 +138,14 @@ block3(v7: r64, v8: r64):
 ;   str x6, [x15]
 ;   uxtb w0, w0
 ;   cbz x0, #0x48
-; block1: ; offset 0x3c
+; block2: ; offset 0x3c
 ;   mov x0, x6
 ;   ldur x1, [sp, #0x10]
 ;   b #0x50
-; block2: ; offset 0x48
+; block3: ; offset 0x48
 ;   mov x1, x6
 ;   ldur x0, [sp, #0x10]
-; block3: ; offset 0x50
+; block4: ; offset 0x50
 ;   mov x2, sp
 ;   ldr x2, [x2]
 ;   add sp, sp, #0x20

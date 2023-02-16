@@ -20,9 +20,10 @@ block0(v0: i32):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   leaq (%rip), %rdi ; reloc_external ElfX86_64TlsGd u1:0 -4
 ;   callq 0x14 ; reloc_external CallPLTRel4 %ElfTlsGetAddr -4
 ;   movq %rbp, %rsp

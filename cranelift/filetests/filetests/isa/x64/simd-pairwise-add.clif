@@ -22,9 +22,10 @@ block0(v0: i8x16):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movdqa %xmm0, %xmm4
 ;   movdqu 0x10(%rip), %xmm0
 ;   movdqa %xmm4, %xmm5
@@ -61,9 +62,10 @@ block0(v0: i16x8):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movdqu 0x14(%rip), %xmm2
 ;   pmaddwd %xmm2, %xmm0
 ;   movq %rbp, %rsp
@@ -102,9 +104,10 @@ block0(v0: i8x16):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movdqu 0x14(%rip), %xmm2
 ;   pmaddubsw %xmm2, %xmm0
 ;   movq %rbp, %rsp
@@ -147,9 +150,10 @@ block0(v0: i16x8):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movdqu 0x24(%rip), %xmm2
 ;   pxor %xmm2, %xmm0
 ;   movdqu 0x28(%rip), %xmm6
