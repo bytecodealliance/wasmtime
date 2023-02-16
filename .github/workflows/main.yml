@@ -54,6 +54,8 @@ jobs:
   # incompatible licences
   cargo_deny:
     name: Cargo deny
+    needs: determine
+    if: needs.determine.outputs.audit
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -76,6 +78,8 @@ jobs:
   # Ensure dependencies are vetted. See https://mozilla.github.io/cargo-vet/
   cargo_vet:
     name: Cargo vet
+    needs: determine
+    if: needs.determine.outputs.audit
     runs-on: ubuntu-latest
     env:
       CARGO_VET_VERSION: 0.3.1
@@ -116,6 +120,7 @@ jobs:
       test-matrix: ${{ steps.calculate.outputs.test-matrix }}
       test-capi: ${{ steps.calculate.outputs.test-capi }}
       build-fuzz: ${{ steps.calculate.outputs.build-fuzz }}
+      audit: ${{ steps.calculate.outputs.audit }}
     steps:
     - uses: actions/checkout@v3
     - id: calculate
@@ -143,6 +148,9 @@ jobs:
           if grep -q fuzz names.log; then
             echo build-fuzz=true >> $GITHUB_OUTPUT
           fi
+          if grep -q Cargo.lock names.log; then
+            echo audit=true >> $GITHUB_OUTPUT
+          fi
         fi
         matrix="$(node ./ci/build-test-matrix.js ./commits.log ./names.log $run_full)"
         echo "test-matrix={\"include\":$(echo $matrix)}" >> $GITHUB_OUTPUT
@@ -152,6 +160,7 @@ jobs:
             echo run-full=true >> $GITHUB_OUTPUT
             echo test-capi=true >> $GITHUB_OUTPUT
             echo build-fuzz=true >> $GITHUB_OUTPUT
+            echo audit=true >> $GITHUB_OUTPUT
         fi
 
   # Build all documentation of Wasmtime, including the C API documentation,
