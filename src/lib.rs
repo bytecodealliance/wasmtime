@@ -158,6 +158,7 @@ fn align_to(ptr: usize, align: usize) -> usize {
 struct ImportAlloc {
     buffer: Cell<*mut u8>,
     len: Cell<usize>,
+    arena: Cell<Option<&'static BumpArena>>,
 }
 
 impl ImportAlloc {
@@ -165,13 +166,20 @@ impl ImportAlloc {
         ImportAlloc {
             buffer: Cell::new(std::ptr::null_mut()),
             len: Cell::new(0),
+            arena: Cell::new(None),
         }
     }
 
+    /// Expect at most one import allocation during execution of the provided closure.
+    /// Use the provided buffer to satisfy that import allocation. The user is responsible
+    /// for making sure allocated imports are not used beyond the lifetime of the buffer.
     fn with_buffer<T>(&self, buffer: *mut u8, len: usize, f: impl FnOnce() -> T) -> T {
+        if self.arena.get().is_some() {
+            unreachable!("arena mode")
+        }
         let prev = self.buffer.replace(buffer);
         if !prev.is_null() {
-            unreachable!()
+            unreachable!("overwrote another buffer")
         }
         self.len.set(len);
         let r = f();
@@ -179,20 +187,44 @@ impl ImportAlloc {
         r
     }
 
+    /// Permit many import allocations during execution of the provided closure.
+    /// Use the provided BumpArena to satisfry those allocations. The user is responsible
+    /// for making sure allocated imports are not used beyond the lifetime of the arena.
+    fn with_arena<T>(&self, arena: &BumpArena, f: impl FnOnce() -> T) -> T {
+        if !self.buffer.get().is_null() {
+            unreachable!("buffer mode")
+        }
+        let prev = self.arena.replace(Some(unsafe {
+            // Safety: Need to erase the lifetime to store in the arena cell.
+            std::mem::transmute::<&'_ BumpArena, &'static BumpArena>(arena)
+        }));
+        if prev.is_some() {
+            unreachable!("overwrote another arena")
+        }
+        let r = f();
+        self.arena.set(None);
+        r
+    }
+
+    /// To be used by cabi_import_realloc only!
     fn alloc(&self, align: usize, size: usize) -> *mut u8 {
-        let buffer = self.buffer.get();
-        if buffer.is_null() {
-            unreachable!("buffer not provided, or already used")
+        if let Some(arena) = self.arena.get() {
+            arena.alloc(align, size)
+        } else {
+            let buffer = self.buffer.get();
+            if buffer.is_null() {
+                unreachable!("buffer not provided, or already used")
+            }
+            let buffer = buffer as usize;
+            let alloc = align_to(buffer, align);
+            if alloc.checked_add(size).trapping_unwrap()
+                > buffer.checked_add(self.len.get()).trapping_unwrap()
+            {
+                unreachable!("out of memory")
+            }
+            self.buffer.set(std::ptr::null_mut());
+            alloc as *mut u8
         }
-        let buffer = buffer as usize;
-        let alloc = align_to(buffer, align);
-        if alloc.checked_add(size).trapping_unwrap()
-            > buffer.checked_add(self.len.get()).trapping_unwrap()
-        {
-            unreachable!("out of memory")
-        }
-        self.buffer.set(std::ptr::null_mut());
-        alloc as *mut u8
     }
 }
 
@@ -2271,7 +2303,7 @@ const fn bump_arena_size() -> usize {
     start -= size_of::<DirentCache>();
 
     // Remove miscellaneous metadata also stored in state.
-    start -= 22 * size_of::<usize>();
+    start -= 24 * size_of::<usize>();
 
     // Everything else is the `command_data` allocation.
     start
@@ -2566,8 +2598,10 @@ impl State {
                 base: std::ptr::null(),
                 len: 0,
             };
-            /* TODO alloc behavior set to arena for following call: */
-            unsafe { get_environment_import(&mut list as *mut _) };
+            self.import_alloc
+                .with_arena(&self.long_lived_arena, || unsafe {
+                    get_environment_import(&mut list as *mut _)
+                });
             self.env_vars.set(Some(unsafe {
                 /* allocation comes from long lived arena, so it is safe to
                  * cast this to a &'static slice: */
@@ -2578,7 +2612,7 @@ impl State {
     }
 
     fn get_preopens(&self) -> &[Preopen] {
-        if self.env_vars.get().is_none() {
+        if self.preopens.get().is_none() {
             #[link(wasm_import_module = "wasi-filesystem")]
             extern "C" {
                 #[link_name = "get-preopens"]
@@ -2588,8 +2622,10 @@ impl State {
                 base: std::ptr::null(),
                 len: 0,
             };
-            /* TODO alloc behavior set to arena for following call: */
-            unsafe { get_preopens_import(&mut list as *mut _) };
+            self.import_alloc
+                .with_arena(&self.long_lived_arena, || unsafe {
+                    get_preopens_import(&mut list as *mut _)
+                });
             let preopens: &'static [Preopen] = unsafe {
                 /* allocation comes from long lived arena, so it is safe to
                  * cast this to a &'static slice: */
