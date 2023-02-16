@@ -356,16 +356,11 @@ impl<T: CompilePhase> CompiledCodeBase<T> {
         let traps = self.buffer.traps();
 
         // Normalize the block starts to include an initial block of offset 0.
-        let block_starts = if let Some(start) = self.bb_starts.first() {
-            let mut starts = Vec::new();
-            if *start != 0 {
-                starts.push(0);
-            }
-            starts.extend_from_slice(&self.bb_starts);
-            starts
-        } else {
-            vec![0]
-        };
+        let mut block_starts = Vec::new();
+        if self.bb_starts.first().copied() != Some(0) {
+            block_starts.push(0);
+        }
+        block_starts.extend_from_slice(&self.bb_starts);
 
         // Iterate over block regions, to ensure that we always produce block labels
         let end = self.buffer.data().len();
