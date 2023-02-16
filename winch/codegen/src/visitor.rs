@@ -5,7 +5,7 @@
 //! machine code emitter.
 
 use crate::codegen::CodeGen;
-use crate::masm::{MacroAssembler, OperandSize, RegImm};
+use crate::masm::{DivKind, MacroAssembler, OperandSize, RegImm};
 use crate::stack::Val;
 use wasmparser::ValType;
 use wasmparser::VisitOperator;
@@ -37,6 +37,10 @@ macro_rules! def_unsupported {
     (emit I64Add $($rest:tt)*) => {};
     (emit I32Sub $($rest:tt)*) => {};
     (emit I32Mul $($rest:tt)*) => {};
+    (emit I32DivS $($rest:tt)*) => {};
+    (emit I32DivU $($rest:tt)*) => {};
+    (emit I64DivS $($rest:tt)*) => {};
+    (emit I64DivU $($rest:tt)*) => {};
     (emit I64Mul $($rest:tt)*) => {};
     (emit I64Sub $($rest:tt)*) => {};
     (emit LocalGet $($rest:tt)*) => {};
@@ -100,6 +104,34 @@ where
             .i64_binop(self.masm, &mut |masm, dst, src, size| {
                 masm.mul(dst, dst, src, size);
             });
+    }
+
+    fn visit_i32_div_s(&mut self) {
+        use DivKind::*;
+        use OperandSize::*;
+
+        self.masm.div(&mut self.context, Signed, S32);
+    }
+
+    fn visit_i32_div_u(&mut self) {
+        use DivKind::*;
+        use OperandSize::*;
+
+        self.masm.div(&mut self.context, Unsigned, S32);
+    }
+
+    fn visit_i64_div_s(&mut self) {
+        use DivKind::*;
+        use OperandSize::*;
+
+        self.masm.div(&mut self.context, Signed, S64);
+    }
+
+    fn visit_i64_div_u(&mut self) {
+        use DivKind::*;
+        use OperandSize::*;
+
+        self.masm.div(&mut self.context, Unsigned, S64);
     }
 
     fn visit_end(&mut self) {}

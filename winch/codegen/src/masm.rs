@@ -1,8 +1,17 @@
 use crate::abi::{align_to, LocalSlot};
+use crate::codegen::CodeGenContext;
 use crate::isa::reg::Reg;
 use crate::regalloc::RegAlloc;
 use cranelift_codegen::{Final, MachBufferFinalized};
 use std::{fmt::Debug, ops::Range};
+
+#[derive(Eq, PartialEq)]
+pub(crate) enum DivKind {
+    /// Signed division.
+    Signed,
+    /// Unsigned division.
+    Unsigned,
+}
 
 /// Operand size, in bits.
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -93,6 +102,19 @@ pub(crate) trait MacroAssembler {
 
     /// Perform multiplication operation.
     fn mul(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize);
+
+    /// Perform division operation.
+    /// Division is special in that some architectures have specific
+    /// expectations regarding the location of the instruction
+    /// arguments and regarding the location of the quotient /
+    /// remainder. To free the caller from having to deal with the
+    /// architecure specific contraints we give this function access
+    /// to the code generation context, allowing each implementation
+    /// to decide the lowering path.  For cases in which division is a
+    /// unconstrained binary operation, the caller can decide to use
+    /// the `CodeGenContext::i32_binop` or `CodeGenContext::i64_binop`
+    /// functions.
+    fn div(&mut self, context: &mut CodeGenContext, kind: DivKind, size: OperandSize);
 
     /// Push the register to the stack, returning the offset.
     fn push(&mut self, src: Reg) -> u32;
