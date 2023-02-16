@@ -2182,6 +2182,18 @@ pub(crate) fn emit(
                 AvxOpcode::Vpsllq => (LP::_66, OM::_0F, 0xF3),
                 AvxOpcode::Vpsraw => (LP::_66, OM::_0F, 0xE1),
                 AvxOpcode::Vpsrad => (LP::_66, OM::_0F, 0xE2),
+                AvxOpcode::Vaddss => (LP::_F3, OM::_0F, 0x58),
+                AvxOpcode::Vaddsd => (LP::_F2, OM::_0F, 0x58),
+                AvxOpcode::Vmulss => (LP::_F3, OM::_0F, 0x59),
+                AvxOpcode::Vmulsd => (LP::_F2, OM::_0F, 0x59),
+                AvxOpcode::Vsubss => (LP::_F3, OM::_0F, 0x5C),
+                AvxOpcode::Vsubsd => (LP::_F2, OM::_0F, 0x5C),
+                AvxOpcode::Vdivss => (LP::_F3, OM::_0F, 0x5E),
+                AvxOpcode::Vdivsd => (LP::_F2, OM::_0F, 0x5E),
+                AvxOpcode::Vminss => (LP::_F3, OM::_0F, 0x5D),
+                AvxOpcode::Vminsd => (LP::_F2, OM::_0F, 0x5D),
+                AvxOpcode::Vmaxss => (LP::_F3, OM::_0F, 0x5F),
+                AvxOpcode::Vmaxsd => (LP::_F2, OM::_0F, 0x5F),
                 _ => panic!("unexpected rmir vex opcode {op:?}"),
             };
             VexInstruction::new()
@@ -2356,6 +2368,72 @@ pub(crate) fn emit(
                 .vvvv(src1.to_real_reg().unwrap().hw_enc())
                 .rm(src2)
                 .imm(mask.to_real_reg().unwrap().hw_enc() << 4)
+                .encode(sink);
+        }
+
+        Inst::XmmUnaryRmRVex { op, src, dst } => {
+            let dst = allocs.next(dst.to_reg().to_reg());
+            let src = match src.clone().to_reg_mem().with_allocs(allocs) {
+                RegMem::Reg { reg } => {
+                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
+                }
+                RegMem::Mem { addr } => RegisterOrAmode::Amode(addr.finalize(state, sink)),
+            };
+
+            let (prefix, map, opcode) = match op {
+                AvxOpcode::Vpmovsxbw => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x20),
+                AvxOpcode::Vpmovzxbw => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x30),
+                AvxOpcode::Vpmovsxwd => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x23),
+                AvxOpcode::Vpmovzxwd => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x33),
+                AvxOpcode::Vpmovsxdq => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x25),
+                AvxOpcode::Vpmovzxdq => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x35),
+                AvxOpcode::Vpabsb => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x1C),
+                AvxOpcode::Vpabsw => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x1D),
+                AvxOpcode::Vpabsd => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x1E),
+                AvxOpcode::Vsqrtps => (LegacyPrefixes::None, OpcodeMap::_0F, 0x51),
+                AvxOpcode::Vsqrtpd => (LegacyPrefixes::_66, OpcodeMap::_0F, 0x51),
+                AvxOpcode::Vcvtdq2pd => (LegacyPrefixes::_F3, OpcodeMap::_0F, 0xE6),
+                AvxOpcode::Vcvtdq2ps => (LegacyPrefixes::None, OpcodeMap::_0F, 0x5B),
+                AvxOpcode::Vcvtpd2ps => (LegacyPrefixes::_66, OpcodeMap::_0F, 0x5A),
+                AvxOpcode::Vcvtps2pd => (LegacyPrefixes::None, OpcodeMap::_0F, 0x5A),
+                AvxOpcode::Vcvttpd2dq => (LegacyPrefixes::_66, OpcodeMap::_0F, 0xE6),
+                AvxOpcode::Vcvttps2dq => (LegacyPrefixes::_F3, OpcodeMap::_0F, 0x5B),
+                _ => panic!("unexpected rmr_imm_vex opcode {op:?}"),
+            };
+
+            VexInstruction::new()
+                .length(VexVectorLength::V128)
+                .prefix(prefix)
+                .map(map)
+                .opcode(opcode)
+                .reg(dst.to_real_reg().unwrap().hw_enc())
+                .rm(src)
+                .encode(sink);
+        }
+
+        Inst::XmmUnaryRmRImmVex { op, src, dst, imm } => {
+            let dst = allocs.next(dst.to_reg().to_reg());
+            let src = match src.clone().to_reg_mem().with_allocs(allocs) {
+                RegMem::Reg { reg } => {
+                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
+                }
+                RegMem::Mem { addr } => RegisterOrAmode::Amode(addr.finalize(state, sink)),
+            };
+
+            let (prefix, map, opcode) = match op {
+                AvxOpcode::Vroundps => (LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x08),
+                AvxOpcode::Vroundpd => (LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x09),
+                _ => panic!("unexpected rmr_imm_vex opcode {op:?}"),
+            };
+
+            VexInstruction::new()
+                .length(VexVectorLength::V128)
+                .prefix(prefix)
+                .map(map)
+                .opcode(opcode)
+                .reg(dst.to_real_reg().unwrap().hw_enc())
+                .rm(src)
+                .imm(*imm)
                 .encode(sink);
         }
 
