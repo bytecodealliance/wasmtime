@@ -2009,7 +2009,7 @@ pub(crate) fn emit(
                 RegMemImm::Imm { simm32 } => {
                     let (opcode, opcode_ext, prefix) = match op {
                         AvxOpcode::Vpsrld => (0x72, 2, LegacyPrefixes::_66),
-                        _ => todo!(),
+                        _ => panic!("unexpected avx opcode with immediate {op:?}"),
                     };
                     VexInstruction::new()
                         .length(VexVectorLength::V128)
@@ -2034,7 +2034,7 @@ pub(crate) fn emit(
                 AvxOpcode::Vandnps => (LegacyPrefixes::None, 0x55),
                 AvxOpcode::Vorps => (LegacyPrefixes::None, 0x56),
                 AvxOpcode::Vpsrld => (LegacyPrefixes::_66, 0xD2),
-                _ => todo!(),
+                _ => panic!("unexpected rmir vex opcode {op:?}"),
             };
             VexInstruction::new()
                 .length(VexVectorLength::V128)

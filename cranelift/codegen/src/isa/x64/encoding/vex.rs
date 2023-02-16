@@ -265,7 +265,7 @@ impl VexInstruction {
         sink.put1(last_byte);
     }
 
-    /// Emit the VEX-encoded instruction to the code sink:
+    /// Emit the VEX-encoded instruction to the provided buffer.
     pub fn encode(&self, sink: &mut MachBuffer<Inst>) {
         // 2/3 byte prefix
         if self.use_2byte_prefix() {

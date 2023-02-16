@@ -3141,7 +3141,7 @@
       (xmm_rm_r (SseOpcode.Maxpd) x y))
 
 
-;; Helper for creating `MInst.XmmRmRVex` instructions.
+;; Helper for creating `MInst.XmmRmiRVex` instructions.
 (decl xmm_rmir_vex (AvxOpcode Xmm XmmMemImm) Xmm)
 (rule (xmm_rmir_vex op src1 src2)
       (let ((dst WritableXmm (temp_writable_xmm))
