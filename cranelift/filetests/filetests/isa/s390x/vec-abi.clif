@@ -20,9 +20,10 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16):
 ;   br %r14
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stmg %r14, %r15, 0x70(%r15)
 ;   aghi %r15, -0xa0
-; block0: ; offset 0xa
+; block1: ; offset 0xa
 ;   bras %r1, 0x16
 ;   .byte 0x00, 0x00 ; reloc_external Abs8 %callee_be 0
 ;   .byte 0x00, 0x00
@@ -80,6 +81,7 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16):
 ;   br %r14
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stmg %r14, %r15, 0x70(%r15)
 ;   aghi %r15, -0xe0
 ;   std %f8, 0xa0(%r15)
@@ -90,7 +92,7 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16):
 ;   std %f13, 0xc8(%r15)
 ;   std %f14, 0xd0(%r15)
 ;   std %f15, 0xd8(%r15)
-; block0: ; offset 0x2a
+; block1: ; offset 0x2a
 ;   vpdi %v24, %v24, %v24, 4
 ;   vpdi %v7, %v25, %v25, 4
 ;   verllg %v25, %v7, 0x20
@@ -168,6 +170,7 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16):
 ;   br %r14
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stmg %r14, %r15, 0x70(%r15)
 ;   aghi %r15, -0xe0
 ;   std %f8, 0xa0(%r15)
@@ -178,7 +181,7 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16):
 ;   std %f13, 0xc8(%r15)
 ;   std %f14, 0xd0(%r15)
 ;   std %f15, 0xd8(%r15)
-; block0: ; offset 0x2a
+; block1: ; offset 0x2a
 ;   vpdi %v24, %v24, %v24, 4
 ;   vpdi %v7, %v25, %v25, 4
 ;   verllg %v25, %v7, 0x20
@@ -228,9 +231,10 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16):
 ;   br %r14
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stmg %r14, %r15, 0x70(%r15)
 ;   aghi %r15, -0xa0
-; block0: ; offset 0xa
+; block1: ; offset 0xa
 ;   bras %r1, 0x16
 ;   .byte 0x00, 0x00 ; reloc_external Abs8 %callee_le 0
 ;   .byte 0x00, 0x00

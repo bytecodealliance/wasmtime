@@ -25,9 +25,10 @@ block0(v0: i32, v1: i128, v2: i128):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   cmpl $0x2a, %edi
 ;   movq %rcx, %rax
 ;   cmoveq %rsi, %rax
@@ -61,9 +62,10 @@ block0(v0: f32, v1: i128, v2: i128):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   ucomiss %xmm0, %xmm0
 ;   movq %rdi, %rax
 ;   cmovneq %rdx, %rax

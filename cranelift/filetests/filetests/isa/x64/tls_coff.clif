@@ -21,9 +21,10 @@ block0(v0: i32):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movl (%rip), %eax ; reloc_external PCRel4 %CoffTlsIndex -4
 ;   movq %gs:0x58, %rcx
 ;   movq (%rcx, %rax, 8), %rax

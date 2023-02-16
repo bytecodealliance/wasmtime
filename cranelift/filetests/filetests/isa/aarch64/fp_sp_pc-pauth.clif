@@ -18,10 +18,11 @@ block0:
 ;   autiasp ; ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   paciasp
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-; block0: ; offset 0xc
+; block1: ; offset 0xc
 ;   mov x0, x29
 ;   ldp x29, x30, [sp], #0x10
 ;   autiasp
@@ -43,10 +44,11 @@ block0:
 ;   autiasp ; ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   paciasp
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-; block0: ; offset 0xc
+; block1: ; offset 0xc
 ;   mov x0, sp
 ;   ldp x29, x30, [sp], #0x10
 ;   autiasp
@@ -70,10 +72,11 @@ block0:
 ;   autiasp ; ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   paciasp
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-; block0: ; offset 0xc
+; block1: ; offset 0xc
 ;   ldur x30, [x29, #8]
 ;   xpaclri
 ;   mov x0, x30

@@ -24,9 +24,10 @@ block0(v0: i64):
 ;   br %r14
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stmg %r14, %r15, 0x70(%r15)
 ;   aghi %r15, -0xa0
-; block0: ; offset 0xa
+; block1: ; offset 0xa
 ;   bras %r1, 0x16
 ;   .byte 0x00, 0x00 ; reloc_external Abs8 %g 0
 ;   .byte 0x00, 0x00
@@ -57,9 +58,10 @@ block0(v0: i32):
 ;   br %r14
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stmg %r14, %r15, 0x70(%r15)
 ;   aghi %r15, -0xa0
-; block0: ; offset 0xa
+; block1: ; offset 0xa
 ;   llgfr %r2, %r2
 ;   bras %r1, 0x1a
 ;   .byte 0x00, 0x00 ; reloc_external Abs8 %g 0
@@ -106,9 +108,10 @@ block0(v0: i32):
 ;   br %r14
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stmg %r14, %r15, 0x70(%r15)
 ;   aghi %r15, -0xa0
-; block0: ; offset 0xa
+; block1: ; offset 0xa
 ;   lgfr %r2, %r2
 ;   bras %r1, 0x1a
 ;   .byte 0x00, 0x00 ; reloc_external Abs8 %g 0
@@ -153,9 +156,10 @@ block0(v0: i64):
 ;   br %r14
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stmg %r14, %r15, 0x70(%r15)
 ;   aghi %r15, -0xa0
-; block0: ; offset 0xa
+; block1: ; offset 0xa
 ;   brasl %r14, 0xa ; reloc_external PLTRel32Dbl %g 2
 ;   lmg %r14, %r15, 0x110(%r15)
 ;   br %r14
@@ -180,9 +184,10 @@ block0(v0: i32):
 ;   br %r14
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stmg %r14, %r15, 0x70(%r15)
 ;   aghi %r15, -0xa0
-; block0: ; offset 0xa
+; block1: ; offset 0xa
 ;   llgfr %r2, %r2
 ;   bras %r1, 0x1a
 ;   .byte 0x00, 0x00 ; reloc_external Abs8 %g 0
@@ -211,9 +216,10 @@ block0(v0: i64, v1: i64):
 ;   br %r14
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stmg %r14, %r15, 0x70(%r15)
 ;   aghi %r15, -0xa0
-; block0: ; offset 0xa
+; block1: ; offset 0xa
 ;   basr %r14, %r3
 ;   lmg %r14, %r15, 0x110(%r15)
 ;   br %r14
@@ -271,8 +277,9 @@ block0(v0: i64, v1: i32, v2: i32, v3: i32, v4: i16, v5: i16, v6: i16, v7: i8, v8
 ;   br %r14
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stmg %r6, %r15, 0x30(%r15)
-; block0: ; offset 0x6
+; block1: ; offset 0x6
 ;   lg %r12, 0xa0(%r15)
 ;   lg %r14, 0xa8(%r15)
 ;   llgc %r7, 0xb7(%r15)
@@ -378,9 +385,10 @@ block0:
 ;   trap
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stmg %r14, %r15, 0x70(%r15)
 ;   aghi %r15, -0xa0
-; block0: ; offset 0xa
+; block1: ; offset 0xa
 ;   lghi %r2, 0
 ;   brasl %r14, 0xe ; reloc_external PLTRel32Dbl %g 2
 ;   .byte 0x00, 0x00 ; trap: user0

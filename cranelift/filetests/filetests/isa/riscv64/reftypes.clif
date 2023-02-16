@@ -132,13 +132,14 @@ block3(v7: r64, v8: r64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   ori s0, sp, 0
 ;   sd s7, -8(sp)
 ;   addi sp, sp, -0x30
-; block0: ; offset 0x18
+; block1: ; offset 0x18
 ;   sd a0, 8(sp)
 ;   sd a1, 0x10(sp)
 ;   ori s7, a2, 0
@@ -153,14 +154,14 @@ block3(v7: r64, v8: r64):
 ;   sd t4, 0(a1)
 ;   andi a1, a0, 0xff
 ;   beqz a1, 0x10
-; block1: ; offset 0x50
+; block2: ; offset 0x50
 ;   ori a0, t4, 0
 ;   ld a1, 0x10(sp)
 ;   j 0xc
-; block2: ; offset 0x5c
+; block3: ; offset 0x5c
 ;   ori a1, t4, 0
 ;   ld a0, 0x10(sp)
-; block3: ; offset 0x64
+; block4: ; offset 0x64
 ;   mv a2, sp
 ;   ld a2, 0(a2)
 ;   ori a3, s7, 0

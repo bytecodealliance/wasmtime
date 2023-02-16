@@ -19,9 +19,10 @@ block0(v0: i8, v1: i8):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movq %rdi, %rax
 ;   cbtw
 ;   idivb %sil ; trap: int_divz
@@ -47,9 +48,10 @@ block0(v0: i16, v1: i16):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movq %rdi, %rax
 ;   cwtd
 ;   idivw %si ; trap: int_divz
@@ -75,9 +77,10 @@ block0(v0: i32, v1: i32):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movq %rdi, %rax
 ;   cltd
 ;   idivl %esi ; trap: int_divz
@@ -103,9 +106,10 @@ block0(v0: i64, v1: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movq %rdi, %rax
 ;   cqto
 ;   idivq %rsi ; trap: int_divz

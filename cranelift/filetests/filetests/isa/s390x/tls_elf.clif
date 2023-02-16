@@ -26,9 +26,10 @@ block0(v0: i32):
 ;   br %r14
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stmg %r12, %r15, 0x60(%r15)
 ;   aghi %r15, -0xa0
-; block0: ; offset 0xa
+; block1: ; offset 0xa
 ;   larl %r12, 0xa ; reloc_external PCRel32Dbl %ElfGlobalOffsetTable 2
 ;   bras %r1, 0x1c
 ;   .byte 0x00, 0x00 ; reloc_external TlsGd64 u1:0 0

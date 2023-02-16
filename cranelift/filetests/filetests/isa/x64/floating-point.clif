@@ -19,9 +19,10 @@ block0(v0: f64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movabsq $0x7fffffffffffffff, %rax
 ;   movq %rax, %xmm4
 ;   andpd %xmm4, %xmm0
@@ -49,9 +50,10 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movsd (%rdi), %xmm0 ; trap: heap_oob
 ;   movabsq $0x7fffffffffffffff, %rcx
 ;   movq %rcx, %xmm5

@@ -27,9 +27,10 @@ block0(v0: f64x2):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   xorpd %xmm2, %xmm2
 ;   movdqa %xmm0, %xmm6
 ;   maxpd %xmm2, %xmm6

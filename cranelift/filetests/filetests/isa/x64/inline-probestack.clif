@@ -27,10 +27,11 @@ block0:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ;   subq $0x800, %rsp
-; block0: ; offset 0xb
+; block1: ; offset 0xb
 ;   leaq (%rsp), %rax
 ;   addq $0x800, %rsp
 ;   movq %rbp, %rsp
@@ -60,13 +61,14 @@ block0:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ;   movl %esp, -0x1000(%rsp)
 ;   movl %esp, -0x2000(%rsp)
 ;   movl %esp, -0x3000(%rsp)
 ;   subq $0x3000, %rsp
-; block0: ; offset 0x20
+; block1: ; offset 0x20
 ;   leaq (%rsp), %rax
 ;   addq $0x3000, %rsp
 ;   movq %rbp, %rsp
@@ -94,6 +96,7 @@ block0:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ;   movq %rsp, %r11
@@ -104,7 +107,7 @@ block0:
 ;   jne 0xe
 ;   addq $0x19000, %rsp
 ;   subq $0x186a0, %rsp
-; block0: ; offset 0x2f
+; block1: ; offset 0x2f
 ;   leaq (%rsp), %rax
 ;   addq $0x186a0, %rsp
 ;   movq %rbp, %rsp

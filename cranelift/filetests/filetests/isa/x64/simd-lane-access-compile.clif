@@ -28,9 +28,10 @@ block0:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movdqu 0x64(%rip), %xmm0
 ;   movdqu 0x4c(%rip), %xmm4
 ;   movdqu 0x24(%rip), %xmm2
@@ -90,9 +91,10 @@ block0:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movdqu 0x24(%rip), %xmm0
 ;   movdqu 0xc(%rip), %xmm1
 ;   pshufb %xmm1, %xmm0
@@ -138,9 +140,10 @@ block0:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movdqu 0x34(%rip), %xmm0
 ;   movdqu 0x2c(%rip), %xmm2
 ;   movdqu 0x14(%rip), %xmm3
@@ -183,9 +186,10 @@ block0(v0: i8):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   pinsrb $0, %edi, %xmm0
 ;   pxor %xmm6, %xmm6
 ;   pshufb %xmm6, %xmm0
@@ -214,9 +218,10 @@ block0:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movl $0xffffffff, %esi
 ;   pinsrw $0, %esi, %xmm4
 ;   pinsrw $1, %esi, %xmm4
@@ -243,9 +248,10 @@ block0(v0: i32):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   pinsrd $0, %edi, %xmm3
 ;   pshufd $0, %xmm3, %xmm0
 ;   movq %rbp, %rsp
@@ -272,9 +278,10 @@ block0(v0: f64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movdqa %xmm0, %xmm5
 ;   movdqa %xmm5, %xmm6
 ;   movsd %xmm6, %xmm0
@@ -300,9 +307,10 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movss (%rdi), %xmm0 ; trap: heap_oob
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -324,9 +332,10 @@ block0(v0: i32):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movd %edi, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -347,9 +356,10 @@ block0(v0: f32):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

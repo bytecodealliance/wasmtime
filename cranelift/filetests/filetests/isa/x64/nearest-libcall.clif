@@ -18,9 +18,10 @@ block0(v0: f32):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movabsq $0, %rcx ; reloc_external Abs8 %NearestF32 0
 ;   callq *%rcx
 ;   movq %rbp, %rsp
@@ -44,9 +45,10 @@ block0(v0: f64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   movabsq $0, %rcx ; reloc_external Abs8 %NearestF64 0
 ;   callq *%rcx
 ;   movq %rbp, %rsp

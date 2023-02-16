@@ -61,8 +61,9 @@ block5(v5: i32):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   hint #0x22
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   cmp w0, #3
 ;   b.hs #0x30
 ;   csel x15, xzr, x0, hs
@@ -74,24 +75,24 @@ block5(v5: i32):
 ;   .byte 0x14, 0x00, 0x00, 0x00
 ;   .byte 0x20, 0x00, 0x00, 0x00
 ;   .byte 0x2c, 0x00, 0x00, 0x00
-; block1: ; offset 0x30
+; block2: ; offset 0x30
 ;   mov w5, #4
-; block2: ; offset 0x34
+; block3: ; offset 0x34
 ;   b #0x58
-; block3: ; offset 0x38
+; block4: ; offset 0x38
 ;   hint #0x24
 ;   mov w5, #1
-; block4: ; offset 0x40
+; block5: ; offset 0x40
 ;   b #0x58
-; block5: ; offset 0x44
+; block6: ; offset 0x44
 ;   hint #0x24
 ;   mov w5, #2
-; block6: ; offset 0x4c
+; block7: ; offset 0x4c
 ;   b #0x58
-; block7: ; offset 0x50
+; block8: ; offset 0x50
 ;   hint #0x24
 ;   mov w5, #3
-; block8: ; offset 0x58
+; block9: ; offset 0x58
 ;   add w0, w0, w5
 ;   ret
 
@@ -128,8 +129,9 @@ block2:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   hint #0x22
-; block0: ; offset 0x4
+; block1: ; offset 0x4
 ;   ldr x5, [x0]
 ;   mov x8, x5
 ;   cmp w0, #1
@@ -141,10 +143,10 @@ block2:
 ;   add x6, x6, x7
 ;   br x6
 ;   .byte 0x0c, 0x00, 0x00, 0x00
-; block1: ; offset 0x30
+; block2: ; offset 0x30
 ;   mov x0, x8
 ;   ret
-; block2: ; offset 0x38
+; block3: ; offset 0x38
 ;   hint #0x24
 ;   mov x0, x8
 ;   add x0, x0, #0x2a
@@ -169,10 +171,11 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   hint #0x22
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-; block0: ; offset 0xc
+; block1: ; offset 0xc
 ;   ldr x3, #0x14
 ;   b #0x1c
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0

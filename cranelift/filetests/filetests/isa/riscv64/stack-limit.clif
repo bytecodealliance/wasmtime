@@ -68,13 +68,14 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   ori s0, sp, 0
 ;   bgeu sp, a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
-; block0: ; offset 0x18
+; block1: ; offset 0x18
 ;   auipc t2, 0
 ;   ld t2, 0xc(t2)
 ;   j 0xc
@@ -114,6 +115,7 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
@@ -122,7 +124,7 @@ block0(v0: i64):
 ;   ld t6, 4(t6)
 ;   bgeu sp, t6, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
-; block0: ; offset 0x20
+; block1: ; offset 0x20
 ;   auipc t2, 0
 ;   ld t2, 0xc(t2)
 ;   j 0xc
@@ -156,6 +158,7 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
@@ -164,7 +167,7 @@ block0(v0: i64):
 ;   bgeu sp, t6, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
 ;   addi sp, sp, -0xb0
-; block0: ; offset 0x20
+; block1: ; offset 0x20
 ;   addi sp, sp, 0xb0
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
@@ -199,6 +202,7 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
@@ -221,7 +225,7 @@ block0(v0: i64):
 ;   lui t6, 0xfff9e
 ;   addi t6, t6, 0x580
 ;   add sp, t6, sp
-; block0: ; offset 0x58
+; block1: ; offset 0x58
 ;   lui t6, 0x62
 ;   addi t6, t6, -0x580
 ;   add sp, t6, sp
@@ -258,6 +262,7 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
@@ -268,7 +273,7 @@ block0(v0: i64):
 ;   bgeu sp, t6, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
 ;   addi sp, sp, -0x20
-; block0: ; offset 0x28
+; block1: ; offset 0x28
 ;   addi sp, sp, 0x20
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
@@ -309,6 +314,7 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
@@ -333,7 +339,7 @@ block0(v0: i64):
 ;   lui t6, 0xfff9e
 ;   addi t6, t6, 0x580
 ;   add sp, t6, sp
-; block0: ; offset 0x60
+; block1: ; offset 0x60
 ;   lui t6, 0x62
 ;   addi t6, t6, -0x580
 ;   add sp, t6, sp
@@ -368,6 +374,7 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
@@ -383,7 +390,7 @@ block0(v0: i64):
 ;   bgeu sp, t6, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
 ;   addi sp, sp, -0x20
-; block0: ; offset 0x3c
+; block1: ; offset 0x3c
 ;   addi sp, sp, 0x20
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)

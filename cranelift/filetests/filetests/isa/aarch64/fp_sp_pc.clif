@@ -17,9 +17,10 @@ block0:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-; block0: ; offset 0x8
+; block1: ; offset 0x8
 ;   mov x0, x29
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
@@ -39,9 +40,10 @@ block0:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-; block0: ; offset 0x8
+; block1: ; offset 0x8
 ;   mov x0, sp
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
@@ -61,9 +63,10 @@ block0:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-; block0: ; offset 0x8
+; block1: ; offset 0x8
 ;   ldur x0, [x29, #8]
 ;   ldp x29, x30, [sp], #0x10
 ;   ret

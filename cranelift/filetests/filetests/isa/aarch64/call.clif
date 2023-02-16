@@ -21,9 +21,10 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-; block0: ; offset 0x8
+; block1: ; offset 0x8
 ;   ldr x3, #0x10
 ;   b #0x18
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
@@ -50,9 +51,10 @@ block0(v0: i32):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-; block0: ; offset 0x8
+; block1: ; offset 0x8
 ;   ldr x3, #0x10
 ;   b #0x18
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
@@ -92,9 +94,10 @@ block0(v0: i32):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-; block0: ; offset 0x8
+; block1: ; offset 0x8
 ;   ldr x3, #0x10
 ;   b #0x18
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
@@ -149,9 +152,10 @@ block0(v0: i8):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-; block0: ; offset 0x8
+; block1: ; offset 0x8
 ;   mov x8, x0
 ;   sub sp, sp, #0x10
 ;   mov w0, #0x2a
@@ -256,10 +260,11 @@ block0:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   sub sp, sp, #0x30
-; block0: ; offset 0xc
+; block1: ; offset 0xc
 ;   ldr x9, #0x14
 ;   b #0x1c
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g0 0
@@ -351,10 +356,11 @@ block0:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   sub sp, sp, #0x30
-; block0: ; offset 0xc
+; block1: ; offset 0xc
 ;   ldr x9, #0x14
 ;   b #0x1c
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g0 0
@@ -450,10 +456,11 @@ block0:
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   sub sp, sp, #0x30
-; block0: ; offset 0xc
+; block1: ; offset 0xc
 ;   ldr x9, #0x14
 ;   b #0x1c
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g0 0
@@ -538,9 +545,10 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-; block0: ; offset 0x8
+; block1: ; offset 0x8
 ;   mov x1, x0
 ;   mov x0, #0x2a
 ;   mov x2, #0x2a
@@ -591,9 +599,10 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-; block0: ; offset 0x8
+; block1: ; offset 0x8
 ;   mov x2, x0
 ;   mov x3, #0x2a
 ;   mov x0, #0x2a
@@ -644,9 +653,10 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-; block0: ; offset 0x8
+; block1: ; offset 0x8
 ;   mov x1, x0
 ;   mov x2, #0x2a
 ;   mov x0, #0x2a
@@ -673,9 +683,10 @@ block0(v0: i128, v1: i128, v2: i128, v3: i64, v4: i128):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-; block0: ; offset 0x8
+; block1: ; offset 0x8
 ;   ldur x0, [x29, #0x10]
 ;   ldur x1, [x29, #0x18]
 ;   ldp x29, x30, [sp], #0x10
@@ -712,9 +723,10 @@ block0(v0: i128, v1: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-; block0: ; offset 0x8
+; block1: ; offset 0x8
 ;   mov x6, x2
 ;   sub sp, sp, #0x10
 ;   stur x0, [sp]
@@ -749,9 +761,10 @@ block0(v0: i128, v1: i128, v2: i128, v3: i64, v4: i128):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-; block0: ; offset 0x8
+; block1: ; offset 0x8
 ;   ldur x0, [x29, #0x10]
 ;   ldur x1, [x29, #0x18]
 ;   ldp x29, x30, [sp], #0x10
@@ -788,9 +801,10 @@ block0(v0: i128, v1: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-; block0: ; offset 0x8
+; block1: ; offset 0x8
 ;   mov x6, x2
 ;   sub sp, sp, #0x10
 ;   stur x0, [sp]
@@ -873,9 +887,10 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-; block0: ; offset 0x8
+; block1: ; offset 0x8
 ;   mov x8, x0
 ;   ldr x3, #0x14
 ;   b #0x1c
@@ -907,10 +922,11 @@ block0(v0: i64):
 ;   ret
 ; 
 ; Disassembled:
+; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   str x24, [sp, #-0x10]!
-; block0: ; offset 0xc
+; block1: ; offset 0xc
 ;   mov x24, x8
 ;   ldr x4, #0x18
 ;   b #0x20
