@@ -10,7 +10,13 @@ block0(v0: i8x16, v1: i8x16):
   return v4
 }
 
+; VCode:
 ; block0:
+;   smull v0.8h, v0.8b, v1.8b
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   smull v0.8h, v0.8b, v1.8b
 ;   ret
 
@@ -22,7 +28,13 @@ block0(v0: i8x16, v1: i8x16):
   return v4
 }
 
+; VCode:
 ; block0:
+;   smull2 v0.8h, v0.16b, v1.16b
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   smull2 v0.8h, v0.16b, v1.16b
 ;   ret
 
@@ -34,7 +46,13 @@ block0(v0: i16x8, v1: i16x8):
   return v4
 }
 
+; VCode:
 ; block0:
+;   smull v0.4s, v0.4h, v1.4h
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   smull v0.4s, v0.4h, v1.4h
 ;   ret
 
@@ -46,7 +64,13 @@ block0(v0: i16x8, v1: i16x8):
   return v4
 }
 
+; VCode:
 ; block0:
+;   smull2 v0.4s, v0.8h, v1.8h
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   smull2 v0.4s, v0.8h, v1.8h
 ;   ret
 
@@ -58,7 +82,13 @@ block0(v0: i32x4, v1: i32x4):
   return v4
 }
 
+; VCode:
 ; block0:
+;   smull v0.2d, v0.2s, v1.2s
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   smull v0.2d, v0.2s, v1.2s
 ;   ret
 
@@ -70,7 +100,13 @@ block0(v0: i32x4, v1: i32x4):
   return v4
 }
 
+; VCode:
 ; block0:
+;   smull2 v0.2d, v0.4s, v1.4s
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   smull2 v0.2d, v0.4s, v1.4s
 ;   ret
 
@@ -82,7 +118,13 @@ block0(v0: i8x16, v1: i8x16):
   return v4
 }
 
+; VCode:
 ; block0:
+;   umull v0.8h, v0.8b, v1.8b
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   umull v0.8h, v0.8b, v1.8b
 ;   ret
 
@@ -94,7 +136,13 @@ block0(v0: i8x16, v1: i8x16):
   return v4
 }
 
+; VCode:
 ; block0:
+;   umull2 v0.8h, v0.16b, v1.16b
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   umull2 v0.8h, v0.16b, v1.16b
 ;   ret
 
@@ -106,7 +154,13 @@ block0(v0: i16x8, v1: i16x8):
   return v4
 }
 
+; VCode:
 ; block0:
+;   umull v0.4s, v0.4h, v1.4h
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   umull v0.4s, v0.4h, v1.4h
 ;   ret
 
@@ -118,7 +172,13 @@ block0(v0: i16x8, v1: i16x8):
   return v4
 }
 
+; VCode:
 ; block0:
+;   umull2 v0.4s, v0.8h, v1.8h
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   umull2 v0.4s, v0.8h, v1.8h
 ;   ret
 
@@ -130,7 +190,13 @@ block0(v0: i32x4, v1: i32x4):
   return v4
 }
 
+; VCode:
 ; block0:
+;   umull v0.2d, v0.2s, v1.2s
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   umull v0.2d, v0.2s, v1.2s
 ;   ret
 
@@ -142,7 +208,13 @@ block0(v0: i32x4, v1: i32x4):
   return v4
 }
 
+; VCode:
 ; block0:
+;   umull2 v0.2d, v0.4s, v1.4s
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   umull2 v0.2d, v0.4s, v1.4s
 ;   ret
 

@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use wasmtime::*;
 
 fn measure_execution_time(c: &mut Criterion) {
-    // Baseline performance: a single measurment covers both initializing
+    // Baseline performance: a single measurement covers both initializing
     // thread local resources and executing the first call.
     //
     // The other two bench functions should sum to this duration.
@@ -55,7 +55,7 @@ fn duration_of_call(engine: &Engine, module: &Module) -> Duration {
     let mut store = Store::new(engine, ());
     let inst = Instance::new(&mut store, module, &[]).expect("instantiate");
     let f = inst.get_func(&mut store, "f").expect("get f");
-    let f = f.typed::<(), (), _>(&store).expect("type f");
+    let f = f.typed::<(), ()>(&store).expect("type f");
 
     let call = Instant::now();
     f.call(&mut store, ()).expect("call f");
@@ -91,15 +91,10 @@ fn test_setup() -> (Engine, Module) {
     // We only expect to create one Instance at a time, with a single memory.
     let pool_count = 10;
 
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(pool_count).instance_memory_pages(1);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: pool_count,
-            memory_pages: 1,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     let engine = Engine::new(&config).unwrap();
 
     // The module has a memory (shouldn't matter) and a single function which is a no-op.

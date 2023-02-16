@@ -8,32 +8,6 @@ use cranelift_frontend::FunctionBuilder;
 use serde::{Deserialize, Serialize};
 use wasmparser::{FuncValidator, WasmFuncType, WasmModuleResources};
 
-/// WebAssembly table element. Can be a function or a scalar type.
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub enum TableElementType {
-    /// A scalar type.
-    Val(ir::Type),
-    /// A function.
-    Func,
-}
-
-/// Helper function translating wasmparser types to Cranelift types when possible.
-pub fn type_to_type<PE: TargetEnvironment + ?Sized>(
-    ty: wasmparser::ValType,
-    environ: &PE,
-) -> WasmResult<ir::Type> {
-    match ty {
-        wasmparser::ValType::I32 => Ok(ir::types::I32),
-        wasmparser::ValType::I64 => Ok(ir::types::I64),
-        wasmparser::ValType::F32 => Ok(ir::types::F32),
-        wasmparser::ValType::F64 => Ok(ir::types::F64),
-        wasmparser::ValType::V128 => Ok(ir::types::I8X16),
-        wasmparser::ValType::Ref(rt) => Ok(environ.reference_type(rt.heap_type.into())),
-        wasmparser::ValType::Bot => todo!("ValType::Bot will not exist in final wasm-tools"),
-    }
-}
-
 /// Get the parameter and result types for the given Wasm blocktype.
 pub fn blocktype_params_results<'a, T>(
     validator: &'a FuncValidator<T>,
@@ -104,7 +78,6 @@ pub fn block_with_params<PE: TargetEnvironment + ?Sized>(
             wasmparser::ValType::V128 => {
                 builder.append_block_param(block, ir::types::I8X16);
             }
-            wasmparser::ValType::Bot => todo!("ValType::Bot will not exist in actual wasmparser"),
         }
     }
     Ok(block)

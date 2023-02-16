@@ -47,7 +47,7 @@ pub use clocks::clocks_ctx;
 pub use sched::sched_ctx;
 
 use crate::net::Socket;
-use cap_rand::RngCore;
+use cap_rand::{Rng, RngCore, SeedableRng};
 use std::path::Path;
 use wasi_common::{file::FileCaps, table::Table, Error, WasiCtx, WasiFile};
 
@@ -94,15 +94,15 @@ impl WasiCtxBuilder {
         }
         Ok(self)
     }
-    pub fn stdin(mut self, f: Box<dyn WasiFile>) -> Self {
+    pub fn stdin(self, f: Box<dyn WasiFile>) -> Self {
         self.0.set_stdin(f);
         self
     }
-    pub fn stdout(mut self, f: Box<dyn WasiFile>) -> Self {
+    pub fn stdout(self, f: Box<dyn WasiFile>) -> Self {
         self.0.set_stdout(f);
         self
     }
-    pub fn stderr(mut self, f: Box<dyn WasiFile>) -> Self {
+    pub fn stderr(self, f: Box<dyn WasiFile>) -> Self {
         self.0.set_stderr(f);
         self
     }
@@ -118,12 +118,12 @@ impl WasiCtxBuilder {
     pub fn inherit_stdio(self) -> Self {
         self.inherit_stdin().inherit_stdout().inherit_stderr()
     }
-    pub fn preopened_dir(mut self, dir: Dir, guest_path: impl AsRef<Path>) -> Result<Self, Error> {
+    pub fn preopened_dir(self, dir: Dir, guest_path: impl AsRef<Path>) -> Result<Self, Error> {
         let dir = Box::new(crate::dir::Dir::from_cap_std(dir));
         self.0.push_preopened_dir(dir, guest_path)?;
         Ok(self)
     }
-    pub fn preopened_socket(mut self, fd: u32, socket: impl Into<Socket>) -> Result<Self, Error> {
+    pub fn preopened_socket(self, fd: u32, socket: impl Into<Socket>) -> Result<Self, Error> {
         let socket: Socket = socket.into();
         let file: Box<dyn WasiFile> = socket.into();
 
@@ -141,5 +141,6 @@ impl WasiCtxBuilder {
 }
 
 pub fn random_ctx() -> Box<dyn RngCore + Send + Sync> {
-    Box::new(cap_rand::rngs::OsRng::default(ambient_authority()))
+    let mut rng = cap_rand::thread_rng(cap_rand::ambient_authority());
+    Box::new(cap_rand::rngs::StdRng::from_seed(rng.gen()))
 }

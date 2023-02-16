@@ -3,108 +3,146 @@ use crate::{Error, ErrorExt, SystemTimeSpec};
 use bitflags::bitflags;
 use std::any::Any;
 use std::path::PathBuf;
+use std::sync::{Arc, RwLock};
 
 #[wiggle::async_trait]
 pub trait WasiDir: Send + Sync {
     fn as_any(&self) -> &dyn Any;
+
     async fn open_file(
         &self,
-        symlink_follow: bool,
-        path: &str,
-        oflags: OFlags,
-        read: bool,
-        write: bool,
-        fdflags: FdFlags,
-    ) -> Result<Box<dyn WasiFile>, Error>;
-    async fn open_dir(&self, symlink_follow: bool, path: &str) -> Result<Box<dyn WasiDir>, Error>;
-    async fn create_dir(&self, path: &str) -> Result<(), Error>;
+        _symlink_follow: bool,
+        _path: &str,
+        _oflags: OFlags,
+        _read: bool,
+        _write: bool,
+        _fdflags: FdFlags,
+    ) -> Result<Box<dyn WasiFile>, Error> {
+        Err(Error::not_supported())
+    }
+
+    async fn open_dir(
+        &self,
+        _symlink_follow: bool,
+        _path: &str,
+    ) -> Result<Box<dyn WasiDir>, Error> {
+        Err(Error::not_supported())
+    }
+
+    async fn create_dir(&self, _path: &str) -> Result<(), Error> {
+        Err(Error::not_supported())
+    }
+
     // XXX the iterator here needs to be asyncified as well!
     async fn readdir(
         &self,
-        cursor: ReaddirCursor,
-    ) -> Result<Box<dyn Iterator<Item = Result<ReaddirEntity, Error>> + Send>, Error>;
-    async fn symlink(&self, old_path: &str, new_path: &str) -> Result<(), Error>;
-    async fn remove_dir(&self, path: &str) -> Result<(), Error>;
-    async fn unlink_file(&self, path: &str) -> Result<(), Error>;
-    async fn read_link(&self, path: &str) -> Result<PathBuf, Error>;
-    async fn get_filestat(&self) -> Result<Filestat, Error>;
-    async fn get_path_filestat(&self, path: &str, follow_symlinks: bool)
-        -> Result<Filestat, Error>;
+        _cursor: ReaddirCursor,
+    ) -> Result<Box<dyn Iterator<Item = Result<ReaddirEntity, Error>> + Send>, Error> {
+        Err(Error::not_supported())
+    }
+
+    async fn symlink(&self, _old_path: &str, _new_path: &str) -> Result<(), Error> {
+        Err(Error::not_supported())
+    }
+
+    async fn remove_dir(&self, _path: &str) -> Result<(), Error> {
+        Err(Error::not_supported())
+    }
+
+    async fn unlink_file(&self, _path: &str) -> Result<(), Error> {
+        Err(Error::not_supported())
+    }
+
+    async fn read_link(&self, _path: &str) -> Result<PathBuf, Error> {
+        Err(Error::not_supported())
+    }
+
+    async fn get_filestat(&self) -> Result<Filestat, Error> {
+        Err(Error::not_supported())
+    }
+
+    async fn get_path_filestat(
+        &self,
+        _path: &str,
+        _follow_symlinks: bool,
+    ) -> Result<Filestat, Error> {
+        Err(Error::not_supported())
+    }
+
     async fn rename(
         &self,
-        path: &str,
-        dest_dir: &dyn WasiDir,
-        dest_path: &str,
-    ) -> Result<(), Error>;
+        _path: &str,
+        _dest_dir: &dyn WasiDir,
+        _dest_path: &str,
+    ) -> Result<(), Error> {
+        Err(Error::not_supported())
+    }
+
     async fn hard_link(
         &self,
-        path: &str,
-        target_dir: &dyn WasiDir,
-        target_path: &str,
-    ) -> Result<(), Error>;
+        _path: &str,
+        _target_dir: &dyn WasiDir,
+        _target_path: &str,
+    ) -> Result<(), Error> {
+        Err(Error::not_supported())
+    }
+
     async fn set_times(
         &self,
-        path: &str,
-        atime: Option<SystemTimeSpec>,
-        mtime: Option<SystemTimeSpec>,
-        follow_symlinks: bool,
-    ) -> Result<(), Error>;
+        _path: &str,
+        _atime: Option<SystemTimeSpec>,
+        _mtime: Option<SystemTimeSpec>,
+        _follow_symlinks: bool,
+    ) -> Result<(), Error> {
+        Err(Error::not_supported())
+    }
 }
 
 pub(crate) struct DirEntry {
-    caps: DirCaps,
-    file_caps: FileCaps,
+    caps: RwLock<DirFdStat>,
     preopen_path: Option<PathBuf>, // precondition: PathBuf is valid unicode
     dir: Box<dyn WasiDir>,
 }
 
 impl DirEntry {
     pub fn new(
-        caps: DirCaps,
+        dir_caps: DirCaps,
         file_caps: FileCaps,
         preopen_path: Option<PathBuf>,
         dir: Box<dyn WasiDir>,
     ) -> Self {
         DirEntry {
-            caps,
-            file_caps,
+            caps: RwLock::new(DirFdStat {
+                dir_caps,
+                file_caps,
+            }),
             preopen_path,
             dir,
         }
     }
     pub fn capable_of_dir(&self, caps: DirCaps) -> Result<(), Error> {
-        if self.caps.contains(caps) {
-            Ok(())
-        } else {
-            Err(Error::not_capable().context(format!("desired {:?}, has {:?}", caps, self.caps,)))
-        }
+        let fdstat = self.caps.read().unwrap();
+        fdstat.capable_of_dir(caps)
     }
-    pub fn capable_of_file(&self, caps: FileCaps) -> Result<(), Error> {
-        if self.file_caps.contains(caps) {
-            Ok(())
-        } else {
-            Err(Error::not_capable()
-                .context(format!("desired {:?}, has {:?}", caps, self.file_caps)))
-        }
-    }
-    pub fn drop_caps_to(&mut self, caps: DirCaps, file_caps: FileCaps) -> Result<(), Error> {
-        self.capable_of_dir(caps)?;
-        self.capable_of_file(file_caps)?;
-        self.caps = caps;
-        self.file_caps = file_caps;
+
+    pub fn drop_caps_to(&self, dir_caps: DirCaps, file_caps: FileCaps) -> Result<(), Error> {
+        let mut fdstat = self.caps.write().unwrap();
+        fdstat.capable_of_dir(dir_caps)?;
+        fdstat.capable_of_file(file_caps)?;
+        *fdstat = DirFdStat {
+            dir_caps,
+            file_caps,
+        };
         Ok(())
     }
     pub fn child_dir_caps(&self, desired_caps: DirCaps) -> DirCaps {
-        self.caps & desired_caps
+        self.caps.read().unwrap().dir_caps & desired_caps
     }
     pub fn child_file_caps(&self, desired_caps: FileCaps) -> FileCaps {
-        self.file_caps & desired_caps
+        self.caps.read().unwrap().file_caps & desired_caps
     }
     pub fn get_dir_fdstat(&self) -> DirFdStat {
-        DirFdStat {
-            dir_caps: self.caps,
-            file_caps: self.file_caps,
-        }
+        self.caps.read().unwrap().clone()
     }
     pub fn preopen_path(&self) -> &Option<PathBuf> {
         &self.preopen_path
@@ -149,18 +187,47 @@ pub struct DirFdStat {
     pub dir_caps: DirCaps,
 }
 
+impl DirFdStat {
+    pub fn capable_of_dir(&self, caps: DirCaps) -> Result<(), Error> {
+        if self.dir_caps.contains(caps) {
+            Ok(())
+        } else {
+            let missing = caps & !self.dir_caps;
+            let err = if missing.intersects(DirCaps::READDIR) {
+                Error::not_dir()
+            } else {
+                Error::perm()
+            };
+            Err(err.context(format!(
+                "desired rights {:?}, has {:?}",
+                caps, self.dir_caps
+            )))
+        }
+    }
+    pub fn capable_of_file(&self, caps: FileCaps) -> Result<(), Error> {
+        if self.file_caps.contains(caps) {
+            Ok(())
+        } else {
+            Err(Error::perm().context(format!(
+                "desired rights {:?}, has {:?}",
+                caps, self.file_caps
+            )))
+        }
+    }
+}
+
 pub(crate) trait TableDirExt {
-    fn get_dir(&self, fd: u32) -> Result<&DirEntry, Error>;
+    fn get_dir(&self, fd: u32) -> Result<Arc<DirEntry>, Error>;
     fn is_preopen(&self, fd: u32) -> bool;
 }
 
 impl TableDirExt for crate::table::Table {
-    fn get_dir(&self, fd: u32) -> Result<&DirEntry, Error> {
+    fn get_dir(&self, fd: u32) -> Result<Arc<DirEntry>, Error> {
         self.get(fd)
     }
     fn is_preopen(&self, fd: u32) -> bool {
         if self.is::<DirEntry>(fd) {
-            let dir_entry: &DirEntry = self.get(fd).unwrap();
+            let dir_entry: Arc<DirEntry> = self.get(fd).unwrap();
             dir_entry.preopen_path.is_some()
         } else {
             false

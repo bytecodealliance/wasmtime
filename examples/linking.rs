@@ -32,7 +32,7 @@ fn main() -> Result<()> {
 
     // And with that we can perform the final link and the execute the module.
     let linking1 = linker.instantiate(&mut store, &linking1)?;
-    let run = linking1.get_typed_func::<(), (), _>(&mut store, "run")?;
+    let run = linking1.get_typed_func::<(), ()>(&mut store, "run")?;
     run.call(&mut store, ())?;
     Ok(())
 }

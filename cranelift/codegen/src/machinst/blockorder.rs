@@ -106,6 +106,8 @@ pub struct BlockLoweringOrder {
     /// which is used by VCode emission to sink the blocks at the last
     /// moment (when we actually emit bytes into the MachBuffer).
     cold_blocks: FxHashSet<BlockIndex>,
+    /// Lowered blocks that are indirect branch targets.
+    indirect_branch_targets: FxHashSet<BlockIndex>,
 }
 
 /// The origin of a block in the lowered block-order: either an original CLIF
@@ -216,6 +218,13 @@ impl BlockLoweringOrder {
     pub fn new(f: &Function) -> BlockLoweringOrder {
         trace!("BlockLoweringOrder: function body {:?}", f);
 
+        // Make sure that we have an entry block, and the entry block is
+        // not marked as cold. (The verifier ensures this as well, but
+        // the user may not have run the verifier, and this property is
+        // critical to avoid a miscompile, so we assert it here too.)
+        let entry = f.layout.entry_block().expect("Must have entry block");
+        assert!(!f.layout.is_cold(entry));
+
         // Step 1: compute the in-edge and out-edge count of every block.
         let mut block_in_count = SecondaryMap::with_default(0);
         let mut block_out_count = SecondaryMap::with_default(0);
@@ -223,29 +232,33 @@ impl BlockLoweringOrder {
         // Cache the block successors to avoid re-examining branches below.
         let mut block_succs: SmallVec<[(Inst, usize, Block); 128]> = SmallVec::new();
         let mut block_succ_range = SecondaryMap::with_default((0, 0));
+        let mut indirect_branch_target_clif_blocks = FxHashSet::default();
+
         for block in f.layout.blocks() {
             let block_succ_start = block_succs.len();
             let mut succ_idx = 0;
-            visit_block_succs(f, block, |inst, succ| {
+            visit_block_succs(f, block, |inst, succ, from_table| {
                 block_out_count[block] += 1;
                 block_in_count[succ] += 1;
                 block_succs.push((inst, succ_idx, succ));
                 succ_idx += 1;
+
+                if from_table {
+                    indirect_branch_target_clif_blocks.insert(succ);
+                }
             });
             let block_succ_end = block_succs.len();
             block_succ_range[block] = (block_succ_start, block_succ_end);
 
-            for inst in f.layout.block_likely_branches(block) {
-                if f.dfg[inst].opcode() == Opcode::Return {
+            if let Some(inst) = f.layout.last_inst(block) {
+                if f.dfg.insts[inst].opcode() == Opcode::Return {
                     // Implicit output edge for any return.
                     block_out_count[block] += 1;
                 }
             }
         }
         // Implicit input edge for entry block.
-        if let Some(entry) = f.layout.entry_block() {
-            block_in_count[entry] += 1;
-        }
+        block_in_count[entry] += 1;
 
         // All blocks ending in conditional branches or br_tables must
         // have edge-moves inserted at the top of successor blocks,
@@ -263,10 +276,10 @@ impl BlockLoweringOrder {
         // could not be, in cases of br_table with no table and just a
         // default label, for example.)
         for block in f.layout.blocks() {
-            for inst in f.layout.block_likely_branches(block) {
+            if let Some(inst) = f.layout.last_inst(block) {
                 // If the block has a branch with any "fixed args"
                 // (not blockparam args) ...
-                if f.dfg[inst].opcode().is_branch() && f.dfg.inst_fixed_args(inst).len() > 0 {
+                if f.dfg.insts[inst].opcode().is_branch() && f.dfg.inst_fixed_args(inst).len() > 0 {
                     // ... then force a minimum successor count of
                     // two, so the below algorithm cannot put
                     // edge-moves on the end of the block.
@@ -376,19 +389,20 @@ impl BlockLoweringOrder {
         let mut stack: SmallVec<[StackEntry; 16]> = SmallVec::new();
         let mut visited = FxHashSet::default();
         let mut postorder = vec![];
-        if let Some(entry) = f.layout.entry_block() {
-            // FIXME(cfallin): we might be able to use OrigAndEdge. Find a way
-            // to not special-case the entry block here.
-            let block = LoweredBlock::Orig { block: entry };
-            visited.insert(block);
-            let range = compute_lowered_succs(&mut lowered_succs, block);
-            lowered_succ_indices.resize(lowered_succs.len(), 0);
-            stack.push(StackEntry {
-                this: block,
-                succs: range,
-                cur_succ: range.1,
-            });
-        }
+
+        // Add the entry block.
+        //
+        // FIXME(cfallin): we might be able to use OrigAndEdge. Find a
+        // way to not special-case the entry block here.
+        let block = LoweredBlock::Orig { block: entry };
+        visited.insert(block);
+        let range = compute_lowered_succs(&mut lowered_succs, block);
+        lowered_succ_indices.resize(lowered_succs.len(), 0);
+        stack.push(StackEntry {
+            this: block,
+            succs: range,
+            cur_succ: range.1,
+        });
 
         while !stack.is_empty() {
             let stack_entry = stack.last_mut().unwrap();
@@ -426,18 +440,34 @@ impl BlockLoweringOrder {
         let mut cold_blocks = FxHashSet::default();
         let mut lowered_succ_ranges = vec![];
         let mut lb_to_bindex = FxHashMap::default();
+        let mut indirect_branch_targets = FxHashSet::default();
         for (block, succ_range) in rpo.into_iter() {
             let index = BlockIndex::new(lowered_order.len());
             lb_to_bindex.insert(block, index);
             lowered_order.push(block);
             lowered_succ_ranges.push(succ_range);
 
-            if block
-                .orig_block()
-                .map(|b| f.layout.is_cold(b))
-                .unwrap_or(false)
-            {
-                cold_blocks.insert(index);
+            match block {
+                LoweredBlock::Orig { block }
+                | LoweredBlock::OrigAndEdge { block, .. }
+                | LoweredBlock::EdgeAndOrig { block, .. } => {
+                    if f.layout.is_cold(block) {
+                        cold_blocks.insert(index);
+                    }
+
+                    if indirect_branch_target_clif_blocks.contains(&block) {
+                        indirect_branch_targets.insert(index);
+                    }
+                }
+                LoweredBlock::Edge { pred, succ, .. } => {
+                    if f.layout.is_cold(pred) || f.layout.is_cold(succ) {
+                        cold_blocks.insert(index);
+                    }
+
+                    if indirect_branch_target_clif_blocks.contains(&succ) {
+                        indirect_branch_targets.insert(index);
+                    }
+                }
             }
         }
 
@@ -461,6 +491,7 @@ impl BlockLoweringOrder {
             lowered_succ_ranges,
             orig_map,
             cold_blocks,
+            indirect_branch_targets,
         };
         trace!("BlockLoweringOrder: {:?}", result);
         result
@@ -481,6 +512,12 @@ impl BlockLoweringOrder {
     pub fn is_cold(&self, block: BlockIndex) -> bool {
         self.cold_blocks.contains(&block)
     }
+
+    /// Determine whether the given lowered block index is an indirect branch
+    /// target.
+    pub fn is_indirect_branch_target(&self, block: BlockIndex) -> bool {
+        self.indirect_branch_targets.contains(&block)
+    }
 }
 
 #[cfg(test)]
@@ -488,13 +525,14 @@ mod test {
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
     use crate::ir::types::*;
-    use crate::ir::{AbiParam, ExternalName, Function, InstBuilder, Signature};
+    use crate::ir::UserFuncName;
+    use crate::ir::{AbiParam, Function, InstBuilder, Signature};
     use crate::isa::CallConv;
 
     fn build_test_func(n_blocks: usize, edges: &[(usize, usize)]) -> Function {
         assert!(n_blocks > 0);
 
-        let name = ExternalName::testcase("test0");
+        let name = UserFuncName::testcase("test0");
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I32));
         let mut func = Function::with_name_signature(name, sig);
@@ -523,8 +561,8 @@ mod test {
             } else if succs.len() == 1 {
                 pos.ins().jump(blocks[succs[0]], &[]);
             } else if succs.len() == 2 {
-                pos.ins().brnz(arg0, blocks[succs[0]], &[]);
-                pos.ins().jump(blocks[succs[1]], &[]);
+                pos.ins()
+                    .brif(arg0, blocks[succs[0]], &[], blocks[succs[1]], &[]);
             } else {
                 panic!("Too many successors");
             }

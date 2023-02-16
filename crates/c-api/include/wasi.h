@@ -7,6 +7,7 @@
 #ifndef WASI_H
 #define WASI_H
 
+#include <stdint.h>
 #include "wasm.h"
 
 #ifndef WASI_API_EXTERN
@@ -95,6 +96,16 @@ WASI_API_EXTERN void wasi_config_inherit_env(wasi_config_t* config);
 WASI_API_EXTERN bool wasi_config_set_stdin_file(wasi_config_t* config, const char* path);
 
 /**
+ * \brief Configures standard input to be taken from the specified #wasm_byte_vec_t.
+ *
+ * By default WASI programs have no stdin, but this configures the specified
+ * bytes to be used as stdin for this configuration.
+ *
+ * This function takes ownership of the `binary` argument.
+ */
+WASI_API_EXTERN void wasi_config_set_stdin_bytes(wasi_config_t* config, wasm_byte_vec_t* binary);
+
+/**
  * \brief Configures this process's own stdin stream to be used as stdin for
  * this WASI configuration.
  */
@@ -145,6 +156,19 @@ WASI_API_EXTERN void wasi_config_inherit_stderr(wasi_config_t* config);
  * `guest_path` is the name by which it will be known in wasm.
  */
 WASI_API_EXTERN bool wasi_config_preopen_dir(wasi_config_t* config, const char* path, const char* guest_path);
+
+/**
+ * \brief Configures a "preopened" listen socket to be available to WASI APIs.
+ *
+ * By default WASI programs do not have access to open up network sockets on
+ * the host. This API can be used to grant WASI programs access to a network
+ * socket file descriptor on the host.
+ *
+ * The fd_num argument is the number of the file descriptor by which it will be
+ * known in WASM and the host_port is the IP address and port (e.g.
+ * "127.0.0.1:8080") requested to listen on.
+ */
+WASI_API_EXTERN bool wasi_config_preopen_socket(wasi_config_t* config, uint32_t fd_num, const char* host_port);
 
 #undef own
 

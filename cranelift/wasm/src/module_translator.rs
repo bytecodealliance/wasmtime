@@ -6,7 +6,6 @@ use crate::sections_translator::{
     parse_global_section, parse_import_section, parse_memory_section, parse_name_section,
     parse_start_section, parse_table_section, parse_tag_section, parse_type_section,
 };
-use crate::state::ModuleTranslationState;
 use crate::WasmResult;
 use cranelift_codegen::timing;
 use std::prelude::v1::*;
@@ -17,9 +16,8 @@ use wasmparser::{NameSectionReader, Parser, Payload, Validator};
 pub fn translate_module<'data>(
     data: &'data [u8],
     environ: &mut dyn ModuleEnvironment<'data>,
-) -> WasmResult<ModuleTranslationState> {
+) -> WasmResult<()> {
     let _tt = timing::wasm_translate_module();
-    let mut module_translation_state = ModuleTranslationState::new();
     let mut validator = Validator::new_with_features(environ.wasm_features());
 
     for payload in Parser::new(0).parse_all(data) {
@@ -37,7 +35,7 @@ pub fn translate_module<'data>(
 
             Payload::TypeSection(types) => {
                 validator.type_section(&types)?;
-                parse_type_section(types, &mut module_translation_state, environ)?;
+                parse_type_section(types, environ)?;
             }
 
             Payload::ImportSection(imports) => {
@@ -91,7 +89,9 @@ pub fn translate_module<'data>(
             }
 
             Payload::CodeSectionEntry(body) => {
-                let func_validator = validator.code_section_entry(&body)?;
+                let func_validator = validator
+                    .code_section_entry(&body)?
+                    .into_validator(Default::default());
                 environ.define_function_body(func_validator, body)?;
             }
 
@@ -108,9 +108,8 @@ pub fn translate_module<'data>(
             }
 
             Payload::CustomSection(s) if s.name() == "name" => {
-                let result = NameSectionReader::new(s.data(), s.data_offset())
-                    .map_err(|e| e.into())
-                    .and_then(|s| parse_name_section(s, environ));
+                let result =
+                    parse_name_section(NameSectionReader::new(s.data(), s.data_offset()), environ);
                 if let Err(e) = result {
                     log::warn!("failed to parse name section {:?}", e);
                 }
@@ -125,5 +124,5 @@ pub fn translate_module<'data>(
         }
     }
 
-    Ok(module_translation_state)
+    Ok(())
 }

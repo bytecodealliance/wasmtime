@@ -8,7 +8,6 @@
 )]
 
 use crate::disasm::print_all;
-use crate::utils::parse_sets_and_triple;
 use anyhow::{Context as _, Result};
 use clap::Parser;
 use cranelift_codegen::ir::DisplayFunctionAnnotations;
@@ -17,6 +16,7 @@ use cranelift_codegen::settings::FlagsOrIsa;
 use cranelift_codegen::timing;
 use cranelift_codegen::Context;
 use cranelift_entity::EntityRef;
+use cranelift_reader::parse_sets_and_triple;
 use cranelift_wasm::{translate_module, DummyEnvironment, FuncIndex};
 use std::io::Read;
 use std::path::Path;
@@ -313,6 +313,7 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
         if let Some(total_size) = saved_size {
             print_all(
                 isa,
+                &context.func.params,
                 &mem,
                 total_size,
                 options.print,

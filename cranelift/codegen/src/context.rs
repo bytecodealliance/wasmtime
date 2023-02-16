@@ -12,19 +12,21 @@
 use crate::alias_analysis::AliasAnalysis;
 use crate::dce::do_dce;
 use crate::dominator_tree::DominatorTree;
+use crate::egraph::EgraphPass;
 use crate::flowgraph::ControlFlowGraph;
 use crate::ir::Function;
 use crate::isa::TargetIsa;
 use crate::legalizer::simple_legalize;
 use crate::licm::do_licm;
 use crate::loop_analysis::LoopAnalysis;
-use crate::machinst::CompiledCode;
+use crate::machinst::{CompiledCode, CompiledCodeStencil};
 use crate::nan_canonicalization::do_nan_canonicalization;
 use crate::remove_constant_phis::do_remove_constant_phis;
 use crate::result::{CodegenResult, CompileResult};
 use crate::settings::{FlagsOrIsa, OptLevel};
 use crate::simple_gvn::do_simple_gvn;
 use crate::simple_preopt::do_preopt;
+use crate::trace;
 use crate::unreachable_code::eliminate_unreachable_code;
 use crate::verifier::{verify_context, VerifierErrors, VerifierResult};
 use crate::{timing, CompileError};
@@ -50,7 +52,7 @@ pub struct Context {
     pub loop_analysis: LoopAnalysis,
 
     /// Result of MachBackend compilation, if computed.
-    compiled_code: Option<CompiledCode>,
+    pub(crate) compiled_code: Option<CompiledCode>,
 
     /// Flag: do we want a disassembly with the CompiledCode?
     pub want_disasm: bool,
@@ -104,26 +106,103 @@ impl Context {
 
     /// Compile the function, and emit machine code into a `Vec<u8>`.
     ///
-    /// Run the function through all the passes necessary to generate code for the target ISA
-    /// represented by `isa`, as well as the final step of emitting machine code into a
-    /// `Vec<u8>`. The machine code is not relocated. Instead, any relocations can be obtained
-    /// from `compiled_code()`.
+    /// Run the function through all the passes necessary to generate
+    /// code for the target ISA represented by `isa`, as well as the
+    /// final step of emitting machine code into a `Vec<u8>`. The
+    /// machine code is not relocated. Instead, any relocations can be
+    /// obtained from `compiled_code()`.
     ///
-    /// This function calls `compile` and `emit_to_memory`, taking care to resize `mem` as
-    /// needed, so it provides a safe interface.
+    /// Performs any optimizations that are enabled, unless
+    /// `optimize()` was already invoked.
     ///
-    /// Returns information about the function's code and read-only data.
+    /// This function calls `compile`, taking care to resize `mem` as
+    /// needed.
+    ///
+    /// Returns information about the function's code and read-only
+    /// data.
     pub fn compile_and_emit(
         &mut self,
         isa: &dyn TargetIsa,
         mem: &mut Vec<u8>,
     ) -> CompileResult<&CompiledCode> {
         let compiled_code = self.compile(isa)?;
-        let code_info = compiled_code.code_info();
-        let old_len = mem.len();
-        mem.resize(old_len + code_info.total_size as usize, 0);
-        mem[old_len..].copy_from_slice(compiled_code.code_buffer());
+        mem.extend_from_slice(compiled_code.code_buffer());
         Ok(compiled_code)
+    }
+
+    /// Internally compiles the function into a stencil.
+    ///
+    /// Public only for testing and fuzzing purposes.
+    pub fn compile_stencil(&mut self, isa: &dyn TargetIsa) -> CodegenResult<CompiledCodeStencil> {
+        let _tt = timing::compile();
+
+        self.verify_if(isa)?;
+
+        self.optimize(isa)?;
+
+        isa.compile_function(&self.func, self.want_disasm)
+    }
+
+    /// Optimize the function, performing all compilation steps up to
+    /// but not including machine-code lowering and register
+    /// allocation.
+    ///
+    /// Public only for testing purposes.
+    pub fn optimize(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
+        log::debug!(
+            "Number of CLIF instructions to optimize: {}",
+            self.func.dfg.num_insts()
+        );
+        log::debug!(
+            "Number of CLIF blocks to optimize: {}",
+            self.func.dfg.num_blocks()
+        );
+
+        let opt_level = isa.flags().opt_level();
+        crate::trace!(
+            "Optimizing (opt level {:?}):\n{}",
+            opt_level,
+            self.func.display()
+        );
+
+        self.compute_cfg();
+        if !isa.flags().use_egraphs() && opt_level != OptLevel::None {
+            self.preopt(isa)?;
+        }
+        if isa.flags().enable_nan_canonicalization() {
+            self.canonicalize_nans(isa)?;
+        }
+
+        self.legalize(isa)?;
+
+        if !isa.flags().use_egraphs() && opt_level != OptLevel::None {
+            self.compute_domtree();
+            self.compute_loop_analysis();
+            self.licm(isa)?;
+            self.simple_gvn(isa)?;
+        }
+
+        self.compute_domtree();
+        self.eliminate_unreachable_code(isa)?;
+
+        if opt_level != OptLevel::None {
+            self.dce(isa)?;
+        }
+
+        self.remove_constant_phis(isa)?;
+
+        if opt_level != OptLevel::None {
+            if isa.flags().use_egraphs() {
+                self.egraph_pass()?;
+            } else if isa.flags().enable_alias_analysis() {
+                for _ in 0..2 {
+                    self.replace_redundant_loads()?;
+                    self.simple_gvn(isa)?;
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Compile the function.
@@ -135,88 +214,33 @@ impl Context {
     /// Returns information about the function's code and read-only data.
     pub fn compile(&mut self, isa: &dyn TargetIsa) -> CompileResult<&CompiledCode> {
         let _tt = timing::compile();
-
-        let mut inner = || {
-            self.verify_if(isa)?;
-
-            let opt_level = isa.flags().opt_level();
-            log::trace!(
-                "Compiling (opt level {:?}):\n{}",
-                opt_level,
-                self.func.display()
-            );
-
-            self.compute_cfg();
-            if opt_level != OptLevel::None {
-                self.preopt(isa)?;
-            }
-            if isa.flags().enable_nan_canonicalization() {
-                self.canonicalize_nans(isa)?;
-            }
-
-            self.legalize(isa)?;
-            if opt_level != OptLevel::None {
-                self.compute_domtree();
-                self.compute_loop_analysis();
-                self.licm(isa)?;
-                self.simple_gvn(isa)?;
-            }
-
-            self.compute_domtree();
-            self.eliminate_unreachable_code(isa)?;
-            if opt_level != OptLevel::None {
-                self.dce(isa)?;
-            }
-
-            self.remove_constant_phis(isa)?;
-
-            if opt_level != OptLevel::None && isa.flags().enable_alias_analysis() {
-                self.replace_redundant_loads()?;
-                self.simple_gvn(isa)?;
-            }
-
-            let result = isa.compile_function(&self.func, self.want_disasm)?;
-            self.compiled_code = Some(result);
-            Ok(())
-        };
-
-        inner()
-            .map(|_| self.compiled_code.as_ref().unwrap())
-            .map_err(|error| CompileError {
-                inner: error,
-                func: &self.func,
-            })
+        let stencil = self.compile_stencil(isa).map_err(|error| CompileError {
+            inner: error,
+            func: &self.func,
+        })?;
+        Ok(self
+            .compiled_code
+            .insert(stencil.apply_params(&self.func.params)))
     }
 
     /// If available, return information about the code layout in the
     /// final machine code: the offsets (in bytes) of each basic-block
     /// start, and all basic-block edges.
+    #[deprecated = "use CompiledCode::get_code_bb_layout"]
     pub fn get_code_bb_layout(&self) -> Option<(Vec<usize>, Vec<(usize, usize)>)> {
-        if let Some(result) = self.compiled_code.as_ref() {
-            Some((
-                result.bb_starts.iter().map(|&off| off as usize).collect(),
-                result
-                    .bb_edges
-                    .iter()
-                    .map(|&(from, to)| (from as usize, to as usize))
-                    .collect(),
-            ))
-        } else {
-            None
-        }
+        self.compiled_code().map(CompiledCode::get_code_bb_layout)
     }
 
     /// Creates unwind information for the function.
     ///
     /// Returns `None` if the function has no unwind information.
     #[cfg(feature = "unwind")]
+    #[deprecated = "use CompiledCode::create_unwind_info"]
     pub fn create_unwind_info(
         &self,
         isa: &dyn TargetIsa,
     ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
-        let unwind_info_kind = isa.unwind_info_kind();
-        let result = self.compiled_code.as_ref().unwrap();
-        isa.emit_unwind_info(result, unwind_info_kind)
+        self.compiled_code().unwrap().create_unwind_info(isa)
     }
 
     /// Run the verifier on the function.
@@ -261,7 +285,7 @@ impl Context {
 
     /// Perform pre-legalization rewrites on the function.
     pub fn preopt(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
-        do_preopt(&mut self.func, &mut self.cfg, isa);
+        do_preopt(&mut self.func, isa);
         self.verify_if(isa)?;
         Ok(())
     }
@@ -338,8 +362,8 @@ impl Context {
     /// by a store instruction to the same instruction (so-called
     /// "store-to-load forwarding").
     pub fn replace_redundant_loads(&mut self) -> CodegenResult<()> {
-        let mut analysis = AliasAnalysis::new(&mut self.func, &self.domtree);
-        analysis.compute_and_update_aliases();
+        let mut analysis = AliasAnalysis::new(&self.func, &self.domtree);
+        analysis.compute_and_update_aliases(&mut self.func);
         Ok(())
     }
 
@@ -350,6 +374,26 @@ impl Context {
         out: &mut std::sync::mpsc::Sender<String>,
     ) -> CodegenResult<()> {
         do_souper_harvest(&self.func, out);
+        Ok(())
+    }
+
+    /// Run optimizations via the egraph infrastructure.
+    pub fn egraph_pass(&mut self) -> CodegenResult<()> {
+        trace!(
+            "About to optimize with egraph phase:\n{}",
+            self.func.display()
+        );
+        self.compute_loop_analysis();
+        let mut alias_analysis = AliasAnalysis::new(&self.func, &self.domtree);
+        let mut pass = EgraphPass::new(
+            &mut self.func,
+            &self.domtree,
+            &self.loop_analysis,
+            &mut alias_analysis,
+        );
+        pass.run();
+        log::info!("egraph stats: {:?}", pass.stats);
+        trace!("After egraph optimization:\n{}", self.func.display());
         Ok(())
     }
 }

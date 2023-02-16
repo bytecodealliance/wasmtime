@@ -57,8 +57,7 @@ unsafe fn test_file_seek_tell(dir_fd: wasi::Fd) {
     // Seek before byte 0 is an error though
     assert_errno!(
         wasi::fd_seek(file_fd, -2000, wasi::WHENCE_CUR)
-            .expect_err("seeking before byte 0 should be an error")
-            .raw_error(),
+            .expect_err("seeking before byte 0 should be an error"),
         wasi::ERRNO_INVAL
     );
 

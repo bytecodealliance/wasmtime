@@ -138,8 +138,8 @@ fn cross_store() -> anyhow::Result<()> {
         .call(&mut store2, &[Some(s2_f.clone()).into()], &mut [])
         .is_ok());
 
-    let s1_f_t = s1_f.typed::<Option<Func>, (), _>(&store1)?;
-    let s2_f_t = s2_f.typed::<Option<Func>, (), _>(&store2)?;
+    let s1_f_t = s1_f.typed::<Option<Func>, ()>(&store1)?;
+    let s2_f_t = s2_f.typed::<Option<Func>, ()>(&store2)?;
 
     assert!(s1_f_t.call(&mut store1, None).is_ok());
     assert!(s2_f_t.call(&mut store2, None).is_ok());

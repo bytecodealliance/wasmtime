@@ -1,0 +1,57 @@
+test compile precise-output
+target x86_64 has_avx=false has_fma=false
+
+function %fma_f32(f32, f32, f32) -> f32 {
+block0(v0: f32, v1: f32, v2: f32):
+    v3 = fma v0, v1, v2
+    return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   load_ext_name %FmaF32+0, %r8
+;   call    *%r8
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movabsq $0, %r8 ; reloc_external Abs8 %FmaF32 0
+;   callq *%r8
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %fma_f64(f64, f64, f64) -> f64 {
+block0(v0: f64, v1: f64, v2: f64):
+    v3 = fma v0, v1, v2
+    return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   load_ext_name %FmaF64+0, %r8
+;   call    *%r8
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movabsq $0, %r8 ; reloc_external Abs8 %FmaF64 0
+;   callq *%r8
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

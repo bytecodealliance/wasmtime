@@ -42,6 +42,9 @@ cfg_if! {
     } else if #[cfg(target_arch = "s390x")] {
         mod s390x;
         use s390x as arch;
+    } else if #[cfg(target_arch = "riscv64")] {
+        mod riscv64;
+        use riscv64 as arch;
     } else {
         compile_error!("unsupported architecture");
     }
@@ -71,6 +74,11 @@ impl Frame {
 }
 
 impl Backtrace {
+    /// Returns an empty backtrace
+    pub fn empty() -> Backtrace {
+        Backtrace(Vec::new())
+    }
+
     /// Capture the current Wasm stack in a backtrace.
     pub fn new() -> Backtrace {
         tls::with(|state| match state {
@@ -149,18 +157,18 @@ impl Backtrace {
             // trace through (since each `CallTheadState` saves the *previous*
             // call into Wasm's saved registers, and the youngest call into
             // Wasm's registers are saved in the `VMRuntimeLimits`)
-            if state.prev.get().is_null() {
-                debug_assert_eq!(state.old_last_wasm_exit_pc, 0);
-                debug_assert_eq!(state.old_last_wasm_exit_fp, 0);
-                debug_assert_eq!(state.old_last_wasm_entry_sp, 0);
+            if state.prev().is_null() {
+                debug_assert_eq!(state.old_last_wasm_exit_pc(), 0);
+                debug_assert_eq!(state.old_last_wasm_exit_fp(), 0);
+                debug_assert_eq!(state.old_last_wasm_entry_sp(), 0);
                 log::trace!("====== Done Capturing Backtrace ======");
                 return;
             }
 
             if let ControlFlow::Break(()) = Self::trace_through_wasm(
-                state.old_last_wasm_exit_pc,
-                state.old_last_wasm_exit_fp,
-                state.old_last_wasm_entry_sp,
+                state.old_last_wasm_exit_pc(),
+                state.old_last_wasm_exit_fp(),
+                state.old_last_wasm_entry_sp(),
                 &mut f,
             ) {
                 log::trace!("====== Done Capturing Backtrace ======");
@@ -266,7 +274,7 @@ impl Backtrace {
     }
 
     /// Iterate over the frames inside this backtrace.
-    pub fn frames<'a>(&'a self) -> impl Iterator<Item = &'a Frame> + 'a {
+    pub fn frames<'a>(&'a self) -> impl ExactSizeIterator<Item = &'a Frame> + 'a {
         self.0.iter()
     }
 }

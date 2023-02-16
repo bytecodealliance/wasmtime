@@ -1,0 +1,3 @@
+default world the-world {
+  export y: func()
+}

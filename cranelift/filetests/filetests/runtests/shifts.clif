@@ -1,8 +1,9 @@
+test interpret
 test run
 target aarch64
 target x86_64
 target s390x
-
+target riscv64
 
 function %ishl_i64_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -110,6 +111,137 @@ block0(v0: i32, v1: i8):
 ; run: %ishl_i32_i8(0x00000004, 34) == 0x00000010
 
 
+function %ishl_i16_i64(i16, i64) -> i16 {
+block0(v0: i16, v1: i64):
+    v2 = ishl.i16 v0, v1
+    return v2
+}
+; run: %ishl_i16_i64(0x0000, 0) == 0x0000
+; run: %ishl_i16_i64(0x0000, 1) == 0x0000
+; run: %ishl_i16_i64(0x000f, 0) == 0x000f
+; run: %ishl_i16_i64(0x000f, 4) == 0x00f0
+; run: %ishl_i16_i64(0x0004, 16) == 0x0004
+; run: %ishl_i16_i64(0x0004, 17) == 0x0008
+; run: %ishl_i16_i64(0x0004, 18) == 0x0010
+; run: %ishl_i16_i64(0x0004, 32) == 0x0004
+; run: %ishl_i16_i64(0x0004, 33) == 0x0008
+; run: %ishl_i16_i64(0x0004, 34) == 0x0010
+
+function %ishl_i16_i32(i16, i32) -> i16 {
+block0(v0: i16, v1: i32):
+    v2 = ishl.i16 v0, v1
+    return v2
+}
+; run: %ishl_i16_i32(0x0000, 0) == 0x0000
+; run: %ishl_i16_i32(0x0000, 1) == 0x0000
+; run: %ishl_i16_i32(0x000f, 0) == 0x000f
+; run: %ishl_i16_i32(0x000f, 4) == 0x00f0
+; run: %ishl_i16_i32(0x0004, 16) == 0x0004
+; run: %ishl_i16_i32(0x0004, 17) == 0x0008
+; run: %ishl_i16_i32(0x0004, 18) == 0x0010
+; run: %ishl_i16_i32(0x0004, 32) == 0x0004
+; run: %ishl_i16_i32(0x0004, 33) == 0x0008
+; run: %ishl_i16_i32(0x0004, 34) == 0x0010
+
+function %ishl_i16_i16(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+    v2 = ishl.i16 v0, v1
+    return v2
+}
+; run: %ishl_i16_i16(0x0000, 0) == 0x0000
+; run: %ishl_i16_i16(0x0000, 1) == 0x0000
+; run: %ishl_i16_i16(0x000f, 0) == 0x000f
+; run: %ishl_i16_i16(0x000f, 4) == 0x00f0
+; run: %ishl_i16_i16(0x0004, 16) == 0x0004
+; run: %ishl_i16_i16(0x0004, 17) == 0x0008
+; run: %ishl_i16_i16(0x0004, 18) == 0x0010
+; run: %ishl_i16_i16(0x0004, 32) == 0x0004
+; run: %ishl_i16_i16(0x0004, 33) == 0x0008
+; run: %ishl_i16_i16(0x0004, 34) == 0x0010
+
+function %ishl_i16_i8(i16, i8) -> i16 {
+block0(v0: i16, v1: i8):
+    v2 = ishl.i16 v0, v1
+    return v2
+}
+; run: %ishl_i16_i8(0x0000, 0) == 0x0000
+; run: %ishl_i16_i8(0x0000, 1) == 0x0000
+; run: %ishl_i16_i8(0x000f, 0) == 0x000f
+; run: %ishl_i16_i8(0x000f, 4) == 0x00f0
+; run: %ishl_i16_i8(0x0004, 16) == 0x0004
+; run: %ishl_i16_i8(0x0004, 17) == 0x0008
+; run: %ishl_i16_i8(0x0004, 18) == 0x0010
+; run: %ishl_i16_i8(0x0004, 32) == 0x0004
+; run: %ishl_i16_i8(0x0004, 33) == 0x0008
+; run: %ishl_i16_i8(0x0004, 34) == 0x0010
+
+
+function %ishl_i8_i64(i8, i64) -> i8 {
+block0(v0: i8, v1: i64):
+    v2 = ishl.i8 v0, v1
+    return v2
+}
+; run: %ishl_i8_i64(0x00, 0) == 0x00
+; run: %ishl_i8_i64(0x00, 1) == 0x00
+; run: %ishl_i8_i64(0x0f, 0) == 0x0f
+; run: %ishl_i8_i64(0x0f, 4) == 0xf0
+; run: %ishl_i8_i64(0x04, 8) == 0x04
+; run: %ishl_i8_i64(0x04, 9) == 0x08
+; run: %ishl_i8_i64(0x04, 10) == 0x10
+; run: %ishl_i8_i64(0x04, 32) == 0x04
+; run: %ishl_i8_i64(0x04, 33) == 0x08
+; run: %ishl_i8_i64(0x04, 34) == 0x10
+
+function %ishl_i8_i32(i8, i32) -> i8 {
+block0(v0: i8, v1: i32):
+    v2 = ishl.i8 v0, v1
+    return v2
+}
+; run: %ishl_i8_i32(0x00, 0) == 0x00
+; run: %ishl_i8_i32(0x00, 1) == 0x00
+; run: %ishl_i8_i32(0x0f, 0) == 0x0f
+; run: %ishl_i8_i32(0x0f, 4) == 0xf0
+; run: %ishl_i8_i32(0x04, 8) == 0x04
+; run: %ishl_i8_i32(0x04, 9) == 0x08
+; run: %ishl_i8_i32(0x04, 10) == 0x10
+; run: %ishl_i8_i32(0x04, 32) == 0x04
+; run: %ishl_i8_i32(0x04, 33) == 0x08
+; run: %ishl_i8_i32(0x04, 34) == 0x10
+
+function %ishl_i8_i16(i8, i16) -> i8 {
+block0(v0: i8, v1: i16):
+    v2 = ishl.i8 v0, v1
+    return v2
+}
+; run: %ishl_i8_i16(0x00, 0) == 0x00
+; run: %ishl_i8_i16(0x00, 1) == 0x00
+; run: %ishl_i8_i16(0x0f, 0) == 0x0f
+; run: %ishl_i8_i16(0x0f, 4) == 0xf0
+; run: %ishl_i8_i16(0x04, 8) == 0x04
+; run: %ishl_i8_i16(0x04, 9) == 0x08
+; run: %ishl_i8_i16(0x04, 10) == 0x10
+; run: %ishl_i8_i16(0x04, 32) == 0x04
+; run: %ishl_i8_i16(0x04, 33) == 0x08
+; run: %ishl_i8_i16(0x04, 34) == 0x10
+
+function %ishl_i8_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = ishl.i8 v0, v1
+    return v2
+}
+; run: %ishl_i8_i8(0x00, 0) == 0x00
+; run: %ishl_i8_i8(0x00, 1) == 0x00
+; run: %ishl_i8_i8(0x0f, 0) == 0x0f
+; run: %ishl_i8_i8(0x0f, 4) == 0xf0
+; run: %ishl_i8_i8(0x04, 8) == 0x04
+; run: %ishl_i8_i8(0x04, 9) == 0x08
+; run: %ishl_i8_i8(0x04, 10) == 0x10
+; run: %ishl_i8_i8(0x04, 32) == 0x04
+; run: %ishl_i8_i8(0x04, 33) == 0x08
+; run: %ishl_i8_i8(0x04, 34) == 0x10
+
+
+
 function %ushr_i64_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
     v2 = ushr.i64 v0, v1
@@ -213,6 +345,137 @@ block0(v0: i32, v1: i8):
 ; run: %ushr_i32_i8(0x40000000, 32) == 0x40000000
 ; run: %ushr_i32_i8(0x40000000, 33) == 0x20000000
 ; run: %ushr_i32_i8(0x40000000, 34) == 0x10000000
+
+
+function %ushr_i16_i64(i16, i64) -> i16 {
+block0(v0: i16, v1: i64):
+    v2 = ushr.i16 v0, v1
+    return v2
+}
+; run: %ushr_i16_i64(0x1000, 0) == 0x1000
+; run: %ushr_i16_i64(0x1000, 1) == 0x0800
+; run: %ushr_i16_i64(0xf000, 0) == 0xf000
+; run: %ushr_i16_i64(0xf000, 4) == 0x0f00
+; run: %ushr_i16_i64(0x4000, 16) == 0x4000
+; run: %ushr_i16_i64(0x4000, 17) == 0x2000
+; run: %ushr_i16_i64(0x4000, 18) == 0x1000
+; run: %ushr_i16_i64(0x4000, 32) == 0x4000
+; run: %ushr_i16_i64(0x4000, 33) == 0x2000
+; run: %ushr_i16_i64(0x4000, 34) == 0x1000
+
+function %ushr_i16_i32(i16, i32) -> i16 {
+block0(v0: i16, v1: i32):
+    v2 = ushr.i16 v0, v1
+    return v2
+}
+; run: %ushr_i16_i32(0x1000, 0) == 0x1000
+; run: %ushr_i16_i32(0x1000, 1) == 0x0800
+; run: %ushr_i16_i32(0xf000, 0) == 0xf000
+; run: %ushr_i16_i32(0xf000, 4) == 0x0f00
+; run: %ushr_i16_i32(0x4000, 16) == 0x4000
+; run: %ushr_i16_i32(0x4000, 17) == 0x2000
+; run: %ushr_i16_i32(0x4000, 18) == 0x1000
+; run: %ushr_i16_i32(0x4000, 32) == 0x4000
+; run: %ushr_i16_i32(0x4000, 33) == 0x2000
+; run: %ushr_i16_i32(0x4000, 34) == 0x1000
+
+function %ushr_i16_i16(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+    v2 = ushr.i16 v0, v1
+    return v2
+}
+; run: %ushr_i16_i16(0x1000, 0) == 0x1000
+; run: %ushr_i16_i16(0x1000, 1) == 0x0800
+; run: %ushr_i16_i16(0xf000, 0) == 0xf000
+; run: %ushr_i16_i16(0xf000, 4) == 0x0f00
+; run: %ushr_i16_i16(0x4000, 16) == 0x4000
+; run: %ushr_i16_i16(0x4000, 17) == 0x2000
+; run: %ushr_i16_i16(0x4000, 18) == 0x1000
+; run: %ushr_i16_i16(0x4000, 32) == 0x4000
+; run: %ushr_i16_i16(0x4000, 33) == 0x2000
+; run: %ushr_i16_i16(0x4000, 34) == 0x1000
+
+function %ushr_i16_i8(i16, i8) -> i16 {
+block0(v0: i16, v1: i8):
+    v2 = ushr.i16 v0, v1
+    return v2
+}
+; run: %ushr_i16_i8(0x1000, 0) == 0x1000
+; run: %ushr_i16_i8(0x1000, 1) == 0x0800
+; run: %ushr_i16_i8(0xf000, 0) == 0xf000
+; run: %ushr_i16_i8(0xf000, 4) == 0x0f00
+; run: %ushr_i16_i8(0x4000, 16) == 0x4000
+; run: %ushr_i16_i8(0x4000, 17) == 0x2000
+; run: %ushr_i16_i8(0x4000, 18) == 0x1000
+; run: %ushr_i16_i8(0x4000, 32) == 0x4000
+; run: %ushr_i16_i8(0x4000, 33) == 0x2000
+; run: %ushr_i16_i8(0x4000, 34) == 0x1000
+
+
+function %ushr_i8_i64(i8, i64) -> i8 {
+block0(v0: i8, v1: i64):
+    v2 = ushr.i8 v0, v1
+    return v2
+}
+; run: %ushr_i8_i64(0x10, 0) == 0x10
+; run: %ushr_i8_i64(0x10, 1) == 0x08
+; run: %ushr_i8_i64(0xf0, 0) == 0xf0
+; run: %ushr_i8_i64(0xf0, 4) == 0x0f
+; run: %ushr_i8_i64(0x40, 8) == 0x40
+; run: %ushr_i8_i64(0x40, 9) == 0x20
+; run: %ushr_i8_i64(0x40, 10) == 0x10
+; run: %ushr_i8_i64(0x40, 32) == 0x40
+; run: %ushr_i8_i64(0x40, 33) == 0x20
+; run: %ushr_i8_i64(0x40, 34) == 0x10
+
+function %ushr_i8_i32(i8, i32) -> i8 {
+block0(v0: i8, v1: i32):
+    v2 = ushr.i8 v0, v1
+    return v2
+}
+; run: %ushr_i8_i32(0x10, 0) == 0x10
+; run: %ushr_i8_i32(0x10, 1) == 0x08
+; run: %ushr_i8_i32(0xf0, 0) == 0xf0
+; run: %ushr_i8_i32(0xf0, 4) == 0x0f
+; run: %ushr_i8_i32(0x40, 8) == 0x40
+; run: %ushr_i8_i32(0x40, 9) == 0x20
+; run: %ushr_i8_i32(0x40, 10) == 0x10
+; run: %ushr_i8_i32(0x40, 32) == 0x40
+; run: %ushr_i8_i32(0x40, 33) == 0x20
+; run: %ushr_i8_i32(0x40, 34) == 0x10
+
+function %ushr_i8_i16(i8, i16) -> i8 {
+block0(v0: i8, v1: i16):
+    v2 = ushr.i8 v0, v1
+    return v2
+}
+; run: %ushr_i8_i16(0x10, 0) == 0x10
+; run: %ushr_i8_i16(0x10, 1) == 0x08
+; run: %ushr_i8_i16(0xf0, 0) == 0xf0
+; run: %ushr_i8_i16(0xf0, 4) == 0x0f
+; run: %ushr_i8_i16(0x40, 8) == 0x40
+; run: %ushr_i8_i16(0x40, 9) == 0x20
+; run: %ushr_i8_i16(0x40, 10) == 0x10
+; run: %ushr_i8_i16(0x40, 32) == 0x40
+; run: %ushr_i8_i16(0x40, 33) == 0x20
+; run: %ushr_i8_i16(0x40, 34) == 0x10
+
+function %ushr_i8_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = ushr.i8 v0, v1
+    return v2
+}
+; run: %ushr_i8_i8(0x10, 0) == 0x10
+; run: %ushr_i8_i8(0x10, 1) == 0x08
+; run: %ushr_i8_i8(0xf0, 0) == 0xf0
+; run: %ushr_i8_i8(0xf0, 4) == 0x0f
+; run: %ushr_i8_i8(0x40, 8) == 0x40
+; run: %ushr_i8_i8(0x40, 9) == 0x20
+; run: %ushr_i8_i8(0x40, 10) == 0x10
+; run: %ushr_i8_i8(0x40, 32) == 0x40
+; run: %ushr_i8_i8(0x40, 33) == 0x20
+; run: %ushr_i8_i8(0x40, 34) == 0x10
+
 
 
 function %sshr_i64_i64(i64, i64) -> i64 {
@@ -319,24 +582,222 @@ block0(v0: i32, v1: i8):
 ; run: %sshr_i32_i8(0x40000000, 33) == 0x20000000
 ; run: %sshr_i32_i8(0x40000000, 34) == 0x10000000
 
-function %rotl_i8_const_37(i8) -> i8 {
-block0(v0: i8):
-  v1 = iconst.i8 37
-  v2 = rotl.i8 v0, v1
-  return v2
+
+function %sshr_i16_i64(i16, i64) -> i16 {
+block0(v0: i16, v1: i64):
+    v2 = sshr.i16 v0, v1
+    return v2
 }
+; run: %sshr_i16_i64(0x8000, 0) == 0x8000
+; run: %sshr_i16_i64(0x8000, 1) == 0xC000
+; run: %sshr_i16_i64(0xf000, 0) == 0xf000
+; run: %sshr_i16_i64(0xf000, 4) == 0xff00
+; run: %sshr_i16_i64(0x4000, 16) == 0x4000
+; run: %sshr_i16_i64(0x4000, 17) == 0x2000
+; run: %sshr_i16_i64(0x4000, 18) == 0x1000
+; run: %sshr_i16_i64(0x4000, 32) == 0x4000
+; run: %sshr_i16_i64(0x4000, 33) == 0x2000
+; run: %sshr_i16_i64(0x4000, 34) == 0x1000
 
-; run: %rotl_i8_const_37(0x00) == 0x00
-; run: %rotl_i8_const_37(0x01) == 0x20
-; run: %rotl_i8_const_37(0x12) == 0x42
-
-function %rotr_i8_const_37(i8) -> i8 {
-block0(v0: i8):
-  v1 = iconst.i8 37
-  v2 = rotr.i8 v0, v1
-  return v2
+function %sshr_i16_i32(i16, i32) -> i16 {
+block0(v0: i16, v1: i32):
+    v2 = sshr.i16 v0, v1
+    return v2
 }
+; run: %sshr_i16_i32(0x8000, 0) == 0x8000
+; run: %sshr_i16_i32(0x8000, 1) == 0xC000
+; run: %sshr_i16_i32(0xf000, 0) == 0xf000
+; run: %sshr_i16_i32(0xf000, 4) == 0xff00
+; run: %sshr_i16_i32(0x4000, 16) == 0x4000
+; run: %sshr_i16_i32(0x4000, 17) == 0x2000
+; run: %sshr_i16_i32(0x4000, 18) == 0x1000
+; run: %sshr_i16_i32(0x4000, 32) == 0x4000
+; run: %sshr_i16_i32(0x4000, 33) == 0x2000
+; run: %sshr_i16_i32(0x4000, 34) == 0x1000
 
-; run: %rotr_i8_const_37(0x00) == 0x00
-; run: %rotr_i8_const_37(0x01) == 0x08
-; run: %rotr_i8_const_37(0x12) == 0x90
+function %sshr_i16_i16(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+    v2 = sshr.i16 v0, v1
+    return v2
+}
+; run: %sshr_i16_i16(0x8000, 0) == 0x8000
+; run: %sshr_i16_i16(0x8000, 1) == 0xC000
+; run: %sshr_i16_i16(0xf000, 0) == 0xf000
+; run: %sshr_i16_i16(0xf000, 4) == 0xff00
+; run: %sshr_i16_i16(0x4000, 16) == 0x4000
+; run: %sshr_i16_i16(0x4000, 17) == 0x2000
+; run: %sshr_i16_i16(0x4000, 18) == 0x1000
+; run: %sshr_i16_i16(0x4000, 32) == 0x4000
+; run: %sshr_i16_i16(0x4000, 33) == 0x2000
+; run: %sshr_i16_i16(0x4000, 34) == 0x1000
+
+function %sshr_i16_i8(i16, i8) -> i16 {
+block0(v0: i16, v1: i8):
+    v2 = sshr.i16 v0, v1
+    return v2
+}
+; run: %sshr_i16_i8(0x8000, 0) == 0x8000
+; run: %sshr_i16_i8(0x8000, 1) == 0xC000
+; run: %sshr_i16_i8(0xf000, 0) == 0xf000
+; run: %sshr_i16_i8(0xf000, 4) == 0xff00
+; run: %sshr_i16_i8(0x4000, 16) == 0x4000
+; run: %sshr_i16_i8(0x4000, 17) == 0x2000
+; run: %sshr_i16_i8(0x4000, 18) == 0x1000
+; run: %sshr_i16_i8(0x4000, 32) == 0x4000
+; run: %sshr_i16_i8(0x4000, 33) == 0x2000
+; run: %sshr_i16_i8(0x4000, 34) == 0x1000
+
+
+function %sshr_i8_i64(i8, i64) -> i8 {
+block0(v0: i8, v1: i64):
+    v2 = sshr.i8 v0, v1
+    return v2
+}
+; run: %sshr_i8_i64(0x80, 0) == 0x80
+; run: %sshr_i8_i64(0x80, 1) == 0xC0
+; run: %sshr_i8_i64(0xf0, 0) == 0xf0
+; run: %sshr_i8_i64(0xf0, 4) == 0xff
+; run: %sshr_i8_i64(0x40, 8) == 0x40
+; run: %sshr_i8_i64(0x40, 9) == 0x20
+; run: %sshr_i8_i64(0x40, 10) == 0x10
+; run: %sshr_i8_i64(0x40, 32) == 0x40
+; run: %sshr_i8_i64(0x40, 33) == 0x20
+; run: %sshr_i8_i64(0x40, 34) == 0x10
+
+function %sshr_i8_i32(i8, i32) -> i8 {
+block0(v0: i8, v1: i32):
+    v2 = sshr.i8 v0, v1
+    return v2
+}
+; run: %sshr_i8_i32(0x80, 0) == 0x80
+; run: %sshr_i8_i32(0x80, 1) == 0xC0
+; run: %sshr_i8_i32(0xf0, 0) == 0xf0
+; run: %sshr_i8_i32(0xf0, 4) == 0xff
+; run: %sshr_i8_i32(0x40, 8) == 0x40
+; run: %sshr_i8_i32(0x40, 9) == 0x20
+; run: %sshr_i8_i32(0x40, 10) == 0x10
+; run: %sshr_i8_i32(0x40, 32) == 0x40
+; run: %sshr_i8_i32(0x40, 33) == 0x20
+; run: %sshr_i8_i32(0x40, 34) == 0x10
+
+function %sshr_i8_i16(i8, i16) -> i8 {
+block0(v0: i8, v1: i16):
+    v2 = sshr.i8 v0, v1
+    return v2
+}
+; run: %sshr_i8_i16(0x80, 0) == 0x80
+; run: %sshr_i8_i16(0x80, 1) == 0xC0
+; run: %sshr_i8_i16(0xf0, 0) == 0xf0
+; run: %sshr_i8_i16(0xf0, 4) == 0xff
+; run: %sshr_i8_i16(0x40, 8) == 0x40
+; run: %sshr_i8_i16(0x40, 9) == 0x20
+; run: %sshr_i8_i16(0x40, 10) == 0x10
+; run: %sshr_i8_i16(0x40, 32) == 0x40
+; run: %sshr_i8_i16(0x40, 33) == 0x20
+; run: %sshr_i8_i16(0x40, 34) == 0x10
+
+function %sshr_i8_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = sshr.i8 v0, v1
+    return v2
+}
+; run: %sshr_i8_i8(0x80, 0) == 0x80
+; run: %sshr_i8_i8(0x80, 1) == 0xC0
+; run: %sshr_i8_i8(0xf0, 0) == 0xf0
+; run: %sshr_i8_i8(0xf0, 4) == 0xff
+; run: %sshr_i8_i8(0x40, 8) == 0x40
+; run: %sshr_i8_i8(0x40, 9) == 0x20
+; run: %sshr_i8_i8(0x40, 10) == 0x10
+; run: %sshr_i8_i8(0x40, 32) == 0x40
+; run: %sshr_i8_i8(0x40, 33) == 0x20
+; run: %sshr_i8_i8(0x40, 34) == 0x10
+
+
+
+
+function %ishl_i64_const(i64) -> i64 {
+block0(v0: i64):
+    v1 = ishl_imm.i64 v0, 65
+    return v1
+}
+; run: %ishl_i64_const(0x00000000_00000004) == 0x00000000_00000008
+
+function %ishl_i32_const(i32) -> i32 {
+block0(v0: i32):
+    v1 = ishl_imm.i32 v0, 33
+    return v1
+}
+; run: %ishl_i32_const(0x00000004) == 0x00000008
+
+function %ishl_i16_const(i16) -> i16 {
+block0(v0: i16):
+    v1 = ishl_imm.i16 v0, 17
+    return v1
+}
+; run: %ishl_i16_const(0x0004) == 0x0008
+
+function %ishl_i8_const(i8) -> i8 {
+block0(v0: i8):
+    v1 = ishl_imm.i8 v0, 9
+    return v1
+}
+; run: %ishl_i8_const(0x04) == 0x08
+
+
+
+function %ushr_i64_const(i64) -> i64 {
+block0(v0: i64):
+    v1 = ushr_imm.i64 v0, 65
+    return v1
+}
+; run: %ushr_i64_const(0x40000000_40000000) == 0x20000000_20000000
+
+function %ushr_i32_const(i32) -> i32 {
+block0(v0: i32):
+    v1 = ushr_imm.i32 v0, 33
+    return v1
+}
+; run: %ushr_i32_const(0x40000000) == 0x20000000
+
+function %ushr_i16_const(i16) -> i16 {
+block0(v0: i16):
+    v1 = ushr_imm.i16 v0, 17
+    return v1
+}
+; run: %ushr_i16_const(0x4000) == 0x2000
+
+function %ushr_i8_const(i8) -> i8 {
+block0(v0: i8):
+    v1 = ushr_imm.i8 v0, 9
+    return v1
+}
+; run: %ushr_i8_const(0x40) == 0x20
+
+
+function %sshr_i64_const(i64) -> i64 {
+block0(v0: i64):
+    v1 = sshr_imm.i64 v0, 65
+    return v1
+}
+; run: %sshr_i64_const(0x40000000_40000000) == 0x20000000_20000000
+
+function %sshr_i32_const(i32) -> i32 {
+block0(v0: i32):
+    v1 = sshr_imm.i32 v0, 33
+    return v1
+}
+; run: %sshr_i32_const(0x40000000) == 0x20000000
+
+function %sshr_i16_const(i16) -> i16 {
+block0(v0: i16):
+    v1 = sshr_imm.i16 v0, 17
+    return v1
+}
+; run: %sshr_i16_const(0x4000) == 0x2000
+
+function %sshr_i8_const(i8) -> i8 {
+block0(v0: i8):
+    v1 = sshr_imm.i8 v0, 9
+    return v1
+}
+; run: %sshr_i8_const(0x40) == 0x20

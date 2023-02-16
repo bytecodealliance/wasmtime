@@ -2,12 +2,12 @@
 name = "component-test-util"
 authors = ["The Wasmtime Project Developers"]
 license = "Apache-2.0 WITH LLVM-exception"
-version = "0.1.0"
-edition = "2021"
+version = "0.0.0"
+edition.workspace = true
 publish = false
 
 [dependencies]
-env_logger = "0.9.0"
-anyhow = "1.0.19"
+env_logger = { workspace = true }
+anyhow = { workspace = true }
 arbitrary = { version = "1.1.0", features = ["derive"] }
-wasmtime = { path = "../../wasmtime", features = ["component-model"] }
+wasmtime = { workspace = true, features = ["component-model"] }

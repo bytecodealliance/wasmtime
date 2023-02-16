@@ -51,8 +51,9 @@ impl CookieCutterExercise {
             &host_memory,
             self.cookie as i64,
             self.return_ptr_loc.ptr as i32,
-        );
-        assert_eq!(res, Ok(types::Errno::Ok as i32), "cookie cutter errno");
+        )
+        .unwrap();
+        assert_eq!(res, types::Errno::Ok as i32, "cookie cutter errno");
 
         let is_cookie_start = host_memory
             .ptr::<types::Bool>(self.return_ptr_loc.ptr)

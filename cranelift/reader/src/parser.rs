@@ -1,7 +1,6 @@
 //! Parser for .clif files.
 
 use crate::error::{Location, ParseError, ParseResult};
-use crate::heap_command::{HeapCommand, HeapType};
 use crate::isaspec;
 use crate::lexer::{LexError, Lexer, LocatedError, LocatedToken, Token};
 use crate::run_command::{Comparison, Invocation, RunCommand};
@@ -9,19 +8,18 @@ use crate::sourcemap::SourceMap;
 use crate::testcommand::TestCommand;
 use crate::testfile::{Comment, Details, Feature, TestFile};
 use cranelift_codegen::data_value::DataValue;
-use cranelift_codegen::entity::EntityRef;
-use cranelift_codegen::ir;
+use cranelift_codegen::entity::{EntityRef, PrimaryMap};
 use cranelift_codegen::ir::entities::{AnyEntity, DynamicType};
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64};
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
 use cranelift_codegen::ir::types::INVALID;
 use cranelift_codegen::ir::types::*;
+use cranelift_codegen::ir::{self, UserExternalNameRef};
 use cranelift_codegen::ir::{
     AbiParam, ArgumentExtension, ArgumentPurpose, Block, Constant, ConstantData, DynamicStackSlot,
     DynamicStackSlotData, DynamicTypeData, ExtFuncData, ExternalName, FuncRef, Function,
-    GlobalValue, GlobalValueData, Heap, HeapData, HeapStyle, JumpTable, JumpTableData, MemFlags,
-    Opcode, SigRef, Signature, StackSlot, StackSlotData, StackSlotKind, Table, TableData, Type,
-    Value,
+    GlobalValue, GlobalValueData, JumpTableData, MemFlags, Opcode, SigRef, Signature, StackSlot,
+    StackSlotData, StackSlotKind, Table, TableData, Type, UserFuncName, Value,
 };
 use cranelift_codegen::isa::{self, CallConv};
 use cranelift_codegen::packed_option::ReservedValue;
@@ -99,6 +97,8 @@ pub struct ParseOptions<'a> {
     pub default_calling_convention: CallConv,
     /// Default for unwind-info setting (enabled or disabled).
     pub unwind_info: bool,
+    /// Default for machine_code_cfg_info setting (enabled or disabled).
+    pub machine_code_cfg_info: bool,
 }
 
 impl Default for ParseOptions<'_> {
@@ -108,6 +108,7 @@ impl Default for ParseOptions<'_> {
             target: None,
             default_calling_convention: CallConv::Fast,
             unwind_info: false,
+            machine_code_cfg_info: false,
         }
     }
 }
@@ -187,24 +188,6 @@ pub fn parse_run_command<'a>(text: &str, signature: &Signature) -> ParseResult<O
     }
 }
 
-/// Parse a CLIF comment `text` as a heap command.
-///
-/// Return:
-///  - `Ok(None)` if the comment is not intended to be a `HeapCommand` (i.e. does not start with `heap`
-///  - `Ok(Some(heap))` if the comment is intended as a `HeapCommand` and can be parsed to one
-///  - `Err` otherwise.
-pub fn parse_heap_command<'a>(text: &str) -> ParseResult<Option<HeapCommand>> {
-    let _tt = timing::parse_text();
-    // We remove leading spaces and semi-colons for convenience here instead of at the call sites
-    // since this function will be attempting to parse a HeapCommand from a CLIF comment.
-    let trimmed_text = text.trim_start_matches(|c| c == ' ' || c == ';');
-    let mut parser = Parser::new(trimmed_text);
-    match parser.token() {
-        Some(Token::Identifier("heap")) => parser.parse_heap_command().map(|c| Some(c)),
-        Some(_) | None => Ok(None),
-    }
-}
-
 pub struct Parser<'a> {
     lex: Lexer<'a>,
 
@@ -224,6 +207,12 @@ pub struct Parser<'a> {
 
     /// Comments collected so far.
     comments: Vec<Comment<'a>>,
+
+    /// Maps inlined external names to a ref value, so they can be declared before parsing the rest
+    /// of the function later.
+    ///
+    /// This maintains backward compatibility with previous ways for declaring external names.
+    predeclared_external_names: PrimaryMap<UserExternalNameRef, ir::UserExternalName>,
 
     /// Default calling conventions; used when none is specified.
     default_calling_convention: CallConv,
@@ -332,33 +321,6 @@ impl Context {
         }
     }
 
-    // Allocate a heap slot.
-    fn add_heap(&mut self, heap: Heap, data: HeapData, loc: Location) -> ParseResult<()> {
-        self.map.def_heap(heap, loc)?;
-        while self.function.heaps.next_key().index() <= heap.index() {
-            self.function.create_heap(HeapData {
-                base: GlobalValue::reserved_value(),
-                min_size: Uimm64::new(0),
-                offset_guard_size: Uimm64::new(0),
-                style: HeapStyle::Static {
-                    bound: Uimm64::new(0),
-                },
-                index_type: INVALID,
-            });
-        }
-        self.function.heaps[heap] = data;
-        Ok(())
-    }
-
-    // Resolve a reference to a heap.
-    fn check_heap(&self, heap: Heap, loc: Location) -> ParseResult<()> {
-        if !self.map.contains_heap(heap) {
-            err!(loc, "undefined heap {}", heap)
-        } else {
-            Ok(())
-        }
-    }
-
     // Allocate a table slot.
     fn add_table(&mut self, table: Table, data: TableData, loc: Location) -> ParseResult<()> {
         while self.function.tables.next_key().index() <= table.index() {
@@ -431,25 +393,6 @@ impl Context {
         }
     }
 
-    // Allocate a new jump table.
-    fn add_jt(&mut self, jt: JumpTable, data: JumpTableData, loc: Location) -> ParseResult<()> {
-        self.map.def_jt(jt, loc)?;
-        while self.function.jump_tables.next_key().index() <= jt.index() {
-            self.function.create_jump_table(JumpTableData::new());
-        }
-        self.function.jump_tables[jt] = data;
-        Ok(())
-    }
-
-    // Resolve a reference to a jump table.
-    fn check_jt(&self, jt: JumpTable, loc: Location) -> ParseResult<()> {
-        if !self.map.contains_jt(jt) {
-            err!(loc, "undefined jump table {}", jt)
-        } else {
-            Ok(())
-        }
-    }
-
     // Allocate a new constant.
     fn add_constant(
         &mut self,
@@ -508,6 +451,7 @@ impl<'a> Parser<'a> {
             gathered_comments: Vec::new(),
             comments: Vec::new(),
             default_calling_convention: CallConv::Fast,
+            predeclared_external_names: Default::default(),
         }
     }
 
@@ -699,17 +643,6 @@ impl<'a> Parser<'a> {
         err!(self.loc, err_msg)
     }
 
-    // Match and consume a heap reference.
-    fn match_heap(&mut self, err_msg: &str) -> ParseResult<Heap> {
-        if let Some(Token::Heap(heap)) = self.token() {
-            self.consume();
-            if let Some(heap) = Heap::with_number(heap) {
-                return Ok(heap);
-            }
-        }
-        err!(self.loc, err_msg)
-    }
-
     // Match and consume a table reference.
     fn match_table(&mut self, err_msg: &str) -> ParseResult<Table> {
         if let Some(Token::Table(table)) = self.token() {
@@ -719,17 +652,6 @@ impl<'a> Parser<'a> {
             }
         }
         err!(self.loc, err_msg)
-    }
-
-    // Match and consume a jump table reference.
-    fn match_jt(&mut self) -> ParseResult<JumpTable> {
-        if let Some(Token::JumpTable(jt)) = self.token() {
-            self.consume();
-            if let Some(jt) = JumpTable::with_number(jt) {
-                return Ok(jt);
-            }
-        }
-        err!(self.loc, "expected jump table number: jt«n»")
     }
 
     // Match and consume a constant reference.
@@ -968,20 +890,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // Match and consume a boolean immediate.
-    fn match_bool(&mut self, err_msg: &str) -> ParseResult<bool> {
-        if let Some(Token::Identifier(text)) = self.token() {
-            self.consume();
-            match text {
-                "true" => Ok(true),
-                "false" => Ok(false),
-                _ => err!(self.loc, err_msg),
-            }
-        } else {
-            err!(self.loc, err_msg)
-        }
-    }
-
     // Match and consume an enumerated immediate, like one of the condition codes.
     fn match_enum<T: FromStr>(&mut self, err_msg: &str) -> ParseResult<T> {
         if let Some(Token::Identifier(text)) = self.token() {
@@ -1046,15 +954,6 @@ impl<'a> Parser<'a> {
             }};
         }
 
-        fn boolean_to_vec(value: bool, ty: Type) -> Vec<u8> {
-            let lane_size = ty.bytes() / u32::from(ty.lane_count());
-            if lane_size < 1 {
-                panic!("The boolean lane must have a byte size greater than zero.");
-            }
-            let value = if value { 0xFF } else { 0 };
-            vec![value; lane_size as usize]
-        }
-
         if !ty.is_vector() && !ty.is_dynamic_vector() {
             err!(self.loc, "Expected a controlling vector type, not {}", ty)
         } else {
@@ -1065,10 +964,6 @@ impl<'a> Parser<'a> {
                 I64 => consume!(ty, self.match_imm64("Expected a 64-bit integer")?),
                 F32 => consume!(ty, self.match_ieee32("Expected a 32-bit float")?),
                 F64 => consume!(ty, self.match_ieee64("Expected a 64-bit float")?),
-                b if b.is_bool() => consume!(
-                    ty,
-                    boolean_to_vec(self.match_bool("Expected a boolean")?, ty)
-                ),
                 _ => return err!(self.loc, "Expected a type of: float, int, bool"),
             };
             Ok(constant_data)
@@ -1154,9 +1049,24 @@ impl<'a> Parser<'a> {
         let mut targets = Vec::new();
         let mut flag_builder = settings::builder();
 
-        let unwind_info = if options.unwind_info { "true" } else { "false" };
+        let bool_to_str = |val: bool| {
+            if val {
+                "true"
+            } else {
+                "false"
+            }
+        };
+
+        // default to enabling cfg info
         flag_builder
-            .set("unwind_info", unwind_info)
+            .set(
+                "machine_code_cfg_info",
+                bool_to_str(options.machine_code_cfg_info),
+            )
+            .expect("machine_code_cfg_info option should be present");
+
+        flag_builder
+            .set("unwind_info", bool_to_str(options.unwind_info))
             .expect("unwind_info option should be present");
 
         while let Some(Token::Identifier(command)) = self.token() {
@@ -1282,7 +1192,7 @@ impl<'a> Parser<'a> {
         let location = self.loc;
 
         // function ::= "function" * name signature "{" preamble function-body "}"
-        let name = self.parse_external_name()?;
+        let name = self.parse_user_func_name()?;
 
         // function ::= "function" name * signature "{" preamble function-body "}"
         let sig = self.parse_signature()?;
@@ -1307,6 +1217,16 @@ impl<'a> Parser<'a> {
         self.token();
         self.claim_gathered_comments(AnyEntity::Function);
 
+        // Claim all the declared user-defined function names.
+        for (user_func_ref, user_external_name) in
+            std::mem::take(&mut self.predeclared_external_names)
+        {
+            let actual_ref = ctx
+                .function
+                .declare_imported_user_function(user_external_name);
+            assert_eq!(user_func_ref, actual_ref);
+        }
+
         let details = Details {
             location,
             comments: self.take_comments(),
@@ -1316,18 +1236,17 @@ impl<'a> Parser<'a> {
         Ok((ctx.function, details))
     }
 
-    // Parse an external name.
+    // Parse a user-defined function name
     //
     // For example, in a function decl, the parser would be in this state:
     //
     // function ::= "function" * name signature { ... }
     //
-    fn parse_external_name(&mut self) -> ParseResult<ExternalName> {
+    fn parse_user_func_name(&mut self) -> ParseResult<UserFuncName> {
         match self.token() {
             Some(Token::Name(s)) => {
                 self.consume();
-                s.parse()
-                    .map_err(|_| self.error("invalid test case or libcall name"))
+                Ok(UserFuncName::testcase(s))
             }
             Some(Token::UserRef(namespace)) => {
                 self.consume();
@@ -1336,19 +1255,84 @@ impl<'a> Parser<'a> {
                         self.consume();
                         match self.token() {
                             Some(Token::Integer(index_str)) => {
+                                self.consume();
                                 let index: u32 =
                                     u32::from_str_radix(index_str, 10).map_err(|_| {
                                         self.error("the integer given overflows the u32 type")
                                     })?;
-                                self.consume();
-                                Ok(ExternalName::user(namespace, index))
+                                Ok(UserFuncName::user(namespace, index))
                             }
                             _ => err!(self.loc, "expected integer"),
                         }
                     }
-                    _ => err!(self.loc, "expected colon"),
+                    _ => {
+                        err!(self.loc, "expected user function name in the form uX:Y")
+                    }
                 }
             }
+            _ => err!(self.loc, "expected external name"),
+        }
+    }
+
+    // Parse an external name.
+    //
+    // For example, in a function reference decl, the parser would be in this state:
+    //
+    // fn0 = * name signature
+    //
+    fn parse_external_name(&mut self) -> ParseResult<ExternalName> {
+        match self.token() {
+            Some(Token::Name(s)) => {
+                self.consume();
+                s.parse()
+                    .map_err(|_| self.error("invalid test case or libcall name"))
+            }
+
+            Some(Token::UserNameRef(name_ref)) => {
+                self.consume();
+                Ok(ExternalName::user(UserExternalNameRef::new(
+                    name_ref as usize,
+                )))
+            }
+
+            Some(Token::UserRef(namespace)) => {
+                self.consume();
+                if let Some(Token::Colon) = self.token() {
+                    self.consume();
+                    match self.token() {
+                        Some(Token::Integer(index_str)) => {
+                            let index: u32 = u32::from_str_radix(index_str, 10).map_err(|_| {
+                                self.error("the integer given overflows the u32 type")
+                            })?;
+                            self.consume();
+
+                            // Deduplicate the reference (O(n), but should be fine for tests),
+                            // to follow `FunctionParameters::declare_imported_user_function`,
+                            // otherwise this will cause ref mismatches when asserted below.
+                            let name_ref = self
+                                .predeclared_external_names
+                                .iter()
+                                .find_map(|(reff, name)| {
+                                    if name.index == index && name.namespace == namespace {
+                                        Some(reff)
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .unwrap_or_else(|| {
+                                    self.predeclared_external_names
+                                        .push(ir::UserExternalName { namespace, index })
+                                });
+
+                            Ok(ExternalName::user(name_ref))
+                        }
+                        _ => err!(self.loc, "expected integer"),
+                    }
+                } else {
+                    err!(self.loc, "expected colon")
+                }
+            }
+
             _ => err!(self.loc, "expected external name"),
         }
     }
@@ -1406,10 +1390,10 @@ impl<'a> Parser<'a> {
 
     // Parse a single argument type with flags.
     fn parse_abi_param(&mut self) -> ParseResult<AbiParam> {
-        // abi-param ::= * type { flag } [ argumentloc ]
+        // abi-param ::= * type { flag }
         let mut arg = AbiParam::new(self.match_type("expected parameter type")?);
 
-        // abi-param ::= type * { flag } [ argumentloc ]
+        // abi-param ::= type * { flag }
         while let Some(Token::Identifier(s)) = self.token() {
             match s {
                 "uext" => arg.extension = ArgumentExtension::Uext,
@@ -1472,11 +1456,6 @@ impl<'a> Parser<'a> {
                     self.parse_global_value_decl()
                         .and_then(|(gv, dat)| ctx.add_gv(gv, dat, self.loc))
                 }
-                Some(Token::Heap(..)) => {
-                    self.start_gathering_comments();
-                    self.parse_heap_decl()
-                        .and_then(|(heap, dat)| ctx.add_heap(heap, dat, self.loc))
-                }
                 Some(Token::Table(..)) => {
                     self.start_gathering_comments();
                     self.parse_table_decl()
@@ -1492,11 +1471,6 @@ impl<'a> Parser<'a> {
                     self.start_gathering_comments();
                     self.parse_function_decl(ctx)
                         .and_then(|(fn_, dat)| ctx.add_fn(fn_, dat, self.loc))
-                }
-                Some(Token::JumpTable(..)) => {
-                    self.start_gathering_comments();
-                    self.parse_jump_table_decl()
-                        .and_then(|(jt, dat)| ctx.add_jt(jt, dat, self.loc))
                 }
                 Some(Token::Constant(..)) => {
                     self.start_gathering_comments();
@@ -1664,77 +1638,6 @@ impl<'a> Parser<'a> {
         Ok((gv, data))
     }
 
-    // Parse a heap decl.
-    //
-    // heap-decl ::= * Heap(heap) "=" heap-desc
-    // heap-desc ::= heap-style heap-base { "," heap-attr }
-    // heap-style ::= "static" | "dynamic"
-    // heap-base ::= GlobalValue(base)
-    // heap-attr ::= "min" Imm64(bytes)
-    //             | "bound" Imm64(bytes)
-    //             | "offset_guard" Imm64(bytes)
-    //             | "index_type" type
-    //
-    fn parse_heap_decl(&mut self) -> ParseResult<(Heap, HeapData)> {
-        let heap = self.match_heap("expected heap number: heap«n»")?;
-        self.match_token(Token::Equal, "expected '=' in heap declaration")?;
-
-        let style_name = self.match_any_identifier("expected 'static' or 'dynamic'")?;
-
-        // heap-desc ::= heap-style * heap-base { "," heap-attr }
-        // heap-base ::= * GlobalValue(base)
-        let base = match self.token() {
-            Some(Token::GlobalValue(base_num)) => match GlobalValue::with_number(base_num) {
-                Some(gv) => gv,
-                None => return err!(self.loc, "invalid global value number for heap base"),
-            },
-            _ => return err!(self.loc, "expected heap base"),
-        };
-        self.consume();
-
-        let mut data = HeapData {
-            base,
-            min_size: 0.into(),
-            offset_guard_size: 0.into(),
-            style: HeapStyle::Static { bound: 0.into() },
-            index_type: ir::types::I32,
-        };
-
-        // heap-desc ::= heap-style heap-base * { "," heap-attr }
-        while self.optional(Token::Comma) {
-            match self.match_any_identifier("expected heap attribute name")? {
-                "min" => {
-                    data.min_size = self.match_uimm64("expected integer min size")?;
-                }
-                "bound" => {
-                    data.style = match style_name {
-                        "dynamic" => HeapStyle::Dynamic {
-                            bound_gv: self.match_gv("expected gv bound")?,
-                        },
-                        "static" => HeapStyle::Static {
-                            bound: self.match_uimm64("expected integer bound")?,
-                        },
-                        t => return err!(self.loc, "unknown heap style '{}'", t),
-                    };
-                }
-                "offset_guard" => {
-                    data.offset_guard_size =
-                        self.match_uimm64("expected integer offset-guard size")?;
-                }
-                "index_type" => {
-                    data.index_type = self.match_type("expected index type")?;
-                }
-                t => return err!(self.loc, "unknown heap attribute '{}'", t),
-            }
-        }
-
-        // Collect any trailing comments.
-        self.token();
-        self.claim_gathered_comments(heap);
-
-        Ok((heap, data))
-    }
-
     // Parse a table decl.
     //
     // table-decl ::= * Table(table) "=" table-desc
@@ -1878,22 +1781,19 @@ impl<'a> Parser<'a> {
         Ok((fn_, data))
     }
 
-    // Parse a jump table decl.
+    // Parse a jump table literal.
     //
-    // jump-table-decl ::= * JumpTable(jt) "=" "jump_table" "[" jt-entry {"," jt-entry} "]"
-    fn parse_jump_table_decl(&mut self) -> ParseResult<(JumpTable, JumpTableData)> {
-        let jt = self.match_jt()?;
-        self.match_token(Token::Equal, "expected '=' in jump_table decl")?;
-        self.match_identifier("jump_table", "expected 'jump_table'")?;
+    // jump-table-lit ::= "[" block {"," block } "]"
+    //                  | "[]"
+    fn parse_jump_table(&mut self, def: Block) -> ParseResult<JumpTableData> {
         self.match_token(Token::LBracket, "expected '[' before jump table contents")?;
 
-        let mut data = JumpTableData::new();
+        let mut data = Vec::new();
 
-        // jump-table-decl ::= JumpTable(jt) "=" "jump_table" "[" * Block(dest) {"," Block(dest)} "]"
         match self.token() {
             Some(Token::Block(dest)) => {
                 self.consume();
-                data.push_entry(dest);
+                data.push(dest);
 
                 loop {
                     match self.token() {
@@ -1901,7 +1801,7 @@ impl<'a> Parser<'a> {
                             self.consume();
                             if let Some(Token::Block(dest)) = self.token() {
                                 self.consume();
-                                data.push_entry(dest);
+                                data.push(dest);
                             } else {
                                 return err!(self.loc, "expected jump_table entry");
                             }
@@ -1917,11 +1817,7 @@ impl<'a> Parser<'a> {
 
         self.consume();
 
-        // Collect any trailing comments.
-        self.token();
-        self.claim_gathered_comments(jt);
-
-        Ok((jt, data))
+        Ok(JumpTableData::new(def, &data))
     }
 
     // Parse a constant decl.
@@ -1979,8 +1875,8 @@ impl<'a> Parser<'a> {
         // all references refer to a definition.
         for block in &ctx.function.layout {
             for inst in ctx.function.layout.block_insts(block) {
-                for value in ctx.function.dfg.inst_args(inst) {
-                    if !ctx.map.contains_value(*value) {
+                for value in ctx.function.dfg.inst_values(inst) {
+                    if !ctx.map.contains_value(value) {
                         return err!(
                             ctx.map.location(AnyEntity::Inst(inst)).unwrap(),
                             "undefined operand value {}",
@@ -2249,7 +2145,7 @@ impl<'a> Parser<'a> {
             .expect("duplicate inst references created");
 
         if !srcloc.is_default() {
-            ctx.function.srclocs[inst] = srcloc;
+            ctx.function.set_srcloc(inst, srcloc);
         }
 
         if results.len() != num_results {
@@ -2388,86 +2284,6 @@ impl<'a> Parser<'a> {
         Ok(args)
     }
 
-    /// Parse a vmctx offset annotation
-    ///
-    /// vmctx-offset ::= "vmctx" "+" UImm64(offset)
-    fn parse_vmctx_offset(&mut self) -> ParseResult<Uimm64> {
-        self.match_token(Token::Identifier("vmctx"), "expected a 'vmctx' token")?;
-
-        // The '+' token here gets parsed as part of the integer text, so we can't just match_token it
-        // and `match_uimm64` doesn't support leading '+' tokens, so we can't use that either.
-        match self.token() {
-            Some(Token::Integer(text)) if text.starts_with('+') => {
-                self.consume();
-
-                text[1..]
-                    .parse()
-                    .map_err(|_| self.error("expected u64 decimal immediate"))
-            }
-            token => err!(
-                self.loc,
-                format!("Unexpected token {:?} after vmctx", token)
-            ),
-        }
-    }
-
-    /// Parse a CLIF heap command.
-    ///
-    /// heap-command ::= "heap" ":" heap-type { "," heap-attr }
-    /// heap-attr ::= "size" "=" UImm64(bytes)
-    fn parse_heap_command(&mut self) -> ParseResult<HeapCommand> {
-        self.match_token(Token::Identifier("heap"), "expected a 'heap:' command")?;
-        self.match_token(Token::Colon, "expected a ':' after heap command")?;
-
-        let mut heap_command = HeapCommand {
-            heap_type: self.parse_heap_type()?,
-            size: Uimm64::new(0),
-            ptr_offset: None,
-            bound_offset: None,
-        };
-
-        while self.optional(Token::Comma) {
-            let identifier = self.match_any_identifier("expected heap attribute name")?;
-            self.match_token(Token::Equal, "expected '=' after heap attribute name")?;
-
-            match identifier {
-                "size" => {
-                    heap_command.size = self.match_uimm64("expected integer size")?;
-                }
-                "ptr" => {
-                    heap_command.ptr_offset = Some(self.parse_vmctx_offset()?);
-                }
-                "bound" => {
-                    heap_command.bound_offset = Some(self.parse_vmctx_offset()?);
-                }
-                t => return err!(self.loc, "unknown heap attribute '{}'", t),
-            }
-        }
-
-        if heap_command.size == Uimm64::new(0) {
-            return err!(self.loc, self.error("Expected a heap size to be specified"));
-        }
-
-        Ok(heap_command)
-    }
-
-    /// Parse a heap type.
-    ///
-    /// heap-type ::= "static" | "dynamic"
-    fn parse_heap_type(&mut self) -> ParseResult<HeapType> {
-        match self.token() {
-            Some(Token::Identifier("static")) => {
-                self.consume();
-                Ok(HeapType::Static)
-            }
-            Some(Token::Identifier("dynamic")) => {
-                self.consume();
-                Ok(HeapType::Dynamic)
-            }
-            _ => Err(self.error("expected a heap type, e.g. static or dynamic")),
-        }
-    }
-
     /// Parse a CLIF run command.
     ///
     /// run-command ::= "run" [":" invocation comparison expected]
@@ -2484,14 +2300,14 @@ impl<'a> Parser<'a> {
                     Ok(RunCommand::Run(invocation, comparison, expected))
                 } else if sig.params.is_empty()
                     && sig.returns.len() == 1
-                    && sig.returns[0].value_type.is_bool()
+                    && sig.returns[0].value_type.is_int()
                 {
                     // To match the existing run behavior that does not require an explicit
-                    // invocation, we create an invocation from a function like `() -> b*` and
-                    // compare it to `true`.
+                    // invocation, we create an invocation from a function like `() -> i*` and
+                    // require the result to be non-zero.
                     let invocation = Invocation::new("default", vec![]);
-                    let expected = vec![DataValue::B(true)];
-                    let comparison = Comparison::Equals;
+                    let expected = vec![DataValue::I8(0)];
+                    let comparison = Comparison::NotEquals;
                     Ok(RunCommand::Run(invocation, comparison, expected))
                 } else {
                     Err(self.error("unable to parse the run command"))
@@ -2632,9 +2448,6 @@ impl<'a> Parser<'a> {
                     return Err(self.error("only 128-bit vectors are currently supported"));
                 }
             }
-            _ if ty.is_bool() && !ty.is_vector() => {
-                DataValue::from(self.match_bool("expected a boolean")?)
-            }
             _ => return Err(self.error(&format!("don't know how to parse data values of: {}", ty))),
         };
         Ok(dv)
@@ -2664,10 +2477,6 @@ impl<'a> Parser<'a> {
             InstructionFormat::UnaryIeee64 => InstructionData::UnaryIeee64 {
                 opcode,
                 imm: self.match_ieee64("expected immediate 64-bit float operand")?,
-            },
-            InstructionFormat::UnaryBool => InstructionData::UnaryBool {
-                opcode,
-                imm: self.match_bool("expected immediate boolean operand")?,
             },
             InstructionFormat::UnaryConst => {
                 let constant_handle = if let Some(Token::Constant(_)) = self.token() {
@@ -2749,62 +2558,30 @@ impl<'a> Parser<'a> {
                 // Parse the destination block number.
                 let block_num = self.match_block("expected jump destination block")?;
                 let args = self.parse_opt_value_list()?;
+                let destination = ctx.function.dfg.block_call(block_num, &args);
                 InstructionData::Jump {
                     opcode,
-                    destination: block_num,
-                    args: args.into_value_list(&[], &mut ctx.function.dfg.value_lists),
+                    destination,
                 }
             }
-            InstructionFormat::Branch => {
-                let ctrl_arg = self.match_value("expected SSA value control operand")?;
+            InstructionFormat::Brif => {
+                let arg = self.match_value("expected SSA value control operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
-                let block_num = self.match_block("expected branch destination block")?;
-                let args = self.parse_opt_value_list()?;
-                InstructionData::Branch {
+                let block_then = {
+                    let block_num = self.match_block("expected branch then block")?;
+                    let args = self.parse_opt_value_list()?;
+                    ctx.function.dfg.block_call(block_num, &args)
+                };
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let block_else = {
+                    let block_num = self.match_block("expected branch else block")?;
+                    let args = self.parse_opt_value_list()?;
+                    ctx.function.dfg.block_call(block_num, &args)
+                };
+                InstructionData::Brif {
                     opcode,
-                    destination: block_num,
-                    args: args.into_value_list(&[ctrl_arg], &mut ctx.function.dfg.value_lists),
-                }
-            }
-            InstructionFormat::BranchInt => {
-                let cond = self.match_enum("expected intcc condition code")?;
-                let arg = self.match_value("expected SSA value first operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let block_num = self.match_block("expected branch destination block")?;
-                let args = self.parse_opt_value_list()?;
-                InstructionData::BranchInt {
-                    opcode,
-                    cond,
-                    destination: block_num,
-                    args: args.into_value_list(&[arg], &mut ctx.function.dfg.value_lists),
-                }
-            }
-            InstructionFormat::BranchFloat => {
-                let cond = self.match_enum("expected floatcc condition code")?;
-                let arg = self.match_value("expected SSA value first operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let block_num = self.match_block("expected branch destination block")?;
-                let args = self.parse_opt_value_list()?;
-                InstructionData::BranchFloat {
-                    opcode,
-                    cond,
-                    destination: block_num,
-                    args: args.into_value_list(&[arg], &mut ctx.function.dfg.value_lists),
-                }
-            }
-            InstructionFormat::BranchIcmp => {
-                let cond = self.match_enum("expected intcc condition code")?;
-                let lhs = self.match_value("expected SSA value first operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let rhs = self.match_value("expected SSA value second operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let block_num = self.match_block("expected branch destination block")?;
-                let args = self.parse_opt_value_list()?;
-                InstructionData::BranchIcmp {
-                    opcode,
-                    cond,
-                    destination: block_num,
-                    args: args.into_value_list(&[lhs, rhs], &mut ctx.function.dfg.value_lists),
+                    arg,
+                    blocks: [block_then, block_else],
                 }
             }
             InstructionFormat::BranchTable => {
@@ -2812,14 +2589,9 @@ impl<'a> Parser<'a> {
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let block_num = self.match_block("expected branch destination block")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
-                let table = self.match_jt()?;
-                ctx.check_jt(table, self.loc)?;
-                InstructionData::BranchTable {
-                    opcode,
-                    arg,
-                    destination: block_num,
-                    table,
-                }
+                let table_data = self.parse_jump_table(block_num)?;
+                let table = ctx.function.dfg.jump_tables.push(table_data);
+                InstructionData::BranchTable { opcode, arg, table }
             }
             InstructionFormat::TernaryImm8 => {
                 let lhs = self.match_value("expected SSA value first operand")?;
@@ -2869,11 +2641,6 @@ impl<'a> Parser<'a> {
                     imm: rhs,
                 }
             }
-            InstructionFormat::IntCond => {
-                let cond = self.match_enum("expected intcc condition code")?;
-                let arg = self.match_value("expected SSA value")?;
-                InstructionData::IntCond { opcode, cond, arg }
-            }
             InstructionFormat::FloatCompare => {
                 let cond = self.match_enum("expected floatcc condition code")?;
                 let lhs = self.match_value("expected SSA value first operand")?;
@@ -2883,24 +2650,6 @@ impl<'a> Parser<'a> {
                     opcode,
                     cond,
                     args: [lhs, rhs],
-                }
-            }
-            InstructionFormat::FloatCond => {
-                let cond = self.match_enum("expected floatcc condition code")?;
-                let arg = self.match_value("expected SSA value")?;
-                InstructionData::FloatCond { opcode, cond, arg }
-            }
-            InstructionFormat::IntSelect => {
-                let cond = self.match_enum("expected intcc condition code")?;
-                let guard = self.match_value("expected SSA value first operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let v_true = self.match_value("expected SSA value second operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let v_false = self.match_value("expected SSA value third operand")?;
-                InstructionData::IntSelect {
-                    opcode,
-                    cond,
-                    args: [guard, v_true, v_false],
                 }
             }
             InstructionFormat::Call => {
@@ -2976,20 +2725,6 @@ impl<'a> Parser<'a> {
                     dynamic_stack_slot: dss,
                 }
             }
-            InstructionFormat::HeapAddr => {
-                let heap = self.match_heap("expected heap identifier")?;
-                ctx.check_heap(heap, self.loc)?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let arg = self.match_value("expected SSA value heap address")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let imm = self.match_uimm32("expected 32-bit integer size")?;
-                InstructionData::HeapAddr {
-                    opcode,
-                    heap,
-                    arg,
-                    imm,
-                }
-            }
             InstructionFormat::TableAddr => {
                 let table = self.match_table("expected table identifier")?;
                 ctx.check_table(table, self.loc)?;
@@ -3038,30 +2773,6 @@ impl<'a> Parser<'a> {
                 let code = self.match_enum("expected trap code")?;
                 InstructionData::CondTrap { opcode, arg, code }
             }
-            InstructionFormat::IntCondTrap => {
-                let cond = self.match_enum("expected intcc condition code")?;
-                let arg = self.match_value("expected SSA value operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let code = self.match_enum("expected trap code")?;
-                InstructionData::IntCondTrap {
-                    opcode,
-                    cond,
-                    arg,
-                    code,
-                }
-            }
-            InstructionFormat::FloatCondTrap => {
-                let cond = self.match_enum("expected floatcc condition code")?;
-                let arg = self.match_value("expected SSA value operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let code = self.match_enum("expected trap code")?;
-                InstructionData::FloatCondTrap {
-                    opcode,
-                    cond,
-                    arg,
-                    code,
-                }
-            }
             InstructionFormat::AtomicCas => {
                 let flags = self.optional_memflags();
                 let addr = self.match_value("expected SSA value address")?;
@@ -3106,6 +2817,18 @@ impl<'a> Parser<'a> {
                     opcode,
                     flags,
                     args: [arg, addr],
+                }
+            }
+            InstructionFormat::IntAddTrap => {
+                let a = self.match_value("expected SSA value operand")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let b = self.match_value("expected SSA value operand")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let code = self.match_enum("expected trap code")?;
+                InstructionData::IntAddTrap {
+                    opcode,
+                    args: [a, b],
+                    code,
                 }
             }
         };
@@ -3328,25 +3051,6 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_jt() {
-        let ParseError {
-            location,
-            message,
-            is_warning,
-        } = Parser::new(
-            "function %blocks() system_v {
-                jt0 = jump_table []
-                jt0 = jump_table []",
-        )
-        .parse_function()
-        .unwrap_err();
-
-        assert_eq!(location.line_number, 3);
-        assert_eq!(message, "duplicate entity: jt0");
-        assert!(!is_warning);
-    }
-
-    #[test]
     fn duplicate_ss() {
         let ParseError {
             location,
@@ -3381,25 +3085,6 @@ mod tests {
 
         assert_eq!(location.line_number, 3);
         assert_eq!(message, "duplicate entity: gv0");
-        assert!(!is_warning);
-    }
-
-    #[test]
-    fn duplicate_heap() {
-        let ParseError {
-            location,
-            message,
-            is_warning,
-        } = Parser::new(
-            "function %blocks() system_v {
-                heap0 = static gv0, min 0x1000, bound 0x10_0000, offset_guard 0x1000
-                heap0 = static gv0, min 0x1000, bound 0x10_0000, offset_guard 0x1000",
-        )
-        .parse_function()
-        .unwrap_err();
-
-        assert_eq!(location.line_number, 3);
-        assert_eq!(message, "duplicate entity: heap0");
         assert!(!is_warning);
     }
 
@@ -3449,8 +3134,6 @@ mod tests {
                          function %comment() system_v { ; decl
                             ss10  = explicit_slot 13 ; stackslot.
                             ; Still stackslot.
-                            jt10 = jump_table [block0]
-                            ; Jumptable
                          block0: ; Basic block
                          trap user42; Instruction
                          } ; Trailing.
@@ -3459,7 +3142,7 @@ mod tests {
         .parse_function()
         .unwrap();
         assert_eq!(func.name.to_string(), "%comment");
-        assert_eq!(comments.len(), 8); // no 'before' comment.
+        assert_eq!(comments.len(), 7); // no 'before' comment.
         assert_eq!(
             comments[0],
             Comment {
@@ -3470,16 +3153,14 @@ mod tests {
         assert_eq!(comments[1].entity.to_string(), "ss10");
         assert_eq!(comments[2].entity.to_string(), "ss10");
         assert_eq!(comments[2].text, "; Still stackslot.");
-        assert_eq!(comments[3].entity.to_string(), "jt10");
-        assert_eq!(comments[3].text, "; Jumptable");
-        assert_eq!(comments[4].entity.to_string(), "block0");
-        assert_eq!(comments[4].text, "; Basic block");
+        assert_eq!(comments[3].entity.to_string(), "block0");
+        assert_eq!(comments[3].text, "; Basic block");
 
-        assert_eq!(comments[5].entity.to_string(), "inst0");
-        assert_eq!(comments[5].text, "; Instruction");
+        assert_eq!(comments[4].entity.to_string(), "inst0");
+        assert_eq!(comments[4].text, "; Instruction");
 
+        assert_eq!(comments[5].entity, AnyEntity::Function);
         assert_eq!(comments[6].entity, AnyEntity::Function);
-        assert_eq!(comments[7].entity, AnyEntity::Function);
     }
 
     #[test]
@@ -3726,10 +3407,10 @@ mod tests {
         can_parse_as_constant_data!("1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16", I8X16);
         can_parse_as_constant_data!("0x1.1 0x2.2 0x3.3 0x4.4", F32X4);
         can_parse_as_constant_data!("0x0 0x1 0x2 0x3", I32X4);
-        can_parse_as_constant_data!("true false true false true false true false", B16X8);
+        can_parse_as_constant_data!("-1 0 -1 0 -1 0 -1 0", I16X8);
         can_parse_as_constant_data!("0 -1", I64X2);
-        can_parse_as_constant_data!("true false", B64X2);
-        can_parse_as_constant_data!("true true true true true", B32X4); // note that parse_literals_to_constant_data will leave extra tokens unconsumed
+        can_parse_as_constant_data!("-1 0", I64X2);
+        can_parse_as_constant_data!("-1 -1 -1 -1 -1", I32X4); // note that parse_literals_to_constant_data will leave extra tokens unconsumed
 
         cannot_parse_as_constant_data!("1 2 3", I32X4);
         cannot_parse_as_constant_data!(" ", F32X4);
@@ -3737,8 +3418,8 @@ mod tests {
 
     #[test]
     fn parse_constant_from_booleans() {
-        let c = Parser::new("true false true false")
-            .parse_literals_to_constant_data(B32X4)
+        let c = Parser::new("-1 0 -1 0")
+            .parse_literals_to_constant_data(I32X4)
             .unwrap();
         assert_eq!(
             c.into_vec(),
@@ -3783,18 +3464,18 @@ mod tests {
         }
         assert_roundtrip("run: %fn0() == 42", &sig(&[], &[I32]));
         assert_roundtrip(
-            "run: %fn0(8, 16, 32, 64) == true",
-            &sig(&[I8, I16, I32, I64], &[B8]),
+            "run: %fn0(8, 16, 32, 64) == 1",
+            &sig(&[I8, I16, I32, I64], &[I8]),
         );
         assert_roundtrip(
-            "run: %my_func(true) == 0x0f0e0d0c0b0a09080706050403020100",
-            &sig(&[B32], &[I8X16]),
+            "run: %my_func(1) == 0x0f0e0d0c0b0a09080706050403020100",
+            &sig(&[I32], &[I8X16]),
         );
 
         // Verify that default invocations are created when not specified.
         assert_eq!(
-            parse("run", &sig(&[], &[B32])).unwrap().to_string(),
-            "run: %default() == true"
+            parse("run", &sig(&[], &[I32])).unwrap().to_string(),
+            "run: %default() != 0"
         );
         assert_eq!(
             parse("print", &sig(&[], &[F32X4, I16X8]))
@@ -3804,49 +3485,9 @@ mod tests {
         );
 
         // Demonstrate some unparseable cases.
-        assert!(parse("print", &sig(&[I32], &[B32])).is_err());
-        assert!(parse("run", &sig(&[], &[I32])).is_err());
+        assert!(parse("print", &sig(&[I32], &[I32])).is_err());
         assert!(parse("print:", &sig(&[], &[])).is_err());
         assert!(parse("run: ", &sig(&[], &[])).is_err());
-    }
-
-    #[test]
-    fn parse_heap_commands() {
-        fn parse(text: &str) -> ParseResult<HeapCommand> {
-            Parser::new(text).parse_heap_command()
-        }
-
-        // Check that we can parse and display the same set of heap commands.
-        fn assert_roundtrip(text: &str) {
-            assert_eq!(parse(text).unwrap().to_string(), text);
-        }
-
-        assert_roundtrip("heap: static, size=10");
-        assert_roundtrip("heap: dynamic, size=10");
-        assert_roundtrip("heap: static, size=10, ptr=vmctx+10");
-        assert_roundtrip("heap: static, size=10, bound=vmctx+11");
-        assert_roundtrip("heap: static, size=10, ptr=vmctx+10, bound=vmctx+10");
-        assert_roundtrip("heap: dynamic, size=10, ptr=vmctx+10");
-        assert_roundtrip("heap: dynamic, size=10, bound=vmctx+11");
-        assert_roundtrip("heap: dynamic, size=10, ptr=vmctx+10, bound=vmctx+10");
-
-        let static_heap = parse("heap: static, size=10, ptr=vmctx+8, bound=vmctx+2").unwrap();
-        assert_eq!(static_heap.size, Uimm64::new(10));
-        assert_eq!(static_heap.heap_type, HeapType::Static);
-        assert_eq!(static_heap.ptr_offset, Some(Uimm64::new(8)));
-        assert_eq!(static_heap.bound_offset, Some(Uimm64::new(2)));
-        let dynamic_heap = parse("heap: dynamic, size=0x10").unwrap();
-        assert_eq!(dynamic_heap.size, Uimm64::new(16));
-        assert_eq!(dynamic_heap.heap_type, HeapType::Dynamic);
-        assert_eq!(dynamic_heap.ptr_offset, None);
-        assert_eq!(dynamic_heap.bound_offset, None);
-
-        assert!(parse("heap: static").is_err());
-        assert!(parse("heap: dynamic").is_err());
-        assert!(parse("heap: static size=0").is_err());
-        assert!(parse("heap: dynamic size=0").is_err());
-        assert!(parse("heap: static, size=10, ptr=10").is_err());
-        assert!(parse("heap: static, size=10, bound=vmctx-10").is_err());
     }
 
     #[test]
@@ -3866,8 +3507,6 @@ mod tests {
         assert_eq!(parse("1234567", I128).to_string(), "1234567");
         assert_eq!(parse("0x32.32", F32).to_string(), "0x1.919000p5");
         assert_eq!(parse("0x64.64", F64).to_string(), "0x1.9190000000000p6");
-        assert_eq!(parse("true", B1).to_string(), "true");
-        assert_eq!(parse("false", B64).to_string(), "false");
         assert_eq!(
             parse("[0 1 2 3]", I32X4).to_string(),
             "0x00000003000000020000000100000000"

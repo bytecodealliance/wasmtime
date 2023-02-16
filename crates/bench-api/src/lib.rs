@@ -136,14 +136,15 @@
 mod unsafe_send_sync;
 
 use crate::unsafe_send_sync::UnsafeSendSync;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
+use clap::Parser;
 use std::os::raw::{c_int, c_void};
 use std::slice;
 use std::{env, path::PathBuf};
 use target_lexicon::Triple;
-use wasmtime::{Config, Engine, Instance, Linker, Module, Store};
-use wasmtime_cli_flags::CommonOptions;
-use wasmtime_wasi::{sync::WasiCtxBuilder, WasiCtx};
+use wasmtime::{Engine, Instance, Linker, Module, Store};
+use wasmtime_cli_flags::{CommonOptions, WasiModules};
+use wasmtime_wasi::{sync::WasiCtxBuilder, I32Exit, WasiCtx};
 
 pub type ExitCode = c_int;
 pub const OK: ExitCode = 0;
@@ -238,20 +239,23 @@ impl WasmBenchConfig {
         Ok(Some(stdin_path.into()))
     }
 
-    fn execution_flags(&self) -> Result<Option<Config>> {
-        if self.execution_flags_ptr.is_null() {
-            return Ok(None);
-        }
-
-        let execution_flags = unsafe {
-            std::slice::from_raw_parts(self.execution_flags_ptr, self.execution_flags_len)
+    fn execution_flags(&self) -> Result<CommonOptions> {
+        let flags = if self.execution_flags_ptr.is_null() {
+            ""
+        } else {
+            let execution_flags = unsafe {
+                std::slice::from_raw_parts(self.execution_flags_ptr, self.execution_flags_len)
+            };
+            std::str::from_utf8(execution_flags)
+                .context("given execution flags string is not valid UTF-8")?
         };
-        let execution_flags = std::str::from_utf8(execution_flags)
-            .context("given execution flags string is not valid UTF-8")?;
-
-        let options = CommonOptions::parse_from_str(execution_flags)?;
-        let config = options.config(Some(&Triple::host().to_string()))?;
-        Ok(Some(config))
+        let options = CommonOptions::try_parse_from(
+            ["wasmtime"]
+                .into_iter()
+                .chain(flags.split(' ').filter(|s| !s.is_empty())),
+        )
+        .context("failed to parse options")?;
+        Ok(options)
     }
 }
 
@@ -281,10 +285,10 @@ pub extern "C" fn wasm_bench_create(
         let stdout_path = config.stdout_path()?;
         let stderr_path = config.stderr_path()?;
         let stdin_path = config.stdin_path()?;
-        let engine_config = config.execution_flags()?;
+        let options = config.execution_flags()?;
 
         let state = Box::new(BenchState::new(
-            engine_config,
+            options,
             config.compilation_timer,
             config.compilation_start,
             config.compilation_end,
@@ -348,7 +352,7 @@ pub extern "C" fn wasm_bench_create(
 pub extern "C" fn wasm_bench_free(state: *mut c_void) {
     assert!(!state.is_null());
     unsafe {
-        Box::from_raw(state as *mut BenchState);
+        drop(Box::from_raw(state as *mut BenchState));
     }
 }
 
@@ -407,20 +411,21 @@ struct BenchState {
     make_wasi_cx: Box<dyn FnMut() -> Result<WasiCtx>>,
     module: Option<Module>,
     store_and_instance: Option<(Store<HostState>, Instance)>,
+    epoch_interruption: bool,
+    fuel: Option<u64>,
 }
 
 struct HostState {
     wasi: WasiCtx,
     #[cfg(feature = "wasi-nn")]
     wasi_nn: wasmtime_wasi_nn::WasiNnCtx,
-
     #[cfg(feature = "wasi-crypto")]
     wasi_crypto: wasmtime_wasi_crypto::WasiCryptoCtx,
 }
 
 impl BenchState {
     fn new(
-        engine_config: Option<Config>,
+        options: CommonOptions,
         compilation_timer: *mut u8,
         compilation_start: extern "C" fn(*mut u8),
         compilation_end: extern "C" fn(*mut u8),
@@ -432,8 +437,10 @@ impl BenchState {
         execution_end: extern "C" fn(*mut u8),
         make_wasi_cx: impl FnMut() -> Result<WasiCtx> + 'static,
     ) -> Result<Self> {
-        // NB: do not configure a code cache.
-        let engine = Engine::new(&engine_config.unwrap_or(Config::new()))?;
+        let mut config = options.config(Some(&Triple::host().to_string()))?;
+        // NB: always disable the compilation cache.
+        config.disable_cache();
+        let engine = Engine::new(&config)?;
         let mut linker = Linker::<HostState>::new(&engine);
 
         // Define the benchmarking start/end functions.
@@ -451,13 +458,24 @@ impl BenchState {
             Ok(())
         })?;
 
-        wasmtime_wasi::add_to_linker(&mut linker, |cx| &mut cx.wasi)?;
+        let epoch_interruption = options.epoch_interruption;
+        let fuel = options.fuel;
+
+        let wasi_modules = options.wasi_modules.unwrap_or(WasiModules::default());
+
+        if wasi_modules.wasi_common {
+            wasmtime_wasi::add_to_linker(&mut linker, |cx| &mut cx.wasi)?;
+        }
 
         #[cfg(feature = "wasi-nn")]
-        wasmtime_wasi_nn::add_to_linker(&mut linker, |cx| &mut cx.wasi_nn)?;
+        if wasi_modules.wasi_nn {
+            wasmtime_wasi_nn::add_to_linker(&mut linker, |cx| &mut cx.wasi_nn)?;
+        }
 
         #[cfg(feature = "wasi-crypto")]
-        wasmtime_wasi_crypto::add_to_linker(&mut linker, |cx| &mut cx.wasi_crypto)?;
+        if wasi_modules.wasi_crypto {
+            wasmtime_wasi_crypto::add_to_linker(&mut linker, |cx| &mut cx.wasi_crypto)?;
+        }
 
         Ok(Self {
             linker,
@@ -470,6 +488,8 @@ impl BenchState {
             make_wasi_cx: Box::new(make_wasi_cx) as _,
             module: None,
             store_and_instance: None,
+            epoch_interruption,
+            fuel,
         })
     }
 
@@ -506,6 +526,13 @@ impl BenchState {
         // stdin/stdout/stderr.
         (self.instantiation_start)(self.instantiation_timer);
         let mut store = Store::new(self.linker.engine(), host);
+        if self.epoch_interruption {
+            store.set_epoch_deadline(1);
+        }
+        if let Some(fuel) = self.fuel {
+            store.add_fuel(fuel).unwrap();
+        }
+
         let instance = self.linker.instantiate(&mut store, &module)?;
         (self.instantiation_end)(self.instantiation_timer);
 
@@ -519,20 +546,19 @@ impl BenchState {
             .take()
             .expect("instantiate the module before executing it");
 
-        let start_func = instance.get_typed_func::<(), (), _>(&mut store, "_start")?;
+        let start_func = instance.get_typed_func::<(), ()>(&mut store, "_start")?;
         match start_func.call(&mut store, ()) {
             Ok(_) => Ok(()),
             Err(trap) => {
                 // Since _start will likely return by using the system `exit` call, we must
                 // check the trap code to see if it actually represents a successful exit.
-                match trap.i32_exit_status() {
-                    Some(0) => Ok(()),
-                    Some(n) => Err(anyhow!("_start exited with a non-zero code: {}", n)),
-                    None => Err(anyhow!(
-                        "executing the benchmark resulted in a trap: {}",
-                        trap
-                    )),
+                if let Some(exit) = trap.downcast_ref::<I32Exit>() {
+                    if exit.0 == 0 {
+                        return Ok(());
+                    }
                 }
+
+                Err(trap)
             }
         }
     }

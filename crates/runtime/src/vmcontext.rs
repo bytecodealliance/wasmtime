@@ -255,7 +255,7 @@ mod test_vmmemory_definition {
     use super::VMMemoryDefinition;
     use memoffset::offset_of;
     use std::mem::size_of;
-    use wasmtime_environ::{Module, VMOffsets};
+    use wasmtime_environ::{Module, PtrSize, VMOffsets};
 
     #[test]
     fn check_vmmemory_definition_offsets() {
@@ -263,15 +263,15 @@ mod test_vmmemory_definition {
         let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
         assert_eq!(
             size_of::<VMMemoryDefinition>(),
-            usize::from(offsets.size_of_vmmemory_definition())
+            usize::from(offsets.ptr.size_of_vmmemory_definition())
         );
         assert_eq!(
             offset_of!(VMMemoryDefinition, base),
-            usize::from(offsets.vmmemory_definition_base())
+            usize::from(offsets.ptr.vmmemory_definition_base())
         );
         assert_eq!(
             offset_of!(VMMemoryDefinition, current_length),
-            usize::from(offsets.vmmemory_definition_current_length())
+            usize::from(offsets.ptr.vmmemory_definition_current_length())
         );
         /* TODO: Assert that the size of `current_length` matches.
         assert_eq!(
@@ -514,22 +514,22 @@ impl VMGlobalDefinition {
 
     /// Return a reference to the value as an anyfunc.
     #[allow(clippy::cast_ptr_alignment)]
-    pub unsafe fn as_anyfunc(&self) -> *const VMCallerCheckedAnyfunc {
+    pub unsafe fn as_anyfunc(&self) -> *const VMCallerCheckedFuncRef {
         *(self
             .storage
             .as_ref()
             .as_ptr()
-            .cast::<*const VMCallerCheckedAnyfunc>())
+            .cast::<*const VMCallerCheckedFuncRef>())
     }
 
     /// Return a mutable reference to the value as an anyfunc.
     #[allow(clippy::cast_ptr_alignment)]
-    pub unsafe fn as_anyfunc_mut(&mut self) -> &mut *const VMCallerCheckedAnyfunc {
+    pub unsafe fn as_anyfunc_mut(&mut self) -> &mut *const VMCallerCheckedFuncRef {
         &mut *(self
             .storage
             .as_mut()
             .as_mut_ptr()
-            .cast::<*const VMCallerCheckedAnyfunc>())
+            .cast::<*const VMCallerCheckedFuncRef>())
     }
 }
 
@@ -582,7 +582,7 @@ impl Default for VMSharedSignatureIndex {
 /// by the caller.
 #[derive(Debug, Clone)]
 #[repr(C)]
-pub struct VMCallerCheckedAnyfunc {
+pub struct VMCallerCheckedFuncRef {
     /// Function body.
     pub func_ptr: NonNull<VMFunctionBody>,
     /// Function signature id.
@@ -597,12 +597,12 @@ pub struct VMCallerCheckedAnyfunc {
     // If more elements are added here, remember to add offset_of tests below!
 }
 
-unsafe impl Send for VMCallerCheckedAnyfunc {}
-unsafe impl Sync for VMCallerCheckedAnyfunc {}
+unsafe impl Send for VMCallerCheckedFuncRef {}
+unsafe impl Sync for VMCallerCheckedFuncRef {}
 
 #[cfg(test)]
 mod test_vmcaller_checked_anyfunc {
-    use super::VMCallerCheckedAnyfunc;
+    use super::VMCallerCheckedFuncRef;
     use memoffset::offset_of;
     use std::mem::size_of;
     use wasmtime_environ::{Module, PtrSize, VMOffsets};
@@ -612,20 +612,20 @@ mod test_vmcaller_checked_anyfunc {
         let module = Module::new();
         let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
         assert_eq!(
-            size_of::<VMCallerCheckedAnyfunc>(),
-            usize::from(offsets.ptr.size_of_vmcaller_checked_anyfunc())
+            size_of::<VMCallerCheckedFuncRef>(),
+            usize::from(offsets.ptr.size_of_vmcaller_checked_func_ref())
         );
         assert_eq!(
-            offset_of!(VMCallerCheckedAnyfunc, func_ptr),
-            usize::from(offsets.ptr.vmcaller_checked_anyfunc_func_ptr())
+            offset_of!(VMCallerCheckedFuncRef, func_ptr),
+            usize::from(offsets.ptr.vmcaller_checked_func_ref_func_ptr())
         );
         assert_eq!(
-            offset_of!(VMCallerCheckedAnyfunc, type_index),
-            usize::from(offsets.ptr.vmcaller_checked_anyfunc_type_index())
+            offset_of!(VMCallerCheckedFuncRef, type_index),
+            usize::from(offsets.ptr.vmcaller_checked_func_ref_type_index())
         );
         assert_eq!(
-            offset_of!(VMCallerCheckedAnyfunc, vmctx),
-            usize::from(offsets.ptr.vmcaller_checked_anyfunc_vmctx())
+            offset_of!(VMCallerCheckedFuncRef, vmctx),
+            usize::from(offsets.ptr.vmcaller_checked_func_ref_vmctx())
         );
     }
 }
@@ -983,7 +983,13 @@ impl ValRaw {
     /// Creates a WebAssembly `i32` value
     #[inline]
     pub fn i32(i: i32) -> ValRaw {
-        ValRaw { i32: i.to_le() }
+        // Note that this is intentionally not setting the `i32` field, instead
+        // setting the `i64` field with a zero-extended version of `i`. For more
+        // information on this see the comments on `Lower for Result` in the
+        // `wasmtime` crate. Otherwise though all `ValRaw` constructors are
+        // otherwise constrained to guarantee that the initial 64-bits are
+        // always initialized.
+        ValRaw::u64((i as u32).into())
     }
 
     /// Creates a WebAssembly `i64` value
@@ -995,7 +1001,9 @@ impl ValRaw {
     /// Creates a WebAssembly `i32` value
     #[inline]
     pub fn u32(i: u32) -> ValRaw {
-        ValRaw::i32(i as i32)
+        // See comments in `ValRaw::i32` for why this is setting the upper
+        // 32-bits as well.
+        ValRaw::u64(i.into())
     }
 
     /// Creates a WebAssembly `i64` value
@@ -1007,7 +1015,9 @@ impl ValRaw {
     /// Creates a WebAssembly `f32` value
     #[inline]
     pub fn f32(i: u32) -> ValRaw {
-        ValRaw { f32: i.to_le() }
+        // See comments in `ValRaw::i32` for why this is setting the upper
+        // 32-bits as well.
+        ValRaw::u64(i.into())
     }
 
     /// Creates a WebAssembly `f64` value
@@ -1134,11 +1144,11 @@ pub type VMTrampoline =
 /// target context.
 ///
 /// This context is used to represent that contexts specified in
-/// `VMCallerCheckedAnyfunc` can have any type and don't have an implicit
+/// `VMCallerCheckedFuncRef` can have any type and don't have an implicit
 /// structure. Neither wasmtime nor cranelift-generated code can rely on the
 /// structure of an opaque context in general and only the code which configured
 /// the context is able to rely on a particular structure. This is because the
-/// context pointer configured for `VMCallerCheckedAnyfunc` is guaranteed to be
+/// context pointer configured for `VMCallerCheckedFuncRef` is guaranteed to be
 /// the first parameter passed.
 ///
 /// Note that Wasmtime currently has a layout where all contexts that are casted

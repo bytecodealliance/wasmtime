@@ -7,7 +7,7 @@ use crate::entity::SecondaryMap;
 use crate::ir::entities::AnyEntity;
 use crate::ir::{Block, DataFlowGraph, Function, Inst, SigRef, Type, Value, ValueDef};
 use crate::packed_option::ReservedValue;
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::fmt::{self, Write};
 
@@ -56,13 +56,6 @@ pub trait FuncWriter {
             self.write_entity_definition(w, func, gv.into(), gv_data)?;
         }
 
-        for (heap, heap_data) in &func.heaps {
-            if !heap_data.index_type.is_invalid() {
-                any = true;
-                self.write_entity_definition(w, func, heap.into(), heap_data)?;
-            }
-        }
-
         for (table, table_data) in &func.tables {
             if !table_data.index_type.is_invalid() {
                 any = true;
@@ -80,13 +73,13 @@ pub trait FuncWriter {
         for (fnref, ext_func) in &func.dfg.ext_funcs {
             if ext_func.signature != SigRef::reserved_value() {
                 any = true;
-                self.write_entity_definition(w, func, fnref.into(), ext_func)?;
+                self.write_entity_definition(
+                    w,
+                    func,
+                    fnref.into(),
+                    &ext_func.display(Some(&func.params)),
+                )?;
             }
-        }
-
-        for (jt, jt_data) in &func.jump_tables {
-            any = true;
-            self.write_entity_definition(w, func, jt.into(), jt_data)?;
         }
 
         for (&cref, cval) in func.dfg.constants.iter() {
@@ -254,7 +247,7 @@ fn decorate_block<FW: FuncWriter>(
     block: Block,
 ) -> fmt::Result {
     // Indent all instructions if any srclocs are present.
-    let indent = if func.srclocs.is_empty() { 4 } else { 36 };
+    let indent = if func.rel_srclocs().is_empty() { 4 } else { 36 };
 
     func_w.write_block_header(w, func, block, indent)?;
     for a in func.dfg.block_params(block).iter().cloned() {
@@ -278,7 +271,7 @@ fn decorate_block<FW: FuncWriter>(
 // if it can't be trivially inferred.
 //
 fn type_suffix(func: &Function, inst: Inst) -> Option<Type> {
-    let inst_data = &func.dfg[inst];
+    let inst_data = &func.dfg.insts[inst];
     let constraints = inst_data.opcode().constraints();
 
     if !constraints.is_polymorphic() {
@@ -292,6 +285,7 @@ fn type_suffix(func: &Function, inst: Inst) -> Option<Type> {
         let def_block = match func.dfg.value_def(ctrl_var) {
             ValueDef::Result(instr, _) => func.layout.inst_block(instr),
             ValueDef::Param(block, _) => Some(block),
+            ValueDef::Union(..) => None,
         };
         if def_block.is_some() && def_block == func.layout.inst_block(inst) {
             return None;
@@ -335,7 +329,7 @@ fn write_instruction(
     let mut s = String::with_capacity(16);
 
     // Source location goes first.
-    let srcloc = func.srclocs[inst];
+    let srcloc = func.srcloc(inst);
     if !srcloc.is_default() {
         write!(s, "{} ", srcloc)?;
     }
@@ -358,7 +352,7 @@ fn write_instruction(
     }
 
     // Then the opcode, possibly with a '.type' suffix.
-    let opcode = func.dfg[inst].opcode();
+    let opcode = func.dfg.insts[inst].opcode();
 
     match type_suffix(func, inst) {
         Some(suf) => write!(w, "{}.{}", opcode, suf)?,
@@ -378,8 +372,9 @@ fn write_instruction(
 /// Write the operands of `inst` to `w` with a prepended space.
 pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt::Result {
     let pool = &dfg.value_lists;
+    let jump_tables = &dfg.jump_tables;
     use crate::ir::instructions::InstructionData::*;
-    match dfg[inst] {
+    match dfg.insts[inst] {
         AtomicRmw { op, args, .. } => write!(w, " {} {}, {}", op, args[0], args[1]),
         AtomicCas { args, .. } => write!(w, " {}, {}, {}", args[0], args[1], args[2]),
         LoadNoOffset { flags, arg, .. } => write!(w, "{} {}", flags, arg),
@@ -388,7 +383,6 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
         UnaryImm { imm, .. } => write!(w, " {}", imm),
         UnaryIeee32 { imm, .. } => write!(w, " {}", imm),
         UnaryIeee64 { imm, .. } => write!(w, " {}", imm),
-        UnaryBool { imm, .. } => write!(w, " {}", imm),
         UnaryGlobalValue { global_value, .. } => write!(w, " {}", global_value),
         UnaryConst {
             constant_handle, ..
@@ -414,65 +408,20 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
         }
         IntCompare { cond, args, .. } => write!(w, " {} {}, {}", cond, args[0], args[1]),
         IntCompareImm { cond, arg, imm, .. } => write!(w, " {} {}, {}", cond, arg, imm),
-        IntCond { cond, arg, .. } => write!(w, " {} {}", cond, arg),
+        IntAddTrap { args, code, .. } => write!(w, " {}, {}, {}", args[0], args[1], code),
         FloatCompare { cond, args, .. } => write!(w, " {} {}, {}", cond, args[0], args[1]),
-        FloatCond { cond, arg, .. } => write!(w, " {} {}", cond, arg),
-        IntSelect { cond, args, .. } => {
-            write!(w, " {} {}, {}, {}", cond, args[0], args[1], args[2])
+        Jump { destination, .. } => {
+            write!(w, " {}", destination.display(pool))
         }
-        Jump {
-            destination,
-            ref args,
-            ..
-        } => {
-            write!(w, " {}", destination)?;
-            write_block_args(w, args.as_slice(pool))
-        }
-        Branch {
-            destination,
-            ref args,
-            ..
-        } => {
-            let args = args.as_slice(pool);
-            write!(w, " {}, {}", args[0], destination)?;
-            write_block_args(w, &args[1..])
-        }
-        BranchInt {
-            cond,
-            destination,
-            ref args,
-            ..
-        } => {
-            let args = args.as_slice(pool);
-            write!(w, " {} {}, {}", cond, args[0], destination)?;
-            write_block_args(w, &args[1..])
-        }
-        BranchFloat {
-            cond,
-            destination,
-            ref args,
-            ..
-        } => {
-            let args = args.as_slice(pool);
-            write!(w, " {} {}, {}", cond, args[0], destination)?;
-            write_block_args(w, &args[1..])
-        }
-        BranchIcmp {
-            cond,
-            destination,
-            ref args,
-            ..
-        } => {
-            let args = args.as_slice(pool);
-            write!(w, " {} {}, {}, {}", cond, args[0], args[1], destination)?;
-            write_block_args(w, &args[2..])
-        }
-        BranchTable {
+        Brif {
             arg,
-            destination,
-            table,
+            blocks: [block_then, block_else],
             ..
-        } => write!(w, " {}, {}, {}", arg, destination, table),
+        } => {
+            write!(w, " {}, {}", arg, block_then.display(pool))?;
+            write!(w, ", {}", block_else.display(pool))
+        }
+        BranchTable { arg, table, .. } => write!(w, " {}, {}", arg, jump_tables[table]),
         Call {
             func_ref, ref args, ..
         } => write!(w, " {}({})", func_ref, DisplayValues(args.as_slice(pool))),
@@ -506,7 +455,6 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
             dynamic_stack_slot,
             ..
         } => write!(w, " {}, {}", arg, dynamic_stack_slot),
-        HeapAddr { heap, arg, imm, .. } => write!(w, " {}, {}, {}", heap, arg, imm),
         TableAddr { table, arg, .. } => write!(w, " {}, {}", table, arg),
         Load {
             flags, arg, offset, ..
@@ -519,22 +467,25 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
         } => write!(w, "{} {}, {}{}", flags, args[0], args[1], offset),
         Trap { code, .. } => write!(w, " {}", code),
         CondTrap { arg, code, .. } => write!(w, " {}, {}", arg, code),
-        IntCondTrap {
-            cond, arg, code, ..
-        } => write!(w, " {} {}, {}", cond, arg, code),
-        FloatCondTrap {
-            cond, arg, code, ..
-        } => write!(w, " {} {}, {}", cond, arg, code),
-    }
-}
+    }?;
 
-/// Write block args using optional parantheses.
-fn write_block_args(w: &mut dyn Write, args: &[Value]) -> fmt::Result {
-    if args.is_empty() {
-        Ok(())
-    } else {
-        write!(w, "({})", DisplayValues(args))
+    let mut sep = "  ; ";
+    for arg in dfg.inst_values(inst) {
+        if let ValueDef::Result(src, _) = dfg.value_def(arg) {
+            let imm = match dfg.insts[src] {
+                UnaryImm { imm, .. } => imm.to_string(),
+                UnaryIeee32 { imm, .. } => imm.to_string(),
+                UnaryIeee64 { imm, .. } => imm.to_string(),
+                UnaryConst {
+                    constant_handle, ..
+                } => constant_handle.to_string(),
+                _ => continue,
+            };
+            write!(w, "{}{} = {}", sep, arg, imm)?;
+            sep = ", ";
+        }
     }
+    Ok(())
 }
 
 /// Displayable slice of values.
@@ -553,26 +504,11 @@ impl<'a> fmt::Display for DisplayValues<'a> {
     }
 }
 
-struct DisplayValuesWithDelimiter<'a>(&'a [Value], char);
-
-impl<'a> fmt::Display for DisplayValuesWithDelimiter<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for (i, val) in self.0.iter().enumerate() {
-            if i == 0 {
-                write!(f, "{}", val)?;
-            } else {
-                write!(f, "{}{}", self.1, val)?;
-            }
-        }
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::cursor::{Cursor, CursorPosition, FuncCursor};
     use crate::ir::types;
-    use crate::ir::{ExternalName, Function, InstBuilder, StackSlotData, StackSlotKind};
+    use crate::ir::{Function, InstBuilder, StackSlotData, StackSlotKind, UserFuncName};
     use alloc::string::ToString;
 
     #[test]
@@ -580,7 +516,7 @@ mod tests {
         let mut f = Function::new();
         assert_eq!(f.to_string(), "function u0:0() fast {\n}\n");
 
-        f.name = ExternalName::testcase("foo");
+        f.name = UserFuncName::testcase("foo");
         assert_eq!(f.to_string(), "function %foo() fast {\n}\n");
 
         f.create_sized_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, 4));

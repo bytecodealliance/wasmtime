@@ -4,6 +4,7 @@ set enable_llvm_abi_extensions=true
 target aarch64
 target s390x
 target x86_64
+target riscv64
 
 function %add_i128(i128, i128) -> i128 {
 block0(v0: i128,v1: i128):
@@ -56,3 +57,13 @@ block0(v0: i128,v1: i128):
 ; run: %mul_i128(13, 0x01010101_01010101_01010101_01010101) == 0x0D0D0D0D_0D0D0D0D_0D0D0D0D_0D0D0D0D
 ; run: %mul_i128(0x00000000_01234567_89ABCDEF_00000000, 0x00000000_FEDCBA98_76543210_00000000) == 0x2236D88F_E5618CF0_00000000_00000000
 ; run: %mul_i128(0xC0FFEEEE_C0FFEEEE_C0FFEEEE_C0FFEEEE, 0xDECAFFFF_DECAFFFF_DECAFFFF_DECAFFFF) == 0x5ECD38B5_9D1C2B7E_DB6B1E48_19BA1112
+
+
+; Tests that imm's are sign extended on i128's
+; See: https://github.com/bytecodealliance/wasmtime/issues/4568
+function %iadd_imm_neg(i128) -> i128 {
+block0(v0: i128):
+    v1 = iadd_imm.i128 v0, -1
+    return v1
+}
+; run: %iadd_imm_neg(1) == 0

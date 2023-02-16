@@ -1,0 +1,175 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %f0(r64) -> r64 {
+block0(v0: r64):
+  return v0
+}
+
+; VCode:
+; block0:
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   ret
+
+function %f1(r64) -> i8 {
+block0(v0: r64):
+  v1 = is_null v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   is_null a0,a0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   beq zero, a0, 0xc
+;   mv a0, zero
+;   j 8
+;   addi a0, zero, 1
+;   ret
+
+function %f2(r64) -> i8 {
+block0(v0: r64):
+  v1 = is_invalid v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   is_invalid a0,a0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   beq zero, a0, 0xc
+;   mv a0, zero
+;   j 8
+;   addi a0, zero, 1
+;   ret
+
+function %f3() -> r64 {
+block0:
+  v0 = null.r64
+  return v0
+}
+
+; VCode:
+; block0:
+;   li a0,0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   mv a0, zero
+;   ret
+
+function %f4(r64, r64) -> r64, r64, r64 {
+    fn0 = %f(r64) -> i8
+    ss0 = explicit_slot 8
+
+block0(v0: r64, v1: r64):
+    v2 = call fn0(v0)
+    stack_store.r64 v0, ss0
+    brif v2, block2(v0, v1), block1(v1, v0)
+
+block1(v3: r64, v4: r64):
+    jump block3(v3, v4)
+
+block2(v5: r64, v6: r64):
+    jump block3(v5, v6)
+
+block3(v7: r64, v8: r64):
+    v9 = stack_load.r64 ss0
+    return v7, v8, v9
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   sd s7,-8(sp)
+;   add sp,-48
+; block0:
+;   sd a0,8(nominal_sp)
+;   sd a1,16(nominal_sp)
+;   mv s7,a2
+;   load_sym a1,%f+0
+;   callind a1
+;   load_addr a1,nsp+0
+;   ld t4,8(nominal_sp)
+;   sd t4,0(a1)
+;   andi a1,a0,255
+;   bne a1,zero,taken(label1),not_taken(label3)
+; block1:
+;   j label2
+; block2:
+;   mv a0,t4
+;   ld a1,16(nominal_sp)
+;   j label5
+; block3:
+;   j label4
+; block4:
+;   mv a1,t4
+;   ld a0,16(nominal_sp)
+;   j label5
+; block5:
+;   load_addr a2,nsp+0
+;   ld a2,0(a2)
+;   mv a3,s7
+;   sd a2,0(a3)
+;   add sp,+48
+;   ld s7,-8(sp)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   ori s0, sp, 0
+;   sd s7, -8(sp)
+;   addi sp, sp, -0x30
+; block1: ; offset 0x18
+;   sd a0, 8(sp)
+;   sd a1, 0x10(sp)
+;   ori s7, a2, 0
+;   auipc a1, 0
+;   ld a1, 0xc(a1)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %f 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   jalr a1
+;   mv a1, sp
+;   ld t4, 8(sp)
+;   sd t4, 0(a1)
+;   andi a1, a0, 0xff
+;   beqz a1, 0x10
+; block2: ; offset 0x50
+;   ori a0, t4, 0
+;   ld a1, 0x10(sp)
+;   j 0xc
+; block3: ; offset 0x5c
+;   ori a1, t4, 0
+;   ld a0, 0x10(sp)
+; block4: ; offset 0x64
+;   mv a2, sp
+;   ld a2, 0(a2)
+;   ori a3, s7, 0
+;   sd a2, 0(a3)
+;   addi sp, sp, 0x30
+;   ld s7, -8(sp)
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+

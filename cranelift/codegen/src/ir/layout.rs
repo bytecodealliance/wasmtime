@@ -4,7 +4,6 @@
 //! determined by the `Layout` data structure defined in this module.
 
 use crate::entity::SecondaryMap;
-use crate::ir::dfg::DataFlowGraph;
 use crate::ir::progpoint::{ExpandedProgramPoint, ProgramOrder};
 use crate::ir::{Block, Inst};
 use crate::packed_option::PackedOption;
@@ -25,7 +24,7 @@ use core::iter::{IntoIterator, Iterator};
 /// While data dependencies are not recorded, instruction ordering does affect control
 /// dependencies, so part of the semantics of the program are determined by the layout.
 ///
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub struct Layout {
     /// Linked list nodes for the layout order of blocks Forms a doubly linked list, terminated in
     /// both ends by `None`.
@@ -311,7 +310,7 @@ impl Layout {
     ///
     /// This doesn't affect the position of anything, but it gives more room in the internal
     /// sequence numbers for inserting instructions later.
-    fn full_renumber(&mut self) {
+    pub(crate) fn full_renumber(&mut self) {
         let _tt = timing::layout_renumber();
         let mut seq = 0;
         let mut next_block = self.first_block;
@@ -486,7 +485,7 @@ impl Layout {
 
 /// A single node in the linked-list of blocks.
 // Whenever you add new fields here, don't forget to update the custom serializer for `Layout` too.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Hash)]
 struct BlockNode {
     prev: PackedOption<Block>,
     next: PackedOption<Block>,
@@ -594,19 +593,6 @@ impl Layout {
         self.insts[inst].prev.expand()
     }
 
-    /// Fetch the first instruction in a block's terminal branch group.
-    pub fn canonical_branch_inst(&self, dfg: &DataFlowGraph, block: Block) -> Option<Inst> {
-        // Basic blocks permit at most two terminal branch instructions.
-        // If two, the former is conditional and the latter is unconditional.
-        let last = self.last_inst(block)?;
-        if let Some(prev) = self.prev_inst(last) {
-            if dfg[prev].opcode().is_branch() {
-                return Some(prev);
-            }
-        }
-        Some(last)
-    }
-
     /// Insert `inst` before the instruction `before` in the same block.
     pub fn insert_inst(&mut self, inst: Inst, before: Inst) {
         debug_assert_eq!(self.inst_block(inst), None);
@@ -659,24 +645,6 @@ impl Layout {
             layout: self,
             head: self.blocks[block].first_inst.into(),
             tail: self.blocks[block].last_inst.into(),
-        }
-    }
-
-    /// Iterate over a limited set of instruction which are likely the branches of `block` in layout
-    /// order. Any instruction not visited by this iterator is not a branch, but an instruction visited by this may not be a branch.
-    pub fn block_likely_branches(&self, block: Block) -> Insts {
-        // Note: Checking whether an instruction is a branch or not while walking backward might add
-        // extra overhead. However, we know that the number of branches is limited to 2 at the end of
-        // each block, and therefore we can just iterate over the last 2 instructions.
-        let mut iter = self.block_insts(block);
-        let head = iter.head;
-        let tail = iter.tail;
-        iter.next_back();
-        let head = iter.next_back().or(head);
-        Insts {
-            layout: self,
-            head,
-            tail,
         }
     }
 
@@ -748,7 +716,7 @@ impl Layout {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Hash)]
 struct InstNode {
     /// The Block containing this instruction, or `None` if the instruction is not yet inserted.
     block: PackedOption<Block>,

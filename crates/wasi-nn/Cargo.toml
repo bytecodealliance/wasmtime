@@ -1,7 +1,7 @@
 [package]
 name = "wasmtime-wasi-nn"
-version = "0.41.0"
-authors = ["The Wasmtime Project Developers"]
+version.workspace = true
+authors.workspace = true
 description = "Wasmtime implementation of the wasi-nn API"
 documentation = "https://docs.rs/wasmtime-wasi-nn"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -9,16 +9,16 @@ categories = ["wasm", "computer-vision"]
 keywords = ["webassembly", "wasm", "neural-network"]
 repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
-edition = "2021"
+edition.workspace = true
 
 [dependencies]
 # These dependencies are necessary for the witx-generation macros to work:
-anyhow = "1.0"
-wiggle = { path = "../wiggle", version = "=0.41.0" }
+anyhow = { workspace = true }
+wiggle = { workspace = true }
 
 # These dependencies are necessary for the wasi-nn implementation:
-openvino = { version = "0.4.1", features = ["runtime-linking"] }
-thiserror = "1.0"
+openvino = { version = "0.4.2", features = ["runtime-linking"] }
+thiserror = { workspace = true }
 
 [build-dependencies]
 walkdir = "2.3"

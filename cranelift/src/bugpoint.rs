@@ -1,11 +1,12 @@
 //! CLI tool to reduce Cranelift IR files crashing during compilation.
 
-use crate::utils::{parse_sets_and_triple, read_to_string};
+use crate::utils::read_to_string;
 use anyhow::{Context as _, Result};
 use clap::Parser;
+use cranelift::prelude::Value;
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
 use cranelift_codegen::flowgraph::ControlFlowGraph;
-use cranelift_codegen::ir::types::{F32, F64};
+use cranelift_codegen::ir::types::{F32, F64, I128, I64};
 use cranelift_codegen::ir::{
     self, Block, FuncRef, Function, GlobalValueData, Inst, InstBuilder, InstructionData,
     StackSlots, TrapCode,
@@ -13,7 +14,7 @@ use cranelift_codegen::ir::{
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::Context;
 use cranelift_entity::PrimaryMap;
-use cranelift_reader::{parse_test, ParseOptions};
+use cranelift_reader::{parse_sets_and_triple, parse_test, ParseOptions};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -173,7 +174,7 @@ impl Mutator for ReplaceInstWithConst {
             |(_prev_block, prev_inst)| {
                 let num_results = func.dfg.inst_results(prev_inst).len();
 
-                let opcode = func.dfg[prev_inst].opcode();
+                let opcode = func.dfg.insts[prev_inst].opcode();
                 if num_results == 0
                     || opcode == ir::Opcode::Iconst
                     || opcode == ir::Opcode::F32const
@@ -182,14 +183,22 @@ impl Mutator for ReplaceInstWithConst {
                     return (func, format!(""), ProgressStatus::Skip);
                 }
 
-                if num_results == 1 {
-                    let ty = func.dfg.value_type(func.dfg.first_result(prev_inst));
-                    let new_inst_name = const_for_type(func.dfg.replace(prev_inst), ty);
-                    return (
-                        func,
-                        format!("Replace inst {} with {}.", prev_inst, new_inst_name),
-                        ProgressStatus::Changed,
-                    );
+                // We replace a i128 const with a uextend+iconst, so we need to match that here
+                // to avoid processing those multiple times
+                if opcode == ir::Opcode::Uextend {
+                    let ret_ty = func.dfg.value_type(func.dfg.first_result(prev_inst));
+                    let is_uextend_i128 = ret_ty == I128;
+
+                    let arg = func.dfg.inst_args(prev_inst)[0];
+                    let arg_def = func.dfg.value_def(arg);
+                    let arg_is_iconst = arg_def
+                        .inst()
+                        .map(|inst| func.dfg.insts[inst].opcode() == ir::Opcode::Iconst)
+                        .unwrap_or(false);
+
+                    if is_uextend_i128 && arg_is_iconst {
+                        return (func, format!(""), ProgressStatus::Skip);
+                    }
                 }
 
                 // At least 2 results. Replace each instruction with as many const instructions as
@@ -204,20 +213,24 @@ impl Mutator for ReplaceInstWithConst {
                 pos.func.dfg.clear_results(prev_inst);
 
                 let mut inst_names = Vec::new();
-                for r in results {
-                    let ty = pos.func.dfg.value_type(r);
-                    let builder = pos.ins().with_results([Some(r)]);
-                    let new_inst_name = const_for_type(builder, ty);
+                for r in &results {
+                    let new_inst_name = replace_with_const(&mut pos, *r);
                     inst_names.push(new_inst_name);
                 }
 
                 // Remove the instruction.
                 assert_eq!(pos.remove_inst(), prev_inst);
 
+                let progress = if results.len() == 1 {
+                    ProgressStatus::Changed
+                } else {
+                    ProgressStatus::ExpandedOrShrinked
+                };
+
                 (
                     func,
                     format!("Replace inst {} with {}", prev_inst, inst_names.join(" / ")),
-                    ProgressStatus::ExpandedOrShrinked,
+                    progress,
                 )
             },
         )
@@ -253,7 +266,7 @@ impl Mutator for ReplaceInstWithTrap {
     fn mutate(&mut self, mut func: Function) -> Option<(Function, String, ProgressStatus)> {
         next_inst_ret_prev(&func, &mut self.block, &mut self.inst).map(
             |(_prev_block, prev_inst)| {
-                let status = if func.dfg[prev_inst].opcode() == ir::Opcode::Trap {
+                let status = if func.dfg.insts[prev_inst].opcode() == ir::Opcode::Trap {
                     ProgressStatus::Skip
                 } else {
                     func.dfg.replace(prev_inst).trap(TrapCode::User(0));
@@ -397,24 +410,23 @@ impl Mutator for ReplaceBlockParamWithConst {
         let param_index = self.params_remaining;
 
         let param = func.dfg.block_params(self.block)[param_index];
-        let param_type = func.dfg.value_type(param);
         func.dfg.remove_block_param(param);
 
         let first_inst = func.layout.first_inst(self.block).unwrap();
         let mut pos = FuncCursor::new(&mut func).at_inst(first_inst);
-        let builder = pos.ins().with_results([Some(param)]);
-        let new_inst_name = const_for_type(builder, param_type);
+        let new_inst_name = replace_with_const(&mut pos, param);
 
         let mut cfg = ControlFlowGraph::new();
         cfg.compute(&func);
 
         // Remove parameters in branching instructions that point to this block
         for pred in cfg.pred_iter(self.block) {
-            let inst = &mut func.dfg[pred.inst];
-            let num_fixed_args = inst.opcode().constraints().num_fixed_value_arguments();
-            let mut values = inst.take_value_list().unwrap();
-            values.remove(num_fixed_args + param_index, &mut func.dfg.value_lists);
-            func.dfg[pred.inst].put_value_list(values);
+            let dfg = &mut func.dfg;
+            for branch in dfg.insts[pred.inst].branch_destination_mut().into_iter() {
+                if branch.block(&dfg.value_lists) == self.block {
+                    branch.remove(param_index, &mut dfg.value_lists);
+                }
+            }
         }
 
         if Some(self.block) == func.layout.entry_block() {
@@ -460,7 +472,7 @@ impl Mutator for RemoveUnusedEntities {
                 let mut ext_func_usage_map = HashMap::new();
                 for block in func.layout.blocks() {
                     for inst in func.layout.block_insts(block) {
-                        match func.dfg[inst] {
+                        match func.dfg.insts[inst] {
                             // Add new cases when there are new instruction formats taking a `FuncRef`.
                             InstructionData::Call { func_ref, .. }
                             | InstructionData::FuncAddr { func_ref, .. } => {
@@ -480,7 +492,7 @@ impl Mutator for RemoveUnusedEntities {
                     if let Some(func_ref_usage) = ext_func_usage_map.get(&func_ref) {
                         let new_func_ref = ext_funcs.push(ext_func_data.clone());
                         for &inst in func_ref_usage {
-                            match func.dfg[inst] {
+                            match func.dfg.insts[inst] {
                                 // Keep in sync with the above match.
                                 InstructionData::Call {
                                     ref mut func_ref, ..
@@ -511,7 +523,8 @@ impl Mutator for RemoveUnusedEntities {
                 for block in func.layout.blocks() {
                     for inst in func.layout.block_insts(block) {
                         // Add new cases when there are new instruction formats taking a `SigRef`.
-                        if let InstructionData::CallIndirect { sig_ref, .. } = func.dfg[inst] {
+                        if let InstructionData::CallIndirect { sig_ref, .. } = func.dfg.insts[inst]
+                        {
                             signatures_usage_map
                                 .entry(sig_ref)
                                 .or_insert_with(Vec::new)
@@ -533,7 +546,7 @@ impl Mutator for RemoveUnusedEntities {
                         let new_sig_ref = signatures.push(sig_data.clone());
                         for &sig_ref_user in sig_ref_usage {
                             match sig_ref_user {
-                                SigRefUser::Instruction(inst) => match func.dfg[inst] {
+                                SigRefUser::Instruction(inst) => match func.dfg.insts[inst] {
                                     // Keep in sync with the above match.
                                     InstructionData::CallIndirect {
                                         ref mut sig_ref, ..
@@ -558,7 +571,7 @@ impl Mutator for RemoveUnusedEntities {
                 let mut stack_slot_usage_map = HashMap::new();
                 for block in func.layout.blocks() {
                     for inst in func.layout.block_insts(block) {
-                        match func.dfg[inst] {
+                        match func.dfg.insts[inst] {
                             // Add new cases when there are new instruction formats taking a `StackSlot`.
                             InstructionData::StackLoad { stack_slot, .. }
                             | InstructionData::StackStore { stack_slot, .. } => {
@@ -579,7 +592,7 @@ impl Mutator for RemoveUnusedEntities {
                     if let Some(stack_slot_usage) = stack_slot_usage_map.get(&stack_slot) {
                         let new_stack_slot = stack_slots.push(stack_slot_data.clone());
                         for &inst in stack_slot_usage {
-                            match &mut func.dfg[inst] {
+                            match &mut func.dfg.insts[inst] {
                                 // Keep in sync with the above match.
                                 InstructionData::StackLoad { stack_slot, .. }
                                 | InstructionData::StackStore { stack_slot, .. } => {
@@ -601,7 +614,7 @@ impl Mutator for RemoveUnusedEntities {
                     for inst in func.layout.block_insts(block) {
                         // Add new cases when there are new instruction formats taking a `GlobalValue`.
                         if let InstructionData::UnaryGlobalValue { global_value, .. } =
-                            func.dfg[inst]
+                            func.dfg.insts[inst]
                         {
                             global_value_usage_map
                                 .entry(global_value)
@@ -629,7 +642,7 @@ impl Mutator for RemoveUnusedEntities {
                     if let Some(global_value_usage) = global_value_usage_map.get(&global_value) {
                         let new_global_value = global_values.push(global_value_data.clone());
                         for &inst in global_value_usage {
-                            match &mut func.dfg[inst] {
+                            match &mut func.dfg.insts[inst] {
                                 // Keep in sync with the above match.
                                 InstructionData::UnaryGlobalValue { global_value, .. } => {
                                     *global_value = new_global_value;
@@ -696,32 +709,31 @@ impl Mutator for MergeBlocks {
 
         let pred = cfg.pred_iter(block).next().unwrap();
 
-        // If the branch instruction that lead us to this block is preceded by another branch
-        // instruction, then we have a conditional jump sequence that we should not break by
-        // replacing the second instruction by more of them.
-        if let Some(pred_pred_inst) = func.layout.prev_inst(pred.inst) {
-            if func.dfg[pred_pred_inst].opcode().is_branch() {
-                return Some((
-                    func,
-                    format!("did nothing for {}", block),
-                    ProgressStatus::Skip,
-                ));
-            }
+        // If the branch instruction that lead us to this block wasn't an unconditional jump, then
+        // we have a conditional jump sequence that we should not break.
+        let branch_dests = func.dfg.insts[pred.inst].branch_destination();
+        if branch_dests.len() != 1 {
+            return Some((
+                func,
+                format!("did nothing for {}", block),
+                ProgressStatus::Skip,
+            ));
         }
 
-        assert!(func.dfg.block_params(block).len() == func.dfg.inst_variable_args(pred.inst).len());
+        let branch_args = branch_dests[0].args_slice(&func.dfg.value_lists).to_vec();
 
-        // If there were any block parameters in block, then the last instruction in pred will
-        // fill these parameters. Make the block params aliases of the terminator arguments.
-        for (block_param, arg) in func
+        // TODO: should we free the entity list associated with the block params?
+        let block_params = func
             .dfg
             .detach_block_params(block)
             .as_slice(&func.dfg.value_lists)
-            .iter()
-            .cloned()
-            .zip(func.dfg.inst_variable_args(pred.inst).iter().cloned())
-            .collect::<Vec<_>>()
-        {
+            .to_vec();
+
+        assert_eq!(block_params.len(), branch_args.len());
+
+        // If there were any block parameters in block, then the last instruction in pred will
+        // fill these parameters. Make the block params aliases of the terminator arguments.
+        for (block_param, arg) in block_params.into_iter().zip(branch_args) {
             if block_param != arg {
                 func.dfg.change_to_alias(block_param, arg);
             }
@@ -755,27 +767,29 @@ impl Mutator for MergeBlocks {
     }
 }
 
-fn const_for_type<'f, T: InstBuilder<'f>>(mut builder: T, ty: ir::Type) -> &'static str {
+fn replace_with_const(pos: &mut FuncCursor, param: Value) -> &'static str {
+    let ty = pos.func.dfg.value_type(param);
     if ty == F32 {
-        builder.f32const(0.0);
+        pos.ins().with_result(param).f32const(0.0);
         "f32const"
     } else if ty == F64 {
-        builder.f64const(0.0);
+        pos.ins().with_result(param).f64const(0.0);
         "f64const"
-    } else if ty.is_bool() {
-        builder.bconst(ty, false);
-        "bconst"
     } else if ty.is_ref() {
-        builder.null(ty);
+        pos.ins().with_result(param).null(ty);
         "null"
     } else if ty.is_vector() {
         let zero_data = vec![0; ty.bytes() as usize].into();
-        let zero_handle = builder.data_flow_graph_mut().constants.insert(zero_data);
-        builder.vconst(ty, zero_handle);
+        let zero_handle = pos.func.dfg.constants.insert(zero_data);
+        pos.ins().with_result(param).vconst(ty, zero_handle);
         "vconst"
+    } else if ty == I128 {
+        let res = pos.ins().iconst(I64, 0);
+        pos.ins().with_result(param).uextend(I128, res);
+        "iconst+uextend"
     } else {
         // Default to an integer type and possibly create verifier error
-        builder.iconst(ty, 0);
+        pos.ins().with_result(param).iconst(ty, 0);
         "iconst"
     }
 }
@@ -810,9 +824,9 @@ fn inst_count(func: &Function) -> usize {
 }
 
 fn resolve_aliases(func: &mut Function) {
-    for block in func.layout.blocks() {
-        for inst in func.layout.block_insts(block) {
-            func.dfg.resolve_aliases_in_arguments(inst);
+    for block in func.stencil.layout.blocks() {
+        for inst in func.stencil.layout.block_insts(block) {
+            func.stencil.dfg.resolve_aliases_in_arguments(inst);
         }
     }
 }
@@ -1011,7 +1025,7 @@ impl<'a> CrashCheckContext<'a> {
             let contains_call = func.layout.blocks().any(|block| {
                 func.layout
                     .block_insts(block)
-                    .any(|inst| match func.dfg[inst] {
+                    .any(|inst| match func.dfg.insts[inst] {
                         InstructionData::Call { .. } => true,
                         _ => false,
                     })
@@ -1073,9 +1087,13 @@ mod tests {
                 "reduction wasn't maximal for insts"
             );
 
-            assert_eq!(
-                format!("{}", reduced_func),
-                expected_str.replace("\r\n", "\n")
+            let actual_ir = format!("{}", reduced_func);
+            let expected_ir = expected_str.replace("\r\n", "\n");
+            assert!(
+                expected_ir == actual_ir,
+                "Expected:\n{}\nGot:\n{}",
+                expected_ir,
+                actual_ir,
             );
         }
     }

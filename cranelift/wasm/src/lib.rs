@@ -51,18 +51,20 @@ use std::collections::{
 mod code_translator;
 mod environ;
 mod func_translator;
+mod heap;
 mod module_translator;
 mod sections_translator;
 mod state;
 mod translation_utils;
 
 pub use crate::environ::{
-    DummyEnvironment, FuncEnvironment, GlobalVariable, ModuleEnvironment, TargetEnvironment,
+    DummyEnvironment, DummyFuncEnvironment, DummyModuleInfo, ExpectedReachability, FuncEnvironment,
+    GlobalVariable, ModuleEnvironment, TargetEnvironment,
 };
 pub use crate::func_translator::FuncTranslator;
+pub use crate::heap::{Heap, HeapData, HeapStyle};
 pub use crate::module_translator::translate_module;
-pub use crate::state::func_state::FuncTranslationState;
-pub use crate::state::module_state::ModuleTranslationState;
+pub use crate::state::FuncTranslationState;
 pub use crate::translation_utils::*;
 pub use cranelift_frontend::FunctionBuilder;
 pub use wasmtime_types::*;

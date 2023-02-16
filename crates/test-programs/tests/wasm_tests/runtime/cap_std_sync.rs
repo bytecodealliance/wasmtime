@@ -59,7 +59,7 @@ fn run(
 
         let mut store = Store::new(&engine, builder.build());
         let instance = linker.instantiate(&mut store, &module)?;
-        let start = instance.get_typed_func::<(), (), _>(&mut store, "_start")?;
+        let start = instance.get_typed_func::<(), ()>(&mut store, "_start")?;
         start.call(&mut store, ()).map_err(anyhow::Error::from)
     };
 

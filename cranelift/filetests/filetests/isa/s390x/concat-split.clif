@@ -7,9 +7,16 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
+; VCode:
 ; block0:
-;   vlvgp %v7, %r4, %r3
-;   vst %v7, 0(%r2)
+;   vlvgp %v4, %r4, %r3
+;   vst %v4, 0(%r2)
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vlvgp %v4, %r4, %r3
+;   vst %v4, 0(%r2)
 ;   br %r14
 
 function %isplit_i128(i128) -> i64, i64 {
@@ -18,9 +25,17 @@ block0(v0: i128):
   return v1, v2
 }
 
+; VCode:
 ; block0:
-;   vl %v0, 0(%r2)
-;   lgdr %r3, %f0
-;   vlgvg %r2, %v0, 1
+;   vl %v1, 0(%r2)
+;   lgdr %r3, %f1
+;   vlgvg %r2, %v1, 1
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r2)
+;   lgdr %r3, %f1
+;   vlgvg %r2, %v1, 1
 ;   br %r14
 

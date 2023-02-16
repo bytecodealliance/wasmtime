@@ -9,7 +9,6 @@ pub use wasmtime::component::*;
 
 pub fn val(v: &WastVal<'_>, ty: &Type) -> Result<Val> {
     Ok(match v {
-        WastVal::Unit => Val::Unit,
         WastVal::Bool(b) => Val::Bool(*b),
         WastVal::U8(b) => Val::U8(*b),
         WastVal::S8(b) => Val::S8(*b),
@@ -19,8 +18,8 @@ pub fn val(v: &WastVal<'_>, ty: &Type) -> Result<Val> {
         WastVal::S32(b) => Val::S32(*b),
         WastVal::U64(b) => Val::U64(*b),
         WastVal::S64(b) => Val::S64(*b),
-        WastVal::Float32(b) => Val::Float32(b.bits),
-        WastVal::Float64(b) => Val::Float64(b.bits),
+        WastVal::Float32(b) => Val::Float32(f32::from_bits(b.bits)),
+        WastVal::Float64(b) => Val::Float64(f64::from_bits(b.bits)),
         WastVal::Char(b) => Val::Char(*b),
         WastVal::String(s) => Val::String(s.to_string().into()),
         WastVal::List(vals) => match ty {
@@ -80,10 +79,10 @@ pub fn val(v: &WastVal<'_>, ty: &Type) -> Result<Val> {
         WastVal::Variant(name, payload) => match ty {
             Type::Variant(t) => {
                 let case = match t.cases().find(|c| c.name == *name) {
-                    Some(case) => case.ty,
+                    Some(case) => case,
                     None => bail!("no case named `{}", name),
                 };
-                let payload = val(payload, &case)?;
+                let payload = payload_val(case.name, payload.as_deref(), case.ty.as_ref())?;
                 t.new_val(name, payload)?
             }
             _ => bail!("expected a variant value"),
@@ -109,11 +108,11 @@ pub fn val(v: &WastVal<'_>, ty: &Type) -> Result<Val> {
             }
             _ => bail!("expected an option value"),
         },
-        WastVal::Expected(v) => match ty {
-            Type::Expected(t) => {
+        WastVal::Result(v) => match ty {
+            Type::Result(t) => {
                 let v = match v {
-                    Ok(v) => Ok(val(v, &t.ok())?),
-                    Err(v) => Err(val(v, &t.err())?),
+                    Ok(v) => Ok(payload_val("ok", v.as_deref(), t.ok().as_ref())?),
+                    Err(v) => Err(payload_val("err", v.as_deref(), t.err().as_ref())?),
                 };
                 t.new_val(v)?
             }
@@ -126,12 +125,17 @@ pub fn val(v: &WastVal<'_>, ty: &Type) -> Result<Val> {
     })
 }
 
+fn payload_val(name: &str, v: Option<&WastVal<'_>>, ty: Option<&Type>) -> Result<Option<Val>> {
+    match (v, ty) {
+        (Some(v), Some(ty)) => Ok(Some(val(v, ty)?)),
+        (None, None) => Ok(None),
+        (Some(_), None) => bail!("expected payload for case `{name}`"),
+        (None, Some(_)) => bail!("unexpected payload for case `{name}`"),
+    }
+}
+
 pub fn match_val(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
     match expected {
-        WastVal::Unit => match actual {
-            Val::Unit => Ok(()),
-            _ => mismatch(expected, actual),
-        },
         WastVal::Bool(e) => match actual {
             Val::Bool(a) => match_debug(a, e),
             _ => mismatch(expected, actual),
@@ -169,11 +173,11 @@ pub fn match_val(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
             _ => mismatch(expected, actual),
         },
         WastVal::Float32(e) => match actual {
-            Val::Float32(a) => core::match_f32(*a, &NanPattern::Value(*e)),
+            Val::Float32(a) => core::match_f32(a.to_bits(), &NanPattern::Value(*e)),
             _ => mismatch(expected, actual),
         },
         WastVal::Float64(e) => match actual {
-            Val::Float64(a) => core::match_f64(*a, &NanPattern::Value(*e)),
+            Val::Float64(a) => core::match_f64(a.to_bits(), &NanPattern::Value(*e)),
             _ => mismatch(expected, actual),
         },
         WastVal::Char(e) => match actual {
@@ -242,7 +246,7 @@ pub fn match_val(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
                 if a.discriminant() != *name {
                     bail!("expected discriminant `{name}` got `{}`", a.discriminant());
                 }
-                match_val(e, a.payload())
+                match_payload_val(name, e.as_deref(), a.payload())
             }
             _ => mismatch(expected, actual),
         },
@@ -274,12 +278,12 @@ pub fn match_val(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
             },
             _ => mismatch(expected, actual),
         },
-        WastVal::Expected(e) => match actual {
-            Val::Expected(a) => match (e, a.value()) {
+        WastVal::Result(e) => match actual {
+            Val::Result(a) => match (e, a.value()) {
                 (Ok(_), Err(_)) => bail!("expected `ok`, found `err`"),
                 (Err(_), Ok(_)) => bail!("expected `err`, found `ok`"),
-                (Err(e), Err(a)) => match_val(e, a),
-                (Ok(e), Ok(a)) => match_val(e, a),
+                (Err(e), Err(a)) => match_payload_val("err", e.as_deref(), a),
+                (Ok(e), Ok(a)) => match_payload_val("ok", e.as_deref(), a),
             },
             _ => mismatch(expected, actual),
         },
@@ -291,6 +295,21 @@ pub fn match_val(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
             }
             _ => mismatch(expected, actual),
         },
+    }
+}
+
+fn match_payload_val(
+    name: &str,
+    expected: Option<&WastVal<'_>>,
+    actual: Option<&Val>,
+) -> Result<()> {
+    match (expected, actual) {
+        (Some(e), Some(a)) => {
+            match_val(e, a).with_context(|| format!("failed to match case `{name}`"))
+        }
+        (None, None) => Ok(()),
+        (Some(_), None) => bail!("expected payload for case `{name}`"),
+        (None, Some(_)) => bail!("unexpected payload for case `{name}`"),
     }
 }
 
@@ -311,7 +330,6 @@ where
 
 fn mismatch(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
     let expected = match expected {
-        WastVal::Unit => "unit",
         WastVal::Bool(..) => "bool",
         WastVal::U8(..) => "u8",
         WastVal::S8(..) => "s8",
@@ -332,11 +350,10 @@ fn mismatch(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
         WastVal::Variant(..) => "variant",
         WastVal::Union(..) => "union",
         WastVal::Option(..) => "option",
-        WastVal::Expected(..) => "expected",
+        WastVal::Result(..) => "result",
         WastVal::Flags(..) => "flags",
     };
     let actual = match actual {
-        Val::Unit => "unit",
         Val::Bool(..) => "bool",
         Val::U8(..) => "u8",
         Val::S8(..) => "s8",
@@ -357,7 +374,7 @@ fn mismatch(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
         Val::Variant(..) => "variant",
         Val::Union(..) => "union",
         Val::Option(..) => "option",
-        Val::Expected(..) => "expected",
+        Val::Result(..) => "result",
         Val::Flags(..) => "flags",
     };
     bail!("expected `{expected}` got `{actual}`")

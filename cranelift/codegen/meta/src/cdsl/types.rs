@@ -18,7 +18,6 @@ static RUST_NAME_PREFIX: &str = "ir::types::";
 pub(crate) enum ValueType {
     Lane(LaneType),
     Reference(ReferenceType),
-    Special(SpecialType),
     Vector(VectorType),
     DynamicVector(DynamicVectorType),
 }
@@ -27,11 +26,6 @@ impl ValueType {
     /// Iterate through all of the lane types.
     pub fn all_lane_types() -> LaneTypeIterator {
         LaneTypeIterator::new()
-    }
-
-    /// Iterate through all of the special types (neither lanes nor vectors).
-    pub fn all_special_types() -> SpecialTypeIterator {
-        SpecialTypeIterator::new()
     }
 
     pub fn all_reference_types() -> ReferenceTypeIterator {
@@ -43,7 +37,6 @@ impl ValueType {
         match *self {
             ValueType::Lane(l) => l.doc(),
             ValueType::Reference(r) => r.doc(),
-            ValueType::Special(s) => s.doc(),
             ValueType::Vector(ref v) => v.doc(),
             ValueType::DynamicVector(ref v) => v.doc(),
         }
@@ -54,7 +47,6 @@ impl ValueType {
         match *self {
             ValueType::Lane(l) => l.lane_bits(),
             ValueType::Reference(r) => r.lane_bits(),
-            ValueType::Special(s) => s.lane_bits(),
             ValueType::Vector(ref v) => v.lane_bits(),
             ValueType::DynamicVector(ref v) => v.lane_bits(),
         }
@@ -78,7 +70,6 @@ impl ValueType {
         match *self {
             ValueType::Lane(l) => l.number(),
             ValueType::Reference(r) => r.number(),
-            ValueType::Special(s) => s.number(),
             ValueType::Vector(ref v) => v.number(),
             ValueType::DynamicVector(ref v) => v.number(),
         }
@@ -100,7 +91,6 @@ impl fmt::Display for ValueType {
         match *self {
             ValueType::Lane(l) => l.fmt(f),
             ValueType::Reference(r) => r.fmt(f),
-            ValueType::Special(s) => s.fmt(f),
             ValueType::Vector(ref v) => v.fmt(f),
             ValueType::DynamicVector(ref v) => v.fmt(f),
         }
@@ -121,13 +111,6 @@ impl From<ReferenceType> for ValueType {
     }
 }
 
-/// Create a ValueType from a given special type.
-impl From<SpecialType> for ValueType {
-    fn from(spec: SpecialType) -> Self {
-        ValueType::Special(spec)
-    }
-}
-
 /// Create a ValueType from a given vector type.
 impl From<VectorType> for ValueType {
     fn from(vector: VectorType) -> Self {
@@ -145,7 +128,6 @@ impl From<DynamicVectorType> for ValueType {
 /// A concrete scalar type that can appear as a vector lane too.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum LaneType {
-    Bool(shared_types::Bool),
     Float(shared_types::Float),
     Int(shared_types::Int),
 }
@@ -154,7 +136,6 @@ impl LaneType {
     /// Return a string containing the documentation comment for this lane type.
     pub fn doc(self) -> String {
         match self {
-            LaneType::Bool(_) => format!("A boolean type with {} bits.", self.lane_bits()),
             LaneType::Float(shared_types::Float::F32) => String::from(
                 "A 32-bit floating point type represented in the IEEE 754-2008
                 *binary32* interchange format. This corresponds to the :c:type:`float`
@@ -178,7 +159,6 @@ impl LaneType {
     /// Return the number of bits in a lane.
     pub fn lane_bits(self) -> u64 {
         match self {
-            LaneType::Bool(ref b) => *b as u64,
             LaneType::Float(ref f) => *f as u64,
             LaneType::Int(ref i) => *i as u64,
         }
@@ -188,12 +168,6 @@ impl LaneType {
     pub fn number(self) -> u16 {
         constants::LANE_BASE
             + match self {
-                LaneType::Bool(shared_types::Bool::B1) => 0,
-                LaneType::Bool(shared_types::Bool::B8) => 1,
-                LaneType::Bool(shared_types::Bool::B16) => 2,
-                LaneType::Bool(shared_types::Bool::B32) => 3,
-                LaneType::Bool(shared_types::Bool::B64) => 4,
-                LaneType::Bool(shared_types::Bool::B128) => 5,
                 LaneType::Int(shared_types::Int::I8) => 6,
                 LaneType::Int(shared_types::Int::I16) => 7,
                 LaneType::Int(shared_types::Int::I32) => 8,
@@ -202,18 +176,6 @@ impl LaneType {
                 LaneType::Float(shared_types::Float::F32) => 11,
                 LaneType::Float(shared_types::Float::F64) => 12,
             }
-    }
-
-    pub fn bool_from_bits(num_bits: u16) -> LaneType {
-        LaneType::Bool(match num_bits {
-            1 => shared_types::Bool::B1,
-            8 => shared_types::Bool::B8,
-            16 => shared_types::Bool::B16,
-            32 => shared_types::Bool::B32,
-            64 => shared_types::Bool::B64,
-            128 => shared_types::Bool::B128,
-            _ => unreachable!("unxpected num bits for bool"),
-        })
     }
 
     pub fn int_from_bits(num_bits: u16) -> LaneType {
@@ -251,7 +213,6 @@ impl LaneType {
 impl fmt::Display for LaneType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            LaneType::Bool(_) => write!(f, "b{}", self.lane_bits()),
             LaneType::Float(_) => write!(f, "f{}", self.lane_bits()),
             LaneType::Int(_) => write!(f, "i{}", self.lane_bits()),
         }
@@ -265,18 +226,10 @@ impl fmt::Debug for LaneType {
             f,
             "{}",
             match *self {
-                LaneType::Bool(_) => format!("BoolType({})", inner_msg),
                 LaneType::Float(_) => format!("FloatType({})", inner_msg),
                 LaneType::Int(_) => format!("IntType({})", inner_msg),
             }
         )
-    }
-}
-
-/// Create a LaneType from a given bool variant.
-impl From<shared_types::Bool> for LaneType {
-    fn from(b: shared_types::Bool) -> Self {
-        LaneType::Bool(b)
     }
 }
 
@@ -296,7 +249,6 @@ impl From<shared_types::Int> for LaneType {
 
 /// An iterator for different lane types.
 pub(crate) struct LaneTypeIterator {
-    bool_iter: shared_types::BoolIterator,
     int_iter: shared_types::IntIterator,
     float_iter: shared_types::FloatIterator,
 }
@@ -305,7 +257,6 @@ impl LaneTypeIterator {
     /// Create a new lane type iterator.
     fn new() -> Self {
         Self {
-            bool_iter: shared_types::BoolIterator::new(),
             int_iter: shared_types::IntIterator::new(),
             float_iter: shared_types::FloatIterator::new(),
         }
@@ -315,9 +266,7 @@ impl LaneTypeIterator {
 impl Iterator for LaneTypeIterator {
     type Item = LaneType;
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(b) = self.bool_iter.next() {
-            Some(LaneType::from(b))
-        } else if let Some(i) = self.int_iter.next() {
+        if let Some(i) = self.int_iter.next() {
             Some(LaneType::from(i))
         } else if let Some(f) = self.float_iter.next() {
             Some(LaneType::from(f))
@@ -467,91 +416,6 @@ impl fmt::Debug for DynamicVectorType {
             self.base,
             self.minimum_lane_count(),
         )
-    }
-}
-
-/// A concrete scalar type that is neither a vector nor a lane type.
-///
-/// Special types cannot be used to form vectors.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) enum SpecialType {
-    Flag(shared_types::Flag),
-}
-
-impl SpecialType {
-    /// Return a string containing the documentation comment for this special type.
-    pub fn doc(self) -> String {
-        match self {
-            SpecialType::Flag(shared_types::Flag::IFlags) => String::from(
-                "CPU flags representing the result of an integer comparison. These flags
-                can be tested with an :type:`intcc` condition code.",
-            ),
-            SpecialType::Flag(shared_types::Flag::FFlags) => String::from(
-                "CPU flags representing the result of a floating point comparison. These
-                flags can be tested with a :type:`floatcc` condition code.",
-            ),
-        }
-    }
-
-    /// Return the number of bits in a lane.
-    pub fn lane_bits(self) -> u64 {
-        match self {
-            SpecialType::Flag(_) => 0,
-        }
-    }
-
-    /// Find the unique number associated with this special type.
-    pub fn number(self) -> u16 {
-        match self {
-            SpecialType::Flag(shared_types::Flag::IFlags) => 1,
-            SpecialType::Flag(shared_types::Flag::FFlags) => 2,
-        }
-    }
-}
-
-impl fmt::Display for SpecialType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            SpecialType::Flag(shared_types::Flag::IFlags) => write!(f, "iflags"),
-            SpecialType::Flag(shared_types::Flag::FFlags) => write!(f, "fflags"),
-        }
-    }
-}
-
-impl fmt::Debug for SpecialType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match *self {
-                SpecialType::Flag(_) => format!("FlagsType({})", self),
-            }
-        )
-    }
-}
-
-impl From<shared_types::Flag> for SpecialType {
-    fn from(f: shared_types::Flag) -> Self {
-        SpecialType::Flag(f)
-    }
-}
-
-pub(crate) struct SpecialTypeIterator {
-    flag_iter: shared_types::FlagIterator,
-}
-
-impl SpecialTypeIterator {
-    fn new() -> Self {
-        Self {
-            flag_iter: shared_types::FlagIterator::new(),
-        }
-    }
-}
-
-impl Iterator for SpecialTypeIterator {
-    type Item = SpecialType;
-    fn next(&mut self) -> Option<Self::Item> {
-        self.flag_iter.next().map(SpecialType::from)
     }
 }
 

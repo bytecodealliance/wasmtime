@@ -1,36 +1,36 @@
 [package]
 name = "wasmtime-cache"
-version = "0.41.0"
-authors = ["The Wasmtime Project Developers"]
+version.workspace = true
+authors.workspace = true
 description = "Support for automatic module caching with Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
 documentation = "https://docs.rs/wasmtime-cache/"
-edition = "2021"
+edition.workspace = true
 
 [dependencies]
-anyhow = "1.0"
-base64 = "0.13.0"
+anyhow = { workspace = true }
+base64 = "0.21.0"
 bincode = "1.1.4"
 directories-next = "2.0"
 file-per-thread-logger = "0.1.1"
-log = { version = "0.4.8", default-features = false }
+log = { workspace = true }
 serde = { version = "1.0.94", features = ["derive"] }
-sha2 = "0.9.0"
+sha2 = "0.10.2"
 toml = "0.5.5"
 zstd = { version = "0.11.1", default-features = false }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
-version = "0.36.0"
+workspace = true
 features = [
   "Win32_System_Threading",
 ]
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
-rustix = { version = "0.35.6", features = ["process"] }
+rustix = { workspace = true, features = ["process"] }
 
 [dev-dependencies]
 filetime = "0.2.7"
-once_cell = "1.12.0"
+once_cell = { workspace = true }
 pretty_env_logger = "0.4.0"
 tempfile = "3"

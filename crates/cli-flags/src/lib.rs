@@ -16,13 +16,11 @@
     )
 )]
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use clap::Parser;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use wasmtime::{Config, ProfilingStrategy};
-#[cfg(feature = "pooling-allocator")]
-use wasmtime::{InstanceLimits, PoolingAllocationStrategy};
 
 pub const SUPPORTED_WASM_FEATURES: &[(&str, &str)] = &[
     ("all", "enables all supported WebAssembly features"),
@@ -57,12 +55,16 @@ pub const SUPPORTED_WASI_MODULES: &[(&str, &str)] = &[
         "enables support for the WASI common APIs, see https://github.com/WebAssembly/WASI",
     ),
     (
+        "experimental-wasi-crypto",
+        "enables support for the WASI cryptography APIs (experimental), see https://github.com/WebAssembly/wasi-crypto",
+    ),
+    (
         "experimental-wasi-nn",
         "enables support for the WASI neural network API (experimental), see https://github.com/WebAssembly/wasi-nn",
     ),
     (
-        "experimental-wasi-crypto",
-        "enables support for the WASI cryptography APIs (experimental), see https://github.com/WebAssembly/wasi-crypto",
+        "experimental-wasi-threads",
+        "enables support for the WASI threading API (experimental), see https://github.com/WebAssembly/wasi-threads",
     ),
 ];
 
@@ -112,11 +114,11 @@ pub struct CommonOptions {
     #[clap(long, parse(from_os_str), value_name = "CONFIG_PATH")]
     pub config: Option<PathBuf>,
 
-    /// Disable logging.
+    /// Disable logging
     #[clap(long, conflicts_with = "log-to-files")]
     pub disable_logging: bool,
 
-    /// Log to per-thread log files instead of stderr.
+    /// Log to per-thread log files instead of stderr
     #[clap(long)]
     pub log_to_files: bool,
 
@@ -128,11 +130,15 @@ pub struct CommonOptions {
     #[clap(long)]
     pub disable_cache: bool,
 
-    /// Enables or disables WebAssembly features
+    /// Disable parallel compilation
+    #[clap(long)]
+    pub disable_parallel_compilation: bool,
+
+    /// Enable or disable WebAssembly features
     #[clap(long, value_name = "FEATURE,FEATURE,...", parse(try_from_str = parse_wasm_features))]
     pub wasm_features: Option<WasmFeatures>,
 
-    /// Enables or disables WASI modules
+    /// Enable or disable WASI modules
     #[clap(long, value_name = "MODULE,MODULE,...", parse(try_from_str = parse_wasi_modules))]
     pub wasi_modules: Option<WasiModules>,
 
@@ -178,15 +184,15 @@ pub struct CommonOptions {
     #[clap(long, value_name = "MAXIMUM")]
     pub static_memory_maximum_size: Option<u64>,
 
-    /// Force using a "static" style for all wasm memories.
+    /// Force using a "static" style for all wasm memories
     #[clap(long)]
     pub static_memory_forced: bool,
 
-    /// Byte size of the guard region after static memories are allocated.
+    /// Byte size of the guard region after static memories are allocated
     #[clap(long, value_name = "SIZE")]
     pub static_memory_guard_size: Option<u64>,
 
-    /// Byte size of the guard region after dynamic memories are allocated.
+    /// Byte size of the guard region after dynamic memories are allocated
     #[clap(long, value_name = "SIZE")]
     pub dynamic_memory_guard_size: Option<u64>,
 
@@ -214,31 +220,28 @@ pub struct CommonOptions {
     #[clap(long)]
     pub epoch_interruption: bool,
 
-    /// Disables the on-by-default address map from native code to wasm code.
+    /// Disable the on-by-default address map from native code to wasm code
     #[clap(long)]
     pub disable_address_map: bool,
 
-    /// Disables the default of attempting to initialize linear memory via a
-    /// copy-on-write mapping.
-    #[cfg(feature = "memory-init-cow")]
+    /// Disable the default of attempting to initialize linear memory via a
+    /// copy-on-write mapping
     #[clap(long)]
     pub disable_memory_init_cow: bool,
 
-    /// Enables the pooling allocator, in place of the on-demand
+    /// Enable the pooling allocator, in place of the on-demand
     /// allocator.
     #[cfg(feature = "pooling-allocator")]
     #[clap(long)]
     pub pooling_allocator: bool,
+
+    /// Maximum stack size, in bytes, that wasm is allowed to consume before a
+    /// stack overflow is reported.
+    #[clap(long)]
+    pub max_wasm_stack: Option<usize>,
 }
 
 impl CommonOptions {
-    pub fn parse_from_str(s: &str) -> Result<Self> {
-        let parts = s.split(" ");
-        let options =
-            Self::try_parse_from(parts).context("unable to parse options from passed flags")?;
-        Ok(options)
-    }
-
     pub fn init_logging(&self) {
         if self.disable_logging {
             return;
@@ -292,6 +295,10 @@ impl CommonOptions {
             }
         }
 
+        if self.disable_parallel_compilation {
+            config.parallel_compilation(false);
+        }
+
         if let Some(max) = self.static_memory_maximum_size {
             config.static_memory_maximum_size(max);
         }
@@ -313,18 +320,17 @@ impl CommonOptions {
 
         config.epoch_interruption(self.epoch_interruption);
         config.generate_address_map(!self.disable_address_map);
-        #[cfg(feature = "memory-init-cow")]
         config.memory_init_cow(!self.disable_memory_init_cow);
 
         #[cfg(feature = "pooling-allocator")]
         {
             if self.pooling_allocator {
-                let instance_limits = InstanceLimits::default();
-                config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling {
-                    strategy: PoolingAllocationStrategy::NextAvailable,
-                    instance_limits,
-                });
+                config.allocation_strategy(wasmtime::InstanceAllocationStrategy::pooling());
             }
+        }
+
+        if let Some(max) = self.max_wasm_stack {
+            config.max_wasm_stack(max);
         }
 
         Ok(config)
@@ -474,8 +480,9 @@ fn parse_wasi_modules(modules: &str) -> Result<WasiModules> {
             let mut set = |module: &str, enable: bool| match module {
                 "" => Ok(()),
                 "wasi-common" => Ok(wasi_modules.wasi_common = enable),
-                "experimental-wasi-nn" => Ok(wasi_modules.wasi_nn = enable),
                 "experimental-wasi-crypto" => Ok(wasi_modules.wasi_crypto = enable),
+                "experimental-wasi-nn" => Ok(wasi_modules.wasi_nn = enable),
+                "experimental-wasi-threads" => Ok(wasi_modules.wasi_threads = enable),
                 "default" => bail!("'default' cannot be specified with other WASI modules"),
                 _ => bail!("unsupported WASI module '{}'", module),
             };
@@ -502,19 +509,23 @@ pub struct WasiModules {
     /// parts once the implementation allows for it (e.g. wasi-fs, wasi-clocks, etc.).
     pub wasi_common: bool,
 
+    /// Enable the experimental wasi-crypto implementation.
+    pub wasi_crypto: bool,
+
     /// Enable the experimental wasi-nn implementation.
     pub wasi_nn: bool,
 
-    /// Enable the experimental wasi-crypto implementation.
-    pub wasi_crypto: bool,
+    /// Enable the experimental wasi-threads implementation.
+    pub wasi_threads: bool,
 }
 
 impl Default for WasiModules {
     fn default() -> Self {
         Self {
             wasi_common: true,
-            wasi_nn: false,
             wasi_crypto: false,
+            wasi_nn: false,
+            wasi_threads: false,
         }
     }
 }
@@ -526,6 +537,7 @@ impl WasiModules {
             wasi_common: false,
             wasi_nn: false,
             wasi_crypto: false,
+            wasi_threads: false,
         }
     }
 }
@@ -677,8 +689,9 @@ mod test {
             options.wasi_modules.unwrap(),
             WasiModules {
                 wasi_common: true,
+                wasi_crypto: false,
                 wasi_nn: false,
-                wasi_crypto: false
+                wasi_threads: false
             }
         );
     }
@@ -690,8 +703,9 @@ mod test {
             options.wasi_modules.unwrap(),
             WasiModules {
                 wasi_common: true,
+                wasi_crypto: false,
                 wasi_nn: false,
-                wasi_crypto: false
+                wasi_threads: false
             }
         );
     }
@@ -707,8 +721,9 @@ mod test {
             options.wasi_modules.unwrap(),
             WasiModules {
                 wasi_common: false,
+                wasi_crypto: false,
                 wasi_nn: true,
-                wasi_crypto: false
+                wasi_threads: false
             }
         );
     }
@@ -721,29 +736,10 @@ mod test {
             options.wasi_modules.unwrap(),
             WasiModules {
                 wasi_common: false,
+                wasi_crypto: false,
                 wasi_nn: false,
-                wasi_crypto: false
+                wasi_threads: false
             }
-        );
-    }
-
-    #[test]
-    fn test_parse_from_str() {
-        fn use_func(flags: &str) -> CommonOptions {
-            CommonOptions::parse_from_str(flags).unwrap()
-        }
-        fn use_clap_parser(flags: &[&str]) -> CommonOptions {
-            CommonOptions::try_parse_from(flags).unwrap()
-        }
-
-        assert_eq!(use_func(""), use_clap_parser(&[]));
-        assert_eq!(
-            use_func("foo --wasm-features=threads"),
-            use_clap_parser(&["foo", "--wasm-features=threads"])
-        );
-        assert_eq!(
-            use_func("foo --cranelift-set enable_simd=true"),
-            use_clap_parser(&["foo", "--cranelift-set", "enable_simd=true"])
         );
     }
 }

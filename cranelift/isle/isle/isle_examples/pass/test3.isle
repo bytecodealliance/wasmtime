@@ -56,7 +56,7 @@
 (rule
   (Lower (Iadd ra rb))
   (MachInst.Add (UseInput ra) (UseInput rb)))
-(rule
+(rule 1
   (Lower (Iadd (Producer (Iadd ra rb)) rc))
   (MachInst.Add3 (UseInput ra) (UseInput rb) (UseInput rc)))
 (rule

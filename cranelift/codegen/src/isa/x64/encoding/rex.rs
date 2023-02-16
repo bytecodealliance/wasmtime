@@ -13,7 +13,7 @@ use crate::{
     ir::TrapCode,
     isa::x64::inst::{
         args::{Amode, OperandSize},
-        regs, EmitInfo, Inst, LabelUse,
+        regs, Inst, LabelUse,
     },
     machinst::MachBuffer,
 };
@@ -103,6 +103,21 @@ impl RexFlags {
     #[inline(always)]
     pub(crate) fn must_always_emit(&self) -> bool {
         (self.0 & 2) != 0
+    }
+
+    #[inline(always)]
+    pub(crate) fn emit_one_op(&self, sink: &mut MachBuffer<Inst>, enc_e: u8) {
+        // Register Operand coded in Opcode Byte
+        // REX.R and REX.X unused
+        // REX.B == 1 accesses r8-r15
+        let w = if self.must_clear_w() { 0 } else { 1 };
+        let r = 0;
+        let x = 0;
+        let b = (enc_e >> 3) & 1;
+        let rex = 0x40 | (w << 3) | (r << 2) | (x << 1) | b;
+        if rex != 0x40 || self.must_always_emit() {
+            sink.put1(rex);
+        }
     }
 
     #[inline(always)]
@@ -278,7 +293,6 @@ impl Default for LegacyPrefixes {
 /// indicate a 64-bit operation.
 pub(crate) fn emit_std_enc_mem(
     sink: &mut MachBuffer<Inst>,
-    info: &EmitInfo,
     prefixes: LegacyPrefixes,
     opcodes: u32,
     mut num_opcodes: usize,
@@ -300,12 +314,6 @@ pub(crate) fn emit_std_enc_mem(
 
     match *mem_e {
         Amode::ImmReg { simm32, base, .. } => {
-            // If this is an access based off of RSP, it may trap with a stack overflow if it's the
-            // first touch of a new stack page.
-            if base == regs::rsp() && !can_trap && info.flags.enable_probestack() {
-                sink.add_trap(TrapCode::StackOverflow);
-            }
-
             // First, the REX byte.
             let enc_e = int_reg_enc(base);
             rex.emit_two_op(sink, enc_g, enc_e);
@@ -366,12 +374,6 @@ pub(crate) fn emit_std_enc_mem(
             shift,
             ..
         } => {
-            // If this is an access based off of RSP, it may trap with a stack overflow if it's the
-            // first touch of a new stack page.
-            if *reg_base == regs::rsp() && !can_trap && info.flags.enable_probestack() {
-                sink.add_trap(TrapCode::StackOverflow);
-            }
-
             let enc_base = int_reg_enc(*reg_base);
             let enc_index = int_reg_enc(*reg_index);
 
@@ -466,7 +468,6 @@ pub(crate) fn emit_std_enc_enc(
 
 pub(crate) fn emit_std_reg_mem(
     sink: &mut MachBuffer<Inst>,
-    info: &EmitInfo,
     prefixes: LegacyPrefixes,
     opcodes: u32,
     num_opcodes: usize,
@@ -478,7 +479,6 @@ pub(crate) fn emit_std_reg_mem(
     let enc_g = reg_enc(reg_g);
     emit_std_enc_mem(
         sink,
-        info,
         prefixes,
         opcodes,
         num_opcodes,

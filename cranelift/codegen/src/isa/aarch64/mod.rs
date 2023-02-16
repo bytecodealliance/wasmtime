@@ -7,7 +7,8 @@ use crate::isa::aarch64::settings as aarch64_settings;
 use crate::isa::unwind::systemv;
 use crate::isa::{Builder as IsaBuilder, TargetIsa};
 use crate::machinst::{
-    compile, CompiledCode, MachTextSectionBuilder, Reg, TextSectionBuilder, VCode,
+    compile, CompiledCode, CompiledCodeStencil, MachTextSectionBuilder, Reg, SigSet,
+    TextSectionBuilder, VCode,
 };
 use crate::result::CodegenResult;
 use crate::settings as shared_settings;
@@ -18,10 +19,9 @@ use target_lexicon::{Aarch64Architecture, Architecture, OperatingSystem, Triple}
 
 // New backend:
 mod abi;
-pub(crate) mod inst;
+pub mod inst;
 mod lower;
-mod lower_inst;
-mod settings;
+pub mod settings;
 
 use inst::create_reg_env;
 
@@ -56,20 +56,27 @@ impl AArch64Backend {
     fn compile_vcode(
         &self,
         func: &Function,
-        flags: shared_settings::Flags,
     ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
-        let emit_info = EmitInfo::new(flags.clone());
-        let abi = Box::new(abi::AArch64ABICallee::new(func, self, &self.isa_flags)?);
-        compile::compile::<AArch64Backend>(func, self, abi, &self.machine_env, emit_info)
+        let emit_info = EmitInfo::new(self.flags.clone());
+        let sigs = SigSet::new::<abi::AArch64MachineDeps>(func, &self.flags)?;
+        let abi = abi::AArch64Callee::new(func, self, &self.isa_flags, &sigs)?;
+        compile::compile::<AArch64Backend>(func, self, abi, emit_info, sigs)
     }
 }
 
 impl TargetIsa for AArch64Backend {
-    fn compile_function(&self, func: &Function, want_disasm: bool) -> CodegenResult<CompiledCode> {
-        let flags = self.flags();
-        let (vcode, regalloc_result) = self.compile_vcode(func, flags.clone())?;
+    fn compile_function(
+        &self,
+        func: &Function,
+        want_disasm: bool,
+    ) -> CodegenResult<CompiledCodeStencil> {
+        let (vcode, regalloc_result) = self.compile_vcode(func)?;
 
-        let emit_result = vcode.emit(&regalloc_result, want_disasm, flags.machine_code_cfg_info());
+        let emit_result = vcode.emit(
+            &regalloc_result,
+            want_disasm,
+            self.flags.machine_code_cfg_info(),
+        );
         let frame_size = emit_result.frame_size;
         let value_labels_ranges = emit_result.value_labels_ranges;
         let buffer = emit_result.buffer.finish();
@@ -80,15 +87,16 @@ impl TargetIsa for AArch64Backend {
             log::debug!("disassembly:\n{}", disasm);
         }
 
-        Ok(CompiledCode {
+        Ok(CompiledCodeStencil {
             buffer,
             frame_size,
-            disasm: emit_result.disasm,
+            vcode: emit_result.disasm,
             value_labels_ranges,
             sized_stackslot_offsets,
             dynamic_stackslot_offsets,
             bb_starts: emit_result.bb_offsets,
             bb_edges: emit_result.bb_edges,
+            alignment: emit_result.alignment,
         })
     }
 
@@ -104,8 +112,16 @@ impl TargetIsa for AArch64Backend {
         &self.flags
     }
 
+    fn machine_env(&self) -> &MachineEnv {
+        &self.machine_env
+    }
+
     fn isa_flags(&self) -> Vec<shared_settings::Value> {
         self.isa_flags.iter().collect()
+    }
+
+    fn is_branch_protection_enabled(&self) -> bool {
+        self.isa_flags.use_bti()
     }
 
     fn dynamic_vector_bytes(&self, _dyn_ty: Type) -> u32 {
@@ -165,13 +181,35 @@ impl TargetIsa for AArch64Backend {
         Some(inst::unwind::systemv::create_cie())
     }
 
-    fn text_section_builder(&self, num_funcs: u32) -> Box<dyn TextSectionBuilder> {
+    fn text_section_builder(&self, num_funcs: usize) -> Box<dyn TextSectionBuilder> {
         Box::new(MachTextSectionBuilder::<inst::Inst>::new(num_funcs))
     }
 
     #[cfg(feature = "unwind")]
     fn map_regalloc_reg_to_dwarf(&self, reg: Reg) -> Result<u16, systemv::RegisterMappingError> {
         inst::unwind::systemv::map_reg(reg).map(|reg| reg.0)
+    }
+
+    fn function_alignment(&self) -> u32 {
+        // We use 32-byte alignment for performance reasons, but for correctness we would only need
+        // 4-byte alignment.
+        32
+    }
+
+    #[cfg(feature = "disas")]
+    fn to_capstone(&self) -> Result<capstone::Capstone, capstone::Error> {
+        use capstone::prelude::*;
+        let mut cs = Capstone::new()
+            .arm64()
+            .mode(arch::arm64::ArchMode::Arm)
+            .build()?;
+        // AArch64 uses inline constants rather than a separate constant pool right now.
+        // Without this option, Capstone will stop disassembling as soon as it sees
+        // an inline constant that is not also a valid instruction. With this option,
+        // Capstone will print a `.byte` directive with the bytes of the inline constant
+        // and continue to the next instruction.
+        cs.set_skipdata(true)?;
+        Ok(cs)
     }
 }
 
@@ -194,7 +232,7 @@ pub fn isa_builder(triple: Triple) -> IsaBuilder {
         constructor: |triple, shared_flags, builder| {
             let isa_flags = aarch64_settings::Flags::new(&shared_flags, builder);
             let backend = AArch64Backend::new_with_flags(triple, shared_flags, isa_flags);
-            Ok(Box::new(backend))
+            Ok(backend.wrapped())
         },
     }
 }
@@ -204,7 +242,7 @@ mod test {
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
     use crate::ir::types::*;
-    use crate::ir::{AbiParam, ExternalName, Function, InstBuilder, JumpTableData, Signature};
+    use crate::ir::{AbiParam, Function, InstBuilder, JumpTableData, Signature, UserFuncName};
     use crate::isa::CallConv;
     use crate::settings;
     use crate::settings::Configurable;
@@ -213,7 +251,7 @@ mod test {
 
     #[test]
     fn test_compile_function() {
-        let name = ExternalName::testcase("test0");
+        let name = UserFuncName::testcase("test0");
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I32));
         sig.returns.push(AbiParam::new(I32));
@@ -240,19 +278,22 @@ mod test {
         let buffer = backend.compile_function(&mut func, false).unwrap().buffer;
         let code = buffer.data();
 
-        // mov x3, #0x1234
-        // add w0, w0, w3
-        // ret
-        let golden = vec![
-            0x83, 0x46, 0x82, 0xd2, 0x00, 0x00, 0x03, 0x0b, 0xc0, 0x03, 0x5f, 0xd6,
-        ];
+        // To update this comment, write the golden bytes to a file, and run the following command
+        // on it to update:
+        // > aarch64-linux-gnu-objdump -b binary -D <file> -m aarch64
+        //
+        // 0:   52824682        mov     w2, #0x1234                     // #4660
+        // 4:   0b020000        add     w0, w0, w2
+        // 8:   d65f03c0        ret
+
+        let golden = vec![130, 70, 130, 82, 0, 0, 2, 11, 192, 3, 95, 214];
 
         assert_eq!(code, &golden[..]);
     }
 
     #[test]
     fn test_branch_lowering() {
-        let name = ExternalName::testcase("test0");
+        let name = UserFuncName::testcase("test0");
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I32));
         sig.returns.push(AbiParam::new(I32));
@@ -268,15 +309,12 @@ mod test {
         pos.insert_block(bb0);
         let v0 = pos.ins().iconst(I32, 0x1234);
         let v1 = pos.ins().iadd(arg0, v0);
-        pos.ins().brnz(v1, bb1, &[]);
-        pos.ins().jump(bb2, &[]);
+        pos.ins().brif(v1, bb1, &[], bb2, &[]);
         pos.insert_block(bb1);
-        pos.ins().brnz(v1, bb2, &[]);
-        pos.ins().jump(bb3, &[]);
+        pos.ins().brif(v1, bb2, &[], bb3, &[]);
         pos.insert_block(bb2);
         let v2 = pos.ins().iadd(v1, v0);
-        pos.ins().brnz(v2, bb2, &[]);
-        pos.ins().jump(bb1, &[]);
+        pos.ins().brif(v2, bb2, &[], bb1, &[]);
         pos.insert_block(bb3);
         let v3 = pos.ins().isub(v1, v0);
         pos.ins().return_(&[v3]);
@@ -295,24 +333,28 @@ mod test {
             .unwrap();
         let code = result.buffer.data();
 
-        // mov     x10, #0x1234                    // #4660
-        // add     w12, w0, w10
-        // mov     w11, w12
-        // cbnz    x11, 0x20
-        // mov     x13, #0x1234                    // #4660
-        // add     w15, w12, w13
-        // mov     w14, w15
-        // cbnz    x14, 0x10
-        // mov     w1, w12
-        // cbnz    x1, 0x10
-        // mov     x2, #0x1234                     // #4660
-        // sub     w0, w12, w2
-        // ret
+        // To update this comment, write the golden bytes to a file, and run the following command
+        // on it to update:
+        // > aarch64-linux-gnu-objdump -b binary -D <file> -m aarch64
+        //
+        //   0:   52824689        mov     w9, #0x1234                     // #4660
+        //   4:   0b09000b        add     w11, w0, w9
+        //   8:   2a0b03ea        mov     w10, w11
+        //   c:   b50000aa        cbnz    x10, 0x20
+        //  10:   5282468c        mov     w12, #0x1234                    // #4660
+        //  14:   0b0c016e        add     w14, w11, w12
+        //  18:   2a0e03ed        mov     w13, w14
+        //  1c:   b5ffffad        cbnz    x13, 0x10
+        //  20:   2a0b03e0        mov     w0, w11
+        //  24:   b5ffff60        cbnz    x0, 0x10
+        //  28:   52824681        mov     w1, #0x1234                     // #4660
+        //  2c:   4b010160        sub     w0, w11, w1
+        //  30:   d65f03c0        ret
 
         let golden = vec![
-            138, 70, 130, 210, 12, 0, 10, 11, 235, 3, 12, 42, 171, 0, 0, 181, 141, 70, 130, 210,
-            143, 1, 13, 11, 238, 3, 15, 42, 174, 255, 255, 181, 225, 3, 12, 42, 97, 255, 255, 181,
-            130, 70, 130, 210, 128, 1, 2, 75, 192, 3, 95, 214,
+            137, 70, 130, 82, 11, 0, 9, 11, 234, 3, 11, 42, 170, 0, 0, 181, 140, 70, 130, 82, 110,
+            1, 12, 11, 237, 3, 14, 42, 173, 255, 255, 181, 224, 3, 11, 42, 96, 255, 255, 181, 129,
+            70, 130, 82, 96, 1, 1, 75, 192, 3, 95, 214,
         ];
 
         assert_eq!(code, &golden[..]);
@@ -320,7 +362,7 @@ mod test {
 
     #[test]
     fn test_br_table() {
-        let name = ExternalName::testcase("test0");
+        let name = UserFuncName::testcase("test0");
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I32));
         sig.returns.push(AbiParam::new(I32));
@@ -335,11 +377,10 @@ mod test {
         let mut pos = FuncCursor::new(&mut func);
 
         pos.insert_block(bb0);
-        let mut jt_data = JumpTableData::new();
-        jt_data.push_entry(bb1);
-        jt_data.push_entry(bb2);
-        let jt = pos.func.create_jump_table(jt_data);
-        pos.ins().br_table(arg0, bb3, jt);
+        let jt = pos
+            .func
+            .create_jump_table(JumpTableData::new(bb3, &[bb1, bb2]));
+        pos.ins().br_table(arg0, jt);
 
         pos.insert_block(bb1);
         let v1 = pos.ins().iconst(I32, 1);
@@ -368,27 +409,31 @@ mod test {
             .unwrap();
         let code = result.buffer.data();
 
+        // To update this comment, write the golden bytes to a file, and run the following command
+        // on it to update:
+        // > aarch64-linux-gnu-objdump -b binary -D <file> -m aarch64
+        //
         //   0:   7100081f        cmp     w0, #0x2
         //   4:   54000122        b.cs    0x28  // b.hs, b.nlast
-        //   8:   9a8023e9        csel    x9, xzr, x0, cs  // cs = hs, nlast
+        //   8:   9a8023e8        csel    x8, xzr, x0, cs  // cs = hs, nlast
         //   c:   d503229f        csdb
-        //  10:   10000088        adr     x8, 0x1c
-        //  14:   b8a95909        ldrsw   x9, [x8, w9, uxtw #2]
-        //  18:   8b090108        add     x8, x8, x9
-        //  1c:   d61f0100        br      x8
+        //  10:   10000087        adr     x7, 0x20
+        //  14:   b8a858e8        ldrsw   x8, [x7, w8, uxtw #2]
+        //  18:   8b0800e7        add     x7, x7, x8
+        //  1c:   d61f00e0        br      x7
         //  20:   00000010        udf     #16
         //  24:   00000018        udf     #24
-        //  28:   d2800060        mov     x0, #0x3                        // #3
+        //  28:   52800060        mov     w0, #0x3                        // #3
         //  2c:   d65f03c0        ret
-        //  30:   d2800020        mov     x0, #0x1                        // #1
+        //  30:   52800020        mov     w0, #0x1                        // #1
         //  34:   d65f03c0        ret
-        //  38:   d2800040        mov     x0, #0x2                        // #2
+        //  38:   52800040        mov     w0, #0x2                        // #2
         //  3c:   d65f03c0        ret
 
         let golden = vec![
-            31, 8, 0, 113, 34, 1, 0, 84, 233, 35, 128, 154, 159, 34, 3, 213, 136, 0, 0, 16, 9, 89,
-            169, 184, 8, 1, 9, 139, 0, 1, 31, 214, 16, 0, 0, 0, 24, 0, 0, 0, 96, 0, 128, 210, 192,
-            3, 95, 214, 32, 0, 128, 210, 192, 3, 95, 214, 64, 0, 128, 210, 192, 3, 95, 214,
+            31, 8, 0, 113, 34, 1, 0, 84, 232, 35, 128, 154, 159, 34, 3, 213, 135, 0, 0, 16, 232,
+            88, 168, 184, 231, 0, 8, 139, 224, 0, 31, 214, 16, 0, 0, 0, 24, 0, 0, 0, 96, 0, 128,
+            82, 192, 3, 95, 214, 32, 0, 128, 82, 192, 3, 95, 214, 64, 0, 128, 82, 192, 3, 95, 214,
         ];
 
         assert_eq!(code, &golden[..]);

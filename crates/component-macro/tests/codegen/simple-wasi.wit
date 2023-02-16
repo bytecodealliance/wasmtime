@@ -1,0 +1,15 @@
+interface wasi-filesystem {
+  record descriptor-stat {
+  }
+
+  enum errno { e }
+
+
+  create-directory-at: func() -> result<_, errno>
+
+  stat: func() -> result<descriptor-stat, errno>
+}
+
+default world wasi {
+  import wasi-filesystem: self.wasi-filesystem
+}

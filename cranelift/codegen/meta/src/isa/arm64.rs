@@ -5,13 +5,13 @@ use crate::shared::Definitions as SharedDefinitions;
 
 fn define_settings(_shared: &SettingGroup) -> SettingGroup {
     let mut setting = SettingGroupBuilder::new("arm64");
-    let has_lse = setting.add_bool(
+
+    setting.add_bool(
         "has_lse",
         "Has Large System Extensions (FEAT_LSE) support.",
         "",
         false,
     );
-
     setting.add_bool(
         "has_pauth",
         "Has Pointer authentication (FEAT_PAuth) support; enables the use of \
@@ -44,8 +44,13 @@ fn define_settings(_shared: &SettingGroup) -> SettingGroup {
         "",
         false,
     );
+    setting.add_bool(
+        "use_bti",
+        "Use Branch Target Identification (FEAT_BTI) instructions.",
+        "",
+        false,
+    );
 
-    setting.add_predicate("use_lse", predicate!(has_lse));
     setting.build()
 }
 

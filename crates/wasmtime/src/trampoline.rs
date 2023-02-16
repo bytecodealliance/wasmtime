@@ -17,7 +17,7 @@ use crate::{GlobalType, MemoryType, TableType, Val};
 use anyhow::Result;
 use std::any::Any;
 use std::sync::Arc;
-use wasmtime_environ::{GlobalIndex, MemoryIndex, Module, SignatureIndex, TableIndex};
+use wasmtime_environ::{GlobalIndex, MemoryIndex, Module, TableIndex};
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, InstanceAllocator, OnDemandInstanceAllocator, SharedMemory,
     StorePtr, VMFunctionImport, VMSharedSignatureIndex,
@@ -28,7 +28,7 @@ fn create_handle(
     store: &mut StoreOpaque,
     host_state: Box<dyn Any + Send + Sync>,
     func_imports: &[VMFunctionImport],
-    one_signature: Option<(SignatureIndex, VMSharedSignatureIndex)>,
+    one_signature: Option<VMSharedSignatureIndex>,
 ) -> Result<InstanceId> {
     let mut imports = Imports::default();
     imports.functions = func_imports;
@@ -68,7 +68,7 @@ pub fn generate_global_export(
 pub fn generate_memory_export(
     store: &mut StoreOpaque,
     m: &MemoryType,
-    preallocation: Option<SharedMemory>,
+    preallocation: Option<&SharedMemory>,
 ) -> Result<wasmtime_runtime::ExportMemory> {
     let instance = create_memory(store, m, preallocation)?;
     Ok(store

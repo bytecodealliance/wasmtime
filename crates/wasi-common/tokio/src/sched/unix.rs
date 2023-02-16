@@ -6,7 +6,7 @@ use wasi_common::{
         subscription::{RwEventFlags, Subscription},
         Poll,
     },
-    Context as _, Error,
+    Error,
 };
 
 struct FirstReady<'a, T>(Vec<Pin<Box<dyn Future<Output = T> + Send + 'a>>>);
@@ -56,12 +56,14 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
         match s {
             Subscription::Read(f) => {
                 futures.push(async move {
-                    f.file.readable().await.context("readable future")?;
+                    f.file
+                        .readable()
+                        .await
+                        .map_err(|e| e.context("readable future"))?;
                     f.complete(
                         f.file
                             .num_ready_bytes()
-                            .await
-                            .context("read num_ready_bytes")?,
+                            .map_err(|e| e.context("read num_ready_bytes"))?,
                         RwEventFlags::empty(),
                     );
                     Ok::<(), Error>(())
@@ -70,7 +72,10 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
 
             Subscription::Write(f) => {
                 futures.push(async move {
-                    f.file.writable().await.context("writable future")?;
+                    f.file
+                        .writable()
+                        .await
+                        .map_err(|e| e.context("writable future"))?;
                     f.complete(0, RwEventFlags::empty());
                     Ok(())
                 });

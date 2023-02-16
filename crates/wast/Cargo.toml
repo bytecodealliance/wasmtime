@@ -1,19 +1,19 @@
 [package]
 name = "wasmtime-wast"
-version = "0.41.0"
-authors = ["The Wasmtime Project Developers"]
+version.workspace = true
+authors.workspace = true
 description = "wast testing support for wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
 repository = "https://github.com/bytecodealliance/wasmtime"
-edition = "2021"
+edition.workspace = true
 
 [dependencies]
-anyhow = "1.0.19"
-wasmtime = { path = "../wasmtime", version = "0.41.0", default-features = false, features = ['cranelift'] }
-wast = "45.0.0"
-log = "0.4"
+anyhow = { workspace = true }
+wasmtime = { workspace = true, features = ['cranelift'] }
+wast = { workspace = true }
+log = { workspace = true }
 
 [badges]
 maintenance = { status = "actively-developed" }

@@ -8,10 +8,9 @@ target aarch64
 function %f0(i64 vmctx, i32) -> i32, i32, i32, i32, i32, i32, i32, i32, i32, i32 {
     gv0 = vmctx
     gv1 = load.i64 notrap readonly aligned gv0+8
-    heap0 = static gv1, bound 0x1_0000_0000, offset_guard 0x8000_0000, index_type i32
- 
+
 block0(v0: i64, v1: i32):
-    v2 = heap_addr.i64 heap0, v1, 0
+    v2 = global_value.i64 gv1
 
     v3 = load.i32 v2+8
     v4 = load.i32 vmctx v0+16
@@ -39,7 +38,7 @@ block0(v0: i64, v1: i32):
     v11 = atomic_load.i32 v0
 
     v12 = load.i32 vmctx v0+16
-    ; check: v12 = load.i32 vmctx v0+16    
+    ; check: v12 = load.i32 vmctx v0+16
 
     return v3, v4, v5, v6, v7, v8, v9, v10, v11, v12
 }

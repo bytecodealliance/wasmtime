@@ -23,20 +23,20 @@
 
 (assert_invalid
   (component
-    (import "" (component))
+    (import "a" (component))
   )
   "root-level component imports are not supported")
 
 (assert_invalid
   (component
-    (component (export ""))
+    (component (export "a"))
   )
   "exporting a component from the root component is not supported")
 
 (component
   (core module $m (func (export "")))
   (core instance $m (instantiate $m))
-  (func (export "") (canon lift (core func $m "")))
+  (func (export "a") (canon lift (core func $m "")))
 )
 
-(assert_return (invoke "") (unit.const))
+(assert_return (invoke "a"))

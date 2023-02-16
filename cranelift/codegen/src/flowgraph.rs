@@ -11,21 +11,18 @@
 //!
 //!         ...
 //!
-//!         brz vx, Block1 ; end of basic block
+//!         brif vx, Block1, Block2 ; end of basic block
 //!
-//!         ...          ; beginning of basic block
-//!
-//!         ...
-//!
-//!         jmp Block2     ; end of basic block
+//!     Block1:
+//!         jump block3
 //! ```
 //!
-//! Here `Block1` and `Block2` would each have a single predecessor denoted as `(Block0, brz)`
-//! and `(Block0, jmp Block2)` respectively.
+//! Here `Block1` and `Block2` would each have a single predecessor denoted as `(Block0, brif)`,
+//! while `Block3` would have a single predecessor denoted as `(Block1, jump block3)`.
 
 use crate::bforest;
 use crate::entity::SecondaryMap;
-use crate::ir::instructions::BranchInfo;
+use crate::inst_predicates;
 use crate::ir::{Block, Function, Inst};
 use crate::timing;
 use core::mem;
@@ -120,22 +117,9 @@ impl ControlFlowGraph {
     }
 
     fn compute_block(&mut self, func: &Function, block: Block) {
-        for inst in func.layout.block_likely_branches(block) {
-            match func.dfg.analyze_branch(inst) {
-                BranchInfo::SingleDest(dest, _) => {
-                    self.add_edge(block, inst, dest);
-                }
-                BranchInfo::Table(jt, dest) => {
-                    if let Some(dest) = dest {
-                        self.add_edge(block, inst, dest);
-                    }
-                    for dest in func.jump_tables[jt].iter() {
-                        self.add_edge(block, inst, *dest);
-                    }
-                }
-                BranchInfo::NotABranch => {}
-            }
-        }
+        inst_predicates::visit_block_succs(func, block, |inst, dest, _| {
+            self.add_edge(block, inst, dest);
+        });
     }
 
     fn invalidate_block_successors(&mut self, block: Block) {
@@ -250,21 +234,17 @@ mod tests {
         let block1 = func.dfg.make_block();
         let block2 = func.dfg.make_block();
 
-        let br_block0_block2;
-        let br_block1_block1;
-        let jmp_block0_block1;
-        let jmp_block1_block2;
+        let br_block0_block2_block1;
+        let br_block1_block1_block2;
 
         {
             let mut cur = FuncCursor::new(&mut func);
 
             cur.insert_block(block0);
-            br_block0_block2 = cur.ins().brnz(cond, block2, &[]);
-            jmp_block0_block1 = cur.ins().jump(block1, &[]);
+            br_block0_block2_block1 = cur.ins().brif(cond, block2, &[], block1, &[]);
 
             cur.insert_block(block1);
-            br_block1_block1 = cur.ins().brnz(cond, block1, &[]);
-            jmp_block1_block2 = cur.ins().jump(block2, &[]);
+            br_block1_block1_block2 = cur.ins().brif(cond, block1, &[], block2, &[]);
 
             cur.insert_block(block2);
         }
@@ -285,19 +265,23 @@ mod tests {
             assert_eq!(block2_predecessors.len(), 2);
 
             assert_eq!(
-                block1_predecessors.contains(&BlockPredecessor::new(block0, jmp_block0_block1)),
+                block1_predecessors
+                    .contains(&BlockPredecessor::new(block0, br_block0_block2_block1)),
                 true
             );
             assert_eq!(
-                block1_predecessors.contains(&BlockPredecessor::new(block1, br_block1_block1)),
+                block1_predecessors
+                    .contains(&BlockPredecessor::new(block1, br_block1_block1_block2)),
                 true
             );
             assert_eq!(
-                block2_predecessors.contains(&BlockPredecessor::new(block0, br_block0_block2)),
+                block2_predecessors
+                    .contains(&BlockPredecessor::new(block0, br_block0_block2_block1)),
                 true
             );
             assert_eq!(
-                block2_predecessors.contains(&BlockPredecessor::new(block1, jmp_block1_block2)),
+                block2_predecessors
+                    .contains(&BlockPredecessor::new(block1, br_block1_block1_block2)),
                 true
             );
 
@@ -306,11 +290,22 @@ mod tests {
             assert_eq!(block2_successors, []);
         }
 
-        // Change some instructions and recompute block0
-        func.dfg.replace(br_block0_block2).brnz(cond, block1, &[]);
-        func.dfg.replace(jmp_block0_block1).return_(&[]);
+        // Add a new block to hold a return instruction
+        let ret_block = func.dfg.make_block();
+
+        {
+            let mut cur = FuncCursor::new(&mut func);
+            cur.insert_block(ret_block);
+            cur.ins().return_(&[]);
+        }
+
+        // Change some instructions and recompute block0 and ret_block
+        func.dfg
+            .replace(br_block0_block2_block1)
+            .brif(cond, block1, &[], ret_block, &[]);
         cfg.recompute_block(&mut func, block0);
-        let br_block0_block1 = br_block0_block2;
+        cfg.recompute_block(&mut func, ret_block);
+        let br_block0_block1_ret_block = br_block0_block2_block1;
 
         {
             let block0_predecessors = cfg.pred_iter(block0).collect::<Vec<_>>();
@@ -326,23 +321,27 @@ mod tests {
             assert_eq!(block2_predecessors.len(), 1);
 
             assert_eq!(
-                block1_predecessors.contains(&BlockPredecessor::new(block0, br_block0_block1)),
+                block1_predecessors
+                    .contains(&BlockPredecessor::new(block0, br_block0_block1_ret_block)),
                 true
             );
             assert_eq!(
-                block1_predecessors.contains(&BlockPredecessor::new(block1, br_block1_block1)),
+                block1_predecessors
+                    .contains(&BlockPredecessor::new(block1, br_block1_block1_block2)),
                 true
             );
             assert_eq!(
-                block2_predecessors.contains(&BlockPredecessor::new(block0, br_block0_block2)),
+                block2_predecessors
+                    .contains(&BlockPredecessor::new(block0, br_block0_block1_ret_block)),
                 false
             );
             assert_eq!(
-                block2_predecessors.contains(&BlockPredecessor::new(block1, jmp_block1_block2)),
+                block2_predecessors
+                    .contains(&BlockPredecessor::new(block1, br_block1_block1_block2)),
                 true
             );
 
-            assert_eq!(block0_successors.collect::<Vec<_>>(), [block1]);
+            assert_eq!(block0_successors.collect::<Vec<_>>(), [block1, ret_block]);
             assert_eq!(block1_successors.collect::<Vec<_>>(), [block1, block2]);
             assert_eq!(block2_successors.collect::<Vec<_>>(), []);
         }

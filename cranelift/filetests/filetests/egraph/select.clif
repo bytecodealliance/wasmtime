@@ -1,0 +1,155 @@
+test optimize
+set opt_level=speed
+set use_egraphs=true
+target x86_64
+target aarch64
+target s390x
+target riscv64
+
+function %select_sgt_to_smax(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = icmp sgt v0, v1
+    v3 = select v2, v0, v1
+    return v3
+}
+
+; check: block0(v0: i32, v1: i32):
+; check:    v4 = smax v0, v1
+; check:    return v4
+
+
+; This tests an inverted select, where the operands are swapped.
+function %select_sgt_to_smax_inverse(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = icmp sgt v0, v1
+    v3 = select v2, v1, v0
+    return v3
+}
+
+; check: block0(v0: i32, v1: i32):
+; check:    v4 = smin v0, v1
+; check:    return v4
+
+
+function %select_sge_to_smax(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = icmp sge v0, v1
+    v3 = select v2, v0, v1
+    return v3
+}
+
+; check: block0(v0: i32, v1: i32):
+; check:    v4 = smax v0, v1
+; check:    return v4
+
+
+function %select_ugt_to_umax(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = icmp ugt v0, v1
+    v3 = select v2, v0, v1
+    return v3
+}
+
+; check: block0(v0: i32, v1: i32):
+; check:    v4 = umax v0, v1
+; check:    return v4
+
+
+function %select_uge_to_umax(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = icmp uge v0, v1
+    v3 = select v2, v0, v1
+    return v3
+}
+
+; check: block0(v0: i32, v1: i32):
+; check:    v4 = umax v0, v1
+; check:    return v4
+
+
+
+function %select_slt_to_smin(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = icmp slt v0, v1
+    v3 = select v2, v0, v1
+    return v3
+}
+
+; check: block0(v0: i32, v1: i32):
+; check:    v4 = smin v0, v1
+; check:    return v4
+
+
+function %select_sle_to_smin(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = icmp sle v0, v1
+    v3 = select v2, v0, v1
+    return v3
+}
+
+; check: block0(v0: i32, v1: i32):
+; check:    v4 = smin v0, v1
+; check:    return v4
+
+
+function %select_ult_to_umin(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = icmp ult v0, v1
+    v3 = select v2, v0, v1
+    return v3
+}
+
+; check: block0(v0: i32, v1: i32):
+; check:    v4 = umin v0, v1
+; check:    return v4
+
+
+function %select_ule_to_umin(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = icmp ule v0, v1
+    v3 = select v2, v0, v1
+    return v3
+}
+
+; check: block0(v0: i32, v1: i32):
+; check:    v4 = umin v0, v1
+; check:    return v4
+
+
+
+function %select_with_different_regs_does_not_optimize(i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    v4 = icmp ule v0, v1
+    v5 = select v4, v2, v3
+    return v5
+}
+
+; check: block0(v0: i32, v1: i32, v2: i32, v3: i32):
+; check:    v4 = icmp ule v0, v1
+; check:    v5 = select v4, v2, v3
+; check:    return v5
+
+
+
+
+function %select_fcmp_gt_to_fmax_pseudo(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp gt v0, v1
+    v3 = select v2, v0, v1
+    return v3
+}
+
+; check: block0(v0: f32, v1: f32):
+; check:    v4 = fmax_pseudo v0, v1
+; check:    return v4
+
+function %select_fcmp_lt_to_fmin_pseudo(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp lt v0, v1
+    v3 = select v2, v0, v1
+    return v3
+}
+
+; check: block0(v0: f32, v1: f32):
+; check:    v4 = fmin_pseudo v0, v1
+; check:    return v4

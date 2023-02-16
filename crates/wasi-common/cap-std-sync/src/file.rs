@@ -1,12 +1,13 @@
 use cap_fs_ext::MetadataExt;
 use fs_set_times::{SetTimes, SystemTimeSpec};
+use io_lifetimes::AsFilelike;
 use is_terminal::IsTerminal;
 use std::any::Any;
 use std::convert::TryInto;
 use std::io;
 use system_interface::{
     fs::{FileIoExt, GetSetFdFlags},
-    io::ReadReady,
+    io::{IoExt, ReadReady},
 };
 use wasi_common::{
     file::{Advice, FdFlags, FileType, Filestat, WasiFile},
@@ -30,26 +31,25 @@ impl WasiFile for File {
     fn pollable(&self) -> Option<rustix::fd::BorrowedFd> {
         Some(self.0.as_fd())
     }
-
     #[cfg(windows)]
     fn pollable(&self) -> Option<io_extras::os::windows::RawHandleOrSocket> {
         Some(self.0.as_raw_handle_or_socket())
     }
-    async fn datasync(&mut self) -> Result<(), Error> {
+    async fn datasync(&self) -> Result<(), Error> {
         self.0.sync_data()?;
         Ok(())
     }
-    async fn sync(&mut self) -> Result<(), Error> {
+    async fn sync(&self) -> Result<(), Error> {
         self.0.sync_all()?;
         Ok(())
     }
-    async fn get_filetype(&mut self) -> Result<FileType, Error> {
+    async fn get_filetype(&self) -> Result<FileType, Error> {
         let meta = self.0.metadata()?;
         Ok(filetype_from(&meta.file_type()))
     }
-    async fn get_fdflags(&mut self) -> Result<FdFlags, Error> {
-        let fdflags = self.0.get_fd_flags()?;
-        Ok(from_sysif_fdflags(fdflags))
+    async fn get_fdflags(&self) -> Result<FdFlags, Error> {
+        let fdflags = get_fd_flags(&self.0)?;
+        Ok(fdflags)
     }
     async fn set_fdflags(&mut self, fdflags: FdFlags) -> Result<(), Error> {
         if fdflags.intersects(
@@ -63,7 +63,7 @@ impl WasiFile for File {
         self.0.set_fd_flags(set_fd_flags)?;
         Ok(())
     }
-    async fn get_filestat(&mut self) -> Result<Filestat, Error> {
+    async fn get_filestat(&self) -> Result<Filestat, Error> {
         let meta = self.0.metadata()?;
         Ok(Filestat {
             device_id: meta.dev(),
@@ -76,20 +76,20 @@ impl WasiFile for File {
             ctim: meta.created().map(|t| Some(t.into_std())).unwrap_or(None),
         })
     }
-    async fn set_filestat_size(&mut self, size: u64) -> Result<(), Error> {
+    async fn set_filestat_size(&self, size: u64) -> Result<(), Error> {
         self.0.set_len(size)?;
         Ok(())
     }
-    async fn advise(&mut self, offset: u64, len: u64, advice: Advice) -> Result<(), Error> {
+    async fn advise(&self, offset: u64, len: u64, advice: Advice) -> Result<(), Error> {
         self.0.advise(offset, len, convert_advice(advice))?;
         Ok(())
     }
-    async fn allocate(&mut self, offset: u64, len: u64) -> Result<(), Error> {
+    async fn allocate(&self, offset: u64, len: u64) -> Result<(), Error> {
         self.0.allocate(offset, len)?;
         Ok(())
     }
     async fn set_times(
-        &mut self,
+        &self,
         atime: Option<wasi_common::SystemTimeSpec>,
         mtime: Option<wasi_common::SystemTimeSpec>,
     ) -> Result<(), Error> {
@@ -97,41 +97,41 @@ impl WasiFile for File {
             .set_times(convert_systimespec(atime), convert_systimespec(mtime))?;
         Ok(())
     }
-    async fn read_vectored<'a>(&mut self, bufs: &mut [io::IoSliceMut<'a>]) -> Result<u64, Error> {
+    async fn read_vectored<'a>(&self, bufs: &mut [io::IoSliceMut<'a>]) -> Result<u64, Error> {
         let n = self.0.read_vectored(bufs)?;
         Ok(n.try_into()?)
     }
     async fn read_vectored_at<'a>(
-        &mut self,
+        &self,
         bufs: &mut [io::IoSliceMut<'a>],
         offset: u64,
     ) -> Result<u64, Error> {
         let n = self.0.read_vectored_at(bufs, offset)?;
         Ok(n.try_into()?)
     }
-    async fn write_vectored<'a>(&mut self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
+    async fn write_vectored<'a>(&self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
         let n = self.0.write_vectored(bufs)?;
         Ok(n.try_into()?)
     }
     async fn write_vectored_at<'a>(
-        &mut self,
+        &self,
         bufs: &[io::IoSlice<'a>],
         offset: u64,
     ) -> Result<u64, Error> {
         let n = self.0.write_vectored_at(bufs, offset)?;
         Ok(n.try_into()?)
     }
-    async fn seek(&mut self, pos: std::io::SeekFrom) -> Result<u64, Error> {
+    async fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error> {
         Ok(self.0.seek(pos)?)
     }
-    async fn peek(&mut self, buf: &mut [u8]) -> Result<u64, Error> {
+    async fn peek(&self, buf: &mut [u8]) -> Result<u64, Error> {
         let n = self.0.peek(buf)?;
         Ok(n.try_into()?)
     }
-    async fn num_ready_bytes(&self) -> Result<u64, Error> {
+    fn num_ready_bytes(&self) -> Result<u64, Error> {
         Ok(self.0.num_ready_bytes()?)
     }
-    fn isatty(&mut self) -> bool {
+    fn isatty(&self) -> bool {
         self.0.is_terminal()
     }
 }
@@ -187,7 +187,10 @@ impl AsFd for File {
         self.0.as_fd()
     }
 }
-pub fn convert_systimespec(t: Option<wasi_common::SystemTimeSpec>) -> Option<SystemTimeSpec> {
+
+pub(crate) fn convert_systimespec(
+    t: Option<wasi_common::SystemTimeSpec>,
+) -> Option<SystemTimeSpec> {
     match t {
         Some(wasi_common::SystemTimeSpec::Absolute(t)) => {
             Some(SystemTimeSpec::Absolute(t.into_std()))
@@ -197,7 +200,7 @@ pub fn convert_systimespec(t: Option<wasi_common::SystemTimeSpec>) -> Option<Sys
     }
 }
 
-pub fn to_sysif_fdflags(f: wasi_common::file::FdFlags) -> system_interface::fs::FdFlags {
+pub(crate) fn to_sysif_fdflags(f: wasi_common::file::FdFlags) -> system_interface::fs::FdFlags {
     let mut out = system_interface::fs::FdFlags::empty();
     if f.contains(wasi_common::file::FdFlags::APPEND) {
         out |= system_interface::fs::FdFlags::APPEND;
@@ -216,7 +219,12 @@ pub fn to_sysif_fdflags(f: wasi_common::file::FdFlags) -> system_interface::fs::
     }
     out
 }
-pub fn from_sysif_fdflags(f: system_interface::fs::FdFlags) -> wasi_common::file::FdFlags {
+
+/// Return the file-descriptor flags for a given file-like object.
+///
+/// This returns the flags needed to implement [`WasiFile::get_fdflags`].
+pub fn get_fd_flags<Filelike: AsFilelike>(f: Filelike) -> io::Result<wasi_common::file::FdFlags> {
+    let f = f.as_filelike().get_fd_flags()?;
     let mut out = wasi_common::file::FdFlags::empty();
     if f.contains(system_interface::fs::FdFlags::APPEND) {
         out |= wasi_common::file::FdFlags::APPEND;
@@ -233,9 +241,10 @@ pub fn from_sysif_fdflags(f: system_interface::fs::FdFlags) -> wasi_common::file
     if f.contains(system_interface::fs::FdFlags::SYNC) {
         out |= wasi_common::file::FdFlags::SYNC;
     }
-    out
+    Ok(out)
 }
-pub fn convert_advice(advice: Advice) -> system_interface::fs::Advice {
+
+fn convert_advice(advice: Advice) -> system_interface::fs::Advice {
     match advice {
         Advice::Normal => system_interface::fs::Advice::Normal,
         Advice::Sequential => system_interface::fs::Advice::Sequential,

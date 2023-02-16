@@ -18,21 +18,20 @@
 //   `DW_CFA_AARCH64_negate_ra_state` DWARF operation (aliased with the
 //   `.cfi_window_save` assembler directive) informs an unwinder about this
 
+use super::wasmtime_fiber_start;
 use wasmtime_asm_macros::asm_func;
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "macos")] {
-        macro_rules! cfi_window_save { () => (""); }
-        macro_rules! pacia1716 { () => (""); }
-        macro_rules! paciasp { () => (""); }
-        macro_rules! autiasp { () => (""); }
-        macro_rules! sym_adrp { ($s:tt) => (concat!("_", $s, "@PAGE")); }
-        macro_rules! sym_add { ($s:tt) => (concat!("_", $s, "@PAGEOFF")); }
+        macro_rules! paci1716 { () => ("pacib1716\n"); }
+        macro_rules! pacisp { () => ("pacibsp\n"); }
+        macro_rules! autisp { () => ("autibsp\n"); }
+        macro_rules! sym_adrp { ($s:tt) => (concat!($s, "@PAGE")); }
+        macro_rules! sym_add { ($s:tt) => (concat!($s, "@PAGEOFF")); }
     } else {
-        macro_rules! cfi_window_save { () => (".cfi_window_save\n"); }
-        macro_rules! pacia1716 { () => ("pacia1716\n"); }
-        macro_rules! paciasp { () => ("paciasp\n"); }
-        macro_rules! autiasp { () => ("autiasp\n"); }
+        macro_rules! paci1716 { () => ("pacia1716\n"); }
+        macro_rules! pacisp { () => ("paciasp\n"); }
+        macro_rules! autisp { () => ("autiasp\n"); }
         macro_rules! sym_adrp { ($s:tt) => (concat!($s, "")); }
         macro_rules! sym_add { ($s:tt) => (concat!(":lo12:", $s)); }
     }
@@ -41,52 +40,54 @@ cfg_if::cfg_if! {
 // fn(top_of_stack(%x0): *mut u8)
 asm_func!(
     "wasmtime_fiber_switch",
-    "
-        .cfi_startproc
-    ",
-    paciasp!(),
-    cfi_window_save!(),
-    "
-        // Save all callee-saved registers on the stack since we're
-        // assuming they're clobbered as a result of the stack switch.
-        stp x29, x30, [sp, -16]!
-        stp x20, x19, [sp, -16]!
-        stp x22, x21, [sp, -16]!
-        stp x24, x23, [sp, -16]!
-        stp x26, x25, [sp, -16]!
-        stp x28, x27, [sp, -16]!
-        stp d9, d8, [sp, -16]!
-        stp d11, d10, [sp, -16]!
-        stp d13, d12, [sp, -16]!
-        stp d15, d14, [sp, -16]!
+    concat!(
+        "
+            .cfi_startproc
+        ",
+        pacisp!(),
+        "
+            .cfi_window_save
+            // Save all callee-saved registers on the stack since we're
+            // assuming they're clobbered as a result of the stack switch.
+            stp x29, x30, [sp, -16]!
+            stp x20, x19, [sp, -16]!
+            stp x22, x21, [sp, -16]!
+            stp x24, x23, [sp, -16]!
+            stp x26, x25, [sp, -16]!
+            stp x28, x27, [sp, -16]!
+            stp d9, d8, [sp, -16]!
+            stp d11, d10, [sp, -16]!
+            stp d13, d12, [sp, -16]!
+            stp d15, d14, [sp, -16]!
 
-        // Load our previously saved stack pointer to resume to, and save
-        // off our current stack pointer on where to come back to
-        // eventually.
-        ldr x8, [x0, -0x10]
-        mov x9, sp
-        str x9, [x0, -0x10]
+            // Load our previously saved stack pointer to resume to, and save
+            // off our current stack pointer on where to come back to
+            // eventually.
+            ldr x8, [x0, -0x10]
+            mov x9, sp
+            str x9, [x0, -0x10]
 
-        // Switch to the new stack and restore all our callee-saved
-        // registers after the switch and return to our new stack.
-        mov sp, x8
-        ldp d15, d14, [sp], 16
-        ldp d13, d12, [sp], 16
-        ldp d11, d10, [sp], 16
-        ldp d9, d8, [sp], 16
-        ldp x28, x27, [sp], 16
-        ldp x26, x25, [sp], 16
-        ldp x24, x23, [sp], 16
-        ldp x22, x21, [sp], 16
-        ldp x20, x19, [sp], 16
-        ldp x29, x30, [sp], 16
-    ",
-    autiasp!(),
-    cfi_window_save!(),
-    "
-        ret
-        .cfi_endproc
-    ",
+            // Switch to the new stack and restore all our callee-saved
+            // registers after the switch and return to our new stack.
+            mov sp, x8
+            ldp d15, d14, [sp], 16
+            ldp d13, d12, [sp], 16
+            ldp d11, d10, [sp], 16
+            ldp d9, d8, [sp], 16
+            ldp x28, x27, [sp], 16
+            ldp x26, x25, [sp], 16
+            ldp x24, x23, [sp], 16
+            ldp x22, x21, [sp], 16
+            ldp x20, x19, [sp], 16
+            ldp x29, x30, [sp], 16
+        ",
+        autisp!(),
+        "
+            .cfi_window_save
+            ret
+            .cfi_endproc
+        ",
+    ),
 );
 
 // fn(
@@ -114,26 +115,29 @@ asm_func!(
 #[rustfmt::skip]
 asm_func!(
     "wasmtime_fiber_init",
-    "
-        .cfi_startproc
-        hint #34 // bti c
-        sub x16, x0, #16
-        adrp x17, ", sym_adrp!("wasmtime_fiber_start"), "
-        add x17, x17, ", sym_add!("wasmtime_fiber_start"), "
-    ",
-    pacia1716!(),
-    "
-        str x17, [x16, -0x8] // x17 => lr
-        str x0, [x16, -0x18] // x0 => x19
-        stp x2, x1, [x0, -0x38] // x1 => x20, x2 => x21
+    concat!(
+        "
+            .cfi_startproc
+            hint #34 // bti c
+            sub x16, x0, #16
+            adrp x17, ", sym_adrp!("{fiber}"), "
+            add x17, x17, ", sym_add!("{fiber}"), "
+        ",
+        paci1716!(),
+        "
+            str x17, [x16, -0x8] // x17 => lr
+            str x0, [x16, -0x18] // x0 => x19
+            stp x2, x1, [x0, -0x38] // x1 => x20, x2 => x21
 
-        // `wasmtime_fiber_switch` has an 0xa0 byte stack, and we add 0x10 more for
-        // the original reserved 16 bytes.
-        add x8, x0, -0xb0
-        str x8, [x0, -0x10]
-        ret
-        .cfi_endproc
-    ",
+            // `wasmtime_fiber_switch` has an 0xa0 byte stack, and we add 0x10 more for
+            // the original reserved 16 bytes.
+            add x8, x0, -0xb0
+            str x8, [x0, -0x10]
+            ret
+            .cfi_endproc
+        ",
+    ),
+    fiber = sym wasmtime_fiber_start,
 );
 
 // See the x86_64 file for more commentary on what these CFI directives are
@@ -151,9 +155,7 @@ asm_func!(
             0x23, 0xa0, 0x1  /* DW_OP_plus_uconst 0xa0 */
         .cfi_rel_offset x29, -0x10
         .cfi_rel_offset x30, -0x08
-    ",
-    cfi_window_save!(),
-    "
+        .cfi_window_save
         .cfi_rel_offset x19, -0x18
         .cfi_rel_offset x20, -0x20
         .cfi_rel_offset x21, -0x28

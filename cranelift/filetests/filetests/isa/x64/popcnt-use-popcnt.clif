@@ -7,6 +7,7 @@ block0(v0: i64):
     return v1
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -14,6 +15,16 @@ block0(v0: i64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   popcntq %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %popcnt(i32) -> i32 {
 block0(v0: i32):
@@ -21,6 +32,7 @@ block0(v0: i32):
     return v1
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -28,4 +40,14 @@ block0(v0: i32):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   popcntl %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 

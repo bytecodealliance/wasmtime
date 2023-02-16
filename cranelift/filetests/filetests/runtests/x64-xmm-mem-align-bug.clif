@@ -1,0 +1,17 @@
+test run
+set enable_llvm_abi_extensions
+target x86_64
+
+; Regression test for unaligned loads to xmm registers when relying on automatic
+; conversion to XmmMem arguments in ISLE.
+; https://github.com/bytecodealliance/wasmtime/issues/4761
+function %a() -> f64 {
+  ss0 = explicit_slot 59
+
+block0:
+  v0 = f64const 0x1.d7d7d7d7d006fp984
+  v1 = fcopysign v0, v0
+  return v1
+}
+
+; run: %a() == 0x1.d7d7d7d7d006fp984

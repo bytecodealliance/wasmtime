@@ -7,9 +7,7 @@
 //! directory.
 
 use alloc::vec::Vec;
-use core::convert::{TryFrom, TryInto};
 use core::fmt::{self, Display, Formatter};
-use core::num::NonZeroU32;
 use core::ops::{Deref, DerefMut};
 use core::str::FromStr;
 
@@ -17,13 +15,12 @@ use core::str::FromStr;
 use serde::{Deserialize, Serialize};
 
 use crate::bitset::BitSet;
-use crate::data_value::DataValue;
 use crate::entity;
 use crate::ir::{
     self,
     condcodes::{FloatCC, IntCC},
     trapcode::TrapCode,
-    types, Block, FuncRef, JumpTable, MemFlags, SigRef, StackSlot, Type, Value,
+    types, Block, FuncRef, MemFlags, SigRef, StackSlot, Type, Value,
 };
 
 /// Some instructions use an external list of argument values because there is not enough space in
@@ -33,6 +30,133 @@ pub type ValueList = entity::EntityList<Value>;
 
 /// Memory pool for holding value lists. See `ValueList`.
 pub type ValueListPool = entity::ListPool<Value>;
+
+/// A pair of a Block and its arguments, stored in a single EntityList internally.
+///
+/// NOTE: We don't expose either value_to_block or block_to_value outside of this module because
+/// this operation is not generally safe. However, as the two share the same underlying layout,
+/// they can be stored in the same value pool.
+///
+/// BlockCall makes use of this shared layout by storing all of its contents (a block and its
+/// argument) in a single EntityList. This is a bit better than introducing a new entity type for
+/// the pair of a block name and the arguments entity list, as we don't pay any indirection penalty
+/// to get to the argument values -- they're stored in-line with the block in the same list.
+///
+/// The BlockCall::new function guarantees this layout by requiring a block argument that's written
+/// in as the first element of the EntityList. Any subsequent entries are always assumed to be real
+/// Values.
+#[derive(Debug, Clone, Copy, PartialEq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct BlockCall {
+    /// The underlying storage for the BlockCall. The first element of the values EntityList is
+    /// guaranteed to always be a Block encoded as a Value via BlockCall::block_to_value.
+    /// Consequently, the values entity list is never empty.
+    values: entity::EntityList<Value>,
+}
+
+impl BlockCall {
+    // NOTE: the only uses of this function should be internal to BlockCall. See the block comment
+    // on BlockCall for more context.
+    fn value_to_block(val: Value) -> Block {
+        Block::from_u32(val.as_u32())
+    }
+
+    // NOTE: the only uses of this function should be internal to BlockCall. See the block comment
+    // on BlockCall for more context.
+    fn block_to_value(block: Block) -> Value {
+        Value::from_u32(block.as_u32())
+    }
+
+    /// Construct a BlockCall with the given block and arguments.
+    pub fn new(block: Block, args: &[Value], pool: &mut ValueListPool) -> Self {
+        let mut values = ValueList::default();
+        values.push(Self::block_to_value(block), pool);
+        values.extend(args.iter().copied(), pool);
+        Self { values }
+    }
+
+    /// Return the block for this BlockCall.
+    pub fn block(&self, pool: &ValueListPool) -> Block {
+        let val = self.values.first(pool).unwrap();
+        Self::value_to_block(val)
+    }
+
+    /// Replace the block for this BlockCall.
+    pub fn set_block(&mut self, block: Block, pool: &mut ValueListPool) {
+        *self.values.get_mut(0, pool).unwrap() = Self::block_to_value(block);
+    }
+
+    /// Append an argument to the block args.
+    pub fn append_argument(&mut self, arg: Value, pool: &mut ValueListPool) {
+        self.values.push(arg, pool);
+    }
+
+    /// Return a slice for the arguments of this block.
+    pub fn args_slice<'a>(&self, pool: &'a ValueListPool) -> &'a [Value] {
+        &self.values.as_slice(pool)[1..]
+    }
+
+    /// Return a slice for the arguments of this block.
+    pub fn args_slice_mut<'a>(&'a mut self, pool: &'a mut ValueListPool) -> &'a mut [Value] {
+        &mut self.values.as_mut_slice(pool)[1..]
+    }
+
+    /// Remove the argument at ix from the argument list.
+    pub fn remove(&mut self, ix: usize, pool: &mut ValueListPool) {
+        self.values.remove(1 + ix, pool)
+    }
+
+    /// Clear out the arguments list.
+    pub fn clear(&mut self, pool: &mut ValueListPool) {
+        self.values.truncate(1, pool)
+    }
+
+    /// Appends multiple elements to the arguments.
+    pub fn extend<I>(&mut self, elements: I, pool: &mut ValueListPool)
+    where
+        I: IntoIterator<Item = Value>,
+    {
+        self.values.extend(elements, pool)
+    }
+
+    /// Return a value that can display this block call.
+    pub fn display<'a>(&self, pool: &'a ValueListPool) -> DisplayBlockCall<'a> {
+        DisplayBlockCall { block: *self, pool }
+    }
+
+    /// Deep-clone the underlying list in the same pool. The returned
+    /// list will have identical contents but changes to this list
+    /// will not change its contents or vice-versa.
+    pub fn deep_clone(&self, pool: &mut ValueListPool) -> Self {
+        Self {
+            values: self.values.deep_clone(pool),
+        }
+    }
+}
+
+/// Wrapper for the context needed to display a [BlockCall] value.
+pub struct DisplayBlockCall<'a> {
+    block: BlockCall,
+    pool: &'a ValueListPool,
+}
+
+impl<'a> Display for DisplayBlockCall<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.block.block(&self.pool))?;
+        let args = self.block.args_slice(&self.pool);
+        if !args.is_empty() {
+            write!(f, "(")?;
+            for (ix, arg) in args.iter().enumerate() {
+                if ix > 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{}", arg)?;
+            }
+            write!(f, ")")?;
+        }
+        Ok(())
+    }
+}
 
 // Include code generated by `cranelift-codegen/meta/src/gen_inst.rs`. This file contains:
 //
@@ -75,24 +199,6 @@ impl Opcode {
             Opcode::ResumableTrap | Opcode::ResumableTrapnz => true,
             _ => false,
         }
-    }
-}
-
-impl TryFrom<NonZeroU32> for Opcode {
-    type Error = ();
-
-    #[inline]
-    fn try_from(x: NonZeroU32) -> Result<Self, ()> {
-        let x: u16 = x.get().try_into().map_err(|_| ())?;
-        Self::try_from(x)
-    }
-}
-
-impl From<Opcode> for NonZeroU32 {
-    #[inline]
-    fn from(op: Opcode) -> NonZeroU32 {
-        let x = op as u8;
-        NonZeroU32::new(x as u32).unwrap()
     }
 }
 
@@ -195,130 +301,38 @@ impl Default for VariableArgs {
 /// Avoid large matches on instruction formats by using the methods defined here to examine
 /// instructions.
 impl InstructionData {
-    /// Return information about the destination of a branch or jump instruction.
+    /// Get the destinations of this instruction, if it's a branch.
     ///
-    /// Any instruction that can transfer control to another block reveals its possible destinations
-    /// here.
-    pub fn analyze_branch<'a>(&'a self, pool: &'a ValueListPool) -> BranchInfo<'a> {
-        match *self {
-            Self::Jump {
-                destination,
-                ref args,
-                ..
-            } => BranchInfo::SingleDest(destination, args.as_slice(pool)),
-            Self::BranchInt {
-                destination,
-                ref args,
-                ..
-            }
-            | Self::BranchFloat {
-                destination,
-                ref args,
-                ..
-            }
-            | Self::Branch {
-                destination,
-                ref args,
-                ..
-            } => BranchInfo::SingleDest(destination, &args.as_slice(pool)[1..]),
-            Self::BranchIcmp {
-                destination,
-                ref args,
-                ..
-            } => BranchInfo::SingleDest(destination, &args.as_slice(pool)[2..]),
-            Self::BranchTable {
-                table, destination, ..
-            } => BranchInfo::Table(table, Some(destination)),
-            _ => {
-                debug_assert!(!self.opcode().is_branch());
-                BranchInfo::NotABranch
-            }
-        }
-    }
-
-    /// Get the single destination of this branch instruction, if it is a single destination
-    /// branch or jump.
-    ///
-    /// Multi-destination branches like `br_table` return `None`.
-    pub fn branch_destination(&self) -> Option<Block> {
-        match *self {
-            Self::Jump { destination, .. }
-            | Self::Branch { destination, .. }
-            | Self::BranchInt { destination, .. }
-            | Self::BranchFloat { destination, .. }
-            | Self::BranchIcmp { destination, .. } => Some(destination),
-            Self::BranchTable { .. } => None,
-            _ => {
-                debug_assert!(!self.opcode().is_branch());
-                None
-            }
-        }
-    }
-
-    /// Get a mutable reference to the single destination of this branch instruction, if it is a
-    /// single destination branch or jump.
-    ///
-    /// Multi-destination branches like `br_table` return `None`.
-    pub fn branch_destination_mut(&mut self) -> Option<&mut Block> {
-        match *self {
-            Self::Jump {
-                ref mut destination,
-                ..
-            }
-            | Self::Branch {
-                ref mut destination,
-                ..
-            }
-            | Self::BranchInt {
-                ref mut destination,
-                ..
-            }
-            | Self::BranchFloat {
-                ref mut destination,
-                ..
-            }
-            | Self::BranchIcmp {
-                ref mut destination,
-                ..
-            } => Some(destination),
-            Self::BranchTable { .. } => None,
-            _ => {
-                debug_assert!(!self.opcode().is_branch());
-                None
-            }
-        }
-    }
-
-    /// Return the value of an immediate if the instruction has one or `None` otherwise. Only
-    /// immediate values are considered, not global values, constant handles, condition codes, etc.
-    pub fn imm_value(&self) -> Option<DataValue> {
+    /// `br_table` returns the empty slice.
+    pub fn branch_destination(&self) -> &[BlockCall] {
         match self {
-            &InstructionData::UnaryBool { imm, .. } => Some(DataValue::from(imm)),
-            // 8-bit.
-            &InstructionData::BinaryImm8 { imm, .. }
-            | &InstructionData::TernaryImm8 { imm, .. } => Some(DataValue::from(imm as i8)), // Note the switch from unsigned to signed.
-            // 32-bit
-            &InstructionData::UnaryIeee32 { imm, .. } => Some(DataValue::from(imm)),
-            &InstructionData::HeapAddr { imm, .. } => {
-                let imm: u32 = imm.into();
-                Some(DataValue::from(imm as i32)) // Note the switch from unsigned to signed.
+            Self::Jump {
+                ref destination, ..
+            } => std::slice::from_ref(destination),
+            Self::Brif { blocks, .. } => blocks,
+            Self::BranchTable { .. } => &[],
+            _ => {
+                debug_assert!(!self.opcode().is_branch());
+                &[]
             }
-            &InstructionData::Load { offset, .. }
-            | &InstructionData::Store { offset, .. }
-            | &InstructionData::StackLoad { offset, .. }
-            | &InstructionData::StackStore { offset, .. }
-            | &InstructionData::TableAddr { offset, .. } => Some(DataValue::from(offset)),
-            // 64-bit.
-            &InstructionData::UnaryImm { imm, .. }
-            | &InstructionData::BinaryImm64 { imm, .. }
-            | &InstructionData::IntCompareImm { imm, .. } => Some(DataValue::from(imm.bits())),
-            &InstructionData::UnaryIeee64 { imm, .. } => Some(DataValue::from(imm)),
-            // 128-bit; though these immediates are present logically in the IR they are not
-            // included in the `InstructionData` for memory-size reasons. This case, returning
-            // `None`, is left here to alert users of this method that they should retrieve the
-            // value using the `DataFlowGraph`.
-            &InstructionData::Shuffle { imm: _, .. } => None,
-            _ => None,
+        }
+    }
+
+    /// Get a mutable slice of the destinations of this instruction, if it's a branch.
+    ///
+    /// `br_table` returns the empty slice.
+    pub fn branch_destination_mut(&mut self) -> &mut [BlockCall] {
+        match self {
+            Self::Jump {
+                ref mut destination,
+                ..
+            } => std::slice::from_mut(destination),
+            Self::Brif { blocks, .. } => blocks,
+            Self::BranchTable { .. } => &mut [],
+            _ => {
+                debug_assert!(!self.opcode().is_branch());
+                &mut []
+            }
         }
     }
 
@@ -326,10 +340,7 @@ impl InstructionData {
     /// `None`.
     pub fn trap_code(&self) -> Option<TrapCode> {
         match *self {
-            Self::CondTrap { code, .. }
-            | Self::FloatCondTrap { code, .. }
-            | Self::IntCondTrap { code, .. }
-            | Self::Trap { code, .. } => Some(code),
+            Self::CondTrap { code, .. } | Self::Trap { code, .. } => Some(code),
             _ => None,
         }
     }
@@ -338,12 +349,7 @@ impl InstructionData {
     /// condition.  Otherwise, return `None`.
     pub fn cond_code(&self) -> Option<IntCC> {
         match self {
-            &InstructionData::IntCond { cond, .. }
-            | &InstructionData::BranchIcmp { cond, .. }
-            | &InstructionData::IntCompare { cond, .. }
-            | &InstructionData::IntCondTrap { cond, .. }
-            | &InstructionData::BranchInt { cond, .. }
-            | &InstructionData::IntSelect { cond, .. }
+            &InstructionData::IntCompare { cond, .. }
             | &InstructionData::IntCompareImm { cond, .. } => Some(cond),
             _ => None,
         }
@@ -353,10 +359,7 @@ impl InstructionData {
     /// condition.  Otherwise, return `None`.
     pub fn fp_cond_code(&self) -> Option<FloatCC> {
         match self {
-            &InstructionData::BranchFloat { cond, .. }
-            | &InstructionData::FloatCompare { cond, .. }
-            | &InstructionData::FloatCond { cond, .. }
-            | &InstructionData::FloatCondTrap { cond, .. } => Some(cond),
+            &InstructionData::FloatCompare { cond, .. } => Some(cond),
             _ => None,
         }
     }
@@ -365,10 +368,7 @@ impl InstructionData {
     /// trap code. Otherwise, return `None`.
     pub fn trap_code_mut(&mut self) -> Option<&mut TrapCode> {
         match self {
-            Self::CondTrap { code, .. }
-            | Self::FloatCondTrap { code, .. }
-            | Self::IntCondTrap { code, .. }
-            | Self::Trap { code, .. } => Some(code),
+            Self::CondTrap { code, .. } | Self::Trap { code, .. } => Some(code),
             _ => None,
         }
     }
@@ -462,20 +462,6 @@ impl InstructionData {
             _ => {}
         }
     }
-}
-
-/// Information about branch and jump instructions.
-pub enum BranchInfo<'a> {
-    /// This is not a branch or jump instruction.
-    /// This instruction will not transfer control to another block in the function, but it may still
-    /// affect control flow by returning or trapping.
-    NotABranch,
-
-    /// This is a branch or jump to a single destination block, possibly taking value arguments.
-    SingleDest(Block, &'a [Value]),
-
-    /// This is a jump table branch which can have many destination blocks and maybe one default block.
-    Table(JumpTable, Option<Block>),
 }
 
 /// Information about call instructions.
@@ -629,8 +615,6 @@ pub struct ValueTypeSet {
     pub ints: BitSet8,
     /// Allowed float widths
     pub floats: BitSet8,
-    /// Allowed bool widths
-    pub bools: BitSet8,
     /// Allowed ref widths
     pub refs: BitSet8,
     /// Allowed dynamic vectors minimum lane sizes
@@ -647,8 +631,6 @@ impl ValueTypeSet {
             self.ints.contains(l2b)
         } else if scalar.is_float() {
             self.floats.contains(l2b)
-        } else if scalar.is_bool() {
-            self.bools.contains(l2b)
         } else if scalar.is_ref() {
             self.refs.contains(l2b)
         } else {
@@ -675,10 +657,8 @@ impl ValueTypeSet {
             types::I32
         } else if self.floats.max().unwrap_or(0) > 5 {
             types::F32
-        } else if self.bools.max().unwrap_or(0) > 5 {
-            types::B32
         } else {
-            types::B1
+            types::I8
         };
         t.by(1 << self.lanes.min().unwrap()).unwrap()
     }
@@ -708,12 +688,6 @@ enum OperandConstraint {
     /// This operand is `ctrlType.double_width()`.
     DoubleWidth,
 
-    /// This operand is `ctrlType.half_vector()`.
-    HalfVector,
-
-    /// This operand is `ctrlType.double_vector()`.
-    DoubleVector,
-
     /// This operand is `ctrlType.split_lanes()`.
     SplitLanes,
 
@@ -742,12 +716,6 @@ impl OperandConstraint {
                     .double_width()
                     .expect("invalid type for double_width"),
             ),
-            HalfVector => Bound(
-                ctrl_type
-                    .half_vector()
-                    .expect("invalid type for half_vector"),
-            ),
-            DoubleVector => Bound(ctrl_type.by(2).expect("invalid type for double_vector")),
             SplitLanes => {
                 if ctrl_type.is_dynamic_vector() {
                     Bound(
@@ -808,6 +776,19 @@ pub enum ResolvedConstraint {
 mod tests {
     use super::*;
     use alloc::string::ToString;
+
+    #[test]
+    fn inst_data_is_copy() {
+        fn is_copy<T: Copy>() {}
+        is_copy::<InstructionData>();
+    }
+
+    #[test]
+    fn inst_data_size() {
+        // The size of `InstructionData` is performance sensitive, so make sure
+        // we don't regress it unintentionally.
+        assert_eq!(std::mem::size_of::<InstructionData>(), 16);
+    }
 
     #[test]
     fn opcodes() {
@@ -901,7 +882,6 @@ mod tests {
             lanes: BitSet16::from_range(0, 8),
             ints: BitSet8::from_range(4, 7),
             floats: BitSet8::from_range(0, 0),
-            bools: BitSet8::from_range(3, 7),
             refs: BitSet8::from_range(5, 7),
             dynamic_lanes: BitSet16::from_range(0, 4),
         };
@@ -911,9 +891,6 @@ mod tests {
         assert!(vts.contains(I32X4));
         assert!(vts.contains(I32X4XN));
         assert!(!vts.contains(F32));
-        assert!(!vts.contains(B1));
-        assert!(vts.contains(B8));
-        assert!(vts.contains(B64));
         assert!(vts.contains(R32));
         assert!(vts.contains(R64));
         assert_eq!(vts.example().to_string(), "i32");
@@ -922,7 +899,6 @@ mod tests {
             lanes: BitSet16::from_range(0, 8),
             ints: BitSet8::from_range(0, 0),
             floats: BitSet8::from_range(5, 7),
-            bools: BitSet8::from_range(3, 7),
             refs: BitSet8::from_range(0, 0),
             dynamic_lanes: BitSet16::from_range(0, 8),
         };
@@ -932,7 +908,6 @@ mod tests {
             lanes: BitSet16::from_range(1, 8),
             ints: BitSet8::from_range(0, 0),
             floats: BitSet8::from_range(5, 7),
-            bools: BitSet8::from_range(3, 7),
             refs: BitSet8::from_range(0, 0),
             dynamic_lanes: BitSet16::from_range(0, 8),
         };
@@ -940,23 +915,18 @@ mod tests {
 
         let vts = ValueTypeSet {
             lanes: BitSet16::from_range(2, 8),
-            ints: BitSet8::from_range(0, 0),
+            ints: BitSet8::from_range(3, 7),
             floats: BitSet8::from_range(0, 0),
-            bools: BitSet8::from_range(3, 7),
             refs: BitSet8::from_range(0, 0),
             dynamic_lanes: BitSet16::from_range(0, 8),
         };
-        assert!(!vts.contains(B32X2));
-        assert!(vts.contains(B32X4));
-        assert!(vts.contains(B16X4XN));
-        assert_eq!(vts.example().to_string(), "b32x4");
+        assert_eq!(vts.example().to_string(), "i32x4");
 
         let vts = ValueTypeSet {
             // TypeSet(lanes=(1, 256), ints=(8, 64))
             lanes: BitSet16::from_range(0, 9),
             ints: BitSet8::from_range(3, 7),
             floats: BitSet8::from_range(0, 0),
-            bools: BitSet8::from_range(0, 0),
             refs: BitSet8::from_range(0, 0),
             dynamic_lanes: BitSet16::from_range(0, 8),
         };

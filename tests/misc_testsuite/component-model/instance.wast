@@ -70,7 +70,7 @@
 ;; Test to see if a component with a type export can be instantiated.
 (component
     (type string)
-    (export "" (type 0))
+    (export "a" (type 0))
 )
 
 ;; double-check the start function runs by ensuring that a trap shows up and it
@@ -177,6 +177,12 @@
   (core instance (instantiate $m
     (with "host" (instance (export "return-three" (func $three_lower))))
   ))
+)
+
+(component
+  (import "host" (instance $i
+    (type $rec (record (field "x" (record)) (field "y" string)))
+    (export "some-record" (type (eq $rec)))))
 )
 
 (component

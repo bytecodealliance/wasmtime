@@ -1,5 +1,8 @@
-use crate::{region::Region, GuestError, GuestPtr};
+use crate::{GuestError, GuestPtr};
 use std::mem;
+use std::sync::atomic::{
+    AtomicI16, AtomicI32, AtomicI64, AtomicI8, AtomicU16, AtomicU32, AtomicU64, AtomicU8, Ordering,
+};
 
 /// A trait for types which are used to report errors. Each type used in the
 /// first result position of an interface function is used, by convention, to
@@ -48,98 +51,148 @@ pub trait GuestType<'a>: Sized {
 /// as in Rust. These types can be used with the `GuestPtr::as_slice` method to
 /// view as a slice.
 ///
-/// Unsafe trait because a correct GuestTypeTransparent implemengation ensures that the
-/// GuestPtr::as_slice methods are safe. This trait should only ever be implemented
-/// by wiggle_generate-produced code.
-pub unsafe trait GuestTypeTransparent<'a>: GuestType<'a> {
-    /// Checks that the memory at `ptr` is a valid representation of `Self`.
-    ///
-    /// Assumes that memory safety checks have already been performed: `ptr`
-    /// has been checked to be aligned correctly and reside in memory using
-    /// `GuestMemory::validate_size_align`
-    fn validate(ptr: *mut Self) -> Result<(), GuestError>;
-}
+/// Unsafe trait because a correct `GuestTypeTransparent` implementation ensures
+/// that the `GuestPtr::as_slice` methods are safe, notably that the
+/// representation on the host matches the guest and all bit patterns are
+/// valid. This trait should only ever be implemented by
+/// wiggle_generate-produced code.
+pub unsafe trait GuestTypeTransparent<'a>: GuestType<'a> {}
 
-macro_rules! primitives {
-    ($($i:ident)*) => ($(
-        impl<'a> GuestType<'a> for $i {
+macro_rules! integer_primitives {
+    ($([$ty:ident, $ty_atomic:ident],)*) => ($(
+        impl<'a> GuestType<'a> for $ty {
+            #[inline]
             fn guest_size() -> u32 { mem::size_of::<Self>() as u32 }
+            #[inline]
             fn guest_align() -> usize { mem::align_of::<Self>() }
 
             #[inline]
             fn read(ptr: &GuestPtr<'a, Self>) -> Result<Self, GuestError> {
-                // Any bit pattern for any primitive implemented with this
-                // macro is safe, so our `validate_size_align` method will
-                // guarantee that if we are given a pointer it's valid for the
-                // size of our type as well as properly aligned. Consequently we
-                // should be able to safely ready the pointer just after we
-                // validated it, returning it along here.
+                // Use `validate_size_align` to validate offset and alignment
+                // internally. The `host_ptr` type will be `&UnsafeCell<Self>`
+                // indicating that the memory is valid, and next safety checks
+                // are required to access it.
                 let offset = ptr.offset();
-                let size = Self::guest_size();
-                let host_ptr = ptr.mem().validate_size_align(
-                    offset,
-                    Self::guest_align(),
-                    size,
-                )?;
-                let region = Region {
-                    start: offset,
-                    len: size,
-                };
+                let (host_ptr, region) = super::validate_size_align::<Self>(ptr.mem(), offset, 1)?;
+                let host_ptr = &host_ptr[0];
+
+                // If this memory is mutable borrowed then it cannot be read
+                // here, so skip this operation.
+                //
+                // Note that shared memories don't allow borrows and other
+                // shared borrows are ok to overlap with this.
                 if ptr.mem().is_mut_borrowed(region) {
                     return Err(GuestError::PtrBorrowed(region));
                 }
-                Ok(unsafe { <$i>::from_le_bytes(*host_ptr.cast::<[u8; mem::size_of::<Self>()]>()) })
+
+                // If the accessed memory is shared, we need to load the bytes
+                // with the correct memory consistency. We could check if the
+                // memory is shared each time, but we expect little performance
+                // difference between an additional branch and a relaxed memory
+                // access and thus always do the relaxed access here.
+                let atomic_value_ref: &$ty_atomic =
+                    unsafe { &*(host_ptr.get().cast::<$ty_atomic>()) };
+                let val = atomic_value_ref.load(Ordering::Relaxed);
+
+                // And as a final operation convert from the little-endian wasm
+                // value to a native-endian value for the host.
+                Ok($ty::from_le(val))
             }
 
             #[inline]
             fn write(ptr: &GuestPtr<'_, Self>, val: Self) -> Result<(), GuestError> {
+                // See `read` above for various checks here.
+                let val = val.to_le();
                 let offset = ptr.offset();
-                let size = Self::guest_size();
-                let host_ptr = ptr.mem().validate_size_align(
-                    offset,
-                    Self::guest_align(),
-                    size,
-                )?;
-                let region = Region {
-                    start: offset,
-                    len: size,
-                };
+                let (host_ptr, region) = super::validate_size_align::<Self>(ptr.mem(), offset, 1)?;
+                let host_ptr = &host_ptr[0];
                 if ptr.mem().is_shared_borrowed(region) || ptr.mem().is_mut_borrowed(region) {
                     return Err(GuestError::PtrBorrowed(region));
                 }
-                unsafe {
-                    *host_ptr.cast::<[u8; mem::size_of::<Self>()]>() = <$i>::to_le_bytes(val);
-                }
+                let atomic_value_ref: &$ty_atomic =
+                    unsafe { &*(host_ptr.get().cast::<$ty_atomic>()) };
+                atomic_value_ref.store(val, Ordering::Relaxed);
                 Ok(())
             }
         }
 
-        unsafe impl<'a> GuestTypeTransparent<'a> for $i {
-            #[inline]
-            fn validate(_ptr: *mut $i) -> Result<(), GuestError> {
-                // All bit patterns are safe, nothing to do here
-                Ok(())
-            }
-        }
+        unsafe impl<'a> GuestTypeTransparent<'a> for $ty {}
 
     )*)
 }
 
-primitives! {
+macro_rules! float_primitives {
+    ($([$ty:ident, $ty_unsigned:ident, $ty_atomic:ident],)*) => ($(
+        impl<'a> GuestType<'a> for $ty {
+            #[inline]
+            fn guest_size() -> u32 { mem::size_of::<Self>() as u32 }
+            #[inline]
+            fn guest_align() -> usize { mem::align_of::<Self>() }
+
+            #[inline]
+            fn read(ptr: &GuestPtr<'a, Self>) -> Result<Self, GuestError> {
+                // For more commentary see `read` for integers
+                let offset = ptr.offset();
+                let (host_ptr, region) = super::validate_size_align::<$ty_unsigned>(
+                    ptr.mem(),
+                    offset,
+                    1,
+                )?;
+                let host_ptr = &host_ptr[0];
+                if ptr.mem().is_mut_borrowed(region) {
+                    return Err(GuestError::PtrBorrowed(region));
+                }
+                let atomic_value_ref: &$ty_atomic =
+                    unsafe { &*(host_ptr.get().cast::<$ty_atomic>()) };
+                let value = $ty_unsigned::from_le(atomic_value_ref.load(Ordering::Relaxed));
+                Ok($ty::from_bits(value))
+            }
+
+            #[inline]
+            fn write(ptr: &GuestPtr<'_, Self>, val: Self) -> Result<(), GuestError> {
+                // For more commentary see `read`/`write` for integers.
+                let offset = ptr.offset();
+                let (host_ptr, region) = super::validate_size_align::<$ty_unsigned>(
+                    ptr.mem(),
+                    offset,
+                    1,
+                )?;
+                let host_ptr = &host_ptr[0];
+                if ptr.mem().is_shared_borrowed(region) || ptr.mem().is_mut_borrowed(region) {
+                    return Err(GuestError::PtrBorrowed(region));
+                }
+                let atomic_value_ref: &$ty_atomic =
+                    unsafe { &*(host_ptr.get().cast::<$ty_atomic>()) };
+                let le_value = $ty_unsigned::to_le(val.to_bits());
+                atomic_value_ref.store(le_value, Ordering::Relaxed);
+                Ok(())
+            }
+        }
+
+        unsafe impl<'a> GuestTypeTransparent<'a> for $ty {}
+
+    )*)
+}
+
+integer_primitives! {
     // signed
-    i8 i16 i32 i64 i128
+    [i8, AtomicI8], [i16, AtomicI16], [i32, AtomicI32], [i64, AtomicI64],
     // unsigned
-    u8 u16 u32 u64 u128
-    // floats
-    f32 f64
+    [u8, AtomicU8], [u16, AtomicU16], [u32, AtomicU32], [u64, AtomicU64],
+}
+
+float_primitives! {
+    [f32, u32, AtomicU32], [f64, u64, AtomicU64],
 }
 
 // Support pointers-to-pointers where pointers are always 32-bits in wasm land
 impl<'a, T> GuestType<'a> for GuestPtr<'a, T> {
+    #[inline]
     fn guest_size() -> u32 {
         u32::guest_size()
     }
 
+    #[inline]
     fn guest_align() -> usize {
         u32::guest_align()
     }
@@ -159,10 +212,12 @@ impl<'a, T> GuestType<'a> for GuestPtr<'a, [T]>
 where
     T: GuestType<'a>,
 {
+    #[inline]
     fn guest_size() -> u32 {
         u32::guest_size() * 2
     }
 
+    #[inline]
     fn guest_align() -> usize {
         u32::guest_align()
     }

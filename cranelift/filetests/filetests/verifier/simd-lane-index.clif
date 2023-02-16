@@ -11,11 +11,11 @@ block0:
     return
 }
 
-function %insertlane_b16x8() {
+function %insertlane_i16x8() {
 block0:
-    v0 = vconst.b16x8 [false false false false false false false false]
-    v1 = bconst.b16 true
-    v2 = insertlane v0, v1, 8 ; error: The lane 8 does not index into the type b16x8
+    v0 = vconst.i16x8 [0 0 0 0 0 0 0 0]
+    v1 = iconst.i16 -1
+    v2 = insertlane v0, v1, 8 ; error: The lane 8 does not index into the type i16x8
     return
 }
 
@@ -34,9 +34,9 @@ block0:
     return
 }
 
-function %extractlane_b8x16() {
+function %extractlane_i8x16() {
 block0:
-    v0 = vconst.b8x16 0x00
-    v1 = extractlane v0, 16 ; error: The lane 16 does not index into the type b8x16
+    v0 = vconst.i8x16 0x00
+    v1 = extractlane v0, 16 ; error: The lane 16 does not index into the type i8x16
     return
 }

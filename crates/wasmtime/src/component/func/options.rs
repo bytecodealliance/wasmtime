@@ -3,7 +3,7 @@ use crate::StoreContextMut;
 use anyhow::{bail, Result};
 use std::ptr::NonNull;
 use wasmtime_environ::component::StringEncoding;
-use wasmtime_runtime::{VMCallerCheckedAnyfunc, VMMemoryDefinition};
+use wasmtime_runtime::{VMCallerCheckedFuncRef, VMMemoryDefinition};
 
 /// Runtime representation of canonical ABI options in the component model.
 ///
@@ -30,7 +30,7 @@ pub struct Options {
     /// function.
     ///
     /// Safely using this pointer has the same restrictions as `memory` above.
-    realloc: Option<NonNull<VMCallerCheckedAnyfunc>>,
+    realloc: Option<NonNull<VMCallerCheckedFuncRef>>,
 
     /// The encoding used for strings, if found.
     ///
@@ -57,7 +57,7 @@ impl Options {
     pub unsafe fn new(
         store_id: StoreId,
         memory: Option<NonNull<VMMemoryDefinition>>,
-        realloc: Option<NonNull<VMCallerCheckedAnyfunc>>,
+        realloc: Option<NonNull<VMCallerCheckedFuncRef>>,
         string_encoding: StringEncoding,
     ) -> Options {
         Options {
@@ -102,13 +102,9 @@ impl Options {
 
         let memory = self.memory_mut(store.0);
 
-        let result_slice = if new_size == 0 {
-            &mut []
-        } else {
-            match memory.get_mut(result..).and_then(|s| s.get_mut(..new_size)) {
-                Some(end) => end,
-                None => bail!("realloc return: beyond end of memory"),
-            }
+        let result_slice = match memory.get_mut(result..).and_then(|s| s.get_mut(..new_size)) {
+            Some(end) => end,
+            None => bail!("realloc return: beyond end of memory"),
         };
 
         Ok((result_slice, result))

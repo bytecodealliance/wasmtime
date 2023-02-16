@@ -1,0 +1,34 @@
+;; Test the rewrite: `or(and(x, y), not(y)) => or(x, not(y))`
+
+test interpret
+test run
+target aarch64
+target x86_64
+target riscv64
+target s390x
+
+function %or_and_y_with_not_y(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = band v0, v1
+    v3 = bnot v1
+    v4 = bor v2, v3
+    return v4
+}
+; run: %or_and_y_with_not_y(0xff, 0x0a) == 0xff
+; run: %or_and_y_with_not_y(0xff, 0xb0) == 0xff
+; run: %or_and_y_with_not_y(0xaa, 0x0a) == 0xff
+; run: %or_and_y_with_not_y(0xaa, 0xb0) == 0xef
+; run: %or_and_y_with_not_y(0x00, 0x0a) == 0xf5
+; run: %or_and_y_with_not_y(0x00, 0xb0) == 0x4f
+
+function %or_and_constant_with_not_constant(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 -4
+    v2 = band v0, v1
+    v3 = iconst.i8 3
+    v4 = bor v2, v3
+    return v4
+}
+; run: %or_and_constant_with_not_constant(0xff) == 0xff
+; run: %or_and_constant_with_not_constant(0xaa) == 0xab
+; run: %or_and_constant_with_not_constant(0x00) == 0x03

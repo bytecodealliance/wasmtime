@@ -1,11 +1,13 @@
-use anyhow::{bail, Result};
-use std::io::Write;
+use anyhow::{bail, Context, Result};
+use std::fs::File;
+use std::io::{Read, Write};
 use std::path::Path;
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
 use tempfile::{NamedTempFile, TempDir};
 
 // Run the wasmtime CLI with the provided args and return the `Output`.
-fn run_wasmtime_for_output(args: &[&str]) -> Result<Output> {
+// If the `stdin` is `Some`, opens the file and redirects to the child's stdin.
+fn run_wasmtime_for_output(args: &[&str], stdin: Option<&Path>) -> Result<Output> {
     let runner = std::env::vars()
         .filter(|(k, _v)| k.starts_with("CARGO_TARGET") && k.ends_with("RUNNER"))
         .next();
@@ -13,6 +15,11 @@ fn run_wasmtime_for_output(args: &[&str]) -> Result<Output> {
     me.pop(); // chop off the file name
     me.pop(); // chop off `deps`
     me.push("wasmtime");
+
+    let stdin = stdin
+        .map(File::open)
+        .transpose()
+        .context("Cannot open a file to use as stdin")?;
 
     // If we're running tests with a "runner" then we might be doing something
     // like cross-emulation, so spin up the emulator rather than the tests
@@ -28,13 +35,33 @@ fn run_wasmtime_for_output(args: &[&str]) -> Result<Output> {
     } else {
         Command::new(&me)
     };
-    cmd.args(args).output().map_err(Into::into)
+
+    if let Some(mut f) = stdin {
+        let mut buf = Vec::new();
+        f.read_to_end(&mut buf)?;
+
+        let mut child = cmd
+            .stdout(Stdio::piped())
+            .stdin(Stdio::piped())
+            .args(args)
+            .spawn()?;
+
+        let mut stdin = child.stdin.take().unwrap();
+        std::thread::spawn(move || {
+            stdin
+                .write_all(&buf)
+                .expect("failed to write module to child stdin")
+        });
+        child.wait_with_output().map_err(Into::into)
+    } else {
+        cmd.args(args).output().map_err(Into::into)
+    }
 }
 
 // Run the wasmtime CLI with the provided args and, if it succeeds, return
 // the standard output in a `String`.
 fn run_wasmtime(args: &[&str]) -> Result<String> {
-    let output = run_wasmtime_for_output(args)?;
+    let output = run_wasmtime_for_output(args, None)?;
     if !output.status.success() {
         bail!(
             "Failed to execute wasmtime with: {:?}\n{}",
@@ -124,7 +151,8 @@ fn run_wasmtime_simple_wat() -> Result<()> {
 #[test]
 fn run_wasmtime_unreachable_wat() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/unreachable.wat")?;
-    let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
+    let output =
+        run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"], None)?;
 
     assert_ne!(output.stderr, b"");
     assert_eq!(output.stdout, b"");
@@ -164,13 +192,16 @@ fn hello_wasi_snapshot1() -> Result<()> {
 #[test]
 fn timeout_in_start() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/iloop-start.wat")?;
-    let output = run_wasmtime_for_output(&[
-        "run",
-        wasm.path().to_str().unwrap(),
-        "--wasm-timeout",
-        "1ms",
-        "--disable-cache",
-    ])?;
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            wasm.path().to_str().unwrap(),
+            "--wasm-timeout",
+            "1ms",
+            "--disable-cache",
+        ],
+        None,
+    )?;
     assert!(!output.status.success());
     assert_eq!(output.stdout, b"");
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -185,13 +216,16 @@ fn timeout_in_start() -> Result<()> {
 #[test]
 fn timeout_in_invoke() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/iloop-invoke.wat")?;
-    let output = run_wasmtime_for_output(&[
-        "run",
-        wasm.path().to_str().unwrap(),
-        "--wasm-timeout",
-        "1ms",
-        "--disable-cache",
-    ])?;
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            wasm.path().to_str().unwrap(),
+            "--wasm-timeout",
+            "1ms",
+            "--disable-cache",
+        ],
+        None,
+    )?;
     assert!(!output.status.success());
     assert_eq!(output.stdout, b"");
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -207,7 +241,8 @@ fn timeout_in_invoke() -> Result<()> {
 #[test]
 fn exit2_wasi_snapshot0() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/exit2_wasi_snapshot0.wat")?;
-    let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
+    let output =
+        run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"], None)?;
     assert_eq!(output.status.code().unwrap(), 2);
     Ok(())
 }
@@ -216,7 +251,8 @@ fn exit2_wasi_snapshot0() -> Result<()> {
 #[test]
 fn exit2_wasi_snapshot1() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/exit2_wasi_snapshot1.wat")?;
-    let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
+    let output =
+        run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"], None)?;
     assert_eq!(output.status.code().unwrap(), 2);
     Ok(())
 }
@@ -225,7 +261,8 @@ fn exit2_wasi_snapshot1() -> Result<()> {
 #[test]
 fn exit125_wasi_snapshot0() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/exit125_wasi_snapshot0.wat")?;
-    let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
+    let output =
+        run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"], None)?;
     if cfg!(windows) {
         assert_eq!(output.status.code().unwrap(), 1);
     } else {
@@ -238,7 +275,8 @@ fn exit125_wasi_snapshot0() -> Result<()> {
 #[test]
 fn exit125_wasi_snapshot1() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/exit125_wasi_snapshot1.wat")?;
-    let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
+    let output =
+        run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"], None)?;
     if cfg!(windows) {
         assert_eq!(output.status.code().unwrap(), 1);
     } else {
@@ -251,12 +289,9 @@ fn exit125_wasi_snapshot1() -> Result<()> {
 #[test]
 fn exit126_wasi_snapshot0() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/exit126_wasi_snapshot0.wat")?;
-    let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
-    if cfg!(windows) {
-        assert_eq!(output.status.code().unwrap(), 3);
-    } else {
-        assert_eq!(output.status.code().unwrap(), 128 + libc::SIGABRT);
-    }
+    let output =
+        run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"], None)?;
+    assert_eq!(output.status.code().unwrap(), 1);
     assert!(output.stdout.is_empty());
     assert!(String::from_utf8_lossy(&output.stderr).contains("invalid exit status"));
     Ok(())
@@ -266,12 +301,9 @@ fn exit126_wasi_snapshot0() -> Result<()> {
 #[test]
 fn exit126_wasi_snapshot1() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/exit126_wasi_snapshot1.wat")?;
-    let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
-    if cfg!(windows) {
-        assert_eq!(output.status.code().unwrap(), 3);
-    } else {
-        assert_eq!(output.status.code().unwrap(), 128 + libc::SIGABRT);
-    }
+    let output =
+        run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"], None)?;
+    assert_eq!(output.status.code().unwrap(), 1);
     assert!(output.stdout.is_empty());
     assert!(String::from_utf8_lossy(&output.stderr).contains("invalid exit status"));
     Ok(())
@@ -376,7 +408,8 @@ fn greeter_preload_callable_command() -> Result<()> {
 #[test]
 fn exit_with_saved_fprs() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/exit_with_saved_fprs.wat")?;
-    let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
+    let output =
+        run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"], None)?;
     assert_eq!(output.status.code().unwrap(), 0);
     assert!(output.stdout.is_empty());
     Ok(())
@@ -395,5 +428,73 @@ fn run_cwasm() -> Result<()> {
     assert_eq!(stdout, "");
     let stdout = run_wasmtime(&["run", "--allow-precompiled", cwasm.to_str().unwrap()])?;
     assert_eq!(stdout, "");
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn hello_wasi_snapshot0_from_stdin() -> Result<()> {
+    // Run a simple WASI hello world, snapshot0 edition.
+    // The module is piped from standard input.
+    let wasm = build_wasm("tests/all/cli_tests/hello_wasi_snapshot0.wat")?;
+    let stdout = {
+        let path = wasm.path();
+        let args: &[&str] = &["-", "--disable-cache"];
+        let output = run_wasmtime_for_output(args, Some(path))?;
+        if !output.status.success() {
+            bail!(
+                "Failed to execute wasmtime with: {:?}\n{}",
+                args,
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        Ok::<_, anyhow::Error>(String::from_utf8(output.stdout).unwrap())
+    }?;
+    assert_eq!(stdout, "Hello, world!\n");
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn run_cwasm_from_stdin() -> Result<()> {
+    let td = TempDir::new()?;
+    let cwasm = td.path().join("foo.cwasm");
+    let stdout = run_wasmtime(&[
+        "compile",
+        "tests/all/cli_tests/simple.wat",
+        "-o",
+        cwasm.to_str().unwrap(),
+    ])?;
+    assert_eq!(stdout, "");
+    let args: &[&str] = &["run", "--allow-precompiled", "-"];
+    let output = run_wasmtime_for_output(args, Some(&cwasm))?;
+    if output.status.success() {
+        bail!("wasmtime should fail loading precompiled modules from piped files, but suceeded");
+    }
+    Ok(())
+}
+
+#[cfg(feature = "wasi-threads")]
+#[test]
+fn run_threads() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/threads.wat")?;
+    let stdout = run_wasmtime(&[
+        "run",
+        "--wasi-modules",
+        "experimental-wasi-threads",
+        "--wasm-features",
+        "threads",
+        "--disable-cache",
+        wasm.path().to_str().unwrap(),
+    ])?;
+
+    assert!(
+        stdout
+            == "Called _start\n\
+    Running wasi_thread_start\n\
+    Running wasi_thread_start\n\
+    Running wasi_thread_start\n\
+    Done\n"
+    );
     Ok(())
 }

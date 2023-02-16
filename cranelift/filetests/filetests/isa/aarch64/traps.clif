@@ -1,35 +1,35 @@
 test compile precise-output
-set unwind_info=false
 target aarch64
 
-function %f() {
+function %trap() {
 block0:
   trap user0
 }
 
+; VCode:
 ; block0:
 ;   udf #0xc11f
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
 
-function %g(i64) {
-block0(v0: i64):
-  v1 = iconst.i64 42
-  v2 = ifcmp v0, v1
-  trapif eq v2, user0
+function %trap_iadd_ifcout(i64, i64) {
+block0(v0: i64, v1: i64):
+  v2 = uadd_overflow_trap v0, v1, user0
   return
 }
 
+; VCode:
 ; block0:
-;   subs xzr, x0, #42
-;   b.ne 8 ; udf
+;   adds x3, x0, x1
+;   b.lo 8 ; udf
 ;   ret
-
-function %h() {
-block0:
-  debugtrap
-  return
-}
-
-; block0:
-;   brk #0
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   adds x3, x0, x1
+;   b.lo #0xc
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
 ;   ret
 

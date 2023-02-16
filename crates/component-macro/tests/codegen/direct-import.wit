@@ -1,0 +1,3 @@
+default world foo {
+  import foo: func()
+}

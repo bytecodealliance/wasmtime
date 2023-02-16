@@ -14,9 +14,6 @@ pub(crate) struct Immediates {
     /// counts on shift instructions.
     pub uimm8: OperandKind,
 
-    /// An unsigned 32-bit immediate integer operand.
-    pub uimm32: OperandKind,
-
     /// An unsigned 128-bit immediate integer operand.
     ///
     /// This operand is used to pass entire 128-bit vectors as immediates to instructions like
@@ -43,11 +40,6 @@ pub(crate) struct Immediates {
     ///
     /// IEEE 754-2008 binary64 interchange format.
     pub ieee64: OperandKind,
-
-    /// An immediate boolean operand.
-    ///
-    /// This type of immediate boolean can interact with SSA values with any BoolType type.
-    pub boolean: OperandKind,
 
     /// A condition code for comparing integer values.
     ///
@@ -112,11 +104,6 @@ impl Immediates {
                 "ir::immediates::Uimm8",
                 "An 8-bit immediate unsigned integer.",
             ),
-            uimm32: new_imm(
-                "imm",
-                "ir::immediates::Uimm32",
-                "A 32-bit immediate unsigned integer.",
-            ),
             uimm128: new_imm(
                 "imm",
                 "ir::Immediate",
@@ -142,7 +129,6 @@ impl Immediates {
                 "ir::immediates::Ieee64",
                 "A 64-bit immediate floating point number.",
             ),
-            boolean: new_imm("imm", "bool", "An immediate boolean."),
             intcc: {
                 let mut intcc_values = HashMap::new();
                 intcc_values.insert("eq", "Equal");
@@ -155,8 +141,6 @@ impl Immediates {
                 intcc_values.insert("ugt", "UnsignedGreaterThan");
                 intcc_values.insert("ule", "UnsignedLessThanOrEqual");
                 intcc_values.insert("ult", "UnsignedLessThan");
-                intcc_values.insert("of", "Overflow");
-                intcc_values.insert("nof", "NotOverflow");
                 new_enum(
                     "cond",
                     "ir::condcodes::IntCC",
@@ -190,6 +174,7 @@ impl Immediates {
             },
 
             memflags: new_imm("flags", "ir::MemFlags", "Memory operation flags"),
+
             trapcode: {
                 let mut trapcode_values = HashMap::new();
                 trapcode_values.insert("stk_ovf", "StackOverflow");

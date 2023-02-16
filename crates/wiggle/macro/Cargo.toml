@@ -1,8 +1,8 @@
 [package]
 name = "wiggle-macro"
-version = "0.41.0"
+version.workspace = true
 authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkon@jakubkonka.com>", "Alex Crichton <alex@alexcrichton.com>"]
-edition = "2021"
+edition.workspace = true
 license = "Apache-2.0 WITH LLVM-exception"
 description = "Wiggle code generator"
 categories = ["wasm"]
@@ -21,7 +21,7 @@ test = false
 doctest = false
 
 [dependencies]
-wiggle-generate = { path = "../generate", version = "=0.41.0" }
+wiggle-generate = { workspace = true }
 quote = "1.0"
 syn = { version = "1.0", features = ["full"] }
 proc-macro2 = "1.0"
@@ -30,5 +30,4 @@ proc-macro2 = "1.0"
 wiggle = { path = ".." }
 
 [features]
-wasmtime = []
 wiggle_metadata = []

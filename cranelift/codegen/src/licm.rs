@@ -142,7 +142,6 @@ fn trivially_unsafe_for_licm(opcode: Opcode) -> bool {
         || opcode.is_return()
         || opcode.can_trap()
         || opcode.other_side_effects()
-        || opcode.writes_cpu_flags()
 }
 
 fn is_unsafe_load(inst_data: &InstructionData) -> bool {
@@ -154,17 +153,16 @@ fn is_unsafe_load(inst_data: &InstructionData) -> bool {
 
 /// Test whether the given instruction is loop-invariant.
 fn is_loop_invariant(inst: Inst, dfg: &DataFlowGraph, loop_values: &FxHashSet<Value>) -> bool {
-    if trivially_unsafe_for_licm(dfg[inst].opcode()) {
+    if trivially_unsafe_for_licm(dfg.insts[inst].opcode()) {
         return false;
     }
 
-    if is_unsafe_load(&dfg[inst]) {
+    if is_unsafe_load(&dfg.insts[inst]) {
         return false;
     }
 
-    let inst_args = dfg.inst_args(inst);
-    for arg in inst_args {
-        let arg = dfg.resolve_aliases(*arg);
+    for arg in dfg.inst_values(inst) {
+        let arg = dfg.resolve_aliases(arg);
         if loop_values.contains(&arg) {
             return false;
         }

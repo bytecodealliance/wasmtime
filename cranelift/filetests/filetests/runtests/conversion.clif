@@ -1,0 +1,56 @@
+test interpret
+test run
+target aarch64
+target s390x
+target x86_64
+target riscv64
+
+function %fcvt_to_sint(f32) -> i32 {
+block0(v0: f32):
+    v1 = fcvt_to_sint.i32 v0
+    return v1
+}
+; run: %fcvt_to_sint(0x0.0) == 0
+; run: %fcvt_to_sint(0x1.0) == 1
+; run: %fcvt_to_sint(0x1.d6f346p26) == 123456792
+; run: %fcvt_to_sint(0x8.1) == 8
+
+function %fcvt_to_uint(f32) -> i32 {
+block0(v0:f32):
+    v1 = fcvt_to_uint.i32 v0
+    return v1
+}
+; run: %fcvt_to_uint(0x0.0) == 0
+; run: %fcvt_to_uint(0x1.0) == 1
+; run: %fcvt_to_uint(0x4.2) == 4
+; run: %fcvt_to_uint(0x4.6) == 4
+; run: %fcvt_to_uint(0x1.d6f346p26) == 123456792
+; run: %fcvt_to_uint(0xB2D05E00.0) == 3000000000
+
+function %fcvt_to_sint_sat(f32) -> i32 {
+block0(v0: f32):
+    v1 = fcvt_to_sint_sat.i32 v0
+    return v1
+}
+; run: %fcvt_to_sint_sat(0x0.0) == 0
+; run: %fcvt_to_sint_sat(0x1.0) == 1
+; run: %fcvt_to_sint_sat(0x1.d6f346p26) == 123456792
+; run: %fcvt_to_sint_sat(0x8.1) == 8
+; run: %fcvt_to_sint_sat(-0x1.0) == -1
+; run: %fcvt_to_sint_sat(0x1.fffffep127) == 2147483647
+; run: %fcvt_to_sint_sat(-0x1.fffffep127) == -2147483648
+
+function %fcvt_to_uint_sat(f32) -> i32 {
+block0(v0:f32):
+    v1 = fcvt_to_uint_sat.i32 v0
+    return v1
+}
+; run: %fcvt_to_uint_sat(0x0.0) == 0
+; run: %fcvt_to_uint_sat(0x1.0) == 1
+; run: %fcvt_to_uint_sat(0x4.2) == 4
+; run: %fcvt_to_uint_sat(0x4.6) == 4
+; run: %fcvt_to_uint_sat(0x1.d6f346p26) == 123456792
+; run: %fcvt_to_uint_sat(0xB2D05E00.0) == 3000000000
+; run: %fcvt_to_uint_sat(-0x1.0) == 0
+; run: %fcvt_to_uint_sat(0x1.fffffep127) == 4294967295
+; run: %fcvt_to_uint_sat(-0x1.fffffep127) == 0

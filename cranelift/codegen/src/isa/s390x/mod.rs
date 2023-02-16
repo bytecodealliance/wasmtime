@@ -7,7 +7,8 @@ use crate::isa::s390x::settings as s390x_settings;
 use crate::isa::unwind::systemv::RegisterMappingError;
 use crate::isa::{Builder as IsaBuilder, TargetIsa};
 use crate::machinst::{
-    compile, CompiledCode, MachTextSectionBuilder, Reg, TextSectionBuilder, VCode,
+    compile, CompiledCode, CompiledCodeStencil, MachTextSectionBuilder, Reg, SigSet,
+    TextSectionBuilder, VCode,
 };
 use crate::result::CodegenResult;
 use crate::settings as shared_settings;
@@ -57,13 +58,18 @@ impl S390xBackend {
         func: &Function,
     ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
         let emit_info = EmitInfo::new(self.isa_flags.clone());
-        let abi = Box::new(abi::S390xABICallee::new(func, self, &self.isa_flags)?);
-        compile::compile::<S390xBackend>(func, self, abi, &self.machine_env, emit_info)
+        let sigs = SigSet::new::<abi::S390xMachineDeps>(func, &self.flags)?;
+        let abi = abi::S390xCallee::new(func, self, &self.isa_flags, &sigs)?;
+        compile::compile::<S390xBackend>(func, self, abi, emit_info, sigs)
     }
 }
 
 impl TargetIsa for S390xBackend {
-    fn compile_function(&self, func: &Function, want_disasm: bool) -> CodegenResult<CompiledCode> {
+    fn compile_function(
+        &self,
+        func: &Function,
+        want_disasm: bool,
+    ) -> CodegenResult<CompiledCodeStencil> {
         let flags = self.flags();
         let (vcode, regalloc_result) = self.compile_vcode(func)?;
 
@@ -78,15 +84,16 @@ impl TargetIsa for S390xBackend {
             log::debug!("disassembly:\n{}", disasm);
         }
 
-        Ok(CompiledCode {
+        Ok(CompiledCodeStencil {
             buffer,
             frame_size,
-            disasm: emit_result.disasm,
+            vcode: emit_result.disasm,
             value_labels_ranges,
             sized_stackslot_offsets,
             dynamic_stackslot_offsets,
             bb_starts: emit_result.bb_offsets,
             bb_edges: emit_result.bb_edges,
+            alignment: emit_result.alignment,
         })
     }
 
@@ -100,6 +107,10 @@ impl TargetIsa for S390xBackend {
 
     fn flags(&self) -> &shared_settings::Flags {
         &self.flags
+    }
+
+    fn machine_env(&self) -> &MachineEnv {
+        &self.machine_env
     }
 
     fn isa_flags(&self) -> Vec<shared_settings::Value> {
@@ -152,8 +163,25 @@ impl TargetIsa for S390xBackend {
         inst::unwind::systemv::map_reg(reg).map(|reg| reg.0)
     }
 
-    fn text_section_builder(&self, num_funcs: u32) -> Box<dyn TextSectionBuilder> {
+    fn text_section_builder(&self, num_funcs: usize) -> Box<dyn TextSectionBuilder> {
         Box::new(MachTextSectionBuilder::<inst::Inst>::new(num_funcs))
+    }
+
+    fn function_alignment(&self) -> u32 {
+        4
+    }
+
+    #[cfg(feature = "disas")]
+    fn to_capstone(&self) -> Result<capstone::Capstone, capstone::Error> {
+        use capstone::prelude::*;
+        let mut cs = Capstone::new()
+            .sysz()
+            .mode(arch::sysz::ArchMode::Default)
+            .build()?;
+
+        cs.set_skipdata(true)?;
+
+        Ok(cs)
     }
 }
 
@@ -176,7 +204,7 @@ pub fn isa_builder(triple: Triple) -> IsaBuilder {
         constructor: |triple, shared_flags, builder| {
             let isa_flags = s390x_settings::Flags::new(&shared_flags, builder);
             let backend = S390xBackend::new_with_flags(triple, shared_flags, isa_flags);
-            Ok(Box::new(backend))
+            Ok(backend.wrapped())
         },
     }
 }
@@ -186,7 +214,8 @@ mod test {
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
     use crate::ir::types::*;
-    use crate::ir::{AbiParam, ExternalName, Function, InstBuilder, Signature};
+    use crate::ir::UserFuncName;
+    use crate::ir::{AbiParam, Function, InstBuilder, Signature};
     use crate::isa::CallConv;
     use crate::settings;
     use crate::settings::Configurable;
@@ -195,7 +224,7 @@ mod test {
 
     #[test]
     fn test_compile_function() {
-        let name = ExternalName::testcase("test0");
+        let name = UserFuncName::testcase("test0");
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I32));
         sig.returns.push(AbiParam::new(I32));
@@ -233,7 +262,7 @@ mod test {
 
     #[test]
     fn test_branch_lowering() {
-        let name = ExternalName::testcase("test0");
+        let name = UserFuncName::testcase("test0");
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I32));
         sig.returns.push(AbiParam::new(I32));
@@ -249,15 +278,12 @@ mod test {
         pos.insert_block(bb0);
         let v0 = pos.ins().iconst(I32, 0x1234);
         let v1 = pos.ins().iadd(arg0, v0);
-        pos.ins().brnz(v1, bb1, &[]);
-        pos.ins().jump(bb2, &[]);
+        pos.ins().brif(v1, bb1, &[], bb2, &[]);
         pos.insert_block(bb1);
-        pos.ins().brnz(v1, bb2, &[]);
-        pos.ins().jump(bb3, &[]);
+        pos.ins().brif(v1, bb2, &[], bb3, &[]);
         pos.insert_block(bb2);
         let v2 = pos.ins().iadd(v1, v0);
-        pos.ins().brnz(v2, bb2, &[]);
-        pos.ins().jump(bb1, &[]);
+        pos.ins().brif(v2, bb2, &[], bb1, &[]);
         pos.insert_block(bb3);
         let v3 = pos.ins().isub(v1, v0);
         pos.ins().return_(&[v3]);
@@ -278,26 +304,25 @@ mod test {
 
         // FIXME: the branching logic should be optimized more
 
-        // ahi %r2, 4660
-        // chi %r2, 0
-        // jglh label1 ; jg label2
-        // jg label6
-        // jg label3
-        // ahik %r3, %r2, 4660
-        // chi %r3, 0
-        // jglh label4 ; jg label5
-        // jg label3
-        // jg label6
-        // chi %r2, 0
-        // jglh label7 ; jg label8
-        // jg label3
-        // ahi %r2, -4660
-        // br %r14
+        // To update this comment, write the golden bytes to a file, and run the following command
+        // on it to update:
+        // > s390x-linux-gnu-objdump -b binary -D <file> -m s390
+        //
+        //  0:   a7 2a 12 34             ahi     %r2,4660
+        //  4:   a7 2e 00 00             chi     %r2,0
+        //  8:   c0 64 00 00 00 0b       jglh    0x1e
+        //  e:   ec 32 12 34 00 d8       ahik    %r3,%r2,4660
+        // 14:   a7 3e 00 00             chi     %r3,0
+        // 18:   c0 64 ff ff ff fb       jglh    0xe
+        // 1e:   a7 2e 00 00             chi     %r2,0
+        // 22:   c0 64 ff ff ff f6       jglh    0xe
+        // 28:   a7 2a ed cc             ahi     %r2,-4660
+        // 2c:   07 fe                   br      %r14
 
         let golden = vec![
-            236, 50, 18, 52, 0, 216, 167, 62, 0, 0, 192, 100, 0, 0, 0, 11, 236, 67, 18, 52, 0, 216,
-            167, 78, 0, 0, 192, 100, 255, 255, 255, 251, 167, 62, 0, 0, 192, 100, 255, 255, 255,
-            246, 236, 35, 237, 204, 0, 216, 7, 254,
+            167, 42, 18, 52, 167, 46, 0, 0, 192, 100, 0, 0, 0, 11, 236, 50, 18, 52, 0, 216, 167,
+            62, 0, 0, 192, 100, 255, 255, 255, 251, 167, 46, 0, 0, 192, 100, 255, 255, 255, 246,
+            167, 42, 237, 204, 7, 254,
         ];
 
         assert_eq!(code, &golden[..]);

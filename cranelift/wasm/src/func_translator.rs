@@ -93,12 +93,11 @@ impl FuncTranslator {
         debug_assert_eq!(func.dfg.num_blocks(), 0, "Function must be empty");
         debug_assert_eq!(func.dfg.num_insts(), 0, "Function must be empty");
 
-        // This clears the `FunctionBuilderContext`.
         let mut builder = FunctionBuilder::new(func, &mut self.func_ctx);
         builder.set_srcloc(cur_srcloc(&reader));
         let entry_block = builder.create_block();
         builder.append_block_params_for_function_params(entry_block);
-        builder.switch_to_block(entry_block); // This also creates values for the arguments.
+        builder.switch_to_block(entry_block);
         builder.seal_block(entry_block); // Declare all predecessors known.
 
         // Make sure the entry block is inserted in the layout before we make any callbacks to
@@ -117,6 +116,7 @@ impl FuncTranslator {
         parse_function_body(validator, reader, &mut builder, &mut self.state, environ)?;
 
         builder.finalize();
+        log::trace!("translated Wasm to CLIF:\n{}", func.display());
         Ok(())
     }
 }
@@ -170,7 +170,7 @@ fn parse_local_decls<FE: FuncEnvironment + ?Sized>(
         builder.set_srcloc(cur_srcloc(reader));
         let pos = reader.original_position();
         let count = reader.read_var_u32()?;
-        let ty = reader.read_val_type()?;
+        let ty = reader.read()?;
         validator.define_locals(pos, count, ty)?;
         declare_locals(builder, count, ty, &mut next_local, environ)?;
     }
@@ -182,7 +182,7 @@ fn parse_local_decls<FE: FuncEnvironment + ?Sized>(
 
 /// Declare `count` local variables of the same type, starting from `next_local`.
 ///
-/// Fail of too many locals are declared in the function, or if the type is not valid for a local.
+/// Fail if too many locals are declared in the function, or if the type is not valid for a local.
 fn declare_locals<FE: FuncEnvironment + ?Sized>(
     builder: &mut FunctionBuilder,
     count: u32,
@@ -232,13 +232,12 @@ fn parse_function_body<FE: FuncEnvironment + ?Sized>(
 
     environ.before_translate_function(builder, state)?;
     while !reader.eof() {
-        let ty = validator.peek();
         let pos = reader.original_position();
         builder.set_srcloc(cur_srcloc(&reader));
         let op = reader.read_operator()?;
         validator.op(pos, &op)?;
         environ.before_translate_operator(&op, builder, state)?;
-        translate_operator(validator, &op, builder, state, environ, ty)?;
+        translate_operator(validator, &op, builder, state, environ)?;
         environ.after_translate_operator(&op, builder, state)?;
     }
     environ.after_translate_function(builder, state)?;
@@ -309,7 +308,7 @@ mod tests {
 
         let mut ctx = Context::new();
 
-        ctx.func.name = ir::ExternalName::testcase("small1");
+        ctx.func.name = ir::UserFuncName::testcase("small1");
         ctx.func.signature.params.push(ir::AbiParam::new(I32));
         ctx.func.signature.returns.push(ir::AbiParam::new(I32));
 
@@ -347,7 +346,7 @@ mod tests {
 
         let mut ctx = Context::new();
 
-        ctx.func.name = ir::ExternalName::testcase("small2");
+        ctx.func.name = ir::UserFuncName::testcase("small2");
         ctx.func.signature.params.push(ir::AbiParam::new(I32));
         ctx.func.signature.returns.push(ir::AbiParam::new(I32));
 
@@ -390,7 +389,7 @@ mod tests {
 
         let mut ctx = Context::new();
 
-        ctx.func.name = ir::ExternalName::testcase("infloop");
+        ctx.func.name = ir::UserFuncName::testcase("infloop");
         ctx.func.signature.returns.push(ir::AbiParam::new(I32));
 
         let (body, mut validator) = extract_func(&wasm);
@@ -405,7 +404,10 @@ mod tests {
         let mut validator = Validator::new();
         for payload in Parser::new(0).parse_all(wat) {
             match validator.payload(&payload.unwrap()).unwrap() {
-                ValidPayload::Func(validator, body) => return (body, validator),
+                ValidPayload::Func(validator, body) => {
+                    let validator = validator.into_validator(Default::default());
+                    return (body, validator);
+                }
                 _ => {}
             }
         }

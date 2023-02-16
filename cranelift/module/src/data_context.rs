@@ -3,11 +3,13 @@
 use cranelift_codegen::binemit::{Addend, CodeOffset, Reloc};
 use cranelift_codegen::entity::PrimaryMap;
 use cranelift_codegen::ir;
-use cranelift_codegen::MachReloc;
 use std::borrow::ToOwned;
 use std::boxed::Box;
 use std::string::String;
 use std::vec::Vec;
+
+use crate::module::ModuleReloc;
+use crate::ModuleExtName;
 
 /// This specifies how data is to be initialized.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -43,9 +45,9 @@ pub struct DataDescription {
     /// How the data should be initialized.
     pub init: Init,
     /// External function declarations.
-    pub function_decls: PrimaryMap<ir::FuncRef, ir::ExternalName>,
+    pub function_decls: PrimaryMap<ir::FuncRef, ModuleExtName>,
     /// External data object declarations.
-    pub data_decls: PrimaryMap<ir::GlobalValue, ir::ExternalName>,
+    pub data_decls: PrimaryMap<ir::GlobalValue, ModuleExtName>,
     /// Function addresses to write at specified offsets.
     pub function_relocs: Vec<(CodeOffset, ir::FuncRef)>,
     /// Data addresses to write at specified offsets.
@@ -59,11 +61,14 @@ pub struct DataDescription {
 
 impl DataDescription {
     /// An iterator over all relocations of the data object.
-    pub fn all_relocs<'a>(&'a self, pointer_reloc: Reloc) -> impl Iterator<Item = MachReloc> + 'a {
+    pub fn all_relocs<'a>(
+        &'a self,
+        pointer_reloc: Reloc,
+    ) -> impl Iterator<Item = ModuleReloc> + 'a {
         let func_relocs = self
             .function_relocs
             .iter()
-            .map(move |&(offset, id)| MachReloc {
+            .map(move |&(offset, id)| ModuleReloc {
                 kind: pointer_reloc,
                 offset,
                 name: self.function_decls[id].clone(),
@@ -72,7 +77,7 @@ impl DataDescription {
         let data_relocs = self
             .data_relocs
             .iter()
-            .map(move |&(offset, id, addend)| MachReloc {
+            .map(move |&(offset, id, addend)| ModuleReloc {
                 kind: pointer_reloc,
                 offset,
                 name: self.data_decls[id].clone(),
@@ -144,7 +149,7 @@ impl DataContext {
     /// Users of the `Module` API generally should call
     /// `Module::declare_func_in_data` instead, as it takes care of generating
     /// the appropriate `ExternalName`.
-    pub fn import_function(&mut self, name: ir::ExternalName) -> ir::FuncRef {
+    pub fn import_function(&mut self, name: ModuleExtName) -> ir::FuncRef {
         self.description.function_decls.push(name)
     }
 
@@ -155,7 +160,7 @@ impl DataContext {
     /// Users of the `Module` API generally should call
     /// `Module::declare_data_in_data` instead, as it takes care of generating
     /// the appropriate `ExternalName`.
-    pub fn import_global_value(&mut self, name: ir::ExternalName) -> ir::GlobalValue {
+    pub fn import_global_value(&mut self, name: ModuleExtName) -> ir::GlobalValue {
         self.description.data_decls.push(name)
     }
 
@@ -181,8 +186,9 @@ impl DataContext {
 
 #[cfg(test)]
 mod tests {
+    use crate::ModuleExtName;
+
     use super::{DataContext, Init};
-    use cranelift_codegen::ir;
 
     #[test]
     fn basic_data_context() {
@@ -198,11 +204,11 @@ mod tests {
 
         data_ctx.define_zeroinit(256);
 
-        let _func_a = data_ctx.import_function(ir::ExternalName::user(0, 0));
-        let func_b = data_ctx.import_function(ir::ExternalName::user(0, 1));
-        let func_c = data_ctx.import_function(ir::ExternalName::user(1, 0));
-        let _data_a = data_ctx.import_global_value(ir::ExternalName::user(2, 2));
-        let data_b = data_ctx.import_global_value(ir::ExternalName::user(2, 3));
+        let _func_a = data_ctx.import_function(ModuleExtName::user(0, 0));
+        let func_b = data_ctx.import_function(ModuleExtName::user(0, 1));
+        let func_c = data_ctx.import_function(ModuleExtName::user(0, 2));
+        let _data_a = data_ctx.import_global_value(ModuleExtName::user(0, 3));
+        let data_b = data_ctx.import_global_value(ModuleExtName::user(0, 4));
 
         data_ctx.write_function_addr(8, func_b);
         data_ctx.write_function_addr(16, func_c);

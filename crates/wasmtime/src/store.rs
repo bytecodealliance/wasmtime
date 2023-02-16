@@ -79,7 +79,7 @@
 use crate::linker::Definition;
 use crate::module::BareModuleInfo;
 use crate::{module::ModuleRegistry, Engine, Module, Trap, Val, ValRaw};
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -95,7 +95,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use wasmtime_runtime::{
     InstanceAllocationRequest, InstanceAllocator, InstanceHandle, ModuleInfo,
-    OnDemandInstanceAllocator, SignalHandler, StorePtr, VMCallerCheckedAnyfunc, VMContext,
+    OnDemandInstanceAllocator, SignalHandler, StorePtr, VMCallerCheckedFuncRef, VMContext,
     VMExternRef, VMExternRefActivationsTable, VMRuntimeLimits, VMSharedSignatureIndex,
     VMTrampoline,
 };
@@ -219,11 +219,11 @@ enum ResourceLimiterInner<T> {
 pub trait CallHookHandler<T>: Send {
     /// A callback to run when wasmtime is about to enter a host call, or when about to
     /// exit the hostcall.
-    async fn handle_call_event(&self, t: &mut T, ch: CallHook) -> Result<(), crate::Trap>;
+    async fn handle_call_event(&self, t: &mut T, ch: CallHook) -> Result<()>;
 }
 
 enum CallHookInner<T> {
-    Sync(Box<dyn FnMut(&mut T, CallHook) -> Result<(), crate::Trap> + Send + Sync>),
+    Sync(Box<dyn FnMut(&mut T, CallHook) -> Result<()> + Send + Sync>),
     #[cfg(feature = "async")]
     Async(Box<dyn CallHookHandler<T> + Send + Sync>),
 }
@@ -331,8 +331,7 @@ pub struct StoreOpaque {
 
 #[cfg(feature = "async")]
 struct AsyncState {
-    current_suspend:
-        UnsafeCell<*const wasmtime_fiber::Suspend<Result<(), Trap>, (), Result<(), Trap>>>,
+    current_suspend: UnsafeCell<*const wasmtime_fiber::Suspend<Result<()>, (), Result<()>>>,
     current_poll_cx: UnsafeCell<*mut Context<'static>>,
 }
 
@@ -455,7 +454,7 @@ impl<T> Store<T> {
         // single "default callee" for the entire `Store`. This is then used as
         // part of `Func::call` to guarantee that the `callee: *mut VMContext`
         // is never null.
-        let default_callee = unsafe {
+        let default_callee = {
             let module = Arc::new(wasmtime_environ::Module::default());
             let shim = BareModuleInfo::empty(module).into_traitobj();
             OnDemandInstanceAllocator::default()
@@ -722,7 +721,7 @@ impl<T> Store<T> {
     /// to host or wasm code as the trap propagates to the root call.
     pub fn call_hook(
         &mut self,
-        hook: impl FnMut(&mut T, CallHook) -> Result<(), Trap> + Send + Sync + 'static,
+        hook: impl FnMut(&mut T, CallHook) -> Result<()> + Send + Sync + 'static,
     ) {
         self.inner.call_hook = Some(CallHookInner::Sync(Box::new(hook)));
     }
@@ -767,10 +766,10 @@ impl<T> Store<T> {
     /// Note that at this time when fuel is entirely consumed it will cause
     /// wasm to trap. More usages of fuel are planned for the future.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// This function will panic if the store's [`Config`](crate::Config) did
-    /// not have fuel consumption enabled.
+    /// This function will return an error if fuel consumption is not enabled via
+    /// [`Config::consume_fuel`](crate::Config::consume_fuel).
     pub fn add_fuel(&mut self, fuel: u64) -> Result<()> {
         self.inner.add_fuel(fuel)
     }
@@ -791,9 +790,9 @@ impl<T> Store<T> {
     ///
     /// # Errors
     ///
-    /// This function will return an either either if fuel consumption via
-    /// [`Config`](crate::Config) is disabled or if `fuel` exceeds the amount
-    /// of remaining fuel within this store.
+    /// This function will return an error either if fuel consumption is not
+    /// enabled via [`Config::consume_fuel`](crate::Config::consume_fuel) or if
+    /// `fuel` exceeds the amount of remaining fuel within this store.
     pub fn consume_fuel(&mut self, fuel: u64) -> Result<u64> {
         self.inner.consume_fuel(fuel)
     }
@@ -1094,7 +1093,7 @@ impl<T> StoreInner<T> {
         &mut self.data
     }
 
-    pub fn call_hook(&mut self, s: CallHook) -> Result<(), Trap> {
+    pub fn call_hook(&mut self, s: CallHook) -> Result<()> {
         match &mut self.call_hook {
             Some(CallHookInner::Sync(hook)) => hook(&mut self.data, s),
 
@@ -1103,7 +1102,7 @@ impl<T> StoreInner<T> {
                 Ok(self
                     .inner
                     .async_cx()
-                    .ok_or(Trap::new("couldn't grab async_cx for call hook"))?
+                    .ok_or_else(|| anyhow!("couldn't grab async_cx for call hook"))?
                     .block_on(handler.handle_call_event(&mut self.data, s).as_mut())??)
             },
 
@@ -1264,7 +1263,7 @@ impl StoreOpaque {
     /// `self.host_trampolines` we lazily populate `self.host_trampolines` by
     /// iterating over `self.store_data().funcs`, inserting trampolines as we
     /// go. If we find the right trampoline then it's returned.
-    pub fn lookup_trampoline(&mut self, anyfunc: &VMCallerCheckedAnyfunc) -> VMTrampoline {
+    pub fn lookup_trampoline(&mut self, anyfunc: &VMCallerCheckedFuncRef) -> VMTrampoline {
         // First try to see if the `anyfunc` belongs to any module. Each module
         // has its own map of trampolines-per-type-index and the code pointer in
         // the `anyfunc` will enable us to quickly find a module.
@@ -1354,7 +1353,7 @@ impl StoreOpaque {
     /// This only works on async futures and stores, and assumes that we're
     /// executing on a fiber. This will yield execution back to the caller once.
     #[cfg(feature = "async")]
-    fn async_yield_impl(&mut self) -> Result<(), Trap> {
+    fn async_yield_impl(&mut self) -> Result<()> {
         // Small future that yields once and then returns ()
         #[derive(Default)]
         struct Yield {
@@ -1380,7 +1379,7 @@ impl StoreOpaque {
 
         let mut future = Yield::default();
 
-        // When control returns, we have a `Result<(), Trap>` passed
+        // When control returns, we have a `Result<()>` passed
         // in from the host fiber. If this finished successfully then
         // we were resumed normally via a `poll`, so keep going.  If
         // the future was dropped while we were yielded, then we need
@@ -1434,7 +1433,7 @@ impl StoreOpaque {
             .ok()
             .and_then(|fuel| consumed_ptr.checked_add(fuel))
         {
-            Some(consumed) if consumed < 0 => {
+            Some(consumed) if consumed <= 0 => {
                 *consumed_ptr = consumed;
                 Ok(u64::try_from(-consumed).unwrap())
             }
@@ -1518,7 +1517,7 @@ impl<T> StoreContextMut<'_, T> {
     pub(crate) async fn on_fiber<R>(
         &mut self,
         func: impl FnOnce(&mut StoreContextMut<'_, T>) -> R + Send,
-    ) -> Result<R, Trap>
+    ) -> Result<R>
     where
         T: Send,
     {
@@ -1530,11 +1529,7 @@ impl<T> StoreContextMut<'_, T> {
         let future = {
             let current_poll_cx = self.0.async_state.current_poll_cx.get();
             let current_suspend = self.0.async_state.current_suspend.get();
-            let stack = self
-                .engine()
-                .allocator()
-                .allocate_fiber_stack()
-                .map_err(|e| Trap::from(anyhow::Error::from(e)))?;
+            let stack = self.engine().allocator().allocate_fiber_stack()?;
 
             let engine = self.engine().clone();
             let slot = &mut slot;
@@ -1558,8 +1553,7 @@ impl<T> StoreContextMut<'_, T> {
                     *slot = Some(func(self));
                     Ok(())
                 }
-            })
-            .map_err(|e| Trap::from(anyhow::Error::from(e)))?;
+            })?;
 
             // Once we have the fiber representing our synchronous computation, we
             // wrap that in a custom future implementation which does the
@@ -1575,7 +1569,7 @@ impl<T> StoreContextMut<'_, T> {
         return Ok(slot.unwrap());
 
         struct FiberFuture<'a> {
-            fiber: wasmtime_fiber::Fiber<'a, Result<(), Trap>, (), Result<(), Trap>>,
+            fiber: wasmtime_fiber::Fiber<'a, Result<()>, (), Result<()>>,
             current_poll_cx: *mut *mut Context<'static>,
             engine: Engine,
         }
@@ -1644,7 +1638,7 @@ impl<T> StoreContextMut<'_, T> {
         unsafe impl Send for FiberFuture<'_> {}
 
         impl Future for FiberFuture<'_> {
-            type Output = Result<(), Trap>;
+            type Output = Result<()>;
 
             fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
                 // We need to carry over this `cx` into our fiber's runtime
@@ -1699,7 +1693,7 @@ impl<T> StoreContextMut<'_, T> {
         impl Drop for FiberFuture<'_> {
             fn drop(&mut self) {
                 if !self.fiber.done() {
-                    let result = self.fiber.resume(Err(Trap::new("future dropped")));
+                    let result = self.fiber.resume(Err(anyhow!("future dropped")));
                     // This resumption with an error should always complete the
                     // fiber. While it's technically possible for host code to catch
                     // the trap and re-resume, we'd ideally like to signal that to
@@ -1719,7 +1713,7 @@ impl<T> StoreContextMut<'_, T> {
 
 #[cfg(feature = "async")]
 pub struct AsyncCx {
-    current_suspend: *mut *const wasmtime_fiber::Suspend<Result<(), Trap>, (), Result<(), Trap>>,
+    current_suspend: *mut *const wasmtime_fiber::Suspend<Result<()>, (), Result<()>>,
     current_poll_cx: *mut *mut Context<'static>,
 }
 
@@ -1748,7 +1742,7 @@ impl AsyncCx {
     pub unsafe fn block_on<U>(
         &self,
         mut future: Pin<&mut (dyn Future<Output = U> + Send)>,
-    ) -> Result<U, Trap> {
+    ) -> Result<U> {
         // Take our current `Suspend` context which was configured as soon as
         // our fiber started. Note that we must load it at the front here and
         // save it on our stack frame. While we're polling the future other
@@ -1896,14 +1890,14 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
 
     fn out_of_gas(&mut self) -> Result<(), anyhow::Error> {
         return match &mut self.out_of_gas_behavior {
-            OutOfGas::Trap => Err(anyhow::Error::new(OutOfGasError)),
+            OutOfGas::Trap => Err(Trap::OutOfFuel.into()),
             #[cfg(feature = "async")]
             OutOfGas::InjectFuel {
                 injection_count,
                 fuel_to_inject,
             } => {
                 if *injection_count == 0 {
-                    return Err(anyhow::Error::new(OutOfGasError));
+                    return Err(Trap::OutOfFuel.into());
                 }
                 *injection_count -= 1;
                 let fuel = *fuel_to_inject;
@@ -1916,25 +1910,11 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
             #[cfg(not(feature = "async"))]
             OutOfGas::InjectFuel { .. } => unreachable!(),
         };
-
-        #[derive(Debug)]
-        struct OutOfGasError;
-
-        impl fmt::Display for OutOfGasError {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.write_str("all fuel consumed by WebAssembly")
-            }
-        }
-
-        impl std::error::Error for OutOfGasError {}
     }
 
     fn new_epoch(&mut self) -> Result<u64, anyhow::Error> {
         return match &mut self.epoch_deadline_behavior {
-            EpochDeadline::Trap => {
-                let trap = Trap::new_wasm(wasmtime_environ::TrapCode::Interrupt, None);
-                Err(anyhow::Error::from(trap))
-            }
+            EpochDeadline::Trap => Err(Trap::Interrupt.into()),
             EpochDeadline::Callback(callback) => {
                 let delta = callback(&mut self.data)?;
                 // Set a new deadline and return the new epoch deadline so
@@ -2040,14 +2020,14 @@ impl Drop for StoreOpaque {
         unsafe {
             let allocator = self.engine.allocator();
             let ondemand = OnDemandInstanceAllocator::default();
-            for instance in self.instances.iter() {
+            for instance in self.instances.iter_mut() {
                 if instance.ondemand {
-                    ondemand.deallocate(&instance.handle);
+                    ondemand.deallocate(&mut instance.handle);
                 } else {
-                    allocator.deallocate(&instance.handle);
+                    allocator.deallocate(&mut instance.handle);
                 }
             }
-            ondemand.deallocate(&self.default_caller);
+            ondemand.deallocate(&mut self.default_caller);
 
             // See documentation for these fields on `StoreOpaque` for why they
             // must be dropped in this order.

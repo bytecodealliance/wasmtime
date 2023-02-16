@@ -17,10 +17,7 @@ use target_lexicon::{PointerWidth, Triple};
 ///
 /// Basic floating point types: `F32` and `F64`. IEEE single and double precision.
 ///
-/// Boolean types: `B1`, `B8`, `B16`, `B32`, `B64`, and `B128`. These all encode 'true' or 'false'. The
-/// larger types use redundant bits.
-///
-/// SIMD vector types have power-of-two lanes, up to 256. Lanes can be any int/float/bool type.
+/// SIMD vector types have power-of-two lanes, up to 256. Lanes can be any int/float type.
 ///
 /// Note that this is encoded in a `u16` currently for extensibility,
 /// but allows only 14 bits to be used due to some bitpacking tricks
@@ -59,12 +56,11 @@ impl Type {
     /// Get log_2 of the number of bits in a lane.
     pub fn log2_lane_bits(self) -> u32 {
         match self.lane_type() {
-            B1 => 0,
-            B8 | I8 => 3,
-            B16 | I16 => 4,
-            B32 | I32 | F32 | R32 => 5,
-            B64 | I64 | F64 | R64 => 6,
-            B128 | I128 => 7,
+            I8 => 3,
+            I16 => 4,
+            I32 | F32 | R32 => 5,
+            I64 | F64 | R64 => 6,
+            I128 => 7,
             _ => 0,
         }
     }
@@ -72,12 +68,11 @@ impl Type {
     /// Get the number of bits in a lane.
     pub fn lane_bits(self) -> u32 {
         match self.lane_type() {
-            B1 => 1,
-            B8 | I8 => 8,
-            B16 | I16 => 16,
-            B32 | I32 | F32 | R32 => 32,
-            B64 | I64 | F64 | R64 => 64,
-            B128 | I128 => 128,
+            I8 => 8,
+            I16 => 16,
+            I32 | F32 | R32 => 32,
+            I64 | F64 | R64 => 64,
+            I128 => 128,
             _ => 0,
         }
     }
@@ -141,13 +136,13 @@ impl Type {
     pub fn as_bool_pedantic(self) -> Self {
         // Replace the low 4 bits with the boolean version, preserve the high 4 bits.
         self.replace_lanes(match self.lane_type() {
-            B8 | I8 => B8,
-            B16 | I16 => B16,
-            B32 | I32 | F32 => B32,
-            B64 | I64 | F64 => B64,
+            I8 => I8,
+            I16 => I16,
+            I32 | F32 => I32,
+            I64 | F64 => I64,
             R32 | R64 => panic!("Reference types should not convert to bool"),
-            B128 | I128 => B128,
-            _ => B1,
+            I128 => I128,
+            _ => I8,
         })
     }
 
@@ -157,7 +152,7 @@ impl Type {
     /// Scalar types are all converted to `b1` which is usually what you want.
     pub fn as_bool(self) -> Self {
         if !self.is_vector() {
-            B1
+            I8
         } else {
             self.as_bool_pedantic()
         }
@@ -169,11 +164,11 @@ impl Type {
     /// Scalar types follow this same rule, but `b1` is converted into `i8`
     pub fn as_int(self) -> Self {
         self.replace_lanes(match self.lane_type() {
-            I8 | B1 | B8 => I8,
-            I16 | B16 => I16,
-            I32 | B32 | F32 => I32,
-            I64 | B64 | F64 => I64,
-            I128 | B128 => I128,
+            I8 => I8,
+            I16 => I16,
+            I32 | F32 => I32,
+            I64 | F64 => I64,
+            I128 => I128,
             _ => unimplemented!(),
         })
     }
@@ -187,10 +182,6 @@ impl Type {
             I64 => I32,
             I128 => I64,
             F64 => F32,
-            B16 => B8,
-            B32 => B16,
-            B64 => B32,
-            B128 => B64,
             _ => return None,
         }))
     }
@@ -204,10 +195,6 @@ impl Type {
             I32 => I64,
             I64 => I128,
             F32 => F64,
-            B8 => B16,
-            B16 => B32,
-            B32 => B64,
-            B64 => B128,
             _ => return None,
         }))
     }
@@ -241,19 +228,6 @@ impl Type {
         self.0 >= constants::DYNAMIC_VECTOR_BASE
     }
 
-    /// Is this a scalar boolean type?
-    pub fn is_bool(self) -> bool {
-        match self {
-            B1 | B8 | B16 | B32 | B64 | B128 => true,
-            _ => false,
-        }
-    }
-
-    /// Is this a vector boolean type?
-    pub fn is_bool_vector(self) -> bool {
-        self.is_vector() && self.lane_type().is_bool()
-    }
-
     /// Is this a scalar integer type?
     pub fn is_int(self) -> bool {
         match self {
@@ -266,14 +240,6 @@ impl Type {
     pub fn is_float(self) -> bool {
         match self {
             F32 | F64 => true,
-            _ => false,
-        }
-    }
-
-    /// Is this a CPU flags type?
-    pub fn is_flags(self) -> bool {
-        match self {
-            IFLAGS | FFLAGS => true,
             _ => false,
         }
     }
@@ -398,17 +364,6 @@ impl Type {
         Some(Self(self.0 - constants::VECTOR_BASE))
     }
 
-    /// Get a SIMD vector with half the number of lanes.
-    ///
-    /// There is no `double_vector()` method. Use `t.by(2)` instead.
-    pub fn half_vector(self) -> Option<Self> {
-        if self.is_vector() && !self.is_dynamic_vector() {
-            Some(Self(self.0 - 0x10))
-        } else {
-            None
-        }
-    }
-
     /// Split the lane width in half and double the number of lanes to maintain the same bit-width.
     ///
     /// If this is a scalar type of `n` bits, it produces a SIMD vector type of `(n/2)x2`.
@@ -425,7 +380,13 @@ impl Type {
     /// If this is a scalar type, it will return `None`.
     pub fn merge_lanes(self) -> Option<Self> {
         match self.double_width() {
-            Some(double_width) => double_width.half_vector(),
+            Some(double_width) => {
+                if double_width.is_vector() && !double_width.is_dynamic_vector() {
+                    Some(Self(double_width.0 - 0x10))
+                } else {
+                    None
+                }
+            }
             None => None,
         }
     }
@@ -453,19 +414,6 @@ impl Type {
         }
     }
 
-    /// Coerces boolean types (scalar and vectors) into their integer counterparts.
-    /// B1 is converted into I8.
-    pub fn coerce_bools_to_ints(self) -> Self {
-        let is_scalar_bool = self.is_bool();
-        let is_vector_bool = self.is_vector() && self.lane_type().is_bool();
-
-        if is_scalar_bool || is_vector_bool {
-            self.as_int()
-        } else {
-            self
-        }
-    }
-
     /// Gets a bit-level representation of the type. Used only
     /// internally for efficiently storing types.
     pub(crate) fn repr(self) -> u16 {
@@ -481,9 +429,7 @@ impl Type {
 
 impl Display for Type {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        if self.is_bool() {
-            write!(f, "b{}", self.lane_bits())
-        } else if self.is_int() {
+        if self.is_int() {
             write!(f, "i{}", self.lane_bits())
         } else if self.is_float() {
             write!(f, "f{}", self.lane_bits())
@@ -494,21 +440,17 @@ impl Display for Type {
         } else if self.is_ref() {
             write!(f, "r{}", self.lane_bits())
         } else {
-            f.write_str(match *self {
-                IFLAGS => "iflags",
-                FFLAGS => "fflags",
+            match *self {
                 INVALID => panic!("INVALID encountered"),
                 _ => panic!("Unknown Type(0x{:x})", self.0),
-            })
+            }
         }
     }
 }
 
 impl Debug for Type {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        if self.is_bool() {
-            write!(f, "types::B{}", self.lane_bits())
-        } else if self.is_int() {
+        if self.is_int() {
             write!(f, "types::I{}", self.lane_bits())
         } else if self.is_float() {
             write!(f, "types::F{}", self.lane_bits())
@@ -521,8 +463,6 @@ impl Debug for Type {
         } else {
             match *self {
                 INVALID => write!(f, "types::INVALID"),
-                IFLAGS => write!(f, "types::IFLAGS"),
-                FFLAGS => write!(f, "types::FFLAGS"),
                 _ => write!(f, "Type(0x{:x})", self.0),
             }
         }
@@ -544,16 +484,6 @@ mod tests {
     fn basic_scalars() {
         assert_eq!(INVALID, INVALID.lane_type());
         assert_eq!(0, INVALID.bits());
-        assert_eq!(IFLAGS, IFLAGS.lane_type());
-        assert_eq!(0, IFLAGS.bits());
-        assert_eq!(FFLAGS, FFLAGS.lane_type());
-        assert_eq!(0, FFLAGS.bits());
-        assert_eq!(B1, B1.lane_type());
-        assert_eq!(B8, B8.lane_type());
-        assert_eq!(B16, B16.lane_type());
-        assert_eq!(B32, B32.lane_type());
-        assert_eq!(B64, B64.lane_type());
-        assert_eq!(B128, B128.lane_type());
         assert_eq!(I8, I8.lane_type());
         assert_eq!(I16, I16.lane_type());
         assert_eq!(I32, I32.lane_type());
@@ -561,21 +491,12 @@ mod tests {
         assert_eq!(I128, I128.lane_type());
         assert_eq!(F32, F32.lane_type());
         assert_eq!(F64, F64.lane_type());
-        assert_eq!(B1, B1.by(8).unwrap().lane_type());
         assert_eq!(I32, I32X4.lane_type());
         assert_eq!(F64, F64X2.lane_type());
         assert_eq!(R32, R32.lane_type());
         assert_eq!(R64, R64.lane_type());
 
         assert_eq!(INVALID.lane_bits(), 0);
-        assert_eq!(IFLAGS.lane_bits(), 0);
-        assert_eq!(FFLAGS.lane_bits(), 0);
-        assert_eq!(B1.lane_bits(), 1);
-        assert_eq!(B8.lane_bits(), 8);
-        assert_eq!(B16.lane_bits(), 16);
-        assert_eq!(B32.lane_bits(), 32);
-        assert_eq!(B64.lane_bits(), 64);
-        assert_eq!(B128.lane_bits(), 128);
         assert_eq!(I8.lane_bits(), 8);
         assert_eq!(I16.lane_bits(), 16);
         assert_eq!(I32.lane_bits(), 32);
@@ -591,13 +512,6 @@ mod tests {
     fn typevar_functions() {
         assert_eq!(INVALID.half_width(), None);
         assert_eq!(INVALID.half_width(), None);
-        assert_eq!(FFLAGS.half_width(), None);
-        assert_eq!(B1.half_width(), None);
-        assert_eq!(B8.half_width(), None);
-        assert_eq!(B16.half_width(), Some(B8));
-        assert_eq!(B32.half_width(), Some(B16));
-        assert_eq!(B64.half_width(), Some(B32));
-        assert_eq!(B128.half_width(), Some(B64));
         assert_eq!(I8.half_width(), None);
         assert_eq!(I16.half_width(), Some(I8));
         assert_eq!(I32.half_width(), Some(I16));
@@ -608,14 +522,6 @@ mod tests {
         assert_eq!(F64.half_width(), Some(F32));
 
         assert_eq!(INVALID.double_width(), None);
-        assert_eq!(IFLAGS.double_width(), None);
-        assert_eq!(FFLAGS.double_width(), None);
-        assert_eq!(B1.double_width(), None);
-        assert_eq!(B8.double_width(), Some(B16));
-        assert_eq!(B16.double_width(), Some(B32));
-        assert_eq!(B32.double_width(), Some(B64));
-        assert_eq!(B64.double_width(), Some(B128));
-        assert_eq!(B128.double_width(), None);
         assert_eq!(I8.double_width(), Some(I16));
         assert_eq!(I16.double_width(), Some(I32));
         assert_eq!(I32.double_width(), Some(I64));
@@ -633,11 +539,6 @@ mod tests {
         assert_eq!(big.lane_count(), 256);
         assert_eq!(big.bits(), 64 * 256);
 
-        assert_eq!(big.half_vector().unwrap().to_string(), "f64x128");
-        assert_eq!(B1.by(2).unwrap().half_vector().unwrap().to_string(), "b1");
-        assert_eq!(I32.half_vector(), None);
-        assert_eq!(INVALID.half_vector(), None);
-
         // Check that the generated constants match the computed vector types.
         assert_eq!(I32.by(4), Some(I32X4));
         assert_eq!(F64.by(8), Some(F64X8));
@@ -647,7 +548,6 @@ mod tests {
     fn dynamic_vectors() {
         // Identification.
         assert_eq!(I8X16XN.is_dynamic_vector(), true);
-        assert_eq!(B16X4XN.is_dynamic_vector(), true);
         assert_eq!(F32X8XN.is_dynamic_vector(), true);
         assert_eq!(F64X4XN.is_dynamic_vector(), true);
         assert_eq!(I128X2XN.is_dynamic_vector(), true);
@@ -656,28 +556,18 @@ mod tests {
         assert_eq!(I16X8XN.lane_count(), 0);
         assert_eq!(I16X8XN.min_lane_count(), 8);
 
-        // Size
-        assert_eq!(B32X2XN.bits(), 0);
-        assert_eq!(B32X2XN.min_bits(), 64);
-
         // Change lane counts
-        assert_eq!(F64X4XN.half_vector(), None);
         assert_eq!(I8X8XN.by(2), None);
 
         // Conversions to and from vectors.
-        assert_eq!(B8.by(8).unwrap().vector_to_dynamic(), Some(B8X8XN));
         assert_eq!(I8.by(16).unwrap().vector_to_dynamic(), Some(I8X16XN));
         assert_eq!(I16.by(8).unwrap().vector_to_dynamic(), Some(I16X8XN));
-        assert_eq!(B16.by(16).unwrap().vector_to_dynamic(), Some(B16X16XN));
-        assert_eq!(B32.by(2).unwrap().vector_to_dynamic(), Some(B32X2XN));
-        assert_eq!(B32.by(8).unwrap().vector_to_dynamic(), Some(B32X8XN));
         assert_eq!(I32.by(4).unwrap().vector_to_dynamic(), Some(I32X4XN));
         assert_eq!(F32.by(4).unwrap().vector_to_dynamic(), Some(F32X4XN));
         assert_eq!(F64.by(2).unwrap().vector_to_dynamic(), Some(F64X2XN));
         assert_eq!(I128.by(2).unwrap().vector_to_dynamic(), Some(I128X2XN));
 
         assert_eq!(I128X2XN.dynamic_to_vector(), Some(I128X2));
-        assert_eq!(B64X2XN.dynamic_to_vector(), Some(B64X2));
         assert_eq!(F32X4XN.dynamic_to_vector(), Some(F32X4));
         assert_eq!(F64X4XN.dynamic_to_vector(), Some(F64X4));
         assert_eq!(I32X2XN.dynamic_to_vector(), Some(I32X2));
@@ -686,7 +576,6 @@ mod tests {
         assert_eq!(I8X32XN.dynamic_to_vector(), Some(I8X32));
 
         assert_eq!(I8X64.vector_to_dynamic(), None);
-        assert_eq!(B16X32.vector_to_dynamic(), None);
         assert_eq!(F32X16.vector_to_dynamic(), None);
         assert_eq!(I64X8.vector_to_dynamic(), None);
         assert_eq!(I128X4.vector_to_dynamic(), None);
@@ -694,14 +583,6 @@ mod tests {
 
     #[test]
     fn format_scalars() {
-        assert_eq!(IFLAGS.to_string(), "iflags");
-        assert_eq!(FFLAGS.to_string(), "fflags");
-        assert_eq!(B1.to_string(), "b1");
-        assert_eq!(B8.to_string(), "b8");
-        assert_eq!(B16.to_string(), "b16");
-        assert_eq!(B32.to_string(), "b32");
-        assert_eq!(B64.to_string(), "b64");
-        assert_eq!(B128.to_string(), "b128");
         assert_eq!(I8.to_string(), "i8");
         assert_eq!(I16.to_string(), "i16");
         assert_eq!(I32.to_string(), "i32");
@@ -715,11 +596,6 @@ mod tests {
 
     #[test]
     fn format_vectors() {
-        assert_eq!(B1.by(8).unwrap().to_string(), "b1x8");
-        assert_eq!(B8.by(1).unwrap().to_string(), "b8");
-        assert_eq!(B16.by(256).unwrap().to_string(), "b16x256");
-        assert_eq!(B32.by(4).unwrap().by(2).unwrap().to_string(), "b32x8");
-        assert_eq!(B64.by(8).unwrap().to_string(), "b64x8");
         assert_eq!(I8.by(64).unwrap().to_string(), "i8x64");
         assert_eq!(F64.by(2).unwrap().to_string(), "f64x2");
         assert_eq!(I8.by(3), None);
@@ -729,19 +605,10 @@ mod tests {
 
     #[test]
     fn as_bool() {
-        assert_eq!(I32X4.as_bool(), B32X4);
-        assert_eq!(I32.as_bool(), B1);
-        assert_eq!(I32X4.as_bool_pedantic(), B32X4);
-        assert_eq!(I32.as_bool_pedantic(), B32);
-    }
-
-    #[test]
-    fn as_int() {
-        assert_eq!(B32X4.as_int(), I32X4);
-        assert_eq!(B8X8.as_int(), I8X8);
-        assert_eq!(B1.as_int(), I8);
-        assert_eq!(B8.as_int(), I8);
-        assert_eq!(B128.as_int(), I128);
+        assert_eq!(I32X4.as_bool(), I32X4);
+        assert_eq!(I32.as_bool(), I8);
+        assert_eq!(I32X4.as_bool_pedantic(), I32X4);
+        assert_eq!(I32.as_bool_pedantic(), I32);
     }
 
     #[test]

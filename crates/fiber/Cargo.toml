@@ -1,11 +1,11 @@
 [package]
 name = "wasmtime-fiber"
-version = "0.41.0"
-authors = ["The Wasmtime Project Developers"]
+version.workspace = true
+authors.workspace = true
 description = "Fiber support for Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
-edition = "2021"
+edition.workspace = true
 
 # We link to some native code with symbols that don't change often, so let Cargo
 # know that we can't show up multiple times in a crate graph. If this is an
@@ -17,11 +17,11 @@ links = "wasmtime-fiber-shims"
 cfg-if = "1.0"
 
 [target.'cfg(unix)'.dependencies]
-rustix = { version = "0.35.6", features = ["mm", "param"] }
-wasmtime-asm-macros = { version = "=0.41.0", path = "../asm-macros" }
+rustix = { workspace = true, features = ["mm", "param"] }
+wasmtime-asm-macros = { workspace = true }
 
 [target.'cfg(windows)'.dependencies.windows-sys]
-version = "0.36.1"
+workspace = true
 features = [
   "Win32_System_Threading",
   "Win32_Foundation",

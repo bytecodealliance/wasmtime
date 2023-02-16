@@ -56,6 +56,7 @@ release is made, such as:
 * [`wasmtime-py`](https://github.com/bytecodealliance/wasmtime-py)
 * [`wasmtime-go`](https://github.com/bytecodealliance/wasmtime-go)
 * [`wasmtime-cpp`](https://github.com/bytecodealliance/wasmtime-cpp)
+* [`wasmtime-rb`](https://github.com/bytecodealliance/wasmtime-rb)
 
 Note, though, that bugs and security issues in these projects do not at this
 time warrant patch releases for Wasmtime.

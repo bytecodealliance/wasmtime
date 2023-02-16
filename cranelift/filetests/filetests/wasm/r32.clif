@@ -9,8 +9,7 @@ target i686 haswell
 
 function %select_ref(i32, r32, r32) -> r32 {
 block0(v0: i32, v1: r32, v2: r32):
-    brz v0, block1(v2)
-    jump block1(v1)
+    brif v0, block1(v1), block1(v2)
 
 block1(v3: r32):
     return v3

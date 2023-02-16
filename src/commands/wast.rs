@@ -36,7 +36,7 @@ impl WastCommand {
         let mut wast_context = WastContext::new(store);
 
         wast_context
-            .register_spectest()
+            .register_spectest(true)
             .expect("error instantiating \"spectest\"");
 
         for script in self.scripts.iter() {

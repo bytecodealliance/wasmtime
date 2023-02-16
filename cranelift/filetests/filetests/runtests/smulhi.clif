@@ -4,6 +4,8 @@ target aarch64
 target s390x
 set enable_simd
 target x86_64 has_sse3 has_ssse3 has_sse41
+target riscv64
+
 
 function %smulhi_i16(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):

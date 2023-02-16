@@ -27,8 +27,13 @@ impl super::wasi_ephemeral_crypto_common::WasiEphemeralCryptoCommon for WasiCryp
         value_ptr: &wiggle::GuestPtr<'_, u8>,
         value_len: guest_types::Size,
     ) -> Result<(), guest_types::CryptoErrno> {
-        let name_str: &str = &*name_str.as_str()?;
-        let value: &[u8] = { &*value_ptr.as_array(value_len).as_slice()? };
+        let name_str: &str = &*name_str.as_cow()?;
+        let value: &[u8] = {
+            &*value_ptr
+                .as_array(value_len)
+                .as_slice()?
+                .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)")
+        };
         Ok((&*self).options_set(options_handle.into(), name_str, value)?)
     }
 
@@ -39,9 +44,15 @@ impl super::wasi_ephemeral_crypto_common::WasiEphemeralCryptoCommon for WasiCryp
         buffer_ptr: &wiggle::GuestPtr<'_, u8>,
         buffer_len: guest_types::Size,
     ) -> Result<(), guest_types::CryptoErrno> {
-        let name_str: &str = &*name_str.as_str()?;
-        let buffer: &'static mut [u8] =
-            unsafe { std::mem::transmute(&mut *buffer_ptr.as_array(buffer_len).as_slice_mut()?) };
+        let name_str: &str = &*name_str.as_cow()?;
+        let buffer: &'static mut [u8] = unsafe {
+            std::mem::transmute(
+                &mut *buffer_ptr
+                    .as_array(buffer_len)
+                    .as_slice_mut()?
+                    .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)"),
+            )
+        };
         Ok((&*self).options_set_guest_buffer(options_handle.into(), name_str, buffer)?)
     }
 
@@ -51,7 +62,7 @@ impl super::wasi_ephemeral_crypto_common::WasiEphemeralCryptoCommon for WasiCryp
         name_str: &wiggle::GuestPtr<'_, str>,
         value: u64,
     ) -> Result<(), guest_types::CryptoErrno> {
-        let name_str: &str = &*name_str.as_str()?;
+        let name_str: &str = &*name_str.as_cow()?;
         Ok((&*self).options_set_u64(options_handle.into(), name_str, value)?)
     }
 
@@ -72,7 +83,12 @@ impl super::wasi_ephemeral_crypto_common::WasiEphemeralCryptoCommon for WasiCryp
         buf_ptr: &wiggle::GuestPtr<'_, u8>,
         buf_len: guest_types::Size,
     ) -> Result<guest_types::Size, guest_types::CryptoErrno> {
-        let buf: &mut [u8] = { &mut *buf_ptr.as_array(buf_len).as_slice_mut()? };
+        let buf: &mut [u8] = {
+            &mut *buf_ptr
+                .as_array(buf_len)
+                .as_slice_mut()?
+                .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)")
+        };
         Ok((&*self)
             .array_output_pull(array_output_handle.into(), buf)?
             .try_into()?)
@@ -107,7 +123,12 @@ impl super::wasi_ephemeral_crypto_common::WasiEphemeralCryptoCommon for WasiCryp
         key_id_len: guest_types::Size,
         key_version: guest_types::Version,
     ) -> Result<(), guest_types::CryptoErrno> {
-        let key_id: &[u8] = { &*key_id_ptr.as_array(key_id_len).as_slice()? };
+        let key_id: &[u8] = {
+            &*key_id_ptr
+                .as_array(key_id_len)
+                .as_slice()?
+                .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)")
+        };
         Ok((&*self).secrets_manager_invalidate(
             secrets_manager_handle.into(),
             key_id,

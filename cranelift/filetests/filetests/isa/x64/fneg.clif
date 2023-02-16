@@ -1,0 +1,119 @@
+test compile precise-output
+target x86_64
+
+function %f1(f32) -> f32 {
+block0(v0: f32):
+  v1 = fneg v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    $-2147483648, %eax
+;   movd    %eax, %xmm4
+;   xorps   %xmm0, %xmm4, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movl $0x80000000, %eax
+;   movd %eax, %xmm4
+;   xorps %xmm4, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %f2(f64) -> f64 {
+block0(v0: f64):
+  v1 = fneg v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movabsq $-9223372036854775808, %rax
+;   movq    %rax, %xmm4
+;   xorpd   %xmm0, %xmm4, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movabsq $9223372036854775808, %rax
+;   movq %rax, %xmm4
+;   xorpd %xmm4, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %f3(f32x4) -> f32x4 {
+block0(v0: f32x4):
+  v1 = fneg v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   pcmpeqd %xmm3, %xmm3, %xmm3
+;   pslld   %xmm3, $31, %xmm3
+;   xorps   %xmm0, %xmm3, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   pcmpeqd %xmm3, %xmm3
+;   pslld $0x1f, %xmm3
+;   xorps %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %f4(f64x2) -> f64x2 {
+block0(v0: f64x2):
+  v1 = fneg v0
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   pcmpeqd %xmm3, %xmm3, %xmm3
+;   psllq   %xmm3, $63, %xmm3
+;   xorpd   %xmm0, %xmm3, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   pcmpeqd %xmm3, %xmm3
+;   psllq $0x3f, %xmm3
+;   xorpd %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

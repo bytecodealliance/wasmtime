@@ -10,6 +10,8 @@ pub struct UnwindRegistration {
 }
 
 impl UnwindRegistration {
+    pub const SECTION_NAME: &str = ".pdata";
+
     pub unsafe fn new(
         base_address: *const u8,
         unwind_info: *const u8,
@@ -21,7 +23,7 @@ impl UnwindRegistration {
         if RtlAddFunctionTable(
             unwind_info as *mut _,
             (unwind_len / unit_len) as u32,
-            base_address as u64,
+            base_address as _,
         ) == 0
         {
             bail!("failed to register function table");
@@ -30,10 +32,6 @@ impl UnwindRegistration {
         Ok(UnwindRegistration {
             functions: unwind_info as usize,
         })
-    }
-
-    pub fn section_name() -> &'static str {
-        ".pdata"
     }
 }
 

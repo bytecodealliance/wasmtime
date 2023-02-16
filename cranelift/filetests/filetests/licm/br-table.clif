@@ -4,11 +4,10 @@ target aarch64
 target x86_64
 
 function %br_table_opt() {
-    jt0 = jump_table [block1, block2]
 
     block0:
         v0 = iconst.i32 1
-        br_table v0, block2, jt0
+        br_table v0, block2, [block1, block2]
 
     block1:
         return

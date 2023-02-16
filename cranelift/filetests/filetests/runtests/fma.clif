@@ -1,6 +1,10 @@
+test interpret
 test run
 target aarch64
 target s390x
+target x86_64 has_avx has_fma
+target x86_64 has_avx=false has_fma=false
+target riscv64
 
 function %fma_f32(f32, f32, f32) -> f32 {
 block0(v0: f32, v1: f32, v2: f32):
@@ -54,7 +58,7 @@ function %fma_is_nan_f32(f32, f32, f32) -> i32 {
 block0(v0: f32, v1: f32, v2: f32):
     v3 = fma v0, v1, v2
     v4 = fcmp ne v3, v3
-    v5 = bint.i32 v4
+    v5 = uextend.i32 v4
     return v5
 }
 ; run: %fma_is_nan_f32(Inf, -Inf, Inf) == 1
@@ -120,7 +124,7 @@ function %fma_is_nan_f64(f64, f64, f64) -> i32 {
 block0(v0: f64, v1: f64, v2: f64):
     v3 = fma v0, v1, v2
     v4 = fcmp ne v3, v3
-    v5 = bint.i32 v4
+    v5 = uextend.i32 v4
     return v5
 }
 ; run: %fma_is_nan_f64(Inf, -Inf, Inf) == 1
@@ -133,3 +137,16 @@ block0(v0: f64, v1: f64, v2: f64):
 ; run: %fma_is_nan_f64(-NaN, 0x0.0, 0x0.0) == 1
 ; run: %fma_is_nan_f64(0x0.0, -NaN, 0x0.0) == 1
 ; run: %fma_is_nan_f64(0x0.0, 0x0.0, -NaN) == 1
+
+; This is a regression test for the native fma instruction
+; Discovered by the fuzzer in: https://github.com/bytecodealliance/wasmtime/issues/4759
+function %fma_load_f32(f32, f32, f32) -> f32 {
+    ss0 = explicit_slot 4
+
+block0(v0: f32, v1: f32, v2: f32):
+    stack_store.f32 v2, ss0
+    v3 = stack_load.f32 ss0
+    v4 = fma v0, v1, v3
+    return v4
+}
+; run: %fma_load_f32(0x9.0, 0x9.0, 0x9.0) == 0x1.680000p6

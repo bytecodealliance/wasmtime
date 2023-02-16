@@ -59,9 +59,6 @@ block0(v0: f64):
 ; run: %splat_f64x2(0x2.0) == [0x2.0 0x2.0]
 ; run: %splat_f64x2(NaN) == [NaN NaN]
 
-; TODO: Test combinations of `bconst` and `splat`, potentially with `breduce` in
-; the middle
-
 function %splat_i8x16_2(i8x16) -> i8x16 {
 block0(v0: i8x16):
   v1 = iconst.i8 116

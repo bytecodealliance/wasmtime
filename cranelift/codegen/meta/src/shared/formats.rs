@@ -8,24 +8,16 @@ pub(crate) struct Formats {
     pub(crate) binary: Rc<InstructionFormat>,
     pub(crate) binary_imm8: Rc<InstructionFormat>,
     pub(crate) binary_imm64: Rc<InstructionFormat>,
-    pub(crate) branch: Rc<InstructionFormat>,
-    pub(crate) branch_float: Rc<InstructionFormat>,
-    pub(crate) branch_icmp: Rc<InstructionFormat>,
-    pub(crate) branch_int: Rc<InstructionFormat>,
     pub(crate) branch_table: Rc<InstructionFormat>,
+    pub(crate) brif: Rc<InstructionFormat>,
     pub(crate) call: Rc<InstructionFormat>,
     pub(crate) call_indirect: Rc<InstructionFormat>,
     pub(crate) cond_trap: Rc<InstructionFormat>,
     pub(crate) float_compare: Rc<InstructionFormat>,
-    pub(crate) float_cond: Rc<InstructionFormat>,
-    pub(crate) float_cond_trap: Rc<InstructionFormat>,
     pub(crate) func_addr: Rc<InstructionFormat>,
-    pub(crate) heap_addr: Rc<InstructionFormat>,
     pub(crate) int_compare: Rc<InstructionFormat>,
     pub(crate) int_compare_imm: Rc<InstructionFormat>,
-    pub(crate) int_cond: Rc<InstructionFormat>,
-    pub(crate) int_cond_trap: Rc<InstructionFormat>,
-    pub(crate) int_select: Rc<InstructionFormat>,
+    pub(crate) int_add_trap: Rc<InstructionFormat>,
     pub(crate) jump: Rc<InstructionFormat>,
     pub(crate) load: Rc<InstructionFormat>,
     pub(crate) load_no_offset: Rc<InstructionFormat>,
@@ -43,7 +35,6 @@ pub(crate) struct Formats {
     pub(crate) ternary_imm8: Rc<InstructionFormat>,
     pub(crate) trap: Rc<InstructionFormat>,
     pub(crate) unary: Rc<InstructionFormat>,
-    pub(crate) unary_bool: Rc<InstructionFormat>,
     pub(crate) unary_const: Rc<InstructionFormat>,
     pub(crate) unary_global_value: Rc<InstructionFormat>,
     pub(crate) unary_ieee32: Rc<InstructionFormat>,
@@ -61,8 +52,6 @@ impl Formats {
             unary_ieee32: Builder::new("UnaryIeee32").imm(&imm.ieee32).build(),
 
             unary_ieee64: Builder::new("UnaryIeee64").imm(&imm.ieee64).build(),
-
-            unary_bool: Builder::new("UnaryBool").imm(&imm.boolean).build(),
 
             unary_const: Builder::new("UnaryConst").imm(&imm.pool_constant).build(),
 
@@ -116,56 +105,18 @@ impl Formats {
                 .imm(&imm.imm64)
                 .build(),
 
-            int_cond: Builder::new("IntCond").imm(&imm.intcc).value().build(),
-
             float_compare: Builder::new("FloatCompare")
                 .imm(&imm.floatcc)
                 .value()
                 .value()
                 .build(),
 
-            float_cond: Builder::new("FloatCond").imm(&imm.floatcc).value().build(),
+            jump: Builder::new("Jump").block().build(),
 
-            int_select: Builder::new("IntSelect")
-                .imm(&imm.intcc)
-                .value()
-                .value()
-                .value()
-                .build(),
-
-            jump: Builder::new("Jump").imm(&entities.block).varargs().build(),
-
-            branch: Builder::new("Branch")
-                .value()
-                .imm(&entities.block)
-                .varargs()
-                .build(),
-
-            branch_int: Builder::new("BranchInt")
-                .imm(&imm.intcc)
-                .value()
-                .imm(&entities.block)
-                .varargs()
-                .build(),
-
-            branch_float: Builder::new("BranchFloat")
-                .imm(&imm.floatcc)
-                .value()
-                .imm(&entities.block)
-                .varargs()
-                .build(),
-
-            branch_icmp: Builder::new("BranchIcmp")
-                .imm(&imm.intcc)
-                .value()
-                .value()
-                .imm(&entities.block)
-                .varargs()
-                .build(),
+            brif: Builder::new("Brif").value().block().block().build(),
 
             branch_table: Builder::new("BranchTable")
                 .value()
-                .imm(&entities.block)
                 .imm(&entities.jump_table)
                 .build(),
 
@@ -241,13 +192,6 @@ impl Formats {
                 .imm(&entities.dynamic_stack_slot)
                 .build(),
 
-            // Accessing a WebAssembly heap.
-            heap_addr: Builder::new("HeapAddr")
-                .imm(&entities.heap)
-                .value()
-                .imm(&imm.uimm32)
-                .build(),
-
             // Accessing a WebAssembly table.
             table_addr: Builder::new("TableAddr")
                 .imm(&entities.table)
@@ -259,14 +203,8 @@ impl Formats {
 
             cond_trap: Builder::new("CondTrap").value().imm(&imm.trapcode).build(),
 
-            int_cond_trap: Builder::new("IntCondTrap")
-                .imm(&imm.intcc)
+            int_add_trap: Builder::new("IntAddTrap")
                 .value()
-                .imm(&imm.trapcode)
-                .build(),
-
-            float_cond_trap: Builder::new("FloatCondTrap")
-                .imm(&imm.floatcc)
                 .value()
                 .imm(&imm.trapcode)
                 .build(),

@@ -814,7 +814,7 @@ pub struct Module {
     pub num_imported_globals: usize,
 
     /// Number of functions that "escape" from this module may need to have a
-    /// `VMCallerCheckedAnyfunc` constructed for them.
+    /// `VMCallerCheckedFuncRef` constructed for them.
     ///
     /// This is also the number of functions in the `functions` array below with
     /// an `anyfunc` index (and is the maximum anyfunc index).
@@ -979,7 +979,7 @@ impl Module {
 
     /// Returns an iterator of all the imports in this module, along with their
     /// module name, field name, and type that's being imported.
-    pub fn imports(&self) -> impl Iterator<Item = (&str, &str, EntityType)> {
+    pub fn imports(&self) -> impl ExactSizeIterator<Item = (&str, &str, EntityType)> {
         self.initializers.iter().map(move |i| match i {
             Initializer::Import { name, field, index } => {
                 (name.as_str(), field.as_str(), self.type_of(*index))

@@ -3,6 +3,7 @@ test run
 target aarch64
 target x86_64
 target s390x
+target riscv64
 
 function %fabs_f32(f32) -> f32 {
 block0(v0: f32):

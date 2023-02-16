@@ -49,8 +49,7 @@ function %average(i32, i32) -> f32 system_v {
 block1(v0: i32, v1: i32):
     v2 = f64const 0x0.0
     stack_store v2, ss0
-    brz v1, block5                  ; Handle count == 0.
-    jump block2
+    brif v1, block2, block5                  ; Handle count == 0.
 
 block2:
     v3 = iconst.i32 0
@@ -66,8 +65,7 @@ block3(v4: i32):
     stack_store v10, ss0
     v11 = iadd_imm v4, 1
     v12 = icmp ult v11, v1
-    brnz v12, block3(v11)           ; Loop backedge.
-    jump block4
+    brif v12, block3(v11), block4 ; Loop backedge.
 
 block4:
     v13 = stack_load.f64 ss0
@@ -138,25 +136,6 @@ All SSA values have a type which determines the size and shape (for SIMD
 vectors) of the value. Many instructions are polymorphic -- they can operate on
 different types.
 
-### Boolean types
-
-Boolean values are either true or false.
-
-The `b1` type represents an abstract boolean value. It can only exist as
-an SSA value, and can't be directly stored in memory. It can, however, be
-converted into an integer with value 0 or 1 by the `bint` instruction (and
-converted back with `icmp_imm` with 0).
-
-Several larger boolean types are also defined, primarily to be used as SIMD
-element types. They can be stored in memory, and are represented as either all
-zero bits or all one bits.
-
-- b1
-- b8
-- b16
-- b32
-- b64
-
 ### Integer types
 
 Integer values have a fixed size and can be interpreted as either signed or
@@ -198,29 +177,11 @@ instructions are encoded as follows:
 - f32
 - f64
 
-### CPU flags types
-
-Some target ISAs use CPU flags to represent the result of a comparison. These
-CPU flags are represented as two value types depending on the type of values
-compared.
-
-Since some ISAs don't have CPU flags, these value types should not be used
-until the legalization phase of compilation where the code is adapted to fit
-the target ISA. Use instructions like `icmp` instead.
-
-The CPU flags types are also restricted such that two flags values can not be
-live at the same time. After legalization, some instruction encodings will
-clobber the flags, and flags values are not allowed to be live across such
-instructions either. The verifier enforces these rules.
-
-- iflags
-- fflags
-
 ### SIMD vector types
 
 A SIMD vector type represents a vector of values from one of the scalar types
-(boolean, integer, and floating point). Each scalar value in a SIMD type is
-called a *lane*. The number of lanes must be a power of two in the range 2-256.
+(integer, and floating point). Each scalar value in a SIMD type is called a
+*lane*. The number of lanes must be a power of two in the range 2-256.
 
 i%Bx%N
     A SIMD vector of integers. The lane type `iB` is one of the integer
@@ -246,14 +207,6 @@ f64x%N
     and `f64x8`.
 
     The size of a `f64` vector in memory is :math:`8N` bytes.
-
-b1x%N
-    A boolean SIMD vector.
-
-    Boolean vectors are used when comparing SIMD vectors. For example,
-    comparing two `i32x4` values would produce a `b1x4` result.
-
-    Like the `b1` type, a boolean vector cannot be stored in memory.
 
 ### Pseudo-types and type classes
 
@@ -313,12 +266,6 @@ ieee32
 ieee64
     A 64-bit immediate floating point number in the IEEE 754-2008 binary64
     interchange format. All bit patterns are allowed.
-
-bool
-    A boolean immediate value, either false or true.
-
-    In the textual format, `bool` immediates appear as 'false'
-    and 'true'.
 
 intcc
     An integer condition code. See the `icmp` instruction for details.
@@ -404,7 +351,7 @@ paramlist    : param { "," param }
 retlist      : paramlist
 param        : type [paramext] [paramspecial]
 paramext     : "uext" | "sext"
-paramspecial : "sret" | "link" | "fp" | "csr" | "vmctx" | "sigid" | "stack_limit"
+paramspecial : "sarg" ( num ) | "sret" | "vmctx" | "stack_limit"
 callconv     : "fast" | "cold" | "system_v" | "windows_fastcall"
              | "wasmtime_system_v" | "wasmtime_fastcall"
              | "apple_aarch64" | "wasmtime_apple_aarch64"
@@ -419,12 +366,9 @@ system, a function's calling convention is only fully determined by a
 
 | Name      | Description |
 | ----------| ----------  |
+| sarg      | pointer to a struct argument of the given size |
 | sret      | pointer to a return value in memory |
-| link      | return address |
-| fp        | the initial value of the frame pointer |
-| csr       | callee-saved register |
 | vmctx     | VM context pointer, which may contain pointers to heaps etc. |
-| sigid     | signature id, for checking caller/callee signature compatibility |
 | stack_limit | limit value for the size of the stack |
 
 | Name      | Description |
@@ -465,8 +409,7 @@ function %gcd(i32 uext, i32 uext) -> i32 uext system_v {
     fn0 = %divmod(i32 uext, i32 uext) -> i32 uext, i32 uext
 
 block1(v0: i32, v1: i32):
-    brz v1, block3
-    jump block2
+    brif v1, block2, block3
 
 block2:
     v2, v3 = call fn0(v0, v1)
@@ -610,148 +553,6 @@ GV = [colocated] symbol Name
     :arg Name: External name.
     :result GV: Global value.
 
-### Heaps
-
-Code compiled from WebAssembly or asm.js runs in a sandbox where it can't access
-all process memory. Instead, it is given a small set of memory areas to work
-in, and all accesses are bounds checked. Cranelift models this through the
-concept of *heaps*.
-
-A heap is declared in the function preamble and can be accessed with the
-`heap_addr` instruction that [traps] on out-of-bounds accesses or
-returns a pointer that is guaranteed to trap. Heap addresses can be smaller than
-the native pointer size, for example unsigned `i32` offsets on a 64-bit
-architecture.
-
-![Heap address space layout](./heap.svg)
-
-A heap appears as three consecutive ranges of address space:
-
-1. The *mapped pages* are the [accessible] memory range in the heap. A
-   heap may have a minimum guaranteed size which means that some mapped pages
-   are always present.
-2. The *unmapped pages* is a possibly empty range of address space that may be
-   mapped in the future when the heap is grown. They are [addressable] but
-   not [accessible].
-3. The *offset-guard pages* is a range of address space that is guaranteed to
-   always cause a trap when accessed. It is used to optimize bounds checking for
-   heap accesses with a shared base pointer. They are [addressable] but
-   not [accessible].
-
-The *heap bound* is the total size of the mapped and unmapped pages. This is
-the bound that `heap_addr` checks against. Memory accesses inside the
-heap bounds can trap if they hit an unmapped page (which is not
-[accessible]).
-
-Two styles of heaps are supported, *static* and *dynamic*. They behave
-differently when resized.
-
-#### Static heaps
-
-A *static heap* starts out with all the address space it will ever need, so it
-never moves to a different address. At the base address is a number of mapped
-pages corresponding to the heap's current size. Then follows a number of
-unmapped pages where the heap can grow up to its maximum size. After the
-unmapped pages follow the offset-guard pages which are also guaranteed to
-generate a trap when accessed.
-
-H = static Base, min MinBytes, bound BoundBytes, offset_guard OffsetGuardBytes
-    Declare a static heap in the preamble.
-
-    :arg Base: Global value holding the heap's base address.
-    :arg MinBytes: Guaranteed minimum heap size in bytes. Accesses below this
-            size will never trap.
-    :arg BoundBytes: Fixed heap bound in bytes. This defines the amount of
-            address space reserved for the heap, not including the offset-guard
-            pages.
-    :arg OffsetGuardBytes: Size of the offset-guard pages in bytes.
-
-#### Dynamic heaps
-
-A *dynamic heap* can be relocated to a different base address when it is
-resized, and its bound can move dynamically. The offset-guard pages move when
-the heap is resized. The bound of a dynamic heap is stored in a global value.
-
-H = dynamic Base, min MinBytes, bound BoundGV, offset_guard OffsetGuardBytes
-    Declare a dynamic heap in the preamble.
-
-    :arg Base: Global value holding the heap's base address.
-    :arg MinBytes: Guaranteed minimum heap size in bytes. Accesses below this
-            size will never trap.
-    :arg BoundGV: Global value containing the current heap bound in bytes.
-    :arg OffsetGuardBytes: Size of the offset-guard pages in bytes.
-
-#### Heap examples
-
-Some Wasm VMs prefer to use fixed heaps with a 4 GB bound and 2 GB of
-offset-guard pages when running WebAssembly code on 64-bit CPUs. The combination
-of a 4 GB fixed bound and 1-byte bounds checks means that no code needs to be
-generated for bounds checks at all:
-
-```
-test verifier
-
-function %add_members(i32, i64 vmctx) -> f32 {
-    gv0 = vmctx
-    gv1 = load.i64 notrap aligned gv0+64
-    heap0 = static gv1, min 0x1000, bound 0x1_0000_0000, offset_guard 0x8000_0000
-
-block0(v0: i32, v5: i64):
-    v1 = heap_addr.i64 heap0, v0, 1
-    v2 = load.f32 v1+16
-    v3 = load.f32 v1+20
-    v4 = fadd v2, v3
-    return v4
-}
-```
-
-A static heap can also be used for 32-bit code when the WebAssembly module
-declares a small upper bound on its memory. A 1 MB static bound with a single 4
-KB offset-guard page still has opportunities for sharing bounds checking code:
-
-```
-test verifier
-
-function %add_members(i32, i32 vmctx) -> f32 {
-    gv0 = vmctx
-    gv1 = load.i32 notrap aligned gv0+64
-    heap0 = static gv1, min 0x1000, bound 0x10_0000, offset_guard 0x1000
-
-block0(v0: i32, v5: i32):
-    v1 = heap_addr.i32 heap0, v0, 1
-    v2 = load.f32 v1+16
-    v3 = load.f32 v1+20
-    v4 = fadd v2, v3
-    return v4
-}
-```
-
-If the upper bound on the heap size is too large, a dynamic heap is required
-instead.
-
-Finally, a runtime environment that simply allocates a heap with
-`malloc()` may not have any offset-guard pages at all. In that case,
-full bounds checking is required for each access:
-
-```
-test verifier
-
-function %add_members(i32, i64 vmctx) -> f32 {
-    gv0 = vmctx
-    gv1 = load.i64 notrap aligned gv0+64
-    gv2 = load.i32 notrap aligned gv0+72
-    heap0 = dynamic gv1, min 0x1000, bound gv2, offset_guard 0
-
-block0(v0: i32, v6: i64):
-    v1 = heap_addr.i64 heap0, v0, 20
-    v2 = load.f32 v1+16
-    v3 = heap_addr.i64 heap0, v0, 24
-    v4 = load.f32 v3+20
-    v5 = fadd v2, v4
-    return v5
-}
-```
-
 ### Tables
 
 Code compiled from WebAssembly often needs access to objects outside of its
@@ -779,7 +580,7 @@ T = dynamic Base, min MinElements, bound BoundGV, element_size ElementSize
 
     :arg Base: Global value holding the table's base address.
     :arg MinElements: Guaranteed minimum table size in elements.
-    :arg BoundGV: Global value containing the current heap bound in elements.
+    :arg BoundGV: Global value containing the current table bound in elements.
     :arg ElementSize: Size of each element.
 
 ### Constant materialization
@@ -790,10 +591,9 @@ an instruction is required to load a constant into an SSA value: `iconst`,
 
 ### Bitwise operations
 
-The bitwise operations and operate on any value type: Integers, floating point
-numbers, and booleans. When operating on integer or floating point types, the
-bitwise operations are working on the binary representation of the values. When
-operating on boolean values, the bitwise operations work as logical operators.
+The bitwise operations and operate on any value type: Integers, and floating
+point numbers. When operating on integer or floating point types, the bitwise
+operations are working on the binary representation of the values.
 
 The shift and rotate operations only work on integer types (scalar and vector).
 The shift amount does not have to be the same type as the value being shifted.

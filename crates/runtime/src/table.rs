@@ -2,15 +2,13 @@
 //!
 //! `Table` is to WebAssembly tables what `LinearMemory` is to WebAssembly linear memories.
 
-use crate::vmcontext::{VMCallerCheckedAnyfunc, VMTableDefinition};
+use crate::vmcontext::{VMCallerCheckedFuncRef, VMTableDefinition};
 use crate::{Store, VMExternRef};
 use anyhow::{bail, format_err, Error, Result};
 use std::convert::{TryFrom, TryInto};
 use std::ops::Range;
 use std::ptr;
-use wasmtime_environ::{
-    TablePlan, TrapCode, WasmHeapType, WasmRefType, FUNCREF_INIT_BIT, FUNCREF_MASK,
-};
+use wasmtime_environ::{TablePlan, Trap, WasmHeapType, WasmRefType, WasmType, FUNCREF_INIT_BIT, FUNCREF_MASK};
 
 /// An element going into or coming out of a table.
 ///
@@ -18,7 +16,7 @@ use wasmtime_environ::{
 #[derive(Clone)]
 pub enum TableElement {
     /// A `funcref`.
-    FuncRef(*mut VMCallerCheckedAnyfunc),
+    FuncRef(*mut VMCallerCheckedFuncRef),
     /// An `exrernref`.
     ExternRef(Option<VMExternRef>),
     /// An uninitialized funcref value. This should never be exposed
@@ -34,7 +32,7 @@ pub enum TableElementType {
     Extern,
 }
 
-// The usage of `*mut VMCallerCheckedAnyfunc` is safe w.r.t. thread safety, this
+// The usage of `*mut VMCallerCheckedFuncRef` is safe w.r.t. thread safety, this
 // just relies on thread-safety of `VMExternRef` itself.
 unsafe impl Send for TableElement where VMExternRef: Send {}
 unsafe impl Sync for TableElement where VMExternRef: Sync {}
@@ -105,7 +103,7 @@ impl TableElement {
     /// The same warnings as for `into_table_values()` apply.
     pub(crate) unsafe fn into_ref_asserting_initialized(self) -> usize {
         match self {
-            Self::FuncRef(e) => (e as usize),
+            Self::FuncRef(e) => e as usize,
             Self::ExternRef(e) => e.map_or(0, |e| e.into_raw() as usize),
             Self::UninitFunc => panic!("Uninitialized table element value outside of table slot"),
         }
@@ -121,8 +119,8 @@ impl TableElement {
     }
 }
 
-impl From<*mut VMCallerCheckedAnyfunc> for TableElement {
-    fn from(f: *mut VMCallerCheckedAnyfunc) -> TableElement {
+impl From<*mut VMCallerCheckedFuncRef> for TableElement {
+    fn from(f: *mut VMCallerCheckedFuncRef) -> TableElement {
         TableElement::FuncRef(f)
     }
 }
@@ -269,8 +267,8 @@ impl Table {
     pub fn init_funcs(
         &mut self,
         dst: u32,
-        items: impl ExactSizeIterator<Item = *mut VMCallerCheckedAnyfunc>,
-    ) -> Result<(), TrapCode> {
+        items: impl ExactSizeIterator<Item = *mut VMCallerCheckedFuncRef>,
+    ) -> Result<(), Trap> {
         assert!(self.element_type() == TableElementType::Func);
 
         let elements = match self
@@ -279,7 +277,7 @@ impl Table {
             .and_then(|s| s.get_mut(..items.len()))
         {
             Some(elements) => elements,
-            None => return Err(TrapCode::TableOutOfBounds),
+            None => return Err(Trap::TableOutOfBounds),
         };
 
         for (item, slot) in items.zip(elements) {
@@ -293,14 +291,14 @@ impl Table {
     /// Fill `table[dst..dst + len]` with `val`.
     ///
     /// Returns a trap error on out-of-bounds accesses.
-    pub fn fill(&mut self, dst: u32, val: TableElement, len: u32) -> Result<(), TrapCode> {
+    pub fn fill(&mut self, dst: u32, val: TableElement, len: u32) -> Result<(), Trap> {
         let start = dst as usize;
         let end = start
             .checked_add(len as usize)
-            .ok_or_else(|| TrapCode::TableOutOfBounds)?;
+            .ok_or_else(|| Trap::TableOutOfBounds)?;
 
         if end > self.size() as usize {
-            return Err(TrapCode::TableOutOfBounds);
+            return Err(Trap::TableOutOfBounds);
         }
 
         debug_assert!(self.type_matches(&val));
@@ -415,7 +413,7 @@ impl Table {
         dst_index: u32,
         src_index: u32,
         len: u32,
-    ) -> Result<(), TrapCode> {
+    ) -> Result<(), Trap> {
         // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-table-copy
 
         if src_index
@@ -425,7 +423,7 @@ impl Table {
                 .checked_add(len)
                 .map_or(true, |m| m > (*dst_table).size())
         {
-            return Err(TrapCode::TableOutOfBounds);
+            return Err(Trap::TableOutOfBounds);
         }
 
         debug_assert!(

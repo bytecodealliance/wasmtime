@@ -147,6 +147,10 @@ pub struct Component {
     /// The number of functions which "always trap" used to implement
     /// `canon.lower` of `canon.lift`'d functions within the same component.
     pub num_always_trap: u32,
+
+    /// The number of host transcoder functions needed for strings in adapter
+    /// modules.
+    pub num_transcoders: u32,
 }
 
 /// GlobalInitializer instructions to get processed when instantiating a component
@@ -180,7 +184,7 @@ pub enum GlobalInitializer {
     /// A core wasm function was "generated" via `canon lower` of a function
     /// that was `canon lift`'d in the same component, meaning that the function
     /// always traps. This is recorded within the `VMComponentContext` as a new
-    /// `VMCallerCheckedAnyfunc` that's available for use.
+    /// `VMCallerCheckedFuncRef` that's available for use.
     AlwaysTrap(AlwaysTrap),
 
     /// A core wasm linear memory is going to be saved into the
@@ -207,6 +211,11 @@ pub enum GlobalInitializer {
 
     /// Same as `SaveModuleUpvar`, but for imports.
     SaveModuleImport(RuntimeImportIndex),
+
+    /// Similar to `ExtractMemory` and friends and indicates that a
+    /// `VMCallerCheckedFuncRef` needs to be initialized for a transcoder
+    /// function and this will later be used to instantiate an adapter module.
+    Transcoder(Transcoder),
 }
 
 /// Metadata for extraction of a memory of what's being extracted and where it's
@@ -316,6 +325,9 @@ pub enum CoreDef {
     /// This is a reference to a wasm global which represents the
     /// runtime-managed flags for a wasm instance.
     InstanceFlags(RuntimeComponentInstanceIndex),
+    /// This refers to a cranelift-generated trampoline which calls to a
+    /// host-defined transcoding function.
+    Transcoder(RuntimeTranscoderIndex),
 }
 
 impl<T> From<CoreExport<T>> for CoreDef
@@ -399,6 +411,9 @@ pub enum Export {
     /// A nested instance is being exported which has recursively defined
     /// `Export` items.
     Instance(IndexMap<String, Export>),
+    /// An exported type from a component or instance, currently only
+    /// informational.
+    Type(TypeDef),
 }
 
 /// Canonical ABI options associated with a lifted or lowered function.
@@ -433,3 +448,42 @@ pub enum StringEncoding {
     Utf16,
     CompactUtf16,
 }
+
+/// Information about a string transcoding function required by an adapter
+/// module.
+///
+/// A transcoder is used when strings are passed between adapter modules,
+/// optionally changing string encodings at the same time. The transcoder is
+/// implemented in a few different layers:
+///
+/// * Each generated adapter module has some glue around invoking the transcoder
+///   represented by this item. This involves bounds-checks and handling
+///   `realloc` for example.
+/// * Each transcoder gets a cranelift-generated trampoline which has the
+///   appropriate signature for the adapter module in question. Existence of
+///   this initializer indicates that this should be compiled by Cranelift.
+/// * The cranelift-generated trampoline will invoke a "transcoder libcall"
+///   which is implemented natively in Rust that has a signature independent of
+///   memory64 configuration options for example.
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
+pub struct Transcoder {
+    /// The index of the transcoder being defined and initialized.
+    ///
+    /// This indicates which `VMCallerCheckedFuncRef` slot is written to in a
+    /// `VMComponentContext`.
+    pub index: RuntimeTranscoderIndex,
+    /// The transcoding operation being performed.
+    pub op: Transcode,
+    /// The linear memory that the string is being read from.
+    pub from: RuntimeMemoryIndex,
+    /// Whether or not the source linear memory is 64-bit or not.
+    pub from64: bool,
+    /// The linear memory that the string is being written to.
+    pub to: RuntimeMemoryIndex,
+    /// Whether or not the destination linear memory is 64-bit or not.
+    pub to64: bool,
+    /// The wasm signature of the cranelift-generated trampoline.
+    pub signature: SignatureIndex,
+}
+
+pub use crate::fact::{FixedEncoding, Transcode};

@@ -55,15 +55,15 @@
 //! ```
 
 use crate::externref::VMExternRef;
-use crate::instance::Instance;
 use crate::table::{Table, TableElementType};
-use crate::vmcontext::{VMCallerCheckedAnyfunc, VMContext};
+use crate::vmcontext::{VMCallerCheckedFuncRef, VMContext};
 use crate::TrapReason;
 use anyhow::Result;
 use std::mem;
 use std::ptr::{self, NonNull};
+use std::time::{Duration, Instant};
 use wasmtime_environ::{
-    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TrapCode,
+    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, Trap,
 };
 
 /// Actually public trampolines which are used by the runtime as the entrypoint
@@ -104,7 +104,12 @@ pub mod trampolines {
                 // This will delegate to the outer module to the actual
                 // implementation and automatically perform `catch_unwind` along
                 // with conversion of the return value in the face of traps.
-                #[no_mangle]
+                //
+                // Note that rust targets which support `global_asm!` can use
+                // the `sym` operator to get the symbol here, but other targets
+                // like s390x need to use outlined assembly files which requires
+                // `no_mangle`.
+                #[cfg_attr(target_arch = "s390x", no_mangle)]
                 unsafe extern "C" fn [<impl_ $name>](
                     vmctx : *mut VMContext,
                     $( $pname : libcall!(@ty $param), )*
@@ -117,6 +122,17 @@ pub mod trampolines {
                         Err(panic) => crate::traphandlers::resume_panic(panic),
                     }
                 }
+
+                // This works around a `rustc` bug where compiling with LTO
+                // will sometimes strip out some of these symbols resulting
+                // in a linking failure.
+                #[allow(non_upper_case_globals)]
+                #[used]
+                static [<impl_ $name _ref>]: unsafe extern "C" fn(
+                    *mut VMContext,
+                    $( $pname : libcall!(@ty $param), )*
+                ) $( -> libcall!(@ty $result))? = [<impl_ $name>];
+
             )*
         }};
 
@@ -165,13 +181,23 @@ pub mod trampolines {
     }
 }
 
-unsafe fn memory32_grow(vmctx: *mut VMContext, delta: u64, memory_index: u32) -> Result<*mut u8> {
+unsafe fn memory32_grow(
+    vmctx: *mut VMContext,
+    delta: u64,
+    memory_index: u32,
+) -> Result<*mut u8, TrapReason> {
     let instance = (*vmctx).instance_mut();
     let memory_index = MemoryIndex::from_u32(memory_index);
-    let result = match instance.memory_grow(memory_index, delta)? {
-        Some(size_in_bytes) => size_in_bytes / (wasmtime_environ::WASM_PAGE_SIZE as usize),
-        None => usize::max_value(),
-    };
+    let result =
+        match instance
+            .memory_grow(memory_index, delta)
+            .map_err(|error| TrapReason::User {
+                error,
+                needs_backtrace: true,
+            })? {
+            Some(size_in_bytes) => size_in_bytes / (wasmtime_environ::WASM_PAGE_SIZE as usize),
+            None => usize::max_value(),
+        };
     Ok(result as *mut _)
 }
 
@@ -183,14 +209,14 @@ unsafe fn table_grow(
     vmctx: *mut VMContext,
     table_index: u32,
     delta: u32,
-    // NB: we don't know whether this is a pointer to a `VMCallerCheckedAnyfunc`
+    // NB: we don't know whether this is a pointer to a `VMCallerCheckedFuncRef`
     // or is a `VMExternRef` until we look at the table type.
     init_value: *mut u8,
 ) -> Result<u32> {
     let instance = (*vmctx).instance_mut();
     let table_index = TableIndex::from_u32(table_index);
     let element = match instance.table_element_type(table_index) {
-        TableElementType::Func => (init_value as *mut VMCallerCheckedAnyfunc).into(),
+        TableElementType::Func => (init_value as *mut VMCallerCheckedFuncRef).into(),
         TableElementType::Extern => {
             let init_value = if init_value.is_null() {
                 None
@@ -215,16 +241,16 @@ unsafe fn table_fill(
     table_index: u32,
     dst: u32,
     // NB: we don't know whether this is a `VMExternRef` or a pointer to a
-    // `VMCallerCheckedAnyfunc` until we look at the table's element type.
+    // `VMCallerCheckedFuncRef` until we look at the table's element type.
     val: *mut u8,
     len: u32,
-) -> Result<(), TrapCode> {
+) -> Result<(), Trap> {
     let instance = (*vmctx).instance_mut();
     let table_index = TableIndex::from_u32(table_index);
     let table = &mut *instance.get_table(table_index);
     match table.element_type() {
         TableElementType::Func => {
-            let val = val as *mut VMCallerCheckedAnyfunc;
+            let val = val as *mut VMCallerCheckedFuncRef;
             table.fill(dst, val.into(), len)
         }
         TableElementType::Extern => {
@@ -249,7 +275,7 @@ unsafe fn table_copy(
     dst: u32,
     src: u32,
     len: u32,
-) -> Result<(), TrapCode> {
+) -> Result<(), Trap> {
     let dst_table_index = TableIndex::from_u32(dst_table_index);
     let src_table_index = TableIndex::from_u32(src_table_index);
     let instance = (*vmctx).instance_mut();
@@ -268,7 +294,7 @@ unsafe fn table_init(
     dst: u32,
     src: u32,
     len: u32,
-) -> Result<(), TrapCode> {
+) -> Result<(), Trap> {
     let table_index = TableIndex::from_u32(table_index);
     let elem_index = ElemIndex::from_u32(elem_index);
     let instance = (*vmctx).instance_mut();
@@ -290,7 +316,7 @@ unsafe fn memory_copy(
     src_index: u32,
     src: u64,
     len: u64,
-) -> Result<(), TrapCode> {
+) -> Result<(), Trap> {
     let src_index = MemoryIndex::from_u32(src_index);
     let dst_index = MemoryIndex::from_u32(dst_index);
     let instance = (*vmctx).instance_mut();
@@ -304,7 +330,7 @@ unsafe fn memory_fill(
     dst: u64,
     val: u32,
     len: u64,
-) -> Result<(), TrapCode> {
+) -> Result<(), Trap> {
     let memory_index = MemoryIndex::from_u32(memory_index);
     let instance = (*vmctx).instance_mut();
     instance.memory_fill(memory_index, dst, val as u8, len)
@@ -318,7 +344,7 @@ unsafe fn memory_init(
     dst: u64,
     src: u32,
     len: u32,
-) -> Result<(), TrapCode> {
+) -> Result<(), Trap> {
     let memory_index = MemoryIndex::from_u32(memory_index);
     let data_index = DataIndex::from_u32(data_index);
     let instance = (*vmctx).instance_mut();
@@ -424,83 +450,48 @@ unsafe fn externref_global_set(vmctx: *mut VMContext, index: u32, externref: *mu
 unsafe fn memory_atomic_notify(
     vmctx: *mut VMContext,
     memory_index: u32,
-    addr: *mut u8,
-    _count: u32,
-) -> Result<u32, TrapReason> {
-    let addr = addr as usize;
+    addr_index: u64,
+    count: u32,
+) -> Result<u32, Trap> {
     let memory = MemoryIndex::from_u32(memory_index);
-    let instance = (*vmctx).instance();
-    // this should never overflow since addr + 4 either hits a guard page
-    // or it's been validated to be in-bounds already. Double-check for now
-    // just to be sure.
-    let addr_to_check = addr.checked_add(4).unwrap();
-    validate_atomic_addr(instance, memory, addr_to_check)?;
-    Err(
-        anyhow::anyhow!("unimplemented: wasm atomics (fn memory_atomic_notify) unsupported",)
-            .into(),
-    )
+    let instance = (*vmctx).instance_mut();
+    instance
+        .get_runtime_memory(memory)
+        .atomic_notify(addr_index, count)
 }
 
 // Implementation of `memory.atomic.wait32` for locally defined memories.
 unsafe fn memory_atomic_wait32(
     vmctx: *mut VMContext,
     memory_index: u32,
-    addr: *mut u8,
-    _expected: u32,
-    _timeout: u64,
-) -> Result<u32, TrapReason> {
-    let addr = addr as usize;
+    addr_index: u64,
+    expected: u32,
+    timeout: u64,
+) -> Result<u32, Trap> {
+    // convert timeout to Instant, before any wait happens on locking
+    let timeout = (timeout as i64 >= 0).then(|| Instant::now() + Duration::from_nanos(timeout));
     let memory = MemoryIndex::from_u32(memory_index);
-    let instance = (*vmctx).instance();
-    // see wasmtime_memory_atomic_notify for why this shouldn't overflow
-    // but we still double-check
-    let addr_to_check = addr.checked_add(4).unwrap();
-    validate_atomic_addr(instance, memory, addr_to_check)?;
-    Err(
-        anyhow::anyhow!("unimplemented: wasm atomics (fn memory_atomic_wait32) unsupported",)
-            .into(),
-    )
+    let instance = (*vmctx).instance_mut();
+    Ok(instance
+        .get_runtime_memory(memory)
+        .atomic_wait32(addr_index, expected, timeout)? as u32)
 }
 
 // Implementation of `memory.atomic.wait64` for locally defined memories.
 unsafe fn memory_atomic_wait64(
     vmctx: *mut VMContext,
     memory_index: u32,
-    addr: *mut u8,
-    _expected: u64,
-    _timeout: u64,
-) -> Result<u32, TrapReason> {
-    let addr = addr as usize;
+    addr_index: u64,
+    expected: u64,
+    timeout: u64,
+) -> Result<u32, Trap> {
+    // convert timeout to Instant, before any wait happens on locking
+    let timeout = (timeout as i64 >= 0).then(|| Instant::now() + Duration::from_nanos(timeout));
     let memory = MemoryIndex::from_u32(memory_index);
-    let instance = (*vmctx).instance();
-    // see wasmtime_memory_atomic_notify for why this shouldn't overflow
-    // but we still double-check
-    let addr_to_check = addr.checked_add(8).unwrap();
-    validate_atomic_addr(instance, memory, addr_to_check)?;
-    Err(
-        anyhow::anyhow!("unimplemented: wasm atomics (fn memory_atomic_wait64) unsupported",)
-            .into(),
-    )
-}
-
-/// For atomic operations we still check the actual address despite this also
-/// being checked via the `heap_addr` instruction in cranelift. The reason for
-/// that is because the `heap_addr` instruction can defer to a later segfault to
-/// actually recognize the out-of-bounds whereas once we're running Rust code
-/// here we don't want to segfault.
-///
-/// In the situations where bounds checks were elided in JIT code (because oob
-/// would then be later guaranteed to segfault) this manual check is here
-/// so we don't segfault from Rust.
-unsafe fn validate_atomic_addr(
-    instance: &Instance,
-    memory: MemoryIndex,
-    addr: usize,
-) -> Result<(), TrapCode> {
-    if addr > instance.get_memory(memory).current_length() {
-        return Err(TrapCode::HeapOutOfBounds);
-    }
-    Ok(())
+    let instance = (*vmctx).instance_mut();
+    Ok(instance
+        .get_runtime_memory(memory)
+        .atomic_wait64(addr_index, expected, timeout)? as u32)
 }
 
 // Hook for when an instance runs out of fuel.
@@ -511,4 +502,86 @@ unsafe fn out_of_gas(vmctx: *mut VMContext) -> Result<()> {
 // Hook for when an instance observes that the epoch has changed.
 unsafe fn new_epoch(vmctx: *mut VMContext) -> Result<u64> {
     (*(*vmctx).instance().store()).new_epoch()
+}
+
+/// This module contains functions which are used for resolving relocations at
+/// runtime if necessary.
+///
+/// These functions are not used by default and currently the only platform
+/// they're used for is on x86_64 when SIMD is disabled and then SSE features
+/// are further disabled. In these configurations Cranelift isn't allowed to use
+/// native CPU instructions so it falls back to libcalls and we rely on the Rust
+/// standard library generally for implementing these.
+#[allow(missing_docs)]
+pub mod relocs {
+    pub extern "C" fn floorf32(f: f32) -> f32 {
+        f.floor()
+    }
+
+    pub extern "C" fn floorf64(f: f64) -> f64 {
+        f.floor()
+    }
+
+    pub extern "C" fn ceilf32(f: f32) -> f32 {
+        f.ceil()
+    }
+
+    pub extern "C" fn ceilf64(f: f64) -> f64 {
+        f.ceil()
+    }
+
+    pub extern "C" fn truncf32(f: f32) -> f32 {
+        f.trunc()
+    }
+
+    pub extern "C" fn truncf64(f: f64) -> f64 {
+        f.trunc()
+    }
+
+    const TOINT_32: f32 = 1.0 / f32::EPSILON;
+    const TOINT_64: f64 = 1.0 / f64::EPSILON;
+
+    // NB: replace with `round_ties_even` from libstd when it's stable as
+    // tracked by rust-lang/rust#96710
+    pub extern "C" fn nearestf32(x: f32) -> f32 {
+        // Rust doesn't have a nearest function; there's nearbyint, but it's not
+        // stabilized, so do it manually.
+        // Nearest is either ceil or floor depending on which is nearest or even.
+        // This approach exploited round half to even default mode.
+        let i = x.to_bits();
+        let e = i >> 23 & 0xff;
+        if e >= 0x7f_u32 + 23 {
+            // Check for NaNs.
+            if e == 0xff {
+                // Read the 23-bits significand.
+                if i & 0x7fffff != 0 {
+                    // Ensure it's arithmetic by setting the significand's most
+                    // significant bit to 1; it also works for canonical NaNs.
+                    return f32::from_bits(i | (1 << 22));
+                }
+            }
+            x
+        } else {
+            (x.abs() + TOINT_32 - TOINT_32).copysign(x)
+        }
+    }
+
+    pub extern "C" fn nearestf64(x: f64) -> f64 {
+        let i = x.to_bits();
+        let e = i >> 52 & 0x7ff;
+        if e >= 0x3ff_u64 + 52 {
+            // Check for NaNs.
+            if e == 0x7ff {
+                // Read the 52-bits significand.
+                if i & 0xfffffffffffff != 0 {
+                    // Ensure it's arithmetic by setting the significand's most
+                    // significant bit to 1; it also works for canonical NaNs.
+                    return f64::from_bits(i | (1 << 51));
+                }
+            }
+            x
+        } else {
+            (x.abs() + TOINT_64 - TOINT_64).copysign(x)
+        }
+    }
 }

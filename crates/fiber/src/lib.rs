@@ -234,6 +234,8 @@ mod tests {
                 .any(|s| s.contains("look_for_me"))
                 // TODO: apparently windows unwind routines don't unwind through fibers, so this will always fail. Is there a way we can fix that?
                 || cfg!(windows)
+                // TODO: the system libunwind is broken (#2808)
+                || cfg!(all(target_os = "macos", target_arch = "aarch64"))
             );
         }
 

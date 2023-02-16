@@ -196,6 +196,23 @@
 #include <wasmtime/trap.h>
 #include <wasmtime/val.h>
 
+/**
+ * \brief Wasmtime version string.
+ */
+#define WASMTIME_VERSION "7.0.0"
+/**
+ * \brief Wasmtime major version number.
+ */
+#define WASMTIME_VERSION_MAJOR 7
+/**
+ * \brief Wasmtime minor version number.
+ */
+#define WASMTIME_VERSION_MINOR 0
+/**
+ * \brief Wasmtime patch version number.
+ */
+#define WASMTIME_VERSION_PATCH 0
+
 #ifdef __cplusplus
 extern "C" {
 #endif

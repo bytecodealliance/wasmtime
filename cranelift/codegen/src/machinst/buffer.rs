@@ -141,7 +141,7 @@
 //! semantics below (grep for "Preserves execution semantics").
 
 use crate::binemit::{Addend, CodeOffset, Reloc, StackMap};
-use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode};
+use crate::ir::{ExternalName, Opcode, RelSourceLoc, SourceLoc, TrapCode};
 use crate::isa::unwind::UnwindInst;
 use crate::machinst::{
     BlockIndex, MachInstLabelUse, TextSectionBuilder, VCodeConstant, VCodeConstants, VCodeInst,
@@ -154,6 +154,40 @@ use std::convert::TryFrom;
 use std::mem;
 use std::string::String;
 use std::vec::Vec;
+
+#[cfg(feature = "enable-serde")]
+use serde::{Deserialize, Serialize};
+
+#[cfg(feature = "enable-serde")]
+pub trait CompilePhase {
+    type MachSrcLocType: for<'a> Deserialize<'a> + Serialize + core::fmt::Debug + PartialEq + Clone;
+    type SourceLocType: for<'a> Deserialize<'a> + Serialize + core::fmt::Debug + PartialEq + Clone;
+}
+
+#[cfg(not(feature = "enable-serde"))]
+pub trait CompilePhase {
+    type MachSrcLocType: core::fmt::Debug + PartialEq + Clone;
+    type SourceLocType: core::fmt::Debug + PartialEq + Clone;
+}
+
+/// Status of a compiled artifact that needs patching before being used.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct Stencil;
+
+/// Status of a compiled artifact ready to use.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Final;
+
+impl CompilePhase for Stencil {
+    type MachSrcLocType = MachSrcLoc<Stencil>;
+    type SourceLocType = RelSourceLoc;
+}
+
+impl CompilePhase for Final {
+    type MachSrcLocType = MachSrcLoc<Final>;
+    type SourceLocType = SourceLoc;
+}
 
 /// A buffer of output to be produced, fixed up, and then emitted to a CodeSink
 /// in bulk.
@@ -174,14 +208,14 @@ pub struct MachBuffer<I: VCodeInst> {
     /// Any call site records referring to this code.
     call_sites: SmallVec<[MachCallSite; 16]>,
     /// Any source location mappings referring to this code.
-    srclocs: SmallVec<[MachSrcLoc; 64]>,
+    srclocs: SmallVec<[MachSrcLoc<Stencil>; 64]>,
     /// Any stack maps referring to this code.
     stack_maps: SmallVec<[MachStackMap; 8]>,
     /// Any unwind info at a given location.
     unwind_info: SmallVec<[(CodeOffset, UnwindInst); 8]>,
     /// The current source location in progress (after `start_srcloc()` and
     /// before `end_srcloc()`).  This is a (start_offset, src_loc) tuple.
-    cur_srcloc: Option<(CodeOffset, SourceLoc)>,
+    cur_srcloc: Option<(CodeOffset, RelSourceLoc)>,
     /// Known label offsets; `UNKNOWN_LABEL_OFFSET` if unknown.
     label_offsets: SmallVec<[CodeOffset; 16]>,
     /// Label aliases: when one label points to an unconditional jump, and that
@@ -229,23 +263,44 @@ pub struct MachBuffer<I: VCodeInst> {
     constant_labels: SecondaryMap<VCodeConstant, MachLabel>,
 }
 
+impl MachBufferFinalized<Stencil> {
+    /// Get a finalized machine buffer by applying the function's base source location.
+    pub fn apply_base_srcloc(self, base_srcloc: SourceLoc) -> MachBufferFinalized<Final> {
+        MachBufferFinalized {
+            data: self.data,
+            relocs: self.relocs,
+            traps: self.traps,
+            call_sites: self.call_sites,
+            srclocs: self
+                .srclocs
+                .into_iter()
+                .map(|srcloc| srcloc.apply_base_srcloc(base_srcloc))
+                .collect(),
+            stack_maps: self.stack_maps,
+            unwind_info: self.unwind_info,
+        }
+    }
+}
+
 /// A `MachBuffer` once emission is completed: holds generated code and records,
 /// without fixups. This allows the type to be independent of the backend.
-pub struct MachBufferFinalized {
+#[derive(PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct MachBufferFinalized<T: CompilePhase> {
     /// The buffer contents, as raw bytes.
-    data: SmallVec<[u8; 1024]>,
+    pub(crate) data: SmallVec<[u8; 1024]>,
     /// Any relocations referring to this code. Note that only *external*
     /// relocations are tracked here; references to labels within the buffer are
     /// resolved before emission.
-    relocs: SmallVec<[MachReloc; 16]>,
+    pub(crate) relocs: SmallVec<[MachReloc; 16]>,
     /// Any trap records referring to this code.
-    traps: SmallVec<[MachTrap; 16]>,
+    pub(crate) traps: SmallVec<[MachTrap; 16]>,
     /// Any call site records referring to this code.
-    call_sites: SmallVec<[MachCallSite; 16]>,
+    pub(crate) call_sites: SmallVec<[MachCallSite; 16]>,
     /// Any source location mappings referring to this code.
-    srclocs: SmallVec<[MachSrcLoc; 64]>,
+    pub(crate) srclocs: SmallVec<[T::MachSrcLocType; 64]>,
     /// Any stack maps referring to this code.
-    stack_maps: SmallVec<[MachStackMap; 8]>,
+    pub(crate) stack_maps: SmallVec<[MachStackMap; 8]>,
     /// Any unwind info at a given location.
     pub unwind_info: SmallVec<[(CodeOffset, UnwindInst); 8]>,
 }
@@ -411,7 +466,11 @@ impl<I: VCodeInst> MachBuffer<I> {
     /// Align up to the given alignment.
     pub fn align_to(&mut self, align_to: CodeOffset) {
         trace!("MachBuffer: align to {}", align_to);
-        assert!(align_to.is_power_of_two());
+        assert!(
+            align_to.is_power_of_two(),
+            "{} is not a power of two",
+            align_to
+        );
         while self.cur_offset() & (align_to - 1) != 0 {
             self.put1(0);
         }
@@ -1211,8 +1270,12 @@ impl<I: VCodeInst> MachBuffer<I> {
     }
 
     /// Finish any deferred emissions and/or fixups.
-    pub fn finish(mut self) -> MachBufferFinalized {
+    pub fn finish(mut self) -> MachBufferFinalized<Stencil> {
         let _tt = timing::vcode_emit_finish();
+
+        // Do any optimizations on branches at tail of buffer, as if we
+        // had bound one last label.
+        self.optimize_branches();
 
         self.finish_emission_maybe_forcing_veneers(false);
 
@@ -1301,7 +1364,7 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     /// Set the `SourceLoc` for code from this offset until the offset at the
     /// next call to `end_srcloc()`.
-    pub fn start_srcloc(&mut self, loc: SourceLoc) {
+    pub fn start_srcloc(&mut self, loc: RelSourceLoc) {
         self.cur_srcloc = Some((self.cur_offset(), loc));
     }
 
@@ -1347,9 +1410,9 @@ impl<I: VCodeInst> MachBuffer<I> {
     }
 }
 
-impl MachBufferFinalized {
+impl<T: CompilePhase> MachBufferFinalized<T> {
     /// Get a list of source location mapping tuples in sorted-by-start-offset order.
-    pub fn get_srclocs_sorted(&self) -> &[MachSrcLoc] {
+    pub fn get_srclocs_sorted(&self) -> &[T::MachSrcLocType] {
         &self.srclocs[..]
     }
 
@@ -1433,7 +1496,8 @@ struct MachLabelFixup<I: VCodeInst> {
 }
 
 /// A relocation resulting from a compilation.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MachReloc {
     /// The offset at which the relocation applies, *relative to the
     /// containing section*.
@@ -1447,7 +1511,8 @@ pub struct MachReloc {
 }
 
 /// A trap record resulting from a compilation.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MachTrap {
     /// The offset at which the trap instruction occurs, *relative to the
     /// containing section*.
@@ -1457,7 +1522,8 @@ pub struct MachTrap {
 }
 
 /// A call site record resulting from a compilation.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MachCallSite {
     /// The offset of the call's return address, *relative to the containing section*.
     pub ret_addr: CodeOffset,
@@ -1466,8 +1532,9 @@ pub struct MachCallSite {
 }
 
 /// A source-location mapping resulting from a compilation.
-#[derive(Clone, Debug)]
-pub struct MachSrcLoc {
+#[derive(PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct MachSrcLoc<T: CompilePhase> {
     /// The start of the region of code corresponding to a source location.
     /// This is relative to the start of the function, not to the start of the
     /// section.
@@ -1477,11 +1544,22 @@ pub struct MachSrcLoc {
     /// section.
     pub end: CodeOffset,
     /// The source location.
-    pub loc: SourceLoc,
+    pub loc: T::SourceLocType,
+}
+
+impl MachSrcLoc<Stencil> {
+    fn apply_base_srcloc(self, base_srcloc: SourceLoc) -> MachSrcLoc<Final> {
+        MachSrcLoc {
+            start: self.start,
+            end: self.end,
+            loc: self.loc.expand(base_srcloc),
+        }
+    }
 }
 
 /// Record of stack map metadata: stack offsets containing references.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MachStackMap {
     /// The code offset at which this stack map applies.
     pub offset: CodeOffset,
@@ -1532,9 +1610,9 @@ pub struct MachTextSectionBuilder<I: VCodeInst> {
 }
 
 impl<I: VCodeInst> MachTextSectionBuilder<I> {
-    pub fn new(num_funcs: u32) -> MachTextSectionBuilder<I> {
+    pub fn new(num_funcs: usize) -> MachTextSectionBuilder<I> {
         let mut buf = MachBuffer::new();
-        buf.reserve_labels_for_blocks(num_funcs as usize);
+        buf.reserve_labels_for_blocks(num_funcs);
         MachTextSectionBuilder {
             buf,
             next_func: 0,
@@ -1544,7 +1622,7 @@ impl<I: VCodeInst> MachTextSectionBuilder<I> {
 }
 
 impl<I: VCodeInst> TextSectionBuilder for MachTextSectionBuilder<I> {
-    fn append(&mut self, named: bool, func: &[u8], align: Option<u32>) -> u64 {
+    fn append(&mut self, labeled: bool, func: &[u8], align: u32) -> u64 {
         // Conditionally emit an island if it's necessary to resolve jumps
         // between functions which are too far away.
         let size = func.len() as u32;
@@ -1552,9 +1630,9 @@ impl<I: VCodeInst> TextSectionBuilder for MachTextSectionBuilder<I> {
             self.buf.emit_island_maybe_forced(self.force_veneers, size);
         }
 
-        self.buf.align_to(align.unwrap_or(I::LabelUse::ALIGN));
+        self.buf.align_to(align);
         let pos = self.buf.cur_offset();
-        if named {
+        if labeled {
             self.buf
                 .bind_label(MachLabel::from_block(BlockIndex::new(self.next_func)));
             self.next_func += 1;
@@ -1563,8 +1641,8 @@ impl<I: VCodeInst> TextSectionBuilder for MachTextSectionBuilder<I> {
         u64::from(pos)
     }
 
-    fn resolve_reloc(&mut self, offset: u64, reloc: Reloc, addend: Addend, target: u32) -> bool {
-        let label = MachLabel::from_block(BlockIndex::new(target as usize));
+    fn resolve_reloc(&mut self, offset: u64, reloc: Reloc, addend: Addend, target: usize) -> bool {
+        let label = MachLabel::from_block(BlockIndex::new(target));
         let offset = u32::try_from(offset).unwrap();
         match I::LabelUse::from_reloc(reloc, addend) {
             Some(label_use) => {
@@ -1595,7 +1673,10 @@ impl<I: VCodeInst> TextSectionBuilder for MachTextSectionBuilder<I> {
 // We use an actual instruction definition to do tests, so we depend on the `arm64` feature here.
 #[cfg(all(test, feature = "arm64"))]
 mod test {
+    use cranelift_entity::EntityRef as _;
+
     use super::*;
+    use crate::ir::UserExternalNameRef;
     use crate::isa::aarch64::inst::xreg;
     use crate::isa::aarch64::inst::{BranchTarget, CondBrKind, EmitInfo, Inst};
     use crate::machinst::MachInstEmit;
@@ -1978,9 +2059,17 @@ mod test {
         buf.add_trap(TrapCode::IntegerOverflow);
         buf.add_trap(TrapCode::IntegerDivisionByZero);
         buf.add_call_site(Opcode::Call);
-        buf.add_reloc(Reloc::Abs4, &ExternalName::user(0, 0), 0);
+        buf.add_reloc(
+            Reloc::Abs4,
+            &ExternalName::User(UserExternalNameRef::new(0)),
+            0,
+        );
         buf.put1(3);
-        buf.add_reloc(Reloc::Abs8, &ExternalName::user(1, 1), 1);
+        buf.add_reloc(
+            Reloc::Abs8,
+            &ExternalName::User(UserExternalNameRef::new(1)),
+            1,
+        );
         buf.put1(4);
 
         let buf = buf.finish();

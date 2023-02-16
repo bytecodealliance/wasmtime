@@ -1,6 +1,6 @@
 #![no_main]
 
-use libfuzzer_sys::fuzz_target;
+use libfuzzer_sys::{arbitrary, fuzz_target};
 use wasmtime_fuzzing::oracles;
 
 include!(concat!(env!("OUT_DIR"), "/static_component_api.rs"));

@@ -30,15 +30,15 @@ At the time of writing, we have the following fuzz targets:
 * `cranelift-fuzzgen`: Generate a Cranelift function and check that it returns
   the same results when compiled to the host and when using the Cranelift
   interpreter; only a subset of Cranelift IR is currently supported.
-* `differential`: Generate a Wasm module and check that Wasmtime returns
-  the same results when run with two different configurations.
-* `differential_spec`: Generate a Wasm module and check that Wasmtime returns
-  the same results as the Wasm spec interpreter (see the `wasm-spec-interpreter`
-  crate).
-* `differential_v8`: Generate a Wasm module and check that Wasmtime returns
-  the same results as V8.
-* `differential_wasmi`: Generate a Wasm module and check that Wasmtime returns
-  the same results as the `wasmi` interpreter.
+* `cranelift-icache`: Generate a Cranelift function A, applies a small mutation
+  to its source, yielding a function A', and checks that A compiled +
+  incremental compilation generates the same machine code as if A' was compiled
+  from scratch.
+* `differential`: Generate a Wasm module, evaluate each exported function
+  with random inputs, and check that Wasmtime returns the same results as a
+  choice of another engine: the Wasm spec interpreter (see the
+  `wasm-spec-interpreter` crate), the `wasmi` interpreter, V8 (through the `v8`
+  crate), or Wasmtime itself run with a different configuration.
 * `instantiate`: Generate a Wasm module and Wasmtime configuration and attempt
   to compile and instantiate with them.
 * `instantiate-many`: Generate many Wasm modules and attempt to compile and

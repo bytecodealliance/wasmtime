@@ -2,6 +2,7 @@ test interpret
 test run
 target x86_64
 target aarch64
+target riscv64
 ; target s390x FIXME: This currently fails under qemu due to a qemu bug
 
 function %fmin_p_f32(f32, f32) -> f32 {
@@ -44,7 +45,7 @@ function %fmin_is_nan_f32(f32, f32) -> i32 {
 block0(v0: f32, v1: f32):
     v2 = fmin_pseudo v0, v1
     v3 = fcmp ne v2, v2
-    v4 = bint.i32 v3
+    v4 = uextend.i32 v3
     return v4
 }
 ; run: %fmin_is_nan_f32(-NaN, 0x0.0) == 1
@@ -97,7 +98,7 @@ function %fmin_is_nan_f64(f64, f64) -> i32 {
 block0(v0: f64, v1: f64):
     v2 = fmin_pseudo v0, v1
     v3 = fcmp ne v2, v2
-    v4 = bint.i32 v3
+    v4 = uextend.i32 v3
     return v4
 }
 ; run: %fmin_is_nan_f64(-NaN, 0x0.0) == 1

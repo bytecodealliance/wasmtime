@@ -5,12 +5,12 @@ use cranelift_codegen::ir::immediates::{Imm64, Offset32, Uimm64};
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{AbiParam, ArgumentPurpose, Function, InstBuilder, Signature};
 use cranelift_codegen::isa::{self, TargetFrontendConfig, TargetIsa};
-use cranelift_entity::EntityRef;
+use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_frontend::Variable;
 use cranelift_wasm::{
-    self, FuncIndex, FuncTranslationState, GlobalIndex, GlobalVariable, MemoryIndex, TableIndex,
-    TargetEnvironment, TypeIndex, WasmError, WasmHeapType, WasmRefType, WasmResult, WasmType,
+    self, FuncIndex, FuncTranslationState, GlobalIndex, GlobalVariable, Heap, HeapData, HeapStyle,
+    MemoryIndex, TableIndex, TargetEnvironment, TypeIndex, WasmError, WasmHeapType, WasmRefType, WasmResult, WasmType,
 };
 use std::convert::TryFrom;
 use std::mem;
@@ -20,11 +20,6 @@ use wasmtime_environ::{
     TableStyle, Tunables, VMOffsets, WASM_PAGE_SIZE,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
-
-/// Compute an `ir::ExternalName` for a given wasm function index.
-pub fn get_func_name(func_index: FuncIndex) -> ir::ExternalName {
-    ir::ExternalName::user(0, func_index.as_u32())
-}
 
 macro_rules! declare_function_signatures {
     (
@@ -115,6 +110,9 @@ pub struct FuncEnvironment<'module_environment> {
     translation: &'module_environment ModuleTranslation<'module_environment>,
     types: &'module_environment ModuleTypes,
 
+    /// Heaps implementing WebAssembly linear memories.
+    heaps: PrimaryMap<Heap, HeapData>,
+
     /// The Cranelift global holding the vmctx address.
     vmctx: Option<ir::GlobalValue>,
 
@@ -175,6 +173,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             module: &translation.module,
             translation,
             types,
+            heaps: PrimaryMap::default(),
             vmctx: None,
             builtin_function_signatures,
             offsets: VMOffsets::new(isa.pointer_bytes(), &translation.module),
@@ -313,7 +312,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             pointer_type,
             mem_flags,
             callee,
-            i32::from(self.offsets.ptr.vmcaller_checked_anyfunc_func_ptr()),
+            i32::from(self.offsets.ptr.vmcaller_checked_func_ref_vmctx()),
         );
 
         let mut real_call_args = Vec::with_capacity(call_args.len() + 2);
@@ -327,7 +326,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             pointer_type,
             mem_flags,
             callee,
-            i32::from(self.offsets.ptr.vmcaller_checked_anyfunc_vmctx()),
+            i32::from(self.offsets.ptr.vmcaller_checked_func_ref_vmctx()),
         );
         real_call_args.push(vmctx);
         real_call_args.push(caller_vmctx);
@@ -593,11 +592,12 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // Otherwise we can continue on like usual.
         let zero = builder.ins().iconst(ir::types::I64, 0);
         let fuel = builder.use_var(self.fuel_var);
-        let cmp = builder.ins().ifcmp(fuel, zero);
+        let cmp = builder
+            .ins()
+            .icmp(IntCC::SignedGreaterThanOrEqual, fuel, zero);
         builder
             .ins()
-            .brif(IntCC::SignedGreaterThanOrEqual, cmp, out_of_gas_block, &[]);
-        builder.ins().jump(continuation_block, &[]);
+            .brif(cmp, out_of_gas_block, &[], continuation_block, &[]);
         builder.seal_block(out_of_gas_block);
 
         // If we ran out of gas then we call our out-of-gas intrinsic and it
@@ -700,11 +700,14 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // fine, as we'll reload it and check again before yielding in
         // the cold path.
         let cur_epoch_value = self.epoch_load_current(builder);
-        let cmp = builder.ins().ifcmp(cur_epoch_value, epoch_deadline);
+        let cmp = builder.ins().icmp(
+            IntCC::UnsignedGreaterThanOrEqual,
+            cur_epoch_value,
+            epoch_deadline,
+        );
         builder
             .ins()
-            .brif(IntCC::UnsignedGreaterThanOrEqual, cmp, new_epoch_block, &[]);
-        builder.ins().jump(continuation_block, &[]);
+            .brif(cmp, new_epoch_block, &[], continuation_block, &[]);
         builder.seal_block(new_epoch_block);
 
         // In the "new epoch block", we've noticed that the epoch has
@@ -717,14 +720,18 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         builder.switch_to_block(new_epoch_block);
         self.epoch_load_deadline_into_var(builder);
         let fresh_epoch_deadline = builder.use_var(self.epoch_deadline_var);
-        let fresh_cmp = builder.ins().ifcmp(cur_epoch_value, fresh_epoch_deadline);
-        builder.ins().brif(
+        let fresh_cmp = builder.ins().icmp(
             IntCC::UnsignedGreaterThanOrEqual,
+            cur_epoch_value,
+            fresh_epoch_deadline,
+        );
+        builder.ins().brif(
             fresh_cmp,
             new_epoch_doublecheck_block,
             &[],
+            continuation_block,
+            &[],
         );
-        builder.ins().jump(continuation_block, &[]);
         builder.seal_block(new_epoch_doublecheck_block);
 
         builder.switch_to_block(new_epoch_doublecheck_block);
@@ -828,8 +835,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let result_param = builder.append_block_param(continuation_block, pointer_type);
         builder.set_cold_block(null_block);
 
-        builder.ins().brz(value, null_block, &[]);
-        builder.ins().jump(continuation_block, &[value_masked]);
+        builder
+            .ins()
+            .brif(value, continuation_block, &[value_masked], null_block, &[]);
         builder.seal_block(null_block);
 
         builder.switch_to_block(null_block);
@@ -861,9 +869,17 @@ impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environm
     fn reference_type(&self, ty: WasmHeapType) -> ir::Type {
         crate::reference_type(ty, self.pointer_type())
     }
+
+    fn heap_access_spectre_mitigation(&self) -> bool {
+        self.isa.flags().enable_heap_access_spectre_mitigation()
+    }
 }
 
 impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'module_environment> {
+    fn heaps(&self) -> &PrimaryMap<Heap, HeapData> {
+        &self.heaps
+    }
+
     fn is_wasm_parameter(&self, _signature: &ir::Signature, index: usize) -> bool {
         // The first two parameters are the vmctx and caller vmctx. The rest are
         // the wasm parameters.
@@ -1027,8 +1043,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 let elem = builder.ins().load(reference_type, flags, elem_addr, 0);
 
                 let elem_is_null = builder.ins().is_null(elem);
-                builder.ins().brnz(elem_is_null, continue_block, &[]);
-                builder.ins().jump(non_null_elem_block, &[]);
+                builder
+                    .ins()
+                    .brif(elem_is_null, continue_block, &[], non_null_elem_block, &[]);
 
                 // Load the `VMExternRefActivationsTable::next` bump finger and
                 // the `VMExternRefActivationsTable::end` bump boundary.
@@ -1058,8 +1075,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 // builtin to do a GC and insert this reference into the
                 // just-swept table for us.
                 let at_capacity = builder.ins().icmp(ir::condcodes::IntCC::Equal, next, end);
-                builder.ins().brnz(at_capacity, gc_block, &[]);
-                builder.ins().jump(no_gc_block, &[]);
+                builder
+                    .ins()
+                    .brif(at_capacity, gc_block, &[], no_gc_block, &[]);
                 builder.switch_to_block(gc_block);
                 let builtin_idx = BuiltinFunctionIndex::activations_table_insert_with_gc();
                 let builtin_sig = self
@@ -1194,10 +1212,13 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 // deallocate `value` and leave it in the table, leading to use
                 // after free.
                 let value_is_null = builder.ins().is_null(value);
-                builder
-                    .ins()
-                    .brnz(value_is_null, check_current_elem_block, &[]);
-                builder.ins().jump(inc_ref_count_block, &[]);
+                builder.ins().brif(
+                    value_is_null,
+                    check_current_elem_block,
+                    &[],
+                    inc_ref_count_block,
+                    &[],
+                );
                 builder.switch_to_block(inc_ref_count_block);
                 self.mutate_externref_ref_count(builder, value, 1);
                 builder.ins().jump(check_current_elem_block, &[]);
@@ -1223,18 +1244,21 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     builder
                         .ins()
                         .icmp_imm(ir::condcodes::IntCC::Equal, current_elem, 0);
-                builder
-                    .ins()
-                    .brz(current_elem_is_null, dec_ref_count_block, &[]);
-                builder.ins().jump(continue_block, &[]);
+                builder.ins().brif(
+                    current_elem_is_null,
+                    continue_block,
+                    &[],
+                    dec_ref_count_block,
+                    &[],
+                );
 
                 builder.switch_to_block(dec_ref_count_block);
                 let prev_ref_count = self.mutate_externref_ref_count(builder, current_elem, -1);
                 let one = builder.ins().iconst(pointer_type, 1);
+                let cond = builder.ins().icmp(IntCC::Equal, one, prev_ref_count);
                 builder
                     .ins()
-                    .br_icmp(IntCC::Equal, one, prev_ref_count, drop_block, &[]);
-                builder.ins().jump(continue_block, &[]);
+                    .brif(cond, drop_block, &[], continue_block, &[]);
 
                 // Call the `drop_externref` builtin to (you guessed it) drop
                 // the `externref`.
@@ -1331,7 +1355,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             _ => unreachable!(),
         };
 
-        Ok(pos.ins().bint(ir::types::I32, bool_is_null))
+        Ok(pos.ins().uextend(ir::types::I32, bool_is_null))
     }
 
     fn translate_ref_func(
@@ -1405,9 +1429,23 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         Ok(())
     }
 
-    fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> WasmResult<ir::Heap> {
+    fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> WasmResult<Heap> {
         let pointer_type = self.pointer_type();
         let is_shared = self.module.memory_plans[index].memory.shared;
+
+        let min_size = self.module.memory_plans[index]
+            .memory
+            .minimum
+            .checked_mul(u64::from(WASM_PAGE_SIZE))
+            .unwrap_or_else(|| {
+                // The only valid Wasm memory size that won't fit in a 64-bit
+                // integer is the maximum memory64 size (2^64) which is one
+                // larger than `u64::MAX` (2^64 - 1). In this case, just say the
+                // minimum heap size is `u64::MAX`.
+                debug_assert_eq!(self.module.memory_plans[index].memory.minimum, 1 << 48);
+                u64::MAX
+            });
+
         let (ptr, base_offset, current_length_offset) = {
             let vmctx = self.vmctx(func);
             if let Some(def_index) = self.module.defined_memory_index(index) {
@@ -1423,9 +1461,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                         global_type: pointer_type,
                         readonly: true,
                     });
-                    let base_offset = i32::from(self.offsets.vmmemory_definition_base());
+                    let base_offset = i32::from(self.offsets.ptr.vmmemory_definition_base());
                     let current_length_offset =
-                        i32::from(self.offsets.vmmemory_definition_current_length());
+                        i32::from(self.offsets.ptr.vmmemory_definition_current_length());
                     (memory, base_offset, current_length_offset)
                 } else {
                     let owned_index = self.module.owned_memory_index(def_index);
@@ -1446,9 +1484,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     global_type: pointer_type,
                     readonly: true,
                 });
-                let base_offset = i32::from(self.offsets.vmmemory_definition_base());
+                let base_offset = i32::from(self.offsets.ptr.vmmemory_definition_base());
                 let current_length_offset =
-                    i32::from(self.offsets.vmmemory_definition_current_length());
+                    i32::from(self.offsets.ptr.vmmemory_definition_current_length());
                 (memory, base_offset, current_length_offset)
             }
         };
@@ -1469,8 +1507,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     readonly: false,
                 });
                 (
-                    Uimm64::new(offset_guard_size),
-                    ir::HeapStyle::Dynamic {
+                    offset_guard_size,
+                    HeapStyle::Dynamic {
                         bound_gv: heap_bound,
                     },
                     false,
@@ -1482,9 +1520,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 pre_guard_size: _,
                 memory: _,
             } => (
-                Uimm64::new(offset_guard_size),
-                ir::HeapStyle::Static {
-                    bound: Uimm64::new(u64::from(bound) * u64::from(WASM_PAGE_SIZE)),
+                offset_guard_size,
+                HeapStyle::Static {
+                    bound: u64::from(bound) * u64::from(WASM_PAGE_SIZE),
                 },
                 true,
             ),
@@ -1496,9 +1534,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             global_type: pointer_type,
             readonly: readonly_base,
         });
-        Ok(func.create_heap(ir::HeapData {
+        Ok(self.heaps.push(HeapData {
             base: heap_base,
-            min_size: 0.into(),
+            min_size,
             offset_guard_size,
             style: heap_style,
             index_type: self.memory_index_type(index),
@@ -1549,7 +1587,11 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<ir::FuncRef> {
         let sig = crate::func_signature(self.isa, self.translation, self.types, index);
         let signature = func.import_signature(sig);
-        let name = get_func_name(index);
+        let name =
+            ir::ExternalName::User(func.declare_imported_user_function(ir::UserExternalName {
+                namespace: 0,
+                index: index.as_u32(),
+            }));
         Ok(func.import_function(ir::ExtFuncData {
             name,
             signature,
@@ -1584,13 +1626,22 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<ir::Inst> {
         let pointer_type = self.pointer_type();
 
-        // Get the anyfunc pointer (the funcref) from the table.
-        let anyfunc_ptr = self.get_or_init_funcref_table_elem(builder, table_index, table, callee);
+        // Get the funcref pointer from the table.
+        let funcref_ptr = self.get_or_init_funcref_table_elem(builder, table_index, table, callee);
 
         // Check for whether the table element is null, and trap if so.
         builder
             .ins()
-            .trapz(anyfunc_ptr, ir::TrapCode::IndirectCallToNull);
+            .trapz(funcref_ptr, ir::TrapCode::IndirectCallToNull);
+
+        // // Dereference the funcref pointer to get the function address.
+        // let mem_flags = ir::MemFlags::trusted();
+        // let func_addr = builder.ins().load(
+        //     pointer_type,
+        //     mem_flags,
+        //     funcref_ptr,
+        //     i32::from(self.offsets.ptr.vmcaller_checked_func_ref_func_ptr()),
+        // );
 
         // If necessary, check the signature.
         match self.module.table_plans[table_index].style {
@@ -1601,7 +1652,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 let base = builder.ins().global_value(pointer_type, vmctx);
 
                 // Load the caller ID. This requires loading the
-                // `*mut VMCallerCheckedAnyfunc` base pointer from `VMContext`
+                // `*mut VMCallerCheckedFuncRef` base pointer from `VMContext`
                 // and then loading, based on `SignatureIndex`, the
                 // corresponding entry.
                 let mem_flags = ir::MemFlags::trusted().with_readonly();
@@ -1624,8 +1675,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 let callee_sig_id = builder.ins().load(
                     sig_id_type,
                     mem_flags,
-                    anyfunc_ptr,
-                    i32::from(self.offsets.ptr.vmcaller_checked_anyfunc_type_index()),
+                    funcref_ptr,
+                    i32::from(self.offsets.ptr.vmcaller_checked_func_ref_type_index()),
                 );
 
                 // Check that they match.
@@ -1636,7 +1687,30 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             }
         }
 
-        self.call_function_unchecked(builder, sig_ref, anyfunc_ptr, call_args)
+        self.call_function_unchecked(builder, sig_ref, funcref_ptr, call_args)
+            // TODO(dhil): the below may need to be merge into call_function_unchecked
+        // let mut real_call_args = Vec::with_capacity(call_args.len() + 2);
+        // let caller_vmctx = builder
+        //     .func
+        //     .special_param(ArgumentPurpose::VMContext)
+        //     .unwrap();
+
+        // // First append the callee vmctx address.
+        // let vmctx = builder.ins().load(
+        //     pointer_type,
+        //     mem_flags,
+        //     funcref_ptr,
+        //     i32::from(self.offsets.ptr.vmcaller_checked_func_ref_vmctx()),
+        // );
+        // real_call_args.push(vmctx);
+        // real_call_args.push(caller_vmctx);
+
+        // // Then append the regular call arguments.
+        // real_call_args.extend_from_slice(call_args);
+
+        // Ok(builder
+        //     .ins()
+        //     .call_indirect(sig_ref, func_addr, &real_call_args))
     }
 
     fn translate_call(
@@ -1713,7 +1787,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         &mut self,
         mut pos: FuncCursor<'_>,
         index: MemoryIndex,
-        _heap: ir::Heap,
+        _heap: Heap,
         val: ir::Value,
     ) -> WasmResult<ir::Value> {
         let func_sig = self
@@ -1739,7 +1813,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         &mut self,
         mut pos: FuncCursor<'_>,
         index: MemoryIndex,
-        _heap: ir::Heap,
+        _heap: Heap,
     ) -> WasmResult<ir::Value> {
         let pointer_type = self.pointer_type();
         let vmctx = self.vmctx(&mut pos.func);
@@ -1754,7 +1828,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                         pos.ins()
                             .load(pointer_type, ir::MemFlags::trusted(), base, offset);
                     let vmmemory_definition_offset =
-                        i64::from(self.offsets.vmmemory_definition_current_length());
+                        i64::from(self.offsets.ptr.vmmemory_definition_current_length());
                     let vmmemory_definition_ptr =
                         pos.ins().iadd_imm(vmmemory_ptr, vmmemory_definition_offset);
                     // This atomic access of the
@@ -1786,7 +1860,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                         .load(pointer_type, ir::MemFlags::trusted(), base, offset);
                 if is_shared {
                     let vmmemory_definition_offset =
-                        i64::from(self.offsets.vmmemory_definition_current_length());
+                        i64::from(self.offsets.ptr.vmmemory_definition_current_length());
                     let vmmemory_definition_ptr =
                         pos.ins().iadd_imm(vmmemory_ptr, vmmemory_definition_offset);
                     pos.ins().atomic_load(
@@ -1799,7 +1873,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                         pointer_type,
                         ir::MemFlags::trusted(),
                         vmmemory_ptr,
-                        i32::from(self.offsets.vmmemory_definition_current_length()),
+                        i32::from(self.offsets.ptr.vmmemory_definition_current_length()),
                     )
                 }
             }
@@ -1815,9 +1889,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         &mut self,
         mut pos: FuncCursor,
         src_index: MemoryIndex,
-        _src_heap: ir::Heap,
+        _src_heap: Heap,
         dst_index: MemoryIndex,
-        _dst_heap: ir::Heap,
+        _dst_heap: Heap,
         dst: ir::Value,
         src: ir::Value,
         len: ir::Value,
@@ -1855,7 +1929,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         &mut self,
         mut pos: FuncCursor,
         memory_index: MemoryIndex,
-        _heap: ir::Heap,
+        _heap: Heap,
         dst: ir::Value,
         val: ir::Value,
         len: ir::Value,
@@ -1881,7 +1955,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         &mut self,
         mut pos: FuncCursor,
         memory_index: MemoryIndex,
-        _heap: ir::Heap,
+        _heap: Heap,
         seg_index: u32,
         dst: ir::Value,
         src: ir::Value,
@@ -2003,11 +2077,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         &mut self,
         mut pos: FuncCursor,
         memory_index: MemoryIndex,
-        _heap: ir::Heap,
+        _heap: Heap,
         addr: ir::Value,
         expected: ir::Value,
         timeout: ir::Value,
     ) -> WasmResult<ir::Value> {
+        let addr = self.cast_memory_index_to_i64(&mut pos, addr, memory_index);
         let implied_ty = pos.func.dfg.value_type(expected);
         let (func_sig, memory_index, func_idx) =
             self.get_memory_atomic_wait(&mut pos.func, memory_index, implied_ty);
@@ -2029,10 +2104,11 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         &mut self,
         mut pos: FuncCursor,
         memory_index: MemoryIndex,
-        _heap: ir::Heap,
+        _heap: Heap,
         addr: ir::Value,
         count: ir::Value,
     ) -> WasmResult<ir::Value> {
+        let addr = self.cast_memory_index_to_i64(&mut pos, addr, memory_index);
         let func_sig = self
             .builtin_function_signatures
             .memory_atomic_notify(&mut pos.func);
@@ -2087,6 +2163,17 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<()> {
         if self.tunables.consume_fuel && state.reachable() {
             self.fuel_after_op(op, builder);
+        }
+        Ok(())
+    }
+
+    fn before_unconditionally_trapping_memory_access(
+        &mut self,
+        builder: &mut FunctionBuilder,
+    ) -> WasmResult<()> {
+        if self.tunables.consume_fuel {
+            self.fuel_increment_var(builder);
+            self.fuel_save_from_var(builder);
         }
         Ok(())
     }

@@ -2,6 +2,7 @@ test run
 target aarch64
 target s390x
 target x86_64
+target riscv64
 
 function %i8_iconst_0() -> i8 {
 block0:
@@ -92,62 +93,62 @@ block0:
 
 
 
-function %b8_bconst_false() -> b8 {
+function %i8_iconst_false() -> i8 {
 block0:
-    v1 = bconst.b8 false
+    v1 = iconst.i8 0
     return v1
 }
-; run: %b8_bconst_false() == false
+; run: %i8_iconst_false() == 0
 
-function %b8_bconst_true() -> b8 {
+function %i8_iconst_true() -> i8 {
 block0:
-    v1 = bconst.b8 true
+    v1 = iconst.i8 1
     return v1
 }
-; run: %b8_bconst_true() == true
+; run: %i8_iconst_true() == 1
 
 
-function %b16_bconst_false() -> b16 {
+function %i16_iconst_false() -> i16 {
 block0:
-    v1 = bconst.b16 false
+    v1 = iconst.i16 0
     return v1
 }
-; run: %b16_bconst_false() == false
+; run: %i16_iconst_false() == 0
 
-function %b16_bconst_true() -> b16 {
+function %i16_iconst_true() -> i16 {
 block0:
-    v1 = bconst.b16 true
+    v1 = iconst.i16 1
     return v1
 }
-; run: %b16_bconst_true() == true
+; run: %i16_iconst_true() == 1
 
 
-function %b32_bconst_false() -> b32 {
+function %i32_iconst_false() -> i32 {
 block0:
-    v1 = bconst.b32 false
+    v1 = iconst.i32 0
     return v1
 }
-; run: %b32_bconst_false() == false
+; run: %i32_iconst_false() == 0
 
-function %b32_bconst_true() -> b32 {
+function %i32_iconst_true() -> i32 {
 block0:
-    v1 = bconst.b32 true
+    v1 = iconst.i32 1
     return v1
 }
-; run: %b32_bconst_true() == true
+; run: %i32_iconst_true() == 1
 
 
-function %b64_bconst_false() -> b64 {
+function %i64_iconst_false() -> i64 {
 block0:
-    v1 = bconst.b64 false
+    v1 = iconst.i64 0
     return v1
 }
-; run: %b64_bconst_false() == false
+; run: %i64_iconst_false() == 0
 
-; this verifies that returning b64 immediates does not result in a segmentation fault, see https://github.com/bytecodealliance/cranelift/issues/911
-function %b64_bconst_true() -> b64 {
+; this verifies that returning i64 immediates does not result in a segmentation fault, see https://github.com/bytecodealliance/cranelift/issues/911
+function %i64_iconst_true() -> i64 {
 block0:
-    v1 = bconst.b64 true
+    v1 = iconst.i64 1
     return v1
 }
-; run: %b64_bconst_true() == true
+; run: %i64_iconst_true() == 1

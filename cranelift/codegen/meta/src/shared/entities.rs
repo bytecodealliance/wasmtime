@@ -11,9 +11,17 @@ fn new(format_field_name: &'static str, rust_type: &'static str, doc: &'static s
 }
 
 pub(crate) struct EntityRefs {
-    /// A reference to a basic block in the same function.
-    /// This is primarliy used in control flow instructions.
-    pub(crate) block: OperandKind,
+    /// A reference to a basic block in the same function, with its arguments provided.
+    /// This is primarily used in control flow instructions.
+    pub(crate) block_call: OperandKind,
+
+    /// A reference to a basic block in the same function, with its arguments provided.
+    /// This is primarily used in control flow instructions.
+    pub(crate) block_then: OperandKind,
+
+    /// A reference to a basic block in the same function, with its arguments provided.
+    /// This is primarily used in control flow instructions.
+    pub(crate) block_else: OperandKind,
 
     /// A reference to a stack slot declared in the function preamble.
     pub(crate) stack_slot: OperandKind,
@@ -35,9 +43,6 @@ pub(crate) struct EntityRefs {
     /// A reference to a jump table declared in the function preamble.
     pub(crate) jump_table: OperandKind,
 
-    /// A reference to a heap declared in the function preamble.
-    pub(crate) heap: OperandKind,
-
     /// A reference to a table declared in the function preamble.
     pub(crate) table: OperandKind,
 
@@ -48,11 +53,24 @@ pub(crate) struct EntityRefs {
 impl EntityRefs {
     pub fn new() -> Self {
         Self {
-            block: new(
+            block_call: new(
                 "destination",
-                "ir::Block",
-                "a basic block in the same function.",
+                "ir::BlockCall",
+                "a basic block in the same function, with its arguments provided.",
             ),
+
+            block_then: new(
+                "block_then",
+                "ir::BlockCall",
+                "a basic block in the same function, with its arguments provided.",
+            ),
+
+            block_else: new(
+                "block_else",
+                "ir::BlockCall",
+                "a basic block in the same function, with its arguments provided.",
+            ),
+
             stack_slot: new("stack_slot", "ir::StackSlot", "A stack slot"),
 
             dynamic_stack_slot: new(
@@ -68,8 +86,6 @@ impl EntityRefs {
             func_ref: new("func_ref", "ir::FuncRef", "An external function."),
 
             jump_table: new("table", "ir::JumpTable", "A jump table."),
-
-            heap: new("heap", "ir::Heap", "A heap."),
 
             table: new("table", "ir::Table", "A table."),
 
