@@ -34,7 +34,7 @@ on:
 
 jobs:
   release_process:
-    if: github.repository == 'bytecodealliance/wasmtime'
+    if: "github.repository == 'bytecodealliance/wasmtime' || !github.event.schedule"
     name: Run the release process
     runs-on: ubuntu-latest
     steps:
