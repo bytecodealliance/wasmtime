@@ -45,7 +45,7 @@ pub type ValueListPool = entity::ListPool<Value>;
 /// The BlockCall::new function guarantees this layout by requiring a block argument that's written
 /// in as the first element of the EntityList. Any subsequent entries are always assumed to be real
 /// Values.
-#[derive(Debug, Clone, Copy, PartialEq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct BlockCall {
     /// The underlying storage for the BlockCall. The first element of the values EntityList is
