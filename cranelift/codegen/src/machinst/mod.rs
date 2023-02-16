@@ -354,49 +354,66 @@ impl<T: CompilePhase> CompiledCodeBase<T> {
 
         let relocs = self.buffer.relocs();
         let traps = self.buffer.traps();
-        let labels = self.bb_starts.as_slice();
 
-        let insns = cs.disasm_all(self.buffer.data(), 0x0).map_err(map_caperr)?;
-        for i in insns.iter() {
-            if let Some((n, off)) = labels
-                .iter()
-                .copied()
-                .enumerate()
-                .find(|(_, val)| *val == i.address() as u32)
-            {
-                writeln!(buf, "block{}: ; offset 0x{:x}", n, off)?;
+        // Normalize the block starts to include an initial block of offset 0.
+        let block_starts = if let Some(start) = self.bb_starts.first() {
+            let mut starts = Vec::new();
+            if *start != 0 {
+                starts.push(0);
             }
+            starts.extend_from_slice(&self.bb_starts);
+            starts
+        } else {
+            vec![0]
+        };
 
-            write!(buf, "  ")?;
+        // Iterate over block regions, to ensure that we always produce block labels
+        let end = self.buffer.data().len();
+        for (n, start) in block_starts.iter().enumerate() {
+            let start = *start as usize;
+            let end = if let Some(next) = block_starts.get(n + 1) {
+                *next as usize
+            } else {
+                end
+            };
 
-            let op_str = i.op_str().unwrap_or("");
-            if let Some(s) = i.mnemonic() {
-                write!(buf, "{}", s)?;
-                if !op_str.is_empty() {
-                    write!(buf, " ")?;
+            writeln!(buf, "block{}: ; offset 0x{:x}", n, start)?;
+
+            let insns = cs
+                .disasm_all(&self.buffer.data()[start..end], start as u64)
+                .map_err(map_caperr)?;
+            for i in insns.iter() {
+                write!(buf, "  ")?;
+
+                let op_str = i.op_str().unwrap_or("");
+                if let Some(s) = i.mnemonic() {
+                    write!(buf, "{}", s)?;
+                    if !op_str.is_empty() {
+                        write!(buf, " ")?;
+                    }
                 }
+
+                write!(buf, "{}", op_str)?;
+
+                let end = i.address() + i.bytes().len() as u64;
+                let contains = |off| i.address() <= off && off < end;
+
+                if let Some(reloc) = relocs.iter().find(|reloc| contains(reloc.offset as u64)) {
+                    write!(
+                        buf,
+                        " ; reloc_external {} {} {}",
+                        reloc.kind,
+                        reloc.name.display(params),
+                        reloc.addend,
+                    )?;
+                }
+
+                if let Some(trap) = traps.iter().find(|trap| contains(trap.offset as u64)) {
+                    write!(buf, " ; trap: {}", trap.code)?;
+                }
+
+                writeln!(buf)?;
             }
-
-            write!(buf, "{}", op_str)?;
-
-            let end = i.address() + i.bytes().len() as u64;
-            let contains = |off| i.address() <= off && off < end;
-
-            if let Some(reloc) = relocs.iter().find(|reloc| contains(reloc.offset as u64)) {
-                write!(
-                    buf,
-                    " ; reloc_external {} {} {}",
-                    reloc.kind,
-                    reloc.name.display(params),
-                    reloc.addend,
-                )?;
-            }
-
-            if let Some(trap) = traps.iter().find(|trap| contains(trap.offset as u64)) {
-                write!(buf, " ; trap: {}", trap.code)?;
-            }
-
-            writeln!(buf)?;
         }
 
         return Ok(buf);
