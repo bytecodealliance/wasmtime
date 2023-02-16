@@ -87,8 +87,8 @@ impl TargetIsa for X64 {
         let frame = Frame::new(&abi_sig, &mut body, &mut validator, &abi)?;
         // TODO Add in floating point bitmask
         let regalloc = RegAlloc::new(RegSet::new(ALL_GPR, 0), regs::scratch());
-        let codegen_context = CodeGenContext::new(&mut masm, stack, &frame);
-        let mut codegen = CodeGen::new::<abi::X64ABI>(codegen_context, abi_sig, regalloc);
+        let codegen_context = CodeGenContext::new(regalloc, stack, &frame);
+        let mut codegen = CodeGen::new::<abi::X64ABI>(&mut masm, codegen_context, abi_sig);
 
         codegen.emit(&mut body, validator)?;
 

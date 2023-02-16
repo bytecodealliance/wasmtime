@@ -62,42 +62,42 @@ where
 
     fn visit_i32_add(&mut self) {
         self.context
-            .i32_binop(&mut self.regalloc, &mut |masm: &mut M, dst, src, size| {
+            .i32_binop(self.masm, &mut |masm, dst, src, size| {
                 masm.add(dst, dst, src, size);
             });
     }
 
     fn visit_i64_add(&mut self) {
         self.context
-            .i64_binop(&mut self.regalloc, &mut |masm: &mut M, dst, src, size| {
+            .i64_binop(self.masm, &mut |masm, dst, src, size| {
                 masm.add(dst, dst, src, size);
             });
     }
 
     fn visit_i32_sub(&mut self) {
         self.context
-            .i32_binop(&mut self.regalloc, &mut |masm: &mut M, dst, src, size| {
+            .i32_binop(self.masm, &mut |masm, dst, src, size| {
                 masm.sub(dst, dst, src, size);
             });
     }
 
     fn visit_i64_sub(&mut self) {
         self.context
-            .i64_binop(&mut self.regalloc, &mut |masm: &mut M, dst, src, size| {
+            .i64_binop(self.masm, &mut |masm, dst, src, size| {
                 masm.sub(dst, dst, src, size);
             });
     }
 
     fn visit_i32_mul(&mut self) {
         self.context
-            .i32_binop(&mut self.regalloc, &mut |masm: &mut M, dst, src, size| {
+            .i32_binop(self.masm, &mut |masm, dst, src, size| {
                 masm.mul(dst, dst, src, size);
             });
     }
 
     fn visit_i64_mul(&mut self) {
         self.context
-            .i64_binop(&mut self.regalloc, &mut |masm: &mut M, dst, src, size| {
+            .i64_binop(self.masm, &mut |masm, dst, src, size| {
                 masm.mul(dst, dst, src, size);
             });
     }
@@ -124,10 +124,10 @@ where
             .get_local(index)
             .expect(&format!("vald local at slot = {}", index));
         let size: OperandSize = slot.ty.into();
-        let src = self.regalloc.pop_to_reg(context, size);
-        let addr = context.masm.local_address(&slot);
-        context.masm.store(RegImm::reg(src), addr, size);
-        self.regalloc.free_gpr(src);
+        let src = self.context.pop_to_reg(self.masm, size);
+        let addr = self.masm.local_address(&slot);
+        self.masm.store(RegImm::reg(src), addr, size);
+        self.context.regalloc.free_gpr(src);
     }
 
     wasmparser::for_each_operator!(def_unsupported);
