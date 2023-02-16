@@ -1333,11 +1333,11 @@
 
 ;; i32x4.replace_lane
 (rule (vec_insert_lane $I32X4 vec val idx)
-      (x64_pinsrd vec val idx (OperandSize.Size32)))
+      (x64_pinsrd vec val idx))
 
 ;; i64x2.replace_lane
 (rule (vec_insert_lane $I64X2 vec val idx)
-      (x64_pinsrd vec val idx (OperandSize.Size64)))
+      (x64_pinsrq vec val idx))
 
 ;; f32x4.replace_lane
 (rule (vec_insert_lane $F32X4 vec val idx)
@@ -2982,8 +2982,8 @@
 
 ;; Rules for `fcvt_low_from_sint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (fcvt_low_from_sint a @ (value_type ty)))
-      (x64_cvtdq2pd ty a))
+(rule (lower (fcvt_low_from_sint a))
+      (x64_cvtdq2pd a))
 
 ;; Rules for `fcvt_from_uint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
