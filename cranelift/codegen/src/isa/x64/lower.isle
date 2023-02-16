@@ -473,7 +473,7 @@
 (rule (lower (has_type ty @ $I8X16 (ishl src amt)))
       (let (
             ;; Mask the amount to ensure wrapping behaviour
-            (masked_amt Reg (x64_and $I64 amt (RegMemImm.Imm (shift_mask ty))))
+            (masked_amt RegMemImm (mask_xmm_shift ty amt))
             ;; Shift `src` using 16x8. Unfortunately, a 16x8 shift will only be
             ;; correct for half of the lanes; the others must be fixed up with
             ;; the mask below.
@@ -515,16 +515,13 @@
 ;; 16x8, 32x4, and 64x2 shifts can each use a single instruction, once the shift amount is masked.
 
 (rule (lower (has_type ty @ $I16X8 (ishl src amt)))
-      (let ((masked_amt Reg (x64_and $I64 amt (RegMemImm.Imm (shift_mask ty)))))
-        (x64_psllw src (mov_rmi_to_xmm masked_amt))))
+      (x64_psllw src (mov_rmi_to_xmm (mask_xmm_shift ty amt))))
 
 (rule (lower (has_type ty @ $I32X4 (ishl src amt)))
-      (let ((masked_amt Reg (x64_and $I64 amt (RegMemImm.Imm (shift_mask ty)))))
-        (x64_pslld src (mov_rmi_to_xmm masked_amt))))
+      (x64_pslld src (mov_rmi_to_xmm (mask_xmm_shift ty amt))))
 
 (rule (lower (has_type ty @ $I64X2 (ishl src amt)))
-      (let ((masked_amt Reg (x64_and $I64 amt (RegMemImm.Imm (shift_mask ty)))))
-        (x64_psllq src (mov_rmi_to_xmm masked_amt))))
+      (x64_psllq src (mov_rmi_to_xmm (mask_xmm_shift ty amt))))
 
 ;;;; Rules for `ushr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -580,7 +577,7 @@
 (rule (lower (has_type ty @ $I8X16 (ushr src amt)))
       (let (
             ;; Mask the amount to ensure wrapping behaviour
-            (masked_amt Reg (x64_and $I64 amt (RegMemImm.Imm (shift_mask ty))))
+            (masked_amt RegMemImm (mask_xmm_shift ty amt))
             ;; Shift `src` using 16x8. Unfortunately, a 16x8 shift will only be
             ;; correct for half of the lanes; the others must be fixed up with
             ;; the mask below.
@@ -625,16 +622,19 @@
 ;; 16x8, 32x4, and 64x2 shifts can each use a single instruction, once the shift amount is masked.
 
 (rule (lower (has_type ty @ $I16X8 (ushr src amt)))
-      (let ((masked_amt Reg (x64_and $I64 amt (RegMemImm.Imm (shift_mask ty)))))
-        (x64_psrlw src (mov_rmi_to_xmm masked_amt))))
+      (x64_psrlw src (mov_rmi_to_xmm (mask_xmm_shift ty amt))))
 
 (rule (lower (has_type ty @ $I32X4 (ushr src amt)))
-      (let ((masked_amt Reg (x64_and $I64 amt (RegMemImm.Imm (shift_mask ty)))))
-        (x64_psrld src (mov_rmi_to_xmm masked_amt))))
+      (x64_psrld src (mov_rmi_to_xmm (mask_xmm_shift ty amt))))
 
 (rule (lower (has_type ty @ $I64X2 (ushr src amt)))
-      (let ((masked_amt Reg (x64_and $I64 amt (RegMemImm.Imm (shift_mask ty)))))
-        (x64_psrlq src (mov_rmi_to_xmm masked_amt))))
+      (x64_psrlq src (mov_rmi_to_xmm (mask_xmm_shift ty amt))))
+
+(decl mask_xmm_shift (Type Value) RegMemImm)
+(rule (mask_xmm_shift ty amt)
+      (gpr_to_reg (x64_and $I64 amt (RegMemImm.Imm (shift_mask ty)))))
+(rule 1 (mask_xmm_shift ty (iconst n))
+      (RegMemImm.Imm (shift_amount_masked ty n)))
 
 ;;;; Rules for `sshr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -701,7 +701,7 @@
 (rule (lower (has_type ty @ $I8X16 (sshr src amt @ (value_type amt_ty))))
       (let ((src_ Xmm (put_in_xmm src))
             ;; Mask the amount to ensure wrapping behaviour
-            (masked_amt Reg (x64_and $I64 amt (RegMemImm.Imm (shift_mask ty))))
+            (masked_amt RegMemImm (mask_xmm_shift ty amt))
             ;; In order for `packsswb` later to only use the high byte of each
             ;; 16x8 lane, we shift right an extra 8 bits, relying on `psraw` to
             ;; fill in the upper bits appropriately.
@@ -728,12 +728,10 @@
 ;; that if the shift amount is in a register, it is in an XMM register.
 
 (rule (lower (has_type ty @ $I16X8 (sshr src amt)))
-      (let ((masked_amt Reg (x64_and $I64 amt (RegMemImm.Imm (shift_mask ty)))))
-        (x64_psraw src (mov_rmi_to_xmm masked_amt))))
+      (x64_psraw src (mov_rmi_to_xmm (mask_xmm_shift ty amt))))
 
 (rule (lower (has_type ty @ $I32X4 (sshr src amt)))
-      (let ((masked_amt Reg (x64_and $I64 amt (RegMemImm.Imm (shift_mask ty)))))
-        (x64_psrad src (mov_rmi_to_xmm masked_amt))))
+      (x64_psrad src (mov_rmi_to_xmm (mask_xmm_shift ty amt))))
 
 ;; The `sshr.i64x2` CLIF instruction has no single x86 instruction in the older
 ;; feature sets. Newer ones like AVX512VL + AVX512F include `vpsraq`, a 128-bit
