@@ -155,9 +155,17 @@ fn align_to(ptr: usize, align: usize) -> usize {
     (ptr + (align - 1)) & !(align - 1)
 }
 
+// Invariant: buffer not-null and arena is-some are never true at the same
+// time. We did not use an enum to make this invalid behavior unrepresentable
+// because we can't use RefCell to borrow() the variants of the enum - only
+// Cell provides mutability without pulling in panic machinery - so it would
+// make the accessors a lot more awkward to write.
 struct ImportAlloc {
+    // When not-null, allocator should use this buffer/len pair at most once
+    // to satisfy allocations.
     buffer: Cell<*mut u8>,
     len: Cell<usize>,
+    // When not-empty, allocator should use this arena to satisfy allocations.
     arena: Cell<Option<&'static BumpArena>>,
 }
 
@@ -2218,16 +2226,19 @@ struct State {
     ///
     /// This is used for the cabi_export_realloc to allocate data passed to the
     /// `command` entrypoint. Allocations in this arena are safe to use for
-    /// the lifetime of the State struct.
+    /// the lifetime of the State struct. It may also be used for import allocations
+    /// which need to be long-lived, by using `import_alloc.with_arena`.
     long_lived_arena: BumpArena,
 
     /// Arguments passed to the `command` entrypoint
     args: Option<&'static [WasmStr]>,
 
-    /// Environment variables
+    /// Environment variables. Initialized lazily. Access with `State::get_environment`
+    /// to take care of initialization.
     env_vars: Cell<Option<&'static [StrTuple]>>,
 
-    /// Preopened directories
+    /// Preopened directories. Initialized lazily. Access with `State::get_preopens`
+    /// to take care of initialization.
     preopens: Cell<Option<&'static [Preopen]>>,
 
     /// Cache for the `fd_readdir` call for a final `wasi::Dirent` plus path
@@ -2627,11 +2638,13 @@ impl State {
                     get_preopens_import(&mut list as *mut _)
                 });
             let preopens: &'static [Preopen] = unsafe {
-                /* allocation comes from long lived arena, so it is safe to
-                 * cast this to a &'static slice: */
+                // allocation comes from long lived arena, so it is safe to
+                // cast this to a &'static slice:
                 std::slice::from_raw_parts(list.base, list.len)
             };
             for preopen in preopens {
+                // Expectation is that the descriptor index is initialized with
+                // stdio (0,1,2) and no others, so that preopens are 3..
                 self.push_desc(Descriptor::Streams(Streams {
                     input: Cell::new(None),
                     output: Cell::new(None),
