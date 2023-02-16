@@ -361,22 +361,18 @@ impl<T: CompilePhase> CompiledCodeBase<T> {
             block_starts.push(0);
         }
         block_starts.extend_from_slice(&self.bb_starts);
+        block_starts.push(self.buffer.data().len() as u32);
 
         // Iterate over block regions, to ensure that we always produce block labels
-        let end = self.buffer.data().len();
-        for (n, start) in block_starts.iter().enumerate() {
-            let start = *start as usize;
-            let end = if let Some(next) = block_starts.get(n + 1) {
-                *next as usize
-            } else {
-                end
-            };
-
+        for (n, (&start, &end)) in block_starts
+            .iter()
+            .zip(block_starts.iter().skip(1))
+            .enumerate()
+        {
             writeln!(buf, "block{}: ; offset 0x{:x}", n, start)?;
 
-            let insns = cs
-                .disasm_all(&self.buffer.data()[start..end], start as u64)
-                .map_err(map_caperr)?;
+            let buffer = &self.buffer.data()[start as usize..end as usize];
+            let insns = cs.disasm_all(buffer, start as u64).map_err(map_caperr)?;
             for i in insns.iter() {
                 write!(buf, "  ")?;
 
