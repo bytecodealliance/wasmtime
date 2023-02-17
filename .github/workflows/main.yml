@@ -679,6 +679,7 @@ jobs:
       - bench
       - meta_deterministic_check
       - verify-publish
+      - determine
     if: always()
     steps:
     - name: Dump needs context
