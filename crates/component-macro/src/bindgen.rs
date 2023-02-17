@@ -53,7 +53,6 @@ impl Parse for Config {
             let content;
             syn::braced!(content in input);
             let fields = Punctuated::<Opt, Token![,]>::parse_terminated(&content)?;
-            let mut world = None;
             for field in fields.into_pairs() {
                 match field.into_value() {
                     Opt::Path(s) => {
