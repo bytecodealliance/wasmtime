@@ -349,8 +349,11 @@ where
     // Interpret a Cranelift instruction.
     Ok(match inst.opcode() {
         Opcode::Jump => {
-            let block = inst.branch_destination()[0];
-            continue_at(block)?
+            if let InstructionData::Jump { destination, .. } = inst {
+                continue_at(destination)?
+            } else {
+                unreachable!()
+            }
         }
         Opcode::Brif => {
             if let InstructionData::Brif {
@@ -383,7 +386,7 @@ where
                     .copied()
                     .unwrap_or(jt_data.default_block());
 
-                ControlFlow::ContinueAt(jump_target, SmallVec::new())
+                continue_at(jump_target)?
             } else {
                 unreachable!()
             }

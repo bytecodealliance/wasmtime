@@ -3,7 +3,8 @@
 //! Jump tables are declared in the preamble and assigned an `ir::entities::JumpTable` reference.
 //! The actual table of destinations is stored in a `JumpTableData` struct defined in this module.
 
-use crate::ir::entities::Block;
+use crate::ir::instructions::ValueListPool;
+use crate::ir::BlockCall;
 use alloc::vec::Vec;
 use core::fmt::{self, Display, Formatter};
 use core::slice::{Iter, IterMut};
@@ -23,57 +24,57 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct JumpTableData {
     // Table entries.
-    table: Vec<Block>,
+    table: Vec<BlockCall>,
 }
 
 impl JumpTableData {
     /// Create a new jump table with the provided blocks
-    pub fn new(def: Block, table: &[Block]) -> Self {
+    pub fn new(def: BlockCall, table: &[BlockCall]) -> Self {
         Self {
             table: std::iter::once(def).chain(table.iter().copied()).collect(),
         }
     }
 
     /// Fetch the default block for this jump table.
-    pub fn default_block(&self) -> Block {
+    pub fn default_block(&self) -> BlockCall {
         *self.table.first().unwrap()
     }
 
     /// Mutable access to the default block of this jump table.
-    pub fn default_block_mut(&mut self) -> &mut Block {
+    pub fn default_block_mut(&mut self) -> &mut BlockCall {
         self.table.first_mut().unwrap()
     }
 
     /// The jump table and default block as a single slice. The default block will always be first.
-    pub fn all_branches(&self) -> &[Block] {
+    pub fn all_branches(&self) -> &[BlockCall] {
         self.table.as_slice()
     }
 
     /// The jump table and default block as a single mutable slice. The default block will always
     /// be first.
-    pub fn all_branches_mut(&mut self) -> &mut [Block] {
+    pub fn all_branches_mut(&mut self) -> &mut [BlockCall] {
         self.table.as_mut_slice()
     }
 
     /// Access the jump table as a slice. This excludes the default block.
-    pub fn as_slice(&self) -> &[Block] {
+    pub fn as_slice(&self) -> &[BlockCall] {
         &self.table.as_slice()[1..]
     }
 
     /// Access the jump table as a mutable slice. This excludes the default block.
-    pub fn as_mut_slice(&mut self) -> &mut [Block] {
+    pub fn as_mut_slice(&mut self) -> &mut [BlockCall] {
         &mut self.table.as_mut_slice()[1..]
     }
 
     /// Returns an iterator to the jump table, excluding the default block.
     #[deprecated(since = "7.0.0", note = "please use `.as_slice()` instead")]
-    pub fn iter(&self) -> Iter<Block> {
+    pub fn iter(&self) -> Iter<BlockCall> {
         self.as_slice().iter()
     }
 
     /// Returns an iterator that allows modifying each value, excluding the default block.
     #[deprecated(since = "7.0.0", note = "please use `.as_mut_slice()` instead")]
-    pub fn iter_mut(&mut self) -> IterMut<Block> {
+    pub fn iter_mut(&mut self) -> IterMut<BlockCall> {
         self.as_mut_slice().iter_mut()
     }
 
@@ -81,15 +82,26 @@ impl JumpTableData {
     pub fn clear(&mut self) {
         self.table.drain(1..);
     }
+
+    /// Return a value that can display the contents of this jump table.
+    pub fn display<'a>(&'a self, pool: &'a ValueListPool) -> DisplayJumpTable<'a> {
+        DisplayJumpTable { jt: self, pool }
+    }
 }
 
-impl Display for JumpTableData {
-    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
-        write!(fmt, "{}, [", self.default_block())?;
-        if let Some((first, rest)) = self.as_slice().split_first() {
-            write!(fmt, "{}", first)?;
+/// A wrapper for the context required to display a [JumpTableData].
+pub struct DisplayJumpTable<'a> {
+    jt: &'a JumpTableData,
+    pool: &'a ValueListPool,
+}
+
+impl<'a> Display for DisplayJumpTable<'a> {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> fmt::Result {
+        write!(fmt, "{}, [", self.jt.default_block().display(self.pool))?;
+        if let Some((first, rest)) = self.jt.as_slice().split_first() {
+            write!(fmt, "{}", first.display(self.pool))?;
             for block in rest {
-                write!(fmt, ", {}", block)?;
+                write!(fmt, ", {}", block.display(self.pool))?;
             }
         }
         write!(fmt, "]")
@@ -100,12 +112,14 @@ impl Display for JumpTableData {
 mod tests {
     use super::JumpTableData;
     use crate::entity::EntityRef;
-    use crate::ir::Block;
-    use alloc::string::ToString;
+    use crate::ir::instructions::ValueListPool;
+    use crate::ir::{Block, BlockCall, Value};
+    use std::string::ToString;
 
     #[test]
     fn empty() {
-        let def = Block::new(0);
+        let mut pool = ValueListPool::default();
+        let def = BlockCall::new(Block::new(0), &[], &mut pool);
 
         let jt = JumpTableData::new(def, &[]);
 
@@ -114,7 +128,7 @@ mod tests {
         assert_eq!(jt.as_slice().get(0), None);
         assert_eq!(jt.as_slice().get(10), None);
 
-        assert_eq!(jt.to_string(), "block0, []");
+        assert_eq!(jt.display(&pool).to_string(), "block0, []");
 
         assert_eq!(jt.all_branches(), [def]);
         assert_eq!(jt.as_slice(), []);
@@ -122,16 +136,33 @@ mod tests {
 
     #[test]
     fn insert() {
-        let def = Block::new(0);
+        let mut pool = ValueListPool::default();
+
+        let v0 = Value::new(0);
+        let v1 = Value::new(1);
+
+        let e0 = Block::new(0);
         let e1 = Block::new(1);
         let e2 = Block::new(2);
 
-        let jt = JumpTableData::new(def, &[e1, e2, e1]);
+        let def = BlockCall::new(e0, &[], &mut pool);
+        let b1 = BlockCall::new(e1, &[v0], &mut pool);
+        let b2 = BlockCall::new(e2, &[], &mut pool);
+        let b3 = BlockCall::new(e1, &[v1], &mut pool);
+
+        let jt = JumpTableData::new(def, &[b1, b2, b3]);
 
         assert_eq!(jt.default_block(), def);
-        assert_eq!(jt.to_string(), "block0, [block1, block2, block1]");
+        assert_eq!(
+            jt.display(&pool).to_string(),
+            "block0, [block1(v0), block2, block1(v1)]"
+        );
 
-        assert_eq!(jt.all_branches(), [def, e1, e2, e1]);
-        assert_eq!(jt.as_slice(), [e1, e2, e1]);
+        assert_eq!(jt.all_branches(), [def, b1, b2, b3]);
+        assert_eq!(jt.as_slice(), [b1, b2, b3]);
+
+        assert_eq!(jt.as_slice()[0].args_slice(&pool), [v0]);
+        assert_eq!(jt.as_slice()[1].args_slice(&pool), []);
+        assert_eq!(jt.as_slice()[2].args_slice(&pool), [v1]);
     }
 }

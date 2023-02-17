@@ -1,10 +1,26 @@
 name: CI
 on:
-  push:
-    branches: [main]
-    tags-ignore: [dev]
+  # Run CI for PRs to `main` and to release branches.
+  #
+  # Note that PRs to `main` will run a subset of tests and PRs to the
+  # `release-*` branches will run full CI.
   pull_request:
-    branches: ['main', 'release-*']
+    branches:
+    - main
+    - 'release-*'
+
+  push:
+    branches:
+    # This is an alternative to using `merge_group:` which doesn't work at the
+    # time of this writing.
+    - 'gh-readonly-queue/main/*'
+    # Right now merge queues can't be used with wildcards in branch protections
+    # so full CI runs both on PRs to release branches as well as merges to
+    # release branches. Note that the merge to a release branch may produce a
+    # tag at the end of CI if successful and the tag will trigger the artifact
+    # uploads as well as publication to crates.io.
+    - 'release-*'
+
 defaults:
   run:
     shell: bash
@@ -28,10 +44,18 @@ jobs:
     - run: rustup component add rustfmt
     - run: cargo fmt --all -- --check
 
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+
   # Lint dependency graph for security advisories, duplicate versions, and
   # incompatible licences
   cargo_deny:
     name: Cargo deny
+    needs: determine
+    if: needs.determine.outputs.audit
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -45,9 +69,17 @@ jobs:
         echo `pwd` >> $GITHUB_PATH
     - run: cargo deny check bans licenses
 
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+
   # Ensure dependencies are vetted. See https://mozilla.github.io/cargo-vet/
   cargo_vet:
     name: Cargo vet
+    needs: determine
+    if: needs.determine.outputs.audit
     runs-on: ubuntu-latest
     env:
       CARGO_VET_VERSION: 0.3.1
@@ -64,7 +96,79 @@ jobs:
     - run: cargo install --root ${{ runner.tool_cache }}/cargo-vet --version ${{ env.CARGO_VET_VERSION }} cargo-vet
     - run: cargo vet --locked
 
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+
+  # This job is a dependency of many of the jobs below. This calculates what's
+  # actually being run for this workflow. For example:
+  #
+  # * Pushes to branches, which is currently both pushes to merge queue branches
+  #   as well as release branches, perform full CI.
+  # * PRs to release branches (not `main`) run full CI.
+  # * PRs to `main` will only run a few smoke tests above plus some elements of
+  #   the test matrix. The test matrix here is determined dynamically by the
+  #   `./ci/build-test-matrix.js` script given the commits that happened and
+  #   the files modified.
+  determine:
+    name: Determine CI jobs to run
+    runs-on: ubuntu-latest
+    outputs:
+      run-full: ${{ steps.calculate.outputs.run-full }}
+      test-matrix: ${{ steps.calculate.outputs.test-matrix }}
+      test-capi: ${{ steps.calculate.outputs.test-capi }}
+      build-fuzz: ${{ steps.calculate.outputs.build-fuzz }}
+      audit: ${{ steps.calculate.outputs.audit }}
+    steps:
+    - uses: actions/checkout@v3
+    - id: calculate
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        touch commits.log names.log
+        # Note that CI doesn't run on pushes to `main`, only pushes to merge
+        # queue branches and release branches, so this only runs full CI in
+        # those locations.
+        if [ "${{ github.event_name }}" != "pull_request" ]; then
+          run_full=true
+        else
+          pr=${{ github.event.number }}
+          gh pr view $pr --json commits | tee commits.log
+          gh pr diff $pr --name-only | tee names.log
+          if [ "${{ github.base_ref }}" != "main" ]; then
+            run_full=true
+          elif grep -q 'prtest:full' commits.log; then
+            run_full=true
+          fi
+          if grep -q crates.c-api names.log; then
+            echo test-capi=true >> $GITHUB_OUTPUT
+          fi
+          if grep -q fuzz names.log; then
+            echo build-fuzz=true >> $GITHUB_OUTPUT
+          fi
+          if grep -q Cargo.lock names.log; then
+            echo audit=true >> $GITHUB_OUTPUT
+          fi
+        fi
+        matrix="$(node ./ci/build-test-matrix.js ./commits.log ./names.log $run_full)"
+        echo "test-matrix={\"include\":$(echo $matrix)}" >> $GITHUB_OUTPUT
+        echo "$matrix"
+
+        if [ "$run_full" = "true" ]; then
+            echo run-full=true >> $GITHUB_OUTPUT
+            echo test-capi=true >> $GITHUB_OUTPUT
+            echo build-fuzz=true >> $GITHUB_OUTPUT
+            echo audit=true >> $GITHUB_OUTPUT
+        fi
+
+  # Build all documentation of Wasmtime, including the C API documentation,
+  # mdbook documentation, etc. This produces a `gh-pages` artifact which is what
+  # gets uploaded to the `gh-pages` branch later on.
   doc:
+    needs: determine
+    if: needs.determine.outputs.run-full
     name: Doc build
     runs-on: ubuntu-latest
     env:
@@ -117,22 +221,18 @@ jobs:
         name: gh-pages
         path: gh-pages.tar.gz
 
-    # If this is a push to the main branch push to the `gh-pages` using a
-    # deploy key. Note that a deploy key is necessary for now because otherwise
-    # using the default token for github actions doesn't actually trigger a page
-    # rebuild.
-    - name: Push to gh-pages
-      run: curl -LsSf https://git.io/fhJ8n | rustc - && (cd gh-pages && ../rust_out)
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
       env:
-        GITHUB_DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
-        BUILD_REPOSITORY_ID: ${{ github.repository }}
-        BUILD_SOURCEVERSION: ${{ github.sha }}
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'bytecodealliance/wasmtime'
+        GH_TOKEN: ${{ github.token }}
 
-  # Quick checks of various feature combinations and whether things
+  # Checks of various feature combinations and whether things
   # compile. The goal here isn't to run tests, mostly just serve as a
   # double-check that Rust code compiles and is likely to work everywhere else.
   checks:
+    needs: determine
+    if: needs.determine.outputs.run-full
     name: Check
     runs-on: ubuntu-latest
     env:
@@ -178,7 +278,6 @@ jobs:
     # TODO: We aren't building with default features since the `ittapi` crate fails to compile on freebsd.
     - run: rustup target add x86_64-unknown-freebsd
     - run: cargo check -p wasmtime --no-default-features --features cranelift,wat,async,cache --target x86_64-unknown-freebsd
-
     # Check whether `wasmtime` cross-compiles to aarch64-linux-android
     - run: rustup target add aarch64-linux-android
     - name: Setup Android SDK
@@ -191,10 +290,18 @@ jobs:
     - run: cargo install --root ${{ runner.tool_cache }}/cargo-ndk --version ${{ env.CARGO_NDK_VERSION }} cargo-ndk
     - run: cargo ndk -t arm64-v8a check -p wasmtime
 
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+
   # Check whether `wasmtime` cross-compiles to aarch64-pc-windows-msvc
   # We don't build nor test it because it lacks trap handling.
   # Tracking issue: https://github.com/bytecodealliance/wasmtime/issues/4992
   checks_winarm64:
+    needs: determine
+    if: needs.determine.outputs.run-full
     name: Check Windows ARM64
     runs-on: windows-latest
     steps:
@@ -205,7 +312,16 @@ jobs:
     - run: rustup target add aarch64-pc-windows-msvc
     - run: cargo check -p wasmtime --target aarch64-pc-windows-msvc
 
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+
+  # Verify all fuzz targets compile successfully
   fuzz_targets:
+    needs: determine
+    if: needs.determine.outputs.build-fuzz
     name: Fuzz Targets
     runs-on: ubuntu-latest
     steps:
@@ -227,40 +343,25 @@ jobs:
     # Check that the ISLE fuzz targets build too.
     - run: cargo fuzz build --dev -s none --fuzz-dir ./cranelift/isle/fuzz
 
-  # Perform all tests (debug mode) for `wasmtime`. This runs stable/beta/nightly
-  # channels of Rust as well as macOS/Linux/Windows.
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+
+  # Perform all tests (debug mode) for `wasmtime`.
+  #
+  # Note that the full matrix for what may run here is defined within
+  # `./ci/build-test-matrix.js` and the execution of the `determine` step will
+  # calculate whether the tests are actually run as part of PRs and such.
   test:
-    name: Test
+    needs: determine
+    name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     env:
       QEMU_BUILD_VERSION: 6.1.0
     strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-          # defaults to x86_64-apple-darwin
-          - os: macos-latest
-          - os: windows-latest
-          - os: windows-latest
-            target: x86_64-pc-windows-gnu
-          - os: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-            gcc_package: gcc-aarch64-linux-gnu
-            gcc: aarch64-linux-gnu-gcc
-            qemu: qemu-aarch64 -L /usr/aarch64-linux-gnu
-            qemu_target: aarch64-linux-user
-          - os: ubuntu-latest
-            target: s390x-unknown-linux-gnu
-            gcc_package: gcc-s390x-linux-gnu
-            gcc: s390x-linux-gnu-gcc
-            qemu: qemu-s390x -L /usr/s390x-linux-gnu
-            qemu_target: s390x-linux-user
-          - os: ubuntu-latest
-            target: riscv64gc-unknown-linux-gnu
-            gcc_package: gcc-riscv64-linux-gnu
-            gcc: riscv64-linux-gnu-gcc
-            qemu: qemu-riscv64 -L /usr/riscv64-linux-gnu
-            qemu_target: riscv64-linux-user
+      matrix: ${{ fromJson(needs.determine.outputs.test-matrix) }}
     steps:
     - uses: actions/checkout@v3
       with:
@@ -321,21 +422,21 @@ jobs:
         touch ${{ runner.tool_cache }}/qemu/built
       if: matrix.gcc != ''
 
-    # Prepare tests in CMake
+    # Build and test the C API with example C programs along with the example
+    # Rust programs. Note that this only executes if the `determine` step told
+    # us to test the capi which is off-by-default for PRs.
     - run: cmake -Sexamples -Bexamples/build -DBUILD_SHARED_LIBS=OFF
-      if: matrix.target == ''
-    # Build tests
+      if: matrix.target == '' && needs.determine.outputs.test-capi
     - run: cmake --build examples/build --config Debug
-      if: matrix.target == ''
-    # Run tests
+      if: matrix.target == '' && needs.determine.outputs.test-capi
     - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target RUN_TESTS
       env:
         RUST_BACKTRACE: 1
-      if: matrix.target == '' && matrix.os == 'windows-latest'
+      if: matrix.target == '' && matrix.os == 'windows-latest' && needs.determine.outputs.test-capi
     - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target test
       env:
         RUST_BACKTRACE: 1
-      if: matrix.target == '' && matrix.os != 'windows-latest'
+      if: matrix.target == '' && matrix.os != 'windows-latest' && needs.determine.outputs.test-capi
 
     # Build and test all features
     - run: ./ci/run-tests.sh --locked
@@ -346,12 +447,20 @@ jobs:
     - run: |
         sudo apt-get update && sudo apt-get install -y gdb lldb llvm
         cargo test test_debug_dwarf -- --ignored --test-threads 1
-      if: matrix.os == 'ubuntu-latest' && matrix.target == ''
+      if: matrix.os == 'ubuntu-latest' && matrix.target == ''&& needs.determine.outputs.run-full
       env:
         RUST_BACKTRACE: 1
 
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+
   # Build and test the wasi-nn module.
   test_wasi_nn:
+    needs: determine
+    if: needs.determine.outputs.run-full
     name: Test wasi-nn module
     runs-on: ubuntu-20.04 # TODO: remove pin when fixed (#5408)
     steps:
@@ -365,8 +474,16 @@ jobs:
         env:
           RUST_BACKTRACE: 1
 
+      # common logic to cancel the entire run if this job fails
+      - run: gh run cancel ${{ github.run_id }}
+        if: failure() && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+
   # Build and test the wasi-crypto module.
   test_wasi_crypto:
+    needs: determine
+    if: needs.determine.outputs.run-full
     name: Test wasi-crypto module
     runs-on: ubuntu-latest
     steps:
@@ -379,7 +496,15 @@ jobs:
       env:
         RUST_BACKTRACE: 1
 
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+
   bench:
+    needs: determine
+    if: needs.determine.outputs.run-full
     name: Run benchmarks
     runs-on: ubuntu-latest
     steps:
@@ -390,8 +515,16 @@ jobs:
     - run: rustup target add wasm32-wasi
     - run: cargo test --benches --release
 
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+
   # Verify that cranelift's code generation is deterministic
-  meta_determinist_check:
+  meta_deterministic_check:
+    needs: determine
+    if: needs.determine.outputs.run-full
     name: Meta deterministic check
     runs-on: ubuntu-latest
     steps:
@@ -402,8 +535,15 @@ jobs:
     - run: cd cranelift/codegen && cargo build --features all-arch
     - run: ci/ensure_deterministic_build.sh
 
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+
   verify-publish:
-    if: github.repository == 'bytecodealliance/wasmtime'
+    needs: determine
+    if: github.repository == 'bytecodealliance/wasmtime' && needs.determine.outputs.run-full
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -420,3 +560,195 @@ jobs:
     - run: ./publish verify
     # Make sure we can bump version numbers for the next release
     - run: ./publish bump
+
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+
+  # Perform release builds of `wasmtime` and `libwasmtime.so`. Builds a variety
+  # of platforms and architectures and then uploads the release artifacts to
+  # this workflow run's list of artifacts.
+  build:
+    needs: determine
+    if: needs.determine.outputs.run-full
+    name: Release build for ${{ matrix.build }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+        - build: x86_64-linux
+          os: ubuntu-latest
+        - build: x86_64-macos
+          os: macos-latest
+        - build: aarch64-macos
+          os: macos-latest
+          target: aarch64-apple-darwin
+        - build: x86_64-windows
+          os: windows-latest
+        - build: x86_64-mingw
+          os: windows-latest
+          target: x86_64-pc-windows-gnu
+        - build: aarch64-linux
+          os: ubuntu-latest
+          target: aarch64-unknown-linux-gnu
+        - build: s390x-linux
+          os: ubuntu-latest
+          target: s390x-unknown-linux-gnu
+        - build: riscv64gc-linux
+          os: ubuntu-latest
+          target: riscv64gc-unknown-linux-gnu
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+      # Note that the usage of this nightly toolchain is temporary until it
+      # rides to stable. After this nightly version becomes stable (Rust 1.69.0)
+      # then this should switch back to using stable by deleting the `with` and
+      # `toolchain` options.
+      with:
+        toolchain: nightly-2023-01-31
+    # On one builder produce the source tarball since there's no need to produce
+    # it everywhere
+    - run: ./ci/build-src-tarball.sh
+      if: matrix.build == 'x86_64-linux'
+    - uses: ./.github/actions/binary-compatible-builds
+      with:
+        name: ${{ matrix.build }}
+    - run: |
+        echo CARGO_BUILD_TARGET=${{ matrix.target }} >> $GITHUB_ENV
+        rustup target add ${{ matrix.target }}
+      if: matrix.target != ''
+
+    # Build `wasmtime` and executables. Note that we include `all-arch` so our
+    # release artifacts can be used to compile `.cwasm`s for other targets.
+    - run: $CENTOS cargo build --release --bin wasmtime --features all-arch
+
+    # Build `libwasmtime.so`
+    - run: $CENTOS cargo build --release --manifest-path crates/c-api/Cargo.toml
+
+    # Assemble release artifats appropriate for this platform, then upload them
+    # unconditionally to this workflow's files so we have a copy of them.
+    - run: ./ci/build-tarballs.sh "${{ matrix.build }}" "${{ matrix.target }}"
+    - uses: actions/upload-artifact@v3
+      with:
+        name: bins-${{ matrix.build }}
+        path: dist
+
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+
+  # This is a "join node" which depends on all prior workflows. The merge queue,
+  # for example, gates on this to ensure that everything has executed
+  # successfully.
+  #
+  # Note that this is required currently for odd reasons with github. Notably
+  # the set of checks to enter the merge queue and leave the merge queue must
+  # be the same which means that the "build" step for example shows as skipped
+  # for PRs but expands to many different steps for merge-queue-based PRs. That
+  # means that for that step there's no single name to gate on, so it's required
+  # to have a "join" node here which joins everything.
+  #
+  # Note that this currently always runs to always report a status, even on
+  # cancellation and even if dependency steps fail. Each dependency tries to
+  # cancel the whole run if it fails, so if a test matrix entry fails, for
+  # example, it cancels the build matrix entries too. This step then tries to
+  # fail on cancellation to ensure that the dependency failures are propagated
+  # correctly.
+  ci-status:
+    name: Record the result of testing and building steps
+    runs-on: ubuntu-latest
+    needs:
+      - test
+      - build
+      - rustfmt
+      - cargo_deny
+      - cargo_vet
+      - doc
+      - checks
+      - checks_winarm64
+      - fuzz_targets
+      - test_wasi_nn
+      - test_wasi_crypto
+      - bench
+      - meta_deterministic_check
+      - verify-publish
+      - determine
+    if: always()
+    steps:
+    - name: Dump needs context
+      env:
+        CONTEXT: ${{ toJson(needs) }}
+      run: |
+        echo -e "\033[33;1;4mDump context\033[0m"
+        echo -e "$CONTEXT\n"
+    - name: Successful test and build
+      if: ${{ !(contains(needs.*.result, 'failure')) }}
+      run: exit 0
+    - name: Failing test and build
+      if: ${{ contains(needs.*.result, 'failure') }}
+      run: exit 1
+    - name: Report failure on cancellation
+      if: ${{ contains(needs.*.result, 'cancelled') || cancelled() }}
+      run: exit 1
+
+  # The purpose of this jobs is to watch for changes on the `release-*`
+  # branches of this repository and look for the term
+  # "automatically-tag-and-release-this-commit" within merged PRs/commits. Once
+  # that term is found the current version of `Cargo.toml`, the `wasmtime-cli`
+  # Cargo.toml, is created as a tag and the tag is pushed to the repo.
+  # Currently the tag is created through the GitHub API with an access token to
+  # ensure that CI is further triggered for the tag itself which performs the
+  # full release process.
+  #
+  # Note that this depends on the `ci-status` step above which is the "join"
+  # point of this workflow for when everything succeeds. the purpose of that is
+  # so that the tag is only created after the aftifacts have been uploaded for
+  # this workflow as the `publish-artifacts.yml` workflow will download these
+  # artifacts and then publish them to the tag.
+  push-tag:
+    runs-on: ubuntu-latest
+    needs: ci-status
+    if: |
+      always()
+      && needs.ci-status.result == 'success'
+      && github.event_name == 'push'
+      && startsWith(github.ref, 'refs/heads/release-')
+      && github.repository == 'bytecodealliance/wasmtime'
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+        fetch-depth: 0
+    - name: Test if tag is needed
+      run: |
+        git log ${{ github.event.before }}...${{ github.event.after }} | tee main.log
+        version=$(grep '^version =' Cargo.toml | head -n 1 | sed 's/.*"\(.*\)"/\1/')
+        echo "version: $version"
+        echo "version=$version" >> $GITHUB_OUTPUT
+        echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+        if grep -q "automatically-tag-and-release-this-commit" main.log; then
+          echo push-tag
+          echo "push_tag=yes" >> $GITHUB_OUTPUT
+        else
+          echo no-push-tag
+          echo "push_tag=no" >> $GITHUB_OUTPUT
+        fi
+      id: tag
+    - name: Push the tag
+      run: |
+        git_refs_url=$(jq .repository.git_refs_url $GITHUB_EVENT_PATH | tr -d '"' | sed 's/{\/sha}//g')
+        curl -iX POST $git_refs_url \
+          -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+          -d @- << EOF
+        {
+          "ref": "refs/tags/v${{ steps.tag.outputs.version }}",
+          "sha": "${{ steps.tag.outputs.sha }}"
+        }
+        EOF
+      if: steps.tag.outputs.push_tag == 'yes'

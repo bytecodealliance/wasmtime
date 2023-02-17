@@ -10,8 +10,8 @@ use crate::fx::{FxHashMap, FxHashSet};
 use crate::inst_predicates::{has_lowering_side_effect, is_constant_64bit};
 use crate::ir::{
     ArgumentPurpose, Block, Constant, ConstantData, DataFlowGraph, ExternalName, Function,
-    GlobalValue, GlobalValueData, Immediate, Inst, InstructionData, MemFlags, Opcode, RelSourceLoc,
-    Type, Value, ValueDef, ValueLabelAssignments, ValueLabelStart,
+    GlobalValue, GlobalValueData, Immediate, Inst, InstructionData, MemFlags, RelSourceLoc, Type,
+    Value, ValueDef, ValueLabelAssignments, ValueLabelStart,
 };
 use crate::machinst::{
     writable_value_regs, BlockIndex, BlockLoweringOrder, Callee, LoweredBlock, MachLabel, Reg,
@@ -898,39 +898,29 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         bindex: BlockIndex,
         // Original CLIF block:
         block: Block,
-        branches: &SmallVec<[Inst; 2]>,
-        targets: &SmallVec<[MachLabel; 2]>,
+        branch: Inst,
+        targets: &[MachLabel],
     ) -> CodegenResult<()> {
         trace!(
-            "lower_clif_branches: block {} branches {:?} targets {:?}",
+            "lower_clif_branches: block {} branch {:?} targets {:?}",
             block,
-            branches,
+            branch,
             targets,
         );
-        // A block should end with at most two branches. The first may be a
-        // conditional branch; a conditional branch can be followed only by an
-        // unconditional branch or fallthrough. Otherwise, if only one branch,
-        // it may be an unconditional branch, a fallthrough, a return, or a
-        // trap. These conditions are verified by `is_block_basic()` during the
-        // verifier pass.
-        assert!(branches.len() <= 2);
-        if branches.len() == 2 {
-            assert!(self.data(branches[1]).opcode() == Opcode::Jump);
-        }
         // When considering code-motion opportunities, consider the current
-        // program point to be the first branch.
-        self.cur_inst = Some(branches[0]);
-        // Lower the first branch in ISLE.  This will automatically handle
-        // the second branch (if any) by emitting a two-way conditional branch.
+        // program point to be this branch.
+        self.cur_inst = Some(branch);
+
+        // Lower the branch in ISLE.
         backend
-            .lower_branch(self, branches[0], targets)
+            .lower_branch(self, branch, targets)
             .unwrap_or_else(|| {
                 panic!(
                     "should be implemented in ISLE: branch = `{}`",
-                    self.f.dfg.display_inst(branches[0]),
+                    self.f.dfg.display_inst(branch),
                 )
             });
-        let loc = self.srcloc(branches[0]);
+        let loc = self.srcloc(branch);
         self.finish_ir_inst(loc);
         // Add block param outputs for current block.
         self.lower_branch_blockparam_args(bindex);
@@ -942,29 +932,13 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             // Avoid immutable borrow by explicitly indexing.
             let (inst, succ) = self.vcode.block_order().succ_indices(block)[succ_idx];
 
-            // Get branch args and convert to Regs.
-            let branch_args = match &self.f.dfg.insts[inst] {
-                InstructionData::Jump {
-                    destination: block, ..
-                } => block.args_slice(&self.f.dfg.value_lists),
-                InstructionData::Brif {
-                    blocks: [then_block, else_block],
-                    ..
-                } => {
-                    // NOTE: `succ_idx == 0` implying that we're traversing the `then_block` is
-                    // enforced by the traversal order defined in `visit_block_succs`. Eventually
-                    // we should traverse the `branch_destination` slice there, which would
-                    // simplify computing the branch args significantly.
-                    if succ_idx == 0 {
-                        then_block.args_slice(&self.f.dfg.value_lists)
-                    } else {
-                        assert!(succ_idx == 1);
-                        else_block.args_slice(&self.f.dfg.value_lists)
-                    }
-                }
-                InstructionData::BranchTable { .. } => &[],
-                _ => unreachable!(),
-            };
+            // The use of `succ_idx` to index `branch_destination` is valid on the assumption that
+            // the traversal order defined in `visit_block_succs` mirrors the order returned by
+            // `branch_destination`. If that assumption is violated, the branch targets returned
+            // here will not match the clif.
+            let branches = self.f.dfg.insts[inst].branch_destination(&self.f.dfg.jump_tables);
+            let branch_args = branches[succ_idx].args_slice(&self.f.dfg.value_lists);
+
             let mut branch_arg_vregs: SmallVec<[Reg; 16]> = smallvec![];
             for &arg in branch_args {
                 let arg = self.f.dfg.resolve_aliases(arg);
@@ -983,26 +957,20 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         &self,
         bindex: BlockIndex,
         _bb: Block,
-        branches: &mut SmallVec<[Inst; 2]>,
         targets: &mut SmallVec<[MachLabel; 2]>,
-    ) {
-        branches.clear();
+    ) -> Option<Inst> {
         targets.clear();
         let mut last_inst = None;
         for &(inst, succ) in self.vcode.block_order().succ_indices(bindex) {
-            // Avoid duplicates: this ensures a br_table is only inserted once.
-            if last_inst != Some(inst) {
-                branches.push(inst);
-            } else {
-                debug_assert!(
-                    self.f.dfg.insts[inst].opcode() == Opcode::BrTable
-                        || self.f.dfg.insts[inst].opcode() == Opcode::Brif
-                );
-                debug_assert!(branches.len() == 1);
-            }
+            // Basic blocks may end in a single branch instruction, but those instructions may have
+            // multiple destinations. As such, all `inst` values in `succ_indices` must be the
+            // same, or this basic block would have multiple branch instructions present.
+            debug_assert!(last_inst.map_or(true, |prev| prev == inst));
             last_inst = Some(inst);
             targets.push(MachLabel::from_block(succ));
         }
+
+        last_inst
     }
 
     /// Lower the function.
@@ -1026,7 +994,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         self.vcode.set_entry(BlockIndex::new(0));
 
         // Reused vectors for branch lowering.
-        let mut branches: SmallVec<[Inst; 2]> = SmallVec::new();
         let mut targets: SmallVec<[MachLabel; 2]> = SmallVec::new();
 
         // get a copy of the lowered order; we hold this separately because we
@@ -1048,10 +1015,9 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
             // End branches.
             if let Some(bb) = lb.orig_block() {
-                self.collect_branches_and_targets(bindex, bb, &mut branches, &mut targets);
-                if branches.len() > 0 {
-                    self.lower_clif_branches(backend, bindex, bb, &branches, &targets)?;
-                    self.finish_ir_inst(self.srcloc(branches[0]));
+                if let Some(branch) = self.collect_branches_and_targets(bindex, bb, &mut targets) {
+                    self.lower_clif_branches(backend, bindex, bb, branch, &targets)?;
+                    self.finish_ir_inst(self.srcloc(branch));
                 }
             } else {
                 // If no orig block, this must be a pure edge block;

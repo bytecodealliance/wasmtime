@@ -1634,14 +1634,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             .ins()
             .trapz(funcref_ptr, ir::TrapCode::IndirectCallToNull);
 
-        // // Dereference the funcref pointer to get the function address.
-        // let mem_flags = ir::MemFlags::trusted();
-        // let func_addr = builder.ins().load(
-        //     pointer_type,
-        //     mem_flags,
-        //     funcref_ptr,
-        //     i32::from(self.offsets.ptr.vmcaller_checked_func_ref_func_ptr()),
-        // );
 
         // If necessary, check the signature.
         match self.module.table_plans[table_index].style {
@@ -1688,29 +1680,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         }
 
         self.call_function_unchecked(builder, sig_ref, funcref_ptr, call_args)
-            // TODO(dhil): the below may need to be merge into call_function_unchecked
-        // let mut real_call_args = Vec::with_capacity(call_args.len() + 2);
-        // let caller_vmctx = builder
-        //     .func
-        //     .special_param(ArgumentPurpose::VMContext)
-        //     .unwrap();
-
-        // // First append the callee vmctx address.
-        // let vmctx = builder.ins().load(
-        //     pointer_type,
-        //     mem_flags,
-        //     funcref_ptr,
-        //     i32::from(self.offsets.ptr.vmcaller_checked_func_ref_vmctx()),
-        // );
-        // real_call_args.push(vmctx);
-        // real_call_args.push(caller_vmctx);
-
-        // // Then append the regular call arguments.
-        // real_call_args.extend_from_slice(call_args);
-
-        // Ok(builder
-        //     .ins()
-        //     .call_indirect(sig_ref, func_addr, &real_call_args))
     }
 
     fn translate_call(

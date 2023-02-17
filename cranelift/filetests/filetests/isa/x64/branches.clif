@@ -727,3 +727,185 @@ block2:
 ;   popq %rbp
 ;   retq
 
+function %br_table_i32(i32) -> i32 {
+block0(v0: i32):
+  br_table v0, block4, [block1, block2, block2, block3]
+
+block1:
+  v1 = iconst.i32 1
+  jump block5(v1)
+
+block2:
+  v2 = iconst.i32 2
+  jump block5(v2)
+
+block3:
+  v3 = iconst.i32 3
+  jump block5(v3)
+
+block4:
+  v4 = iconst.i32 4
+  jump block5(v4)
+
+block5(v5: i32):
+  v6 = iadd.i32 v0, v5
+  return v6
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   cmpl    $4, %edi
+;   br_table %rdi, %rcx, %rdx
+; block1:
+;   movl    $4, %edx
+;   jmp     label2
+; block2:
+;   jmp     label10
+; block3:
+;   movl    $1, %edx
+;   jmp     label4
+; block4:
+;   jmp     label10
+; block5:
+;   jmp     label7
+; block6:
+;   jmp     label7
+; block7:
+;   movl    $2, %edx
+;   jmp     label10
+; block8:
+;   movl    $3, %edx
+;   jmp     label9
+; block9:
+;   jmp     label10
+; block10:
+;   movq    %rdi, %rax
+;   addl    %eax, %edx, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   cmpl $4, %edi
+;   jae 0x39
+;   movl %edi, %edx
+;   movl $0, %ecx
+;   cmovaeq %rcx, %rdx
+;   leaq 0xa(%rip), %rcx
+;   movslq (%rcx, %rdx, 4), %rdx
+;   addq %rdx, %rcx
+;   jmpq *%rcx
+;   sbbb (%rax), %al
+;   addb %al, (%rax)
+;   andb $0, %al
+;   addb %al, (%rax)
+;   andb $0, %al
+;   addb %al, (%rax)
+;   addb %al, %cs:(%rax)
+; block2: ; offset 0x39
+;   movl $4, %edx
+; block3: ; offset 0x3e
+;   jmp 0x5c
+; block4: ; offset 0x43
+;   movl $1, %edx
+; block5: ; offset 0x48
+;   jmp 0x5c
+; block6: ; offset 0x4d
+;   movl $2, %edx
+;   jmp 0x5c
+; block7: ; offset 0x57
+;   movl $3, %edx
+; block8: ; offset 0x5c
+;   movq %rdi, %rax
+;   addl %edx, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %br_table_i32_inline(i32) -> i32 {
+block0(v0: i32):
+  v1 = iconst.i32 1
+  v2 = iconst.i32 2
+  v3 = iconst.i32 3
+  v4 = iconst.i32 4
+  br_table v0, block1(v4), [block1(v1), block1(v2), block1(v2), block1(v3)]
+
+block1(v5: i32):
+  return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    $1, %edx
+;   movl    $2, %r8d
+;   movl    $3, %r9d
+;   movl    $4, %eax
+;   cmpl    $4, %edi
+;   br_table %rdi, %r11, %r10
+; block1:
+;   jmp     label6
+; block2:
+;   movq    %rdx, %rax
+;   jmp     label6
+; block3:
+;   movq    %r8, %rax
+;   jmp     label6
+; block4:
+;   movq    %r8, %rax
+;   jmp     label6
+; block5:
+;   movq    %r9, %rax
+;   jmp     label6
+; block6:
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movl $1, %edx
+;   movl $2, %r8d
+;   movl $3, %r9d
+;   movl $4, %eax
+;   cmpl $4, %edi
+;   jae 0x72
+;   movl %edi, %r10d
+;   movl $0, %r11d
+;   cmovaeq %r11, %r10
+;   leaq 0xb(%rip), %r11
+;   movslq (%r11, %r10, 4), %r10
+;   addq %r10, %r11
+;   jmpq *%r11
+;   adcl $0x1d000000, %eax
+;   addb %al, (%rax)
+;   addb %ah, 0x2d000000(%rip)
+;   addb %al, (%rax)
+; block2: ; offset 0x52
+;   jmp 0x72
+; block3: ; offset 0x57
+;   movq %rdx, %rax
+;   jmp 0x72
+; block4: ; offset 0x5f
+;   movq %r8, %rax
+;   jmp 0x72
+; block5: ; offset 0x67
+;   movq %r8, %rax
+;   jmp 0x72
+; block6: ; offset 0x6f
+;   movq %r9, %rax
+; block7: ; offset 0x72
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

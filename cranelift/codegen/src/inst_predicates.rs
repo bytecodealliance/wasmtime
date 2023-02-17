@@ -73,25 +73,6 @@ pub fn is_pure_for_egraph(func: &Function, inst: Inst) -> bool {
     has_one_result && (is_readonly_load || (!op.can_load() && !trivially_has_side_effects(op)))
 }
 
-/// Can the given instruction be merged into another copy of itself?
-/// These instructions may have side-effects, but as long as we retain
-/// the first instance of the instruction, the second and further
-/// instances are redundant if they would produce the same trap or
-/// result.
-pub fn is_mergeable_for_egraph(func: &Function, inst: Inst) -> bool {
-    let op = func.dfg.insts[inst].opcode();
-    // We can only merge one-result operators due to the way that GVN
-    // is structured in the egraph implementation.
-    let has_one_result = func.dfg.inst_results(inst).len() == 1;
-    has_one_result
-        // Loads/stores are handled by alias analysis and not
-        // otherwise mergeable.
-        && !op.can_load()
-        && !op.can_store()
-        // Can only have idempotent side-effects.
-        && (!has_side_effect(func, inst) || op.side_effects_idempotent())
-}
-
 /// Does the given instruction have any side-effect as per [has_side_effect], or else is a load,
 /// but not the get_pinned_reg opcode?
 pub fn has_lowering_side_effect(func: &Function, inst: Inst) -> bool {
@@ -191,16 +172,23 @@ pub(crate) fn visit_block_succs<F: FnMut(Inst, Block, bool)>(
             }
 
             ir::InstructionData::BranchTable { table, .. } => {
+                let pool = &f.dfg.value_lists;
                 let table = &f.stencil.dfg.jump_tables[*table];
 
                 // The default block is reached via a direct conditional branch,
-                // so it is not part of the table. We visit the default block first
-                // explicitly, as some callers of visit_block_succs depend on that
-                // ordering.
-                visit(inst, table.default_block(), false);
+                // so it is not part of the table. We visit the default block
+                // first explicitly, to mirror the traversal order of
+                // `JumpTableData::all_branches`, and transitively the order of
+                // `InstructionData::branch_destination`.
+                //
+                // Additionally, this case is why we are unable to replace this
+                // whole function with a loop over `branch_destination`: we need
+                // to report which branch targets come from the table vs the
+                // default.
+                visit(inst, table.default_block().block(pool), false);
 
-                for &dest in table.as_slice() {
-                    visit(inst, dest, true);
+                for dest in table.as_slice() {
+                    visit(inst, dest.block(pool), true);
                 }
             }
 

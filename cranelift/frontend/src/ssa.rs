@@ -15,7 +15,7 @@ use cranelift_codegen::cursor::{Cursor, FuncCursor};
 use cranelift_codegen::entity::{EntityList, EntitySet, ListPool, SecondaryMap};
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};
 use cranelift_codegen::ir::types::{F32, F64, I128, I64};
-use cranelift_codegen::ir::{Block, Function, Inst, InstBuilder, InstructionData, Type, Value};
+use cranelift_codegen::ir::{Block, Function, Inst, InstBuilder, Type, Value};
 use cranelift_codegen::packed_option::PackedOption;
 
 /// Structure containing the data relevant the construction of SSA for a given function.
@@ -488,7 +488,6 @@ impl SSABuilder {
         &mut self,
         func: &mut Function,
         sentinel: Value,
-        var: Variable,
         dest_block: Block,
     ) -> Value {
         // Determine how many predecessors are yielding unique, non-temporary Values. If a variable
@@ -545,71 +544,23 @@ impl SSABuilder {
             // There is disagreement in the predecessors on which value to use so we have
             // to keep the block argument.
             let mut preds = self.ssa_blocks[dest_block].predecessors;
-            let var_defs = &mut self.variables[var];
+            let dfg = &mut func.stencil.dfg;
             for (idx, &val) in results.as_slice().iter().enumerate() {
                 let pred = preds.get_mut(idx, &mut self.inst_pool).unwrap();
                 let branch = *pred;
-                if let Some((new_block, new_branch)) =
-                    Self::append_jump_argument(func, branch, dest_block, val)
-                {
-                    *pred = new_branch;
-                    let old_block = func.layout.inst_block(branch).unwrap();
-                    self.ssa_blocks[new_block] = SSABlockData {
-                        predecessors: EntityList::from_slice(&[branch], &mut self.inst_pool),
-                        sealed: Sealed::Yes,
-                        single_predecessor: PackedOption::from(old_block),
-                    };
-                    var_defs[new_block] = PackedOption::from(val);
-                    self.side_effects.split_blocks_created.push(new_block);
-                }
-            }
-            sentinel
-        }
-    }
 
-    /// Appends a jump argument to a jump instruction, returns block created in case of
-    /// critical edge splitting.
-    fn append_jump_argument(
-        func: &mut Function,
-        branch: Inst,
-        dest_block: Block,
-        val: Value,
-    ) -> Option<(Block, Inst)> {
-        let dfg = &mut func.stencil.dfg;
-        match &mut dfg.insts[branch] {
-            // For a single destination appending a jump argument to the instruction
-            // is sufficient.
-            InstructionData::Jump { destination, .. } => {
-                destination.append_argument(val, &mut dfg.value_lists);
-                None
-            }
-            InstructionData::Brif { blocks, .. } => {
-                for block in blocks {
+                let dests = dfg.insts[branch].branch_destination_mut(&mut dfg.jump_tables);
+                assert!(
+                    !dests.is_empty(),
+                    "you have declared a non-branch instruction as a predecessor to a block!"
+                );
+                for block in dests {
                     if block.block(&dfg.value_lists) == dest_block {
                         block.append_argument(val, &mut dfg.value_lists);
                     }
                 }
-                None
             }
-            InstructionData::BranchTable { table: jt, .. } => {
-                // In the case of a jump table, the situation is tricky because br_table doesn't
-                // support arguments. We have to split the critical edge.
-                let middle_block = dfg.blocks.add();
-                func.stencil.layout.append_block(middle_block);
-
-                for block in dfg.jump_tables[*jt].all_branches_mut() {
-                    if *block == dest_block {
-                        *block = middle_block;
-                    }
-                }
-
-                let mut cur = FuncCursor::new(func).at_bottom(middle_block);
-                let middle_jump_inst = cur.ins().jump(dest_block, &[val]);
-                Some((middle_block, middle_jump_inst))
-            }
-            _ => {
-                panic!("you have declared a non-branch instruction as a predecessor to a block");
-            }
+            sentinel
         }
     }
 
@@ -644,7 +595,7 @@ impl SSABuilder {
                     self.use_var_nonlocal(func, var, ty, block);
                 }
                 Call::FinishPredecessorsLookup(sentinel, dest_block) => {
-                    let val = self.finish_predecessors_lookup(func, sentinel, var, dest_block);
+                    let val = self.finish_predecessors_lookup(func, sentinel, dest_block);
                     self.results.push(val);
                 }
             }
@@ -1010,7 +961,13 @@ mod tests {
         ssa.def_var(x_var, x1, block0);
         ssa.use_var(&mut func, x_var, I32, block0).0;
         let br_table = {
-            let jump_table = JumpTableData::new(block2, &[block2, block1]);
+            let jump_table = JumpTableData::new(
+                func.dfg.block_call(block2, &[]),
+                &[
+                    func.dfg.block_call(block2, &[]),
+                    func.dfg.block_call(block1, &[]),
+                ],
+            );
             let jt = func.create_jump_table(jump_table);
             let mut cur = FuncCursor::new(&mut func).at_bottom(block0);
             cur.ins().br_table(x1, jt)

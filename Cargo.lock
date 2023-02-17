@@ -94,12 +94,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "arrayvec"
-version = "0.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8da52d66c7071e2e3fa2a1e5c6d088fec47b593032b254f5e980de8ea54454d6"
-
-[[package]]
 name = "async-trait"
 version = "0.1.64"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -546,7 +540,6 @@ name = "cranelift-codegen"
 version = "0.94.0"
 dependencies = [
  "anyhow",
- "arrayvec",
  "bincode",
  "bumpalo",
  "capstone",
@@ -3368,7 +3361,7 @@ dependencies = [
 [[package]]
 name = "wasmparser"
 version = "0.101.0"
-source = "git+https://github.com/bytecodealliance/wasm-tools#c4c9125419684c4cf64fc88eeee2661fa0c36f14"
+source = "git+https://github.com/bytecodealliance/wasm-tools#673e74b53813104ad247307ba034f06600ba04ab"
 dependencies = [
  "indexmap",
  "url",

@@ -130,6 +130,8 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
             }
 
             ir::InstructionData::BranchTable { table, .. } => {
+                let pool = &self.builder.func.dfg.value_lists;
+
                 // Unlike all other jumps/branches, jump tables are
                 // capable of having the same successor appear
                 // multiple times, so we must deduplicate.
@@ -144,7 +146,8 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
                     .expect("you are referencing an undeclared jump table")
                     .all_branches()
                 {
-                    if !unique.insert(*dest_block) {
+                    let block = dest_block.block(pool);
+                    if !unique.insert(block) {
                         continue;
                     }
 
@@ -153,7 +156,7 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
                     self.builder
                         .func_ctx
                         .ssa
-                        .declare_block_predecessor(*dest_block, inst);
+                        .declare_block_predecessor(block, inst);
                 }
             }
 
@@ -691,7 +694,7 @@ impl<'a> FunctionBuilder<'a> {
     /// other jump instructions.
     pub fn change_jump_destination(&mut self, inst: Inst, old_block: Block, new_block: Block) {
         let dfg = &mut self.func.dfg;
-        for block in dfg.insts[inst].branch_destination_mut() {
+        for block in dfg.insts[inst].branch_destination_mut(&mut dfg.jump_tables) {
             if block.block(&dfg.value_lists) == old_block {
                 self.func_ctx.ssa.remove_block_predecessor(old_block, inst);
                 block.set_block(new_block, &mut dfg.value_lists);
