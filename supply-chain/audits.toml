@@ -517,6 +517,15 @@ who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
 delta = "0.29.0 -> 0.30.1"
 
+[[audits.object]]
+who = "Jamey Sharp <jsharp@fastly.com>"
+criteria = "safe-to-deploy"
+delta = "0.30.1 -> 0.30.3"
+notes = """
+No unsafe blocks or I/O in the diff. The only changes clearly implement what
+the changelog says is new in these versions.
+"""
+
 [[audits.once_cell]]
 who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
