@@ -239,6 +239,18 @@ impl Engine {
         Ok(mmap.to_vec())
     }
 
+    /// Returns a [`std::hash::Hash`] that can be used to check precompiled WebAssembly compatibility.
+    ///
+    /// The outputs of [`Engine::precompile_module`] and [`Engine::precompile_component`]
+    /// are compatible with a different [`Engine`] instance only if the two engines use
+    /// compatible [`Config`]s. If this Hash matches between two [`Engine`]s then binaries
+    /// from one are guaranteed to deserialize in the other.
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    pub fn precompile_compatibility_hash(&self) -> impl std::hash::Hash + '_ {
+        crate::module::HashedEngineCompileEnv(self)
+    }
+
     pub(crate) fn run_maybe_parallel<
         A: Send,
         B: Send,
@@ -628,6 +640,11 @@ impl Default for Engine {
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        collections::hash_map::DefaultHasher,
+        hash::{Hash, Hasher},
+    };
+
     use crate::{Config, Engine, Module, OptLevel};
 
     use anyhow::Result;
@@ -692,5 +709,21 @@ mod tests {
         assert_eq!(engine.config().cache_config.cache_misses(), 1);
 
         Ok(())
+    }
+
+    #[test]
+    fn precompile_compatibility_key_accounts_for_opt_level() {
+        fn hash_for_config(cfg: &Config) -> u64 {
+            let engine = Engine::new(cfg).expect("Config should be valid");
+            let mut hasher = DefaultHasher::new();
+            engine.precompile_compatibility_hash().hash(&mut hasher);
+            hasher.finish()
+        }
+        let mut cfg = Config::new();
+        cfg.cranelift_opt_level(OptLevel::None);
+        let opt_none_hash = hash_for_config(&cfg);
+        cfg.cranelift_opt_level(OptLevel::Speed);
+        let opt_speed_hash = hash_for_config(&cfg);
+        assert_ne!(opt_none_hash, opt_speed_hash)
     }
 }
