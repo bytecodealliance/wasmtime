@@ -617,13 +617,6 @@ impl RegMemImm {
         }
     }
 
-    pub(crate) fn to_reg(&self) -> Option<Reg> {
-        match self {
-            Self::Reg { reg } => Some(*reg),
-            _ => None,
-        }
-    }
-
     pub(crate) fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
         match self {
             Self::Reg { reg } => Self::Reg {
@@ -724,12 +717,6 @@ impl RegMem {
         match self {
             RegMem::Reg { reg } => collector.reg_use(*reg),
             RegMem::Mem { addr, .. } => addr.get_operands(collector),
-        }
-    }
-    pub(crate) fn to_reg(&self) -> Option<Reg> {
-        match self {
-            RegMem::Reg { reg } => Some(*reg),
-            _ => None,
         }
     }
 

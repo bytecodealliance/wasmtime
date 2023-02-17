@@ -3148,7 +3148,7 @@
 
             ;; Converting to unsigned int so if float src is negative or NaN
             ;; will first set to zero.
-            (tmp2 Xmm (x64_pxor src src)) ;; make a zero
+            (tmp2 Xmm (xmm_zero $F32X4))
             (dst Xmm (x64_maxps src tmp2))
 
             ;; Set tmp2 to INT_MAX+1. It is important to note here that after it looks
@@ -3181,7 +3181,7 @@
             ;; that have positive overflow (based on the mask) by setting these lanes
             ;; to 0x7FFFFFFF
             (tmp1 Xmm (x64_pxor tmp1 tmp2))
-            (tmp2 Xmm (x64_pxor tmp2 tmp2)) ;; make another zero
+            (tmp2 Xmm (xmm_zero $I32X4))
             (tmp1 Xmm (x64_pmaxsd tmp1 tmp2)))
 
         ;; Add this second set of converted lanes to the original to properly handle
@@ -3611,7 +3611,7 @@
 
 (rule (lower (has_type (multi_lane 8 16) (splat src)))
       (let ((vec Xmm (vec_insert_lane $I8X16 (xmm_uninit_value) src 0))
-            (zeros Xmm (x64_pxor vec vec)))
+            (zeros Xmm (xmm_zero $I8X16)))
         ;; Shuffle the lowest byte lane to all other lanes.
         (x64_pshufb vec zeros)))
 
@@ -3661,7 +3661,7 @@
 
 (rule (lower (vall_true val @ (value_type ty)))
       (let ((src Xmm val)
-            (zeros Xmm (x64_pxor src src))
+            (zeros Xmm (xmm_zero ty))
             (cmp Xmm (x64_pcmpeq (vec_int_type ty) src zeros)))
         (with_flags (x64_ptest cmp cmp) (x64_setcc (CC.Z)))))
 
@@ -3752,7 +3752,7 @@
 
             ;; MOVAPD xmm_y, xmm_x
             ;; XORPD xmm_tmp, xmm_tmp
-            (zeros Xmm (x64_xorpd src src))
+            (zeros Xmm (xmm_zero $F64X2))
             (dst Xmm (x64_maxpd src zeros))
 
             (umax_mask Xmm (x64_xmm_load_const $F64X2 (uunarrow_umax_mask)))

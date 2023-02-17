@@ -148,16 +148,10 @@ pub(crate) fn emit(
             src2,
             dst: reg_g,
         } => {
-            let (reg_g, src2) = if inst.produces_const() {
-                let reg_g = allocs.next(reg_g.to_reg().to_reg());
-                (reg_g, RegMemImm::reg(reg_g))
-            } else {
-                let src1 = allocs.next(src1.to_reg());
-                let reg_g = allocs.next(reg_g.to_reg().to_reg());
-                debug_assert_eq!(src1, reg_g);
-                let src2 = src2.clone().to_reg_mem_imm().with_allocs(allocs);
-                (reg_g, src2)
-            };
+            let src1 = allocs.next(src1.to_reg());
+            let reg_g = allocs.next(reg_g.to_reg().to_reg());
+            debug_assert_eq!(src1, reg_g);
+            let src2 = src2.clone().to_reg_mem_imm().with_allocs(allocs);
 
             let rex = RexFlags::from(*size);
             if *op == AluRmiROpcode::Mul {
@@ -251,6 +245,23 @@ pub(crate) fn emit(
                     }
                 }
             }
+        }
+
+        Inst::AluConstOp { op, size, dst } => {
+            let dst = allocs.next(dst.to_reg().to_reg());
+            emit(
+                &Inst::AluRmiR {
+                    size: *size,
+                    op: *op,
+                    dst: Writable::from_reg(Gpr::new(dst).unwrap()),
+                    src1: Gpr::new(dst).unwrap(),
+                    src2: Gpr::new(dst).unwrap().into(),
+                },
+                allocs,
+                sink,
+                info,
+                state,
+            );
         }
 
         Inst::AluRM {
@@ -1837,16 +1848,10 @@ pub(crate) fn emit(
             src2: src_e,
             dst: reg_g,
         } => {
-            let (src_e, reg_g) = if inst.produces_const() {
-                let reg_g = allocs.next(reg_g.to_reg().to_reg());
-                (RegMem::Reg { reg: reg_g }, reg_g)
-            } else {
-                let src1 = allocs.next(src1.to_reg());
-                let reg_g = allocs.next(reg_g.to_reg().to_reg());
-                let src_e = src_e.clone().to_reg_mem().with_allocs(allocs);
-                debug_assert_eq!(src1, reg_g);
-                (src_e, reg_g)
-            };
+            let src1 = allocs.next(src1.to_reg());
+            let reg_g = allocs.next(reg_g.to_reg().to_reg());
+            let src_e = src_e.clone().to_reg_mem().with_allocs(allocs);
+            debug_assert_eq!(src1, reg_g);
 
             let rex = RexFlags::clear_w();
             let (prefix, opcode, length) = match op {
@@ -1959,6 +1964,22 @@ pub(crate) fn emit(
             }
         }
 
+        Inst::XmmConstOp { op, dst } => {
+            let dst = allocs.next(dst.to_reg().to_reg());
+            emit(
+                &Inst::XmmRmR {
+                    op: *op,
+                    dst: Writable::from_reg(Xmm::new(dst).unwrap()),
+                    src1: Xmm::new(dst).unwrap(),
+                    src2: Xmm::new(dst).unwrap().into(),
+                },
+                allocs,
+                sink,
+                info,
+                state,
+            );
+        }
+
         Inst::XmmRmRBlend {
             op,
             src1,
@@ -2002,14 +2023,8 @@ pub(crate) fn emit(
             use OpcodeMap as OM;
 
             let dst = allocs.next(dst.to_reg().to_reg());
-            let (src1, src2) = if inst.produces_const() {
-                (dst, RegMemImm::reg(dst))
-            } else {
-                (
-                    allocs.next(src1.to_reg()),
-                    src2.clone().to_reg_mem_imm().with_allocs(allocs),
-                )
-            };
+            let src1 = allocs.next(src1.to_reg());
+            let src2 = src2.clone().to_reg_mem_imm().with_allocs(allocs);
 
             let src2 = match src2 {
                 // For opcodes where one of the operands is an immediate the
@@ -2443,10 +2458,7 @@ pub(crate) fn emit(
             imm,
             size,
         } => {
-            let (src2, dst) = if inst.produces_const() {
-                let dst = allocs.next(dst.to_reg());
-                (RegMem::Reg { reg: dst }, dst)
-            } else if !op.uses_src1() {
+            let (src2, dst) = if !op.uses_src1() {
                 let dst = allocs.next(dst.to_reg());
                 let src2 = src2.with_allocs(allocs);
                 (src2, dst)
