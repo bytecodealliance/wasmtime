@@ -10,7 +10,7 @@ use cranelift_frontend::FunctionBuilder;
 use cranelift_frontend::Variable;
 use cranelift_wasm::{
     self, FuncIndex, FuncTranslationState, GlobalIndex, GlobalVariable, Heap, HeapData, HeapStyle,
-    MemoryIndex, TableIndex, TargetEnvironment, TypeIndex, WasmError, WasmHeapType, WasmRefType, WasmResult, WasmType,
+    MemoryIndex, TableIndex, TargetEnvironment, TypeIndex, WasmHeapType, WasmRefType, WasmResult, WasmType,
 };
 use std::convert::TryFrom;
 use std::mem;
@@ -972,7 +972,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     self.builtin_function_signatures
                         .table_grow_externref(&mut pos.func),
                 ),
-                WasmHeapType::Bot => unreachable!("no bot"),
             };
 
         let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
@@ -1119,10 +1118,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
                 Ok(elem)
             }
-            ty => Err(WasmError::Unsupported(format!(
-                "unsupported table type for `table.get` instruction: {:?}",
-                ty
-            ))),
         }
     }
 
@@ -1284,10 +1279,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
                 Ok(())
             }
-            ty => Err(WasmError::Unsupported(format!(
-                "unsupported table type for `table.set` instruction: {:?}",
-                ty
-            ))),
         }
     }
 
@@ -1311,7 +1302,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     self.builtin_function_signatures
                         .table_fill_externref(&mut pos.func),
                 ),
-                WasmHeapType::Bot => unreachable!("no bot"),
             };
 
         let (vmctx, builtin_addr) =
@@ -1335,7 +1325,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         Ok(match ht {
             WasmHeapType::Func | WasmHeapType::Index(_) => pos.ins().iconst(self.pointer_type(), 0),
             WasmHeapType::Extern => pos.ins().null(self.reference_type(ht)),
-            WasmHeapType::Bot => panic!("goes away in refactor"),
         })
     }
 

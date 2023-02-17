@@ -150,9 +150,7 @@ impl Val {
                 HeapType::Func | HeapType::Index(_) => {
                     Val::FuncRef(Func::from_raw(store, raw.get_funcref()))
                 }
-                HeapType::Bot => panic!("no bot"),
             },
-            ValType::Bot => panic!("ValType::Bot disappears soon"),
         }
     }
 

@@ -47,8 +47,6 @@ pub enum ValType {
     V128,
     /// A typeful reference type.
     Ref(RefType),
-    /// Special bottom type.
-    Bot,
 }
 
 impl fmt::Display for ValType {
@@ -60,7 +58,6 @@ impl fmt::Display for ValType {
             ValType::F64 => write!(f, "f64"),
             ValType::V128 => write!(f, "v128"),
             ValType::Ref(rt) => write!(f, "{}", rt),
-            ValType::Bot => write!(f, "bot"),
         }
     }
 }
@@ -91,7 +88,6 @@ impl ValType {
             Self::F64 => WasmType::F64,
             Self::V128 => WasmType::V128,
             Self::Ref(rt) => WasmType::Ref(RefType::to_wasm_ref_type(rt)),
-            Self::Bot => WasmType::Bot,
         }
     }
 
@@ -103,7 +99,6 @@ impl ValType {
             WasmType::F64 => Self::F64,
             WasmType::V128 => Self::V128,
             WasmType::Ref(rt) => Self::Ref(RefType::from_wasm_ref_type(&rt)),
-            WasmType::Bot => Self::Bot,
         }
     }
 }
@@ -161,8 +156,6 @@ pub enum HeapType {
     Extern,
     /// A typed reference to a Wasm function.
     Index(u32),
-    /// A special bottom heap type.
-    Bot,
 }
 
 impl fmt::Display for HeapType {
@@ -171,7 +164,6 @@ impl fmt::Display for HeapType {
             Self::Func => write!(f, "func"),
             Self::Extern => write!(f, "extern"),
             Self::Index(i) => write!(f, "{}", i),
-            Self::Bot => write!(f, "bot"),
         }
     }
 }
@@ -182,7 +174,6 @@ impl HeapType {
             Self::Func => WasmHeapType::Func,
             Self::Extern => WasmHeapType::Extern,
             Self::Index(i) => WasmHeapType::Index(*i),
-            Self::Bot => WasmHeapType::Bot,
         }
     }
 
@@ -191,7 +182,6 @@ impl HeapType {
             WasmHeapType::Func => Self::Func,
             WasmHeapType::Extern => Self::Extern,
             WasmHeapType::Index(i) => Self::Index(*i),
-            WasmHeapType::Bot => Self::Bot,
         }
     }
 }

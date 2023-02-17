@@ -142,7 +142,6 @@ fn value_type(isa: &dyn TargetIsa, ty: WasmType) -> ir::types::Type {
         WasmType::F64 => ir::types::F64,
         WasmType::V128 => ir::types::I8X16,
         WasmType::Ref(rt) => reference_type(rt.heap_type, isa.pointer_type()),
-        WasmType::Bot => panic!("WasmType::Bot will soon not exist"),
     }
 }
 
@@ -217,6 +216,5 @@ fn reference_type(wasm_ht: cranelift_wasm::WasmHeapType, pointer_type: ir::Type)
             ir::types::I64 => ir::types::R64,
             _ => panic!("unsupported pointer type"),
         },
-        _ => panic!("unsupported Wasm reference type"),
     }
 }
