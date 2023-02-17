@@ -4863,11 +4863,11 @@ fn test_x64_emit() {
     // ========================================================
     // XmmRmRImmVex
     insns.push((
-        Inst::XmmRmRImmVex {
+        Inst::XmmVexPinsr {
             op: AvxOpcode::Vpinsrb,
             dst: Writable::from_reg(Xmm::new(xmm13).unwrap()),
             src1: Xmm::new(xmm14).unwrap(),
-            src2: RegMem::reg(r15),
+            src2: GprMem::new(RegMem::reg(r15)).unwrap(),
             imm: 2,
         },
         "C4430920EF02",
