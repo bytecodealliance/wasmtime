@@ -179,9 +179,9 @@ pub trait Compiler: Send + Sync {
 
     /// Appends a list of compiled functions to an in-memory object.
     ///
-    /// This function will receive the same `Box<dyn Ayn>` produced as part of
+    /// This function will receive the same `Box<dyn Any>` produced as part of
     /// compilation from functions like `compile_function`,
-    /// compile_host_to_wasm_trampoline`, and other component-related shims.
+    /// `compile_host_to_wasm_trampoline`, and other component-related shims.
     /// Internally this will take all of these functions and add information to
     /// the object such as:
     ///
