@@ -7,7 +7,7 @@ use crate::{
     abi::local::LocalSlot,
     codegen::CodeGenContext,
     isa::reg::Reg,
-    masm::{DivKind, MacroAssembler as Masm, OperandSize, RegImm},
+    masm::{DivKind, MacroAssembler as Masm, OperandSize, RegImm, RemKind},
 };
 use cranelift_codegen::{settings, Final, MachBufferFinalized};
 
@@ -153,6 +153,10 @@ impl Masm for MacroAssembler {
     }
 
     fn div(&mut self, _context: &mut CodeGenContext, _kind: DivKind, _size: OperandSize) {
+        todo!()
+    }
+
+    fn rem(&mut self, _context: &mut CodeGenContext, _kind: RemKind, _size: OperandSize) {
         todo!()
     }
 
