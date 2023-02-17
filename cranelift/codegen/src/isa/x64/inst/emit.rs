@@ -2158,7 +2158,7 @@ pub(crate) fn emit(
         } => {
             let dst = allocs.next(dst.to_reg().to_reg());
             let src1 = allocs.next(src1.to_reg());
-            let src2 = match src2.clone().with_allocs(allocs) {
+            let src2 = match src2.clone().to_reg_mem().with_allocs(allocs) {
                 RegMem::Reg { reg } => {
                     RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
                 }
@@ -2169,10 +2169,6 @@ pub(crate) fn emit(
                 AvxOpcode::Vcmpps => (false, LegacyPrefixes::None, OpcodeMap::_0F, 0xC2),
                 AvxOpcode::Vcmppd => (false, LegacyPrefixes::_66, OpcodeMap::_0F, 0xC2),
                 AvxOpcode::Vpalignr => (false, LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x0F),
-                AvxOpcode::Vpinsrb => (false, LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x20),
-                AvxOpcode::Vpinsrw => (false, LegacyPrefixes::_66, OpcodeMap::_0F, 0xC4),
-                AvxOpcode::Vpinsrd => (false, LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x22),
-                AvxOpcode::Vpinsrq => (true, LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x22),
                 AvxOpcode::Vinsertps => (false, LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x21),
                 AvxOpcode::Vshufps => (false, LegacyPrefixes::None, OpcodeMap::_0F, 0xC6),
                 _ => panic!("unexpected rmr_imm_vex opcode {op:?}"),
@@ -2181,6 +2177,43 @@ pub(crate) fn emit(
             VexInstruction::new()
                 .length(VexVectorLength::V128)
                 .prefix(prefix)
+                .map(map)
+                .w(w)
+                .opcode(opcode)
+                .reg(dst.to_real_reg().unwrap().hw_enc())
+                .vvvv(src1.to_real_reg().unwrap().hw_enc())
+                .rm(src2)
+                .imm(*imm)
+                .encode(sink);
+        }
+
+        Inst::XmmVexPinsr {
+            op,
+            src1,
+            src2,
+            dst,
+            imm,
+        } => {
+            let dst = allocs.next(dst.to_reg().to_reg());
+            let src1 = allocs.next(src1.to_reg());
+            let src2 = match src2.clone().to_reg_mem().with_allocs(allocs) {
+                RegMem::Reg { reg } => {
+                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
+                }
+                RegMem::Mem { addr } => RegisterOrAmode::Amode(addr.finalize(state, sink)),
+            };
+
+            let (w, map, opcode) = match op {
+                AvxOpcode::Vpinsrb => (false, OpcodeMap::_0F3A, 0x20),
+                AvxOpcode::Vpinsrw => (false, OpcodeMap::_0F, 0xC4),
+                AvxOpcode::Vpinsrd => (false, OpcodeMap::_0F3A, 0x22),
+                AvxOpcode::Vpinsrq => (true, OpcodeMap::_0F3A, 0x22),
+                _ => panic!("unexpected vex_pinsr opcode {op:?}"),
+            };
+
+            VexInstruction::new()
+                .length(VexVectorLength::V128)
+                .prefix(LegacyPrefixes::_66)
                 .map(map)
                 .w(w)
                 .opcode(opcode)

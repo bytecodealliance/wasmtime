@@ -236,14 +236,19 @@
 
        ;; XMM (scalar or vector) ternary op that relies on the VEX prefix and
        ;; has two dynamic inputs plus one immediate input.
-       ;;
-       ;; Note the usage of `RegMem` here since some instructions work with gprs
-       ;; in that operand location
        (XmmRmRImmVex (op AvxOpcode)
                      (src1 Xmm)
-                     (src2 RegMem)
+                     (src2 XmmMem)
                      (dst WritableXmm)
                      (imm u8))
+
+       ;; XMM instruction for `vpinsr{b,w,d,q}` which is separte from
+       ;; `XmmRmRImmVex` because `src2` is a gpr, not xmm register.
+       (XmmVexPinsr (op AvxOpcode)
+                   (src1 Xmm)
+                   (src2 GprMem)
+                   (dst WritableXmm)
+                   (imm u8))
 
        ;; XMM (scalar or vector) ternary op that relies on the VEX prefix and
        ;; has three dynamic inputs.
@@ -3005,7 +3010,7 @@
                     (OperandSize.Size32)))
 (rule 1 (x64_pinsrb src1 src2 lane)
       (if-let $true (has_avx))
-      (xmm_rmr_imm_vex (AvxOpcode.Vpinsrb) src1 src2 lane))
+      (xmm_vex_pinsr (AvxOpcode.Vpinsrb) src1 src2 lane))
 
 ;; Helper for creating `pinsrw` instructions.
 (decl x64_pinsrw (Xmm GprMem u8) Xmm)
@@ -3017,7 +3022,7 @@
                     (OperandSize.Size32)))
 (rule 1 (x64_pinsrw src1 src2 lane)
       (if-let $true (has_avx))
-      (xmm_rmr_imm_vex (AvxOpcode.Vpinsrw) src1 src2 lane))
+      (xmm_vex_pinsr (AvxOpcode.Vpinsrw) src1 src2 lane))
 
 ;; Helper for creating `pinsrd` instructions.
 (decl x64_pinsrd (Xmm GprMem u8) Xmm)
@@ -3029,7 +3034,7 @@
                     (OperandSize.Size32)))
 (rule 1 (x64_pinsrd src1 src2 lane)
       (if-let $true (has_avx))
-      (xmm_rmr_imm_vex (AvxOpcode.Vpinsrd) src1 src2 lane))
+      (xmm_vex_pinsr (AvxOpcode.Vpinsrd) src1 src2 lane))
 
 ;; Helper for creating `pinsrq` instructions.
 (decl x64_pinsrq (Xmm GprMem u8) Xmm)
@@ -3041,7 +3046,14 @@
                     (OperandSize.Size64)))
 (rule 1 (x64_pinsrq src1 src2 lane)
       (if-let $true (has_avx))
-      (xmm_rmr_imm_vex (AvxOpcode.Vpinsrq) src1 src2 lane))
+      (xmm_vex_pinsr (AvxOpcode.Vpinsrq) src1 src2 lane))
+
+;; Helper for constructing `XmmVexPinsr` instructions.
+(decl xmm_vex_pinsr (AvxOpcode Xmm GprMem u8) Xmm)
+(rule (xmm_vex_pinsr op src1 src2 imm)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmVexPinsr op src1 src2 dst imm))))
+        dst))
 
 ;; Helper for constructing `XmmUnaryRmRImm` instructions.
 (decl xmm_unary_rm_r_imm (SseOpcode XmmMem u8) Xmm)
@@ -3544,7 +3556,7 @@
         dst))
 
 ;; Helper for creating `MInst.XmmRmRImmVex` instructions.
-(decl xmm_rmr_imm_vex (AvxOpcode Xmm RegMem u8) Xmm)
+(decl xmm_rmr_imm_vex (AvxOpcode Xmm XmmMem u8) Xmm)
 (rule (xmm_rmr_imm_vex op src1 src2 imm)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmRmRImmVex op src1 src2 dst imm))))
