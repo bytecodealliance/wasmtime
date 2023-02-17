@@ -312,7 +312,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             pointer_type,
             mem_flags,
             callee,
-            i32::from(self.offsets.ptr.vmcaller_checked_func_ref_vmctx()),
+            i32::from(self.offsets.ptr.vmcaller_checked_func_ref_func_ptr()),
         );
 
         let mut real_call_args = Vec::with_capacity(call_args.len() + 2);

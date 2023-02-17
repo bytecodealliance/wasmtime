@@ -168,6 +168,7 @@ struct WasmFeatures {
     memory64: bool,
     relaxed_simd: bool,
     extended_const: bool,
+    function_references: bool,
 }
 
 impl Metadata {
@@ -187,6 +188,7 @@ impl Metadata {
             relaxed_simd,
             extended_const,
             memory_control,
+            function_references,
 
             // Always on; we don't currently have knobs for these.
             mutable_global: _,
@@ -215,6 +217,7 @@ impl Metadata {
                 memory64,
                 relaxed_simd,
                 extended_const,
+                function_references,
             },
         }
     }
@@ -379,6 +382,7 @@ impl Metadata {
             memory64,
             relaxed_simd,
             extended_const,
+            function_references,
         } = self.features;
 
         Self::check_bool(
@@ -427,6 +431,11 @@ impl Metadata {
             relaxed_simd,
             other.relaxed_simd,
             "WebAssembly relaxed-simd support",
+        )?;
+        Self::check_bool(
+            function_references,
+            other.function_references,
+            "WebAssembly function-references support",
         )?;
 
         Ok(())

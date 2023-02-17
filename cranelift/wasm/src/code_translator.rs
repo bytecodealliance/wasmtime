@@ -2184,12 +2184,12 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (br_destination, inputs) = translate_br_if_args(*relative_depth, state);
             let is_null = environ.translate_ref_is_null(builder.cursor(), r)?;
             //canonicalise_then_brnz(builder, is_null, br_destination, inputs);
-            todo!("implement jump");
+            let else_block = builder.create_block();
+            canonicalise_brif(builder, is_null, br_destination, inputs, else_block, &[]);
 
-            let next_block = builder.create_block();
-            canonicalise_then_jump(builder, next_block, &[]);
-            builder.seal_block(next_block); // The only predecessor is the current block.
-            builder.switch_to_block(next_block);
+            // canonicalise_then_jump(builder, next_block, &[]);
+            builder.seal_block(else_block); // The only predecessor is the current block.
+            builder.switch_to_block(else_block);
             state.push1(r);
         }
         Operator::BrOnNonNull { relative_depth } => {
@@ -2202,16 +2202,18 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let is_null = environ.translate_ref_is_null(builder.cursor(), state.peek1())?;
             let (br_destination, inputs) = translate_br_if_args(*relative_depth, state);
             //canonicalise_then_brz(builder, is_null, br_destination, inputs);
-            todo!("implement jump");
+            let else_block = builder.create_block();
+            canonicalise_brif(builder, is_null, br_destination, inputs, else_block, &[]);
+
             // In the null case, pop the ref
             state.pop1();
-            let next_block = builder.create_block();
-            canonicalise_then_jump(builder, next_block, &[]);
-            builder.seal_block(next_block); // The only predecessor is the current block.
+
+            //canonicalise_then_jump(builder, next_block, &[]);
+            builder.seal_block(else_block); // The only predecessor is the current block.
 
             // The rest of the translation operates on our is null case, which is
             // currently an empty block
-            builder.switch_to_block(next_block);
+            builder.switch_to_block(else_block);
         }
         Operator::CallRef { hty } => {
             // Get function signature

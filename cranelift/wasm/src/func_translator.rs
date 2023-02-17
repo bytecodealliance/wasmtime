@@ -202,7 +202,6 @@ fn declare_locals<FE: FuncEnvironment + ?Sized>(
             builder.ins().vconst(ir::types::I8X16, constant_handle)
         }
         Ref(rt) => environ.translate_ref_null(builder.cursor(), rt.heap_type.into())?,
-        Bot => panic!("ValType::Bot won't ever actually exist"),
     };
 
     let ty = builder.func.dfg.value_type(zeroval);
