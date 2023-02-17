@@ -81,7 +81,7 @@ impl Default for Config {
             switch_max_range_size: 2..=32,
             funcrefs_per_function: 0..=8,
             static_stack_slots_per_function: 0..=8,
-            static_stack_slot_size: 0..=128,
+            static_stack_slot_size: 0..=8192,
             // We need the mix of sizes that allows us to:
             //  * not generates any stack probes
             //  * generate unrolled stack probes
