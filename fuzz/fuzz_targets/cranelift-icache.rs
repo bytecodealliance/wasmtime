@@ -10,7 +10,7 @@ use cranelift_codegen::{
     isa, Context,
 };
 use libfuzzer_sys::{
-    arbitrary::{self, Arbitrary},
+    arbitrary::{self, Arbitrary, Unstructured},
     fuzz_target,
 };
 use std::fmt;
@@ -41,22 +41,8 @@ pub struct FunctionWithIsa {
     pub func: Function,
 }
 
-impl fmt::Debug for FunctionWithIsa {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, ";; Compile test case\n")?;
-
-        write_non_default_flags(f, self.isa.flags())?;
-
-        writeln!(f, "test compile")?;
-        writeln!(f, "target {}", self.isa.triple().architecture)?;
-        writeln!(f, "{}", self.func)?;
-
-        Ok(())
-    }
-}
-
-impl<'a> Arbitrary<'a> for FunctionWithIsa {
-    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+impl FunctionWithIsa {
+    pub fn generate(u: &mut Unstructured) -> anyhow::Result<Self> {
         // We filter out targets that aren't supported in the current build
         // configuration after randomly choosing one, instead of randomly choosing
         // a supported one, so that the same fuzz input works across different build
@@ -97,6 +83,20 @@ impl<'a> Arbitrary<'a> for FunctionWithIsa {
             .map_err(|_| arbitrary::Error::IncorrectFormat)?;
 
         Ok(FunctionWithIsa { isa, func })
+    }
+}
+
+impl fmt::Debug for FunctionWithIsa {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // TODO: We could avoid the clone here.
+        let funcs = &[self.func.clone()];
+        PrintableTestCase::compile(&self.isa, funcs).fmt(f)
+    }
+}
+
+impl<'a> Arbitrary<'a> for FunctionWithIsa {
+    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        Self::generate(u).map_err(|_| arbitrary::Error::IncorrectFormat)
     }
 }
 

@@ -10,29 +10,17 @@ use cranelift::codegen::Context;
 use cranelift::prelude::*;
 use cranelift_arbitrary::CraneliftArbitrary;
 use cranelift_native::builder_with_options;
-use std::fmt;
 use target_lexicon::{Architecture, Triple};
 
 mod config;
 mod cranelift_arbitrary;
 mod function_generator;
 mod passes;
+mod print;
+
+pub use print::PrintableTestCase;
 
 pub type TestCaseInput = Vec<DataValue>;
-
-/// Print only non default flags.
-pub fn write_non_default_flags(f: &mut fmt::Formatter<'_>, flags: &settings::Flags) -> fmt::Result {
-    let default_flags = settings::Flags::new(settings::builder());
-    for (default, flag) in default_flags.iter().zip(flags.iter()) {
-        assert_eq!(default.name, flag.name);
-
-        if default.value_string() != flag.value_string() {
-            writeln!(f, "set {}={}", flag.name, flag.value_string())?;
-        }
-    }
-
-    Ok(())
-}
 
 pub struct FuzzGen<'r, 'data>
 where

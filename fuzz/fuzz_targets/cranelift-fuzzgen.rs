@@ -143,52 +143,7 @@ pub struct TestCase {
 
 impl fmt::Debug for TestCase {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, ";; Fuzzgen test case\n")?;
-        writeln!(f, "test interpret")?;
-        writeln!(f, "test run")?;
-
-        write_non_default_flags(f, self.isa.flags())?;
-
-        writeln!(f, "target {}\n", self.isa.triple().architecture)?;
-
-        // Print the functions backwards, so that the main function is printed last
-        // and near the test inputs.
-        for func in self.functions.iter().rev() {
-            writeln!(f, "{}\n", func)?;
-        }
-
-        writeln!(f, "; Note: the results in the below test cases are simply a placeholder and probably will be wrong\n")?;
-
-        for input in self.inputs.iter() {
-            // TODO: We don't know the expected outputs, maybe we can run the interpreter
-            // here to figure them out? Should work, however we need to be careful to catch
-            // panics in case its the interpreter that is failing.
-            // For now create a placeholder output consisting of the zero value for the type
-            let returns = &self.main().signature.returns;
-            let placeholder_output = returns
-                .iter()
-                .map(|param| DataValue::read_from_slice_ne(&[0; 16][..], param.value_type))
-                .map(|val| format!("{}", val))
-                .collect::<Vec<_>>()
-                .join(", ");
-
-            // If we have no output, we don't need the == condition
-            let test_condition = match returns.len() {
-                0 => String::new(),
-                1 => format!(" == {}", placeholder_output),
-                _ => format!(" == [{}]", placeholder_output),
-            };
-
-            let args = input
-                .iter()
-                .map(|val| format!("{}", val))
-                .collect::<Vec<_>>()
-                .join(", ");
-
-            writeln!(f, "; run: {}({}){}", self.main().name, args, test_condition)?;
-        }
-
-        Ok(())
+        PrintableTestCase::run(&self.isa, &self.functions, &self.inputs).fmt(f)
     }
 }
 
