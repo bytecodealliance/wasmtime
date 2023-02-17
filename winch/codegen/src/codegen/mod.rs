@@ -1,89 +1,12 @@
 use crate::{
     abi::{ABISig, ABI},
-    frame::Frame,
-    masm::{MacroAssembler, OperandSize, RegImm},
-    regalloc::RegAlloc,
-    stack::{Stack, Val},
+    masm::{MacroAssembler, OperandSize},
 };
 use anyhow::Result;
 use wasmparser::{BinaryReader, FuncValidator, ValType, ValidatorResources, VisitOperator};
 
-/// The code generation context.
-pub(crate) struct CodeGenContext<'a, M>
-where
-    M: MacroAssembler,
-{
-    pub masm: &'a mut M,
-    pub stack: Stack,
-    pub frame: &'a Frame,
-}
-
-impl<'a, M> CodeGenContext<'a, M>
-where
-    M: MacroAssembler,
-{
-    /// Create a new code generation context.
-    pub fn new(masm: &'a mut M, stack: Stack, frame: &'a Frame) -> Self {
-        Self { masm, stack, frame }
-    }
-
-    /// Prepares arguments for emitting an i32 binary operation.
-    pub fn i32_binop<F>(&mut self, regalloc: &mut RegAlloc, emit: &mut F)
-    where
-        F: FnMut(&mut M, RegImm, RegImm, OperandSize),
-    {
-        let top = self.stack.peek().expect("value at stack top");
-
-        if top.is_i32_const() {
-            let val = self
-                .stack
-                .pop_i32_const()
-                .expect("i32 const value at stack top");
-            let reg = regalloc.pop_to_reg(self, OperandSize::S32);
-            emit(
-                &mut self.masm,
-                RegImm::reg(reg),
-                RegImm::imm(val as i64),
-                OperandSize::S32,
-            );
-            self.stack.push(Val::reg(reg));
-        } else {
-            let src = regalloc.pop_to_reg(self, OperandSize::S32);
-            let dst = regalloc.pop_to_reg(self, OperandSize::S32);
-            emit(&mut self.masm, dst.into(), src.into(), OperandSize::S32);
-            regalloc.free_gpr(src);
-            self.stack.push(Val::reg(dst));
-        }
-    }
-
-    /// Prepares arguments for emitting an i64 binary operation.
-    pub fn i64_binop<F>(&mut self, regalloc: &mut RegAlloc, emit: &mut F)
-    where
-        F: FnMut(&mut M, RegImm, RegImm, OperandSize),
-    {
-        let top = self.stack.peek().expect("value at stack top");
-        if top.is_i64_const() {
-            let val = self
-                .stack
-                .pop_i64_const()
-                .expect("i64 const value at stack top");
-            let reg = regalloc.pop_to_reg(self, OperandSize::S64);
-            emit(
-                &mut self.masm,
-                RegImm::reg(reg),
-                RegImm::imm(val),
-                OperandSize::S64,
-            );
-            self.stack.push(Val::reg(reg));
-        } else {
-            let src = regalloc.pop_to_reg(self, OperandSize::S64);
-            let dst = regalloc.pop_to_reg(self, OperandSize::S64);
-            emit(&mut self.masm, dst.into(), src.into(), OperandSize::S64);
-            regalloc.free_gpr(src);
-            self.stack.push(Val::reg(dst));
-        }
-    }
-}
+mod context;
+pub(crate) use context::*;
 
 /// The code generation abstraction.
 pub(crate) struct CodeGen<'a, M>
@@ -97,22 +20,22 @@ where
     sig: ABISig,
 
     /// The code generation context.
-    pub context: CodeGenContext<'a, M>,
+    pub context: CodeGenContext<'a>,
 
-    /// The register allocator.
-    pub regalloc: RegAlloc,
+    /// The MacroAssembler.
+    pub masm: &'a mut M,
 }
 
 impl<'a, M> CodeGen<'a, M>
 where
     M: MacroAssembler,
 {
-    pub fn new<A: ABI>(context: CodeGenContext<'a, M>, sig: ABISig, regalloc: RegAlloc) -> Self {
+    pub fn new<A: ABI>(masm: &'a mut M, context: CodeGenContext<'a>, sig: ABISig) -> Self {
         Self {
             word_size: <A as ABI>::word_bytes(),
             sig,
             context,
-            regalloc,
+            masm,
         }
     }
 
@@ -131,10 +54,8 @@ where
 
     // TODO stack checks
     fn emit_start(&mut self) -> Result<()> {
-        self.context.masm.prologue();
-        self.context
-            .masm
-            .reserve_stack(self.context.frame.locals_size);
+        self.masm.prologue();
+        self.masm.reserve_stack(self.context.frame.locals_size);
         Ok(())
     }
 
@@ -145,10 +66,10 @@ where
     ) -> Result<()> {
         self.spill_register_arguments();
         let defined_locals_range = &self.context.frame.defined_locals_range;
-        self.context.masm.zero_mem_range(
+        self.masm.zero_mem_range(
             defined_locals_range.as_range(),
             self.word_size,
-            &mut self.regalloc,
+            &mut self.context.regalloc,
         );
 
         while !body.eof() {
@@ -185,7 +106,7 @@ where
     // Emit the usual function end instruction sequence.
     pub fn emit_end(&mut self) -> Result<()> {
         self.handle_abi_result();
-        self.context.masm.epilogue(self.context.frame.locals_size);
+        self.masm.epilogue(self.context.frame.locals_size);
         Ok(())
     }
 
@@ -206,14 +127,14 @@ where
                     .frame
                     .get_local(index as u32)
                     .expect("valid local slot at location");
-                let addr = self.context.masm.local_address(local);
+                let addr = self.masm.local_address(local);
                 let src = arg
                     .get_reg()
                     .expect("arg should be associated to a register");
 
                 match &ty {
-                    ValType::I32 => self.context.masm.store(src.into(), addr, OperandSize::S32),
-                    ValType::I64 => self.context.masm.store(src.into(), addr, OperandSize::S64),
+                    ValType::I32 => self.masm.store(src.into(), addr, OperandSize::S32),
+                    ValType::I64 => self.masm.store(src.into(), addr, OperandSize::S64),
                     _ => panic!("Unsupported type {:?}", ty),
                 }
             });
@@ -225,8 +146,8 @@ where
         }
         let named_reg = self.sig.result.result_reg();
         let reg = self
-            .regalloc
-            .pop_to_named_reg(&mut self.context, named_reg, OperandSize::S64);
-        self.regalloc.free_gpr(reg);
+            .context
+            .pop_to_named_reg(self.masm, named_reg, OperandSize::S64);
+        self.context.regalloc.free_gpr(reg);
     }
 }
