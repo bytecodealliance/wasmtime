@@ -30,7 +30,8 @@ pub struct Config {
     pub switch_cases: RangeInclusive<usize>,
     pub switch_max_range_size: RangeInclusive<usize>,
 
-    pub funcrefs_per_function: RangeInclusive<usize>,
+    /// Number of distinct functions in the same testsuite that we allow calling per function.
+    pub usercalls: RangeInclusive<usize>,
 
     /// Stack slots.
     /// The combination of these two determines stack usage per function
@@ -79,7 +80,7 @@ impl Default for Config {
             switch_cases: 0..=64,
             // Ranges smaller than 2 don't make sense.
             switch_max_range_size: 2..=32,
-            funcrefs_per_function: 0..=8,
+            usercalls: 0..=8,
             static_stack_slots_per_function: 0..=8,
             static_stack_slot_size: 0..=128,
             // We need the mix of sizes that allows us to:
