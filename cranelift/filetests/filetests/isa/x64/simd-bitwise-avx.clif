@@ -1,0 +1,228 @@
+test compile precise-output
+set enable_simd
+target x86_64 has_avx
+
+function %mask_from_icmp(f32x4, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32x4):
+    v2 = fmin v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vminps  %xmm0, %xmm1, %xmm3
+;   vminps  %xmm1, %xmm0, %xmm5
+;   vorps   %xmm3, %xmm5, %xmm7
+;   vcmpps  $3 %xmm7, %xmm5, %xmm9
+;   vorps   %xmm7, %xmm9, %xmm11
+;   vpsrld  %xmm9, $10, %xmm13
+;   vandnps %xmm13, %xmm11, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vminps %xmm1, %xmm0, %xmm3
+;   vminps %xmm0, %xmm1, %xmm5
+;   vorps %xmm5, %xmm3, %xmm7
+;   vcmpunordps %xmm5, %xmm7, %xmm9
+;   vorps %xmm9, %xmm7, %xmm11
+;   vpsrld $0xa, %xmm9, %xmm13
+;   vandnps %xmm11, %xmm13, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %or_from_memory(f32x4, i64) -> f32x4 {
+block0(v0: f32x4, v1: i64):
+    v2 = load.f32x4 notrap aligned v1
+    v3 = bor v0, v2
+    return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movups  0(%rdi), %xmm4
+;   vorps   %xmm0, %xmm4, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movups (%rdi), %xmm4
+;   vorps %xmm4, %xmm0, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %copysign_from_memory(i64) -> f32 {
+block0(v0: i64):
+    v1 = f32const 0.0
+    v2 = load.f32 notrap aligned v0
+    v3 = fcopysign v1, v2
+    return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movss   0(%rdi), %xmm7
+;   movl    $-2147483648, %ecx
+;   movd    %ecx, %xmm8
+;   vandnps %xmm8, const(0), %xmm9
+;   andps   %xmm8, %xmm7, %xmm8
+;   vorps   %xmm9, %xmm8, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movss (%rdi), %xmm7
+;   movl $0x80000000, %ecx
+;   movd %ecx, %xmm8
+;   vandnps 0x16(%rip), %xmm8, %xmm9
+;   andps %xmm7, %xmm8
+;   vorps %xmm8, %xmm9, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+
+function %bor_f32x4(f32x4, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32x4):
+    v2 = bor v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vorps   %xmm0, %xmm1, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vorps %xmm1, %xmm0, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %band_not_f32x4(f32x4, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32x4):
+    v2 = band_not v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vandnps %xmm1, %xmm0, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vandnps %xmm0, %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %i32x4_shr(i32x4, i32) -> i32x4 {
+block0(v0: i32x4, v1: i32):
+    v2 = ushr v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rcx
+;   andq    %rcx, $31, %rcx
+;   movd    %ecx, %xmm5
+;   vpsrld  %xmm0, %xmm5, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rcx
+;   andq $0x1f, %rcx
+;   movd %ecx, %xmm5
+;   vpsrld %xmm5, %xmm0, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %f32x4_abs(f32x4) -> f32x4 {
+block0(v0: f32x4):
+    v1 = fabs v0
+    return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   pcmpeqd %xmm2, %xmm2, %xmm2
+;   vpsrld  %xmm2, $1, %xmm4
+;   andps   %xmm0, %xmm4, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   pcmpeqd %xmm2, %xmm2
+;   vpsrld $1, %xmm2, %xmm4
+;   andps %xmm4, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
