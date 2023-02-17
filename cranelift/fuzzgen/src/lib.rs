@@ -321,6 +321,7 @@ where
         let supports_inline_probestack = match target_arch {
             Architecture::X86_64 => true,
             Architecture::Aarch64(_) => true,
+            Architecture::Riscv64(_) => true,
             _ => false,
         };
 
