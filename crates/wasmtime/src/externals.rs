@@ -2,7 +2,7 @@ use crate::store::{StoreData, StoreOpaque, Stored};
 use crate::trampoline::{generate_global_export, generate_table_export};
 use crate::{
     AsContext, AsContextMut, Engine, ExternRef, ExternType, Func, GlobalType, Memory, Mutability,
-    SharedMemory, TableType, Trap, Val, ValType, HeapType,
+    SharedMemory, TableType, Val, ValType, HeapType,
 };
 use anyhow::{anyhow, bail, Result};
 use std::mem;
