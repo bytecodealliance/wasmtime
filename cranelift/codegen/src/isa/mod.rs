@@ -43,6 +43,7 @@
 //! The configured target ISA trait object is a `Box<TargetIsa>` which can be used for multiple
 //! concurrent function compilations.
 
+use crate::dominator_tree::DominatorTree;
 pub use crate::isa::call_conv::CallConv;
 
 use crate::flowgraph;
@@ -252,6 +253,7 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     fn compile_function(
         &self,
         func: &Function,
+        domtree: &DominatorTree,
         want_disasm: bool,
     ) -> CodegenResult<CompiledCodeStencil>;
 

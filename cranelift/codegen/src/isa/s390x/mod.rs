@@ -1,5 +1,6 @@
 //! IBM Z 64-bit Instruction Set Architecture.
 
+use crate::dominator_tree::DominatorTree;
 use crate::ir::condcodes::IntCC;
 use crate::ir::{Function, Type};
 use crate::isa::s390x::settings as s390x_settings;
@@ -56,11 +57,12 @@ impl S390xBackend {
     fn compile_vcode(
         &self,
         func: &Function,
+        domtree: &DominatorTree,
     ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
         let emit_info = EmitInfo::new(self.isa_flags.clone());
         let sigs = SigSet::new::<abi::S390xMachineDeps>(func, &self.flags)?;
         let abi = abi::S390xCallee::new(func, self, &self.isa_flags, &sigs)?;
-        compile::compile::<S390xBackend>(func, self, abi, emit_info, sigs)
+        compile::compile::<S390xBackend>(func, domtree, self, abi, emit_info, sigs)
     }
 }
 
@@ -68,10 +70,11 @@ impl TargetIsa for S390xBackend {
     fn compile_function(
         &self,
         func: &Function,
+        domtree: &DominatorTree,
         want_disasm: bool,
     ) -> CodegenResult<CompiledCodeStencil> {
         let flags = self.flags();
-        let (vcode, regalloc_result) = self.compile_vcode(func)?;
+        let (vcode, regalloc_result) = self.compile_vcode(func, domtree)?;
 
         let emit_result = vcode.emit(&regalloc_result, want_disasm, flags.machine_code_cfg_info());
         let frame_size = emit_result.frame_size;
@@ -213,6 +216,8 @@ pub fn isa_builder(triple: Triple) -> IsaBuilder {
 mod test {
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
+    use crate::dominator_tree::DominatorTree;
+    use crate::flowgraph::ControlFlowGraph;
     use crate::ir::types::*;
     use crate::ir::UserFuncName;
     use crate::ir::{AbiParam, Function, InstBuilder, Signature};
@@ -248,8 +253,10 @@ mod test {
             shared_flags,
             isa_flags,
         );
+        let cfg = ControlFlowGraph::with_function(&func);
+        let domtree = DominatorTree::with_function(&func, &cfg);
         let result = backend
-            .compile_function(&mut func, /* want_disasm = */ false)
+            .compile_function(&mut func, &domtree, /* want_disasm = */ false)
             .unwrap();
         let code = result.buffer.data();
 
@@ -297,8 +304,10 @@ mod test {
             shared_flags,
             isa_flags,
         );
+        let cfg = ControlFlowGraph::with_function(&func);
+        let domtree = DominatorTree::with_function(&func, &cfg);
         let result = backend
-            .compile_function(&mut func, /* want_disasm = */ false)
+            .compile_function(&mut func, &domtree, /* want_disasm = */ false)
             .unwrap();
         let code = result.buffer.data();
 
@@ -310,19 +319,20 @@ mod test {
         //
         //  0:   a7 2a 12 34             ahi     %r2,4660
         //  4:   a7 2e 00 00             chi     %r2,0
-        //  8:   c0 64 00 00 00 0b       jglh    0x1e
-        //  e:   ec 32 12 34 00 d8       ahik    %r3,%r2,4660
-        // 14:   a7 3e 00 00             chi     %r3,0
-        // 18:   c0 64 ff ff ff fb       jglh    0xe
-        // 1e:   a7 2e 00 00             chi     %r2,0
-        // 22:   c0 64 ff ff ff f6       jglh    0xe
-        // 28:   a7 2a ed cc             ahi     %r2,-4660
-        // 2c:   07 fe                   br      %r14
+        //  8:   c0 94 00 00 00 0b       jgnlh   0x1e
+        //  e:   a7 2e 00 00             chi     %r2,0
+        // 12:   c0 64 00 00 00 06       jglh    0x1e
+        // 18:   a7 2a ed cc             ahi     %r2,-4660
+        // 1c:   07 fe                   br      %r14
+        // 1e:   ec 32 12 34 00 d8       ahik    %r3,%r2,4660
+        // 24:   a7 3e 00 00             chi     %r3,0
+        // 28:   c0 64 ff ff ff fb       jglh    0x1e
+        // 2e:   c0 f4 ff ff ff f0       jg      0xe
 
         let golden = vec![
-            167, 42, 18, 52, 167, 46, 0, 0, 192, 100, 0, 0, 0, 11, 236, 50, 18, 52, 0, 216, 167,
-            62, 0, 0, 192, 100, 255, 255, 255, 251, 167, 46, 0, 0, 192, 100, 255, 255, 255, 246,
-            167, 42, 237, 204, 7, 254,
+            167, 42, 18, 52, 167, 46, 0, 0, 192, 148, 0, 0, 0, 11, 167, 46, 0, 0, 192, 100, 0, 0,
+            0, 6, 167, 42, 237, 204, 7, 254, 236, 50, 18, 52, 0, 216, 167, 62, 0, 0, 192, 100, 255,
+            255, 255, 251, 192, 244, 255, 255, 255, 240,
         ];
 
         assert_eq!(code, &golden[..]);
