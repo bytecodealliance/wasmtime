@@ -130,7 +130,7 @@ impl<T, E> TrappingUnwrap<T> for Result<T, E> {
 pub unsafe extern "C" fn cabi_import_realloc(
     old_ptr: *mut u8,
     old_size: usize,
-    _align: usize,
+    align: usize,
     new_size: usize,
 ) -> *mut u8 {
     if !old_ptr.is_null() || old_size != 0 {
@@ -138,21 +138,81 @@ pub unsafe extern "C" fn cabi_import_realloc(
     }
     let mut ptr = null_mut::<u8>();
     State::with(|state| {
-        ptr = state.buffer_ptr.replace(null_mut());
-        if ptr.is_null() {
-            unreachable!();
-        }
-        let len = state.buffer_len.replace(0);
-        if len < new_size {
-            unreachable!();
-        }
+        ptr = state.import_alloc.alloc(align, new_size);
         Ok(())
     });
     ptr
 }
 
+/// Bump-allocated memory arena. This is a singleton - the
+/// memory will be sized according to `bump_arena_size()`.
+struct BumpArena {
+    data: MaybeUninit<[u8; bump_arena_size()]>,
+    position: Cell<usize>,
+}
+
+impl BumpArena {
+    fn new() -> Self {
+        BumpArena {
+            data: MaybeUninit::uninit(),
+            position: Cell::new(0),
+        }
+    }
+    fn alloc(&self, align: usize, size: usize) -> *mut u8 {
+        let start = self.data.as_ptr() as usize;
+        let next = start + self.position.get();
+        let alloc = align_to(next, align);
+        let offset = alloc - start;
+        if offset + size > bump_arena_size() {
+            unreachable!("out of memory");
+        }
+        self.position.set(offset + size);
+        alloc as *mut u8
+    }
+}
 fn align_to(ptr: usize, align: usize) -> usize {
     (ptr + (align - 1)) & !(align - 1)
+}
+
+struct ImportAlloc {
+    buffer: Cell<*mut u8>,
+    len: Cell<usize>,
+}
+
+impl ImportAlloc {
+    fn new() -> Self {
+        ImportAlloc {
+            buffer: Cell::new(std::ptr::null_mut()),
+            len: Cell::new(0),
+        }
+    }
+
+    fn with_buffer<T>(&self, buffer: *mut u8, len: usize, f: impl FnOnce() -> T) -> T {
+        let prev = self.buffer.replace(buffer);
+        if !prev.is_null() {
+            unreachable!()
+        }
+        self.len.set(len);
+        let r = f();
+        self.buffer.set(std::ptr::null_mut());
+        r
+    }
+
+    fn alloc(&self, align: usize, size: usize) -> *mut u8 {
+        let buffer = self.buffer.get();
+        if buffer.is_null() {
+            unreachable!("buffer not provided, or already used")
+        }
+        let buffer = buffer as usize;
+        let alloc = align_to(buffer, align);
+        if alloc.checked_add(size).trapping_unwrap()
+            > buffer.checked_add(self.len.get()).trapping_unwrap()
+        {
+            unreachable!("out of memory")
+        }
+        self.buffer.set(std::ptr::null_mut());
+        alloc as *mut u8
+    }
 }
 
 /// This allocator is only used for the `command` entrypoint.
@@ -174,21 +234,7 @@ pub unsafe extern "C" fn cabi_export_realloc(
     }
     let mut ret = null_mut::<u8>();
     State::with_mut(|state| {
-        let data = state.command_data.as_mut_ptr();
-        let ptr = align_to(
-            usize::try_from(state.command_data_next).trapping_unwrap(),
-            align,
-        );
-
-        // "oom" as too much argument data tried to flow into the component.
-        // Ideally this would have a better error message?
-        if ptr + new_size > (*data).len() {
-            unreachable!("out of memory");
-        }
-        state.command_data_next = (ptr + new_size)
-            .try_into()
-            .unwrap_or_else(|_| unreachable!());
-        ret = (*data).as_mut_ptr().add(ptr);
+        ret = state.long_lived_arena.alloc(align, new_size);
         Ok(())
     });
     ret
@@ -664,10 +710,11 @@ pub unsafe extern "C" fn fd_pread(
     State::with(|state| {
         let ptr = (*iovs_ptr).buf;
         let len = (*iovs_ptr).buf_len;
-        state.register_buffer(ptr, len);
 
         let file = state.get_file(fd)?;
-        let (data, end) = wasi_filesystem::pread(file.fd, len as u64, offset)?;
+        let (data, end) = state.import_alloc.with_buffer(ptr, len, || {
+            wasi_filesystem::pread(file.fd, len as u64, offset)
+        })?;
         assert_eq!(data.as_ptr(), ptr);
         assert!(data.len() <= len);
 
@@ -785,15 +832,16 @@ pub unsafe extern "C" fn fd_read(
     let len = (*iovs_ptr).buf_len;
 
     State::with(|state| {
-        state.register_buffer(ptr, len);
-
         match state.get(fd)? {
             Descriptor::Streams(streams) => {
                 let wasi_stream = streams.get_read_stream()?;
 
                 let read_len = u64::try_from(len).trapping_unwrap();
                 let wasi_stream = streams.get_read_stream()?;
-                let (data, end) = wasi_io::read(wasi_stream, read_len).map_err(|_| ERRNO_IO)?;
+                let (data, end) = state
+                    .import_alloc
+                    .with_buffer(ptr, len, || wasi_io::read(wasi_stream, read_len))
+                    .map_err(|_| ERRNO_IO)?;
 
                 assert_eq!(data.as_ptr(), ptr);
                 assert!(data.len() <= len);
@@ -981,9 +1029,12 @@ pub unsafe extern "C" fn fd_readdir(
                     Ok((dirent, buffer))
                 });
             }
-            self.state
-                .register_buffer(self.state.path_buf.get().cast(), PATH_MAX);
-            let entry = match wasi_filesystem::read_dir_entry(self.stream.0) {
+            let entry = self.state.import_alloc.with_buffer(
+                self.state.path_buf.get().cast(),
+                PATH_MAX,
+                || wasi_filesystem::read_dir_entry(self.stream.0),
+            );
+            let entry = match entry {
                 Ok(Some(entry)) => entry,
                 Ok(None) => return None,
                 Err(e) => return Some(Err(e.into())),
@@ -1343,14 +1394,18 @@ pub unsafe extern "C" fn path_readlink(
         // so instead we handle this case specially.
         let use_state_buf = buf_len < PATH_MAX;
 
-        if use_state_buf {
-            state.register_buffer(state.path_buf.get().cast(), PATH_MAX);
-        } else {
-            state.register_buffer(buf, buf_len);
-        }
-
         let file = state.get_dir(fd)?;
-        let path = wasi_filesystem::readlink_at(file.fd, path)?;
+        let path = if use_state_buf {
+            state
+                .import_alloc
+                .with_buffer(state.path_buf.get().cast(), PATH_MAX, || {
+                    wasi_filesystem::readlink_at(file.fd, path)
+                })?
+        } else {
+            state
+                .import_alloc
+                .with_buffer(buf, buf_len, || wasi_filesystem::readlink_at(file.fd, path))?
+        };
 
         assert_eq!(path.as_ptr(), buf);
         assert!(path.len() <= buf_len);
@@ -1531,250 +1586,257 @@ pub unsafe extern "C" fn poll_oneoff(
     }
 
     State::with(|state| {
-        state.register_buffer(
+        state.import_alloc.with_buffer(
             results,
             nsubscriptions
                 .checked_mul(size_of::<bool>())
                 .trapping_unwrap(),
-        );
+            || {
+                let mut pollables = Pollables {
+                    pointer: pollables,
+                    index: 0,
+                    length: nsubscriptions,
+                };
 
-        let mut pollables = Pollables {
-            pointer: pollables,
-            index: 0,
-            length: nsubscriptions,
-        };
+                for subscription in subscriptions {
+                    const EVENTTYPE_CLOCK: u8 = wasi::EVENTTYPE_CLOCK.raw();
+                    const EVENTTYPE_FD_READ: u8 = wasi::EVENTTYPE_FD_READ.raw();
+                    const EVENTTYPE_FD_WRITE: u8 = wasi::EVENTTYPE_FD_WRITE.raw();
+                    pollables.push(match subscription.u.tag {
+                        EVENTTYPE_CLOCK => {
+                            let clock = &subscription.u.u.clock;
+                            let absolute = (clock.flags & SUBCLOCKFLAGS_SUBSCRIPTION_CLOCK_ABSTIME)
+                                == SUBCLOCKFLAGS_SUBSCRIPTION_CLOCK_ABSTIME;
+                            match clock.id {
+                                CLOCKID_REALTIME => {
+                                    let timeout = if absolute {
+                                        // Convert `clock.timeout` to `Datetime`.
+                                        let mut datetime = wasi_wall_clock::Datetime {
+                                            seconds: clock.timeout / 1_000_000_000,
+                                            nanoseconds: (clock.timeout % 1_000_000_000) as _,
+                                        };
 
-        for subscription in subscriptions {
-            const EVENTTYPE_CLOCK: u8 = wasi::EVENTTYPE_CLOCK.raw();
-            const EVENTTYPE_FD_READ: u8 = wasi::EVENTTYPE_FD_READ.raw();
-            const EVENTTYPE_FD_WRITE: u8 = wasi::EVENTTYPE_FD_WRITE.raw();
-            pollables.push(match subscription.u.tag {
-                EVENTTYPE_CLOCK => {
-                    let clock = &subscription.u.u.clock;
-                    let absolute = (clock.flags & SUBCLOCKFLAGS_SUBSCRIPTION_CLOCK_ABSTIME)
-                        == SUBCLOCKFLAGS_SUBSCRIPTION_CLOCK_ABSTIME;
-                    match clock.id {
-                        CLOCKID_REALTIME => {
-                            let timeout = if absolute {
-                                // Convert `clock.timeout` to `Datetime`.
-                                let mut datetime = wasi_wall_clock::Datetime {
-                                    seconds: clock.timeout / 1_000_000_000,
-                                    nanoseconds: (clock.timeout % 1_000_000_000) as _,
-                                };
+                                        // Subtract `now`.
+                                        let now = wasi_wall_clock::now(state.default_wall_clock());
+                                        datetime.seconds -= now.seconds;
+                                        if datetime.nanoseconds < now.nanoseconds {
+                                            datetime.seconds -= 1;
+                                            datetime.nanoseconds += 1_000_000_000;
+                                        }
+                                        datetime.nanoseconds -= now.nanoseconds;
 
-                                // Subtract `now`.
-                                let now = wasi_wall_clock::now(state.default_wall_clock());
-                                datetime.seconds -= now.seconds;
-                                if datetime.nanoseconds < now.nanoseconds {
-                                    datetime.seconds -= 1;
-                                    datetime.nanoseconds += 1_000_000_000;
+                                        // Convert to nanoseconds.
+                                        let nanos = datetime
+                                            .seconds
+                                            .checked_mul(1_000_000_000)
+                                            .ok_or(ERRNO_OVERFLOW)?;
+                                        nanos
+                                            .checked_add(datetime.nanoseconds.into())
+                                            .ok_or(ERRNO_OVERFLOW)?
+                                    } else {
+                                        clock.timeout
+                                    };
+
+                                    wasi_monotonic_clock::subscribe(
+                                        state.default_monotonic_clock(),
+                                        timeout,
+                                        false,
+                                    )
                                 }
-                                datetime.nanoseconds -= now.nanoseconds;
 
-                                // Convert to nanoseconds.
-                                let nanos = datetime
-                                    .seconds
-                                    .checked_mul(1_000_000_000)
-                                    .ok_or(ERRNO_OVERFLOW)?;
-                                nanos
-                                    .checked_add(datetime.nanoseconds.into())
-                                    .ok_or(ERRNO_OVERFLOW)?
-                            } else {
-                                clock.timeout
-                            };
+                                CLOCKID_MONOTONIC => wasi_monotonic_clock::subscribe(
+                                    state.default_monotonic_clock(),
+                                    clock.timeout,
+                                    absolute,
+                                ),
 
-                            wasi_monotonic_clock::subscribe(
-                                state.default_monotonic_clock(),
-                                timeout,
-                                false,
-                            )
+                                _ => return Err(ERRNO_INVAL),
+                            }
                         }
 
-                        CLOCKID_MONOTONIC => wasi_monotonic_clock::subscribe(
-                            state.default_monotonic_clock(),
-                            clock.timeout,
-                            absolute,
-                        ),
+                        EVENTTYPE_FD_READ => {
+                            match state.get_read_stream(subscription.u.u.fd_read.file_descriptor) {
+                                Ok(stream) => wasi_io::subscribe_read(stream),
+                                // If the file descriptor isn't a stream, request a
+                                // pollable which completes immediately so that it'll
+                                // immediately fail.
+                                Err(ERRNO_BADF) => wasi_monotonic_clock::subscribe(
+                                    state.default_monotonic_clock(),
+                                    0,
+                                    false,
+                                ),
+                                Err(e) => return Err(e),
+                            }
+                        }
+
+                        EVENTTYPE_FD_WRITE => {
+                            match state.get_write_stream(subscription.u.u.fd_write.file_descriptor)
+                            {
+                                Ok(stream) => wasi_io::subscribe(stream),
+                                // If the file descriptor isn't a stream, request a
+                                // pollable which completes immediately so that it'll
+                                // immediately fail.
+                                Err(ERRNO_BADF) => wasi_monotonic_clock::subscribe(
+                                    state.default_monotonic_clock(),
+                                    0,
+                                    false,
+                                ),
+                                Err(e) => return Err(e),
+                            }
+                        }
 
                         _ => return Err(ERRNO_INVAL),
-                    }
+                    });
                 }
 
-                EVENTTYPE_FD_READ => {
-                    match state.get_read_stream(subscription.u.u.fd_read.file_descriptor) {
-                        Ok(stream) => wasi_io::subscribe_read(stream),
-                        // If the file descriptor isn't a stream, request a
-                        // pollable which completes immediately so that it'll
-                        // immediately fail.
-                        Err(ERRNO_BADF) => wasi_monotonic_clock::subscribe(
-                            state.default_monotonic_clock(),
-                            0,
-                            false,
-                        ),
-                        Err(e) => return Err(e),
-                    }
-                }
+                let vec = wasi_poll::poll_oneoff(slice::from_raw_parts(
+                    pollables.pointer,
+                    pollables.length,
+                ));
 
-                EVENTTYPE_FD_WRITE => {
-                    match state.get_write_stream(subscription.u.u.fd_write.file_descriptor) {
-                        Ok(stream) => wasi_io::subscribe(stream),
-                        // If the file descriptor isn't a stream, request a
-                        // pollable which completes immediately so that it'll
-                        // immediately fail.
-                        Err(ERRNO_BADF) => wasi_monotonic_clock::subscribe(
-                            state.default_monotonic_clock(),
-                            0,
-                            false,
-                        ),
-                        Err(e) => return Err(e),
-                    }
-                }
+                assert_eq!(vec.len(), nsubscriptions);
+                assert_eq!(vec.as_ptr(), results);
+                forget(vec);
 
-                _ => return Err(ERRNO_INVAL),
-            });
-        }
+                drop(pollables);
 
-        let vec =
-            wasi_poll::poll_oneoff(slice::from_raw_parts(pollables.pointer, pollables.length));
+                let ready = subscriptions
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, s)| (*results.add(i) != 0).then_some(s));
 
-        assert_eq!(vec.len(), nsubscriptions);
-        assert_eq!(vec.as_ptr(), results);
-        forget(vec);
+                let mut count = 0;
 
-        drop(pollables);
+                for subscription in ready {
+                    let error;
+                    let type_;
+                    let nbytes;
+                    let flags;
 
-        let ready = subscriptions
-            .iter()
-            .enumerate()
-            .filter_map(|(i, s)| (*results.add(i) != 0).then_some(s));
+                    match subscription.u.tag {
+                        0 => {
+                            error = ERRNO_SUCCESS;
+                            type_ = EVENTTYPE_CLOCK;
+                            nbytes = 0;
+                            flags = 0;
+                        }
 
-        let mut count = 0;
-
-        for subscription in ready {
-            let error;
-            let type_;
-            let nbytes;
-            let flags;
-
-            match subscription.u.tag {
-                0 => {
-                    error = ERRNO_SUCCESS;
-                    type_ = EVENTTYPE_CLOCK;
-                    nbytes = 0;
-                    flags = 0;
-                }
-
-                1 => {
-                    type_ = EVENTTYPE_FD_READ;
-                    let desc = state
-                        .get(subscription.u.u.fd_read.file_descriptor)
-                        .trapping_unwrap();
-                    match desc {
-                        Descriptor::Streams(streams) => match &streams.type_ {
-                            StreamType::File(file) => match wasi_filesystem::stat(file.fd) {
-                                Ok(stat) => {
-                                    error = ERRNO_SUCCESS;
-                                    nbytes = stat.size.saturating_sub(file.position.get());
-                                    flags = if nbytes == 0 {
-                                        EVENTRWFLAGS_FD_READWRITE_HANGUP
-                                    } else {
-                                        0
-                                    };
-                                }
-                                Err(e) => {
-                                    error = e.into();
-                                    nbytes = 1;
-                                    flags = 0;
-                                }
-                            },
-                            StreamType::Socket(connection) => {
-                                match wasi_tcp::bytes_readable(*connection) {
-                                    Ok(result) => {
-                                        error = ERRNO_SUCCESS;
-                                        nbytes = result.0;
-                                        flags = if result.1 {
-                                            EVENTRWFLAGS_FD_READWRITE_HANGUP
-                                        } else {
-                                            0
-                                        };
+                        1 => {
+                            type_ = EVENTTYPE_FD_READ;
+                            let desc = state
+                                .get(subscription.u.u.fd_read.file_descriptor)
+                                .trapping_unwrap();
+                            match desc {
+                                Descriptor::Streams(streams) => match &streams.type_ {
+                                    StreamType::File(file) => {
+                                        match wasi_filesystem::stat(file.fd) {
+                                            Ok(stat) => {
+                                                error = ERRNO_SUCCESS;
+                                                nbytes =
+                                                    stat.size.saturating_sub(file.position.get());
+                                                flags = if nbytes == 0 {
+                                                    EVENTRWFLAGS_FD_READWRITE_HANGUP
+                                                } else {
+                                                    0
+                                                };
+                                            }
+                                            Err(e) => {
+                                                error = e.into();
+                                                nbytes = 1;
+                                                flags = 0;
+                                            }
+                                        }
                                     }
-                                    Err(e) => {
-                                        error = e.into();
+                                    StreamType::Socket(connection) => {
+                                        match wasi_tcp::bytes_readable(*connection) {
+                                            Ok(result) => {
+                                                error = ERRNO_SUCCESS;
+                                                nbytes = result.0;
+                                                flags = if result.1 {
+                                                    EVENTRWFLAGS_FD_READWRITE_HANGUP
+                                                } else {
+                                                    0
+                                                };
+                                            }
+                                            Err(e) => {
+                                                error = e.into();
+                                                nbytes = 0;
+                                                flags = 0;
+                                            }
+                                        }
+                                    }
+                                    StreamType::EmptyStdin => {
+                                        error = ERRNO_SUCCESS;
+                                        nbytes = 0;
+                                        flags = EVENTRWFLAGS_FD_READWRITE_HANGUP;
+                                    }
+                                    StreamType::Unknown => {
+                                        error = ERRNO_SUCCESS;
+                                        nbytes = 1;
+                                        flags = 0;
+                                    }
+                                },
+                                _ => unreachable!(),
+                            }
+                        }
+                        2 => {
+                            type_ = EVENTTYPE_FD_WRITE;
+                            let desc = state
+                                .get(subscription.u.u.fd_read.file_descriptor)
+                                .trapping_unwrap();
+                            match desc {
+                                Descriptor::Streams(streams) => match streams.type_ {
+                                    StreamType::File(_) | StreamType::Unknown => {
+                                        error = ERRNO_SUCCESS;
+                                        nbytes = 1;
+                                        flags = 0;
+                                    }
+                                    StreamType::Socket(connection) => {
+                                        match wasi_tcp::bytes_writable(connection) {
+                                            Ok(result) => {
+                                                error = ERRNO_SUCCESS;
+                                                nbytes = result.0;
+                                                flags = if result.1 {
+                                                    EVENTRWFLAGS_FD_READWRITE_HANGUP
+                                                } else {
+                                                    0
+                                                };
+                                            }
+                                            Err(e) => {
+                                                error = e.into();
+                                                nbytes = 0;
+                                                flags = 0;
+                                            }
+                                        }
+                                    }
+                                    StreamType::EmptyStdin => {
+                                        error = ERRNO_BADF;
                                         nbytes = 0;
                                         flags = 0;
                                     }
-                                }
+                                },
+                                _ => unreachable!(),
                             }
-                            StreamType::EmptyStdin => {
-                                error = ERRNO_SUCCESS;
-                                nbytes = 0;
-                                flags = EVENTRWFLAGS_FD_READWRITE_HANGUP;
-                            }
-                            StreamType::Unknown => {
-                                error = ERRNO_SUCCESS;
-                                nbytes = 1;
-                                flags = 0;
-                            }
-                        },
+                        }
+
                         _ => unreachable!(),
                     }
-                }
-                2 => {
-                    type_ = EVENTTYPE_FD_WRITE;
-                    let desc = state
-                        .get(subscription.u.u.fd_read.file_descriptor)
-                        .trapping_unwrap();
-                    match desc {
-                        Descriptor::Streams(streams) => match streams.type_ {
-                            StreamType::File(_) | StreamType::Unknown => {
-                                error = ERRNO_SUCCESS;
-                                nbytes = 1;
-                                flags = 0;
-                            }
-                            StreamType::Socket(connection) => {
-                                match wasi_tcp::bytes_writable(connection) {
-                                    Ok(result) => {
-                                        error = ERRNO_SUCCESS;
-                                        nbytes = result.0;
-                                        flags = if result.1 {
-                                            EVENTRWFLAGS_FD_READWRITE_HANGUP
-                                        } else {
-                                            0
-                                        };
-                                    }
-                                    Err(e) => {
-                                        error = e.into();
-                                        nbytes = 0;
-                                        flags = 0;
-                                    }
-                                }
-                            }
-                            StreamType::EmptyStdin => {
-                                error = ERRNO_BADF;
-                                nbytes = 0;
-                                flags = 0;
-                            }
-                        },
-                        _ => unreachable!(),
-                    }
+
+                    *out.add(count) = Event {
+                        userdata: subscription.userdata,
+                        error,
+                        type_,
+                        fd_readwrite: EventFdReadwrite { nbytes, flags },
+                    };
+
+                    count += 1;
                 }
 
-                _ => unreachable!(),
-            }
+                *nevents = count;
 
-            *out.add(count) = Event {
-                userdata: subscription.userdata,
-                error,
-                type_,
-                fd_readwrite: EventFdReadwrite { nbytes, flags },
-            };
-
-            count += 1;
-        }
-
-        *nevents = count;
-
-        Ok(())
+                Ok(())
+            },
+        )
     })
 }
 
@@ -1817,10 +1879,10 @@ pub unsafe extern "C" fn random_get(buf: *mut u8, buf_len: Size) -> Errno {
         AllocationState::StackAllocated | AllocationState::StateAllocated
     ) {
         State::with(|state| {
-            state.register_buffer(buf, buf_len);
-
             assert_eq!(buf_len as u32 as Size, buf_len);
-            let result = wasi_random::get_random_bytes(buf_len as u32);
+            let result = state.import_alloc.with_buffer(buf, buf_len, || {
+                wasi_random::get_random_bytes(buf_len as u32)
+            });
             assert_eq!(result.as_ptr(), buf);
 
             // The returned buffer's memory was allocated in `buf`, so don't separately
@@ -2135,10 +2197,8 @@ struct State {
     /// try to catch memory corruption coming from the bottom.
     magic1: u32,
 
-    /// Used by `register_buffer` to coordinate allocations with
-    /// `cabi_import_realloc`.
-    buffer_ptr: Cell<*mut u8>,
-    buffer_len: Cell<usize>,
+    /// Used to coordinate allocations of `cabi_import_realloc`
+    import_alloc: ImportAlloc,
 
     /// Storage of mapping from preview1 file descriptors to preview2 file
     /// descriptors.
@@ -2151,12 +2211,12 @@ struct State {
     /// Auxiliary storage to handle the `path_readlink` function.
     path_buf: UnsafeCell<MaybeUninit<[u8; PATH_MAX]>>,
 
-    /// Storage area for data passed to the `command` entrypoint. The
-    /// `command_data` is a block of memory which is dynamically allocated from
-    /// in `cabi_export_realloc`. The `command_data_next` is the
-    /// bump-allocated-pointer of where to allocate from next.
-    command_data: MaybeUninit<[u8; command_data_size()]>,
-    command_data_next: u16,
+    /// Long-lived bump allocated memory arena.
+    ///
+    /// This is used for the cabi_export_realloc to allocate data passed to the
+    /// `command` entrypoint. Allocations in this arena are safe to use for
+    /// the lifetime of the State struct.
+    long_lived_arena: BumpArena,
 
     /// Arguments passed to the `command` entrypoint
     args: Option<&'static [WasmStr]>,
@@ -2229,7 +2289,7 @@ pub struct PreopenList {
     len: usize,
 }
 
-const fn command_data_size() -> usize {
+const fn bump_arena_size() -> usize {
     // The total size of the struct should be a page, so start there
     let mut start = PAGE_SIZE;
 
@@ -2240,7 +2300,7 @@ const fn command_data_size() -> usize {
     start -= size_of::<DirentCache>();
 
     // Remove miscellaneous metadata also stored in state.
-    start -= 21 * size_of::<usize>();
+    start -= 22 * size_of::<usize>();
 
     // Everything else is the `command_data` allocation.
     start
@@ -2341,14 +2401,12 @@ impl State {
             ret.write(RefCell::new(State {
                 magic1: MAGIC,
                 magic2: MAGIC,
-                buffer_ptr: Cell::new(null_mut()),
-                buffer_len: Cell::new(0),
+                import_alloc: ImportAlloc::new(),
                 ndescriptors: 0,
                 closed: None,
                 descriptors: MaybeUninit::uninit(),
                 path_buf: UnsafeCell::new(MaybeUninit::uninit()),
-                command_data: MaybeUninit::uninit(),
-                command_data_next: 0,
+                long_lived_arena: BumpArena::new(),
                 args: None,
                 env_vars: None,
                 preopens: None,
@@ -2493,13 +2551,6 @@ impl State {
             Descriptor::Streams(streams) => streams.get_write_stream(),
             Descriptor::Closed(_) | Descriptor::Stderr => Err(ERRNO_BADF),
         }
-    }
-
-    /// Register `buf` and `buf_len` to be used by `cabi_realloc` to satisfy
-    /// the next request.
-    fn register_buffer(&self, buf: *mut u8, buf_len: usize) {
-        self.buffer_ptr.set(buf);
-        self.buffer_len.set(buf_len);
     }
 
     /// Return a handle to the default wall clock, creating one if we
