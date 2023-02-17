@@ -210,6 +210,12 @@ fn system_time_spec_from_timestamp(
 
 #[async_trait::async_trait]
 impl wasi_filesystem::WasiFilesystem for WasiCtx {
+    async fn get_preopens(
+        &mut self,
+    ) -> Result<Vec<(wasi_filesystem::Descriptor, String)>, anyhow::Error> {
+        Ok(self.preopens.clone())
+    }
+
     async fn fadvise(
         &mut self,
         fd: wasi_filesystem::Descriptor,

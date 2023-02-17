@@ -1,4 +1,5 @@
 mod clocks;
+mod env;
 mod exit;
 mod filesystem;
 mod io;
@@ -33,5 +34,6 @@ pub fn add_to_linker<T: Send>(
     wasi_random::add_to_linker(l, f)?;
     wasi_tcp::add_to_linker(l, f)?;
     wasi_exit::add_to_linker(l, f)?;
+    wasi_environment::add_to_linker(l, f)?;
     Ok(())
 }
