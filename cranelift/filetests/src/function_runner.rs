@@ -114,7 +114,7 @@ impl TestFileCompiler {
         Self::with_host_isa(flags)
     }
 
-    /// Declares and compiles all functions in `functions`. Additionaly creates a trampoline for
+    /// Declares and compiles all functions in `functions`. Additionally creates a trampoline for
     /// each one of them.
     pub fn add_functions(&mut self, functions: &[Function]) -> Result<()> {
         // Declare all functions in the file, so that they may refer to each other.
