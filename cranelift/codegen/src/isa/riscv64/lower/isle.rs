@@ -378,6 +378,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
 
     fn lower_br_table(&mut self, index: Reg, targets: &VecMachLabel) -> Unit {
         let tmp1 = self.temp_writable_reg(I64);
+        let tmp2 = self.temp_writable_reg(I64);
         let targets: Vec<BranchTarget> = targets
             .into_iter()
             .copied()
@@ -386,6 +387,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         self.emit(&MInst::BrTable {
             index,
             tmp1,
+            tmp2,
             targets,
         });
     }
