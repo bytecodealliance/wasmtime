@@ -31,8 +31,8 @@ macro_rules! newtype_of_reg {
         $newtype_reg:ident,
         $newtype_writable_reg:ident,
         $newtype_option_writable_reg:ident,
-        $newtype_reg_mem:ident,
-        $newtype_reg_mem_imm:ident,
+        reg_mem: ($($newtype_reg_mem:ident $(aligned:$aligned:ident)?),*),
+        reg_mem_imm: ($($newtype_reg_mem_imm:ident),*),
         $newtype_imm8_reg:ident,
         |$check_reg:ident| $check:expr
     ) => {
@@ -102,108 +102,130 @@ macro_rules! newtype_of_reg {
             }
         }
 
-        /// A newtype wrapper around `RegMem` for general-purpose registers.
-        #[derive(Clone, Debug)]
-        pub struct $newtype_reg_mem(RegMem);
+        $(
+            /// A newtype wrapper around `RegMem` for general-purpose registers.
+            #[derive(Clone, Debug)]
+            pub struct $newtype_reg_mem(RegMem);
 
-        impl From<$newtype_reg_mem> for RegMem {
-            fn from(rm: $newtype_reg_mem) -> Self {
-                rm.0
-            }
-        }
-
-        impl From<$newtype_reg> for $newtype_reg_mem {
-            fn from(r: $newtype_reg) -> Self {
-                $newtype_reg_mem(RegMem::reg(r.into()))
-            }
-        }
-
-        impl $newtype_reg_mem {
-            /// Construct a `RegMem` newtype from the given `RegMem`, or return
-            /// `None` if the `RegMem` is not a valid instance of this `RegMem`
-            /// newtype.
-            pub fn new(rm: RegMem) -> Option<Self> {
-                match rm {
-                    RegMem::Mem { addr: _ } => Some(Self(rm)),
-                    RegMem::Reg { reg: $check_reg } if $check => Some(Self(rm)),
-                    RegMem::Reg { reg: _ } => None,
+            impl From<$newtype_reg_mem> for RegMem {
+                fn from(rm: $newtype_reg_mem) -> Self {
+                    rm.0
                 }
             }
 
-            /// Convert this newtype into its underlying `RegMem`.
-            pub fn to_reg_mem(self) -> RegMem {
-                self.0
-            }
-
-            #[allow(dead_code)] // Used by some newtypes and not others.
-            pub(crate) fn get_operands<F: Fn(VReg) -> VReg>(
-                &self,
-                collector: &mut OperandCollector<'_, F>,
-            ) {
-                self.0.get_operands(collector);
-            }
-        }
-        impl PrettyPrint for $newtype_reg_mem {
-            fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
-                self.0.pretty_print(size, allocs)
-            }
-        }
-
-        /// A newtype wrapper around `RegMemImm`.
-        #[derive(Clone, Debug)]
-        pub struct $newtype_reg_mem_imm(RegMemImm);
-
-        impl From<$newtype_reg_mem_imm> for RegMemImm {
-            fn from(rmi: $newtype_reg_mem_imm) -> RegMemImm {
-                rmi.0
-            }
-        }
-
-        impl From<$newtype_reg> for $newtype_reg_mem_imm {
-            fn from(r: $newtype_reg) -> Self {
-                $newtype_reg_mem_imm(RegMemImm::reg(r.into()))
-            }
-        }
-
-        impl From<$newtype_reg_mem> for $newtype_reg_mem_imm {
-            fn from(r: $newtype_reg_mem) -> Self {
-                $newtype_reg_mem_imm(r.0.into())
-            }
-        }
-
-        impl $newtype_reg_mem_imm {
-            /// Construct this newtype from the given `RegMemImm`, or return
-            /// `None` if the `RegMemImm` is not a valid instance of this
-            /// newtype.
-            pub fn new(rmi: RegMemImm) -> Option<Self> {
-                match rmi {
-                    RegMemImm::Imm { .. } => Some(Self(rmi)),
-                    RegMemImm::Mem { addr: _ } => Some(Self(rmi)),
-                    RegMemImm::Reg { reg: $check_reg } if $check => Some(Self(rmi)),
-                    RegMemImm::Reg { reg: _ } => None,
+            impl From<$newtype_reg> for $newtype_reg_mem {
+                fn from(r: $newtype_reg) -> Self {
+                    $newtype_reg_mem(RegMem::reg(r.into()))
                 }
             }
 
-            /// Convert this newtype into its underlying `RegMemImm`.
-            #[allow(dead_code)] // Used by some newtypes and not others.
-            pub fn to_reg_mem_imm(self) -> RegMemImm {
-                self.0
+            impl $newtype_reg_mem {
+                /// Construct a `RegMem` newtype from the given `RegMem`, or return
+                /// `None` if the `RegMem` is not a valid instance of this `RegMem`
+                /// newtype.
+                pub fn new(rm: RegMem) -> Option<Self> {
+                    match rm {
+                        RegMem::Mem { addr } => {
+                            let mut _allow = true;
+                            $(
+                                if $aligned {
+                                    _allow = addr.aligned();
+                                }
+                            )?
+                            if _allow {
+                                Some(Self(RegMem::Mem { addr }))
+                            } else {
+                                None
+                            }
+                        }
+                        RegMem::Reg { reg: $check_reg } if $check => Some(Self(rm)),
+                        RegMem::Reg { reg: _ } => None,
+                    }
+                }
+
+                /// Convert this newtype into its underlying `RegMem`.
+                pub fn to_reg_mem(self) -> RegMem {
+                    self.0
+                }
+
+                #[allow(dead_code)] // Used by some newtypes and not others.
+                pub(crate) fn get_operands<F: Fn(VReg) -> VReg>(
+                    &self,
+                    collector: &mut OperandCollector<'_, F>,
+                ) {
+                    self.0.get_operands(collector);
+                }
+            }
+            impl PrettyPrint for $newtype_reg_mem {
+                fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
+                    self.0.pretty_print(size, allocs)
+                }
+            }
+        )*
+
+        $(
+            /// A newtype wrapper around `RegMemImm`.
+            #[derive(Clone, Debug)]
+            pub struct $newtype_reg_mem_imm(RegMemImm);
+
+            impl From<$newtype_reg_mem_imm> for RegMemImm {
+                fn from(rmi: $newtype_reg_mem_imm) -> RegMemImm {
+                    rmi.0
+                }
             }
 
-            #[allow(dead_code)] // Used by some newtypes and not others.
-            pub(crate) fn get_operands<F: Fn(VReg) -> VReg>(
-                &self,
-                collector: &mut OperandCollector<'_, F>,
-            ) {
-                self.0.get_operands(collector);
+            impl From<$newtype_reg> for $newtype_reg_mem_imm {
+                fn from(r: $newtype_reg) -> Self {
+                    $newtype_reg_mem_imm(RegMemImm::reg(r.into()))
+                }
             }
-        }
 
-        impl PrettyPrint for $newtype_reg_mem_imm {
-            fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
-                self.0.pretty_print(size, allocs)
+            impl $newtype_reg_mem_imm {
+                /// Construct this newtype from the given `RegMemImm`, or return
+                /// `None` if the `RegMemImm` is not a valid instance of this
+                /// newtype.
+                pub fn new(rmi: RegMemImm) -> Option<Self> {
+                    match rmi {
+                        RegMemImm::Imm { .. } => Some(Self(rmi)),
+                        RegMemImm::Mem { addr } => {
+                            let mut _allow = true;
+                            $(
+                                if $aligned {
+                                    _allow = addr.aligned();
+                                }
+                            )?
+                            if _allow {
+                                Some(Self(RegMemImm::Mem { addr }))
+                            } else {
+                                None
+                            }
+                        }
+                        RegMemImm::Reg { reg: $check_reg } if $check => Some(Self(rmi)),
+                        RegMemImm::Reg { reg: _ } => None,
+                    }
+                }
+
+                /// Convert this newtype into its underlying `RegMemImm`.
+                #[allow(dead_code)] // Used by some newtypes and not others.
+                pub fn to_reg_mem_imm(self) -> RegMemImm {
+                    self.0
+                }
+
+                #[allow(dead_code)] // Used by some newtypes and not others.
+                pub(crate) fn get_operands<F: Fn(VReg) -> VReg>(
+                    &self,
+                    collector: &mut OperandCollector<'_, F>,
+                ) {
+                    self.0.get_operands(collector);
+                }
             }
-        }
+
+            impl PrettyPrint for $newtype_reg_mem_imm {
+                fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
+                    self.0.pretty_print(size, allocs)
+                }
+            }
+        )*
 
         /// A newtype wrapper around `Imm8Reg`.
         #[derive(Clone, Debug)]
@@ -242,8 +264,8 @@ newtype_of_reg!(
     Gpr,
     WritableGpr,
     OptionWritableGpr,
-    GprMem,
-    GprMemImm,
+    reg_mem: (GprMem),
+    reg_mem_imm: (GprMemImm),
     Imm8Gpr,
     |reg| reg.class() == RegClass::Int
 );
@@ -253,8 +275,8 @@ newtype_of_reg!(
     Xmm,
     WritableXmm,
     OptionWritableXmm,
-    XmmMem,
-    XmmMemImm,
+    reg_mem: (XmmMem, XmmMemAligned aligned:true),
+    reg_mem_imm: (XmmMemImm, XmmMemAlignedImm),
     Imm8Xmm,
     |reg| reg.class() == RegClass::Float
 );
@@ -420,6 +442,10 @@ impl Amode {
         }
         ret
     }
+
+    pub(crate) fn aligned(&self) -> bool {
+        self.get_flags().aligned()
+    }
 }
 
 impl PrettyPrint for Amode {
@@ -529,6 +555,13 @@ impl SyntheticAmode {
             &SyntheticAmode::NominalSPOffset { .. } | &SyntheticAmode::ConstantOffset { .. } => {
                 self.clone()
             }
+        }
+    }
+
+    pub(crate) fn aligned(&self) -> bool {
+        match self {
+            SyntheticAmode::Real(addr) => addr.aligned(),
+            SyntheticAmode::NominalSPOffset { .. } | SyntheticAmode::ConstantOffset { .. } => true,
         }
     }
 }

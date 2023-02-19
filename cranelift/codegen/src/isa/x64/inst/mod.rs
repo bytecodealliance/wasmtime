@@ -133,10 +133,12 @@ impl Inst {
             | Inst::XmmMovRM { op, .. }
             | Inst::XmmRmiReg { opcode: op, .. }
             | Inst::XmmRmR { op, .. }
+            | Inst::XmmRmRUnaligned { op, .. }
             | Inst::XmmRmRBlend { op, .. }
             | Inst::XmmRmRImm { op, .. }
             | Inst::XmmToGpr { op, .. }
             | Inst::XmmUnaryRmRImm { op, .. }
+            | Inst::XmmUnaryRmRUnaligned { op, .. }
             | Inst::XmmUnaryRmR { op, .. }
             | Inst::XmmConstOp { op, .. } => smallvec![op.available_from()],
 
@@ -292,7 +294,7 @@ impl Inst {
         debug_assert!(dst.to_reg().class() == RegClass::Float);
         Inst::XmmUnaryRmR {
             op,
-            src: XmmMem::new(src).unwrap(),
+            src: XmmMemAligned::new(src).unwrap(),
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
         }
     }
@@ -303,7 +305,7 @@ impl Inst {
         Inst::XmmRmR {
             op,
             src1: Xmm::new(dst.to_reg()).unwrap(),
-            src2: XmmMem::new(src).unwrap(),
+            src2: XmmMemAligned::new(src).unwrap(),
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
         }
     }
@@ -368,7 +370,7 @@ impl Inst {
     pub(crate) fn xmm_cmp_rm_r(op: SseOpcode, src: RegMem, dst: Reg) -> Inst {
         src.assert_regclass_is(RegClass::Float);
         debug_assert!(dst.class() == RegClass::Float);
-        let src = XmmMem::new(src).unwrap();
+        let src = XmmMemAligned::new(src).unwrap();
         let dst = Xmm::new(dst).unwrap();
         Inst::XmmCmpRmR { op, src, dst }
     }
@@ -893,6 +895,12 @@ impl PrettyPrint for Inst {
                 format!("{} {}, {}", ljustify(op.to_string()), src, dst)
             }
 
+            Inst::XmmUnaryRmRUnaligned { op, src, dst, .. } => {
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), op.src_size(), allocs);
+                let src = src.pretty_print(op.src_size(), allocs);
+                format!("{} {}, {}", ljustify(op.to_string()), src, dst)
+            }
+
             Inst::XmmUnaryRmRImm {
                 op, src, dst, imm, ..
             } => {
@@ -914,6 +922,19 @@ impl PrettyPrint for Inst {
             }
 
             Inst::XmmRmR {
+                op,
+                src1,
+                src2,
+                dst,
+                ..
+            } => {
+                let src1 = pretty_print_reg(src1.to_reg(), 8, allocs);
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
+                let src2 = src2.pretty_print(8, allocs);
+                format!("{} {}, {}, {}", ljustify(op.to_string()), src1, src2, dst)
+            }
+
+            Inst::XmmRmRUnaligned {
                 op,
                 src1,
                 src2,
@@ -1863,13 +1884,22 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_def(dst.to_writable_reg());
             src.get_operands(collector);
         }
-        Inst::XmmUnaryRmR { src, dst, .. }
-        | Inst::XmmUnaryRmREvex { src, dst, .. }
-        | Inst::XmmUnaryRmRImm { src, dst, .. } => {
+        Inst::XmmUnaryRmR { src, dst, .. } | Inst::XmmUnaryRmRImm { src, dst, .. } => {
+            collector.reg_def(dst.to_writable_reg());
+            src.get_operands(collector);
+        }
+        Inst::XmmUnaryRmREvex { src, dst, .. } | Inst::XmmUnaryRmRUnaligned { src, dst, .. } => {
             collector.reg_def(dst.to_writable_reg());
             src.get_operands(collector);
         }
         Inst::XmmRmR {
+            src1, src2, dst, ..
+        } => {
+            collector.reg_use(src1.to_reg());
+            collector.reg_reuse_def(dst.to_writable_reg(), 0);
+            src2.get_operands(collector);
+        }
+        Inst::XmmRmRUnaligned {
             src1, src2, dst, ..
         } => {
             collector.reg_use(src1.to_reg());

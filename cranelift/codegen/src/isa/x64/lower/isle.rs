@@ -100,23 +100,9 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             if let Some(imm) = to_simm32(c as i64) {
                 return imm.to_reg_mem_imm();
             }
-
-            // A load from the constant pool is better than a
-            // rematerialization into a register, because it reduces
-            // register pressure.
-            let vcode_constant = self.emit_u64_le_const(c);
-            return RegMemImm::mem(SyntheticAmode::ConstantOffset(vcode_constant));
         }
 
-        if let InputSourceInst::UniqueUse(src_insn, 0) = inputs.inst {
-            if let Some((addr_input, offset)) = is_mergeable_load(self.lower_ctx, src_insn) {
-                self.lower_ctx.sink_inst(src_insn);
-                let amode = lower_to_amode(self.lower_ctx, addr_input, offset);
-                return RegMemImm::mem(amode);
-            }
-        }
-
-        RegMemImm::reg(self.put_in_reg(val))
+        self.put_in_reg_mem(val).into()
     }
 
     fn put_in_xmm_mem_imm(&mut self, val: Value) -> XmmMemImm {
@@ -150,7 +136,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
                 .unwrap();
         }
 
-        XmmMem::new(RegMem::reg(self.put_in_reg(val))).unwrap()
+        XmmMem::new(self.put_in_reg_mem(val)).unwrap()
     }
 
     fn put_in_reg_mem(&mut self, val: Value) -> RegMem {
@@ -164,12 +150,8 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             return RegMem::mem(SyntheticAmode::ConstantOffset(vcode_constant));
         }
 
-        if let InputSourceInst::UniqueUse(src_insn, 0) = inputs.inst {
-            if let Some((addr_input, offset)) = is_mergeable_load(self.lower_ctx, src_insn) {
-                self.lower_ctx.sink_inst(src_insn);
-                let amode = lower_to_amode(self.lower_ctx, addr_input, offset);
-                return RegMem::mem(amode);
-            }
+        if let Some(load) = self.sinkable_load(val) {
+            return self.sink_load(&load);
         }
 
         RegMem::reg(self.put_in_reg(val))
@@ -446,7 +428,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
 
     #[inline]
     fn xmm_mem_to_xmm_mem_imm(&mut self, r: &XmmMem) -> XmmMemImm {
-        r.clone().into()
+        XmmMemImm::new(r.clone().to_reg_mem().into()).unwrap()
     }
 
     #[inline]
@@ -997,10 +979,40 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             }
         }
     }
+
+    fn xmm_mem_to_xmm_mem_aligned(&mut self, arg: &XmmMem) -> XmmMemAligned {
+        match XmmMemAligned::new(arg.clone().into()) {
+            Some(aligned) => aligned,
+            None => match arg.clone().into() {
+                RegMem::Mem { addr } => self.load_xmm_unaligned(addr).into(),
+                _ => unreachable!(),
+            },
+        }
+    }
+
+    fn xmm_mem_imm_to_xmm_mem_aligned_imm(&mut self, arg: &XmmMemImm) -> XmmMemAlignedImm {
+        match XmmMemAlignedImm::new(arg.clone().into()) {
+            Some(aligned) => aligned,
+            None => match arg.clone().into() {
+                RegMemImm::Mem { addr } => self.load_xmm_unaligned(addr).into(),
+                _ => unreachable!(),
+            },
+        }
+    }
 }
 
 impl IsleContext<'_, '_, MInst, X64Backend> {
     isle_prelude_method_helpers!(X64Caller);
+
+    fn load_xmm_unaligned(&mut self, addr: SyntheticAmode) -> Xmm {
+        let tmp = self.lower_ctx.alloc_tmp(types::F32X4).only_reg().unwrap();
+        self.lower_ctx.emit(MInst::XmmUnaryRmRUnaligned {
+            op: SseOpcode::Movdqu,
+            src: XmmMem::new(RegMem::mem(addr)).unwrap(),
+            dst: Writable::from_reg(Xmm::new(tmp.to_reg()).unwrap()),
+        });
+        Xmm::new(tmp.to_reg()).unwrap()
+    }
 }
 
 // Since x64 doesn't have 8x16 shifts and we must use a 16x8 shift instead, we
