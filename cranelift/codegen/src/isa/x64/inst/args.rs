@@ -617,13 +617,6 @@ impl RegMemImm {
         }
     }
 
-    pub(crate) fn to_reg(&self) -> Option<Reg> {
-        match self {
-            Self::Reg { reg } => Some(*reg),
-            _ => None,
-        }
-    }
-
     pub(crate) fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
         match self {
             Self::Reg { reg } => Self::Reg {
@@ -724,12 +717,6 @@ impl RegMem {
         match self {
             RegMem::Reg { reg } => collector.reg_use(*reg),
             RegMem::Mem { addr, .. } => addr.get_operands(collector),
-        }
-    }
-    pub(crate) fn to_reg(&self) -> Option<Reg> {
-        match self {
-            RegMem::Reg { reg } => Some(*reg),
-            _ => None,
         }
     }
 
@@ -1510,10 +1497,108 @@ impl AvxOpcode {
             | AvxOpcode::Vfmadd213ps
             | AvxOpcode::Vfmadd213pd => smallvec![InstructionSet::FMA],
             AvxOpcode::Vminps
-            | AvxOpcode::Vorps
+            | AvxOpcode::Vminpd
+            | AvxOpcode::Vmaxps
+            | AvxOpcode::Vmaxpd
             | AvxOpcode::Vandnps
+            | AvxOpcode::Vandnpd
+            | AvxOpcode::Vpandn
             | AvxOpcode::Vcmpps
-            | AvxOpcode::Vpsrld => {
+            | AvxOpcode::Vcmppd
+            | AvxOpcode::Vpsrlw
+            | AvxOpcode::Vpsrld
+            | AvxOpcode::Vpsrlq
+            | AvxOpcode::Vpaddb
+            | AvxOpcode::Vpaddw
+            | AvxOpcode::Vpaddd
+            | AvxOpcode::Vpaddq
+            | AvxOpcode::Vpaddsb
+            | AvxOpcode::Vpaddsw
+            | AvxOpcode::Vpaddusb
+            | AvxOpcode::Vpaddusw
+            | AvxOpcode::Vpsubb
+            | AvxOpcode::Vpsubw
+            | AvxOpcode::Vpsubd
+            | AvxOpcode::Vpsubq
+            | AvxOpcode::Vpsubsb
+            | AvxOpcode::Vpsubsw
+            | AvxOpcode::Vpsubusb
+            | AvxOpcode::Vpsubusw
+            | AvxOpcode::Vpavgb
+            | AvxOpcode::Vpavgw
+            | AvxOpcode::Vpand
+            | AvxOpcode::Vandps
+            | AvxOpcode::Vandpd
+            | AvxOpcode::Vpor
+            | AvxOpcode::Vorps
+            | AvxOpcode::Vorpd
+            | AvxOpcode::Vpxor
+            | AvxOpcode::Vxorps
+            | AvxOpcode::Vxorpd
+            | AvxOpcode::Vpmullw
+            | AvxOpcode::Vpmulld
+            | AvxOpcode::Vpmulhw
+            | AvxOpcode::Vpmulhd
+            | AvxOpcode::Vpmulhrsw
+            | AvxOpcode::Vpmulhuw
+            | AvxOpcode::Vpmuldq
+            | AvxOpcode::Vpmuludq
+            | AvxOpcode::Vpunpckhwd
+            | AvxOpcode::Vpunpcklwd
+            | AvxOpcode::Vunpcklps
+            | AvxOpcode::Vaddps
+            | AvxOpcode::Vaddpd
+            | AvxOpcode::Vsubps
+            | AvxOpcode::Vsubpd
+            | AvxOpcode::Vmulps
+            | AvxOpcode::Vmulpd
+            | AvxOpcode::Vdivps
+            | AvxOpcode::Vdivpd
+            | AvxOpcode::Vpcmpeqb
+            | AvxOpcode::Vpcmpeqw
+            | AvxOpcode::Vpcmpeqd
+            | AvxOpcode::Vpcmpeqq
+            | AvxOpcode::Vpcmpgtb
+            | AvxOpcode::Vpcmpgtw
+            | AvxOpcode::Vpcmpgtd
+            | AvxOpcode::Vpcmpgtq
+            | AvxOpcode::Vblendvps
+            | AvxOpcode::Vblendvpd
+            | AvxOpcode::Vpblendvb
+            | AvxOpcode::Vmovlhps
+            | AvxOpcode::Vpminsb
+            | AvxOpcode::Vpminsw
+            | AvxOpcode::Vpminsd
+            | AvxOpcode::Vpminub
+            | AvxOpcode::Vpminuw
+            | AvxOpcode::Vpminud
+            | AvxOpcode::Vpmaxsb
+            | AvxOpcode::Vpmaxsw
+            | AvxOpcode::Vpmaxsd
+            | AvxOpcode::Vpmaxub
+            | AvxOpcode::Vpmaxuw
+            | AvxOpcode::Vpmaxud
+            | AvxOpcode::Vpunpcklbw
+            | AvxOpcode::Vpunpckhbw
+            | AvxOpcode::Vpacksswb
+            | AvxOpcode::Vpackssdw
+            | AvxOpcode::Vpackuswb
+            | AvxOpcode::Vpackusdw
+            | AvxOpcode::Vpalignr
+            | AvxOpcode::Vpinsrb
+            | AvxOpcode::Vpinsrw
+            | AvxOpcode::Vpinsrd
+            | AvxOpcode::Vpinsrq
+            | AvxOpcode::Vpmaddwd
+            | AvxOpcode::Vpmaddubsw
+            | AvxOpcode::Vinsertps
+            | AvxOpcode::Vpshufb
+            | AvxOpcode::Vshufps
+            | AvxOpcode::Vpsllw
+            | AvxOpcode::Vpslld
+            | AvxOpcode::Vpsllq
+            | AvxOpcode::Vpsraw
+            | AvxOpcode::Vpsrad => {
                 smallvec![InstructionSet::AVX]
             }
         }
