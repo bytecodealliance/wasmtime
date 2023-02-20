@@ -7,7 +7,7 @@ use crate::ir::dynamic_type::{DynamicTypeData, DynamicTypes};
 use crate::ir::instructions::{CallInfo, InstructionData};
 use crate::ir::{
     types, Block, BlockCall, ConstantData, ConstantPool, DynamicType, ExtFuncData, FuncRef,
-    Immediate, Inst, JumpTables, Opcode, RelSourceLoc, SigRef, Signature, Type, Value,
+    Immediate, Inst, JumpTables, RelSourceLoc, SigRef, Signature, Type, Value,
     ValueLabelAssignments, ValueList, ValueListPool,
 };
 use crate::packed_option::ReservedValue;
@@ -1040,7 +1040,6 @@ impl DataFlowGraph {
     /// Checks `inst` to see if it is a conditional branch with a constant
     /// condition.  Returns the taken block and a list of not taken blocks.
     pub fn is_const_branch(&self, inst: Inst) -> Option<(BlockCall, Vec<BlockCall>)> {
-        use crate::trace;
         match &self.insts[inst] {
             InstructionData::Brif { arg, blocks, .. } => {
                 if let Some(imm) = self.value_iconst(*arg) {
@@ -1056,10 +1055,28 @@ impl DataFlowGraph {
                 }
             }
             InstructionData::BranchTable { arg, table, .. } => {
-                trace!("MMC {arg:?} table:{table:?}");
                 if let Some(imm) = self.value_iconst(*arg) {
                     // let mut not_taken = Vec::new();
-                    trace!("MMC table: {table:?}");
+                    let jump_table = &self.jump_tables[*table];
+                    let all_branches = jump_table.all_branches();
+                    let taken = if imm < 0 {
+                        all_branches[0]
+                    } else {
+                        *all_branches
+                            .get(imm as usize + 1)
+                            .unwrap_or(&all_branches[0])
+                    };
+                    let not_taken: Vec<BlockCall> = all_branches
+                        .iter()
+                        .flat_map(|branch| {
+                            if *branch != taken {
+                                Some(*branch)
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                    return Some((taken, not_taken));
                 }
             }
             _ => {}
