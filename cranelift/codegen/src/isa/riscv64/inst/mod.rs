@@ -845,16 +845,6 @@ impl Inst {
             x
         };
 
-        fn format_extend_op(signed: bool, from_bits: u8, _to_bits: u8) -> String {
-            let type_name = match from_bits {
-                1 => "b1",
-                8 => "b",
-                16 => "h",
-                32 => "w",
-                _ => unreachable!("from_bits:{:?}", from_bits),
-            };
-            format!("{}ext.{}", if signed { "s" } else { "u" }, type_name)
-        }
         fn format_frm(rounding_mode: Option<FRM>) -> String {
             if let Some(r) = rounding_mode {
                 format!(",{}", r.to_static_str(),)
@@ -1410,16 +1400,17 @@ impl Inst {
                 rn,
                 signed,
                 from_bits,
-                to_bits,
+                ..
             } => {
                 let rn = format_reg(rn, allocs);
-                let rm = format_reg(rd.to_reg(), allocs);
-                format!(
-                    "{} {},{}",
-                    format_extend_op(signed, from_bits, to_bits),
-                    rm,
-                    rn
-                )
+                let rd = format_reg(rd.to_reg(), allocs);
+                return if signed == false && from_bits == 8 {
+                    format!("andi {rd},{rn}")
+                } else {
+                    let op = if signed { "srai" } else { "srli" };
+                    let shift_bits = (64 - from_bits) as i16;
+                    format!("slli {rd},{rn},{shift_bits}; {op} {rd},{rd},{shift_bits}")
+                };
             }
             &MInst::AjustSp { amount } => {
                 format!("{} sp,{:+}", "add", amount)
