@@ -858,22 +858,6 @@
             (_ Unit (emit (MInst.AluRRImm12 op dst src (imm12_zero)))))
         dst))
 
-;; extend int if need.
-(decl ext_int_if_need (bool ValueRegs Type) ValueRegs)
-;;; for I8, I16, and I32 ...
-(rule -1
-  (ext_int_if_need signed val ty)
-  (gen_extend val signed (ty_bits ty) 64))
-;;; otherwise this is a I64 or I128
-;;; no need to extend.
-(rule
-  (ext_int_if_need _ r  $I64)
-  r)
-(rule
-  (ext_int_if_need _ r  $I128)
-  r)
-
-
 ;; Helper for get negative of Imm12
 (decl neg_imm12 (Imm12) Imm12)
 (extern constructor neg_imm12 neg_imm12)
@@ -1071,6 +1055,17 @@
 (rule
   (lower_extend r $false from_bits 128)
   (value_regs (gen_extend r $false from_bits 64) (load_u64_constant 0)))
+
+  
+;; extend int if need.
+(decl ext_int_if_need (bool ValueRegs Type) ValueRegs)
+;;; for I8, I16, and I32 ...
+(rule -1 (ext_int_if_need signed val ty)
+  (lower_extend val signed (ty_bits ty) 64))
+;;; otherwise this is a I64 or I128
+;;; no need to extend.
+(rule (ext_int_if_need _ r  $I64) r)
+(rule (ext_int_if_need _ r  $I128) r)
 
 
 (decl lower_b128_binary (AluOPRRR ValueRegs ValueRegs) ValueRegs)
@@ -1835,7 +1830,7 @@
       (tmp2 Reg (alu_and (gen_bit_not xs) (alu_and ys rs)))
       ;;;tmp3
       (tmp3 Reg (alu_rrr (AluOPRRR.Or) tmp1 tmp2)))
-    (gen_extend tmp3 $true 1 64)))
+    (lower_extend tmp3 $true 1 64)))
 
 (decl i128_sub (ValueRegs ValueRegs) ValueRegs)
 (rule
