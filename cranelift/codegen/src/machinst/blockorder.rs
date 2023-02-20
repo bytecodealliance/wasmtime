@@ -64,7 +64,7 @@ use crate::dominator_tree::DominatorTree;
 use crate::entity::SecondaryMap;
 use crate::fx::{FxHashMap, FxHashSet};
 use crate::inst_predicates::visit_block_succs;
-use crate::ir::{Block, Function, Inst};
+use crate::ir::{Block, Function, Inst, Opcode};
 use crate::{machinst::*, trace};
 
 use smallvec::SmallVec;
@@ -169,6 +169,16 @@ impl BlockLoweringOrder {
                     indirect_branch_target_clif_blocks.insert(succ);
                 }
             });
+
+            // Ensure that blocks terminated by br_table instructions with an empty jump table are
+            // still treated like conditional blocks from the point of view of critical edge
+            // splitting.
+            if let Some(inst) = f.layout.last_inst(block) {
+                if Opcode::BrTable == f.dfg.insts[inst].opcode() {
+                    block_out_count[block] = block_out_count[block].max(2);
+                }
+            }
+
             let end = block_succs.len();
             block_succ_range[block] = start..end;
         }
