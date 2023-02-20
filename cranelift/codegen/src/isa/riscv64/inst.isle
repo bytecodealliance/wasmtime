@@ -1072,9 +1072,6 @@
   (lower_extend r $false from_bits 128)
   (value_regs (gen_extend r $false from_bits 64) (load_u64_constant 0)))
 
-;; extract the sign bit of integer.
-(decl ext_sign_bit (Type Reg) Reg)
-(extern constructor ext_sign_bit ext_sign_bit)
 
 (decl lower_b128_binary (AluOPRRR ValueRegs ValueRegs) ValueRegs)
 (rule
