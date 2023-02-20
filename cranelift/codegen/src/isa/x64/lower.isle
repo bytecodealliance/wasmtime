@@ -743,8 +743,8 @@
 ;; (TODO: when EVEX support is available, add an alternate lowering here).
 (rule (lower (has_type $I64X2 (sshr src amt)))
       (let ((src_ Xmm (put_in_xmm src))
-            (lo Gpr (x64_pextrd $I64 src_ 0))
-            (hi Gpr (x64_pextrd $I64 src_ 1))
+            (lo Gpr (x64_pextrq src_ 0))
+            (hi Gpr (x64_pextrq src_ 1))
             (amt_ Imm8Gpr (put_masked_in_imm8_gpr amt $I64))
             (shifted_lo Gpr (x64_sar $I64 lo amt_))
             (shifted_hi Gpr (x64_sar $I64 hi amt_)))
@@ -993,12 +993,8 @@
                                                x))
                              (swiden_high (and (value_type (multi_lane 32 4))
                                                y)))))
-      (let ((x2 Xmm (x64_pshufd x
-                            0xFA
-                            (OperandSize.Size32)))
-            (y2 Xmm (x64_pshufd y
-                            0xFA
-                            (OperandSize.Size32))))
+      (let ((x2 Xmm (x64_pshufd x 0xFA))
+            (y2 Xmm (x64_pshufd y 0xFA)))
         (x64_pmuldq x2 y2)))
 
 ;; Special case for `i16x8.extmul_low_i8x16_s`.
@@ -1029,12 +1025,8 @@
                                               x))
                              (swiden_low (and (value_type (multi_lane 32 4))
                                               y)))))
-      (let ((x2 Xmm (x64_pshufd x
-                            0x50
-                            (OperandSize.Size32)))
-            (y2 Xmm (x64_pshufd y
-                            0x50
-                            (OperandSize.Size32))))
+      (let ((x2 Xmm (x64_pshufd x 0x50))
+            (y2 Xmm (x64_pshufd y 0x50)))
         (x64_pmuldq x2 y2)))
 
 ;; Special case for `i16x8.extmul_high_i8x16_u`.
@@ -1069,12 +1061,8 @@
                                                x))
                              (uwiden_high (and (value_type (multi_lane 32 4))
                                                y)))))
-      (let ((x2 Xmm (x64_pshufd x
-                            0xFA
-                            (OperandSize.Size32)))
-            (y2 Xmm (x64_pshufd y
-                            0xFA
-                            (OperandSize.Size32))))
+      (let ((x2 Xmm (x64_pshufd x 0xFA))
+            (y2 Xmm (x64_pshufd y 0xFA)))
         (x64_pmuludq x2 y2)))
 
 ;; Special case for `i16x8.extmul_low_i8x16_u`.
@@ -1105,12 +1093,8 @@
                                               x))
                              (uwiden_low (and (value_type (multi_lane 32 4))
                                               y)))))
-      (let ((x2 Xmm (x64_pshufd x
-                            0x50
-                            (OperandSize.Size32)))
-            (y2 Xmm (x64_pshufd y
-                            0x50
-                            (OperandSize.Size32))))
+      (let ((x2 Xmm (x64_pshufd x 0x50))
+            (y2 Xmm (x64_pshufd y 0x50)))
         (x64_pmuludq x2 y2)))
 
 ;;;; Rules for `iabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3246,7 +3230,7 @@
         (x64_pmovsxwd (x64_palignr x x 8 (OperandSize.Size32)))))
 
 (rule (lower (has_type $I64X2 (swiden_high val @ (value_type $I32X4))))
-      (x64_pmovsxdq (x64_pshufd val 0xEE (OperandSize.Size32))))
+      (x64_pmovsxdq (x64_pshufd val 0xEE)))
 
 ;; Rules for `uwiden_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3270,7 +3254,7 @@
         (x64_pmovzxwd (x64_palignr x x 8 (OperandSize.Size32)))))
 
 (rule (lower (has_type $I64X2 (uwiden_high val @ (value_type $I32X4))))
-      (x64_pmovzxdq (x64_pshufd val 0xEE (OperandSize.Size32))))
+      (x64_pmovzxdq (x64_pshufd val 0xEE)))
 
 ;; Rules for `snarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3566,25 +3550,25 @@
 ;; Cases 2-4 for an F32X4
 (rule 1 (lower (has_type $F32 (extractlane val @ (value_type (ty_vec128 ty))
                                          (u8_from_uimm8 lane))))
-      (x64_pshufd val lane (OperandSize.Size32)))
+      (x64_pshufd val lane))
 
 ;; This is the only remaining case for F64X2
 (rule 1 (lower (has_type $F64 (extractlane val @ (value_type (ty_vec128 ty))
                                          (u8_from_uimm8 1))))
       ;; 0xee == 0b11_10_11_10
-      (x64_pshufd val 0xee (OperandSize.Size32)))
+      (x64_pshufd val 0xee))
 
 (rule 0 (lower (extractlane val @ (value_type ty @ (multi_lane 8 16)) (u8_from_uimm8 lane)))
-      (x64_pextrb ty val lane))
+      (x64_pextrb val lane))
 
 (rule 0 (lower (extractlane val @ (value_type ty @ (multi_lane 16 8)) (u8_from_uimm8 lane)))
-      (x64_pextrw ty val lane))
+      (x64_pextrw val lane))
 
 (rule 0 (lower (extractlane val @ (value_type ty @ (multi_lane 32 4)) (u8_from_uimm8 lane)))
-      (x64_pextrd ty val lane))
+      (x64_pextrd val lane))
 
 (rule 0 (lower (extractlane val @ (value_type ty @ (multi_lane 64 2)) (u8_from_uimm8 lane)))
-      (x64_pextrd ty val lane))
+      (x64_pextrq val lane))
 
 ;; Rules for `scalar_to_vector` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3622,7 +3606,7 @@
             (vec Xmm (vec_insert_lane $I16X8 (xmm_uninit_value) src 0))
             (vec Xmm (vec_insert_lane $I16X8 vec src 1)))
         ;; Shuffle the lowest two lanes to all other lanes.
-        (x64_pshufd vec 0 (OperandSize.Size32))))
+        (x64_pshufd vec 0)))
 
 (rule 1 (lower (has_type (multi_lane 32 4) (splat src @ (value_type (ty_scalar_float _)))))
       (lower_splat_32x4 $F32X4 src))
@@ -3635,7 +3619,7 @@
       (let ((src RegMem src)
             (vec Xmm (vec_insert_lane ty (xmm_uninit_value) src 0)))
         ;; Shuffle the lowest lane to all other lanes.
-        (x64_pshufd vec 0 (OperandSize.Size32))))
+        (x64_pshufd vec 0)))
 
 (rule 1 (lower (has_type (multi_lane 64 2) (splat src @ (value_type (ty_scalar_float _)))))
       (lower_splat_64x2 $F64X2 src))

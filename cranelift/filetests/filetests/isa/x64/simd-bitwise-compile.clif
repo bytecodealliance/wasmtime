@@ -753,8 +753,8 @@ block0(v0: i64x2):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pextrd.w $0, %xmm0, %rdx
-;   pextrd.w $1, %xmm0, %r9
+;   pextrq  $0, %xmm0, %rdx
+;   pextrq  $1, %xmm0, %r9
 ;   sarq    $36, %rdx, %rdx
 ;   sarq    $36, %r9, %r9
 ;   uninit  %xmm0
@@ -789,8 +789,8 @@ block0(v0: i64x2, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pextrd.w $0, %xmm0, %r8
-;   pextrd.w $1, %xmm0, %r10
+;   pextrq  $0, %xmm0, %r8
+;   pextrq  $1, %xmm0, %r10
 ;   movq    %rdi, %rcx
 ;   sarq    %cl, %r8, %r8
 ;   sarq    %cl, %r10, %r10

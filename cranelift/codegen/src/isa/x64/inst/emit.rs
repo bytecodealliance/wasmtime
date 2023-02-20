@@ -1792,8 +1792,6 @@ pub(crate) fn emit(
         }
 
         Inst::XmmUnaryRmRImm { op, src, dst, imm } => {
-            debug_assert!(!op.uses_src1());
-
             let dst = allocs.next(dst.to_reg().to_reg());
             let src = src.clone().to_reg_mem().with_allocs(allocs);
             let rex = RexFlags::clear_w();
@@ -1803,6 +1801,7 @@ pub(crate) fn emit(
                 SseOpcode::Roundss => (LegacyPrefixes::_66, 0x0F3A0A, 3),
                 SseOpcode::Roundpd => (LegacyPrefixes::_66, 0x0F3A09, 3),
                 SseOpcode::Roundsd => (LegacyPrefixes::_66, 0x0F3A0B, 3),
+                SseOpcode::Pshufd => (LegacyPrefixes::_66, 0x0F70, 2),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
             match src {
@@ -2458,17 +2457,10 @@ pub(crate) fn emit(
             imm,
             size,
         } => {
-            let (src2, dst) = if !op.uses_src1() {
-                let dst = allocs.next(dst.to_reg());
-                let src2 = src2.with_allocs(allocs);
-                (src2, dst)
-            } else {
-                let src1 = allocs.next(*src1);
-                let dst = allocs.next(dst.to_reg());
-                let src2 = src2.with_allocs(allocs);
-                debug_assert_eq!(src1, dst);
-                (src2, dst)
-            };
+            let src1 = allocs.next(*src1);
+            let dst = allocs.next(dst.to_reg());
+            let src2 = src2.with_allocs(allocs);
+            debug_assert_eq!(src1, dst);
 
             let (prefix, opcode, len) = match op {
                 SseOpcode::Cmpps => (LegacyPrefixes::None, 0x0FC2, 2),
@@ -2480,10 +2472,6 @@ pub(crate) fn emit(
                 SseOpcode::Pinsrb => (LegacyPrefixes::_66, 0x0F3A20, 3),
                 SseOpcode::Pinsrw => (LegacyPrefixes::_66, 0x0FC4, 2),
                 SseOpcode::Pinsrd => (LegacyPrefixes::_66, 0x0F3A22, 3),
-                SseOpcode::Pextrb => (LegacyPrefixes::_66, 0x0F3A14, 3),
-                SseOpcode::Pextrw => (LegacyPrefixes::_66, 0x0FC5, 2),
-                SseOpcode::Pextrd => (LegacyPrefixes::_66, 0x0F3A16, 3),
-                SseOpcode::Pshufd => (LegacyPrefixes::_66, 0x0F70, 2),
                 SseOpcode::Shufps => (LegacyPrefixes::None, 0x0FC6, 2),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
@@ -2564,6 +2552,26 @@ pub(crate) fn emit(
             let (src, dst) = if dst_first { (dst, src) } else { (src, dst) };
 
             emit_std_reg_reg(sink, prefix, opcode, 2, src, dst, rex);
+        }
+
+        Inst::XmmToGprImm { op, src, dst, imm } => {
+            use OperandSize as OS;
+
+            let src = allocs.next(src.to_reg());
+            let dst = allocs.next(dst.to_reg().to_reg());
+
+            let (prefix, opcode, opcode_bytes, dst_size, dst_first) = match op {
+                SseOpcode::Pextrb => (LegacyPrefixes::_66, 0x0F3A14, 3, OS::Size32, false),
+                SseOpcode::Pextrw => (LegacyPrefixes::_66, 0x0FC5, 2, OS::Size32, true),
+                SseOpcode::Pextrd => (LegacyPrefixes::_66, 0x0F3A16, 3, OS::Size32, false),
+                SseOpcode::Pextrq => (LegacyPrefixes::_66, 0x0F3A16, 3, OS::Size64, false),
+                _ => panic!("unexpected opcode {:?}", op),
+            };
+            let rex = RexFlags::from(dst_size);
+            let (src, dst) = if dst_first { (dst, src) } else { (src, dst) };
+
+            emit_std_reg_reg(sink, prefix, opcode, opcode_bytes, src, dst, rex);
+            sink.put1(*imm);
         }
 
         Inst::GprToXmm {
