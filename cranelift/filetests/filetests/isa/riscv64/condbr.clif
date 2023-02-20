@@ -705,7 +705,7 @@ block1:
 
 ; VCode:
 ; block0:
-;   addiw t2,a0,0
+;   sext.w t2,a0
 ;   bne t2,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3

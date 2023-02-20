@@ -80,15 +80,13 @@ block0(v0: i64, v1: i32):
 
 ; VCode:
 ; block0:
-;   slli a1,a1,32
-;   srai a3,a1,32
-;   add a0,a0,a3
+;   sext.w a1,a1
+;   add a0,a0,a1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a1, a1, 0x20
-;   srai a3, a1, 0x20
-;   add a0, a0, a3
+;   sext.w a1, a1
+;   add a0, a0, a1
 ;   ret
 

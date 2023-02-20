@@ -258,46 +258,42 @@ block0(v0: i32, v1: i32):
 
 ; VCode:
 ; block0:
-;   slli a0,a0,32
-;   srai a2,a0,32
-;   slli a4,a1,32
-;   srai a6,a4,32
-;   li t3,-1
-;   li t0,1
-;   slli t2,t0,63
-;   slli a1,a2,32
-;   eq a3,t3,a6##ty=i32
-;   eq a5,t2,a1##ty=i32
-;   and a7,a3,a5
-;   trap_if a7,int_ovf
-;   trap_ifc int_divz##(zero eq a6)
-;   divw a0,a2,a6
+;   sext.w a0,a0
+;   sext.w a2,a1
+;   li a4,-1
+;   li a6,1
+;   slli t3,a6,63
+;   slli t0,a0,32
+;   eq t2,a4,a2##ty=i32
+;   eq a1,t3,t0##ty=i32
+;   and a3,t2,a1
+;   trap_if a3,int_ovf
+;   trap_ifc int_divz##(zero eq a2)
+;   divw a0,a0,a2
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a0, a0, 0x20
-;   srai a2, a0, 0x20
-;   slli a4, a1, 0x20
-;   srai a6, a4, 0x20
-;   addi t3, zero, -1
-;   addi t0, zero, 1
-;   slli t2, t0, 0x3f
-;   slli a1, a2, 0x20
-;   bne t3, a6, 0xc
-;   addi a3, zero, 1
+;   sext.w a0, a0
+;   sext.w a2, a1
+;   addi a4, zero, -1
+;   addi a6, zero, 1
+;   slli t3, a6, 0x3f
+;   slli t0, a0, 0x20
+;   bne a4, a2, 0xc
+;   addi t2, zero, 1
 ;   j 8
-;   mv a3, zero
-;   bne t2, a1, 0xc
-;   addi a5, zero, 1
+;   mv t2, zero
+;   bne t3, t0, 0xc
+;   addi a1, zero, 1
 ;   j 8
-;   mv a5, zero
-;   and a7, a3, a5
-;   beqz a7, 8
+;   mv a1, zero
+;   and a3, t2, a1
+;   beqz a3, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   bne zero, a6, 8
+;   bne zero, a2, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_divz
-;   divw a0, a2, a6
+;   divw a0, a0, a2
 ;   ret
 
 function %f13(i32) -> i32 {
@@ -309,48 +305,44 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   slli t2,a0,32
-;   srai a1,t2,32
-;   li a3,2
-;   slli a5,a3,32
-;   srai a7,a5,32
-;   li t4,-1
-;   li t1,1
-;   slli a0,t1,63
-;   slli a2,a1,32
-;   eq a4,t4,a7##ty=i32
-;   eq a6,a0,a2##ty=i32
-;   and t3,a4,a6
-;   trap_if t3,int_ovf
-;   trap_ifc int_divz##(zero eq a7)
-;   divw a0,a1,a7
+;   sext.w t2,a0
+;   li a1,2
+;   sext.w a3,a1
+;   li a5,-1
+;   li a7,1
+;   slli t4,a7,63
+;   slli t1,t2,32
+;   eq a0,a5,a3##ty=i32
+;   eq a2,t4,t1##ty=i32
+;   and a4,a0,a2
+;   trap_if a4,int_ovf
+;   trap_ifc int_divz##(zero eq a3)
+;   divw a0,t2,a3
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli t2, a0, 0x20
-;   srai a1, t2, 0x20
-;   addi a3, zero, 2
-;   slli a5, a3, 0x20
-;   srai a7, a5, 0x20
-;   addi t4, zero, -1
-;   addi t1, zero, 1
-;   slli a0, t1, 0x3f
-;   slli a2, a1, 0x20
-;   bne t4, a7, 0xc
-;   addi a4, zero, 1
+;   sext.w t2, a0
+;   addi a1, zero, 2
+;   sext.w a3, a1
+;   addi a5, zero, -1
+;   addi a7, zero, 1
+;   slli t4, a7, 0x3f
+;   slli t1, t2, 0x20
+;   bne a5, a3, 0xc
+;   addi a0, zero, 1
 ;   j 8
-;   mv a4, zero
-;   bne a0, a2, 0xc
-;   addi a6, zero, 1
+;   mv a0, zero
+;   bne t4, t1, 0xc
+;   addi a2, zero, 1
 ;   j 8
-;   mv a6, zero
-;   and t3, a4, a6
-;   beqz t3, 8
+;   mv a2, zero
+;   and a4, a0, a2
+;   beqz a4, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   bne zero, a7, 8
+;   bne zero, a3, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_divz
-;   divw a0, a1, a7
+;   divw a0, t2, a3
 ;   ret
 
 function %f14(i32, i32) -> i32 {
@@ -418,19 +410,17 @@ block0(v0: i32, v1: i32):
 
 ; VCode:
 ; block0:
-;   slli a1,a1,32
-;   srai a2,a1,32
-;   trap_ifc int_divz##(zero eq a2)
-;   remw a0,a0,a2
+;   sext.w a1,a1
+;   trap_ifc int_divz##(zero eq a1)
+;   remw a0,a0,a1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a1, a1, 0x20
-;   srai a2, a1, 0x20
-;   bne zero, a2, 8
+;   sext.w a1, a1
+;   bne zero, a1, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_divz
-;   remw a0, a0, a2
+;   remw a0, a0, a1
 ;   ret
 
 function %f17(i32, i32) -> i32 {

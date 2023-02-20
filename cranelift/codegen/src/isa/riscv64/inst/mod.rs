@@ -1341,15 +1341,23 @@ impl Inst {
             } => {
                 let rs_s = format_reg(rs, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
-                // check if it is a load constant.
-                if alu_op == AluOPRRI::Addi && rs == zero_reg() {
-                    format!("li {},{}", rd, imm12.as_i16())
-                } else if alu_op == AluOPRRI::Xori && imm12.as_i16() == -1 {
-                    format!("not {},{}", rd, rs_s)
-                } else {
-                    if alu_op.option_funct12().is_some() {
+
+                // Some of these special cases are better known as
+                // their pseudo-instruction version, so prefer printing those.
+                match (alu_op, rs, imm12) {
+                    (AluOPRRI::Addi, rs, _) if rs == zero_reg() => {
+                        return format!("li {},{}", rd, imm12.as_i16());
+                    }
+                    (AluOPRRI::Addiw, _, imm12) if imm12.as_i16() == 0 => {
+                        return format!("sext.w {},{}", rd, rs_s);
+                    }
+                    (AluOPRRI::Xori, _, imm12) if imm12.as_i16() == -1 => {
+                        return format!("not {},{}", rd, rs_s);
+                    }
+                    (alu_op, _, _) if alu_op.option_funct12().is_some() => {
                         format!("{} {},{}", alu_op.op_name(), rd, rs_s)
-                    } else {
+                    }
+                    (alu_op, _, imm12) => {
                         format!("{} {},{},{}", alu_op.op_name(), rd, rs_s, imm12.as_i16())
                     }
                 }

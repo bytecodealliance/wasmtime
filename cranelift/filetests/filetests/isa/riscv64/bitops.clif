@@ -514,35 +514,33 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   slli t2,a0,32
-;   srai a1,t2,32
-;   not a3,a0
-;   select_reg a5,a3,a0##condition=(a1 slt zero)
-;   clz t4,a5##ty=i32 tmp=a7 step=t3
-;   addi a0,t4,-1
+;   sext.w t2,a0
+;   not a1,a0
+;   select_reg a3,a1,a0##condition=(t2 slt zero)
+;   clz a7,a3##ty=i32 tmp=a5 step=a6
+;   addi a0,a7,-1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli t2, a0, 0x20
-;   srai a1, t2, 0x20
-;   not a3, a0
-;   bltz a1, 0xc
-;   ori a5, a0, 0
+;   sext.w t2, a0
+;   not a1, a0
+;   bltz t2, 0xc
+;   ori a3, a0, 0
 ;   j 8
-;   ori a5, a3, 0
-;   ori t4, zero, 0
-;   addi t3, zero, 0x20
-;   addi a7, zero, 1
-;   slli a7, a7, 0x1f
-;   blez t3, 0x1c
-;   and t5, a7, a5
+;   ori a3, a1, 0
+;   ori a7, zero, 0
+;   addi a6, zero, 0x20
+;   addi a5, zero, 1
+;   slli a5, a5, 0x1f
+;   blez a6, 0x1c
+;   and t5, a5, a3
 ;   bne zero, t5, 0x14
-;   addi t4, t4, 1
-;   addi t3, t3, -1
-;   srli a7, a7, 1
+;   addi a7, a7, 1
+;   addi a6, a6, -1
+;   srli a5, a5, 1
 ;   j -0x18
-;   addi a0, t4, -1
+;   addi a0, a7, -1
 ;   ret
 
 function %c(i64) -> i64 {
