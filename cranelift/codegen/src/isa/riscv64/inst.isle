@@ -1787,50 +1787,6 @@
 (rule (lower_icmp cc x y ty)
   (gen_icmp cc (ext_int_if_need $false x ty) (ext_int_if_need $false y ty) ty))
 
-(decl lower_icmp_over_flow (ValueRegs ValueRegs Type) Reg)
-
-;;; for I8 I16 I32
-(rule 1
-  (lower_icmp_over_flow x y ty)
-  (let
-    ((tmp Reg (alu_sub (ext_int_if_need $true x ty) (ext_int_if_need $true y ty)))
-      (tmp2 WritableReg (temp_writable_reg $I64))
-      (_ Unit (emit (MInst.Extend tmp2 tmp $true (ty_bits ty) 64))))
-    (gen_icmp (IntCC.NotEqual) (writable_reg_to_reg tmp2) tmp $I64)))
-
-;;; $I64
-(rule 3
-  (lower_icmp_over_flow x y $I64)
-  (let
-    ((y_sign Reg (alu_rrr (AluOPRRR.Sgt) y (zero_reg)))
-       (sub_result Reg (alu_sub x y))
-       (tmp Reg (alu_rrr (AluOPRRR.Slt) sub_result x)))
-    (gen_icmp (IntCC.NotEqual) y_sign tmp $I64)))
-
-;;; $I128
-(rule 2
-  (lower_icmp_over_flow x y $I128)
-  (let
-    ( ;; x sign bit.
-      (xs Reg (alu_rr_imm12 (AluOPRRI.Srli) (value_regs_get x 1) (imm12_const 63)))
-      ;; y sign bit.
-      (ys Reg (alu_rr_imm12 (AluOPRRI.Srli) (value_regs_get y 1) (imm12_const 63)))
-      ;;
-      (sub_result ValueRegs (i128_sub x y))
-      ;; result sign bit.
-      (rs Reg (alu_rr_imm12 (AluOPRRI.Srli) (value_regs_get sub_result 1) (imm12_const 63)))
-
-      ;;; xs && !ys && !rs
-      ;;; x is positive y is negtive and result is negative.
-      ;;; must overflow
-      (tmp1 Reg (alu_and xs (alu_and (gen_bit_not ys) (gen_bit_not rs))))
-      ;;; !xs && ys && rs
-      ;;; x is negative y is positive and result is positive.
-      ;;; overflow
-      (tmp2 Reg (alu_and (gen_bit_not xs) (alu_and ys rs)))
-      ;;;tmp3
-      (tmp3 Reg (alu_rrr (AluOPRRR.Or) tmp1 tmp2)))
-    (lower_extend tmp3 $true 1 64)))
 
 (decl i128_sub (ValueRegs ValueRegs) ValueRegs)
 (rule
