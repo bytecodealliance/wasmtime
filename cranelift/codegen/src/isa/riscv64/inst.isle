@@ -1023,49 +1023,66 @@
     ((tmp WritableReg (temp_writable_reg $I16))
       (_ Unit (emit (MInst.Extend tmp r is_signed from_bits to_bits))))
     tmp))
-
-;; val is_signed from_bits to_bits
-(decl lower_extend (Reg bool u8 u8) ValueRegs)
-(rule -1
-  (lower_extend r is_signed from_bits to_bits)
-  (gen_extend r is_signed from_bits to_bits))
-
-;;;; for I128 signed extend.
-(rule 1
-  (lower_extend r $true 64 128)
-  (let
-    ((tmp Reg (alu_rrr (AluOPRRR.Slt) r (zero_reg)))
-      (high Reg (gen_extend tmp $true 1 64)))
-    (value_regs (gen_move2 r $I64 $I64) high)))
-
-(rule
-  (lower_extend r $true from_bits 128)
-  (let
-    ((tmp Reg (gen_extend r $true from_bits 64))
-      (tmp2 Reg (alu_rrr (AluOPRRR.Slt) tmp (zero_reg)))
-      (high Reg (gen_extend tmp2 $true 1 64)))
-    (value_regs (gen_move2 tmp $I64 $I64) high)))
-
-
-;;;; for I128 unsigned extend.
-(rule 1
-  (lower_extend r $false 64 128)
-  (value_regs (gen_move2 r $I64 $I64) (load_u64_constant 0)))
-
-(rule
-  (lower_extend r $false from_bits 128)
-  (value_regs (gen_extend r $false from_bits 64) (load_u64_constant 0)))
-
   
-;; extend int if need.
+;; Extends an integer if it is smaller than 64 bits.
 (decl ext_int_if_need (bool ValueRegs Type) ValueRegs)
-;;; for I8, I16, and I32 ...
-(rule -1 (ext_int_if_need signed val ty)
-  (lower_extend val signed (ty_bits ty) 64))
-;;; otherwise this is a I64 or I128
-;;; no need to extend.
-(rule (ext_int_if_need _ r  $I64) r)
-(rule (ext_int_if_need _ r  $I128) r)
+;;; For values smaller than 64 bits, we need to extend them to 64 bits
+(rule 0 (ext_int_if_need $true val (fits_in_32 (ty_int ty)))
+  (extend val (ExtendOp.Signed) ty $I64))
+(rule 0 (ext_int_if_need $false val (fits_in_32 (ty_int ty)))
+  (extend val (ExtendOp.Zero) ty $I64))
+;; If the value is larger than one machine register, we don't need to do anything
+(rule 1 (ext_int_if_need _ r $I64) r)
+(rule 2 (ext_int_if_need _ r $I128) r)
+
+
+;; Performs a zero extension of the given value
+(decl zext (ValueRegs Type Type) ValueRegs)
+(rule (zext val from_ty to_ty) (extend val (ExtendOp.Zero) from_ty to_ty))
+
+;; Performs a signed extension of the given value
+(decl sext (ValueRegs Type Type) ValueRegs)
+(rule (sext val from_ty to_ty) (extend val (ExtendOp.Signed) from_ty to_ty))
+
+(type ExtendOp
+  (enum
+    (Zero)
+    (Signed)))
+
+;; Performs either a sign or zero extension of the given value
+(decl extend (ValueRegs ExtendOp Type Type) ValueRegs)
+
+;; Fallback to gen_extend
+(rule -1 (extend val (ExtendOp.Zero) from_ty to_ty)
+  (gen_extend (value_regs_get val 0) $false (ty_bits from_ty) (ty_bits to_ty)))
+(rule -1 (extend val (ExtendOp.Signed) from_ty to_ty)
+  (gen_extend (value_regs_get val 0) $true (ty_bits from_ty) (ty_bits to_ty)))
+
+
+;;; Signed rules extending to I128
+;; Extend the bottom part, and extract the sign bit from the bottom as the top
+(rule 1 (extend val (ExtendOp.Signed) (fits_in_64 from_ty) $I128)
+  (let ((val Reg (value_regs_get val 0))
+        (low Reg (extend val (ExtendOp.Signed) from_ty $I64))
+        (high Reg (alu_rr_imm12 (AluOPRRI.Srai) low (imm12_const 63))))
+    (value_regs low high)))
+
+
+;;; Unsigned rules extending to I128
+;; Extend the bottom register to I64 and then just zero out the top half.
+(rule 1 (extend val (ExtendOp.Zero) (fits_in_32 from_ty) $I128)
+  (let ((val Reg (value_regs_get val 0))
+        (extended Reg (extend val (ExtendOp.Zero) from_ty $I64)))
+    (value_regs extended (load_u64_constant 0))))
+
+(rule 2 (extend val (ExtendOp.Zero) $I64 $I128)
+  (value_regs
+    (value_regs_get val 0)
+    (load_u64_constant 0)))
+
+;; Catch all rule for ignoring extensions of the same type.
+(rule 3 (extend val _ ty ty) val)
+
 
 
 (decl lower_b128_binary (AluOPRRR ValueRegs ValueRegs) ValueRegs)
