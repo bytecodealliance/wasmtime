@@ -1070,9 +1070,28 @@
   (let ((val Reg (value_regs_get val 0)))
     (alu_rr_imm12 (AluOPRRI.Addiw) val (imm12_const 0))))
 
+
+;; If we have the `zbb` extension we can use the dedicated `sext.b` instruction.
+(rule 3 (extend val (ExtendOp.Signed) $I8 (fits_in_64 _))
+  (if-let $true (has_zbb))
+  (let ((val Reg (value_regs_get val 0)))
+    (alu_rr_imm12 (AluOPRRI.Sextb) val (imm12_const 0))))
+
+;; If we have the `zbb` extension we can use the dedicated `sext.h` instruction.
+(rule 4 (extend val (ExtendOp.Signed) $I16 (fits_in_64 _))
+  (if-let $true (has_zbb))
+  (let ((val Reg (value_regs_get val 0)))
+    (alu_rr_imm12 (AluOPRRI.Sexth) val (imm12_const 0))))
+
+;; If we have the `zbb` extension we can use the dedicated `zext.h` instruction.
+(rule 5 (extend val (ExtendOp.Zero) $I16 (fits_in_64 _))
+  (if-let $true (has_zbb))
+  (let ((val Reg (value_regs_get val 0)))
+    (alu_rr_imm12 (AluOPRRI.Zexth) val (imm12_const 0))))
+
 ;;; Signed rules extending to I128
 ;; Extend the bottom part, and extract the sign bit from the bottom as the top
-(rule 3 (extend val (ExtendOp.Signed) (fits_in_64 from_ty) $I128)
+(rule 6 (extend val (ExtendOp.Signed) (fits_in_64 from_ty) $I128)
   (let ((val Reg (value_regs_get val 0))
         (low Reg (extend val (ExtendOp.Signed) from_ty $I64))
         (high Reg (alu_rr_imm12 (AluOPRRI.Srai) low (imm12_const 63))))
@@ -1081,18 +1100,18 @@
 
 ;;; Unsigned rules extending to I128
 ;; Extend the bottom register to I64 and then just zero out the top half.
-(rule 4 (extend val (ExtendOp.Zero) (fits_in_32 from_ty) $I128)
+(rule 7 (extend val (ExtendOp.Zero) (fits_in_32 from_ty) $I128)
   (let ((val Reg (value_regs_get val 0))
         (extended Reg (extend val (ExtendOp.Zero) from_ty $I64)))
     (value_regs extended (load_u64_constant 0))))
 
-(rule 5 (extend val (ExtendOp.Zero) $I64 $I128)
+(rule 8 (extend val (ExtendOp.Zero) $I64 $I128)
   (value_regs
     (value_regs_get val 0)
     (load_u64_constant 0)))
 
 ;; Catch all rule for ignoring extensions of the same type.
-(rule 6 (extend val _ ty ty) val)
+(rule 9 (extend val _ ty ty) val)
 
 
 

@@ -3,7 +3,8 @@ test run
 target aarch64
 target s390x
 target x86_64
-target riscv64 
+target riscv64 has_zbb=false
+target riscv64 has_zbb=true
 
 ;;;; basic uextend
 
