@@ -59,12 +59,12 @@ block0(v0: i16):
 
 ; VCode:
 ; block0:
-;   packw a0,zero,a0
+;   packw a0,a0,zero
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0x3b, 0x45, 0xa0, 0x08
+;   .byte 0x3b, 0x45, 0x05, 0x08
 ;   ret
 
 function %uextend16_64(i16) -> i64 {
@@ -75,12 +75,12 @@ block0(v0: i16):
 
 ; VCode:
 ; block0:
-;   packw a0,zero,a0
+;   packw a0,a0,zero
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0x3b, 0x45, 0xa0, 0x08
+;   .byte 0x3b, 0x45, 0x05, 0x08
 ;   ret
 
 function %uextend32_64(i32) -> i64 {
@@ -91,11 +91,11 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   pack a0,zero,a0
+;   pack a0,a0,zero
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0x33, 0x45, 0xa0, 0x08
+;   .byte 0x33, 0x45, 0x05, 0x08
 ;   ret
 

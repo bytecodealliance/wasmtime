@@ -1083,13 +1083,13 @@
 (rule 3 (extend val (ExtendOp.Zero) $I16 (fits_in_64 _))
   (if-let $true (has_zbkb))
   (let ((val Reg (value_regs_get val 0)))
-    (alu_rrr (AluOPRRR.Packw) (zero_reg) val)))
+    (alu_rrr (AluOPRRR.Packw) val (zero_reg))))
 
 ;; If we have the `zbkb` extension `pack` can be used to zero extend 32 bit registers
 (rule 4 (extend val (ExtendOp.Zero) $I32 $I64)
   (if-let $true (has_zbkb))
   (let ((val Reg (value_regs_get val 0)))
-    (alu_rrr (AluOPRRR.Pack) (zero_reg) val)))
+    (alu_rrr (AluOPRRR.Pack) val (zero_reg))))
 
 
 ;; If we have the `zbb` extension we can use the dedicated `sext.b` instruction.
