@@ -47,16 +47,17 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   atomic_load.i32 a0,(a0)
-;   uext.w a0,a0
+;   atomic_load.i32 a1,(a0)
+;   slli a0,a1,32
+;   srli a0,a0,32
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fence rw, rw
-;   lw a0, 0(a0)
+;   lw a1, 0(a0)
 ;   fence r, rw
-;   slli a0, a0, 0x20
+;   slli a0, a1, 0x20
 ;   srli a0, a0, 0x20
 ;   ret
 

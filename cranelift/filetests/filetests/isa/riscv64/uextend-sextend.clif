@@ -10,7 +10,7 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   uext.b a0,a0
+;   andi a0,a0,255
 ;   ret
 ; 
 ; Disassembled:
@@ -26,7 +26,7 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   uext.b a0,a0
+;   andi a0,a0,255
 ;   ret
 ; 
 ; Disassembled:
@@ -42,7 +42,7 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   uext.b a0,a0
+;   andi a0,a0,255
 ;   ret
 ; 
 ; Disassembled:
@@ -58,13 +58,14 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   sext.b a0,a0
+;   slli t2,a0,56
+;   srai a0,t2,56
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a0, a0, 0x38
-;   srai a0, a0, 0x38
+;   slli t2, a0, 0x38
+;   srai a0, t2, 0x38
 ;   ret
 
 function %f_s_8_32(i8) -> i32 {
@@ -75,13 +76,14 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   sext.b a0,a0
+;   slli t2,a0,56
+;   srai a0,t2,56
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a0, a0, 0x38
-;   srai a0, a0, 0x38
+;   slli t2, a0, 0x38
+;   srai a0, t2, 0x38
 ;   ret
 
 function %f_s_8_16(i8) -> i16 {
@@ -92,13 +94,14 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   sext.b a0,a0
+;   slli t2,a0,56
+;   srai a0,t2,56
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a0, a0, 0x38
-;   srai a0, a0, 0x38
+;   slli t2, a0, 0x38
+;   srai a0, t2, 0x38
 ;   ret
 
 function %f_u_16_64(i16) -> i64 {
@@ -109,13 +112,14 @@ block0(v0: i16):
 
 ; VCode:
 ; block0:
-;   uext.h a0,a0
+;   slli t2,a0,48
+;   srli a0,t2,48
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a0, a0, 0x30
-;   srli a0, a0, 0x30
+;   slli t2, a0, 0x30
+;   srli a0, t2, 0x30
 ;   ret
 
 function %f_u_16_32(i16) -> i32 {
@@ -126,13 +130,14 @@ block0(v0: i16):
 
 ; VCode:
 ; block0:
-;   uext.h a0,a0
+;   slli t2,a0,48
+;   srli a0,t2,48
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a0, a0, 0x30
-;   srli a0, a0, 0x30
+;   slli t2, a0, 0x30
+;   srli a0, t2, 0x30
 ;   ret
 
 function %f_s_16_64(i16) -> i64 {
@@ -143,13 +148,14 @@ block0(v0: i16):
 
 ; VCode:
 ; block0:
-;   sext.h a0,a0
+;   slli t2,a0,48
+;   srai a0,t2,48
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a0, a0, 0x30
-;   srai a0, a0, 0x30
+;   slli t2, a0, 0x30
+;   srai a0, t2, 0x30
 ;   ret
 
 function %f_s_16_32(i16) -> i32 {
@@ -160,13 +166,14 @@ block0(v0: i16):
 
 ; VCode:
 ; block0:
-;   sext.h a0,a0
+;   slli t2,a0,48
+;   srai a0,t2,48
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a0, a0, 0x30
-;   srai a0, a0, 0x30
+;   slli t2, a0, 0x30
+;   srai a0, t2, 0x30
 ;   ret
 
 function %f_u_32_64(i32) -> i64 {
@@ -177,13 +184,14 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   uext.w a0,a0
+;   slli t2,a0,32
+;   srli a0,t2,32
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a0, a0, 0x20
-;   srli a0, a0, 0x20
+;   slli t2, a0, 0x20
+;   srli a0, t2, 0x20
 ;   ret
 
 function %f_s_32_64(i32) -> i64 {
@@ -194,12 +202,13 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   sext.w a0,a0
+;   slli t2,a0,32
+;   srai a0,t2,32
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a0, a0, 0x20
-;   srai a0, a0, 0x20
+;   slli t2, a0, 0x20
+;   srai a0, t2, 0x20
 ;   ret
 

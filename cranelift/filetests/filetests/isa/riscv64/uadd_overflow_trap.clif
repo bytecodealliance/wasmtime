@@ -11,23 +11,25 @@ block0(v0: i32):
 ; VCode:
 ; block0:
 ;   li t2,127
-;   uext.w a1,a0
-;   uext.w a3,t2
-;   add a0,a1,a3
-;   srli a7,a0,32
-;   trap_if a7,user0
+;   slli a1,a0,32
+;   srli a3,a1,32
+;   slli a5,t2,32
+;   srli a7,a5,32
+;   add a0,a3,a7
+;   srli t1,a0,32
+;   trap_if t1,user0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi t2, zero, 0x7f
 ;   slli a1, a0, 0x20
-;   srli a1, a1, 0x20
-;   slli a3, t2, 0x20
-;   srli a3, a3, 0x20
-;   add a0, a1, a3
-;   srli a7, a0, 0x20
-;   beqz a7, 8
+;   srli a3, a1, 0x20
+;   slli a5, t2, 0x20
+;   srli a7, a5, 0x20
+;   add a0, a3, a7
+;   srli t1, a0, 0x20
+;   beqz t1, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
 ;   ret
 
@@ -41,23 +43,25 @@ block0(v0: i32):
 ; VCode:
 ; block0:
 ;   li t2,127
-;   uext.w a1,t2
-;   uext.w a3,a0
-;   add a0,a1,a3
-;   srli a7,a0,32
-;   trap_if a7,user0
+;   slli a1,t2,32
+;   srli a3,a1,32
+;   slli a5,a0,32
+;   srli a7,a5,32
+;   add a0,a3,a7
+;   srli t1,a0,32
+;   trap_if t1,user0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi t2, zero, 0x7f
 ;   slli a1, t2, 0x20
-;   srli a1, a1, 0x20
-;   slli a3, a0, 0x20
-;   srli a3, a3, 0x20
-;   add a0, a1, a3
-;   srli a7, a0, 0x20
-;   beqz a7, 8
+;   srli a3, a1, 0x20
+;   slli a5, a0, 0x20
+;   srli a7, a5, 0x20
+;   add a0, a3, a7
+;   srli t1, a0, 0x20
+;   beqz t1, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
 ;   ret
 
@@ -69,22 +73,24 @@ block0(v0: i32, v1: i32):
 
 ; VCode:
 ; block0:
-;   uext.w a0,a0
-;   uext.w a2,a1
-;   add a0,a0,a2
-;   srli a6,a0,32
-;   trap_if a6,user0
+;   slli a0,a0,32
+;   srli a2,a0,32
+;   slli a4,a1,32
+;   srli a6,a4,32
+;   add a0,a2,a6
+;   srli t0,a0,32
+;   trap_if t0,user0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli a0, a0, 0x20
-;   srli a0, a0, 0x20
-;   slli a2, a1, 0x20
-;   srli a2, a2, 0x20
-;   add a0, a0, a2
-;   srli a6, a0, 0x20
-;   beqz a6, 8
+;   srli a2, a0, 0x20
+;   slli a4, a1, 0x20
+;   srli a6, a4, 0x20
+;   add a0, a2, a6
+;   srli t0, a0, 0x20
+;   beqz t0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
 ;   ret
 

@@ -39,8 +39,8 @@ block0(v0: i8):
 ; VCode:
 ; block0:
 ;   li t2,42
-;   uext.b a1,a0
-;   uext.b a3,t2
+;   andi a1,a0,255
+;   andi a3,t2,255
 ;   eq a0,a1,a3##ty=i8
 ;   ret
 ; 

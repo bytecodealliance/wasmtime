@@ -1015,14 +1015,6 @@
       ;; add low and high together.
       (result Reg (alu_add high low)))
     (value_regs result (load_u64_constant 0))))
-
-(decl gen_extend (Reg bool u8 u8) Reg)
-(rule
-  (gen_extend r is_signed from_bits to_bits)
-  (let
-    ((tmp WritableReg (temp_writable_reg $I16))
-      (_ Unit (emit (MInst.Extend tmp r is_signed from_bits to_bits))))
-    tmp))
   
 ;; Extends an integer if it is smaller than 64 bits.
 (decl ext_int_if_need (bool ValueRegs Type) ValueRegs)
@@ -1052,16 +1044,29 @@
 ;; Performs either a sign or zero extension of the given value
 (decl extend (ValueRegs ExtendOp Type Type) ValueRegs)
 
-;; Fallback to gen_extend
-(rule -1 (extend val (ExtendOp.Zero) from_ty to_ty)
-  (gen_extend (value_regs_get val 0) $false (ty_bits from_ty) (ty_bits to_ty)))
-(rule -1 (extend val (ExtendOp.Signed) from_ty to_ty)
-  (gen_extend (value_regs_get val 0) $true (ty_bits from_ty) (ty_bits to_ty)))
+;;; Generic Rules Extending to I64
+(decl extend_shift_op (ExtendOp) AluOPRRI)
+(rule (extend_shift_op (ExtendOp.Zero)) (AluOPRRI.Srli))
+(rule (extend_shift_op (ExtendOp.Signed)) (AluOPRRI.Srai))
 
+;; In the most generic case, we shift left and then shift right.
+;; The type of right shift is determined by the extend op.
+(rule 0 (extend val extend_op (fits_in_32 from_ty) (fits_in_64 to_ty))
+  (let ((val Reg (value_regs_get val 0))
+        (shift Imm12 (imm_from_bits (u64_sub 64 (ty_bits from_ty))))
+        (left Reg (alu_rr_imm12 (AluOPRRI.Slli) val shift))
+        (shift_op AluOPRRI (extend_shift_op extend_op))
+        (right Reg (alu_rr_imm12 shift_op left shift)))
+    right))
+
+;; If we are zero extending a U8 we can use a `andi` instruction.
+(rule 1 (extend val (ExtendOp.Zero) $I8 (fits_in_64 to_ty))
+  (let ((val Reg (value_regs_get val 0)))
+    (alu_rr_imm12 (AluOPRRI.Andi) val (imm12_const 255))))
 
 ;;; Signed rules extending to I128
 ;; Extend the bottom part, and extract the sign bit from the bottom as the top
-(rule 1 (extend val (ExtendOp.Signed) (fits_in_64 from_ty) $I128)
+(rule 2 (extend val (ExtendOp.Signed) (fits_in_64 from_ty) $I128)
   (let ((val Reg (value_regs_get val 0))
         (low Reg (extend val (ExtendOp.Signed) from_ty $I64))
         (high Reg (alu_rr_imm12 (AluOPRRI.Srai) low (imm12_const 63))))
@@ -1070,18 +1075,18 @@
 
 ;;; Unsigned rules extending to I128
 ;; Extend the bottom register to I64 and then just zero out the top half.
-(rule 1 (extend val (ExtendOp.Zero) (fits_in_32 from_ty) $I128)
+(rule 3 (extend val (ExtendOp.Zero) (fits_in_32 from_ty) $I128)
   (let ((val Reg (value_regs_get val 0))
         (extended Reg (extend val (ExtendOp.Zero) from_ty $I64)))
     (value_regs extended (load_u64_constant 0))))
 
-(rule 2 (extend val (ExtendOp.Zero) $I64 $I128)
+(rule 4 (extend val (ExtendOp.Zero) $I64 $I128)
   (value_regs
     (value_regs_get val 0)
     (load_u64_constant 0)))
 
 ;; Catch all rule for ignoring extensions of the same type.
-(rule 3 (extend val _ ty ty) val)
+(rule 5 (extend val _ ty ty) val)
 
 
 
