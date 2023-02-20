@@ -1878,27 +1878,27 @@
 
 (decl x64_pmovsxbw (XmmMem) Xmm)
 (rule (x64_pmovsxbw from)
-      (xmm_unary_rm_r (SseOpcode.Pmovsxbw) from))
+      (xmm_unary_rm_r_unaligned (SseOpcode.Pmovsxbw) from))
 
 (decl x64_pmovzxbw (XmmMem) Xmm)
 (rule (x64_pmovzxbw from)
-      (xmm_unary_rm_r (SseOpcode.Pmovzxbw) from))
+      (xmm_unary_rm_r_unaligned (SseOpcode.Pmovzxbw) from))
 
 (decl x64_pmovsxwd (XmmMem) Xmm)
 (rule (x64_pmovsxwd from)
-      (xmm_unary_rm_r (SseOpcode.Pmovsxwd) from))
+      (xmm_unary_rm_r_unaligned (SseOpcode.Pmovsxwd) from))
 
 (decl x64_pmovzxwd (XmmMem) Xmm)
 (rule (x64_pmovzxwd from)
-      (xmm_unary_rm_r (SseOpcode.Pmovzxwd) from))
+      (xmm_unary_rm_r_unaligned (SseOpcode.Pmovzxwd) from))
 
 (decl x64_pmovsxdq (XmmMem) Xmm)
 (rule (x64_pmovsxdq from)
-      (xmm_unary_rm_r (SseOpcode.Pmovsxdq) from))
+      (xmm_unary_rm_r_unaligned (SseOpcode.Pmovsxdq) from))
 
 (decl x64_pmovzxdq (XmmMem) Xmm)
 (rule (x64_pmovzxdq from)
-      (xmm_unary_rm_r (SseOpcode.Pmovzxdq) from))
+      (xmm_unary_rm_r_unaligned (SseOpcode.Pmovzxdq) from))
 
 (decl x64_movrm (Type SyntheticAmode Gpr) SideEffectNoResult)
 (rule (x64_movrm ty addr data)
