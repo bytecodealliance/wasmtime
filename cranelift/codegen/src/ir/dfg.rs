@@ -7,7 +7,7 @@ use crate::ir::dynamic_type::{DynamicTypeData, DynamicTypes};
 use crate::ir::instructions::{CallInfo, InstructionData};
 use crate::ir::{
     types, Block, BlockCall, ConstantData, ConstantPool, DynamicType, ExtFuncData, FuncRef,
-    Immediate, Inst, JumpTables, RelSourceLoc, SigRef, Signature, Type, Value,
+    Immediate, Inst, JumpTables, Opcode, RelSourceLoc, SigRef, Signature, Type, Value,
     ValueLabelAssignments, ValueList, ValueListPool,
 };
 use crate::packed_option::ReservedValue;
@@ -19,6 +19,7 @@ use core::ops::{Index, IndexMut};
 use core::u16;
 
 use alloc::collections::BTreeMap;
+use alloc::vec::Vec;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
@@ -1023,6 +1024,47 @@ impl DataFlowGraph {
                 constraints.num_fixed_results()
             }
         }
+    }
+
+    fn value_iconst(&self, value: Value) -> Option<i64> {
+        use crate::trace;
+        if let ValueDef::Result(inst, ..) = self.value_def(value) {
+            trace!("value_iconst: {inst:?}");
+            if let InstructionData::UnaryImm { imm, .. } = self.insts[inst] {
+                return Some(imm.into());
+            }
+        }
+        None
+    }
+
+    /// Checks `inst` to see if it is a conditional branch with a constant
+    /// condition.  Returns the taken block and a list of not taken blocks.
+    pub fn is_const_branch(&self, inst: Inst) -> Option<(BlockCall, Vec<BlockCall>)> {
+        use crate::trace;
+        match &self.insts[inst] {
+            InstructionData::Brif { arg, blocks, .. } => {
+                if let Some(imm) = self.value_iconst(*arg) {
+                    let mut not_taken = Vec::new();
+                    let taken = if imm != 0 {
+                        not_taken.push(blocks[1]);
+                        blocks[0]
+                    } else {
+                        not_taken.push(blocks[0]);
+                        blocks[1]
+                    };
+                    return Some((taken, not_taken));
+                }
+            }
+            InstructionData::BranchTable { arg, table, .. } => {
+                trace!("MMC {arg:?} table:{table:?}");
+                if let Some(imm) = self.value_iconst(*arg) {
+                    // let mut not_taken = Vec::new();
+                    trace!("MMC table: {table:?}");
+                }
+            }
+            _ => {}
+        }
+        None
     }
 
     /// Get the result types of the given instruction.

@@ -9,7 +9,8 @@ use crate::egraph::elaborate::Elaborator;
 use crate::fx::FxHashSet;
 use crate::inst_predicates::is_pure_for_egraph;
 use crate::ir::{
-    DataFlowGraph, Function, Inst, InstructionData, Type, Value, ValueDef, ValueListPool,
+    DataFlowGraph, Function, Inst, InstBuilderBase, InstructionData, Opcode, Type, Value, ValueDef,
+    ValueListPool,
 };
 use crate::loop_analysis::LoopAnalysis;
 use crate::opts::generated_code::ContextIter;
@@ -303,6 +304,24 @@ where
             self.value_to_opt_value[result] = new_result;
             true
         }
+        // If a conditional branch with a constant condtition, convert
+        // to a jump
+        else if let Some((taken, not_taken)) = self.func.dfg.is_const_branch(inst) {
+            // Convert to branch, and unlink not taken blocks
+            trace!("Folding branch to {taken:?}");
+            self.stats.branch_folds += 1;
+            self.func.dfg.replace(inst).build(
+                InstructionData::Jump {
+                    opcode: Opcode::Jump,
+                    destination: taken,
+                },
+                super::ir::types::INVALID,
+            );
+
+            // TODO: Remove not_taken references to current block
+
+            false
+        }
         // Otherwise, generic side-effecting op -- always keep it, and
         // set its results to identity-map to original values.
         else {
@@ -564,6 +583,7 @@ pub(crate) struct Stats {
     pub(crate) pure_inst_deduped: u64,
     pub(crate) skeleton_inst: u64,
     pub(crate) alias_analysis_removed: u64,
+    pub(crate) branch_folds: u64,
     pub(crate) new_inst: u64,
     pub(crate) union: u64,
     pub(crate) subsume: u64,
