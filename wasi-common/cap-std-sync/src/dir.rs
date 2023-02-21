@@ -4,7 +4,7 @@ use std::any::Any;
 use std::path::{Path, PathBuf};
 use wasi_common::{
     dir::{ReaddirCursor, ReaddirEntity, WasiDir},
-    file::{FdFlags, FileType, Filestat, OFlags, WasiFile},
+    file::{FdFlags, Filestat, OFlags, WasiFile},
     Error, ErrorExt,
 };
 
@@ -187,19 +187,7 @@ impl WasiDir for Dir {
         // cap_std's read_dir does not include . and .., we should prepend these.
         // Why does the Ok contain a tuple? We can't construct a cap_std::fs::DirEntry, and we don't
         // have enough info to make a ReaddirEntity yet.
-        let dir_meta = self.0.dir_metadata()?;
-        let rd = vec![
-            {
-                let name = ".".to_owned();
-                Ok::<_, ReaddirError>((FileType::Directory, dir_meta.ino(), name))
-            },
-            {
-                let name = "..".to_owned();
-                Ok((FileType::Directory, dir_meta.ino(), name))
-            },
-        ]
-        .into_iter()
-        .chain({
+        let rd = {
             // Now process the `DirEntry`s:
             let entries = self.0.entries()?.map(|entry| {
                 let entry = entry?;
@@ -231,7 +219,7 @@ impl WasiDir for Dir {
             });
 
             entries
-        })
+        }
         // Enumeration of the iterator makes it possible to define the ReaddirCursor
         .enumerate()
         .map(|(ix, r)| match r {
@@ -379,7 +367,7 @@ mod test {
     fn readdir() {
         use std::collections::HashMap;
         use wasi_common::dir::{ReaddirCursor, ReaddirEntity, WasiDir};
-        use wasi_common::file::{FdFlags, FileType, OFlags};
+        use wasi_common::file::{FdFlags, OFlags};
 
         fn readdir_into_map(dir: &dyn WasiDir) -> HashMap<String, ReaddirEntity> {
             let mut out = HashMap::new();
