@@ -92,12 +92,6 @@ fn is_mergeable_load(ctx: &mut Lower<Inst>, src_insn: IRInst) -> Option<(InsnInp
         return None;
     }
 
-    // SIMD instructions can only be load-coalesced when the loaded value comes
-    // from an aligned address.
-    if load_ty.is_vector() && !insn_data.memflags().map_or(false, |f| f.aligned()) {
-        return None;
-    }
-
     // Just testing the opcode is enough, because the width will always match if
     // the type does (and the type should match if the CLIF is properly
     // constructed).

@@ -2155,10 +2155,6 @@
 
 ;; Rules for `fadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; N.B.: there are no load-op merging rules here. We can't guarantee
-;; the RHS (if a load) is 128-bit aligned, so we must avoid merging a
-;; load. Likewise for other ops below.
-
 (rule (lower (has_type $F32 (fadd x y)))
       (x64_addss x y))
 (rule (lower (has_type $F64 (fadd x y)))
@@ -2167,6 +2163,17 @@
       (x64_addps x y))
 (rule (lower (has_type $F64X2 (fadd x y)))
       (x64_addpd x y))
+
+;; The above rules automatically sink loads for rhs operands, so additionally
+;; add rules for sinking loads with lhs operands.
+(rule 1 (lower (has_type $F32 (fadd (sinkable_load x) y)))
+      (x64_addss y (sink_load x)))
+(rule 1 (lower (has_type $F64 (fadd (sinkable_load x) y)))
+      (x64_addsd y (sink_load x)))
+(rule 1 (lower (has_type $F32X4 (fadd (sinkable_load x) y)))
+      (x64_addps y (sink_load x)))
+(rule 1 (lower (has_type $F64X2 (fadd (sinkable_load x) y)))
+      (x64_addpd y (sink_load x)))
 
 ;; Rules for `fsub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2189,6 +2196,17 @@
       (x64_mulps x y))
 (rule (lower (has_type $F64X2 (fmul x y)))
       (x64_mulpd x y))
+
+;; The above rules automatically sink loads for rhs operands, so additionally
+;; add rules for sinking loads with lhs operands.
+(rule 1 (lower (has_type $F32 (fmul (sinkable_load x) y)))
+      (x64_mulss y (sink_load x)))
+(rule 1 (lower (has_type $F64 (fmul (sinkable_load x) y)))
+      (x64_mulsd y (sink_load x)))
+(rule 1 (lower (has_type $F32X4 (fmul (sinkable_load x) y)))
+      (x64_mulps y (sink_load x)))
+(rule 1 (lower (has_type $F64X2 (fmul (sinkable_load x) y)))
+      (x64_mulpd y (sink_load x)))
 
 ;; Rules for `fdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2983,7 +3001,7 @@
             (tmp Xmm (x64_pxor tmp dst))
 
             ;; Convert the packed float to packed doubleword.
-            (dst Xmm (x64_cvttps2dq $F32X4 dst))
+            (dst Xmm (x64_cvttps2dq dst))
 
             ;; Set top bit only if < 0
             (tmp Xmm (x64_pand dst tmp))
@@ -3064,7 +3082,7 @@
             ;; Overflow lanes greater than the maximum allowed signed value will
             ;; set to 0x80000000. Negative and NaN lanes will be 0x0
             (tmp1 Xmm dst)
-            (dst Xmm (x64_cvttps2dq $F32X4 dst))
+            (dst Xmm (x64_cvttps2dq dst))
 
             ;; Set lanes to src - max_signed_int
             (tmp1 Xmm (x64_subps tmp1 tmp2))
@@ -3074,7 +3092,7 @@
             (tmp2 Xmm (x64_cmpps tmp2 tmp1 (FcmpImm.LessThanOrEqual)))
 
             ;; Convert those set of lanes that have the max_signed_int factored out.
-            (tmp1 Xmm (x64_cvttps2dq $F32X4 tmp1))
+            (tmp1 Xmm (x64_cvttps2dq tmp1))
 
             ;; Prepare converted lanes by zeroing negative lanes and prepping lanes
             ;; that have positive overflow (based on the mask) by setting these lanes

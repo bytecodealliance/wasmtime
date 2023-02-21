@@ -162,7 +162,7 @@
        ;; Arithmetic SIMD shifts.
        (XmmRmiReg (opcode SseOpcode)
                   (src1 Xmm)
-                  (src2 XmmMemImm)
+                  (src2 XmmMemAlignedImm)
                   (dst WritableXmm))
 
        ;; Integer comparisons/tests: cmp or test (b w l q) (reg addr imm) reg.
@@ -193,7 +193,7 @@
        ;; XMM conditional move; overwrites the destination register.
        (XmmCmove (ty Type)
                  (cc CC)
-                 (consequent XmmMem)
+                 (consequent XmmMemAligned)
                  (alternative Xmm)
                  (dst WritableXmm))
 
@@ -218,8 +218,14 @@
        ;; (32 64) (reg addr) reg
        (XmmRmR (op SseOpcode)
                (src1 Xmm)
-               (src2 XmmMem)
+               (src2 XmmMemAligned)
                (dst WritableXmm))
+
+       ;; Same as `XmmRmR` except the memory operand can be unaligned
+       (XmmRmRUnaligned (op SseOpcode)
+                        (src1 Xmm)
+                        (src2 XmmMem)
+                        (dst WritableXmm))
 
        ;; XMM (scalar or vector) production of a constant value by operating
        ;; on a register with itself.
@@ -235,7 +241,7 @@
        (XmmRmRBlend
          (op SseOpcode)
          (src1 Xmm)
-         (src2 XmmMem)
+         (src2 XmmMemAligned)
          (mask Xmm)
          (dst WritableXmm))
 
@@ -300,8 +306,14 @@
        ;; not have to be a previously valid value. This is characteristic of mov
        ;; instructions.
        (XmmUnaryRmR (op SseOpcode)
-                    (src XmmMem)
+                    (src XmmMemAligned)
                     (dst WritableXmm))
+
+       ;; Same as `XmmUnaryRmR` but used for opcodes where the memory address
+       ;; can be unaligned.
+       (XmmUnaryRmRUnaligned (op SseOpcode)
+                             (src XmmMem)
+                             (dst WritableXmm))
 
        ;; XMM (scalar or vector) unary op with immediate: roundss, roundsd, etc.
        ;;
@@ -309,7 +321,7 @@
        ;; XmmUnaryRmRImm is not used in the computation of the instruction dst
        ;; value and so does not have to be a previously valid value.
        (XmmUnaryRmRImm (op SseOpcode)
-                       (src XmmMem)
+                       (src XmmMemAligned)
                        (imm u8)
                        (dst WritableXmm))
 
@@ -380,7 +392,7 @@
 
        ;; Float comparisons/tests: cmp (b w l q) (reg addr imm) reg.
        (XmmCmpRmR (op SseOpcode)
-                  (src XmmMem)
+                  (src XmmMemAligned)
                   (dst Xmm))
 
        ;; A binary XMM instruction with an 8-bit immediate: e.g. cmp (ps pd) imm
@@ -1334,7 +1346,9 @@
 (type WritableXmm (primitive WritableXmm))
 (type OptionWritableXmm (primitive OptionWritableXmm))
 (type XmmMem extern (enum))
+(type XmmMemAligned extern (enum))
 (type XmmMemImm extern (enum))
+(type XmmMemAlignedImm extern (enum))
 
 ;; Convert an `Imm8Reg` into an `Imm8Gpr`.
 (decl imm8_reg_to_imm8_gpr (Imm8Reg) Imm8Gpr)
@@ -1383,6 +1397,25 @@
 ;; Convert an `XmmMem` into an `XmmMemImm`.
 (decl xmm_mem_to_xmm_mem_imm (XmmMem) XmmMemImm)
 (extern constructor xmm_mem_to_xmm_mem_imm xmm_mem_to_xmm_mem_imm)
+
+;; Convert an `XmmMem` into an `XmmMemAligned`.
+;;
+;; Note that this is an infallible conversion, not a fallible one. If the
+;; original `XmmMem` source is a register, then it's passed through directly.
+;; If it's `Mem` and refers to aligned memory, it's also passed through
+;; directly. Otherwise, though, it's a memory source which is not aligned to
+;; 16 bytes so a load is performed and the temporary register which is the
+;; result of the load is passed through. The end-result is that the return value
+;; here is guaranteed to be a register or an aligned memory location.
+(decl xmm_mem_to_xmm_mem_aligned (XmmMem) XmmMemAligned)
+(extern constructor xmm_mem_to_xmm_mem_aligned xmm_mem_to_xmm_mem_aligned)
+
+;; Convert an `XmmMemImm` into an `XmmMemImmAligned`.
+;;
+;; Note that this is the same as `xmm_mem_to_xmm_mem_aligned` except it handles
+;; an immediate case as well.
+(decl xmm_mem_imm_to_xmm_mem_aligned_imm (XmmMemImm) XmmMemAlignedImm)
+(extern constructor xmm_mem_imm_to_xmm_mem_aligned_imm xmm_mem_imm_to_xmm_mem_aligned_imm)
 
 ;; Allocate a new temporary GPR register.
 (decl temp_writable_gpr () WritableGpr)
@@ -1801,23 +1834,19 @@
         dst))
 
 (rule 2 (x64_load $F32 addr _ext_kind)
-      (xmm_unary_rm_r (SseOpcode.Movss)
-                      addr))
+      (xmm_unary_rm_r_unaligned (SseOpcode.Movss) addr))
 
 (rule 2 (x64_load $F64 addr _ext_kind)
-      (xmm_unary_rm_r (SseOpcode.Movsd)
-                      addr))
+      (xmm_unary_rm_r_unaligned (SseOpcode.Movsd) addr))
 
 (rule 2 (x64_load $F32X4 addr _ext_kind)
-      (xmm_unary_rm_r (SseOpcode.Movups)
-                      addr))
+      (xmm_unary_rm_r_unaligned (SseOpcode.Movups) addr))
 
 (rule 2 (x64_load $F64X2 addr _ext_kind)
-      (xmm_unary_rm_r (SseOpcode.Movupd)
-                      addr))
+      (xmm_unary_rm_r_unaligned (SseOpcode.Movupd) addr))
 
 (rule 0 (x64_load (multi_lane _bits _lanes) addr _ext_kind)
-      (xmm_unary_rm_r (SseOpcode.Movdqu) addr))
+      (xmm_unary_rm_r_unaligned (SseOpcode.Movdqu) addr))
 
 (decl x64_mov (Amode) Reg)
 (rule (x64_mov addr)
@@ -1839,19 +1868,19 @@
 
 (decl x64_movss_load (XmmMem) Xmm)
 (rule (x64_movss_load from)
-      (xmm_unary_rm_r (SseOpcode.Movss) from))
+      (xmm_unary_rm_r_unaligned (SseOpcode.Movss) from))
 
 (decl x64_movsd_load (XmmMem) Xmm)
 (rule (x64_movsd_load from)
-      (xmm_unary_rm_r (SseOpcode.Movsd) from))
+      (xmm_unary_rm_r_unaligned (SseOpcode.Movsd) from))
 
 (decl x64_movups (XmmMem) Xmm)
 (rule (x64_movups from)
-      (xmm_unary_rm_r (SseOpcode.Movups) from))
+      (xmm_unary_rm_r_unaligned (SseOpcode.Movups) from))
 
 (decl x64_movupd (XmmMem) Xmm)
 (rule (x64_movupd from)
-      (xmm_unary_rm_r (SseOpcode.Movupd) from))
+      (xmm_unary_rm_r_unaligned (SseOpcode.Movupd) from))
 
 (decl x64_movd (Xmm) Gpr)
 (rule (x64_movd from)
@@ -1859,7 +1888,7 @@
 
 (decl x64_movdqu (XmmMem) Xmm)
 (rule (x64_movdqu from)
-      (xmm_unary_rm_r (SseOpcode.Movdqu) from))
+      (xmm_unary_rm_r_unaligned (SseOpcode.Movdqu) from))
 
 (decl x64_movapd (XmmMem) Xmm)
 (rule (x64_movapd src)
@@ -1867,27 +1896,27 @@
 
 (decl x64_pmovsxbw (XmmMem) Xmm)
 (rule (x64_pmovsxbw from)
-      (xmm_unary_rm_r (SseOpcode.Pmovsxbw) from))
+      (xmm_unary_rm_r_unaligned (SseOpcode.Pmovsxbw) from))
 
 (decl x64_pmovzxbw (XmmMem) Xmm)
 (rule (x64_pmovzxbw from)
-      (xmm_unary_rm_r (SseOpcode.Pmovzxbw) from))
+      (xmm_unary_rm_r_unaligned (SseOpcode.Pmovzxbw) from))
 
 (decl x64_pmovsxwd (XmmMem) Xmm)
 (rule (x64_pmovsxwd from)
-      (xmm_unary_rm_r (SseOpcode.Pmovsxwd) from))
+      (xmm_unary_rm_r_unaligned (SseOpcode.Pmovsxwd) from))
 
 (decl x64_pmovzxwd (XmmMem) Xmm)
 (rule (x64_pmovzxwd from)
-      (xmm_unary_rm_r (SseOpcode.Pmovzxwd) from))
+      (xmm_unary_rm_r_unaligned (SseOpcode.Pmovzxwd) from))
 
 (decl x64_pmovsxdq (XmmMem) Xmm)
 (rule (x64_pmovsxdq from)
-      (xmm_unary_rm_r (SseOpcode.Pmovsxdq) from))
+      (xmm_unary_rm_r_unaligned (SseOpcode.Pmovsxdq) from))
 
 (decl x64_pmovzxdq (XmmMem) Xmm)
 (rule (x64_pmovzxdq from)
-      (xmm_unary_rm_r (SseOpcode.Pmovzxdq) from))
+      (xmm_unary_rm_r_unaligned (SseOpcode.Pmovzxdq) from))
 
 (decl x64_movrm (Type SyntheticAmode Gpr) SideEffectNoResult)
 (rule (x64_movrm ty addr data)
@@ -2178,7 +2207,7 @@
       (cmp_rmi_r size (CmpOpcode.Cmp) (RegMemImm.Imm src1) src2))
 
 ;; Helper for creating `MInst.XmmCmpRmR` instructions.
-(decl xmm_cmp_rm_r (SseOpcode XmmMem Xmm) ProducesFlags)
+(decl xmm_cmp_rm_r (SseOpcode XmmMemAligned Xmm) ProducesFlags)
 (rule (xmm_cmp_rm_r opcode src1 src2)
       (ProducesFlags.ProducesFlagsSideEffect
        (MInst.XmmCmpRmR opcode src1 src2)))
@@ -2213,7 +2242,7 @@
          (MInst.Cmove size cc consequent alternative dst)
          dst)))
 
-(decl cmove_xmm (Type CC XmmMem Xmm) ConsumesFlags)
+(decl cmove_xmm (Type CC XmmMemAligned Xmm) ConsumesFlags)
 (rule (cmove_xmm ty cc consequent alternative)
       (let ((dst WritableXmm (temp_writable_xmm)))
         (ConsumesFlags.ConsumesFlagsReturnsReg
@@ -2266,7 +2295,7 @@
          cmove2
          dst)))
 
-(decl cmove_or_xmm (Type CC CC XmmMem Xmm) ConsumesFlags)
+(decl cmove_or_xmm (Type CC CC XmmMemAligned Xmm) ConsumesFlags)
 (rule (cmove_or_xmm ty cc1 cc2 consequent alternative)
       (let ((dst WritableXmm (temp_writable_xmm))
             (tmp WritableXmm (temp_writable_xmm))
@@ -2324,10 +2353,17 @@
          dst)))
 
 ;; Helper for creating `MInst.XmmRmR` instructions.
-(decl xmm_rm_r (SseOpcode Xmm XmmMem) Xmm)
+(decl xmm_rm_r (SseOpcode Xmm XmmMemAligned) Xmm)
 (rule (xmm_rm_r op src1 src2)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmRmR op src1 src2 dst))))
+        dst))
+
+;; Helper for creating `MInst.XmmRmRUnaligned` instructions.
+(decl xmm_rm_r_unaligned (SseOpcode Xmm XmmMem) Xmm)
+(rule (xmm_rm_r_unaligned op src1 src2)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmRmRUnaligned op src1 src2 dst))))
         dst))
 
 ;; Helper for creating `paddb` instructions.
@@ -2653,12 +2689,12 @@
 ;; Helper for creating `addss` instructions.
 (decl x64_addss (Xmm XmmMem) Xmm)
 (rule (x64_addss src1 src2)
-      (xmm_rm_r (SseOpcode.Addss) src1 src2))
+      (xmm_rm_r_unaligned (SseOpcode.Addss) src1 src2))
 
 ;; Helper for creating `addsd` instructions.
 (decl x64_addsd (Xmm XmmMem) Xmm)
 (rule (x64_addsd src1 src2)
-      (xmm_rm_r (SseOpcode.Addsd) src1 src2))
+      (xmm_rm_r_unaligned (SseOpcode.Addsd) src1 src2))
 
 ;; Helper for creating `addps` instructions.
 (decl x64_addps (Xmm XmmMem) Xmm)
@@ -2679,12 +2715,12 @@
 ;; Helper for creating `subss` instructions.
 (decl x64_subss (Xmm XmmMem) Xmm)
 (rule (x64_subss src1 src2)
-      (xmm_rm_r (SseOpcode.Subss) src1 src2))
+      (xmm_rm_r_unaligned (SseOpcode.Subss) src1 src2))
 
 ;; Helper for creating `subsd` instructions.
 (decl x64_subsd (Xmm XmmMem) Xmm)
 (rule (x64_subsd src1 src2)
-      (xmm_rm_r (SseOpcode.Subsd) src1 src2))
+      (xmm_rm_r_unaligned (SseOpcode.Subsd) src1 src2))
 
 ;; Helper for creating `subps` instructions.
 (decl x64_subps (Xmm XmmMem) Xmm)
@@ -2705,12 +2741,12 @@
 ;; Helper for creating `mulss` instructions.
 (decl x64_mulss (Xmm XmmMem) Xmm)
 (rule (x64_mulss src1 src2)
-      (xmm_rm_r (SseOpcode.Mulss) src1 src2))
+      (xmm_rm_r_unaligned (SseOpcode.Mulss) src1 src2))
 
 ;; Helper for creating `mulsd` instructions.
 (decl x64_mulsd (Xmm XmmMem) Xmm)
 (rule (x64_mulsd src1 src2)
-      (xmm_rm_r (SseOpcode.Mulsd) src1 src2))
+      (xmm_rm_r_unaligned (SseOpcode.Mulsd) src1 src2))
 
 ;; Helper for creating `mulps` instructions.
 (decl x64_mulps (Xmm XmmMem) Xmm)
@@ -2731,12 +2767,12 @@
 ;; Helper for creating `divss` instructions.
 (decl x64_divss (Xmm XmmMem) Xmm)
 (rule (x64_divss src1 src2)
-      (xmm_rm_r (SseOpcode.Divss) src1 src2))
+      (xmm_rm_r_unaligned (SseOpcode.Divss) src1 src2))
 
 ;; Helper for creating `divsd` instructions.
 (decl x64_divsd (Xmm XmmMem) Xmm)
 (rule (x64_divsd src1 src2)
-      (xmm_rm_r (SseOpcode.Divsd) src1 src2))
+      (xmm_rm_r_unaligned (SseOpcode.Divsd) src1 src2))
 
 ;; Helper for creating `divps` instructions.
 (decl x64_divps (Xmm XmmMem) Xmm)
@@ -2755,7 +2791,7 @@
       (xmm_rmir_vex (AvxOpcode.Vdivpd) src1 src2))
 
 ;; Helper for creating `XmmRmRBlend` instructions
-(decl xmm_rm_r_blend (SseOpcode Xmm XmmMem Xmm) Xmm)
+(decl xmm_rm_r_blend (SseOpcode Xmm XmmMemAligned Xmm) Xmm)
 (rule (xmm_rm_r_blend op src1 src2 mask)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmRmRBlend op src1 src2 mask dst))))
@@ -2801,7 +2837,7 @@
 ;; Helper for creating `movsd` instructions.
 (decl x64_movsd_regmove (Xmm XmmMem) Xmm)
 (rule (x64_movsd_regmove src1 src2)
-      (xmm_rm_r (SseOpcode.Movsd) src1 src2))
+      (xmm_rm_r_unaligned (SseOpcode.Movsd) src1 src2))
 
 ;; Helper for creating `movlhps` instructions.
 (decl x64_movlhps (Xmm XmmMem) Xmm)
@@ -3063,7 +3099,7 @@
         dst))
 
 ;; Helper for constructing `XmmUnaryRmRImm` instructions.
-(decl xmm_unary_rm_r_imm (SseOpcode XmmMem u8) Xmm)
+(decl xmm_unary_rm_r_imm (SseOpcode XmmMemAligned u8) Xmm)
 (rule (xmm_unary_rm_r_imm op src1 imm)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmUnaryRmRImm op src1 imm dst))))
@@ -3142,10 +3178,17 @@
       (xmm_rmr_imm_vex (AvxOpcode.Vshufps) src1 src2 byte))
 
 ;; Helper for creating `MInst.XmmUnaryRmR` instructions.
-(decl xmm_unary_rm_r (SseOpcode XmmMem) Xmm)
+(decl xmm_unary_rm_r (SseOpcode XmmMemAligned) Xmm)
 (rule (xmm_unary_rm_r op src)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmUnaryRmR op src dst))))
+        dst))
+
+;; Helper for creating `MInst.XmmUnaryRmRUnaligned` instructions.
+(decl xmm_unary_rm_r_unaligned (SseOpcode XmmMem) Xmm)
+(rule (xmm_unary_rm_r_unaligned op src)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmUnaryRmRUnaligned op src dst))))
         dst))
 
 ;; Helper for creating `pabsb` instructions.
@@ -3240,7 +3283,7 @@
       (mul_hi ty $false src1 src2))
 
 ;; Helper for creating `MInst.XmmRmiXmm` instructions.
-(decl xmm_rmi_xmm (SseOpcode Xmm XmmMemImm) Xmm)
+(decl xmm_rmi_xmm (SseOpcode Xmm XmmMemAlignedImm) Xmm)
 (rule (xmm_rmi_xmm op src1 src2)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmRmiReg op
@@ -3482,22 +3525,17 @@
         dst))
 
 ;; Helper for creating `minss` instructions.
-(decl x64_minss (Xmm Xmm) Xmm)
+(decl x64_minss (Xmm XmmMem) Xmm)
 (rule (x64_minss x y)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmR (SseOpcode.Minss) x y dst))))
-        dst))
+      (xmm_rm_r_unaligned (SseOpcode.Minss) x y))
 
 ;; Helper for creating `minsd` instructions.
-(decl x64_minsd (Xmm Xmm) Xmm)
+(decl x64_minsd (Xmm XmmMem) Xmm)
 (rule (x64_minsd x y)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmR (SseOpcode.Minsd) x y dst))))
-        dst))
-
+      (xmm_rm_r_unaligned (SseOpcode.Minsd) x y))
 
 ;; Helper for creating `minps` instructions.
-(decl x64_minps (Xmm Xmm) Xmm)
+(decl x64_minps (Xmm XmmMem) Xmm)
 (rule 0 (x64_minps x y)
       (xmm_rm_r (SseOpcode.Minps) x y))
 (rule 1 (x64_minps x y)
@@ -3505,7 +3543,7 @@
       (xmm_rmir_vex (AvxOpcode.Vminps) x y))
 
 ;; Helper for creating `minpd` instructions.
-(decl x64_minpd (Xmm Xmm) Xmm)
+(decl x64_minpd (Xmm XmmMem) Xmm)
 (rule 0 (x64_minpd x y)
       (xmm_rm_r (SseOpcode.Minpd) x y))
 (rule 1 (x64_minpd x y)
@@ -3513,17 +3551,17 @@
       (xmm_rmir_vex (AvxOpcode.Vminpd) x y))
 
 ;; Helper for creating `maxss` instructions.
-(decl x64_maxss (Xmm Xmm) Xmm)
+(decl x64_maxss (Xmm XmmMem) Xmm)
 (rule (x64_maxss x y)
-      (xmm_rm_r (SseOpcode.Maxss) x y))
+      (xmm_rm_r_unaligned (SseOpcode.Maxss) x y))
 
 ;; Helper for creating `maxsd` instructions.
-(decl x64_maxsd (Xmm Xmm) Xmm)
+(decl x64_maxsd (Xmm XmmMem) Xmm)
 (rule (x64_maxsd x y)
-      (xmm_rm_r (SseOpcode.Maxsd) x y))
+      (xmm_rm_r_unaligned (SseOpcode.Maxsd) x y))
 
 ;; Helper for creating `maxps` instructions.
-(decl x64_maxps (Xmm Xmm) Xmm)
+(decl x64_maxps (Xmm XmmMem) Xmm)
 (rule 0 (x64_maxps x y)
       (xmm_rm_r (SseOpcode.Maxps) x y))
 (rule 1 (x64_maxps x y)
@@ -3531,7 +3569,7 @@
       (xmm_rmir_vex (AvxOpcode.Vmaxps) x y))
 
 ;; Helper for creating `maxpd` instructions.
-(decl x64_maxpd (Xmm Xmm) Xmm)
+(decl x64_maxpd (Xmm XmmMem) Xmm)
 (rule 0 (x64_maxpd x y)
       (xmm_rm_r (SseOpcode.Maxpd) x y))
 (rule 1 (x64_maxpd x y)
@@ -3590,19 +3628,19 @@
 
 
 ;; Helper for creating `sqrtss` instructions.
-(decl x64_sqrtss (Xmm) Xmm)
-(rule (x64_sqrtss x) (xmm_unary_rm_r (SseOpcode.Sqrtss) x))
+(decl x64_sqrtss (XmmMem) Xmm)
+(rule (x64_sqrtss x) (xmm_unary_rm_r_unaligned (SseOpcode.Sqrtss) x))
 
 ;; Helper for creating `sqrtsd` instructions.
-(decl x64_sqrtsd (Xmm) Xmm)
-(rule (x64_sqrtsd x) (xmm_unary_rm_r (SseOpcode.Sqrtsd) x))
+(decl x64_sqrtsd (XmmMem) Xmm)
+(rule (x64_sqrtsd x) (xmm_unary_rm_r_unaligned (SseOpcode.Sqrtsd) x))
 
 ;; Helper for creating `sqrtps` instructions.
-(decl x64_sqrtps (Xmm) Xmm)
+(decl x64_sqrtps (XmmMem) Xmm)
 (rule (x64_sqrtps x) (xmm_unary_rm_r (SseOpcode.Sqrtps) x))
 
 ;; Helper for creating `sqrtpd` instructions.
-(decl x64_sqrtpd (Xmm) Xmm)
+(decl x64_sqrtpd (XmmMem) Xmm)
 (rule (x64_sqrtpd x) (xmm_unary_rm_r (SseOpcode.Sqrtpd) x))
 
 ;; Helper for creating `cvtss2sd` instructions.
@@ -3614,19 +3652,19 @@
 (rule (x64_cvtsd2ss x) (xmm_unary_rm_r (SseOpcode.Cvtsd2ss) x))
 
 ;; Helper for creating `cvtdq2ps` instructions.
-(decl x64_cvtdq2ps (Xmm) Xmm)
+(decl x64_cvtdq2ps (XmmMem) Xmm)
 (rule (x64_cvtdq2ps x) (xmm_unary_rm_r (SseOpcode.Cvtdq2ps) x))
 
 ;; Helper for creating `cvtps2pd` instructions.
-(decl x64_cvtps2pd (Xmm) Xmm)
+(decl x64_cvtps2pd (XmmMem) Xmm)
 (rule (x64_cvtps2pd x) (xmm_unary_rm_r (SseOpcode.Cvtps2pd) x))
 
 ;; Helper for creating `cvtpd2ps` instructions.
-(decl x64_cvtpd2ps (Xmm) Xmm)
+(decl x64_cvtpd2ps (XmmMem) Xmm)
 (rule (x64_cvtpd2ps x) (xmm_unary_rm_r (SseOpcode.Cvtpd2ps) x))
 
 ;; Helper for creating `cvtdq2pd` instructions.
-(decl x64_cvtdq2pd (Xmm) Xmm)
+(decl x64_cvtdq2pd (XmmMem) Xmm)
 (rule (x64_cvtdq2pd x) (xmm_unary_rm_r (SseOpcode.Cvtdq2pd) x))
 
 ;; Helper for creating `cvtsi2ss` instructions.
@@ -3640,8 +3678,8 @@
       (gpr_to_xmm (SseOpcode.Cvtsi2sd) x (raw_operand_size_of_type ty)))
 
 ;; Helper for creating `cvttps2dq` instructions.
-(decl x64_cvttps2dq (Type XmmMem) Xmm)
-(rule (x64_cvttps2dq ty x)
+(decl x64_cvttps2dq (XmmMem) Xmm)
+(rule (x64_cvttps2dq x)
       (xmm_unary_rm_r (SseOpcode.Cvttps2dq) x))
 
 ;; Helper for creating `cvttpd2dq` instructions.
@@ -4262,6 +4300,7 @@
 (convert Xmm InstOutput output_xmm)
 (convert Value Xmm put_in_xmm)
 (convert Value XmmMem put_in_xmm_mem)
+(convert Value XmmMemAligned put_in_xmm_mem_aligned)
 (convert Value XmmMemImm put_in_xmm_mem_imm)
 (convert Xmm Reg xmm_to_reg)
 (convert Xmm RegMem xmm_to_reg_mem)
@@ -4272,6 +4311,7 @@
 (convert RegMemImm XmmMemImm mov_rmi_to_xmm)
 (convert Xmm XmmMem xmm_to_xmm_mem)
 (convert Xmm XmmMemImm xmm_to_xmm_mem_imm)
+(convert Xmm XmmMemAligned xmm_to_xmm_mem_aligned)
 (convert XmmMem XmmMemImm xmm_mem_to_xmm_mem_imm)
 (convert XmmMem RegMem xmm_mem_to_reg_mem)
 (convert WritableXmm Xmm writable_xmm_to_xmm)
@@ -4279,6 +4319,15 @@
 (convert WritableXmm Reg writable_xmm_to_r_reg)
 (convert WritableXmm XmmMem writable_xmm_to_xmm_mem)
 (convert WritableXmm ValueRegs writable_xmm_to_value_regs)
+
+;; Note that these conversions will introduce a `movupd` instruction if
+;; the memory location is not aligned to a 16-byte boundary. This is primarily
+;; used to convert `XmmMem` inputs, which themselves were typically created
+;; via the `put_in_xmm_mem` constructor, into operands of SSE instructions.
+;; Most pre-AVX instructions working with 16-bytes of data (e.g. full xmm
+;; registers) require 16-byte alignment.
+(convert XmmMem XmmMemAligned xmm_mem_to_xmm_mem_aligned)
+(convert XmmMemImm XmmMemAlignedImm xmm_mem_imm_to_xmm_mem_aligned_imm)
 
 (convert Gpr Imm8Gpr gpr_to_imm8_gpr)
 (convert Imm8Reg Imm8Gpr imm8_reg_to_imm8_gpr)
@@ -4288,6 +4337,8 @@
 (convert SyntheticAmode GprMem synthetic_amode_to_gpr_mem)
 (convert Amode XmmMem amode_to_xmm_mem)
 (convert SyntheticAmode XmmMem synthetic_amode_to_xmm_mem)
+(convert Amode XmmMemAligned amode_to_xmm_mem_aligned)
+(convert SyntheticAmode XmmMemAligned synthetic_amode_to_xmm_mem_aligned)
 
 (convert IntCC CC intcc_to_cc)
 (convert AtomicRmwOp MachAtomicRmwOp atomic_rmw_op_to_mach_atomic_rmw_op)
@@ -4336,6 +4387,15 @@
       (synthetic_amode_to_reg_mem amode))
 (decl const_to_synthetic_amode (VCodeConstant) SyntheticAmode)
 (extern constructor const_to_synthetic_amode const_to_synthetic_amode)
+
+(decl xmm_to_xmm_mem_aligned (Xmm) XmmMemAligned)
+(rule (xmm_to_xmm_mem_aligned reg) (xmm_mem_to_xmm_mem_aligned reg))
+(decl amode_to_xmm_mem_aligned (Amode) XmmMemAligned)
+(rule (amode_to_xmm_mem_aligned mode) (amode_to_xmm_mem mode))
+(decl synthetic_amode_to_xmm_mem_aligned (SyntheticAmode) XmmMemAligned)
+(rule (synthetic_amode_to_xmm_mem_aligned mode) (synthetic_amode_to_xmm_mem mode))
+(decl put_in_xmm_mem_aligned (Value) XmmMemAligned)
+(rule (put_in_xmm_mem_aligned val) (put_in_xmm_mem val))
 
 ;; Helper for creating `MovFromPReg` instructions.
 (decl mov_from_preg (PReg) Reg)

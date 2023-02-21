@@ -1731,7 +1731,21 @@ pub(crate) fn emit(
             sink.bind_label(else_label);
         }
 
-        Inst::XmmUnaryRmR {
+        Inst::XmmUnaryRmR { op, src, dst } => {
+            emit(
+                &Inst::XmmUnaryRmRUnaligned {
+                    op: *op,
+                    src: XmmMem::new(src.clone().into()).unwrap(),
+                    dst: *dst,
+                },
+                allocs,
+                sink,
+                info,
+                state,
+            );
+        }
+
+        Inst::XmmUnaryRmRUnaligned {
             op,
             src: src_e,
             dst: reg_g,
@@ -1842,6 +1856,24 @@ pub(crate) fn emit(
         }
 
         Inst::XmmRmR {
+            op,
+            src1,
+            src2,
+            dst,
+        } => emit(
+            &Inst::XmmRmRUnaligned {
+                op: *op,
+                dst: *dst,
+                src1: *src1,
+                src2: XmmMem::new(src2.clone().to_reg_mem()).unwrap(),
+            },
+            allocs,
+            sink,
+            info,
+            state,
+        ),
+
+        Inst::XmmRmRUnaligned {
             op,
             src1,
             src2: src_e,
