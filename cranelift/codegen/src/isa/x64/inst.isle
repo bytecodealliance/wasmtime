@@ -4301,6 +4301,10 @@
 (convert IntCC CC intcc_to_cc)
 (convert AtomicRmwOp MachAtomicRmwOp atomic_rmw_op_to_mach_atomic_rmw_op)
 
+(convert SinkableLoad RegMem sink_load)
+(convert SinkableLoad GprMemImm sink_load_to_gpr_mem_imm)
+(convert SinkableLoad XmmMem sink_load_to_xmm_mem)
+
 (decl reg_to_xmm_mem (Reg) XmmMem)
 (rule (reg_to_xmm_mem r)
       (xmm_to_xmm_mem (xmm_new r)))
