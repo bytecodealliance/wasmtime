@@ -32,7 +32,7 @@ macro_rules! newtype_of_reg {
         $newtype_writable_reg:ident,
         $newtype_option_writable_reg:ident,
         reg_mem: ($($newtype_reg_mem:ident $(aligned:$aligned:ident)?),*),
-        reg_mem_imm: ($($newtype_reg_mem_imm:ident),*),
+        reg_mem_imm: ($($newtype_reg_mem_imm:ident $(aligned:$aligned_imm:ident)?),*),
         $newtype_imm8_reg:ident,
         |$check_reg:ident| $check:expr
     ) => {
@@ -190,7 +190,7 @@ macro_rules! newtype_of_reg {
                         RegMemImm::Mem { addr } => {
                             let mut _allow = true;
                             $(
-                                if $aligned {
+                                if $aligned_imm {
                                     _allow = addr.aligned();
                                 }
                             )?
@@ -276,7 +276,7 @@ newtype_of_reg!(
     WritableXmm,
     OptionWritableXmm,
     reg_mem: (XmmMem, XmmMemAligned aligned:true),
-    reg_mem_imm: (XmmMemImm, XmmMemAlignedImm),
+    reg_mem_imm: (XmmMemImm, XmmMemAlignedImm aligned:true),
     Imm8Xmm,
     |reg| reg.class() == RegClass::Float
 );

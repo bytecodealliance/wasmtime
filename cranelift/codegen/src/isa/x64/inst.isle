@@ -1392,10 +1392,21 @@
 (extern constructor xmm_mem_to_xmm_mem_imm xmm_mem_to_xmm_mem_imm)
 
 ;; Convert an `XmmMem` into an `XmmMemAligned`.
+;;
+;; Note that this is an infallible conversion, not a fallible one. If the
+;; original `XmmMem` source is a register, then it's passed through directly.
+;; If it's `Mem` and refers to aligned memory, it's also passed through
+;; directly. Otherwise, though, it's a memory source which is not aligned to
+;; 16 bytes so a load is performed and the temporary register which is the
+;; result of the load is passed through. The end-result is that the return value
+;; here is guaranteed to be a register or an aligned memory location.
 (decl xmm_mem_to_xmm_mem_aligned (XmmMem) XmmMemAligned)
 (extern constructor xmm_mem_to_xmm_mem_aligned xmm_mem_to_xmm_mem_aligned)
 
 ;; Convert an `XmmMemImm` into an `XmmMemImmAligned`.
+;;
+;; Note that this is the same as `xmm_mem_to_xmm_mem_aligned` except it handles
+;; an immediate case as well.
 (decl xmm_mem_imm_to_xmm_mem_aligned_imm (XmmMemImm) XmmMemAlignedImm)
 (extern constructor xmm_mem_imm_to_xmm_mem_aligned_imm xmm_mem_imm_to_xmm_mem_aligned_imm)
 
@@ -4312,13 +4323,20 @@
 (convert Xmm XmmMemAligned xmm_to_xmm_mem_aligned)
 (convert XmmMem XmmMemImm xmm_mem_to_xmm_mem_imm)
 (convert XmmMem RegMem xmm_mem_to_reg_mem)
-(convert XmmMem XmmMemAligned xmm_mem_to_xmm_mem_aligned)
-(convert XmmMemImm XmmMemAlignedImm xmm_mem_imm_to_xmm_mem_aligned_imm)
 (convert WritableXmm Xmm writable_xmm_to_xmm)
 (convert WritableXmm WritableReg writable_xmm_to_reg)
 (convert WritableXmm Reg writable_xmm_to_r_reg)
 (convert WritableXmm XmmMem writable_xmm_to_xmm_mem)
 (convert WritableXmm ValueRegs writable_xmm_to_value_regs)
+
+;; Note that these conversions will introduce a `movupd` instruction if
+;; the memory location is not aligned to a 16-byte boundary. This is primarily
+;; used to convert `XmmMem` inputs, which themselves were typically created
+;; via the `put_in_xmm_mem` constructor, into operands of SSE instructions.
+;; Most pre-AVX instructions working with 16-bytes of data (e.g. full xmm
+;; registers) require 16-byte alignment.
+(convert XmmMem XmmMemAligned xmm_mem_to_xmm_mem_aligned)
+(convert XmmMemImm XmmMemAlignedImm xmm_mem_imm_to_xmm_mem_aligned_imm)
 
 (convert Gpr Imm8Gpr gpr_to_imm8_gpr)
 (convert Imm8Reg Imm8Gpr imm8_reg_to_imm8_gpr)
