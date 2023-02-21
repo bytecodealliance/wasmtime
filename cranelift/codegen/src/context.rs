@@ -193,7 +193,7 @@ impl Context {
 
         if opt_level != OptLevel::None {
             if isa.flags().use_egraphs() {
-                self.egraph_pass()?;
+                self.egraph_pass(isa)?;
             } else if isa.flags().enable_alias_analysis() {
                 for _ in 0..2 {
                     self.replace_redundant_loads()?;
@@ -378,21 +378,31 @@ impl Context {
     }
 
     /// Run optimizations via the egraph infrastructure.
-    pub fn egraph_pass(&mut self) -> CodegenResult<()> {
-        trace!(
-            "About to optimize with egraph phase:\n{}",
-            self.func.display()
-        );
-        self.compute_loop_analysis();
-        let mut alias_analysis = AliasAnalysis::new(&self.func, &self.domtree);
-        let mut pass = EgraphPass::new(
-            &mut self.func,
-            &self.domtree,
-            &self.loop_analysis,
-            &mut alias_analysis,
-        );
-        pass.run();
-        log::info!("egraph stats: {:?}", pass.stats);
+    pub fn egraph_pass(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
+        loop {
+            trace!(
+                "About to optimize with egraph phase:\n{}",
+                self.func.display()
+            );
+            self.compute_loop_analysis();
+            let mut alias_analysis = AliasAnalysis::new(&self.func, &self.domtree);
+            let mut pass = EgraphPass::new(
+                &mut self.func,
+                &self.domtree,
+                &self.loop_analysis,
+                &mut alias_analysis,
+                &mut self.cfg,
+            );
+            pass.run();
+            log::info!("egraph stats: {:?}", pass.stats);
+            if pass.stats.branch_folds == 0 {
+                break;
+            }
+
+            // Recompute domtree and eliminate unreachable code due to branch folding
+            self.compute_domtree();
+            self.eliminate_unreachable_code(isa)?;
+        }
         trace!("After egraph optimization:\n{}", self.func.display());
         Ok(())
     }

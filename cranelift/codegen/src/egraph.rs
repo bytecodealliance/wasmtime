@@ -6,6 +6,7 @@ use crate::cursor::{Cursor, CursorPosition, FuncCursor};
 use crate::dominator_tree::DominatorTree;
 use crate::egraph::domtree::DomTreeWithChildren;
 use crate::egraph::elaborate::Elaborator;
+use crate::flowgraph::ControlFlowGraph;
 use crate::fx::FxHashSet;
 use crate::inst_predicates::is_pure_for_egraph;
 use crate::ir::{
@@ -56,6 +57,8 @@ pub struct EgraphPass<'a> {
     /// Loop analysis results, used for built-in LICM during
     /// elaboration.
     loop_analysis: &'a LoopAnalysis,
+    /// ControlFlowGraph, used to fix up during branch folding
+    cfg: &'a mut ControlFlowGraph,
     /// Which canonical Values do we want to rematerialize in each
     /// block where they're used?
     ///
@@ -86,6 +89,7 @@ where
     // Held locally during optimization of one node (recursively):
     pub(crate) rewrite_depth: usize,
     pub(crate) subsume_values: FxHashSet<Value>,
+    pub(crate) cfg: &'opt mut ControlFlowGraph,
 }
 
 /// For passing to `insert_pure_enode`. Sometimes the enode already
@@ -283,8 +287,35 @@ where
     /// Optimize a "skeleton" instruction, possibly removing
     /// it. Returns `true` if the instruction should be removed from
     /// the layout.
-    fn optimize_skeleton_inst(&mut self, inst: Inst) -> bool {
+    fn optimize_skeleton_inst(&mut self, mut inst: Inst) -> bool {
         self.stats.skeleton_inst += 1;
+
+        // If a conditional branch with a constant condtition, convert
+        // to a jump
+        if let Some((taken, not_taken)) = self.func.dfg.is_const_branch(inst) {
+            // Convert to branch, and unlink not taken blocks
+            trace!(
+                " -> inst {} is a constant conditional branch, folding",
+                inst
+            );
+            self.stats.branch_folds += 1;
+
+            // Remove edge in ControlFlowGraph from inst to not_taken blocks
+            let block = self.func.layout.inst_block(inst).unwrap();
+            for not_taken in not_taken.iter() {
+                self.cfg
+                    .remove_edge(block, inst, not_taken.block(&self.func.dfg.value_lists));
+                // if self.cfg.re:12
+            }
+
+            (inst, _) = self.func.dfg.replace(inst).build(
+                InstructionData::Jump {
+                    opcode: Opcode::Jump,
+                    destination: taken,
+                },
+                super::ir::types::INVALID,
+            );
+        }
 
         // If a load or store, process it with the alias analysis to see
         // if we can optimize it (rewrite in terms of an earlier load or
@@ -303,24 +334,6 @@ where
             );
             self.value_to_opt_value[result] = new_result;
             true
-        }
-        // If a conditional branch with a constant condtition, convert
-        // to a jump
-        else if let Some((taken, not_taken)) = self.func.dfg.is_const_branch(inst) {
-            // Convert to branch, and unlink not taken blocks
-            trace!("Folding branch to {taken:?}");
-            self.stats.branch_folds += 1;
-            self.func.dfg.replace(inst).build(
-                InstructionData::Jump {
-                    opcode: Opcode::Jump,
-                    destination: taken,
-                },
-                super::ir::types::INVALID,
-            );
-
-            // TODO: Remove not_taken references to current block
-
-            false
         }
         // Otherwise, generic side-effecting op -- always keep it, and
         // set its results to identity-map to original values.
@@ -343,6 +356,7 @@ impl<'a> EgraphPass<'a> {
         domtree: &'a DominatorTree,
         loop_analysis: &'a LoopAnalysis,
         alias_analysis: &'a mut AliasAnalysis<'a>,
+        cfg: &'a mut ControlFlowGraph,
     ) -> Self {
         let num_values = func.dfg.num_values();
         let domtree_children = DomTreeWithChildren::new(func, domtree);
@@ -352,6 +366,7 @@ impl<'a> EgraphPass<'a> {
             domtree_children,
             loop_analysis,
             alias_analysis,
+            cfg,
             stats: Stats::default(),
             eclasses: UnionFind::with_capacity(num_values),
             remat_values: FxHashSet::default(),
@@ -418,6 +433,10 @@ impl<'a> EgraphPass<'a> {
 
             let mut alias_analysis_state = self.alias_analysis.block_starting_state(block);
 
+            if let Some(inst) = self.cfg.single_pred_inst(block) {
+                // Only one entry point.  Alias block params to the branching arguments
+                cursor.func.dfg.alias_single_pred_block_params(block, inst);
+            }
             for &param in cursor.func.dfg.block_params(block) {
                 trace!("creating initial singleton eclass for blockparam {}", param);
                 self.eclasses.add(param);
@@ -461,6 +480,7 @@ impl<'a> EgraphPass<'a> {
                     stats: &mut self.stats,
                     alias_analysis: self.alias_analysis,
                     alias_analysis_state: &mut alias_analysis_state,
+                    cfg: self.cfg,
                 };
 
                 if is_pure_for_egraph(ctx.func, inst) {

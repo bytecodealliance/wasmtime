@@ -1027,9 +1027,7 @@ impl DataFlowGraph {
     }
 
     fn value_iconst(&self, value: Value) -> Option<i64> {
-        use crate::trace;
         if let ValueDef::Result(inst, ..) = self.value_def(value) {
-            trace!("value_iconst: {inst:?}");
             if let InstructionData::UnaryImm { imm, .. } = self.insts[inst] {
                 return Some(imm.into());
             }
@@ -1342,6 +1340,59 @@ impl DataFlowGraph {
     /// with `change_to_alias()`.
     pub fn detach_block_params(&mut self, block: Block) -> ValueList {
         self.blocks[block].params.take()
+    }
+
+    /// Conditionally detach all the parameters from `block` and alias them to the BlockCall args in `inst`
+    /// if there is a single `BlockCall` that matches `block`.
+    pub fn alias_single_pred_block_params(&mut self, block: Block, inst: Inst) {
+        macro_rules! extract_block_args {
+            ($block_call:expr) => {{
+                let mut args: Vec<Value> = Vec::new();
+                args.extend($block_call.args_slice(&self.value_lists).iter().copied());
+                $block_call.clear(&mut self.value_lists);
+                args
+            }};
+        }
+
+        macro_rules! check_and_extract_block_args {
+            ($block_calls:expr) => {{
+                let mut block_call = None;
+                for bc in $block_calls.iter_mut() {
+                    if bc.block(&self.value_lists) == block {
+                        if block_call.is_some() {
+                            block_call = None;
+                            break;
+                        } else {
+                            block_call = Some(bc);
+                        }
+                    }
+                }
+
+                if let Some(block_call) = block_call {
+                    extract_block_args!(block_call)
+                } else {
+                    Vec::new()
+                }
+            }};
+        }
+        let args: Vec<Value> = match &mut self.insts[inst] {
+            InstructionData::Brif { blocks, .. } => check_and_extract_block_args!(blocks),
+            InstructionData::BranchTable { table, .. } => {
+                check_and_extract_block_args!(self.jump_tables[*table].all_branches_mut())
+            }
+            InstructionData::Jump { destination, .. } => extract_block_args!(destination),
+            _ => Vec::new(),
+        };
+        if args.len() == 1 {
+            let params: Vec<Value> = self
+                .detach_block_params(block)
+                .as_slice(&self.value_lists)
+                .into();
+
+            for (&param, &arg) in params.iter().zip(args.iter()) {
+                self.change_to_alias(param, arg);
+            }
+        }
     }
 }
 
