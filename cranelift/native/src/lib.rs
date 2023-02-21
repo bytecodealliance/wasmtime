@@ -213,8 +213,9 @@ pub fn builder_with_options(infer_native_flags: bool) -> Result<isa::Builder, &'
             isa_builder.enable("has_v").unwrap();
         }
 
-        // TODO: ZiFencei does not have a bit associated with it
-        // TODO: Zbkb does not have a bit associated with it
+        // In general extensions that are longer than one letter
+        // won't have a bit associated with them. The Linux kernel
+        // is currently working on a new way to query the extensions.
     }
 
     // squelch warnings about unused mut/variables on some platforms.
