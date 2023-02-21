@@ -213,7 +213,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
-    fn use_fma(&mut self, _: Type) -> bool {
+    fn use_fma(&mut self) -> bool {
         self.backend.x64_flags.use_fma()
     }
 

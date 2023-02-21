@@ -2281,32 +2281,46 @@ pub(crate) fn emit(
             let dst = allocs.next(dst.to_reg().to_reg());
             debug_assert_eq!(src1, dst);
             let src2 = allocs.next(src2.to_reg());
-            let src3 = src3.clone().to_reg_mem().with_allocs(allocs);
+            let src3 = match src3.clone().to_reg_mem().with_allocs(allocs) {
+                RegMem::Reg { reg } => {
+                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
+                }
+                RegMem::Mem { addr } => RegisterOrAmode::Amode(addr.finalize(state, sink)),
+            };
 
             let (w, map, opcode) = match op {
+                AvxOpcode::Vfmadd132ss => (false, OpcodeMap::_0F38, 0x99),
                 AvxOpcode::Vfmadd213ss => (false, OpcodeMap::_0F38, 0xA9),
+                AvxOpcode::Vfnmadd132ss => (false, OpcodeMap::_0F38, 0x9D),
+                AvxOpcode::Vfnmadd213ss => (false, OpcodeMap::_0F38, 0xAD),
+                AvxOpcode::Vfmadd132sd => (true, OpcodeMap::_0F38, 0x99),
                 AvxOpcode::Vfmadd213sd => (true, OpcodeMap::_0F38, 0xA9),
+                AvxOpcode::Vfnmadd132sd => (true, OpcodeMap::_0F38, 0x9D),
+                AvxOpcode::Vfnmadd213sd => (true, OpcodeMap::_0F38, 0xAD),
+                AvxOpcode::Vfmadd132ps => (false, OpcodeMap::_0F38, 0x98),
                 AvxOpcode::Vfmadd213ps => (false, OpcodeMap::_0F38, 0xA8),
+                AvxOpcode::Vfnmadd132ps => (false, OpcodeMap::_0F38, 0x9C),
+                AvxOpcode::Vfnmadd213ps => (false, OpcodeMap::_0F38, 0xAC),
+                AvxOpcode::Vfmadd132pd => (true, OpcodeMap::_0F38, 0x98),
                 AvxOpcode::Vfmadd213pd => (true, OpcodeMap::_0F38, 0xA8),
+                AvxOpcode::Vfnmadd132pd => (true, OpcodeMap::_0F38, 0x9C),
+                AvxOpcode::Vfnmadd213pd => (true, OpcodeMap::_0F38, 0xAC),
                 AvxOpcode::Vblendvps => (false, OpcodeMap::_0F3A, 0x4A),
                 AvxOpcode::Vblendvpd => (false, OpcodeMap::_0F3A, 0x4B),
                 AvxOpcode::Vpblendvb => (false, OpcodeMap::_0F3A, 0x4C),
                 _ => unreachable!(),
             };
 
-            match src3 {
-                RegMem::Reg { reg: src } => VexInstruction::new()
-                    .length(VexVectorLength::V128)
-                    .prefix(LegacyPrefixes::_66)
-                    .map(map)
-                    .w(w)
-                    .opcode(opcode)
-                    .reg(dst.to_real_reg().unwrap().hw_enc())
-                    .rm(src.to_real_reg().unwrap().hw_enc())
-                    .vvvv(src2.to_real_reg().unwrap().hw_enc())
-                    .encode(sink),
-                _ => todo!(),
-            };
+            VexInstruction::new()
+                .length(VexVectorLength::V128)
+                .prefix(LegacyPrefixes::_66)
+                .map(map)
+                .w(w)
+                .opcode(opcode)
+                .reg(dst.to_real_reg().unwrap().hw_enc())
+                .rm(src3)
+                .vvvv(src2.to_real_reg().unwrap().hw_enc())
+                .encode(sink);
         }
 
         Inst::XmmRmRBlendVex {
