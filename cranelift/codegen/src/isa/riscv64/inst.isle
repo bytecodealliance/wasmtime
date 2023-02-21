@@ -1025,9 +1025,9 @@
 (decl ext_int_if_need (bool ValueRegs Type) ValueRegs)
 ;;; For values smaller than 64 bits, we need to extend them to 64 bits
 (rule 0 (ext_int_if_need $true val (fits_in_32 (ty_int ty)))
-  (extend val (ExtendOp.Signed) ty $I64))
+  (sext val ty $I64))
 (rule 0 (ext_int_if_need $false val (fits_in_32 (ty_int ty)))
-  (extend val (ExtendOp.Zero) ty $I64))
+  (zext val ty $I64))
 ;; If the value is larger than one machine register, we don't need to do anything
 (rule 1 (ext_int_if_need _ r $I64) r)
 (rule 2 (ext_int_if_need _ r $I128) r)

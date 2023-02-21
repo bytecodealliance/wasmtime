@@ -6,7 +6,6 @@ target x86_64
 target riscv64
 target riscv64 has_zbb
 target riscv64 has_zbkb
-target riscv64 has_zbb has_zbkb
 
 ;;;; basic uextend
 

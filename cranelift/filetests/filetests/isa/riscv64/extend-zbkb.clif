@@ -3,54 +3,6 @@ set unwind_info=false
 target riscv64 has_zbkb=true
 
 
-function %uextend8_16(i8) -> i16 {
-block0(v0: i8):
-    v1 = uextend.i16 v0
-    return v1
-}
-
-; VCode:
-; block0:
-;   andi a0,a0,255
-;   ret
-; 
-; Disassembled:
-; block0: ; offset 0x0
-;   andi a0, a0, 0xff
-;   ret
-
-function %uextend8_32(i8) -> i32 {
-block0(v0: i8):
-    v1 = uextend.i32 v0
-    return v1
-}
-
-; VCode:
-; block0:
-;   andi a0,a0,255
-;   ret
-; 
-; Disassembled:
-; block0: ; offset 0x0
-;   andi a0, a0, 0xff
-;   ret
-
-function %uextend8_64(i8) -> i64 {
-block0(v0: i8):
-    v1 = uextend.i64 v0
-    return v1
-}
-
-; VCode:
-; block0:
-;   andi a0,a0,255
-;   ret
-; 
-; Disassembled:
-; block0: ; offset 0x0
-;   andi a0, a0, 0xff
-;   ret
-
 function %uextend16_32(i16) -> i32 {
 block0(v0: i16):
     v1 = uextend.i32 v0
