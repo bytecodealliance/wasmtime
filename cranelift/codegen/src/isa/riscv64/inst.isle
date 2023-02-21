@@ -213,6 +213,7 @@
     (BrTable
       (index Reg)
       (tmp1 WritableReg)
+      (tmp2 WritableReg)
       (targets VecBranchTarget))
 
     ;; atomic compare and set operation
