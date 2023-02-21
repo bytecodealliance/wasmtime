@@ -1199,6 +1199,18 @@
             Vfmadd213sd
             Vfmadd213ps
             Vfmadd213pd
+            Vfmadd132ss
+            Vfmadd132sd
+            Vfmadd132ps
+            Vfmadd132pd
+            Vfnmadd213ss
+            Vfnmadd213sd
+            Vfnmadd213ps
+            Vfnmadd213pd
+            Vfnmadd132ss
+            Vfnmadd132sd
+            Vfnmadd132ps
+            Vfnmadd132pd
             Vcmpps
             Vcmppd
             Vpsrlw
@@ -1623,8 +1635,8 @@
 (decl use_popcnt (bool) Type)
 (extern extractor infallible use_popcnt use_popcnt)
 
-(decl use_fma (bool) Type)
-(extern extractor infallible use_fma use_fma)
+(decl pure use_fma () bool)
+(extern constructor use_fma use_fma)
 
 (decl use_sse41 (bool) Type)
 (extern extractor infallible use_sse41 use_sse41)
@@ -3598,34 +3610,33 @@
             (_ Unit (emit (MInst.XmmRmRVex3 op src1 src2 src3 dst))))
         dst))
 
-;; Helper for creating `vfmadd213ss` instructions.
-; TODO: This should have the (Xmm Xmm XmmMem) signature
-; but we don't support VEX memory encodings yet
-(decl x64_vfmadd213ss (Xmm Xmm Xmm) Xmm)
-(rule (x64_vfmadd213ss x y z)
-      (xmm_rmr_vex3 (AvxOpcode.Vfmadd213ss) x y z))
+;; Helper for creating `vfmadd213*` instructions
+(decl x64_vfmadd213 (Type Xmm Xmm XmmMem) Xmm)
+(rule (x64_vfmadd213 $F32 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmadd213ss) a b c))
+(rule (x64_vfmadd213 $F64 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmadd213sd) a b c))
+(rule (x64_vfmadd213 $F32X4 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmadd213ps) a b c))
+(rule (x64_vfmadd213 $F64X2 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmadd213pd) a b c))
 
-;; Helper for creating `vfmadd213sd` instructions.
-; TODO: This should have the (Xmm Xmm XmmMem) signature
-; but we don't support VEX memory encodings yet
-(decl x64_vfmadd213sd (Xmm Xmm Xmm) Xmm)
-(rule (x64_vfmadd213sd x y z)
-      (xmm_rmr_vex3 (AvxOpcode.Vfmadd213sd) x y z))
+;; Helper for creating `vfmadd132*` instructions
+(decl x64_vfmadd132 (Type Xmm Xmm XmmMem) Xmm)
+(rule (x64_vfmadd132 $F32 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmadd132ss) a b c))
+(rule (x64_vfmadd132 $F64 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmadd132sd) a b c))
+(rule (x64_vfmadd132 $F32X4 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmadd132ps) a b c))
+(rule (x64_vfmadd132 $F64X2 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmadd132pd) a b c))
 
-;; Helper for creating `vfmadd213ps` instructions.
-; TODO: This should have the (Xmm Xmm XmmMem) signature
-; but we don't support VEX memory encodings yet
-(decl x64_vfmadd213ps (Xmm Xmm Xmm) Xmm)
-(rule (x64_vfmadd213ps x y z)
-      (xmm_rmr_vex3 (AvxOpcode.Vfmadd213ps) x y z))
+;; Helper for creating `vfnmadd213*` instructions
+(decl x64_vfnmadd213 (Type Xmm Xmm XmmMem) Xmm)
+(rule (x64_vfnmadd213 $F32 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmadd213ss) a b c))
+(rule (x64_vfnmadd213 $F64 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmadd213sd) a b c))
+(rule (x64_vfnmadd213 $F32X4 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmadd213ps) a b c))
+(rule (x64_vfnmadd213 $F64X2 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmadd213pd) a b c))
 
-;; Helper for creating `vfmadd213pd` instructions.
-; TODO: This should have the (Xmm Xmm XmmMem) signature
-; but we don't support VEX memory encodings yet
-(decl x64_vfmadd213pd (Xmm Xmm Xmm) Xmm)
-(rule (x64_vfmadd213pd x y z)
-      (xmm_rmr_vex3 (AvxOpcode.Vfmadd213pd) x y z))
-
+;; Helper for creating `vfnmadd132*` instructions
+(decl x64_vfnmadd132 (Type Xmm Xmm XmmMem) Xmm)
+(rule (x64_vfnmadd132 $F32 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmadd132ss) a b c))
+(rule (x64_vfnmadd132 $F64 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmadd132sd) a b c))
+(rule (x64_vfnmadd132 $F32X4 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmadd132ps) a b c))
+(rule (x64_vfnmadd132 $F64X2 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmadd132pd) a b c))
 
 ;; Helper for creating `sqrtss` instructions.
 (decl x64_sqrtss (XmmMem) Xmm)

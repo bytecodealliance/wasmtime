@@ -1515,7 +1515,19 @@ impl AvxOpcode {
             AvxOpcode::Vfmadd213ss
             | AvxOpcode::Vfmadd213sd
             | AvxOpcode::Vfmadd213ps
-            | AvxOpcode::Vfmadd213pd => smallvec![InstructionSet::FMA],
+            | AvxOpcode::Vfmadd213pd
+            | AvxOpcode::Vfmadd132ss
+            | AvxOpcode::Vfmadd132sd
+            | AvxOpcode::Vfmadd132ps
+            | AvxOpcode::Vfmadd132pd
+            | AvxOpcode::Vfnmadd213ss
+            | AvxOpcode::Vfnmadd213sd
+            | AvxOpcode::Vfnmadd213ps
+            | AvxOpcode::Vfnmadd213pd
+            | AvxOpcode::Vfnmadd132ss
+            | AvxOpcode::Vfnmadd132sd
+            | AvxOpcode::Vfnmadd132ps
+            | AvxOpcode::Vfnmadd132pd => smallvec![InstructionSet::FMA],
             AvxOpcode::Vminps
             | AvxOpcode::Vminpd
             | AvxOpcode::Vmaxps

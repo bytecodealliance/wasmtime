@@ -1944,23 +1944,12 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             src2.get_operands(collector);
         }
         Inst::XmmRmRVex3 {
-            op,
             src1,
             src2,
             src3,
             dst,
             ..
         } => {
-            // Vfmadd uses and defs the dst reg, that is not the case with all
-            // AVX's ops, if you're adding a new op, make sure to correctly define
-            // register uses.
-            assert!(
-                *op == AvxOpcode::Vfmadd213ss
-                    || *op == AvxOpcode::Vfmadd213sd
-                    || *op == AvxOpcode::Vfmadd213ps
-                    || *op == AvxOpcode::Vfmadd213pd
-            );
-
             collector.reg_use(src1.to_reg());
             collector.reg_reuse_def(dst.to_writable_reg(), 0);
             collector.reg_use(src2.to_reg());

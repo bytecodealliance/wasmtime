@@ -2167,13 +2167,13 @@
 ;; The above rules automatically sink loads for rhs operands, so additionally
 ;; add rules for sinking loads with lhs operands.
 (rule 1 (lower (has_type $F32 (fadd (sinkable_load x) y)))
-      (x64_addss y (sink_load x)))
+      (x64_addss y x))
 (rule 1 (lower (has_type $F64 (fadd (sinkable_load x) y)))
-      (x64_addsd y (sink_load x)))
+      (x64_addsd y x))
 (rule 1 (lower (has_type $F32X4 (fadd (sinkable_load x) y)))
-      (x64_addps y (sink_load x)))
+      (x64_addps y x))
 (rule 1 (lower (has_type $F64X2 (fadd (sinkable_load x) y)))
-      (x64_addpd y (sink_load x)))
+      (x64_addpd y x))
 
 ;; Rules for `fsub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2200,13 +2200,13 @@
 ;; The above rules automatically sink loads for rhs operands, so additionally
 ;; add rules for sinking loads with lhs operands.
 (rule 1 (lower (has_type $F32 (fmul (sinkable_load x) y)))
-      (x64_mulss y (sink_load x)))
+      (x64_mulss y x))
 (rule 1 (lower (has_type $F64 (fmul (sinkable_load x) y)))
-      (x64_mulsd y (sink_load x)))
+      (x64_mulsd y x))
 (rule 1 (lower (has_type $F32X4 (fmul (sinkable_load x) y)))
-      (x64_mulps y (sink_load x)))
+      (x64_mulps y x))
 (rule 1 (lower (has_type $F64X2 (fmul (sinkable_load x) y)))
-      (x64_mulpd y (sink_load x)))
+      (x64_mulpd y x))
 
 ;; Rules for `fdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2438,18 +2438,83 @@
 
 ;; Rules for `fma` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Base case for fma is to call out to one of two libcalls. For vectors they
+;; need to be decomposed, handle each element individually, and then recomposed.
+
 (rule (lower (has_type $F32 (fma x y z)))
       (libcall_3 (LibCall.FmaF32) x y z))
 (rule (lower (has_type $F64 (fma x y z)))
       (libcall_3 (LibCall.FmaF64) x y z))
-(rule 1 (lower (has_type (and (use_fma $true) $F32) (fma x y z)))
-      (x64_vfmadd213ss x y z))
-(rule 1 (lower (has_type (and (use_fma $true) $F64) (fma x y z)))
-      (x64_vfmadd213sd x y z))
-(rule (lower (has_type (and (use_fma $true) $F32X4) (fma x y z)))
-      (x64_vfmadd213ps x y z))
-(rule (lower (has_type (and (use_fma $true) $F64X2) (fma x y z)))
-      (x64_vfmadd213pd x y z))
+
+(rule (lower (has_type $F32X4 (fma x y z)))
+      (let (
+          (x Xmm (put_in_xmm x))
+          (y Xmm (put_in_xmm y))
+          (z Xmm (put_in_xmm z))
+          (x0 Xmm (libcall_3 (LibCall.FmaF32) x y z))
+          (x1 Xmm (libcall_3 (LibCall.FmaF32)
+            (x64_pshufd x 1)
+            (x64_pshufd y 1)
+            (x64_pshufd z 1)))
+          (x2 Xmm (libcall_3 (LibCall.FmaF32)
+            (x64_pshufd x 2)
+            (x64_pshufd y 2)
+            (x64_pshufd z 2)))
+          (x3 Xmm (libcall_3 (LibCall.FmaF32)
+            (x64_pshufd x 3)
+            (x64_pshufd y 3)
+            (x64_pshufd z 3)))
+
+          (tmp Xmm (vec_insert_lane $F32X4 x0 x1 1))
+          (tmp Xmm (vec_insert_lane $F32X4 tmp x2 2))
+          (tmp Xmm (vec_insert_lane $F32X4 tmp x3 3))
+        )
+        tmp))
+(rule (lower (has_type $F64X2 (fma x y z)))
+      (let (
+          (x Xmm (put_in_xmm x))
+          (y Xmm (put_in_xmm y))
+          (z Xmm (put_in_xmm z))
+          (x0 Xmm (libcall_3 (LibCall.FmaF64) x y z))
+          (x1 Xmm (libcall_3 (LibCall.FmaF64)
+            (x64_pshufd x 0xee)
+            (x64_pshufd y 0xee)
+            (x64_pshufd z 0xee)))
+        )
+        (vec_insert_lane $F64X2 x0 x1 1)))
+
+
+;; Special case for when the `fma` feature is active and a native instruction
+;; can be used.
+(rule 1 (lower (has_type ty (fma x y z)))
+      (if-let $true (use_fma))
+      (fmadd ty x y z))
+
+(decl fmadd (Type Value Value Value) Xmm)
+(decl fnmadd (Type Value Value Value) Xmm)
+
+;; Base case. Note that this will automatically sink a load with `z`, the value
+;; to add.
+(rule (fmadd ty x y z) (x64_vfmadd213 ty x y z))
+
+;; Allow sinking loads with one of the two values being multiplied in addition
+;; to the value being added. Note that both x and y can be sunk here due to
+;; multiplication being commutative.
+(rule 1 (fmadd ty (sinkable_load x) y z) (x64_vfmadd132 ty y z x))
+(rule 2 (fmadd ty x (sinkable_load y) z) (x64_vfmadd132 ty x z y))
+
+;; If one of the values being multiplied is negated then use a `vfnmadd*`
+;; instruction instead
+(rule 3 (fmadd ty (fneg x) y z) (fnmadd ty x y z))
+(rule 4 (fmadd ty x (fneg y) z) (fnmadd ty x y z))
+
+(rule (fnmadd ty x y z) (x64_vfnmadd213 ty x y z))
+(rule 1 (fnmadd ty (sinkable_load x) y z) (x64_vfnmadd132 ty y z x))
+(rule 2 (fnmadd ty x (sinkable_load y) z) (x64_vfnmadd132 ty x z y))
+
+;; Like `fmadd` if one argument is negated switch which one is being codegen'd
+(rule 3 (fnmadd ty (fneg x) y z) (fmadd ty x y z))
+(rule 4 (fnmadd ty x (fneg y) z) (fmadd ty x y z))
 
 ;; Rules for `load*` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
