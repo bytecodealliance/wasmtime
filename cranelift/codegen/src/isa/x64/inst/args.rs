@@ -999,6 +999,7 @@ pub enum SseOpcode {
     Pextrb,
     Pextrw,
     Pextrd,
+    Pextrq,
     Pinsrb,
     Pinsrw,
     Pinsrd,
@@ -1237,6 +1238,7 @@ impl SseOpcode {
             | SseOpcode::Pcmpeqq
             | SseOpcode::Pextrb
             | SseOpcode::Pextrd
+            | SseOpcode::Pextrq
             | SseOpcode::Pinsrb
             | SseOpcode::Pinsrd
             | SseOpcode::Pmaxsb
@@ -1276,22 +1278,6 @@ impl SseOpcode {
         match self {
             SseOpcode::Movd => 4,
             _ => 8,
-        }
-    }
-
-    /// Does an XmmRmmRImm with this opcode use src1? FIXME: split
-    /// into separate instructions.
-    pub(crate) fn uses_src1(&self) -> bool {
-        match self {
-            SseOpcode::Pextrb => false,
-            SseOpcode::Pextrw => false,
-            SseOpcode::Pextrd => false,
-            SseOpcode::Pshufd => false,
-            SseOpcode::Roundss => false,
-            SseOpcode::Roundsd => false,
-            SseOpcode::Roundps => false,
-            SseOpcode::Roundpd => false,
-            _ => true,
         }
     }
 }
@@ -1393,6 +1379,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Pextrb => "pextrb",
             SseOpcode::Pextrw => "pextrw",
             SseOpcode::Pextrd => "pextrd",
+            SseOpcode::Pextrq => "pextrq",
             SseOpcode::Pinsrb => "pinsrb",
             SseOpcode::Pinsrw => "pinsrw",
             SseOpcode::Pinsrd => "pinsrd",

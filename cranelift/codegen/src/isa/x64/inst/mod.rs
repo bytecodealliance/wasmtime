@@ -136,6 +136,7 @@ impl Inst {
             | Inst::XmmRmRBlend { op, .. }
             | Inst::XmmRmRImm { op, .. }
             | Inst::XmmToGpr { op, .. }
+            | Inst::XmmToGprImm { op, .. }
             | Inst::XmmUnaryRmRImm { op, .. }
             | Inst::XmmUnaryRmR { op, .. }
             | Inst::XmmConstOp { op, .. } => smallvec![op.available_from()],
@@ -1111,15 +1112,11 @@ impl PrettyPrint for Inst {
                 size,
                 ..
             } => {
-                let src1 = if op.uses_src1() {
-                    pretty_print_reg(*src1, 8, allocs) + ", "
-                } else {
-                    "".into()
-                };
+                let src1 = pretty_print_reg(*src1, 8, allocs);
                 let dst = pretty_print_reg(dst.to_reg(), 8, allocs);
                 let src2 = src2.pretty_print(8, allocs);
                 format!(
-                    "{} ${}, {}{}, {}",
+                    "{} ${imm}, {src1}, {src2}, {dst}",
                     ljustify(format!(
                         "{}{}",
                         op.to_string(),
@@ -1129,10 +1126,6 @@ impl PrettyPrint for Inst {
                             ""
                         }
                     )),
-                    imm,
-                    src1,
-                    src2,
-                    dst,
                 )
             }
 
@@ -1151,6 +1144,12 @@ impl PrettyPrint for Inst {
                 let src = pretty_print_reg(src.to_reg(), 8, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), dst_size, allocs);
                 format!("{} {}, {}", ljustify(op.to_string()), src, dst)
+            }
+
+            Inst::XmmToGprImm { op, src, dst, imm } => {
+                let src = pretty_print_reg(src.to_reg(), 8, allocs);
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
+                format!("{} ${imm}, {}, {}", ljustify(op.to_string()), src, dst)
             }
 
             Inst::GprToXmm {
@@ -1976,23 +1975,11 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             src1.get_operands(collector);
         }
         Inst::XmmRmRImm {
-            op,
-            src1,
-            src2,
-            dst,
-            ..
+            src1, src2, dst, ..
         } => {
-            if !op.uses_src1() {
-                // FIXME: split this instruction into two, so we don't
-                // need this awkward src1-is-only-sometimes-an-arg
-                // behavior.
-                collector.reg_def(*dst);
-                src2.get_operands(collector);
-            } else {
-                collector.reg_use(*src1);
-                collector.reg_reuse_def(*dst, 0);
-                src2.get_operands(collector);
-            }
+            collector.reg_use(*src1);
+            collector.reg_reuse_def(*dst, 0);
+            src2.get_operands(collector);
         }
         Inst::XmmConstOp { dst, .. } => {
             collector.reg_def(dst.to_writable_reg());
@@ -2035,7 +2022,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_use(src.to_reg());
             collector.reg_fixed_nonallocatable(*dst);
         }
-        Inst::XmmToGpr { src, dst, .. } => {
+        Inst::XmmToGpr { src, dst, .. } | Inst::XmmToGprImm { src, dst, .. } => {
             collector.reg_use(src.to_reg());
             collector.reg_def(dst.to_writable_reg());
         }

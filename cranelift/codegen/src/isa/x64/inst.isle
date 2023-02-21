@@ -331,6 +331,12 @@
                  (dst WritableGpr)
                  (dst_size OperandSize))
 
+       ;; XMM (scalar) unary op (from xmm to integer reg): pextr{w,b,d,q}
+       (XmmToGprImm (op SseOpcode)
+                    (src Xmm)
+                    (dst WritableGpr)
+                    (imm u8))
+
        ;; XMM (scalar) unary op (from integer to float reg): movd, movq,
        ;; cvtsi2s{s,d}
        (GprToXmm (op SseOpcode)
@@ -749,6 +755,7 @@
             Pextrb
             Pextrw
             Pextrd
+            Pextrq
             Pinsrb
             Pinsrw
             Pinsrd
@@ -3110,16 +3117,9 @@
       (xmm_rmr_imm_vex (AvxOpcode.Vinsertps) src1 src2 lane))
 
 ;; Helper for creating `pshufd` instructions.
-(decl x64_pshufd (XmmMem u8 OperandSize) Xmm)
-(rule (x64_pshufd src imm size)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmRImm (SseOpcode.Pshufd)
-                                           dst
-                                           src
-                                           dst
-                                           imm
-                                           size))))
-        dst))
+(decl x64_pshufd (XmmMem u8) Xmm)
+(rule (x64_pshufd src imm)
+      (xmm_unary_rm_r_imm (SseOpcode.Pshufd) src imm))
 
 ;; Helper for creating `pshufb` instructions.
 (decl x64_pshufb (Xmm XmmMem) Xmm)
@@ -3314,46 +3314,37 @@
       (xmm_rmir_vex (AvxOpcode.Vpsrad) src1 src2))
 
 ;; Helper for creating `pextrb` instructions.
-(decl x64_pextrb (Type Xmm u8) Gpr)
-(rule (x64_pextrb ty src lane)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.XmmRmRImm (SseOpcode.Pextrb)
-                                           dst
-                                           src
-                                           dst
-                                           lane
-                                           (operand_size_of_type_32_64 (lane_type ty))))))
-        dst))
+(decl x64_pextrb (Xmm u8) Gpr)
+(rule (x64_pextrb src lane)
+      (xmm_to_gpr_imm (SseOpcode.Pextrb) src lane))
 
 ;; Helper for creating `pextrw` instructions.
-(decl x64_pextrw (Type Xmm u8) Gpr)
-(rule (x64_pextrw ty src lane)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.XmmRmRImm (SseOpcode.Pextrw)
-                                           dst
-                                           src
-                                           dst
-                                           lane
-                                           (operand_size_of_type_32_64 (lane_type ty))))))
-        dst))
+(decl x64_pextrw (Xmm u8) Gpr)
+(rule (x64_pextrw src lane)
+      (xmm_to_gpr_imm (SseOpcode.Pextrw) src lane))
 
 ;; Helper for creating `pextrd` instructions.
-(decl x64_pextrd (Type Xmm u8) Gpr)
-(rule (x64_pextrd ty src lane)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.XmmRmRImm (SseOpcode.Pextrd)
-                                           dst
-                                           src
-                                           dst
-                                           lane
-                                           (operand_size_of_type_32_64 (lane_type ty))))))
-        dst))
+(decl x64_pextrd (Xmm u8) Gpr)
+(rule (x64_pextrd src lane)
+      (xmm_to_gpr_imm (SseOpcode.Pextrd) src lane))
+
+;; Helper for creating `pextrq` instructions.
+(decl x64_pextrq (Xmm u8) Gpr)
+(rule (x64_pextrq src lane)
+      (xmm_to_gpr_imm (SseOpcode.Pextrq) src lane))
 
 ;; Helper for creating `MInst.XmmToGpr` instructions.
 (decl xmm_to_gpr (SseOpcode Xmm OperandSize) Gpr)
 (rule (xmm_to_gpr op src size)
       (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.XmmToGpr op src dst size))))
+        dst))
+
+;; Helper for creating `MInst.XmmToGpr` instructions.
+(decl xmm_to_gpr_imm (SseOpcode Xmm u8) Gpr)
+(rule (xmm_to_gpr_imm op src imm)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.XmmToGprImm op src dst imm))))
         dst))
 
 ;; Helper for creating `pmovmskb` instructions.
