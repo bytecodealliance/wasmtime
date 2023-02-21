@@ -24,7 +24,7 @@
   (func (export "is_null-funcref") (param $i i32) (result i32)
     (ref.is_null (call $f3 (local.get $i)))
   )
-  (func (export "get-typed-and-call") (param $i i32) (result i32) (call_ref (call $f4 (local.get $i))))
+  (func (export "get-typed-and-call") (param $i i32) (result i32) (call_ref $res-i32 (call $f4 (local.get $i))))
 )
 
 (invoke "init" (ref.extern 1))
