@@ -914,6 +914,13 @@ pub unsafe extern "C" fn fd_readdir(
             } else {
                 None
             };
+
+        // Compute the inode of `.` so that the iterator can produce an entry
+        // for it.
+        let dir = state.get_dir(fd)?;
+        let stat = wasi_filesystem::stat(dir.fd)?;
+        let dot_inode = stat.ino;
+
         let mut iter;
         match stream {
             // All our checks passed and a dirent cache was available with a
@@ -926,6 +933,7 @@ pub unsafe extern "C" fn fd_readdir(
                     state,
                     cookie,
                     use_cache: true,
+                    dot_inode,
                 }
             }
 
@@ -935,12 +943,12 @@ pub unsafe extern "C" fn fd_readdir(
             // from scratch, and the `cookie` value indicates how many items
             // need skipping.
             None => {
-                let dir = state.get_dir(fd)?;
                 iter = DirEntryIterator {
                     state,
                     cookie: wasi::DIRCOOKIE_START,
                     use_cache: false,
                     stream: DirEntryStream(wasi_filesystem::readdir(dir.fd)?),
+                    dot_inode,
                 };
 
                 // Skip to the entry that is requested by the `cookie`
@@ -1019,6 +1027,7 @@ pub unsafe extern "C" fn fd_readdir(
         use_cache: bool,
         cookie: Dircookie,
         stream: DirEntryStream,
+        dot_inode: wasi::Inode,
     }
 
     impl<'a> Iterator for DirEntryIterator<'a> {
@@ -1027,7 +1036,33 @@ pub unsafe extern "C" fn fd_readdir(
         type Item = Result<(wasi::Dirent, &'a [UnsafeCell<u8>]), Errno>;
 
         fn next(&mut self) -> Option<Self::Item> {
+            let current_cookie = self.cookie;
+
             self.cookie += 1;
+
+            // Preview1 programs expect to see `.` and `..` in the traversal, but
+            // Preview2 excludes them, so re-add them.
+            match current_cookie {
+                0 => {
+                    let dirent = wasi::Dirent {
+                        d_next: self.cookie,
+                        d_ino: self.dot_inode,
+                        d_type: wasi::FILETYPE_DIRECTORY,
+                        d_namlen: 1,
+                    };
+                    return Some(Ok((dirent, &self.state.dotdot[..1])));
+                }
+                1 => {
+                    let dirent = wasi::Dirent {
+                        d_next: self.cookie,
+                        d_ino: 0,
+                        d_type: wasi::FILETYPE_DIRECTORY,
+                        d_namlen: 2,
+                    };
+                    return Some(Ok((dirent, &self.state.dotdot[..])));
+                }
+                _ => {}
+            }
 
             if self.use_cache {
                 self.use_cache = false;
@@ -2251,6 +2286,9 @@ struct State {
     /// The clock handle for `CLOCKID_REALTIME`.
     default_wall_clock: Cell<Option<Fd>>,
 
+    /// The string `..` for use by the directory iterator.
+    dotdot: [UnsafeCell<u8>; 2],
+
     /// Another canary constant located at the end of the structure to catch
     /// memory corruption coming from the bottom.
     magic2: u32,
@@ -2438,6 +2476,7 @@ impl State {
                 },
                 default_monotonic_clock: Cell::new(None),
                 default_wall_clock: Cell::new(None),
+                dotdot: [UnsafeCell::new(b'.'), UnsafeCell::new(b'.')],
             }));
             &*ret
         };
