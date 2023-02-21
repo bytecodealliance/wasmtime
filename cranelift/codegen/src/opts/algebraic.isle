@@ -42,7 +42,7 @@
                       x))
       (subsume x))
 
-;; x*0 == 0*x == x.
+;; x*0 == 0*x == 0.
 (rule (simplify (imul ty
                       _
                       zero @ (iconst ty (u64_from_imm64 0))))

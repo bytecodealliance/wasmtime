@@ -1,11 +1,14 @@
 //! Assembler library implementation for x64.
 
-use crate::{isa::reg::Reg, masm::OperandSize};
+use crate::{
+    isa::reg::Reg,
+    masm::{DivKind, OperandSize, RemKind},
+};
 use cranelift_codegen::{
     isa::x64::{
         args::{
-            self, AluRmiROpcode, Amode, ExtMode, FromWritableReg, Gpr, GprMem, GprMemImm, RegMem,
-            RegMemImm, SyntheticAmode, WritableGpr,
+            self, AluRmiROpcode, Amode, DivOrRemKind, ExtMode, FromWritableReg, Gpr, GprMem,
+            GprMemImm, RegMem, RegMemImm, SyntheticAmode, WritableGpr,
         },
         settings as x64_settings, EmitInfo, EmitState, Inst,
     },
@@ -57,6 +60,24 @@ impl From<OperandSize> for args::OperandSize {
         match size {
             OperandSize::S32 => Self::Size32,
             OperandSize::S64 => Self::Size64,
+        }
+    }
+}
+
+impl From<DivKind> for DivOrRemKind {
+    fn from(kind: DivKind) -> Self {
+        match kind {
+            DivKind::Signed => DivOrRemKind::SignedDiv,
+            DivKind::Unsigned => DivOrRemKind::UnsignedDiv,
+        }
+    }
+}
+
+impl From<RemKind> for DivOrRemKind {
+    fn from(kind: RemKind) -> Self {
+        match kind {
+            RemKind::Signed => DivOrRemKind::SignedRem,
+            RemKind::Unsigned => DivOrRemKind::UnsignedRem,
         }
     }
 }
@@ -260,6 +281,51 @@ impl Assembler {
                 src, dst
             ),
         }
+    }
+
+    /// Signed/unsigned division.
+    ///
+    /// Emits a sequence of instructions to ensure the correctness of
+    /// the division invariants.  This function assumes that the
+    /// caller has correctly allocated the dividend as `(rdx:rax)` and
+    /// accounted for the quotient to be stored in `rax`.
+    pub fn div(&mut self, divisor: Reg, dst: (Reg, Reg), kind: DivKind, size: OperandSize) {
+        let tmp = if size == OperandSize::S64 && kind == DivKind::Signed {
+            Some(regs::scratch())
+        } else {
+            None
+        };
+
+        self.emit(Inst::CheckedDivOrRemSeq {
+            kind: kind.into(),
+            size: size.into(),
+            divisor: divisor.into(),
+            dividend_lo: dst.0.into(),
+            dividend_hi: dst.1.into(),
+            dst_quotient: dst.0.into(),
+            dst_remainder: dst.1.into(),
+            tmp: tmp.map(|reg| reg.into()),
+        });
+    }
+
+    /// Signed/unsigned remainder.
+    ///
+    /// Emits a sequence of instructions to ensure the correctness of the
+    /// division invariants and ultimately calculate the remainder.
+    /// This function assumes that the
+    /// caller has correctly allocated the dividend as `(rdx:rax)` and
+    /// accounted for the remainder to be stored in `rdx`.
+    pub fn rem(&mut self, divisor: Reg, dst: (Reg, Reg), kind: RemKind, size: OperandSize) {
+        self.emit(Inst::CheckedDivOrRemSeq {
+            kind: kind.into(),
+            size: size.into(),
+            divisor: divisor.into(),
+            dividend_lo: dst.0.into(),
+            dividend_hi: dst.1.into(),
+            dst_quotient: dst.0.into(),
+            dst_remainder: dst.1.into(),
+            tmp: None,
+        });
     }
 
     /// Multiply immediate and register.

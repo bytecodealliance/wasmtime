@@ -891,12 +891,11 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
                 None
             };
             let dividend_hi = self.lower_ctx.alloc_tmp(types::I64).only_reg().unwrap();
-            self.lower_ctx.emit(MInst::alu_rmi_r(
-                OperandSize::Size32,
-                AluRmiROpcode::Xor,
-                RegMemImm::reg(dividend_hi.to_reg()),
-                dividend_hi,
-            ));
+            self.lower_ctx.emit(MInst::AluConstOp {
+                op: AluRmiROpcode::Xor,
+                size: OperandSize::Size32,
+                dst: WritableGpr::from_reg(Gpr::new(dividend_hi.to_reg()).unwrap()),
+            });
             self.lower_ctx.emit(MInst::checked_div_or_rem_seq(
                 kind.clone(),
                 size,

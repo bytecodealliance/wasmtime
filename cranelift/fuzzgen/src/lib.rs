@@ -4,33 +4,32 @@ use crate::settings::{Flags, OptLevel};
 use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
 use cranelift::codegen::data_value::DataValue;
-use cranelift::codegen::ir::types::*;
-use cranelift::codegen::ir::Function;
+use cranelift::codegen::ir::{types::*, UserExternalName, UserFuncName};
+use cranelift::codegen::ir::{Function, LibCall};
 use cranelift::codegen::Context;
 use cranelift::prelude::isa;
 use cranelift::prelude::*;
+use cranelift_arbitrary::CraneliftArbitrary;
 use cranelift_native::builder_with_options;
 use std::fmt;
 use target_lexicon::{Architecture, Triple};
 
 mod config;
+mod cranelift_arbitrary;
 mod function_generator;
 mod passes;
 
+/// These libcalls need a interpreter implementation in `cranelift-fuzzgen.rs`
+const ALLOWED_LIBCALLS: &'static [LibCall] = &[
+    LibCall::CeilF32,
+    LibCall::CeilF64,
+    LibCall::FloorF32,
+    LibCall::FloorF64,
+    LibCall::TruncF32,
+    LibCall::TruncF64,
+];
+
 pub type TestCaseInput = Vec<DataValue>;
-
-/// Simple wrapper to generate a single Cranelift `Function`.
-#[derive(Debug)]
-pub struct SingleFunction(pub Function);
-
-impl<'a> Arbitrary<'a> for SingleFunction {
-    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
-        FuzzGen::new(u)
-            .generate_func(Triple::host())
-            .map_err(|_| arbitrary::Error::IncorrectFormat)
-            .map(Self)
-    }
-}
 
 /// Print only non default flags.
 fn write_non_default_flags(f: &mut fmt::Formatter<'_>, flags: &settings::Flags) -> fmt::Result {
@@ -176,27 +175,6 @@ where
         }
     }
 
-    fn generate_datavalue(&mut self, ty: Type) -> Result<DataValue> {
-        Ok(match ty {
-            ty if ty.is_int() => {
-                let imm = match ty {
-                    I8 => self.u.arbitrary::<i8>()? as i128,
-                    I16 => self.u.arbitrary::<i16>()? as i128,
-                    I32 => self.u.arbitrary::<i32>()? as i128,
-                    I64 => self.u.arbitrary::<i64>()? as i128,
-                    I128 => self.u.arbitrary::<i128>()?,
-                    _ => unreachable!(),
-                };
-                DataValue::from_integer(imm, ty)?
-            }
-            // f{32,64}::arbitrary does not generate a bunch of important values
-            // such as Signaling NaN's / NaN's with payload, so generate floats from integers.
-            F32 => DataValue::F32(Ieee32::with_bits(u32::arbitrary(self.u)?)),
-            F64 => DataValue::F64(Ieee64::with_bits(u64::arbitrary(self.u)?)),
-            _ => unimplemented!(),
-        })
-    }
-
     fn generate_test_inputs(mut self, signature: &Signature) -> Result<Vec<TestCaseInput>> {
         let mut inputs = Vec::new();
 
@@ -209,7 +187,7 @@ where
             let test_args = signature
                 .params
                 .iter()
-                .map(|p| self.generate_datavalue(p.value_type))
+                .map(|p| self.u.datavalue(p.value_type))
                 .collect::<Result<TestCaseInput>>()?;
 
             inputs.push(test_args);
@@ -276,7 +254,38 @@ where
     }
 
     fn generate_func(&mut self, target_triple: Triple) -> Result<Function> {
-        let func = FunctionGenerator::new(&mut self.u, &self.config, target_triple).generate()?;
+        let max_params = self.u.int_in_range(self.config.signature_params.clone())?;
+        let max_rets = self.u.int_in_range(self.config.signature_rets.clone())?;
+        let sig = self.u.signature(max_params, max_rets)?;
+
+        // Function name must be in a different namespace than TESTFILE_NAMESPACE (0)
+        let fname = UserFuncName::user(1, 0);
+
+        // Generate the external functions that we allow calling in this function.
+        let usercalls = (0..self.u.int_in_range(self.config.usercalls.clone())?)
+            .map(|i| {
+                let max_params = self.u.int_in_range(self.config.signature_params.clone())?;
+                let max_rets = self.u.int_in_range(self.config.signature_rets.clone())?;
+                let sig = self.u.signature(max_params, max_rets)?;
+                let name = UserExternalName {
+                    namespace: 2,
+                    index: i as u32,
+                };
+                Ok((name, sig))
+            })
+            .collect::<Result<Vec<(UserExternalName, Signature)>>>()?;
+
+        let func = FunctionGenerator::new(
+            &mut self.u,
+            &self.config,
+            target_triple,
+            fname,
+            sig,
+            usercalls,
+            ALLOWED_LIBCALLS.to_vec(),
+        )
+        .generate()?;
+
         self.run_func_passes(func)
     }
 
@@ -321,6 +330,7 @@ where
         let supports_inline_probestack = match target_arch {
             Architecture::X86_64 => true,
             Architecture::Aarch64(_) => true,
+            Architecture::Riscv64(_) => true,
             _ => false,
         };
 
@@ -363,8 +373,9 @@ where
     pub fn generate_host_test(mut self) -> Result<TestCase> {
         // If we're generating test inputs as well as a function, then we're planning to execute
         // this function. That means that any function references in it need to exist. We don't yet
-        // have infrastructure for generating multiple functions, so just don't generate funcrefs.
-        self.config.funcrefs_per_function = 0..=0;
+        // have infrastructure for generating multiple functions, so just don't generate user call
+        // function references.
+        self.config.usercalls = 0..=0;
 
         // TestCase is meant to be consumed by a runner, so we make the assumption here that we're
         // generating a TargetIsa for the host.

@@ -82,8 +82,8 @@ impl TargetIsa for Aarch64 {
         let frame = Frame::new(&abi_sig, &mut body, &mut validator, &abi)?;
         // TODO: Add floating point bitmask
         let regalloc = RegAlloc::new(RegSet::new(ALL_GPR, 0), scratch());
-        let codegen_context = CodeGenContext::new(&mut masm, stack, &frame);
-        let mut codegen = CodeGen::new::<abi::Aarch64ABI>(codegen_context, abi_sig, regalloc);
+        let codegen_context = CodeGenContext::new(regalloc, stack, &frame);
+        let mut codegen = CodeGen::new::<abi::Aarch64ABI>(&mut masm, codegen_context, abi_sig);
 
         codegen.emit(&mut body, validator)?;
         Ok(masm.finalize())

@@ -1,11 +1,11 @@
 use super::{
     address::Address,
     asm::{Assembler, Operand},
-    regs::{rbp, rsp},
+    regs::{self, rbp, rsp},
 };
-use crate::abi::LocalSlot;
 use crate::isa::reg::Reg;
-use crate::masm::{MacroAssembler as Masm, OperandSize, RegImm};
+use crate::masm::{DivKind, MacroAssembler as Masm, OperandSize, RegImm, RemKind};
+use crate::{abi::LocalSlot, codegen::CodeGenContext, stack::Val};
 use cranelift_codegen::{isa::x64::settings as x64_settings, settings, Final, MachBufferFinalized};
 
 /// x64 MacroAssembler.
@@ -150,6 +150,50 @@ impl Masm for MacroAssembler {
         };
 
         self.asm.mul(src, dst, size);
+    }
+
+    fn div(&mut self, context: &mut CodeGenContext, kind: DivKind, size: OperandSize) {
+        // Allocate rdx:rax.
+        let rdx = context.gpr(regs::rdx(), self);
+        let rax = context.gpr(regs::rax(), self);
+
+        // Allocate the divisor, which can be any gpr.
+        let divisor = context.pop_to_reg(self, size);
+
+        // Mark rax as allocatable.
+        context.regalloc.free_gpr(rax);
+        // Move the top value to rax.
+        let rax = context.pop_to_named_reg(self, rax, size);
+        self.asm.div(divisor, (rax, rdx), kind, size);
+
+        // Free the divisor and rdx.
+        context.free_gpr(divisor);
+        context.free_gpr(rdx);
+
+        // Push the quotient.
+        context.stack.push(Val::reg(rax));
+    }
+
+    fn rem(&mut self, context: &mut CodeGenContext, kind: RemKind, size: OperandSize) {
+        // Allocate rdx:rax.
+        let rdx = context.gpr(regs::rdx(), self);
+        let rax = context.gpr(regs::rax(), self);
+
+        // Allocate the divisor, which can be any gpr.
+        let divisor = context.pop_to_reg(self, size);
+
+        // Mark rax as allocatable.
+        context.regalloc.free_gpr(rax);
+        // Move the top value to rax.
+        let rax = context.pop_to_named_reg(self, rax, size);
+        self.asm.rem(divisor, (rax, rdx), kind, size);
+
+        // Free the divisor and rax.
+        context.free_gpr(divisor);
+        context.free_gpr(rax);
+
+        // Push the remainder.
+        context.stack.push(Val::reg(rdx));
     }
 
     fn epilogue(&mut self, locals_size: u32) {

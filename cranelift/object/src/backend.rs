@@ -457,7 +457,7 @@ impl Module for ObjectModule {
                 } else if relocs.is_empty() {
                     SectionKind::ReadOnlyData
                 } else {
-                    SectionKind::Data
+                    SectionKind::ReadOnlyDataWithRel
                 },
             )
         };

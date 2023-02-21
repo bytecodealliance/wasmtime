@@ -5,7 +5,7 @@
 //! machine code emitter.
 
 use crate::codegen::CodeGen;
-use crate::masm::{MacroAssembler, OperandSize, RegImm};
+use crate::masm::{DivKind, MacroAssembler, OperandSize, RegImm, RemKind};
 use crate::stack::Val;
 use wasmparser::ValType;
 use wasmparser::VisitOperator;
@@ -37,6 +37,14 @@ macro_rules! def_unsupported {
     (emit I64Add $($rest:tt)*) => {};
     (emit I32Sub $($rest:tt)*) => {};
     (emit I32Mul $($rest:tt)*) => {};
+    (emit I32DivS $($rest:tt)*) => {};
+    (emit I32DivU $($rest:tt)*) => {};
+    (emit I64DivS $($rest:tt)*) => {};
+    (emit I64DivU $($rest:tt)*) => {};
+    (emit I64RemU $($rest:tt)*) => {};
+    (emit I64RemS $($rest:tt)*) => {};
+    (emit I32RemU $($rest:tt)*) => {};
+    (emit I32RemS $($rest:tt)*) => {};
     (emit I64Mul $($rest:tt)*) => {};
     (emit I64Sub $($rest:tt)*) => {};
     (emit LocalGet $($rest:tt)*) => {};
@@ -62,44 +70,100 @@ where
 
     fn visit_i32_add(&mut self) {
         self.context
-            .i32_binop(&mut self.regalloc, &mut |masm: &mut M, dst, src, size| {
+            .i32_binop(self.masm, &mut |masm, dst, src, size| {
                 masm.add(dst, dst, src, size);
             });
     }
 
     fn visit_i64_add(&mut self) {
         self.context
-            .i64_binop(&mut self.regalloc, &mut |masm: &mut M, dst, src, size| {
+            .i64_binop(self.masm, &mut |masm, dst, src, size| {
                 masm.add(dst, dst, src, size);
             });
     }
 
     fn visit_i32_sub(&mut self) {
         self.context
-            .i32_binop(&mut self.regalloc, &mut |masm: &mut M, dst, src, size| {
+            .i32_binop(self.masm, &mut |masm, dst, src, size| {
                 masm.sub(dst, dst, src, size);
             });
     }
 
     fn visit_i64_sub(&mut self) {
         self.context
-            .i64_binop(&mut self.regalloc, &mut |masm: &mut M, dst, src, size| {
+            .i64_binop(self.masm, &mut |masm, dst, src, size| {
                 masm.sub(dst, dst, src, size);
             });
     }
 
     fn visit_i32_mul(&mut self) {
         self.context
-            .i32_binop(&mut self.regalloc, &mut |masm: &mut M, dst, src, size| {
+            .i32_binop(self.masm, &mut |masm, dst, src, size| {
                 masm.mul(dst, dst, src, size);
             });
     }
 
     fn visit_i64_mul(&mut self) {
         self.context
-            .i64_binop(&mut self.regalloc, &mut |masm: &mut M, dst, src, size| {
+            .i64_binop(self.masm, &mut |masm, dst, src, size| {
                 masm.mul(dst, dst, src, size);
             });
+    }
+
+    fn visit_i32_div_s(&mut self) {
+        use DivKind::*;
+        use OperandSize::*;
+
+        self.masm.div(&mut self.context, Signed, S32);
+    }
+
+    fn visit_i32_div_u(&mut self) {
+        use DivKind::*;
+        use OperandSize::*;
+
+        self.masm.div(&mut self.context, Unsigned, S32);
+    }
+
+    fn visit_i64_div_s(&mut self) {
+        use DivKind::*;
+        use OperandSize::*;
+
+        self.masm.div(&mut self.context, Signed, S64);
+    }
+
+    fn visit_i64_div_u(&mut self) {
+        use DivKind::*;
+        use OperandSize::*;
+
+        self.masm.div(&mut self.context, Unsigned, S64);
+    }
+
+    fn visit_i32_rem_s(&mut self) {
+        use OperandSize::*;
+        use RemKind::*;
+
+        self.masm.rem(&mut self.context, Signed, S32);
+    }
+
+    fn visit_i32_rem_u(&mut self) {
+        use OperandSize::*;
+        use RemKind::*;
+
+        self.masm.rem(&mut self.context, Unsigned, S32);
+    }
+
+    fn visit_i64_rem_s(&mut self) {
+        use OperandSize::*;
+        use RemKind::*;
+
+        self.masm.rem(&mut self.context, Signed, S64);
+    }
+
+    fn visit_i64_rem_u(&mut self) {
+        use OperandSize::*;
+        use RemKind::*;
+
+        self.masm.rem(&mut self.context, Unsigned, S64);
     }
 
     fn visit_end(&mut self) {}
@@ -124,10 +188,10 @@ where
             .get_local(index)
             .expect(&format!("vald local at slot = {}", index));
         let size: OperandSize = slot.ty.into();
-        let src = self.regalloc.pop_to_reg(context, size);
-        let addr = context.masm.local_address(&slot);
-        context.masm.store(RegImm::reg(src), addr, size);
-        self.regalloc.free_gpr(src);
+        let src = self.context.pop_to_reg(self.masm, size);
+        let addr = self.masm.local_address(&slot);
+        self.masm.store(RegImm::reg(src), addr, size);
+        self.context.regalloc.free_gpr(src);
     }
 
     wasmparser::for_each_operator!(def_unsupported);
