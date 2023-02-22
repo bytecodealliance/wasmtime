@@ -1050,7 +1050,7 @@
 (decl extend (ValueRegs ExtendOp Type Type) ValueRegs)
 
 ;;; Generic Rules Extending to I64
-(decl extend_shift_op (ExtendOp) AluOPRRI)
+(decl pure extend_shift_op (ExtendOp) AluOPRRI)
 (rule (extend_shift_op (ExtendOp.Zero)) (AluOPRRI.Srli))
 (rule (extend_shift_op (ExtendOp.Signed)) (AluOPRRI.Srai))
 
@@ -1071,7 +1071,7 @@
 
 ;; When signed extending from 32 to 64 bits we can use a
 ;; `addiw val 0`. Also known as a `sext.w`
-(rule 2 (extend val (ExtendOp.Signed) $I32 $I64)
+(rule 1 (extend val (ExtendOp.Signed) $I32 $I64)
   (let ((val Reg (value_regs_get val 0)))
     (alu_rr_imm12 (AluOPRRI.Addiw) val (imm12_const 0))))
 
@@ -1080,59 +1080,54 @@
 ;; since we can just use `andi` instead which is part of the base ISA.
 
 ;; If we have the `zbkb` extension `packw` can be used to zero extend 16 bit values
-(rule 3 (extend val (ExtendOp.Zero) $I16 (fits_in_64 _))
+(rule 1 (extend val (ExtendOp.Zero) $I16 (fits_in_64 _))
   (if-let $true (has_zbkb))
   (let ((val Reg (value_regs_get val 0)))
     (alu_rrr (AluOPRRR.Packw) val (zero_reg))))
 
 ;; If we have the `zbkb` extension `pack` can be used to zero extend 32 bit registers
-(rule 4 (extend val (ExtendOp.Zero) $I32 $I64)
+(rule 1 (extend val (ExtendOp.Zero) $I32 $I64)
   (if-let $true (has_zbkb))
   (let ((val Reg (value_regs_get val 0)))
     (alu_rrr (AluOPRRR.Pack) val (zero_reg))))
 
 
 ;; If we have the `zbb` extension we can use the dedicated `sext.b` instruction.
-(rule 5 (extend val (ExtendOp.Signed) $I8 (fits_in_64 _))
+(rule 1 (extend val (ExtendOp.Signed) $I8 (fits_in_64 _))
   (if-let $true (has_zbb))
   (let ((val Reg (value_regs_get val 0)))
     (alu_rr_imm12 (AluOPRRI.Sextb) val (imm12_const 0))))
 
 ;; If we have the `zbb` extension we can use the dedicated `sext.h` instruction.
-(rule 6 (extend val (ExtendOp.Signed) $I16 (fits_in_64 _))
+(rule 1 (extend val (ExtendOp.Signed) $I16 (fits_in_64 _))
   (if-let $true (has_zbb))
   (let ((val Reg (value_regs_get val 0)))
     (alu_rr_imm12 (AluOPRRI.Sexth) val (imm12_const 0))))
 
 ;; If we have the `zbb` extension we can use the dedicated `zext.h` instruction.
-(rule 7 (extend val (ExtendOp.Zero) $I16 (fits_in_64 _))
+(rule 2 (extend val (ExtendOp.Zero) $I16 (fits_in_64 _))
   (if-let $true (has_zbb))
   (let ((val Reg (value_regs_get val 0)))
     (alu_rr_imm12 (AluOPRRI.Zexth) val (imm12_const 0))))
 
 ;;; Signed rules extending to I128
 ;; Extend the bottom part, and extract the sign bit from the bottom as the top
-(rule 8 (extend val (ExtendOp.Signed) (fits_in_64 from_ty) $I128)
+(rule 2 (extend val (ExtendOp.Signed) (fits_in_64 from_ty) $I128)
   (let ((val Reg (value_regs_get val 0))
         (low Reg (extend val (ExtendOp.Signed) from_ty $I64))
         (high Reg (alu_rr_imm12 (AluOPRRI.Srai) low (imm12_const 63))))
     (value_regs low high)))
 
-
 ;;; Unsigned rules extending to I128
 ;; Extend the bottom register to I64 and then just zero out the top half.
-(rule 9 (extend val (ExtendOp.Zero) (fits_in_32 from_ty) $I128)
+(rule 3 (extend val (ExtendOp.Zero) (fits_in_64 from_ty) $I128)
   (let ((val Reg (value_regs_get val 0))
-        (extended Reg (extend val (ExtendOp.Zero) from_ty $I64)))
-    (value_regs extended (load_u64_constant 0))))
-
-(rule 10 (extend val (ExtendOp.Zero) $I64 $I128)
-  (value_regs
-    (value_regs_get val 0)
-    (load_u64_constant 0)))
+        (low Reg (extend val (ExtendOp.Zero) from_ty $I64))
+        (high Reg (load_u64_constant 0)))
+    (value_regs low high)))
 
 ;; Catch all rule for ignoring extensions of the same type.
-(rule 11 (extend val _ ty ty) val)
+(rule 4 (extend val _ ty ty) val)
 
 
 
