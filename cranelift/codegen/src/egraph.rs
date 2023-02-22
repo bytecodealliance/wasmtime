@@ -77,6 +77,7 @@ pub(crate) struct OptimizeCtx<'opt> {
     // Borrowed from EgraphPass:
     pub(crate) func: &'opt mut Function,
     pub(crate) domtree: &'opt mut DominatorTree,
+    pub(crate) loop_analysis: &'opt LoopAnalysis,
     pub(crate) value_to_opt_value: &'opt mut SecondaryMap<Value, Value>,
     pub(crate) gvn_map: &'opt mut CtxHashMap<(Type, InstructionData), Value>,
     pub(crate) eclasses: &'opt mut UnionFind<Value>,
@@ -298,12 +299,15 @@ impl<'opt> OptimizeCtx<'opt> {
             fn remove(
                 cfg: &mut ControlFlowGraph,
                 domtree: &mut DominatorTree,
+                loop_analysis: &LoopAnalysis,
                 from_block: Block,
                 inst: Inst,
                 to_block: Block,
             ) {
                 cfg.remove_edge(from_block, inst, to_block);
-                if cfg.pred_iter(to_block).count() == 0 {
+                if cfg.pred_iter(to_block).count() == 0
+                    || loop_analysis.is_loop_header(to_block).is_some()
+                {
                     // not_taken_block is now unreachable
                     domtree.set_unreachable(to_block);
                     let succ: alloc::vec::Vec<Block> = cfg.succ_iter(to_block).collect();
@@ -314,7 +318,14 @@ impl<'opt> OptimizeCtx<'opt> {
                             .collect();
                         for (pred_inst, pred_block) in pred {
                             if to_block == pred_block {
-                                remove(cfg, domtree, to_block, pred_inst, next_block);
+                                remove(
+                                    cfg,
+                                    domtree,
+                                    loop_analysis,
+                                    to_block,
+                                    pred_inst,
+                                    next_block,
+                                );
                             }
                         }
                     }
@@ -324,7 +335,14 @@ impl<'opt> OptimizeCtx<'opt> {
             let block = self.func.layout.inst_block(inst).unwrap();
             for not_taken in not_taken.iter() {
                 let not_taken_block = not_taken.block(&self.func.dfg.value_lists);
-                remove(self.cfg, self.domtree, block, inst, not_taken_block);
+                remove(
+                    self.cfg,
+                    self.domtree,
+                    self.loop_analysis,
+                    block,
+                    inst,
+                    not_taken_block,
+                );
             }
 
             (inst, _) = self.func.dfg.replace(inst).build(
@@ -493,6 +511,7 @@ impl<'a> EgraphPass<'a> {
                 let mut ctx = OptimizeCtx {
                     func: cursor.func,
                     domtree: self.domtree,
+                    loop_analysis: self.loop_analysis,
                     value_to_opt_value: &mut value_to_opt_value,
                     gvn_map: &mut gvn_map,
                     eclasses: &mut self.eclasses,
