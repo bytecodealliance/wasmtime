@@ -1,0 +1,79 @@
+test compile precise-output
+set unwind_info=false
+target riscv64 has_zbb
+
+;; This is a regression test for a bug in the RISC-V backend where
+;; When enabling `Zbb` the backend would try to use one of the
+;; integer instructions (`orn`) to implement a float operation
+;; causing a regalloc panic.
+
+function %or_not_optimization_float() -> i32 system_v {
+block0:
+    v0 = iconst.i32 0
+    v1 = f32const 0.0
+    v2 = bnot v1 
+    v3 = bor v2, v2
+    br_table v0, block1(v3), [block1(v1)]
+
+block1(v4: f32):
+    return v0
+}
+
+; VCode:
+; block0:
+;   li a1,0
+;   fmv.w.x ft9,a1
+;   li t1,0
+;   fmv.w.x fa6,t1
+;   fmv.x.w a1,fa6
+;   not a3,a1
+;   fmv.w.x ft1,a3
+;   fmv.x.w t1,ft1
+;   fmv.x.w a0,ft1
+;   or a2,t1,a0
+;   fmv.w.x fa2,a2
+;   li t2,0
+;   br_table t2,[MachLabel(1),MachLabel(2)]##tmp1=a1,tmp2=a2
+; block1:
+;   j label3
+; block2:
+;   fmv.d fa2,ft9
+;   j label3
+; block3:
+;   li a0,0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   mv a1, zero
+;   fmv.w.x ft9, a1
+;   mv t1, zero
+;   fmv.w.x fa6, t1
+;   fmv.x.w a1, fa6
+;   not a3, a1
+;   fmv.w.x ft1, a3
+;   fmv.x.w t1, ft1
+;   fmv.x.w a0, ft1
+;   or a2, t1, a0
+;   fmv.w.x fa2, a2
+;   mv t2, zero
+;   slli t6, t2, 0x20
+;   srli t6, t6, 0x20
+;   addi a2, zero, 1
+;   bltu t6, a2, 0xc
+;   auipc a2, 0
+;   jalr zero, a2, 0x28
+;   auipc a1, 0
+;   slli a2, t6, 3
+;   add a1, a1, a2
+;   jalr zero, a1, 0x10
+;   auipc a2, 0
+;   jalr zero, a2, 0xc
+; block1: ; offset 0x60
+;   j 8
+; block2: ; offset 0x64
+;   fmv.d fa2, ft9
+; block3: ; offset 0x68
+;   mv a0, zero
+;   ret
+

@@ -186,14 +186,14 @@
     (alu_rrr (AluOPRRR.RemU) x y)))
 
 ;;;; Rules for `and` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule -1 (lower (has_type (fits_in_64 ty) (band x y)))
+(rule -1 (lower (has_type (fits_in_64 (ty_int ty)) (band x y)))
   (alu_rrr (AluOPRRR.And) x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
-(rule 2 (lower (has_type (fits_in_64 ty) (band x (imm12_from_value y))))
+(rule 2 (lower (has_type (fits_in_64 (ty_int ty)) (band x (imm12_from_value y))))
   (alu_rr_imm12 (AluOPRRI.Andi) x y))
 
-(rule 1 (lower (has_type (fits_in_64 ty) (band (imm12_from_value x) y)))
+(rule 1 (lower (has_type (fits_in_64 (ty_int ty)) (band (imm12_from_value x) y)))
   (alu_rr_imm12 (AluOPRRI.Andi) y x))
 
 (rule (lower (has_type $I128 (band x y)))
@@ -201,6 +201,7 @@
 
 (rule (lower (has_type $F32 (band x y)))
   (lower_float_binary (AluOPRRR.And) x y $F32))
+
 (rule (lower (has_type $F64 (band x y)))
   (lower_float_binary (AluOPRRR.And) x y $F64))
 
@@ -208,18 +209,21 @@
 ;; by Cranelift's `band_not` instruction that is legalized into the simpler
 ;; forms early on.
 
-(rule 3 (lower (has_type (fits_in_64 ty) (band x (bnot y))))
+(rule 3 (lower (has_type (fits_in_64 (ty_int ty)) (band x (bnot y))))
   (if-let $true (has_zbb))
   (gen_andn x y))
-(rule 4 (lower (has_type (fits_in_64 ty) (band (bnot y) x)))
+
+(rule 4 (lower (has_type (fits_in_64 (ty_int ty)) (band (bnot y) x)))
   (if-let $true (has_zbb))
   (gen_andn x y))
+
 (rule 5 (lower (has_type $I128 (band x (bnot y))))
   (if-let $true (has_zbb))
   (let
     ((low Reg (gen_andn (value_regs_get x 0) (value_regs_get y 0)))
       (high Reg (gen_andn (value_regs_get x 1) (value_regs_get y 1))))
     (value_regs low high)))
+
 (rule 6 (lower (has_type $I128 (band (bnot y) x)))
   (if-let $true (has_zbb))
   (let
@@ -229,19 +233,22 @@
 
 
 ;;;; Rules for `or` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule -1 (lower (has_type (fits_in_64 ty) (bor x y)))
+(rule -1 (lower (has_type (fits_in_64 (ty_int ty)) (bor x y)))
   (alu_rrr (AluOPRRR.Or) x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
-(rule 2 (lower (has_type (fits_in_64 ty) (bor x (imm12_from_value y))))
+(rule 2 (lower (has_type (fits_in_64 (ty_int ty)) (bor x (imm12_from_value y))))
   (alu_rr_imm12 (AluOPRRI.Ori) x y))
 
-(rule 1 (lower (has_type (fits_in_64 ty) (bor (imm12_from_value x) y)))
+(rule 1 (lower (has_type (fits_in_64 (ty_int ty)) (bor (imm12_from_value x) y)))
   (alu_rr_imm12 (AluOPRRI.Ori) y x))
+
 (rule (lower (has_type $I128 (bor x y)))
   (lower_b128_binary (AluOPRRR.Or) x y))
+
 (rule (lower (has_type $F32 (bor x y)))
   (lower_float_binary (AluOPRRR.Or) x y $F32))
+
 (rule (lower (has_type $F64 (bor x y)))
   (lower_float_binary (AluOPRRR.Or) x y $F64))
 
@@ -249,10 +256,11 @@
 ;; by Cranelift's `bor_not` instruction that is legalized into the simpler
 ;; forms early on.
 
-(rule 3 (lower (has_type (fits_in_64 ty) (bor x (bnot y))))
+(rule 3 (lower (has_type (fits_in_64 (ty_int ty)) (bor x (bnot y))))
   (if-let $true (has_zbb))
   (gen_orn x y))
-(rule 4 (lower (has_type (fits_in_64 ty) (bor (bnot y) x)))
+
+(rule 4 (lower (has_type (fits_in_64 (ty_int ty)) (bor (bnot y) x)))
   (if-let $true (has_zbb))
   (gen_orn x y))
 
@@ -262,6 +270,7 @@
     ((low Reg (gen_orn (value_regs_get x 0) (value_regs_get y 0)))
       (high Reg (gen_orn (value_regs_get x 1) (value_regs_get y 1))))
     (value_regs low high)))
+
 (rule 6 (lower (has_type $I128 (bor (bnot y) x)))
   (if-let $true (has_zbb))
   (let
@@ -271,40 +280,43 @@
 
 
 ;;;; Rules for `xor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule -1 (lower (has_type (fits_in_64 ty) (bxor x y)))
+(rule -1 (lower (has_type (fits_in_64 (ty_int ty)) (bxor x y)))
   (alu_rrr (AluOPRRR.Xor) x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
-(rule 2 (lower (has_type (fits_in_64 ty) (bxor x (imm12_from_value y))))
+(rule 2 (lower (has_type (fits_in_64 (ty_int ty)) (bxor x (imm12_from_value y))))
   (alu_rr_imm12 (AluOPRRI.Xori) x y))
 
-(rule 1 (lower (has_type (fits_in_64 ty) (bxor (imm12_from_value x) y)))
+(rule 1 (lower (has_type (fits_in_64 (ty_int ty)) (bxor (imm12_from_value x) y)))
   (alu_rr_imm12 (AluOPRRI.Xori) y x))
+
 (rule (lower (has_type $I128 (bxor x y)))
   (lower_b128_binary (AluOPRRR.Xor) x y))
+
 (rule (lower (has_type $F32 (bxor x y)))
   (lower_float_binary (AluOPRRR.Xor) x y $F32))
+
 (rule (lower (has_type $F64 (bxor x y)))
   (lower_float_binary (AluOPRRR.Xor) x y $F64))
 
 
 ;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule -1 (lower (has_type fits_in_64 (bnot x)))
+(rule -1 (lower (has_type (fits_in_64 (ty_int ty)) (bnot x)))
   (alu_rr_imm12 (AluOPRRI.Xori) x (imm_from_neg_bits -1)))
 
 (rule (lower (has_type $I128 (bnot x)))
   (bnot_128 x))
+
 (rule
   (lower (has_type $F32 (bnot x)))
-  (lower_float_bnot x $F32)
-)
+  (lower_float_bnot x $F32))
+
 (rule
   (lower (has_type $F64 (bnot x)))
-  (lower_float_bnot x $F64)
-)
+  (lower_float_bnot x $F64))
 
 ;;;; Rules for `bit_reverse` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type ty (bitrev x)))
+(rule (lower (has_type (fits_in_64 (ty_int ty)) (bitrev x)))
   (lower_bit_reverse x ty))
 
 (rule 1 (lower (has_type $I128 (bitrev x)))
