@@ -304,11 +304,16 @@ impl<'opt> OptimizeCtx<'opt> {
                 inst: Inst,
                 to_block: Block,
             ) {
+                trace!("Removing edge from {from_block:?} {inst:?} to {to_block:?}");
                 cfg.remove_edge(from_block, inst, to_block);
                 let pred_count = cfg.pred_iter(to_block).count();
+                if !domtree.is_reachable(to_block) {
+                    return;
+                }
                 if pred_count == 0
                     || (pred_count == 1 && loop_analysis.is_loop_header(to_block).is_some())
                 {
+                    trace!("Detected {to_block:?} is now unreachable");
                     // not_taken_block is now unreachable
                     domtree.set_unreachable(to_block);
                     let succ: alloc::vec::Vec<Block> = cfg.succ_iter(to_block).collect();
