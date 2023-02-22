@@ -2205,7 +2205,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (br_destination, inputs) = translate_br_if_args(*relative_depth, state);
             //canonicalise_then_brz(builder, is_null, br_destination, inputs);
             let else_block = builder.create_block();
-            canonicalise_brif(builder, is_null, br_destination, inputs, else_block, &[]);
+            canonicalise_brif(builder, is_null, else_block, &[], br_destination, inputs);
 
             // In the null case, pop the ref
             state.pop1();
