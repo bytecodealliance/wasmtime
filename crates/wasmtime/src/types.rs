@@ -101,6 +101,13 @@ impl ValType {
             WasmType::Ref(rt) => Self::Ref(RefType::from_wasm_ref_type(&rt)),
         }
     }
+
+    pub(crate) fn is_subtype(&self, other: &Self) -> bool {
+        match (self, other) {
+            (ValType::Ref(rt1), ValType::Ref(rt2)) => RefType::is_subtype(&rt1, &rt2),
+            (_, _) => self == other
+        }
+    }
 }
 
 /// A reference type holds what it refers to and whether it is nullable
@@ -145,6 +152,11 @@ impl RefType {
             heap_type: HeapType::from_wasm_heap_type(&rt.heap_type),
         }
     }
+
+    pub(crate) fn is_subtype(&self, other: &Self) -> bool {
+        (self.nullable == other.nullable || other.nullable)
+            && HeapType::is_subtype(&self.heap_type, &other.heap_type)
+    }
 }
 
 /// A list of all possible heap types in WebAssembly
@@ -183,6 +195,14 @@ impl HeapType {
             WasmHeapType::Extern => Self::Extern,
             WasmHeapType::Index(i) => Self::Index(*i),
         }
+    }
+
+    pub(crate) fn is_subtype(&self, other: &Self) -> bool {
+        self == other // TODO(dhil): This is not always
+                      // correct. Consider when [self = Index(n)] and
+                      // [other = Index(m)] such that n != m, then we
+                      // should still check whether [n] and [m] points
+                      // to structurally equivalent types.
     }
 }
 

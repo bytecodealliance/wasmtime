@@ -1009,7 +1009,7 @@ impl Func {
             );
         }
         for (ty, arg) in ty.params().zip(params) {
-            if arg.ty() != ty {
+            if !ValType::is_subtype(&ty, &arg.ty()) {
                 bail!(
                     "argument type mismatch: found {} but expected {}",
                     arg.ty(),
