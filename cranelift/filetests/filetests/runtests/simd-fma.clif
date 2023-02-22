@@ -1,6 +1,7 @@
 test interpret
 test run
 target x86_64 has_avx has_fma
+target x86_64 has_avx=false has_fma=false
 target aarch64
 
 function %fma_f32x4(f32x4, f32x4, f32x4) -> f32x4 {

@@ -984,11 +984,13 @@ impl MachInstEmit for Inst {
             &Inst::BrTable {
                 index,
                 tmp1,
+                tmp2,
                 ref targets,
             } => {
                 let index = allocs.next(index);
                 let tmp1 = allocs.next_writable(tmp1);
-                let tmp2 = writable_spilltmp_reg();
+                let tmp2 = allocs.next_writable(tmp2);
+                let ext_index = writable_spilltmp_reg();
 
                 // The default target is passed in as the 0th element of `targets`
                 // separate it here for clarity.
@@ -1001,21 +1003,37 @@ impl MachInstEmit for Inst {
                 // that offset. Each jump table entry is a regular auipc+jalr which we emit sequentially.
                 //
                 // Build the following sequence:
+                //
+                // extend_index:
+                //     zext.w  ext_index, index
                 // bounds_check:
                 //     li      tmp, n_labels
-                //     bltu    index, tmp, compute_target
+                //     bltu    ext_index, tmp, compute_target
                 // jump_to_default_block:
                 //     auipc   pc, 0
                 //     jalr    zero, pc, default_block
                 // compute_target:
                 //     auipc   pc, 0
-                //     slli    tmp, index, 3
+                //     slli    tmp, ext_index, 3
                 //     add     pc, pc, tmp
                 //     jalr    zero, pc, 0x10
                 // jump_table:
                 //     ; This repeats for each entry in the jumptable
                 //     auipc   pc, 0
                 //     jalr    zero, pc, block_target
+
+                // Extend the index to 64 bits.
+                //
+                // This prevents us branching on the top 32 bits of the index, which
+                // are undefined.
+                Inst::Extend {
+                    rd: ext_index,
+                    rn: index,
+                    signed: false,
+                    from_bits: 32,
+                    to_bits: 64,
+                }
+                .emit(&[], sink, emit_info, state);
 
                 // Bounds check.
                 //
@@ -1030,7 +1048,7 @@ impl MachInstEmit for Inst {
                     not_taken: BranchTarget::zero(),
                     kind: IntegerCompare {
                         kind: IntCC::UnsignedLessThan,
-                        rs1: index,
+                        rs1: ext_index.to_reg(),
                         rs2: tmp2.to_reg(),
                     },
                 }
@@ -1059,7 +1077,7 @@ impl MachInstEmit for Inst {
                 Inst::AluRRImm12 {
                     alu_op: AluOPRRI::Slli,
                     rd: tmp2,
-                    rs: index,
+                    rs: ext_index.to_reg(),
                     imm12: Imm12::from_bits(3),
                 }
                 .emit(&[], sink, emit_info, state);

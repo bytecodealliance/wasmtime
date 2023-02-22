@@ -338,9 +338,12 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
     match inst {
         &Inst::Nop0 => {}
         &Inst::Nop4 => {}
-        &Inst::BrTable { index, tmp1, .. } => {
+        &Inst::BrTable {
+            index, tmp1, tmp2, ..
+        } => {
             collector.reg_use(index);
             collector.reg_early_def(tmp1);
+            collector.reg_early_def(tmp2);
         }
         &Inst::Auipc { rd, .. } => collector.reg_def(rd),
         &Inst::Lui { rd, .. } => collector.reg_def(rd),
@@ -1171,15 +1174,17 @@ impl Inst {
             &Inst::BrTable {
                 index,
                 tmp1,
+                tmp2,
                 ref targets,
             } => {
                 let targets: Vec<_> = targets.iter().map(|x| x.as_label().unwrap()).collect();
                 format!(
-                    "{} {},{}##tmp1={}",
+                    "{} {},{}##tmp1={},tmp2={}",
                     "br_table",
                     format_reg(index, allocs),
                     format_labels(&targets[..]),
                     format_reg(tmp1.to_reg(), allocs),
+                    format_reg(tmp2.to_reg(), allocs),
                 )
             }
             &Inst::Auipc { rd, imm } => {

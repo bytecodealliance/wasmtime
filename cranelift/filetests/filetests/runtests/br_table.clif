@@ -100,3 +100,32 @@ block1(v5: i32):
 ; run: %br_table_i32_inline_varied(4) == 4
 ; run: %br_table_i32_inline_varied(297) == 4
 ; run: %br_table_i32_inline_varied(65535) == 4
+
+
+
+; This is a regression test for #5831.
+; The riscv64 backend was failing to clear the upper half of the
+; index register on a br_table, which caused it to jump to the wrong
+; block.
+function %br_table_upper_reg() -> i32 {
+block0:
+    v0 = iconst.i32 -555163938
+    v1 = iconst.i8 -34
+    jump block1(v0, v1)
+
+block1(v2: i32, v3: i8):
+    v4 = ishl.i32 v2, v2
+    v5 = rotr v4, v3
+    br_table v5, block2, [block2, block2, block3]
+
+block2 cold:
+    v100 = iconst.i32 100
+    return v100
+
+block3 cold:
+    v200 = iconst.i32 200
+    return v200
+}
+
+
+; run: %br_table_upper_reg() == 200
