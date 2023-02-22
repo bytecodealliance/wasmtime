@@ -4049,16 +4049,10 @@
             ;; wasm-table index) and then 64-bits (address addend). The small
             ;; lie about the I64 type is benign, since the temporary is dead
             ;; after this instruction (and its Cranelift type is thus unused).
-            (tmp2 WritableGpr (temp_writable_gpr))
+            (tmp2 WritableGpr (temp_writable_gpr)))
 
-            (size OperandSize (raw_operand_size_of_type ty))
-
-            (jt_size u32 (jump_table_size jt_targets)))
-
-        (with_flags_side_effect
-          (x64_cmp size (RegMemImm.Imm jt_size) idx)
-          (ConsumesFlags.ConsumesFlagsSideEffect
-            (MInst.JmpTableSeq idx tmp1 tmp2 default_target jt_targets)))))
+          (SideEffectNoResult.Inst
+            (MInst.JmpTableSeq idx tmp1 tmp2 default_target jt_targets))))
 
 ;;;; iadd_pairwise constants ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
