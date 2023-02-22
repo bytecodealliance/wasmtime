@@ -1383,11 +1383,13 @@ impl DataFlowGraph {
             InstructionData::Jump { destination, .. } => extract_block_args!(destination),
             _ => Vec::new(),
         };
-        if args.len() == 1 {
+        if args.len() != 0 {
             let params: Vec<Value> = self
                 .detach_block_params(block)
                 .as_slice(&self.value_lists)
                 .into();
+
+            debug_assert_eq!(args.len(), params.len());
 
             for (&param, &arg) in params.iter().zip(args.iter()) {
                 self.change_to_alias(param, arg);
