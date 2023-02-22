@@ -180,10 +180,7 @@ struct MemoryLoc {
 }
 
 /// An alias-analysis pass.
-pub struct AliasAnalysis<'a> {
-    /// The domtree for the function.
-    domtree: &'a DominatorTree,
-
+pub struct AliasAnalysis {
     /// Input state to a basic block.
     block_input: FxHashMap<Block, LastStores>,
 
@@ -195,12 +192,11 @@ pub struct AliasAnalysis<'a> {
     mem_values: FxHashMap<MemoryLoc, (Inst, Value)>,
 }
 
-impl<'a> AliasAnalysis<'a> {
+impl AliasAnalysis {
     /// Perform an alias analysis pass.
-    pub fn new(func: &Function, domtree: &'a DominatorTree) -> AliasAnalysis<'a> {
+    pub fn new(func: &Function) -> AliasAnalysis {
         trace!("alias analysis: input is:\n{:?}", func);
         let mut analysis = AliasAnalysis {
-            domtree,
             block_input: FxHashMap::default(),
             mem_values: FxHashMap::default(),
         };
@@ -272,6 +268,7 @@ impl<'a> AliasAnalysis<'a> {
     pub fn process_inst(
         &mut self,
         func: &mut Function,
+        domtree: &DominatorTree,
         state: &mut LastStores,
         inst: Inst,
     ) -> Option<Value> {
@@ -340,7 +337,7 @@ impl<'a> AliasAnalysis<'a> {
                             value.index(),
                             def_inst.index()
                         );
-                        if self.domtree.dominates(def_inst, inst, &func.layout) {
+                        if domtree.dominates(def_inst, inst, &func.layout) {
                             trace!(
                                 " -> dominates; value equiv from v{} to v{} inserted",
                                 load_result.index(),
@@ -383,13 +380,15 @@ impl<'a> AliasAnalysis<'a> {
     /// tracking because resolving some aliases may expose others
     /// (e.g. in cases of double-indirection with two separate chains
     /// of loads).
-    pub fn compute_and_update_aliases(&mut self, func: &mut Function) {
+    pub fn compute_and_update_aliases(&mut self, func: &mut Function, domtree: &DominatorTree) {
         let mut pos = FuncCursor::new(func);
 
         while let Some(block) = pos.next_block() {
             let mut state = self.block_starting_state(block);
             while let Some(inst) = pos.next_inst() {
-                if let Some(replaced_result) = self.process_inst(pos.func, &mut state, inst) {
+                if let Some(replaced_result) =
+                    self.process_inst(pos.func, domtree, &mut state, inst)
+                {
                     let result = pos.func.dfg.inst_results(inst)[0];
                     pos.func.dfg.detach_results(inst);
                     pos.func.dfg.change_to_alias(result, replaced_result);

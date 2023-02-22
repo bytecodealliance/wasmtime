@@ -10,8 +10,8 @@ use crate::flowgraph::ControlFlowGraph;
 use crate::fx::FxHashSet;
 use crate::inst_predicates::is_pure_for_egraph;
 use crate::ir::{
-    DataFlowGraph, Function, Inst, InstBuilderBase, InstructionData, Opcode, Type, Value, ValueDef,
-    ValueListPool,
+    Block, DataFlowGraph, Function, Inst, InstBuilderBase, InstructionData, Opcode, Type, Value,
+    ValueDef, ValueListPool,
 };
 use crate::loop_analysis::LoopAnalysis;
 use crate::opts::generated_code::ContextIter;
@@ -48,9 +48,9 @@ pub struct EgraphPass<'a> {
     /// The function we're operating on.
     func: &'a mut Function,
     /// Dominator tree, used for elaboration pass.
-    domtree: &'a DominatorTree,
+    domtree: &'a mut DominatorTree,
     /// Alias analysis, used during optimization.
-    alias_analysis: &'a mut AliasAnalysis<'a>,
+    alias_analysis: &'a mut AliasAnalysis,
     /// "Domtree with children": like `domtree`, but with an explicit
     /// list of children, rather than just parent pointers.
     domtree_children: DomTreeWithChildren,
@@ -73,18 +73,16 @@ pub struct EgraphPass<'a> {
 }
 
 /// Context passed through node insertion and optimization.
-pub(crate) struct OptimizeCtx<'opt, 'analysis>
-where
-    'analysis: 'opt,
-{
+pub(crate) struct OptimizeCtx<'opt> {
     // Borrowed from EgraphPass:
     pub(crate) func: &'opt mut Function,
+    pub(crate) domtree: &'opt mut DominatorTree,
     pub(crate) value_to_opt_value: &'opt mut SecondaryMap<Value, Value>,
     pub(crate) gvn_map: &'opt mut CtxHashMap<(Type, InstructionData), Value>,
     pub(crate) eclasses: &'opt mut UnionFind<Value>,
     pub(crate) remat_values: &'opt mut FxHashSet<Value>,
     pub(crate) stats: &'opt mut Stats,
-    pub(crate) alias_analysis: &'opt mut AliasAnalysis<'analysis>,
+    pub(crate) alias_analysis: &'opt mut AliasAnalysis,
     pub(crate) alias_analysis_state: &'opt mut LastStores,
     // Held locally during optimization of one node (recursively):
     pub(crate) rewrite_depth: usize,
@@ -113,10 +111,7 @@ impl NewOrExistingInst {
     }
 }
 
-impl<'opt, 'analysis> OptimizeCtx<'opt, 'analysis>
-where
-    'analysis: 'opt,
-{
+impl<'opt> OptimizeCtx<'opt> {
     /// Optimization of a single instruction.
     ///
     /// This does a few things:
@@ -300,12 +295,36 @@ where
             );
             self.stats.branch_folds += 1;
 
+            fn remove(
+                cfg: &mut ControlFlowGraph,
+                domtree: &mut DominatorTree,
+                from_block: Block,
+                inst: Inst,
+                to_block: Block,
+            ) {
+                cfg.remove_edge(from_block, inst, to_block);
+                if cfg.pred_iter(to_block).count() == 0 {
+                    // not_taken_block is now unreachable
+                    domtree.set_unreachable(to_block);
+                    let succ: alloc::vec::Vec<Block> = cfg.succ_iter(to_block).collect();
+                    for next_block in succ {
+                        let pred: alloc::vec::Vec<(Inst, Block)> = cfg
+                            .pred_iter(next_block)
+                            .map(|pred| (pred.inst, pred.block))
+                            .collect();
+                        for (pred_inst, pred_block) in pred {
+                            if to_block == pred_block {
+                                remove(cfg, domtree, to_block, pred_inst, next_block);
+                            }
+                        }
+                    }
+                }
+            }
             // Remove edge in ControlFlowGraph from inst to not_taken blocks
             let block = self.func.layout.inst_block(inst).unwrap();
             for not_taken in not_taken.iter() {
-                self.cfg
-                    .remove_edge(block, inst, not_taken.block(&self.func.dfg.value_lists));
-                // if self.cfg.re:12
+                let not_taken_block = not_taken.block(&self.func.dfg.value_lists);
+                remove(self.cfg, self.domtree, block, inst, not_taken_block);
             }
 
             (inst, _) = self.func.dfg.replace(inst).build(
@@ -320,10 +339,12 @@ where
         // If a load or store, process it with the alias analysis to see
         // if we can optimize it (rewrite in terms of an earlier load or
         // stored value).
-        if let Some(new_result) =
-            self.alias_analysis
-                .process_inst(self.func, self.alias_analysis_state, inst)
-        {
+        if let Some(new_result) = self.alias_analysis.process_inst(
+            self.func,
+            self.domtree,
+            self.alias_analysis_state,
+            inst,
+        ) {
             self.stats.alias_analysis_removed += 1;
             let result = self.func.dfg.first_result(inst);
             trace!(
@@ -353,9 +374,9 @@ impl<'a> EgraphPass<'a> {
     /// Create a new EgraphPass.
     pub fn new(
         func: &'a mut Function,
-        domtree: &'a DominatorTree,
+        domtree: &'a mut DominatorTree,
         loop_analysis: &'a LoopAnalysis,
-        alias_analysis: &'a mut AliasAnalysis<'a>,
+        alias_analysis: &'a mut AliasAnalysis,
         cfg: &'a mut ControlFlowGraph,
     ) -> Self {
         let num_values = func.dfg.num_values();
@@ -471,6 +492,7 @@ impl<'a> EgraphPass<'a> {
                 // here.
                 let mut ctx = OptimizeCtx {
                     func: cursor.func,
+                    domtree: self.domtree,
                     value_to_opt_value: &mut value_to_opt_value,
                     gvn_map: &mut gvn_map,
                     eclasses: &mut self.eclasses,

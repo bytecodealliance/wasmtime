@@ -29,37 +29,34 @@ pub type ConstructorVec<T> = SmallVec<[T; 8]>;
 pub(crate) mod generated_code;
 use generated_code::ContextIter;
 
-pub(crate) struct IsleContext<'a, 'b, 'c> {
-    pub(crate) ctx: &'a mut OptimizeCtx<'b, 'c>,
+pub(crate) struct IsleContext<'a, 'b> {
+    pub(crate) ctx: &'a mut OptimizeCtx<'b>,
 }
 
-pub(crate) struct InstDataEtorIter<'a, 'b, 'c> {
+pub(crate) struct InstDataEtorIter<'a, 'b> {
     stack: SmallVec<[Value; 8]>,
     _phantom1: PhantomData<&'a ()>,
     _phantom2: PhantomData<&'b ()>,
-    _phantom3: PhantomData<&'c ()>,
 }
-impl<'a, 'b, 'c> InstDataEtorIter<'a, 'b, 'c> {
+impl<'a, 'b, 'c> InstDataEtorIter<'a, 'b> {
     fn new(root: Value) -> Self {
         debug_assert_ne!(root, Value::reserved_value());
         Self {
             stack: smallvec![root],
             _phantom1: PhantomData,
             _phantom2: PhantomData,
-            _phantom3: PhantomData,
         }
     }
 }
 
-impl<'a, 'b, 'c> ContextIter for InstDataEtorIter<'a, 'b, 'c>
+impl<'a, 'b> ContextIter for InstDataEtorIter<'a, 'b>
 where
     'b: 'a,
-    'c: 'b,
 {
-    type Context = IsleContext<'a, 'b, 'c>;
+    type Context = IsleContext<'a, 'b>;
     type Output = (Type, InstructionData);
 
-    fn next(&mut self, ctx: &mut IsleContext<'a, 'b, 'c>) -> Option<Self::Output> {
+    fn next(&mut self, ctx: &mut IsleContext<'a, 'b>) -> Option<Self::Output> {
         while let Some(value) = self.stack.pop() {
             debug_assert_ne!(value, Value::reserved_value());
             let value = ctx.ctx.func.dfg.resolve_aliases(value);
@@ -85,12 +82,12 @@ where
     }
 }
 
-impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
+impl<'a, 'b> generated_code::Context for IsleContext<'a, 'b> {
     isle_common_prelude_methods!();
 
-    type inst_data_etor_iter = InstDataEtorIter<'a, 'b, 'c>;
+    type inst_data_etor_iter = InstDataEtorIter<'a, 'b>;
 
-    fn inst_data_etor(&mut self, eclass: Value) -> InstDataEtorIter<'a, 'b, 'c> {
+    fn inst_data_etor(&mut self, eclass: Value) -> InstDataEtorIter<'a, 'b> {
         InstDataEtorIter::new(eclass)
     }
 
