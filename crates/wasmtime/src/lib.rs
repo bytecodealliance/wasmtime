@@ -427,6 +427,12 @@ pub use crate::trap::*;
 pub use crate::types::*;
 pub use crate::values::*;
 
+/// A convience wrapper for `Result<T, anyhow::Error>`.
+///
+/// This type can be used to interact with `wasmtimes`'s extensive use
+/// of `anyhow::Error` while still not directly depending on `anyhow`.
+pub type Result<T> = std::result::Result<T, anyhow::Error>;
+
 #[cfg(feature = "component-model")]
 pub mod component;
 
