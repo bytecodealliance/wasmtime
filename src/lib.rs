@@ -378,9 +378,9 @@ pub extern "C" fn clock_res_get(id: Clockid, resolution: &mut Timestamp) -> Errn
             }
             CLOCKID_REALTIME => {
                 let res = wasi_wall_clock::resolution(state.default_wall_clock());
-                *resolution = Timestamp::from(res.nanoseconds)
-                    .checked_add(res.seconds)
-                    .and_then(|secs| secs.checked_mul(1_000_000_000))
+                *resolution = Timestamp::from(res.seconds)
+                    .checked_mul(1_000_000_000)
+                    .and_then(|ns| ns.checked_add(res.nanoseconds.into()))
                     .ok_or(ERRNO_OVERFLOW)?;
             }
             _ => unreachable!(),
@@ -408,9 +408,9 @@ pub unsafe extern "C" fn clock_time_get(
                 }
                 CLOCKID_REALTIME => {
                     let res = wasi_wall_clock::now(state.default_wall_clock());
-                    *time = Timestamp::from(res.nanoseconds)
-                        .checked_add(res.seconds)
-                        .and_then(|secs| secs.checked_mul(1_000_000_000))
+                    *time = Timestamp::from(res.seconds)
+                        .checked_mul(1_000_000_000)
+                        .and_then(|ns| ns.checked_add(res.nanoseconds.into()))
                         .ok_or(ERRNO_OVERFLOW)?;
                 }
                 _ => unreachable!(),
