@@ -34,7 +34,7 @@ impl Inst {
         debug_assert!(dst.to_reg().class() == RegClass::Float);
         Inst::XmmUnaryRmRImm {
             op,
-            src: XmmMem::new(src).unwrap(),
+            src: XmmMemAligned::new(src).unwrap(),
             imm,
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
         }
@@ -56,7 +56,7 @@ impl Inst {
         Inst::XmmRmiReg {
             opcode,
             src1: Xmm::new(dst.to_reg()).unwrap(),
-            src2: XmmMemImm::new(src).unwrap(),
+            src2: XmmMemAlignedImm::new(src).unwrap(),
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
         }
     }
@@ -96,7 +96,7 @@ impl Inst {
         debug_assert!(dst.to_reg().class() == RegClass::Float);
         Inst::XmmUnaryRmR {
             op,
-            src: XmmMem::new(src).unwrap(),
+            src: XmmMemAligned::new(src).unwrap(),
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
         }
     }
@@ -136,7 +136,7 @@ impl Inst {
         Inst::XmmRmRBlend {
             op,
             src1: Xmm::new(dst.to_reg()).unwrap(),
-            src2: XmmMem::new(src2).unwrap(),
+            src2: XmmMemAligned::new(src2).unwrap(),
             mask: Xmm::new(regs::xmm0()).unwrap(),
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
         }

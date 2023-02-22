@@ -13,8 +13,7 @@ block0(v0: f32x4, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movups  0(%rdi), %xmm4
-;   vorps   %xmm0, %xmm4, %xmm0
+;   vorps   %xmm0, 0(%rdi), %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -24,8 +23,7 @@ block0(v0: f32x4, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movups (%rdi), %xmm4
-;   vorps %xmm4, %xmm0, %xmm0
+;   vorps (%rdi), %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -42,12 +40,11 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movss   0(%rdi), %xmm7
-;   movl    $-2147483648, %ecx
-;   movd    %ecx, %xmm5
-;   vandnps %xmm5, const(0), %xmm8
-;   vandps  %xmm5, %xmm7, %xmm9
-;   vorps   %xmm8, %xmm9, %xmm0
+;   movl    $-2147483648, %eax
+;   movd    %eax, %xmm4
+;   vandnps %xmm4, const(0), %xmm6
+;   vandps  %xmm4, 0(%rdi), %xmm8
+;   vorps   %xmm6, %xmm8, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -57,15 +54,16 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movss (%rdi), %xmm7
-;   movl $0x80000000, %ecx
-;   movd %ecx, %xmm5
-;   vandnps 0x17(%rip), %xmm5, %xmm8
-;   vandps %xmm7, %xmm5, %xmm9
-;   vorps %xmm9, %xmm8, %xmm0
+;   movl $0x80000000, %eax
+;   movd %eax, %xmm4
+;   vandnps 0x1b(%rip), %xmm4, %xmm6
+;   vandps (%rdi), %xmm4, %xmm8
+;   vorps %xmm8, %xmm6, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
