@@ -27,10 +27,9 @@
 //! An example of using Wasmtime looks like:
 //!
 //! ```
-//! use anyhow::Result;
 //! use wasmtime::*;
 //!
-//! fn main() -> Result<()> {
+//! fn main() -> wasmtime::Result<()> {
 //!     // Modules can be compiled through either the text or binary format
 //!     let engine = Engine::default();
 //!     let wat = r#"
@@ -141,10 +140,9 @@
 //! For example we can reimplement the above example with a `Linker`:
 //!
 //! ```
-//! use anyhow::Result;
 //! use wasmtime::*;
 //!
-//! fn main() -> Result<()> {
+//! fn main() -> wasmtime::Result<()> {
 //!     let engine = Engine::default();
 //!     let wat = r#"
 //!         (module
@@ -301,11 +299,10 @@
 //! An example of using WASI looks like:
 //!
 //! ```no_run
-//! # use anyhow::Result;
 //! # use wasmtime::*;
 //! use wasmtime_wasi::sync::WasiCtxBuilder;
 //!
-//! # fn main() -> Result<()> {
+//! # fn main() -> wasmtime::Result<()> {
 //! // Compile our module and create a `Linker` which has WASI functions defined
 //! // within it.
 //! let engine = Engine::default();
@@ -333,7 +330,7 @@
 //! use std::str;
 //!
 //! # use wasmtime::*;
-//! # fn main() -> anyhow::Result<()> {
+//! # fn main() -> wasmtime::Result<()> {
 //! let mut store = Store::default();
 //! let log_str = Func::wrap(&mut store, |mut caller: Caller<'_, ()>, ptr: i32, len: i32| {
 //!     // Use our `caller` context to learn about the memory export of the
