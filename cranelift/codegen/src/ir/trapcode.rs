@@ -51,6 +51,9 @@ pub enum TrapCode {
 
     /// A user-defined trap code.
     User(u16),
+
+    /// Call to a null reference.
+    NullReference,
 }
 
 impl TrapCode {
@@ -68,6 +71,7 @@ impl TrapCode {
             TrapCode::BadConversionToInteger,
             TrapCode::UnreachableCodeReached,
             TrapCode::Interrupt,
+            TrapCode::NullReference,
         ]
     }
 }
@@ -88,6 +92,7 @@ impl Display for TrapCode {
             UnreachableCodeReached => "unreachable",
             Interrupt => "interrupt",
             User(x) => return write!(f, "user{}", x),
+            NullReference => "null reference",
         };
         f.write_str(identifier)
     }
@@ -110,6 +115,7 @@ impl FromStr for TrapCode {
             "bad_toint" => Ok(BadConversionToInteger),
             "unreachable" => Ok(UnreachableCodeReached),
             "interrupt" => Ok(Interrupt),
+            "null reference" => Ok(NullReference),
             _ if s.starts_with("user") => s[4..].parse().map(User).map_err(|_| ()),
             _ => Err(()),
         }

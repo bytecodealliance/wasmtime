@@ -1736,7 +1736,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         // figure that out
         builder
             .ins()
-            .trapz(callee, ir::TrapCode::IndirectCallToNull);
+            .trapz(callee, ir::TrapCode::NullReference);
 
         self.call_function_unchecked(builder, sig_ref, callee, call_args)
     }

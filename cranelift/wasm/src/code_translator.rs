@@ -2247,7 +2247,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::RefAsNonNull => {
             let r = state.pop1();
             let is_null = environ.translate_ref_is_null(builder.cursor(), r)?;
-            builder.ins().trapnz(is_null, ir::TrapCode::IndirectCallToNull);
+            builder.ins().trapnz(is_null, ir::TrapCode::NullReference);
             state.push1(r);
         }
     };
