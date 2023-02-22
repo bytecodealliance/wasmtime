@@ -34,7 +34,7 @@ impl Inst {
         debug_assert!(dst.to_reg().class() == RegClass::Float);
         Inst::XmmUnaryRmRImm {
             op,
-            src: XmmMem::new(src).unwrap(),
+            src: XmmMemAligned::new(src).unwrap(),
             imm,
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
         }
@@ -56,7 +56,7 @@ impl Inst {
         Inst::XmmRmiReg {
             opcode,
             src1: Xmm::new(dst.to_reg()).unwrap(),
-            src2: XmmMemImm::new(src).unwrap(),
+            src2: XmmMemAlignedImm::new(src).unwrap(),
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
         }
     }
@@ -96,7 +96,7 @@ impl Inst {
         debug_assert!(dst.to_reg().class() == RegClass::Float);
         Inst::XmmUnaryRmR {
             op,
-            src: XmmMem::new(src).unwrap(),
+            src: XmmMemAligned::new(src).unwrap(),
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
         }
     }
@@ -136,7 +136,7 @@ impl Inst {
         Inst::XmmRmRBlend {
             op,
             src1: Xmm::new(dst.to_reg()).unwrap(),
-            src2: XmmMem::new(src2).unwrap(),
+            src2: XmmMemAligned::new(src2).unwrap(),
             mask: Xmm::new(regs::xmm0()).unwrap(),
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
         }
@@ -4861,6 +4861,20 @@ fn test_x64_emit() {
     ));
 
     // ========================================================
+    // XmmRmRImmVex
+    insns.push((
+        Inst::XmmVexPinsr {
+            op: AvxOpcode::Vpinsrb,
+            dst: Writable::from_reg(Xmm::new(xmm13).unwrap()),
+            src1: Xmm::new(xmm14).unwrap(),
+            src2: GprMem::new(RegMem::reg(r15)).unwrap(),
+            imm: 2,
+        },
+        "C4430920EF02",
+        "vpinsrb $2 %xmm14, %r15, %xmm13",
+    ));
+
+    // ========================================================
     // Pertaining to atomics.
     let am1: SyntheticAmode =
         Amode::imm_reg_reg_shift(321, Gpr::new(r10).unwrap(), Gpr::new(rdx).unwrap(), 2).into();
@@ -5135,6 +5149,7 @@ fn test_x64_emit() {
     isa_flag_builder.enable("has_ssse3").unwrap();
     isa_flag_builder.enable("has_sse41").unwrap();
     isa_flag_builder.enable("has_fma").unwrap();
+    isa_flag_builder.enable("has_avx").unwrap();
     isa_flag_builder.enable("has_avx512bitalg").unwrap();
     isa_flag_builder.enable("has_avx512dq").unwrap();
     isa_flag_builder.enable("has_avx512f").unwrap();

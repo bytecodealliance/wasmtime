@@ -122,7 +122,8 @@ impl Inst {
             | Inst::MachOTlsGetAddr { .. }
             | Inst::CoffTlsGetAddr { .. }
             | Inst::Unwind { .. }
-            | Inst::DummyUse { .. } => smallvec![],
+            | Inst::DummyUse { .. }
+            | Inst::AluConstOp { .. } => smallvec![],
 
             Inst::AluRmRVex { op, .. } => op.available_from(),
             Inst::UnaryRmR { op, .. } => op.available_from(),
@@ -132,11 +133,15 @@ impl Inst {
             | Inst::XmmMovRM { op, .. }
             | Inst::XmmRmiReg { opcode: op, .. }
             | Inst::XmmRmR { op, .. }
+            | Inst::XmmRmRUnaligned { op, .. }
             | Inst::XmmRmRBlend { op, .. }
             | Inst::XmmRmRImm { op, .. }
             | Inst::XmmToGpr { op, .. }
+            | Inst::XmmToGprImm { op, .. }
             | Inst::XmmUnaryRmRImm { op, .. }
-            | Inst::XmmUnaryRmR { op, .. } => smallvec![op.available_from()],
+            | Inst::XmmUnaryRmRUnaligned { op, .. }
+            | Inst::XmmUnaryRmR { op, .. }
+            | Inst::XmmConstOp { op, .. } => smallvec![op.available_from()],
 
             Inst::XmmUnaryRmREvex { op, .. }
             | Inst::XmmRmREvex { op, .. }
@@ -144,7 +149,9 @@ impl Inst {
 
             Inst::XmmRmiRVex { op, .. }
             | Inst::XmmRmRVex3 { op, .. }
-            | Inst::XmmRmRImmVex { op, .. } => op.available_from(),
+            | Inst::XmmRmRImmVex { op, .. }
+            | Inst::XmmRmRBlendVex { op, .. }
+            | Inst::XmmVexPinsr { op, .. } => op.available_from(),
         }
     }
 }
@@ -288,7 +295,7 @@ impl Inst {
         debug_assert!(dst.to_reg().class() == RegClass::Float);
         Inst::XmmUnaryRmR {
             op,
-            src: XmmMem::new(src).unwrap(),
+            src: XmmMemAligned::new(src).unwrap(),
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
         }
     }
@@ -299,7 +306,7 @@ impl Inst {
         Inst::XmmRmR {
             op,
             src1: Xmm::new(dst.to_reg()).unwrap(),
-            src2: XmmMem::new(src).unwrap(),
+            src2: XmmMemAligned::new(src).unwrap(),
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
         }
     }
@@ -364,7 +371,7 @@ impl Inst {
     pub(crate) fn xmm_cmp_rm_r(op: SseOpcode, src: RegMem, dst: Reg) -> Inst {
         src.assert_regclass_is(RegClass::Float);
         debug_assert!(dst.class() == RegClass::Float);
-        let src = XmmMem::new(src).unwrap();
+        let src = XmmMemAligned::new(src).unwrap();
         let dst = Xmm::new(dst).unwrap();
         Inst::XmmCmpRmR { op, src, dst }
     }
@@ -622,40 +629,6 @@ impl Inst {
     }
 }
 
-// Inst helpers.
-
-impl Inst {
-    /// In certain cases, instructions of this format can act as a definition of an XMM register,
-    /// producing a value that is independent of its initial value.
-    ///
-    /// For example, a vector equality comparison (`cmppd` or `cmpps`) that compares a register to
-    /// itself will generate all ones as a result, regardless of its value. From the register
-    /// allocator's point of view, we should (i) record the first register, which is normally a
-    /// mod, as a def instead; and (ii) not record the second register as a use, because it is the
-    /// same as the first register (already handled).
-    fn produces_const(&self) -> bool {
-        match self {
-            Self::AluRmiR { op, src1, src2, .. } => {
-                src2.clone().to_reg_mem_imm().to_reg() == Some(src1.to_reg())
-                    && (*op == AluRmiROpcode::Xor || *op == AluRmiROpcode::Sub)
-            }
-
-            Self::XmmRmR { op, src1, src2, .. } => {
-                src2.clone().to_reg_mem().to_reg() == Some(src1.to_reg())
-                    && (*op == SseOpcode::Xorps
-                        || *op == SseOpcode::Xorpd
-                        || *op == SseOpcode::Pxor
-                        || *op == SseOpcode::Pcmpeqb
-                        || *op == SseOpcode::Pcmpeqw
-                        || *op == SseOpcode::Pcmpeqd
-                        || *op == SseOpcode::Pcmpeqq)
-            }
-
-            _ => false,
-        }
-    }
-}
-
 //=============================================================================
 // Instructions: printing
 
@@ -705,16 +678,6 @@ impl PrettyPrint for Inst {
         match self {
             Inst::Nop { len } => format!("{} len={}", ljustify("nop".to_string()), len),
 
-            Inst::AluRmiR { size, op, dst, .. } if self.produces_const() => {
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes(), allocs);
-                format!(
-                    "{} {}, {}, {}",
-                    ljustify2(op.to_string(), suffix_lqb(*size)),
-                    dst,
-                    dst,
-                    dst
-                )
-            }
             Inst::AluRmiR {
                 size,
                 op,
@@ -732,6 +695,14 @@ impl PrettyPrint for Inst {
                     src1,
                     src2,
                     dst
+                )
+            }
+            Inst::AluConstOp { op, dst, size } => {
+                let size_bytes = size.to_bytes();
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), size_bytes, allocs);
+                format!(
+                    "{} {dst}, {dst}, {dst}",
+                    ljustify2(op.to_string(), suffix_lqb(*size)),
                 )
             }
             Inst::AluRM {
@@ -925,6 +896,12 @@ impl PrettyPrint for Inst {
                 format!("{} {}, {}", ljustify(op.to_string()), src, dst)
             }
 
+            Inst::XmmUnaryRmRUnaligned { op, src, dst, .. } => {
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), op.src_size(), allocs);
+                let src = src.pretty_print(op.src_size(), allocs);
+                format!("{} {}, {}", ljustify(op.to_string()), src, dst)
+            }
+
             Inst::XmmUnaryRmRImm {
                 op, src, dst, imm, ..
             } => {
@@ -945,11 +922,6 @@ impl PrettyPrint for Inst {
                 format!("{} {}, {}", ljustify(op.to_string()), src, dst)
             }
 
-            Inst::XmmRmR { op, dst, .. } if self.produces_const() => {
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
-                format!("{} {}, {}, {}", ljustify(op.to_string()), dst, dst, dst)
-            }
-
             Inst::XmmRmR {
                 op,
                 src1,
@@ -961,6 +933,24 @@ impl PrettyPrint for Inst {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
                 let src2 = src2.pretty_print(8, allocs);
                 format!("{} {}, {}, {}", ljustify(op.to_string()), src1, src2, dst)
+            }
+
+            Inst::XmmRmRUnaligned {
+                op,
+                src1,
+                src2,
+                dst,
+                ..
+            } => {
+                let src1 = pretty_print_reg(src1.to_reg(), 8, allocs);
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
+                let src2 = src2.pretty_print(8, allocs);
+                format!("{} {}, {}, {}", ljustify(op.to_string()), src1, src2, dst)
+            }
+
+            Inst::XmmConstOp { op, dst } => {
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
+                format!("{} {dst}, {dst}, {dst}", ljustify(op.to_string()))
             }
 
             Inst::XmmRmRBlend {
@@ -1016,13 +1006,22 @@ impl PrettyPrint for Inst {
                 let src1 = pretty_print_reg(src1.to_reg(), 8, allocs);
                 let src2 = src2.pretty_print(8, allocs);
 
-                format!(
-                    "{} ${imm} {}, {}, {}",
-                    ljustify(op.to_string()),
-                    src1,
-                    src2,
-                    dst
-                )
+                format!("{} ${imm} {src1}, {src2}, {dst}", ljustify(op.to_string()))
+            }
+
+            Inst::XmmVexPinsr {
+                op,
+                src1,
+                src2,
+                dst,
+                imm,
+                ..
+            } => {
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
+                let src1 = pretty_print_reg(src1.to_reg(), 8, allocs);
+                let src2 = src2.pretty_print(8, allocs);
+
+                format!("{} ${imm} {src1}, {src2}, {dst}", ljustify(op.to_string()))
             }
 
             Inst::XmmRmRVex3 {
@@ -1046,6 +1045,22 @@ impl PrettyPrint for Inst {
                     src3,
                     dst
                 )
+            }
+
+            Inst::XmmRmRBlendVex {
+                op,
+                src1,
+                src2,
+                mask,
+                dst,
+                ..
+            } => {
+                let src1 = pretty_print_reg(src1.to_reg(), 8, allocs);
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
+                let src2 = src2.pretty_print(8, allocs);
+                let mask = pretty_print_reg(mask.to_reg(), 8, allocs);
+
+                format!("{} {src1}, {src2}, {mask}, {dst}", ljustify(op.to_string()))
             }
 
             Inst::XmmRmREvex {
@@ -1110,28 +1125,6 @@ impl PrettyPrint for Inst {
             }
 
             Inst::XmmRmRImm {
-                op, dst, imm, size, ..
-            } if self.produces_const() => {
-                let dst = pretty_print_reg(dst.to_reg(), 8, allocs);
-                format!(
-                    "{} ${}, {}, {}, {}",
-                    ljustify(format!(
-                        "{}{}",
-                        op.to_string(),
-                        if *size == OperandSize::Size64 {
-                            ".w"
-                        } else {
-                            ""
-                        }
-                    )),
-                    imm,
-                    dst,
-                    dst,
-                    dst,
-                )
-            }
-
-            Inst::XmmRmRImm {
                 op,
                 src1,
                 src2,
@@ -1140,15 +1133,11 @@ impl PrettyPrint for Inst {
                 size,
                 ..
             } => {
-                let src1 = if op.uses_src1() {
-                    pretty_print_reg(*src1, 8, allocs) + ", "
-                } else {
-                    "".into()
-                };
+                let src1 = pretty_print_reg(*src1, 8, allocs);
                 let dst = pretty_print_reg(dst.to_reg(), 8, allocs);
                 let src2 = src2.pretty_print(8, allocs);
                 format!(
-                    "{} ${}, {}{}, {}",
+                    "{} ${imm}, {src1}, {src2}, {dst}",
                     ljustify(format!(
                         "{}{}",
                         op.to_string(),
@@ -1158,10 +1147,6 @@ impl PrettyPrint for Inst {
                             ""
                         }
                     )),
-                    imm,
-                    src1,
-                    src2,
-                    dst,
                 )
             }
 
@@ -1180,6 +1165,12 @@ impl PrettyPrint for Inst {
                 let src = pretty_print_reg(src.to_reg(), 8, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), dst_size, allocs);
                 format!("{} {}, {}", ljustify(op.to_string()), src, dst)
+            }
+
+            Inst::XmmToGprImm { op, src, dst, imm } => {
+                let src = pretty_print_reg(src.to_reg(), 8, allocs);
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
+                format!("{} ${imm}, {}, {}", ljustify(op.to_string()), src, dst)
             }
 
             Inst::GprToXmm {
@@ -1799,14 +1790,11 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         Inst::AluRmiR {
             src1, src2, dst, ..
         } => {
-            if inst.produces_const() {
-                collector.reg_def(dst.to_writable_reg());
-            } else {
-                collector.reg_use(src1.to_reg());
-                collector.reg_reuse_def(dst.to_writable_reg(), 0);
-                src2.get_operands(collector);
-            }
+            collector.reg_use(src1.to_reg());
+            collector.reg_reuse_def(dst.to_writable_reg(), 0);
+            src2.get_operands(collector);
         }
+        Inst::AluConstOp { dst, .. } => collector.reg_def(dst.to_writable_reg()),
         Inst::AluRM { src1_dst, src2, .. } => {
             collector.reg_use(src2.to_reg());
             src1_dst.get_operands(collector);
@@ -1895,22 +1883,27 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_def(dst.to_writable_reg());
             src.get_operands(collector);
         }
-        Inst::XmmUnaryRmR { src, dst, .. }
-        | Inst::XmmUnaryRmREvex { src, dst, .. }
-        | Inst::XmmUnaryRmRImm { src, dst, .. } => {
+        Inst::XmmUnaryRmR { src, dst, .. } | Inst::XmmUnaryRmRImm { src, dst, .. } => {
+            collector.reg_def(dst.to_writable_reg());
+            src.get_operands(collector);
+        }
+        Inst::XmmUnaryRmREvex { src, dst, .. } | Inst::XmmUnaryRmRUnaligned { src, dst, .. } => {
             collector.reg_def(dst.to_writable_reg());
             src.get_operands(collector);
         }
         Inst::XmmRmR {
             src1, src2, dst, ..
         } => {
-            if inst.produces_const() {
-                collector.reg_def(dst.to_writable_reg());
-            } else {
-                collector.reg_use(src1.to_reg());
-                collector.reg_reuse_def(dst.to_writable_reg(), 0);
-                src2.get_operands(collector);
-            }
+            collector.reg_use(src1.to_reg());
+            collector.reg_reuse_def(dst.to_writable_reg(), 0);
+            src2.get_operands(collector);
+        }
+        Inst::XmmRmRUnaligned {
+            src1, src2, dst, ..
+        } => {
+            collector.reg_use(src1.to_reg());
+            collector.reg_reuse_def(dst.to_writable_reg(), 0);
+            src2.get_operands(collector);
         }
         Inst::XmmRmRBlend {
             src1,
@@ -1943,28 +1936,36 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_use(src1.to_reg());
             src2.get_operands(collector);
         }
+        Inst::XmmVexPinsr {
+            src1, src2, dst, ..
+        } => {
+            collector.reg_def(dst.to_writable_reg());
+            collector.reg_use(src1.to_reg());
+            src2.get_operands(collector);
+        }
         Inst::XmmRmRVex3 {
-            op,
             src1,
             src2,
             src3,
             dst,
             ..
         } => {
-            // Vfmadd uses and defs the dst reg, that is not the case with all
-            // AVX's ops, if you're adding a new op, make sure to correctly define
-            // register uses.
-            assert!(
-                *op == AvxOpcode::Vfmadd213ss
-                    || *op == AvxOpcode::Vfmadd213sd
-                    || *op == AvxOpcode::Vfmadd213ps
-                    || *op == AvxOpcode::Vfmadd213pd
-            );
-
             collector.reg_use(src1.to_reg());
             collector.reg_reuse_def(dst.to_writable_reg(), 0);
             collector.reg_use(src2.to_reg());
             src3.get_operands(collector);
+        }
+        Inst::XmmRmRBlendVex {
+            src1,
+            src2,
+            mask,
+            dst,
+            ..
+        } => {
+            collector.reg_def(dst.to_writable_reg());
+            collector.reg_use(src1.to_reg());
+            src2.get_operands(collector);
+            collector.reg_use(mask.to_reg());
         }
         Inst::XmmRmREvex {
             op,
@@ -1993,25 +1994,14 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             src1.get_operands(collector);
         }
         Inst::XmmRmRImm {
-            op,
-            src1,
-            src2,
-            dst,
-            ..
+            src1, src2, dst, ..
         } => {
-            if inst.produces_const() {
-                collector.reg_def(*dst);
-            } else if !op.uses_src1() {
-                // FIXME: split this instruction into two, so we don't
-                // need this awkward src1-is-only-sometimes-an-arg
-                // behavior.
-                collector.reg_def(*dst);
-                src2.get_operands(collector);
-            } else {
-                collector.reg_use(*src1);
-                collector.reg_reuse_def(*dst, 0);
-                src2.get_operands(collector);
-            }
+            collector.reg_use(*src1);
+            collector.reg_reuse_def(*dst, 0);
+            src2.get_operands(collector);
+        }
+        Inst::XmmConstOp { dst, .. } => {
+            collector.reg_def(dst.to_writable_reg());
         }
         Inst::XmmUninitializedValue { dst } => collector.reg_def(dst.to_writable_reg()),
         Inst::XmmMinMaxSeq { lhs, rhs, dst, .. } => {
@@ -2051,7 +2041,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_use(src.to_reg());
             collector.reg_fixed_nonallocatable(*dst);
         }
-        Inst::XmmToGpr { src, dst, .. } => {
+        Inst::XmmToGpr { src, dst, .. } | Inst::XmmToGprImm { src, dst, .. } => {
             collector.reg_use(src.to_reg());
             collector.reg_def(dst.to_writable_reg());
         }

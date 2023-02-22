@@ -2,7 +2,7 @@
 
 use crate::{
     isa::reg::Reg,
-    masm::{DivKind, OperandSize},
+    masm::{DivKind, OperandSize, RemKind},
 };
 use cranelift_codegen::{
     isa::x64::{
@@ -69,6 +69,15 @@ impl From<DivKind> for DivOrRemKind {
         match kind {
             DivKind::Signed => DivOrRemKind::SignedDiv,
             DivKind::Unsigned => DivOrRemKind::UnsignedDiv,
+        }
+    }
+}
+
+impl From<RemKind> for DivOrRemKind {
+    fn from(kind: RemKind) -> Self {
+        match kind {
+            RemKind::Signed => DivOrRemKind::SignedRem,
+            RemKind::Unsigned => DivOrRemKind::UnsignedRem,
         }
     }
 }
@@ -296,6 +305,26 @@ impl Assembler {
             dst_quotient: dst.0.into(),
             dst_remainder: dst.1.into(),
             tmp: tmp.map(|reg| reg.into()),
+        });
+    }
+
+    /// Signed/unsigned remainder.
+    ///
+    /// Emits a sequence of instructions to ensure the correctness of the
+    /// division invariants and ultimately calculate the remainder.
+    /// This function assumes that the
+    /// caller has correctly allocated the dividend as `(rdx:rax)` and
+    /// accounted for the remainder to be stored in `rdx`.
+    pub fn rem(&mut self, divisor: Reg, dst: (Reg, Reg), kind: RemKind, size: OperandSize) {
+        self.emit(Inst::CheckedDivOrRemSeq {
+            kind: kind.into(),
+            size: size.into(),
+            divisor: divisor.into(),
+            dividend_lo: dst.0.into(),
+            dividend_hi: dst.1.into(),
+            dst_quotient: dst.0.into(),
+            dst_remainder: dst.1.into(),
+            tmp: None,
         });
     }
 

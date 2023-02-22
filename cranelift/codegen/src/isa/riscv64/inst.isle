@@ -213,6 +213,7 @@
     (BrTable
       (index Reg)
       (tmp1 WritableReg)
+      (tmp2 WritableReg)
       (targets VecBranchTarget))
 
     ;; atomic compare and set operation
@@ -530,39 +531,44 @@
   (RemU)
 
   ;; RV64M Standard Extension (in addition to RV32M)
-
   (Mulw)
   (Divw)
   (Divuw)
   (Remw)
   (Remuw)
 
-  ;; bitmapip
+  ;; Zba: Address Generation Instructions
   (Adduw)
-  (Andn)
-  (Bclr)
-  (Bext)
-  (Binv)
-  (Bset)
-  (Clmul)
-  (Clmulh)
-  (Clmulr)
-  (Max)
-  (Maxu)
-  (Min)
-  (Minu)
-  (Orn)
-  (Rol)
-  (Rolw)
-  (Ror)
-  (Rorw)
   (Sh1add)
   (Sh1adduw)
   (Sh2add)
   (Sh2adduw)
   (Sh3add)
   (Sh3adduw)
+
+  ;; Zbb: Bit Manipulation Instructions
+  (Andn)
+  (Orn)
   (Xnor)
+  (Max)
+  (Maxu)
+  (Min)
+  (Minu)
+  (Rol)
+  (Rolw)
+  (Ror)
+  (Rorw)
+
+  ;; Zbs: Single-bit instructions
+  (Bclr)
+  (Bext)
+  (Binv)
+  (Bset)
+
+  ;; Zbc: Carry-less multiplication
+  (Clmul)
+  (Clmulh)
+  (Clmulr)
 ))
 
 
@@ -600,6 +606,7 @@
 
 
 (type AluOPRRI (enum
+  ;; Base ISA
   (Addi)
   (Slti)
   (SltiU)
@@ -613,25 +620,31 @@
   (Slliw)
   (SrliW)
   (Sraiw)
+
+  ;; Zba: Address Generation Instructions
+  (SlliUw)
+
+  ;; Zbb: Bit Manipulation Instructions
+  (Clz)
+  (Clzw)
+  (Ctz)
+  (Ctzw)
+  (Cpop)
+  (Cpopw)
+  (Sextb)
+  (Sexth)
+  (Zexth)
+  (Rori)
+  (Roriw)
+  (Rev8)
+  (Brev8)
+  (Orcb)
+
+  ;; Zbs: Single-bit instructions
   (Bclri)
   (Bexti)
   (Binvi)
   (Bseti)
-  (Rori)
-  (Roriw)
-  (SlliUw)
-  (Clz)
-  (Clzw)
-  (Cpop)
-  (Cpopw)
-  (Ctz)
-  (Ctzw)
-  (Rev8)
-  (Sextb)
-  (Sexth)
-  (Zexth)
-  (Orcb)
-  (Brev8)
 ))
 
 
@@ -693,6 +706,23 @@
 (type VecU8 (primitive VecU8))
 (type AMO (primitive AMO))
 (type VecMachLabel extern (enum))
+
+;; ISA Extension helpers
+
+(decl pure has_zbkb () bool)
+(extern constructor has_zbkb has_zbkb)
+
+(decl pure has_zba () bool)
+(extern constructor has_zba has_zba)
+
+(decl pure has_zbb () bool)
+(extern constructor has_zbb has_zbb)
+
+(decl pure has_zbc () bool)
+(extern constructor has_zbc has_zbc)
+
+(decl pure has_zbs () bool)
+(extern constructor has_zbs has_zbs)
 
 ;; Helper for creating the zero register.
 (decl zero_reg () Reg)
@@ -907,22 +937,24 @@
 (decl lower_ctz (Type Reg) Reg)
 (rule
   (lower_ctz ty x)
-  (if-let $false (has_b))
+  (if-let $false (has_zbb))
   (gen_cltz $false x ty))
 
 (rule 2
   (lower_ctz $I64 x)
-  (if-let $true (has_b))
+  (if-let $true (has_zbb))
   (alu_rr_funct12 (AluOPRRI.Ctz) x))
 
 (rule 2
   (lower_ctz $I32 x)
-  (if-let $true (has_b))
+  (if-let $true (has_zbb))
   (alu_rr_funct12 (AluOPRRI.Ctzw) x))
+
 ;;;; for I8 and I16
 (rule 1
   (lower_ctz ty x)
-  (if-let $true (has_b))
+  (if-let $true (has_zbb))
+  (if-let $true (has_zbs))
   (let
     ((tmp Reg (alu_rr_imm12 (AluOPRRI.Bseti) x (imm12_const (ty_bits ty)))))
     (alu_rr_funct12 (AluOPRRI.Ctzw) x)))
@@ -953,21 +985,21 @@
 (decl lower_clz (Type Reg) Reg)
 (rule
   (lower_clz ty rs)
-  (if-let $false (has_b))
+  (if-let $false (has_zbb))
   (gen_cltz $true rs ty))
 (rule 2
   (lower_clz $I64 r)
-  (if-let $true (has_b))
+  (if-let $true (has_zbb))
   (alu_rr_funct12 (AluOPRRI.Clz) r))
 (rule 2
   (lower_clz $I32 r)
-  (if-let $true (has_b))
+  (if-let $true (has_zbb))
   (alu_rr_funct12 (AluOPRRI.Clzw) r))
 
 ;;; for I8 and I16
 (rule 1
   (lower_clz ty r)
-  (if-let $true (has_b))
+  (if-let $true (has_zbb))
   (let
     ( ;; narrow int make all upper bits are zeros.
       (tmp Reg (ext_int_if_need $false r ty ))
@@ -1077,30 +1109,26 @@
     (alu_rr_imm12 (AluOPRRI.Srli) tmp (imm12_const (ty_bits ty)))))
 
 
-;;; has extension B??
-(decl pure has_b () bool)
-(extern constructor has_b has_b)
-
 (decl lower_rotl (Type Reg Reg) Reg)
 
 (rule 1
   (lower_rotl $I64 rs amount)
-  (if-let $true (has_b))
+  (if-let $true (has_zbb))
   (alu_rrr (AluOPRRR.Rol) rs amount))
 
 (rule
   (lower_rotl $I64 rs amount)
-  (if-let $false (has_b))
+  (if-let $false (has_zbb))
   (lower_rotl_shift $I64 rs amount))
 
 (rule 1
   (lower_rotl $I32 rs amount)
-  (if-let $true (has_b))
+  (if-let $true (has_zbb))
   (alu_rrr (AluOPRRR.Rolw) rs amount))
 
 (rule
   (lower_rotl $I32 rs amount)
-  (if-let $false (has_b))
+  (if-let $false (has_zbb))
   (lower_rotl_shift $I32 rs amount))
 
 (rule -1
@@ -1135,21 +1163,21 @@
 
 (rule 1
   (lower_rotr $I64 rs amount)
-  (if-let $true (has_b))
+  (if-let $true (has_zbb))
   (alu_rrr (AluOPRRR.Ror) rs amount))
 (rule
   (lower_rotr $I64 rs amount)
-  (if-let $false (has_b))
+  (if-let $false (has_zbb))
   (lower_rotr_shift $I64 rs amount))
 
 (rule 1
   (lower_rotr $I32 rs amount)
-  (if-let $true (has_b))
+  (if-let $true (has_zbb))
   (alu_rrr (AluOPRRR.Rorw) rs amount))
 
 (rule
   (lower_rotr $I32 rs amount)
-  (if-let $false (has_b))
+  (if-let $false (has_zbb))
   (lower_rotr_shift $I32 rs amount))
 
 (rule -1
@@ -1207,10 +1235,10 @@
 
 (decl lower_popcnt (Reg Type) Reg)
 (rule 1 (lower_popcnt rs ty )
-  (if-let $true (has_b))
+  (if-let $true (has_zbb))
   (alu_rr_funct12 (AluOPRRI.Cpop) (ext_int_if_need $false rs ty)))
 (rule (lower_popcnt rs ty)
-  (if-let $false (has_b))
+  (if-let $false (has_zbb))
   (gen_popcnt rs ty))
 
 (decl lower_popcnt_i128 (ValueRegs) ValueRegs)
@@ -1961,12 +1989,12 @@
 (decl gen_rev8 (Reg) Reg)
 (rule 1
   (gen_rev8 rs)
-  (if-let $true (has_b))
+  (if-let $true (has_zbb))
   (alu_rr_funct12 (AluOPRRI.Rev8) rs))
 
 (rule
   (gen_rev8 rs)
-  (if-let $false (has_b))
+  (if-let $false (has_zbb))
   (let
     ((rd WritableReg (temp_writable_reg $I64))
       (tmp WritableReg (temp_writable_reg $I64))
@@ -1974,11 +2002,6 @@
       (_ Unit (emit (MInst.Rev8 rs step tmp rd))))
     (writable_reg_to_reg rd)))
 
-(decl pure has_zbkb () bool)
-(extern constructor has_zbkb has_zbkb)
-
-(decl pure has_zbb () bool)
-(extern constructor has_zbb has_zbb)
 
 (decl gen_brev8 (Reg Type) Reg)
 (rule 1

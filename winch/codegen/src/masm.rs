@@ -13,6 +13,14 @@ pub(crate) enum DivKind {
     Unsigned,
 }
 
+/// Remainder kind.
+pub(crate) enum RemKind {
+    /// Signed remainder.
+    Signed,
+    /// Unsigned remainder.
+    Unsigned,
+}
+
 /// Operand size, in bits.
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub(crate) enum OperandSize {
@@ -115,6 +123,9 @@ pub(crate) trait MacroAssembler {
     /// the `CodeGenContext::i32_binop` or `CodeGenContext::i64_binop`
     /// functions.
     fn div(&mut self, context: &mut CodeGenContext, kind: DivKind, size: OperandSize);
+
+    /// Calculate remainder.
+    fn rem(&mut self, context: &mut CodeGenContext, kind: RemKind, size: OperandSize);
 
     /// Push the register to the stack, returning the offset.
     fn push(&mut self, src: Reg) -> u32;

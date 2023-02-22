@@ -5,7 +5,7 @@
 //! machine code emitter.
 
 use crate::codegen::CodeGen;
-use crate::masm::{DivKind, MacroAssembler, OperandSize, RegImm};
+use crate::masm::{DivKind, MacroAssembler, OperandSize, RegImm, RemKind};
 use crate::stack::Val;
 use wasmparser::ValType;
 use wasmparser::VisitOperator;
@@ -41,6 +41,10 @@ macro_rules! def_unsupported {
     (emit I32DivU $($rest:tt)*) => {};
     (emit I64DivS $($rest:tt)*) => {};
     (emit I64DivU $($rest:tt)*) => {};
+    (emit I64RemU $($rest:tt)*) => {};
+    (emit I64RemS $($rest:tt)*) => {};
+    (emit I32RemU $($rest:tt)*) => {};
+    (emit I32RemS $($rest:tt)*) => {};
     (emit I64Mul $($rest:tt)*) => {};
     (emit I64Sub $($rest:tt)*) => {};
     (emit LocalGet $($rest:tt)*) => {};
@@ -132,6 +136,34 @@ where
         use OperandSize::*;
 
         self.masm.div(&mut self.context, Unsigned, S64);
+    }
+
+    fn visit_i32_rem_s(&mut self) {
+        use OperandSize::*;
+        use RemKind::*;
+
+        self.masm.rem(&mut self.context, Signed, S32);
+    }
+
+    fn visit_i32_rem_u(&mut self) {
+        use OperandSize::*;
+        use RemKind::*;
+
+        self.masm.rem(&mut self.context, Unsigned, S32);
+    }
+
+    fn visit_i64_rem_s(&mut self) {
+        use OperandSize::*;
+        use RemKind::*;
+
+        self.masm.rem(&mut self.context, Signed, S64);
+    }
+
+    fn visit_i64_rem_u(&mut self) {
+        use OperandSize::*;
+        use RemKind::*;
+
+        self.masm.rem(&mut self.context, Unsigned, S64);
     }
 
     fn visit_end(&mut self) {}

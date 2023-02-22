@@ -86,7 +86,7 @@ block0(v0: i64x2):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pextrd.w $1, %xmm0, %rax
+;   pextrq  $1, %xmm0, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
