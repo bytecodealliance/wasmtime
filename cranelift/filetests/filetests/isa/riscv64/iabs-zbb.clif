@@ -16,8 +16,7 @@ block0(v0: i8):
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli t2, a0, 0x38
-;   srai t2, t2, 0x38
+;   .byte 0x93, 0x13, 0x45, 0x60
 ;   neg a1, t2
 ;   .byte 0x33, 0xe5, 0xb3, 0x0a
 ;   ret
@@ -37,8 +36,7 @@ block0(v0: i16):
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli t2, a0, 0x30
-;   srai t2, t2, 0x30
+;   .byte 0x93, 0x13, 0x55, 0x60
 ;   neg a1, t2
 ;   .byte 0x33, 0xe5, 0xb3, 0x0a
 ;   ret
@@ -58,8 +56,7 @@ block0(v0: i32):
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli t2, a0, 0x20
-;   srai t2, t2, 0x20
+;   sext.w t2, a0
 ;   neg a1, t2
 ;   .byte 0x33, 0xe5, 0xb3, 0x0a
 ;   ret

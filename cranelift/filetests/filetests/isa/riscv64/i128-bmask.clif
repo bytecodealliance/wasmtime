@@ -150,7 +150,7 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   addiw t2,a0,0
+;   sext.w t2,a0
 ;   li a1,-1
 ;   select_reg a1,zero,a1##condition=(zero eq t2)
 ;   mv a0,a1
