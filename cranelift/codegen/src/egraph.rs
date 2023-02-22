@@ -305,8 +305,9 @@ impl<'opt> OptimizeCtx<'opt> {
                 to_block: Block,
             ) {
                 cfg.remove_edge(from_block, inst, to_block);
-                if cfg.pred_iter(to_block).count() == 0
-                    || loop_analysis.is_loop_header(to_block).is_some()
+                let pred_count = cfg.pred_iter(to_block).count();
+                if pred_count == 0
+                    || (pred_count == 1 && loop_analysis.is_loop_header(to_block).is_some())
                 {
                     // not_taken_block is now unreachable
                     domtree.set_unreachable(to_block);
