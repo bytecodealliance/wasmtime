@@ -132,7 +132,7 @@ async fn run_time(mut store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
         }
 
         fn now(&self) -> Duration {
-            Duration::from_secs(1431648000)
+            Duration::new(1431648000, 100)
         }
 
         fn dup(&self) -> Box<dyn WasiWallClock + Send + Sync> {
