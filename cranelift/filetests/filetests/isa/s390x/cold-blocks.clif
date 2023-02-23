@@ -1,0 +1,142 @@
+test compile precise-output
+
+target s390x
+
+function %no_cold_annotation(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 0x1234
+    v2 = iadd v0, v1
+    brif v2, block1(v2), block2
+
+block1(v3: i32):
+    v4 = isub v2, v1
+    v5 = iadd v4, v3
+    brif v2, block2, block3(v5)
+
+block2:
+    v6 = iadd v2, v1
+    brif v6, block2, block1(v6)
+
+block3(v7: i32):
+    return v7
+}
+
+; VCode:
+; block0:
+;   ahik %r4, %r2, 4660
+;   chi %r4, 0
+;   jglh label1 ; jg label2
+; block1:
+;   lgr %r3, %r4
+;   jg label3
+; block2:
+;   jg label6
+; block3:
+;   ahik %r5, %r4, -4660
+;   ark %r2, %r5, %r3
+;   chi %r4, 0
+;   jglh label4 ; jg label5
+; block4:
+;   jg label6
+; block5:
+;   br %r14
+; block6:
+;   ahik %r3, %r4, 4660
+;   chi %r3, 0
+;   jglh label7 ; jg label8
+; block7:
+;   jg label6
+; block8:
+;   jg label3
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   ahik %r4, %r2, 0x1234
+;   chi %r4, 0
+;   jgnlh 0x2a
+; block1: ; offset 0x10
+;   lgr %r3, %r4
+; block2: ; offset 0x14
+;   ahik %r5, %r4, -0x1234
+;   ark %r2, %r5, %r3
+;   chi %r4, 0
+;   jglh 0x2a
+; block3: ; offset 0x28
+;   br %r14
+; block4: ; offset 0x2a
+;   ahik %r3, %r4, 0x1234
+;   chi %r3, 0
+;   jglh 0x2a
+; block5: ; offset 0x3a
+;   jg 0x14
+
+function %with_cold_annotation(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 0x1234
+    v2 = iadd v0, v1
+    brif v2, block1(v2), block2
+
+block1(v3: i32):
+    v4 = isub v2, v1
+    v5 = iadd v4, v3
+    brif v2, block2, block3(v5)
+
+block2 cold:
+    v6 = iadd v2, v1
+    brif v6, block2, block1(v6)
+
+block3(v7: i32):
+    return v7
+}
+
+; VCode:
+; block0:
+;   ahik %r4, %r2, 4660
+;   chi %r4, 0
+;   jglh label1 ; jg label2
+; block1:
+;   lgr %r3, %r4
+;   jg label3
+; block3:
+;   ahik %r5, %r4, -4660
+;   ark %r2, %r5, %r3
+;   chi %r4, 0
+;   jglh label4 ; jg label5
+; block5:
+;   br %r14
+; block8:
+;   jg label3
+; block2:
+;   jg label6
+; block4:
+;   jg label6
+; block6:
+;   ahik %r3, %r4, 4660
+;   chi %r3, 0
+;   jglh label7 ; jg label8
+; block7:
+;   jg label6
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   ahik %r4, %r2, 0x1234
+;   chi %r4, 0
+;   jgnlh 0x30
+; block1: ; offset 0x10
+;   lgr %r3, %r4
+; block2: ; offset 0x14
+;   ahik %r5, %r4, -0x1234
+;   ark %r2, %r5, %r3
+;   chi %r4, 0
+;   jglh 0x30
+; block3: ; offset 0x28
+;   br %r14
+; block4: ; offset 0x2a
+;   jg 0x14
+; block5: ; offset 0x30
+;   ahik %r3, %r4, 0x1234
+;   chi %r3, 0
+;   jgnlh 0x14
+; block6: ; offset 0x40
+;   jg 0x30
+

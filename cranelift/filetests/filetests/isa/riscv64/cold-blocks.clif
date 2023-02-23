@@ -1,0 +1,166 @@
+test compile precise-output
+
+target riscv64
+
+function %no_cold_annotation(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 0x1234
+    v2 = iadd v0, v1
+    brif v2, block1(v2), block2
+
+block1(v3: i32):
+    v4 = isub v2, v1
+    v5 = iadd v4, v3
+    brif v2, block2, block3(v5)
+
+block2:
+    v6 = iadd v2, v1
+    brif v6, block2, block1(v6)
+
+block3(v7: i32):
+    return v7
+}
+
+; VCode:
+; block0:
+;   lui a1,1
+;   addi a1,a1,564
+;   addw a3,a0,a1
+;   sext.w a1,a3
+;   bne a1,zero,taken(label1),not_taken(label2)
+; block1:
+;   mv a4,a3
+;   j label3
+; block2:
+;   j label6
+; block3:
+;   lui a2,1
+;   addi a2,a2,564
+;   subw a5,a3,a2
+;   addw a0,a5,a4
+;   sext.w a4,a3
+;   bne a4,zero,taken(label4),not_taken(label5)
+; block4:
+;   j label6
+; block5:
+;   ret
+; block6:
+;   lui a5,1
+;   addi a5,a5,564
+;   addw a4,a3,a5
+;   sext.w a6,a4
+;   bne a6,zero,taken(label7),not_taken(label8)
+; block7:
+;   j label6
+; block8:
+;   j label3
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a1, 1
+;   addi a1, a1, 0x234
+;   addw a3, a0, a1
+;   sext.w a1, a3
+;   beqz a1, 0x24
+; block1: ; offset 0x14
+;   ori a4, a3, 0
+; block2: ; offset 0x18
+;   lui a2, 1
+;   addi a2, a2, 0x234
+;   subw a5, a3, a2
+;   addw a0, a5, a4
+;   sext.w a4, a3
+;   bnez a4, 8
+; block3: ; offset 0x30
+;   ret
+; block4: ; offset 0x34
+;   lui a5, 1
+;   addi a5, a5, 0x234
+;   addw a4, a3, a5
+;   sext.w a6, a4
+;   bnez a6, -0x10
+; block5: ; offset 0x48
+;   j -0x30
+
+function %with_cold_annotation(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 0x1234
+    v2 = iadd v0, v1
+    brif v2, block1(v2), block2
+
+block1(v3: i32):
+    v4 = isub v2, v1
+    v5 = iadd v4, v3
+    brif v2, block2, block3(v5)
+
+block2 cold:
+    v6 = iadd v2, v1
+    brif v6, block2, block1(v6)
+
+block3(v7: i32):
+    return v7
+}
+
+; VCode:
+; block0:
+;   lui a1,1
+;   addi a1,a1,564
+;   addw a3,a0,a1
+;   sext.w a1,a3
+;   bne a1,zero,taken(label1),not_taken(label2)
+; block1:
+;   mv a4,a3
+;   j label3
+; block3:
+;   lui a2,1
+;   addi a2,a2,564
+;   subw a5,a3,a2
+;   addw a0,a5,a4
+;   sext.w a4,a3
+;   bne a4,zero,taken(label4),not_taken(label5)
+; block5:
+;   ret
+; block8:
+;   j label3
+; block2:
+;   j label6
+; block4:
+;   j label6
+; block6:
+;   lui a5,1
+;   addi a5,a5,564
+;   addw a4,a3,a5
+;   sext.w a6,a4
+;   bne a6,zero,taken(label7),not_taken(label8)
+; block7:
+;   j label6
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a1, 1
+;   addi a1, a1, 0x234
+;   addw a3, a0, a1
+;   sext.w a1, a3
+;   beqz a1, 0x28
+; block1: ; offset 0x14
+;   ori a4, a3, 0
+; block2: ; offset 0x18
+;   lui a2, 1
+;   addi a2, a2, 0x234
+;   subw a5, a3, a2
+;   addw a0, a5, a4
+;   sext.w a4, a3
+;   bnez a4, 0xc
+; block3: ; offset 0x30
+;   ret
+; block4: ; offset 0x34
+;   j -0x1c
+; block5: ; offset 0x38
+;   lui a5, 1
+;   addi a5, a5, 0x234
+;   addw a4, a3, a5
+;   sext.w a6, a4
+;   beqz a6, -0x30
+; block6: ; offset 0x4c
+;   j -0x14
+

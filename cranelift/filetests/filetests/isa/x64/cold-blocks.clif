@@ -1,0 +1,172 @@
+test compile precise-output
+
+target x86_64
+
+function %no_cold_annotation(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 0x1234
+    v2 = iadd v0, v1
+    brif v2, block1(v2), block2
+
+block1(v3: i32):
+    v4 = isub v2, v1
+    v5 = iadd v4, v3
+    brif v2, block2, block3(v5)
+
+block2:
+    v6 = iadd v2, v1
+    brif v6, block2, block1(v6)
+
+block3(v7: i32):
+    return v7
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %r11
+;   addl    %r11d, $4660, %r11d
+;   testl   %r11d, %r11d
+;   jnz     label1; j label2
+; block1:
+;   movq    %r11, %r8
+;   jmp     label3
+; block2:
+;   jmp     label6
+; block3:
+;   movq    %r11, %rax
+;   subl    %eax, $4660, %eax
+;   addl    %eax, %r8d, %eax
+;   testl   %r11d, %r11d
+;   jnz     label4; j label5
+; block4:
+;   jmp     label6
+; block5:
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block6:
+;   movq    %r11, %r8
+;   addl    %r8d, $4660, %r8d
+;   testl   %r8d, %r8d
+;   jnz     label7; j label8
+; block7:
+;   jmp     label6
+; block8:
+;   jmp     label3
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %r11
+;   addl $0x1234, %r11d
+;   testl %r11d, %r11d
+;   je 0x34
+; block2: ; offset 0x17
+;   movq %r11, %r8
+; block3: ; offset 0x1a
+;   movq %r11, %rax
+;   subl $0x1234, %eax
+;   addl %r8d, %eax
+;   testl %r11d, %r11d
+;   jne 0x34
+; block4: ; offset 0x2f
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block5: ; offset 0x34
+;   movq %r11, %r8
+;   addl $0x1234, %r8d
+;   testl %r8d, %r8d
+;   jne 0x34
+; block6: ; offset 0x47
+;   jmp 0x1a
+
+function %with_cold_annotation(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 0x1234
+    v2 = iadd v0, v1
+    brif v2, block1(v2), block2
+
+block1(v3: i32):
+    v4 = isub v2, v1
+    v5 = iadd v4, v3
+    brif v2, block2, block3(v5)
+
+block2 cold:
+    v6 = iadd v2, v1
+    brif v6, block2, block1(v6)
+
+block3(v7: i32):
+    return v7
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %r11
+;   addl    %r11d, $4660, %r11d
+;   testl   %r11d, %r11d
+;   jnz     label1; j label2
+; block1:
+;   movq    %r11, %r8
+;   jmp     label3
+; block3:
+;   movq    %r11, %rax
+;   subl    %eax, $4660, %eax
+;   addl    %eax, %r8d, %eax
+;   testl   %r11d, %r11d
+;   jnz     label4; j label5
+; block5:
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block8:
+;   jmp     label3
+; block2:
+;   jmp     label6
+; block4:
+;   jmp     label6
+; block6:
+;   movq    %r11, %r8
+;   addl    %r8d, $4660, %r8d
+;   testl   %r8d, %r8d
+;   jnz     label7; j label8
+; block7:
+;   jmp     label6
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %r11
+;   addl $0x1234, %r11d
+;   testl %r11d, %r11d
+;   je 0x39
+; block2: ; offset 0x17
+;   movq %r11, %r8
+; block3: ; offset 0x1a
+;   movq %r11, %rax
+;   subl $0x1234, %eax
+;   addl %r8d, %eax
+;   testl %r11d, %r11d
+;   jne 0x39
+; block4: ; offset 0x2f
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block5: ; offset 0x34
+;   jmp 0x1a
+; block6: ; offset 0x39
+;   movq %r11, %r8
+;   addl $0x1234, %r8d
+;   testl %r8d, %r8d
+;   je 0x1a
+; block7: ; offset 0x4c
+;   jmp 0x39
+
