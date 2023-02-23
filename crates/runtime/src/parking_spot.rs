@@ -119,7 +119,7 @@ impl ParkingSpot {
                 // agents as returned from the `unpark` return value.
                 //
                 // Note that this may actually prevent other threads from
-                // getting unaprked. For example:
+                // getting unparked. For example:
                 //
                 // * Thread A parks with a timeout
                 // * Thread B parks with no timeout
