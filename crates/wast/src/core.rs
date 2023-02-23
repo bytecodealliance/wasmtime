@@ -72,11 +72,15 @@ pub fn match_val(actual: &Val, expected: &WastRetCore) -> Result<()> {
                 bail!("expected non-null externref, found null")
             }
         }
-        (Val::FuncRef(x), WastRetCore::RefNull(_)) => {
-            if x.is_none() {
-                Ok(())
-            } else {
-                bail!("expected null funcref, found non-null")
+        (Val::FuncRef(actual), WastRetCore::RefNull(expected)) => {
+            // TODO(dhil): I spelled out a few cases to understand
+            // what's going on. Should probably be removed/simplified
+            // before merge.
+            match (actual, expected) {
+                (None, None) => Ok(()),
+                (None, Some(HeapType::Func)) => Ok(()),
+                (None, Some(_)) => bail!("expected null non-funcref, found null funcref"),
+                (Some(_), _) => bail!("expected null funcref, found non-null"),
             }
         }
         (Val::FuncRef(x), WastRetCore::RefFunc(_)) => {
