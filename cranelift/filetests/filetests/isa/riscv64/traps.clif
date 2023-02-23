@@ -27,10 +27,10 @@ block0(v0: i64):
 ; block0:
 ;   li t2,42
 ;   eq a1,a0,t2##ty=i64
-;   bne a1,zero,taken(label1),not_taken(label2)
-; block2:
-;   ret
+;   bne a1,zero,taken(label2),not_taken(label1)
 ; block1:
+;   ret
+; block2:
 ;   udf##trap_code=user0
 ; 
 ; Disassembled:

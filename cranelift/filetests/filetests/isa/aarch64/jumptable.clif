@@ -31,59 +31,48 @@ block5(v5: i32):
 ; block0:
 ;   emit_island 44
 ;   subs wzr, w0, #3
-;   b.hs label1 ; csel x15, xzr, x0, hs ; csdb ; adr x14, pc+16 ; ldrsw x15, [x14, x15, uxtw #2] ; add x14, x14, x15 ; br x14 ; jt_entries [Label(MachLabel(3)), Label(MachLabel(5)), Label(MachLabel(7))]
+;   b.hs label4 ; csel x11, xzr, x0, hs ; csdb ; adr x10, pc+16 ; ldrsw x11, [x10, x11, uxtw #2] ; add x10, x10, x11 ; br x10 ; jt_entries [Label(MachLabel(3)), Label(MachLabel(2)), Label(MachLabel(1))]
 ; block1:
-;   movz w5, #4
-;   b label2
+;   movz w5, #3
+;   b label5
 ; block2:
-;   b label9
+;   movz w5, #2
+;   b label5
 ; block3:
 ;   movz w5, #1
-;   b label4
+;   b label5
 ; block4:
-;   b label9
+;   movz w5, #4
+;   b label5
 ; block5:
-;   movz w5, #2
-;   b label6
-; block6:
-;   b label9
-; block7:
-;   movz w5, #3
-;   b label8
-; block8:
-;   b label9
-; block9:
 ;   add w0, w0, w5
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cmp w0, #3
-;   b.hs #0x2c
-;   csel x15, xzr, x0, hs
+;   b.hs #0x44
+;   csel x11, xzr, x0, hs
 ;   csdb
-;   adr x14, #0x20
-;   ldrsw x15, [x14, w15, uxtw #2]
-;   add x14, x14, x15
-;   br x14
-;   .byte 0x14, 0x00, 0x00, 0x00
+;   adr x10, #0x20
+;   ldrsw x11, [x10, w11, uxtw #2]
+;   add x10, x10, x11
+;   br x10
 ;   .byte 0x1c, 0x00, 0x00, 0x00
-;   .byte 0x24, 0x00, 0x00, 0x00
+;   .byte 0x14, 0x00, 0x00, 0x00
+;   .byte 0x0c, 0x00, 0x00, 0x00
 ; block1: ; offset 0x2c
-;   mov w5, #4
-; block2: ; offset 0x30
-;   b #0x48
-; block3: ; offset 0x34
-;   mov w5, #1
-; block4: ; offset 0x38
-;   b #0x48
-; block5: ; offset 0x3c
-;   mov w5, #2
-; block6: ; offset 0x40
-;   b #0x48
-; block7: ; offset 0x44
 ;   mov w5, #3
-; block8: ; offset 0x48
+;   b #0x48
+; block2: ; offset 0x34
+;   mov w5, #2
+;   b #0x48
+; block3: ; offset 0x3c
+;   mov w5, #1
+;   b #0x48
+; block4: ; offset 0x44
+;   mov w5, #4
+; block5: ; offset 0x48
 ;   add w0, w0, w5
 ;   ret
 

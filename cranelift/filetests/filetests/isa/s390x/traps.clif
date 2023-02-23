@@ -42,10 +42,10 @@ block0(v0: i64):
 ; VCode:
 ; block0:
 ;   clgfi %r2, 42
-;   jge label1 ; jg label2
-; block1:
-;   br %r14
+;   jge label2 ; jg label1
 ; block2:
+;   br %r14
+; block1:
 ;   trap
 ; 
 ; Disassembled:
@@ -68,10 +68,10 @@ block0(v0: i64):
 ; VCode:
 ; block0:
 ;   clgfi %r2, 42
-;   jge label1 ; jg label2
-; block2:
-;   br %r14
+;   jge label2 ; jg label1
 ; block1:
+;   br %r14
+; block2:
 ;   trap
 ; 
 ; Disassembled:
@@ -94,10 +94,10 @@ block0(v0: i64):
 ; VCode:
 ; block0:
 ;   clgfi %r2, 42
-;   jge label1 ; jg label2
-; block2:
-;   br %r14
+;   jge label2 ; jg label1
 ; block1:
+;   br %r14
+; block2:
 ;   trap
 ; 
 ; Disassembled:
