@@ -3361,7 +3361,7 @@ dependencies = [
 [[package]]
 name = "wasmparser"
 version = "0.101.0"
-source = "git+https://github.com/bytecodealliance/wasm-tools#673e74b53813104ad247307ba034f06600ba04ab"
+source = "git+https://github.com/bytecodealliance/wasm-tools#4ee705fbb5600ae51ec3192b5a1cbf8f67bfda95"
 dependencies = [
  "indexmap",
  "url",
