@@ -79,11 +79,11 @@ pub fn match_val(actual: &Val, expected: &WastRetCore) -> Result<()> {
                 bail!("expected null funcref, found non-null")
             }
         }
-        (Val::FuncRef(x), WastRetCore::RefFunc(y)) => {
-            if x.is_none() && y.is_none() {
-                Ok(())
+        (Val::FuncRef(x), WastRetCore::RefFunc(_)) => {
+            if x.is_none() {
+                bail!("expected non-null funcref, found null");
             } else {
-                bail!("expected null funcref, found non-null")
+                Ok(())
             }
         }
         _ => bail!(
