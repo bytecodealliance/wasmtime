@@ -628,21 +628,21 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     #[inline]
     fn i64_from_negated_value(&mut self, val: Value) -> Option<i64> {
         let constant = self.u64_from_signed_value(val)? as i64;
-        let imm = -constant;
+        let imm = constant.wrapping_neg();
         Some(imm)
     }
 
     #[inline]
     fn i32_from_negated_value(&mut self, val: Value) -> Option<i32> {
         let constant = self.u64_from_signed_value(val)? as i64;
-        let imm = i32::try_from(-constant).ok()?;
+        let imm = i32::try_from(constant.wrapping_neg()).ok()?;
         Some(imm)
     }
 
     #[inline]
     fn i16_from_negated_value(&mut self, val: Value) -> Option<i16> {
         let constant = self.u64_from_signed_value(val)? as i64;
-        let imm = i16::try_from(-constant).ok()?;
+        let imm = i16::try_from(constant.wrapping_neg()).ok()?;
         Some(imm)
     }
 
