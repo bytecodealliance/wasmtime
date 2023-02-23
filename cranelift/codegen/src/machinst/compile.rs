@@ -1,5 +1,6 @@
 //! Compilation backend pipeline: optimized IR to VCode / binemit.
 
+use crate::dominator_tree::DominatorTree;
 use crate::ir::Function;
 use crate::isa::TargetIsa;
 use crate::machinst::*;
@@ -12,6 +13,7 @@ use regalloc2::RegallocOptions;
 /// for binary emission.
 pub fn compile<B: LowerBackend + TargetIsa>(
     f: &Function,
+    domtree: &DominatorTree,
     b: &B,
     abi: Callee<<<B as LowerBackend>::MInst as MachInst>::ABIMachineSpec>,
     emit_info: <B::MInst as MachInstEmit>::Info,
@@ -20,7 +22,7 @@ pub fn compile<B: LowerBackend + TargetIsa>(
     let machine_env = b.machine_env();
 
     // Compute lowered block order.
-    let block_order = BlockLoweringOrder::new(f);
+    let block_order = BlockLoweringOrder::new(f, domtree);
 
     // Build the lowering context.
     let lower = crate::machinst::Lower::new(f, machine_env, abi, emit_info, block_order, sigs)?;

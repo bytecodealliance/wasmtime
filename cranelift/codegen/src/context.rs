@@ -140,7 +140,7 @@ impl Context {
 
         self.optimize(isa)?;
 
-        isa.compile_function(&self.func, self.want_disasm)
+        isa.compile_function(&self.func, &self.domtree, self.want_disasm)
     }
 
     /// Optimize the function, performing all compilation steps up to

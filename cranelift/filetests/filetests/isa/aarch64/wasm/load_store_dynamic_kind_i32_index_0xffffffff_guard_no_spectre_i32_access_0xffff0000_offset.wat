@@ -47,16 +47,16 @@
 ;;   b.lo 8 ; udf
 ;;   ldr x12, [x2, #8]
 ;;   subs xzr, x11, x12
-;;   b.hi label1 ; b label2
-;; block2:
-;;   ldr x14, [x2]
-;;   movz x15, #65535, LSL #16
-;;   add x14, x15, x14
-;;   str w1, [x14, w0, UXTW]
-;;   b label3
-;; block3:
-;;   ret
+;;   b.hi label3 ; b label1
 ;; block1:
+;;   ldr x13, [x2]
+;;   movz x14, #65535, LSL #16
+;;   add x13, x14, x13
+;;   str w1, [x13, w0, UXTW]
+;;   b label2
+;; block2:
+;;   ret
+;; block3:
 ;;   udf #0xc11f
 ;;
 ;; function u0:1:
@@ -67,14 +67,14 @@
 ;;   b.lo 8 ; udf
 ;;   ldr x12, [x1, #8]
 ;;   subs xzr, x11, x12
-;;   b.hi label1 ; b label2
-;; block2:
-;;   ldr x14, [x1]
-;;   movz x13, #65535, LSL #16
-;;   add x13, x13, x14
-;;   ldr w0, [x13, w0, UXTW]
-;;   b label3
-;; block3:
-;;   ret
+;;   b.hi label3 ; b label1
 ;; block1:
+;;   ldr x13, [x1]
+;;   movz x12, #65535, LSL #16
+;;   add x12, x12, x13
+;;   ldr w0, [x12, w0, UXTW]
+;;   b label2
+;; block2:
+;;   ret
+;; block3:
 ;;   udf #0xc11f

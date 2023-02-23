@@ -1,5 +1,6 @@
 //! ARM 64-bit Instruction Set Architecture.
 
+use crate::dominator_tree::DominatorTree;
 use crate::ir::condcodes::IntCC;
 use crate::ir::{Function, Type};
 use crate::isa::aarch64::settings as aarch64_settings;
@@ -56,11 +57,12 @@ impl AArch64Backend {
     fn compile_vcode(
         &self,
         func: &Function,
+        domtree: &DominatorTree,
     ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
         let emit_info = EmitInfo::new(self.flags.clone());
         let sigs = SigSet::new::<abi::AArch64MachineDeps>(func, &self.flags)?;
         let abi = abi::AArch64Callee::new(func, self, &self.isa_flags, &sigs)?;
-        compile::compile::<AArch64Backend>(func, self, abi, emit_info, sigs)
+        compile::compile::<AArch64Backend>(func, domtree, self, abi, emit_info, sigs)
     }
 }
 
@@ -68,9 +70,10 @@ impl TargetIsa for AArch64Backend {
     fn compile_function(
         &self,
         func: &Function,
+        domtree: &DominatorTree,
         want_disasm: bool,
     ) -> CodegenResult<CompiledCodeStencil> {
-        let (vcode, regalloc_result) = self.compile_vcode(func)?;
+        let (vcode, regalloc_result) = self.compile_vcode(func, domtree)?;
 
         let emit_result = vcode.emit(
             &regalloc_result,
@@ -241,6 +244,8 @@ pub fn isa_builder(triple: Triple) -> IsaBuilder {
 mod test {
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
+    use crate::dominator_tree::DominatorTree;
+    use crate::flowgraph::ControlFlowGraph;
     use crate::ir::types::*;
     use crate::ir::{AbiParam, Function, InstBuilder, JumpTableData, Signature, UserFuncName};
     use crate::isa::CallConv;
@@ -275,7 +280,12 @@ mod test {
             shared_flags,
             isa_flags,
         );
-        let buffer = backend.compile_function(&mut func, false).unwrap().buffer;
+        let cfg = ControlFlowGraph::with_function(&func);
+        let domtree = DominatorTree::with_function(&func, &cfg);
+        let buffer = backend
+            .compile_function(&mut func, &domtree, false)
+            .unwrap()
+            .buffer;
         let code = buffer.data();
 
         // To update this comment, write the golden bytes to a file, and run the following command
@@ -328,8 +338,10 @@ mod test {
             shared_flags,
             isa_flags,
         );
+        let cfg = ControlFlowGraph::with_function(&func);
+        let domtree = DominatorTree::with_function(&func, &cfg);
         let result = backend
-            .compile_function(&mut func, /* want_disasm = */ false)
+            .compile_function(&mut func, &domtree, /* want_disasm = */ false)
             .unwrap();
         let code = result.buffer.data();
 
@@ -340,21 +352,22 @@ mod test {
         //   0:   52824689        mov     w9, #0x1234                     // #4660
         //   4:   0b09000b        add     w11, w0, w9
         //   8:   2a0b03ea        mov     w10, w11
-        //   c:   b50000aa        cbnz    x10, 0x20
-        //  10:   5282468c        mov     w12, #0x1234                    // #4660
-        //  14:   0b0c016e        add     w14, w11, w12
-        //  18:   2a0e03ed        mov     w13, w14
-        //  1c:   b5ffffad        cbnz    x13, 0x10
-        //  20:   2a0b03e0        mov     w0, w11
-        //  24:   b5ffff60        cbnz    x0, 0x10
-        //  28:   52824681        mov     w1, #0x1234                     // #4660
-        //  2c:   4b010160        sub     w0, w11, w1
-        //  30:   d65f03c0        ret
+        //   c:   b40000ca        cbz     x10, 0x24
+        //  10:   2a0b03ed        mov     w13, w11
+        //  14:   b500008d        cbnz    x13, 0x24
+        //  18:   5282468e        mov     w14, #0x1234                    // #4660
+        //  1c:   4b0e0160        sub     w0, w11, w14
+        //  20:   d65f03c0        ret
+        //  24:   5282468f        mov     w15, #0x1234                    // #4660
+        //  28:   0b0f0161        add     w1, w11, w15
+        //  2c:   2a0103e0        mov     w0, w1
+        //  30:   b5ffffa0        cbnz    x0, 0x24
+        //  34:   17fffff7        b       0x10
 
         let golden = vec![
-            137, 70, 130, 82, 11, 0, 9, 11, 234, 3, 11, 42, 170, 0, 0, 181, 140, 70, 130, 82, 110,
-            1, 12, 11, 237, 3, 14, 42, 173, 255, 255, 181, 224, 3, 11, 42, 96, 255, 255, 181, 129,
-            70, 130, 82, 96, 1, 1, 75, 192, 3, 95, 214,
+            137, 70, 130, 82, 11, 0, 9, 11, 234, 3, 11, 42, 202, 0, 0, 180, 237, 3, 11, 42, 141, 0,
+            0, 181, 142, 70, 130, 82, 96, 1, 14, 75, 192, 3, 95, 214, 143, 70, 130, 82, 97, 1, 15,
+            11, 224, 3, 1, 42, 160, 255, 255, 181, 247, 255, 255, 23,
         ];
 
         assert_eq!(code, &golden[..]);
@@ -409,8 +422,10 @@ mod test {
             shared_flags,
             isa_flags,
         );
+        let cfg = ControlFlowGraph::with_function(&func);
+        let domtree = DominatorTree::with_function(&func, &cfg);
         let result = backend
-            .compile_function(&mut func, /* want_disasm = */ false)
+            .compile_function(&mut func, &domtree, /* want_disasm = */ false)
             .unwrap();
         let code = result.buffer.data();
 
@@ -419,7 +434,7 @@ mod test {
         // > aarch64-linux-gnu-objdump -b binary -D <file> -m aarch64
         //
         //   0:   7100081f        cmp     w0, #0x2
-        //   4:   54000122        b.cs    0x28  // b.hs, b.nlast
+        //   4:   540001a2        b.cs    0x38  // b.hs, b.nlast
         //   8:   9a8023e8        csel    x8, xzr, x0, cs  // cs = hs, nlast
         //   c:   d503229f        csdb
         //  10:   10000087        adr     x7, 0x20
@@ -427,18 +442,18 @@ mod test {
         //  18:   8b0800e7        add     x7, x7, x8
         //  1c:   d61f00e0        br      x7
         //  20:   00000010        udf     #16
-        //  24:   00000018        udf     #24
-        //  28:   52800060        mov     w0, #0x3                        // #3
+        //  24:   00000008        udf     #8
+        //  28:   52800040        mov     w0, #0x2                        // #2
         //  2c:   d65f03c0        ret
         //  30:   52800020        mov     w0, #0x1                        // #1
         //  34:   d65f03c0        ret
-        //  38:   52800040        mov     w0, #0x2                        // #2
+        //  38:   52800060        mov     w0, #0x3                        // #3
         //  3c:   d65f03c0        ret
 
         let golden = vec![
-            31, 8, 0, 113, 34, 1, 0, 84, 232, 35, 128, 154, 159, 34, 3, 213, 135, 0, 0, 16, 232,
-            88, 168, 184, 231, 0, 8, 139, 224, 0, 31, 214, 16, 0, 0, 0, 24, 0, 0, 0, 96, 0, 128,
-            82, 192, 3, 95, 214, 32, 0, 128, 82, 192, 3, 95, 214, 64, 0, 128, 82, 192, 3, 95, 214,
+            31, 8, 0, 113, 162, 1, 0, 84, 232, 35, 128, 154, 159, 34, 3, 213, 135, 0, 0, 16, 232,
+            88, 168, 184, 231, 0, 8, 139, 224, 0, 31, 214, 16, 0, 0, 0, 8, 0, 0, 0, 64, 0, 128, 82,
+            192, 3, 95, 214, 32, 0, 128, 82, 192, 3, 95, 214, 96, 0, 128, 82, 192, 3, 95, 214,
         ];
 
         assert_eq!(code, &golden[..]);
