@@ -1200,46 +1200,54 @@ pub unsafe extern "C" fn fd_write(
     mut iovs_len: usize,
     nwritten: *mut Size,
 ) -> Errno {
-    // Advance to the first non-empty buffer.
-    while iovs_len != 0 && (*iovs_ptr).buf_len == 0 {
-        iovs_ptr = iovs_ptr.add(1);
-        iovs_len -= 1;
-    }
-    if iovs_len == 0 {
-        *nwritten = 0;
-        return ERRNO_SUCCESS;
-    }
+    if matches!(
+        get_allocation_state(),
+        AllocationState::StackAllocated | AllocationState::StateAllocated
+    ) {
+        // Advance to the first non-empty buffer.
+        while iovs_len != 0 && (*iovs_ptr).buf_len == 0 {
+            iovs_ptr = iovs_ptr.add(1);
+            iovs_len -= 1;
+        }
+        if iovs_len == 0 {
+            *nwritten = 0;
+            return ERRNO_SUCCESS;
+        }
 
-    let ptr = (*iovs_ptr).buf;
-    let len = (*iovs_ptr).buf_len;
-    let bytes = slice::from_raw_parts(ptr, len);
+        let ptr = (*iovs_ptr).buf;
+        let len = (*iovs_ptr).buf_len;
+        let bytes = slice::from_raw_parts(ptr, len);
 
-    State::with(|state| match state.get(fd)? {
-        Descriptor::Streams(streams) => {
-            let wasi_stream = streams.get_write_stream()?;
-            let bytes = wasi_io::write(wasi_stream, bytes).map_err(|_| ERRNO_IO)?;
+        State::with(|state| match state.get(fd)? {
+            Descriptor::Streams(streams) => {
+                let wasi_stream = streams.get_write_stream()?;
+                let bytes = wasi_io::write(wasi_stream, bytes).map_err(|_| ERRNO_IO)?;
 
-            // If this is a file, keep the current-position pointer up to date.
-            if let StreamType::File(file) = &streams.type_ {
-                // But don't update if we're in append mode. Strictly speaking,
-                // we should set the position to the new end of the file, but
-                // we don't have an API to do that atomically.
-                if !file.append {
-                    file.position
-                        .set(file.position.get() + wasi_filesystem::Filesize::from(bytes));
+                // If this is a file, keep the current-position pointer up to date.
+                if let StreamType::File(file) = &streams.type_ {
+                    // But don't update if we're in append mode. Strictly speaking,
+                    // we should set the position to the new end of the file, but
+                    // we don't have an API to do that atomically.
+                    if !file.append {
+                        file.position
+                            .set(file.position.get() + wasi_filesystem::Filesize::from(bytes));
+                    }
                 }
-            }
 
-            *nwritten = bytes as usize;
-            Ok(())
-        }
-        Descriptor::Stderr => {
-            wasi_stderr::print(bytes);
-            *nwritten = len;
-            Ok(())
-        }
-        Descriptor::Closed(_) => Err(ERRNO_BADF),
-    })
+                *nwritten = bytes as usize;
+                Ok(())
+            }
+            Descriptor::Stderr => {
+                wasi_stderr::print(bytes);
+                *nwritten = len;
+                Ok(())
+            }
+            Descriptor::Closed(_) => Err(ERRNO_BADF),
+        })
+    } else {
+        *nwritten = 0;
+        ERRNO_IO
+    }
 }
 
 /// Create a directory.
