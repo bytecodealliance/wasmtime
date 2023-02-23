@@ -4,6 +4,8 @@ use anyhow::{anyhow, bail, Context as _, Result};
 use clap::Parser;
 use once_cell::sync::Lazy;
 use std::ffi::OsStr;
+use std::fs::File;
+use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 use std::thread;
 use std::time::Duration;
@@ -151,6 +153,10 @@ pub struct RunCommand {
     )]
     wasm_timeout: Option<Duration>,
 
+    /// Enable coredump generation after a WebAssembly trap.
+    #[clap(long = "coredump-on-trap", value_name = "PATH")]
+    coredump_on_trap: Option<String>,
+
     // NOTE: this must come last for trailing varargs
     /// The arguments to pass to the module
     #[clap(value_name = "ARGS")]
@@ -169,6 +175,13 @@ impl RunCommand {
         let engine = Engine::new(&config)?;
 
         let preopen_sockets = self.compute_preopen_sockets()?;
+
+        // Validate coredump-on-trap argument
+        if let Some(coredump_path) = self.coredump_on_trap.as_ref() {
+            if coredump_path.contains("%") {
+                bail!("the coredump-on-trap path does not support patterns yet.")
+            }
+        }
 
         // Make wasi available by default.
         let preopen_dirs = self.compute_preopen_dirs()?;
@@ -376,13 +389,35 @@ impl RunCommand {
         // Invoke the function and then afterwards print all the results that came
         // out, if there are any.
         let mut results = vec![Val::null(); ty.results().len()];
-        func.call(store, &values, &mut results).with_context(|| {
+        let invoke_res = func.call(store, &values, &mut results).with_context(|| {
             if let Some(name) = name {
                 format!("failed to invoke `{}`", name)
             } else {
                 format!("failed to invoke command default")
             }
-        })?;
+        });
+
+        if let Err(err) = invoke_res {
+            let err = if err.is::<wasmtime::Trap>() {
+                if let Some(coredump_path) = self.coredump_on_trap.as_ref() {
+                    let source_name = self.module.to_str().unwrap_or_else(|| "unknown");
+
+                    if let Err(coredump_err) = generate_coredump(&err, &source_name, coredump_path)
+                    {
+                        eprintln!("warning: coredump failed to generate: {}", coredump_err);
+                        err
+                    } else {
+                        err.context(format!("core dumped at {}", coredump_path))
+                    }
+                } else {
+                    err
+                }
+            } else {
+                err
+            };
+            return Err(err);
+        }
+
         if !results.is_empty() {
             eprintln!(
                 "warning: using `--invoke` with a function that returns values \
@@ -556,4 +591,38 @@ fn ctx_set_listenfd(num_fd: usize, builder: WasiCtxBuilder) -> Result<(usize, Wa
     }
 
     Ok((num_fd, builder))
+}
+
+fn generate_coredump(err: &anyhow::Error, source_name: &str, coredump_path: &str) -> Result<()> {
+    let bt = err
+        .downcast_ref::<wasmtime::WasmBacktrace>()
+        .ok_or_else(|| anyhow!("no wasm backtrace found to generate coredump with"))?;
+
+    let mut coredump_builder =
+        wasm_coredump_builder::CoredumpBuilder::new().executable_name(source_name);
+
+    {
+        let mut thread_builder = wasm_coredump_builder::ThreadBuilder::new().thread_name("main");
+
+        for frame in bt.frames() {
+            let coredump_frame = wasm_coredump_builder::FrameBuilder::new()
+                .codeoffset(frame.func_offset().unwrap_or(0) as u32)
+                .funcidx(frame.func_index())
+                .build();
+            thread_builder.add_frame(coredump_frame);
+        }
+
+        coredump_builder.add_thread(thread_builder.build());
+    }
+
+    let coredump = coredump_builder
+        .serialize()
+        .map_err(|err| anyhow!("failed to serialize coredump: {}", err))?;
+
+    let mut f = File::create(coredump_path)
+        .context(format!("failed to create file at `{}`", coredump_path))?;
+    f.write_all(&coredump)
+        .with_context(|| format!("failed to write coredump file at `{}`", coredump_path))?;
+
+    Ok(())
 }
