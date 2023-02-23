@@ -104,17 +104,53 @@ impl ParkingSpot {
             let spot = inner.get_mut(&key).expect("failed to get spot");
 
             if timed_out {
-                if let Some(timeout) = timeout {
-                    if Instant::now() < timeout {
-                        // Did not sleep long enough, try again.
-                        continue;
-                    }
-                }
-            } else {
-                if spot.to_unpark == 0 {
+                // If waiting on the cvar timed out then due to how system cvars
+                // are implemented we may need to continue to sleep longer. If
+                // the deadline has not been reached then turn the crank again
+                // and go back to sleep.
+                if Instant::now() < timeout.unwrap() {
                     continue;
                 }
 
+                // Opportunistically consume `to_unpark` signals even on
+                // timeout. From the perspective of `unpark` this "agent" raced
+                // between its own timeout and receiving the unpark signal, but
+                // from unpark's perspective it's definitely going to wake up N
+                // agents as returned from the `unpark` return value.
+                //
+                // Note that this may actually prevent other threads from
+                // getting unaprked. For example:
+                //
+                // * Thread A parks with a timeout
+                // * Thread B parks with no timeout
+                // * Thread C decides to unpark 1 thread
+                // * Thread A's cvar wakes up due to a timeout, blocks on the
+                //   lock
+                // * Thread C finishes unpark and signals the cvar once
+                // * Thread B wakes up
+                // * Thread A and B contend for the lock and A wins
+                // * A consumes the "to_unpark" value
+                // * B goes back to sleep since `to_unpark == 0`, thinking that
+                //   a spurious wakeup happened.
+                //
+                // It's believed that this is ok, however, since from C's
+                // perspective one agent was still woken up and is allowed to
+                // continue, notably A in this case. C doesn't know that A raced
+                // with B and "stole" its wakeup signal.
+                if spot.to_unpark > 0 {
+                    spot.to_unpark -= 1;
+                }
+            } else {
+                if spot.to_unpark == 0 {
+                    // If no timeout happen but nothing has unparked this spot (as
+                    // signaled through `to_unpark`) then this is indicative of a
+                    // spurious wakeup. In this situation turn the crank again and
+                    // go back to sleep as this interface doesn't allow for spurious
+                    // wakeups.
+                    continue;
+                }
+                // No timeout happened, and some other thread registered to
+                // unpark this thread, so consume one unpark notification.
                 spot.to_unpark -= 1;
             }
 
@@ -443,5 +479,43 @@ mod tests {
                 addr_of!(self.semaphore) as _
             }
         }
+    }
+
+    #[test]
+    fn wait_with_timeout() {
+        let parking_spot = &ParkingSpot::default();
+        let atomic = &AtomicU64::new(0);
+
+        thread::scope(|s| {
+            let atomic_key = addr_of!(atomic) as u64;
+
+            const N: u64 = 5;
+            const M: u64 = 1000;
+
+            let thread = s.spawn(move || {
+                while atomic.load(Ordering::SeqCst) != N * M {
+                    let timeout = Instant::now() + Duration::from_millis(1);
+                    parking_spot.park(
+                        atomic_key,
+                        || atomic.load(Ordering::SeqCst) != N * M,
+                        Some(timeout),
+                    );
+                }
+            });
+
+            let mut threads = vec![thread];
+            for _ in 0..N {
+                threads.push(s.spawn(move || {
+                    for _ in 0..M {
+                        atomic.fetch_add(1, Ordering::SeqCst);
+                        parking_spot.unpark(atomic_key, 1);
+                    }
+                }));
+            }
+
+            for thread in threads {
+                thread.join().unwrap();
+            }
+        });
     }
 }
