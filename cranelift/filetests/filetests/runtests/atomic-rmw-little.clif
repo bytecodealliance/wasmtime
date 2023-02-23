@@ -1,3 +1,4 @@
+test interpret
 test run
 target s390x
 target s390x has_mie2
@@ -116,11 +117,11 @@ block0(v0: i32, v1: i32):
     return v4
 }
 
-; run: %atomic_rmw_and_i64(0, 0) == 0
-; run: %atomic_rmw_and_i64(1, 0) == 0
-; run: %atomic_rmw_and_i64(0, 1) == 0
-; run: %atomic_rmw_and_i64(1, 1) == 1
-; run: %atomic_rmw_and_i64(0xF1FFFEFE, 0xCEFFEFEF) == 0xC0FFEEEE
+; run: %atomic_rmw_and_i32(0, 0) == 0
+; run: %atomic_rmw_and_i32(1, 0) == 0
+; run: %atomic_rmw_and_i32(0, 1) == 0
+; run: %atomic_rmw_and_i32(1, 1) == 1
+; run: %atomic_rmw_and_i32(0xF1FFFEFE, 0xCEFFEFEF) == 0xC0FFEEEE
 
 
 

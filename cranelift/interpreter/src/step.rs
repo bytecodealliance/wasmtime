@@ -7,8 +7,8 @@ use crate::value::{Value, ValueConversionKind, ValueError, ValueResult};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
-    types, AbiParam, Block, BlockCall, ExternalName, FuncRef, Function, InstructionData, Opcode,
-    TrapCode, Type, Value as ValueRef,
+    types, AbiParam, AtomicRmwOp, Block, BlockCall, ExternalName, FuncRef, Function,
+    InstructionData, Opcode, TrapCode, Type, Value as ValueRef,
 };
 use log::trace;
 use smallvec::{smallvec, SmallVec};
@@ -1187,7 +1187,41 @@ where
             Value::convert(arg(0)?, ValueConversionKind::ExtractUpper(types::I64))?,
         ]),
         Opcode::Iconcat => assign(Value::concat(arg(0)?, arg(1)?)?),
-        Opcode::AtomicRmw => unimplemented!("AtomicRmw"),
+        Opcode::AtomicRmw => {
+            let op = inst.atomic_rmw_op().unwrap();
+            let val = arg(1)?;
+            let addr = arg(0)?.into_int()? as u64;
+            let loaded = Address::try_from(addr).and_then(|addr| state.checked_load(addr, ctrl_ty));
+            let prev_val = match loaded {
+                Ok(v) => v,
+                Err(e) => return Ok(ControlFlow::Trap(CraneliftTrap::User(memerror_to_trap(e)))),
+            };
+            let prev_val_to_assign = prev_val.clone();
+            let replace = match op {
+                AtomicRmwOp::Xchg => Ok(val),
+                AtomicRmwOp::Add => Value::add(prev_val, val),
+                AtomicRmwOp::Sub => Value::sub(prev_val, val),
+                AtomicRmwOp::And => Value::and(prev_val, val),
+                AtomicRmwOp::Or => Value::or(prev_val, val),
+                AtomicRmwOp::Xor => Value::xor(prev_val, val),
+                AtomicRmwOp::Nand => Value::and(prev_val, val).and_then(V::not),
+                AtomicRmwOp::Smax => Value::max(prev_val, val),
+                AtomicRmwOp::Smin => Value::min(prev_val, val),
+                AtomicRmwOp::Umax => Value::max(
+                    Value::convert(val, ValueConversionKind::ToUnsigned)?,
+                    Value::convert(prev_val, ValueConversionKind::ToUnsigned)?,
+                )
+                .and_then(|v| Value::convert(v, ValueConversionKind::ToSigned)),
+                AtomicRmwOp::Umin => Value::min(
+                    Value::convert(val, ValueConversionKind::ToUnsigned)?,
+                    Value::convert(prev_val, ValueConversionKind::ToUnsigned)?,
+                )
+                .and_then(|v| Value::convert(v, ValueConversionKind::ToSigned)),
+            }?;
+            let stored =
+                Address::try_from(addr).and_then(|addr| state.checked_store(addr, replace));
+            assign_or_memtrap(stored.map(|_| prev_val_to_assign))
+        }
         Opcode::AtomicCas => unimplemented!("AtomicCas"),
         Opcode::AtomicLoad => {
             let load_ty = inst_context.controlling_type().unwrap();
