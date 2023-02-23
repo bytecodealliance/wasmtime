@@ -176,55 +176,53 @@ impl ParkingSpot {
 #[cfg(test)]
 mod tests {
     use super::ParkingSpot;
-    use once_cell::sync::Lazy;
     use std::ptr::addr_of;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::thread;
-
-    static PARKING_SPOT: Lazy<ParkingSpot> = Lazy::new(ParkingSpot::default);
-
-    static ATOMIC: AtomicU64 = AtomicU64::new(0);
+    use std::time::{Duration, Instant};
 
     #[test]
     fn atomic_wait_notify() {
-        let thread1 = thread::spawn(|| {
-            let atomic_key = addr_of!(ATOMIC) as u64;
-            ATOMIC.store(1, Ordering::SeqCst);
-            PARKING_SPOT.unpark(atomic_key, u32::MAX);
-            PARKING_SPOT.park(atomic_key, || ATOMIC.load(Ordering::SeqCst) == 1, None);
-        });
+        let parking_spot = &ParkingSpot::default();
+        let atomic = &AtomicU64::new(0);
 
-        let thread2 = thread::spawn(|| {
-            let atomic_key = addr_of!(ATOMIC) as u64;
-            while ATOMIC.load(Ordering::SeqCst) != 1 {
-                PARKING_SPOT.park(atomic_key, || ATOMIC.load(Ordering::SeqCst) != 1, None);
+        thread::scope(|s| {
+            let atomic_key = addr_of!(atomic) as u64;
+            let thread1 = s.spawn(move || {
+                atomic.store(1, Ordering::SeqCst);
+                parking_spot.unpark(atomic_key, u32::MAX);
+                parking_spot.park(atomic_key, || atomic.load(Ordering::SeqCst) == 1, None);
+            });
+
+            let thread2 = s.spawn(move || {
+                while atomic.load(Ordering::SeqCst) != 1 {
+                    parking_spot.park(atomic_key, || atomic.load(Ordering::SeqCst) != 1, None);
+                }
+                atomic.store(2, Ordering::SeqCst);
+                parking_spot.unpark(atomic_key, u32::MAX);
+                parking_spot.park(atomic_key, || atomic.load(Ordering::SeqCst) == 2, None);
+            });
+
+            let thread3 = s.spawn(move || {
+                while atomic.load(Ordering::SeqCst) != 2 {
+                    parking_spot.park(atomic_key, || atomic.load(Ordering::SeqCst) != 2, None);
+                }
+                atomic.store(3, Ordering::SeqCst);
+                parking_spot.unpark(atomic_key, u32::MAX);
+
+                parking_spot.park(atomic_key, || atomic.load(Ordering::SeqCst) == 3, None);
+            });
+
+            while atomic.load(Ordering::SeqCst) != 3 {
+                parking_spot.park(atomic_key, || atomic.load(Ordering::SeqCst) != 3, None);
             }
-            ATOMIC.store(2, Ordering::SeqCst);
-            PARKING_SPOT.unpark(atomic_key, u32::MAX);
-            PARKING_SPOT.park(atomic_key, || ATOMIC.load(Ordering::SeqCst) == 2, None);
+            atomic.store(4, Ordering::SeqCst);
+            parking_spot.unpark(atomic_key, u32::MAX);
+
+            thread1.join().unwrap();
+            thread2.join().unwrap();
+            thread3.join().unwrap();
         });
-
-        let thread3 = thread::spawn(|| {
-            let atomic_key = addr_of!(ATOMIC) as u64;
-            while ATOMIC.load(Ordering::SeqCst) != 2 {
-                PARKING_SPOT.park(atomic_key, || ATOMIC.load(Ordering::SeqCst) != 2, None);
-            }
-            ATOMIC.store(3, Ordering::SeqCst);
-            PARKING_SPOT.unpark(atomic_key, u32::MAX);
-
-            PARKING_SPOT.park(atomic_key, || ATOMIC.load(Ordering::SeqCst) == 3, None);
-        });
-
-        let atomic_key = addr_of!(ATOMIC) as u64;
-        while ATOMIC.load(Ordering::SeqCst) != 3 {
-            PARKING_SPOT.park(atomic_key, || ATOMIC.load(Ordering::SeqCst) != 3, None);
-        }
-        ATOMIC.store(4, Ordering::SeqCst);
-        PARKING_SPOT.unpark(atomic_key, u32::MAX);
-
-        thread1.join().unwrap();
-        thread2.join().unwrap();
-        thread3.join().unwrap();
     }
 
     mod parking_lot {
@@ -302,47 +300,53 @@ mod tests {
             num_threads: u32,
             num_single_unparks: u32,
         ) {
-            let mut tests = Vec::with_capacity(num_latches);
+            let spot = ParkingSpot::default();
 
-            for _ in 0..num_latches {
-                let test = Arc::new(SingleLatchTest::new(num_threads));
-                let mut threads = Vec::with_capacity(num_threads as _);
-                for _ in 0..num_threads {
-                    let test = test.clone();
-                    threads.push(thread::spawn(move || test.run()));
-                }
-                tests.push((test, threads));
-            }
+            thread::scope(|s| {
+                let mut tests = Vec::with_capacity(num_latches);
 
-            for unpark_index in 0..num_single_unparks {
-                thread::sleep(delay);
-                for (test, _) in &tests {
-                    test.unpark_one(unpark_index);
+                for _ in 0..num_latches {
+                    let test = Arc::new(SingleLatchTest::new(num_threads, &spot));
+                    let mut threads = Vec::with_capacity(num_threads as _);
+                    for _ in 0..num_threads {
+                        let test = test.clone();
+                        threads.push(s.spawn(move || test.run()));
+                    }
+                    tests.push((test, threads));
                 }
-            }
 
-            for (test, threads) in tests {
-                test.finish(num_single_unparks);
-                for thread in threads {
-                    thread.join().expect("Test thread panic");
+                for unpark_index in 0..num_single_unparks {
+                    thread::sleep(delay);
+                    for (test, _) in &tests {
+                        test.unpark_one(unpark_index);
+                    }
                 }
-            }
+
+                for (test, threads) in tests {
+                    test.finish(num_single_unparks);
+                    for thread in threads {
+                        thread.join().expect("Test thread panic");
+                    }
+                }
+            });
         }
 
-        struct SingleLatchTest {
+        struct SingleLatchTest<'a> {
             semaphore: AtomicIsize,
             num_awake: AtomicU32,
             /// Total number of threads participating in this test.
             num_threads: u32,
+            spot: &'a ParkingSpot,
         }
 
-        impl SingleLatchTest {
-            pub fn new(num_threads: u32) -> Self {
+        impl<'a> SingleLatchTest<'a> {
+            pub fn new(num_threads: u32, spot: &'a ParkingSpot) -> Self {
                 Self {
                     // This implements a fair (FIFO) semaphore, and it starts out unavailable.
                     semaphore: AtomicIsize::new(0),
                     num_awake: AtomicU32::new(0),
                     num_threads,
+                    spot,
                 }
             }
 
@@ -373,14 +377,14 @@ mod tests {
                 // still be threads that has not yet parked.
                 while num_threads_left > 0 {
                     let mut num_waiting_on_address = 0;
-                    PARKING_SPOT.with_lot(self.semaphore_addr(), |thread_data| {
+                    self.spot.with_lot(self.semaphore_addr(), |thread_data| {
                         num_waiting_on_address = thread_data.num_parked;
                     });
                     assert!(num_waiting_on_address <= num_threads_left);
 
                     let num_awake_before_unpark = self.num_awake.load(Ordering::SeqCst);
 
-                    let num_unparked = PARKING_SPOT.unpark(self.semaphore_addr(), u32::MAX);
+                    let num_unparked = self.spot.unpark(self.semaphore_addr(), u32::MAX);
                     assert!(num_unparked >= num_waiting_on_address);
                     assert!(num_unparked <= num_threads_left);
 
@@ -398,7 +402,7 @@ mod tests {
 
                 // Make sure no thread is parked on our semaphore address
                 let mut num_waiting_on_address = 0;
-                PARKING_SPOT.with_lot(self.semaphore_addr(), |thread_data| {
+                self.spot.with_lot(self.semaphore_addr(), |thread_data| {
                     num_waiting_on_address = thread_data.num_parked;
                 });
                 assert_eq!(num_waiting_on_address, 0);
@@ -414,7 +418,7 @@ mod tests {
 
                 // We need to wait.
                 let validate = || true;
-                PARKING_SPOT.park(self.semaphore_addr(), validate, None);
+                self.spot.park(self.semaphore_addr(), validate, None);
             }
 
             pub fn up(&self) {
@@ -426,7 +430,7 @@ mod tests {
                     // the thread we want to pass ownership to has decremented the semaphore counter,
                     // but not yet parked.
                     loop {
-                        match PARKING_SPOT.unpark(self.semaphore_addr(), 1) {
+                        match self.spot.unpark(self.semaphore_addr(), 1) {
                             1 => break,
                             0 => (),
                             i => panic!("Should not wake up {i} threads"),
