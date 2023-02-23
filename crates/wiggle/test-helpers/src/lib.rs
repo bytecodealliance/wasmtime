@@ -117,11 +117,9 @@ impl HostMemory {
 }
 
 unsafe impl GuestMemory for HostMemory {
-    fn base(&self) -> (*mut u8, u32) {
-        unsafe {
-            let ptr = self.buffer.cell.get();
-            ((*ptr).as_mut_ptr(), (*ptr).len() as u32)
-        }
+    fn base(&self) -> &[UnsafeCell<u8>] {
+        let ptr = self.buffer.cell.get();
+        unsafe { std::slice::from_raw_parts(ptr.cast(), (*ptr).len()) }
     }
     fn has_outstanding_borrows(&self) -> bool {
         self.bc.has_outstanding_borrows()
@@ -214,12 +212,13 @@ impl MemArea {
 #[cfg(test)]
 mod test {
     use super::*;
+
     #[test]
     fn hostmemory_is_aligned() {
         let h = HostMemory::new();
-        assert_eq!(h.base().0 as usize % 4096, 0);
+        assert_eq!(h.base().as_ptr() as usize % 4096, 0);
         let h = Box::new(h);
-        assert_eq!(h.base().0 as usize % 4096, 0);
+        assert_eq!(h.base().as_ptr() as usize % 4096, 0);
     }
 
     #[test]

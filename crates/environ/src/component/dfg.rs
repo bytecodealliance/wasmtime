@@ -71,6 +71,9 @@ pub struct ComponentDfg {
     /// out of the inlining pass of translation.
     pub adapters: Intern<AdapterId, Adapter>,
 
+    /// Metadata about string transcoders needed by adapter modules.
+    pub transcoders: Intern<TranscoderId, Transcoder>,
+
     /// Metadata about all known core wasm instances created.
     ///
     /// This is mostly an ordered list and is not deduplicated based on contents
@@ -125,6 +128,7 @@ id! {
     pub struct PostReturnId(u32);
     pub struct AlwaysTrapId(u32);
     pub struct AdapterModuleId(u32);
+    pub struct TranscoderId(u32);
 }
 
 /// Same as `info::InstantiateModule`
@@ -148,6 +152,7 @@ pub enum Export {
     ModuleStatic(StaticModuleIndex),
     ModuleImport(RuntimeImportIndex),
     Instance(IndexMap<String, Export>),
+    Type(TypeDef),
 }
 
 /// Same as `info::CoreDef`, except has an extra `Adapter` variant.
@@ -158,6 +163,7 @@ pub enum CoreDef {
     Lowered(LowerImportId),
     AlwaysTrap(AlwaysTrapId),
     InstanceFlags(RuntimeComponentInstanceIndex),
+    Transcoder(TranscoderId),
 
     /// This is a special variant not present in `info::CoreDef` which
     /// represents that this definition refers to a fused adapter function. This
@@ -218,6 +224,18 @@ pub struct CanonicalOptions {
     pub memory: Option<MemoryId>,
     pub realloc: Option<ReallocId>,
     pub post_return: Option<PostReturnId>,
+}
+
+/// Same as `info::Transcoder`
+#[derive(Clone, Hash, Eq, PartialEq)]
+#[allow(missing_docs)]
+pub struct Transcoder {
+    pub op: Transcode,
+    pub from: MemoryId,
+    pub from64: bool,
+    pub to: MemoryId,
+    pub to64: bool,
+    pub signature: SignatureIndex,
 }
 
 /// A helper structure to "intern" and deduplicate values of type `V` with an
@@ -292,6 +310,7 @@ impl ComponentDfg {
             runtime_instances: Default::default(),
             runtime_always_trap: Default::default(),
             runtime_lowerings: Default::default(),
+            runtime_transcoders: Default::default(),
         };
 
         // First the instances are all processed for instantiation. This will,
@@ -324,6 +343,7 @@ impl ComponentDfg {
             num_runtime_instances: linearize.runtime_instances.len() as u32,
             num_always_trap: linearize.runtime_always_trap.len() as u32,
             num_lowerings: linearize.runtime_lowerings.len() as u32,
+            num_transcoders: linearize.runtime_transcoders.len() as u32,
 
             imports: self.imports,
             import_types: self.import_types,
@@ -342,6 +362,7 @@ struct LinearizeDfg<'a> {
     runtime_instances: HashMap<RuntimeInstance, RuntimeInstanceIndex>,
     runtime_always_trap: HashMap<AlwaysTrapId, RuntimeAlwaysTrapIndex>,
     runtime_lowerings: HashMap<LowerImportId, LoweredIndex>,
+    runtime_transcoders: HashMap<TranscoderId, RuntimeTranscoderIndex>,
 }
 
 #[derive(Copy, Clone, Hash, Eq, PartialEq)]
@@ -410,6 +431,7 @@ impl LinearizeDfg<'_> {
                     .map(|(name, export)| (name.clone(), self.export(export)))
                     .collect(),
             ),
+            Export::Type(def) => info::Export::Type(*def),
         }
     }
 
@@ -460,6 +482,7 @@ impl LinearizeDfg<'_> {
             CoreDef::Lowered(id) => info::CoreDef::Lowered(self.runtime_lowering(*id)),
             CoreDef::InstanceFlags(i) => info::CoreDef::InstanceFlags(*i),
             CoreDef::Adapter(id) => info::CoreDef::Export(self.adapter(*id)),
+            CoreDef::Transcoder(id) => info::CoreDef::Transcoder(self.runtime_transcoder(*id)),
         }
     }
 
@@ -492,6 +515,35 @@ impl LinearizeDfg<'_> {
                     import,
                     canonical_abi,
                     options,
+                })
+            },
+        )
+    }
+
+    fn runtime_transcoder(&mut self, id: TranscoderId) -> RuntimeTranscoderIndex {
+        self.intern(
+            id,
+            |me| &mut me.runtime_transcoders,
+            |me, id| {
+                let info = &me.dfg.transcoders[id];
+                (
+                    info.op,
+                    me.runtime_memory(info.from),
+                    info.from64,
+                    me.runtime_memory(info.to),
+                    info.to64,
+                    info.signature,
+                )
+            },
+            |index, (op, from, from64, to, to64, signature)| {
+                GlobalInitializer::Transcoder(info::Transcoder {
+                    index,
+                    op,
+                    from,
+                    from64,
+                    to,
+                    to64,
+                    signature,
                 })
             },
         )

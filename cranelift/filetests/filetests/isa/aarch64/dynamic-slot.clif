@@ -11,15 +11,29 @@ block0:
   return
 }
 
+; VCode:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ;   sub sp, sp, #16
 ; block0:
-;   mov x0, sp
+;   mov x1, sp
 ;   movz x2, #1
-;   str x2, [x0]
+;   str x2, [x1]
 ;   add sp, sp, #16
 ;   ldp fp, lr, [sp], #16
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x10
+; block1: ; offset 0xc
+;   mov x1, sp
+;   mov x2, #1
+;   str x2, [x1]
+;   add sp, sp, #0x10
+;   ldp x29, x30, [sp], #0x10
 ;   ret
 
 function %store_scale_lt_128() {
@@ -32,15 +46,29 @@ block0:
   return
 }
 
+; VCode:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ;   sub sp, sp, #16
 ; block0:
-;   mov x0, sp
+;   mov x1, sp
 ;   movz x2, #1
-;   str x2, [x0]
+;   str x2, [x1]
 ;   add sp, sp, #16
 ;   ldp fp, lr, [sp], #16
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x10
+; block1: ; offset 0xc
+;   mov x1, sp
+;   mov x2, #1
+;   str x2, [x1]
+;   add sp, sp, #0x10
+;   ldp x29, x30, [sp], #0x10
 ;   ret
 
 function %store_explicit(i32) {
@@ -54,6 +82,7 @@ block0(v0: i32):
   return
 }
 
+; VCode:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ;   sub sp, sp, #16
@@ -63,6 +92,19 @@ block0(v0: i32):
 ;   str q3, [x3]
 ;   add sp, sp, #16
 ;   ldp fp, lr, [sp], #16
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x10
+; block1: ; offset 0xc
+;   dup v3.4s, w0
+;   mov x3, sp
+;   str q3, [x3]
+;   add sp, sp, #0x10
+;   ldp x29, x30, [sp], #0x10
 ;   ret
 
 function %load_explicit() -> i32x4 {
@@ -76,14 +118,27 @@ block0:
   return v1
 }
 
+; VCode:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ;   sub sp, sp, #16
 ; block0:
-;   mov x3, sp
-;   ldr q0, [x3]
+;   mov x2, sp
+;   ldr q0, [x2]
 ;   add sp, sp, #16
 ;   ldp fp, lr, [sp], #16
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x10
+; block1: ; offset 0xc
+;   mov x2, sp
+;   ldr q0, [x2]
+;   add sp, sp, #0x10
+;   ldp x29, x30, [sp], #0x10
 ;   ret
 
 function %store_implicit(i32) {
@@ -97,6 +152,7 @@ block0(v0: i32):
   return
 }
 
+; VCode:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ;   sub sp, sp, #16
@@ -106,6 +162,19 @@ block0(v0: i32):
 ;   str q3, [x3]
 ;   add sp, sp, #16
 ;   ldp fp, lr, [sp], #16
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x10
+; block1: ; offset 0xc
+;   dup v3.4s, w0
+;   mov x3, sp
+;   str q3, [x3]
+;   add sp, sp, #0x10
+;   ldp x29, x30, [sp], #0x10
 ;   ret
 
 function %addr() -> i64 {
@@ -118,6 +187,7 @@ block0:
   return v0
 }
 
+; VCode:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ;   sub sp, sp, #16
@@ -125,5 +195,16 @@ block0:
 ;   mov x0, sp
 ;   add sp, sp, #16
 ;   ldp fp, lr, [sp], #16
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x10
+; block1: ; offset 0xc
+;   mov x0, sp
+;   add sp, sp, #0x10
+;   ldp x29, x30, [sp], #0x10
 ;   ret
 

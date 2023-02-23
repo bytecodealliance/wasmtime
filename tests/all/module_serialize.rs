@@ -51,7 +51,7 @@ fn test_module_serialize_simple() -> Result<()> {
 
     let mut store = Store::default();
     let instance = unsafe { deserialize_and_instantiate(&mut store, &buffer)? };
-    let run = instance.get_typed_func::<(), i32, _>(&mut store, "run")?;
+    let run = instance.get_typed_func::<(), i32>(&mut store, "run")?;
     let result = run.call(&mut store, ())?;
 
     assert_eq!(42, result);
@@ -98,8 +98,20 @@ fn test_deserialize_from_file() -> Result<()> {
         fs::write(&path, &buffer)?;
         let module = unsafe { Module::deserialize_file(store.engine(), &path)? };
         let instance = Instance::new(&mut store, &module, &[])?;
-        let func = instance.get_typed_func::<(), i32, _>(&mut store, "run")?;
+        let func = instance.get_typed_func::<(), i32>(&mut store, "run")?;
         assert_eq!(func.call(&mut store, ())?, 42);
         Ok(())
     }
+}
+
+#[test]
+fn deserialize_from_serialized() -> Result<()> {
+    let engine = Engine::default();
+    let buffer1 = serialize(
+        &engine,
+        "(module (func (export \"run\") (result i32) i32.const 42))",
+    )?;
+    let buffer2 = unsafe { Module::deserialize(&engine, &buffer1)?.serialize()? };
+    assert!(buffer1 == buffer2);
+    Ok(())
 }

@@ -8,14 +8,28 @@ block0(v1: i32, v2: i64):
     return v4
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movl    0(%rsi), %r9d
-;   cmpl    %edi, %r9d
-;   cmovnbl %r9d, %edi, %edi
+;   movl    0(%rsi), %edx
+;   cmpl    %edi, %edx
 ;   movq    %rdi, %rax
+;   cmovnbl %edx, %eax, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movl (%rsi), %edx
+;   cmpl %edi, %edx
+;   movq %rdi, %rax
+;   cmovael %edx, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 

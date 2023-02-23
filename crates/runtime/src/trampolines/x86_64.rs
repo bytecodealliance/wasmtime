@@ -22,27 +22,29 @@ cfg_if::cfg_if! {
 #[rustfmt::skip]
 asm_func!(
     "host_to_wasm_trampoline",
-    "
-        .cfi_startproc simple
-        .cfi_def_cfa_offset 0
+    concat!(
+        "
+            .cfi_startproc simple
+            .cfi_def_cfa_offset 0
 
-        // Load the pointer to `VMRuntimeLimits` in `scratch0`.
-        mov ", scratch0!(), ", 8[", arg1!(), "]
+            // Load the pointer to `VMRuntimeLimits` in `scratch0`.
+            mov ", scratch0!(), ", 8[", arg1!(), "]
 
-        // Check to see if this is a core `VMContext` (MAGIC == 'core').
-        cmp DWORD PTR [", arg0!(), "], 0x65726f63
+            // Check to see if this is a core `VMContext` (MAGIC == 'core').
+            cmp DWORD PTR [", arg0!(), "], 0x65726f63
 
-        // Store the last Wasm SP into the `last_wasm_entry_sp` in the limits, if this
-        // was core Wasm, otherwise store an invalid sentinal value.
-        mov ", scratch1!(), ", -1
-        cmove ", scratch1!(), ", rsp
-        mov 40[", scratch0!(), "], ", scratch1!(), "
+            // Store the last Wasm SP into the `last_wasm_entry_sp` in the limits, if this
+            // was core Wasm, otherwise store an invalid sentinal value.
+            mov ", scratch1!(), ", -1
+            cmove ", scratch1!(), ", rsp
+            mov 40[", scratch0!(), "], ", scratch1!(), "
 
-        // Tail call to the callee function pointer in the vmctx.
-        jmp 16[", arg1!(), "]
+            // Tail call to the callee function pointer in the vmctx.
+            jmp 16[", arg1!(), "]
 
-        .cfi_endproc
-    ",
+            .cfi_endproc
+        ",
+    ),
 );
 
 #[cfg(test)]
@@ -64,28 +66,30 @@ mod host_to_wasm_trampoline_offsets_tests {
 #[rustfmt::skip]
 asm_func!(
     "wasm_to_host_trampoline",
-    "
-        .cfi_startproc simple
-        .cfi_def_cfa_offset 0
+    concat!(
+        "
+            .cfi_startproc simple
+            .cfi_def_cfa_offset 0
 
-        // Load the pointer to `VMRuntimeLimits` in `scratch0`.
-        mov ", scratch0!(), ", 8[", arg1!(), "]
+            // Load the pointer to `VMRuntimeLimits` in `scratch0`.
+            mov ", scratch0!(), ", 8[", arg1!(), "]
 
-        // Store the last Wasm FP into the `last_wasm_exit_fp` in the limits.
-        mov 24[", scratch0!(), "], rbp
+            // Store the last Wasm FP into the `last_wasm_exit_fp` in the limits.
+            mov 24[", scratch0!(), "], rbp
 
-        // Store the last Wasm PC into the `last_wasm_exit_pc` in the limits.
-        mov ", scratch1!(), ", [rsp]
-        mov 32[", scratch0!(), "], ", scratch1!(), "
+            // Store the last Wasm PC into the `last_wasm_exit_pc` in the limits.
+            mov ", scratch1!(), ", [rsp]
+            mov 32[", scratch0!(), "], ", scratch1!(), "
 
-        // Tail call to the actual host function.
-        //
-        // This *must* be a tail call so that we do not push to the stack and mess
-        // up the offsets of stack arguments (if any).
-        jmp 8[", arg0!(), "]
+            // Tail call to the actual host function.
+            //
+            // This *must* be a tail call so that we do not push to the stack and mess
+            // up the offsets of stack arguments (if any).
+            jmp 8[", arg0!(), "]
 
-        .cfi_endproc
-    ",
+            .cfi_endproc
+        ",
+    ),
 );
 
 #[cfg(test)]
@@ -111,25 +115,28 @@ macro_rules! wasm_to_libcall_trampoline {
     ($libcall:ident ; $libcall_impl:ident) => {
         wasmtime_asm_macros::asm_func!(
             stringify!($libcall),
-            "
-               .cfi_startproc simple
-               .cfi_def_cfa_offset 0
+            concat!(
+                "
+                   .cfi_startproc simple
+                   .cfi_def_cfa_offset 0
 
-                // Load the pointer to `VMRuntimeLimits` in `", scratch0!(), "`.
-                mov ", scratch0!(), ", 8[", arg0!(), "]
+                    // Load the pointer to `VMRuntimeLimits` in `", scratch0!(), "`.
+                    mov ", scratch0!(), ", 8[", arg0!(), "]
 
-                // Store the last Wasm FP into the `last_wasm_exit_fp` in the limits.
-                mov 24[", scratch0!(), "], rbp
+                    // Store the last Wasm FP into the `last_wasm_exit_fp` in the limits.
+                    mov 24[", scratch0!(), "], rbp
 
-                // Store the last Wasm PC into the `last_wasm_exit_pc` in the limits.
-                mov ", scratch1!(), ", [rsp]
-                mov 32[", scratch0!(), "], ", scratch1!(), "
+                    // Store the last Wasm PC into the `last_wasm_exit_pc` in the limits.
+                    mov ", scratch1!(), ", [rsp]
+                    mov 32[", scratch0!(), "], ", scratch1!(), "
 
-                // Tail call to the actual implementation of this libcall.
-                jmp ", wasmtime_asm_macros::asm_sym!(stringify!($libcall_impl)), "
+                    // Tail call to the actual implementation of this libcall.
+                    jmp {}
 
-                .cfi_endproc
-            ",
+                    .cfi_endproc
+                ",
+            ),
+            sym $libcall_impl
         );
     };
 }

@@ -101,8 +101,7 @@ impl crate::isa::unwind::systemv::RegisterMapper<Reg> for RegisterMapper {
 mod tests {
     use crate::cursor::{Cursor, FuncCursor};
     use crate::ir::{
-        types, AbiParam, ExternalName, Function, InstBuilder, Signature, StackSlotData,
-        StackSlotKind,
+        types, AbiParam, Function, InstBuilder, Signature, StackSlotData, StackSlotKind,
     };
     use crate::isa::{lookup, CallConv};
     use crate::settings::{builder, Flags};
@@ -123,9 +122,9 @@ mod tests {
             Some(StackSlotData::new(StackSlotKind::ExplicitSlot, 64)),
         ));
 
-        context.compile(&*isa).expect("expected compilation");
+        let code = context.compile(&*isa).expect("expected compilation");
 
-        let fde = match context
+        let fde = match code
             .create_unwind_info(isa.as_ref())
             .expect("can create unwind info")
         {
@@ -139,8 +138,7 @@ mod tests {
     }
 
     fn create_function(call_conv: CallConv, stack_slot: Option<StackSlotData>) -> Function {
-        let mut func =
-            Function::with_name_signature(ExternalName::user(0, 0), Signature::new(call_conv));
+        let mut func = Function::with_name_signature(Default::default(), Signature::new(call_conv));
 
         let block0 = func.dfg.make_block();
         let mut pos = FuncCursor::new(&mut func);
@@ -166,9 +164,9 @@ mod tests {
             Some(StackSlotData::new(StackSlotKind::ExplicitSlot, 64)),
         ));
 
-        context.compile(&*isa).expect("expected compilation");
+        let code = context.compile(&*isa).expect("expected compilation");
 
-        let fde = match context
+        let fde = match code
             .create_unwind_info(isa.as_ref())
             .expect("can create unwind info")
         {
@@ -187,7 +185,7 @@ mod tests {
     ) -> Function {
         let mut sig = Signature::new(call_conv);
         sig.params.push(AbiParam::new(types::I32));
-        let mut func = Function::with_name_signature(ExternalName::user(0, 0), sig);
+        let mut func = Function::with_name_signature(Default::default(), sig);
 
         let block0 = func.dfg.make_block();
         let v0 = func.dfg.append_block_param(block0, types::I32);
@@ -196,8 +194,7 @@ mod tests {
 
         let mut pos = FuncCursor::new(&mut func);
         pos.insert_block(block0);
-        pos.ins().brnz(v0, block2, &[]);
-        pos.ins().jump(block1, &[]);
+        pos.ins().brif(v0, block2, &[], block1, &[]);
 
         pos.insert_block(block1);
         pos.ins().return_(&[]);

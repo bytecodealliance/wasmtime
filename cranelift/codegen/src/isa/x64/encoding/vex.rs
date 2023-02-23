@@ -4,7 +4,11 @@
 use super::evex::Register;
 use super::rex::{LegacyPrefixes, OpcodeMap};
 use super::ByteSink;
-use crate::isa::x64::encoding::rex::encode_modrm;
+use crate::ir::TrapCode;
+use crate::isa::x64::args::Amode;
+use crate::isa::x64::encoding::rex;
+use crate::isa::x64::inst::Inst;
+use crate::machinst::MachBuffer;
 
 /// Constructs a VEX-encoded instruction using a builder pattern. This approach makes it visually
 /// easier to transform something the manual's syntax, `VEX.128.66.0F 73 /7 ib` to code:
@@ -16,9 +20,27 @@ pub struct VexInstruction {
     opcode: u8,
     w: bool,
     reg: u8,
-    rm: Register,
+    rm: RegisterOrAmode,
     vvvv: Option<Register>,
     imm: Option<u8>,
+}
+
+#[allow(missing_docs)]
+pub enum RegisterOrAmode {
+    Register(Register),
+    Amode(Amode),
+}
+
+impl From<u8> for RegisterOrAmode {
+    fn from(reg: u8) -> Self {
+        RegisterOrAmode::Register(reg.into())
+    }
+}
+
+impl From<Amode> for RegisterOrAmode {
+    fn from(amode: Amode) -> Self {
+        RegisterOrAmode::Amode(amode)
+    }
 }
 
 impl Default for VexInstruction {
@@ -30,7 +52,7 @@ impl Default for VexInstruction {
             opcode: 0x00,
             w: false,
             reg: 0x00,
-            rm: Register::default(),
+            rm: RegisterOrAmode::Register(Register::default()),
             vvvv: None,
             imm: None,
         }
@@ -105,12 +127,12 @@ impl VexInstruction {
         self
     }
 
-    /// Set the register to use for the `rm` bits; many instructions use this as the "read from
-    /// register/memory" operand. Currently this does not support memory addressing (TODO).Setting
-    /// this affects both the ModRM byte (`rm` section) and the VEX prefix (the extension bits for
-    /// register encodings > 8).
+    /// Set the register to use for the `rm` bits; many instructions use this
+    /// as the "read from register/memory" operand. Setting this affects both
+    /// the ModRM byte (`rm` section) and the VEX prefix (the extension bits
+    /// for register encodings > 8).
     #[inline(always)]
-    pub fn rm(mut self, reg: impl Into<Register>) -> Self {
+    pub fn rm(mut self, reg: impl Into<RegisterOrAmode>) -> Self {
         self.rm = reg.into();
         self
     }
@@ -150,15 +172,33 @@ impl VexInstruction {
     /// The X bit in encoded format (inverted).
     #[inline(always)]
     fn x_bit(&self) -> u8 {
-        // TODO
-        (!0) & 1
+        let reg = match &self.rm {
+            RegisterOrAmode::Register(_) => 0,
+            RegisterOrAmode::Amode(Amode::ImmReg { .. }) => 0,
+            RegisterOrAmode::Amode(Amode::ImmRegRegShift { index, .. }) => {
+                index.to_real_reg().unwrap().hw_enc()
+            }
+            RegisterOrAmode::Amode(Amode::RipRelative { .. }) => 0,
+        };
+
+        !(reg >> 3) & 1
     }
 
     /// The B bit in encoded format (inverted).
     #[inline(always)]
     fn b_bit(&self) -> u8 {
-        let rm: u8 = self.rm.into();
-        (!(rm >> 3)) & 1
+        let reg = match &self.rm {
+            RegisterOrAmode::Register(r) => (*r).into(),
+            RegisterOrAmode::Amode(Amode::ImmReg { base, .. }) => {
+                base.to_real_reg().unwrap().hw_enc()
+            }
+            RegisterOrAmode::Amode(Amode::ImmRegRegShift { base, .. }) => {
+                base.to_real_reg().unwrap().hw_enc()
+            }
+            RegisterOrAmode::Amode(Amode::RipRelative { .. }) => 0,
+        };
+
+        !(reg >> 3) & 1
     }
 
     /// Is the 2 byte prefix available for this instruction?
@@ -176,6 +216,7 @@ impl VexInstruction {
         // encoded by the three-byte form of VEX
         !(self.map == OpcodeMap::_0F3A || self.map == OpcodeMap::_0F38)
     }
+
     /// The last byte of the 2byte and 3byte prefixes is mostly the same, share the common
     /// encoding logic here.
     #[inline(always)]
@@ -225,8 +266,14 @@ impl VexInstruction {
         sink.put1(last_byte);
     }
 
-    /// Emit the VEX-encoded instruction to the code sink:
-    pub fn encode<CS: ByteSink + ?Sized>(&self, sink: &mut CS) {
+    /// Emit the VEX-encoded instruction to the provided buffer.
+    pub fn encode(&self, sink: &mut MachBuffer<Inst>) {
+        if let RegisterOrAmode::Amode(amode) = &self.rm {
+            if amode.can_trap() {
+                sink.add_trap(TrapCode::HeapOutOfBounds);
+            }
+        }
+
         // 2/3 byte prefix
         if self.use_2byte_prefix() {
             self.encode_2byte_prefix(sink);
@@ -237,13 +284,21 @@ impl VexInstruction {
         // 1 Byte Opcode
         sink.put1(self.opcode);
 
-        // 1 ModRM Byte
-        // Not all instructions use Reg as a reg, some use it as an extension of the opcode.
-        let rm: u8 = self.rm.into();
-        sink.put1(encode_modrm(3, self.reg & 7, rm & 7));
-
-        // TODO: 0/1 byte SIB
-        // TODO: 0/1/2/4 bytes DISP
+        match &self.rm {
+            // Not all instructions use Reg as a reg, some use it as an extension
+            // of the opcode.
+            RegisterOrAmode::Register(reg) => {
+                let rm: u8 = (*reg).into();
+                sink.put1(rex::encode_modrm(3, self.reg & 7, rm & 7));
+            }
+            // For address-based modes reuse the logic from the `rex` module
+            // for the modrm and trailing bytes since VEX uses the same
+            // encoding.
+            RegisterOrAmode::Amode(amode) => {
+                let bytes_at_end = if self.imm.is_some() { 1 } else { 0 };
+                rex::emit_modrm_sib_disp(sink, self.reg & 7, amode, bytes_at_end);
+            }
+        }
 
         // Optional 1 Byte imm
         if let Some(imm) = self.imm {
@@ -278,8 +333,9 @@ impl Default for VexVectorLength {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::isa::x64::inst::args::Gpr;
     use crate::isa::x64::inst::regs;
-    use std::vec::Vec;
+    use crate::opts::MemFlags;
 
     #[test]
     fn vpslldq() {
@@ -288,7 +344,7 @@ mod tests {
 
         let dst = regs::xmm1().to_real_reg().unwrap().hw_enc();
         let src = regs::xmm2().to_real_reg().unwrap().hw_enc();
-        let mut sink0 = Vec::new();
+        let mut sink = MachBuffer::new();
 
         VexInstruction::new()
             .length(VexVectorLength::V128)
@@ -299,9 +355,10 @@ mod tests {
             .vvvv(dst)
             .rm(src)
             .imm(0x17)
-            .encode(&mut sink0);
+            .encode(&mut sink);
 
-        assert_eq!(sink0, vec![0xc5, 0xf1, 0x73, 0xfa, 0x17]);
+        let bytes = sink.finish().data;
+        assert_eq!(bytes.as_slice(), [0xc5, 0xf1, 0x73, 0xfa, 0x17]);
     }
 
     #[test]
@@ -314,7 +371,7 @@ mod tests {
         let a = regs::xmm2().to_real_reg().unwrap().hw_enc();
         let b = regs::xmm3().to_real_reg().unwrap().hw_enc();
         let c = regs::xmm4().to_real_reg().unwrap().hw_enc();
-        let mut sink0 = Vec::new();
+        let mut sink = MachBuffer::new();
 
         VexInstruction::new()
             .length(VexVectorLength::V128)
@@ -326,9 +383,10 @@ mod tests {
             .vvvv(a)
             .rm(b)
             .imm_reg(c)
-            .encode(&mut sink0);
+            .encode(&mut sink);
 
-        assert_eq!(sink0, vec![0xc4, 0xe3, 0x69, 0x4b, 0xcb, 0x40]);
+        let bytes = sink.finish().data;
+        assert_eq!(bytes.as_slice(), [0xc4, 0xe3, 0x69, 0x4b, 0xcb, 0x40]);
     }
 
     #[test]
@@ -339,7 +397,7 @@ mod tests {
         let dst = regs::xmm10().to_real_reg().unwrap().hw_enc();
         let a = regs::xmm11().to_real_reg().unwrap().hw_enc();
         let b = regs::xmm12().to_real_reg().unwrap().hw_enc();
-        let mut sink0 = Vec::new();
+        let mut sink = MachBuffer::new();
 
         VexInstruction::new()
             .length(VexVectorLength::V256)
@@ -350,8 +408,91 @@ mod tests {
             .vvvv(a)
             .rm(b)
             .imm(4)
-            .encode(&mut sink0);
+            .encode(&mut sink);
 
-        assert_eq!(sink0, vec![0xc4, 0x41, 0x24, 0xc2, 0xd4, 0x04]);
+        let bytes = sink.finish().data;
+        assert_eq!(bytes.as_slice(), [0xc4, 0x41, 0x24, 0xc2, 0xd4, 0x04]);
+    }
+
+    #[test]
+    fn vandnps() {
+        // VEX.128.0F 55 /r
+        // VANDNPS xmm0, xmm1, xmm2
+
+        let dst = regs::xmm2().to_real_reg().unwrap().hw_enc();
+        let src1 = regs::xmm1().to_real_reg().unwrap().hw_enc();
+        let src2 = regs::xmm0().to_real_reg().unwrap().hw_enc();
+        let mut sink = MachBuffer::new();
+
+        VexInstruction::new()
+            .length(VexVectorLength::V128)
+            .prefix(LegacyPrefixes::None)
+            .map(OpcodeMap::_0F)
+            .opcode(0x55)
+            .reg(dst)
+            .vvvv(src1)
+            .rm(src2)
+            .encode(&mut sink);
+
+        let bytes = sink.finish().data;
+        assert_eq!(bytes.as_slice(), [0xc5, 0xf0, 0x55, 0xd0]);
+    }
+
+    #[test]
+    fn vandnps_mem() {
+        // VEX.128.0F 55 /r
+        // VANDNPS 10(%r13), xmm1, xmm2
+
+        let dst = regs::xmm2().to_real_reg().unwrap().hw_enc();
+        let src1 = regs::xmm1().to_real_reg().unwrap().hw_enc();
+        let src2 = Amode::ImmReg {
+            base: regs::r13(),
+            flags: MemFlags::trusted(),
+            simm32: 10,
+        };
+        let mut sink = MachBuffer::new();
+
+        VexInstruction::new()
+            .length(VexVectorLength::V128)
+            .prefix(LegacyPrefixes::None)
+            .map(OpcodeMap::_0F)
+            .opcode(0x55)
+            .reg(dst)
+            .vvvv(src1)
+            .rm(src2)
+            .encode(&mut sink);
+
+        let bytes = sink.finish().data;
+        assert_eq!(bytes.as_slice(), [0xc4, 0xc1, 0x70, 0x55, 0x55, 0x0a]);
+    }
+
+    #[test]
+    fn vandnps_more_mem() {
+        // VEX.128.0F 55 /r
+        // VANDNPS 100(%rax,%r13,4), xmm1, xmm2
+
+        let dst = regs::xmm2().to_real_reg().unwrap().hw_enc();
+        let src1 = regs::xmm1().to_real_reg().unwrap().hw_enc();
+        let src2 = Amode::ImmRegRegShift {
+            base: Gpr::new(regs::rax()).unwrap(),
+            index: Gpr::new(regs::r13()).unwrap(),
+            flags: MemFlags::trusted(),
+            simm32: 100,
+            shift: 2,
+        };
+        let mut sink = MachBuffer::new();
+
+        VexInstruction::new()
+            .length(VexVectorLength::V128)
+            .prefix(LegacyPrefixes::None)
+            .map(OpcodeMap::_0F)
+            .opcode(0x55)
+            .reg(dst)
+            .vvvv(src1)
+            .rm(src2)
+            .encode(&mut sink);
+
+        let bytes = sink.finish().data;
+        assert_eq!(bytes.as_slice(), [0xc4, 0xa1, 0x70, 0x55, 0x54, 0xa8, 100]);
     }
 }

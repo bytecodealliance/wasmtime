@@ -8,8 +8,14 @@ block0(v0: i64x2, v1: i64):
     return v3
 }
 
+; VCode:
 ; block0:
-;   vleg %v24, 0(%r2), 1
+;   vleg %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vleg %v24, 0(%r2), 0
 ;   br %r14
 
 function %insertlane_i64x2_mem_1(i64x2, i64) -> i64x2 {
@@ -19,8 +25,14 @@ block0(v0: i64x2, v1: i64):
     return v3
 }
 
+; VCode:
 ; block0:
-;   vleg %v24, 0(%r2), 0
+;   vleg %v24, 0(%r2), 1
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vleg %v24, 0(%r2), 1
 ;   br %r14
 
 function %insertlane_i64x2_mem_little_0(i64x2, i64) -> i64x2 {
@@ -30,8 +42,16 @@ block0(v0: i64x2, v1: i64):
     return v3
 }
 
+; VCode:
 ; block0:
-;   vlebrg %v24, 0(%r2), 1
+;   vlebrg %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe6, 0x80
+;   lpdr %f0, %f0
+;   .byte 0x08, 0x02
 ;   br %r14
 
 function %insertlane_i64x2_mem_little_1(i64x2, i64) -> i64x2 {
@@ -41,8 +61,16 @@ block0(v0: i64x2, v1: i64):
     return v3
 }
 
+; VCode:
 ; block0:
-;   vlebrg %v24, 0(%r2), 0
+;   vlebrg %v24, 0(%r2), 1
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe6, 0x80
+;   lpdr %f0, %f0
+;   lr %r0, %r2
 ;   br %r14
 
 function %insertlane_i32x4_mem_0(i32x4, i64) -> i32x4 {
@@ -52,8 +80,14 @@ block0(v0: i32x4, v1: i64):
     return v3
 }
 
+; VCode:
 ; block0:
-;   vlef %v24, 0(%r2), 3
+;   vlef %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vlef %v24, 0(%r2), 0
 ;   br %r14
 
 function %insertlane_i32x4_mem_3(i32x4, i64) -> i32x4 {
@@ -63,8 +97,14 @@ block0(v0: i32x4, v1: i64):
     return v3
 }
 
+; VCode:
 ; block0:
-;   vlef %v24, 0(%r2), 0
+;   vlef %v24, 0(%r2), 3
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vlef %v24, 0(%r2), 3
 ;   br %r14
 
 function %insertlane_i32x4_mem_little_0(i32x4, i64) -> i32x4 {
@@ -74,8 +114,16 @@ block0(v0: i32x4, v1: i64):
     return v3
 }
 
+; VCode:
 ; block0:
-;   vlebrf %v24, 0(%r2), 3
+;   vlebrf %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe6, 0x80
+;   lpdr %f0, %f0
+;   .byte 0x08, 0x03
 ;   br %r14
 
 function %insertlane_i32x4_mem_little_3(i32x4, i64) -> i32x4 {
@@ -85,8 +133,16 @@ block0(v0: i32x4, v1: i64):
     return v3
 }
 
+; VCode:
 ; block0:
-;   vlebrf %v24, 0(%r2), 0
+;   vlebrf %v24, 0(%r2), 3
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe6, 0x80
+;   lpdr %f0, %f0
+;   ler %f0, %f3
 ;   br %r14
 
 function %insertlane_i16x8_mem_0(i16x8, i64) -> i16x8 {
@@ -96,8 +152,14 @@ block0(v0: i16x8, v1: i64):
     return v3
 }
 
+; VCode:
 ; block0:
-;   vleh %v24, 0(%r2), 7
+;   vleh %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vleh %v24, 0(%r2), 0
 ;   br %r14
 
 function %insertlane_i16x8_mem_7(i16x8, i64) -> i16x8 {
@@ -107,8 +169,14 @@ block0(v0: i16x8, v1: i64):
     return v3
 }
 
+; VCode:
 ; block0:
-;   vleh %v24, 0(%r2), 0
+;   vleh %v24, 0(%r2), 7
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vleh %v24, 0(%r2), 7
 ;   br %r14
 
 function %insertlane_i16x8_mem_little_0(i16x8, i64) -> i16x8 {
@@ -118,8 +186,16 @@ block0(v0: i16x8, v1: i64):
     return v3
 }
 
+; VCode:
 ; block0:
-;   vlebrh %v24, 0(%r2), 7
+;   vlebrh %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe6, 0x80
+;   lpdr %f0, %f0
+;   .byte 0x08, 0x01
 ;   br %r14
 
 function %insertlane_i16x8_mem_little_7(i16x8, i64) -> i16x8 {
@@ -129,9 +205,16 @@ block0(v0: i16x8, v1: i64):
     return v3
 }
 
+; VCode:
 ; block0:
-;   vlebrh %v24, 0(%r2), 0
+;   vlebrh %v24, 0(%r2), 7
 ;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe6, 0x80
+;   lpdr %f0, %f0
+;   le %f0, 0x7fe(%r1)
 
 function %insertlane_i8x16_mem_0(i8x16, i64) -> i8x16 {
 block0(v0: i8x16, v1: i64):
@@ -140,8 +223,14 @@ block0(v0: i8x16, v1: i64):
     return v3
 }
 
+; VCode:
 ; block0:
-;   vleb %v24, 0(%r2), 15
+;   vleb %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vleb %v24, 0(%r2), 0
 ;   br %r14
 
 function %insertlane_i8x16_mem_15(i8x16, i64) -> i8x16 {
@@ -151,8 +240,14 @@ block0(v0: i8x16, v1: i64):
     return v3
 }
 
+; VCode:
 ; block0:
-;   vleb %v24, 0(%r2), 0
+;   vleb %v24, 0(%r2), 15
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vleb %v24, 0(%r2), 0xf
 ;   br %r14
 
 function %insertlane_i8x16_mem_little_0(i8x16, i64) -> i8x16 {
@@ -162,8 +257,14 @@ block0(v0: i8x16, v1: i64):
     return v3
 }
 
+; VCode:
 ; block0:
-;   vleb %v24, 0(%r2), 15
+;   vleb %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vleb %v24, 0(%r2), 0
 ;   br %r14
 
 function %insertlane_i8x16_mem_little_15(i8x16, i64) -> i8x16 {
@@ -173,8 +274,14 @@ block0(v0: i8x16, v1: i64):
     return v3
 }
 
+; VCode:
 ; block0:
-;   vleb %v24, 0(%r2), 0
+;   vleb %v24, 0(%r2), 15
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vleb %v24, 0(%r2), 0xf
 ;   br %r14
 
 function %insertlane_f64x2_mem_0(f64x2, i64) -> f64x2 {
@@ -184,8 +291,14 @@ block0(v0: f64x2, v1: i64):
     return v3
 }
 
+; VCode:
 ; block0:
-;   vleg %v24, 0(%r2), 1
+;   vleg %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vleg %v24, 0(%r2), 0
 ;   br %r14
 
 function %insertlane_f64x2_mem_1(f64x2, i64) -> f64x2 {
@@ -195,8 +308,14 @@ block0(v0: f64x2, v1: i64):
     return v3
 }
 
+; VCode:
 ; block0:
-;   vleg %v24, 0(%r2), 0
+;   vleg %v24, 0(%r2), 1
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vleg %v24, 0(%r2), 1
 ;   br %r14
 
 function %insertlane_f64x2_mem_little_0(f64x2, i64) -> f64x2 {
@@ -206,8 +325,16 @@ block0(v0: f64x2, v1: i64):
     return v3
 }
 
+; VCode:
 ; block0:
-;   vlebrg %v24, 0(%r2), 1
+;   vlebrg %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe6, 0x80
+;   lpdr %f0, %f0
+;   .byte 0x08, 0x02
 ;   br %r14
 
 function %insertlane_f64x2_mem_little_1(f64x2, i64) -> f64x2 {
@@ -217,8 +344,16 @@ block0(v0: f64x2, v1: i64):
     return v3
 }
 
+; VCode:
 ; block0:
-;   vlebrg %v24, 0(%r2), 0
+;   vlebrg %v24, 0(%r2), 1
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe6, 0x80
+;   lpdr %f0, %f0
+;   lr %r0, %r2
 ;   br %r14
 
 function %insertlane_f32x4_mem_0(f32x4, i64) -> f32x4 {
@@ -228,8 +363,14 @@ block0(v0: f32x4, v1: i64):
     return v3
 }
 
+; VCode:
 ; block0:
-;   vlef %v24, 0(%r2), 3
+;   vlef %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vlef %v24, 0(%r2), 0
 ;   br %r14
 
 function %insertlane_i32x4_mem_3(i32x4, i64) -> i32x4 {
@@ -239,8 +380,14 @@ block0(v0: i32x4, v1: i64):
     return v3
 }
 
+; VCode:
 ; block0:
-;   vlef %v24, 0(%r2), 0
+;   vlef %v24, 0(%r2), 3
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vlef %v24, 0(%r2), 3
 ;   br %r14
 
 function %insertlane_f32x4_mem_little_0(f32x4, i64) -> f32x4 {
@@ -250,8 +397,16 @@ block0(v0: f32x4, v1: i64):
     return v3
 }
 
+; VCode:
 ; block0:
-;   vlebrf %v24, 0(%r2), 3
+;   vlebrf %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe6, 0x80
+;   lpdr %f0, %f0
+;   .byte 0x08, 0x03
 ;   br %r14
 
 function %insertlane_i32x4_mem_little_3(i32x4, i64) -> i32x4 {
@@ -261,8 +416,16 @@ block0(v0: i32x4, v1: i64):
     return v3
 }
 
+; VCode:
 ; block0:
-;   vlebrf %v24, 0(%r2), 0
+;   vlebrf %v24, 0(%r2), 3
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe6, 0x80
+;   lpdr %f0, %f0
+;   ler %f0, %f3
 ;   br %r14
 
 function %extractlane_i64x2_mem_0(i64x2, i64) {
@@ -272,8 +435,14 @@ block0(v0: i64x2, v1: i64):
     return
 }
 
+; VCode:
 ; block0:
-;   vsteg %v24, 0(%r2), 1
+;   vsteg %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vsteg %v24, 0(%r2), 0
 ;   br %r14
 
 function %extractlane_i64x2_mem_1(i64x2, i64) {
@@ -283,8 +452,14 @@ block0(v0: i64x2, v1: i64):
     return
 }
 
+; VCode:
 ; block0:
-;   vsteg %v24, 0(%r2), 0
+;   vsteg %v24, 0(%r2), 1
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vsteg %v24, 0(%r2), 1
 ;   br %r14
 
 function %extractlane_i64x2_mem_little_0(i64x2, i64) {
@@ -294,8 +469,16 @@ block0(v0: i64x2, v1: i64):
     return
 }
 
+; VCode:
 ; block0:
-;   vstebrg %v24, 0(%r2), 1
+;   vstebrg %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe6, 0x80
+;   lpdr %f0, %f0
+;   .byte 0x08, 0x0a
 ;   br %r14
 
 function %extractlane_i64x2_mem_little_1(i64x2, i64) {
@@ -305,8 +488,16 @@ block0(v0: i64x2, v1: i64):
     return
 }
 
+; VCode:
 ; block0:
-;   vstebrg %v24, 0(%r2), 0
+;   vstebrg %v24, 0(%r2), 1
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe6, 0x80
+;   lpdr %f0, %f0
+;   lr %r0, %r10
 ;   br %r14
 
 function %extractlane_i32x4_mem_0(i32x4, i64) {
@@ -316,8 +507,14 @@ block0(v0: i32x4, v1: i64):
     return
 }
 
+; VCode:
 ; block0:
-;   vstef %v24, 0(%r2), 3
+;   vstef %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vstef %v24, 0(%r2), 0
 ;   br %r14
 
 function %extractlane_i32x4_mem_3(i32x4, i64) {
@@ -327,8 +524,14 @@ block0(v0: i32x4, v1: i64):
     return
 }
 
+; VCode:
 ; block0:
-;   vstef %v24, 0(%r2), 0
+;   vstef %v24, 0(%r2), 3
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vstef %v24, 0(%r2), 3
 ;   br %r14
 
 function %extractlane_i32x4_mem_little_0(i32x4, i64) {
@@ -338,8 +541,16 @@ block0(v0: i32x4, v1: i64):
     return
 }
 
+; VCode:
 ; block0:
-;   vstebrf %v24, 0(%r2), 3
+;   vstebrf %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe6, 0x80
+;   lpdr %f0, %f0
+;   .byte 0x08, 0x0b
 ;   br %r14
 
 function %extractlane_i32x4_mem_little_3(i32x4, i64) {
@@ -349,8 +560,16 @@ block0(v0: i32x4, v1: i64):
     return
 }
 
+; VCode:
 ; block0:
-;   vstebrf %v24, 0(%r2), 0
+;   vstebrf %v24, 0(%r2), 3
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe6, 0x80
+;   lpdr %f0, %f0
+;   ler %f0, %f11
 ;   br %r14
 
 function %extractlane_i16x8_mem_0(i16x8, i64) {
@@ -360,8 +579,14 @@ block0(v0: i16x8, v1: i64):
     return
 }
 
+; VCode:
 ; block0:
-;   vsteh %v24, 0(%r2), 7
+;   vsteh %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vsteh %v24, 0(%r2), 0
 ;   br %r14
 
 function %extractlane_i16x8_mem_7(i16x8, i64) {
@@ -371,8 +596,14 @@ block0(v0: i16x8, v1: i64):
     return
 }
 
+; VCode:
 ; block0:
-;   vsteh %v24, 0(%r2), 0
+;   vsteh %v24, 0(%r2), 7
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vsteh %v24, 0(%r2), 7
 ;   br %r14
 
 function %extractlane_i16x8_mem_little_0(i16x8, i64) {
@@ -382,8 +613,16 @@ block0(v0: i16x8, v1: i64):
     return
 }
 
+; VCode:
 ; block0:
-;   vstebrh %v24, 0(%r2), 7
+;   vstebrh %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe6, 0x80
+;   lpdr %f0, %f0
+;   .byte 0x08, 0x09
 ;   br %r14
 
 function %extractlane_i16x8_mem_little_7(i16x8, i64) {
@@ -393,9 +632,16 @@ block0(v0: i16x8, v1: i64):
     return
 }
 
+; VCode:
 ; block0:
-;   vstebrh %v24, 0(%r2), 0
+;   vstebrh %v24, 0(%r2), 7
 ;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe6, 0x80
+;   lpdr %f0, %f0
+;   le %f0, 0x7fe(%r9)
 
 function %extractlane_i8x16_mem_0(i8x16, i64) {
 block0(v0: i8x16, v1: i64):
@@ -404,8 +650,14 @@ block0(v0: i8x16, v1: i64):
     return
 }
 
+; VCode:
 ; block0:
-;   vsteb %v24, 0(%r2), 15
+;   vsteb %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vsteb %v24, 0(%r2), 0
 ;   br %r14
 
 function %extractlane_i8x16_mem_15(i8x16, i64) {
@@ -415,8 +667,14 @@ block0(v0: i8x16, v1: i64):
     return
 }
 
+; VCode:
 ; block0:
-;   vsteb %v24, 0(%r2), 0
+;   vsteb %v24, 0(%r2), 15
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vsteb %v24, 0(%r2), 0xf
 ;   br %r14
 
 function %extractlane_i8x16_mem_little_0(i8x16, i64) {
@@ -426,8 +684,14 @@ block0(v0: i8x16, v1: i64):
     return
 }
 
+; VCode:
 ; block0:
-;   vsteb %v24, 0(%r2), 15
+;   vsteb %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vsteb %v24, 0(%r2), 0
 ;   br %r14
 
 function %extractlane_i8x16_mem_little_15(i8x16, i64) {
@@ -437,8 +701,14 @@ block0(v0: i8x16, v1: i64):
     return
 }
 
+; VCode:
 ; block0:
-;   vsteb %v24, 0(%r2), 0
+;   vsteb %v24, 0(%r2), 15
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vsteb %v24, 0(%r2), 0xf
 ;   br %r14
 
 function %extractlane_f64x2_mem_0(f64x2, i64) {
@@ -448,8 +718,14 @@ block0(v0: f64x2, v1: i64):
     return
 }
 
+; VCode:
 ; block0:
-;   vsteg %v24, 0(%r2), 1
+;   vsteg %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vsteg %v24, 0(%r2), 0
 ;   br %r14
 
 function %extractlane_f64x2_mem_1(f64x2, i64) {
@@ -459,8 +735,14 @@ block0(v0: f64x2, v1: i64):
     return
 }
 
+; VCode:
 ; block0:
-;   vsteg %v24, 0(%r2), 0
+;   vsteg %v24, 0(%r2), 1
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vsteg %v24, 0(%r2), 1
 ;   br %r14
 
 function %extractlane_f64x2_mem_little_0(f64x2, i64) {
@@ -470,8 +752,16 @@ block0(v0: f64x2, v1: i64):
     return
 }
 
+; VCode:
 ; block0:
-;   vstebrg %v24, 0(%r2), 1
+;   vstebrg %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe6, 0x80
+;   lpdr %f0, %f0
+;   .byte 0x08, 0x0a
 ;   br %r14
 
 function %extractlane_f64x2_mem_little_1(f64x2, i64) {
@@ -481,8 +771,16 @@ block0(v0: f64x2, v1: i64):
     return
 }
 
+; VCode:
 ; block0:
-;   vstebrg %v24, 0(%r2), 0
+;   vstebrg %v24, 0(%r2), 1
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe6, 0x80
+;   lpdr %f0, %f0
+;   lr %r0, %r10
 ;   br %r14
 
 function %extractlane_f32x4_mem_0(f32x4, i64) {
@@ -492,8 +790,14 @@ block0(v0: f32x4, v1: i64):
     return
 }
 
+; VCode:
 ; block0:
-;   vstef %v24, 0(%r2), 3
+;   vstef %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vstef %v24, 0(%r2), 0
 ;   br %r14
 
 function %extractlane_f32x4_mem_3(f32x4, i64) {
@@ -503,8 +807,14 @@ block0(v0: f32x4, v1: i64):
     return
 }
 
+; VCode:
 ; block0:
-;   vstef %v24, 0(%r2), 0
+;   vstef %v24, 0(%r2), 3
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vstef %v24, 0(%r2), 3
 ;   br %r14
 
 function %extractlane_f32x4_mem_little_0(f32x4, i64) {
@@ -514,8 +824,16 @@ block0(v0: f32x4, v1: i64):
     return
 }
 
+; VCode:
 ; block0:
-;   vstebrf %v24, 0(%r2), 3
+;   vstebrf %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe6, 0x80
+;   lpdr %f0, %f0
+;   .byte 0x08, 0x0b
 ;   br %r14
 
 function %extractlane_f32x4_mem_little_3(f32x4, i64) {
@@ -525,8 +843,16 @@ block0(v0: f32x4, v1: i64):
     return
 }
 
+; VCode:
 ; block0:
-;   vstebrf %v24, 0(%r2), 0
+;   vstebrf %v24, 0(%r2), 3
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe6, 0x80
+;   lpdr %f0, %f0
+;   ler %f0, %f11
 ;   br %r14
 
 function %splat_i64x2_mem(i64) -> i64x2 {
@@ -536,7 +862,13 @@ block0(v0: i64):
     return v2
 }
 
+; VCode:
 ; block0:
+;   vlrepg %v24, 0(%r2)
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   vlrepg %v24, 0(%r2)
 ;   br %r14
 
@@ -547,8 +879,16 @@ block0(v0: i64):
     return v2
 }
 
+; VCode:
 ; block0:
 ;   vlbrrepg %v24, 0(%r2)
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe6, 0x80
+;   lpdr %f0, %f0
+;   ler %f0, %f5
 ;   br %r14
 
 function %splat_i32x4_mem(i64) -> i32x4 {
@@ -558,7 +898,13 @@ block0(v0: i64):
     return v2
 }
 
+; VCode:
 ; block0:
+;   vlrepf %v24, 0(%r2)
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   vlrepf %v24, 0(%r2)
 ;   br %r14
 
@@ -569,8 +915,16 @@ block0(v0: i64):
     return v2
 }
 
+; VCode:
 ; block0:
 ;   vlbrrepf %v24, 0(%r2)
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe6, 0x80
+;   lpdr %f0, %f0
+;   ldr %f0, %f5
 ;   br %r14
 
 function %splat_i16x8_mem(i64) -> i16x8 {
@@ -580,7 +934,13 @@ block0(v0: i64):
     return v2
 }
 
+; VCode:
 ; block0:
+;   vlreph %v24, 0(%r2)
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   vlreph %v24, 0(%r2)
 ;   br %r14
 
@@ -591,8 +951,16 @@ block0(v0: i64):
     return v2
 }
 
+; VCode:
 ; block0:
 ;   vlbrreph %v24, 0(%r2)
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe6, 0x80
+;   lpdr %f0, %f0
+;   lr %r0, %r5
 ;   br %r14
 
 function %splat_i8x16_mem(i64) -> i8x16 {
@@ -602,7 +970,13 @@ block0(v0: i64):
     return v2
 }
 
+; VCode:
 ; block0:
+;   vlrepb %v24, 0(%r2)
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   vlrepb %v24, 0(%r2)
 ;   br %r14
 
@@ -613,7 +987,13 @@ block0(v0: i64):
     return v2
 }
 
+; VCode:
 ; block0:
+;   vlrepb %v24, 0(%r2)
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   vlrepb %v24, 0(%r2)
 ;   br %r14
 
@@ -624,7 +1004,13 @@ block0(v0: i64):
     return v2
 }
 
+; VCode:
 ; block0:
+;   vlrepg %v24, 0(%r2)
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   vlrepg %v24, 0(%r2)
 ;   br %r14
 
@@ -635,8 +1021,16 @@ block0(v0: i64):
     return v2
 }
 
+; VCode:
 ; block0:
 ;   vlbrrepg %v24, 0(%r2)
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe6, 0x80
+;   lpdr %f0, %f0
+;   ler %f0, %f5
 ;   br %r14
 
 function %splat_f32x4_mem(i64) -> f32x4 {
@@ -646,7 +1040,13 @@ block0(v0: i64):
     return v2
 }
 
+; VCode:
 ; block0:
+;   vlrepf %v24, 0(%r2)
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
 ;   vlrepf %v24, 0(%r2)
 ;   br %r14
 
@@ -657,8 +1057,16 @@ block0(v0: i64):
     return v2
 }
 
+; VCode:
 ; block0:
 ;   vlbrrepf %v24, 0(%r2)
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0xe6, 0x80
+;   lpdr %f0, %f0
+;   ldr %f0, %f5
 ;   br %r14
 
 function %scalar_to_vector_i64x2_mem(i64) -> i64x2 {
@@ -668,9 +1076,16 @@ block0(v0: i64):
     return v2
 }
 
+; VCode:
 ; block0:
 ;   vgbm %v24, 0
-;   vleg %v24, 0(%r2), 1
+;   vleg %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vzero %v24
+;   vleg %v24, 0(%r2), 0
 ;   br %r14
 
 function %scalar_to_vector_i64x2_mem_little(i64) -> i64x2 {
@@ -680,9 +1095,18 @@ block0(v0: i64):
     return v2
 }
 
+; VCode:
 ; block0:
 ;   vgbm %v24, 0
-;   vlebrg %v24, 0(%r2), 1
+;   vlebrg %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vzero %v24
+;   .byte 0xe6, 0x80
+;   lpdr %f0, %f0
+;   .byte 0x08, 0x02
 ;   br %r14
 
 function %scalar_to_vector_i32x4_mem(i64) -> i32x4 {
@@ -692,9 +1116,16 @@ block0(v0: i64):
     return v2
 }
 
+; VCode:
 ; block0:
 ;   vgbm %v24, 0
-;   vlef %v24, 0(%r2), 3
+;   vlef %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vzero %v24
+;   vlef %v24, 0(%r2), 0
 ;   br %r14
 
 function %scalar_to_vector_i32x4_mem_little(i64) -> i32x4 {
@@ -704,9 +1135,18 @@ block0(v0: i64):
     return v2
 }
 
+; VCode:
 ; block0:
 ;   vgbm %v24, 0
-;   vlebrf %v24, 0(%r2), 3
+;   vlebrf %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vzero %v24
+;   .byte 0xe6, 0x80
+;   lpdr %f0, %f0
+;   .byte 0x08, 0x03
 ;   br %r14
 
 function %scalar_to_vector_i16x8_mem(i64) -> i16x8 {
@@ -716,9 +1156,16 @@ block0(v0: i64):
     return v2
 }
 
+; VCode:
 ; block0:
 ;   vgbm %v24, 0
-;   vleh %v24, 0(%r2), 7
+;   vleh %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vzero %v24
+;   vleh %v24, 0(%r2), 0
 ;   br %r14
 
 function %scalar_to_vector_i16x8_mem_little(i64) -> i16x8 {
@@ -728,9 +1175,18 @@ block0(v0: i64):
     return v2
 }
 
+; VCode:
 ; block0:
 ;   vgbm %v24, 0
-;   vlebrh %v24, 0(%r2), 7
+;   vlebrh %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vzero %v24
+;   .byte 0xe6, 0x80
+;   lpdr %f0, %f0
+;   .byte 0x08, 0x01
 ;   br %r14
 
 function %scalar_to_vector_i8x16_mem(i64) -> i8x16 {
@@ -740,9 +1196,16 @@ block0(v0: i64):
     return v2
 }
 
+; VCode:
 ; block0:
 ;   vgbm %v24, 0
-;   vleb %v24, 0(%r2), 15
+;   vleb %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vzero %v24
+;   vleb %v24, 0(%r2), 0
 ;   br %r14
 
 function %scalar_to_vector_i8x16_mem_little(i64) -> i8x16 {
@@ -752,9 +1215,16 @@ block0(v0: i64):
     return v2
 }
 
+; VCode:
 ; block0:
 ;   vgbm %v24, 0
-;   vleb %v24, 0(%r2), 15
+;   vleb %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vzero %v24
+;   vleb %v24, 0(%r2), 0
 ;   br %r14
 
 function %scalar_to_vector_f64x2_mem(i64) -> f64x2 {
@@ -764,9 +1234,16 @@ block0(v0: i64):
     return v2
 }
 
+; VCode:
 ; block0:
 ;   vgbm %v24, 0
-;   vleg %v24, 0(%r2), 1
+;   vleg %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vzero %v24
+;   vleg %v24, 0(%r2), 0
 ;   br %r14
 
 function %scalar_to_vector_f64x2_mem_little(i64) -> f64x2 {
@@ -776,9 +1253,18 @@ block0(v0: i64):
     return v2
 }
 
+; VCode:
 ; block0:
 ;   vgbm %v24, 0
-;   vlebrg %v24, 0(%r2), 1
+;   vlebrg %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vzero %v24
+;   .byte 0xe6, 0x80
+;   lpdr %f0, %f0
+;   .byte 0x08, 0x02
 ;   br %r14
 
 function %scalar_to_vector_f32x4_mem(i64) -> f32x4 {
@@ -788,9 +1274,16 @@ block0(v0: i64):
     return v2
 }
 
+; VCode:
 ; block0:
 ;   vgbm %v24, 0
-;   vlef %v24, 0(%r2), 3
+;   vlef %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vzero %v24
+;   vlef %v24, 0(%r2), 0
 ;   br %r14
 
 function %scalar_to_vector_f32x4_mem_little(i64) -> f32x4 {
@@ -800,8 +1293,17 @@ block0(v0: i64):
     return v2
 }
 
+; VCode:
 ; block0:
 ;   vgbm %v24, 0
-;   vlebrf %v24, 0(%r2), 3
+;   vlebrf %v24, 0(%r2), 0
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   vzero %v24
+;   .byte 0xe6, 0x80
+;   lpdr %f0, %f0
+;   .byte 0x08, 0x03
 ;   br %r14
 

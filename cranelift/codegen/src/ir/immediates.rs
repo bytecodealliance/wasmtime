@@ -8,7 +8,7 @@ use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::convert::TryFrom;
 use core::fmt::{self, Display, Formatter};
-use core::ops::{Add, Div, Mul, Neg, Sub};
+use core::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Sub};
 use core::str::FromStr;
 use core::{i32, u32};
 #[cfg(feature = "enable-serde")]
@@ -472,6 +472,12 @@ impl FromStr for Offset32 {
 /// An IEEE binary32 immediate floating point value, represented as a u32
 /// containing the bit pattern.
 ///
+/// We specifically avoid using a f32 here since some architectures may silently alter floats.
+/// See: <https://github.com/bytecodealliance/wasmtime/pull/2251#discussion_r498508646>
+///
+/// The [PartialEq] and [Hash] implementations are over the underlying bit pattern, but
+/// [PartialOrd] respects IEEE754 semantics.
+///
 /// All bit patterns are allowed.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
@@ -480,6 +486,12 @@ pub struct Ieee32(u32);
 
 /// An IEEE binary64 immediate floating point value, represented as a u64
 /// containing the bit pattern.
+///
+/// We specifically avoid using a f64 here since some architectures may silently alter floats.
+/// See: <https://github.com/bytecodealliance/wasmtime/pull/2251#discussion_r498508646>
+///
+/// The [PartialEq] and [Hash] implementations are over the underlying bit pattern, but
+/// [PartialOrd] respects IEEE754 semantics.
 ///
 /// All bit patterns are allowed.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
@@ -909,6 +921,38 @@ impl Div for Ieee32 {
     }
 }
 
+impl BitAnd for Ieee32 {
+    type Output = Ieee32;
+
+    fn bitand(self, rhs: Self) -> Self::Output {
+        Self::with_bits(self.bits() & rhs.bits())
+    }
+}
+
+impl BitOr for Ieee32 {
+    type Output = Ieee32;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self::with_bits(self.bits() | rhs.bits())
+    }
+}
+
+impl BitXor for Ieee32 {
+    type Output = Ieee32;
+
+    fn bitxor(self, rhs: Self) -> Self::Output {
+        Self::with_bits(self.bits() ^ rhs.bits())
+    }
+}
+
+impl Not for Ieee32 {
+    type Output = Ieee32;
+
+    fn not(self) -> Self::Output {
+        Self::with_bits(!self.bits())
+    }
+}
+
 impl Ieee64 {
     /// Create a new `Ieee64` containing the bits of `x`.
     pub fn with_bits(x: u64) -> Self {
@@ -1098,6 +1142,38 @@ impl Div for Ieee64 {
 
     fn div(self, rhs: Self) -> Self::Output {
         Self::with_float(self.as_f64() / rhs.as_f64())
+    }
+}
+
+impl BitAnd for Ieee64 {
+    type Output = Ieee64;
+
+    fn bitand(self, rhs: Self) -> Self::Output {
+        Self::with_bits(self.bits() & rhs.bits())
+    }
+}
+
+impl BitOr for Ieee64 {
+    type Output = Ieee64;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self::with_bits(self.bits() | rhs.bits())
+    }
+}
+
+impl BitXor for Ieee64 {
+    type Output = Ieee64;
+
+    fn bitxor(self, rhs: Self) -> Self::Output {
+        Self::with_bits(self.bits() ^ rhs.bits())
+    }
+}
+
+impl Not for Ieee64 {
+    type Output = Ieee64;
+
+    fn not(self) -> Self::Output {
+        Self::with_bits(!self.bits())
     }
 }
 

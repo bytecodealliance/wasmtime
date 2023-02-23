@@ -17,8 +17,8 @@ fn define_control_flow(
     imm: &Immediates,
     entities: &EntityRefs,
 ) {
-    let block = &Operand::new("block", &entities.block).with_doc("Destination basic block");
-    let args = &Operand::new("args", &entities.varargs).with_doc("block arguments");
+    let block_call = &Operand::new("block_call", &entities.block_call)
+        .with_doc("Destination basic block, with its arguments provided");
 
     ig.push(
         Inst::new(
@@ -32,127 +32,33 @@ fn define_control_flow(
         "#,
             &formats.jump,
         )
-        .operands_in(vec![block, args])
-        .is_terminator(true)
-        .is_branch(true),
+        .operands_in(vec![block_call])
+        .branches(),
     );
 
-    let Testable = &TypeVar::new(
-        "Testable",
-        "A scalar boolean or integer type",
-        TypeSetBuilder::new()
-            .ints(Interval::All)
-            .bools(Interval::All)
-            .build(),
-    );
-
-    {
-        let c = &Operand::new("c", Testable).with_doc("Controlling value to test");
-
-        ig.push(
-            Inst::new(
-                "brz",
-                r#"
-        Branch when zero.
-
-        If ``c`` is a `b1` value, take the branch when ``c`` is false. If
-        ``c`` is an integer value, take the branch when ``c = 0``.
-        "#,
-                &formats.branch,
-            )
-            .operands_in(vec![c, block, args])
-            .is_branch(true),
-        );
-
-        ig.push(
-            Inst::new(
-                "brnz",
-                r#"
-        Branch when non-zero.
-
-        If ``c`` is a `b1` value, take the branch when ``c`` is true. If
-        ``c`` is an integer value, take the branch when ``c != 0``.
-        "#,
-                &formats.branch,
-            )
-            .operands_in(vec![c, block, args])
-            .is_branch(true),
-        );
-    }
-
-    let iB = &TypeVar::new(
-        "iB",
-        "A scalar integer type",
+    let ScalarTruthy = &TypeVar::new(
+        "ScalarTruthy",
+        "A scalar truthy type",
         TypeSetBuilder::new().ints(Interval::All).build(),
     );
-    let iflags: &TypeVar = &ValueType::Special(types::Flag::IFlags.into()).into();
-    let fflags: &TypeVar = &ValueType::Special(types::Flag::FFlags.into()).into();
 
     {
-        let Cond = &Operand::new("Cond", &imm.intcc);
-        let x = &Operand::new("x", iB);
-        let y = &Operand::new("y", iB);
-
-        ig.push(
-            Inst::new(
-                "br_icmp",
-                r#"
-        Compare scalar integers and branch.
-
-        Compare ``x`` and ``y`` in the same way as the `icmp` instruction
-        and take the branch if the condition is true:
-
-        ```text
-            br_icmp ugt v1, v2, block4(v5, v6)
-        ```
-
-        is semantically equivalent to:
-
-        ```text
-            v10 = icmp ugt, v1, v2
-            brnz v10, block4(v5, v6)
-        ```
-
-        Some RISC architectures like MIPS and RISC-V provide instructions that
-        implement all or some of the condition codes. The instruction can also
-        be used to represent *macro-op fusion* on architectures like Intel's.
-        "#,
-                &formats.branch_icmp,
-            )
-            .operands_in(vec![Cond, x, y, block, args])
-            .is_branch(true),
-        );
-
-        let f = &Operand::new("f", iflags);
+        let c = &Operand::new("c", ScalarTruthy).with_doc("Controlling value to test");
+        let block_then = &Operand::new("block_then", &entities.block_then).with_doc("Then block");
+        let block_else = &Operand::new("block_else", &entities.block_else).with_doc("Else block");
 
         ig.push(
             Inst::new(
                 "brif",
                 r#"
-        Branch when condition is true in integer CPU flags.
+        Conditional branch when cond is non-zero.
+
+        Take the ``then`` branch when ``c != 0``, and the ``else`` branch otherwise.
         "#,
-                &formats.branch_int,
+                &formats.brif,
             )
-            .operands_in(vec![Cond, f, block, args])
-            .is_branch(true),
-        );
-    }
-
-    {
-        let Cond = &Operand::new("Cond", &imm.floatcc);
-
-        let f = &Operand::new("f", fflags);
-
-        ig.push(
-            Inst::new(
-                "brff",
-                r#"
-        Branch when condition is true in floating point CPU flags.
-        "#,
-                &formats.branch_float,
-            )
-            .operands_in(vec![Cond, f, block, args])
-            .is_branch(true),
+            .operands_in(vec![c, block_then, block_else])
+            .branches(),
         );
     }
 
@@ -173,7 +79,8 @@ fn define_control_flow(
 
         Use ``x`` as an unsigned index into the jump table ``JT``. If a jump
         table entry is found, branch to the corresponding block. If no entry was
-        found or the index is out-of-bounds, branch to the given default block.
+        found or the index is out-of-bounds, branch to the default block of the
+        table.
 
         Note that this branch instruction can't pass arguments to the targeted
         blocks. Split critical edges as needed to work around this.
@@ -186,9 +93,8 @@ fn define_control_flow(
         "#,
                 &formats.branch_table,
             )
-            .operands_in(vec![x, block, JT])
-            .is_terminator(true)
-            .is_branch(true),
+            .operands_in(vec![x, JT])
+            .branches(),
         );
     }
 
@@ -206,9 +112,9 @@ fn define_control_flow(
     "#,
             &formats.nullary,
         )
-        .other_side_effects(true)
-        .can_load(true)
-        .can_store(true),
+        .other_side_effects()
+        .can_load()
+        .can_store(),
     );
 
     {
@@ -222,11 +128,11 @@ fn define_control_flow(
                 &formats.trap,
             )
             .operands_in(vec![code])
-            .can_trap(true)
-            .is_terminator(true),
+            .can_trap()
+            .terminates_block(),
         );
 
-        let c = &Operand::new("c", Testable).with_doc("Controlling value to test");
+        let c = &Operand::new("c", ScalarTruthy).with_doc("Controlling value to test");
         ig.push(
             Inst::new(
                 "trapz",
@@ -238,7 +144,7 @@ fn define_control_flow(
                 &formats.cond_trap,
             )
             .operands_in(vec![c, code])
-            .can_trap(true),
+            .can_trap(),
         );
 
         ig.push(
@@ -252,10 +158,10 @@ fn define_control_flow(
                 &formats.trap,
             )
             .operands_in(vec![code])
-            .can_trap(true),
+            .can_trap(),
         );
 
-        let c = &Operand::new("c", Testable).with_doc("Controlling value to test");
+        let c = &Operand::new("c", ScalarTruthy).with_doc("Controlling value to test");
         ig.push(
             Inst::new(
                 "trapnz",
@@ -267,7 +173,7 @@ fn define_control_flow(
                 &formats.cond_trap,
             )
             .operands_in(vec![c, code])
-            .can_trap(true),
+            .can_trap(),
         );
 
         ig.push(
@@ -281,36 +187,7 @@ fn define_control_flow(
                 &formats.cond_trap,
             )
             .operands_in(vec![c, code])
-            .can_trap(true),
-        );
-
-        let Cond = &Operand::new("Cond", &imm.intcc);
-        let f = &Operand::new("f", iflags);
-        ig.push(
-            Inst::new(
-                "trapif",
-                r#"
-        Trap when condition is true in integer CPU flags.
-        "#,
-                &formats.int_cond_trap,
-            )
-            .operands_in(vec![Cond, f, code])
-            .can_trap(true),
-        );
-
-        let Cond = &Operand::new("Cond", &imm.floatcc);
-        let f = &Operand::new("f", fflags);
-        let code = &Operand::new("code", &imm.trapcode);
-        ig.push(
-            Inst::new(
-                "trapff",
-                r#"
-        Trap when condition is true in floating point CPU flags.
-        "#,
-                &formats.float_cond_trap,
-            )
-            .operands_in(vec![Cond, f, code])
-            .can_trap(true),
+            .can_trap(),
         );
     }
 
@@ -328,8 +205,7 @@ fn define_control_flow(
             &formats.multiary,
         )
         .operands_in(vec![rvals])
-        .is_return(true)
-        .is_terminator(true),
+        .returns(),
     );
 
     let FN = &Operand::new("FN", &entities.func_ref)
@@ -349,7 +225,7 @@ fn define_control_flow(
         )
         .operands_in(vec![FN, args])
         .operands_out(vec![rvals])
-        .is_call(true),
+        .call(),
     );
 
     let SIG = &Operand::new("SIG", &entities.sig_ref).with_doc("function signature");
@@ -374,7 +250,52 @@ fn define_control_flow(
         )
         .operands_in(vec![SIG, callee, args])
         .operands_out(vec![rvals])
-        .is_call(true),
+        .call(),
+    );
+
+    ig.push(
+        Inst::new(
+            "return_call",
+            r#"
+        Direct tail call.
+
+        Tail call a function which has been declared in the preamble. The
+        argument types must match the function's signature, the caller and
+        callee calling conventions must be the same, and must be a calling
+        convention that supports tail calls.
+
+        This instruction is a block terminator.
+        "#,
+            &formats.call,
+        )
+        .operands_in(vec![FN, args])
+        .returns()
+        .call(),
+    );
+
+    ig.push(
+        Inst::new(
+            "return_call_indirect",
+            r#"
+        Indirect tail call.
+
+        Call the function pointed to by `callee` with the given arguments. The
+        argument types must match the function's signature, the caller and
+        callee calling conventions must be the same, and must be a calling
+        convention that supports tail calls.
+
+        This instruction is a block terminator.
+
+        Note that this is different from WebAssembly's ``tail_call_indirect``;
+        the callee is a native address, rather than a table index. For
+        WebAssembly, `table_addr` and `load` are used to obtain a native address
+        from a table.
+        "#,
+            &formats.call_indirect,
+        )
+        .operands_in(vec![SIG, callee, args])
+        .returns()
+        .call(),
     );
 
     let FN = &Operand::new("FN", &entities.func_ref)
@@ -412,7 +333,6 @@ fn define_simd_lane_access(
         TypeSetBuilder::new()
             .ints(Interval::All)
             .floats(Interval::All)
-            .bools(Interval::All)
             .simd_lanes(Interval::All)
             .dynamic_simd_lanes(Interval::All)
             .includes_scalars(false)
@@ -527,7 +447,7 @@ fn define_simd_arithmetic(
 
     ig.push(
         Inst::new(
-            "imin",
+            "smin",
             r#"
         Signed integer minimum.
         "#,
@@ -551,7 +471,7 @@ fn define_simd_arithmetic(
 
     ig.push(
         Inst::new(
-            "imax",
+            "smax",
             r#"
         Signed integer maximum.
         "#,
@@ -592,6 +512,8 @@ fn define_simd_arithmetic(
             "avg_round",
             r#"
         Unsigned average with rounding: `a := (x + y + 1) // 2`
+
+        The addition does not lose any information (such as from overflow).
         "#,
             &formats.binary,
         )
@@ -680,10 +602,7 @@ pub(crate) fn define(
     define_simd_arithmetic(&mut ig, formats, imm, entities);
 
     // Operand kind shorthands.
-    let iflags: &TypeVar = &ValueType::Special(types::Flag::IFlags.into()).into();
-    let fflags: &TypeVar = &ValueType::Special(types::Flag::FFlags.into()).into();
-
-    let b1: &TypeVar = &ValueType::from(LaneType::from(types::Bool::B1)).into();
+    let i8: &TypeVar = &ValueType::from(LaneType::from(types::Int::I8)).into();
     let f32_: &TypeVar = &ValueType::from(LaneType::from(types::Float::F32)).into();
     let f64_: &TypeVar = &ValueType::from(LaneType::from(types::Float::F64)).into();
 
@@ -698,25 +617,32 @@ pub(crate) fn define(
             .build(),
     );
 
-    let Bool = &TypeVar::new(
-        "Bool",
-        "A scalar or vector boolean type",
+    let NarrowInt = &TypeVar::new(
+        "NarrowInt",
+        "An integer type with lanes type to `i64`",
         TypeSetBuilder::new()
-            .bools(Interval::All)
+            .ints(8..64)
             .simd_lanes(Interval::All)
+            .dynamic_simd_lanes(Interval::All)
             .build(),
     );
 
-    let ScalarBool = &TypeVar::new(
-        "ScalarBool",
-        "A scalar boolean type",
-        TypeSetBuilder::new().bools(Interval::All).build(),
+    let ScalarTruthy = &TypeVar::new(
+        "ScalarTruthy",
+        "A scalar truthy type",
+        TypeSetBuilder::new().ints(Interval::All).build(),
     );
 
     let iB = &TypeVar::new(
         "iB",
         "A scalar integer type",
         TypeSetBuilder::new().ints(Interval::All).build(),
+    );
+
+    let iSwappable = &TypeVar::new(
+        "iSwappable",
+        "A multi byte scalar integer type",
+        TypeSetBuilder::new().ints(16..128).build(),
     );
 
     let iAddr = &TypeVar::new(
@@ -731,40 +657,27 @@ pub(crate) fn define(
         TypeSetBuilder::new().refs(Interval::All).build(),
     );
 
-    let Testable = &TypeVar::new(
-        "Testable",
-        "A scalar boolean or integer type",
-        TypeSetBuilder::new()
-            .ints(Interval::All)
-            .bools(Interval::All)
-            .build(),
-    );
-
     let TxN = &TypeVar::new(
         "TxN",
         "A SIMD vector type",
         TypeSetBuilder::new()
             .ints(Interval::All)
             .floats(Interval::All)
-            .bools(Interval::All)
             .simd_lanes(Interval::All)
             .includes_scalars(false)
             .build(),
     );
     let Any = &TypeVar::new(
         "Any",
-        "Any integer, float, boolean, or reference scalar or vector type",
+        "Any integer, float, or reference scalar or vector type",
         TypeSetBuilder::new()
             .ints(Interval::All)
             .floats(Interval::All)
-            .bools(Interval::All)
             .refs(Interval::All)
             .simd_lanes(Interval::All)
             .includes_scalars(true)
             .build(),
     );
-
-    let AnyTo = &TypeVar::copy_from(Any, "AnyTo".to_string());
 
     let Mem = &TypeVar::new(
         "Mem",
@@ -803,7 +716,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -818,7 +731,7 @@ pub(crate) fn define(
             &formats.store,
         )
         .operands_in(vec![MemFlags, x, p, Offset])
-        .can_store(true),
+        .can_store(),
     );
 
     let iExt8 = &TypeVar::new(
@@ -841,7 +754,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -856,7 +769,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -870,7 +783,7 @@ pub(crate) fn define(
             &formats.store,
         )
         .operands_in(vec![MemFlags, x, p, Offset])
-        .can_store(true),
+        .can_store(),
     );
 
     let iExt16 = &TypeVar::new(
@@ -893,7 +806,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -908,7 +821,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -922,7 +835,7 @@ pub(crate) fn define(
             &formats.store,
         )
         .operands_in(vec![MemFlags, x, p, Offset])
-        .can_store(true),
+        .can_store(),
     );
 
     let iExt32 = &TypeVar::new(
@@ -945,7 +858,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -960,7 +873,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -974,7 +887,7 @@ pub(crate) fn define(
             &formats.store,
         )
         .operands_in(vec![MemFlags, x, p, Offset])
-        .can_store(true),
+        .can_store(),
     );
 
     let I16x8 = &TypeVar::new(
@@ -999,7 +912,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -1013,7 +926,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     let I32x4 = &TypeVar::new(
@@ -1038,7 +951,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -1052,7 +965,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     let I64x2 = &TypeVar::new(
@@ -1077,7 +990,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -1091,7 +1004,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     let x = &Operand::new("x", Mem).with_doc("Value to be stored");
@@ -1116,7 +1029,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![SS, Offset])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -1135,7 +1048,7 @@ pub(crate) fn define(
             &formats.stack_store,
         )
         .operands_in(vec![x, SS, Offset])
-        .can_store(true),
+        .can_store(),
     );
 
     ig.push(
@@ -1167,7 +1080,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![DSS])
         .operands_out(vec![a])
-        .can_load(true),
+        .can_load(),
     );
 
     ig.push(
@@ -1182,7 +1095,7 @@ pub(crate) fn define(
             &formats.dynamic_stack_store,
         )
         .operands_in(vec![x, DSS])
-        .can_store(true),
+        .can_store(),
     );
 
     let GV = &Operand::new("GV", &entities.global_value);
@@ -1236,36 +1149,6 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let HeapOffset = &TypeVar::new(
-        "HeapOffset",
-        "An unsigned heap offset",
-        TypeSetBuilder::new().ints(32..64).build(),
-    );
-
-    let H = &Operand::new("H", &entities.heap);
-    let p = &Operand::new("p", HeapOffset);
-    let Size = &Operand::new("Size", &imm.uimm32).with_doc("Size in bytes");
-
-    ig.push(
-        Inst::new(
-            "heap_addr",
-            r#"
-        Bounds check and compute absolute address of heap memory.
-
-        Verify that the offset range ``p .. p + Size - 1`` is in bounds for the
-        heap H, and generate an absolute address that is safe to dereference.
-
-        1. If ``p + Size`` is not greater than the heap bound, return an
-           absolute address corresponding to a byte offset of ``p`` from the
-           heap's base address.
-        2. If ``p + Size`` is greater than the heap bound, generate a trap.
-        "#,
-            &formats.heap_addr,
-        )
-        .operands_in(vec![H, p, Size])
-        .operands_out(vec![addr]),
-    );
-
     // Note this instruction is marked as having other side-effects, so GVN won't try to hoist it,
     // which would result in it being subject to spilling. While not hoisting would generally hurt
     // performance, since a computed value used many times may need to be regenerated before each
@@ -1281,7 +1164,7 @@ pub(crate) fn define(
             &formats.nullary,
         )
         .operands_out(vec![addr])
-        .other_side_effects(true),
+        .other_side_effects(),
     );
 
     ig.push(
@@ -1293,7 +1176,7 @@ pub(crate) fn define(
             &formats.unary,
         )
         .operands_in(vec![addr])
-        .other_side_effects(true),
+        .other_side_effects(),
     );
 
     ig.push(
@@ -1366,7 +1249,7 @@ pub(crate) fn define(
     );
 
     let N = &Operand::new("N", &imm.imm64);
-    let a = &Operand::new("a", Int).with_doc("A constant integer scalar or vector value");
+    let a = &Operand::new("a", NarrowInt).with_doc("A constant integer scalar or vector value");
 
     ig.push(
         Inst::new(
@@ -1417,24 +1300,6 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let N = &Operand::new("N", &imm.boolean);
-    let a = &Operand::new("a", Bool).with_doc("A constant boolean scalar or vector value");
-
-    ig.push(
-        Inst::new(
-            "bconst",
-            r#"
-        Boolean constant.
-
-        Create a scalar boolean SSA value with an immediate constant value, or
-        a boolean vector where all the lanes have the same value.
-        "#,
-            &formats.unary_bool,
-        )
-        .operands_in(vec![N])
-        .operands_out(vec![a]),
-    );
-
     let N = &Operand::new("N", &imm.pool_constant)
         .with_doc("The 16 immediate bytes of a 128-bit vector");
     let a = &Operand::new("a", TxN).with_doc("A constant vector value");
@@ -1453,21 +1318,6 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let constant =
-        &Operand::new("constant", &imm.pool_constant).with_doc("A constant in the constant pool");
-    let address = &Operand::new("address", iAddr);
-    ig.push(
-        Inst::new(
-            "const_addr",
-            r#"
-        Calculate the base address of a value in the constant pool.
-        "#,
-            &formats.unary_const,
-        )
-        .operands_in(vec![constant])
-        .operands_out(vec![address]),
-    );
-
     let mask = &Operand::new("mask", &imm.uimm128)
         .with_doc("The 16 immediate bytes used for selecting the elements to shuffle");
     let Tx16 = &TypeVar::new(
@@ -1476,7 +1326,6 @@ pub(crate) fn define(
          lane counts and widths",
         TypeSetBuilder::new()
             .ints(8..8)
-            .bools(8..8)
             .simd_lanes(16..16)
             .includes_scalars(false)
             .build(),
@@ -1526,7 +1375,7 @@ pub(crate) fn define(
         &formats.nullary,
     ));
 
-    let c = &Operand::new("c", Testable).with_doc("Controlling value to test");
+    let c = &Operand::new("c", ScalarTruthy).with_doc("Controlling value to test");
     let x = &Operand::new("x", Any).with_doc("Value to use when `c` is true");
     let y = &Operand::new("y", Any).with_doc("Value to use when `c` is false");
     let a = &Operand::new("a", Any);
@@ -1546,28 +1395,13 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let cc = &Operand::new("cc", &imm.intcc).with_doc("Controlling condition code");
-    let flags = &Operand::new("flags", iflags).with_doc("The machine's flag register");
-
     ig.push(
         Inst::new(
-            "selectif",
-            r#"
-        Conditional select, dependent on integer condition codes.
-        "#,
-            &formats.int_select,
-        )
-        .operands_in(vec![cc, flags, x, y])
-        .operands_out(vec![a]),
-    );
-
-    ig.push(
-        Inst::new(
-            "selectif_spectre_guard",
+            "select_spectre_guard",
             r#"
             Conditional select intended for Spectre guards.
 
-            This operation is semantically equivalent to a selectif instruction.
+            This operation is semantically equivalent to a select instruction.
             However, it is guaranteed to not be removed or otherwise altered by any
             optimization pass, and is guaranteed to result in a conditional-move
             instruction, not a branch-based lowering.  As such, it is suitable
@@ -1582,11 +1416,14 @@ pub(crate) fn define(
             speculative path, this ensures that no Spectre vulnerability will
             exist.
             "#,
-            &formats.int_select,
+            &formats.ternary,
         )
-        .operands_in(vec![cc, flags, x, y])
+        .operands_in(vec![c, x, y])
         .operands_out(vec![a])
-        .other_side_effects(true),
+        .other_side_effects()
+        // We can de-duplicate spectre selects since the side effect is
+        // idempotent.
+        .side_effects_idempotent(),
     );
 
     let c = &Operand::new("c", Any).with_doc("Controlling value to test");
@@ -1606,82 +1443,6 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let x = &Operand::new("x", Any);
-
-    ig.push(
-        Inst::new(
-            "copy",
-            r#"
-        Register-register copy.
-
-        This instruction copies its input, preserving the value type.
-
-        A pure SSA-form program does not need to copy values, but this
-        instruction is useful for representing intermediate stages during
-        instruction transformations, and the register allocator needs a way of
-        representing register copies.
-        "#,
-            &formats.unary,
-        )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
-    );
-
-    let x = &Operand::new("x", TxN).with_doc("Vector to split");
-    let lo = &Operand::new("lo", &TxN.half_vector()).with_doc("Low-numbered lanes of `x`");
-    let hi = &Operand::new("hi", &TxN.half_vector()).with_doc("High-numbered lanes of `x`");
-
-    ig.push(
-        Inst::new(
-            "vsplit",
-            r#"
-        Split a vector into two halves.
-
-        Split the vector `x` into two separate values, each containing half of
-        the lanes from ``x``. The result may be two scalars if ``x`` only had
-        two lanes.
-        "#,
-            &formats.unary,
-        )
-        .operands_in(vec![x])
-        .operands_out(vec![lo, hi]),
-    );
-
-    let Any128 = &TypeVar::new(
-        "Any128",
-        "Any scalar or vector type with as most 128 lanes",
-        TypeSetBuilder::new()
-            .ints(Interval::All)
-            .floats(Interval::All)
-            .bools(Interval::All)
-            .simd_lanes(1..128)
-            .includes_scalars(true)
-            .build(),
-    );
-
-    let x = &Operand::new("x", Any128).with_doc("Low-numbered lanes");
-    let y = &Operand::new("y", Any128).with_doc("High-numbered lanes");
-    let a = &Operand::new("a", &Any128.double_vector()).with_doc("Concatenation of `x` and `y`");
-
-    ig.push(
-        Inst::new(
-            "vconcat",
-            r#"
-        Vector concatenation.
-
-        Return a vector formed by concatenating ``x`` and ``y``. The resulting
-        vector type has twice as many lanes as each of the inputs. The lanes of
-        ``x`` appear as the low-numbered lanes, and the lanes of ``y`` become
-        the high-numbered lanes of ``a``.
-
-        It is possible to form a vector by concatenating two scalars.
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
-    );
-
     let c = &Operand::new("c", &TxN.as_bool()).with_doc("Controlling vector");
     let x = &Operand::new("x", TxN).with_doc("Value to use where `c` is true");
     let y = &Operand::new("y", TxN).with_doc("Value to use where `c` is false");
@@ -1693,7 +1454,7 @@ pub(crate) fn define(
             r#"
         Vector lane select.
 
-        Select lanes from ``x`` or ``y`` controlled by the lanes of the boolean
+        Select lanes from ``x`` or ``y`` controlled by the lanes of the truthy
         vector ``c``.
         "#,
             &formats.ternary,
@@ -1702,7 +1463,7 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let s = &Operand::new("s", b1);
+    let s = &Operand::new("s", i8);
 
     ig.push(
         Inst::new(
@@ -1772,15 +1533,9 @@ pub(crate) fn define(
         | sge    | uge      | Greater than or equal |
         | sgt    | ugt      | Greater than          |
         | sle    | ule      | Less than or equal    |
-        | of     | *        | Overflow              |
-        | nof    | *        | No Overflow           |
 
-        \* The unsigned version of overflow condition for add has ISA-specific semantics and thus
-        has been kept as a method on the TargetIsa trait as
-        [unsigned_add_overflow_condition][crate::isa::TargetIsa::unsigned_add_overflow_condition].
-
-        When this instruction compares integer vectors, it returns a boolean
-        vector of lane-wise comparisons.
+        When this instruction compares integer vectors, it returns a vector of
+        lane-wise comparisons.
         "#,
             &formats.int_compare,
         )
@@ -1788,7 +1543,7 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let a = &Operand::new("a", b1);
+    let a = &Operand::new("a", i8);
     let x = &Operand::new("x", iB);
     let Y = &Operand::new("Y", &imm.imm64);
 
@@ -1799,7 +1554,7 @@ pub(crate) fn define(
         Compare scalar integer to a constant.
 
         This is the same as the `icmp` instruction, except one operand is
-        an immediate constant.
+        a sign extended 64 bit immediate constant.
 
         This instruction can only compare scalars. Use `icmp` for
         lane-wise vector comparisons.
@@ -1808,40 +1563,6 @@ pub(crate) fn define(
         )
         .operands_in(vec![Cond, x, Y])
         .operands_out(vec![a]),
-    );
-
-    let f = &Operand::new("f", iflags);
-    let x = &Operand::new("x", iB);
-    let y = &Operand::new("y", iB);
-
-    ig.push(
-        Inst::new(
-            "ifcmp",
-            r#"
-        Compare scalar integers and return flags.
-
-        Compare two scalar integer values and return integer CPU flags
-        representing the result.
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![x, y])
-        .operands_out(vec![f]),
-    );
-
-    ig.push(
-        Inst::new(
-            "ifcmp_imm",
-            r#"
-        Compare scalar integer to a constant and return flags.
-
-        Like `icmp_imm`, but returns integer CPU flags instead of testing
-        a specific condition code.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![x, Y])
-        .operands_out(vec![f]),
     );
 
     let a = &Operand::new("a", Int);
@@ -1996,7 +1717,8 @@ pub(crate) fn define(
             )
             .operands_in(vec![x, y])
             .operands_out(vec![a])
-            .can_trap(true),
+            .can_trap()
+            .side_effects_idempotent(),
         );
 
         ig.push(
@@ -2014,7 +1736,8 @@ pub(crate) fn define(
             )
             .operands_in(vec![x, y])
             .operands_out(vec![a])
-            .can_trap(true),
+            .can_trap()
+            .side_effects_idempotent(),
         );
 
         ig.push(
@@ -2029,7 +1752,8 @@ pub(crate) fn define(
             )
             .operands_in(vec![x, y])
             .operands_out(vec![a])
-            .can_trap(true),
+            .can_trap()
+            .side_effects_idempotent(),
         );
 
         ig.push(
@@ -2044,7 +1768,8 @@ pub(crate) fn define(
             )
             .operands_in(vec![x, y])
             .operands_out(vec![a])
-            .can_trap(true),
+            .can_trap()
+            .side_effects_idempotent(),
         );
     }
 
@@ -2058,7 +1783,7 @@ pub(crate) fn define(
             r#"
         Add immediate integer.
 
-        Same as `iadd`, but one operand is an immediate constant.
+        Same as `iadd`, but one operand is a sign extended 64 bit immediate constant.
 
         Polymorphic over all scalar integer types, but does not support vector
         types.
@@ -2075,6 +1800,8 @@ pub(crate) fn define(
             r#"
         Integer multiplication by immediate constant.
 
+        Same as `imul`, but one operand is a sign extended 64 bit immediate constant.
+
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
@@ -2090,6 +1817,8 @@ pub(crate) fn define(
             r#"
         Unsigned integer division by an immediate constant.
 
+        Same as `udiv`, but one operand is a zero extended 64 bit immediate constant.
+
         This operation traps if the divisor is zero.
         "#,
             &formats.binary_imm64,
@@ -2103,6 +1832,8 @@ pub(crate) fn define(
             "sdiv_imm",
             r#"
         Signed integer division by an immediate constant.
+
+        Same as `sdiv`, but one operand is a sign extended 64 bit immediate constant.
 
         This operation traps if the divisor is zero, or if the result is not
         representable in `B` bits two's complement. This only happens
@@ -2120,6 +1851,8 @@ pub(crate) fn define(
             r#"
         Unsigned integer remainder with immediate divisor.
 
+        Same as `urem`, but one operand is a zero extended 64 bit immediate constant.
+
         This operation traps if the divisor is zero.
         "#,
             &formats.binary_imm64,
@@ -2134,6 +1867,8 @@ pub(crate) fn define(
             r#"
         Signed integer remainder with immediate divisor.
 
+        Same as `srem`, but one operand is a sign extended 64 bit immediate constant.
+
         This operation traps if the divisor is zero.
         "#,
             &formats.binary_imm64,
@@ -2147,6 +1882,8 @@ pub(crate) fn define(
             "irsub_imm",
             r#"
         Immediate reverse wrapping subtraction: `a := Y - x \pmod{2^B}`.
+
+        The immediate operand is a sign extended 64 bit constant.
 
         Also works as integer negation when `Y = 0`. Use `iadd_imm`
         with a negative immediate operand for the reverse immediate
@@ -2165,15 +1902,10 @@ pub(crate) fn define(
     let x = &Operand::new("x", iB);
     let y = &Operand::new("y", iB);
 
-    let c_in = &Operand::new("c_in", b1).with_doc("Input carry flag");
-    let c_out = &Operand::new("c_out", b1).with_doc("Output carry flag");
-    let b_in = &Operand::new("b_in", b1).with_doc("Input borrow flag");
-    let b_out = &Operand::new("b_out", b1).with_doc("Output borrow flag");
-
-    let c_if_in = &Operand::new("c_in", iflags);
-    let c_if_out = &Operand::new("c_out", iflags);
-    let b_if_in = &Operand::new("b_in", iflags);
-    let b_if_out = &Operand::new("b_out", iflags);
+    let c_in = &Operand::new("c_in", i8).with_doc("Input carry flag");
+    let c_out = &Operand::new("c_out", i8).with_doc("Output carry flag");
+    let b_in = &Operand::new("b_in", i8).with_doc("Input borrow flag");
+    let b_out = &Operand::new("b_out", i8).with_doc("Output borrow flag");
 
     ig.push(
         Inst::new(
@@ -2193,27 +1925,6 @@ pub(crate) fn define(
             &formats.ternary,
         )
         .operands_in(vec![x, y, c_in])
-        .operands_out(vec![a]),
-    );
-
-    ig.push(
-        Inst::new(
-            "iadd_ifcin",
-            r#"
-        Add integers with carry in.
-
-        Same as `iadd` with an additional carry flag input. Computes:
-
-        ```text
-            a = x + y + c_{in} \pmod 2^B
-        ```
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.ternary,
-        )
-        .operands_in(vec![x, y, c_if_in])
         .operands_out(vec![a]),
     );
 
@@ -2241,28 +1952,6 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
-            "iadd_ifcout",
-            r#"
-        Add integers with carry out.
-
-        Same as `iadd` with an additional carry flag output.
-
-        ```text
-            a &= x + y \pmod 2^B \\
-            c_{out} &= x+y >= 2^B
-        ```
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a, c_if_out]),
-    );
-
-    ig.push(
-        Inst::new(
             "iadd_carry",
             r#"
         Add integers with carry in and out.
@@ -2283,27 +1972,34 @@ pub(crate) fn define(
         .operands_out(vec![a, c_out]),
     );
 
-    ig.push(
-        Inst::new(
-            "iadd_ifcarry",
-            r#"
-        Add integers with carry in and out.
+    {
+        let code = &Operand::new("code", &imm.trapcode);
 
-        Same as `iadd` with an additional carry flag input and output.
+        let i32_64 = &TypeVar::new(
+            "i32_64",
+            "A 32 or 64-bit scalar integer type",
+            TypeSetBuilder::new().ints(32..64).build(),
+        );
 
-        ```text
-            a &= x + y + c_{in} \pmod 2^B \\
-            c_{out} &= x + y + c_{in} >= 2^B
-        ```
+        let a = &Operand::new("a", i32_64);
+        let x = &Operand::new("x", i32_64);
+        let y = &Operand::new("y", i32_64);
+        ig.push(
+            Inst::new(
+                "uadd_overflow_trap",
+                r#"
+            Unsigned addition of x and y, trapping if the result overflows.
 
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.ternary,
-        )
-        .operands_in(vec![x, y, c_if_in])
-        .operands_out(vec![a, c_if_out]),
-    );
+            Accepts 32 or 64-bit integers, and does not support vector types.
+            "#,
+                &formats.int_add_trap,
+            )
+            .operands_in(vec![x, y, code])
+            .operands_out(vec![a])
+            .can_trap()
+            .side_effects_idempotent(),
+        );
+    }
 
     ig.push(
         Inst::new(
@@ -2323,27 +2019,6 @@ pub(crate) fn define(
             &formats.ternary,
         )
         .operands_in(vec![x, y, b_in])
-        .operands_out(vec![a]),
-    );
-
-    ig.push(
-        Inst::new(
-            "isub_ifbin",
-            r#"
-        Subtract integers with borrow in.
-
-        Same as `isub` with an additional borrow flag input. Computes:
-
-        ```text
-            a = x - (y + b_{in}) \pmod 2^B
-        ```
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.ternary,
-        )
-        .operands_in(vec![x, y, b_if_in])
         .operands_out(vec![a]),
     );
 
@@ -2371,28 +2046,6 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
-            "isub_ifbout",
-            r#"
-        Subtract integers with borrow out.
-
-        Same as `isub` with an additional borrow flag output.
-
-        ```text
-            a &= x - y \pmod 2^B \\
-            b_{out} &= x < y
-        ```
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a, b_if_out]),
-    );
-
-    ig.push(
-        Inst::new(
             "isub_borrow",
             r#"
         Subtract integers with borrow in and out.
@@ -2413,35 +2066,12 @@ pub(crate) fn define(
         .operands_out(vec![a, b_out]),
     );
 
-    ig.push(
-        Inst::new(
-            "isub_ifborrow",
-            r#"
-        Subtract integers with borrow in and out.
-
-        Same as `isub` with an additional borrow flag input and output.
-
-        ```text
-            a &= x - (y + b_{in}) \pmod 2^B \\
-            b_{out} &= x < y + b_{in}
-        ```
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.ternary,
-        )
-        .operands_in(vec![x, y, b_if_in])
-        .operands_out(vec![a, b_if_out]),
-    );
-
     let bits = &TypeVar::new(
         "bits",
-        "Any integer, float, or boolean scalar or vector type",
+        "Any integer, float, or vector type",
         TypeSetBuilder::new()
             .ints(Interval::All)
             .floats(Interval::All)
-            .bools(Interval::All)
             .simd_lanes(Interval::All)
             .includes_scalars(true)
             .build(),
@@ -2550,7 +2180,7 @@ pub(crate) fn define(
             r#"
         Bitwise and with immediate.
 
-        Same as `band`, but one operand is an immediate constant.
+        Same as `band`, but one operand is a zero extended 64 bit immediate constant.
 
         Polymorphic over all scalar integer types, but does not support vector
         types.
@@ -2567,7 +2197,7 @@ pub(crate) fn define(
             r#"
         Bitwise or with immediate.
 
-        Same as `bor`, but one operand is an immediate constant.
+        Same as `bor`, but one operand is a zero extended 64 bit immediate constant.
 
         Polymorphic over all scalar integer types, but does not support vector
         types.
@@ -2584,7 +2214,7 @@ pub(crate) fn define(
             r#"
         Bitwise xor with immediate.
 
-        Same as `bxor`, but one operand is an immediate constant.
+        Same as `bxor`, but one operand is a zero extended 64 bit immediate constant.
 
         Polymorphic over all scalar integer types, but does not support vector
         types.
@@ -2633,6 +2263,8 @@ pub(crate) fn define(
             "rotl_imm",
             r#"
         Rotate left by immediate.
+
+        Same as `rotl`, but one operand is a zero extended 64 bit immediate constant.
         "#,
             &formats.binary_imm64,
         )
@@ -2645,6 +2277,8 @@ pub(crate) fn define(
             "rotr_imm",
             r#"
         Rotate right by immediate.
+
+        Same as `rotr`, but one operand is a zero extended 64 bit immediate constant.
         "#,
             &formats.binary_imm64,
         )
@@ -2820,6 +2454,23 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    let x = &Operand::new("x", iSwappable);
+    let a = &Operand::new("a", iSwappable);
+
+    ig.push(
+        Inst::new(
+            "bswap",
+            r#"
+        Reverse the byte order of an integer.
+
+        Reverses the bytes in ``x``.
+        "#,
+            &formats.unary,
+        )
+        .operands_in(vec![x])
+        .operands_out(vec![a]),
+    );
+
     let x = &Operand::new("x", Int);
     let a = &Operand::new("a", Int);
 
@@ -2919,29 +2570,12 @@ pub(crate) fn define(
         floating point comparisons of the same name.
 
         When this instruction compares floating point vectors, it returns a
-        boolean vector with the results of lane-wise comparisons.
+        vector with the results of lane-wise comparisons.
         "#,
             &formats.float_compare,
         )
         .operands_in(vec![Cond, x, y])
         .operands_out(vec![a]),
-    );
-
-    let f = &Operand::new("f", fflags);
-
-    ig.push(
-        Inst::new(
-            "ffcmp",
-            r#"
-        Floating point comparison returning flags.
-
-        Compares two numbers like `fcmp`, but returns floating point CPU
-        flags instead of testing a specific condition.
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![x, y])
-        .operands_out(vec![f]),
     );
 
     let x = &Operand::new("x", Float);
@@ -3198,7 +2832,7 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let a = &Operand::new("a", b1);
+    let a = &Operand::new("a", i8);
     let x = &Operand::new("x", Ref);
 
     ig.push(
@@ -3216,7 +2850,7 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let a = &Operand::new("a", b1);
+    let a = &Operand::new("a", i8);
     let x = &Operand::new("x", Ref);
 
     ig.push(
@@ -3234,45 +2868,9 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let Cond = &Operand::new("Cond", &imm.intcc);
-    let f = &Operand::new("f", iflags);
-    let a = &Operand::new("a", b1);
-
-    ig.push(
-        Inst::new(
-            "trueif",
-            r#"
-        Test integer CPU flags for a specific condition.
-
-        Check the CPU flags in ``f`` against the ``Cond`` condition code and
-        return true when the condition code is satisfied.
-        "#,
-            &formats.int_cond,
-        )
-        .operands_in(vec![Cond, f])
-        .operands_out(vec![a]),
-    );
-
-    let Cond = &Operand::new("Cond", &imm.floatcc);
-    let f = &Operand::new("f", fflags);
-
-    ig.push(
-        Inst::new(
-            "trueff",
-            r#"
-        Test floating point CPU flags for a specific condition.
-
-        Check the CPU flags in ``f`` against the ``Cond`` condition code and
-        return true when the condition code is satisfied.
-        "#,
-            &formats.float_cond,
-        )
-        .operands_in(vec![Cond, f])
-        .operands_out(vec![a]),
-    );
-
     let x = &Operand::new("x", Mem);
     let a = &Operand::new("a", MemTo).with_doc("Bits of `x` reinterpreted");
+    let MemFlags = &Operand::new("MemFlags", &imm.memflags);
 
     ig.push(
         Inst::new(
@@ -3282,34 +2880,16 @@ pub(crate) fn define(
 
         The input and output types must be storable to memory and of the same
         size. A bitcast is equivalent to storing one type and loading the other
-        type from the same address.
+        type from the same address, both using the specified MemFlags.
+
+        Note that this operation only supports the `big` or `little` MemFlags.
+        The specified byte order only affects the result in the case where
+        input and output types differ in lane count/size.  In this case, the
+        operation is only valid if a byte order specifier is provided.
         "#,
-            &formats.unary,
+            &formats.load_no_offset,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
-    );
-
-    let x = &Operand::new("x", Any);
-    let a = &Operand::new("a", AnyTo).with_doc("Bits of `x` reinterpreted");
-
-    ig.push(
-        Inst::new(
-            "raw_bitcast",
-            r#"
-        Cast the bits in `x` as a different type of the same bit width.
-
-        This instruction does not change the data's representation but allows
-        data in registers to be used as different types, e.g. an i32x4 as a
-        b8x16. The only constraint on the result `a` is that it can be
-        `raw_bitcast` back to the original type. Also, in a raw_bitcast between
-        vector types with the same number of lanes, the value of each result
-        lane is a raw_bitcast of the corresponding operand lane. TODO there is
-        currently no mechanism for enforcing the bit width constraint.
-        "#,
-            &formats.unary,
-        )
-        .operands_in(vec![x])
+        .operands_in(vec![MemFlags, x])
         .operands_out(vec![a]),
     );
 
@@ -3329,80 +2909,11 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let Bool = &TypeVar::new(
-        "Bool",
-        "A scalar boolean type",
-        TypeSetBuilder::new().bools(Interval::All).build(),
-    );
-
-    let BoolTo = &TypeVar::new(
-        "BoolTo",
-        "A smaller boolean type",
-        TypeSetBuilder::new().bools(Interval::All).build(),
-    );
-
-    let x = &Operand::new("x", Bool);
-    let a = &Operand::new("a", BoolTo);
-
-    ig.push(
-        Inst::new(
-            "breduce",
-            r#"
-        Convert `x` to a smaller boolean type by discarding the most significant bits.
-        "#,
-            &formats.unary,
-        )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
-    );
-
-    let BoolTo = &TypeVar::new(
-        "BoolTo",
-        "A larger boolean type",
-        TypeSetBuilder::new().bools(Interval::All).build(),
-    );
-    let x = &Operand::new("x", Bool);
-    let a = &Operand::new("a", BoolTo);
-
-    ig.push(
-        Inst::new(
-            "bextend",
-            r#"
-        Convert `x` to a larger boolean type
-        "#,
-            &formats.unary,
-        )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
-    );
-
-    let IntTo = &TypeVar::new(
-        "IntTo",
-        "A scalar integer type",
-        TypeSetBuilder::new().ints(Interval::All).build(),
-    );
-    let x = &Operand::new("x", ScalarBool);
-    let a = &Operand::new("a", IntTo);
-
-    ig.push(
-        Inst::new(
-            "bint",
-            r#"
-        Convert `x` to an integer.
-
-        True maps to 1 and false maps to 0.
-        "#,
-            &formats.unary,
-        )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
-    );
-
-    let Bool = &TypeVar::new(
-        "Bool",
-        "A scalar or vector boolean type",
+    let Truthy = &TypeVar::new(
+        "Truthy",
+        "A scalar or vector whose values are truthy",
         TypeSetBuilder::new()
-            .bools(Interval::All)
+            .ints(Interval::All)
             .simd_lanes(Interval::All)
             .build(),
     );
@@ -3414,7 +2925,7 @@ pub(crate) fn define(
             .simd_lanes(Interval::All)
             .build(),
     );
-    let x = &Operand::new("x", Bool);
+    let x = &Operand::new("x", Truthy);
     let a = &Operand::new("a", IntTo);
 
     ig.push(
@@ -3733,8 +3244,7 @@ pub(crate) fn define(
         - `f32` and `f64`. This may change in the future.
 
         The result type must have the same number of vector lanes as the input,
-        and the result lanes must not have fewer bits than the input lanes. If
-        the input and output types are the same, this is a no-op.
+        and the result lanes must not have fewer bits than the input lanes.
         "#,
             &formats.unary,
         )
@@ -3755,8 +3265,7 @@ pub(crate) fn define(
         - `f32` and `f64`. This may change in the future.
 
         The result type must have the same number of vector lanes as the input,
-        and the result lanes must not have more bits than the input lanes. If
-        the input and output types are the same, this is a no-op.
+        and the result lanes must not have more bits than the input lanes.
         "#,
             &formats.unary,
         )
@@ -3827,27 +3336,54 @@ pub(crate) fn define(
         .operands_out(vec![x]),
     );
 
-    let x = &Operand::new("x", Float);
+    let FloatScalar = &TypeVar::new(
+        "FloatScalar",
+        "A scalar only floating point number",
+        TypeSetBuilder::new().floats(Interval::All).build(),
+    );
+    let x = &Operand::new("x", FloatScalar);
     let a = &Operand::new("a", IntTo);
 
     ig.push(
         Inst::new(
             "fcvt_to_uint",
             r#"
-        Convert floating point to unsigned integer.
+        Converts floating point scalars to unsigned integer.
 
-        Each lane in `x` is converted to an unsigned integer by rounding
-        towards zero. If `x` is NaN or if the unsigned integral value cannot be
-        represented in the result type, this instruction traps.
+        Only operates on `x` if it is a scalar. If `x` is NaN or if
+        the unsigned integral value cannot be represented in the result
+        type, this instruction traps.
 
-        The result type must have the same number of vector lanes as the input.
         "#,
             &formats.unary,
         )
         .operands_in(vec![x])
         .operands_out(vec![a])
-        .can_trap(true),
+        .can_trap()
+        .side_effects_idempotent(),
     );
+
+    ig.push(
+        Inst::new(
+            "fcvt_to_sint",
+            r#"
+        Converts floating point scalars to signed integer.
+
+        Only operates on `x` if it is a scalar. If `x` is NaN or if
+        the unsigned integral value cannot be represented in the result
+        type, this instruction traps.
+
+        "#,
+            &formats.unary,
+        )
+        .operands_in(vec![x])
+        .operands_out(vec![a])
+        .can_trap()
+        .side_effects_idempotent(),
+    );
+
+    let x = &Operand::new("x", Float);
+    let a = &Operand::new("a", IntTo);
 
     ig.push(
         Inst::new(
@@ -3861,25 +3397,6 @@ pub(crate) fn define(
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
-    );
-
-    ig.push(
-        Inst::new(
-            "fcvt_to_sint",
-            r#"
-        Convert floating point to signed integer.
-
-        Each lane in `x` is converted to a signed integer by rounding towards
-        zero. If `x` is NaN or if the signed integral value cannot be
-        represented in the result type, this instruction traps.
-
-        The result type must have the same number of vector lanes as the input.
-        "#,
-            &formats.unary,
-        )
-        .operands_in(vec![x])
-        .operands_out(vec![a])
-        .can_trap(true),
     );
 
     ig.push(
@@ -3990,15 +3507,6 @@ pub(crate) fn define(
         .operands_out(vec![lo, hi]),
     );
 
-    let NarrowInt = &TypeVar::new(
-        "NarrowInt",
-        "An integer type with lanes type to `i64`",
-        TypeSetBuilder::new()
-            .ints(8..64)
-            .simd_lanes(Interval::All)
-            .build(),
-    );
-
     let lo = &Operand::new("lo", NarrowInt);
     let hi = &Operand::new("hi", NarrowInt);
     let a = &Operand::new("a", &NarrowInt.double_width())
@@ -4047,9 +3555,9 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, AtomicRmwOp, p, x])
         .operands_out(vec![a])
-        .can_load(true)
-        .can_store(true)
-        .other_side_effects(true),
+        .can_load()
+        .can_store()
+        .other_side_effects(),
     );
 
     ig.push(
@@ -4069,9 +3577,9 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p, e, x])
         .operands_out(vec![a])
-        .can_load(true)
-        .can_store(true)
-        .other_side_effects(true),
+        .can_load()
+        .can_store()
+        .other_side_effects(),
     );
 
     ig.push(
@@ -4089,8 +3597,8 @@ pub(crate) fn define(
         )
         .operands_in(vec![MemFlags, p])
         .operands_out(vec![a])
-        .can_load(true)
-        .other_side_effects(true),
+        .can_load()
+        .other_side_effects(),
     );
 
     ig.push(
@@ -4107,8 +3615,8 @@ pub(crate) fn define(
             &formats.store_no_offset,
         )
         .operands_in(vec![MemFlags, x, p])
-        .can_store(true)
-        .other_side_effects(true),
+        .can_store()
+        .other_side_effects(),
     );
 
     ig.push(
@@ -4121,7 +3629,7 @@ pub(crate) fn define(
         "#,
             &formats.nullary,
         )
-        .other_side_effects(true),
+        .other_side_effects(),
     );
 
     let TxN = &TypeVar::new(
@@ -4130,7 +3638,6 @@ pub(crate) fn define(
         TypeSetBuilder::new()
             .ints(Interval::All)
             .floats(Interval::All)
-            .bools(Interval::All)
             .dynamic_simd_lanes(Interval::All)
             .build(),
     );

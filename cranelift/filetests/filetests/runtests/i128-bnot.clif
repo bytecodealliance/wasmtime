@@ -1,0 +1,11 @@
+test interpret
+test run
+target s390x
+
+function %bnot_i128(i128) -> i128 {
+block0(v0: i128):
+    v1 = bnot.i128 v0
+    return v1
+}
+; run: %bnot_i128(0) == -1
+; run: %bnot_i128(1) == -2

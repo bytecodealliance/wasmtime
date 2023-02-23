@@ -5,21 +5,68 @@ use crate::sched::{
 };
 use crate::snapshots::preview_1::types as snapshot1_types;
 use crate::snapshots::preview_1::wasi_snapshot_preview1::WasiSnapshotPreview1 as Snapshot1;
-use crate::{Error, ErrorExt, WasiCtx};
+use crate::snapshots::preview_1::MAX_SHARED_BUFFER_SIZE;
+use crate::{ErrorExt, WasiCtx};
 use cap_std::time::Duration;
 use std::collections::HashSet;
 use std::convert::{TryFrom, TryInto};
 use std::io::{IoSlice, IoSliceMut};
 use std::ops::Deref;
-use tracing::debug;
 use wiggle::GuestPtr;
 
 wiggle::from_witx!({
     witx: ["$WASI_ROOT/phases/old/snapshot_0/witx/wasi_unstable.witx"],
-    errors: { errno => Error },
+    errors: { errno => trappable Error },
     async: *,
     wasmtime: false,
 });
+
+use types::Error;
+
+impl ErrorExt for Error {
+    fn not_found() -> Self {
+        types::Errno::Noent.into()
+    }
+    fn too_big() -> Self {
+        types::Errno::TooBig.into()
+    }
+    fn badf() -> Self {
+        types::Errno::Badf.into()
+    }
+    fn exist() -> Self {
+        types::Errno::Exist.into()
+    }
+    fn illegal_byte_sequence() -> Self {
+        types::Errno::Ilseq.into()
+    }
+    fn invalid_argument() -> Self {
+        types::Errno::Inval.into()
+    }
+    fn io() -> Self {
+        types::Errno::Io.into()
+    }
+    fn name_too_long() -> Self {
+        types::Errno::Nametoolong.into()
+    }
+    fn not_dir() -> Self {
+        types::Errno::Notdir.into()
+    }
+    fn not_supported() -> Self {
+        types::Errno::Notsup.into()
+    }
+    fn overflow() -> Self {
+        types::Errno::Overflow.into()
+    }
+    fn range() -> Self {
+        types::Errno::Range.into()
+    }
+    fn seek_pipe() -> Self {
+        types::Errno::Spipe.into()
+    }
+    fn perm() -> Self {
+        types::Errno::Perm.into()
+    }
+}
 
 impl wiggle::GuestErrorType for types::Errno {
     fn success() -> Self {
@@ -27,19 +74,24 @@ impl wiggle::GuestErrorType for types::Errno {
     }
 }
 
-impl types::UserErrorConversion for WasiCtx {
-    fn errno_from_error(&mut self, e: Error) -> Result<types::Errno, wiggle::Trap> {
-        debug!("Error: {:?}", e);
-        e.try_into()
-            .map_err(|e| wiggle::Trap::String(format!("{:?}", e)))
+impl From<wiggle::GuestError> for Error {
+    fn from(err: wiggle::GuestError) -> Error {
+        snapshot1_types::Error::from(err).into()
     }
 }
 
-impl TryFrom<Error> for types::Errno {
-    type Error = Error;
-    fn try_from(e: Error) -> Result<types::Errno, Error> {
-        let snapshot1_errno: snapshot1_types::Errno = e.try_into()?;
-        Ok(snapshot1_errno.into())
+impl From<snapshot1_types::Error> for Error {
+    fn from(error: snapshot1_types::Error) -> Error {
+        match error.downcast() {
+            Ok(errno) => Error::from(types::Errno::from(errno)),
+            Err(trap) => Error::trap(trap),
+        }
+    }
+}
+
+impl From<std::num::TryFromIntError> for Error {
+    fn from(_err: std::num::TryFromIntError) -> Error {
+        types::Errno::Overflow.into()
     }
 }
 
@@ -342,11 +394,13 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         argv: &GuestPtr<'a, GuestPtr<'a, u8>>,
         argv_buf: &GuestPtr<'a, u8>,
     ) -> Result<(), Error> {
-        Snapshot1::args_get(self, argv, argv_buf).await
+        Snapshot1::args_get(self, argv, argv_buf).await?;
+        Ok(())
     }
 
     async fn args_sizes_get(&mut self) -> Result<(types::Size, types::Size), Error> {
-        Snapshot1::args_sizes_get(self).await
+        let s = Snapshot1::args_sizes_get(self).await?;
+        Ok(s)
     }
 
     async fn environ_get<'a>(
@@ -354,15 +408,18 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         environ: &GuestPtr<'a, GuestPtr<'a, u8>>,
         environ_buf: &GuestPtr<'a, u8>,
     ) -> Result<(), Error> {
-        Snapshot1::environ_get(self, environ, environ_buf).await
+        Snapshot1::environ_get(self, environ, environ_buf).await?;
+        Ok(())
     }
 
     async fn environ_sizes_get(&mut self) -> Result<(types::Size, types::Size), Error> {
-        Snapshot1::environ_sizes_get(self).await
+        let s = Snapshot1::environ_sizes_get(self).await?;
+        Ok(s)
     }
 
     async fn clock_res_get(&mut self, id: types::Clockid) -> Result<types::Timestamp, Error> {
-        Snapshot1::clock_res_get(self, id.into()).await
+        let t = Snapshot1::clock_res_get(self, id.into()).await?;
+        Ok(t)
     }
 
     async fn clock_time_get(
@@ -370,7 +427,8 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         id: types::Clockid,
         precision: types::Timestamp,
     ) -> Result<types::Timestamp, Error> {
-        Snapshot1::clock_time_get(self, id.into(), precision).await
+        let t = Snapshot1::clock_time_get(self, id.into(), precision).await?;
+        Ok(t)
     }
 
     async fn fd_advise(
@@ -380,7 +438,8 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         len: types::Filesize,
         advice: types::Advice,
     ) -> Result<(), Error> {
-        Snapshot1::fd_advise(self, fd.into(), offset, len, advice.into()).await
+        Snapshot1::fd_advise(self, fd.into(), offset, len, advice.into()).await?;
+        Ok(())
     }
 
     async fn fd_allocate(
@@ -389,15 +448,18 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         offset: types::Filesize,
         len: types::Filesize,
     ) -> Result<(), Error> {
-        Snapshot1::fd_allocate(self, fd.into(), offset, len).await
+        Snapshot1::fd_allocate(self, fd.into(), offset, len).await?;
+        Ok(())
     }
 
     async fn fd_close(&mut self, fd: types::Fd) -> Result<(), Error> {
-        Snapshot1::fd_close(self, fd.into()).await
+        Snapshot1::fd_close(self, fd.into()).await?;
+        Ok(())
     }
 
     async fn fd_datasync(&mut self, fd: types::Fd) -> Result<(), Error> {
-        Snapshot1::fd_datasync(self, fd.into()).await
+        Snapshot1::fd_datasync(self, fd.into()).await?;
+        Ok(())
     }
 
     async fn fd_fdstat_get(&mut self, fd: types::Fd) -> Result<types::Fdstat, Error> {
@@ -409,7 +471,8 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         fd: types::Fd,
         flags: types::Fdflags,
     ) -> Result<(), Error> {
-        Snapshot1::fd_fdstat_set_flags(self, fd.into(), flags.into()).await
+        Snapshot1::fd_fdstat_set_flags(self, fd.into(), flags.into()).await?;
+        Ok(())
     }
 
     async fn fd_fdstat_set_rights(
@@ -424,7 +487,8 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
             fs_rights_base.into(),
             fs_rights_inheriting.into(),
         )
-        .await
+        .await?;
+        Ok(())
     }
 
     async fn fd_filestat_get(&mut self, fd: types::Fd) -> Result<types::Filestat, Error> {
@@ -436,7 +500,8 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         fd: types::Fd,
         size: types::Filesize,
     ) -> Result<(), Error> {
-        Snapshot1::fd_filestat_set_size(self, fd.into(), size).await
+        Snapshot1::fd_filestat_set_size(self, fd.into(), size).await?;
+        Ok(())
     }
 
     async fn fd_filestat_set_times(
@@ -446,7 +511,8 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         mtim: types::Timestamp,
         fst_flags: types::Fstflags,
     ) -> Result<(), Error> {
-        Snapshot1::fd_filestat_set_times(self, fd.into(), atim, mtim, fst_flags.into()).await
+        Snapshot1::fd_filestat_set_times(self, fd.into(), atim, mtim, fst_flags.into()).await?;
+        Ok(())
     }
 
     // NOTE on fd_read, fd_pread, fd_write, fd_pwrite implementations:
@@ -462,26 +528,68 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         fd: types::Fd,
         iovs: &types::IovecArray<'a>,
     ) -> Result<types::Size, Error> {
-        let f = self
-            .table()
-            .get_file_mut(u32::from(fd))?
-            .get_cap_mut(FileCaps::READ)?;
+        let f = self.table().get_file(u32::from(fd))?;
+        let f = f.get_cap(FileCaps::READ)?;
 
-        let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> = iovs
+        let iovs: Vec<wiggle::GuestPtr<[u8]>> = iovs
             .iter()
             .map(|iov_ptr| {
                 let iov_ptr = iov_ptr?;
                 let iov: types::Iovec = iov_ptr.read()?;
-                Ok(iov.buf.as_array(iov.buf_len).as_slice_mut()?)
+                Ok(iov.buf.as_array(iov.buf_len))
             })
             .collect::<Result<_, Error>>()?;
 
-        let mut ioslices: Vec<IoSliceMut> = guest_slices
-            .iter_mut()
-            .map(|s| IoSliceMut::new(&mut *s))
-            .collect();
+        // If the first iov structure is from shared memory we can safely assume
+        // all the rest will be. We then read into memory based on the memory's
+        // shared-ness:
+        // - if not shared, we copy directly into the Wasm memory
+        // - if shared, we use an intermediate buffer; this avoids Rust unsafety
+        //   due to holding on to a `&mut [u8]` of Wasm memory when we cannot
+        //   guarantee the `&mut` exclusivity--other threads could be modifying
+        //   the data as this functions writes to it. Though likely there is no
+        //   issue with OS writing to io structs in multi-threaded scenarios,
+        //   since we do not know here if `&dyn WasiFile` does anything else
+        //   (e.g., read), we cautiously incur some performance overhead by
+        //   copying twice.
+        let is_shared_memory = iovs
+            .iter()
+            .next()
+            .and_then(|s| Some(s.is_shared_memory()))
+            .unwrap_or(false);
+        let bytes_read: u64 = if is_shared_memory {
+            // For shared memory, read into an intermediate buffer. Only the
+            // first iov will be filled and even then the read is capped by the
+            // `MAX_SHARED_BUFFER_SIZE`, so users are expected to re-call.
+            let iov = iovs.into_iter().next();
+            if let Some(iov) = iov {
+                let mut buffer = vec![0; (iov.len() as usize).min(MAX_SHARED_BUFFER_SIZE)];
+                let bytes_read = f.read_vectored(&mut [IoSliceMut::new(&mut buffer)]).await?;
+                iov.get_range(0..bytes_read.try_into()?)
+                    .expect("it should always be possible to slice the iov smaller")
+                    .copy_from_slice(&buffer[0..bytes_read.try_into()?])?;
+                bytes_read
+            } else {
+                return Ok(0);
+            }
+        } else {
+            // Convert all of the unsafe guest slices to safe ones--this uses
+            // Wiggle's internal borrow checker to ensure no overlaps. We assume
+            // here that, because the memory is not shared, there are no other
+            // threads to access it while it is written to.
+            let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> = iovs
+                .into_iter()
+                .map(|iov| Ok(iov.as_slice_mut()?.unwrap()))
+                .collect::<Result<_, Error>>()?;
 
-        let bytes_read = f.read_vectored(&mut ioslices).await?;
+            // Read directly into the Wasm memory.
+            let mut ioslices: Vec<IoSliceMut> = guest_slices
+                .iter_mut()
+                .map(|s| IoSliceMut::new(&mut *s))
+                .collect();
+            f.read_vectored(&mut ioslices).await?
+        };
+
         Ok(types::Size::try_from(bytes_read)?)
     }
 
@@ -491,26 +599,70 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         iovs: &types::IovecArray<'a>,
         offset: types::Filesize,
     ) -> Result<types::Size, Error> {
-        let f = self
-            .table()
-            .get_file_mut(u32::from(fd))?
-            .get_cap_mut(FileCaps::READ | FileCaps::SEEK)?;
+        let f = self.table().get_file(u32::from(fd))?;
+        let f = f.get_cap(FileCaps::READ | FileCaps::SEEK)?;
 
-        let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> = iovs
+        let iovs: Vec<wiggle::GuestPtr<[u8]>> = iovs
             .iter()
             .map(|iov_ptr| {
                 let iov_ptr = iov_ptr?;
                 let iov: types::Iovec = iov_ptr.read()?;
-                Ok(iov.buf.as_array(iov.buf_len).as_slice_mut()?)
+                Ok(iov.buf.as_array(iov.buf_len))
             })
             .collect::<Result<_, Error>>()?;
 
-        let mut ioslices: Vec<IoSliceMut> = guest_slices
-            .iter_mut()
-            .map(|s| IoSliceMut::new(&mut *s))
-            .collect();
+        // If the first iov structure is from shared memory we can safely assume
+        // all the rest will be. We then read into memory based on the memory's
+        // shared-ness:
+        // - if not shared, we copy directly into the Wasm memory
+        // - if shared, we use an intermediate buffer; this avoids Rust unsafety
+        //   due to holding on to a `&mut [u8]` of Wasm memory when we cannot
+        //   guarantee the `&mut` exclusivity--other threads could be modifying
+        //   the data as this functions writes to it. Though likely there is no
+        //   issue with OS writing to io structs in multi-threaded scenarios,
+        //   since we do not know here if `&dyn WasiFile` does anything else
+        //   (e.g., read), we cautiously incur some performance overhead by
+        //   copying twice.
+        let is_shared_memory = iovs
+            .iter()
+            .next()
+            .and_then(|s| Some(s.is_shared_memory()))
+            .unwrap_or(false);
+        let bytes_read: u64 = if is_shared_memory {
+            // For shared memory, read into an intermediate buffer. Only the
+            // first iov will be filled and even then the read is capped by the
+            // `MAX_SHARED_BUFFER_SIZE`, so users are expected to re-call.
+            let iov = iovs.into_iter().next();
+            if let Some(iov) = iov {
+                let mut buffer = vec![0; (iov.len() as usize).min(MAX_SHARED_BUFFER_SIZE)];
+                let bytes_read = f
+                    .read_vectored_at(&mut [IoSliceMut::new(&mut buffer)], offset)
+                    .await?;
+                iov.get_range(0..bytes_read.try_into()?)
+                    .expect("it should always be possible to slice the iov smaller")
+                    .copy_from_slice(&buffer[0..bytes_read.try_into()?])?;
+                bytes_read
+            } else {
+                return Ok(0);
+            }
+        } else {
+            // Convert all of the unsafe guest slices to safe ones--this uses
+            // Wiggle's internal borrow checker to ensure no overlaps. We assume
+            // here that, because the memory is not shared, there are no other
+            // threads to access it while it is written to.
+            let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> = iovs
+                .into_iter()
+                .map(|iov| Ok(iov.as_slice_mut()?.unwrap()))
+                .collect::<Result<_, Error>>()?;
 
-        let bytes_read = f.read_vectored_at(&mut ioslices, offset).await?;
+            // Read directly into the Wasm memory.
+            let mut ioslices: Vec<IoSliceMut> = guest_slices
+                .iter_mut()
+                .map(|s| IoSliceMut::new(&mut *s))
+                .collect();
+            f.read_vectored_at(&mut ioslices, offset).await?
+        };
+
         Ok(types::Size::try_from(bytes_read)?)
     }
 
@@ -519,17 +671,15 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         fd: types::Fd,
         ciovs: &types::CiovecArray<'a>,
     ) -> Result<types::Size, Error> {
-        let f = self
-            .table()
-            .get_file_mut(u32::from(fd))?
-            .get_cap_mut(FileCaps::WRITE)?;
+        let f = self.table().get_file(u32::from(fd))?;
+        let f = f.get_cap(FileCaps::WRITE)?;
 
-        let guest_slices: Vec<wiggle::GuestSlice<u8>> = ciovs
+        let guest_slices: Vec<wiggle::GuestCow<u8>> = ciovs
             .iter()
             .map(|iov_ptr| {
                 let iov_ptr = iov_ptr?;
                 let iov: types::Ciovec = iov_ptr.read()?;
-                Ok(iov.buf.as_array(iov.buf_len).as_slice()?)
+                Ok(iov.buf.as_array(iov.buf_len).as_cow()?)
             })
             .collect::<Result<_, Error>>()?;
 
@@ -548,17 +698,15 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         ciovs: &types::CiovecArray<'a>,
         offset: types::Filesize,
     ) -> Result<types::Size, Error> {
-        let f = self
-            .table()
-            .get_file_mut(u32::from(fd))?
-            .get_cap_mut(FileCaps::WRITE | FileCaps::SEEK)?;
+        let f = self.table().get_file(u32::from(fd))?;
+        let f = f.get_cap(FileCaps::WRITE | FileCaps::SEEK)?;
 
-        let guest_slices: Vec<wiggle::GuestSlice<u8>> = ciovs
+        let guest_slices: Vec<wiggle::GuestCow<u8>> = ciovs
             .iter()
             .map(|iov_ptr| {
                 let iov_ptr = iov_ptr?;
                 let iov: types::Ciovec = iov_ptr.read()?;
-                Ok(iov.buf.as_array(iov.buf_len).as_slice()?)
+                Ok(iov.buf.as_array(iov.buf_len).as_cow()?)
             })
             .collect::<Result<_, Error>>()?;
 
@@ -581,11 +729,13 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         path: &GuestPtr<'a, u8>,
         path_max_len: types::Size,
     ) -> Result<(), Error> {
-        Snapshot1::fd_prestat_dir_name(self, fd.into(), path, path_max_len).await
+        Snapshot1::fd_prestat_dir_name(self, fd.into(), path, path_max_len).await?;
+        Ok(())
     }
 
     async fn fd_renumber(&mut self, from: types::Fd, to: types::Fd) -> Result<(), Error> {
-        Snapshot1::fd_renumber(self, from.into(), to.into()).await
+        Snapshot1::fd_renumber(self, from.into(), to.into()).await?;
+        Ok(())
     }
 
     async fn fd_seek(
@@ -594,15 +744,16 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         offset: types::Filedelta,
         whence: types::Whence,
     ) -> Result<types::Filesize, Error> {
-        Snapshot1::fd_seek(self, fd.into(), offset, whence.into()).await
+        Ok(Snapshot1::fd_seek(self, fd.into(), offset, whence.into()).await?)
     }
 
     async fn fd_sync(&mut self, fd: types::Fd) -> Result<(), Error> {
-        Snapshot1::fd_sync(self, fd.into()).await
+        Snapshot1::fd_sync(self, fd.into()).await?;
+        Ok(())
     }
 
     async fn fd_tell(&mut self, fd: types::Fd) -> Result<types::Filesize, Error> {
-        Snapshot1::fd_tell(self, fd.into()).await
+        Ok(Snapshot1::fd_tell(self, fd.into()).await?)
     }
 
     async fn fd_readdir<'a>(
@@ -612,7 +763,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         buf_len: types::Size,
         cookie: types::Dircookie,
     ) -> Result<types::Size, Error> {
-        Snapshot1::fd_readdir(self, fd.into(), buf, buf_len, cookie).await
+        Ok(Snapshot1::fd_readdir(self, fd.into(), buf, buf_len, cookie).await?)
     }
 
     async fn path_create_directory<'a>(
@@ -620,7 +771,8 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         dirfd: types::Fd,
         path: &GuestPtr<'a, str>,
     ) -> Result<(), Error> {
-        Snapshot1::path_create_directory(self, dirfd.into(), path).await
+        Snapshot1::path_create_directory(self, dirfd.into(), path).await?;
+        Ok(())
     }
 
     async fn path_filestat_get<'a>(
@@ -654,7 +806,8 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
             mtim,
             fst_flags.into(),
         )
-        .await
+        .await?;
+        Ok(())
     }
 
     async fn path_link<'a>(
@@ -673,7 +826,8 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
             target_fd.into(),
             target_path,
         )
-        .await
+        .await?;
+        Ok(())
     }
 
     async fn path_open<'a>(
@@ -707,7 +861,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         buf: &GuestPtr<'a, u8>,
         buf_len: types::Size,
     ) -> Result<types::Size, Error> {
-        Snapshot1::path_readlink(self, dirfd.into(), path, buf, buf_len).await
+        Ok(Snapshot1::path_readlink(self, dirfd.into(), path, buf, buf_len).await?)
     }
 
     async fn path_remove_directory<'a>(
@@ -715,7 +869,8 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         dirfd: types::Fd,
         path: &GuestPtr<'a, str>,
     ) -> Result<(), Error> {
-        Snapshot1::path_remove_directory(self, dirfd.into(), path).await
+        Snapshot1::path_remove_directory(self, dirfd.into(), path).await?;
+        Ok(())
     }
 
     async fn path_rename<'a>(
@@ -725,7 +880,8 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         dest_fd: types::Fd,
         dest_path: &GuestPtr<'a, str>,
     ) -> Result<(), Error> {
-        Snapshot1::path_rename(self, src_fd.into(), src_path, dest_fd.into(), dest_path).await
+        Snapshot1::path_rename(self, src_fd.into(), src_path, dest_fd.into(), dest_path).await?;
+        Ok(())
     }
 
     async fn path_symlink<'a>(
@@ -734,7 +890,8 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         dirfd: types::Fd,
         dest_path: &GuestPtr<'a, str>,
     ) -> Result<(), Error> {
-        Snapshot1::path_symlink(self, src_path, dirfd.into(), dest_path).await
+        Snapshot1::path_symlink(self, src_path, dirfd.into(), dest_path).await?;
+        Ok(())
     }
 
     async fn path_unlink_file<'a>(
@@ -742,7 +899,8 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         dirfd: types::Fd,
         path: &GuestPtr<'a, str>,
     ) -> Result<(), Error> {
-        Snapshot1::path_unlink_file(self, dirfd.into(), path).await
+        Snapshot1::path_unlink_file(self, dirfd.into(), path).await?;
+        Ok(())
     }
 
     // NOTE on poll_oneoff implementation:
@@ -787,7 +945,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
             }
         }
 
-        let table = &mut self.table;
+        let table = &self.table;
         let mut sub_fds: HashSet<types::Fd> = HashSet::new();
         // We need these refmuts to outlive Poll, which will hold the &mut dyn WasiFile inside
         let mut reads: Vec<(u32, Userdata)> = Vec::new();
@@ -837,8 +995,8 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
                         sub_fds.insert(fd);
                     }
                     table
-                        .get_file_mut(u32::from(fd))?
-                        .get_cap_mut(FileCaps::POLL_READWRITE)?;
+                        .get_file(u32::from(fd))?
+                        .get_cap(FileCaps::POLL_READWRITE)?;
                     reads.push((u32::from(fd), sub.userdata.into()));
                 }
                 types::SubscriptionU::FdWrite(writesub) => {
@@ -850,8 +1008,8 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
                         sub_fds.insert(fd);
                     }
                     table
-                        .get_file_mut(u32::from(fd))?
-                        .get_cap_mut(FileCaps::POLL_READWRITE)?;
+                        .get_file(u32::from(fd))?
+                        .get_cap(FileCaps::POLL_READWRITE)?;
                     writes.push((u32::from(fd), sub.userdata.into()));
                 }
             }
@@ -888,7 +1046,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
                         },
                         Err(e) => types::Event {
                             userdata,
-                            error: e.try_into().expect("non-trapping"),
+                            error: types::Errno::from(e.downcast().map_err(Error::trap)?),
                             type_,
                             fd_readwrite: fd_readwrite_empty(),
                         },
@@ -908,7 +1066,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
                         },
                         Err(e) => types::Event {
                             userdata,
-                            error: e.try_into()?,
+                            error: types::Errno::from(e.downcast().map_err(Error::trap)?),
                             type_,
                             fd_readwrite: fd_readwrite_empty(),
                         },
@@ -920,7 +1078,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
                         userdata,
                         error: match r {
                             Ok(()) => types::Errno::Success,
-                            Err(e) => e.try_into()?,
+                            Err(e) => types::Errno::from(e.downcast().map_err(Error::trap)?),
                         },
                         type_,
                         fd_readwrite: fd_readwrite_empty(),
@@ -932,16 +1090,17 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         Ok(num_results.try_into().expect("results fit into memory"))
     }
 
-    async fn proc_exit(&mut self, status: types::Exitcode) -> wiggle::Trap {
+    async fn proc_exit(&mut self, status: types::Exitcode) -> anyhow::Error {
         Snapshot1::proc_exit(self, status).await
     }
 
     async fn proc_raise(&mut self, _sig: types::Signal) -> Result<(), Error> {
-        Err(Error::trap("proc_raise unsupported"))
+        Err(Error::trap(anyhow::Error::msg("proc_raise unsupported")))
     }
 
     async fn sched_yield(&mut self) -> Result<(), Error> {
-        Snapshot1::sched_yield(self).await
+        Snapshot1::sched_yield(self).await?;
+        Ok(())
     }
 
     async fn random_get<'a>(
@@ -949,7 +1108,8 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         buf: &GuestPtr<'a, u8>,
         buf_len: types::Size,
     ) -> Result<(), Error> {
-        Snapshot1::random_get(self, buf, buf_len).await
+        Snapshot1::random_get(self, buf, buf_len).await?;
+        Ok(())
     }
 
     async fn sock_recv<'a>(
@@ -958,7 +1118,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         _ri_data: &types::IovecArray<'a>,
         _ri_flags: types::Riflags,
     ) -> Result<(types::Size, types::Roflags), Error> {
-        Err(Error::trap("sock_recv unsupported"))
+        Err(Error::trap(anyhow::Error::msg("sock_recv unsupported")))
     }
 
     async fn sock_send<'a>(
@@ -967,11 +1127,11 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         _si_data: &types::CiovecArray<'a>,
         _si_flags: types::Siflags,
     ) -> Result<types::Size, Error> {
-        Err(Error::trap("sock_send unsupported"))
+        Err(Error::trap(anyhow::Error::msg("sock_send unsupported")))
     }
 
     async fn sock_shutdown(&mut self, _fd: types::Fd, _how: types::Sdflags) -> Result<(), Error> {
-        Err(Error::trap("sock_shutdown unsupported"))
+        Err(Error::trap(anyhow::Error::msg("sock_shutdown unsupported")))
     }
 }
 

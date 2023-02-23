@@ -11,7 +11,7 @@ use crate::ir::Function;
 use crate::timing;
 
 /// Perform DCE on `func`.
-pub fn do_dce(func: &mut Function, domtree: &mut DominatorTree) {
+pub fn do_dce(func: &mut Function, domtree: &DominatorTree) {
     let _tt = timing::dce();
     debug_assert!(domtree.is_valid());
 
@@ -23,10 +23,11 @@ pub fn do_dce(func: &mut Function, domtree: &mut DominatorTree) {
                 if has_side_effect(pos.func, inst)
                     || any_inst_results_used(inst, &live, &pos.func.dfg)
                 {
-                    for arg in pos.func.dfg.inst_args(inst) {
-                        let v = pos.func.dfg.resolve_aliases(*arg);
+                    for arg in pos.func.dfg.inst_values(inst) {
+                        let v = pos.func.dfg.resolve_aliases(arg);
                         live[v.index()] = true;
                     }
+
                     continue;
                 }
             }

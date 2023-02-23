@@ -1118,7 +1118,7 @@ mod tests {
         use wasmtime_environ::WasmFileInfo;
         let mut module_map = PrimaryMap::new();
         let code_section_offset: u32 = 100;
-        module_map.push(CompiledFunction {
+        let func = CompiledFunction {
             address_map: FunctionAddressMap {
                 instructions: vec![
                     InstructionAddressMap {
@@ -1145,7 +1145,8 @@ mod tests {
                 body_len: 30,
             },
             ..Default::default()
-        });
+        };
+        module_map.push(&func);
         let fi = WasmFileInfo {
             code_section_offset: code_section_offset.into(),
             funcs: Vec::new(),

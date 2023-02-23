@@ -4,7 +4,7 @@
 
 use wasmtime_environ::VM_HOST_FUNC_MAGIC;
 
-use super::{VMCallerCheckedAnyfunc, VMFunctionBody, VMOpaqueContext, VMSharedSignatureIndex};
+use super::{VMCallerCheckedFuncRef, VMFunctionBody, VMOpaqueContext, VMSharedSignatureIndex};
 use std::{
     any::Any,
     ptr::{self, NonNull},
@@ -20,7 +20,7 @@ pub struct VMHostFuncContext {
     magic: u32,
     // _padding: u32, // (on 64-bit systems)
     pub(crate) host_func: NonNull<VMFunctionBody>,
-    wasm_to_host_trampoline: VMCallerCheckedAnyfunc,
+    wasm_to_host_trampoline: VMCallerCheckedFuncRef,
     host_state: Box<dyn Any + Send + Sync>,
 }
 
@@ -41,7 +41,7 @@ impl VMHostFuncContext {
         signature: VMSharedSignatureIndex,
         host_state: Box<dyn Any + Send + Sync>,
     ) -> Box<VMHostFuncContext> {
-        let wasm_to_host_trampoline = VMCallerCheckedAnyfunc {
+        let wasm_to_host_trampoline = VMCallerCheckedFuncRef {
             func_ptr: NonNull::new(crate::trampolines::wasm_to_host_trampoline as _).unwrap(),
             type_index: signature,
             vmctx: ptr::null_mut(),
@@ -58,7 +58,7 @@ impl VMHostFuncContext {
     }
 
     /// Get the Wasm-to-host trampoline for this host function context.
-    pub fn wasm_to_host_trampoline(&self) -> NonNull<VMCallerCheckedAnyfunc> {
+    pub fn wasm_to_host_trampoline(&self) -> NonNull<VMCallerCheckedFuncRef> {
         NonNull::from(&self.wasm_to_host_trampoline)
     }
 

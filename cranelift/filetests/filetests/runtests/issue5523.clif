@@ -1,0 +1,15 @@
+test interpret
+test run
+set enable_llvm_abi_extensions=true
+target riscv64
+target aarch64
+target s390x
+target x86_64
+
+function %a(i16, i128) -> i128 system_v {
+block0(v0: i16, v1: i128):
+    v2 = rotl v1, v0
+    return v2
+}
+
+; run: %a(64, 1095219937288) == 20203241887575960770402119057408

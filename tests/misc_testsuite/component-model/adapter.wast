@@ -35,7 +35,7 @@
   )
   (core instance $i (instantiate $m))
 
-  (func (export "thunk") (param string)
+  (func (export "thunk") (param "a" string)
     (canon lift
       (core func $i "")
       (memory $i "memory")
@@ -43,7 +43,7 @@
     )
   )
 
-  (func (export "thunk8") (param string)
+  (func (export "thunk8") (param "a" string)
     (canon lift
       (core func $i "")
       string-encoding=utf8
@@ -52,7 +52,7 @@
     )
   )
 
-  (func (export "thunk16") (param string)
+  (func (export "thunk16") (param "a" string)
     (canon lift
       (core func $i "")
       string-encoding=utf16
@@ -61,7 +61,7 @@
     )
   )
 
-  (func (export "thunklatin16") (param string)
+  (func (export "thunklatin16") (param "a" string)
     (canon lift
       (core func $i "")
       string-encoding=latin1+utf16
@@ -121,7 +121,7 @@
     (memory (export "memory") 0)
   )
   (core instance $m (instantiate $m))
-  (func $f (param (list unit))
+  (func $f (param "a" (list (record)))
     (canon lift
       (core func $m "x")
       (realloc (func $m "realloc"))
@@ -130,4 +130,4 @@
   )
   (export "empty-list" (func $f))
 )
-(assert_return (invoke "empty-list" (list.const)) (unit.const))
+(assert_trap (invoke "empty-list" (list.const)) "realloc return: beyond end of memory")

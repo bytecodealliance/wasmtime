@@ -8,9 +8,9 @@ use cranelift_codegen::ir;
 use cranelift_codegen::isa::{unwind::UnwindInfo, CallConv, TargetIsa};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmFuncType, WasmType};
-use target_lexicon::CallingConvention;
+use target_lexicon::{Architecture, CallingConvention};
 use wasmtime_environ::{
-    FilePos, FunctionInfo, InstructionAddressMap, ModuleTranslation, ModuleTypes, TrapInformation,
+    FilePos, InstructionAddressMap, ModuleTranslation, ModuleTypes, TrapInformation,
 };
 
 pub use builder::builder;
@@ -21,7 +21,7 @@ mod debug;
 mod func_environ;
 mod obj;
 
-type CompiledFunctions = PrimaryMap<DefinedFuncIndex, CompiledFunction>;
+type CompiledFunctions<'a> = PrimaryMap<DefinedFuncIndex, &'a CompiledFunction>;
 
 /// Compiled function: machine code body, jump table offsets, and unwind information.
 #[derive(Default)]
@@ -43,9 +43,7 @@ pub struct CompiledFunction {
     relocations: Vec<Relocation>,
     value_labels_ranges: cranelift_codegen::ValueLabelsRanges,
     sized_stack_slots: ir::StackSlots,
-
-    // TODO: Add dynamic_stack_slots?
-    info: FunctionInfo,
+    alignment: u32,
 }
 
 /// Function and its instructions addresses mappings.
@@ -144,7 +142,6 @@ fn value_type(isa: &dyn TargetIsa, ty: WasmType) -> ir::types::Type {
         WasmType::F64 => ir::types::F64,
         WasmType::V128 => ir::types::I8X16,
         WasmType::Ref(rt) => reference_type(rt.heap_type, isa.pointer_type()),
-        WasmType::Bot => panic!("WasmType::Bot will soon not exist"),
     }
 }
 
@@ -191,6 +188,10 @@ fn func_signature(
                 // about pointer authentication usage, so we can't just use
                 // `CallConv::Fast`.
                 CallConv::WasmtimeAppleAarch64
+            } else if isa.triple().architecture == Architecture::S390x {
+                // On S390x we need a Wasmtime calling convention to ensure
+                // we're using little-endian vector lane order.
+                wasmtime_call_conv(isa)
             } else {
                 CallConv::Fast
             }
@@ -215,6 +216,5 @@ fn reference_type(wasm_ht: cranelift_wasm::WasmHeapType, pointer_type: ir::Type)
             ir::types::I64 => ir::types::R64,
             _ => panic!("unsupported pointer type"),
         },
-        _ => panic!("unsupported Wasm reference type"),
     }
 }

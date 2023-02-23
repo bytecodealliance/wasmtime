@@ -116,7 +116,8 @@
 //! created.
 
 use crate::component::translate::*;
-use crate::fact::Module;
+use crate::fact;
+use crate::EntityType;
 use std::collections::HashSet;
 use wasmparser::WasmFeatures;
 
@@ -183,10 +184,7 @@ impl<'data> Translator<'_, 'data> {
         // the module using standard core wasm translation, and then fills out
         // the dfg metadata for each adapter.
         for (module_id, adapter_module) in state.adapter_modules.iter() {
-            let mut module = Module::new(
-                self.types.component_types(),
-                self.tunables.debug_adapter_modules,
-            );
+            let mut module = fact::Module::new(self.types, self.tunables.debug_adapter_modules);
             let mut names = Vec::with_capacity(adapter_module.adapters.len());
             for adapter in adapter_module.adapters.iter() {
                 let name = format!("adapter{}", adapter.as_u32());
@@ -194,7 +192,7 @@ impl<'data> Translator<'_, 'data> {
                 names.push(name);
             }
             let wasm = module.encode();
-            let args = module.imports().to_vec();
+            let imports = module.imports().to_vec();
 
             // Extend the lifetime of the owned `wasm: Vec<u8>` on the stack to
             // a higher scope defined by our original caller. That allows to
@@ -240,9 +238,56 @@ impl<'data> Translator<'_, 'data> {
             // module is also recorded in the dfg. This metadata will be used
             // to generate `GlobalInitializer` entries during the linearization
             // final phase.
+            assert_eq!(imports.len(), translation.module.imports().len());
+            let args = imports
+                .iter()
+                .zip(translation.module.imports())
+                .map(|(arg, (_, _, ty))| fact_import_to_core_def(component, arg, ty))
+                .collect::<Vec<_>>();
             let static_index = self.static_modules.push(translation);
             let id = component.adapter_modules.push((static_index, args.into()));
             assert_eq!(id, module_id);
+        }
+    }
+}
+
+fn fact_import_to_core_def(
+    dfg: &mut dfg::ComponentDfg,
+    import: &fact::Import,
+    ty: EntityType,
+) -> dfg::CoreDef {
+    match import {
+        fact::Import::CoreDef(def) => def.clone(),
+        fact::Import::Transcode {
+            op,
+            from,
+            from64,
+            to,
+            to64,
+        } => {
+            fn unwrap_memory(def: &dfg::CoreDef) -> dfg::CoreExport<MemoryIndex> {
+                match def {
+                    dfg::CoreDef::Export(e) => e.clone().map_index(|i| match i {
+                        EntityIndex::Memory(i) => i,
+                        _ => unreachable!(),
+                    }),
+                    _ => unreachable!(),
+                }
+            }
+
+            let from = dfg.memories.push_uniq(unwrap_memory(from));
+            let to = dfg.memories.push_uniq(unwrap_memory(to));
+            dfg::CoreDef::Transcoder(dfg.transcoders.push_uniq(dfg::Transcoder {
+                op: *op,
+                from,
+                from64: *from64,
+                to,
+                to64: *to64,
+                signature: match ty {
+                    EntityType::Function(signature) => signature,
+                    _ => unreachable!(),
+                },
+            }))
         }
     }
 }
@@ -336,6 +381,9 @@ impl PartitionAdapterModules {
             dfg::CoreDef::Lowered(_)
             | dfg::CoreDef::AlwaysTrap(_)
             | dfg::CoreDef::InstanceFlags(_) => {}
+
+            // should not be in the dfg yet
+            dfg::CoreDef::Transcoder(_) => unreachable!(),
         }
     }
 

@@ -1,5 +1,7 @@
 //! Unreachable code elimination.
 
+use cranelift_entity::EntitySet;
+
 use crate::cursor::{Cursor, FuncCursor};
 use crate::dominator_tree::DominatorTree;
 use crate::flowgraph::ControlFlowGraph;
@@ -19,8 +21,13 @@ pub fn eliminate_unreachable_code(
 ) {
     let _tt = timing::unreachable_code();
     let mut pos = FuncCursor::new(func);
+    let mut used_tables = EntitySet::with_capacity(pos.func.stencil.dfg.jump_tables.len());
     while let Some(block) = pos.next_block() {
         if domtree.is_reachable(block) {
+            let inst = pos.func.layout.last_inst(block).unwrap();
+            if let ir::InstructionData::BranchTable { table, .. } = pos.func.dfg.insts[inst] {
+                used_tables.insert(table);
+            }
             continue;
         }
 
@@ -43,15 +50,8 @@ pub fn eliminate_unreachable_code(
         pos.func.layout.remove_block(block);
     }
 
-    // Remove all jumptable block-list contents that refer to unreachable
-    // blocks; the jumptable itself must have been unused (or used only in an
-    // unreachable block) if so. Note that we are not necessarily removing *all*
-    // unused jumptables, because that would require computing their
-    // reachability as well; we are just removing enough to clean up references
-    // to deleted blocks.
-    for jt_data in func.jump_tables.values_mut() {
-        let invalid_ref = jt_data.iter().any(|block| !domtree.is_reachable(*block));
-        if invalid_ref {
+    for (table, jt_data) in func.stencil.dfg.jump_tables.iter_mut() {
+        if !used_tables.contains(table) {
             jt_data.clear();
         }
     }

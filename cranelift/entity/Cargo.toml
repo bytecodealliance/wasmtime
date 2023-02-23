@@ -1,7 +1,7 @@
 [package]
 authors = ["The Cranelift Project Developers"]
 name = "cranelift-entity"
-version = "0.88.0"
+version = "0.94.0"
 description = "Data structures using entity references as mapping keys"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/cranelift-entity"
@@ -9,7 +9,7 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 categories = ["no-std"]
 readme = "README.md"
 keywords = ["entity", "set", "map"]
-edition = "2021"
+edition.workspace = true
 
 [dependencies]
 serde = { version = "1.0.94", features = ["derive"], optional = true }

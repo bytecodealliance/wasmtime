@@ -1,6 +1,6 @@
 test interpret
 
-function %stack_addr_iadd(i64) -> b1 {
+function %stack_addr_iadd(i64) -> i8 {
     ss0 = explicit_slot 16
 
 block0(v0: i64):
@@ -19,12 +19,12 @@ block0(v0: i64):
     v9 = band v7, v8
     return v9
 }
-; run: %stack_addr_iadd(0) == true
-; run: %stack_addr_iadd(1) == true
-; run: %stack_addr_iadd(-1) == true
+; run: %stack_addr_iadd(0) == 1
+; run: %stack_addr_iadd(1) == 1
+; run: %stack_addr_iadd(-1) == 1
 
 
-function %stack_addr_32(i64) -> b1 {
+function %stack_addr_32(i64) -> i8 {
     ss0 = explicit_slot 24
 
 block0(v0: i64):
@@ -47,13 +47,13 @@ block0(v0: i64):
     v11 = band v10, v9
     return v11
 }
-; run: %stack_addr_32(0) == true
-; run: %stack_addr_32(1) == true
-; run: %stack_addr_32(-1) == true
+; run: %stack_addr_32(0) == 1
+; run: %stack_addr_32(1) == 1
+; run: %stack_addr_32(-1) == 1
 
 
 
-function %addr32_64(i64) -> b1 {
+function %addr32_64(i64) -> i8 {
     ss0 = explicit_slot 16
 
 block0(v0: i64):
@@ -67,12 +67,12 @@ block0(v0: i64):
 
     return v4
 }
-; run: %addr32_64(0) == true
-; run: %addr32_64(1) == true
-; run: %addr32_64(-1) == true
+; run: %addr32_64(0) == 1
+; run: %addr32_64(1) == 1
+; run: %addr32_64(-1) == 1
 
 
-function %multi_slot_different_addrs() -> b1 {
+function %multi_slot_different_addrs() -> i8 {
     ss0 = explicit_slot 8
     ss1 = explicit_slot 8
 
@@ -82,4 +82,4 @@ block0:
     v2 = icmp ne v0, v1
     return v2
 }
-; run: %multi_slot_diffe() == true
+; run: %multi_slot_different_addrs() == 1

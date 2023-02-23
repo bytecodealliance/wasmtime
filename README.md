@@ -28,7 +28,7 @@
 
 ## Installation
 
-The Wasmtime CLI can be installed on Linux and macOS with a small install
+The Wasmtime CLI can be installed on Linux and macOS (locally) with a small install
 script:
 
 ```sh
@@ -64,25 +64,25 @@ Hello, world!
 
 * **Fast**. Wasmtime is built on the optimizing [Cranelift] code generator to
   quickly generate high-quality machine code either at runtime or
-  ahead-of-time. Wasmtime's runtime is also optimized for cases such as
-  efficient instantiation, low-overhead transitions between the embedder and
-  wasm, and scalability of concurrent instances.
+  ahead-of-time. Wasmtime is optimized for efficient instantiation, low-overhead
+  calls between the embedder and wasm, and scalability of concurrent instances.
 
-* **[Secure]**. Wasmtime's development is strongly focused on the correctness of
-  its implementation with 24/7 fuzzing donated by [Google's OSS Fuzz],
-  leveraging Rust's API and runtime safety guarantees, careful design of
-  features and APIs through an [RFC process], a [security policy] in place
-  for when things go wrong, and a [release policy] for patching older versions
-  as well. We follow best practices for defense-in-depth and known
-  protections and mitigations for issues like Spectre. Finally, we're working
-  to push the state-of-the-art by collaborating with academic
-  researchers to formally verify critical parts of Wasmtime and Cranelift.
+* **[Secure]**. Wasmtime's development is strongly focused on correctness and
+  security. Building on top of Rust's runtime safety guarantees, each Wasmtime
+  feature goes through careful review and consideration via an [RFC
+  process]. Once features are designed and implemented, they undergo 24/7
+  fuzzing donated by [Google's OSS Fuzz]. As features stabilize they become part
+  of a [release][release policy], and when things go wrong we have a
+  well-defined [security policy] in place to quickly mitigate and patch any
+  issues. We follow best practices for defense-in-depth and integrate
+  protections and mitigations for issues like Spectre. Finally, we're working to
+  push the state-of-the-art by collaborating with academic researchers to
+  formally verify critical parts of Wasmtime and Cranelift.
 
-* **[Configurable]**. Wastime supports a rich set of APIs and build time
-  configuration to provide many options such as further means of restricting
-  WebAssembly beyond its basic guarantees such as its CPU and Memory
-  consumption. Wasmtime also runs in tiny environments all the way up to massive
-  servers with many concurrent instances.
+* **[Configurable]**. Wasmtime uses sensible defaults, but can also be
+  configured to provide more fine-grained control over things like CPU and
+  memory consumption. Whether you want to run Wasmtime in a tiny environment or
+  on massive servers with many concurrent instances, we've got you covered.
 
 * **[WASI]**. Wasmtime supports a rich set of APIs for interacting with the host
   environment through the [WASI standard](https://wasi.dev).
@@ -108,7 +108,9 @@ Hello, world!
 ## Language Support
 
 You can use Wasmtime from a variety of different languages through embeddings of
-the implementation:
+the implementation.
+
+Languages supported by the Bytecode Alliance:
 
 * **[Rust]** - the [`wasmtime` crate]
 * **[C]** - the [`wasm.h`, `wasi.h`, and `wasmtime.h` headers][c-headers], [CMake](crates/c-api/CMakeLists.txt) or [`wasmtime` Conan package]
@@ -116,6 +118,11 @@ the implementation:
 * **[Python]** - the [`wasmtime` PyPI package]
 * **[.NET]** - the [`Wasmtime` NuGet package]
 * **[Go]** - the [`wasmtime-go` repository]
+* **[Ruby]** - the [`wasmtime` gem]
+
+Languages supported by the community:
+
+* **[Elixir]** - the [`wasmex` hex package]
 
 [Rust]: https://bytecodealliance.github.io/wasmtime/lang-rust.html
 [C]: https://bytecodealliance.github.io/wasmtime/examples-c-embed.html
@@ -130,6 +137,10 @@ the implementation:
 [wasmtime-cpp]: https://github.com/bytecodealliance/wasmtime-cpp
 [`wasmtime` Conan package]: https://conan.io/center/wasmtime
 [`wasmtime-cpp` Conan package]: https://conan.io/center/wasmtime-cpp
+[Ruby]: https://bytecodealliance.github.io/wasmtime/lang-ruby.html
+[`wasmtime` gem]: https://rubygems.org/gems/wasmtime
+[Elixir]: https://docs.wasmtime.dev/lang-elixir.html
+[`wasmex` hex package]: https://hex.pm/packages/wasmex
 
 ## Documentation
 

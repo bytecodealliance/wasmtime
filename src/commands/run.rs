@@ -3,18 +3,17 @@
 use anyhow::{anyhow, bail, Context as _, Result};
 use clap::Parser;
 use once_cell::sync::Lazy;
-use std::fs::File;
-use std::io::Read;
+use std::ffi::OsStr;
+use std::path::{Component, Path, PathBuf};
 use std::thread;
 use std::time::Duration;
-use std::{
-    ffi::OsStr,
-    path::{Component, Path, PathBuf},
-    process,
-};
-use wasmtime::{Engine, Func, Linker, Module, Store, Trap, Val, ValType};
+use wasmtime::{Engine, Func, Linker, Module, Store, Val, ValType};
 use wasmtime_cli_flags::{CommonOptions, WasiModules};
+use wasmtime_wasi::maybe_exit_on_error;
 use wasmtime_wasi::sync::{ambient_authority, Dir, TcpListener, WasiCtxBuilder};
+
+#[cfg(any(feature = "wasi-crypto", feature = "wasi-nn", feature = "wasi-threads"))]
+use std::sync::Arc;
 
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::WasiNnCtx;
@@ -22,12 +21,17 @@ use wasmtime_wasi_nn::WasiNnCtx;
 #[cfg(feature = "wasi-crypto")]
 use wasmtime_wasi_crypto::WasiCryptoCtx;
 
+#[cfg(feature = "wasi-threads")]
+use wasmtime_wasi_threads::WasiThreadsCtx;
+
 fn parse_module(s: &OsStr) -> anyhow::Result<PathBuf> {
     // Do not accept wasmtime subcommand names as the module name
     match s.to_str() {
         Some("help") | Some("config") | Some("run") | Some("wast") | Some("compile") => {
             bail!("module name cannot be the same as a subcommand")
         }
+        #[cfg(unix)]
+        Some("-") => Ok(PathBuf::from("/dev/stdin")),
         _ => Ok(s.into()),
     }
 }
@@ -163,13 +167,6 @@ impl RunCommand {
             config.epoch_interruption(true);
         }
         let engine = Engine::new(&config)?;
-        let mut store = Store::new(&engine, Host::default());
-
-        // If fuel has been configured, we want to add the configured
-        // fuel amount to this store.
-        if let Some(fuel) = self.common.fuel {
-            store.add_fuel(fuel)?;
-        }
 
         let preopen_sockets = self.compute_preopen_sockets()?;
 
@@ -180,9 +177,15 @@ impl RunCommand {
         let mut linker = Linker::new(&engine);
         linker.allow_unknown_exports(self.allow_unknown_exports);
 
+        // Read the wasm module binary either as `*.wat` or a raw binary.
+        let module = self.load_module(linker.engine(), &self.module)?;
+
+        let host = Host::default();
+        let mut store = Store::new(&engine, host);
         populate_with_wasi(
-            &mut store,
             &mut linker,
+            &mut store,
+            module.clone(),
             preopen_dirs,
             &argv,
             &self.vars,
@@ -190,6 +193,12 @@ impl RunCommand {
             self.listenfd,
             preopen_sockets,
         )?;
+
+        // If fuel has been configured, we want to add the configured
+        // fuel amount to this store.
+        if let Some(fuel) = self.common.fuel {
+            store.add_fuel(fuel)?;
+        }
 
         // Load the preload wasm modules.
         for (name, path) in self.preloads.iter() {
@@ -206,39 +215,15 @@ impl RunCommand {
 
         // Load the main wasm module.
         match self
-            .load_main_module(&mut store, &mut linker)
+            .load_main_module(&mut store, &mut linker, module)
             .with_context(|| format!("failed to run main module `{}`", self.module.display()))
         {
             Ok(()) => (),
             Err(e) => {
-                // If the program exited because of a non-zero exit status, print
-                // a message and exit.
-                if let Some(trap) = e.downcast_ref::<Trap>() {
-                    // Print the error message in the usual way.
-                    if let Some(status) = trap.i32_exit_status() {
-                        // On Windows, exit status 3 indicates an abort (see below),
-                        // so return 1 indicating a non-zero status to avoid ambiguity.
-                        if cfg!(windows) && status >= 3 {
-                            process::exit(1);
-                        }
-                        process::exit(status);
-                    }
-
-                    eprintln!("Error: {:?}", e);
-
-                    // If the program exited because of a trap, return an error code
-                    // to the outside environment indicating a more severe problem
-                    // than a simple failure.
-                    if cfg!(unix) {
-                        // On Unix, return the error code of an abort.
-                        process::exit(128 + libc::SIGABRT);
-                    } else if cfg!(windows) {
-                        // On Windows, return 3.
-                        // https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/abort?view=vs-2019
-                        process::exit(3);
-                    }
-                }
-                return Err(e);
+                // Exit the process if Wasmtime understands the error;
+                // otherwise, fall back on Rust's default error printing/return
+                // code.
+                return Err(maybe_exit_on_error(e));
             }
         }
 
@@ -304,7 +289,12 @@ impl RunCommand {
         result
     }
 
-    fn load_main_module(&self, store: &mut Store<Host>, linker: &mut Linker<Host>) -> Result<()> {
+    fn load_main_module(
+        &self,
+        store: &mut Store<Host>,
+        linker: &mut Linker<Host>,
+        module: Module,
+    ) -> Result<()> {
         if let Some(timeout) = self.wasm_timeout {
             store.set_epoch_deadline(1);
             let engine = store.engine().clone();
@@ -314,8 +304,6 @@ impl RunCommand {
             });
         }
 
-        // Read the wasm module binary either as `*.wat` or a raw binary.
-        let module = self.load_module(linker.engine(), &self.module)?;
         // The main module might be allowed to have unknown imports, which
         // should be defined as traps:
         if self.trap_unknown_imports {
@@ -418,43 +406,31 @@ impl RunCommand {
     }
 
     fn load_module(&self, engine: &Engine, path: &Path) -> Result<Module> {
-        // Peek at the first few bytes of the file to figure out if this is
-        // something we can pass off to `deserialize_file` which is fastest if
-        // we don't actually read the whole file into memory. Note that this
-        // behavior is disabled by default, though, because it's not safe to
-        // pass arbitrary user input to this command with `--allow-precompiled`
-        let mut file =
-            File::open(path).with_context(|| format!("failed to open: {}", path.display()))?;
-        let mut magic = [0; 4];
-        if let Ok(()) = file.read_exact(&mut magic) {
-            if &magic == b"\x7fELF" {
-                if self.allow_precompiled {
-                    return unsafe { Module::deserialize_file(engine, path) };
-                }
-                bail!(
-                    "cannot load precompiled module `{}` unless --allow-precompiled is passed",
-                    path.display()
-                )
-            }
+        if self.allow_precompiled {
+            unsafe { Module::from_trusted_file(engine, path) }
+        } else {
+            Module::from_file(engine, path)
+                .context("if you're trying to run a precompiled module, pass --allow-precompiled")
         }
-
-        Module::from_file(engine, path)
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct Host {
     wasi: Option<wasmtime_wasi::WasiCtx>,
-    #[cfg(feature = "wasi-nn")]
-    wasi_nn: Option<WasiNnCtx>,
     #[cfg(feature = "wasi-crypto")]
-    wasi_crypto: Option<WasiCryptoCtx>,
+    wasi_crypto: Option<Arc<WasiCryptoCtx>>,
+    #[cfg(feature = "wasi-nn")]
+    wasi_nn: Option<Arc<WasiNnCtx>>,
+    #[cfg(feature = "wasi-threads")]
+    wasi_threads: Option<Arc<WasiThreadsCtx<Host>>>,
 }
 
 /// Populates the given `Linker` with WASI APIs.
 fn populate_with_wasi(
-    store: &mut Store<Host>,
     linker: &mut Linker<Host>,
+    store: &mut Store<Host>,
+    module: Module,
     preopen_dirs: Vec<(String, Dir)>,
     argv: &[String],
     vars: &[(String, String)],
@@ -488,18 +464,6 @@ fn populate_with_wasi(
         store.data_mut().wasi = Some(builder.build());
     }
 
-    if wasi_modules.wasi_nn {
-        #[cfg(not(feature = "wasi-nn"))]
-        {
-            bail!("Cannot enable wasi-nn when the binary is not compiled with this feature.");
-        }
-        #[cfg(feature = "wasi-nn")]
-        {
-            wasmtime_wasi_nn::add_to_linker(linker, |host| host.wasi_nn.as_mut().unwrap())?;
-            store.data_mut().wasi_nn = Some(WasiNnCtx::new()?);
-        }
-    }
-
     if wasi_modules.wasi_crypto {
         #[cfg(not(feature = "wasi-crypto"))]
         {
@@ -507,8 +471,55 @@ fn populate_with_wasi(
         }
         #[cfg(feature = "wasi-crypto")]
         {
-            wasmtime_wasi_crypto::add_to_linker(linker, |host| host.wasi_crypto.as_mut().unwrap())?;
-            store.data_mut().wasi_crypto = Some(WasiCryptoCtx::new());
+            wasmtime_wasi_crypto::add_to_linker(linker, |host| {
+                // This WASI proposal is currently not protected against
+                // concurrent access--i.e., when wasi-threads is actively
+                // spawning new threads, we cannot (yet) safely allow access and
+                // fail if more than one thread has `Arc`-references to the
+                // context. Once this proposal is updated (as wasi-common has
+                // been) to allow concurrent access, this `Arc::get_mut`
+                // limitation can be removed.
+                Arc::get_mut(host.wasi_crypto.as_mut().unwrap())
+                    .expect("wasi-crypto is not implemented with multi-threading support")
+            })?;
+            store.data_mut().wasi_crypto = Some(Arc::new(WasiCryptoCtx::new()));
+        }
+    }
+
+    if wasi_modules.wasi_nn {
+        #[cfg(not(feature = "wasi-nn"))]
+        {
+            bail!("Cannot enable wasi-nn when the binary is not compiled with this feature.");
+        }
+        #[cfg(feature = "wasi-nn")]
+        {
+            wasmtime_wasi_nn::add_to_linker(linker, |host| {
+                // See documentation for wasi-crypto for why this is needed.
+                Arc::get_mut(host.wasi_nn.as_mut().unwrap())
+                    .expect("wasi-nn is not implemented with multi-threading support")
+            })?;
+            store.data_mut().wasi_nn = Some(Arc::new(WasiNnCtx::new()?));
+        }
+    }
+
+    if wasi_modules.wasi_threads {
+        #[cfg(not(feature = "wasi-threads"))]
+        {
+            // Silence the unused warning for `module` as it is only used in the
+            // conditionally-compiled wasi-threads.
+            drop(&module);
+
+            bail!("Cannot enable wasi-threads when the binary is not compiled with this feature.");
+        }
+        #[cfg(feature = "wasi-threads")]
+        {
+            wasmtime_wasi_threads::add_to_linker(linker, store, &module, |host| {
+                host.wasi_threads.as_ref().unwrap()
+            })?;
+            store.data_mut().wasi_threads = Some(Arc::new(WasiThreadsCtx::new(
+                module,
+                Arc::new(linker.clone()),
+            )?));
         }
     }
 

@@ -1,7 +1,7 @@
 //! Size, align, and flattening information about component model types.
 
-use crate::component::{InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
-use crate::fact::{Context, Module, Options};
+use crate::component::{ComponentTypesBuilder, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
+use crate::fact::{AdapterOptions, Context, Options};
 use wasm_encoder::ValType;
 
 /// Metadata about a core wasm signature which is created for a component model
@@ -22,47 +22,54 @@ pub struct Signature {
     pub results_indirect: bool,
 }
 
-pub(crate) fn align_to(n: usize, align: usize) -> usize {
-    assert!(align.is_power_of_two());
-    (n + (align - 1)) & !(align - 1)
-}
-
-impl Module<'_> {
+impl ComponentTypesBuilder {
     /// Calculates the core wasm function signature for the component function
     /// type specified within `Context`.
     ///
     /// This is used to generate the core wasm signatures for functions that are
     /// imported (matching whatever was `canon lift`'d) and functions that are
     /// exported (matching the generated function from `canon lower`).
-    pub(super) fn signature(&self, options: &Options, context: Context) -> Signature {
-        let ty = &self.types[options.ty];
-        let ptr_ty = options.ptr();
+    pub(super) fn signature(&self, options: &AdapterOptions, context: Context) -> Signature {
+        let ty = &self[options.ty];
+        let ptr_ty = options.options.ptr();
 
-        let mut params = self.flatten_types(options, ty.params.iter().map(|(_, ty)| *ty));
         let mut params_indirect = false;
-        if params.len() > MAX_FLAT_PARAMS {
-            params = vec![ptr_ty];
-            params_indirect = true;
-        }
+        let mut params = match self.flatten_types(
+            &options.options,
+            MAX_FLAT_PARAMS,
+            ty.params.iter().copied(),
+        ) {
+            Some(list) => list,
+            None => {
+                params_indirect = true;
+                vec![ptr_ty]
+            }
+        };
 
-        let mut results = self.flatten_types(options, [ty.result]);
         let mut results_indirect = false;
-        if results.len() > MAX_FLAT_RESULTS {
-            results_indirect = true;
-            match context {
-                // For a lifted function too-many-results gets translated to a
-                // returned pointer where results are read from. The callee
-                // allocates space here.
-                Context::Lift => results = vec![ptr_ty],
-                // For a lowered function too-many-results becomes a return
-                // pointer which is passed as the last argument. The caller
-                // allocates space here.
-                Context::Lower => {
-                    results.truncate(0);
-                    params.push(ptr_ty);
+        let results = match self.flatten_types(
+            &options.options,
+            MAX_FLAT_RESULTS,
+            ty.results.iter().map(|ty| *ty),
+        ) {
+            Some(list) => list,
+            None => {
+                results_indirect = true;
+                match context {
+                    // For a lifted function too-many-results gets translated to a
+                    // returned pointer where results are read from. The callee
+                    // allocates space here.
+                    Context::Lift => vec![ptr_ty],
+                    // For a lowered function too-many-results becomes a return
+                    // pointer which is passed as the last argument. The caller
+                    // allocates space here.
+                    Context::Lower => {
+                        params.push(ptr_ty);
+                        Vec::new()
+                    }
                 }
             }
-        }
+        };
         Signature {
             params,
             results,
@@ -76,115 +83,22 @@ impl Module<'_> {
     pub(super) fn flatten_types(
         &self,
         opts: &Options,
+        max: usize,
         tys: impl IntoIterator<Item = InterfaceType>,
-    ) -> Vec<ValType> {
-        let mut result = Vec::new();
+    ) -> Option<Vec<ValType>> {
+        let mut dst = Vec::new();
         for ty in tys {
-            self.push_flat(opts, &ty, &mut result);
+            for ty in opts.flat_types(&ty, self)? {
+                if dst.len() == max {
+                    return None;
+                }
+                dst.push((*ty).into());
+            }
         }
-        result
+        Some(dst)
     }
 
-    fn push_flat(&self, opts: &Options, ty: &InterfaceType, dst: &mut Vec<ValType>) {
-        match ty {
-            InterfaceType::Unit => {}
-
-            InterfaceType::Bool
-            | InterfaceType::S8
-            | InterfaceType::U8
-            | InterfaceType::S16
-            | InterfaceType::U16
-            | InterfaceType::S32
-            | InterfaceType::U32
-            | InterfaceType::Char => dst.push(ValType::I32),
-
-            InterfaceType::S64 | InterfaceType::U64 => dst.push(ValType::I64),
-
-            InterfaceType::Float32 => dst.push(ValType::F32),
-            InterfaceType::Float64 => dst.push(ValType::F64),
-
-            InterfaceType::String | InterfaceType::List(_) => {
-                dst.push(opts.ptr());
-                dst.push(opts.ptr());
-            }
-            InterfaceType::Record(r) => {
-                for field in self.types[*r].fields.iter() {
-                    self.push_flat(opts, &field.ty, dst);
-                }
-            }
-            InterfaceType::Tuple(t) => {
-                for ty in self.types[*t].types.iter() {
-                    self.push_flat(opts, ty, dst);
-                }
-            }
-            InterfaceType::Flags(f) => {
-                let flags = &self.types[*f];
-                let nflags = align_to(flags.names.len(), 32) / 32;
-                for _ in 0..nflags {
-                    dst.push(ValType::I32);
-                }
-            }
-            InterfaceType::Enum(_) => dst.push(ValType::I32),
-            InterfaceType::Option(t) => {
-                dst.push(ValType::I32);
-                self.push_flat(opts, &self.types[*t], dst);
-            }
-            InterfaceType::Variant(t) => {
-                dst.push(ValType::I32);
-                let pos = dst.len();
-                let mut tmp = Vec::new();
-                for case in self.types[*t].cases.iter() {
-                    self.push_flat_variant(opts, &case.ty, pos, &mut tmp, dst);
-                }
-            }
-            InterfaceType::Union(t) => {
-                dst.push(ValType::I32);
-                let pos = dst.len();
-                let mut tmp = Vec::new();
-                for ty in self.types[*t].types.iter() {
-                    self.push_flat_variant(opts, ty, pos, &mut tmp, dst);
-                }
-            }
-            InterfaceType::Expected(t) => {
-                dst.push(ValType::I32);
-                let e = &self.types[*t];
-                let pos = dst.len();
-                let mut tmp = Vec::new();
-                self.push_flat_variant(opts, &e.ok, pos, &mut tmp, dst);
-                self.push_flat_variant(opts, &e.err, pos, &mut tmp, dst);
-            }
-        }
-    }
-
-    fn push_flat_variant(
-        &self,
-        opts: &Options,
-        ty: &InterfaceType,
-        pos: usize,
-        tmp: &mut Vec<ValType>,
-        dst: &mut Vec<ValType>,
-    ) {
-        tmp.truncate(0);
-        self.push_flat(opts, ty, tmp);
-        for (i, a) in tmp.iter().enumerate() {
-            match dst.get_mut(pos + i) {
-                Some(b) => join(*a, b),
-                None => dst.push(*a),
-            }
-        }
-
-        fn join(a: ValType, b: &mut ValType) {
-            if a == *b {
-                return;
-            }
-            match (a, *b) {
-                (ValType::I32, ValType::F32) | (ValType::F32, ValType::I32) => *b = ValType::I32,
-                _ => *b = ValType::I64,
-            }
-        }
-    }
-
-    pub(super) fn align(&self, opts: &Options, ty: &InterfaceType) -> usize {
+    pub(super) fn align(&self, opts: &Options, ty: &InterfaceType) -> u32 {
         self.size_align(opts, ty).1
     }
 
@@ -193,81 +107,12 @@ impl Module<'_> {
     //
     // TODO: this is probably inefficient to entire recalculate at all phases,
     // seems like it would be best to intern this in some sort of map somewhere.
-    pub(super) fn size_align(&self, opts: &Options, ty: &InterfaceType) -> (usize, usize) {
-        match ty {
-            InterfaceType::Unit => (0, 1),
-            InterfaceType::Bool | InterfaceType::S8 | InterfaceType::U8 => (1, 1),
-            InterfaceType::S16 | InterfaceType::U16 => (2, 2),
-            InterfaceType::S32
-            | InterfaceType::U32
-            | InterfaceType::Char
-            | InterfaceType::Float32 => (4, 4),
-            InterfaceType::S64 | InterfaceType::U64 | InterfaceType::Float64 => (8, 8),
-            InterfaceType::String | InterfaceType::List(_) => {
-                ((2 * opts.ptr_size()).into(), opts.ptr_size().into())
-            }
-
-            InterfaceType::Record(r) => {
-                self.record_size_align(opts, self.types[*r].fields.iter().map(|f| &f.ty))
-            }
-            InterfaceType::Tuple(t) => self.record_size_align(opts, self.types[*t].types.iter()),
-            InterfaceType::Flags(f) => match self.types[*f].names.len() {
-                n if n <= 8 => (1, 1),
-                n if n <= 16 => (2, 2),
-                n if n <= 32 => (4, 4),
-                n => (4 * (align_to(n, 32) / 32), 4),
-            },
-            InterfaceType::Enum(t) => self.discrim_size_align(self.types[*t].names.len()),
-            InterfaceType::Option(t) => {
-                let ty = &self.types[*t];
-                self.variant_size_align(opts, [&InterfaceType::Unit, ty].into_iter())
-            }
-            InterfaceType::Variant(t) => {
-                self.variant_size_align(opts, self.types[*t].cases.iter().map(|c| &c.ty))
-            }
-            InterfaceType::Union(t) => self.variant_size_align(opts, self.types[*t].types.iter()),
-            InterfaceType::Expected(t) => {
-                let e = &self.types[*t];
-                self.variant_size_align(opts, [&e.ok, &e.err].into_iter())
-            }
-        }
-    }
-
-    pub(super) fn record_size_align<'a>(
-        &self,
-        opts: &Options,
-        fields: impl Iterator<Item = &'a InterfaceType>,
-    ) -> (usize, usize) {
-        let mut size = 0;
-        let mut align = 1;
-        for ty in fields {
-            let (fsize, falign) = self.size_align(opts, ty);
-            size = align_to(size, falign) + fsize;
-            align = align.max(falign);
-        }
-        (align_to(size, align), align)
-    }
-
-    fn variant_size_align<'a>(
-        &self,
-        opts: &Options,
-        cases: impl ExactSizeIterator<Item = &'a InterfaceType>,
-    ) -> (usize, usize) {
-        let (discrim_size, mut align) = self.discrim_size_align(cases.len());
-        let mut payload_size = 0;
-        for ty in cases {
-            let (csize, calign) = self.size_align(opts, ty);
-            payload_size = payload_size.max(csize);
-            align = align.max(calign);
-        }
-        (align_to(discrim_size, align) + payload_size, align)
-    }
-
-    fn discrim_size_align<'a>(&self, cases: usize) -> (usize, usize) {
-        match cases {
-            n if n <= u8::MAX as usize => (1, 1),
-            n if n <= u16::MAX as usize => (2, 2),
-            _ => (4, 4),
+    pub(super) fn size_align(&self, opts: &Options, ty: &InterfaceType) -> (u32, u32) {
+        let abi = self.canonical_abi(ty);
+        if opts.memory64 {
+            (abi.size64, abi.align64)
+        } else {
+            (abi.size32, abi.align32)
         }
     }
 }

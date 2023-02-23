@@ -8,262 +8,35 @@ use crate::{
         subscription::{RwEventFlags, SubscriptionResult},
         Poll, Userdata,
     },
-    Error, ErrorExt, ErrorKind, SystemTimeSpec, WasiCtx,
+    I32Exit, SystemTimeSpec, WasiCtx,
 };
-use anyhow::Context;
 use cap_std::time::{Duration, SystemClock};
 use std::convert::{TryFrom, TryInto};
 use std::io::{IoSlice, IoSliceMut};
-use std::ops::{Deref, DerefMut};
-use tracing::debug;
+use std::ops::Deref;
+use std::sync::Arc;
 use wiggle::GuestPtr;
+
+pub mod error;
+use error::{Error, ErrorExt};
+
+// Limit the size of intermediate buffers when copying to WebAssembly shared
+// memory.
+pub(crate) const MAX_SHARED_BUFFER_SIZE: usize = 1 << 16;
 
 wiggle::from_witx!({
     witx: ["$WASI_ROOT/phases/snapshot/witx/wasi_snapshot_preview1.witx"],
-    errors: { errno => Error },
+    errors: { errno => trappable Error },
     // Note: not every function actually needs to be async, however, nearly all of them do, and
     // keeping that set the same in this macro and the wasmtime_wiggle / lucet_wiggle macros is
     // tedious, and there is no cost to having a sync function be async in this case.
     async: *,
-    wasmtime: false
+    wasmtime: false,
 });
 
 impl wiggle::GuestErrorType for types::Errno {
     fn success() -> Self {
         Self::Success
-    }
-}
-
-impl types::UserErrorConversion for WasiCtx {
-    fn errno_from_error(&mut self, e: Error) -> Result<types::Errno, wiggle::Trap> {
-        debug!("Error: {:?}", e);
-        e.try_into()
-            .map_err(|e| wiggle::Trap::String(format!("{:?}", e)))
-    }
-}
-
-impl TryFrom<Error> for types::Errno {
-    type Error = Error;
-    fn try_from(e: Error) -> Result<types::Errno, Error> {
-        use types::Errno;
-        if e.is::<ErrorKind>() {
-            let e = e.downcast::<ErrorKind>().unwrap();
-            Ok(e.into())
-        } else if e.is::<std::io::Error>() {
-            let e = e.downcast::<std::io::Error>().unwrap();
-            e.try_into()
-        } else if e.is::<wiggle::GuestError>() {
-            let e = e.downcast::<wiggle::GuestError>().unwrap();
-            Ok(e.into())
-        } else if e.is::<std::num::TryFromIntError>() {
-            Ok(Errno::Overflow)
-        } else if e.is::<std::str::Utf8Error>() {
-            Ok(Errno::Ilseq)
-        } else {
-            Err(e)
-        }
-    }
-}
-
-impl From<ErrorKind> for types::Errno {
-    fn from(e: ErrorKind) -> types::Errno {
-        use types::Errno;
-        match e {
-            ErrorKind::WouldBlk => Errno::Again,
-            ErrorKind::Noent => Errno::Noent,
-            ErrorKind::TooBig => Errno::TooBig,
-            ErrorKind::Badf => Errno::Badf,
-            ErrorKind::Exist => Errno::Exist,
-            ErrorKind::Ilseq => Errno::Ilseq,
-            ErrorKind::Inval => Errno::Inval,
-            ErrorKind::Io => Errno::Io,
-            ErrorKind::Nametoolong => Errno::Nametoolong,
-            ErrorKind::Notdir => Errno::Notdir,
-            ErrorKind::Notsup => Errno::Notsup,
-            ErrorKind::Overflow => Errno::Overflow,
-            ErrorKind::Range => Errno::Range,
-            ErrorKind::Spipe => Errno::Spipe,
-            ErrorKind::NotCapable => Errno::Notcapable,
-        }
-    }
-}
-
-impl From<wiggle::GuestError> for types::Errno {
-    fn from(err: wiggle::GuestError) -> Self {
-        use wiggle::GuestError::*;
-        match err {
-            InvalidFlagValue { .. } => Self::Inval,
-            InvalidEnumValue { .. } => Self::Inval,
-            PtrOverflow { .. } => Self::Fault,
-            PtrOutOfBounds { .. } => Self::Fault,
-            PtrNotAligned { .. } => Self::Inval,
-            PtrBorrowed { .. } => Self::Fault,
-            InvalidUtf8 { .. } => Self::Ilseq,
-            TryFromIntError { .. } => Self::Overflow,
-            InFunc { err, .. } => types::Errno::from(*err),
-            SliceLengthsDiffer { .. } => Self::Fault,
-            BorrowCheckerOutOfHandles { .. } => Self::Fault,
-        }
-    }
-}
-
-impl TryFrom<std::io::Error> for types::Errno {
-    type Error = Error;
-    fn try_from(err: std::io::Error) -> Result<types::Errno, Error> {
-        #[cfg(unix)]
-        fn raw_error_code(err: &std::io::Error) -> Option<types::Errno> {
-            use rustix::io::Errno;
-            match Errno::from_io_error(err) {
-                Some(Errno::AGAIN) => Some(types::Errno::Again),
-                Some(Errno::PIPE) => Some(types::Errno::Pipe),
-                Some(Errno::PERM) => Some(types::Errno::Perm),
-                Some(Errno::NOENT) => Some(types::Errno::Noent),
-                Some(Errno::NOMEM) => Some(types::Errno::Nomem),
-                Some(Errno::TOOBIG) => Some(types::Errno::TooBig),
-                Some(Errno::IO) => Some(types::Errno::Io),
-                Some(Errno::BADF) => Some(types::Errno::Badf),
-                Some(Errno::BUSY) => Some(types::Errno::Busy),
-                Some(Errno::ACCESS) => Some(types::Errno::Acces),
-                Some(Errno::FAULT) => Some(types::Errno::Fault),
-                Some(Errno::NOTDIR) => Some(types::Errno::Notdir),
-                Some(Errno::ISDIR) => Some(types::Errno::Isdir),
-                Some(Errno::INVAL) => Some(types::Errno::Inval),
-                Some(Errno::EXIST) => Some(types::Errno::Exist),
-                Some(Errno::FBIG) => Some(types::Errno::Fbig),
-                Some(Errno::NOSPC) => Some(types::Errno::Nospc),
-                Some(Errno::SPIPE) => Some(types::Errno::Spipe),
-                Some(Errno::MFILE) => Some(types::Errno::Mfile),
-                Some(Errno::MLINK) => Some(types::Errno::Mlink),
-                Some(Errno::NAMETOOLONG) => Some(types::Errno::Nametoolong),
-                Some(Errno::NFILE) => Some(types::Errno::Nfile),
-                Some(Errno::NOTEMPTY) => Some(types::Errno::Notempty),
-                Some(Errno::LOOP) => Some(types::Errno::Loop),
-                Some(Errno::OVERFLOW) => Some(types::Errno::Overflow),
-                Some(Errno::ILSEQ) => Some(types::Errno::Ilseq),
-                Some(Errno::NOTSUP) => Some(types::Errno::Notsup),
-                Some(Errno::ADDRINUSE) => Some(types::Errno::Addrinuse),
-                Some(Errno::CANCELED) => Some(types::Errno::Canceled),
-                Some(Errno::ADDRNOTAVAIL) => Some(types::Errno::Addrnotavail),
-                Some(Errno::AFNOSUPPORT) => Some(types::Errno::Afnosupport),
-                Some(Errno::ALREADY) => Some(types::Errno::Already),
-                Some(Errno::CONNABORTED) => Some(types::Errno::Connaborted),
-                Some(Errno::CONNREFUSED) => Some(types::Errno::Connrefused),
-                Some(Errno::CONNRESET) => Some(types::Errno::Connreset),
-                Some(Errno::DESTADDRREQ) => Some(types::Errno::Destaddrreq),
-                Some(Errno::DQUOT) => Some(types::Errno::Dquot),
-                Some(Errno::HOSTUNREACH) => Some(types::Errno::Hostunreach),
-                Some(Errno::INPROGRESS) => Some(types::Errno::Inprogress),
-                Some(Errno::INTR) => Some(types::Errno::Intr),
-                Some(Errno::ISCONN) => Some(types::Errno::Isconn),
-                Some(Errno::MSGSIZE) => Some(types::Errno::Msgsize),
-                Some(Errno::NETDOWN) => Some(types::Errno::Netdown),
-                Some(Errno::NETRESET) => Some(types::Errno::Netreset),
-                Some(Errno::NETUNREACH) => Some(types::Errno::Netunreach),
-                Some(Errno::NOBUFS) => Some(types::Errno::Nobufs),
-                Some(Errno::NOPROTOOPT) => Some(types::Errno::Noprotoopt),
-                Some(Errno::NOTCONN) => Some(types::Errno::Notconn),
-                Some(Errno::NOTSOCK) => Some(types::Errno::Notsock),
-                Some(Errno::PROTONOSUPPORT) => Some(types::Errno::Protonosupport),
-                Some(Errno::PROTOTYPE) => Some(types::Errno::Prototype),
-                Some(Errno::STALE) => Some(types::Errno::Stale),
-                Some(Errno::TIMEDOUT) => Some(types::Errno::Timedout),
-
-                // On some platforms, these have the same value as other errno values.
-                #[allow(unreachable_patterns)]
-                Some(Errno::WOULDBLOCK) => Some(types::Errno::Again),
-                #[allow(unreachable_patterns)]
-                Some(Errno::OPNOTSUPP) => Some(types::Errno::Notsup),
-
-                _ => None,
-            }
-        }
-        #[cfg(windows)]
-        fn raw_error_code(err: &std::io::Error) -> Option<types::Errno> {
-            use windows_sys::Win32::Foundation;
-            use windows_sys::Win32::Networking::WinSock;
-
-            match err.raw_os_error().map(|code| code as u32) {
-                Some(Foundation::ERROR_BAD_ENVIRONMENT) => return Some(types::Errno::TooBig),
-                Some(Foundation::ERROR_FILE_NOT_FOUND) => return Some(types::Errno::Noent),
-                Some(Foundation::ERROR_PATH_NOT_FOUND) => return Some(types::Errno::Noent),
-                Some(Foundation::ERROR_TOO_MANY_OPEN_FILES) => return Some(types::Errno::Nfile),
-                Some(Foundation::ERROR_ACCESS_DENIED) => return Some(types::Errno::Acces),
-                Some(Foundation::ERROR_SHARING_VIOLATION) => return Some(types::Errno::Acces),
-                Some(Foundation::ERROR_PRIVILEGE_NOT_HELD) => return Some(types::Errno::Perm),
-                Some(Foundation::ERROR_INVALID_HANDLE) => return Some(types::Errno::Badf),
-                Some(Foundation::ERROR_INVALID_NAME) => return Some(types::Errno::Noent),
-                Some(Foundation::ERROR_NOT_ENOUGH_MEMORY) => return Some(types::Errno::Nomem),
-                Some(Foundation::ERROR_OUTOFMEMORY) => return Some(types::Errno::Nomem),
-                Some(Foundation::ERROR_DIR_NOT_EMPTY) => return Some(types::Errno::Notempty),
-                Some(Foundation::ERROR_NOT_READY) => return Some(types::Errno::Busy),
-                Some(Foundation::ERROR_BUSY) => return Some(types::Errno::Busy),
-                Some(Foundation::ERROR_NOT_SUPPORTED) => return Some(types::Errno::Notsup),
-                Some(Foundation::ERROR_FILE_EXISTS) => return Some(types::Errno::Exist),
-                Some(Foundation::ERROR_BROKEN_PIPE) => return Some(types::Errno::Pipe),
-                Some(Foundation::ERROR_BUFFER_OVERFLOW) => return Some(types::Errno::Nametoolong),
-                Some(Foundation::ERROR_NOT_A_REPARSE_POINT) => return Some(types::Errno::Inval),
-                Some(Foundation::ERROR_NEGATIVE_SEEK) => return Some(types::Errno::Inval),
-                Some(Foundation::ERROR_DIRECTORY) => return Some(types::Errno::Notdir),
-                Some(Foundation::ERROR_ALREADY_EXISTS) => return Some(types::Errno::Exist),
-                Some(Foundation::ERROR_STOPPED_ON_SYMLINK) => return Some(types::Errno::Loop),
-                Some(Foundation::ERROR_DIRECTORY_NOT_SUPPORTED) => {
-                    return Some(types::Errno::Isdir)
-                }
-                _ => {}
-            }
-
-            match err.raw_os_error() {
-                Some(WinSock::WSAEWOULDBLOCK) => Some(types::Errno::Again),
-                Some(WinSock::WSAECANCELLED) => Some(types::Errno::Canceled),
-                Some(WinSock::WSA_E_CANCELLED) => Some(types::Errno::Canceled),
-                Some(WinSock::WSAEBADF) => Some(types::Errno::Badf),
-                Some(WinSock::WSAEFAULT) => Some(types::Errno::Fault),
-                Some(WinSock::WSAEINVAL) => Some(types::Errno::Inval),
-                Some(WinSock::WSAEMFILE) => Some(types::Errno::Mfile),
-                Some(WinSock::WSAENAMETOOLONG) => Some(types::Errno::Nametoolong),
-                Some(WinSock::WSAENOTEMPTY) => Some(types::Errno::Notempty),
-                Some(WinSock::WSAELOOP) => Some(types::Errno::Loop),
-                Some(WinSock::WSAEOPNOTSUPP) => Some(types::Errno::Notsup),
-                Some(WinSock::WSAEADDRINUSE) => Some(types::Errno::Addrinuse),
-                Some(WinSock::WSAEACCES) => Some(types::Errno::Acces),
-                Some(WinSock::WSAEADDRNOTAVAIL) => Some(types::Errno::Addrnotavail),
-                Some(WinSock::WSAEAFNOSUPPORT) => Some(types::Errno::Afnosupport),
-                Some(WinSock::WSAEALREADY) => Some(types::Errno::Already),
-                Some(WinSock::WSAECONNABORTED) => Some(types::Errno::Connaborted),
-                Some(WinSock::WSAECONNREFUSED) => Some(types::Errno::Connrefused),
-                Some(WinSock::WSAECONNRESET) => Some(types::Errno::Connreset),
-                Some(WinSock::WSAEDESTADDRREQ) => Some(types::Errno::Destaddrreq),
-                Some(WinSock::WSAEDQUOT) => Some(types::Errno::Dquot),
-                Some(WinSock::WSAEHOSTUNREACH) => Some(types::Errno::Hostunreach),
-                Some(WinSock::WSAEINPROGRESS) => Some(types::Errno::Inprogress),
-                Some(WinSock::WSAEINTR) => Some(types::Errno::Intr),
-                Some(WinSock::WSAEISCONN) => Some(types::Errno::Isconn),
-                Some(WinSock::WSAEMSGSIZE) => Some(types::Errno::Msgsize),
-                Some(WinSock::WSAENETDOWN) => Some(types::Errno::Netdown),
-                Some(WinSock::WSAENETRESET) => Some(types::Errno::Netreset),
-                Some(WinSock::WSAENETUNREACH) => Some(types::Errno::Netunreach),
-                Some(WinSock::WSAENOBUFS) => Some(types::Errno::Nobufs),
-                Some(WinSock::WSAENOPROTOOPT) => Some(types::Errno::Noprotoopt),
-                Some(WinSock::WSAENOTCONN) => Some(types::Errno::Notconn),
-                Some(WinSock::WSAENOTSOCK) => Some(types::Errno::Notsock),
-                Some(WinSock::WSAEPROTONOSUPPORT) => Some(types::Errno::Protonosupport),
-                Some(WinSock::WSAEPROTOTYPE) => Some(types::Errno::Prototype),
-                Some(WinSock::WSAESTALE) => Some(types::Errno::Stale),
-                Some(WinSock::WSAETIMEDOUT) => Some(types::Errno::Timedout),
-                _ => None,
-            }
-        }
-
-        match raw_error_code(&err) {
-            Some(errno) => Ok(errno),
-            None => match err.kind() {
-                std::io::ErrorKind::NotFound => Ok(types::Errno::Noent),
-                std::io::ErrorKind::PermissionDenied => Ok(types::Errno::Perm),
-                std::io::ErrorKind::AlreadyExists => Ok(types::Errno::Exist),
-                std::io::ErrorKind::InvalidInput => Ok(types::Errno::Ilseq),
-                _ => Err(anyhow::anyhow!(err).context(format!("Unknown OS error"))),
-            },
-        }
     }
 }
 
@@ -315,7 +88,9 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 let now = self.clocks.system.now(precision).into_std();
                 let d = now
                     .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                    .map_err(|_| Error::trap("current time before unix epoch"))?;
+                    .map_err(|_| {
+                        Error::trap(anyhow::Error::msg("current time before unix epoch"))
+                    })?;
                 Ok(d.as_nanos().try_into()?)
             }
             types::Clockid::Monotonic => {
@@ -337,8 +112,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         advice: types::Advice,
     ) -> Result<(), Error> {
         self.table()
-            .get_file_mut(u32::from(fd))?
-            .get_cap_mut(FileCaps::ADVISE)?
+            .get_file(u32::from(fd))?
+            .get_cap(FileCaps::ADVISE)?
             .advise(offset, len, advice.into())
             .await?;
         Ok(())
@@ -351,8 +126,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         len: types::Filesize,
     ) -> Result<(), Error> {
         self.table()
-            .get_file_mut(u32::from(fd))?
-            .get_cap_mut(FileCaps::ALLOCATE)?
+            .get_file(u32::from(fd))?
+            .get_cap(FileCaps::ALLOCATE)?
             .allocate(offset, len)
             .await?;
         Ok(())
@@ -368,15 +143,15 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         }
         // fd_close must close either a File or a Dir handle
         if table.is::<FileEntry>(fd) {
-            let _ = table.delete(fd);
+            let _ = table.delete::<FileEntry>(fd);
         } else if table.is::<DirEntry>(fd) {
             // We cannot close preopened directories
-            let dir_entry: &DirEntry = table.get(fd).unwrap();
+            let dir_entry: Arc<DirEntry> = table.get(fd).unwrap();
             if dir_entry.preopen_path().is_some() {
                 return Err(Error::not_supported().context("cannot close propened directory"));
             }
             drop(dir_entry);
-            let _ = table.delete(fd);
+            let _ = table.delete::<DirEntry>(fd);
         } else {
             return Err(Error::badf().context("key does not refer to file or directory"));
         }
@@ -386,8 +161,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
     async fn fd_datasync(&mut self, fd: types::Fd) -> Result<(), Error> {
         self.table()
-            .get_file_mut(u32::from(fd))?
-            .get_cap_mut(FileCaps::DATASYNC)?
+            .get_file(u32::from(fd))?
+            .get_cap(FileCaps::DATASYNC)?
             .datasync()
             .await?;
         Ok(())
@@ -397,11 +172,11 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let table = self.table();
         let fd = u32::from(fd);
         if table.is::<FileEntry>(fd) {
-            let file_entry: &mut FileEntry = table.get_mut(fd)?;
+            let file_entry: Arc<FileEntry> = table.get(fd)?;
             let fdstat = file_entry.get_fdstat().await?;
             Ok(types::Fdstat::from(&fdstat))
         } else if table.is::<DirEntry>(fd) {
-            let dir_entry: &DirEntry = table.get(fd)?;
+            let dir_entry: Arc<DirEntry> = table.get(fd)?;
             let dir_fdstat = dir_entry.get_dir_fdstat();
             Ok(types::Fdstat::from(&dir_fdstat))
         } else {
@@ -414,11 +189,16 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         fd: types::Fd,
         flags: types::Fdflags,
     ) -> Result<(), Error> {
-        self.table()
-            .get_file_mut(u32::from(fd))?
-            .get_cap_mut(FileCaps::FDSTAT_SET_FLAGS)?
-            .set_fdflags(FdFlags::from(flags))
-            .await
+        if let Some(table) = self.table_mut() {
+            table
+                .get_file_mut(u32::from(fd))?
+                .get_cap_mut(FileCaps::FDSTAT_SET_FLAGS)?
+                .set_fdflags(FdFlags::from(flags))
+                .await
+        } else {
+            log::warn!("`fd_fdstat_set_flags` does not work with wasi-threads enabled; see https://github.com/bytecodealliance/wasmtime/issues/5643");
+            Err(Error::not_supported())
+        }
     }
 
     async fn fd_fdstat_set_rights(
@@ -430,11 +210,11 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let table = self.table();
         let fd = u32::from(fd);
         if table.is::<FileEntry>(fd) {
-            let file_entry: &mut FileEntry = table.get_mut(fd)?;
+            let file_entry: Arc<FileEntry> = table.get(fd)?;
             let file_caps = FileCaps::from(&fs_rights_base);
             file_entry.drop_caps_to(file_caps)
         } else if table.is::<DirEntry>(fd) {
-            let dir_entry: &mut DirEntry = table.get_mut(fd)?;
+            let dir_entry: Arc<DirEntry> = table.get(fd)?;
             let dir_caps = DirCaps::from(&fs_rights_base);
             let file_caps = FileCaps::from(&fs_rights_inheriting);
             dir_entry.drop_caps_to(dir_caps, file_caps)
@@ -448,8 +228,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let fd = u32::from(fd);
         if table.is::<FileEntry>(fd) {
             let filestat = table
-                .get_file_mut(fd)?
-                .get_cap_mut(FileCaps::FILESTAT_GET)?
+                .get_file(fd)?
+                .get_cap(FileCaps::FILESTAT_GET)?
                 .get_filestat()
                 .await?;
             Ok(filestat.into())
@@ -471,8 +251,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         size: types::Filesize,
     ) -> Result<(), Error> {
         self.table()
-            .get_file_mut(u32::from(fd))?
-            .get_cap_mut(FileCaps::FILESTAT_SET_SIZE)?
+            .get_file(u32::from(fd))?
+            .get_cap(FileCaps::FILESTAT_SET_SIZE)?
             .set_filestat_size(size)
             .await?;
         Ok(())
@@ -493,14 +273,14 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let set_mtim = fst_flags.contains(types::Fstflags::MTIM);
         let set_mtim_now = fst_flags.contains(types::Fstflags::MTIM_NOW);
 
-        let atim = systimespec(set_atim, atim, set_atim_now).context("atim")?;
-        let mtim = systimespec(set_mtim, mtim, set_mtim_now).context("mtim")?;
+        let atim = systimespec(set_atim, atim, set_atim_now).map_err(|e| e.context("atim"))?;
+        let mtim = systimespec(set_mtim, mtim, set_mtim_now).map_err(|e| e.context("mtim"))?;
 
         if table.is::<FileEntry>(fd) {
             table
-                .get_file_mut(fd)
+                .get_file(fd)
                 .expect("checked that entry is file")
-                .get_cap_mut(FileCaps::FILESTAT_SET_TIMES)?
+                .get_cap(FileCaps::FILESTAT_SET_TIMES)?
                 .set_times(atim, mtim)
                 .await
         } else if table.is::<DirEntry>(fd) {
@@ -520,26 +300,68 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         fd: types::Fd,
         iovs: &types::IovecArray<'a>,
     ) -> Result<types::Size, Error> {
-        let f = self
-            .table()
-            .get_file_mut(u32::from(fd))?
-            .get_cap_mut(FileCaps::READ)?;
+        let f = self.table().get_file(u32::from(fd))?;
+        let f = f.get_cap(FileCaps::READ)?;
 
-        let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> = iovs
+        let iovs: Vec<wiggle::GuestPtr<[u8]>> = iovs
             .iter()
             .map(|iov_ptr| {
                 let iov_ptr = iov_ptr?;
                 let iov: types::Iovec = iov_ptr.read()?;
-                Ok(iov.buf.as_array(iov.buf_len).as_slice_mut()?)
+                Ok(iov.buf.as_array(iov.buf_len))
             })
             .collect::<Result<_, Error>>()?;
 
-        let mut ioslices: Vec<IoSliceMut> = guest_slices
-            .iter_mut()
-            .map(|s| IoSliceMut::new(&mut *s))
-            .collect();
+        // If the first iov structure is from shared memory we can safely assume
+        // all the rest will be. We then read into memory based on the memory's
+        // shared-ness:
+        // - if not shared, we copy directly into the Wasm memory
+        // - if shared, we use an intermediate buffer; this avoids Rust unsafety
+        //   due to holding on to a `&mut [u8]` of Wasm memory when we cannot
+        //   guarantee the `&mut` exclusivity--other threads could be modifying
+        //   the data as this functions writes to it. Though likely there is no
+        //   issue with OS writing to io structs in multi-threaded scenarios,
+        //   since we do not know here if `&dyn WasiFile` does anything else
+        //   (e.g., read), we cautiously incur some performance overhead by
+        //   copying twice.
+        let is_shared_memory = iovs
+            .iter()
+            .next()
+            .and_then(|s| Some(s.is_shared_memory()))
+            .unwrap_or(false);
+        let bytes_read: u64 = if is_shared_memory {
+            // For shared memory, read into an intermediate buffer. Only the
+            // first iov will be filled and even then the read is capped by the
+            // `MAX_SHARED_BUFFER_SIZE`, so users are expected to re-call.
+            let iov = iovs.into_iter().next();
+            if let Some(iov) = iov {
+                let mut buffer = vec![0; (iov.len() as usize).min(MAX_SHARED_BUFFER_SIZE)];
+                let bytes_read = f.read_vectored(&mut [IoSliceMut::new(&mut buffer)]).await?;
+                iov.get_range(0..bytes_read.try_into()?)
+                    .expect("it should always be possible to slice the iov smaller")
+                    .copy_from_slice(&buffer[0..bytes_read.try_into()?])?;
+                bytes_read
+            } else {
+                return Ok(0);
+            }
+        } else {
+            // Convert all of the unsafe guest slices to safe ones--this uses
+            // Wiggle's internal borrow checker to ensure no overlaps. We assume
+            // here that, because the memory is not shared, there are no other
+            // threads to access it while it is written to.
+            let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> = iovs
+                .into_iter()
+                .map(|iov| Ok(iov.as_slice_mut()?.unwrap()))
+                .collect::<Result<_, Error>>()?;
 
-        let bytes_read = f.read_vectored(&mut ioslices).await?;
+            // Read directly into the Wasm memory.
+            let mut ioslices: Vec<IoSliceMut> = guest_slices
+                .iter_mut()
+                .map(|s| IoSliceMut::new(&mut *s))
+                .collect();
+            f.read_vectored(&mut ioslices).await?
+        };
+
         Ok(types::Size::try_from(bytes_read)?)
     }
 
@@ -549,26 +371,70 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         iovs: &types::IovecArray<'a>,
         offset: types::Filesize,
     ) -> Result<types::Size, Error> {
-        let f = self
-            .table()
-            .get_file_mut(u32::from(fd))?
-            .get_cap_mut(FileCaps::READ | FileCaps::SEEK)?;
+        let f = self.table().get_file(u32::from(fd))?;
+        let f = f.get_cap(FileCaps::READ | FileCaps::SEEK)?;
 
-        let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> = iovs
+        let iovs: Vec<wiggle::GuestPtr<[u8]>> = iovs
             .iter()
             .map(|iov_ptr| {
                 let iov_ptr = iov_ptr?;
                 let iov: types::Iovec = iov_ptr.read()?;
-                Ok(iov.buf.as_array(iov.buf_len).as_slice_mut()?)
+                Ok(iov.buf.as_array(iov.buf_len))
             })
             .collect::<Result<_, Error>>()?;
 
-        let mut ioslices: Vec<IoSliceMut> = guest_slices
-            .iter_mut()
-            .map(|s| IoSliceMut::new(&mut *s))
-            .collect();
+        // If the first iov structure is from shared memory we can safely assume
+        // all the rest will be. We then read into memory based on the memory's
+        // shared-ness:
+        // - if not shared, we copy directly into the Wasm memory
+        // - if shared, we use an intermediate buffer; this avoids Rust unsafety
+        //   due to holding on to a `&mut [u8]` of Wasm memory when we cannot
+        //   guarantee the `&mut` exclusivity--other threads could be modifying
+        //   the data as this functions writes to it. Though likely there is no
+        //   issue with OS writing to io structs in multi-threaded scenarios,
+        //   since we do not know here if `&dyn WasiFile` does anything else
+        //   (e.g., read), we cautiously incur some performance overhead by
+        //   copying twice.
+        let is_shared_memory = iovs
+            .iter()
+            .next()
+            .and_then(|s| Some(s.is_shared_memory()))
+            .unwrap_or(false);
+        let bytes_read: u64 = if is_shared_memory {
+            // For shared memory, read into an intermediate buffer. Only the
+            // first iov will be filled and even then the read is capped by the
+            // `MAX_SHARED_BUFFER_SIZE`, so users are expected to re-call.
+            let iov = iovs.into_iter().next();
+            if let Some(iov) = iov {
+                let mut buffer = vec![0; (iov.len() as usize).min(MAX_SHARED_BUFFER_SIZE)];
+                let bytes_read = f
+                    .read_vectored_at(&mut [IoSliceMut::new(&mut buffer)], offset)
+                    .await?;
+                iov.get_range(0..bytes_read.try_into()?)
+                    .expect("it should always be possible to slice the iov smaller")
+                    .copy_from_slice(&buffer[0..bytes_read.try_into()?])?;
+                bytes_read
+            } else {
+                return Ok(0);
+            }
+        } else {
+            // Convert all of the unsafe guest slices to safe ones--this uses
+            // Wiggle's internal borrow checker to ensure no overlaps. We assume
+            // here that, because the memory is not shared, there are no other
+            // threads to access it while it is written to.
+            let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> = iovs
+                .into_iter()
+                .map(|iov| Ok(iov.as_slice_mut()?.unwrap()))
+                .collect::<Result<_, Error>>()?;
 
-        let bytes_read = f.read_vectored_at(&mut ioslices, offset).await?;
+            // Read directly into the Wasm memory.
+            let mut ioslices: Vec<IoSliceMut> = guest_slices
+                .iter_mut()
+                .map(|s| IoSliceMut::new(&mut *s))
+                .collect();
+            f.read_vectored_at(&mut ioslices, offset).await?
+        };
+
         Ok(types::Size::try_from(bytes_read)?)
     }
 
@@ -577,17 +443,15 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         fd: types::Fd,
         ciovs: &types::CiovecArray<'a>,
     ) -> Result<types::Size, Error> {
-        let f = self
-            .table()
-            .get_file_mut(u32::from(fd))?
-            .get_cap_mut(FileCaps::WRITE)?;
+        let f = self.table().get_file(u32::from(fd))?;
+        let f = f.get_cap(FileCaps::WRITE)?;
 
-        let guest_slices: Vec<wiggle::GuestSlice<u8>> = ciovs
+        let guest_slices: Vec<wiggle::GuestCow<u8>> = ciovs
             .iter()
             .map(|iov_ptr| {
                 let iov_ptr = iov_ptr?;
                 let iov: types::Ciovec = iov_ptr.read()?;
-                Ok(iov.buf.as_array(iov.buf_len).as_slice()?)
+                Ok(iov.buf.as_array(iov.buf_len).as_cow()?)
             })
             .collect::<Result<_, Error>>()?;
 
@@ -606,17 +470,15 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         ciovs: &types::CiovecArray<'a>,
         offset: types::Filesize,
     ) -> Result<types::Size, Error> {
-        let f = self
-            .table()
-            .get_file_mut(u32::from(fd))?
-            .get_cap_mut(FileCaps::WRITE | FileCaps::SEEK)?;
+        let f = self.table().get_file(u32::from(fd))?;
+        let f = f.get_cap(FileCaps::WRITE | FileCaps::SEEK)?;
 
-        let guest_slices: Vec<wiggle::GuestSlice<u8>> = ciovs
+        let guest_slices: Vec<wiggle::GuestCow<u8>> = ciovs
             .iter()
             .map(|iov_ptr| {
                 let iov_ptr = iov_ptr?;
                 let iov: types::Ciovec = iov_ptr.read()?;
-                Ok(iov.buf.as_array(iov.buf_len).as_slice()?)
+                Ok(iov.buf.as_array(iov.buf_len).as_cow()?)
             })
             .collect::<Result<_, Error>>()?;
 
@@ -631,7 +493,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
     async fn fd_prestat_get(&mut self, fd: types::Fd) -> Result<types::Prestat, Error> {
         let table = self.table();
-        let dir_entry: &DirEntry = table.get(u32::from(fd)).map_err(|_| Error::badf())?;
+        let dir_entry: Arc<DirEntry> = table.get(u32::from(fd)).map_err(|_| Error::badf())?;
         if let Some(ref preopen) = dir_entry.preopen_path() {
             let path_str = preopen.to_str().ok_or_else(|| Error::not_supported())?;
             let pr_name_len = u32::try_from(path_str.as_bytes().len())?;
@@ -648,7 +510,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         path_max_len: types::Size,
     ) -> Result<(), Error> {
         let table = self.table();
-        let dir_entry: &DirEntry = table.get(u32::from(fd)).map_err(|_| Error::not_dir())?;
+        let dir_entry: Arc<DirEntry> = table.get(u32::from(fd)).map_err(|_| Error::not_dir())?;
         if let Some(ref preopen) = dir_entry.preopen_path() {
             let path_bytes = preopen
                 .to_str()
@@ -658,8 +520,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             if path_len < path_max_len as usize {
                 return Err(Error::name_too_long());
             }
-            let mut p_memory = path.as_array(path_len as u32).as_slice_mut()?;
-            p_memory.copy_from_slice(path_bytes);
+            path.as_array(path_len as u32).copy_from_slice(path_bytes)?;
             Ok(())
         } else {
             Err(Error::not_supported())
@@ -675,11 +536,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         if table.is_preopen(from) || table.is_preopen(to) {
             return Err(Error::not_supported().context("cannot renumber a preopen"));
         }
-        let from_entry = table
-            .delete(from)
-            .expect("we checked that table contains from");
-        table.insert_at(to, from_entry);
-        Ok(())
+        table.renumber(from, to)
     }
 
     async fn fd_seek(
@@ -703,8 +560,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         };
         let newoffset = self
             .table()
-            .get_file_mut(u32::from(fd))?
-            .get_cap_mut(required_caps)?
+            .get_file(u32::from(fd))?
+            .get_cap(required_caps)?
             .seek(whence)
             .await?;
         Ok(newoffset)
@@ -712,8 +569,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
     async fn fd_sync(&mut self, fd: types::Fd) -> Result<(), Error> {
         self.table()
-            .get_file_mut(u32::from(fd))?
-            .get_cap_mut(FileCaps::SYNC)?
+            .get_file(u32::from(fd))?
+            .get_cap(FileCaps::SYNC)?
             .sync()
             .await?;
         Ok(())
@@ -723,8 +580,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         // XXX should this be stream_position?
         let offset = self
             .table()
-            .get_file_mut(u32::from(fd))?
-            .get_cap_mut(FileCaps::TELL)?
+            .get_file(u32::from(fd))?
+            .get_cap(FileCaps::TELL)?
             .seek(std::io::SeekFrom::Current(0))
             .await?;
         Ok(offset)
@@ -792,7 +649,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         self.table()
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::CREATE_DIRECTORY)?
-            .create_dir(path.as_str()?.deref())
+            .create_dir(path.as_cow()?.deref())
             .await
     }
 
@@ -807,7 +664,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::PATH_FILESTAT_GET)?
             .get_path_filestat(
-                path.as_str()?.deref(),
+                path.as_cow()?.deref(),
                 flags.contains(types::Lookupflags::SYMLINK_FOLLOW),
             )
             .await?;
@@ -828,13 +685,13 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let set_mtim = fst_flags.contains(types::Fstflags::MTIM);
         let set_mtim_now = fst_flags.contains(types::Fstflags::MTIM_NOW);
 
-        let atim = systimespec(set_atim, atim, set_atim_now).context("atim")?;
-        let mtim = systimespec(set_mtim, mtim, set_mtim_now).context("mtim")?;
+        let atim = systimespec(set_atim, atim, set_atim_now).map_err(|e| e.context("atim"))?;
+        let mtim = systimespec(set_mtim, mtim, set_mtim_now).map_err(|e| e.context("mtim"))?;
         self.table()
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::PATH_FILESTAT_SET_TIMES)?
             .set_times(
-                path.as_str()?.deref(),
+                path.as_cow()?.deref(),
                 atim,
                 mtim,
                 flags.contains(types::Lookupflags::SYMLINK_FOLLOW),
@@ -851,12 +708,10 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         target_path: &GuestPtr<'a, str>,
     ) -> Result<(), Error> {
         let table = self.table();
-        let src_dir = table
-            .get_dir(u32::from(src_fd))?
-            .get_cap(DirCaps::LINK_SOURCE)?;
-        let target_dir = table
-            .get_dir(u32::from(target_fd))?
-            .get_cap(DirCaps::LINK_TARGET)?;
+        let src_dir = table.get_dir(u32::from(src_fd))?;
+        let src_dir = src_dir.get_cap(DirCaps::LINK_SOURCE)?;
+        let target_dir = table.get_dir(u32::from(target_fd))?;
+        let target_dir = target_dir.get_cap(DirCaps::LINK_TARGET)?;
         let symlink_follow = src_flags.contains(types::Lookupflags::SYMLINK_FOLLOW);
         if symlink_follow {
             return Err(Error::invalid_argument()
@@ -865,9 +720,9 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
         src_dir
             .hard_link(
-                src_path.as_str()?.deref(),
+                src_path.as_cow()?.deref(),
                 target_dir.deref(),
-                target_path.as_str()?.deref(),
+                target_path.as_cow()?.deref(),
             )
             .await
     }
@@ -893,7 +748,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
         let oflags = OFlags::from(&oflags);
         let fdflags = FdFlags::from(fdflags);
-        let path = path.as_str()?;
+        let path = path.as_cow()?;
         if oflags.contains(OFlags::DIRECTORY) {
             if oflags.contains(OFlags::CREATE)
                 || oflags.contains(OFlags::EXCLUSIVE)
@@ -906,7 +761,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             let dir = dir_entry.get_cap(DirCaps::OPEN)?;
             let child_dir = dir.open_dir(symlink_follow, path.deref()).await?;
             drop(dir);
-            let fd = table.push(Box::new(DirEntry::new(
+            let fd = table.push(Arc::new(DirEntry::new(
                 dir_caps, file_caps, None, child_dir,
             )))?;
             Ok(types::Fd::from(fd))
@@ -926,7 +781,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 .open_file(symlink_follow, path.deref(), oflags, read, write, fdflags)
                 .await?;
             drop(dir);
-            let fd = table.push(Box::new(FileEntry::new(file_caps, file)))?;
+            let fd = table.push(Arc::new(FileEntry::new(file_caps, file)))?;
             Ok(types::Fd::from(fd))
         }
     }
@@ -942,7 +797,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .table()
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::READLINK)?
-            .read_link(path.as_str()?.deref())
+            .read_link(path.as_cow()?.deref())
             .await?
             .into_os_string()
             .into_string()
@@ -952,8 +807,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         if link_len > buf_len as usize {
             return Err(Error::range());
         }
-        let mut buf = buf.as_array(link_len as u32).as_slice_mut()?;
-        buf.copy_from_slice(link_bytes);
+        buf.as_array(link_len as u32).copy_from_slice(link_bytes)?;
         Ok(link_len as types::Size)
     }
 
@@ -965,7 +819,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         self.table()
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::REMOVE_DIRECTORY)?
-            .remove_dir(path.as_str()?.deref())
+            .remove_dir(path.as_cow()?.deref())
             .await
     }
 
@@ -977,17 +831,15 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         dest_path: &GuestPtr<'a, str>,
     ) -> Result<(), Error> {
         let table = self.table();
-        let src_dir = table
-            .get_dir(u32::from(src_fd))?
-            .get_cap(DirCaps::RENAME_SOURCE)?;
-        let dest_dir = table
-            .get_dir(u32::from(dest_fd))?
-            .get_cap(DirCaps::RENAME_TARGET)?;
+        let src_dir = table.get_dir(u32::from(src_fd))?;
+        let src_dir = src_dir.get_cap(DirCaps::RENAME_SOURCE)?;
+        let dest_dir = table.get_dir(u32::from(dest_fd))?;
+        let dest_dir = dest_dir.get_cap(DirCaps::RENAME_TARGET)?;
         src_dir
             .rename(
-                src_path.as_str()?.deref(),
+                src_path.as_cow()?.deref(),
                 dest_dir.deref(),
-                dest_path.as_str()?.deref(),
+                dest_path.as_cow()?.deref(),
             )
             .await
     }
@@ -1001,7 +853,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         self.table()
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::SYMLINK)?
-            .symlink(src_path.as_str()?.deref(), dest_path.as_str()?.deref())
+            .symlink(src_path.as_cow()?.deref(), dest_path.as_cow()?.deref())
             .await
     }
 
@@ -1013,7 +865,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         self.table()
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::UNLINK_FILE)?
-            .unlink_file(path.as_str()?.deref())
+            .unlink_file(path.as_cow()?.deref())
             .await
     }
 
@@ -1052,10 +904,11 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             }
         }
 
-        let table = &mut self.table;
+        let table = &self.table;
         // We need these refmuts to outlive Poll, which will hold the &mut dyn WasiFile inside
-        let mut read_refs: Vec<(&dyn WasiFile, Userdata)> = Vec::new();
-        let mut write_refs: Vec<(&dyn WasiFile, Userdata)> = Vec::new();
+        let mut read_refs: Vec<(Arc<FileEntry>, Option<Userdata>)> = Vec::new();
+        let mut write_refs: Vec<(Arc<FileEntry>, Option<Userdata>)> = Vec::new();
+
         let mut poll = Poll::new();
 
         let subs = subs.as_array(nsubscriptions);
@@ -1089,30 +942,69 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                             sub.userdata.into(),
                         )
                     }
+                    types::Clockid::Realtime => {
+                        // POSIX specifies that functions like `nanosleep` and others use the
+                        // `REALTIME` clock. But it also says that `clock_settime` has no effect
+                        // on threads waiting in these functions. MONOTONIC should always have
+                        // resolution at least as good as REALTIME, so we can translate a
+                        // non-absolute `REALTIME` request into a `MONOTONIC` request.
+                        let clock = self.clocks.monotonic.deref();
+                        let precision = Duration::from_nanos(clocksub.precision);
+                        let duration = Duration::from_nanos(clocksub.timeout);
+                        let deadline = if clocksub
+                            .flags
+                            .contains(types::Subclockflags::SUBSCRIPTION_CLOCK_ABSTIME)
+                        {
+                            return Err(Error::not_supported());
+                        } else {
+                            clock
+                                .now(precision)
+                                .checked_add(duration)
+                                .ok_or_else(|| Error::overflow().context("deadline"))?
+                        };
+                        poll.subscribe_monotonic_clock(
+                            clock,
+                            deadline,
+                            precision,
+                            sub.userdata.into(),
+                        )
+                    }
                     _ => Err(Error::invalid_argument()
                         .context("timer subscriptions only support monotonic timer"))?,
                 },
                 types::SubscriptionU::FdRead(readsub) => {
                     let fd = readsub.file_descriptor;
-                    let file_ref = table
-                        .get_file(u32::from(fd))?
-                        .get_cap(FileCaps::POLL_READWRITE)?;
-                    read_refs.push((file_ref, sub.userdata.into()));
+                    let file_ref = table.get_file(u32::from(fd))?;
+                    let _file = file_ref.get_cap(FileCaps::POLL_READWRITE)?;
+
+                    read_refs.push((file_ref, Some(sub.userdata.into())));
                 }
                 types::SubscriptionU::FdWrite(writesub) => {
                     let fd = writesub.file_descriptor;
-                    let file_ref = table
-                        .get_file(u32::from(fd))?
-                        .get_cap(FileCaps::POLL_READWRITE)?;
-                    write_refs.push((file_ref, sub.userdata.into()));
+                    let file_ref = table.get_file(u32::from(fd))?;
+                    let _file = file_ref.get_cap(FileCaps::POLL_READWRITE)?;
+                    write_refs.push((file_ref, Some(sub.userdata.into())));
                 }
             }
         }
 
-        for (f, ud) in read_refs.iter_mut() {
+        let mut read_mut_refs: Vec<(&dyn WasiFile, Userdata)> = Vec::new();
+        for (file_lock, userdata) in read_refs.iter_mut() {
+            let file = file_lock.get_cap(FileCaps::POLL_READWRITE)?;
+            read_mut_refs.push((file, userdata.take().unwrap()));
+        }
+
+        for (f, ud) in read_mut_refs.iter_mut() {
             poll.subscribe_read(*f, *ud);
         }
-        for (f, ud) in write_refs.iter_mut() {
+
+        let mut write_mut_refs: Vec<(&dyn WasiFile, Userdata)> = Vec::new();
+        for (file_lock, userdata) in write_refs.iter_mut() {
+            let file = file_lock.get_cap(FileCaps::POLL_READWRITE)?;
+            write_mut_refs.push((file, userdata.take().unwrap()));
+        }
+
+        for (f, ud) in write_mut_refs.iter_mut() {
             poll.subscribe_write(*f, *ud);
         }
 
@@ -1147,7 +1039,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                         },
                         Err(e) => types::Event {
                             userdata,
-                            error: e.try_into().expect("non-trapping"),
+                            error: e.downcast().map_err(Error::trap)?,
                             type_,
                             fd_readwrite: fd_readwrite_empty(),
                         },
@@ -1167,7 +1059,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                         },
                         Err(e) => types::Event {
                             userdata,
-                            error: e.try_into()?,
+                            error: e.downcast().map_err(Error::trap)?,
                             type_,
                             fd_readwrite: fd_readwrite_empty(),
                         },
@@ -1179,7 +1071,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                         userdata,
                         error: match r {
                             Ok(()) => types::Errno::Success,
-                            Err(e) => e.try_into()?,
+                            Err(e) => e.downcast().map_err(Error::trap)?,
                         },
                         type_,
                         fd_readwrite: fd_readwrite_empty(),
@@ -1191,17 +1083,17 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         Ok(num_results.try_into().expect("results fit into memory"))
     }
 
-    async fn proc_exit(&mut self, status: types::Exitcode) -> wiggle::Trap {
+    async fn proc_exit(&mut self, status: types::Exitcode) -> anyhow::Error {
         // Check that the status is within WASI's range.
         if status < 126 {
-            wiggle::Trap::I32Exit(status as i32)
+            I32Exit(status as i32).into()
         } else {
-            wiggle::Trap::String("exit with invalid exit status outside of [0..126)".to_owned())
+            anyhow::Error::msg("exit with invalid exit status outside of [0..126)")
         }
     }
 
     async fn proc_raise(&mut self, _sig: types::Signal) -> Result<(), Error> {
-        Err(Error::trap("proc_raise unsupported"))
+        Err(Error::trap(anyhow::Error::msg("proc_raise unsupported")))
     }
 
     async fn sched_yield(&mut self) -> Result<(), Error> {
@@ -1213,8 +1105,30 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         buf: &GuestPtr<'a, u8>,
         buf_len: types::Size,
     ) -> Result<(), Error> {
-        let mut buf = buf.as_array(buf_len).as_slice_mut()?;
-        self.random.try_fill_bytes(buf.deref_mut())?;
+        let buf = buf.as_array(buf_len);
+        if buf.is_shared_memory() {
+            // If the Wasm memory is shared, copy to an intermediate buffer to
+            // avoid Rust unsafety (i.e., the called function could rely on
+            // `&mut [u8]`'s exclusive ownership which is not guaranteed due to
+            // potential access from other threads).
+            let mut copied: u32 = 0;
+            while copied < buf.len() {
+                let len = (buf.len() - copied).min(MAX_SHARED_BUFFER_SIZE as u32);
+                let mut tmp = vec![0; len as usize];
+                self.random.lock().unwrap().try_fill_bytes(&mut tmp)?;
+                let dest = buf
+                    .get_range(copied..copied + len)
+                    .unwrap()
+                    .as_unsafe_slice_mut()?;
+                dest.copy_from_slice(&tmp)?;
+                copied += len;
+            }
+        } else {
+            // If the Wasm memory is non-shared, copy directly into the linear
+            // memory.
+            let mem = &mut buf.as_slice_mut()?.unwrap();
+            self.random.lock().unwrap().try_fill_bytes(mem)?;
+        }
         Ok(())
     }
 
@@ -1224,9 +1138,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         flags: types::Fdflags,
     ) -> Result<types::Fd, Error> {
         let table = self.table();
-        let f = table
-            .get_file_mut(u32::from(fd))?
-            .get_cap_mut(FileCaps::READ)?;
+        let f = table.get_file(u32::from(fd))?;
+        let f = f.get_cap(FileCaps::READ)?;
 
         let file = f.sock_accept(FdFlags::from(flags)).await?;
         let file_caps = FileCaps::READ
@@ -1235,7 +1148,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             | FileCaps::POLL_READWRITE
             | FileCaps::FILESTAT_GET;
 
-        let fd = table.push(Box::new(FileEntry::new(file_caps, file)))?;
+        let fd = table.push(Arc::new(FileEntry::new(file_caps, file)))?;
         Ok(types::Fd::from(fd))
     }
 
@@ -1245,27 +1158,71 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         ri_data: &types::IovecArray<'a>,
         ri_flags: types::Riflags,
     ) -> Result<(types::Size, types::Roflags), Error> {
-        let f = self
-            .table()
-            .get_file_mut(u32::from(fd))?
-            .get_cap_mut(FileCaps::READ)?;
+        let f = self.table().get_file(u32::from(fd))?;
+        let f = f.get_cap(FileCaps::READ)?;
 
-        let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> = ri_data
+        let iovs: Vec<wiggle::GuestPtr<[u8]>> = ri_data
             .iter()
             .map(|iov_ptr| {
                 let iov_ptr = iov_ptr?;
                 let iov: types::Iovec = iov_ptr.read()?;
-                Ok(iov.buf.as_array(iov.buf_len).as_slice_mut()?)
+                Ok(iov.buf.as_array(iov.buf_len))
             })
             .collect::<Result<_, Error>>()?;
 
-        let mut ioslices: Vec<IoSliceMut> = guest_slices
-            .iter_mut()
-            .map(|s| IoSliceMut::new(&mut *s))
-            .collect();
+        // If the first iov structure is from shared memory we can safely assume
+        // all the rest will be. We then read into memory based on the memory's
+        // shared-ness:
+        // - if not shared, we copy directly into the Wasm memory
+        // - if shared, we use an intermediate buffer; this avoids Rust unsafety
+        //   due to holding on to a `&mut [u8]` of Wasm memory when we cannot
+        //   guarantee the `&mut` exclusivity--other threads could be modifying
+        //   the data as this functions writes to it. Though likely there is no
+        //   issue with OS writing to io structs in multi-threaded scenarios,
+        //   since we do not know here if `&dyn WasiFile` does anything else
+        //   (e.g., read), we cautiously incur some performance overhead by
+        //   copying twice.
+        let is_shared_memory = iovs
+            .iter()
+            .next()
+            .and_then(|s| Some(s.is_shared_memory()))
+            .unwrap_or(false);
+        let (bytes_read, ro_flags) = if is_shared_memory {
+            // For shared memory, read into an intermediate buffer. Only the
+            // first iov will be filled and even then the read is capped by the
+            // `MAX_SHARED_BUFFER_SIZE`, so users are expected to re-call.
+            let iov = iovs.into_iter().next();
+            if let Some(iov) = iov {
+                let mut buffer = vec![0; (iov.len() as usize).min(MAX_SHARED_BUFFER_SIZE)];
+                let (bytes_read, ro_flags) = f
+                    .sock_recv(&mut [IoSliceMut::new(&mut buffer)], RiFlags::from(ri_flags))
+                    .await?;
+                iov.get_range(0..bytes_read.try_into()?)
+                    .expect("it should always be possible to slice the iov smaller")
+                    .copy_from_slice(&buffer[0..bytes_read.try_into()?])?;
+                (bytes_read, ro_flags)
+            } else {
+                return Ok((0, RoFlags::empty().into()));
+            }
+        } else {
+            // Convert all of the unsafe guest slices to safe ones--this uses
+            // Wiggle's internal borrow checker to ensure no overlaps. We assume
+            // here that, because the memory is not shared, there are no other
+            // threads to access it while it is written to.
+            let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> = iovs
+                .into_iter()
+                .map(|iov| Ok(iov.as_slice_mut()?.unwrap()))
+                .collect::<Result<_, Error>>()?;
 
-        let (bytes_read, roflags) = f.sock_recv(&mut ioslices, RiFlags::from(ri_flags)).await?;
-        Ok((types::Size::try_from(bytes_read)?, roflags.into()))
+            // Read directly into the Wasm memory.
+            let mut ioslices: Vec<IoSliceMut> = guest_slices
+                .iter_mut()
+                .map(|s| IoSliceMut::new(&mut *s))
+                .collect();
+            f.sock_recv(&mut ioslices, RiFlags::from(ri_flags)).await?
+        };
+
+        Ok((types::Size::try_from(bytes_read)?, ro_flags.into()))
     }
 
     async fn sock_send<'a>(
@@ -1274,17 +1231,15 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         si_data: &types::CiovecArray<'a>,
         _si_flags: types::Siflags,
     ) -> Result<types::Size, Error> {
-        let f = self
-            .table()
-            .get_file_mut(u32::from(fd))?
-            .get_cap_mut(FileCaps::WRITE)?;
+        let f = self.table().get_file(u32::from(fd))?;
+        let f = f.get_cap(FileCaps::WRITE)?;
 
-        let guest_slices: Vec<wiggle::GuestSlice<u8>> = si_data
+        let guest_slices: Vec<wiggle::GuestCow<u8>> = si_data
             .iter()
             .map(|iov_ptr| {
                 let iov_ptr = iov_ptr?;
                 let iov: types::Ciovec = iov_ptr.read()?;
-                Ok(iov.buf.as_array(iov.buf_len).as_slice()?)
+                Ok(iov.buf.as_array(iov.buf_len).as_cow()?)
             })
             .collect::<Result<_, Error>>()?;
 
@@ -1298,10 +1253,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     async fn sock_shutdown(&mut self, fd: types::Fd, how: types::Sdflags) -> Result<(), Error> {
-        let f = self
-            .table()
-            .get_file_mut(u32::from(fd))?
-            .get_cap_mut(FileCaps::FDSTAT_SET_FLAGS)?;
+        let f = self.table().get_file(u32::from(fd))?;
+        let f = f.get_cap(FileCaps::FDSTAT_SET_FLAGS)?;
 
         f.sock_shutdown(SdFlags::from(how)).await
     }

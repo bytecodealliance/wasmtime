@@ -4,16 +4,12 @@ use wasmtime::*;
 
 #[test]
 fn successful_instantiation() -> Result<()> {
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(1)
+        .instance_memory_pages(1)
+        .instance_table_elements(10);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: 1,
-            memory_pages: 1,
-            table_elements: 10,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);
     config.static_memory_maximum_size(65536);
@@ -30,16 +26,12 @@ fn successful_instantiation() -> Result<()> {
 
 #[test]
 fn memory_limit() -> Result<()> {
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(1)
+        .instance_memory_pages(3)
+        .instance_table_elements(10);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: 1,
-            memory_pages: 3,
-            table_elements: 10,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(65536);
     config.static_memory_maximum_size(3 * 65536);
@@ -75,7 +67,7 @@ fn memory_limit() -> Result<()> {
     {
         let mut store = Store::new(&engine, ());
         let instance = Instance::new(&mut store, &module, &[])?;
-        let f = instance.get_typed_func::<(), i32, _>(&mut store, "f")?;
+        let f = instance.get_typed_func::<(), i32>(&mut store, "f")?;
 
         assert_eq!(f.call(&mut store, ()).expect("function should not trap"), 0);
         assert_eq!(f.call(&mut store, ()).expect("function should not trap"), 1);
@@ -109,16 +101,12 @@ fn memory_limit() -> Result<()> {
 
 #[test]
 fn memory_init() -> Result<()> {
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(1)
+        .instance_memory_pages(2)
+        .instance_table_elements(0);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: 1,
-            memory_pages: 2,
-            table_elements: 0,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
 
     let engine = Engine::new(&config)?;
 
@@ -142,16 +130,12 @@ fn memory_init() -> Result<()> {
 
 #[test]
 fn memory_guard_page_trap() -> Result<()> {
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(1)
+        .instance_memory_pages(2)
+        .instance_table_elements(0);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: 1,
-            memory_pages: 2,
-            table_elements: 0,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
 
     let engine = Engine::new(&config)?;
 
@@ -165,22 +149,34 @@ fn memory_guard_page_trap() -> Result<()> {
         let mut store = Store::new(&engine, ());
         let instance = Instance::new(&mut store, &module, &[])?;
         let m = instance.get_memory(&mut store, "m").unwrap();
-        let f = instance.get_typed_func::<i32, (), _>(&mut store, "f")?;
+        let f = instance.get_typed_func::<i32, ()>(&mut store, "f")?;
 
-        let trap = f.call(&mut store, 0).expect_err("function should trap");
-        assert!(trap.to_string().contains("out of bounds"));
+        let trap = f
+            .call(&mut store, 0)
+            .expect_err("function should trap")
+            .downcast::<Trap>()?;
+        assert_eq!(trap, Trap::MemoryOutOfBounds);
 
-        let trap = f.call(&mut store, 1).expect_err("function should trap");
-        assert!(trap.to_string().contains("out of bounds"));
+        let trap = f
+            .call(&mut store, 1)
+            .expect_err("function should trap")
+            .downcast::<Trap>()?;
+        assert_eq!(trap, Trap::MemoryOutOfBounds);
 
         m.grow(&mut store, 1).expect("memory should grow");
         f.call(&mut store, 0).expect("function should not trap");
 
-        let trap = f.call(&mut store, 65536).expect_err("function should trap");
-        assert!(trap.to_string().contains("out of bounds"));
+        let trap = f
+            .call(&mut store, 65536)
+            .expect_err("function should trap")
+            .downcast::<Trap>()?;
+        assert_eq!(trap, Trap::MemoryOutOfBounds);
 
-        let trap = f.call(&mut store, 65537).expect_err("function should trap");
-        assert!(trap.to_string().contains("out of bounds"));
+        let trap = f
+            .call(&mut store, 65537)
+            .expect_err("function should trap")
+            .downcast::<Trap>()?;
+        assert_eq!(trap, Trap::MemoryOutOfBounds);
 
         m.grow(&mut store, 1).expect("memory should grow");
         f.call(&mut store, 65536).expect("function should not trap");
@@ -198,16 +194,12 @@ fn memory_zeroed() -> Result<()> {
         return Ok(());
     }
 
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(1)
+        .instance_memory_pages(1)
+        .instance_table_elements(0);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: 1,
-            memory_pages: 1,
-            table_elements: 0,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);
     config.static_memory_maximum_size(65536);
@@ -241,16 +233,12 @@ fn memory_zeroed() -> Result<()> {
 #[test]
 fn table_limit() -> Result<()> {
     const TABLE_ELEMENTS: u32 = 10;
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(1)
+        .instance_memory_pages(1)
+        .instance_table_elements(TABLE_ELEMENTS);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: 1,
-            memory_pages: 1,
-            table_elements: TABLE_ELEMENTS,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);
     config.static_memory_maximum_size(65536);
@@ -285,7 +273,7 @@ fn table_limit() -> Result<()> {
     {
         let mut store = Store::new(&engine, ());
         let instance = Instance::new(&mut store, &module, &[])?;
-        let f = instance.get_typed_func::<(), i32, _>(&mut store, "f")?;
+        let f = instance.get_typed_func::<(), i32>(&mut store, "f")?;
 
         for i in 0..TABLE_ELEMENTS {
             assert_eq!(
@@ -328,16 +316,12 @@ fn table_limit() -> Result<()> {
 
 #[test]
 fn table_init() -> Result<()> {
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(1)
+        .instance_memory_pages(0)
+        .instance_table_elements(6);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: 1,
-            memory_pages: 0,
-            table_elements: 6,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
 
     let engine = Engine::new(&config)?;
 
@@ -378,16 +362,12 @@ fn table_zeroed() -> Result<()> {
         return Ok(());
     }
 
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(1)
+        .instance_memory_pages(1)
+        .instance_table_elements(10);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: 1,
-            memory_pages: 1,
-            table_elements: 10,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);
     config.static_memory_maximum_size(65536);
@@ -422,16 +402,12 @@ fn table_zeroed() -> Result<()> {
 #[test]
 fn instantiation_limit() -> Result<()> {
     const INSTANCE_LIMIT: u32 = 10;
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(INSTANCE_LIMIT)
+        .instance_memory_pages(1)
+        .instance_table_elements(10);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: INSTANCE_LIMIT,
-            memory_pages: 1,
-            table_elements: 10,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);
     config.static_memory_maximum_size(65536);
@@ -452,7 +428,7 @@ fn instantiation_limit() -> Result<()> {
             Err(e) => assert_eq!(
                 e.to_string(),
                 format!(
-                    "Limit of {} concurrent instances has been reached",
+                    "maximum concurrent instance limit of {} reached",
                     INSTANCE_LIMIT
                 )
             ),
@@ -472,16 +448,12 @@ fn instantiation_limit() -> Result<()> {
 
 #[test]
 fn preserve_data_segments() -> Result<()> {
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(2)
+        .instance_memory_pages(1)
+        .instance_table_elements(10);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: 2,
-            memory_pages: 1,
-            table_elements: 10,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     let engine = Engine::new(&config)?;
     let m = Module::new(
         &engine,
@@ -524,16 +496,12 @@ fn multi_memory_with_imported_memories() -> Result<()> {
     // This test checks that the base address for the defined memory is correct for the instance
     // despite the presence of an imported memory.
 
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(1)
+        .instance_memories(2)
+        .instance_memory_pages(1);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: 1,
-            memories: 2,
-            memory_pages: 1,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     config.wasm_multi_memory(true);
 
     let engine = Engine::new(&config)?;
@@ -569,15 +537,11 @@ fn drop_externref_global_during_module_init() -> Result<()> {
         }
     }
 
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(1);
     let mut config = Config::new();
     config.wasm_reference_types(true);
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: 1,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
 
     let engine = Engine::new(&config)?;
 
@@ -616,24 +580,77 @@ fn drop_externref_global_during_module_init() -> Result<()> {
 }
 
 #[test]
+fn switch_image_and_non_image() -> Result<()> {
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(1);
+    let mut c = Config::new();
+    c.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    let engine = Engine::new(&c)?;
+    let module1 = Module::new(
+        &engine,
+        r#"
+            (module
+                (memory 1)
+                (func (export "load") (param i32) (result i32)
+                    local.get 0
+                    i32.load
+                )
+            )
+        "#,
+    )?;
+    let module2 = Module::new(
+        &engine,
+        r#"
+            (module
+                (memory (export "memory") 1)
+                (data (i32.const 0) "1234")
+            )
+        "#,
+    )?;
+
+    let assert_zero = || -> Result<()> {
+        let mut store = Store::new(&engine, ());
+        let instance = Instance::new(&mut store, &module1, &[])?;
+        let func = instance.get_typed_func::<i32, i32>(&mut store, "load")?;
+        assert_eq!(func.call(&mut store, 0)?, 0);
+        Ok(())
+    };
+
+    // Initialize with a heap image and make sure the next instance, without an
+    // image, is zeroed
+    Instance::new(&mut Store::new(&engine, ()), &module2, &[])?;
+    assert_zero()?;
+
+    // ... transition back to heap image and do this again
+    Instance::new(&mut Store::new(&engine, ()), &module2, &[])?;
+    assert_zero()?;
+
+    // And go back to an image and make sure it's read/write on the host.
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module2, &[])?;
+    let memory = instance.get_memory(&mut store, "memory").unwrap();
+    let mem = memory.data_mut(&mut store);
+    assert!(mem.starts_with(b"1234"));
+    mem[..6].copy_from_slice(b"567890");
+
+    Ok(())
+}
+
+#[test]
 #[cfg(target_pointer_width = "64")]
 fn instance_too_large() -> Result<()> {
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_size(16).instance_count(1);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            size: 16,
-            count: 1,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
 
     let engine = Engine::new(&config)?;
     let expected = "\
-instance allocation for this module requires 336 bytes which exceeds the \
+instance allocation for this module requires 240 bytes which exceeds the \
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
- * 76.19% - 256 bytes - instance state management
+ * 66.67% - 160 bytes - instance state management
+ * 6.67% - 16 bytes - jit store state
 ";
     match Module::new(&engine, "(module)") {
         Ok(_) => panic!("should have failed to compile"),
@@ -647,16 +664,154 @@ configured maximum of 16 bytes; breakdown of allocation requirement:
     lots_of_globals.push_str(")");
 
     let expected = "\
-instance allocation for this module requires 1936 bytes which exceeds the \
+instance allocation for this module requires 1840 bytes which exceeds the \
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
- * 13.22% - 256 bytes - instance state management
- * 82.64% - 1600 bytes - defined globals
+ * 8.70% - 160 bytes - instance state management
+ * 86.96% - 1600 bytes - defined globals
 ";
     match Module::new(&engine, &lots_of_globals) {
         Ok(_) => panic!("should have failed to compile"),
         Err(e) => assert_eq!(e.to_string(), expected),
     }
 
+    Ok(())
+}
+
+#[test]
+fn dynamic_memory_pooling_allocator() -> Result<()> {
+    let max_size = 128 << 20;
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(1)
+        .instance_memory_pages(max_size / (64 * 1024));
+    let mut config = Config::new();
+    config.static_memory_maximum_size(max_size);
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+
+    let engine = Engine::new(&config)?;
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (memory (export "memory") 1)
+
+                (func (export "grow") (param i32) (result i32)
+                    local.get 0
+                    memory.grow)
+
+                (func (export "size") (result i32)
+                    memory.size)
+
+                (func (export "i32.load") (param i32) (result i32)
+                    local.get 0
+                    i32.load)
+
+                (func (export "i32.store") (param i32 i32)
+                    local.get 0
+                    local.get 1
+                    i32.store)
+
+                (data (i32.const 100) "x")
+            )
+         "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+
+    let grow = instance.get_typed_func::<u32, i32>(&mut store, "grow")?;
+    let size = instance.get_typed_func::<(), u32>(&mut store, "size")?;
+    let i32_load = instance.get_typed_func::<u32, i32>(&mut store, "i32.load")?;
+    let i32_store = instance.get_typed_func::<(u32, i32), ()>(&mut store, "i32.store")?;
+    let memory = instance.get_memory(&mut store, "memory").unwrap();
+
+    // basic length 1 tests
+    // assert_eq!(memory.grow(&mut store, 1)?, 0);
+    assert_eq!(memory.size(&store), 1);
+    assert_eq!(size.call(&mut store, ())?, 1);
+    assert_eq!(i32_load.call(&mut store, 0)?, 0);
+    assert_eq!(i32_load.call(&mut store, 100)?, i32::from(b'x'));
+    i32_store.call(&mut store, (0, 0))?;
+    i32_store.call(&mut store, (100, i32::from(b'y')))?;
+    assert_eq!(i32_load.call(&mut store, 100)?, i32::from(b'y'));
+
+    // basic length 2 tests
+    let page = 64 * 1024;
+    assert_eq!(grow.call(&mut store, 1)?, 1);
+    assert_eq!(memory.size(&store), 2);
+    assert_eq!(size.call(&mut store, ())?, 2);
+    i32_store.call(&mut store, (page, 200))?;
+    assert_eq!(i32_load.call(&mut store, page)?, 200);
+
+    // test writes are visible
+    i32_store.call(&mut store, (2, 100))?;
+    assert_eq!(i32_load.call(&mut store, 2)?, 100);
+
+    // test growth can't exceed maximum
+    let too_many = max_size / (64 * 1024);
+    assert_eq!(grow.call(&mut store, too_many as u32)?, -1);
+    assert!(memory.grow(&mut store, too_many).is_err());
+
+    assert_eq!(memory.data(&store)[page as usize], 200);
+
+    // Re-instantiate in another store.
+    store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let i32_load = instance.get_typed_func::<u32, i32>(&mut store, "i32.load")?;
+    let memory = instance.get_memory(&mut store, "memory").unwrap();
+
+    // Technically this is out of bounds...
+    assert!(i32_load.call(&mut store, page).is_err());
+    // ... but implementation-wise it should still be mapped memory from before.
+    // Note though that prior writes should all appear as zeros and we can't see
+    // data from the prior instance.
+    //
+    // Note that this part is only implemented on Linux which has
+    // `MADV_DONTNEED`.
+    assert_eq!(memory.data_size(&store), page as usize);
+    if cfg!(target_os = "linux") {
+        unsafe {
+            let ptr = memory.data_ptr(&store);
+            assert_eq!(*ptr.offset(page as isize), 0);
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
+fn zero_memory_pages_disallows_oob() -> Result<()> {
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(1).instance_memory_pages(0);
+    let mut config = Config::new();
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+
+    let engine = Engine::new(&config)?;
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (memory 0)
+
+                (func (export "load") (param i32) (result i32)
+                    local.get 0
+                    i32.load)
+
+                (func (export "store") (param i32 )
+                    local.get 0
+                    local.get 0
+                    i32.store)
+            )
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let load32 = instance.get_typed_func::<i32, i32>(&mut store, "load")?;
+    let store32 = instance.get_typed_func::<i32, ()>(&mut store, "store")?;
+    for i in 0..31 {
+        assert!(load32.call(&mut store, 1 << i).is_err());
+        assert!(store32.call(&mut store, 1 << i).is_err());
+    }
     Ok(())
 }

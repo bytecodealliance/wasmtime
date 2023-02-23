@@ -1,4 +1,5 @@
 use crate::generators::Stacks;
+use anyhow::{bail, Result};
 use wasmtime::*;
 
 /// Run the given `Stacks` test case and assert that the host's view of the Wasm
@@ -17,7 +18,7 @@ pub fn check_stacks(stacks: Stacks) -> usize {
         .func_wrap(
             "host",
             "check_stack",
-            |mut caller: Caller<'_, ()>| -> Result<(), Trap> {
+            |mut caller: Caller<'_, ()>| -> Result<()> {
                 let fuel = caller
                     .get_export("fuel")
                     .expect("should export `fuel`")
@@ -26,7 +27,7 @@ pub fn check_stacks(stacks: Stacks) -> usize {
 
                 let fuel_left = fuel.get(&mut caller).unwrap_i32();
                 if fuel_left == 0 {
-                    return Err(Trap::new("out of fuel"));
+                    bail!(Trap::OutOfFuel);
                 }
 
                 fuel.set(&mut caller, Val::I32(fuel_left - 1)).unwrap();
@@ -52,16 +53,16 @@ pub fn check_stacks(stacks: Stacks) -> usize {
         .expect("should instantiate okay");
 
     let run = instance
-        .get_typed_func::<(u32,), (), _>(&mut store, "run")
+        .get_typed_func::<(u32,), ()>(&mut store, "run")
         .expect("should export `run` function");
 
     let mut max_stack_depth = 0;
     for input in stacks.inputs().iter().copied() {
         log::debug!("input: {}", input);
         if let Err(trap) = run.call(&mut store, (input.into(),)) {
-            log::debug!("trap: {}", trap);
+            log::debug!("trap: {:?}", trap);
             let get_stack = instance
-                .get_typed_func::<(), (u32, u32), _>(&mut store, "get_stack")
+                .get_typed_func::<(), (u32, u32)>(&mut store, "get_stack")
                 .expect("should export `get_stack` function as expected");
 
             let (ptr, len) = get_stack
@@ -72,9 +73,10 @@ pub fn check_stacks(stacks: Stacks) -> usize {
                 .get_memory(&mut store, "memory")
                 .expect("should have `memory` export");
 
-            let host_trace = trap.trace().unwrap();
+            let host_trace = trap.downcast_ref::<WasmBacktrace>().unwrap().frames();
+            let trap = trap.downcast_ref::<Trap>().unwrap();
             max_stack_depth = max_stack_depth.max(host_trace.len());
-            assert_stack_matches(&mut store, memory, ptr, len, host_trace, trap.trap_code());
+            assert_stack_matches(&mut store, memory, ptr, len, host_trace, *trap);
         }
     }
     max_stack_depth
@@ -87,7 +89,7 @@ fn assert_stack_matches(
     ptr: u32,
     len: u32,
     host_trace: &[FrameInfo],
-    trap_code: Option<TrapCode>,
+    trap: Trap,
 ) {
     let mut data = vec![0; len as usize];
     memory
@@ -108,7 +110,7 @@ fn assert_stack_matches(
     // be able to see the exact function that triggered the stack overflow. In
     // this situation the host trace is asserted to be one larger and then the
     // top frame (first) of the host trace is discarded.
-    let host_trace = if trap_code == Some(TrapCode::StackOverflow) {
+    let host_trace = if trap == Trap::StackOverflow {
         assert_eq!(host_trace.len(), wasm_trace.len() + 1);
         &host_trace[1..]
     } else {

@@ -89,12 +89,15 @@ impl Val {
             Val::I64(_) => ValType::I64,
             Val::F32(_) => ValType::F32,
             Val::F64(_) => ValType::F64,
-            Val::ExternRef(_) => ValType::Ref(RefType {
+            Val::ExternRef(_) => ValType::Ref(RefType { // TODO(dhil):
+                                                        // This is a bug. It is not true that every externref is
+                                                        // nullable. Too see why, just consider the instruction [ref.extern]
+                                                        // it returns a non-nullable extern ref.
                 nullable: true,
                 heap_type: HeapType::Extern,
             }),
             Val::FuncRef(_) => ValType::Ref(RefType {
-                nullable: true,
+                nullable: true,                         // TODO(dhil): bug. Similar to the above, consider [ref.func].
                 heap_type: HeapType::Func,
             }),
             Val::V128(_) => ValType::V128,
@@ -150,9 +153,7 @@ impl Val {
                 HeapType::Func | HeapType::Index(_) => {
                     Val::FuncRef(Func::from_raw(store, raw.get_funcref()))
                 }
-                HeapType::Bot => panic!("no bot"),
             },
-            ValType::Bot => panic!("ValType::Bot disappears soon"),
         }
     }
 

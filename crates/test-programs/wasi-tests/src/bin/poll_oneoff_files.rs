@@ -3,7 +3,7 @@ use wasi_tests::{assert_errno, open_scratch_directory};
 
 const CLOCK_ID: wasi::Userdata = 0x0123_45678;
 
-unsafe fn poll_oneoff_impl(r#in: &[wasi::Subscription]) -> Result<Vec<wasi::Event>, wasi::Error> {
+unsafe fn poll_oneoff_impl(r#in: &[wasi::Subscription]) -> Result<Vec<wasi::Event>, wasi::Errno> {
     let mut out: Vec<wasi::Event> = Vec::new();
     out.resize_with(r#in.len(), || {
         MaybeUninit::<wasi::Event>::zeroed().assume_init()
@@ -17,7 +17,7 @@ unsafe fn poll_oneoff_impl(r#in: &[wasi::Subscription]) -> Result<Vec<wasi::Even
 /// seen their events occur.
 unsafe fn poll_oneoff_with_retry(
     r#in: &[wasi::Subscription],
-) -> Result<Vec<wasi::Event>, wasi::Error> {
+) -> Result<Vec<wasi::Event>, wasi::Errno> {
     let mut subscriptions = r#in.to_vec();
     let mut events = Vec::new();
     while !subscriptions.is_empty() {
@@ -47,8 +47,7 @@ unsafe fn test_empty_poll() {
     let mut out: Vec<wasi::Event> = Vec::new();
     assert_errno!(
         wasi::poll_oneoff(r#in.as_ptr(), out.as_mut_ptr(), r#in.len())
-            .expect_err("empty poll_oneoff should fail")
-            .raw_error(),
+            .expect_err("empty poll_oneoff should fail"),
         wasi::ERRNO_INVAL
     );
 }
@@ -64,7 +63,7 @@ unsafe fn test_timeout() {
     let r#in = [wasi::Subscription {
         userdata: CLOCK_ID,
         u: wasi::SubscriptionU {
-            tag: wasi::EVENTTYPE_CLOCK,
+            tag: wasi::EVENTTYPE_CLOCK.raw(),
             u: wasi::SubscriptionUU { clock },
         },
     }];
@@ -75,7 +74,7 @@ unsafe fn test_timeout() {
     let event = &out[0];
     assert_errno!(event.error, wasi::ERRNO_SUCCESS);
     assert_eq!(
-        event.r#type,
+        event.type_,
         wasi::EVENTTYPE_CLOCK,
         "the event.type should equal clock"
     );
@@ -102,7 +101,7 @@ unsafe fn test_sleep() {
     let r#in = [wasi::Subscription {
         userdata: CLOCK_ID,
         u: wasi::SubscriptionU {
-            tag: wasi::EVENTTYPE_CLOCK,
+            tag: wasi::EVENTTYPE_CLOCK.raw(),
             u: wasi::SubscriptionUU { clock },
         },
     }];
@@ -113,7 +112,7 @@ unsafe fn test_sleep() {
     let event = &out[0];
     assert_errno!(event.error, wasi::ERRNO_SUCCESS);
     assert_eq!(
-        event.r#type,
+        event.type_,
         wasi::EVENTTYPE_CLOCK,
         "the event.type should equal clock"
     );
@@ -132,7 +131,7 @@ unsafe fn test_fd_readwrite(readable_fd: wasi::Fd, writable_fd: wasi::Fd, error_
         wasi::Subscription {
             userdata: 1,
             u: wasi::SubscriptionU {
-                tag: wasi::EVENTTYPE_FD_READ,
+                tag: wasi::EVENTTYPE_FD_READ.raw(),
                 u: wasi::SubscriptionUU {
                     fd_read: wasi::SubscriptionFdReadwrite {
                         file_descriptor: readable_fd,
@@ -143,7 +142,7 @@ unsafe fn test_fd_readwrite(readable_fd: wasi::Fd, writable_fd: wasi::Fd, error_
         wasi::Subscription {
             userdata: 2,
             u: wasi::SubscriptionU {
-                tag: wasi::EVENTTYPE_FD_WRITE,
+                tag: wasi::EVENTTYPE_FD_WRITE.raw(),
                 u: wasi::SubscriptionUU {
                     fd_write: wasi::SubscriptionFdReadwrite {
                         file_descriptor: writable_fd,
@@ -160,7 +159,7 @@ unsafe fn test_fd_readwrite(readable_fd: wasi::Fd, writable_fd: wasi::Fd, error_
     );
     assert_errno!(out[0].error, error_code);
     assert_eq!(
-        out[0].r#type,
+        out[0].type_,
         wasi::EVENTTYPE_FD_READ,
         "the event.type_ should equal FD_READ"
     );
@@ -170,7 +169,7 @@ unsafe fn test_fd_readwrite(readable_fd: wasi::Fd, writable_fd: wasi::Fd, error_
     );
     assert_errno!(out[1].error, error_code);
     assert_eq!(
-        out[1].r#type,
+        out[1].type_,
         wasi::EVENTTYPE_FD_WRITE,
         "the event.type_ should equal FD_WRITE"
     );
@@ -244,7 +243,7 @@ unsafe fn test_fd_readwrite_invalid_fd() {
         wasi::Subscription {
             userdata: 1,
             u: wasi::SubscriptionU {
-                tag: wasi::EVENTTYPE_FD_READ,
+                tag: wasi::EVENTTYPE_FD_READ.raw(),
                 u: wasi::SubscriptionUU {
                     fd_read: fd_readwrite,
                 },
@@ -253,7 +252,7 @@ unsafe fn test_fd_readwrite_invalid_fd() {
         wasi::Subscription {
             userdata: 2,
             u: wasi::SubscriptionU {
-                tag: wasi::EVENTTYPE_FD_WRITE,
+                tag: wasi::EVENTTYPE_FD_WRITE.raw(),
                 u: wasi::SubscriptionUU {
                     fd_write: fd_readwrite,
                 },
@@ -261,7 +260,7 @@ unsafe fn test_fd_readwrite_invalid_fd() {
         },
     ];
     let err = poll_oneoff_impl(&r#in).unwrap_err();
-    assert_eq!(err.raw_error(), wasi::ERRNO_BADF)
+    assert_eq!(err, wasi::ERRNO_BADF)
 }
 
 unsafe fn test_poll_oneoff(dir_fd: wasi::Fd) {

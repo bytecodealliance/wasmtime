@@ -1,15 +1,17 @@
 //! X86_64-bit Instruction Set Architecture.
 
-use self::inst::EmitInfo;
+pub use self::inst::{args, EmitInfo, EmitState, Inst};
 
-use super::TargetIsa;
+use super::{OwnedTargetIsa, TargetIsa};
 use crate::ir::{condcodes::IntCC, Function, Type};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv;
 use crate::isa::x64::{inst::regs::create_reg_env_systemv, settings as x64_settings};
 use crate::isa::Builder as IsaBuilder;
-use crate::machinst::Reg;
-use crate::machinst::{compile, CompiledCode, MachTextSectionBuilder, TextSectionBuilder, VCode};
+use crate::machinst::{
+    compile, CompiledCode, CompiledCodeStencil, MachTextSectionBuilder, Reg, SigSet,
+    TextSectionBuilder, VCode,
+};
 use crate::result::{CodegenError, CodegenResult};
 use crate::settings::{self as shared_settings, Flags};
 use alloc::{boxed::Box, vec::Vec};
@@ -21,7 +23,7 @@ mod abi;
 pub mod encoding;
 mod inst;
 mod lower;
-mod settings;
+pub mod settings;
 
 /// An X64 backend.
 pub(crate) struct X64Backend {
@@ -46,22 +48,29 @@ impl X64Backend {
     fn compile_vcode(
         &self,
         func: &Function,
-        flags: Flags,
     ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
         // This performs lowering to VCode, register-allocates the code, computes
         // block layout and finalizes branches. The result is ready for binary emission.
-        let emit_info = EmitInfo::new(flags.clone(), self.x64_flags.clone());
-        let abi = Box::new(abi::X64ABICallee::new(&func, self, &self.x64_flags)?);
-        compile::compile::<Self>(&func, self, abi, &self.reg_env, emit_info)
+        let emit_info = EmitInfo::new(self.flags.clone(), self.x64_flags.clone());
+        let sigs = SigSet::new::<abi::X64ABIMachineSpec>(func, &self.flags)?;
+        let abi = abi::X64Callee::new(&func, self, &self.x64_flags, &sigs)?;
+        compile::compile::<Self>(&func, self, abi, emit_info, sigs)
     }
 }
 
 impl TargetIsa for X64Backend {
-    fn compile_function(&self, func: &Function, want_disasm: bool) -> CodegenResult<CompiledCode> {
-        let flags = self.flags();
-        let (vcode, regalloc_result) = self.compile_vcode(func, flags.clone())?;
+    fn compile_function(
+        &self,
+        func: &Function,
+        want_disasm: bool,
+    ) -> CodegenResult<CompiledCodeStencil> {
+        let (vcode, regalloc_result) = self.compile_vcode(func)?;
 
-        let emit_result = vcode.emit(&regalloc_result, want_disasm, flags.machine_code_cfg_info());
+        let emit_result = vcode.emit(
+            &regalloc_result,
+            want_disasm,
+            self.flags.machine_code_cfg_info(),
+        );
         let frame_size = emit_result.frame_size;
         let value_labels_ranges = emit_result.value_labels_ranges;
         let buffer = emit_result.buffer.finish();
@@ -72,20 +81,25 @@ impl TargetIsa for X64Backend {
             log::trace!("disassembly:\n{}", disasm);
         }
 
-        Ok(CompiledCode {
+        Ok(CompiledCodeStencil {
             buffer,
             frame_size,
-            disasm: emit_result.disasm,
+            vcode: emit_result.disasm,
             value_labels_ranges,
             sized_stackslot_offsets,
             dynamic_stackslot_offsets,
             bb_starts: emit_result.bb_offsets,
             bb_edges: emit_result.bb_edges,
+            alignment: emit_result.alignment,
         })
     }
 
     fn flags(&self) -> &Flags {
         &self.flags
+    }
+
+    fn machine_env(&self) -> &MachineEnv {
+        &self.reg_env
     }
 
     fn isa_flags(&self) -> Vec<shared_settings::Value> {
@@ -148,8 +162,24 @@ impl TargetIsa for X64Backend {
         inst::unwind::systemv::map_reg(reg).map(|reg| reg.0)
     }
 
-    fn text_section_builder(&self, num_funcs: u32) -> Box<dyn TextSectionBuilder> {
+    fn text_section_builder(&self, num_funcs: usize) -> Box<dyn TextSectionBuilder> {
         Box::new(MachTextSectionBuilder::<inst::Inst>::new(num_funcs))
+    }
+
+    /// Align functions on x86 to 16 bytes, ensuring that rip-relative loads to SSE registers are
+    /// always from aligned memory.
+    fn function_alignment(&self) -> u32 {
+        16
+    }
+
+    #[cfg(feature = "disas")]
+    fn to_capstone(&self) -> Result<capstone::Capstone, capstone::Error> {
+        use capstone::prelude::*;
+        Capstone::new()
+            .x86()
+            .mode(arch::x86::ArchMode::Mode64)
+            .syntax(arch::x86::ArchSyntax::Att)
+            .build()
     }
 }
 
@@ -176,7 +206,7 @@ fn isa_constructor(
     triple: Triple,
     shared_flags: Flags,
     builder: shared_settings::Builder,
-) -> CodegenResult<Box<dyn TargetIsa>> {
+) -> CodegenResult<OwnedTargetIsa> {
     let isa_flags = x64_settings::Flags::new(&shared_flags, builder);
 
     // Check for compatibility between flags and ISA level
@@ -194,15 +224,15 @@ fn isa_constructor(
     }
 
     let backend = X64Backend::new_with_flags(triple, shared_flags, isa_flags);
-    Ok(Box::new(backend))
+    Ok(backend.wrapped())
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
-    use crate::ir::{types::*, SourceLoc, ValueLabel, ValueLabelStart};
-    use crate::ir::{AbiParam, ExternalName, Function, InstBuilder, JumpTableData, Signature};
+    use crate::ir::{types::*, RelSourceLoc, SourceLoc, UserFuncName, ValueLabel, ValueLabelStart};
+    use crate::ir::{AbiParam, Function, InstBuilder, JumpTableData, Signature};
     use crate::isa::CallConv;
     use crate::settings;
     use crate::settings::Configurable;
@@ -217,7 +247,7 @@ mod test {
     /// well do the test here, where we have a backend to use.
     #[test]
     fn test_cold_blocks() {
-        let name = ExternalName::testcase("test0");
+        let name = UserFuncName::testcase("test0");
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I32));
         sig.returns.push(AbiParam::new(I32));
@@ -241,23 +271,20 @@ mod test {
         let v0 = pos.ins().iconst(I32, 0x1234);
         pos.set_srcloc(SourceLoc::new(2));
         let v1 = pos.ins().iadd(arg0, v0);
-        pos.ins().brnz(v1, bb1, &[v1]);
-        pos.ins().jump(bb2, &[]);
+        pos.ins().brif(v1, bb1, &[v1], bb2, &[]);
 
         pos.insert_block(bb1);
         pos.set_srcloc(SourceLoc::new(3));
         let v2 = pos.ins().isub(v1, v0);
         pos.set_srcloc(SourceLoc::new(4));
         let v3 = pos.ins().iadd(v2, bb1_param);
-        pos.ins().brnz(v1, bb2, &[]);
-        pos.ins().jump(bb3, &[v3]);
+        pos.ins().brif(v1, bb2, &[], bb3, &[v3]);
 
         pos.func.layout.set_cold(bb2);
         pos.insert_block(bb2);
         pos.set_srcloc(SourceLoc::new(5));
         let v4 = pos.ins().iadd(v1, v0);
-        pos.ins().brnz(v4, bb2, &[]);
-        pos.ins().jump(bb1, &[v4]);
+        pos.ins().brif(v4, bb2, &[], bb1, &[v4]);
 
         pos.insert_block(bb3);
         pos.set_srcloc(SourceLoc::new(6));
@@ -271,35 +298,35 @@ mod test {
         pos.func.dfg.values_labels.as_mut().unwrap().insert(
             v0,
             crate::ir::ValueLabelAssignments::Starts(vec![ValueLabelStart {
-                from: SourceLoc::new(1),
+                from: RelSourceLoc::new(1),
                 label: ValueLabel::new(1),
             }]),
         );
         pos.func.dfg.values_labels.as_mut().unwrap().insert(
             v1,
             crate::ir::ValueLabelAssignments::Starts(vec![ValueLabelStart {
-                from: SourceLoc::new(2),
+                from: RelSourceLoc::new(2),
                 label: ValueLabel::new(1),
             }]),
         );
         pos.func.dfg.values_labels.as_mut().unwrap().insert(
             v2,
             crate::ir::ValueLabelAssignments::Starts(vec![ValueLabelStart {
-                from: SourceLoc::new(3),
+                from: RelSourceLoc::new(3),
                 label: ValueLabel::new(1),
             }]),
         );
         pos.func.dfg.values_labels.as_mut().unwrap().insert(
             v3,
             crate::ir::ValueLabelAssignments::Starts(vec![ValueLabelStart {
-                from: SourceLoc::new(4),
+                from: RelSourceLoc::new(4),
                 label: ValueLabel::new(1),
             }]),
         );
         pos.func.dfg.values_labels.as_mut().unwrap().insert(
             v4,
             crate::ir::ValueLabelAssignments::Starts(vec![ValueLabelStart {
-                from: SourceLoc::new(5),
+                from: RelSourceLoc::new(5),
                 label: ValueLabel::new(1),
             }]),
         );
@@ -319,31 +346,36 @@ mod test {
             .unwrap();
         let code = result.buffer.data();
 
-        // 00000000  55                push rbp
-        // 00000001  4889E5            mov rbp,rsp
-        // 00000004  81C734120000      add edi,0x1234
-        // 0000000A  85FF              test edi,edi
-        // 0000000C  0F841C000000      jz near 0x2e
-        // 00000012  4989F8            mov r8,rdi
-        // 00000015  4889F8            mov rax,rdi
-        // 00000018  81E834120000      sub eax,0x1234
-        // 0000001E  4401C0            add eax,r8d
-        // 00000021  85FF              test edi,edi
-        // 00000023  0F8505000000      jnz near 0x2e
-        // 00000029  4889EC            mov rsp,rbp
-        // 0000002C  5D                pop rbp
-        // 0000002D  C3                ret
-        // 0000002E  4989F8            mov r8,rdi
-        // 00000031  4181C034120000    add r8d,0x1234
-        // 00000038  4585C0            test r8d,r8d
-        // 0000003B  0F85EDFFFFFF      jnz near 0x2e
-        // 00000041  E9CFFFFFFF        jmp 0x15
+        // To update this comment, write the golden bytes to a file, and run the following
+        // command on it:
+        // > objdump -b binary -D <file> -m i386:x86-64 -M intel
+        //
+        //  0:   55                      push   rbp
+        //  1:   48 89 e5                mov    rbp,rsp
+        //  4:   48 89 fe                mov    rsi,rdi
+        //  7:   81 c6 34 12 00 00       add    esi,0x1234
+        //  d:   85 f6                   test   esi,esi
+        //  f:   0f 84 1c 00 00 00       je     0x31
+        // 15:   49 89 f0                mov    r8,rsi
+        // 18:   48 89 f0                mov    rax,rsi
+        // 1b:   81 e8 34 12 00 00       sub    eax,0x1234
+        // 21:   44 01 c0                add    eax,r8d
+        // 24:   85 f6                   test   esi,esi
+        // 26:   0f 85 05 00 00 00       jne    0x31
+        // 2c:   48 89 ec                mov    rsp,rbp
+        // 2f:   5d                      pop    rbp
+        // 30:   c3                      ret
+        // 31:   49 89 f0                mov    r8,rsi
+        // 34:   41 81 c0 34 12 00 00    add    r8d,0x1234
+        // 3b:   45 85 c0                test   r8d,r8d
+        // 3e:   0f 85 ed ff ff ff       jne    0x31
+        // 44:   e9 cf ff ff ff          jmp    0x18
 
         let golden = vec![
-            85, 72, 137, 229, 129, 199, 52, 18, 0, 0, 133, 255, 15, 132, 28, 0, 0, 0, 73, 137, 248,
-            72, 137, 248, 129, 232, 52, 18, 0, 0, 68, 1, 192, 133, 255, 15, 133, 5, 0, 0, 0, 72,
-            137, 236, 93, 195, 73, 137, 248, 65, 129, 192, 52, 18, 0, 0, 69, 133, 192, 15, 133,
-            237, 255, 255, 255, 233, 207, 255, 255, 255,
+            85, 72, 137, 229, 72, 137, 254, 129, 198, 52, 18, 0, 0, 133, 246, 15, 132, 28, 0, 0, 0,
+            73, 137, 240, 72, 137, 240, 129, 232, 52, 18, 0, 0, 68, 1, 192, 133, 246, 15, 133, 5,
+            0, 0, 0, 72, 137, 236, 93, 195, 73, 137, 240, 65, 129, 192, 52, 18, 0, 0, 69, 133, 192,
+            15, 133, 237, 255, 255, 255, 233, 207, 255, 255, 255,
         ];
 
         assert_eq!(code, &golden[..]);
@@ -371,7 +403,7 @@ mod test {
     // expands during emission.
     #[test]
     fn br_table() {
-        let name = ExternalName::testcase("test0");
+        let name = UserFuncName::testcase("test0");
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I32));
         sig.returns.push(AbiParam::new(I32));
@@ -386,11 +418,15 @@ mod test {
         let mut pos = FuncCursor::new(&mut func);
 
         pos.insert_block(bb0);
-        let mut jt_data = JumpTableData::new();
-        jt_data.push_entry(bb1);
-        jt_data.push_entry(bb2);
+        let jt_data = JumpTableData::new(
+            pos.func.dfg.block_call(bb3, &[]),
+            &[
+                pos.func.dfg.block_call(bb1, &[]),
+                pos.func.dfg.block_call(bb2, &[]),
+            ],
+        );
         let jt = pos.func.create_jump_table(jt_data);
-        pos.ins().br_table(arg0, bb3, jt);
+        pos.ins().br_table(arg0, jt);
 
         pos.insert_block(bb1);
         let v1 = pos.ins().iconst(I32, 1);
@@ -419,39 +455,43 @@ mod test {
             .unwrap();
         let code = result.buffer.data();
 
-        // 00000000  55                push rbp
-        // 00000001  4889E5            mov rbp,rsp
-        // 00000004  41B900000000      mov r9d,0x0
-        // 0000000A  83FF02            cmp edi,byte +0x2
-        // 0000000D  0F8320000000      jnc near 0x33
-        // 00000013  8BF7              mov esi,edi
-        // 00000015  490F43F1          cmovnc rsi,r9
-        // 00000019  4C8D0D0B000000    lea r9,[rel 0x2b]
-        // 00000020  496374B100        movsxd rsi,dword [r9+rsi*4+0x0]
-        // 00000025  4901F1            add r9,rsi
-        // 00000028  41FFE1            jmp r9
-        // 0000002B  1200              adc al,[rax]
-        // 0000002D  0000              add [rax],al
-        // 0000002F  1C00              sbb al,0x0
-        // 00000031  0000              add [rax],al
-        // 00000033  B803000000        mov eax,0x3
-        // 00000038  4889EC            mov rsp,rbp
-        // 0000003B  5D                pop rbp
-        // 0000003C  C3                ret
-        // 0000003D  B801000000        mov eax,0x1
-        // 00000042  4889EC            mov rsp,rbp
-        // 00000045  5D                pop rbp
-        // 00000046  C3                ret
-        // 00000047  B802000000        mov eax,0x2
-        // 0000004C  4889EC            mov rsp,rbp
-        // 0000004F  5D                pop rbp
-        // 00000050  C3                ret
+        // To update this comment, write the golden bytes to a file, and run the following
+        // command on it:
+        // > objdump -b binary -D <file> -m i386:x86-64 -M intel
+        //
+        //  0:   55                      push   rbp
+        //  1:   48 89 e5                mov    rbp,rsp
+        //  4:   83 ff 02                cmp    edi,0x2
+        //  7:   0f 83 27 00 00 00       jae    0x34
+        //  d:   44 8b d7                mov    r10d,edi
+        // 10:   41 b9 00 00 00 00       mov    r9d,0x0
+        // 16:   4d 0f 43 d1             cmovae r10,r9
+        // 1a:   4c 8d 0d 0b 00 00 00    lea    r9,[rip+0xb]        # 0x2c
+        // 21:   4f 63 54 91 00          movsxd r10,DWORD PTR [r9+r10*4+0x0]
+        // 26:   4d 01 d1                add    r9,r10
+        // 29:   41 ff e1                jmp    r9
+        // 2c:   12 00                   adc    al,BYTE PTR [rax]
+        // 2e:   00 00                   add    BYTE PTR [rax],al
+        // 30:   1c 00                   sbb    al,0x0
+        // 32:   00 00                   add    BYTE PTR [rax],al
+        // 34:   b8 03 00 00 00          mov    eax,0x3
+        // 39:   48 89 ec                mov    rsp,rbp
+        // 3c:   5d                      pop    rbp
+        // 3d:   c3                      ret
+        // 3e:   b8 01 00 00 00          mov    eax,0x1
+        // 43:   48 89 ec                mov    rsp,rbp
+        // 46:   5d                      pop    rbp
+        // 47:   c3                      ret
+        // 48:   b8 02 00 00 00          mov    eax,0x2
+        // 4d:   48 89 ec                mov    rsp,rbp
+        // 50:   5d                      pop    rbp
+        // 51:   c3                      ret
 
         let golden = vec![
-            85, 72, 137, 229, 65, 185, 0, 0, 0, 0, 131, 255, 2, 15, 131, 32, 0, 0, 0, 139, 247, 73,
-            15, 67, 241, 76, 141, 13, 11, 0, 0, 0, 73, 99, 116, 177, 0, 73, 1, 241, 65, 255, 225,
-            18, 0, 0, 0, 28, 0, 0, 0, 184, 3, 0, 0, 0, 72, 137, 236, 93, 195, 184, 1, 0, 0, 0, 72,
-            137, 236, 93, 195, 184, 2, 0, 0, 0, 72, 137, 236, 93, 195,
+            85, 72, 137, 229, 131, 255, 2, 15, 131, 39, 0, 0, 0, 68, 139, 215, 65, 185, 0, 0, 0, 0,
+            77, 15, 67, 209, 76, 141, 13, 11, 0, 0, 0, 79, 99, 84, 145, 0, 77, 1, 209, 65, 255,
+            225, 18, 0, 0, 0, 28, 0, 0, 0, 184, 3, 0, 0, 0, 72, 137, 236, 93, 195, 184, 1, 0, 0, 0,
+            72, 137, 236, 93, 195, 184, 2, 0, 0, 0, 72, 137, 236, 93, 195,
         ];
 
         assert_eq!(code, &golden[..]);

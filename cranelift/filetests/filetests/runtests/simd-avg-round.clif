@@ -1,0 +1,51 @@
+; the interpreter does not currently support SIMD `avg_round`.
+test run
+target aarch64
+; x86_64 and s390x do not currently support 64-bit vectors, or
+; `avg_round` on `i64x2` values.
+; x86_64 also does not currently support `avg_round.i32x4`.
+
+function %average_rounding_i8x8(i8x8, i8x8) -> i8x8 {
+block0(v0: i8x8, v1: i8x8):
+    v2 = avg_round v0, v1
+    return v2
+}
+; run: %average_rounding_i8x8([0 0 0 1 42 19 -1 0xff], [0 1 2 4 42 18 -1 0]) == [0 1 1 3 42 19 -1 0x80]
+
+function %average_rounding_i16x4(i16x4, i16x4) -> i16x4 {
+block0(v0: i16x4, v1: i16x4):
+    v2 = avg_round v0, v1
+    return v2
+}
+; run: %average_rounding_i16x4([0 0 0 1], [0 1 2 4]) == [0 1 1 3]
+; run: %average_rounding_i16x4([42 19 -1 0xffff], [42 18 -1 0]) == [42 19 -1 0x8000]
+
+function %average_rounding_i32x2(i32x2, i32x2) -> i32x2 {
+block0(v0: i32x2, v1: i32x2):
+    v2 = avg_round v0, v1
+    return v2
+}
+; run: %average_rounding_i32x2([0 0], [0 1]) == [0 1]
+; run: %average_rounding_i32x2([0 1], [2 4]) == [1 3]
+; run: %average_rounding_i32x2([42 19], [42 18]) == [42 19]
+; run: %average_rounding_i32x2([-1 0xffffffff], [-1 0]) == [-1 0x80000000]
+; run: %average_rounding_i32x2([0xffffffff 0xfffffffd], [10 0xffffffff]) == [0x80000005 0xfffffffe]
+
+function %average_rounding_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = avg_round v0, v1
+    return v2
+}
+; run: %average_rounding_i32x4([0 0 0 0xffffffff], [0 1 2 0]) == [0 1 1 0x80000000]
+; run: %average_rounding_i32x4([1 42 19 -1], [4 42 18 -1]) == [3 42 19 -1]
+
+function %average_rounding_i64x2(i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2):
+    v2 = avg_round v0, v1
+    return v2
+}
+; run: %average_rounding_i64x2([0 0], [0 1]) == [0 1]
+; run: %average_rounding_i64x2([0 1], [2 4]) == [1 3]
+; run: %average_rounding_i64x2([42 19], [42 18]) == [42 19]
+; run: %average_rounding_i64x2([-1 0xffffffffffffffff], [-1 0]) == [-1 0x8000000000000000]
+; run: %average_rounding_i64x2([0xffffffffffffffff 0xfffffffffffffffd], [10 0xffffffffffffffff]) == [0x8000000000000005 0xfffffffffffffffe]

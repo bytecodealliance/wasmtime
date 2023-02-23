@@ -49,11 +49,31 @@ pub enum TrapCode {
     /// This trap is resumable.
     Interrupt,
 
-    /// A reference that should not be null was null
-    NullReference,
-
     /// A user-defined trap code.
     User(u16),
+
+    /// Call to a null reference.
+    NullReference,
+}
+
+impl TrapCode {
+    /// Returns a slice of all traps except `TrapCode::User` traps
+    pub const fn non_user_traps() -> &'static [TrapCode] {
+        &[
+            TrapCode::StackOverflow,
+            TrapCode::HeapOutOfBounds,
+            TrapCode::HeapMisaligned,
+            TrapCode::TableOutOfBounds,
+            TrapCode::IndirectCallToNull,
+            TrapCode::BadSignature,
+            TrapCode::IntegerOverflow,
+            TrapCode::IntegerDivisionByZero,
+            TrapCode::BadConversionToInteger,
+            TrapCode::UnreachableCodeReached,
+            TrapCode::Interrupt,
+            TrapCode::NullReference,
+        ]
+    }
 }
 
 impl Display for TrapCode {
@@ -71,8 +91,8 @@ impl Display for TrapCode {
             BadConversionToInteger => "bad_toint",
             UnreachableCodeReached => "unreachable",
             Interrupt => "interrupt",
-            NullReference => "null_reference",
             User(x) => return write!(f, "user{}", x),
+            NullReference => "null reference",
         };
         f.write_str(identifier)
     }
@@ -95,7 +115,7 @@ impl FromStr for TrapCode {
             "bad_toint" => Ok(BadConversionToInteger),
             "unreachable" => Ok(UnreachableCodeReached),
             "interrupt" => Ok(Interrupt),
-            "null_reference" => Ok(NullReference),
+            "null reference" => Ok(NullReference),
             _ if s.starts_with("user") => s[4..].parse().map(User).map_err(|_| ()),
             _ => Err(()),
         }
@@ -107,24 +127,9 @@ mod tests {
     use super::*;
     use alloc::string::ToString;
 
-    // Everything but user-defined codes.
-    const CODES: [TrapCode; 11] = [
-        TrapCode::StackOverflow,
-        TrapCode::HeapOutOfBounds,
-        TrapCode::HeapMisaligned,
-        TrapCode::TableOutOfBounds,
-        TrapCode::IndirectCallToNull,
-        TrapCode::BadSignature,
-        TrapCode::IntegerOverflow,
-        TrapCode::IntegerDivisionByZero,
-        TrapCode::BadConversionToInteger,
-        TrapCode::UnreachableCodeReached,
-        TrapCode::Interrupt,
-    ];
-
     #[test]
     fn display() {
-        for r in &CODES {
+        for r in TrapCode::non_user_traps() {
             let tc = *r;
             assert_eq!(tc.to_string().parse(), Ok(tc));
         }

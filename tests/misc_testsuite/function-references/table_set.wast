@@ -38,7 +38,7 @@
   (func (export "set-returns-five") (param $i i32)
     (call $f5 (local.get $i) (ref.func $returns-five))
   )
-  (func (export "get-typed-and-call") (param $i i32) (result i32) (call_ref (call $f4 (local.get $i))))
+  (func (export "get-typed-and-call") (param $i i32) (result i32) (call_ref $res-i32 (call $f4 (local.get $i))))
 )
 
 (assert_return (invoke "get-externref" (i32.const 0)) (ref.null extern))

@@ -52,40 +52,37 @@ block1(v92: i32, v93: f32):
 ; Branches with no arguments. The '()' empty argument list is optional.
 function %minimal(i32) {
 block0(v90: i32):
-    brz v90, block1
+    brif v90, block1, block1
 
 block1:
-    brnz v90, block1()
+    brif v90, block1(), block1()
 }
 ; sameln: function %minimal(i32) fast {
 ; nextln: block0(v90: i32):
-; nextln:     brz v90, block1
+; nextln:     brif v90, block1, block1
 ; nextln: 
 ; nextln: block1:
-; nextln:     brnz.i32 v90, block1
+; nextln:     brif.i32 v90, block1, block1
 ; nextln: }
 
 function %twoargs(i32, f32) {
 block0(v90: i32, v91: f32):
-    brz v90, block1(v90, v91)
+    brif v90, block1(v90, v91), block1(v90, v91)
 
 block1(v92: i32, v93: f32):
-    brnz v90, block0(v92, v93)
+    brif v90, block0(v92, v93), block0(v92, v93)
 }
 ; sameln: function %twoargs(i32, f32) fast {
 ; nextln: block0(v90: i32, v91: f32):
-; nextln:     brz v90, block1(v90, v91)
+; nextln:     brif v90, block1(v90, v91), block1(v90, v91)
 ; nextln: 
 ; nextln: block1(v92: i32, v93: f32):
-; nextln:     brnz.i32 v90, block0(v92, v93)
+; nextln:     brif.i32 v90, block0(v92, v93), block0(v92, v93)
 ; nextln: }
 
 function %jumptable(i32) {
-    jt200 = jump_table []
-    jt2 = jump_table [block10, block40, block20, block30]
-
 block10(v3: i32):
-    br_table v3, block50, jt2
+    br_table v3, block50, [block10, block40, block20, block30]
 
 block20:
     trap user2
@@ -97,10 +94,8 @@ block50:
     trap user1    
 }
 ; sameln: function %jumptable(i32) fast {
-; check:      jt2 = jump_table [block10, block40, block20, block30]
-; check:      jt200 = jump_table []
 ; check:  block10(v3: i32):
-; nextln:     br_table v3, block50, jt2
+; nextln:     br_table v3, block50, [block10, block40, block20, block30]
 ; nextln: 
 ; nextln: block20:
 ; nextln:     trap user2
@@ -113,4 +108,25 @@ block50:
 ; nextln: 
 ; nextln: block50:
 ; nextln:     trap user1
+; nextln: }
+
+function %twoargs(i32, f32) {
+block0(v90: i32, v91: f32):
+    brif v90, block1(v90, v91), block2(v91, v90)
+
+block1(v92: i32, v93: f32):
+    brif v90, block1(v90, v91), block2(v91, v90)
+
+block2(v94: f32, v95: i32):
+    brif v90, block1(v90, v91), block2(v91, v90)
+}
+; sameln: function %twoargs(i32, f32) fast {
+; nextln: block0(v90: i32, v91: f32):
+; nextln:     brif v90, block1(v90, v91), block2(v91, v90)
+; nextln: 
+; nextln: block1(v92: i32, v93: f32):
+; nextln:     brif.i32 v90, block1(v90, v91), block2(v91, v90)
+; nextln: 
+; nextln: block2(v94: f32, v95: i32):
+; nextln:     brif.i32 v90, block1(v90, v91), block2(v91, v90)
 ; nextln: }

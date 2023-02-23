@@ -1,10 +1,13 @@
 test run
 set enable_llvm_abi_extensions=true
+; Disable stack probes since these tests don't require them
+set enable_probestack=false
 target x86_64
 target aarch64
+target riscv64
 target s390x
 
-function %i128_stack_store_load(i128) -> b1 {
+function %i128_stack_store_load(i128) -> i8 {
     ss0 = explicit_slot 16
 
 block0(v0: i128):
@@ -14,16 +17,16 @@ block0(v0: i128):
     v2 = icmp.i128 eq v0, v1
     return v2
 }
-; run: %i128_stack_store_load(0) == true
-; run: %i128_stack_store_load(-1) == true
-; run: %i128_stack_store_load(0x00000000_00000000_FFFFFFFF_FFFFFFFF) == true
-; run: %i128_stack_store_load(0xFFFFFFFF_FFFFFFFF_00000000_00000000) == true
-; run: %i128_stack_store_load(0xFEDCBA98_76543210_01234567_89ABCDEF) == true
-; run: %i128_stack_store_load(0xA00A00A0_0A00A00A_06060606_06060606) == true
-; run: %i128_stack_store_load(0xDECAFFFF_C0FFEEEE_C0FFEEEE_DECAFFFF) == true
+; run: %i128_stack_store_load(0) == 1
+; run: %i128_stack_store_load(-1) == 1
+; run: %i128_stack_store_load(0x00000000_00000000_FFFFFFFF_FFFFFFFF) == 1
+; run: %i128_stack_store_load(0xFFFFFFFF_FFFFFFFF_00000000_00000000) == 1
+; run: %i128_stack_store_load(0xFEDCBA98_76543210_01234567_89ABCDEF) == 1
+; run: %i128_stack_store_load(0xA00A00A0_0A00A00A_06060606_06060606) == 1
+; run: %i128_stack_store_load(0xDECAFFFF_C0FFEEEE_C0FFEEEE_DECAFFFF) == 1
 
 
-function %i128_stack_store_load_inst_offset(i128) -> b1 {
+function %i128_stack_store_load_inst_offset(i128) -> i8 {
     ss0 = explicit_slot 16
     ss1 = explicit_slot 16
     ss2 = explicit_slot 16
@@ -35,18 +38,18 @@ block0(v0: i128):
     v2 = icmp.i128 eq v0, v1
     return v2
 }
-; run: %i128_stack_store_load_inst_offset(0) == true
-; run: %i128_stack_store_load_inst_offset(-1) == true
-; run: %i128_stack_store_load_inst_offset(0x00000000_00000000_FFFFFFFF_FFFFFFFF) == true
-; run: %i128_stack_store_load_inst_offset(0xFFFFFFFF_FFFFFFFF_00000000_00000000) == true
-; run: %i128_stack_store_load_inst_offset(0xFEDCBA98_76543210_01234567_89ABCDEF) == true
-; run: %i128_stack_store_load_inst_offset(0xA00A00A0_0A00A00A_06060606_06060606) == true
-; run: %i128_stack_store_load_inst_offset(0xDECAFFFF_C0FFEEEE_C0FFEEEE_DECAFFFF) == true
+; run: %i128_stack_store_load_inst_offset(0) == 1
+; run: %i128_stack_store_load_inst_offset(-1) == 1
+; run: %i128_stack_store_load_inst_offset(0x00000000_00000000_FFFFFFFF_FFFFFFFF) == 1
+; run: %i128_stack_store_load_inst_offset(0xFFFFFFFF_FFFFFFFF_00000000_00000000) == 1
+; run: %i128_stack_store_load_inst_offset(0xFEDCBA98_76543210_01234567_89ABCDEF) == 1
+; run: %i128_stack_store_load_inst_offset(0xA00A00A0_0A00A00A_06060606_06060606) == 1
+; run: %i128_stack_store_load_inst_offset(0xDECAFFFF_C0FFEEEE_C0FFEEEE_DECAFFFF) == 1
 
 
 ; Some arches (aarch64) try to encode the offset into the load/store instructions
 ; test that we spill if the offset is too large and doesn't fit in the instruction
-function %i128_stack_store_load_big_offset(i128) -> b1 {
+function %i128_stack_store_load_big_offset(i128) -> i8 {
     ss0 = explicit_slot 100000
     ss1 = explicit_slot 8
 
@@ -57,17 +60,17 @@ block0(v0: i128):
     v2 = icmp.i128 eq v0, v1
     return v2
 }
-; run: %i128_stack_store_load_big_offset(0) == true
-; run: %i128_stack_store_load_big_offset(-1) == true
-; run: %i128_stack_store_load_big_offset(0x00000000_00000000_FFFFFFFF_FFFFFFFF) == true
-; run: %i128_stack_store_load_big_offset(0xFFFFFFFF_FFFFFFFF_00000000_00000000) == true
-; run: %i128_stack_store_load_big_offset(0xFEDCBA98_76543210_01234567_89ABCDEF) == true
-; run: %i128_stack_store_load_big_offset(0xA00A00A0_0A00A00A_06060606_06060606) == true
-; run: %i128_stack_store_load_big_offset(0xDECAFFFF_C0FFEEEE_C0FFEEEE_DECAFFFF) == true
+; run: %i128_stack_store_load_big_offset(0) == 1
+; run: %i128_stack_store_load_big_offset(-1) == 1
+; run: %i128_stack_store_load_big_offset(0x00000000_00000000_FFFFFFFF_FFFFFFFF) == 1
+; run: %i128_stack_store_load_big_offset(0xFFFFFFFF_FFFFFFFF_00000000_00000000) == 1
+; run: %i128_stack_store_load_big_offset(0xFEDCBA98_76543210_01234567_89ABCDEF) == 1
+; run: %i128_stack_store_load_big_offset(0xA00A00A0_0A00A00A_06060606_06060606) == 1
+; run: %i128_stack_store_load_big_offset(0xDECAFFFF_C0FFEEEE_C0FFEEEE_DECAFFFF) == 1
 
 
 
-function %i128_store_load(i128) -> b1 {
+function %i128_store_load(i128) -> i8 {
     ss0 = explicit_slot 16
 
 block0(v0: i128):
@@ -78,16 +81,16 @@ block0(v0: i128):
     v3 = icmp.i128 eq v0, v2
     return v3
 }
-; run: %i128_store_load(0) == true
-; run: %i128_store_load(-1) == true
-; run: %i128_store_load(0x00000000_00000000_FFFFFFFF_FFFFFFFF) == true
-; run: %i128_store_load(0xFFFFFFFF_FFFFFFFF_00000000_00000000) == true
-; run: %i128_store_load(0xFEDCBA98_76543210_01234567_89ABCDEF) == true
-; run: %i128_store_load(0xA00A00A0_0A00A00A_06060606_06060606) == true
-; run: %i128_store_load(0xDECAFFFF_C0FFEEEE_C0FFEEEE_DECAFFFF) == true
+; run: %i128_store_load(0) == 1
+; run: %i128_store_load(-1) == 1
+; run: %i128_store_load(0x00000000_00000000_FFFFFFFF_FFFFFFFF) == 1
+; run: %i128_store_load(0xFFFFFFFF_FFFFFFFF_00000000_00000000) == 1
+; run: %i128_store_load(0xFEDCBA98_76543210_01234567_89ABCDEF) == 1
+; run: %i128_store_load(0xA00A00A0_0A00A00A_06060606_06060606) == 1
+; run: %i128_store_load(0xDECAFFFF_C0FFEEEE_C0FFEEEE_DECAFFFF) == 1
 
 
-function %i128_store_load_offset(i128) -> b1 {
+function %i128_store_load_offset(i128) -> i8 {
     ss0 = explicit_slot 32
 
 block0(v0: i128):
@@ -98,10 +101,10 @@ block0(v0: i128):
     v3 = icmp.i128 eq v0, v2
     return v3
 }
-; run: %i128_store_load_offset(0) == true
-; run: %i128_store_load_offset(-1) == true
-; run: %i128_store_load_offset(0x00000000_00000000_FFFFFFFF_FFFFFFFF) == true
-; run: %i128_store_load_offset(0xFFFFFFFF_FFFFFFFF_00000000_00000000) == true
-; run: %i128_store_load_offset(0xFEDCBA98_76543210_01234567_89ABCDEF) == true
-; run: %i128_store_load_offset(0xA00A00A0_0A00A00A_06060606_06060606) == true
-; run: %i128_store_load_offset(0xDECAFFFF_C0FFEEEE_C0FFEEEE_DECAFFFF) == true
+; run: %i128_store_load_offset(0) == 1
+; run: %i128_store_load_offset(-1) == 1
+; run: %i128_store_load_offset(0x00000000_00000000_FFFFFFFF_FFFFFFFF) == 1
+; run: %i128_store_load_offset(0xFFFFFFFF_FFFFFFFF_00000000_00000000) == 1
+; run: %i128_store_load_offset(0xFEDCBA98_76543210_01234567_89ABCDEF) == 1
+; run: %i128_store_load_offset(0xA00A00A0_0A00A00A_06060606_06060606) == 1
+; run: %i128_store_load_offset(0xDECAFFFF_C0FFEEEE_C0FFEEEE_DECAFFFF) == 1

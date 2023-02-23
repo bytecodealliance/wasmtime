@@ -22,7 +22,7 @@ block0(v0: i8x16, v1: i8x16, v2: i8x16):
 ; Remember that bitselect accepts: 1) the selector vector, 2) the "if true" vector, and 3) the "if false" vector.
 ; run: %bitselect_i8x16([0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 255], [127 0 0 0 0 0 0 0 0 0 0 0 0 0 0 42], [42 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127]) == [42 0 0 0 0 0 0 0 0 0 0 0 0 0 0 42]
 
-function %bitselect_i8x16() -> b1 {
+function %bitselect_i8x16_1() -> i8 {
 block0:
     v0 = vconst.i8x16 [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 255]  ; the selector vector
     v1 = vconst.i8x16 [127 0 0 0 0 0 0 0 0 0 0 0 0 0 0 42] ; for each 1-bit in v0 the bit of v1 is selected

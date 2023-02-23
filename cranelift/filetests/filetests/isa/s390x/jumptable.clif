@@ -2,10 +2,8 @@ test compile precise-output
 target s390x
 
 function %f(i32) -> i32 {
-  jt0 = jump_table [block1, block2, block3]
-
 block0(v0: i32):
-  br_table v0, block4, jt0
+  br_table v0, block4, [block1, block2, block3]
 
 block1:
   v1 = iconst.i32 1
@@ -28,6 +26,7 @@ block5(v5: i32):
   return v6
 }
 
+; VCode:
 ; block0:
 ;   llgfr %r3, %r2
 ;   clgfi %r3, 3
@@ -55,6 +54,39 @@ block5(v5: i32):
 ; block8:
 ;   jg label9
 ; block9:
+;   ar %r2, %r5
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   llgfr %r3, %r2
+;   clgfi %r3, 3
+;   jghe 0x30
+;   sllg %r3, %r3, 2
+;   larl %r1, 0x24
+;   agf %r1, 0(%r3, %r1)
+;   br %r1
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x16
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x20
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x2a
+; block1: ; offset 0x30
+;   lhi %r5, 4
+; block2: ; offset 0x34
+;   jg 0x52
+; block3: ; offset 0x3a
+;   lhi %r5, 1
+; block4: ; offset 0x3e
+;   jg 0x52
+; block5: ; offset 0x44
+;   lhi %r5, 2
+; block6: ; offset 0x48
+;   jg 0x52
+; block7: ; offset 0x4e
+;   lhi %r5, 3
+; block8: ; offset 0x52
 ;   ar %r2, %r5
 ;   br %r14
 

@@ -47,16 +47,18 @@ pub unsafe fn platform_init() {
     register(&mut PREV_SIGILL, libc::SIGILL);
 
     // x86 and s390x use SIGFPE to report division by zero
-    if cfg!(target_arch = "x86") || cfg!(target_arch = "x86_64") || cfg!(target_arch = "s390x") {
+    if cfg!(target_arch = "x86_64") || cfg!(target_arch = "s390x") {
         register(&mut PREV_SIGFPE, libc::SIGFPE);
     }
 
     // Sometimes we need to handle SIGBUS too:
-    // - On ARM, handle Unaligned Accesses.
     // - On Darwin, guard page accesses are raised as SIGBUS.
-    if cfg!(target_arch = "arm") || cfg!(target_os = "macos") || cfg!(target_os = "freebsd") {
+    if cfg!(target_os = "macos") || cfg!(target_os = "freebsd") {
         register(&mut PREV_SIGBUS, libc::SIGBUS);
     }
+
+    // TODO(#1980): x86-32, if we support it, will also need a SIGFPE handler.
+    // TODO(#1173): ARM32, if we support it, will also need a SIGBUS handler.
 }
 
 unsafe extern "C" fn trap_handler(
@@ -87,7 +89,7 @@ unsafe extern "C" fn trap_handler(
         // handling, and reset our trap handling flag. Then we figure
         // out what to do based on the result of the trap handling.
         let (pc, fp) = get_pc_and_fp(context, signum);
-        let jmp_buf = info.jmp_buf_if_trap(pc, |handler| handler(signum, siginfo, context));
+        let jmp_buf = info.take_jmp_buf_if_trap(pc, |handler| handler(signum, siginfo, context));
 
         // Figure out what to do based on the result of this handling of
         // the trap. Note that our sentinel value of 1 means that the
@@ -172,12 +174,6 @@ unsafe fn get_pc_and_fp(cx: *mut libc::c_void, _signum: libc::c_int) -> (*const 
                 cx.uc_mcontext.gregs[libc::REG_RIP as usize] as *const u8,
                 cx.uc_mcontext.gregs[libc::REG_RBP as usize] as usize
             )
-        } else if #[cfg(all(target_os = "linux", target_arch = "x86"))] {
-            let cx = &*(cx as *const libc::ucontext_t);
-            (
-                cx.uc_mcontext.gregs[libc::REG_EIP as usize] as *const u8,
-                cx.uc_mcontext.gregs[libc::REG_EBP as usize] as usize,
-            )
         } else if #[cfg(all(any(target_os = "linux", target_os = "android"), target_arch = "aarch64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
             (
@@ -210,12 +206,6 @@ unsafe fn get_pc_and_fp(cx: *mut libc::c_void, _signum: libc::c_int) -> (*const 
                 (*cx.uc_mcontext).__ss.__rip as *const u8,
                 (*cx.uc_mcontext).__ss.__rbp as usize,
             )
-        } else if #[cfg(all(target_os = "macos", target_arch = "x86"))] {
-            let cx = &*(cx as *const libc::ucontext_t);
-            (
-                (*cx.uc_mcontext).__ss.__eip as *const u8,
-                (*cx.uc_mcontext).__ss.__ebp as usize,
-            )
         } else if #[cfg(all(target_os = "macos", target_arch = "aarch64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
             (
@@ -228,7 +218,20 @@ unsafe fn get_pc_and_fp(cx: *mut libc::c_void, _signum: libc::c_int) -> (*const 
                 cx.uc_mcontext.mc_rip as *const u8,
                 cx.uc_mcontext.mc_rbp as usize,
             )
-        } else {
+        } else if #[cfg(all(target_os = "linux", target_arch = "riscv64"))] {
+            let cx = &*(cx as *const libc::ucontext_t);
+            (
+                cx.uc_mcontext.__gregs[libc::REG_PC] as *const u8,
+                cx.uc_mcontext.__gregs[libc::REG_S0] as usize,
+            )
+        } else if #[cfg(all(target_os = "freebsd", target_arch = "aarch64"))] {
+            let cx = &*(cx as *const libc::mcontext_t);
+            (
+                cx.mc_gpregs.gp_elr as *const u8,
+                cx.mc_gpregs.gp_x[29] as usize,
+            )
+        }
+        else {
             compile_error!("unsupported platform");
         }
     }
@@ -286,7 +289,14 @@ pub fn lazy_per_thread_init() {
 
     /// The size of the sigaltstack (not including the guard, which will be
     /// added). Make this large enough to run our signal handlers.
-    const MIN_STACK_SIZE: usize = 16 * 4096;
+    ///
+    /// The main current requirement of the signal handler in terms of stack
+    /// space is that `malloc`/`realloc` are called to create a `Backtrace` of
+    /// wasm frames.
+    ///
+    /// Historically this was 16k. Turns out jemalloc requires more than 16k of
+    /// stack space in debug mode, so this was bumped to 64k.
+    const MIN_STACK_SIZE: usize = 64 * 4096;
 
     struct Stack {
         mmap_ptr: *mut libc::c_void,

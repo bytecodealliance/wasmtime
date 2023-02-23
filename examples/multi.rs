@@ -33,7 +33,7 @@ fn main() -> Result<()> {
 
     // Extract exports.
     println!("Extracting export...");
-    let g = instance.get_typed_func::<(i32, i64), (i64, i32), _>(&mut store, "g")?;
+    let g = instance.get_typed_func::<(i32, i64), (i64, i32)>(&mut store, "g")?;
 
     // Call `$g`.
     println!("Calling export \"g\"...");
@@ -51,7 +51,6 @@ fn main() -> Result<()> {
         .get_typed_func::<
         (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64),
         (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64),
-        _,
         >
         (&mut store, "round_trip_many")?;
     let results = round_trip_many.call(&mut store, (0, 1, 2, 3, 4, 5, 6, 7, 8, 9))?;

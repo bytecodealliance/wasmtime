@@ -1,0 +1,98 @@
+test interpret
+test run
+target riscv64
+
+function %a(i128, i8, i8, i8, i16, i32, i8, i8, i64, i8) -> i8, i8, i8, i128, i8, i8, i64, i128, i8 system_v {
+    ss0 = explicit_slot 90
+    ss1 = explicit_slot 90
+    ss2 = explicit_slot 90
+    ss3 = explicit_slot 90
+    ss4 = explicit_slot 126
+    ss5 = explicit_slot 126
+    ss6 = explicit_slot 126
+    ss7 = explicit_slot 126
+
+block0(v0: i128, v1: i8, v2: i8, v3: i8, v4: i16, v5: i32, v6: i8, v7: i8, v8: i64, v9: i8):
+    v11 = iconst.i8 50
+    v12 = iconst.i8 0
+    v13 = iconst.i16 0
+    v14 = iconst.i32 0
+    v15 = iconst.i64 0
+    v16 = uextend.i128 v15  ; v15 = 0
+    stack_store v16, ss0
+    stack_store v16, ss0+16
+    stack_store v16, ss0+32
+    stack_store v16, ss0+48
+    stack_store v16, ss0+64
+    stack_store v15, ss0+80  ; v15 = 0
+    stack_store v13, ss0+88  ; v13 = 0
+    stack_store v16, ss1
+    stack_store v16, ss1+16
+    stack_store v16, ss1+32
+    stack_store v16, ss1+48
+    stack_store v16, ss1+64
+    stack_store v15, ss1+80  ; v15 = 0
+    stack_store v13, ss1+88  ; v13 = 0
+    stack_store v16, ss2
+    stack_store v16, ss2+16
+    stack_store v16, ss2+32
+    stack_store v16, ss2+48
+    stack_store v16, ss2+64
+    stack_store v15, ss2+80  ; v15 = 0
+    stack_store v13, ss2+88  ; v13 = 0
+    stack_store v16, ss3
+    stack_store v16, ss3+16
+    stack_store v16, ss3+32
+    stack_store v16, ss3+48
+    stack_store v16, ss3+64
+    stack_store v15, ss3+80  ; v15 = 0
+    stack_store v13, ss3+88  ; v13 = 0
+    stack_store v16, ss4
+    stack_store v16, ss4+16
+    stack_store v16, ss4+32
+    stack_store v16, ss4+48
+    stack_store v16, ss4+64
+    stack_store v16, ss4+80
+    stack_store v16, ss4+96
+    stack_store v15, ss4+112  ; v15 = 0
+    stack_store v14, ss4+120  ; v14 = 0
+    stack_store v13, ss4+124  ; v13 = 0
+    stack_store v16, ss5
+    stack_store v16, ss5+16
+    stack_store v16, ss5+32
+    stack_store v16, ss5+48
+    stack_store v16, ss5+64
+    stack_store v16, ss5+80
+    stack_store v16, ss5+96
+    stack_store v15, ss5+112  ; v15 = 0
+    stack_store v14, ss5+120  ; v14 = 0
+    stack_store v13, ss5+124  ; v13 = 0
+    stack_store v16, ss6
+    stack_store v16, ss6+16
+    stack_store v16, ss6+32
+    stack_store v16, ss6+48
+    stack_store v16, ss6+64
+    stack_store v16, ss6+80
+    stack_store v16, ss6+96
+    stack_store v15, ss6+112  ; v15 = 0
+    stack_store v14, ss6+120  ; v14 = 0
+    stack_store v13, ss6+124  ; v13 = 0
+    stack_store v16, ss7
+    stack_store v16, ss7+16
+    stack_store v16, ss7+32
+    stack_store v16, ss7+48
+    stack_store v16, ss7+64
+    stack_store v16, ss7+80
+    stack_store v16, ss7+96
+    stack_store v15, ss7+112  ; v15 = 0
+    stack_store v14, ss7+120  ; v14 = 0
+    stack_store v13, ss7+124  ; v13 = 0
+
+
+    v17 = select_spectre_guard v8, v0, v0
+    v18 = isub v8, v8
+
+    return v1, v3, v2, v17, v1, v1, v18, v17, v6
+}
+
+; run: %a(64324483005384539584200704, 0, 0, 95, 24415, 1600085839, 1, 0, 89294900846985228, 4) == [0, 95, 0, 64324483005384539584200704, 0, 0, 0, 64324483005384539584200704, 1]

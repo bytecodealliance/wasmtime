@@ -1,0 +1,132 @@
+test run
+target aarch64
+target s390x
+; x86_64 does not support `fcvt_to_{u,s}int_sat` to integers < 32 bits.
+
+function %fcvt_to_sint_sat_i8(f32) -> i8 {
+block0(v0: f32):
+    v1 = fcvt_to_sint_sat.i8 v0
+    return v1
+}
+; run: %fcvt_to_sint_sat_i8(0x0.0) == 0
+; run: %fcvt_to_sint_sat_i8(0x1.0) == 1
+; run: %fcvt_to_sint_sat_i8(0x1.d6f346p26) == 127
+; run: %fcvt_to_sint_sat_i8(0x8.1) == 8
+; run: %fcvt_to_sint_sat_i8(-0x1.0) == -1
+; run: %fcvt_to_sint_sat_i8(0xB2D05E00.0) == 127
+; run: %fcvt_to_sint_sat_i8(-0xB2D05E00.0) == -128
+; run: %fcvt_to_sint_sat_i8(0x1.fffffep127) == 127
+; run: %fcvt_to_sint_sat_i8(-0x1.fffffep127) == -128
+; run: %fcvt_to_sint_sat_i8(NaN) == 0
+
+function %fcvt_to_uint_sat_i8(f32) -> i8 {
+block0(v0: f32):
+    v1 = fcvt_to_uint_sat.i8 v0
+    return v1
+}
+; run: %fcvt_to_uint_sat_i8(0x0.0) == 0
+; run: %fcvt_to_uint_sat_i8(0x1.0) == 1
+; run: %fcvt_to_uint_sat_i8(0x1.d6f346p26) == 255
+; run: %fcvt_to_uint_sat_i8(0x8.1) == 8
+; run: %fcvt_to_uint_sat_i8(-0x1.0) == 0
+; run: %fcvt_to_uint_sat_i8(0xB2D05E00.0) == 255
+; run: %fcvt_to_uint_sat_i8(-0xB2D05E00.0) == 0
+; run: %fcvt_to_uint_sat_i8(0x1.fffffep127) == 255
+; run: %fcvt_to_uint_sat_i8(-0x1.fffffep127) == 0
+; run: %fcvt_to_uint_sat_i8(NaN) == 0
+
+function %fcvt_to_sint_sat_i16(f32) -> i16 {
+block0(v0: f32):
+    v1 = fcvt_to_sint_sat.i16 v0
+    return v1
+}
+; run: %fcvt_to_sint_sat_i16(0x0.0) == 0
+; run: %fcvt_to_sint_sat_i16(0x1.0) == 1
+; run: %fcvt_to_sint_sat_i16(0x1.d6f346p26) == 32767
+; run: %fcvt_to_sint_sat_i16(0x8.1) == 8
+; run: %fcvt_to_sint_sat_i16(-0x1.0) == -1
+; run: %fcvt_to_sint_sat_i16(0xB2D05E00.0) == 32767
+; run: %fcvt_to_sint_sat_i16(-0xB2D05E00.0) == -32768
+; run: %fcvt_to_sint_sat_i16(0x1.fffffep127) == 32767
+; run: %fcvt_to_sint_sat_i16(-0x1.fffffep127) == -32768
+; run: %fcvt_to_sint_sat_i16(NaN) == 0
+
+function %fcvt_to_uint_sat_i16(f32) -> i16 {
+block0(v0: f32):
+    v1 = fcvt_to_uint_sat.i16 v0
+    return v1
+}
+; run: %fcvt_to_uint_sat_i16(0x0.0) == 0
+; run: %fcvt_to_uint_sat_i16(0x1.0) == 1
+; run: %fcvt_to_uint_sat_i16(0x1.d6f346p26) == 65535
+; run: %fcvt_to_uint_sat_i16(0x8.1) == 8
+; run: %fcvt_to_uint_sat_i16(-0x1.0) == 0
+; run: %fcvt_to_uint_sat_i16(0xB2D05E00.0) == 65535
+; run: %fcvt_to_uint_sat_i16(-0xB2D05E00.0) == 0
+; run: %fcvt_to_uint_sat_i16(0x1.fffffep127) == 65535
+; run: %fcvt_to_uint_sat_i16(-0x1.fffffep127) == 0
+; run: %fcvt_to_uint_sat_i16(NaN) == 0
+
+function %fcvt_to_sint_sat_i8_f64(f64) -> i8 {
+block0(v0: f64):
+    v1 = fcvt_to_sint_sat.i8 v0
+    return v1
+}
+; run: %fcvt_to_sint_sat_i8_f64(0x0.0) == 0
+; run: %fcvt_to_sint_sat_i8_f64(0x1.0) == 1
+; run: %fcvt_to_sint_sat_i8_f64(0x1.d6f346p26) == 127
+; run: %fcvt_to_sint_sat_i8_f64(0x8.1) == 8
+; run: %fcvt_to_sint_sat_i8_f64(-0x1.0) == -1
+; run: %fcvt_to_sint_sat_i8_f64(0xB2D05E00.0) == 127
+; run: %fcvt_to_sint_sat_i8_f64(-0xB2D05E00.0) == -128
+; run: %fcvt_to_sint_sat_i8_f64(0x1.fffffffffffffp1023) == 127
+; run: %fcvt_to_sint_sat_i8_f64(-0x1.fffffffffffffp1023) == -128
+; run: %fcvt_to_sint_sat_i8_f64(NaN) == 0
+
+function %fcvt_to_uint_sat_i8_f64(f64) -> i8 {
+block0(v0: f64):
+    v1 = fcvt_to_uint_sat.i8 v0
+    return v1
+}
+; run: %fcvt_to_uint_sat_i8_f64(0x0.0) == 0
+; run: %fcvt_to_uint_sat_i8_f64(0x1.0) == 1
+; run: %fcvt_to_uint_sat_i8_f64(0x1.d6f346p26) == 255
+; run: %fcvt_to_uint_sat_i8_f64(0x8.1) == 8
+; run: %fcvt_to_uint_sat_i8_f64(-0x1.0) == 0
+; run: %fcvt_to_uint_sat_i8_f64(0xB2D05E00.0) == 255
+; run: %fcvt_to_uint_sat_i8_f64(-0xB2D05E00.0) == 0
+; run: %fcvt_to_uint_sat_i8_f64(0x1.fffffffffffffp1023) == 255
+; run: %fcvt_to_sint_sat_i8_f64(-0x1.fffffffffffffp1023) == 0
+; run: %fcvt_to_uint_sat_i8_f64(NaN) == 0
+
+function %fcvt_to_sint_sat_i16_f64(f64) -> i16 {
+block0(v0: f64):
+    v1 = fcvt_to_sint_sat.i16 v0
+    return v1
+}
+; run: %fcvt_to_sint_sat_i16_f64(0x0.0) == 0
+; run: %fcvt_to_sint_sat_i16_f64(0x1.0) == 1
+; run: %fcvt_to_sint_sat_i16_f64(0x1.d6f346p26) == 32767
+; run: %fcvt_to_sint_sat_i16_f64(0x8.1) == 8
+; run: %fcvt_to_sint_sat_i16_f64(-0x1.0) == -1
+; run: %fcvt_to_sint_sat_i16_f64(0xB2D05E00.0) == 32767
+; run: %fcvt_to_sint_sat_i16_f64(-0xB2D05E00.0) == -32768
+; run: %fcvt_to_sint_sat_i16_f64(0x1.fffffffffffffp1023) == 32767
+; run: %fcvt_to_sint_sat_i16_f64(-0x1.fffffffffffffp1023) == -32768
+; run: %fcvt_to_sint_sat_i16_f64(NaN) == 0
+
+function %fcvt_to_uint_sat_i16_f64(f64) -> i16 {
+block0(v0: f64):
+    v1 = fcvt_to_uint_sat.i16 v0
+    return v1
+}
+; run: %fcvt_to_uint_sat_i16_f64(0x0.0) == 0
+; run: %fcvt_to_uint_sat_i16_f64(0x1.0) == 1
+; run: %fcvt_to_uint_sat_i16_f64(0x1.d6f346p26) == 65535
+; run: %fcvt_to_uint_sat_i16_f64(0x8.1) == 8
+; run: %fcvt_to_uint_sat_i16_f64(-0x1.0) == 0
+; run: %fcvt_to_uint_sat_i16_f64(0xB2D05E00.0) == 65535
+; run: %fcvt_to_uint_sat_i16_f64(-0xB2D05E00.0) == 0
+; run: %fcvt_to_uint_sat_i16_f64(0x1.fffffffffffffp1023) == 65535
+; run: %fcvt_to_uint_sat_i16_f64(-0x1.fffffffffffffp1023) == 0
+; run: %fcvt_to_uint_sat_i16_f64(NaN) == 0

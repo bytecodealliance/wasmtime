@@ -50,6 +50,7 @@ pub(crate) const fn vreg_preg(num: u8) -> PReg {
 }
 
 /// Get a writable reference to a V-register.
+#[cfg(test)] // Used only in test code.
 pub fn writable_vreg(num: u8) -> Writable<Reg> {
     Writable::from_reg(vreg(num))
 }
@@ -90,6 +91,11 @@ pub fn writable_stack_reg() -> Writable<Reg> {
 /// Get a reference to the link register (x30).
 pub fn link_reg() -> Reg {
     xreg(30)
+}
+
+/// Get a reference to the pinned register (x21).
+pub fn pinned_reg() -> Reg {
+    xreg(PINNED_REG)
 }
 
 /// Get a writable reference to the link register.

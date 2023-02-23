@@ -1,6 +1,7 @@
 //! Contains the macro-generated implementation of wasi-nn from the its witx definition file.
 use crate::ctx::WasiNnCtx;
 use crate::ctx::WasiNnError;
+use anyhow::Result;
 
 // Generate the traits and types of wasi-nn in several Rust modules (e.g. `types`).
 wiggle::from_witx!({
@@ -11,7 +12,7 @@ wiggle::from_witx!({
 use types::NnErrno;
 
 impl<'a> types::UserErrorConversion for WasiNnCtx {
-    fn nn_errno_from_wasi_nn_error(&mut self, e: WasiNnError) -> Result<NnErrno, wiggle::Trap> {
+    fn nn_errno_from_wasi_nn_error(&mut self, e: WasiNnError) -> Result<NnErrno> {
         eprintln!("Host error: {:?}", e);
         match e {
             WasiNnError::BackendError(_) => unimplemented!(),

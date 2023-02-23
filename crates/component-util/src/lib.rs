@@ -1,5 +1,5 @@
 /// Represents the possible sizes in bytes of the discriminant of a variant type in the component model
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum DiscriminantSize {
     /// 8-bit discriminant
     Size1,
@@ -11,7 +11,7 @@ pub enum DiscriminantSize {
 
 impl DiscriminantSize {
     /// Calculate the size of discriminant needed to represent a variant with the specified number of cases.
-    pub fn from_count(count: usize) -> Option<Self> {
+    pub const fn from_count(count: usize) -> Option<Self> {
         if count <= 0xFF {
             Some(Self::Size1)
         } else if count <= 0xFFFF {
@@ -22,16 +22,21 @@ impl DiscriminantSize {
             None
         }
     }
+
+    /// Returns the size, in bytes, of this discriminant
+    pub const fn byte_size(&self) -> u32 {
+        match self {
+            DiscriminantSize::Size1 => 1,
+            DiscriminantSize::Size2 => 2,
+            DiscriminantSize::Size4 => 4,
+        }
+    }
 }
 
 impl From<DiscriminantSize> for u32 {
     /// Size of the discriminant as a `u32`
     fn from(size: DiscriminantSize) -> u32 {
-        match size {
-            DiscriminantSize::Size1 => 1,
-            DiscriminantSize::Size2 => 2,
-            DiscriminantSize::Size4 => 4,
-        }
+        size.byte_size()
     }
 }
 
@@ -55,12 +60,12 @@ pub enum FlagsSize {
     /// Flags can fit in a u16
     Size2,
     /// Flags can fit in a specified number of u32 fields
-    Size4Plus(usize),
+    Size4Plus(u8),
 }
 
 impl FlagsSize {
     /// Calculate the size needed to represent a value with the specified number of flags.
-    pub fn from_count(count: usize) -> FlagsSize {
+    pub const fn from_count(count: usize) -> FlagsSize {
         if count == 0 {
             FlagsSize::Size0
         } else if count <= 8 {
@@ -68,13 +73,17 @@ impl FlagsSize {
         } else if count <= 16 {
             FlagsSize::Size2
         } else {
-            FlagsSize::Size4Plus(ceiling_divide(count, 32))
+            let amt = ceiling_divide(count, 32);
+            if amt > (u8::MAX as usize) {
+                panic!("too many flags");
+            }
+            FlagsSize::Size4Plus(amt as u8)
         }
     }
 }
 
 /// Divide `n` by `d`, rounding up in the case of a non-zero remainder.
-fn ceiling_divide(n: usize, d: usize) -> usize {
+const fn ceiling_divide(n: usize, d: usize) -> usize {
     (n + d - 1) / d
 }
 
@@ -87,6 +96,8 @@ pub const REALLOC_AND_FREE: &str = r#"
         (param $align i32)
         (param $new_size i32)
         (result i32)
+
+        (local $ret i32)
 
         ;; Test if the old pointer is non-null
         local.get $old_ptr
@@ -101,8 +112,8 @@ pub const REALLOC_AND_FREE: &str = r#"
                 return
             end
 
-            ;; ... otherwise this is unimplemented
-            unreachable
+            ;; otherwise fall through to allocate a new chunk which will later
+            ;; copy data over
         end
 
         ;; align up `$last`
@@ -121,18 +132,49 @@ pub const REALLOC_AND_FREE: &str = r#"
 
         ;; save the current value of `$last` as the return value
         global.get $last
-
-        ;; ensure anything necessary is set to valid data by spraying a bit
-        ;; pattern that is invalid
-        global.get $last
-        i32.const 0xde
-        local.get $new_size
-        memory.fill
+        local.set $ret
 
         ;; bump our pointer
         (global.set $last
             (i32.add
                 (global.get $last)
                 (local.get $new_size)))
+
+        ;; while `memory.size` is less than `$last`, grow memory
+        ;; by one page
+        (loop $loop
+            (if
+                (i32.lt_u
+                    (i32.mul (memory.size) (i32.const 65536))
+                    (global.get $last))
+                (then
+                    i32.const 1
+                    memory.grow
+                    ;; test to make sure growth succeeded
+                    i32.const -1
+                    i32.eq
+                    if unreachable end
+
+                    br $loop)))
+
+
+        ;; ensure anything necessary is set to valid data by spraying a bit
+        ;; pattern that is invalid
+        local.get $ret
+        i32.const 0xde
+        local.get $new_size
+        memory.fill
+
+        ;; If the old pointer is present then that means this was a reallocation
+        ;; of an existing chunk which means the existing data must be copied.
+        local.get $old_ptr
+        if
+            local.get $ret          ;; destination
+            local.get $old_ptr      ;; source
+            local.get $old_size     ;; size
+            memory.copy
+        end
+
+        local.get $ret
     )
 "#;

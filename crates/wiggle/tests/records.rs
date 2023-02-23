@@ -118,9 +118,10 @@ impl SumOfPairExercise {
             &host_memory,
             self.input_loc.ptr as i32,
             self.return_loc.ptr as i32,
-        );
+        )
+        .unwrap();
 
-        assert_eq!(sum_err, Ok(types::Errno::Ok as i32), "sum errno");
+        assert_eq!(sum_err, types::Errno::Ok as i32, "sum errno");
 
         let return_val: i64 = host_memory
             .ptr(self.return_loc.ptr)
@@ -216,13 +217,10 @@ impl SumPairPtrsExercise {
             &host_memory,
             self.input_struct_loc.ptr as i32,
             self.return_loc.ptr as i32,
-        );
+        )
+        .unwrap();
 
-        assert_eq!(
-            res,
-            Ok(types::Errno::Ok as i32),
-            "sum of pair of ptrs errno"
-        );
+        assert_eq!(res, types::Errno::Ok as i32, "sum of pair of ptrs errno");
 
         let doubled: i64 = host_memory
             .ptr(self.return_loc.ptr)
@@ -299,9 +297,10 @@ impl SumIntAndPtrExercise {
             &host_memory,
             self.input_struct_loc.ptr as i32,
             self.return_loc.ptr as i32,
-        );
+        )
+        .unwrap();
 
-        assert_eq!(res, Ok(types::Errno::Ok as i32), "sum of int and ptr errno");
+        assert_eq!(res, types::Errno::Ok as i32, "sum of int and ptr errno");
 
         let doubled: i64 = host_memory
             .ptr(self.return_loc.ptr)
@@ -338,9 +337,10 @@ impl ReturnPairInts {
         let mut ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
 
-        let err = records::return_pair_ints(&mut ctx, &host_memory, self.return_loc.ptr as i32);
+        let err =
+            records::return_pair_ints(&mut ctx, &host_memory, self.return_loc.ptr as i32).unwrap();
 
-        assert_eq!(err, Ok(types::Errno::Ok as i32), "return struct errno");
+        assert_eq!(err, types::Errno::Ok as i32, "return struct errno");
 
         let return_struct: types::PairInts = host_memory
             .ptr(self.return_loc.ptr)
@@ -418,13 +418,10 @@ impl ReturnPairPtrsExercise {
             self.input_first_loc.ptr as i32,
             self.input_second_loc.ptr as i32,
             self.return_loc.ptr as i32,
-        );
+        )
+        .unwrap();
 
-        assert_eq!(
-            res,
-            Ok(types::Errno::Ok as i32),
-            "return pair of ptrs errno"
-        );
+        assert_eq!(res, types::Errno::Ok as i32, "return pair of ptrs errno");
 
         let ptr_pair_int_ptrs: types::PairIntPtrs<'_> = host_memory
             .ptr(self.return_loc.ptr)
@@ -529,10 +526,11 @@ impl SumArrayExercise {
             &host_memory,
             self.input_struct_loc.ptr as i32,
             self.output_loc.ptr as i32,
-        );
+        )
+        .unwrap();
 
         // should be no error - if hostcall did a GuestError it should eprintln it.
-        assert_eq!(res, Ok(types::Errno::Ok as i32), "reduce excuses errno");
+        assert_eq!(res, types::Errno::Ok as i32, "reduce excuses errno");
 
         // Sum is inputs upcasted to u16
         let expected: u16 = self.inputs.iter().map(|v| *v as u16).sum();

@@ -8,12 +8,9 @@ pub fn dummy_linker<'module, T>(store: &mut Store<T>, module: &Module) -> Result
     let mut linker = Linker::new(store.engine());
     linker.allow_shadowing(true);
     for import in module.imports() {
+        let extern_ = dummy_extern(store, import.ty())?;
         linker
-            .define(
-                import.module(),
-                import.name(),
-                dummy_extern(store, import.ty())?,
-            )
+            .define(&store, import.module(), import.name(), extern_)
             .unwrap();
     }
     Ok(linker)

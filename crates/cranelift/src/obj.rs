@@ -15,6 +15,8 @@
 
 use crate::{CompiledFunction, RelocationTarget};
 use anyhow::Result;
+use cranelift_codegen::binemit::Reloc;
+use cranelift_codegen::ir::LibCall;
 use cranelift_codegen::isa::{
     unwind::{systemv, UnwindInfo},
     TargetIsa,
@@ -24,10 +26,10 @@ use gimli::write::{Address, EhFrame, EndianVec, FrameTable, Writer};
 use gimli::RunTimeEndian;
 use object::write::{Object, SectionId, StandardSegment, Symbol, SymbolId, SymbolSection};
 use object::{Architecture, SectionKind, SymbolFlags, SymbolKind, SymbolScope};
+use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::ops::Range;
-use wasmtime_environ::obj;
-use wasmtime_environ::{DefinedFuncIndex, Module, PrimaryMap, SignatureIndex, Trampoline};
+use wasmtime_environ::FuncIndex;
 
 const TEXT_SECTION_NAME: &[u8] = b".text";
 
@@ -46,24 +48,30 @@ pub struct ModuleTextBuilder<'a> {
     obj: &'a mut Object<'static>,
 
     /// The WebAssembly module we're generating code for.
-    module: &'a Module,
-
     text_section: SectionId,
 
     unwind_info: UnwindInfoBuilder<'a>,
 
-    /// The corresponding symbol for each function, inserted as they're defined.
-    ///
-    /// If an index isn't here yet then it hasn't been defined yet.
-    func_symbols: PrimaryMap<DefinedFuncIndex, SymbolId>,
-
     /// In-progress text section that we're using cranelift's `MachBuffer` to
     /// build to resolve relocations (calls) between functions.
     text: Box<dyn TextSectionBuilder>,
+
+    /// Symbols defined in the object for libcalls that relocations are applied
+    /// against.
+    ///
+    /// Note that this isn't typically used. It's only used for SSE-disabled
+    /// builds without SIMD on x86_64 right now.
+    libcall_symbols: HashMap<LibCall, SymbolId>,
 }
 
 impl<'a> ModuleTextBuilder<'a> {
-    pub fn new(obj: &'a mut Object<'static>, module: &'a Module, isa: &'a dyn TargetIsa) -> Self {
+    /// Creates a new builder for the text section of an executable.
+    ///
+    /// The `.text` section will be appended to the specified `obj` along with
+    /// any unwinding or such information as necessary. The `num_funcs`
+    /// parameter indicates the number of times the `append_func` function will
+    /// be called. The `finish` function will panic if this contract is not met.
+    pub fn new(obj: &'a mut Object<'static>, isa: &'a dyn TargetIsa, num_funcs: usize) -> Self {
         // Entire code (functions and trampolines) will be placed
         // in the ".text" section.
         let text_section = obj.add_section(
@@ -72,33 +80,41 @@ impl<'a> ModuleTextBuilder<'a> {
             SectionKind::Text,
         );
 
-        let num_defined = module.functions.len() - module.num_imported_funcs;
         Self {
             isa,
             obj,
-            module,
             text_section,
-            func_symbols: PrimaryMap::with_capacity(num_defined),
             unwind_info: Default::default(),
-            text: isa.text_section_builder(num_defined as u32),
+            text: isa.text_section_builder(num_funcs),
+            libcall_symbols: HashMap::default(),
         }
     }
 
     /// Appends the `func` specified named `name` to this object.
     ///
+    /// The `resolve_reloc_target` closure is used to resolve a relocation
+    /// target to an adjacent function which has already been added or will be
+    /// added to this object. The argument is the relocation target specified
+    /// within `CompiledFunction` and the return value must be an index where
+    /// the target will be defined by the `n`th call to `append_func`.
+    ///
     /// Returns the symbol associated with the function as well as the range
     /// that the function resides within the text section.
     pub fn append_func(
         &mut self,
-        labeled: bool,
-        name: Vec<u8>,
+        name: &str,
         func: &'a CompiledFunction,
+        resolve_reloc_target: impl Fn(FuncIndex) -> usize,
     ) -> (SymbolId, Range<u64>) {
         let body_len = func.body.len() as u64;
-        let off = self.text.append(labeled, &func.body, None);
+        let off = self.text.append(
+            true,
+            &func.body,
+            self.isa.function_alignment().max(func.alignment),
+        );
 
         let symbol_id = self.obj.add_symbol(Symbol {
-            name,
+            name: name.as_bytes().to_vec(),
             value: off,
             size: body_len,
             kind: SymbolKind::Text,
@@ -121,13 +137,11 @@ impl<'a> ModuleTextBuilder<'a> {
                 // file, but if it can't handle it then we pass through the
                 // relocation.
                 RelocationTarget::UserFunc(index) => {
-                    let defined_index = self.module.defined_func_index(index).unwrap();
-                    if self.text.resolve_reloc(
-                        off + u64::from(r.offset),
-                        r.reloc,
-                        r.addend,
-                        defined_index.as_u32(),
-                    ) {
+                    let target = resolve_reloc_target(index);
+                    if self
+                        .text
+                        .resolve_reloc(off + u64::from(r.offset), r.reloc, r.addend, target)
+                    {
                         continue;
                     }
 
@@ -143,42 +157,53 @@ impl<'a> ModuleTextBuilder<'a> {
                     );
                 }
 
-                // At this time it's not expected that any libcall relocations
-                // are generated. Ideally we don't want relocations against
-                // libcalls anyway as libcalls should go through indirect
-                // `VMContext` tables to avoid needing to apply relocations at
-                // module-load time as well.
+                // Relocations against libcalls are not common at this time and
+                // are only used in non-default configurations that disable wasm
+                // SIMD, disable SSE features, and for wasm modules that still
+                // use floating point operations.
+                //
+                // Currently these relocations are all expected to be absolute
+                // 8-byte relocations so that's asserted here and then encoded
+                // directly into the object as a normal object relocation. This
+                // is processed at module load time to resolve the relocations.
                 RelocationTarget::LibCall(call) => {
-                    unimplemented!("cannot generate relocation against libcall {call:?}");
+                    let symbol = *self.libcall_symbols.entry(call).or_insert_with(|| {
+                        self.obj.add_symbol(Symbol {
+                            name: libcall_name(call).as_bytes().to_vec(),
+                            value: 0,
+                            size: 0,
+                            kind: SymbolKind::Text,
+                            scope: SymbolScope::Linkage,
+                            weak: false,
+                            section: SymbolSection::Undefined,
+                            flags: SymbolFlags::None,
+                        })
+                    });
+                    let (encoding, kind, size) = match r.reloc {
+                        Reloc::Abs8 => (
+                            object::RelocationEncoding::Generic,
+                            object::RelocationKind::Absolute,
+                            8,
+                        ),
+                        other => unimplemented!("unimplemented relocation kind {other:?}"),
+                    };
+                    self.obj
+                        .add_relocation(
+                            self.text_section,
+                            object::write::Relocation {
+                                symbol,
+                                size,
+                                kind,
+                                encoding,
+                                offset: off + u64::from(r.offset),
+                                addend: r.addend,
+                            },
+                        )
+                        .unwrap();
                 }
             };
         }
         (symbol_id, off..off + body_len)
-    }
-
-    /// Appends a function to this object file.
-    ///
-    /// This is expected to be called in-order for ascending `index` values.
-    pub fn func(&mut self, index: DefinedFuncIndex, func: &'a CompiledFunction) -> Range<u64> {
-        let name = obj::func_symbol_name(self.module.func_index(index));
-        let (symbol_id, range) = self.append_func(true, name.into_bytes(), func);
-        assert_eq!(self.func_symbols.push(symbol_id), index);
-        range
-    }
-
-    pub fn trampoline(&mut self, sig: SignatureIndex, func: &'a CompiledFunction) -> Trampoline {
-        let name = obj::trampoline_symbol_name(sig);
-        let range = self.named_func(&name, func);
-        Trampoline {
-            signature: sig,
-            start: range.start,
-            length: u32::try_from(range.end - range.start).unwrap(),
-        }
-    }
-
-    pub fn named_func(&mut self, name: &str, func: &'a CompiledFunction) -> Range<u64> {
-        let (_, range) = self.append_func(false, name.as_bytes().to_vec(), func);
-        range
     }
 
     /// Forces "veneers" to be used for inter-function calls in the text
@@ -198,7 +223,7 @@ impl<'a> ModuleTextBuilder<'a> {
         if padding == 0 {
             return;
         }
-        self.text.append(false, &vec![0; padding], Some(1));
+        self.text.append(false, &vec![0; padding], 1);
     }
 
     /// Indicates that the text section has been written completely and this
@@ -206,7 +231,7 @@ impl<'a> ModuleTextBuilder<'a> {
     ///
     /// Note that this will also write out the unwind information sections if
     /// necessary.
-    pub fn finish(mut self) -> Result<PrimaryMap<DefinedFuncIndex, SymbolId>> {
+    pub fn finish(mut self) {
         // Finish up the text section now that we're done adding functions.
         let text = self.text.finish();
         self.obj
@@ -216,8 +241,6 @@ impl<'a> ModuleTextBuilder<'a> {
         // Append the unwind information for all our functions, if necessary.
         self.unwind_info
             .append_section(self.isa, self.obj, self.text_section);
-
-        Ok(self.func_symbols)
     }
 }
 
@@ -509,4 +532,20 @@ impl<'a> UnwindInfoBuilder<'a> {
             }
         }
     }
+}
+
+fn libcall_name(call: LibCall) -> &'static str {
+    use wasmtime_environ::obj::LibCall as LC;
+    let other = match call {
+        LibCall::FloorF32 => LC::FloorF32,
+        LibCall::FloorF64 => LC::FloorF64,
+        LibCall::NearestF32 => LC::NearestF32,
+        LibCall::NearestF64 => LC::NearestF64,
+        LibCall::CeilF32 => LC::CeilF32,
+        LibCall::CeilF64 => LC::CeilF64,
+        LibCall::TruncF32 => LC::TruncF32,
+        LibCall::TruncF64 => LC::TruncF64,
+        _ => panic!("unknown libcall to give a name to: {call:?}"),
+    };
+    other.symbol()
 }

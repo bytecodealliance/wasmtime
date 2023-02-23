@@ -8,6 +8,7 @@ block0:
     return v0
 }
 
+; VCode:
 ;   stmg %r14, %r15, 112(%r15)
 ;   lgr %r1, %r15
 ;   aghi %r15, -160
@@ -17,6 +18,17 @@ block0:
 ;   lg %r2, 0(%r15)
 ;   lmg %r14, %r15, 272(%r15)
 ;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r14, %r15, 0x70(%r15)
+;   lgr %r1, %r15
+;   aghi %r15, -0xa0
+;   stg %r1, 0(%r15)
+; block1: ; offset 0x14
+;   lg %r2, 0(%r15)
+;   lmg %r14, %r15, 0x110(%r15)
+;   br %r14
 
 function %sp() -> i64 {
 block0:
@@ -24,6 +36,7 @@ block0:
     return v0
 }
 
+; VCode:
 ;   stmg %r14, %r15, 112(%r15)
 ;   lgr %r1, %r15
 ;   aghi %r15, -160
@@ -33,6 +46,17 @@ block0:
 ;   lgr %r2, %r15
 ;   lmg %r14, %r15, 272(%r15)
 ;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r14, %r15, 0x70(%r15)
+;   lgr %r1, %r15
+;   aghi %r15, -0xa0
+;   stg %r1, 0(%r15)
+; block1: ; offset 0x14
+;   lgr %r2, %r15
+;   lmg %r14, %r15, 0x110(%r15)
+;   br %r14
 
 function %return_address() -> i64 {
 block0:
@@ -40,6 +64,7 @@ block0:
     return v0
 }
 
+; VCode:
 ;   stmg %r14, %r15, 112(%r15)
 ;   lgr %r1, %r15
 ;   aghi %r15, -160
@@ -48,5 +73,16 @@ block0:
 ; block0:
 ;   lg %r2, 272(%r15)
 ;   lmg %r14, %r15, 272(%r15)
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r14, %r15, 0x70(%r15)
+;   lgr %r1, %r15
+;   aghi %r15, -0xa0
+;   stg %r1, 0(%r15)
+; block1: ; offset 0x14
+;   lg %r2, 0x110(%r15)
+;   lmg %r14, %r15, 0x110(%r15)
 ;   br %r14
 

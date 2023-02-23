@@ -14,9 +14,9 @@ use std::convert::{TryFrom, TryInto};
 use std::path::PathBuf;
 use std::sync::Arc;
 use wasmparser::{
-    CustomSectionReader, DataKind, ElementItem, ElementKind, Encoding, ExternalKind, FuncValidator,
-    FunctionBody, NameSectionReader, Naming, Operator, Parser, Payload, Type, TypeRef, Validator,
-    ValidatorResources,
+    types::Types, CustomSectionReader, DataKind, ElementItems, ElementKind, Encoding, ExternalKind,
+    FuncToValidate, FunctionBody, NameSectionReader, Naming, Operator, Parser, Payload, Type,
+    TypeRef, Validator, ValidatorResources,
 };
 
 /// Object containing the standalone environment information.
@@ -39,6 +39,13 @@ pub struct ModuleEnvironment<'a, 'data> {
 pub struct ModuleTranslation<'data> {
     /// Module information.
     pub module: Module,
+
+    /// The input wasm binary.
+    ///
+    /// This can be useful, for example, when modules are parsed from a
+    /// component and the embedder wants access to the raw wasm modules
+    /// themselves.
+    pub wasm: &'data [u8],
 
     /// References to the function bodies.
     pub function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
@@ -83,6 +90,19 @@ pub struct ModuleTranslation<'data> {
     /// When we're parsing the code section this will be incremented so we know
     /// which function is currently being defined.
     code_index: u32,
+
+    /// The type information of the current module made available at the end of the
+    /// validation process.
+    types: Option<Types>,
+}
+
+impl<'data> ModuleTranslation<'data> {
+    /// Returns a reference to the type information of the current module.
+    pub fn get_types(&self) -> &Types {
+        self.types
+            .as_ref()
+            .expect("module type information to be available")
+    }
 }
 
 /// Contains function data: byte code and its offset in the module.
@@ -90,7 +110,7 @@ pub struct FunctionBodyData<'a> {
     /// The body of the function, containing code and locals.
     pub body: FunctionBody<'a>,
     /// Validator for the function body
-    pub validator: FuncValidator<ValidatorResources>,
+    pub validator: FuncToValidate<ValidatorResources>,
 }
 
 #[derive(Debug, Default)]
@@ -162,6 +182,8 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
         parser: Parser,
         data: &'data [u8],
     ) -> WasmResult<ModuleTranslation<'data>> {
+        self.result.wasm = data;
+
         for payload in parser.parse_all(data) {
             self.translate_payload(payload?)?;
         }
@@ -186,7 +208,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             }
 
             Payload::End(offset) => {
-                self.validator.end(offset)?;
+                self.result.types = Some(self.validator.end(offset)?);
 
                 // With the `escaped_funcs` set of functions finished
                 // we can calculate the set of signatures that are exported as
@@ -210,7 +232,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
 
             Payload::TypeSection(types) => {
                 self.validator.type_section(&types)?;
-                let num = usize::try_from(types.get_count()).unwrap();
+                let num = usize::try_from(types.count()).unwrap();
                 self.result.module.types.reserve(num);
                 self.types.reserve_wasm_signatures(num);
 
@@ -226,7 +248,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             Payload::ImportSection(imports) => {
                 self.validator.import_section(&imports)?;
 
-                let cnt = usize::try_from(imports.get_count()).unwrap();
+                let cnt = usize::try_from(imports.count()).unwrap();
                 self.result.module.initializers.reserve(cnt);
 
                 for entry in imports {
@@ -262,7 +284,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             Payload::FunctionSection(functions) => {
                 self.validator.function_section(&functions)?;
 
-                let cnt = usize::try_from(functions.get_count()).unwrap();
+                let cnt = usize::try_from(functions.count()).unwrap();
                 self.result.module.functions.reserve_exact(cnt);
 
                 for entry in functions {
@@ -275,11 +297,11 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
 
             Payload::TableSection(tables) => {
                 self.validator.table_section(&tables)?;
-                let cnt = usize::try_from(tables.get_count()).unwrap();
+                let cnt = usize::try_from(tables.count()).unwrap();
                 self.result.module.table_plans.reserve_exact(cnt);
 
                 for entry in tables {
-                    let table = entry?.into();
+                    let table = entry?.ty.into();
                     let plan = TablePlan::for_table(table, &self.tunables);
                     self.result.module.table_plans.push(plan);
                 }
@@ -288,7 +310,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             Payload::MemorySection(memories) => {
                 self.validator.memory_section(&memories)?;
 
-                let cnt = usize::try_from(memories.get_count()).unwrap();
+                let cnt = usize::try_from(memories.count()).unwrap();
                 self.result.module.memory_plans.reserve_exact(cnt);
 
                 for entry in memories {
@@ -309,7 +331,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             Payload::GlobalSection(globals) => {
                 self.validator.global_section(&globals)?;
 
-                let cnt = usize::try_from(globals.get_count()).unwrap();
+                let cnt = usize::try_from(globals.count()).unwrap();
                 self.result.module.globals.reserve_exact(cnt);
 
                 for entry in globals {
@@ -323,7 +345,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         Operator::V128Const { value } => {
                             GlobalInit::V128Const(u128::from_le_bytes(*value.bytes()))
                         }
-                        Operator::RefNull { ty: _ } => GlobalInit::RefNullConst,
+                        Operator::RefNull { hty: _ } => GlobalInit::RefNullConst,
                         Operator::RefFunc { function_index } => {
                             let index = FuncIndex::from_u32(function_index);
                             self.flag_func_escaped(index);
@@ -347,7 +369,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             Payload::ExportSection(exports) => {
                 self.validator.export_section(&exports)?;
 
-                let cnt = usize::try_from(exports.get_count()).unwrap();
+                let cnt = usize::try_from(exports.count()).unwrap();
                 self.result.module.exports.reserve(cnt);
 
                 for entry in exports {
@@ -397,43 +419,46 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     // possible to create anything other than a `ref.null
                     // extern` for externref segments, so those just get
                     // translated to the reserved value of `FuncIndex`.
-                    let items_reader = items.get_items_reader()?;
-                    let mut elements =
-                        Vec::with_capacity(usize::try_from(items_reader.get_count()).unwrap());
-                    for item in items_reader {
-                        let func = match item? {
-                            ElementItem::Func(f) => Some(f),
-                            ElementItem::Expr(init) => {
-                                match init.get_binary_reader().read_operator()? {
-                                    Operator::RefNull { .. } => None,
-                                    Operator::RefFunc { function_index } => Some(function_index),
+                    let mut elements = Vec::new();
+                    match items {
+                        ElementItems::Functions(funcs) => {
+                            elements.reserve(usize::try_from(funcs.count()).unwrap());
+                            for func in funcs {
+                                let func = FuncIndex::from_u32(func?);
+                                self.flag_func_escaped(func);
+                                elements.push(func);
+                            }
+                        }
+                        ElementItems::Expressions(funcs) => {
+                            elements.reserve(usize::try_from(funcs.count()).unwrap());
+                            for func in funcs {
+                                let func = match func?.get_binary_reader().read_operator()? {
+                                    Operator::RefNull { .. } => FuncIndex::reserved_value(),
+                                    Operator::RefFunc { function_index } => {
+                                        let func = FuncIndex::from_u32(function_index);
+                                        self.flag_func_escaped(func);
+                                        func
+                                    }
                                     s => {
                                         return Err(WasmError::Unsupported(format!(
                                             "unsupported init expr in element section: {:?}",
                                             s
                                         )));
                                     }
-                                }
+                                };
+                                elements.push(func);
                             }
-                        };
-                        elements.push(match func {
-                            Some(f) => {
-                                let f = FuncIndex::from_u32(f);
-                                self.flag_func_escaped(f);
-                                f
-                            }
-                            None => FuncIndex::reserved_value(),
-                        });
+                        }
                     }
 
                     match kind {
                         ElementKind::Active {
                             table_index,
-                            offset_expr: init_expr,
+                            offset_expr,
                         } => {
                             let table_index = TableIndex::from_u32(table_index);
-                            let mut init_expr_reader = init_expr.get_binary_reader();
-                            let (base, offset) = match init_expr_reader.read_operator()? {
+                            let mut offset_expr_reader = offset_expr.get_binary_reader();
+                            let (base, offset) = match offset_expr_reader.read_operator()? {
                                 Operator::I32Const { value } => (None, value as u32),
                                 Operator::GlobalGet { global_index } => {
                                     (Some(GlobalIndex::from_u32(global_index)), 0)
@@ -518,7 +543,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     _ => unreachable!(),
                 };
 
-                let cnt = usize::try_from(data.get_count()).unwrap();
+                let cnt = usize::try_from(data.count()).unwrap();
                 initializers.reserve_exact(cnt);
                 self.result.data.reserve_exact(cnt);
 
@@ -547,12 +572,12 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     match kind {
                         DataKind::Active {
                             memory_index,
-                            offset_expr: init_expr,
+                            offset_expr,
                         } => {
                             let range = mk_range(&mut self.result.total_data)?;
                             let memory_index = MemoryIndex::from_u32(memory_index);
-                            let mut init_expr_reader = init_expr.get_binary_reader();
-                            let (base, offset) = match init_expr_reader.read_operator()? {
+                            let mut offset_expr_reader = offset_expr.get_binary_reader();
+                            let (base, offset) = match offset_expr_reader.read_operator()? {
                                 Operator::I32Const { value } => (None, value as u64),
                                 Operator::I64Const { value } => (None, value as u64),
                                 Operator::GlobalGet { global_index } => {
@@ -598,9 +623,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             }
 
             Payload::CustomSection(s) if s.name() == "name" => {
-                let result = NameSectionReader::new(s.data(), s.data_offset())
-                    .map_err(|e| e.into())
-                    .and_then(|s| self.name_section(s));
+                let result = self.name_section(NameSectionReader::new(s.data(), s.data_offset()));
                 if let Err(e) = result {
                     log::warn!("failed to parse name section {:?}", e);
                 }
@@ -613,7 +636,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     "\
 Support for interface types has temporarily been removed from `wasmtime`.
 
-For more information about this temoprary you can read on the issue online:
+For more information about this temporary change you can read on the issue online:
 
     https://github.com/bytecodealliance/wasmtime/issues/1271
 
@@ -752,10 +775,9 @@ and for re-adding support for interface types you can see this issue:
     fn name_section(&mut self, names: NameSectionReader<'data>) -> WasmResult<()> {
         for subsection in names {
             match subsection? {
-                wasmparser::Name::Function(f) => {
-                    let mut names = f.get_map()?;
-                    for _ in 0..names.get_count() {
-                        let Naming { index, name } = names.read()?;
+                wasmparser::Name::Function(names) => {
+                    for name in names {
+                        let Naming { index, name } = name?;
                         // Skip this naming if it's naming a function that
                         // doesn't actually exist.
                         if (index as usize) >= self.result.module.functions.len() {
@@ -774,34 +796,31 @@ and for re-adding support for interface types you can see this issue:
                             .insert(index, name);
                     }
                 }
-                wasmparser::Name::Module(module) => {
-                    let name = module.get_name()?;
+                wasmparser::Name::Module { name, .. } => {
                     self.result.module.name = Some(name.to_string());
                     if self.tunables.generate_native_debuginfo {
                         self.result.debuginfo.name_section.module_name = Some(name);
                     }
                 }
-                wasmparser::Name::Local(l) => {
+                wasmparser::Name::Local(reader) => {
                     if !self.tunables.generate_native_debuginfo {
                         continue;
                     }
-                    let mut reader = l.get_indirect_map()?;
-                    for _ in 0..reader.get_indirect_count() {
-                        let f = reader.read()?;
+                    for f in reader {
+                        let f = f?;
                         // Skip this naming if it's naming a function that
                         // doesn't actually exist.
-                        if (f.indirect_index as usize) >= self.result.module.functions.len() {
+                        if (f.index as usize) >= self.result.module.functions.len() {
                             continue;
                         }
-                        let mut map = f.get_map()?;
-                        for _ in 0..map.get_count() {
-                            let Naming { index, name } = map.read()?;
+                        for name in f.names {
+                            let Naming { index, name } = name?;
 
                             self.result
                                 .debuginfo
                                 .name_section
                                 .locals_names
-                                .entry(FuncIndex::from_u32(f.indirect_index))
+                                .entry(FuncIndex::from_u32(f.index))
                                 .or_insert(HashMap::new())
                                 .insert(index, name);
                         }

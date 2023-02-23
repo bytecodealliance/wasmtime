@@ -330,8 +330,8 @@
   )
 
   (component $c1
-    (component $c2 (export "")
-      (component $c3 (export "")
+    (component $c2 (export "a")
+      (component $c3 (export "a")
         (alias outer $C $m (core module $my_module))
         (alias outer $C $c (component $my_component))
 
@@ -342,8 +342,8 @@
   )
 
   (instance $i1 (instantiate $c1))
-  (instance $i2 (instantiate (component $i1 "")))
-  (instance $i3 (instantiate (component $i2 "")))
+  (instance $i2 (instantiate (component $i1 "a")))
+  (instance $i3 (instantiate (component $i2 "a")))
 
   (core instance $m1 (instantiate (module $i3 "m")))
   (instance $c (instantiate (component $i3 "c")))
@@ -412,10 +412,10 @@
 
   ;; thread the host function through an instance
   (component $c
-    (import "" (func $f (result u32)))
+    (import "a" (func $f (result u32)))
     (export "f" (func $f))
   )
-  (instance $c (instantiate $c (with "" (func $import))))
+  (instance $c (instantiate $c (with "a" (func $import))))
   (alias export $c "f" (func $import2))
 
   ;; thread the host function into a nested component

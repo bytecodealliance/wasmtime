@@ -1,14 +1,14 @@
 //! Defines `JITModule`.
 
-use crate::{compiled_blob::CompiledBlob, memory::Memory};
-use cranelift_codegen::isa::TargetIsa;
+use crate::{compiled_blob::CompiledBlob, memory::BranchProtection, memory::Memory};
+use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
 use cranelift_codegen::settings::Configurable;
 use cranelift_codegen::{self, ir, settings, MachReloc};
 use cranelift_codegen::{binemit::Reloc, CodegenError};
 use cranelift_entity::SecondaryMap;
 use cranelift_module::{
     DataContext, DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleCompiledFunction,
-    ModuleDeclarations, ModuleError, ModuleResult,
+    ModuleDeclarations, ModuleError, ModuleExtName, ModuleReloc, ModuleResult,
 };
 use log::info;
 use std::cell::RefCell;
@@ -21,13 +21,12 @@ use std::ptr::NonNull;
 use std::sync::atomic::{AtomicPtr, Ordering};
 use target_lexicon::PointerWidth;
 
-const EXECUTABLE_DATA_ALIGNMENT: u64 = 0x10;
 const WRITABLE_DATA_ALIGNMENT: u64 = 0x8;
 const READONLY_DATA_ALIGNMENT: u64 = 0x1;
 
 /// A builder for `JITModule`.
 pub struct JITBuilder {
-    isa: Box<dyn TargetIsa>,
+    isa: OwnedTargetIsa,
     symbols: HashMap<String, *const u8>,
     lookup_symbols: Vec<Box<dyn Fn(&str) -> Option<*const u8>>>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
@@ -44,7 +43,24 @@ impl JITBuilder {
     pub fn new(
         libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     ) -> ModuleResult<Self> {
+        Self::with_flags(&[], libcall_names)
+    }
+
+    /// Create a new `JITBuilder` with the given flags.
+    ///
+    /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s `ir::LibCall`
+    /// enum to symbols. LibCalls are inserted in the IR as part of the legalization for certain
+    /// floating point instructions, and for stack probes. If you don't know what to use for this
+    /// argument, use `cranelift_module::default_libcall_names()`.
+    pub fn with_flags(
+        flags: &[(&str, &str)],
+        libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
+    ) -> ModuleResult<Self> {
         let mut flag_builder = settings::builder();
+        for (name, value) in flags {
+            flag_builder.set(name, value)?;
+        }
+
         // On at least AArch64, "colocated" calls use shorter-range relocations,
         // which might not reach all definitions; we can't handle that here, so
         // we require long-range relocation types.
@@ -60,15 +76,15 @@ impl JITBuilder {
     /// Create a new `JITBuilder` with an arbitrary target. This is mainly
     /// useful for testing.
     ///
-    /// To create a `JITBuilder` for native use, use the `new` constructor
-    /// instead.
+    /// To create a `JITBuilder` for native use, use the `new` or `with_flags`
+    /// constructors instead.
     ///
     /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s `ir::LibCall`
     /// enum to symbols. LibCalls are inserted in the IR as part of the legalization for certain
     /// floating point instructions, and for stack probes. If you don't know what to use for this
     /// argument, use `cranelift_module::default_libcall_names()`.
     pub fn with_isa(
-        isa: Box<dyn TargetIsa>,
+        isa: OwnedTargetIsa,
         libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     ) -> Self {
         let symbols = HashMap::new();
@@ -154,7 +170,7 @@ struct GotUpdate {
 ///
 /// See the `JITBuilder` for a convenient way to construct `JITModule` instances.
 pub struct JITModule {
-    isa: Box<dyn TargetIsa>,
+    isa: OwnedTargetIsa,
     hotswap_enabled: bool,
     symbols: RefCell<HashMap<String, *const u8>>,
     lookup_symbols: Vec<Box<dyn Fn(&str) -> Option<*const u8>>>,
@@ -234,7 +250,12 @@ impl JITModule {
         let plt_entry = self
             .memory
             .code
-            .allocate(std::mem::size_of::<[u8; 16]>(), EXECUTABLE_DATA_ALIGNMENT)
+            .allocate(
+                std::mem::size_of::<[u8; 16]>(),
+                self.isa
+                    .symbol_alignment()
+                    .max(self.isa.function_alignment() as u64),
+            )
             .unwrap()
             .cast::<[u8; 16]>();
         unsafe {
@@ -275,9 +296,9 @@ impl JITModule {
         std::ptr::write(plt_ptr, plt_val);
     }
 
-    fn get_address(&self, name: &ir::ExternalName) -> *const u8 {
+    fn get_address(&self, name: &ModuleExtName) -> *const u8 {
         match *name {
-            ir::ExternalName::User { .. } => {
+            ModuleExtName::User { .. } => {
                 let (name, linkage) = if ModuleDeclarations::is_function(name) {
                     if self.hotswap_enabled {
                         return self.get_plt_address(name);
@@ -309,12 +330,12 @@ impl JITModule {
                     panic!("can't resolve symbol {}", name);
                 }
             }
-            ir::ExternalName::LibCall(ref libcall) => {
+            ModuleExtName::LibCall(ref libcall) => {
                 let sym = (self.libcall_names)(*libcall);
                 self.lookup_symbol(&sym)
                     .unwrap_or_else(|| panic!("can't resolve libcall {}", sym))
             }
-            _ => panic!("invalid ExternalName {}", name),
+            _ => panic!("invalid name"),
         }
     }
 
@@ -326,9 +347,9 @@ impl JITModule {
         unsafe { got_entry.as_ref() }.load(Ordering::SeqCst)
     }
 
-    fn get_got_address(&self, name: &ir::ExternalName) -> NonNull<AtomicPtr<u8>> {
+    fn get_got_address(&self, name: &ModuleExtName) -> NonNull<AtomicPtr<u8>> {
         match *name {
-            ir::ExternalName::User { .. } => {
+            ModuleExtName::User { .. } => {
                 if ModuleDeclarations::is_function(name) {
                     let func_id = FuncId::from_name(name);
                     self.function_got_entries[func_id].unwrap()
@@ -337,17 +358,17 @@ impl JITModule {
                     self.data_object_got_entries[data_id].unwrap()
                 }
             }
-            ir::ExternalName::LibCall(ref libcall) => *self
+            ModuleExtName::LibCall(ref libcall) => *self
                 .libcall_got_entries
                 .get(libcall)
                 .unwrap_or_else(|| panic!("can't resolve libcall {}", libcall)),
-            _ => panic!("invalid ExternalName {}", name),
+            _ => panic!("invalid name"),
         }
     }
 
-    fn get_plt_address(&self, name: &ir::ExternalName) -> *const u8 {
+    fn get_plt_address(&self, name: &ModuleExtName) -> *const u8 {
         match *name {
-            ir::ExternalName::User { .. } => {
+            ModuleExtName::User { .. } => {
                 if ModuleDeclarations::is_function(name) {
                     let func_id = FuncId::from_name(name);
                     self.function_plt_entries[func_id]
@@ -358,13 +379,13 @@ impl JITModule {
                     unreachable!("PLT relocations can only have functions as target");
                 }
             }
-            ir::ExternalName::LibCall(ref libcall) => self
+            ModuleExtName::LibCall(ref libcall) => self
                 .libcall_plt_entries
                 .get(libcall)
                 .unwrap_or_else(|| panic!("can't resolve libcall {}", libcall))
                 .as_ptr()
                 .cast::<u8>(),
-            _ => panic!("invalid ExternalName {}", name),
+            _ => panic!("invalid name"),
         }
     }
 
@@ -423,7 +444,9 @@ impl JITModule {
     ///
     /// Use `get_finalized_function` and `get_finalized_data` to obtain the final
     /// artifacts.
-    pub fn finalize_definitions(&mut self) {
+    ///
+    /// Returns ModuleError in case of allocation or syscall failure
+    pub fn finalize_definitions(&mut self) -> ModuleResult<()> {
         for func in std::mem::take(&mut self.functions_to_finalize) {
             let decl = self.declarations.get_function_decl(func);
             assert!(decl.linkage.is_definable());
@@ -451,20 +474,13 @@ impl JITModule {
         }
 
         // Now that we're done patching, prepare the memory for execution!
-        self.memory.readonly.set_readonly();
-        self.memory.code.set_readable_and_executable();
-
-        #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
-        {
-            let cmd: libc::c_int = 32; // MEMBARRIER_CMD_PRIVATE_EXPEDITED_SYNC_CORE
-
-            // Ensure that no processor has fetched a stale instruction stream.
-            unsafe { libc::syscall(libc::SYS_membarrier, cmd) };
-        }
+        self.memory.readonly.set_readonly()?;
+        self.memory.code.set_readable_and_executable()?;
 
         for update in self.pending_got_updates.drain(..) {
             unsafe { update.entry.as_ref() }.store(update.ptr as *mut _, Ordering::SeqCst);
         }
+        Ok(())
     }
 
     /// Create a new `JITModule`.
@@ -476,6 +492,12 @@ impl JITModule {
             );
         }
 
+        let branch_protection =
+            if cfg!(target_arch = "aarch64") && use_bti(&builder.isa.isa_flags()) {
+                BranchProtection::BTI
+            } else {
+                BranchProtection::None
+            };
         let mut module = Self {
             isa: builder.isa,
             hotswap_enabled: builder.hotswap_enabled,
@@ -483,9 +505,10 @@ impl JITModule {
             lookup_symbols: builder.lookup_symbols,
             libcall_names: builder.libcall_names,
             memory: MemoryHandle {
-                code: Memory::new(),
-                readonly: Memory::new(),
-                writable: Memory::new(),
+                code: Memory::new(branch_protection),
+                // Branch protection is not applicable to non-executable memory.
+                readonly: Memory::new(BranchProtection::None),
+                writable: Memory::new(BranchProtection::None),
             },
             declarations: ModuleDeclarations::default(),
             function_got_entries: SecondaryMap::new(),
@@ -517,15 +540,6 @@ impl JITModule {
             module.libcall_got_entries.insert(libcall, got_entry);
             let plt_entry = module.new_plt_entry(got_entry);
             module.libcall_plt_entries.insert(libcall, plt_entry);
-        }
-
-        #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
-        {
-            let cmd: libc::c_int = 64; // MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED_SYNC_CORE
-
-            // This is a requirement of the membarrier() call executed by
-            // the finalize_definitions() method.
-            unsafe { libc::syscall(libc::SYS_membarrier, cmd) };
         }
 
         module
@@ -631,12 +645,16 @@ impl Module for JITModule {
     ///
     /// TODO: Coalesce redundant decls and signatures.
     /// TODO: Look into ways to reduce the risk of using a FuncRef in the wrong function.
-    fn declare_func_in_func(&self, func: FuncId, in_func: &mut ir::Function) -> ir::FuncRef {
+    fn declare_func_in_func(&mut self, func: FuncId, in_func: &mut ir::Function) -> ir::FuncRef {
         let decl = self.declarations.get_function_decl(func);
         let signature = in_func.import_signature(decl.signature.clone());
         let colocated = !self.hotswap_enabled && decl.linkage.is_final();
+        let user_name_ref = in_func.declare_imported_user_function(ir::UserExternalName {
+            namespace: 0,
+            index: func.as_u32(),
+        });
         in_func.import_function(ir::ExtFuncData {
-            name: ir::ExternalName::user(0, func.as_u32()),
+            name: ir::ExternalName::user(user_name_ref),
             signature,
             colocated,
         })
@@ -648,22 +666,16 @@ impl Module for JITModule {
     fn declare_data_in_func(&self, data: DataId, func: &mut ir::Function) -> ir::GlobalValue {
         let decl = self.declarations.get_data_decl(data);
         let colocated = !self.hotswap_enabled && decl.linkage.is_final();
+        let user_name_ref = func.declare_imported_user_function(ir::UserExternalName {
+            namespace: 1,
+            index: data.as_u32(),
+        });
         func.create_global_value(ir::GlobalValueData::Symbol {
-            name: ir::ExternalName::user(1, data.as_u32()),
+            name: ir::ExternalName::user(user_name_ref),
             offset: ir::immediates::Imm64::new(0),
             colocated,
             tls: decl.tls,
         })
-    }
-
-    /// TODO: Same as above.
-    fn declare_func_in_data(&self, func: FuncId, ctx: &mut DataContext) -> ir::FuncRef {
-        ctx.import_function(ir::ExternalName::user(0, func.as_u32()))
-    }
-
-    /// TODO: Same as above.
-    fn declare_data_in_data(&self, data: DataId, ctx: &mut DataContext) -> ir::GlobalValue {
-        ctx.import_global_value(ir::ExternalName::user(1, data.as_u32()))
     }
 
     fn define_function(
@@ -681,22 +693,37 @@ impl Module for JITModule {
             return Err(ModuleError::DuplicateDefinition(decl.name.to_owned()));
         }
 
-        let compiled_code = ctx.compile(self.isa())?;
+        // work around borrow-checker to allow reuse of ctx below
+        let res = ctx.compile(self.isa())?;
+        let alignment = res.alignment as u64;
+        let compiled_code = ctx.compiled_code().unwrap();
+
         let code_size = compiled_code.code_info().total_size;
 
         let size = code_size as usize;
+        let align = alignment
+            .max(self.isa.function_alignment() as u64)
+            .max(self.isa.symbol_alignment());
         let ptr = self
             .memory
             .code
-            .allocate(size, EXECUTABLE_DATA_ALIGNMENT)
-            .expect("TODO: handle OOM etc.");
+            .allocate(size, align)
+            .map_err(|e| ModuleError::Allocation {
+                message: "unable to alloc function",
+                err: e,
+            })?;
 
         {
             let mem = unsafe { std::slice::from_raw_parts_mut(ptr, size) };
             mem.copy_from_slice(compiled_code.code_buffer());
         }
 
-        let relocs = compiled_code.buffer.relocs().to_vec();
+        let relocs = compiled_code
+            .buffer
+            .relocs()
+            .iter()
+            .map(|reloc| ModuleReloc::from_mach_reloc(reloc, &ctx.func))
+            .collect();
 
         self.record_function_for_perf(ptr, size, &decl.name);
         self.compiled_functions[id] = Some(CompiledBlob { ptr, size, relocs });
@@ -714,16 +741,16 @@ impl Module for JITModule {
                 .unwrap()
                 .perform_relocations(
                     |name| match *name {
-                        ir::ExternalName::User { .. } => {
+                        ModuleExtName::User { .. } => {
                             unreachable!("non GOT or PLT relocation in function {} to {}", id, name)
                         }
-                        ir::ExternalName::LibCall(ref libcall) => self
+                        ModuleExtName::LibCall(ref libcall) => self
                             .libcall_plt_entries
                             .get(libcall)
                             .unwrap_or_else(|| panic!("can't resolve libcall {}", libcall))
                             .as_ptr()
                             .cast::<u8>(),
-                        _ => panic!("invalid ExternalName {}", name),
+                        _ => panic!("invalid name"),
                     },
                     |name| self.get_got_address(name).as_ptr().cast(),
                     |name| self.get_plt_address(name),
@@ -738,6 +765,8 @@ impl Module for JITModule {
     fn define_function_bytes(
         &mut self,
         id: FuncId,
+        func: &ir::Function,
+        alignment: u64,
         bytes: &[u8],
         relocs: &[MachReloc],
     ) -> ModuleResult<ModuleCompiledFunction> {
@@ -757,11 +786,17 @@ impl Module for JITModule {
         }
 
         let size = bytes.len();
+        let align = alignment
+            .max(self.isa.function_alignment() as u64)
+            .max(self.isa.symbol_alignment());
         let ptr = self
             .memory
             .code
-            .allocate(size, EXECUTABLE_DATA_ALIGNMENT)
-            .expect("TODO: handle OOM etc.");
+            .allocate(size, align)
+            .map_err(|e| ModuleError::Allocation {
+                message: "unable to alloc function bytes",
+                err: e,
+            })?;
 
         unsafe {
             ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, size);
@@ -771,7 +806,10 @@ impl Module for JITModule {
         self.compiled_functions[id] = Some(CompiledBlob {
             ptr,
             size,
-            relocs: relocs.to_vec(),
+            relocs: relocs
+                .iter()
+                .map(|reloc| ModuleReloc::from_mach_reloc(reloc, func))
+                .collect(),
         });
 
         if self.isa.flags().is_pic() {
@@ -824,12 +862,18 @@ impl Module for JITModule {
             self.memory
                 .writable
                 .allocate(size, align.unwrap_or(WRITABLE_DATA_ALIGNMENT))
-                .expect("TODO: handle OOM etc.")
+                .map_err(|e| ModuleError::Allocation {
+                    message: "unable to alloc writable data",
+                    err: e,
+                })?
         } else {
             self.memory
                 .readonly
                 .allocate(size, align.unwrap_or(READONLY_DATA_ALIGNMENT))
-                .expect("TODO: handle OOM etc.")
+                .map_err(|e| ModuleError::Allocation {
+                    message: "unable to alloc readonly data",
+                    err: e,
+                })?
         };
 
         match *init {
@@ -866,6 +910,33 @@ impl Module for JITModule {
 
         Ok(())
     }
+
+    fn get_name(&self, name: &str) -> Option<cranelift_module::FuncOrDataId> {
+        self.declarations().get_name(name)
+    }
+
+    fn target_config(&self) -> cranelift_codegen::isa::TargetFrontendConfig {
+        self.isa().frontend_config()
+    }
+
+    fn make_context(&self) -> cranelift_codegen::Context {
+        let mut ctx = cranelift_codegen::Context::new();
+        ctx.func.signature.call_conv = self.isa().default_call_conv();
+        ctx
+    }
+
+    fn clear_context(&self, ctx: &mut cranelift_codegen::Context) {
+        ctx.clear();
+        ctx.func.signature.call_conv = self.isa().default_call_conv();
+    }
+
+    fn make_signature(&self) -> ir::Signature {
+        ir::Signature::new(self.isa().default_call_conv())
+    }
+
+    fn clear_signature(&self, sig: &mut ir::Signature) {
+        sig.clear(self.isa().default_call_conv());
+    }
 }
 
 #[cfg(not(windows))]
@@ -886,7 +957,7 @@ fn lookup_with_dlsym(name: &str) -> Option<*const u8> {
     use windows_sys::Win32::Foundation::HINSTANCE;
     use windows_sys::Win32::System::LibraryLoader;
 
-    const MSVCRT_DLL: &[u8] = b"msvcrt.dll\0";
+    const UCRTBASE: &[u8] = b"ucrtbase.dll\0";
 
     let c_str = CString::new(name).unwrap();
     let c_str_ptr = c_str.as_ptr();
@@ -896,7 +967,7 @@ fn lookup_with_dlsym(name: &str) -> Option<*const u8> {
             // try to find the searched symbol in the currently running executable
             ptr::null_mut(),
             // try to find the searched symbol in local c runtime
-            LibraryLoader::GetModuleHandleA(MSVCRT_DLL.as_ptr()) as RawHandle,
+            LibraryLoader::GetModuleHandleA(UCRTBASE.as_ptr()) as RawHandle,
         ];
 
         for handle in &handles {
@@ -909,4 +980,11 @@ fn lookup_with_dlsym(name: &str) -> Option<*const u8> {
 
         None
     }
+}
+
+fn use_bti(isa_flags: &Vec<settings::Value>) -> bool {
+    isa_flags
+        .iter()
+        .find(|&f| f.name == "use_bti")
+        .map_or(false, |f| f.as_bool().unwrap_or(false))
 }

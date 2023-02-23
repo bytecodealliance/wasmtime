@@ -1,41 +1,41 @@
 [package]
-authors = ["The Wasmtime Project Developers"]
+authors.workspace = true
 description = "Fuzzing infrastructure for Wasmtime"
-edition = "2021"
+edition.workspace = true
 name = "wasmtime-fuzzing"
 publish = false
-version = "0.19.0"
+version = "0.0.0"
 license = "Apache-2.0 WITH LLVM-exception"
 
 [dependencies]
-anyhow = "1.0.22"
+anyhow = { workspace = true }
 arbitrary = { version = "1.1.0", features = ["derive"] }
-component-test-util = { path = "../misc/component-test-util" }
-component-fuzz-util = { path = "../misc/component-fuzz-util" }
-env_logger = "0.9.0"
-log = "0.4.8"
+component-test-util = { workspace = true }
+component-fuzz-util = { workspace = true }
+env_logger = { workspace = true }
+log = { workspace = true }
 rayon = "1.2.1"
-target-lexicon = "0.12.3"
+target-lexicon = { workspace = true }
 tempfile = "3.3.0"
-wasmparser = "0.88.0"
-wasmprinter = "0.2.38"
-wasmtime = { path = "../wasmtime" }
-wasmtime-wast = { path = "../wast" }
-wasm-encoder = "0.15.0"
-wasm-smith = "0.11.3"
-wasm-mutate = "0.2.6"
+wasmparser = { workspace = true }
+wasmprinter = { workspace = true }
+wasmtime = { workspace = true, features = ['default'] }
+wasmtime-wast = { workspace = true }
+wasm-encoder = { workspace = true }
+wasm-smith = { workspace = true }
+wasm-mutate = { workspace = true }
 wasm-spec-interpreter = { path = "./wasm-spec-interpreter", optional = true }
-wasmi = "0.11.0"
+wasmi = "0.20.0"
 
 # We rely on precompiled v8 binaries, but rusty-v8 doesn't have a precompiled
 # binary for MinGW which is built on our CI. It does have one for Windows-msvc,
 # though, so we could use that if we wanted. For now though just simplify a bit
-# and don't depend on this on Windows.  The same applies on s390x.
-[target.'cfg(not(any(windows, target_arch = "s390x")))'.dependencies]
+# and don't depend on this on Windows.  The same applies on s390x and riscv.
+[target.'cfg(not(any(windows, target_arch = "s390x", target_arch = "riscv64")))'.dependencies]
 v8 = "0.44.3"
 
 [dev-dependencies]
-wat = "1.0.47"
+wat = { workspace = true }
 rand = { version = "0.8.0", features = ["small_rng"] }
 
 # Only enable the `build-libinterpret` feature when fuzzing is enabled, enabling

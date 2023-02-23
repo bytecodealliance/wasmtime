@@ -4,7 +4,7 @@
 //! read and write memory through the `Memory` object, and how wasm functions
 //! can trap when dealing with out-of-bounds addresses.
 
-// You can execute this example with `cargo run --example example`
+// You can execute this example with `cargo run --example memory`
 
 use anyhow::Result;
 use wasmtime::*;
@@ -20,9 +20,9 @@ fn main() -> Result<()> {
     let memory = instance
         .get_memory(&mut store, "memory")
         .ok_or(anyhow::format_err!("failed to find `memory` export"))?;
-    let size = instance.get_typed_func::<(), i32, _>(&mut store, "size")?;
-    let load_fn = instance.get_typed_func::<i32, i32, _>(&mut store, "load")?;
-    let store_fn = instance.get_typed_func::<(i32, i32), (), _>(&mut store, "store")?;
+    let size = instance.get_typed_func::<(), i32>(&mut store, "size")?;
+    let load_fn = instance.get_typed_func::<i32, i32>(&mut store, "load")?;
+    let store_fn = instance.get_typed_func::<(i32, i32), ()>(&mut store, "store")?;
 
     println!("Checking memory...");
     assert_eq!(memory.size(&store), 2);

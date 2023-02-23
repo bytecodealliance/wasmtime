@@ -1,10 +1,11 @@
 use anyhow::Result;
 use cfg_if::cfg_if;
+use cranelift_codegen::ir::function::FunctionParameters;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{MachReloc, MachStackMap, MachTrap};
 use std::fmt::Write;
 
-pub fn print_relocs(relocs: &[MachReloc]) -> String {
+fn print_relocs(func_params: &FunctionParameters, relocs: &[MachReloc]) -> String {
     let mut text = String::new();
     for &MachReloc {
         kind,
@@ -16,7 +17,10 @@ pub fn print_relocs(relocs: &[MachReloc]) -> String {
         writeln!(
             text,
             "reloc_external: {} {} {} at {}",
-            kind, name, addend, offset
+            kind,
+            name.display(Some(func_params)),
+            addend,
+            offset
         )
         .unwrap();
     }
@@ -65,63 +69,8 @@ pub fn print_stack_maps(traps: &[MachStackMap]) -> String {
 
 cfg_if! {
     if #[cfg(feature = "disas")] {
-        use capstone::prelude::*;
-        use target_lexicon::Architecture;
-
-        fn get_disassembler(isa: &dyn TargetIsa) -> Result<Capstone> {
-            let cs = match isa.triple().architecture {
-                Architecture::X86_32(_) => Capstone::new()
-                    .x86()
-                    .mode(arch::x86::ArchMode::Mode32)
-                    .build()
-                    .map_err(map_caperr)?,
-                Architecture::X86_64 => Capstone::new()
-                    .x86()
-                    .mode(arch::x86::ArchMode::Mode64)
-                    .build()
-                    .map_err(map_caperr)?,
-                Architecture::Arm(arm) => {
-                    if arm.is_thumb() {
-                        Capstone::new()
-                            .arm()
-                            .mode(arch::arm::ArchMode::Thumb)
-                            .build()
-                            .map_err(map_caperr)?
-                    } else {
-                        Capstone::new()
-                            .arm()
-                            .mode(arch::arm::ArchMode::Arm)
-                            .build()
-                            .map_err(map_caperr)?
-                    }
-                }
-                Architecture::Aarch64 {..} => {
-                    let mut cs = Capstone::new()
-                        .arm64()
-                        .mode(arch::arm64::ArchMode::Arm)
-                        .build()
-                        .map_err(map_caperr)?;
-                    // AArch64 uses inline constants rather than a separate constant pool right now.
-                    // Without this option, Capstone will stop disassembling as soon as it sees
-                    // an inline constant that is not also a valid instruction. With this option,
-                    // Capstone will print a `.byte` directive with the bytes of the inline constant
-                    // and continue to the next instruction.
-                    cs.set_skipdata(true).map_err(map_caperr)?;
-                    cs
-                }
-                Architecture::S390x {..} => Capstone::new()
-                    .sysz()
-                    .mode(arch::sysz::ArchMode::Default)
-                    .build()
-                    .map_err(map_caperr)?,
-                _ => anyhow::bail!("Unknown ISA"),
-            };
-
-            Ok(cs)
-        }
-
         pub fn print_disassembly(isa: &dyn TargetIsa, mem: &[u8]) -> Result<()> {
-            let cs = get_disassembler(isa)?;
+            let cs = isa.to_capstone().map_err(|e| anyhow::format_err!("{}", e))?;
 
             println!("\nDisassembly of {} bytes:", mem.len());
             let insns = cs.disasm_all(&mem, 0x0).unwrap();
@@ -158,10 +107,6 @@ cfg_if! {
             }
             Ok(())
         }
-
-        fn map_caperr(err: capstone::Error) -> anyhow::Error{
-            anyhow::format_err!("{}", err)
-        }
     } else {
         pub fn print_disassembly(_: &dyn TargetIsa, _: &[u8]) -> Result<()> {
             println!("\nNo disassembly available.");
@@ -172,6 +117,7 @@ cfg_if! {
 
 pub fn print_all(
     isa: &dyn TargetIsa,
+    func_params: &FunctionParameters,
     mem: &[u8],
     code_size: u32,
     print: bool,
@@ -184,7 +130,7 @@ pub fn print_all(
     if print {
         println!(
             "\n{}\n{}\n{}",
-            print_relocs(relocs),
+            print_relocs(func_params, relocs),
             print_traps(traps),
             print_stack_maps(stack_maps)
         );

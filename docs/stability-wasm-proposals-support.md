@@ -20,7 +20,7 @@ vetted](./contributing-implementing-wasm-proposals.html).
 | **[Bulk Memory Operations]**                | **Yes.**<br/>Enabled by default. | `bulk-memory`      | [`wasm_bulk_memory`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_bulk_memory) |
 | **[Reference Types]**                       | **Yes.**<br/>Enabled by default. | `reference-types`  | [`wasm_reference_types`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_reference_types) |
 | **[Fixed-Width SIMD]**                      | **Yes.**<br/>Enabled by default. | `simd`             | [`wasm_simd`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_simd) |
-| **[Threads and Atomics]**                   | **In progress.**                 | `threads`          | [`wasm_threads`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_threads) |
+| **[Threads and Atomics]**                   | **Yes.**                 | `threads`          | [`wasm_threads`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_threads) |
 | **[Multi-Memory]**                          | **Yes.**                         | `multi-memory`     | [`wasm_multi_memory`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_multi_memory) |
 | **[Component Model]**                       | **In progress.**                 | `component-model`  | [`wasm_component_model`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_component_model) |
 | **[Memory64]**                              | **Yes.**                         | `memory64`         | [`wasm_memory64`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_memory64) |

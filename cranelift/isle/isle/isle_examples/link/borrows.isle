@@ -4,7 +4,7 @@
 (decl get_a (A) u32)
 (extern extractor get_a get_a)
 
-(decl pure u32_pure (u32) u32)
+(decl pure partial u32_pure (u32) u32)
 (extern constructor u32_pure u32_pure)
 
 (decl entry (u32) u32)

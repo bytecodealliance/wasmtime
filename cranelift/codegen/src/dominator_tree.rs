@@ -2,7 +2,6 @@
 
 use crate::entity::SecondaryMap;
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
-use crate::ir::instructions::BranchInfo;
 use crate::ir::{Block, ExpandedProgramPoint, Function, Inst, Layout, ProgramOrder, Value};
 use crate::packed_option::PackedOption;
 use crate::timing;
@@ -16,8 +15,7 @@ use core::mem;
 const STRIDE: u32 = 4;
 
 /// Special RPO numbers used during `compute_postorder`.
-const DONE: u32 = 1;
-const SEEN: u32 = 2;
+const SEEN: u32 = 1;
 
 /// Dominator tree node. We keep one of these per block.
 #[derive(Clone, Default)]
@@ -36,6 +34,12 @@ struct DomNode {
     idom: PackedOption<Inst>,
 }
 
+/// DFT stack state marker for computing the cfg postorder.
+enum Visit {
+    First,
+    Last,
+}
+
 /// The dominator tree for a single function.
 pub struct DominatorTree {
     nodes: SecondaryMap<Block, DomNode>,
@@ -44,7 +48,7 @@ pub struct DominatorTree {
     postorder: Vec<Block>,
 
     /// Scratch memory used by `compute_postorder()`.
-    stack: Vec<Block>,
+    stack: Vec<(Visit, Block)>,
 
     valid: bool,
 }
@@ -275,103 +279,61 @@ impl DominatorTree {
 
         // This algorithm is a depth first traversal (DFT) of the control flow graph, computing a
         // post-order of the blocks that are reachable form the entry block. A DFT post-order is not
-        // unique. The specific order we get is controlled by two factors:
+        // unique. The specific order we get is controlled by the order each node's children are
+        // visited.
         //
-        // 1. The order each node's children are visited, and
-        // 2. The method used for pruning graph edges to get a tree.
+        // We view the CFG as a graph where each `BlockCall` value of a terminating branch
+        // instruction is an edge. A consequence of this is that we visit successor nodes in the
+        // reverse order specified by the branch instruction that terminates the basic block.
+        // (Reversed because we are using a stack to control traversal, and push the successors in
+        // the order the branch instruction specifies -- there's no good reason for this particular
+        // order.)
         //
-        // There are two ways of viewing the CFG as a graph:
-        //
-        // 1. Each block is a node, with outgoing edges for all the branches in the block.
-        // 2. Each basic block is a node, with outgoing edges for the single branch at the end of
-        //    the BB. (A block is a linear sequence of basic blocks).
-        //
-        // The first graph is a contraction of the second one. We want to compute a block post-order
-        // that is compatible both graph interpretations. That is, if you compute a BB post-order
-        // and then remove those BBs that do not correspond to block headers, you get a post-order of
-        // the block graph.
-        //
-        // Node child order:
-        //
-        //     In the BB graph, we always go down the fall-through path first and follow the branch
-        //     destination second.
-        //
-        //     In the block graph, this is equivalent to visiting block successors in a bottom-up
-        //     order, starting from the destination of the block's terminating jump, ending at the
-        //     destination of the first branch in the block.
-        //
-        // Edge pruning:
-        //
-        //     In the BB graph, we keep an edge to a block the first time we visit the *source* side
-        //     of the edge. Any subsequent edges to the same block are pruned.
-        //
-        //     The equivalent tree is reached in the block graph by keeping the first edge to a block
-        //     in a top-down traversal of the successors. (And then visiting edges in a bottom-up
-        //     order).
-        //
-        // This pruning method makes it possible to compute the DFT without storing lots of
-        // information about the progress through a block.
-
         // During this algorithm only, use `rpo_number` to hold the following state:
         //
-        //   0:    block has not yet been reached in the pre-order.
-        //   SEEN: block has been pushed on the stack but successors not yet pushed.
-        //   DONE: Successors pushed.
+        //   0:    block has not yet had its first visit
+        //   SEEN: block has been visited at least once, implying that all of its successors are on
+        //         the stack
 
         match func.layout.entry_block() {
             Some(block) => {
-                self.stack.push(block);
-                self.nodes[block].rpo_number = SEEN;
+                self.stack.push((Visit::First, block));
             }
             None => return,
         }
 
-        while let Some(block) = self.stack.pop() {
-            match self.nodes[block].rpo_number {
-                SEEN => {
-                    // This is the first time we pop the block, so we need to scan its successors and
-                    // then revisit it.
-                    self.nodes[block].rpo_number = DONE;
-                    self.stack.push(block);
-                    self.push_successors(func, block);
+        while let Some((visit, block)) = self.stack.pop() {
+            match visit {
+                Visit::First => {
+                    if self.nodes[block].rpo_number == 0 {
+                        // This is the first time we pop the block, so we need to scan its
+                        // successors and then revisit it.
+                        self.nodes[block].rpo_number = SEEN;
+                        self.stack.push((Visit::Last, block));
+                        if let Some(inst) = func.stencil.layout.last_inst(block) {
+                            for block in func.stencil.dfg.insts[inst]
+                                .branch_destination(&func.stencil.dfg.jump_tables)
+                                .iter()
+                            {
+                                let succ = block.block(&func.stencil.dfg.value_lists);
+
+                                // This is purely an optimization to avoid additional iterations of
+                                // the loop, and is not required; it's merely inlining the check
+                                // from the outer conditional of this case to avoid the extra loop
+                                // iteration.
+                                if self.nodes[succ].rpo_number == 0 {
+                                    self.stack.push((Visit::First, succ))
+                                }
+                            }
+                        }
+                    }
                 }
-                DONE => {
-                    // This is the second time we pop the block, so all successors have been
-                    // processed.
+
+                Visit::Last => {
+                    // We've finished all this node's successors.
                     self.postorder.push(block);
                 }
-                _ => unreachable!(),
             }
-        }
-    }
-
-    /// Push `block` successors onto `self.stack`, filtering out those that have already been seen.
-    ///
-    /// The successors are pushed in program order which is important to get a split-invariant
-    /// post-order. Split-invariant means that if a block is split in two, we get the same
-    /// post-order except for the insertion of the new block header at the split point.
-    fn push_successors(&mut self, func: &Function, block: Block) {
-        for inst in func.layout.block_likely_branches(block) {
-            match func.dfg.analyze_branch(inst) {
-                BranchInfo::SingleDest(succ, _) => self.push_if_unseen(succ),
-                BranchInfo::Table(jt, dest) => {
-                    for succ in func.jump_tables[jt].iter() {
-                        self.push_if_unseen(*succ);
-                    }
-                    if let Some(dest) = dest {
-                        self.push_if_unseen(dest);
-                    }
-                }
-                BranchInfo::NotABranch => {}
-            }
-        }
-    }
-
-    /// Push `block` onto `self.stack` if it has not already been seen.
-    fn push_if_unseen(&mut self, block: Block) {
-        if self.nodes[block].rpo_number == 0 {
-            self.nodes[block].rpo_number = SEEN;
-            self.stack.push(block);
         }
     }
 
@@ -649,11 +611,14 @@ mod tests {
         let v0 = func.dfg.append_block_param(block0, I32);
         let block1 = func.dfg.make_block();
         let block2 = func.dfg.make_block();
+        let trap_block = func.dfg.make_block();
 
         let mut cur = FuncCursor::new(&mut func);
 
         cur.insert_block(block0);
-        cur.ins().brnz(v0, block2, &[]);
+        cur.ins().brif(v0, block2, &[], trap_block, &[]);
+
+        cur.insert_block(trap_block);
         cur.ins().trap(TrapCode::User(0));
 
         cur.insert_block(block1);
@@ -670,13 +635,13 @@ mod tests {
         // Fall-through-first, prune-at-source DFT:
         //
         // block0 {
-        //   brnz block2 {
+        //   brif block2 {
         //     trap
         //     block2 {
         //       return
         //     } block2
         // } block0
-        assert_eq!(dt.cfg_postorder(), &[block2, block0]);
+        assert_eq!(dt.cfg_postorder(), &[trap_block, block2, block0]);
 
         let v2_def = cur.func.dfg.value_def(v2).unwrap_inst();
         assert!(!dt.dominates(v2_def, block0, &cur.func.layout));
@@ -710,8 +675,7 @@ mod tests {
         let jmp_block3_block1 = cur.ins().jump(block1, &[]);
 
         cur.insert_block(block1);
-        let br_block1_block0 = cur.ins().brnz(cond, block0, &[]);
-        let jmp_block1_block2 = cur.ins().jump(block2, &[]);
+        let br_block1_block0_block2 = cur.ins().brif(cond, block0, &[], block2, &[]);
 
         cur.insert_block(block2);
         cur.ins().jump(block0, &[]);
@@ -726,7 +690,7 @@ mod tests {
         // block3 {
         //   block3:jump block1 {
         //     block1 {
-        //       block1:brnz block0 {
+        //       block1:brif block0 {
         //         block1:jump block2 {
         //           block2 {
         //             block2:jump block0 (seen)
@@ -734,22 +698,26 @@ mod tests {
         //         } block1:jump block2
         //         block0 {
         //         } block0
-        //       } block1:brnz block0
+        //       } block1:brif block0
         //     } block1
         //   } block3:jump block1
         // } block3
 
-        assert_eq!(dt.cfg_postorder(), &[block2, block0, block1, block3]);
+        assert_eq!(dt.cfg_postorder(), &[block0, block2, block1, block3]);
 
         assert_eq!(cur.func.layout.entry_block().unwrap(), block3);
         assert_eq!(dt.idom(block3), None);
         assert_eq!(dt.idom(block1).unwrap(), jmp_block3_block1);
-        assert_eq!(dt.idom(block2).unwrap(), jmp_block1_block2);
-        assert_eq!(dt.idom(block0).unwrap(), br_block1_block0);
+        assert_eq!(dt.idom(block2).unwrap(), br_block1_block0_block2);
+        assert_eq!(dt.idom(block0).unwrap(), br_block1_block0_block2);
 
-        assert!(dt.dominates(br_block1_block0, br_block1_block0, &cur.func.layout));
-        assert!(!dt.dominates(br_block1_block0, jmp_block3_block1, &cur.func.layout));
-        assert!(dt.dominates(jmp_block3_block1, br_block1_block0, &cur.func.layout));
+        assert!(dt.dominates(
+            br_block1_block0_block2,
+            br_block1_block0_block2,
+            &cur.func.layout
+        ));
+        assert!(!dt.dominates(br_block1_block0_block2, jmp_block3_block1, &cur.func.layout));
+        assert!(dt.dominates(jmp_block3_block1, br_block1_block0_block2, &cur.func.layout));
 
         assert_eq!(
             dt.rpo_cmp(block3, block3, &cur.func.layout),
@@ -761,7 +729,7 @@ mod tests {
             Ordering::Less
         );
         assert_eq!(
-            dt.rpo_cmp(jmp_block3_block1, jmp_block1_block2, &cur.func.layout),
+            dt.rpo_cmp(jmp_block3_block1, br_block1_block0_block2, &cur.func.layout),
             Ordering::Less
         );
     }

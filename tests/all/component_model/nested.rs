@@ -95,7 +95,7 @@ fn nested_many_instantiations() -> Result<()> {
     let mut linker = Linker::new(&engine);
     linker
         .root()
-        .func_wrap("count", |mut store: StoreContextMut<'_, u32>| {
+        .func_wrap("count", |mut store: StoreContextMut<'_, u32>, _: ()| {
             *store.data_mut() += 1;
             Ok(())
         })?;
@@ -109,10 +109,10 @@ fn thread_options_through_inner() -> Result<()> {
     let component = format!(
         r#"
 (component
-  (import "hostfn" (func $host (param u32) (result string)))
+  (import "hostfn" (func $host (param "a" u32) (result string)))
 
   (component $c
-    (import "hostfn" (func $host (param u32) (result string)))
+    (import "hostfn" (func $host (param "a" u32) (result string)))
 
     (core module $libc
         (memory (export "memory") 1)
@@ -144,7 +144,7 @@ fn thread_options_through_inner() -> Result<()> {
         (with "libc" (instance $libc))
     ))
 
-    (func (export "run") (param u32) (result string)
+    (func (export "run") (param "a" u32) (result string)
         (canon lift
             (core func $m "run")
             (memory $m "memory")
@@ -162,11 +162,12 @@ fn thread_options_through_inner() -> Result<()> {
     let mut linker = Linker::new(&engine);
     linker
         .root()
-        .func_wrap("hostfn", |param: u32| Ok(param.to_string()))?;
+        .func_wrap("hostfn", |_, (param,): (u32,)| Ok((param.to_string(),)))?;
     let instance = linker.instantiate(&mut store, &component)?;
     let result = instance
-        .get_typed_func::<(u32,), WasmStr, _>(&mut store, "run")?
-        .call(&mut store, (43,))?;
+        .get_typed_func::<(u32,), (WasmStr,)>(&mut store, "run")?
+        .call(&mut store, (43,))?
+        .0;
     assert_eq!(result.to_str(&store)?, "42");
     Ok(())
 }

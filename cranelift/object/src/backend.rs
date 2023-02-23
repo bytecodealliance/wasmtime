@@ -2,7 +2,7 @@
 
 use anyhow::anyhow;
 use cranelift_codegen::entity::SecondaryMap;
-use cranelift_codegen::isa::TargetIsa;
+use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
 use cranelift_codegen::{self, ir, MachReloc};
 use cranelift_codegen::{
     binemit::{Addend, CodeOffset, Reloc},
@@ -10,7 +10,7 @@ use cranelift_codegen::{
 };
 use cranelift_module::{
     DataContext, DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleCompiledFunction,
-    ModuleDeclarations, ModuleError, ModuleResult,
+    ModuleDeclarations, ModuleError, ModuleExtName, ModuleReloc, ModuleResult,
 };
 use log::info;
 use object::write::{
@@ -26,13 +26,13 @@ use target_lexicon::PointerWidth;
 
 /// A builder for `ObjectModule`.
 pub struct ObjectBuilder {
-    isa: Box<dyn TargetIsa>,
+    isa: OwnedTargetIsa,
     binary_format: object::BinaryFormat,
     architecture: object::Architecture,
+    flags: object::FileFlags,
     endian: object::Endianness,
     name: Vec<u8>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
-    function_alignment: u64,
     per_function_section: bool,
 }
 
@@ -40,15 +40,16 @@ impl ObjectBuilder {
     /// Create a new `ObjectBuilder` using the given Cranelift target, that
     /// can be passed to [`ObjectModule::new`].
     ///
-    /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s `ir::LibCall`
+    /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s [ir::LibCall]
     /// enum to symbols. LibCalls are inserted in the IR as part of the legalization for certain
     /// floating point instructions, and for stack probes. If you don't know what to use for this
-    /// argument, use `cranelift_module::default_libcall_names()`.
+    /// argument, use [cranelift_module::default_libcall_names]().
     pub fn new<V: Into<Vec<u8>>>(
-        isa: Box<dyn TargetIsa>,
+        isa: OwnedTargetIsa,
         name: V,
         libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     ) -> ModuleResult<Self> {
+        let mut file_flags = object::FileFlags::None;
         let binary_format = match isa.triple().binary_format {
             target_lexicon::BinaryFormat::Elf => object::BinaryFormat::Elf,
             target_lexicon::BinaryFormat::Coff => object::BinaryFormat::Coff,
@@ -73,6 +74,22 @@ impl ObjectBuilder {
             target_lexicon::Architecture::X86_64 => object::Architecture::X86_64,
             target_lexicon::Architecture::Arm(_) => object::Architecture::Arm,
             target_lexicon::Architecture::Aarch64(_) => object::Architecture::Aarch64,
+            target_lexicon::Architecture::Riscv64(_) => {
+                if binary_format != object::BinaryFormat::Elf {
+                    return Err(ModuleError::Backend(anyhow!(
+                        "binary format {:?} is not supported for riscv64",
+                        binary_format,
+                    )));
+                }
+                // FIXME(#4994) get the right variant from the TargetIsa
+                file_flags = object::FileFlags::Elf {
+                    os_abi: object::elf::ELFOSABI_NONE,
+                    abi_version: 0,
+                    e_flags: object::elf::EF_RISCV_RVC | object::elf::EF_RISCV_FLOAT_ABI_DOUBLE,
+                };
+                object::Architecture::Riscv64
+            }
+            target_lexicon::Architecture::S390x => object::Architecture::S390x,
             architecture => {
                 return Err(ModuleError::Backend(anyhow!(
                     "target architecture {:?} is unsupported",
@@ -88,18 +105,12 @@ impl ObjectBuilder {
             isa,
             binary_format,
             architecture,
+            flags: file_flags,
             endian,
             name: name.into(),
             libcall_names,
-            function_alignment: 1,
             per_function_section: false,
         })
-    }
-
-    /// Set the alignment used for functions.
-    pub fn function_alignment(&mut self, alignment: u64) -> &mut Self {
-        self.function_alignment = alignment;
-        self
     }
 
     /// Set if every function should end up in their own section.
@@ -113,7 +124,7 @@ impl ObjectBuilder {
 ///
 /// See the `ObjectBuilder` for a convenient way to construct `ObjectModule` instances.
 pub struct ObjectModule {
-    isa: Box<dyn TargetIsa>,
+    isa: OwnedTargetIsa,
     object: Object<'static>,
     declarations: ModuleDeclarations,
     functions: SecondaryMap<FuncId, Option<(SymbolId, bool)>>,
@@ -121,7 +132,7 @@ pub struct ObjectModule {
     relocs: Vec<SymbolRelocs>,
     libcalls: HashMap<ir::LibCall, SymbolId>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
-    function_alignment: u64,
+    known_symbols: HashMap<ir::KnownSymbol, SymbolId>,
     per_function_section: bool,
     anon_func_number: u64,
     anon_data_number: u64,
@@ -131,6 +142,7 @@ impl ObjectModule {
     /// Create a new `ObjectModule` using the given Cranelift target.
     pub fn new(builder: ObjectBuilder) -> Self {
         let mut object = Object::new(builder.binary_format, builder.architecture, builder.endian);
+        object.flags = builder.flags;
         object.add_file_symbol(builder.name);
         Self {
             isa: builder.isa,
@@ -141,7 +153,7 @@ impl ObjectModule {
             relocs: Vec::new(),
             libcalls: HashMap::new(),
             libcall_names: builder.libcall_names,
-            function_alignment: builder.function_alignment,
+            known_symbols: HashMap::new(),
             per_function_section: builder.per_function_section,
             anon_func_number: 0,
             anon_data_number: 0,
@@ -311,14 +323,23 @@ impl Module for ObjectModule {
         info!("defining function {}: {}", func_id, ctx.func.display());
         let mut code: Vec<u8> = Vec::new();
 
-        ctx.compile_and_emit(self.isa(), &mut code)?;
+        let res = ctx.compile_and_emit(self.isa(), &mut code)?;
+        let alignment = res.alignment as u64;
 
-        self.define_function_bytes(func_id, &code, ctx.compiled_code().unwrap().buffer.relocs())
+        self.define_function_bytes(
+            func_id,
+            &ctx.func,
+            alignment,
+            &code,
+            ctx.compiled_code().unwrap().buffer.relocs(),
+        )
     }
 
     fn define_function_bytes(
         &mut self,
         func_id: FuncId,
+        func: &ir::Function,
+        alignment: u64,
         bytes: &[u8],
         relocs: &[MachReloc],
     ) -> ModuleResult<ModuleCompiledFunction> {
@@ -339,29 +360,27 @@ impl Module for ObjectModule {
         }
         *defined = true;
 
+        let align = alignment
+            .max(self.isa.function_alignment() as u64)
+            .max(self.isa.symbol_alignment());
         let (section, offset) = if self.per_function_section {
             let symbol_name = self.object.symbol(symbol).name.clone();
-            let (section, offset) = self.object.add_subsection(
-                StandardSection::Text,
-                &symbol_name,
-                bytes,
-                self.function_alignment,
-            );
+            let (section, offset) =
+                self.object
+                    .add_subsection(StandardSection::Text, &symbol_name, bytes, align);
             self.object.symbol_mut(symbol).section = SymbolSection::Section(section);
             self.object.symbol_mut(symbol).value = offset;
             (section, offset)
         } else {
             let section = self.object.section_id(StandardSection::Text);
-            let offset =
-                self.object
-                    .add_symbol_data(symbol, section, bytes, self.function_alignment);
+            let offset = self.object.add_symbol_data(symbol, section, bytes, align);
             (section, offset)
         };
 
         if !relocs.is_empty() {
             let relocs = relocs
                 .iter()
-                .map(|record| self.process_reloc(record))
+                .map(|record| self.process_reloc(&ModuleReloc::from_mach_reloc(&record, func)))
                 .collect();
             self.relocs.push(SymbolRelocs {
                 section,
@@ -438,12 +457,12 @@ impl Module for ObjectModule {
                 } else if relocs.is_empty() {
                     SectionKind::ReadOnlyData
                 } else {
-                    SectionKind::Data
+                    SectionKind::ReadOnlyDataWithRel
                 },
             )
         };
 
-        let align = align.unwrap_or(1);
+        let align = std::cmp::max(align.unwrap_or(1), self.isa.symbol_alignment());
         let offset = match *init {
             Init::Uninitialized => {
                 panic!("data is not initialized yet");
@@ -515,9 +534,9 @@ impl ObjectModule {
 
     /// This should only be called during finish because it creates
     /// symbols for missing libcalls.
-    fn get_symbol(&mut self, name: &ir::ExternalName) -> SymbolId {
+    fn get_symbol(&mut self, name: &ModuleExtName) -> SymbolId {
         match *name {
-            ir::ExternalName::User { .. } => {
+            ModuleExtName::User { .. } => {
                 if ModuleDeclarations::is_function(name) {
                     let id = FuncId::from_name(name);
                     self.functions[id].unwrap().0
@@ -526,7 +545,7 @@ impl ObjectModule {
                     self.data_objects[id].unwrap().0
                 }
             }
-            ir::ExternalName::LibCall(ref libcall) => {
+            ModuleExtName::LibCall(ref libcall) => {
                 let name = (self.libcall_names)(*libcall);
                 if let Some(symbol) = self.object.symbol_id(name.as_bytes()) {
                     symbol
@@ -547,11 +566,42 @@ impl ObjectModule {
                     symbol
                 }
             }
-            _ => panic!("invalid ExternalName {}", name),
+            // These are "magic" names well-known to the linker.
+            // They require special treatment.
+            ModuleExtName::KnownSymbol(ref known_symbol) => {
+                if let Some(symbol) = self.known_symbols.get(known_symbol) {
+                    *symbol
+                } else {
+                    let symbol = self.object.add_symbol(match known_symbol {
+                        ir::KnownSymbol::ElfGlobalOffsetTable => Symbol {
+                            name: b"_GLOBAL_OFFSET_TABLE_".to_vec(),
+                            value: 0,
+                            size: 0,
+                            kind: SymbolKind::Data,
+                            scope: SymbolScope::Unknown,
+                            weak: false,
+                            section: SymbolSection::Undefined,
+                            flags: SymbolFlags::None,
+                        },
+                        ir::KnownSymbol::CoffTlsIndex => Symbol {
+                            name: b"_tls_index".to_vec(),
+                            value: 0,
+                            size: 32,
+                            kind: SymbolKind::Tls,
+                            scope: SymbolScope::Unknown,
+                            weak: false,
+                            section: SymbolSection::Undefined,
+                            flags: SymbolFlags::None,
+                        },
+                    });
+                    self.known_symbols.insert(*known_symbol, symbol);
+                    symbol
+                }
+            }
         }
     }
 
-    fn process_reloc(&self, record: &MachReloc) -> ObjectRelocRecord {
+    fn process_reloc(&self, record: &ModuleReloc) -> ObjectRelocRecord {
         let mut addend = record.addend;
         let (kind, encoding, size) = match record.kind {
             Reloc::Abs4 => (RelocationKind::Absolute, RelocationEncoding::Generic, 32),
@@ -563,6 +613,11 @@ impl ObjectModule {
             Reloc::X86CallPLTRel4 => (
                 RelocationKind::PltRelative,
                 RelocationEncoding::X86Branch,
+                32,
+            ),
+            Reloc::X86SecRel => (
+                RelocationKind::SectionOffset,
+                RelocationEncoding::Generic,
                 32,
             ),
             Reloc::X86GOTPCRel4 => (RelocationKind::GotRelative, RelocationEncoding::Generic, 32),
@@ -623,9 +678,84 @@ impl ObjectModule {
                     12,
                 )
             }
+            Reloc::Aarch64AdrGotPage21 => match self.object.format() {
+                object::BinaryFormat::Elf => (
+                    RelocationKind::Elf(object::elf::R_AARCH64_ADR_GOT_PAGE),
+                    RelocationEncoding::Generic,
+                    21,
+                ),
+                object::BinaryFormat::MachO => (
+                    RelocationKind::MachO {
+                        value: object::macho::ARM64_RELOC_GOT_LOAD_PAGE21,
+                        relative: true,
+                    },
+                    RelocationEncoding::Generic,
+                    21,
+                ),
+                _ => unimplemented!("Aarch64AdrGotPage21 is not supported for this file format"),
+            },
+            Reloc::Aarch64Ld64GotLo12Nc => match self.object.format() {
+                object::BinaryFormat::Elf => (
+                    RelocationKind::Elf(object::elf::R_AARCH64_LD64_GOT_LO12_NC),
+                    RelocationEncoding::Generic,
+                    12,
+                ),
+                object::BinaryFormat::MachO => (
+                    RelocationKind::MachO {
+                        value: object::macho::ARM64_RELOC_GOT_LOAD_PAGEOFF12,
+                        relative: false,
+                    },
+                    RelocationEncoding::Generic,
+                    12,
+                ),
+                _ => unimplemented!("Aarch64Ld64GotLo12Nc is not supported for this file format"),
+            },
+            Reloc::S390xPCRel32Dbl => (RelocationKind::Relative, RelocationEncoding::S390xDbl, 32),
+            Reloc::S390xPLTRel32Dbl => (
+                RelocationKind::PltRelative,
+                RelocationEncoding::S390xDbl,
+                32,
+            ),
+            Reloc::S390xTlsGd64 => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::Elf,
+                    "S390xTlsGd64 is not supported for this file format"
+                );
+                (
+                    RelocationKind::Elf(object::elf::R_390_TLS_GD64),
+                    RelocationEncoding::Generic,
+                    64,
+                )
+            }
+            Reloc::S390xTlsGdCall => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::Elf,
+                    "S390xTlsGdCall is not supported for this file format"
+                );
+                (
+                    RelocationKind::Elf(object::elf::R_390_TLS_GDCALL),
+                    RelocationEncoding::Generic,
+                    0,
+                )
+            }
+            Reloc::RiscvCall => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::Elf,
+                    "RiscvCall is not supported for this file format"
+                );
+                (
+                    RelocationKind::Elf(object::elf::R_RISCV_CALL),
+                    RelocationEncoding::Generic,
+                    0,
+                )
+            }
             // FIXME
             reloc => unimplemented!("{:?}", reloc),
         };
+
         ObjectRelocRecord {
             offset: record.offset,
             name: record.name.clone(),
@@ -692,7 +822,7 @@ struct SymbolRelocs {
 #[derive(Clone)]
 struct ObjectRelocRecord {
     offset: CodeOffset,
-    name: ir::ExternalName,
+    name: ModuleExtName,
     kind: RelocationKind,
     encoding: RelocationEncoding,
     size: u8,

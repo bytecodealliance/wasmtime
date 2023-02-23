@@ -12,6 +12,7 @@ use std::process::Command;
 
 fn main() -> anyhow::Result<()> {
     println!("cargo:rerun-if-changed=build.rs");
+
     let out_dir = PathBuf::from(
         env::var_os("OUT_DIR").expect("The OUT_DIR environment variable must be set"),
     );
@@ -44,6 +45,12 @@ fn main() -> anyhow::Result<()> {
                     "tests/spec_testsuite/proposals/function-references",
                     strategy,
                 )?;
+                test_directory_module(
+                    out,
+                    "tests/spec_testsuite/proposals/multi-memory",
+                    strategy,
+                )?;
+                test_directory_module(out, "tests/spec_testsuite/proposals/threads", strategy)?;
             } else {
                 println!(
                     "cargo:warning=The spec testsuite is disabled. To enable, run `git submodule \
@@ -63,7 +70,6 @@ fn main() -> anyhow::Result<()> {
     drop(Command::new("rustfmt").arg(&output).status());
     Ok(())
 }
-
 fn test_directory_module(
     out: &mut String,
     path: impl AsRef<Path>,
@@ -92,7 +98,7 @@ fn test_directory(
                 return None;
             }
             // Ignore files starting with `.`, which could be editor temporary files
-            if p.file_stem()?.to_str()?.starts_with(".") {
+            if p.file_stem()?.to_str()?.starts_with('.') {
                 return None;
             }
             Some(p)
@@ -117,8 +123,7 @@ fn extract_name(path: impl AsRef<Path>) -> String {
         .expect("filename should have a stem")
         .to_str()
         .expect("filename should be representable as a string")
-        .replace("-", "_")
-        .replace("/", "_")
+        .replace(['-', '/'], "_")
 }
 
 fn with_test_module<T>(
@@ -164,7 +169,7 @@ fn write_testsuite_tests(
         "    crate::wast::run_wast(r#\"{}\"#, crate::wast::Strategy::{}, {}).unwrap();",
         path.display(),
         strategy,
-        pooling
+        pooling,
     )?;
     writeln!(out, "}}")?;
     writeln!(out)?;
@@ -173,19 +178,19 @@ fn write_testsuite_tests(
 
 /// Ignore tests that aren't supported yet.
 fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
-    match strategy {
-        "Cranelift" => match (testsuite, testname) {
+    assert_eq!(strategy, "Cranelift");
+    match env::var("CARGO_CFG_TARGET_ARCH").unwrap().as_str() {
+        "s390x" => {
             // FIXME: These tests fail under qemu due to a qemu bug.
-            (_, "simd_f32x4_pmin_pmax") if platform_is_s390x() => return true,
-            (_, "simd_f64x2_pmin_pmax") if platform_is_s390x() => return true,
-            _ => {}
-        },
-        _ => panic!("unrecognized strategy"),
+            testname == "simd_f32x4_pmin_pmax" || testname == "simd_f64x2_pmin_pmax"
+        }
+
+        // Currently the simd wasm proposal is not implemented in the riscv64
+        // backend so skip all tests which could use simd.
+        "riscv64" => {
+            testsuite == "simd" || testname.contains("simd") || testname.contains("memory_multi")
+        }
+
+        _ => false,
     }
-
-    false
-}
-
-fn platform_is_s390x() -> bool {
-    env::var("CARGO_CFG_TARGET_ARCH").unwrap() == "s390x"
 }

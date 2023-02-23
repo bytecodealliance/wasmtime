@@ -30,6 +30,8 @@ pub enum Trap {
     InvalidDiscriminant,
     InvalidChar,
     ListByteLengthOverflow,
+    StringLengthTooBig,
+    StringLengthOverflow,
     AssertFailed(&'static str),
 }
 
@@ -105,6 +107,8 @@ impl fmt::Display for Trap {
             Trap::InvalidDiscriminant => "invalid variant discriminant".fmt(f),
             Trap::InvalidChar => "invalid char value specified".fmt(f),
             Trap::ListByteLengthOverflow => "byte size of list too large for i32".fmt(f),
+            Trap::StringLengthTooBig => "string byte size exceeds maximum".fmt(f),
+            Trap::StringLengthOverflow => "string byte size overflows i32".fmt(f),
             Trap::AssertFailed(s) => write!(f, "assertion failure: {}", s),
         }
     }

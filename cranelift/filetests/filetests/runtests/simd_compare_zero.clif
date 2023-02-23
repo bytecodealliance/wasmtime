@@ -2,15 +2,12 @@ test run
 target aarch64
 target s390x
 
-; raw_bitcast is needed to get around issue with "bint" on aarch64
-
 function %simd_icmp_eq_i8(i8x16) -> i8x16 {
 block0(v0: i8x16):
     v1 = iconst.i8 0
     v3 = splat.i8x16 v1
     v2 = icmp eq v0, v3
-    v4 = raw_bitcast.i8x16 v2
-    return v4
+    return v2
 }
 ; run: %simd_icmp_eq_i8([-1 0 1 100 -1 0 1 100 -1 0 1 100 -1 0 1 100]) == [0 0xff 0 0 0 0xff 0 0 0 0xff 0 0 0 0xff 0 0]
 
@@ -19,8 +16,7 @@ block0(v0: i16x8):
     v1 = iconst.i16 0
     v3 = splat.i16x8 v1
     v2 = icmp ne v0, v3
-    v4 = raw_bitcast.i16x8 v2
-    return v4
+    return v2
 }
 ; run: %simd_icmp_ne_i16([-1 0 1 100 -1 0 1 100]) == [0xffff 0 0xffff 0xffff 0xffff 0 0xffff 0xffff]
 
@@ -29,8 +25,7 @@ block0(v0: i32x4):
     v1 = iconst.i32 0
     v3 = splat.i32x4 v1
     v2 = icmp sle v0, v3
-    v4 = raw_bitcast.i32x4 v2
-    return v4
+    return v2
 }
 ; run: %simd_icmp_le_i32([-1 0 1 100]) == [0xffffffff 0xffffffff 0 0]
 
@@ -39,8 +34,7 @@ block0(v0: i64x2):
     v1 = iconst.i64 0
     v3 = splat.i64x2 v1
     v2 = icmp sge v0, v3
-    v4 = raw_bitcast.i64x2 v2
-    return v4
+    return v2
 }
 ; run: %simd_icmp_ge_i64([-1 0]) == [0 0xffffffffffffffff]
 ; run: %simd_icmp_ge_i64([1 100]) == [0xffffffffffffffff 0xffffffffffffffff]
@@ -50,8 +44,7 @@ block0(v0: i8x16):
     v1 = iconst.i8 0
     v3 = splat.i8x16 v1
     v2 = icmp slt v0, v3
-    v4 = raw_bitcast.i8x16 v2
-    return v4
+    return v2
 }
 ; run: %simd_icmp_lt_i8([-1 0 1 100 -1 0 1 100 -1 0 1 100 -1 0 1 100]) == [0xff 0 0 0 0xff 0 0 0 0xff 0 0 0 0xff 0 0 0]
 
@@ -60,8 +53,7 @@ block0(v0: i16x8):
     v1 = iconst.i16 0
     v3 = splat.i16x8 v1
     v2 = icmp sgt v0, v3
-    v4 = raw_bitcast.i16x8 v2
-    return v4
+    return v2
 }
 ; run: %simd_icmp_gt_i16([-1 0 1 100 -1 0 1 100]) == [0 0 0xffff 0xffff 0 0 0xffff 0xffff]
 
@@ -70,8 +62,7 @@ block0(v0: f32x4):
     v1 = f32const 0.0
     v3 = splat.f32x4 v1
     v2 = fcmp eq v0, v3
-    v4 = raw_bitcast.i32x4 v2
-    return v4
+    return v2
 }
 ; run: %simd_fcmp_eq_f32([-0x1.0 0x0.0 0x1.0 NaN]) == [0 0xffffffff 0 0]
 
@@ -80,8 +71,7 @@ block0(v0: f64x2):
     v1 = f64const 0.0
     v3 = splat.f64x2 v1
     v2 = fcmp ne v0, v3
-    v4 = raw_bitcast.i64x2 v2
-    return v4
+    return v2
 }
 ; run: %simd_fcmp_ne_f64([-0x1.0 0x0.0]) == [0xffffffffffffffff 0]
 ; run: %simd_fcmp_ne_f64([0x1.0 NaN]) == [0xffffffffffffffff 0xffffffffffffffff]
@@ -91,8 +81,7 @@ block0(v0: f32x4):
     v1 = f32const 0.0
     v3 = splat.f32x4 v1
     v2 = fcmp le v0, v3
-    v4 = raw_bitcast.i32x4 v2
-    return v4
+    return v2
 }
 ; run: %simd_fcmp_le_f32([-0x1.0 0x0.0 0x1.0 NaN]) == [0xffffffff 0xffffffff 0 0]
 
@@ -101,8 +90,7 @@ block0(v0: f64x2):
     v1 = f64const 0.0
     v3 = splat.f64x2 v1
     v2 = fcmp ge v0, v3
-    v4 = raw_bitcast.i64x2 v2
-    return v4
+    return v2
 }
 
 ; run: %simd_fcmp_ge_f64([-0x1.0 0x0.0]) == [0 0xffffffffffffffff]
@@ -113,8 +101,7 @@ block0(v0: f32x4):
     v1 = f32const 0.0
     v3 = splat.f32x4 v1
     v2 = fcmp lt v0, v3
-    v4 = raw_bitcast.i32x4 v2
-    return v4
+    return v2
 }
 ; run: %simd_fcmp_lt_f32([-0x1.0 0x0.0 0x1.0 NaN]) == [0xffffffff 0 0 0]
 
@@ -123,8 +110,7 @@ block0(v0: f64x2):
     v1 = f64const 0.0
     v3 = splat.f64x2 v1
     v2 = fcmp gt v0, v3
-    v4 = raw_bitcast.i64x2 v2
-    return v4
+    return v2
 }
 
 ; run: %simd_fcmp_gt_f64([-0x1.0 0x0.0]) == [0 0]
@@ -135,8 +121,7 @@ block0(v0: i32x4):
     v1 = iconst.i32 0
     v3 = splat.i32x4 v1
     v2 = icmp eq v3, v0
-    v4 = raw_bitcast.i32x4 v2
-    return v4
+    return v2
 }
 ; run: %simd_icmp_eq_i32([1 0 -1 100]) == [0 0xffffffff 0 0]
 
@@ -145,8 +130,7 @@ block0(v0: i64x2):
     v1 = iconst.i64 0
     v3 = splat.i64x2 v1
     v2 = icmp ne v3, v0
-    v4 = raw_bitcast.i64x2 v2
-    return v4
+    return v2
 }
 ; run: %simd_icmp_ne_i64([-1 0]) == [0xffffffffffffffff 0]
 ; run: %simd_icmp_ne_i64([1 100]) == [0xffffffffffffffff 0xffffffffffffffff]
@@ -156,8 +140,7 @@ block0(v0: i8x16):
     v1 = iconst.i8 0
     v3 = splat.i8x16 v1
     v2 = icmp sle v3, v0
-    v4 = raw_bitcast.i8x16 v2
-    return v4
+    return v2
 }
 ; run: %simd_icmp_le_i8([-1 0 1 100 -1 0 1 100 -1 0 1 100 -1 0 1 100]) == [0 0xff 0xff 0xff 0 0xff 0xff 0xff 0 0xff 0xff 0xff 0 0xff 0xff 0xff]
 
@@ -166,8 +149,7 @@ block0(v0: i16x8):
     v1 = iconst.i16 0
     v3 = splat.i16x8 v1
     v2 = icmp sge v3, v0
-    v4 = raw_bitcast.i16x8 v2
-    return v4
+    return v2
 }
 ; run: %simd_icmp_ge_i16([-1 0 1 100 -1 0 1 100]) == [0xffff 0xffff 0 0 0xffff 0xffff 0 0]
 
@@ -176,8 +158,7 @@ block0(v0: i32x4):
     v1 = iconst.i32 0
     v3 = splat.i32x4 v1
     v2 = icmp slt v3, v0
-    v4 = raw_bitcast.i32x4 v2
-    return v4
+    return v2
 }
 ; run: %simd_icmp_lt_i32([-1 0 1 100]) == [0 0 0xffffffff 0xffffffff]
 
@@ -186,8 +167,7 @@ block0(v0: i64x2):
     v1 = iconst.i64 0
     v3 = splat.i64x2 v1
     v2 = icmp sgt v3, v0
-    v4 = raw_bitcast.i64x2 v2
-    return v4
+    return v2
 }
 ; run: %simd_icmp_gt_i64([-1 0]) == [0xffffffffffffffff 0]
 ; run: %simd_icmp_gt_i64([1 100]) == [0 0]
@@ -197,8 +177,7 @@ block0(v0: f64x2):
     v1 = f64const 0.0
     v3 = splat.f64x2 v1
     v2 = fcmp eq v3, v0
-    v4 = raw_bitcast.i64x2 v2
-    return v4
+    return v2
 }
 ; run: %simd_fcmp_eq_f64([-0x1.0 0x0.0]) == [0 0xffffffffffffffff]
 ; run: %simd_fcmp_eq_f64([0x1.0 NaN]) == [0 0]
@@ -208,8 +187,7 @@ block0(v0: f32x4):
     v1 = f32const 0.0
     v3 = splat.f32x4 v1
     v2 = fcmp ne v3, v0
-    v4 = raw_bitcast.i32x4 v2
-    return v4
+    return v2
 }
 ; run: %simd_fcmp_ne_f32([-0x1.0 0x0.0 0x1.0 NaN]) == [0xffffffff 0 0xffffffff 0xffffffff]
 
@@ -218,8 +196,7 @@ block0(v0: f64x2):
     v1 = f64const 0.0
     v3 = splat.f64x2 v1
     v2 = fcmp le v3, v0
-    v4 = raw_bitcast.i64x2 v2
-    return v4
+    return v2
 }
 ; run: %simd_fcmp_le_f64([-0x1.0 0x0.0]) == [0 0xffffffffffffffff]
 ; run: %simd_fcmp_le_f64([0x1.0 NaN]) == [0xffffffffffffffff 0]
@@ -229,8 +206,7 @@ block0(v0: f32x4):
     v1 = f32const 0.0
     v3 = splat.f32x4 v1
     v2 = fcmp ge v3, v0
-    v4 = raw_bitcast.i32x4 v2
-    return v4
+    return v2
 }
 ; run: %simd_fcmp_ge_f32([-0x1.0 0x0.0 0x1.0 NaN]) == [0xffffffff 0xffffffff 0 0]
 
@@ -239,8 +215,7 @@ block0(v0: f64x2):
     v1 = f64const 0.0
     v3 = splat.f64x2 v1
     v2 = fcmp lt v3, v0
-    v4 = raw_bitcast.i64x2 v2
-    return v4
+    return v2
 }
 ; run: %simd_fcmp_lt_f64([-0x1.0 0x0.0]) == [0 0]
 ; run: %simd_fcmp_lt_f64([0x1.0 NaN]) == [0xffffffffffffffff 0]
@@ -250,7 +225,6 @@ block0(v0: f32x4):
     v1 = f32const 0.0
     v3 = splat.f32x4 v1
     v2 = fcmp gt v3, v0
-    v4 = raw_bitcast.i32x4 v2
-    return v4
+    return v2
 }
 ; run: %simd_fcmp_gt_f32([-0x1.0 0x0.0 0x1.0 NaN]) == [0xffffffff 0 0 0]

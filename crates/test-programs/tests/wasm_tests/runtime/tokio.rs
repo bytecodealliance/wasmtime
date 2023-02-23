@@ -67,7 +67,7 @@ fn run(
             let mut store = Store::new(&engine, builder.build());
 
             let instance = linker.instantiate_async(&mut store, &module).await?;
-            let start = instance.get_typed_func::<(), (), _>(&mut store, "_start")?;
+            let start = instance.get_typed_func::<(), ()>(&mut store, "_start")?;
             start
                 .call_async(&mut store, ())
                 .await

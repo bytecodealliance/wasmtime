@@ -19,15 +19,11 @@
         clippy::use_self
     )
 )]
-#![cfg_attr(not(memory_init_cow), allow(unused_variables, unreachable_code))]
 
 use anyhow::Error;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
-use wasmtime_environ::DefinedFuncIndex;
-use wasmtime_environ::DefinedMemoryIndex;
-use wasmtime_environ::FunctionInfo;
-use wasmtime_environ::SignatureIndex;
+use wasmtime_environ::{DefinedFuncIndex, DefinedMemoryIndex, HostPtr, VMOffsets};
 
 #[macro_use]
 mod trampolines;
@@ -41,6 +37,7 @@ mod instance;
 mod memory;
 mod mmap;
 mod mmap_vec;
+mod parking_spot;
 mod table;
 mod traphandlers;
 mod vmcontext;
@@ -54,11 +51,13 @@ pub use crate::export::*;
 pub use crate::externref::*;
 pub use crate::imports::Imports;
 pub use crate::instance::{
-    allocate_single_memory_instance, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
-    InstantiationError, LinkError, OnDemandInstanceAllocator, StorePtr,
+    InstanceAllocationRequest, InstanceAllocator, InstanceHandle, OnDemandInstanceAllocator,
+    StorePtr,
 };
 #[cfg(feature = "pooling-allocator")]
-pub use crate::instance::{InstanceLimits, PoolingAllocationStrategy, PoolingInstanceAllocator};
+pub use crate::instance::{
+    InstanceLimits, PoolingInstanceAllocator, PoolingInstanceAllocatorConfig,
+};
 pub use crate::memory::{
     DefaultMemoryCreator, Memory, RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory,
 };
@@ -71,7 +70,7 @@ pub use crate::traphandlers::{
     Backtrace, SignalHandler, TlsRestore, Trap, TrapReason,
 };
 pub use crate::vmcontext::{
-    VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition,
+    VMCallerCheckedFuncRef, VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition,
     VMGlobalImport, VMHostFuncContext, VMInvokeArgument, VMMemoryDefinition, VMMemoryImport,
     VMOpaqueContext, VMRuntimeLimits, VMSharedSignatureIndex, VMTableDefinition, VMTableImport,
     VMTrampoline, ValRaw,
@@ -80,15 +79,8 @@ pub use crate::vmcontext::{
 mod module_id;
 pub use module_id::{CompiledModuleId, CompiledModuleIdAllocator};
 
-#[cfg(memory_init_cow)]
 mod cow;
-#[cfg(memory_init_cow)]
 pub use crate::cow::{MemoryImage, MemoryImageSlot, ModuleMemoryImages};
-
-#[cfg(not(memory_init_cow))]
-mod cow_disabled;
-#[cfg(not(memory_init_cow))]
-pub use crate::cow_disabled::{MemoryImage, MemoryImageSlot, ModuleMemoryImages};
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -163,7 +155,7 @@ pub unsafe trait Store {
 /// is chiefly needed for lazy initialization of various bits of
 /// instance state.
 ///
-/// When an instance is created, it holds an Arc<dyn ModuleRuntimeInfo>
+/// When an instance is created, it holds an `Arc<dyn ModuleRuntimeInfo>`
 /// so that it can get to signatures, metadata on functions, memory and
 /// funcref-table images, etc. All of these things are ordinarily known
 /// by the higher-level layers of Wasmtime. Specifically, the main
@@ -176,15 +168,8 @@ pub trait ModuleRuntimeInfo: Send + Sync + 'static {
     /// The underlying Module.
     fn module(&self) -> &Arc<wasmtime_environ::Module>;
 
-    /// The signatures.
-    fn signature(&self, index: SignatureIndex) -> VMSharedSignatureIndex;
-
-    /// The base address of where JIT functions are located.
-    fn image_base(&self) -> usize;
-
-    /// Descriptors about each compiled function, such as the offset from
-    /// `image_base`.
-    fn function_info(&self, func_index: DefinedFuncIndex) -> &FunctionInfo;
+    /// Returns the address, in memory, that the function `index` resides at.
+    fn function(&self, index: DefinedFuncIndex) -> *mut VMFunctionBody;
 
     /// Returns the `MemoryImage` structure used for copy-on-write
     /// initialization of the memory, if it's applicable.
@@ -202,6 +187,9 @@ pub trait ModuleRuntimeInfo: Send + Sync + 'static {
     /// Returns an array, indexed by `SignatureIndex` of all
     /// `VMSharedSignatureIndex` entries corresponding to the `SignatureIndex`.
     fn signature_ids(&self) -> &[VMSharedSignatureIndex];
+
+    /// Offset information for the current host.
+    fn offsets(&self) -> &VMOffsets<HostPtr>;
 }
 
 /// Returns the host OS page size, in bytes.
@@ -234,4 +222,18 @@ pub fn page_size() -> usize {
     fn get_page_size() -> usize {
         unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize }
     }
+}
+
+/// Result of [`Memory::atomic_wait32`] and [`Memory::atomic_wait64`]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum WaitResult {
+    /// Indicates that a `wait` completed by being awoken by a different thread.
+    /// This means the thread went to sleep and didn't time out.
+    Ok = 0,
+    /// Indicates that `wait` did not complete and instead returned due to the
+    /// value in memory not matching the expected value.
+    Mismatch = 1,
+    /// Indicates that `wait` completed with a timeout, meaning that the
+    /// original value matched as expected but nothing ever called `notify`.
+    TimedOut = 2,
 }

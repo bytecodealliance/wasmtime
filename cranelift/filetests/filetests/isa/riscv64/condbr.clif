@@ -1,0 +1,745 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %f(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+  v2 = icmp eq v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   eq a0,a0,a1##ty=i64
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   bne a0, a1, 0xc
+;   addi a0, zero, 1
+;   j 8
+;   mv a0, zero
+;   ret
+
+function %icmp_eq_i128(i128, i128) -> i8 {
+block0(v0: i128, v1: i128):
+  v2 = icmp eq v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   eq a0,[a0,a1],[a2,a3]##ty=i128
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   bne a1, a3, 0x10
+;   bne a0, a2, 0xc
+;   addi a0, zero, 1
+;   j 8
+;   mv a0, zero
+;   ret
+
+function %icmp_ne_i128(i128, i128) -> i8 {
+block0(v0: i128, v1: i128):
+  v2 = icmp ne v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   ne a0,[a0,a1],[a2,a3]##ty=i128
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   bne a1, a3, 8
+;   beq a0, a2, 0xc
+;   addi a0, zero, 1
+;   j 8
+;   mv a0, zero
+;   ret
+
+function %icmp_slt_i128(i128, i128) -> i8 {
+block0(v0: i128, v1: i128):
+  v2 = icmp slt v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   slt a0,[a0,a1],[a2,a3]##ty=i128
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   blt a1, a3, 0xc
+;   bne a1, a3, 0x10
+;   bgeu a0, a2, 0xc
+;   addi a0, zero, 1
+;   j 8
+;   mv a0, zero
+;   ret
+
+function %icmp_ult_i128(i128, i128) -> i8 {
+block0(v0: i128, v1: i128):
+  v2 = icmp ult v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   ult a0,[a0,a1],[a2,a3]##ty=i128
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   bltu a1, a3, 0xc
+;   bne a1, a3, 0x10
+;   bgeu a0, a2, 0xc
+;   addi a0, zero, 1
+;   j 8
+;   mv a0, zero
+;   ret
+
+function %icmp_sle_i128(i128, i128) -> i8 {
+block0(v0: i128, v1: i128):
+  v2 = icmp sle v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   sle a0,[a0,a1],[a2,a3]##ty=i128
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   blt a1, a3, 0xc
+;   bne a1, a3, 0x10
+;   bltu a2, a0, 0xc
+;   addi a0, zero, 1
+;   j 8
+;   mv a0, zero
+;   ret
+
+function %icmp_ule_i128(i128, i128) -> i8 {
+block0(v0: i128, v1: i128):
+  v2 = icmp ule v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   ule a0,[a0,a1],[a2,a3]##ty=i128
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   bltu a1, a3, 0xc
+;   bne a1, a3, 0x10
+;   bltu a2, a0, 0xc
+;   addi a0, zero, 1
+;   j 8
+;   mv a0, zero
+;   ret
+
+function %icmp_sgt_i128(i128, i128) -> i8 {
+block0(v0: i128, v1: i128):
+  v2 = icmp sgt v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   sgt a0,[a0,a1],[a2,a3]##ty=i128
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   blt a3, a1, 0xc
+;   bne a1, a3, 0x10
+;   bgeu a2, a0, 0xc
+;   addi a0, zero, 1
+;   j 8
+;   mv a0, zero
+;   ret
+
+function %icmp_ugt_i128(i128, i128) -> i8 {
+block0(v0: i128, v1: i128):
+  v2 = icmp ugt v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   ugt a0,[a0,a1],[a2,a3]##ty=i128
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   bltu a3, a1, 0xc
+;   bne a1, a3, 0x10
+;   bgeu a2, a0, 0xc
+;   addi a0, zero, 1
+;   j 8
+;   mv a0, zero
+;   ret
+
+function %icmp_sge_i128(i128, i128) -> i8 {
+block0(v0: i128, v1: i128):
+  v2 = icmp sge v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   sge a0,[a0,a1],[a2,a3]##ty=i128
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   blt a3, a1, 0xc
+;   bne a1, a3, 0x10
+;   bltu a0, a2, 0xc
+;   addi a0, zero, 1
+;   j 8
+;   mv a0, zero
+;   ret
+
+function %icmp_uge_i128(i128, i128) -> i8 {
+block0(v0: i128, v1: i128):
+  v2 = icmp uge v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   uge a0,[a0,a1],[a2,a3]##ty=i128
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   bltu a3, a1, 0xc
+;   bne a1, a3, 0x10
+;   bltu a0, a2, 0xc
+;   addi a0, zero, 1
+;   j 8
+;   mv a0, zero
+;   ret
+
+function %f(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = icmp eq v0, v1
+  brif v2, block1, block2
+
+block1:
+  v4 = iconst.i64 1
+  return v4
+
+block2:
+  v5 = iconst.i64 2
+  return v5
+}
+
+; VCode:
+; block0:
+;   eq a2,a0,a1##ty=i64
+;   bne a2,zero,taken(label1),not_taken(label2)
+; block1:
+;   li a0,1
+;   ret
+; block2:
+;   li a0,2
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   bne a0, a1, 0xc
+;   addi a2, zero, 1
+;   j 8
+;   mv a2, zero
+;   beqz a2, 0xc
+; block1: ; offset 0x14
+;   addi a0, zero, 1
+;   ret
+; block2: ; offset 0x1c
+;   addi a0, zero, 2
+;   ret
+
+function %f(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = icmp eq v0, v1
+  brif v2, block1, block1
+
+block1:
+  v4 = iconst.i64 1
+  return v4
+}
+
+; VCode:
+; block0:
+;   eq a1,a0,a1##ty=i64
+;   bne a1,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   li a0,1
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   bne a0, a1, 0xc
+;   addi a1, zero, 1
+;   j 8
+;   mv a1, zero
+; block1: ; offset 0x10
+;   addi a0, zero, 1
+;   ret
+
+function %i128_brif(i128){
+block0(v0: i128):
+    brif v0, block1, block1
+
+block1:
+    nop
+    return
+}
+
+; VCode:
+; block0:
+;   ne a0,[a0,a1],[zerozero]##ty=i128
+;   bne a0,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   bnez a1, 8
+;   beqz a0, 0xc
+;   addi a0, zero, 1
+;   j 8
+;   mv a0, zero
+; block1: ; offset 0x14
+;   ret
+
+function %i128_bricmp_eq(i128, i128) {
+block0(v0: i128, v1: i128):
+  v2 = icmp eq v0, v1
+  brif v2, block1, block1
+
+block1:
+  return
+}
+
+; VCode:
+; block0:
+;   eq a2,[a0,a1],[a2,a3]##ty=i128
+;   bne a2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   bne a1, a3, 0x10
+;   bne a0, a2, 0xc
+;   addi a2, zero, 1
+;   j 8
+;   mv a2, zero
+; block1: ; offset 0x14
+;   ret
+
+function %i128_bricmp_ne(i128, i128) {
+block0(v0: i128, v1: i128):
+  v2 = icmp ne v0, v1
+  brif v2, block1, block1
+
+block1:
+  return
+}
+
+; VCode:
+; block0:
+;   ne a2,[a0,a1],[a2,a3]##ty=i128
+;   bne a2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   bne a1, a3, 8
+;   beq a0, a2, 0xc
+;   addi a2, zero, 1
+;   j 8
+;   mv a2, zero
+; block1: ; offset 0x14
+;   ret
+
+function %i128_bricmp_slt(i128, i128) {
+block0(v0: i128, v1: i128):
+  v2 = icmp slt v0, v1
+  brif v2, block1, block1
+
+block1:
+  return
+}
+
+; VCode:
+; block0:
+;   slt a2,[a0,a1],[a2,a3]##ty=i128
+;   bne a2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   blt a1, a3, 0xc
+;   bne a1, a3, 0x10
+;   bgeu a0, a2, 0xc
+;   addi a2, zero, 1
+;   j 8
+;   mv a2, zero
+; block1: ; offset 0x18
+;   ret
+
+function %i128_bricmp_ult(i128, i128) {
+block0(v0: i128, v1: i128):
+  v2 = icmp ult v0, v1
+  brif v2, block1, block1
+
+block1:
+  return
+}
+
+; VCode:
+; block0:
+;   ult a2,[a0,a1],[a2,a3]##ty=i128
+;   bne a2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   bltu a1, a3, 0xc
+;   bne a1, a3, 0x10
+;   bgeu a0, a2, 0xc
+;   addi a2, zero, 1
+;   j 8
+;   mv a2, zero
+; block1: ; offset 0x18
+;   ret
+
+function %i128_bricmp_sle(i128, i128) {
+block0(v0: i128, v1: i128):
+  v2 = icmp sle v0, v1
+  brif v2, block1, block1
+
+block1:
+  return
+}
+
+; VCode:
+; block0:
+;   sle a2,[a0,a1],[a2,a3]##ty=i128
+;   bne a2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   blt a1, a3, 0xc
+;   bne a1, a3, 0x10
+;   bltu a2, a0, 0xc
+;   addi a2, zero, 1
+;   j 8
+;   mv a2, zero
+; block1: ; offset 0x18
+;   ret
+
+function %i128_bricmp_ule(i128, i128) {
+block0(v0: i128, v1: i128):
+  v2 = icmp ule v0, v1
+  brif v2, block1, block1
+
+block1:
+  return
+}
+
+; VCode:
+; block0:
+;   ule a2,[a0,a1],[a2,a3]##ty=i128
+;   bne a2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   bltu a1, a3, 0xc
+;   bne a1, a3, 0x10
+;   bltu a2, a0, 0xc
+;   addi a2, zero, 1
+;   j 8
+;   mv a2, zero
+; block1: ; offset 0x18
+;   ret
+
+function %i128_bricmp_sgt(i128, i128) {
+block0(v0: i128, v1: i128):
+  v2 = icmp sgt v0, v1
+  brif v2, block1, block1
+
+block1:
+  return
+}
+
+; VCode:
+; block0:
+;   sgt a2,[a0,a1],[a2,a3]##ty=i128
+;   bne a2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   blt a3, a1, 0xc
+;   bne a1, a3, 0x10
+;   bgeu a2, a0, 0xc
+;   addi a2, zero, 1
+;   j 8
+;   mv a2, zero
+; block1: ; offset 0x18
+;   ret
+
+function %i128_bricmp_ugt(i128, i128) {
+block0(v0: i128, v1: i128):
+  v2 = icmp ugt v0, v1
+  brif v2, block1, block1
+
+block1:
+  return
+}
+
+; VCode:
+; block0:
+;   ugt a2,[a0,a1],[a2,a3]##ty=i128
+;   bne a2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   bltu a3, a1, 0xc
+;   bne a1, a3, 0x10
+;   bgeu a2, a0, 0xc
+;   addi a2, zero, 1
+;   j 8
+;   mv a2, zero
+; block1: ; offset 0x18
+;   ret
+
+function %i128_bricmp_sge(i128, i128) {
+block0(v0: i128, v1: i128):
+  v2 = icmp sge v0, v1
+  brif v2, block1, block1
+
+block1:
+  return
+}
+
+; VCode:
+; block0:
+;   sge a2,[a0,a1],[a2,a3]##ty=i128
+;   bne a2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   blt a3, a1, 0xc
+;   bne a1, a3, 0x10
+;   bltu a0, a2, 0xc
+;   addi a2, zero, 1
+;   j 8
+;   mv a2, zero
+; block1: ; offset 0x18
+;   ret
+
+function %i128_bricmp_uge(i128, i128) {
+block0(v0: i128, v1: i128):
+  v2 = icmp uge v0, v1
+  brif v2, block1, block1
+
+block1:
+  return
+}
+
+; VCode:
+; block0:
+;   uge a2,[a0,a1],[a2,a3]##ty=i128
+;   bne a2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   bltu a3, a1, 0xc
+;   bne a1, a3, 0x10
+;   bltu a0, a2, 0xc
+;   addi a2, zero, 1
+;   j 8
+;   mv a2, zero
+; block1: ; offset 0x18
+;   ret
+
+function %i8_brif(i8){
+block0(v0: i8):
+    brif v0, block1, block1
+
+block1:
+    nop
+    return
+}
+
+; VCode:
+; block0:
+;   andi t2,a0,255
+;   bne t2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   andi t2, a0, 0xff
+; block1: ; offset 0x4
+;   ret
+
+function %i16_brif(i16){
+block0(v0: i16):
+    brif v0, block1, block1
+
+block1:
+    nop
+    return
+}
+
+; VCode:
+; block0:
+;   lui a1,16
+;   addi a1,a1,4095
+;   and a3,a0,a1
+;   bne a3,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a1, 0x10
+;   addi a1, a1, -1
+;   and a3, a0, a1
+; block1: ; offset 0xc
+;   ret
+
+function %i32_brif(i32){
+block0(v0: i32):
+    brif v0, block1, block1
+
+block1:
+    nop
+    return
+}
+
+; VCode:
+; block0:
+;   sext.w t2,a0
+;   bne t2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   sext.w t2, a0
+; block1: ; offset 0x4
+;   ret
+
+function %i64_brif(i64){
+block0(v0: i64):
+    brif v0, block1, block1
+
+block1:
+    nop
+    return
+}
+
+; VCode:
+; block0:
+;   bne a0,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   ret
+

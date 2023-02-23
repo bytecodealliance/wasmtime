@@ -39,10 +39,7 @@ impl RunCommand {
             }
             RunCommand::Run(invoke, compare, expected) => {
                 let actual = invoke_fn(&invoke.func, &invoke.args)?;
-                let matched = match compare {
-                    Comparison::Equals => *expected == actual,
-                    Comparison::NotEquals => *expected != actual,
-                };
+                let matched = Self::compare_results(compare, &actual, expected);
                 if !matched {
                     let actual = DisplayDataValues(&actual);
                     return Err(format!("Failed test: {}, actual: {}", self, actual));
@@ -50,6 +47,23 @@ impl RunCommand {
             }
         }
         Ok(())
+    }
+
+    fn compare_results(
+        compare: &Comparison,
+        actual: &Vec<DataValue>,
+        expected: &Vec<DataValue>,
+    ) -> bool {
+        let are_equal = actual.len() == expected.len()
+            && actual
+                .into_iter()
+                .zip(expected.into_iter())
+                .all(|(a, b)| a.bitwise_eq(b));
+
+        match compare {
+            Comparison::Equals => are_equal,
+            Comparison::NotEquals => !are_equal,
+        }
     }
 }
 

@@ -10,9 +10,9 @@
 #![no_main]
 
 use arbitrary::Arbitrary;
-use component_fuzz_util::Type as ValType;
+use component_fuzz_util::TestCase;
 use libfuzzer_sys::fuzz_target;
-use wasmparser::{Validator, WasmFeatures};
+use wasmparser::{Parser, Payload, Validator, WasmFeatures};
 use wasmtime_environ::component::*;
 use wasmtime_environ::fact::Module;
 
@@ -24,30 +24,17 @@ struct GenAdapterModule {
 
 #[derive(Arbitrary, Debug)]
 struct GenAdapter {
-    ty: FuncType,
     post_return: bool,
     lift_memory64: bool,
     lower_memory64: bool,
-    lift_encoding: GenStringEncoding,
-    lower_encoding: GenStringEncoding,
+    test: TestCase,
 }
 
-#[derive(Arbitrary, Debug)]
-struct FuncType {
-    params: Vec<ValType>,
-    result: ValType,
-}
+fuzz_target!(|module: GenAdapterModule| {
+    target(module);
+});
 
-#[derive(Copy, Clone, Arbitrary, Debug)]
-enum GenStringEncoding {
-    Utf8,
-    Utf16,
-    CompactUtf16,
-}
-
-fuzz_target!(|module: GenAdapterModule| { drop(target(module)) });
-
-fn target(module: GenAdapterModule) -> Result<(), ()> {
+fn target(module: GenAdapterModule) {
     drop(env_logger::try_init());
 
     let mut types = ComponentTypesBuilder::default();
@@ -57,7 +44,7 @@ fn target(module: GenAdapterModule) -> Result<(), ()> {
     let mut next_def = 0;
     let mut dummy_def = || {
         next_def += 1;
-        CoreDef::Adapter(AdapterIndex::from_u32(next_def))
+        dfg::CoreDef::Adapter(dfg::AdapterId::from_u32(next_def))
     };
 
     // Manufactures a `CoreExport` for a memory with the shape specified. Note
@@ -80,56 +67,82 @@ fn target(module: GenAdapterModule) -> Result<(), ()> {
         } else {
             dst[0]
         };
-        CoreExport {
-            instance: RuntimeInstanceIndex::from_u32(idx),
+        dfg::CoreExport {
+            instance: dfg::InstanceId::from_u32(idx),
             item: ExportItem::Name(String::new()),
         }
     };
 
     let mut adapters = Vec::new();
     for adapter in module.adapters.iter() {
-        let mut params = Vec::new();
-        for param in adapter.ty.params.iter() {
-            params.push((None, intern(&mut types, param)?));
+        let wat_decls = adapter.test.declarations();
+        let wat = format!(
+            "(component
+                {types}
+                (type (func {params} {results}))
+            )",
+            types = wat_decls.types,
+            params = wat_decls.params,
+            results = wat_decls.results,
+        );
+        let wasm = wat::parse_str(&wat).unwrap();
+
+        let mut validator = Validator::new_with_features(WasmFeatures {
+            component_model: true,
+            ..Default::default()
+        });
+
+        types.push_type_scope();
+        for payload in Parser::new(0).parse_all(&wasm) {
+            let payload = payload.unwrap();
+            validator.payload(&payload).unwrap();
+            let section = match payload {
+                Payload::ComponentTypeSection(s) => s,
+                _ => continue,
+            };
+            for ty in section {
+                let ty = types.intern_component_type(&ty.unwrap()).unwrap();
+                types.push_component_typedef(ty);
+                let ty = match ty {
+                    TypeDef::ComponentFunc(ty) => ty,
+                    _ => continue,
+                };
+                adapters.push(Adapter {
+                    lift_ty: ty,
+                    lower_ty: ty,
+                    lower_options: AdapterOptions {
+                        instance: RuntimeComponentInstanceIndex::from_u32(0),
+                        string_encoding: convert_encoding(adapter.test.encoding1),
+                        memory64: adapter.lower_memory64,
+                        // Pessimistically assume that memory/realloc are going to be
+                        // required for this trampoline and provide it. Avoids doing
+                        // calculations to figure out whether they're necessary and
+                        // simplifies the fuzzer here without reducing coverage within FACT
+                        // itself.
+                        memory: Some(dummy_memory(adapter.lower_memory64)),
+                        realloc: Some(dummy_def()),
+                        // Lowering never allows `post-return`
+                        post_return: None,
+                    },
+                    lift_options: AdapterOptions {
+                        instance: RuntimeComponentInstanceIndex::from_u32(1),
+                        string_encoding: convert_encoding(adapter.test.encoding2),
+                        memory64: adapter.lift_memory64,
+                        memory: Some(dummy_memory(adapter.lift_memory64)),
+                        realloc: Some(dummy_def()),
+                        post_return: if adapter.post_return {
+                            Some(dummy_def())
+                        } else {
+                            None
+                        },
+                    },
+                    func: dummy_def(),
+                });
+            }
         }
-        let result = intern(&mut types, &adapter.ty.result)?;
-        let signature = types.add_func_type(TypeFunc {
-            params: params.into(),
-            result,
-        });
-        adapters.push(Adapter {
-            lift_ty: signature,
-            lower_ty: signature,
-            lower_options: AdapterOptions {
-                instance: RuntimeComponentInstanceIndex::from_u32(0),
-                string_encoding: adapter.lower_encoding.into(),
-                memory64: adapter.lower_memory64,
-                // Pessimistically assume that memory/realloc are going to be
-                // required for this trampoline and provide it. Avoids doing
-                // calculations to figure out whether they're necessary and
-                // simplifies the fuzzer here without reducing coverage within FACT
-                // itself.
-                memory: Some(dummy_memory(adapter.lower_memory64)),
-                realloc: Some(dummy_def()),
-                // Lowering never allows `post-return`
-                post_return: None,
-            },
-            lift_options: AdapterOptions {
-                instance: RuntimeComponentInstanceIndex::from_u32(1),
-                string_encoding: adapter.lift_encoding.into(),
-                memory64: adapter.lift_memory64,
-                memory: Some(dummy_memory(adapter.lift_memory64)),
-                realloc: Some(dummy_def()),
-                post_return: if adapter.post_return {
-                    Some(dummy_def())
-                } else {
-                    None
-                },
-            },
-            func: dummy_def(),
-        });
+        types.pop_type_scope();
     }
-    let types = types.finish();
+
     let mut fact_module = Module::new(&types, module.debug);
     for (i, adapter) in adapters.iter().enumerate() {
         fact_module.adapt(&format!("adapter{i}"), adapter);
@@ -143,7 +156,7 @@ fn target(module: GenAdapterModule) -> Result<(), ()> {
     .validate_all(&wasm);
 
     let err = match result {
-        Ok(_) => return Ok(()),
+        Ok(_) => return,
         Err(e) => e,
     };
     eprintln!("invalid wasm module: {err:?}");
@@ -159,104 +172,10 @@ fn target(module: GenAdapterModule) -> Result<(), ()> {
     panic!()
 }
 
-fn intern(types: &mut ComponentTypesBuilder, ty: &ValType) -> Result<InterfaceType, ()> {
-    Ok(match ty {
-        ValType::Unit => InterfaceType::Unit,
-        ValType::Bool => InterfaceType::Bool,
-        ValType::U8 => InterfaceType::U8,
-        ValType::S8 => InterfaceType::S8,
-        ValType::U16 => InterfaceType::U16,
-        ValType::S16 => InterfaceType::S16,
-        ValType::U32 => InterfaceType::U32,
-        ValType::S32 => InterfaceType::S32,
-        ValType::U64 => InterfaceType::U64,
-        ValType::S64 => InterfaceType::S64,
-        ValType::Float32 => InterfaceType::Float32,
-        ValType::Float64 => InterfaceType::Float64,
-        ValType::Char => InterfaceType::Char,
-        ValType::List(ty) => {
-            let ty = intern(types, ty)?;
-            InterfaceType::List(types.add_interface_type(ty))
-        }
-        ValType::Record(tys) => {
-            let ty = TypeRecord {
-                fields: tys
-                    .iter()
-                    .enumerate()
-                    .map(|(i, ty)| {
-                        Ok(RecordField {
-                            name: format!("f{i}"),
-                            ty: intern(types, ty)?,
-                        })
-                    })
-                    .collect::<Result<_, _>>()?,
-            };
-            InterfaceType::Record(types.add_record_type(ty))
-        }
-        ValType::Flags(size) => {
-            let ty = TypeFlags {
-                names: (0..size.as_usize()).map(|i| format!("f{i}")).collect(),
-            };
-            InterfaceType::Flags(types.add_flags_type(ty))
-        }
-        ValType::Tuple(tys) => {
-            let ty = TypeTuple {
-                types: tys
-                    .iter()
-                    .map(|ty| intern(types, ty))
-                    .collect::<Result<_, _>>()?,
-            };
-            InterfaceType::Tuple(types.add_tuple_type(ty))
-        }
-        ValType::Variant(cases) => {
-            let ty = TypeVariant {
-                cases: cases
-                    .iter()
-                    .enumerate()
-                    .map(|(i, ty)| {
-                        Ok(VariantCase {
-                            name: format!("c{i}"),
-                            ty: intern(types, ty)?,
-                        })
-                    })
-                    .collect::<Result<_, _>>()?,
-            };
-            InterfaceType::Variant(types.add_variant_type(ty))
-        }
-        ValType::Union(tys) => {
-            let ty = TypeUnion {
-                types: tys
-                    .iter()
-                    .map(|ty| intern(types, ty))
-                    .collect::<Result<_, _>>()?,
-            };
-            InterfaceType::Union(types.add_union_type(ty))
-        }
-        ValType::Enum(size) => {
-            let ty = TypeEnum {
-                names: (0..size.as_usize()).map(|i| format!("c{i}")).collect(),
-            };
-            InterfaceType::Enum(types.add_enum_type(ty))
-        }
-        ValType::Option(ty) => {
-            let ty = intern(types, ty)?;
-            InterfaceType::Option(types.add_interface_type(ty))
-        }
-        ValType::Expected { ok, err } => {
-            let ok = intern(types, ok)?;
-            let err = intern(types, err)?;
-            InterfaceType::Expected(types.add_expected_type(TypeExpected { ok, err }))
-        }
-        ValType::String => return Err(()),
-    })
-}
-
-impl From<GenStringEncoding> for StringEncoding {
-    fn from(gen: GenStringEncoding) -> StringEncoding {
-        match gen {
-            GenStringEncoding::Utf8 => StringEncoding::Utf8,
-            GenStringEncoding::Utf16 => StringEncoding::Utf16,
-            GenStringEncoding::CompactUtf16 => StringEncoding::CompactUtf16,
-        }
+fn convert_encoding(encoding: component_fuzz_util::StringEncoding) -> StringEncoding {
+    match encoding {
+        component_fuzz_util::StringEncoding::Utf8 => StringEncoding::Utf8,
+        component_fuzz_util::StringEncoding::Utf16 => StringEncoding::Utf16,
+        component_fuzz_util::StringEncoding::Latin1OrUtf16 => StringEncoding::CompactUtf16,
     }
 }

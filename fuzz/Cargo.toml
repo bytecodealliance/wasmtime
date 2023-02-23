@@ -1,36 +1,36 @@
 [package]
 name = "wasmtime-fuzz"
 version = "0.0.0"
-authors = ["The Wasmtime Project Developers"]
-edition = "2021"
+edition.workspace = true
 publish = false
 
 [package.metadata]
 cargo-fuzz = true
 
 [dependencies]
-anyhow = { version = "1.0.19" }
-arbitrary = { version = "1.1.0", features = ["derive"] }
-cranelift-codegen = { path = "../cranelift/codegen" }
-cranelift-reader = { path = "../cranelift/reader" }
-cranelift-wasm = { path = "../cranelift/wasm" }
-cranelift-filetests = { path = "../cranelift/filetests" }
-cranelift-interpreter = { path = "../cranelift/interpreter" }
-cranelift-fuzzgen = { path = "../cranelift/fuzzgen" }
-libfuzzer-sys = "0.4.0"
-target-lexicon = "0.12"
-wasmtime = { path = "../crates/wasmtime" }
-wasmtime-fuzzing = { path = "../crates/fuzzing" }
-component-test-util = { path = "../crates/misc/component-test-util" }
-component-fuzz-util = { path = "../crates/misc/component-fuzz-util" }
+anyhow = { workspace = true }
+once_cell = { workspace = true }
+cranelift-codegen = { workspace = true, features = ["incremental-cache", "x86", "arm64", "s390x", "riscv64"] }
+cranelift-reader = { workspace = true }
+cranelift-wasm = { workspace = true }
+cranelift-filetests = { workspace = true }
+cranelift-interpreter = { workspace = true }
+cranelift-fuzzgen = { workspace = true }
+libfuzzer-sys = { version = "0.4.0", features = ["arbitrary-derive"] }
+target-lexicon = { workspace = true }
+smallvec = { workspace = true }
+wasmtime = { workspace = true }
+wasmtime-fuzzing = { workspace = true }
+component-test-util = { workspace = true }
+component-fuzz-util = { workspace = true }
 
 [build-dependencies]
-anyhow = "1.0.19"
+anyhow = { workspace = true }
 proc-macro2 = "1.0"
 arbitrary = { version = "1.1.0", features = ["derive"] }
 rand = { version = "0.8.0" }
 quote = "1.0"
-component-fuzz-util = { path = "../crates/misc/component-fuzz-util" }
+component-fuzz-util = { workspace = true }
 
 [features]
 default = ['fuzz-spec-interpreter']
@@ -57,25 +57,6 @@ doc = false
 [[bin]]
 name = "differential"
 path = "fuzz_targets/differential.rs"
-test = false
-doc = false
-
-[[bin]]
-name = "differential_spec"
-path = "fuzz_targets/differential_spec.rs"
-test = false
-doc = false
-required-features = ['fuzz-spec-interpreter']
-
-[[bin]]
-name = "differential_wasmi"
-path = "fuzz_targets/differential_wasmi.rs"
-test = false
-doc = false
-
-[[bin]]
-name = "differential_v8"
-path = "fuzz_targets/differential_v8.rs"
 test = false
 doc = false
 
@@ -118,5 +99,11 @@ doc = false
 [[bin]]
 name = "component_api"
 path = "fuzz_targets/component_api.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "cranelift-icache"
+path = "fuzz_targets/cranelift-icache.rs"
 test = false
 doc = false

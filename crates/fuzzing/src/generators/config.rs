@@ -1,8 +1,7 @@
 //! Generate a configuration for both Wasmtime and the Wasm module to execute.
 
 use super::{
-    CodegenSettings, InstanceAllocationStrategy, MemoryConfig, ModuleConfig, NormalMemoryConfig,
-    UnalignedMemoryCreator,
+    CodegenSettings, InstanceAllocationStrategy, MemoryConfig, ModuleConfig, UnalignedMemoryCreator,
 };
 use crate::oracles::{StoreLimits, Timeout};
 use anyhow::Result;
@@ -27,25 +26,27 @@ pub struct Config {
 
 impl Config {
     /// Indicates that this configuration is being used for differential
-    /// execution so only a single function should be generated since that's all
-    /// that's going to be exercised.
+    /// execution.
+    ///
+    /// The purpose of this function is to update the configuration which was
+    /// generated to be compatible with execution in multiple engines. The goal
+    /// is to produce the exact same result in all engines so we need to paper
+    /// over things like nan differences and memory/table behavior differences.
     pub fn set_differential_config(&mut self) {
         let config = &mut self.module_config.config;
 
-        config.allow_start_export = false;
-
-        // Make sure there's a type available for the function.
-        config.min_types = 1;
+        // Make it more likely that there are types available to generate a
+        // function with.
+        config.min_types = config.min_types.max(1);
         config.max_types = config.max_types.max(1);
 
         // Generate at least one function
-        config.min_funcs = 1;
+        config.min_funcs = config.min_funcs.max(1);
         config.max_funcs = config.max_funcs.max(1);
 
         // Allow a memory to be generated, but don't let it get too large.
         // Additionally require the maximum size to guarantee that the growth
         // behavior is consistent across engines.
-        config.max_memories = 1;
         config.max_memory_pages = 10;
         config.memory_max_size_required = true;
 
@@ -56,7 +57,6 @@ impl Config {
         //
         // Note that while reference types are disabled below, only allow one
         // table.
-        config.max_tables = 1;
         config.max_table_elements = 1_000;
         config.table_max_size_required = true;
 
@@ -70,34 +70,16 @@ impl Config {
         // can paper over NaN differences between engines.
         config.canonicalize_nans = true;
 
-        // When diffing against a non-wasmtime engine then disable wasm
-        // features to get selectively re-enabled against each differential
-        // engine.
-        config.bulk_memory_enabled = false;
-        config.reference_types_enabled = false;
-        config.simd_enabled = false;
-        config.memory64_enabled = false;
-        config.threads_enabled = false;
-
         // If using the pooling allocator, update the instance limits too
-        if let InstanceAllocationStrategy::Pooling {
-            instance_limits: limits,
-            ..
-        } = &mut self.wasmtime.strategy
-        {
+        if let InstanceAllocationStrategy::Pooling(pooling) = &mut self.wasmtime.strategy {
             // One single-page memory
-            limits.memories = 1;
-            limits.memory_pages = 10;
+            pooling.instance_memories = config.max_memories as u32;
+            pooling.instance_memory_pages = 10;
 
-            limits.tables = 1;
-            limits.table_elements = 1_000;
+            pooling.instance_tables = config.max_tables as u32;
+            pooling.instance_table_elements = 1_000;
 
-            match &mut self.wasmtime.memory_config {
-                MemoryConfig::Normal(config) => {
-                    config.static_memory_maximum_size = Some(limits.memory_pages * 0x10000);
-                }
-                MemoryConfig::CustomUnaligned => unreachable!(), // Arbitrary impl for `Config` should have prevented this
-            }
+            pooling.instance_size = 1_000_000;
         }
     }
 
@@ -108,58 +90,58 @@ impl Config {
     /// to ensure termination; as doing so will add an additional global to the module,
     /// the pooling allocator, if configured, will also have its globals limit updated.
     pub fn generate(
-        &mut self,
+        &self,
         input: &mut Unstructured<'_>,
         default_fuel: Option<u32>,
     ) -> arbitrary::Result<wasm_smith::Module> {
-        let mut module = wasm_smith::Module::new(self.module_config.config.clone(), input)?;
-
-        if let Some(default_fuel) = default_fuel {
-            module.ensure_termination(default_fuel);
-        }
-
-        Ok(module)
+        self.module_config.generate(input, default_fuel)
     }
 
-    /// Indicates that this configuration should be spec-test-compliant,
-    /// disabling various features the spec tests assert are disabled.
-    pub fn set_spectest_compliant(&mut self) {
-        let config = &mut self.module_config.config;
-        config.memory64_enabled = false;
-        config.bulk_memory_enabled = true;
-        config.reference_types_enabled = true;
-        config.multi_value_enabled = true;
-        config.simd_enabled = true;
-        config.threads_enabled = false;
-        config.max_memories = 1;
-        config.max_tables = 5;
+    /// Tests whether this configuration is capable of running all spec tests.
+    pub fn is_spectest_compliant(&self) -> bool {
+        let config = &self.module_config.config;
 
-        if let InstanceAllocationStrategy::Pooling {
-            instance_limits: limits,
-            ..
-        } = &mut self.wasmtime.strategy
+        // Check for wasm features that must be disabled to run spec tests
+        if config.memory64_enabled || config.threads_enabled {
+            return false;
+        }
+
+        // Check for wasm features that must be enabled to run spec tests
+        if !config.bulk_memory_enabled
+            || !config.reference_types_enabled
+            || !config.multi_value_enabled
+            || !config.simd_enabled
         {
-            // Configure the lower bound of a number of limits to what's
-            // required to actually run the spec tests. Fuzz-generated inputs
-            // may have limits less than these thresholds which would cause the
-            // spec tests to fail which isn't particularly interesting.
-            limits.memories = limits.memories.max(1);
-            limits.tables = limits.memories.max(5);
-            limits.table_elements = limits.memories.max(1_000);
-            limits.memory_pages = limits.memory_pages.max(900);
-            limits.count = limits.count.max(500);
-            limits.size = limits.size.max(64 * 1024);
+            return false;
+        }
 
-            match &mut self.wasmtime.memory_config {
-                MemoryConfig::Normal(config) => {
-                    config.static_memory_maximum_size = Some(limits.memory_pages * 0x10000);
-                }
-                MemoryConfig::CustomUnaligned => unreachable!(), // Arbitrary impl for `Config` should have prevented this
+        // Make sure the runtime limits allow for the instantiation of all spec
+        // tests. Note that the max memories must be precisely one since 0 won't
+        // instantiate spec tests and more than one is multi-memory which is
+        // disabled for spec tests.
+        if config.max_memories != 1 || config.max_tables < 5 {
+            return false;
+        }
+
+        if let InstanceAllocationStrategy::Pooling(pooling) = &self.wasmtime.strategy {
+            // Check to see if any item limit is less than the required
+            // threshold to execute the spec tests.
+            if pooling.instance_memories < 1
+                || pooling.instance_tables < 5
+                || pooling.instance_table_elements < 1_000
+                || pooling.instance_memory_pages < 900
+                || pooling.instance_count < 500
+                || pooling.instance_size < 64 * 1024
+            {
+                return false;
             }
         }
+
+        true
     }
 
     /// Converts this to a `wasmtime::Config` object
+    #[allow(deprecated)] // Allow use of `cranelift_use_egraphs` below.
     pub fn to_wasmtime(&self) -> wasmtime::Config {
         crate::init_fuzzing();
         log::debug!("creating wasmtime config with {:#?}", self.wasmtime);
@@ -172,9 +154,10 @@ impl Config {
             .wasm_simd(self.module_config.config.simd_enabled)
             .wasm_memory64(self.module_config.config.memory64_enabled)
             .wasm_threads(self.module_config.config.threads_enabled)
-            .wasm_backtrace(self.wasmtime.wasm_backtraces)
+            .native_unwind_info(self.wasmtime.native_unwind_info)
             .cranelift_nan_canonicalization(self.wasmtime.canonicalize_nans)
             .cranelift_opt_level(self.wasmtime.opt_level.to_wasmtime())
+            .cranelift_use_egraphs(self.wasmtime.use_egraphs)
             .consume_fuel(self.wasmtime.consume_fuel)
             .epoch_interruption(self.wasmtime.epoch_interruption)
             .memory_init_cow(self.wasmtime.memory_init_cow)
@@ -314,9 +297,10 @@ impl Config {
         // Don't propagate these errors to prevent them from accidentally being
         // interpreted as invalid wasm, these should never fail on a
         // well-behaved host system.
-        let file = tempfile::NamedTempFile::new().unwrap();
-        std::fs::write(file.path(), module.serialize().unwrap()).unwrap();
-        unsafe { Ok(Module::deserialize_file(engine, file.path()).unwrap()) }
+        let dir = tempfile::TempDir::new().unwrap();
+        let file = dir.path().join("module.wasm");
+        std::fs::write(&file, module.serialize().unwrap()).unwrap();
+        unsafe { Ok(Module::deserialize_file(engine, &file).unwrap()) }
     }
 }
 
@@ -327,41 +311,61 @@ impl<'a> Arbitrary<'a> for Config {
             module_config: u.arbitrary()?,
         };
 
+        // This is pulled from `u` by default via `wasm-smith`, but Wasmtime
+        // doesn't implement this yet, so forcibly always disable it.
+        config.module_config.config.tail_call_enabled = false;
+
+        config
+            .wasmtime
+            .codegen
+            .maybe_disable_more_features(&config.module_config, u)?;
+
         // If using the pooling allocator, constrain the memory and module configurations
         // to the module limits.
-        if let InstanceAllocationStrategy::Pooling {
-            instance_limits: limits,
-            ..
-        } = &config.wasmtime.strategy
-        {
+        if let InstanceAllocationStrategy::Pooling(pooling) = &mut config.wasmtime.strategy {
+            let cfg = &mut config.module_config.config;
             // If the pooling allocator is used, do not allow shared memory to
             // be created. FIXME: see
             // https://github.com/bytecodealliance/wasmtime/issues/4244.
-            config.module_config.config.threads_enabled = false;
+            cfg.threads_enabled = false;
 
-            // Force the use of a normal memory config when using the pooling allocator and
-            // limit the static memory maximum to be the same as the pooling allocator's memory
-            // page limit.
-            config.wasmtime.memory_config = match config.wasmtime.memory_config {
-                MemoryConfig::Normal(mut config) => {
-                    config.static_memory_maximum_size = Some(limits.memory_pages * 0x10000);
-                    MemoryConfig::Normal(config)
+            // Ensure the pooling allocator can support the maximal size of
+            // memory, picking the smaller of the two to win.
+            if cfg.max_memory_pages < pooling.instance_memory_pages {
+                pooling.instance_memory_pages = cfg.max_memory_pages;
+            } else {
+                cfg.max_memory_pages = pooling.instance_memory_pages;
+            }
+
+            // If traps are disallowed then memories must have at least one page
+            // of memory so if we still are only allowing 0 pages of memory then
+            // increase that to one here.
+            if cfg.disallow_traps {
+                if pooling.instance_memory_pages == 0 {
+                    pooling.instance_memory_pages = 1;
+                    cfg.max_memory_pages = 1;
                 }
-                MemoryConfig::CustomUnaligned => {
-                    let mut config: NormalMemoryConfig = u.arbitrary()?;
-                    config.static_memory_maximum_size = Some(limits.memory_pages * 0x10000);
-                    MemoryConfig::Normal(config)
+                // .. additionally update tables
+                if pooling.instance_table_elements == 0 {
+                    pooling.instance_table_elements = 1;
                 }
-            };
+            }
 
-            let cfg = &mut config.module_config.config;
-            cfg.max_memories = limits.memories as usize;
-            cfg.max_tables = limits.tables as usize;
-            cfg.max_memory_pages = limits.memory_pages;
+            // Forcibly don't use the `CustomUnaligned` memory configuration
+            // with the pooling allocator active.
+            if let MemoryConfig::CustomUnaligned = config.wasmtime.memory_config {
+                config.wasmtime.memory_config = MemoryConfig::Normal(u.arbitrary()?);
+            }
 
-            // Force no aliases in any generated modules as they might count against the
-            // import limits above.
-            cfg.max_aliases = 0;
+            // Don't allow too many linear memories per instance since massive
+            // virtual mappings can fail to get allocated.
+            cfg.min_memories = cfg.min_memories.min(10);
+            cfg.max_memories = cfg.max_memories.min(10);
+
+            // Force this pooling allocator to always be able to accommodate the
+            // module that may be generated.
+            pooling.instance_memories = cfg.max_memories as u32;
+            pooling.instance_tables = cfg.max_tables as u32;
         }
 
         Ok(config)
@@ -373,6 +377,7 @@ impl<'a> Arbitrary<'a> for Config {
 #[derive(Arbitrary, Clone, Debug, Eq, Hash, PartialEq)]
 pub struct WasmtimeConfig {
     opt_level: OptLevel,
+    use_egraphs: bool,
     debug_info: bool,
     canonicalize_nans: bool,
     interruptable: bool,
@@ -389,7 +394,32 @@ pub struct WasmtimeConfig {
     codegen: CodegenSettings,
     padding_between_functions: Option<u16>,
     generate_address_map: bool,
-    wasm_backtraces: bool,
+    native_unwind_info: bool,
+}
+
+impl WasmtimeConfig {
+    /// Force `self` to be a configuration compatible with `other`. This is
+    /// useful for differential execution to avoid unhelpful fuzz crashes when
+    /// one engine has a feature enabled and the other does not.
+    pub fn make_compatible_with(&mut self, other: &Self) {
+        // Use the same allocation strategy between the two configs.
+        //
+        // Ideally this wouldn't be necessary, but, during differential
+        // evaluation, if the `lhs` is using ondemand and the `rhs` is using the
+        // pooling allocator (or vice versa), then the module may have been
+        // generated in such a way that is incompatible with the other
+        // allocation strategy.
+        //
+        // We can remove this in the future when it's possible to access the
+        // fields of `wasm_smith::Module` to constrain the pooling allocator
+        // based on what was actually generated.
+        self.strategy = other.strategy.clone();
+        if let InstanceAllocationStrategy::Pooling { .. } = &other.strategy {
+            // Also use the same memory configuration when using the pooling
+            // allocator.
+            self.memory_config = other.memory_config.clone();
+        }
+    }
 }
 
 #[derive(Arbitrary, Clone, Debug, PartialEq, Eq, Hash)]

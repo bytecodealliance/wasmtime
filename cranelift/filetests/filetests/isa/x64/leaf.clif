@@ -10,6 +10,7 @@ block0(v0: i64):
     return v0
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -17,4 +18,14 @@ block0(v0: i64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 

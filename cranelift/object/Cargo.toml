@@ -1,25 +1,25 @@
 [package]
 name = "cranelift-object"
-version = "0.88.0"
+version = "0.94.0"
 authors = ["The Cranelift Project Developers"]
 description = "Emit Cranelift output to native object files with `object`"
 repository = "https://github.com/bytecodealliance/wasmtime"
 documentation = "https://docs.rs/cranelift-object"
 license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
-edition = "2021"
+edition.workspace = true
 
 [dependencies]
-cranelift-module = { path = "../module", version = "0.88.0" }
-cranelift-codegen = { path = "../codegen", version = "0.88.0", default-features = false, features = ["std"] }
-object = { version = "0.29.0", default-features = false, features = ["write"] }
-target-lexicon = "0.12"
-anyhow = "1.0"
-log = { version = "0.4.6", default-features = false }
+cranelift-module = { workspace = true }
+cranelift-codegen = { workspace = true, features = ["std"] }
+object = { workspace = true, features = ["write"] }
+target-lexicon = { workspace = true }
+anyhow = { workspace = true }
+log = { workspace = true }
 
 [dev-dependencies]
-cranelift-frontend = { path = "../frontend", version = "0.88.0" }
-cranelift-entity = { path = "../entity", version = "0.88.0" }
+cranelift-frontend = { workspace = true }
+cranelift-entity = { workspace = true }
 
 [badges]
 maintenance = { status = "experimental" }

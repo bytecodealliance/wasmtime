@@ -1,6 +1,6 @@
 use anyhow::Result;
 use wasmtime::component::*;
-use wasmtime::{Store, StoreContextMut, Trap, TrapCode};
+use wasmtime::{Store, StoreContextMut, Trap};
 
 #[test]
 fn invalid_api() -> Result<()> {
@@ -24,8 +24,8 @@ fn invalid_api() -> Result<()> {
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
-    let thunk1 = instance.get_typed_func::<(), (), _>(&mut store, "thunk1")?;
-    let thunk2 = instance.get_typed_func::<(), (), _>(&mut store, "thunk2")?;
+    let thunk1 = instance.get_typed_func::<(), ()>(&mut store, "thunk1")?;
+    let thunk2 = instance.get_typed_func::<(), ()>(&mut store, "thunk2")?;
 
     // Ensure that we can't call `post_return` before doing anything
     let msg = "post_return can only be called after a function has previously been called";
@@ -120,16 +120,17 @@ fn invoke_post_return() -> Result<()> {
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, false);
     let mut linker = Linker::new(&engine);
-    linker
-        .root()
-        .func_wrap("f", |mut store: StoreContextMut<'_, bool>| -> Result<()> {
+    linker.root().func_wrap(
+        "f",
+        |mut store: StoreContextMut<'_, bool>, _: ()| -> Result<()> {
             assert!(!*store.data());
             *store.data_mut() = true;
             Ok(())
-        })?;
+        },
+    )?;
 
     let instance = linker.instantiate(&mut store, &component)?;
-    let thunk = instance.get_typed_func::<(), (), _>(&mut store, "thunk")?;
+    let thunk = instance.get_typed_func::<(), ()>(&mut store, "thunk")?;
 
     assert!(!*store.data());
     thunk.call(&mut store, ())?;
@@ -195,21 +196,21 @@ fn post_return_all_types() -> Result<()> {
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, false);
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
-    let i32 = instance.get_typed_func::<(), u32, _>(&mut store, "i32")?;
-    let i64 = instance.get_typed_func::<(), u64, _>(&mut store, "i64")?;
-    let f32 = instance.get_typed_func::<(), f32, _>(&mut store, "f32")?;
-    let f64 = instance.get_typed_func::<(), f64, _>(&mut store, "f64")?;
+    let i32 = instance.get_typed_func::<(), (u32,)>(&mut store, "i32")?;
+    let i64 = instance.get_typed_func::<(), (u64,)>(&mut store, "i64")?;
+    let f32 = instance.get_typed_func::<(), (f32,)>(&mut store, "f32")?;
+    let f64 = instance.get_typed_func::<(), (f64,)>(&mut store, "f64")?;
 
-    assert_eq!(i32.call(&mut store, ())?, 1);
+    assert_eq!(i32.call(&mut store, ())?, (1,));
     i32.post_return(&mut store)?;
 
-    assert_eq!(i64.call(&mut store, ())?, 2);
+    assert_eq!(i64.call(&mut store, ())?, (2,));
     i64.post_return(&mut store)?;
 
-    assert_eq!(f32.call(&mut store, ())?, 3.);
+    assert_eq!(f32.call(&mut store, ())?, (3.,));
     f32.post_return(&mut store)?;
 
-    assert_eq!(f64.call(&mut store, ())?, 4.);
+    assert_eq!(f64.call(&mut store, ())?, (4.,));
     f64.post_return(&mut store)?;
 
     Ok(())
@@ -250,8 +251,8 @@ fn post_return_string() -> Result<()> {
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, false);
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
-    let get = instance.get_typed_func::<(), WasmStr, _>(&mut store, "get")?;
-    let s = get.call(&mut store, ())?;
+    let get = instance.get_typed_func::<(), (WasmStr,)>(&mut store, "get")?;
+    let s = get.call(&mut store, ())?.0;
     assert_eq!(s.to_str(&store)?, "hello world");
     get.post_return(&mut store)?;
 
@@ -280,10 +281,10 @@ fn trap_in_post_return_poisons_instance() -> Result<()> {
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
-    let f = instance.get_typed_func::<(), (), _>(&mut store, "f")?;
+    let f = instance.get_typed_func::<(), ()>(&mut store, "f")?;
     f.call(&mut store, ())?;
     let trap = f.post_return(&mut store).unwrap_err().downcast::<Trap>()?;
-    assert_eq!(trap.trap_code(), Some(TrapCode::UnreachableCodeReached));
+    assert_eq!(trap, Trap::UnreachableCodeReached);
     let err = f.call(&mut store, ()).unwrap_err();
     assert!(
         err.to_string()

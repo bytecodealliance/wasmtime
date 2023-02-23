@@ -9,14 +9,27 @@
 //!  - when the tools are not available, this library will panic at runtime (see
 //!    `without_library` module).
 
-/// Enumerate the kinds of Wasm values.
+/// Enumerate the kinds of Wasm values the OCaml interpreter can handle.
 #[derive(Clone, Debug, PartialEq)]
-pub enum Value {
+pub enum SpecValue {
     I32(i32),
     I64(i64),
     F32(i32),
     F64(i64),
     V128(Vec<u8>),
+}
+
+/// Represents a WebAssembly export from the OCaml interpreter side.
+#[allow(dead_code)]
+pub enum SpecExport {
+    Global(SpecValue),
+    Memory(Vec<u8>),
+}
+
+/// Represents a WebAssembly instance from the OCaml interpreter side.
+pub struct SpecInstance {
+    #[cfg(feature = "has-libinterpret")]
+    repr: ocaml_interop::BoxRoot<SpecInstance>,
 }
 
 #[cfg(feature = "has-libinterpret")]
@@ -32,3 +45,8 @@ pub use without_library::*;
 // If the user is fuzzing`, we expect the OCaml library to have been built.
 #[cfg(all(fuzzing, not(feature = "has-libinterpret")))]
 compile_error!("The OCaml library was not built.");
+
+/// Check if the OCaml spec interpreter bindings will work.
+pub fn support_compiled_in() -> bool {
+    cfg!(feature = "has-libinterpret")
+}

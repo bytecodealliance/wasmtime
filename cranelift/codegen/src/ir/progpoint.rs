@@ -37,6 +37,7 @@ impl From<ValueDef> for ProgramPoint {
         match def {
             ValueDef::Result(inst, _) => inst.into(),
             ValueDef::Param(block, _) => block.into(),
+            ValueDef::Union(_, _) => panic!("Union does not have a single program point"),
         }
     }
 }
@@ -78,6 +79,7 @@ impl From<ValueDef> for ExpandedProgramPoint {
         match def {
             ValueDef::Result(inst, _) => inst.into(),
             ValueDef::Param(block, _) => block.into(),
+            ValueDef::Union(_, _) => panic!("Union does not have a single program point"),
         }
     }
 }

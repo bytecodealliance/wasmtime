@@ -89,25 +89,33 @@ pub mod write;
 
 pub use crate::entity::packed_option;
 pub use crate::machinst::buffer::{MachCallSite, MachReloc, MachSrcLoc, MachStackMap, MachTrap};
-pub use crate::machinst::TextSectionBuilder;
+pub use crate::machinst::{
+    CompiledCode, Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, Reg,
+    TextSectionBuilder, Writable,
+};
 
 mod alias_analysis;
 mod bitset;
 mod constant_hash;
 mod context;
+mod ctxhash;
 mod dce;
 mod divconst_magic_numbers;
+mod egraph;
 mod fx;
 mod inst_predicates;
+mod isle_prelude;
 mod iterators;
 mod legalizer;
 mod licm;
 mod nan_canonicalization;
+mod opts;
 mod remove_constant_phis;
 mod result;
 mod scoped_hash_map;
 mod simple_gvn;
 mod simple_preopt;
+mod unionfind;
 mod unreachable_code;
 mod value_label;
 
@@ -115,6 +123,9 @@ mod value_label;
 mod souper_harvest;
 
 pub use crate::result::{CodegenError, CodegenResult, CompileError};
+
+#[cfg(feature = "incremental-cache")]
+pub mod incremental_cache;
 
 /// Even when trace logging is disabled, the trace macro has a significant performance cost so we
 /// disable it by default.

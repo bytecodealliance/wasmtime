@@ -46,7 +46,7 @@ fn bench_sequential(c: &mut Criterion, path: &Path) {
             let mut linker = Linker::new(&engine);
             wasmtime_wasi::add_to_linker(&mut linker, |cx| cx).unwrap();
             let pre = linker
-                .instantiate_pre(&mut store(&engine), &module)
+                .instantiate_pre(&module)
                 .expect("failed to pre-instantiate");
             (engine, pre)
         });
@@ -77,7 +77,7 @@ fn bench_parallel(c: &mut Criterion, path: &Path) {
             wasmtime_wasi::add_to_linker(&mut linker, |cx| cx).unwrap();
             let pre = Arc::new(
                 linker
-                    .instantiate_pre(&mut store(&engine), &module)
+                    .instantiate_pre(&module)
                     .expect("failed to pre-instantiate"),
             );
             (engine, pre)
@@ -202,13 +202,11 @@ fn bench_instantiation(c: &mut Criterion) {
 fn strategies() -> impl Iterator<Item = InstanceAllocationStrategy> {
     [
         InstanceAllocationStrategy::OnDemand,
-        InstanceAllocationStrategy::Pooling {
-            strategy: Default::default(),
-            instance_limits: InstanceLimits {
-                memory_pages: 10_000,
-                ..Default::default()
-            },
-        },
+        InstanceAllocationStrategy::Pooling({
+            let mut config = PoolingAllocationConfig::default();
+            config.instance_memory_pages(10_000);
+            config
+        }),
     ]
     .into_iter()
 }

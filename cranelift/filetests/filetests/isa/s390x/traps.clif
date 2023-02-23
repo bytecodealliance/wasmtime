@@ -10,16 +10,26 @@ block0:
   trap user0
 }
 
+; VCode:
 ; block0:
 ;   trap
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x00, 0x00 ; trap: user0
 
 function %resumable_trap() {
 block0:
   trap user0
 }
 
+; VCode:
 ; block0:
 ;   trap
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x00, 0x00 ; trap: user0
 
 function %trapz(i64) {
 block0(v0: i64):
@@ -29,6 +39,7 @@ block0(v0: i64):
   return
 }
 
+; VCode:
 ; block0:
 ;   clgfi %r2, 42
 ;   jge label1 ; jg label2
@@ -36,6 +47,15 @@ block0(v0: i64):
 ;   br %r14
 ; block2:
 ;   trap
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   clgfi %r2, 0x2a
+;   jgne 0xe
+; block1: ; offset 0xc
+;   br %r14
+; block2: ; offset 0xe
+;   .byte 0x00, 0x00 ; trap: user0
 
 function %trapnz(i64) {
 block0(v0: i64):
@@ -45,13 +65,23 @@ block0(v0: i64):
   return
 }
 
+; VCode:
 ; block0:
 ;   clgfi %r2, 42
-;   jgne label1 ; jg label2
-; block1:
-;   br %r14
+;   jge label1 ; jg label2
 ; block2:
+;   br %r14
+; block1:
 ;   trap
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   clgfi %r2, 0x2a
+;   jge 0xe
+; block1: ; offset 0xc
+;   br %r14
+; block2: ; offset 0xe
+;   .byte 0x00, 0x00 ; trap: user0
 
 function %resumable_trapnz(i64) {
 block0(v0: i64):
@@ -61,13 +91,23 @@ block0(v0: i64):
   return
 }
 
+; VCode:
 ; block0:
 ;   clgfi %r2, 42
-;   jgne label1 ; jg label2
-; block1:
-;   br %r14
+;   jge label1 ; jg label2
 ; block2:
+;   br %r14
+; block1:
 ;   trap
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   clgfi %r2, 0x2a
+;   jge 0xe
+; block1: ; offset 0xc
+;   br %r14
+; block2: ; offset 0xe
+;   .byte 0x00, 0x00 ; trap: user0
 
 function %h() {
 block0:
@@ -75,7 +115,13 @@ block0:
   return
 }
 
+; VCode:
 ; block0:
 ;   debugtrap
+;   br %r14
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x00, 0x01
 ;   br %r14
 

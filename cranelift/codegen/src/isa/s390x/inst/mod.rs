@@ -2,14 +2,14 @@
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
 use crate::ir::{types, ExternalName, Opcode, Type};
+use crate::isa::s390x::abi::S390xMachineDeps;
 use crate::isa::CallConv;
 use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use core::convert::TryFrom;
 use regalloc2::{PRegSet, VReg};
-use smallvec::{smallvec, SmallVec};
+use smallvec::SmallVec;
 use std::string::{String, ToString};
 pub mod regs;
 pub use self::regs::*;
@@ -28,8 +28,9 @@ mod emit_tests;
 // Instructions (top level): definition
 
 pub use crate::isa::s390x::lower::isle::generated_code::{
-    ALUOp, CmpOp, FPUOp1, FPUOp2, FPUOp3, FpuRoundMode, FpuRoundOp, MInst as Inst, RxSBGOp,
-    ShiftOp, UnaryOp, VecBinaryOp, VecFloatCmpOp, VecIntCmpOp, VecShiftOp, VecUnaryOp,
+    ALUOp, CmpOp, FPUOp1, FPUOp2, FPUOp3, FpuRoundMode, FpuRoundOp, LaneOrder, MInst as Inst,
+    RxSBGOp, ShiftOp, SymbolReloc, UnaryOp, VecBinaryOp, VecFloatCmpOp, VecIntCmpOp, VecShiftOp,
+    VecUnaryOp,
 };
 
 /// Additional information for (direct) Call instructions, left out of line to lower the size of
@@ -37,12 +38,13 @@ pub use crate::isa::s390x::lower::isle::generated_code::{
 #[derive(Clone, Debug)]
 pub struct CallInfo {
     pub dest: ExternalName,
-    pub uses: SmallVec<[Reg; 8]>,
-    pub defs: SmallVec<[Writable<Reg>; 8]>,
+    pub uses: CallArgList,
+    pub defs: CallRetList,
     pub clobbers: PRegSet,
     pub opcode: Opcode,
     pub caller_callconv: CallConv,
     pub callee_callconv: CallConv,
+    pub tls_symbol: Option<SymbolReloc>,
 }
 
 /// Additional information for CallInd instructions, left out of line to lower the size of the Inst
@@ -50,8 +52,8 @@ pub struct CallInfo {
 #[derive(Clone, Debug)]
 pub struct CallIndInfo {
     pub rn: Reg,
-    pub uses: SmallVec<[Reg; 8]>,
-    pub defs: SmallVec<[Writable<Reg>; 8]>,
+    pub uses: CallArgList,
+    pub defs: CallRetList,
     pub clobbers: PRegSet,
     pub opcode: Opcode,
     pub caller_callconv: CallConv,
@@ -63,6 +65,29 @@ fn inst_size_test() {
     // This test will help with unintentionally growing the size
     // of the Inst enum.
     assert_eq!(32, std::mem::size_of::<Inst>());
+}
+
+/// A register pair. Enum so it can be destructured in ISLE.
+#[derive(Clone, Copy, Debug)]
+pub struct RegPair {
+    pub hi: Reg,
+    pub lo: Reg,
+}
+
+/// A writable register pair. Enum so it can be destructured in ISLE.
+#[derive(Clone, Copy, Debug)]
+pub struct WritableRegPair {
+    pub hi: Writable<Reg>,
+    pub lo: Writable<Reg>,
+}
+
+impl WritableRegPair {
+    pub fn to_regpair(&self) -> RegPair {
+        RegPair {
+            hi: self.hi.to_reg(),
+            lo: self.lo.to_reg(),
+        }
+    }
 }
 
 /// Supported instruction sets
@@ -154,6 +179,8 @@ impl Inst {
             | Inst::Mov64UImm32Shifted { .. }
             | Inst::Insert64UImm16Shifted { .. }
             | Inst::Insert64UImm32Shifted { .. }
+            | Inst::LoadAR { .. }
+            | Inst::InsertAR { .. }
             | Inst::Extend { .. }
             | Inst::CMov32 { .. }
             | Inst::CMov64 { .. }
@@ -203,6 +230,7 @@ impl Inst {
             | Inst::VecReplicateLane { .. }
             | Inst::Call { .. }
             | Inst::CallInd { .. }
+            | Inst::Args { .. }
             | Inst::Ret { .. }
             | Inst::Jump { .. }
             | Inst::CondBr { .. }
@@ -212,7 +240,7 @@ impl Inst {
             | Inst::Debugtrap
             | Inst::Trap { .. }
             | Inst::JTSequence { .. }
-            | Inst::LoadExtNameFar { .. }
+            | Inst::LoadSymbolReloc { .. }
             | Inst::LoadAddr { .. }
             | Inst::Loop { .. }
             | Inst::CondBreak { .. }
@@ -242,7 +270,19 @@ impl Inst {
 
             // These are all part of VXRS_EXT2
             Inst::VecLoadRev { .. }
+            | Inst::VecLoadByte16Rev { .. }
+            | Inst::VecLoadByte32Rev { .. }
+            | Inst::VecLoadByte64Rev { .. }
+            | Inst::VecLoadElt16Rev { .. }
+            | Inst::VecLoadElt32Rev { .. }
+            | Inst::VecLoadElt64Rev { .. }
             | Inst::VecStoreRev { .. }
+            | Inst::VecStoreByte16Rev { .. }
+            | Inst::VecStoreByte32Rev { .. }
+            | Inst::VecStoreByte64Rev { .. }
+            | Inst::VecStoreElt16Rev { .. }
+            | Inst::VecStoreElt32Rev { .. }
+            | Inst::VecStoreElt64Rev { .. }
             | Inst::VecLoadReplicateRev { .. }
             | Inst::VecLoadLaneRev { .. }
             | Inst::VecLoadLaneRevUndef { .. }
@@ -293,96 +333,13 @@ impl Inst {
         }
     }
 
-    /// Create an instruction that loads a 64-bit integer constant.
-    pub fn load_constant64(rd: Writable<Reg>, value: u64) -> SmallVec<[Inst; 4]> {
-        if let Ok(imm) = i16::try_from(value as i64) {
-            // 16-bit signed immediate
-            smallvec![Inst::Mov64SImm16 { rd, imm }]
-        } else if let Ok(imm) = i32::try_from(value as i64) {
-            // 32-bit signed immediate
-            smallvec![Inst::Mov64SImm32 { rd, imm }]
-        } else if let Some(imm) = UImm16Shifted::maybe_from_u64(value) {
-            // 16-bit shifted immediate
-            smallvec![Inst::Mov64UImm16Shifted { rd, imm }]
-        } else if let Some(imm) = UImm32Shifted::maybe_from_u64(value) {
-            // 32-bit shifted immediate
-            smallvec![Inst::Mov64UImm32Shifted { rd, imm }]
-        } else {
-            let mut insts = smallvec![];
-            let hi = value & 0xffff_ffff_0000_0000u64;
-            let lo = value & 0x0000_0000_ffff_ffffu64;
-
-            if let Some(imm) = UImm16Shifted::maybe_from_u64(hi) {
-                // 16-bit shifted immediate
-                insts.push(Inst::Mov64UImm16Shifted { rd, imm });
-            } else if let Some(imm) = UImm32Shifted::maybe_from_u64(hi) {
-                // 32-bit shifted immediate
-                insts.push(Inst::Mov64UImm32Shifted { rd, imm });
-            } else {
-                unreachable!();
-            }
-
-            if let Some(imm) = UImm16Shifted::maybe_from_u64(lo) {
-                // 16-bit shifted immediate
-                insts.push(Inst::Insert64UImm16Shifted { rd, imm });
-            } else if let Some(imm) = UImm32Shifted::maybe_from_u64(lo) {
-                // 32-bit shifted immediate
-                insts.push(Inst::Insert64UImm32Shifted { rd, imm });
-            } else {
-                unreachable!();
-            }
-
-            insts
-        }
-    }
-
-    /// Create an instruction that loads a 32-bit integer constant.
-    pub fn load_constant32(rd: Writable<Reg>, value: u32) -> SmallVec<[Inst; 4]> {
-        if let Ok(imm) = i16::try_from(value as i32) {
-            // 16-bit signed immediate
-            smallvec![Inst::Mov32SImm16 { rd, imm }]
-        } else {
-            // 32-bit full immediate
-            smallvec![Inst::Mov32Imm { rd, imm: value }]
-        }
-    }
-
-    /// Create an instruction that loads a 32-bit floating-point constant.
-    pub fn load_fp_constant32(rd: Writable<Reg>, value: f32) -> Inst {
-        // TODO: use LZER to load 0.0
-        Inst::LoadFpuConst32 {
-            rd,
-            const_data: value.to_bits(),
-        }
-    }
-
-    /// Create an instruction that loads a 64-bit floating-point constant.
-    pub fn load_fp_constant64(rd: Writable<Reg>, value: f64) -> Inst {
-        // TODO: use LZDR to load 0.0
-        Inst::LoadFpuConst64 {
-            rd,
-            const_data: value.to_bits(),
-        }
-    }
-
-    /// Create an instruction that loads a 128-bit floating-point constant.
-    pub fn load_vec_constant(rd: Writable<Reg>, value: u128) -> Inst {
-        // FIXME: This doesn't special-case constants that can be loaded
-        // without a constant pool, like the ISLE lowering does.  Ideally,
-        // we should not have to duplicate the logic here.
-        Inst::VecLoadConst {
-            rd,
-            const_data: value,
-        }
-    }
-
     /// Generic constructor for a load (zero-extending where appropriate).
     pub fn gen_load(into_reg: Writable<Reg>, mem: MemArg, ty: Type) -> Inst {
         match ty {
-            types::B1 | types::B8 | types::I8 => Inst::Load64ZExt8 { rd: into_reg, mem },
-            types::B16 | types::I16 => Inst::Load64ZExt16 { rd: into_reg, mem },
-            types::B32 | types::I32 => Inst::Load64ZExt32 { rd: into_reg, mem },
-            types::B64 | types::I64 | types::R64 => Inst::Load64 { rd: into_reg, mem },
+            types::I8 => Inst::Load64ZExt8 { rd: into_reg, mem },
+            types::I16 => Inst::Load64ZExt16 { rd: into_reg, mem },
+            types::I32 => Inst::Load64ZExt32 { rd: into_reg, mem },
+            types::I64 | types::R64 => Inst::Load64 { rd: into_reg, mem },
             types::F32 => Inst::VecLoadLaneUndef {
                 size: 32,
                 rd: into_reg,
@@ -396,7 +353,7 @@ impl Inst {
                 lane_imm: 0,
             },
             _ if ty.is_vector() && ty.bits() == 128 => Inst::VecLoad { rd: into_reg, mem },
-            types::B128 | types::I128 => Inst::VecLoad { rd: into_reg, mem },
+            types::I128 => Inst::VecLoad { rd: into_reg, mem },
             _ => unimplemented!("gen_load({})", ty),
         }
     }
@@ -404,10 +361,10 @@ impl Inst {
     /// Generic constructor for a store.
     pub fn gen_store(mem: MemArg, from_reg: Reg, ty: Type) -> Inst {
         match ty {
-            types::B1 | types::B8 | types::I8 => Inst::Store8 { rd: from_reg, mem },
-            types::B16 | types::I16 => Inst::Store16 { rd: from_reg, mem },
-            types::B32 | types::I32 => Inst::Store32 { rd: from_reg, mem },
-            types::B64 | types::I64 | types::R64 => Inst::Store64 { rd: from_reg, mem },
+            types::I8 => Inst::Store8 { rd: from_reg, mem },
+            types::I16 => Inst::Store16 { rd: from_reg, mem },
+            types::I32 => Inst::Store32 { rd: from_reg, mem },
+            types::I64 | types::R64 => Inst::Store64 { rd: from_reg, mem },
             types::F32 => Inst::VecStoreLane {
                 size: 32,
                 rd: from_reg,
@@ -421,7 +378,7 @@ impl Inst {
                 lane_imm: 0,
             },
             _ if ty.is_vector() && ty.bits() == 128 => Inst::VecStore { rd: from_reg, mem },
-            types::B128 | types::I128 => Inst::VecStore { rd: from_reg, mem },
+            types::I128 => Inst::VecStore { rd: from_reg, mem },
             _ => unimplemented!("gen_store({})", ty),
         }
     }
@@ -458,64 +415,82 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::AluRR { rd, rm, .. } => {
-            collector.reg_mod(rd);
+        &Inst::AluRR { rd, ri, rm, .. } => {
+            collector.reg_reuse_def(rd, 1);
+            collector.reg_use(ri);
             collector.reg_use(rm);
         }
-        &Inst::AluRX { rd, ref mem, .. } => {
-            collector.reg_mod(rd);
+        &Inst::AluRX {
+            rd, ri, ref mem, ..
+        } => {
+            collector.reg_reuse_def(rd, 1);
+            collector.reg_use(ri);
             memarg_operands(mem, collector);
         }
-        &Inst::AluRSImm16 { rd, .. } => {
-            collector.reg_mod(rd);
+        &Inst::AluRSImm16 { rd, ri, .. } => {
+            collector.reg_reuse_def(rd, 1);
+            collector.reg_use(ri);
         }
-        &Inst::AluRSImm32 { rd, .. } => {
-            collector.reg_mod(rd);
+        &Inst::AluRSImm32 { rd, ri, .. } => {
+            collector.reg_reuse_def(rd, 1);
+            collector.reg_use(ri);
         }
-        &Inst::AluRUImm32 { rd, .. } => {
-            collector.reg_mod(rd);
+        &Inst::AluRUImm32 { rd, ri, .. } => {
+            collector.reg_reuse_def(rd, 1);
+            collector.reg_use(ri);
         }
-        &Inst::AluRUImm16Shifted { rd, .. } => {
-            collector.reg_mod(rd);
+        &Inst::AluRUImm16Shifted { rd, ri, .. } => {
+            collector.reg_reuse_def(rd, 1);
+            collector.reg_use(ri);
         }
-        &Inst::AluRUImm32Shifted { rd, .. } => {
-            collector.reg_mod(rd);
+        &Inst::AluRUImm32Shifted { rd, ri, .. } => {
+            collector.reg_reuse_def(rd, 1);
+            collector.reg_use(ri);
         }
-        &Inst::SMulWide { rn, rm, .. } => {
+        &Inst::SMulWide { rd, rn, rm } => {
             collector.reg_use(rn);
             collector.reg_use(rm);
-            collector.reg_def(writable_gpr(0));
-            collector.reg_def(writable_gpr(1));
+            // FIXME: The pair is hard-coded as %r2/%r3 because regalloc cannot handle pairs. If
+            // that changes, all the hard-coded uses of %r2/%r3 can be changed.
+            collector.reg_fixed_def(rd.hi, gpr(2));
+            collector.reg_fixed_def(rd.lo, gpr(3));
         }
-        &Inst::UMulWide { rn, .. } => {
+        &Inst::UMulWide { rd, ri, rn } => {
             collector.reg_use(rn);
-            collector.reg_def(writable_gpr(0));
-            collector.reg_mod(writable_gpr(1));
+            collector.reg_fixed_def(rd.hi, gpr(2));
+            collector.reg_fixed_def(rd.lo, gpr(3));
+            collector.reg_fixed_use(ri, gpr(3));
         }
-        &Inst::SDivMod32 { rn, .. } | &Inst::SDivMod64 { rn, .. } => {
+        &Inst::SDivMod32 { rd, ri, rn } | &Inst::SDivMod64 { rd, ri, rn } => {
             collector.reg_use(rn);
-            collector.reg_def(writable_gpr(0));
-            collector.reg_mod(writable_gpr(1));
+            collector.reg_fixed_def(rd.hi, gpr(2));
+            collector.reg_fixed_def(rd.lo, gpr(3));
+            collector.reg_fixed_use(ri, gpr(3));
         }
-        &Inst::UDivMod32 { rn, .. } | &Inst::UDivMod64 { rn, .. } => {
+        &Inst::UDivMod32 { rd, ri, rn } | &Inst::UDivMod64 { rd, ri, rn } => {
             collector.reg_use(rn);
-            collector.reg_mod(writable_gpr(0));
-            collector.reg_mod(writable_gpr(1));
+            collector.reg_fixed_def(rd.hi, gpr(2));
+            collector.reg_fixed_def(rd.lo, gpr(3));
+            collector.reg_fixed_use(ri.hi, gpr(2));
+            collector.reg_fixed_use(ri.lo, gpr(3));
         }
-        &Inst::Flogr { rn, .. } => {
+        &Inst::Flogr { rd, rn } => {
             collector.reg_use(rn);
-            collector.reg_def(writable_gpr(0));
-            collector.reg_def(writable_gpr(1));
+            collector.reg_fixed_def(rd.hi, gpr(2));
+            collector.reg_fixed_def(rd.lo, gpr(3));
         }
         &Inst::ShiftRR {
             rd, rn, shift_reg, ..
         } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
-            collector.reg_use(shift_reg);
+            if shift_reg != zero_reg() {
+                collector.reg_use(shift_reg);
+            }
         }
-        &Inst::RxSBG { rd, rn, .. } => {
-            collector.reg_mod(rd);
+        &Inst::RxSBG { rd, ri, rn, .. } => {
+            collector.reg_reuse_def(rd, 1);
+            collector.reg_use(ri);
             collector.reg_use(rn);
         }
         &Inst::RxSBGTest { rd, rn, .. } => {
@@ -561,12 +536,21 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             memarg_operands(mem, collector);
         }
         &Inst::AtomicCas32 {
-            rd, rn, ref mem, ..
+            rd,
+            ri,
+            rn,
+            ref mem,
+            ..
         }
         | &Inst::AtomicCas64 {
-            rd, rn, ref mem, ..
+            rd,
+            ri,
+            rn,
+            ref mem,
+            ..
         } => {
-            collector.reg_mod(rd);
+            collector.reg_reuse_def(rd, 1);
+            collector.reg_use(ri);
             collector.reg_use(rn);
             memarg_operands(mem, collector);
         }
@@ -636,7 +620,7 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             collector.reg_use(rm);
         }
         &Inst::MovPReg { rd, rm } => {
-            debug_assert!([regs::gpr(14), regs::gpr(15)].contains(&rm.into()));
+            debug_assert!([regs::gpr(0), regs::gpr(14), regs::gpr(15)].contains(&rm.into()));
             debug_assert!(rd.to_reg().is_virtual());
             collector.reg_def(rd);
         }
@@ -652,22 +636,34 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
         | &Inst::Mov64UImm32Shifted { rd, .. } => {
             collector.reg_def(rd);
         }
-        &Inst::CMov32 { rd, rm, .. } | &Inst::CMov64 { rd, rm, .. } => {
-            collector.reg_mod(rd);
+        &Inst::CMov32 { rd, ri, rm, .. } | &Inst::CMov64 { rd, ri, rm, .. } => {
+            collector.reg_reuse_def(rd, 1);
+            collector.reg_use(ri);
             collector.reg_use(rm);
         }
-        &Inst::CMov32SImm16 { rd, .. } | &Inst::CMov64SImm16 { rd, .. } => {
-            collector.reg_mod(rd);
+        &Inst::CMov32SImm16 { rd, ri, .. } | &Inst::CMov64SImm16 { rd, ri, .. } => {
+            collector.reg_reuse_def(rd, 1);
+            collector.reg_use(ri);
         }
-        &Inst::Insert64UImm16Shifted { rd, .. } | &Inst::Insert64UImm32Shifted { rd, .. } => {
-            collector.reg_mod(rd);
+        &Inst::Insert64UImm16Shifted { rd, ri, .. }
+        | &Inst::Insert64UImm32Shifted { rd, ri, .. } => {
+            collector.reg_reuse_def(rd, 1);
+            collector.reg_use(ri);
+        }
+        &Inst::LoadAR { rd, .. } => {
+            collector.reg_def(rd);
+        }
+        &Inst::InsertAR { rd, ri, .. } => {
+            collector.reg_reuse_def(rd, 1);
+            collector.reg_use(ri);
         }
         &Inst::FpuMove32 { rd, rn } | &Inst::FpuMove64 { rd, rn } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::FpuCMov32 { rd, rm, .. } | &Inst::FpuCMov64 { rd, rm, .. } => {
-            collector.reg_mod(rd);
+        &Inst::FpuCMov32 { rd, ri, rm, .. } | &Inst::FpuCMov64 { rd, ri, rm, .. } => {
+            collector.reg_reuse_def(rd, 1);
+            collector.reg_use(ri);
             collector.reg_use(rm);
         }
         &Inst::FpuRR { rd, rn, .. } => {
@@ -711,7 +707,9 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
         } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
-            collector.reg_use(shift_reg);
+            if shift_reg != zero_reg() {
+                collector.reg_use(shift_reg);
+            }
         }
         &Inst::VecSelect { rd, rn, rm, ra, .. } => {
             collector.reg_def(rd);
@@ -753,11 +751,59 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             collector.reg_def(rd);
             memarg_operands(mem, collector);
         }
+        &Inst::VecLoadByte16Rev { rd, ref mem, .. } => {
+            collector.reg_def(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecLoadByte32Rev { rd, ref mem, .. } => {
+            collector.reg_def(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecLoadByte64Rev { rd, ref mem, .. } => {
+            collector.reg_def(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecLoadElt16Rev { rd, ref mem, .. } => {
+            collector.reg_def(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecLoadElt32Rev { rd, ref mem, .. } => {
+            collector.reg_def(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecLoadElt64Rev { rd, ref mem, .. } => {
+            collector.reg_def(rd);
+            memarg_operands(mem, collector);
+        }
         &Inst::VecStore { rd, ref mem, .. } => {
             collector.reg_use(rd);
             memarg_operands(mem, collector);
         }
         &Inst::VecStoreRev { rd, ref mem, .. } => {
+            collector.reg_use(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecStoreByte16Rev { rd, ref mem, .. } => {
+            collector.reg_use(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecStoreByte32Rev { rd, ref mem, .. } => {
+            collector.reg_use(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecStoreByte64Rev { rd, ref mem, .. } => {
+            collector.reg_use(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecStoreElt16Rev { rd, ref mem, .. } => {
+            collector.reg_use(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecStoreElt32Rev { rd, ref mem, .. } => {
+            collector.reg_use(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecStoreElt64Rev { rd, ref mem, .. } => {
             collector.reg_use(rd);
             memarg_operands(mem, collector);
         }
@@ -773,8 +819,9 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::VecCMov { rd, rm, .. } => {
-            collector.reg_mod(rd);
+        &Inst::VecCMov { rd, ri, rm, .. } => {
+            collector.reg_reuse_def(rd, 1);
+            collector.reg_use(ri);
             collector.reg_use(rm);
         }
         &Inst::MovToVec128 { rd, rn, rm } => {
@@ -795,8 +842,11 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
         &Inst::VecImmReplicate { rd, .. } => {
             collector.reg_def(rd);
         }
-        &Inst::VecLoadLane { rd, ref mem, .. } => {
-            collector.reg_mod(rd);
+        &Inst::VecLoadLane {
+            rd, ri, ref mem, ..
+        } => {
+            collector.reg_reuse_def(rd, 1);
+            collector.reg_use(ri);
             memarg_operands(mem, collector);
         }
         &Inst::VecLoadLaneUndef { rd, ref mem, .. } => {
@@ -815,33 +865,48 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             collector.reg_use(rd);
             memarg_operands(mem, collector);
         }
-        &Inst::VecLoadLaneRev { rd, ref mem, .. } => {
-            collector.reg_mod(rd);
+        &Inst::VecLoadLaneRev {
+            rd, ri, ref mem, ..
+        } => {
+            collector.reg_reuse_def(rd, 1);
+            collector.reg_use(ri);
             memarg_operands(mem, collector);
         }
         &Inst::VecInsertLane {
-            rd, rn, lane_reg, ..
+            rd,
+            ri,
+            rn,
+            lane_reg,
+            ..
         } => {
-            collector.reg_mod(rd);
+            collector.reg_reuse_def(rd, 1);
+            collector.reg_use(ri);
             collector.reg_use(rn);
-            collector.reg_use(lane_reg);
+            if lane_reg != zero_reg() {
+                collector.reg_use(lane_reg);
+            }
         }
         &Inst::VecInsertLaneUndef {
             rd, rn, lane_reg, ..
         } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
-            collector.reg_use(lane_reg);
+            if lane_reg != zero_reg() {
+                collector.reg_use(lane_reg);
+            }
         }
         &Inst::VecExtractLane {
             rd, rn, lane_reg, ..
         } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
-            collector.reg_use(lane_reg);
+            if lane_reg != zero_reg() {
+                collector.reg_use(lane_reg);
+            }
         }
-        &Inst::VecInsertLaneImm { rd, .. } => {
-            collector.reg_def(rd);
+        &Inst::VecInsertLaneImm { rd, ri, .. } => {
+            collector.reg_reuse_def(rd, 1);
+            collector.reg_use(ri);
         }
         &Inst::VecReplicateLane { rd, rn, .. } => {
             collector.reg_def(rd);
@@ -852,21 +917,39 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             collector.reg_use(rn);
         }
         &Inst::Call { link, ref info } => {
-            collector.reg_def(link);
-            collector.reg_uses(&*info.uses);
-            collector.reg_defs(&*info.defs);
-            collector.reg_clobbers(info.clobbers);
+            for u in &info.uses {
+                collector.reg_fixed_use(u.vreg, u.preg);
+            }
+            for d in &info.defs {
+                collector.reg_fixed_def(d.vreg, d.preg);
+            }
+            let mut clobbers = info.clobbers.clone();
+            clobbers.add(link.to_reg().to_real_reg().unwrap().into());
+            collector.reg_clobbers(clobbers);
         }
         &Inst::CallInd { link, ref info } => {
-            collector.reg_def(link);
             collector.reg_use(info.rn);
-            collector.reg_uses(&*info.uses);
-            collector.reg_defs(&*info.defs);
-            collector.reg_clobbers(info.clobbers);
+            for u in &info.uses {
+                collector.reg_fixed_use(u.vreg, u.preg);
+            }
+            for d in &info.defs {
+                collector.reg_fixed_def(d.vreg, d.preg);
+            }
+            let mut clobbers = info.clobbers.clone();
+            clobbers.add(link.to_reg().to_real_reg().unwrap().into());
+            collector.reg_clobbers(clobbers);
         }
-        &Inst::Ret { link, ref rets } => {
-            collector.reg_use(link);
-            collector.reg_uses(&rets[..]);
+        &Inst::Args { ref args } => {
+            for arg in args {
+                collector.reg_fixed_def(arg.vreg, arg.preg);
+            }
+        }
+        &Inst::Ret { ref rets, .. } => {
+            // NOTE: we explicitly don't mark the link register as used here, as the use is only in
+            // the epilog where callee-save registers are restored.
+            for ret in rets {
+                collector.reg_fixed_use(ret.vreg, ret.preg);
+            }
         }
         &Inst::Jump { .. } => {}
         &Inst::IndirectBr { rn, .. } => {
@@ -881,7 +964,7 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             collector.reg_use(ridx);
             collector.reg_early_def(writable_gpr(1));
         }
-        &Inst::LoadExtNameFar { rd, .. } => {
+        &Inst::LoadSymbolReloc { rd, .. } => {
             collector.reg_def(rd);
             collector.reg_def(writable_gpr(1));
         }
@@ -893,6 +976,12 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             for inst in body.iter() {
                 s390x_get_operands(inst, collector);
             }
+
+            // `reuse_def` constraints can't be permitted in a Loop instruction because the operand
+            // index will always be relative to the Loop instruction, not the individual
+            // instruction in the loop body. However, fixed-nonallocatable registers used with
+            // instructions that would have emitted `reuse_def` constraints are fine.
+            debug_assert!(collector.no_reuse_def());
         }
         &Inst::CondBreak { .. } => {}
         &Inst::VirtualSPOffsetAdj { .. } => {}
@@ -907,6 +996,7 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
 // Instructions: misc functions and external interface
 
 impl MachInst for Inst {
+    type ABIMachineSpec = S390xMachineDeps;
     type LabelUse = LabelUse;
 
     fn get_operands<F: Fn(VReg) -> VReg>(&self, collector: &mut OperandCollector<'_, F>) {
@@ -933,9 +1023,24 @@ impl MachInst for Inst {
         // half-caller-save, half-callee-save SysV ABI for some vector
         // registers.
         match self {
+            &Inst::Args { .. } => false,
             &Inst::Call { ref info, .. } => info.caller_callconv != info.callee_callconv,
             &Inst::CallInd { ref info, .. } => info.caller_callconv != info.callee_callconv,
             _ => true,
+        }
+    }
+
+    fn is_trap(&self) -> bool {
+        match self {
+            Self::Trap { .. } => true,
+            _ => false,
+        }
+    }
+
+    fn is_args(&self) -> bool {
+        match self {
+            Self::Args { .. } => true,
+            _ => false,
         }
     }
 
@@ -978,54 +1083,6 @@ impl MachInst for Inst {
         }
     }
 
-    fn gen_constant<F: FnMut(Type) -> Writable<Reg>>(
-        to_regs: ValueRegs<Writable<Reg>>,
-        value: u128,
-        ty: Type,
-        _alloc_tmp: F,
-    ) -> SmallVec<[Inst; 4]> {
-        let to_reg = to_regs
-            .only_reg()
-            .expect("multi-reg values not supported yet");
-        match ty {
-            types::I128 | types::B128 => {
-                let mut ret = SmallVec::new();
-                ret.push(Inst::load_vec_constant(to_reg, value));
-                ret
-            }
-            _ if ty.is_vector() && ty.bits() == 128 => {
-                let mut ret = SmallVec::new();
-                ret.push(Inst::load_vec_constant(to_reg, value));
-                ret
-            }
-            types::F64 => {
-                let mut ret = SmallVec::new();
-                ret.push(Inst::load_fp_constant64(
-                    to_reg,
-                    f64::from_bits(value as u64),
-                ));
-                ret
-            }
-            types::F32 => {
-                let mut ret = SmallVec::new();
-                ret.push(Inst::load_fp_constant32(
-                    to_reg,
-                    f32::from_bits(value as u32),
-                ));
-                ret
-            }
-            types::I64 | types::B64 | types::R64 => Inst::load_constant64(to_reg, value as u64),
-            types::B1
-            | types::I8
-            | types::B8
-            | types::I16
-            | types::B16
-            | types::I32
-            | types::B32 => Inst::load_constant32(to_reg, value as u32),
-            _ => unreachable!(),
-        }
-    }
-
     fn gen_nop(preferred_size: usize) -> Inst {
         if preferred_size == 0 {
             Inst::Nop0
@@ -1042,21 +1099,12 @@ impl MachInst for Inst {
             types::I16 => Ok((&[RegClass::Int], &[types::I16])),
             types::I32 => Ok((&[RegClass::Int], &[types::I32])),
             types::I64 => Ok((&[RegClass::Int], &[types::I64])),
-            types::B1 => Ok((&[RegClass::Int], &[types::B1])),
-            types::B8 => Ok((&[RegClass::Int], &[types::B8])),
-            types::B16 => Ok((&[RegClass::Int], &[types::B16])),
-            types::B32 => Ok((&[RegClass::Int], &[types::B32])),
-            types::B64 => Ok((&[RegClass::Int], &[types::B64])),
             types::R32 => panic!("32-bit reftype pointer should never be seen on s390x"),
             types::R64 => Ok((&[RegClass::Int], &[types::R64])),
             types::F32 => Ok((&[RegClass::Float], &[types::F32])),
             types::F64 => Ok((&[RegClass::Float], &[types::F64])),
             types::I128 => Ok((&[RegClass::Float], &[types::I128])),
-            types::B128 => Ok((&[RegClass::Float], &[types::B128])),
             _ if ty.is_vector() && ty.bits() == 128 => Ok((&[RegClass::Float], &[types::I8X16])),
-            // FIXME: We don't really have IFLAGS, but need to allow it here
-            // for now to support the SelectifSpectreGuard instruction.
-            types::IFLAGS => Ok((&[RegClass::Int], &[types::I64])),
             _ => Err(CodegenError::Unsupported(format!(
                 "Unexpected SSA-value type: {}",
                 ty
@@ -1098,15 +1146,8 @@ impl MachInst for Inst {
 //=============================================================================
 // Pretty-printing of instructions.
 
-fn mem_finalize_for_show(
-    mem: &MemArg,
-    state: &EmitState,
-    have_d12: bool,
-    have_d20: bool,
-    have_pcrel: bool,
-    have_index: bool,
-) -> (String, MemArg) {
-    let (mem_insts, mem) = mem_finalize(mem, state, have_d12, have_d20, have_pcrel, have_index);
+fn mem_finalize_for_show(mem: &MemArg, state: &EmitState, mi: MemInstType) -> (String, MemArg) {
+    let (mem_insts, mem) = mem_finalize(mem, state, mi);
     let mut mem_str = mem_insts
         .into_iter()
         .map(|inst| {
@@ -1170,7 +1211,12 @@ impl Inst {
                     _ => unreachable!(),
                 };
                 if have_rr && rd.to_reg() == rn {
-                    let inst = Inst::AluRR { alu_op, rd, rm };
+                    let inst = Inst::AluRR {
+                        alu_op,
+                        rd,
+                        ri: rd.to_reg(),
+                        rm,
+                    };
                     return inst.print_with_state(state, &mut empty_allocs);
                 }
                 let rd = pretty_print_reg(rd.to_reg(), &mut empty_allocs);
@@ -1188,7 +1234,12 @@ impl Inst {
                 let rn = allocs.next(rn);
 
                 if rd.to_reg() == rn {
-                    let inst = Inst::AluRSImm16 { alu_op, rd, imm };
+                    let inst = Inst::AluRSImm16 {
+                        alu_op,
+                        rd,
+                        ri: rd.to_reg(),
+                        imm,
+                    };
                     return inst.print_with_state(state, &mut empty_allocs);
                 }
                 let op = match alu_op {
@@ -1200,7 +1251,7 @@ impl Inst {
                 let rn = pretty_print_reg(rn, &mut empty_allocs);
                 format!("{} {}, {}, {}", op, rd, rn, imm)
             }
-            &Inst::AluRR { alu_op, rd, rm } => {
+            &Inst::AluRR { alu_op, rd, ri, rm } => {
                 let op = match alu_op {
                     ALUOp::Add32 => "ar",
                     ALUOp::Add64 => "agr",
@@ -1225,13 +1276,14 @@ impl Inst {
                     ALUOp::Xor64 => "xgr",
                     _ => unreachable!(),
                 };
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
                 let rm = pretty_print_reg(rm, allocs);
                 format!("{} {}, {}", op, rd, rm)
             }
             &Inst::AluRX {
                 alu_op,
                 rd,
+                ri,
                 ref mem,
             } => {
                 let (opcode_rx, opcode_rxy) = match alu_op {
@@ -1265,15 +1317,18 @@ impl Inst {
                     _ => unreachable!(),
                 };
 
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
                 let mem = mem.with_allocs(allocs);
                 let (mem_str, mem) = mem_finalize_for_show(
                     &mem,
                     state,
-                    opcode_rx.is_some(),
-                    opcode_rxy.is_some(),
-                    false,
-                    true,
+                    MemInstType {
+                        have_d12: opcode_rx.is_some(),
+                        have_d20: opcode_rxy.is_some(),
+                        have_pcrel: false,
+                        have_unaligned_pcrel: false,
+                        have_index: true,
+                    },
                 );
                 let op = match &mem {
                     &MemArg::BXD12 { .. } => opcode_rx,
@@ -1284,7 +1339,12 @@ impl Inst {
 
                 format!("{}{} {}, {}", mem_str, op.unwrap(), rd, mem)
             }
-            &Inst::AluRSImm16 { alu_op, rd, imm } => {
+            &Inst::AluRSImm16 {
+                alu_op,
+                rd,
+                ri,
+                imm,
+            } => {
                 let op = match alu_op {
                     ALUOp::Add32 => "ahi",
                     ALUOp::Add64 => "aghi",
@@ -1292,10 +1352,15 @@ impl Inst {
                     ALUOp::Mul64 => "mghi",
                     _ => unreachable!(),
                 };
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
                 format!("{} {}, {}", op, rd, imm)
             }
-            &Inst::AluRSImm32 { alu_op, rd, imm } => {
+            &Inst::AluRSImm32 {
+                alu_op,
+                rd,
+                ri,
+                imm,
+            } => {
                 let op = match alu_op {
                     ALUOp::Add32 => "afi",
                     ALUOp::Add64 => "agfi",
@@ -1303,10 +1368,15 @@ impl Inst {
                     ALUOp::Mul64 => "msgfi",
                     _ => unreachable!(),
                 };
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
                 format!("{} {}, {}", op, rd, imm)
             }
-            &Inst::AluRUImm32 { alu_op, rd, imm } => {
+            &Inst::AluRUImm32 {
+                alu_op,
+                rd,
+                ri,
+                imm,
+            } => {
                 let op = match alu_op {
                     ALUOp::AddLogical32 => "alfi",
                     ALUOp::AddLogical64 => "algfi",
@@ -1314,10 +1384,15 @@ impl Inst {
                     ALUOp::SubLogical64 => "slgfi",
                     _ => unreachable!(),
                 };
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
                 format!("{} {}, {}", op, rd, imm)
             }
-            &Inst::AluRUImm16Shifted { alu_op, rd, imm } => {
+            &Inst::AluRUImm16Shifted {
+                alu_op,
+                rd,
+                ri,
+                imm,
+            } => {
                 let op = match (alu_op, imm.shift) {
                     (ALUOp::And32, 0) => "nill",
                     (ALUOp::And32, 1) => "nilh",
@@ -1333,10 +1408,15 @@ impl Inst {
                     (ALUOp::Orr64, 3) => "oihh",
                     _ => unreachable!(),
                 };
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
                 format!("{} {}, {}", op, rd, imm.bits)
             }
-            &Inst::AluRUImm32Shifted { alu_op, rd, imm } => {
+            &Inst::AluRUImm32Shifted {
+                alu_op,
+                rd,
+                ri,
+                imm,
+            } => {
                 let op = match (alu_op, imm.shift) {
                     (ALUOp::And32, 0) => "nilf",
                     (ALUOp::And64, 0) => "nilf",
@@ -1349,57 +1429,50 @@ impl Inst {
                     (ALUOp::Xor64, 1) => "xihf",
                     _ => unreachable!(),
                 };
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
                 format!("{} {}, {}", op, rd, imm.bits)
             }
-            &Inst::SMulWide { rn, rm } => {
+            &Inst::SMulWide { rd, rn, rm } => {
                 let op = "mgrk";
                 let rn = pretty_print_reg(rn, allocs);
                 let rm = pretty_print_reg(rm, allocs);
-                let rd = pretty_print_reg(gpr(0), allocs);
-                let _r1 = allocs.next(gpr(1));
+                let rd = pretty_print_regpair(rd.to_regpair(), allocs);
                 format!("{} {}, {}, {}", op, rd, rn, rm)
             }
-            &Inst::UMulWide { rn } => {
+            &Inst::UMulWide { rd, ri, rn } => {
                 let op = "mlgr";
                 let rn = pretty_print_reg(rn, allocs);
-                let rd = pretty_print_reg(gpr(0), allocs);
-                let _r1 = allocs.next(gpr(1));
+                let rd = pretty_print_regpair_mod_lo(rd, ri, allocs);
                 format!("{} {}, {}", op, rd, rn)
             }
-            &Inst::SDivMod32 { rn, .. } => {
+            &Inst::SDivMod32 { rd, ri, rn } => {
                 let op = "dsgfr";
                 let rn = pretty_print_reg(rn, allocs);
-                let rd = pretty_print_reg(gpr(0), allocs);
-                let _r1 = allocs.next(gpr(1));
+                let rd = pretty_print_regpair_mod_lo(rd, ri, allocs);
                 format!("{} {}, {}", op, rd, rn)
             }
-            &Inst::SDivMod64 { rn, .. } => {
+            &Inst::SDivMod64 { rd, ri, rn } => {
                 let op = "dsgr";
                 let rn = pretty_print_reg(rn, allocs);
-                let rd = pretty_print_reg(gpr(0), allocs);
-                let _r1 = allocs.next(gpr(1));
+                let rd = pretty_print_regpair_mod_lo(rd, ri, allocs);
                 format!("{} {}, {}", op, rd, rn)
             }
-            &Inst::UDivMod32 { rn, .. } => {
+            &Inst::UDivMod32 { rd, ri, rn } => {
                 let op = "dlr";
                 let rn = pretty_print_reg(rn, allocs);
-                let rd = pretty_print_reg(gpr(0), allocs);
-                let _r1 = allocs.next(gpr(1));
+                let rd = pretty_print_regpair_mod(rd, ri, allocs);
                 format!("{} {}, {}", op, rd, rn)
             }
-            &Inst::UDivMod64 { rn, .. } => {
+            &Inst::UDivMod64 { rd, ri, rn } => {
                 let op = "dlgr";
                 let rn = pretty_print_reg(rn, allocs);
-                let rd = pretty_print_reg(gpr(0), allocs);
-                let _r1 = allocs.next(gpr(1));
+                let rd = pretty_print_regpair_mod(rd, ri, allocs);
                 format!("{} {}, {}", op, rd, rn)
             }
-            &Inst::Flogr { rn } => {
+            &Inst::Flogr { rd, rn } => {
                 let op = "flogr";
                 let rn = pretty_print_reg(rn, allocs);
-                let rd = pretty_print_reg(gpr(0), allocs);
-                let _r1 = allocs.next(gpr(1));
+                let rd = pretty_print_regpair(rd.to_regpair(), allocs);
                 format!("{} {}, {}", op, rd, rn)
             }
             &Inst::ShiftRR {
@@ -1431,6 +1504,7 @@ impl Inst {
             &Inst::RxSBG {
                 op,
                 rd,
+                ri,
                 rn,
                 start_bit,
                 end_bit,
@@ -1442,7 +1516,7 @@ impl Inst {
                     RxSBGOp::Or => "rosbg",
                     RxSBGOp::Xor => "rxsbg",
                 };
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
                 let rn = pretty_print_reg(rn, allocs);
                 format!(
                     "{} {}, {}, {}, {}, {}",
@@ -1530,10 +1604,13 @@ impl Inst {
                 let (mem_str, mem) = mem_finalize_for_show(
                     &mem,
                     state,
-                    opcode_rx.is_some(),
-                    opcode_rxy.is_some(),
-                    opcode_ril.is_some(),
-                    true,
+                    MemInstType {
+                        have_d12: opcode_rx.is_some(),
+                        have_d20: opcode_rxy.is_some(),
+                        have_pcrel: opcode_ril.is_some(),
+                        have_unaligned_pcrel: false,
+                        have_index: true,
+                    },
                 );
                 let op = match &mem {
                     &MemArg::BXD12 { .. } => opcode_rx,
@@ -1634,27 +1711,51 @@ impl Inst {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
                 let rn = pretty_print_reg(rn, allocs);
                 let mem = mem.with_allocs(allocs);
-                let (mem_str, mem) = mem_finalize_for_show(&mem, state, false, true, false, false);
+                let (mem_str, mem) = mem_finalize_for_show(
+                    &mem,
+                    state,
+                    MemInstType {
+                        have_d12: false,
+                        have_d20: true,
+                        have_pcrel: false,
+                        have_unaligned_pcrel: false,
+                        have_index: false,
+                    },
+                );
                 let mem = mem.pretty_print_default();
                 format!("{}{} {}, {}, {}", mem_str, op, rd, rn, mem)
             }
-            &Inst::AtomicCas32 { rd, rn, ref mem } | &Inst::AtomicCas64 { rd, rn, ref mem } => {
+            &Inst::AtomicCas32 {
+                rd,
+                ri,
+                rn,
+                ref mem,
+            }
+            | &Inst::AtomicCas64 {
+                rd,
+                ri,
+                rn,
+                ref mem,
+            } => {
                 let (opcode_rs, opcode_rsy) = match self {
                     &Inst::AtomicCas32 { .. } => (Some("cs"), Some("csy")),
                     &Inst::AtomicCas64 { .. } => (None, Some("csg")),
                     _ => unreachable!(),
                 };
 
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
                 let rn = pretty_print_reg(rn, allocs);
                 let mem = mem.with_allocs(allocs);
                 let (mem_str, mem) = mem_finalize_for_show(
                     &mem,
                     state,
-                    opcode_rs.is_some(),
-                    opcode_rsy.is_some(),
-                    false,
-                    false,
+                    MemInstType {
+                        have_d12: opcode_rs.is_some(),
+                        have_d20: opcode_rsy.is_some(),
+                        have_pcrel: false,
+                        have_unaligned_pcrel: false,
+                        have_index: false,
+                    },
                 );
                 let op = match &mem {
                     &MemArg::BXD12 { .. } => opcode_rs,
@@ -1705,10 +1806,13 @@ impl Inst {
                 let (mem_str, mem) = mem_finalize_for_show(
                     &mem,
                     state,
-                    opcode_rx.is_some(),
-                    opcode_rxy.is_some(),
-                    opcode_ril.is_some(),
-                    true,
+                    MemInstType {
+                        have_d12: opcode_rx.is_some(),
+                        have_d20: opcode_rxy.is_some(),
+                        have_pcrel: opcode_ril.is_some(),
+                        have_unaligned_pcrel: false,
+                        have_index: true,
+                    },
                 );
                 let op = match &mem {
                     &MemArg::BXD12 { .. } => opcode_rx,
@@ -1742,10 +1846,13 @@ impl Inst {
                 let (mem_str, mem) = mem_finalize_for_show(
                     &mem,
                     state,
-                    opcode_rx.is_some(),
-                    opcode_rxy.is_some(),
-                    opcode_ril.is_some(),
-                    true,
+                    MemInstType {
+                        have_d12: opcode_rx.is_some(),
+                        have_d20: opcode_rxy.is_some(),
+                        have_pcrel: opcode_ril.is_some(),
+                        have_unaligned_pcrel: false,
+                        have_index: true,
+                    },
                 );
                 let op = match &mem {
                     &MemArg::BXD12 { .. } => opcode_rx,
@@ -1759,7 +1866,17 @@ impl Inst {
             }
             &Inst::StoreImm8 { imm, ref mem } => {
                 let mem = mem.with_allocs(allocs);
-                let (mem_str, mem) = mem_finalize_for_show(&mem, state, true, true, false, false);
+                let (mem_str, mem) = mem_finalize_for_show(
+                    &mem,
+                    state,
+                    MemInstType {
+                        have_d12: true,
+                        have_d20: true,
+                        have_pcrel: false,
+                        have_unaligned_pcrel: false,
+                        have_index: false,
+                    },
+                );
                 let op = match &mem {
                     &MemArg::BXD12 { .. } => "mvi",
                     &MemArg::BXD20 { .. } => "mviy",
@@ -1773,7 +1890,17 @@ impl Inst {
             | &Inst::StoreImm32SExt16 { imm, ref mem }
             | &Inst::StoreImm64SExt16 { imm, ref mem } => {
                 let mem = mem.with_allocs(allocs);
-                let (mem_str, mem) = mem_finalize_for_show(&mem, state, false, true, false, false);
+                let (mem_str, mem) = mem_finalize_for_show(
+                    &mem,
+                    state,
+                    MemInstType {
+                        have_d12: false,
+                        have_d20: true,
+                        have_pcrel: false,
+                        have_unaligned_pcrel: false,
+                        have_index: false,
+                    },
+                );
                 let op = match self {
                     &Inst::StoreImm16 { .. } => "mvhhi",
                     &Inst::StoreImm32SExt16 { .. } => "mvhi",
@@ -1802,7 +1929,17 @@ impl Inst {
             }
             &Inst::LoadMultiple64 { rt, rt2, ref mem } => {
                 let mem = mem.with_allocs(allocs);
-                let (mem_str, mem) = mem_finalize_for_show(&mem, state, false, true, false, false);
+                let (mem_str, mem) = mem_finalize_for_show(
+                    &mem,
+                    state,
+                    MemInstType {
+                        have_d12: false,
+                        have_d20: true,
+                        have_pcrel: false,
+                        have_unaligned_pcrel: false,
+                        have_index: false,
+                    },
+                );
                 let rt = pretty_print_reg(rt.to_reg(), &mut empty_allocs);
                 let rt2 = pretty_print_reg(rt2.to_reg(), &mut empty_allocs);
                 let mem = mem.pretty_print_default();
@@ -1810,7 +1947,17 @@ impl Inst {
             }
             &Inst::StoreMultiple64 { rt, rt2, ref mem } => {
                 let mem = mem.with_allocs(allocs);
-                let (mem_str, mem) = mem_finalize_for_show(&mem, state, false, true, false, false);
+                let (mem_str, mem) = mem_finalize_for_show(
+                    &mem,
+                    state,
+                    MemInstType {
+                        have_d12: false,
+                        have_d20: true,
+                        have_pcrel: false,
+                        have_unaligned_pcrel: false,
+                        have_index: false,
+                    },
+                );
                 let rt = pretty_print_reg(rt, &mut empty_allocs);
                 let rt2 = pretty_print_reg(rt2, &mut empty_allocs);
                 let mem = mem.pretty_print_default();
@@ -1867,8 +2014,8 @@ impl Inst {
                 };
                 format!("{} {}, {}", op, rd, imm.bits)
             }
-            &Inst::Insert64UImm16Shifted { rd, ref imm } => {
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+            &Inst::Insert64UImm16Shifted { rd, ri, ref imm } => {
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
                 let op = match imm.shift {
                     0 => "iill",
                     1 => "iilh",
@@ -1878,8 +2025,8 @@ impl Inst {
                 };
                 format!("{} {}, {}", op, rd, imm.bits)
             }
-            &Inst::Insert64UImm32Shifted { rd, ref imm } => {
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+            &Inst::Insert64UImm32Shifted { rd, ri, ref imm } => {
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
                 let op = match imm.shift {
                     0 => "iilf",
                     1 => "iihf",
@@ -1887,25 +2034,43 @@ impl Inst {
                 };
                 format!("{} {}, {}", op, rd, imm.bits)
             }
-            &Inst::CMov32 { rd, cond, rm } => {
+            &Inst::LoadAR { rd, ar } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
+                format!("ear {}, %a{}", rd, ar)
+            }
+            &Inst::InsertAR { rd, ri, ar } => {
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
+                format!("ear {}, %a{}", rd, ar)
+            }
+            &Inst::CMov32 { rd, cond, ri, rm } => {
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
                 let rm = pretty_print_reg(rm, allocs);
                 let cond = cond.pretty_print_default();
                 format!("locr{} {}, {}", cond, rd, rm)
             }
-            &Inst::CMov64 { rd, cond, rm } => {
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+            &Inst::CMov64 { rd, cond, ri, rm } => {
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
                 let rm = pretty_print_reg(rm, allocs);
                 let cond = cond.pretty_print_default();
                 format!("locgr{} {}, {}", cond, rd, rm)
             }
-            &Inst::CMov32SImm16 { rd, cond, ref imm } => {
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+            &Inst::CMov32SImm16 {
+                rd,
+                cond,
+                ri,
+                ref imm,
+            } => {
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
                 let cond = cond.pretty_print_default();
                 format!("lochi{} {}, {}", cond, rd, imm)
             }
-            &Inst::CMov64SImm16 { rd, cond, ref imm } => {
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+            &Inst::CMov64SImm16 {
+                rd,
+                cond,
+                ri,
+                ref imm,
+            } => {
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
                 let cond = cond.pretty_print_default();
                 format!("locghi{} {}, {}", cond, rd, imm)
             }
@@ -1927,8 +2092,9 @@ impl Inst {
                     format!("vlr {}, {}", rd, rn)
                 }
             }
-            &Inst::FpuCMov32 { rd, cond, rm } => {
+            &Inst::FpuCMov32 { rd, cond, ri, rm } => {
                 let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg(), allocs);
+                let _ri = allocs.next(ri);
                 let (rm, rm_fpr) = pretty_print_fpr(rm, allocs);
                 if rd_fpr.is_some() && rm_fpr.is_some() {
                     let cond = cond.invert().pretty_print_default();
@@ -1938,8 +2104,9 @@ impl Inst {
                     format!("j{} 10 ; vlr {}, {}", cond, rd, rm)
                 }
             }
-            &Inst::FpuCMov64 { rd, cond, rm } => {
+            &Inst::FpuCMov64 { rd, cond, ri, rm } => {
                 let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg(), allocs);
+                let _ri = allocs.next(ri);
                 let (rm, rm_fpr) = pretty_print_fpr(rm, allocs);
                 if rd_fpr.is_some() && rm_fpr.is_some() {
                     let cond = cond.invert().pretty_print_default();
@@ -2192,11 +2359,16 @@ impl Inst {
                 let (rn, rn_fpr) = pretty_print_fpr(rn, allocs);
                 if opcode_fpr.is_some() && rd_fpr.is_some() && rn_fpr.is_some() {
                     format!(
-                        "{} {}, {}, {}",
+                        "{} {}, {}, {}{}",
                         opcode_fpr.unwrap(),
                         rd_fpr.unwrap(),
+                        mode,
                         rn_fpr.unwrap(),
-                        mode
+                        if opcode_fpr.unwrap().ends_with('a') {
+                            ", 0"
+                        } else {
+                            ""
+                        }
                     )
                 } else if opcode.starts_with('w') {
                     format!(
@@ -2463,29 +2635,75 @@ impl Inst {
                     op, rm, rn, tmp, rn, rm
                 )
             }
-            &Inst::VecLoad { rd, ref mem } | &Inst::VecLoadRev { rd, ref mem } => {
+            &Inst::VecLoad { rd, ref mem }
+            | &Inst::VecLoadRev { rd, ref mem }
+            | &Inst::VecLoadByte16Rev { rd, ref mem }
+            | &Inst::VecLoadByte32Rev { rd, ref mem }
+            | &Inst::VecLoadByte64Rev { rd, ref mem }
+            | &Inst::VecLoadElt16Rev { rd, ref mem }
+            | &Inst::VecLoadElt32Rev { rd, ref mem }
+            | &Inst::VecLoadElt64Rev { rd, ref mem } => {
                 let opcode = match self {
                     &Inst::VecLoad { .. } => "vl",
                     &Inst::VecLoadRev { .. } => "vlbrq",
+                    &Inst::VecLoadByte16Rev { .. } => "vlbrh",
+                    &Inst::VecLoadByte32Rev { .. } => "vlbrf",
+                    &Inst::VecLoadByte64Rev { .. } => "vlbrg",
+                    &Inst::VecLoadElt16Rev { .. } => "vlerh",
+                    &Inst::VecLoadElt32Rev { .. } => "vlerf",
+                    &Inst::VecLoadElt64Rev { .. } => "vlerg",
                     _ => unreachable!(),
                 };
 
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
                 let mem = mem.with_allocs(allocs);
-                let (mem_str, mem) = mem_finalize_for_show(&mem, state, true, false, false, true);
+                let (mem_str, mem) = mem_finalize_for_show(
+                    &mem,
+                    state,
+                    MemInstType {
+                        have_d12: true,
+                        have_d20: false,
+                        have_pcrel: false,
+                        have_unaligned_pcrel: false,
+                        have_index: true,
+                    },
+                );
                 let mem = mem.pretty_print_default();
                 format!("{}{} {}, {}", mem_str, opcode, rd, mem)
             }
-            &Inst::VecStore { rd, ref mem } | &Inst::VecStoreRev { rd, ref mem } => {
+            &Inst::VecStore { rd, ref mem }
+            | &Inst::VecStoreRev { rd, ref mem }
+            | &Inst::VecStoreByte16Rev { rd, ref mem }
+            | &Inst::VecStoreByte32Rev { rd, ref mem }
+            | &Inst::VecStoreByte64Rev { rd, ref mem }
+            | &Inst::VecStoreElt16Rev { rd, ref mem }
+            | &Inst::VecStoreElt32Rev { rd, ref mem }
+            | &Inst::VecStoreElt64Rev { rd, ref mem } => {
                 let opcode = match self {
                     &Inst::VecStore { .. } => "vst",
                     &Inst::VecStoreRev { .. } => "vstbrq",
+                    &Inst::VecStoreByte16Rev { .. } => "vstbrh",
+                    &Inst::VecStoreByte32Rev { .. } => "vstbrf",
+                    &Inst::VecStoreByte64Rev { .. } => "vstbrg",
+                    &Inst::VecStoreElt16Rev { .. } => "vsterh",
+                    &Inst::VecStoreElt32Rev { .. } => "vsterf",
+                    &Inst::VecStoreElt64Rev { .. } => "vsterg",
                     _ => unreachable!(),
                 };
 
                 let rd = pretty_print_reg(rd, allocs);
                 let mem = mem.with_allocs(allocs);
-                let (mem_str, mem) = mem_finalize_for_show(&mem, state, true, false, false, true);
+                let (mem_str, mem) = mem_finalize_for_show(
+                    &mem,
+                    state,
+                    MemInstType {
+                        have_d12: true,
+                        have_d20: false,
+                        have_pcrel: false,
+                        have_unaligned_pcrel: false,
+                        have_index: true,
+                    },
+                );
                 let mem = mem.pretty_print_default();
                 format!("{}{} {}, {}", mem_str, opcode, rd, mem)
             }
@@ -2504,7 +2722,17 @@ impl Inst {
 
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
                 let mem = mem.with_allocs(allocs);
-                let (mem_str, mem) = mem_finalize_for_show(&mem, state, true, false, false, true);
+                let (mem_str, mem) = mem_finalize_for_show(
+                    &mem,
+                    state,
+                    MemInstType {
+                        have_d12: true,
+                        have_d20: false,
+                        have_pcrel: false,
+                        have_unaligned_pcrel: false,
+                        have_index: true,
+                    },
+                );
                 let mem = mem.pretty_print_default();
                 format!("{}{} {}, {}", mem_str, opcode, rd, mem)
             }
@@ -2513,8 +2741,8 @@ impl Inst {
                 let rn = pretty_print_reg(rn, allocs);
                 format!("vlr {}, {}", rd, rn)
             }
-            &Inst::VecCMov { rd, cond, rm } => {
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+            &Inst::VecCMov { rd, cond, ri, rm } => {
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
                 let rm = pretty_print_reg(rm, allocs);
                 let cond = cond.invert().pretty_print_default();
                 format!("j{} 10 ; vlr {}, {}", cond, rd, rm)
@@ -2590,16 +2818,46 @@ impl Inst {
             &Inst::VecLoadLane {
                 size,
                 rd,
+                ri,
                 ref mem,
                 lane_imm,
             }
             | &Inst::VecLoadLaneRev {
                 size,
                 rd,
+                ri,
                 ref mem,
                 lane_imm,
+            } => {
+                let opcode_vrx = match (self, size) {
+                    (&Inst::VecLoadLane { .. }, 8) => "vleb",
+                    (&Inst::VecLoadLane { .. }, 16) => "vleh",
+                    (&Inst::VecLoadLane { .. }, 32) => "vlef",
+                    (&Inst::VecLoadLane { .. }, 64) => "vleg",
+                    (&Inst::VecLoadLaneRev { .. }, 16) => "vlebrh",
+                    (&Inst::VecLoadLaneRev { .. }, 32) => "vlebrf",
+                    (&Inst::VecLoadLaneRev { .. }, 64) => "vlebrg",
+                    _ => unreachable!(),
+                };
+
+                let (rd, _) = pretty_print_fpr(rd.to_reg(), allocs);
+                let _ri = allocs.next(ri);
+                let mem = mem.with_allocs(allocs);
+                let (mem_str, mem) = mem_finalize_for_show(
+                    &mem,
+                    state,
+                    MemInstType {
+                        have_d12: true,
+                        have_d20: false,
+                        have_pcrel: false,
+                        have_unaligned_pcrel: false,
+                        have_index: true,
+                    },
+                );
+                let mem = mem.pretty_print_default();
+                format!("{}{} {}, {}, {}", mem_str, opcode_vrx, rd, mem, lane_imm)
             }
-            | &Inst::VecLoadLaneUndef {
+            &Inst::VecLoadLaneUndef {
                 size,
                 rd,
                 ref mem,
@@ -2612,13 +2870,6 @@ impl Inst {
                 lane_imm,
             } => {
                 let (opcode_vrx, opcode_rx, opcode_rxy) = match (self, size) {
-                    (&Inst::VecLoadLane { .. }, 8) => ("vleb", None, None),
-                    (&Inst::VecLoadLane { .. }, 16) => ("vleh", None, None),
-                    (&Inst::VecLoadLane { .. }, 32) => ("vlef", None, None),
-                    (&Inst::VecLoadLane { .. }, 64) => ("vleg", None, None),
-                    (&Inst::VecLoadLaneRev { .. }, 16) => ("vlebrh", None, None),
-                    (&Inst::VecLoadLaneRev { .. }, 32) => ("vlebrf", None, None),
-                    (&Inst::VecLoadLaneRev { .. }, 64) => ("vlebrg", None, None),
                     (&Inst::VecLoadLaneUndef { .. }, 8) => ("vleb", None, None),
                     (&Inst::VecLoadLaneUndef { .. }, 16) => ("vleh", None, None),
                     (&Inst::VecLoadLaneUndef { .. }, 32) => ("vlef", Some("le"), Some("ley")),
@@ -2632,8 +2883,17 @@ impl Inst {
                 let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg(), allocs);
                 let mem = mem.with_allocs(allocs);
                 if lane_imm == 0 && rd_fpr.is_some() && opcode_rx.is_some() {
-                    let (mem_str, mem) =
-                        mem_finalize_for_show(&mem, state, true, true, false, true);
+                    let (mem_str, mem) = mem_finalize_for_show(
+                        &mem,
+                        state,
+                        MemInstType {
+                            have_d12: true,
+                            have_d20: true,
+                            have_pcrel: false,
+                            have_unaligned_pcrel: false,
+                            have_index: true,
+                        },
+                    );
                     let op = match &mem {
                         &MemArg::BXD12 { .. } => opcode_rx,
                         &MemArg::BXD20 { .. } => opcode_rxy,
@@ -2642,8 +2902,17 @@ impl Inst {
                     let mem = mem.pretty_print_default();
                     format!("{}{} {}, {}", mem_str, op.unwrap(), rd_fpr.unwrap(), mem)
                 } else {
-                    let (mem_str, mem) =
-                        mem_finalize_for_show(&mem, state, true, false, false, true);
+                    let (mem_str, mem) = mem_finalize_for_show(
+                        &mem,
+                        state,
+                        MemInstType {
+                            have_d12: true,
+                            have_d20: false,
+                            have_pcrel: false,
+                            have_unaligned_pcrel: false,
+                            have_index: true,
+                        },
+                    );
                     let mem = mem.pretty_print_default();
                     format!("{}{} {}, {}, {}", mem_str, opcode_vrx, rd, mem, lane_imm)
                 }
@@ -2674,8 +2943,17 @@ impl Inst {
                 let (rd, rd_fpr) = pretty_print_fpr(rd, allocs);
                 let mem = mem.with_allocs(allocs);
                 if lane_imm == 0 && rd_fpr.is_some() && opcode_rx.is_some() {
-                    let (mem_str, mem) =
-                        mem_finalize_for_show(&mem, state, true, true, false, true);
+                    let (mem_str, mem) = mem_finalize_for_show(
+                        &mem,
+                        state,
+                        MemInstType {
+                            have_d12: true,
+                            have_d20: true,
+                            have_pcrel: false,
+                            have_unaligned_pcrel: false,
+                            have_index: true,
+                        },
+                    );
                     let op = match &mem {
                         &MemArg::BXD12 { .. } => opcode_rx,
                         &MemArg::BXD20 { .. } => opcode_rxy,
@@ -2684,8 +2962,17 @@ impl Inst {
                     let mem = mem.pretty_print_default();
                     format!("{}{} {}, {}", mem_str, op.unwrap(), rd_fpr.unwrap(), mem)
                 } else {
-                    let (mem_str, mem) =
-                        mem_finalize_for_show(&mem, state, true, false, false, true);
+                    let (mem_str, mem) = mem_finalize_for_show(
+                        &mem,
+                        state,
+                        MemInstType {
+                            have_d12: true,
+                            have_d20: false,
+                            have_pcrel: false,
+                            have_unaligned_pcrel: false,
+                            have_index: true,
+                        },
+                    );
                     let mem = mem.pretty_print_default();
                     format!("{}{} {}, {}, {}", mem_str, opcode_vrx, rd, mem, lane_imm,)
                 }
@@ -2693,6 +2980,7 @@ impl Inst {
             &Inst::VecInsertLane {
                 size,
                 rd,
+                ri,
                 rn,
                 lane_imm,
                 lane_reg,
@@ -2704,7 +2992,7 @@ impl Inst {
                     64 => "vlvgg",
                     _ => unreachable!(),
                 };
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
                 let rn = pretty_print_reg(rn, allocs);
                 let lane_reg = if lane_reg != zero_reg() {
                     format!("({})", pretty_print_reg(lane_reg, allocs))
@@ -2772,6 +3060,7 @@ impl Inst {
             &Inst::VecInsertLaneImm {
                 size,
                 rd,
+                ri,
                 imm,
                 lane_imm,
             } => {
@@ -2782,7 +3071,7 @@ impl Inst {
                     64 => "vleig",
                     _ => unreachable!(),
                 };
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
                 format!("{} {}, {}, {}", op, rd, imm, lane_imm)
             }
             &Inst::VecReplicateLane {
@@ -2829,17 +3118,48 @@ impl Inst {
                 format!("{} {}, {}", op, rd, rn)
             }
             &Inst::Call { link, ref info, .. } => {
-                let link = pretty_print_reg(link.to_reg(), allocs);
-                format!("brasl {}, {}", link, info.dest)
+                let link = link.to_reg();
+                let tls_symbol = match &info.tls_symbol {
+                    None => "".to_string(),
+                    Some(SymbolReloc::TlsGd { name }) => {
+                        format!(":tls_gdcall:{}", name.display(None))
+                    }
+                    _ => unreachable!(),
+                };
+                debug_assert_eq!(link, gpr(14));
+                format!(
+                    "brasl {}, {}{}",
+                    show_reg(link),
+                    info.dest.display(None),
+                    tls_symbol
+                )
             }
             &Inst::CallInd { link, ref info, .. } => {
-                let link = pretty_print_reg(link.to_reg(), allocs);
+                let link = link.to_reg();
                 let rn = pretty_print_reg(info.rn, allocs);
-                format!("basr {}, {}", link, rn)
+                debug_assert_eq!(link, gpr(14));
+                format!("basr {}, {}", show_reg(link), rn)
             }
-            &Inst::Ret { link, .. } => {
-                let link = pretty_print_reg(link, allocs);
-                format!("br {}", link)
+            &Inst::Args { ref args } => {
+                let mut s = "args".to_string();
+                for arg in args {
+                    use std::fmt::Write;
+                    let preg = pretty_print_reg(arg.preg, &mut empty_allocs);
+                    let def = pretty_print_reg(arg.vreg.to_reg(), allocs);
+                    write!(&mut s, " {}={}", def, preg).unwrap();
+                }
+                s
+            }
+            &Inst::Ret { link, ref rets } => {
+                debug_assert_eq!(link, gpr(14));
+                let mut s = format!("br {}", show_reg(link));
+                for ret in rets {
+                    use std::fmt::Write;
+                    let preg = pretty_print_reg(ret.preg, &mut empty_allocs);
+                    let vreg = pretty_print_reg(ret.vreg, allocs);
+                    write!(&mut s, " {}={}", vreg, preg).unwrap();
+                }
+                s
             }
             &Inst::Jump { dest } => {
                 let dest = dest.to_string();
@@ -2891,22 +3211,34 @@ impl Inst {
                     rtmp, rtmp, rtmp, ridx, rtmp, jt_entries,
                 )
             }
-            &Inst::LoadExtNameFar {
+            &Inst::LoadSymbolReloc {
                 rd,
-                ref name,
-                offset,
+                ref symbol_reloc,
             } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
                 let tmp = pretty_print_reg(writable_spilltmp_reg().to_reg(), &mut empty_allocs);
-                format!(
-                    "bras {}, 12 ; data {} + {} ; lg {}, 0({})",
-                    tmp, name, offset, rd, tmp
-                )
+                let symbol = match &**symbol_reloc {
+                    SymbolReloc::Absolute { name, offset } => {
+                        format!("{} + {}", name.display(None), offset)
+                    }
+                    SymbolReloc::TlsGd { name } => format!("{}@tlsgd", name.display(None)),
+                };
+                format!("bras {}, 12 ; data {} ; lg {}, 0({})", tmp, symbol, rd, tmp)
             }
             &Inst::LoadAddr { rd, ref mem } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
                 let mem = mem.with_allocs(allocs);
-                let (mem_str, mem) = mem_finalize_for_show(&mem, state, true, true, true, true);
+                let (mem_str, mem) = mem_finalize_for_show(
+                    &mem,
+                    state,
+                    MemInstType {
+                        have_d12: true,
+                        have_d20: true,
+                        have_pcrel: true,
+                        have_unaligned_pcrel: true,
+                        have_index: true,
+                    },
+                );
                 let op = match &mem {
                     &MemArg::BXD12 { .. } => "la",
                     &MemArg::BXD20 { .. } => "lay",
@@ -3059,6 +3391,7 @@ impl MachInstLabelUse for LabelUse {
     fn from_reloc(reloc: Reloc, addend: Addend) -> Option<Self> {
         match (reloc, addend) {
             (Reloc::S390xPCRel32Dbl, 2) => Some(LabelUse::PCRel32Dbl),
+            (Reloc::S390xPLTRel32Dbl, 2) => Some(LabelUse::PCRel32Dbl),
             _ => None,
         }
     }

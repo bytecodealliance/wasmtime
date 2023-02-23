@@ -1,0 +1,58 @@
+test interpret
+test run
+target x86_64
+target aarch64
+target s390x
+
+function %bswap_i16(i16) -> i16 {
+block0(v0: i16):
+    v1 = bswap v0
+    return v1
+}
+; run: %bswap_i16(0) == 0
+; run: %bswap_i16(1) == 0x0100
+; run: %bswap_i16(0x1234) == 0x3412
+; run: %bswap_i16(-2) == 0xFEFF
+
+function %bswap_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = bswap v0
+    return v1
+}
+; run: %bswap_i32(0) == 0
+; run: %bswap_i32(1) == 0x01000000
+; run: %bswap_i32(0x12345678) == 0x78563412
+; run: %bswap_i32(-2) == 0xFEFFFFFF
+
+function %bswap_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = bswap v0
+    return v1
+}
+; run: %bswap_i64(0) == 0
+; run: %bswap_i64(1) == 0x0100000000000000
+; run: %bswap_i64(0x123456789ABCDEF0) == 0xF0DEBC9A78563412
+; run: %bswap_i64(-2) == 0xFEFFFFFFFFFFFFFF
+
+function %fuzzer_case_0() -> i8, i32, i64 {
+block0:
+    v5 = iconst.i64 0x9903_5204_d05f_abab
+    v6 = bswap v5
+    v7 = iconst.i8 0
+    v8 = iconst.i32 0
+    return v7, v8, v6
+}
+
+; run: %fuzzer_case_0() == [0, 0, 0xabab_5fd0_0452_0399]
+
+function %fuzzer_case_1(f32, f64, i32, i32, f64) -> i8, i32, i64 {
+block0(v0: f32, v1: f64, v2: i32, v3: i32, v4: f64):
+    v5 = iconst.i64 0x9903_5204_d05f_abab
+    v6 = bswap v5
+    v7 = iconst.i8 0
+    v8 = iconst.i32 0
+    return v7, v8, v6
+}
+
+; run: %fuzzer_case_1(0.0, 0.0, 0, 0, 0.0) == [0, 0, 0xabab_5fd0_0452_0399]
+

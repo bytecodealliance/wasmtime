@@ -11,6 +11,7 @@ use arbitrary::{Arbitrary, Result, Unstructured};
 use wasm_encoder::Instruction;
 
 const MAX_FUNCS: usize = 20;
+const MAX_OPS: usize = 1_000;
 
 /// Generate a Wasm module that keeps track of its current call stack, to
 /// compare to the host.
@@ -50,7 +51,10 @@ impl Stacks {
         let mut work_list = vec![0];
 
         while let Some(f) = work_list.pop() {
-            let mut ops = u.arbitrary::<Vec<Op>>()?;
+            let mut ops = Vec::with_capacity(u.arbitrary_len::<Op>()?.min(MAX_OPS));
+            for _ in 0..ops.capacity() {
+                ops.push(u.arbitrary()?);
+            }
             for op in &mut ops {
                 match op {
                     Op::CallThroughHost(idx) | Op::Call(idx) => {

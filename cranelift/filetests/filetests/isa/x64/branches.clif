@@ -4,8 +4,7 @@ target x86_64
 function %f0(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
   v2 = icmp eq v0, v1
-  brnz v2, block1
-  jump block2
+  brif v2, block1, block2
 
 block1:
   v3 = iconst.i32 1
@@ -16,6 +15,7 @@ block2:
   return v4
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -31,12 +31,29 @@ block2:
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   cmpl %esi, %edi
+;   jne 0x16
+; block2: ; offset 0xc
+;   movl $1, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block3: ; offset 0x16
+;   movl $2, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %f1(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
   v2 = icmp eq v0, v1
-  brz v2, block1
-  jump block2
+  brif v2, block2, block1
 
 block1:
   v3 = iconst.i32 1
@@ -47,27 +64,45 @@ block2:
   return v4
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   cmpl    %esi, %edi
-;   jnz     label1; j label2
+;   jz      label1; j label2
 ; block1:
-;   movl    $1, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
-; block2:
 ;   movl    $2, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; block2:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   cmpl %esi, %edi
+;   jne 0x16
+; block2: ; offset 0xc
+;   movl $2, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block3: ; offset 0x16
+;   movl $1, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %f2(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
-  v2 = ifcmp v0, v1
-  brif eq v2, block1
-  jump block2
+  v2 = icmp eq v0, v1
+  brif v2, block1, block2
 
 block1:
   v3 = iconst.i32 1
@@ -78,6 +113,7 @@ block2:
   return v4
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -93,12 +129,29 @@ block2:
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   cmpl %esi, %edi
+;   jne 0x16
+; block2: ; offset 0xc
+;   movl $1, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block3: ; offset 0x16
+;   movl $2, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %f3(f32, f32) -> i32 {
 block0(v0: f32, v1: f32):
-  v2 = ffcmp v0, v1
-  brff eq v2, block1
-  jump block2
+  v2 = fcmp eq v0, v1
+  brif v2, block1, block2
 
 block1:
   v3 = iconst.i32 1
@@ -109,6 +162,7 @@ block2:
   return v4
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -125,20 +179,88 @@ block2:
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   ucomiss %xmm1, %xmm0
+;   jp 0x1d
+;   jne 0x1d
+; block2: ; offset 0x13
+;   movl $1, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block3: ; offset 0x1d
+;   movl $2, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
-function %f4(f32, f32) -> b1 {
+function %f4(f32, f32) -> i8 {
 block0(v0: f32, v1: f32):
   v2 = fcmp eq v0, v1
-  brz v2, block1
-  jump block2
+  brif v2, block2, block1
 block1:
-  v3 = bconst.b1 true
+  v3 = iconst.i8 1
   return v3
 block2:
-  v4 = bconst.b1 false
+  v4 = iconst.i8 0
   return v4
 }
 
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   ucomiss %xmm1, %xmm0
+;   jp      label2
+;   jnz     label2; j label1
+; block1:
+;   xorl    %eax, %eax, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   ucomiss %xmm1, %xmm0
+;   jp 0x1a
+;   jne 0x1a
+; block2: ; offset 0x13
+;   xorl %eax, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block3: ; offset 0x1a
+;   movl $1, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %f4(f32, f32) -> i8 {
+block0(v0: f32, v1: f32):
+  v2 = fcmp ne v0, v1
+  brif v2, block2, block1
+block1:
+  v3 = iconst.i8 1
+  return v3
+block2:
+  v4 = iconst.i8 0
+  return v4
+}
+
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
@@ -146,68 +268,54 @@ block2:
 ;   jp      label1
 ;   jnz     label1; j label2
 ; block1:
-;   movl    $1, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
-; block2:
 ;   xorl    %eax, %eax, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-
-function %f4(f32, f32) -> b1 {
-block0(v0: f32, v1: f32):
-  v2 = fcmp ne v0, v1
-  brz v2, block1
-  jump block2
-block1:
-  v3 = bconst.b1 true
-  return v3
-block2:
-  v4 = bconst.b1 false
-  return v4
-}
-
-;   pushq   %rbp
-;   movq    %rsp, %rbp
-; block0:
+; block2:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
 ;   ucomiss %xmm1, %xmm0
-;   jp      label2
-;   jnz     label2; j label1
-; block1:
-;   movl    $1, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
-; block2:
-;   xorl    %eax, %eax, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
+;   jp 0x13
+;   je 0x1a
+; block2: ; offset 0x13
+;   xorl %eax, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block3: ; offset 0x1a
+;   movl $1, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
-
-function %f5(i32) -> b1 {
-  jt0 = jump_table [block1, block2]
-
+function %f5(i32) -> i8 {
 block0(v0: i32):
-  br_table v0, block1, jt0
+  br_table v0, block1, [block1, block2]
 
 block1:
-  v1 = bconst.b1 true
+  v1 = iconst.i8 1
   return v1
 
 block2:
-  v2 = bconst.b1 false
+  v2 = iconst.i8 0
   return v2
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movl    $0, %r8d
 ;   cmpl    $2, %edi
-;   br_table %rdi
+;   br_table %rdi, %r8, %r9
 ; block1:
 ;   jmp     label3
 ; block2:
@@ -222,4 +330,582 @@ block2:
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   cmpl $2, %edi
+;   jae 0x34
+;   movl %edi, %r9d
+;   movl $0, %r8d
+;   cmovaeq %r8, %r9
+;   leaq 0xb(%rip), %r8
+;   movslq (%r8, %r9, 4), %r9
+;   addq %r9, %r8
+;   jmpq *%r8
+;   orb %al, (%rax)
+;   addb %al, (%rax)
+;   adcb (%rax), %al
+;   addb %al, (%rax)
+; block2: ; offset 0x34
+;   movl $1, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block3: ; offset 0x3e
+;   xorl %eax, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %f6(i64) -> i8 {
+block0(v0: i64):
+  v1 = iconst.i64 0
+  v2 = icmp slt v0, v1
+  brif v2, block1, block2
+block1:
+  v3 = iconst.i8 1
+  return v3
+block2:
+  v4 = iconst.i8 0
+  return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   cmpq    $0, %rdi
+;   jl      label1; j label2
+; block1:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   xorl    %eax, %eax, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   cmpq $0, %rdi
+;   jge 0x18
+; block2: ; offset 0xe
+;   movl $1, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block3: ; offset 0x18
+;   xorl %eax, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %f7(i32) -> i8 {
+block0(v0: i32):
+  v1 = iconst.i32 0
+  v2 = icmp slt v0, v1
+  brif v2, block1, block2
+block1:
+  v3 = iconst.i8 1
+  return v3
+block2:
+  v4 = iconst.i8 0
+  return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   cmpl    $0, %edi
+;   jl      label1; j label2
+; block1:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   xorl    %eax, %eax, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   cmpl $0, %edi
+;   jge 0x17
+; block2: ; offset 0xd
+;   movl $1, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block3: ; offset 0x17
+;   xorl %eax, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %fflags(f32) {
+block200(v0: f32):
+    v1 = f32const 0x34.0p0
+    v2 = fcmp eq v0, v1
+    brif v2, block201, block400
+
+block400:
+    v3 = fcmp ord v0, v1
+    brif v3, block202, block201
+
+block401:
+    return
+
+block201:
+    return
+
+block202:
+    trap heap_oob
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    $1112539136, %edx
+;   movd    %edx, %xmm6
+;   ucomiss %xmm6, %xmm0
+;   jp      label2
+;   jnz     label2; j label1
+; block1:
+;   jmp     label5
+; block2:
+;   movl    $1112539136, %r11d
+;   movd    %r11d, %xmm10
+;   ucomiss %xmm10, %xmm0
+;   jnp     label3; j label4
+; block3:
+;   ud2 heap_oob
+; block4:
+;   jmp     label5
+; block5:
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movl $0x42500000, %edx
+;   movd %edx, %xmm6
+;   ucomiss %xmm6, %xmm0
+;   jp 0x1c
+;   je 0x33
+; block2: ; offset 0x1c
+;   movl $0x42500000, %r11d
+;   movd %r11d, %xmm10
+;   ucomiss %xmm10, %xmm0
+;   jp 0x33
+; block3: ; offset 0x31
+;   ud2 ; trap: heap_oob
+; block4: ; offset 0x33
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %br_i8_icmp(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = icmp eq v0, v1
+  v3 = uextend.i32 v2
+  brif v3, block1, block2
+
+block1:
+  v4 = iconst.i32 1
+  return v4
+
+block2:
+  v5 = iconst.i32 2
+  return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   cmpl    %esi, %edi
+;   jz      label1; j label2
+; block1:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   movl    $2, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   cmpl %esi, %edi
+;   jne 0x16
+; block2: ; offset 0xc
+;   movl $1, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block3: ; offset 0x16
+;   movl $2, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %br_i8_fcmp(f32, f32) -> i32 {
+block0(v0: f32, v1: f32):
+  v2 = fcmp eq v0, v1
+  v3 = uextend.i32 v2
+  brif v3, block1, block2
+
+block1:
+  v4 = iconst.i32 1
+  return v4
+
+block2:
+  v5 = iconst.i32 2
+  return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   ucomiss %xmm1, %xmm0
+;   jp      label2
+;   jnz     label2; j label1
+; block1:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   movl    $2, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   ucomiss %xmm1, %xmm0
+;   jp 0x1d
+;   jne 0x1d
+; block2: ; offset 0x13
+;   movl $1, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block3: ; offset 0x1d
+;   movl $2, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %brif_i8_icmp(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = icmp eq v0, v1
+  v3 = uextend.i32 v2
+  brif v3, block1, block2
+
+block1:
+  v4 = iconst.i32 1
+  return v4
+
+block2:
+  v5 = iconst.i32 2
+  return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   cmpl    %esi, %edi
+;   jz      label1; j label2
+; block1:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   movl    $2, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   cmpl %esi, %edi
+;   jne 0x16
+; block2: ; offset 0xc
+;   movl $1, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block3: ; offset 0x16
+;   movl $2, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %brif_i8_fcmp(f32, f32) -> i32 {
+block0(v0: f32, v1: f32):
+  v2 = fcmp eq v0, v1
+  v3 = uextend.i32 v2
+  brif v3, block1, block2
+
+block1:
+  v4 = iconst.i32 1
+  return v4
+
+block2:
+  v5 = iconst.i32 2
+  return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   ucomiss %xmm1, %xmm0
+;   jp      label2
+;   jnz     label2; j label1
+; block1:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   movl    $2, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   ucomiss %xmm1, %xmm0
+;   jp 0x1d
+;   jne 0x1d
+; block2: ; offset 0x13
+;   movl $1, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block3: ; offset 0x1d
+;   movl $2, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %br_table_i32(i32) -> i32 {
+block0(v0: i32):
+  br_table v0, block4, [block1, block2, block2, block3]
+
+block1:
+  v1 = iconst.i32 1
+  jump block5(v1)
+
+block2:
+  v2 = iconst.i32 2
+  jump block5(v2)
+
+block3:
+  v3 = iconst.i32 3
+  jump block5(v3)
+
+block4:
+  v4 = iconst.i32 4
+  jump block5(v4)
+
+block5(v5: i32):
+  v6 = iadd.i32 v0, v5
+  return v6
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   cmpl    $4, %edi
+;   br_table %rdi, %rcx, %rdx
+; block1:
+;   movl    $4, %edx
+;   jmp     label2
+; block2:
+;   jmp     label10
+; block3:
+;   movl    $1, %edx
+;   jmp     label4
+; block4:
+;   jmp     label10
+; block5:
+;   jmp     label7
+; block6:
+;   jmp     label7
+; block7:
+;   movl    $2, %edx
+;   jmp     label10
+; block8:
+;   movl    $3, %edx
+;   jmp     label9
+; block9:
+;   jmp     label10
+; block10:
+;   movq    %rdi, %rax
+;   addl    %eax, %edx, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   cmpl $4, %edi
+;   jae 0x39
+;   movl %edi, %edx
+;   movl $0, %ecx
+;   cmovaeq %rcx, %rdx
+;   leaq 0xa(%rip), %rcx
+;   movslq (%rcx, %rdx, 4), %rdx
+;   addq %rdx, %rcx
+;   jmpq *%rcx
+;   sbbb (%rax), %al
+;   addb %al, (%rax)
+;   andb $0, %al
+;   addb %al, (%rax)
+;   andb $0, %al
+;   addb %al, (%rax)
+;   addb %al, %cs:(%rax)
+; block2: ; offset 0x39
+;   movl $4, %edx
+; block3: ; offset 0x3e
+;   jmp 0x5c
+; block4: ; offset 0x43
+;   movl $1, %edx
+; block5: ; offset 0x48
+;   jmp 0x5c
+; block6: ; offset 0x4d
+;   movl $2, %edx
+;   jmp 0x5c
+; block7: ; offset 0x57
+;   movl $3, %edx
+; block8: ; offset 0x5c
+;   movq %rdi, %rax
+;   addl %edx, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %br_table_i32_inline(i32) -> i32 {
+block0(v0: i32):
+  v1 = iconst.i32 1
+  v2 = iconst.i32 2
+  v3 = iconst.i32 3
+  v4 = iconst.i32 4
+  br_table v0, block1(v4), [block1(v1), block1(v2), block1(v2), block1(v3)]
+
+block1(v5: i32):
+  return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    $1, %edx
+;   movl    $2, %r8d
+;   movl    $3, %r9d
+;   movl    $4, %eax
+;   cmpl    $4, %edi
+;   br_table %rdi, %r11, %r10
+; block1:
+;   jmp     label6
+; block2:
+;   movq    %rdx, %rax
+;   jmp     label6
+; block3:
+;   movq    %r8, %rax
+;   jmp     label6
+; block4:
+;   movq    %r8, %rax
+;   jmp     label6
+; block5:
+;   movq    %r9, %rax
+;   jmp     label6
+; block6:
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movl $1, %edx
+;   movl $2, %r8d
+;   movl $3, %r9d
+;   movl $4, %eax
+;   cmpl $4, %edi
+;   jae 0x72
+;   movl %edi, %r10d
+;   movl $0, %r11d
+;   cmovaeq %r11, %r10
+;   leaq 0xb(%rip), %r11
+;   movslq (%r11, %r10, 4), %r10
+;   addq %r10, %r11
+;   jmpq *%r11
+;   adcl $0x1d000000, %eax
+;   addb %al, (%rax)
+;   addb %ah, 0x2d000000(%rip)
+;   addb %al, (%rax)
+; block2: ; offset 0x52
+;   jmp 0x72
+; block3: ; offset 0x57
+;   movq %rdx, %rax
+;   jmp 0x72
+; block4: ; offset 0x5f
+;   movq %r8, %rax
+;   jmp 0x72
+; block5: ; offset 0x67
+;   movq %r8, %rax
+;   jmp 0x72
+; block6: ; offset 0x6f
+;   movq %r9, %rax
+; block7: ; offset 0x72
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 

@@ -1,0 +1,27 @@
+interface a {
+  record foo {}
+
+  a: func() -> foo
+}
+
+interface b {
+  use self.a.{foo}
+
+  a: func() -> foo
+}
+
+interface c {
+  use self.b.{foo}
+
+  a: func() -> foo
+}
+
+default world d {
+  import a: self.a
+  import b: self.b
+  import d: interface {
+    use self.c.{foo}
+
+    b: func() -> foo
+  }
+}

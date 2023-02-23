@@ -14,6 +14,8 @@ pub enum CallConv {
     Fast,
     /// Smallest caller code size, not ABI-stable.
     Cold,
+    /// Supports tail calls, not ABI-stable.
+    Tail,
     /// System V-style convention used on many platforms.
     SystemV,
     /// Windows "fastcall" convention, also used for x64 and ARM.
@@ -64,6 +66,14 @@ impl CallConv {
         }
     }
 
+    /// Does this calling convention support tail calls?
+    pub fn supports_tail_calls(&self) -> bool {
+        match self {
+            CallConv::Tail => true,
+            _ => false,
+        }
+    }
+
     /// Is the calling convention extending the Windows Fastcall ABI?
     pub fn extends_windows_fastcall(self) -> bool {
         match self {
@@ -94,6 +104,7 @@ impl fmt::Display for CallConv {
         f.write_str(match *self {
             Self::Fast => "fast",
             Self::Cold => "cold",
+            Self::Tail => "tail",
             Self::SystemV => "system_v",
             Self::WindowsFastcall => "windows_fastcall",
             Self::AppleAarch64 => "apple_aarch64",
@@ -111,6 +122,7 @@ impl str::FromStr for CallConv {
         match s {
             "fast" => Ok(Self::Fast),
             "cold" => Ok(Self::Cold),
+            "tail" => Ok(Self::Tail),
             "system_v" => Ok(Self::SystemV),
             "windows_fastcall" => Ok(Self::WindowsFastcall),
             "apple_aarch64" => Ok(Self::AppleAarch64),

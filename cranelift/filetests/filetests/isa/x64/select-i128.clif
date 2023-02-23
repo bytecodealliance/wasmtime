@@ -10,17 +10,34 @@ block0(v0: i32, v1: i128, v2: i128):
     return v5
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   cmpl    $42, %edi
-;   cmovzq  %rsi, %rcx, %rcx
-;   cmovzq  %rdx, %r8, %r8
 ;   movq    %rcx, %rax
+;   cmovzq  %rsi, %rax, %rax
+;   movq    %rdx, %rdi
 ;   movq    %r8, %rdx
+;   cmovzq  %rdi, %rdx, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   cmpl $0x2a, %edi
+;   movq %rcx, %rax
+;   cmoveq %rsi, %rax
+;   movq %rdx, %rdi
+;   movq %r8, %rdx
+;   cmoveq %rdi, %rdx
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %f1(f32, i128, i128) -> i128 {
 block0(v0: f32, v1: i128, v2: i128):
@@ -29,17 +46,34 @@ block0(v0: f32, v1: i128, v2: i128):
     return v4
 }
 
+; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   ucomiss %xmm0, %xmm0
-;   cmovnzq %rdx, %rdi, %rdi
-;   cmovpq  %rdx, %rdi, %rdi
-;   cmovnzq %rcx, %rsi, %rsi
-;   cmovpq  %rcx, %rsi, %rsi
 ;   movq    %rdi, %rax
+;   cmovnzq %rdx, %rax, %rax
+;   cmovpq  %rdx, %rax, %rax
 ;   movq    %rsi, %rdx
+;   cmovnzq %rcx, %rdx, %rdx
+;   cmovpq  %rcx, %rdx, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   ucomiss %xmm0, %xmm0
+;   movq %rdi, %rax
+;   cmovneq %rdx, %rax
+;   cmovpq %rdx, %rax
+;   movq %rsi, %rdx
+;   cmovneq %rcx, %rdx
+;   cmovpq %rcx, %rdx
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 

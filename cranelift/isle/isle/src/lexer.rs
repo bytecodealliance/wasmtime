@@ -1,9 +1,11 @@
 //! Lexer for the ISLE language.
 
-use crate::error::{Error, Result, Source, Span};
+use crate::error::{Error, Errors, Span};
 use std::borrow::Cow;
 use std::path::Path;
 use std::sync::Arc;
+
+type Result<T> = std::result::Result<T, Errors>;
 
 /// The lexer.
 ///
@@ -43,18 +45,9 @@ pub struct Pos {
 }
 
 impl Pos {
-    /// Print this source position as `file.isle:12:34`.
-    pub fn pretty_print(&self, filenames: &[Arc<str>]) -> String {
-        self.pretty_print_with_filename(&filenames[self.file])
-    }
     /// Print this source position as `file.isle line 12`.
     pub fn pretty_print_line(&self, filenames: &[Arc<str>]) -> String {
         format!("{} line {}", filenames[self.file], self.line)
-    }
-    /// As above for `pretty_print`, but with the specific filename
-    /// already provided.
-    pub fn pretty_print_with_filename(&self, filename: &str) -> String {
-        format!("{}:{}:{}", filename, self.line, self.col)
     }
 }
 
@@ -107,7 +100,7 @@ impl<'a> Lexer<'a> {
             filenames.push(f.display().to_string().into());
 
             let s = std::fs::read_to_string(f)
-                .map_err(|e| Error::from_io(e, format!("failed to read file: {}", f.display())))?;
+                .map_err(|e| Errors::from_io(e, format!("failed to read file: {}", f.display())))?;
             file_texts.push(s.into());
         }
 
@@ -165,14 +158,14 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn error(&self, pos: Pos, msg: impl Into<String>) -> Error {
-        Error::ParseError {
-            msg: msg.into(),
-            src: Source::new(
-                self.filenames[pos.file].clone(),
-                self.file_texts[pos.file].clone(),
-            ),
-            span: Span::new_single(self.pos()),
+    fn error(&self, pos: Pos, msg: impl Into<String>) -> Errors {
+        Errors {
+            errors: vec![Error::ParseError {
+                msg: msg.into(),
+                span: Span::new_single(pos),
+            }],
+            filenames: self.filenames.clone(),
+            file_texts: self.file_texts.clone(),
         }
     }
 
@@ -239,7 +232,7 @@ impl<'a> Lexer<'a> {
                 debug_assert!(!s.is_empty());
                 Ok(Some((start_pos, Token::Symbol(s.to_string()))))
             }
-            c if (c >= b'0' && c <= b'9') || c == b'-' => {
+            c @ (b'0'..=b'9' | b'-') => {
                 let start_pos = self.pos();
                 let neg = if c == b'-' {
                     self.advance_pos();
@@ -265,16 +258,8 @@ impl<'a> Lexer<'a> {
                 // string-to-integer conversion.
                 let mut s = vec![];
                 while self.pos.offset < self.buf.len()
-                    && ((radix == 10
-                        && self.buf[self.pos.offset] >= b'0'
-                        && self.buf[self.pos.offset] <= b'9')
-                        || (radix == 16
-                            && ((self.buf[self.pos.offset] >= b'0'
-                                && self.buf[self.pos.offset] <= b'9')
-                                || (self.buf[self.pos.offset] >= b'a'
-                                    && self.buf[self.pos.offset] <= b'f')
-                                || (self.buf[self.pos.offset] >= b'A'
-                                    && self.buf[self.pos.offset] <= b'F')))
+                    && ((radix == 10 && self.buf[self.pos.offset].is_ascii_digit())
+                        || (radix == 16 && self.buf[self.pos.offset].is_ascii_hexdigit())
                         || self.buf[self.pos.offset] == b'_')
                 {
                     if self.buf[self.pos.offset] != b'_' {

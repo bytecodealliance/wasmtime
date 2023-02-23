@@ -1,6 +1,7 @@
 use crate::component::func::HostFunc;
-use crate::component::{Component, ComponentParams, Func, Lift, Lower, TypedFunc};
+use crate::component::{Component, ComponentNamedList, Func, Lift, Lower, TypedFunc};
 use crate::instance::OwnedImports;
+use crate::linker::DefinitionType;
 use crate::store::{StoreOpaque, Stored};
 use crate::{AsContextMut, Module, StoreContextMut};
 use anyhow::{anyhow, Context, Result};
@@ -10,9 +11,9 @@ use std::sync::Arc;
 use wasmtime_environ::component::{
     AlwaysTrap, ComponentTypes, CoreDef, CoreExport, Export, ExportItem, ExtractMemory,
     ExtractPostReturn, ExtractRealloc, GlobalInitializer, InstantiateModule, LowerImport,
-    RuntimeImportIndex, RuntimeInstanceIndex, RuntimeModuleIndex,
+    RuntimeImportIndex, RuntimeInstanceIndex, RuntimeModuleIndex, Transcoder,
 };
-use wasmtime_environ::{EntityIndex, Global, GlobalInit, PrimaryMap, WasmType};
+use wasmtime_environ::{EntityIndex, EntityType, Global, GlobalInit, PrimaryMap, WasmType};
 use wasmtime_runtime::component::{ComponentInstance, OwnedComponentInstance};
 
 /// An instantiated component.
@@ -84,20 +85,19 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `store` does not own this instance.
-    pub fn get_typed_func<Params, Results, S>(
+    pub fn get_typed_func<Params, Results>(
         &self,
-        mut store: S,
+        mut store: impl AsContextMut,
         name: &str,
     ) -> Result<TypedFunc<Params, Results>>
     where
-        Params: ComponentParams + Lower,
-        Results: Lift,
-        S: AsContextMut,
+        Params: ComponentNamedList + Lower,
+        Results: ComponentNamedList + Lift,
     {
         let f = self
             .get_func(store.as_context_mut(), name)
             .ok_or_else(|| anyhow!("failed to find function export `{}`", name))?;
-        Ok(f.typed::<Params, Results, _>(store)
+        Ok(f.typed::<Params, Results>(store)
             .with_context(|| format!("failed to convert function `{}` to given type", name))?)
     }
 
@@ -140,6 +140,11 @@ impl InstanceData {
                         mutability: true,
                         initializer: GlobalInit::I32Const(0),
                     },
+                })
+            }
+            CoreDef::Transcoder(idx) => {
+                wasmtime_runtime::Export::Function(wasmtime_runtime::ExportFunction {
+                    anyfunc: self.state.transcoder_anyfunc(*idx),
                 })
             }
         }
@@ -254,10 +259,16 @@ impl<'a> Instantiator<'a> {
 
                     // Note that the unsafety here should be ok because the
                     // validity of the component means that type-checks have
-                    // already been performed. This maens that the unsafety due
+                    // already been performed. This means that the unsafety due
                     // to imports having the wrong type should not happen here.
-                    let i =
-                        unsafe { crate::Instance::new_started(store, module, imports.as_ref())? };
+                    //
+                    // Also note we are calling new_started_impl because we have
+                    // already checked for asyncness and are running on a fiber
+                    // if required.
+
+                    let i = unsafe {
+                        crate::Instance::new_started_impl(store, module, imports.as_ref())?
+                    };
                     self.data.instances.push(i);
                 }
 
@@ -287,6 +298,8 @@ impl<'a> Instantiator<'a> {
                         _ => unreachable!(),
                     });
                 }
+
+                GlobalInitializer::Transcoder(e) => self.transcoder(e),
             }
         }
         Ok(())
@@ -324,6 +337,17 @@ impl<'a> Instantiator<'a> {
             self.component
                 .signatures()
                 .shared_signature(trap.canonical_abi)
+                .expect("found unregistered signature"),
+        );
+    }
+
+    fn transcoder(&mut self, transcoder: &Transcoder) {
+        self.data.state.set_transcoder(
+            transcoder.index,
+            self.component.transcoder_ptr(transcoder.index),
+            self.component
+                .signatures()
+                .shared_signature(transcoder.signature)
                 .expect("found unregistered signature"),
         );
     }
@@ -371,24 +395,16 @@ impl<'a> Instantiator<'a> {
             // core wasm instantiations internally within a component are
             // unnecessary and superfluous. Naturally though mistakes may be
             // made, so double-check this property of wasmtime in debug mode.
+
             if cfg!(debug_assertions) {
-                let export = self.data.lookup_def(store, arg);
                 let (_, _, expected) = imports.next().unwrap();
-                let val = unsafe { crate::Extern::from_wasmtime_export(export, store) };
-                crate::types::matching::MatchCx {
-                    store,
-                    engine: store.engine(),
-                    signatures: module.signatures(),
-                    types: module.types(),
-                }
-                .extern_(&expected, &val)
-                .expect("unexpected typecheck failure");
+                self.assert_type_matches(store, module, arg, expected);
             }
 
-            let export = self.data.lookup_def(store, arg);
             // The unsafety here should be ok since the `export` is loaded
             // directly from an instance which should only give us valid export
             // items.
+            let export = self.data.lookup_def(store, arg);
             unsafe {
                 self.core_imports.push_export(&export);
             }
@@ -396,6 +412,41 @@ impl<'a> Instantiator<'a> {
         debug_assert!(imports.next().is_none());
 
         &self.core_imports
+    }
+
+    fn assert_type_matches(
+        &mut self,
+        store: &mut StoreOpaque,
+        module: &Module,
+        arg: &CoreDef,
+        expected: EntityType,
+    ) {
+        let export = self.data.lookup_def(store, arg);
+
+        // If this value is a core wasm function then the type check is inlined
+        // here. This can otherwise fail `Extern::from_wasmtime_export` because
+        // there's no guarantee that there exists a trampoline for `f` so this
+        // can't fall through to the case below
+        if let wasmtime_runtime::Export::Function(f) = &export {
+            match expected {
+                EntityType::Function(expected) => {
+                    let actual = unsafe { f.anyfunc.as_ref().type_index };
+                    assert_eq!(module.signatures().shared_signature(expected), Some(actual));
+                    return;
+                }
+                _ => panic!("function not expected"),
+            }
+        }
+
+        let val = unsafe { crate::Extern::from_wasmtime_export(export, store) };
+        let ty = DefinitionType::from(store, &val);
+        crate::types::matching::MatchCx {
+            engine: store.engine(),
+            signatures: module.signatures(),
+            types: module.types(),
+        }
+        .definition(&expected, &ty)
+        .expect("unexpected typecheck failure");
     }
 }
 
@@ -439,7 +490,36 @@ impl<T> InstancePre<T> {
     /// Performs the instantiation process into the store specified.
     //
     // TODO: needs more docs
-    pub fn instantiate(&self, mut store: impl AsContextMut<Data = T>) -> Result<Instance> {
+    pub fn instantiate(&self, store: impl AsContextMut<Data = T>) -> Result<Instance> {
+        assert!(
+            !store.as_context().async_support(),
+            "must use async instantiation when async support is enabled"
+        );
+        self.instantiate_impl(store)
+    }
+    /// Performs the instantiation process into the store specified.
+    ///
+    /// Exactly like [`Self::instantiate`] except for use on async stores.
+    //
+    // TODO: needs more docs
+    #[cfg(feature = "async")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    pub async fn instantiate_async(
+        &self,
+        mut store: impl AsContextMut<Data = T>,
+    ) -> Result<Instance>
+    where
+        T: Send,
+    {
+        let mut store = store.as_context_mut();
+        assert!(
+            store.0.async_support(),
+            "must use sync instantiation when async support is disabled"
+        );
+        store.on_fiber(|store| self.instantiate_impl(store)).await?
+    }
+
+    fn instantiate_impl(&self, mut store: impl AsContextMut<Data = T>) -> Result<Instance> {
         let mut store = store.as_context_mut();
         let mut i = Instantiator::new(&self.component, store.0, &self.imports);
         i.run(&mut store)?;
@@ -533,15 +613,15 @@ impl<'a, 'store> ExportInstance<'a, 'store> {
                 func,
                 options,
             )),
-            Export::Module(_) | Export::Instance(_) => None,
+            Export::Module(_) | Export::Instance(_) | Export::Type(_) => None,
         }
     }
 
     /// Same as [`Instance::get_typed_func`]
     pub fn typed_func<Params, Results>(&mut self, name: &str) -> Result<TypedFunc<Params, Results>>
     where
-        Params: ComponentParams + Lower,
-        Results: Lift,
+        Params: ComponentNamedList + Lower,
+        Results: ComponentNamedList + Lift,
     {
         let func = self
             .func(name)

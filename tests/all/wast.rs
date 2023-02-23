@@ -1,10 +1,12 @@
+use anyhow::Context;
+use bstr::ByteSlice;
 use once_cell::sync::Lazy;
 use std::path::Path;
 use std::sync::{Condvar, Mutex};
 use wasmtime::{
-    Config, Engine, InstanceAllocationStrategy, InstanceLimits, PoolingAllocationStrategy, Store,
-    Strategy,
+    Config, Engine, InstanceAllocationStrategy, PoolingAllocationConfig, Store, Strategy,
 };
+use wasmtime_environ::WASM_PAGE_SIZE;
 use wasmtime_wast::WastContext;
 
 include!(concat!(env!("OUT_DIR"), "/wast_testsuite_tests.rs"));
@@ -15,24 +17,34 @@ include!(concat!(env!("OUT_DIR"), "/wast_testsuite_tests.rs"));
 fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()> {
     drop(env_logger::try_init());
 
+    let wast_bytes = std::fs::read(wast).with_context(|| format!("failed to read `{}`", wast))?;
+
     match strategy {
         Strategy::Cranelift => {}
         _ => unimplemented!(),
     }
+
     let wast = Path::new(wast);
 
-    let simd = feature_found(wast, "simd");
     let memory64 = feature_found(wast, "memory64");
     let multi_memory = feature_found(wast, "multi-memory");
     let threads = feature_found(wast, "threads");
     let function_references = feature_found(wast, "function-references");
+    let reference_types = !(threads && feature_found(wast, "proposals"));
+    let use_shared_memory = feature_found_src(&wast_bytes, "shared_memory")
+        || feature_found_src(&wast_bytes, "shared)");
+
+    if pooling && use_shared_memory {
+        eprintln!("skipping pooling test with shared memory");
+        return Ok(());
+    }
 
     let mut cfg = Config::new();
-    cfg.wasm_simd(simd)
-        .wasm_multi_memory(multi_memory)
+    cfg.wasm_multi_memory(multi_memory)
         .wasm_threads(threads)
         .wasm_memory64(memory64)
         .wasm_function_references(function_references)
+        .wasm_reference_types(reference_types)
         .cranelift_debug_verifier(true);
 
     cfg.wasm_component_model(feature_found(wast, "component-model"));
@@ -67,7 +79,11 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
         // Don't use 4gb address space reservations when not hogging memory, and
         // also don't reserve lots of memory after dynamic memories for growth
         // (makes growth slower).
-        cfg.static_memory_maximum_size(0);
+        if use_shared_memory {
+            cfg.static_memory_maximum_size(2 * WASM_PAGE_SIZE as u64);
+        } else {
+            cfg.static_memory_maximum_size(0);
+        }
         cfg.dynamic_memory_reserved_for_growth(0);
     }
 
@@ -83,16 +99,12 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
         // However, these limits may become insufficient in the future as the wast tests change.
         // If a wast test fails because of a limit being "exceeded" or if memory/table
         // fails to grow, the values here will need to be adjusted.
-        cfg.allocation_strategy(InstanceAllocationStrategy::Pooling {
-            strategy: PoolingAllocationStrategy::NextAvailable,
-            instance_limits: InstanceLimits {
-                count: 450,
-                memories: 2,
-                tables: 4,
-                memory_pages: 805,
-                ..Default::default()
-            },
-        });
+        let mut pool = PoolingAllocationConfig::default();
+        pool.instance_count(450)
+            .instance_memories(2)
+            .instance_tables(4)
+            .instance_memory_pages(805);
+        cfg.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
         Some(lock_pooling())
     } else {
         None
@@ -100,8 +112,10 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
 
     let store = Store::new(&Engine::new(&cfg)?, ());
     let mut wast_context = WastContext::new(store);
-    wast_context.register_spectest()?;
-    wast_context.run_file(wast)?;
+
+    wast_context.register_spectest(use_shared_memory)?;
+    wast_context.run_buffer(wast.to_str().unwrap(), &wast_bytes)?;
+
     Ok(())
 }
 
@@ -110,6 +124,10 @@ fn feature_found(path: &Path, name: &str) -> bool {
         Some(s) => s.contains(name),
         None => false,
     })
+}
+
+fn feature_found_src(bytes: &[u8], name: &str) -> bool {
+    bytes.contains_str(name)
 }
 
 // The pooling tests make about 6TB of address space reservation which means

@@ -1,14 +1,14 @@
 [package]
 name = "wasi-common"
-version = "0.41.0"
-authors = ["The Wasmtime Project Developers"]
+version.workspace = true
+authors.workspace = true
 description = "WASI implementation in Rust"
 license = "Apache-2.0 WITH LLVM-exception"
 categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
 repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
-edition = "2021"
+edition.workspace = true
 include = ["src/**/*", "WASI/phases/**/*", "README.md", "LICENSE", "build.rs"]
 build = "build.rs"
 
@@ -18,22 +18,24 @@ build = "build.rs"
 links = "wasi-common-19"
 
 [dependencies]
-anyhow = "1.0"
-thiserror = "1.0"
-wiggle = { path = "../wiggle", default-features = false, version = "=0.41.0" }
-tracing = "0.1.19"
-cap-std = "0.25.0"
-cap-rand = "0.25.0"
-bitflags = "1.2"
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+wiggle = { workspace = true }
+wasmtime = { workspace = true }
+tracing = { workspace = true }
+cap-std = { workspace = true }
+cap-rand = { workspace = true }
+bitflags = { workspace = true }
+log = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
-rustix = { version = "0.35.6", features = ["fs"] }
+rustix = { workspace = true, features = ["fs"] }
 
 [target.'cfg(windows)'.dependencies]
-io-extras = "0.15.0"
+io-extras = "0.17.0"
 
 [target.'cfg(windows)'.dependencies.windows-sys]
-version = "0.36.0"
+workspace = true
 features = [
     "Win32_Foundation",
     "Win32_Networking_WinSock",

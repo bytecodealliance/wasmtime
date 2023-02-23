@@ -1,17 +1,17 @@
-use crate::linker::Definition;
+use crate::linker::{Definition, DefinitionType};
 use crate::store::{InstanceId, StoreOpaque, Stored};
 use crate::types::matching;
 use crate::{
     AsContextMut, Engine, Export, Extern, Func, Global, Memory, Module, SharedMemory,
-    StoreContextMut, Table, Trap, TypedFunc,
+    StoreContextMut, Table, TypedFunc,
 };
-use anyhow::{anyhow, bail, Context, Error, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use std::mem;
 use std::sync::Arc;
 use wasmtime_environ::{EntityType, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap, TableIndex};
 use wasmtime_runtime::{
-    Imports, InstanceAllocationRequest, InstantiationError, StorePtr, VMContext, VMFunctionBody,
-    VMFunctionImport, VMGlobalImport, VMMemoryImport, VMOpaqueContext, VMTableImport,
+    Imports, InstanceAllocationRequest, StorePtr, VMContext, VMFunctionBody, VMFunctionImport,
+    VMGlobalImport, VMMemoryImport, VMOpaqueContext, VMTableImport,
 };
 
 /// An instantiated WebAssembly module.
@@ -88,7 +88,10 @@ impl Instance {
     ///
     /// When instantiation fails it's recommended to inspect the return value to
     /// see why it failed, or bubble it upwards. If you'd like to specifically
-    /// check for trap errors, you can use `error.downcast::<Trap>()`.
+    /// check for trap errors, you can use `error.downcast::<Trap>()`. For more
+    /// about error handling see the [`Trap`] documentation.
+    ///
+    /// [`Trap`]: crate::Trap
     ///
     /// # Panics
     ///
@@ -102,7 +105,7 @@ impl Instance {
         mut store: impl AsContextMut,
         module: &Module,
         imports: &[Extern],
-    ) -> Result<Instance, Error> {
+    ) -> Result<Instance> {
         let mut store = store.as_context_mut();
         let imports = Instance::typecheck_externs(store.0, module, imports)?;
         // Note that the unsafety here should be satisfied by the call to
@@ -134,7 +137,7 @@ impl Instance {
         mut store: impl AsContextMut<Data = T>,
         module: &Module,
         imports: &[Extern],
-    ) -> Result<Instance, Error>
+    ) -> Result<Instance>
     where
         T: Send,
     {
@@ -154,7 +157,10 @@ impl Instance {
                 bail!("cross-`Store` instantiation is not currently supported");
             }
         }
-        typecheck(store, module, imports, |cx, ty, item| cx.extern_(ty, item))?;
+        typecheck(module, imports, |cx, ty, item| {
+            let item = DefinitionType::from(store, item);
+            cx.definition(ty, &item)
+        })?;
         let mut owned_imports = OwnedImports::new(module);
         for import in imports {
             owned_imports.push(import, store);
@@ -174,7 +180,18 @@ impl Instance {
             !store.0.async_support(),
             "must use async instantiation when async support is enabled",
         );
+        Self::new_started_impl(store, module, imports)
+    }
 
+    /// Internal function to create an instance and run the start function.
+    ///
+    /// ONLY CALL THIS IF YOU HAVE ALREADY CHECKED FOR ASYNCNESS AND HANDLED
+    /// THE FIBER NONSENSE
+    pub(crate) unsafe fn new_started_impl<T>(
+        store: &mut StoreContextMut<'_, T>,
+        module: &Module,
+        imports: Imports<'_>,
+    ) -> Result<Instance> {
         let (instance, start) = Instance::new_raw(store.0, module, imports)?;
         if let Some(start) = start {
             instance.start_raw(store, start)?;
@@ -194,22 +211,13 @@ impl Instance {
     where
         T: Send,
     {
-        // Note that the body of this function is intentionally quite similar
-        // to the `new_started` function, and it's intended that the two bodies
-        // here are small enough to be ok duplicating.
         assert!(
             store.0.async_support(),
             "must use sync instantiation when async support is disabled",
         );
 
         store
-            .on_fiber(|store| {
-                let (instance, start) = Instance::new_raw(store.0, module, imports)?;
-                if let Some(start) = start {
-                    instance.start_raw(store, start)?;
-                }
-                Ok(instance)
-            })
+            .on_fiber(|store| Self::new_started_impl(store, module, imports))
             .await?
     }
 
@@ -312,20 +320,10 @@ impl Instance {
         // items from this instance into other instances should be ok when
         // those items are loaded and run we'll have all the metadata to
         // look at them.
-        store
-            .engine()
-            .allocator()
-            .initialize(
-                &mut instance_handle,
-                compiled_module.module(),
-                store.engine().config().features.bulk_memory,
-            )
-            .map_err(|e| -> Error {
-                match e {
-                    InstantiationError::Trap(trap) => Trap::new_wasm(trap, None).into(),
-                    other => other.into(),
-                }
-            })?;
+        instance_handle.initialize(
+            compiled_module.module(),
+            store.engine().config().features.bulk_memory,
+        )?;
 
         Ok((instance, compiled_module.module().start_func))
     }
@@ -454,21 +452,20 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `store` does not own this instance.
-    pub fn get_typed_func<Params, Results, S>(
+    pub fn get_typed_func<Params, Results>(
         &self,
-        mut store: S,
+        mut store: impl AsContextMut,
         name: &str,
     ) -> Result<TypedFunc<Params, Results>>
     where
         Params: crate::WasmParams,
         Results: crate::WasmResults,
-        S: AsContextMut,
     {
         let f = self
             .get_export(store.as_context_mut(), name)
             .and_then(|f| f.into_func())
             .ok_or_else(|| anyhow!("failed to find function export `{}`", name))?;
-        Ok(f.typed::<Params, Results, _>(store)
+        Ok(f.typed::<Params, Results>(store)
             .with_context(|| format!("failed to convert function `{}` to given type", name))?)
     }
 
@@ -685,19 +682,8 @@ impl<T> InstancePre<T> {
     /// This method is unsafe as the `T` of the `InstancePre<T>` is not
     /// guaranteed to be the same as the `T` within the `Store`, the caller must
     /// verify that.
-    pub(crate) unsafe fn new(
-        store: &mut StoreOpaque,
-        module: &Module,
-        items: Vec<Definition>,
-    ) -> Result<InstancePre<T>> {
-        for import in items.iter() {
-            if !import.comes_from_same_store(store) {
-                bail!("cross-`Store` instantiation is not currently supported");
-            }
-        }
-        typecheck(store, module, &items, |cx, ty, item| {
-            cx.definition(ty, item)
-        })?;
+    pub(crate) unsafe fn new(module: &Module, items: Vec<Definition>) -> Result<InstancePre<T>> {
+        typecheck(module, &items, |cx, ty, item| cx.definition(ty, &item.ty()))?;
 
         let host_funcs = items
             .iter()
@@ -819,7 +805,6 @@ fn pre_instantiate_raw(
 }
 
 fn typecheck<I>(
-    store: &mut StoreOpaque,
     module: &Module,
     imports: &[I],
     check: impl Fn(&matching::MatchCx<'_>, &EntityType, &I) -> Result<()>,
@@ -832,8 +817,7 @@ fn typecheck<I>(
     let cx = matching::MatchCx {
         signatures: module.signatures(),
         types: module.types(),
-        store: store,
-        engine: store.engine(),
+        engine: module.engine(),
     };
     for ((name, field, expected_ty), actual) in env_module.imports().zip(imports) {
         check(&cx, &expected_ty, actual)

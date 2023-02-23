@@ -60,9 +60,9 @@ The `set` lines apply settings cumulatively:
     test legalizer
     set opt_level=best
     set is_pic=1
-    isa riscv64
+    target riscv64
     set is_pic=0
-    isa riscv32 supports_m=false
+    target riscv32 supports_m=false
 
     function %foo() {}
 ```
@@ -116,13 +116,13 @@ Example:
 
 ```
     function %r1() -> i32, f32 {
-    ebb1:
+    block1:
         v10 = iconst.i32 3
         v20 = f32const 0.0
         return v10, v20
     }
     ; sameln: function %r1() -> i32, f32 {
-    ; nextln: ebb0:
+    ; nextln: block0:
     ; nextln:     v10 = iconst.i32 3
     ; nextln:     v20 = f32const 0.0
     ; nextln:     return v10, v20
@@ -142,8 +142,8 @@ reported location of the error is verified:
     test verifier
 
     function %test(i32) {
-        ebb0(v0: i32):
-            jump ebb1       ; error: terminator
+        block0(v0: i32):
+            jump block1       ; error: terminator
             return
     }
 ```
@@ -169,17 +169,17 @@ command:
     function %nonsense(i32, i32) -> f32 {
     ; check: digraph %nonsense {
     ; regex: I=\binst\d+\b
-    ; check: label="{ebb0 | <$(BRZ=$I)>brz ebb2 | <$(JUMP=$I)>jump ebb1}"]
+    ; check: label="{block0 | <$(BRIF=$I)>brif v1, block1(v2), block2 }"]
 
-    ebb0(v0: i32, v1: i32):
-        brz v1, ebb2            ; unordered: ebb0:$BRZ -> ebb2
+    block0(v0: i32, v1: i32):
         v2 = iconst.i32 0
-        jump ebb1(v2)           ; unordered: ebb0:$JUMP -> ebb1
+        brif v1, block1(v2), block2  ; unordered: block0:$BRIF -> block1
+                                     ; unordered: block0:$BRIF -> block2
 
-    ebb1(v5: i32):
+    block1(v5: i32):
         return v0
 
-    ebb2:
+    block2:
         v100 = f32const 0.0
         return v100
     }
@@ -194,14 +194,13 @@ Compute the dominator tree of each function and validate it against the
     test domtree
 
     function %test(i32) {
-        ebb0(v0: i32):
-            jump ebb1     ; dominates: ebb1
-        ebb1:
-            brz v0, ebb3  ; dominates: ebb3
-            jump ebb2     ; dominates: ebb2
-        ebb2:
-            jump ebb3
-        ebb3:
+        block0(v0: i32):
+            jump block1              ; dominates: block1
+        block1:
+            brif v0, block2, block3  ; dominates: block2, block3
+        block2:
+            jump block3
+        block3:
             return
     }
 ```
@@ -233,36 +232,6 @@ assigning registers and stack slots to all values.
 
 The resulting function is then run through filecheck.
 
-### `test binemit`
-
-Test the emission of binary machine code.
-
-The functions must contains instructions that are annotated with both encodings
-and value locations (registers or stack slots). For instructions that are
-annotated with a `bin:` directive, the emitted hexadecimal machine code for
-that instruction is compared to the directive:
-
-```
-    test binemit
-    isa riscv
-
-    function %int32() {
-    ebb0:
-        [-,%x5]             v0 = iconst.i32 1
-        [-,%x6]             v1 = iconst.i32 2
-        [R#0c,%x7]          v10 = iadd v0, v1       ; bin: 006283b3
-        [R#200c,%x8]        v11 = isub v0, v1       ; bin: 40628433
-        return
-    }
-```
-
-If any instructions are unencoded (indicated with a `[-]` encoding field), they
-will be encoded using the same mechanism as the legalizer uses. However,
-illegal instructions for the ISA won't be expanded into other instruction
-sequences. Instead the test will fail.
-
-Value locations must be present if they are required to compute the binary
-bits. Missing value locations will cause the test to crash.
 
 ### `test simple-gvn`
 
@@ -292,7 +261,7 @@ Test the instruction shrinking pass.
 The shrink pass is run on each function, and then results are run
 through filecheck.
 
-### `test preopt`
+### `test simple_preopt`
 
 Test the preopt pass.
 
@@ -321,9 +290,9 @@ This test command allows several directives:
  - to check the result of a function, add a `run` directive and call the
  preceding function with a comparison (`==` or `!=`) (see `%bar` below)
  - for backwards compatibility, to check the result of a function with a
- `() -> b*` signature, only the `run` directive is required, with no
- invocation or comparison (see `%baz` below);  a `true` value is
- interpreted as a successful test execution, whereas a `false` value is
+ `() -> i*` signature, only the `run` directive is required, with no
+ invocation or comparison (see `%baz` below);  a non zero value is
+ interpreted as a successful test execution, whereas a zero value is
  interpreted as a failed test.
 
 Currently a `target` is required but is only used to indicate whether the host
@@ -353,100 +322,10 @@ Example:
     ; run: %bar(1) == 2
 
     ; legacy method of checking the results of a function
-    function %baz() -> b1 {
+    function %baz() -> i8 {
     block0:
-        v0 = bconst.b1 true
+        v0 = iconst.i8 1
         return v0
     }
     ; run
 ```
-
-#### Environment directives
-
-Some tests need additional resources to be provided by the filetest infrastructure.
-
-When any of the following directives is present the first argument of the function is *required* to be a `i64 vmctx`.
-The filetest infrastructure will then pass a pointer to the environment struct via this argument.
-
-The environment struct is essentially a list of pointers with info about the resources requested by the directives. These
-pointers are always 8 bytes, and laid out sequentially in memory. Even for 32 bit machines, where we only fill the first
-4 bytes of the pointer slot.
-
-Currently, we only support requesting heaps, however this is a generic mechanism that should
-be able to introduce any sort of environment support that we may need later. (e.g. tables, global values, external functions)
-
-##### `heap` directive
-
-The `heap` directive allows a test to request a heap to be allocated and passed to the test via the environment struct.
-
-
-A sample heap annotation is the following:
-```
-; heap: static, size=0x1000, ptr=vmctx+0, bound=vmctx+8
-```
-
-This indicates the following:
-* `static`: We have requested a non-resizable and non-movable static heap.
-* `size=0x1000`: It has to have a size of 4096 bytes.
-* `ptr=vmctx+0`: The pointer to the address to the start of this heap is placed at offset 0 in the `vmctx` struct
-* `bound=vmctx+8`: The pointer to the address to the end of this heap is placed at offset 8 in the `vmctx` struct
-
-The `ptr` and `bound` arguments make explicit the placement of the pointers to the start and end of the heap memory in
-the environment struct. `vmctx+0` means that at offset 0 of the environment struct there will be the pointer to the start
-similarly, at offset 8 the pointer to the end.
-
-
-You can combine multiple heap annotations, in which case, their pointers are laid out sequentially in memory in
-the order that the annotations appear in the source file.
-
-```
-; heap: static, size=0x1000, ptr=vmctx+0, bound=vmctx+8
-; heap: dynamic, size=0x1000, ptr=vmctx+16, bound=vmctx+24
-```
-
-An invalid or unexpected offset will raise an error when the test is run.
-
-See the diagram below, on how the `vmctx` struct ends up if with multiple heaps:
-
-```
- ┌─────────────────────┐ vmctx+0
- │heap0: start address │
- ├─────────────────────┤ vmctx+8
- │heap0: end address   │
- ├─────────────────────┤ vmctx+16
- │heap1: start address │
- ├─────────────────────┤ vmctx+24
- │heap1: end address   │
- ├─────────────────────┤ vmctx+32
- │etc...               │
- └─────────────────────┘
-```
-
-With this setup, you can now use the global values to load heaps, and load / store to them.
-
-Example:
-
-```
-function %heap_load_store(i64 vmctx, i64, i32) -> i32 {
-    gv0 = vmctx
-    gv1 = load.i64 notrap aligned gv0+0
-    gv2 = load.i64 notrap aligned gv0+8
-    heap0 = dynamic gv1, bound gv2, offset_guard 0, index_type i64
-
-block0(v0: i64, v1: i64, v2: i32):
-    v3 = heap_addr.i64 heap0, v1, 4
-    store.i32 v2, v3
-    v4 = load.i32 v3
-    return v4
-}
-; heap: static, size=0x1000, ptr=vmctx+0, bound=vmctx+8
-; run: %heap_load_store(0, 1) == 1
-```
-
-
-### `test interpret`
-
-Test the CLIF interpreter
-
-This test supports the same commands as `test run`, but runs the code in the cranelift
-interpreter instead of the host machine.

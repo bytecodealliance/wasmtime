@@ -14,8 +14,7 @@ block1:
 block79:
     v425 = iconst.i64 0
     v426 = icmp_imm eq v425, 1
-    brnz v426, block80
-    jump block85(v20, v17)
+    brif v426, block80, block85(v20, v17)
 
 block80:
     trap user0

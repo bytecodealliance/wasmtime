@@ -67,8 +67,7 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
                 0,
                 wasi::FDFLAGS_SYNC,
             )
-            .expect_err("FDFLAGS_SYNC not supported by platform")
-            .raw_error(),
+            .expect_err("FDFLAGS_SYNC not supported by platform"),
             wasi::ERRNO_NOTSUP
         );
     }
@@ -95,8 +94,7 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
             new_mtim,
             wasi::FSTFLAGS_MTIM | wasi::FSTFLAGS_MTIM_NOW,
         )
-        .expect_err("MTIM and MTIM_NOW can't both be set")
-        .raw_error(),
+        .expect_err("MTIM and MTIM_NOW can't both be set"),
         wasi::ERRNO_INVAL
     );
 
@@ -118,8 +116,7 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
             0,
             wasi::FSTFLAGS_ATIM | wasi::FSTFLAGS_ATIM_NOW,
         )
-        .expect_err("ATIM & ATIM_NOW can't both be set")
-        .raw_error(),
+        .expect_err("ATIM & ATIM_NOW can't both be set"),
         wasi::ERRNO_INVAL
     );
 

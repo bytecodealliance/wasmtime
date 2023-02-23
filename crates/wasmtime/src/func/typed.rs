@@ -1,12 +1,12 @@
 use super::{invoke_wasm_and_catch_traps, HostAbi};
 use crate::store::{AutoAssertNoGc, StoreOpaque};
-use crate::{AsContextMut, ExternRef, Func, FuncType, StoreContextMut, Trap, ValRaw, ValType, RefType, HeapType};
+use crate::{AsContextMut, ExternRef, Func, FuncType, StoreContextMut, ValRaw, ValType, HeapType, RefType};
 use anyhow::{bail, Result};
 use std::marker;
 use std::mem::{self, MaybeUninit};
 use std::ptr;
 use wasmtime_runtime::{
-    VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMOpaqueContext, VMSharedSignatureIndex,
+    VMCallerCheckedFuncRef, VMContext, VMFunctionBody, VMOpaqueContext, VMSharedSignatureIndex,
 };
 
 /// A statically typed WebAssembly function.
@@ -68,11 +68,17 @@ where
     /// For more information, see the [`Func::typed`] and [`Func::call`]
     /// documentation.
     ///
+    /// # Errors
+    ///
+    /// For more information on errors see the documentation on [`Func::call`].
+    ///
     /// # Panics
     ///
     /// This function will panic if it is called when the underlying [`Func`] is
     /// connected to an asynchronous store.
-    pub fn call(&self, mut store: impl AsContextMut, params: Params) -> Result<Results, Trap> {
+    ///
+    /// [`Trap`]: crate::Trap
+    pub fn call(&self, mut store: impl AsContextMut, params: Params) -> Result<Results> {
         let mut store = store.as_context_mut();
         assert!(
             !store.0.async_support(),
@@ -89,17 +95,23 @@ where
     /// For more information, see the [`Func::typed`] and [`Func::call_async`]
     /// documentation.
     ///
+    /// # Errors
+    ///
+    /// For more information on errors see the documentation on [`Func::call`].
+    ///
     /// # Panics
     ///
     /// This function will panic if it is called when the underlying [`Func`] is
     /// connected to a synchronous store.
+    ///
+    /// [`Trap`]: crate::Trap
     #[cfg(feature = "async")]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
     pub async fn call_async<T>(
         &self,
         mut store: impl AsContextMut<Data = T>,
         params: Params,
-    ) -> Result<Results, Trap>
+    ) -> Result<Results>
     where
         T: Send,
     {
@@ -118,9 +130,9 @@ where
 
     pub(crate) unsafe fn call_raw<T>(
         store: &mut StoreContextMut<'_, T>,
-        func: ptr::NonNull<VMCallerCheckedAnyfunc>,
+        func: ptr::NonNull<VMCallerCheckedFuncRef>,
         params: Params,
-    ) -> Result<Results, Trap> {
+    ) -> Result<Results> {
         // double-check that params/results match for this function's type in
         // debug mode.
         if cfg!(debug_assertions) {
@@ -150,9 +162,7 @@ where
             match params.into_abi(&mut store) {
                 Some(abi) => abi,
                 None => {
-                    return Err(Trap::new(
-                        "attempt to pass cross-`Store` value to Wasm as function argument",
-                    ))
+                    bail!("attempt to pass cross-`Store` value to Wasm as function argument")
                 }
             }
         };
@@ -399,7 +409,7 @@ unsafe impl WasmTy for Option<ExternRef> {
 }
 
 unsafe impl WasmTy for Option<Func> {
-    type Abi = *mut wasmtime_runtime::VMCallerCheckedAnyfunc;
+    type Abi = *mut wasmtime_runtime::VMCallerCheckedFuncRef;
 
     #[inline]
     fn valtype() -> ValType {

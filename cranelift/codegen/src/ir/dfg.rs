@@ -4,24 +4,84 @@ use crate::entity::{self, PrimaryMap, SecondaryMap};
 use crate::ir;
 use crate::ir::builder::ReplaceBuilder;
 use crate::ir::dynamic_type::{DynamicTypeData, DynamicTypes};
-use crate::ir::extfunc::ExtFuncData;
-use crate::ir::instructions::{BranchInfo, CallInfo, InstructionData};
-use crate::ir::{types, ConstantData, ConstantPool, Immediate};
+use crate::ir::instructions::{CallInfo, InstructionData};
 use crate::ir::{
-    Block, DynamicType, FuncRef, Inst, SigRef, Signature, SourceLoc, Type, Value,
+    types, Block, BlockCall, ConstantData, ConstantPool, DynamicType, ExtFuncData, FuncRef,
+    Immediate, Inst, JumpTables, RelSourceLoc, SigRef, Signature, Type, Value,
     ValueLabelAssignments, ValueList, ValueListPool,
 };
 use crate::packed_option::ReservedValue;
 use crate::write::write_operands;
-use crate::HashMap;
 use core::fmt;
 use core::iter;
 use core::mem;
 use core::ops::{Index, IndexMut};
 use core::u16;
 
+use alloc::collections::BTreeMap;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
+use smallvec::SmallVec;
+
+/// Storage for instructions within the DFG.
+#[derive(Clone, PartialEq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct Insts(PrimaryMap<Inst, InstructionData>);
+
+/// Allow immutable access to instructions via indexing.
+impl Index<Inst> for Insts {
+    type Output = InstructionData;
+
+    fn index(&self, inst: Inst) -> &InstructionData {
+        self.0.index(inst)
+    }
+}
+
+/// Allow mutable access to instructions via indexing.
+impl IndexMut<Inst> for Insts {
+    fn index_mut(&mut self, inst: Inst) -> &mut InstructionData {
+        self.0.index_mut(inst)
+    }
+}
+
+/// Storage for basic blocks within the DFG.
+#[derive(Clone, PartialEq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct Blocks(PrimaryMap<Block, BlockData>);
+
+impl Blocks {
+    /// Create a new basic block.
+    pub fn add(&mut self) -> Block {
+        self.0.push(BlockData::new())
+    }
+
+    /// Get the total number of basic blocks created in this function, whether they are
+    /// currently inserted in the layout or not.
+    ///
+    /// This is intended for use with `SecondaryMap::with_capacity`.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Returns `true` if the given block reference is valid.
+    pub fn is_valid(&self, block: Block) -> bool {
+        self.0.is_valid(block)
+    }
+}
+
+impl Index<Block> for Blocks {
+    type Output = BlockData;
+
+    fn index(&self, block: Block) -> &BlockData {
+        &self.0[block]
+    }
+}
+
+impl IndexMut<Block> for Blocks {
+    fn index_mut(&mut self, block: Block) -> &mut BlockData {
+        &mut self.0[block]
+    }
+}
 
 /// A data flow graph defines all instructions and basic blocks in a function as well as
 /// the data flow dependencies between them. The DFG also tracks values which can be either
@@ -30,13 +90,13 @@ use serde::{Deserialize, Serialize};
 /// The layout of blocks in the function and of instructions in each block is recorded by the
 /// `Layout` data structure which forms the other half of the function representation.
 ///
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct DataFlowGraph {
     /// Data about all of the instructions in the function, including opcodes and operands.
     /// The instructions in this map are not in program order. That is tracked by `Layout`, along
     /// with the block containing each instruction.
-    insts: PrimaryMap<Inst, InstructionData>,
+    pub insts: Insts,
 
     /// List of result values for each instruction.
     ///
@@ -48,7 +108,7 @@ pub struct DataFlowGraph {
     ///
     /// This map is not in program order. That is handled by `Layout`, and so is the sequence of
     /// instructions contained in each block.
-    blocks: PrimaryMap<Block, BlockData>,
+    pub blocks: Blocks,
 
     /// Dynamic types created.
     pub dynamic_types: DynamicTypes,
@@ -76,22 +136,25 @@ pub struct DataFlowGraph {
     pub ext_funcs: PrimaryMap<FuncRef, ExtFuncData>,
 
     /// Saves Value labels.
-    pub values_labels: Option<HashMap<Value, ValueLabelAssignments>>,
+    pub values_labels: Option<BTreeMap<Value, ValueLabelAssignments>>,
 
     /// Constants used within the function
     pub constants: ConstantPool,
 
     /// Stores large immediates that otherwise will not fit on InstructionData
     pub immediates: PrimaryMap<Immediate, ConstantData>,
+
+    /// Jump tables used in this function.
+    pub jump_tables: JumpTables,
 }
 
 impl DataFlowGraph {
     /// Create a new empty `DataFlowGraph`.
     pub fn new() -> Self {
         Self {
-            insts: PrimaryMap::new(),
+            insts: Insts(PrimaryMap::new()),
             results: SecondaryMap::new(),
-            blocks: PrimaryMap::new(),
+            blocks: Blocks(PrimaryMap::new()),
             dynamic_types: DynamicTypes::new(),
             value_lists: ValueListPool::new(),
             values: PrimaryMap::new(),
@@ -101,14 +164,15 @@ impl DataFlowGraph {
             values_labels: None,
             constants: ConstantPool::new(),
             immediates: PrimaryMap::new(),
+            jump_tables: JumpTables::new(),
         }
     }
 
     /// Clear everything.
     pub fn clear(&mut self) {
-        self.insts.clear();
+        self.insts.0.clear();
         self.results.clear();
-        self.blocks.clear();
+        self.blocks.0.clear();
         self.dynamic_types.clear();
         self.value_lists.clear();
         self.values.clear();
@@ -118,6 +182,7 @@ impl DataFlowGraph {
         self.values_labels = None;
         self.constants.clear();
         self.immediates.clear();
+        self.jump_tables.clear();
     }
 
     /// Get the total number of instructions created in this function, whether they are currently
@@ -125,12 +190,12 @@ impl DataFlowGraph {
     ///
     /// This is intended for use with `SecondaryMap::with_capacity`.
     pub fn num_insts(&self) -> usize {
-        self.insts.len()
+        self.insts.0.len()
     }
 
     /// Returns `true` if the given instruction reference is valid.
     pub fn inst_is_valid(&self, inst: Inst) -> bool {
-        self.insts.is_valid(inst)
+        self.insts.0.is_valid(inst)
     }
 
     /// Get the total number of basic blocks created in this function, whether they are
@@ -146,21 +211,31 @@ impl DataFlowGraph {
         self.blocks.is_valid(block)
     }
 
+    /// Make a BlockCall, bundling together the block and its arguments.
+    pub fn block_call(&mut self, block: Block, args: &[Value]) -> BlockCall {
+        BlockCall::new(block, args, &mut self.value_lists)
+    }
+
     /// Get the total number of values.
     pub fn num_values(&self) -> usize {
         self.values.len()
     }
 
+    /// Get an iterator over all values and their definitions.
+    pub fn values_and_defs(&self) -> impl Iterator<Item = (Value, ValueDef)> + '_ {
+        self.values().map(|value| (value, self.value_def(value)))
+    }
+
     /// Starts collection of debug information.
     pub fn collect_debug_info(&mut self) {
         if self.values_labels.is_none() {
-            self.values_labels = Some(HashMap::new());
+            self.values_labels = Some(Default::default());
         }
     }
 
     /// Inserts a `ValueLabelAssignments::Alias` for `to_alias` if debug info
     /// collection is enabled.
-    pub fn add_value_label_alias(&mut self, to_alias: Value, from: SourceLoc, value: Value) {
+    pub fn add_value_label_alias(&mut self, to_alias: Value, from: RelSourceLoc, value: Value) {
         if let Some(values_labels) = self.values_labels.as_mut() {
             values_labels.insert(to_alias, ir::ValueLabelAssignments::Alias { from, value });
         }
@@ -270,6 +345,7 @@ impl DataFlowGraph {
                 // detect alias loops without overrunning the stack.
                 self.value_def(self.resolve_aliases(original))
             }
+            ValueData::Union { x, y, .. } => ValueDef::Union(x, y),
         }
     }
 
@@ -285,6 +361,7 @@ impl DataFlowGraph {
             Inst { inst, num, .. } => Some(&v) == self.inst_results(inst).get(num as usize),
             Param { block, num, .. } => Some(&v) == self.block_params(block).get(num as usize),
             Alias { .. } => false,
+            Union { .. } => false,
         }
     }
 
@@ -300,12 +377,7 @@ impl DataFlowGraph {
     /// For each argument of inst which is defined by an alias, replace the
     /// alias with the aliased value.
     pub fn resolve_aliases_in_arguments(&mut self, inst: Inst) {
-        for arg in self.insts[inst].arguments_mut(&mut self.value_lists) {
-            let resolved = resolve_aliases(&self.values, *arg);
-            if resolved != *arg {
-                *arg = resolved;
-            }
-        }
+        self.map_inst_values(inst, |dfg, arg| resolve_aliases(&dfg.values, arg));
     }
 
     /// Turn a value into an alias of another.
@@ -394,6 +466,8 @@ pub enum ValueDef {
     Result(Inst, usize),
     /// Value is the n'th parameter to a block.
     Param(Block, usize),
+    /// Value is a union of two other values.
+    Union(Value, Value),
 }
 
 impl ValueDef {
@@ -430,12 +504,13 @@ impl ValueDef {
     pub fn num(self) -> usize {
         match self {
             Self::Result(_, n) | Self::Param(_, n) => n,
+            Self::Union(_, _) => 0,
         }
     }
 }
 
 /// Internal table storage for extended values.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 enum ValueData {
     /// Value is defined by an instruction.
@@ -448,6 +523,11 @@ enum ValueData {
     /// An alias value can't be linked as an instruction result or block parameter. It is used as a
     /// placeholder when the original instruction or block has been rewritten or modified.
     Alias { ty: Type, original: Value },
+
+    /// Union is a "fork" in representation: the value can be
+    /// represented as either of the values named here. This is used
+    /// for aegraph (acyclic egraph) representation in the DFG.
+    Union { ty: Type, x: Value, y: Value },
 }
 
 /// Bit-packed version of ValueData, for efficiency.
@@ -455,40 +535,71 @@ enum ValueData {
 /// Layout:
 ///
 /// ```plain
-///        | tag:2 |  type:14        |    num:16       | index:32          |
+///        | tag:2 |  type:14        |    x:24       | y:24          |
+///
+/// Inst       00     ty               inst output     inst index
+/// Param      01     ty               blockparam num  block index
+/// Alias      10     ty               0               value index
+/// Union      11     ty               first value     second value
 /// ```
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 struct ValueDataPacked(u64);
 
+/// Encodes a value in 0..2^32 into 0..2^n, where n is less than 32
+/// (and is implied by `mask`), by translating 2^32-1 (0xffffffff)
+/// into 2^n-1 and panic'ing on 2^n..2^32-1.
+fn encode_narrow_field(x: u32, bits: u8) -> u32 {
+    if x == 0xffff_ffff {
+        (1 << bits) - 1
+    } else {
+        debug_assert!(x < (1 << bits));
+        x
+    }
+}
+
+/// The inverse of the above `encode_narrow_field`: unpacks 2^n-1 into
+/// 2^32-1.
+fn decode_narrow_field(x: u32, bits: u8) -> u32 {
+    if x == (1 << bits) - 1 {
+        0xffff_ffff
+    } else {
+        x
+    }
+}
+
 impl ValueDataPacked {
-    const INDEX_SHIFT: u64 = 0;
-    const INDEX_BITS: u64 = 32;
-    const NUM_SHIFT: u64 = Self::INDEX_SHIFT + Self::INDEX_BITS;
-    const NUM_BITS: u64 = 16;
-    const TYPE_SHIFT: u64 = Self::NUM_SHIFT + Self::NUM_BITS;
-    const TYPE_BITS: u64 = 14;
-    const TAG_SHIFT: u64 = Self::TYPE_SHIFT + Self::TYPE_BITS;
-    const TAG_BITS: u64 = 2;
+    const Y_SHIFT: u8 = 0;
+    const Y_BITS: u8 = 24;
+    const X_SHIFT: u8 = Self::Y_SHIFT + Self::Y_BITS;
+    const X_BITS: u8 = 24;
+    const TYPE_SHIFT: u8 = Self::X_SHIFT + Self::X_BITS;
+    const TYPE_BITS: u8 = 14;
+    const TAG_SHIFT: u8 = Self::TYPE_SHIFT + Self::TYPE_BITS;
+    const TAG_BITS: u8 = 2;
 
-    const TAG_INST: u64 = 1;
-    const TAG_PARAM: u64 = 2;
-    const TAG_ALIAS: u64 = 3;
+    const TAG_INST: u64 = 0;
+    const TAG_PARAM: u64 = 1;
+    const TAG_ALIAS: u64 = 2;
+    const TAG_UNION: u64 = 3;
 
-    fn make(tag: u64, ty: Type, num: u16, index: u32) -> ValueDataPacked {
+    fn make(tag: u64, ty: Type, x: u32, y: u32) -> ValueDataPacked {
         debug_assert!(tag < (1 << Self::TAG_BITS));
         debug_assert!(ty.repr() < (1 << Self::TYPE_BITS));
+
+        let x = encode_narrow_field(x, Self::X_BITS);
+        let y = encode_narrow_field(y, Self::Y_BITS);
 
         ValueDataPacked(
             (tag << Self::TAG_SHIFT)
                 | ((ty.repr() as u64) << Self::TYPE_SHIFT)
-                | ((num as u64) << Self::NUM_SHIFT)
-                | ((index as u64) << Self::INDEX_SHIFT),
+                | ((x as u64) << Self::X_SHIFT)
+                | ((y as u64) << Self::Y_SHIFT),
         )
     }
 
     #[inline(always)]
-    fn field(self, shift: u64, bits: u64) -> u64 {
+    fn field(self, shift: u8, bits: u8) -> u64 {
         (self.0 >> shift) & ((1 << bits) - 1)
     }
 
@@ -500,7 +611,7 @@ impl ValueDataPacked {
 
     #[inline(always)]
     fn set_type(&mut self, ty: Type) {
-        self.0 &= !((1 << Self::TYPE_BITS) - 1) << Self::TYPE_SHIFT;
+        self.0 &= !(((1 << Self::TYPE_BITS) - 1) << Self::TYPE_SHIFT);
         self.0 |= (ty.repr() as u64) << Self::TYPE_SHIFT;
     }
 }
@@ -509,13 +620,16 @@ impl From<ValueData> for ValueDataPacked {
     fn from(data: ValueData) -> Self {
         match data {
             ValueData::Inst { ty, num, inst } => {
-                Self::make(Self::TAG_INST, ty, num, inst.as_bits())
+                Self::make(Self::TAG_INST, ty, num.into(), inst.as_bits())
             }
             ValueData::Param { ty, num, block } => {
-                Self::make(Self::TAG_PARAM, ty, num, block.as_bits())
+                Self::make(Self::TAG_PARAM, ty, num.into(), block.as_bits())
             }
             ValueData::Alias { ty, original } => {
                 Self::make(Self::TAG_ALIAS, ty, 0, original.as_bits())
+            }
+            ValueData::Union { ty, x, y } => {
+                Self::make(Self::TAG_ALIAS, ty, x.as_bits(), y.as_bits())
             }
         }
     }
@@ -524,25 +638,33 @@ impl From<ValueData> for ValueDataPacked {
 impl From<ValueDataPacked> for ValueData {
     fn from(data: ValueDataPacked) -> Self {
         let tag = data.field(ValueDataPacked::TAG_SHIFT, ValueDataPacked::TAG_BITS);
-        let ty = data.field(ValueDataPacked::TYPE_SHIFT, ValueDataPacked::TYPE_BITS) as u16;
-        let num = data.field(ValueDataPacked::NUM_SHIFT, ValueDataPacked::NUM_BITS) as u16;
-        let index = data.field(ValueDataPacked::INDEX_SHIFT, ValueDataPacked::INDEX_BITS) as u32;
+        let ty = u16::try_from(data.field(ValueDataPacked::TYPE_SHIFT, ValueDataPacked::TYPE_BITS))
+            .expect("Mask should ensure result fits in a u16");
+        let x = u32::try_from(data.field(ValueDataPacked::X_SHIFT, ValueDataPacked::X_BITS))
+            .expect("Mask should ensure result fits in a u32");
+        let y = u32::try_from(data.field(ValueDataPacked::Y_SHIFT, ValueDataPacked::Y_BITS))
+            .expect("Mask should ensure result fits in a u32");
 
         let ty = Type::from_repr(ty);
         match tag {
             ValueDataPacked::TAG_INST => ValueData::Inst {
                 ty,
-                num,
-                inst: Inst::from_bits(index),
+                num: u16::try_from(x).expect("Inst result num should fit in u16"),
+                inst: Inst::from_bits(decode_narrow_field(y, ValueDataPacked::Y_BITS)),
             },
             ValueDataPacked::TAG_PARAM => ValueData::Param {
                 ty,
-                num,
-                block: Block::from_bits(index),
+                num: u16::try_from(x).expect("Blockparam index should fit in u16"),
+                block: Block::from_bits(decode_narrow_field(y, ValueDataPacked::Y_BITS)),
             },
             ValueDataPacked::TAG_ALIAS => ValueData::Alias {
                 ty,
-                original: Value::from_bits(index),
+                original: Value::from_bits(decode_narrow_field(y, ValueDataPacked::Y_BITS)),
+            },
+            ValueDataPacked::TAG_UNION => ValueData::Union {
+                ty,
+                x: Value::from_bits(decode_narrow_field(x, ValueDataPacked::X_BITS)),
+                y: Value::from_bits(decode_narrow_field(y, ValueDataPacked::Y_BITS)),
             },
             _ => panic!("Invalid tag {} in ValueDataPacked 0x{:x}", tag, data.0),
         }
@@ -554,12 +676,15 @@ impl From<ValueDataPacked> for ValueData {
 impl DataFlowGraph {
     /// Create a new instruction.
     ///
-    /// The type of the first result is indicated by `data.ty`. If the instruction produces
-    /// multiple results, also call `make_inst_results` to allocate value table entries.
+    /// The type of the first result is indicated by `data.ty`. If the
+    /// instruction produces multiple results, also call
+    /// `make_inst_results` to allocate value table entries. (It is
+    /// always safe to call `make_inst_results`, regardless of how
+    /// many results the instruction has.)
     pub fn make_inst(&mut self, data: InstructionData) -> Inst {
         let n = self.num_insts() + 1;
         self.results.resize(n);
-        self.insts.push(data)
+        self.insts.0.push(data)
     }
 
     /// Declares a dynamic vector type
@@ -570,6 +695,74 @@ impl DataFlowGraph {
     /// Returns an object that displays `inst`.
     pub fn display_inst<'a>(&'a self, inst: Inst) -> DisplayInst<'a> {
         DisplayInst(self, inst)
+    }
+
+    /// Returns an object that displays the given `value`'s defining instruction.
+    ///
+    /// Panics if the value is not defined by an instruction (i.e. it is a basic
+    /// block argument).
+    pub fn display_value_inst(&self, value: Value) -> DisplayInst<'_> {
+        match self.value_def(value) {
+            ir::ValueDef::Result(inst, _) => self.display_inst(inst),
+            ir::ValueDef::Param(_, _) => panic!("value is not defined by an instruction"),
+            ir::ValueDef::Union(_, _) => panic!("value is a union of two other values"),
+        }
+    }
+
+    /// Construct a read-only visitor context for the values of this instruction.
+    pub fn inst_values<'dfg>(
+        &'dfg self,
+        inst: Inst,
+    ) -> impl DoubleEndedIterator<Item = Value> + 'dfg {
+        self.inst_args(inst)
+            .iter()
+            .chain(
+                self.insts[inst]
+                    .branch_destination(&self.jump_tables)
+                    .into_iter()
+                    .flat_map(|branch| branch.args_slice(&self.value_lists).iter()),
+            )
+            .copied()
+    }
+
+    /// Map a function over the values of the instruction.
+    pub fn map_inst_values<F>(&mut self, inst: Inst, mut body: F)
+    where
+        F: FnMut(&mut DataFlowGraph, Value) -> Value,
+    {
+        for i in 0..self.inst_args(inst).len() {
+            let arg = self.inst_args(inst)[i];
+            self.inst_args_mut(inst)[i] = body(self, arg);
+        }
+
+        for block_ix in 0..self.insts[inst].branch_destination(&self.jump_tables).len() {
+            // We aren't changing the size of the args list, so we won't need to write the branch
+            // back to the instruction.
+            let mut block = self.insts[inst].branch_destination(&self.jump_tables)[block_ix];
+            for i in 0..block.args_slice(&self.value_lists).len() {
+                let arg = block.args_slice(&self.value_lists)[i];
+                block.args_slice_mut(&mut self.value_lists)[i] = body(self, arg);
+            }
+        }
+    }
+
+    /// Overwrite the instruction's value references with values from the iterator.
+    /// NOTE: the iterator provided is expected to yield at least as many values as the instruction
+    /// currently has.
+    pub fn overwrite_inst_values<I>(&mut self, inst: Inst, mut values: I)
+    where
+        I: Iterator<Item = Value>,
+    {
+        for arg in self.inst_args_mut(inst) {
+            *arg = values.next().unwrap();
+        }
+
+        for block_ix in 0..self.insts[inst].branch_destination(&self.jump_tables).len() {
+            let mut block = self.insts[inst].branch_destination(&self.jump_tables)[block_ix];
+            for arg in block.args_slice_mut(&mut self.value_lists) {
+                *arg = values.next().unwrap();
+            }
+        }
     }
 
     /// Get all value arguments on `inst` as a slice.
@@ -584,7 +777,7 @@ impl DataFlowGraph {
 
     /// Get the fixed value arguments on `inst` as a slice.
     pub fn inst_fixed_args(&self, inst: Inst) -> &[Value] {
-        let num_fixed_args = self[inst]
+        let num_fixed_args = self.insts[inst]
             .opcode()
             .constraints()
             .num_fixed_value_arguments();
@@ -593,7 +786,7 @@ impl DataFlowGraph {
 
     /// Get the fixed value arguments on `inst` as a mutable slice.
     pub fn inst_fixed_args_mut(&mut self, inst: Inst) -> &mut [Value] {
-        let num_fixed_args = self[inst]
+        let num_fixed_args = self.insts[inst]
             .opcode()
             .constraints()
             .num_fixed_value_arguments();
@@ -602,7 +795,7 @@ impl DataFlowGraph {
 
     /// Get the variable value arguments on `inst` as a slice.
     pub fn inst_variable_args(&self, inst: Inst) -> &[Value] {
-        let num_fixed_args = self[inst]
+        let num_fixed_args = self.insts[inst]
             .opcode()
             .constraints()
             .num_fixed_value_arguments();
@@ -611,7 +804,7 @@ impl DataFlowGraph {
 
     /// Get the variable value arguments on `inst` as a mutable slice.
     pub fn inst_variable_args_mut(&mut self, inst: Inst) -> &mut [Value] {
-        let num_fixed_args = self[inst]
+        let num_fixed_args = self.insts[inst]
             .opcode()
             .constraints()
             .num_fixed_value_arguments();
@@ -648,43 +841,22 @@ impl DataFlowGraph {
     where
         I: Iterator<Item = Option<Value>>,
     {
-        let mut reuse = reuse.fuse();
-
         self.results[inst].clear(&mut self.value_lists);
 
-        // Get the call signature if this is a function call.
-        if let Some(sig) = self.call_signature(inst) {
-            // Create result values corresponding to the call return types.
-            debug_assert_eq!(
-                self.insts[inst].opcode().constraints().num_fixed_results(),
-                0
-            );
-            let num_results = self.signatures[sig].returns.len();
-            for res_idx in 0..num_results {
-                let ty = self.signatures[sig].returns[res_idx].value_type;
-                if let Some(Some(v)) = reuse.next() {
-                    debug_assert_eq!(self.value_type(v), ty, "Reused {} is wrong type", ty);
-                    self.attach_result(inst, v);
-                } else {
-                    self.append_result(inst, ty);
-                }
+        let mut reuse = reuse.fuse();
+        let result_tys: SmallVec<[_; 16]> = self.inst_result_types(inst, ctrl_typevar).collect();
+        let num_results = result_tys.len();
+
+        for ty in result_tys {
+            if let Some(Some(v)) = reuse.next() {
+                debug_assert_eq!(self.value_type(v), ty, "Reused {} is wrong type", ty);
+                self.attach_result(inst, v);
+            } else {
+                self.append_result(inst, ty);
             }
-            num_results
-        } else {
-            // Create result values corresponding to the opcode's constraints.
-            let constraints = self.insts[inst].opcode().constraints();
-            let num_results = constraints.num_fixed_results();
-            for res_idx in 0..num_results {
-                let ty = constraints.result_type(res_idx, ctrl_typevar);
-                if let Some(Some(v)) = reuse.next() {
-                    debug_assert_eq!(self.value_type(v), ty, "Reused {} is wrong type", ty);
-                    self.attach_result(inst, v);
-                } else {
-                    self.append_result(inst, ty);
-                }
-            }
-            num_results
         }
+
+        num_results
     }
 
     /// Create a `ReplaceBuilder` that will replace `inst` with a new instruction in place.
@@ -773,15 +945,21 @@ impl DataFlowGraph {
         })
     }
 
-    /// Append a new value argument to an instruction.
-    ///
-    /// Panics if the instruction doesn't support arguments.
-    pub fn append_inst_arg(&mut self, inst: Inst, new_arg: Value) {
-        let mut branch_values = self.insts[inst]
-            .take_value_list()
-            .expect("the instruction doesn't have value arguments");
-        branch_values.push(new_arg, &mut self.value_lists);
-        self.insts[inst].put_value_list(branch_values)
+    /// Clone an instruction, attaching new result `Value`s and
+    /// returning them.
+    pub fn clone_inst(&mut self, inst: Inst) -> Inst {
+        // First, add a clone of the InstructionData.
+        let inst_data = self.insts[inst].clone();
+        // If the `inst_data` has a reference to a ValueList, clone it
+        // as well, because we can't share these (otherwise mutating
+        // one would affect the other).
+        let inst_data = inst_data.deep_clone(&mut self.value_lists);
+        let new_inst = self.make_inst(inst_data);
+        // Get the controlling type variable.
+        let ctrl_typevar = self.ctrl_typevar(inst);
+        // Create new result values.
+        self.make_inst_results(new_inst, ctrl_typevar);
+        new_inst
     }
 
     /// Get the first result of an instruction.
@@ -808,6 +986,14 @@ impl DataFlowGraph {
         self.results[inst]
     }
 
+    /// Create a union of two values.
+    pub fn union(&mut self, x: Value, y: Value) -> Value {
+        // Get the type.
+        let ty = self.value_type(x);
+        debug_assert_eq!(ty, self.value_type(y));
+        self.make_value(ValueData::Union { ty, x, y })
+    }
+
     /// Get the call signature of a direct or indirect call instruction.
     /// Returns `None` if `inst` is not a call instruction.
     pub fn call_signature(&self, inst: Inst) -> Option<SigRef> {
@@ -818,9 +1004,82 @@ impl DataFlowGraph {
         }
     }
 
-    /// Check if `inst` is a branch.
-    pub fn analyze_branch(&self, inst: Inst) -> BranchInfo {
-        self.insts[inst].analyze_branch(&self.value_lists)
+    /// Like `call_signature` but returns none for tail call instructions.
+    fn non_tail_call_signature(&self, inst: Inst) -> Option<SigRef> {
+        let sig = self.call_signature(inst)?;
+        match self.insts[inst].opcode() {
+            ir::Opcode::ReturnCall | ir::Opcode::ReturnCallIndirect => None,
+            _ => Some(sig),
+        }
+    }
+
+    // Only for use by the verifier. Everyone else should just use
+    // `dfg.inst_results(inst).len()`.
+    pub(crate) fn num_expected_results_for_verifier(&self, inst: Inst) -> usize {
+        match self.non_tail_call_signature(inst) {
+            Some(sig) => self.signatures[sig].returns.len(),
+            None => {
+                let constraints = self.insts[inst].opcode().constraints();
+                constraints.num_fixed_results()
+            }
+        }
+    }
+
+    /// Get the result types of the given instruction.
+    pub fn inst_result_types<'a>(
+        &'a self,
+        inst: Inst,
+        ctrl_typevar: Type,
+    ) -> impl iter::ExactSizeIterator<Item = Type> + 'a {
+        return match self.non_tail_call_signature(inst) {
+            Some(sig) => InstResultTypes::Signature(self, sig, 0),
+            None => {
+                let constraints = self.insts[inst].opcode().constraints();
+                InstResultTypes::Constraints(constraints, ctrl_typevar, 0)
+            }
+        };
+
+        enum InstResultTypes<'a> {
+            Signature(&'a DataFlowGraph, SigRef, usize),
+            Constraints(ir::instructions::OpcodeConstraints, Type, usize),
+        }
+
+        impl Iterator for InstResultTypes<'_> {
+            type Item = Type;
+
+            fn next(&mut self) -> Option<Type> {
+                match self {
+                    InstResultTypes::Signature(dfg, sig, i) => {
+                        let param = dfg.signatures[*sig].returns.get(*i)?;
+                        *i += 1;
+                        Some(param.value_type)
+                    }
+                    InstResultTypes::Constraints(constraints, ctrl_ty, i) => {
+                        if *i < constraints.num_fixed_results() {
+                            let ty = constraints.result_type(*i, *ctrl_ty);
+                            *i += 1;
+                            Some(ty)
+                        } else {
+                            None
+                        }
+                    }
+                }
+            }
+
+            fn size_hint(&self) -> (usize, Option<usize>) {
+                let len = match self {
+                    InstResultTypes::Signature(dfg, sig, i) => {
+                        dfg.signatures[*sig].returns.len() - *i
+                    }
+                    InstResultTypes::Constraints(constraints, _, i) => {
+                        constraints.num_fixed_results() - *i
+                    }
+                };
+                (len, Some(len))
+            }
+        }
+
+        impl ExactSizeIterator for InstResultTypes<'_> {}
     }
 
     /// Compute the type of an instruction result from opcode constraints and call signatures.
@@ -836,25 +1095,12 @@ impl DataFlowGraph {
         result_idx: usize,
         ctrl_typevar: Type,
     ) -> Option<Type> {
-        let constraints = self.insts[inst].opcode().constraints();
-        let num_fixed_results = constraints.num_fixed_results();
-
-        if result_idx < num_fixed_results {
-            return Some(constraints.result_type(result_idx, ctrl_typevar));
-        }
-
-        // Not a fixed result, try to extract a return type from the call signature.
-        self.call_signature(inst).and_then(|sigref| {
-            self.signatures[sigref]
-                .returns
-                .get(result_idx - num_fixed_results)
-                .map(|&arg| arg.value_type)
-        })
+        self.inst_result_types(inst, ctrl_typevar).nth(result_idx)
     }
 
     /// Get the controlling type variable, or `INVALID` if `inst` isn't polymorphic.
     pub fn ctrl_typevar(&self, inst: Inst) -> Type {
-        let constraints = self[inst].opcode().constraints();
+        let constraints = self.insts[inst].opcode().constraints();
 
         if !constraints.is_polymorphic() {
             types::INVALID
@@ -862,9 +1108,14 @@ impl DataFlowGraph {
             // Not all instruction formats have a designated operand, but in that case
             // `requires_typevar_operand()` should never be true.
             self.value_type(
-                self[inst]
+                self.insts[inst]
                     .typevar_operand(&self.value_lists)
-                    .expect("Instruction format doesn't have a designated operand, bad opcode."),
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "Instruction format for {:?} doesn't have a designated operand",
+                            self.insts[inst]
+                        )
+                    }),
             )
         } else {
             self.value_type(self.first_result(inst))
@@ -872,37 +1123,21 @@ impl DataFlowGraph {
     }
 }
 
-/// Allow immutable access to instructions via indexing.
-impl Index<Inst> for DataFlowGraph {
-    type Output = InstructionData;
-
-    fn index(&self, inst: Inst) -> &InstructionData {
-        &self.insts[inst]
-    }
-}
-
-/// Allow mutable access to instructions via indexing.
-impl IndexMut<Inst> for DataFlowGraph {
-    fn index_mut(&mut self, inst: Inst) -> &mut InstructionData {
-        &mut self.insts[inst]
-    }
-}
-
 /// basic blocks.
 impl DataFlowGraph {
     /// Create a new basic block.
     pub fn make_block(&mut self) -> Block {
-        self.blocks.push(BlockData::new())
+        self.blocks.add()
     }
 
     /// Get the number of parameters on `block`.
     pub fn num_block_params(&self, block: Block) -> usize {
-        self.blocks[block].params.len(&self.value_lists)
+        self.blocks[block].params(&self.value_lists).len()
     }
 
     /// Get the parameters on `block`.
     pub fn block_params(&self, block: Block) -> &[Value] {
-        self.blocks[block].params.as_slice(&self.value_lists)
+        self.blocks[block].params(&self.value_lists)
     }
 
     /// Get the types of the parameters on `block`.
@@ -1056,9 +1291,9 @@ impl DataFlowGraph {
 /// Parameters on a basic block are values that dominate everything in the block. All
 /// branches to this block must provide matching arguments, and the arguments to the entry block must
 /// match the function arguments.
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-struct BlockData {
+pub struct BlockData {
     /// List of parameters to this block.
     params: ValueList,
 }
@@ -1068,6 +1303,11 @@ impl BlockData {
         Self {
             params: ValueList::new(),
         }
+    }
+
+    /// Get the parameters on `block`.
+    pub fn params<'a>(&self, pool: &'a ValueListPool) -> &'a [Value] {
+        self.params.as_slice(pool)
     }
 }
 
@@ -1089,9 +1329,9 @@ impl<'a> fmt::Display for DisplayInst<'a> {
 
         let typevar = dfg.ctrl_typevar(inst);
         if typevar.is_invalid() {
-            write!(f, "{}", dfg[inst].opcode())?;
+            write!(f, "{}", dfg.insts[inst].opcode())?;
         } else {
-            write!(f, "{}.{}", dfg[inst].opcode(), typevar)?;
+            write!(f, "{}.{}", dfg.insts[inst].opcode(), typevar)?;
         }
         write_operands(f, dfg, inst)
     }
@@ -1135,29 +1375,15 @@ impl DataFlowGraph {
         ctrl_typevar: Type,
         reuse: &[Value],
     ) -> usize {
-        // Get the call signature if this is a function call.
-        if let Some(sig) = self.call_signature(inst) {
-            assert_eq!(
-                self.insts[inst].opcode().constraints().num_fixed_results(),
-                0
-            );
-            for res_idx in 0..self.signatures[sig].returns.len() {
-                let ty = self.signatures[sig].returns[res_idx].value_type;
-                if let Some(v) = reuse.get(res_idx) {
-                    self.set_value_type_for_parser(*v, ty);
-                }
+        let mut reuse_iter = reuse.iter().copied();
+        let result_tys: SmallVec<[_; 16]> = self.inst_result_types(inst, ctrl_typevar).collect();
+        for ty in result_tys {
+            if ty.is_dynamic_vector() {
+                self.check_dynamic_type(ty)
+                    .unwrap_or_else(|| panic!("Use of undeclared dynamic type: {}", ty));
             }
-        } else {
-            let constraints = self.insts[inst].opcode().constraints();
-            for res_idx in 0..constraints.num_fixed_results() {
-                let ty = constraints.result_type(res_idx, ctrl_typevar);
-                if ty.is_dynamic_vector() {
-                    self.check_dynamic_type(ty)
-                        .unwrap_or_else(|| panic!("Use of undeclared dynamic type: {}", ty));
-                }
-                if let Some(v) = reuse.get(res_idx) {
-                    self.set_value_type_for_parser(*v, ty);
-                }
+            if let Some(v) = reuse_iter.next() {
+                self.set_value_type_for_parser(v, ty);
             }
         }
 
@@ -1278,7 +1504,7 @@ mod tests {
         // Immutable reference resolution.
         {
             let immdfg = &dfg;
-            let ins = &immdfg[inst];
+            let ins = &immdfg.insts[inst];
             assert_eq!(ins.opcode(), Opcode::Iconst);
         }
 
@@ -1408,6 +1634,7 @@ mod tests {
 
     #[test]
     fn aliases() {
+        use crate::ir::condcodes::IntCC;
         use crate::ir::InstBuilder;
 
         let mut func = Function::new();
@@ -1422,7 +1649,7 @@ mod tests {
         assert_eq!(pos.func.dfg.resolve_aliases(v1), v1);
 
         let arg0 = pos.func.dfg.append_block_param(block0, types::I32);
-        let (s, c) = pos.ins().iadd_ifcout(v1, arg0);
+        let (s, c) = pos.ins().iadd_cout(v1, arg0);
         let iadd = match pos.func.dfg.value_def(s) {
             ValueDef::Result(i, 0) => i,
             _ => panic!(),
@@ -1432,17 +1659,33 @@ mod tests {
         pos.func.dfg.clear_results(iadd);
         pos.func.dfg.attach_result(iadd, s);
 
-        // Replace `iadd_ifcout` with a normal `iadd` and an `ifcmp`.
+        // Replace `iadd_cout` with a normal `iadd` and an `icmp`.
         pos.func.dfg.replace(iadd).iadd(v1, arg0);
-        let c2 = pos.ins().ifcmp(s, v1);
+        let c2 = pos.ins().icmp(IntCC::Equal, s, v1);
         pos.func.dfg.change_to_alias(c, c2);
 
         assert_eq!(pos.func.dfg.resolve_aliases(c2), c2);
         assert_eq!(pos.func.dfg.resolve_aliases(c), c2);
+    }
 
-        // Make a copy of the alias.
-        let c3 = pos.ins().copy(c);
-        // This does not see through copies.
-        assert_eq!(pos.func.dfg.resolve_aliases(c3), c3);
+    #[test]
+    fn cloning() {
+        use crate::ir::InstBuilder;
+
+        let mut func = Function::new();
+        let mut sig = Signature::new(crate::isa::CallConv::SystemV);
+        sig.params.push(ir::AbiParam::new(types::I32));
+        let sig = func.import_signature(sig);
+        let block0 = func.dfg.make_block();
+        let mut pos = FuncCursor::new(&mut func);
+        pos.insert_block(block0);
+        let v1 = pos.ins().iconst(types::I32, 0);
+        let v2 = pos.ins().iconst(types::I32, 1);
+        let call_inst = pos.ins().call_indirect(sig, v1, &[v1]);
+        let func = pos.func;
+
+        let call_inst_dup = func.dfg.clone_inst(call_inst);
+        func.dfg.inst_args_mut(call_inst)[0] = v2;
+        assert_eq!(v1, func.dfg.inst_args(call_inst_dup)[0]);
     }
 }

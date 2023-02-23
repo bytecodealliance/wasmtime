@@ -3,20 +3,18 @@ test verifier
 
 function %iflags(i32) {
 block200(v0: i32):
-    v1 = ifcmp_imm v0, 17
-    brif eq v1, block201
-    jump block400
+    v17 = iconst.i32 17
+    v1 = icmp eq v0, v17
+    brif v1, block201, block400
 
 block400:
-    brif ugt v1, block202
-    jump block401
+    v5 = icmp ugt v0, v17
+    brif v5, block202, block401
 
 block401:
     v2 = iconst.i32 34
-    v3 = ifcmp v0, v2
-    v4 = trueif eq v3
-    brnz v4, block202
-    jump block402
+    v3 = icmp eq v0, v2
+    brif v3, block202, block402
 
 block402:
     return
@@ -27,27 +25,26 @@ block201:
 block202:
     trap heap_oob
 }
-; check: v1 = ifcmp_imm v0, 17
-; check: brif eq v1, block201
-; check: brif ugt v1, block202
-; check: v3 = ifcmp.i32 v0, v2
-; check: v4 = trueif eq v3
+; check: v17 = iconst.i32 17
+; check: v1 = icmp eq v0, v17
+; check: brif v1, block201, block400
+; check: v5 = icmp.i32 ugt v0, v17
+; check: brif v5, block202, block401
+; check: v3 = icmp.i32 eq v0, v2
 
 function %fflags(f32) {
 block200(v0: f32):
     v1 = f32const 0x34.0p0
-    v2 = ffcmp v0, v1
-    brff eq v2, block201
-    jump block400
+    v2 = fcmp eq v0, v1
+    brif v2, block201, block400
 
 block400:
-    brff ord v2, block202
-    jump block401
+    v5 = fcmp ord v0, v1
+    brif v5, block202, block401
 
 block401:
-    v3 = trueff gt v2
-    brnz v3, block202
-    jump block402
+    v3 = fcmp gt v0, v1
+    brif v3, block202, block402
 
 block402:
     return
@@ -58,7 +55,8 @@ block201:
 block202:
     trap heap_oob
 }
-; check: v2 = ffcmp v0, v1
-; check: brff eq v2, block201
-; check: brff ord v2, block202
-; check: v3 = trueff gt v2
+; check: v2 = fcmp eq v0, v1
+; check: brif v2, block201, block400
+; check: v5 = fcmp.f32 ord v0, v1
+; check: brif v5, block202, block401
+; check: v3 = fcmp.f32 gt v0, v1

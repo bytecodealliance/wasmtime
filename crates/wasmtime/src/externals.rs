@@ -2,7 +2,7 @@ use crate::store::{StoreData, StoreOpaque, Stored};
 use crate::trampoline::{generate_global_export, generate_table_export};
 use crate::{
     AsContext, AsContextMut, Engine, ExternRef, ExternType, Func, GlobalType, Memory, Mutability,
-    SharedMemory, TableType, Trap, Val, ValType, HeapType,
+    SharedMemory, TableType, Val, ValType, HeapType,
 };
 use anyhow::{anyhow, bail, Result};
 use std::mem;
@@ -18,7 +18,7 @@ use wasmtime_runtime::{self as runtime, InstanceHandle};
 /// as well as required by [`Instance::new`](crate::Instance::new). In other
 /// words, this is the type of extracted values from an instantiated module, and
 /// it's also used to provide imported values when instantiating a module.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Extern {
     /// A WebAssembly `func` which can be called.
     Func(Func),
@@ -138,16 +138,6 @@ impl Extern {
             Extern::Table(t) => store.store_data().contains(t.0),
         }
     }
-
-    pub(crate) fn desc(&self) -> &'static str {
-        match self {
-            Extern::Func(_) => "function",
-            Extern::Table(_) => "table",
-            Extern::Memory(_) => "memory",
-            Extern::SharedMemory(_) => "shared memory",
-            Extern::Global(_) => "global",
-        }
-    }
 }
 
 impl From<Func> for Extern {
@@ -233,8 +223,8 @@ impl Global {
     /// )?;
     ///
     /// let mut linker = Linker::new(&engine);
-    /// linker.define("", "i32-const", i32_const)?;
-    /// linker.define("", "f64-mut", f64_mut)?;
+    /// linker.define(&store, "", "i32-const", i32_const)?;
+    /// linker.define(&store, "", "f64-mut", f64_mut)?;
     ///
     /// let instance = linker.instantiate(&mut store, &module)?;
     /// // ...
@@ -291,14 +281,12 @@ impl Global {
                                 .clone()
                                 .map(|inner| ExternRef { inner }),
                         ),
-                        HeapType::Func => {
+                        HeapType::Index(_) | HeapType::Func => {
                             Val::FuncRef(Func::from_raw(store, definition.as_anyfunc() as usize))
                         }
-                        _ => todo!("Implement HeapType::Bot/Index for get") // TODO(dhil) fixme
                     }
                 }
                 ValType::V128 => Val::V128(*definition.as_u128()),
-                ValType::Bot => todo!("Implement ValType::Bot for get"), // TODO(dhil) fixme: I think this one is trivial.
             }
         }
     }
@@ -468,9 +456,7 @@ impl Table {
         let init = init.into_table_element(store, ty.element())?;
         unsafe {
             let table = Table::from_wasmtime_table(wasmtime_export, store);
-            (*table.wasmtime_table(store, std::iter::empty()))
-                .fill(0, init, ty.minimum())
-                .map_err(|c| Trap::new_wasm(c, None))?;
+            (*table.wasmtime_table(store, std::iter::empty())).fill(0, init, ty.minimum())?;
 
             Ok(table)
         }
@@ -658,8 +644,7 @@ impl Table {
         let src_range = src_index..(src_index.checked_add(len).unwrap_or(u32::MAX));
         let src_table = src_table.wasmtime_table(store, src_range);
         unsafe {
-            runtime::Table::copy(dst_table, src_table, dst_index, src_index, len)
-                .map_err(|c| Trap::new_wasm(c, None))?;
+            runtime::Table::copy(dst_table, src_table, dst_index, src_index, len)?;
         }
         Ok(())
     }
@@ -687,9 +672,7 @@ impl Table {
 
         let table = self.wasmtime_table(store, std::iter::empty());
         unsafe {
-            (*table)
-                .fill(dst, val, len)
-                .map_err(|c| Trap::new_wasm(c, None))?;
+            (*table).fill(dst, val, len)?;
         }
 
         Ok(())

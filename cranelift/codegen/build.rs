@@ -15,6 +15,7 @@
 // current directory is used to find the sources.
 
 use cranelift_codegen_meta as meta;
+use cranelift_isle::error::Errors;
 
 use std::env;
 use std::io::Read;
@@ -177,9 +178,19 @@ fn get_isle_compilations(
 ) -> Result<IsleCompilations, std::io::Error> {
     let cur_dir = std::env::current_dir()?;
 
-    let clif_isle = out_dir.join("clif.isle");
+    // Preludes.
+    let clif_lower_isle = out_dir.join("clif_lower.isle");
+    let clif_opt_isle = out_dir.join("clif_opt.isle");
     let prelude_isle =
         make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("prelude.isle"));
+    let prelude_opt_isle =
+        make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("prelude_opt.isle"));
+    let prelude_lower_isle =
+        make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("prelude_lower.isle"));
+
+    // Directory for mid-end optimizations.
+    let src_opts = make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("opts"));
+    // Directories for lowering backends.
     let src_isa_x64 =
         make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("isa").join("x64"));
     let src_isa_aarch64 =
@@ -187,6 +198,8 @@ fn get_isle_compilations(
     let src_isa_s390x =
         make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("isa").join("s390x"));
 
+    let src_isa_risc_v =
+        make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("isa").join("riscv64"));
     // This is a set of ISLE compilation units.
     //
     // The format of each entry is:
@@ -202,37 +215,62 @@ fn get_isle_compilations(
     // `cranelift/codegen/src/isa/*/lower/isle/generated_code.rs`!
     Ok(IsleCompilations {
         items: vec![
+            // The mid-end optimization rules.
+            IsleCompilation {
+                output: out_dir.join("isle_opt.rs"),
+                inputs: vec![
+                    prelude_isle.clone(),
+                    prelude_opt_isle.clone(),
+                    src_opts.join("algebraic.isle"),
+                    src_opts.join("cprop.isle"),
+                ],
+                untracked_inputs: vec![clif_opt_isle.clone()],
+            },
             // The x86-64 instruction selector.
             IsleCompilation {
                 output: out_dir.join("isle_x64.rs"),
                 inputs: vec![
                     prelude_isle.clone(),
+                    prelude_lower_isle.clone(),
                     src_isa_x64.join("inst.isle"),
                     src_isa_x64.join("lower.isle"),
                 ],
-                untracked_inputs: vec![clif_isle.clone()],
+                untracked_inputs: vec![clif_lower_isle.clone()],
             },
             // The aarch64 instruction selector.
             IsleCompilation {
                 output: out_dir.join("isle_aarch64.rs"),
                 inputs: vec![
                     prelude_isle.clone(),
+                    prelude_lower_isle.clone(),
                     src_isa_aarch64.join("inst.isle"),
                     src_isa_aarch64.join("inst_neon.isle"),
                     src_isa_aarch64.join("lower.isle"),
                     src_isa_aarch64.join("lower_dynamic_neon.isle"),
                 ],
-                untracked_inputs: vec![clif_isle.clone()],
+                untracked_inputs: vec![clif_lower_isle.clone()],
             },
             // The s390x instruction selector.
             IsleCompilation {
                 output: out_dir.join("isle_s390x.rs"),
                 inputs: vec![
                     prelude_isle.clone(),
+                    prelude_lower_isle.clone(),
                     src_isa_s390x.join("inst.isle"),
                     src_isa_s390x.join("lower.isle"),
                 ],
-                untracked_inputs: vec![clif_isle.clone()],
+                untracked_inputs: vec![clif_lower_isle.clone()],
+            },
+            // The risc-v instruction selector.
+            IsleCompilation {
+                output: out_dir.join("isle_riscv64.rs"),
+                inputs: vec![
+                    prelude_isle.clone(),
+                    prelude_lower_isle.clone(),
+                    src_isa_risc_v.join("inst.isle"),
+                    src_isa_risc_v.join("lower.isle"),
+                ],
+                untracked_inputs: vec![clif_lower_isle.clone()],
             },
         ],
     })
@@ -251,13 +289,16 @@ fn build_isle(
         }
 
         if let Err(e) = run_compilation(compilation) {
-            eprintln!("Error building ISLE files: {:?}", e);
-            let mut source = e.source();
-            while let Some(e) = source {
-                eprintln!("{:?}", e);
-                source = e.source();
-            }
             had_error = true;
+            eprintln!("Error building ISLE files:");
+            eprintln!("{:?}", e);
+            #[cfg(not(feature = "isle-errors"))]
+            {
+                eprintln!("To see a more detailed error report, run: ");
+                eprintln!();
+                eprintln!("    $ cargo check -p cranelift-codegen --features isle-errors");
+                eprintln!();
+            }
         }
     }
 
@@ -274,21 +315,16 @@ fn build_isle(
 ///
 /// NB: This must happen *after* the `cranelift-codegen-meta` functions, since
 /// it consumes files generated by them.
-fn run_compilation(
-    compilation: &IsleCompilation,
-) -> Result<(), Box<dyn std::error::Error + 'static>> {
+fn run_compilation(compilation: &IsleCompilation) -> Result<(), Errors> {
     use cranelift_isle as isle;
 
     eprintln!("Rebuilding {}", compilation.output.display());
 
-    let code = (|| {
-        let lexer = isle::lexer::Lexer::from_files(
-            compilation
-                .inputs
-                .iter()
-                .chain(compilation.untracked_inputs.iter()),
-        )?;
-        let defs = isle::parser::parse(lexer)?;
+    let code = {
+        let file_paths = compilation
+            .inputs
+            .iter()
+            .chain(compilation.untracked_inputs.iter());
 
         let mut options = isle::codegen::CodegenOptions::default();
         // Because we include!() the generated ISLE source, we cannot
@@ -298,62 +334,8 @@ fn run_compilation(
         // https://github.com/rust-lang/rust/issues/47995.)
         options.exclude_global_allow_pragmas = true;
 
-        isle::compile::compile(&defs, &options)
-    })()
-    .map_err(|e| {
-        // Make sure to include the source snippets location info along with
-        // the error messages.
-
-        #[cfg(feature = "isle-errors")]
-        {
-            let report = miette::Report::new(e);
-            return DebugReport(report);
-
-            struct DebugReport(miette::Report);
-
-            impl std::fmt::Display for DebugReport {
-                fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                    self.0.handler().debug(&*self.0, f)
-                }
-            }
-
-            impl std::fmt::Debug for DebugReport {
-                fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                    std::fmt::Display::fmt(self, f)
-                }
-            }
-
-            impl std::error::Error for DebugReport {}
-        }
-        #[cfg(not(feature = "isle-errors"))]
-        {
-            return DebugReport(format!("{}", e));
-
-            struct DebugReport(String);
-
-            impl std::fmt::Display for DebugReport {
-                fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                    writeln!(f, "ISLE errors:\n\n{}\n", self.0)?;
-                    writeln!(f, "To see a more detailed error report, run: ")?;
-                    writeln!(f, "")?;
-                    writeln!(
-                        f,
-                        "    $ cargo check -p cranelift-codegen --features isle-errors"
-                    )?;
-                    writeln!(f, "")?;
-                    Ok(())
-                }
-            }
-
-            impl std::fmt::Debug for DebugReport {
-                fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                    std::fmt::Display::fmt(self, f)
-                }
-            }
-
-            impl std::error::Error for DebugReport {}
-        }
-    })?;
+        isle::compile::from_files(file_paths, &options)?
+    };
 
     let code = rustfmt(&code).unwrap_or_else(|e| {
         println!(
@@ -367,7 +349,8 @@ fn run_compilation(
         "Writing ISLE-generated Rust code to {}",
         compilation.output.display()
     );
-    std::fs::write(&compilation.output, code)?;
+    std::fs::write(&compilation.output, code)
+        .map_err(|e| Errors::from_io(e, "failed writing output"))?;
 
     Ok(())
 }

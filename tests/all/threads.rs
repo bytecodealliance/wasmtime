@@ -65,20 +65,27 @@ fn test_sharing_of_shared_memory() -> Result<()> {
     let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, 5))?;
     let instance1 = Instance::new(&mut store, &module, &[shared_memory.clone().into()])?;
     let instance2 = Instance::new(&mut store, &module, &[shared_memory.clone().into()])?;
+    let data = shared_memory.data();
 
     // Modify the memory in one place.
     unsafe {
-        (*(shared_memory.data()))[0] = 42;
+        *data[0].get() = 42;
     }
 
     // Verify that the memory is the same in all shared locations.
-    let shared_memory_first_word =
-        i32::from_le_bytes(unsafe { (*shared_memory.data())[0..4].try_into()? });
+    let shared_memory_first_word = i32::from_le_bytes(unsafe {
+        [
+            *data[0].get(),
+            *data[1].get(),
+            *data[2].get(),
+            *data[3].get(),
+        ]
+    });
     let instance1_first_word = instance1
-        .get_typed_func::<(), i32, _>(&mut store, "first_word")?
+        .get_typed_func::<(), i32>(&mut store, "first_word")?
         .call(&mut store, ())?;
     let instance2_first_word = instance2
-        .get_typed_func::<(), i32, _>(&mut store, "first_word")?
+        .get_typed_func::<(), i32>(&mut store, "first_word")?
         .call(&mut store, ())?;
     assert_eq!(shared_memory_first_word, 42);
     assert_eq!(instance1_first_word, 42);
@@ -99,8 +106,8 @@ fn test_probe_shared_memory_size() -> Result<()> {
     let module = Module::new(&engine, wat)?;
     let mut store = Store::new(&engine, ());
     let instance = Instance::new(&mut store, &module, &[])?;
-    let size_fn = instance.get_typed_func::<(), i32, _>(&mut store, "size")?;
-    let mut shared_memory = instance.get_shared_memory(&mut store, "memory").unwrap();
+    let size_fn = instance.get_typed_func::<(), i32>(&mut store, "size")?;
+    let shared_memory = instance.get_shared_memory(&mut store, "memory").unwrap();
 
     assert_eq!(size_fn.call(&mut store, ())?, 1);
     assert_eq!(shared_memory.size(), 1);
@@ -178,7 +185,7 @@ fn test_grow_memory_in_multiple_threads() -> Result<()> {
             let mut store = Store::new(&engine, ());
             let instance = Instance::new(&mut store, &module, &[shared_memory.into()]).unwrap();
             let grow_fn = instance
-                .get_typed_func::<i32, i32, _>(&mut store, "grow")
+                .get_typed_func::<i32, i32>(&mut store, "grow")
                 .unwrap();
             let mut thread_local_observed_sizes: Vec<_> = (0..NUM_GROW_OPS / NUM_THREADS)
                 .map(|_| grow_fn.call(&mut store, 1).unwrap() as u32)
@@ -237,7 +244,7 @@ fn test_memory_size_accessibility() -> Result<()> {
     let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, NUM_GROW_OPS as u32))?;
     let done = Arc::new(AtomicBool::new(false));
 
-    let mut grow_memory = shared_memory.clone();
+    let grow_memory = shared_memory.clone();
     let grow_thread = std::thread::spawn(move || {
         for i in 0..NUM_GROW_OPS {
             if grow_memory.grow(1).is_err() {
@@ -253,7 +260,7 @@ fn test_memory_size_accessibility() -> Result<()> {
         let mut store = Store::new(&engine, ());
         let instance = Instance::new(&mut store, &module, &[probe_memory.into()]).unwrap();
         let probe_fn = instance
-            .get_typed_func::<(), i32, _>(&mut store, "probe_last_available")
+            .get_typed_func::<(), i32>(&mut store, "probe_last_available")
             .unwrap();
         while !probe_done.load(Ordering::SeqCst) {
             let value = probe_fn.call(&mut store, ()).unwrap() as u32;

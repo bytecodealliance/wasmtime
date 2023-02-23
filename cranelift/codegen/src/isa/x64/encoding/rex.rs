@@ -13,7 +13,7 @@ use crate::{
     ir::TrapCode,
     isa::x64::inst::{
         args::{Amode, OperandSize},
-        regs, EmitInfo, Inst, LabelUse,
+        regs, Inst, LabelUse,
     },
     machinst::MachBuffer,
 };
@@ -103,6 +103,21 @@ impl RexFlags {
     #[inline(always)]
     pub(crate) fn must_always_emit(&self) -> bool {
         (self.0 & 2) != 0
+    }
+
+    #[inline(always)]
+    pub(crate) fn emit_one_op(&self, sink: &mut MachBuffer<Inst>, enc_e: u8) {
+        // Register Operand coded in Opcode Byte
+        // REX.R and REX.X unused
+        // REX.B == 1 accesses r8-r15
+        let w = if self.must_clear_w() { 0 } else { 1 };
+        let r = 0;
+        let x = 0;
+        let b = (enc_e >> 3) & 1;
+        let rex = 0x40 | (w << 3) | (r << 2) | (x << 1) | b;
+        if rex != 0x40 || self.must_always_emit() {
+            sink.put1(rex);
+        }
     }
 
     #[inline(always)]
@@ -278,7 +293,6 @@ impl Default for LegacyPrefixes {
 /// indicate a 64-bit operation.
 pub(crate) fn emit_std_enc_mem(
     sink: &mut MachBuffer<Inst>,
-    info: &EmitInfo,
     prefixes: LegacyPrefixes,
     opcodes: u32,
     mut num_opcodes: usize,
@@ -298,24 +312,50 @@ pub(crate) fn emit_std_enc_mem(
 
     prefixes.emit(sink);
 
+    // After prefixes, first emit the REX byte depending on the kind of
+    // addressing mode that's being used.
     match *mem_e {
-        Amode::ImmReg { simm32, base, .. } => {
-            // If this is an access based off of RSP, it may trap with a stack overflow if it's the
-            // first touch of a new stack page.
-            if base == regs::rsp() && !can_trap && info.flags.enable_probestack() {
-                sink.add_trap(TrapCode::StackOverflow);
-            }
-
-            // First, the REX byte.
+        Amode::ImmReg { base, .. } => {
             let enc_e = int_reg_enc(base);
             rex.emit_two_op(sink, enc_g, enc_e);
+        }
 
-            // Now the opcode(s).  These include any other prefixes the caller
-            // hands to us.
-            while num_opcodes > 0 {
-                num_opcodes -= 1;
-                sink.put1(((opcodes >> (num_opcodes << 3)) & 0xFF) as u8);
-            }
+        Amode::ImmRegRegShift {
+            base: reg_base,
+            index: reg_index,
+            ..
+        } => {
+            let enc_base = int_reg_enc(*reg_base);
+            let enc_index = int_reg_enc(*reg_index);
+            rex.emit_three_op(sink, enc_g, enc_index, enc_base);
+        }
+
+        Amode::RipRelative { .. } => {
+            // note REX.B = 0.
+            rex.emit_two_op(sink, enc_g, 0);
+        }
+    }
+
+    // Now the opcode(s).  These include any other prefixes the caller
+    // hands to us.
+    while num_opcodes > 0 {
+        num_opcodes -= 1;
+        sink.put1(((opcodes >> (num_opcodes << 3)) & 0xFF) as u8);
+    }
+
+    // And finally encode the mod/rm bytes and all further information.
+    emit_modrm_sib_disp(sink, enc_g, mem_e, bytes_at_end)
+}
+
+pub(crate) fn emit_modrm_sib_disp(
+    sink: &mut MachBuffer<Inst>,
+    enc_g: u8,
+    mem_e: &Amode,
+    bytes_at_end: u8,
+) {
+    match *mem_e {
+        Amode::ImmReg { simm32, base, .. } => {
+            let enc_e = int_reg_enc(base);
 
             // Now the mod/rm and associated immediates.  This is
             // significantly complicated due to the multiple special cases.
@@ -366,23 +406,8 @@ pub(crate) fn emit_std_enc_mem(
             shift,
             ..
         } => {
-            // If this is an access based off of RSP, it may trap with a stack overflow if it's the
-            // first touch of a new stack page.
-            if *reg_base == regs::rsp() && !can_trap && info.flags.enable_probestack() {
-                sink.add_trap(TrapCode::StackOverflow);
-            }
-
             let enc_base = int_reg_enc(*reg_base);
             let enc_index = int_reg_enc(*reg_index);
-
-            // The rex byte.
-            rex.emit_three_op(sink, enc_g, enc_index, enc_base);
-
-            // All other prefixes and opcodes.
-            while num_opcodes > 0 {
-                num_opcodes -= 1;
-                sink.put1(((opcodes >> (num_opcodes << 3)) & 0xFF) as u8);
-            }
 
             // modrm, SIB, immediates.
             if low8_will_sign_extend_to_32(simm32) && enc_index != regs::ENC_RSP {
@@ -399,16 +424,6 @@ pub(crate) fn emit_std_enc_mem(
         }
 
         Amode::RipRelative { ref target } => {
-            // First, the REX byte, with REX.B = 0.
-            rex.emit_two_op(sink, enc_g, 0);
-
-            // Now the opcode(s).  These include any other prefixes the caller
-            // hands to us.
-            while num_opcodes > 0 {
-                num_opcodes -= 1;
-                sink.put1(((opcodes >> (num_opcodes << 3)) & 0xFF) as u8);
-            }
-
             // RIP-relative is mod=00, rm=101.
             sink.put1(encode_modrm(0, enc_g & 7, 0b101));
 
@@ -466,7 +481,6 @@ pub(crate) fn emit_std_enc_enc(
 
 pub(crate) fn emit_std_reg_mem(
     sink: &mut MachBuffer<Inst>,
-    info: &EmitInfo,
     prefixes: LegacyPrefixes,
     opcodes: u32,
     num_opcodes: usize,
@@ -478,7 +492,6 @@ pub(crate) fn emit_std_reg_mem(
     let enc_g = reg_enc(reg_g);
     emit_std_enc_mem(
         sink,
-        info,
         prefixes,
         opcodes,
         num_opcodes,

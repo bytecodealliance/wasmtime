@@ -42,26 +42,20 @@ mod traps;
 
 pub use crate::data_context::{DataContext, DataDescription, Init};
 pub use crate::module::{
-    DataId, FuncId, FuncOrDataId, Linkage, Module, ModuleCompiledFunction, ModuleDeclarations,
-    ModuleError, ModuleResult,
+    DataDeclaration, DataId, FuncId, FuncOrDataId, FunctionDeclaration, Linkage, Module,
+    ModuleCompiledFunction, ModuleDeclarations, ModuleError, ModuleExtName, ModuleReloc,
+    ModuleResult,
 };
 pub use crate::traps::TrapSite;
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Default names for `ir::LibCall`s. A function by this name is imported into the object as
-/// part of the translation of a `ir::ExternalName::LibCall` variant.
+/// Default names for [ir::LibCall]s. A function by this name is imported into the object as
+/// part of the translation of a [ir::ExternalName::LibCall] variant.
 pub fn default_libcall_names() -> Box<dyn Fn(ir::LibCall) -> String + Send + Sync> {
     Box::new(move |libcall| match libcall {
         ir::LibCall::Probestack => "__cranelift_probestack".to_owned(),
-        ir::LibCall::UdivI64 => "__udivdi3".to_owned(),
-        ir::LibCall::SdivI64 => "__divdi3".to_owned(),
-        ir::LibCall::UremI64 => "__umoddi3".to_owned(),
-        ir::LibCall::SremI64 => "__moddi3".to_owned(),
-        ir::LibCall::IshlI64 => "__ashldi3".to_owned(),
-        ir::LibCall::UshrI64 => "__lshrdi3".to_owned(),
-        ir::LibCall::SshrI64 => "__ashrdi3".to_owned(),
         ir::LibCall::CeilF32 => "ceilf".to_owned(),
         ir::LibCall::CeilF64 => "ceil".to_owned(),
         ir::LibCall::FloorF32 => "floorf".to_owned(),
@@ -78,5 +72,6 @@ pub fn default_libcall_names() -> Box<dyn Fn(ir::LibCall) -> String + Send + Syn
         ir::LibCall::Memcmp => "memcmp".to_owned(),
 
         ir::LibCall::ElfTlsGetAddr => "__tls_get_addr".to_owned(),
+        ir::LibCall::ElfTlsGetOffset => "__tls_get_offset".to_owned(),
     })
 }

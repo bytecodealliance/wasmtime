@@ -27,8 +27,6 @@ pub enum WasmType {
     V128,
     /// Reference type
     Ref(WasmRefType),
-    /// Bottom type
-    Bot,
 }
 
 impl TryFrom<wasmparser::ValType> for WasmType {
@@ -42,7 +40,6 @@ impl TryFrom<wasmparser::ValType> for WasmType {
             F64 => Ok(WasmType::F64),
             V128 => Ok(WasmType::V128),
             Ref(rt) => Ok(WasmType::Ref(WasmRefType::from(rt))),
-            Bot => Ok(WasmType::Bot),
         }
     }
 }
@@ -56,7 +53,6 @@ impl From<WasmType> for wasmparser::ValType {
             WasmType::F64 => wasmparser::ValType::F64,
             WasmType::V128 => wasmparser::ValType::V128,
             WasmType::Ref(rt) => wasmparser::ValType::Ref(wasmparser::RefType::from(rt)),
-            WasmType::Bot => wasmparser::ValType::Bot,
         }
     }
 }
@@ -70,7 +66,6 @@ impl fmt::Display for WasmType {
             WasmType::F64 => write!(f, "f64"),
             WasmType::V128 => write!(f, "v128"),
             WasmType::Ref(rt) => write!(f, "{}", rt),
-            WasmType::Bot => write!(f, "bot"),
         }
     }
 }
@@ -143,7 +138,6 @@ impl fmt::Display for WasmRefType {
 /// WebAssembly heap type -- equivalent of `wasmparser`'s HeapType
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum WasmHeapType {
-    Bot,
     Func,
     Extern,
     Index(u32),
@@ -153,10 +147,9 @@ impl From<wasmparser::HeapType> for WasmHeapType {
     fn from(ht: wasmparser::HeapType) -> Self {
         use wasmparser::HeapType::*;
         match ht {
-            Bot => WasmHeapType::Bot,
             Func => WasmHeapType::Func,
             Extern => WasmHeapType::Extern,
-            Index(i) => WasmHeapType::Index(i),
+            TypedFunc(i) => WasmHeapType::Index(i.into()),
         }
     }
 }
@@ -164,10 +157,9 @@ impl From<wasmparser::HeapType> for WasmHeapType {
 impl From<WasmHeapType> for wasmparser::HeapType {
     fn from(ht: WasmHeapType) -> wasmparser::HeapType {
         match ht {
-            WasmHeapType::Bot => wasmparser::HeapType::Bot,
             WasmHeapType::Func => wasmparser::HeapType::Func,
             WasmHeapType::Extern => wasmparser::HeapType::Extern,
-            WasmHeapType::Index(i) => wasmparser::HeapType::Index(i),
+            WasmHeapType::Index(i) => wasmparser::HeapType::TypedFunc(i.try_into().unwrap()),
         }
     }
 }
@@ -175,7 +167,6 @@ impl From<WasmHeapType> for wasmparser::HeapType {
 impl fmt::Display for WasmHeapType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            WasmHeapType::Bot => write!(f, "bot"),
             WasmHeapType::Func => write!(f, "func"),
             WasmHeapType::Extern => write!(f, "extern"),
             WasmHeapType::Index(i) => write!(f, "{}", i),
@@ -246,15 +237,15 @@ impl TryFrom<wasmparser::FuncType> for WasmFuncType {
     type Error = WasmError;
     fn try_from(ty: wasmparser::FuncType) -> Result<Self, Self::Error> {
         let params = ty
-            .params
-            .into_vec()
-            .into_iter()
+            .params()
+            .iter()
+            .copied()
             .map(WasmType::try_from)
             .collect::<Result<_, Self::Error>>()?;
         let returns = ty
-            .returns
-            .into_vec()
-            .into_iter()
+            .results()
+            .iter()
+            .copied()
             .map(WasmType::try_from)
             .collect::<Result<_, Self::Error>>()?;
         Ok(Self::new(params, returns))

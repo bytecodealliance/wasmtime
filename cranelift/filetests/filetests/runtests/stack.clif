@@ -1,8 +1,11 @@
 test interpret
 test run
+; Disable stack probes since these tests don't require them
+set enable_probestack=false
 target x86_64
 target s390x
 target aarch64
+target riscv64
 
 function %stack_simple(i64) -> i64 {
     ss0 = explicit_slot 8
@@ -72,8 +75,8 @@ block0(v0: i8, v1: i64):
     v3 = stack_load.i64 ss1
     return v2, v3
 }
-; run: %multi_slot_out_o(10, 1) == [10, 1]
-; run: %multi_slot_out_o(0, 2) == [0, 2]
+; run: %multi_slot_out_of_bounds_writes(10, 1) == [10, 1]
+; run: %multi_slot_out_of_bounds_writes(0, 2) == [0, 2]
 
 
 function %multi_slot_offset_writes(i8, i64) -> i8, i64 {
@@ -87,8 +90,8 @@ block0(v0: i8, v1: i64):
     v3 = stack_load.i64 ss1
     return v2, v3
 }
-; run: %multi_slot_offse(0, 1) == [0, 1]
-; run: %multi_slot_offse(1, 2) == [1, 2]
+; run: %multi_slot_offset_writes(0, 1) == [0, 1]
+; run: %multi_slot_offset_writes(1, 2) == [1, 2]
 
 function %huge_slots(i64) -> i64 {
     ss0 = explicit_slot 1048576 ; 1MB Slot

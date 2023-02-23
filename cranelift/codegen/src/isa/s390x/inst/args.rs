@@ -233,8 +233,6 @@ impl Cond {
             IntCC::UnsignedGreaterThan => 2,
             IntCC::UnsignedLessThanOrEqual => 8 | 4,
             IntCC::UnsignedLessThan => 4,
-            IntCC::Overflow => 1,
-            IntCC::NotOverflow => 8 | 4 | 2,
         };
         Cond { mask }
     }
@@ -326,7 +324,7 @@ impl PrettyPrint for MemArg {
             &MemArg::Label { target } => target.to_string(),
             &MemArg::Symbol {
                 ref name, offset, ..
-            } => format!("{} + {}", name, offset),
+            } => format!("{} + {}", name.display(None), offset),
             // Eliminated by `mem_finalize()`.
             &MemArg::InitialSPOffset { .. }
             | &MemArg::NominalSPOffset { .. }

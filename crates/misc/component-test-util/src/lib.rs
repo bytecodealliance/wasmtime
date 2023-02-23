@@ -2,9 +2,9 @@ use anyhow::Result;
 use arbitrary::Arbitrary;
 use std::mem::MaybeUninit;
 use wasmtime::component::__internal::{
-    ComponentTypes, InterfaceType, Memory, MemoryMut, Options, StoreOpaque,
+    CanonicalAbiInfo, ComponentTypes, InterfaceType, Memory, MemoryMut, Options, StoreOpaque,
 };
-use wasmtime::component::{ComponentParams, ComponentType, Func, Lift, Lower, TypedFunc, Val};
+use wasmtime::component::{ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, Val};
 use wasmtime::{AsContextMut, Config, Engine, StoreContextMut};
 
 pub trait TypedFuncExt<P, R> {
@@ -13,8 +13,8 @@ pub trait TypedFuncExt<P, R> {
 
 impl<P, R> TypedFuncExt<P, R> for TypedFunc<P, R>
 where
-    P: ComponentParams + Lower,
-    R: Lift,
+    P: ComponentNamedList + Lower,
+    R: ComponentNamedList + Lift,
 {
     fn call_and_post_return(&self, mut store: impl AsContextMut, params: P) -> Result<R> {
         let result = self.call(&mut store, params)?;
@@ -24,18 +24,28 @@ where
 }
 
 pub trait FuncExt {
-    fn call_and_post_return(&self, store: impl AsContextMut, args: &[Val]) -> Result<Val>;
+    fn call_and_post_return(
+        &self,
+        store: impl AsContextMut,
+        params: &[Val],
+        results: &mut [Val],
+    ) -> Result<()>;
 }
 
 impl FuncExt for Func {
-    fn call_and_post_return(&self, mut store: impl AsContextMut, args: &[Val]) -> Result<Val> {
-        let result = self.call(&mut store, args)?;
+    fn call_and_post_return(
+        &self,
+        mut store: impl AsContextMut,
+        params: &[Val],
+        results: &mut [Val],
+    ) -> Result<()> {
+        self.call(&mut store, params, results)?;
         self.post_return(&mut store)?;
-        Ok(result)
+        Ok(())
     }
 }
 
-pub fn engine() -> Engine {
+pub fn config() -> Config {
     drop(env_logger::try_init());
 
     let mut config = Config::new();
@@ -48,6 +58,16 @@ pub fn engine() -> Engine {
         config.static_memory_maximum_size(0);
         config.dynamic_memory_guard_size(0);
     }
+    config
+}
+
+pub fn engine() -> Engine {
+    Engine::new(&config()).unwrap()
+}
+
+pub fn async_engine() -> Engine {
+    let mut config = config();
+    config.async_support(true);
     Engine::new(&config).unwrap()
 }
 
@@ -64,8 +84,7 @@ macro_rules! forward_impls {
         unsafe impl ComponentType for $a {
             type Lower = <$b as ComponentType>::Lower;
 
-            const SIZE32: usize = <$b as ComponentType>::SIZE32;
-            const ALIGN32: u32 = <$b as ComponentType>::ALIGN32;
+            const ABI: CanonicalAbiInfo = <$b as ComponentType>::ABI;
 
             #[inline]
             fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()> {

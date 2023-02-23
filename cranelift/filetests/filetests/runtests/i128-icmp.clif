@@ -4,170 +4,174 @@ set enable_llvm_abi_extensions=true
 target aarch64
 target s390x
 target x86_64
+target riscv64
 
-function %icmp_eq_i128(i128, i128) -> b1 {
+function %icmp_eq_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
     v2 = icmp.i128 eq v0, v1
     return v2
 }
-; run: %icmp_eq_i128(0, 0) == true
-; run: %icmp_eq_i128(-1, -1) == true
-; run: %icmp_eq_i128(-1, 0) == false
-; run: %icmp_eq_i128(-1, 0x00000000_00000000_FFFFFFFF_FFFFFFFF) == false
-; run: %icmp_eq_i128(0x00000000_00000000_FFFFFFFF_FFFFFFFF, -1) == false
-; run: %icmp_eq_i128(0xFFFFFFFF_FFFFFFFF_00000000_00000000, -1) == false
-; run: %icmp_eq_i128(0xDECAFFFF_C0FFEEEE_C0FFEEEE_DECAFFFF, 0xDECAFFFF_C0FFEEEE_C0FFEEEE_DECAFFFF) == true
-; run: %icmp_eq_i128(0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF, 0x00000000_00000001_00000000_00000001) == false
-; run: %icmp_eq_i128(0x00000000_00000001_FFFFFFFF_FFFFFFFF, 0x00000000_00000001_00000000_00000001) == false
+; run: %icmp_eq_i128(0, 0) == 1
+; run: %icmp_eq_i128(-1, -1) == 1
+; run: %icmp_eq_i128(-1, 0) == 0
+; run: %icmp_eq_i128(-1, 0x00000000_00000000_FFFFFFFF_FFFFFFFF) == 0
+; run: %icmp_eq_i128(0x00000000_00000000_FFFFFFFF_FFFFFFFF, -1) == 0
+; run: %icmp_eq_i128(0xFFFFFFFF_FFFFFFFF_00000000_00000000, -1) == 0
+; run: %icmp_eq_i128(0xDECAFFFF_C0FFEEEE_C0FFEEEE_DECAFFFF, 0xDECAFFFF_C0FFEEEE_C0FFEEEE_DECAFFFF) == 1
+; run: %icmp_eq_i128(0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF, 0x00000000_00000001_00000000_00000001) == 0
+; run: %icmp_eq_i128(0x00000000_00000001_FFFFFFFF_FFFFFFFF, 0x00000000_00000001_00000000_00000001) == 0
+
+; This is a regression test for aarch64, see: https://github.com/bytecodealliance/wasmtime/issues/4705
+; run: %icmp_eq_i128(36893488147419103231, 0) == 0
 
 
-function %icmp_ne_i128(i128, i128) -> b1 {
+function %icmp_ne_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp.i128 ne v0, v1
   return v2
 }
-; run: %icmp_ne_i128(0, 0) == false
-; run: %icmp_ne_i128(-1, -1) == false
-; run: %icmp_ne_i128(-1, 0) == true
-; run: %icmp_ne_i128(-1, 0x00000000_00000000_FFFFFFFF_FFFFFF) == true
-; run: %icmp_ne_i128(0x00000000_00000000_FFFFFFFF_FFFFFFFF, -1) == true
-; run: %icmp_ne_i128(0xFFFFFFFF_FFFFFFFF_00000000_00000000, -1) == true
-; run: %icmp_ne_i128(0xDECAFFFF_C0FFEEEE_C0FFEEEE_DECAFFFF, 0xDECAFFFF_C0FFEEEE_C0FFEEEE_DECAFFFF) == false
-; run: %icmp_ne_i128(0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF, 0x00000000_00000001_00000000_00000001) == true
-; run: %icmp_ne_i128(0x00000000_00000001_FFFFFFFF_FFFFFFFF, 0x00000000_00000001_00000000_00000001) == true
+; run: %icmp_ne_i128(0, 0) == 0
+; run: %icmp_ne_i128(-1, -1) == 0
+; run: %icmp_ne_i128(-1, 0) == 1
+; run: %icmp_ne_i128(-1, 0x00000000_00000000_FFFFFFFF_FFFFFF) == 1
+; run: %icmp_ne_i128(0x00000000_00000000_FFFFFFFF_FFFFFFFF, -1) == 1
+; run: %icmp_ne_i128(0xFFFFFFFF_FFFFFFFF_00000000_00000000, -1) == 1
+; run: %icmp_ne_i128(0xDECAFFFF_C0FFEEEE_C0FFEEEE_DECAFFFF, 0xDECAFFFF_C0FFEEEE_C0FFEEEE_DECAFFFF) == 0
+; run: %icmp_ne_i128(0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF, 0x00000000_00000001_00000000_00000001) == 1
+; run: %icmp_ne_i128(0x00000000_00000001_FFFFFFFF_FFFFFFFF, 0x00000000_00000001_00000000_00000001) == 1
 
 
 
-function %icmp_slt_i128(i128, i128) -> b1 {
+function %icmp_slt_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp.i128 slt v0, v1
   return v2
 }
-; run: %icmp_slt_i128(0, 0) == false
-; run: %icmp_slt_i128(1, 1) == false
-; run: %icmp_slt_i128(0, 1) == true
-; run: %icmp_slt_i128(-1, 0) == true
-; run: %icmp_slt_i128(0, -1) == false
-; run: %icmp_slt_i128(-1, -1) == false
-; run: %icmp_slt_i128(0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFD, 0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF) == true
-; run: %icmp_slt_i128(0xC0FFEEEE_C0FFEEEE_00000000_00000000, 0xDECAFFFF_DECAFFFF_00000000_00000000) == true
-; run: %icmp_slt_i128(0xDECAFFFF_DECAFFFF_00000000_00000000, 0xC0FFEEEE_C0FFEEEE_00000000_00000000) == false
+; run: %icmp_slt_i128(0, 0) == 0
+; run: %icmp_slt_i128(1, 1) == 0
+; run: %icmp_slt_i128(0, 1) == 1
+; run: %icmp_slt_i128(-1, 0) == 1
+; run: %icmp_slt_i128(0, -1) == 0
+; run: %icmp_slt_i128(-1, -1) == 0
+; run: %icmp_slt_i128(0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFD, 0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF) == 1
+; run: %icmp_slt_i128(0xC0FFEEEE_C0FFEEEE_00000000_00000000, 0xDECAFFFF_DECAFFFF_00000000_00000000) == 1
+; run: %icmp_slt_i128(0xDECAFFFF_DECAFFFF_00000000_00000000, 0xC0FFEEEE_C0FFEEEE_00000000_00000000) == 0
 
 
-function %icmp_ult_i128(i128, i128) -> b1 {
+function %icmp_ult_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
     v2 = icmp.i128 ult v0, v1
     return v2
 }
-; run: %icmp_ult_i128(0, 0) == false
-; run: %icmp_ult_i128(1, 1) == false
-; run: %icmp_ult_i128(0, 1) == true
-; run: %icmp_ult_i128(-1, 0) == false
-; run: %icmp_ult_i128(0, -1) == true
-; run: %icmp_ult_i128(-1, -1) == false
-; run: %icmp_ult_i128(0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFD, 0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF) == true
-; run: %icmp_ult_i128(0xC0FFEEEE_C0FFEEEE_00000000_00000000, 0xDECAFFFF_DECAFFFF_00000000_00000000) == true
-; run: %icmp_ult_i128(0xDECAFFFF_DECAFFFF_00000000_00000000, 0xC0FFEEEE_C0FFEEEE_00000000_00000000) == false
+; run: %icmp_ult_i128(0, 0) == 0
+; run: %icmp_ult_i128(1, 1) == 0
+; run: %icmp_ult_i128(0, 1) == 1
+; run: %icmp_ult_i128(-1, 0) == 0
+; run: %icmp_ult_i128(0, -1) == 1
+; run: %icmp_ult_i128(-1, -1) == 0
+; run: %icmp_ult_i128(0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFD, 0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF) == 1
+; run: %icmp_ult_i128(0xC0FFEEEE_C0FFEEEE_00000000_00000000, 0xDECAFFFF_DECAFFFF_00000000_00000000) == 1
+; run: %icmp_ult_i128(0xDECAFFFF_DECAFFFF_00000000_00000000, 0xC0FFEEEE_C0FFEEEE_00000000_00000000) == 0
 
 
-function %icmp_sle_i128(i128, i128) -> b1 {
+function %icmp_sle_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp.i128 sle v0, v1
   return v2
 }
-; run: %icmp_sle_i128(0, 0) == true
-; run: %icmp_sle_i128(1, 1) == true
-; run: %icmp_sle_i128(0, 1) == true
-; run: %icmp_sle_i128(-1, 0) == true
-; run: %icmp_sle_i128(0, -1) == false
-; run: %icmp_sle_i128(-1, -1) == true
-; run: %icmp_sle_i128(0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFD, 0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF) == true
-; run: %icmp_sle_i128(0xC0FFEEEE_C0FFEEEE_00000000_00000000, 0xDECAFFFF_DECAFFFF_00000000_00000000) == true
-; run: %icmp_sle_i128(0xDECAFFFF_DECAFFFF_00000000_00000000, 0xC0FFEEEE_C0FFEEEE_00000000_00000000) == false
+; run: %icmp_sle_i128(0, 0) == 1
+; run: %icmp_sle_i128(1, 1) == 1
+; run: %icmp_sle_i128(0, 1) == 1
+; run: %icmp_sle_i128(-1, 0) == 1
+; run: %icmp_sle_i128(0, -1) == 0
+; run: %icmp_sle_i128(-1, -1) == 1
+; run: %icmp_sle_i128(0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFD, 0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF) == 1
+; run: %icmp_sle_i128(0xC0FFEEEE_C0FFEEEE_00000000_00000000, 0xDECAFFFF_DECAFFFF_00000000_00000000) == 1
+; run: %icmp_sle_i128(0xDECAFFFF_DECAFFFF_00000000_00000000, 0xC0FFEEEE_C0FFEEEE_00000000_00000000) == 0
 
 
-function %icmp_ule_i128(i128, i128) -> b1 {
+function %icmp_ule_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
     v2 = icmp.i128 ule v0, v1
     return v2
 }
-; run: %icmp_ule_i128(0, 0) == true
-; run: %icmp_ule_i128(1, 1) == true
-; run: %icmp_ule_i128(0, 1) == true
-; run: %icmp_ule_i128(-1, 0) == false
-; run: %icmp_ule_i128(0, -1) == true
-; run: %icmp_ule_i128(-1, -1) == true
-; run: %icmp_ule_i128(0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFD, 0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF) == true
-; run: %icmp_ule_i128(0xC0FFEEEE_C0FFEEEE_00000000_00000000, 0xDECAFFFF_DECAFFFF_00000000_00000000) == true
-; run: %icmp_ule_i128(0xDECAFFFF_DECAFFFF_00000000_00000000, 0xC0FFEEEE_C0FFEEEE_00000000_00000000) == false
+; run: %icmp_ule_i128(0, 0) == 1
+; run: %icmp_ule_i128(1, 1) == 1
+; run: %icmp_ule_i128(0, 1) == 1
+; run: %icmp_ule_i128(-1, 0) == 0
+; run: %icmp_ule_i128(0, -1) == 1
+; run: %icmp_ule_i128(-1, -1) == 1
+; run: %icmp_ule_i128(0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFD, 0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF) == 1
+; run: %icmp_ule_i128(0xC0FFEEEE_C0FFEEEE_00000000_00000000, 0xDECAFFFF_DECAFFFF_00000000_00000000) == 1
+; run: %icmp_ule_i128(0xDECAFFFF_DECAFFFF_00000000_00000000, 0xC0FFEEEE_C0FFEEEE_00000000_00000000) == 0
 
 
-function %icmp_sgt_i128(i128, i128) -> b1 {
+function %icmp_sgt_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp.i128 sgt v0, v1
   return v2
 }
-; run: %icmp_sgt_i128(0, 0) == false
-; run: %icmp_sgt_i128(1, 1) == false
-; run: %icmp_sgt_i128(0, 1) == false
-; run: %icmp_sgt_i128(-1, 0) == false
-; run: %icmp_sgt_i128(0, -1) == true
-; run: %icmp_sgt_i128(-1, -1) == false
-; run: %icmp_sgt_i128(0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFD, 0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF) == false
-; run: %icmp_sgt_i128(0xC0FFEEEE_C0FFEEEE_00000000_00000000, 0xDECAFFFF_DECAFFFF_00000000_00000000) == false
-; run: %icmp_sgt_i128(0xDECAFFFF_DECAFFFF_00000000_00000000, 0xC0FFEEEE_C0FFEEEE_00000000_00000000) == true
+; run: %icmp_sgt_i128(0, 0) == 0
+; run: %icmp_sgt_i128(1, 1) == 0
+; run: %icmp_sgt_i128(0, 1) == 0
+; run: %icmp_sgt_i128(-1, 0) == 0
+; run: %icmp_sgt_i128(0, -1) == 1
+; run: %icmp_sgt_i128(-1, -1) == 0
+; run: %icmp_sgt_i128(0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFD, 0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF) == 0
+; run: %icmp_sgt_i128(0xC0FFEEEE_C0FFEEEE_00000000_00000000, 0xDECAFFFF_DECAFFFF_00000000_00000000) == 0
+; run: %icmp_sgt_i128(0xDECAFFFF_DECAFFFF_00000000_00000000, 0xC0FFEEEE_C0FFEEEE_00000000_00000000) == 1
 
 
-function %icmp_ugt_i128(i128, i128) -> b1 {
+function %icmp_ugt_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
     v2 = icmp.i128 ugt v0, v1
     return v2
 }
-; run: %icmp_ugt_i128(0, 0) == false
-; run: %icmp_ugt_i128(1, 1) == false
-; run: %icmp_ugt_i128(0, 1) == false
-; run: %icmp_ugt_i128(-1, 0) == true
-; run: %icmp_ugt_i128(0, -1) == false
-; run: %icmp_ugt_i128(-1, -1) == false
-; run: %icmp_ugt_i128(0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFD, 0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF) == false
-; run: %icmp_ugt_i128(0xC0FFEEEE_C0FFEEEE_00000000_00000000, 0xDECAFFFF_DECAFFFF_00000000_00000000) == false
-; run: %icmp_ugt_i128(0xDECAFFFF_DECAFFFF_00000000_00000000, 0xC0FFEEEE_C0FFEEEE_00000000_00000000) == true
+; run: %icmp_ugt_i128(0, 0) == 0
+; run: %icmp_ugt_i128(1, 1) == 0
+; run: %icmp_ugt_i128(0, 1) == 0
+; run: %icmp_ugt_i128(-1, 0) == 1
+; run: %icmp_ugt_i128(0, -1) == 0
+; run: %icmp_ugt_i128(-1, -1) == 0
+; run: %icmp_ugt_i128(0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFD, 0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF) == 0
+; run: %icmp_ugt_i128(0xC0FFEEEE_C0FFEEEE_00000000_00000000, 0xDECAFFFF_DECAFFFF_00000000_00000000) == 0
+; run: %icmp_ugt_i128(0xDECAFFFF_DECAFFFF_00000000_00000000, 0xC0FFEEEE_C0FFEEEE_00000000_00000000) == 1
 
 
-function %icmp_sge_i128(i128, i128) -> b1 {
+function %icmp_sge_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp.i128 sge v0, v1
   return v2
 }
-; run: %icmp_sge_i128(0, 0) == true
-; run: %icmp_sge_i128(1, 1) == true
-; run: %icmp_sge_i128(0, 1) == false
-; run: %icmp_sge_i128(-1, 0) == false
-; run: %icmp_sge_i128(0, -1) == true
-; run: %icmp_sge_i128(-1, -1) == true
-; run: %icmp_sge_i128(0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFD, 0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF) == false
-; run: %icmp_sge_i128(0xC0FFEEEE_C0FFEEEE_00000000_00000000, 0xDECAFFFF_DECAFFFF_00000000_00000000) == false
-; run: %icmp_sge_i128(0xDECAFFFF_DECAFFFF_00000000_00000000, 0xC0FFEEEE_C0FFEEEE_00000000_00000000) == true
+; run: %icmp_sge_i128(0, 0) == 1
+; run: %icmp_sge_i128(1, 1) == 1
+; run: %icmp_sge_i128(0, 1) == 0
+; run: %icmp_sge_i128(-1, 0) == 0
+; run: %icmp_sge_i128(0, -1) == 1
+; run: %icmp_sge_i128(-1, -1) == 1
+; run: %icmp_sge_i128(0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFD, 0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF) == 0
+; run: %icmp_sge_i128(0xC0FFEEEE_C0FFEEEE_00000000_00000000, 0xDECAFFFF_DECAFFFF_00000000_00000000) == 0
+; run: %icmp_sge_i128(0xDECAFFFF_DECAFFFF_00000000_00000000, 0xC0FFEEEE_C0FFEEEE_00000000_00000000) == 1
 
 
-function %icmp_uge_i128(i128, i128) -> b1 {
+function %icmp_uge_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
     v2 = icmp.i128 uge v0, v1
     return v2
 }
-; run: %icmp_uge_i128(0, 0) == true
-; run: %icmp_uge_i128(1, 1) == true
-; run: %icmp_uge_i128(0, 1) == false
-; run: %icmp_uge_i128(-1, 0) == true
-; run: %icmp_uge_i128(0, -1) == false
-; run: %icmp_uge_i128(-1, -1) == true
-; run: %icmp_uge_i128(0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFD, 0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF) == false
-; run: %icmp_uge_i128(0xC0FFEEEE_C0FFEEEE_00000000_00000000, 0xDECAFFFF_DECAFFFF_00000000_00000000) == false
-; run: %icmp_uge_i128(0xDECAFFFF_DECAFFFF_00000000_00000000, 0xC0FFEEEE_C0FFEEEE_00000000_00000000) == true
+; run: %icmp_uge_i128(0, 0) == 1
+; run: %icmp_uge_i128(1, 1) == 1
+; run: %icmp_uge_i128(0, 1) == 0
+; run: %icmp_uge_i128(-1, 0) == 1
+; run: %icmp_uge_i128(0, -1) == 0
+; run: %icmp_uge_i128(-1, -1) == 1
+; run: %icmp_uge_i128(0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFD, 0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF) == 0
+; run: %icmp_uge_i128(0xC0FFEEEE_C0FFEEEE_00000000_00000000, 0xDECAFFFF_DECAFFFF_00000000_00000000) == 0
+; run: %icmp_uge_i128(0xDECAFFFF_DECAFFFF_00000000_00000000, 0xC0FFEEEE_C0FFEEEE_00000000_00000000) == 1
 
 
 ; Icmp Imm Tests
-function %icmp_imm_eq_i128() -> b1 {
+function %icmp_imm_eq_i128() -> i8 {
 block0:
     v11 = iconst.i64 0x0
     v12 = iconst.i64 0x0
@@ -176,9 +180,9 @@ block0:
     return v10
 }
 
-; run: %icmp_imm_eq_i128() == true
+; run: %icmp_imm_eq_i128() == 1
 
-function %icmp_imm_ne_i128() -> b1 {
+function %icmp_imm_ne_i128() -> i8 {
 block0:
     v11 = iconst.i64 0x0
     v12 = iconst.i64 0x0
@@ -187,4 +191,4 @@ block0:
     return v10
 }
 
-; run: %icmp_imm_ne_i128() == true
+; run: %icmp_imm_ne_i128() == 1

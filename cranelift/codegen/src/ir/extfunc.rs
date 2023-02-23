@@ -14,6 +14,8 @@ use core::str::FromStr;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
 
+use super::function::FunctionParameters;
+
 /// Function signature.
 ///
 /// The function signature describes the types of formal parameters and return values along with
@@ -142,9 +144,6 @@ pub struct AbiParam {
     pub purpose: ArgumentPurpose,
     /// Method for extending argument to a full register.
     pub extension: ArgumentExtension,
-
-    /// Was the argument converted to pointer during legalization?
-    pub legalized_to_pointer: bool,
 }
 
 impl AbiParam {
@@ -154,7 +153,6 @@ impl AbiParam {
             value_type: vt,
             extension: ArgumentExtension::None,
             purpose: ArgumentPurpose::Normal,
-            legalized_to_pointer: false,
         }
     }
 
@@ -164,7 +162,6 @@ impl AbiParam {
             value_type: vt,
             extension: ArgumentExtension::None,
             purpose,
-            legalized_to_pointer: false,
         }
     }
 
@@ -190,9 +187,6 @@ impl AbiParam {
 impl fmt::Display for AbiParam {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.value_type)?;
-        if self.legalized_to_pointer {
-            write!(f, " ptr")?;
-        }
         match self.extension {
             ArgumentExtension::None => {}
             ArgumentExtension::Uext => write!(f, " uext")?,
@@ -252,40 +246,11 @@ pub enum ArgumentPurpose {
     /// a `StructReturn` pointer argument to also return that pointer in a register.
     StructReturn,
 
-    /// The link register.
-    ///
-    /// Most RISC architectures implement calls by saving the return address in a designated
-    /// register rather than pushing it on the stack. This is represented with a `Link` argument.
-    ///
-    /// Similarly, some return instructions expect the return address in a register represented as
-    /// a `Link` return value.
-    Link,
-
-    /// The frame pointer.
-    ///
-    /// This indicates the frame pointer register which has a special meaning in some ABIs.
-    ///
-    /// The frame pointer appears as an argument and as a return value since it is a callee-saved
-    /// register.
-    FramePointer,
-
-    /// A callee-saved register.
-    ///
-    /// Some calling conventions have registers that must be saved by the callee. These registers
-    /// are represented as `CalleeSaved` arguments and return values.
-    CalleeSaved,
-
     /// A VM context pointer.
     ///
     /// This is a pointer to a context struct containing details about the current sandbox. It is
     /// used as a base pointer for `vmctx` global values.
     VMContext,
-
-    /// A signature identifier.
-    ///
-    /// This is a special-purpose argument used to identify the calling convention expected by the
-    /// caller in an indirect call. The callee can verify that the expected signature ID matches.
-    SignatureId,
 
     /// A stack limit pointer.
     ///
@@ -300,11 +265,7 @@ impl fmt::Display for ArgumentPurpose {
             Self::Normal => "normal",
             Self::StructArgument(size) => return write!(f, "sarg({})", size),
             Self::StructReturn => "sret",
-            Self::Link => "link",
-            Self::FramePointer => "fp",
-            Self::CalleeSaved => "csr",
             Self::VMContext => "vmctx",
-            Self::SignatureId => "sigid",
             Self::StackLimit => "stack_limit",
         })
     }
@@ -316,11 +277,7 @@ impl FromStr for ArgumentPurpose {
         match s {
             "normal" => Ok(Self::Normal),
             "sret" => Ok(Self::StructReturn),
-            "link" => Ok(Self::Link),
-            "fp" => Ok(Self::FramePointer),
-            "csr" => Ok(Self::CalleeSaved),
             "vmctx" => Ok(Self::VMContext),
-            "sigid" => Ok(Self::SignatureId),
             "stack_limit" => Ok(Self::StackLimit),
             _ if s.starts_with("sarg(") => {
                 if !s.ends_with(")") {
@@ -338,7 +295,7 @@ impl FromStr for ArgumentPurpose {
 /// An external function.
 ///
 /// Information about a function that can be called directly with a direct `call` instruction.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct ExtFuncData {
     /// Name of the external function.
@@ -356,18 +313,9 @@ pub struct ExtFuncData {
     /// flag is best used when the target is known to be in the same unit of code generation, such
     /// as a Wasm module.
     ///
-    /// See the documentation for [`RelocDistance`](crate::machinst::RelocDistance) for more details. A
-    /// `colocated` flag value of `true` implies `RelocDistance::Near`.
+    /// See the documentation for `RelocDistance` for more details. A `colocated` flag value of
+    /// `true` implies `RelocDistance::Near`.
     pub colocated: bool,
-}
-
-impl fmt::Display for ExtFuncData {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.colocated {
-            write!(f, "colocated ")?;
-        }
-        write!(f, "{} {}", self.name, self.signature)
-    }
 }
 
 impl ExtFuncData {
@@ -379,12 +327,44 @@ impl ExtFuncData {
             RelocDistance::Far
         }
     }
+
+    /// Returns a displayable version of the `ExtFuncData`, with or without extra context to
+    /// prettify the output.
+    pub fn display<'a>(
+        &'a self,
+        params: Option<&'a FunctionParameters>,
+    ) -> DisplayableExtFuncData<'a> {
+        DisplayableExtFuncData {
+            ext_func: self,
+            params,
+        }
+    }
+}
+
+/// A displayable `ExtFuncData`, with extra context to prettify the output.
+pub struct DisplayableExtFuncData<'a> {
+    ext_func: &'a ExtFuncData,
+    params: Option<&'a FunctionParameters>,
+}
+
+impl<'a> fmt::Display for DisplayableExtFuncData<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.ext_func.colocated {
+            write!(f, "colocated ")?;
+        }
+        write!(
+            f,
+            "{} {}",
+            self.ext_func.name.display(self.params),
+            self.ext_func.signature
+        )
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ir::types::{B8, F32, I32};
+    use crate::ir::types::{F32, I32, I8};
     use alloc::string::ToString;
 
     #[test]
@@ -396,8 +376,6 @@ mod tests {
         assert_eq!(t.sext().to_string(), "i32 sext");
         t.purpose = ArgumentPurpose::StructReturn;
         assert_eq!(t.to_string(), "i32 uext sret");
-        t.legalized_to_pointer = true;
-        assert_eq!(t.to_string(), "i32 ptr uext sret");
     }
 
     #[test]
@@ -405,11 +383,7 @@ mod tests {
         let all_purpose = [
             (ArgumentPurpose::Normal, "normal"),
             (ArgumentPurpose::StructReturn, "sret"),
-            (ArgumentPurpose::Link, "link"),
-            (ArgumentPurpose::FramePointer, "fp"),
-            (ArgumentPurpose::CalleeSaved, "csr"),
             (ArgumentPurpose::VMContext, "vmctx"),
-            (ArgumentPurpose::SignatureId, "sigid"),
             (ArgumentPurpose::StackLimit, "stack_limit"),
             (ArgumentPurpose::StructArgument(42), "sarg(42)"),
         ];
@@ -441,7 +415,7 @@ mod tests {
         assert_eq!(sig.to_string(), "(i32) -> f32 windows_fastcall");
         sig.params.push(AbiParam::new(I32.by(4).unwrap()));
         assert_eq!(sig.to_string(), "(i32, i32x4) -> f32 windows_fastcall");
-        sig.returns.push(AbiParam::new(B8));
-        assert_eq!(sig.to_string(), "(i32, i32x4) -> f32, b8 windows_fastcall");
+        sig.returns.push(AbiParam::new(I8));
+        assert_eq!(sig.to_string(), "(i32, i32x4) -> f32, i8 windows_fastcall");
     }
 }
