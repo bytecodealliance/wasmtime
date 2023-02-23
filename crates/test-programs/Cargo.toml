@@ -13,7 +13,7 @@ cfg-if = "1.0"
 [dev-dependencies]
 wasi-common = { workspace = true }
 wasi-cap-std-sync = { workspace = true }
-wasmtime = { workspace = true }
+wasmtime = { workspace = true, features = ['cranelift'] }
 wasmtime-wasi = { workspace = true, features = ["tokio"] }
 target-lexicon = { workspace = true }
 tracing-subscriber = { version = "0.3.1", default-features = false, features = ['fmt'] }
