@@ -3,11 +3,12 @@ use crate::cranelift_arbitrary::CraneliftArbitrary;
 use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
 use cranelift::codegen::data_value::DataValue;
+use cranelift::codegen::ir::immediates::Offset32;
 use cranelift::codegen::ir::instructions::InstructionFormat;
 use cranelift::codegen::ir::stackslot::StackSize;
-use cranelift::codegen::ir::{types::*, FuncRef, LibCall, UserExternalName, UserFuncName};
 use cranelift::codegen::ir::{
-    Block, ExternalName, Function, Opcode, Signature, StackSlot, Type, Value,
+    types::*, AtomicRmwOp, Block, ExternalName, FuncRef, Function, LibCall, Opcode, Signature,
+    StackSlot, Type, UserExternalName, UserFuncName, Value,
 };
 use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Switch, Variable};
@@ -215,36 +216,9 @@ fn insert_load_store(
     let ctrl_type = *rets.first().or(args.first()).unwrap();
     let type_size = ctrl_type.bytes();
 
-    // Should we generate an aligned address
     let is_atomic = [Opcode::AtomicLoad, Opcode::AtomicStore].contains(&opcode);
-    let is_aarch64 = matches!(fgen.target_triple.architecture, Architecture::Aarch64(_));
-    let aligned = if is_atomic && is_aarch64 {
-        // AArch64 has issues with unaligned atomics.
-        // https://github.com/bytecodealliance/wasmtime/issues/5483
-        true
-    } else {
-        bool::arbitrary(fgen.u)?
-    };
-
-    let mut flags = MemFlags::new();
-    // Even if we picked an aligned address, we can always generate unaligned memflags
-    if aligned && bool::arbitrary(fgen.u)? {
-        flags.set_aligned();
-    }
-    // If the address is aligned, then we know it won't trap
-    if aligned && bool::arbitrary(fgen.u)? {
-        flags.set_notrap();
-    }
-
-    let (address, max_offset) = fgen.generate_load_store_address(builder, type_size, aligned)?;
-
-    // Pick an offset to pass into the load/store.
-    let offset = if aligned {
-        0
-    } else {
-        fgen.u.int_in_range(0..=max_offset)? as i32
-    }
-    .into();
+    let (address, flags, offset) =
+        fgen.generate_address_and_memflags(builder, type_size, is_atomic)?;
 
     // The variable being loaded or stored into
     let var = fgen.get_variable_of_type(ctrl_type)?;
@@ -283,6 +257,36 @@ fn insert_load_store(
         _ => unimplemented!(),
     }
 
+    Ok(())
+}
+
+fn insert_atomic_rmw(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    _: Opcode,
+    _: &'static [Type],
+    rets: &'static [Type],
+) -> Result<()> {
+    let ctrl_type = *rets.first().unwrap();
+    let type_size = ctrl_type.bytes();
+
+    let rmw_op = *fgen.u.choose(AtomicRmwOp::all())?;
+
+    let (address, flags, offset) = fgen.generate_address_and_memflags(builder, type_size, true)?;
+
+    // AtomicRMW does not directly support offsets, so add the offset to the address separately.
+    let address = builder.ins().iadd_imm(address, i64::from(offset));
+
+    // Load and store target variables
+    let source_var = fgen.get_variable_of_type(ctrl_type)?;
+    let target_var = fgen.get_variable_of_type(ctrl_type)?;
+
+    let source_val = builder.use_var(source_var);
+    let new_val = builder
+        .ins()
+        .atomic_rmw(ctrl_type, flags, rmw_op, address, source_val);
+
+    builder.def_var(target_var, new_val);
     Ok(())
 }
 
@@ -1263,6 +1267,11 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::AtomicStore, &[I16], &[], insert_load_store),
     (Opcode::AtomicStore, &[I32], &[], insert_load_store),
     (Opcode::AtomicStore, &[I64], &[], insert_load_store),
+    // AtomicRMW
+    (Opcode::AtomicRmw, &[I8, I8], &[I8], insert_atomic_rmw),
+    (Opcode::AtomicRmw, &[I16, I16], &[I16], insert_atomic_rmw),
+    (Opcode::AtomicRmw, &[I32, I32], &[I32], insert_atomic_rmw),
+    (Opcode::AtomicRmw, &[I64, I64], &[I64], insert_atomic_rmw),
     // Bitcast
     (Opcode::Bitcast, &[F32], &[I32], insert_bitcast),
     (Opcode::Bitcast, &[I32], &[F32], insert_bitcast),
@@ -1439,6 +1448,46 @@ where
         // caller. Preserving min_size bytes.
         let max_offset = available_size.saturating_sub(min_size);
         Ok((addr, max_offset))
+    }
+
+    // Generates an address and memflags for a load or store.
+    fn generate_address_and_memflags(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        min_size: u32,
+        is_atomic: bool,
+    ) -> Result<(Value, MemFlags, Offset32)> {
+        // Should we generate an aligned address
+        let is_aarch64 = matches!(self.target_triple.architecture, Architecture::Aarch64(_));
+        let aligned = if is_atomic && is_aarch64 {
+            // AArch64 has issues with unaligned atomics.
+            // https://github.com/bytecodealliance/wasmtime/issues/5483
+            true
+        } else {
+            bool::arbitrary(self.u)?
+        };
+
+        let mut flags = MemFlags::new();
+        // Even if we picked an aligned address, we can always generate unaligned memflags
+        if aligned && bool::arbitrary(self.u)? {
+            flags.set_aligned();
+        }
+        // If the address is aligned, then we know it won't trap
+        if aligned && bool::arbitrary(self.u)? {
+            flags.set_notrap();
+        }
+
+        let (address, max_offset) = self.generate_load_store_address(builder, min_size, aligned)?;
+
+        // Pick an offset to pass into the load/store.
+        let offset = if aligned {
+            0
+        } else {
+            self.u.int_in_range(0..=max_offset)? as i32
+        }
+        .into();
+
+        Ok((address, flags, offset))
     }
 
     /// Get a variable of type `ty` from the current function
