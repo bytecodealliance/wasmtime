@@ -328,12 +328,12 @@
   (lower_clz_i128 x))
 
 ;;;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type out (uextend x @ (value_type in))))
-  (lower_extend x $false (ty_bits in) (ty_bits out)))
+(rule (lower (has_type out_ty (uextend val @ (value_type in_ty))))
+  (zext val in_ty out_ty))
 
 ;;;; Rules for `sextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type out (sextend x @ (value_type in))))
-  (lower_extend x $true (ty_bits in) (ty_bits out)))
+(rule (lower (has_type out_ty (sextend val @ (value_type in_ty))))
+  (sext val in_ty out_ty))
 
 
 ;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

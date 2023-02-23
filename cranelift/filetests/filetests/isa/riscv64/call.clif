@@ -55,7 +55,7 @@ block0(v0: i32):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   uext.w a0,a0
+;   slli a0,a0,32; srli a0,a0,32
 ;   load_sym a2,%g+0
 ;   callind a2
 ;   ld ra,8(sp)
@@ -90,7 +90,7 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   uext.w a0,a0
+;   slli a0,a0,32; srli a0,a0,32
 ;   ret
 ; 
 ; Disassembled:
@@ -113,7 +113,7 @@ block0(v0: i32):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   sext.w a0,a0
+;   slli a0,a0,32; srai a0,a0,32
 ;   load_sym a2,%g+0
 ;   callind a2
 ;   ld ra,8(sp)
@@ -148,7 +148,7 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   sext.w a0,a0
+;   slli a0,a0,32; srai a0,a0,32
 ;   ret
 ; 
 ; Disassembled:
@@ -183,7 +183,7 @@ block0(v0: i8):
 ;   li a5,42
 ;   li a6,42
 ;   li a7,42
-;   sext.b t3,t3
+;   slli t3,t3,56; srai t3,t3,56
 ;   sd t3,0(sp)
 ;   load_sym t3,%g+0
 ;   callind t3
@@ -250,7 +250,7 @@ block0(v0: i8):
 ;   sw t0,24(a1)
 ;   sw t2,32(a1)
 ;   sw a2,40(a1)
-;   sext.b t4,a0
+;   slli t4,a0,56; srai t4,t4,56
 ;   sd a0,48(a1)
 ;   mv a0,t1
 ;   mv a1,a3

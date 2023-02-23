@@ -5,6 +5,8 @@ target aarch64
 target s390x
 target x86_64
 target riscv64
+target riscv64 has_zbb
+target riscv64 has_zbkb
 
 function %i128_uextend_i64(i64) -> i128 {
 block0(v0: i64):
