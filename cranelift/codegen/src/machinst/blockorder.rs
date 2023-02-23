@@ -108,8 +108,10 @@ pub enum LoweredBlock {
         /// The successor block.
         succ: Block,
 
-        /// The branch index
-        branch_idx: u32,
+        /// The index of this branch in the successor edges from `pred`, following the same
+        /// indexing order as `inst_predicates::visit_block_succs`. This is used to distinguish
+        /// multiple edges between the same CLIF blocks.
+        succ_idx: u32,
     },
 }
 
@@ -197,7 +199,7 @@ impl BlockLoweringOrder {
 
             if block_out_count[block] > 1 {
                 let range = block_succ_range[block].clone();
-                for (ix, lb) in block_succs[range].iter_mut().enumerate() {
+                for (succ_ix, lb) in block_succs[range].iter_mut().enumerate() {
                     let succ = lb.orig_block().unwrap();
                     if block_in_count[succ] > 1 {
                         // Mutate the successor to be a critical edge, as `block` has multiple
@@ -205,7 +207,7 @@ impl BlockLoweringOrder {
                         *lb = LoweredBlock::CriticalEdge {
                             pred: block,
                             succ,
-                            branch_idx: ix as u32,
+                            succ_idx: succ_ix as u32,
                         };
                         let bindex = BlockIndex::new(lowered_order.len());
                         lb_to_bindex.insert(*lb, bindex);
