@@ -161,6 +161,13 @@ impl<T> AsContextMut for StoreContextMut<'_, T> {
     }
 }
 
+impl<'a, T> From<StoreContextMut<'a, T>> for StoreContext<'a, T> {
+    #[inline]
+    fn from(store: StoreContextMut<'a, T>) -> StoreContext<'a, T> {
+        StoreContext(store.0)
+    }
+}
+
 // Implementations for internal consumers, but these aren't public types so
 // they're not publicly accessible for crate consumers.
 impl<T> AsContext for &'_ StoreInner<T> {
