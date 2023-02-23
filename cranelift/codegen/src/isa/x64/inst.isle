@@ -288,7 +288,7 @@
                        (src XmmMem)
                        (dst WritableXmm))
 
-       ;; XMM unary op using a VEX encoding (aka AVX)with an immediate
+       ;; XMM unary op using a VEX encoding (aka AVX) with an immediate.
        (XmmUnaryRmRImmVex (op AvxOpcode)
                           (src XmmMem)
                           (dst WritableXmm)
