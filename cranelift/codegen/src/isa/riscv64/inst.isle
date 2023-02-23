@@ -1121,9 +1121,15 @@
   (let ((val Reg (value_regs_get val 0)))
     (alu_rr_imm12 (AluOPRRI.Zexth) val (imm12_const 0))))
 
+;; With `zba` we have a `zext.w` instruction
+(rule 3 (extend val (ExtendOp.Zero) $I32 $I64)
+  (if-let $true (has_zba))
+  (let ((val Reg (value_regs_get val 0)))
+    (alu_rrr (AluOPRRR.Adduw) val (zero_reg))))
+
 ;;; Signed rules extending to I128
 ;; Extend the bottom part, and extract the sign bit from the bottom as the top
-(rule 2 (extend val (ExtendOp.Signed) (fits_in_64 from_ty) $I128)
+(rule 3 (extend val (ExtendOp.Signed) (fits_in_64 from_ty) $I128)
   (let ((val Reg (value_regs_get val 0))
         (low Reg (extend val (ExtendOp.Signed) from_ty $I64))
         (high Reg (alu_rr_imm12 (AluOPRRI.Srai) low (imm12_const 63))))
@@ -1131,14 +1137,14 @@
 
 ;;; Unsigned rules extending to I128
 ;; Extend the bottom register to I64 and then just zero out the top half.
-(rule 3 (extend val (ExtendOp.Zero) (fits_in_64 from_ty) $I128)
+(rule 4 (extend val (ExtendOp.Zero) (fits_in_64 from_ty) $I128)
   (let ((val Reg (value_regs_get val 0))
         (low Reg (extend val (ExtendOp.Zero) from_ty $I64))
         (high Reg (load_u64_constant 0)))
     (value_regs low high)))
 
 ;; Catch all rule for ignoring extensions of the same type.
-(rule 4 (extend val _ ty ty) val)
+(rule 5 (extend val _ ty ty) val)
 
 
 
