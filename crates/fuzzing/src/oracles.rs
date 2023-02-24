@@ -785,7 +785,6 @@ pub fn set_fuel<T>(store: &mut Store<T>, fuel: u64) {
 /// arbitrary types and values.
 pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbitrary::Result<()> {
     use crate::generators::component_types;
-    use anyhow::Result;
     use component_fuzz_util::{TestCase, EXPORT_FUNCTION, IMPORT_FUNCTION};
     use component_test_util::FuncExt;
     use wasmtime::component::{Component, Linker, Val};
