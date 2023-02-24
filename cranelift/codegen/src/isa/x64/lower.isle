@@ -2923,7 +2923,14 @@
 ;; Rules for `br_table` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower_branch (br_table idx @ (value_type ty) _) (jump_table_targets default_target jt_targets))
-      (emit_side_effect (jmp_table_seq ty idx default_target jt_targets)))
+      (let ((size OperandSize (raw_operand_size_of_type ty))
+            (jt_size u32 (jump_table_size jt_targets))
+            (size_reg Reg (imm ty (u32_as_u64 jt_size)))
+            (idx_reg Gpr (extend_to_gpr idx $I64 (ExtendKind.Zero)))
+            (clamped_idx Reg (with_flags_reg
+              (x64_cmp size size_reg idx_reg)
+              (cmove ty (CC.B) idx_reg size_reg))))
+      (emit_side_effect (jmp_table_seq ty clamped_idx default_target jt_targets))))
 
 ;; Rules for `select_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -314,8 +314,11 @@ block2:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cmpl    $2, %edi
-;   br_table %rdi, %r8, %r9
+;   movl    $2, %r9d
+;   movl    %edi, %r10d
+;   cmpl    %r9d, %r10d
+;   cmovbl  %r10d, %r9d, %r9d
+;   br_table %r9, %rax, %rcx
 ; block1:
 ;   jmp     label4
 ; block2:
@@ -336,25 +339,28 @@ block2:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   cmpl $2, %edi
-;   jae 0x40
-;   movl %edi, %r9d
-;   movl $0, %r8d
-;   cmovaeq %r8, %r9
-;   leaq 0xb(%rip), %r8
-;   movslq (%r8, %r9, 4), %r9
-;   addq %r9, %r8
-;   jmpq *%r8
-;   adcb $0, %al
+;   movl $2, %r9d
+;   movl %edi, %r10d
+;   cmpl %r9d, %r10d
+;   cmovbl %r10d, %r9d
+;   leaq 0xa(%rip), %rax
+;   movslq (%rax, %r9, 4), %rcx
+;   addq %rcx, %rax
+;   jmpq *%rax
+;   sbbb %al, (%rax)
 ;   addb %al, (%rax)
-; block2: ; offset 0x34
-;   jmp 0x40
-; block3: ; offset 0x39
+;   adcl %eax, (%rax)
+;   addb %al, (%rax)
+;   sbbb %al, (%rax)
+;   addb %al, (%rax)
+; block2: ; offset 0x31
+;   jmp 0x3d
+; block3: ; offset 0x36
 ;   xorl %eax, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-; block4: ; offset 0x40
+; block4: ; offset 0x3d
 ;   movl $1, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -756,27 +762,30 @@ block5(v5: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cmpl    $4, %edi
-;   br_table %rdi, %rsi, %rax
+;   movl    $4, %eax
+;   movl    %edi, %ecx
+;   cmpl    %eax, %ecx
+;   cmovbl  %ecx, %eax, %eax
+;   br_table %rax, %r9, %r10
 ; block1:
 ;   jmp     label4
 ; block2:
 ;   jmp     label4
 ; block3:
-;   movl    $3, %r9d
+;   movl    $3, %esi
 ;   jmp     label7
 ; block4:
-;   movl    $2, %r9d
+;   movl    $2, %esi
 ;   jmp     label7
 ; block5:
-;   movl    $1, %r9d
+;   movl    $1, %esi
 ;   jmp     label7
 ; block6:
-;   movl    $4, %r9d
+;   movl    $4, %esi
 ;   jmp     label7
 ; block7:
 ;   movq    %rdi, %rax
-;   addl    %eax, %r9d, %eax
+;   addl    %eax, %esi, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -786,37 +795,38 @@ block5(v5: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   cmpl $4, %edi
-;   jae 0x5f
-;   movl %edi, %eax
-;   movl $0, %esi
-;   cmovaeq %rsi, %rax
-;   leaq 0xa(%rip), %rsi
-;   movslq (%rsi, %rax, 4), %rax
-;   addq %rax, %rsi
-;   jmpq *%rsi
-;   subl (%rax), %eax
+;   movl $4, %eax
+;   movl %edi, %ecx
+;   cmpl %eax, %ecx
+;   cmovbl %ecx, %eax
+;   leaq 0xb(%rip), %r9
+;   movslq (%r9, %rax, 4), %r10
+;   addq %r10, %r9
+;   jmpq *%r9
+;   subl $0x23000000, %eax
 ;   addb %al, (%rax)
-;   andb %al, (%rax)
+;   addb %ah, (%rbx)
 ;   addb %al, (%rax)
-;   andb %al, (%rax)
+;   addb %bl, (%rcx)
 ;   addb %al, (%rax)
-; block2: ; offset 0x39
-;   jmp 0x49
-; block3: ; offset 0x3e
-;   movl $3, %r9d
-;   jmp 0x65
-; block4: ; offset 0x49
-;   movl $2, %r9d
-;   jmp 0x65
-; block5: ; offset 0x54
-;   movl $1, %r9d
-;   jmp 0x65
-; block6: ; offset 0x5f
-;   movl $4, %r9d
-; block7: ; offset 0x65
+;   addb %dh, (%rdi)
+;   addb %al, (%rax)
+; block2: ; offset 0x36
+;   jmp 0x45
+; block3: ; offset 0x3b
+;   movl $3, %esi
+;   jmp 0x5e
+; block4: ; offset 0x45
+;   movl $2, %esi
+;   jmp 0x5e
+; block5: ; offset 0x4f
+;   movl $1, %esi
+;   jmp 0x5e
+; block6: ; offset 0x59
+;   movl $4, %esi
+; block7: ; offset 0x5e
 ;   movq %rdi, %rax
-;   addl %r9d, %eax
+;   addl %esi, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -837,25 +847,28 @@ block1(v5: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movl    $1, %edx
-;   movl    $2, %r8d
-;   movl    $3, %r9d
+;   movl    $1, %r10d
+;   movl    $2, %r11d
+;   movl    $3, %esi
 ;   movl    $4, %eax
-;   cmpl    $4, %edi
-;   br_table %rdi, %r11, %r10
+;   movl    $4, %r8d
+;   movl    %edi, %r9d
+;   cmpl    %r8d, %r9d
+;   cmovbl  %r9d, %r8d, %r8d
+;   br_table %r8, %rdi, %rcx
 ; block1:
 ;   jmp     label6
 ; block2:
-;   movq    %rdx, %rax
+;   movq    %r10, %rax
 ;   jmp     label6
 ; block3:
-;   movq    %r8, %rax
+;   movq    %r11, %rax
 ;   jmp     label6
 ; block4:
-;   movq    %r8, %rax
+;   movq    %r11, %rax
 ;   jmp     label6
 ; block5:
-;   movq    %r9, %rax
+;   movq    %rsi, %rax
 ;   jmp     label6
 ; block6:
 ;   movq    %rbp, %rsp
@@ -867,37 +880,42 @@ block1(v5: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movl $1, %edx
-;   movl $2, %r8d
-;   movl $3, %r9d
+;   movl $1, %r10d
+;   movl $2, %r11d
+;   movl $3, %esi
 ;   movl $4, %eax
-;   cmpl $4, %edi
-;   jae 0x72
-;   movl %edi, %r10d
-;   movl $0, %r11d
-;   cmovaeq %r11, %r10
-;   leaq 0xb(%rip), %r11
-;   movslq (%r11, %r10, 4), %r10
-;   addq %r10, %r11
-;   jmpq *%r11
-;   adcl $0x1d000000, %eax
+;   movl $4, %r8d
+;   movl %edi, %r9d
+;   cmpl %r8d, %r9d
+;   cmovbl %r9d, %r8d
+;   leaq 0xa(%rip), %rdi
+;   movslq (%rdi, %r8, 4), %rcx
+;   addq %rcx, %rdi
+;   jmpq *%rdi
+;   sbbl %eax, (%rax)
 ;   addb %al, (%rax)
-;   addb %ah, 0x2d000000(%rip)
+;   andl %eax, (%rax)
 ;   addb %al, (%rax)
-; block2: ; offset 0x52
-;   jmp 0x72
-; block3: ; offset 0x57
-;   movq %rdx, %rax
-;   jmp 0x72
-; block4: ; offset 0x5f
-;   movq %r8, %rax
-;   jmp 0x72
-; block5: ; offset 0x67
-;   movq %r8, %rax
-;   jmp 0x72
-; block6: ; offset 0x6f
-;   movq %r9, %rax
-; block7: ; offset 0x72
+;   subl %eax, (%rax)
+;   addb %al, (%rax)
+;   xorl %eax, (%rax)
+;   addb %al, (%rax)
+;   xorb $0, %al
+;   addb %al, (%rax)
+; block2: ; offset 0x4f
+;   jmp 0x6f
+; block3: ; offset 0x54
+;   movq %r10, %rax
+;   jmp 0x6f
+; block4: ; offset 0x5c
+;   movq %r11, %rax
+;   jmp 0x6f
+; block5: ; offset 0x64
+;   movq %r11, %rax
+;   jmp 0x6f
+; block6: ; offset 0x6c
+;   movq %rsi, %rax
+; block7: ; offset 0x6f
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

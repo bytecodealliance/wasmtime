@@ -2216,7 +2216,10 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         } => {
             collector.reg_use(*idx);
             collector.reg_early_def(*tmp1);
-            collector.reg_early_def(*tmp2);
+            // In the sequence emitted for this pseudoinstruction in emit.rs,
+            // tmp2 is only written after idx is read, so it doesn't need to be
+            // an early def.
+            collector.reg_def(*tmp2);
         }
 
         Inst::JmpUnknown { target } => {
