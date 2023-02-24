@@ -429,7 +429,7 @@ pub use crate::values::*;
 /// This type can be used to interact with `wasmtimes`'s extensive use
 /// of `anyhow::Error` while still not directly depending on `anyhow`.
 /// This type alias is identical to `anyhow::Result`.
-pub type Result<T> = std::result::Result<T, anyhow::Error>;
+pub use anyhow::{Error, Result};
 
 #[cfg(feature = "component-model")]
 pub mod component;
