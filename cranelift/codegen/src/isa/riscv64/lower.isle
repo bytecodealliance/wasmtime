@@ -612,13 +612,17 @@
   (gen_stack_addr ss offset))
 
 ;;;;;  Rules for `is_null`;;;;;;;;;
+
+;; Null references are represented by the constant value `0`.
 (rule (lower (is_null v))
   (seqz v))
 
 ;;;;;  Rules for `is_invalid`;;;;;;;;;
-;; TODO: Is `is_invalid` the same as `is_null`?
+
+;; Invalid references are represented by the constant value `-1`.
 (rule (lower (is_invalid v))
-  (seqz v))
+  (let ((v Reg (alu_rr_imm12 (AluOPRRI.Addi) v (imm12_const 1))))
+    (seqz v)))
 
 ;;;;;  Rules for `select`;;;;;;;;;
 (rule

@@ -452,7 +452,7 @@ fn construct_dest<F: std::ops::FnMut(Type) -> WritableReg>(
     mut alloc: F,
     ty: Type,
 ) -> WritableValueRegs {
-    if ty.is_int() {
+    if ty.is_int() || ty.is_ref() {
         if ty.bits() == 128 {
             WritableValueRegs::two(alloc(I64), alloc(I64))
         } else {
