@@ -1222,7 +1222,24 @@ where
                 Address::try_from(addr).and_then(|addr| state.checked_store(addr, replace));
             assign_or_memtrap(stored.map(|_| prev_val_to_assign))
         }
-        Opcode::AtomicCas => unimplemented!("AtomicCas"),
+        Opcode::AtomicCas => {
+            let addr = arg(0)?.into_int()? as u64;
+            let loaded = Address::try_from(addr).and_then(|addr| state.checked_load(addr, ctrl_ty));
+            let loaded_val = match loaded {
+                Ok(v) => v,
+                Err(e) => return Ok(ControlFlow::Trap(CraneliftTrap::User(memerror_to_trap(e)))),
+            };
+            let expected_val = arg(1)?;
+            let val_to_assign = if Value::eq(&loaded_val, &expected_val)? {
+                let val_to_store = arg(2)?;
+                Address::try_from(addr)
+                    .and_then(|addr| state.checked_store(addr, val_to_store))
+                    .map(|_| loaded_val)
+            } else {
+                Ok(loaded_val)
+            };
+            assign_or_memtrap(val_to_assign)
+        }
         Opcode::AtomicLoad => {
             let load_ty = inst_context.controlling_type().unwrap();
             let addr = arg(0)?.into_int()? as u64;
