@@ -216,26 +216,34 @@
 ;; `n+k` bits. In the special case where `x` is the result of either
 ;; `sextend` or `uextend` from `n` bits to `n+k` bits, we can implement this
 ;; using `sextend`.
-(rule (simplify (sshr wide (ishl _ (uextend _ x @ (value_type narrow)) (iconst _ shift)) (iconst _ shift)))
-      (if-let shift (imm64 (u64_sub (ty_bits_u64 wide) (ty_bits_u64 narrow))))
+(rule (simplify (sshr wide
+                 (ishl wide
+                  (uextend wide x @ (value_type narrow))
+                  (iconst _ shift))
+                 (iconst _ shift)))
+      (if-let (u64_from_imm64 shift_u64) shift)
+      (if-let $true (u64_eq shift_u64 (u64_sub (ty_bits_u64 wide) (ty_bits_u64 narrow))))
       (sextend wide x))
-(rule (simplify (sshr wide (ishl _ x @ (sextend _ (value_type narrow)) (iconst _ shift)) (iconst _ shift)))
-      (if-let shift (imm64 (u64_sub (ty_bits_u64 wide) (ty_bits_u64 narrow))))
+(rule (simplify (sshr wide
+                 (ishl wide
+                  x @ (sextend wide (value_type narrow))
+                  (iconst _ shift))
+                 (iconst _ shift)))
+      (if-let (u64_from_imm64 shift_u64) shift)
+      (if-let $true (u64_eq shift_u64 (u64_sub (ty_bits_u64 wide) (ty_bits_u64 narrow))))
       x)
 
 
 ;; Masking out any of the top bits of the result of `uextend` is a no-op. (This
 ;; is like a cheap version of known-bits analysis.)
 (rule (simplify (band wide x @ (uextend _ (value_type narrow)) (iconst _ (u64_from_imm64 mask))))
-      ; This if-let is infallible, used for its let-binding effect.
-      (if-let narrow_mask (ty_mask narrow))
-      ; This if-let checks that `narrow_mask` has a subset of the bits that `mask` does.
-      (if-let narrow_mask (u64_and mask narrow_mask))
+      ; Check that `narrow_mask` has a subset of the bits that `mask` does.
+      (if-let $true (let ((narrow_mask u64 (ty_mask narrow))) (u64_eq narrow_mask (u64_and mask narrow_mask))))
       x)
 
 ;; Masking out the sign-extended bits of an `sextend` turns it into a `uextend`.
 (rule (simplify (band wide (sextend _ x @ (value_type narrow)) (iconst _ (u64_from_imm64 mask))))
-      (if-let mask (ty_mask narrow))
+      (if-let $true (u64_eq mask (ty_mask narrow)))
       (uextend wide x))
 
 
