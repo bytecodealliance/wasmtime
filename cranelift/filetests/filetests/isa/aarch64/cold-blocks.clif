@@ -4,151 +4,68 @@ target aarch64
 
 function %no_cold_annotation(i32) -> i32 {
 block0(v0: i32):
-    v1 = iconst.i32 0x1234
-    v2 = iadd v0, v1
-    brif v2, block1(v2), block2
+    brif v0, block1(v0), block2
 
-block1(v3: i32):
-    v4 = isub v2, v1
-    v5 = iadd v4, v3
-    brif v2, block2, block3(v5)
+block1(v1: i32):
+    return v1
 
 block2:
-    v6 = iadd v2, v1
-    brif v6, block2, block1(v6)
-
-block3(v7: i32):
-    return v7
+    v2 = iconst.i32 97
+    jump block1(v2)
 }
 
 ; VCode:
 ; block0:
-;   movz w13, #4660
-;   add w15, w0, w13
-;   mov w14, w15
-;   cbnz x14, label1 ; b label2
+;   mov w5, w0
+;   cbnz x5, label1 ; b label2
 ; block1:
-;   mov x6, x15
 ;   b label3
 ; block2:
-;   b label6
-; block3:
-;   movz w0, #4660
-;   sub w1, w15, w0
-;   add w0, w1, w6
-;   mov w1, w15
-;   cbnz x1, label4 ; b label5
-; block4:
-;   b label6
-; block5:
-;   ret
-; block6:
-;   movz w2, #4660
-;   add w6, w15, w2
-;   mov w3, w6
-;   cbnz x3, label7 ; b label8
-; block7:
-;   b label6
-; block8:
+;   movz w0, #97
 ;   b label3
+; block3:
+;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov w13, #0x1234
-;   add w15, w0, w13
-;   mov w14, w15
-;   cbz x14, #0x2c
-; block1: ; offset 0x10
-;   mov x6, x15
-; block2: ; offset 0x14
-;   mov w0, #0x1234
-;   sub w1, w15, w0
-;   add w0, w1, w6
-;   mov w1, w15
-;   cbnz x1, #0x2c
-; block3: ; offset 0x28
+;   mov w5, w0
+;   cbnz x5, #0xc
+; block1: ; offset 0x8
+;   mov w0, #0x61
+; block2: ; offset 0xc
 ;   ret
-; block4: ; offset 0x2c
-;   mov w2, #0x1234
-;   add w6, w15, w2
-;   mov w3, w6
-;   cbnz x3, #0x2c
-; block5: ; offset 0x3c
-;   b #0x14
 
-function %with_cold_annotation(i32) -> i32 {
+function %cold_annotation(i32) -> i32 {
 block0(v0: i32):
-    v1 = iconst.i32 0x1234
-    v2 = iadd v0, v1
-    brif v2, block1(v2), block2
+    brif v0, block1(v0), block2
 
-block1(v3: i32):
-    v4 = isub v2, v1
-    v5 = iadd v4, v3
-    brif v2, block2, block3(v5)
+block1(v1: i32):
+    return v1
 
 block2 cold:
-    v6 = iadd v2, v1
-    brif v6, block2, block1(v6)
-
-block3(v7: i32):
-    return v7
+    v2 = iconst.i32 97
+    jump block1(v2)
 }
 
 ; VCode:
 ; block0:
-;   movz w13, #4660
-;   add w15, w0, w13
-;   mov w14, w15
-;   cbnz x14, label1 ; b label2
+;   mov w5, w0
+;   cbnz x5, label1 ; b label2
 ; block1:
-;   mov x6, x15
 ;   b label3
 ; block3:
-;   movz w0, #4660
-;   sub w1, w15, w0
-;   add w0, w1, w6
-;   mov w1, w15
-;   cbnz x1, label4 ; b label5
-; block5:
 ;   ret
-; block8:
-;   b label3
 ; block2:
-;   b label6
-; block4:
-;   b label6
-; block6:
-;   movz w2, #4660
-;   add w6, w15, w2
-;   mov w3, w6
-;   cbnz x3, label7 ; b label8
-; block7:
-;   b label6
+;   movz w0, #97
+;   b label3
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov w13, #0x1234
-;   add w15, w0, w13
-;   mov w14, w15
-;   cbz x14, #0x30
-; block1: ; offset 0x10
-;   mov x6, x15
-; block2: ; offset 0x14
-;   mov w0, #0x1234
-;   sub w1, w15, w0
-;   add w0, w1, w6
-;   mov w1, w15
-;   cbnz x1, #0x30
-; block3: ; offset 0x28
+;   mov w5, w0
+;   cbz x5, #0xc
+; block1: ; offset 0x8
 ;   ret
-; block4: ; offset 0x2c
-;   b #0x14
-; block5: ; offset 0x30
-;   mov w2, #0x1234
-;   add w6, w15, w2
-;   mov w3, w6
-;   cbz x3, #0x14
-; block6: ; offset 0x40
-;   b #0x30
+; block2: ; offset 0xc
+;   mov w0, #0x61
+;   b #8
 
