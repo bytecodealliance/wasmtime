@@ -4489,6 +4489,8 @@
 (convert SyntheticAmode XmmMem synthetic_amode_to_xmm_mem)
 (convert Amode XmmMemAligned amode_to_xmm_mem_aligned)
 (convert SyntheticAmode XmmMemAligned synthetic_amode_to_xmm_mem_aligned)
+(convert VCodeConstant SyntheticAmode const_to_synthetic_amode)
+(convert VCodeConstant XmmMem const_to_xmm_mem)
 
 (convert IntCC CC intcc_to_cc)
 (convert AtomicRmwOp MachAtomicRmwOp atomic_rmw_op_to_mach_atomic_rmw_op)
@@ -4537,6 +4539,8 @@
       (synthetic_amode_to_reg_mem amode))
 (decl const_to_synthetic_amode (VCodeConstant) SyntheticAmode)
 (extern constructor const_to_synthetic_amode const_to_synthetic_amode)
+(decl const_to_xmm_mem (VCodeConstant) XmmMem)
+(rule (const_to_xmm_mem c) (const_to_synthetic_amode c))
 
 (decl xmm_to_xmm_mem_aligned (Xmm) XmmMemAligned)
 (rule (xmm_to_xmm_mem_aligned reg) (xmm_mem_to_xmm_mem_aligned reg))
