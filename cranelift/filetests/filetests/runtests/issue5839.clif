@@ -1,7 +1,10 @@
 test interpret
 test run
 set opt_level=speed
-target riscv64gc
+target aarch64
+target s390x
+target x86_64
+target riscv64
 
 function %a(i8, i8) -> i32 {
 block0(v0: i8, v1: i8):
