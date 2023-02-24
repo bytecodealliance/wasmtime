@@ -762,6 +762,33 @@ is similar to what it once was back then. Skimming over the crate there is
 nothing suspicious and it's everything you'd expect a Rust URL parser to be.
 """
 
+[[audits.wasm-coredump-builder]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.1.10"
+notes = """
+This is a small crate which doesn't deviate outside of its intended purpose and
+additionally contains no `unsafe` code.
+"""
+
+[[audits.wasm-coredump-encoder]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.1.10"
+notes = """
+This small crate contains no `unsafe` code and does no more than what it says on
+the tin.
+"""
+
+[[audits.wasm-coredump-types]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.1.10"
+notes = """
+This small crate contains no `unsafe` code and only contains type definitions
+used for wasm core dumps and trivially stays within its bounds.
+"""
+
 [[audits.wasm-encoder]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
