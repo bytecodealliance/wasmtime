@@ -145,12 +145,6 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         if table.is::<FileEntry>(fd) {
             let _ = table.delete::<FileEntry>(fd);
         } else if table.is::<DirEntry>(fd) {
-            // We cannot close preopened directories
-            let dir_entry: Arc<DirEntry> = table.get(fd).unwrap();
-            if dir_entry.preopen_path().is_some() {
-                return Err(Error::not_supported().context("cannot close propened directory"));
-            }
-            drop(dir_entry);
             let _ = table.delete::<DirEntry>(fd);
         } else {
             return Err(Error::badf().context("key does not refer to file or directory"));
@@ -532,9 +526,6 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let to = u32::from(to);
         if !table.contains_key(from) {
             return Err(Error::badf());
-        }
-        if table.is_preopen(from) || table.is_preopen(to) {
-            return Err(Error::not_supported().context("cannot renumber a preopen"));
         }
         table.renumber(from, to)
     }
