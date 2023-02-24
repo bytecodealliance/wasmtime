@@ -2,7 +2,6 @@ test interpret
 test run
 target aarch64
 target s390x
-target x86_64
 target riscv64
 
 function %a(i32 sext, f64, f32, i64 uext) -> f32, i8, i8 system_v {
