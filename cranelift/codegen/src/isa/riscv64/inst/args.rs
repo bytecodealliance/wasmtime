@@ -1639,23 +1639,6 @@ impl IntSelectOP {
     }
 }
 
-impl ReferenceCheckOP {
-    pub(crate) fn op_name(self) -> &'static str {
-        match self {
-            ReferenceCheckOP::IsNull => "is_null",
-            ReferenceCheckOP::IsInvalid => "is_invalid",
-        }
-    }
-    #[inline]
-    pub(crate) fn from_ir_op(op: crate::ir::Opcode) -> Self {
-        match op {
-            crate::ir::Opcode::IsInvalid => Self::IsInvalid,
-            crate::ir::Opcode::IsNull => Self::IsNull,
-            _ => unreachable!(),
-        }
-    }
-}
-
 #[derive(Clone, Copy)]
 pub enum CsrAddress {
     Fcsr = 0x3,

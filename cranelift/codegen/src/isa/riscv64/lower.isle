@@ -612,14 +612,13 @@
   (gen_stack_addr ss offset))
 
 ;;;;;  Rules for `is_null`;;;;;;;;;
-(rule
-  (lower (is_null v))
-  (gen_reference_check (ReferenceCheckOP.IsNull) v))
+(rule (lower (is_null v))
+  (seqz v))
 
 ;;;;;  Rules for `is_invalid`;;;;;;;;;
-(rule
-  (lower (is_invalid v))
-  (gen_reference_check (ReferenceCheckOP.IsInvalid) v))
+;; TODO: Is `is_invalid` the same as `is_null`?
+(rule (lower (is_invalid v))
+  (seqz v))
 
 ;;;;;  Rules for `select`;;;;;;;;;
 (rule
