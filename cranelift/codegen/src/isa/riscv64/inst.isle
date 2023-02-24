@@ -1924,9 +1924,9 @@
 (decl normalize_cmp_value (Type ValueRegs) ValueRegs)
 
 (rule (normalize_cmp_value $I8 r)
-      (value_reg (alu_rr_imm12 (AluOPRRI.Andi) r (imm12_const 255))))
+      (extend r (ExtendOp.Signed) $I8 $I64))
 (rule (normalize_cmp_value $I16 r)
-      (value_reg (alu_rrr (AluOPRRR.And) r (imm $I16 65535))))
+      (extend r (ExtendOp.Signed) $I16 $I64))
 (rule (normalize_cmp_value $I32 r)
       (value_reg (alu_rr_imm12 (AluOPRRI.Addiw) r (imm12_const 0))))
 
