@@ -6,7 +6,7 @@ use crate::address::{Address, AddressFunctionEntry, AddressRegion, AddressSize};
 use crate::environment::{FuncIndex, FunctionStore};
 use crate::frame::Frame;
 use crate::instruction::DfgInstructionContext;
-use crate::state::{InterperterFunctionRef, MemoryError, State};
+use crate::state::{InterpreterFunctionRef, MemoryError, State};
 use crate::step::{step, ControlFlow, StepError};
 use crate::value::{Value, ValueError};
 use cranelift_codegen::data_value::DataValue;
@@ -384,7 +384,7 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
         Address::from_parts(size, AddressRegion::Function, entry as u64, index as u64)
     }
 
-    fn get_function_from_address(&self, address: Address) -> Option<InterperterFunctionRef<'a>> {
+    fn get_function_from_address(&self, address: Address) -> Option<InterpreterFunctionRef<'a>> {
         let index = address.offset as u32;
         if address.region != AddressRegion::Function {
             return None;
@@ -394,12 +394,12 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
             AddressFunctionEntry::UserFunction => self
                 .functions
                 .get_by_index(FuncIndex::from_u32(index))
-                .map(InterperterFunctionRef::from),
+                .map(InterpreterFunctionRef::from),
 
             AddressFunctionEntry::LibCall => LibCall::all_libcalls()
                 .get(index as usize)
                 .copied()
-                .map(InterperterFunctionRef::from),
+                .map(InterpreterFunctionRef::from),
         }
     }
 

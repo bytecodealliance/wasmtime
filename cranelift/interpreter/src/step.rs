@@ -2,7 +2,7 @@
 //! [InstructionContext]; the interpretation is generic over [Value]s.
 use crate::address::{Address, AddressSize};
 use crate::instruction::InstructionContext;
-use crate::state::{InterperterFunctionRef, MemoryError, State};
+use crate::state::{InterpreterFunctionRef, MemoryError, State};
 use crate::value::{Value, ValueConversionKind, ValueError, ValueResult};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
@@ -277,7 +277,7 @@ where
     };
 
     // Calls a function reference with the given arguments.
-    let call_func = |func_ref: InterperterFunctionRef<'a>,
+    let call_func = |func_ref: InterpreterFunctionRef<'a>,
                      args: SmallVec<[V; 1]>,
                      make_ctrl_flow: fn(&'a Function, SmallVec<[V; 1]>) -> ControlFlow<'a, V>|
      -> Result<ControlFlow<'a, V>, StepError> {
@@ -293,8 +293,8 @@ where
         }
 
         Ok(match func_ref {
-            InterperterFunctionRef::Function(func) => make_ctrl_flow(func, args),
-            InterperterFunctionRef::LibCall(libcall) => {
+            InterpreterFunctionRef::Function(func) => make_ctrl_flow(func, args),
+            InterpreterFunctionRef::LibCall(libcall) => {
                 debug_assert!(
                     !matches!(
                         inst.opcode(),
@@ -394,9 +394,9 @@ where
                     let function = state
                         .get_function(func_ref)
                         .ok_or(StepError::UnknownFunction(func_ref))?;
-                    InterperterFunctionRef::Function(function)
+                    InterpreterFunctionRef::Function(function)
                 }
-                ExternalName::LibCall(libcall) => InterperterFunctionRef::LibCall(libcall),
+                ExternalName::LibCall(libcall) => InterpreterFunctionRef::LibCall(libcall),
                 ExternalName::KnownSymbol(_) => unimplemented!(),
             };
 

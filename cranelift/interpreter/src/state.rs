@@ -75,7 +75,7 @@ pub trait State<'a, V> {
     ) -> Result<Address, MemoryError>;
 
     /// Retrieve a reference to a [Function] given its address.
-    fn get_function_from_address(&self, address: Address) -> Option<InterperterFunctionRef<'a>>;
+    fn get_function_from_address(&self, address: Address) -> Option<InterpreterFunctionRef<'a>>;
 
     /// Given a global value, compute the final value for that global value, applying all operations
     /// in intermediate global values.
@@ -90,30 +90,30 @@ pub trait State<'a, V> {
     fn set_pinned_reg(&mut self, v: V);
 }
 
-pub enum InterperterFunctionRef<'a> {
+pub enum InterpreterFunctionRef<'a> {
     Function(&'a Function),
     LibCall(LibCall),
 }
 
-impl<'a> InterperterFunctionRef<'a> {
+impl<'a> InterpreterFunctionRef<'a> {
     pub fn signature(&self) -> Signature {
         match self {
-            InterperterFunctionRef::Function(f) => f.stencil.signature.clone(),
+            InterpreterFunctionRef::Function(f) => f.stencil.signature.clone(),
             // CallConv here is sort of irrelevant, since we don't use it for anything
-            InterperterFunctionRef::LibCall(lc) => lc.signature(CallConv::SystemV),
+            InterpreterFunctionRef::LibCall(lc) => lc.signature(CallConv::SystemV),
         }
     }
 }
 
-impl<'a> From<&'a Function> for InterperterFunctionRef<'a> {
+impl<'a> From<&'a Function> for InterpreterFunctionRef<'a> {
     fn from(f: &'a Function) -> Self {
-        InterperterFunctionRef::Function(f)
+        InterpreterFunctionRef::Function(f)
     }
 }
 
-impl From<LibCall> for InterperterFunctionRef<'_> {
+impl From<LibCall> for InterpreterFunctionRef<'_> {
     fn from(lc: LibCall) -> Self {
-        InterperterFunctionRef::LibCall(lc)
+        InterpreterFunctionRef::LibCall(lc)
     }
 }
 
@@ -198,7 +198,7 @@ where
         unimplemented!()
     }
 
-    fn get_function_from_address(&self, _address: Address) -> Option<InterperterFunctionRef<'a>> {
+    fn get_function_from_address(&self, _address: Address) -> Option<InterpreterFunctionRef<'a>> {
         unimplemented!()
     }
 
