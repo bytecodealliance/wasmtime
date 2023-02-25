@@ -621,8 +621,7 @@
 
 ;; Invalid references are represented by the constant value `-1`.
 (rule (lower (is_invalid v))
-  (let ((v Reg (alu_rr_imm12 (AluOPRRI.Addi) v (imm12_const 1))))
-    (seqz v)))
+  (seqz (alu_rr_imm12 (AluOPRRI.Addi) v (imm12_const 1))))
 
 ;;;;;  Rules for `select`;;;;;;;;;
 (rule
