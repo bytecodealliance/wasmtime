@@ -64,35 +64,12 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   slli a1,a1,1
-;   add a0,a0,a1
+;   sh1add a0,a0,a1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a1, a1, 1
-;   add a0, a0, a1
-;   ret
-
-;; Same as %sh1add but with the operands reversed
-function %sh1add_r(i64, i64) -> i64 {
-block0(v0: i64, v1: i64):
-    v2 = iconst.i64 1
-    v3 = ishl v1, v2
-    v4 = iadd.i64 v3, v0
-    return v4
-}
-
-; VCode:
-; block0:
-;   slli a1,a1,1
-;   add a0,a1,a0
-;   ret
-; 
-; Disassembled:
-; block0: ; offset 0x0
-;   slli a1, a1, 1
-;   add a0, a1, a0
+;   .byte 0x33, 0x25, 0xb5, 0x20
 ;   ret
 
 function %sh1add_uw(i64, i32) -> i64 {
@@ -106,16 +83,12 @@ block0(v0: i64, v1: i32):
 
 ; VCode:
 ; block0:
-;   zext.h a2,a1
-;   slli a2,a2,1
-;   add a0,a0,a2
+;   sh1add.uw a0,a0,a1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0x3b, 0x86, 0x05, 0x08
-;   slli a2, a2, 1
-;   add a0, a0, a2
+;   .byte 0x3b, 0x25, 0xb5, 0x20
 ;   ret
 
 function %sh2add(i64, i64) -> i64 {
@@ -128,18 +101,13 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   slli a1,a1,2
-;   add a0,a0,a1
+;   sh2add a0,a0,a1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a1, a1, 2
-;   add a0, a0, a1
+;   .byte 0x33, 0x45, 0xb5, 0x20
 ;   ret
-
-
-
 
 function %sh2add_uw(i64, i32) -> i64 {
 block0(v0: i64, v1: i32):
@@ -152,20 +120,13 @@ block0(v0: i64, v1: i32):
 
 ; VCode:
 ; block0:
-;   zext.h a2,a1
-;   slli a2,a2,2
-;   add a0,a0,a2
+;   sh2add.uw a0,a0,a1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0x3b, 0x86, 0x05, 0x08
-;   slli a2, a2, 2
-;   add a0, a0, a2
+;   .byte 0x3b, 0x45, 0xb5, 0x20
 ;   ret
-
-
-
 
 function %sh3add(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -177,14 +138,12 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   slli a1,a1,3
-;   add a0,a0,a1
+;   sh3add a0,a0,a1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a1, a1, 3
-;   add a0, a0, a1
+;   .byte 0x33, 0x65, 0xb5, 0x20
 ;   ret
 
 function %sh3add_uw(i64, i32) -> i64 {
@@ -198,15 +157,49 @@ block0(v0: i64, v1: i32):
 
 ; VCode:
 ; block0:
-;   zext.h a2,a1
-;   slli a2,a2,3
-;   add a0,a0,a2
+;   sh3add.uw a0,a0,a1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0x3b, 0x86, 0x05, 0x08
-;   slli a2, a2, 3
-;   add a0, a0, a2
+;   .byte 0x3b, 0x65, 0xb5, 0x20
 ;   ret
 
+;; Same as %sh1add but with the operands reversed
+function %sh1add_r(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 1
+    v3 = ishl v1, v2
+    v4 = iadd.i64 v3, v0
+    return v4
+}
+
+; VCode:
+; block0:
+;   sh1add a0,a0,a1
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x33, 0x25, 0xb5, 0x20
+;   ret
+
+;; Same as %sh1add but with an uextended const
+function %sh1add_uextend(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i32 1
+    v3 = uextend.i64 v2
+    v4 = ishl v1, v3
+    v5 = iadd.i64 v0, v4
+    return v5
+}
+
+; VCode:
+; block0:
+;   sh1add a0,a0,a1
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x33, 0x25, 0xb5, 0x20
+;   ret
