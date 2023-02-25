@@ -2,17 +2,17 @@
 //!
 //! This module partially contains the logic for interpreting Cranelift IR.
 
-use crate::address::{Address, AddressRegion, AddressSize};
+use crate::address::{Address, AddressFunctionEntry, AddressRegion, AddressSize};
 use crate::environment::{FuncIndex, FunctionStore};
 use crate::frame::Frame;
 use crate::instruction::DfgInstructionContext;
-use crate::state::{MemoryError, State};
+use crate::state::{InterpreterFunctionRef, MemoryError, State};
 use crate::step::{step, ControlFlow, StepError};
 use crate::value::{Value, ValueError};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{
-    ArgumentPurpose, Block, FuncRef, Function, GlobalValue, GlobalValueData, LibCall, StackSlot,
-    TrapCode, Type, Value as ValueRef,
+    ArgumentPurpose, Block, ExternalName, FuncRef, Function, GlobalValue, GlobalValueData, LibCall,
+    StackSlot, TrapCode, Type, Value as ValueRef,
 };
 use log::trace;
 use smallvec::SmallVec;
@@ -344,6 +344,63 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
         };
 
         Ok(v.write_to_slice(dst))
+    }
+
+    fn function_address(
+        &self,
+        size: AddressSize,
+        name: &ExternalName,
+    ) -> Result<Address, MemoryError> {
+        let curr_func = self.get_current_function();
+        let (entry, index) = match name {
+            ExternalName::User(username) => {
+                let ext_name = &curr_func.params.user_named_funcs()[*username];
+
+                // TODO: This is not optimal since we are looking up by string name
+                let index = self.functions.index_of(&ext_name.to_string()).unwrap();
+
+                (AddressFunctionEntry::UserFunction, index.as_u32())
+            }
+
+            ExternalName::TestCase(testname) => {
+                // TODO: This is not optimal since we are looking up by string name
+                let index = self.functions.index_of(&testname.to_string()).unwrap();
+
+                (AddressFunctionEntry::UserFunction, index.as_u32())
+            }
+            ExternalName::LibCall(libcall) => {
+                // We don't properly have a "libcall" store, but we can use `LibCall::all()`
+                // and index into that.
+                let index = LibCall::all_libcalls()
+                    .iter()
+                    .position(|lc| lc == libcall)
+                    .unwrap();
+
+                (AddressFunctionEntry::LibCall, index as u32)
+            }
+            _ => unimplemented!("function_address: {:?}", name),
+        };
+
+        Address::from_parts(size, AddressRegion::Function, entry as u64, index as u64)
+    }
+
+    fn get_function_from_address(&self, address: Address) -> Option<InterpreterFunctionRef<'a>> {
+        let index = address.offset as u32;
+        if address.region != AddressRegion::Function {
+            return None;
+        }
+
+        match AddressFunctionEntry::from(address.entry) {
+            AddressFunctionEntry::UserFunction => self
+                .functions
+                .get_by_index(FuncIndex::from_u32(index))
+                .map(InterpreterFunctionRef::from),
+
+            AddressFunctionEntry::LibCall => LibCall::all_libcalls()
+                .get(index as usize)
+                .copied()
+                .map(InterpreterFunctionRef::from),
+        }
     }
 
     /// Non-Recursively resolves a global value until its address is found
