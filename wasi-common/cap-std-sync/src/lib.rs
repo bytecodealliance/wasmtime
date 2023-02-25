@@ -45,12 +45,12 @@ pub use cap_std::net::TcpListener;
 pub use clocks::clocks_ctx;
 pub use sched::sched_ctx;
 
-use crate::net::Listener;
+use crate::net::TcpSocket;
 use cap_rand::{Rng, RngCore, SeedableRng};
 use wasi_common::{
-    listener::WasiListener,
     stream::{InputStream, OutputStream},
     table::Table,
+    tcp_socket::WasiTcpSocket,
     WasiCtx,
 };
 
@@ -94,9 +94,9 @@ impl WasiCtxBuilder {
         self.0.insert_dir(fd, dir);
         self
     }
-    pub fn preopened_listener(mut self, fd: u32, listener: impl Into<Listener>) -> Self {
-        let listener: Listener = listener.into();
-        let listener: Box<dyn WasiListener> = listener.into();
+    pub fn preopened_listener(mut self, fd: u32, listener: impl Into<TcpSocket>) -> Self {
+        let listener: TcpSocket = listener.into();
+        let listener: Box<dyn WasiTcpSocket> = Box::new(TcpSocket::from(listener));
 
         self.0.insert_listener(fd, listener);
         self

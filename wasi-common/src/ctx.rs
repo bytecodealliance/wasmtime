@@ -1,10 +1,10 @@
 use crate::clocks::WasiClocks;
 use crate::dir::WasiDir;
 use crate::file::WasiFile;
-use crate::listener::WasiListener;
 use crate::sched::WasiSched;
 use crate::stream::{InputStream, OutputStream};
 use crate::table::Table;
+use crate::tcp_socket::WasiTcpSocket;
 use crate::Error;
 use cap_rand::RngCore;
 
@@ -50,7 +50,7 @@ impl WasiCtx {
         self.table_mut().insert_at(fd, Box::new(stream));
     }
 
-    pub fn insert_listener(&mut self, fd: u32, listener: Box<dyn WasiListener>) {
+    pub fn insert_listener(&mut self, fd: u32, listener: Box<dyn WasiTcpSocket>) {
         self.table_mut().insert_at(fd, Box::new(listener));
     }
 
