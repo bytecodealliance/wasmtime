@@ -423,6 +423,12 @@
 (rule 1 (lower (has_type $I64 (ishl x y)))
   (alu_rrr (AluOPRRR.Sll) x (value_regs_get y 0)))
 
+;; With `Zba` we have a shift that zero extends the LHS argument.
+(rule 3 (lower (has_type (fits_in_64 ty) (ishl (uextend x) (maybe_uextend (imm12_from_value y)))))
+  (if-let $true (has_zba))
+  (alu_rr_imm12 (AluOPRRI.SlliUw) x y))
+
+;; I128 cases
 (rule 0 (lower (has_type $I128 (ishl x y)))
   (lower_i128_ishl x y))
 

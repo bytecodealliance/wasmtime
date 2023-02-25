@@ -203,3 +203,24 @@ block0(v0: i64, v1: i64):
 ; block0: ; offset 0x0
 ;   .byte 0x33, 0x25, 0xb5, 0x20
 ;   ret
+
+
+
+function %slli_uw(i8) -> i64 {
+block0(v0: i8):
+    v1 = uextend.i64 v0
+    v2 = iconst.i64 5
+    v3 = ishl v1, v2
+    return v3
+}
+
+; VCode:
+; block0:
+;   slli.uw a0,a0,5
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x1b, 0x15, 0x55, 0x08
+;   ret
+
