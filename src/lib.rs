@@ -1,8 +1,8 @@
 #![allow(unused_variables)] // TODO: remove this when more things are implemented
 
 use crate::bindings::{
-    wasi_default_clocks, wasi_exit, wasi_filesystem, wasi_io, wasi_monotonic_clock, wasi_poll,
-    wasi_random, wasi_stderr, wasi_tcp, wasi_wall_clock,
+    wasi_default_clocks, wasi_exit, wasi_filesystem, wasi_io, wasi_monotonic_clock, wasi_network,
+    wasi_poll, wasi_random, wasi_stderr, wasi_tcp, wasi_wall_clock,
 };
 use core::arch::wasm32;
 use core::cell::{Cell, RefCell, UnsafeCell};
@@ -1576,11 +1576,12 @@ impl Drop for Pollables {
     }
 }
 
-impl From<wasi_tcp::Errno> for Errno {
-    fn from(error: wasi_tcp::Errno) -> Errno {
-        use wasi_tcp::Errno::*;
-
+impl From<wasi_network::Error> for Errno {
+    fn from(error: wasi_network::Error) -> Errno {
         match error {
+            wasi_network::Error::Unknown => unreachable!(), // TODO
+            wasi_network::Error::Again => ERRNO_AGAIN,
+            /* TODO
             // Use a black box to prevent the optimizer from generating a
             // lookup table, which would require a static initializer.
             ConnectionAborted => black_box(ERRNO_CONNABORTED),
@@ -1591,6 +1592,7 @@ impl From<wasi_tcp::Errno> for Errno {
             NetworkUnreachable => ERRNO_NETUNREACH,
             Timedout => ERRNO_TIMEDOUT,
             _ => unreachable!(),
+            */
         }
     }
 }
@@ -1802,22 +1804,25 @@ pub unsafe extern "C" fn poll_oneoff(
                                         }
                                     }
                                     StreamType::Socket(connection) => {
-                                        match wasi_tcp::bytes_readable(*connection) {
-                                            Ok(result) => {
-                                                error = ERRNO_SUCCESS;
-                                                nbytes = result.0;
-                                                flags = if result.1 {
-                                                    EVENTRWFLAGS_FD_READWRITE_HANGUP
-                                                } else {
-                                                    0
-                                                };
-                                            }
-                                            Err(e) => {
-                                                error = e.into();
-                                                nbytes = 0;
-                                                flags = 0;
-                                            }
-                                        }
+                                        unreachable!() // TODO
+                                                       /*
+                                                       match wasi_tcp::bytes_readable(*connection) {
+                                                           Ok(result) => {
+                                                               error = ERRNO_SUCCESS;
+                                                               nbytes = result.0;
+                                                               flags = if result.1 {
+                                                                   EVENTRWFLAGS_FD_READWRITE_HANGUP
+                                                               } else {
+                                                                   0
+                                                               };
+                                                           }
+                                                           Err(e) => {
+                                                               error = e.into();
+                                                               nbytes = 0;
+                                                               flags = 0;
+                                                           }
+                                                       }
+                                                       */
                                     }
                                     StreamType::EmptyStdin => {
                                         error = ERRNO_SUCCESS;
@@ -1846,22 +1851,25 @@ pub unsafe extern "C" fn poll_oneoff(
                                         flags = 0;
                                     }
                                     StreamType::Socket(connection) => {
-                                        match wasi_tcp::bytes_writable(connection) {
-                                            Ok(result) => {
-                                                error = ERRNO_SUCCESS;
-                                                nbytes = result.0;
-                                                flags = if result.1 {
-                                                    EVENTRWFLAGS_FD_READWRITE_HANGUP
-                                                } else {
-                                                    0
-                                                };
-                                            }
-                                            Err(e) => {
-                                                error = e.into();
-                                                nbytes = 0;
-                                                flags = 0;
-                                            }
-                                        }
+                                        unreachable!() // TODO
+                                                       /*
+                                                       match wasi_tcp::bytes_writable(connection) {
+                                                           Ok(result) => {
+                                                               error = ERRNO_SUCCESS;
+                                                               nbytes = result.0;
+                                                               flags = if result.1 {
+                                                                   EVENTRWFLAGS_FD_READWRITE_HANGUP
+                                                               } else {
+                                                                   0
+                                                               };
+                                                           }
+                                                           Err(e) => {
+                                                               error = e.into();
+                                                               nbytes = 0;
+                                                               flags = 0;
+                                                           }
+                                                       }
+                                                       */
                                     }
                                     StreamType::EmptyStdin => {
                                         error = ERRNO_BADF;
@@ -2193,7 +2201,7 @@ enum StreamType {
     File(File),
 
     /// Streaming data with a socket connection.
-    Socket(wasi_tcp::Connection),
+    Socket(wasi_tcp::TcpSocket),
 }
 
 impl Drop for Descriptor {
@@ -2574,7 +2582,7 @@ impl State {
     }
 
     #[allow(dead_code)] // until Socket is implemented
-    fn get_socket(&self, fd: Fd) -> Result<wasi_tcp::Connection, Errno> {
+    fn get_socket(&self, fd: Fd) -> Result<wasi_tcp::TcpSocket, Errno> {
         match self.get(fd)? {
             Descriptor::Streams(Streams {
                 type_: StreamType::Socket(socket),
