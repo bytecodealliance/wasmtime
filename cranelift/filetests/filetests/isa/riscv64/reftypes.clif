@@ -23,15 +23,12 @@ block0(v0: r64):
 
 ; VCode:
 ; block0:
-;   is_null a0,a0
+;   seqz a0,a0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   beq zero, a0, 0xc
-;   mv a0, zero
-;   j 8
-;   addi a0, zero, 1
+;   seqz a0, a0
 ;   ret
 
 function %f2(r64) -> i8 {
@@ -42,15 +39,14 @@ block0(v0: r64):
 
 ; VCode:
 ; block0:
-;   is_invalid a0,a0
+;   addi t2,a0,1
+;   seqz a0,t2
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   beq zero, a0, 0xc
-;   mv a0, zero
-;   j 8
-;   addi a0, zero, 1
+;   addi t2, a0, 1
+;   seqz a0, t2
 ;   ret
 
 function %f3() -> r64 {

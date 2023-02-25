@@ -51,8 +51,7 @@ pub(crate) type VecWritableReg = Vec<Writable<Reg>>;
 use crate::isa::riscv64::lower::isle::generated_code::MInst;
 pub use crate::isa::riscv64::lower::isle::generated_code::{
     AluOPRRI, AluOPRRR, AtomicOP, CsrOP, FClassResult, FFlagsException, FenceFm, FloatRoundOP,
-    FloatSelectOP, FpuOPRR, FpuOPRRR, FpuOPRRRR, IntSelectOP, LoadOP, MInst as Inst,
-    ReferenceCheckOP, StoreOP, FRM,
+    FloatSelectOP, FpuOPRR, FpuOPRRR, FpuOPRRRR, IntSelectOP, LoadOP, MInst as Inst, StoreOP, FRM,
 };
 
 type BoxCallInfo = Box<CallInfo>;
@@ -470,10 +469,6 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             for d in dst.iter() {
                 collector.reg_early_def(d.clone());
             }
-        }
-        &Inst::ReferenceCheck { rd, x, .. } => {
-            collector.reg_use(x);
-            collector.reg_def(rd);
         }
         &Inst::AtomicCas {
             offset,
@@ -1185,12 +1180,6 @@ impl Inst {
                     imm.bits
                 )
             }
-
-            &Inst::ReferenceCheck { rd, op, x } => {
-                let x = format_reg(x, allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
-                format!("{} {},{}", op.op_name(), rd, x)
-            }
             &Inst::Jalr { rd, base, offset } => {
                 let base = format_reg(base, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
@@ -1343,6 +1332,9 @@ impl Inst {
                     }
                     (AluOPRRI::Xori, _, imm12) if imm12.as_i16() == -1 => {
                         return format!("not {},{}", rd, rs_s);
+                    }
+                    (AluOPRRI::SltiU, _, imm12) if imm12.as_i16() == 1 => {
+                        return format!("seqz {},{}", rd, rs_s);
                     }
                     (alu_op, _, _) if alu_op.option_funct12().is_some() => {
                         format!("{} {},{}", alu_op.op_name(), rd, rs_s)

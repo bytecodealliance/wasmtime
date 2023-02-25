@@ -680,57 +680,6 @@ impl MachInstEmit for Inst {
                         .for_each(|inst| inst.emit(&[], sink, emit_info, state));
                 }
             }
-
-            &Inst::ReferenceCheck { rd, op, x } => {
-                let x = allocs.next(x);
-                let rd = allocs.next_writable(rd);
-                let mut insts = SmallInstVec::new();
-                match op {
-                    ReferenceCheckOP::IsNull => {
-                        insts.push(Inst::CondBr {
-                            taken: BranchTarget::ResolvedOffset(Inst::INSTRUCTION_SIZE * 3),
-                            not_taken: BranchTarget::zero(),
-                            kind: IntegerCompare {
-                                kind: IntCC::Equal,
-                                rs1: zero_reg(),
-                                rs2: x,
-                            },
-                        });
-                        // here is false
-                        insts.push(Inst::load_imm12(rd, Imm12::FALSE));
-                        insts.push(Inst::Jal {
-                            dest: BranchTarget::ResolvedOffset(Inst::INSTRUCTION_SIZE * 2),
-                        });
-                        // here is true
-                        insts.push(Inst::load_imm12(rd, Imm12::TRUE));
-                    }
-
-                    ReferenceCheckOP::IsInvalid => {
-                        // todo:: right now just check if it is null
-                        // null is a valid reference??????
-                        insts.push(Inst::CondBr {
-                            taken: BranchTarget::ResolvedOffset(Inst::INSTRUCTION_SIZE * 3),
-                            not_taken: BranchTarget::zero(),
-                            kind: IntegerCompare {
-                                kind: IntCC::Equal,
-                                rs1: zero_reg(),
-                                rs2: x,
-                            },
-                        });
-                        // here is false
-                        insts.push(Inst::load_imm12(rd, Imm12::FALSE));
-                        insts.push(Inst::Jal {
-                            dest: BranchTarget::ResolvedOffset(Inst::INSTRUCTION_SIZE * 2),
-                        });
-                        // here is true
-                        insts.push(Inst::load_imm12(rd, Imm12::TRUE));
-                    }
-                }
-
-                insts
-                    .into_iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
-            }
             &Inst::Args { .. } => {
                 // Nothing: this is a pseudoinstruction that serves
                 // only to constrain registers at a certain point.

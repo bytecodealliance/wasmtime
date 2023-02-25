@@ -2025,7 +2025,7 @@
 
 ;; Rules for `is_invalid` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Null references are represented by the constant value `-1`.
+;; Invalid references are represented by the constant value `-1`.
 (rule (lower (is_invalid src @ (value_type $R64)))
       (with_flags
        (x64_cmp_imm (OperandSize.Size64) 0xffffffff src)  ;; simm32 0xffff_ffff is sign-extended to -1.
