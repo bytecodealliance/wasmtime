@@ -524,7 +524,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::FcvtToInt { rd, rs, tmp, .. } => {
             collector.reg_use(rs);
             collector.reg_early_def(tmp);
-            collector.reg_def(rd);
+            collector.reg_early_def(rd);
         }
         &Inst::SelectIf {
             ref rd,
