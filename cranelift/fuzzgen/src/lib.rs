@@ -256,7 +256,9 @@ where
     fn generate_func(&mut self, target_triple: Triple) -> Result<Function> {
         let max_params = self.u.int_in_range(self.config.signature_params.clone())?;
         let max_rets = self.u.int_in_range(self.config.signature_rets.clone())?;
-        let sig = self.u.signature(max_params, max_rets)?;
+        let sig = self
+            .u
+            .signature(target_triple.architecture, max_params, max_rets)?;
 
         // Function name must be in a different namespace than TESTFILE_NAMESPACE (0)
         let fname = UserFuncName::user(1, 0);
@@ -266,7 +268,9 @@ where
             .map(|i| {
                 let max_params = self.u.int_in_range(self.config.signature_params.clone())?;
                 let max_rets = self.u.int_in_range(self.config.signature_rets.clone())?;
-                let sig = self.u.signature(max_params, max_rets)?;
+                let sig = self
+                    .u
+                    .signature(target_triple.architecture, max_params, max_rets)?;
                 let name = UserExternalName {
                     namespace: 2,
                     index: i as u32,

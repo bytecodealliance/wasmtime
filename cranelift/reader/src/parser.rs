@@ -729,16 +729,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // Match and consume a sequence of immediate bytes (uimm8); e.g. [0x42 0x99 0x32]
-    fn match_constant_data(&mut self) -> ParseResult<ConstantData> {
-        self.match_token(Token::LBracket, "expected an opening left bracket")?;
-        let mut data = ConstantData::default();
-        while !self.optional(Token::RBracket) {
-            data = data.append(self.match_uimm8("expected a sequence of bytes (uimm8)")?);
-        }
-        Ok(data)
-    }
-
     // Match and consume either a hexadecimal Uimm128 immediate (e.g. 0x000102...) or its literal
     // list form (e.g. [0 1 2...]). For convenience, since uimm128 values are stored in the
     // `ConstantPool`, this returns `ConstantData`.
@@ -1840,7 +1830,7 @@ impl<'a> Parser<'a> {
             let ty = self.match_type("expected type of constant")?;
             self.match_uimm128(ty)
         } else {
-            self.match_constant_data()
+            self.match_hexadecimal_constant("expected an immediate hexadecimal operand")
         }?;
 
         // Collect any trailing comments.
@@ -3440,14 +3430,18 @@ mod tests {
 
     #[test]
     fn parse_unbounded_constants() {
-        // Unlike match_uimm128, match_constant_data can parse byte sequences of any size:
+        // Unlike match_uimm128, match_hexadecimal_constant can parse byte sequences of any size:
         assert_eq!(
-            Parser::new("[0 1]").match_constant_data().unwrap(),
+            Parser::new("0x0100")
+                .match_hexadecimal_constant("err message")
+                .unwrap(),
             vec![0, 1].into()
         );
 
-        // Only parse byte literals:
-        assert!(Parser::new("[256]").match_constant_data().is_err());
+        // Only parse hexadecimal constants:
+        assert!(Parser::new("228")
+            .match_hexadecimal_constant("err message")
+            .is_err());
     }
 
     #[test]

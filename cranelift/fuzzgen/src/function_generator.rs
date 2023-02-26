@@ -313,6 +313,13 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
         }
     }
 
+    // RISC-V Does not support SIMD at all
+    let is_simd = args.iter().chain(rets).any(|t| t.is_vector());
+    let is_riscv = matches!(triple.architecture, Architecture::Riscv64(_));
+    if is_simd && is_riscv {
+        return false;
+    }
+
     match triple.architecture {
         Architecture::X86_64 => {
             exceptions!(
@@ -705,6 +712,10 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::Iabs, &[I32], &[I32], insert_opcode),
     (Opcode::Iabs, &[I64], &[I64], insert_opcode),
     (Opcode::Iabs, &[I128], &[I128], insert_opcode),
+    (Opcode::Iabs, &[I8X16, I8X16], &[I8X16], insert_opcode),
+    (Opcode::Iabs, &[I16X8, I16X8], &[I16X8], insert_opcode),
+    (Opcode::Iabs, &[I32X4, I32X4], &[I32X4], insert_opcode),
+    (Opcode::Iabs, &[I64X2, I64X2], &[I64X2], insert_opcode),
     // Smin
     (Opcode::Smin, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Smin, &[I16, I16], &[I16], insert_opcode),
@@ -1511,6 +1522,11 @@ where
             }
             DataValue::F32(f) => builder.ins().f32const(f),
             DataValue::F64(f) => builder.ins().f64const(f),
+            DataValue::V128(bytes) => {
+                let data = bytes.to_vec().into();
+                let handle = builder.func.dfg.constants.insert(data);
+                builder.ins().vconst(ty, handle)
+            }
             _ => unimplemented!(),
         })
     }
@@ -1881,7 +1897,7 @@ where
 
         let mut params = Vec::with_capacity(param_count);
         for _ in 0..param_count {
-            params.push(self.u._type()?);
+            params.push(self.u._type(self.target_triple.architecture)?);
         }
         Ok(params)
     }
@@ -1901,7 +1917,7 @@ where
 
         // Create a pool of vars that are going to be used in this function
         for _ in 0..self.param(&self.config.vars_per_function)? {
-            let ty = self.u._type()?;
+            let ty = self.u._type(self.target_triple.architecture)?;
             let value = self.generate_const(builder, ty)?;
             vars.push((ty, value));
         }
