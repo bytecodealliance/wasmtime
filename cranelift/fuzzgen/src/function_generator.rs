@@ -290,6 +290,36 @@ fn insert_atomic_rmw(
     Ok(())
 }
 
+fn insert_atomic_cas(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    _: Opcode,
+    _: &'static [Type],
+    rets: &'static [Type],
+) -> Result<()> {
+    let ctrl_type = *rets.first().unwrap();
+    let type_size = ctrl_type.bytes();
+
+    let (address, flags, offset) = fgen.generate_address_and_memflags(builder, type_size, true)?;
+
+    // AtomicCas does not directly support offsets, so add the offset to the address separately.
+    let address = builder.ins().iadd_imm(address, i64::from(offset));
+
+    // Source and Target variables
+    let expected_var = fgen.get_variable_of_type(ctrl_type)?;
+    let store_var = fgen.get_variable_of_type(ctrl_type)?;
+    let loaded_var = fgen.get_variable_of_type(ctrl_type)?;
+
+    let expected_val = builder.use_var(expected_var);
+    let store_val = builder.use_var(store_var);
+    let new_val = builder
+        .ins()
+        .atomic_cas(flags, address, expected_val, store_val);
+
+    builder.def_var(loaded_var, new_val);
+    Ok(())
+}
+
 type OpcodeInserter = fn(
     fgen: &mut FunctionGenerator,
     builder: &mut FunctionBuilder,
@@ -1272,6 +1302,11 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::AtomicRmw, &[I16, I16], &[I16], insert_atomic_rmw),
     (Opcode::AtomicRmw, &[I32, I32], &[I32], insert_atomic_rmw),
     (Opcode::AtomicRmw, &[I64, I64], &[I64], insert_atomic_rmw),
+    // AtomicCas
+    (Opcode::AtomicCas, &[I8, I8], &[I8], insert_atomic_cas),
+    (Opcode::AtomicCas, &[I16, I16], &[I16], insert_atomic_cas),
+    (Opcode::AtomicCas, &[I32, I32], &[I32], insert_atomic_cas),
+    (Opcode::AtomicCas, &[I64, I64], &[I64], insert_atomic_cas),
     // Bitcast
     (Opcode::Bitcast, &[F32], &[I32], insert_bitcast),
     (Opcode::Bitcast, &[I32], &[F32], insert_bitcast),
