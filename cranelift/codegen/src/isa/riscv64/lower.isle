@@ -51,34 +51,38 @@
   (if-let $true (has_zba))
   (alu_rrr (AluOPRRR.Adduw) x y))
 
-;; Add with shift. We have a few of these instructions with `Zba`.
-(decl select_shnadd (Imm64) AluOPRRR)
-(rule (select_shnadd (u64_from_imm64 1)) (AluOPRRR.Sh1add))
-(rule (select_shnadd (u64_from_imm64 2)) (AluOPRRR.Sh2add))
-(rule (select_shnadd (u64_from_imm64 3)) (AluOPRRR.Sh3add))
+;; Add with const shift. We have a few of these instructions with `Zba`.
+(decl pure partial match_shnadd (Imm64) AluOPRRR)
+(rule (match_shnadd (uimm8 1)) (AluOPRRR.Sh1add))
+(rule (match_shnadd (uimm8 2)) (AluOPRRR.Sh2add))
+(rule (match_shnadd (uimm8 3)) (AluOPRRR.Sh3add))
   
 (rule 4 (lower (has_type (fits_in_64 ty) (iadd x (ishl y (maybe_uextend (iconst n))))))
   (if-let $true (has_zba))
-  (alu_rrr (select_shnadd n) y x))
+  (if-let shnadd (match_shnadd n))
+  (alu_rrr shnadd y x))
 
 (rule 5 (lower (has_type (fits_in_64 ty) (iadd (ishl x (maybe_uextend (iconst n))) y)))
   (if-let $true (has_zba))
-  (alu_rrr (select_shnadd n) x y))
+  (if-let shnadd (match_shnadd n))
+  (alu_rrr shnadd x y))
 
 
-;; Add with uextended shift. We have a few of these instructions with `Zba`.
-(decl select_shnadd_uw (Imm64) AluOPRRR)
-(rule (select_shnadd_uw (u64_from_imm64 1)) (AluOPRRR.Sh1adduw))
-(rule (select_shnadd_uw (u64_from_imm64 2)) (AluOPRRR.Sh2adduw))
-(rule (select_shnadd_uw (u64_from_imm64 3)) (AluOPRRR.Sh3adduw))
+;; Add with uextended const shift. We have a few of these instructions with `Zba`.
+(decl pure partial match_shnadd_uw (Imm64) AluOPRRR)
+(rule (match_shnadd_uw (uimm8 1)) (AluOPRRR.Sh1adduw))
+(rule (match_shnadd_uw (uimm8 2)) (AluOPRRR.Sh2adduw))
+(rule (match_shnadd_uw (uimm8 3)) (AluOPRRR.Sh3adduw))
   
 (rule 6 (lower (has_type (fits_in_64 ty) (iadd x (ishl (uextend y) (maybe_uextend (iconst n))))))
   (if-let $true (has_zba))
-  (alu_rrr (select_shnadd_uw n) y x))
+  (if-let shnadd_uw (match_shnadd_uw n))
+  (alu_rrr shnadd_uw y x))
 
 (rule 7 (lower (has_type (fits_in_64 ty) (iadd (ishl (uextend x) (maybe_uextend (iconst n))) y)))
   (if-let $true (has_zba))
-  (alu_rrr (select_shnadd_uw n) x y))
+  (if-let shnadd_uw (match_shnadd_uw n))
+  (alu_rrr shnadd_uw x y))
 
 ;; I128 cases
 (rule 8 (lower (has_type $I128 (iadd x y)))
