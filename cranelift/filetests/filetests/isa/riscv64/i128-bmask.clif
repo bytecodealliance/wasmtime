@@ -150,17 +150,20 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   sext.w t2,a0
-;   li a1,-1
-;   select_reg a1,zero,a1##condition=(zero eq t2)
+;   slli t2,a0,32
+;   srli a1,t2,32
+;   li a3,-1
+;   select_reg a1,zero,a3##condition=(zero eq a1)
 ;   mv a0,a1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   sext.w t2, a0
-;   addi a1, zero, -1
-;   beq zero, t2, 8
+;   slli t2, a0, 0x20
+;   srli a1, t2, 0x20
+;   addi a3, zero, -1
+;   beq zero, a1, 0xc
+;   ori a1, a3, 0
 ;   j 8
 ;   ori a1, zero, 0
 ;   ori a0, a1, 0
@@ -174,22 +177,20 @@ block0(v0: i16):
 
 ; VCode:
 ; block0:
-;   lui a1,16
-;   addi a1,a1,4095
-;   and a3,a0,a1
-;   li a5,-1
-;   select_reg a1,zero,a5##condition=(zero eq a3)
+;   slli t2,a0,48
+;   srli a1,t2,48
+;   li a3,-1
+;   select_reg a1,zero,a3##condition=(zero eq a1)
 ;   mv a0,a1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lui a1, 0x10
-;   addi a1, a1, -1
-;   and a3, a0, a1
-;   addi a5, zero, -1
-;   beq zero, a3, 0xc
-;   ori a1, a5, 0
+;   slli t2, a0, 0x30
+;   srli a1, t2, 0x30
+;   addi a3, zero, -1
+;   beq zero, a1, 0xc
+;   ori a1, a3, 0
 ;   j 8
 ;   ori a1, zero, 0
 ;   ori a0, a1, 0

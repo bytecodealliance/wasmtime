@@ -108,18 +108,22 @@ block0(v0: i32, v1: i8, v2: i8):
 
 ; VCode:
 ; block0:
-;   sext.w a3,a0
-;   li a4,42
-;   sext.w a5,a4
-;   select_reg a0,a1,a2##condition=(a3 eq a5)
+;   slli a3,a0,32
+;   srli a3,a3,32
+;   li a5,42
+;   slli a7,a5,32
+;   srli t4,a7,32
+;   select_reg a0,a1,a2##condition=(a3 eq t4)
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   sext.w a3, a0
-;   addi a4, zero, 0x2a
-;   sext.w a5, a4
-;   beq a3, a5, 0xc
+;   slli a3, a0, 0x20
+;   srli a3, a3, 0x20
+;   addi a5, zero, 0x2a
+;   slli a7, a5, 0x20
+;   srli t4, a7, 0x20
+;   beq a3, t4, 0xc
 ;   ori a0, a2, 0
 ;   j 8
 ;   ori a0, a1, 0

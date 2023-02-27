@@ -675,10 +675,9 @@ block1:
 
 ; VCode:
 ; block0:
-;   lui a1,16
-;   addi a1,a1,4095
-;   and a3,a0,a1
-;   bne a3,zero,taken(label1),not_taken(label2)
+;   slli t2,a0,48
+;   srli a1,t2,48
+;   bne a1,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -688,10 +687,9 @@ block1:
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lui a1, 0x10
-;   addi a1, a1, -1
-;   and a3, a0, a1
-; block1: ; offset 0xc
+;   slli t2, a0, 0x30
+;   srli a1, t2, 0x30
+; block1: ; offset 0x8
 ;   ret
 
 function %i32_brif(i32){
@@ -705,8 +703,9 @@ block1:
 
 ; VCode:
 ; block0:
-;   sext.w t2,a0
-;   bne t2,zero,taken(label1),not_taken(label2)
+;   slli t2,a0,32
+;   srli a1,t2,32
+;   bne a1,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -716,8 +715,9 @@ block1:
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   sext.w t2, a0
-; block1: ; offset 0x4
+;   slli t2, a0, 0x20
+;   srli a1, t2, 0x20
+; block1: ; offset 0x8
 ;   ret
 
 function %i64_brif(i64){
