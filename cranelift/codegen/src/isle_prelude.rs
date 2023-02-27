@@ -130,6 +130,16 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn u64_le(&mut self, x: u64, y: u64) -> bool {
+            x <= y
+        }
+
+        #[inline]
+        fn u64_lt(&mut self, x: u64, y: u64) -> bool {
+            x < y
+        }
+
+        #[inline]
         fn u64_is_zero(&mut self, value: u64) -> bool {
             0 == value
         }
