@@ -27,17 +27,17 @@ mod macros;
 mod bindings {
     #[cfg(feature = "cli-command")]
     wit_bindgen::generate!({
-        world: "cli",
+        world: "command",
         std_feature,
         raw_strings,
         // The generated definition of command will pull in std, so we are defining it
         // manually below instead
-        skip: ["command", "preopens", "get-environment"],
+        skip: ["main", "preopens", "get-environment"],
     });
 
     #[cfg(feature = "cli-reactor")]
     wit_bindgen::generate!({
-        world: "cli-reactor",
+        world: "reactor",
         std_feature,
         raw_strings,
         skip: ["preopens", "get-environment"],
@@ -46,7 +46,7 @@ mod bindings {
 
 #[no_mangle]
 #[cfg(feature = "cli-command")]
-pub unsafe extern "C" fn command(
+pub unsafe extern "C" fn main(
     stdin: InputStream,
     stdout: OutputStream,
     stderr: OutputStream,
@@ -246,7 +246,7 @@ impl ImportAlloc {
     }
 }
 
-/// This allocator is only used for the `command` entrypoint.
+/// This allocator is only used for the `main` entrypoint.
 ///
 /// The implementation here is a bump allocator into `State::command_data` which
 /// traps when it runs out of data. This means that the total size of
@@ -2159,7 +2159,7 @@ impl Streams {
                 // For files, we may have adjusted the position for seeking, so
                 // create a new stream.
                 StreamType::File(file) => {
-                    let input = filesystem::read_via_stream(file.fd, file.position.get())?;
+                    let input = filesystem::read_via_stream(file.fd, file.position.get());
                     self.input.set(Some(input));
                     Ok(input)
                 }
@@ -2177,9 +2177,9 @@ impl Streams {
                 // create a new stream.
                 StreamType::File(file) => {
                     let output = if file.append {
-                        filesystem::append_via_stream(file.fd)?
+                        filesystem::append_via_stream(file.fd)
                     } else {
-                        filesystem::write_via_stream(file.fd, file.position.get())?
+                        filesystem::write_via_stream(file.fd, file.position.get())
                     };
                     self.output.set(Some(output));
                     Ok(output)
@@ -2277,12 +2277,12 @@ struct State {
     /// Long-lived bump allocated memory arena.
     ///
     /// This is used for the cabi_export_realloc to allocate data passed to the
-    /// `command` entrypoint. Allocations in this arena are safe to use for
+    /// `main` entrypoint. Allocations in this arena are safe to use for
     /// the lifetime of the State struct. It may also be used for import allocations
     /// which need to be long-lived, by using `import_alloc.with_arena`.
     long_lived_arena: BumpArena,
 
-    /// Arguments passed to the `command` entrypoint
+    /// Arguments passed to the `main` entrypoint
     args: Option<&'static [WasmStr]>,
 
     /// Environment variables. Initialized lazily. Access with `State::get_environment`
@@ -2504,7 +2504,7 @@ impl State {
     }
 
     fn init(&mut self) {
-        // Set up a default stdin. This will be overridden when `command`
+        // Set up a default stdin. This will be overridden when `main`
         // is called.
         self.push_desc(Descriptor::Streams(Streams {
             input: Cell::new(None),
@@ -2513,7 +2513,7 @@ impl State {
         }))
         .trapping_unwrap();
         // Set up a default stdout, writing to the stderr device. This will
-        // be overridden when `command` is called.
+        // be overridden when `main` is called.
         self.push_desc(Descriptor::Stderr).trapping_unwrap();
         // Set up a default stderr.
         self.push_desc(Descriptor::Stderr).trapping_unwrap();
