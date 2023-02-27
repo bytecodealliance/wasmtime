@@ -2147,12 +2147,6 @@
 (rule (lower (debugtrap))
       (side_effect (x64_hlt)))
 
-;; Rules for `widening_pairwise_dot_product_s` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (has_type $I32X4
-                       (widening_pairwise_dot_product_s x y)))
-      (x64_pmaddwd x y))
-
 ;; Rules for `fadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $F32 (fadd x y)))
@@ -3179,6 +3173,7 @@
 
 ;; Rules for `iadd_pairwise` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; special case for the `i16x8.extadd_pairwise_i8x16_s` wasm instruction
 (rule (lower
         (has_type $I16X8 (iadd_pairwise
                            (swiden_low val @ (value_type $I8X16))
@@ -3186,6 +3181,7 @@
       (let ((mul_const Xmm (x64_xmm_load_const $I8X16 (iadd_pairwise_mul_const_16))))
         (x64_pmaddubsw mul_const val)))
 
+;; special case for the `i32x4.extadd_pairwise_i16x8_s` wasm instruction
 (rule (lower
         (has_type $I32X4 (iadd_pairwise
                            (swiden_low val @ (value_type $I16X8))
@@ -3193,6 +3189,7 @@
       (let ((mul_const Xmm (x64_xmm_load_const $I16X8 (iadd_pairwise_mul_const_32))))
         (x64_pmaddwd val mul_const)))
 
+;; special case for the `i16x8.extadd_pairwise_i8x16_u` wasm instruction
 (rule (lower
         (has_type $I16X8 (iadd_pairwise
                            (uwiden_low val @ (value_type $I8X16))
@@ -3200,6 +3197,7 @@
       (let ((mul_const Xmm (x64_xmm_load_const $I8X16 (iadd_pairwise_mul_const_16))))
         (x64_pmaddubsw val mul_const)))
 
+;; special case for the `i32x4.extadd_pairwise_i16x8_u` wasm instruction
 (rule (lower
         (has_type $I32X4 (iadd_pairwise
                            (uwiden_low val @ (value_type $I16X8))
@@ -3212,6 +3210,13 @@
 
             (addd_const Xmm (x64_xmm_load_const $I16X8 (iadd_pairwise_addd_const_32))))
         (x64_paddd dst addd_const)))
+
+;; special case for the `i32x4.dot_i16x8_s` wasm instruction
+(rule (lower
+        (has_type $I32X4 (iadd_pairwise
+                           (imul (swiden_low x) (swiden_low y))
+                           (imul (swiden_high x) (swiden_high y)))))
+      (x64_pmaddwd x y))
 
 ;; Rules for `swiden_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
