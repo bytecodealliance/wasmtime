@@ -309,6 +309,17 @@ fn exit126_wasi_snapshot1() -> Result<()> {
     Ok(())
 }
 
+// Check that `poll_oneoff` with default parameters does not fail.
+#[test]
+fn poll_oneoff() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/poll_oneoff.wat")?;
+    let output =
+        run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"], None)?;
+    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
+    assert_eq!(output.status.code().unwrap(), 0);
+    Ok(())
+}
+
 // Run a minimal command program.
 #[test]
 fn minimal_command() -> Result<()> {
