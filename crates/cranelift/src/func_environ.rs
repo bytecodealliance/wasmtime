@@ -10,7 +10,8 @@ use cranelift_frontend::FunctionBuilder;
 use cranelift_frontend::Variable;
 use cranelift_wasm::{
     self, FuncIndex, FuncTranslationState, GlobalIndex, GlobalVariable, Heap, HeapData, HeapStyle,
-    MemoryIndex, TableIndex, TargetEnvironment, TypeIndex, WasmHeapType, WasmRefType, WasmResult, WasmType,
+    MemoryIndex, TableIndex, TargetEnvironment, TypeIndex, WasmHeapType, WasmRefType, WasmResult,
+    WasmType,
 };
 use std::convert::TryFrom;
 use std::mem;
@@ -1623,7 +1624,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             .ins()
             .trapz(funcref_ptr, ir::TrapCode::IndirectCallToNull);
 
-
         // If necessary, check the signature.
         match self.module.table_plans[table_index].style {
             TableStyle::CallerChecksSignature => {
@@ -1734,9 +1734,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         // This doesn't need to happen when the ref is non-nullable. But, it
         // may not need to happen ever. So, leave it for now and let smart people
         // figure that out
-        builder
-            .ins()
-            .trapz(callee, ir::TrapCode::NullReference);
+        builder.ins().trapz(callee, ir::TrapCode::NullReference);
 
         self.call_function_unchecked(builder, sig_ref, callee, call_args)
     }

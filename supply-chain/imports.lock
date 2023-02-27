@@ -185,6 +185,11 @@ criteria = "safe-to-deploy"
 version = "0.12.3"
 notes = "This version is used in rust's libstd, so effectively we're already trusting it"
 
+[[audits.mozilla.audits.hermit-abi]]
+who = "Mike Hommey <mh+mozilla@glandium.org>"
+criteria = "safe-to-deploy"
+delta = "0.1.19 -> 0.2.6"
+
 [[audits.mozilla.audits.indexmap]]
 who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
@@ -237,6 +242,16 @@ who = "Josh Stone <jistone@redhat.com>"
 criteria = "safe-to-deploy"
 version = "0.2.15"
 notes = "All code written or reviewed by Josh Stone."
+
+[[audits.mozilla.audits.num_cpus]]
+who = "Mike Hommey <mh+mozilla@glandium.org>"
+criteria = "safe-to-deploy"
+delta = "1.13.1 -> 1.14.0"
+
+[[audits.mozilla.audits.num_cpus]]
+who = "Mike Hommey <mh+mozilla@glandium.org>"
+criteria = "safe-to-deploy"
+delta = "1.14.0 -> 1.15.0"
 
 [[audits.mozilla.audits.once_cell]]
 who = "Mike Hommey <mh+mozilla@glandium.org>"

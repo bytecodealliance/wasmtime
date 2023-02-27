@@ -80,6 +80,14 @@ impl ValType {
         }
     }
 
+    /// Returns true if `self` is a subtype of `other`.
+    pub(crate) fn is_subtype(&self, other: &ValType) -> bool {
+        match (self, other) {
+            (ValType::Ref(x), ValType::Ref(y)) => RefType::is_subtype(x, y),
+            (x, y) => x == y,
+        }
+    }
+
     pub(crate) fn to_wasm_type(&self) -> WasmType {
         match self {
             Self::I32 => WasmType::I32,
@@ -145,6 +153,11 @@ impl RefType {
             heap_type: HeapType::from_wasm_heap_type(&rt.heap_type),
         }
     }
+
+    pub(crate) fn is_subtype(&self, other: &RefType) -> bool {
+        HeapType::is_subtype(&self.heap_type, &other.heap_type) && self.nullable == other.nullable
+            || other.nullable
+    }
 }
 
 /// A list of all possible heap types in WebAssembly
@@ -183,6 +196,14 @@ impl HeapType {
             WasmHeapType::Extern => Self::Extern,
             WasmHeapType::Index(i) => Self::Index(*i),
         }
+    }
+
+    pub(crate) fn is_subtype(&self, other: &HeapType) -> bool {
+        self == other // TODO(dhil): We ought to check for [Index(m)]
+                      // and [Index(n)] that the types pointed to by
+                      // [m] and [n] are equivalent. By type
+                      // caonicalisation it ought to be enough to
+                      // simply [m == n].
     }
 }
 

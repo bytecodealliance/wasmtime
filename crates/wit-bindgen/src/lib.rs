@@ -179,7 +179,7 @@ impl Wasmtime {
                     "
                         pub fn new(
                             __exports: &mut wasmtime::component::ExportInstance<'_, '_>,
-                        ) -> anyhow::Result<{camel}> {{
+                        ) -> wasmtime::Result<{camel}> {{
                     "
                 );
                 let mut fields = Vec::new();
@@ -267,7 +267,7 @@ impl Wasmtime {
                     mut store: impl wasmtime::AsContextMut<Data = T>,
                     component: &wasmtime::component::Component,
                     linker: &wasmtime::component::Linker<T>,
-                ) -> anyhow::Result<(Self, wasmtime::component::Instance)> {{
+                ) -> wasmtime::Result<(Self, wasmtime::component::Instance)> {{
                     let instance = linker.instantiate{async__}(&mut store, component){await_}?;
                     Ok((Self::new(store, &instance)?, instance))
                 }}
@@ -278,7 +278,7 @@ impl Wasmtime {
                 pub {async_} fn instantiate_pre<T {send}>(
                     mut store: impl wasmtime::AsContextMut<Data = T>,
                     instance_pre: &wasmtime::component::InstancePre<T>,
-                ) -> anyhow::Result<(Self, wasmtime::component::Instance)> {{
+                ) -> wasmtime::Result<(Self, wasmtime::component::Instance)> {{
                     let instance = instance_pre.instantiate{async__}(&mut store){await_}?;
                     Ok((Self::new(store, &instance)?, instance))
                 }}
@@ -294,7 +294,7 @@ impl Wasmtime {
                 pub fn new(
                     mut store: impl wasmtime::AsContextMut,
                     instance: &wasmtime::component::Instance,
-                ) -> anyhow::Result<Self> {{
+                ) -> wasmtime::Result<Self> {{
                     let mut store = store.as_context_mut();
                     let mut exports = instance.exports(&mut store);
                     let mut __exports = exports.root();
@@ -397,7 +397,7 @@ impl Wasmtime {
                 pub fn add_to_linker<T, U>(
                     linker: &mut wasmtime::component::Linker<T>,
                     get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-                ) -> anyhow::Result<()>
+                ) -> wasmtime::Result<()>
                     where U: \
             "
         );
@@ -442,7 +442,7 @@ impl Wasmtime {
                 pub fn add_root_to_linker<T, U>(
                     linker: &mut wasmtime::component::Linker<T>,
                     get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-                ) -> anyhow::Result<()>
+                ) -> wasmtime::Result<()>
                     where U: {world_trait}{maybe_send}
                 {{
                     let mut linker = linker.root();
@@ -978,7 +978,7 @@ impl<'a> InterfaceGenerator<'a> {
                 pub fn add_to_linker<T, U>(
                     linker: &mut wasmtime::component::Linker<T>,
                     get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-                ) -> anyhow::Result<()>
+                ) -> wasmtime::Result<()>
                     where {where_clause},
                 {{
             "
@@ -1124,9 +1124,9 @@ impl<'a> InterfaceGenerator<'a> {
             self.push_str(&error_typename);
             self.push_str(">");
         } else {
-            // All other functions get their return values wrapped in an anyhow::Result.
+            // All other functions get their return values wrapped in an wasmtime::Result.
             // Returning the anyhow::Error case can be used to trap.
-            self.push_str("anyhow::Result<");
+            self.push_str("wasmtime::Result<");
             self.print_result_ty(&func.results, TypeMode::Owned);
             self.push_str(">");
         }
@@ -1174,7 +1174,7 @@ impl<'a> InterfaceGenerator<'a> {
             self.print_ty(&param.1, TypeMode::AllBorrowed("'_"));
             self.push_str(",");
         }
-        self.src.push_str(") -> anyhow::Result<");
+        self.src.push_str(") -> wasmtime::Result<");
         self.print_result_ty(&func.results, TypeMode::Owned);
 
         if self.gen.opts.async_ {

@@ -2220,7 +2220,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::CallRef { hty } => {
             // Get function signature
             let index = match hty {
-                wasmparser::HeapType::TypedFunc(type_idx) => <wasmparser::PackedIndex as Into<u32>>::into(*type_idx),
+                wasmparser::HeapType::TypedFunc(type_idx) => u32::from(*type_idx),
                 _ => panic!("expected typed func"),
             };
             // `index` is the index of the function's signature and `table_index` is the index of

@@ -3,7 +3,10 @@ use wasmtime::*;
 
 const WASM_PAGE_SIZE: usize = wasmtime_environ::WASM_PAGE_SIZE as usize;
 
-const FUNC_REF : RefType = RefType { nullable: true, heap_type: HeapType::Func };
+const FUNC_REF: RefType = RefType {
+    nullable: true,
+    heap_type: HeapType::Func,
+};
 
 #[test]
 fn test_limits() -> Result<()> {

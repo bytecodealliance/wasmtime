@@ -1,7 +1,7 @@
 use crate::store::{StoreData, StoreOpaque, Stored};
 use crate::{
     AsContext, AsContextMut, CallHook, Engine, Extern, FuncType, Instance, StoreContext,
-    StoreContextMut, Val, ValRaw, ValType, RefType, HeapType,
+    StoreContextMut, Val, ValRaw, ValType,
 };
 use anyhow::{bail, Context as _, Error, Result};
 use std::future::Future;
@@ -1009,17 +1009,8 @@ impl Func {
             );
         }
 
-        // TODO(dhil): temporary hack to circumvent the limitation in
-        // [wasmtime::values::Val::ty()] for funcref and externref.
-        fn hacky_eq(expected_ty : &ValType, arg : &Val) -> bool {
-            match (expected_ty, arg) {
-                (ValType::Ref(RefType { nullable: _, heap_type: HeapType::Func }), Val::FuncRef(Some(_))) |
-                (ValType::Ref(RefType { nullable: _, heap_type: HeapType::Extern }), Val::ExternRef(Some(_))) => true,
-                (_, _) => false,
-            }
-        }
         for (ty, arg) in ty.params().zip(params) {
-            if !hacky_eq(&ty, &arg) && ty != arg.ty() {
+            if !ValType::is_subtype(&arg.ty(), &ty) {
                 bail!(
                     "argument type mismatch: found {} but expected {}",
                     arg.ty(),

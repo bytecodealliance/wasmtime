@@ -92,7 +92,7 @@ impl Display for TrapCode {
             UnreachableCodeReached => "unreachable",
             Interrupt => "interrupt",
             User(x) => return write!(f, "user{}", x),
-            NullReference => "null reference",
+            NullReference => "null_reference",
         };
         f.write_str(identifier)
     }

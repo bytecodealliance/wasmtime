@@ -1,9 +1,11 @@
+test interpret
 test run
 target x86_64
 target aarch64
 target aarch64 sign_return_address
 target aarch64 has_pauth sign_return_address
 target s390x
+target riscv64gc
 
 
 function %callee_indirect(i64) -> i64 {

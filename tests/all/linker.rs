@@ -5,7 +5,10 @@ use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::sync::Arc;
 use wasmtime::*;
 
-const FUNC_REF : RefType = RefType { nullable: true, heap_type: HeapType::Func };
+const FUNC_REF: RefType = RefType {
+    nullable: true,
+    heap_type: HeapType::Func,
+};
 
 #[test]
 fn link_undefined() -> Result<()> {

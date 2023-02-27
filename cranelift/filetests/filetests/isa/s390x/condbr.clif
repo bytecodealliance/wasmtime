@@ -38,23 +38,23 @@ block2:
 ; VCode:
 ; block0:
 ;   clgr %r2, %r3
-;   jge label1 ; jg label2
+;   jge label2 ; jg label1
 ; block1:
-;   lghi %r2, 1
+;   lghi %r2, 2
 ;   br %r14
 ; block2:
-;   lghi %r2, 2
+;   lghi %r2, 1
 ;   br %r14
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   clgr %r2, %r3
-;   jgne 0x10
+;   jge 0x10
 ; block1: ; offset 0xa
-;   lghi %r2, 1
+;   lghi %r2, 2
 ;   br %r14
 ; block2: ; offset 0x10
-;   lghi %r2, 2
+;   lghi %r2, 1
 ;   br %r14
 
 function %f(i64, i64) -> i64 {

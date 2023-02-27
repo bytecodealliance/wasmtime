@@ -45,16 +45,16 @@
 ;; block0:
 ;;   movl    %edi, %r8d
 ;;   cmpq    $268431359, %r8
-;;   jnbe    label1; j label2
+;;   jnbe    label3; j label1
+;; block1:
+;;   movq    0(%rdx), %r10
+;;   movb    %sil, 4096(%r10,%r8,1)
+;;   jmp     label2
 ;; block2:
-;;   movq    0(%rdx), %r11
-;;   movb    %sil, 4096(%r11,%r8,1)
-;;   jmp     label3
-;; block3:
 ;;   movq    %rbp, %rsp
 ;;   popq    %rbp
 ;;   ret
-;; block1:
+;; block3:
 ;;   ud2 heap_oob
 ;;
 ;; function u0:1:
@@ -65,14 +65,14 @@
 ;; block0:
 ;;   movl    %edi, %r8d
 ;;   cmpq    $268431359, %r8
-;;   jnbe    label1; j label2
+;;   jnbe    label3; j label1
+;; block1:
+;;   movq    0(%rsi), %r10
+;;   movzbq  4096(%r10,%r8,1), %rax
+;;   jmp     label2
 ;; block2:
-;;   movq    0(%rsi), %r11
-;;   movzbq  4096(%r11,%r8,1), %rax
-;;   jmp     label3
-;; block3:
 ;;   movq    %rbp, %rsp
 ;;   popq    %rbp
 ;;   ret
-;; block1:
+;; block3:
 ;;   ud2 heap_oob

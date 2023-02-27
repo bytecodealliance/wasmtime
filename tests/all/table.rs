@@ -1,8 +1,14 @@
 use anyhow::Result;
 use wasmtime::*;
 
-const EXTERN_REF : RefType = RefType { nullable: true, heap_type: HeapType::Extern };
-const FUNC_REF : RefType = RefType { nullable: true, heap_type: HeapType::Func };
+const EXTERN_REF: RefType = RefType {
+    nullable: true,
+    heap_type: HeapType::Extern,
+};
+const FUNC_REF: RefType = RefType {
+    nullable: true,
+    heap_type: HeapType::Func,
+};
 
 #[test]
 fn get_none() {

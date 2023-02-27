@@ -97,6 +97,13 @@ function myFilter(item) {
   if (item.filter && commits.includes(`prtest:${item.filter}`)) {
     return true;
   }
+
+  // If any runtest was modified, re-run the whole test suite as those can
+  // target any backend.
+  if (names.includes(`cranelift/filetests/filetests/runtests`)) {
+    return true;
+  }
+
   return false;
 }
 

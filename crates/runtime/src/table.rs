@@ -8,7 +8,9 @@ use anyhow::{bail, format_err, Error, Result};
 use std::convert::{TryFrom, TryInto};
 use std::ops::Range;
 use std::ptr;
-use wasmtime_environ::{TablePlan, Trap, WasmHeapType, WasmRefType, FUNCREF_INIT_BIT, FUNCREF_MASK};
+use wasmtime_environ::{
+    TablePlan, Trap, WasmHeapType, WasmRefType, FUNCREF_INIT_BIT, FUNCREF_MASK,
+};
 
 /// An element going into or coming out of a table.
 ///

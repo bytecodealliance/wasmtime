@@ -144,7 +144,11 @@ fn global_ty(expected: &Global, actual: &Global) -> Result<()> {
 }
 
 fn table_ty(expected: &Table, actual: &Table, actual_runtime_size: Option<u32>) -> Result<()> {
-    match_ty(WasmType::Ref(expected.wasm_ty), WasmType::Ref(actual.wasm_ty), "table")?;
+    match_ty(
+        WasmType::Ref(expected.wasm_ty),
+        WasmType::Ref(actual.wasm_ty),
+        "table",
+    )?;
     match_limits(
         expected.minimum.into(),
         expected.maximum.map(|i| i.into()),

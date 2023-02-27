@@ -3,8 +3,14 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 use std::sync::Arc;
 use wasmtime::*;
 
-const EXTERN_REF : RefType = RefType { nullable: true, heap_type: HeapType::Extern };
-const FUNC_REF : RefType = RefType { nullable: true, heap_type: HeapType::Func };
+const EXTERN_REF: RefType = RefType {
+    nullable: true,
+    heap_type: HeapType::Extern,
+};
+const FUNC_REF: RefType = RefType {
+    nullable: true,
+    heap_type: HeapType::Func,
+};
 
 #[test]
 fn func_constructors() {
@@ -522,8 +528,12 @@ fn externref_signature_no_reference_types() -> anyhow::Result<()> {
     Func::new(
         &mut store,
         FuncType::new(
-            [ValType::Ref(FUNC_REF), ValType::Ref(EXTERN_REF)].iter().cloned(),
-            [ValType::Ref(FUNC_REF), ValType::Ref(EXTERN_REF)].iter().cloned(),
+            [ValType::Ref(FUNC_REF), ValType::Ref(EXTERN_REF)]
+                .iter()
+                .cloned(),
+            [ValType::Ref(FUNC_REF), ValType::Ref(EXTERN_REF)]
+                .iter()
+                .cloned(),
         ),
         |_, _, _| Ok(()),
     );

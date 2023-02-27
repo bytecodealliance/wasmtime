@@ -94,28 +94,24 @@ block3(v7: r64, v8: r64):
 ; block0:
 ;   str x0, [sp, #8]
 ;   str x1, [sp, #16]
-;   load_ext_name x1, TestCase(%f)+0
-;   blr x1
-;   mov x15, sp
-;   ldr x6, [sp, #8]
-;   str x6, [x15]
-;   uxtb w0, w0
-;   cbnz x0, label1 ; b label3
+;   load_ext_name x12, TestCase(%f)+0
+;   blr x12
+;   mov x11, sp
+;   ldr x2, [sp, #8]
+;   str x2, [x11]
+;   uxtb w12, w0
+;   cbnz x12, label2 ; b label1
 ; block1:
-;   b label2
-; block2:
-;   mov x0, x6
-;   ldr x1, [sp, #16]
-;   b label5
-; block3:
-;   b label4
-; block4:
-;   mov x1, x6
+;   mov x1, x2
 ;   ldr x0, [sp, #16]
-;   b label5
-; block5:
-;   mov x2, sp
-;   ldr x2, [x2]
+;   b label3
+; block2:
+;   mov x0, x2
+;   ldr x1, [sp, #16]
+;   b label3
+; block3:
+;   mov x15, sp
+;   ldr x2, [x15]
 ;   add sp, sp, #32
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -128,26 +124,26 @@ block3(v7: r64, v8: r64):
 ; block1: ; offset 0xc
 ;   stur x0, [sp, #8]
 ;   stur x1, [sp, #0x10]
-;   ldr x1, #0x1c
+;   ldr x12, #0x1c
 ;   b #0x24
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %f 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   blr x1
-;   mov x15, sp
-;   ldur x6, [sp, #8]
-;   str x6, [x15]
-;   uxtb w0, w0
-;   cbz x0, #0x48
+;   blr x12
+;   mov x11, sp
+;   ldur x2, [sp, #8]
+;   str x2, [x11]
+;   uxtb w12, w0
+;   cbnz x12, #0x48
 ; block2: ; offset 0x3c
-;   mov x0, x6
-;   ldur x1, [sp, #0x10]
+;   mov x1, x2
+;   ldur x0, [sp, #0x10]
 ;   b #0x50
 ; block3: ; offset 0x48
-;   mov x1, x6
-;   ldur x0, [sp, #0x10]
+;   mov x0, x2
+;   ldur x1, [sp, #0x10]
 ; block4: ; offset 0x50
-;   mov x2, sp
-;   ldr x2, [x2]
+;   mov x15, sp
+;   ldr x2, [x15]
 ;   add sp, sp, #0x20
 ;   ldp x29, x30, [sp], #0x10
 ;   ret

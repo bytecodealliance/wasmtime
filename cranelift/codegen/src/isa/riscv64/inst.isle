@@ -205,11 +205,6 @@
       (x ValueRegs)
       (y ValueRegs))
 
-    (ReferenceCheck
-      (rd WritableReg)
-      (op ReferenceCheckOP)
-      (x Reg))
-
     (BrTable
       (index Reg)
       (tmp1 WritableReg)
@@ -368,11 +363,6 @@
   (Umax)
   (Smin)
   (Umin)
-))
-
-(type ReferenceCheckOP (enum
-  (IsNull)
-  (IsInvalid)
 ))
 
 (type AtomicOP (enum
@@ -877,6 +867,17 @@
 (decl select_addi (Type) AluOPRRI)
 (rule 1 (select_addi (fits_in_32 ty)) (AluOPRRI.Addiw))
 (rule (select_addi (fits_in_64 ty)) (AluOPRRI.Addi))
+
+
+;; Helper for emiting the `sltiu` instruction
+(decl sltiu (Reg Imm12) Reg)
+(rule (sltiu r imm)
+  (alu_rr_imm12 (AluOPRRI.SltiU) r imm))
+
+;; Helper for emiting the `seqz` mnemonic
+(decl seqz (Reg) Reg)
+(rule (seqz r)
+  (sltiu r (imm12_const 1)))
 
 
 (decl bnot_128 (ValueRegs) ValueRegs)
@@ -1699,14 +1700,6 @@
 (decl gen_moves (ValueRegs Type Type) ValueRegs)
 (extern constructor gen_moves gen_moves)
 
-;;
-(decl gen_reference_check (ReferenceCheckOP Reg) Reg)
-(rule
-  (gen_reference_check op r)
-  (let
-    ((tmp WritableReg (temp_writable_reg $I64))
-      (_ Unit (emit (MInst.ReferenceCheck tmp op r))))
-    tmp))
 
 ;;
 (decl gen_select (Type Reg ValueRegs ValueRegs) ValueRegs)
