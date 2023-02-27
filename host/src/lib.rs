@@ -17,7 +17,7 @@ type HostResult<T, E> = anyhow::Result<Result<T, E>>;
 pub mod wasi {
     wasmtime::component::bindgen!({
         path: "../wit",
-        world: "cli",
+        world: "command",
         tracing: true,
         async: true,
     });

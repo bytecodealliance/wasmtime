@@ -755,7 +755,7 @@ impl wasi::filesystem::Host for WasiCtx {
         &mut self,
         fd: wasi::filesystem::Descriptor,
         offset: wasi::filesystem::Filesize,
-    ) -> HostResult<InputStream, wasi::filesystem::ErrorCode> {
+    ) -> anyhow::Result<InputStream> {
         let f = self.table_mut().get_file_mut(fd).map_err(convert)?;
 
         // Duplicate the file descriptor so that we get an indepenent lifetime.
@@ -770,14 +770,14 @@ impl wasi::filesystem::Host for WasiCtx {
         // Insert the stream view into the table.
         let index = self.table_mut().push(Box::new(boxed)).map_err(convert)?;
 
-        Ok(Ok(index))
+        Ok(index)
     }
 
     async fn write_via_stream(
         &mut self,
         fd: wasi::filesystem::Descriptor,
         offset: wasi::filesystem::Filesize,
-    ) -> HostResult<OutputStream, wasi::filesystem::ErrorCode> {
+    ) -> anyhow::Result<OutputStream> {
         let f = self.table_mut().get_file_mut(fd).map_err(convert)?;
 
         // Duplicate the file descriptor so that we get an indepenent lifetime.
@@ -792,13 +792,13 @@ impl wasi::filesystem::Host for WasiCtx {
         // Insert the stream view into the table.
         let index = self.table_mut().push(Box::new(boxed)).map_err(convert)?;
 
-        Ok(Ok(index))
+        Ok(index)
     }
 
     async fn append_via_stream(
         &mut self,
         fd: wasi::filesystem::Descriptor,
-    ) -> HostResult<OutputStream, wasi::filesystem::ErrorCode> {
+    ) -> anyhow::Result<OutputStream> {
         let f = self.table_mut().get_file_mut(fd).map_err(convert)?;
 
         // Duplicate the file descriptor so that we get an indepenent lifetime.
@@ -813,6 +813,6 @@ impl wasi::filesystem::Host for WasiCtx {
         // Insert the stream view into the table.
         let index = self.table_mut().push(Box::new(boxed)).map_err(convert)?;
 
-        Ok(Ok(index))
+        Ok(index)
     }
 }
