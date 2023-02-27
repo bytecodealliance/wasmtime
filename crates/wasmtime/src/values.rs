@@ -91,8 +91,8 @@ impl Val {
             Val::F64(_) => ValType::F64,
             Val::ExternRef(x) => ValType::Ref(RefType {
                 nullable: x.is_none(), // NOTE(dhil): this may not
-                                       // produce the original source type for `Val` as a non-null reference
-                                       // value can be declared with nullable reference type.
+                // produce the original source type for `Val` as a non-null reference
+                // value can be declared with nullable reference type.
                 heap_type: HeapType::Extern,
             }),
             Val::FuncRef(x) => ValType::Ref(RefType {
@@ -237,6 +237,13 @@ impl Val {
                     nullable: true,
                 },
             ) => Ok(TableElement::ExternRef(None)),
+            (
+                _,
+                RefType {
+                    heap_type: HeapType::Index(_),
+                    ..
+                },
+            ) => unimplemented!(),
             _ => bail!("value does not match table element type"),
         }
     }
