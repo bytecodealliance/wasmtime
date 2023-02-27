@@ -55,12 +55,11 @@ block0(v0: i8x16, v1: i8x16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm7
-;   movdqu  const(1), %xmm0
-;   movdqu  const(0), %xmm6
-;   movdqa  %xmm7, %xmm9
-;   vpermi2b %xmm1, %xmm9, %xmm6, %xmm6
-;   andps   %xmm0, %xmm6, %xmm0
+;   movdqa  %xmm0, %xmm6
+;   movdqu  const(0), %xmm0
+;   movdqa  %xmm6, %xmm7
+;   vpermi2b %xmm1, %xmm7, %xmm0, %xmm0
+;   andps   %xmm0, const(1), %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -70,12 +69,11 @@ block0(v0: i8x16, v1: i8x16):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movdqa %xmm0, %xmm7
-;   movdqu 0x30(%rip), %xmm0
-;   movdqu 0x18(%rip), %xmm6
-;   movdqa %xmm7, %xmm9
-;   vpermi2b %xmm1, %xmm9, %xmm6
-;   andps %xmm6, %xmm0
+;   movdqa %xmm0, %xmm6
+;   movdqu 0x20(%rip), %xmm0
+;   movdqa %xmm6, %xmm7
+;   vpermi2b %xmm1, %xmm7, %xmm0
+;   andps 0x1f(%rip), %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -89,7 +87,9 @@ block0(v0: i8x16, v1: i8x16):
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
-;   cmpb $0xff, %bh
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, -1(%rax)
 
 function %f3(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):

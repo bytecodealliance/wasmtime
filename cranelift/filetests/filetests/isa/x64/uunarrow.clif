@@ -14,13 +14,11 @@ block0(v0: f64x2):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   xorpd   %xmm2, %xmm2, %xmm2
-;   movdqa  %xmm0, %xmm6
-;   maxpd   %xmm6, %xmm2, %xmm6
-;   movupd  const(0), %xmm7
-;   minpd   %xmm6, %xmm7, %xmm6
-;   roundpd $3, %xmm6, %xmm0
-;   movupd  const(1), %xmm12
-;   addpd   %xmm0, %xmm12, %xmm0
+;   movdqa  %xmm0, %xmm5
+;   maxpd   %xmm5, %xmm2, %xmm5
+;   minpd   %xmm5, const(0), %xmm5
+;   roundpd $3, %xmm5, %xmm0
+;   addpd   %xmm0, const(1), %xmm0
 ;   shufps  $136, %xmm0, %xmm2, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -32,20 +30,15 @@ block0(v0: f64x2):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   xorpd %xmm2, %xmm2
-;   movdqa %xmm0, %xmm6
-;   maxpd %xmm2, %xmm6
-;   movupd 0x28(%rip), %xmm7
-;   minpd %xmm7, %xmm6
-;   roundpd $3, %xmm6, %xmm0
-;   movupd 0x25(%rip), %xmm12
-;   addpd %xmm12, %xmm0
+;   movdqa %xmm0, %xmm5
+;   maxpd %xmm2, %xmm5
+;   minpd 0x18(%rip), %xmm5
+;   roundpd $3, %xmm5, %xmm0
+;   addpd 0x1a(%rip), %xmm0
 ;   shufps $0x88, %xmm2, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
 ;   addb %al, (%rax)
 ;   addb %ah, %al
 

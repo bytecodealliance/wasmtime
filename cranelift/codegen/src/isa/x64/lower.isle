@@ -1908,7 +1908,7 @@
 (rule (lower (has_type $I8X16
                        (popcnt src)))
       (let ((nibble_table_const VCodeConstant (popcount_4bit_table))
-            (low_mask Xmm (x64_xmm_load_const $I8X16 (popcount_low_mask)))
+            (low_mask XmmMem (popcount_low_mask))
             (low_nibbles Xmm (sse_and $I8X16 src low_mask))
             ;; Note that this is a 16x8 shift, but that's OK; we mask
             ;; off anything that traverses from one byte to the next
@@ -2984,9 +2984,9 @@
 ;; every value of the mantissa represents a corresponding uint32 number.
 ;; When we subtract 0x1.0p52 we are left with double(src).
 (rule 1 (lower (has_type $F64X2 (fcvt_from_uint (uwiden_low val @ (value_type $I32X4)))))
-      (let ((uint_mask Xmm (x64_xmm_load_const $I32X4 (fcvt_uint_mask_const)))
+      (let ((uint_mask XmmMem (fcvt_uint_mask_const))
             (res Xmm (x64_unpcklps val uint_mask))
-            (uint_mask_high Xmm (x64_xmm_load_const $I32X4 (fcvt_uint_mask_high_const))))
+            (uint_mask_high XmmMem (fcvt_uint_mask_high_const)))
         (x64_subpd res uint_mask_high)))
 
 ;; When AVX512VL and AVX512F are available,
@@ -3186,7 +3186,7 @@
         (has_type $I32X4 (iadd_pairwise
                            (swiden_low val @ (value_type $I16X8))
                            (swiden_high val))))
-      (let ((mul_const Xmm (x64_xmm_load_const $I16X8 (iadd_pairwise_mul_const_32))))
+      (let ((mul_const XmmMem (iadd_pairwise_mul_const_32)))
         (x64_pmaddwd val mul_const)))
 
 ;; special case for the `i16x8.extadd_pairwise_i8x16_u` wasm instruction
@@ -3194,7 +3194,7 @@
         (has_type $I16X8 (iadd_pairwise
                            (uwiden_low val @ (value_type $I8X16))
                            (uwiden_high val))))
-      (let ((mul_const Xmm (x64_xmm_load_const $I8X16 (iadd_pairwise_mul_const_16))))
+      (let ((mul_const XmmMem (iadd_pairwise_mul_const_16)))
         (x64_pmaddubsw val mul_const)))
 
 ;; special case for the `i32x4.extadd_pairwise_i16x8_u` wasm instruction
@@ -3202,13 +3202,13 @@
         (has_type $I32X4 (iadd_pairwise
                            (uwiden_low val @ (value_type $I16X8))
                            (uwiden_high val))))
-      (let ((xor_const Xmm (x64_xmm_load_const $I16X8 (iadd_pairwise_xor_const_32)))
+      (let ((xor_const XmmMem (iadd_pairwise_xor_const_32))
             (dst Xmm (x64_pxor val xor_const))
 
-            (madd_const Xmm (x64_xmm_load_const $I16X8 (iadd_pairwise_mul_const_32)))
+            (madd_const XmmMem (iadd_pairwise_mul_const_32))
             (dst Xmm (x64_pmaddwd dst madd_const))
 
-            (addd_const Xmm (x64_xmm_load_const $I16X8 (iadd_pairwise_addd_const_32))))
+            (addd_const XmmMem (iadd_pairwise_addd_const_32)))
         (x64_paddd dst addd_const)))
 
 ;; special case for the `i32x4.dot_i16x8_s` wasm instruction
@@ -3293,7 +3293,7 @@
             ;; CVTTPD2DQ xmm_y, xmm_y
 
             (tmp1 Xmm (x64_cmppd a a (FcmpImm.Equal)))
-            (umax_mask Xmm (x64_xmm_load_const $F64X2 (snarrow_umax_mask)))
+            (umax_mask XmmMem (snarrow_umax_mask))
 
             ;; ANDPD xmm_y, [wasm_f64x2_splat(2147483647.0)]
             (tmp1 Xmm (x64_andps tmp1 umax_mask))
@@ -3509,7 +3509,7 @@
 ;; indices (may not be completely necessary: verification could fail incorrect
 ;; mask values) and fix the indexes to all point to the `dst` vector.
 (rule 3 (lower (shuffle a a (vec_mask_from_immediate mask)))
-      (x64_pshufb a (x64_xmm_load_const $I8X16 (shuffle_0_31_mask mask))))
+      (x64_pshufb a (shuffle_0_31_mask mask)))
 
 ;; For the case where the shuffle mask contains out-of-bounds values (values
 ;; greater than 31) we must mask off those resulting values in the result of
@@ -3517,9 +3517,7 @@
 (rule 2 (lower (has_type (and (avx512vl_enabled $true) (avx512vbmi_enabled $true))
                          (shuffle a b (vec_mask_from_immediate
                                         (perm_from_mask_with_zeros mask zeros)))))
-      (x64_andps
-        (x64_xmm_load_const $I8X16 zeros)
-        (x64_vpermi2b b a (x64_xmm_load_const $I8X16 mask))))
+      (x64_andps (x64_vpermi2b b a (x64_xmm_load_const $I8X16 mask)) zeros))
 
 ;; However, if the shuffle mask contains no out-of-bounds values, we can use
 ;; `vpermi2b` without any masking.
@@ -3532,8 +3530,8 @@
 ;; above, we build the `constructed_mask` for each case statically.
 (rule (lower (shuffle a b (vec_mask_from_immediate mask)))
       (x64_por
-        (x64_pshufb a (x64_xmm_load_const $I8X16 (shuffle_0_15_mask mask)))
-        (x64_pshufb b (x64_xmm_load_const $I8X16 (shuffle_16_31_mask mask)))))
+        (x64_pshufb a (shuffle_0_15_mask mask))
+        (x64_pshufb b (shuffle_16_31_mask mask))))
 
 ;; Rules for `swizzle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3544,9 +3542,7 @@
 ;; Wasm SIMD semantics for this instruction. The instruction format maps to
 ;; variables like: %dst = swizzle %src, %mask
 (rule (lower (swizzle src mask))
-      (let ((mask Xmm (x64_paddusb
-                        mask
-                        (x64_xmm_load_const $I8X16 (swizzle_zero_mask)))))
+      (let ((mask Xmm (x64_paddusb mask (swizzle_zero_mask))))
         (x64_pshufb src mask)))
 
 ;; Rules for `extractlane` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3721,9 +3717,9 @@
       (let ((src1 Xmm qx)
             (src2 Xmm qy)
 
-            (mask Xmm (x64_xmm_load_const $I16X8 (sqmul_round_sat_mask)))
+            (mask XmmMem (sqmul_round_sat_mask))
             (dst Xmm (x64_pmulhrsw src1 src2))
-            (cmp Xmm (x64_pcmpeqw mask dst)))
+            (cmp Xmm (x64_pcmpeqw dst mask)))
         (x64_pxor dst cmp)))
 
 ;; Rules for `sqmul_round_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3749,7 +3745,7 @@
             (zeros Xmm (xmm_zero $F64X2))
             (dst Xmm (x64_maxpd src zeros))
 
-            (umax_mask Xmm (x64_xmm_load_const $F64X2 (uunarrow_umax_mask)))
+            (umax_mask XmmMem (uunarrow_umax_mask))
 
             ;; MINPD xmm_y, [wasm_f64x2_splat(4294967295.0)]
             (dst Xmm (x64_minpd dst umax_mask))
@@ -3758,7 +3754,7 @@
             (dst Xmm (x64_roundpd dst (RoundImm.RoundZero)))
 
             ;; ADDPD xmm_y, [wasm_f64x2_splat(0x1.0p+52)]
-            (uint_mask Xmm (x64_xmm_load_const $F64X2 (uunarrow_uint_mask)))
+            (uint_mask XmmMem (uunarrow_uint_mask))
             (dst Xmm (x64_addpd dst uint_mask)))
 
         ;; SHUFPS xmm_y, xmm_xmp, 0x88
