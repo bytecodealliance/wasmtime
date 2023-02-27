@@ -1,4 +1,4 @@
-use crate::rust::{to_rust_ident, RustGenerator, TypeMode};
+use crate::rust::{to_rust_ident, to_rust_upper_camel_case, RustGenerator, TypeMode};
 use crate::types::{TypeInfo, Types};
 use heck::*;
 use std::collections::BTreeMap;
@@ -162,7 +162,7 @@ impl Wasmtime {
                 gen.generate_trappable_error_types(TypeOwner::Interface(*id));
                 let iface = &resolve.interfaces[*id];
 
-                let camel = name.to_upper_camel_case();
+                let camel = to_rust_upper_camel_case(name);
                 uwriteln!(gen.src, "pub struct {camel} {{");
                 for (_, func) in iface.functions.iter() {
                     uwriteln!(
@@ -237,7 +237,7 @@ impl Wasmtime {
     }
 
     fn finish(&mut self, resolve: &Resolve, world: WorldId) -> String {
-        let camel = resolve.worlds[world].name.to_upper_camel_case();
+        let camel = to_rust_upper_camel_case(&resolve.worlds[world].name);
         uwriteln!(self.src, "pub struct {camel} {{");
         for (name, (ty, _)) in self.exports.fields.iter() {
             uwriteln!(self.src, "{name}: {ty},");
@@ -363,7 +363,7 @@ impl Wasmtime {
             return;
         }
 
-        let world_camel = resolve.worlds[world].name.to_upper_camel_case();
+        let world_camel = to_rust_upper_camel_case(&resolve.worlds[world].name);
         if self.opts.async_ {
             uwriteln!(self.src, "#[wasmtime::component::__internal::async_trait]")
         }
@@ -401,11 +401,11 @@ impl Wasmtime {
                     where U: \
             "
         );
-        let world_camel = resolve.worlds[world].name.to_upper_camel_case();
+        let world_camel = to_rust_upper_camel_case(&resolve.worlds[world].name);
         let world_trait = format!("{world_camel}Imports");
         for (i, name) in interfaces
             .iter()
-            .map(|n| format!("{n}::{}", n.to_upper_camel_case()))
+            .map(|n| format!("{n}::Host"))
             .chain(if functions.is_empty() {
                 None
             } else {
@@ -591,7 +591,7 @@ impl<'a> InterfaceGenerator<'a> {
         self.rustdoc(docs);
         self.src.push_str("wasmtime::component::flags!(\n");
         self.src
-            .push_str(&format!("{} {{\n", name.to_upper_camel_case()));
+            .push_str(&format!("{} {{\n", to_rust_upper_camel_case(name)));
         for flag in flags.flags.iter() {
             // TODO wasmtime-component-macro doesnt support docs for flags rn
             uwrite!(
@@ -657,7 +657,7 @@ impl<'a> InterfaceGenerator<'a> {
         let info = self.info(id);
 
         for (name, mode) in self.modes_of(id) {
-            let name = name.to_upper_camel_case();
+            let name = to_rust_upper_camel_case(&name);
 
             self.rustdoc(docs);
             let lt = self.lifetime_for(&info, mode);
@@ -783,14 +783,14 @@ impl<'a> InterfaceGenerator<'a> {
     fn type_enum(&mut self, id: TypeId, name: &str, enum_: &Enum, docs: &Docs) {
         let info = self.info(id);
 
-        let name = name.to_upper_camel_case();
+        let name = to_rust_upper_camel_case(name);
         self.rustdoc(docs);
         self.push_str("#[derive(wasmtime::component::ComponentType)]\n");
         self.push_str("#[derive(wasmtime::component::Lift)]\n");
         self.push_str("#[derive(wasmtime::component::Lower)]\n");
         self.push_str("#[component(enum)]\n");
         self.push_str("#[derive(Clone, Copy, PartialEq, Eq)]\n");
-        self.push_str(&format!("pub enum {} {{\n", name.to_upper_camel_case()));
+        self.push_str(&format!("pub enum {} {{\n", name));
         for case in enum_.cases.iter() {
             self.rustdoc(&case.docs);
             self.push_str(&format!("#[component(name = \"{}\")]", case.name));
@@ -953,7 +953,6 @@ impl<'a> InterfaceGenerator<'a> {
 
     fn generate_add_to_linker(&mut self, id: InterfaceId, name: &str) {
         let iface = &self.resolve.interfaces[id];
-        let camel = name.to_upper_camel_case();
         let owner = TypeOwner::Interface(id);
 
         if self.gen.opts.async_ {
@@ -961,16 +960,16 @@ impl<'a> InterfaceGenerator<'a> {
         }
         // Generate the `pub trait` which represents the host functionality for
         // this import.
-        uwriteln!(self.src, "pub trait {camel}: Sized {{");
+        uwriteln!(self.src, "pub trait Host: Sized {{");
         for (_, func) in iface.functions.iter() {
             self.generate_function_trait_sig(owner, func);
         }
         uwriteln!(self.src, "}}");
 
         let where_clause = if self.gen.opts.async_ {
-            format!("T: Send, U: {camel} + Send")
+            format!("T: Send, U: Host + Send")
         } else {
-            format!("U: {camel}")
+            format!("U: Host")
         };
         uwriteln!(
             self.src,
