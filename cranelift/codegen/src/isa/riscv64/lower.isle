@@ -624,12 +624,12 @@
 ;;;;;  Rules for `select`;;;;;;;;;
 (rule
   (lower (has_type ty (select c @ (value_type cty) x y)))
-  (gen_select ty (truthy_to_reg cty (normalize_cmp_value cty c)) x y))
+  (gen_select ty (truthy_to_reg cty (normalize_cmp_value cty c (IntCC.Equal))) x y))
 
 (rule 1
   (lower (has_type (fits_in_64 ty) (select (icmp cc a b @ (value_type in_ty)) x y)))
-  (let ((a Reg (normalize_cmp_value in_ty a))
-        (b Reg (normalize_cmp_value in_ty b)))
+  (let ((a Reg (normalize_cmp_value in_ty a cc))
+        (b Reg (normalize_cmp_value in_ty b cc)))
     (gen_select_reg cc a b x y)))
 
 ;;;;;  Rules for `bitselect`;;;;;;;;;
@@ -849,7 +849,7 @@
 
 (rule -1
   (lower (has_type ty (select_spectre_guard c @ (value_type cty) x y)))
-  (gen_select ty (truthy_to_reg cty (normalize_cmp_value cty c)) x y))
+  (gen_select ty (truthy_to_reg cty (normalize_cmp_value cty c (IntCC.Equal))) x y))
 
 ;;;;;  Rules for `bmask`;;;;;;;;;
 (rule
