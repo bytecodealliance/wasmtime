@@ -60,7 +60,7 @@ mod empty_error {
         #[derive(Default)]
         struct MyImports {}
 
-        impl imports::Imports for MyImports {
+        impl imports::Host for MyImports {
             fn empty_error(&mut self, a: f64) -> Result<Result<f64, ()>, Error> {
                 if a == 0.0 {
                     Ok(Ok(a))
@@ -171,7 +171,7 @@ mod string_error {
         #[derive(Default)]
         struct MyImports {}
 
-        impl imports::Imports for MyImports {
+        impl imports::Host for MyImports {
             fn string_error(&mut self, a: f64) -> Result<Result<f64, String>, Error> {
                 if a == 0.0 {
                     Ok(Ok(a))
@@ -313,7 +313,7 @@ mod enum_error {
         #[derive(Default)]
         struct MyImports {}
 
-        impl imports::Imports for MyImports {
+        impl imports::Host for MyImports {
             fn enum_error(&mut self, a: f64) -> Result<f64, imports::TrappableE1> {
                 if a == 0.0 {
                     Ok(a)
@@ -440,7 +440,7 @@ mod record_error {
         #[derive(Default)]
         struct MyImports {}
 
-        impl imports::Imports for MyImports {
+        impl imports::Host for MyImports {
             fn record_error(&mut self, a: f64) -> Result<f64, imports::TrappableE2> {
                 if a == 0.0 {
                     Ok(a)
@@ -576,7 +576,7 @@ mod variant_error {
         #[derive(Default)]
         struct MyImports {}
 
-        impl imports::Imports for MyImports {
+        impl imports::Host for MyImports {
             fn variant_error(&mut self, a: f64) -> Result<f64, imports::TrappableE3> {
                 if a == 0.0 {
                     Ok(a)
