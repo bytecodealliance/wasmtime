@@ -432,7 +432,7 @@ impl ModuleTranslation<'_> {
                 .table
                 .wasm_ty
                 .heap_type
-                != WasmHeapType::Func
+                == WasmHeapType::Extern
             {
                 leftovers.push(segment.clone());
                 continue;
