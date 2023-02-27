@@ -980,7 +980,7 @@ impl<'a, T> StoreContext<'a, T> {
     /// Access the underlying data owned by this `Store`.
     ///
     /// Same as [`Store::data`].
-    pub fn data(&self) -> &T {
+    pub fn data(&self) -> &'a T {
         self.0.data()
     }
 

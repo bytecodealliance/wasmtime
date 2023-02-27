@@ -417,25 +417,23 @@ mod tests {
         }
 
         let mut loop_analysis = LoopAnalysis::new();
-        let mut cfg = ControlFlowGraph::new();
-        let mut domtree = DominatorTree::new();
-        cfg.compute(&func);
-        domtree.compute(&func, &cfg);
+        let cfg = ControlFlowGraph::with_function(&func);
+        let domtree = DominatorTree::with_function(&func, &cfg);
         loop_analysis.compute(&func, &cfg, &domtree);
 
         let loops = loop_analysis.loops().collect::<Vec<Loop>>();
         assert_eq!(loops.len(), 3);
         assert_eq!(loop_analysis.loop_header(loops[0]), block0);
-        assert_eq!(loop_analysis.loop_header(loops[1]), block1);
-        assert_eq!(loop_analysis.loop_header(loops[2]), block3);
+        assert_eq!(loop_analysis.loop_header(loops[1]), block3);
+        assert_eq!(loop_analysis.loop_header(loops[2]), block1);
         assert_eq!(loop_analysis.loop_parent(loops[1]), Some(loops[0]));
         assert_eq!(loop_analysis.loop_parent(loops[2]), Some(loops[0]));
         assert_eq!(loop_analysis.loop_parent(loops[0]), None);
         assert_eq!(loop_analysis.is_in_loop(block0, loops[0]), true);
-        assert_eq!(loop_analysis.is_in_loop(block1, loops[1]), true);
-        assert_eq!(loop_analysis.is_in_loop(block2, loops[1]), true);
-        assert_eq!(loop_analysis.is_in_loop(block3, loops[2]), true);
-        assert_eq!(loop_analysis.is_in_loop(block4, loops[2]), true);
+        assert_eq!(loop_analysis.is_in_loop(block1, loops[2]), true);
+        assert_eq!(loop_analysis.is_in_loop(block2, loops[2]), true);
+        assert_eq!(loop_analysis.is_in_loop(block3, loops[1]), true);
+        assert_eq!(loop_analysis.is_in_loop(block4, loops[1]), true);
         assert_eq!(loop_analysis.is_in_loop(block5, loops[0]), true);
         assert_eq!(loop_analysis.loop_level(block0).level(), 1);
         assert_eq!(loop_analysis.loop_level(block1).level(), 2);

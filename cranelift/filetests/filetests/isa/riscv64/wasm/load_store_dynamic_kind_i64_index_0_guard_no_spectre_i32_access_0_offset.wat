@@ -44,15 +44,15 @@
 ;;   ld a5,8(a2)
 ;;   addi a5,a5,-4
 ;;   ugt a5,a0,a5##ty=i64
-;;   bne a5,zero,taken(label1),not_taken(label2)
-;; block2:
-;;   ld a7,0(a2)
-;;   add a7,a7,a0
-;;   sw a1,0(a7)
-;;   j label3
-;; block3:
-;;   ret
+;;   bne a5,zero,taken(label3),not_taken(label1)
 ;; block1:
+;;   ld a6,0(a2)
+;;   add a6,a6,a0
+;;   sw a1,0(a6)
+;;   j label2
+;; block2:
+;;   ret
+;; block3:
 ;;   udf##trap_code=heap_oob
 ;;
 ;; function u0:1:
@@ -60,13 +60,13 @@
 ;;   ld a5,8(a1)
 ;;   addi a5,a5,-4
 ;;   ugt a5,a0,a5##ty=i64
-;;   bne a5,zero,taken(label1),not_taken(label2)
-;; block2:
-;;   ld a7,0(a1)
-;;   add a7,a7,a0
-;;   lw a0,0(a7)
-;;   j label3
-;; block3:
-;;   ret
+;;   bne a5,zero,taken(label3),not_taken(label1)
 ;; block1:
+;;   ld a6,0(a1)
+;;   add a6,a6,a0
+;;   lw a0,0(a6)
+;;   j label2
+;; block2:
+;;   ret
+;; block3:
 ;;   udf##trap_code=heap_oob

@@ -3,6 +3,7 @@
 pub use self::inst::{args, EmitInfo, EmitState, Inst};
 
 use super::{OwnedTargetIsa, TargetIsa};
+use crate::dominator_tree::DominatorTree;
 use crate::ir::{condcodes::IntCC, Function, Type};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv;
@@ -48,13 +49,14 @@ impl X64Backend {
     fn compile_vcode(
         &self,
         func: &Function,
+        domtree: &DominatorTree,
     ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
         // This performs lowering to VCode, register-allocates the code, computes
         // block layout and finalizes branches. The result is ready for binary emission.
         let emit_info = EmitInfo::new(self.flags.clone(), self.x64_flags.clone());
         let sigs = SigSet::new::<abi::X64ABIMachineSpec>(func, &self.flags)?;
-        let abi = abi::X64Callee::new(&func, self, &self.x64_flags, &sigs)?;
-        compile::compile::<Self>(&func, self, abi, emit_info, sigs)
+        let abi = abi::X64Callee::new(func, self, &self.x64_flags, &sigs)?;
+        compile::compile::<Self>(func, domtree, self, abi, emit_info, sigs)
     }
 }
 
@@ -62,9 +64,10 @@ impl TargetIsa for X64Backend {
     fn compile_function(
         &self,
         func: &Function,
+        domtree: &DominatorTree,
         want_disasm: bool,
     ) -> CodegenResult<CompiledCodeStencil> {
-        let (vcode, regalloc_result) = self.compile_vcode(func)?;
+        let (vcode, regalloc_result) = self.compile_vcode(func, domtree)?;
 
         let emit_result = vcode.emit(
             &regalloc_result,
@@ -230,156 +233,8 @@ fn isa_constructor(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::cursor::{Cursor, FuncCursor};
-    use crate::ir::{types::*, RelSourceLoc, SourceLoc, UserFuncName, ValueLabel, ValueLabelStart};
-    use crate::ir::{AbiParam, Function, InstBuilder, JumpTableData, Signature};
-    use crate::isa::CallConv;
     use crate::settings;
     use crate::settings::Configurable;
-    use core::str::FromStr;
-    use cranelift_entity::EntityRef;
-    use target_lexicon::Triple;
-
-    /// We have to test cold blocks by observing final machine code,
-    /// rather than VCode, because the VCode orders blocks in lowering
-    /// order, not emission order. (The exact difference between the
-    /// two is that cold blocks are sunk in the latter.) We might as
-    /// well do the test here, where we have a backend to use.
-    #[test]
-    fn test_cold_blocks() {
-        let name = UserFuncName::testcase("test0");
-        let mut sig = Signature::new(CallConv::SystemV);
-        sig.params.push(AbiParam::new(I32));
-        sig.returns.push(AbiParam::new(I32));
-        let mut func = Function::with_name_signature(name, sig);
-        // Add debug info: this tests the debug machinery wrt cold
-        // blocks as well.
-        func.dfg.collect_debug_info();
-
-        let bb0 = func.dfg.make_block();
-        let arg0 = func.dfg.append_block_param(bb0, I32);
-        let bb1 = func.dfg.make_block();
-        let bb2 = func.dfg.make_block();
-        let bb3 = func.dfg.make_block();
-        let bb1_param = func.dfg.append_block_param(bb1, I32);
-        let bb3_param = func.dfg.append_block_param(bb3, I32);
-
-        let mut pos = FuncCursor::new(&mut func);
-
-        pos.insert_block(bb0);
-        pos.set_srcloc(SourceLoc::new(1));
-        let v0 = pos.ins().iconst(I32, 0x1234);
-        pos.set_srcloc(SourceLoc::new(2));
-        let v1 = pos.ins().iadd(arg0, v0);
-        pos.ins().brif(v1, bb1, &[v1], bb2, &[]);
-
-        pos.insert_block(bb1);
-        pos.set_srcloc(SourceLoc::new(3));
-        let v2 = pos.ins().isub(v1, v0);
-        pos.set_srcloc(SourceLoc::new(4));
-        let v3 = pos.ins().iadd(v2, bb1_param);
-        pos.ins().brif(v1, bb2, &[], bb3, &[v3]);
-
-        pos.func.layout.set_cold(bb2);
-        pos.insert_block(bb2);
-        pos.set_srcloc(SourceLoc::new(5));
-        let v4 = pos.ins().iadd(v1, v0);
-        pos.ins().brif(v4, bb2, &[], bb1, &[v4]);
-
-        pos.insert_block(bb3);
-        pos.set_srcloc(SourceLoc::new(6));
-        pos.ins().return_(&[bb3_param]);
-
-        // Create some debug info. Make one label that follows all the
-        // values around. Note that this is usually done via an API on
-        // the FunctionBuilder, but that's in cranelift_frontend
-        // (i.e., a higher level of the crate DAG) so we have to build
-        // it manually here.
-        pos.func.dfg.values_labels.as_mut().unwrap().insert(
-            v0,
-            crate::ir::ValueLabelAssignments::Starts(vec![ValueLabelStart {
-                from: RelSourceLoc::new(1),
-                label: ValueLabel::new(1),
-            }]),
-        );
-        pos.func.dfg.values_labels.as_mut().unwrap().insert(
-            v1,
-            crate::ir::ValueLabelAssignments::Starts(vec![ValueLabelStart {
-                from: RelSourceLoc::new(2),
-                label: ValueLabel::new(1),
-            }]),
-        );
-        pos.func.dfg.values_labels.as_mut().unwrap().insert(
-            v2,
-            crate::ir::ValueLabelAssignments::Starts(vec![ValueLabelStart {
-                from: RelSourceLoc::new(3),
-                label: ValueLabel::new(1),
-            }]),
-        );
-        pos.func.dfg.values_labels.as_mut().unwrap().insert(
-            v3,
-            crate::ir::ValueLabelAssignments::Starts(vec![ValueLabelStart {
-                from: RelSourceLoc::new(4),
-                label: ValueLabel::new(1),
-            }]),
-        );
-        pos.func.dfg.values_labels.as_mut().unwrap().insert(
-            v4,
-            crate::ir::ValueLabelAssignments::Starts(vec![ValueLabelStart {
-                from: RelSourceLoc::new(5),
-                label: ValueLabel::new(1),
-            }]),
-        );
-
-        let mut shared_flags_builder = settings::builder();
-        shared_flags_builder.set("opt_level", "none").unwrap();
-        shared_flags_builder.set("enable_verifier", "true").unwrap();
-        let shared_flags = settings::Flags::new(shared_flags_builder);
-        let isa_flags = x64_settings::Flags::new(&shared_flags, x64_settings::builder());
-        let backend = X64Backend::new_with_flags(
-            Triple::from_str("x86_64").unwrap(),
-            shared_flags,
-            isa_flags,
-        );
-        let result = backend
-            .compile_function(&mut func, /* want_disasm = */ false)
-            .unwrap();
-        let code = result.buffer.data();
-
-        // To update this comment, write the golden bytes to a file, and run the following
-        // command on it:
-        // > objdump -b binary -D <file> -m i386:x86-64 -M intel
-        //
-        //  0:   55                      push   rbp
-        //  1:   48 89 e5                mov    rbp,rsp
-        //  4:   48 89 fe                mov    rsi,rdi
-        //  7:   81 c6 34 12 00 00       add    esi,0x1234
-        //  d:   85 f6                   test   esi,esi
-        //  f:   0f 84 1c 00 00 00       je     0x31
-        // 15:   49 89 f0                mov    r8,rsi
-        // 18:   48 89 f0                mov    rax,rsi
-        // 1b:   81 e8 34 12 00 00       sub    eax,0x1234
-        // 21:   44 01 c0                add    eax,r8d
-        // 24:   85 f6                   test   esi,esi
-        // 26:   0f 85 05 00 00 00       jne    0x31
-        // 2c:   48 89 ec                mov    rsp,rbp
-        // 2f:   5d                      pop    rbp
-        // 30:   c3                      ret
-        // 31:   49 89 f0                mov    r8,rsi
-        // 34:   41 81 c0 34 12 00 00    add    r8d,0x1234
-        // 3b:   45 85 c0                test   r8d,r8d
-        // 3e:   0f 85 ed ff ff ff       jne    0x31
-        // 44:   e9 cf ff ff ff          jmp    0x18
-
-        let golden = vec![
-            85, 72, 137, 229, 72, 137, 254, 129, 198, 52, 18, 0, 0, 133, 246, 15, 132, 28, 0, 0, 0,
-            73, 137, 240, 72, 137, 240, 129, 232, 52, 18, 0, 0, 68, 1, 192, 133, 246, 15, 133, 5,
-            0, 0, 0, 72, 137, 236, 93, 195, 73, 137, 240, 65, 129, 192, 52, 18, 0, 0, 69, 133, 192,
-            15, 133, 237, 255, 255, 255, 233, 207, 255, 255, 255,
-        ];
-
-        assert_eq!(code, &golden[..]);
-    }
 
     // Check that feature tests for SIMD work correctly.
     #[test]
@@ -396,104 +251,5 @@ mod test {
             isa_builder.finish(shared_flags),
             Err(CodegenError::Unsupported(_)),
         ));
-    }
-
-    // Check that br_table lowers properly. We can't test this with an
-    // ordinary compile-test because the br_table pseudoinstruction
-    // expands during emission.
-    #[test]
-    fn br_table() {
-        let name = UserFuncName::testcase("test0");
-        let mut sig = Signature::new(CallConv::SystemV);
-        sig.params.push(AbiParam::new(I32));
-        sig.returns.push(AbiParam::new(I32));
-        let mut func = Function::with_name_signature(name, sig);
-
-        let bb0 = func.dfg.make_block();
-        let arg0 = func.dfg.append_block_param(bb0, I32);
-        let bb1 = func.dfg.make_block();
-        let bb2 = func.dfg.make_block();
-        let bb3 = func.dfg.make_block();
-
-        let mut pos = FuncCursor::new(&mut func);
-
-        pos.insert_block(bb0);
-        let jt_data = JumpTableData::new(
-            pos.func.dfg.block_call(bb3, &[]),
-            &[
-                pos.func.dfg.block_call(bb1, &[]),
-                pos.func.dfg.block_call(bb2, &[]),
-            ],
-        );
-        let jt = pos.func.create_jump_table(jt_data);
-        pos.ins().br_table(arg0, jt);
-
-        pos.insert_block(bb1);
-        let v1 = pos.ins().iconst(I32, 1);
-        pos.ins().return_(&[v1]);
-
-        pos.insert_block(bb2);
-        let v2 = pos.ins().iconst(I32, 2);
-        pos.ins().return_(&[v2]);
-
-        pos.insert_block(bb3);
-        let v3 = pos.ins().iconst(I32, 3);
-        pos.ins().return_(&[v3]);
-
-        let mut shared_flags_builder = settings::builder();
-        shared_flags_builder.set("opt_level", "none").unwrap();
-        shared_flags_builder.set("enable_verifier", "true").unwrap();
-        let shared_flags = settings::Flags::new(shared_flags_builder);
-        let isa_flags = x64_settings::Flags::new(&shared_flags, x64_settings::builder());
-        let backend = X64Backend::new_with_flags(
-            Triple::from_str("x86_64").unwrap(),
-            shared_flags,
-            isa_flags,
-        );
-        let result = backend
-            .compile_function(&mut func, /* want_disasm = */ false)
-            .unwrap();
-        let code = result.buffer.data();
-
-        // To update this comment, write the golden bytes to a file, and run the following
-        // command on it:
-        // > objdump -b binary -D <file> -m i386:x86-64 -M intel
-        //
-        //  0:   55                      push   rbp
-        //  1:   48 89 e5                mov    rbp,rsp
-        //  4:   83 ff 02                cmp    edi,0x2
-        //  7:   0f 83 27 00 00 00       jae    0x34
-        //  d:   44 8b d7                mov    r10d,edi
-        // 10:   41 b9 00 00 00 00       mov    r9d,0x0
-        // 16:   4d 0f 43 d1             cmovae r10,r9
-        // 1a:   4c 8d 0d 0b 00 00 00    lea    r9,[rip+0xb]        # 0x2c
-        // 21:   4f 63 54 91 00          movsxd r10,DWORD PTR [r9+r10*4+0x0]
-        // 26:   4d 01 d1                add    r9,r10
-        // 29:   41 ff e1                jmp    r9
-        // 2c:   12 00                   adc    al,BYTE PTR [rax]
-        // 2e:   00 00                   add    BYTE PTR [rax],al
-        // 30:   1c 00                   sbb    al,0x0
-        // 32:   00 00                   add    BYTE PTR [rax],al
-        // 34:   b8 03 00 00 00          mov    eax,0x3
-        // 39:   48 89 ec                mov    rsp,rbp
-        // 3c:   5d                      pop    rbp
-        // 3d:   c3                      ret
-        // 3e:   b8 01 00 00 00          mov    eax,0x1
-        // 43:   48 89 ec                mov    rsp,rbp
-        // 46:   5d                      pop    rbp
-        // 47:   c3                      ret
-        // 48:   b8 02 00 00 00          mov    eax,0x2
-        // 4d:   48 89 ec                mov    rsp,rbp
-        // 50:   5d                      pop    rbp
-        // 51:   c3                      ret
-
-        let golden = vec![
-            85, 72, 137, 229, 131, 255, 2, 15, 131, 39, 0, 0, 0, 68, 139, 215, 65, 185, 0, 0, 0, 0,
-            77, 15, 67, 209, 76, 141, 13, 11, 0, 0, 0, 79, 99, 84, 145, 0, 77, 1, 209, 65, 255,
-            225, 18, 0, 0, 0, 28, 0, 0, 0, 184, 3, 0, 0, 0, 72, 137, 236, 93, 195, 184, 1, 0, 0, 0,
-            72, 137, 236, 93, 195, 184, 2, 0, 0, 0, 72, 137, 236, 93, 195,
-        ];
-
-        assert_eq!(code, &golden[..]);
     }
 }

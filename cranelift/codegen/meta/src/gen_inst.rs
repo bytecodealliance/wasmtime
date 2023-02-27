@@ -1405,7 +1405,9 @@ fn gen_common_isle(
         IsleTarget::Opt => "Value",
     };
     for inst in instructions {
-        if isle_target == IsleTarget::Opt && inst.format.has_value_list {
+        if isle_target == IsleTarget::Opt
+            && (inst.format.has_value_list || inst.value_results.len() != 1)
+        {
             continue;
         }
 

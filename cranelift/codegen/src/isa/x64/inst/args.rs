@@ -1630,7 +1630,38 @@ impl AvxOpcode {
             | AvxOpcode::Vpslld
             | AvxOpcode::Vpsllq
             | AvxOpcode::Vpsraw
-            | AvxOpcode::Vpsrad => {
+            | AvxOpcode::Vpsrad
+            | AvxOpcode::Vpmovsxbw
+            | AvxOpcode::Vpmovzxbw
+            | AvxOpcode::Vpmovsxwd
+            | AvxOpcode::Vpmovzxwd
+            | AvxOpcode::Vpmovsxdq
+            | AvxOpcode::Vpmovzxdq
+            | AvxOpcode::Vaddss
+            | AvxOpcode::Vaddsd
+            | AvxOpcode::Vmulss
+            | AvxOpcode::Vmulsd
+            | AvxOpcode::Vsubss
+            | AvxOpcode::Vsubsd
+            | AvxOpcode::Vdivss
+            | AvxOpcode::Vdivsd
+            | AvxOpcode::Vpabsb
+            | AvxOpcode::Vpabsw
+            | AvxOpcode::Vpabsd
+            | AvxOpcode::Vminss
+            | AvxOpcode::Vminsd
+            | AvxOpcode::Vmaxss
+            | AvxOpcode::Vmaxsd
+            | AvxOpcode::Vsqrtps
+            | AvxOpcode::Vsqrtpd
+            | AvxOpcode::Vroundpd
+            | AvxOpcode::Vroundps
+            | AvxOpcode::Vcvtdq2pd
+            | AvxOpcode::Vcvtdq2ps
+            | AvxOpcode::Vcvtpd2ps
+            | AvxOpcode::Vcvtps2pd
+            | AvxOpcode::Vcvttpd2dq
+            | AvxOpcode::Vcvttps2dq => {
                 smallvec![InstructionSet::AVX]
             }
         }

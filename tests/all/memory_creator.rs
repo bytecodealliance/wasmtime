@@ -57,7 +57,7 @@ mod not_for_windows {
             Some(self.size - self.guard_size)
         }
 
-        fn grow_to(&mut self, new_size: usize) -> Result<(), anyhow::Error> {
+        fn grow_to(&mut self, new_size: usize) -> wasmtime::Result<()> {
             println!("grow to {:x}", new_size);
             let delta = new_size - self.used_wasm_bytes;
             unsafe {

@@ -44,21 +44,21 @@ function %test(i32) {
 ;
 ; check: cfg_postorder:
 ; sameln: block6
-; sameln: block5
-; sameln: block4
 ; sameln: block3
-; sameln: block1
+; sameln: block4
+; sameln: block5
 ; sameln: block2
+; sameln: block1
 ; sameln: block0
 
 ; check: domtree_preorder {
-; nextln: block0: block2 block1 block3 block4 block5
-; nextln: block2:
+; nextln: block0: block1 block2 block5 block4 block3
 ; nextln: block1:
-; nextln: block3:
-; nextln: block4:
+; nextln: block2:
 ; nextln: block5: block6
 ; nextln: block6:
+; nextln: block4:
+; nextln: block3:
 ; nextln: }
 
 function %loop2(i32) system_v {
@@ -84,26 +84,26 @@ function %loop2(i32) system_v {
         return
 }
 ; check: cfg_postorder:
+; sameln: block9
 ; sameln: block7
 ; sameln: block6
-; sameln: block9
-; sameln: block5
 ; sameln: block8
-; sameln: block4
 ; sameln: block3
-; sameln: block1
+; sameln: block4
+; sameln: block5
 ; sameln: block2
+; sameln: block1
 ; sameln: block0
 
 ; check: domtree_preorder {
-; nextln: block0: block2 block1 block3 block4 block5
-; nextln: block2:
+; nextln: block0: block1 block2 block5 block4 block3
 ; nextln: block1:
-; nextln: block3:
+; nextln: block2:
+; nextln: block5: block9
+; nextln: block9:
 ; nextln: block4: block8
 ; nextln: block8: block6
 ; nextln: block6: block7
 ; nextln: block7:
-; nextln: block5: block9
-; nextln: block9:
+; nextln: block3:
 ; nextln: }

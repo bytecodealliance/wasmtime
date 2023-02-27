@@ -32,6 +32,25 @@ pub enum AtomicRmwOp {
     Smax,
 }
 
+impl AtomicRmwOp {
+    /// Returns a slice with all supported [AtomicRmwOp]'s.
+    pub fn all() -> &'static [AtomicRmwOp] {
+        &[
+            AtomicRmwOp::Add,
+            AtomicRmwOp::Sub,
+            AtomicRmwOp::And,
+            AtomicRmwOp::Nand,
+            AtomicRmwOp::Or,
+            AtomicRmwOp::Xor,
+            AtomicRmwOp::Xchg,
+            AtomicRmwOp::Umin,
+            AtomicRmwOp::Umax,
+            AtomicRmwOp::Smin,
+            AtomicRmwOp::Smax,
+        ]
+    }
+}
+
 impl Display for AtomicRmwOp {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let s = match self {
@@ -67,6 +86,19 @@ impl FromStr for AtomicRmwOp {
             "smin" => Ok(AtomicRmwOp::Smin),
             "smax" => Ok(AtomicRmwOp::Smax),
             _ => Err(()),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn roundtrip_parse() {
+        for op in AtomicRmwOp::all() {
+            let roundtripped = format!("{op}").parse::<AtomicRmwOp>().unwrap();
+            assert_eq!(*op, roundtripped);
         }
     }
 }

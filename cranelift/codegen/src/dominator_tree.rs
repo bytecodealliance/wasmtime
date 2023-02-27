@@ -311,9 +311,17 @@ impl DominatorTree {
                         self.nodes[block].rpo_number = SEEN;
                         self.stack.push((Visit::Last, block));
                         if let Some(inst) = func.stencil.layout.last_inst(block) {
+                            // Heuristic: chase the children in reverse. This puts the first
+                            // successor block first in the postorder, all other things being
+                            // equal, which tends to prioritize loop backedges over out-edges,
+                            // putting the edge-block closer to the loop body and minimizing
+                            // live-ranges in linear instruction space. This heuristic doesn't have
+                            // any effect on the computation of dominators, and is purely for other
+                            // consumers of the postorder we cache here.
                             for block in func.stencil.dfg.insts[inst]
                                 .branch_destination(&func.stencil.dfg.jump_tables)
                                 .iter()
+                                .rev()
                             {
                                 let succ = block.block(&func.stencil.dfg.value_lists);
 
@@ -641,7 +649,7 @@ mod tests {
         //       return
         //     } block2
         // } block0
-        assert_eq!(dt.cfg_postorder(), &[trap_block, block2, block0]);
+        assert_eq!(dt.cfg_postorder(), &[block2, trap_block, block0]);
 
         let v2_def = cur.func.dfg.value_def(v2).unwrap_inst();
         assert!(!dt.dominates(v2_def, block0, &cur.func.layout));

@@ -928,9 +928,12 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     }
 
     fn lower_branch_blockparam_args(&mut self, block: BlockIndex) {
-        for succ_idx in 0..self.vcode.block_order().succ_indices(block).len() {
+        // TODO: why not make `block_order` public?
+        for succ_idx in 0..self.vcode.block_order().succ_indices(block).1.len() {
             // Avoid immutable borrow by explicitly indexing.
-            let (inst, succ) = self.vcode.block_order().succ_indices(block)[succ_idx];
+            let (opt_inst, succs) = self.vcode.block_order().succ_indices(block);
+            let inst = opt_inst.expect("lower_branch_blockparam_args called on a critical edge!");
+            let succ = succs[succ_idx];
 
             // The use of `succ_idx` to index `branch_destination` is valid on the assumption that
             // the traversal order defined in `visit_block_succs` mirrors the order returned by
@@ -960,17 +963,9 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         targets: &mut SmallVec<[MachLabel; 2]>,
     ) -> Option<Inst> {
         targets.clear();
-        let mut last_inst = None;
-        for &(inst, succ) in self.vcode.block_order().succ_indices(bindex) {
-            // Basic blocks may end in a single branch instruction, but those instructions may have
-            // multiple destinations. As such, all `inst` values in `succ_indices` must be the
-            // same, or this basic block would have multiple branch instructions present.
-            debug_assert!(last_inst.map_or(true, |prev| prev == inst));
-            last_inst = Some(inst);
-            targets.push(MachLabel::from_block(succ));
-        }
-
-        last_inst
+        let (opt_inst, succs) = self.vcode.block_order().succ_indices(bindex);
+        targets.extend(succs.iter().map(|succ| MachLabel::from_block(*succ)));
+        opt_inst
     }
 
     /// Lower the function.
@@ -1025,7 +1020,8 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 // according to the one successor, and pass them
                 // through; note that the successor must have an
                 // original block.
-                let (_, succ) = self.vcode.block_order().succ_indices(bindex)[0];
+                let (_, succs) = self.vcode.block_order().succ_indices(bindex);
+                let succ = succs[0];
 
                 let orig_succ = lowered_order[succ.index()];
                 let orig_succ = orig_succ
