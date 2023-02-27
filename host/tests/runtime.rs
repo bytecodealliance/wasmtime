@@ -360,7 +360,11 @@ async fn run_clock_time_get(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<
 }
 
 async fn run_close_preopen(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
-    expect_fail(run_with_temp_dir(store, wasi).await)
+    run_with_temp_dir(store, wasi).await
+}
+
+async fn run_overwrite_preopen(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {
+    run_with_temp_dir(store, wasi).await
 }
 
 async fn run_dangling_fd(store: Store<WasiCtx>, wasi: WasiCommand) -> Result<()> {

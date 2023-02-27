@@ -14,7 +14,7 @@ pub struct WasiCtx {
     pub sched: Box<dyn WasiSched>,
     pub table: Table,
     pub env: Vec<(String, String)>,
-    pub preopens: Vec<(u32, String)>,
+    pub preopens: Vec<(Box<dyn WasiDir>, String)>,
 }
 
 impl WasiCtx {
@@ -91,8 +91,7 @@ impl WasiCtx {
     }
 
     pub fn push_preopened_dir(&mut self, dir: Box<dyn WasiDir>, path: &str) -> anyhow::Result<()> {
-        let fd = self.push_dir(dir)?;
-        self.preopens.push((fd, path.to_owned()));
+        self.preopens.push((dir, path.to_owned()));
         Ok(())
     }
 }

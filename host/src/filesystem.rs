@@ -213,7 +213,13 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
     async fn get_preopens(
         &mut self,
     ) -> Result<Vec<(wasi_filesystem::Descriptor, String)>, anyhow::Error> {
-        Ok(self.preopens.clone())
+        // Create new handles to the preopens.
+        let mut results = Vec::new();
+        for (handle, name) in &self.preopens {
+            let desc = self.table.push(Box::new(handle.dup()))?;
+            results.push((desc, name.clone()));
+        }
+        Ok(results)
     }
 
     async fn fadvise(
@@ -610,8 +616,6 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
 
     async fn drop_descriptor(&mut self, fd: wasi_filesystem::Descriptor) -> anyhow::Result<()> {
         let table = self.table_mut();
-        // TODO: `WasiCtx` no longer keeps track of which directories are preopens, so we currently have no way
-        // of preventing them from being closed.  Is that a problem?
         if !(table.delete::<Box<dyn WasiFile>>(fd).is_ok()
             || table.delete::<Box<dyn WasiDir>>(fd).is_ok())
         {

@@ -7,17 +7,7 @@ unsafe fn test_close_preopen(dir_fd: wasi::Fd) {
     assert!(dir_fd > pre_fd, "dir_fd number");
 
     // Try to close a preopened directory handle.
-    assert_errno!(
-        wasi::fd_close(pre_fd).expect_err("closing a preopened file descriptor"),
-        wasi::ERRNO_NOTSUP
-    );
-
-    // Try to renumber over a preopened directory handle.
-    assert_errno!(
-        wasi::fd_renumber(dir_fd, pre_fd)
-            .expect_err("renumbering over a preopened file descriptor"),
-        wasi::ERRNO_NOTSUP
-    );
+    wasi::fd_close(pre_fd).expect("closing a preopened file descriptor");
 
     // Ensure that dir_fd is still open.
     let dir_fdstat = wasi::fd_fdstat_get(dir_fd).expect("failed fd_fdstat_get");
@@ -27,19 +17,10 @@ unsafe fn test_close_preopen(dir_fd: wasi::Fd) {
         "expected the scratch directory to be a directory",
     );
 
-    // Try to renumber a preopened directory handle.
+    // Ensure that pre_fd is closed.
     assert_errno!(
-        wasi::fd_renumber(pre_fd, dir_fd)
-            .expect_err("renumbering over a preopened file descriptor"),
-        wasi::ERRNO_NOTSUP
-    );
-
-    // Ensure that dir_fd is still open.
-    let dir_fdstat = wasi::fd_fdstat_get(dir_fd).expect("failed fd_fdstat_get");
-    assert_eq!(
-        dir_fdstat.fs_filetype,
-        wasi::FILETYPE_DIRECTORY,
-        "expected the scratch directory to be a directory",
+        wasi::fd_fdstat_get(pre_fd).expect_err("failed fd_fdstat_get"),
+        wasi::ERRNO_BADF
     );
 }
 

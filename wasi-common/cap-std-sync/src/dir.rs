@@ -2,17 +2,22 @@ use crate::file::{filetype_from, get_fd_flags, File};
 use cap_fs_ext::{DirEntryExt, DirExt, MetadataExt, SystemTimeSpec};
 use std::any::Any;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use wasi_common::{
     dir::{ReaddirCursor, ReaddirEntity, WasiDir},
     file::{FdFlags, Filestat, OFlags, WasiFile},
     Error, ErrorExt,
 };
 
-pub struct Dir(cap_std::fs::Dir);
+/// A directory handle.
+///
+/// We hold an `Arc` so that preopens can be regular handles which can
+/// be closed, without closing the underlying file descriptor.
+pub struct Dir(Arc<cap_std::fs::Dir>);
 
 impl Dir {
     pub fn from_cap_std(dir: cap_std::fs::Dir) -> Self {
-        Dir(dir)
+        Dir(Arc::new(dir))
     }
 
     pub fn open_file_(
@@ -159,7 +164,7 @@ impl WasiDir for Dir {
     }
 
     async fn get_fdflags(&self) -> Result<FdFlags, Error> {
-        let fdflags = get_fd_flags(&self.0)?;
+        let fdflags = get_fd_flags(&*self.0)?;
         Ok(fdflags)
     }
 
@@ -333,6 +338,10 @@ impl WasiDir for Dir {
             )?;
         }
         Ok(())
+    }
+
+    fn dup(&self) -> Box<dyn WasiDir> {
+        Box::new(Dir(Arc::clone(&self.0)))
     }
 }
 

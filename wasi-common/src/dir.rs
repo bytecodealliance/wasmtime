@@ -99,6 +99,8 @@ pub trait WasiDir: Send + Sync {
     ) -> Result<(), Error> {
         Err(Error::not_supported())
     }
+
+    fn dup(&self) -> Box<dyn WasiDir>;
 }
 
 pub trait TableDirExt {
