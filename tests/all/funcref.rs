@@ -3,7 +3,10 @@ use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
 use std::sync::Arc;
 use wasmtime::*;
 
-const FUNC_REF : RefType = RefType { nullable: true, heap_type: HeapType::Func };
+const FUNC_REF: RefType = RefType {
+    nullable: true,
+    heap_type: HeapType::Func,
+};
 
 #[test]
 fn store_null_funcref_into_nonnull_funcref_table() -> anyhow::Result<()> {
@@ -14,9 +17,24 @@ fn store_null_funcref_into_nonnull_funcref_table() -> anyhow::Result<()> {
 
     // Non-null funcref table and initial funcref.
     let f = Func::wrap(&mut store, || {});
-    let table = Table::new(&mut store, TableType::new(RefType { nullable: false, heap_type: HeapType::Func }, 1, None), Val::FuncRef(Some(f)))?;
+    let table = Table::new(
+        &mut store,
+        TableType::new(
+            RefType {
+                nullable: false,
+                heap_type: HeapType::Func,
+            },
+            1,
+            None,
+        ),
+        Val::FuncRef(Some(f)),
+    )?;
     // Soundness check: expect position 0 to be inhabited.
-    assert!(table.get(&mut store, 0).expect("some").unwrap_funcref().is_some());
+    assert!(table
+        .get(&mut store, 0)
+        .expect("some")
+        .unwrap_funcref()
+        .is_some());
 
     // Attempt to store a null ref into the non-nullable cell 0.
     assert!(table.set(&mut store, 0, Val::FuncRef(None)).is_err());

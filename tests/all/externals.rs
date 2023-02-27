@@ -446,9 +446,24 @@ fn store_null_externref_into_nonnull_externref_table() -> anyhow::Result<()> {
 
     // Non-null externref table and initial externref.
     let e = ExternRef::new(42_usize);
-    let table = Table::new(&mut store, TableType::new(RefType { nullable: false, heap_type: HeapType::Extern }, 1, None), Val::ExternRef(Some(e)))?;
+    let table = Table::new(
+        &mut store,
+        TableType::new(
+            RefType {
+                nullable: false,
+                heap_type: HeapType::Extern,
+            },
+            1,
+            None,
+        ),
+        Val::ExternRef(Some(e)),
+    )?;
     // Soundness check: expect position 0 to be inhabited.
-    assert!(table.get(&mut store, 0).expect("some").unwrap_externref().is_some());
+    assert!(table
+        .get(&mut store, 0)
+        .expect("some")
+        .unwrap_externref()
+        .is_some());
 
     // Attempt to store a null ref into the non-nullable cell 0.
     assert!(table.set(&mut store, 0, Val::ExternRef(None)).is_err());

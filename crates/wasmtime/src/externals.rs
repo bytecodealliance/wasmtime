@@ -1,8 +1,8 @@
 use crate::store::{StoreData, StoreOpaque, Stored};
 use crate::trampoline::{generate_global_export, generate_table_export};
 use crate::{
-    AsContext, AsContextMut, Engine, ExternRef, ExternType, Func, GlobalType, Memory, Mutability,
-    SharedMemory, TableType, Val, ValType, HeapType,
+    AsContext, AsContextMut, Engine, ExternRef, ExternType, Func, GlobalType, HeapType, Memory,
+    Mutability, SharedMemory, TableType, Val, ValType,
 };
 use anyhow::{anyhow, bail, Result};
 use std::mem;
@@ -273,19 +273,17 @@ impl Global {
                 ValType::I64 => Val::from(*definition.as_i64()),
                 ValType::F32 => Val::F32(*definition.as_u32()),
                 ValType::F64 => Val::F64(*definition.as_u64()),
-                ValType::Ref(rt) => {
-                    match rt.heap_type {
-                        HeapType::Extern => Val::ExternRef(
-                            definition
-                                .as_externref()
-                                .clone()
-                                .map(|inner| ExternRef { inner }),
-                        ),
-                        HeapType::Index(_) | HeapType::Func => {
-                            Val::FuncRef(Func::from_raw(store, definition.as_anyfunc() as usize))
-                        }
+                ValType::Ref(rt) => match rt.heap_type {
+                    HeapType::Extern => Val::ExternRef(
+                        definition
+                            .as_externref()
+                            .clone()
+                            .map(|inner| ExternRef { inner }),
+                    ),
+                    HeapType::Index(_) | HeapType::Func => {
+                        Val::FuncRef(Func::from_raw(store, definition.as_anyfunc() as usize))
                     }
-                }
+                },
                 ValType::V128 => Val::V128(*definition.as_u128()),
             }
         }

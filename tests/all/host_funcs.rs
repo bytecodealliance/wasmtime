@@ -4,9 +4,14 @@ use wasmtime::*;
 use wasmtime_wasi::sync::WasiCtxBuilder;
 use wasmtime_wasi::I32Exit;
 
-const EXTERN_REF : RefType = RefType { nullable: true, heap_type: HeapType::Extern };
-const FUNC_REF : RefType = RefType { nullable: true, heap_type: HeapType::Func };
-
+const EXTERN_REF: RefType = RefType {
+    nullable: true,
+    heap_type: HeapType::Extern,
+};
+const FUNC_REF: RefType = RefType {
+    nullable: true,
+    heap_type: HeapType::Func,
+};
 
 #[test]
 #[should_panic = "cannot use `func_new_async` without enabling async support"]

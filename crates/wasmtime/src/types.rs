@@ -155,7 +155,8 @@ impl RefType {
     }
 
     pub(crate) fn is_subtype(&self, other: &RefType) -> bool {
-        HeapType::is_subtype(&self.heap_type, &other.heap_type) && self.nullable == other.nullable || other.nullable
+        HeapType::is_subtype(&self.heap_type, &other.heap_type) && self.nullable == other.nullable
+            || other.nullable
     }
 }
 
