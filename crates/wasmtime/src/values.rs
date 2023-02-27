@@ -89,15 +89,14 @@ impl Val {
             Val::I64(_) => ValType::I64,
             Val::F32(_) => ValType::F32,
             Val::F64(_) => ValType::F64,
-            Val::ExternRef(_) => ValType::Ref(RefType { // TODO(dhil):
-                                                        // This is a bug. It is not true that every externref is
-                                                        // nullable. Too see why, just consider the instruction [ref.extern]
-                                                        // it returns a non-nullable extern ref.
-                nullable: true,
+            Val::ExternRef(x) => ValType::Ref(RefType {
+                nullable: x.is_none(), // NOTE(dhil): this may not
+                                       // produce the original source type for `Val` as a non-null reference
+                                       // value can be declared with nullable reference type.
                 heap_type: HeapType::Extern,
             }),
-            Val::FuncRef(_) => ValType::Ref(RefType {
-                nullable: true,                         // TODO(dhil): bug. Similar to the above, consider [ref.func].
+            Val::FuncRef(x) => ValType::Ref(RefType {
+                nullable: x.is_none(), // same as above.
                 heap_type: HeapType::Func,
             }),
             Val::V128(_) => ValType::V128,
@@ -221,7 +220,7 @@ impl Val {
                 Val::FuncRef(None),
                 RefType {
                     heap_type: HeapType::Func,
-                    ..
+                    nullable: true,
                 },
             ) => Ok(TableElement::FuncRef(ptr::null_mut())),
             (
@@ -235,7 +234,7 @@ impl Val {
                 Val::ExternRef(None),
                 RefType {
                     heap_type: HeapType::Extern,
-                    ..
+                    nullable: true,
                 },
             ) => Ok(TableElement::ExternRef(None)),
             _ => bail!("value does not match table element type"),

@@ -436,3 +436,22 @@ fn read_write_memory_via_api() {
     let res = mem.write(&mut store, usize::MAX, &mut buffer);
     assert!(res.is_err());
 }
+
+#[test]
+fn store_null_externref_into_nonnull_externref_table() -> anyhow::Result<()> {
+    let mut cfg = Config::new();
+    cfg.wasm_function_references(true);
+    let engine = Engine::new(&cfg)?;
+    let mut store = Store::new(&engine, ());
+
+    // Non-null externref table and initial externref.
+    let e = ExternRef::new(42_usize);
+    let table = Table::new(&mut store, TableType::new(RefType { nullable: false, heap_type: HeapType::Extern }, 1, None), Val::ExternRef(Some(e)))?;
+    // Soundness check: expect position 0 to be inhabited.
+    assert!(table.get(&mut store, 0).expect("some").unwrap_externref().is_some());
+
+    // Attempt to store a null ref into the non-nullable cell 0.
+    assert!(table.set(&mut store, 0, Val::ExternRef(None)).is_err());
+
+    Ok(())
+}

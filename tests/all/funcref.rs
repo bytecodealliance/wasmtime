@@ -6,6 +6,25 @@ use wasmtime::*;
 const FUNC_REF : RefType = RefType { nullable: true, heap_type: HeapType::Func };
 
 #[test]
+fn store_null_funcref_into_nonnull_funcref_table() -> anyhow::Result<()> {
+    let mut cfg = Config::new();
+    cfg.wasm_function_references(true);
+    let engine = Engine::new(&cfg)?;
+    let mut store = Store::new(&engine, ());
+
+    // Non-null funcref table and initial funcref.
+    let f = Func::wrap(&mut store, || {});
+    let table = Table::new(&mut store, TableType::new(RefType { nullable: false, heap_type: HeapType::Func }, 1, None), Val::FuncRef(Some(f)))?;
+    // Soundness check: expect position 0 to be inhabited.
+    assert!(table.get(&mut store, 0).expect("some").unwrap_funcref().is_some());
+
+    // Attempt to store a null ref into the non-nullable cell 0.
+    assert!(table.set(&mut store, 0, Val::FuncRef(None)).is_err());
+
+    Ok(())
+}
+
+#[test]
 fn pass_funcref_in_and_out_of_wasm() -> anyhow::Result<()> {
     let (mut store, module) = ref_types_module(
         false,

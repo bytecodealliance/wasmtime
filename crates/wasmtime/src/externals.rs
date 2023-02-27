@@ -239,7 +239,7 @@ impl Global {
         if !val.comes_from_same_store(store) {
             bail!("cross-`Store` globals are not supported");
         }
-        if val.ty() != *ty.content() {
+        if !ValType::is_subtype(&val.ty(), &ty.content()) {
             bail!("value provided does not match the type of this global");
         }
         unsafe {
@@ -309,7 +309,8 @@ impl Global {
             bail!("immutable global cannot be set");
         }
         let ty = ty.content();
-        if val.ty() != *ty {
+
+        if !ValType::is_subtype(&val.ty(), ty) {
             bail!("global of type {:?} cannot be set to {:?}", ty, val.ty());
         }
         if !val.comes_from_same_store(store) {
