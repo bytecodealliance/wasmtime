@@ -4,8 +4,10 @@ use wasmtime::{AsContext, AsContextMut};
 
 const WASM_PAGE_SIZE: u64 = 65_536;
 
-/// The maximum number of data segments that most engines support.
-const MAX_DATA_SEGMENTS: usize = 100_000;
+/// The maximum number of data segments that we will emit. Most
+/// engines support more than this, but we want to leave some
+/// headroom.
+const MAX_DATA_SEGMENTS: usize = 10_000;
 
 /// A "snapshot" of Wasm state from its default value after having been initialized.
 pub struct Snapshot {
