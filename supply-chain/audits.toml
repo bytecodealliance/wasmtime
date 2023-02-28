@@ -771,6 +771,12 @@ This is a small crate which doesn't deviate outside of its intended purpose and
 additionally contains no `unsafe` code.
 """
 
+[[audits.wasm-coredump-builder]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.1.10 -> 0.1.11"
+notes = "This is a minor update which only adds a small bit of functionality."
+
 [[audits.wasm-coredump-encoder]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -778,6 +784,15 @@ version = "0.1.10"
 notes = """
 This small crate contains no `unsafe` code and does no more than what it says on
 the tin.
+"""
+
+[[audits.wasm-coredump-encoder]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.1.10 -> 0.1.11"
+notes = """
+This is a small update which accounts for a function offset in frames and
+doesn't add in too much extra.
 """
 
 [[audits.wasm-coredump-types]]
@@ -788,6 +803,12 @@ notes = """
 This small crate contains no `unsafe` code and only contains type definitions
 used for wasm core dumps and trivially stays within its bounds.
 """
+
+[[audits.wasm-coredump-types]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.1.10 -> 0.1.11"
+notes = "This is quite a small update which only adds a small bit of offset-related functionality."
 
 [[audits.wasm-encoder]]
 who = "Alex Crichton <alex@alexcrichton.com>"
