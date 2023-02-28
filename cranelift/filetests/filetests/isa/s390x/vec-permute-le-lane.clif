@@ -3,7 +3,7 @@ target s390x
 
 function %swizzle(i8x16, i8x16) -> i8x16 wasmtime_system_v {
 block0(v0: i8x16, v1: i8x16):
-    v2 = swizzle.i8x16 v0, v1
+    v2 = swizzle v0, v1
     return v2
 }
 
