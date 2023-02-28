@@ -82,6 +82,7 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv {
         wasmparser::WasmFeatures {
             memory64: true,
             multi_memory: true,
+            relaxed_simd: true,
             ..self.inner.wasm_features()
         }
     }
@@ -612,5 +613,9 @@ impl<'a> FuncEnvironment for FuncEnv<'a> {
     ) -> &cranelift_codegen::entity::PrimaryMap<cranelift_wasm::Heap, cranelift_wasm::HeapData>
     {
         self.inner.heaps()
+    }
+
+    fn relaxed_simd_deterministic(&self) -> bool {
+        self.config.relaxed_simd_deterministic
     }
 }

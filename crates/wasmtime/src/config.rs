@@ -682,6 +682,47 @@ impl Config {
         self
     }
 
+    /// Configures whether the WebAssembly Relaxed SIMD proposal will be
+    /// enabled for compilation.
+    ///
+    /// The [WebAssembly Relaxed SIMD proposal][proposal] is not, at the time of
+    /// this writing, at stage 4. Additionally note that the relaxed SIMD
+    /// proposal's instructions are allowed to have different semantics on
+    /// different architectures depending on the inputs. By default the fastest
+    /// this difference in semantics is enabled in Wasmtime, but this behavior
+    /// can also be disabled through the [`Config::relaxed_simd_deterministic`]
+    /// option which will force deterministic behavior, as classified by the
+    /// specification, at the cost of performance.
+    ///
+    /// This is `false` by default.
+    ///
+    /// [proposal]: https://github.com/webassembly/relaxed-simd
+    pub fn wasm_relaxed_simd(&mut self, enable: bool) -> &mut Self {
+        self.features.relaxed_simd = enable;
+        self
+    }
+
+    /// This option can be used to control the behavior of the [relaxed SIMD
+    /// proposal's][proposal] instructions.
+    ///
+    /// The relaxed SIMD proposal introduces instructions that are allowed to
+    /// have different behavior on different architectures, primarily to afford
+    /// an efficient implementation on all architectures. This means, however,
+    /// that the same module may execute differently on one host than another,
+    /// which typically is not otherwise the case. This option is provided to
+    /// force Wasmtime to generate deterministic code for all relaxed simd
+    /// instructions, at the cost of performance, for all architectures. When
+    /// this option is enabled then the deterministic behavior of all
+    /// instructions in the relaxed SIMD proposal is selected.
+    ///
+    /// This is `false` by default.
+    ///
+    /// [proposal]: https://github.com/webassembly/relaxed-simd
+    pub fn relaxed_simd_deterministic(&mut self, enable: bool) -> &mut Self {
+        self.tunables.relaxed_simd_deterministic = enable;
+        self
+    }
+
     /// Configures whether the [WebAssembly bulk memory operations
     /// proposal][proposal] will be enabled for compilation.
     ///
@@ -1560,6 +1601,10 @@ impl Config {
             }
         }
 
+        if self.features.relaxed_simd && !self.features.simd {
+            bail!("cannot disable the simd proposal but enable the relaxed simd proposal");
+        }
+
         // Apply compiler settings and flags
         for (k, v) in self.compiler_config.settings.iter() {
             compiler.set(k, v)?;
@@ -1608,6 +1653,7 @@ impl fmt::Debug for Config {
             .field("wasm_reference_types", &self.features.reference_types)
             .field("wasm_bulk_memory", &self.features.bulk_memory)
             .field("wasm_simd", &self.features.simd)
+            .field("wasm_relaxed_simd", &self.features.relaxed_simd)
             .field("wasm_multi_value", &self.features.multi_value)
             .field(
                 "static_memory_maximum_size",

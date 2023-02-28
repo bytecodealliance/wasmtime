@@ -184,6 +184,10 @@ impl TargetIsa for X64Backend {
             .syntax(arch::x86::ArchSyntax::Att)
             .build()
     }
+
+    fn has_native_fma(&self) -> bool {
+        self.x64_flags.use_fma()
+    }
 }
 
 impl fmt::Display for X64Backend {

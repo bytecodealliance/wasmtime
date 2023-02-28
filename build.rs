@@ -30,6 +30,12 @@ fn main() -> anyhow::Result<()> {
             test_directory_module(out, "tests/misc_testsuite/threads", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/memory64", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/component-model", strategy)?;
+
+            // NB: these are copied from upstream and updated to wasmtime's
+            // current version of `wast`. This local copy should go away when
+            // all of Wasmtime's tooling is updated and the upstream
+            // `testsuite` module is additionally updated.
+            test_directory_module(out, "tests/misc_testsuite/relaxed-simd", strategy)?;
             Ok(())
         })?;
 
@@ -64,6 +70,7 @@ fn main() -> anyhow::Result<()> {
     drop(Command::new("rustfmt").arg(&output).status());
     Ok(())
 }
+
 fn test_directory_module(
     out: &mut String,
     path: impl AsRef<Path>,

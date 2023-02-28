@@ -2153,4 +2153,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     fn unsigned_add_overflow_condition(&self) -> ir::condcodes::IntCC {
         self.isa.unsigned_add_overflow_condition()
     }
+
+    fn relaxed_simd_deterministic(&self) -> bool {
+        self.tunables.relaxed_simd_deterministic
+    }
+
+    fn has_native_fma(&self) -> bool {
+        self.isa.has_native_fma()
+    }
 }

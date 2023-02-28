@@ -30,6 +30,7 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
     let multi_memory = feature_found(wast, "multi-memory");
     let threads = feature_found(wast, "threads");
     let reference_types = !(threads && feature_found(wast, "proposals"));
+    let relaxed_simd = feature_found(wast, "relaxed-simd");
     let use_shared_memory = feature_found_src(&wast_bytes, "shared_memory")
         || feature_found_src(&wast_bytes, "shared)");
 
@@ -43,6 +44,7 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
         .wasm_threads(threads)
         .wasm_memory64(memory64)
         .wasm_reference_types(reference_types)
+        .wasm_relaxed_simd(relaxed_simd)
         .cranelift_debug_verifier(true);
 
     cfg.wasm_component_model(feature_found(wast, "component-model"));
@@ -108,11 +110,26 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
         None
     };
 
-    let store = Store::new(&Engine::new(&cfg)?, ());
-    let mut wast_context = WastContext::new(store);
+    let mut engines = vec![(Engine::new(&cfg)?, "default")];
 
-    wast_context.register_spectest(use_shared_memory)?;
-    wast_context.run_buffer(wast.to_str().unwrap(), &wast_bytes)?;
+    // For tests that use relaxed-simd test both the default engine and the
+    // guaranteed-deterministic engine to ensure that both the 'native'
+    // semantics of the instructions plus the canonical semantics work.
+    if relaxed_simd {
+        engines.push((
+            Engine::new(cfg.relaxed_simd_deterministic(true))?,
+            "deterministic",
+        ));
+    }
+
+    for (engine, desc) in engines {
+        let store = Store::new(&engine, ());
+        let mut wast_context = WastContext::new(store);
+        wast_context.register_spectest(use_shared_memory)?;
+        wast_context
+            .run_buffer(wast.to_str().unwrap(), &wast_bytes)
+            .with_context(|| format!("failed to run spec test with {desc} engine"))?;
+    }
 
     Ok(())
 }

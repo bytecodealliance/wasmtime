@@ -1778,13 +1778,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.push1(builder.ins().sshr(bitcast_a, b))
         }
         Operator::V128Bitselect => {
-            let (a, b, c) = state.pop3();
-            let bitcast_a = optionally_bitcast_vector(a, I8X16, builder);
-            let bitcast_b = optionally_bitcast_vector(b, I8X16, builder);
-            let bitcast_c = optionally_bitcast_vector(c, I8X16, builder);
+            let (a, b, c) = pop3_with_bitcast(state, I8X16, builder);
             // The CLIF operand ordering is slightly different and the types of all three
             // operands must match (hence the bitcast).
-            state.push1(builder.ins().bitselect(bitcast_c, bitcast_a, bitcast_b))
+            state.push1(builder.ins().bitselect(c, a, b))
         }
         Operator::V128AnyTrue => {
             let a = pop1_with_bitcast(state, type_of(op), builder);
@@ -1938,11 +1935,23 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
 
             state.push1(builder.ins().snarrow(converted_a, zero));
         }
-        Operator::I32x4TruncSatF32x4U => {
+
+        // TODO: the relaxed instructions here are translated the same as the
+        // saturating instructions, even when the code generator configuration
+        // allow for different semantics across hosts. On x86, however, it's
+        // theoretically possible to have a slightly more optimal lowering which
+        // accounts for NaN differently, although the lowering is still not
+        // trivial (e.g. one instruction). At this time the
+        // more-optimal-but-still-large lowering for x86 is not implemented so
+        // the relaxed instructions are listed here instead of down below with
+        // the other relaxed instructions. An x86-specific implementation (or
+        // perhaps for other backends too) should be added and the codegen for
+        // the relaxed instruction should conditionally be different.
+        Operator::I32x4RelaxedTruncF32x4U | Operator::I32x4TruncSatF32x4U => {
             let a = pop1_with_bitcast(state, F32X4, builder);
             state.push1(builder.ins().fcvt_to_uint_sat(I32X4, a))
         }
-        Operator::I32x4TruncSatF64x2UZero => {
+        Operator::I32x4RelaxedTruncF64x2UZero | Operator::I32x4TruncSatF64x2UZero => {
             let a = pop1_with_bitcast(state, F64X2, builder);
             let converted_a = builder.ins().fcvt_to_uint_sat(I64X2, a);
             let handle = builder.func.dfg.constants.insert(vec![0u8; 16].into());
@@ -1950,6 +1959,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
 
             state.push1(builder.ins().uunarrow(converted_a, zero));
         }
+
         Operator::I8x16NarrowI16x8S => {
             let (a, b) = pop2_with_bitcast(state, I16X8, builder);
             state.push1(builder.ins().snarrow(a, b))
@@ -2156,27 +2166,165 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 op
             ));
         }
-        Operator::I8x16RelaxedSwizzle
-        | Operator::I32x4RelaxedTruncF32x4S
-        | Operator::I32x4RelaxedTruncF32x4U
-        | Operator::I32x4RelaxedTruncF64x2SZero
-        | Operator::I32x4RelaxedTruncF64x2UZero
-        | Operator::F32x4RelaxedMadd
-        | Operator::F32x4RelaxedNmadd
-        | Operator::F64x2RelaxedMadd
-        | Operator::F64x2RelaxedNmadd
-        | Operator::I8x16RelaxedLaneselect
+
+        Operator::F32x4RelaxedMax | Operator::F64x2RelaxedMax => {
+            let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
+            state.push1(if environ.relaxed_simd_deterministic() {
+                builder.ins().fmax(a, b)
+            } else {
+                // TODO: should have a more optimal lowering for x86 which
+                // doesn't use the standard `fmax` instruction
+                builder.ins().fmax(a, b)
+            })
+        }
+
+        Operator::F32x4RelaxedMin | Operator::F64x2RelaxedMin => {
+            let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
+            state.push1(if environ.relaxed_simd_deterministic() {
+                builder.ins().fmin(a, b)
+            } else {
+                // TODO: should have a more optimal lowering for x86 which
+                // doesn't use the standard `fmin` instruction
+                builder.ins().fmin(a, b)
+            });
+        }
+
+        Operator::I8x16RelaxedSwizzle => {
+            let (a, b) = pop2_with_bitcast(state, I8X16, builder);
+            state.push1(if environ.relaxed_simd_deterministic() {
+                builder.ins().swizzle(a, b)
+            } else {
+                // TODO: should have a more optimal lowering for x86 which
+                // doesn't use the standard `swizzle` instruction
+                builder.ins().swizzle(a, b)
+            });
+        }
+
+        Operator::F32x4RelaxedMadd | Operator::F64x2RelaxedMadd => {
+            let (a, b, c) = pop3_with_bitcast(state, type_of(op), builder);
+            state.push1(
+                if environ.relaxed_simd_deterministic() || environ.has_native_fma() {
+                    builder.ins().fma(a, b, c)
+                } else {
+                    let mul = builder.ins().fmul(a, b);
+                    builder.ins().fadd(mul, c)
+                },
+            );
+        }
+        Operator::F32x4RelaxedNmadd | Operator::F64x2RelaxedNmadd => {
+            let (a, b, c) = pop3_with_bitcast(state, type_of(op), builder);
+            let a = builder.ins().fneg(a);
+            state.push1(
+                if environ.relaxed_simd_deterministic() || environ.has_native_fma() {
+                    builder.ins().fma(a, b, c)
+                } else {
+                    let mul = builder.ins().fmul(a, b);
+                    builder.ins().fadd(mul, c)
+                },
+            );
+        }
+
+        Operator::I8x16RelaxedLaneselect
         | Operator::I16x8RelaxedLaneselect
         | Operator::I32x4RelaxedLaneselect
-        | Operator::I64x2RelaxedLaneselect
-        | Operator::F32x4RelaxedMin
-        | Operator::F32x4RelaxedMax
-        | Operator::F64x2RelaxedMin
-        | Operator::F64x2RelaxedMax
-        | Operator::I16x8RelaxedQ15mulrS
-        | Operator::I16x8RelaxedDotI8x16I7x16S
-        | Operator::I32x4RelaxedDotI8x16I7x16AddS => {
-            return Err(wasm_unsupported!("proposed relaxed-simd operator {:?}", op));
+        | Operator::I64x2RelaxedLaneselect => {
+            let ty = type_of(op);
+            let (a, b, c) = pop3_with_bitcast(state, ty, builder);
+            // Note that the variable swaps here are intentional due to
+            // the difference of the order of the wasm op and the clif
+            // op.
+            state.push1(if environ.relaxed_simd_deterministic() {
+                builder.ins().bitselect(c, a, b)
+            } else {
+                // TODO: should have a more optimal lowering for x86 which
+                // doesn't use the standard `bitselect` instruction
+                builder.ins().bitselect(c, a, b)
+            });
+        }
+
+        Operator::I32x4RelaxedTruncF32x4S => {
+            let a = pop1_with_bitcast(state, F32X4, builder);
+            state.push1(if environ.relaxed_simd_deterministic() {
+                builder.ins().fcvt_to_sint_sat(I32X4, a)
+            } else {
+                // TODO: should have a more optimal lowering for x86 which
+                // doesn't use the standard `fcvt_to_sint_sat` instruction
+                builder.ins().fcvt_to_sint_sat(I32X4, a)
+            })
+        }
+        Operator::I32x4RelaxedTruncF64x2SZero => {
+            let a = pop1_with_bitcast(state, F64X2, builder);
+            let converted_a = if environ.relaxed_simd_deterministic() {
+                builder.ins().fcvt_to_sint_sat(I64X2, a)
+            } else {
+                // TODO: should have a more optimal lowering for x86 which
+                // doesn't use the standard `fcvt_to_sint_sat` instruction
+                builder.ins().fcvt_to_sint_sat(I64X2, a)
+            };
+            let handle = builder.func.dfg.constants.insert(vec![0u8; 16].into());
+            let zero = builder.ins().vconst(I64X2, handle);
+
+            state.push1(builder.ins().snarrow(converted_a, zero));
+        }
+        Operator::I16x8RelaxedQ15mulrS => {
+            let (a, b) = pop2_with_bitcast(state, I16X8, builder);
+            state.push1(if environ.relaxed_simd_deterministic() {
+                builder.ins().sqmul_round_sat(a, b)
+            } else {
+                // TODO: should have a more optimal lowering for x86 which
+                // doesn't use the standard `sqmul_round_sat` instruction
+                builder.ins().sqmul_round_sat(a, b)
+            });
+        }
+        Operator::I16x8RelaxedDotI8x16I7x16S => {
+            let (a, b) = pop2_with_bitcast(state, I8X16, builder);
+            state.push1(if environ.relaxed_simd_deterministic() {
+                let alo = builder.ins().swiden_low(a);
+                let blo = builder.ins().swiden_low(b);
+                let lo = builder.ins().imul(alo, blo);
+                let ahi = builder.ins().swiden_high(a);
+                let bhi = builder.ins().swiden_high(b);
+                let hi = builder.ins().imul(ahi, bhi);
+                builder.ins().iadd_pairwise(lo, hi)
+            } else {
+                // TODO: should have a more optimal lowering for x86 which
+                // doesn't use this sequence of instructions
+                let alo = builder.ins().swiden_low(a);
+                let blo = builder.ins().swiden_low(b);
+                let lo = builder.ins().imul(alo, blo);
+                let ahi = builder.ins().swiden_high(a);
+                let bhi = builder.ins().swiden_high(b);
+                let hi = builder.ins().imul(ahi, bhi);
+                builder.ins().iadd_pairwise(lo, hi)
+            });
+        }
+
+        Operator::I32x4RelaxedDotI8x16I7x16AddS => {
+            let c = pop1_with_bitcast(state, I32X4, builder);
+            let (a, b) = pop2_with_bitcast(state, I8X16, builder);
+            let dot = if environ.relaxed_simd_deterministic() {
+                let alo = builder.ins().swiden_low(a);
+                let blo = builder.ins().swiden_low(b);
+                let lo = builder.ins().imul(alo, blo);
+                let ahi = builder.ins().swiden_high(a);
+                let bhi = builder.ins().swiden_high(b);
+                let hi = builder.ins().imul(ahi, bhi);
+                builder.ins().iadd_pairwise(lo, hi)
+            } else {
+                // TODO: should have a more optimal lowering for x86 which
+                // doesn't use this sequence of instructions
+                let alo = builder.ins().swiden_low(a);
+                let blo = builder.ins().swiden_low(b);
+                let lo = builder.ins().imul(alo, blo);
+                let ahi = builder.ins().swiden_high(a);
+                let bhi = builder.ins().swiden_high(b);
+                let hi = builder.ins().imul(ahi, bhi);
+                builder.ins().iadd_pairwise(lo, hi)
+            };
+            let dotlo = builder.ins().swiden_low(dot);
+            let dothi = builder.ins().swiden_high(dot);
+            let dot32 = builder.ins().iadd_pairwise(dotlo, dothi);
+            state.push1(builder.ins().iadd(dot32, c));
         }
 
         Operator::CallRef { .. }
@@ -2945,7 +3093,8 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I8x16MaxU
         | Operator::I8x16AvgrU
         | Operator::I8x16Bitmask
-        | Operator::I8x16Popcnt => I8X16,
+        | Operator::I8x16Popcnt
+        | Operator::I8x16RelaxedLaneselect => I8X16,
 
         Operator::I16x8Splat
         | Operator::V128Load16Splat { .. }
@@ -2982,7 +3131,8 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I16x8MaxU
         | Operator::I16x8AvgrU
         | Operator::I16x8Mul
-        | Operator::I16x8Bitmask => I16X8,
+        | Operator::I16x8Bitmask
+        | Operator::I16x8RelaxedLaneselect => I16X8,
 
         Operator::I32x4Splat
         | Operator::V128Load32Splat { .. }
@@ -3016,6 +3166,7 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I32x4Bitmask
         | Operator::I32x4TruncSatF32x4S
         | Operator::I32x4TruncSatF32x4U
+        | Operator::I32x4RelaxedLaneselect
         | Operator::V128Load32Zero { .. } => I32X4,
 
         Operator::I64x2Splat
@@ -3040,6 +3191,7 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I64x2Sub
         | Operator::I64x2Mul
         | Operator::I64x2Bitmask
+        | Operator::I64x2RelaxedLaneselect
         | Operator::V128Load64Zero { .. } => I64X2,
 
         Operator::F32x4Splat
@@ -3067,7 +3219,11 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::F32x4Ceil
         | Operator::F32x4Floor
         | Operator::F32x4Trunc
-        | Operator::F32x4Nearest => F32X4,
+        | Operator::F32x4Nearest
+        | Operator::F32x4RelaxedMax
+        | Operator::F32x4RelaxedMin
+        | Operator::F32x4RelaxedMadd
+        | Operator::F32x4RelaxedNmadd => F32X4,
 
         Operator::F64x2Splat
         | Operator::F64x2ExtractLane { .. }
@@ -3092,7 +3248,11 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::F64x2Ceil
         | Operator::F64x2Floor
         | Operator::F64x2Trunc
-        | Operator::F64x2Nearest => F64X2,
+        | Operator::F64x2Nearest
+        | Operator::F64x2RelaxedMax
+        | Operator::F64x2RelaxedMin
+        | Operator::F64x2RelaxedMadd
+        | Operator::F64x2RelaxedNmadd => F64X2,
 
         _ => unimplemented!(
             "Currently only SIMD instructions are mapped to their return type; the \
@@ -3217,6 +3377,18 @@ fn pop2_with_bitcast(
     let bitcast_a = optionally_bitcast_vector(a, needed_type, builder);
     let bitcast_b = optionally_bitcast_vector(b, needed_type, builder);
     (bitcast_a, bitcast_b)
+}
+
+fn pop3_with_bitcast(
+    state: &mut FuncTranslationState,
+    needed_type: Type,
+    builder: &mut FunctionBuilder,
+) -> (Value, Value, Value) {
+    let (a, b, c) = state.pop3();
+    let bitcast_a = optionally_bitcast_vector(a, needed_type, builder);
+    let bitcast_b = optionally_bitcast_vector(b, needed_type, builder);
+    let bitcast_c = optionally_bitcast_vector(c, needed_type, builder);
+    (bitcast_a, bitcast_b, bitcast_c)
 }
 
 fn bitcast_arguments<'a>(
