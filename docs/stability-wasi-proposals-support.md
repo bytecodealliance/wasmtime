@@ -1,14 +1,9 @@
 # WASI Proposals Support
 
 The following table summarizes Wasmtime's support for WASI [proposals]. If a
-proposal is not listed, then it is not supported by Wasmtime. As with its [Wasm
-support][wasm-support], Wasmtime will never enable a WASI proposal by default
-unless it has reached phase 4 of the [WASI standardization process][phases].
+proposal is not listed, then it is not supported by Wasmtime.
 
 [proposals]: https://github.com/WebAssembly/WASI/blob/main/Proposals.md
-[wasm-support]: ./stability-wasm-proposals-support.md
-[phases]: https://github.com/WebAssembly/meetings/blob/master/process/phases.md
-
 
 | WASI Proposal                          | Supported in Wasmtime?  | Enabled by default?  | CLI Flag Name [^cli]        |
 |----------------------------------------|-------------------------|----------------------|-----------------------------|
