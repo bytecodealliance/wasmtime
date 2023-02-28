@@ -1920,8 +1920,6 @@
 (decl intcc_to_extend_op (IntCC) ExtendOp)
 (extern constructor intcc_to_extend_op intcc_to_extend_op)
 
-(convert IntCC ExtendOp intcc_to_extend_op)
-
 ;; Normalize a value for comparision.
 ;;
 ;; This ensures that types smaller than a register don't accidentally
