@@ -123,7 +123,7 @@ impl fmt::Debug for TestCase {
             let returns = &self.func.signature.returns;
             let placeholder_output = returns
                 .iter()
-                .map(|param| DataValue::read_from_slice(&[0; 16][..], param.value_type))
+                .map(|param| DataValue::read_from_slice_ne(&[0; 16][..], param.value_type))
                 .map(|val| format!("{}", val))
                 .collect::<Vec<_>>()
                 .join(", ");

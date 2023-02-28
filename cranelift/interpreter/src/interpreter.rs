@@ -11,8 +11,8 @@ use crate::step::{step, ControlFlow, StepError};
 use crate::value::{Value, ValueError};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{
-    ArgumentPurpose, Block, ExternalName, FuncRef, Function, GlobalValue, GlobalValueData, LibCall,
-    StackSlot, TrapCode, Type, Value as ValueRef,
+    ArgumentPurpose, Block, Endianness, ExternalName, FuncRef, Function, GlobalValue,
+    GlobalValueData, LibCall, MemFlags, StackSlot, TrapCode, Type, Value as ValueRef,
 };
 use log::trace;
 use smallvec::SmallVec;
@@ -192,10 +192,16 @@ pub struct InterpreterState<'a> {
     pub frame_offset: usize,
     pub stack: Vec<u8>,
     pub pinned_reg: DataValue,
+    pub native_endianness: Endianness,
 }
 
 impl Default for InterpreterState<'_> {
     fn default() -> Self {
+        let native_endianness = if cfg!(target_endian = "little") {
+            Endianness::Little
+        } else {
+            Endianness::Big
+        };
         Self {
             functions: FunctionStore::default(),
             libcall_handler: |_, _| Err(TrapCode::UnreachableCodeReached),
@@ -203,6 +209,7 @@ impl Default for InterpreterState<'_> {
             frame_offset: 0,
             stack: Vec::with_capacity(1024),
             pinned_reg: DataValue::U64(0),
+            native_endianness,
         }
     }
 }
@@ -308,7 +315,12 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
         Address::from_parts(size, AddressRegion::Stack, 0, final_offset)
     }
 
-    fn checked_load(&self, addr: Address, ty: Type) -> Result<DataValue, MemoryError> {
+    fn checked_load(
+        &self,
+        addr: Address,
+        ty: Type,
+        mem_flags: MemFlags,
+    ) -> Result<DataValue, MemoryError> {
         let load_size = ty.bytes() as usize;
         let addr_start = addr.offset as usize;
         let addr_end = addr_start + load_size;
@@ -324,10 +336,18 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
             _ => unimplemented!(),
         };
 
-        Ok(DataValue::read_from_slice(src, ty))
+        Ok(match mem_flags.endianness(self.native_endianness) {
+            Endianness::Big => DataValue::read_from_slice_be(src, ty),
+            Endianness::Little => DataValue::read_from_slice_le(src, ty),
+        })
     }
 
-    fn checked_store(&mut self, addr: Address, v: DataValue) -> Result<(), MemoryError> {
+    fn checked_store(
+        &mut self,
+        addr: Address,
+        v: DataValue,
+        mem_flags: MemFlags,
+    ) -> Result<(), MemoryError> {
         let store_size = v.ty().bytes() as usize;
         let addr_start = addr.offset as usize;
         let addr_end = addr_start + store_size;
@@ -343,7 +363,10 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
             _ => unimplemented!(),
         };
 
-        Ok(v.write_to_slice(dst))
+        Ok(match mem_flags.endianness(self.native_endianness) {
+            Endianness::Big => v.write_to_slice_be(dst),
+            Endianness::Little => v.write_to_slice_le(dst),
+        })
     }
 
     fn function_address(
@@ -493,9 +516,10 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
                     global_type,
                 }) => {
                     let mut addr = Address::try_from(current_val)?;
+                    let mem_flags = MemFlags::trusted();
                     // We can forego bounds checking here since its performed in `checked_load`
                     addr.offset += offset as u64;
-                    current_val = self.checked_load(addr, global_type)?;
+                    current_val = self.checked_load(addr, global_type, mem_flags)?;
                 }
 
                 // We are done resolving this, return the current value
