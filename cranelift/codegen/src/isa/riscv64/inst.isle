@@ -1928,7 +1928,7 @@
 ;; pass undefined high bits when being compared as a full register.
 (decl normalize_cmp_value (Type ValueRegs ExtendOp) ValueRegs)
 
-(rule 2(normalize_cmp_value (fits_in_32 ity) r op)
+(rule 1 (normalize_cmp_value (fits_in_32 ity) r op)
       (extend r op ity $I64))
 
 (rule (normalize_cmp_value $I64  r _) r)
