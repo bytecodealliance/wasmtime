@@ -860,7 +860,10 @@
             Ucomisd
             Unpcklps
             Xorps
-            Xorpd))
+            Xorpd
+            Phaddw
+            Phaddd
+          ))
 
 (type CmpOpcode extern
       (enum Cmp
@@ -1356,6 +1359,8 @@
             Vcvtps2pd
             Vcvttpd2dq
             Vcvttps2dq
+            Vphaddw
+            Vphaddd
           ))
 
 (type Avx512Opcode extern
@@ -2481,6 +2486,22 @@
 (rule 1 (x64_paddsw src1 src2)
       (if-let $true (has_avx))
       (xmm_rmir_vex (AvxOpcode.Vpaddsw) src1 src2))
+
+;; Helper for creating `phaddw` instructions.
+(decl x64_phaddw (Xmm XmmMem) Xmm)
+(rule 0 (x64_phaddw src1 src2)
+      (xmm_rm_r (SseOpcode.Phaddw) src1 src2))
+(rule 1 (x64_phaddw src1 src2)
+      (if-let $true (has_avx))
+      (xmm_rmir_vex (AvxOpcode.Vphaddw) src1 src2))
+
+;; Helper for creating `phaddd` instructions.
+(decl x64_phaddd (Xmm XmmMem) Xmm)
+(rule 0 (x64_phaddd src1 src2)
+      (xmm_rm_r (SseOpcode.Phaddd) src1 src2))
+(rule 1 (x64_phaddd src1 src2)
+      (if-let $true (has_avx))
+      (xmm_rmir_vex (AvxOpcode.Vphaddd) src1 src2))
 
 ;; Helper for creating `paddusb` instructions.
 (decl x64_paddusb (Xmm XmmMem) Xmm)

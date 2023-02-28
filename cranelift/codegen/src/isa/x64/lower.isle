@@ -3173,8 +3173,14 @@
 
 ;; Rules for `iadd_pairwise` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(rule (lower (has_type $I16X8 (iadd_pairwise x y)))
+      (x64_phaddw x y))
+
+(rule (lower (has_type $I32X4 (iadd_pairwise x y)))
+      (x64_phaddd x y))
+
 ;; special case for the `i16x8.extadd_pairwise_i8x16_s` wasm instruction
-(rule (lower
+(rule 1 (lower
         (has_type $I16X8 (iadd_pairwise
                            (swiden_low val @ (value_type $I8X16))
                            (swiden_high val))))
@@ -3182,7 +3188,7 @@
         (x64_pmaddubsw mul_const val)))
 
 ;; special case for the `i32x4.extadd_pairwise_i16x8_s` wasm instruction
-(rule (lower
+(rule 1 (lower
         (has_type $I32X4 (iadd_pairwise
                            (swiden_low val @ (value_type $I16X8))
                            (swiden_high val))))
@@ -3190,7 +3196,7 @@
         (x64_pmaddwd val mul_const)))
 
 ;; special case for the `i16x8.extadd_pairwise_i8x16_u` wasm instruction
-(rule (lower
+(rule 1 (lower
         (has_type $I16X8 (iadd_pairwise
                            (uwiden_low val @ (value_type $I8X16))
                            (uwiden_high val))))
@@ -3198,7 +3204,7 @@
         (x64_pmaddubsw val mul_const)))
 
 ;; special case for the `i32x4.extadd_pairwise_i16x8_u` wasm instruction
-(rule (lower
+(rule 1 (lower
         (has_type $I32X4 (iadd_pairwise
                            (uwiden_low val @ (value_type $I16X8))
                            (uwiden_high val))))
@@ -3212,7 +3218,7 @@
         (x64_paddd dst addd_const)))
 
 ;; special case for the `i32x4.dot_i16x8_s` wasm instruction
-(rule (lower
+(rule 1 (lower
         (has_type $I32X4 (iadd_pairwise
                            (imul (swiden_low x) (swiden_low y))
                            (imul (swiden_high x) (swiden_high y)))))
