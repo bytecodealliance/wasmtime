@@ -1910,21 +1910,20 @@
 (decl lower_cond_br (IntCC ValueRegs VecMachLabel Type) Unit)
 (extern constructor lower_cond_br lower_cond_br)
 
+(decl intcc_to_extend_op (IntCC) ExtendOp)
+(extern constructor intcc_to_extend_op intcc_to_extend_op)
+
 ;; Normalize a value for comparision.
 ;;
 ;; This ensures that types smaller than a register don't accidentally
 ;; pass undefined high bits when being compared as a full register.
-(decl normalize_cmp_value (Type ValueRegs) ValueRegs)
+(decl normalize_cmp_value (Type ValueRegs ExtendOp) ValueRegs)
 
-(rule (normalize_cmp_value $I8 r)
-      (value_reg (alu_rr_imm12 (AluOPRRI.Andi) r (imm12_const 255))))
-(rule (normalize_cmp_value $I16 r)
-      (value_reg (alu_rrr (AluOPRRR.And) r (imm $I16 65535))))
-(rule (normalize_cmp_value $I32 r)
-      (value_reg (alu_rr_imm12 (AluOPRRI.Addiw) r (imm12_const 0))))
+(rule 1 (normalize_cmp_value (fits_in_32 ity) r op)
+      (extend r op ity $I64))
 
-(rule (normalize_cmp_value $I64  r) r)
-(rule (normalize_cmp_value $I128 r) r)
+(rule (normalize_cmp_value $I64  r _) r)
+(rule (normalize_cmp_value $I128 r _) r)
 
 ;; Convert a truthy value, possibly of more than one register (an
 ;; I128), to one register. If narrower than 64 bits, must have already
@@ -1940,7 +1939,7 @@
 ;; Default behavior for branching based on an input value.
 (rule
   (lower_branch (brif v @ (value_type ty) _ _) targets)
-  (lower_cond_br (IntCC.NotEqual) (normalize_cmp_value ty v) targets ty))
+  (lower_cond_br (IntCC.NotEqual) (normalize_cmp_value ty v (ExtendOp.Zero)) targets ty))
 
 ;; Special case for SI128 to reify the comparison value and branch on it.
 (rule 2
@@ -2118,7 +2117,7 @@
 (rule
   0
   (lower_bmask (fits_in_64 _) (fits_in_64 in_ty) val)
-  (let ((input Reg (normalize_cmp_value in_ty val))
+  (let ((input Reg (normalize_cmp_value in_ty val (ExtendOp.Zero)))
         (zero Reg (zero_reg))
         (ones Reg (load_imm12 -1)))
   (value_reg (gen_select_reg (IntCC.Equal) zero input zero ones))))
