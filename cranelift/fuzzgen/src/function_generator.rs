@@ -1460,14 +1460,14 @@ where
         is_atomic: bool,
     ) -> Result<(Value, MemFlags, Offset32)> {
         // Should we generate an aligned address
-        let supports_unaligned_atomics = !matches!(
+        // Some backends have issues with unaligned atomics.
+        // AArch64: https://github.com/bytecodealliance/wasmtime/issues/5483
+        // RISCV: https://github.com/bytecodealliance/wasmtime/issues/5882
+        let requires_aligned_atomics = matches!(
             self.target_triple.architecture,
             Architecture::Aarch64(_) | Architecture::Riscv64(_)
         );
-        let aligned = if is_atomic && !supports_unaligned_atomics {
-            // Some backends have issues with unaligned atomics.
-            // AArch64: https://github.com/bytecodealliance/wasmtime/issues/5483
-            // RISCV: https://github.com/bytecodealliance/wasmtime/issues/5882
+        let aligned = if is_atomic && requires_aligned_atomics {
             true
         } else {
             bool::arbitrary(self.u)?
