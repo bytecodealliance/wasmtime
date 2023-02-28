@@ -628,8 +628,8 @@
 
 (rule 1
   (lower (has_type (fits_in_64 ty) (select (icmp cc a b @ (value_type in_ty)) x y)))
-  (let ((a Reg (normalize_cmp_value in_ty a cc))
-        (b Reg (normalize_cmp_value in_ty b cc)))
+  (let ((a Reg (normalize_cmp_value in_ty a (intcc_to_extend_op cc)))
+        (b Reg (normalize_cmp_value in_ty b (intcc_to_extend_op cc))))
     (gen_select_reg cc a b x y)))
 
 ;;;;;  Rules for `bitselect`;;;;;;;;;
