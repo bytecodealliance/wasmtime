@@ -313,13 +313,6 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
         }
     }
 
-    // RISC-V Does not support SIMD at all
-    let is_simd = args.iter().chain(rets).any(|t| t.is_vector());
-    let is_riscv = matches!(triple.architecture, Architecture::Riscv64(_));
-    if is_simd && is_riscv {
-        return false;
-    }
-
     match triple.architecture {
         Architecture::X86_64 => {
             exceptions!(
@@ -542,6 +535,12 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
         }
 
         Architecture::Riscv64(_) => {
+            // RISC-V Does not support SIMD at all
+            let is_simd = args.iter().chain(rets).any(|t| t.is_vector());
+            if is_simd {
+                return false;
+            }
+
             exceptions!(
                 // TODO
                 (Opcode::IaddCout),

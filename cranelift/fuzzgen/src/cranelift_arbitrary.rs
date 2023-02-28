@@ -27,16 +27,16 @@ impl<'a> CraneliftArbitrary for &mut Unstructured<'a> {
     fn _type(&mut self, architecture: Architecture) -> Result<Type> {
         // TODO: It would be nice if we could get these directly from cranelift
         // TODO: RISCV does not support SIMD yet
-        let is_riscv = matches!(architecture, Architecture::Riscv64(_));
-        let choices = if is_riscv {
-            &[I8, I16, I32, I64, I128, F32, F64][..]
-        } else {
+        let supports_simd = !matches!(architecture, Architecture::Riscv64(_));
+        let choices = if supports_simd {
             &[
                 I8, I16, I32, I64, I128, // Scalar Integers
                 F32, F64, // Scalar Floats
                 I8X16, I16X8, I32X4, I64X2, // SIMD Integers
                 F32X4, F64X2, // SIMD Floats
             ][..]
+        } else {
+            &[I8, I16, I32, I64, I128, F32, F64][..]
         };
 
         Ok(*self.choose(choices)?)
