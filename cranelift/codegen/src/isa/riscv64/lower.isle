@@ -328,12 +328,12 @@
   (lower_clz_i128 x))
 
 ;;;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type out (uextend x @ (value_type in))))
-  (lower_extend x $false (ty_bits in) (ty_bits out)))
+(rule (lower (has_type out_ty (uextend val @ (value_type in_ty))))
+  (zext val in_ty out_ty))
 
 ;;;; Rules for `sextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type out (sextend x @ (value_type in))))
-  (lower_extend x $true (ty_bits in) (ty_bits out)))
+(rule (lower (has_type out_ty (sextend val @ (value_type in_ty))))
+  (sext val in_ty out_ty))
 
 
 ;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -612,14 +612,16 @@
   (gen_stack_addr ss offset))
 
 ;;;;;  Rules for `is_null`;;;;;;;;;
-(rule
-  (lower (is_null v))
-  (gen_reference_check (ReferenceCheckOP.IsNull) v))
+
+;; Null references are represented by the constant value `0`.
+(rule (lower (is_null v))
+  (seqz v))
 
 ;;;;;  Rules for `is_invalid`;;;;;;;;;
-(rule
-  (lower (is_invalid v))
-  (gen_reference_check (ReferenceCheckOP.IsInvalid) v))
+
+;; Invalid references are represented by the constant value `-1`.
+(rule (lower (is_invalid v))
+  (seqz (alu_rr_imm12 (AluOPRRI.Addi) v (imm12_const 1))))
 
 ;;;;;  Rules for `select`;;;;;;;;;
 (rule

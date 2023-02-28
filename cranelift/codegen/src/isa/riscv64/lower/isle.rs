@@ -229,17 +229,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         x as i32
     }
 
-    fn ext_sign_bit(&mut self, ty: Type, r: Reg) -> Reg {
-        assert!(ty.is_int());
-        let rd = self.temp_writable_reg(I64);
-        self.emit(&MInst::AluRRImm12 {
-            alu_op: AluOPRRI::Bexti,
-            rd,
-            rs: r,
-            imm12: Imm12::from_bits((ty.bits() - 1) as i16),
-        });
-        rd.to_reg()
-    }
     fn imm12_const(&mut self, val: i32) -> Imm12 {
         if let Some(res) = Imm12::maybe_from_u64(val as u64) {
             res
@@ -463,7 +452,7 @@ fn construct_dest<F: std::ops::FnMut(Type) -> WritableReg>(
     mut alloc: F,
     ty: Type,
 ) -> WritableValueRegs {
-    if ty.is_int() {
+    if ty.is_int() || ty.is_ref() {
         if ty.bits() == 128 {
             WritableValueRegs::two(alloc(I64), alloc(I64))
         } else {

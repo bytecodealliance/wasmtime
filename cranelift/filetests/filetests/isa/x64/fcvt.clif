@@ -304,10 +304,8 @@ block0(v0: i32x4):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqu  const(0), %xmm2
-;   unpcklps %xmm0, %xmm2, %xmm0
-;   movdqu  const(1), %xmm6
-;   subpd   %xmm0, %xmm6, %xmm0
+;   unpcklps %xmm0, const(0), %xmm0
+;   subpd   %xmm0, const(1), %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -317,13 +315,15 @@ block0(v0: i32x4):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movdqu 0x14(%rip), %xmm2
-;   unpcklps %xmm2, %xmm0
-;   movdqu 0x19(%rip), %xmm6
-;   subpd %xmm6, %xmm0
+;   unpcklps 0x15(%rip), %xmm0
+;   subpd 0x1d(%rip), %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
 ;   addb %al, (%rax)
 ;   xorb %al, (%rbx)
 ;   addb %dh, (%rax)

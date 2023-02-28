@@ -1,5 +1,6 @@
 //! IBM Z 64-bit Instruction Set Architecture.
 
+use crate::dominator_tree::DominatorTree;
 use crate::ir::condcodes::IntCC;
 use crate::ir::{Function, Type};
 use crate::isa::s390x::settings as s390x_settings;
@@ -56,11 +57,12 @@ impl S390xBackend {
     fn compile_vcode(
         &self,
         func: &Function,
+        domtree: &DominatorTree,
     ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
         let emit_info = EmitInfo::new(self.isa_flags.clone());
         let sigs = SigSet::new::<abi::S390xMachineDeps>(func, &self.flags)?;
         let abi = abi::S390xCallee::new(func, self, &self.isa_flags, &sigs)?;
-        compile::compile::<S390xBackend>(func, self, abi, emit_info, sigs)
+        compile::compile::<S390xBackend>(func, domtree, self, abi, emit_info, sigs)
     }
 }
 
@@ -68,10 +70,11 @@ impl TargetIsa for S390xBackend {
     fn compile_function(
         &self,
         func: &Function,
+        domtree: &DominatorTree,
         want_disasm: bool,
     ) -> CodegenResult<CompiledCodeStencil> {
         let flags = self.flags();
-        let (vcode, regalloc_result) = self.compile_vcode(func)?;
+        let (vcode, regalloc_result) = self.compile_vcode(func, domtree)?;
 
         let emit_result = vcode.emit(&regalloc_result, want_disasm, flags.machine_code_cfg_info());
         let frame_size = emit_result.frame_size;
@@ -206,125 +209,5 @@ pub fn isa_builder(triple: Triple) -> IsaBuilder {
             let backend = S390xBackend::new_with_flags(triple, shared_flags, isa_flags);
             Ok(backend.wrapped())
         },
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use crate::cursor::{Cursor, FuncCursor};
-    use crate::ir::types::*;
-    use crate::ir::UserFuncName;
-    use crate::ir::{AbiParam, Function, InstBuilder, Signature};
-    use crate::isa::CallConv;
-    use crate::settings;
-    use crate::settings::Configurable;
-    use core::str::FromStr;
-    use target_lexicon::Triple;
-
-    #[test]
-    fn test_compile_function() {
-        let name = UserFuncName::testcase("test0");
-        let mut sig = Signature::new(CallConv::SystemV);
-        sig.params.push(AbiParam::new(I32));
-        sig.returns.push(AbiParam::new(I32));
-        let mut func = Function::with_name_signature(name, sig);
-
-        let bb0 = func.dfg.make_block();
-        let arg0 = func.dfg.append_block_param(bb0, I32);
-
-        let mut pos = FuncCursor::new(&mut func);
-        pos.insert_block(bb0);
-        let v0 = pos.ins().iconst(I32, 0x1234);
-        let v1 = pos.ins().iadd(arg0, v0);
-        pos.ins().return_(&[v1]);
-
-        let mut shared_flags_builder = settings::builder();
-        shared_flags_builder.set("opt_level", "none").unwrap();
-        let shared_flags = settings::Flags::new(shared_flags_builder);
-        let isa_flags = s390x_settings::Flags::new(&shared_flags, s390x_settings::builder());
-        let backend = S390xBackend::new_with_flags(
-            Triple::from_str("s390x").unwrap(),
-            shared_flags,
-            isa_flags,
-        );
-        let result = backend
-            .compile_function(&mut func, /* want_disasm = */ false)
-            .unwrap();
-        let code = result.buffer.data();
-
-        // ahi %r2, 0x1234
-        // br %r14
-        let golden = vec![0xa7, 0x2a, 0x12, 0x34, 0x07, 0xfe];
-
-        assert_eq!(code, &golden[..]);
-    }
-
-    #[test]
-    fn test_branch_lowering() {
-        let name = UserFuncName::testcase("test0");
-        let mut sig = Signature::new(CallConv::SystemV);
-        sig.params.push(AbiParam::new(I32));
-        sig.returns.push(AbiParam::new(I32));
-        let mut func = Function::with_name_signature(name, sig);
-
-        let bb0 = func.dfg.make_block();
-        let arg0 = func.dfg.append_block_param(bb0, I32);
-        let bb1 = func.dfg.make_block();
-        let bb2 = func.dfg.make_block();
-        let bb3 = func.dfg.make_block();
-
-        let mut pos = FuncCursor::new(&mut func);
-        pos.insert_block(bb0);
-        let v0 = pos.ins().iconst(I32, 0x1234);
-        let v1 = pos.ins().iadd(arg0, v0);
-        pos.ins().brif(v1, bb1, &[], bb2, &[]);
-        pos.insert_block(bb1);
-        pos.ins().brif(v1, bb2, &[], bb3, &[]);
-        pos.insert_block(bb2);
-        let v2 = pos.ins().iadd(v1, v0);
-        pos.ins().brif(v2, bb2, &[], bb1, &[]);
-        pos.insert_block(bb3);
-        let v3 = pos.ins().isub(v1, v0);
-        pos.ins().return_(&[v3]);
-
-        let mut shared_flags_builder = settings::builder();
-        shared_flags_builder.set("opt_level", "none").unwrap();
-        let shared_flags = settings::Flags::new(shared_flags_builder);
-        let isa_flags = s390x_settings::Flags::new(&shared_flags, s390x_settings::builder());
-        let backend = S390xBackend::new_with_flags(
-            Triple::from_str("s390x").unwrap(),
-            shared_flags,
-            isa_flags,
-        );
-        let result = backend
-            .compile_function(&mut func, /* want_disasm = */ false)
-            .unwrap();
-        let code = result.buffer.data();
-
-        // FIXME: the branching logic should be optimized more
-
-        // To update this comment, write the golden bytes to a file, and run the following command
-        // on it to update:
-        // > s390x-linux-gnu-objdump -b binary -D <file> -m s390
-        //
-        //  0:   a7 2a 12 34             ahi     %r2,4660
-        //  4:   a7 2e 00 00             chi     %r2,0
-        //  8:   c0 64 00 00 00 0b       jglh    0x1e
-        //  e:   ec 32 12 34 00 d8       ahik    %r3,%r2,4660
-        // 14:   a7 3e 00 00             chi     %r3,0
-        // 18:   c0 64 ff ff ff fb       jglh    0xe
-        // 1e:   a7 2e 00 00             chi     %r2,0
-        // 22:   c0 64 ff ff ff f6       jglh    0xe
-        // 28:   a7 2a ed cc             ahi     %r2,-4660
-        // 2c:   07 fe                   br      %r14
-
-        let golden = vec![
-            167, 42, 18, 52, 167, 46, 0, 0, 192, 100, 0, 0, 0, 11, 236, 50, 18, 52, 0, 216, 167,
-            62, 0, 0, 192, 100, 255, 255, 255, 251, 167, 46, 0, 0, 192, 100, 255, 255, 255, 246,
-            167, 42, 237, 204, 7, 254,
-        ];
-
-        assert_eq!(code, &golden[..]);
     }
 }

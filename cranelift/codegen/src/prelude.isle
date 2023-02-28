@@ -144,6 +144,12 @@
 (decl pure u64_eq (u64 u64) bool)
 (extern constructor u64_eq u64_eq)
 
+(decl pure u64_le (u64 u64) bool)
+(extern constructor u64_le u64_le)
+
+(decl pure u64_lt (u64 u64) bool)
+(extern constructor u64_lt u64_lt)
+
 (decl pure i64_sextend_imm64 (Type Imm64) i64)
 (extern constructor i64_sextend_imm64 i64_sextend_imm64)
 

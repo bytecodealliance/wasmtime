@@ -21,12 +21,15 @@
     (drop (call $__wasi_thread_spawn (i32.const 0)))
 
     ;; Wait for all the threads to notify us that they are done.
+    (local.set $i (i32.const 0))
     (loop $again
-      ;; Retrieve the i32 at address 128, compare it to -1 (it should always
-      ;; fail) and load it atomically to check if all three threads are
-      ;; complete. This wait is for 1ms or until notified, whichever is first.
-      (drop (memory.atomic.wait32 (i32.const 128) (i32.const -1) (i64.const 1000000)))
-      (br_if $again (i32.lt_s (i32.atomic.load (i32.const 128)) (i32.const 3)))
+      ;; Wait for the i32 at address 128 to be incremented by each thread. We
+      ;; maintain a local $i with the atomically loaded value as the expected
+      ;; wait value and to check if all three threads are complete. This wait is
+      ;; for 1ms or until notified, whichever is first.
+      (drop (memory.atomic.wait32 (i32.const 128) (local.get $i) (i64.const 1000000)))
+      (local.set $i (i32.atomic.load (i32.const 128)))
+      (br_if $again (i32.lt_s (local.get $i) (i32.const 3)))
     )
 
     ;; Print "Done".

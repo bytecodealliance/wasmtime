@@ -15,8 +15,8 @@
 //! are the "entry" field, the amount of "entry" bits depends on the size of the address and
 //! the "region" of the address. The remaining bits belong to the "offset" field
 //!
-//! An example address could be a 32 bit address, in the `heap` region, which has 2 "entry" bits
-//! this address would have 32 - 2 - 2 = 28 offset bits.
+//! An example address could be a 32 bit address, in the `function` region, which has 1 "entry" bit
+//! this address would have 32 - 1 - 2 = 29 offset bits.
 //!
 //! The only exception to this is the "stack" region, where, because we only have a single "stack"
 //! we have 0 "entry" bits, and thus is all offset.
@@ -24,11 +24,11 @@
 //! | address size | address kind | region value (2 bits) | entry bits (#) | offset bits (#) |
 //! |--------------|--------------|-----------------------|----------------|-----------------|
 //! | 32           | Stack        | 0b00                  | 0              | 30              |
-//! | 32           | Heap         | 0b01                  | 2              | 28              |
+//! | 32           | Function     | 0b01                  | 1              | 29              |
 //! | 32           | Table        | 0b10                  | 5              | 25              |
 //! | 32           | GlobalValue  | 0b11                  | 6              | 24              |
 //! | 64           | Stack        | 0b00                  | 0              | 62              |
-//! | 64           | Heap         | 0b01                  | 6              | 56              |
+//! | 64           | Function     | 0b01                  | 1              | 61              |
 //! | 64           | Table        | 0b10                  | 10             | 52              |
 //! | 64           | GlobalValue  | 0b11                  | 12             | 50              |
 
@@ -68,7 +68,7 @@ impl TryFrom<Type> for AddressSize {
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum AddressRegion {
     Stack,
-    Heap,
+    Function,
     Table,
     GlobalValue,
 }
@@ -78,7 +78,7 @@ impl AddressRegion {
         assert!(bits < 4);
         match bits {
             0 => AddressRegion::Stack,
-            1 => AddressRegion::Heap,
+            1 => AddressRegion::Function,
             2 => AddressRegion::Table,
             3 => AddressRegion::GlobalValue,
             _ => unreachable!(),
@@ -88,7 +88,7 @@ impl AddressRegion {
     pub fn encode(self) -> u64 {
         match self {
             AddressRegion::Stack => 0,
-            AddressRegion::Heap => 1,
+            AddressRegion::Function => 1,
             AddressRegion::Table => 2,
             AddressRegion::GlobalValue => 3,
         }
@@ -143,11 +143,13 @@ impl Address {
             // We only have one stack, so the whole address is offset
             (_, AddressRegion::Stack) => 0,
 
-            (AddressSize::_32, AddressRegion::Heap) => 2,
+            // We have two function "entries", one for libcalls, and
+            // another for user functions.
+            (_, AddressRegion::Function) => 1,
+
             (AddressSize::_32, AddressRegion::Table) => 5,
             (AddressSize::_32, AddressRegion::GlobalValue) => 6,
 
-            (AddressSize::_64, AddressRegion::Heap) => 6,
             (AddressSize::_64, AddressRegion::Table) => 10,
             (AddressSize::_64, AddressRegion::GlobalValue) => 12,
         }
@@ -224,6 +226,22 @@ impl TryFrom<u64> for Address {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum AddressFunctionEntry {
+    UserFunction = 0,
+    LibCall,
+}
+
+impl From<u64> for AddressFunctionEntry {
+    fn from(bits: u64) -> Self {
+        match bits {
+            0 => AddressFunctionEntry::UserFunction,
+            1 => AddressFunctionEntry::LibCall,
+            _ => unreachable!(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -233,7 +251,7 @@ mod tests {
     fn address_region_roundtrip_encode_decode() {
         let all_regions = [
             AddressRegion::Stack,
-            AddressRegion::Heap,
+            AddressRegion::Function,
             AddressRegion::Table,
             AddressRegion::GlobalValue,
         ];
@@ -250,10 +268,10 @@ mod tests {
             (AddressSize::_32, AddressRegion::Stack, 0, 1),
             (AddressSize::_32, AddressRegion::Stack, 0, 1024),
             (AddressSize::_32, AddressRegion::Stack, 0, 0x3FFF_FFFF),
-            (AddressSize::_32, AddressRegion::Heap, 0, 0),
-            (AddressSize::_32, AddressRegion::Heap, 1, 1),
-            (AddressSize::_32, AddressRegion::Heap, 3, 1024),
-            (AddressSize::_32, AddressRegion::Heap, 3, 0x0FFF_FFFF),
+            (AddressSize::_32, AddressRegion::Function, 0, 0),
+            (AddressSize::_32, AddressRegion::Function, 1, 1),
+            (AddressSize::_32, AddressRegion::Function, 0, 1024),
+            (AddressSize::_32, AddressRegion::Function, 1, 0x0FFF_FFFF),
             (AddressSize::_32, AddressRegion::Table, 0, 0),
             (AddressSize::_32, AddressRegion::Table, 1, 1),
             (AddressSize::_32, AddressRegion::Table, 31, 0x1FF_FFFF),
@@ -268,10 +286,10 @@ mod tests {
                 0,
                 0x3FFFFFFF_FFFFFFFF,
             ),
-            (AddressSize::_64, AddressRegion::Heap, 0, 0),
-            (AddressSize::_64, AddressRegion::Heap, 1, 1),
-            (AddressSize::_64, AddressRegion::Heap, 3, 1024),
-            (AddressSize::_64, AddressRegion::Heap, 3, 0x0FFF_FFFF),
+            (AddressSize::_64, AddressRegion::Function, 0, 0),
+            (AddressSize::_64, AddressRegion::Function, 1, 1),
+            (AddressSize::_64, AddressRegion::Function, 0, 1024),
+            (AddressSize::_64, AddressRegion::Function, 1, 0x0FFF_FFFF),
             (AddressSize::_64, AddressRegion::Table, 0, 0),
             (AddressSize::_64, AddressRegion::Table, 1, 1),
             (AddressSize::_64, AddressRegion::Table, 31, 0x1FF_FFFF),

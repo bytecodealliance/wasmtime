@@ -97,7 +97,7 @@ mod one_import {
             hit: bool,
         }
 
-        impl foo::Foo for MyImports {
+        impl foo::Host for MyImports {
             fn foo(&mut self) -> Result<()> {
                 self.hit = true;
                 Ok(())

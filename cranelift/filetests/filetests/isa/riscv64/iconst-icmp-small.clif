@@ -16,9 +16,11 @@ block0:
 ;   addi t1,t1,3532
 ;   lui a2,14
 ;   addi a2,a2,3532
-;   uext.h a5,t1
-;   uext.h a7,a2
-;   ne a0,a5,a7##ty=i16
+;   slli a5,t1,48
+;   srli a7,a5,48
+;   slli t4,a2,48
+;   srli t1,t4,48
+;   ne a0,a7,t1##ty=i16
 ;   ret
 ; 
 ; Disassembled:
@@ -28,10 +30,10 @@ block0:
 ;   lui a2, 0xe
 ;   addi a2, a2, -0x234
 ;   slli a5, t1, 0x30
-;   srli a5, a5, 0x30
-;   slli a7, a2, 0x30
-;   srli a7, a7, 0x30
-;   beq a5, a7, 0xc
+;   srli a7, a5, 0x30
+;   slli t4, a2, 0x30
+;   srli t1, t4, 0x30
+;   beq a7, t1, 0xc
 ;   addi a0, zero, 1
 ;   j 8
 ;   mv a0, zero

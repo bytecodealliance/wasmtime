@@ -270,23 +270,23 @@ block2:
 ; VCode:
 ; block0:
 ;   subs xzr, x0, x1
-;   b.eq label1 ; b label2
+;   b.eq label2 ; b label1
 ; block1:
-;   movz x0, #1
+;   movz x0, #2
 ;   ret
 ; block2:
-;   movz x0, #2
+;   movz x0, #1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cmp x0, x1
-;   b.ne #0x10
+;   b.eq #0x10
 ; block1: ; offset 0x8
-;   mov x0, #1
+;   mov x0, #2
 ;   ret
 ; block2: ; offset 0x10
-;   mov x0, #2
+;   mov x0, #1
 ;   ret
 
 function %f(i64, i64) -> i64 {

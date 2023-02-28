@@ -514,6 +514,38 @@ fn test_riscv64_binemit() {
         0x400545b3,
     ));
 
+    // Zbkb
+    insns.push(TestUnit::new(
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Pack,
+            rd: writable_a1(),
+            rs1: a0(),
+            rs2: zero_reg(),
+        },
+        "pack a1,a0,zero",
+        0x080545b3,
+    ));
+    insns.push(TestUnit::new(
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Packw,
+            rd: writable_a1(),
+            rs1: a0(),
+            rs2: zero_reg(),
+        },
+        "packw a1,a0,zero",
+        0x080545bb,
+    ));
+    insns.push(TestUnit::new(
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Packh,
+            rd: writable_a1(),
+            rs1: a0(),
+            rs2: zero_reg(),
+        },
+        "packh a1,a0,zero",
+        0x080575b3,
+    ));
+
     //
     insns.push(TestUnit::new(
         Inst::AluRRR {

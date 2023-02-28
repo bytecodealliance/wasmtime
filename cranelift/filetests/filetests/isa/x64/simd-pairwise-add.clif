@@ -55,8 +55,7 @@ block0(v0: i16x8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqu  const(0), %xmm2
-;   pmaddwd %xmm0, %xmm2, %xmm0
+;   pmaddwd %xmm0, const(0), %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -66,11 +65,12 @@ block0(v0: i16x8):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movdqu 0x14(%rip), %xmm2
-;   pmaddwd %xmm2, %xmm0
+;   pmaddwd 0x14(%rip), %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
@@ -97,8 +97,7 @@ block0(v0: i8x16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqu  const(0), %xmm2
-;   pmaddubsw %xmm0, %xmm2, %xmm0
+;   pmaddubsw %xmm0, const(0), %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -108,11 +107,12 @@ block0(v0: i8x16):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movdqu 0x14(%rip), %xmm2
-;   pmaddubsw %xmm2, %xmm0
+;   pmaddubsw 0x13(%rip), %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
@@ -139,12 +139,9 @@ block0(v0: i16x8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqu  const(0), %xmm2
-;   pxor    %xmm0, %xmm2, %xmm0
-;   movdqu  const(1), %xmm6
-;   pmaddwd %xmm0, %xmm6, %xmm0
-;   movdqu  const(2), %xmm10
-;   paddd   %xmm0, %xmm10, %xmm0
+;   pxor    %xmm0, const(0), %xmm0
+;   pmaddwd %xmm0, const(1), %xmm0
+;   paddd   %xmm0, const(2), %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -154,15 +151,19 @@ block0(v0: i16x8):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movdqu 0x24(%rip), %xmm2
-;   pxor %xmm2, %xmm0
-;   movdqu 0x28(%rip), %xmm6
-;   pmaddwd %xmm6, %xmm0
-;   movdqu 0x2b(%rip), %xmm10
-;   paddd %xmm10, %xmm0
+;   pxor 0x24(%rip), %xmm0
+;   pmaddwd 0x2c(%rip), %xmm0
+;   paddd 0x34(%rip), %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
 ;   addb %al, (%rax)
 ;   addb $0x80, (%rax)
 ;   addb %al, -0x7fff8000(%rax)

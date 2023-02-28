@@ -204,15 +204,19 @@
 
 ;;;; Rules for `iadd_pairwise` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; special case for the `i16x8.extadd_pairwise_i8x16_s` wasm instruction
 (rule (lower (has_type $I16X8 (iadd_pairwise (swiden_low x) (swiden_high x))))
       (saddlp8 x))
 
+;; special case for the `i32x4.extadd_pairwise_i16x8_s` wasm instruction
 (rule (lower (has_type $I32X4 (iadd_pairwise (swiden_low x) (swiden_high x))))
       (saddlp16 x))
 
+;; special case for the `i16x8.extadd_pairwise_i8x16_u` wasm instruction
 (rule (lower (has_type $I16X8 (iadd_pairwise (uwiden_low x) (uwiden_high x))))
       (uaddlp8 x))
 
+;; special case for the `i32x4.extadd_pairwise_i16x8_u` wasm instruction
 (rule (lower (has_type $I32X4 (iadd_pairwise (uwiden_low x) (uwiden_high x))))
       (uaddlp16 x))
 
@@ -2029,18 +2033,6 @@
       (if (ty_vec64 ty))
       (let ((tmp Reg (fpu_move_from_vec x 1 (VectorSize.Size32x2))))
        (vec_extend (VecExtendOp.Uxtl) tmp $false (lane_size ty))))
-
-;;;; Rules for `widening_pairwise_dot_product_s` ;;;;;;;;;;;;;;;;;;;;;;
-
-;; The args have type I16X8.
-;; "dst = i32x4.dot_i16x8_s(x, y)"
-;; => smull  tmp, x, y
-;;    smull2 dst, x, y
-;;    addp   dst, tmp, dst
-(rule (lower (has_type $I32X4 (widening_pairwise_dot_product_s x y)))
-      (let ((tmp Reg (vec_rrr_long (VecRRRLongOp.Smull16) x y $false))
-            (dst Reg (vec_rrr_long (VecRRRLongOp.Smull16) x y $true)))
-       (vec_rrr (VecALUOp.Addp) tmp dst (VectorSize.Size32x4))))
 
 ;;;; Rules for `Fence` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

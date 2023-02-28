@@ -55,7 +55,7 @@ block0(v0: i32):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   uext.w a0,a0
+;   slli a0,a0,32; srli a0,a0,32
 ;   load_sym a2,%g+0
 ;   callind a2
 ;   ld ra,8(sp)
@@ -90,7 +90,7 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   uext.w a0,a0
+;   slli a0,a0,32; srli a0,a0,32
 ;   ret
 ; 
 ; Disassembled:
@@ -113,7 +113,7 @@ block0(v0: i32):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   sext.w a0,a0
+;   slli a0,a0,32; srai a0,a0,32
 ;   load_sym a2,%g+0
 ;   callind a2
 ;   ld ra,8(sp)
@@ -148,7 +148,7 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   sext.w a0,a0
+;   slli a0,a0,32; srai a0,a0,32
 ;   ret
 ; 
 ; Disassembled:
@@ -183,7 +183,7 @@ block0(v0: i8):
 ;   li a5,42
 ;   li a6,42
 ;   li a7,42
-;   sext.b t3,t3
+;   slli t3,t3,56; srai t3,t3,56
 ;   sd t3,0(sp)
 ;   load_sym t3,%g+0
 ;   callind t3
@@ -250,7 +250,7 @@ block0(v0: i8):
 ;   sw t0,24(a1)
 ;   sw t2,32(a1)
 ;   sw a2,40(a1)
-;   sext.b t4,a0
+;   slli t4,a0,56; srai t4,t4,56
 ;   sd a0,48(a1)
 ;   mv a0,t1
 ;   mv a1,a3
@@ -808,5 +808,54 @@ block0:
 ; block0: ; offset 0x0
 ;   mv a0, zero
 ;   addi a1, zero, 1
+;   ret
+
+
+
+function %call_colocated(i16) -> i16 {
+    sig0 = () system_v
+    fn0 = colocated u0:0 sig0
+
+block0(v0: i16):
+    call fn0()
+    return v0
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   sd s3,-8(sp)
+;   add sp,-16
+; block0:
+;   mv s3,a0
+;   call userextname0
+;   mv a0,s3
+;   add sp,+16
+;   ld s3,-8(sp)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   ori s0, sp, 0
+;   sd s3, -8(sp)
+;   addi sp, sp, -0x10
+; block1: ; offset 0x18
+;   ori s3, a0, 0
+;   auipc ra, 0 ; reloc_external RiscvCall u0:0 0
+;   jalr ra
+;   ori a0, s3, 0
+;   addi sp, sp, 0x10
+;   ld s3, -8(sp)
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
 ;   ret
 

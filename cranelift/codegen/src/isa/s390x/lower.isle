@@ -138,6 +138,14 @@
                              (vec_add ty x (vec_lshr_by_byte x size))
                              (vec_add ty y (vec_lshr_by_byte y size)))))
 
+;; special case for the `i32x4.dot_i16x8_s` wasm instruction
+(rule 1 (lower
+        (has_type dst_ty (iadd_pairwise
+                           (imul (swiden_low x @ (value_type src_ty)) (swiden_low y))
+                           (imul (swiden_high x) (swiden_high y)))))
+      (vec_add dst_ty (vec_smul_even src_ty x y)
+                      (vec_smul_odd src_ty x y)))
+
 
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -239,9 +247,19 @@
 ;;;; Rules for `umax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Unsigned maximum of two scalar integers - expand to icmp + select.
-(rule 1 (lower (has_type (ty_int ty) (umax x y)))
-      (let ((cond ProducesBool (icmp_val $false (IntCC.UnsignedLessThan) x y)))
-        (select_bool_reg ty cond y x)))
+(rule 2 (lower (has_type (fits_in_64 ty) (umax x y)))
+      (let ((x_ext Reg (put_in_reg_zext32 x))
+            (y_ext Reg (put_in_reg_zext32 y))
+            (cond ProducesBool (bool (icmpu_reg (ty_ext32 ty) x_ext y_ext)
+                                     (intcc_as_cond (IntCC.UnsignedLessThan)))))
+        (select_bool_reg ty cond y_ext x_ext)))
+
+;; Unsigned maximum of two 128-bit integers - expand to icmp + select.
+(rule 1 (lower (has_type $I128 (umax x y)))
+      (let ((x_reg Reg (put_in_reg x))
+            (y_reg Reg (put_in_reg y))
+            (cond ProducesBool (vec_int128_ucmphi y_reg x_reg)))
+        (select_bool_reg $I128 cond y_reg x_reg)))
 
 ;; Unsigned maximum of two vector registers.
 (rule 0 (lower (has_type (ty_vec128 ty) (umax x y)))
@@ -251,9 +269,19 @@
 ;;;; Rules for `umin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Unsigned minimum of two scalar integers - expand to icmp + select.
-(rule 1 (lower (has_type (ty_int ty) (umin x y)))
-      (let ((cond ProducesBool (icmp_val $false (IntCC.UnsignedGreaterThan) x y)))
-        (select_bool_reg ty cond y x)))
+(rule 2 (lower (has_type (fits_in_64 ty) (umin x y)))
+      (let ((x_ext Reg (put_in_reg_zext32 x))
+            (y_ext Reg (put_in_reg_zext32 y))
+            (cond ProducesBool (bool (icmpu_reg (ty_ext32 ty) x_ext y_ext)
+                                     (intcc_as_cond (IntCC.UnsignedGreaterThan)))))
+        (select_bool_reg ty cond y_ext x_ext)))
+
+;; Unsigned maximum of two 128-bit integers - expand to icmp + select.
+(rule 1 (lower (has_type $I128 (umin x y)))
+      (let ((x_reg Reg (put_in_reg x))
+            (y_reg Reg (put_in_reg y))
+            (cond ProducesBool (vec_int128_ucmphi x_reg y_reg)))
+        (select_bool_reg $I128 cond y_reg x_reg)))
 
 ;; Unsigned minimum of two vector registers.
 (rule 0 (lower (has_type (ty_vec128 ty) (umin x y)))
@@ -263,9 +291,19 @@
 ;;;; Rules for `smax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Signed maximum of two scalar integers - expand to icmp + select.
-(rule 1 (lower (has_type (ty_int ty) (smax x y)))
-      (let ((cond ProducesBool (icmp_val $false (IntCC.SignedLessThan) x y)))
-        (select_bool_reg ty cond y x)))
+(rule 2 (lower (has_type (fits_in_64 ty) (smax x y)))
+      (let ((x_ext Reg (put_in_reg_sext32 x))
+            (y_ext Reg (put_in_reg_sext32 y))
+            (cond ProducesBool (bool (icmps_reg (ty_ext32 ty) x_ext y_ext)
+                                     (intcc_as_cond (IntCC.SignedLessThan)))))
+        (select_bool_reg ty cond y_ext x_ext)))
+
+;; Signed maximum of two 128-bit integers - expand to icmp + select.
+(rule 1 (lower (has_type $I128 (smax x y)))
+      (let ((x_reg Reg (put_in_reg x))
+            (y_reg Reg (put_in_reg y))
+            (cond ProducesBool (vec_int128_scmphi y_reg x_reg)))
+        (select_bool_reg $I128 cond y_reg x_reg)))
 
 ;; Signed maximum of two vector registers.
 (rule (lower (has_type (ty_vec128 ty) (smax x y)))
@@ -275,9 +313,19 @@
 ;;;; Rules for `smin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Signed minimum of two scalar integers - expand to icmp + select.
-(rule 1 (lower (has_type (ty_int ty) (smin x y)))
-      (let ((cond ProducesBool (icmp_val $false (IntCC.SignedGreaterThan) x y)))
-        (select_bool_reg ty cond y x)))
+(rule 2 (lower (has_type (fits_in_64 ty) (smin x y)))
+      (let ((x_ext Reg (put_in_reg_sext32 x))
+            (y_ext Reg (put_in_reg_sext32 y))
+            (cond ProducesBool (bool (icmps_reg (ty_ext32 ty) x_ext y_ext)
+                                     (intcc_as_cond (IntCC.SignedGreaterThan)))))
+        (select_bool_reg ty cond y_ext x_ext)))
+
+;; Signed maximum of two 128-bit integers - expand to icmp + select.
+(rule 1 (lower (has_type $I128 (smin x y)))
+      (let ((x_reg Reg (put_in_reg x))
+            (y_reg Reg (put_in_reg y))
+            (cond ProducesBool (vec_int128_scmphi x_reg y_reg)))
+        (select_bool_reg $I128 cond y_reg x_reg)))
 
 ;; Signed minimum of two vector registers.
 (rule (lower (has_type (ty_vec128 ty) (smin x y)))
@@ -442,15 +490,6 @@
                                        (vec_extract_lane $I64X2 y 1 (zero_reg))))
             (res_1 Reg (copy_reg $I64 (regpair_hi pair_1))))
         (mov_to_vec128 $I64X2 res_0 res_1)))
-
-
-;;;; Rules for `widening_pairwise_dot_product_s` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Widening pairwise dot product of two vector registers.
-(rule (lower (has_type dst_ty (widening_pairwise_dot_product_s
-                                 x @ (value_type src_ty) y)))
-      (vec_add dst_ty (vec_smul_even src_ty x y)
-                      (vec_smul_odd src_ty x y)))
 
 
 ;;;; Rules for `sqmul_round_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

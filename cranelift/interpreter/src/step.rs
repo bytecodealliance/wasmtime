@@ -2,13 +2,13 @@
 //! [InstructionContext]; the interpretation is generic over [Value]s.
 use crate::address::{Address, AddressSize};
 use crate::instruction::InstructionContext;
-use crate::state::{MemoryError, State};
+use crate::state::{InterpreterFunctionRef, MemoryError, State};
 use crate::value::{Value, ValueConversionKind, ValueError, ValueResult};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
-    types, AbiParam, Block, BlockCall, ExternalName, FuncRef, Function, InstructionData, Opcode,
-    TrapCode, Type, Value as ValueRef,
+    types, AbiParam, AtomicRmwOp, Block, BlockCall, ExternalName, FuncRef, Function,
+    InstructionData, Opcode, TrapCode, Type, Value as ValueRef,
 };
 use log::trace;
 use smallvec::{smallvec, SmallVec};
@@ -276,35 +276,12 @@ where
         }
     };
 
-    // Perform a call operation.
-    //
-    // The returned `ControlFlow` variant is determined by the given function
-    // argument, which should make either a `ControlFlow::Call` or a
-    // `ControlFlow::ReturnCall`.
-    let do_call = |make_ctrl_flow: fn(&'a Function, SmallVec<[V; 1]>) -> ControlFlow<'a, V>|
+    // Calls a function reference with the given arguments.
+    let call_func = |func_ref: InterpreterFunctionRef<'a>,
+                     args: SmallVec<[V; 1]>,
+                     make_ctrl_flow: fn(&'a Function, SmallVec<[V; 1]>) -> ControlFlow<'a, V>|
      -> Result<ControlFlow<'a, V>, StepError> {
-        let func_ref = if let InstructionData::Call { func_ref, .. } = inst {
-            func_ref
-        } else {
-            unreachable!()
-        };
-
-        let curr_func = state.get_current_function();
-        let ext_data = curr_func
-            .dfg
-            .ext_funcs
-            .get(func_ref)
-            .ok_or(StepError::UnknownFunction(func_ref))?;
-
-        let signature = if let Some(sig) = curr_func.dfg.signatures.get(ext_data.signature) {
-            sig
-        } else {
-            return Ok(ControlFlow::Trap(CraneliftTrap::User(
-                TrapCode::BadSignature,
-            )));
-        };
-
-        let args = args()?;
+        let signature = func_ref.signature();
 
         // Check the types of the arguments. This is usually done by the verifier, but nothing
         // guarantees that the user has ran that.
@@ -315,17 +292,16 @@ where
             )));
         }
 
-        Ok(match ext_data.name {
-            // These functions should be registered in the regular function store
-            ExternalName::User(_) | ExternalName::TestCase(_) => {
-                let function = state
-                    .get_function(func_ref)
-                    .ok_or(StepError::UnknownFunction(func_ref))?;
-
-                make_ctrl_flow(function, args)
-            }
-            ExternalName::LibCall(libcall) => {
-                debug_assert_ne!(inst.opcode(), Opcode::ReturnCall, "Cannot tail call to libcalls");
+        Ok(match func_ref {
+            InterpreterFunctionRef::Function(func) => make_ctrl_flow(func, args),
+            InterpreterFunctionRef::LibCall(libcall) => {
+                debug_assert!(
+                    !matches!(
+                        inst.opcode(),
+                        Opcode::ReturnCall | Opcode::ReturnCallIndirect,
+                    ),
+                    "Cannot tail call to libcalls"
+                );
                 let libcall_handler = state.get_libcall_handler();
 
                 // We don't transfer control to a libcall, we just execute it and return the results
@@ -342,7 +318,6 @@ where
                     ControlFlow::Trap(CraneliftTrap::User(TrapCode::BadSignature))
                 }
             }
-            ExternalName::KnownSymbol(_) => unimplemented!(),
         })
     };
 
@@ -398,11 +373,83 @@ where
         Opcode::Trapnz => trap_when(arg(0)?.into_bool()?, CraneliftTrap::User(trap_code())),
         Opcode::ResumableTrapnz => trap_when(arg(0)?.into_bool()?, CraneliftTrap::Resumable),
         Opcode::Return => ControlFlow::Return(args()?),
-        Opcode::Call => do_call(ControlFlow::Call)?,
-        Opcode::CallIndirect => unimplemented!("CallIndirect"),
-        Opcode::ReturnCall => do_call(ControlFlow::ReturnCall)?,
-        Opcode::ReturnCallIndirect => unimplemented!("ReturnCallIndirect"),
-        Opcode::FuncAddr => unimplemented!("FuncAddr"),
+        Opcode::Call | Opcode::ReturnCall => {
+            let func_ref = if let InstructionData::Call { func_ref, .. } = inst {
+                func_ref
+            } else {
+                unreachable!()
+            };
+
+            let curr_func = state.get_current_function();
+            let ext_data = curr_func
+                .dfg
+                .ext_funcs
+                .get(func_ref)
+                .ok_or(StepError::UnknownFunction(func_ref))?;
+
+            let args = args()?;
+            let func = match ext_data.name {
+                // These functions should be registered in the regular function store
+                ExternalName::User(_) | ExternalName::TestCase(_) => {
+                    let function = state
+                        .get_function(func_ref)
+                        .ok_or(StepError::UnknownFunction(func_ref))?;
+                    InterpreterFunctionRef::Function(function)
+                }
+                ExternalName::LibCall(libcall) => InterpreterFunctionRef::LibCall(libcall),
+                ExternalName::KnownSymbol(_) => unimplemented!(),
+            };
+
+            let make_control_flow = match inst.opcode() {
+                Opcode::Call => ControlFlow::Call,
+                Opcode::ReturnCall => ControlFlow::ReturnCall,
+                _ => unreachable!(),
+            };
+
+            call_func(func, args, make_control_flow)?
+        }
+        Opcode::CallIndirect | Opcode::ReturnCallIndirect => {
+            let args = args()?;
+            let addr_dv = DataValue::U64(arg(0)?.into_int()? as u64);
+            let addr = Address::try_from(addr_dv.clone()).map_err(StepError::MemoryError)?;
+
+            let func = state
+                .get_function_from_address(addr)
+                .ok_or_else(|| StepError::MemoryError(MemoryError::InvalidAddress(addr_dv)))?;
+
+            let call_args: SmallVec<[V; 1]> = SmallVec::from(&args[1..]);
+
+            let make_control_flow = match inst.opcode() {
+                Opcode::CallIndirect => ControlFlow::Call,
+                Opcode::ReturnCallIndirect => ControlFlow::ReturnCall,
+                _ => unreachable!(),
+            };
+
+            call_func(func, call_args, make_control_flow)?
+        }
+        Opcode::FuncAddr => {
+            let func_ref = if let InstructionData::FuncAddr { func_ref, .. } = inst {
+                func_ref
+            } else {
+                unreachable!()
+            };
+
+            let ext_data = state
+                .get_current_function()
+                .dfg
+                .ext_funcs
+                .get(func_ref)
+                .ok_or(StepError::UnknownFunction(func_ref))?;
+
+            let addr_ty = inst_context.controlling_type().unwrap();
+            assign_or_memtrap({
+                AddressSize::try_from(addr_ty).and_then(|addr_size| {
+                    let addr = state.function_address(addr_size, &ext_data.name)?;
+                    let dv = DataValue::try_from(addr)?;
+                    Ok(dv.into())
+                })
+            })
+        }
         Opcode::Load
         | Opcode::Uload8
         | Opcode::Sload8
@@ -1187,8 +1234,59 @@ where
             Value::convert(arg(0)?, ValueConversionKind::ExtractUpper(types::I64))?,
         ]),
         Opcode::Iconcat => assign(Value::concat(arg(0)?, arg(1)?)?),
-        Opcode::AtomicRmw => unimplemented!("AtomicRmw"),
-        Opcode::AtomicCas => unimplemented!("AtomicCas"),
+        Opcode::AtomicRmw => {
+            let op = inst.atomic_rmw_op().unwrap();
+            let val = arg(1)?;
+            let addr = arg(0)?.into_int()? as u64;
+            let loaded = Address::try_from(addr).and_then(|addr| state.checked_load(addr, ctrl_ty));
+            let prev_val = match loaded {
+                Ok(v) => v,
+                Err(e) => return Ok(ControlFlow::Trap(CraneliftTrap::User(memerror_to_trap(e)))),
+            };
+            let prev_val_to_assign = prev_val.clone();
+            let replace = match op {
+                AtomicRmwOp::Xchg => Ok(val),
+                AtomicRmwOp::Add => Value::add(prev_val, val),
+                AtomicRmwOp::Sub => Value::sub(prev_val, val),
+                AtomicRmwOp::And => Value::and(prev_val, val),
+                AtomicRmwOp::Or => Value::or(prev_val, val),
+                AtomicRmwOp::Xor => Value::xor(prev_val, val),
+                AtomicRmwOp::Nand => Value::and(prev_val, val).and_then(V::not),
+                AtomicRmwOp::Smax => Value::max(prev_val, val),
+                AtomicRmwOp::Smin => Value::min(prev_val, val),
+                AtomicRmwOp::Umax => Value::max(
+                    Value::convert(val, ValueConversionKind::ToUnsigned)?,
+                    Value::convert(prev_val, ValueConversionKind::ToUnsigned)?,
+                )
+                .and_then(|v| Value::convert(v, ValueConversionKind::ToSigned)),
+                AtomicRmwOp::Umin => Value::min(
+                    Value::convert(val, ValueConversionKind::ToUnsigned)?,
+                    Value::convert(prev_val, ValueConversionKind::ToUnsigned)?,
+                )
+                .and_then(|v| Value::convert(v, ValueConversionKind::ToSigned)),
+            }?;
+            let stored =
+                Address::try_from(addr).and_then(|addr| state.checked_store(addr, replace));
+            assign_or_memtrap(stored.map(|_| prev_val_to_assign))
+        }
+        Opcode::AtomicCas => {
+            let addr = arg(0)?.into_int()? as u64;
+            let loaded = Address::try_from(addr).and_then(|addr| state.checked_load(addr, ctrl_ty));
+            let loaded_val = match loaded {
+                Ok(v) => v,
+                Err(e) => return Ok(ControlFlow::Trap(CraneliftTrap::User(memerror_to_trap(e)))),
+            };
+            let expected_val = arg(1)?;
+            let val_to_assign = if Value::eq(&loaded_val, &expected_val)? {
+                let val_to_store = arg(2)?;
+                Address::try_from(addr)
+                    .and_then(|addr| state.checked_store(addr, val_to_store))
+                    .map(|_| loaded_val)
+            } else {
+                Ok(loaded_val)
+            };
+            assign_or_memtrap(val_to_assign)
+        }
         Opcode::AtomicLoad => {
             let load_ty = inst_context.controlling_type().unwrap();
             let addr = arg(0)?.into_int()? as u64;
@@ -1209,26 +1307,6 @@ where
             // The interpreter always runs in a single threaded context, so we don't
             // actually need to emit a fence here.
             ControlFlow::Continue
-        }
-        Opcode::WideningPairwiseDotProductS => {
-            let ctrl_ty = types::I16X8;
-            let new_type = ctrl_ty.merge_lanes().unwrap();
-            let arg0 = extractlanes(&arg(0)?, ctrl_ty)?;
-            let arg1 = extractlanes(&arg(1)?, ctrl_ty)?;
-            let new_vec = arg0
-                .chunks(2)
-                .into_iter()
-                .zip(arg1.chunks(2))
-                .into_iter()
-                .map(|(x, y)| {
-                    let mut z = 0i128;
-                    for (lhs, rhs) in x.into_iter().zip(y.into_iter()) {
-                        z += lhs.clone().into_int()? * rhs.clone().into_int()?;
-                    }
-                    Value::int(z, new_type.lane_type())
-                })
-                .collect::<ValueResult<Vec<_>>>()?;
-            assign(vectorizelanes(&new_vec, new_type)?)
         }
         Opcode::SqmulRoundSat => {
             let lane_type = ctrl_ty.lane_type();

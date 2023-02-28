@@ -32,18 +32,18 @@ function %test(i32) {
 }
 
 ; check: domtree_preorder {
-; nextln: block0: block12 block1
-; nextln: block12: block2 block3 block5
-; nextln: block2:
-; nextln: block3:
-; nextln: block5:
+; nextln: block0: block1 block12
 ; nextln: block1: block4
-; nextln: block4: block7 block6 block10
-; nextln: block7:
-; nextln: block6: block13 block8 block11
+; nextln: block4: block6 block7 block10
+; nextln: block6: block8 block13 block11
+; nextln: block8:
 ; nextln: block13: block9
 ; nextln: block9:
-; nextln: block8:
 ; nextln: block11:
+; nextln: block7:
 ; nextln: block10:
+; nextln: block12: block3 block2 block5
+; nextln: block3:
+; nextln: block2:
+; nextln: block5:
 ; nextln: }

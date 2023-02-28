@@ -274,10 +274,8 @@ block0(v0: i32, v1: i32):
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a0, a0, 0x20
-;   srai a0, a0, 0x20
-;   slli a2, a1, 0x20
-;   srai a2, a2, 0x20
+;   sext.w a0, a0
+;   sext.w a2, a1
 ;   addi a4, zero, -1
 ;   addi a6, zero, 1
 ;   slli t3, a6, 0x3f
@@ -324,11 +322,9 @@ block0(v0: i32):
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli t2, a0, 0x20
-;   srai t2, t2, 0x20
+;   sext.w t2, a0
 ;   addi a1, zero, 2
-;   slli a3, a1, 0x20
-;   srai a3, a3, 0x20
+;   sext.w a3, a1
 ;   addi a5, zero, -1
 ;   addi a7, zero, 1
 ;   slli t4, a7, 0x3f
@@ -357,23 +353,23 @@ block0(v0: i32, v1: i32):
 
 ; VCode:
 ; block0:
-;   mv a5,a0
-;   uext.w a0,a1
-;   trap_ifc int_divz##(zero eq a0)
-;   uext.w a3,a5
-;   divuw a0,a3,a0
+;   slli a1,a1,32
+;   srli a2,a1,32
+;   trap_ifc int_divz##(zero eq a2)
+;   slli a5,a0,32
+;   srli a7,a5,32
+;   divuw a0,a7,a2
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ori a5, a0, 0
-;   slli a0, a1, 0x20
-;   srli a0, a0, 0x20
-;   bne zero, a0, 8
+;   slli a1, a1, 0x20
+;   srli a2, a1, 0x20
+;   bne zero, a2, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_divz
-;   slli a3, a5, 0x20
-;   srli a3, a3, 0x20
-;   divuw a0, a3, a0
+;   slli a5, a0, 0x20
+;   srli a7, a5, 0x20
+;   divuw a0, a7, a2
 ;   ret
 
 function %f15(i32) -> i32 {
@@ -386,22 +382,24 @@ block0(v0: i32):
 ; VCode:
 ; block0:
 ;   li t2,2
-;   uext.w a1,t2
-;   trap_ifc int_divz##(zero eq a1)
-;   uext.w a4,a0
-;   divuw a0,a4,a1
+;   slli a1,t2,32
+;   srli a3,a1,32
+;   trap_ifc int_divz##(zero eq a3)
+;   slli a6,a0,32
+;   srli t3,a6,32
+;   divuw a0,t3,a3
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi t2, zero, 2
 ;   slli a1, t2, 0x20
-;   srli a1, a1, 0x20
-;   bne zero, a1, 8
+;   srli a3, a1, 0x20
+;   bne zero, a3, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_divz
-;   slli a4, a0, 0x20
-;   srli a4, a4, 0x20
-;   divuw a0, a4, a1
+;   slli a6, a0, 0x20
+;   srli t3, a6, 0x20
+;   divuw a0, t3, a3
 ;   ret
 
 function %f16(i32, i32) -> i32 {
@@ -419,8 +417,7 @@ block0(v0: i32, v1: i32):
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a1, a1, 0x20
-;   srai a1, a1, 0x20
+;   sext.w a1, a1
 ;   bne zero, a1, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_divz
 ;   remw a0, a0, a1
@@ -434,18 +431,19 @@ block0(v0: i32, v1: i32):
 
 ; VCode:
 ; block0:
-;   uext.w a1,a1
-;   trap_ifc int_divz##(zero eq a1)
-;   remuw a0,a0,a1
+;   slli a1,a1,32
+;   srli a2,a1,32
+;   trap_ifc int_divz##(zero eq a2)
+;   remuw a0,a0,a2
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli a1, a1, 0x20
-;   srli a1, a1, 0x20
-;   bne zero, a1, 8
+;   srli a2, a1, 0x20
+;   bne zero, a2, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_divz
-;   remuw a0, a0, a1
+;   remuw a0, a0, a2
 ;   ret
 
 function %f18(i64, i64) -> i64 {

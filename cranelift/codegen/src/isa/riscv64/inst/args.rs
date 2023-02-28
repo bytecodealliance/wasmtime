@@ -746,6 +746,9 @@ impl AluOPRRR {
             Self::Sh3add => "sh3add",
             Self::Sh3adduw => "sh3add.uw",
             Self::Xnor => "xnor",
+            Self::Pack => "pack",
+            Self::Packw => "packw",
+            Self::Packh => "packh",
         }
     }
 
@@ -785,6 +788,7 @@ impl AluOPRRR {
             AluOPRRR::Remw => 0b110,
             AluOPRRR::Remuw => 0b111,
 
+            // Zbb
             AluOPRRR::Adduw => 0b000,
             AluOPRRR::Andn => 0b111,
             AluOPRRR::Bclr => 0b001,
@@ -810,6 +814,11 @@ impl AluOPRRR {
             AluOPRRR::Sh3add => 0b110,
             AluOPRRR::Sh3adduw => 0b110,
             AluOPRRR::Xnor => 0b100,
+
+            // Zbkb
+            AluOPRRR::Pack => 0b100,
+            AluOPRRR::Packw => 0b100,
+            AluOPRRR::Packh => 0b111,
         }
     }
 
@@ -826,11 +835,16 @@ impl AluOPRRR {
             | AluOPRRR::Srl
             | AluOPRRR::Sra
             | AluOPRRR::Or
-            | AluOPRRR::And => 0b0110011,
+            | AluOPRRR::And
+            | AluOPRRR::Pack
+            | AluOPRRR::Packh => 0b0110011,
 
-            AluOPRRR::Addw | AluOPRRR::Subw | AluOPRRR::Sllw | AluOPRRR::Srlw | AluOPRRR::Sraw => {
-                0b0111011
-            }
+            AluOPRRR::Addw
+            | AluOPRRR::Subw
+            | AluOPRRR::Sllw
+            | AluOPRRR::Srlw
+            | AluOPRRR::Sraw
+            | AluOPRRR::Packw => 0b0111011,
 
             AluOPRRR::Mul
             | AluOPRRR::Mulh
@@ -937,6 +951,11 @@ impl AluOPRRR {
             AluOPRRR::Sh3add => 0b0010000,
             AluOPRRR::Sh3adduw => 0b0010000,
             AluOPRRR::Xnor => 0b0100000,
+
+            // Zbkb
+            AluOPRRR::Pack => 0b0000100,
+            AluOPRRR::Packw => 0b0000100,
+            AluOPRRR::Packh => 0b0000100,
         }
     }
 
@@ -1616,23 +1635,6 @@ impl IntSelectOP {
             IntSelectOP::Umax => IntCC::UnsignedGreaterThan,
             IntSelectOP::Smin => IntCC::SignedLessThan,
             IntSelectOP::Umin => IntCC::UnsignedLessThan,
-        }
-    }
-}
-
-impl ReferenceCheckOP {
-    pub(crate) fn op_name(self) -> &'static str {
-        match self {
-            ReferenceCheckOP::IsNull => "is_null",
-            ReferenceCheckOP::IsInvalid => "is_invalid",
-        }
-    }
-    #[inline]
-    pub(crate) fn from_ir_op(op: crate::ir::Opcode) -> Self {
-        match op {
-            crate::ir::Opcode::IsInvalid => Self::IsInvalid,
-            crate::ir::Opcode::IsNull => Self::IsNull,
-            _ => unreachable!(),
         }
     }
 }

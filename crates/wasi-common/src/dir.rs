@@ -218,20 +218,11 @@ impl DirFdStat {
 
 pub(crate) trait TableDirExt {
     fn get_dir(&self, fd: u32) -> Result<Arc<DirEntry>, Error>;
-    fn is_preopen(&self, fd: u32) -> bool;
 }
 
 impl TableDirExt for crate::table::Table {
     fn get_dir(&self, fd: u32) -> Result<Arc<DirEntry>, Error> {
         self.get(fd)
-    }
-    fn is_preopen(&self, fd: u32) -> bool {
-        if self.is::<DirEntry>(fd) {
-            let dir_entry: Arc<DirEntry> = self.get(fd).unwrap();
-            dir_entry.preopen_path.is_some()
-        } else {
-            false
-        }
     }
 }
 
