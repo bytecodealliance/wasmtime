@@ -2169,35 +2169,35 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
 
         Operator::F32x4RelaxedMax | Operator::F64x2RelaxedMax => {
             let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
-            state.push1(if environ.relaxed_simd_deterministic() {
-                builder.ins().fmax(a, b)
-            } else {
-                // TODO: should have a more optimal lowering for x86 which
-                // doesn't use the standard `fmax` instruction
-                builder.ins().fmax(a, b)
-            })
+            state.push1(
+                if environ.relaxed_simd_deterministic() || !environ.is_x86() {
+                    builder.ins().fmax(a, b)
+                } else {
+                    builder.ins().fmax_pseudo(a, b)
+                },
+            )
         }
 
         Operator::F32x4RelaxedMin | Operator::F64x2RelaxedMin => {
             let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
-            state.push1(if environ.relaxed_simd_deterministic() {
-                builder.ins().fmin(a, b)
-            } else {
-                // TODO: should have a more optimal lowering for x86 which
-                // doesn't use the standard `fmin` instruction
-                builder.ins().fmin(a, b)
-            });
+            state.push1(
+                if environ.relaxed_simd_deterministic() || !environ.is_x86() {
+                    builder.ins().fmin(a, b)
+                } else {
+                    builder.ins().fmin_pseudo(a, b)
+                },
+            );
         }
 
         Operator::I8x16RelaxedSwizzle => {
             let (a, b) = pop2_with_bitcast(state, I8X16, builder);
-            state.push1(if environ.relaxed_simd_deterministic() {
-                builder.ins().swizzle(a, b)
-            } else {
-                // TODO: should have a more optimal lowering for x86 which
-                // doesn't use the standard `swizzle` instruction
-                builder.ins().swizzle(a, b)
-            });
+            state.push1(
+                if environ.relaxed_simd_deterministic() || !environ.is_x86() {
+                    builder.ins().swizzle(a, b)
+                } else {
+                    builder.ins().x86_pshufb(a, b)
+                },
+            );
         }
 
         Operator::F32x4RelaxedMadd | Operator::F64x2RelaxedMadd => {
@@ -2233,33 +2233,35 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             // Note that the variable swaps here are intentional due to
             // the difference of the order of the wasm op and the clif
             // op.
-            state.push1(if environ.relaxed_simd_deterministic() {
-                builder.ins().bitselect(c, a, b)
-            } else {
-                // TODO: should have a more optimal lowering for x86 which
-                // doesn't use the standard `bitselect` instruction
-                builder.ins().bitselect(c, a, b)
-            });
+            //
+            // Additionally note that even on x86 the I16X8 type uses the
+            // `bitselect` instruction since x86 has no corresponding
+            // `blendv`-style instruction for 16-bit operands.
+            state.push1(
+                if environ.relaxed_simd_deterministic() || !environ.is_x86() || ty == I16X8 {
+                    builder.ins().bitselect(c, a, b)
+                } else {
+                    builder.ins().x86_blendv(c, a, b)
+                },
+            );
         }
 
         Operator::I32x4RelaxedTruncF32x4S => {
             let a = pop1_with_bitcast(state, F32X4, builder);
-            state.push1(if environ.relaxed_simd_deterministic() {
-                builder.ins().fcvt_to_sint_sat(I32X4, a)
-            } else {
-                // TODO: should have a more optimal lowering for x86 which
-                // doesn't use the standard `fcvt_to_sint_sat` instruction
-                builder.ins().fcvt_to_sint_sat(I32X4, a)
-            })
+            state.push1(
+                if environ.relaxed_simd_deterministic() || !environ.is_x86() {
+                    builder.ins().fcvt_to_sint_sat(I32X4, a)
+                } else {
+                    builder.ins().x86_cvtt2dq(I32X4, a)
+                },
+            )
         }
         Operator::I32x4RelaxedTruncF64x2SZero => {
             let a = pop1_with_bitcast(state, F64X2, builder);
-            let converted_a = if environ.relaxed_simd_deterministic() {
+            let converted_a = if environ.relaxed_simd_deterministic() || !environ.is_x86() {
                 builder.ins().fcvt_to_sint_sat(I64X2, a)
             } else {
-                // TODO: should have a more optimal lowering for x86 which
-                // doesn't use the standard `fcvt_to_sint_sat` instruction
-                builder.ins().fcvt_to_sint_sat(I64X2, a)
+                builder.ins().x86_cvtt2dq(I64X2, a)
             };
             let handle = builder.func.dfg.constants.insert(vec![0u8; 16].into());
             let zero = builder.ins().vconst(I64X2, handle);
@@ -2268,41 +2270,35 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         Operator::I16x8RelaxedQ15mulrS => {
             let (a, b) = pop2_with_bitcast(state, I16X8, builder);
-            state.push1(if environ.relaxed_simd_deterministic() {
-                builder.ins().sqmul_round_sat(a, b)
-            } else {
-                // TODO: should have a more optimal lowering for x86 which
-                // doesn't use the standard `sqmul_round_sat` instruction
-                builder.ins().sqmul_round_sat(a, b)
-            });
+            state.push1(
+                if environ.relaxed_simd_deterministic() || !environ.is_x86() {
+                    builder.ins().sqmul_round_sat(a, b)
+                } else {
+                    builder.ins().x86_pmulhrsw(a, b)
+                },
+            );
         }
         Operator::I16x8RelaxedDotI8x16I7x16S => {
             let (a, b) = pop2_with_bitcast(state, I8X16, builder);
-            state.push1(if environ.relaxed_simd_deterministic() {
-                let alo = builder.ins().swiden_low(a);
-                let blo = builder.ins().swiden_low(b);
-                let lo = builder.ins().imul(alo, blo);
-                let ahi = builder.ins().swiden_high(a);
-                let bhi = builder.ins().swiden_high(b);
-                let hi = builder.ins().imul(ahi, bhi);
-                builder.ins().iadd_pairwise(lo, hi)
-            } else {
-                // TODO: should have a more optimal lowering for x86 which
-                // doesn't use this sequence of instructions
-                let alo = builder.ins().swiden_low(a);
-                let blo = builder.ins().swiden_low(b);
-                let lo = builder.ins().imul(alo, blo);
-                let ahi = builder.ins().swiden_high(a);
-                let bhi = builder.ins().swiden_high(b);
-                let hi = builder.ins().imul(ahi, bhi);
-                builder.ins().iadd_pairwise(lo, hi)
-            });
+            state.push1(
+                if environ.relaxed_simd_deterministic() || !environ.is_x86() {
+                    let alo = builder.ins().swiden_low(a);
+                    let blo = builder.ins().swiden_low(b);
+                    let lo = builder.ins().imul(alo, blo);
+                    let ahi = builder.ins().swiden_high(a);
+                    let bhi = builder.ins().swiden_high(b);
+                    let hi = builder.ins().imul(ahi, bhi);
+                    builder.ins().iadd_pairwise(lo, hi)
+                } else {
+                    builder.ins().x86_pmaddubsw(a, b)
+                },
+            );
         }
 
         Operator::I32x4RelaxedDotI8x16I7x16AddS => {
             let c = pop1_with_bitcast(state, I32X4, builder);
             let (a, b) = pop2_with_bitcast(state, I8X16, builder);
-            let dot = if environ.relaxed_simd_deterministic() {
+            let dot = if environ.relaxed_simd_deterministic() || !environ.is_x86() {
                 let alo = builder.ins().swiden_low(a);
                 let blo = builder.ins().swiden_low(b);
                 let lo = builder.ins().imul(alo, blo);
@@ -2311,15 +2307,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 let hi = builder.ins().imul(ahi, bhi);
                 builder.ins().iadd_pairwise(lo, hi)
             } else {
-                // TODO: should have a more optimal lowering for x86 which
-                // doesn't use this sequence of instructions
-                let alo = builder.ins().swiden_low(a);
-                let blo = builder.ins().swiden_low(b);
-                let lo = builder.ins().imul(alo, blo);
-                let ahi = builder.ins().swiden_high(a);
-                let bhi = builder.ins().swiden_high(b);
-                let hi = builder.ins().imul(ahi, bhi);
-                builder.ins().iadd_pairwise(lo, hi)
+                builder.ins().x86_pmaddubsw(a, b)
             };
             let dotlo = builder.ins().swiden_low(dot);
             let dothi = builder.ins().swiden_high(dot);

@@ -540,6 +540,12 @@ pub trait FuncEnvironment: TargetEnvironment {
     fn has_native_fma(&self) -> bool {
         false
     }
+
+    /// Returns whether this is an x86 target, which may alter lowerings of
+    /// relaxed simd instructions.
+    fn is_x86(&self) -> bool {
+        false
+    }
 }
 
 /// An object satisfying the `ModuleEnvironment` trait can be passed as argument to the

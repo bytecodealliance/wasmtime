@@ -618,4 +618,8 @@ impl<'a> FuncEnvironment for FuncEnv<'a> {
     fn relaxed_simd_deterministic(&self) -> bool {
         self.config.relaxed_simd_deterministic
     }
+
+    fn is_x86(&self) -> bool {
+        self.config.target.contains("x86_64")
+    }
 }

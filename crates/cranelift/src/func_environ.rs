@@ -2161,4 +2161,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     fn has_native_fma(&self) -> bool {
         self.isa.has_native_fma()
     }
+
+    fn is_x86(&self) -> bool {
+        self.isa.triple().architecture == target_lexicon::Architecture::X86_64
+    }
 }

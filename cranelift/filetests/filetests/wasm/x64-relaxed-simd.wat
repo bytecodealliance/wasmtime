@@ -42,16 +42,7 @@
 ;;   movq    %rsp, %rbp
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
-;;   movdqa  %xmm0, %xmm5
-;;   cmpps   $0, %xmm5, %xmm0, %xmm5
-;;   movdqa  %xmm0, %xmm6
-;;   andps   %xmm6, %xmm5, %xmm6
-;;   pxor    %xmm5, %xmm6, %xmm5
-;;   cvttps2dq %xmm6, %xmm9
-;;   movdqa  %xmm9, %xmm0
-;;   pand    %xmm0, %xmm5, %xmm0
-;;   psrad   %xmm0, $31, %xmm0
-;;   pxor    %xmm0, %xmm9, %xmm0
+;;   cvttps2dq %xmm0, %xmm0
 ;;   jmp     label1
 ;; block1:
 ;;   movq    %rbp, %rsp
@@ -90,12 +81,7 @@
 ;;   movq    %rsp, %rbp
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
-;;   movdqa  %xmm0, %xmm4
-;;   cmppd   $0, %xmm4, %xmm0, %xmm4
-;;   andps   %xmm4, const(0), %xmm4
-;;   movdqa  %xmm0, %xmm7
-;;   minpd   %xmm7, %xmm4, %xmm7
-;;   cvttpd2dq %xmm7, %xmm0
+;;   cvttpd2dq %xmm0, %xmm0
 ;;   jmp     label1
 ;; block1:
 ;;   movq    %rbp, %rsp
@@ -127,20 +113,9 @@
 ;;   movq    %rsp, %rbp
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
-;;   pmovsxbw %xmm0, %xmm4
-;;   pmovsxbw %xmm1, %xmm12
-;;   movdqa  %xmm4, %xmm15
-;;   pmullw  %xmm15, %xmm12, %xmm15
-;;   movdqa  %xmm15, %xmm4
-;;   movdqa  %xmm0, %xmm8
-;;   palignr $8, %xmm8, %xmm0, %xmm8
-;;   pmovsxbw %xmm8, %xmm13
-;;   movdqa  %xmm1, %xmm12
-;;   palignr $8, %xmm12, %xmm1, %xmm12
-;;   pmovsxbw %xmm12, %xmm14
-;;   pmullw  %xmm13, %xmm14, %xmm13
+;;   movdqa  %xmm1, %xmm4
+;;   pmaddubsw %xmm4, %xmm0, %xmm4
 ;;   movdqa  %xmm4, %xmm0
-;;   phaddw  %xmm0, %xmm13, %xmm0
 ;;   jmp     label1
 ;; block1:
 ;;   movq    %rbp, %rsp
@@ -153,20 +128,9 @@
 ;;   movq    %rsp, %rbp
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
-;;   pmovsxbw %xmm0, %xmm5
-;;   pmovsxbw %xmm1, %xmm15
-;;   movdqa  %xmm5, %xmm3
-;;   pmullw  %xmm3, %xmm15, %xmm3
-;;   movdqa  %xmm3, %xmm5
-;;   movdqa  %xmm0, %xmm11
-;;   palignr $8, %xmm11, %xmm0, %xmm11
-;;   pmovsxbw %xmm11, %xmm3
-;;   movdqa  %xmm1, %xmm15
-;;   palignr $8, %xmm15, %xmm1, %xmm15
-;;   pmovsxbw %xmm15, %xmm1
-;;   pmullw  %xmm3, %xmm1, %xmm3
-;;   movdqa  %xmm5, %xmm0
-;;   phaddw  %xmm0, %xmm3, %xmm0
+;;   movdqa  %xmm0, %xmm8
+;;   movdqa  %xmm1, %xmm0
+;;   pmaddubsw %xmm0, %xmm8, %xmm0
 ;;   pmaddwd %xmm0, const(0), %xmm0
 ;;   paddd   %xmm0, %xmm2, %xmm0
 ;;   jmp     label1
