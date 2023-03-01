@@ -20,10 +20,10 @@
     "wizer": "./wizer.js"
   },
   "optionalDependencies": {
-    "@bytecode-alliance/wizer-darwin-arm64": "1.6.0",
-    "@bytecode-alliance/wizer-darwin-x64": "1.6.0",
-    "@bytecode-alliance/wizer-linux-x64": "1.6.0",
-    "@bytecode-alliance/wizer-win32-x64": "1.6.0"
+    "@bytecode-alliance/wizer-darwin-arm64": "1.6.1-beta",
+    "@bytecode-alliance/wizer-darwin-x64": "1.6.1-beta",
+    "@bytecode-alliance/wizer-linux-x64": "1.6.1-beta",
+    "@bytecode-alliance/wizer-win32-x64": "1.6.1-beta"
   },
   "license": "Apache-2.0",
   "repository": {

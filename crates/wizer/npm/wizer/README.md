@@ -5,12 +5,12 @@
 ## API
 
 ```
-$ npm install --save @bytecode-alliance/wizer
+$ npm install --save @bytecodealliance/wizer
 ```
 
 ```js
 const execFile = require('child_process').execFile;
-const wizer = require('@bytecode-alliance/wizer');
+const wizer = require('@bytecodealliance/wizer');
 
 execFile(wizer, ['input.wasm', '-o', 'initialized.wasm'], (err, stdout) => {
 	console.log(stdout);
