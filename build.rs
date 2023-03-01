@@ -183,9 +183,7 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
     match env::var("CARGO_CFG_TARGET_ARCH").unwrap().as_str() {
         "s390x" => {
             // FIXME: These tests fail under qemu due to a qemu bug.
-            testname == "simd_f32x4_pmin_pmax"
-                || testname == "simd_f64x2_pmin_pmax"
-                || testsuite == "relaxed-simd"
+            testname == "simd_f32x4_pmin_pmax" || testname == "simd_f64x2_pmin_pmax"
         }
 
         // Currently the simd wasm proposal is not implemented in the riscv64
