@@ -1,7 +1,10 @@
 
 test run
-target riscv64
+target aarch64
 target x86_64
+target riscv64
+target s390x
+
 
 function %a(i64, i16) -> i16 {
     ss0 = explicit_slot 8
