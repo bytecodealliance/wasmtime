@@ -2173,8 +2173,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             return Err(wasm_unsupported!("proposed relaxed-simd operator {:?}", op));
         }
 
-        // TODO(dhil) fixme: merge into the above list.
-        // Function references instructions
         Operator::ReturnCallRef { hty: _ } => {
             return Err(wasm_unsupported!(
                 "proposed tail-call operator for function references {:?}",
@@ -2185,11 +2183,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let r = state.pop1();
             let (br_destination, inputs) = translate_br_if_args(*relative_depth, state);
             let is_null = environ.translate_ref_is_null(builder.cursor(), r)?;
-            //canonicalise_then_brnz(builder, is_null, br_destination, inputs);
             let else_block = builder.create_block();
             canonicalise_brif(builder, is_null, br_destination, inputs, else_block, &[]);
 
-            // canonicalise_then_jump(builder, next_block, &[]);
             builder.seal_block(else_block); // The only predecessor is the current block.
             builder.switch_to_block(else_block);
             state.push1(r);
@@ -2203,14 +2199,12 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             // Else: Execute the instruction (br relative_depth).
             let is_null = environ.translate_ref_is_null(builder.cursor(), state.peek1())?;
             let (br_destination, inputs) = translate_br_if_args(*relative_depth, state);
-            //canonicalise_then_brz(builder, is_null, br_destination, inputs);
             let else_block = builder.create_block();
             canonicalise_brif(builder, is_null, else_block, &[], br_destination, inputs);
 
             // In the null case, pop the ref
             state.pop1();
 
-            //canonicalise_then_jump(builder, next_block, &[]);
             builder.seal_block(else_block); // The only predecessor is the current block.
 
             // The rest of the translation operates on our is null case, which is

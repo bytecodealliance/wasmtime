@@ -696,7 +696,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
                 WasmType::F32 => ir::types::F32,
                 WasmType::F64 => ir::types::F64,
                 WasmType::V128 => ir::types::I8X16,
-                WasmType::Ref(_) => reference_type, // TODO(dhil) fixme: verify this is indeed the correct thing to do.
+                WasmType::Ref(_) => reference_type,
             })
         };
         sig.params.extend(wasm.params().iter().map(&mut cvt));
