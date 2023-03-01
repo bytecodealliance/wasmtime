@@ -3513,16 +3513,21 @@
 ;; Special case for the `punpckhbw` instruction which interleaves the upper
 ;; lanes of the two input registers.
 (rule 5 (lower (shuffle a b (vec_mask_from_immediate mask)))
-      (if-let $true (vec_mask_is mask 8 24 9 25 10 26 11 27 12 28 13 29 14 30 15 31))
+      (if-let $true (vec_mask_is mask 0x1f0f_1e0e_1d0d_1c0c_1b0b_1a0a_1909_1808))
       (x64_punpckhbw a b))
 
-;; Special case for the `punpcklbw` instruction which interleaves the upper
+;; Special case for the `punpcklbw` instruction which interleaves the lower
 ;; lanes of the two input registers.
 (rule 4 (lower (shuffle a b (vec_mask_from_immediate mask)))
-      (if-let $true (vec_mask_is mask 0 16 1 17 2 18 3 19 4 20 5 21 6 22 7 23))
+      (if-let $true (vec_mask_is mask 0x1707_1606_1505_1404_1303_1202_1101_1000))
       (x64_punpcklbw a b))
 
-(decl pure vec_mask_is (VecMask u8 u8 u8 u8 u8 u8 u8 u8 u8 u8 u8 u8 u8 u8 u8 u8) bool)
+;; Tests whether the `VecMask` provided is equal to the u128 literal provided.
+;;
+;; Note that the u128 is equated in its little-endian representation so the
+;; most significant bytes left correspond to the last entries in the `VecMask`,
+;; and least significant bytes correspond to the first entries in `VecMask`.
+(decl pure vec_mask_is (VecMask u128) bool)
 (extern constructor vec_mask_is vec_mask_is)
 
 ;; If `lhs` and `rhs` are the same we can use a single PSHUFB to shuffle the XMM
