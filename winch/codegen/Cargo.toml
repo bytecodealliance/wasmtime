@@ -18,6 +18,7 @@ target-lexicon = { workspace = true, features = ["std"] }
 # by Cranelift and Winch.
 cranelift-codegen = { workspace = true }
 regalloc2 = "0.6.0"
+gimli = { workspace = true }
 
 [features]
 x64 = ["cranelift-codegen/x86"]

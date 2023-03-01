@@ -1,9 +1,8 @@
 use crate::debug::{DwarfSectionRelocTarget, ModuleMemoryOffset};
 use crate::func_environ::FuncEnvironment;
-use crate::obj::ModuleTextBuilder;
 use crate::{
     blank_sig, func_signature, indirect_signature, value_type, wasmtime_call_conv,
-    CompiledFunction, FunctionAddressMap, Relocation, RelocationTarget,
+    CompiledFunction, FunctionAddressMap,
 };
 use anyhow::{Context as _, Result};
 use cranelift_codegen::ir::{
@@ -29,7 +28,9 @@ use std::convert::TryFrom;
 use std::mem;
 use std::sync::{Arc, Mutex};
 use wasmparser::{FuncValidatorAllocations, FunctionBody};
+use wasmtime_cranelift_shared::obj::ModuleTextBuilder;
 use wasmtime_cranelift_shared::LinkOptions;
+use wasmtime_cranelift_shared::{Relocation, RelocationTarget};
 use wasmtime_environ::{
     AddressMapSection, CacheStore, CompileError, FilePos, FlagValue, FunctionBodyData, FunctionLoc,
     InstructionAddressMap, ModuleTranslation, ModuleTypes, PtrSize, StackMapInformation, Trap,
@@ -113,10 +114,6 @@ impl Compiler {
             linkopts,
             cache_store,
         }
-    }
-
-    pub fn isa(&self) -> &dyn TargetIsa {
-        &*self.isa
     }
 
     fn take_context(&self) -> CompilerContext {
@@ -364,7 +361,8 @@ impl wasmtime_environ::Compiler for Compiler {
         tunables: &Tunables,
         resolve_reloc: &dyn Fn(usize, FuncIndex) -> usize,
     ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
-        let mut builder = ModuleTextBuilder::new(obj, self, funcs.len());
+        let mut builder =
+            ModuleTextBuilder::new(obj, self, self.isa.text_section_builder(funcs.len()));
         if self.linkopts.force_jump_veneers {
             builder.force_veneers();
         }
@@ -373,8 +371,15 @@ impl wasmtime_environ::Compiler for Compiler {
 
         let mut ret = Vec::with_capacity(funcs.len());
         for (i, (sym, func)) in funcs.iter().enumerate() {
-            let func = func.downcast_ref().unwrap();
-            let (sym, range) = builder.append_func(&sym, func, |idx| resolve_reloc(i, idx));
+            let func = func.downcast_ref::<CompiledFunction>().unwrap();
+            let (sym, range) = builder.append_func(
+                &sym,
+                &func.body,
+                func.alignment,
+                func.unwind_info.as_ref(),
+                &func.relocations,
+                |idx| resolve_reloc(i, idx),
+            );
             if tunables.generate_address_map {
                 addrs.push(range.clone(), &func.address_map.instructions);
             }
@@ -405,9 +410,23 @@ impl wasmtime_environ::Compiler for Compiler {
     ) -> Result<(FunctionLoc, FunctionLoc)> {
         let host_to_wasm = self.host_to_wasm_trampoline(ty)?;
         let wasm_to_host = self.wasm_to_host_trampoline(ty, host_fn)?;
-        let mut builder = ModuleTextBuilder::new(obj, self, 2);
-        let (_, a) = builder.append_func("host_to_wasm", &host_to_wasm, |_| unreachable!());
-        let (_, b) = builder.append_func("wasm_to_host", &wasm_to_host, |_| unreachable!());
+        let mut builder = ModuleTextBuilder::new(obj, self, self.isa.text_section_builder(2));
+        let (_, a) = builder.append_func(
+            "host_to_wasm",
+            &host_to_wasm.body,
+            host_to_wasm.alignment,
+            host_to_wasm.unwind_info.as_ref(),
+            &host_to_wasm.relocations,
+            |_| unreachable!(),
+        );
+        let (_, b) = builder.append_func(
+            "wasm_to_host",
+            &wasm_to_host.body,
+            wasm_to_host.alignment,
+            wasm_to_host.unwind_info.as_ref(),
+            &wasm_to_host.relocations,
+            |_| unreachable!(),
+        );
         let a = FunctionLoc {
             start: u32::try_from(a.start).unwrap(),
             length: u32::try_from(a.end - a.start).unwrap(),
@@ -525,6 +544,14 @@ impl wasmtime_environ::Compiler for Compiler {
         }
 
         Ok(())
+    }
+
+    fn function_alignment(&self) -> u32 {
+        self.isa.function_alignment()
+    }
+
+    fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
+        self.isa.create_systemv_cie()
     }
 }
 

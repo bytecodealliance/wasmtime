@@ -308,6 +308,17 @@ pub trait Compiler: Send + Sync {
         translation: &ModuleTranslation<'_>,
         funcs: &PrimaryMap<DefinedFuncIndex, (SymbolId, &(dyn Any + Send))>,
     ) -> Result<()>;
+
+    /// The function alignment required by this ISA.
+    fn function_alignment(&self) -> u32;
+
+    /// Creates a new System V Common Information Entry for the ISA.
+    ///
+    /// Returns `None` if the ISA does not support System V unwind information.
+    fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
+        // By default, an ISA cannot create a System V CIE
+        None
+    }
 }
 
 /// Value of a configured setting for a [`Compiler`]

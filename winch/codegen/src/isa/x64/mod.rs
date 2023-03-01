@@ -12,6 +12,7 @@ use crate::{
 use anyhow::Result;
 use cranelift_codegen::settings::{self, Flags};
 use cranelift_codegen::{isa::x64::settings as x64_settings, Final, MachBufferFinalized};
+use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
 use target_lexicon::Triple;
 use wasmparser::{FuncType, FuncValidator, FunctionBody, ValidatorResources};
 
@@ -100,5 +101,14 @@ impl TargetIsa for X64 {
         codegen.emit(&mut body, validator)?;
 
         Ok(masm.finalize())
+    }
+
+    fn text_section_builder(&self, num_funcs: usize) -> Box<dyn TextSectionBuilder> {
+        Box::new(MachTextSectionBuilder::<cranelift_codegen::isa::x64::Inst>::new(num_funcs))
+    }
+
+    fn function_alignment(&self) -> u32 {
+        // See `cranelift_codegen`'s value of this for more information
+        16
     }
 }

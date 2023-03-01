@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use core::fmt::Formatter;
 use cranelift_codegen::isa::{CallConv, IsaBuilder};
 use cranelift_codegen::settings;
-use cranelift_codegen::{Final, MachBufferFinalized};
+use cranelift_codegen::{Final, MachBufferFinalized, TextSectionBuilder};
 use std::{
     error,
     fmt::{self, Debug, Display},
@@ -104,6 +104,18 @@ pub trait TargetIsa: Send + Sync {
     fn endianness(&self) -> target_lexicon::Endianness {
         self.triple().endianness().unwrap()
     }
+
+    /// See `cranelift_codegen::isa::TargetIsa::create_systemv_cie`
+    fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
+        // By default, an ISA cannot create a System V CIE
+        None
+    }
+
+    /// See `cranelift_codegen::isa::TargetIsa::text_section_builder`
+    fn text_section_builder(&self, num_labeled_funcs: usize) -> Box<dyn TextSectionBuilder>;
+
+    /// See `cranelift_codegen::isa::TargetIsa::function_alignment`
+    fn function_alignment(&self) -> u32;
 }
 
 impl Debug for &dyn TargetIsa {

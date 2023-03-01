@@ -88,4 +88,12 @@ impl wasmtime_environ::Compiler for Compiler {
     ) -> Result<()> {
         todo!()
     }
+
+    fn function_alignment(&self) -> u32 {
+        self.isa.function_alignment()
+    }
+
+    fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
+        self.isa.create_systemv_cie()
+    }
 }

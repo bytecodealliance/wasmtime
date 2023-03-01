@@ -13,15 +13,11 @@
 //! function body, the imported wasm function do not. The trampolines symbol
 //! names have format "_trampoline_N", where N is `SignatureIndex`.
 
-use crate::compiler::Compiler;
-use crate::{CompiledFunction, RelocationTarget};
+use crate::{Relocation, RelocationTarget};
 use anyhow::Result;
 use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::ir::LibCall;
-use cranelift_codegen::isa::{
-    unwind::{systemv, UnwindInfo},
-    TargetIsa,
-};
+use cranelift_codegen::isa::unwind::{systemv, UnwindInfo};
 use cranelift_codegen::TextSectionBuilder;
 use gimli::write::{Address, EhFrame, EndianVec, FrameTable, Writer};
 use gimli::RunTimeEndian;
@@ -30,7 +26,7 @@ use object::{Architecture, SectionKind, SymbolFlags, SymbolKind, SymbolScope};
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::ops::Range;
-use wasmtime_environ::{Compiler as _, FuncIndex};
+use wasmtime_environ::{Compiler, FuncIndex};
 
 const TEXT_SECTION_NAME: &[u8] = b".text";
 
@@ -43,8 +39,7 @@ const TEXT_SECTION_NAME: &[u8] = b".text";
 pub struct ModuleTextBuilder<'a> {
     /// The target that we're compiling for, used to query target-specific
     /// information as necessary.
-    isa: &'a dyn TargetIsa,
-    compiler: &'a Compiler,
+    compiler: &'a dyn Compiler,
 
     /// The object file that we're generating code into.
     obj: &'a mut Object<'static>,
@@ -73,10 +68,10 @@ impl<'a> ModuleTextBuilder<'a> {
     /// any unwinding or such information as necessary. The `num_funcs`
     /// parameter indicates the number of times the `append_func` function will
     /// be called. The `finish` function will panic if this contract is not met.
-    pub(crate) fn new(
+    pub fn new(
         obj: &'a mut Object<'static>,
-        compiler: &'a Compiler,
-        num_funcs: usize,
+        compiler: &'a dyn Compiler,
+        text: Box<dyn TextSectionBuilder>,
     ) -> Self {
         // Entire code (functions and trampolines) will be placed
         // in the ".text" section.
@@ -87,12 +82,11 @@ impl<'a> ModuleTextBuilder<'a> {
         );
 
         Self {
-            isa: compiler.isa(),
             compiler,
             obj,
             text_section,
             unwind_info: Default::default(),
-            text: compiler.isa().text_section_builder(num_funcs),
+            text,
             libcall_symbols: HashMap::default(),
         }
     }
@@ -110,14 +104,17 @@ impl<'a> ModuleTextBuilder<'a> {
     pub fn append_func(
         &mut self,
         name: &str,
-        func: &'a CompiledFunction,
+        body: &[u8],
+        alignment: u32,
+        unwind_info: Option<&'a UnwindInfo>,
+        relocations: &[Relocation],
         resolve_reloc_target: impl Fn(FuncIndex) -> usize,
     ) -> (SymbolId, Range<u64>) {
-        let body_len = func.body.len() as u64;
+        let body_len = body.len() as u64;
         let off = self.text.append(
             true,
-            &func.body,
-            self.isa.function_alignment().max(func.alignment),
+            &body,
+            self.compiler.function_alignment().max(alignment),
         );
 
         let symbol_id = self.obj.add_symbol(Symbol {
@@ -131,11 +128,11 @@ impl<'a> ModuleTextBuilder<'a> {
             flags: SymbolFlags::None,
         });
 
-        if let Some(info) = &func.unwind_info {
+        if let Some(info) = unwind_info {
             self.unwind_info.push(off, body_len, info);
         }
 
-        for r in func.relocations.iter() {
+        for r in relocations {
             match r.reloc_target {
                 // Relocations against user-defined functions means that this is
                 // a relocation against a module-local function, typically a
@@ -340,7 +337,12 @@ impl<'a> UnwindInfoBuilder<'a> {
     /// section immediately.
     ///
     /// The `text_section`'s section identifier is passed into this function.
-    fn append_section(&self, compiler: &Compiler, obj: &mut Object<'_>, text_section: SectionId) {
+    fn append_section(
+        &self,
+        compiler: &dyn Compiler,
+        obj: &mut Object<'_>,
+        text_section: SectionId,
+    ) {
         // This write will align the text section to a page boundary and then
         // return the offset at that point. This gives us the full size of the
         // text section at that point, after alignment.
@@ -363,7 +365,7 @@ impl<'a> UnwindInfoBuilder<'a> {
             let segment = obj.segment_name(StandardSegment::Data).to_vec();
             let section_id =
                 obj.add_section(segment, b".eh_frame".to_vec(), SectionKind::ReadOnlyData);
-            self.write_systemv_unwind_info(compiler.isa(), obj, section_id, text_section_size)
+            self.write_systemv_unwind_info(compiler, obj, section_id, text_section_size)
         }
     }
 
@@ -458,12 +460,12 @@ impl<'a> UnwindInfoBuilder<'a> {
     /// bits.
     fn write_systemv_unwind_info(
         &self,
-        isa: &dyn TargetIsa,
+        compiler: &dyn Compiler,
         obj: &mut Object<'_>,
         section_id: SectionId,
         text_section_size: u64,
     ) {
-        let mut cie = isa
+        let mut cie = compiler
             .create_systemv_cie()
             .expect("must be able to create a CIE for system-v unwind info");
         let mut table = FrameTable::default();
@@ -480,7 +482,7 @@ impl<'a> UnwindInfoBuilder<'a> {
             let fde = unwind_info.to_fde(Address::Constant(actual_offset as u64));
             table.add_fde(cie_id, fde);
         }
-        let endian = match isa.triple().endianness().unwrap() {
+        let endian = match compiler.triple().endianness().unwrap() {
             target_lexicon::Endianness::Little => RunTimeEndian::Little,
             target_lexicon::Endianness::Big => RunTimeEndian::Big,
         };

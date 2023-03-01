@@ -14,3 +14,5 @@ wasmtime-environ = { workspace = true }
 cranelift-codegen = { workspace = true }
 cranelift-native = { workspace = true }
 target-lexicon = { workspace = true }
+gimli = { workspace = true }
+object = { workspace = true }

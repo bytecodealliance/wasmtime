@@ -3,12 +3,12 @@
 //! This crate provides an implementation of the `wasmtime_environ::Compiler`
 //! and `wasmtime_environ::CompilerBuilder` traits.
 
-use cranelift_codegen::binemit;
 use cranelift_codegen::ir;
 use cranelift_codegen::isa::{self, unwind::UnwindInfo, CallConv, TargetIsa};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmFuncType, WasmType};
 use target_lexicon::{Architecture, CallingConvention};
+use wasmtime_cranelift_shared::Relocation;
 use wasmtime_environ::{
     FilePos, InstructionAddressMap, ModuleTranslation, ModuleTypes, TrapInformation,
 };
@@ -16,7 +16,6 @@ use wasmtime_environ::{
 mod compiler;
 mod debug;
 mod func_environ;
-mod obj;
 
 type CompiledFunctions<'a> = PrimaryMap<DefinedFuncIndex, &'a CompiledFunction>;
 
@@ -80,28 +79,6 @@ struct FunctionAddressMap {
 
     /// Generated function body length.
     body_len: u32,
-}
-
-/// A record of a relocation to perform.
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct Relocation {
-    /// The relocation code.
-    reloc: binemit::Reloc,
-    /// Relocation target.
-    reloc_target: RelocationTarget,
-    /// The offset where to apply the relocation.
-    offset: binemit::CodeOffset,
-    /// The addend to add to the relocation value.
-    addend: binemit::Addend,
-}
-
-/// Destination function. Can be either user function or some special one, like `memory.grow`.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-enum RelocationTarget {
-    /// The user function index.
-    UserFunc(FuncIndex),
-    /// A compiler-generated libcall.
-    LibCall(ir::LibCall),
 }
 
 /// Creates a new cranelift `Signature` with no wasm params/results for the
