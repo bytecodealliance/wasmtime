@@ -19,6 +19,7 @@ use core::ops::{Index, IndexMut};
 use core::u16;
 
 use alloc::collections::BTreeMap;
+use alloc::vec::Vec;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
@@ -1025,6 +1026,62 @@ impl DataFlowGraph {
         }
     }
 
+    fn value_iconst(&self, value: Value) -> Option<i64> {
+        if let ValueDef::Result(inst, ..) = self.value_def(value) {
+            if let InstructionData::UnaryImm { imm, .. } = self.insts[inst] {
+                return Some(imm.into());
+            }
+        }
+        None
+    }
+
+    /// Checks `inst` to see if it is a conditional branch with a constant
+    /// condition.  Returns the taken block and a list of not taken blocks.
+    pub fn is_const_branch(&self, inst: Inst) -> Option<(BlockCall, Vec<BlockCall>)> {
+        match &self.insts[inst] {
+            InstructionData::Brif { arg, blocks, .. } => {
+                if let Some(imm) = self.value_iconst(*arg) {
+                    let mut not_taken = Vec::new();
+                    let taken = if imm != 0 {
+                        not_taken.push(blocks[1]);
+                        blocks[0]
+                    } else {
+                        not_taken.push(blocks[0]);
+                        blocks[1]
+                    };
+                    return Some((taken, not_taken));
+                }
+            }
+            InstructionData::BranchTable { arg, table, .. } => {
+                if let Some(imm) = self.value_iconst(*arg) {
+                    // let mut not_taken = Vec::new();
+                    let jump_table = &self.jump_tables[*table];
+                    let all_branches = jump_table.all_branches();
+                    let taken = if imm < 0 {
+                        all_branches[0]
+                    } else {
+                        *all_branches
+                            .get(imm as usize + 1)
+                            .unwrap_or(&all_branches[0])
+                    };
+                    let not_taken: Vec<BlockCall> = all_branches
+                        .iter()
+                        .flat_map(|branch| {
+                            if *branch != taken {
+                                Some(*branch)
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                    return Some((taken, not_taken));
+                }
+            }
+            _ => {}
+        }
+        None
+    }
+
     /// Get the result types of the given instruction.
     pub fn inst_result_types<'a>(
         &'a self,
@@ -1283,6 +1340,61 @@ impl DataFlowGraph {
     /// with `change_to_alias()`.
     pub fn detach_block_params(&mut self, block: Block) -> ValueList {
         self.blocks[block].params.take()
+    }
+
+    /// Conditionally detach all the parameters from `block` and alias them to the BlockCall args in `inst`
+    /// if there is a single `BlockCall` that matches `block`.
+    pub fn alias_single_pred_block_params(&mut self, block: Block, inst: Inst) {
+        macro_rules! extract_block_args {
+            ($block_call:expr) => {{
+                let mut args: Vec<Value> = Vec::new();
+                args.extend($block_call.args_slice(&self.value_lists).iter().copied());
+                $block_call.clear(&mut self.value_lists);
+                args
+            }};
+        }
+
+        macro_rules! check_and_extract_block_args {
+            ($block_calls:expr) => {{
+                let mut block_call = None;
+                for bc in $block_calls.iter_mut() {
+                    if bc.block(&self.value_lists) == block {
+                        if block_call.is_some() {
+                            block_call = None;
+                            break;
+                        } else {
+                            block_call = Some(bc);
+                        }
+                    }
+                }
+
+                if let Some(block_call) = block_call {
+                    extract_block_args!(block_call)
+                } else {
+                    Vec::new()
+                }
+            }};
+        }
+        let args: Vec<Value> = match &mut self.insts[inst] {
+            InstructionData::Brif { blocks, .. } => check_and_extract_block_args!(blocks),
+            InstructionData::BranchTable { table, .. } => {
+                check_and_extract_block_args!(self.jump_tables[*table].all_branches_mut())
+            }
+            InstructionData::Jump { destination, .. } => extract_block_args!(destination),
+            _ => Vec::new(),
+        };
+        if args.len() != 0 {
+            let params: Vec<Value> = self
+                .detach_block_params(block)
+                .as_slice(&self.value_lists)
+                .into();
+
+            debug_assert_eq!(args.len(), params.len());
+
+            for (&param, &arg) in params.iter().zip(args.iter()) {
+                self.change_to_alias(param, arg);
+            }
+        }
     }
 }
 

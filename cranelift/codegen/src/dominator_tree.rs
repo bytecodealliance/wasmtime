@@ -60,6 +60,12 @@ impl DominatorTree {
         self.nodes[block].rpo_number != 0
     }
 
+    /// Set `block` unreachable
+    pub fn set_unreachable(&mut self, block: Block) {
+        self.nodes[block].rpo_number = 0;
+        self.nodes[block].idom = None.into();
+    }
+
     /// Get the CFG post-order of blocks that was used to compute the dominator tree.
     ///
     /// Note that this post-order is not updated automatically when the CFG is modified. It is

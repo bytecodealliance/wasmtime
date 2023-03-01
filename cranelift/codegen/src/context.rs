@@ -362,8 +362,8 @@ impl Context {
     /// by a store instruction to the same instruction (so-called
     /// "store-to-load forwarding").
     pub fn replace_redundant_loads(&mut self) -> CodegenResult<()> {
-        let mut analysis = AliasAnalysis::new(&self.func, &self.domtree);
-        analysis.compute_and_update_aliases(&mut self.func);
+        let mut analysis = AliasAnalysis::new(&self.func);
+        analysis.compute_and_update_aliases(&mut self.func, &self.domtree);
         Ok(())
     }
 
@@ -384,12 +384,13 @@ impl Context {
             self.func.display()
         );
         self.compute_loop_analysis();
-        let mut alias_analysis = AliasAnalysis::new(&self.func, &self.domtree);
+        let mut alias_analysis = AliasAnalysis::new(&self.func);
         let mut pass = EgraphPass::new(
             &mut self.func,
-            &self.domtree,
+            &mut self.domtree,
             &self.loop_analysis,
             &mut alias_analysis,
+            &mut self.cfg,
         );
         pass.run();
         log::info!("egraph stats: {:?}", pass.stats);

@@ -147,6 +147,16 @@ impl ControlFlowGraph {
         self.compute_block(func, block);
     }
 
+    /// Remove and edge from the `from` block at `from_inst` to `to` block.
+    pub fn remove_edge(&mut self, from: Block, from_inst: Inst, to: Block) {
+        self.data[from]
+            .successors
+            .remove(to, &mut self.succ_forest, &());
+        self.data[to]
+            .predecessors
+            .remove(from_inst, &mut self.pred_forest, &());
+    }
+
     fn add_edge(&mut self, from: Block, from_inst: Inst, to: Block) {
         self.data[from]
             .successors
@@ -154,6 +164,21 @@ impl ControlFlowGraph {
         self.data[to]
             .predecessors
             .insert(from_inst, from, &mut self.pred_forest, &());
+    }
+
+    /// Check if `block` as a single predecessor and return the `Some(Inst)` for the predecessor.
+    /// Otherwise return `None`
+    pub fn single_pred_inst(&self, block: Block) -> Option<Inst> {
+        let mut iter = self.pred_iter(block);
+        let mut inst = None;
+        if let Some(pred) = iter.next() {
+            inst = Some(pred.inst);
+        }
+        if iter.next().is_some() {
+            None
+        } else {
+            inst
+        }
     }
 
     /// Get an iterator over the CFG predecessors to `block`.

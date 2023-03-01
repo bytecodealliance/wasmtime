@@ -6,10 +6,12 @@ use crate::cursor::{Cursor, CursorPosition, FuncCursor};
 use crate::dominator_tree::DominatorTree;
 use crate::egraph::domtree::DomTreeWithChildren;
 use crate::egraph::elaborate::Elaborator;
+use crate::flowgraph::ControlFlowGraph;
 use crate::fx::FxHashSet;
 use crate::inst_predicates::is_pure_for_egraph;
 use crate::ir::{
-    DataFlowGraph, Function, Inst, InstructionData, Type, Value, ValueDef, ValueListPool,
+    Block, DataFlowGraph, Function, Inst, InstBuilderBase, InstructionData, Opcode, Type, Value,
+    ValueDef, ValueListPool,
 };
 use crate::loop_analysis::LoopAnalysis;
 use crate::opts::generated_code::ContextIter;
@@ -46,15 +48,17 @@ pub struct EgraphPass<'a> {
     /// The function we're operating on.
     func: &'a mut Function,
     /// Dominator tree, used for elaboration pass.
-    domtree: &'a DominatorTree,
+    domtree: &'a mut DominatorTree,
     /// Alias analysis, used during optimization.
-    alias_analysis: &'a mut AliasAnalysis<'a>,
+    alias_analysis: &'a mut AliasAnalysis,
     /// "Domtree with children": like `domtree`, but with an explicit
     /// list of children, rather than just parent pointers.
     domtree_children: DomTreeWithChildren,
     /// Loop analysis results, used for built-in LICM during
     /// elaboration.
     loop_analysis: &'a LoopAnalysis,
+    /// ControlFlowGraph, used to fix up during branch folding
+    cfg: &'a mut ControlFlowGraph,
     /// Which canonical Values do we want to rematerialize in each
     /// block where they're used?
     ///
@@ -69,22 +73,22 @@ pub struct EgraphPass<'a> {
 }
 
 /// Context passed through node insertion and optimization.
-pub(crate) struct OptimizeCtx<'opt, 'analysis>
-where
-    'analysis: 'opt,
-{
+pub(crate) struct OptimizeCtx<'opt> {
     // Borrowed from EgraphPass:
     pub(crate) func: &'opt mut Function,
+    pub(crate) domtree: &'opt mut DominatorTree,
+    pub(crate) loop_analysis: &'opt LoopAnalysis,
     pub(crate) value_to_opt_value: &'opt mut SecondaryMap<Value, Value>,
     pub(crate) gvn_map: &'opt mut CtxHashMap<(Type, InstructionData), Value>,
     pub(crate) eclasses: &'opt mut UnionFind<Value>,
     pub(crate) remat_values: &'opt mut FxHashSet<Value>,
     pub(crate) stats: &'opt mut Stats,
-    pub(crate) alias_analysis: &'opt mut AliasAnalysis<'analysis>,
+    pub(crate) alias_analysis: &'opt mut AliasAnalysis,
     pub(crate) alias_analysis_state: &'opt mut LastStores,
     // Held locally during optimization of one node (recursively):
     pub(crate) rewrite_depth: usize,
     pub(crate) subsume_values: FxHashSet<Value>,
+    pub(crate) cfg: &'opt mut ControlFlowGraph,
 }
 
 /// For passing to `insert_pure_enode`. Sometimes the enode already
@@ -108,10 +112,7 @@ impl NewOrExistingInst {
     }
 }
 
-impl<'opt, 'analysis> OptimizeCtx<'opt, 'analysis>
-where
-    'analysis: 'opt,
-{
+impl<'opt> OptimizeCtx<'opt> {
     /// Optimization of a single instruction.
     ///
     /// This does a few things:
@@ -282,16 +283,92 @@ where
     /// Optimize a "skeleton" instruction, possibly removing
     /// it. Returns `true` if the instruction should be removed from
     /// the layout.
-    fn optimize_skeleton_inst(&mut self, inst: Inst) -> bool {
+    fn optimize_skeleton_inst(&mut self, mut inst: Inst) -> bool {
         self.stats.skeleton_inst += 1;
+
+        // If a conditional branch with a constant condtition, convert
+        // to a jump
+        if let Some((taken, not_taken)) = self.func.dfg.is_const_branch(inst) {
+            // Convert to branch, and unlink not taken blocks
+            trace!(
+                " -> inst {} is a constant conditional branch, folding",
+                inst
+            );
+            self.stats.branch_folds += 1;
+
+            fn remove(
+                cfg: &mut ControlFlowGraph,
+                domtree: &mut DominatorTree,
+                loop_analysis: &LoopAnalysis,
+                from_block: Block,
+                inst: Inst,
+                to_block: Block,
+            ) {
+                trace!("Removing edge from {from_block:?} {inst:?} to {to_block:?}");
+                cfg.remove_edge(from_block, inst, to_block);
+                let pred_count = cfg.pred_iter(to_block).count();
+                if !domtree.is_reachable(to_block) {
+                    return;
+                }
+                if pred_count == 0
+                    || (pred_count == 1 && loop_analysis.is_loop_header(to_block).is_some())
+                {
+                    trace!("Detected {to_block:?} is now unreachable");
+                    // not_taken_block is now unreachable
+                    domtree.set_unreachable(to_block);
+                    let succ: alloc::vec::Vec<Block> = cfg.succ_iter(to_block).collect();
+                    for next_block in succ {
+                        let pred: alloc::vec::Vec<(Inst, Block)> = cfg
+                            .pred_iter(next_block)
+                            .map(|pred| (pred.inst, pred.block))
+                            .collect();
+                        for (pred_inst, pred_block) in pred {
+                            if to_block == pred_block {
+                                remove(
+                                    cfg,
+                                    domtree,
+                                    loop_analysis,
+                                    to_block,
+                                    pred_inst,
+                                    next_block,
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+            // Remove edge in ControlFlowGraph from inst to not_taken blocks
+            let block = self.func.layout.inst_block(inst).unwrap();
+            for not_taken in not_taken.iter() {
+                let not_taken_block = not_taken.block(&self.func.dfg.value_lists);
+                remove(
+                    self.cfg,
+                    self.domtree,
+                    self.loop_analysis,
+                    block,
+                    inst,
+                    not_taken_block,
+                );
+            }
+
+            (inst, _) = self.func.dfg.replace(inst).build(
+                InstructionData::Jump {
+                    opcode: Opcode::Jump,
+                    destination: taken,
+                },
+                super::ir::types::INVALID,
+            );
+        }
 
         // If a load or store, process it with the alias analysis to see
         // if we can optimize it (rewrite in terms of an earlier load or
         // stored value).
-        if let Some(new_result) =
-            self.alias_analysis
-                .process_inst(self.func, self.alias_analysis_state, inst)
-        {
+        if let Some(new_result) = self.alias_analysis.process_inst(
+            self.func,
+            self.domtree,
+            self.alias_analysis_state,
+            inst,
+        ) {
             self.stats.alias_analysis_removed += 1;
             let result = self.func.dfg.first_result(inst);
             trace!(
@@ -321,9 +398,10 @@ impl<'a> EgraphPass<'a> {
     /// Create a new EgraphPass.
     pub fn new(
         func: &'a mut Function,
-        domtree: &'a DominatorTree,
+        domtree: &'a mut DominatorTree,
         loop_analysis: &'a LoopAnalysis,
-        alias_analysis: &'a mut AliasAnalysis<'a>,
+        alias_analysis: &'a mut AliasAnalysis,
+        cfg: &'a mut ControlFlowGraph,
     ) -> Self {
         let num_values = func.dfg.num_values();
         let domtree_children = DomTreeWithChildren::new(func, domtree);
@@ -333,6 +411,7 @@ impl<'a> EgraphPass<'a> {
             domtree_children,
             loop_analysis,
             alias_analysis,
+            cfg,
             stats: Stats::default(),
             eclasses: UnionFind::with_capacity(num_values),
             remat_values: FxHashSet::default(),
@@ -399,6 +478,10 @@ impl<'a> EgraphPass<'a> {
 
             let mut alias_analysis_state = self.alias_analysis.block_starting_state(block);
 
+            if let Some(inst) = self.cfg.single_pred_inst(block) {
+                // Only one entry point.  Alias block params to the branching arguments
+                cursor.func.dfg.alias_single_pred_block_params(block, inst);
+            }
             for &param in cursor.func.dfg.block_params(block) {
                 trace!("creating initial singleton eclass for blockparam {}", param);
                 self.eclasses.add(param);
@@ -433,6 +516,8 @@ impl<'a> EgraphPass<'a> {
                 // here.
                 let mut ctx = OptimizeCtx {
                     func: cursor.func,
+                    domtree: self.domtree,
+                    loop_analysis: self.loop_analysis,
                     value_to_opt_value: &mut value_to_opt_value,
                     gvn_map: &mut gvn_map,
                     eclasses: &mut self.eclasses,
@@ -442,6 +527,7 @@ impl<'a> EgraphPass<'a> {
                     stats: &mut self.stats,
                     alias_analysis: self.alias_analysis,
                     alias_analysis_state: &mut alias_analysis_state,
+                    cfg: self.cfg,
                 };
 
                 if is_pure_for_egraph(ctx.func, inst) {
@@ -564,6 +650,7 @@ pub(crate) struct Stats {
     pub(crate) pure_inst_deduped: u64,
     pub(crate) skeleton_inst: u64,
     pub(crate) alias_analysis_removed: u64,
+    pub(crate) branch_folds: u64,
     pub(crate) new_inst: u64,
     pub(crate) union: u64,
     pub(crate) subsume: u64,
