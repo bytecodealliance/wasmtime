@@ -21,6 +21,7 @@ wasmtime-jit = { workspace = true }
 wasmtime-cache = { workspace = true, optional = true }
 wasmtime-fiber = { workspace = true, optional = true }
 wasmtime-cranelift = { workspace = true, optional = true }
+wasmtime-winch = { workspace = true, optional = true }
 wasmtime-component-macro = { workspace = true, optional = true }
 wasmtime-component-util = { workspace = true, optional = true }
 target-lexicon = { workspace = true }
@@ -103,7 +104,10 @@ pooling-allocator = ["wasmtime-runtime/pooling-allocator"]
 # Enables support for all architectures in Cranelift, allowing
 # cross-compilation using the `wasmtime` crate's API, notably the
 # `Engine::precompile_module` function.
-all-arch = ["wasmtime-cranelift?/all-arch"]
+all-arch = [
+  "wasmtime-cranelift?/all-arch",
+  "wasmtime-winch?/all-arch",
+]
 
 # Enables trap handling using POSIX signals instead of Mach exceptions on MacOS.
 # It is useful for applications that do not bind their own exception ports and
@@ -116,8 +120,11 @@ posix-signals-on-macos = ["wasmtime-runtime/posix-signals-on-macos"]
 component-model = [
   "wasmtime-environ/component-model",
   "wasmtime-cranelift?/component-model",
+  "wasmtime-winch?/component-model",
   "wasmtime-runtime/component-model",
   "dep:wasmtime-component-macro",
   "dep:wasmtime-component-util",
   "dep:encoding_rs",
 ]
+
+winch = ["dep:wasmtime-winch"]

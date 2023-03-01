@@ -3423,6 +3423,7 @@ dependencies = [
  "wasmtime-jit",
  "wasmtime-runtime",
  "wasmtime-wasi",
+ "wasmtime-winch",
  "wat",
  "windows-sys",
 ]

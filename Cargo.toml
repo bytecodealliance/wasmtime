@@ -226,6 +226,7 @@ component-model = [
   "wasmtime-wast/component-model",
   "wasmtime-cli-flags/component-model"
 ]
+winch = ["wasmtime/winch"]
 
 # Stub feature that does nothing, for Cargo-features compatibility: the new
 # backend is the default now.

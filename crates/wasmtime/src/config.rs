@@ -1546,7 +1546,18 @@ impl Config {
     #[cfg(compiler)]
     pub(crate) fn build_compiler(&mut self) -> Result<Box<dyn wasmtime_environ::Compiler>> {
         let mut compiler = match self.compiler_config.strategy {
-            Strategy::Auto | Strategy::Cranelift => wasmtime_cranelift::builder(),
+            #[cfg(feature = "cranelift")]
+            Strategy::Auto => wasmtime_cranelift::builder(),
+            #[cfg(all(feature = "winch", not(feature = "cranelift")))]
+            Strategy::Auto => wasmtime_winch::builder(),
+            #[cfg(feature = "cranelift")]
+            Strategy::Cranelift => wasmtime_cranelift::builder(),
+            #[cfg(not(feature = "cranelift"))]
+            Strategy::Cranelift => bail!("cranelift support not compiled in"),
+            #[cfg(feature = "winch")]
+            Strategy::Winch => wasmtime_winch::builder(),
+            #[cfg(not(feature = "winch"))]
+            Strategy::Winch => bail!("winch support not compiled in"),
         };
 
         if let Some(target) = &self.compiler_config.target {
@@ -1710,7 +1721,14 @@ pub enum Strategy {
 
     /// Currently the default backend, Cranelift aims to be a reasonably fast
     /// code generator which generates high quality machine code.
+    #[cfg(feature = "cranelift")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))]
     Cranelift,
+
+    /// TODO
+    #[cfg(feature = "winch")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "winch")))]
+    Winch,
 }
 
 /// Possible optimization levels for the Cranelift codegen backend.
