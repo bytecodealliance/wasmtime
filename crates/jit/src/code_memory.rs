@@ -296,6 +296,8 @@ impl CodeMemory {
                 obj::LibCall::CeilF64 => libcalls::relocs::ceilf64 as usize,
                 obj::LibCall::TruncF32 => libcalls::relocs::truncf32 as usize,
                 obj::LibCall::TruncF64 => libcalls::relocs::truncf64 as usize,
+                obj::LibCall::FmaF32 => libcalls::relocs::fmaf32 as usize,
+                obj::LibCall::FmaF64 => libcalls::relocs::fmaf64 as usize,
             };
             *self.mmap.as_mut_ptr().add(offset).cast::<usize>() = libcall;
         }
