@@ -2,7 +2,7 @@ use crate::store::{StoreData, StoreOpaque, Stored};
 use crate::trampoline::{generate_global_export, generate_table_export};
 use crate::{
     AsContext, AsContextMut, Engine, ExternRef, ExternType, Func, GlobalType, HeapType, Memory,
-    Mutability, SharedMemory, TableType, Val, ValType,
+    Mutability, SharedMemory, RefType, TableType, Val, ValType,
 };
 use anyhow::{anyhow, bail, Result};
 use std::mem;
@@ -635,7 +635,7 @@ impl Table {
         len: u32,
     ) -> Result<()> {
         let store = store.as_context_mut().0;
-        if dst_table.ty(&store).element() != src_table.ty(&store).element() {
+        if !RefType::is_subtype(&dst_table.ty(&store).element(), &src_table.ty(&store).element()) {
             bail!("tables do not have the same element type");
         }
 

@@ -222,7 +222,7 @@ pub unsafe trait WasmTy: Send {
     #[doc(hidden)]
     #[inline]
     fn typecheck(ty: crate::ValType) -> Result<()> {
-        if ty == Self::valtype() {
+        if ValType::is_subtype(&ty, &Self::valtype()) {
             Ok(())
         } else {
             bail!("expected {} found {}", Self::valtype(), ty)

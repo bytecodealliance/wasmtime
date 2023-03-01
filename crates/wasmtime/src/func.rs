@@ -1141,7 +1141,7 @@ impl Func {
         // produces the wrong number, wrong types, or wrong stores of
         // values, and we need to catch that here.
         for (i, (ret, ty)) in results.iter().zip(ty.results()).enumerate() {
-            if ret.ty() != ty {
+            if !ValType::is_subtype(&ret.ty(), &ty) {
                 bail!("function attempted to return an incompatible value");
             }
             if !ret.comes_from_same_store(caller.store.0) {

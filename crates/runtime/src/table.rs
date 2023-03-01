@@ -28,7 +28,7 @@ pub enum TableElement {
     UninitFunc,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum TableElementType {
     Func,
     Extern,

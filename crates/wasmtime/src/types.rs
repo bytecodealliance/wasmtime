@@ -6,15 +6,6 @@ use wasmtime_environ::{
 
 pub(crate) mod matching;
 
-const FUNC_REF: RefType = RefType {
-    nullable: true,
-    heap_type: HeapType::Func,
-};
-const EXTERN_REF: RefType = RefType {
-    nullable: true,
-    heap_type: HeapType::Extern,
-};
-
 // Type Representations
 
 // Type attributes
@@ -31,7 +22,7 @@ pub enum Mutability {
 // Value Types
 
 /// A list of all possible value types in WebAssembly.
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Hash)]
 pub enum ValType {
     // NB: the ordering here is intended to match the ordering in
     // `wasmtime_types::WasmType` to help improve codegen when converting.
@@ -81,10 +72,13 @@ impl ValType {
     }
 
     /// Returns true if `self` is a subtype of `other`.
-    pub(crate) fn is_subtype(&self, other: &ValType) -> bool {
+    pub fn is_subtype(&self, other: &ValType) -> bool {
         match (self, other) {
             (ValType::Ref(x), ValType::Ref(y)) => RefType::is_subtype(x, y),
-            (x, y) => x == y,
+            (ValType::I32, ValType::I32) | (ValType::I64, ValType::I64) |
+            (ValType::F32, ValType::F32) | (ValType::F64, ValType::F64) |
+            (ValType::V128, ValType::V128) => true,
+            (_, _) => false,
         }
     }
 
@@ -112,7 +106,7 @@ impl ValType {
 }
 
 /// A reference type holds what it refers to and whether it is nullable
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Hash)]
 pub struct RefType {
     /// Indicates whether the reference is nullable.
     pub nullable: bool,
@@ -123,8 +117,10 @@ pub struct RefType {
 impl fmt::Display for RefType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            &FUNC_REF => write!(f, "funcref"),
-            &EXTERN_REF => write!(f, "externref"),
+            RefType {
+                nullable: true,
+                heap_type: HeapType::Func | HeapType::Extern,
+            } => write!(f, "{}ref", self.heap_type),
             RefType {
                 nullable,
                 heap_type,
@@ -154,14 +150,14 @@ impl RefType {
         }
     }
 
-    pub(crate) fn is_subtype(&self, other: &RefType) -> bool {
-        HeapType::is_subtype(&self.heap_type, &other.heap_type) && self.nullable == other.nullable
-            || other.nullable
+    /// Returns true if `self` is a sub-referencetype of `other`.
+    pub fn is_subtype(&self, other: &RefType) -> bool {
+        (self.nullable == other.nullable || other.nullable) && HeapType::is_subtype(&self.heap_type, &other.heap_type)
     }
 }
 
 /// A list of all possible heap types in WebAssembly
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Hash)]
 pub enum HeapType {
     /// A reference to a Wasm function.
     Func,
@@ -198,12 +194,24 @@ impl HeapType {
         }
     }
 
-    pub(crate) fn is_subtype(&self, other: &HeapType) -> bool {
-        self == other // TODO(dhil): We ought to check for [Index(m)]
-                      // and [Index(n)] that the types pointed to by
-                      // [m] and [n] are equivalent. By type
-                      // caonicalisation it ought to be enough to
-                      // simply [m == n].
+    /// Returns true if `self` is a sub-heaptype of `other`.
+    ///
+    /// Note: The current implementation is incomplete as it only
+    /// performs nominal equality on `Index`.
+    pub fn is_subtype(&self, other: &HeapType) -> bool {
+        match (self, other) {
+            (HeapType::Extern, HeapType::Extern) |
+            (HeapType::Func, HeapType::Func) |
+            (HeapType::Index(_), HeapType::Func) => true,
+            (HeapType::Index(m), HeapType::Index(n)) => m == n, // TODO(dhil): This is not
+                                                                // necessarily complete as
+                                                                // [m] and [n] may be
+                                                                // nominally different,
+                                                                // but whatever they point
+                                                                // to may be structurally
+                                                                // the same.
+            (_,_) => false,
+        }
     }
 }
 
@@ -345,7 +353,7 @@ impl FuncType {
 /// This type describes an instance of a global in a WebAssembly module. Globals
 /// are local to an [`Instance`](crate::Instance) and are either immutable or
 /// mutable.
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Hash)]
 pub struct GlobalType {
     content: ValType,
     mutability: Mutability,

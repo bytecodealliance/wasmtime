@@ -4,14 +4,7 @@ use wasmtime::*;
 use wasmtime_wasi::sync::WasiCtxBuilder;
 use wasmtime_wasi::I32Exit;
 
-const EXTERN_REF: RefType = RefType {
-    nullable: true,
-    heap_type: HeapType::Extern,
-};
-const FUNC_REF: RefType = RefType {
-    nullable: true,
-    heap_type: HeapType::Func,
-};
+use crate::valtype_util::*;
 
 #[test]
 #[should_panic = "cannot use `func_new_async` without enabling async support"]
@@ -161,49 +154,49 @@ fn signatures_match() -> Result<()> {
         .unwrap()
         .into_func()
         .unwrap();
-    assert_eq!(f.ty(&store).params().collect::<Vec<_>>(), &[]);
-    assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[]);
+    assert!(pointwise_eq(f.ty(&store).params().collect::<Vec<_>>(), [].to_vec()));
+    assert!(pointwise_eq(f.ty(&store).results().collect::<Vec<_>>(), [].to_vec()));
 
     let f = linker
         .get(&mut store, "", "f2")
         .unwrap()
         .into_func()
         .unwrap();
-    assert_eq!(f.ty(&store).params().collect::<Vec<_>>(), &[]);
-    assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::I32]);
+    assert!(pointwise_eq(f.ty(&store).params().collect::<Vec<_>>(), [].to_vec()));
+    assert!(pointwise_eq(f.ty(&store).results().collect::<Vec<_>>(), [ValType::I32].to_vec()));
 
     let f = linker
         .get(&mut store, "", "f3")
         .unwrap()
         .into_func()
         .unwrap();
-    assert_eq!(f.ty(&store).params().collect::<Vec<_>>(), &[]);
-    assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::I64]);
+    assert!(pointwise_eq(f.ty(&store).params().collect::<Vec<_>>(), [].to_vec()));
+    assert!(pointwise_eq(f.ty(&store).results().collect::<Vec<_>>(), [ValType::I64].to_vec()));
 
     let f = linker
         .get(&mut store, "", "f4")
         .unwrap()
         .into_func()
         .unwrap();
-    assert_eq!(f.ty(&store).params().collect::<Vec<_>>(), &[]);
-    assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::F32]);
+    assert!(pointwise_eq(f.ty(&store).params().collect::<Vec<_>>(), [].to_vec()));
+    assert!(pointwise_eq(f.ty(&store).results().collect::<Vec<_>>(), [ValType::F32].to_vec()));
 
     let f = linker
         .get(&mut store, "", "f5")
         .unwrap()
         .into_func()
         .unwrap();
-    assert_eq!(f.ty(&store).params().collect::<Vec<_>>(), &[]);
-    assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::F64]);
+    assert!(pointwise_eq(f.ty(&store).params().collect::<Vec<_>>(), [].to_vec()));
+    assert!(pointwise_eq(f.ty(&store).results().collect::<Vec<_>>(), [ValType::F64].to_vec()));
 
     let f = linker
         .get(&mut store, "", "f6")
         .unwrap()
         .into_func()
         .unwrap();
-    assert_eq!(
-        f.ty(&store).params().collect::<Vec<_>>(),
-        &[
+    assert!(
+        pointwise_eq(f.ty(&store).params().collect::<Vec<_>>(),
+        [
             ValType::F32,
             ValType::F64,
             ValType::I32,
@@ -211,9 +204,9 @@ fn signatures_match() -> Result<()> {
             ValType::I32,
             ValType::Ref(EXTERN_REF),
             ValType::Ref(FUNC_REF),
-        ]
+        ].to_vec())
     );
-    assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::F64]);
+    assert!(pointwise_eq(f.ty(&store).results().collect::<Vec<_>>(), [ValType::F64].to_vec()));
 
     Ok(())
 }
