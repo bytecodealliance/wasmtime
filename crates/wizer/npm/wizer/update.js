@@ -117,7 +117,7 @@ export default location
 function packageJson(name, version, description, os, cpu) {
     version = version.startsWith('v') ? version.replace('v','') : version
     return JSON.stringify({
-        name: `@bytecode-alliance/${name}`,
+        name: `@bytecodealliance/${name}`,
         bin: {
             [name]: "wizer"
         },
@@ -129,8 +129,5 @@ function packageJson(name, version, description, os, cpu) {
         preferUnplugged: false,
         os: [os],
         cpu: [cpu],
-        publishConfig: {
-            access: "public"
-        },
     }, null, 4);
 }
