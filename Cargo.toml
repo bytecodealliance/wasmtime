@@ -118,6 +118,7 @@ wasmtime = { path = "crates/wasmtime", version = "8.0.0", default-features = fal
 wasmtime-cache = { path = "crates/cache", version = "=8.0.0" }
 wasmtime-cli-flags = { path = "crates/cli-flags", version = "=8.0.0" }
 wasmtime-cranelift = { path = "crates/cranelift", version = "=8.0.0" }
+wasmtime-cranelift-shared = { path = "crates/cranelift-shared", version = "=8.0.0" }
 wasmtime-environ = { path = "crates/environ", version = "=8.0.0" }
 wasmtime-fiber = { path = "crates/fiber", version = "=8.0.0" }
 wasmtime-types = { path = "crates/types", version = "8.0.0" }

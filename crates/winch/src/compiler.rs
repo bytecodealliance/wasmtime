@@ -1,6 +1,7 @@
 use anyhow::Result;
 use object::write::{Object, SymbolId};
 use std::any::Any;
+use wasmtime_cranelift_shared::LinkOptions;
 use wasmtime_environ::{
     CompileError, DefinedFuncIndex, FuncIndex, FunctionBodyData, FunctionLoc, ModuleTranslation,
     ModuleTypes, PrimaryMap, Tunables, WasmFunctionInfo,
@@ -9,11 +10,12 @@ use winch_codegen::TargetIsa;
 
 pub(crate) struct Compiler {
     isa: Box<dyn TargetIsa>,
+    linkopts: LinkOptions,
 }
 
 impl Compiler {
-    pub fn new(isa: Box<dyn TargetIsa>) -> Self {
-        Self { isa }
+    pub fn new(isa: Box<dyn TargetIsa>, linkopts: LinkOptions) -> Self {
+        Self { isa, linkopts }
     }
 }
 

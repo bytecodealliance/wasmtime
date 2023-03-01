@@ -14,8 +14,8 @@ wasmtime-environ = { workspace = true }
 anyhow = { workspace = true }
 object = { workspace = true }
 cranelift-codegen = { workspace = true }
+wasmtime-cranelift-shared = { workspace = true }
 
 [features]
-default = ["all-arch", "component-model"]
 component-model = ["wasmtime-environ/component-model"]
 all-arch = ["winch-codegen/all-arch"]

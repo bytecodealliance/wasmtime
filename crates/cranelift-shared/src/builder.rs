@@ -4,17 +4,20 @@
 //! well as providing a function to return the default configuration to build.
 
 use anyhow::Result;
-use cranelift_codegen::isa;
+use cranelift_codegen::isa::IsaBuilder;
 use cranelift_codegen::settings::{self, Configurable, SetError};
 use std::fmt;
 use std::sync::Arc;
+use target_lexicon::Triple;
 use wasmtime_environ::{CacheStore, CompilerBuilder, Setting, SettingKind};
 
-struct Builder {
-    flags: settings::Builder,
-    isa_flags: isa::Builder,
-    linkopts: LinkOptions,
-    cache_store: Option<Arc<dyn CacheStore>>,
+pub struct Builder<T> {
+    pub flags: settings::Builder,
+    pub isa_flags: IsaBuilder<T>,
+    pub linkopts: LinkOptions,
+    pub cache_store: Option<Arc<dyn CacheStore>>,
+    pub lookup: fn(Triple) -> Result<IsaBuilder<T>>,
+    pub build: fn(T, &Self) -> Result<Box<dyn wasmtime_environ::Compiler>>,
 }
 
 #[derive(Clone, Default)]
@@ -30,7 +33,13 @@ pub struct LinkOptions {
     pub force_jump_veneers: bool,
 }
 
-pub fn builder() -> Box<dyn CompilerBuilder> {
+pub fn builder<T>(
+    lookup: fn(Triple) -> Result<IsaBuilder<T>>,
+    build: fn(T, &Builder<T>) -> Result<Box<dyn wasmtime_environ::Compiler>>,
+) -> Box<dyn CompilerBuilder>
+where
+    T: 'static,
+{
     let mut flags = settings::builder();
 
     // There are two possible traps for division, and this way
@@ -46,19 +55,21 @@ pub fn builder() -> Box<dyn CompilerBuilder> {
 
     Box::new(Builder {
         flags,
-        isa_flags: cranelift_native::builder().expect("host machine is not a supported target"),
+        isa_flags: lookup(Triple::host()).expect("host machine is not a supported target"),
         linkopts: LinkOptions::default(),
         cache_store: None,
+        lookup,
+        build,
     })
 }
 
-impl CompilerBuilder for Builder {
+impl<T> CompilerBuilder for Builder<T> {
     fn triple(&self) -> &target_lexicon::Triple {
         self.isa_flags.triple()
     }
 
-    fn target(&mut self, target: target_lexicon::Triple) -> Result<()> {
-        self.isa_flags = isa::lookup(target)?;
+    fn target(&mut self, target: Triple) -> Result<()> {
+        self.isa_flags = (self.lookup)(target)?;
         Ok(())
     }
 
@@ -102,13 +113,8 @@ impl CompilerBuilder for Builder {
     fn build(&self) -> Result<Box<dyn wasmtime_environ::Compiler>> {
         let isa = self
             .isa_flags
-            .clone()
-            .finish(settings::Flags::new(self.flags.clone()))?;
-        Ok(Box::new(crate::compiler::Compiler::new(
-            isa,
-            self.cache_store.clone(),
-            self.linkopts.clone(),
-        )))
+            .finish(settings::Flags::new(self.flags.clone()));
+        (self.build)(isa, self)
     }
 
     fn settings(&self) -> Vec<Setting> {
@@ -136,7 +142,7 @@ impl CompilerBuilder for Builder {
     }
 }
 
-impl fmt::Debug for Builder {
+impl<T> fmt::Debug for Builder<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("Builder")
             .field(

@@ -1,4 +1,3 @@
-use crate::builder::LinkOptions;
 use crate::debug::{DwarfSectionRelocTarget, ModuleMemoryOffset};
 use crate::func_environ::FuncEnvironment;
 use crate::obj::ModuleTextBuilder;
@@ -30,6 +29,7 @@ use std::convert::TryFrom;
 use std::mem;
 use std::sync::{Arc, Mutex};
 use wasmparser::{FuncValidatorAllocations, FunctionBody};
+use wasmtime_cranelift_shared::LinkOptions;
 use wasmtime_environ::{
     AddressMapSection, CacheStore, CompileError, FilePos, FlagValue, FunctionBodyData, FunctionLoc,
     InstructionAddressMap, ModuleTranslation, ModuleTypes, PtrSize, StackMapInformation, Trap,

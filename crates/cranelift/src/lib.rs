@@ -5,7 +5,7 @@
 
 use cranelift_codegen::binemit;
 use cranelift_codegen::ir;
-use cranelift_codegen::isa::{unwind::UnwindInfo, CallConv, TargetIsa};
+use cranelift_codegen::isa::{self, unwind::UnwindInfo, CallConv, TargetIsa};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmFuncType, WasmType};
 use target_lexicon::{Architecture, CallingConvention};
@@ -13,15 +13,25 @@ use wasmtime_environ::{
     FilePos, InstructionAddressMap, ModuleTranslation, ModuleTypes, TrapInformation,
 };
 
-pub use builder::builder;
-
-mod builder;
 mod compiler;
 mod debug;
 mod func_environ;
 mod obj;
 
 type CompiledFunctions<'a> = PrimaryMap<DefinedFuncIndex, &'a CompiledFunction>;
+
+pub fn builder() -> Box<dyn wasmtime_environ::CompilerBuilder> {
+    wasmtime_cranelift_shared::builder(
+        |triple| isa::lookup(triple).map_err(|e| e.into()),
+        |isa, opts| {
+            Ok(Box::new(crate::compiler::Compiler::new(
+                isa?,
+                opts.cache_store.clone(),
+                opts.linkopts.clone(),
+            )))
+        },
+    )
+}
 
 /// Compiled function: machine code body, jump table offsets, and unwind information.
 #[derive(Default)]
