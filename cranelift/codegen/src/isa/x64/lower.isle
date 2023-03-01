@@ -3510,6 +3510,21 @@
 
 ;; Rules for `shuffle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Special case for the `punpckhbw` instruction which interleaves the upper
+;; lanes of the two input registers.
+(rule 5 (lower (shuffle a b (vec_mask_from_immediate mask)))
+      (if-let $true (vec_mask_is mask 8 24 9 25 10 26 11 27 12 28 13 29 14 30 15 31))
+      (x64_punpckhbw a b))
+
+;; Special case for the `punpcklbw` instruction which interleaves the upper
+;; lanes of the two input registers.
+(rule 4 (lower (shuffle a b (vec_mask_from_immediate mask)))
+      (if-let $true (vec_mask_is mask 0 16 1 17 2 18 3 19 4 20 5 21 6 22 7 23))
+      (x64_punpcklbw a b))
+
+(decl pure vec_mask_is (VecMask u8 u8 u8 u8 u8 u8 u8 u8 u8 u8 u8 u8 u8 u8 u8 u8) bool)
+(extern constructor vec_mask_is vec_mask_is)
+
 ;; If `lhs` and `rhs` are the same we can use a single PSHUFB to shuffle the XMM
 ;; register. We statically build `constructed_mask` to zero out any unknown lane
 ;; indices (may not be completely necessary: verification could fail incorrect

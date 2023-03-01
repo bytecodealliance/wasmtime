@@ -999,6 +999,32 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             },
         }
     }
+
+    fn vec_mask_is(
+        &mut self,
+        mask: &VecMask,
+        a1: u8,
+        a2: u8,
+        a3: u8,
+        a4: u8,
+        a5: u8,
+        a6: u8,
+        a7: u8,
+        a8: u8,
+        a9: u8,
+        a10: u8,
+        a11: u8,
+        a12: u8,
+        a13: u8,
+        a14: u8,
+        a15: u8,
+        a16: u8,
+    ) -> bool {
+        let mask: &[u8] = mask;
+        mask == [
+            a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16,
+        ]
+    }
 }
 
 impl IsleContext<'_, '_, MInst, X64Backend> {
