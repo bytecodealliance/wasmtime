@@ -999,10 +999,6 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             },
         }
     }
-
-    fn vec_mask_is(&mut self, mask: &VecMask, val: u128) -> bool {
-        &mask[..] == val.to_le_bytes()
-    }
 }
 
 impl IsleContext<'_, '_, MInst, X64Backend> {
