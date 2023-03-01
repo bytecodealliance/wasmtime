@@ -1678,7 +1678,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         Operator::I8x16Swizzle => {
             let (a, b) = pop2_with_bitcast(state, I8X16, builder);
-            state.push1(builder.ins().swizzle(I8X16, a, b))
+            state.push1(builder.ins().swizzle(a, b))
         }
         Operator::I8x16Add | Operator::I16x8Add | Operator::I32x4Add | Operator::I64x2Add => {
             let (a, b) = pop2_with_bitcast(state, type_of(op), builder);

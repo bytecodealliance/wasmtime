@@ -367,6 +367,7 @@ fn define_simd_lane_access(
     );
     let x = &Operand::new("x", I8x16).with_doc("Vector to modify by re-arranging lanes");
     let y = &Operand::new("y", I8x16).with_doc("Mask for re-arranging lanes");
+    let a = &Operand::new("a", I8x16);
 
     ig.push(
         Inst::new(
@@ -388,6 +389,7 @@ fn define_simd_lane_access(
     let x = &Operand::new("x", TxN).with_doc("The vector to modify");
     let y = &Operand::new("y", &TxN.lane_of()).with_doc("New lane value");
     let Idx = &Operand::new("Idx", &imm.uimm8).with_doc("Lane index");
+    let a = &Operand::new("a", TxN);
 
     ig.push(
         Inst::new(

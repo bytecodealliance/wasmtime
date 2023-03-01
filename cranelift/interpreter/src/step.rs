@@ -1027,7 +1027,7 @@ where
                     new[i] = x[s[i] as usize];
                 } // else leave as 0
             }
-            assign(Value::vector(new, ctrl_ty)?)
+            assign(Value::vector(new, types::I8X16)?)
         }
         Opcode::Splat => {
             let mut new_vector = SimdVec::new();
