@@ -19,5 +19,9 @@ wasi-common = { workspace = true }
 wasmtime = { workspace = true }
 wasmtime-wasi = { workspace = true, features = ["exit"] }
 
+[dev-dependencies]
+serde = "1.0"
+serde_json = "1.0"
+
 [badges]
 maintenance = { status = "experimental" }
