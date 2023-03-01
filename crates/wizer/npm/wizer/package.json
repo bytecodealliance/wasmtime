@@ -1,11 +1,8 @@
 {
-  "name": "@bytecode-alliance/wizer",
-  "version": "1.6.0",
+  "name": "@bytecodealliance/wizer",
+  "version": "1.6.1-beta",
   "description": "The WebAssembly Pre-Initializer",
   "type": "module",
-  "publishConfig": {
-    "access": "public"
-  },
   "scripts": {
     "version": "node ./update.js $npm_package_version"
   },
