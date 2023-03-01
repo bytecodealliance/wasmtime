@@ -1558,6 +1558,17 @@ impl MachInstEmit for Inst {
                     }
                 };
 
+                // store to dst.
+                {
+                    Inst::AluRRR {
+                        alu_op: AluOPRRR::Srl,
+                        rd: dst,
+                        rs1: store_value,
+                        rs2: offset,
+                    }
+                    .emit(&[], sink, emit_info, state);
+                }
+
                 Inst::Atomic {
                     op: AtomicOP::store_op(ty),
                     rd: t0,
