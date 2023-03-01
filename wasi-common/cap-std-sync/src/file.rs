@@ -5,6 +5,7 @@ use is_terminal::IsTerminal;
 use std::any::Any;
 use std::convert::TryInto;
 use std::io;
+use std::sync::Arc;
 use system_interface::fs::{FileIoExt, GetSetFdFlags};
 use system_interface::io::IsReadWrite;
 use wasi_common::{
@@ -14,11 +15,15 @@ use wasi_common::{
 #[cfg(windows)]
 use windows_sys::Win32::Foundation::ERROR_ACCESS_DENIED;
 
-pub struct File(cap_std::fs::File);
+/// A file handle.
+///
+/// We hold an `Arc` so that stream views can be regular handles which can
+/// be closed, without closing the underlying file descriptor.
+pub struct File(Arc<cap_std::fs::File>);
 
 impl File {
     pub fn from_cap_std(file: cap_std::fs::File) -> Self {
-        File(file)
+        File(Arc::new(file))
     }
 }
 
@@ -35,11 +40,6 @@ impl WasiFile for File {
     #[cfg(windows)]
     fn pollable(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
         Some(self.0.as_handle_or_socket())
-    }
-
-    async fn try_clone(&mut self) -> Result<Box<dyn WasiFile>, Error> {
-        let clone = self.0.try_clone()?;
-        Ok(Box::new(Self(clone)))
     }
 
     async fn datasync(&self) -> Result<(), Error> {
@@ -74,20 +74,8 @@ impl WasiFile for File {
         Ok(filetype_from(&meta.file_type()))
     }
     async fn get_fdflags(&self) -> Result<FdFlags, Error> {
-        let fdflags = get_fd_flags(&self.0)?;
+        let fdflags = get_fd_flags(&*self.0)?;
         Ok(fdflags)
-    }
-    async fn set_fdflags(&mut self, fdflags: FdFlags) -> Result<(), Error> {
-        if fdflags.intersects(
-            wasi_common::file::FdFlags::DSYNC
-                | wasi_common::file::FdFlags::SYNC
-                | wasi_common::file::FdFlags::RSYNC,
-        ) {
-            return Err(Error::invalid_argument().context("cannot set DSYNC, SYNC, or RSYNC flag"));
-        }
-        let set_fd_flags = self.0.new_set_fd_flags(to_sysif_fdflags(fdflags))?;
-        self.0.set_fd_flags(set_fd_flags)?;
-        Ok(())
     }
     async fn get_filestat(&self) -> Result<Filestat, Error> {
         let meta = self.0.metadata()?;
@@ -177,7 +165,7 @@ impl WasiFile for File {
     }
 
     async fn readable(&self) -> Result<(), Error> {
-        if is_read_write(&self.0)?.0 {
+        if is_read_write(&*self.0)?.0 {
             Ok(())
         } else {
             Err(Error::badf())
@@ -185,11 +173,15 @@ impl WasiFile for File {
     }
 
     async fn writable(&self) -> Result<(), Error> {
-        if is_read_write(&self.0)?.1 {
+        if is_read_write(&*self.0)?.1 {
             Ok(())
         } else {
             Err(Error::badf())
         }
+    }
+
+    fn dup(&self) -> Box<dyn WasiFile> {
+        Box::new(File(Arc::clone(&self.0)))
     }
 }
 
@@ -255,26 +247,6 @@ pub(crate) fn convert_systimespec(
         Some(wasi_common::SystemTimeSpec::SymbolicNow) => Some(SystemTimeSpec::SymbolicNow),
         None => None,
     }
-}
-
-pub(crate) fn to_sysif_fdflags(f: wasi_common::file::FdFlags) -> system_interface::fs::FdFlags {
-    let mut out = system_interface::fs::FdFlags::empty();
-    if f.contains(wasi_common::file::FdFlags::APPEND) {
-        out |= system_interface::fs::FdFlags::APPEND;
-    }
-    if f.contains(wasi_common::file::FdFlags::DSYNC) {
-        out |= system_interface::fs::FdFlags::DSYNC;
-    }
-    if f.contains(wasi_common::file::FdFlags::NONBLOCK) {
-        out |= system_interface::fs::FdFlags::NONBLOCK;
-    }
-    if f.contains(wasi_common::file::FdFlags::RSYNC) {
-        out |= system_interface::fs::FdFlags::RSYNC;
-    }
-    if f.contains(wasi_common::file::FdFlags::SYNC) {
-        out |= system_interface::fs::FdFlags::SYNC;
-    }
-    out
 }
 
 /// Return the file-descriptor flags for a given file-like object.

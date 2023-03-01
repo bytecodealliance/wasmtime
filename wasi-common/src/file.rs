@@ -22,10 +22,6 @@ pub trait WasiFile: Send + Sync {
         false
     }
 
-    async fn try_clone(&mut self) -> Result<Box<dyn WasiFile>, Error> {
-        Err(Error::badf())
-    }
-
     async fn datasync(&self) -> Result<(), Error>;
 
     async fn sync(&self) -> Result<(), Error>;
@@ -118,6 +114,8 @@ pub trait WasiFile: Send + Sync {
     async fn readable(&self) -> Result<(), Error>;
 
     async fn writable(&self) -> Result<(), Error>;
+
+    fn dup(&self) -> Box<dyn WasiFile>;
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

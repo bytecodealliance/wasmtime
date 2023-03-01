@@ -761,7 +761,7 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         let f = self.table_mut().get_file_mut(fd).map_err(convert)?;
 
         // Duplicate the file descriptor so that we get an indepenent lifetime.
-        let clone = f.try_clone().await.map_err(convert)?;
+        let clone = f.dup();
 
         // Create a stream view for it.
         let reader = FileStream::new_reader(clone, offset);
@@ -783,7 +783,7 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         let f = self.table_mut().get_file_mut(fd).map_err(convert)?;
 
         // Duplicate the file descriptor so that we get an indepenent lifetime.
-        let clone = f.try_clone().await.map_err(convert)?;
+        let clone = f.dup();
 
         // Create a stream view for it.
         let writer = FileStream::new_writer(clone, offset);
@@ -804,7 +804,7 @@ impl wasi_filesystem::WasiFilesystem for WasiCtx {
         let f = self.table_mut().get_file_mut(fd).map_err(convert)?;
 
         // Duplicate the file descriptor so that we get an indepenent lifetime.
-        let clone = f.try_clone().await.map_err(convert)?;
+        let clone = f.dup();
 
         // Create a stream view for it.
         let appender = FileStream::new_appender(clone);
