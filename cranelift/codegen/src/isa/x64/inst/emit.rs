@@ -869,20 +869,16 @@ pub(crate) fn emit(
             )
         }
 
-        Inst::LoadEffectiveAddress { addr, dst } => {
+        Inst::LoadEffectiveAddress { addr, dst, size } => {
             let dst = allocs.next(dst.to_reg().to_reg());
             let amode = addr.finalize(state, sink).with_allocs(allocs);
+            let flags = match size {
+                OperandSize::Size32 => RexFlags::clear_w(),
+                OperandSize::Size64 => RexFlags::set_w(),
+                _ => unreachable!(),
+            };
 
-            emit_std_reg_mem(
-                sink,
-                LegacyPrefixes::None,
-                0x8D,
-                1,
-                dst,
-                &amode,
-                RexFlags::set_w(),
-                0,
-            );
+            emit_std_reg_mem(sink, LegacyPrefixes::None, 0x8D, 1, dst, &amode, flags, 0);
         }
 
         Inst::MovsxRmR { ext_mode, src, dst } => {

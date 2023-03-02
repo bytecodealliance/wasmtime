@@ -41,17 +41,57 @@
 
 ;; `i64` and smaller.
 
-;; Add two registers.
-(rule -5 (lower (has_type (fits_in_64 ty)
+;; Base case for 8 and 16-bit types
+(rule -6 (lower (has_type (fits_in_16 ty)
                        (iadd x y)))
       (x64_add ty x y))
 
-;; The above case handles when the rhs is an immediate or a sinkable load, but
-;; additionally add lhs meets these criteria.
+;; Base case for 32 and 64-bit types which might end up using the `lea`
+;; instruction to fold multiple operations into one. The actualy determination
+;; of whether to use `add` or `lea` is left up to the `add_or_lea` helper.
+(rule -5 (lower (has_type (ty_32_or_64 ty) (iadd x y)))
+      (add_or_lea ty (to_amode_add (mem_flags_trusted) x y (zero_offset))))
 
+;; Small helper used as part of the lowering of `iadd` just above which chooses
+;; either `lea` or `add` for the `Amode` given. The x64 `lea` instruction in
+;; theory is a superior `add` alternative offering the means to have a 3-operand
+;; instruction (aka better regalloc) along with the ability to fold multiple
+;; pieces of functionality into one. In practice though it seems that it's not
+;; so cut-and-dry. The `meshoptimizer` benchmark's `vtx` measurement, for
+;; example, gets 10% slower if `lea` is unconditionally used here. The apparent
+;; reason for this is that x64 cores have dedicated units for computing
+;; addresses, but a finite number of them. It seems that forcing everything
+;; through these units can cause a slowdown vs also using the ALUs which are
+;; otherwise idle if there's a lot of add instructions.
+;;
+;; Given all that a rough heuristic is applied here. If the `Amode` is "simple"
+;; and basically looks like one add instruction then the `add` instruction is
+;; itself used. This covers cases like `a + $constant` or `a + b`. In these
+;; cases the theoretical downside to using `add` is that the 3-operand mode
+;; can't be used and this may require an extra `mov` relative to an `lea`
+;; instruction.
+;;
+;; Otherwise if the `Amode` is "complicated", or can fold more than one
+;; arithmetic instruction into it, then an `lea` is used. This means that
+;; expressions of the form `a + b * c` or `a + b + $const` generate a single
+;; `lea` instruction.
+;;
+;; Locally on the `meshoptimizer` benchmark this at least preserves the
+;; performance relative to "always use `add`".
+(decl add_or_lea (Type Amode) Reg)
+(rule 1 (add_or_lea ty (Amode.ImmReg imm reg _flags))
+      (x64_add ty reg (RegMemImm.Imm imm)))
+(rule 1 (add_or_lea ty (Amode.ImmRegRegShift 0 base index 0 _flags))
+      (x64_add ty base index))
+(rule (add_or_lea ty mode)
+      (x64_lea ty mode))
+
+;; Higher-priority cases than the previous two where a load can be sunk into
+;; the add instruction itself. Note that both operands are tested for
+;; sink-ability since addition is commutative
 (rule -4 (lower (has_type (fits_in_64 ty)
-                       (iadd (simm32_from_value x) y)))
-      (x64_add ty y x))
+                       (iadd x (sinkable_load y))))
+      (x64_add ty x y))
 (rule -3 (lower (has_type (fits_in_64 ty)
                        (iadd (sinkable_load x) y)))
       (x64_add ty y x))
@@ -442,7 +482,7 @@
 (extern constructor ishl_i8x16_mask_table ishl_i8x16_mask_table)
 (rule (ishl_i8x16_mask (RegMemImm.Reg amt))
       (let ((mask_table SyntheticAmode (ishl_i8x16_mask_table))
-            (base_mask_addr Gpr (x64_lea mask_table))
+            (base_mask_addr Gpr (x64_lea $I64 mask_table))
             (mask_offset Gpr (x64_shl $I64 amt
                                   (imm8_to_imm8_gpr 4))))
         (Amode.ImmRegRegShift 0
@@ -547,7 +587,7 @@
 (extern constructor ushr_i8x16_mask_table ushr_i8x16_mask_table)
 (rule (ushr_i8x16_mask (RegMemImm.Reg amt))
       (let ((mask_table SyntheticAmode (ushr_i8x16_mask_table))
-            (base_mask_addr Gpr (x64_lea mask_table))
+            (base_mask_addr Gpr (x64_lea $I64 mask_table))
             (mask_offset Gpr (x64_shl $I64
                                   amt
                                   (imm8_to_imm8_gpr 4))))
