@@ -427,6 +427,10 @@ impl<'a> EgraphPass<'a> {
         // into the egraph. This can be a standard (non-scoped)
         // hashmap because pure ops have no location: they are
         // "outside of" control flow.
+        //
+        // Note also that we keep the controlling typevar (the `Type`
+        // in the tuple below) because it may disambiguate
+        // instructions that are identical except for type.
         let mut gvn_map: CtxHashMap<(Type, InstructionData), Value> =
             CtxHashMap::with_capacity(cursor.func.dfg.num_values());
         // Map from instruction to value for GVN'ing of effectful but
@@ -434,6 +438,20 @@ impl<'a> EgraphPass<'a> {
         // skeleton. This needs to be scoped because we cannot
         // deduplicate one instruction to another that is in a
         // non-dominating block.
+        //
+        // Note that we can use a ScopedHashMap here without the
+        // "context" (as needed by CtxHashMap) because in practice the
+        // ops we want to GVN have all their args inline. Equality on
+        // the InstructionData itself is conservative: two insts whose
+        // struct contents compare shallowly equal are definitely
+        // identical, but identical insts in a deep-equality sense may
+        // not compare shallowly equal, due to list indirection. This
+        // is fine for GVN, because it is still sound to skip any
+        // given GVN opportunity (and keep the original instructions).
+        //
+        // As above, we keep the controlling typevar here as part of
+        // the key: effectful instructions may (as for pure
+        // instructions) be differentiated only on the type.
         let mut effectful_gvn_map: ScopedHashMap<(Type, InstructionData), Value> =
             ScopedHashMap::new();
 
