@@ -1,3 +1,4 @@
+test interpret
 test run
 target s390x
 target s390x has_mie2

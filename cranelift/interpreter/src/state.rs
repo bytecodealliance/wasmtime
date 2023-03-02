@@ -4,7 +4,8 @@ use crate::address::{Address, AddressSize};
 use crate::interpreter::LibCallHandler;
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{
-    ExternalName, FuncRef, Function, GlobalValue, LibCall, Signature, StackSlot, Type, Value,
+    ExternalName, FuncRef, Function, GlobalValue, LibCall, MemFlags, Signature, StackSlot, Type,
+    Value,
 };
 use cranelift_codegen::isa::CallConv;
 use cranelift_entity::PrimaryMap;
@@ -62,10 +63,20 @@ pub trait State<'a, V> {
     ) -> Result<Address, MemoryError>;
     /// Retrieve a value `V` from memory at the given `address`, checking if it belongs either to the
     /// stack or to one of the heaps; the number of bytes loaded corresponds to the specified [Type].
-    fn checked_load(&self, address: Address, ty: Type) -> Result<V, MemoryError>;
+    fn checked_load(
+        &self,
+        address: Address,
+        ty: Type,
+        mem_flags: MemFlags,
+    ) -> Result<V, MemoryError>;
     /// Store a value `V` into memory at the given `address`, checking if it belongs either to the
     /// stack or to one of the heaps; the number of bytes stored corresponds to the specified [Type].
-    fn checked_store(&mut self, address: Address, v: V) -> Result<(), MemoryError>;
+    fn checked_store(
+        &mut self,
+        address: Address,
+        v: V,
+        mem_flags: MemFlags,
+    ) -> Result<(), MemoryError>;
 
     /// Compute the address of a function given its name.
     fn function_address(
@@ -182,11 +193,21 @@ where
         unimplemented!()
     }
 
-    fn checked_load(&self, _addr: Address, _ty: Type) -> Result<V, MemoryError> {
+    fn checked_load(
+        &self,
+        _addr: Address,
+        _ty: Type,
+        _mem_flags: MemFlags,
+    ) -> Result<V, MemoryError> {
         unimplemented!()
     }
 
-    fn checked_store(&mut self, _addr: Address, _v: V) -> Result<(), MemoryError> {
+    fn checked_store(
+        &mut self,
+        _addr: Address,
+        _v: V,
+        _mem_flags: MemFlags,
+    ) -> Result<(), MemoryError> {
         unimplemented!()
     }
 

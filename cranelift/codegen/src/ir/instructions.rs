@@ -403,7 +403,9 @@ impl InstructionData {
             &InstructionData::Load { flags, .. }
             | &InstructionData::LoadNoOffset { flags, .. }
             | &InstructionData::Store { flags, .. }
-            | &InstructionData::StoreNoOffset { flags, .. } => Some(flags),
+            | &InstructionData::StoreNoOffset { flags, .. }
+            | &InstructionData::AtomicCas { flags, .. }
+            | &InstructionData::AtomicRmw { flags, .. } => Some(flags),
             _ => None,
         }
     }
