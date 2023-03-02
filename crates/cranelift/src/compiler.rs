@@ -2,7 +2,7 @@ use crate::debug::{DwarfSectionRelocTarget, ModuleMemoryOffset};
 use crate::func_environ::FuncEnvironment;
 use crate::{
     blank_sig, func_signature, indirect_signature, value_type, wasmtime_call_conv,
-    CompiledFunction, FunctionAddressMap,
+    CompiledFunction, FunctionAddressMap, builder::LinkOptions
 };
 use anyhow::{Context as _, Result};
 use cranelift_codegen::ir::{
@@ -29,7 +29,6 @@ use std::mem;
 use std::sync::{Arc, Mutex};
 use wasmparser::{FuncValidatorAllocations, FunctionBody};
 use wasmtime_cranelift_shared::obj::ModuleTextBuilder;
-use wasmtime_cranelift_shared::LinkOptions;
 use wasmtime_cranelift_shared::{Relocation, RelocationTarget};
 use wasmtime_environ::{
     AddressMapSection, CacheStore, CompileError, FilePos, FlagValue, FunctionBodyData, FunctionLoc,
