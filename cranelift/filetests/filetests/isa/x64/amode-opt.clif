@@ -1,4 +1,6 @@
 test compile precise-output
+set use_egraphs=true
+set opt_level=speed
 target x86_64
 
 function %amode_add(i64, i64) -> i64 {

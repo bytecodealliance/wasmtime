@@ -445,10 +445,11 @@
             (base_mask_addr Gpr (x64_lea mask_table))
             (mask_offset Gpr (x64_shl $I64 amt
                                   (imm8_to_imm8_gpr 4))))
-        (amode_imm_reg_reg_shift 0
-                                 base_mask_addr
-                                 mask_offset
-                                 0)))
+        (Amode.ImmRegRegShift 0
+                              base_mask_addr
+                              mask_offset
+                              0
+                              (mem_flags_trusted))))
 
 (rule (ishl_i8x16_mask (RegMemImm.Mem amt))
       (ishl_i8x16_mask (RegMemImm.Reg (x64_load $I64 amt (ExtKind.None)))))
@@ -550,10 +551,11 @@
             (mask_offset Gpr (x64_shl $I64
                                   amt
                                   (imm8_to_imm8_gpr 4))))
-        (amode_imm_reg_reg_shift 0
-                                 base_mask_addr
-                                 mask_offset
-                                 0)))
+        (Amode.ImmRegRegShift 0
+                              base_mask_addr
+                              mask_offset
+                              0
+                              (mem_flags_trusted))))
 
 (rule (ushr_i8x16_mask (RegMemImm.Mem amt))
       (ushr_i8x16_mask (RegMemImm.Reg (x64_load $I64 amt (ExtKind.None)))))
