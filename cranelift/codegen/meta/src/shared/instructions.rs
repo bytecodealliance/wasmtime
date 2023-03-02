@@ -392,12 +392,14 @@ fn define_simd_lane_access(
             r#"
         A vector swizzle lookalike which has the semantics of `pshufb` on x64.
 
-        This instruction will permute the lanes of `x` with the indices
-        specified in `y`. The output vector will have the following contents
-        when the element of `y` in in these ranges:
+        This instruction will permute the 8-bit lanes of `x` with the indices
+        specified in `y`. Each lane in the mask, `y`, uses the bottom four
+        bits for selecting the lane from `x` unless the most significant bit
+        is set, in which case the lane is zeroed. The output vector will have
+        the following contents when the element of `y` is in these ranges:
 
-        * `[0, 127]` - `x[y[i] % 16]`
-        * `[128, 255]` - 0
+        * `[0, 127]` -> `x[y[i] % 16]`
+        * `[128, 255]` -> 0
         "#,
             &formats.binary,
         )
