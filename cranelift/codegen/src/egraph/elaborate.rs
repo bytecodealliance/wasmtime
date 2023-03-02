@@ -401,6 +401,17 @@ impl<'a> Elaborator<'a> {
                     let arg_values = &self.elab_result_stack[arg_idx..];
 
                     // Compute max loop depth.
+                    //
+                    // Note that if there are no arguments then this instruction
+                    // is allowed to get hoisted up one loop. This is not
+                    // usually used since no-argument values are things like
+                    // constants which are typically rematerialized, but for the
+                    // `vconst` instruction 128-bit constants aren't as easily
+                    // rematerialized. They're hoisted out of inner loops but
+                    // not to the function entry which may run the risk of
+                    // placing too much register pressure on the entire
+                    // function. This is modeled with the `.saturating_sub(1)`
+                    // as the default if there's otherwise no maximum.
                     let loop_hoist_level = arg_values
                         .iter()
                         .map(|&value| {
@@ -423,7 +434,7 @@ impl<'a> Elaborator<'a> {
                             hoist_level
                         })
                         .max()
-                        .unwrap_or(self.loop_stack.len());
+                        .unwrap_or(self.loop_stack.len().saturating_sub(1));
                     trace!(
                         " -> loop hoist level: {:?}; cur loop depth: {:?}, loop_stack: {:?}",
                         loop_hoist_level,
