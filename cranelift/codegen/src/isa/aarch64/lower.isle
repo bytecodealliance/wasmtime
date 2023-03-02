@@ -1659,11 +1659,6 @@
 (rule 1 (lower (has_type (ty_vec128 ty) (bitselect c x y)))
         (bsl ty c x y))
 
-;;;; Rules for `vselect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (has_type (ty_vec128 ty) (vselect c x y)))
-        (bsl ty c x y))
-
 ;;;; Rules for `ireduce` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; T -> I{64,32,16,8}: We can simply pass through the value: values

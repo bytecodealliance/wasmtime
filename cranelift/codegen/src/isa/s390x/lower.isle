@@ -1170,13 +1170,6 @@
       (vec_select ty y z x))
 
 
-;;;; Rules for `vselect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Vector select.
-(rule (lower (has_type (ty_vec128 ty) (vselect x y z)))
-      (vec_select ty y z x))
-
-
 ;;;; Rules for `bmask` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty (bmask x)))

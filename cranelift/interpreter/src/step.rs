@@ -1067,7 +1067,6 @@ where
             }
             assign(Value::int(result, ctrl_ty)?)
         }
-        Opcode::Vselect => assign(vselect(&arg(0)?, &arg(1)?, &arg(2)?, ctrl_ty)?),
         Opcode::VanyTrue => {
             let lane_ty = ctrl_ty.lane_type();
             let init = V::bool(false, true, lane_ty)?;
