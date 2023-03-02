@@ -62,7 +62,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// The index stored in an `EntityList` points to part 2, the list elements. The value 0 is
 /// reserved for the empty list which isn't allocated in the vector.
-#[derive(Clone, Copy, Debug, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct EntityList<T: EntityRef + ReservedValue> {
     index: u32,
