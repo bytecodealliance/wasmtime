@@ -1936,12 +1936,12 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.push1(builder.ins().snarrow(converted_a, zero));
         }
 
-        // TODO: the relaxed instructions here are translated the same as the
-        // saturating instructions, even when the code generator configuration
-        // allow for different semantics across hosts. On x86, however, it's
-        // theoretically possible to have a slightly more optimal lowering which
-        // accounts for NaN differently, although the lowering is still not
-        // trivial (e.g. one instruction). At this time the
+        // FIXME(#5913): the relaxed instructions here are translated the same
+        // as the saturating instructions, even when the code generator
+        // configuration allow for different semantics across hosts. On x86,
+        // however, it's theoretically possible to have a slightly more optimal
+        // lowering which accounts for NaN differently, although the lowering is
+        // still not trivial (e.g. one instruction). At this time the
         // more-optimal-but-still-large lowering for x86 is not implemented so
         // the relaxed instructions are listed here instead of down below with
         // the other relaxed instructions. An x86-specific implementation (or
