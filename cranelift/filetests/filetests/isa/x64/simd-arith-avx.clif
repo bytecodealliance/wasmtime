@@ -1635,8 +1635,7 @@ block0(v0: i8x16, v1: i32):
 ;   vpsrlw  %xmm0, %xmm5, %xmm7
 ;   lea     const(0), %rsi
 ;   shlq    $4, %r10, %r10
-;   movdqu  0(%rsi,%r10,1), %xmm13
-;   vpand   %xmm7, %xmm13, %xmm0
+;   vpand   %xmm7, 0(%rsi,%r10,1), %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -1652,11 +1651,13 @@ block0(v0: i8x16, v1: i32):
 ;   vpsrlw %xmm5, %xmm0, %xmm7
 ;   leaq 0x15(%rip), %rsi
 ;   shlq $4, %r10
-;   movdqu (%rsi, %r10), %xmm13
-;   vpand %xmm13, %xmm7, %xmm0
+;   vpand (%rsi, %r10), %xmm7, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %bh, %bh
 
 function %i8x16_ushr_imm(i8x16) -> i8x16 {
 block0(v0: i8x16):
@@ -1670,8 +1671,7 @@ block0(v0: i8x16):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   vpsrlw  %xmm0, $1, %xmm2
-;   movdqu  const(0), %xmm4
-;   vpand   %xmm2, %xmm4, %xmm0
+;   vpand   %xmm2, const(0), %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -1682,11 +1682,12 @@ block0(v0: i8x16):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   vpsrlw $1, %xmm0, %xmm2
-;   movdqu 0xf(%rip), %xmm4
-;   vpand %xmm4, %xmm2, %xmm0
+;   vpand 0xf(%rip), %xmm2, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)

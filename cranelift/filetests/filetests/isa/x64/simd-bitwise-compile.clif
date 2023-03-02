@@ -485,8 +485,7 @@ block0:
 ; block0:
 ;   movdqu  const(1), %xmm0
 ;   psrlw   %xmm0, $1, %xmm0
-;   movdqu  const(0), %xmm3
-;   pand    %xmm0, %xmm3, %xmm0
+;   pand    %xmm0, const(0), %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -496,28 +495,21 @@ block0:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movdqu 0x34(%rip), %xmm0
+;   movdqu 0x24(%rip), %xmm0
 ;   psrlw $1, %xmm0
-;   movdqu 0x17(%rip), %xmm3
-;   pand %xmm3, %xmm0
+;   pand 7(%rip), %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
 ;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   jg 0xb1
-;   jg 0xb3
-;   jg 0xb5
-;   jg 0xb7
-;   jg 0xb9
-;   jg 0xbb
-;   jg 0xbd
-;   jg 0xbf
+;   jg 0xa1
+;   jg 0xa3
+;   jg 0xa5
+;   jg 0xa7
+;   jg 0xa9
+;   jg 0xab
+;   jg 0xad
+;   jg 0xaf
 ;   addb %al, (%rcx)
 ;   addb (%rbx), %al
 ;   addb $5, %al
