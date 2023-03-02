@@ -122,9 +122,8 @@ block0(v0: i64, v1: i64):
 ;   lr.d.aqrl a0, (a3)
 ;   and a1, a2, a0
 ;   not a1, a1
-;   srl a0, a1, zero
 ;   sc.d.aqrl a1, a1, (a3)
-;   bnez a1, -0x14
+;   bnez a1, -0x10
 ;   ret
 
 function %atomic_rmw_nand_i32(i64, i32) {
@@ -147,9 +146,8 @@ block0(v0: i64, v1: i32):
 ;   lr.w.aqrl a0, (a3)
 ;   and a1, a2, a0
 ;   not a1, a1
-;   srl a0, a1, zero
 ;   sc.w.aqrl a1, a1, (a3)
-;   bnez a1, -0x14
+;   bnez a1, -0x10
 ;   ret
 
 function %atomic_rmw_or_i64(i64, i64) {

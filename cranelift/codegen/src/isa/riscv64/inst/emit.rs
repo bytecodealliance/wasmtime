@@ -1408,7 +1408,7 @@ impl MachInstEmit for Inst {
                     | crate::ir::AtomicRmwOp::And
                     | crate::ir::AtomicRmwOp::Or
                     | crate::ir::AtomicRmwOp::Xor => {
-                        AtomicOP::extract(t0, offset, dst.to_reg(), ty)
+                        AtomicOP::extract(dst, offset, dst.to_reg(), ty)
                             .iter()
                             .for_each(|i| i.emit(&[], sink, emit_info, state));
                         Inst::AluRRR {
@@ -1421,7 +1421,7 @@ impl MachInstEmit for Inst {
                                 _ => unreachable!(),
                             },
                             rd: t0,
-                            rs1: t0.to_reg(),
+                            rs1: dst.to_reg(),
                             rs2: x,
                         }
                         .emit(&[], sink, emit_info, state);
@@ -1445,19 +1445,16 @@ impl MachInstEmit for Inst {
                         spilltmp_reg2()
                     }
                     crate::ir::AtomicRmwOp::Nand => {
-                        let x2 = if ty.bits() < 32 {
-                            AtomicOP::extract(t0, offset, dst.to_reg(), ty)
+                        if ty.bits() < 32 {
+                            AtomicOP::extract(dst, offset, dst.to_reg(), ty)
                                 .iter()
                                 .for_each(|i| i.emit(&[], sink, emit_info, state));
-                            t0.to_reg()
-                        } else {
-                            dst.to_reg()
-                        };
+                        }
                         Inst::AluRRR {
                             alu_op: AluOPRRR::And,
                             rd: t0,
                             rs1: x,
-                            rs2: x2,
+                            rs2: dst.to_reg(),
                         }
                         .emit(&[], sink, emit_info, state);
                         Inst::construct_bit_not(t0, t0.to_reg()).emit(&[], sink, emit_info, state);
@@ -1489,12 +1486,13 @@ impl MachInstEmit for Inst {
                     | crate::ir::AtomicRmwOp::Umax
                     | crate::ir::AtomicRmwOp::Smin
                     | crate::ir::AtomicRmwOp::Smax => {
+                        let label_select_dst = sink.get_label();
                         let label_select_done = sink.get_label();
                         if op == crate::ir::AtomicRmwOp::Umin || op == crate::ir::AtomicRmwOp::Umax
                         {
-                            AtomicOP::extract(t0, offset, dst.to_reg(), ty)
+                            AtomicOP::extract(dst, offset, dst.to_reg(), ty)
                         } else {
-                            AtomicOP::extract_sext(t0, offset, dst.to_reg(), ty)
+                            AtomicOP::extract_sext(dst, offset, dst.to_reg(), ty)
                         }
                         .iter()
                         .for_each(|i| i.emit(&[], sink, emit_info, state));
@@ -1506,9 +1504,9 @@ impl MachInstEmit for Inst {
                                 crate::ir::AtomicRmwOp::Smax => IntCC::SignedGreaterThan,
                                 _ => unreachable!(),
                             },
-                            ValueRegs::one(t0.to_reg()),
+                            ValueRegs::one(dst.to_reg()),
                             ValueRegs::one(x),
-                            BranchTarget::Label(label_select_done),
+                            BranchTarget::Label(label_select_dst),
                             BranchTarget::zero(),
                             ty,
                         )
@@ -1516,6 +1514,12 @@ impl MachInstEmit for Inst {
                         .for_each(|i| i.emit(&[], sink, emit_info, state));
                         // here we select x.
                         Inst::gen_move(t0, x, I64).emit(&[], sink, emit_info, state);
+                        Inst::Jal {
+                            dest: BranchTarget::Label(label_select_done),
+                        }
+                        .emit(&[], sink, emit_info, state);
+                        sink.bind_label(label_select_dst);
+                        Inst::gen_move(t0, dst.to_reg(), I64).emit(&[], sink, emit_info, state);
                         sink.bind_label(label_select_done);
                         Inst::Atomic {
                             op: AtomicOP::load_op(ty),
@@ -1537,6 +1541,9 @@ impl MachInstEmit for Inst {
                         spilltmp_reg2()
                     }
                     crate::ir::AtomicRmwOp::Xchg => {
+                        AtomicOP::extract(dst, offset, dst.to_reg(), ty)
+                            .iter()
+                            .for_each(|i| i.emit(&[], sink, emit_info, state));
                         Inst::Atomic {
                             op: AtomicOP::load_op(ty),
                             rd: writable_spilltmp_reg2(),
@@ -1557,17 +1564,6 @@ impl MachInstEmit for Inst {
                         spilltmp_reg2()
                     }
                 };
-
-                // store to dst.
-                {
-                    Inst::AluRRR {
-                        alu_op: AluOPRRR::Srl,
-                        rd: dst,
-                        rs1: store_value,
-                        rs2: offset,
-                    }
-                    .emit(&[], sink, emit_info, state);
-                }
 
                 Inst::Atomic {
                     op: AtomicOP::store_op(ty),
