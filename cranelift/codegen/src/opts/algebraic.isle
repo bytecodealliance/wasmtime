@@ -527,3 +527,13 @@
 (rule (simplify
        (vselect ty (fcmp _ (FloatCC.GreaterThan) x y) x y))
       (fmax_pseudo ty x y))
+
+;; If both of the multiplied arguments to an `fma` are negated then remove
+;; both of them since they cancel out.
+(rule (simplify (fma ty (fneg ty x) (fneg ty y) z))
+      (fma ty x y z))
+
+;; If both of the multiplied arguments to an `fmul` are negated then remove
+;; both of them since they cancel out.
+(rule (simplify (fmul ty (fneg ty x) (fneg ty y)))
+      (fmul ty x y))
