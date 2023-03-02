@@ -73,7 +73,7 @@ mod empty_error {
         }
 
         let mut linker = Linker::new(&engine);
-        imports::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
+        imports::add_to_linker(&mut linker, &component, |f: &mut MyImports| f)?;
 
         let mut store = Store::new(&engine, MyImports::default());
         let (results, _) = ResultPlayground::instantiate(&mut store, &component, &linker)?;
@@ -184,7 +184,7 @@ mod string_error {
         }
 
         let mut linker = Linker::new(&engine);
-        imports::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
+        imports::add_to_linker(&mut linker, &component, |f: &mut MyImports| f)?;
 
         let mut store = Store::new(&engine, MyImports::default());
         let (results, _) = ResultPlayground::instantiate(&mut store, &component, &linker)?;
@@ -326,7 +326,7 @@ mod enum_error {
         }
 
         let mut linker = Linker::new(&engine);
-        imports::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
+        imports::add_to_linker(&mut linker, &component, |f: &mut MyImports| f)?;
 
         let mut store = Store::new(&engine, MyImports::default());
         let (results, _) = ResultPlayground::instantiate(&mut store, &component, &linker)?;
@@ -456,7 +456,7 @@ mod record_error {
         }
 
         let mut linker = Linker::new(&engine);
-        imports::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
+        imports::add_to_linker(&mut linker, &component, |f: &mut MyImports| f)?;
 
         let mut store = Store::new(&engine, MyImports::default());
         let (results, _) = ResultPlayground::instantiate(&mut store, &component, &linker)?;
@@ -592,7 +592,7 @@ mod variant_error {
         }
 
         let mut linker = Linker::new(&engine);
-        imports::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
+        imports::add_to_linker(&mut linker, &component, |f: &mut MyImports| f)?;
 
         let mut store = Store::new(&engine, MyImports::default());
         let (results, _) = ResultPlayground::instantiate(&mut store, &component, &linker)?;

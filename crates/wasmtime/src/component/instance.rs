@@ -7,6 +7,7 @@ use crate::{AsContextMut, Module, StoreContextMut};
 use anyhow::{anyhow, Context, Result};
 use indexmap::IndexMap;
 use std::marker;
+use std::ops::Deref;
 use std::sync::Arc;
 use wasmtime_environ::component::{
     AlwaysTrap, ComponentTypes, CoreDef, CoreExport, Export, ExportItem, ExtractMemory,
@@ -656,6 +657,29 @@ impl<'a, 'store> ExportInstance<'a, 'store> {
             .iter()
             .filter_map(|(name, export)| match *export {
                 Export::Module(idx) => Some((name.as_str(), &self.data.exported_modules[idx])),
+                _ => None,
+            })
+    }
+
+    /// Returns an iterator of all of the exported functions that this instance
+    /// contains.
+    //
+    // See FIXME in above `modules` method, which also applies here.
+    pub fn funcs(&mut self) -> impl Iterator<Item = (&'a str, Func)> + '_ {
+        self.exports
+            .iter()
+            .filter_map(|(name, export)| match export {
+                Export::LiftedFunction { ty, func, options } => Some((
+                    name.deref(),
+                    Func::from_lifted_func(
+                        self.store,
+                        self.instance,
+                        self.data,
+                        *ty,
+                        func,
+                        options,
+                    ),
+                )),
                 _ => None,
             })
     }

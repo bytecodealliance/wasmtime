@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap};
 use std::fs;
 use std::mem;
+use std::ops::Deref;
 use std::path::Path;
 use std::ptr::NonNull;
 use std::sync::Arc;
@@ -526,5 +527,22 @@ impl Component {
     /// [`Module`]: crate::Module
     pub fn serialize(&self) -> Result<Vec<u8>> {
         Ok(self.code_object().code_memory().mmap().to_vec())
+    }
+
+    /// Get the names of all the imports from the specified instance.
+    pub fn names<'a>(&'a self, instance_name: &'a str) -> impl Iterator<Item = &str> + 'a {
+        let env_component = self.env_component();
+
+        env_component
+            .imports
+            .values()
+            .filter_map(move |(import, names)| {
+                if instance_name == &env_component.import_types[*import].0 {
+                    Some(names.iter().map(Deref::deref))
+                } else {
+                    None
+                }
+            })
+            .flatten()
     }
 }

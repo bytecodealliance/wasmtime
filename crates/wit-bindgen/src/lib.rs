@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::io::{Read, Write};
 use std::mem;
+use std::ops::Deref;
 use std::process::{Command, Stdio};
 use wit_parser::*;
 
@@ -106,7 +107,7 @@ impl Wasmtime {
             WorldItem::Function(func) => {
                 gen.generate_function_trait_sig(TypeOwner::None, &func);
                 let sig = mem::take(&mut gen.src).into();
-                gen.generate_add_function_to_linker(TypeOwner::None, &func, "linker");
+                gen.generate_add_function_to_linker(TypeOwner::None, &func, "linker", None);
                 let add_to_linker = gen.src.into();
                 Import::Function { sig, add_to_linker }
             }
@@ -150,7 +151,7 @@ impl Wasmtime {
             WorldItem::Function(func) => {
                 gen.define_rust_guest_export(None, func);
                 let body = mem::take(&mut gen.src).into();
-                let (_name, getter) = gen.extract_typed_function(func);
+                let (_name, getter) = gen.extract_typed_function(func, None);
                 assert!(gen.src.is_empty());
                 self.exports.funcs.push(body);
                 (format!("wasmtime::component::Func"), getter)
@@ -164,12 +165,27 @@ impl Wasmtime {
 
                 let camel = to_rust_upper_camel_case(name);
                 uwriteln!(gen.src, "pub struct {camel} {{");
-                for (_, func) in iface.functions.iter() {
-                    uwriteln!(
-                        gen.src,
-                        "{}: wasmtime::component::Func,",
-                        func.name.to_snake_case()
-                    );
+                match iface
+                    .functions
+                    .iter()
+                    .map(|(_, f)| f.name.deref())
+                    .collect::<Vec<_>>()
+                    .deref()
+                {
+                    ["*"] => {
+                        gen.src.push_str(
+                            "funcs: std::collections::HashMap<String, wasmtime::component::Func>\n",
+                        );
+                    }
+                    _ => {
+                        for (_, func) in iface.functions.iter() {
+                            uwriteln!(
+                                gen.src,
+                                "{}: wasmtime::component::Func,",
+                                func.name.to_snake_case()
+                            );
+                        }
+                    }
                 }
                 uwriteln!(gen.src, "}}");
 
@@ -183,10 +199,33 @@ impl Wasmtime {
                     "
                 );
                 let mut fields = Vec::new();
-                for (_, func) in iface.functions.iter() {
-                    let (name, getter) = gen.extract_typed_function(func);
-                    uwriteln!(gen.src, "let {name} = {getter};");
-                    fields.push(name);
+                match iface
+                    .functions
+                    .iter()
+                    .map(|(_, f)| (f, f.name.deref()))
+                    .collect::<Vec<_>>()
+                    .deref()
+                {
+                    [(func, "*")] => {
+                        gen.src
+                            .push_str("let mut funcs = std::collections::HashMap::new();\n");
+                        gen.src
+                            .push_str("let exports = __exports.funcs()\
+                                       .map(|(n, f)| (n.to_owned(), f)).collect::<std::vec::Vec<_>>();\n");
+                        gen.src.push_str("for (name, func) in exports {\n");
+                        let (_, getter) = gen.extract_typed_function(func, Some("&name"));
+                        uwriteln!(gen.src, "drop({getter});");
+                        gen.src.push_str("funcs.insert(name, func);\n");
+                        gen.src.push_str("}\n");
+                        fields.push("funcs".to_owned());
+                    }
+                    _ => {
+                        for (_, func) in iface.functions.iter() {
+                            let (name, getter) = gen.extract_typed_function(func, None);
+                            uwriteln!(gen.src, "let {name} = {getter};");
+                            fields.push(name);
+                        }
+                    }
                 }
                 uwriteln!(gen.src, "Ok({camel} {{");
                 for name in fields {
@@ -396,6 +435,7 @@ impl Wasmtime {
             "
                 pub fn add_to_linker<T, U>(
                     linker: &mut wasmtime::component::Linker<T>,
+                    component: &wasmtime::component::Component,
                     get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
                 ) -> wasmtime::Result<()>
                     where U: \
@@ -426,10 +466,13 @@ impl Wasmtime {
         self.src.push_str(maybe_send);
         self.src.push_str(",\n{\n");
         for name in interfaces.iter() {
-            uwriteln!(self.src, "{name}::add_to_linker(linker, get)?;");
+            uwriteln!(self.src, "{name}::add_to_linker(linker, component, get)?;");
         }
         if !functions.is_empty() {
-            uwriteln!(self.src, "Self::add_root_to_linker(linker, get)?;");
+            uwriteln!(
+                self.src,
+                "Self::add_root_to_linker(linker, component, get)?;"
+            );
         }
         uwriteln!(self.src, "Ok(())\n}}");
         if functions.is_empty() {
@@ -441,6 +484,7 @@ impl Wasmtime {
             "
                 pub fn add_root_to_linker<T, U>(
                     linker: &mut wasmtime::component::Linker<T>,
+                    component: &wasmtime::component::Component,
                     get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
                 ) -> wasmtime::Result<()>
                     where U: {world_trait}{maybe_send}
@@ -976,6 +1020,7 @@ impl<'a> InterfaceGenerator<'a> {
             "
                 pub fn add_to_linker<T, U>(
                     linker: &mut wasmtime::component::Linker<T>,
+                    component: &wasmtime::component::Component,
                     get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
                 ) -> wasmtime::Result<()>
                     where {where_clause},
@@ -983,29 +1028,63 @@ impl<'a> InterfaceGenerator<'a> {
             "
         );
         uwriteln!(self.src, "let mut inst = linker.instance(\"{name}\")?;");
-        for (_, func) in iface.functions.iter() {
-            self.generate_add_function_to_linker(owner, func, "inst");
+        match iface
+            .functions
+            .iter()
+            .map(|(_, f)| (f, f.name.deref()))
+            .collect::<Vec<_>>()
+            .deref()
+        {
+            [(func, "*")] => {
+                uwriteln!(self.src, "for name in component.names(\"{name}\") {{");
+                self.generate_add_function_to_linker(owner, func, "inst", Some("name"));
+                self.src.push_str("}\n");
+            }
+            _ => {
+                for (_, func) in iface.functions.iter() {
+                    self.generate_add_function_to_linker(owner, func, "inst", None);
+                }
+            }
         }
         uwriteln!(self.src, "Ok(())");
         uwriteln!(self.src, "}}");
     }
 
-    fn generate_add_function_to_linker(&mut self, owner: TypeOwner, func: &Function, linker: &str) {
+    fn generate_add_function_to_linker(
+        &mut self,
+        owner: TypeOwner,
+        func: &Function,
+        linker: &str,
+        name: Option<&str>,
+    ) {
         uwrite!(
             self.src,
-            "{linker}.{}(\"{}\", ",
+            "{linker}.{}({}, ",
             if self.gen.opts.async_ {
                 "func_wrap_async"
             } else {
                 "func_wrap"
             },
-            func.name
+            name.map(str::to_owned)
+                .unwrap_or_else(|| format!("\"{}\"", func.name))
         );
-        self.generate_guest_import_closure(owner, func);
-        uwriteln!(self.src, ")?;")
+        if let Some(name) = name {
+            uwriteln!(self.src, "{{\nlet {name} = {name}.to_owned();");
+        }
+        self.generate_guest_import_closure(owner, func, name);
+        if name.is_some() {
+            self.src.push_str("}\n");
+        }
+        uwriteln!(self.src, ")?;");
+        uwriteln!(self.src, "drop(component);")
     }
 
-    fn generate_guest_import_closure(&mut self, owner: TypeOwner, func: &Function) {
+    fn generate_guest_import_closure(
+        &mut self,
+        owner: TypeOwner,
+        func: &Function,
+        name: Option<&str>,
+    ) {
         // Generate the closure that's passed to a `Linker`, the final piece of
         // codegen here.
         self.src
@@ -1034,7 +1113,7 @@ impl<'a> InterfaceGenerator<'a> {
                        tracing::Level::TRACE,
                        \"wit-bindgen guest import\",
                        module = \"{}\",
-                       function = \"{}\",
+                       function = {},
                    );
                    let _enter = span.enter();
                ",
@@ -1046,13 +1125,20 @@ impl<'a> InterfaceGenerator<'a> {
                     TypeOwner::World(id) => &self.resolve.worlds[id].name,
                     TypeOwner::None => "<no owner>",
                 },
-                func.name,
+                name.map(str::to_owned)
+                    .unwrap_or_else(|| format!("\"{}\"", func.name)),
             ));
         }
 
         self.src.push_str("let host = get(caller.data_mut());\n");
+        self.src.push_str("let r = host.");
 
-        uwrite!(self.src, "let r = host.{}(", func.name.to_snake_case());
+        if let Some(name) = name {
+            uwrite!(self.src, "call(&{name}, ");
+        } else {
+            uwrite!(self.src, "{}(", func.name.to_snake_case());
+        }
+
         for (i, _) in func.params.iter().enumerate() {
             uwrite!(self.src, "arg{},", i);
         }
@@ -1097,8 +1183,12 @@ impl<'a> InterfaceGenerator<'a> {
             self.push_str("async ");
         }
         self.push_str("fn ");
-        self.push_str(&to_rust_ident(&func.name));
-        self.push_str("(&mut self, ");
+        if "*" == &func.name {
+            self.push_str("call(&mut self, name: &str, ");
+        } else {
+            self.push_str(&to_rust_ident(&func.name));
+            self.push_str("(&mut self, ");
+        }
         for (name, param) in func.params.iter() {
             let name = to_rust_ident(name);
             self.push_str(&name);
@@ -1133,7 +1223,7 @@ impl<'a> InterfaceGenerator<'a> {
         self.push_str(";\n");
     }
 
-    fn extract_typed_function(&mut self, func: &Function) -> (String, String) {
+    fn extract_typed_function(&mut self, func: &Function, name: Option<&str>) -> (String, String) {
         let prev = mem::take(&mut self.src);
         let snake = func.name.to_snake_case();
         uwrite!(self.src, "*__exports.typed_func::<(");
@@ -1146,9 +1236,13 @@ impl<'a> InterfaceGenerator<'a> {
             self.print_ty(ty, TypeMode::Owned);
             self.push_str(", ");
         }
-        self.src.push_str(")>(\"");
-        self.src.push_str(&func.name);
-        self.src.push_str("\")?.func()");
+        self.src.push_str(")>(");
+        self.src.push_str(
+            &name
+                .map(str::to_owned)
+                .unwrap_or_else(|| format!("\"{}\"", &func.name)),
+        );
+        self.src.push_str(")?.func()");
 
         let ret = (snake, mem::take(&mut self.src).to_string());
         self.src = prev;
@@ -1163,11 +1257,18 @@ impl<'a> InterfaceGenerator<'a> {
         };
 
         self.rustdoc(&func.docs);
-        uwrite!(
-            self.src,
-            "pub {async_} fn call_{}<S: wasmtime::AsContextMut>(&self, mut store: S, ",
-            func.name.to_snake_case(),
-        );
+        if "*" == &func.name {
+            uwrite!(
+                self.src,
+                "pub {async_} fn call<S: wasmtime::AsContextMut>(&self, name: &str, mut store: S, ",
+            );
+        } else {
+            uwrite!(
+                self.src,
+                "pub {async_} fn call_{}<S: wasmtime::AsContextMut>(&self, mut store: S, ",
+                func.name.to_snake_case(),
+            );
+        }
         for (i, param) in func.params.iter().enumerate() {
             uwrite!(self.src, "arg{}: ", i);
             self.print_ty(&param.1, TypeMode::AllBorrowed("'_"));
@@ -1212,8 +1313,15 @@ impl<'a> InterfaceGenerator<'a> {
         }
         uwriteln!(
             self.src,
-            ")>::new_unchecked(self.{})",
-            func.name.to_snake_case()
+            ")>::new_unchecked({})",
+            if "*" == &func.name {
+                r#"*self.funcs
+                     .get(name)
+                     .ok_or_else(|| anyhow::anyhow!("instance has no such export: `{}`", name))?"#
+                    .to_owned()
+            } else {
+                format!("self.{}", func.name.to_snake_case())
+            }
         );
         self.src.push_str("};\n");
         self.src.push_str("let (");
