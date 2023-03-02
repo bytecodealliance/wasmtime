@@ -404,7 +404,13 @@
 (rule (lower (has_type ty @ (multi_lane _ _) (fma x y z)))
       (vec_rrr_mod (VecALUModOp.Fmla) z x y (vector_size ty)))
 
-(rule 1 (lower (has_type (ty_scalar_float ty) (fma x y z)))
+(rule 1 (lower (has_type ty @ (multi_lane _ _) (fma (fneg x) y z)))
+      (vec_rrr_mod (VecALUModOp.Fmls) z x y (vector_size ty)))
+
+(rule 2 (lower (has_type ty @ (multi_lane _ _) (fma x (fneg y) z)))
+      (vec_rrr_mod (VecALUModOp.Fmls) z x y (vector_size ty)))
+
+(rule 3 (lower (has_type (ty_scalar_float ty) (fma x y z)))
       (fpu_rrrr (FPUOp3.MAdd) (scalar_size ty) x y z))
 
 ;;;; Rules for `fcopysign` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

@@ -852,7 +852,7 @@
         (rd WritableReg)
         ;; Offset in range -2^20 .. 2^20.
         (off i32))
-      
+
        ;; Compute the address (using a PC-relative offset) of a 4KB page.
        (Adrp
         (rd WritableReg)
@@ -1401,6 +1401,8 @@
     (Bsl)
     ;; Floating-point fused multiply-add vectors
     (Fmla)
+    ;; Floating-point fused multiply-subtract vectors
+    (Fmls)
 ))
 
 ;; A Vector miscellaneous operation with two registers.
