@@ -1,8 +1,8 @@
 use crate::debug::{DwarfSectionRelocTarget, ModuleMemoryOffset};
 use crate::func_environ::FuncEnvironment;
 use crate::{
-    blank_sig, func_signature, indirect_signature, value_type, wasmtime_call_conv,
-    CompiledFunction, FunctionAddressMap, builder::LinkOptions
+    blank_sig, builder::LinkOptions, func_signature, indirect_signature, value_type,
+    wasmtime_call_conv, CompiledFunction, FunctionAddressMap,
 };
 use anyhow::{Context as _, Result};
 use cranelift_codegen::ir::{

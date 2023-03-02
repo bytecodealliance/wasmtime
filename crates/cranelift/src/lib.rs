@@ -15,10 +15,10 @@ use wasmtime_environ::{
 
 pub use builder::builder;
 
+mod builder;
 mod compiler;
 mod debug;
 mod func_environ;
-mod builder;
 
 type CompiledFunctions<'a> = PrimaryMap<DefinedFuncIndex, &'a CompiledFunction>;
 

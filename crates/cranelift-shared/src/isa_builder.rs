@@ -1,0 +1,94 @@
+use anyhow::Result;
+use cranelift_codegen::isa::IsaBuilder as Builder;
+use cranelift_codegen::settings::{self, Configurable, Flags, SetError};
+use target_lexicon::Triple;
+use wasmtime_environ::{Setting, SettingKind};
+
+pub struct IsaBuilder<T> {
+    shared_flags: settings::Builder,
+    inner: Builder<T>,
+    pub lookup: fn(Triple) -> Result<Builder<T>>,
+}
+
+impl<T> IsaBuilder<T> {
+    pub fn new(lookup: fn(Triple) -> Result<Builder<T>>) -> Self {
+        let mut flags = settings::builder();
+
+        // There are two possible traps for division, and this way
+        // we get the proper one if code traps.
+        flags
+            .enable("avoid_div_traps")
+            .expect("should be valid flag");
+
+        // We don't use probestack as a stack limit mechanism
+        flags
+            .set("enable_probestack", "false")
+            .expect("should be valid flag");
+
+        Self {
+            shared_flags: flags,
+            inner: lookup(Triple::host()).expect("host machine is not a supported target"),
+            lookup,
+        }
+    }
+
+    pub fn triple(&self) -> &target_lexicon::Triple {
+        self.inner.triple()
+    }
+
+    pub fn target(&mut self, target: target_lexicon::Triple) -> Result<()> {
+        self.inner = (self.lookup)(target)?;
+        Ok(())
+    }
+
+    pub fn settings(&self) -> Vec<Setting> {
+        self.inner
+            .iter()
+            .map(|s| Setting {
+                description: s.description,
+                name: s.name,
+                values: s.values,
+                kind: match s.kind {
+                    settings::SettingKind::Preset => SettingKind::Preset,
+                    settings::SettingKind::Enum => SettingKind::Enum,
+                    settings::SettingKind::Num => SettingKind::Num,
+                    settings::SettingKind::Bool => SettingKind::Bool,
+                },
+            })
+            .collect()
+    }
+
+    pub fn set(&mut self, name: &str, value: &str) -> Result<()> {
+        if let Err(err) = self.shared_flags.set(name, value) {
+            match err {
+                SetError::BadName(_) => {
+                    self.inner.set(name, value)?;
+                }
+                _ => return Err(err.into()),
+            }
+        }
+        Ok(())
+    }
+
+    pub fn enable(&mut self, name: &str) -> Result<()> {
+        if let Err(err) = self.shared_flags.enable(name) {
+            match err {
+                SetError::BadName(_) => {
+                    // Try the target-specific flags.
+                    self.inner.enable(name)?;
+                }
+                _ => return Err(err.into()),
+            }
+        }
+        Ok(())
+    }
+
+    pub fn finish(&self) -> T {
+        self.inner
+            .finish(settings::Flags::new(self.shared_flags.clone()))
+    }
+
+    pub fn shared_flags(&self) -> Flags {
+        settings::Flags::new(self.shared_flags.clone())
+    }
+}

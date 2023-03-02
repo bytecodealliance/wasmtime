@@ -4,9 +4,8 @@ use cranelift_codegen::settings;
 use std::collections::BTreeMap;
 use wasmtime_environ::{FlagValue, FuncIndex};
 
-mod builder;
+pub mod isa_builder;
 pub mod obj;
-pub use builder::*;
 
 /// A record of a relocation to perform.
 #[derive(Debug, Clone, PartialEq, Eq)]

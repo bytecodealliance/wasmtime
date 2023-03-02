@@ -13362,7 +13362,7 @@ fn test_s390x_binemit() {
     use crate::settings::Configurable;
     let mut isa_flag_builder = s390x_settings::builder();
     isa_flag_builder.enable("arch13").unwrap();
-    let isa_flags = s390x_settings::Flags::new(&flags, isa_flag_builder);
+    let isa_flags = s390x_settings::Flags::new(&flags, &isa_flag_builder);
 
     let emit_info = EmitInfo::new(isa_flags);
     for (insn, expected_encoding, expected_printing) in insns {

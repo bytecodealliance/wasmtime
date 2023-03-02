@@ -112,7 +112,7 @@ pub trait CompilerBuilder: Send + Sync + fmt::Debug {
 
     /// Enables Cranelift's incremental compilation cache, using the given `CacheStore`
     /// implementation.
-    fn enable_incremental_compilation(&mut self, cache_store: Arc<dyn CacheStore>);
+    fn enable_incremental_compilation(&mut self, cache_store: Arc<dyn CacheStore>) -> Result<()>;
 
     /// Builds a new [`Compiler`] object from this configuration.
     fn build(&self) -> Result<Box<dyn Compiler>>;
