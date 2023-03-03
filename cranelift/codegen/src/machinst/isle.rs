@@ -585,7 +585,31 @@ macro_rules! isle_lower_prelude_methods {
                 .collect();
             self.lower_ctx.gen_return(rets);
         }
+
+        fn shuffle32_from_imm(&mut self, imm: Immediate) -> Option<(u8, u8, u8, u8)> {
+            let bytes = self.lower_ctx.get_immediate_data(imm).as_slice();
+            Some((
+                crate::machinst::isle::shuffle_imm(4, &bytes[0..4])?,
+                crate::machinst::isle::shuffle_imm(4, &bytes[4..8])?,
+                crate::machinst::isle::shuffle_imm(4, &bytes[8..12])?,
+                crate::machinst::isle::shuffle_imm(4, &bytes[12..16])?,
+            ))
+        }
     };
+}
+
+pub fn shuffle_imm(size: u8, bytes: &[u8]) -> Option<u8> {
+    assert_eq!(bytes.len(), usize::from(size));
+    if bytes[0] % size != 0 {
+        return None;
+    }
+    for i in 0..size - 1 {
+        let idx = usize::from(i);
+        if bytes[idx] + 1 != bytes[idx + 1] {
+            return None;
+        }
+    }
+    Some(bytes[0] / size)
 }
 
 /// Helpers specifically for machines that use ABICaller.

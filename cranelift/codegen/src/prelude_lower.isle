@@ -592,6 +592,14 @@
 (decl u64_from_constant (u64) Constant)
 (extern extractor u64_from_constant u64_from_constant)
 
+;; Extracts 4 lane indices, represented as u8's, if the immediate for a
+;; `shuffle` instruction represents shuffling 32-bit values. The u8 values
+;; returned will be in the range of 0 to 7, inclusive, and index the 32-bit
+;; chunks of two concatenated 128-bit vectors starting from the
+;; least-significant bits.
+(decl shuffle32_from_imm (u8 u8 u8 u8) Immediate)
+(extern extractor shuffle32_from_imm shuffle32_from_imm)
+
 ;;;; Helpers for generating returns ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Extractor to check for the special case that a `WritableValueRegs`

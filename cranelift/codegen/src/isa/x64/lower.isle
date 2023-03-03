@@ -3529,6 +3529,21 @@
 
 ;; Rules for `shuffle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Special case for the `pshufd` instruction which will permute 32-bit values
+;; within a single register. This is only applicable if the `imm` specified
+;; selects 32-bit values from either `x` or `y`, but not both. This means
+;; there's one rule for selecting from `x` and another rule for selecting from
+;; `y`.
+(rule 6 (lower (shuffle x y (pshufd_lhs_imm imm)))
+      (x64_pshufd x imm))
+(rule 5 (lower (shuffle x y (pshufd_rhs_imm imm)))
+      (x64_pshufd y imm))
+
+(decl pshufd_lhs_imm (u8) Immediate)
+(extern extractor pshufd_lhs_imm pshufd_lhs_imm)
+(decl pshufd_rhs_imm (u8) Immediate)
+(extern extractor pshufd_rhs_imm pshufd_rhs_imm)
+
 ;; Special case for i8-level interleaving of upper/low bytes.
 (rule 4 (lower (shuffle a b (u128_from_immediate 0x1f0f_1e0e_1d0d_1c0c_1b0b_1a0a_1909_1808)))
       (x64_punpckhbw a b))

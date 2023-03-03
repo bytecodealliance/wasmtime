@@ -52,3 +52,191 @@ block0(v0: i8x16, v1: i8x16):
 ;   popq %rbp
 ;   retq
 
+function %punpcklwd(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+    v2 = bitcast.i8x16 little v0
+    v3 = bitcast.i8x16 little v1
+    v4 = shuffle v2, v3, [0 1 16 17 2 3 18 19 4 5 20 21 6 7 22 23]
+    v5 = bitcast.i16x8 little v4
+    return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   punpcklwd %xmm0, %xmm1, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   punpcklwd %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %punpckhwd(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+    v2 = bitcast.i8x16 little v0
+    v3 = bitcast.i8x16 little v1
+    v4 = shuffle v2, v3, [8 9 24 25 10 11 26 27 12 13 28 29 14 15 30 31]
+    v5 = bitcast.i16x8 little v4
+    return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   punpckhwd %xmm0, %xmm1, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   punpckhwd %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %pshufd_0022(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = bitcast.i8x16 little v0
+    v3 = bitcast.i8x16 little v1
+    v4 = shuffle v2, v3, [0 1 2 3 0 1 2 3 8 9 10 11 8 9 10 11]
+    v5 = bitcast.i32x4 little v4
+    return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   pshufd  $160, %xmm0, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   pshufd $0xa0, %xmm0, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %pshufd_3120(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = bitcast.i8x16 little v0
+    v3 = bitcast.i8x16 little v1
+    v4 = shuffle v2, v3, [12 13 14 15 4 5 6 7 8 9 10 11 0 1 2 3]
+    v5 = bitcast.i32x4 little v4
+    return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   pshufd  $39, %xmm0, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   pshufd $0x27, %xmm0, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %pshufd_7546(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = bitcast.i8x16 little v0
+    v3 = bitcast.i8x16 little v1
+    v4 = shuffle v2, v3, [28 29 30 31 20 21 22 23 16 17 18 19 24 25 26 27]
+    v5 = bitcast.i32x4 little v4
+    return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   pshufd  $135, %xmm1, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   pshufd $0x87, %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %not_single_pshufd(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = bitcast.i8x16 little v0
+    v3 = bitcast.i8x16 little v1
+    v4 = shuffle v2, v3, [8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23]
+    v5 = bitcast.i32x4 little v4
+    return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   pshufb  %xmm0, const(0), %xmm0
+;   movdqa  %xmm1, %xmm5
+;   pshufb  %xmm5, const(1), %xmm5
+;   por     %xmm0, %xmm5, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   pshufb 0x23(%rip), %xmm0
+;   movdqa %xmm1, %xmm5
+;   pshufb 0x26(%rip), %xmm5
+;   por %xmm5, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %cl, (%rax)
+;   orl %ecx, (%rdx)
+;   orl -0x7f7ff0f2(, %rcx), %ecx
+;   addb $0x80, -0x7f7f7f80(%rax)
+;   addb $0x80, -0x7f7f7f80(%rax)
+;   addb %al, (%rcx)
+;   addb (%rbx), %al
+;   addb $5, %al
+

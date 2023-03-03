@@ -999,6 +999,31 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             },
         }
     }
+
+    fn pshufd_lhs_imm(&mut self, imm: Immediate) -> Option<u8> {
+        let (a, b, c, d) = self.shuffle32_from_imm(imm)?;
+        if a < 4 && b < 4 && c < 4 && d < 4 {
+            Some(a | (b << 2) | (c << 4) | (d << 6))
+        } else {
+            None
+        }
+    }
+
+    fn pshufd_rhs_imm(&mut self, imm: Immediate) -> Option<u8> {
+        let (a, b, c, d) = self.shuffle32_from_imm(imm)?;
+        // When selecting from the right-hand-side offset these all by 4 which
+        // will bail out if anything is less than 4. Afterwards the check is the
+        // same as `pshufd_lhs_imm` above.
+        let a = a.checked_sub(4)?;
+        let b = b.checked_sub(4)?;
+        let c = c.checked_sub(4)?;
+        let d = d.checked_sub(4)?;
+        if a < 4 && b < 4 && c < 4 && d < 4 {
+            Some(a | (b << 2) | (c << 4) | (d << 6))
+        } else {
+            None
+        }
+    }
 }
 
 impl IsleContext<'_, '_, MInst, X64Backend> {
