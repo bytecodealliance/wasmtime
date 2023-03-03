@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use std::process::Output;
 
 #[test]
+#[cfg_attr((target_os = "windows"), ignore)] // TODO: https://github.com/WebAssembly/WASI/issues/524
 fn wasi_threads_testsuite() -> Result<()> {
     for module in list_modules("tests/wasi_testsuite/wasi-threads/test/testsuite")? {
         println!("Testing {}", module.display());
