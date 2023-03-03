@@ -3529,15 +3529,17 @@
 
 ;; Rules for `shuffle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Special case for the `punpckhbw` instruction which interleaves the upper
-;; lanes of the two input registers.
+;; Special case for i8-level interleaving of upper/low bytes.
 (rule 4 (lower (shuffle a b (u128_from_immediate 0x1f0f_1e0e_1d0d_1c0c_1b0b_1a0a_1909_1808)))
       (x64_punpckhbw a b))
-
-;; Special case for the `punpcklbw` instruction which interleaves the lower
-;; lanes of the two input registers.
 (rule 4 (lower (shuffle a b (u128_from_immediate 0x1707_1606_1505_1404_1303_1202_1101_1000)))
       (x64_punpcklbw a b))
+
+;; Special case for i16-level interleaving of upper/low bytes.
+(rule 4 (lower (shuffle a b (u128_from_immediate 0x1f1e_0f0e_1d1c_0d0c_1b1a_0b0a_1918_0908)))
+      (x64_punpckhwd a b))
+(rule 4 (lower (shuffle a b (u128_from_immediate 0x1716_0706_1514_0504_1312_0302_1110_0100)))
+      (x64_punpcklwd a b))
 
 ;; If `lhs` and `rhs` are the same we can use a single PSHUFB to shuffle the XMM
 ;; register. We statically build `constructed_mask` to zero out any unknown lane
