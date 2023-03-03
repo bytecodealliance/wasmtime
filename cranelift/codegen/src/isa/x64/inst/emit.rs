@@ -1976,22 +1976,6 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::XmmConstOp { op, dst } => {
-            let dst = allocs.next(dst.to_reg().to_reg());
-            emit(
-                &Inst::XmmRmR {
-                    op: *op,
-                    dst: Writable::from_reg(Xmm::new(dst).unwrap()),
-                    src1: Xmm::new(dst).unwrap(),
-                    src2: Xmm::new(dst).unwrap().into(),
-                },
-                allocs,
-                sink,
-                info,
-                state,
-            );
-        }
-
         Inst::XmmRmRBlend {
             op,
             src1,

@@ -227,13 +227,6 @@
                         (src2 XmmMem)
                         (dst WritableXmm))
 
-       ;; XMM (scalar or vector) production of a constant value by operating
-       ;; on a register with itself.
-       ;;
-       ;; Used to produce all zeros with xor or all one with a comparison.
-       (XmmConstOp (op SseOpcode)
-                   (dst WritableXmm))
-
        ;; XMM (scalar or vector) blend op. The mask is used to blend between
        ;; src1 and src2. This differs from a use of `XmmRmR` as the mask is
        ;; implicitly in register xmm0; this special case exists to allow us to
@@ -1836,9 +1829,8 @@
 ;; we're guaranteeed that everything is equal to itself.
 (decl vector_all_ones () Xmm)
 (rule (vector_all_ones)
-      (let ((r WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmConstOp (SseOpcode.Pcmpeqd) r))))
-        r))
+      (let ((tmp Xmm (xmm_uninit_value)))
+        (x64_pcmpeqd tmp tmp)))
 
 ;; Helper for creating XmmUninitializedValue instructions.
 (decl xmm_uninit_value () Xmm)
@@ -2249,18 +2241,12 @@
       (xmm_to_reg (xmm_zero ty)))
 
 ;; Special case for `f32` zero immediates
-(rule 2 (imm ty @ $F32 (u64_zero))
-      (let ((wr WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmConstOp (SseOpcode.Xorps) wr))))
-        (xmm_to_reg wr)))
+(rule 2 (imm ty @ $F32 (u64_zero)) (xmm_zero ty))
 
 ;; TODO: use cmpeqps for all 1s
 
 ;; Special case for `f64` zero immediates to use `xorpd`.
-(rule 2 (imm ty @ $F64 (u64_zero))
-      (let ((wr WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmConstOp (SseOpcode.Xorpd) wr))))
-        (xmm_to_reg wr)))
+(rule 2 (imm ty @ $F64 (u64_zero)) (xmm_zero ty))
 
 ;; TODO: use cmpeqpd for all 1s
 

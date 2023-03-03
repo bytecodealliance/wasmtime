@@ -140,8 +140,7 @@ impl Inst {
             | Inst::XmmToGprImm { op, .. }
             | Inst::XmmUnaryRmRImm { op, .. }
             | Inst::XmmUnaryRmRUnaligned { op, .. }
-            | Inst::XmmUnaryRmR { op, .. }
-            | Inst::XmmConstOp { op, .. } => smallvec![op.available_from()],
+            | Inst::XmmUnaryRmR { op, .. } => smallvec![op.available_from()],
 
             Inst::XmmUnaryRmREvex { op, .. }
             | Inst::XmmRmREvex { op, .. }
@@ -969,11 +968,6 @@ impl PrettyPrint for Inst {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
                 let src2 = src2.pretty_print(8, allocs);
                 format!("{} {}, {}, {}", ljustify(op.to_string()), src1, src2, dst)
-            }
-
-            Inst::XmmConstOp { op, dst } => {
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
-                format!("{} {dst}, {dst}, {dst}", ljustify(op.to_string()))
             }
 
             Inst::XmmRmRBlend {
@@ -2025,9 +2019,6 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_use(*src1);
             collector.reg_reuse_def(*dst, 0);
             src2.get_operands(collector);
-        }
-        Inst::XmmConstOp { dst, .. } => {
-            collector.reg_def(dst.to_writable_reg());
         }
         Inst::XmmUninitializedValue { dst } => collector.reg_def(dst.to_writable_reg()),
         Inst::XmmMinMaxSeq { lhs, rhs, dst, .. } => {
