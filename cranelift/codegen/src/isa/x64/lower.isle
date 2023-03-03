@@ -3534,9 +3534,9 @@
 ;; selects 32-bit values from either `x` or `y`, but not both. This means
 ;; there's one rule for selecting from `x` and another rule for selecting from
 ;; `y`.
-(rule 6 (lower (shuffle x y (pshufd_lhs_imm imm)))
+(rule 8 (lower (shuffle x y (pshufd_lhs_imm imm)))
       (x64_pshufd x imm))
-(rule 5 (lower (shuffle x y (pshufd_rhs_imm imm)))
+(rule 7 (lower (shuffle x y (pshufd_rhs_imm imm)))
       (x64_pshufd y imm))
 
 (decl pshufd_lhs_imm (u8) Immediate)
@@ -3545,28 +3545,49 @@
 (extern extractor pshufd_rhs_imm pshufd_rhs_imm)
 
 ;; Special case for i8-level interleaving of upper/low bytes.
-(rule 4 (lower (shuffle a b (u128_from_immediate 0x1f0f_1e0e_1d0d_1c0c_1b0b_1a0a_1909_1808)))
+(rule 6 (lower (shuffle a b (u128_from_immediate 0x1f0f_1e0e_1d0d_1c0c_1b0b_1a0a_1909_1808)))
       (x64_punpckhbw a b))
-(rule 4 (lower (shuffle a b (u128_from_immediate 0x1707_1606_1505_1404_1303_1202_1101_1000)))
+(rule 6 (lower (shuffle a b (u128_from_immediate 0x1707_1606_1505_1404_1303_1202_1101_1000)))
       (x64_punpcklbw a b))
 
 ;; Special case for i16-level interleaving of upper/low bytes.
-(rule 4 (lower (shuffle a b (u128_from_immediate 0x1f1e_0f0e_1d1c_0d0c_1b1a_0b0a_1918_0908)))
+(rule 6 (lower (shuffle a b (u128_from_immediate 0x1f1e_0f0e_1d1c_0d0c_1b1a_0b0a_1918_0908)))
       (x64_punpckhwd a b))
-(rule 4 (lower (shuffle a b (u128_from_immediate 0x1716_0706_1514_0504_1312_0302_1110_0100)))
+(rule 6 (lower (shuffle a b (u128_from_immediate 0x1716_0706_1514_0504_1312_0302_1110_0100)))
       (x64_punpcklwd a b))
 
 ;; Special case for i32-level interleaving of upper/low bytes.
-(rule 4 (lower (shuffle a b (u128_from_immediate 0x1f1e1d1c_0f0e0d0c_1b1a1918_0b0a0908)))
+(rule 6 (lower (shuffle a b (u128_from_immediate 0x1f1e1d1c_0f0e0d0c_1b1a1918_0b0a0908)))
       (x64_punpckhdq a b))
-(rule 4 (lower (shuffle a b (u128_from_immediate 0x17161514_07060504_13121110_03020100)))
+(rule 6 (lower (shuffle a b (u128_from_immediate 0x17161514_07060504_13121110_03020100)))
       (x64_punpckldq a b))
 
 ;; Special case for i64-level interleaving of upper/low bytes.
-(rule 4 (lower (shuffle a b (u128_from_immediate 0x1f1e1d1c1b1a1918_0f0e0d0c0b0a0908)))
+(rule 6 (lower (shuffle a b (u128_from_immediate 0x1f1e1d1c1b1a1918_0f0e0d0c0b0a0908)))
       (x64_punpckhqdq a b))
-(rule 4 (lower (shuffle a b (u128_from_immediate 0x1716151413121110_0706050403020100)))
+(rule 6 (lower (shuffle a b (u128_from_immediate 0x1716151413121110_0706050403020100)))
       (x64_punpcklqdq a b))
+
+;; Special case for the `shufps` instruction which will select two 32-bit values
+;; from the first operand and two 32-bit values from the second operand. Note
+;; that there is a second case here as well for when the operands can be
+;; swapped.
+;;
+;; Note that the priority of this instruction is currently lower than the above
+;; special cases since `shufps` handles many of them and for now it's
+;; hypothesized that the dedicated instructions are better than `shufps`.
+;; Someone with more knowledge about x86 timings should perhaps reorder the
+;; rules here eventually though.
+(rule 5 (lower (shuffle x y (shufps_imm imm)))
+      (x64_shufps x y imm))
+(rule 4 (lower (shuffle x y (shufps_rev_imm imm)))
+      (x64_shufps y x imm))
+
+(decl shufps_imm(u8) Immediate)
+(extern extractor shufps_imm shufps_imm)
+(decl shufps_rev_imm(u8) Immediate)
+(extern extractor shufps_rev_imm shufps_rev_imm)
+
 
 ;; If `lhs` and `rhs` are the same we can use a single PSHUFB to shuffle the XMM
 ;; register. We statically build `constructed_mask` to zero out any unknown lane

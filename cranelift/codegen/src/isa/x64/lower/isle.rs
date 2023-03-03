@@ -1024,6 +1024,35 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             None
         }
     }
+
+    fn shufps_imm(&mut self, imm: Immediate) -> Option<u8> {
+        // The `shufps` instruction selects the first two elements from the
+        // first vector and the second two elements from the second vector, so
+        // offset the third/fourth selectors by 4 and then make sure everything
+        // fits in 32-bits
+        let (a, b, c, d) = self.shuffle32_from_imm(imm)?;
+        let c = c.checked_sub(4)?;
+        let d = d.checked_sub(4)?;
+        if a < 4 && b < 4 && c < 4 && d < 4 {
+            Some(a | (b << 2) | (c << 4) | (d << 6))
+        } else {
+            None
+        }
+    }
+
+    fn shufps_rev_imm(&mut self, imm: Immediate) -> Option<u8> {
+        // This is almost the same as `shufps_imm` except the elements that are
+        // subtracted are reversed. This handles the case that `shufps`
+        // instruction can be emitted if the order of the operands are swapped.
+        let (a, b, c, d) = self.shuffle32_from_imm(imm)?;
+        let a = a.checked_sub(4)?;
+        let b = b.checked_sub(4)?;
+        if a < 4 && b < 4 && c < 4 && d < 4 {
+            Some(a | (b << 2) | (c << 4) | (d << 6))
+        } else {
+            None
+        }
+    }
 }
 
 impl IsleContext<'_, '_, MInst, X64Backend> {

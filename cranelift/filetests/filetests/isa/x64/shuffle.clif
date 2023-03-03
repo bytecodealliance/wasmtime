@@ -205,10 +205,7 @@ block0(v0: i32x4, v1: i32x4):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pshufb  %xmm0, const(0), %xmm0
-;   movdqa  %xmm1, %xmm5
-;   pshufb  %xmm5, const(1), %xmm5
-;   por     %xmm0, %xmm5, %xmm0
+;   shufps  $78, %xmm0, %xmm1, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -218,27 +215,10 @@ block0(v0: i32x4, v1: i32x4):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   pshufb 0x23(%rip), %xmm0
-;   movdqa %xmm1, %xmm5
-;   pshufb 0x26(%rip), %xmm5
-;   por %xmm5, %xmm0
+;   shufps $0x4e, %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %cl, (%rax)
-;   orl %ecx, (%rdx)
-;   orl -0x7f7ff0f2(, %rcx), %ecx
-;   addb $0x80, -0x7f7f7f80(%rax)
-;   addb $0x80, -0x7f7f7f80(%rax)
-;   addb %al, (%rcx)
-;   addb (%rbx), %al
-;   addb $5, %al
 
 function %punpckldq(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):
@@ -348,6 +328,66 @@ block0(v0: i64x2, v1: i64x2):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   punpckhqdq %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %shufps_3277(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = bitcast.i8x16 little v0
+    v3 = bitcast.i8x16 little v1
+    v4 = shuffle v2, v3, [12 13 14 15 8 9 10 11 28 29 30 31 28 29 30 31]
+    v5 = bitcast.i32x4 little v4
+    return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   shufps  $251, %xmm0, %xmm1, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   shufps $0xfb, %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %shufps_6500(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = bitcast.i8x16 little v0
+    v3 = bitcast.i8x16 little v1
+    v4 = shuffle v2, v3, [24 25 26 27 20 21 22 23 0 1 2 3 0 1 2 3]
+    v5 = bitcast.i32x4 little v4
+    return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movdqa  %xmm0, %xmm4
+;   movdqa  %xmm1, %xmm0
+;   shufps  $6, %xmm0, %xmm4, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqa %xmm0, %xmm4
+;   movdqa %xmm1, %xmm0
+;   shufps $6, %xmm4, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
