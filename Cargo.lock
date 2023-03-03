@@ -603,7 +603,7 @@ dependencies = [
  "target-lexicon",
  "thiserror",
  "toml",
- "wasmparser 0.101.1 (git+https://github.com/bytecodealliance/wasm-tools)",
+ "wasmparser 0.101.1 (git+https://github.com/bytecodealliance/wasm-tools?rev=56cdbdd)",
  "wat",
 ]
 
@@ -774,7 +774,7 @@ dependencies = [
  "serde",
  "smallvec",
  "target-lexicon",
- "wasmparser 0.101.1 (git+https://github.com/bytecodealliance/wasm-tools)",
+ "wasmparser 0.101.1 (git+https://github.com/bytecodealliance/wasm-tools?rev=56cdbdd)",
  "wasmtime-types",
  "wat",
 ]
@@ -826,9 +826,9 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-channel"
-version = "0.5.6"
+version = "0.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2dd04ddaf88237dc3b8d8f9a3c1004b506b54b3313403944054d23c0870c521"
+checksum = "cf2b3e8478797446514c91ef04bafcb59faba183e621ad488df88983cc14128c"
 dependencies = [
  "cfg-if",
  "crossbeam-utils",
@@ -836,9 +836,9 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-deque"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "715e8152b692bba2d374b53d4875445368fdf21a94751410af607a5ac677d1fc"
+checksum = "ce6fd6f855243022dcecf8702fef0c297d4338e226845fe067f6341ad9fa0cef"
 dependencies = [
  "cfg-if",
  "crossbeam-epoch",
@@ -847,22 +847,22 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-epoch"
-version = "0.9.13"
+version = "0.9.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01a9af1f4c2ef74bb8aa1f7e19706bc72d03598c8a570bb5de72243c7a9d9d5a"
+checksum = "46bd5f3f85273295a9d14aedfb86f6aadbff6d8f5295c4a9edb08e819dcf5695"
 dependencies = [
  "autocfg 1.1.0",
  "cfg-if",
  "crossbeam-utils",
- "memoffset 0.7.1",
+ "memoffset",
  "scopeguard",
 ]
 
 [[package]]
 name = "crossbeam-utils"
-version = "0.8.14"
+version = "0.8.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fb766fa798726286dbbb842f174001dab8abc7b627a1dd86e0b7222a95d929f"
+checksum = "3c063cd8cc95f5c377ed0d4b49a4b21f632396ff690e8470c29b3359b346984b"
 dependencies = [
  "cfg-if",
 ]
@@ -1633,9 +1633,9 @@ dependencies = [
 
 [[package]]
 name = "jobserver"
-version = "0.1.25"
+version = "0.1.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "068b1ee6743e4d11fb9c6a1e6064b3693a1b600e7f5f5988047d98b3dc9fb90b"
+checksum = "936cfd212a0155903bcbc060e316fb6cc7cbf2e1907329391ebadc1fe0ce77c2"
 dependencies = [
  "libc",
 ]
@@ -1782,15 +1782,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "723e3ebdcdc5c023db1df315364573789f8857c11b631a2fdfad7c00f5c046b4"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "memoffset"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5de893c32cde5f383baa4c04c5d6dbdd735cfd4a794b0debdb2bb1b421da5ff4"
-dependencies = [
- "autocfg 1.1.0",
 ]
 
 [[package]]
@@ -2898,9 +2889,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.25.0"
+version = "1.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8e00990ebabbe4c14c08aca901caed183ecd5c09562a12c824bb53d3c3fd3af"
+checksum = "03201d01c3c27a29c8a5cee5b55a93ddae1ccf6f08f65365c2c918f8c1b76f64"
 dependencies = [
  "autocfg 1.1.0",
  "bytes",
@@ -2911,7 +2902,7 @@ dependencies = [
  "pin-project-lite",
  "socket2",
  "tokio-macros",
- "windows-sys 0.42.0",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
@@ -3351,7 +3342,7 @@ dependencies = [
 [[package]]
 name = "wasmparser"
 version = "0.101.1"
-source = "git+https://github.com/bytecodealliance/wasm-tools#c892013426b5143b3e6108d2fc42ef825e63fe88"
+source = "git+https://github.com/bytecodealliance/wasm-tools?rev=56cdbdd#56cdbdd3fc6b1aca1afb13268bc5f3494e9c5b6c"
 dependencies = [
  "indexmap",
  "url",
@@ -3397,7 +3388,7 @@ dependencies = [
  "target-lexicon",
  "tempfile",
  "wasi-cap-std-sync",
- "wasmparser 0.101.1 (git+https://github.com/bytecodealliance/wasm-tools)",
+ "wasmparser 0.101.1 (git+https://github.com/bytecodealliance/wasm-tools?rev=56cdbdd)",
  "wasmtime-cache",
  "wasmtime-component-macro",
  "wasmtime-component-util",
@@ -3510,7 +3501,7 @@ dependencies = [
  "tempfile",
  "test-programs",
  "tokio",
- "wasmparser 0.101.1 (git+https://github.com/bytecodealliance/wasm-tools)",
+ "wasmparser 0.101.1 (git+https://github.com/bytecodealliance/wasm-tools?rev=56cdbdd)",
  "wasmtime",
  "wasmtime-cache",
  "wasmtime-cli-flags",
@@ -3575,7 +3566,7 @@ dependencies = [
  "object",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.101.1 (git+https://github.com/bytecodealliance/wasm-tools)",
+ "wasmparser 0.101.1 (git+https://github.com/bytecodealliance/wasm-tools?rev=56cdbdd)",
  "wasmtime-environ",
 ]
 
@@ -3596,7 +3587,7 @@ dependencies = [
  "target-lexicon",
  "thiserror",
  "wasm-encoder 0.23.0",
- "wasmparser 0.101.1 (git+https://github.com/bytecodealliance/wasm-tools)",
+ "wasmparser 0.101.1 (git+https://github.com/bytecodealliance/wasm-tools?rev=56cdbdd)",
  "wasmprinter",
  "wasmtime-component-util",
  "wasmtime-types",
@@ -3611,7 +3602,7 @@ dependencies = [
  "component-fuzz-util",
  "env_logger 0.9.3",
  "libfuzzer-sys",
- "wasmparser 0.101.1 (git+https://github.com/bytecodealliance/wasm-tools)",
+ "wasmparser 0.101.1 (git+https://github.com/bytecodealliance/wasm-tools?rev=56cdbdd)",
  "wasmprinter",
  "wasmtime-environ",
  "wat",
@@ -3674,7 +3665,7 @@ dependencies = [
  "wasm-smith",
  "wasm-spec-interpreter",
  "wasmi",
- "wasmparser 0.101.1 (git+https://github.com/bytecodealliance/wasm-tools)",
+ "wasmparser 0.101.1 (git+https://github.com/bytecodealliance/wasm-tools?rev=56cdbdd)",
  "wasmprinter",
  "wasmtime",
  "wasmtime-wast",
@@ -3735,7 +3726,7 @@ dependencies = [
  "log",
  "mach",
  "memfd",
- "memoffset 0.8.0",
+ "memoffset",
  "once_cell",
  "paste",
  "rand 0.8.5",
@@ -3754,7 +3745,7 @@ dependencies = [
  "cranelift-entity",
  "serde",
  "thiserror",
- "wasmparser 0.101.1 (git+https://github.com/bytecodealliance/wasm-tools)",
+ "wasmparser 0.101.1 (git+https://github.com/bytecodealliance/wasm-tools?rev=56cdbdd)",
 ]
 
 [[package]]
@@ -3991,7 +3982,7 @@ dependencies = [
  "regalloc2",
  "smallvec",
  "target-lexicon",
- "wasmparser 0.101.1 (git+https://github.com/bytecodealliance/wasm-tools)",
+ "wasmparser 0.101.1 (git+https://github.com/bytecodealliance/wasm-tools?rev=56cdbdd)",
 ]
 
 [[package]]
@@ -4034,7 +4025,7 @@ dependencies = [
  "similar",
  "target-lexicon",
  "toml",
- "wasmparser 0.101.1 (git+https://github.com/bytecodealliance/wasm-tools)",
+ "wasmparser 0.101.1 (git+https://github.com/bytecodealliance/wasm-tools?rev=56cdbdd)",
  "wasmtime-environ",
  "wat",
  "winch-codegen",

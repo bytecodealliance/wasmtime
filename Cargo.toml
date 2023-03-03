@@ -162,7 +162,7 @@ winch-test-macros = { path = "winch/test-macros" }
 
 target-lexicon = { version = "0.12.3", default-features = false, features = ["std"] }
 anyhow = "1.0.22"
-wasmparser = { git = "https://github.com/bytecodealliance/wasm-tools" }
+wasmparser = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "56cdbdd" }
 wat = "1.0.57"
 wast = "53.0.0"
 wasmprinter = "0.2.50"
