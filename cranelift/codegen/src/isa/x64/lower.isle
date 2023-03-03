@@ -2653,6 +2653,24 @@
         (x64_movrm $I64 addr_lo value_lo)
         (x64_movrm $I64 addr_hi value_hi)))))
 
+;; Slightly optimize the extraction of the first lane from a vector which is
+;; stored in memory. In the case the first lane specifically is selected the
+;; standard `movss` and `movsd` instructions can be used as-if we're storing a
+;; f32 or f64 despite the source perhaps being an integer vector since the
+;; result of the instruction is the same.
+(rule 2 (lower (store flags
+                    (has_type (ty_32 _) (extractlane value (u8_from_uimm8 0)))
+                    address
+                    offset))
+      (side_effect
+       (x64_xmm_movrm (SseOpcode.Movss) (to_amode flags address offset) value)))
+(rule 3 (lower (store flags
+                    (has_type (ty_64 _) (extractlane value (u8_from_uimm8 0)))
+                    address
+                    offset))
+      (side_effect
+       (x64_xmm_movrm (SseOpcode.Movsd) (to_amode flags address offset) value)))
+
 ;; Rules for `load*` + ALU op + `store*` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Add mem, reg
