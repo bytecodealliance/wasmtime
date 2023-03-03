@@ -1817,28 +1817,13 @@
 (rule (vec_int_type (multi_lane 32 4)) $I32X4)
 (rule (vec_int_type (multi_lane 64 2)) $I64X2)
 
-;; Determine the appropriate operation for xor-ing vectors of the specified type
-(decl sse_xor_op (Type) SseOpcode)
-(rule 1 (sse_xor_op $F32X4) (SseOpcode.Xorps))
-(rule 1 (sse_xor_op $F64X2) (SseOpcode.Xorpd))
-(rule 1 (sse_xor_op $F32) (SseOpcode.Xorps))
-(rule 1 (sse_xor_op $F64) (SseOpcode.Xorpd))
-
-;; Priority 0 because multi_lane overlaps with the previous two explicit type
-;; patterns.
-(rule 0 (sse_xor_op (multi_lane _bits _lanes)) (SseOpcode.Pxor))
-
-(decl avx_xor_op (Type) AvxOpcode)
-(rule 1 (avx_xor_op $F32X4) (AvxOpcode.Vxorps))
-(rule 1 (avx_xor_op $F64X2) (AvxOpcode.Vxorpd))
-(rule 0 (avx_xor_op (multi_lane _bits _lanes)) (AvxOpcode.Vpxor))
-
 ;; Performs an xor operation of the two operands specified.
 (decl sse_xor (Type Xmm XmmMem) Xmm)
-(rule 0 (sse_xor ty x y) (xmm_rm_r (sse_xor_op ty) x y))
-(rule 1 (sse_xor ty @ (multi_lane _ _) x y)
-        (if-let $true (has_avx))
-        (xmm_rmir_vex (avx_xor_op ty) x y))
+(rule 1 (sse_xor $F32 x y) (x64_xorps x y))
+(rule 1 (sse_xor $F64 x y) (x64_xorpd x y))
+(rule 1 (sse_xor $F32X4 x y) (x64_xorps x y))
+(rule 1 (sse_xor $F64X2 x y) (x64_xorpd x y))
+(rule 0 (sse_xor (multi_lane _ _) x y) (x64_pxor x y))
 
 ;; Generates a register value which has an all-ones pattern.
 ;;
@@ -2281,9 +2266,8 @@
 
 (decl xmm_zero (Type) Xmm)
 (rule (xmm_zero ty)
-      (let ((wr WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmConstOp (sse_xor_op ty) wr))))
-        wr))
+      (let ((tmp Xmm (xmm_uninit_value)))
+        (sse_xor ty tmp tmp)))
 
 ;; Helper for creating `MInst.ShiftR` instructions.
 (decl shift_r (Type ShiftKind Gpr Imm8Gpr) Gpr)
