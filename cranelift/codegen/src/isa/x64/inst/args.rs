@@ -1117,6 +1117,10 @@ pub enum SseOpcode {
     Xorpd,
     Phaddw,
     Phaddd,
+    Punpckhdq,
+    Punpckldq,
+    Punpckhqdq,
+    Punpcklqdq,
 }
 
 impl SseOpcode {
@@ -1256,7 +1260,11 @@ impl SseOpcode {
             | SseOpcode::Subpd
             | SseOpcode::Subsd
             | SseOpcode::Ucomisd
-            | SseOpcode::Xorpd => SSE2,
+            | SseOpcode::Xorpd
+            | SseOpcode::Punpckldq
+            | SseOpcode::Punpckhdq
+            | SseOpcode::Punpcklqdq
+            | SseOpcode::Punpckhqdq => SSE2,
 
             SseOpcode::Pabsb
             | SseOpcode::Pabsw
@@ -1501,6 +1509,10 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Xorpd => "xorpd",
             SseOpcode::Phaddw => "phaddw",
             SseOpcode::Phaddd => "phaddd",
+            SseOpcode::Punpckldq => "punpckldq",
+            SseOpcode::Punpckhdq => "punpckhdq",
+            SseOpcode::Punpcklqdq => "punpcklqdq",
+            SseOpcode::Punpckhqdq => "punpckhqdq",
         };
         write!(fmt, "{}", name)
     }
@@ -1669,7 +1681,11 @@ impl AvxOpcode {
             | AvxOpcode::Vcvttpd2dq
             | AvxOpcode::Vcvttps2dq
             | AvxOpcode::Vphaddw
-            | AvxOpcode::Vphaddd => {
+            | AvxOpcode::Vphaddd
+            | AvxOpcode::Vpunpckldq
+            | AvxOpcode::Vpunpckhdq
+            | AvxOpcode::Vpunpcklqdq
+            | AvxOpcode::Vpunpckhqdq => {
                 smallvec![InstructionSet::AVX]
             }
         }

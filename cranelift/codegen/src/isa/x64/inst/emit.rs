@@ -1946,6 +1946,10 @@ pub(crate) fn emit(
                 SseOpcode::Punpckhwd => (LegacyPrefixes::_66, 0x0F69, 2),
                 SseOpcode::Punpcklbw => (LegacyPrefixes::_66, 0x0F60, 2),
                 SseOpcode::Punpcklwd => (LegacyPrefixes::_66, 0x0F61, 2),
+                SseOpcode::Punpckldq => (LegacyPrefixes::_66, 0x0F62, 2),
+                SseOpcode::Punpcklqdq => (LegacyPrefixes::_66, 0x0F6C, 2),
+                SseOpcode::Punpckhdq => (LegacyPrefixes::_66, 0x0F6A, 2),
+                SseOpcode::Punpckhqdq => (LegacyPrefixes::_66, 0x0F6D, 2),
                 SseOpcode::Pxor => (LegacyPrefixes::_66, 0x0FEF, 2),
                 SseOpcode::Subps => (LegacyPrefixes::None, 0x0F5C, 2),
                 SseOpcode::Subpd => (LegacyPrefixes::_66, 0x0F5C, 2),
@@ -2171,6 +2175,10 @@ pub(crate) fn emit(
                 AvxOpcode::Vmaxsd => (LP::_F2, OM::_0F, 0x5F),
                 AvxOpcode::Vphaddw => (LP::_66, OM::_0F38, 0x01),
                 AvxOpcode::Vphaddd => (LP::_66, OM::_0F38, 0x02),
+                AvxOpcode::Vpunpckldq => (LP::_66, OM::_0F, 0x62),
+                AvxOpcode::Vpunpckhdq => (LP::_66, OM::_0F, 0x6A),
+                AvxOpcode::Vpunpcklqdq => (LP::_66, OM::_0F, 0x6C),
+                AvxOpcode::Vpunpckhqdq => (LP::_66, OM::_0F, 0x6D),
                 _ => panic!("unexpected rmir vex opcode {op:?}"),
             };
             VexInstruction::new()

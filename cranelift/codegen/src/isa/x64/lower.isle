@@ -3556,6 +3556,18 @@
 (rule 4 (lower (shuffle a b (u128_from_immediate 0x1716_0706_1514_0504_1312_0302_1110_0100)))
       (x64_punpcklwd a b))
 
+;; Special case for i32-level interleaving of upper/low bytes.
+(rule 4 (lower (shuffle a b (u128_from_immediate 0x1f1e1d1c_0f0e0d0c_1b1a1918_0b0a0908)))
+      (x64_punpckhdq a b))
+(rule 4 (lower (shuffle a b (u128_from_immediate 0x17161514_07060504_13121110_03020100)))
+      (x64_punpckldq a b))
+
+;; Special case for i64-level interleaving of upper/low bytes.
+(rule 4 (lower (shuffle a b (u128_from_immediate 0x1f1e1d1c1b1a1918_0f0e0d0c0b0a0908)))
+      (x64_punpckhqdq a b))
+(rule 4 (lower (shuffle a b (u128_from_immediate 0x1716151413121110_0706050403020100)))
+      (x64_punpcklqdq a b))
+
 ;; If `lhs` and `rhs` are the same we can use a single PSHUFB to shuffle the XMM
 ;; register. We statically build `constructed_mask` to zero out any unknown lane
 ;; indices (may not be completely necessary: verification could fail incorrect
