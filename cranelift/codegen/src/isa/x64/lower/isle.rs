@@ -151,7 +151,9 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         }
 
         if let Some(load) = self.sinkable_load(val) {
-            return self.sink_load(&load);
+            return RegMem::Mem {
+                addr: self.sink_load(&load),
+            };
         }
 
         RegMem::reg(self.put_in_reg(val))
@@ -277,12 +279,10 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         None
     }
 
-    fn sink_load(&mut self, load: &SinkableLoad) -> RegMem {
+    fn sink_load(&mut self, load: &SinkableLoad) -> SyntheticAmode {
         self.lower_ctx.sink_inst(load.inst);
         let addr = lower_to_amode(self.lower_ctx, load.addr_input, load.offset);
-        RegMem::Mem {
-            addr: SyntheticAmode::Real(addr),
-        }
+        SyntheticAmode::Real(addr)
     }
 
     #[inline]

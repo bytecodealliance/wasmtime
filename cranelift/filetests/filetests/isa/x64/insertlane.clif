@@ -1,0 +1,82 @@
+test compile precise-output
+set enable_simd
+target x86_64 has_avx
+
+function %insertlane_f64x2_zero(f64x2, f64) -> f64x2 {
+block0(v0: f64x2, v1: f64):
+  v2 = insertlane v0, v1, 0
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vmovsd  %xmm0, %xmm1, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vmovsd %xmm1, %xmm0, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %insertlane_f64x2_one(f64x2, f64) -> f64x2 {
+block0(v0: f64x2, v1: f64):
+  v2 = insertlane v0, v1, 1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vmovlhps %xmm0, %xmm1, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vmovlhps %xmm1, %xmm0, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %insertlane_f64x2_zero_with_load(f64x2, i64) -> f64x2 {
+block0(v0: f64x2, v1: i64):
+  v2 = load.f64 v1
+  v3 = insertlane v0, v2, 0
+  return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vmovsd  0(%rdi), %xmm3
+;   vmovsd  %xmm0, %xmm3, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vmovsd (%rdi), %xmm3 ; trap: heap_oob
+;   vmovsd %xmm3, %xmm0, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

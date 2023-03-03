@@ -153,7 +153,8 @@ impl Inst {
             | Inst::XmmRmRBlendVex { op, .. }
             | Inst::XmmVexPinsr { op, .. }
             | Inst::XmmUnaryRmRVex { op, .. }
-            | Inst::XmmUnaryRmRImmVex { op, .. } => op.available_from(),
+            | Inst::XmmUnaryRmRImmVex { op, .. }
+            | Inst::XmmMovRMVex { op, .. } => op.available_from(),
         }
     }
 }
@@ -933,6 +934,12 @@ impl PrettyPrint for Inst {
             }
 
             Inst::XmmMovRM { op, src, dst, .. } => {
+                let src = pretty_print_reg(*src, 8, allocs);
+                let dst = dst.pretty_print(8, allocs);
+                format!("{} {}, {}", ljustify(op.to_string()), src, dst)
+            }
+
+            Inst::XmmMovRMVex { op, src, dst, .. } => {
                 let src = pretty_print_reg(*src, 8, allocs);
                 let dst = dst.pretty_print(8, allocs);
                 format!("{} {}, {}", ljustify(op.to_string()), src, dst)
@@ -2035,7 +2042,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_reuse_def(dst.to_writable_reg(), 0); // Reuse RHS.
             src2.get_operands(collector);
         }
-        Inst::XmmMovRM { src, dst, .. } => {
+        Inst::XmmMovRM { src, dst, .. } | Inst::XmmMovRMVex { src, dst, .. } => {
             collector.reg_use(*src);
             dst.get_operands(collector);
         }
