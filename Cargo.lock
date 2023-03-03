@@ -3831,8 +3831,6 @@ dependencies = [
  "anyhow",
  "log",
  "rand 0.8.5",
- "serde",
- "serde_json",
  "wasi-common",
  "wasmtime",
  "wasmtime-wasi",

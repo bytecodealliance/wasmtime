@@ -7,7 +7,7 @@ use tempfile::{NamedTempFile, TempDir};
 
 // Run the wasmtime CLI with the provided args and return the `Output`.
 // If the `stdin` is `Some`, opens the file and redirects to the child's stdin.
-fn run_wasmtime_for_output(args: &[&str], stdin: Option<&Path>) -> Result<Output> {
+pub fn run_wasmtime_for_output(args: &[&str], stdin: Option<&Path>) -> Result<Output> {
     let runner = std::env::vars()
         .filter(|(k, _v)| k.starts_with("CARGO_TARGET") && k.ends_with("RUNNER"))
         .next();
