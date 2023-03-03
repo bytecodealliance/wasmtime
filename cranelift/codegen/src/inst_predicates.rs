@@ -73,6 +73,25 @@ pub fn is_pure_for_egraph(func: &Function, inst: Inst) -> bool {
     has_one_result && (is_readonly_load || (!op.can_load() && !trivially_has_side_effects(op)))
 }
 
+/// Can the given instruction be merged into another copy of itself?
+/// These instructions may have side-effects, but as long as we retain
+/// the first instance of the instruction, the second and further
+/// instances are redundant if they would produce the same trap or
+/// result.
+pub fn is_mergeable_for_egraph(func: &Function, inst: Inst) -> bool {
+    let op = func.dfg.insts[inst].opcode();
+    // We can only merge one-result operators due to the way that GVN
+    // is structured in the egraph implementation.
+    let has_one_result = func.dfg.inst_results(inst).len() == 1;
+    has_one_result
+        // Loads/stores are handled by alias analysis and not
+        // otherwise mergeable.
+        && !op.can_load()
+        && !op.can_store()
+        // Can only have idempotent side-effects.
+        && (!has_side_effect(func, inst) || op.side_effects_idempotent())
+}
+
 /// Does the given instruction have any side-effect as per [has_side_effect], or else is a load,
 /// but not the get_pinned_reg opcode?
 pub fn has_lowering_side_effect(func: &Function, inst: Inst) -> bool {

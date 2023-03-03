@@ -7,13 +7,14 @@ use crate::dominator_tree::DominatorTree;
 use crate::egraph::domtree::DomTreeWithChildren;
 use crate::egraph::elaborate::Elaborator;
 use crate::fx::FxHashSet;
-use crate::inst_predicates::is_pure_for_egraph;
+use crate::inst_predicates::{is_mergeable_for_egraph, is_pure_for_egraph};
 use crate::ir::{
-    DataFlowGraph, Function, Inst, InstructionData, Type, Value, ValueDef, ValueListPool,
+    Block, DataFlowGraph, Function, Inst, InstructionData, Type, Value, ValueDef, ValueListPool,
 };
 use crate::loop_analysis::LoopAnalysis;
 use crate::opts::generated_code::ContextIter;
 use crate::opts::IsleContext;
+use crate::scoped_hash_map::{Entry as ScopedEntry, ScopedHashMap};
 use crate::trace;
 use crate::unionfind::UnionFind;
 use cranelift_entity::packed_option::ReservedValue;
@@ -77,6 +78,7 @@ where
     pub(crate) func: &'opt mut Function,
     pub(crate) value_to_opt_value: &'opt mut SecondaryMap<Value, Value>,
     pub(crate) gvn_map: &'opt mut CtxHashMap<(Type, InstructionData), Value>,
+    pub(crate) effectful_gvn_map: &'opt mut ScopedHashMap<(Type, InstructionData), Value>,
     pub(crate) eclasses: &'opt mut UnionFind<Value>,
     pub(crate) remat_values: &'opt mut FxHashSet<Value>,
     pub(crate) stats: &'opt mut Stats,
@@ -285,10 +287,49 @@ where
     fn optimize_skeleton_inst(&mut self, inst: Inst) -> bool {
         self.stats.skeleton_inst += 1;
 
-        // If a load or store, process it with the alias analysis to see
-        // if we can optimize it (rewrite in terms of an earlier load or
-        // stored value).
-        if let Some(new_result) =
+        // First, can we try to deduplicate? We need to keep some copy
+        // of the instruction around because it's side-effecting, but
+        // we may be able to reuse an earlier instance of it.
+        if is_mergeable_for_egraph(self.func, inst) {
+            let result = self.func.dfg.inst_results(inst)[0];
+            trace!(" -> mergeable side-effecting op {}", inst);
+
+            // Does this instruction already exist? If so, add entries to
+            // the value-map to rewrite uses of its results to the results
+            // of the original (existing) instruction. If not, optimize
+            // the new instruction.
+            //
+            // Note that we use the "effectful GVN map", which is
+            // scoped: because effectful ops are not removed from the
+            // skeleton (`Layout`), we need to be mindful of whether
+            // our current position is dominated by an instance of the
+            // instruction. (See #5796 for details.)
+            let ty = self.func.dfg.ctrl_typevar(inst);
+            match self
+                .effectful_gvn_map
+                .entry((ty, self.func.dfg.insts[inst].clone()))
+            {
+                ScopedEntry::Occupied(o) => {
+                    let orig_result = *o.get();
+                    // Hit in GVN map -- reuse value.
+                    self.value_to_opt_value[result] = orig_result;
+                    self.eclasses.union(orig_result, result);
+                    trace!(" -> merges result {} to {}", result, orig_result);
+                    true
+                }
+                ScopedEntry::Vacant(v) => {
+                    // Otherwise, insert it into the value-map.
+                    self.value_to_opt_value[result] = result;
+                    v.insert(result);
+                    trace!(" -> inserts as new (no GVN)");
+                    false
+                }
+            }
+        }
+        // Otherwise, if a load or store, process it with the alias
+        // analysis to see if we can optimize it (rewrite in terms of
+        // an earlier load or stored value).
+        else if let Some(new_result) =
             self.alias_analysis
                 .process_inst(self.func, self.alias_analysis_state, inst)
         {
@@ -382,82 +423,126 @@ impl<'a> EgraphPass<'a> {
         let mut cursor = FuncCursor::new(self.func);
         let mut value_to_opt_value: SecondaryMap<Value, Value> =
             SecondaryMap::with_default(Value::reserved_value());
+        // Map from instruction to value for hash-consing of pure ops
+        // into the egraph. This can be a standard (non-scoped)
+        // hashmap because pure ops have no location: they are
+        // "outside of" control flow.
+        //
+        // Note also that we keep the controlling typevar (the `Type`
+        // in the tuple below) because it may disambiguate
+        // instructions that are identical except for type.
         let mut gvn_map: CtxHashMap<(Type, InstructionData), Value> =
             CtxHashMap::with_capacity(cursor.func.dfg.num_values());
+        // Map from instruction to value for GVN'ing of effectful but
+        // idempotent ops, which remain in the side-effecting
+        // skeleton. This needs to be scoped because we cannot
+        // deduplicate one instruction to another that is in a
+        // non-dominating block.
+        //
+        // Note that we can use a ScopedHashMap here without the
+        // "context" (as needed by CtxHashMap) because in practice the
+        // ops we want to GVN have all their args inline. Equality on
+        // the InstructionData itself is conservative: two insts whose
+        // struct contents compare shallowly equal are definitely
+        // identical, but identical insts in a deep-equality sense may
+        // not compare shallowly equal, due to list indirection. This
+        // is fine for GVN, because it is still sound to skip any
+        // given GVN opportunity (and keep the original instructions).
+        //
+        // As above, we keep the controlling typevar here as part of
+        // the key: effectful instructions may (as for pure
+        // instructions) be differentiated only on the type.
+        let mut effectful_gvn_map: ScopedHashMap<(Type, InstructionData), Value> =
+            ScopedHashMap::new();
 
         // In domtree preorder, visit blocks. (TODO: factor out an
         // iterator from this and elaborator.)
         let root = self.domtree_children.root();
-        let mut block_stack = vec![root];
-        while let Some(block) = block_stack.pop() {
-            // We popped this block; push children
-            // immediately, then process this block.
-            block_stack.extend(self.domtree_children.children(block));
+        enum StackEntry {
+            Visit(Block),
+            Pop,
+        }
+        let mut block_stack = vec![StackEntry::Visit(root)];
+        while let Some(entry) = block_stack.pop() {
+            match entry {
+                StackEntry::Visit(block) => {
+                    // We popped this block; push children
+                    // immediately, then process this block.
+                    block_stack.push(StackEntry::Pop);
+                    block_stack
+                        .extend(self.domtree_children.children(block).map(StackEntry::Visit));
+                    effectful_gvn_map.increment_depth();
 
-            trace!("Processing block {}", block);
-            cursor.set_position(CursorPosition::Before(block));
+                    trace!("Processing block {}", block);
+                    cursor.set_position(CursorPosition::Before(block));
 
-            let mut alias_analysis_state = self.alias_analysis.block_starting_state(block);
+                    let mut alias_analysis_state = self.alias_analysis.block_starting_state(block);
 
-            for &param in cursor.func.dfg.block_params(block) {
-                trace!("creating initial singleton eclass for blockparam {}", param);
-                self.eclasses.add(param);
-                value_to_opt_value[param] = param;
-            }
-            while let Some(inst) = cursor.next_inst() {
-                trace!("Processing inst {}", inst);
-
-                // While we're passing over all insts, create initial
-                // singleton eclasses for all result and blockparam
-                // values.  Also do initial analysis of all inst
-                // results.
-                for &result in cursor.func.dfg.inst_results(inst) {
-                    trace!("creating initial singleton eclass for {}", result);
-                    self.eclasses.add(result);
-                }
-
-                // Rewrite args of *all* instructions using the
-                // value-to-opt-value map.
-                cursor.func.dfg.resolve_aliases_in_arguments(inst);
-                cursor.func.dfg.map_inst_values(inst, |_, arg| {
-                    let new_value = value_to_opt_value[arg];
-                    trace!("rewriting arg {} of inst {} to {}", arg, inst, new_value);
-                    debug_assert_ne!(new_value, Value::reserved_value());
-                    new_value
-                });
-
-                // Build a context for optimization, with borrows of
-                // state. We can't invoke a method on `self` because
-                // we've borrowed `self.func` mutably (as
-                // `cursor.func`) so we pull apart the pieces instead
-                // here.
-                let mut ctx = OptimizeCtx {
-                    func: cursor.func,
-                    value_to_opt_value: &mut value_to_opt_value,
-                    gvn_map: &mut gvn_map,
-                    eclasses: &mut self.eclasses,
-                    rewrite_depth: 0,
-                    subsume_values: FxHashSet::default(),
-                    remat_values: &mut self.remat_values,
-                    stats: &mut self.stats,
-                    alias_analysis: self.alias_analysis,
-                    alias_analysis_state: &mut alias_analysis_state,
-                };
-
-                if is_pure_for_egraph(ctx.func, inst) {
-                    // Insert into GVN map and optimize any new nodes
-                    // inserted (recursively performing this work for
-                    // any nodes the optimization rules produce).
-                    let inst = NewOrExistingInst::Existing(inst);
-                    ctx.insert_pure_enode(inst);
-                    // We've now rewritten all uses, or will when we
-                    // see them, and the instruction exists as a pure
-                    // enode in the eclass, so we can remove it.
-                    cursor.remove_inst_and_step_back();
-                } else {
-                    if ctx.optimize_skeleton_inst(inst) {
-                        cursor.remove_inst_and_step_back();
+                    for &param in cursor.func.dfg.block_params(block) {
+                        trace!("creating initial singleton eclass for blockparam {}", param);
+                        self.eclasses.add(param);
+                        value_to_opt_value[param] = param;
                     }
+                    while let Some(inst) = cursor.next_inst() {
+                        trace!("Processing inst {}", inst);
+
+                        // While we're passing over all insts, create initial
+                        // singleton eclasses for all result and blockparam
+                        // values.  Also do initial analysis of all inst
+                        // results.
+                        for &result in cursor.func.dfg.inst_results(inst) {
+                            trace!("creating initial singleton eclass for {}", result);
+                            self.eclasses.add(result);
+                        }
+
+                        // Rewrite args of *all* instructions using the
+                        // value-to-opt-value map.
+                        cursor.func.dfg.resolve_aliases_in_arguments(inst);
+                        cursor.func.dfg.map_inst_values(inst, |_, arg| {
+                            let new_value = value_to_opt_value[arg];
+                            trace!("rewriting arg {} of inst {} to {}", arg, inst, new_value);
+                            debug_assert_ne!(new_value, Value::reserved_value());
+                            new_value
+                        });
+
+                        // Build a context for optimization, with borrows of
+                        // state. We can't invoke a method on `self` because
+                        // we've borrowed `self.func` mutably (as
+                        // `cursor.func`) so we pull apart the pieces instead
+                        // here.
+                        let mut ctx = OptimizeCtx {
+                            func: cursor.func,
+                            value_to_opt_value: &mut value_to_opt_value,
+                            gvn_map: &mut gvn_map,
+                            effectful_gvn_map: &mut effectful_gvn_map,
+                            eclasses: &mut self.eclasses,
+                            rewrite_depth: 0,
+                            subsume_values: FxHashSet::default(),
+                            remat_values: &mut self.remat_values,
+                            stats: &mut self.stats,
+                            alias_analysis: self.alias_analysis,
+                            alias_analysis_state: &mut alias_analysis_state,
+                        };
+
+                        if is_pure_for_egraph(ctx.func, inst) {
+                            // Insert into GVN map and optimize any new nodes
+                            // inserted (recursively performing this work for
+                            // any nodes the optimization rules produce).
+                            let inst = NewOrExistingInst::Existing(inst);
+                            ctx.insert_pure_enode(inst);
+                            // We've now rewritten all uses, or will when we
+                            // see them, and the instruction exists as a pure
+                            // enode in the eclass, so we can remove it.
+                            cursor.remove_inst_and_step_back();
+                        } else {
+                            if ctx.optimize_skeleton_inst(inst) {
+                                cursor.remove_inst_and_step_back();
+                            }
+                        }
+                    }
+                }
+                StackEntry::Pop => {
+                    effectful_gvn_map.decrement_depth();
                 }
             }
         }

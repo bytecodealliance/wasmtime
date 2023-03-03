@@ -3,7 +3,7 @@
 // Pull in the ISLE generated code.
 #[allow(unused)]
 pub mod generated_code;
-use generated_code::{Context, MInst};
+use generated_code::{Context, ExtendOp, MInst};
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{writable_zero_reg, zero_reg};
@@ -60,7 +60,22 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
             _ => unreachable!(),
         }
     }
+    fn intcc_to_extend_op(&mut self, cc: &IntCC) -> ExtendOp {
+        use IntCC::*;
+        match *cc {
+            Equal
+            | NotEqual
+            | UnsignedLessThan
+            | UnsignedGreaterThanOrEqual
+            | UnsignedGreaterThan
+            | UnsignedLessThanOrEqual => ExtendOp::Zero,
 
+            SignedLessThan
+            | SignedGreaterThanOrEqual
+            | SignedGreaterThan
+            | SignedLessThanOrEqual => ExtendOp::Signed,
+        }
+    }
     fn lower_cond_br(
         &mut self,
         cc: &IntCC,

@@ -2,6 +2,7 @@ test run
 target x86_64
 ; AArch64 Does not have these libcalls
 target s390x
+target riscv64
 
 
 function %libcall_ceilf32(f32) -> f32 {

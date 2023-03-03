@@ -368,6 +368,7 @@ pub trait RustGenerator<'a> {
     }
 }
 
+/// Translate `name` to a Rust `snake_case` identifier.
 pub fn to_rust_ident(name: &str) -> String {
     match name {
         // Escape Rust keywords.
@@ -423,5 +424,15 @@ pub fn to_rust_ident(name: &str) -> String {
         "yield" => "yield_".into(),
         "try" => "try_".into(),
         s => s.to_snake_case(),
+    }
+}
+
+/// Translate `name` to a Rust `UpperCamelCase` identifier.
+pub fn to_rust_upper_camel_case(name: &str) -> String {
+    match name {
+        // We use `Host` as the name of the trait for host implementations
+        // to fill in, so rename it if "Host" is used as a regular identifier.
+        "host" => "Host_".into(),
+        s => s.to_upper_camel_case(),
     }
 }

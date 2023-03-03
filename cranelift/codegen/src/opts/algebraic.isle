@@ -187,15 +187,9 @@
 (rule (simplify (imul ty (iconst _ (imm64_power_of_two c)) x))
       (ishl ty x (iconst ty (imm64 c))))
 
-;; x<<32>>32: uextend/sextend 32->64.
-(rule (simplify (ushr $I64 (ishl $I64 (uextend $I64 x @ (value_type $I32)) (iconst _ (simm32 32))) (iconst _ (simm32 32))))
-      (uextend $I64 x))
-
-(rule (simplify (sshr $I64 (ishl $I64 (uextend $I64 x @ (value_type $I32)) (iconst _ (simm32 32))) (iconst _ (simm32 32))))
-      (sextend $I64 x))
-
 ;; TODO: strength reduction: div to shifts
 ;; TODO: div/rem by constants -> magic multiplications
+
 
 ;; `(x >> k) << k` is the same as masking off the bottom `k` bits (regardless if
 ;; this is a signed or unsigned shift right).
@@ -209,6 +203,66 @@
                       (iconst _ k)))
       (let ((mask Imm64 (imm64_shl ty (imm64 0xFFFF_FFFF_FFFF_FFFF) k)))
         (band ty x (iconst ty mask))))
+
+
+;; For unsigned shifts, `(x << k) >> k` is the same as masking out the top
+;; `k` bits. A similar rule is valid for vectors but this `iconst` mask only
+;; works for scalar integers.
+(rule (simplify (ushr (fits_in_64 (ty_int ty))
+                      (ishl ty x (iconst _ k))
+                      (iconst _ k)))
+      (band ty x (iconst ty (imm64_ushr ty (imm64 (ty_mask ty)) k))))
+
+
+;; For signed shifts, `(x << k) >> k` does sign-extension from `n` bits to
+;; `n+k` bits. In the special case where `x` is the result of either `sextend`
+;; or `uextend` from `n` bits to `n+k` bits, we can implement this using
+;; `sextend`.
+(rule (simplify (sshr wide
+                 (ishl wide
+                  (uextend wide x @ (value_type narrow))
+                  (iconst _ shift))
+                 (iconst _ shift)))
+      (if-let (u64_from_imm64 shift_u64) shift)
+      (if-let $true (u64_eq shift_u64 (u64_sub (ty_bits_u64 wide) (ty_bits_u64 narrow))))
+      (sextend wide x))
+
+;; If `k` is smaller than the difference in bit widths of the two types, then
+;; the intermediate sign bit comes from the extend op, so the final result is
+;; the same as the original extend op.
+(rule (simplify (sshr wide
+                 (ishl wide
+                  x @ (uextend wide (value_type narrow))
+                  (iconst _ shift))
+                 (iconst _ shift)))
+      (if-let (u64_from_imm64 shift_u64) shift)
+      (if-let $true (u64_lt shift_u64 (u64_sub (ty_bits_u64 wide) (ty_bits_u64 narrow))))
+      x)
+
+;; If the original extend op was `sextend`, then both of the above cases say
+;; the result should also be `sextend`.
+(rule (simplify (sshr wide
+                 (ishl wide
+                  x @ (sextend wide (value_type narrow))
+                  (iconst _ shift))
+                 (iconst _ shift)))
+      (if-let (u64_from_imm64 shift_u64) shift)
+      (if-let $true (u64_le shift_u64 (u64_sub (ty_bits_u64 wide) (ty_bits_u64 narrow))))
+      x)
+
+
+;; Masking out any of the top bits of the result of `uextend` is a no-op. (This
+;; is like a cheap version of known-bits analysis.)
+(rule (simplify (band wide x @ (uextend _ (value_type narrow)) (iconst _ (u64_from_imm64 mask))))
+      ; Check that `narrow_mask` has a subset of the bits that `mask` does.
+      (if-let $true (let ((narrow_mask u64 (ty_mask narrow))) (u64_eq narrow_mask (u64_and mask narrow_mask))))
+      x)
+
+;; Masking out the sign-extended bits of an `sextend` turns it into a `uextend`.
+(rule (simplify (band wide (sextend _ x @ (value_type narrow)) (iconst _ (u64_from_imm64 mask))))
+      (if-let $true (u64_eq mask (ty_mask narrow)))
+      (uextend wide x))
+
 
 ;; Rematerialize ALU-op-with-imm and iconsts in each block where they're
 ;; used. This is neutral (add-with-imm) or positive (iconst) for
@@ -473,3 +527,13 @@
 (rule (simplify
        (vselect ty (fcmp _ (FloatCC.GreaterThan) x y) x y))
       (fmax_pseudo ty x y))
+
+;; If both of the multiplied arguments to an `fma` are negated then remove
+;; both of them since they cancel out.
+(rule (simplify (fma ty (fneg ty x) (fneg ty y) z))
+      (fma ty x y z))
+
+;; If both of the multiplied arguments to an `fmul` are negated then remove
+;; both of them since they cancel out.
+(rule (simplify (fmul ty (fneg ty x) (fneg ty y)))
+      (fmul ty x y))

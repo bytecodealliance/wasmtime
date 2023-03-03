@@ -8,7 +8,7 @@ use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
     types, AbiParam, AtomicRmwOp, Block, BlockCall, ExternalName, FuncRef, Function,
-    InstructionData, Opcode, TrapCode, Type, Value as ValueRef,
+    InstructionData, MemFlags, Opcode, TrapCode, Type, Value as ValueRef,
 };
 use log::trace;
 use smallvec::{smallvec, SmallVec};
@@ -482,8 +482,10 @@ where
             };
 
             let addr_value = calculate_addr(types::I64, imm(), args()?)?;
+            let mem_flags = inst.memflags().expect("instruction to have memory flags");
             let loaded = assign_or_memtrap(
-                Address::try_from(addr_value).and_then(|addr| state.checked_load(addr, load_ty)),
+                Address::try_from(addr_value)
+                    .and_then(|addr| state.checked_load(addr, load_ty, mem_flags)),
             );
 
             match (loaded, kind) {
@@ -505,33 +507,37 @@ where
             };
 
             let addr_value = calculate_addr(types::I64, imm(), args_range(1..)?)?;
+            let mem_flags = inst.memflags().expect("instruction to have memory flags");
             let reduced = if let Some(c) = kind {
                 arg(0)?.convert(c)?
             } else {
                 arg(0)?
             };
             continue_or_memtrap(
-                Address::try_from(addr_value).and_then(|addr| state.checked_store(addr, reduced)),
+                Address::try_from(addr_value)
+                    .and_then(|addr| state.checked_store(addr, reduced, mem_flags)),
             )
         }
         Opcode::StackLoad => {
             let load_ty = inst_context.controlling_type().unwrap();
             let slot = inst.stack_slot().unwrap();
             let offset = sum(imm(), args()?)? as u64;
+            let mem_flags = MemFlags::trusted();
             assign_or_memtrap({
                 state
                     .stack_address(AddressSize::_64, slot, offset)
-                    .and_then(|addr| state.checked_load(addr, load_ty))
+                    .and_then(|addr| state.checked_load(addr, load_ty, mem_flags))
             })
         }
         Opcode::StackStore => {
             let arg = arg(0)?;
             let slot = inst.stack_slot().unwrap();
             let offset = sum(imm(), args_range(1..)?)? as u64;
+            let mem_flags = MemFlags::trusted();
             continue_or_memtrap({
                 state
                     .stack_address(AddressSize::_64, slot, offset)
-                    .and_then(|addr| state.checked_store(addr, arg))
+                    .and_then(|addr| state.checked_store(addr, arg, mem_flags))
             })
         }
         Opcode::StackAddr => {
@@ -1027,7 +1033,7 @@ where
                     new[i] = x[s[i] as usize];
                 } // else leave as 0
             }
-            assign(Value::vector(new, ctrl_ty)?)
+            assign(Value::vector(new, types::I8X16)?)
         }
         Opcode::Splat => {
             let mut new_vector = SimdVec::new();
@@ -1238,7 +1244,9 @@ where
             let op = inst.atomic_rmw_op().unwrap();
             let val = arg(1)?;
             let addr = arg(0)?.into_int()? as u64;
-            let loaded = Address::try_from(addr).and_then(|addr| state.checked_load(addr, ctrl_ty));
+            let mem_flags = inst.memflags().expect("instruction to have memory flags");
+            let loaded = Address::try_from(addr)
+                .and_then(|addr| state.checked_load(addr, ctrl_ty, mem_flags));
             let prev_val = match loaded {
                 Ok(v) => v,
                 Err(e) => return Ok(ControlFlow::Trap(CraneliftTrap::User(memerror_to_trap(e)))),
@@ -1265,13 +1273,15 @@ where
                 )
                 .and_then(|v| Value::convert(v, ValueConversionKind::ToSigned)),
             }?;
-            let stored =
-                Address::try_from(addr).and_then(|addr| state.checked_store(addr, replace));
+            let stored = Address::try_from(addr)
+                .and_then(|addr| state.checked_store(addr, replace, mem_flags));
             assign_or_memtrap(stored.map(|_| prev_val_to_assign))
         }
         Opcode::AtomicCas => {
             let addr = arg(0)?.into_int()? as u64;
-            let loaded = Address::try_from(addr).and_then(|addr| state.checked_load(addr, ctrl_ty));
+            let mem_flags = inst.memflags().expect("instruction to have memory flags");
+            let loaded = Address::try_from(addr)
+                .and_then(|addr| state.checked_load(addr, ctrl_ty, mem_flags));
             let loaded_val = match loaded {
                 Ok(v) => v,
                 Err(e) => return Ok(ControlFlow::Trap(CraneliftTrap::User(memerror_to_trap(e)))),
@@ -1280,7 +1290,7 @@ where
             let val_to_assign = if Value::eq(&loaded_val, &expected_val)? {
                 let val_to_store = arg(2)?;
                 Address::try_from(addr)
-                    .and_then(|addr| state.checked_store(addr, val_to_store))
+                    .and_then(|addr| state.checked_store(addr, val_to_store, mem_flags))
                     .map(|_| loaded_val)
             } else {
                 Ok(loaded_val)
@@ -1290,43 +1300,26 @@ where
         Opcode::AtomicLoad => {
             let load_ty = inst_context.controlling_type().unwrap();
             let addr = arg(0)?.into_int()? as u64;
+            let mem_flags = inst.memflags().expect("instruction to have memory flags");
             // We are doing a regular load here, this isn't actually thread safe.
             assign_or_memtrap(
-                Address::try_from(addr).and_then(|addr| state.checked_load(addr, load_ty)),
+                Address::try_from(addr)
+                    .and_then(|addr| state.checked_load(addr, load_ty, mem_flags)),
             )
         }
         Opcode::AtomicStore => {
             let val = arg(0)?;
             let addr = arg(1)?.into_int()? as u64;
+            let mem_flags = inst.memflags().expect("instruction to have memory flags");
             // We are doing a regular store here, this isn't actually thread safe.
             continue_or_memtrap(
-                Address::try_from(addr).and_then(|addr| state.checked_store(addr, val)),
+                Address::try_from(addr).and_then(|addr| state.checked_store(addr, val, mem_flags)),
             )
         }
         Opcode::Fence => {
             // The interpreter always runs in a single threaded context, so we don't
             // actually need to emit a fence here.
             ControlFlow::Continue
-        }
-        Opcode::WideningPairwiseDotProductS => {
-            let ctrl_ty = types::I16X8;
-            let new_type = ctrl_ty.merge_lanes().unwrap();
-            let arg0 = extractlanes(&arg(0)?, ctrl_ty)?;
-            let arg1 = extractlanes(&arg(1)?, ctrl_ty)?;
-            let new_vec = arg0
-                .chunks(2)
-                .into_iter()
-                .zip(arg1.chunks(2))
-                .into_iter()
-                .map(|(x, y)| {
-                    let mut z = 0i128;
-                    for (lhs, rhs) in x.into_iter().zip(y.into_iter()) {
-                        z += lhs.clone().into_int()? * rhs.clone().into_int()?;
-                    }
-                    Value::int(z, new_type.lane_type())
-                })
-                .collect::<ValueResult<Vec<_>>>()?;
-            assign(vectorizelanes(&new_vec, new_type)?)
         }
         Opcode::SqmulRoundSat => {
             let lane_type = ctrl_ty.lane_type();

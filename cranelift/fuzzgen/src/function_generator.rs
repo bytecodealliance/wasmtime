@@ -290,6 +290,36 @@ fn insert_atomic_rmw(
     Ok(())
 }
 
+fn insert_atomic_cas(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    _: Opcode,
+    _: &'static [Type],
+    rets: &'static [Type],
+) -> Result<()> {
+    let ctrl_type = *rets.first().unwrap();
+    let type_size = ctrl_type.bytes();
+
+    let (address, flags, offset) = fgen.generate_address_and_memflags(builder, type_size, true)?;
+
+    // AtomicCas does not directly support offsets, so add the offset to the address separately.
+    let address = builder.ins().iadd_imm(address, i64::from(offset));
+
+    // Source and Target variables
+    let expected_var = fgen.get_variable_of_type(ctrl_type)?;
+    let store_var = fgen.get_variable_of_type(ctrl_type)?;
+    let loaded_var = fgen.get_variable_of_type(ctrl_type)?;
+
+    let expected_val = builder.use_var(expected_var);
+    let store_val = builder.use_var(store_var);
+    let new_val = builder
+        .ins()
+        .atomic_cas(flags, address, expected_val, store_val);
+
+    builder.def_var(loaded_var, new_val);
+    Ok(())
+}
+
 type OpcodeInserter = fn(
     fgen: &mut FunctionGenerator,
     builder: &mut FunctionBuilder,
@@ -535,6 +565,12 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
         }
 
         Architecture::Riscv64(_) => {
+            // RISC-V Does not support SIMD at all
+            let is_simd = args.iter().chain(rets).any(|t| t.is_vector());
+            if is_simd {
+                return false;
+            }
+
             exceptions!(
                 // TODO
                 (Opcode::IaddCout),
@@ -617,6 +653,8 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 // TODO
                 (Opcode::BxorNot, &[F32, F32]),
                 (Opcode::BxorNot, &[F64, F64]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5884
+                (Opcode::AtomicRmw),
             )
         }
 
@@ -705,6 +743,10 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::Iabs, &[I32], &[I32], insert_opcode),
     (Opcode::Iabs, &[I64], &[I64], insert_opcode),
     (Opcode::Iabs, &[I128], &[I128], insert_opcode),
+    (Opcode::Iabs, &[I8X16, I8X16], &[I8X16], insert_opcode),
+    (Opcode::Iabs, &[I16X8, I16X8], &[I16X8], insert_opcode),
+    (Opcode::Iabs, &[I32X4, I32X4], &[I32X4], insert_opcode),
+    (Opcode::Iabs, &[I64X2, I64X2], &[I64X2], insert_opcode),
     // Smin
     (Opcode::Smin, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Smin, &[I16, I16], &[I16], insert_opcode),
@@ -1272,6 +1314,11 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::AtomicRmw, &[I16, I16], &[I16], insert_atomic_rmw),
     (Opcode::AtomicRmw, &[I32, I32], &[I32], insert_atomic_rmw),
     (Opcode::AtomicRmw, &[I64, I64], &[I64], insert_atomic_rmw),
+    // AtomicCas
+    (Opcode::AtomicCas, &[I8, I8], &[I8], insert_atomic_cas),
+    (Opcode::AtomicCas, &[I16, I16], &[I16], insert_atomic_cas),
+    (Opcode::AtomicCas, &[I32, I32], &[I32], insert_atomic_cas),
+    (Opcode::AtomicCas, &[I64, I64], &[I64], insert_atomic_cas),
     // Bitcast
     (Opcode::Bitcast, &[F32], &[I32], insert_bitcast),
     (Opcode::Bitcast, &[I32], &[F32], insert_bitcast),
@@ -1458,10 +1505,14 @@ where
         is_atomic: bool,
     ) -> Result<(Value, MemFlags, Offset32)> {
         // Should we generate an aligned address
-        let is_aarch64 = matches!(self.target_triple.architecture, Architecture::Aarch64(_));
-        let aligned = if is_atomic && is_aarch64 {
-            // AArch64 has issues with unaligned atomics.
-            // https://github.com/bytecodealliance/wasmtime/issues/5483
+        // Some backends have issues with unaligned atomics.
+        // AArch64: https://github.com/bytecodealliance/wasmtime/issues/5483
+        // RISCV: https://github.com/bytecodealliance/wasmtime/issues/5882
+        let requires_aligned_atomics = matches!(
+            self.target_triple.architecture,
+            Architecture::Aarch64(_) | Architecture::Riscv64(_)
+        );
+        let aligned = if is_atomic && requires_aligned_atomics {
             true
         } else {
             bool::arbitrary(self.u)?
@@ -1511,6 +1562,11 @@ where
             }
             DataValue::F32(f) => builder.ins().f32const(f),
             DataValue::F64(f) => builder.ins().f64const(f),
+            DataValue::V128(bytes) => {
+                let data = bytes.to_vec().into();
+                let handle = builder.func.dfg.constants.insert(data);
+                builder.ins().vconst(ty, handle)
+            }
             _ => unimplemented!(),
         })
     }
@@ -1881,7 +1937,7 @@ where
 
         let mut params = Vec::with_capacity(param_count);
         for _ in 0..param_count {
-            params.push(self.u._type()?);
+            params.push(self.u._type(self.target_triple.architecture)?);
         }
         Ok(params)
     }
@@ -1901,7 +1957,7 @@ where
 
         // Create a pool of vars that are going to be used in this function
         for _ in 0..self.param(&self.config.vars_per_function)? {
-            let ty = self.u._type()?;
+            let ty = self.u._type(self.target_triple.architecture)?;
             let value = self.generate_const(builder, ty)?;
             vars.push((ty, value));
         }

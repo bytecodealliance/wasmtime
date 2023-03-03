@@ -367,6 +367,7 @@ fn define_simd_lane_access(
     );
     let x = &Operand::new("x", I8x16).with_doc("Vector to modify by re-arranging lanes");
     let y = &Operand::new("y", I8x16).with_doc("Mask for re-arranging lanes");
+    let a = &Operand::new("a", I8x16);
 
     ig.push(
         Inst::new(
@@ -388,6 +389,7 @@ fn define_simd_lane_access(
     let x = &Operand::new("x", TxN).with_doc("The vector to modify");
     let y = &Operand::new("y", &TxN.lane_of()).with_doc("New lane value");
     let Idx = &Operand::new("Idx", &imm.uimm8).with_doc("Lane index");
+    let a = &Operand::new("a", TxN);
 
     ig.push(
         Inst::new(
@@ -3127,41 +3129,6 @@ pub(crate) fn define(
         pairwise add results will make up the low half of the resulting vector while
         the second operand pairwise add results will make up the upper half of the
         resulting vector.
-            "#,
-            &formats.binary,
-        )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
-    );
-
-    let I16x8 = &TypeVar::new(
-        "I16x8",
-        "A SIMD vector type containing 8 integer lanes each 16 bits wide.",
-        TypeSetBuilder::new()
-            .ints(16..16)
-            .simd_lanes(8..8)
-            .includes_scalars(false)
-            .build(),
-    );
-
-    let x = &Operand::new("x", I16x8);
-    let y = &Operand::new("y", I16x8);
-    let a = &Operand::new("a", &I16x8.merge_lanes());
-
-    ig.push(
-        Inst::new(
-            "widening_pairwise_dot_product_s",
-            r#"
-        Takes corresponding elements in `x` and `y`, performs a sign-extending length-doubling
-        multiplication on them, then adds adjacent pairs of elements to form the result.  For
-        example, if the input vectors are `[x3, x2, x1, x0]` and `[y3, y2, y1, y0]`, it produces
-        the vector `[r1, r0]`, where `r1 = sx(x3) * sx(y3) + sx(x2) * sx(y2)` and
-        `r0 = sx(x1) * sx(y1) + sx(x0) * sx(y0)`, and `sx(n)` sign-extends `n` to twice its width.
-
-        This will double the lane width and halve the number of lanes.  So the resulting
-        vector has the same number of bits as `x` and `y` do (individually).
-
-        See <https://github.com/WebAssembly/simd/pull/127> for background info.
             "#,
             &formats.binary,
         )

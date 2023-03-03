@@ -29,7 +29,7 @@ block0(v0: i8):
     return v3
     ; check: v4 = iconst.i8 224
     ; check: v5 = band v0, v4
-    ; return v5
+    ; check: return v5
 }
 
 function %unsigned_shift_right_shift_left_i32(i32) -> i32 {
@@ -51,7 +51,7 @@ block0(v0: i64):
     return v3
     ; check: v4 = iconst.i64 -32
     ; check: v5 = band v0, v4
-    ; return v5
+    ; check: return v5
 }
 
 function %signed_shift_right_shift_left_i8(i8) -> i8 {
@@ -62,7 +62,7 @@ block0(v0: i8):
     return v3
     ; check: v4 = iconst.i8 224
     ; check: v5 = band v0, v4
-    ; return v5
+    ; check: return v5
 }
 
 function %signed_shift_right_shift_left_i32(i32) -> i32 {
@@ -73,7 +73,7 @@ block0(v0: i32):
     return v3
     ; check: v4 = iconst.i32 0xffff_ffe0
     ; check: v5 = band v0, v4
-    ; return v5
+    ; check: return v5
 }
 
 function %signed_shift_right_shift_left_i64(i64) -> i64 {
@@ -84,7 +84,7 @@ block0(v0: i64):
     return v3
     ; check: v4 = iconst.i64 -32
     ; check: v5 = band v0, v4
-    ; return v5
+    ; check: return v5
 }
 
 function %signed_shift_right_shift_left_i8_mask_rhs(i8) -> i8 {
@@ -95,7 +95,133 @@ block0(v0: i8):
     return v3
     ; check: v4 = iconst.i8 224
     ; check: v5 = band v0, v4
-    ; return v5
+    ; check: return v5
+}
+
+function %sextend_shift_32_64_unsigned(i32) -> i64 {
+block0(v0: i32):
+    v1 = iconst.i8 32
+    v2 = sextend.i64 v0
+    v3 = ishl v2, v1
+    v4 = ushr v3, v1
+    return v4
+    ; check: v7 = uextend.i64 v0
+    ; check: return v7
+}
+
+function %sextend_shift_32_64_signed(i32) -> i64 {
+block0(v0: i32):
+    v1 = iconst.i8 32
+    v2 = sextend.i64 v0
+    v3 = ishl v2, v1
+    v4 = sshr v3, v1
+    return v4
+    ; check: return v2
+}
+
+function %sextend_undershift_32_64_unsigned(i32) -> i64 {
+block0(v0: i32):
+    v1 = iconst.i8 31
+    v2 = sextend.i64 v0
+    v3 = ishl v2, v1
+    v4 = ushr v3, v1
+    return v4
+    ; check: v5 = iconst.i64 0x0001_ffff_ffff
+    ; check: v6 = band v2, v5
+    ; check: return v6
+}
+
+function %sextend_undershift_32_64_signed(i32) -> i64 {
+block0(v0: i32):
+    v1 = iconst.i8 31
+    v2 = sextend.i64 v0
+    v3 = ishl v2, v1
+    v4 = sshr v3, v1
+    return v4
+    ; check: return v2
+}
+
+function %sextend_shift_8_64_unsigned(i8) -> i64 {
+block0(v0: i8):
+    v1 = iconst.i8 56
+    v2 = sextend.i64 v0
+    v3 = ishl v2, v1
+    v4 = ushr v3, v1
+    return v4
+    ; check: v7 = uextend.i64 v0
+    ; check: return v7
+}
+
+function %sextend_shift_8_64_signed(i8) -> i64 {
+block0(v0: i8):
+    v1 = iconst.i8 56
+    v2 = sextend.i64 v0
+    v3 = ishl v2, v1
+    v4 = sshr v3, v1
+    return v4
+    ; check: return v2
+}
+
+function %uextend_shift_32_64_unsigned(i32) -> i64 {
+block0(v0: i32):
+    v1 = iconst.i8 32
+    v2 = uextend.i64 v0
+    v3 = ishl v2, v1
+    v4 = ushr v3, v1
+    return v4
+    ; check: return v2
+}
+
+function %uextend_shift_32_64_signed(i32) -> i64 {
+block0(v0: i32):
+    v1 = iconst.i8 32
+    v2 = uextend.i64 v0
+    v3 = ishl v2, v1
+    v4 = sshr v3, v1
+    return v4
+    ; check: v5 = sextend.i64 v0
+    ; check: return v5
+}
+
+function %uextend_undershift_32_64_unsigned(i32) -> i64 {
+block0(v0: i32):
+    v1 = iconst.i8 31
+    v2 = uextend.i64 v0
+    v3 = ishl v2, v1
+    v4 = ushr v3, v1
+    return v4
+    ; check: return v2
+}
+
+function %uextend_undershift_32_64_signed(i32) -> i64 {
+block0(v0: i32):
+    v1 = iconst.i8 31
+    v2 = uextend.i64 v0
+    v3 = ishl v2, v1
+    v4 = sshr v3, v1
+    return v4
+    ; check: return v2
+}
+
+function %uextend_shift_8_64_unsigned(i8) -> i64 {
+block0(v0: i8):
+    v1 = iconst.i8 56
+    v2 = uextend.i64 v0
+    v3 = ishl v2, v1
+    v4 = ushr v3, v1
+    return v4
+    ; check: return v2
+}
+
+function %uextend_shift_8_64_signed(i8) -> i64 {
+block0(v0: i8):
+    v1 = iconst.i8 56
+    v2 = uextend.i64 v0
+    v3 = ishl v2, v1
+    v4 = sshr v3, v1
+    return v4
+    ; check: v5 = sextend.i64 v0
+    ; check: return v5
 }
 
 function %or_and_y_with_not_y_i8(i8, i8) -> i8 {
@@ -357,3 +483,25 @@ block0(v1: i16):
 
 ; check: v4 = sextend.i64 v1
 ; check: return v4
+
+function %fma_double_fneg(f32, f32, f32) -> f32 {
+block0(v1: f32, v2: f32, v3: f32):
+    v4 = fneg v1
+    v5 = fneg v2
+    v6 = fma v4, v5, v3
+    return v6
+}
+
+; check: v7 = fma v1, v2, v3
+; check: return v7
+
+function %fmul_double_fneg(f32, f32) -> f32 {
+block0(v1: f32, v2: f32):
+    v3 = fneg v1
+    v4 = fneg v2
+    v5 = fmul v3, v4
+    return v5
+}
+
+; check: v6 = fmul v1, v2
+; check: return v6

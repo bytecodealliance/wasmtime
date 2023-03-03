@@ -135,7 +135,7 @@ pub(crate) use self::store::ComponentStoreData;
 ///
 ///     // Here our `greet` function doesn't take any parameters for the component,
 ///     // but in the Wasmtime embedding API the first argument is always a `Store`.
-///     bindings.greet(&mut store)?;
+///     bindings.call_greet(&mut store)?;
 ///     Ok(())
 /// }
 /// ```

@@ -7,7 +7,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
 use cranelift_codegen::data_value::DataValue;
-use cranelift_codegen::ir::{Function, LibCall, TrapCode};
+use cranelift_codegen::ir::{LibCall, TrapCode};
 use cranelift_filetests::function_runner::{TestFileCompiler, Trampoline};
 use cranelift_fuzzgen::*;
 use cranelift_interpreter::environment::FuncIndex;
@@ -139,9 +139,11 @@ fn run_in_host(trampoline: &Trampoline, args: &[DataValue]) -> RunResult {
     RunResult::Success(res)
 }
 
-fn build_interpreter(func: &Function) -> Interpreter {
+fn build_interpreter(testcase: &TestCase) -> Interpreter {
     let mut env = FunctionStore::default();
-    env.add(func.name.to_string(), &func);
+    for func in testcase.functions.iter() {
+        env.add(func.name.to_string(), &func);
+    }
 
     let state = InterpreterState::default()
         .with_function_store(env)
@@ -174,21 +176,17 @@ fuzz_target!(|testcase: TestCase| {
         STATISTICS.print(valid_inputs);
     }
 
-    let mut compiler = TestFileCompiler::new(testcase.isa);
-    compiler.declare_function(&testcase.func).unwrap();
-    compiler.define_function(testcase.func.clone()).unwrap();
-    compiler
-        .create_trampoline_for_function(&testcase.func)
-        .unwrap();
+    let mut compiler = TestFileCompiler::new(testcase.isa.clone());
+    compiler.add_functions(&testcase.functions[..]).unwrap();
     let compiled = compiler.compile().unwrap();
-    let trampoline = compiled.get_trampoline(&testcase.func).unwrap();
+    let trampoline = compiled.get_trampoline(testcase.main()).unwrap();
 
     for args in &testcase.inputs {
         STATISTICS.total_runs.fetch_add(1, Ordering::SeqCst);
 
         // We rebuild the interpreter every run so that we don't accidentally carry over any state
         // between runs, such as fuel remaining.
-        let mut interpreter = build_interpreter(&testcase.func);
+        let mut interpreter = build_interpreter(&testcase);
         let int_res = run_in_interpreter(&mut interpreter, args);
         match int_res {
             RunResult::Success(_) => {

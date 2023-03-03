@@ -114,20 +114,34 @@ impl TestFileCompiler {
         Self::with_host_isa(flags)
     }
 
-    /// Registers all functions in a [TestFile]. Additionally creates a trampoline for each one
-    /// of them.
-    pub fn add_testfile(&mut self, testfile: &TestFile) -> Result<()> {
+    /// Declares and compiles all functions in `functions`. Additionally creates a trampoline for
+    /// each one of them.
+    pub fn add_functions(&mut self, functions: &[Function]) -> Result<()> {
         // Declare all functions in the file, so that they may refer to each other.
-        for (func, _) in &testfile.functions {
+        for func in functions {
             self.declare_function(func)?;
         }
 
         // Define all functions and trampolines
-        for (func, _) in &testfile.functions {
+        for func in functions {
             self.define_function(func.clone())?;
             self.create_trampoline_for_function(func)?;
         }
 
+        Ok(())
+    }
+
+    /// Registers all functions in a [TestFile]. Additionally creates a trampoline for each one
+    /// of them.
+    pub fn add_testfile(&mut self, testfile: &TestFile) -> Result<()> {
+        let functions = testfile
+            .functions
+            .iter()
+            .map(|(f, _)| f)
+            .cloned()
+            .collect::<Vec<_>>();
+
+        self.add_functions(&functions[..])?;
         Ok(())
     }
 

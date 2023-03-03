@@ -3246,6 +3246,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0046fef7e28c3804e5e38bfa31ea2a0f73905319b677e57ebe37e49358989b5d"
 
 [[package]]
+name = "wasm-coredump-builder"
+version = "0.1.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "158180f35c9ba89a3e7763f20be93e77d5e41535c18e22c85d6dd5b5bce18108"
+dependencies = [
+ "wasm-coredump-encoder",
+ "wasm-coredump-types",
+ "wasm-encoder 0.23.0",
+]
+
+[[package]]
+name = "wasm-coredump-encoder"
+version = "0.1.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2f0c99cdf3a88363570f1027e2f337de6647cac9fed5d474f86103d7c45c8700"
+dependencies = [
+ "leb128",
+ "wasm-coredump-types",
+]
+
+[[package]]
+name = "wasm-coredump-types"
+version = "0.1.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10e35729a021e44c20511e23ac2b215df05da243bdc4bad336fd3686552539fc"
+
+[[package]]
 name = "wasm-encoder"
 version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3501,6 +3528,7 @@ dependencies = [
  "tempfile",
  "test-programs",
  "tokio",
+ "wasm-coredump-builder",
  "wasmparser 0.101.1 (git+https://github.com/bytecodealliance/wasm-tools?rev=56cdbdd)",
  "wasmtime",
  "wasmtime-cache",

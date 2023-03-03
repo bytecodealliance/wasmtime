@@ -2363,6 +2363,7 @@ impl Inst {
                 let (op, size) = match alu_op {
                     VecALUModOp::Bsl => ("bsl", VectorSize::Size8x16),
                     VecALUModOp::Fmla => ("fmla", size),
+                    VecALUModOp::Fmls => ("fmls", size),
                 };
                 let rd = pretty_print_vreg_vector(rd.to_reg(), size, allocs);
                 let ri = pretty_print_vreg_vector(ri, size, allocs);

@@ -3,6 +3,14 @@ use cranelift_module::ModuleExtName;
 use cranelift_module::ModuleReloc;
 use std::convert::TryFrom;
 
+/// Reads a 32bit instruction at `iptr`, and writes it again after
+/// being altered by `modifier`
+unsafe fn modify_inst32(iptr: *mut u32, modifier: impl FnOnce(u32) -> u32) {
+    let inst = iptr.read_unaligned();
+    let new_inst = modifier(inst);
+    iptr.write_unaligned(new_inst);
+}
+
 #[derive(Clone)]
 pub(crate) struct CompiledBlob {
     pub(crate) ptr: *mut u8,
@@ -97,9 +105,34 @@ impl CompiledBlob {
                     // immediate offset argument.
                     let chop = 32 - 26;
                     let imm26 = (diff as u32) << chop >> chop;
-                    let ins = unsafe { iptr.read_unaligned() } | imm26;
+                    unsafe { modify_inst32(iptr, |inst| inst | imm26) };
+                }
+                Reloc::RiscvCall => {
+                    // A R_RISCV_CALL relocation expects auipc+jalr instruction pair.
+                    // It is the equivalent of two relocations:
+                    // 1. R_RISCV_PCREL_HI20 on the `auipc`
+                    // 2. R_RISCV_PCREL_LO12_I on the `jalr`
+
+                    let base = get_address(name);
+                    let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
+                    let pcrel = i32::try_from((what as isize) - (at as isize)).unwrap() as u32;
+
+                    // See https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#pc-relative-symbol-addresses
+                    // for a better explanation of the following code.
+                    //
+                    // Unlike the regular symbol relocations, here both "sub-relocations" point
+                    // to the same address.
+                    let hi20 = pcrel.wrapping_add(0x800) & 0xFFFFF000;
+                    let lo12 = (pcrel - hi20) & 0xFFF;
+
                     unsafe {
-                        iptr.write_unaligned(ins);
+                        // Do a R_RISCV_PCREL_HI20 on the `auipc`
+                        let auipc_addr = at as *mut u32;
+                        modify_inst32(auipc_addr, |auipc| (auipc & 0xFFF) | hi20);
+
+                        // Do a R_RISCV_PCREL_LO12_I on the `jalr`
+                        let jalr_addr = at.offset(4) as *mut u32;
+                        modify_inst32(jalr_addr, |jalr| (jalr & 0xFFFFF) | (lo12 << 20));
                     }
                 }
                 _ => unimplemented!(),

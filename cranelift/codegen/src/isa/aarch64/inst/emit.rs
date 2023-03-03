@@ -2906,6 +2906,9 @@ impl MachInstEmit for Inst {
                     VecALUModOp::Fmla => {
                         (0b000_01110_00_1 | (size.enc_float_size() << 1), 0b110011)
                     }
+                    VecALUModOp::Fmls => {
+                        (0b000_01110_10_1 | (size.enc_float_size() << 1), 0b110011)
+                    }
                 };
                 sink.put4(enc_vec_rrr(top11 | q << 9, rm, bit15_10, rn, rd));
             }

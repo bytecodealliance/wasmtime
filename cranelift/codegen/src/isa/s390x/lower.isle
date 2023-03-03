@@ -138,6 +138,14 @@
                              (vec_add ty x (vec_lshr_by_byte x size))
                              (vec_add ty y (vec_lshr_by_byte y size)))))
 
+;; special case for the `i32x4.dot_i16x8_s` wasm instruction
+(rule 1 (lower
+        (has_type dst_ty (iadd_pairwise
+                           (imul (swiden_low x @ (value_type src_ty)) (swiden_low y))
+                           (imul (swiden_high x) (swiden_high y)))))
+      (vec_add dst_ty (vec_smul_even src_ty x y)
+                      (vec_smul_odd src_ty x y)))
+
 
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -482,15 +490,6 @@
                                        (vec_extract_lane $I64X2 y 1 (zero_reg))))
             (res_1 Reg (copy_reg $I64 (regpair_hi pair_1))))
         (mov_to_vec128 $I64X2 res_0 res_1)))
-
-
-;;;; Rules for `widening_pairwise_dot_product_s` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Widening pairwise dot product of two vector registers.
-(rule (lower (has_type dst_ty (widening_pairwise_dot_product_s
-                                 x @ (value_type src_ty) y)))
-      (vec_add dst_ty (vec_smul_even src_ty x y)
-                      (vec_smul_odd src_ty x y)))
 
 
 ;;;; Rules for `sqmul_round_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
