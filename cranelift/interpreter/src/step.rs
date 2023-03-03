@@ -173,6 +173,8 @@ where
         MemoryError::InvalidEntry { .. } => TrapCode::HeapOutOfBounds,
         MemoryError::OutOfBoundsStore { .. } => TrapCode::HeapOutOfBounds,
         MemoryError::OutOfBoundsLoad { .. } => TrapCode::HeapOutOfBounds,
+        MemoryError::MisalignedLoad { .. } => TrapCode::HeapMisaligned,
+        MemoryError::MisalignedStore { .. } => TrapCode::HeapMisaligned,
     };
 
     // Assigns or traps depending on the value of the result
@@ -522,7 +524,7 @@ where
             let load_ty = inst_context.controlling_type().unwrap();
             let slot = inst.stack_slot().unwrap();
             let offset = sum(imm(), args()?)? as u64;
-            let mem_flags = MemFlags::trusted();
+            let mem_flags = MemFlags::new();
             assign_or_memtrap({
                 state
                     .stack_address(AddressSize::_64, slot, offset)
@@ -533,7 +535,7 @@ where
             let arg = arg(0)?;
             let slot = inst.stack_slot().unwrap();
             let offset = sum(imm(), args_range(1..)?)? as u64;
-            let mem_flags = MemFlags::trusted();
+            let mem_flags = MemFlags::new();
             continue_or_memtrap({
                 state
                     .stack_address(AddressSize::_64, slot, offset)

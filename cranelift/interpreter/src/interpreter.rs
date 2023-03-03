@@ -336,6 +336,11 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
             _ => unimplemented!(),
         };
 
+        // Aligned flag is set and address is not aligned for the given type
+        if mem_flags.aligned() && addr_start % load_size != 0 {
+            return Err(MemoryError::MisalignedLoad { addr, load_size });
+        }
+
         Ok(match mem_flags.endianness(self.native_endianness) {
             Endianness::Big => DataValue::read_from_slice_be(src, ty),
             Endianness::Little => DataValue::read_from_slice_le(src, ty),
@@ -362,6 +367,11 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
             }
             _ => unimplemented!(),
         };
+
+        // Aligned flag is set and address is not aligned for the given type
+        if mem_flags.aligned() && addr_start % store_size != 0 {
+            return Err(MemoryError::MisalignedStore { addr, store_size });
+        }
 
         Ok(match mem_flags.endianness(self.native_endianness) {
             Endianness::Big => v.write_to_slice_be(dst),
@@ -964,5 +974,56 @@ mod tests {
             .unwrap_return();
 
         assert_eq!(result, vec![DataValue::F32(Ieee32::with_float(1.0))])
+    }
+
+    #[test]
+    fn misaligned_store_traps() {
+        let code = "
+        function %test() {
+            ss0 = explicit_slot 16
+
+        block0:
+            v0 = stack_addr.i64 ss0
+            v1 = iconst.i64 1
+            store.i64 aligned v1, v0+2
+            return
+        }";
+
+        let func = parse_functions(code).unwrap().into_iter().next().unwrap();
+        let mut env = FunctionStore::default();
+        env.add(func.name.to_string(), &func);
+        let state = InterpreterState::default().with_function_store(env);
+        let trap = Interpreter::new(state)
+            .call_by_name("%test", &[])
+            .unwrap()
+            .unwrap_trap();
+
+        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapMisaligned));
+    }
+
+    #[test]
+    fn misaligned_load_traps() {
+        let code = "
+        function %test() {
+            ss0 = explicit_slot 16
+
+        block0:
+            v0 = stack_addr.i64 ss0
+            v1 = iconst.i64 1
+            store.i64 aligned v1, v0
+            v2 = load.i64 aligned v0+2
+            return
+        }";
+
+        let func = parse_functions(code).unwrap().into_iter().next().unwrap();
+        let mut env = FunctionStore::default();
+        env.add(func.name.to_string(), &func);
+        let state = InterpreterState::default().with_function_store(env);
+        let trap = Interpreter::new(state)
+            .call_by_name("%test", &[])
+            .unwrap()
+            .unwrap_trap();
+
+        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapMisaligned));
     }
 }
