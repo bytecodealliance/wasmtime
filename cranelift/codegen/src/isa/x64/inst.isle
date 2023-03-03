@@ -1359,6 +1359,7 @@
             Vpunpcklqdq
             Vpshuflw
             Vpshufhw
+            Vpshufd
           ))
 
 (type Avx512Opcode extern
@@ -3319,6 +3320,9 @@
 (decl x64_pshufd (XmmMem u8) Xmm)
 (rule (x64_pshufd src imm)
       (xmm_unary_rm_r_imm (SseOpcode.Pshufd) src imm))
+(rule 1 (x64_pshufd src imm)
+      (if-let $true (has_avx))
+      (xmm_unary_rm_r_imm_vex (AvxOpcode.Vpshufd) src imm))
 
 ;; Helper for creating `pshufb` instructions.
 (decl x64_pshufb (Xmm XmmMem) Xmm)

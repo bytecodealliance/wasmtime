@@ -610,8 +610,8 @@ block0(v0: i32x4, v1: i32x4):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pshufd  $250, %xmm0, %xmm3
-;   pshufd  $250, %xmm1, %xmm5
+;   vpshufd $250, %xmm0, %xmm3
+;   vpshufd $250, %xmm1, %xmm5
 ;   vpmuldq %xmm3, %xmm5, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -622,8 +622,8 @@ block0(v0: i32x4, v1: i32x4):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   pshufd $0xfa, %xmm0, %xmm3
-;   pshufd $0xfa, %xmm1, %xmm5
+;   vpshufd $0xfa, %xmm0, %xmm3
+;   vpshufd $0xfa, %xmm1, %xmm5
 ;   vpmuldq %xmm5, %xmm3, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -641,8 +641,8 @@ block0(v0: i32x4, v1: i32x4):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pshufd  $80, %xmm0, %xmm3
-;   pshufd  $80, %xmm1, %xmm5
+;   vpshufd $80, %xmm0, %xmm3
+;   vpshufd $80, %xmm1, %xmm5
 ;   vpmuludq %xmm3, %xmm5, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -653,8 +653,8 @@ block0(v0: i32x4, v1: i32x4):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   pshufd $0x50, %xmm0, %xmm3
-;   pshufd $0x50, %xmm1, %xmm5
+;   vpshufd $0x50, %xmm0, %xmm3
+;   vpshufd $0x50, %xmm1, %xmm5
 ;   vpmuludq %xmm5, %xmm3, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
