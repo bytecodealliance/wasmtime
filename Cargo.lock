@@ -3674,6 +3674,7 @@ dependencies = [
  "cranelift-filetests",
  "cranelift-fuzzgen",
  "cranelift-interpreter",
+ "cranelift-native",
  "cranelift-reader",
  "cranelift-wasm",
  "libfuzzer-sys",

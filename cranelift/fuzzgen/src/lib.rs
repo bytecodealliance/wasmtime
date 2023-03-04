@@ -7,190 +7,27 @@ use cranelift::codegen::data_value::DataValue;
 use cranelift::codegen::ir::{types::*, UserExternalName, UserFuncName};
 use cranelift::codegen::ir::{Function, LibCall};
 use cranelift::codegen::Context;
-use cranelift::prelude::isa;
 use cranelift::prelude::*;
 use cranelift_arbitrary::CraneliftArbitrary;
 use cranelift_native::builder_with_options;
-use std::fmt;
 use target_lexicon::{Architecture, Triple};
 
 mod config;
 mod cranelift_arbitrary;
 mod function_generator;
 mod passes;
+mod print;
 
-/// These libcalls need a interpreter implementation in `cranelift-fuzzgen.rs`
-const ALLOWED_LIBCALLS: &'static [LibCall] = &[
-    LibCall::CeilF32,
-    LibCall::CeilF64,
-    LibCall::FloorF32,
-    LibCall::FloorF64,
-    LibCall::TruncF32,
-    LibCall::TruncF64,
-];
+pub use print::PrintableTestCase;
 
 pub type TestCaseInput = Vec<DataValue>;
-
-/// Print only non default flags.
-fn write_non_default_flags(f: &mut fmt::Formatter<'_>, flags: &settings::Flags) -> fmt::Result {
-    let default_flags = settings::Flags::new(settings::builder());
-    for (default, flag) in default_flags.iter().zip(flags.iter()) {
-        assert_eq!(default.name, flag.name);
-
-        if default.value_string() != flag.value_string() {
-            writeln!(f, "set {}={}", flag.name, flag.value_string())?;
-        }
-    }
-
-    Ok(())
-}
-
-/// A generated function with an ISA that targets one of cranelift's backends.
-pub struct FunctionWithIsa {
-    /// TargetIsa to use when compiling this test case
-    pub isa: isa::OwnedTargetIsa,
-
-    /// Function under test
-    pub func: Function,
-}
-
-impl fmt::Debug for FunctionWithIsa {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, ";; Compile test case\n")?;
-
-        write_non_default_flags(f, self.isa.flags())?;
-
-        writeln!(f, "test compile")?;
-        writeln!(f, "target {}", self.isa.triple().architecture)?;
-        writeln!(f, "{}", self.func)?;
-
-        Ok(())
-    }
-}
-
-impl<'a> Arbitrary<'a> for FunctionWithIsa {
-    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
-        // We filter out targets that aren't supported in the current build
-        // configuration after randomly choosing one, instead of randomly choosing
-        // a supported one, so that the same fuzz input works across different build
-        // configurations.
-        let target = u.choose(isa::ALL_ARCHITECTURES)?;
-        let builder = isa::lookup_by_name(target).map_err(|_| arbitrary::Error::IncorrectFormat)?;
-        let architecture = builder.triple().architecture;
-
-        let mut gen = FuzzGen::new(u);
-        let flags = gen
-            .generate_flags(architecture)
-            .map_err(|_| arbitrary::Error::IncorrectFormat)?;
-        let isa = builder
-            .finish(flags)
-            .map_err(|_| arbitrary::Error::IncorrectFormat)?;
-
-        // Function name must be in a different namespace than TESTFILE_NAMESPACE (0)
-        let fname = UserFuncName::user(1, 0);
-
-        // We don't actually generate these functions, we just simulate their signatures and names
-        let func_count = gen.u.int_in_range(gen.config.testcase_funcs.clone())?;
-        let usercalls = (0..func_count)
-            .map(|i| {
-                let name = UserExternalName::new(2, i as u32);
-                let sig = gen.generate_signature(architecture)?;
-                Ok((name, sig))
-            })
-            .collect::<Result<Vec<(UserExternalName, Signature)>>>()
-            .map_err(|_| arbitrary::Error::IncorrectFormat)?;
-
-        let func = gen
-            .generate_func(fname, isa.triple().clone(), usercalls)
-            .map_err(|_| arbitrary::Error::IncorrectFormat)?;
-
-        Ok(FunctionWithIsa { isa, func })
-    }
-}
-
-pub struct TestCase {
-    /// TargetIsa to use when compiling this test case
-    pub isa: isa::OwnedTargetIsa,
-    /// Functions under test
-    /// By convention the first function is the main function.
-    pub functions: Vec<Function>,
-    /// Generate multiple test inputs for each test case.
-    /// This allows us to get more coverage per compilation, which may be somewhat expensive.
-    pub inputs: Vec<TestCaseInput>,
-}
-
-impl fmt::Debug for TestCase {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, ";; Fuzzgen test case\n")?;
-        writeln!(f, "test interpret")?;
-        writeln!(f, "test run")?;
-
-        write_non_default_flags(f, self.isa.flags())?;
-
-        writeln!(f, "target {}\n", self.isa.triple().architecture)?;
-
-        // Print the functions backwards, so that the main function is printed last
-        // and near the test inputs.
-        for func in self.functions.iter().rev() {
-            writeln!(f, "{}\n", func)?;
-        }
-
-        writeln!(f, "; Note: the results in the below test cases are simply a placeholder and probably will be wrong\n")?;
-
-        for input in self.inputs.iter() {
-            // TODO: We don't know the expected outputs, maybe we can run the interpreter
-            // here to figure them out? Should work, however we need to be careful to catch
-            // panics in case its the interpreter that is failing.
-            // For now create a placeholder output consisting of the zero value for the type
-            let returns = &self.main().signature.returns;
-            let placeholder_output = returns
-                .iter()
-                .map(|param| DataValue::read_from_slice_ne(&[0; 16][..], param.value_type))
-                .map(|val| format!("{}", val))
-                .collect::<Vec<_>>()
-                .join(", ");
-
-            // If we have no output, we don't need the == condition
-            let test_condition = match returns.len() {
-                0 => String::new(),
-                1 => format!(" == {}", placeholder_output),
-                _ => format!(" == [{}]", placeholder_output),
-            };
-
-            let args = input
-                .iter()
-                .map(|val| format!("{}", val))
-                .collect::<Vec<_>>()
-                .join(", ");
-
-            writeln!(f, "; run: {}({}){}", self.main().name, args, test_condition)?;
-        }
-
-        Ok(())
-    }
-}
-
-impl<'a> Arbitrary<'a> for TestCase {
-    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
-        FuzzGen::new(u)
-            .generate_host_test()
-            .map_err(|_| arbitrary::Error::IncorrectFormat)
-    }
-}
-
-impl TestCase {
-    /// Returns the main function of this test case.
-    pub fn main(&self) -> &Function {
-        &self.functions[0]
-    }
-}
 
 pub struct FuzzGen<'r, 'data>
 where
     'data: 'r,
 {
-    u: &'r mut Unstructured<'data>,
-    config: Config,
+    pub u: &'r mut Unstructured<'data>,
+    pub config: Config,
 }
 
 impl<'r, 'data> FuzzGen<'r, 'data>
@@ -204,13 +41,13 @@ where
         }
     }
 
-    fn generate_signature(&mut self, architecture: Architecture) -> Result<Signature> {
+    pub fn generate_signature(&mut self, architecture: Architecture) -> Result<Signature> {
         let max_params = self.u.int_in_range(self.config.signature_params.clone())?;
         let max_rets = self.u.int_in_range(self.config.signature_rets.clone())?;
         Ok(self.u.signature(architecture, max_params, max_rets)?)
     }
 
-    fn generate_test_inputs(mut self, signature: &Signature) -> Result<Vec<TestCaseInput>> {
+    pub fn generate_test_inputs(mut self, signature: &Signature) -> Result<Vec<TestCaseInput>> {
         let mut inputs = Vec::new();
 
         // Generate up to "max_test_case_inputs" inputs, we need an upper bound here since
@@ -288,11 +125,12 @@ where
         Ok(ctx.func)
     }
 
-    fn generate_func(
+    pub fn generate_func(
         &mut self,
         name: UserFuncName,
         target_triple: Triple,
         usercalls: Vec<(UserExternalName, Signature)>,
+        libcalls: Vec<LibCall>,
     ) -> Result<Function> {
         let sig = self.generate_signature(target_triple.architecture)?;
 
@@ -303,7 +141,7 @@ where
             name,
             sig,
             usercalls,
-            ALLOWED_LIBCALLS.to_vec(),
+            libcalls,
         )
         .generate()?;
 
@@ -312,7 +150,7 @@ where
 
     /// Generate a random set of cranelift flags.
     /// Only semantics preserving flags are considered
-    fn generate_flags(&mut self, target_arch: Architecture) -> Result<Flags> {
+    pub fn generate_flags(&mut self, target_arch: Architecture) -> Result<Flags> {
         let mut builder = settings::builder();
 
         let opt = self.u.choose(OptLevel::all())?;
@@ -389,49 +227,5 @@ where
         builder.enable("machine_code_cfg_info")?;
 
         Ok(Flags::new(builder))
-    }
-
-    pub fn generate_host_test(mut self) -> Result<TestCase> {
-        // TestCase is meant to be consumed by a runner, so we make the assumption here that we're
-        // generating a TargetIsa for the host.
-        let builder =
-            builder_with_options(true).expect("Unable to build a TargetIsa for the current host");
-        let flags = self.generate_flags(builder.triple().architecture)?;
-        let isa = builder.finish(flags)?;
-
-        // When generating functions, we allow each function to call any function that has
-        // already been generated. This guarantees that we never have loops in the call graph.
-        // We generate these backwards, and then reverse them so that the main function is at
-        // the start.
-        let func_count = self.u.int_in_range(self.config.testcase_funcs.clone())?;
-        let mut functions: Vec<Function> = Vec::with_capacity(func_count);
-        for i in (0..func_count).rev() {
-            // Function name must be in a different namespace than TESTFILE_NAMESPACE (0)
-            let fname = UserFuncName::user(1, i as u32);
-
-            let usercalls: Vec<(UserExternalName, Signature)> = functions
-                .iter()
-                .map(|f| {
-                    (
-                        f.name.get_user().unwrap().clone(),
-                        f.stencil.signature.clone(),
-                    )
-                })
-                .collect();
-
-            let func = self.generate_func(fname, isa.triple().clone(), usercalls)?;
-            functions.push(func);
-        }
-        // Now reverse the functions so that the main function is at the start.
-        functions.reverse();
-
-        let main = &functions[0];
-        let inputs = self.generate_test_inputs(&main.signature)?;
-
-        Ok(TestCase {
-            isa,
-            functions,
-            inputs,
-        })
     }
 }
