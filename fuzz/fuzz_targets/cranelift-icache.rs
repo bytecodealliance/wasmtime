@@ -3,12 +3,81 @@
 use cranelift_codegen::{
     cursor::{Cursor, FuncCursor},
     incremental_cache as icache,
-    ir::{self, immediates::Imm64, ExternalName},
-    Context,
+    ir::{
+        self, immediates::Imm64, ExternalName, Function, Signature, UserExternalName, UserFuncName,
+    },
+    isa, Context,
 };
-use libfuzzer_sys::fuzz_target;
+use libfuzzer_sys::{
+    arbitrary::{self, Arbitrary},
+    fuzz_target,
+};
+use std::fmt;
 
 use cranelift_fuzzgen::*;
+
+/// A generated function with an ISA that targets one of cranelift's backends.
+pub struct FunctionWithIsa {
+    /// TargetIsa to use when compiling this test case
+    pub isa: isa::OwnedTargetIsa,
+
+    /// Function under test
+    pub func: Function,
+}
+
+impl fmt::Debug for FunctionWithIsa {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, ";; Compile test case\n")?;
+
+        write_non_default_flags(f, self.isa.flags())?;
+
+        writeln!(f, "test compile")?;
+        writeln!(f, "target {}", self.isa.triple().architecture)?;
+        writeln!(f, "{}", self.func)?;
+
+        Ok(())
+    }
+}
+
+impl<'a> Arbitrary<'a> for FunctionWithIsa {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        // We filter out targets that aren't supported in the current build
+        // configuration after randomly choosing one, instead of randomly choosing
+        // a supported one, so that the same fuzz input works across different build
+        // configurations.
+        let target = u.choose(isa::ALL_ARCHITECTURES)?;
+        let builder = isa::lookup_by_name(target).map_err(|_| arbitrary::Error::IncorrectFormat)?;
+        let architecture = builder.triple().architecture;
+
+        let mut gen = FuzzGen::new(u);
+        let flags = gen
+            .generate_flags(architecture)
+            .map_err(|_| arbitrary::Error::IncorrectFormat)?;
+        let isa = builder
+            .finish(flags)
+            .map_err(|_| arbitrary::Error::IncorrectFormat)?;
+
+        // Function name must be in a different namespace than TESTFILE_NAMESPACE (0)
+        let fname = UserFuncName::user(1, 0);
+
+        // We don't actually generate these functions, we just simulate their signatures and names
+        let func_count = gen.u.int_in_range(gen.config.testcase_funcs.clone())?;
+        let usercalls = (0..func_count)
+            .map(|i| {
+                let name = UserExternalName::new(2, i as u32);
+                let sig = gen.generate_signature(architecture)?;
+                Ok((name, sig))
+            })
+            .collect::<anyhow::Result<Vec<(UserExternalName, Signature)>>>()
+            .map_err(|_| arbitrary::Error::IncorrectFormat)?;
+
+        let func = gen
+            .generate_func(fname, isa.triple().clone(), usercalls)
+            .map_err(|_| arbitrary::Error::IncorrectFormat)?;
+
+        Ok(FunctionWithIsa { isa, func })
+    }
+}
 
 fuzz_target!(|func: FunctionWithIsa| {
     let FunctionWithIsa { mut func, isa } = func;

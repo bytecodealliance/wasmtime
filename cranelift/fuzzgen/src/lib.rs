@@ -32,7 +32,7 @@ const ALLOWED_LIBCALLS: &'static [LibCall] = &[
 pub type TestCaseInput = Vec<DataValue>;
 
 /// Print only non default flags.
-fn write_non_default_flags(f: &mut fmt::Formatter<'_>, flags: &settings::Flags) -> fmt::Result {
+pub fn write_non_default_flags(f: &mut fmt::Formatter<'_>, flags: &settings::Flags) -> fmt::Result {
     let default_flags = settings::Flags::new(settings::builder());
     for (default, flag) in default_flags.iter().zip(flags.iter()) {
         assert_eq!(default.name, flag.name);
@@ -43,69 +43,6 @@ fn write_non_default_flags(f: &mut fmt::Formatter<'_>, flags: &settings::Flags) 
     }
 
     Ok(())
-}
-
-/// A generated function with an ISA that targets one of cranelift's backends.
-pub struct FunctionWithIsa {
-    /// TargetIsa to use when compiling this test case
-    pub isa: isa::OwnedTargetIsa,
-
-    /// Function under test
-    pub func: Function,
-}
-
-impl fmt::Debug for FunctionWithIsa {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, ";; Compile test case\n")?;
-
-        write_non_default_flags(f, self.isa.flags())?;
-
-        writeln!(f, "test compile")?;
-        writeln!(f, "target {}", self.isa.triple().architecture)?;
-        writeln!(f, "{}", self.func)?;
-
-        Ok(())
-    }
-}
-
-impl<'a> Arbitrary<'a> for FunctionWithIsa {
-    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
-        // We filter out targets that aren't supported in the current build
-        // configuration after randomly choosing one, instead of randomly choosing
-        // a supported one, so that the same fuzz input works across different build
-        // configurations.
-        let target = u.choose(isa::ALL_ARCHITECTURES)?;
-        let builder = isa::lookup_by_name(target).map_err(|_| arbitrary::Error::IncorrectFormat)?;
-        let architecture = builder.triple().architecture;
-
-        let mut gen = FuzzGen::new(u);
-        let flags = gen
-            .generate_flags(architecture)
-            .map_err(|_| arbitrary::Error::IncorrectFormat)?;
-        let isa = builder
-            .finish(flags)
-            .map_err(|_| arbitrary::Error::IncorrectFormat)?;
-
-        // Function name must be in a different namespace than TESTFILE_NAMESPACE (0)
-        let fname = UserFuncName::user(1, 0);
-
-        // We don't actually generate these functions, we just simulate their signatures and names
-        let func_count = gen.u.int_in_range(gen.config.testcase_funcs.clone())?;
-        let usercalls = (0..func_count)
-            .map(|i| {
-                let name = UserExternalName::new(2, i as u32);
-                let sig = gen.generate_signature(architecture)?;
-                Ok((name, sig))
-            })
-            .collect::<Result<Vec<(UserExternalName, Signature)>>>()
-            .map_err(|_| arbitrary::Error::IncorrectFormat)?;
-
-        let func = gen
-            .generate_func(fname, isa.triple().clone(), usercalls)
-            .map_err(|_| arbitrary::Error::IncorrectFormat)?;
-
-        Ok(FunctionWithIsa { isa, func })
-    }
 }
 
 pub struct TestCase {
@@ -189,8 +126,8 @@ pub struct FuzzGen<'r, 'data>
 where
     'data: 'r,
 {
-    u: &'r mut Unstructured<'data>,
-    config: Config,
+    pub u: &'r mut Unstructured<'data>,
+    pub config: Config,
 }
 
 impl<'r, 'data> FuzzGen<'r, 'data>
@@ -204,7 +141,7 @@ where
         }
     }
 
-    fn generate_signature(&mut self, architecture: Architecture) -> Result<Signature> {
+    pub fn generate_signature(&mut self, architecture: Architecture) -> Result<Signature> {
         let max_params = self.u.int_in_range(self.config.signature_params.clone())?;
         let max_rets = self.u.int_in_range(self.config.signature_rets.clone())?;
         Ok(self.u.signature(architecture, max_params, max_rets)?)
@@ -288,7 +225,7 @@ where
         Ok(ctx.func)
     }
 
-    fn generate_func(
+    pub fn generate_func(
         &mut self,
         name: UserFuncName,
         target_triple: Triple,
@@ -312,7 +249,7 @@ where
 
     /// Generate a random set of cranelift flags.
     /// Only semantics preserving flags are considered
-    fn generate_flags(&mut self, target_arch: Architecture) -> Result<Flags> {
+    pub fn generate_flags(&mut self, target_arch: Architecture) -> Result<Flags> {
         let mut builder = settings::builder();
 
         let opt = self.u.choose(OptLevel::all())?;
