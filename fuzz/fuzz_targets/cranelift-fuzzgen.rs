@@ -36,6 +36,8 @@ struct Statistics {
     /// Inputs that fuzzgen can build a function with
     /// This is also how many compiles we executed
     pub valid_inputs: AtomicU64,
+    /// How many times did we generate an invalid format?
+    pub invalid_inputs: AtomicU64,
 
     /// Total amount of runs that we tried in the interpreter
     /// One fuzzer input can have many runs
@@ -53,11 +55,17 @@ impl Statistics {
     pub fn print(&self, valid_inputs: u64) {
         // We get valid_inputs as a param since we already loaded it previously.
         let total_runs = self.total_runs.load(Ordering::SeqCst);
+        let invalid_inputs = self.invalid_inputs.load(Ordering::SeqCst);
         let run_result_success = self.run_result_success.load(Ordering::SeqCst);
         let run_result_timeout = self.run_result_timeout.load(Ordering::SeqCst);
 
         println!("== FuzzGen Statistics  ====================");
         println!("Valid Inputs: {}", valid_inputs);
+        println!(
+            "Invalid Inputs: {} ({:.1}% of Total Inputs)",
+            invalid_inputs,
+            (invalid_inputs as f64 / (valid_inputs + invalid_inputs) as f64) * 100.0
+        );
         println!("Total Runs: {}", total_runs);
         println!(
             "Successful Runs: {} ({:.1}% of Total Runs)",
@@ -104,6 +112,7 @@ impl Default for Statistics {
 
         Self {
             valid_inputs: AtomicU64::new(0),
+            invalid_inputs: AtomicU64::new(0),
             total_runs: AtomicU64::new(0),
             run_result_success: AtomicU64::new(0),
             run_result_timeout: AtomicU64::new(0),
@@ -149,7 +158,10 @@ impl fmt::Debug for TestCase {
 
 impl<'a> Arbitrary<'a> for TestCase {
     fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
-        Self::generate(u).map_err(|_| arbitrary::Error::IncorrectFormat)
+        Self::generate(u).map_err(|_| {
+            STATISTICS.invalid_inputs.fetch_add(1, Ordering::SeqCst);
+            arbitrary::Error::IncorrectFormat
+        })
     }
 }
 
