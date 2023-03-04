@@ -3592,6 +3592,14 @@
 (rule 6 (lower (shuffle a b (u128_from_immediate 0x1716151413121110_0706050403020100)))
       (x64_punpcklqdq a b))
 
+;; If the vector shift mask is all 0s then that means the first byte of the
+;; first operand is broadcast to all bytes. Falling through would load an
+;; all-zeros constant from a rip-relative location but it should be slightly
+;; more efficient to execute the `pshufb` here-and-now with an xor'd-to-be-zero
+;; register.
+(rule 6 (lower (shuffle a _ (u128_from_immediate 0)))
+      (x64_pshufb a (xmm_zero $I8X16)))
+
 ;; Special case for the `shufps` instruction which will select two 32-bit values
 ;; from the first operand and two 32-bit values from the second operand. Note
 ;; that there is a second case here as well for when the operands can be
