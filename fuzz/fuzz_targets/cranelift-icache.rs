@@ -4,7 +4,8 @@ use cranelift_codegen::{
     cursor::{Cursor, FuncCursor},
     incremental_cache as icache,
     ir::{
-        self, immediates::Imm64, ExternalName, Function, Signature, UserExternalName, UserFuncName,
+        self, immediates::Imm64, ExternalName, Function, LibCall, Signature, UserExternalName,
+        UserFuncName,
     },
     isa, Context,
 };
@@ -15,6 +16,21 @@ use libfuzzer_sys::{
 use std::fmt;
 
 use cranelift_fuzzgen::*;
+
+/// TODO: This *almost* could be replaced with `LibCall::all()`, but
+/// `LibCall::signature` panics for some libcalls, so we need to avoid that.
+const ALLOWED_LIBCALLS: &'static [LibCall] = &[
+    LibCall::CeilF32,
+    LibCall::CeilF64,
+    LibCall::FloorF32,
+    LibCall::FloorF64,
+    LibCall::TruncF32,
+    LibCall::TruncF64,
+    LibCall::NearestF32,
+    LibCall::NearestF64,
+    LibCall::FmaF32,
+    LibCall::FmaF64,
+];
 
 /// A generated function with an ISA that targets one of cranelift's backends.
 pub struct FunctionWithIsa {
@@ -72,7 +88,12 @@ impl<'a> Arbitrary<'a> for FunctionWithIsa {
             .map_err(|_| arbitrary::Error::IncorrectFormat)?;
 
         let func = gen
-            .generate_func(fname, isa.triple().clone(), usercalls)
+            .generate_func(
+                fname,
+                isa.triple().clone(),
+                usercalls,
+                ALLOWED_LIBCALLS.to_vec(),
+            )
             .map_err(|_| arbitrary::Error::IncorrectFormat)?;
 
         Ok(FunctionWithIsa { isa, func })

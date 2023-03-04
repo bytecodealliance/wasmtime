@@ -18,16 +18,6 @@ mod cranelift_arbitrary;
 mod function_generator;
 mod passes;
 
-/// These libcalls need a interpreter implementation in `cranelift-fuzzgen.rs`
-const ALLOWED_LIBCALLS: &'static [LibCall] = &[
-    LibCall::CeilF32,
-    LibCall::CeilF64,
-    LibCall::FloorF32,
-    LibCall::FloorF64,
-    LibCall::TruncF32,
-    LibCall::TruncF64,
-];
-
 pub type TestCaseInput = Vec<DataValue>;
 
 /// Print only non default flags.
@@ -152,6 +142,7 @@ where
         name: UserFuncName,
         target_triple: Triple,
         usercalls: Vec<(UserExternalName, Signature)>,
+        libcalls: Vec<LibCall>,
     ) -> Result<Function> {
         let sig = self.generate_signature(target_triple.architecture)?;
 
@@ -162,7 +153,7 @@ where
             name,
             sig,
             usercalls,
-            ALLOWED_LIBCALLS.to_vec(),
+            libcalls,
         )
         .generate()?;
 

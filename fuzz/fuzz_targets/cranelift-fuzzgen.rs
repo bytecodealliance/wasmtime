@@ -229,7 +229,12 @@ impl TestCase {
                 })
                 .collect();
 
-            let func = gen.generate_func(fname, isa.triple().clone(), usercalls)?;
+            let func = gen.generate_func(
+                fname,
+                isa.triple().clone(),
+                usercalls,
+                ALLOWED_LIBCALLS.to_vec(),
+            )?;
             functions.push(func);
         }
         // Now reverse the functions so that the main function is at the start.
@@ -269,6 +274,16 @@ fn run_in_host(trampoline: &Trampoline, args: &[DataValue]) -> RunResult {
     let res = trampoline.call(args);
     RunResult::Success(res)
 }
+
+/// These libcalls need a interpreter implementation in `build_interpreter`
+const ALLOWED_LIBCALLS: &'static [LibCall] = &[
+    LibCall::CeilF32,
+    LibCall::CeilF64,
+    LibCall::FloorF32,
+    LibCall::FloorF64,
+    LibCall::TruncF32,
+    LibCall::TruncF64,
+];
 
 fn build_interpreter(testcase: &TestCase) -> Interpreter {
     let mut env = FunctionStore::default();
