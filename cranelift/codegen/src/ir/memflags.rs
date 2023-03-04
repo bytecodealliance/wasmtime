@@ -103,12 +103,17 @@ impl MemFlags {
     /// caller since it is not explicitly encoded in CLIF IR -- this allows a
     /// front end to create IR without having to know the target endianness.
     pub fn endianness(self, native_endianness: Endianness) -> Endianness {
+        self.get_endianness().unwrap_or(native_endianness)
+    }
+
+    /// Get endianness of the memory access if any.
+    pub fn get_endianness(&self) -> Option<Endianness> {
         if self.read(FlagBit::LittleEndian) {
-            Endianness::Little
+            Some(Endianness::Little)
         } else if self.read(FlagBit::BigEndian) {
-            Endianness::Big
+            Some(Endianness::Big)
         } else {
-            native_endianness
+            None
         }
     }
 

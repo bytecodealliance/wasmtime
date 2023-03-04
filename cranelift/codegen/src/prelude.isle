@@ -228,6 +228,13 @@
 (decl pure mem_flags_trusted () MemFlags)
 (extern constructor mem_flags_trusted mem_flags_trusted)
 
+;; Checks if the `endianness` flag on both memflags is equal.
+;;
+;; If the `endianness` flag is not set, then we only consider
+;; them equal if both are not set.
+(decl pure mem_flags_endianness_eq (MemFlags MemFlags) bool)
+(extern constructor mem_flags_endianness_eq mem_flags_endianness_eq)
+
 ;;;; Helpers for Working with Flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Reverse an IntCC flag.

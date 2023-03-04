@@ -537,3 +537,25 @@
 ;; both of them since they cancel out.
 (rule (simplify (fmul ty (fneg ty x) (fneg ty y)))
       (fmul ty x y))
+
+
+;; Wasmtime generates a lot of load+bitcast's. This is because in Wasm
+;; SIMD loads are always v128.load, without type information. This means
+;; that the translation to CLIF first loads into a `i8x16` and then each
+;; op bitcasts the vector as needed.
+;;
+;; This bitcasting prevents the x64 backend from merging the load into the
+;; op, so try to change the type of the load into the bitcast type.
+(rule (simplify (bitcast cty cflags (load lty lflags addr offset)))
+      ;; Two preconditions for this rule:
+      ;; 1. The types must have the same size. (this is enforced by the verifier)
+      ;; 2. The endiannes on both memflags must match
+      (if-let $true (mem_flags_endianness_eq cflags lflags))
+      (load cty lflags addr offset))
+
+;; TODO: We could also do this for `store`. It doesen't seem to be generated in clif_opt.isle.
+
+;; This is a more general case where we do a double bitcast.
+(rule (simplify (bitcast ty lflags (bitcast _ rflags x)))
+      (if-let $true (mem_flags_endianness_eq lflags rflags))
+      (bitcast ty lflags x))

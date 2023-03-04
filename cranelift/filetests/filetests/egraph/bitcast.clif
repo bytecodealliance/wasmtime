@@ -1,0 +1,66 @@
+test optimize
+set opt_level=speed
+set use_egraphs=true
+target x86_64
+
+function %bitcast_to_bitcast(i8x16) -> i64x2 {
+block0(v0: i8x16):
+    v1 = bitcast.i32x4 little v0
+    v2 = bitcast.i64x2 little v1
+    return v2
+}
+
+; check: block0(v0: i8x16):
+; check:    v3 = bitcast.i64x2 little v0
+; check:    return v3
+
+
+;; If the bitcasts have different memory flags, we can't optimize.
+function %bitcast_different_memflags(i8x16) -> i64x2 {
+block0(v0: i8x16):
+    v1 = bitcast.i32x4 little v0
+    v2 = bitcast.i64x2 big v1
+    return v2
+}
+
+; check: block0(v0: i8x16):
+; check:    v1 = bitcast.i32x4 little v0
+; check:    v2 = bitcast.i64x2 big v1
+; check:    return v2
+
+
+function %load_bitcast(i64) -> i64x2 {
+block0(v0: i64):
+    v1 = load.i8x16 little v0
+    v2 = bitcast.i64x2 little v1
+    return v2
+}
+
+; check: block0(v0: i64):
+; check:    v3 = load.i64x2 little v0
+; check:    return v3
+
+
+function %load_bitcast_aligned(i64) -> i64x2 {
+block0(v0: i64):
+    v1 = load.i8x16 little aligned v0
+    v2 = bitcast.i64x2 little v1
+    return v2
+}
+
+; check: block0(v0: i64):
+; check:    v3 = load.i64x2 little aligned v0
+; check:    return v3
+
+
+function %load_bitcast_different_flags(i64) -> i64x2 {
+block0(v0: i64):
+    v1 = load.i8x16 little aligned v0
+    v2 = bitcast.i64x2 big v1
+    return v2
+}
+
+; check: block0(v0: i64):
+; check:    v1 = load.i8x16 little aligned v0
+; check:    v2 = bitcast.i64x2 big v1
+; check:    return v2

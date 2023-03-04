@@ -656,6 +656,11 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn mem_flags_endianness_eq(&mut self, lhs: MemFlags, rhs: MemFlags) -> bool {
+            lhs.get_endianness() == rhs.get_endianness()
+        }
+
+        #[inline]
         fn intcc_unsigned(&mut self, x: &IntCC) -> IntCC {
             x.unsigned()
         }
