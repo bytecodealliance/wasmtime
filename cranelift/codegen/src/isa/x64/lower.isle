@@ -3529,6 +3529,30 @@
 
 ;; Rules for `shuffle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Special case the `pshuf{l,h}w` instruction which shuffles four 16-bit
+;; integers within one value, preserving the other four 16-bit integers in that
+;; value (either the high or low half). The complicated logic is in the
+;; extractors here implemented in Rust and note that there's two cases for each
+;; instruction here to match when either the first or second shuffle operand is
+;; used.
+(rule 12 (lower (shuffle x y (pshuflw_lhs_imm imm)))
+      (x64_pshuflw x imm))
+(rule 11 (lower (shuffle x y (pshuflw_rhs_imm imm)))
+      (x64_pshuflw y imm))
+(rule 10 (lower (shuffle x y (pshufhw_lhs_imm imm)))
+      (x64_pshufhw x imm))
+(rule 9 (lower (shuffle x y (pshufhw_rhs_imm imm)))
+      (x64_pshufhw y imm))
+
+(decl pshuflw_lhs_imm (u8) Immediate)
+(extern extractor pshuflw_lhs_imm pshuflw_lhs_imm)
+(decl pshuflw_rhs_imm (u8) Immediate)
+(extern extractor pshuflw_rhs_imm pshuflw_rhs_imm)
+(decl pshufhw_lhs_imm (u8) Immediate)
+(extern extractor pshufhw_lhs_imm pshufhw_lhs_imm)
+(decl pshufhw_rhs_imm (u8) Immediate)
+(extern extractor pshufhw_rhs_imm pshufhw_rhs_imm)
+
 ;; Special case for the `pshufd` instruction which will permute 32-bit values
 ;; within a single register. This is only applicable if the `imm` specified
 ;; selects 32-bit values from either `x` or `y`, but not both. This means

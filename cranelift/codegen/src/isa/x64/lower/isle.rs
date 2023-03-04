@@ -1053,6 +1053,70 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             None
         }
     }
+
+    fn pshuflw_lhs_imm(&mut self, imm: Immediate) -> Option<u8> {
+        // Similar to `shufps` except this operates over 16-bit values so four
+        // of them must be fixed and the other four must be in-range to encode
+        // in the immediate.
+        let (a, b, c, d, e, f, g, h) = self.shuffle16_from_imm(imm)?;
+        if a < 4 && b < 4 && c < 4 && d < 4 && [e, f, g, h] == [4, 5, 6, 7] {
+            Some(a | (b << 2) | (c << 4) | (d << 6))
+        } else {
+            None
+        }
+    }
+
+    fn pshuflw_rhs_imm(&mut self, imm: Immediate) -> Option<u8> {
+        let (a, b, c, d, e, f, g, h) = self.shuffle16_from_imm(imm)?;
+        let a = a.checked_sub(8)?;
+        let b = b.checked_sub(8)?;
+        let c = c.checked_sub(8)?;
+        let d = d.checked_sub(8)?;
+        let e = e.checked_sub(8)?;
+        let f = f.checked_sub(8)?;
+        let g = g.checked_sub(8)?;
+        let h = h.checked_sub(8)?;
+        if a < 4 && b < 4 && c < 4 && d < 4 && [e, f, g, h] == [4, 5, 6, 7] {
+            Some(a | (b << 2) | (c << 4) | (d << 6))
+        } else {
+            None
+        }
+    }
+
+    fn pshufhw_lhs_imm(&mut self, imm: Immediate) -> Option<u8> {
+        // Similar to `pshuflw` except that the first four operands must be
+        // fixed and the second four are offset by an extra 4 and tested to
+        // make sure they're all in the range [4, 8).
+        let (a, b, c, d, e, f, g, h) = self.shuffle16_from_imm(imm)?;
+        let e = e.checked_sub(4)?;
+        let f = f.checked_sub(4)?;
+        let g = g.checked_sub(4)?;
+        let h = h.checked_sub(4)?;
+        if e < 4 && f < 4 && g < 4 && h < 4 && [a, b, c, d] == [0, 1, 2, 3] {
+            Some(e | (f << 2) | (g << 4) | (h << 6))
+        } else {
+            None
+        }
+    }
+
+    fn pshufhw_rhs_imm(&mut self, imm: Immediate) -> Option<u8> {
+        // Note that everything here is offset by at least 8 and the upper
+        // bits are offset by 12 to test they're in the range of [12, 16).
+        let (a, b, c, d, e, f, g, h) = self.shuffle16_from_imm(imm)?;
+        let a = a.checked_sub(8)?;
+        let b = b.checked_sub(8)?;
+        let c = c.checked_sub(8)?;
+        let d = d.checked_sub(8)?;
+        let e = e.checked_sub(12)?;
+        let f = f.checked_sub(12)?;
+        let g = g.checked_sub(12)?;
+        let h = h.checked_sub(12)?;
+        if e < 4 && f < 4 && g < 4 && h < 4 && [a, b, c, d] == [0, 1, 2, 3] {
+            Some(e | (f << 2) | (g << 4) | (h << 6))
+        } else {
+            None
+        }
+    }
 }
 
 impl IsleContext<'_, '_, MInst, X64Backend> {

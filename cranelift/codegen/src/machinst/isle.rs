@@ -595,6 +595,23 @@ macro_rules! isle_lower_prelude_methods {
                 crate::machinst::isle::shuffle_imm(4, &bytes[12..16])?,
             ))
         }
+
+        fn shuffle16_from_imm(
+            &mut self,
+            imm: Immediate,
+        ) -> Option<(u8, u8, u8, u8, u8, u8, u8, u8)> {
+            let bytes = self.lower_ctx.get_immediate_data(imm).as_slice();
+            Some((
+                crate::machinst::isle::shuffle_imm(2, &bytes[0..2])?,
+                crate::machinst::isle::shuffle_imm(2, &bytes[2..4])?,
+                crate::machinst::isle::shuffle_imm(2, &bytes[4..6])?,
+                crate::machinst::isle::shuffle_imm(2, &bytes[6..8])?,
+                crate::machinst::isle::shuffle_imm(2, &bytes[8..10])?,
+                crate::machinst::isle::shuffle_imm(2, &bytes[10..12])?,
+                crate::machinst::isle::shuffle_imm(2, &bytes[12..14])?,
+                crate::machinst::isle::shuffle_imm(2, &bytes[14..16])?,
+            ))
+        }
     };
 }
 

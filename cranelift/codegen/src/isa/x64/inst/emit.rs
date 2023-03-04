@@ -1789,6 +1789,8 @@ pub(crate) fn emit(
                 SseOpcode::Roundpd => (LegacyPrefixes::_66, 0x0F3A09, 3),
                 SseOpcode::Roundsd => (LegacyPrefixes::_66, 0x0F3A0B, 3),
                 SseOpcode::Pshufd => (LegacyPrefixes::_66, 0x0F70, 2),
+                SseOpcode::Pshuflw => (LegacyPrefixes::_F2, 0x0F70, 2),
+                SseOpcode::Pshufhw => (LegacyPrefixes::_F3, 0x0F70, 2),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
             match src {
@@ -2408,6 +2410,8 @@ pub(crate) fn emit(
             let (prefix, map, opcode) = match op {
                 AvxOpcode::Vroundps => (LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x08),
                 AvxOpcode::Vroundpd => (LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x09),
+                AvxOpcode::Vpshuflw => (LegacyPrefixes::_F2, OpcodeMap::_0F, 0x70),
+                AvxOpcode::Vpshufhw => (LegacyPrefixes::_F3, OpcodeMap::_0F, 0x70),
                 _ => panic!("unexpected rmr_imm_vex opcode {op:?}"),
             };
 

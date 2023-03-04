@@ -4,6 +4,7 @@ target aarch64
 target s390x
 set enable_simd
 target x86_64 has_sse3 has_ssse3 has_sse41
+target x86_64 has_sse3 has_ssse3 has_sse41 has_avx
 target x86_64 has_sse3 has_ssse3 has_sse41 has_avx512vl has_avx512vbmi
 
 function %shuffle_i8x16(i8x16, i8x16) -> i8x16 {
@@ -170,3 +171,83 @@ block0(v0: i32x4, v1: i32x4):
     return v5
 }
 ; run: %shufps_0145([1 2 3 4], [5 6 7 8]) == [7 6 1 1]
+
+function %pshuflw_3210(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+    v2 = bitcast.i8x16 little v0
+    v3 = bitcast.i8x16 little v1
+    v4 = shuffle v2, v3, [6 7 4 5 2 3 0 1 8 9 10 11 12 13 14 15]
+    v5 = bitcast.i16x8 little v4
+    return v5
+}
+; run: %pshuflw_3210([1 2 3 4 5 6 7 8], [9 10 11 12 13 14 15 16]) == [4 3 2 1 5 6 7 8]
+
+function %pshuflw_3131(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+    v2 = bitcast.i8x16 little v0
+    v3 = bitcast.i8x16 little v1
+    v4 = shuffle v2, v3, [6 7 4 5 6 7 4 5 8 9 10 11 12 13 14 15]
+    v5 = bitcast.i16x8 little v4
+    return v5
+}
+; run: %pshuflw_3131([1 2 3 4 5 6 7 8], [9 10 11 12 13 14 15 16]) == [4 3 4 3 5 6 7 8]
+
+function %pshuflw_rhs_3210(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+    v2 = bitcast.i8x16 little v0
+    v3 = bitcast.i8x16 little v1
+    v4 = shuffle v2, v3, [22 23 20 21 18 19 16 17 24 25 26 27 28 29 30 31]
+    v5 = bitcast.i16x8 little v4
+    return v5
+}
+; run: %pshuflw_rhs_3210([1 2 3 4 5 6 7 8], [9 10 11 12 13 14 15 16]) == [12 11 10 9 13 14 15 16]
+
+function %pshuflw_rhs_3131(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+    v2 = bitcast.i8x16 little v0
+    v3 = bitcast.i8x16 little v1
+    v4 = shuffle v2, v3, [22 23 18 19 22 23 18 19 24 25 26 27 28 29 30 31]
+    v5 = bitcast.i16x8 little v4
+    return v5
+}
+; run: %pshuflw_rhs_3131([1 2 3 4 5 6 7 8], [9 10 11 12 13 14 15 16]) == [12 10 12 10 13 14 15 16]
+
+function %pshufhw_3210(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+    v2 = bitcast.i8x16 little v0
+    v3 = bitcast.i8x16 little v1
+    v4 = shuffle v2, v3, [0 1 2 3 4 5 6 7 14 15 12 13 10 11 8 9]
+    v5 = bitcast.i16x8 little v4
+    return v5
+}
+; run: %pshufhw_3210([1 2 3 4 5 6 7 8], [9 10 11 12 13 14 15 16]) == [1 2 3 4 8 7 6 5]
+
+function %pshufhw_3131(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+    v2 = bitcast.i8x16 little v0
+    v3 = bitcast.i8x16 little v1
+    v4 = shuffle v2, v3, [0 1 2 3 4 5 6 7 14 15 10 11 14 15 10 11]
+    v5 = bitcast.i16x8 little v4
+    return v5
+}
+; run: %pshufhw_3131([1 2 3 4 5 6 7 8], [9 10 11 12 13 14 15 16]) == [1 2 3 4 8 6 8 6]
+
+function %pshufhw_rhs_3210(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+    v2 = bitcast.i8x16 little v0
+    v3 = bitcast.i8x16 little v1
+    v4 = shuffle v2, v3, [16 17 18 19 20 21 22 23 30 31 28 29 26 27 24 25]
+    v5 = bitcast.i16x8 little v4
+    return v5
+}
+; run: %pshufhw_rhs_3210([1 2 3 4 5 6 7 8], [9 10 11 12 13 14 15 16]) == [9 10 11 12 16 15 14 13]
+
+function %pshufhw_rhs_3131(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+    v2 = bitcast.i8x16 little v0
+    v3 = bitcast.i8x16 little v1
+    v4 = shuffle v2, v3, [16 17 18 19 20 21 22 23 30 31 26 27 30 31 26 27]
+    v5 = bitcast.i16x8 little v4
+    return v5
+}
+; run: %pshufhw_rhs_3131([1 2 3 4 5 6 7 8], [9 10 11 12 13 14 15 16]) == [9 10 11 12 16 14 16 14]
