@@ -199,11 +199,11 @@
 /**
  * \brief Wasmtime version string.
  */
-#define WASMTIME_VERSION "7.0.0"
+#define WASMTIME_VERSION "8.0.0"
 /**
  * \brief Wasmtime major version number.
  */
-#define WASMTIME_VERSION_MAJOR 7
+#define WASMTIME_VERSION_MAJOR 8
 /**
  * \brief Wasmtime minor version number.
  */
