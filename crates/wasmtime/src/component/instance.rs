@@ -672,6 +672,29 @@ impl<'a, 'store> ExportInstance<'a, 'store> {
             })
     }
 
+    /// Returns an iterator of all of the exported functions that this instance
+    /// contains.
+    //
+    // See FIXME in above `modules` method, which also applies here.
+    pub fn funcs(&mut self) -> impl Iterator<Item = (&'a str, Func)> + '_ {
+        self.exports
+            .iter()
+            .filter_map(|(name, export)| match export {
+                Export::LiftedFunction { ty, func, options } => Some((
+                    name.as_str(),
+                    Func::from_lifted_func(
+                        self.store,
+                        self.instance,
+                        self.data,
+                        *ty,
+                        func,
+                        options,
+                    ),
+                )),
+                _ => None,
+            })
+    }
+
     fn as_mut(&mut self) -> ExportInstance<'a, '_> {
         ExportInstance {
             exports: self.exports,

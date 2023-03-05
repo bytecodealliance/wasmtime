@@ -261,3 +261,6 @@ harness = false
 [[bench]]
 name = "wasi"
 harness = false
+
+[patch.crates-io]
+wit-parser = { git = "https://github.com/dicej/wasm-tools", branch = "wit-templates" }

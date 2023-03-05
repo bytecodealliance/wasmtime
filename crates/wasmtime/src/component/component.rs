@@ -10,8 +10,8 @@ use std::path::Path;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    ComponentTypes, GlobalInitializer, LoweredIndex, RuntimeAlwaysTrapIndex,
-    RuntimeTranscoderIndex, StaticModuleIndex, Translator,
+    ComponentTypes, Export, GlobalInitializer, LoweredIndex, RuntimeAlwaysTrapIndex,
+    RuntimeTranscoderIndex, StaticModuleIndex, Translator, TypeDef,
 };
 use wasmtime_environ::{EntityRef, FunctionLoc, ObjectKind, PrimaryMap, ScopeVec, SignatureIndex};
 use wasmtime_jit::{CodeMemory, CompiledModuleInfo};
@@ -526,5 +526,63 @@ impl Component {
     /// [`Module`]: crate::Module
     pub fn serialize(&self) -> Result<Vec<u8>> {
         Ok(self.code_object().code_memory().mmap().to_vec())
+    }
+
+    /// Get the names of all the functions exported from the specified instance.
+    //
+    // TODO: Eventually we'll want a public API for reflecting the entire
+    // component type, including the names and types of all its instances,
+    // imports, and exports.  This function is currently only intended for
+    // discovering wildcard imports.
+    pub fn function_import_names<'a>(
+        &'a self,
+        instance_name: &'a str,
+    ) -> impl Iterator<Item = &str> + 'a {
+        let env_component = self.env_component();
+
+        env_component
+            .imports
+            .values()
+            .filter_map(move |(import, names)| {
+                let (name, typedef) = &env_component.import_types[*import];
+                if let (TypeDef::ComponentInstance(_), true) = (typedef, instance_name == name) {
+                    Some(names.iter().map(String::as_str))
+                } else {
+                    None
+                }
+            })
+            .flatten()
+    }
+
+    /// Get the names of all the functions exported from the specified instance.
+    //
+    // TODO: Eventually we'll want a public API for reflecting the entire
+    // component type, including the names and types of all its instances,
+    // imports, and exports.  This function is currently only intended for
+    // discovering wildcard exports.
+    pub fn function_export_names<'a>(
+        &'a self,
+        instance_name: &'a str,
+    ) -> impl Iterator<Item = &str> + 'a {
+        let env_component = self.env_component();
+
+        env_component
+            .exports
+            .get(instance_name)
+            .and_then(|export| {
+                if let Export::Instance(map) = export {
+                    Some(map.iter().filter_map(|(n, e)| {
+                        if let Export::LiftedFunction { .. } = e {
+                            Some(n.as_str())
+                        } else {
+                            None
+                        }
+                    }))
+                } else {
+                    None
+                }
+            })
+            .into_iter()
+            .flatten()
     }
 }
