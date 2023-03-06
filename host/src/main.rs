@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use host::{add_to_linker, WasiCommand};
+use host::{add_to_linker, wasi::Cli};
 use std::path::PathBuf;
 use wasi_cap_std_sync::WasiCtxBuilder;
 use wasmtime::{
@@ -34,9 +34,9 @@ async fn main() -> Result<()> {
             .build(),
     );
 
-    let (wasi, _instance) = WasiCommand::instantiate_async(&mut store, &component, &linker).await?;
+    let (wasi, _instance) = Cli::instantiate_async(&mut store, &component, &linker).await?;
 
-    let result: Result<(), ()> = wasi.call_command(&mut store, 0, 1, &[]).await?;
+    let result: Result<(), ()> = wasi.call_command(&mut store, 0, 1, 2, &[], &[]).await?;
 
     if result.is_err() {
         anyhow::bail!("command returned with failing exit status");

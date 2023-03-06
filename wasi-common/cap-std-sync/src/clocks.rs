@@ -95,12 +95,12 @@ impl WasiMonotonicClock for MonotonicClock {
 }
 
 pub fn clocks_ctx() -> WasiClocks {
-    // Create the default clock resources.
-    let default_monotonic_clock = Box::new(MonotonicClock::new(ambient_authority()));
-    let default_wall_clock = Box::new(WallClock::new(ambient_authority()));
+    // Create the per-instance clock resources.
+    let instance_monotonic_clock = Box::new(MonotonicClock::new(ambient_authority()));
+    let instance_wall_clock = Box::new(WallClock::new(ambient_authority()));
 
     WasiClocks {
-        default_monotonic_clock,
-        default_wall_clock,
+        instance_monotonic_clock,
+        instance_wall_clock,
     }
 }

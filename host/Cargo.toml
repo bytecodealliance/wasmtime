@@ -11,11 +11,9 @@ cap-std = { workspace = true }
 cap-rand = { workspace = true }
 tokio = { version = "1.22.0", features = [ "rt", "macros" ] }
 tracing = { workspace = true }
-wasmtime = { version = "6.0.0", features = ["component-model"] }
+wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", rev = "f05babc74414b59a8eb2d92e13ce4708c7482711", features = ["component-model"] }
 wasi-common = { path = "../wasi-common" }
 wasi-cap-std-sync = { path = "../wasi-common/cap-std-sync" }
-is-terminal = "0.4.1"
-terminal_size = "0.2.3"
 
 [dev-dependencies]
 test-programs-macros = { path = "../test-programs/macros" }

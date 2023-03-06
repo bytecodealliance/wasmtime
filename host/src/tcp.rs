@@ -2,17 +2,18 @@
 
 use crate::{
     network::convert,
-    wasi_io::{InputStream, OutputStream},
-    wasi_network::{Error, IpAddressFamily, Network},
-    wasi_poll::Pollable,
-    wasi_tcp::{IpSocketAddress, ShutdownType, TcpSocket, WasiTcp},
+    wasi::network::{Error, IpAddressFamily, Network},
+    wasi::poll::Pollable,
+    wasi::streams::{InputStream, OutputStream},
+    wasi::tcp::{self, IpSocketAddress, ShutdownType, TcpSocket},
+    wasi::tcp_create_socket,
     HostResult, WasiCtx,
 };
 use wasi_common::tcp_socket::TableTcpSocketExt;
 
 #[async_trait::async_trait]
-impl WasiTcp for WasiCtx {
-    async fn listen(&mut self, socket: TcpSocket, backlog: Option<u64>) -> HostResult<(), Error> {
+impl tcp::Host for WasiCtx {
+    async fn listen(&mut self, socket: TcpSocket, backlog: u32) -> HostResult<(), Error> {
         todo!()
     }
 
@@ -35,6 +36,7 @@ impl WasiTcp for WasiCtx {
     async fn connect(
         &mut self,
         socket: TcpSocket,
+        network: Network,
         remote_address: IpSocketAddress,
     ) -> HostResult<(InputStream, OutputStream), Error> {
         todo!()
@@ -64,17 +66,10 @@ impl WasiTcp for WasiCtx {
         todo!()
     }
 
-    async fn create_tcp_socket(
-        &mut self,
-        network: Network,
-        address_family: IpAddressFamily,
-    ) -> HostResult<TcpSocket, Error> {
-        todo!()
-    }
-
     async fn bind(
         &mut self,
         this: TcpSocket,
+        network: Network,
         local_address: IpSocketAddress,
     ) -> HostResult<(), Error> {
         todo!()
@@ -112,7 +107,7 @@ impl WasiTcp for WasiCtx {
         todo!()
     }
 
-    async fn address_family(&mut self, this: TcpSocket) -> anyhow::Result<IpAddressFamily> {
+    async fn address_family(&mut self, this: TcpSocket) -> HostResult<IpAddressFamily, Error> {
         todo!()
     }
 
@@ -121,6 +116,14 @@ impl WasiTcp for WasiCtx {
     }
 
     async fn set_unicast_hop_limit(&mut self, this: TcpSocket, value: u8) -> HostResult<(), Error> {
+        todo!()
+    }
+
+    async fn set_listen_backlog_size(
+        &mut self,
+        this: TcpSocket,
+        value: u64,
+    ) -> HostResult<(), Error> {
         todo!()
     }
 
@@ -158,6 +161,16 @@ impl WasiTcp for WasiCtx {
 
     async fn drop_tcp_socket(&mut self, socket: TcpSocket) -> anyhow::Result<()> {
         drop(socket);
+        todo!()
+    }
+}
+
+#[async_trait::async_trait]
+impl tcp_create_socket::Host for WasiCtx {
+    async fn create_tcp_socket(
+        &mut self,
+        address_family: IpAddressFamily,
+    ) -> HostResult<TcpSocket, Error> {
         todo!()
     }
 }

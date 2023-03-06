@@ -1,17 +1,19 @@
 #![allow(unused_variables)]
 
 use crate::{
-    wasi_network::{Error, IpAddressFamily, Network},
-    wasi_poll::Pollable,
-    wasi_udp::{Datagram, IpSocketAddress, UdpSocket, WasiUdp},
+    wasi::network::{Error, IpAddressFamily, Network},
+    wasi::poll::Pollable,
+    wasi::udp::{self, Datagram, IpSocketAddress, UdpSocket},
+    wasi::udp_create_socket,
     HostResult, WasiCtx,
 };
 use wasi_common::udp_socket::TableUdpSocketExt;
 
 #[async_trait::async_trait]
-impl WasiUdp for WasiCtx {
+impl udp::Host for WasiCtx {
     async fn connect(
         &mut self,
+        udp_socket: UdpSocket,
         network: Network,
         remote_address: IpSocketAddress,
     ) -> HostResult<(), Error> {
@@ -50,17 +52,10 @@ impl WasiUdp for WasiCtx {
         todo!()
     }
 
-    async fn create_udp_socket(
-        &mut self,
-        network: Network,
-        address_family: IpAddressFamily,
-    ) -> HostResult<UdpSocket, Error> {
-        todo!()
-    }
-
     async fn bind(
         &mut self,
         this: UdpSocket,
+        network: Network,
         local_address: IpSocketAddress,
     ) -> HostResult<(), Error> {
         todo!()
@@ -74,7 +69,7 @@ impl WasiUdp for WasiCtx {
         todo!()
     }
 
-    async fn address_family(&mut self, this: UdpSocket) -> anyhow::Result<IpAddressFamily> {
+    async fn address_family(&mut self, this: UdpSocket) -> HostResult<IpAddressFamily, Error> {
         todo!()
     }
 
@@ -122,6 +117,16 @@ impl WasiUdp for WasiCtx {
 
     async fn drop_udp_socket(&mut self, socket: UdpSocket) -> anyhow::Result<()> {
         drop(socket);
+        todo!()
+    }
+}
+
+#[async_trait::async_trait]
+impl udp_create_socket::Host for WasiCtx {
+    async fn create_udp_socket(
+        &mut self,
+        address_family: IpAddressFamily,
+    ) -> HostResult<UdpSocket, Error> {
         todo!()
     }
 }

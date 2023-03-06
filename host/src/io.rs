@@ -1,7 +1,7 @@
 use crate::{
     poll::PollableEntry,
-    wasi_io::{InputStream, OutputStream, StreamError, WasiIo},
-    wasi_poll::Pollable,
+    wasi::poll::Pollable,
+    wasi::streams::{self, InputStream, OutputStream, StreamError},
     HostResult, WasiCtx,
 };
 use wasi_common::stream::TableStreamExt;
@@ -15,7 +15,7 @@ fn convert(error: wasi_common::Error) -> anyhow::Error {
 }
 
 #[async_trait::async_trait]
-impl WasiIo for WasiCtx {
+impl streams::Host for WasiCtx {
     async fn drop_input_stream(&mut self, stream: InputStream) -> anyhow::Result<()> {
         self.table_mut()
             .delete::<Box<dyn wasi_common::InputStream>>(stream)
@@ -153,13 +153,16 @@ impl WasiIo for WasiCtx {
         todo!()
     }
 
-    async fn subscribe_read(&mut self, stream: InputStream) -> anyhow::Result<Pollable> {
+    async fn subscribe_to_input_stream(&mut self, stream: InputStream) -> anyhow::Result<Pollable> {
         Ok(self
             .table_mut()
             .push(Box::new(PollableEntry::Read(stream)))?)
     }
 
-    async fn subscribe(&mut self, stream: OutputStream) -> anyhow::Result<Pollable> {
+    async fn subscribe_to_output_stream(
+        &mut self,
+        stream: OutputStream,
+    ) -> anyhow::Result<Pollable> {
         Ok(self
             .table_mut()
             .push(Box::new(PollableEntry::Write(stream)))?)

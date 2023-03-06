@@ -14,8 +14,8 @@ pub trait WasiMonotonicClock: Send + Sync {
 }
 
 pub struct WasiClocks {
-    pub default_wall_clock: Box<dyn WasiWallClock + Send + Sync>,
-    pub default_monotonic_clock: Box<dyn WasiMonotonicClock + Send + Sync>,
+    pub instance_wall_clock: Box<dyn WasiWallClock + Send + Sync>,
+    pub instance_monotonic_clock: Box<dyn WasiMonotonicClock + Send + Sync>,
 }
 
 pub trait TableWallClockExt {

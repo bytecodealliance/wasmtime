@@ -1,7 +1,7 @@
 use crate::{
-    wasi_io::{InputStream, OutputStream, StreamError},
-    wasi_monotonic_clock::{Instant, MonotonicClock},
-    wasi_poll::{Pollable, WasiPoll},
+    wasi::monotonic_clock::{Instant, MonotonicClock},
+    wasi::poll::{self, Pollable},
+    wasi::streams::{InputStream, OutputStream, StreamError},
     WasiCtx,
 };
 use wasi_common::clocks::TableMonotonicClockExt;
@@ -27,7 +27,7 @@ pub(crate) enum PollableEntry {
 }
 
 #[async_trait::async_trait]
-impl WasiPoll for WasiCtx {
+impl poll::Host for WasiCtx {
     async fn drop_pollable(&mut self, pollable: Pollable) -> anyhow::Result<()> {
         self.table_mut()
             .delete::<PollableEntry>(pollable)
