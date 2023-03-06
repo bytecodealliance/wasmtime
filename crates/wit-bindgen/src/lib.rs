@@ -32,6 +32,7 @@ struct Wasmtime {
     imports: Vec<Import>,
     exports: Exports,
     types: Types,
+    sizes: SizeAlign,
 }
 
 enum Import {
@@ -81,6 +82,7 @@ pub struct TrappableError {
 impl Opts {
     pub fn generate(&self, resolve: &Resolve, world: WorldId) -> String {
         let mut r = Wasmtime::default();
+        r.sizes.fill(resolve);
         r.opts = self.clone();
         r.generate(resolve, world)
     }
@@ -568,6 +570,7 @@ impl<'a> InterfaceGenerator<'a> {
                 self.push_str(&name);
                 self.push_str("{}\n");
             }
+            self.assert_type(id, &name);
         }
     }
 
@@ -584,14 +587,15 @@ impl<'a> InterfaceGenerator<'a> {
                 self.push_str(",");
             }
             self.push_str(");\n");
+            self.assert_type(id, &name);
         }
     }
 
-    fn type_flags(&mut self, _id: TypeId, name: &str, flags: &Flags, docs: &Docs) {
+    fn type_flags(&mut self, id: TypeId, name: &str, flags: &Flags, docs: &Docs) {
         self.rustdoc(docs);
+        let rust_name = to_rust_upper_camel_case(name);
         self.src.push_str("wasmtime::component::flags!(\n");
-        self.src
-            .push_str(&format!("{} {{\n", to_rust_upper_camel_case(name)));
+        self.src.push_str(&format!("{rust_name} {{\n"));
         for flag in flags.flags.iter() {
             // TODO wasmtime-component-macro doesnt support docs for flags rn
             uwrite!(
@@ -603,6 +607,7 @@ impl<'a> InterfaceGenerator<'a> {
         }
         self.src.push_str("}\n");
         self.src.push_str(");\n\n");
+        self.assert_type(id, &rust_name);
     }
 
     fn type_variant(&mut self, id: TypeId, _name: &str, variant: &Variant, docs: &Docs) {
@@ -642,7 +647,25 @@ impl<'a> InterfaceGenerator<'a> {
             self.push_str("= Option<");
             self.print_ty(payload, mode);
             self.push_str(">;\n");
+            self.assert_type(id, &name);
         }
+    }
+
+    // Emit a double-check that the wit-parser-understood size of a type agrees
+    // with the Wasmtime-understood size of a type.
+    fn assert_type(&mut self, id: TypeId, name: &str) {
+        self.push_str("const _: () = {\n");
+        uwriteln!(
+            self.src,
+            "assert!({} == <{name} as wasmtime::component::ComponentType>::SIZE32);",
+            self.gen.sizes.size(&Type::Id(id)),
+        );
+        uwriteln!(
+            self.src,
+            "assert!({} == <{name} as wasmtime::component::ComponentType>::ALIGN32);",
+            self.gen.sizes.align(&Type::Id(id)),
+        );
+        self.push_str("};\n");
     }
 
     fn print_rust_enum<'b>(
@@ -722,6 +745,8 @@ impl<'a> InterfaceGenerator<'a> {
                 self.print_generics(lt);
                 self.push_str(" {}\n");
             }
+
+            self.assert_type(id, &name);
         }
     }
 
@@ -777,6 +802,7 @@ impl<'a> InterfaceGenerator<'a> {
             self.push_str(",");
             self.print_optional_ty(result.err.as_ref(), mode);
             self.push_str(">;\n");
+            self.assert_type(id, &name);
         }
     }
 
@@ -874,6 +900,7 @@ impl<'a> InterfaceGenerator<'a> {
                     .map(|c| (c.name.to_upper_camel_case(), None)),
             )
         }
+        self.assert_type(id, &name);
     }
 
     fn type_alias(&mut self, id: TypeId, _name: &str, ty: &Type, docs: &Docs) {
@@ -886,6 +913,7 @@ impl<'a> InterfaceGenerator<'a> {
             self.push_str(" = ");
             self.print_ty(ty, mode);
             self.push_str(";\n");
+            self.assert_type(id, &name);
         }
     }
 
@@ -899,6 +927,7 @@ impl<'a> InterfaceGenerator<'a> {
             self.push_str(" = ");
             self.print_list(ty, mode);
             self.push_str(";\n");
+            self.assert_type(id, &name);
         }
     }
 
