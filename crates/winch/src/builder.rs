@@ -1,5 +1,5 @@
 use crate::compiler::Compiler;
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use std::sync::Arc;
 use wasmtime_cranelift_shared::isa_builder::IsaBuilder;
 use wasmtime_environ::{CompilerBuilder, Setting};
@@ -46,7 +46,7 @@ impl CompilerBuilder for Builder {
 
     fn enable_incremental_compilation(
         &mut self,
-        cache_store: Arc<dyn wasmtime_environ::CacheStore>,
+        _cache_store: Arc<dyn wasmtime_environ::CacheStore>,
     ) -> Result<()> {
         bail!("incremental compilation is not supported on this platform");
     }
