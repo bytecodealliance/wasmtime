@@ -1674,7 +1674,7 @@ pub(crate) fn define(
 
     let I16or32 = &TypeVar::new(
         "I16or32",
-        "A scalar or vector integer type with 16- or 32-bit numbers",
+        "A vector integer type with 16- or 32-bit numbers",
         TypeSetBuilder::new().ints(16..32).simd_lanes(4..8).build(),
     );
 
@@ -1690,8 +1690,7 @@ pub(crate) fn define(
         is the number bitwidth:
         `a := signed_saturate((x * y + 1 << (Q - 1)) >> Q)`
 
-        Polymorphic over all integer types (scalar and vector) with 16- or
-        32-bit numbers.
+        Polymorphic over all integer vector types with 16- or 32-bit numbers.
         "#,
             &formats.binary,
         )
