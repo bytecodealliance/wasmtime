@@ -58,7 +58,7 @@ test-programs = { path = "crates/test-programs" }
 wasmtime-runtime = { workspace = true }
 tokio = { version = "1.8.0", features = ["rt", "time", "macros", "rt-multi-thread"] }
 wast = { workspace = true }
-criterion = "0.3.4"
+criterion = "0.4.0"
 num_cpus = "1.13.0"
 memchr = "2.4"
 async-trait = { workspace = true }

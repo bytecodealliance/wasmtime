@@ -37,8 +37,6 @@ mod x86 {
     /// Using an inner module to feature-gate the benchmarks means that we must
     /// manually specify how to run the benchmarks (see `criterion_main!`).
     pub fn run_benchmarks() {
-        criterion::__warn_about_html_reports_feature();
-        criterion::__warn_about_cargo_bench_support_feature();
         benches();
         Criterion::default().configure_from_args().final_summary();
     }
