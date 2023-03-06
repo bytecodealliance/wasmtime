@@ -27,7 +27,7 @@ pub fn run(opt: &Options) -> Result<()> {
     let triple = Triple::from_str(&opt.target)?;
     let shared_flags = settings::Flags::new(settings::builder());
     let isa_builder = lookup(triple)?;
-    let isa = isa_builder.build(shared_flags)?;
+    let isa = isa_builder.finish(shared_flags)?;
     let mut validator = Validator::new();
     let parser = WasmParser::new(0);
     let mut types = Default::default();
