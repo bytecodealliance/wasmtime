@@ -1392,6 +1392,9 @@
     (Zip1)
     ;; Signed saturating rounding doubling multiply returning high half
     (Sqrdmulh)
+
+    (Uzp1)
+    (Uzp2)
 ))
 
 ;; A Vector ALU operation which modifies a source register.
@@ -3767,3 +3770,11 @@
        (emit_side_effect (with_flags_side_effect
             (cmp (OperandSize.Size32) ridx jt_size)
             (jt_sequence ridx jt_info)))))
+
+;; Helper for emitting the `uzp1` instruction
+(decl vec_uzp1 (Reg Reg VectorSize) Reg)
+(rule (vec_uzp1 rn rm size) (vec_rrr (VecALUOp.Uzp1) rn rm size))
+
+;; Helper for emitting the `uzp2` instruction
+(decl vec_uzp2 (Reg Reg VectorSize) Reg)
+(rule (vec_uzp2 rn rm size) (vec_rrr (VecALUOp.Uzp2) rn rm size))

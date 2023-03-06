@@ -118,6 +118,25 @@
 
 ;;;; Rules for `shuffle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Rules for the `uzp1` and `uzp2` instructions which gather even-numbered lanes
+;; or odd-numbered lanes
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1e1c_1a18_1614_1210_0e0c_0a08_0604_0200)))
+      (vec_uzp1 a b (VectorSize.Size8x16)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1f1d_1b19_1715_1311_0f0d_0b09_0705_0301)))
+      (vec_uzp2 a b (VectorSize.Size8x16)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1d1c_1918_1514_1110_0d0c_0908_0504_0100)))
+      (vec_uzp1 a b (VectorSize.Size16x8)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1f1e_1b1a_1716_1312_0f0e_0b0a_0706_0302)))
+      (vec_uzp2 a b (VectorSize.Size16x8)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1b1a1918_13121110_0b0a0908_03020100)))
+      (vec_uzp1 a b (VectorSize.Size32x4)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1f1e1d1c_17161514_0f0e0d0c_07060504)))
+      (vec_uzp2 a b (VectorSize.Size32x4)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1716151413121110_0706050403020100)))
+      (vec_uzp1 a b (VectorSize.Size64x2)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1f1e1d1c1b1a1918_0f0e0d0c0b0a0908)))
+      (vec_uzp2 a b (VectorSize.Size64x2)))
+
 (rule (lower (has_type ty (shuffle rn rn2 (u128_from_immediate mask))))
       (let ((mask_reg Reg (constant_f128 mask)))
        (vec_tbl2 rn rn2 mask_reg ty)))
