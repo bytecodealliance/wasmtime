@@ -240,6 +240,25 @@ impl<'a> InterpreterState<'a> {
             _ => &self.frame_stack[num_frames - 1],
         }
     }
+
+    fn is_address_within_stack_slot_range(&self, addr: &Address, ty: &Type) -> bool {
+        let size = ty.bytes() as u64;
+        let addr_start = addr.offset;
+        let addr_end = addr_start + size;
+        let stack_slots = &self.get_current_function().sized_stack_slots;
+        let mut slot_offset = self.frame_offset as u64;
+        let stack_slot = stack_slots.values().find(|ss| {
+            let next_slot_offset = slot_offset + ss.size as u64;
+            let addr_start_is_in_ss_range = (slot_offset..next_slot_offset).contains(&addr_start);
+            if addr_start_is_in_ss_range {
+                true
+            } else {
+                slot_offset = next_slot_offset;
+                false
+            }
+        });
+        stack_slot.map_or(false, |ss| addr_end <= slot_offset + ss.size as u64)
+    }
 }
 
 impl<'a> State<'a, DataValue> for InterpreterState<'a> {
@@ -327,7 +346,10 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
 
         let src = match addr.region {
             AddressRegion::Stack => {
-                if addr_end > self.stack.len() {
+                let is_out_of_bounds = addr_end > self.stack.len()
+                    || !self.is_address_within_stack_slot_range(&addr, &ty);
+
+                if is_out_of_bounds {
                     return Err(MemoryError::OutOfBoundsLoad { addr, load_size });
                 }
 
@@ -359,7 +381,10 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
 
         let dst = match addr.region {
             AddressRegion::Stack => {
-                if addr_end > self.stack.len() {
+                let is_out_of_bounds = addr_end > self.stack.len()
+                    || !self.is_address_within_stack_slot_range(&addr, &v.ty());
+
+                if is_out_of_bounds {
                     return Err(MemoryError::OutOfBoundsStore { addr, store_size });
                 }
 
@@ -873,10 +898,63 @@ mod tests {
     }
 
     #[test]
+    fn partial_out_of_stack_read_by_addr_traps() {
+        let code = "
+        function %stack_load() {
+            ss0 = explicit_slot 8
+
+        block0:
+            v0 = stack_addr.i64 ss0
+            v1 = iconst.i64 4
+            v2 = iadd.i64 v0, v1
+            v3 = load.i64 v2
+            return
+        }";
+
+        let func = parse_functions(code).unwrap().into_iter().next().unwrap();
+        let mut env = FunctionStore::default();
+        env.add(func.name.to_string(), &func);
+        let state = InterpreterState::default().with_function_store(env);
+        let trap = Interpreter::new(state)
+            .call_by_name("%stack_load", &[])
+            .unwrap()
+            .unwrap_trap();
+
+        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapOutOfBounds));
+    }
+
+    #[test]
+    fn partial_out_of_stack_write_by_addr_traps() {
+        let code = "
+        function %stack_store() {
+            ss0 = explicit_slot 8
+
+        block0:
+            v0 = stack_addr.i64 ss0
+            v1 = iconst.i64 4
+            v2 = iadd.i64 v0, v1
+            store.i64 v1, v2
+            return
+        }";
+
+        let func = parse_functions(code).unwrap().into_iter().next().unwrap();
+        let mut env = FunctionStore::default();
+        env.add(func.name.to_string(), &func);
+        let state = InterpreterState::default().with_function_store(env);
+        let trap = Interpreter::new(state)
+            .call_by_name("%stack_store", &[])
+            .unwrap()
+            .unwrap_trap();
+
+        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapOutOfBounds));
+    }
+
+    #[test]
     fn partial_out_of_slot_read_by_addr_traps() {
         let code = "
         function %stack_load() {
             ss0 = explicit_slot 8
+            ss1 = explicit_slot 8
 
         block0:
             v0 = stack_addr.i64 ss0
@@ -903,6 +981,7 @@ mod tests {
         let code = "
         function %stack_store() {
             ss0 = explicit_slot 8
+            ss1 = explicit_slot 8
 
         block0:
             v0 = stack_addr.i64 ss0
@@ -986,6 +1065,7 @@ mod tests {
             v0 = stack_addr.i64 ss0
             v1 = iconst.i64 1
             store.i64 aligned v1, v0+2
+            store.i64 v1, v0+2
             return
         }";
 
