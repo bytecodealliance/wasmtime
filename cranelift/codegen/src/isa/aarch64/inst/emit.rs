@@ -2881,6 +2881,8 @@ impl MachInstEmit for Inst {
                     }
                     VecALUOp::Uzp1 => (0b01001110_00_0 | enc_size << 1, 0b000110),
                     VecALUOp::Uzp2 => (0b01001110_00_0 | enc_size << 1, 0b010110),
+                    VecALUOp::Trn1 => (0b01001110_00_0 | enc_size << 1, 0b001010),
+                    VecALUOp::Trn2 => (0b01001110_00_0 | enc_size << 1, 0b011010),
                 };
                 let top11 = if is_float {
                     top11 | size.enc_float_size() << 1

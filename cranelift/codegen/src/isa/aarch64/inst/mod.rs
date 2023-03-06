@@ -2349,6 +2349,8 @@ impl Inst {
                     VecALUOp::Sqrdmulh => ("sqrdmulh", size),
                     VecALUOp::Uzp1 => ("uzp1", size),
                     VecALUOp::Uzp2 => ("uzp2", size),
+                    VecALUOp::Trn1 => ("trn1", size),
+                    VecALUOp::Trn2 => ("trn2", size),
                 };
                 let rd = pretty_print_vreg_vector(rd.to_reg(), size, allocs);
                 let rn = pretty_print_vreg_vector(rn, size, allocs);

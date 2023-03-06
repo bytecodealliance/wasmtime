@@ -1398,6 +1398,10 @@
     (Uzp1)
     ;; Unzip vectors (secondary)
     (Uzp2)
+    ;; Transpose vectors (primary)
+    (Trn1)
+    ;; Transpose vectors (secondary)
+    (Trn2)
 ))
 
 ;; A Vector ALU operation which modifies a source register.
@@ -3789,3 +3793,11 @@
 ;; Helper for emitting the `zip2` instruction
 (decl vec_zip2 (Reg Reg VectorSize) Reg)
 (rule (vec_zip2 rn rm size) (vec_rrr (VecALUOp.Zip2) rn rm size))
+
+;; Helper for emitting the `trn1` instruction
+(decl vec_trn1 (Reg Reg VectorSize) Reg)
+(rule (vec_trn1 rn rm size) (vec_rrr (VecALUOp.Trn1) rn rm size))
+
+;; Helper for emitting the `trn2` instruction
+(decl vec_trn2 (Reg Reg VectorSize) Reg)
+(rule (vec_trn2 rn rm size) (vec_rrr (VecALUOp.Trn2) rn rm size))

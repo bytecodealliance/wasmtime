@@ -155,6 +155,24 @@
 ;; by the i64x2 cases of uzp1/uzp2 above where both zip and uzp have the same
 ;; semantics for 64-bit lanes.
 
+;; Rules for the `trn1` and `trn2` instructions which interleave odd or even
+;; lanes in the two input vectors.
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1e0e_1c0c_1a0a_1808_1606_1404_1202_1000)))
+      (vec_trn1 a b (VectorSize.Size8x16)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1f0f_1d0d_1b0b_1909_1707_1505_1303_1101)))
+      (vec_trn2 a b (VectorSize.Size8x16)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1d1c_0d0c_1918_0908_1514_0504_1110_0100)))
+      (vec_trn1 a b (VectorSize.Size16x8)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1f1e_0f0e_1b1a_0b0a_1716_0706_1312_0302)))
+      (vec_trn2 a b (VectorSize.Size16x8)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1b1a1918_0b0a0908_13121110_03020100)))
+      (vec_trn1 a b (VectorSize.Size32x4)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1f1e1d1c_0f0e0d0c_17161514_07060504)))
+      (vec_trn2 a b (VectorSize.Size32x4)))
+;; Note that trn1/trn2 for i64x2 vectors is omitted since it's already covered
+;; by the i64x2 cases of uzp1/uzp2 above where both trn and uzp have the same
+;; semantics for 64-bit lanes.
+
 (rule (lower (has_type ty (shuffle rn rn2 (u128_from_immediate mask))))
       (let ((mask_reg Reg (constant_f128 mask)))
        (vec_tbl2 rn rn2 mask_reg ty)))
