@@ -2171,6 +2171,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
             state.push1(
                 if environ.relaxed_simd_deterministic() || !environ.is_x86() {
+                    // Deterministic semantics match the `fmax` instruction, or
+                    // the `fAAxBB.max` wasm instruction.
                     builder.ins().fmax(a, b)
                 } else {
                     builder.ins().fmax_pseudo(a, b)
@@ -2182,6 +2184,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
             state.push1(
                 if environ.relaxed_simd_deterministic() || !environ.is_x86() {
+                    // Deterministic semantics match the `fmin` instruction, or
+                    // the `fAAxBB.min` wasm instruction.
                     builder.ins().fmin(a, b)
                 } else {
                     builder.ins().fmin_pseudo(a, b)
@@ -2193,6 +2197,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (a, b) = pop2_with_bitcast(state, I8X16, builder);
             state.push1(
                 if environ.relaxed_simd_deterministic() || !environ.is_x86() {
+                    // Deterministic semantics match the `i8x16.swizzle`
+                    // instruction which is the CLIF `swizzle`.
                     builder.ins().swizzle(a, b)
                 } else {
                     builder.ins().x86_pshufb(a, b)
@@ -2204,6 +2210,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (a, b, c) = pop3_with_bitcast(state, type_of(op), builder);
             state.push1(
                 if environ.relaxed_simd_deterministic() || environ.has_native_fma() {
+                    // Deterministic semantics are "fused multiply and add"
+                    // which the CLIF `fma` guarantees.
                     builder.ins().fma(a, b, c)
                 } else {
                     let mul = builder.ins().fmul(a, b);
@@ -2216,6 +2224,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let a = builder.ins().fneg(a);
             state.push1(
                 if environ.relaxed_simd_deterministic() || environ.has_native_fma() {
+                    // Deterministic semantics are "fused multiply and add"
+                    // which the CLIF `fma` guarantees.
                     builder.ins().fma(a, b, c)
                 } else {
                     let mul = builder.ins().fmul(a, b);
@@ -2239,6 +2249,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             // `blendv`-style instruction for 16-bit operands.
             state.push1(
                 if environ.relaxed_simd_deterministic() || !environ.is_x86() || ty == I16X8 {
+                    // Deterministic semantics are a `bitselect` along the lines
+                    // of the wasm `v128.bitselect` instruction.
                     builder.ins().bitselect(c, a, b)
                 } else {
                     builder.ins().x86_blendv(c, a, b)
@@ -2250,6 +2262,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let a = pop1_with_bitcast(state, F32X4, builder);
             state.push1(
                 if environ.relaxed_simd_deterministic() || !environ.is_x86() {
+                    // Deterministic semantics are to match the
+                    // `i32x4.trunc_sat_f32x4_s` instruction.
                     builder.ins().fcvt_to_sint_sat(I32X4, a)
                 } else {
                     builder.ins().x86_cvtt2dq(I32X4, a)
@@ -2259,6 +2273,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::I32x4RelaxedTruncF64x2SZero => {
             let a = pop1_with_bitcast(state, F64X2, builder);
             let converted_a = if environ.relaxed_simd_deterministic() || !environ.is_x86() {
+                // Deterministic semantics are to match the
+                // `i32x4.trunc_sat_f64x2_s_zero` instruction.
                 builder.ins().fcvt_to_sint_sat(I64X2, a)
             } else {
                 builder.ins().x86_cvtt2dq(I64X2, a)
@@ -2272,6 +2288,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (a, b) = pop2_with_bitcast(state, I16X8, builder);
             state.push1(
                 if environ.relaxed_simd_deterministic() || !environ.is_x86() {
+                    // Deterministic semantics are to match the
+                    // `i16x8.q15mulr_sat_s` instruction.
                     builder.ins().sqmul_round_sat(a, b)
                 } else {
                     builder.ins().x86_pmulhrsw(a, b)
@@ -2282,6 +2300,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (a, b) = pop2_with_bitcast(state, I8X16, builder);
             state.push1(
                 if environ.relaxed_simd_deterministic() || !environ.is_x86() {
+                    // Deterministic semantics are to treat both operands as
+                    // signed integers and perform the dot product.
                     let alo = builder.ins().swiden_low(a);
                     let blo = builder.ins().swiden_low(b);
                     let lo = builder.ins().imul(alo, blo);
@@ -2299,6 +2319,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let c = pop1_with_bitcast(state, I32X4, builder);
             let (a, b) = pop2_with_bitcast(state, I8X16, builder);
             let dot = if environ.relaxed_simd_deterministic() || !environ.is_x86() {
+                // Deterministic semantics are to treat both operands as
+                // signed integers and perform the dot product.
                 let alo = builder.ins().swiden_low(a);
                 let blo = builder.ins().swiden_low(b);
                 let lo = builder.ins().imul(alo, blo);
