@@ -3,6 +3,13 @@
 //! We're avoiding static initializers, so we can't have things like string
 //! literals. Replace the standard assert macros with simpler implementations.
 
+// TODO: Wire this up to stderr.
+#[allow(dead_code)]
+#[doc(hidden)]
+pub fn print(message: &[u8]) {
+    crate::bindings::stderr::print(message)
+}
+
 /// A minimal `eprint` for debugging.
 #[allow(unused_macros)]
 macro_rules! eprint {
@@ -10,7 +17,7 @@ macro_rules! eprint {
         // We have to expand string literals into byte arrays to prevent them
         // from getting statically initialized.
         let message = byte_array::str!($arg);
-        crate::bindings::wasi_stderr::print(&message);
+        $crate::macros::print(&message);
     }};
 }
 
@@ -21,7 +28,7 @@ macro_rules! eprintln {
         // We have to expand string literals into byte arrays to prevent them
         // from getting statically initialized.
         let message = byte_array::str_nl!($arg);
-        crate::bindings::wasi_stderr::print(&message);
+        $crate::macros::print(&message);
     }};
 }
 
@@ -37,7 +44,7 @@ pub(crate) fn eprint_u32(x: u32) {
             eprint_u32_impl(x / 10);
 
             let digit = [b'0' + ((x % 10) as u8)];
-            crate::bindings::wasi_stderr::print(&digit);
+            crate::macros::print(&digit);
         }
     }
 }

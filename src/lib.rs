@@ -1,8 +1,8 @@
 #![allow(unused_variables)] // TODO: remove this when more things are implemented
 
 use crate::bindings::{
-    wasi_default_clocks, wasi_exit, wasi_filesystem, wasi_io, wasi_monotonic_clock, wasi_network,
-    wasi_poll, wasi_random, wasi_stderr, wasi_tcp, wasi_wall_clock,
+    exit, filesystem, instance_monotonic_clock, instance_wall_clock, monotonic_clock, network,
+    poll, random, streams, tcp, wall_clock,
 };
 use core::arch::wasm32;
 use core::cell::{Cell, RefCell, UnsafeCell};
@@ -12,9 +12,9 @@ use core::hint::black_box;
 use core::mem::{self, align_of, forget, replace, size_of, ManuallyDrop, MaybeUninit};
 use core::ptr::{self, null_mut};
 use core::slice;
+use poll::Pollable;
+use streams::{InputStream, OutputStream};
 use wasi::*;
-use wasi_io::{InputStream, OutputStream};
-use wasi_poll::Pollable;
 
 #[macro_use]
 mod macros;
@@ -22,22 +22,20 @@ mod macros;
 mod bindings {
     #[cfg(feature = "command")]
     wit_bindgen::generate!({
-        world: "wasi-command",
-        no_std,
+        world: "cli",
+        std_feature,
         raw_strings,
-        unchecked,
         // The generated definition of command will pull in std, so we are defining it
         // manually below instead
-        skip: ["command", "get-preopens", "get-environment"],
+        skip: ["command", "preopens", "get-environment"],
     });
 
     #[cfg(not(feature = "command"))]
     wit_bindgen::generate!({
-        world: "wasi",
-        no_std,
+        world: "cli-reactor",
+        std_feature,
         raw_strings,
-        unchecked,
-        skip: ["get-preopens", "get-environment"],
+        skip: ["preopens", "get-environment"],
     });
 }
 
@@ -46,8 +44,10 @@ mod bindings {
 pub unsafe extern "C" fn command(
     stdin: InputStream,
     stdout: OutputStream,
+    stderr: OutputStream,
     args_ptr: *const WasmStr,
     args_len: usize,
+    preopens: PreopenList,
 ) -> u32 {
     State::with_mut(|state| {
         // Initialization of `State` automatically fills in some dummy
@@ -66,6 +66,11 @@ pub unsafe extern "C" fn command(
             descriptors[1] = Descriptor::Streams(Streams {
                 input: Cell::new(None),
                 output: Cell::new(Some(stdout)),
+                type_: StreamType::Unknown,
+            });
+            descriptors[2] = Descriptor::Streams(Streams {
+                input: Cell::new(None),
+                output: Cell::new(Some(stderr)),
                 type_: StreamType::Unknown,
             });
         }
@@ -373,11 +378,11 @@ pub extern "C" fn clock_res_get(id: Clockid, resolution: &mut Timestamp) -> Errn
     State::with(|state| {
         match id {
             CLOCKID_MONOTONIC => {
-                let res = wasi_monotonic_clock::resolution(state.default_monotonic_clock());
+                let res = monotonic_clock::resolution(state.instance_monotonic_clock());
                 *resolution = res;
             }
             CLOCKID_REALTIME => {
-                let res = wasi_wall_clock::resolution(state.default_wall_clock());
+                let res = wall_clock::resolution(state.instance_wall_clock());
                 *resolution = Timestamp::from(res.seconds)
                     .checked_mul(1_000_000_000)
                     .and_then(|ns| ns.checked_add(res.nanoseconds.into()))
@@ -404,10 +409,10 @@ pub unsafe extern "C" fn clock_time_get(
         State::with(|state| {
             match id {
                 CLOCKID_MONOTONIC => {
-                    *time = wasi_monotonic_clock::now(state.default_monotonic_clock());
+                    *time = monotonic_clock::now(state.instance_monotonic_clock());
                 }
                 CLOCKID_REALTIME => {
-                    let res = wasi_wall_clock::now(state.default_wall_clock());
+                    let res = wall_clock::now(state.instance_wall_clock());
                     *time = Timestamp::from(res.seconds)
                         .checked_mul(1_000_000_000)
                         .and_then(|ns| ns.checked_add(res.nanoseconds.into()))
@@ -433,17 +438,17 @@ pub unsafe extern "C" fn fd_advise(
     advice: Advice,
 ) -> Errno {
     let advice = match advice {
-        ADVICE_NORMAL => wasi_filesystem::Advice::Normal,
-        ADVICE_SEQUENTIAL => wasi_filesystem::Advice::Sequential,
-        ADVICE_RANDOM => wasi_filesystem::Advice::Random,
-        ADVICE_WILLNEED => wasi_filesystem::Advice::WillNeed,
-        ADVICE_DONTNEED => wasi_filesystem::Advice::DontNeed,
-        ADVICE_NOREUSE => wasi_filesystem::Advice::NoReuse,
+        ADVICE_NORMAL => filesystem::Advice::Normal,
+        ADVICE_SEQUENTIAL => filesystem::Advice::Sequential,
+        ADVICE_RANDOM => filesystem::Advice::Random,
+        ADVICE_WILLNEED => filesystem::Advice::WillNeed,
+        ADVICE_DONTNEED => filesystem::Advice::DontNeed,
+        ADVICE_NOREUSE => filesystem::Advice::NoReuse,
         _ => return ERRNO_INVAL,
     };
     State::with(|state| {
         let file = state.get_seekable_file(fd)?;
-        wasi_filesystem::fadvise(file.fd, offset, len, advice)?;
+        filesystem::advise(file.fd, offset, len, advice)?;
         Ok(())
     })
 }
@@ -481,7 +486,7 @@ pub unsafe extern "C" fn fd_close(fd: Fd) -> Errno {
 pub unsafe extern "C" fn fd_datasync(fd: Fd) -> Errno {
     State::with(|state| {
         let file = state.get_file(fd)?;
-        wasi_filesystem::datasync(file.fd)?;
+        filesystem::sync_data(file.fd)?;
         Ok(())
     })
 }
@@ -495,29 +500,29 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
             type_: StreamType::File(file),
             ..
         }) => {
-            let flags = wasi_filesystem::flags(file.fd)?;
-            let type_ = wasi_filesystem::todo_type(file.fd)?;
+            let flags = filesystem::get_flags(file.fd)?;
+            let type_ = filesystem::get_type(file.fd)?;
 
             let fs_filetype = type_.into();
 
             let mut fs_flags = 0;
             let mut fs_rights_base = !0;
-            if !flags.contains(wasi_filesystem::DescriptorFlags::READ) {
+            if !flags.contains(filesystem::DescriptorFlags::READ) {
                 fs_rights_base &= !RIGHTS_FD_READ;
             }
-            if !flags.contains(wasi_filesystem::DescriptorFlags::WRITE) {
+            if !flags.contains(filesystem::DescriptorFlags::WRITE) {
                 fs_rights_base &= !RIGHTS_FD_WRITE;
             }
-            if flags.contains(wasi_filesystem::DescriptorFlags::DSYNC) {
+            if flags.contains(filesystem::DescriptorFlags::DATA_INTEGRITY_SYNC) {
                 fs_flags |= FDFLAGS_DSYNC;
             }
-            if flags.contains(wasi_filesystem::DescriptorFlags::NONBLOCK) {
+            if flags.contains(filesystem::DescriptorFlags::NON_BLOCKING) {
                 fs_flags |= FDFLAGS_NONBLOCK;
             }
-            if flags.contains(wasi_filesystem::DescriptorFlags::RSYNC) {
+            if flags.contains(filesystem::DescriptorFlags::REQUESTED_WRITE_SYNC) {
                 fs_flags |= FDFLAGS_RSYNC;
             }
-            if flags.contains(wasi_filesystem::DescriptorFlags::SYNC) {
+            if flags.contains(filesystem::DescriptorFlags::FILE_INTEGRITY_SYNC) {
                 fs_flags |= FDFLAGS_SYNC;
             }
             if file.append {
@@ -599,23 +604,23 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
 /// Note: This is similar to `fcntl(fd, F_SETFL, flags)` in POSIX.
 #[no_mangle]
 pub unsafe extern "C" fn fd_fdstat_set_flags(fd: Fd, flags: Fdflags) -> Errno {
-    let mut new_flags = wasi_filesystem::DescriptorFlags::empty();
+    let mut new_flags = filesystem::DescriptorFlags::empty();
     if flags & FDFLAGS_DSYNC == FDFLAGS_DSYNC {
-        new_flags |= wasi_filesystem::DescriptorFlags::DSYNC;
+        new_flags |= filesystem::DescriptorFlags::DATA_INTEGRITY_SYNC;
     }
     if flags & FDFLAGS_NONBLOCK == FDFLAGS_NONBLOCK {
-        new_flags |= wasi_filesystem::DescriptorFlags::NONBLOCK;
+        new_flags |= filesystem::DescriptorFlags::NON_BLOCKING;
     }
     if flags & FDFLAGS_RSYNC == FDFLAGS_RSYNC {
-        new_flags |= wasi_filesystem::DescriptorFlags::RSYNC;
+        new_flags |= filesystem::DescriptorFlags::REQUESTED_WRITE_SYNC;
     }
     if flags & FDFLAGS_SYNC == FDFLAGS_SYNC {
-        new_flags |= wasi_filesystem::DescriptorFlags::SYNC;
+        new_flags |= filesystem::DescriptorFlags::FILE_INTEGRITY_SYNC;
     }
 
     State::with(|state| {
         let file = state.get_file(fd)?;
-        wasi_filesystem::set_flags(file.fd, new_flags)?;
+        filesystem::set_flags(file.fd, new_flags)?;
         Ok(())
     })
 }
@@ -636,17 +641,17 @@ pub unsafe extern "C" fn fd_fdstat_set_rights(
 pub unsafe extern "C" fn fd_filestat_get(fd: Fd, buf: *mut Filestat) -> Errno {
     State::with(|state| {
         let file = state.get_file(fd)?;
-        let stat = wasi_filesystem::stat(file.fd)?;
+        let stat = filesystem::stat(file.fd)?;
         let filetype = stat.type_.into();
         *buf = Filestat {
-            dev: stat.dev,
-            ino: stat.ino,
+            dev: stat.device,
+            ino: stat.inode,
             filetype,
-            nlink: stat.nlink,
+            nlink: stat.link_count,
             size: stat.size,
-            atim: datetime_to_timestamp(stat.atim),
-            mtim: datetime_to_timestamp(stat.mtim),
-            ctim: datetime_to_timestamp(stat.ctim),
+            atim: datetime_to_timestamp(stat.data_access_timestamp),
+            mtim: datetime_to_timestamp(stat.data_modification_timestamp),
+            ctim: datetime_to_timestamp(stat.status_change_timestamp),
         };
         Ok(())
     })
@@ -658,7 +663,7 @@ pub unsafe extern "C" fn fd_filestat_get(fd: Fd, buf: *mut Filestat) -> Errno {
 pub unsafe extern "C" fn fd_filestat_set_size(fd: Fd, size: Filesize) -> Errno {
     State::with(|state| {
         let file = state.get_file(fd)?;
-        wasi_filesystem::set_size(file.fd, size)?;
+        filesystem::set_size(file.fd, size)?;
         Ok(())
     })
 }
@@ -674,30 +679,30 @@ pub unsafe extern "C" fn fd_filestat_set_times(
 ) -> Errno {
     let atim =
         if fst_flags & (FSTFLAGS_ATIM | FSTFLAGS_ATIM_NOW) == (FSTFLAGS_ATIM | FSTFLAGS_ATIM_NOW) {
-            wasi_filesystem::NewTimestamp::Now
+            filesystem::NewTimestamp::Now
         } else if fst_flags & FSTFLAGS_ATIM == FSTFLAGS_ATIM {
-            wasi_filesystem::NewTimestamp::Timestamp(wasi_filesystem::Datetime {
+            filesystem::NewTimestamp::Timestamp(filesystem::Datetime {
                 seconds: atim / 1_000_000_000,
                 nanoseconds: (atim % 1_000_000_000) as _,
             })
         } else {
-            wasi_filesystem::NewTimestamp::NoChange
+            filesystem::NewTimestamp::NoChange
         };
     let mtim =
         if fst_flags & (FSTFLAGS_MTIM | FSTFLAGS_MTIM_NOW) == (FSTFLAGS_MTIM | FSTFLAGS_MTIM_NOW) {
-            wasi_filesystem::NewTimestamp::Now
+            filesystem::NewTimestamp::Now
         } else if fst_flags & FSTFLAGS_MTIM == FSTFLAGS_MTIM {
-            wasi_filesystem::NewTimestamp::Timestamp(wasi_filesystem::Datetime {
+            filesystem::NewTimestamp::Timestamp(filesystem::Datetime {
                 seconds: mtim / 1_000_000_000,
                 nanoseconds: (mtim % 1_000_000_000) as _,
             })
         } else {
-            wasi_filesystem::NewTimestamp::NoChange
+            filesystem::NewTimestamp::NoChange
         };
 
     State::with(|state| {
         let file = state.get_file(fd)?;
-        wasi_filesystem::set_times(file.fd, atim, mtim)?;
+        filesystem::set_times(file.fd, atim, mtim)?;
         Ok(())
     })
 }
@@ -727,9 +732,9 @@ pub unsafe extern "C" fn fd_pread(
         let len = (*iovs_ptr).buf_len;
 
         let file = state.get_file(fd)?;
-        let (data, end) = state.import_alloc.with_buffer(ptr, len, || {
-            wasi_filesystem::pread(file.fd, len as u64, offset)
-        })?;
+        let (data, end) = state
+            .import_alloc
+            .with_buffer(ptr, len, || filesystem::read(file.fd, len as u64, offset))?;
         assert_eq!(data.as_ptr(), ptr);
         assert!(data.len() <= len);
 
@@ -814,7 +819,7 @@ pub unsafe extern "C" fn fd_pwrite(
 
     State::with(|state| {
         let file = state.get_seekable_file(fd)?;
-        let bytes = wasi_filesystem::pwrite(file.fd, slice::from_raw_parts(ptr, len), offset)?;
+        let bytes = filesystem::write(file.fd, slice::from_raw_parts(ptr, len), offset)?;
         *nwritten = bytes as usize;
         Ok(())
     })
@@ -851,7 +856,7 @@ pub unsafe extern "C" fn fd_read(
                 let wasi_stream = streams.get_read_stream()?;
                 let (data, end) = state
                     .import_alloc
-                    .with_buffer(ptr, len, || wasi_io::read(wasi_stream, read_len))
+                    .with_buffer(ptr, len, || streams::read(wasi_stream, read_len))
                     .map_err(|_| ERRNO_IO)?;
 
                 assert_eq!(data.as_ptr(), ptr);
@@ -860,7 +865,7 @@ pub unsafe extern "C" fn fd_read(
                 // If this is a file, keep the current-position pointer up to date.
                 if let StreamType::File(file) = &streams.type_ {
                     file.position
-                        .set(file.position.get() + data.len() as wasi_filesystem::Filesize);
+                        .set(file.position.get() + data.len() as filesystem::Filesize);
                 }
 
                 let len = data.len();
@@ -918,8 +923,8 @@ pub unsafe extern "C" fn fd_readdir(
         // Compute the inode of `.` so that the iterator can produce an entry
         // for it.
         let dir = state.get_dir(fd)?;
-        let stat = wasi_filesystem::stat(dir.fd)?;
-        let dot_inode = stat.ino;
+        let stat = filesystem::stat(dir.fd)?;
+        let dot_inode = stat.inode;
 
         let mut iter;
         match stream {
@@ -928,7 +933,7 @@ pub unsafe extern "C" fn fd_readdir(
             // entry from cache and is additionally resuming at the `cookie`
             // specified.
             Some(stream) => {
-                iter = DirEntryIterator {
+                iter = DirectoryEntryIterator {
                     stream,
                     state,
                     cookie,
@@ -943,11 +948,11 @@ pub unsafe extern "C" fn fd_readdir(
             // from scratch, and the `cookie` value indicates how many items
             // need skipping.
             None => {
-                iter = DirEntryIterator {
+                iter = DirectoryEntryIterator {
                     state,
                     cookie: wasi::DIRCOOKIE_START,
                     use_cache: false,
-                    stream: DirEntryStream(wasi_filesystem::readdir(dir.fd)?),
+                    stream: DirectoryEntryStream(filesystem::read_directory(dir.fd)?),
                     dot_inode,
                 };
 
@@ -1004,7 +1009,7 @@ pub unsafe extern "C" fn fd_readdir(
             // In that case there's not much we can do and let the next call to
             // `fd_readdir` start from scratch.
             if buf.len() == 0 && name.len() <= DIRENT_CACHE {
-                let DirEntryIterator { stream, cookie, .. } = iter;
+                let DirectoryEntryIterator { stream, cookie, .. } = iter;
                 state.dirent_cache.stream.set(Some(stream));
                 state.dirent_cache.for_fd.set(fd);
                 state.dirent_cache.cookie.set(cookie - 1);
@@ -1022,15 +1027,15 @@ pub unsafe extern "C" fn fd_readdir(
         Ok(())
     });
 
-    struct DirEntryIterator<'a> {
+    struct DirectoryEntryIterator<'a> {
         state: &'a State,
         use_cache: bool,
         cookie: Dircookie,
-        stream: DirEntryStream,
+        stream: DirectoryEntryStream,
         dot_inode: wasi::Inode,
     }
 
-    impl<'a> Iterator for DirEntryIterator<'a> {
+    impl<'a> Iterator for DirectoryEntryIterator<'a> {
         // Note the usage of `UnsafeCell<u8>` here to indicate that the data can
         // alias the storage within `state`.
         type Item = Result<(wasi::Dirent, &'a [UnsafeCell<u8>]), Errno>;
@@ -1078,7 +1083,7 @@ pub unsafe extern "C" fn fd_readdir(
             let entry = self.state.import_alloc.with_buffer(
                 self.state.path_buf.get().cast(),
                 PATH_MAX,
-                || wasi_filesystem::read_dir_entry(self.stream.0),
+                || filesystem::read_directory_entry(self.stream.0),
             );
             let entry = match entry {
                 Ok(Some(entry)) => entry,
@@ -1086,11 +1091,11 @@ pub unsafe extern "C" fn fd_readdir(
                 Err(e) => return Some(Err(e.into())),
             };
 
-            let wasi_filesystem::DirEntry { ino, type_, name } = entry;
+            let filesystem::DirectoryEntry { inode, type_, name } = entry;
             let name = ManuallyDrop::new(name);
             let dirent = wasi::Dirent {
                 d_next: self.cookie,
-                d_ino: ino.unwrap_or(0),
+                d_ino: inode.unwrap_or(0),
                 d_namlen: u32::try_from(name.len()).trapping_unwrap(),
                 d_type: type_.into(),
             };
@@ -1155,13 +1160,13 @@ pub unsafe extern "C" fn fd_seek(
             let from = match whence {
                 WHENCE_SET => offset,
                 WHENCE_CUR => (file.position.get() as i64).wrapping_add(offset),
-                WHENCE_END => (wasi_filesystem::stat(file.fd)?.size as i64) + offset,
+                WHENCE_END => (filesystem::stat(file.fd)?.size as i64) + offset,
                 _ => return Err(ERRNO_INVAL),
             };
             stream.input.set(None);
             stream.output.set(None);
-            file.position.set(from as wasi_filesystem::Filesize);
-            *newoffset = from as wasi_filesystem::Filesize;
+            file.position.set(from as filesystem::Filesize);
+            *newoffset = from as filesystem::Filesize;
             Ok(())
         } else {
             Err(ERRNO_SPIPE)
@@ -1175,7 +1180,7 @@ pub unsafe extern "C" fn fd_seek(
 pub unsafe extern "C" fn fd_sync(fd: Fd) -> Errno {
     State::with(|state| {
         let file = state.get_file(fd)?;
-        wasi_filesystem::sync(file.fd)?;
+        filesystem::sync(file.fd)?;
         Ok(())
     })
 }
@@ -1221,7 +1226,7 @@ pub unsafe extern "C" fn fd_write(
         State::with(|state| match state.get(fd)? {
             Descriptor::Streams(streams) => {
                 let wasi_stream = streams.get_write_stream()?;
-                let bytes = wasi_io::write(wasi_stream, bytes).map_err(|_| ERRNO_IO)?;
+                let bytes = streams::write(wasi_stream, bytes).map_err(|_| ERRNO_IO)?;
 
                 // If this is a file, keep the current-position pointer up to date.
                 if let StreamType::File(file) = &streams.type_ {
@@ -1230,7 +1235,7 @@ pub unsafe extern "C" fn fd_write(
                     // we don't have an API to do that atomically.
                     if !file.append {
                         file.position
-                            .set(file.position.get() + wasi_filesystem::Filesize::from(bytes));
+                            .set(file.position.get() + filesystem::Filesize::from(bytes));
                     }
                 }
 
@@ -1238,7 +1243,7 @@ pub unsafe extern "C" fn fd_write(
                 Ok(())
             }
             Descriptor::Stderr => {
-                wasi_stderr::print(bytes);
+                crate::macros::print(bytes);
                 *nwritten = len;
                 Ok(())
             }
@@ -1262,7 +1267,7 @@ pub unsafe extern "C" fn path_create_directory(
 
     State::with(|state| {
         let file = state.get_dir(fd)?;
-        wasi_filesystem::create_directory_at(file.fd, path)?;
+        filesystem::create_directory_at(file.fd, path)?;
         Ok(())
     })
 }
@@ -1282,17 +1287,17 @@ pub unsafe extern "C" fn path_filestat_get(
 
     State::with(|state| {
         let file = state.get_dir(fd)?;
-        let stat = wasi_filesystem::stat_at(file.fd, at_flags, path)?;
+        let stat = filesystem::stat_at(file.fd, at_flags, path)?;
         let filetype = stat.type_.into();
         *buf = Filestat {
-            dev: stat.dev,
-            ino: stat.ino,
+            dev: stat.device,
+            ino: stat.inode,
             filetype,
-            nlink: stat.nlink,
+            nlink: stat.link_count,
             size: stat.size,
-            atim: datetime_to_timestamp(stat.atim),
-            mtim: datetime_to_timestamp(stat.mtim),
-            ctim: datetime_to_timestamp(stat.ctim),
+            atim: datetime_to_timestamp(stat.data_access_timestamp),
+            mtim: datetime_to_timestamp(stat.data_modification_timestamp),
+            ctim: datetime_to_timestamp(stat.status_change_timestamp),
         };
         Ok(())
     })
@@ -1312,25 +1317,25 @@ pub unsafe extern "C" fn path_filestat_set_times(
 ) -> Errno {
     let atim =
         if fst_flags & (FSTFLAGS_ATIM | FSTFLAGS_ATIM_NOW) == (FSTFLAGS_ATIM | FSTFLAGS_ATIM_NOW) {
-            wasi_filesystem::NewTimestamp::Now
+            filesystem::NewTimestamp::Now
         } else if fst_flags & FSTFLAGS_ATIM == FSTFLAGS_ATIM {
-            wasi_filesystem::NewTimestamp::Timestamp(wasi_filesystem::Datetime {
+            filesystem::NewTimestamp::Timestamp(filesystem::Datetime {
                 seconds: atim / 1_000_000_000,
                 nanoseconds: (atim % 1_000_000_000) as _,
             })
         } else {
-            wasi_filesystem::NewTimestamp::NoChange
+            filesystem::NewTimestamp::NoChange
         };
     let mtim =
         if fst_flags & (FSTFLAGS_MTIM | FSTFLAGS_MTIM_NOW) == (FSTFLAGS_MTIM | FSTFLAGS_MTIM_NOW) {
-            wasi_filesystem::NewTimestamp::Now
+            filesystem::NewTimestamp::Now
         } else if fst_flags & FSTFLAGS_MTIM == FSTFLAGS_MTIM {
-            wasi_filesystem::NewTimestamp::Timestamp(wasi_filesystem::Datetime {
+            filesystem::NewTimestamp::Timestamp(filesystem::Datetime {
                 seconds: mtim / 1_000_000_000,
                 nanoseconds: (mtim % 1_000_000_000) as _,
             })
         } else {
-            wasi_filesystem::NewTimestamp::NoChange
+            filesystem::NewTimestamp::NoChange
         };
 
     let path = slice::from_raw_parts(path_ptr, path_len);
@@ -1338,7 +1343,7 @@ pub unsafe extern "C" fn path_filestat_set_times(
 
     State::with(|state| {
         let file = state.get_dir(fd)?;
-        wasi_filesystem::set_times_at(file.fd, at_flags, path, atim, mtim)?;
+        filesystem::set_times_at(file.fd, at_flags, path, atim, mtim)?;
         Ok(())
     })
 }
@@ -1362,7 +1367,7 @@ pub unsafe extern "C" fn path_link(
     State::with(|state| {
         let old = state.get_dir(old_fd)?.fd;
         let new = state.get_dir(new_fd)?.fd;
-        wasi_filesystem::link_at(old, at_flags, old_path, new, new_path)?;
+        filesystem::link_at(old, at_flags, old_path, new, new_path)?;
         Ok(())
     })
 }
@@ -1392,12 +1397,12 @@ pub unsafe extern "C" fn path_open(
     let at_flags = at_flags_from_lookupflags(dirflags);
     let o_flags = o_flags_from_oflags(oflags);
     let flags = descriptor_flags_from_flags(fs_rights_base, fdflags);
-    let mode = wasi_filesystem::Mode::READABLE | wasi_filesystem::Mode::WRITEABLE;
+    let mode = filesystem::Modes::READABLE | filesystem::Modes::WRITEABLE;
     let append = fdflags & wasi::FDFLAGS_APPEND == wasi::FDFLAGS_APPEND;
 
     State::with_mut(|state| {
         let file = state.get_dir(fd)?;
-        let result = wasi_filesystem::open_at(file.fd, at_flags, path, o_flags, flags, mode)?;
+        let result = filesystem::open_at(file.fd, at_flags, path, o_flags, flags, mode)?;
         let desc = Descriptor::Streams(Streams {
             input: Cell::new(None),
             output: Cell::new(None),
@@ -1453,12 +1458,12 @@ pub unsafe extern "C" fn path_readlink(
             state
                 .import_alloc
                 .with_buffer(state.path_buf.get().cast(), PATH_MAX, || {
-                    wasi_filesystem::readlink_at(file.fd, path)
+                    filesystem::readlink_at(file.fd, path)
                 })?
         } else {
             state
                 .import_alloc
-                .with_buffer(buf, buf_len, || wasi_filesystem::readlink_at(file.fd, path))?
+                .with_buffer(buf, buf_len, || filesystem::readlink_at(file.fd, path))?
         };
 
         assert_eq!(path.as_ptr(), buf);
@@ -1493,7 +1498,7 @@ pub unsafe extern "C" fn path_remove_directory(
 
     State::with(|state| {
         let file = state.get_dir(fd)?;
-        wasi_filesystem::remove_directory_at(file.fd, path)?;
+        filesystem::remove_directory_at(file.fd, path)?;
         Ok(())
     })
 }
@@ -1515,7 +1520,7 @@ pub unsafe extern "C" fn path_rename(
     State::with(|state| {
         let old = state.get_dir(old_fd)?.fd;
         let new = state.get_dir(new_fd)?.fd;
-        wasi_filesystem::rename_at(old, old_path, new, new_path)?;
+        filesystem::rename_at(old, old_path, new, new_path)?;
         Ok(())
     })
 }
@@ -1535,7 +1540,7 @@ pub unsafe extern "C" fn path_symlink(
 
     State::with(|state| {
         let file = state.get_dir(fd)?;
-        wasi_filesystem::symlink_at(file.fd, old_path, new_path)?;
+        filesystem::symlink_at(file.fd, old_path, new_path)?;
         Ok(())
     })
 }
@@ -1549,7 +1554,7 @@ pub unsafe extern "C" fn path_unlink_file(fd: Fd, path_ptr: *const u8, path_len:
 
     State::with(|state| {
         let file = state.get_dir(fd)?;
-        wasi_filesystem::unlink_file_at(file.fd, path)?;
+        filesystem::unlink_file_at(file.fd, path)?;
         Ok(())
     })
 }
@@ -1571,16 +1576,16 @@ impl Pollables {
 impl Drop for Pollables {
     fn drop(&mut self) {
         for i in 0..self.index {
-            wasi_poll::drop_pollable(unsafe { *self.pointer.add(i) })
+            poll::drop_pollable(unsafe { *self.pointer.add(i) })
         }
     }
 }
 
-impl From<wasi_network::Error> for Errno {
-    fn from(error: wasi_network::Error) -> Errno {
+impl From<network::Error> for Errno {
+    fn from(error: network::Error) -> Errno {
         match error {
-            wasi_network::Error::Unknown => unreachable!(), // TODO
-            wasi_network::Error::Again => ERRNO_AGAIN,
+            network::Error::Unknown => unreachable!(), // TODO
+            network::Error::Again => ERRNO_AGAIN,
             /* TODO
             // Use a black box to prevent the optimizer from generating a
             // lookup table, which would require a static initializer.
@@ -1667,13 +1672,13 @@ pub unsafe extern "C" fn poll_oneoff(
                                 CLOCKID_REALTIME => {
                                     let timeout = if absolute {
                                         // Convert `clock.timeout` to `Datetime`.
-                                        let mut datetime = wasi_wall_clock::Datetime {
+                                        let mut datetime = wall_clock::Datetime {
                                             seconds: clock.timeout / 1_000_000_000,
                                             nanoseconds: (clock.timeout % 1_000_000_000) as _,
                                         };
 
                                         // Subtract `now`.
-                                        let now = wasi_wall_clock::now(state.default_wall_clock());
+                                        let now = wall_clock::now(state.instance_wall_clock());
                                         datetime.seconds -= now.seconds;
                                         if datetime.nanoseconds < now.nanoseconds {
                                             datetime.seconds -= 1;
@@ -1693,15 +1698,15 @@ pub unsafe extern "C" fn poll_oneoff(
                                         clock.timeout
                                     };
 
-                                    wasi_monotonic_clock::subscribe(
-                                        state.default_monotonic_clock(),
+                                    monotonic_clock::subscribe(
+                                        state.instance_monotonic_clock(),
                                         timeout,
                                         false,
                                     )
                                 }
 
-                                CLOCKID_MONOTONIC => wasi_monotonic_clock::subscribe(
-                                    state.default_monotonic_clock(),
+                                CLOCKID_MONOTONIC => monotonic_clock::subscribe(
+                                    state.instance_monotonic_clock(),
                                     clock.timeout,
                                     absolute,
                                 ),
@@ -1712,12 +1717,12 @@ pub unsafe extern "C" fn poll_oneoff(
 
                         EVENTTYPE_FD_READ => {
                             match state.get_read_stream(subscription.u.u.fd_read.file_descriptor) {
-                                Ok(stream) => wasi_io::subscribe_read(stream),
+                                Ok(stream) => streams::subscribe_to_input_stream(stream),
                                 // If the file descriptor isn't a stream, request a
                                 // pollable which completes immediately so that it'll
                                 // immediately fail.
-                                Err(ERRNO_BADF) => wasi_monotonic_clock::subscribe(
-                                    state.default_monotonic_clock(),
+                                Err(ERRNO_BADF) => monotonic_clock::subscribe(
+                                    state.instance_monotonic_clock(),
                                     0,
                                     false,
                                 ),
@@ -1728,12 +1733,12 @@ pub unsafe extern "C" fn poll_oneoff(
                         EVENTTYPE_FD_WRITE => {
                             match state.get_write_stream(subscription.u.u.fd_write.file_descriptor)
                             {
-                                Ok(stream) => wasi_io::subscribe(stream),
+                                Ok(stream) => streams::subscribe_to_output_stream(stream),
                                 // If the file descriptor isn't a stream, request a
                                 // pollable which completes immediately so that it'll
                                 // immediately fail.
-                                Err(ERRNO_BADF) => wasi_monotonic_clock::subscribe(
-                                    state.default_monotonic_clock(),
+                                Err(ERRNO_BADF) => monotonic_clock::subscribe(
+                                    state.instance_monotonic_clock(),
                                     0,
                                     false,
                                 ),
@@ -1745,10 +1750,8 @@ pub unsafe extern "C" fn poll_oneoff(
                     });
                 }
 
-                let vec = wasi_poll::poll_oneoff(slice::from_raw_parts(
-                    pollables.pointer,
-                    pollables.length,
-                ));
+                let vec =
+                    poll::poll_oneoff(slice::from_raw_parts(pollables.pointer, pollables.length));
 
                 assert_eq!(vec.len(), nsubscriptions);
                 assert_eq!(vec.as_ptr(), results);
@@ -1784,29 +1787,26 @@ pub unsafe extern "C" fn poll_oneoff(
                                 .trapping_unwrap();
                             match desc {
                                 Descriptor::Streams(streams) => match &streams.type_ {
-                                    StreamType::File(file) => {
-                                        match wasi_filesystem::stat(file.fd) {
-                                            Ok(stat) => {
-                                                error = ERRNO_SUCCESS;
-                                                nbytes =
-                                                    stat.size.saturating_sub(file.position.get());
-                                                flags = if nbytes == 0 {
-                                                    EVENTRWFLAGS_FD_READWRITE_HANGUP
-                                                } else {
-                                                    0
-                                                };
-                                            }
-                                            Err(e) => {
-                                                error = e.into();
-                                                nbytes = 1;
-                                                flags = 0;
-                                            }
+                                    StreamType::File(file) => match filesystem::stat(file.fd) {
+                                        Ok(stat) => {
+                                            error = ERRNO_SUCCESS;
+                                            nbytes = stat.size.saturating_sub(file.position.get());
+                                            flags = if nbytes == 0 {
+                                                EVENTRWFLAGS_FD_READWRITE_HANGUP
+                                            } else {
+                                                0
+                                            };
                                         }
-                                    }
+                                        Err(e) => {
+                                            error = e.into();
+                                            nbytes = 1;
+                                            flags = 0;
+                                        }
+                                    },
                                     StreamType::Socket(connection) => {
                                         unreachable!() // TODO
                                                        /*
-                                                       match wasi_tcp::bytes_readable(*connection) {
+                                                       match tcp::bytes_readable(*connection) {
                                                            Ok(result) => {
                                                                error = ERRNO_SUCCESS;
                                                                nbytes = result.0;
@@ -1853,7 +1853,7 @@ pub unsafe extern "C" fn poll_oneoff(
                                     StreamType::Socket(connection) => {
                                         unreachable!() // TODO
                                                        /*
-                                                       match wasi_tcp::bytes_writable(connection) {
+                                                       match tcp::bytes_writable(connection) {
                                                            Ok(result) => {
                                                                error = ERRNO_SUCCESS;
                                                                nbytes = result.0;
@@ -1908,7 +1908,7 @@ pub unsafe extern "C" fn poll_oneoff(
 #[no_mangle]
 pub unsafe extern "C" fn proc_exit(rval: Exitcode) -> ! {
     let status = if rval == 0 { Ok(()) } else { Err(()) };
-    wasi_exit::exit(status); // does not return
+    exit::exit(status); // does not return
     unreachable!("host exit implementation didn't exit!") // actually unreachable
 }
 
@@ -1942,9 +1942,9 @@ pub unsafe extern "C" fn random_get(buf: *mut u8, buf_len: Size) -> Errno {
     ) {
         State::with(|state| {
             assert_eq!(buf_len as u32 as Size, buf_len);
-            let result = state.import_alloc.with_buffer(buf, buf_len, || {
-                wasi_random::get_random_bytes(buf_len as u32)
-            });
+            let result = state
+                .import_alloc
+                .with_buffer(buf, buf_len, || random::get_random_bytes(buf_len as u64));
             assert_eq!(result.as_ptr(), buf);
 
             // The returned buffer's memory was allocated in `buf`, so don't separately
@@ -2001,123 +2001,119 @@ pub unsafe extern "C" fn sock_shutdown(fd: Fd, how: Sdflags) -> Errno {
     unreachable!()
 }
 
-fn datetime_to_timestamp(datetime: wasi_filesystem::Datetime) -> Timestamp {
+fn datetime_to_timestamp(datetime: filesystem::Datetime) -> Timestamp {
     u64::from(datetime.nanoseconds).saturating_add(datetime.seconds.saturating_mul(1_000_000_000))
 }
 
-fn at_flags_from_lookupflags(flags: Lookupflags) -> wasi_filesystem::AtFlags {
+fn at_flags_from_lookupflags(flags: Lookupflags) -> filesystem::PathFlags {
     if flags & LOOKUPFLAGS_SYMLINK_FOLLOW == LOOKUPFLAGS_SYMLINK_FOLLOW {
-        wasi_filesystem::AtFlags::SYMLINK_FOLLOW
+        filesystem::PathFlags::SYMLINK_FOLLOW
     } else {
-        wasi_filesystem::AtFlags::empty()
+        filesystem::PathFlags::empty()
     }
 }
 
-fn o_flags_from_oflags(flags: Oflags) -> wasi_filesystem::OFlags {
-    let mut o_flags = wasi_filesystem::OFlags::empty();
+fn o_flags_from_oflags(flags: Oflags) -> filesystem::OpenFlags {
+    let mut o_flags = filesystem::OpenFlags::empty();
     if flags & OFLAGS_CREAT == OFLAGS_CREAT {
-        o_flags |= wasi_filesystem::OFlags::CREATE;
+        o_flags |= filesystem::OpenFlags::CREATE;
     }
     if flags & OFLAGS_DIRECTORY == OFLAGS_DIRECTORY {
-        o_flags |= wasi_filesystem::OFlags::DIRECTORY;
+        o_flags |= filesystem::OpenFlags::DIRECTORY;
     }
     if flags & OFLAGS_EXCL == OFLAGS_EXCL {
-        o_flags |= wasi_filesystem::OFlags::EXCL;
+        o_flags |= filesystem::OpenFlags::EXCLUSIVE;
     }
     if flags & OFLAGS_TRUNC == OFLAGS_TRUNC {
-        o_flags |= wasi_filesystem::OFlags::TRUNC;
+        o_flags |= filesystem::OpenFlags::TRUNCATE;
     }
     o_flags
 }
 
-fn descriptor_flags_from_flags(
-    rights: Rights,
-    fdflags: Fdflags,
-) -> wasi_filesystem::DescriptorFlags {
-    let mut flags = wasi_filesystem::DescriptorFlags::empty();
+fn descriptor_flags_from_flags(rights: Rights, fdflags: Fdflags) -> filesystem::DescriptorFlags {
+    let mut flags = filesystem::DescriptorFlags::empty();
     if rights & wasi::RIGHTS_FD_READ == wasi::RIGHTS_FD_READ {
-        flags |= wasi_filesystem::DescriptorFlags::READ;
+        flags |= filesystem::DescriptorFlags::READ;
     }
     if rights & wasi::RIGHTS_FD_WRITE == wasi::RIGHTS_FD_WRITE {
-        flags |= wasi_filesystem::DescriptorFlags::WRITE;
+        flags |= filesystem::DescriptorFlags::WRITE;
     }
     if fdflags & wasi::FDFLAGS_SYNC == wasi::FDFLAGS_SYNC {
-        flags |= wasi_filesystem::DescriptorFlags::SYNC;
+        flags |= filesystem::DescriptorFlags::FILE_INTEGRITY_SYNC;
     }
     if fdflags & wasi::FDFLAGS_DSYNC == wasi::FDFLAGS_DSYNC {
-        flags |= wasi_filesystem::DescriptorFlags::DSYNC;
+        flags |= filesystem::DescriptorFlags::DATA_INTEGRITY_SYNC;
     }
     if fdflags & wasi::FDFLAGS_RSYNC == wasi::FDFLAGS_RSYNC {
-        flags |= wasi_filesystem::DescriptorFlags::RSYNC;
+        flags |= filesystem::DescriptorFlags::REQUESTED_WRITE_SYNC;
     }
     if fdflags & wasi::FDFLAGS_NONBLOCK == wasi::FDFLAGS_NONBLOCK {
-        flags |= wasi_filesystem::DescriptorFlags::NONBLOCK;
+        flags |= filesystem::DescriptorFlags::NON_BLOCKING;
     }
     flags
 }
 
-impl From<wasi_filesystem::Errno> for Errno {
+impl From<filesystem::ErrorCode> for Errno {
     #[inline(never)] // Disable inlining as this is bulky and relatively cold.
-    fn from(err: wasi_filesystem::Errno) -> Errno {
+    fn from(err: filesystem::ErrorCode) -> Errno {
         match err {
             // Use a black box to prevent the optimizer from generating a
             // lookup table, which would require a static initializer.
-            wasi_filesystem::Errno::Access => black_box(ERRNO_ACCES),
-            wasi_filesystem::Errno::Again => ERRNO_AGAIN,
-            wasi_filesystem::Errno::Already => ERRNO_ALREADY,
-            wasi_filesystem::Errno::Badf => ERRNO_BADF,
-            wasi_filesystem::Errno::Busy => ERRNO_BUSY,
-            wasi_filesystem::Errno::Deadlk => ERRNO_DEADLK,
-            wasi_filesystem::Errno::Dquot => ERRNO_DQUOT,
-            wasi_filesystem::Errno::Exist => ERRNO_EXIST,
-            wasi_filesystem::Errno::Fbig => ERRNO_FBIG,
-            wasi_filesystem::Errno::Ilseq => ERRNO_ILSEQ,
-            wasi_filesystem::Errno::Inprogress => ERRNO_INPROGRESS,
-            wasi_filesystem::Errno::Intr => ERRNO_INTR,
-            wasi_filesystem::Errno::Inval => ERRNO_INVAL,
-            wasi_filesystem::Errno::Io => ERRNO_IO,
-            wasi_filesystem::Errno::Isdir => ERRNO_ISDIR,
-            wasi_filesystem::Errno::Loop => ERRNO_LOOP,
-            wasi_filesystem::Errno::Mlink => ERRNO_MLINK,
-            wasi_filesystem::Errno::Msgsize => ERRNO_MSGSIZE,
-            wasi_filesystem::Errno::Nametoolong => ERRNO_NAMETOOLONG,
-            wasi_filesystem::Errno::Nodev => ERRNO_NODEV,
-            wasi_filesystem::Errno::Noent => ERRNO_NOENT,
-            wasi_filesystem::Errno::Nolck => ERRNO_NOLCK,
-            wasi_filesystem::Errno::Nomem => ERRNO_NOMEM,
-            wasi_filesystem::Errno::Nospc => ERRNO_NOSPC,
-            wasi_filesystem::Errno::Nosys => ERRNO_NOSYS,
-            wasi_filesystem::Errno::Notdir => ERRNO_NOTDIR,
-            wasi_filesystem::Errno::Notempty => ERRNO_NOTEMPTY,
-            wasi_filesystem::Errno::Notrecoverable => ERRNO_NOTRECOVERABLE,
-            wasi_filesystem::Errno::Notsup => ERRNO_NOTSUP,
-            wasi_filesystem::Errno::Notty => ERRNO_NOTTY,
-            wasi_filesystem::Errno::Nxio => ERRNO_NXIO,
-            wasi_filesystem::Errno::Overflow => ERRNO_OVERFLOW,
-            wasi_filesystem::Errno::Perm => ERRNO_PERM,
-            wasi_filesystem::Errno::Pipe => ERRNO_PIPE,
-            wasi_filesystem::Errno::Rofs => ERRNO_ROFS,
-            wasi_filesystem::Errno::Spipe => ERRNO_SPIPE,
-            wasi_filesystem::Errno::Txtbsy => ERRNO_TXTBSY,
-            wasi_filesystem::Errno::Xdev => ERRNO_XDEV,
+            filesystem::ErrorCode::Access => black_box(ERRNO_ACCES),
+            filesystem::ErrorCode::WouldBlock => ERRNO_AGAIN,
+            filesystem::ErrorCode::Already => ERRNO_ALREADY,
+            filesystem::ErrorCode::BadDescriptor => ERRNO_BADF,
+            filesystem::ErrorCode::Busy => ERRNO_BUSY,
+            filesystem::ErrorCode::Deadlock => ERRNO_DEADLK,
+            filesystem::ErrorCode::Quota => ERRNO_DQUOT,
+            filesystem::ErrorCode::Exist => ERRNO_EXIST,
+            filesystem::ErrorCode::FileTooLarge => ERRNO_FBIG,
+            filesystem::ErrorCode::IllegalByteSequence => ERRNO_ILSEQ,
+            filesystem::ErrorCode::InProgress => ERRNO_INPROGRESS,
+            filesystem::ErrorCode::Interrupted => ERRNO_INTR,
+            filesystem::ErrorCode::Invalid => ERRNO_INVAL,
+            filesystem::ErrorCode::Io => ERRNO_IO,
+            filesystem::ErrorCode::IsDirectory => ERRNO_ISDIR,
+            filesystem::ErrorCode::Loop => ERRNO_LOOP,
+            filesystem::ErrorCode::TooManyLinks => ERRNO_MLINK,
+            filesystem::ErrorCode::MessageSize => ERRNO_MSGSIZE,
+            filesystem::ErrorCode::NameTooLong => ERRNO_NAMETOOLONG,
+            filesystem::ErrorCode::NoDevice => ERRNO_NODEV,
+            filesystem::ErrorCode::NoEntry => ERRNO_NOENT,
+            filesystem::ErrorCode::NoLock => ERRNO_NOLCK,
+            filesystem::ErrorCode::InsufficientMemory => ERRNO_NOMEM,
+            filesystem::ErrorCode::InsufficientSpace => ERRNO_NOSPC,
+            filesystem::ErrorCode::Unsupported => ERRNO_NOTSUP,
+            filesystem::ErrorCode::NotDirectory => ERRNO_NOTDIR,
+            filesystem::ErrorCode::NotEmpty => ERRNO_NOTEMPTY,
+            filesystem::ErrorCode::NotRecoverable => ERRNO_NOTRECOVERABLE,
+            filesystem::ErrorCode::NoTty => ERRNO_NOTTY,
+            filesystem::ErrorCode::NoSuchDevice => ERRNO_NXIO,
+            filesystem::ErrorCode::Overflow => ERRNO_OVERFLOW,
+            filesystem::ErrorCode::NotPermitted => ERRNO_PERM,
+            filesystem::ErrorCode::Pipe => ERRNO_PIPE,
+            filesystem::ErrorCode::ReadOnly => ERRNO_ROFS,
+            filesystem::ErrorCode::InvalidSeek => ERRNO_SPIPE,
+            filesystem::ErrorCode::TextFileBusy => ERRNO_TXTBSY,
+            filesystem::ErrorCode::CrossDevice => ERRNO_XDEV,
         }
     }
 }
 
-impl From<wasi_filesystem::DescriptorType> for wasi::Filetype {
-    fn from(ty: wasi_filesystem::DescriptorType) -> wasi::Filetype {
+impl From<filesystem::DescriptorType> for wasi::Filetype {
+    fn from(ty: filesystem::DescriptorType) -> wasi::Filetype {
         match ty {
-            wasi_filesystem::DescriptorType::RegularFile => FILETYPE_REGULAR_FILE,
-            wasi_filesystem::DescriptorType::Directory => FILETYPE_DIRECTORY,
-            wasi_filesystem::DescriptorType::BlockDevice => FILETYPE_BLOCK_DEVICE,
-            wasi_filesystem::DescriptorType::CharacterDevice => FILETYPE_CHARACTER_DEVICE,
+            filesystem::DescriptorType::RegularFile => FILETYPE_REGULAR_FILE,
+            filesystem::DescriptorType::Directory => FILETYPE_DIRECTORY,
+            filesystem::DescriptorType::BlockDevice => FILETYPE_BLOCK_DEVICE,
+            filesystem::DescriptorType::CharacterDevice => FILETYPE_CHARACTER_DEVICE,
             // preview1 never had a FIFO code.
-            wasi_filesystem::DescriptorType::Fifo => FILETYPE_UNKNOWN,
+            filesystem::DescriptorType::Fifo => FILETYPE_UNKNOWN,
             // TODO: Add a way to disginguish between FILETYPE_SOCKET_STREAM and
             // FILETYPE_SOCKET_DGRAM.
-            wasi_filesystem::DescriptorType::Socket => unreachable!(),
-            wasi_filesystem::DescriptorType::SymbolicLink => FILETYPE_SYMBOLIC_LINK,
-            wasi_filesystem::DescriptorType::Unknown => FILETYPE_UNKNOWN,
+            filesystem::DescriptorType::Socket => unreachable!(),
+            filesystem::DescriptorType::SymbolicLink => FILETYPE_SYMBOLIC_LINK,
+            filesystem::DescriptorType::Unknown => FILETYPE_UNKNOWN,
         }
     }
 }
@@ -2158,7 +2154,7 @@ impl Streams {
                 // For files, we may have adjusted the position for seeking, so
                 // create a new stream.
                 StreamType::File(file) => {
-                    let input = wasi_filesystem::read_via_stream(file.fd, file.position.get())?;
+                    let input = filesystem::read_via_stream(file.fd, file.position.get())?;
                     self.input.set(Some(input));
                     Ok(input)
                 }
@@ -2176,9 +2172,9 @@ impl Streams {
                 // create a new stream.
                 StreamType::File(file) => {
                     let output = if file.append {
-                        wasi_filesystem::append_via_stream(file.fd)?
+                        filesystem::append_via_stream(file.fd)?
                     } else {
-                        wasi_filesystem::write_via_stream(file.fd, file.position.get())?
+                        filesystem::write_via_stream(file.fd, file.position.get())?
                     };
                     self.output.set(Some(output));
                     Ok(output)
@@ -2201,7 +2197,7 @@ enum StreamType {
     File(File),
 
     /// Streaming data with a socket connection.
-    Socket(wasi_tcp::TcpSocket),
+    Socket(tcp::TcpSocket),
 }
 
 impl Drop for Descriptor {
@@ -2209,13 +2205,13 @@ impl Drop for Descriptor {
         match self {
             Descriptor::Streams(stream) => {
                 if let Some(input) = stream.input.get() {
-                    wasi_io::drop_input_stream(input);
+                    streams::drop_input_stream(input);
                 }
                 if let Some(output) = stream.output.get() {
-                    wasi_io::drop_output_stream(output);
+                    streams::drop_output_stream(output);
                 }
                 match &stream.type_ {
-                    StreamType::File(file) => wasi_filesystem::drop_descriptor(file.fd),
+                    StreamType::File(file) => filesystem::drop_descriptor(file.fd),
                     StreamType::Socket(_) => unreachable!(),
                     StreamType::EmptyStdin | StreamType::Unknown => {}
                 }
@@ -2229,10 +2225,10 @@ impl Drop for Descriptor {
 #[repr(C)]
 struct File {
     /// The handle to the preview2 descriptor that this file is referencing.
-    fd: wasi_filesystem::Descriptor,
+    fd: filesystem::Descriptor,
 
     /// The current-position pointer.
-    position: Cell<wasi_filesystem::Filesize>,
+    position: Cell<filesystem::Filesize>,
 
     /// In append mode, all writes append to the file.
     append: bool,
@@ -2297,10 +2293,10 @@ struct State {
     dirent_cache: DirentCache,
 
     /// The clock handle for `CLOCKID_MONOTONIC`.
-    default_monotonic_clock: Cell<Option<Fd>>,
+    instance_monotonic_clock: Cell<Option<Fd>>,
 
     /// The clock handle for `CLOCKID_REALTIME`.
-    default_wall_clock: Cell<Option<Fd>>,
+    instance_wall_clock: Cell<Option<Fd>>,
 
     /// The string `..` for use by the directory iterator.
     dotdot: [UnsafeCell<u8>; 2],
@@ -2311,18 +2307,18 @@ struct State {
 }
 
 struct DirentCache {
-    stream: Cell<Option<DirEntryStream>>,
+    stream: Cell<Option<DirectoryEntryStream>>,
     for_fd: Cell<wasi::Fd>,
     cookie: Cell<wasi::Dircookie>,
     cached_dirent: Cell<wasi::Dirent>,
     path_data: UnsafeCell<MaybeUninit<[u8; DIRENT_CACHE]>>,
 }
 
-struct DirEntryStream(wasi_filesystem::DirEntryStream);
+struct DirectoryEntryStream(filesystem::DirectoryEntryStream);
 
-impl Drop for DirEntryStream {
+impl Drop for DirectoryEntryStream {
     fn drop(&mut self) {
-        wasi_filesystem::drop_dir_entry_stream(self.0);
+        filesystem::drop_directory_entry_stream(self.0);
     }
 }
 
@@ -2490,8 +2486,8 @@ impl State {
                     }),
                     path_data: UnsafeCell::new(MaybeUninit::uninit()),
                 },
-                default_monotonic_clock: Cell::new(None),
-                default_wall_clock: Cell::new(None),
+                instance_monotonic_clock: Cell::new(None),
+                instance_wall_clock: Cell::new(None),
                 dotdot: [UnsafeCell::new(b'.'), UnsafeCell::new(b'.')],
             }));
             &*ret
@@ -2582,7 +2578,7 @@ impl State {
     }
 
     #[allow(dead_code)] // until Socket is implemented
-    fn get_socket(&self, fd: Fd) -> Result<wasi_tcp::TcpSocket, Errno> {
+    fn get_socket(&self, fd: Fd) -> Result<tcp::TcpSocket, Errno> {
         match self.get(fd)? {
             Descriptor::Streams(Streams {
                 type_: StreamType::Socket(socket),
@@ -2625,37 +2621,37 @@ impl State {
 
     /// Return a handle to the default wall clock, creating one if we
     /// don't already have one.
-    fn default_wall_clock(&self) -> Fd {
-        match self.default_wall_clock.get() {
+    fn instance_wall_clock(&self) -> Fd {
+        match self.instance_wall_clock.get() {
             Some(fd) => fd,
-            None => self.init_default_wall_clock(),
+            None => self.init_instance_wall_clock(),
         }
     }
 
-    fn init_default_wall_clock(&self) -> Fd {
-        let clock = wasi_default_clocks::default_wall_clock();
-        self.default_wall_clock.set(Some(clock));
+    fn init_instance_wall_clock(&self) -> Fd {
+        let clock = instance_wall_clock::instance_wall_clock();
+        self.instance_wall_clock.set(Some(clock));
         clock
     }
 
     /// Return a handle to the default monotonic clock, creating one if we
     /// don't already have one.
-    fn default_monotonic_clock(&self) -> Fd {
-        match self.default_monotonic_clock.get() {
+    fn instance_monotonic_clock(&self) -> Fd {
+        match self.instance_monotonic_clock.get() {
             Some(fd) => fd,
-            None => self.init_default_monotonic_clock(),
+            None => self.init_instance_monotonic_clock(),
         }
     }
 
-    fn init_default_monotonic_clock(&self) -> Fd {
-        let clock = wasi_default_clocks::default_monotonic_clock();
-        self.default_monotonic_clock.set(Some(clock));
+    fn init_instance_monotonic_clock(&self) -> Fd {
+        let clock = instance_monotonic_clock::instance_monotonic_clock();
+        self.instance_monotonic_clock.set(Some(clock));
         clock
     }
 
     fn get_environment(&self) -> &[StrTuple] {
         if self.env_vars.get().is_none() {
-            #[link(wasm_import_module = "wasi-environment")]
+            #[link(wasm_import_module = "environment")]
             extern "C" {
                 #[link_name = "get-environment"]
                 fn get_environment_import(rval: *mut StrTupleList);
@@ -2679,9 +2675,9 @@ impl State {
 
     fn get_preopens(&self) -> &[Preopen] {
         if self.preopens.get().is_none() {
-            #[link(wasm_import_module = "wasi-filesystem")]
+            #[link(wasm_import_module = "environment-preopens")]
             extern "C" {
-                #[link_name = "get-preopens"]
+                #[link_name = "preopens"]
                 fn get_preopens_import(rval: *mut PreopenList);
             }
             let mut list = PreopenList {
