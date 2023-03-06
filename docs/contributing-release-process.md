@@ -132,28 +132,31 @@ the runbook is merged.
    Advisory**
    * This will not have any CI run, it's recommended to run `./ci/run-tests.sh`
      locally at least.
-   * This will also only be the patch for the `main` branch. You'll need to
-     locally maintain and develop patches for any older releases being backported
-     to. Note that from the major release process there should already be a
-     branch for all older releases.
+   * Develop fixes for all branches that will get a patch release in the
+     advisory, one PR per branch. When the advisory is published all branches
+     will be merged simultaneously. Be sure to run `./ci/run-tests.sh` in each
+     branch.
+   * Don't forget to update `RELEASES.md` with notes about the release on
+     each branch.
 2. **Send a PR for the version bump when an email goes out announcing there will
    be a security release**
    * An email is sent to the bytecodealliance security mailing list ahead of a
      patch release to announce that a patch release will happen. At this time you
      should [trigger the version bump][ci-trigger] against the appropriate
-     `release-x.y.z` branch with the `release-patch` argument.
+     `release-x.y.z` branches with the `release-patch` argument.
    * This will send a PR, but you should not merge it. Instead use this PR and
      the time ahead of the security release to fix any issues with CI. Older
      `release-x.y.z` branches haven't run CI in awhile so they may need to
      backport fixes of one variety or another. DO NOT include the actual fix for
      the security issue into the PR, that comes in the next step.
-3. **Make the patches public**
-   * For the `main` branch this will involve simply publishing the GitHub
-     Security Advisory. Note that CI will run after the advisory's changes are
-     merged in on `main`.
-   * For the backported release branches you should either create a PR targeting
-     these branches or push the changes to the previous version-bump PRs.
-3. **Merge the version-bump PR**
+3. **Make the advisories/patches public**
+   * Publishing the GitHub Security Advisory will merge all the PRs into each
+     branch from the advisory. Note that CI will run for release branches but
+     `main` will probably fail CI since it expected to be merged through the
+     merge queue, but that's ok.
+   * Double-check that CI for release branches finishes and completes
+     successfully.
+4. **Merge the version-bump PR**
    * Like the patch release process this will kick everything else into motion.
      Note that the actual security fixes should be merged either before or as
      part of this PR.
