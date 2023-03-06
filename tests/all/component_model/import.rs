@@ -685,10 +685,10 @@ fn bad_import_alignment() -> Result<()> {
     ))
   ))
 
-  (func (export "unaligned-retptr")
+  (func (export "unaligned-retptr2")
     (canon lift (core func $m "unaligned-retptr"))
   )
-  (func (export "unaligned-argptr")
+  (func (export "unaligned-argptr2")
     (canon lift (core func $m "unaligned-argptr"))
   )
 )
@@ -723,7 +723,7 @@ fn bad_import_alignment() -> Result<()> {
 
     let trap = linker
         .instantiate(&mut store, &component)?
-        .get_typed_func::<(), ()>(&mut store, "unaligned-retptr")?
+        .get_typed_func::<(), ()>(&mut store, "unaligned-retptr2")?
         .call(&mut store, ())
         .unwrap_err();
     assert!(
@@ -733,7 +733,7 @@ fn bad_import_alignment() -> Result<()> {
     );
     let trap = linker
         .instantiate(&mut store, &component)?
-        .get_typed_func::<(), ()>(&mut store, "unaligned-argptr")?
+        .get_typed_func::<(), ()>(&mut store, "unaligned-argptr2")?
         .call(&mut store, ())
         .unwrap_err();
     assert!(

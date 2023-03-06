@@ -1151,8 +1151,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::F32Le | Operator::F64Le => {
             translate_fcmp(FloatCC::LessThanOrEqual, builder, state)
         }
-        Operator::RefNull { ty } => {
-            state.push1(environ.translate_ref_null(builder.cursor(), (*ty).try_into()?)?)
+        Operator::RefNull { hty } => {
+            state.push1(environ.translate_ref_null(builder.cursor(), (*hty).try_into()?)?)
         }
         Operator::RefIsNull => {
             let value = state.pop1();
@@ -2157,14 +2157,14 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             ));
         }
         Operator::I8x16RelaxedSwizzle
-        | Operator::I32x4RelaxedTruncSatF32x4S
-        | Operator::I32x4RelaxedTruncSatF32x4U
-        | Operator::I32x4RelaxedTruncSatF64x2SZero
-        | Operator::I32x4RelaxedTruncSatF64x2UZero
-        | Operator::F32x4RelaxedFma
-        | Operator::F32x4RelaxedFnma
-        | Operator::F64x2RelaxedFma
-        | Operator::F64x2RelaxedFnma
+        | Operator::I32x4RelaxedTruncF32x4S
+        | Operator::I32x4RelaxedTruncF32x4U
+        | Operator::I32x4RelaxedTruncF64x2SZero
+        | Operator::I32x4RelaxedTruncF64x2UZero
+        | Operator::F32x4RelaxedMadd
+        | Operator::F32x4RelaxedNmadd
+        | Operator::F64x2RelaxedMadd
+        | Operator::F64x2RelaxedNmadd
         | Operator::I8x16RelaxedLaneselect
         | Operator::I16x8RelaxedLaneselect
         | Operator::I32x4RelaxedLaneselect
@@ -2174,10 +2174,20 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::F64x2RelaxedMin
         | Operator::F64x2RelaxedMax
         | Operator::I16x8RelaxedQ15mulrS
-        | Operator::I16x8DotI8x16I7x16S
-        | Operator::I32x4DotI8x16I7x16AddS
-        | Operator::F32x4RelaxedDotBf16x8AddF32x4 => {
+        | Operator::I16x8RelaxedDotI8x16I7x16S
+        | Operator::I32x4RelaxedDotI8x16I7x16AddS => {
             return Err(wasm_unsupported!("proposed relaxed-simd operator {:?}", op));
+        }
+
+        Operator::CallRef { .. }
+        | Operator::ReturnCallRef { .. }
+        | Operator::BrOnNull { .. }
+        | Operator::BrOnNonNull { .. }
+        | Operator::RefAsNonNull => {
+            return Err(wasm_unsupported!(
+                "proposed function-references operator {:?}",
+                op
+            ));
         }
     };
     Ok(())

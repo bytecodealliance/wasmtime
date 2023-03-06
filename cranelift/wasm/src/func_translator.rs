@@ -202,9 +202,13 @@ fn declare_locals<FE: FuncEnvironment + ?Sized>(
             let constant_handle = builder.func.dfg.constants.insert([0; 16].to_vec().into());
             builder.ins().vconst(ir::types::I8X16, constant_handle)
         }
-        ExternRef | FuncRef => {
-            environ.translate_ref_null(builder.cursor(), wasm_type.try_into()?)?
-        }
+        Ref(wasmparser::RefType {
+            nullable: true,
+            heap_type,
+        }) => environ.translate_ref_null(builder.cursor(), heap_type.try_into()?)?,
+        Ref(wasmparser::RefType {
+            nullable: false, ..
+        }) => unreachable!(),
     };
 
     let ty = builder.func.dfg.value_type(zeroval);

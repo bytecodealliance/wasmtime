@@ -37,8 +37,9 @@ where
                 wasmparser::ValType::F32 => &[wasmparser::ValType::F32],
                 wasmparser::ValType::F64 => &[wasmparser::ValType::F64],
                 wasmparser::ValType::V128 => &[wasmparser::ValType::V128],
-                wasmparser::ValType::ExternRef => &[wasmparser::ValType::ExternRef],
-                wasmparser::ValType::FuncRef => &[wasmparser::ValType::FuncRef],
+                wasmparser::ValType::EXTERNREF => &[wasmparser::ValType::EXTERNREF],
+                wasmparser::ValType::FUNCREF => &[wasmparser::ValType::FUNCREF],
+                wasmparser::ValType::Ref(_) => unimplemented!("function references proposal"),
             };
             (
                 itertools::Either::Left(params.iter().copied()),
@@ -79,7 +80,7 @@ pub fn block_with_params<PE: TargetEnvironment + ?Sized>(
             wasmparser::ValType::F64 => {
                 builder.append_block_param(block, ir::types::F64);
             }
-            wasmparser::ValType::ExternRef | wasmparser::ValType::FuncRef => {
+            wasmparser::ValType::Ref(ty) => {
                 builder.append_block_param(block, environ.reference_type(ty.try_into()?));
             }
             wasmparser::ValType::V128 => {
