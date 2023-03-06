@@ -2870,6 +2870,7 @@ impl MachInstEmit for Inst {
                     VecALUOp::Fmul => (0b001_01110_00_1, 0b110111),
                     VecALUOp::Addp => (0b000_01110_00_1 | enc_size << 1, 0b101111),
                     VecALUOp::Zip1 => (0b01001110_00_0 | enc_size << 1, 0b001110),
+                    VecALUOp::Zip2 => (0b01001110_00_0 | enc_size << 1, 0b011110),
                     VecALUOp::Sqrdmulh => {
                         debug_assert!(
                             size.lane_size() == ScalarSize::Size16

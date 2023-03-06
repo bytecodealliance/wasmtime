@@ -137,6 +137,24 @@
 (rule 1 (lower (shuffle a b (u128_from_immediate 0x1f1e1d1c1b1a1918_0f0e0d0c0b0a0908)))
       (vec_uzp2 a b (VectorSize.Size64x2)))
 
+;; Rules for the `zip1` and `zip2` instructions which interleave lanes in the
+;; low or high halves of the two input vectors.
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1707_1606_1505_1404_1303_1202_1101_1000)))
+      (vec_zip1 a b (VectorSize.Size8x16)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1f0f_1e0e_1d0d_1c0c_1b0b_1a0a_1909_1808)))
+      (vec_zip2 a b (VectorSize.Size8x16)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1716_0706_1514_0504_1312_0302_1110_0100)))
+      (vec_zip1 a b (VectorSize.Size16x8)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1f1e_0f0e_1d1c_0d0c_1b1a_0b0a_1918_0908)))
+      (vec_zip2 a b (VectorSize.Size16x8)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x17161514_07060504_13121110_03020100)))
+      (vec_zip1 a b (VectorSize.Size32x4)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1f1e1d1c_0f0e0d0c_1b1a1918_0b0a0908)))
+      (vec_zip2 a b (VectorSize.Size32x4)))
+;; Note that zip1/zip2 for i64x2 vectors is omitted since it's already covered
+;; by the i64x2 cases of uzp1/uzp2 above where both zip and uzp have the same
+;; semantics for 64-bit lanes.
+
 (rule (lower (has_type ty (shuffle rn rn2 (u128_from_immediate mask))))
       (let ((mask_reg Reg (constant_f128 mask)))
        (vec_tbl2 rn rn2 mask_reg ty)))

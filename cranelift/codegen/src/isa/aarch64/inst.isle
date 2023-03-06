@@ -1390,10 +1390,13 @@
     (Addp)
     ;; Zip vectors (primary) [meaning, high halves]
     (Zip1)
+    ;; Zip vectors (secondary)
+    (Zip2)
     ;; Signed saturating rounding doubling multiply returning high half
     (Sqrdmulh)
-
+    ;; Unzip vectors (primary)
     (Uzp1)
+    ;; Unzip vectors (secondary)
     (Uzp2)
 ))
 
@@ -3778,3 +3781,11 @@
 ;; Helper for emitting the `uzp2` instruction
 (decl vec_uzp2 (Reg Reg VectorSize) Reg)
 (rule (vec_uzp2 rn rm size) (vec_rrr (VecALUOp.Uzp2) rn rm size))
+
+;; Helper for emitting the `zip1` instruction
+(decl vec_zip1 (Reg Reg VectorSize) Reg)
+(rule (vec_zip1 rn rm size) (vec_rrr (VecALUOp.Zip1) rn rm size))
+
+;; Helper for emitting the `zip2` instruction
+(decl vec_zip2 (Reg Reg VectorSize) Reg)
+(rule (vec_zip2 rn rm size) (vec_rrr (VecALUOp.Zip2) rn rm size))

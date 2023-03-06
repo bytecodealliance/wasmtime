@@ -2345,6 +2345,7 @@ impl Inst {
                     VecALUOp::Fmul => ("fmul", size),
                     VecALUOp::Addp => ("addp", size),
                     VecALUOp::Zip1 => ("zip1", size),
+                    VecALUOp::Zip2 => ("zip2", size),
                     VecALUOp::Sqrdmulh => ("sqrdmulh", size),
                     VecALUOp::Uzp1 => ("uzp1", size),
                     VecALUOp::Uzp2 => ("uzp2", size),
