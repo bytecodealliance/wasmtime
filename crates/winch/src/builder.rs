@@ -39,7 +39,7 @@ impl CompilerBuilder for Builder {
     }
 
     fn build(&self) -> Result<Box<dyn wasmtime_environ::Compiler>> {
-        let isa = self.inner.finish()?;
+        let isa = self.inner.build()?;
 
         Ok(Box::new(Compiler::new(isa)))
     }

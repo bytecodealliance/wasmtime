@@ -29,6 +29,7 @@ pub enum RelocationTarget {
     LibCall(ir::LibCall),
 }
 
+/// Converts cranelift_codegen settings to the wasmtime_environ equivalent.
 pub fn clif_flags_to_wasmtime(
     flags: impl IntoIterator<Item = settings::Value>,
 ) -> BTreeMap<String, FlagValue> {

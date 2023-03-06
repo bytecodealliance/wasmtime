@@ -4,13 +4,22 @@ use cranelift_codegen::settings::{self, Configurable, Flags, SetError};
 use target_lexicon::Triple;
 use wasmtime_environ::{Setting, SettingKind};
 
+/// A helper to build an Isa for a compiler implementation.
+/// Compiler builders can wrap this to provide better flexibility when setting flags.
+///
+/// Most methods are mirrored from the `wasmtime_environ::CompilerBuilder` trait, so look there for more
+/// information.
 pub struct IsaBuilder<T> {
+    /// The shared flags that all targets share.
     shared_flags: settings::Builder,
+    /// The internal ISA builder for the current target.
     inner: Builder<T>,
+    /// A callback to lookup a new ISA builder for a target.
     pub lookup: fn(Triple) -> Result<Builder<T>>,
 }
 
 impl<T> IsaBuilder<T> {
+    /// Create a new ISA builder with the given lookup function.
     pub fn new(lookup: fn(Triple) -> Result<Builder<T>>) -> Self {
         let mut flags = settings::builder();
 
@@ -83,7 +92,7 @@ impl<T> IsaBuilder<T> {
         Ok(())
     }
 
-    pub fn finish(&self) -> T {
+    pub fn build(&self) -> T {
         self.inner
             .finish(settings::Flags::new(self.shared_flags.clone()))
     }
