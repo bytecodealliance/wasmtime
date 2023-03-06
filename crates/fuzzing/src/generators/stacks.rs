@@ -122,7 +122,7 @@ impl Stacks {
         types.function(vec![], vec![]);
 
         let call_func_type = types.len();
-        types.function(vec![wasm_encoder::ValType::FuncRef], vec![]);
+        types.function(vec![wasm_encoder::ValType::FUNCREF], vec![]);
 
         section(&mut module, types);
 
@@ -190,7 +190,7 @@ impl Stacks {
 
         let mut elems = wasm_encoder::ElementSection::new();
         elems.declared(
-            wasm_encoder::ValType::FuncRef,
+            wasm_encoder::RefType::FUNCREF,
             wasm_encoder::Elements::Functions(
                 &(0..num_imported_funcs + u32::try_from(self.funcs.len()).unwrap())
                     .collect::<Vec<_>>(),

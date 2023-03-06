@@ -1984,7 +1984,7 @@ fn drop_component_still_works() -> Result<()> {
                     (export "" (func $f_lower))
                 ))
             ))
-            (func (export "f")
+            (func (export "g")
                 (canon lift
                     (core func $i "f")
                 )
@@ -2008,7 +2008,7 @@ fn drop_component_still_works() -> Result<()> {
         (store, instance)
     };
 
-    let f = instance.get_typed_func::<(), ()>(&mut store, "f")?;
+    let f = instance.get_typed_func::<(), ()>(&mut store, "g")?;
     assert_eq!(*store.data(), 0);
     f.call(&mut store, ())?;
     assert_eq!(*store.data(), 2);
@@ -2202,7 +2202,7 @@ fn lower_then_lift() -> Result<()> {
   (func $f2 (result s32)
     (canon lift (core func $f_lower))
   )
-  (export "f" (func $f2))
+  (export "f2" (func $f2))
 )
     "#;
 
@@ -2213,7 +2213,7 @@ fn lower_then_lift() -> Result<()> {
     linker.root().func_wrap("f", |_, _: ()| Ok((2u32,)))?;
     let instance = linker.instantiate(&mut store, &component)?;
 
-    let f = instance.get_typed_func::<(), (i32,)>(&mut store, "f")?;
+    let f = instance.get_typed_func::<(), (i32,)>(&mut store, "f2")?;
     assert_eq!(f.call(&mut store, ())?, (2,));
 
     // First test strings when the import/export ABI happen to line up

@@ -41,8 +41,36 @@ impl TryFrom<wasmparser::ValType> for WasmType {
             F32 => Ok(WasmType::F32),
             F64 => Ok(WasmType::F64),
             V128 => Ok(WasmType::V128),
-            FuncRef => Ok(WasmType::FuncRef),
-            ExternRef => Ok(WasmType::ExternRef),
+            Ref(r) => r.try_into(),
+        }
+    }
+}
+
+impl TryFrom<wasmparser::RefType> for WasmType {
+    type Error = WasmError;
+    fn try_from(ty: wasmparser::RefType) -> Result<Self, Self::Error> {
+        match ty {
+            wasmparser::RefType::FUNCREF => Ok(WasmType::FuncRef),
+            wasmparser::RefType::EXTERNREF => Ok(WasmType::ExternRef),
+            _ => Err(WasmError::Unsupported(
+                "function references proposal".to_string(),
+            )),
+        }
+    }
+}
+
+impl TryFrom<wasmparser::HeapType> for WasmType {
+    type Error = WasmError;
+    fn try_from(ty: wasmparser::HeapType) -> Result<Self, Self::Error> {
+        match ty {
+            wasmparser::HeapType::Func => Ok(WasmType::FuncRef),
+            wasmparser::HeapType::Extern => Ok(WasmType::ExternRef),
+            // NB: when the function-references proposal is implemented this
+            // entire `impl` should probably go away to remove the need for not
+            // only this `unsupported` but everything.
+            _ => Err(WasmError::Unsupported(
+                "function references proposal".to_string(),
+            )),
         }
     }
 }
@@ -55,8 +83,8 @@ impl From<WasmType> for wasmparser::ValType {
             WasmType::F32 => wasmparser::ValType::F32,
             WasmType::F64 => wasmparser::ValType::F64,
             WasmType::V128 => wasmparser::ValType::V128,
-            WasmType::FuncRef => wasmparser::ValType::FuncRef,
-            WasmType::ExternRef => wasmparser::ValType::ExternRef,
+            WasmType::FuncRef => wasmparser::ValType::FUNCREF,
+            WasmType::ExternRef => wasmparser::ValType::EXTERNREF,
         }
     }
 }

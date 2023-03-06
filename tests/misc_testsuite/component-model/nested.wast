@@ -267,7 +267,7 @@
       (export "a" (global i32))
     ))
 
-    (component (export "c")
+    (component (export "c2")
       (export "m" (core module $c))
     )
   )
@@ -278,8 +278,8 @@
   (instance $c1 (instantiate $c (with "c" (core module $m1))))
   (instance $c2 (instantiate $c (with "c" (core module $m2))))
 
-  (instance $m1_container (instantiate (component $c1 "c")))
-  (instance $m2_container (instantiate (component $c2 "c")))
+  (instance $m1_container (instantiate (component $c1 "c2")))
+  (instance $m2_container (instantiate (component $c2 "c2")))
 
   (core instance $core1 (instantiate (module $m1_container "m")))
   (core instance $core2 (instantiate (module $m2_container "m")))

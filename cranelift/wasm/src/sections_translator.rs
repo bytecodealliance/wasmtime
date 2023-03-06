@@ -143,7 +143,7 @@ pub fn parse_table_section(
     environ.reserve_tables(tables.count())?;
 
     for entry in tables {
-        let ty = table(entry?)?;
+        let ty = table(entry?.ty)?;
         environ.declare_table(ty)?;
     }
 
@@ -198,7 +198,7 @@ pub fn parse_global_section(
             Operator::V128Const { value } => {
                 GlobalInit::V128Const(u128::from_le_bytes(*value.bytes()))
             }
-            Operator::RefNull { ty: _ } => GlobalInit::RefNullConst,
+            Operator::RefNull { hty: _ } => GlobalInit::RefNullConst,
             Operator::RefFunc { function_index } => {
                 GlobalInit::RefFunc(FuncIndex::from_u32(function_index))
             }

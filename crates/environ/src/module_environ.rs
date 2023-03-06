@@ -301,7 +301,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 self.result.module.table_plans.reserve_exact(cnt);
 
                 for entry in tables {
-                    let table = entry?.try_into()?;
+                    let table = entry?.ty.try_into()?;
                     let plan = TablePlan::for_table(table, &self.tunables);
                     self.result.module.table_plans.push(plan);
                 }
@@ -345,7 +345,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         Operator::V128Const { value } => {
                             GlobalInit::V128Const(u128::from_le_bytes(*value.bytes()))
                         }
-                        Operator::RefNull { ty: _ } => GlobalInit::RefNullConst,
+                        Operator::RefNull { hty: _ } => GlobalInit::RefNullConst,
                         Operator::RefFunc { function_index } => {
                             let index = FuncIndex::from_u32(function_index);
                             self.flag_func_escaped(index);

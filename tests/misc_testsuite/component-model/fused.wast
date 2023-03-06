@@ -244,17 +244,17 @@
         (export "" (func $import))
       ))
     ))
-    (func $export (export "thunk") (result u32)
+    (func $export (export "thunk2") (result u32)
       (canon lift (core func $reexport "thunk"))
     )
   )
 
   (instance $c1 (instantiate $c (with "thunk" (func $root))))
-  (instance $c2 (instantiate $c (with "thunk" (func $c1 "thunk"))))
-  (instance $c3 (instantiate $c (with "thunk" (func $c2 "thunk"))))
-  (instance $c4 (instantiate $c (with "thunk" (func $c3 "thunk"))))
-  (instance $c5 (instantiate $c (with "thunk" (func $c4 "thunk"))))
-  (instance $c6 (instantiate $c (with "thunk" (func $c5 "thunk"))))
+  (instance $c2 (instantiate $c (with "thunk" (func $c1 "thunk2"))))
+  (instance $c3 (instantiate $c (with "thunk" (func $c2 "thunk2"))))
+  (instance $c4 (instantiate $c (with "thunk" (func $c3 "thunk2"))))
+  (instance $c5 (instantiate $c (with "thunk" (func $c4 "thunk2"))))
+  (instance $c6 (instantiate $c (with "thunk" (func $c5 "thunk2"))))
 
   (component $verify
     (import "thunk" (func $thunk (result u32)))
@@ -276,7 +276,7 @@
       ))
     ))
   )
-  (instance (instantiate $verify (with "thunk" (func $c6 "thunk"))))
+  (instance (instantiate $verify (with "thunk" (func $c6 "thunk2"))))
 )
 
 ;; Fancy case of an adapter using an adapter. Note that this is silly and
