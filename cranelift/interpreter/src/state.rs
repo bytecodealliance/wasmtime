@@ -142,6 +142,10 @@ pub enum MemoryError {
     OutOfBoundsLoad { addr: Address, load_size: usize },
     #[error("Store of {store_size} bytes is larger than available size at address {addr:?}")]
     OutOfBoundsStore { addr: Address, store_size: usize },
+    #[error("Load of {load_size} bytes is misaligned at address {addr:?}")]
+    MisalignedLoad { addr: Address, load_size: usize },
+    #[error("Store of {store_size} bytes is misaligned at address {addr:?}")]
+    MisalignedStore { addr: Address, store_size: usize },
 }
 
 /// This dummy state allows interpretation over an immutable mapping of values in a single frame.
