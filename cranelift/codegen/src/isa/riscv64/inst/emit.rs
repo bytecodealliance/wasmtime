@@ -1281,7 +1281,7 @@ impl MachInstEmit for Inst {
                         .for_each(|i| i.emit(&[], sink, emit_info, state));
                 } else if ty.bits() == 32 {
                     Inst::Extend {
-                        rd: t0,
+                        rd: dst,
                         rn: dst.to_reg(),
                         signed: false,
                         from_bits: 32,
