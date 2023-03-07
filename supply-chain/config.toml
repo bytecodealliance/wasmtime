@@ -2,7 +2,7 @@
 # cargo-vet config file
 
 [imports.mozilla]
-url = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+url = "https://raw.githubusercontent.com/mozilla/supply-chain/main/audits.toml"
 
 [policy.isle-fuzz]
 criteria = "safe-to-run"
@@ -242,10 +242,6 @@ criteria = "safe-to-deploy"
 version = "0.6.0"
 criteria = "safe-to-run"
 
-[[exemptions.either]]
-version = "1.6.1"
-criteria = "safe-to-deploy"
-
 [[exemptions.elliptic-curve]]
 version = "0.10.6"
 criteria = "safe-to-deploy"
@@ -388,10 +384,6 @@ criteria = "safe-to-run"
 
 [[exemptions.k256]]
 version = "0.9.6"
-criteria = "safe-to-deploy"
-
-[[exemptions.lazy_static]]
-version = "1.4.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.libc]]
