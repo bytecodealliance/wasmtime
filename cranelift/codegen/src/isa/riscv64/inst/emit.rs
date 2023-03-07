@@ -1275,31 +1275,27 @@ impl MachInstEmit for Inst {
                     amo: AMO::SeqCst,
                 }
                 .emit(&[], sink, emit_info, state);
-                let origin_value = if ty.bits() < 32 {
-                    AtomicOP::extract(t0, offset, dst.to_reg(), ty)
+                if ty.bits() < 32 {
+                    AtomicOP::extract(dst, offset, dst.to_reg(), ty)
                         .iter()
                         .for_each(|i| i.emit(&[], sink, emit_info, state));
-                    t0.to_reg()
                 } else if ty.bits() == 32 {
                     Inst::Extend {
-                        rd: t0,
+                        rd: dst,
                         rn: dst.to_reg(),
                         signed: false,
                         from_bits: 32,
                         to_bits: 64,
                     }
                     .emit(&[], sink, emit_info, state);
-                    t0.to_reg()
-                } else {
-                    dst.to_reg()
-                };
+                }
                 Inst::CondBr {
                     taken: BranchTarget::Label(fail_label),
                     not_taken: BranchTarget::zero(),
                     kind: IntegerCompare {
                         kind: IntCC::NotEqual,
                         rs1: e,
-                        rs2: origin_value,
+                        rs2: dst.to_reg(),
                     },
                 }
                 .emit(&[], sink, emit_info, state);

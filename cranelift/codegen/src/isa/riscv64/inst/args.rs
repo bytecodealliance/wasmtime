@@ -1511,7 +1511,7 @@ impl AtomicOP {
     }
 
     /// like extract but sign extend the value.
-    /// suitable for smax.
+    /// suitable for smax,etc.
     pub(crate) fn extract_sext(
         rd: WritableReg,
         offset: Reg,
