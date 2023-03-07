@@ -108,7 +108,7 @@ impl TargetIsa for X64 {
     }
 
     fn function_alignment(&self) -> u32 {
-        // See `cranelift_codegen`'s value of this for more information
+        // See `cranelift_codegen`'s value of this for more information.
         16
     }
 }

@@ -318,7 +318,7 @@ pub trait Compiler: Send + Sync {
     ///
     /// Returns `None` if the ISA does not support System V unwind information.
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
-        // By default, an ISA cannot create a System V CIE
+        // By default, an ISA cannot create a System V CIE.
         None
     }
 }

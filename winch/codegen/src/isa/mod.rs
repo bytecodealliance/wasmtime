@@ -105,16 +105,16 @@ pub trait TargetIsa: Send + Sync {
         self.triple().endianness().unwrap()
     }
 
-    /// See `cranelift_codegen::isa::TargetIsa::create_systemv_cie`
+    /// See `cranelift_codegen::isa::TargetIsa::create_systemv_cie`.
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
-        // By default, an ISA cannot create a System V CIE
+        // By default, an ISA cannot create a System V CIE.
         None
     }
 
-    /// See `cranelift_codegen::isa::TargetIsa::text_section_builder`
+    /// See `cranelift_codegen::isa::TargetIsa::text_section_builder`.
     fn text_section_builder(&self, num_labeled_funcs: usize) -> Box<dyn TextSectionBuilder>;
 
-    /// See `cranelift_codegen::isa::TargetIsa::function_alignment`
+    /// See `cranelift_codegen::isa::TargetIsa::function_alignment`.
     fn function_alignment(&self) -> u32;
 }
 

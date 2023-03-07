@@ -146,7 +146,7 @@ impl fmt::Display for LookupError {
 /// The type of a polymorphic TargetISA object which is 'static.
 pub type OwnedTargetIsa = Arc<dyn TargetIsa>;
 
-/// Type alias of `IsaBuilder` used for building Cranelift's ISAs
+/// Type alias of `IsaBuilder` used for building Cranelift's ISAs.
 pub type Builder = IsaBuilder<CodegenResult<OwnedTargetIsa>>;
 
 /// Builder for a `TargetIsa`.
