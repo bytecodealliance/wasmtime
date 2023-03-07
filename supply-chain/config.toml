@@ -1,6 +1,9 @@
 
 # cargo-vet config file
 
+[imports.embark-studios]
+url = "https://raw.githubusercontent.com/EmbarkStudios/rust-ecosystem/main/audits.toml"
+
 [imports.mozilla]
 url = "https://raw.githubusercontent.com/mozilla/supply-chain/main/audits.toml"
 
@@ -52,10 +55,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.ambient-authority]]
 version = "0.0.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.anyhow]]
-version = "1.0.57"
 criteria = "safe-to-deploy"
 
 [[exemptions.async-trait]]
@@ -185,10 +184,6 @@ criteria = "safe-to-deploy"
 [[exemptions.ctr]]
 version = "0.8.0"
 criteria = "safe-to-deploy"
-
-[[exemptions.cty]]
-version = "0.2.2"
-criteria = "safe-to-run"
 
 [[exemptions.curve25519-dalek]]
 version = "3.2.0"
