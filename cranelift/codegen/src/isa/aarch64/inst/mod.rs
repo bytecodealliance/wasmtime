@@ -2123,9 +2123,9 @@ impl Inst {
                 let rn = pretty_print_ireg(rn, size.operand_size(), allocs);
                 format!("dup {}, {}", rd, rn)
             }
-            &Inst::VecDupFromFpu { rd, rn, size } => {
+            &Inst::VecDupFromFpu { rd, rn, size, lane } => {
                 let rd = pretty_print_vreg_vector(rd.to_reg(), size, allocs);
-                let rn = pretty_print_vreg_element(rn, 0, size.lane_size(), allocs);
+                let rn = pretty_print_vreg_element(rn, lane.into(), size.lane_size(), allocs);
                 format!("dup {}, {}", rd, rn)
             }
             &Inst::VecDupFPImm { rd, imm, size } => {

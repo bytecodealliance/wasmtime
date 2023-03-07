@@ -2493,13 +2493,27 @@ impl MachInstEmit for Inst {
                         | machreg_to_vec(rd.to_reg()),
                 );
             }
-            &Inst::VecDupFromFpu { rd, rn, size } => {
+            &Inst::VecDupFromFpu { rd, rn, size, lane } => {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
                 let q = size.is_128bits() as u32;
                 let imm5 = match size.lane_size() {
-                    ScalarSize::Size32 => 0b00100,
-                    ScalarSize::Size64 => 0b01000,
+                    ScalarSize::Size8 => {
+                        assert!(lane < 16);
+                        0b00001 | (u32::from(lane) << 1)
+                    }
+                    ScalarSize::Size16 => {
+                        assert!(lane < 8);
+                        0b00010 | (u32::from(lane) << 2)
+                    }
+                    ScalarSize::Size32 => {
+                        assert!(lane < 4);
+                        0b00100 | (u32::from(lane) << 3)
+                    }
+                    ScalarSize::Size64 => {
+                        assert!(lane < 2);
+                        0b01000 | (u32::from(lane) << 4)
+                    }
                     _ => unimplemented!(),
                 };
                 sink.put4(

@@ -752,4 +752,37 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
             None
         }
     }
+
+    fn shuffle_dup8_from_imm(&mut self, imm: Immediate) -> Option<u8> {
+        let bytes = self.lower_ctx.get_immediate_data(imm).as_slice();
+        if bytes.iter().all(|b| *b == bytes[0]) && bytes[0] < 16 {
+            Some(bytes[0])
+        } else {
+            None
+        }
+    }
+    fn shuffle_dup16_from_imm(&mut self, imm: Immediate) -> Option<u8> {
+        let (a, b, c, d, e, f, g, h) = self.shuffle16_from_imm(imm)?;
+        if a == b && b == c && c == d && d == e && e == f && f == g && g == h && a < 8 {
+            Some(a)
+        } else {
+            None
+        }
+    }
+    fn shuffle_dup32_from_imm(&mut self, imm: Immediate) -> Option<u8> {
+        let (a, b, c, d) = self.shuffle32_from_imm(imm)?;
+        if a == b && b == c && c == d && a < 4 {
+            Some(a)
+        } else {
+            None
+        }
+    }
+    fn shuffle_dup64_from_imm(&mut self, imm: Immediate) -> Option<u8> {
+        let (a, b) = self.shuffle64_from_imm(imm)?;
+        if a == b && a < 2 {
+            Some(a)
+        } else {
+            None
+        }
+    }
 }

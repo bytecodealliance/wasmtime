@@ -118,6 +118,28 @@
 
 ;;;; Rules for `shuffle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; When a single element of one vector is broadcast to all the destination
+;; lanes then the `dup` instruction can be used for this operation. Note that
+;; for now this only matches lane selection from the first vector `a`, but
+;; if necessary in the future rules can be added to select from `b` as well.
+(rule 6 (lower (shuffle a b (shuffle_dup8_from_imm n)))
+        (vec_dup_from_fpu a (VectorSize.Size8x16) n))
+(rule 5 (lower (shuffle a b (shuffle_dup16_from_imm n)))
+        (vec_dup_from_fpu a (VectorSize.Size16x8) n))
+(rule 4 (lower (shuffle a b (shuffle_dup32_from_imm n)))
+        (vec_dup_from_fpu a (VectorSize.Size32x4) n))
+(rule 3 (lower (shuffle a b (shuffle_dup64_from_imm n)))
+        (vec_dup_from_fpu a (VectorSize.Size64x2) n))
+
+(decl shuffle_dup8_from_imm (u8) Immediate)
+(extern extractor shuffle_dup8_from_imm shuffle_dup8_from_imm)
+(decl shuffle_dup16_from_imm (u8) Immediate)
+(extern extractor shuffle_dup16_from_imm shuffle_dup16_from_imm)
+(decl shuffle_dup32_from_imm (u8) Immediate)
+(extern extractor shuffle_dup32_from_imm shuffle_dup32_from_imm)
+(decl shuffle_dup64_from_imm (u8) Immediate)
+(extern extractor shuffle_dup64_from_imm shuffle_dup64_from_imm)
+
 ;; When the shuffle looks like "concatenate `a` and `b` and shift right by n*8
 ;; bytes", that's an `ext` instruction.
 (rule 2 (lower (shuffle a b (vec_extract_imm4_from_immediate n)))
@@ -1902,7 +1924,7 @@
       (vec_dup x (vector_size ty)))
 
 (rule -2 (lower (has_type ty (splat x @ (value_type (ty_scalar_float _)))))
-      (vec_dup_from_fpu x (vector_size ty)))
+      (vec_dup_from_fpu x (vector_size ty) 0))
 
 (rule (lower (has_type ty (splat (f32const (u64_from_ieee32 n)))))
       (splat_const n (vector_size ty)))

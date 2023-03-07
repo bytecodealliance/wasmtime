@@ -597,6 +597,8 @@
 ;; returned will be in the range of 0 to (256/N)-1, inclusive, and index the
 ;; N-bit chunks of two concatenated 128-bit vectors starting from the
 ;; least-significant bits.
+(decl shuffle64_from_imm (u8 u8) Immediate)
+(extern extractor shuffle64_from_imm shuffle64_from_imm)
 (decl shuffle32_from_imm (u8 u8 u8 u8) Immediate)
 (extern extractor shuffle32_from_imm shuffle32_from_imm)
 (decl shuffle16_from_imm (u8 u8 u8 u8 u8 u8 u8 u8) Immediate)

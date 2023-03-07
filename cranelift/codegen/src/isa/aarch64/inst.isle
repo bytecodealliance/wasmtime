@@ -553,7 +553,8 @@
        (VecDupFromFpu
         (rd WritableReg)
         (rn Reg)
-        (size VectorSize))
+        (size VectorSize)
+        (lane u8))
 
        ;; Duplicate FP immediate to vector.
        (VecDupFPImm
@@ -1897,10 +1898,10 @@
         dst))
 
 ;; Helper for emitting `MInst.VecDupFromFpu` instructions.
-(decl vec_dup_from_fpu (Reg VectorSize) Reg)
-(rule (vec_dup_from_fpu src size)
+(decl vec_dup_from_fpu (Reg VectorSize u8) Reg)
+(rule (vec_dup_from_fpu src size lane)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
-            (_ Unit (emit (MInst.VecDupFromFpu dst src size))))
+            (_ Unit (emit (MInst.VecDupFromFpu dst src size lane))))
         dst))
 
 ;; Helper for emitting `MInst.AluRRImm12` instructions.
