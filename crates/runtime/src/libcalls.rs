@@ -584,4 +584,12 @@ pub mod relocs {
             (x.abs() + TOINT_64 - TOINT_64).copysign(x)
         }
     }
+
+    pub extern "C" fn fmaf32(a: f32, b: f32, c: f32) -> f32 {
+        a.mul_add(b, c)
+    }
+
+    pub extern "C" fn fmaf64(a: f64, b: f64, c: f64) -> f64 {
+        a.mul_add(b, c)
+    }
 }

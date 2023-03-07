@@ -1358,6 +1358,11 @@ where
         Opcode::GetFramePointer => unimplemented!("GetFramePointer"),
         Opcode::GetStackPointer => unimplemented!("GetStackPointer"),
         Opcode::GetReturnAddress => unimplemented!("GetReturnAddress"),
+        Opcode::X86Pshufb => unimplemented!("X86Pshufb"),
+        Opcode::X86Blendv => unimplemented!("X86Blendv"),
+        Opcode::X86Pmulhrsw => unimplemented!("X86Pmulhrsw"),
+        Opcode::X86Pmaddubsw => unimplemented!("X86Pmaddubsw"),
+        Opcode::X86Cvtt2dq => unimplemented!("X86Cvtt2dq"),
     })
 }
 

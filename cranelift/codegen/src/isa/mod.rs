@@ -315,6 +315,13 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     fn to_capstone(&self) -> Result<capstone::Capstone, capstone::Error> {
         Err(capstone::Error::UnsupportedArch)
     }
+
+    /// Returns whether this ISA has a native fused-multiply-and-add instruction
+    /// for floats.
+    ///
+    /// Currently this only returns false on x86 when some native features are
+    /// not detected.
+    fn has_native_fma(&self) -> bool;
 }
 
 /// Methods implemented for free for target ISA!

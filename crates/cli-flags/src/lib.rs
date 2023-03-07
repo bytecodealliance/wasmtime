@@ -35,6 +35,10 @@ pub const SUPPORTED_WASM_FEATURES: &[(&str, &str)] = &[
     ("multi-value", "enables support for multi-value functions"),
     ("reference-types", "enables support for reference types"),
     ("simd", "enables support for proposed SIMD instructions"),
+    (
+        "relaxed-simd",
+        "enables support for the relaxed simd proposal",
+    ),
     ("threads", "enables support for WebAssembly threads"),
     ("memory64", "enables support for 64-bit memories"),
     #[cfg(feature = "component-model")]
@@ -235,6 +239,17 @@ pub struct CommonOptions {
     /// stack overflow is reported.
     #[clap(long)]
     pub max_wasm_stack: Option<usize>,
+
+    /// Whether or not to force deterministic and host-independent behavior of
+    /// the relaxed-simd instructions.
+    ///
+    /// By default these instructions may have architecture-specific behavior as
+    /// allowed by the specification, but this can be used to force the behavior
+    /// of these instructions to match the deterministic behavior classified in
+    /// the specification. Note that enabling this option may come at a
+    /// performance cost.
+    #[clap(long)]
+    pub relaxed_simd_deterministic: bool,
 }
 
 impl CommonOptions {
@@ -329,12 +344,15 @@ impl CommonOptions {
             config.max_wasm_stack(max);
         }
 
+        config.relaxed_simd_deterministic(self.relaxed_simd_deterministic);
+
         Ok(config)
     }
 
     pub fn enable_wasm_features(&self, config: &mut Config) {
         let WasmFeatures {
             simd,
+            relaxed_simd,
             bulk_memory,
             reference_types,
             multi_value,
@@ -347,6 +365,9 @@ impl CommonOptions {
 
         if let Some(enable) = simd {
             config.wasm_simd(enable);
+        }
+        if let Some(enable) = relaxed_simd {
+            config.wasm_relaxed_simd(enable);
         }
         if let Some(enable) = bulk_memory {
             config.wasm_bulk_memory(enable);
@@ -400,6 +421,7 @@ pub struct WasmFeatures {
     pub multi_value: Option<bool>,
     pub bulk_memory: Option<bool>,
     pub simd: Option<bool>,
+    pub relaxed_simd: Option<bool>,
     pub threads: Option<bool>,
     pub multi_memory: Option<bool>,
     pub memory64: Option<bool>,
@@ -450,6 +472,7 @@ fn parse_wasm_features(features: &str) -> Result<WasmFeatures> {
         multi_value: all.or(values["multi-value"]),
         bulk_memory: all.or(values["bulk-memory"]),
         simd: all.or(values["simd"]),
+        relaxed_simd: all.or(values["relaxed-simd"]),
         threads: all.or(values["threads"]),
         multi_memory: all.or(values["multi-memory"]),
         memory64: all.or(values["memory64"]),
@@ -560,6 +583,7 @@ mod test {
             multi_value,
             bulk_memory,
             simd,
+            relaxed_simd,
             threads,
             multi_memory,
             memory64,
@@ -572,6 +596,7 @@ mod test {
         assert_eq!(threads, Some(true));
         assert_eq!(multi_memory, Some(true));
         assert_eq!(memory64, Some(true));
+        assert_eq!(relaxed_simd, Some(true));
 
         Ok(())
     }
@@ -585,6 +610,7 @@ mod test {
             multi_value,
             bulk_memory,
             simd,
+            relaxed_simd,
             threads,
             multi_memory,
             memory64,
@@ -597,6 +623,7 @@ mod test {
         assert_eq!(threads, Some(false));
         assert_eq!(multi_memory, Some(false));
         assert_eq!(memory64, Some(false));
+        assert_eq!(relaxed_simd, Some(false));
 
         Ok(())
     }
@@ -613,6 +640,7 @@ mod test {
             multi_value,
             bulk_memory,
             simd,
+            relaxed_simd,
             threads,
             multi_memory,
             memory64,
@@ -625,6 +653,7 @@ mod test {
         assert_eq!(threads, None);
         assert_eq!(multi_memory, Some(true));
         assert_eq!(memory64, Some(true));
+        assert_eq!(relaxed_simd, None);
 
         Ok(())
     }
@@ -662,6 +691,7 @@ mod test {
     feature_test!(test_multi_value_feature, multi_value, "multi-value");
     feature_test!(test_bulk_memory_feature, bulk_memory, "bulk-memory");
     feature_test!(test_simd_feature, simd, "simd");
+    feature_test!(test_relaxed_simd_feature, relaxed_simd, "relaxed-simd");
     feature_test!(test_threads_feature, threads, "threads");
     feature_test!(test_multi_memory_feature, multi_memory, "multi-memory");
     feature_test!(test_memory64_feature, memory64, "memory64");

@@ -29,6 +29,9 @@ pub struct TestConfig {
 
     #[serde(default)]
     pub heaps: Vec<TestHeap>,
+
+    #[serde(default)]
+    pub relaxed_simd_deterministic: bool,
 }
 
 impl TestConfig {

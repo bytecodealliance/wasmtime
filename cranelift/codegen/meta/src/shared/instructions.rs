@@ -386,6 +386,27 @@ fn define_simd_lane_access(
         .operands_out(vec![a]),
     );
 
+    ig.push(
+        Inst::new(
+            "x86_pshufb",
+            r#"
+        A vector swizzle lookalike which has the semantics of `pshufb` on x64.
+
+        This instruction will permute the 8-bit lanes of `x` with the indices
+        specified in `y`. Each lane in the mask, `y`, uses the bottom four
+        bits for selecting the lane from `x` unless the most significant bit
+        is set, in which case the lane is zeroed. The output vector will have
+        the following contents when the element of `y` is in these ranges:
+
+        * `[0, 127]` -> `x[y[i] % 16]`
+        * `[128, 255]` -> 0
+        "#,
+            &formats.binary,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
+    );
+
     let x = &Operand::new("x", TxN).with_doc("The vector to modify");
     let y = &Operand::new("y", &TxN.lane_of()).with_doc("New lane value");
     let Idx = &Operand::new("Idx", &imm.uimm8).with_doc("Lane index");
@@ -1436,9 +1457,27 @@ pub(crate) fn define(
         Conditional select of bits.
 
         For each bit in `c`, this instruction selects the corresponding bit from `x` if the bit
-        in `c` is 1 and the corresponding bit from `y` if the bit in `c` is 0. See also:
+        in `x` is 1 and the corresponding bit from `y` if the bit in `c` is 0. See also:
         `select`, `vselect`.
         "#,
+            &formats.ternary,
+        )
+        .operands_in(vec![c, x, y])
+        .operands_out(vec![a]),
+    );
+
+    ig.push(
+        Inst::new(
+            "x86_blendv",
+            r#"
+        A bitselect-lookalike instruction except with the semantics of
+        `blendv`-related instructions on x86.
+
+        This instruction will use the top bit of each lane in `c`, the condition
+        mask. If the bit is 1 then the corresponding lane from `x` is chosen.
+        Otherwise the corresponding lane from `y` is chosen.
+
+            "#,
             &formats.ternary,
         )
         .operands_in(vec![c, x, y])
@@ -1691,6 +1730,22 @@ pub(crate) fn define(
         `a := signed_saturate((x * y + 1 << (Q - 1)) >> Q)`
 
         Polymorphic over all integer vector types with 16- or 32-bit numbers.
+        "#,
+            &formats.binary,
+        )
+        .operands_in(vec![qx, qy])
+        .operands_out(vec![qa]),
+    );
+
+    ig.push(
+        Inst::new(
+            "x86_pmulhrsw",
+            r#"
+        A similar instruction to `sqmul_round_sat` except with the semantics
+        of x86's `pmulhrsw` instruction.
+
+        This is the same as `sqmul_round_sat` except when both input lanes are
+        `i16::MIN`.
         "#,
             &formats.binary,
         )
@@ -3135,6 +3190,36 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    let I8x16 = &TypeVar::new(
+        "I8x16",
+        "A SIMD vector type consisting of 16 lanes of 8-bit integers",
+        TypeSetBuilder::new()
+            .ints(8..8)
+            .simd_lanes(16..16)
+            .includes_scalars(false)
+            .build(),
+    );
+    let x = &Operand::new("x", I8x16);
+    let y = &Operand::new("y", I8x16);
+    let a = &Operand::new("a", I16x8);
+
+    ig.push(
+        Inst::new(
+            "x86_pmaddubsw",
+            r#"
+        An instruction with equivalent semantics to `pmaddubsw` on x86.
+
+        This instruction will take signed bytes from the first argument and
+        multiply them against unsigned bytes in the second argument. Adjacent
+        pairs are then added, with saturating, to a 16-bit value and are packed
+        into the result.
+            "#,
+            &formats.binary,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
+    );
+
     let IntTo = &TypeVar::new(
         "IntTo",
         "A larger integer type with the same number of lanes",
@@ -3371,6 +3456,20 @@ pub(crate) fn define(
             r#"
         Convert floating point to signed integer as fcvt_to_sint does, but
         saturates the input instead of trapping. NaN values are converted to 0.
+        "#,
+            &formats.unary,
+        )
+        .operands_in(vec![x])
+        .operands_out(vec![a]),
+    );
+
+    ig.push(
+        Inst::new(
+            "x86_cvtt2dq",
+            r#"
+        A float-to-integer conversion instruction for vectors-of-floats which
+        has the same semantics as `cvttp{s,d}2dq` on x86. This specifically
+        returns `INT_MIN` for NaN or out-of-bounds lanes.
         "#,
             &formats.unary,
         )

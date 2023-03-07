@@ -186,6 +186,10 @@ impl TargetIsa for Riscv64Backend {
         cs.set_skipdata(true)?;
         Ok(cs)
     }
+
+    fn has_native_fma(&self) -> bool {
+        true
+    }
 }
 
 impl fmt::Display for Riscv64Backend {

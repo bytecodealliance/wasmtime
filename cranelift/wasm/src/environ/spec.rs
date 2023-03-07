@@ -525,6 +525,27 @@ pub trait FuncEnvironment: TargetEnvironment {
     /// Returns the target ISA's condition to check for unsigned addition
     /// overflowing.
     fn unsigned_add_overflow_condition(&self) -> ir::condcodes::IntCC;
+
+    /// Whether or not to force relaxed simd instructions to have deterministic
+    /// lowerings meaning they will produce the same results across all hosts,
+    /// regardless of the cost to performance.
+    fn relaxed_simd_deterministic(&self) -> bool {
+        true
+    }
+
+    /// Whether or not the target being translated for has a native fma
+    /// instruction. If it does not then when relaxed simd isn't deterministic
+    /// the translation of the `f32x4.relaxed_fma` instruction, for example,
+    /// will do a multiplication and then an add instead of the fused version.
+    fn has_native_fma(&self) -> bool {
+        false
+    }
+
+    /// Returns whether this is an x86 target, which may alter lowerings of
+    /// relaxed simd instructions.
+    fn is_x86(&self) -> bool {
+        false
+    }
 }
 
 /// An object satisfying the `ModuleEnvironment` trait can be passed as argument to the

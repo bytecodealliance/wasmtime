@@ -186,6 +186,10 @@ impl TargetIsa for S390xBackend {
 
         Ok(cs)
     }
+
+    fn has_native_fma(&self) -> bool {
+        true
+    }
 }
 
 impl fmt::Display for S390xBackend {

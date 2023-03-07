@@ -1212,6 +1212,20 @@
 (decl pure vconst_all_ones_or_all_zeros () Constant)
 (extern extractor vconst_all_ones_or_all_zeros vconst_all_ones_or_all_zeros)
 
+;;;; Rules for `x86_blendv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I8X16
+                       (x86_blendv condition if_true if_false)))
+      (x64_pblendvb if_false if_true condition))
+
+(rule (lower (has_type $I32X4
+                       (x86_blendv condition if_true if_false)))
+      (x64_blendvps if_false if_true condition))
+
+(rule (lower (has_type $I64X2
+                       (x86_blendv condition if_true if_false)))
+      (x64_blendvpd if_false if_true condition))
+
 ;;;; Rules for `vselect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty @ (multi_lane _bits _lanes)
@@ -2144,6 +2158,11 @@
 
 (rule (lower (debugtrap))
       (side_effect (x64_hlt)))
+
+;; Rules for `x86_pmaddubsw` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I16X8 (x86_pmaddubsw x y)))
+      (x64_pmaddubsw y x))
 
 ;; Rules for `fadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3169,6 +3188,11 @@
         ;; values greater than max signed int.
         (x64_paddd tmp1 dst)))
 
+;; Rules for `x86_cvtt2dq` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I32X4 (x86_cvtt2dq val @ (value_type $F32X4))))
+      (x64_cvttps2dq val))
+
 ;; Rules for `iadd_pairwise` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I16X8 (iadd_pairwise x y)))
@@ -3303,6 +3327,12 @@
             (tmp1 Xmm (x64_andps tmp1 umax_mask))
             (dst Xmm (x64_minpd a tmp1)))
         (x64_cvttpd2dq dst)))
+
+;; This rule is a special case for handling the translation of the wasm op
+;; `i32x4.relaxed_trunc_f64x2_s_zero`.
+(rule (lower (has_type $I32X4 (snarrow (has_type $I64X2 (x86_cvtt2dq val))
+                                       (vconst (u128_from_constant 0)))))
+        (x64_cvttpd2dq val))
 
 ;; Rules for `unarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3559,6 +3589,11 @@
       (let ((mask Xmm (x64_paddusb mask (swizzle_zero_mask))))
         (x64_pshufb src mask)))
 
+;; Rules for `x86_pshufb` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (x86_pshufb src mask))
+      (x64_pshufb src mask))
+
 ;; Rules for `extractlane` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Remove the extractlane instruction, leaving the float where it is. The upper
@@ -3736,7 +3771,12 @@
             (cmp Xmm (x64_pcmpeqw dst mask)))
         (x64_pxor dst cmp)))
 
-;; Rules for `sqmul_round_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Rules for `x86_pmulhrsw` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (x86_pmulhrsw qx @ (value_type $I16X8) qy))
+      (x64_pmulhrsw qx qy))
+
+;; Rules for `uunarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; TODO: currently we only lower a special case of `uunarrow` needed to support
 ;; the translation of wasm's i32x4.trunc_sat_f64x2_u_zero operation.
