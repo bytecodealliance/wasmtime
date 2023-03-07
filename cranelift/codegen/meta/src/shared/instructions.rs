@@ -2967,19 +2967,13 @@ pub(crate) fn define(
 
     let Truthy = &TypeVar::new(
         "Truthy",
-        "A scalar or vector whose values are truthy",
-        TypeSetBuilder::new()
-            .ints(Interval::All)
-            .simd_lanes(Interval::All)
-            .build(),
+        "A scalar whose values are truthy",
+        TypeSetBuilder::new().ints(Interval::All).build(),
     );
     let IntTo = &TypeVar::new(
         "IntTo",
-        "An integer type with the same number of lanes",
-        TypeSetBuilder::new()
-            .ints(Interval::All)
-            .simd_lanes(Interval::All)
-            .build(),
+        "An integer type",
+        TypeSetBuilder::new().ints(Interval::All).build(),
     );
     let x = &Operand::new("x", Truthy);
     let a = &Operand::new("a", IntTo);
@@ -2990,8 +2984,7 @@ pub(crate) fn define(
             r#"
         Convert `x` to an integer mask.
 
-        True maps to all 1s and false maps to all 0s. The result type must have
-        the same number of vector lanes as the input.
+        Non-zero maps to all 1s and zero maps to all 0s.
         "#,
             &formats.unary,
         )
