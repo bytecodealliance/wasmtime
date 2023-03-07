@@ -603,11 +603,7 @@ where
         Opcode::Select | Opcode::SelectSpectreGuard => {
             choose(arg(0)?.into_bool()?, arg(1)?, arg(2)?)
         }
-        Opcode::Bitselect => {
-            let mask_a = Value::and(arg(0)?, arg(1)?)?;
-            let mask_b = Value::and(Value::not(arg(0)?)?, arg(2)?)?;
-            assign(Value::or(mask_a, mask_b)?)
-        }
+        Opcode::Bitselect => assign(bitselect(arg(0)?, arg(1)?, arg(2)?)?),
         Opcode::Icmp => assign(icmp(
             ctrl_ty,
             inst.cond_code().unwrap(),
@@ -623,7 +619,7 @@ where
         Opcode::Smin => {
             if ctrl_ty.is_vector() {
                 let icmp = icmp(ctrl_ty, IntCC::SignedGreaterThan, &arg(1)?, &arg(0)?)?;
-                assign(vselect(&icmp, &arg(0)?, &arg(1)?, ctrl_ty)?)
+                assign(bitselect(icmp, arg(0)?, arg(1)?)?)
             } else {
                 choose(Value::gt(&arg(1)?, &arg(0)?)?, arg(0)?, arg(1)?)
             }
@@ -631,7 +627,7 @@ where
         Opcode::Umin => {
             if ctrl_ty.is_vector() {
                 let icmp = icmp(ctrl_ty, IntCC::UnsignedGreaterThan, &arg(1)?, &arg(0)?)?;
-                assign(vselect(&icmp, &arg(0)?, &arg(1)?, ctrl_ty)?)
+                assign(bitselect(icmp, arg(0)?, arg(1)?)?)
             } else {
                 choose(
                     Value::gt(
@@ -646,7 +642,7 @@ where
         Opcode::Smax => {
             if ctrl_ty.is_vector() {
                 let icmp = icmp(ctrl_ty, IntCC::SignedGreaterThan, &arg(0)?, &arg(1)?)?;
-                assign(vselect(&icmp, &arg(0)?, &arg(1)?, ctrl_ty)?)
+                assign(bitselect(icmp, arg(0)?, arg(1)?)?)
             } else {
                 choose(Value::gt(&arg(0)?, &arg(1)?)?, arg(0)?, arg(1)?)
             }
@@ -654,7 +650,7 @@ where
         Opcode::Umax => {
             if ctrl_ty.is_vector() {
                 let icmp = icmp(ctrl_ty, IntCC::UnsignedGreaterThan, &arg(0)?, &arg(1)?)?;
-                assign(vselect(&icmp, &arg(0)?, &arg(1)?, ctrl_ty)?)
+                assign(bitselect(icmp, arg(0)?, arg(1)?)?)
             } else {
                 choose(
                     Value::gt(
@@ -1640,20 +1636,11 @@ where
     vectorizelanes(&result, vector_type)
 }
 
-fn vselect<V>(c: &V, x: &V, y: &V, vector_type: types::Type) -> ValueResult<V>
+fn bitselect<V>(c: V, x: V, y: V) -> ValueResult<V>
 where
     V: Value,
 {
-    let c = extractlanes(c, vector_type)?;
-    let x = extractlanes(x, vector_type)?;
-    let y = extractlanes(y, vector_type)?;
-    let mut new_vec = SimdVec::new();
-    for (c, (x, y)) in c.into_iter().zip(x.into_iter().zip(y.into_iter())) {
-        if Value::eq(&c, &Value::int(0, vector_type.lane_type())?)? {
-            new_vec.push(y);
-        } else {
-            new_vec.push(x);
-        }
-    }
-    vectorizelanes(&new_vec, vector_type)
+    let mask_x = Value::and(c.clone(), x)?;
+    let mask_y = Value::and(Value::not(c)?, y)?;
+    Value::or(mask_x, mask_y)
 }
