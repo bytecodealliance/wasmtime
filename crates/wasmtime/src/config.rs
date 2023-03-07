@@ -1367,7 +1367,7 @@ impl Config {
     /// Configures whether compiled artifacts will contain information to map
     /// native program addresses back to the original wasm module.
     ///
-    /// This configuration option is `true` by default and, if enables,
+    /// This configuration option is `true` by default and, if enabled,
     /// generates the appropriate tables in compiled modules to map from native
     /// address back to wasm source addresses. This is used for displaying wasm
     /// program counters in backtraces as well as generating filenames/line
