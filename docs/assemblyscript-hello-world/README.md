@@ -1,24 +1,23 @@
-# AssemblyScript WASI Demo
+# AssemblyScript Hello World (WASI)
 
-This demo shows some WASI features off such as System Time, User Input, Writing to the Console, and Random Numbers.
-The module `@assemblyscript/wasi-shim` as well as a wasi-enabled runtime are required.
+This example implements the typical "Hello, World!" application in AssemblyScript, utilizing WASI.
 
 ## Setup
 
-Navigate to `./docs/assemblyscript_demo` and run
+Navigate to `./docs/assemblyscript-hello-world` and run
 
 ```
 npm install
 ```
 
-Build the AssemblyScript demo file
+Build the AssemblyScript example
 
 ```
 npm run build
 ```
 
-Run the WASI Demo
+Run the example
 
 ```
-npm run demo
+npm run start
 ```
