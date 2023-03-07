@@ -15,6 +15,12 @@ who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
 delta = "0.7.6 -> 0.8.2"
 
+[[audits.anes]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+version = "0.1.6"
+notes = "Contains no unsafe code, no IO, no build.rs."
+
 [[audits.anyhow]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -230,6 +236,21 @@ criteria = "safe-to-deploy"
 version = "1.0.0"
 notes = "I am the author of this crate."
 
+[[audits.ciborium]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+version = "0.2.0"
+
+[[audits.ciborium-io]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+version = "0.2.0"
+
+[[audits.ciborium-ll]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+version = "0.2.0"
+
 [[audits.codespan-reporting]]
 who = "Jamey Sharp <jsharp@fastly.com>"
 criteria = "safe-to-deploy"
@@ -251,6 +272,15 @@ There were no major changes to code in this update, mostly just stylistic and
 updating some version dependency requirements.
 """
 
+[[audits.criterion]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.6 -> 0.4.0"
+notes = """
+criterion v0.3.6..v0.4.0 is mostly re-arranging the crate features and bumping dependencies. all changes
+to code seem to be confined to benchmarks.
+"""
+
 [[audits.criterion-plot]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-run"
@@ -259,6 +289,12 @@ notes = """
 No major changes in this update, it was almost entirely stylistic with what
 appears to be a few clippy fixes here and there.
 """
+
+[[audits.criterion-plot]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.5 -> 0.5.0"
+notes = "Just a version bump, only change to code is to remove an allow(deprecated)"
 
 [[audits.crypto-common]]
 who = "Benjamin Bouvier <public@benj.me>"
