@@ -52,6 +52,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-fiber",
     "wasmtime-environ",
     "wasmtime-runtime",
+    "wasmtime-cranelift-shared",
     "wasmtime-cranelift",
     "wasmtime-jit",
     "wasmtime-cache",
