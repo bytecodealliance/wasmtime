@@ -118,6 +118,13 @@
 
 ;;;; Rules for `shuffle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; When the shuffle looks like "concatenate `a` and `b` and shift right by n*8
+;; bytes", that's an `ext` instruction.
+(rule 2 (lower (shuffle a b (vec_extract_imm4_from_immediate n)))
+        (vec_extract a b n))
+(decl vec_extract_imm4_from_immediate (u8) Immediate)
+(extern extractor vec_extract_imm4_from_immediate vec_extract_imm4_from_immediate)
+
 ;; Rules for the `uzp1` and `uzp2` instructions which gather even-numbered lanes
 ;; or odd-numbered lanes
 (rule 1 (lower (shuffle a b (u128_from_immediate 0x1e1c_1a18_1614_1210_0e0c_0a08_0604_0200)))

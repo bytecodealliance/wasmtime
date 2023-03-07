@@ -467,3 +467,94 @@ block0(v0: i64x2, v1: i64x2):
 ;   uzp2 v0.2d, v0.2d, v1.2d
 ;   ret
 
+function %aarch64_ext_0(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = shuffle v0, v1, [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15]
+    return v2
+}
+
+; VCode:
+; block0:
+;   ext v0.16b, v0.16b, v1.16b, #0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   ext v0.16b, v0.16b, v1.16b, #0
+;   ret
+
+function %aarch64_ext_1(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = shuffle v0, v1, [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16]
+    return v2
+}
+
+; VCode:
+; block0:
+;   ext v0.16b, v0.16b, v1.16b, #1
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   ext v0.16b, v0.16b, v1.16b, #1
+;   ret
+
+function %aarch64_ext_5(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = shuffle v0, v1, [5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20]
+    return v2
+}
+
+; VCode:
+; block0:
+;   ext v0.16b, v0.16b, v1.16b, #5
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   ext v0.16b, v0.16b, v1.16b, #5
+;   ret
+
+function %aarch64_ext_11(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = shuffle v0, v1, [11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26]
+    return v2
+}
+
+; VCode:
+; block0:
+;   ext v0.16b, v0.16b, v1.16b, #11
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   ext v0.16b, v0.16b, v1.16b, #0xb
+;   ret
+
+function %aarch64_ext_16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = shuffle v0, v1, [16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31]
+    return v2
+}
+
+; VCode:
+; block0:
+;   mov v30.16b, v0.16b
+;   mov v31.16b, v1.16b
+;   ldr q3, pc+8 ; b 20 ; data.f128 0x1f1e1d1c1b1a19181716151413121110
+;   tbl v0.16b, { v30.16b, v31.16b }, v3.16b
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   mov v30.16b, v0.16b
+;   mov v31.16b, v1.16b
+;   ldr q3, #0x10
+;   b #0x20
+;   sbfiz w16, w8, #0xe, #5
+;   b #0xfffffffffc585464
+;   madd w24, w8, w26, w6
+;   fmadd s28, s8, s30, s7
+;   tbl v0.16b, {v30.16b, v31.16b}, v3.16b
+;   ret
+
