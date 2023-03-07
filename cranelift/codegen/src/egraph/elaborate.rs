@@ -330,14 +330,14 @@ impl<'a> Elaborator<'a> {
                             );
                             (inst, result_idx)
                         }
-                        ValueDef::Param(_, _) => {
+                        ValueDef::Param(in_block, _) => {
                             // We don't need to do anything to compute
                             // this value; just push its result on the
                             // result stack (blockparams are already
                             // available).
                             trace!(" -> value {} is a blockparam", best_value);
                             self.elab_result_stack.push(ElaboratedValue {
-                                in_block: self.cur_block,
+                                in_block,
                                 value: best_value,
                             });
                             continue;
