@@ -3213,21 +3213,20 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let IntTo = &TypeVar::new(
-        "IntTo",
-        "A larger integer type with the same number of lanes",
-        TypeSetBuilder::new()
-            .ints(Interval::All)
-            .simd_lanes(Interval::All)
-            .build(),
-    );
-    let x = &Operand::new("x", Int);
-    let a = &Operand::new("a", IntTo);
+    {
+        let IntTo = &TypeVar::new(
+            "IntTo",
+            "A larger integer type with the same number of lanes",
+            TypeSetBuilder::new().ints(Interval::All).build(),
+        );
 
-    ig.push(
-        Inst::new(
-            "uextend",
-            r#"
+        let x = &Operand::new("x", Int);
+        let a = &Operand::new("a", IntTo);
+
+        ig.push(
+            Inst::new(
+                "uextend",
+                r#"
         Convert `x` to a larger integer type by zero-extending.
 
         Each lane in `x` is converted to a larger integer type by adding
@@ -3238,16 +3237,16 @@ pub(crate) fn define(
         and each lane must not have fewer bits that the input lanes. If the
         input and output types are the same, this is a no-op.
         "#,
-            &formats.unary,
-        )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
-    );
+                &formats.unary,
+            )
+            .operands_in(vec![x])
+            .operands_out(vec![a]),
+        );
 
-    ig.push(
-        Inst::new(
-            "sextend",
-            r#"
+        ig.push(
+            Inst::new(
+                "sextend",
+                r#"
         Convert `x` to a larger integer type by sign-extending.
 
         Each lane in `x` is converted to a larger integer type by replicating
@@ -3258,10 +3257,20 @@ pub(crate) fn define(
         and each lane must not have fewer bits that the input lanes. If the
         input and output types are the same, this is a no-op.
         "#,
-            &formats.unary,
-        )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+                &formats.unary,
+            )
+            .operands_in(vec![x])
+            .operands_out(vec![a]),
+        );
+    }
+
+    let IntTo = &TypeVar::new(
+        "IntTo",
+        "A larger integer type with the same number of lanes",
+        TypeSetBuilder::new()
+            .ints(Interval::All)
+            .simd_lanes(Interval::All)
+            .build(),
     );
 
     let FloatTo = &TypeVar::new(
@@ -3272,6 +3281,7 @@ pub(crate) fn define(
             .simd_lanes(Interval::All)
             .build(),
     );
+
     let x = &Operand::new("x", Float);
     let a = &Operand::new("a", FloatTo);
 

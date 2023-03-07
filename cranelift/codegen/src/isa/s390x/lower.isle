@@ -931,14 +931,14 @@
       (put_in_reg_zext64 x))
 
 ;; 128-bit target types.
-(rule (lower (has_type (vr128_ty ty) (uextend x @ (value_type $I8))))
-      (vec_insert_lane $I8X16 (vec_imm ty 0) x 15 (zero_reg)))
-(rule (lower (has_type (vr128_ty ty) (uextend x @ (value_type $I16))))
-      (vec_insert_lane $I16X8 (vec_imm ty 0) x 7 (zero_reg)))
-(rule (lower (has_type (vr128_ty ty) (uextend x @ (value_type $I32))))
-      (vec_insert_lane $I32X4 (vec_imm ty 0) x 3 (zero_reg)))
-(rule (lower (has_type (vr128_ty ty) (uextend x @ (value_type $I64))))
-      (vec_insert_lane $I64X2 (vec_imm ty 0) x 1 (zero_reg)))
+(rule (lower (has_type $I128 (uextend x @ (value_type $I8))))
+      (vec_insert_lane $I8X16 (vec_imm $I128 0) x 15 (zero_reg)))
+(rule (lower (has_type $I128 (uextend x @ (value_type $I16))))
+      (vec_insert_lane $I16X8 (vec_imm $I128 0) x 7 (zero_reg)))
+(rule (lower (has_type $I128 (uextend x @ (value_type $I32))))
+      (vec_insert_lane $I32X4 (vec_imm $I128 0) x 3 (zero_reg)))
+(rule (lower (has_type $I128 (uextend x @ (value_type $I64))))
+      (vec_insert_lane $I64X2 (vec_imm $I128 0) x 1 (zero_reg)))
 
 
 ;;;; Rules for `sextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -952,9 +952,9 @@
       (put_in_reg_sext64 x))
 
 ;; 128-bit target types.
-(rule (lower (has_type (vr128_ty ty) (sextend x)))
+(rule (lower (has_type $I128 (sextend x)))
       (let ((x_ext Reg (put_in_reg_sext64 x)))
-        (mov_to_vec128 ty (ashr_imm $I64 x_ext 63) x_ext)))
+        (mov_to_vec128 $I128 (ashr_imm $I64 x_ext 63) x_ext)))
 
 
 ;;;; Rules for `snarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
