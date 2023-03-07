@@ -65,12 +65,13 @@ fn add_nan_canon_seq(pos: &mut FuncCursor, inst: Inst) {
     // the canonical NaN value if `val` is NaN, assign the result to `inst`.
     let is_nan = pos.ins().fcmp(FloatCC::NotEqual, new_res, new_res);
 
-    let scalar_select = |pos: &mut FuncCursor, is_nan: Value, canon_nan: Value| {
+    let scalar_select = |pos: &mut FuncCursor, canon_nan: Value| {
         pos.ins()
             .with_result(val)
             .select(is_nan, canon_nan, new_res);
     };
-    let vector_select = |pos: &mut FuncCursor, is_nan: Value, canon_nan: Value| {
+    let vector_select = |pos: &mut FuncCursor, canon_nan: Value| {
+        let is_nan = pos.ins().bitcast(val_type, MemFlags::new(), is_nan);
         pos.ins()
             .with_result(val)
             .bitselect(is_nan, canon_nan, new_res);
@@ -79,23 +80,21 @@ fn add_nan_canon_seq(pos: &mut FuncCursor, inst: Inst) {
     match val_type {
         types::F32 => {
             let canon_nan = pos.ins().f32const(Ieee32::with_bits(CANON_32BIT_NAN));
-            scalar_select(pos, is_nan, canon_nan);
+            scalar_select(pos, canon_nan);
         }
         types::F64 => {
             let canon_nan = pos.ins().f64const(Ieee64::with_bits(CANON_64BIT_NAN));
-            scalar_select(pos, is_nan, canon_nan);
+            scalar_select(pos, canon_nan);
         }
         types::F32X4 => {
             let canon_nan = pos.ins().f32const(Ieee32::with_bits(CANON_32BIT_NAN));
             let canon_nan = pos.ins().splat(types::F32X4, canon_nan);
-            let is_nan = pos.ins().bitcast(types::F32X4, MemFlags::new(), is_nan);
-            vector_select(pos, is_nan, canon_nan);
+            vector_select(pos, canon_nan);
         }
         types::F64X2 => {
             let canon_nan = pos.ins().f64const(Ieee64::with_bits(CANON_64BIT_NAN));
             let canon_nan = pos.ins().splat(types::F64X2, canon_nan);
-            let is_nan = pos.ins().bitcast(types::F64X2, MemFlags::new(), is_nan);
-            vector_select(pos, is_nan, canon_nan);
+            vector_select(pos, canon_nan);
         }
         _ => {
             // Panic if the type given was not an IEEE floating point type.
