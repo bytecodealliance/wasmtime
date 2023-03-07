@@ -34,9 +34,12 @@ impl<T> IsaBuilder<T> {
             .set("enable_probestack", "false")
             .expect("should be valid flag");
 
+        let mut isa_flags = lookup(Triple::host()).expect("host machine is not a supported target");
+        cranelift_native::infer_native_flags(&mut isa_flags).unwrap();
+
         Self {
             shared_flags: flags,
-            inner: lookup(Triple::host()).expect("host machine is not a supported target"),
+            inner: isa_flags,
             lookup,
         }
     }
