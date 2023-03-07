@@ -520,6 +520,10 @@
        (select ty (fcmp _ (FloatCC.GreaterThan) x y) x y))
       (fmax_pseudo ty x y))
 
+;; TODO: perform this same optimization to `f{min,max}_pseudo` for vectors
+;; with the `bitselect` instruction, but the pattern is a bit more complicated
+;; due to most bitselects-over-floats having bitcasts.
+
 ;; If both of the multiplied arguments to an `fma` are negated then remove
 ;; both of them since they cancel out.
 (rule (simplify (fma ty (fneg ty x) (fneg ty y) z))
