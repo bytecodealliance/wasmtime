@@ -151,6 +151,9 @@ jobs:
           if grep -q Cargo.lock names.log; then
             echo audit=true >> $GITHUB_OUTPUT
           fi
+          if grep -q supply-chain names.log; then
+            echo audit=true >> $GITHUB_OUTPUT
+          fi
         fi
         matrix="$(node ./ci/build-test-matrix.js ./commits.log ./names.log $run_full)"
         echo "test-matrix={\"include\":$(echo $matrix)}" >> $GITHUB_OUTPUT
