@@ -82,7 +82,7 @@ jobs:
     if: needs.determine.outputs.audit
     runs-on: ubuntu-latest
     env:
-      CARGO_VET_VERSION: 0.3.1
+      CARGO_VET_VERSION: 0.4.0
     steps:
     - uses: actions/checkout@v3
       with:

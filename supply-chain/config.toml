@@ -119,10 +119,6 @@ version = "0.3.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.clap]]
-version = "2.34.0"
-criteria = "safe-to-run"
-
-[[exemptions.clap]]
 version = "3.2.8"
 criteria = "safe-to-deploy"
 
@@ -185,14 +181,6 @@ criteria = "safe-to-deploy"
 [[exemptions.crypto-mac]]
 version = "0.11.1"
 criteria = "safe-to-deploy"
-
-[[exemptions.csv]]
-version = "1.1.6"
-criteria = "safe-to-run"
-
-[[exemptions.csv-core]]
-version = "0.1.10"
-criteria = "safe-to-run"
 
 [[exemptions.ctr]]
 version = "0.8.0"
@@ -377,10 +365,6 @@ criteria = "safe-to-deploy"
 [[exemptions.itertools]]
 version = "0.10.3"
 criteria = "safe-to-deploy"
-
-[[exemptions.itoa]]
-version = "0.4.8"
-criteria = "safe-to-run"
 
 [[exemptions.itoa]]
 version = "1.0.1"
@@ -827,10 +811,6 @@ version = "0.1.17"
 criteria = "safe-to-deploy"
 
 [[exemptions.textwrap]]
-version = "0.11.0"
-criteria = "safe-to-run"
-
-[[exemptions.textwrap]]
 version = "0.15.0"
 criteria = "safe-to-deploy"
 
@@ -997,4 +977,3 @@ criteria = "safe-to-deploy"
 [[exemptions.zstd-sys]]
 version = "2.0.1+zstd.1.5.2"
 criteria = "safe-to-deploy"
-
