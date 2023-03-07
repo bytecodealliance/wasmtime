@@ -1,0 +1,13 @@
+{
+    "targets": {
+        "wasi-demo": {
+            "outFile": "build/wasi-demo.wasm",
+            "textFile": "build/wasi-demo.wat",
+            "optimizeLevel": 0,
+            "shrinkLevel": 0,
+            "converge": false,
+            "noAssert": false
+        }
+    },
+    "extends": "./node_modules/@assemblyscript/wasi-shim/asconfig.json"
+}

@@ -1,9 +1,0 @@
-{
-    "targets": {
-        "helloworld": {
-            "outFile": "build/wasi-hello-world.wasm",
-            "textFile": "build/wasi-hello-world.wat"
-        }
-    },
-    "options": {}
-}
