@@ -1,8 +1,8 @@
 {
     "targets": {
-        "wasi-demo": {
-            "outFile": "build/wasi-demo.wasm",
-            "textFile": "build/wasi-demo.wat",
+        "wasi-hello": {
+            "outFile": "build/wasi-hello.wasm",
+            "textFile": "build/wasi-hello.wat",
             "optimizeLevel": 0,
             "shrinkLevel": 0,
             "converge": false,
