@@ -1409,7 +1409,8 @@ pub(crate) fn define(
             r#"
         Conditional select.
 
-        This instruction selects whole values.
+        This instruction selects whole values. Use `bitselect` to choose each
+        bit according to a mask.
         "#,
             &formats.ternary,
         )

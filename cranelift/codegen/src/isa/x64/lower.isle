@@ -1193,7 +1193,7 @@
         (sse_or ty b a)))
 
 ;; If every byte of the condition is guaranteed to be all ones or all zeroes,
-;; we can use x86_blend.
+;; we can use x64_blend.
 (rule 1 (lower (has_type ty @ (multi_lane _bits _lanes)
                          (bitselect condition
                                     if_true
