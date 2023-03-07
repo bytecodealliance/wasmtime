@@ -595,10 +595,6 @@ dependencies = [
 [[package]]
 name = "cranelift-codegen-shared"
 version = "0.95.0"
-dependencies = [
- "gimli",
- "object",
-]
 
 [[package]]
 name = "cranelift-entity"

@@ -11,5 +11,3 @@ edition.workspace = true
 [dependencies]
 # Since this is a shared dependency of several packages, please strive to keep this dependency-free
 # when no features are enabled.
-gimli = { workspace = true}
-object = { workspace = true}
