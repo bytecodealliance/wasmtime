@@ -321,9 +321,7 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     ///
     /// Currently this only returns false on x86 when some native features are
     /// not detected.
-    fn has_native_fma(&self) -> bool {
-        true
-    }
+    fn has_native_fma(&self) -> bool;
 }
 
 /// Methods implemented for free for target ISA!
