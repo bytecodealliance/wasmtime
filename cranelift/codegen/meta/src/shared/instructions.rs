@@ -3264,15 +3264,6 @@ pub(crate) fn define(
         );
     }
 
-    let IntTo = &TypeVar::new(
-        "IntTo",
-        "A larger integer type with the same number of lanes",
-        TypeSetBuilder::new()
-            .ints(Interval::All)
-            .simd_lanes(Interval::All)
-            .build(),
-    );
-
     let FloatTo = &TypeVar::new(
         "FloatTo",
         "A scalar or vector floating point number",
@@ -3390,18 +3381,24 @@ pub(crate) fn define(
         .operands_out(vec![x]),
     );
 
-    let FloatScalar = &TypeVar::new(
-        "FloatScalar",
-        "A scalar only floating point number",
-        TypeSetBuilder::new().floats(Interval::All).build(),
-    );
-    let x = &Operand::new("x", FloatScalar);
-    let a = &Operand::new("a", IntTo);
+    {
+        let FloatScalar = &TypeVar::new(
+            "FloatScalar",
+            "A scalar only floating point number",
+            TypeSetBuilder::new().floats(Interval::All).build(),
+        );
+        let IntTo = &TypeVar::new(
+            "IntTo",
+            "An scalar only integer type",
+            TypeSetBuilder::new().ints(Interval::All).build(),
+        );
+        let x = &Operand::new("x", FloatScalar);
+        let a = &Operand::new("a", IntTo);
 
-    ig.push(
-        Inst::new(
-            "fcvt_to_uint",
-            r#"
+        ig.push(
+            Inst::new(
+                "fcvt_to_uint",
+                r#"
         Converts floating point scalars to unsigned integer.
 
         Only operates on `x` if it is a scalar. If `x` is NaN or if
@@ -3409,18 +3406,18 @@ pub(crate) fn define(
         type, this instruction traps.
 
         "#,
-            &formats.unary,
-        )
-        .operands_in(vec![x])
-        .operands_out(vec![a])
-        .can_trap()
-        .side_effects_idempotent(),
-    );
+                &formats.unary,
+            )
+            .operands_in(vec![x])
+            .operands_out(vec![a])
+            .can_trap()
+            .side_effects_idempotent(),
+        );
 
-    ig.push(
-        Inst::new(
-            "fcvt_to_sint",
-            r#"
+        ig.push(
+            Inst::new(
+                "fcvt_to_sint",
+                r#"
         Converts floating point scalars to signed integer.
 
         Only operates on `x` if it is a scalar. If `x` is NaN or if
@@ -3428,12 +3425,22 @@ pub(crate) fn define(
         type, this instruction traps.
 
         "#,
-            &formats.unary,
-        )
-        .operands_in(vec![x])
-        .operands_out(vec![a])
-        .can_trap()
-        .side_effects_idempotent(),
+                &formats.unary,
+            )
+            .operands_in(vec![x])
+            .operands_out(vec![a])
+            .can_trap()
+            .side_effects_idempotent(),
+        );
+    }
+
+    let IntTo = &TypeVar::new(
+        "IntTo",
+        "A larger integer type with the same number of lanes",
+        TypeSetBuilder::new()
+            .ints(Interval::All)
+            .simd_lanes(Interval::All)
+            .build(),
     );
 
     let x = &Operand::new("x", Float);
