@@ -25,14 +25,14 @@
   (func (param v128 v128) (result v128)
     local.get 0
     local.get 1
-    i16x8.dot_i8x16_i7x16_s
+    i16x8.relaxed_dot_i8x16_i7x16_s
   )
 
   (func (param v128 v128 v128) (result v128)
     local.get 0
     local.get 1
     local.get 2
-    i32x4.dot_i8x16_i7x16_add_s
+    i32x4.relaxed_dot_i8x16_i7x16_add_s
   )
 )
 

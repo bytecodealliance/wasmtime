@@ -686,12 +686,21 @@ impl Config {
     /// enabled for compilation.
     ///
     /// The [WebAssembly Relaxed SIMD proposal][proposal] is not, at the time of
-    /// this writing, at stage 4. Additionally note that the relaxed SIMD
-    /// proposal's instructions are allowed to have different semantics on
-    /// different architectures depending on the inputs. By default the fastest
-    /// this difference in semantics is enabled in Wasmtime, but this behavior
-    /// can also be disabled through the [`Config::relaxed_simd_deterministic`]
-    /// option which will force deterministic behavior, as classified by the
+    /// this writing, at stage 4. The relaxed SIMD proposal adds new
+    /// instructions to WebAssembly which, for some specific inputs, are allowed
+    /// to produce different results on different hosts. More-or-less this
+    /// proposal enables exposing platform-specific semantics of SIMD
+    /// instructions in a controlled fashion to a WebAssembly program. From an
+    /// embedder's perspective this means that WebAssembly programs may execute
+    /// differently depending on whether the host is x86_64 or AArch64, for
+    /// example.
+    ///
+    /// By default Wasmtime lowers relaxed SIMD instructions to the fastest
+    /// lowering for the platform it's running on. This means that, by default,
+    /// some relaxed SIMD instructions may have different results for the same
+    /// inputs across x86_64 and AArch64. This behavior can be disabled through
+    /// the [`Config::relaxed_simd_deterministic`] option which will force
+    /// deterministic behavior across all platforms, as classified by the
     /// specification, at the cost of performance.
     ///
     /// This is `false` by default.
