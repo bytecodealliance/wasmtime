@@ -1,6 +1,9 @@
 
 # cargo-vet config file
 
+[imports.chromeos]
+url = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/main/cargo-vet/audits.toml?format=TEXT"
+
 [imports.embark-studios]
 url = "https://raw.githubusercontent.com/EmbarkStudios/rust-ecosystem/main/audits.toml"
 
@@ -385,10 +388,6 @@ criteria = "safe-to-deploy"
 version = "0.2.133"
 criteria = "safe-to-deploy"
 
-[[exemptions.libfuzzer-sys]]
-version = "0.4.3"
-criteria = "safe-to-run"
-
 [[exemptions.libloading]]
 version = "0.7.3"
 criteria = "safe-to-deploy"
@@ -424,10 +423,6 @@ criteria = "safe-to-deploy"
 [[exemptions.memoffset]]
 version = "0.6.5"
 criteria = "safe-to-deploy"
-
-[[exemptions.miniz_oxide]]
-version = "0.5.1"
-criteria = "safe-to-run"
 
 [[exemptions.mio]]
 version = "0.8.2"
@@ -760,10 +755,6 @@ criteria = "safe-to-deploy"
 [[exemptions.stable_deref_trait]]
 version = "1.2.0"
 criteria = "safe-to-deploy"
-
-[[exemptions.static_assertions]]
-version = "1.1.0"
-criteria = "safe-to-run"
 
 [[exemptions.strsim]]
 version = "0.10.0"
