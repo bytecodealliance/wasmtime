@@ -454,6 +454,58 @@
        (select ty (icmp _ (IntCC.UnsignedGreaterThanOrEqual) x y) y x))
       (umin ty x y))
 
+;; Transform bitselect-of-icmp into {u,s}{min,max} instructions where possible.
+(rule (simplify
+       (bitselect ty (icmp _ (IntCC.SignedGreaterThan) x y) x y))
+      (smax ty x y))
+(rule (simplify
+       (bitselect ty (icmp _ (IntCC.SignedGreaterThanOrEqual) x y) x y))
+      (smax ty x y))
+(rule (simplify
+       (bitselect ty (icmp _ (IntCC.UnsignedGreaterThan) x y) x y))
+      (umax ty x y))
+(rule (simplify
+       (bitselect ty (icmp _ (IntCC.UnsignedGreaterThanOrEqual) x y) x y))
+      (umax ty x y))
+(rule (simplify
+       (bitselect ty (icmp _ (IntCC.SignedLessThan) x y) x y))
+      (smin ty x y))
+(rule (simplify
+       (bitselect ty (icmp _ (IntCC.SignedLessThanOrEqual) x y) x y))
+      (smin ty x y))
+(rule (simplify
+       (bitselect ty (icmp _ (IntCC.UnsignedLessThan) x y) x y))
+      (umin ty x y))
+(rule (simplify
+       (bitselect ty (icmp _ (IntCC.UnsignedLessThanOrEqual) x y) x y))
+      (umin ty x y))
+
+;; These are the same rules as above, but when the operands for select are swapped
+(rule (simplify
+       (bitselect ty (icmp _ (IntCC.SignedLessThan) x y) y x))
+      (smax ty x y))
+(rule (simplify
+       (bitselect ty (icmp _ (IntCC.SignedLessThanOrEqual) x y) y x))
+      (smax ty x y))
+(rule (simplify
+       (bitselect ty (icmp _ (IntCC.UnsignedLessThan) x y) y x))
+      (umax ty x y))
+(rule (simplify
+       (bitselect ty (icmp _ (IntCC.UnsignedLessThanOrEqual) x y) y x))
+      (umax ty x y))
+(rule (simplify
+       (bitselect ty (icmp _ (IntCC.SignedGreaterThan) x y) y x))
+      (smin ty x y))
+(rule (simplify
+       (bitselect ty (icmp _ (IntCC.SignedGreaterThanOrEqual) x y) y x))
+      (smin ty x y))
+(rule (simplify
+       (bitselect ty (icmp _ (IntCC.UnsignedGreaterThan) x y) y x))
+      (umin ty x y))
+(rule (simplify
+       (bitselect ty (icmp _ (IntCC.UnsignedGreaterThanOrEqual) x y) y x))
+      (umin ty x y))
+
 ;; For floats convert fcmp lt into pseudo_min and gt into pseudo_max
 ;;
 ;; fmax_pseudo docs state:
