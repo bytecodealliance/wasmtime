@@ -52,6 +52,7 @@ pub unsafe extern "C" fn main(
     args_len: usize,
     preopens: PreopenList,
 ) -> u32 {
+    set_stderr_stream(stderr);
     State::with_mut(|state| {
         // Initialization of `State` automatically fills in some dummy
         // structures for fds 0, 1, and 2. Overwrite the stdin/stdout slots of 0
@@ -2406,6 +2407,8 @@ extern "C" {
     fn set_state_ptr(state: *const RefCell<State>);
     fn get_allocation_state() -> AllocationState;
     fn set_allocation_state(state: AllocationState);
+    fn get_stderr_stream() -> Fd;
+    fn set_stderr_stream(fd: Fd);
 }
 
 impl State {
