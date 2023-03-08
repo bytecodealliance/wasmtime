@@ -35,11 +35,9 @@ fn build_adapter(name: &str, features: &[&str]) -> Vec<u8> {
 fn main() {
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
 
-    let cli_reactor_adapter = build_adapter("cli_reactor", &[]);
-    let cli_command_adapter = build_adapter(
-        "cli_command",
-        &["--no-default-features", "--features=cli-command"],
-    );
+    let reactor_adapter = build_adapter("reactor", &[]);
+    let command_adapter =
+        build_adapter("command", &["--no-default-features", "--features=command"]);
 
     // Build all test program crates
     // wasi-tests and test-programs require nightly for a feature in the `errno` crate
@@ -92,7 +90,7 @@ fn main() {
             .module(module.as_slice())
             .unwrap()
             .validate(true)
-            .adapter("wasi_snapshot_preview1", &cli_command_adapter)
+            .adapter("wasi_snapshot_preview1", &command_adapter)
             .unwrap()
             .encode()
             .expect(&format!(
@@ -117,7 +115,7 @@ fn main() {
             .module(module.as_slice())
             .unwrap()
             .validate(true)
-            .adapter("wasi_snapshot_preview1", &cli_reactor_adapter)
+            .adapter("wasi_snapshot_preview1", &reactor_adapter)
             .unwrap()
             .encode()
             .expect(&format!(
