@@ -1026,12 +1026,16 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   fcvt.s.wu fa0,a0
+;   slli t2,a0,32
+;   srli a1,t2,32
+;   fcvt.s.wu fa0,a1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fcvt.s.wu fa0, a0
+;   slli t2, a0, 0x20
+;   srli a1, t2, 0x20
+;   fcvt.s.wu fa0, a1
 ;   ret
 
 function %f42(i32) -> f32 {
@@ -1042,12 +1046,14 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   fcvt.s.w fa0,a0
+;   sext.w t2,a0
+;   fcvt.s.w fa0,t2
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fcvt.s.w fa0, a0
+;   sext.w t2, a0
+;   fcvt.s.w fa0, t2
 ;   ret
 
 function %f43(i64) -> f32 {
@@ -1090,12 +1096,16 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   fcvt.d.wu fa0,a0
+;   slli t2,a0,32
+;   srli a1,t2,32
+;   fcvt.d.wu fa0,a1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fcvt.d.wu fa0, a0
+;   slli t2, a0, 0x20
+;   srli a1, t2, 0x20
+;   fcvt.d.wu fa0, a1
 ;   ret
 
 function %f46(i32) -> f64 {
@@ -1106,12 +1116,14 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   fcvt.d.w fa0,a0
+;   sext.w t2,a0
+;   fcvt.d.w fa0,t2
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0x53, 0x75, 0x05, 0xd2
+;   sext.w t2, a0
+;   .byte 0x53, 0xf5, 0x03, 0xd2
 ;   ret
 
 function %f47(i64) -> f64 {
