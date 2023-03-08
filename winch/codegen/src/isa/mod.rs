@@ -1,6 +1,8 @@
 use anyhow::{anyhow, Result};
 use core::fmt::Formatter;
-use cranelift_codegen::{isa::CallConv, settings, Final, MachBufferFinalized};
+use cranelift_codegen::isa::{CallConv, IsaBuilder};
+use cranelift_codegen::settings;
+use cranelift_codegen::{Final, MachBufferFinalized, TextSectionBuilder};
 use std::{
     error,
     fmt::{self, Debug, Display},
@@ -29,24 +31,7 @@ macro_rules! isa_builder {
     }};
 }
 
-/// The target ISA builder.
-#[derive(Clone)]
-pub struct Builder {
-    /// The target triple.
-    triple: Triple,
-    /// The ISA settings builder.
-    settings: settings::Builder,
-    /// The Target ISA constructor.
-    constructor: fn(Triple, settings::Flags, settings::Builder) -> Result<Box<dyn TargetIsa>>,
-}
-
-impl Builder {
-    /// Create a TargetIsa by combining ISA-specific settings with the provided
-    /// shared flags.
-    pub fn build(self, shared_flags: settings::Flags) -> Result<Box<dyn TargetIsa>> {
-        (self.constructor)(self.triple, shared_flags, self.settings)
-    }
-}
+pub type Builder = IsaBuilder<Result<Box<dyn TargetIsa>>>;
 
 /// Look for an ISA builder for the given target triple.
 pub fn lookup(triple: Triple) -> Result<Builder> {
@@ -92,6 +77,17 @@ pub trait TargetIsa: Send + Sync {
     /// Get the target triple of the ISA.
     fn triple(&self) -> &Triple;
 
+    /// Get the ISA-independent flags that were used to make this trait object.
+    fn flags(&self) -> &settings::Flags;
+
+    /// Get the ISA-dependent flag values that were used to make this trait object.
+    fn isa_flags(&self) -> Vec<settings::Value>;
+
+    /// Get a flag indicating whether branch protection is enabled.
+    fn is_branch_protection_enabled(&self) -> bool {
+        false
+    }
+
     fn compile_function(
         &self,
         sig: &FuncType,
@@ -108,6 +104,18 @@ pub trait TargetIsa: Send + Sync {
     fn endianness(&self) -> target_lexicon::Endianness {
         self.triple().endianness().unwrap()
     }
+
+    /// See `cranelift_codegen::isa::TargetIsa::create_systemv_cie`.
+    fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
+        // By default, an ISA cannot create a System V CIE.
+        None
+    }
+
+    /// See `cranelift_codegen::isa::TargetIsa::text_section_builder`.
+    fn text_section_builder(&self, num_labeled_funcs: usize) -> Box<dyn TextSectionBuilder>;
+
+    /// See `cranelift_codegen::isa::TargetIsa::function_alignment`.
+    fn function_alignment(&self) -> u32;
 }
 
 impl Debug for &dyn TargetIsa {

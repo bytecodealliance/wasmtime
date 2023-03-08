@@ -3592,6 +3592,20 @@ dependencies = [
  "target-lexicon",
  "thiserror",
  "wasmparser",
+ "wasmtime-cranelift-shared",
+ "wasmtime-environ",
+]
+
+[[package]]
+name = "wasmtime-cranelift-shared"
+version = "8.0.0"
+dependencies = [
+ "anyhow",
+ "cranelift-codegen",
+ "cranelift-native",
+ "gimli",
+ "object",
+ "target-lexicon",
  "wasmtime-environ",
 ]
 
@@ -3836,8 +3850,11 @@ version = "8.0.0"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
+ "gimli",
  "object",
  "target-lexicon",
+ "wasmparser",
+ "wasmtime-cranelift-shared",
  "wasmtime-environ",
  "winch-codegen",
 ]
@@ -3993,6 +4010,7 @@ version = "0.6.0"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
+ "gimli",
  "regalloc2",
  "smallvec",
  "target-lexicon",

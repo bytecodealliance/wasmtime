@@ -10,9 +10,9 @@ use crate::{
     stack::Stack,
 };
 use anyhow::Result;
-use cranelift_codegen::{
-    isa::aarch64::settings as aarch64_settings, settings::Flags, Final, MachBufferFinalized,
-};
+use cranelift_codegen::settings::{self, Flags};
+use cranelift_codegen::{isa::aarch64::settings as aarch64_settings, Final, MachBufferFinalized};
+use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
 use masm::MacroAssembler as Aarch64Masm;
 use target_lexicon::Triple;
 use wasmparser::{FuncType, FuncValidator, FunctionBody, ValidatorResources};
@@ -25,15 +25,15 @@ mod regs;
 
 /// Create an ISA from the given triple.
 pub(crate) fn isa_builder(triple: Triple) -> Builder {
-    Builder {
+    Builder::new(
         triple,
-        settings: aarch64_settings::builder(),
-        constructor: |triple, shared_flags, settings| {
+        aarch64_settings::builder(),
+        |triple, shared_flags, settings| {
             let isa_flags = aarch64_settings::Flags::new(&shared_flags, settings);
             let isa = Aarch64::new(triple, shared_flags, isa_flags);
             Ok(Box::new(isa))
         },
-    }
+    )
 }
 
 /// Aarch64 ISA.
@@ -68,6 +68,18 @@ impl TargetIsa for Aarch64 {
         &self.triple
     }
 
+    fn flags(&self) -> &settings::Flags {
+        &self.shared_flags
+    }
+
+    fn isa_flags(&self) -> Vec<settings::Value> {
+        self.isa_flags.iter().collect()
+    }
+
+    fn is_branch_protection_enabled(&self) -> bool {
+        self.isa_flags.use_bti()
+    }
+
     fn compile_function(
         &self,
         sig: &FuncType,
@@ -87,5 +99,16 @@ impl TargetIsa for Aarch64 {
 
         codegen.emit(&mut body, validator)?;
         Ok(masm.finalize())
+    }
+
+    fn text_section_builder(&self, num_funcs: usize) -> Box<dyn TextSectionBuilder> {
+        Box::new(MachTextSectionBuilder::<
+            cranelift_codegen::isa::aarch64::inst::Inst,
+        >::new(num_funcs))
+    }
+
+    fn function_alignment(&self) -> u32 {
+        // See `cranelift_codegen::isa::TargetIsa::function_alignment`.
+        32
     }
 }

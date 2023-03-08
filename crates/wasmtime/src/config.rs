@@ -1623,7 +1623,7 @@ impl Config {
         }
 
         if let Some(cache_store) = &self.compiler_config.cache_store {
-            compiler.enable_incremental_compilation(cache_store.clone());
+            compiler.enable_incremental_compilation(cache_store.clone())?;
         }
 
         compiler.build()

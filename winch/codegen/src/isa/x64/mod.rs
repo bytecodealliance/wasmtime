@@ -10,9 +10,9 @@ use crate::{
     regset::RegSet,
 };
 use anyhow::Result;
-use cranelift_codegen::{
-    isa::x64::settings as x64_settings, settings::Flags, Final, MachBufferFinalized,
-};
+use cranelift_codegen::settings::{self, Flags};
+use cranelift_codegen::{isa::x64::settings as x64_settings, Final, MachBufferFinalized};
+use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
 use target_lexicon::Triple;
 use wasmparser::{FuncType, FuncValidator, FunctionBody, ValidatorResources};
 
@@ -30,17 +30,17 @@ mod regs;
 
 /// Create an ISA builder.
 pub(crate) fn isa_builder(triple: Triple) -> Builder {
-    Builder {
+    Builder::new(
         triple,
-        settings: x64_settings::builder(),
-        constructor: |triple, shared_flags, settings| {
+        x64_settings::builder(),
+        |triple, shared_flags, settings| {
             // TODO: Once enabling/disabling flags is allowed, and once features like SIMD are supported
             // ensure compatibility between shared flags and ISA flags.
             let isa_flags = x64_settings::Flags::new(&shared_flags, settings);
             let isa = X64::new(triple, shared_flags, isa_flags);
             Ok(Box::new(isa))
         },
-    }
+    )
 }
 
 /// x64 ISA.
@@ -73,6 +73,14 @@ impl TargetIsa for X64 {
         &self.triple
     }
 
+    fn flags(&self) -> &settings::Flags {
+        &self.shared_flags
+    }
+
+    fn isa_flags(&self) -> Vec<settings::Value> {
+        self.isa_flags.iter().collect()
+    }
+
     fn compile_function(
         &self,
         sig: &FuncType,
@@ -93,5 +101,14 @@ impl TargetIsa for X64 {
         codegen.emit(&mut body, validator)?;
 
         Ok(masm.finalize())
+    }
+
+    fn text_section_builder(&self, num_funcs: usize) -> Box<dyn TextSectionBuilder> {
+        Box::new(MachTextSectionBuilder::<cranelift_codegen::isa::x64::Inst>::new(num_funcs))
+    }
+
+    fn function_alignment(&self) -> u32 {
+        // See `cranelift_codegen`'s value of this for more information.
+        16
     }
 }

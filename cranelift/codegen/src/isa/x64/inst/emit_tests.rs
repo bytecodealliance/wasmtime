@@ -5155,7 +5155,7 @@ fn test_x64_emit() {
     isa_flag_builder.enable("has_avx512f").unwrap();
     isa_flag_builder.enable("has_avx512vbmi").unwrap();
     isa_flag_builder.enable("has_avx512vl").unwrap();
-    let isa_flags = x64::settings::Flags::new(&flags, isa_flag_builder);
+    let isa_flags = x64::settings::Flags::new(&flags, &isa_flag_builder);
 
     let emit_info = EmitInfo::new(flags, isa_flags);
     for (insn, expected_encoding, expected_printing) in insns {

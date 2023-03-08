@@ -2095,7 +2095,7 @@ fn make_test_flags() -> (settings::Flags, super::super::riscv_settings::Flags) {
     let b = settings::builder();
     let flags = settings::Flags::new(b.clone());
     let b2 = super::super::riscv_settings::builder();
-    let isa_flags = super::super::riscv_settings::Flags::new(&flags, b2);
+    let isa_flags = super::super::riscv_settings::Flags::new(&flags, &b2);
     (flags, isa_flags)
 }
 

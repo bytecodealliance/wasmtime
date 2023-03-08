@@ -24,6 +24,7 @@
 )]
 
 use cranelift_codegen::isa;
+use cranelift_codegen::settings::Configurable;
 use target_lexicon::Triple;
 
 /// Return an `isa` builder configured for the current host
@@ -45,17 +46,24 @@ pub fn builder_with_options(infer_native_flags: bool) -> Result<isa::Builder, &'
         isa::LookupError::SupportDisabled => "support for architecture disabled at compile time",
         isa::LookupError::Unsupported => "unsupported architecture",
     })?;
+    if infer_native_flags {
+        self::infer_native_flags(&mut isa_builder)?;
+    }
+    Ok(isa_builder)
+}
 
+/// Return an `isa` builder configured for the current host
+/// machine, or `Err(())` if the host machine is not supported
+/// in the current configuration.
+///
+/// Selects the given backend variant specifically; this is
+/// useful when more than oen backend exists for a given target
+/// (e.g., on x86-64).
+pub fn infer_native_flags(isa_builder: &mut dyn Configurable) -> Result<(), &'static str> {
     #[cfg(target_arch = "x86_64")]
     {
-        use cranelift_codegen::settings::Configurable;
-
         if !std::is_x86_feature_detected!("sse2") {
             return Err("x86 support requires SSE2");
-        }
-
-        if !infer_native_flags {
-            return Ok(isa_builder);
         }
 
         // These are temporarily enabled by default (see #3810 for
@@ -123,12 +131,6 @@ pub fn builder_with_options(infer_native_flags: bool) -> Result<isa::Builder, &'
 
     #[cfg(target_arch = "aarch64")]
     {
-        use cranelift_codegen::settings::Configurable;
-
-        if !infer_native_flags {
-            return Ok(isa_builder);
-        }
-
         if std::arch::is_aarch64_feature_detected!("lse") {
             isa_builder.enable("has_lse").unwrap();
         }
@@ -149,12 +151,6 @@ pub fn builder_with_options(infer_native_flags: bool) -> Result<isa::Builder, &'
     // we use getauxval from the libc crate directly.
     #[cfg(all(target_arch = "s390x", target_os = "linux"))]
     {
-        use cranelift_codegen::settings::Configurable;
-
-        if !infer_native_flags {
-            return Ok(isa_builder);
-        }
-
         let v = unsafe { libc::getauxval(libc::AT_HWCAP) };
         const HWCAP_S390X_VXRS_EXT2: libc::c_ulong = 32768;
         if (v & HWCAP_S390X_VXRS_EXT2) != 0 {
@@ -169,12 +165,6 @@ pub fn builder_with_options(infer_native_flags: bool) -> Result<isa::Builder, &'
     // getauxval from the libc crate directly as a temporary measure.
     #[cfg(all(target_arch = "riscv64", target_os = "linux"))]
     {
-        use cranelift_codegen::settings::Configurable;
-
-        if !infer_native_flags {
-            return Ok(isa_builder);
-        }
-
         let v = unsafe { libc::getauxval(libc::AT_HWCAP) };
 
         const HWCAP_RISCV_EXT_A: libc::c_ulong = 1 << (b'a' - b'a');
@@ -217,12 +207,7 @@ pub fn builder_with_options(infer_native_flags: bool) -> Result<isa::Builder, &'
         // won't have a bit associated with them. The Linux kernel
         // is currently working on a new way to query the extensions.
     }
-
-    // squelch warnings about unused mut/variables on some platforms.
-    drop(&mut isa_builder);
-    drop(infer_native_flags);
-
-    Ok(isa_builder)
+    Ok(())
 }
 
 #[cfg(test)]

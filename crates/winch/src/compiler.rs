@@ -43,7 +43,8 @@ impl wasmtime_environ::Compiler for Compiler {
         _tunables: &Tunables,
         _resolve_reloc: &dyn Fn(usize, FuncIndex) -> usize,
     ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
-        todo!()
+        assert!(_funcs.is_empty());
+        Ok(Vec::new())
     }
 
     fn emit_trampoline_obj(
@@ -59,20 +60,16 @@ impl wasmtime_environ::Compiler for Compiler {
         self.isa.triple()
     }
 
-    fn page_size_align(&self) -> u64 {
-        todo!()
-    }
-
     fn flags(&self) -> std::collections::BTreeMap<String, wasmtime_environ::FlagValue> {
-        todo!()
+        wasmtime_cranelift_shared::clif_flags_to_wasmtime(self.isa.flags().iter())
     }
 
     fn isa_flags(&self) -> std::collections::BTreeMap<String, wasmtime_environ::FlagValue> {
-        todo!()
+        wasmtime_cranelift_shared::clif_flags_to_wasmtime(self.isa.isa_flags())
     }
 
     fn is_branch_protection_enabled(&self) -> bool {
-        todo!()
+        self.isa.is_branch_protection_enabled()
     }
 
     #[cfg(feature = "component-model")]
@@ -87,5 +84,13 @@ impl wasmtime_environ::Compiler for Compiler {
         _funcs: &PrimaryMap<DefinedFuncIndex, (SymbolId, &(dyn Any + Send))>,
     ) -> Result<()> {
         todo!()
+    }
+
+    fn function_alignment(&self) -> u32 {
+        self.isa.function_alignment()
+    }
+
+    fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
+        self.isa.create_systemv_cie()
     }
 }

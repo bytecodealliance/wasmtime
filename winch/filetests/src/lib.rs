@@ -94,7 +94,7 @@ mod test {
 
         let shared_flags = settings::Flags::new(settings::builder());
         let isa_builder = lookup(triple).unwrap();
-        let isa = isa_builder.build(shared_flags).unwrap();
+        let isa = isa_builder.finish(shared_flags).unwrap();
 
         let mut validator = Validator::new();
         let parser = WasmParser::new(0);

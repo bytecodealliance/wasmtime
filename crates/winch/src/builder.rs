@@ -1,67 +1,54 @@
 use crate::compiler::Compiler;
-use anyhow::Result;
-use cranelift_codegen::settings;
+use anyhow::{bail, Result};
 use std::sync::Arc;
-use target_lexicon::Triple;
+use wasmtime_cranelift_shared::isa_builder::IsaBuilder;
 use wasmtime_environ::{CompilerBuilder, Setting};
-use winch_codegen::isa;
+use winch_codegen::{isa, TargetIsa};
 
 /// Compiler builder.
 struct Builder {
-    /// Target triple.
-    triple: Triple,
-    /// Shared flags builder.
-    shared_flags: settings::Builder,
-    /// ISA builder.
-    isa_builder: isa::Builder,
+    inner: IsaBuilder<Result<Box<dyn TargetIsa>>>,
 }
 
 pub fn builder() -> Box<dyn CompilerBuilder> {
-    let triple = Triple::host();
     Box::new(Builder {
-        triple: triple.clone(),
-        shared_flags: settings::builder(),
-        // TODO:
-        // Either refactor and re-use `cranelift-native::builder()` or come up with a similar
-        // mechanism to lookup the host's architecture ISA and infer native flags.
-        isa_builder: isa::lookup(triple).expect("host architecture is not supported"),
+        inner: IsaBuilder::new(|triple| isa::lookup(triple).map_err(|e| e.into())),
     })
 }
 
 impl CompilerBuilder for Builder {
     fn triple(&self) -> &target_lexicon::Triple {
-        &self.triple
+        self.inner.triple()
     }
 
     fn target(&mut self, target: target_lexicon::Triple) -> Result<()> {
-        self.triple = target;
+        self.inner.target(target)?;
         Ok(())
     }
 
-    fn set(&mut self, _name: &str, _val: &str) -> Result<()> {
-        Ok(())
+    fn set(&mut self, name: &str, value: &str) -> Result<()> {
+        self.inner.set(name, value)
     }
 
-    fn enable(&mut self, _name: &str) -> Result<()> {
-        Ok(())
+    fn enable(&mut self, name: &str) -> Result<()> {
+        self.inner.enable(name)
     }
 
     fn settings(&self) -> Vec<Setting> {
-        vec![]
+        self.inner.settings()
     }
 
     fn build(&self) -> Result<Box<dyn wasmtime_environ::Compiler>> {
-        let flags = settings::Flags::new(self.shared_flags.clone());
-        Ok(Box::new(Compiler::new(
-            self.isa_builder.clone().build(flags)?,
-        )))
+        let isa = self.inner.build()?;
+
+        Ok(Box::new(Compiler::new(isa)))
     }
 
     fn enable_incremental_compilation(
         &mut self,
         _cache_store: Arc<dyn wasmtime_environ::CacheStore>,
-    ) {
-        todo!()
+    ) -> Result<()> {
+        bail!("incremental compilation is not supported on this platform");
     }
 }
 
