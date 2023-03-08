@@ -8,4 +8,4 @@ publish = false
 getrandom = "0.2.8"
 rustix = "0.36.6"
 cap-std = "1.0.3"
-wit-bindgen = { git = "https://github.com/bytecodealliance/wit-bindgen", rev = "39030f9adabe581ceae7d574e4a902e37d1be6eb" }
+wit-bindgen = "0.4.0"

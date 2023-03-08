@@ -14,3 +14,5 @@ quote = "1.0"
 
 [build-dependencies]
 wit-component = "0.7.0"
+cargo_metadata = "0.15.3"
+heck = "0.4.0"

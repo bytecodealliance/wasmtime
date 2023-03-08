@@ -18,7 +18,7 @@ use wasmtime::{
     Config, Engine, Store,
 };
 
-test_programs_macros::tests!();
+test_programs_macros::command_tests!();
 
 // A bunch of these test cases are expected to fail. We wrap up their execution in this
 // function so that we see if changes make them start passing.

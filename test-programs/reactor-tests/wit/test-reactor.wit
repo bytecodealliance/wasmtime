@@ -1,0 +1,7 @@
+default world test-reactor {
+
+  import wasi-environment: wasi.environment
+
+  export add-strings: func(s: list<string>) -> u32
+  export get-strings: func() -> list<string>
+}
