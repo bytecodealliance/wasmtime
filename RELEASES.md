@@ -10,6 +10,20 @@ Unreleased.
 
 --------------------------------------------------------------------------------
 
+## 6.0.1
+
+Released 2023-03-08.
+
+### Fixed
+
+* Guest-controlled out-of-bounds read/write on x86\_64
+  [GHSA-ff4p-7xrq-q5r8](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-ff4p-7xrq-q5r8)
+
+*  Miscompilation of `i8x16.select` with the same inputs on x86\_64
+  [GHSA-xm67-587q-r2vw](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-xm67-587q-r2vw)
+
+--------------------------------------------------------------------------------
+
 ## 6.0.0
 
 Released 2023-02-20
@@ -64,6 +78,20 @@ Released 2023-02-20
 
 --------------------------------------------------------------------------------
 
+## 5.0.1
+
+Released 2023-03-08.
+
+### Fixed
+
+* Guest-controlled out-of-bounds read/write on x86\_64
+  [GHSA-ff4p-7xrq-q5r8](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-ff4p-7xrq-q5r8)
+
+*  Miscompilation of `i8x16.select` with the same inputs on x86\_64
+  [GHSA-xm67-587q-r2vw](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-xm67-587q-r2vw)
+
+--------------------------------------------------------------------------------
+
 ## 5.0.0
 
 Released 2023-01-20
@@ -110,6 +138,20 @@ Released 2023-01-20
 * Handling of DWARF debugging information in components with multiple modules
   has been fixed to ensure the right info is used for each module.
   [#5358](https://github.com/bytecodealliance/wasmtime/pull/5358)
+
+--------------------------------------------------------------------------------
+
+## 4.0.1
+
+Released 2023-03-08.
+
+### Fixed
+
+* Guest-controlled out-of-bounds read/write on x86\_64
+  [GHSA-ff4p-7xrq-q5r8](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-ff4p-7xrq-q5r8)
+
+*  Miscompilation of `i8x16.select` with the same inputs on x86\_64
+  [GHSA-xm67-587q-r2vw](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-xm67-587q-r2vw)
 
 --------------------------------------------------------------------------------
 
