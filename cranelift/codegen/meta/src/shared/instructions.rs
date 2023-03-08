@@ -3245,15 +3245,6 @@ pub(crate) fn define(
         );
     }
 
-    let IntTo = &TypeVar::new(
-        "IntTo",
-        "A larger integer type with the same number of lanes",
-        TypeSetBuilder::new()
-            .ints(Interval::All)
-            .simd_lanes(Interval::All)
-            .build(),
-    );
-
     let FloatTo = &TypeVar::new(
         "FloatTo",
         "A scalar or vector floating point number",
@@ -3376,6 +3367,11 @@ pub(crate) fn define(
         "A scalar only floating point number",
         TypeSetBuilder::new().floats(Interval::All).build(),
     );
+    let IntTo = &TypeVar::new(
+        "IntTo",
+        "An scalar only integer type",
+        TypeSetBuilder::new().ints(Interval::All).build(),
+    );
     let x = &Operand::new("x", FloatScalar);
     let a = &Operand::new("a", IntTo);
 
@@ -3415,6 +3411,15 @@ pub(crate) fn define(
         .operands_out(vec![a])
         .can_trap()
         .side_effects_idempotent(),
+    );
+
+    let IntTo = &TypeVar::new(
+        "IntTo",
+        "A larger integer type with the same number of lanes",
+        TypeSetBuilder::new()
+            .ints(Interval::All)
+            .simd_lanes(Interval::All)
+            .build(),
     );
 
     let x = &Operand::new("x", Float);
