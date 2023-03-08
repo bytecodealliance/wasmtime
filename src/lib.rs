@@ -16,16 +16,14 @@ use poll::Pollable;
 use streams::{InputStream, OutputStream};
 use wasi::*;
 
-#[cfg(all(feature = "cli-command", feature = "cli-reactor"))]
-compile_error!(
-    "only one of the `cli-command` and `cli-reactor` features may be selected at a time"
-);
+#[cfg(all(feature = "command", feature = "reactor"))]
+compile_error!("only one of the `command` and `reactor` features may be selected at a time");
 
 #[macro_use]
 mod macros;
 
 mod bindings {
-    #[cfg(feature = "cli-command")]
+    #[cfg(feature = "command")]
     wit_bindgen::generate!({
         world: "command",
         std_feature,
@@ -35,7 +33,7 @@ mod bindings {
         skip: ["main", "preopens", "get-environment"],
     });
 
-    #[cfg(feature = "cli-reactor")]
+    #[cfg(feature = "reactor")]
     wit_bindgen::generate!({
         world: "reactor",
         std_feature,
@@ -45,7 +43,7 @@ mod bindings {
 }
 
 #[no_mangle]
-#[cfg(feature = "cli-command")]
+#[cfg(feature = "command")]
 pub unsafe extern "C" fn main(
     stdin: InputStream,
     stdout: OutputStream,
@@ -254,7 +252,7 @@ impl ImportAlloc {
 
 /// This allocator is only used for the `main` entrypoint.
 ///
-/// The implementation here is a bump allocator into `State::command_data` which
+/// The implementation here is a bump allocator into `State::long_lived_arena` which
 /// traps when it runs out of data. This means that the total size of
 /// arguments/env/etc coming into a component is bounded by the current 64k
 /// (ish) limit. That's just an implementation limit though which can be lifted
