@@ -1,8 +1,17 @@
 
 # cargo-vet config file
 
+[imports.chromeos]
+url = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/main/cargo-vet/audits.toml?format=TEXT"
+
+[imports.embark-studios]
+url = "https://raw.githubusercontent.com/EmbarkStudios/rust-ecosystem/main/audits.toml"
+
+[imports.isrg]
+url = "https://raw.githubusercontent.com/divviup/libprio-rs/main/supply-chain/audits.toml"
+
 [imports.mozilla]
-url = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+url = "https://raw.githubusercontent.com/mozilla/supply-chain/main/audits.toml"
 
 [policy.isle-fuzz]
 criteria = "safe-to-run"
@@ -54,10 +63,6 @@ criteria = "safe-to-deploy"
 version = "0.0.1"
 criteria = "safe-to-deploy"
 
-[[exemptions.anyhow]]
-version = "1.0.57"
-criteria = "safe-to-deploy"
-
 [[exemptions.async-trait]]
 version = "0.1.53"
 criteria = "safe-to-deploy"
@@ -76,10 +81,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.bitflags]]
 version = "1.3.2"
-criteria = "safe-to-deploy"
-
-[[exemptions.block-buffer]]
-version = "0.9.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.bstr]]
@@ -186,10 +187,6 @@ criteria = "safe-to-deploy"
 version = "0.8.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.cty]]
-version = "0.2.2"
-criteria = "safe-to-run"
-
 [[exemptions.curve25519-dalek]]
 version = "3.2.0"
 criteria = "safe-to-deploy"
@@ -241,10 +238,6 @@ criteria = "safe-to-deploy"
 [[exemptions.egg]]
 version = "0.6.0"
 criteria = "safe-to-run"
-
-[[exemptions.either]]
-version = "1.6.1"
-criteria = "safe-to-deploy"
 
 [[exemptions.elliptic-curve]]
 version = "0.10.6"
@@ -390,17 +383,9 @@ criteria = "safe-to-run"
 version = "0.9.6"
 criteria = "safe-to-deploy"
 
-[[exemptions.lazy_static]]
-version = "1.4.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.libc]]
 version = "0.2.133"
 criteria = "safe-to-deploy"
-
-[[exemptions.libfuzzer-sys]]
-version = "0.4.3"
-criteria = "safe-to-run"
 
 [[exemptions.libloading]]
 version = "0.7.3"
@@ -437,10 +422,6 @@ criteria = "safe-to-deploy"
 [[exemptions.memoffset]]
 version = "0.6.5"
 criteria = "safe-to-deploy"
-
-[[exemptions.miniz_oxide]]
-version = "0.5.1"
-criteria = "safe-to-run"
 
 [[exemptions.mio]]
 version = "0.8.2"
@@ -489,10 +470,6 @@ criteria = "safe-to-deploy"
 [[exemptions.oorandom]]
 version = "11.1.3"
 criteria = "safe-to-run"
-
-[[exemptions.opaque-debug]]
-version = "0.3.0"
-criteria = "safe-to-deploy"
 
 [[exemptions.openvino-finder]]
 version = "0.4.1"
@@ -774,10 +751,6 @@ criteria = "safe-to-deploy"
 version = "1.2.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.static_assertions]]
-version = "1.1.0"
-criteria = "safe-to-run"
-
 [[exemptions.strsim]]
 version = "0.10.0"
 criteria = "safe-to-deploy"
@@ -868,10 +841,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.unicode-xid]]
 version = "0.2.3"
-criteria = "safe-to-deploy"
-
-[[exemptions.universal-hash]]
-version = "0.4.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.uuid]]
