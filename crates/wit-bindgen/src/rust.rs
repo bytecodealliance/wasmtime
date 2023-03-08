@@ -15,7 +15,7 @@ pub trait RustGenerator<'a> {
 
     fn push_str(&mut self, s: &str);
     fn info(&self, ty: TypeId) -> TypeInfo;
-    fn current_interface(&self) -> Option<InterfaceId>;
+    fn path_to_interface(&self, interface: InterfaceId) -> Option<String>;
 
     fn print_ty(&mut self, ty: &Type, mode: TypeMode) {
         match ty {
@@ -64,19 +64,9 @@ pub trait RustGenerator<'a> {
                 self.result_name(id)
             };
             if let TypeOwner::Interface(id) = ty.owner {
-                if let Some(name) = &self.resolve().interfaces[id].name {
-                    match self.current_interface() {
-                        Some(cur) if cur == id => {}
-                        Some(_other) => {
-                            self.push_str("super::");
-                            self.push_str(&name.to_snake_case());
-                            self.push_str("::");
-                        }
-                        None => {
-                            self.push_str(&name.to_snake_case());
-                            self.push_str("::");
-                        }
-                    }
+                if let Some(path) = self.path_to_interface(id) {
+                    self.push_str(&path);
+                    self.push_str("::");
                 }
             }
             self.push_str(&name);

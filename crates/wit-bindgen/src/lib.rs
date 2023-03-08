@@ -1,7 +1,7 @@
 use crate::rust::{to_rust_ident, to_rust_upper_camel_case, RustGenerator, TypeMode};
 use crate::types::{TypeInfo, Types};
 use heck::*;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::Write as _;
 use std::io::{Read, Write};
 use std::mem;
@@ -33,6 +33,7 @@ struct Wasmtime {
     exports: Exports,
     types: Types,
     sizes: SizeAlign,
+    interface_names: HashMap<InterfaceId, String>,
 }
 
 enum Import {
@@ -113,6 +114,7 @@ impl Wasmtime {
                 Import::Function { sig, add_to_linker }
             }
             WorldItem::Interface(id) => {
+                gen.gen.interface_names.insert(*id, snake.clone());
                 gen.current_interface = Some(*id);
                 gen.types(*id);
                 gen.generate_trappable_error_types(TypeOwner::Interface(*id));
@@ -159,6 +161,7 @@ impl Wasmtime {
             }
             WorldItem::Type(_) => unreachable!(),
             WorldItem::Interface(id) => {
+                gen.gen.interface_names.insert(*id, snake.clone());
                 gen.current_interface = Some(*id);
                 gen.types(*id);
                 gen.generate_trappable_error_types(TypeOwner::Interface(*id));
@@ -1382,8 +1385,18 @@ impl<'a> RustGenerator<'a> for InterfaceGenerator<'a> {
         self.resolve
     }
 
-    fn current_interface(&self) -> Option<InterfaceId> {
-        self.current_interface
+    fn path_to_interface(&self, interface: InterfaceId) -> Option<String> {
+        match self.current_interface {
+            Some(id) if id == interface => None,
+            _ => {
+                let name = &self.gen.interface_names[&interface];
+                Some(if self.current_interface.is_some() {
+                    format!("super::{name}")
+                } else {
+                    name.clone()
+                })
+            }
+        }
     }
 
     fn push_str(&mut self, s: &str) {
