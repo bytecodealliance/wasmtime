@@ -54,6 +54,7 @@ macro_rules! unreachable {
     () => {{
         eprint!("unreachable executed at line ");
         crate::macros::eprint_u32(line!());
+        eprint!("\n");
         wasm32::unreachable()
     }};
 
@@ -62,6 +63,7 @@ macro_rules! unreachable {
         crate::macros::eprint_u32(line!());
         eprint!(": ");
         eprintln!($arg);
+        eprint!("\n");
         wasm32::unreachable()
     }};
 }

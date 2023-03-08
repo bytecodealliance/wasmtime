@@ -27,17 +27,17 @@ mod macros;
 mod bindings {
     #[cfg(feature = "cli-command")]
     wit_bindgen::generate!({
-        world: "cli",
+        world: "command",
         std_feature,
         raw_strings,
         // The generated definition of command will pull in std, so we are defining it
         // manually below instead
-        skip: ["command", "preopens", "get-environment"],
+        skip: ["main", "preopens", "get-environment"],
     });
 
     #[cfg(feature = "cli-reactor")]
     wit_bindgen::generate!({
-        world: "cli-reactor",
+        world: "reactor",
         std_feature,
         raw_strings,
         skip: ["preopens", "get-environment"],
@@ -46,7 +46,7 @@ mod bindings {
 
 #[no_mangle]
 #[cfg(feature = "cli-command")]
-pub unsafe extern "C" fn command(
+pub unsafe extern "C" fn main(
     stdin: InputStream,
     stdout: OutputStream,
     stderr: OutputStream,
@@ -80,6 +80,12 @@ pub unsafe extern "C" fn command(
             });
         }
         state.args = Some(slice::from_raw_parts(args_ptr, args_len));
+
+        // Initialize `arg_preopens`.
+        let preopens: &'static [Preopen] =
+            unsafe { std::slice::from_raw_parts(preopens.base, preopens.len) };
+        state.process_preopens(&preopens);
+        state.arg_preopens.set(Some(preopens));
 
         Ok(())
     });
@@ -246,7 +252,7 @@ impl ImportAlloc {
     }
 }
 
-/// This allocator is only used for the `command` entrypoint.
+/// This allocator is only used for the `main` entrypoint.
 ///
 /// The implementation here is a bump allocator into `State::command_data` which
 /// traps when it runs out of data. This means that the total size of
@@ -2159,7 +2165,7 @@ impl Streams {
                 // For files, we may have adjusted the position for seeking, so
                 // create a new stream.
                 StreamType::File(file) => {
-                    let input = filesystem::read_via_stream(file.fd, file.position.get())?;
+                    let input = filesystem::read_via_stream(file.fd, file.position.get());
                     self.input.set(Some(input));
                     Ok(input)
                 }
@@ -2177,9 +2183,9 @@ impl Streams {
                 // create a new stream.
                 StreamType::File(file) => {
                     let output = if file.append {
-                        filesystem::append_via_stream(file.fd)?
+                        filesystem::append_via_stream(file.fd)
                     } else {
-                        filesystem::write_via_stream(file.fd, file.position.get())?
+                        filesystem::write_via_stream(file.fd, file.position.get())
                     };
                     self.output.set(Some(output));
                     Ok(output)
@@ -2277,21 +2283,25 @@ struct State {
     /// Long-lived bump allocated memory arena.
     ///
     /// This is used for the cabi_export_realloc to allocate data passed to the
-    /// `command` entrypoint. Allocations in this arena are safe to use for
+    /// `main` entrypoint. Allocations in this arena are safe to use for
     /// the lifetime of the State struct. It may also be used for import allocations
     /// which need to be long-lived, by using `import_alloc.with_arena`.
     long_lived_arena: BumpArena,
 
-    /// Arguments passed to the `command` entrypoint
+    /// Arguments passed to the `main` entrypoint
     args: Option<&'static [WasmStr]>,
 
     /// Environment variables. Initialized lazily. Access with `State::get_environment`
     /// to take care of initialization.
     env_vars: Cell<Option<&'static [StrTuple]>>,
 
+    /// Preopened directories passed along with `main` args. Access with
+    /// `State::get_preopens` to take care of initialization.
+    arg_preopens: Cell<Option<&'static [Preopen]>>,
+
     /// Preopened directories. Initialized lazily. Access with `State::get_preopens`
     /// to take care of initialization.
-    preopens: Cell<Option<&'static [Preopen]>>,
+    env_preopens: Cell<Option<&'static [Preopen]>>,
 
     /// Cache for the `fd_readdir` call for a final `wasi::Dirent` plus path
     /// name that didn't fit into the caller's buffer.
@@ -2369,7 +2379,7 @@ const fn bump_arena_size() -> usize {
     start -= size_of::<DirentCache>();
 
     // Remove miscellaneous metadata also stored in state.
-    start -= 24 * size_of::<usize>();
+    start -= 25 * size_of::<usize>();
 
     // Everything else is the `command_data` allocation.
     start
@@ -2478,7 +2488,8 @@ impl State {
                 long_lived_arena: BumpArena::new(),
                 args: None,
                 env_vars: Cell::new(None),
-                preopens: Cell::new(None),
+                arg_preopens: Cell::new(None),
+                env_preopens: Cell::new(None),
                 dirent_cache: DirentCache {
                     stream: Cell::new(None),
                     for_fd: Cell::new(0),
@@ -2504,7 +2515,7 @@ impl State {
     }
 
     fn init(&mut self) {
-        // Set up a default stdin. This will be overridden when `command`
+        // Set up a default stdin. This will be overridden when `main`
         // is called.
         self.push_desc(Descriptor::Streams(Streams {
             input: Cell::new(None),
@@ -2513,7 +2524,7 @@ impl State {
         }))
         .trapping_unwrap();
         // Set up a default stdout, writing to the stderr device. This will
-        // be overridden when `command` is called.
+        // be overridden when `main` is called.
         self.push_desc(Descriptor::Stderr).trapping_unwrap();
         // Set up a default stderr.
         self.push_desc(Descriptor::Stderr).trapping_unwrap();
@@ -2678,8 +2689,9 @@ impl State {
         self.env_vars.get().trapping_unwrap()
     }
 
-    fn get_preopens(&self) -> &[Preopen] {
-        if self.preopens.get().is_none() {
+    fn get_preopens(&self) -> (Option<&[Preopen]>, &[Preopen]) {
+        // Lazily initialize `env_preopens`.
+        if self.env_preopens.get().is_none() {
             #[link(wasm_import_module = "environment-preopens")]
             extern "C" {
                 #[link_name = "preopens"]
@@ -2698,26 +2710,46 @@ impl State {
                 // cast this to a &'static slice:
                 std::slice::from_raw_parts(list.base, list.len)
             };
-            for preopen in preopens {
-                // Expectation is that the descriptor index is initialized with
-                // stdio (0,1,2) and no others, so that preopens are 3..
-                self.push_desc(Descriptor::Streams(Streams {
-                    input: Cell::new(None),
-                    output: Cell::new(None),
-                    type_: StreamType::File(File {
-                        fd: preopen.descriptor,
-                        position: Cell::new(0),
-                        append: false,
-                    }),
-                }))
-                .trapping_unwrap();
-            }
-            self.preopens.set(Some(preopens));
+            self.process_preopens(preopens);
+            self.env_preopens.set(Some(preopens));
         }
-        self.preopens.get().trapping_unwrap()
+
+        let arg_preopens = self.arg_preopens.get();
+        let env_preopens = self.env_preopens.get().trapping_unwrap();
+        (arg_preopens, env_preopens)
     }
 
     fn get_preopen(&self, fd: Fd) -> Option<&Preopen> {
-        self.get_preopens().get(fd.checked_sub(3)? as usize)
+        // Lazily initialize the preopens and obtain the two slices.
+        let (arg_preopens, env_preopens) = self.get_preopens();
+
+        // Subtract 3 or the stdio indices to compute the preopen index.
+        let mut index = fd.checked_sub(3)? as usize;
+
+        // Index into the conceptually concatenated preopen slices.
+        if let Some(arg_preopens) = arg_preopens {
+            if let Some(preopen) = arg_preopens.get(index) {
+                return Some(preopen);
+            }
+            index -= arg_preopens.len();
+        }
+        env_preopens.get(index)
+    }
+
+    fn process_preopens(&self, preopens: &[Preopen]) {
+        for preopen in preopens {
+            // Expectation is that the descriptor index is initialized with
+            // stdio (0,1,2) and no others, so that preopens are 3..
+            self.push_desc(Descriptor::Streams(Streams {
+                input: Cell::new(None),
+                output: Cell::new(None),
+                type_: StreamType::File(File {
+                    fd: preopen.descriptor,
+                    position: Cell::new(0),
+                    append: false,
+                }),
+            }))
+            .trapping_unwrap();
+        }
     }
 }
