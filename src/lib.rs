@@ -16,11 +16,16 @@ use poll::Pollable;
 use streams::{InputStream, OutputStream};
 use wasi::*;
 
+#[cfg(all(feature = "cli-command", feature = "cli-reactor"))]
+compile_error!(
+    "only one of the `cli-command` and `cli-reactor` features may be selected at a time"
+);
+
 #[macro_use]
 mod macros;
 
 mod bindings {
-    #[cfg(feature = "command")]
+    #[cfg(feature = "cli-command")]
     wit_bindgen::generate!({
         world: "cli",
         std_feature,
@@ -30,7 +35,7 @@ mod bindings {
         skip: ["command", "preopens", "get-environment"],
     });
 
-    #[cfg(not(feature = "command"))]
+    #[cfg(feature = "cli-reactor")]
     wit_bindgen::generate!({
         world: "cli-reactor",
         std_feature,
@@ -40,7 +45,7 @@ mod bindings {
 }
 
 #[no_mangle]
-#[cfg(feature = "command")]
+#[cfg(feature = "cli-command")]
 pub unsafe extern "C" fn command(
     stdin: InputStream,
     stdout: OutputStream,
