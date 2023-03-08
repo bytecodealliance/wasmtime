@@ -1409,8 +1409,8 @@ pub(crate) fn define(
             r#"
         Conditional select.
 
-        This instruction selects whole values. Use `vselect` for
-        lane-wise selection.
+        This instruction selects whole values. Use `bitselect` to choose each
+        bit according to a mask.
         "#,
             &formats.ternary,
         )
@@ -1458,7 +1458,7 @@ pub(crate) fn define(
 
         For each bit in `c`, this instruction selects the corresponding bit from `x` if the bit
         in `x` is 1 and the corresponding bit from `y` if the bit in `c` is 0. See also:
-        `select`, `vselect`.
+        `select`.
         "#,
             &formats.ternary,
         )
@@ -1484,26 +1484,7 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let c = &Operand::new("c", &TxN.as_bool()).with_doc("Controlling vector");
-    let x = &Operand::new("x", TxN).with_doc("Value to use where `c` is true");
-    let y = &Operand::new("y", TxN).with_doc("Value to use where `c` is false");
     let a = &Operand::new("a", TxN);
-
-    ig.push(
-        Inst::new(
-            "vselect",
-            r#"
-        Vector lane select.
-
-        Select lanes from ``x`` or ``y`` controlled by the lanes of the truthy
-        vector ``c``.
-        "#,
-            &formats.ternary,
-        )
-        .operands_in(vec![c, x, y])
-        .operands_out(vec![a]),
-    );
-
     let s = &Operand::new("s", i8);
 
     ig.push(

@@ -218,6 +218,28 @@ macro_rules! binary_match {
     };
 }
 
+macro_rules! bitop {
+    ( $op:tt($arg1:expr, $arg2:expr) ) => {
+        Ok(match ($arg1, $arg2) {
+            (DataValue::I8(a), DataValue::I8(b)) => DataValue::I8(a $op b),
+            (DataValue::I16(a), DataValue::I16(b)) => DataValue::I16(a $op b),
+            (DataValue::I32(a), DataValue::I32(b)) => DataValue::I32(a $op b),
+            (DataValue::I64(a), DataValue::I64(b)) => DataValue::I64(a $op b),
+            (DataValue::I128(a), DataValue::I128(b)) => DataValue::I128(a $op b),
+            (DataValue::F32(a), DataValue::F32(b)) => DataValue::F32(a $op b),
+            (DataValue::F64(a), DataValue::F64(b)) => DataValue::F64(a $op b),
+            (DataValue::V128(a), DataValue::V128(b)) => {
+                let mut a2 = a.clone();
+                for (a, b) in a2.iter_mut().zip(b.iter()) {
+                    *a = *a $op *b;
+                }
+                DataValue::V128(a2)
+            }
+            _ => unimplemented!(),
+        })
+    };
+}
+
 impl Value for DataValue {
     fn ty(&self) -> Type {
         self.ty()
@@ -686,19 +708,35 @@ impl Value for DataValue {
     }
 
     fn and(self, other: Self) -> ValueResult<Self> {
-        binary_match!(&(self, other); [I8, I16, I32, I64, I128, F32, F64])
+        bitop!(&(self, other))
     }
 
     fn or(self, other: Self) -> ValueResult<Self> {
-        binary_match!(|(self, other); [I8, I16, I32, I64, I128, F32, F64])
+        bitop!(|(self, other))
     }
 
     fn xor(self, other: Self) -> ValueResult<Self> {
-        binary_match!(^(self, other); [I8, I16, I32, I64, I128, F32, F64])
+        bitop!(^(self, other))
     }
 
     fn not(self) -> ValueResult<Self> {
-        unary_match!(!(self); [I8, I16, I32, I64, I128, F32, F64])
+        Ok(match self {
+            DataValue::I8(a) => DataValue::I8(!a),
+            DataValue::I16(a) => DataValue::I16(!a),
+            DataValue::I32(a) => DataValue::I32(!a),
+            DataValue::I64(a) => DataValue::I64(!a),
+            DataValue::I128(a) => DataValue::I128(!a),
+            DataValue::F32(a) => DataValue::F32(!a),
+            DataValue::F64(a) => DataValue::F64(!a),
+            DataValue::V128(a) => {
+                let mut a2 = a.clone();
+                for a in a2.iter_mut() {
+                    *a = !*a;
+                }
+                DataValue::V128(a2)
+            }
+            _ => unimplemented!(),
+        })
     }
 
     fn count_ones(self) -> ValueResult<Self> {

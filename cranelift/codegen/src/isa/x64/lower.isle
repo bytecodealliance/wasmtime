@@ -1193,7 +1193,7 @@
         (sse_or ty b a)))
 
 ;; If every byte of the condition is guaranteed to be all ones or all zeroes,
-;; we can use x86_blend like vselect does.
+;; we can use x64_blend.
 (rule 1 (lower (has_type ty @ (multi_lane _bits _lanes)
                          (bitselect condition
                                     if_true
@@ -1225,15 +1225,6 @@
 (rule (lower (has_type $I64X2
                        (x86_blendv condition if_true if_false)))
       (x64_blendvpd if_false if_true condition))
-
-;;;; Rules for `vselect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (has_type ty @ (multi_lane _bits _lanes)
-                       (vselect condition if_true if_false)))
-      (x64_blend ty
-                 condition
-                 if_true
-                 if_false))
 
 ;;;; Rules for `insertlane` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
