@@ -2122,6 +2122,13 @@
         (ones Reg (load_imm12 -1)))
   (value_reg (gen_select_reg (IntCC.Equal) zero input zero ones))))
 
+(decl normalize_fcvt_from_int (ValueRegs Type ExtendOp) ValueRegs)
+(rule 2 (normalize_fcvt_from_int r (fits_in_16 ty) op)
+  (extend r op ty $I64))
+(rule 1 (normalize_fcvt_from_int r _ _)
+  r)
+
+
 ;; Bitwise-or the two registers that make up the 128-bit value, then recurse as
 ;; though it was a 64-bit value.
 (rule
