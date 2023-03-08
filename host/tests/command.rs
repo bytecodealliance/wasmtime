@@ -269,6 +269,31 @@ async fn run_file_read(mut store: Store<WasiCtx>, wasi: Command) -> Result<()> {
     .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
+/// Like `run_file_read`, but passes the preopen as an argument instead of
+/// via the environment preopens interface.
+async fn run_file_read_arg(mut store: Store<WasiCtx>, wasi: Command) -> Result<()> {
+    let dir = tempfile::tempdir()?;
+
+    std::fs::File::create(dir.path().join("bar.txt"))?.write_all(b"And stood awhile in thought")?;
+
+    let open_dir = Dir::open_ambient_dir(dir.path(), ambient_authority())?;
+    let fd = store
+        .data_mut()
+        .push_dir(Box::new(wasi_cap_std_sync::dir::Dir::from_cap_std(
+            open_dir,
+        )))?;
+    wasi.call_main(
+        &mut store,
+        0 as Descriptor,
+        1 as Descriptor,
+        2 as OutputStream,
+        &[],
+        &[(fd, "/")],
+    )
+    .await?
+    .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
+}
+
 async fn run_file_append(mut store: Store<WasiCtx>, wasi: Command) -> Result<()> {
     let dir = tempfile::tempdir()?;
 
