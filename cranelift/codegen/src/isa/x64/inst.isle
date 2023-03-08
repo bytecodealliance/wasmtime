@@ -970,20 +970,6 @@
 (rule 2 (amode_add (Amode.ImmReg off (valid_reg base) flags) (ishl index (iconst (uimm8 shift))))
       (if (u32_lteq (u8_as_u32 shift) 3))
       (Amode.ImmRegRegShift off base index shift flags))
-(rule 2 (amode_add (Amode.ImmReg off (valid_reg base) flags) (uextend (ishl index (iconst (uimm8 shift)))))
-      (if (u32_lteq (u8_as_u32 shift) 3))
-      (Amode.ImmRegRegShift off base (extend_to_gpr index $I64 (ExtendKind.Zero)) shift flags))
-
-;; Same, but with a uextend of a shift of a 32-bit add. This is valid
-;; because we know our lowering of a narrower-than-64-bit `iadd` will
-;; always write the full register width, so we can effectively ignore
-;; the `uextend` and look through it to the `ishl`.
-;;
-;; Priority 3 to avoid conflict with the previous rule.
-(rule 3 (amode_add (Amode.ImmReg off (valid_reg base) flags)
-                   (uextend (ishl index @ (iadd _ _) (iconst (uimm8 shift)))))
-      (if (u32_lteq (u8_as_u32 shift) 3))
-      (Amode.ImmRegRegShift off base index shift flags))
 
 ;; -- Case 4 (absorbing constant offsets).
 ;;
