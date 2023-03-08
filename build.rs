@@ -253,16 +253,23 @@ fn build_archive(wasm: &[u8]) -> Vec<u8> {
     // Here we're building an archive with just a few symbols so it's a bit
     // easier. Note though we don't know the offset of our `intrinsics.o` up
     // front so it's left as 0 for now and filled in later.
+
+    let syms = [
+        "get_state_ptr",
+        "set_state_ptr",
+        "get_allocation_state",
+        "set_allocation_state",
+        "allocation_state",
+    ];
+
     let mut symbol_table = Vec::new();
-    symbol_table.extend_from_slice(bytes_of(&U32Bytes::new(BigEndian, 5)));
-    for _ in 0..5 {
+    symbol_table.extend_from_slice(bytes_of(&U32Bytes::new(BigEndian, syms.len() as u32)));
+    for _ in syms.iter() {
         symbol_table.extend_from_slice(bytes_of(&U32Bytes::new(BigEndian, 0)));
     }
-    symbol_table.extend_from_slice(b"get_state_ptr\0");
-    symbol_table.extend_from_slice(b"set_state_ptr\0");
-    symbol_table.extend_from_slice(b"get_allocation_state\0");
-    symbol_table.extend_from_slice(b"set_allocation_state\0");
-    symbol_table.extend_from_slice(b"allocation_state\0");
+    for s in syms.iter() {
+        symbol_table.extend_from_slice(&std::ffi::CString::new(*s).unwrap().into_bytes_with_nul());
+    }
 
     archive.extend_from_slice(bytes_of(&object::archive::Header {
         name: *b"/               ",
@@ -287,7 +294,8 @@ fn build_archive(wasm: &[u8]) -> Vec<u8> {
     // Now that we have the starting offset of the `intrinsics.o` file go back
     // and fill in the offset within the symbol table generated earlier.
     let member_offset = archive.len();
-    for index in 1..6 {
+    for (index, _) in syms.iter().enumerate() {
+        let index = index + 1;
         archive[symtab_offset + (index * 4)..][..4].copy_from_slice(bytes_of(&U32Bytes::new(
             BigEndian,
             member_offset.try_into().unwrap(),
