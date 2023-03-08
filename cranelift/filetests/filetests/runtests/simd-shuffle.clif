@@ -488,3 +488,65 @@ block0(v0: i64x2, v1: i64x2):
     return v5
 }
 ; run: %aarch64_dup_i64x2([1 2], [5 6]) == [1 1]
+
+function %aarch64_rev16(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+    v2 = bitcast.i8x16 little v0
+    v3 = bitcast.i8x16 little v1
+    v4 = shuffle v2, v3, [1 0 3 2 5 4 7 6 9 8 11 10 13 12 15 14]
+    v5 = bitcast.i16x8 little v4
+    return v5
+}
+; run: %aarch64_rev16([0x1 0x2 0x3 0x4 0x100 0x200 0x300 0x400], [0 0 0 0 0 0 0 0]) == [0x100 0x200 0x300 0x400 0x1 0x2 0x3 0x4]
+
+function %aarch64_rev32_bytes(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = bitcast.i8x16 little v0
+    v3 = bitcast.i8x16 little v1
+    v4 = shuffle v2, v3, [3 2 1 0 7 6 5 4 11 10 9 8 15 14 13 12]
+    v5 = bitcast.i32x4 little v4
+    return v5
+}
+; run: %aarch64_rev32_bytes([1 2 3 4], [0 0 0 0]) == [0x1000000 0x2000000 0x3000000 0x4000000]
+; run: %aarch64_rev32_bytes([0xff000000 0x00ff0000 0x0000ff00 0x000000ff], [0 0 0 0]) == [0xff 0xff00 0xff0000 0xff000000]
+
+function %aarch64_rev32_words(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = bitcast.i8x16 little v0
+    v3 = bitcast.i8x16 little v1
+    v4 = shuffle v2, v3, [2 3 0 1 6 7 4 5 10 11 8 9 14 15 12 13]
+    v5 = bitcast.i32x4 little v4
+    return v5
+}
+; run: %aarch64_rev32_words([1 2 3 4], [0 0 0 0]) == [0x10000 0x20000 0x30000 0x40000]
+; run: %aarch64_rev32_words([0xff000000 0x00ff0000 0x0000ff00 0x000000ff], [0 0 0 0]) == [0xff00 0xff 0xff000000 0xff0000]
+
+function %aarch64_rev64_bytes(i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2):
+    v2 = bitcast.i8x16 little v0
+    v3 = bitcast.i8x16 little v1
+    v4 = shuffle v2, v3, [7 6 5 4 3 2 1 0 15 14 13 12 11 10 9 8]
+    v5 = bitcast.i64x2 little v4
+    return v5
+}
+; run: %aarch64_rev64_bytes([0x0102030405060708 0x0807060504030201], [0 0]) == [0x0807060504030201 0x0102030405060708]
+
+function %aarch64_rev64_words(i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2):
+    v2 = bitcast.i8x16 little v0
+    v3 = bitcast.i8x16 little v1
+    v4 = shuffle v2, v3, [6 7 4 5 2 3 0 1 14 15 12 13 10 11 8 9]
+    v5 = bitcast.i64x2 little v4
+    return v5
+}
+; run: %aarch64_rev64_words([0x0102030405060708 0x0807060504030201], [0 0]) == [0x0708050603040102 0x0201040306050807]
+
+function %aarch64_rev64_doublewords(i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2):
+    v2 = bitcast.i8x16 little v0
+    v3 = bitcast.i8x16 little v1
+    v4 = shuffle v2, v3, [4 5 6 7 0 1 2 3 12 13 14 15 8 9 10 11]
+    v5 = bitcast.i64x2 little v4
+    return v5
+}
+; run: %aarch64_rev64_words([0x0102030405060708 0x0807060504030201], [0 0]) == [0x0506070801020304 0x0403020108070605]

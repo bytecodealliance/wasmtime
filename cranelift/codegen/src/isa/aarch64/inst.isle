@@ -1431,6 +1431,10 @@
     (Fneg)
     ;; Floating-point square root
     (Fsqrt)
+    ;; Reverse elements in 16-bit lanes
+    (Rev16)
+    ;; Reverse elements in 32-bit lanes
+    (Rev32)
     ;; Reverse elements in 64-bit doublewords
     (Rev64)
     ;; Floating-point convert to signed integer, rounding toward zero
@@ -2396,6 +2400,14 @@
 ;; Helper for generating `neg` instructions.
 (decl neg (Reg VectorSize) Reg)
 (rule (neg x size) (vec_misc (VecMisc2.Neg) x size))
+
+;; Helper for generating `rev16` instructions.
+(decl rev16 (Reg VectorSize) Reg)
+(rule (rev16 x size) (vec_misc (VecMisc2.Rev16) x size))
+
+;; Helper for generating `rev32` instructions.
+(decl rev32 (Reg VectorSize) Reg)
+(rule (rev32 x size) (vec_misc (VecMisc2.Rev32) x size))
 
 ;; Helper for generating `rev64` instructions.
 (decl rev64 (Reg VectorSize) Reg)

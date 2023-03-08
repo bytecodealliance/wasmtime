@@ -202,6 +202,23 @@
 ;; by the i64x2 cases of uzp1/uzp2 above where both trn and uzp have the same
 ;; semantics for 64-bit lanes.
 
+;; Rules for the `rev{16,32,64}` instructions where reversals happen at either
+;; the byte level, the 16-bit level, or 32-bit level. Note that all of these
+;; patterns only match reversals in the first operand, but they can
+;; theoretically be extended if necessary to reversals in the second operand.
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x0e0f_0c0d_0a0b_0809_0607_0405_0203_0001)))
+      (rev16 a (VectorSize.Size8x16)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x0c0d0e0f_08090a0b_04050607_00010203)))
+      (rev32 a (VectorSize.Size8x16)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x0d0c0f0e_09080b0a_05040706_01000302)))
+      (rev32 a (VectorSize.Size16x8)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x08090a0b0c0d0e0f_0001020304050607)))
+      (rev64 a (VectorSize.Size8x16)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x09080b0a0d0c0f0e_0100030205040706)))
+      (rev64 a (VectorSize.Size16x8)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x0b0a09080f0e0d0c_0302010007060504)))
+      (rev64 a (VectorSize.Size32x4)))
+
 (rule (lower (has_type ty (shuffle rn rn2 (u128_from_immediate mask))))
       (let ((mask_reg Reg (constant_f128 mask)))
        (vec_tbl2 rn rn2 mask_reg ty)))

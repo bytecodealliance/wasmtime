@@ -2476,6 +2476,8 @@ impl Inst {
                     VecMisc2::Fabs => ("fabs", size, ""),
                     VecMisc2::Fneg => ("fneg", size, ""),
                     VecMisc2::Fsqrt => ("fsqrt", size, ""),
+                    VecMisc2::Rev16 => ("rev16", size, ""),
+                    VecMisc2::Rev32 => ("rev32", size, ""),
                     VecMisc2::Rev64 => ("rev64", size, ""),
                     VecMisc2::Fcvtzs => ("fcvtzs", size, ""),
                     VecMisc2::Fcvtzu => ("fcvtzu", size, ""),

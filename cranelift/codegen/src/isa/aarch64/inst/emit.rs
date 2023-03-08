@@ -1977,8 +1977,20 @@ impl MachInstEmit for Inst {
                         );
                         (0b1, 0b11111, enc_size)
                     }
+                    VecMisc2::Rev16 => {
+                        debug_assert_eq!(size, VectorSize::Size8x16);
+                        (0b0, 0b00001, enc_size)
+                    }
+                    VecMisc2::Rev32 => {
+                        debug_assert!(size == VectorSize::Size8x16 || size == VectorSize::Size16x8);
+                        (0b1, 0b00000, enc_size)
+                    }
                     VecMisc2::Rev64 => {
-                        debug_assert_ne!(VectorSize::Size64x2, size);
+                        debug_assert!(
+                            size == VectorSize::Size8x16
+                                || size == VectorSize::Size16x8
+                                || size == VectorSize::Size32x4
+                        );
                         (0b0, 0b00000, enc_size)
                     }
                     VecMisc2::Fcvtzs => {
