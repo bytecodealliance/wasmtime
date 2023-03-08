@@ -49,6 +49,15 @@ impl streams::Host for WasiCtx {
         Ok(Ok((buffer, end)))
     }
 
+    async fn blocking_read(
+        &mut self,
+        stream: InputStream,
+        len: u64,
+    ) -> HostResult<(Vec<u8>, bool), StreamError> {
+        // TODO: When this is really async make this block.
+        self.read(stream, len).await
+    }
+
     async fn write(
         &mut self,
         stream: OutputStream,
@@ -62,6 +71,15 @@ impl streams::Host for WasiCtx {
         let bytes_written: u64 = s.write(&bytes).await.map_err(convert)?;
 
         Ok(Ok(u64::try_from(bytes_written).unwrap()))
+    }
+
+    async fn blocking_write(
+        &mut self,
+        stream: OutputStream,
+        bytes: Vec<u8>,
+    ) -> HostResult<u64, StreamError> {
+        // TODO: When this is really async make this block.
+        self.write(stream, bytes).await
     }
 
     async fn skip(
@@ -79,6 +97,15 @@ impl streams::Host for WasiCtx {
         Ok(Ok((bytes_skipped, end)))
     }
 
+    async fn blocking_skip(
+        &mut self,
+        stream: InputStream,
+        len: u64,
+    ) -> HostResult<(u64, bool), StreamError> {
+        // TODO: When this is really async make this block.
+        self.skip(stream, len).await
+    }
+
     async fn write_zeroes(
         &mut self,
         stream: OutputStream,
@@ -92,6 +119,15 @@ impl streams::Host for WasiCtx {
         let bytes_written: u64 = s.write_zeroes(len).await.map_err(convert)?;
 
         Ok(Ok(bytes_written))
+    }
+
+    async fn blocking_write_zeroes(
+        &mut self,
+        stream: OutputStream,
+        len: u64,
+    ) -> HostResult<u64, StreamError> {
+        // TODO: When this is really async make this block.
+        self.write_zeroes(stream, len).await
     }
 
     async fn splice(
@@ -122,6 +158,16 @@ impl streams::Host for WasiCtx {
         */
 
         todo!()
+    }
+
+    async fn blocking_splice(
+        &mut self,
+        src: InputStream,
+        dst: OutputStream,
+        len: u64,
+    ) -> HostResult<(u64, bool), StreamError> {
+        // TODO: When this is really async make this block.
+        self.splice(src, dst, len).await
     }
 
     async fn forward(
