@@ -581,11 +581,26 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (Opcode::SqmulRoundSat, &[I16, I16]),
                 (Opcode::SqmulRoundSat, &[I32, I32]),
                 (Opcode::SqmulRoundSat, &[I32X4, I32X4]),
+                // This Icmp is not implemented: #5529
+                (Opcode::Icmp, &[I64X2, I64X2]),
                 // IaddPairwise is implemented, but only for some types, and with some preceding ops.
                 (Opcode::IaddPairwise),
                 // Nothing wrong with this select. But we have an isle rule that can optimize it
                 // into a `min`/`max` instructions, which we don't have implemented yet.
                 (Opcode::Select, &[_, I128, I128]),
+                // Tmp #5922
+                (Opcode::StackStore, &[I8X16], &[]),
+                (Opcode::StackStore, &[I16X8], &[]),
+                (Opcode::StackStore, &[I32X4], &[]),
+                (Opcode::StackStore, &[I64X2], &[]),
+                (Opcode::StackStore, &[F32X4], &[]),
+                (Opcode::StackStore, &[F64X2], &[]),
+                (Opcode::StackLoad, &[], &[I8X16]),
+                (Opcode::StackLoad, &[], &[I16X8]),
+                (Opcode::StackLoad, &[], &[I32X4]),
+                (Opcode::StackLoad, &[], &[I64X2]),
+                (Opcode::StackLoad, &[], &[F32X4]),
+                (Opcode::StackLoad, &[], &[F64X2]),
             )
         }
 
@@ -1346,8 +1361,6 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     // Fma
     (Opcode::Fma, &[F32, F32, F32], &[F32]),
     (Opcode::Fma, &[F64, F64, F64], &[F64]),
-    (Opcode::Fma, &[F32X4, F32X4, F32X4], &[F32X4]),
-    (Opcode::Fma, &[F64X2, F64X2, F64X2], &[F64X2]),
     // Fabs
     (Opcode::Fabs, &[F32], &[F32]),
     (Opcode::Fabs, &[F64], &[F64]),
