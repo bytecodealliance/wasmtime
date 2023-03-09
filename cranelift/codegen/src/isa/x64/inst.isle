@@ -1114,7 +1114,7 @@
         (Amode.ImmRegRegShift off sum index shift flags)))
 
 ;; Finally, define the toplevel `to_amode`.
-(rule (to_amode flags base offset)
+(rule (to_amode flags base @ (value_type $I64) offset)
       (amode_finalize (amode_add (amode_initial flags offset) base)))
 
 ;; If an amode has no registers at all and only offsets (a constant
