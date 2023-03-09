@@ -1032,20 +1032,22 @@ block0(v0: f32x4):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   xorps   %xmm5, %xmm5, %xmm5
-;   movdqa  %xmm0, %xmm9
-;   maxps   %xmm9, %xmm5, %xmm9
-;   pcmpeqd %xmm5, %xmm5, %xmm5
-;   psrld   %xmm5, $1, %xmm5
-;   cvtdq2ps %xmm5, %xmm13
-;   cvttps2dq %xmm9, %xmm12
-;   subps   %xmm9, %xmm13, %xmm9
-;   cmpps   $2, %xmm13, %xmm9, %xmm13
-;   cvttps2dq %xmm9, %xmm0
-;   pxor    %xmm0, %xmm13, %xmm0
-;   pxor    %xmm6, %xmm6, %xmm6
-;   pmaxsd  %xmm0, %xmm6, %xmm0
-;   paddd   %xmm0, %xmm12, %xmm0
+;   uninit  %xmm6
+;   xorps   %xmm6, %xmm6, %xmm6
+;   movdqa  %xmm0, %xmm11
+;   maxps   %xmm11, %xmm6, %xmm11
+;   pcmpeqd %xmm6, %xmm6, %xmm6
+;   psrld   %xmm6, $1, %xmm6
+;   cvtdq2ps %xmm6, %xmm15
+;   cvttps2dq %xmm11, %xmm14
+;   subps   %xmm11, %xmm15, %xmm11
+;   cmpps   $2, %xmm15, %xmm11, %xmm15
+;   cvttps2dq %xmm11, %xmm0
+;   pxor    %xmm0, %xmm15, %xmm0
+;   uninit  %xmm9
+;   pxor    %xmm9, %xmm9, %xmm9
+;   pmaxsd  %xmm0, %xmm9, %xmm0
+;   paddd   %xmm0, %xmm14, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -1055,20 +1057,20 @@ block0(v0: f32x4):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   xorps %xmm5, %xmm5
-;   movdqa %xmm0, %xmm9
-;   maxps %xmm5, %xmm9
-;   pcmpeqd %xmm5, %xmm5
-;   psrld $1, %xmm5
-;   cvtdq2ps %xmm5, %xmm13
-;   cvttps2dq %xmm9, %xmm12
-;   subps %xmm13, %xmm9
-;   cmpleps %xmm9, %xmm13
-;   cvttps2dq %xmm9, %xmm0
-;   pxor %xmm13, %xmm0
-;   pxor %xmm6, %xmm6
-;   pmaxsd %xmm6, %xmm0
-;   paddd %xmm12, %xmm0
+;   xorps %xmm6, %xmm6
+;   movdqa %xmm0, %xmm11
+;   maxps %xmm6, %xmm11
+;   pcmpeqd %xmm6, %xmm6
+;   psrld $1, %xmm6
+;   cvtdq2ps %xmm6, %xmm15
+;   cvttps2dq %xmm11, %xmm14
+;   subps %xmm15, %xmm11
+;   cmpleps %xmm11, %xmm15
+;   cvttps2dq %xmm11, %xmm0
+;   pxor %xmm15, %xmm0
+;   pxor %xmm9, %xmm9
+;   pmaxsd %xmm9, %xmm0
+;   paddd %xmm14, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

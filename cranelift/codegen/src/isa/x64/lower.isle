@@ -337,12 +337,12 @@
 ;; f32 and f64
 
 (rule 5 (lower (has_type (ty_scalar_float ty) (bxor x y)))
-      (sse_xor ty x y))
+      (x64_xor_vector ty x y))
 
 ;; SSE.
 
 (rule 6 (lower (has_type ty @ (multi_lane _bits _lanes) (bxor x y)))
-      (sse_xor ty x y))
+      (x64_xor_vector ty x y))
 
 ;; `{i,b}128`.
 
@@ -1171,12 +1171,12 @@
 ;; f32 and f64
 
 (rule -3 (lower (has_type (ty_scalar_float ty) (bnot x)))
-      (sse_xor ty x (vector_all_ones)))
+      (x64_xor_vector ty x (vector_all_ones)))
 
 ;; Special case for vector-types where bit-negation is an xor against an
 ;; all-one value
 (rule -1 (lower (has_type ty @ (multi_lane _bits _lanes) (bnot x)))
-      (sse_xor ty x (vector_all_ones)))
+      (x64_xor_vector ty x (vector_all_ones)))
 
 ;;;; Rules for `bitselect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1267,20 +1267,10 @@
 ;; Here the `movsd` instruction is used specifically to specialize moving
 ;; into the fist lane where unlike above cases we're not using the lane
 ;; immediate as an immediate to the instruction itself.
-;;
-;; Note, though, the `movsd` has different behavior with respect to the second
-;; lane of the f64x2 depending on whether the RegMem operand is a register or
-;; memory. When loading from a register `movsd` preserves the upper bits, but
-;; when loading from memory it zeros the upper bits. We specifically want to
-;; preserve the upper bits so if a `RegMem.Mem` is passed in we need to emit
-;; two `movsd` instructions. The first `movsd` (used as `xmm_unary_rm_r`) will
-;; load from memory into a temp register and then the second `movsd` (modeled
-;; internally as `xmm_rm_r` will merge the temp register into our `vec`
-;; register.
-(rule 1 (vec_insert_lane $F64X2 vec (RegMem.Reg val) 0)
+(rule (vec_insert_lane $F64X2 vec (RegMem.Reg val) 0)
       (x64_movsd_regmove vec val))
-(rule (vec_insert_lane $F64X2 vec mem 0)
-      (x64_movsd_regmove vec (x64_movsd_load mem)))
+(rule (vec_insert_lane $F64X2 vec (RegMem.Mem val) 0)
+      (x64_movsd_regmove vec (x64_movsd_load val)))
 
 ;; f64x2.replace_lane 1
 ;;
@@ -1288,7 +1278,7 @@
 ;; into the second lane where unlike above cases we're not using the lane
 ;; immediate as an immediate to the instruction itself.
 (rule (vec_insert_lane $F64X2 vec val 1)
-      (x64_movlhps vec (reg_mem_to_xmm_mem val)))
+      (x64_movlhps vec val))
 
 ;;;; Rules for `smin`, `smax`, `umin`, `umax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2557,11 +2547,11 @@
 (rule (lower (has_type $F64 (load flags address offset)))
       (x64_movsd_load (to_amode flags address offset)))
 (rule (lower (has_type $F32X4 (load flags address offset)))
-      (x64_movups (to_amode flags address offset)))
+      (x64_movups_load (to_amode flags address offset)))
 (rule (lower (has_type $F64X2 (load flags address offset)))
-      (x64_movupd (to_amode flags address offset)))
+      (x64_movupd_load (to_amode flags address offset)))
 (rule -2 (lower (has_type (ty_vec128 ty) (load flags address offset)))
-      (x64_movdqu (to_amode flags address offset)))
+      (x64_movdqu_load (to_amode flags address offset)))
 
 ;; We can load an I128 by doing two 64-bit loads.
 (rule -3 (lower (has_type $I128
@@ -2614,7 +2604,7 @@
                     address
                     offset))
       (side_effect
-       (x64_xmm_movrm (SseOpcode.Movss) (to_amode flags address offset) value)))
+       (x64_movss_store (to_amode flags address offset) value)))
 
 ;; F64 stores of values in XMM registers.
 (rule 1 (lower (store flags
@@ -2622,7 +2612,7 @@
                     address
                     offset))
       (side_effect
-       (x64_xmm_movrm (SseOpcode.Movsd) (to_amode flags address offset) value)))
+       (x64_movsd_store (to_amode flags address offset) value)))
 
 ;; Stores of F32X4 vectors.
 (rule 1 (lower (store flags
@@ -2630,7 +2620,7 @@
                     address
                     offset))
       (side_effect
-       (x64_xmm_movrm (SseOpcode.Movups) (to_amode flags address offset) value)))
+       (x64_movups_store (to_amode flags address offset) value)))
 
 ;; Stores of F64X2 vectors.
 (rule 1 (lower (store flags
@@ -2638,7 +2628,7 @@
                     address
                     offset))
       (side_effect
-       (x64_xmm_movrm (SseOpcode.Movupd) (to_amode flags address offset) value)))
+       (x64_movupd_store (to_amode flags address offset) value)))
 
 ;; Stores of all other 128-bit vector types with integer lanes.
 (rule -1 (lower (store flags
@@ -2646,7 +2636,7 @@
                     address
                     offset))
       (side_effect
-       (x64_xmm_movrm (SseOpcode.Movdqu) (to_amode flags address offset) value)))
+       (x64_movdqu_store (to_amode flags address offset) value)))
 
 ;; Stores of I128 values: store the two 64-bit halves separately.
 (rule 0 (lower (store flags
@@ -2675,7 +2665,7 @@
                               src2))
               addr
               offset))
-      (let ((_ RegMemImm (sink_load sink)))
+      (let ((_ RegMemImm sink))
         (side_effect
          (x64_add_mem ty (to_amode flags addr offset) src2))))
 
@@ -2689,7 +2679,7 @@
                                (load flags addr offset))))
               addr
               offset))
-      (let ((_ RegMemImm (sink_load sink)))
+      (let ((_ RegMemImm sink))
         (side_effect
          (x64_add_mem ty (to_amode flags addr offset) src2))))
 
@@ -2703,7 +2693,7 @@
                               src2))
               addr
               offset))
-      (let ((_ RegMemImm (sink_load sink)))
+      (let ((_ RegMemImm sink))
         (side_effect
          (x64_sub_mem ty (to_amode flags addr offset) src2))))
 
@@ -2717,7 +2707,7 @@
                               src2))
               addr
               offset))
-      (let ((_ RegMemImm (sink_load sink)))
+      (let ((_ RegMemImm sink))
         (side_effect
          (x64_and_mem ty (to_amode flags addr offset) src2))))
 
@@ -2731,7 +2721,7 @@
                                (load flags addr offset))))
               addr
               offset))
-      (let ((_ RegMemImm (sink_load sink)))
+      (let ((_ RegMemImm sink))
         (side_effect
          (x64_and_mem ty (to_amode flags addr offset) src2))))
 
@@ -2745,7 +2735,7 @@
                               src2))
               addr
               offset))
-      (let ((_ RegMemImm (sink_load sink)))
+      (let ((_ RegMemImm sink))
         (side_effect
          (x64_or_mem ty (to_amode flags addr offset) src2))))
 
@@ -2759,7 +2749,7 @@
                                (load flags addr offset))))
               addr
               offset))
-      (let ((_ RegMemImm (sink_load sink)))
+      (let ((_ RegMemImm sink))
         (side_effect
          (x64_or_mem ty (to_amode flags addr offset) src2))))
 
@@ -2773,7 +2763,7 @@
                               src2))
               addr
               offset))
-      (let ((_ RegMemImm (sink_load sink)))
+      (let ((_ RegMemImm sink))
         (side_effect
          (x64_xor_mem ty (to_amode flags addr offset) src2))))
 
@@ -2787,7 +2777,7 @@
                                (load flags addr offset))))
               addr
               offset))
-      (let ((_ RegMemImm (sink_load sink)))
+      (let ((_ RegMemImm sink))
         (side_effect
          (x64_xor_mem ty (to_amode flags addr offset) src2))))
 

@@ -227,13 +227,6 @@
                         (src2 XmmMem)
                         (dst WritableXmm))
 
-       ;; XMM (scalar or vector) production of a constant value by operating
-       ;; on a register with itself.
-       ;;
-       ;; Used to produce all zeros with xor or all one with a comparison.
-       (XmmConstOp (op SseOpcode)
-                   (dst WritableXmm))
-
        ;; XMM (scalar or vector) blend op. The mask is used to blend between
        ;; src1 and src2. This differs from a use of `XmmRmR` as the mask is
        ;; implicitly in register xmm0; this special case exists to allow us to
@@ -293,6 +286,12 @@
                           (src XmmMem)
                           (dst WritableXmm)
                           (imm u8))
+
+       ;; XMM (scalar or vector) unary op (from xmm to reg/mem) using the
+       ;; VEX prefix
+       (XmmMovRMVex (op AvxOpcode)
+                    (src Reg)
+                    (dst SyntheticAmode))
 
        ;; XMM (scalar or vector) binary op that relies on the EVEX
        ;; prefix. Takes two inputs.
@@ -1359,6 +1358,12 @@
             Vpunpcklqdq
             Vpshuflw
             Vpshufhw
+            Vpshufd
+            Vmovss
+            Vmovsd
+            Vmovups
+            Vmovupd
+            Vmovdqu
           ))
 
 (type Avx512Opcode extern
@@ -1726,21 +1731,27 @@
 (decl sinkable_load (SinkableLoad) Value)
 (extern extractor sinkable_load sinkable_load)
 
-;; Sink a `SinkableLoad` into a `RegMemImm.Mem`.
+;; Sink a `SinkableLoad` into a `SyntheticAmode`.
 ;;
 ;; This is a side-effectful operation that notifies the context that the
 ;; instruction that produced the `SinkableImm` has been sunk into another
 ;; instruction, and no longer needs to be lowered.
-(decl sink_load (SinkableLoad) RegMem)
+(decl sink_load (SinkableLoad) SyntheticAmode)
 (extern constructor sink_load sink_load)
 
 (decl sink_load_to_gpr_mem_imm (SinkableLoad) GprMemImm)
 (rule (sink_load_to_gpr_mem_imm load)
-      (gpr_mem_imm_new (sink_load load)))
+      (gpr_mem_imm_new load))
 
 (decl sink_load_to_xmm_mem (SinkableLoad) XmmMem)
 (rule (sink_load_to_xmm_mem load)
-      (reg_mem_to_xmm_mem (sink_load load)))
+      (reg_mem_to_xmm_mem load))
+
+(decl sink_load_to_reg_mem (SinkableLoad) RegMem)
+(rule (sink_load_to_reg_mem load) (RegMem.Mem load))
+
+(decl sink_load_to_reg_mem_imm (SinkableLoad) RegMemImm)
+(rule (sink_load_to_reg_mem_imm load) (RegMemImm.Mem load))
 
 ;;;; Helpers for Sign/Zero Extending ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1799,28 +1810,13 @@
 (rule (vec_int_type (multi_lane 32 4)) $I32X4)
 (rule (vec_int_type (multi_lane 64 2)) $I64X2)
 
-;; Determine the appropriate operation for xor-ing vectors of the specified type
-(decl sse_xor_op (Type) SseOpcode)
-(rule 1 (sse_xor_op $F32X4) (SseOpcode.Xorps))
-(rule 1 (sse_xor_op $F64X2) (SseOpcode.Xorpd))
-(rule 1 (sse_xor_op $F32) (SseOpcode.Xorps))
-(rule 1 (sse_xor_op $F64) (SseOpcode.Xorpd))
-
-;; Priority 0 because multi_lane overlaps with the previous two explicit type
-;; patterns.
-(rule 0 (sse_xor_op (multi_lane _bits _lanes)) (SseOpcode.Pxor))
-
-(decl avx_xor_op (Type) AvxOpcode)
-(rule 1 (avx_xor_op $F32X4) (AvxOpcode.Vxorps))
-(rule 1 (avx_xor_op $F64X2) (AvxOpcode.Vxorpd))
-(rule 0 (avx_xor_op (multi_lane _bits _lanes)) (AvxOpcode.Vpxor))
-
 ;; Performs an xor operation of the two operands specified.
-(decl sse_xor (Type Xmm XmmMem) Xmm)
-(rule 0 (sse_xor ty x y) (xmm_rm_r (sse_xor_op ty) x y))
-(rule 1 (sse_xor ty @ (multi_lane _ _) x y)
-        (if-let $true (has_avx))
-        (xmm_rmir_vex (avx_xor_op ty) x y))
+(decl x64_xor_vector (Type Xmm XmmMem) Xmm)
+(rule 1 (x64_xor_vector $F32 x y) (x64_xorps x y))
+(rule 1 (x64_xor_vector $F64 x y) (x64_xorpd x y))
+(rule 1 (x64_xor_vector $F32X4 x y) (x64_xorps x y))
+(rule 1 (x64_xor_vector $F64X2 x y) (x64_xorpd x y))
+(rule 0 (x64_xor_vector (multi_lane _ _) x y) (x64_pxor x y))
 
 ;; Generates a register value which has an all-ones pattern.
 ;;
@@ -1833,9 +1829,8 @@
 ;; we're guaranteeed that everything is equal to itself.
 (decl vector_all_ones () Xmm)
 (rule (vector_all_ones)
-      (let ((r WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmConstOp (SseOpcode.Pcmpeqd) r))))
-        r))
+      (let ((tmp Xmm (xmm_uninit_value)))
+        (x64_pcmpeqd tmp tmp)))
 
 ;; Helper for creating XmmUninitializedValue instructions.
 (decl xmm_uninit_value () Xmm)
@@ -1891,19 +1886,19 @@
         dst))
 
 (rule 2 (x64_load $F32 addr _ext_kind)
-      (xmm_unary_rm_r_unaligned (SseOpcode.Movss) addr))
+      (x64_movss_load addr))
 
 (rule 2 (x64_load $F64 addr _ext_kind)
-      (xmm_unary_rm_r_unaligned (SseOpcode.Movsd) addr))
+      (x64_movsd_load addr))
 
 (rule 2 (x64_load $F32X4 addr _ext_kind)
-      (xmm_unary_rm_r_unaligned (SseOpcode.Movups) addr))
+      (x64_movups_load addr))
 
 (rule 2 (x64_load $F64X2 addr _ext_kind)
-      (xmm_unary_rm_r_unaligned (SseOpcode.Movupd) addr))
+      (x64_movupd_load addr))
 
 (rule 0 (x64_load (multi_lane _bits _lanes) addr _ext_kind)
-      (xmm_unary_rm_r_unaligned (SseOpcode.Movdqu) addr))
+      (x64_movdqu_load addr))
 
 (decl x64_mov (Amode) Reg)
 (rule (x64_mov addr)
@@ -1923,29 +1918,79 @@
             (_ Unit (emit (MInst.MovsxRmR mode src dst))))
         dst))
 
-(decl x64_movss_load (XmmMem) Xmm)
+(decl x64_movss_load (SyntheticAmode) Xmm)
 (rule (x64_movss_load from)
       (xmm_unary_rm_r_unaligned (SseOpcode.Movss) from))
+(rule 1 (x64_movss_load from)
+        (if-let $true (has_avx))
+        (xmm_unary_rm_r_vex (AvxOpcode.Vmovss) from))
 
-(decl x64_movsd_load (XmmMem) Xmm)
+(decl x64_movss_store (SyntheticAmode Xmm) SideEffectNoResult)
+(rule (x64_movss_store addr data)
+      (xmm_movrm (SseOpcode.Movss) addr data))
+(rule 1 (x64_movss_store addr data)
+        (if-let $true (has_avx))
+        (xmm_movrm_vex (AvxOpcode.Vmovss) addr data))
+
+(decl x64_movsd_load (SyntheticAmode) Xmm)
 (rule (x64_movsd_load from)
       (xmm_unary_rm_r_unaligned (SseOpcode.Movsd) from))
+(rule 1 (x64_movsd_load from)
+        (if-let $true (has_avx))
+        (xmm_unary_rm_r_vex (AvxOpcode.Vmovsd) from))
 
-(decl x64_movups (XmmMem) Xmm)
-(rule (x64_movups from)
+(decl x64_movsd_store (SyntheticAmode Xmm) SideEffectNoResult)
+(rule (x64_movsd_store addr data)
+      (xmm_movrm (SseOpcode.Movsd) addr data))
+(rule 1 (x64_movsd_store addr data)
+        (if-let $true (has_avx))
+        (xmm_movrm_vex (AvxOpcode.Vmovsd) addr data))
+
+(decl x64_movups_load (SyntheticAmode) Xmm)
+(rule (x64_movups_load from)
       (xmm_unary_rm_r_unaligned (SseOpcode.Movups) from))
+(rule 1 (x64_movups_load from)
+        (if-let $true (has_avx))
+        (xmm_unary_rm_r_vex (AvxOpcode.Vmovups) from))
 
-(decl x64_movupd (XmmMem) Xmm)
-(rule (x64_movupd from)
+(decl x64_movups_store (SyntheticAmode Xmm) SideEffectNoResult)
+(rule (x64_movups_store addr data)
+      (xmm_movrm (SseOpcode.Movups) addr data))
+(rule 1 (x64_movups_store addr data)
+        (if-let $true (has_avx))
+        (xmm_movrm_vex (AvxOpcode.Vmovups) addr data))
+
+(decl x64_movupd_load (SyntheticAmode) Xmm)
+(rule (x64_movupd_load from)
       (xmm_unary_rm_r_unaligned (SseOpcode.Movupd) from))
+(rule 1 (x64_movupd_load from)
+        (if-let $true (has_avx))
+        (xmm_unary_rm_r_vex (AvxOpcode.Vmovupd) from))
+
+(decl x64_movupd_store (SyntheticAmode Xmm) SideEffectNoResult)
+(rule (x64_movupd_store addr data)
+      (xmm_movrm (SseOpcode.Movupd) addr data))
+(rule 1 (x64_movupd_store addr data)
+        (if-let $true (has_avx))
+        (xmm_movrm_vex (AvxOpcode.Vmovupd) addr data))
 
 (decl x64_movd (Xmm) Gpr)
 (rule (x64_movd from)
       (xmm_to_gpr (SseOpcode.Movd) from (OperandSize.Size32)))
 
-(decl x64_movdqu (XmmMem) Xmm)
-(rule (x64_movdqu from)
+(decl x64_movdqu_load (XmmMem) Xmm)
+(rule (x64_movdqu_load from)
       (xmm_unary_rm_r_unaligned (SseOpcode.Movdqu) from))
+(rule 1 (x64_movdqu_load from)
+        (if-let $true (has_avx))
+        (xmm_unary_rm_r_vex (AvxOpcode.Vmovdqu) from))
+
+(decl x64_movdqu_store (SyntheticAmode Xmm) SideEffectNoResult)
+(rule (x64_movdqu_store addr data)
+      (xmm_movrm (SseOpcode.Movdqu) addr data))
+(rule 1 (x64_movdqu_store addr data)
+        (if-let $true (has_avx))
+        (xmm_movrm_vex (AvxOpcode.Vmovdqu) addr data))
 
 (decl x64_pmovsxbw (XmmMem) Xmm)
 (rule (x64_pmovsxbw from)
@@ -1994,9 +2039,13 @@
       (let ((size OperandSize (raw_operand_size_of_type ty)))
         (SideEffectNoResult.Inst (MInst.MovRM size data addr))))
 
-(decl x64_xmm_movrm (SseOpcode SyntheticAmode Xmm) SideEffectNoResult)
-(rule (x64_xmm_movrm op addr data)
+(decl xmm_movrm (SseOpcode SyntheticAmode Xmm) SideEffectNoResult)
+(rule (xmm_movrm op addr data)
       (SideEffectNoResult.Inst (MInst.XmmMovRM op data addr)))
+
+(decl xmm_movrm_vex (AvxOpcode SyntheticAmode Xmm) SideEffectNoResult)
+(rule (xmm_movrm_vex op addr data)
+      (SideEffectNoResult.Inst (MInst.XmmMovRMVex op data addr)))
 
 ;; Load a constant into an XMM register.
 (decl x64_xmm_load_const (Type VCodeConstant) Xmm)
@@ -2192,26 +2241,19 @@
       (xmm_to_reg (xmm_zero ty)))
 
 ;; Special case for `f32` zero immediates
-(rule 2 (imm ty @ $F32 (u64_zero))
-      (let ((wr WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmConstOp (SseOpcode.Xorps) wr))))
-        (xmm_to_reg wr)))
+(rule 2 (imm ty @ $F32 (u64_zero)) (xmm_zero ty))
 
 ;; TODO: use cmpeqps for all 1s
 
 ;; Special case for `f64` zero immediates to use `xorpd`.
-(rule 2 (imm ty @ $F64 (u64_zero))
-      (let ((wr WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmConstOp (SseOpcode.Xorpd) wr))))
-        (xmm_to_reg wr)))
+(rule 2 (imm ty @ $F64 (u64_zero)) (xmm_zero ty))
 
 ;; TODO: use cmpeqpd for all 1s
 
 (decl xmm_zero (Type) Xmm)
 (rule (xmm_zero ty)
-      (let ((wr WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmConstOp (sse_xor_op ty) wr))))
-        wr))
+      (let ((tmp Xmm (xmm_uninit_value)))
+        (x64_xor_vector ty tmp tmp)))
 
 ;; Helper for creating `MInst.ShiftR` instructions.
 (decl shift_r (Type ShiftKind Gpr Imm8Gpr) Gpr)
@@ -2991,10 +3033,20 @@
       (if-let $true (has_avx))
       (xmm_rmr_blend_vex (AvxOpcode.Vpblendvb) src1 src2 mask))
 
-;; Helper for creating `movsd` instructions.
-(decl x64_movsd_regmove (Xmm XmmMem) Xmm)
+;; Helper for creating a `movsd` instruction which creates a new vector
+;; register where the upper 64-bits are from the first operand and the low
+;; 64-bits are from the second operand.
+;;
+;; Note that the second argument here is specifically `Xmm` instead of `XmmMem`
+;; because there is no encoding of a 3-operand form of `movsd` and otherwise
+;; when used as a load instruction it wipes out the entire destination register
+;; which defeats the purpose of this being a 2-operand instruction.
+(decl x64_movsd_regmove (Xmm Xmm) Xmm)
 (rule (x64_movsd_regmove src1 src2)
       (xmm_rm_r_unaligned (SseOpcode.Movsd) src1 src2))
+(rule 1 (x64_movsd_regmove src1 src2)
+        (if-let $true (has_avx))
+        (xmm_rmir_vex (AvxOpcode.Vmovsd) src1 src2))
 
 ;; Helper for creating `movlhps` instructions.
 (decl x64_movlhps (Xmm XmmMem) Xmm)
@@ -3319,6 +3371,9 @@
 (decl x64_pshufd (XmmMem u8) Xmm)
 (rule (x64_pshufd src imm)
       (xmm_unary_rm_r_imm (SseOpcode.Pshufd) src imm))
+(rule 1 (x64_pshufd src imm)
+      (if-let $true (has_avx))
+      (xmm_unary_rm_r_imm_vex (AvxOpcode.Vpshufd) src imm))
 
 ;; Helper for creating `pshufb` instructions.
 (decl x64_pshufb (Xmm XmmMem) Xmm)
@@ -4562,9 +4617,11 @@
 (convert IntCC CC intcc_to_cc)
 (convert AtomicRmwOp MachAtomicRmwOp atomic_rmw_op_to_mach_atomic_rmw_op)
 
-(convert SinkableLoad RegMem sink_load)
+(convert SinkableLoad RegMem sink_load_to_reg_mem)
+(convert SinkableLoad RegMemImm sink_load_to_reg_mem_imm)
 (convert SinkableLoad GprMemImm sink_load_to_gpr_mem_imm)
 (convert SinkableLoad XmmMem sink_load_to_xmm_mem)
+(convert SinkableLoad SyntheticAmode sink_load)
 
 (decl reg_to_xmm_mem (Reg) XmmMem)
 (rule (reg_to_xmm_mem r)

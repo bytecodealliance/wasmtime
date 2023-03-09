@@ -172,8 +172,9 @@ block0(v0: i8):
 ; block0:
 ;   uninit  %xmm0
 ;   pinsrb  $0, %xmm0, %rdi, %xmm0
-;   pxor    %xmm6, %xmm6, %xmm6
-;   pshufb  %xmm0, %xmm6, %xmm0
+;   uninit  %xmm7
+;   pxor    %xmm7, %xmm7, %xmm7
+;   pshufb  %xmm0, %xmm7, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -184,8 +185,8 @@ block0(v0: i8):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   pinsrb $0, %edi, %xmm0
-;   pxor %xmm6, %xmm6
-;   pshufb %xmm6, %xmm0
+;   pxor %xmm7, %xmm7
+;   pshufb %xmm7, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

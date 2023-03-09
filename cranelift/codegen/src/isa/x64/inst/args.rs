@@ -1693,7 +1693,13 @@ impl AvxOpcode {
             | AvxOpcode::Vpunpcklqdq
             | AvxOpcode::Vpunpckhqdq
             | AvxOpcode::Vpshuflw
-            | AvxOpcode::Vpshufhw => {
+            | AvxOpcode::Vpshufhw
+            | AvxOpcode::Vpshufd
+            | AvxOpcode::Vmovss
+            | AvxOpcode::Vmovsd
+            | AvxOpcode::Vmovups
+            | AvxOpcode::Vmovupd
+            | AvxOpcode::Vmovdqu => {
                 smallvec![InstructionSet::AVX]
             }
         }

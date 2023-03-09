@@ -1976,22 +1976,6 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::XmmConstOp { op, dst } => {
-            let dst = allocs.next(dst.to_reg().to_reg());
-            emit(
-                &Inst::XmmRmR {
-                    op: *op,
-                    dst: Writable::from_reg(Xmm::new(dst).unwrap()),
-                    src1: Xmm::new(dst).unwrap(),
-                    src2: Xmm::new(dst).unwrap().into(),
-                },
-                allocs,
-                sink,
-                info,
-                state,
-            );
-        }
-
         Inst::XmmRmRBlend {
             op,
             src1,
@@ -2181,6 +2165,7 @@ pub(crate) fn emit(
                 AvxOpcode::Vpunpckhdq => (LP::_66, OM::_0F, 0x6A),
                 AvxOpcode::Vpunpcklqdq => (LP::_66, OM::_0F, 0x6C),
                 AvxOpcode::Vpunpckhqdq => (LP::_66, OM::_0F, 0x6D),
+                AvxOpcode::Vmovsd => (LP::_F2, OM::_0F, 0x10),
                 _ => panic!("unexpected rmir vex opcode {op:?}"),
             };
             VexInstruction::new()
@@ -2385,6 +2370,23 @@ pub(crate) fn emit(
                 AvxOpcode::Vcvtps2pd => (LegacyPrefixes::None, OpcodeMap::_0F, 0x5A),
                 AvxOpcode::Vcvttpd2dq => (LegacyPrefixes::_66, OpcodeMap::_0F, 0xE6),
                 AvxOpcode::Vcvttps2dq => (LegacyPrefixes::_F3, OpcodeMap::_0F, 0x5B),
+                AvxOpcode::Vmovdqu => (LegacyPrefixes::_F3, OpcodeMap::_0F, 0x6F),
+                AvxOpcode::Vmovups => (LegacyPrefixes::None, OpcodeMap::_0F, 0x10),
+                AvxOpcode::Vmovupd => (LegacyPrefixes::_66, OpcodeMap::_0F, 0x10),
+
+                // Note that for `vmov{s,d}` the `inst.isle` rules should
+                // statically ensure that only `Amode` operands are used here.
+                // Otherwise the other encodings of `vmovss` are more like
+                // 2-operand instructions which this unary encoding does not
+                // have.
+                AvxOpcode::Vmovss => match &src {
+                    RegisterOrAmode::Amode(_) => (LegacyPrefixes::_F3, OpcodeMap::_0F, 0x10),
+                    _ => unreachable!(),
+                },
+                AvxOpcode::Vmovsd => match &src {
+                    RegisterOrAmode::Amode(_) => (LegacyPrefixes::_F2, OpcodeMap::_0F, 0x10),
+                    _ => unreachable!(),
+                },
                 _ => panic!("unexpected rmr_imm_vex opcode {op:?}"),
             };
 
@@ -2412,6 +2414,7 @@ pub(crate) fn emit(
                 AvxOpcode::Vroundpd => (LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x09),
                 AvxOpcode::Vpshuflw => (LegacyPrefixes::_F2, OpcodeMap::_0F, 0x70),
                 AvxOpcode::Vpshufhw => (LegacyPrefixes::_F3, OpcodeMap::_0F, 0x70),
+                AvxOpcode::Vpshufd => (LegacyPrefixes::_66, OpcodeMap::_0F, 0x70),
                 _ => panic!("unexpected rmr_imm_vex opcode {op:?}"),
             };
 
@@ -2423,6 +2426,28 @@ pub(crate) fn emit(
                 .reg(dst.to_real_reg().unwrap().hw_enc())
                 .rm(src)
                 .imm(*imm)
+                .encode(sink);
+        }
+
+        Inst::XmmMovRMVex { op, src, dst } => {
+            let src = allocs.next(*src);
+            let dst = dst.with_allocs(allocs).finalize(state, sink);
+
+            let (prefix, map, opcode) = match op {
+                AvxOpcode::Vmovdqu => (LegacyPrefixes::_F3, OpcodeMap::_0F, 0x7F),
+                AvxOpcode::Vmovss => (LegacyPrefixes::_F3, OpcodeMap::_0F, 0x11),
+                AvxOpcode::Vmovsd => (LegacyPrefixes::_F2, OpcodeMap::_0F, 0x11),
+                AvxOpcode::Vmovups => (LegacyPrefixes::None, OpcodeMap::_0F, 0x11),
+                AvxOpcode::Vmovupd => (LegacyPrefixes::_66, OpcodeMap::_0F, 0x11),
+                _ => unimplemented!("Opcode {:?} not implemented", op),
+            };
+            VexInstruction::new()
+                .length(VexVectorLength::V128)
+                .prefix(prefix)
+                .map(map)
+                .opcode(opcode)
+                .rm(dst)
+                .reg(src.to_real_reg().unwrap().hw_enc())
                 .encode(sink);
         }
 

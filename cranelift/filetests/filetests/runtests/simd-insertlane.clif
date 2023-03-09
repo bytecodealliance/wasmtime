@@ -4,6 +4,7 @@ target aarch64
 target s390x
 set enable_simd
 target x86_64 has_sse3 has_ssse3 has_sse41
+target x86_64 has_sse3 has_ssse3 has_sse41 has_avx
 
 function %insertlane_15(i8x16, i8) -> i8x16 {
 block0(v0: i8x16, v1: i8):
@@ -32,3 +33,17 @@ block0(v0: i64x2, v1: i64):
     return v2
 }
 ; run: %insertlane_0([1 1], 5000000000) == [5000000000 1]
+
+function %insertlane_0_in_f64x2(f64x2, f64) -> f64x2 {
+block0(v0: f64x2, v1: f64):
+    v2 = insertlane v0, v1, 0
+    return v2
+}
+; run: %insertlane_0_in_f64x2([0x1.0 0x2.0], 0x3.0) == [0x3.0 0x2.0]
+
+function %insertlane_1_in_f64x2(f64x2, f64) -> f64x2 {
+block0(v0: f64x2, v1: f64):
+    v2 = insertlane v0, v1, 1
+    return v2
+}
+; run: %insertlane_1_in_f64x2([0x1.0 0x2.0], 0x3.0) == [0x1.0 0x3.0]

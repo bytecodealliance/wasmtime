@@ -626,8 +626,9 @@ block0(v0: i8x16, v1: i8x16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pxor    %xmm3, %xmm3, %xmm3
-;   pshufb  %xmm0, %xmm3, %xmm0
+;   uninit  %xmm4
+;   pxor    %xmm4, %xmm4, %xmm4
+;   pshufb  %xmm0, %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -637,8 +638,8 @@ block0(v0: i8x16, v1: i8x16):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   pxor %xmm3, %xmm3
-;   pshufb %xmm3, %xmm0
+;   pxor %xmm4, %xmm4
+;   pshufb %xmm4, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
