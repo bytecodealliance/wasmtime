@@ -30,9 +30,6 @@ fn insert_opcode(
     args: &'static [Type],
     rets: &'static [Type],
 ) -> Result<()> {
-    if std::env::var("LMAO").is_ok() {
-        dbg!("Insertign opcode: {:?} {:?} {:?}", opcode, args, rets);
-    }
     let mut vals = Vec::with_capacity(args.len());
     for &arg in args.into_iter() {
         let var = fgen.get_variable_of_type(arg)?;
