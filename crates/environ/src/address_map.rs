@@ -116,6 +116,23 @@ impl AddressMapSection {
     }
 }
 
+/// Parse an `ELF_WASMTIME_ADDRMAP` section, returning the slice of code offsets
+/// and the slice of associated file positions for each offset.
+fn parse_address_map(
+    section: &[u8],
+) -> Option<(&[U32Bytes<LittleEndian>], &[U32Bytes<LittleEndian>])> {
+    let mut section = Bytes(section);
+    // NB: this matches the encoding written by `append_to` above.
+    let count = section.read::<U32Bytes<LittleEndian>>().ok()?;
+    let count = usize::try_from(count.get(LittleEndian)).ok()?;
+    let (offsets, section) =
+        object::slice_from_bytes::<U32Bytes<LittleEndian>>(section.0, count).ok()?;
+    let (positions, section) =
+        object::slice_from_bytes::<U32Bytes<LittleEndian>>(section, count).ok()?;
+    debug_assert!(section.is_empty());
+    Some((offsets, positions))
+}
+
 /// Lookup an `offset` within an encoded address map section, returning the
 /// original `FilePos` that corresponds to the offset, if found.
 ///
@@ -127,15 +144,7 @@ impl AddressMapSection {
 /// section of the pc that is being looked up. If `offset` is out of range or
 /// doesn't correspond to anything in this file then `None` is returned.
 pub fn lookup_file_pos(section: &[u8], offset: usize) -> Option<FilePos> {
-    let mut section = Bytes(section);
-    // NB: this matches the encoding written by `append_to` above.
-    let count = section.read::<U32Bytes<LittleEndian>>().ok()?;
-    let count = usize::try_from(count.get(LittleEndian)).ok()?;
-    let (offsets, section) =
-        object::slice_from_bytes::<U32Bytes<LittleEndian>>(section.0, count).ok()?;
-    let (positions, section) =
-        object::slice_from_bytes::<U32Bytes<LittleEndian>>(section, count).ok()?;
-    debug_assert!(section.is_empty());
+    let (offsets, positions) = parse_address_map(section)?;
 
     // First perform a binary search on the `offsets` array. This is a sorted
     // array of offsets within the text section, which is conveniently what our
@@ -159,4 +168,25 @@ pub fn lookup_file_pos(section: &[u8], offset: usize) -> Option<FilePos> {
     // lookup the actual `FilePos` value in the `positions` array.
     let pos = positions.get(index)?;
     Some(FilePos(pos.get(LittleEndian)))
+}
+
+/// Iterate over the address map contained in the given address map section.
+///
+/// This function takes a `section` as its first argument which must have been
+/// created with `AddressMapSection` above. This is intended to be the raw
+/// `ELF_WASMTIME_ADDRMAP` section from the compilation artifact.
+///
+/// The yielded offsets are relative to the start of the text section for this
+/// map's code object.
+pub fn iterate_address_map<'a>(
+    section: &'a [u8],
+) -> Option<impl Iterator<Item = (u32, FilePos)> + 'a> {
+    let (offsets, positions) = parse_address_map(section)?;
+
+    Some(
+        offsets
+            .iter()
+            .map(|o| o.get(LittleEndian))
+            .zip(positions.iter().map(|pos| FilePos(pos.get(LittleEndian)))),
+    )
 }
