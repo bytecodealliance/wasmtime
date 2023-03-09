@@ -379,8 +379,8 @@ fn insert_ins_ext_lane(
     let ret_type = *rets.first().unwrap();
 
     let lhs = builder.use_var(fgen.get_variable_of_type(vector_type)?);
-    let lane_count = vector_type.lane_count() as u8;
-    let lane = fgen.u.int_in_range(0..=lane_count)?;
+    let max_lane = (vector_type.lane_count() as u8) - 1;
+    let lane = fgen.u.int_in_range(0..=max_lane)?;
 
     let res = match opcode {
         Opcode::Insertlane => {
