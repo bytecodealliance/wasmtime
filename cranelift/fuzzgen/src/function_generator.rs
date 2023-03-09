@@ -578,8 +578,6 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (Opcode::Uunarrow),
                 (Opcode::Snarrow, &[I64X2, I64X2]),
                 (Opcode::Unarrow, &[I64X2, I64X2]),
-                (Opcode::SqmulRoundSat, &[I16, I16]),
-                (Opcode::SqmulRoundSat, &[I32, I32]),
                 (Opcode::SqmulRoundSat, &[I32X4, I32X4]),
                 // This Icmp is not implemented: #5529
                 (Opcode::Icmp, &[I64X2, I64X2]),
@@ -1654,8 +1652,6 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::UwidenHigh, &[I16X8], &[I32X4]),
     (Opcode::UwidenHigh, &[I32X4], &[I64X2]),
     // SqmulRoundSat
-    (Opcode::SqmulRoundSat, &[I16, I16], &[I16]),
-    (Opcode::SqmulRoundSat, &[I32, I32], &[I32]),
     (Opcode::SqmulRoundSat, &[I16X8, I16X8], &[I16X8]),
     (Opcode::SqmulRoundSat, &[I32X4, I32X4], &[I32X4]),
     // IaddPairwise
