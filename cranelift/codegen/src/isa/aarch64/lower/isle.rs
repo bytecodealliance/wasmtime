@@ -513,10 +513,14 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
     }
 
     fn amode(&mut self, ty: Type, addr: Value, offset: u32) -> AMode {
+        let addr_ty = self.value_type(addr);
+        assert!(addr_ty == I64 || addr_ty == R64);
         lower_address(self.lower_ctx, ty, addr, offset as i32)
     }
 
     fn pair_amode(&mut self, addr: Value, offset: u32) -> PairAMode {
+        let addr_ty = self.value_type(addr);
+        assert!(addr_ty == I64 || addr_ty == R64);
         lower_pair_address(self.lower_ctx, addr, offset as i32)
     }
 

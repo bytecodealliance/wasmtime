@@ -1811,10 +1811,10 @@
 
 (decl lower_address (MemFlags Value Offset32) MemArg)
 
-(rule (lower_address flags addr (i64_from_offset offset))
+(rule (lower_address flags addr @ (value_type (ty_addr64 _)) (i64_from_offset offset))
       (memarg_reg_plus_off addr offset 0 flags))
 
-(rule 1 (lower_address flags (iadd x y) (i64_from_offset 0))
+(rule 1 (lower_address flags (has_type (ty_addr64 _) (iadd x y)) (i64_from_offset 0))
       (memarg_reg_plus_reg x y 0 flags))
 
 (rule 1 (lower_address flags
@@ -1828,10 +1828,10 @@
 
 (decl lower_address_bias (MemFlags Value Offset32 u8) MemArg)
 
-(rule (lower_address_bias flags addr (i64_from_offset offset) bias)
+(rule (lower_address_bias flags addr @ (value_type $I64) (i64_from_offset offset) bias)
       (memarg_reg_plus_off addr offset bias flags))
 
-(rule 1 (lower_address_bias flags (iadd x y) (i64_from_offset 0) bias)
+(rule 1 (lower_address_bias flags (has_type $I64 (iadd x y)) (i64_from_offset 0) bias)
       (memarg_reg_plus_reg x y bias flags))
 
 
