@@ -1811,12 +1811,12 @@
 (rule (vec_int_type (multi_lane 64 2)) $I64X2)
 
 ;; Performs an xor operation of the two operands specified.
-(decl sse_xor (Type Xmm XmmMem) Xmm)
-(rule 1 (sse_xor $F32 x y) (x64_xorps x y))
-(rule 1 (sse_xor $F64 x y) (x64_xorpd x y))
-(rule 1 (sse_xor $F32X4 x y) (x64_xorps x y))
-(rule 1 (sse_xor $F64X2 x y) (x64_xorpd x y))
-(rule 0 (sse_xor (multi_lane _ _) x y) (x64_pxor x y))
+(decl x64_xor_vector (Type Xmm XmmMem) Xmm)
+(rule 1 (x64_xor_vector $F32 x y) (x64_xorps x y))
+(rule 1 (x64_xor_vector $F64 x y) (x64_xorpd x y))
+(rule 1 (x64_xor_vector $F32X4 x y) (x64_xorps x y))
+(rule 1 (x64_xor_vector $F64X2 x y) (x64_xorpd x y))
+(rule 0 (x64_xor_vector (multi_lane _ _) x y) (x64_pxor x y))
 
 ;; Generates a register value which has an all-ones pattern.
 ;;
@@ -1927,7 +1927,7 @@
 
 (decl x64_movss_store (SyntheticAmode Xmm) SideEffectNoResult)
 (rule (x64_movss_store addr data)
-      (x64_xmm_movrm (SseOpcode.Movss) addr data))
+      (xmm_movrm (SseOpcode.Movss) addr data))
 (rule 1 (x64_movss_store addr data)
         (if-let $true (has_avx))
         (xmm_movrm_vex (AvxOpcode.Vmovss) addr data))
@@ -1941,7 +1941,7 @@
 
 (decl x64_movsd_store (SyntheticAmode Xmm) SideEffectNoResult)
 (rule (x64_movsd_store addr data)
-      (x64_xmm_movrm (SseOpcode.Movsd) addr data))
+      (xmm_movrm (SseOpcode.Movsd) addr data))
 (rule 1 (x64_movsd_store addr data)
         (if-let $true (has_avx))
         (xmm_movrm_vex (AvxOpcode.Vmovsd) addr data))
@@ -1955,7 +1955,7 @@
 
 (decl x64_movups_store (SyntheticAmode Xmm) SideEffectNoResult)
 (rule (x64_movups_store addr data)
-      (x64_xmm_movrm (SseOpcode.Movups) addr data))
+      (xmm_movrm (SseOpcode.Movups) addr data))
 (rule 1 (x64_movups_store addr data)
         (if-let $true (has_avx))
         (xmm_movrm_vex (AvxOpcode.Vmovups) addr data))
@@ -1969,7 +1969,7 @@
 
 (decl x64_movupd_store (SyntheticAmode Xmm) SideEffectNoResult)
 (rule (x64_movupd_store addr data)
-      (x64_xmm_movrm (SseOpcode.Movupd) addr data))
+      (xmm_movrm (SseOpcode.Movupd) addr data))
 (rule 1 (x64_movupd_store addr data)
         (if-let $true (has_avx))
         (xmm_movrm_vex (AvxOpcode.Vmovupd) addr data))
@@ -1987,7 +1987,7 @@
 
 (decl x64_movdqu_store (SyntheticAmode Xmm) SideEffectNoResult)
 (rule (x64_movdqu_store addr data)
-      (x64_xmm_movrm (SseOpcode.Movdqu) addr data))
+      (xmm_movrm (SseOpcode.Movdqu) addr data))
 (rule 1 (x64_movdqu_store addr data)
         (if-let $true (has_avx))
         (xmm_movrm_vex (AvxOpcode.Vmovdqu) addr data))
@@ -2039,8 +2039,8 @@
       (let ((size OperandSize (raw_operand_size_of_type ty)))
         (SideEffectNoResult.Inst (MInst.MovRM size data addr))))
 
-(decl x64_xmm_movrm (SseOpcode SyntheticAmode Xmm) SideEffectNoResult)
-(rule (x64_xmm_movrm op addr data)
+(decl xmm_movrm (SseOpcode SyntheticAmode Xmm) SideEffectNoResult)
+(rule (xmm_movrm op addr data)
       (SideEffectNoResult.Inst (MInst.XmmMovRM op data addr)))
 
 (decl xmm_movrm_vex (AvxOpcode SyntheticAmode Xmm) SideEffectNoResult)
@@ -2253,7 +2253,7 @@
 (decl xmm_zero (Type) Xmm)
 (rule (xmm_zero ty)
       (let ((tmp Xmm (xmm_uninit_value)))
-        (sse_xor ty tmp tmp)))
+        (x64_xor_vector ty tmp tmp)))
 
 ;; Helper for creating `MInst.ShiftR` instructions.
 (decl shift_r (Type ShiftKind Gpr Imm8Gpr) Gpr)

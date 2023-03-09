@@ -337,12 +337,12 @@
 ;; f32 and f64
 
 (rule 5 (lower (has_type (ty_scalar_float ty) (bxor x y)))
-      (sse_xor ty x y))
+      (x64_xor_vector ty x y))
 
 ;; SSE.
 
 (rule 6 (lower (has_type ty @ (multi_lane _bits _lanes) (bxor x y)))
-      (sse_xor ty x y))
+      (x64_xor_vector ty x y))
 
 ;; `{i,b}128`.
 
@@ -1171,12 +1171,12 @@
 ;; f32 and f64
 
 (rule -3 (lower (has_type (ty_scalar_float ty) (bnot x)))
-      (sse_xor ty x (vector_all_ones)))
+      (x64_xor_vector ty x (vector_all_ones)))
 
 ;; Special case for vector-types where bit-negation is an xor against an
 ;; all-one value
 (rule -1 (lower (has_type ty @ (multi_lane _bits _lanes) (bnot x)))
-      (sse_xor ty x (vector_all_ones)))
+      (x64_xor_vector ty x (vector_all_ones)))
 
 ;;;; Rules for `bitselect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
