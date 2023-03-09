@@ -347,6 +347,10 @@
 (decl ty_vec128_int (Type) Type)
 (extern extractor ty_vec128_int ty_vec128_int)
 
+;; An extractor that only matches types that can be a 64-bit address.
+(decl ty_addr64 (Type) Type)
+(extern extractor ty_addr64 ty_addr64)
+
 ;; A pure constructor that matches everything except vectors with size 32X2.
 (decl pure partial not_vec32x2 (Type) Type)
 (extern constructor not_vec32x2 not_vec32x2)
