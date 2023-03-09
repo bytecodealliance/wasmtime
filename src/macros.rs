@@ -50,14 +50,14 @@ pub(crate) fn eprint_u32(x: u32) {
 /// A minimal `unreachable`.
 macro_rules! unreachable {
     () => {{
-        eprint!("unreachable executed at line ");
+        eprint!("unreachable executed at adapter line ");
         crate::macros::eprint_u32(line!());
         eprint!("\n");
         wasm32::unreachable()
     }};
 
     ($arg:tt) => {{
-        eprint!("unreachable executed at line ");
+        eprint!("unreachable executed at adapter line ");
         crate::macros::eprint_u32(line!());
         eprint!(": ");
         eprintln!($arg);
