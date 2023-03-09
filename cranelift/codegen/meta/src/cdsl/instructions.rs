@@ -159,15 +159,15 @@ impl InstructionBuilder {
         }
     }
 
-    pub fn operands_in(mut self, operands: Vec<&Operand>) -> Self {
+    pub fn operands_in(mut self, operands: Vec<Operand>) -> Self {
         assert!(self.operands_in.is_none());
-        self.operands_in = Some(operands.iter().map(|x| (*x).clone()).collect());
+        self.operands_in = Some(operands);
         self
     }
 
-    pub fn operands_out(mut self, operands: Vec<&Operand>) -> Self {
+    pub fn operands_out(mut self, operands: Vec<Operand>) -> Self {
         assert!(self.operands_out.is_none());
-        self.operands_out = Some(operands.iter().map(|x| (*x).clone()).collect());
+        self.operands_out = Some(operands);
         self
     }
 
