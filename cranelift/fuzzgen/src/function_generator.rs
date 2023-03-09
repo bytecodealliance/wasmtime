@@ -578,8 +578,6 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (Opcode::Smin, &[I64X2, I64X2]),
                 (Opcode::Bitcast, &[I128], &[_]),
                 (Opcode::Bitcast, &[_], &[I128]),
-                (Opcode::ScalarToVector, &[I8]),
-                (Opcode::ScalarToVector, &[I16]),
                 (Opcode::Uunarrow),
                 (Opcode::Snarrow, &[I64X2, I64X2]),
                 (Opcode::Unarrow, &[I64X2, I64X2]),
@@ -1624,13 +1622,6 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::Bitcast, &[I64X2], &[F32X4]),
     (Opcode::Bitcast, &[I64X2], &[F64X2]),
     (Opcode::Bitcast, &[I64X2], &[I128]),
-    // ScalarToVector
-    (Opcode::ScalarToVector, &[F32], &[F32X4]),
-    (Opcode::ScalarToVector, &[F64], &[F64X2]),
-    (Opcode::ScalarToVector, &[I8], &[I8X16]),
-    (Opcode::ScalarToVector, &[I16], &[I16X8]),
-    (Opcode::ScalarToVector, &[I32], &[I32X4]),
-    (Opcode::ScalarToVector, &[I64], &[I64X2]),
     // Shuffle
     (Opcode::Shuffle, &[I8X16, I8X16, I8X16], &[I8X16]),
     // Swizzle
