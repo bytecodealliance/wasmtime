@@ -1662,7 +1662,6 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::IaddPairwise, &[I8X16, I8X16], &[I8X16]),
     (Opcode::IaddPairwise, &[I16X8, I16X8], &[I16X8]),
     (Opcode::IaddPairwise, &[I32X4, I32X4], &[I32X4]),
-    (Opcode::IaddPairwise, &[I64X2, I64X2], &[I64X2]),
     // Integer Consts
     (Opcode::Iconst, &[], &[I8]),
     (Opcode::Iconst, &[], &[I16]),
