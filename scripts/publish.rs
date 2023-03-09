@@ -70,6 +70,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-wasi-threads",
     "wasmtime-wast",
     "wasmtime-cli-flags",
+    "wasmtime-explorer",
     "wasmtime-cli",
 ];
 

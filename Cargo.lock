@@ -3383,9 +3383,9 @@ dependencies = [
 
 [[package]]
 name = "wasmprinter"
-version = "0.2.53"
+version = "0.2.54"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5aa44d546e4e4479f2e91035fa497c0a05cffbf22413ad05bf0b06a789b9118f"
+checksum = "2dc17ae63836d010a2bf001c26a5fedbb9a05e5f71117fb63e0ab878bfbe1ca3"
 dependencies = [
  "anyhow",
  "wasmparser",
@@ -3533,6 +3533,7 @@ dependencies = [
  "wasmtime-component-util",
  "wasmtime-cranelift",
  "wasmtime-environ",
+ "wasmtime-explorer",
  "wasmtime-runtime",
  "wasmtime-wasi",
  "wasmtime-wasi-crypto",
@@ -3645,6 +3646,19 @@ dependencies = [
  "wasmprinter",
  "wasmtime-environ",
  "wat",
+]
+
+[[package]]
+name = "wasmtime-explorer"
+version = "8.0.0"
+dependencies = [
+ "anyhow",
+ "capstone",
+ "serde",
+ "serde_json",
+ "target-lexicon",
+ "wasmprinter",
+ "wasmtime",
 ]
 
 [[package]]
