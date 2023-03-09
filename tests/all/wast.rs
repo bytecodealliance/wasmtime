@@ -101,7 +101,7 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
         // fails to grow, the values here will need to be adjusted.
         let mut pool = PoolingAllocationConfig::default();
         pool.instance_count(450)
-            .instance_memories(2)
+            .instance_memories(if multi_memory { 9 } else { 1 })
             .instance_tables(4)
             .instance_memory_pages(805);
         cfg.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));

@@ -30,12 +30,6 @@ fn main() -> anyhow::Result<()> {
             test_directory_module(out, "tests/misc_testsuite/threads", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/memory64", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/component-model", strategy)?;
-
-            // NB: these are copied from upstream and updated to wasmtime's
-            // current version of `wast`. This local copy should go away when
-            // all of Wasmtime's tooling is updated and the upstream
-            // `testsuite` module is additionally updated.
-            test_directory_module(out, "tests/misc_testsuite/relaxed-simd", strategy)?;
             Ok(())
         })?;
 
@@ -51,6 +45,11 @@ fn main() -> anyhow::Result<()> {
                     strategy,
                 )?;
                 test_directory_module(out, "tests/spec_testsuite/proposals/threads", strategy)?;
+                test_directory_module(
+                    out,
+                    "tests/spec_testsuite/proposals/relaxed-simd",
+                    strategy,
+                )?;
             } else {
                 println!(
                     "cargo:warning=The spec testsuite is disabled. To enable, run `git submodule \
@@ -180,6 +179,12 @@ fn write_testsuite_tests(
 /// Ignore tests that aren't supported yet.
 fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
     assert_eq!(strategy, "Cranelift");
+
+    // This is an empty file right now which the `wast` crate doesn't parse
+    if testname.contains("memory_copy1") {
+        return true;
+    }
+
     match env::var("CARGO_CFG_TARGET_ARCH").unwrap().as_str() {
         "s390x" => {
             // FIXME: These tests fail under qemu due to a qemu bug.
