@@ -1624,11 +1624,6 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::VanyTrue, &[I16X8, I16X8, I16X8], &[I8]),
     (Opcode::VanyTrue, &[I32X4, I32X4, I32X4], &[I8]),
     (Opcode::VanyTrue, &[I64X2, I64X2, I64X2], &[I8]),
-    // VallTrue
-    (Opcode::VallTrue, &[I8X16, I8X16, I8X16], &[I8]),
-    (Opcode::VallTrue, &[I16X8, I16X8, I16X8], &[I8]),
-    (Opcode::VallTrue, &[I32X4, I32X4, I32X4], &[I8]),
-    (Opcode::VallTrue, &[I64X2, I64X2, I64X2], &[I8]),
     // SwidenLow
     (Opcode::SwidenLow, &[I8X16], &[I16X8]),
     (Opcode::SwidenLow, &[I16X8], &[I32X4]),
