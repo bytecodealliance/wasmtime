@@ -17,9 +17,6 @@ fn define_control_flow(
     imm: &Immediates,
     entities: &EntityRefs,
 ) {
-    let block_call = &Operand::new("block_call", &entities.block_call)
-        .with_doc("Destination basic block, with its arguments provided");
-
     ig.push(
         Inst::new(
             "jump",
@@ -32,7 +29,8 @@ fn define_control_flow(
         "#,
             &formats.jump,
         )
-        .operands_in(vec![block_call])
+        .operands_in(vec![Operand::new("block_call", &entities.block_call)
+            .with_doc("Destination basic block, with its arguments provided")])
         .branches(),
     );
 
@@ -42,25 +40,23 @@ fn define_control_flow(
         TypeSetBuilder::new().ints(Interval::All).build(),
     );
 
-    {
-        let c = &Operand::new("c", ScalarTruthy).with_doc("Controlling value to test");
-        let block_then = &Operand::new("block_then", &entities.block_then).with_doc("Then block");
-        let block_else = &Operand::new("block_else", &entities.block_else).with_doc("Else block");
-
-        ig.push(
-            Inst::new(
-                "brif",
-                r#"
+    ig.push(
+        Inst::new(
+            "brif",
+            r#"
         Conditional branch when cond is non-zero.
 
         Take the ``then`` branch when ``c != 0``, and the ``else`` branch otherwise.
         "#,
-                &formats.brif,
-            )
-            .operands_in(vec![c, block_then, block_else])
-            .branches(),
-        );
-    }
+            &formats.brif,
+        )
+        .operands_in(vec![
+            Operand::new("c", ScalarTruthy).with_doc("Controlling value to test"),
+            Operand::new("block_then", &entities.block_then).with_doc("Then block"),
+            Operand::new("block_else", &entities.block_else).with_doc("Else block"),
+        ])
+        .branches(),
+    );
 
     {
         let _i32 = &TypeVar::new(
@@ -68,8 +64,6 @@ fn define_control_flow(
             "A 32 bit scalar integer type",
             TypeSetBuilder::new().ints(32..32).build(),
         );
-        let x = &Operand::new("x", _i32).with_doc("i32 index into jump table");
-        let JT = &Operand::new("JT", &entities.jump_table);
 
         ig.push(
             Inst::new(
@@ -93,7 +87,10 @@ fn define_control_flow(
         "#,
                 &formats.branch_table,
             )
-            .operands_in(vec![x, JT])
+            .operands_in(vec![
+                Operand::new("x", _i32).with_doc("i32 index into jump table"),
+                Operand::new("JT", &entities.jump_table),
+            ])
             .branches(),
         );
     }
@@ -108,8 +105,8 @@ fn define_control_flow(
         Inst::new(
             "debugtrap",
             r#"
-    Encodes an assembly debug trap.
-    "#,
+        Encodes an assembly debug trap.
+        "#,
             &formats.nullary,
         )
         .other_side_effects()
@@ -117,81 +114,84 @@ fn define_control_flow(
         .can_store(),
     );
 
-    {
-        let code = &Operand::new("code", &imm.trapcode);
-        ig.push(
-            Inst::new(
-                "trap",
-                r#"
+    ig.push(
+        Inst::new(
+            "trap",
+            r#"
         Terminate execution unconditionally.
         "#,
-                &formats.trap,
-            )
-            .operands_in(vec![code])
-            .can_trap()
-            .terminates_block(),
-        );
+            &formats.trap,
+        )
+        .operands_in(vec![Operand::new("code", &imm.trapcode)])
+        .can_trap()
+        .terminates_block(),
+    );
 
-        let c = &Operand::new("c", ScalarTruthy).with_doc("Controlling value to test");
-        ig.push(
-            Inst::new(
-                "trapz",
-                r#"
+    ig.push(
+        Inst::new(
+            "trapz",
+            r#"
         Trap when zero.
 
         if ``c`` is non-zero, execution continues at the following instruction.
         "#,
-                &formats.cond_trap,
-            )
-            .operands_in(vec![c, code])
-            .can_trap(),
-        );
+            &formats.cond_trap,
+        )
+        .operands_in(vec![
+            Operand::new("c", ScalarTruthy).with_doc("Controlling value to test"),
+            Operand::new("code", &imm.trapcode),
+        ])
+        .can_trap(),
+    );
 
-        ig.push(
-            Inst::new(
-                "resumable_trap",
-                r#"
+    ig.push(
+        Inst::new(
+            "resumable_trap",
+            r#"
         A resumable trap.
 
         This instruction allows non-conditional traps to be used as non-terminal instructions.
         "#,
-                &formats.trap,
-            )
-            .operands_in(vec![code])
-            .can_trap(),
-        );
+            &formats.trap,
+        )
+        .operands_in(vec![Operand::new("code", &imm.trapcode)])
+        .can_trap(),
+    );
 
-        let c = &Operand::new("c", ScalarTruthy).with_doc("Controlling value to test");
-        ig.push(
-            Inst::new(
-                "trapnz",
-                r#"
+    ig.push(
+        Inst::new(
+            "trapnz",
+            r#"
         Trap when non-zero.
 
         If ``c`` is zero, execution continues at the following instruction.
         "#,
-                &formats.cond_trap,
-            )
-            .operands_in(vec![c, code])
-            .can_trap(),
-        );
+            &formats.cond_trap,
+        )
+        .operands_in(vec![
+            Operand::new("c", ScalarTruthy).with_doc("Controlling value to test"),
+            Operand::new("code", &imm.trapcode),
+        ])
+        .can_trap(),
+    );
 
-        ig.push(
-            Inst::new(
-                "resumable_trapnz",
-                r#"
+    ig.push(
+        Inst::new(
+            "resumable_trapnz",
+            r#"
         A resumable trap to be called when the passed condition is non-zero.
 
         If ``c`` is zero, execution continues at the following instruction.
         "#,
-                &formats.cond_trap,
-            )
-            .operands_in(vec![c, code])
-            .can_trap(),
-        );
-    }
+            &formats.cond_trap,
+        )
+        .operands_in(vec![
+            Operand::new("c", ScalarTruthy).with_doc("Controlling value to test"),
+            Operand::new("code", &imm.trapcode),
+        ])
+        .can_trap(),
+    );
 
-    let rvals = &Operand::new("rvals", &entities.varargs).with_doc("return values");
     ig.push(
         Inst::new(
             "return",
@@ -204,14 +204,12 @@ fn define_control_flow(
         "#,
             &formats.multiary,
         )
-        .operands_in(vec![rvals])
+        .operands_in(vec![
+            Operand::new("rvals", &entities.varargs).with_doc("return values")
+        ])
         .returns(),
     );
 
-    let FN = &Operand::new("FN", &entities.func_ref)
-        .with_doc("function to call, declared by `function`");
-    let args = &Operand::new("args", &entities.varargs).with_doc("call arguments");
-    let rvals = &Operand::new("rvals", &entities.varargs).with_doc("return values");
     ig.push(
         Inst::new(
             "call",
@@ -223,15 +221,17 @@ fn define_control_flow(
         "#,
             &formats.call,
         )
-        .operands_in(vec![FN, args])
-        .operands_out(vec![rvals])
+        .operands_in(vec![
+            Operand::new("FN", &entities.func_ref)
+                .with_doc("function to call, declared by `function`"),
+            Operand::new("args", &entities.varargs).with_doc("call arguments"),
+        ])
+        .operands_out(vec![
+            Operand::new("rvals", &entities.varargs).with_doc("return values")
+        ])
         .call(),
     );
 
-    let SIG = &Operand::new("SIG", &entities.sig_ref).with_doc("function signature");
-    let callee = &Operand::new("callee", iAddr).with_doc("address of function to call");
-    let args = &Operand::new("args", &entities.varargs).with_doc("call arguments");
-    let rvals = &Operand::new("rvals", &entities.varargs).with_doc("return values");
     ig.push(
         Inst::new(
             "call_indirect",
@@ -248,8 +248,14 @@ fn define_control_flow(
         "#,
             &formats.call_indirect,
         )
-        .operands_in(vec![SIG, callee, args])
-        .operands_out(vec![rvals])
+        .operands_in(vec![
+            Operand::new("SIG", &entities.sig_ref).with_doc("function signature"),
+            Operand::new("callee", iAddr).with_doc("address of function to call"),
+            Operand::new("args", &entities.varargs).with_doc("call arguments"),
+        ])
+        .operands_out(vec![
+            Operand::new("rvals", &entities.varargs).with_doc("return values")
+        ])
         .call(),
     );
 
@@ -268,7 +274,11 @@ fn define_control_flow(
         "#,
             &formats.call,
         )
-        .operands_in(vec![FN, args])
+        .operands_in(vec![
+            Operand::new("FN", &entities.func_ref)
+                .with_doc("function to call, declared by `function`"),
+            Operand::new("args", &entities.varargs).with_doc("call arguments"),
+        ])
         .returns()
         .call(),
     );
@@ -293,14 +303,15 @@ fn define_control_flow(
         "#,
             &formats.call_indirect,
         )
-        .operands_in(vec![SIG, callee, args])
+        .operands_in(vec![
+            Operand::new("SIG", &entities.sig_ref).with_doc("function signature"),
+            Operand::new("callee", iAddr).with_doc("address of function to call"),
+            Operand::new("args", &entities.varargs).with_doc("call arguments"),
+        ])
         .returns()
         .call(),
     );
 
-    let FN = &Operand::new("FN", &entities.func_ref)
-        .with_doc("function to call, declared by `function`");
-    let addr = &Operand::new("addr", iAddr);
     ig.push(
         Inst::new(
             "func_addr",
@@ -315,8 +326,9 @@ fn define_control_flow(
         "#,
             &formats.func_addr,
         )
-        .operands_in(vec![FN])
-        .operands_out(vec![addr]),
+        .operands_in(vec![Operand::new("FN", &entities.func_ref)
+            .with_doc("function to call, declared by `function`")])
+        .operands_out(vec![Operand::new("addr", iAddr)]),
     );
 }
 
@@ -339,9 +351,6 @@ fn define_simd_lane_access(
             .build(),
     );
 
-    let x = &Operand::new("x", &TxN.lane_of()).with_doc("Value to splat to all lanes");
-    let a = &Operand::new("a", TxN);
-
     ig.push(
         Inst::new(
             "splat",
@@ -352,8 +361,10 @@ fn define_simd_lane_access(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("x", &TxN.lane_of()).with_doc("Value to splat to all lanes")
+        ])
+        .operands_out(vec![Operand::new("a", TxN)]),
     );
 
     let I8x16 = &TypeVar::new(
@@ -365,9 +376,6 @@ fn define_simd_lane_access(
             .includes_scalars(false)
             .build(),
     );
-    let x = &Operand::new("x", I8x16).with_doc("Vector to modify by re-arranging lanes");
-    let y = &Operand::new("y", I8x16).with_doc("Mask for re-arranging lanes");
-    let a = &Operand::new("a", I8x16);
 
     ig.push(
         Inst::new(
@@ -382,8 +390,11 @@ fn define_simd_lane_access(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("x", I8x16).with_doc("Vector to modify by re-arranging lanes"),
+            Operand::new("y", I8x16).with_doc("Mask for re-arranging lanes"),
+        ])
+        .operands_out(vec![Operand::new("a", I8x16)]),
     );
 
     ig.push(
@@ -403,14 +414,12 @@ fn define_simd_lane_access(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("x", I8x16).with_doc("Vector to modify by re-arranging lanes"),
+            Operand::new("y", I8x16).with_doc("Mask for re-arranging lanes"),
+        ])
+        .operands_out(vec![Operand::new("a", I8x16)]),
     );
-
-    let x = &Operand::new("x", TxN).with_doc("The vector to modify");
-    let y = &Operand::new("y", &TxN.lane_of()).with_doc("New lane value");
-    let Idx = &Operand::new("Idx", &imm.uimm8).with_doc("Lane index");
-    let a = &Operand::new("a", TxN);
 
     ig.push(
         Inst::new(
@@ -423,12 +432,13 @@ fn define_simd_lane_access(
         "#,
             &formats.ternary_imm8,
         )
-        .operands_in(vec![x, y, Idx])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("x", TxN).with_doc("The vector to modify"),
+            Operand::new("y", &TxN.lane_of()).with_doc("New lane value"),
+            Operand::new("Idx", &imm.uimm8).with_doc("Lane index"),
+        ])
+        .operands_out(vec![Operand::new("a", TxN)]),
     );
-
-    let x = &Operand::new("x", TxN);
-    let a = &Operand::new("a", &TxN.lane_of());
 
     ig.push(
         Inst::new(
@@ -443,8 +453,11 @@ fn define_simd_lane_access(
         "#,
             &formats.binary_imm8,
         )
-        .operands_in(vec![x, Idx])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("x", TxN),
+            Operand::new("Idx", &imm.uimm8).with_doc("Lane index"),
+        ])
+        .operands_out(vec![Operand::new("a", &TxN.lane_of())]),
     );
 }
 
@@ -464,10 +477,6 @@ fn define_simd_arithmetic(
             .build(),
     );
 
-    let a = &Operand::new("a", Int);
-    let x = &Operand::new("x", Int);
-    let y = &Operand::new("y", Int);
-
     ig.push(
         Inst::new(
             "smin",
@@ -476,8 +485,8 @@ fn define_simd_arithmetic(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Int), Operand::new("y", Int)])
+        .operands_out(vec![Operand::new("a", Int)]),
     );
 
     ig.push(
@@ -488,8 +497,8 @@ fn define_simd_arithmetic(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Int), Operand::new("y", Int)])
+        .operands_out(vec![Operand::new("a", Int)]),
     );
 
     ig.push(
@@ -500,8 +509,8 @@ fn define_simd_arithmetic(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Int), Operand::new("y", Int)])
+        .operands_out(vec![Operand::new("a", Int)]),
     );
 
     ig.push(
@@ -512,8 +521,8 @@ fn define_simd_arithmetic(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Int), Operand::new("y", Int)])
+        .operands_out(vec![Operand::new("a", Int)]),
     );
 
     let IxN = &TypeVar::new(
@@ -526,10 +535,6 @@ fn define_simd_arithmetic(
             .build(),
     );
 
-    let a = &Operand::new("a", IxN);
-    let x = &Operand::new("x", IxN);
-    let y = &Operand::new("y", IxN);
-
     ig.push(
         Inst::new(
             "avg_round",
@@ -540,8 +545,8 @@ fn define_simd_arithmetic(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", IxN), Operand::new("y", IxN)])
+        .operands_out(vec![Operand::new("a", IxN)]),
     );
 
     ig.push(
@@ -556,8 +561,8 @@ fn define_simd_arithmetic(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", IxN), Operand::new("y", IxN)])
+        .operands_out(vec![Operand::new("a", IxN)]),
     );
 
     ig.push(
@@ -574,8 +579,8 @@ fn define_simd_arithmetic(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", IxN), Operand::new("y", IxN)])
+        .operands_out(vec![Operand::new("a", IxN)]),
     );
 
     ig.push(
@@ -590,8 +595,8 @@ fn define_simd_arithmetic(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", IxN), Operand::new("y", IxN)])
+        .operands_out(vec![Operand::new("a", IxN)]),
     );
 
     ig.push(
@@ -606,8 +611,8 @@ fn define_simd_arithmetic(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", IxN), Operand::new("y", IxN)])
+        .operands_out(vec![Operand::new("a", IxN)]),
     );
 }
 
@@ -716,16 +721,6 @@ pub(crate) fn define(
 
     let MemTo = &TypeVar::copy_from(Mem, "MemTo".to_string());
 
-    let addr = &Operand::new("addr", iAddr);
-
-    let SS = &Operand::new("SS", &entities.stack_slot);
-    let DSS = &Operand::new("DSS", &entities.dynamic_stack_slot);
-    let Offset = &Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address");
-    let x = &Operand::new("x", Mem).with_doc("Value to be stored");
-    let a = &Operand::new("a", Mem).with_doc("Value loaded");
-    let p = &Operand::new("p", iAddr);
-    let MemFlags = &Operand::new("MemFlags", &imm.memflags);
-
     ig.push(
         Inst::new(
             "load",
@@ -737,8 +732,12 @@ pub(crate) fn define(
         "#,
             &formats.load,
         )
-        .operands_in(vec![MemFlags, p, Offset])
-        .operands_out(vec![a])
+        .operands_in(vec![
+            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("p", iAddr),
+            Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
+        ])
+        .operands_out(vec![Operand::new("a", Mem).with_doc("Value loaded")])
         .can_load(),
     );
 
@@ -753,7 +752,12 @@ pub(crate) fn define(
         "#,
             &formats.store,
         )
-        .operands_in(vec![MemFlags, x, p, Offset])
+        .operands_in(vec![
+            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("x", Mem).with_doc("Value to be stored"),
+            Operand::new("p", iAddr),
+            Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
+        ])
         .can_store(),
     );
 
@@ -762,8 +766,6 @@ pub(crate) fn define(
         "An integer type with more than 8 bits",
         TypeSetBuilder::new().ints(16..64).build(),
     );
-    let x = &Operand::new("x", iExt8);
-    let a = &Operand::new("a", iExt8);
 
     ig.push(
         Inst::new(
@@ -775,8 +777,12 @@ pub(crate) fn define(
         "#,
             &formats.load,
         )
-        .operands_in(vec![MemFlags, p, Offset])
-        .operands_out(vec![a])
+        .operands_in(vec![
+            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("p", iAddr),
+            Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
+        ])
+        .operands_out(vec![Operand::new("a", iExt8)])
         .can_load(),
     );
 
@@ -790,8 +796,12 @@ pub(crate) fn define(
         "#,
             &formats.load,
         )
-        .operands_in(vec![MemFlags, p, Offset])
-        .operands_out(vec![a])
+        .operands_in(vec![
+            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("p", iAddr),
+            Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
+        ])
+        .operands_out(vec![Operand::new("a", iExt8)])
         .can_load(),
     );
 
@@ -805,7 +815,12 @@ pub(crate) fn define(
         "#,
             &formats.store,
         )
-        .operands_in(vec![MemFlags, x, p, Offset])
+        .operands_in(vec![
+            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("x", iExt8),
+            Operand::new("p", iAddr),
+            Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
+        ])
         .can_store(),
     );
 
@@ -814,8 +829,6 @@ pub(crate) fn define(
         "An integer type with more than 16 bits",
         TypeSetBuilder::new().ints(32..64).build(),
     );
-    let x = &Operand::new("x", iExt16);
-    let a = &Operand::new("a", iExt16);
 
     ig.push(
         Inst::new(
@@ -827,8 +840,12 @@ pub(crate) fn define(
         "#,
             &formats.load,
         )
-        .operands_in(vec![MemFlags, p, Offset])
-        .operands_out(vec![a])
+        .operands_in(vec![
+            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("p", iAddr),
+            Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
+        ])
+        .operands_out(vec![Operand::new("a", iExt16)])
         .can_load(),
     );
 
@@ -842,8 +859,12 @@ pub(crate) fn define(
         "#,
             &formats.load,
         )
-        .operands_in(vec![MemFlags, p, Offset])
-        .operands_out(vec![a])
+        .operands_in(vec![
+            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("p", iAddr),
+            Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
+        ])
+        .operands_out(vec![Operand::new("a", iExt16)])
         .can_load(),
     );
 
@@ -857,7 +878,12 @@ pub(crate) fn define(
         "#,
             &formats.store,
         )
-        .operands_in(vec![MemFlags, x, p, Offset])
+        .operands_in(vec![
+            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("x", iExt16),
+            Operand::new("p", iAddr),
+            Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
+        ])
         .can_store(),
     );
 
@@ -866,8 +892,6 @@ pub(crate) fn define(
         "An integer type with more than 32 bits",
         TypeSetBuilder::new().ints(64..64).build(),
     );
-    let x = &Operand::new("x", iExt32);
-    let a = &Operand::new("a", iExt32);
 
     ig.push(
         Inst::new(
@@ -879,8 +903,12 @@ pub(crate) fn define(
         "#,
             &formats.load,
         )
-        .operands_in(vec![MemFlags, p, Offset])
-        .operands_out(vec![a])
+        .operands_in(vec![
+            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("p", iAddr),
+            Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
+        ])
+        .operands_out(vec![Operand::new("a", iExt32)])
         .can_load(),
     );
 
@@ -894,8 +922,12 @@ pub(crate) fn define(
         "#,
             &formats.load,
         )
-        .operands_in(vec![MemFlags, p, Offset])
-        .operands_out(vec![a])
+        .operands_in(vec![
+            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("p", iAddr),
+            Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
+        ])
+        .operands_out(vec![Operand::new("a", iExt32)])
         .can_load(),
     );
 
@@ -909,7 +941,12 @@ pub(crate) fn define(
         "#,
             &formats.store,
         )
-        .operands_in(vec![MemFlags, x, p, Offset])
+        .operands_in(vec![
+            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("x", iExt32),
+            Operand::new("p", iAddr),
+            Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
+        ])
         .can_store(),
     );
 
@@ -922,7 +959,6 @@ pub(crate) fn define(
             .includes_scalars(false)
             .build(),
     );
-    let a = &Operand::new("a", I16x8).with_doc("Value loaded");
 
     ig.push(
         Inst::new(
@@ -933,8 +969,12 @@ pub(crate) fn define(
         "#,
             &formats.load,
         )
-        .operands_in(vec![MemFlags, p, Offset])
-        .operands_out(vec![a])
+        .operands_in(vec![
+            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("p", iAddr),
+            Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
+        ])
+        .operands_out(vec![Operand::new("a", I16x8).with_doc("Value loaded")])
         .can_load(),
     );
 
@@ -947,8 +987,12 @@ pub(crate) fn define(
         "#,
             &formats.load,
         )
-        .operands_in(vec![MemFlags, p, Offset])
-        .operands_out(vec![a])
+        .operands_in(vec![
+            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("p", iAddr),
+            Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
+        ])
+        .operands_out(vec![Operand::new("a", I16x8).with_doc("Value loaded")])
         .can_load(),
     );
 
@@ -961,7 +1005,6 @@ pub(crate) fn define(
             .includes_scalars(false)
             .build(),
     );
-    let a = &Operand::new("a", I32x4).with_doc("Value loaded");
 
     ig.push(
         Inst::new(
@@ -972,8 +1015,12 @@ pub(crate) fn define(
         "#,
             &formats.load,
         )
-        .operands_in(vec![MemFlags, p, Offset])
-        .operands_out(vec![a])
+        .operands_in(vec![
+            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("p", iAddr),
+            Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
+        ])
+        .operands_out(vec![Operand::new("a", I32x4).with_doc("Value loaded")])
         .can_load(),
     );
 
@@ -986,8 +1033,12 @@ pub(crate) fn define(
         "#,
             &formats.load,
         )
-        .operands_in(vec![MemFlags, p, Offset])
-        .operands_out(vec![a])
+        .operands_in(vec![
+            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("p", iAddr),
+            Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
+        ])
+        .operands_out(vec![Operand::new("a", I32x4).with_doc("Value loaded")])
         .can_load(),
     );
 
@@ -1000,7 +1051,6 @@ pub(crate) fn define(
             .includes_scalars(false)
             .build(),
     );
-    let a = &Operand::new("a", I64x2).with_doc("Value loaded");
 
     ig.push(
         Inst::new(
@@ -1011,8 +1061,12 @@ pub(crate) fn define(
         "#,
             &formats.load,
         )
-        .operands_in(vec![MemFlags, p, Offset])
-        .operands_out(vec![a])
+        .operands_in(vec![
+            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("p", iAddr),
+            Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
+        ])
+        .operands_out(vec![Operand::new("a", I64x2).with_doc("Value loaded")])
         .can_load(),
     );
 
@@ -1025,15 +1079,14 @@ pub(crate) fn define(
         "#,
             &formats.load,
         )
-        .operands_in(vec![MemFlags, p, Offset])
-        .operands_out(vec![a])
+        .operands_in(vec![
+            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("p", iAddr),
+            Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
+        ])
+        .operands_out(vec![Operand::new("a", I64x2).with_doc("Value loaded")])
         .can_load(),
     );
-
-    let x = &Operand::new("x", Mem).with_doc("Value to be stored");
-    let a = &Operand::new("a", Mem).with_doc("Value loaded");
-    let Offset =
-        &Operand::new("Offset", &imm.offset32).with_doc("In-bounds offset into stack slot");
 
     ig.push(
         Inst::new(
@@ -1050,8 +1103,11 @@ pub(crate) fn define(
         "#,
             &formats.stack_load,
         )
-        .operands_in(vec![SS, Offset])
-        .operands_out(vec![a])
+        .operands_in(vec![
+            Operand::new("SS", &entities.stack_slot),
+            Operand::new("Offset", &imm.offset32).with_doc("In-bounds offset into stack slot"),
+        ])
+        .operands_out(vec![Operand::new("a", Mem).with_doc("Value loaded")])
         .can_load(),
     );
 
@@ -1070,7 +1126,11 @@ pub(crate) fn define(
         "#,
             &formats.stack_store,
         )
-        .operands_in(vec![x, SS, Offset])
+        .operands_in(vec![
+            Operand::new("x", Mem).with_doc("Value to be stored"),
+            Operand::new("SS", &entities.stack_slot),
+            Operand::new("Offset", &imm.offset32).with_doc("In-bounds offset into stack slot"),
+        ])
         .can_store(),
     );
 
@@ -1086,8 +1146,11 @@ pub(crate) fn define(
         "#,
             &formats.stack_load,
         )
-        .operands_in(vec![SS, Offset])
-        .operands_out(vec![addr]),
+        .operands_in(vec![
+            Operand::new("SS", &entities.stack_slot),
+            Operand::new("Offset", &imm.offset32).with_doc("In-bounds offset into stack slot"),
+        ])
+        .operands_out(vec![Operand::new("addr", iAddr)]),
     );
 
     ig.push(
@@ -1101,8 +1164,8 @@ pub(crate) fn define(
         "#,
             &formats.dynamic_stack_load,
         )
-        .operands_in(vec![DSS])
-        .operands_out(vec![a])
+        .operands_in(vec![Operand::new("DSS", &entities.dynamic_stack_slot)])
+        .operands_out(vec![Operand::new("a", Mem).with_doc("Value loaded")])
         .can_load(),
     );
 
@@ -1117,11 +1180,13 @@ pub(crate) fn define(
         "#,
             &formats.dynamic_stack_store,
         )
-        .operands_in(vec![x, DSS])
+        .operands_in(vec![
+            Operand::new("x", Mem).with_doc("Value to be stored"),
+            Operand::new("DSS", &entities.dynamic_stack_slot),
+        ])
         .can_store(),
     );
 
-    let GV = &Operand::new("GV", &entities.global_value);
     ig.push(
         Inst::new(
             "dynamic_stack_addr",
@@ -1132,8 +1197,8 @@ pub(crate) fn define(
         "#,
             &formats.dynamic_stack_load,
         )
-        .operands_in(vec![DSS])
-        .operands_out(vec![addr]),
+        .operands_in(vec![Operand::new("DSS", &entities.dynamic_stack_slot)])
+        .operands_out(vec![Operand::new("addr", iAddr)]),
     );
 
     ig.push(
@@ -1144,8 +1209,8 @@ pub(crate) fn define(
         "#,
             &formats.unary_global_value,
         )
-        .operands_in(vec![GV])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("GV", &entities.global_value)])
+        .operands_out(vec![Operand::new("a", Mem).with_doc("Value loaded")]),
     );
 
     ig.push(
@@ -1156,8 +1221,8 @@ pub(crate) fn define(
         "#,
             &formats.unary_global_value,
         )
-        .operands_in(vec![GV])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("GV", &entities.global_value)])
+        .operands_out(vec![Operand::new("a", Mem).with_doc("Value loaded")]),
     );
 
     ig.push(
@@ -1168,8 +1233,8 @@ pub(crate) fn define(
         "#,
             &formats.unary_global_value,
         )
-        .operands_in(vec![GV])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("GV", &entities.global_value)])
+        .operands_out(vec![Operand::new("a", Mem).with_doc("Value loaded")]),
     );
 
     // Note this instruction is marked as having other side-effects, so GVN won't try to hoist it,
@@ -1186,7 +1251,7 @@ pub(crate) fn define(
         "#,
             &formats.nullary,
         )
-        .operands_out(vec![addr])
+        .operands_out(vec![Operand::new("addr", iAddr)])
         .other_side_effects(),
     );
 
@@ -1198,7 +1263,7 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![addr])
+        .operands_in(vec![Operand::new("addr", iAddr)])
         .other_side_effects(),
     );
 
@@ -1212,7 +1277,7 @@ pub(crate) fn define(
         "#,
             &formats.nullary,
         )
-        .operands_out(vec![addr]),
+        .operands_out(vec![Operand::new("addr", iAddr)]),
     );
 
     ig.push(
@@ -1223,7 +1288,7 @@ pub(crate) fn define(
         "#,
             &formats.nullary,
         )
-        .operands_out(vec![addr]),
+        .operands_out(vec![Operand::new("addr", iAddr)]),
     );
 
     ig.push(
@@ -1236,7 +1301,7 @@ pub(crate) fn define(
         "#,
             &formats.nullary,
         )
-        .operands_out(vec![addr]),
+        .operands_out(vec![Operand::new("addr", iAddr)]),
     );
 
     let TableOffset = &TypeVar::new(
@@ -1244,10 +1309,6 @@ pub(crate) fn define(
         "An unsigned table offset",
         TypeSetBuilder::new().ints(32..64).build(),
     );
-    let T = &Operand::new("T", &entities.table);
-    let p = &Operand::new("p", TableOffset);
-    let Offset =
-        &Operand::new("Offset", &imm.offset32).with_doc("Byte offset from element address");
 
     ig.push(
         Inst::new(
@@ -1267,12 +1328,13 @@ pub(crate) fn define(
         "#,
             &formats.table_addr,
         )
-        .operands_in(vec![T, p, Offset])
-        .operands_out(vec![addr]),
+        .operands_in(vec![
+            Operand::new("T", &entities.table),
+            Operand::new("p", TableOffset),
+            Operand::new("Offset", &imm.offset32).with_doc("Byte offset from element address"),
+        ])
+        .operands_out(vec![Operand::new("addr", iAddr)]),
     );
-
-    let N = &Operand::new("N", &imm.imm64);
-    let a = &Operand::new("a", NarrowInt).with_doc("A constant integer scalar or vector value");
 
     ig.push(
         Inst::new(
@@ -1285,12 +1347,11 @@ pub(crate) fn define(
         "#,
             &formats.unary_imm,
         )
-        .operands_in(vec![N])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("N", &imm.imm64)])
+        .operands_out(vec![
+            Operand::new("a", NarrowInt).with_doc("A constant integer scalar or vector value")
+        ]),
     );
-
-    let N = &Operand::new("N", &imm.ieee32);
-    let a = &Operand::new("a", f32_).with_doc("A constant f32 scalar value");
 
     ig.push(
         Inst::new(
@@ -1302,12 +1363,11 @@ pub(crate) fn define(
         "#,
             &formats.unary_ieee32,
         )
-        .operands_in(vec![N])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("N", &imm.ieee32)])
+        .operands_out(vec![
+            Operand::new("a", f32_).with_doc("A constant f32 scalar value")
+        ]),
     );
-
-    let N = &Operand::new("N", &imm.ieee64);
-    let a = &Operand::new("a", f64_).with_doc("A constant f64 scalar value");
 
     ig.push(
         Inst::new(
@@ -1319,13 +1379,11 @@ pub(crate) fn define(
         "#,
             &formats.unary_ieee64,
         )
-        .operands_in(vec![N])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("N", &imm.ieee64)])
+        .operands_out(vec![
+            Operand::new("a", f64_).with_doc("A constant f64 scalar value")
+        ]),
     );
-
-    let N = &Operand::new("N", &imm.pool_constant)
-        .with_doc("The 16 immediate bytes of a 128-bit vector");
-    let a = &Operand::new("a", TxN).with_doc("A constant vector value");
 
     ig.push(
         Inst::new(
@@ -1337,12 +1395,13 @@ pub(crate) fn define(
         "#,
             &formats.unary_const,
         )
-        .operands_in(vec![N])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("N", &imm.pool_constant)
+            .with_doc("The 16 immediate bytes of a 128-bit vector")])
+        .operands_out(vec![
+            Operand::new("a", TxN).with_doc("A constant vector value")
+        ]),
     );
 
-    let mask = &Operand::new("mask", &imm.uimm128)
-        .with_doc("The 16 immediate bytes used for selecting the elements to shuffle");
     let Tx16 = &TypeVar::new(
         "Tx16",
         "A SIMD vector with exactly 16 lanes of 8-bit values; eventually this may support other \
@@ -1353,8 +1412,6 @@ pub(crate) fn define(
             .includes_scalars(false)
             .build(),
     );
-    let a = &Operand::new("a", Tx16).with_doc("A vector value");
-    let b = &Operand::new("b", Tx16).with_doc("A vector value");
 
     ig.push(
         Inst::new(
@@ -1369,11 +1426,14 @@ pub(crate) fn define(
         "#,
             &formats.shuffle,
         )
-        .operands_in(vec![a, b, mask])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("a", Tx16).with_doc("A vector value"),
+            Operand::new("b", Tx16).with_doc("A vector value"),
+            Operand::new("mask", &imm.uimm128)
+                .with_doc("The 16 immediate bytes used for selecting the elements to shuffle"),
+        ])
+        .operands_out(vec![Operand::new("a", Tx16).with_doc("A vector value")]),
     );
-
-    let a = &Operand::new("a", Ref).with_doc("A constant reference null value");
 
     ig.push(
         Inst::new(
@@ -1385,7 +1445,9 @@ pub(crate) fn define(
         "#,
             &formats.nullary,
         )
-        .operands_out(vec![a]),
+        .operands_out(vec![
+            Operand::new("a", Ref).with_doc("A constant reference null value")
+        ]),
     );
 
     ig.push(Inst::new(
@@ -1398,11 +1460,6 @@ pub(crate) fn define(
         &formats.nullary,
     ));
 
-    let c = &Operand::new("c", ScalarTruthy).with_doc("Controlling value to test");
-    let x = &Operand::new("x", Any).with_doc("Value to use when `c` is true");
-    let y = &Operand::new("y", Any).with_doc("Value to use when `c` is false");
-    let a = &Operand::new("a", Any);
-
     ig.push(
         Inst::new(
             "select",
@@ -1414,8 +1471,12 @@ pub(crate) fn define(
         "#,
             &formats.ternary,
         )
-        .operands_in(vec![c, x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("c", ScalarTruthy).with_doc("Controlling value to test"),
+            Operand::new("x", Any).with_doc("Value to use when `c` is true"),
+            Operand::new("y", Any).with_doc("Value to use when `c` is false"),
+        ])
+        .operands_out(vec![Operand::new("a", Any)]),
     );
 
     ig.push(
@@ -1441,15 +1502,18 @@ pub(crate) fn define(
             "#,
             &formats.ternary,
         )
-        .operands_in(vec![c, x, y])
-        .operands_out(vec![a])
+        .operands_in(vec![
+            Operand::new("c", ScalarTruthy).with_doc("Controlling value to test"),
+            Operand::new("x", Any).with_doc("Value to use when `c` is true"),
+            Operand::new("y", Any).with_doc("Value to use when `c` is false"),
+        ])
+        .operands_out(vec![Operand::new("a", Any)])
         .other_side_effects()
         // We can de-duplicate spectre selects since the side effect is
         // idempotent.
         .side_effects_idempotent(),
     );
 
-    let c = &Operand::new("c", Any).with_doc("Controlling value to test");
     ig.push(
         Inst::new(
             "bitselect",
@@ -1462,8 +1526,12 @@ pub(crate) fn define(
         "#,
             &formats.ternary,
         )
-        .operands_in(vec![c, x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("c", Any).with_doc("Controlling value to test"),
+            Operand::new("x", Any).with_doc("Value to use when `c` is true"),
+            Operand::new("y", Any).with_doc("Value to use when `c` is false"),
+        ])
+        .operands_out(vec![Operand::new("a", Any)]),
     );
 
     ig.push(
@@ -1480,12 +1548,13 @@ pub(crate) fn define(
             "#,
             &formats.ternary,
         )
-        .operands_in(vec![c, x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("c", Any).with_doc("Controlling value to test"),
+            Operand::new("x", Any).with_doc("Value to use when `c` is true"),
+            Operand::new("y", Any).with_doc("Value to use when `c` is false"),
+        ])
+        .operands_out(vec![Operand::new("a", Any)]),
     );
-
-    let a = &Operand::new("a", TxN);
-    let s = &Operand::new("s", i8);
 
     ig.push(
         Inst::new(
@@ -1497,8 +1566,8 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![a])
-        .operands_out(vec![s]),
+        .operands_in(vec![Operand::new("a", TxN)])
+        .operands_out(vec![Operand::new("s", i8)]),
     );
 
     ig.push(
@@ -1511,12 +1580,9 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![a])
-        .operands_out(vec![s]),
+        .operands_in(vec![Operand::new("a", TxN)])
+        .operands_out(vec![Operand::new("s", i8)]),
     );
-
-    let a = &Operand::new("a", TxN);
-    let x = &Operand::new("x", Int);
 
     ig.push(
         Inst::new(
@@ -1529,14 +1595,9 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![a])
-        .operands_out(vec![x]),
+        .operands_in(vec![Operand::new("a", TxN)])
+        .operands_out(vec![Operand::new("x", Int)]),
     );
-
-    let a = &Operand::new("a", &Int.as_bool());
-    let Cond = &Operand::new("Cond", &imm.intcc);
-    let x = &Operand::new("x", Int);
-    let y = &Operand::new("y", Int);
 
     ig.push(
         Inst::new(
@@ -1561,13 +1622,13 @@ pub(crate) fn define(
         "#,
             &formats.int_compare,
         )
-        .operands_in(vec![Cond, x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("Cond", &imm.intcc),
+            Operand::new("x", Int),
+            Operand::new("y", Int),
+        ])
+        .operands_out(vec![Operand::new("a", &Int.as_bool())]),
     );
-
-    let a = &Operand::new("a", i8);
-    let x = &Operand::new("x", iB);
-    let Y = &Operand::new("Y", &imm.imm64);
 
     ig.push(
         Inst::new(
@@ -1583,13 +1644,13 @@ pub(crate) fn define(
         "#,
             &formats.int_compare_imm,
         )
-        .operands_in(vec![Cond, x, Y])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("Cond", &imm.intcc),
+            Operand::new("x", iB),
+            Operand::new("Y", &imm.imm64),
+        ])
+        .operands_out(vec![Operand::new("a", i8)]),
     );
-
-    let a = &Operand::new("a", Int);
-    let x = &Operand::new("x", Int);
-    let y = &Operand::new("y", Int);
 
     ig.push(
         Inst::new(
@@ -1602,8 +1663,8 @@ pub(crate) fn define(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Int), Operand::new("y", Int)])
+        .operands_out(vec![Operand::new("a", Int)]),
     );
 
     ig.push(
@@ -1617,8 +1678,8 @@ pub(crate) fn define(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Int), Operand::new("y", Int)])
+        .operands_out(vec![Operand::new("a", Int)]),
     );
 
     ig.push(
@@ -1629,8 +1690,8 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Int)])
+        .operands_out(vec![Operand::new("a", Int)]),
     );
 
     ig.push(
@@ -1641,8 +1702,8 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Int)])
+        .operands_out(vec![Operand::new("a", Int)]),
     );
 
     ig.push(
@@ -1658,8 +1719,8 @@ pub(crate) fn define(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Int), Operand::new("y", Int)])
+        .operands_out(vec![Operand::new("a", Int)]),
     );
 
     ig.push(
@@ -1673,8 +1734,8 @@ pub(crate) fn define(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Int), Operand::new("y", Int)])
+        .operands_out(vec![Operand::new("a", Int)]),
     );
 
     ig.push(
@@ -1688,8 +1749,8 @@ pub(crate) fn define(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Int), Operand::new("y", Int)])
+        .operands_out(vec![Operand::new("a", Int)]),
     );
 
     let I16or32 = &TypeVar::new(
@@ -1697,10 +1758,6 @@ pub(crate) fn define(
         "A vector integer type with 16- or 32-bit numbers",
         TypeSetBuilder::new().ints(16..32).simd_lanes(4..8).build(),
     );
-
-    let qx = &Operand::new("x", I16or32);
-    let qy = &Operand::new("y", I16or32);
-    let qa = &Operand::new("a", I16or32);
 
     ig.push(
         Inst::new(
@@ -1714,8 +1771,8 @@ pub(crate) fn define(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![qx, qy])
-        .operands_out(vec![qa]),
+        .operands_in(vec![Operand::new("x", I16or32), Operand::new("y", I16or32)])
+        .operands_out(vec![Operand::new("a", I16or32)]),
     );
 
     ig.push(
@@ -1730,89 +1787,79 @@ pub(crate) fn define(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![qx, qy])
-        .operands_out(vec![qa]),
+        .operands_in(vec![Operand::new("x", I16or32), Operand::new("y", I16or32)])
+        .operands_out(vec![Operand::new("a", I16or32)]),
     );
 
-    {
-        // Integer division and remainder are scalar-only; most
-        // hardware does not directly support vector integer division.
+    // Integer division and remainder are scalar-only; most
+    // hardware does not directly support vector integer division.
 
-        let x = &Operand::new("x", iB);
-        let y = &Operand::new("y", iB);
-        let a = &Operand::new("a", iB);
+    ig.push(
+        Inst::new(
+            "udiv",
+            r#"
+        Unsigned integer division: `a := \lfloor {x \over y} \rfloor`.
 
-        ig.push(
-            Inst::new(
-                "udiv",
-                r#"
-            Unsigned integer division: `a := \lfloor {x \over y} \rfloor`.
+        This operation traps if the divisor is zero.
+        "#,
+            &formats.binary,
+        )
+        .operands_in(vec![Operand::new("x", iB), Operand::new("y", iB)])
+        .operands_out(vec![Operand::new("a", iB)])
+        .can_trap()
+        .side_effects_idempotent(),
+    );
 
-            This operation traps if the divisor is zero.
-            "#,
-                &formats.binary,
-            )
-            .operands_in(vec![x, y])
-            .operands_out(vec![a])
-            .can_trap()
-            .side_effects_idempotent(),
-        );
+    ig.push(
+        Inst::new(
+            "sdiv",
+            r#"
+        Signed integer division rounded toward zero: `a := sign(xy)
+        \lfloor {|x| \over |y|}\rfloor`.
 
-        ig.push(
-            Inst::new(
-                "sdiv",
-                r#"
-            Signed integer division rounded toward zero: `a := sign(xy)
-            \lfloor {|x| \over |y|}\rfloor`.
+        This operation traps if the divisor is zero, or if the result is not
+        representable in `B` bits two's complement. This only happens
+        when `x = -2^{B-1}, y = -1`.
+        "#,
+            &formats.binary,
+        )
+        .operands_in(vec![Operand::new("x", iB), Operand::new("y", iB)])
+        .operands_out(vec![Operand::new("a", iB)])
+        .can_trap()
+        .side_effects_idempotent(),
+    );
 
-            This operation traps if the divisor is zero, or if the result is not
-            representable in `B` bits two's complement. This only happens
-            when `x = -2^{B-1}, y = -1`.
-            "#,
-                &formats.binary,
-            )
-            .operands_in(vec![x, y])
-            .operands_out(vec![a])
-            .can_trap()
-            .side_effects_idempotent(),
-        );
+    ig.push(
+        Inst::new(
+            "urem",
+            r#"
+        Unsigned integer remainder.
 
-        ig.push(
-            Inst::new(
-                "urem",
-                r#"
-            Unsigned integer remainder.
+        This operation traps if the divisor is zero.
+        "#,
+            &formats.binary,
+        )
+        .operands_in(vec![Operand::new("x", iB), Operand::new("y", iB)])
+        .operands_out(vec![Operand::new("a", iB)])
+        .can_trap()
+        .side_effects_idempotent(),
+    );
 
-            This operation traps if the divisor is zero.
-            "#,
-                &formats.binary,
-            )
-            .operands_in(vec![x, y])
-            .operands_out(vec![a])
-            .can_trap()
-            .side_effects_idempotent(),
-        );
+    ig.push(
+        Inst::new(
+            "srem",
+            r#"
+        Signed integer remainder. The result has the sign of the dividend.
 
-        ig.push(
-            Inst::new(
-                "srem",
-                r#"
-            Signed integer remainder. The result has the sign of the dividend.
-
-            This operation traps if the divisor is zero.
-            "#,
-                &formats.binary,
-            )
-            .operands_in(vec![x, y])
-            .operands_out(vec![a])
-            .can_trap()
-            .side_effects_idempotent(),
-        );
-    }
-
-    let a = &Operand::new("a", iB);
-    let x = &Operand::new("x", iB);
-    let Y = &Operand::new("Y", &imm.imm64);
+        This operation traps if the divisor is zero.
+        "#,
+            &formats.binary,
+        )
+        .operands_in(vec![Operand::new("x", iB), Operand::new("y", iB)])
+        .operands_out(vec![Operand::new("a", iB)])
+        .can_trap()
+        .side_effects_idempotent(),
+    );
 
     ig.push(
         Inst::new(
@@ -1827,8 +1874,8 @@ pub(crate) fn define(
         "#,
             &formats.binary_imm64,
         )
-        .operands_in(vec![x, Y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", iB), Operand::new("Y", &imm.imm64)])
+        .operands_out(vec![Operand::new("a", iB)]),
     );
 
     ig.push(
@@ -1844,8 +1891,8 @@ pub(crate) fn define(
         "#,
             &formats.binary_imm64,
         )
-        .operands_in(vec![x, Y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", iB), Operand::new("Y", &imm.imm64)])
+        .operands_out(vec![Operand::new("a", iB)]),
     );
 
     ig.push(
@@ -1860,8 +1907,8 @@ pub(crate) fn define(
         "#,
             &formats.binary_imm64,
         )
-        .operands_in(vec![x, Y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", iB), Operand::new("Y", &imm.imm64)])
+        .operands_out(vec![Operand::new("a", iB)]),
     );
 
     ig.push(
@@ -1878,8 +1925,8 @@ pub(crate) fn define(
         "#,
             &formats.binary_imm64,
         )
-        .operands_in(vec![x, Y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", iB), Operand::new("Y", &imm.imm64)])
+        .operands_out(vec![Operand::new("a", iB)]),
     );
 
     ig.push(
@@ -1894,8 +1941,8 @@ pub(crate) fn define(
         "#,
             &formats.binary_imm64,
         )
-        .operands_in(vec![x, Y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", iB), Operand::new("Y", &imm.imm64)])
+        .operands_out(vec![Operand::new("a", iB)]),
     );
 
     ig.push(
@@ -1910,8 +1957,8 @@ pub(crate) fn define(
         "#,
             &formats.binary_imm64,
         )
-        .operands_in(vec![x, Y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", iB), Operand::new("Y", &imm.imm64)])
+        .operands_out(vec![Operand::new("a", iB)]),
     );
 
     ig.push(
@@ -1931,18 +1978,9 @@ pub(crate) fn define(
         "#,
             &formats.binary_imm64,
         )
-        .operands_in(vec![x, Y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", iB), Operand::new("Y", &imm.imm64)])
+        .operands_out(vec![Operand::new("a", iB)]),
     );
-
-    let a = &Operand::new("a", iB);
-    let x = &Operand::new("x", iB);
-    let y = &Operand::new("y", iB);
-
-    let c_in = &Operand::new("c_in", i8).with_doc("Input carry flag");
-    let c_out = &Operand::new("c_out", i8).with_doc("Output carry flag");
-    let b_in = &Operand::new("b_in", i8).with_doc("Input borrow flag");
-    let b_out = &Operand::new("b_out", i8).with_doc("Output borrow flag");
 
     ig.push(
         Inst::new(
@@ -1961,8 +1999,12 @@ pub(crate) fn define(
         "#,
             &formats.ternary,
         )
-        .operands_in(vec![x, y, c_in])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("x", iB),
+            Operand::new("y", iB),
+            Operand::new("c_in", i8).with_doc("Input carry flag"),
+        ])
+        .operands_out(vec![Operand::new("a", iB)]),
     );
 
     ig.push(
@@ -1983,8 +2025,11 @@ pub(crate) fn define(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a, c_out]),
+        .operands_in(vec![Operand::new("x", iB), Operand::new("y", iB)])
+        .operands_out(vec![
+            Operand::new("a", iB),
+            Operand::new("c_out", i8).with_doc("Output carry flag"),
+        ]),
     );
 
     ig.push(
@@ -2005,38 +2050,42 @@ pub(crate) fn define(
         "#,
             &formats.ternary,
         )
-        .operands_in(vec![x, y, c_in])
-        .operands_out(vec![a, c_out]),
+        .operands_in(vec![
+            Operand::new("x", iB),
+            Operand::new("y", iB),
+            Operand::new("c_in", i8).with_doc("Input carry flag"),
+        ])
+        .operands_out(vec![
+            Operand::new("a", iB),
+            Operand::new("c_out", i8).with_doc("Output carry flag"),
+        ]),
     );
 
-    {
-        let code = &Operand::new("code", &imm.trapcode);
+    let i32_64 = &TypeVar::new(
+        "i32_64",
+        "A 32 or 64-bit scalar integer type",
+        TypeSetBuilder::new().ints(32..64).build(),
+    );
 
-        let i32_64 = &TypeVar::new(
-            "i32_64",
-            "A 32 or 64-bit scalar integer type",
-            TypeSetBuilder::new().ints(32..64).build(),
-        );
+    ig.push(
+        Inst::new(
+            "uadd_overflow_trap",
+            r#"
+        Unsigned addition of x and y, trapping if the result overflows.
 
-        let a = &Operand::new("a", i32_64);
-        let x = &Operand::new("x", i32_64);
-        let y = &Operand::new("y", i32_64);
-        ig.push(
-            Inst::new(
-                "uadd_overflow_trap",
-                r#"
-            Unsigned addition of x and y, trapping if the result overflows.
-
-            Accepts 32 or 64-bit integers, and does not support vector types.
-            "#,
-                &formats.int_add_trap,
-            )
-            .operands_in(vec![x, y, code])
-            .operands_out(vec![a])
-            .can_trap()
-            .side_effects_idempotent(),
-        );
-    }
+        Accepts 32 or 64-bit integers, and does not support vector types.
+        "#,
+            &formats.int_add_trap,
+        )
+        .operands_in(vec![
+            Operand::new("x", i32_64),
+            Operand::new("y", i32_64),
+            Operand::new("code", &imm.trapcode),
+        ])
+        .operands_out(vec![Operand::new("a", i32_64)])
+        .can_trap()
+        .side_effects_idempotent(),
+    );
 
     ig.push(
         Inst::new(
@@ -2055,8 +2104,12 @@ pub(crate) fn define(
         "#,
             &formats.ternary,
         )
-        .operands_in(vec![x, y, b_in])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("x", iB),
+            Operand::new("y", iB),
+            Operand::new("b_in", i8).with_doc("Input borrow flag"),
+        ])
+        .operands_out(vec![Operand::new("a", iB)]),
     );
 
     ig.push(
@@ -2077,8 +2130,11 @@ pub(crate) fn define(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a, b_out]),
+        .operands_in(vec![Operand::new("x", iB), Operand::new("y", iB)])
+        .operands_out(vec![
+            Operand::new("a", iB),
+            Operand::new("b_out", i8).with_doc("Output borrow flag"),
+        ]),
     );
 
     ig.push(
@@ -2099,8 +2155,15 @@ pub(crate) fn define(
         "#,
             &formats.ternary,
         )
-        .operands_in(vec![x, y, b_in])
-        .operands_out(vec![a, b_out]),
+        .operands_in(vec![
+            Operand::new("x", iB),
+            Operand::new("y", iB),
+            Operand::new("b_in", i8).with_doc("Input borrow flag"),
+        ])
+        .operands_out(vec![
+            Operand::new("a", iB),
+            Operand::new("b_out", i8).with_doc("Output borrow flag"),
+        ]),
     );
 
     let bits = &TypeVar::new(
@@ -2113,9 +2176,6 @@ pub(crate) fn define(
             .includes_scalars(true)
             .build(),
     );
-    let x = &Operand::new("x", bits);
-    let y = &Operand::new("y", bits);
-    let a = &Operand::new("a", bits);
 
     ig.push(
         Inst::new(
@@ -2125,8 +2185,8 @@ pub(crate) fn define(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", bits), Operand::new("y", bits)])
+        .operands_out(vec![Operand::new("a", bits)]),
     );
 
     ig.push(
@@ -2137,8 +2197,8 @@ pub(crate) fn define(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", bits), Operand::new("y", bits)])
+        .operands_out(vec![Operand::new("a", bits)]),
     );
 
     ig.push(
@@ -2149,8 +2209,8 @@ pub(crate) fn define(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", bits), Operand::new("y", bits)])
+        .operands_out(vec![Operand::new("a", bits)]),
     );
 
     ig.push(
@@ -2161,8 +2221,8 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", bits)])
+        .operands_out(vec![Operand::new("a", bits)]),
     );
 
     ig.push(
@@ -2175,8 +2235,8 @@ pub(crate) fn define(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", bits), Operand::new("y", bits)])
+        .operands_out(vec![Operand::new("a", bits)]),
     );
 
     ig.push(
@@ -2189,8 +2249,8 @@ pub(crate) fn define(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", bits), Operand::new("y", bits)])
+        .operands_out(vec![Operand::new("a", bits)]),
     );
 
     ig.push(
@@ -2203,13 +2263,9 @@ pub(crate) fn define(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", bits), Operand::new("y", bits)])
+        .operands_out(vec![Operand::new("a", bits)]),
     );
-
-    let x = &Operand::new("x", iB);
-    let Y = &Operand::new("Y", &imm.imm64);
-    let a = &Operand::new("a", iB);
 
     ig.push(
         Inst::new(
@@ -2224,8 +2280,8 @@ pub(crate) fn define(
         "#,
             &formats.binary_imm64,
         )
-        .operands_in(vec![x, Y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", iB), Operand::new("Y", &imm.imm64)])
+        .operands_out(vec![Operand::new("a", iB)]),
     );
 
     ig.push(
@@ -2241,8 +2297,8 @@ pub(crate) fn define(
         "#,
             &formats.binary_imm64,
         )
-        .operands_in(vec![x, Y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", iB), Operand::new("Y", &imm.imm64)])
+        .operands_out(vec![Operand::new("a", iB)]),
     );
 
     ig.push(
@@ -2258,14 +2314,9 @@ pub(crate) fn define(
         "#,
             &formats.binary_imm64,
         )
-        .operands_in(vec![x, Y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", iB), Operand::new("Y", &imm.imm64)])
+        .operands_out(vec![Operand::new("a", iB)]),
     );
-
-    let x = &Operand::new("x", Int).with_doc("Scalar or vector value to shift");
-    let y = &Operand::new("y", iB).with_doc("Number of bits to shift");
-    let Y = &Operand::new("Y", &imm.imm64);
-    let a = &Operand::new("a", Int);
 
     ig.push(
         Inst::new(
@@ -2277,8 +2328,11 @@ pub(crate) fn define(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
+            Operand::new("y", iB).with_doc("Number of bits to shift"),
+        ])
+        .operands_out(vec![Operand::new("a", Int)]),
     );
 
     ig.push(
@@ -2291,8 +2345,11 @@ pub(crate) fn define(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
+            Operand::new("y", iB).with_doc("Number of bits to shift"),
+        ])
+        .operands_out(vec![Operand::new("a", Int)]),
     );
 
     ig.push(
@@ -2305,8 +2362,11 @@ pub(crate) fn define(
         "#,
             &formats.binary_imm64,
         )
-        .operands_in(vec![x, Y])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
+            Operand::new("Y", &imm.imm64),
+        ])
+        .operands_out(vec![Operand::new("a", Int)]),
     );
 
     ig.push(
@@ -2319,8 +2379,11 @@ pub(crate) fn define(
         "#,
             &formats.binary_imm64,
         )
-        .operands_in(vec![x, Y])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
+            Operand::new("Y", &imm.imm64),
+        ])
+        .operands_out(vec![Operand::new("a", Int)]),
     );
 
     ig.push(
@@ -2341,8 +2404,11 @@ pub(crate) fn define(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
+            Operand::new("y", iB).with_doc("Number of bits to shift"),
+        ])
+        .operands_out(vec![Operand::new("a", Int)]),
     );
 
     ig.push(
@@ -2364,8 +2430,11 @@ pub(crate) fn define(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
+            Operand::new("y", iB).with_doc("Number of bits to shift"),
+        ])
+        .operands_out(vec![Operand::new("a", Int)]),
     );
 
     ig.push(
@@ -2380,8 +2449,11 @@ pub(crate) fn define(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
+            Operand::new("y", iB).with_doc("Number of bits to shift"),
+        ])
+        .operands_out(vec![Operand::new("a", Int)]),
     );
 
     ig.push(
@@ -2394,8 +2466,11 @@ pub(crate) fn define(
         "#,
             &formats.binary_imm64,
         )
-        .operands_in(vec![x, Y])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
+            Operand::new("Y", &imm.imm64),
+        ])
+        .operands_out(vec![Operand::new("a", Int)]),
     );
 
     ig.push(
@@ -2408,8 +2483,11 @@ pub(crate) fn define(
         "#,
             &formats.binary_imm64,
         )
-        .operands_in(vec![x, Y])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
+            Operand::new("Y", &imm.imm64),
+        ])
+        .operands_out(vec![Operand::new("a", Int)]),
     );
 
     ig.push(
@@ -2422,12 +2500,12 @@ pub(crate) fn define(
         "#,
             &formats.binary_imm64,
         )
-        .operands_in(vec![x, Y])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
+            Operand::new("Y", &imm.imm64),
+        ])
+        .operands_out(vec![Operand::new("a", Int)]),
     );
-
-    let x = &Operand::new("x", iB);
-    let a = &Operand::new("a", iB);
 
     ig.push(
         Inst::new(
@@ -2439,8 +2517,8 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", iB)])
+        .operands_out(vec![Operand::new("a", iB)]),
     );
 
     ig.push(
@@ -2455,8 +2533,8 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", iB)])
+        .operands_out(vec![Operand::new("a", iB)]),
     );
 
     ig.push(
@@ -2471,8 +2549,8 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", iB)])
+        .operands_out(vec![Operand::new("a", iB)]),
     );
 
     ig.push(
@@ -2487,12 +2565,9 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", iB)])
+        .operands_out(vec![Operand::new("a", iB)]),
     );
-
-    let x = &Operand::new("x", iSwappable);
-    let a = &Operand::new("a", iSwappable);
 
     ig.push(
         Inst::new(
@@ -2504,12 +2579,9 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", iSwappable)])
+        .operands_out(vec![Operand::new("a", iSwappable)]),
     );
-
-    let x = &Operand::new("x", Int);
-    let a = &Operand::new("a", Int);
 
     ig.push(
         Inst::new(
@@ -2521,8 +2593,8 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Int)])
+        .operands_out(vec![Operand::new("a", Int)]),
     );
 
     let Float = &TypeVar::new(
@@ -2534,10 +2606,6 @@ pub(crate) fn define(
             .dynamic_simd_lanes(Interval::All)
             .build(),
     );
-    let Cond = &Operand::new("Cond", &imm.floatcc);
-    let x = &Operand::new("x", Float);
-    let y = &Operand::new("y", Float);
-    let a = &Operand::new("a", &Float.as_bool());
 
     ig.push(
         Inst::new(
@@ -2611,14 +2679,13 @@ pub(crate) fn define(
         "#,
             &formats.float_compare,
         )
-        .operands_in(vec![Cond, x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("Cond", &imm.floatcc),
+            Operand::new("x", Float),
+            Operand::new("y", Float),
+        ])
+        .operands_out(vec![Operand::new("a", &Float.as_bool())]),
     );
-
-    let x = &Operand::new("x", Float);
-    let y = &Operand::new("y", Float);
-    let z = &Operand::new("z", Float);
-    let a = &Operand::new("a", Float).with_doc("Result of applying operator to each lane");
 
     ig.push(
         Inst::new(
@@ -2628,8 +2695,10 @@ pub(crate) fn define(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Float), Operand::new("y", Float)])
+        .operands_out(vec![
+            Operand::new("a", Float).with_doc("Result of applying operator to each lane")
+        ]),
     );
 
     ig.push(
@@ -2640,8 +2709,10 @@ pub(crate) fn define(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Float), Operand::new("y", Float)])
+        .operands_out(vec![
+            Operand::new("a", Float).with_doc("Result of applying operator to each lane")
+        ]),
     );
 
     ig.push(
@@ -2652,8 +2723,10 @@ pub(crate) fn define(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Float), Operand::new("y", Float)])
+        .operands_out(vec![
+            Operand::new("a", Float).with_doc("Result of applying operator to each lane")
+        ]),
     );
 
     ig.push(
@@ -2668,8 +2741,10 @@ pub(crate) fn define(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Float), Operand::new("y", Float)])
+        .operands_out(vec![
+            Operand::new("a", Float).with_doc("Result of applying operator to each lane")
+        ]),
     );
 
     ig.push(
@@ -2680,8 +2755,10 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Float)])
+        .operands_out(vec![
+            Operand::new("a", Float).with_doc("Result of applying operator to each lane")
+        ]),
     );
 
     ig.push(
@@ -2695,11 +2772,15 @@ pub(crate) fn define(
         "#,
             &formats.ternary,
         )
-        .operands_in(vec![x, y, z])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("x", Float),
+            Operand::new("y", Float),
+            Operand::new("z", Float),
+        ])
+        .operands_out(vec![
+            Operand::new("a", Float).with_doc("Result of applying operator to each lane")
+        ]),
     );
-
-    let a = &Operand::new("a", Float).with_doc("``x`` with its sign bit inverted");
 
     ig.push(
         Inst::new(
@@ -2711,11 +2792,11 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Float)])
+        .operands_out(vec![
+            Operand::new("a", Float).with_doc("``x`` with its sign bit inverted")
+        ]),
     );
-
-    let a = &Operand::new("a", Float).with_doc("``x`` with its sign bit cleared");
 
     ig.push(
         Inst::new(
@@ -2727,11 +2808,11 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Float)])
+        .operands_out(vec![
+            Operand::new("a", Float).with_doc("``x`` with its sign bit cleared")
+        ]),
     );
-
-    let a = &Operand::new("a", Float).with_doc("``x`` with its sign bit changed to that of ``y``");
 
     ig.push(
         Inst::new(
@@ -2744,11 +2825,11 @@ pub(crate) fn define(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Float), Operand::new("y", Float)])
+        .operands_out(vec![
+            Operand::new("a", Float).with_doc("``x`` with its sign bit changed to that of ``y``")
+        ]),
     );
-
-    let a = &Operand::new("a", Float).with_doc("The smaller of ``x`` and ``y``");
 
     ig.push(
         Inst::new(
@@ -2763,8 +2844,10 @@ pub(crate) fn define(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Float), Operand::new("y", Float)])
+        .operands_out(vec![
+            Operand::new("a", Float).with_doc("The smaller of ``x`` and ``y``")
+        ]),
     );
 
     ig.push(
@@ -2779,11 +2862,11 @@ pub(crate) fn define(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Float), Operand::new("y", Float)])
+        .operands_out(vec![
+            Operand::new("a", Float).with_doc("The smaller of ``x`` and ``y``")
+        ]),
     );
-
-    let a = &Operand::new("a", Float).with_doc("The larger of ``x`` and ``y``");
 
     ig.push(
         Inst::new(
@@ -2798,8 +2881,10 @@ pub(crate) fn define(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Float), Operand::new("y", Float)])
+        .operands_out(vec![
+            Operand::new("a", Float).with_doc("The larger of ``x`` and ``y``")
+        ]),
     );
 
     ig.push(
@@ -2814,11 +2899,11 @@ pub(crate) fn define(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Float), Operand::new("y", Float)])
+        .operands_out(vec![
+            Operand::new("a", Float).with_doc("The larger of ``x`` and ``y``")
+        ]),
     );
-
-    let a = &Operand::new("a", Float).with_doc("``x`` rounded to integral value");
 
     ig.push(
         Inst::new(
@@ -2828,8 +2913,10 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Float)])
+        .operands_out(vec![
+            Operand::new("a", Float).with_doc("``x`` rounded to integral value")
+        ]),
     );
 
     ig.push(
@@ -2840,8 +2927,10 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Float)])
+        .operands_out(vec![
+            Operand::new("a", Float).with_doc("``x`` rounded to integral value")
+        ]),
     );
 
     ig.push(
@@ -2852,8 +2941,10 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Float)])
+        .operands_out(vec![
+            Operand::new("a", Float).with_doc("``x`` rounded to integral value")
+        ]),
     );
 
     ig.push(
@@ -2865,12 +2956,11 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Float)])
+        .operands_out(vec![
+            Operand::new("a", Float).with_doc("``x`` rounded to integral value")
+        ]),
     );
-
-    let a = &Operand::new("a", i8);
-    let x = &Operand::new("x", Ref);
 
     ig.push(
         Inst::new(
@@ -2883,12 +2973,9 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Ref)])
+        .operands_out(vec![Operand::new("a", i8)]),
     );
-
-    let a = &Operand::new("a", i8);
-    let x = &Operand::new("x", Ref);
 
     ig.push(
         Inst::new(
@@ -2901,13 +2988,9 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Ref)])
+        .operands_out(vec![Operand::new("a", i8)]),
     );
-
-    let x = &Operand::new("x", Mem);
-    let a = &Operand::new("a", MemTo).with_doc("Bits of `x` reinterpreted");
-    let MemFlags = &Operand::new("MemFlags", &imm.memflags);
 
     ig.push(
         Inst::new(
@@ -2926,12 +3009,14 @@ pub(crate) fn define(
         "#,
             &formats.load_no_offset,
         )
-        .operands_in(vec![MemFlags, x])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("x", Mem),
+        ])
+        .operands_out(vec![
+            Operand::new("a", MemTo).with_doc("Bits of `x` reinterpreted")
+        ]),
     );
-
-    let a = &Operand::new("a", TxN).with_doc("A vector value");
-    let s = &Operand::new("s", &TxN.lane_of()).with_doc("A scalar value");
 
     ig.push(
         Inst::new(
@@ -2942,8 +3027,10 @@ pub(crate) fn define(
             "#,
             &formats.unary,
         )
-        .operands_in(vec![s])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("s", &TxN.lane_of()).with_doc("A scalar value")
+        ])
+        .operands_out(vec![Operand::new("a", TxN).with_doc("A vector value")]),
     );
 
     let Truthy = &TypeVar::new(
@@ -2956,8 +3043,6 @@ pub(crate) fn define(
         "An integer type",
         TypeSetBuilder::new().ints(Interval::All).build(),
     );
-    let x = &Operand::new("x", Truthy);
-    let a = &Operand::new("a", IntTo);
 
     ig.push(
         Inst::new(
@@ -2969,8 +3054,8 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Truthy)])
+        .operands_out(vec![Operand::new("a", IntTo)]),
     );
 
     let Int = &TypeVar::new(
@@ -2984,8 +3069,6 @@ pub(crate) fn define(
         "A smaller integer type",
         TypeSetBuilder::new().ints(Interval::All).build(),
     );
-    let x = &Operand::new("x", Int);
-    let a = &Operand::new("a", IntTo);
 
     ig.push(
         Inst::new(
@@ -2998,8 +3081,8 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Int)])
+        .operands_out(vec![Operand::new("a", IntTo)]),
     );
 
     let I16or32or64xN = &TypeVar::new(
@@ -3012,10 +3095,6 @@ pub(crate) fn define(
             .includes_scalars(false)
             .build(),
     );
-
-    let x = &Operand::new("x", I16or32or64xN);
-    let y = &Operand::new("y", I16or32or64xN);
-    let a = &Operand::new("a", &I16or32or64xN.split_lanes());
 
     ig.push(
         Inst::new(
@@ -3030,8 +3109,11 @@ pub(crate) fn define(
             "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("x", I16or32or64xN),
+            Operand::new("y", I16or32or64xN),
+        ])
+        .operands_out(vec![Operand::new("a", &I16or32or64xN.split_lanes())]),
     );
 
     ig.push(
@@ -3050,8 +3132,11 @@ pub(crate) fn define(
             "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("x", I16or32or64xN),
+            Operand::new("y", I16or32or64xN),
+        ])
+        .operands_out(vec![Operand::new("a", &I16or32or64xN.split_lanes())]),
     );
 
     ig.push(
@@ -3069,8 +3154,8 @@ pub(crate) fn define(
             "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", I16or32or64xN), Operand::new("y", I16or32or64xN)])
+        .operands_out(vec![Operand::new("a", &I16or32or64xN.split_lanes())]),
     );
 
     let I8or16or32xN = &TypeVar::new(
@@ -3084,9 +3169,6 @@ pub(crate) fn define(
             .build(),
     );
 
-    let x = &Operand::new("x", I8or16or32xN);
-    let a = &Operand::new("a", &I8or16or32xN.merge_lanes());
-
     ig.push(
         Inst::new(
             "swiden_low",
@@ -3097,8 +3179,8 @@ pub(crate) fn define(
             "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", I8or16or32xN)])
+        .operands_out(vec![Operand::new("a", &I8or16or32xN.merge_lanes())]),
     );
 
     ig.push(
@@ -3111,8 +3193,8 @@ pub(crate) fn define(
             "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", I8or16or32xN)])
+        .operands_out(vec![Operand::new("a", &I8or16or32xN.merge_lanes())]),
     );
 
     ig.push(
@@ -3125,8 +3207,8 @@ pub(crate) fn define(
             "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", I8or16or32xN)])
+        .operands_out(vec![Operand::new("a", &I8or16or32xN.merge_lanes())]),
     );
 
     ig.push(
@@ -3139,13 +3221,9 @@ pub(crate) fn define(
             "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", I8or16or32xN)])
+        .operands_out(vec![Operand::new("a", &I8or16or32xN.merge_lanes())]),
     );
-
-    let x = &Operand::new("x", I8or16or32xN);
-    let y = &Operand::new("y", I8or16or32xN);
-    let a = &Operand::new("a", I8or16or32xN);
 
     ig.push(
         Inst::new(
@@ -3160,8 +3238,11 @@ pub(crate) fn define(
             "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("x", I8or16or32xN),
+            Operand::new("y", I8or16or32xN),
+        ])
+        .operands_out(vec![Operand::new("a", I8or16or32xN)]),
     );
 
     let I8x16 = &TypeVar::new(
@@ -3173,9 +3254,6 @@ pub(crate) fn define(
             .includes_scalars(false)
             .build(),
     );
-    let x = &Operand::new("x", I8x16);
-    let y = &Operand::new("y", I8x16);
-    let a = &Operand::new("a", I16x8);
 
     ig.push(
         Inst::new(
@@ -3190,8 +3268,8 @@ pub(crate) fn define(
             "#,
             &formats.binary,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", I8x16), Operand::new("y", I8x16)])
+        .operands_out(vec![Operand::new("a", I16x8)]),
     );
 
     {
@@ -3200,9 +3278,6 @@ pub(crate) fn define(
             "A larger integer type with the same number of lanes",
             TypeSetBuilder::new().ints(Interval::All).build(),
         );
-
-        let x = &Operand::new("x", Int);
-        let a = &Operand::new("a", IntTo);
 
         ig.push(
             Inst::new(
@@ -3220,8 +3295,8 @@ pub(crate) fn define(
         "#,
                 &formats.unary,
             )
-            .operands_in(vec![x])
-            .operands_out(vec![a]),
+            .operands_in(vec![Operand::new("x", Int)])
+            .operands_out(vec![Operand::new("a", IntTo)]),
         );
 
         ig.push(
@@ -3240,8 +3315,8 @@ pub(crate) fn define(
         "#,
                 &formats.unary,
             )
-            .operands_in(vec![x])
-            .operands_out(vec![a]),
+            .operands_in(vec![Operand::new("x", Int)])
+            .operands_out(vec![Operand::new("a", IntTo)]),
         );
     }
 
@@ -3253,9 +3328,6 @@ pub(crate) fn define(
             .simd_lanes(Interval::All)
             .build(),
     );
-
-    let x = &Operand::new("x", Float);
-    let a = &Operand::new("a", FloatTo);
 
     ig.push(
         Inst::new(
@@ -3274,8 +3346,8 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Float)])
+        .operands_out(vec![Operand::new("a", FloatTo)]),
     );
 
     ig.push(
@@ -3295,8 +3367,8 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Float)])
+        .operands_out(vec![Operand::new("a", FloatTo)]),
     );
 
     let F64x2 = &TypeVar::new(
@@ -3318,9 +3390,6 @@ pub(crate) fn define(
             .build(),
     );
 
-    let x = &Operand::new("x", F64x2);
-    let a = &Operand::new("a", F32x4);
-
     ig.push(
         Inst::new(
             "fvdemote",
@@ -3340,8 +3409,8 @@ pub(crate) fn define(
                 "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", F64x2)])
+        .operands_out(vec![Operand::new("a", F32x4)]),
     );
 
     ig.push(
@@ -3358,8 +3427,8 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![a])
-        .operands_out(vec![x]),
+        .operands_in(vec![Operand::new("a", F32x4)])
+        .operands_out(vec![Operand::new("x", F64x2)]),
     );
 
     let FloatScalar = &TypeVar::new(
@@ -3372,8 +3441,6 @@ pub(crate) fn define(
         "An scalar only integer type",
         TypeSetBuilder::new().ints(Interval::All).build(),
     );
-    let x = &Operand::new("x", FloatScalar);
-    let a = &Operand::new("a", IntTo);
 
     ig.push(
         Inst::new(
@@ -3388,8 +3455,8 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a])
+        .operands_in(vec![Operand::new("x", FloatScalar)])
+        .operands_out(vec![Operand::new("a", IntTo)])
         .can_trap()
         .side_effects_idempotent(),
     );
@@ -3407,8 +3474,8 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a])
+        .operands_in(vec![Operand::new("x", FloatScalar)])
+        .operands_out(vec![Operand::new("a", IntTo)])
         .can_trap()
         .side_effects_idempotent(),
     );
@@ -3422,9 +3489,6 @@ pub(crate) fn define(
             .build(),
     );
 
-    let x = &Operand::new("x", Float);
-    let a = &Operand::new("a", IntTo);
-
     ig.push(
         Inst::new(
             "fcvt_to_uint_sat",
@@ -3435,8 +3499,8 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Float)])
+        .operands_out(vec![Operand::new("a", IntTo)]),
     );
 
     ig.push(
@@ -3448,8 +3512,8 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Float)])
+        .operands_out(vec![Operand::new("a", IntTo)]),
     );
 
     ig.push(
@@ -3462,8 +3526,8 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Float)])
+        .operands_out(vec![Operand::new("a", IntTo)]),
     );
 
     let Int = &TypeVar::new(
@@ -3474,8 +3538,6 @@ pub(crate) fn define(
             .simd_lanes(Interval::All)
             .build(),
     );
-    let x = &Operand::new("x", Int);
-    let a = &Operand::new("a", FloatTo);
 
     ig.push(
         Inst::new(
@@ -3490,8 +3552,8 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Int)])
+        .operands_out(vec![Operand::new("a", FloatTo)]),
     );
 
     ig.push(
@@ -3507,8 +3569,8 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Int)])
+        .operands_out(vec![Operand::new("a", FloatTo)]),
     );
 
     ig.push(
@@ -3527,8 +3589,8 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
+        .operands_in(vec![Operand::new("x", Int)])
+        .operands_out(vec![Operand::new("a", FloatTo)]),
     );
 
     let WideInt = &TypeVar::new(
@@ -3539,9 +3601,6 @@ pub(crate) fn define(
             .simd_lanes(Interval::All)
             .build(),
     );
-    let x = &Operand::new("x", WideInt);
-    let lo = &Operand::new("lo", &WideInt.half_width()).with_doc("The low bits of `x`");
-    let hi = &Operand::new("hi", &WideInt.half_width()).with_doc("The high bits of `x`");
 
     ig.push(
         Inst::new(
@@ -3557,14 +3616,12 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![x])
-        .operands_out(vec![lo, hi]),
+        .operands_in(vec![Operand::new("x", WideInt)])
+        .operands_out(vec![
+            Operand::new("lo", &WideInt.half_width()).with_doc("The low bits of `x`"),
+            Operand::new("hi", &WideInt.half_width()).with_doc("The high bits of `x`"),
+        ]),
     );
-
-    let lo = &Operand::new("lo", NarrowInt);
-    let hi = &Operand::new("hi", NarrowInt);
-    let a = &Operand::new("a", &NarrowInt.double_width())
-        .with_doc("The concatenation of `lo` and `hi`");
 
     ig.push(
         Inst::new(
@@ -3578,8 +3635,12 @@ pub(crate) fn define(
         "#,
             &formats.binary,
         )
-        .operands_in(vec![lo, hi])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("lo", NarrowInt),
+            Operand::new("hi", NarrowInt),
+        ])
+        .operands_out(vec![Operand::new("a", &NarrowInt.double_width())
+            .with_doc("The concatenation of `lo` and `hi`")]),
     );
 
     // Instructions relating to atomic memory accesses and fences
@@ -3588,12 +3649,6 @@ pub(crate) fn define(
         "Any type that can be stored in memory, which can be used in an atomic operation",
         TypeSetBuilder::new().ints(8..64).build(),
     );
-    let x = &Operand::new("x", AtomicMem).with_doc("Value to be atomically stored");
-    let a = &Operand::new("a", AtomicMem).with_doc("Value atomically loaded");
-    let e = &Operand::new("e", AtomicMem).with_doc("Expected value in CAS");
-    let p = &Operand::new("p", iAddr);
-    let MemFlags = &Operand::new("MemFlags", &imm.memflags);
-    let AtomicRmwOp = &Operand::new("AtomicRmwOp", &imm.atomic_rmw_op);
 
     ig.push(
         Inst::new(
@@ -3607,8 +3662,15 @@ pub(crate) fn define(
         "#,
             &formats.atomic_rmw,
         )
-        .operands_in(vec![MemFlags, AtomicRmwOp, p, x])
-        .operands_out(vec![a])
+        .operands_in(vec![
+            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("AtomicRmwOp", &imm.atomic_rmw_op),
+            Operand::new("p", iAddr),
+            Operand::new("x", AtomicMem).with_doc("Value to be atomically stored"),
+        ])
+        .operands_out(vec![
+            Operand::new("a", AtomicMem).with_doc("Value atomically loaded")
+        ])
         .can_load()
         .can_store()
         .other_side_effects(),
@@ -3629,8 +3691,15 @@ pub(crate) fn define(
         "#,
             &formats.atomic_cas,
         )
-        .operands_in(vec![MemFlags, p, e, x])
-        .operands_out(vec![a])
+        .operands_in(vec![
+            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("p", iAddr),
+            Operand::new("e", AtomicMem).with_doc("Expected value in CAS"),
+            Operand::new("x", AtomicMem).with_doc("Value to be atomically stored"),
+        ])
+        .operands_out(vec![
+            Operand::new("a", AtomicMem).with_doc("Value atomically loaded")
+        ])
         .can_load()
         .can_store()
         .other_side_effects(),
@@ -3649,8 +3718,13 @@ pub(crate) fn define(
         "#,
             &formats.load_no_offset,
         )
-        .operands_in(vec![MemFlags, p])
-        .operands_out(vec![a])
+        .operands_in(vec![
+            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("p", iAddr),
+        ])
+        .operands_out(vec![
+            Operand::new("a", AtomicMem).with_doc("Value atomically loaded")
+        ])
         .can_load()
         .other_side_effects(),
     );
@@ -3668,7 +3742,11 @@ pub(crate) fn define(
         "#,
             &formats.store_no_offset,
         )
-        .operands_in(vec![MemFlags, x, p])
+        .operands_in(vec![
+            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("x", AtomicMem).with_doc("Value to be atomically stored"),
+            Operand::new("p", iAddr),
+        ])
         .can_store()
         .other_side_effects(),
     );
@@ -3695,9 +3773,6 @@ pub(crate) fn define(
             .dynamic_simd_lanes(Interval::All)
             .build(),
     );
-    let x = &Operand::new("x", TxN).with_doc("The dynamic vector to extract from");
-    let y = &Operand::new("y", &imm.uimm8).with_doc("128-bit vector index");
-    let a = &Operand::new("a", &TxN.dynamic_to_vector()).with_doc("New fixed vector");
 
     ig.push(
         Inst::new(
@@ -3707,7 +3782,12 @@ pub(crate) fn define(
         "#,
             &formats.binary_imm8,
         )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
+        .operands_in(vec![
+            Operand::new("x", TxN).with_doc("The dynamic vector to extract from"),
+            Operand::new("y", &imm.uimm8).with_doc("128-bit vector index"),
+        ])
+        .operands_out(vec![
+            Operand::new("a", &TxN.dynamic_to_vector()).with_doc("New fixed vector")
+        ]),
     );
 }
