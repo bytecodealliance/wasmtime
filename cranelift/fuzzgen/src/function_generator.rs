@@ -586,7 +586,8 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 // Nothing wrong with this select. But we have an isle rule that can optimize it
                 // into a `min`/`max` instructions, which we don't have implemented yet.
                 (Opcode::Select, &[_, I128, I128]),
-                // Tmp #5922
+                // These stack accesses can cause segfaults if they are merged into an SSE instruction.
+                // See: #5922
                 (Opcode::StackStore, &[I8X16], &[]),
                 (Opcode::StackStore, &[I16X8], &[]),
                 (Opcode::StackStore, &[I32X4], &[]),
@@ -1900,6 +1901,12 @@ where
         );
         let aligned = if is_atomic && requires_aligned_atomics {
             true
+        } else if min_size > 8 {
+            // TODO: We currently can't guarantee that a stack_slot will be aligned on a 16 byte
+            // boundary. We don't have a way to specify alignment when creating stack slots, and
+            // cranelift only guarantees 8 byte alignment between stack slots.
+            // See: https://github.com/bytecodealliance/wasmtime/issues/5922#issuecomment-1457926624
+            false
         } else {
             bool::arbitrary(self.u)?
         };
