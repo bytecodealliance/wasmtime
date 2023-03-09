@@ -3529,15 +3529,97 @@
 
 ;; Rules for `shuffle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Special case for the `punpckhbw` instruction which interleaves the upper
-;; lanes of the two input registers.
-(rule 4 (lower (shuffle a b (u128_from_immediate 0x1f0f_1e0e_1d0d_1c0c_1b0b_1a0a_1909_1808)))
-      (x64_punpckhbw a b))
+;; Special case the `pshuf{l,h}w` instruction which shuffles four 16-bit
+;; integers within one value, preserving the other four 16-bit integers in that
+;; value (either the high or low half). The complicated logic is in the
+;; extractors here implemented in Rust and note that there's two cases for each
+;; instruction here to match when either the first or second shuffle operand is
+;; used.
+(rule 12 (lower (shuffle x y (pshuflw_lhs_imm imm)))
+      (x64_pshuflw x imm))
+(rule 11 (lower (shuffle x y (pshuflw_rhs_imm imm)))
+      (x64_pshuflw y imm))
+(rule 10 (lower (shuffle x y (pshufhw_lhs_imm imm)))
+      (x64_pshufhw x imm))
+(rule 9 (lower (shuffle x y (pshufhw_rhs_imm imm)))
+      (x64_pshufhw y imm))
 
-;; Special case for the `punpcklbw` instruction which interleaves the lower
-;; lanes of the two input registers.
-(rule 4 (lower (shuffle a b (u128_from_immediate 0x1707_1606_1505_1404_1303_1202_1101_1000)))
+(decl pshuflw_lhs_imm (u8) Immediate)
+(extern extractor pshuflw_lhs_imm pshuflw_lhs_imm)
+(decl pshuflw_rhs_imm (u8) Immediate)
+(extern extractor pshuflw_rhs_imm pshuflw_rhs_imm)
+(decl pshufhw_lhs_imm (u8) Immediate)
+(extern extractor pshufhw_lhs_imm pshufhw_lhs_imm)
+(decl pshufhw_rhs_imm (u8) Immediate)
+(extern extractor pshufhw_rhs_imm pshufhw_rhs_imm)
+
+;; Special case for the `pshufd` instruction which will permute 32-bit values
+;; within a single register. This is only applicable if the `imm` specified
+;; selects 32-bit values from either `x` or `y`, but not both. This means
+;; there's one rule for selecting from `x` and another rule for selecting from
+;; `y`.
+(rule 8 (lower (shuffle x y (pshufd_lhs_imm imm)))
+      (x64_pshufd x imm))
+(rule 7 (lower (shuffle x y (pshufd_rhs_imm imm)))
+      (x64_pshufd y imm))
+
+(decl pshufd_lhs_imm (u8) Immediate)
+(extern extractor pshufd_lhs_imm pshufd_lhs_imm)
+(decl pshufd_rhs_imm (u8) Immediate)
+(extern extractor pshufd_rhs_imm pshufd_rhs_imm)
+
+;; Special case for i8-level interleaving of upper/low bytes.
+(rule 6 (lower (shuffle a b (u128_from_immediate 0x1f0f_1e0e_1d0d_1c0c_1b0b_1a0a_1909_1808)))
+      (x64_punpckhbw a b))
+(rule 6 (lower (shuffle a b (u128_from_immediate 0x1707_1606_1505_1404_1303_1202_1101_1000)))
       (x64_punpcklbw a b))
+
+;; Special case for i16-level interleaving of upper/low bytes.
+(rule 6 (lower (shuffle a b (u128_from_immediate 0x1f1e_0f0e_1d1c_0d0c_1b1a_0b0a_1918_0908)))
+      (x64_punpckhwd a b))
+(rule 6 (lower (shuffle a b (u128_from_immediate 0x1716_0706_1514_0504_1312_0302_1110_0100)))
+      (x64_punpcklwd a b))
+
+;; Special case for i32-level interleaving of upper/low bytes.
+(rule 6 (lower (shuffle a b (u128_from_immediate 0x1f1e1d1c_0f0e0d0c_1b1a1918_0b0a0908)))
+      (x64_punpckhdq a b))
+(rule 6 (lower (shuffle a b (u128_from_immediate 0x17161514_07060504_13121110_03020100)))
+      (x64_punpckldq a b))
+
+;; Special case for i64-level interleaving of upper/low bytes.
+(rule 6 (lower (shuffle a b (u128_from_immediate 0x1f1e1d1c1b1a1918_0f0e0d0c0b0a0908)))
+      (x64_punpckhqdq a b))
+(rule 6 (lower (shuffle a b (u128_from_immediate 0x1716151413121110_0706050403020100)))
+      (x64_punpcklqdq a b))
+
+;; If the vector shift mask is all 0s then that means the first byte of the
+;; first operand is broadcast to all bytes. Falling through would load an
+;; all-zeros constant from a rip-relative location but it should be slightly
+;; more efficient to execute the `pshufb` here-and-now with an xor'd-to-be-zero
+;; register.
+(rule 6 (lower (shuffle a _ (u128_from_immediate 0)))
+      (x64_pshufb a (xmm_zero $I8X16)))
+
+;; Special case for the `shufps` instruction which will select two 32-bit values
+;; from the first operand and two 32-bit values from the second operand. Note
+;; that there is a second case here as well for when the operands can be
+;; swapped.
+;;
+;; Note that the priority of this instruction is currently lower than the above
+;; special cases since `shufps` handles many of them and for now it's
+;; hypothesized that the dedicated instructions are better than `shufps`.
+;; Someone with more knowledge about x86 timings should perhaps reorder the
+;; rules here eventually though.
+(rule 5 (lower (shuffle x y (shufps_imm imm)))
+      (x64_shufps x y imm))
+(rule 4 (lower (shuffle x y (shufps_rev_imm imm)))
+      (x64_shufps y x imm))
+
+(decl shufps_imm(u8) Immediate)
+(extern extractor shufps_imm shufps_imm)
+(decl shufps_rev_imm(u8) Immediate)
+(extern extractor shufps_rev_imm shufps_rev_imm)
+
 
 ;; If `lhs` and `rhs` are the same we can use a single PSHUFB to shuffle the XMM
 ;; register. We statically build `constructed_mask` to zero out any unknown lane

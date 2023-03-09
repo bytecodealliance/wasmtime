@@ -999,6 +999,124 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             },
         }
     }
+
+    fn pshufd_lhs_imm(&mut self, imm: Immediate) -> Option<u8> {
+        let (a, b, c, d) = self.shuffle32_from_imm(imm)?;
+        if a < 4 && b < 4 && c < 4 && d < 4 {
+            Some(a | (b << 2) | (c << 4) | (d << 6))
+        } else {
+            None
+        }
+    }
+
+    fn pshufd_rhs_imm(&mut self, imm: Immediate) -> Option<u8> {
+        let (a, b, c, d) = self.shuffle32_from_imm(imm)?;
+        // When selecting from the right-hand-side, subtract these all by 4
+        // which will bail out if anything is less than 4. Afterwards the check
+        // is the same as `pshufd_lhs_imm` above.
+        let a = a.checked_sub(4)?;
+        let b = b.checked_sub(4)?;
+        let c = c.checked_sub(4)?;
+        let d = d.checked_sub(4)?;
+        if a < 4 && b < 4 && c < 4 && d < 4 {
+            Some(a | (b << 2) | (c << 4) | (d << 6))
+        } else {
+            None
+        }
+    }
+
+    fn shufps_imm(&mut self, imm: Immediate) -> Option<u8> {
+        // The `shufps` instruction selects the first two elements from the
+        // first vector and the second two elements from the second vector, so
+        // offset the third/fourth selectors by 4 and then make sure everything
+        // fits in 32-bits.
+        let (a, b, c, d) = self.shuffle32_from_imm(imm)?;
+        let c = c.checked_sub(4)?;
+        let d = d.checked_sub(4)?;
+        if a < 4 && b < 4 && c < 4 && d < 4 {
+            Some(a | (b << 2) | (c << 4) | (d << 6))
+        } else {
+            None
+        }
+    }
+
+    fn shufps_rev_imm(&mut self, imm: Immediate) -> Option<u8> {
+        // This is almost the same as `shufps_imm` except the elements that are
+        // subtracted are reversed. This handles the case that `shufps`
+        // instruction can be emitted if the order of the operands are swapped.
+        let (a, b, c, d) = self.shuffle32_from_imm(imm)?;
+        let a = a.checked_sub(4)?;
+        let b = b.checked_sub(4)?;
+        if a < 4 && b < 4 && c < 4 && d < 4 {
+            Some(a | (b << 2) | (c << 4) | (d << 6))
+        } else {
+            None
+        }
+    }
+
+    fn pshuflw_lhs_imm(&mut self, imm: Immediate) -> Option<u8> {
+        // Similar to `shufps` except this operates over 16-bit values so four
+        // of them must be fixed and the other four must be in-range to encode
+        // in the immediate.
+        let (a, b, c, d, e, f, g, h) = self.shuffle16_from_imm(imm)?;
+        if a < 4 && b < 4 && c < 4 && d < 4 && [e, f, g, h] == [4, 5, 6, 7] {
+            Some(a | (b << 2) | (c << 4) | (d << 6))
+        } else {
+            None
+        }
+    }
+
+    fn pshuflw_rhs_imm(&mut self, imm: Immediate) -> Option<u8> {
+        let (a, b, c, d, e, f, g, h) = self.shuffle16_from_imm(imm)?;
+        let a = a.checked_sub(8)?;
+        let b = b.checked_sub(8)?;
+        let c = c.checked_sub(8)?;
+        let d = d.checked_sub(8)?;
+        let e = e.checked_sub(8)?;
+        let f = f.checked_sub(8)?;
+        let g = g.checked_sub(8)?;
+        let h = h.checked_sub(8)?;
+        if a < 4 && b < 4 && c < 4 && d < 4 && [e, f, g, h] == [4, 5, 6, 7] {
+            Some(a | (b << 2) | (c << 4) | (d << 6))
+        } else {
+            None
+        }
+    }
+
+    fn pshufhw_lhs_imm(&mut self, imm: Immediate) -> Option<u8> {
+        // Similar to `pshuflw` except that the first four operands must be
+        // fixed and the second four are offset by an extra 4 and tested to
+        // make sure they're all in the range [4, 8).
+        let (a, b, c, d, e, f, g, h) = self.shuffle16_from_imm(imm)?;
+        let e = e.checked_sub(4)?;
+        let f = f.checked_sub(4)?;
+        let g = g.checked_sub(4)?;
+        let h = h.checked_sub(4)?;
+        if e < 4 && f < 4 && g < 4 && h < 4 && [a, b, c, d] == [0, 1, 2, 3] {
+            Some(e | (f << 2) | (g << 4) | (h << 6))
+        } else {
+            None
+        }
+    }
+
+    fn pshufhw_rhs_imm(&mut self, imm: Immediate) -> Option<u8> {
+        // Note that everything here is offset by at least 8 and the upper
+        // bits are offset by 12 to test they're in the range of [12, 16).
+        let (a, b, c, d, e, f, g, h) = self.shuffle16_from_imm(imm)?;
+        let a = a.checked_sub(8)?;
+        let b = b.checked_sub(8)?;
+        let c = c.checked_sub(8)?;
+        let d = d.checked_sub(8)?;
+        let e = e.checked_sub(12)?;
+        let f = f.checked_sub(12)?;
+        let g = g.checked_sub(12)?;
+        let h = h.checked_sub(12)?;
+        if e < 4 && f < 4 && g < 4 && h < 4 && [a, b, c, d] == [0, 1, 2, 3] {
+            Some(e | (f << 2) | (g << 4) | (h << 6))
+        } else {
+            None
+        }
+    }
 }
 
 impl IsleContext<'_, '_, MInst, X64Backend> {

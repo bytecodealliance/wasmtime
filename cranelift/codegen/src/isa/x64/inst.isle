@@ -863,6 +863,12 @@
             Xorpd
             Phaddw
             Phaddd
+            Punpckhdq
+            Punpckldq
+            Punpckhqdq
+            Punpcklqdq
+            Pshuflw
+            Pshufhw
           ))
 
 (type CmpOpcode extern
@@ -1347,6 +1353,12 @@
             Vcvttps2dq
             Vphaddw
             Vphaddd
+            Vpunpckhdq
+            Vpunpckldq
+            Vpunpckhqdq
+            Vpunpcklqdq
+            Vpshuflw
+            Vpshufhw
           ))
 
 (type Avx512Opcode extern
@@ -2729,6 +2741,38 @@
       (if-let $true (has_avx))
       (xmm_rmir_vex (AvxOpcode.Vpunpcklwd) src1 src2))
 
+;; Helper for creating `punpckldq` instructions.
+(decl x64_punpckldq (Xmm XmmMem) Xmm)
+(rule 0 (x64_punpckldq src1 src2)
+      (xmm_rm_r (SseOpcode.Punpckldq) src1 src2))
+(rule 1 (x64_punpckldq src1 src2)
+      (if-let $true (has_avx))
+      (xmm_rmir_vex (AvxOpcode.Vpunpckldq) src1 src2))
+
+;; Helper for creating `punpckhdq` instructions.
+(decl x64_punpckhdq (Xmm XmmMem) Xmm)
+(rule 0 (x64_punpckhdq src1 src2)
+      (xmm_rm_r (SseOpcode.Punpckhdq) src1 src2))
+(rule 1 (x64_punpckhdq src1 src2)
+      (if-let $true (has_avx))
+      (xmm_rmir_vex (AvxOpcode.Vpunpckhdq) src1 src2))
+
+;; Helper for creating `punpcklqdq` instructions.
+(decl x64_punpcklqdq (Xmm XmmMem) Xmm)
+(rule 0 (x64_punpcklqdq src1 src2)
+      (xmm_rm_r (SseOpcode.Punpcklqdq) src1 src2))
+(rule 1 (x64_punpcklqdq src1 src2)
+      (if-let $true (has_avx))
+      (xmm_rmir_vex (AvxOpcode.Vpunpcklqdq) src1 src2))
+
+;; Helper for creating `punpckhqdq` instructions.
+(decl x64_punpckhqdq (Xmm XmmMem) Xmm)
+(rule 0 (x64_punpckhqdq src1 src2)
+      (xmm_rm_r (SseOpcode.Punpckhqdq) src1 src2))
+(rule 1 (x64_punpckhqdq src1 src2)
+      (if-let $true (has_avx))
+      (xmm_rmir_vex (AvxOpcode.Vpunpckhqdq) src1 src2))
+
 ;; Helper for creating `unpcklps` instructions.
 (decl x64_unpcklps (Xmm XmmMem) Xmm)
 (rule 0 (x64_unpcklps src1 src2)
@@ -3283,6 +3327,22 @@
 (rule 1 (x64_pshufb src1 src2)
       (if-let $true (has_avx))
       (xmm_rmir_vex (AvxOpcode.Vpshufb) src1 src2))
+
+;; Helper for creating `pshuflw` instructions.
+(decl x64_pshuflw (XmmMem u8) Xmm)
+(rule (x64_pshuflw src imm)
+      (xmm_unary_rm_r_imm (SseOpcode.Pshuflw) src imm))
+(rule 1 (x64_pshuflw src imm)
+      (if-let $true (has_avx))
+      (xmm_unary_rm_r_imm_vex (AvxOpcode.Vpshuflw) src imm))
+
+;; Helper for creating `pshufhw` instructions.
+(decl x64_pshufhw (XmmMem u8) Xmm)
+(rule (x64_pshufhw src imm)
+      (xmm_unary_rm_r_imm (SseOpcode.Pshufhw) src imm))
+(rule 1 (x64_pshufhw src imm)
+      (if-let $true (has_avx))
+      (xmm_unary_rm_r_imm_vex (AvxOpcode.Vpshufhw) src imm))
 
 ;; Helper for creating `shufps` instructions.
 (decl x64_shufps (Xmm XmmMem u8) Xmm)
