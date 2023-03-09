@@ -73,7 +73,7 @@ block0(v0: i32x4, v1: i32x4):
     v5 = bitcast.i32x4 little v4
     return v5
 }
-; run: %pshufd_0022([1 2 3 4], [5 6 7 8]) == [4 2 3 1]
+; run: %pshufd_3120([1 2 3 4], [5 6 7 8]) == [4 2 3 1]
 
 function %pshufd_7546(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):
@@ -83,7 +83,7 @@ block0(v0: i32x4, v1: i32x4):
     v5 = bitcast.i32x4 little v4
     return v5
 }
-; run: %pshufd_0022([1 2 3 4], [5 6 7 8]) == [8 6 5 7]
+; run: %pshufd_7546([1 2 3 4], [5 6 7 8]) == [8 6 5 7]
 
 function %not_pshufd(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):
@@ -93,7 +93,17 @@ block0(v0: i32x4, v1: i32x4):
     v5 = bitcast.i32x4 little v4
     return v5
 }
-; run: %pshufd_0022([1 2 3 4], [5 6 7 8]) == [3 4 5 6]
+; run: %not_pshufd([1 2 3 4], [5 6 7 8]) == [3 4 5 6]
+
+function %not_pshufd2(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = bitcast.i8x16 little v0
+    v3 = bitcast.i8x16 little v1
+    v4 = shuffle v2, v3, [8 9 10 11 12 13 14 15 20 21 22 23 20 21 22 23]
+    v5 = bitcast.i32x4 little v4
+    return v5
+}
+; run: %not_pshufd2([1 2 3 4], [5 6 7 8]) == [3 4 6 6]
 
 function %punpckldq(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):

@@ -3231,14 +3231,14 @@
         dst))
 
 ;; Helper for creating `palignr` instructions.
-(decl x64_palignr (Xmm XmmMem u8 OperandSize) Xmm)
-(rule 0 (x64_palignr src1 src2 imm size)
+(decl x64_palignr (Xmm XmmMem u8) Xmm)
+(rule 0 (x64_palignr src1 src2 imm)
       (xmm_rm_r_imm (SseOpcode.Palignr)
                     src1
                     src2
                     imm
-                    size))
-(rule 1 (x64_palignr src1 src2 imm size)
+                    (OperandSize.Size32)))
+(rule 1 (x64_palignr src1 src2 imm)
       (if-let $true (has_avx))
       (xmm_rmr_imm_vex (AvxOpcode.Vpalignr) src1 src2 imm))
 
