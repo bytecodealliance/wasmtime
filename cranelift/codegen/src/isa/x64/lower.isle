@@ -2663,13 +2663,13 @@
                     address
                     offset))
       (side_effect
-       (x64_xmm_movrm (SseOpcode.Movss) (to_amode flags address offset) value)))
+       (x64_movss_store (to_amode flags address offset) value)))
 (rule 3 (lower (store flags
                     (has_type (ty_64 _) (extractlane value (u8_from_uimm8 0)))
                     address
                     offset))
       (side_effect
-       (x64_xmm_movrm (SseOpcode.Movsd) (to_amode flags address offset) value)))
+       (x64_movsd_store (to_amode flags address offset) value)))
 
 ;; Rules for `load*` + ALU op + `store*` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
