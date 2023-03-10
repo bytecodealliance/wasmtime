@@ -3298,9 +3298,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-mutate"
-version = "0.2.21"
+version = "0.2.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92ada47eda4f13d5dd83b77af7751dd44f1ab8120c01f2fca5b78b49080cf82c"
+checksum = "956f9fd2f785491bdb243ae608c53fd6bb9956f9e174c1fc5a77354fce396698"
 dependencies = [
  "egg",
  "log",
@@ -3383,9 +3383,9 @@ dependencies = [
 
 [[package]]
 name = "wasmprinter"
-version = "0.2.53"
+version = "0.2.54"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5aa44d546e4e4479f2e91035fa497c0a05cffbf22413ad05bf0b06a789b9118f"
+checksum = "2dc17ae63836d010a2bf001c26a5fedbb9a05e5f71117fb63e0ab878bfbe1ca3"
 dependencies = [
  "anyhow",
  "wasmparser",
