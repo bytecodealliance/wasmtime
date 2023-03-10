@@ -37,22 +37,10 @@ fn insert_opcode(
         vals.push(val);
     }
 
-    // For pretty much every instruction the control type is the return type
-    // except for Iconcat and Isplit which are *special* and the control type
-    // is the input type.
-    let ctrl_type = if [
-        Opcode::Iconcat,
-        Opcode::Isplit,
-        Opcode::UwidenHigh,
-        Opcode::SwidenHigh,
-        Opcode::UwidenLow,
-        Opcode::SwidenLow,
-        Opcode::Snarrow,
-        Opcode::Unarrow,
-        Opcode::Uunarrow,
-    ]
-    .contains(&opcode)
-    {
+    // Some opcodes require us to look at their input arguments to determine the
+    // controlling type. This is not the general case, but we can neatly check this
+    // using `requires_typevar_operand`.
+    let ctrl_type = if opcode.constraints().requires_typevar_operand() {
         args.first()
     } else {
         rets.first()
@@ -171,7 +159,6 @@ fn insert_cmp(
             }
             _ => &[],
         };
-
         if unimplemented_ccs.contains(&cc) {
             return Err(arbitrary::Error::IncorrectFormat.into());
         }
@@ -342,7 +329,7 @@ fn insert_atomic_cas(
 fn insert_shuffle(
     fgen: &mut FunctionGenerator,
     builder: &mut FunctionBuilder,
-    _: Opcode,
+    opcode: Opcode,
     _: &'static [Type],
     rets: &'static [Type],
 ) -> Result<()> {
@@ -357,6 +344,10 @@ fn insert_shuffle(
         builder.func.dfg.immediates.push(lanes)
     };
 
+    // This function is called for any `InstructionFormat::Shuffle`. Which today is just
+    // `shuffle`, but lets assert that, just to be sure we don't accidentally insert
+    // something else.
+    assert_eq!(opcode, Opcode::Shuffle);
     let res = builder.ins().shuffle(lhs, rhs, mask);
 
     let target_var = fgen.get_variable_of_type(ctrl_type)?;
