@@ -111,9 +111,17 @@ fn annotate_asm(
 
     let mut address_map_iter = address_map.into_iter().peekable();
     let mut current_entry = address_map_iter.next();
-    let mut wasm_offset_for_address = |address: u32| -> Option<WasmOffset> {
+    let mut wasm_offset_for_address = |start: usize, address: u32| -> Option<WasmOffset> {
+        // Consume any entries that happened before the current function for the
+        // first instruction.
+        while current_entry.map_or(false, |cur| cur.0 < start) {
+            current_entry = address_map_iter.next();
+        }
+
+        // Next advance the address map up to the current `address` specified,
+        // including it.
         while address_map_iter.peek().map_or(false, |next_entry| {
-            u32::try_from(next_entry.0).unwrap() < address
+            u32::try_from(next_entry.0).unwrap() <= address
         }) {
             current_entry = address_map_iter.next();
         }
@@ -126,7 +134,7 @@ fn annotate_asm(
         .map(|(start, len)| {
             let body = &text[start..][..len];
 
-            let cs = match target.architecture {
+            let mut cs = match target.architecture {
                 target_lexicon::Architecture::Aarch64(_) => capstone::Capstone::new()
                     .arm64()
                     .mode(capstone::arch::arm64::ArchMode::Arm)
@@ -150,6 +158,12 @@ fn annotate_asm(
                 _ => anyhow::bail!("Unsupported target: {target}"),
             };
 
+            // This tells capstone to skip over anything that looks like data,
+            // such as inline constant pools and things like that. This also
+            // additionally is required to skip over trapping instructions on
+            // AArch64.
+            cs.set_skipdata(true).unwrap();
+
             let instructions = cs
                 .disasm_all(body, start as u64)
                 .map_err(|e| anyhow::anyhow!("{e}"))?;
@@ -157,7 +171,7 @@ fn annotate_asm(
                 .iter()
                 .map(|inst| {
                     let address = u32::try_from(inst.address()).unwrap();
-                    let wasm_offset = wasm_offset_for_address(address);
+                    let wasm_offset = wasm_offset_for_address(start, address);
                     Ok(AnnotatedInstruction {
                         wasm_offset,
                         address,
