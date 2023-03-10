@@ -196,6 +196,11 @@ pub struct CommonOptions {
     #[clap(long, value_name = "SIZE")]
     pub dynamic_memory_guard_size: Option<u64>,
 
+    /// Bytes to reserve at the end of linear memory for growth for dynamic
+    /// memories.
+    #[clap(long, value_name = "SIZE")]
+    pub dynamic_memory_reserved_for_growth: Option<u64>,
+
     /// Enable Cranelift's internal debug verifier (expensive)
     #[clap(long)]
     pub enable_cranelift_debug_verifier: bool,
@@ -322,6 +327,9 @@ impl CommonOptions {
 
         if let Some(size) = self.dynamic_memory_guard_size {
             config.dynamic_memory_guard_size(size);
+        }
+        if let Some(size) = self.dynamic_memory_reserved_for_growth {
+            config.dynamic_memory_reserved_for_growth(size);
         }
 
         // If fuel has been configured, set the `consume fuel` flag on the config.
