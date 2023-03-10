@@ -85,6 +85,8 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
             cfg.static_memory_maximum_size(0);
         }
         cfg.dynamic_memory_reserved_for_growth(0);
+        cfg.static_memory_guard_size(0);
+        cfg.dynamic_memory_guard_size(0);
     }
 
     let _pooling_lock = if pooling {
