@@ -1925,6 +1925,12 @@
 (rule (normalize_cmp_value $I64  r _) r)
 (rule (normalize_cmp_value $I128 r _) r)
 
+(decl normalize_fcvt_from_int (ValueRegs Type ExtendOp) ValueRegs)
+(rule 2 (normalize_fcvt_from_int r (fits_in_16 ty) op)
+  (extend r op ty $I64))
+(rule 1 (normalize_fcvt_from_int r _ _)
+  r)
+
 ;; Convert a truthy value, possibly of more than one register (an
 ;; I128), to one register. If narrower than 64 bits, must have already
 ;; been masked (e.g. by `normalize_cmp_value`).

@@ -802,12 +802,12 @@
 ;;;;;  Rules for `fcvt_from_sint`;;;;;;;;;
 (rule
   (lower (has_type to (fcvt_from_sint v @ (value_type from))))
-  (fpu_rr (int_convert_2_float_op from $true to) to v))
+  (fpu_rr (int_convert_2_float_op from $true to) to (normalize_fcvt_from_int v from (ExtendOp.Signed))))
 
 ;;;;;  Rules for `fcvt_from_uint`;;;;;;;;;
 (rule
   (lower (has_type to (fcvt_from_uint v @ (value_type from))))
-  (fpu_rr (int_convert_2_float_op from $false to) to v))
+  (fpu_rr (int_convert_2_float_op from $false to) to (normalize_fcvt_from_int v from (ExtendOp.Zero))))
 
 ;;;;;  Rules for `symbol_value`;;;;;;;;;
 (rule
