@@ -131,6 +131,11 @@
 (rule 3 (lower (shuffle a b (shuffle_dup64_from_imm n)))
         (vec_dup_from_fpu a (VectorSize.Size64x2) n))
 
+;; If the `Immediate` specified to the extractor looks like a duplication of the
+;; `n`th lane of the first vector of size K-byte lanes, then each extractor
+;; returns the `n` value as a `u8` to be used as part of a `vec_dup_from_fpu`
+;; instruction. Note that there's a different extractor for each bit-width of
+;; lane.
 (decl shuffle_dup8_from_imm (u8) Immediate)
 (extern extractor shuffle_dup8_from_imm shuffle_dup8_from_imm)
 (decl shuffle_dup16_from_imm (u8) Immediate)
@@ -144,6 +149,12 @@
 ;; bytes", that's an `ext` instruction.
 (rule 2 (lower (shuffle a b (vec_extract_imm4_from_immediate n)))
         (vec_extract a b n))
+
+;; Attempts to extract `n` from the specified shuffle `Immediate` where each
+;; byte of the `Immediate` is a consecutive sequence starting from `n`. This
+;; value of `n` is used as part of the `vec_extract` instruction which extracts
+;; consecutive bytes from two vectors into one final vector, offset by `n`
+;; bytes.
 (decl vec_extract_imm4_from_immediate (u8) Immediate)
 (extern extractor vec_extract_imm4_from_immediate vec_extract_imm4_from_immediate)
 
