@@ -1699,7 +1699,11 @@ impl AvxOpcode {
             | AvxOpcode::Vmovsd
             | AvxOpcode::Vmovups
             | AvxOpcode::Vmovupd
-            | AvxOpcode::Vmovdqu => {
+            | AvxOpcode::Vmovdqu
+            | AvxOpcode::Vpextrb
+            | AvxOpcode::Vpextrw
+            | AvxOpcode::Vpextrd
+            | AvxOpcode::Vpextrq => {
                 smallvec![InstructionSet::AVX]
             }
         }

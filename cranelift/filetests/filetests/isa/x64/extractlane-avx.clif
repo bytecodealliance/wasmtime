@@ -1,5 +1,5 @@
 test compile precise-output
-target x86_64
+target x86_64 has_avx
 
 function %f1(i8x16) -> i8 {
 block0(v0: i8x16):
@@ -11,7 +11,7 @@ block0(v0: i8x16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pextrb  $1, %xmm0, %rax
+;   vpextrb $1, %xmm0, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -21,7 +21,7 @@ block0(v0: i8x16):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   pextrb $1, %xmm0, %eax
+;   vpextrb $1, %xmm0, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -36,7 +36,7 @@ block0(v0: i16x8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pextrw  $1, %xmm0, %rax
+;   vpextrw $1, %xmm0, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -46,7 +46,7 @@ block0(v0: i16x8):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   pextrw $1, %xmm0, %eax
+;   vpextrw $1, %xmm0, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -61,7 +61,7 @@ block0(v0: i32x4):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pextrd  $1, %xmm0, %rax
+;   vpextrd $1, %xmm0, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -71,7 +71,7 @@ block0(v0: i32x4):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   pextrd $1, %xmm0, %eax
+;   vpextrd $1, %xmm0, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -86,7 +86,7 @@ block0(v0: i64x2):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pextrq  $1, %xmm0, %rax
+;   vpextrq $1, %xmm0, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -96,7 +96,7 @@ block0(v0: i64x2):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   pextrq $1, %xmm0, %rax
+;   vpextrq $1, %xmm0, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -111,7 +111,7 @@ block0(v0: f32x4):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pshufd  $1, %xmm0, %xmm0
+;   vpshufd $1, %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -121,7 +121,7 @@ block0(v0: f32x4):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   pshufd $1, %xmm0, %xmm0
+;   vpshufd $1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -136,7 +136,7 @@ block0(v0: f64x2):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pshufd  $238, %xmm0, %xmm0
+;   vpshufd $238, %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -146,7 +146,7 @@ block0(v0: f64x2):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   pshufd $0xee, %xmm0, %xmm0
+;   vpshufd $0xee, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -162,7 +162,7 @@ block0(v0: i8x16, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pextrb  $0, %xmm0, 0(%rdi)
+;   vpextrb $0, %xmm0, 0(%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -172,7 +172,7 @@ block0(v0: i8x16, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   pextrb $0, %xmm0, (%rdi) ; trap: heap_oob
+;   vpextrb $0, %xmm0, (%rdi) ; trap: heap_oob
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -188,7 +188,7 @@ block0(v0: i16x8, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pextrw  $0, %xmm0, 0(%rdi)
+;   vpextrw $0, %xmm0, 0(%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -198,7 +198,7 @@ block0(v0: i16x8, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   pextrw $0, %xmm0, (%rdi) ; trap: heap_oob
+;   vpextrw $0, %xmm0, (%rdi) ; trap: heap_oob
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -214,7 +214,7 @@ block0(v0: i32x4, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pextrd  $0, %xmm0, 0(%rdi)
+;   vpextrd $0, %xmm0, 0(%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -224,7 +224,7 @@ block0(v0: i32x4, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   pextrd $0, %xmm0, (%rdi) ; trap: heap_oob
+;   vpextrd $0, %xmm0, (%rdi) ; trap: heap_oob
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -240,7 +240,7 @@ block0(v0: f32x4, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movss   %xmm0, 0(%rdi)
+;   vmovss  %xmm0, 0(%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -250,7 +250,7 @@ block0(v0: f32x4, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movss %xmm0, (%rdi) ; trap: heap_oob
+;   vmovss %xmm0, (%rdi) ; trap: heap_oob
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -266,7 +266,7 @@ block0(v0: i64x2, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pextrq  $0, %xmm0, 0(%rdi)
+;   vpextrq $0, %xmm0, 0(%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -276,7 +276,7 @@ block0(v0: i64x2, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   pextrq $0, %xmm0, (%rdi) ; trap: heap_oob
+;   vpextrq $0, %xmm0, (%rdi) ; trap: heap_oob
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -292,7 +292,7 @@ block0(v0: f64x2, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movsd   %xmm0, 0(%rdi)
+;   vmovsd  %xmm0, 0(%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -302,7 +302,7 @@ block0(v0: f64x2, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movsd %xmm0, (%rdi) ; trap: heap_oob
+;   vmovsd %xmm0, (%rdi) ; trap: heap_oob
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

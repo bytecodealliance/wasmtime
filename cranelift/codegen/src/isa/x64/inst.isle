@@ -290,8 +290,18 @@
        ;; XMM (scalar or vector) unary op (from xmm to reg/mem) using the
        ;; VEX prefix
        (XmmMovRMVex (op AvxOpcode)
-                    (src Reg)
+                    (src Xmm)
                     (dst SyntheticAmode))
+       (XmmMovRMImmVex (op AvxOpcode)
+                       (src Xmm)
+                       (dst SyntheticAmode)
+                       (imm u8))
+
+       ;; XMM (scalar) unary op (from xmm to integer reg): vpextr{w,b,d,q}
+       (XmmToGprImmVex (op AvxOpcode)
+                       (src Xmm)
+                       (dst WritableGpr)
+                       (imm u8))
 
        ;; XMM (scalar or vector) binary op that relies on the EVEX
        ;; prefix. Takes two inputs.
@@ -343,8 +353,12 @@
        ;; XMM (scalar or vector) unary op (from xmm to reg/mem): stores, movd,
        ;; movq
        (XmmMovRM (op SseOpcode)
-                 (src Reg)
+                 (src Xmm)
                  (dst SyntheticAmode))
+       (XmmMovRMImm (op SseOpcode)
+                    (src Xmm)
+                    (dst SyntheticAmode)
+                    (imm u8))
 
        ;; XMM (scalar) unary op (from xmm to integer reg): movd, movq,
        ;; cvtts{s,d}2si
@@ -1364,6 +1378,10 @@
             Vmovups
             Vmovupd
             Vmovdqu
+            Vpextrb
+            Vpextrw
+            Vpextrd
+            Vpextrq
           ))
 
 (type Avx512Opcode extern
@@ -2043,9 +2061,17 @@
 (rule (xmm_movrm op addr data)
       (SideEffectNoResult.Inst (MInst.XmmMovRM op data addr)))
 
+(decl xmm_movrm_imm (SseOpcode SyntheticAmode Xmm u8) SideEffectNoResult)
+(rule (xmm_movrm_imm op addr data imm)
+      (SideEffectNoResult.Inst (MInst.XmmMovRMImm op data addr imm)))
+
 (decl xmm_movrm_vex (AvxOpcode SyntheticAmode Xmm) SideEffectNoResult)
 (rule (xmm_movrm_vex op addr data)
       (SideEffectNoResult.Inst (MInst.XmmMovRMVex op data addr)))
+
+(decl xmm_movrm_imm_vex (AvxOpcode SyntheticAmode Xmm u8) SideEffectNoResult)
+(rule (xmm_movrm_imm_vex op addr data imm)
+      (SideEffectNoResult.Inst (MInst.XmmMovRMImmVex op data addr imm)))
 
 ;; Load a constant into an XMM register.
 (decl x64_xmm_load_const (Type VCodeConstant) Xmm)
@@ -3603,21 +3629,61 @@
 (decl x64_pextrb (Xmm u8) Gpr)
 (rule (x64_pextrb src lane)
       (xmm_to_gpr_imm (SseOpcode.Pextrb) src lane))
+(rule 1 (x64_pextrb src lane)
+        (if-let $true (has_avx))
+        (xmm_to_gpr_imm_vex (AvxOpcode.Vpextrb) src lane))
+
+(decl x64_pextrb_store (SyntheticAmode Xmm u8) SideEffectNoResult)
+(rule (x64_pextrb_store addr src lane)
+      (xmm_movrm_imm (SseOpcode.Pextrb) addr src lane))
+(rule 1 (x64_pextrb_store addr src lane)
+        (if-let $true (has_avx))
+        (xmm_movrm_imm_vex (AvxOpcode.Vpextrb) addr src lane))
 
 ;; Helper for creating `pextrw` instructions.
 (decl x64_pextrw (Xmm u8) Gpr)
 (rule (x64_pextrw src lane)
       (xmm_to_gpr_imm (SseOpcode.Pextrw) src lane))
+(rule 1 (x64_pextrw src lane)
+        (if-let $true (has_avx))
+        (xmm_to_gpr_imm_vex (AvxOpcode.Vpextrw) src lane))
+
+(decl x64_pextrw_store (SyntheticAmode Xmm u8) SideEffectNoResult)
+(rule (x64_pextrw_store addr src lane)
+      (xmm_movrm_imm (SseOpcode.Pextrw) addr src lane))
+(rule 1 (x64_pextrw_store addr src lane)
+        (if-let $true (has_avx))
+        (xmm_movrm_imm_vex (AvxOpcode.Vpextrw) addr src lane))
 
 ;; Helper for creating `pextrd` instructions.
 (decl x64_pextrd (Xmm u8) Gpr)
 (rule (x64_pextrd src lane)
       (xmm_to_gpr_imm (SseOpcode.Pextrd) src lane))
+(rule 1 (x64_pextrd src lane)
+        (if-let $true (has_avx))
+        (xmm_to_gpr_imm_vex (AvxOpcode.Vpextrd) src lane))
+
+(decl x64_pextrd_store (SyntheticAmode Xmm u8) SideEffectNoResult)
+(rule (x64_pextrd_store addr src lane)
+      (xmm_movrm_imm (SseOpcode.Pextrd) addr src lane))
+(rule 1 (x64_pextrd_store addr src lane)
+        (if-let $true (has_avx))
+        (xmm_movrm_imm_vex (AvxOpcode.Vpextrd) addr src lane))
 
 ;; Helper for creating `pextrq` instructions.
 (decl x64_pextrq (Xmm u8) Gpr)
 (rule (x64_pextrq src lane)
       (xmm_to_gpr_imm (SseOpcode.Pextrq) src lane))
+(rule 1 (x64_pextrq src lane)
+        (if-let $true (has_avx))
+        (xmm_to_gpr_imm_vex (AvxOpcode.Vpextrq) src lane))
+
+(decl x64_pextrq_store (SyntheticAmode Xmm u8) SideEffectNoResult)
+(rule (x64_pextrq_store addr src lane)
+      (xmm_movrm_imm (SseOpcode.Pextrq) addr src lane))
+(rule 1 (x64_pextrq_store addr src lane)
+        (if-let $true (has_avx))
+        (xmm_movrm_imm_vex (AvxOpcode.Vpextrq) addr src lane))
 
 ;; Helper for creating `MInst.XmmToGpr` instructions.
 (decl xmm_to_gpr (SseOpcode Xmm OperandSize) Gpr)
@@ -3626,11 +3692,18 @@
             (_ Unit (emit (MInst.XmmToGpr op src dst size))))
         dst))
 
-;; Helper for creating `MInst.XmmToGpr` instructions.
+;; Helper for creating `MInst.XmmToGprImm` instructions.
 (decl xmm_to_gpr_imm (SseOpcode Xmm u8) Gpr)
 (rule (xmm_to_gpr_imm op src imm)
       (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.XmmToGprImm op src dst imm))))
+        dst))
+
+;; Helper for creating `MInst.XmmToGprImmVex` instructions.
+(decl xmm_to_gpr_imm_vex (AvxOpcode Xmm u8) Gpr)
+(rule (xmm_to_gpr_imm_vex op src imm)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.XmmToGprImmVex op src dst imm))))
         dst))
 
 ;; Helper for creating `pmovmskb` instructions.
