@@ -85,6 +85,8 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
             cfg.static_memory_maximum_size(0);
         }
         cfg.dynamic_memory_reserved_for_growth(0);
+        cfg.static_memory_guard_size(0);
+        cfg.dynamic_memory_guard_size(0);
     }
 
     let _pooling_lock = if pooling {
@@ -101,7 +103,7 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
         // fails to grow, the values here will need to be adjusted.
         let mut pool = PoolingAllocationConfig::default();
         pool.instance_count(450)
-            .instance_memories(2)
+            .instance_memories(if multi_memory { 9 } else { 1 })
             .instance_tables(4)
             .instance_memory_pages(805);
         cfg.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
