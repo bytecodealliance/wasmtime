@@ -324,8 +324,16 @@
 ;;;; Rules for `clz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type ty (clz x)))
   (lower_clz ty x))
+
 (rule 1 (lower (has_type $I128 (clz x)))
   (lower_clz_i128 x))
+  
+;;;; Rules for `cls` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type (fits_in_64 ty) (cls x)))
+  (lower_cls x ty))
+
+(rule 1 (lower (has_type $I128 (cls x)))
+  (lower_cls_i128 x))
 
 ;;;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type out_ty (uextend val @ (value_type in_ty))))
@@ -433,13 +441,6 @@
 
 (rule 1 (lower (has_type $I128 (rotr x y)))
   (lower_i128_rotr x y))
-
-
-;;;; Rules for `cls` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type (fits_in_64 ty) (cls x)))
-  (lower_cls x ty))
-(rule 1 (lower (has_type $I128 (cls x)))
-  (lower_cls_i128 x))
 
 
 ;;;; Rules for `fabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
