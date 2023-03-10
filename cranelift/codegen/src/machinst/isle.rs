@@ -586,6 +586,17 @@ macro_rules! isle_lower_prelude_methods {
             self.lower_ctx.gen_return(rets);
         }
 
+        /// Same as `shuffle32_from_imm`, but for 64-bit lane shuffles.
+        fn shuffle64_from_imm(&mut self, imm: Immediate) -> Option<(u8, u8)> {
+            use crate::machinst::isle::shuffle_imm_as_le_lane_idx;
+
+            let bytes = self.lower_ctx.get_immediate_data(imm).as_slice();
+            Some((
+                shuffle_imm_as_le_lane_idx(8, &bytes[0..8])?,
+                shuffle_imm_as_le_lane_idx(8, &bytes[8..16])?,
+            ))
+        }
+
         /// Attempts to interpret the shuffle immediate `imm` as a shuffle of
         /// 32-bit lanes, returning four integers, each of which is less than 8,
         /// which represents a permutation of 32-bit lanes as specified by

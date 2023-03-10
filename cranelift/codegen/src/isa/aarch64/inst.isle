@@ -553,7 +553,8 @@
        (VecDupFromFpu
         (rd WritableReg)
         (rn Reg)
-        (size VectorSize))
+        (size VectorSize)
+        (lane u8))
 
        ;; Duplicate FP immediate to vector.
        (VecDupFPImm
@@ -1390,8 +1391,18 @@
     (Addp)
     ;; Zip vectors (primary) [meaning, high halves]
     (Zip1)
+    ;; Zip vectors (secondary)
+    (Zip2)
     ;; Signed saturating rounding doubling multiply returning high half
     (Sqrdmulh)
+    ;; Unzip vectors (primary)
+    (Uzp1)
+    ;; Unzip vectors (secondary)
+    (Uzp2)
+    ;; Transpose vectors (primary)
+    (Trn1)
+    ;; Transpose vectors (secondary)
+    (Trn2)
 ))
 
 ;; A Vector ALU operation which modifies a source register.
@@ -1420,6 +1431,10 @@
     (Fneg)
     ;; Floating-point square root
     (Fsqrt)
+    ;; Reverse elements in 16-bit lanes
+    (Rev16)
+    ;; Reverse elements in 32-bit lanes
+    (Rev32)
     ;; Reverse elements in 64-bit doublewords
     (Rev64)
     ;; Floating-point convert to signed integer, rounding toward zero
@@ -1887,10 +1902,10 @@
         dst))
 
 ;; Helper for emitting `MInst.VecDupFromFpu` instructions.
-(decl vec_dup_from_fpu (Reg VectorSize) Reg)
-(rule (vec_dup_from_fpu src size)
+(decl vec_dup_from_fpu (Reg VectorSize u8) Reg)
+(rule (vec_dup_from_fpu src size lane)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
-            (_ Unit (emit (MInst.VecDupFromFpu dst src size))))
+            (_ Unit (emit (MInst.VecDupFromFpu dst src size lane))))
         dst))
 
 ;; Helper for emitting `MInst.AluRRImm12` instructions.
@@ -2385,6 +2400,14 @@
 ;; Helper for generating `neg` instructions.
 (decl neg (Reg VectorSize) Reg)
 (rule (neg x size) (vec_misc (VecMisc2.Neg) x size))
+
+;; Helper for generating `rev16` instructions.
+(decl rev16 (Reg VectorSize) Reg)
+(rule (rev16 x size) (vec_misc (VecMisc2.Rev16) x size))
+
+;; Helper for generating `rev32` instructions.
+(decl rev32 (Reg VectorSize) Reg)
+(rule (rev32 x size) (vec_misc (VecMisc2.Rev32) x size))
 
 ;; Helper for generating `rev64` instructions.
 (decl rev64 (Reg VectorSize) Reg)
@@ -3767,3 +3790,27 @@
        (emit_side_effect (with_flags_side_effect
             (cmp (OperandSize.Size32) ridx jt_size)
             (jt_sequence ridx jt_info)))))
+
+;; Helper for emitting the `uzp1` instruction
+(decl vec_uzp1 (Reg Reg VectorSize) Reg)
+(rule (vec_uzp1 rn rm size) (vec_rrr (VecALUOp.Uzp1) rn rm size))
+
+;; Helper for emitting the `uzp2` instruction
+(decl vec_uzp2 (Reg Reg VectorSize) Reg)
+(rule (vec_uzp2 rn rm size) (vec_rrr (VecALUOp.Uzp2) rn rm size))
+
+;; Helper for emitting the `zip1` instruction
+(decl vec_zip1 (Reg Reg VectorSize) Reg)
+(rule (vec_zip1 rn rm size) (vec_rrr (VecALUOp.Zip1) rn rm size))
+
+;; Helper for emitting the `zip2` instruction
+(decl vec_zip2 (Reg Reg VectorSize) Reg)
+(rule (vec_zip2 rn rm size) (vec_rrr (VecALUOp.Zip2) rn rm size))
+
+;; Helper for emitting the `trn1` instruction
+(decl vec_trn1 (Reg Reg VectorSize) Reg)
+(rule (vec_trn1 rn rm size) (vec_rrr (VecALUOp.Trn1) rn rm size))
+
+;; Helper for emitting the `trn2` instruction
+(decl vec_trn2 (Reg Reg VectorSize) Reg)
+(rule (vec_trn2 rn rm size) (vec_rrr (VecALUOp.Trn2) rn rm size))

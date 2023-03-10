@@ -118,6 +118,118 @@
 
 ;;;; Rules for `shuffle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; When a single element of one vector is broadcast to all the destination
+;; lanes then the `dup` instruction can be used for this operation. Note that
+;; for now this only matches lane selection from the first vector `a`, but
+;; if necessary in the future rules can be added to select from `b` as well.
+(rule 6 (lower (shuffle a b (shuffle_dup8_from_imm n)))
+        (vec_dup_from_fpu a (VectorSize.Size8x16) n))
+(rule 5 (lower (shuffle a b (shuffle_dup16_from_imm n)))
+        (vec_dup_from_fpu a (VectorSize.Size16x8) n))
+(rule 4 (lower (shuffle a b (shuffle_dup32_from_imm n)))
+        (vec_dup_from_fpu a (VectorSize.Size32x4) n))
+(rule 3 (lower (shuffle a b (shuffle_dup64_from_imm n)))
+        (vec_dup_from_fpu a (VectorSize.Size64x2) n))
+
+;; If the `Immediate` specified to the extractor looks like a duplication of the
+;; `n`th lane of the first vector of size K-byte lanes, then each extractor
+;; returns the `n` value as a `u8` to be used as part of a `vec_dup_from_fpu`
+;; instruction. Note that there's a different extractor for each bit-width of
+;; lane.
+(decl shuffle_dup8_from_imm (u8) Immediate)
+(extern extractor shuffle_dup8_from_imm shuffle_dup8_from_imm)
+(decl shuffle_dup16_from_imm (u8) Immediate)
+(extern extractor shuffle_dup16_from_imm shuffle_dup16_from_imm)
+(decl shuffle_dup32_from_imm (u8) Immediate)
+(extern extractor shuffle_dup32_from_imm shuffle_dup32_from_imm)
+(decl shuffle_dup64_from_imm (u8) Immediate)
+(extern extractor shuffle_dup64_from_imm shuffle_dup64_from_imm)
+
+;; When the shuffle looks like "concatenate `a` and `b` and shift right by n*8
+;; bytes", that's an `ext` instruction.
+(rule 2 (lower (shuffle a b (vec_extract_imm4_from_immediate n)))
+        (vec_extract a b n))
+
+;; Attempts to extract `n` from the specified shuffle `Immediate` where each
+;; byte of the `Immediate` is a consecutive sequence starting from `n`. This
+;; value of `n` is used as part of the `vec_extract` instruction which extracts
+;; consecutive bytes from two vectors into one final vector, offset by `n`
+;; bytes.
+(decl vec_extract_imm4_from_immediate (u8) Immediate)
+(extern extractor vec_extract_imm4_from_immediate vec_extract_imm4_from_immediate)
+
+;; Rules for the `uzp1` and `uzp2` instructions which gather even-numbered lanes
+;; or odd-numbered lanes
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1e1c_1a18_1614_1210_0e0c_0a08_0604_0200)))
+      (vec_uzp1 a b (VectorSize.Size8x16)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1f1d_1b19_1715_1311_0f0d_0b09_0705_0301)))
+      (vec_uzp2 a b (VectorSize.Size8x16)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1d1c_1918_1514_1110_0d0c_0908_0504_0100)))
+      (vec_uzp1 a b (VectorSize.Size16x8)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1f1e_1b1a_1716_1312_0f0e_0b0a_0706_0302)))
+      (vec_uzp2 a b (VectorSize.Size16x8)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1b1a1918_13121110_0b0a0908_03020100)))
+      (vec_uzp1 a b (VectorSize.Size32x4)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1f1e1d1c_17161514_0f0e0d0c_07060504)))
+      (vec_uzp2 a b (VectorSize.Size32x4)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1716151413121110_0706050403020100)))
+      (vec_uzp1 a b (VectorSize.Size64x2)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1f1e1d1c1b1a1918_0f0e0d0c0b0a0908)))
+      (vec_uzp2 a b (VectorSize.Size64x2)))
+
+;; Rules for the `zip1` and `zip2` instructions which interleave lanes in the
+;; low or high halves of the two input vectors.
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1707_1606_1505_1404_1303_1202_1101_1000)))
+      (vec_zip1 a b (VectorSize.Size8x16)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1f0f_1e0e_1d0d_1c0c_1b0b_1a0a_1909_1808)))
+      (vec_zip2 a b (VectorSize.Size8x16)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1716_0706_1514_0504_1312_0302_1110_0100)))
+      (vec_zip1 a b (VectorSize.Size16x8)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1f1e_0f0e_1d1c_0d0c_1b1a_0b0a_1918_0908)))
+      (vec_zip2 a b (VectorSize.Size16x8)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x17161514_07060504_13121110_03020100)))
+      (vec_zip1 a b (VectorSize.Size32x4)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1f1e1d1c_0f0e0d0c_1b1a1918_0b0a0908)))
+      (vec_zip2 a b (VectorSize.Size32x4)))
+;; Note that zip1/zip2 for i64x2 vectors is omitted since it's already covered
+;; by the i64x2 cases of uzp1/uzp2 above where both zip and uzp have the same
+;; semantics for 64-bit lanes.
+
+;; Rules for the `trn1` and `trn2` instructions which interleave odd or even
+;; lanes in the two input vectors.
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1e0e_1c0c_1a0a_1808_1606_1404_1202_1000)))
+      (vec_trn1 a b (VectorSize.Size8x16)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1f0f_1d0d_1b0b_1909_1707_1505_1303_1101)))
+      (vec_trn2 a b (VectorSize.Size8x16)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1d1c_0d0c_1918_0908_1514_0504_1110_0100)))
+      (vec_trn1 a b (VectorSize.Size16x8)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1f1e_0f0e_1b1a_0b0a_1716_0706_1312_0302)))
+      (vec_trn2 a b (VectorSize.Size16x8)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1b1a1918_0b0a0908_13121110_03020100)))
+      (vec_trn1 a b (VectorSize.Size32x4)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1f1e1d1c_0f0e0d0c_17161514_07060504)))
+      (vec_trn2 a b (VectorSize.Size32x4)))
+;; Note that trn1/trn2 for i64x2 vectors is omitted since it's already covered
+;; by the i64x2 cases of uzp1/uzp2 above where both trn and uzp have the same
+;; semantics for 64-bit lanes.
+
+;; Rules for the `rev{16,32,64}` instructions where reversals happen at either
+;; the byte level, the 16-bit level, or 32-bit level. Note that all of these
+;; patterns only match reversals in the first operand, but they can
+;; theoretically be extended if necessary to reversals in the second operand.
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x0e0f_0c0d_0a0b_0809_0607_0405_0203_0001)))
+      (rev16 a (VectorSize.Size8x16)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x0c0d0e0f_08090a0b_04050607_00010203)))
+      (rev32 a (VectorSize.Size8x16)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x0d0c0f0e_09080b0a_05040706_01000302)))
+      (rev32 a (VectorSize.Size16x8)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x08090a0b0c0d0e0f_0001020304050607)))
+      (rev64 a (VectorSize.Size8x16)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x09080b0a0d0c0f0e_0100030205040706)))
+      (rev64 a (VectorSize.Size16x8)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x0b0a09080f0e0d0c_0302010007060504)))
+      (rev64 a (VectorSize.Size32x4)))
+
 (rule (lower (has_type ty (shuffle rn rn2 (u128_from_immediate mask))))
       (let ((mask_reg Reg (constant_f128 mask)))
        (vec_tbl2 rn rn2 mask_reg ty)))
@@ -1840,7 +1952,7 @@
       (vec_dup x (vector_size ty)))
 
 (rule -2 (lower (has_type ty (splat x @ (value_type (ty_scalar_float _)))))
-      (vec_dup_from_fpu x (vector_size ty)))
+      (vec_dup_from_fpu x (vector_size ty) 0))
 
 (rule (lower (has_type ty (splat (f32const (u64_from_ieee32 n)))))
       (splat_const n (vector_size ty)))

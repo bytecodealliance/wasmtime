@@ -1977,8 +1977,20 @@ impl MachInstEmit for Inst {
                         );
                         (0b1, 0b11111, enc_size)
                     }
+                    VecMisc2::Rev16 => {
+                        debug_assert_eq!(size, VectorSize::Size8x16);
+                        (0b0, 0b00001, enc_size)
+                    }
+                    VecMisc2::Rev32 => {
+                        debug_assert!(size == VectorSize::Size8x16 || size == VectorSize::Size16x8);
+                        (0b1, 0b00000, enc_size)
+                    }
                     VecMisc2::Rev64 => {
-                        debug_assert_ne!(VectorSize::Size64x2, size);
+                        debug_assert!(
+                            size == VectorSize::Size8x16
+                                || size == VectorSize::Size16x8
+                                || size == VectorSize::Size32x4
+                        );
                         (0b0, 0b00000, enc_size)
                     }
                     VecMisc2::Fcvtzs => {
@@ -2493,13 +2505,27 @@ impl MachInstEmit for Inst {
                         | machreg_to_vec(rd.to_reg()),
                 );
             }
-            &Inst::VecDupFromFpu { rd, rn, size } => {
+            &Inst::VecDupFromFpu { rd, rn, size, lane } => {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
                 let q = size.is_128bits() as u32;
                 let imm5 = match size.lane_size() {
-                    ScalarSize::Size32 => 0b00100,
-                    ScalarSize::Size64 => 0b01000,
+                    ScalarSize::Size8 => {
+                        assert!(lane < 16);
+                        0b00001 | (u32::from(lane) << 1)
+                    }
+                    ScalarSize::Size16 => {
+                        assert!(lane < 8);
+                        0b00010 | (u32::from(lane) << 2)
+                    }
+                    ScalarSize::Size32 => {
+                        assert!(lane < 4);
+                        0b00100 | (u32::from(lane) << 3)
+                    }
+                    ScalarSize::Size64 => {
+                        assert!(lane < 2);
+                        0b01000 | (u32::from(lane) << 4)
+                    }
                     _ => unimplemented!(),
                 };
                 sink.put4(
@@ -2870,6 +2896,7 @@ impl MachInstEmit for Inst {
                     VecALUOp::Fmul => (0b001_01110_00_1, 0b110111),
                     VecALUOp::Addp => (0b000_01110_00_1 | enc_size << 1, 0b101111),
                     VecALUOp::Zip1 => (0b01001110_00_0 | enc_size << 1, 0b001110),
+                    VecALUOp::Zip2 => (0b01001110_00_0 | enc_size << 1, 0b011110),
                     VecALUOp::Sqrdmulh => {
                         debug_assert!(
                             size.lane_size() == ScalarSize::Size16
@@ -2878,6 +2905,10 @@ impl MachInstEmit for Inst {
 
                         (0b001_01110_00_1 | enc_size << 1, 0b101101)
                     }
+                    VecALUOp::Uzp1 => (0b01001110_00_0 | enc_size << 1, 0b000110),
+                    VecALUOp::Uzp2 => (0b01001110_00_0 | enc_size << 1, 0b010110),
+                    VecALUOp::Trn1 => (0b01001110_00_0 | enc_size << 1, 0b001010),
+                    VecALUOp::Trn2 => (0b01001110_00_0 | enc_size << 1, 0b011010),
                 };
                 let top11 = if is_float {
                     top11 | size.enc_float_size() << 1

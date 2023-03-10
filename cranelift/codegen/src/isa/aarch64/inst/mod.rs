@@ -2123,9 +2123,9 @@ impl Inst {
                 let rn = pretty_print_ireg(rn, size.operand_size(), allocs);
                 format!("dup {}, {}", rd, rn)
             }
-            &Inst::VecDupFromFpu { rd, rn, size } => {
+            &Inst::VecDupFromFpu { rd, rn, size, lane } => {
                 let rd = pretty_print_vreg_vector(rd.to_reg(), size, allocs);
-                let rn = pretty_print_vreg_element(rn, 0, size.lane_size(), allocs);
+                let rn = pretty_print_vreg_element(rn, lane.into(), size.lane_size(), allocs);
                 format!("dup {}, {}", rd, rn)
             }
             &Inst::VecDupFPImm { rd, imm, size } => {
@@ -2345,7 +2345,12 @@ impl Inst {
                     VecALUOp::Fmul => ("fmul", size),
                     VecALUOp::Addp => ("addp", size),
                     VecALUOp::Zip1 => ("zip1", size),
+                    VecALUOp::Zip2 => ("zip2", size),
                     VecALUOp::Sqrdmulh => ("sqrdmulh", size),
+                    VecALUOp::Uzp1 => ("uzp1", size),
+                    VecALUOp::Uzp2 => ("uzp2", size),
+                    VecALUOp::Trn1 => ("trn1", size),
+                    VecALUOp::Trn2 => ("trn2", size),
                 };
                 let rd = pretty_print_vreg_vector(rd.to_reg(), size, allocs);
                 let rn = pretty_print_vreg_vector(rn, size, allocs);
@@ -2471,6 +2476,8 @@ impl Inst {
                     VecMisc2::Fabs => ("fabs", size, ""),
                     VecMisc2::Fneg => ("fneg", size, ""),
                     VecMisc2::Fsqrt => ("fsqrt", size, ""),
+                    VecMisc2::Rev16 => ("rev16", size, ""),
+                    VecMisc2::Rev32 => ("rev32", size, ""),
                     VecMisc2::Rev64 => ("rev64", size, ""),
                     VecMisc2::Fcvtzs => ("fcvtzs", size, ""),
                     VecMisc2::Fcvtzu => ("fcvtzu", size, ""),
