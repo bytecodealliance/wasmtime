@@ -171,9 +171,10 @@ impl TestCase {
 
         // TestCase is meant to be consumed by a runner, so we make the assumption here that we're
         // generating a TargetIsa for the host.
-        let builder =
+        let mut builder =
             builder_with_options(true).expect("Unable to build a TargetIsa for the current host");
         let flags = gen.generate_flags(builder.triple().architecture)?;
+        gen.set_isa_flags(&mut builder, IsaFlagGen::Host)?;
         let isa = builder.finish(flags)?;
 
         // When generating functions, we allow each function to call any function that has

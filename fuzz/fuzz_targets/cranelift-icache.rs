@@ -48,13 +48,15 @@ impl FunctionWithIsa {
         // a supported one, so that the same fuzz input works across different build
         // configurations.
         let target = u.choose(isa::ALL_ARCHITECTURES)?;
-        let builder = isa::lookup_by_name(target).map_err(|_| arbitrary::Error::IncorrectFormat)?;
+        let mut builder =
+            isa::lookup_by_name(target).map_err(|_| arbitrary::Error::IncorrectFormat)?;
         let architecture = builder.triple().architecture;
 
         let mut gen = FuzzGen::new(u);
         let flags = gen
             .generate_flags(architecture)
             .map_err(|_| arbitrary::Error::IncorrectFormat)?;
+        gen.set_isa_flags(&mut builder, IsaFlagGen::All)?;
         let isa = builder
             .finish(flags)
             .map_err(|_| arbitrary::Error::IncorrectFormat)?;

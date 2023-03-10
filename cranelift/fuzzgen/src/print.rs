@@ -1,6 +1,6 @@
 use cranelift::codegen::data_value::DataValue;
 use cranelift::codegen::ir::Function;
-use cranelift::prelude::settings;
+use cranelift::prelude::settings::{self, SettingKind};
 use cranelift::prelude::*;
 use std::fmt;
 
@@ -70,7 +70,9 @@ impl<'a> fmt::Debug for PrintableTestCase<'a> {
 
         write_non_default_flags(f, self.isa.flags())?;
 
-        writeln!(f, "target {}\n", self.isa.triple().architecture)?;
+        write!(f, "target {} ", self.isa.triple().architecture)?;
+        write_non_default_isa_flags(f, &self.isa)?;
+        write!(f, "\n\n")?;
 
         // Print the functions backwards, so that the main function is printed last
         // and near the test inputs for run test cases.
@@ -123,6 +125,36 @@ fn write_non_default_flags(f: &mut fmt::Formatter<'_>, flags: &settings::Flags) 
 
         if default.value_string() != flag.value_string() {
             writeln!(f, "set {}={}", flag.name, flag.value_string())?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Print non default ISA flags in a single line, as used in `target` declarations.
+fn write_non_default_isa_flags(
+    f: &mut fmt::Formatter<'_>,
+    isa: &isa::OwnedTargetIsa,
+) -> fmt::Result {
+    let default_isa = isa::lookup(isa.triple().clone())
+        .unwrap()
+        .finish(isa.flags().clone())
+        .unwrap();
+
+    for (default, flag) in default_isa.isa_flags().iter().zip(isa.isa_flags()) {
+        assert_eq!(default.name, flag.name);
+
+        // Skip default flags, putting them all out there is too verbose.
+        if default.value_string() == flag.value_string() {
+            continue;
+        }
+
+        // On boolean flags we can use the shorthand syntax instead of just specifying the flag name.
+        // This is slightly neater than the full syntax.
+        if flag.kind() == SettingKind::Bool && flag.value_string() == "true" {
+            write!(f, "{} ", flag.name)?;
+        } else {
+            write!(f, "{}={} ", flag.name, flag.value_string())?;
         }
     }
 
