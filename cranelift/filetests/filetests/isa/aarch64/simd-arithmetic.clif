@@ -341,12 +341,10 @@ block0(v0: i8x16):
 
 ; VCode:
 ; block0:
-;   shl v0.16b, v0.16b, #0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   shl v0.16b, v0.16b, #0
 ;   ret
 
 function %ishl_i16x8_full_width(i16x8) -> i16x8 {
@@ -358,12 +356,10 @@ block0(v0: i16x8):
 
 ; VCode:
 ; block0:
-;   shl v0.8h, v0.8h, #0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   shl v0.8h, v0.8h, #0
 ;   ret
 
 function %ishl_i32x4_full_width(i32x4) -> i32x4 {
@@ -375,12 +371,10 @@ block0(v0: i32x4):
 
 ; VCode:
 ; block0:
-;   shl v0.4s, v0.4s, #0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   shl v0.4s, v0.4s, #0
 ;   ret
 
 function %ishl_i64x2_full_width(i64x2) -> i64x2 {
@@ -392,12 +386,10 @@ block0(v0: i64x2):
 
 ; VCode:
 ; block0:
-;   shl v0.2d, v0.2d, #0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   shl v0.2d, v0.2d, #0
 ;   ret
 
 function %sshr_i8x16_full_width(i8x16) -> i8x16 {
