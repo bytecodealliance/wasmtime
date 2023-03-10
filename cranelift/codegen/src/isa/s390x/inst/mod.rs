@@ -261,10 +261,10 @@ impl Inst {
                 _ => InstructionSet::Base,
             },
             Inst::FpuRound { op, .. } => match op {
-                FpuRoundOp::ToSInt32 | FpuRoundOp::FromSInt32 => InstructionSet::MIE2,
-                FpuRoundOp::ToUInt32 | FpuRoundOp::FromUInt32 => InstructionSet::MIE2,
-                FpuRoundOp::ToSInt32x4 | FpuRoundOp::FromSInt32x4 => InstructionSet::MIE2,
-                FpuRoundOp::ToUInt32x4 | FpuRoundOp::FromUInt32x4 => InstructionSet::MIE2,
+                FpuRoundOp::ToSInt32 | FpuRoundOp::FromSInt32 => InstructionSet::VXRS_EXT2,
+                FpuRoundOp::ToUInt32 | FpuRoundOp::FromUInt32 => InstructionSet::VXRS_EXT2,
+                FpuRoundOp::ToSInt32x4 | FpuRoundOp::FromSInt32x4 => InstructionSet::VXRS_EXT2,
+                FpuRoundOp::ToUInt32x4 | FpuRoundOp::FromUInt32x4 => InstructionSet::VXRS_EXT2,
                 _ => InstructionSet::Base,
             },
 
