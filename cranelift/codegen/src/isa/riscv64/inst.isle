@@ -702,6 +702,20 @@
 (type AMO (primitive AMO))
 (type VecMachLabel extern (enum))
 
+;; Converters
+
+(convert u8 i32 u8_as_i32)
+(decl u8_as_i32 (u8) i32)
+(extern constructor u8_as_i32 u8_as_i32)
+
+(convert u8 u64 u8_as_u64)
+
+(decl convert_valueregs_reg (ValueRegs) Reg)
+(rule (convert_valueregs_reg x)
+  (value_regs_get x 0))
+(convert ValueRegs Reg convert_valueregs_reg)
+
+
 ;; ISA Extension helpers
 
 (decl pure has_zbkb () bool)
@@ -967,11 +981,6 @@
       (result Reg (alu_add low high)))
     (value_regs result (load_u64_constant 0))))
 
-(convert u8 i32 u8_as_i32)
-(decl u8_as_i32 (u8) i32)
-(extern constructor u8_as_i32 u8_as_i32)
-
-(convert u8 u64 u8_as_u64)
 (decl lower_clz (Type Reg) Reg)
 (rule
   (lower_clz ty rs)
@@ -1828,12 +1837,6 @@
     ;; move back to float register.
     (move_x_to_f tmp2 ty)))
 
-
-(decl convert_valueregs_reg (ValueRegs) Reg)
-(rule
-  (convert_valueregs_reg x)
-  (value_regs_get x 0))
-(convert ValueRegs Reg convert_valueregs_reg)
 
 ;;; lower icmp
 (decl lower_icmp (IntCC ValueRegs ValueRegs Type) Reg)
