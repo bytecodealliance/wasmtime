@@ -1297,7 +1297,7 @@
 (rule -2 (lower (has_type (ty_vec128 ty) (ishl x (iconst (u64_from_imm64 n)))))
         (ushl_vec_imm x (shift_masked_imm ty n) (vector_size ty)))
 
-(decl shift_masked_imm (Type u64) u8)
+(decl pure shift_masked_imm (Type u64) u8)
 (extern constructor shift_masked_imm shift_masked_imm)
 
 ;; Helper function to emit a shift operation with the opcode specified and
@@ -1354,13 +1354,20 @@
       (lower_ushr128 x (value_regs_get y 0)))
 
 ;; Vector shifts.
-(rule -3 (lower (has_type (ty_vec128 ty) (ushr x y)))
+;;
+;; Note that for constant shifts a 0-width shift can't be emitted so it's
+;; special cased to pass through the input as-is since a 0-shift doesn't modify
+;; the input anyway.
+(rule -4 (lower (has_type (ty_vec128 ty) (ushr x y)))
       (let ((size VectorSize (vector_size ty))
             (masked_shift_amt Reg (and_imm $I32 y (shift_mask ty)))
             (shift Reg (vec_dup (sub $I64 (zero_reg) masked_shift_amt) size)))
         (ushl x shift size)))
-(rule -2 (lower (has_type (ty_vec128 ty) (ushr x (iconst (u64_from_imm64 n)))))
+(rule -3 (lower (has_type (ty_vec128 ty) (ushr x (iconst (u64_from_imm64 n)))))
          (ushr_vec_imm x (shift_masked_imm ty n) (vector_size ty)))
+(rule -2 (lower (has_type (ty_vec128 ty) (ushr x (iconst (u64_from_imm64 n)))))
+          (if-let 0 (shift_masked_imm ty n))
+          x)
 
 ;;     lsr       lo_rshift, src_lo, amt
 ;;     lsr       hi_rshift, src_hi, amt
@@ -1392,7 +1399,7 @@
 ;;;; Rules for `sshr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Shift for i8/i16/i32.
-(rule -3 (lower (has_type (fits_in_32 ty) (sshr x y)))
+(rule -4 (lower (has_type (fits_in_32 ty) (sshr x y)))
       (do_shift (ALUOp.Asr) ty (put_in_reg_sext32 x) y))
 
 ;; Shift for i64.
@@ -1405,14 +1412,20 @@
 
 ;; Vector shifts.
 ;;
-;; Note that right shifts are implemented with a negative left shift.
-(rule -2 (lower (has_type (ty_vec128 ty) (sshr x y)))
+;; Note that right shifts are implemented with a negative left shift. Also note
+;; that for constant shifts a 0-width shift can't be emitted so it's special
+;; cased to pass through the input as-is since a 0-shift doesn't modify the
+;; input anyway.
+(rule -3 (lower (has_type (ty_vec128 ty) (sshr x y)))
       (let ((size VectorSize (vector_size ty))
             (masked_shift_amt Reg (and_imm $I32 y (shift_mask ty)))
             (shift Reg (vec_dup (sub $I64 (zero_reg) masked_shift_amt) size)))
         (sshl x shift size)))
-(rule -1 (lower (has_type (ty_vec128 ty) (sshr x (iconst (u64_from_imm64 n)))))
+(rule -2 (lower (has_type (ty_vec128 ty) (sshr x (iconst (u64_from_imm64 n)))))
           (sshr_vec_imm x (shift_masked_imm ty n) (vector_size ty)))
+(rule -1 (lower (has_type (ty_vec128 ty) (sshr x (iconst (u64_from_imm64 n)))))
+          (if-let 0 (shift_masked_imm ty n))
+          x)
 
 ;;     lsr       lo_rshift, src_lo, amt
 ;;     asr       hi_rshift, src_hi, amt
