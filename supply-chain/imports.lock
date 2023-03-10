@@ -1,6 +1,20 @@
 
 # cargo-vet imports lock
 
+[[publisher.wasm-mutate]]
+version = "0.2.22"
+when = "2023-03-10"
+user-id = 696
+user-login = "fitzgen"
+user-name = "Nick Fitzgerald"
+
+[[publisher.wasmprinter]]
+version = "0.2.54"
+when = "2023-03-10"
+user-id = 696
+user-login = "fitzgen"
+user-name = "Nick Fitzgerald"
+
 [audits.chromeos.criteria.crypto-safe]
 description = """
 All crypto algorithms in this crate have been reviewed by a relevant expert.
