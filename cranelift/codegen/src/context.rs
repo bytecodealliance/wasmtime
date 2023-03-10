@@ -213,7 +213,6 @@ impl Context {
     ///
     /// Returns information about the function's code and read-only data.
     pub fn compile(&mut self, isa: &dyn TargetIsa) -> CompileResult<&CompiledCode> {
-        let _tt = timing::compile();
         let stencil = self.compile_stencil(isa).map_err(|error| CompileError {
             inner: error,
             func: &self.func,
@@ -379,6 +378,8 @@ impl Context {
 
     /// Run optimizations via the egraph infrastructure.
     pub fn egraph_pass(&mut self) -> CodegenResult<()> {
+        let _tt = timing::egraph();
+
         trace!(
             "About to optimize with egraph phase:\n{}",
             self.func.display()
