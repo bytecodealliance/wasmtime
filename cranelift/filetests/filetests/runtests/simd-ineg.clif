@@ -1,0 +1,13 @@
+test run
+target aarch64
+target s390x
+set enable_simd
+target x86_64
+target x86_64 skylake
+
+function %ineg_i32x4(i32x4) -> i32x4 {
+block0(v0: i32x4):
+    v1 = ineg v0
+    return v1
+}
+; run: %ineg_i32x4([1 1 1 1]) == [-1 -1 -1 -1]

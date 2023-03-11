@@ -30,12 +30,6 @@ block0(v0: i32x4, v1: i32x4):
 }
 ; run: %isub_i32x4([1 1 1 1], [1 2 3 4]) == [0 -1 -2 -3]
 
-function %ineg_i32x4(i32x4) -> i32x4 {
-block0(v0: i32x4):
-    v1 = ineg v0
-    return v1
-}
-; run: %ineg_i32x4([1 1 1 1]) == [-1 -1 -1 -1]
 
 function %imul_i64x2(i64x2, i64x2) -> i64x2 {
 block0(v0: i64x2, v1: i64x2):
