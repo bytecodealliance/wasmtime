@@ -1042,7 +1042,7 @@ impl PrettyPrint for Inst {
                 let src1 = pretty_print_reg(src1.to_reg(), 8, allocs);
                 let src2 = src2.pretty_print(8, allocs);
 
-                format!("{} ${imm} {src1}, {src2}, {dst}", ljustify(op.to_string()))
+                format!("{} ${imm}, {src1}, {src2}, {dst}", ljustify(op.to_string()))
             }
 
             Inst::XmmVexPinsr {
@@ -1057,7 +1057,7 @@ impl PrettyPrint for Inst {
                 let src1 = pretty_print_reg(src1.to_reg(), 8, allocs);
                 let src2 = src2.pretty_print(8, allocs);
 
-                format!("{} ${imm} {src1}, {src2}, {dst}", ljustify(op.to_string()))
+                format!("{} ${imm}, {src1}, {src2}, {dst}", ljustify(op.to_string()))
             }
 
             Inst::XmmRmRVex3 {
