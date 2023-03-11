@@ -106,10 +106,10 @@ block0(v0: i64x2, v1: i64x2):
 
 ; VCode:
 ; block0:
-;   movz x4, #1
-;   dup v4.2d, x4
+;   movz x3, #1
+;   dup v5.2d, x3
 ;   orr v7.16b, v0.16b, v1.16b
-;   and v17.16b, v7.16b, v4.16b
+;   and v17.16b, v7.16b, v5.16b
 ;   ushr v19.2d, v0.2d, #1
 ;   ushr v21.2d, v1.2d, #1
 ;   add v23.2d, v19.2d, v21.2d
@@ -118,10 +118,10 @@ block0(v0: i64x2, v1: i64x2):
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov x4, #1
-;   dup v4.2d, x4
+;   mov x3, #1
+;   dup v5.2d, x3
 ;   orr v7.16b, v0.16b, v1.16b
-;   and v17.16b, v7.16b, v4.16b
+;   and v17.16b, v7.16b, v5.16b
 ;   ushr v19.2d, v0.2d, #1
 ;   ushr v21.2d, v1.2d, #1
 ;   add v23.2d, v19.2d, v21.2d

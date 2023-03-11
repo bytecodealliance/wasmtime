@@ -1194,6 +1194,16 @@
 (rule (lane_size (dynamic_lane 32 _)) (ScalarSize.Size32))
 (rule (lane_size (dynamic_lane 64 _)) (ScalarSize.Size64))
 
+;; Helper for extracting the size of a lane from the input `VectorSize`
+(decl pure vector_lane_size (VectorSize) ScalarSize)
+(rule (vector_lane_size (VectorSize.Size8x16)) (ScalarSize.Size8))
+(rule (vector_lane_size (VectorSize.Size8x8))  (ScalarSize.Size8))
+(rule (vector_lane_size (VectorSize.Size16x8)) (ScalarSize.Size16))
+(rule (vector_lane_size (VectorSize.Size16x4)) (ScalarSize.Size16))
+(rule (vector_lane_size (VectorSize.Size32x4)) (ScalarSize.Size32))
+(rule (vector_lane_size (VectorSize.Size32x2)) (ScalarSize.Size32))
+(rule (vector_lane_size (VectorSize.Size64x2)) (ScalarSize.Size64))
+
 (type Cond extern
   (enum
     (Eq)
@@ -1908,6 +1918,13 @@
             (_ Unit (emit (MInst.VecDupFromFpu dst src size lane))))
         dst))
 
+;; Helper for emitting `MInst.VecDupImm` instructions.
+(decl vec_dup_imm (ASIMDMovModImm bool VectorSize) Reg)
+(rule (vec_dup_imm imm invert size)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.VecDupImm dst imm invert size))))
+        dst))
+
 ;; Helper for emitting `MInst.AluRRImm12` instructions.
 (decl alu_rr_imm12 (ALUOp Type Reg Imm12) Reg)
 (rule (alu_rr_imm12 op ty src imm)
@@ -2156,6 +2173,13 @@
 (rule (mov_to_fpu x size)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_ Unit (emit (MInst.MovToFpu dst x size))))
+        dst))
+
+;; Helper for emitting `MInst.FpuMoveFPImm` instructions.
+(decl fpu_move_fp_imm (ASIMDFPModImm ScalarSize) Reg)
+(rule (fpu_move_fp_imm imm size)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.FpuMoveFPImm dst imm size))))
         dst))
 
 ;; Helper for emitting `MInst.MovToVec` instructions.
@@ -2986,24 +3010,122 @@
            (amode ty addr offset)))
 
 ;; Lower a constant f32.
-(decl constant_f32 (u64) Reg)
-;; TODO: Port lower_constant_f32() to ISLE.
-(extern constructor constant_f32 constant_f32)
+;;
+;; Note that we must make sure that all bits outside the lowest 32 are set to 0
+;; because this function is also used to load wider constants (that have zeros
+;; in their most significant bits).
+(decl constant_f32 (u32) Reg)
+(rule 2 (constant_f32 0)
+        (vec_dup_imm (asimd_mov_mod_imm_zero (ScalarSize.Size32))
+                     $false
+                     (VectorSize.Size32x2)))
+(rule 1 (constant_f32 n)
+        (if-let imm (asimd_fp_mod_imm_from_u64 n (ScalarSize.Size32)))
+        (fpu_move_fp_imm imm (ScalarSize.Size32)))
+(rule (constant_f32 n)
+      (mov_to_fpu (imm $I32 (ImmExtend.Zero) n) (ScalarSize.Size32)))
 
 ;; Lower a constant f64.
+;;
+;; Note that we must make sure that all bits outside the lowest 64 are set to 0
+;; because this function is also used to load wider constants (that have zeros
+;; in their most significant bits).
+;; TODO: Treat as half of a 128 bit vector and consider replicated patterns.
+;; Scalar MOVI might also be an option.
 (decl constant_f64 (u64) Reg)
-;; TODO: Port lower_constant_f64() to ISLE.
-(extern constructor constant_f64 constant_f64)
+(rule 4 (constant_f64 0)
+        (vec_dup_imm (asimd_mov_mod_imm_zero (ScalarSize.Size32))
+                     $false
+                     (VectorSize.Size32x2)))
+(rule 3 (constant_f64 n)
+        (if-let imm (asimd_fp_mod_imm_from_u64 n (ScalarSize.Size64)))
+        (fpu_move_fp_imm imm (ScalarSize.Size64)))
+(rule 2 (constant_f64 (u64_as_u32 n))
+        (constant_f32 n))
+(rule 1 (constant_f64 (u64_low32_bits_unset n))
+        (mov_to_fpu (imm $I64 (ImmExtend.Zero) n) (ScalarSize.Size64)))
+(rule (constant_f64 n)
+      (load_fpu_const64 n))
+
+;; Tests whether the low 32 bits in the input are all zero.
+(decl u64_low32_bits_unset (u64) u64)
+(extern extractor u64_low32_bits_unset u64_low32_bits_unset)
 
 ;; Lower a constant f128.
 (decl constant_f128 (u128) Reg)
-;; TODO: Port lower_constant_f128() to ISLE.
-(extern constructor constant_f128 constant_f128)
+(rule 3 (constant_f128 0)
+        (vec_dup_imm (asimd_mov_mod_imm_zero (ScalarSize.Size8))
+                     $false
+                     (VectorSize.Size8x16)))
+
+;; If the upper 64-bits are all zero then defer to `constant_f64`.
+(rule 2 (constant_f128 (u128_as_u64 n)) (constant_f64 n))
+
+;; If the low half of the u128 equals the high half then delegate to the splat
+;; logic as a splat of a 64-bit value.
+(rule 1 (constant_f128 (u128_replicated_u64 n))
+        (splat_const n (VectorSize.Size64x2)))
+
+;; Base case is to load the constant from memory.
+(rule (constant_f128 n)
+      (load_fpu_const128 n))
 
 ;; Lower a vector splat with a constant parameter.
+;;
+;; The 64-bit input here only uses the low bits for the lane size in
+;; `VectorSize` and all other bits are ignored.
 (decl splat_const (u64 VectorSize) Reg)
-;; TODO: Port lower_splat_const() to ISLE.
-(extern constructor splat_const splat_const)
+
+;; If the splat'd constant can itself be reduced in size then attempt to do so
+;; as it will make it easier to create the immediates in the instructions below.
+(rule 5 (splat_const (u64_replicated_u32 n) (VectorSize.Size64x2))
+        (splat_const n (VectorSize.Size32x4)))
+(rule 5 (splat_const (u32_replicated_u16 n) (VectorSize.Size32x4))
+        (splat_const n (VectorSize.Size16x8)))
+(rule 5 (splat_const (u32_replicated_u16 n) (VectorSize.Size32x2))
+        (splat_const n (VectorSize.Size16x4)))
+(rule 5 (splat_const (u16_replicated_u8 n) (VectorSize.Size16x8))
+        (splat_const n (VectorSize.Size8x16)))
+(rule 5 (splat_const (u16_replicated_u8 n) (VectorSize.Size16x4))
+        (splat_const n (VectorSize.Size8x8)))
+
+;; Special cases for `vec_dup_imm` instructions where the input is either
+;; negated or not.
+(rule 4 (splat_const n size)
+        (if-let imm (asimd_mov_mod_imm_from_u64 n (vector_lane_size size)))
+        (vec_dup_imm imm $false size))
+(rule 3 (splat_const n size)
+        (if-let imm (asimd_mov_mod_imm_from_u64 (u64_not n) (vector_lane_size size)))
+        (vec_dup_imm imm $true size))
+
+;; Special case a 32-bit splat where an immediate can be created by
+;; concatenating the 32-bit constant into a 64-bit value
+(rule 2 (splat_const n (VectorSize.Size32x4))
+        (if-let imm (asimd_mov_mod_imm_from_u64 (u64_or n (u64_shl n 32)) (ScalarSize.Size64)))
+        (vec_dup_imm imm $false (VectorSize.Size64x2)))
+(rule 2 (splat_const n (VectorSize.Size32x2))
+        (if-let imm (asimd_mov_mod_imm_from_u64 (u64_or n (u64_shl n 32)) (ScalarSize.Size64)))
+        (fpu_extend (vec_dup_imm imm $false (VectorSize.Size64x2)) (ScalarSize.Size64)))
+
+(rule 1 (splat_const n size)
+        (if-let imm (asimd_fp_mod_imm_from_u64 n (vector_lane_size size)))
+        (vec_dup_fp_imm imm size))
+
+;; The base case for splat is to use `vec_dup` with the immediate loaded into a
+;; register.
+(rule (splat_const n size)
+      (vec_dup (imm $I64 (ImmExtend.Zero) n) size))
+
+;; Each of these extractors tests whether the upper half of the input equals the
+;; lower half of the input
+(decl u128_replicated_u64 (u64) u128)
+(extern extractor u128_replicated_u64 u128_replicated_u64)
+(decl u64_replicated_u32 (u64) u64)
+(extern extractor u64_replicated_u32 u64_replicated_u32)
+(decl u32_replicated_u16 (u64) u64)
+(extern extractor u32_replicated_u16 u32_replicated_u16)
+(decl u16_replicated_u8 (u64) u64)
+(extern extractor u16_replicated_u8 u16_replicated_u8)
 
 ;; Lower a FloatCC to a Cond.
 (decl fp_cond_code (FloatCC) Cond)
@@ -3814,3 +3936,36 @@
 ;; Helper for emitting the `trn2` instruction
 (decl vec_trn2 (Reg Reg VectorSize) Reg)
 (rule (vec_trn2 rn rm size) (vec_rrr (VecALUOp.Trn2) rn rm size))
+
+;; Helper for creating a zero value `ASIMDMovModImm` immediate.
+(decl asimd_mov_mod_imm_zero (ScalarSize) ASIMDMovModImm)
+(extern constructor asimd_mov_mod_imm_zero asimd_mov_mod_imm_zero)
+
+;; Helper for fallibly creating an `ASIMDMovModImm` immediate from its parts.
+(decl pure partial asimd_mov_mod_imm_from_u64 (u64 ScalarSize) ASIMDMovModImm)
+(extern constructor asimd_mov_mod_imm_from_u64 asimd_mov_mod_imm_from_u64)
+
+;; Helper for fallibly creating an `ASIMDFPModImm` immediate from its parts.
+(decl pure partial asimd_fp_mod_imm_from_u64 (u64 ScalarSize) ASIMDFPModImm)
+(extern constructor asimd_fp_mod_imm_from_u64 asimd_fp_mod_imm_from_u64)
+
+;; Helper for creating a `LoadFpuConst64` instruction
+(decl load_fpu_const64 (u64) Reg)
+(rule (load_fpu_const64 val)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.LoadFpuConst64 dst val))))
+       dst))
+
+;; Helper for creating a `LoadFpuConst128` instruction
+(decl load_fpu_const128 (u128) Reg)
+(rule (load_fpu_const128 val)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.LoadFpuConst128 dst val))))
+       dst))
+
+;; Helper for creating a `VecDupFPImm` instruction
+(decl vec_dup_fp_imm (ASIMDFPModImm VectorSize) Reg)
+(rule (vec_dup_fp_imm imm size)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.VecDupFPImm dst imm size))))
+       dst))

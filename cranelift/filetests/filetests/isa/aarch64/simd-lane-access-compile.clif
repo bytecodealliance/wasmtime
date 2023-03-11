@@ -15,8 +15,8 @@ block0:
 ; VCode:
 ; block0:
 ;   movi v30.16b, #0
-;   movz x4, #1
-;   fmov s31, w4
+;   movz w3, #1
+;   fmov s31, w3
 ;   ldr q3, pc+8 ; b 20 ; data.f128 0x11000000000000000000000000000000
 ;   tbl v0.16b, { v30.16b, v31.16b }, v3.16b
 ;   ret
@@ -24,8 +24,8 @@ block0:
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   movi v30.16b, #0
-;   mov x4, #1
-;   fmov s31, w4
+;   mov w3, #1
+;   fmov s31, w3
 ;   ldr q3, #0x14
 ;   b #0x24
 ;   .byte 0x00, 0x00, 0x00, 0x00
@@ -44,8 +44,8 @@ block0:
 
 ; VCode:
 ; block0:
-;   movz x3, #1
-;   fmov s31, w3
+;   movz w2, #1
+;   fmov s31, w2
 ;   ldr q2, pc+8 ; b 20 ; data.f128 0x13000000000000000000000000000000
 ;   mov v30.16b, v31.16b
 ;   tbl v0.16b, { v30.16b, v31.16b }, v2.16b
@@ -53,8 +53,8 @@ block0:
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov x3, #1
-;   fmov s31, w3
+;   mov w2, #1
+;   fmov s31, w2
 ;   ldr q2, #0x10
 ;   b #0x20
 ;   .byte 0x00, 0x00, 0x00, 0x00

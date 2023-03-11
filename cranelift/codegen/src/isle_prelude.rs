@@ -81,6 +81,11 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn u64_shl(&mut self, x: u64, y: u64) -> u64 {
+            x << y
+        }
+
+        #[inline]
         fn imm64_shl(&mut self, ty: Type, x: Imm64, y: Imm64) -> Imm64 {
             // Mask off any excess shift bits.
             let shift_mask = (ty.bits() - 1) as u64;
@@ -502,8 +507,8 @@ macro_rules! isle_common_prelude_methods {
             }
         }
 
-        fn u64_from_ieee32(&mut self, val: Ieee32) -> u64 {
-            val.bits().into()
+        fn u32_from_ieee32(&mut self, val: Ieee32) -> u32 {
+            val.bits()
         }
 
         fn u64_from_ieee64(&mut self, val: Ieee64) -> u64 {
@@ -747,6 +752,14 @@ macro_rules! isle_common_prelude_methods {
         #[inline]
         fn pack_block_array_2(&mut self, a: BlockCall, b: BlockCall) -> BlockArray2 {
             [a, b]
+        }
+
+        fn u128_as_u64(&mut self, val: u128) -> Option<u64> {
+            u64::try_from(val).ok()
+        }
+
+        fn u64_as_u32(&mut self, val: u64) -> Option<u32> {
+            u32::try_from(val).ok()
         }
     };
 }
