@@ -416,21 +416,29 @@ impl Inst {
                 size
             }]
         } else if let Some(imm) = widen_32_bit_pattern(pattern, lane_size) {
-            let tmp = alloc_tmp(types::I64X2);
-            let mut insts = smallvec![Inst::VecDupImm {
-                rd: tmp,
-                imm,
-                invert: false,
-                size: VectorSize::Size64x2,
-            }];
+            let mut insts = smallvec![];
 
             // TODO: Implement support for 64-bit scalar MOVI; we zero-extend the
             // lower 64 bits instead.
             if !size.is_128bits() {
+                let tmp = alloc_tmp(types::I64X2);
+                insts.push(Inst::VecDupImm {
+                    rd: tmp,
+                    imm,
+                    invert: false,
+                    size: VectorSize::Size64x2,
+                });
                 insts.push(Inst::FpuExtend {
                     rd,
                     rn: tmp.to_reg(),
                     size: ScalarSize::Size64,
+                });
+            } else {
+                insts.push(Inst::VecDupImm {
+                    rd,
+                    imm,
+                    invert: false,
+                    size: VectorSize::Size64x2,
                 });
             }
 
