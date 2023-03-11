@@ -1422,7 +1422,7 @@ pub(crate) fn define(
         Shuffle two vectors using the given immediate bytes. For each of the 16 bytes of the
         immediate, a value i of 0-15 selects the i-th element of the first vector and a value i of
         16-31 selects the (i-16)th element of the second vector. Immediate values outside of the
-        0-31 range place a 0 in the resulting vector lane.
+        0-31 range are not valid.
         "#,
             &formats.shuffle,
         )

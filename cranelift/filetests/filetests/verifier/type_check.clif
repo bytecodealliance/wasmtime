@@ -123,3 +123,9 @@ block0:
     v1 = ireduce.i64 v0 ; error: input i32 must be larger than output i64
     return
 }
+
+function %bad_shuffle(i8x16, i8x16) {
+block0(v0: i8x16, v1: i8x16):
+    v2 = shuffle v0, v1, [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 32] ; error: shuffle immediate index 32 is larger than the maximum 31
+    return
+}

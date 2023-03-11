@@ -1685,6 +1685,28 @@ impl<'a> Verifier<'a> {
                     Ok(())
                 }
             }
+            ir::InstructionData::Shuffle {
+                opcode: ir::instructions::Opcode::Shuffle,
+                imm,
+                ..
+            } => {
+                let imm = self.func.dfg.immediates.get(imm).unwrap().as_slice();
+                if imm.len() != 16 {
+                    errors.fatal((
+                        inst,
+                        self.context(inst),
+                        format!("the shuffle immediate wasn't 16-bytes long"),
+                    ))
+                } else if let Some(i) = imm.iter().find(|i| **i >= 32) {
+                    errors.fatal((
+                        inst,
+                        self.context(inst),
+                        format!("shuffle immediate index {i} is larger than the maximum 31"),
+                    ))
+                } else {
+                    Ok(())
+                }
+            }
             _ => Ok(()),
         }
     }
