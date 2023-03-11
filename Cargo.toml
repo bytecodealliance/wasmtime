@@ -27,6 +27,7 @@ wasmtime-cache = { workspace = true }
 wasmtime-cli-flags = { workspace = true }
 wasmtime-cranelift = { workspace = true }
 wasmtime-environ = { workspace = true }
+wasmtime-explorer = { workspace = true }
 wasmtime-wast = { workspace = true }
 wasmtime-wasi = { workspace = true, features = ["exit"] }
 wasmtime-wasi-crypto = { workspace = true, optional = true }
@@ -39,8 +40,8 @@ humantime = "2.0.0"
 once_cell = { workspace = true }
 listenfd = "1.0.0"
 wat = { workspace = true }
-serde = "1.0.94"
-serde_json = "1.0.26"
+serde = { workspace = true }
+serde_json = { workspace = true }
 wasmparser = { workspace = true }
 wasm-coredump-builder = { version = "0.1.11" }
 
@@ -70,8 +71,8 @@ component-macro-test = { path = "crates/misc/component-macro-test" }
 component-test-util = { workspace = true }
 bstr = "0.2.17"
 libc = "0.2.60"
-serde = "1.0"
-serde_json = "1.0"
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [target.'cfg(windows)'.dev-dependencies]
 windows-sys = { workspace = true, features = ["Win32_System_Memory"] }
@@ -120,6 +121,7 @@ wasmtime-cli-flags = { path = "crates/cli-flags", version = "=8.0.0" }
 wasmtime-cranelift = { path = "crates/cranelift", version = "=8.0.0" }
 wasmtime-cranelift-shared = { path = "crates/cranelift-shared", version = "=8.0.0" }
 wasmtime-environ = { path = "crates/environ", version = "=8.0.0" }
+wasmtime-explorer = { path = "crates/explorer", version = "=8.0.0" }
 wasmtime-fiber = { path = "crates/fiber", version = "=8.0.0" }
 wasmtime-types = { path = "crates/types", version = "8.0.0" }
 wasmtime-jit = { path = "crates/jit", version = "=8.0.0" }
@@ -196,6 +198,7 @@ heck = "0.4"
 similar = "2.1.0"
 toml = "0.5.9"
 serde = "1.0.94"
+serde_json = "1.0.80"
 glob = "0.3.0"
 
 [features]

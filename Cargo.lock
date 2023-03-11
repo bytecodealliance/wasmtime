@@ -3533,6 +3533,7 @@ dependencies = [
  "wasmtime-component-util",
  "wasmtime-cranelift",
  "wasmtime-environ",
+ "wasmtime-explorer",
  "wasmtime-runtime",
  "wasmtime-wasi",
  "wasmtime-wasi-crypto",
@@ -3645,6 +3646,19 @@ dependencies = [
  "wasmprinter",
  "wasmtime-environ",
  "wat",
+]
+
+[[package]]
+name = "wasmtime-explorer"
+version = "8.0.0"
+dependencies = [
+ "anyhow",
+ "capstone",
+ "serde",
+ "serde_json",
+ "target-lexicon",
+ "wasmprinter",
+ "wasmtime",
 ]
 
 [[package]]
