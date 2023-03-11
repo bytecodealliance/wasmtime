@@ -74,8 +74,8 @@ where
     /// `clear`ed or created with `new`.
     pub fn cardinality(&self) -> usize {
         let mut n: usize = 0;
-        for byte_ix in 0..self.len / BITS {
-            n += self.elems[byte_ix].count_ones() as usize;
+        for idx in 0..self.len / BITS {
+            n += self.elems[idx].count_ones() as usize;
         }
         for bit_ix in (self.len / BITS) * BITS..self.len {
             if (self.elems[bit_ix / BITS] & (1 << (bit_ix % BITS))) != 0 {
@@ -130,13 +130,13 @@ where
             .iter()
             .enumerate()
             .rev()
-            .find(|(_, &byte)| byte != 0)
-            // Map `i` from byte index to bit level index.
-            // `(i + 1) * BITS` = Last bit in byte.
-            // `last - byte.leading_zeros()` = last set bit in byte.
+            .find(|(_, &elem)| elem != 0)
+            // Map `i` from `elem` index to bit level index.
+            // `(i + 1) * BITS` = Last bit in `elem`.
+            // `last - elem.leading_zeros()` = last set bit in `elem`.
             // `as usize` won't ever truncate as the potential range is `0..=8`.
-            .map_or(0, |(i, byte)| {
-                ((i + 1) * BITS) - byte.leading_zeros() as usize
+            .map_or(0, |(i, elem)| {
+                ((i + 1) * BITS) - elem.leading_zeros() as usize
             });
 
         Some(K::new(last_index))
