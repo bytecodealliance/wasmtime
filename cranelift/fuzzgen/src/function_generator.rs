@@ -143,23 +143,23 @@ fn insert_cmp(
         // We filter out condition codes that aren't supported by the target at
         // this point after randomly choosing one, instead of randomly choosing a
         // supported one, to avoid invalidating the corpus when these get implemented.
-        let unimplemented_ccs = match (fgen.target_triple.architecture, args[0]) {
+        let unimplemented_cc = match (fgen.target_triple.architecture, cc) {
             // Some FloatCC's are not implemented on AArch64, see:
             // https://github.com/bytecodealliance/wasmtime/issues/4850
-            (Architecture::Aarch64(_), _) => &[
-                FloatCC::OrderedNotEqual,
-                FloatCC::UnorderedOrEqual,
-                FloatCC::UnorderedOrLessThan,
-                FloatCC::UnorderedOrLessThanOrEqual,
-                FloatCC::UnorderedOrGreaterThan,
-                FloatCC::UnorderedOrGreaterThanOrEqual,
-            ][..],
-            (Architecture::X86_64, ty) if ty.is_vector() => {
-                &[FloatCC::UnorderedOrEqual, FloatCC::OrderedNotEqual][..]
+            (Architecture::Aarch64(_), FloatCC::OrderedNotEqual) => true,
+            (Architecture::Aarch64(_), FloatCC::UnorderedOrEqual) => true,
+            (Architecture::Aarch64(_), FloatCC::UnorderedOrLessThan) => true,
+            (Architecture::Aarch64(_), FloatCC::UnorderedOrLessThanOrEqual) => true,
+            (Architecture::Aarch64(_), FloatCC::UnorderedOrGreaterThan) => true,
+            (Architecture::Aarch64(_), FloatCC::UnorderedOrGreaterThanOrEqual) => true,
+
+            // These are not implemented on x86_64, for vectors.
+            (Architecture::X86_64, FloatCC::UnorderedOrEqual | FloatCC::OrderedNotEqual) => {
+                args[0].is_vector()
             }
-            _ => &[],
+            _ => false,
         };
-        if unimplemented_ccs.contains(&cc) {
+        if unimplemented_cc {
             return Err(arbitrary::Error::IncorrectFormat.into());
         }
 
