@@ -6,9 +6,10 @@ use cranelift::codegen::data_value::DataValue;
 use cranelift::codegen::ir::immediates::Offset32;
 use cranelift::codegen::ir::instructions::InstructionFormat;
 use cranelift::codegen::ir::stackslot::StackSize;
+
 use cranelift::codegen::ir::{
-    types::*, AtomicRmwOp, Block, ExternalName, FuncRef, Function, LibCall, Opcode, Signature,
-    StackSlot, Type, UserExternalName, UserFuncName, Value,
+    types::*, AtomicRmwOp, Block, ConstantData, ExternalName, FuncRef, Function, LibCall, Opcode,
+    Signature, StackSlot, Type, UserExternalName, UserFuncName, Value,
 };
 use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Switch, Variable};
@@ -36,10 +37,10 @@ fn insert_opcode(
         vals.push(val);
     }
 
-    // For pretty much every instruction the control type is the return type
-    // except for Iconcat and Isplit which are *special* and the control type
-    // is the input type.
-    let ctrl_type = if opcode == Opcode::Iconcat || opcode == Opcode::Isplit {
+    // Some opcodes require us to look at their input arguments to determine the
+    // controlling type. This is not the general case, but we can neatly check this
+    // using `requires_typevar_operand`.
+    let ctrl_type = if opcode.constraints().requires_typevar_operand() {
         args.first()
     } else {
         rets.first()
@@ -139,26 +140,28 @@ fn insert_cmp(
     let res = if opcode == Opcode::Fcmp {
         let cc = *fgen.u.choose(FloatCC::all())?;
 
-        // Some FloatCC's are not implemented on AArch64, see:
-        // https://github.com/bytecodealliance/wasmtime/issues/4850
         // We filter out condition codes that aren't supported by the target at
         // this point after randomly choosing one, instead of randomly choosing a
         // supported one, to avoid invalidating the corpus when these get implemented.
-        if matches!(fgen.target_triple.architecture, Architecture::Aarch64(_))
-            && ![
-                FloatCC::Ordered,
-                FloatCC::Unordered,
-                FloatCC::Equal,
-                FloatCC::NotEqual,
-                FloatCC::LessThan,
-                FloatCC::LessThanOrEqual,
-                FloatCC::GreaterThan,
-                FloatCC::GreaterThanOrEqual,
-            ]
-            .contains(&cc)
-        {
-            return Err(arbitrary::Error::IncorrectFormat.into());
+        let unimplemented_cc = match (fgen.target_triple.architecture, cc) {
+            // Some FloatCC's are not implemented on AArch64, see:
+            // https://github.com/bytecodealliance/wasmtime/issues/4850
+            (Architecture::Aarch64(_), FloatCC::OrderedNotEqual) => true,
+            (Architecture::Aarch64(_), FloatCC::UnorderedOrEqual) => true,
+            (Architecture::Aarch64(_), FloatCC::UnorderedOrLessThan) => true,
+            (Architecture::Aarch64(_), FloatCC::UnorderedOrLessThanOrEqual) => true,
+            (Architecture::Aarch64(_), FloatCC::UnorderedOrGreaterThan) => true,
+            (Architecture::Aarch64(_), FloatCC::UnorderedOrGreaterThanOrEqual) => true,
+
+            // These are not implemented on x86_64, for vectors.
+            (Architecture::X86_64, FloatCC::UnorderedOrEqual | FloatCC::OrderedNotEqual) => {
+                args[0].is_vector()
+            }
+            _ => false,
         };
+        if unimplemented_cc {
+            return Err(arbitrary::Error::IncorrectFormat.into());
+        }
 
         builder.ins().fcmp(cc, lhs, rhs)
     } else {
@@ -323,6 +326,65 @@ fn insert_atomic_cas(
     Ok(())
 }
 
+fn insert_shuffle(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    opcode: Opcode,
+    _: &'static [Type],
+    rets: &'static [Type],
+) -> Result<()> {
+    let ctrl_type = *rets.first().unwrap();
+
+    let lhs = builder.use_var(fgen.get_variable_of_type(ctrl_type)?);
+    let rhs = builder.use_var(fgen.get_variable_of_type(ctrl_type)?);
+
+    let mask = {
+        let lanes = fgen.u.arbitrary::<[u8; 16]>()?;
+        let lanes = ConstantData::from(lanes.as_ref());
+        builder.func.dfg.immediates.push(lanes)
+    };
+
+    // This function is called for any `InstructionFormat::Shuffle`. Which today is just
+    // `shuffle`, but lets assert that, just to be sure we don't accidentally insert
+    // something else.
+    assert_eq!(opcode, Opcode::Shuffle);
+    let res = builder.ins().shuffle(lhs, rhs, mask);
+
+    let target_var = fgen.get_variable_of_type(ctrl_type)?;
+    builder.def_var(target_var, res);
+
+    Ok(())
+}
+
+fn insert_ins_ext_lane(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    opcode: Opcode,
+    args: &'static [Type],
+    rets: &'static [Type],
+) -> Result<()> {
+    let vector_type = *args.first().unwrap();
+    let ret_type = *rets.first().unwrap();
+
+    let lhs = builder.use_var(fgen.get_variable_of_type(vector_type)?);
+    let max_lane = (vector_type.lane_count() as u8) - 1;
+    let lane = fgen.u.int_in_range(0..=max_lane)?;
+
+    let res = match opcode {
+        Opcode::Insertlane => {
+            let rhs = builder.use_var(fgen.get_variable_of_type(args[1])?);
+            builder.ins().insertlane(lhs, rhs, lane)
+        }
+        Opcode::Extractlane => builder.ins().extractlane(lhs, lane),
+        _ => todo!(),
+    };
+
+    let target_var = fgen.get_variable_of_type(ret_type)?;
+    builder.def_var(target_var, res);
+
+    Ok(())
+}
+
 type OpcodeInserter = fn(
     fgen: &mut FunctionGenerator,
     builder: &mut FunctionBuilder,
@@ -433,6 +495,8 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (Opcode::FcvtToUint, &[F64], &[I8]),
                 (Opcode::FcvtToUint, &[F64], &[I16]),
                 (Opcode::FcvtToUint, &[F64], &[I128]),
+                (Opcode::FcvtToUint, &[F32X4], &[I32X4]),
+                (Opcode::FcvtToUint, &[F64X2], &[I64X2]),
                 // https://github.com/bytecodealliance/wasmtime/issues/4897
                 // https://github.com/bytecodealliance/wasmtime/issues/4899
                 (Opcode::FcvtToUintSat, &[F32], &[I8]),
@@ -441,6 +505,7 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (Opcode::FcvtToUintSat, &[F64], &[I8]),
                 (Opcode::FcvtToUintSat, &[F64], &[I16]),
                 (Opcode::FcvtToUintSat, &[F64], &[I128]),
+                (Opcode::FcvtToUintSat, &[F64X2], &[I64X2]),
                 // https://github.com/bytecodealliance/wasmtime/issues/4897
                 // https://github.com/bytecodealliance/wasmtime/issues/4899
                 (Opcode::FcvtToSint, &[F32], &[I8]),
@@ -449,6 +514,8 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (Opcode::FcvtToSint, &[F64], &[I8]),
                 (Opcode::FcvtToSint, &[F64], &[I16]),
                 (Opcode::FcvtToSint, &[F64], &[I128]),
+                (Opcode::FcvtToSint, &[F32X4], &[I32X4]),
+                (Opcode::FcvtToSint, &[F64X2], &[I64X2]),
                 // https://github.com/bytecodealliance/wasmtime/issues/4897
                 // https://github.com/bytecodealliance/wasmtime/issues/4899
                 (Opcode::FcvtToSintSat, &[F32], &[I8]),
@@ -457,12 +524,73 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (Opcode::FcvtToSintSat, &[F64], &[I8]),
                 (Opcode::FcvtToSintSat, &[F64], &[I16]),
                 (Opcode::FcvtToSintSat, &[F64], &[I128]),
+                (Opcode::FcvtToSintSat, &[F64X2], &[I64X2]),
                 // https://github.com/bytecodealliance/wasmtime/issues/4900
                 (Opcode::FcvtFromUint, &[I128], &[F32]),
                 (Opcode::FcvtFromUint, &[I128], &[F64]),
+                // This has a lowering, but only when preceded by `uwiden_low`.
+                (Opcode::FcvtFromUint, &[I64X2], &[F64X2]),
                 // https://github.com/bytecodealliance/wasmtime/issues/4900
                 (Opcode::FcvtFromSint, &[I128], &[F32]),
                 (Opcode::FcvtFromSint, &[I128], &[F64]),
+                (Opcode::FcvtFromSint, &[I64X2], &[F64X2]),
+                (Opcode::Bmask, &[I8X16]),
+                (Opcode::Bmask, &[I16X8]),
+                (Opcode::Bmask, &[I32X4]),
+                (Opcode::Bmask, &[I64X2]),
+                (Opcode::Umulhi, &[I8X16, I8X16]),
+                (Opcode::Umulhi, &[I16X8, I16X8]),
+                (Opcode::Umulhi, &[I32X4, I32X4]),
+                (Opcode::Umulhi, &[I64X2, I64X2]),
+                (Opcode::Smulhi, &[I8X16, I8X16]),
+                (Opcode::Smulhi, &[I16X8, I16X8]),
+                (Opcode::Smulhi, &[I32X4, I32X4]),
+                (Opcode::Smulhi, &[I64X2, I64X2]),
+                (Opcode::UaddSat, &[I32X4, I32X4]),
+                (Opcode::UaddSat, &[I64X2, I64X2]),
+                (Opcode::SaddSat, &[I32X4, I32X4]),
+                (Opcode::SaddSat, &[I64X2, I64X2]),
+                (Opcode::UsubSat, &[I32X4, I32X4]),
+                (Opcode::UsubSat, &[I64X2, I64X2]),
+                (Opcode::SsubSat, &[I32X4, I32X4]),
+                (Opcode::SsubSat, &[I64X2, I64X2]),
+                (Opcode::Fcopysign, &[F32X4, F32X4]),
+                (Opcode::Fcopysign, &[F64X2, F64X2]),
+                (Opcode::Popcnt, &[I8X16]),
+                (Opcode::Popcnt, &[I16X8]),
+                (Opcode::Popcnt, &[I32X4]),
+                (Opcode::Popcnt, &[I64X2]),
+                (Opcode::Umax, &[I64X2, I64X2]),
+                (Opcode::Smax, &[I64X2, I64X2]),
+                (Opcode::Umin, &[I64X2, I64X2]),
+                (Opcode::Smin, &[I64X2, I64X2]),
+                (Opcode::Bitcast, &[I128], &[_]),
+                (Opcode::Bitcast, &[_], &[I128]),
+                (Opcode::Uunarrow),
+                (Opcode::Snarrow, &[I64X2, I64X2]),
+                (Opcode::Unarrow, &[I64X2, I64X2]),
+                (Opcode::SqmulRoundSat, &[I32X4, I32X4]),
+                // This Icmp is not implemented: #5529
+                (Opcode::Icmp, &[I64X2, I64X2]),
+                // IaddPairwise is implemented, but only for some types, and with some preceding ops.
+                (Opcode::IaddPairwise),
+                // Nothing wrong with this select. But we have an isle rule that can optimize it
+                // into a `min`/`max` instructions, which we don't have implemented yet.
+                (Opcode::Select, &[_, I128, I128]),
+                // These stack accesses can cause segfaults if they are merged into an SSE instruction.
+                // See: #5922
+                (Opcode::StackStore, &[I8X16], &[]),
+                (Opcode::StackStore, &[I16X8], &[]),
+                (Opcode::StackStore, &[I32X4], &[]),
+                (Opcode::StackStore, &[I64X2], &[]),
+                (Opcode::StackStore, &[F32X4], &[]),
+                (Opcode::StackStore, &[F64X2], &[]),
+                (Opcode::StackLoad, &[], &[I8X16]),
+                (Opcode::StackLoad, &[], &[I16X8]),
+                (Opcode::StackLoad, &[], &[I32X4]),
+                (Opcode::StackLoad, &[], &[I64X2]),
+                (Opcode::StackLoad, &[], &[F32X4]),
+                (Opcode::StackLoad, &[], &[F64X2]),
             )
         }
 
@@ -528,6 +656,24 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 // https://github.com/bytecodealliance/wasmtime/issues/4933
                 (Opcode::FcvtFromSint, &[I128], &[F32]),
                 (Opcode::FcvtFromSint, &[I128], &[F64]),
+                (Opcode::Bmask, &[I8X16]),
+                (Opcode::Bmask, &[I16X8]),
+                (Opcode::Bmask, &[I32X4]),
+                (Opcode::Bmask, &[I64X2]),
+                (Opcode::Umulhi, &[I8X16, I8X16]),
+                (Opcode::Umulhi, &[I16X8, I16X8]),
+                (Opcode::Umulhi, &[I32X4, I32X4]),
+                (Opcode::Umulhi, &[I64X2, I64X2]),
+                (Opcode::Smulhi, &[I8X16, I8X16]),
+                (Opcode::Smulhi, &[I16X8, I16X8]),
+                (Opcode::Smulhi, &[I32X4, I32X4]),
+                (Opcode::Smulhi, &[I64X2, I64X2]),
+                (Opcode::Popcnt, &[I16X8]),
+                (Opcode::Popcnt, &[I32X4]),
+                (Opcode::Popcnt, &[I64X2]),
+                // Nothing wrong with this select. But we have an isle rule that can optimize it
+                // into a `min`/`max` instructions, which we don't have implemented yet.
+                (Opcode::Select, &[I8, I128, I128]),
             )
         }
 
@@ -564,6 +710,12 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (Opcode::FcvtFromUint, &[I128], &[F64]),
                 (Opcode::FcvtFromSint, &[I128], &[F32]),
                 (Opcode::FcvtFromSint, &[I128], &[F64]),
+                (Opcode::Bmask, &[I8X16]),
+                (Opcode::Bmask, &[I16X8]),
+                (Opcode::Bmask, &[I32X4]),
+                (Opcode::Bmask, &[I64X2]),
+                (Opcode::SsubSat, &[I64X2, I64X2]),
+                (Opcode::SaddSat, &[I64X2, I64X2]),
             )
         }
 
@@ -687,12 +839,32 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::IaddCout, &[I32, I32], &[I32, I8]),
     (Opcode::IaddCout, &[I64, I64], &[I64, I8]),
     (Opcode::IaddCout, &[I128, I128], &[I128, I8]),
+    // UaddSat
+    (Opcode::UaddSat, &[I8X16, I8X16], &[I8X16]),
+    (Opcode::UaddSat, &[I16X8, I16X8], &[I16X8]),
+    (Opcode::UaddSat, &[I32X4, I32X4], &[I32X4]),
+    (Opcode::UaddSat, &[I64X2, I64X2], &[I64X2]),
+    // SaddSat
+    (Opcode::SaddSat, &[I8X16, I8X16], &[I8X16]),
+    (Opcode::SaddSat, &[I16X8, I16X8], &[I16X8]),
+    (Opcode::SaddSat, &[I32X4, I32X4], &[I32X4]),
+    (Opcode::SaddSat, &[I64X2, I64X2], &[I64X2]),
     // Isub
     (Opcode::Isub, &[I8, I8], &[I8]),
     (Opcode::Isub, &[I16, I16], &[I16]),
     (Opcode::Isub, &[I32, I32], &[I32]),
     (Opcode::Isub, &[I64, I64], &[I64]),
     (Opcode::Isub, &[I128, I128], &[I128]),
+    // UsubSat
+    (Opcode::UsubSat, &[I8X16, I8X16], &[I8X16]),
+    (Opcode::UsubSat, &[I16X8, I16X8], &[I16X8]),
+    (Opcode::UsubSat, &[I32X4, I32X4], &[I32X4]),
+    (Opcode::UsubSat, &[I64X2, I64X2], &[I64X2]),
+    // SsubSat
+    (Opcode::SsubSat, &[I8X16, I8X16], &[I8X16]),
+    (Opcode::SsubSat, &[I16X8, I16X8], &[I16X8]),
+    (Opcode::SsubSat, &[I32X4, I32X4], &[I32X4]),
+    (Opcode::SsubSat, &[I64X2, I64X2], &[I64X2]),
     // Imul
     (Opcode::Imul, &[I8, I8], &[I8]),
     (Opcode::Imul, &[I16, I16], &[I16]),
@@ -704,11 +876,19 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::Smulhi, &[I16, I16], &[I16]),
     (Opcode::Smulhi, &[I32, I32], &[I32]),
     (Opcode::Smulhi, &[I64, I64], &[I64]),
+    (Opcode::Smulhi, &[I8X16, I8X16], &[I8X16]),
+    (Opcode::Smulhi, &[I16X8, I16X8], &[I16X8]),
+    (Opcode::Smulhi, &[I32X4, I32X4], &[I32X4]),
+    (Opcode::Smulhi, &[I64X2, I64X2], &[I64X2]),
     // Umulhi
     (Opcode::Umulhi, &[I8, I8], &[I8]),
     (Opcode::Umulhi, &[I16, I16], &[I16]),
     (Opcode::Umulhi, &[I32, I32], &[I32]),
     (Opcode::Umulhi, &[I64, I64], &[I64]),
+    (Opcode::Umulhi, &[I8X16, I8X16], &[I8X16]),
+    (Opcode::Umulhi, &[I16X8, I16X8], &[I16X8]),
+    (Opcode::Umulhi, &[I32X4, I32X4], &[I32X4]),
+    (Opcode::Umulhi, &[I64X2, I64X2], &[I64X2]),
     // Udiv
     (Opcode::Udiv, &[I8, I8], &[I8]),
     (Opcode::Udiv, &[I16, I16], &[I16]),
@@ -755,24 +935,40 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::Smin, &[I32, I32], &[I32]),
     (Opcode::Smin, &[I64, I64], &[I64]),
     (Opcode::Smin, &[I128, I128], &[I128]),
+    (Opcode::Smin, &[I8X16, I8X16], &[I8X16]),
+    (Opcode::Smin, &[I16X8, I16X8], &[I16X8]),
+    (Opcode::Smin, &[I32X4, I32X4], &[I32X4]),
+    (Opcode::Smin, &[I64X2, I64X2], &[I64X2]),
     // Umin
     (Opcode::Umin, &[I8, I8], &[I8]),
     (Opcode::Umin, &[I16, I16], &[I16]),
     (Opcode::Umin, &[I32, I32], &[I32]),
     (Opcode::Umin, &[I64, I64], &[I64]),
     (Opcode::Umin, &[I128, I128], &[I128]),
+    (Opcode::Umin, &[I8X16, I8X16], &[I8X16]),
+    (Opcode::Umin, &[I16X8, I16X8], &[I16X8]),
+    (Opcode::Umin, &[I32X4, I32X4], &[I32X4]),
+    (Opcode::Umin, &[I64X2, I64X2], &[I64X2]),
     // Smax
     (Opcode::Smax, &[I8, I8], &[I8]),
     (Opcode::Smax, &[I16, I16], &[I16]),
     (Opcode::Smax, &[I32, I32], &[I32]),
     (Opcode::Smax, &[I64, I64], &[I64]),
     (Opcode::Smax, &[I128, I128], &[I128]),
+    (Opcode::Smax, &[I8X16, I8X16], &[I8X16]),
+    (Opcode::Smax, &[I16X8, I16X8], &[I16X8]),
+    (Opcode::Smax, &[I32X4, I32X4], &[I32X4]),
+    (Opcode::Smax, &[I64X2, I64X2], &[I64X2]),
     // Umax
     (Opcode::Umax, &[I8, I8], &[I8]),
     (Opcode::Umax, &[I16, I16], &[I16]),
     (Opcode::Umax, &[I32, I32], &[I32]),
     (Opcode::Umax, &[I64, I64], &[I64]),
     (Opcode::Umax, &[I128, I128], &[I128]),
+    (Opcode::Umax, &[I8X16, I8X16], &[I8X16]),
+    (Opcode::Umax, &[I16X8, I16X8], &[I16X8]),
+    (Opcode::Umax, &[I32X4, I32X4], &[I32X4]),
+    (Opcode::Umax, &[I64X2, I64X2], &[I64X2]),
     // Rotr
     (Opcode::Rotr, &[I8, I8], &[I8]),
     (Opcode::Rotr, &[I8, I16], &[I8]),
@@ -1026,6 +1222,10 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::Popcnt, &[I32], &[I32]),
     (Opcode::Popcnt, &[I64], &[I64]),
     (Opcode::Popcnt, &[I128], &[I128]),
+    (Opcode::Popcnt, &[I8X16], &[I8X16]),
+    (Opcode::Popcnt, &[I16X8], &[I16X8]),
+    (Opcode::Popcnt, &[I32X4], &[I32X4]),
+    (Opcode::Popcnt, &[I64X2], &[I64X2]),
     // Bmask
     (Opcode::Bmask, &[I8], &[I8]),
     (Opcode::Bmask, &[I16], &[I8]),
@@ -1052,6 +1252,10 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::Bmask, &[I32], &[I128]),
     (Opcode::Bmask, &[I64], &[I128]),
     (Opcode::Bmask, &[I128], &[I128]),
+    (Opcode::Bmask, &[I8X16], &[I8X16]),
+    (Opcode::Bmask, &[I16X8], &[I16X8]),
+    (Opcode::Bmask, &[I32X4], &[I32X4]),
+    (Opcode::Bmask, &[I64X2], &[I64X2]),
     // Bswap
     (Opcode::Bswap, &[I16], &[I16]),
     (Opcode::Bswap, &[I32], &[I32]),
@@ -1142,6 +1346,8 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     // Fcopysign
     (Opcode::Fcopysign, &[F32, F32], &[F32]),
     (Opcode::Fcopysign, &[F64, F64], &[F64]),
+    (Opcode::Fcopysign, &[F32X4, F32X4], &[F32X4]),
+    (Opcode::Fcopysign, &[F64X2, F64X2], &[F64X2]),
     // Fma
     (Opcode::Fma, &[F32, F32, F32], &[F32]),
     (Opcode::Fma, &[F64, F64, F64], &[F64]),
@@ -1192,6 +1398,8 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::FcvtToUintSat, &[F64], &[I32]),
     (Opcode::FcvtToUintSat, &[F64], &[I64]),
     (Opcode::FcvtToUintSat, &[F64], &[I128]),
+    (Opcode::FcvtToUintSat, &[F32X4], &[I32X4]),
+    (Opcode::FcvtToUintSat, &[F64X2], &[I64X2]),
     // FcvtToSint
     (Opcode::FcvtToSint, &[F32], &[I8]),
     (Opcode::FcvtToSint, &[F32], &[I16]),
@@ -1214,6 +1422,8 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::FcvtToSintSat, &[F64], &[I32]),
     (Opcode::FcvtToSintSat, &[F64], &[I64]),
     (Opcode::FcvtToSintSat, &[F64], &[I128]),
+    (Opcode::FcvtToSintSat, &[F32X4], &[I32X4]),
+    (Opcode::FcvtToSintSat, &[F64X2], &[I64X2]),
     // FcvtFromUint
     (Opcode::FcvtFromUint, &[I8], &[F32]),
     (Opcode::FcvtFromUint, &[I16], &[F32]),
@@ -1225,6 +1435,8 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::FcvtFromUint, &[I32], &[F64]),
     (Opcode::FcvtFromUint, &[I64], &[F64]),
     (Opcode::FcvtFromUint, &[I128], &[F64]),
+    (Opcode::FcvtFromUint, &[I32X4], &[F32X4]),
+    (Opcode::FcvtFromUint, &[I64X2], &[F64X2]),
     // FcvtFromSint
     (Opcode::FcvtFromSint, &[I8], &[F32]),
     (Opcode::FcvtFromSint, &[I16], &[F32]),
@@ -1236,15 +1448,29 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::FcvtFromSint, &[I32], &[F64]),
     (Opcode::FcvtFromSint, &[I64], &[F64]),
     (Opcode::FcvtFromSint, &[I128], &[F64]),
+    (Opcode::FcvtFromSint, &[I32X4], &[F32X4]),
+    (Opcode::FcvtFromSint, &[I64X2], &[F64X2]),
+    // FcvtLowFromSint
+    (Opcode::FcvtLowFromSint, &[I32X4], &[F64X2]),
+    // FvpromoteLow
+    (Opcode::FvpromoteLow, &[F32X4], &[F64X2]),
+    // Fvdemote
+    (Opcode::Fvdemote, &[F64X2], &[F32X4]),
     // Fcmp
     (Opcode::Fcmp, &[F32, F32], &[I8]),
     (Opcode::Fcmp, &[F64, F64], &[I8]),
+    (Opcode::Fcmp, &[F32X4, F32X4], &[I32X4]),
+    (Opcode::Fcmp, &[F64X2, F64X2], &[I64X2]),
     // Icmp
     (Opcode::Icmp, &[I8, I8], &[I8]),
     (Opcode::Icmp, &[I16, I16], &[I8]),
     (Opcode::Icmp, &[I32, I32], &[I8]),
     (Opcode::Icmp, &[I64, I64], &[I8]),
     (Opcode::Icmp, &[I128, I128], &[I8]),
+    (Opcode::Icmp, &[I8X16, I8X16], &[I8X16]),
+    (Opcode::Icmp, &[I16X8, I16X8], &[I16X8]),
+    (Opcode::Icmp, &[I32X4, I32X4], &[I32X4]),
+    (Opcode::Icmp, &[I64X2, I64X2], &[I64X2]),
     // Fence
     (Opcode::Fence, &[], &[]),
     // Stack Access
@@ -1253,11 +1479,27 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::StackStore, &[I32], &[]),
     (Opcode::StackStore, &[I64], &[]),
     (Opcode::StackStore, &[I128], &[]),
+    (Opcode::StackStore, &[F32], &[]),
+    (Opcode::StackStore, &[F64], &[]),
+    (Opcode::StackStore, &[I8X16], &[]),
+    (Opcode::StackStore, &[I16X8], &[]),
+    (Opcode::StackStore, &[I32X4], &[]),
+    (Opcode::StackStore, &[I64X2], &[]),
+    (Opcode::StackStore, &[F32X4], &[]),
+    (Opcode::StackStore, &[F64X2], &[]),
     (Opcode::StackLoad, &[], &[I8]),
     (Opcode::StackLoad, &[], &[I16]),
     (Opcode::StackLoad, &[], &[I32]),
     (Opcode::StackLoad, &[], &[I64]),
     (Opcode::StackLoad, &[], &[I128]),
+    (Opcode::StackLoad, &[], &[F32]),
+    (Opcode::StackLoad, &[], &[F64]),
+    (Opcode::StackLoad, &[], &[I8X16]),
+    (Opcode::StackLoad, &[], &[I16X8]),
+    (Opcode::StackLoad, &[], &[I32X4]),
+    (Opcode::StackLoad, &[], &[I64X2]),
+    (Opcode::StackLoad, &[], &[F32X4]),
+    (Opcode::StackLoad, &[], &[F64X2]),
     // Loads
     (Opcode::Load, &[], &[I8]),
     (Opcode::Load, &[], &[I16]),
@@ -1266,6 +1508,12 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::Load, &[], &[I128]),
     (Opcode::Load, &[], &[F32]),
     (Opcode::Load, &[], &[F64]),
+    (Opcode::Load, &[], &[I8X16]),
+    (Opcode::Load, &[], &[I16X8]),
+    (Opcode::Load, &[], &[I32X4]),
+    (Opcode::Load, &[], &[I64X2]),
+    (Opcode::Load, &[], &[F32X4]),
+    (Opcode::Load, &[], &[F64X2]),
     // Special Loads
     (Opcode::Uload8, &[], &[I16]),
     (Opcode::Uload8, &[], &[I32]),
@@ -1299,6 +1547,12 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::Store, &[I128], &[]),
     (Opcode::Store, &[F32], &[]),
     (Opcode::Store, &[F64], &[]),
+    (Opcode::Store, &[I8X16], &[]),
+    (Opcode::Store, &[I16X8], &[]),
+    (Opcode::Store, &[I32X4], &[]),
+    (Opcode::Store, &[I64X2], &[]),
+    (Opcode::Store, &[F32X4], &[]),
+    (Opcode::Store, &[F64X2], &[]),
     // Special Stores
     (Opcode::Istore8, &[I16], &[]),
     (Opcode::Istore8, &[I32], &[]),
@@ -1326,6 +1580,76 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::Bitcast, &[I32], &[F32]),
     (Opcode::Bitcast, &[F64], &[I64]),
     (Opcode::Bitcast, &[I64], &[F64]),
+    // Shuffle
+    (Opcode::Shuffle, &[I8X16, I8X16, I8X16], &[I8X16]),
+    // Swizzle
+    (Opcode::Swizzle, &[I8X16, I8X16], &[I8X16]),
+    // Splat
+    (Opcode::Splat, &[I8], &[I8X16]),
+    (Opcode::Splat, &[I16], &[I16X8]),
+    (Opcode::Splat, &[I32], &[I32X4]),
+    (Opcode::Splat, &[I64], &[I64X2]),
+    (Opcode::Splat, &[F32], &[F32X4]),
+    (Opcode::Splat, &[F64], &[F64X2]),
+    // Insert Lane
+    (Opcode::Insertlane, &[I8X16, I8], &[I8X16]),
+    (Opcode::Insertlane, &[I16X8, I16], &[I16X8]),
+    (Opcode::Insertlane, &[I32X4, I32], &[I32X4]),
+    (Opcode::Insertlane, &[I64X2, I64], &[I64X2]),
+    (Opcode::Insertlane, &[F32X4, F32], &[F32X4]),
+    (Opcode::Insertlane, &[F64X2, F64], &[F64X2]),
+    // Extract Lane
+    (Opcode::Extractlane, &[I8X16], &[I8]),
+    (Opcode::Extractlane, &[I16X8], &[I16]),
+    (Opcode::Extractlane, &[I32X4], &[I32]),
+    (Opcode::Extractlane, &[I64X2], &[I64]),
+    (Opcode::Extractlane, &[F32X4], &[F32]),
+    (Opcode::Extractlane, &[F64X2], &[F64]),
+    // Snarrow
+    (Opcode::Snarrow, &[I64X2, I64X2], &[I32X4]),
+    (Opcode::Snarrow, &[I32X4, I32X4], &[I16X8]),
+    (Opcode::Snarrow, &[I16X8, I16X8], &[I8X16]),
+    // Unarrow
+    (Opcode::Unarrow, &[I64X2, I64X2], &[I32X4]),
+    (Opcode::Unarrow, &[I32X4, I32X4], &[I16X8]),
+    (Opcode::Unarrow, &[I16X8, I16X8], &[I8X16]),
+    // Uunarrow
+    (Opcode::Uunarrow, &[I64X2, I64X2], &[I32X4]),
+    (Opcode::Uunarrow, &[I32X4, I32X4], &[I16X8]),
+    (Opcode::Uunarrow, &[I16X8, I16X8], &[I8X16]),
+    // VhighBits
+    (Opcode::VhighBits, &[I8X16], &[I8]),
+    (Opcode::VhighBits, &[I16X8], &[I8]),
+    (Opcode::VhighBits, &[I32X4], &[I8]),
+    (Opcode::VhighBits, &[I64X2], &[I8]),
+    // VanyTrue
+    (Opcode::VanyTrue, &[I8X16, I8X16, I8X16], &[I8]),
+    (Opcode::VanyTrue, &[I16X8, I16X8, I16X8], &[I8]),
+    (Opcode::VanyTrue, &[I32X4, I32X4, I32X4], &[I8]),
+    (Opcode::VanyTrue, &[I64X2, I64X2, I64X2], &[I8]),
+    // SwidenLow
+    (Opcode::SwidenLow, &[I8X16], &[I16X8]),
+    (Opcode::SwidenLow, &[I16X8], &[I32X4]),
+    (Opcode::SwidenLow, &[I32X4], &[I64X2]),
+    // SwidenHigh
+    (Opcode::SwidenHigh, &[I8X16], &[I16X8]),
+    (Opcode::SwidenHigh, &[I16X8], &[I32X4]),
+    (Opcode::SwidenHigh, &[I32X4], &[I64X2]),
+    // UwidenLow
+    (Opcode::UwidenLow, &[I8X16], &[I16X8]),
+    (Opcode::UwidenLow, &[I16X8], &[I32X4]),
+    (Opcode::UwidenLow, &[I32X4], &[I64X2]),
+    // UwidenHigh
+    (Opcode::UwidenHigh, &[I8X16], &[I16X8]),
+    (Opcode::UwidenHigh, &[I16X8], &[I32X4]),
+    (Opcode::UwidenHigh, &[I32X4], &[I64X2]),
+    // SqmulRoundSat
+    (Opcode::SqmulRoundSat, &[I16X8, I16X8], &[I16X8]),
+    (Opcode::SqmulRoundSat, &[I32X4, I32X4], &[I32X4]),
+    // IaddPairwise
+    (Opcode::IaddPairwise, &[I8X16, I8X16], &[I8X16]),
+    (Opcode::IaddPairwise, &[I16X8, I16X8], &[I16X8]),
+    (Opcode::IaddPairwise, &[I32X4, I32X4], &[I32X4]),
     // Integer Consts
     (Opcode::Iconst, &[], &[I8]),
     (Opcode::Iconst, &[], &[I16]),
@@ -1334,6 +1658,13 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     // Float Consts
     (Opcode::F32const, &[], &[F32]),
     (Opcode::F64const, &[], &[F64]),
+    // Vector Consts
+    (Opcode::Vconst, &[], &[I8X16]),
+    (Opcode::Vconst, &[], &[I16X8]),
+    (Opcode::Vconst, &[], &[I32X4]),
+    (Opcode::Vconst, &[], &[I64X2]),
+    (Opcode::Vconst, &[], &[F32X4]),
+    (Opcode::Vconst, &[], &[F64X2]),
     // Call
     (Opcode::Call, &[], &[]),
 ];
@@ -1344,7 +1675,7 @@ fn inserter_for_format(fmt: InstructionFormat) -> OpcodeInserter {
         InstructionFormat::AtomicRmw => insert_atomic_rmw,
         InstructionFormat::Binary => insert_opcode,
         InstructionFormat::BinaryImm64 => todo!(),
-        InstructionFormat::BinaryImm8 => todo!(),
+        InstructionFormat::BinaryImm8 => insert_ins_ext_lane,
         InstructionFormat::Call => insert_call,
         InstructionFormat::CallIndirect => insert_call,
         InstructionFormat::CondTrap => todo!(),
@@ -1358,14 +1689,14 @@ fn inserter_for_format(fmt: InstructionFormat) -> OpcodeInserter {
         InstructionFormat::Load => insert_load_store,
         InstructionFormat::LoadNoOffset => insert_load_store,
         InstructionFormat::NullAry => insert_opcode,
-        InstructionFormat::Shuffle => todo!(),
+        InstructionFormat::Shuffle => insert_shuffle,
         InstructionFormat::StackLoad => insert_stack_load,
         InstructionFormat::StackStore => insert_stack_store,
         InstructionFormat::Store => insert_load_store,
         InstructionFormat::StoreNoOffset => insert_load_store,
         InstructionFormat::TableAddr => todo!(),
         InstructionFormat::Ternary => insert_opcode,
-        InstructionFormat::TernaryImm8 => todo!(),
+        InstructionFormat::TernaryImm8 => insert_ins_ext_lane,
         InstructionFormat::Trap => todo!(),
         InstructionFormat::Unary => insert_opcode,
         InstructionFormat::UnaryConst => insert_const,
@@ -1561,6 +1892,12 @@ where
         );
         let aligned = if is_atomic && requires_aligned_atomics {
             true
+        } else if min_size > 8 {
+            // TODO: We currently can't guarantee that a stack_slot will be aligned on a 16 byte
+            // boundary. We don't have a way to specify alignment when creating stack slots, and
+            // cranelift only guarantees 8 byte alignment between stack slots.
+            // See: https://github.com/bytecodealliance/wasmtime/issues/5922#issuecomment-1457926624
+            false
         } else {
             bool::arbitrary(self.u)?
         };
