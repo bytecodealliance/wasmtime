@@ -1,9 +1,10 @@
 test compile precise-output
+set avoid_div_traps=true
 target x86_64
 
 function %f1(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
-  v2 = srem v0, v1
+  v2 = udiv v0, v1
   return v2
 }
 
@@ -13,8 +14,7 @@ block0(v0: i8, v1: i8):
 ; block0:
 ;   movq    %rdi, %rax
 ;   xorl    %edx, %edx, %edx
-;   srem_seq %al, %dl, %sil, %al, %dl, tmp=(none)
-;   shrq    $8, %rax, %rax
+;   udiv_seq %al, %dl, %sil, %al, %dl, tmp=(none)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -29,20 +29,14 @@ block0(v0: i8, v1: i8):
 ;   cmpb $0, %sil
 ;   jne 0x15
 ;   ud2 ; trap: int_divz
-;   cmpb $0xff, %sil
-;   jne 0x29
-;   movl $0, %eax
-;   jmp 0x2e
-;   cbtw
-;   idivb %sil ; trap: int_divz
-;   shrq $8, %rax
+;   divb %sil ; trap: int_divz
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
 
 function %f2(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
-  v2 = srem v0, v1
+  v2 = udiv v0, v1
   return v2
 }
 
@@ -52,8 +46,7 @@ block0(v0: i16, v1: i16):
 ; block0:
 ;   movq    %rdi, %rax
 ;   xorl    %edx, %edx, %edx
-;   srem_seq %ax, %dx, %si, %ax, %dx, tmp=(none)
-;   movq    %rdx, %rax
+;   udiv_seq %ax, %dx, %si, %ax, %dx, tmp=(none)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -68,20 +61,15 @@ block0(v0: i16, v1: i16):
 ;   cmpw $0, %si
 ;   jne 0x15
 ;   ud2 ; trap: int_divz
-;   cmpw $-1, %si
-;   jne 0x29
-;   movl $0, %eax
-;   jmp 0x2e
-;   cwtd
-;   idivw %si ; trap: int_divz
-;   movq %rdx, %rax
+;   movl $0, %edx
+;   divw %si ; trap: int_divz
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
 
 function %f3(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
-  v2 = srem v0, v1
+  v2 = udiv v0, v1
   return v2
 }
 
@@ -91,8 +79,7 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   movq    %rdi, %rax
 ;   xorl    %edx, %edx, %edx
-;   srem_seq %eax, %edx, %esi, %eax, %edx, tmp=(none)
-;   movq    %rdx, %rax
+;   udiv_seq %eax, %edx, %esi, %eax, %edx, tmp=(none)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -107,20 +94,15 @@ block0(v0: i32, v1: i32):
 ;   cmpl $0, %esi
 ;   jne 0x14
 ;   ud2 ; trap: int_divz
-;   cmpl $-1, %esi
-;   jne 0x27
-;   movl $0, %eax
-;   jmp 0x2a
-;   cltd
-;   idivl %esi ; trap: int_divz
-;   movq %rdx, %rax
+;   movl $0, %edx
+;   divl %esi ; trap: int_divz
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
 
 function %f4(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-  v2 = srem v0, v1
+  v2 = udiv v0, v1
   return v2
 }
 
@@ -130,8 +112,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   movq    %rdi, %rax
 ;   xorl    %edx, %edx, %edx
-;   srem_seq %rax, %rdx, %rsi, %rax, %rdx, tmp=(none)
-;   movq    %rdx, %rax
+;   udiv_seq %rax, %rdx, %rsi, %rax, %rdx, tmp=(none)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -146,13 +127,8 @@ block0(v0: i64, v1: i64):
 ;   cmpq $0, %rsi
 ;   jne 0x15
 ;   ud2 ; trap: int_divz
-;   cmpq $-1, %rsi
-;   jne 0x29
-;   movl $0, %eax
-;   jmp 0x2e
-;   cqto
-;   idivq %rsi ; trap: int_divz
-;   movq %rdx, %rax
+;   movl $0, %edx
+;   divq %rsi ; trap: int_divz
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -160,7 +136,7 @@ block0(v0: i64, v1: i64):
 function %i8_imm(i8) -> i8 {
 block0(v0: i8):
   v1 = iconst.i8 17
-  v2 = srem v0, v1
+  v2 = udiv v0, v1
   return v2
 }
 
@@ -171,8 +147,7 @@ block0(v0: i8):
 ;   movq    %rdi, %rax
 ;   movl    $17, %ecx
 ;   xorl    %edx, %edx, %edx
-;   srem_seq %al, %dl, %cl, %al, %dl, tmp=(none)
-;   shrq    $8, %rax, %rax
+;   udiv_seq %al, %dl, %cl, %al, %dl, tmp=(none)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -188,13 +163,7 @@ block0(v0: i8):
 ;   cmpb $0, %cl
 ;   jne 0x19
 ;   ud2 ; trap: int_divz
-;   cmpb $0xff, %cl
-;   jne 0x2c
-;   movl $0, %eax
-;   jmp 0x30
-;   cbtw
-;   idivb %cl ; trap: int_divz
-;   shrq $8, %rax
+;   divb %cl ; trap: int_divz
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -202,7 +171,7 @@ block0(v0: i8):
 function %i16_imm(i16) -> i16 {
 block0(v0: i16):
   v1 = iconst.i16 17
-  v2 = srem v0, v1
+  v2 = udiv v0, v1
   return v2
 }
 
@@ -213,8 +182,7 @@ block0(v0: i16):
 ;   movq    %rdi, %rax
 ;   movl    $17, %ecx
 ;   xorl    %edx, %edx, %edx
-;   srem_seq %ax, %dx, %cx, %ax, %dx, tmp=(none)
-;   movq    %rdx, %rax
+;   udiv_seq %ax, %dx, %cx, %ax, %dx, tmp=(none)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -230,13 +198,8 @@ block0(v0: i16):
 ;   cmpw $0, %cx
 ;   jne 0x1a
 ;   ud2 ; trap: int_divz
-;   cmpw $-1, %cx
-;   jne 0x2e
-;   movl $0, %eax
-;   jmp 0x33
-;   cwtd
-;   idivw %cx ; trap: int_divz
-;   movq %rdx, %rax
+;   movl $0, %edx
+;   divw %cx ; trap: int_divz
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -244,7 +207,7 @@ block0(v0: i16):
 function %i32_imm(i32) -> i32 {
 block0(v0: i32):
   v1 = iconst.i32 17
-  v2 = srem v0, v1
+  v2 = udiv v0, v1
   return v2
 }
 
@@ -255,8 +218,7 @@ block0(v0: i32):
 ;   movq    %rdi, %rax
 ;   movl    $17, %ecx
 ;   xorl    %edx, %edx, %edx
-;   srem_seq %eax, %edx, %ecx, %eax, %edx, tmp=(none)
-;   movq    %rdx, %rax
+;   udiv_seq %eax, %edx, %ecx, %eax, %edx, tmp=(none)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -272,13 +234,8 @@ block0(v0: i32):
 ;   cmpl $0, %ecx
 ;   jne 0x19
 ;   ud2 ; trap: int_divz
-;   cmpl $-1, %ecx
-;   jne 0x2c
-;   movl $0, %eax
-;   jmp 0x2f
-;   cltd
-;   idivl %ecx ; trap: int_divz
-;   movq %rdx, %rax
+;   movl $0, %edx
+;   divl %ecx ; trap: int_divz
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -286,7 +243,7 @@ block0(v0: i32):
 function %i64_imm(i64) -> i64 {
 block0(v0: i64):
   v1 = iconst.i64 17
-  v2 = srem v0, v1
+  v2 = udiv v0, v1
   return v2
 }
 
@@ -297,8 +254,7 @@ block0(v0: i64):
 ;   movq    %rdi, %rax
 ;   movl    $17, %ecx
 ;   xorl    %edx, %edx, %edx
-;   srem_seq %rax, %rdx, %rcx, %rax, %rdx, tmp=(none)
-;   movq    %rdx, %rax
+;   udiv_seq %rax, %rdx, %rcx, %rax, %rdx, tmp=(none)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -314,13 +270,8 @@ block0(v0: i64):
 ;   cmpq $0, %rcx
 ;   jne 0x1a
 ;   ud2 ; trap: int_divz
-;   cmpq $-1, %rcx
-;   jne 0x2e
-;   movl $0, %eax
-;   jmp 0x33
-;   cqto
-;   idivq %rcx ; trap: int_divz
-;   movq %rdx, %rax
+;   movl $0, %edx
+;   divq %rcx ; trap: int_divz
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

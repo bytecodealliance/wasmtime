@@ -1,4 +1,5 @@
 test compile precise-output
+set avoid_div_traps=true
 target x86_64
 
 function %f1(i8, i8) -> i8 {
