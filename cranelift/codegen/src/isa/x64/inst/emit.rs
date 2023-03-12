@@ -400,19 +400,32 @@ pub(crate) fn emit(
         }
 
         Inst::Div {
-            size,
             signed,
-            dividend_lo,
-            dividend_hi,
+            dividend_lo: dividend,
             divisor,
             dst_quotient,
-            dst_remainder,
+            ..
+        }
+        | Inst::Div8 {
+            signed,
+            dividend,
+            divisor,
+            dst_quotient,
         } => {
-            let dividend_lo = allocs.next(dividend_lo.to_reg());
+            let dividend = allocs.next(dividend.to_reg());
             let dst_quotient = allocs.next(dst_quotient.to_reg().to_reg());
-            debug_assert_eq!(dividend_lo, regs::rax());
+            debug_assert_eq!(dividend, regs::rax());
             debug_assert_eq!(dst_quotient, regs::rax());
-            if size.to_bits() > 8 {
+            let size = match inst {
+                Inst::Div { size, .. } => *size,
+                _ => OperandSize::Size8,
+            };
+            if let Inst::Div {
+                dividend_hi,
+                dst_remainder,
+                ..
+            } = inst
+            {
                 let dst_remainder = allocs.next(dst_remainder.to_reg().to_reg());
                 debug_assert_eq!(dst_remainder, regs::rdx());
                 let dividend_hi = allocs.next(dividend_hi.to_reg());
@@ -440,7 +453,7 @@ pub(crate) fn emit(
                         1,
                         subopcode,
                         src,
-                        RexFlags::from((*size, reg)),
+                        RexFlags::from((size, reg)),
                     )
                 }
                 RegMem::Mem { addr: src } => {
@@ -452,7 +465,7 @@ pub(crate) fn emit(
                         1,
                         subopcode,
                         &amode,
-                        RexFlags::from(*size),
+                        RexFlags::from(size),
                         0,
                     );
                 }

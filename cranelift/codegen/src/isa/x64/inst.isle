@@ -66,6 +66,12 @@
             (dst_quotient WritableGpr)
             (dst_remainder WritableGpr))
 
+       ;; Integer quotient and remainder: (div idiv) $rax $rdx (reg addr)
+       (Div8 (signed bool)
+             (divisor GprMem)
+             (dividend Gpr)
+             (dst_quotient WritableGpr))
+
        ;; The high (and low) bits of a (un)signed multiply: `RDX:RAX := RAX *
        ;; rhs`.
        (MulHi (size OperandSize)

@@ -78,6 +78,7 @@ impl Inst {
             | Inst::CvtFloatToUintSeq { .. }
             | Inst::CvtUint64ToFloatSeq { .. }
             | Inst::Div { .. }
+            | Inst::Div8 { .. }
             | Inst::Fence { .. }
             | Inst::Hlt
             | Inst::Imm { .. }
@@ -228,14 +229,24 @@ impl Inst {
         dst_remainder: WritableGpr,
     ) -> Inst {
         divisor.assert_regclass_is(RegClass::Int);
-        Inst::Div {
-            size,
-            signed,
-            divisor: GprMem::new(divisor).unwrap(),
-            dividend_lo,
-            dividend_hi,
-            dst_quotient,
-            dst_remainder,
+        // TODO
+        if size == OperandSize::Size8 {
+            Inst::Div8 {
+                signed,
+                divisor: GprMem::new(divisor).unwrap(),
+                dividend: dividend_lo,
+                dst_quotient,
+            }
+        } else {
+            Inst::Div {
+                size,
+                signed,
+                divisor: GprMem::new(divisor).unwrap(),
+                dividend_lo,
+                dividend_hi,
+                dst_quotient,
+                dst_remainder,
+            }
         }
     }
 
@@ -790,16 +801,9 @@ impl PrettyPrint for Inst {
                 let dividend_lo = pretty_print_reg(dividend_lo.to_reg(), size.to_bytes(), allocs);
                 let dst_quotient =
                     pretty_print_reg(dst_quotient.to_reg().to_reg(), size.to_bytes(), allocs);
-                let dst_remainder = if size.to_bits() > 8 {
-                    pretty_print_reg(dst_remainder.to_reg().to_reg(), size.to_bytes(), allocs)
-                } else {
-                    "(none)".to_string()
-                };
-                let dividend_hi = if size.to_bits() > 8 {
-                    pretty_print_reg(dividend_hi.to_reg(), size.to_bytes(), allocs)
-                } else {
-                    "(none)".to_string()
-                };
+                let dst_remainder =
+                    pretty_print_reg(dst_remainder.to_reg().to_reg(), size.to_bytes(), allocs);
+                let dividend_hi = pretty_print_reg(dividend_hi.to_reg(), size.to_bytes(), allocs);
                 let divisor = divisor.pretty_print(size.to_bytes(), allocs);
                 format!(
                     "{} {}, {}, {}, {}, {}",
@@ -813,6 +817,25 @@ impl PrettyPrint for Inst {
                     divisor,
                     dst_quotient,
                     dst_remainder,
+                )
+            }
+
+            Inst::Div8 {
+                signed,
+                divisor,
+                dividend,
+                dst_quotient,
+            } => {
+                let dividend = pretty_print_reg(dividend.to_reg(), 1, allocs);
+                let dst_quotient = pretty_print_reg(dst_quotient.to_reg().to_reg(), 1, allocs);
+                let divisor = divisor.pretty_print(1, allocs);
+                format!(
+                    "{} {dividend}, {divisor}, {dst_quotient}",
+                    ljustify(if *signed {
+                        "idiv".to_string()
+                    } else {
+                        "div".into()
+                    }),
                 )
             }
 
@@ -1862,15 +1885,22 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             dividend_hi,
             dst_quotient,
             dst_remainder,
-            size,
             ..
         } => {
             collector.reg_fixed_use(dividend_lo.to_reg(), regs::rax());
             collector.reg_fixed_def(dst_quotient.to_writable_reg(), regs::rax());
-            if size.to_bits() > 8 {
-                collector.reg_fixed_def(dst_remainder.to_writable_reg(), regs::rdx());
-                collector.reg_fixed_use(dividend_hi.to_reg(), regs::rdx());
-            }
+            collector.reg_fixed_def(dst_remainder.to_writable_reg(), regs::rdx());
+            collector.reg_fixed_use(dividend_hi.to_reg(), regs::rdx());
+            divisor.get_operands(collector);
+        }
+        Inst::Div8 {
+            divisor,
+            dividend,
+            dst_quotient,
+            ..
+        } => {
+            collector.reg_fixed_use(dividend.to_reg(), regs::rax());
+            collector.reg_fixed_def(dst_quotient.to_writable_reg(), regs::rax());
             divisor.get_operands(collector);
         }
         Inst::MulHi {
