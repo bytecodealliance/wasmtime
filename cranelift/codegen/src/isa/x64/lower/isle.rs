@@ -889,50 +889,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
                 tmp,
             ));
         } else {
-            // We don't want more than one trap record for a single instruction,
-            // so let's not allow the "mem" case (load-op merging) here; force
-            // divisor into a register instead.
-            let divisor = RegMem::reg(divisor.to_reg());
-
-            let dividend_hi = self.lower_ctx.alloc_tmp(types::I64).only_reg().unwrap();
-
-            // Fill in the high parts:
-            let dividend_lo = if kind.is_signed() && ty == types::I8 {
-                let dividend_lo = self.lower_ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                // 8-bit div takes its dividend in only the `lo` reg.
-                self.lower_ctx.emit(MInst::sign_extend_data(
-                    size,
-                    Gpr::new(dividend.to_reg()).unwrap(),
-                    WritableGpr::from_reg(Gpr::new(dividend_lo.to_reg()).unwrap()),
-                ));
-                // `dividend_hi` is not used by the Div below, so we
-                // don't def it here.
-
-                dividend_lo.to_reg()
-            } else if kind.is_signed() {
-                // 16-bit and higher div takes its operand in hi:lo
-                // with half in each (64:64, 32:32 or 16:16).
-                self.lower_ctx.emit(MInst::sign_extend_data(
-                    size,
-                    Gpr::new(dividend.to_reg()).unwrap(),
-                    WritableGpr::from_reg(Gpr::new(dividend_hi.to_reg()).unwrap()),
-                ));
-
-                dividend.to_reg()
-            } else {
-                unreachable!()
-            };
-
-            // Emit the actual idiv.
-            self.lower_ctx.emit(MInst::div(
-                size,
-                kind.is_signed(),
-                divisor,
-                Gpr::new(dividend_lo).unwrap(),
-                Gpr::new(dividend_hi.to_reg()).unwrap(),
-                WritableGpr::from_reg(Gpr::new(dst_quotient.to_reg()).unwrap()),
-                WritableGpr::from_reg(Gpr::new(dst_remainder.to_reg()).unwrap()),
-            ));
+            unreachable!()
         }
 
         // Move the result back into the destination reg.

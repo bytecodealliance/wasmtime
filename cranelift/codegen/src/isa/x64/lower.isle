@@ -3491,21 +3491,50 @@
 
 ;; Rules for `udiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (udiv a @ (value_type ty) b))
-      (div_or_rem (DivOrRemKind.UnsignedDiv) a b))
-
 (rule 2 (lower (udiv a @ (value_type $I8) b))
-        (if-let $false (avoid_div_traps))
-        (x64_div8 (extend_to_gpr a $I32 (ExtendKind.Zero)) b $false))
+        (x64_div8 (extend_to_gpr a $I32 (ExtendKind.Zero))
+                  (nonzero_divisor $I8 b)
+                  $false))
 
 (rule 1 (lower (udiv a @ (value_type (fits_in_64 ty)) b))
+        (x64_div_quotient a
+                          (imm $I64 0)
+                          (nonzero_divisor ty b)
+                          (raw_operand_size_of_type ty)
+                          $false))
+
+(decl nonzero_divisor (Type Value) Reg)
+(rule 2 (nonzero_divisor ty (iconst (u64_from_imm64 (u64_nonzero n))))
+        (imm ty n))
+(rule 1 (nonzero_divisor ty val)
         (if-let $false (avoid_div_traps))
-        (x64_div_quotient a (imm $I64 0) b (raw_operand_size_of_type ty) $false))
+        val)
+(rule 0 (nonzero_divisor ty val)
+        (if-let $true (avoid_div_traps))
+        (let (
+            (val Reg val)
+            (_ InstOutput (side_effect (with_flags_side_effect
+              (x64_cmp (raw_operand_size_of_type ty) (RegMemImm.Imm 0) val)
+              (trap_if (CC.Z) (TrapCode.IntegerDivisionByZero)))))
+          )
+          val))
 
 ;; Rules for `sdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (sdiv a @ (value_type ty) b))
       (div_or_rem (DivOrRemKind.SignedDiv) a b))
+
+(rule 2 (lower (sdiv a @ (value_type $I8) b))
+        (if-let $false (avoid_div_traps))
+        (x64_div8 (x64_sign_extend_data a (OperandSize.Size8)) b $true))
+
+(rule 1 (lower (sdiv a @ (value_type (fits_in_64 ty)) b))
+        (if-let $false (avoid_div_traps))
+        (let (
+            (a Reg a)
+            (size OperandSize (raw_operand_size_of_type ty))
+          )
+          (x64_div_quotient a (x64_sign_extend_data a size) b size $true)))
 
 ;; Rules for `urem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
