@@ -3514,7 +3514,7 @@
         (let (
             (val Reg val)
             (_ InstOutput (side_effect (with_flags_side_effect
-              (x64_cmp (raw_operand_size_of_type ty) (RegMemImm.Imm 0) val)
+              (x64_test (raw_operand_size_of_type ty) val val)
               (trap_if (CC.Z) (TrapCode.IntegerDivisionByZero)))))
           )
           val))
