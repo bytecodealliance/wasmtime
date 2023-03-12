@@ -285,12 +285,8 @@ macro_rules! isle_lower_prelude_methods {
             }
         }
 
-        fn avoid_div_traps(&mut self, _: Type) -> Option<()> {
-            if self.backend.flags().avoid_div_traps() {
-                Some(())
-            } else {
-                None
-            }
+        fn avoid_div_traps(&mut self) -> bool {
+            self.backend.flags().avoid_div_traps()
         }
 
         #[inline]

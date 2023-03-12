@@ -4536,6 +4536,41 @@
             (_ Unit (emit_div_or_rem kind ty dst a b)))
         dst))
 
+;; Helper for creating `Div8` instructions
+(decl x64_div8 (Gpr GprMem bool) Gpr)
+(rule (x64_div8 dividend divisor signed)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.Div8 signed divisor dividend dst))))
+        dst))
+
+;; Helper for creating `Div` instructions
+;;
+;; Two registers are returned through `ValueRegs` wher ethe first is the
+;; quotient and the second is the remainder.
+(decl x64_div (Gpr Gpr GprMem OperandSize bool) ValueRegs)
+(rule (x64_div dividend_lo dividend_hi divisor size signed)
+      (let ((dst_quotient WritableGpr (temp_writable_gpr))
+            (dst_remainder WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.Div size signed divisor dividend_lo dividend_hi dst_quotient dst_remainder))))
+        (value_regs dst_quotient dst_remainder)))
+
+;; Helper for `Div`, returning the quotient and discarding the remainder.
+(decl x64_div_quotient (Gpr Gpr GprMem OperandSize bool) ValueRegs)
+(rule (x64_div_quotient dividend_lo dividend_hi divisor size signed)
+      (value_regs_get (x64_div dividend_lo dividend_hi divisor size signed) 0))
+
+;; Helper for `Div`, returning the remainder and discarding the quotient.
+(decl x64_div_remainder (Gpr Gpr GprMem OperandSize bool) ValueRegs)
+(rule (x64_div_remainder dividend_lo dividend_hi divisor size signed)
+      (value_regs_get (x64_div dividend_lo dividend_hi divisor size signed) 1))
+
+;; Helper for creating `SignExtendData` instructions
+(decl x64_sign_extend_data (Gpr OperandSize) Gpr)
+(rule (x64_sign_extend_data src size)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.SignExtendData size src dst))))
+        dst))
+
 ;;;; Pinned Register ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl read_pinned_gpr () Gpr)

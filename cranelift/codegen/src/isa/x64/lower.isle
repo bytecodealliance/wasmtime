@@ -3494,6 +3494,14 @@
 (rule (lower (udiv a @ (value_type ty) b))
       (div_or_rem (DivOrRemKind.UnsignedDiv) a b))
 
+(rule 2 (lower (udiv a @ (value_type $I8) b))
+        (if-let $false (avoid_div_traps))
+        (x64_div8 (extend_to_gpr a $I32 (ExtendKind.Zero)) b $false))
+
+(rule 1 (lower (udiv a @ (value_type (fits_in_64 ty)) b))
+        (if-let $false (avoid_div_traps))
+        (x64_div_quotient a (imm $I64 0) b (raw_operand_size_of_type ty) $false))
+
 ;; Rules for `sdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (sdiv a @ (value_type ty) b))
@@ -3503,6 +3511,19 @@
 
 (rule (lower (urem a @ (value_type ty) b))
       (div_or_rem (DivOrRemKind.UnsignedRem) a b))
+
+;; The remainder is in AH, so take the result of the division and right-shift
+;; by 8.
+(rule 2 (lower (urem a @ (value_type $I8) b))
+        (if-let $false (avoid_div_traps))
+        (let (
+            (result Reg (x64_div8 (extend_to_gpr a $I32 (ExtendKind.Zero)) b $false))
+          )
+          (x64_shr $I64 result (Imm8Reg.Imm8 8))))
+
+(rule 1 (lower (urem a @ (value_type (fits_in_64 ty)) b))
+        (if-let $false (avoid_div_traps))
+        (x64_div_remainder a (imm $I64 0) b (raw_operand_size_of_type ty) $false))
 
 ;; Rules for `srem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

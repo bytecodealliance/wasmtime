@@ -919,21 +919,8 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
                 ));
 
                 dividend.to_reg()
-            } else if ty == types::I8 {
-                let dividend_lo = self.lower_ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                self.lower_ctx.emit(MInst::movzx_rm_r(
-                    ExtMode::BL,
-                    RegMem::reg(dividend.to_reg()),
-                    dividend_lo,
-                ));
-
-                dividend_lo.to_reg()
             } else {
-                // zero for unsigned opcodes.
-                self.lower_ctx
-                    .emit(MInst::imm(OperandSize::Size64, 0, dividend_hi));
-
-                dividend.to_reg()
+                unreachable!()
             };
 
             // Emit the actual idiv.
