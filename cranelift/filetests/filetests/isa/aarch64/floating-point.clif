@@ -717,7 +717,7 @@ block0(v0: f64):
 ; block0:
 ;   fcmp d0, d0
 ;   b.vc 8 ; udf
-;   ldr d4, pc+8 ; b 12 ; data.f64 -2147483649
+;   ldr d4, [const(0)]
 ;   fcmp d0, d4
 ;   b.gt 8 ; udf
 ;   movz x8, #16864, LSL #48
@@ -732,20 +732,19 @@ block0(v0: f64):
 ;   fcmp d0, d0
 ;   b.vc #0xc
 ;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
-;   ldr d4, #0x14
-;   b #0x1c
-;   .byte 0x00, 0x00, 0x20, 0x00
-;   .byte 0x00, 0x00, 0xe0, 0xc1
+;   ldr d4, #0x38
 ;   fcmp d0, d4
-;   b.gt #0x28
+;   b.gt #0x1c
 ;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
 ;   mov x8, #0x41e0000000000000
 ;   fmov d18, x8
 ;   fcmp d0, d18
-;   b.lt #0x3c
+;   b.lt #0x30
 ;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
 ;   fcvtzs w0, d0
 ;   ret
+;   .byte 0x00, 0x00, 0x20, 0x00
+;   .byte 0x00, 0x00, 0xe0, 0xc1
 
 function %f39(f64) -> i64 {
 block0(v0: f64):

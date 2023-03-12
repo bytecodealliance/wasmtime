@@ -6892,24 +6892,6 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
-        Inst::LoadFpuConst64 {
-            rd: writable_vreg(16),
-            const_data: 1.0_f64.to_bits(),
-        },
-        "5000005C03000014000000000000F03F",
-        "ldr d16, pc+8 ; b 12 ; data.f64 1",
-    ));
-
-    insns.push((
-        Inst::LoadFpuConst128 {
-            rd: writable_vreg(5),
-            const_data: 0x0f0e0d0c0b0a09080706050403020100,
-        },
-        "4500009C05000014000102030405060708090A0B0C0D0E0F",
-        "ldr q5, pc+8 ; b 20 ; data.f128 0x0f0e0d0c0b0a09080706050403020100",
-    ));
-
-    insns.push((
         Inst::FpuCSel32 {
             rd: writable_vreg(1),
             rn: vreg(2),

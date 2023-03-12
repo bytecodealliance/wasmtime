@@ -375,6 +375,7 @@ fn memarg_operands<F: Fn(VReg) -> VReg>(memarg: &AMode, collector: &mut OperandC
         &AMode::RegOffset { rn, .. } => {
             collector.reg_use(rn);
         }
+        &AMode::Const { .. } => {}
     }
 }
 
@@ -717,9 +718,6 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(rt);
             collector.reg_use(rt2);
             pairmemarg_operands(mem, collector);
-        }
-        &Inst::LoadFpuConst64 { rd, .. } | &Inst::LoadFpuConst128 { rd, .. } => {
-            collector.reg_def(rd);
         }
         &Inst::FpuToInt { rd, rn, .. } => {
             collector.reg_def(rd);
@@ -1108,7 +1106,7 @@ impl MachInst for Inst {
 // Pretty-printing of instructions.
 
 fn mem_finalize_for_show(mem: &AMode, state: &EmitState) -> (String, AMode) {
-    let (mem_insts, mem) = mem_finalize(0, mem, state);
+    let (mem_insts, mem) = mem_finalize(None, mem, state);
     let mut mem_str = mem_insts
         .into_iter()
         .map(|inst| {
@@ -1796,18 +1794,6 @@ impl Inst {
                 let mem = mem.pretty_print_default();
 
                 format!("stp {}, {}, {}", rt, rt2, mem)
-            }
-            &Inst::LoadFpuConst64 { rd, const_data } => {
-                let rd = pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size64, allocs);
-                format!(
-                    "ldr {}, pc+8 ; b 12 ; data.f64 {}",
-                    rd,
-                    f64::from_bits(const_data)
-                )
-            }
-            &Inst::LoadFpuConst128 { rd, const_data } => {
-                let rd = pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size128, allocs);
-                format!("ldr {}, pc+8 ; b 20 ; data.f128 0x{:032x}", rd, const_data)
             }
             &Inst::FpuToInt { op, rd, rn } => {
                 let (op, sizesrc, sizedest) = match op {
@@ -2610,7 +2596,7 @@ impl Inst {
                 // of the existing legalization framework).
                 let rd = allocs.next_writable(rd);
                 let mem = mem.with_allocs(allocs);
-                let (mem_insts, mem) = mem_finalize(0, &mem, state);
+                let (mem_insts, mem) = mem_finalize(None, &mem, state);
                 let mut ret = String::new();
                 for inst in mem_insts.into_iter() {
                     ret.push_str(

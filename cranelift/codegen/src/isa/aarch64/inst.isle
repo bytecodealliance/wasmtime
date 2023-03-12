@@ -466,14 +466,6 @@
         (mem PairAMode)
         (flags MemFlags))
 
-       (LoadFpuConst64
-        (rd WritableReg)
-        (const_data u64))
-
-       (LoadFpuConst128
-        (rd WritableReg)
-        (const_data u128))
-
        ;; Conversion: FP -> integer.
        (FpuToInt
         (op FpuToIntOp)
@@ -1134,6 +1126,11 @@
         (FPOffset
          (off i64)
          (ty Type))
+
+        ;; A reference to a constant which is placed outside of the function's
+        ;; body, typically at the end.
+        (Const
+          (addr VCodeConstant))
 
         ;; Offset from the "nominal stack pointer", which is where the real SP is
         ;; just after stack and spill slots are allocated in the function prologue.
@@ -3045,7 +3042,7 @@
 (rule 1 (constant_f64 (u64_low32_bits_unset n))
         (mov_to_fpu (imm $I64 (ImmExtend.Zero) n) (ScalarSize.Size64)))
 (rule (constant_f64 n)
-      (load_fpu_const64 n))
+      (fpu_load64 (AMode.Const (emit_u64_le_const n)) (mem_flags_trusted)))
 
 ;; Tests whether the low 32 bits in the input are all zero.
 (decl u64_low32_bits_unset (u64) u64)
@@ -3068,7 +3065,7 @@
 
 ;; Base case is to load the constant from memory.
 (rule (constant_f128 n)
-      (load_fpu_const128 n))
+      (fpu_load128 (AMode.Const (emit_u128_le_const n)) (mem_flags_trusted)))
 
 ;; Lower a vector splat with a constant parameter.
 ;;
@@ -3949,23 +3946,23 @@
 (decl pure partial asimd_fp_mod_imm_from_u64 (u64 ScalarSize) ASIMDFPModImm)
 (extern constructor asimd_fp_mod_imm_from_u64 asimd_fp_mod_imm_from_u64)
 
-;; Helper for creating a `LoadFpuConst64` instruction
-(decl load_fpu_const64 (u64) Reg)
-(rule (load_fpu_const64 val)
-      (let ((dst WritableReg (temp_writable_reg $I8X16))
-            (_ Unit (emit (MInst.LoadFpuConst64 dst val))))
-       dst))
-
-;; Helper for creating a `LoadFpuConst128` instruction
-(decl load_fpu_const128 (u128) Reg)
-(rule (load_fpu_const128 val)
-      (let ((dst WritableReg (temp_writable_reg $I8X16))
-            (_ Unit (emit (MInst.LoadFpuConst128 dst val))))
-       dst))
-
 ;; Helper for creating a `VecDupFPImm` instruction
 (decl vec_dup_fp_imm (ASIMDFPModImm VectorSize) Reg)
 (rule (vec_dup_fp_imm imm size)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_ Unit (emit (MInst.VecDupFPImm dst imm size))))
+       dst))
+
+;; Helper for creating a `FpuLoad64` instruction
+(decl fpu_load64 (AMode MemFlags) Reg)
+(rule (fpu_load64 amode flags)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.FpuLoad64 dst amode flags))))
+       dst))
+
+;; Helper for creating a `FpuLoad128` instruction
+(decl fpu_load128 (AMode MemFlags) Reg)
+(rule (fpu_load128 amode flags)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.FpuLoad128 dst amode flags))))
        dst))

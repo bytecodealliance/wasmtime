@@ -124,6 +124,9 @@ pub enum MemLabel {
     /// offset from this instruction. This form must be used at emission time;
     /// see `memlabel_finalize()` for how other forms are lowered to this one.
     PCRel(i32),
+    /// An address that refers to a label within a `MachBuffer`, for example a
+    /// constant that lives in the pool at the end of the function.
+    Mach(MachLabel),
 }
 
 impl AMode {
@@ -194,6 +197,7 @@ impl AMode {
             | &AMode::FPOffset { .. }
             | &AMode::SPOffset { .. }
             | &AMode::NominalSPOffset { .. }
+            | &AMode::Const { .. }
             | AMode::Label { .. } => self.clone(),
         }
     }
@@ -382,7 +386,8 @@ impl PrettyPrint for ExtendOp {
 impl PrettyPrint for MemLabel {
     fn pretty_print(&self, _: u8, _: &mut AllocationConsumer<'_>) -> String {
         match self {
-            &MemLabel::PCRel(off) => format!("pc+{}", off),
+            MemLabel::PCRel(off) => format!("pc+{}", off),
+            MemLabel::Mach(off) => format!("label({})", off.get()),
         }
     }
 }
@@ -465,6 +470,8 @@ impl PrettyPrint for AMode {
                 let simm9 = simm9.pretty_print(8, allocs);
                 format!("[sp], {}", simm9)
             }
+            AMode::Const { addr } => format!("[const({})]", addr.as_u32()),
+
             // Eliminated by `mem_finalize()`.
             &AMode::SPOffset { .. }
             | &AMode::FPOffset { .. }
