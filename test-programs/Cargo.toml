@@ -8,4 +8,4 @@ publish = false
 getrandom = "0.2.8"
 rustix = "0.36.6"
 cap-std = "1.0.3"
-wit-bindgen = "0.4.0"
+wit-bindgen = { workspace = true, default-features = true }
