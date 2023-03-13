@@ -767,12 +767,12 @@
 
 ;; Imm12 Rules
 
-(decl imm12_zero () Imm12)
+(decl pure imm12_zero () Imm12)
 (rule
   (imm12_zero)
   (imm12_const 0))
 
-(decl imm12_const (i32) Imm12)
+(decl pure imm12_const (i32) Imm12)
 (extern constructor imm12_const imm12_const)
 
 (decl load_imm12 (i32) Reg)
