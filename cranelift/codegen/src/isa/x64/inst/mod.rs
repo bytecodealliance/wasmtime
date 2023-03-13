@@ -30,7 +30,7 @@ use args::*;
 // `Inst` is defined inside ISLE as `MInst`. We publicly re-export it here.
 pub use super::lower::isle::generated_code::MInst as Inst;
 
-// Out-of-line data for calls, to keep the size of `Inst` downn.
+/// Out-of-line data for calls, to keep the size of `Inst` down.
 #[derive(Clone, Debug)]
 pub struct CallInfo {
     /// Register uses of this call.
