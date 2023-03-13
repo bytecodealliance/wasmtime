@@ -58,7 +58,10 @@
             (dst WritableGpr))
 
        ;; Integer quotient and remainder: (div idiv) $rax $rdx (reg addr)
-       (Div (size OperandSize) ;; 1, 2, 4, or 8
+       ;;
+       ;; Note that this isn't use for 8-bit division which has its own `Div8`
+       ;; instruction.
+       (Div (size OperandSize) ;; 2, 4, or 8
             (signed bool)
             (divisor GprMem)
             (dividend_lo Gpr)
@@ -81,17 +84,21 @@
               (dst_lo WritableGpr)
               (dst_hi WritableGpr))
 
-       ;; A synthetic sequence to implement the right inline checks for
-       ;; remainder and division, assuming the dividend is in %rax.
+       ;; A synthetic instruction sequence used as part of the lowering of the
+       ;; `srem` instruction which returns 0 if the divisor is -1 and
+       ;; otherwise executes an `idiv` instruction.
        ;;
-       ;; The generated code sequence is described in the emit's function match
-       ;; arm for this instruction.
+       ;; Note that this does not check for 0 as that's expected to be done
+       ;; separately. Also note that 8-bit types don't use this and use
+       ;; `CheckedSRemSeq8` instead.
        (CheckedSRemSeq (size OperandSize)
                        (dividend_lo Gpr)
                        (dividend_hi Gpr)
                        (divisor Gpr)
                        (dst_quotient WritableGpr)
                        (dst_remainder WritableGpr))
+
+       ;; Same as above but for 8-bit types.
        (CheckedSRemSeq8 (dividend Gpr)
                         (divisor Gpr)
                         (dst WritableGpr))

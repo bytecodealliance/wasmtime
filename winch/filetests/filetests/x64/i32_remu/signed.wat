@@ -14,8 +14,8 @@
 ;;    e:	 83f900               	cmp	ecx, 0
 ;;   11:	 0f8502000000         	jne	0x19
 ;;   17:	 0f0b                 	ud2	
-;;   19:	 ba00000000           	mov	edx, 0
-;;   1e:	 f7f1                 	div	ecx
-;;   20:	 4889d0               	mov	rax, rdx
-;;   23:	 5d                   	pop	rbp
-;;   24:	 c3                   	ret	
+;;   19:	 31d2                 	xor	edx, edx
+;;   1b:	 f7f1                 	div	ecx
+;;   1d:	 4889d0               	mov	rax, rdx
+;;   20:	 5d                   	pop	rbp
+;;   21:	 c3                   	ret	

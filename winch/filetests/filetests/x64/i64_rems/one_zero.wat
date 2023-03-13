@@ -14,11 +14,11 @@
 ;;   12:	 4883f900             	cmp	rcx, 0
 ;;   16:	 0f8502000000         	jne	0x1e
 ;;   1c:	 0f0b                 	ud2	
-;;   1e:	 4883f9ff             	cmp	rcx, -1
-;;   22:	 0f850a000000         	jne	0x32
-;;   28:	 b800000000           	mov	eax, 0
-;;   2d:	 e905000000           	jmp	0x37
-;;   32:	 4899                 	cqo	
+;;   1e:	 4899                 	cqo	
+;;   20:	 4883f9ff             	cmp	rcx, -1
+;;   24:	 0f850a000000         	jne	0x34
+;;   2a:	 ba00000000           	mov	edx, 0
+;;   2f:	 e903000000           	jmp	0x37
 ;;   34:	 48f7f9               	idiv	rcx
 ;;   37:	 4889d0               	mov	rax, rdx
 ;;   3a:	 5d                   	pop	rbp
