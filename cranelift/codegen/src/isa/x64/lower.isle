@@ -2659,17 +2659,41 @@
 ;; f32 or f64 despite the source perhaps being an integer vector since the
 ;; result of the instruction is the same.
 (rule 2 (lower (store flags
-                    (has_type (ty_32 _) (extractlane value (u8_from_uimm8 0)))
+                    (has_type $F32 (extractlane value (u8_from_uimm8 0)))
                     address
                     offset))
       (side_effect
        (x64_movss_store (to_amode flags address offset) value)))
-(rule 3 (lower (store flags
-                    (has_type (ty_64 _) (extractlane value (u8_from_uimm8 0)))
+(rule 2 (lower (store flags
+                    (has_type $F64 (extractlane value (u8_from_uimm8 0)))
                     address
                     offset))
       (side_effect
        (x64_movsd_store (to_amode flags address offset) value)))
+(rule 2 (lower (store flags
+                    (has_type $I8 (extractlane value (u8_from_uimm8 n)))
+                    address
+                    offset))
+      (side_effect
+       (x64_pextrb_store (to_amode flags address offset) value n)))
+(rule 2 (lower (store flags
+                    (has_type $I16 (extractlane value (u8_from_uimm8 n)))
+                    address
+                    offset))
+      (side_effect
+       (x64_pextrw_store (to_amode flags address offset) value n)))
+(rule 2 (lower (store flags
+                    (has_type $I32 (extractlane value (u8_from_uimm8 n)))
+                    address
+                    offset))
+      (side_effect
+       (x64_pextrd_store (to_amode flags address offset) value n)))
+(rule 2 (lower (store flags
+                    (has_type $I64 (extractlane value (u8_from_uimm8 n)))
+                    address
+                    offset))
+      (side_effect
+       (x64_pextrq_store (to_amode flags address offset) value n)))
 
 ;; Rules for `load*` + ALU op + `store*` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

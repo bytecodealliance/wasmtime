@@ -2430,7 +2430,7 @@ pub(crate) fn emit(
         }
 
         Inst::XmmMovRMVex { op, src, dst } => {
-            let src = allocs.next(*src);
+            let src = allocs.next(src.to_reg());
             let dst = dst.with_allocs(allocs).finalize(state, sink);
 
             let (prefix, map, opcode) = match op {
@@ -2448,6 +2448,52 @@ pub(crate) fn emit(
                 .opcode(opcode)
                 .rm(dst)
                 .reg(src.to_real_reg().unwrap().hw_enc())
+                .encode(sink);
+        }
+
+        Inst::XmmMovRMImmVex { op, src, dst, imm } => {
+            let src = allocs.next(src.to_reg());
+            let dst = dst.with_allocs(allocs).finalize(state, sink);
+
+            let (w, prefix, map, opcode) = match op {
+                AvxOpcode::Vpextrb => (false, LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x14),
+                AvxOpcode::Vpextrw => (false, LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x15),
+                AvxOpcode::Vpextrd => (false, LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x16),
+                AvxOpcode::Vpextrq => (true, LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x16),
+                _ => unimplemented!("Opcode {:?} not implemented", op),
+            };
+            VexInstruction::new()
+                .length(VexVectorLength::V128)
+                .w(w)
+                .prefix(prefix)
+                .map(map)
+                .opcode(opcode)
+                .rm(dst)
+                .reg(src.to_real_reg().unwrap().hw_enc())
+                .imm(*imm)
+                .encode(sink);
+        }
+
+        Inst::XmmToGprImmVex { op, src, dst, imm } => {
+            let src = allocs.next(src.to_reg());
+            let dst = allocs.next(dst.to_reg().to_reg());
+
+            let (w, prefix, map, opcode) = match op {
+                AvxOpcode::Vpextrb => (false, LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x14),
+                AvxOpcode::Vpextrw => (false, LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x15),
+                AvxOpcode::Vpextrd => (false, LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x16),
+                AvxOpcode::Vpextrq => (true, LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x16),
+                _ => unimplemented!("Opcode {:?} not implemented", op),
+            };
+            VexInstruction::new()
+                .length(VexVectorLength::V128)
+                .w(w)
+                .prefix(prefix)
+                .map(map)
+                .opcode(opcode)
+                .rm(dst.to_real_reg().unwrap().hw_enc())
+                .reg(src.to_real_reg().unwrap().hw_enc())
+                .imm(*imm)
                 .encode(sink);
         }
 
@@ -2649,7 +2695,7 @@ pub(crate) fn emit(
         }
 
         Inst::XmmMovRM { op, src, dst } => {
-            let src = allocs.next(*src);
+            let src = allocs.next(src.to_reg());
             let dst = dst.with_allocs(allocs);
 
             let (prefix, opcode) = match op {
@@ -2664,6 +2710,27 @@ pub(crate) fn emit(
             };
             let dst = &dst.finalize(state, sink);
             emit_std_reg_mem(sink, prefix, opcode, 2, src, dst, RexFlags::clear_w(), 0);
+        }
+
+        Inst::XmmMovRMImm { op, src, dst, imm } => {
+            let src = allocs.next(src.to_reg());
+            let dst = dst.with_allocs(allocs);
+
+            let (w, prefix, opcode) = match op {
+                SseOpcode::Pextrb => (false, LegacyPrefixes::_66, 0x0F3A14),
+                SseOpcode::Pextrw => (false, LegacyPrefixes::_66, 0x0F3A15),
+                SseOpcode::Pextrd => (false, LegacyPrefixes::_66, 0x0F3A16),
+                SseOpcode::Pextrq => (true, LegacyPrefixes::_66, 0x0F3A16),
+                _ => unimplemented!("Opcode {:?} not implemented", op),
+            };
+            let rex = if w {
+                RexFlags::set_w()
+            } else {
+                RexFlags::clear_w()
+            };
+            let dst = &dst.finalize(state, sink);
+            emit_std_reg_mem(sink, prefix, opcode, 3, src, dst, rex, 1);
+            sink.put1(*imm);
         }
 
         Inst::XmmToGpr {
