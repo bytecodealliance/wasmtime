@@ -35,13 +35,7 @@ impl WasiMonotonicClock for MonotonicClock {
 }
 
 pub fn clocks_ctx() -> WasiClocks {
-    let system = Box::new(SystemClock::new(ambient_authority()));
-    let monotonic = cap_std::time::MonotonicClock::new(ambient_authority());
-    let creation_time = monotonic.now();
-    let monotonic = Box::new(MonotonicClock(monotonic));
-    WasiClocks {
-        system,
-        monotonic,
-        creation_time,
-    }
+    WasiClocks::new()
+        .with_system(SystemClock::new(ambient_authority()))
+        .with_monotonic(MonotonicClock::new(ambient_authority()))
 }

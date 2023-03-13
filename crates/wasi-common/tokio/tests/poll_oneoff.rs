@@ -38,14 +38,14 @@ async fn empty_file_readable() -> Result<(), Error> {
     let mut poll = Poll::new();
     poll.subscribe_read(&mut *f, Userdata::from(123));
     // Timeout bounds time in poll_oneoff
+    let monotonic = &*clocks.monotonic()?.abs_clock;
     poll.subscribe_monotonic_clock(
-        &*clocks.monotonic,
-        clocks
-            .monotonic
-            .now(clocks.monotonic.resolution())
+        monotonic,
+        monotonic
+            .now(monotonic.resolution())
             .checked_add(TIMEOUT)
             .unwrap(),
-        clocks.monotonic.resolution(),
+        monotonic.resolution(),
         Userdata::from(0),
     );
     poll_oneoff(&mut poll).await?;
@@ -81,14 +81,14 @@ async fn empty_file_writable() -> Result<(), Error> {
     let mut poll = Poll::new();
     poll.subscribe_write(&mut *writable_f, Userdata::from(123));
     // Timeout bounds time in poll_oneoff
+    let monotonic = &*clocks.monotonic()?.abs_clock;
     poll.subscribe_monotonic_clock(
-        &*clocks.monotonic,
-        clocks
-            .monotonic
-            .now(clocks.monotonic.resolution())
+        monotonic,
+        monotonic
+            .now(monotonic.resolution())
             .checked_add(TIMEOUT)
             .unwrap(),
-        clocks.monotonic.resolution(),
+        monotonic.resolution(),
         Userdata::from(0),
     );
     poll_oneoff(&mut poll).await?;
@@ -110,9 +110,9 @@ async fn empty_file_writable() -> Result<(), Error> {
 async fn stdio_readable() -> Result<(), Error> {
     let clocks = clocks_ctx();
 
-    let deadline = clocks
-        .monotonic
-        .now(clocks.monotonic.resolution())
+    let monotonic = &*clocks.monotonic()?.abs_clock;
+    let deadline = monotonic
+        .now(monotonic.resolution())
         .checked_add(TIMEOUT)
         .unwrap();
 
@@ -133,10 +133,11 @@ async fn stdio_readable() -> Result<(), Error> {
             poll.subscribe_write(&mut **file, Userdata::from(*ix));
         }
         // Timeout bounds time in poll_oneoff
+        let monotonic = &*clocks.monotonic()?.abs_clock;
         poll.subscribe_monotonic_clock(
-            &*clocks.monotonic,
+            monotonic,
             deadline,
-            clocks.monotonic.resolution(),
+            monotonic.resolution(),
             Userdata::from(999),
         );
         poll_oneoff(&mut poll).await?;
