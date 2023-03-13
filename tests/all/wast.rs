@@ -97,6 +97,23 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
             return Ok(());
         }
 
+        // Reduce the virtual memory required to run multi-memory-based tests.
+        //
+        // The configuration parameters below require that a bare minimum
+        // virtual address space reservation of 450*9*805*65536 == 200G be made
+        // to support each test. If 6G reservations are made for each linear
+        // memory then not that many tests can run concurrently with much else.
+        //
+        // When multiple memories are used and are configured in the pool then
+        // force the usage of static memories without guards to reduce the VM
+        // impact.
+        if multi_memory {
+            cfg.static_memory_maximum_size(0);
+            cfg.dynamic_memory_reserved_for_growth(0);
+            cfg.static_memory_guard_size(0);
+            cfg.dynamic_memory_guard_size(0);
+        }
+
         // The limits here are crafted such that the wast tests should pass.
         // However, these limits may become insufficient in the future as the wast tests change.
         // If a wast test fails because of a limit being "exceeded" or if memory/table
