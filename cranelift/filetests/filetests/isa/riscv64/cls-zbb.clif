@@ -1,0 +1,164 @@
+test compile precise-output
+set unwind_info=false
+target riscv64 has_zbb
+
+
+function %cls_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = cls v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   sext.b t2,a0
+;   not a1,a0
+;   select_reg a3,a1,a0##condition=(t2 slt zero)
+;   andi a5,a3,255
+;   clz a7,a5
+;   addi t4,a7,-56
+;   addi a0,t4,-1
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x93, 0x13, 0x45, 0x60
+;   not a1, a0
+;   bltz t2, 0xc
+;   ori a3, a0, 0
+;   j 8
+;   ori a3, a1, 0
+;   andi a5, a3, 0xff
+;   .byte 0x93, 0x98, 0x07, 0x60
+;   addi t4, a7, -0x38
+;   addi a0, t4, -1
+;   ret
+
+function %cls_i16(i16) -> i16 {
+block0(v0: i16):
+    v1 = cls v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   sext.h t2,a0
+;   not a1,a0
+;   select_reg a3,a1,a0##condition=(t2 slt zero)
+;   zext.h a5,a3
+;   clz a7,a5
+;   addi t4,a7,-48
+;   addi a0,t4,-1
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x93, 0x13, 0x55, 0x60
+;   not a1, a0
+;   bltz t2, 0xc
+;   ori a3, a0, 0
+;   j 8
+;   ori a3, a1, 0
+;   .byte 0xbb, 0xc7, 0x06, 0x08
+;   .byte 0x93, 0x98, 0x07, 0x60
+;   addi t4, a7, -0x30
+;   addi a0, t4, -1
+;   ret
+
+function %cls_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = cls v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   sext.w t2,a0
+;   not a1,a0
+;   select_reg a3,a1,a0##condition=(t2 slt zero)
+;   clzw a5,a3
+;   addi a0,a5,-1
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   sext.w t2, a0
+;   not a1, a0
+;   bltz t2, 0xc
+;   ori a3, a0, 0
+;   j 8
+;   ori a3, a1, 0
+;   .byte 0x9b, 0x97, 0x06, 0x60
+;   addi a0, a5, -1
+;   ret
+
+function %cls_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = cls v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   not t2,a0
+;   select_reg a1,t2,a0##condition=(a0 slt zero)
+;   clz a3,a1
+;   addi a0,a3,-1
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   not t2, a0
+;   bltz a0, 0xc
+;   ori a1, a0, 0
+;   j 8
+;   ori a1, t2, 0
+;   .byte 0x93, 0x96, 0x05, 0x60
+;   addi a0, a3, -1
+;   ret
+
+function %cls_i128(i128) -> i128 {
+block0(v0: i128):
+    v1 = cls v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   not a2,a0
+;   select_reg a2,a2,a0##condition=(a1 slt zero)
+;   not a4,a1
+;   select_reg a6,a4,a1##condition=(a1 slt zero)
+;   clz t3,a6
+;   clz t0,a2
+;   li t2,64
+;   select_reg a1,t0,zero##condition=(t2 eq t3)
+;   add a3,t3,a1
+;   li a5,0
+;   addi a0,a3,-1
+;   li a1,0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   not a2, a0
+;   bltz a1, 8
+;   ori a2, a0, 0
+;   not a4, a1
+;   bltz a1, 0xc
+;   ori a6, a1, 0
+;   j 8
+;   ori a6, a4, 0
+;   .byte 0x13, 0x1e, 0x08, 0x60
+;   .byte 0x93, 0x12, 0x06, 0x60
+;   addi t2, zero, 0x40
+;   beq t2, t3, 0xc
+;   ori a1, zero, 0
+;   j 8
+;   ori a1, t0, 0
+;   add a3, t3, a1
+;   mv a5, zero
+;   addi a0, a3, -1
+;   mv a1, zero
+;   ret
+

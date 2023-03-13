@@ -1031,6 +1031,37 @@
 
 
 
+;; TODO: LLVM lowers this as not+clz for i32/i64. We should do the same.
+(decl lower_cls (Type Reg) Reg)
+(rule (lower_cls ty r)
+  (let ((tmp Reg (ext_int_if_need $true r ty))
+        (tmp2 Reg (gen_select_reg (IntCC.SignedLessThan) tmp (zero_reg) (gen_bit_not r) r))
+        (tmp3 Reg (lower_clz ty tmp2)))
+    (alu_rr_imm12 (AluOPRRI.Addi) tmp3 (imm12_const -1))))
+
+;; If the sign bit is set, we count the leading zeros of the inverted value.
+;; Otherwise we can just count the leading zeros of the original value.
+;; Subtract 1 since the sign bit does not count.
+(decl lower_cls_i128 (ValueRegs) ValueRegs)
+(rule (lower_cls_i128 x)
+  (let ((low Reg (value_regs_get x 0))
+        (high Reg (value_regs_get x 1))
+        (low Reg (gen_select_reg (IntCC.SignedLessThan) high (zero_reg) (gen_bit_not low) low))
+        (high Reg (gen_select_reg (IntCC.SignedLessThan) high (zero_reg) (gen_bit_not high) high))
+        (tmp ValueRegs (lower_clz_i128 (value_regs low high)))
+        (count Reg (value_regs_get tmp 0))
+        (result Reg (alu_rr_imm12 (AluOPRRI.Addi) count (imm12_const -1))))
+    (zext result $I64 $I128)))
+
+
+(decl gen_cltz (bool Reg Type) Reg)
+(rule (gen_cltz leading rs ty)
+  (let ((tmp WritableReg (temp_writable_reg $I64))
+        (step WritableReg (temp_writable_reg $I64))
+        (sum WritableReg (temp_writable_reg $I64))
+        (_ Unit (emit (MInst.Cltz leading sum step tmp rs ty))))
+    sum))
+
   
 ;; Extends an integer if it is smaller than 64 bits.
 (decl ext_int_if_need (bool ValueRegs Type) ValueRegs)
@@ -1267,27 +1298,6 @@
       (part3 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) part2)))
     (alu_rrr (AluOPRRR.Or) part1 part3)))
 
-(decl lower_cls (Reg Type) Reg)
-(rule
-  (lower_cls r ty)
-  (let
-    ( ;; extract sign bit.
-      (tmp Reg (ext_int_if_need $true r ty))
-      ;;
-      (tmp2 Reg (gen_select_reg (IntCC.SignedLessThan) tmp (zero_reg) (gen_bit_not r) r))
-      ;;
-      (tmp3 Reg (lower_clz ty tmp2)))
-    (alu_rr_imm12 (AluOPRRI.Addi) tmp3 (imm12_const -1))))
-
-(decl gen_cltz (bool Reg Type) Reg)
-(rule
-  (gen_cltz leading rs ty)
-  (let
-    ((tmp WritableReg (temp_writable_reg $I64))
-      (step WritableReg (temp_writable_reg $I64))
-      (sum WritableReg (temp_writable_reg $I64))
-      (_ Unit (emit (MInst.Cltz leading sum step tmp rs ty))))
-    (writable_reg_to_reg sum)))
 
 (decl gen_popcnt (Reg Type) Reg)
 (rule
@@ -1452,24 +1462,6 @@
     (value_regs
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high low)
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high_replacement high))))
-
-
-(decl lower_cls_i128 (ValueRegs) ValueRegs)
-(rule
-  (lower_cls_i128 x)
-  (let
-    ( ;;; we use clz to implement cls
-      ;;; if value is negtive we need inverse all bits.
-      (low Reg
-        (gen_select_reg (IntCC.SignedLessThan) (value_regs_get x 1) (zero_reg) (gen_bit_not (value_regs_get x 0)) (value_regs_get x 0)))
-      ;;;
-       (high Reg
-        (gen_select_reg (IntCC.SignedLessThan) (value_regs_get x 1) (zero_reg) (gen_bit_not (value_regs_get x 1)) (value_regs_get x 1)))
-      ;; count leading zeros.
-      (tmp  ValueRegs (lower_clz_i128 (value_regs low high)))
-      (count Reg (value_regs_get tmp 0))
-      (result Reg (alu_rr_imm12 (AluOPRRI.Addi) count (imm12_const -1))))
-    (value_regs result (load_u64_constant 0))))
 
 
 (decl gen_amode (Reg Offset32 Type) AMode)
