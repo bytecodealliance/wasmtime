@@ -403,19 +403,19 @@ pub(crate) fn emit(
             signed,
             dividend_lo: dividend,
             divisor,
-            dst_quotient,
+            dst_quotient: dst,
             ..
         }
         | Inst::Div8 {
             signed,
             dividend,
             divisor,
-            dst_quotient,
+            dst,
         } => {
             let dividend = allocs.next(dividend.to_reg());
-            let dst_quotient = allocs.next(dst_quotient.to_reg().to_reg());
+            let dst = allocs.next(dst.to_reg().to_reg());
             debug_assert_eq!(dividend, regs::rax());
-            debug_assert_eq!(dst_quotient, regs::rax());
+            debug_assert_eq!(dst, regs::rax());
             let size = match inst {
                 Inst::Div { size, .. } => *size,
                 _ => OperandSize::Size8,
@@ -535,164 +535,97 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::CheckedDivOrRemSeq {
-            kind,
-            size,
-            dividend_lo,
-            dividend_hi,
-            divisor,
-            tmp,
-            dst_quotient,
-            dst_remainder,
-        } => {
-            let dividend_lo = allocs.next(dividend_lo.to_reg());
-            let dividend_hi = allocs.next(dividend_hi.to_reg());
+        Inst::CheckedSRemSeq { divisor, .. } | Inst::CheckedSRemSeq8 { divisor, .. } => {
             let divisor = allocs.next(divisor.to_reg());
-            let dst_quotient = allocs.next(dst_quotient.to_reg().to_reg());
-            let dst_remainder = allocs.next(dst_remainder.to_reg().to_reg());
-            let tmp = tmp.map(|tmp| allocs.next(tmp.to_reg().to_reg()));
-            debug_assert_eq!(dividend_lo, regs::rax());
-            debug_assert_eq!(dividend_hi, regs::rdx());
-            debug_assert_eq!(dst_quotient, regs::rax());
-            debug_assert_eq!(dst_remainder, regs::rdx());
+
+            // Validate that the register constraints of the dividend and the
+            // destination are all as expected.
+            let (dst, size) = match inst {
+                Inst::CheckedSRemSeq {
+                    dividend_lo,
+                    dividend_hi,
+                    dst_quotient,
+                    dst_remainder,
+                    size,
+                    ..
+                } => {
+                    let dividend_lo = allocs.next(dividend_lo.to_reg());
+                    let dividend_hi = allocs.next(dividend_hi.to_reg());
+                    let dst_quotient = allocs.next(dst_quotient.to_reg().to_reg());
+                    let dst_remainder = allocs.next(dst_remainder.to_reg().to_reg());
+                    debug_assert_eq!(dividend_lo, regs::rax());
+                    debug_assert_eq!(dividend_hi, regs::rdx());
+                    debug_assert_eq!(dst_quotient, regs::rax());
+                    debug_assert_eq!(dst_remainder, regs::rdx());
+                    (regs::rdx(), *size)
+                }
+                Inst::CheckedSRemSeq8 { dividend, dst, .. } => {
+                    let dividend = allocs.next(dividend.to_reg());
+                    let dst = allocs.next(dst.to_reg().to_reg());
+                    debug_assert_eq!(dividend, regs::rax());
+                    debug_assert_eq!(dst, regs::rax());
+                    (regs::rax(), OperandSize::Size8)
+                }
+                _ => unreachable!(),
+            };
 
             // Generates the following code sequence:
             //
-            // ;; check divide by zero:
-            // cmp 0 %divisor
-            // jnz $after_trap
-            // ud2
-            // $after_trap:
-            //
-            // ;; for signed modulo/div:
             // cmp -1 %divisor
             // jnz $do_op
-            // ;;   for signed modulo, result is 0
-            //    mov #0, %rdx
-            //    j $done
-            // ;;   for signed div, check for integer overflow against INT_MIN of the right size
-            // cmp INT_MIN, %rax
-            // jnz $do_op
-            // ud2
+            //
+            // ;; for srem, result is 0
+            // mov #0, %dst
+            // j $done
             //
             // $do_op:
-            // ;; if signed
-            //     cdq ;; sign-extend from rax into rdx
-            // ;; else
-            //     mov #0, %rdx
             // idiv %divisor
             //
             // $done:
 
-            // Check if the divisor is zero, first.
-            let inst = Inst::cmp_rmi_r(*size, RegMemImm::imm(0), divisor);
+            let do_op = sink.get_label();
+            let done_label = sink.get_label();
+
+            // Check if the divisor is -1, and if it isn't then immediately
+            // go to the `idiv`.
+            let inst = Inst::cmp_rmi_r(size, RegMemImm::imm(0xffffffff), divisor);
+            inst.emit(&[], sink, info, state);
+            one_way_jmp(sink, CC::NZ, do_op);
+
+            // ... otherwise the divisor is -1 and the result is always 0, so
+            // write the result of the remainder, which depends on the op, and
+            // then jump to the end.
+
+            // Here, divisor == -1.
+            // x % -1 = 0; put the result into the destination, $rax.
+            let inst = Inst::imm(OperandSize::Size64, 0, Writable::from_reg(dst));
+            inst.emit(&[], sink, info, state);
+            let inst = Inst::jmp_known(done_label);
             inst.emit(&[], sink, info, state);
 
-            let inst = Inst::trap_if(CC::Z, TrapCode::IntegerDivisionByZero);
-            inst.emit(&[], sink, info, state);
-
-            let (do_op, done_label) = if kind.is_signed() {
-                // Now check if the divisor is -1.
-                let inst = Inst::cmp_rmi_r(*size, RegMemImm::imm(0xffffffff), divisor);
-                inst.emit(&[], sink, info, state);
-                let do_op = sink.get_label();
-
-                // If not equal, jump to do-op.
-                one_way_jmp(sink, CC::NZ, do_op);
-
-                // Here, divisor == -1.
-                if !kind.is_div() {
-                    // x % -1 = 0; put the result into the destination, $rax.
-                    let done_label = sink.get_label();
-
-                    let inst = Inst::imm(OperandSize::Size64, 0, Writable::from_reg(regs::rax()));
-                    inst.emit(&[], sink, info, state);
-
-                    let inst = Inst::jmp_known(done_label);
-                    inst.emit(&[], sink, info, state);
-
-                    (Some(do_op), Some(done_label))
-                } else {
-                    // Check for integer overflow.
-                    if *size == OperandSize::Size64 {
-                        let tmp = tmp.expect("temporary for i64 sdiv");
-
-                        let inst = Inst::imm(
-                            OperandSize::Size64,
-                            0x8000000000000000,
-                            Writable::from_reg(tmp),
-                        );
-                        inst.emit(&[], sink, info, state);
-
-                        let inst =
-                            Inst::cmp_rmi_r(OperandSize::Size64, RegMemImm::reg(tmp), regs::rax());
-                        inst.emit(&[], sink, info, state);
-                    } else {
-                        let inst = Inst::cmp_rmi_r(*size, RegMemImm::imm(0x80000000), regs::rax());
-                        inst.emit(&[], sink, info, state);
-                    }
-
-                    // If not equal, jump over the trap.
-                    let inst = Inst::trap_if(CC::Z, TrapCode::IntegerOverflow);
-                    inst.emit(&[], sink, info, state);
-
-                    (Some(do_op), None)
-                }
-            } else {
-                (None, None)
-            };
-
-            if let Some(do_op) = do_op {
-                sink.bind_label(do_op);
-            }
-
-            let dividend_lo = Gpr::new(regs::rax()).unwrap();
-            let dst_quotient = WritableGpr::from_reg(Gpr::new(regs::rax()).unwrap());
-            let (dividend_hi, dst_remainder) = if *size == OperandSize::Size8 {
-                (
+            // Here the `idiv` is executed, which is different depending on the
+            // size
+            sink.bind_label(do_op);
+            let inst = match size {
+                OperandSize::Size8 => Inst::div8(
+                    true,
+                    RegMem::reg(divisor),
                     Gpr::new(regs::rax()).unwrap(),
                     Writable::from_reg(Gpr::new(regs::rax()).unwrap()),
-                )
-            } else {
-                (
+                ),
+                _ => Inst::div(
+                    size,
+                    true,
+                    RegMem::reg(divisor),
+                    Gpr::new(regs::rax()).unwrap(),
                     Gpr::new(regs::rdx()).unwrap(),
+                    Writable::from_reg(Gpr::new(regs::rax()).unwrap()),
                     Writable::from_reg(Gpr::new(regs::rdx()).unwrap()),
-                )
+                ),
             };
-
-            // Fill in the high parts:
-            if kind.is_signed() {
-                // sign-extend the sign-bit of rax into rdx, for signed opcodes.
-                let inst =
-                    Inst::sign_extend_data(*size, dividend_lo, WritableGpr::from_reg(dividend_hi));
-                inst.emit(&[], sink, info, state);
-            } else if *size != OperandSize::Size8 {
-                // zero for unsigned opcodes.
-                let inst = Inst::imm(
-                    OperandSize::Size64,
-                    0,
-                    Writable::from_reg(dividend_hi.to_reg()),
-                );
-                inst.emit(&[], sink, info, state);
-            }
-
-            let inst = Inst::div(
-                *size,
-                kind.is_signed(),
-                RegMem::reg(divisor),
-                dividend_lo,
-                dividend_hi,
-                dst_quotient,
-                dst_remainder,
-            );
             inst.emit(&[], sink, info, state);
 
-            // Lowering takes care of moving the result back into the right register, see comment
-            // there.
-
-            if let Some(done) = done_label {
-                sink.bind_label(done);
-            }
+            sink.bind_label(done_label);
         }
 
         Inst::ValidateSdivDivisor {

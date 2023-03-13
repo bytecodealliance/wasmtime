@@ -1878,35 +1878,6 @@ impl fmt::Display for ShiftKind {
     }
 }
 
-/// What kind of division or remainder instruction this is?
-#[derive(Clone, Eq, PartialEq)]
-pub enum DivOrRemKind {
-    /// Signed division.
-    SignedDiv,
-    /// Unsigned division.
-    UnsignedDiv,
-    /// Signed remainder.
-    SignedRem,
-    /// Unsigned remainder.
-    UnsignedRem,
-}
-
-impl DivOrRemKind {
-    pub(crate) fn is_signed(&self) -> bool {
-        match self {
-            DivOrRemKind::SignedDiv | DivOrRemKind::SignedRem => true,
-            _ => false,
-        }
-    }
-
-    pub(crate) fn is_div(&self) -> bool {
-        match self {
-            DivOrRemKind::SignedDiv | DivOrRemKind::UnsignedDiv => true,
-            _ => false,
-        }
-    }
-}
-
 /// These indicate condition code tests.  Not all are represented since not all are useful in
 /// compiler-generated code.
 #[derive(Copy, Clone)]

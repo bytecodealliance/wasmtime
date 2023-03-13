@@ -3606,8 +3606,35 @@
           )
           (x64_shr $I64 result (Imm8Reg.Imm8 8))))
 
+;; Same as the above rule but for 16-to-64 bit types.
+(rule 2 (lower (srem a @ (value_type ty) (iconst imm)))
+        (if-let n (safe_divisor_from_imm64 ty imm))
+        (let (
+            (a Gpr a)
+            (size OperandSize (raw_operand_size_of_type ty))
+          )
+          (x64_div_remainder a
+                             (x64_sign_extend_data a size)
+                             (imm ty n)
+                             size
+                             $true)))
+
+(rule 1 (lower (srem a @ (value_type $I8) b))
+        (let (
+            (a Gpr (x64_sign_extend_data a (OperandSize.Size8)))
+            (b Gpr (nonzero_divisor $I8 b))
+          )
+          (x64_shr $I64 (x64_checked_srem_seq8 a b) (Imm8Reg.Imm8 8))))
+
 (rule (lower (srem a @ (value_type ty) b))
-      (div_or_rem (DivOrRemKind.SignedRem) a b))
+      (let (
+          (a Gpr a)
+          (b Gpr (nonzero_divisor ty b))
+          (size OperandSize (raw_operand_size_of_type ty))
+          (hi Gpr (x64_sign_extend_data a size))
+          (tmp ValueRegs (x64_checked_srem_seq size a hi b))
+        )
+        (value_regs_get tmp 1)))
 
 ;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -66,11 +66,11 @@
             (dst_quotient WritableGpr)
             (dst_remainder WritableGpr))
 
-       ;; Integer quotient and remainder: (div idiv) $rax $rdx (reg addr)
+       ;; Same as `Div`, but for 8-bits where the regalloc behavior is different
        (Div8 (signed bool)
              (divisor GprMem)
              (dividend Gpr)
-             (dst_quotient WritableGpr))
+             (dst WritableGpr))
 
        ;; The high (and low) bits of a (un)signed multiply: `RDX:RAX := RAX *
        ;; rhs`.
@@ -86,14 +86,15 @@
        ;;
        ;; The generated code sequence is described in the emit's function match
        ;; arm for this instruction.
-       (CheckedDivOrRemSeq (kind DivOrRemKind)
-                           (size OperandSize)
-                           (dividend_lo Gpr)
-                           (dividend_hi Gpr)
-                           (divisor Gpr)
-                           (dst_quotient WritableGpr)
-                           (dst_remainder WritableGpr)
-                           (tmp OptionWritableGpr))
+       (CheckedSRemSeq (size OperandSize)
+                       (dividend_lo Gpr)
+                       (dividend_hi Gpr)
+                       (divisor Gpr)
+                       (dst_quotient WritableGpr)
+                       (dst_remainder WritableGpr))
+       (CheckedSRemSeq8 (dividend Gpr)
+                        (divisor Gpr)
+                        (dst WritableGpr))
 
        ;; Validates that the `divisor` can be safely divided into the
        ;; `dividend`.
@@ -718,12 +719,6 @@
             Lzcnt
             Tzcnt
             Popcnt))
-
-(type DivOrRemKind extern
-      (enum SignedDiv
-            UnsignedDiv
-            SignedRem
-            UnsignedRem))
 
 (type SseOpcode extern
       (enum Addps
@@ -4550,13 +4545,18 @@
 
 ;;;; Division/Remainders ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl emit_div_or_rem (DivOrRemKind Type WritableGpr Gpr Gpr) Unit)
-(extern constructor emit_div_or_rem emit_div_or_rem)
+;; Helper for creating `CheckedSRemSeq` instructions.
+(decl x64_checked_srem_seq (OperandSize Gpr Gpr Gpr) ValueRegs)
+(rule (x64_checked_srem_seq size dividend_lo dividend_hi divisor)
+      (let ((dst_quotient WritableGpr (temp_writable_gpr))
+            (dst_remainder WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.CheckedSRemSeq size dividend_lo dividend_hi divisor dst_quotient dst_remainder))))
+        (value_regs dst_quotient dst_remainder)))
 
-(decl div_or_rem (DivOrRemKind Value Value) Gpr)
-(rule (div_or_rem kind a @ (value_type ty) b)
+(decl x64_checked_srem_seq8 (Gpr Gpr) Gpr)
+(rule (x64_checked_srem_seq8 dividend divisor)
       (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit_div_or_rem kind ty dst a b)))
+            (_ Unit (emit (MInst.CheckedSRemSeq8 dividend divisor dst))))
         dst))
 
 ;; Helper for creating `Div8` instructions

@@ -71,7 +71,8 @@ impl Inst {
             | Inst::Bswap { .. }
             | Inst::CallKnown { .. }
             | Inst::CallUnknown { .. }
-            | Inst::CheckedDivOrRemSeq { .. }
+            | Inst::CheckedSRemSeq { .. }
+            | Inst::CheckedSRemSeq8 { .. }
             | Inst::ValidateSdivDivisor { .. }
             | Inst::ValidateSdivDivisor64 { .. }
             | Inst::Cmove { .. }
@@ -231,55 +232,25 @@ impl Inst {
         dst_remainder: WritableGpr,
     ) -> Inst {
         divisor.assert_regclass_is(RegClass::Int);
-        // TODO
-        if size == OperandSize::Size8 {
-            Inst::Div8 {
-                signed,
-                divisor: GprMem::new(divisor).unwrap(),
-                dividend: dividend_lo,
-                dst_quotient,
-            }
-        } else {
-            Inst::Div {
-                size,
-                signed,
-                divisor: GprMem::new(divisor).unwrap(),
-                dividend_lo,
-                dividend_hi,
-                dst_quotient,
-                dst_remainder,
-            }
-        }
-    }
-
-    pub(crate) fn checked_div_or_rem_seq(
-        kind: DivOrRemKind,
-        size: OperandSize,
-        divisor: Reg,
-        dividend_lo: Gpr,
-        dividend_hi: Gpr,
-        dst_quotient: WritableGpr,
-        dst_remainder: WritableGpr,
-        tmp: Option<Writable<Reg>>,
-    ) -> Inst {
-        debug_assert!(divisor.class() == RegClass::Int);
-        debug_assert!(tmp
-            .map(|tmp| tmp.to_reg().class() == RegClass::Int)
-            .unwrap_or(true));
-        Inst::CheckedDivOrRemSeq {
-            kind,
+        Inst::Div {
             size,
-            divisor: Gpr::new(divisor).unwrap(),
+            signed,
+            divisor: GprMem::new(divisor).unwrap(),
             dividend_lo,
             dividend_hi,
             dst_quotient,
             dst_remainder,
-            tmp: tmp.map(|tmp| WritableGpr::from_writable_reg(tmp).unwrap()),
         }
     }
 
-    pub(crate) fn sign_extend_data(size: OperandSize, src: Gpr, dst: WritableGpr) -> Inst {
-        Inst::SignExtendData { size, src, dst }
+    pub(crate) fn div8(signed: bool, divisor: RegMem, dividend: Gpr, dst: WritableGpr) -> Inst {
+        divisor.assert_regclass_is(RegClass::Int);
+        Inst::Div8 {
+            signed,
+            divisor: GprMem::new(divisor).unwrap(),
+            dividend,
+            dst,
+        }
     }
 
     pub(crate) fn imm(dst_size: OperandSize, simm64: u64, dst: Writable<Reg>) -> Inst {
@@ -826,13 +797,13 @@ impl PrettyPrint for Inst {
                 signed,
                 divisor,
                 dividend,
-                dst_quotient,
+                dst,
             } => {
                 let dividend = pretty_print_reg(dividend.to_reg(), 1, allocs);
-                let dst_quotient = pretty_print_reg(dst_quotient.to_reg().to_reg(), 1, allocs);
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 1, allocs);
                 let divisor = divisor.pretty_print(1, allocs);
                 format!(
-                    "{} {dividend}, {divisor}, {dst_quotient}",
+                    "{} {dividend}, {divisor}, {dst}",
                     ljustify(if *signed {
                         "idiv".to_string()
                     } else {
@@ -867,41 +838,36 @@ impl PrettyPrint for Inst {
                 )
             }
 
-            Inst::CheckedDivOrRemSeq {
-                kind,
+            Inst::CheckedSRemSeq {
                 size,
                 divisor,
                 dividend_lo,
                 dividend_hi,
                 dst_quotient,
                 dst_remainder,
-                tmp,
             } => {
+                let divisor = pretty_print_reg(divisor.to_reg(), size.to_bytes(), allocs);
                 let dividend_lo = pretty_print_reg(dividend_lo.to_reg(), size.to_bytes(), allocs);
                 let dividend_hi = pretty_print_reg(dividend_hi.to_reg(), size.to_bytes(), allocs);
-                let divisor = pretty_print_reg(divisor.to_reg(), size.to_bytes(), allocs);
                 let dst_quotient =
                     pretty_print_reg(dst_quotient.to_reg().to_reg(), size.to_bytes(), allocs);
                 let dst_remainder =
                     pretty_print_reg(dst_remainder.to_reg().to_reg(), size.to_bytes(), allocs);
-                let tmp = tmp
-                    .map(|tmp| pretty_print_reg(tmp.to_reg().to_reg(), size.to_bytes(), allocs))
-                    .unwrap_or("(none)".to_string());
                 format!(
-                    "{} {}, {}, {}, {}, {}, tmp={}",
-                    match kind {
-                        DivOrRemKind::SignedDiv => "sdiv_seq",
-                        DivOrRemKind::UnsignedDiv => "udiv_seq",
-                        DivOrRemKind::SignedRem => "srem_seq",
-                        DivOrRemKind::UnsignedRem => "urem_seq",
-                    },
-                    dividend_lo,
-                    dividend_hi,
-                    divisor,
-                    dst_quotient,
-                    dst_remainder,
-                    tmp,
+                    "checked_srem_seq {dividend_lo}, {dividend_hi}, \
+                        {divisor}, {dst_quotient}, {dst_remainder}",
                 )
+            }
+
+            Inst::CheckedSRemSeq8 {
+                divisor,
+                dividend,
+                dst,
+            } => {
+                let divisor = pretty_print_reg(divisor.to_reg(), 1, allocs);
+                let dividend = pretty_print_reg(dividend.to_reg(), 1, allocs);
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 1, allocs);
+                format!("checked_srem_seq {dividend}, {divisor}, {dst}")
             }
 
             Inst::ValidateSdivDivisor {
@@ -1919,11 +1885,11 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         Inst::Div8 {
             divisor,
             dividend,
-            dst_quotient,
+            dst,
             ..
         } => {
             collector.reg_fixed_use(dividend.to_reg(), regs::rax());
-            collector.reg_fixed_def(dst_quotient.to_writable_reg(), regs::rax());
+            collector.reg_fixed_def(dst.to_writable_reg(), regs::rax());
             divisor.get_operands(collector);
         }
         Inst::MulHi {
@@ -1938,25 +1904,29 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_fixed_def(dst_hi.to_writable_reg(), regs::rdx());
             src2.get_operands(collector);
         }
-        Inst::CheckedDivOrRemSeq {
+        Inst::CheckedSRemSeq8 {
+            divisor,
+            dividend,
+            dst,
+            ..
+        } => {
+            collector.reg_use(divisor.to_reg());
+            collector.reg_fixed_use(dividend.to_reg(), regs::rax());
+            collector.reg_fixed_def(dst.to_writable_reg(), regs::rax());
+        }
+        Inst::CheckedSRemSeq {
             divisor,
             dividend_lo,
             dividend_hi,
             dst_quotient,
             dst_remainder,
-            tmp,
             ..
         } => {
+            collector.reg_use(divisor.to_reg());
             collector.reg_fixed_use(dividend_lo.to_reg(), regs::rax());
             collector.reg_fixed_use(dividend_hi.to_reg(), regs::rdx());
-            collector.reg_use(divisor.to_reg());
             collector.reg_fixed_def(dst_quotient.to_writable_reg(), regs::rax());
             collector.reg_fixed_def(dst_remainder.to_writable_reg(), regs::rdx());
-            if let Some(tmp) = tmp {
-                // Early def so that the temporary register does not
-                // conflict with inputs or outputs.
-                collector.reg_early_def(tmp.to_writable_reg());
-            }
         }
         Inst::ValidateSdivDivisor {
             dividend, divisor, ..
