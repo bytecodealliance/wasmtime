@@ -1708,7 +1708,7 @@
       (_ Unit (emit (MInst.Select dst ty c x y))))
     (vec_writable_to_regs reuslt)))
   
-;; paramter is "intcc compare_a compare_b rs1 rs2".
+;; Parameters are "intcc compare_a compare_b rs1 rs2".
 (decl gen_select_reg (IntCC Reg Reg Reg Reg) Reg)
 (extern constructor gen_select_reg gen_select_reg)
 
