@@ -59,10 +59,10 @@
 
        ;; Integer quotient and remainder: (div idiv) $rax $rdx (reg addr)
        ;;
-       ;; Note that this isn't use for 8-bit division which has its own `Div8`
+       ;; Note that this isn't used for 8-bit division which has its own `Div8`
        ;; instruction.
        (Div (size OperandSize) ;; 2, 4, or 8
-            (signed bool)
+            (sign DivSignedness)
             (divisor GprMem)
             (dividend_lo Gpr)
             (dividend_hi Gpr)
@@ -70,7 +70,7 @@
             (dst_remainder WritableGpr))
 
        ;; Same as `Div`, but for 8-bits where the regalloc behavior is different
-       (Div8 (signed bool)
+       (Div8 (sign DivSignedness)
              (divisor GprMem)
              (dividend Gpr)
              (dst WritableGpr))
@@ -664,6 +664,10 @@
             Size16
             Size32
             Size64))
+
+(type DivSignedness
+      (enum Signed
+            Unsigned))
 
 (type FenceKind extern
       (enum MFence
@@ -4567,32 +4571,32 @@
         dst))
 
 ;; Helper for creating `Div8` instructions
-(decl x64_div8 (Gpr GprMem bool) Gpr)
-(rule (x64_div8 dividend divisor signed)
+(decl x64_div8 (Gpr GprMem DivSignedness) Gpr)
+(rule (x64_div8 dividend divisor sign)
       (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.Div8 signed divisor dividend dst))))
+            (_ Unit (emit (MInst.Div8 sign divisor dividend dst))))
         dst))
 
 ;; Helper for creating `Div` instructions
 ;;
-;; Two registers are returned through `ValueRegs` wher ethe first is the
+;; Two registers are returned through `ValueRegs` where the first is the
 ;; quotient and the second is the remainder.
-(decl x64_div (Gpr Gpr GprMem OperandSize bool) ValueRegs)
-(rule (x64_div dividend_lo dividend_hi divisor size signed)
+(decl x64_div (Gpr Gpr GprMem OperandSize DivSignedness) ValueRegs)
+(rule (x64_div dividend_lo dividend_hi divisor size sign)
       (let ((dst_quotient WritableGpr (temp_writable_gpr))
             (dst_remainder WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.Div size signed divisor dividend_lo dividend_hi dst_quotient dst_remainder))))
+            (_ Unit (emit (MInst.Div size sign divisor dividend_lo dividend_hi dst_quotient dst_remainder))))
         (value_regs dst_quotient dst_remainder)))
 
 ;; Helper for `Div`, returning the quotient and discarding the remainder.
-(decl x64_div_quotient (Gpr Gpr GprMem OperandSize bool) ValueRegs)
-(rule (x64_div_quotient dividend_lo dividend_hi divisor size signed)
-      (value_regs_get (x64_div dividend_lo dividend_hi divisor size signed) 0))
+(decl x64_div_quotient (Gpr Gpr GprMem OperandSize DivSignedness) ValueRegs)
+(rule (x64_div_quotient dividend_lo dividend_hi divisor size sign)
+      (value_regs_get (x64_div dividend_lo dividend_hi divisor size sign) 0))
 
 ;; Helper for `Div`, returning the remainder and discarding the quotient.
-(decl x64_div_remainder (Gpr Gpr GprMem OperandSize bool) ValueRegs)
-(rule (x64_div_remainder dividend_lo dividend_hi divisor size signed)
-      (value_regs_get (x64_div dividend_lo dividend_hi divisor size signed) 1))
+(decl x64_div_remainder (Gpr Gpr GprMem OperandSize DivSignedness) ValueRegs)
+(rule (x64_div_remainder dividend_lo dividend_hi divisor size sign)
+      (value_regs_get (x64_div dividend_lo dividend_hi divisor size sign) 1))
 
 ;; Helper for creating `SignExtendData` instructions
 (decl x64_sign_extend_data (Gpr OperandSize) Gpr)

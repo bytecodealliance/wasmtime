@@ -224,7 +224,7 @@ impl Inst {
 
     pub(crate) fn div(
         size: OperandSize,
-        signed: bool,
+        sign: DivSignedness,
         divisor: RegMem,
         dividend_lo: Gpr,
         dividend_hi: Gpr,
@@ -234,7 +234,7 @@ impl Inst {
         divisor.assert_regclass_is(RegClass::Int);
         Inst::Div {
             size,
-            signed,
+            sign,
             divisor: GprMem::new(divisor).unwrap(),
             dividend_lo,
             dividend_hi,
@@ -243,10 +243,15 @@ impl Inst {
         }
     }
 
-    pub(crate) fn div8(signed: bool, divisor: RegMem, dividend: Gpr, dst: WritableGpr) -> Inst {
+    pub(crate) fn div8(
+        sign: DivSignedness,
+        divisor: RegMem,
+        dividend: Gpr,
+        dst: WritableGpr,
+    ) -> Inst {
         divisor.assert_regclass_is(RegClass::Int);
         Inst::Div8 {
-            signed,
+            sign,
             divisor: GprMem::new(divisor).unwrap(),
             dividend,
             dst,
@@ -764,7 +769,7 @@ impl PrettyPrint for Inst {
 
             Inst::Div {
                 size,
-                signed,
+                sign,
                 divisor,
                 dividend_lo,
                 dividend_hi,
@@ -780,10 +785,9 @@ impl PrettyPrint for Inst {
                     pretty_print_reg(dst_remainder.to_reg().to_reg(), size.to_bytes(), allocs);
                 format!(
                     "{} {}, {}, {}, {}, {}",
-                    ljustify(if *signed {
-                        "idiv".to_string()
-                    } else {
-                        "div".into()
+                    ljustify(match sign {
+                        DivSignedness::Signed => "idiv".to_string(),
+                        DivSignedness::Unsigned => "div".to_string(),
                     }),
                     dividend_lo,
                     dividend_hi,
@@ -794,7 +798,7 @@ impl PrettyPrint for Inst {
             }
 
             Inst::Div8 {
-                signed,
+                sign,
                 divisor,
                 dividend,
                 dst,
@@ -804,10 +808,9 @@ impl PrettyPrint for Inst {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 1, allocs);
                 format!(
                     "{} {dividend}, {divisor}, {dst}",
-                    ljustify(if *signed {
-                        "idiv".to_string()
-                    } else {
-                        "div".into()
+                    ljustify(match sign {
+                        DivSignedness::Signed => "idiv".to_string(),
+                        DivSignedness::Unsigned => "div".to_string(),
                     }),
                 )
             }

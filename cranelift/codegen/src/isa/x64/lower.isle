@@ -3497,7 +3497,7 @@
 (rule 2 (lower (udiv a @ (value_type $I8) b))
         (x64_div8 (extend_to_gpr a $I32 (ExtendKind.Zero))
                   (nonzero_divisor $I8 b)
-                  $false))
+                  (DivSignedness.Unsigned)))
 
 ;; 16-to-64-bit division is all done with a similar instruction and the only
 ;; tricky requirement here is that when div traps are disallowed the divisor
@@ -3507,7 +3507,7 @@
                           (imm $I64 0)
                           (nonzero_divisor ty b)
                           (raw_operand_size_of_type ty)
-                          $false))
+                          (DivSignedness.Unsigned)))
 
 ;; Helper to place `Value` into a `Gpr` while possibly trapping if it's zero.
 ;;
@@ -3526,7 +3526,7 @@
         (if-let $false (avoid_div_traps))
         val)
 
-;; Base case executes a `test` instruction and trap if it's equal to itself.
+;; Base case traps if `val` is zero by using a `test` + `trap_if` combo
 (rule (nonzero_divisor ty val)
       (let (
           (val Reg val)
@@ -3542,7 +3542,7 @@
         (let (
             (a Gpr (x64_sign_extend_data a (OperandSize.Size8)))
           )
-          (x64_div8 a (safe_sdiv_divisor $I8 a b) $true)))
+          (x64_div8 a (safe_sdiv_divisor $I8 a b) (DivSignedness.Signed))))
 
 (rule 1 (lower (sdiv a @ (value_type (fits_in_64 ty)) b))
         (let (
@@ -3550,7 +3550,7 @@
             (size OperandSize (raw_operand_size_of_type ty))
             (b Gpr (safe_sdiv_divisor ty a b))
           )
-          (x64_div_quotient a (x64_sign_extend_data a size) b size $true)))
+          (x64_div_quotient a (x64_sign_extend_data a size) b size (DivSignedness.Signed))))
 
 ;; Similar to `nonzero_divisor` except this checks to make sure that the divisor
 ;; provided as a `Value` is safe to divide into the dividend `Gpr` provided.
@@ -3563,6 +3563,10 @@
         (imm ty n))
 
 ;; With `avoid_div_traps=false` the divisor can be plumbed through.
+;;
+;; Note that CLIF semantics dictate that division-by-zero and INT_MIN/-1 both
+;; trap, but this matches the hardware semantics of `idiv` on x64 so they're
+;; fine to get plumbed through as-is.
 (rule 2 (safe_sdiv_divisor ty a b)
         (if-let $false (avoid_div_traps))
         b)
@@ -3580,7 +3584,7 @@
         (let (
             (a Gpr (extend_to_gpr a $I32 (ExtendKind.Zero)))
             (b Gpr (nonzero_divisor $I8 b))
-            (result Gpr (x64_div8 a b $false))
+            (result Gpr (x64_div8 a b (DivSignedness.Unsigned)))
           )
           (x64_shr $I64 result (Imm8Reg.Imm8 8))))
 
@@ -3589,7 +3593,7 @@
                            (imm $I64 0)
                            (nonzero_divisor ty b)
                            (raw_operand_size_of_type ty)
-                           $false))
+                           (DivSignedness.Unsigned)))
 
 ;; Rules for `srem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3602,7 +3606,7 @@
         (if-let n (safe_divisor_from_imm64 $I8 imm))
         (let (
             (a Gpr (x64_sign_extend_data a (OperandSize.Size8)))
-            (result Gpr (x64_div8 a (imm $I8 n) $true))
+            (result Gpr (x64_div8 a (imm $I8 n) (DivSignedness.Signed)))
           )
           (x64_shr $I64 result (Imm8Reg.Imm8 8))))
 
@@ -3617,7 +3621,7 @@
                              (x64_sign_extend_data a size)
                              (imm ty n)
                              size
-                             $true)))
+                             (DivSignedness.Signed))))
 
 (rule 1 (lower (srem a @ (value_type $I8) b))
         (let (

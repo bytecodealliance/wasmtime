@@ -399,12 +399,7 @@ pub(crate) fn emit(
             emit_std_enc_enc(sink, prefix, opcode, 1, subopcode, enc_src, rex_flags)
         }
 
-        Inst::Div {
-            signed, divisor, ..
-        }
-        | Inst::Div8 {
-            signed, divisor, ..
-        } => {
+        Inst::Div { sign, divisor, .. } | Inst::Div8 { sign, divisor, .. } => {
             let divisor = divisor.clone().to_reg_mem().with_allocs(allocs);
             let size = match inst {
                 Inst::Div {
@@ -444,7 +439,10 @@ pub(crate) fn emit(
 
             sink.add_trap(TrapCode::IntegerDivisionByZero);
 
-            let subopcode = if *signed { 7 } else { 6 };
+            let subopcode = match sign {
+                DivSignedness::Signed => 7,
+                DivSignedness::Unsigned => 6,
+            };
             match divisor {
                 RegMem::Reg { reg } => {
                     let src = int_reg_enc(reg);
@@ -599,7 +597,9 @@ pub(crate) fn emit(
             // then jump to the end.
 
             // Here, divisor == -1.
-            // x % -1 = 0; put the result into the destination, $rax.
+            // x % -1 = 0; put the result into the destination, $rdx or $rax,
+            // depending on the operand size, and ignore rax for 16-to-64 bits
+            // since as a lowering for srem the quotient will not be used.
             let inst = Inst::imm(OperandSize::Size64, 0, Writable::from_reg(dst));
             inst.emit(&[], sink, info, state);
             let inst = Inst::jmp_known(done_label);
@@ -610,14 +610,14 @@ pub(crate) fn emit(
             sink.bind_label(do_op);
             let inst = match size {
                 OperandSize::Size8 => Inst::div8(
-                    true,
+                    DivSignedness::Signed,
                     RegMem::reg(divisor),
                     Gpr::new(regs::rax()).unwrap(),
                     Writable::from_reg(Gpr::new(regs::rax()).unwrap()),
                 ),
                 _ => Inst::div(
                     size,
-                    true,
+                    DivSignedness::Signed,
                     RegMem::reg(divisor),
                     Gpr::new(regs::rax()).unwrap(),
                     Gpr::new(regs::rdx()).unwrap(),
