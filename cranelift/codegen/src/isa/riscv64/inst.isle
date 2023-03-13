@@ -998,48 +998,39 @@
 
 
 
-
 (decl lower_clz (Type Reg) Reg)
-(rule
-  (lower_clz ty rs)
-  (if-let $false (has_zbb))
+(rule (lower_clz ty rs)
   (gen_cltz $true rs ty))
-(rule 2
-  (lower_clz $I64 r)
+
+(rule 1 (lower_clz (fits_in_16 ty) r)
   (if-let $true (has_zbb))
-  (alu_rr_funct12 (AluOPRRI.Clz) r))
-(rule 2
-  (lower_clz $I32 r)
+  (let ((tmp Reg (zext r ty $I64))
+        (count Reg (alu_rr_funct12 (AluOPRRI.Clz) tmp))
+        ;; We always do the operation on the full 64-bit register, so subtract 64 from the result.
+        (result Reg (alu_rr_imm12 (AluOPRRI.Addi) count (imm12_const_add (ty_bits ty) -64))))
+    result))
+
+(rule 2 (lower_clz $I32 r)
   (if-let $true (has_zbb))
   (alu_rr_funct12 (AluOPRRI.Clzw) r))
 
-;;; for I8 and I16
-(rule 1
-  (lower_clz ty r)
+(rule 2 (lower_clz $I64 r)
   (if-let $true (has_zbb))
-  (let
-    ( ;; narrow int make all upper bits are zeros.
-      (tmp Reg (ext_int_if_need $false r ty ))
-      ;;
-      (count Reg (alu_rr_funct12 (AluOPRRI.Clz) tmp))
-      ;;make result
-      (result Reg (alu_rr_imm12 (AluOPRRI.Addi) count (imm12_const_add (ty_bits ty) -64))))
-    result))
+  (alu_rr_funct12 (AluOPRRI.Clz) r))
 
+;; Count the bottom and the top half of the 128-bit value. 
+;; Only add the bottom half if the top half is 64 (i.e. all bits are 1).
 (decl lower_clz_i128 (ValueRegs) ValueRegs)
-(rule
-  (lower_clz_i128 x)
-  (let
-    ( ;; count high part.
-      (high Reg (lower_clz $I64 (value_regs_get x 1)))
-      ;; coumt low part.
-      (low_part Reg (lower_clz $I64 (value_regs_get x 0)))
-      ;;; load constant 64.
-      (constant_64 Reg (load_u64_constant 64))
-      (low Reg (gen_select_reg (IntCC.Equal) constant_64 high low_part (zero_reg)))
-      ;; add low and high together.
-      (result Reg (alu_add high low)))
-    (value_regs result (load_u64_constant 0))))
+(rule (lower_clz_i128 x)
+  (let((high Reg (lower_clz $I64 (value_regs_get x 1)))
+       (low Reg (lower_clz $I64 (value_regs_get x 0)))
+       (const64 Reg (load_u64_constant 64))
+       (low Reg (gen_select_reg (IntCC.Equal) const64 high low (zero_reg)))
+       (result Reg (alu_add high low)))
+    (zext result $I64 $I128)))
+
+
+
   
 ;; Extends an integer if it is smaller than 64 bits.
 (decl ext_int_if_need (bool ValueRegs Type) ValueRegs)
