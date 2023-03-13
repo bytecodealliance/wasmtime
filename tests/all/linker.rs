@@ -390,3 +390,37 @@ fn test_trapping_unknown_import() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_default_value_unknown_import() -> Result<()> {
+    const WAT: &str = r#"
+      (module
+        (import "unknown" "func" (func $unknown_func (result i64 f32 externref)))
+        (func (export "run") (result i64 f32 externref)
+          call $unknown_func
+        )
+      )
+    "#;
+
+    let mut store = Store::<()>::default();
+    let module = Module::new(store.engine(), WAT).expect("failed to create module");
+    let mut linker = Linker::new(store.engine());
+
+    linker.define_unknown_imports_as_default_values(&module)?;
+    let instance = linker.instantiate(&mut store, &module)?;
+
+    // "run" calls an import function which will not be defined, so it should
+    // return default values.
+    let run_func = instance
+        .get_func(&mut store, "run")
+        .expect("expected a run func in the module");
+
+    let mut results = vec![Val::I32(1), Val::I32(2), Val::I32(3)];
+    run_func.call(&mut store, &[], &mut results)?;
+
+    assert_eq!(results[0].i64(), Some(0));
+    assert_eq!(results[1].f32(), Some(0.0));
+    assert!(results[2].externref().unwrap().is_none());
+
+    Ok(())
+}
