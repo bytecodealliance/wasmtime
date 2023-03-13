@@ -808,6 +808,27 @@
 (decl imm12_from_u64 (Imm12) u64)
 (extern extractor imm12_from_u64 imm12_from_u64)
 
+
+;;;; Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+;; bseti: Set a single bit in a register, indexed by a constant.
+(decl bseti (Reg u64) Reg)
+(rule 1 (bseti val bit)
+  (if-let $false (has_zbs))
+  (let ((const Reg (load_u64_constant (u64_shl 1 bit))))
+    (alu_rrr (AluOPRRR.Or) val const)))
+
+(rule 2 (bseti val bit)
+  (if-let $false (has_zbs))
+  (if (u64_lteq bit 12))
+  (alu_rr_imm12 (AluOPRRI.Ori) val (imm12_const (u64_as_i32 (u64_shl 1 bit)))))
+
+(rule 3 (bseti val bit)
+  (if-let $true (has_zbs))
+  (alu_rr_imm12 (AluOPRRI.Bseti) val (imm12_const (u64_as_i32 bit))))
+
+
 ;; Float Helpers
 
 (decl gen_default_frm () OptionFloatRoundingMode)
@@ -948,47 +969,35 @@
 
 
 (decl lower_ctz (Type Reg) Reg)
-(rule
-  (lower_ctz ty x)
-  (if-let $false (has_zbb))
+(rule (lower_ctz ty x)
   (gen_cltz $false x ty))
 
-(rule 2
-  (lower_ctz $I64 x)
+(rule 1 (lower_ctz (fits_in_16 ty) x)
   (if-let $true (has_zbb))
-  (alu_rr_funct12 (AluOPRRI.Ctz) x))
+  (let ((tmp Reg (bseti x (ty_bits ty))))
+    (alu_rr_funct12 (AluOPRRI.Ctzw) tmp)))
 
-(rule 2
-  (lower_ctz $I32 x)
+(rule 2 (lower_ctz $I32 x)
   (if-let $true (has_zbb))
   (alu_rr_funct12 (AluOPRRI.Ctzw) x))
 
-;;;; for I8 and I16
-(rule 1
-  (lower_ctz ty x)
+(rule 2 (lower_ctz $I64 x)
   (if-let $true (has_zbb))
-  (if-let $true (has_zbs))
-  (let
-    ((tmp Reg (alu_rr_imm12 (AluOPRRI.Bseti) x (imm12_const (ty_bits ty)))))
-    (alu_rr_funct12 (AluOPRRI.Ctzw) x)))
+  (alu_rr_funct12 (AluOPRRI.Ctz) x))
 
-;;;;
+;; Count the bottom and the top half of the 128-bit value. 
+;; Only add the top half if the bottom half is 64 (i.e. all bits are 1).
 (decl lower_ctz_128 (ValueRegs) ValueRegs)
-(rule
-  (lower_ctz_128 x)
-  (let
-    (;; count the low part.
-      (low Reg (lower_ctz $I64 (value_regs_get x 0)))
-      ;; count the high part.
-      (high_part Reg (lower_ctz $I64 (value_regs_get x 1)))
-      ;;;
-      (constant_64 Reg (load_u64_constant 64))
-      ;;;
-      (high Reg (gen_select_reg (IntCC.Equal) constant_64 low high_part (zero_reg)))
+(rule (lower_ctz_128 x)
+  (let ((low Reg (lower_ctz $I64 (value_regs_get x 0)))
+        (high Reg (lower_ctz $I64 (value_regs_get x 1)))
+        (const64 Reg (load_u64_constant 64))
+        (high Reg (gen_select_reg (IntCC.Equal) const64 low high (zero_reg)))
+        (result Reg (alu_add low high)))
+    (zext result $I64 $I128)))
 
-      ;; add low and high together.
-      (result Reg (alu_add low high)))
-    (value_regs result (load_u64_constant 0))))
+
+
 
 (decl lower_clz (Type Reg) Reg)
 (rule

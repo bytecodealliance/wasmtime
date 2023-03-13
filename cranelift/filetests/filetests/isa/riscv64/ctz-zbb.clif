@@ -1,0 +1,103 @@
+test compile precise-output
+set unwind_info=false
+target riscv64 has_zbb
+
+
+function %ctz_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = ctz v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   ori t2,a0,256
+;   ctzw a0,t2
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   ori t2, a0, 0x100
+;   .byte 0x1b, 0x95, 0x13, 0x60
+;   ret
+
+function %ctz_i16(i16) -> i16 {
+block0(v0: i16):
+    v1 = ctz v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   lui t2,16
+;   or a1,a0,t2
+;   ctzw a0,a1
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   lui t2, 0x10
+;   or a1, a0, t2
+;   .byte 0x1b, 0x95, 0x15, 0x60
+;   ret
+
+function %ctz_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = ctz v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   ctzw a0,a0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x1b, 0x15, 0x15, 0x60
+;   ret
+
+function %ctz_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = ctz v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   ctz a0,a0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x13, 0x15, 0x15, 0x60
+;   ret
+
+function %ctz_i128(i128) -> i128 {
+block0(v0: i128):
+    v1 = ctz v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   ctz a0,a0
+;   ctz a2,a1
+;   li a4,64
+;   select_reg a6,a2,zero##condition=(a4 eq a0)
+;   add a0,a0,a6
+;   li a1,0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x13, 0x15, 0x15, 0x60
+;   .byte 0x13, 0x96, 0x15, 0x60
+;   addi a4, zero, 0x40
+;   beq a4, a0, 0xc
+;   ori a6, zero, 0
+;   j 8
+;   ori a6, a2, 0
+;   add a0, a0, a6
+;   mv a1, zero
+;   ret

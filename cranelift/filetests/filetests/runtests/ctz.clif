@@ -3,8 +3,10 @@ test run
 target aarch64
 target s390x
 target x86_64
-target riscv64
 target x86_64 has_bmi1
+target riscv64
+target riscv64 has_zbb
+target riscv64 has_zbb has_zbs
 
 function %ctz_i8(i8) -> i8 {
 block0(v0: i8):
