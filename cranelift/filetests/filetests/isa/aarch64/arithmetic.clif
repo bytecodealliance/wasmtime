@@ -561,20 +561,12 @@ block0(v0: i8x16):
 
 ; VCode:
 ; block0:
-;   movz x2, #1
-;   and w4, w2, #7
-;   sub x6, xzr, x4
-;   dup v16.16b, w6
-;   ushl v0.16b, v0.16b, v16.16b
+;   ushr v0.16b, v0.16b, #1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov x2, #1
-;   and w4, w2, #7
-;   neg x6, x4
-;   dup v16.16b, w6
-;   ushl v0.16b, v0.16b, v16.16b
+;   ushr v0.16b, v0.16b, #1
 ;   ret
 
 function %add_i128(i128, i128) -> i128 {

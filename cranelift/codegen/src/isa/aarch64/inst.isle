@@ -2633,6 +2633,18 @@
 (decl ushl (Reg Reg VectorSize) Reg)
 (rule (ushl x y size) (vec_rrr (VecALUOp.Ushl) x y size))
 
+;; Helpers for generating `ushl` instructions.
+(decl ushl_vec_imm (Reg u8 VectorSize) Reg)
+(rule (ushl_vec_imm x amt size) (vec_shift_imm (VecShiftImmOp.Shl) amt x size))
+
+;; Helpers for generating `ushr` instructions.
+(decl ushr_vec_imm (Reg u8 VectorSize) Reg)
+(rule (ushr_vec_imm x amt size) (vec_shift_imm (VecShiftImmOp.Ushr) amt x size))
+
+;; Helpers for generating `sshr` instructions.
+(decl sshr_vec_imm (Reg u8 VectorSize) Reg)
+(rule (sshr_vec_imm x amt size) (vec_shift_imm (VecShiftImmOp.Sshr) amt x size))
+
 ;; Helpers for generating `rotr` instructions.
 
 (decl a64_rotr (Type Reg Reg) Reg)
@@ -3321,7 +3333,7 @@
        dst))
 (rule (fcopy_sign x y ty @ (multi_lane _ _))
       (let ((dst WritableReg (temp_writable_reg $I8X16))
-            (tmp Reg (vec_shift_imm (VecShiftImmOp.Ushr) (max_shift (lane_type ty)) y (vector_size ty)))
+            (tmp Reg (ushr_vec_imm y (max_shift (lane_type ty)) (vector_size ty)))
             (_ Unit (emit (MInst.VecShiftImmMod (VecShiftImmModOp.Sli) dst x tmp (vector_size ty) (max_shift (lane_type ty))))))
        dst))
 

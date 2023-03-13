@@ -806,4 +806,8 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
             None
         }
     }
+
+    fn shift_masked_imm(&mut self, ty: Type, imm: u64) -> u8 {
+        (imm as u8) & ((ty.lane_bits() - 1) as u8)
+    }
 }
