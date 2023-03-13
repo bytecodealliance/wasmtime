@@ -356,14 +356,14 @@ block0:
 
 ; VCode:
 ; block0:
-;   movz x1, #16457, LSL #48
-;   fmov d0, x1
+;   movz x0, #16457, LSL #48
+;   fmov d0, x0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov x1, #0x4049000000000000
-;   fmov d0, x1
+;   mov x0, #0x4049000000000000
+;   fmov d0, x0
 ;   ret
 
 function %f() -> f32 {
@@ -374,14 +374,14 @@ block0:
 
 ; VCode:
 ; block0:
-;   movz x1, #16968, LSL #16
-;   fmov s0, w1
+;   movz w0, #16968, LSL #16
+;   fmov s0, w0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov x1, #0x42480000
-;   fmov s0, w1
+;   mov w0, #0x42480000
+;   fmov s0, w0
 ;   ret
 
 function %f() -> f64 {

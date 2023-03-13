@@ -33,14 +33,14 @@ block0:
 
 ; VCode:
 ; block0:
-;   movz x1, #42679
-;   dup v0.8h, w1
+;   movz x0, #42679
+;   dup v0.8h, w0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov x1, #0xa6b7
-;   dup v0.8h, w1
+;   mov x0, #0xa6b7
+;   dup v0.8h, w0
 ;   ret
 
 function %f4(i32, i8x16, i8x16) -> i8x16 {
@@ -156,14 +156,14 @@ block0:
 
 ; VCode:
 ; block0:
-;   movi v1.2d, #18374687579166474495
-;   fmov d0, d1
+;   movi v0.2d, #18374687579166474495
+;   fmov d0, d0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   movi v1.2d, #0xff0000ffff0000ff
-;   fmov d0, d1
+;   movi v0.2d, #0xff0000ffff0000ff
+;   fmov d0, d0
 ;   ret
 
 function %f10() -> i32x4 {

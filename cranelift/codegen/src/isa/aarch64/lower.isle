@@ -26,7 +26,7 @@
 
 ;;;; Rules for `f32const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (f32const (u64_from_ieee32 n)))
+(rule (lower (f32const (u32_from_ieee32 n)))
       (constant_f32 n))
 
 ;;;; Rules for `f64const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1954,7 +1954,7 @@
 (rule -2 (lower (has_type ty (splat x @ (value_type (ty_scalar_float _)))))
       (vec_dup_from_fpu x (vector_size ty) 0))
 
-(rule (lower (has_type ty (splat (f32const (u64_from_ieee32 n)))))
+(rule (lower (has_type ty (splat (f32const (u32_from_ieee32 n)))))
       (splat_const n (vector_size ty)))
 
 (rule (lower (has_type ty (splat (f64const (u64_from_ieee64 n)))))

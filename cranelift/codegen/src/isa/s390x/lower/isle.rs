@@ -436,7 +436,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     }
 
     #[inline]
-    fn u64_as_u32(&mut self, n: u64) -> u32 {
+    fn u64_truncate_to_u32(&mut self, n: u64) -> u32 {
         n as u32
     }
 

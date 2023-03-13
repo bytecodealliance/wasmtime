@@ -2,7 +2,7 @@
 
 use regalloc2::Allocation;
 
-use crate::binemit::{CodeOffset, Reloc, StackMap};
+use crate::binemit::{Reloc, StackMap};
 use crate::ir::{types::*, RelSourceLoc};
 use crate::ir::{LibCall, MemFlags, TrapCode};
 use crate::isa::aarch64::inst::*;
@@ -10,20 +10,12 @@ use crate::machinst::{ty_bits, Reg, RegClass, Writable};
 use crate::trace;
 use core::convert::TryFrom;
 
-/// Memory label/reference finalization: convert a MemLabel to a PC-relative
-/// offset, possibly emitting relocation(s) as necessary.
-pub fn memlabel_finalize(_insn_off: CodeOffset, label: &MemLabel) -> i32 {
-    match label {
-        &MemLabel::PCRel(rel) => rel,
-    }
-}
-
 /// Memory addressing mode finalization: convert "special" modes (e.g.,
 /// generic arbitrary stack offset) into real addressing modes, possibly by
 /// emitting some helper instructions that come immediately before the use
 /// of this amode.
 pub fn mem_finalize(
-    insn_off: CodeOffset,
+    sink: Option<&mut MachBuffer<Inst>>,
     mem: &AMode,
     state: &EmitState,
 ) -> (SmallVec<[Inst; 4]>, AMode) {
@@ -74,14 +66,14 @@ pub fn mem_finalize(
             }
         }
 
-        &AMode::Label { ref label } => {
-            let off = memlabel_finalize(insn_off, label);
-            (
-                smallvec![],
-                AMode::Label {
-                    label: MemLabel::PCRel(off),
-                },
-            )
+        AMode::Const { addr } => {
+            let sink = match sink {
+                Some(sink) => sink,
+                None => return (smallvec![], mem.clone()),
+            };
+            let label = sink.get_label_for_constant(*addr);
+            let label = MemLabel::Mach(label);
+            (smallvec![], AMode::Label { label })
         }
 
         _ => (smallvec![], mem.clone()),
@@ -959,7 +951,7 @@ impl MachInstEmit for Inst {
             | &Inst::FpuLoad128 { rd, ref mem, flags } => {
                 let rd = allocs.next_writable(rd);
                 let mem = mem.with_allocs(&mut allocs);
-                let (mem_insts, mem) = mem_finalize(sink.cur_offset(), &mem, state);
+                let (mem_insts, mem) = mem_finalize(Some(sink), &mem, state);
 
                 for inst in mem_insts.into_iter() {
                     inst.emit(&[], sink, emit_info, state);
@@ -1039,7 +1031,19 @@ impl MachInstEmit for Inst {
                     &AMode::Label { ref label } => {
                         let offset = match label {
                             // cast i32 to u32 (two's-complement)
-                            &MemLabel::PCRel(off) => off as u32,
+                            MemLabel::PCRel(off) => *off as u32,
+                            // Emit a relocation into the `MachBuffer`
+                            // for the label that's being loaded from and
+                            // encode an address of 0 in its place which will
+                            // get filled in by relocation resolution later on.
+                            MemLabel::Mach(label) => {
+                                sink.use_label_at_offset(
+                                    sink.cur_offset(),
+                                    *label,
+                                    LabelUse::Ldr19,
+                                );
+                                0
+                            }
                         } / 4;
                         assert!(offset < (1 << 19));
                         match self {
@@ -1076,6 +1080,7 @@ impl MachInstEmit for Inst {
                     &AMode::SPOffset { .. }
                     | &AMode::FPOffset { .. }
                     | &AMode::NominalSPOffset { .. }
+                    | &AMode::Const { .. }
                     | &AMode::RegOffset { .. } => {
                         panic!("Should not see {:?} here!", mem)
                     }
@@ -1091,7 +1096,7 @@ impl MachInstEmit for Inst {
             | &Inst::FpuStore128 { rd, ref mem, flags } => {
                 let rd = allocs.next(rd);
                 let mem = mem.with_allocs(&mut allocs);
-                let (mem_insts, mem) = mem_finalize(sink.cur_offset(), &mem, state);
+                let (mem_insts, mem) = mem_finalize(Some(sink), &mem, state);
 
                 for inst in mem_insts.into_iter() {
                     inst.emit(&[], sink, emit_info, state);
@@ -1172,6 +1177,7 @@ impl MachInstEmit for Inst {
                     &AMode::SPOffset { .. }
                     | &AMode::FPOffset { .. }
                     | &AMode::NominalSPOffset { .. }
+                    | &AMode::Const { .. }
                     | &AMode::RegOffset { .. } => {
                         panic!("Should not see {:?} here!", mem)
                     }
@@ -2319,41 +2325,6 @@ impl MachInstEmit for Inst {
                 };
                 sink.put4(enc_inttofpu(top16, rd, rn));
             }
-            &Inst::LoadFpuConst64 { rd, const_data } => {
-                let rd = allocs.next_writable(rd);
-                let inst = Inst::FpuLoad64 {
-                    rd,
-                    mem: AMode::Label {
-                        label: MemLabel::PCRel(8),
-                    },
-                    flags: MemFlags::trusted(),
-                };
-                inst.emit(&[], sink, emit_info, state);
-                let inst = Inst::Jump {
-                    dest: BranchTarget::ResolvedOffset(12),
-                };
-                inst.emit(&[], sink, emit_info, state);
-                sink.put8(const_data);
-            }
-            &Inst::LoadFpuConst128 { rd, const_data } => {
-                let rd = allocs.next_writable(rd);
-                let inst = Inst::FpuLoad128 {
-                    rd,
-                    mem: AMode::Label {
-                        label: MemLabel::PCRel(8),
-                    },
-                    flags: MemFlags::trusted(),
-                };
-                inst.emit(&[], sink, emit_info, state);
-                let inst = Inst::Jump {
-                    dest: BranchTarget::ResolvedOffset(20),
-                };
-                inst.emit(&[], sink, emit_info, state);
-
-                for i in const_data.to_le_bytes().iter() {
-                    sink.put1(*i);
-                }
-            }
             &Inst::FpuCSel32 { rd, rn, rm, cond } => {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
@@ -3350,7 +3321,7 @@ impl MachInstEmit for Inst {
             &Inst::LoadAddr { rd, ref mem } => {
                 let rd = allocs.next_writable(rd);
                 let mem = mem.with_allocs(&mut allocs);
-                let (mem_insts, mem) = mem_finalize(sink.cur_offset(), &mem, state);
+                let (mem_insts, mem) = mem_finalize(Some(sink), &mem, state);
                 for inst in mem_insts.into_iter() {
                     inst.emit(&[], sink, emit_info, state);
                 }

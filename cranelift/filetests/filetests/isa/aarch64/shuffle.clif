@@ -12,7 +12,7 @@ block0(v0: i8x16, v1: i8x16):
 ; block0:
 ;   mov v30.16b, v0.16b
 ;   mov v31.16b, v1.16b
-;   ldr q3, pc+8 ; b 20 ; data.f128 0x05110f0204180d170b0c06041a1f0003
+;   ldr q3, [const(0)]
 ;   tbl v0.16b, { v30.16b, v31.16b }, v3.16b
 ;   ret
 ; 
@@ -20,14 +20,16 @@ block0(v0: i8x16, v1: i8x16):
 ; block0: ; offset 0x0
 ;   mov v30.16b, v0.16b
 ;   mov v31.16b, v1.16b
-;   ldr q3, #0x10
-;   b #0x20
+;   ldr q3, #0x20
+;   tbl v0.16b, {v30.16b, v31.16b}, v3.16b
+;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
 ;   adc w3, w0, wzr
 ;   add w4, w16, w12, lsl #1
 ;   orr z23.b, p3/m, z23.b, z8.b
 ;   mov z2.b, p1/z, #0x78
-;   tbl v0.16b, {v30.16b, v31.16b}, v3.16b
-;   ret
 
 function %aarch64_uzp1_i8x16(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):
@@ -541,7 +543,7 @@ block0(v0: i8x16, v1: i8x16):
 ; block0:
 ;   mov v30.16b, v0.16b
 ;   mov v31.16b, v1.16b
-;   ldr q3, pc+8 ; b 20 ; data.f128 0x1f1e1d1c1b1a19181716151413121110
+;   ldr q3, [const(0)]
 ;   tbl v0.16b, { v30.16b, v31.16b }, v3.16b
 ;   ret
 ; 
@@ -549,14 +551,16 @@ block0(v0: i8x16, v1: i8x16):
 ; block0: ; offset 0x0
 ;   mov v30.16b, v0.16b
 ;   mov v31.16b, v1.16b
-;   ldr q3, #0x10
-;   b #0x20
-;   sbfiz w16, w8, #0xe, #5
-;   b #0xfffffffffc585464
-;   madd w24, w8, w26, w6
-;   fmadd s28, s8, s30, s7
+;   ldr q3, #0x20
 ;   tbl v0.16b, {v30.16b, v31.16b}, v3.16b
 ;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   sbfiz w16, w8, #0xe, #5
+;   b #0xfffffffffc585474
+;   madd w24, w8, w26, w6
+;   fmadd s28, s8, s30, s7
 
 function %aarch64_dup_i8x16(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):

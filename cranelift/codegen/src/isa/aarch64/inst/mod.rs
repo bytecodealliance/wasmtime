@@ -10,7 +10,6 @@ use crate::{settings, CodegenError, CodegenResult};
 use crate::machinst::{PrettyPrint, Reg, RegClass, Writable};
 
 use alloc::vec::Vec;
-use core::convert::TryFrom;
 use regalloc2::{PRegSet, VReg};
 use smallvec::{smallvec, SmallVec};
 use std::string::{String, ToString};
@@ -250,215 +249,6 @@ impl Inst {
         }
     }
 
-    /// Create instructions that load a 32-bit floating-point constant.
-    pub fn load_fp_constant32<F: FnMut(Type) -> Writable<Reg>>(
-        rd: Writable<Reg>,
-        const_data: u32,
-        mut alloc_tmp: F,
-    ) -> SmallVec<[Inst; 4]> {
-        // Note that we must make sure that all bits outside the lowest 32 are set to 0
-        // because this function is also used to load wider constants (that have zeros
-        // in their most significant bits).
-        if const_data == 0 {
-            smallvec![Inst::VecDupImm {
-                rd,
-                imm: ASIMDMovModImm::zero(ScalarSize::Size32),
-                invert: false,
-                size: VectorSize::Size32x2,
-            }]
-        } else if let Some(imm) =
-            ASIMDFPModImm::maybe_from_u64(const_data.into(), ScalarSize::Size32)
-        {
-            smallvec![Inst::FpuMoveFPImm {
-                rd,
-                imm,
-                size: ScalarSize::Size32,
-            }]
-        } else {
-            let tmp = alloc_tmp(I32);
-            let mut insts = Inst::load_constant(tmp, const_data as u64, &mut alloc_tmp);
-
-            insts.push(Inst::MovToFpu {
-                rd,
-                rn: tmp.to_reg(),
-                size: ScalarSize::Size32,
-            });
-
-            insts
-        }
-    }
-
-    /// Create instructions that load a 64-bit floating-point constant.
-    pub fn load_fp_constant64<F: FnMut(Type) -> Writable<Reg>>(
-        rd: Writable<Reg>,
-        const_data: u64,
-        mut alloc_tmp: F,
-    ) -> SmallVec<[Inst; 4]> {
-        // Note that we must make sure that all bits outside the lowest 64 are set to 0
-        // because this function is also used to load wider constants (that have zeros
-        // in their most significant bits).
-        // TODO: Treat as half of a 128 bit vector and consider replicated patterns.
-        // Scalar MOVI might also be an option.
-        if const_data == 0 {
-            smallvec![Inst::VecDupImm {
-                rd,
-                imm: ASIMDMovModImm::zero(ScalarSize::Size32),
-                invert: false,
-                size: VectorSize::Size32x2,
-            }]
-        } else if let Some(imm) = ASIMDFPModImm::maybe_from_u64(const_data, ScalarSize::Size64) {
-            smallvec![Inst::FpuMoveFPImm {
-                rd,
-                imm,
-                size: ScalarSize::Size64,
-            }]
-        } else if let Ok(const_data) = u32::try_from(const_data) {
-            Inst::load_fp_constant32(rd, const_data, alloc_tmp)
-        } else if const_data & (u32::MAX as u64) == 0 {
-            let tmp = alloc_tmp(I64);
-            let mut insts = Inst::load_constant(tmp, const_data, &mut alloc_tmp);
-
-            insts.push(Inst::MovToFpu {
-                rd,
-                rn: tmp.to_reg(),
-                size: ScalarSize::Size64,
-            });
-
-            insts
-        } else {
-            smallvec![Inst::LoadFpuConst64 { rd, const_data }]
-        }
-    }
-
-    /// Create instructions that load a 128-bit vector constant.
-    pub fn load_fp_constant128<F: FnMut(Type) -> Writable<Reg>>(
-        rd: Writable<Reg>,
-        const_data: u128,
-        alloc_tmp: F,
-    ) -> SmallVec<[Inst; 5]> {
-        if let Ok(const_data) = u64::try_from(const_data) {
-            SmallVec::from(&Inst::load_fp_constant64(rd, const_data, alloc_tmp)[..])
-        } else if let Some((pattern, size)) =
-            Inst::get_replicated_vector_pattern(const_data, ScalarSize::Size64)
-        {
-            Inst::load_replicated_vector_pattern(
-                rd,
-                pattern,
-                VectorSize::from_lane_size(size, true),
-                alloc_tmp,
-            )
-        } else {
-            smallvec![Inst::LoadFpuConst128 { rd, const_data }]
-        }
-    }
-
-    /// Determine whether a 128-bit constant represents a vector consisting of elements with
-    /// the same value.
-    pub fn get_replicated_vector_pattern(
-        value: u128,
-        size: ScalarSize,
-    ) -> Option<(u64, ScalarSize)> {
-        let (mask, shift, next_size) = match size {
-            ScalarSize::Size8 => (u8::MAX as u128, 8, ScalarSize::Size128),
-            ScalarSize::Size16 => (u16::MAX as u128, 16, ScalarSize::Size8),
-            ScalarSize::Size32 => (u32::MAX as u128, 32, ScalarSize::Size16),
-            ScalarSize::Size64 => (u64::MAX as u128, 64, ScalarSize::Size32),
-            _ => return None,
-        };
-        let mut r = None;
-        let v = value & mask;
-
-        if (value >> shift) & mask == v {
-            r = Inst::get_replicated_vector_pattern(v, next_size);
-
-            if r.is_none() {
-                r = Some((v as u64, size));
-            }
-        }
-
-        r
-    }
-
-    /// Create instructions that load a vector constant consisting of elements with
-    /// the same value.
-    pub fn load_replicated_vector_pattern<F: FnMut(Type) -> Writable<Reg>>(
-        rd: Writable<Reg>,
-        pattern: u64,
-        size: VectorSize,
-        mut alloc_tmp: F,
-    ) -> SmallVec<[Inst; 5]> {
-        let lane_size = size.lane_size();
-        let widen_32_bit_pattern = |pattern, lane_size| {
-            if lane_size == ScalarSize::Size32 {
-                let pattern = pattern as u32 as u64;
-
-                ASIMDMovModImm::maybe_from_u64(pattern | (pattern << 32), ScalarSize::Size64)
-            } else {
-                None
-            }
-        };
-
-        if let Some(imm) = ASIMDMovModImm::maybe_from_u64(pattern, lane_size) {
-            smallvec![Inst::VecDupImm {
-                rd,
-                imm,
-                invert: false,
-                size
-            }]
-        } else if let Some(imm) = ASIMDMovModImm::maybe_from_u64(!pattern, lane_size) {
-            debug_assert_ne!(lane_size, ScalarSize::Size8);
-            debug_assert_ne!(lane_size, ScalarSize::Size64);
-
-            smallvec![Inst::VecDupImm {
-                rd,
-                imm,
-                invert: true,
-                size
-            }]
-        } else if let Some(imm) = widen_32_bit_pattern(pattern, lane_size) {
-            let mut insts = smallvec![];
-
-            // TODO: Implement support for 64-bit scalar MOVI; we zero-extend the
-            // lower 64 bits instead.
-            if !size.is_128bits() {
-                let tmp = alloc_tmp(types::I64X2);
-                insts.push(Inst::VecDupImm {
-                    rd: tmp,
-                    imm,
-                    invert: false,
-                    size: VectorSize::Size64x2,
-                });
-                insts.push(Inst::FpuExtend {
-                    rd,
-                    rn: tmp.to_reg(),
-                    size: ScalarSize::Size64,
-                });
-            } else {
-                insts.push(Inst::VecDupImm {
-                    rd,
-                    imm,
-                    invert: false,
-                    size: VectorSize::Size64x2,
-                });
-            }
-
-            insts
-        } else if let Some(imm) = ASIMDFPModImm::maybe_from_u64(pattern, lane_size) {
-            smallvec![Inst::VecDupFPImm { rd, imm, size }]
-        } else {
-            let tmp = alloc_tmp(I64);
-            let mut insts = SmallVec::from(&Inst::load_constant(tmp, pattern, &mut alloc_tmp)[..]);
-
-            insts.push(Inst::VecDup {
-                rd,
-                rn: tmp.to_reg(),
-                size,
-            });
-
-            insts
-        }
-    }
-
     /// Generic constructor for a load (zero-extending where appropriate).
     pub fn gen_load(into_reg: Writable<Reg>, mem: AMode, ty: Type, flags: MemFlags) -> Inst {
         match ty {
@@ -585,6 +375,7 @@ fn memarg_operands<F: Fn(VReg) -> VReg>(memarg: &AMode, collector: &mut OperandC
         &AMode::RegOffset { rn, .. } => {
             collector.reg_use(rn);
         }
+        &AMode::Const { .. } => {}
     }
 }
 
@@ -927,9 +718,6 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(rt);
             collector.reg_use(rt2);
             pairmemarg_operands(mem, collector);
-        }
-        &Inst::LoadFpuConst64 { rd, .. } | &Inst::LoadFpuConst128 { rd, .. } => {
-            collector.reg_def(rd);
         }
         &Inst::FpuToInt { rd, rn, .. } => {
             collector.reg_def(rd);
@@ -1318,7 +1106,7 @@ impl MachInst for Inst {
 // Pretty-printing of instructions.
 
 fn mem_finalize_for_show(mem: &AMode, state: &EmitState) -> (String, AMode) {
-    let (mem_insts, mem) = mem_finalize(0, mem, state);
+    let (mem_insts, mem) = mem_finalize(None, mem, state);
     let mut mem_str = mem_insts
         .into_iter()
         .map(|inst| {
@@ -2006,18 +1794,6 @@ impl Inst {
                 let mem = mem.pretty_print_default();
 
                 format!("stp {}, {}, {}", rt, rt2, mem)
-            }
-            &Inst::LoadFpuConst64 { rd, const_data } => {
-                let rd = pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size64, allocs);
-                format!(
-                    "ldr {}, pc+8 ; b 12 ; data.f64 {}",
-                    rd,
-                    f64::from_bits(const_data)
-                )
-            }
-            &Inst::LoadFpuConst128 { rd, const_data } => {
-                let rd = pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size128, allocs);
-                format!("ldr {}, pc+8 ; b 20 ; data.f128 0x{:032x}", rd, const_data)
             }
             &Inst::FpuToInt { op, rd, rn } => {
                 let (op, sizesrc, sizedest) = match op {
@@ -2820,7 +2596,7 @@ impl Inst {
                 // of the existing legalization framework).
                 let rd = allocs.next_writable(rd);
                 let mem = mem.with_allocs(allocs);
-                let (mem_insts, mem) = mem_finalize(0, &mem, state);
+                let (mem_insts, mem) = mem_finalize(None, &mem, state);
                 let mut ret = String::new();
                 for inst in mem_insts.into_iter() {
                     ret.push_str(

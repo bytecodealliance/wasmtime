@@ -88,9 +88,16 @@
 
 (decl pure u32_as_u64 (u32) u64)
 (extern constructor u32_as_u64 u32_as_u64)
+(convert u32 u64 u32_as_u64)
 
 (decl pure i64_as_u64 (i64) u64)
 (extern constructor i64_as_u64 i64_as_u64)
+
+(decl u128_as_u64 (u64) u128)
+(extern extractor u128_as_u64 u128_as_u64)
+
+(decl u64_as_u32 (u32) u64)
+(extern extractor u64_as_u32 u64_as_u32)
 
 ;;;; Primitive Arithmetic ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -128,6 +135,9 @@
 
 (decl pure u64_xor (u64 u64) u64)
 (extern constructor u64_xor u64_xor)
+
+(decl pure u64_shl (u64 u64) u64)
+(extern constructor u64_shl u64_shl)
 
 (decl pure imm64_shl (Type Imm64 Imm64) Imm64)
 (extern constructor imm64_shl imm64_shl)
@@ -388,8 +398,8 @@
 (extern constructor imm64_masked imm64_masked)
 
 ;; Extract a `u64` from an `Ieee32`.
-(decl u64_from_ieee32 (u64) Ieee32)
-(extern extractor infallible u64_from_ieee32 u64_from_ieee32)
+(decl u32_from_ieee32 (u32) Ieee32)
+(extern extractor infallible u32_from_ieee32 u32_from_ieee32)
 
 ;; Extract a `u64` from an `Ieee64`.
 (decl u64_from_ieee64 (u64) Ieee64)
