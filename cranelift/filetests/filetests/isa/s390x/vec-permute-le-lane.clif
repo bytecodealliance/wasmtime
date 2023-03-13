@@ -70,37 +70,6 @@ block0(v0: i8x16, v1: i8x16):
 ;   vperm %v24, %v24, %v25, %v3
 ;   br %r14
 
-function %shuffle_2(i8x16, i8x16) -> i8x16 wasmtime_system_v {
-block0(v0: i8x16, v1: i8x16):
-    v2 = shuffle v0, v1, [0 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47]
-    return v2
-}
-
-; VCode:
-; block0:
-;   vgbm %v3, 1
-;   bras %r1, 20 ; data.u128 0x8080808080808080808080808080800f ; vl %v5, 0(%r1)
-;   vperm %v7, %v24, %v25, %v5
-;   vn %v24, %v3, %v7
-;   br %r14
-; 
-; Disassembled:
-; block0: ; offset 0x0
-;   vgbm %v3, 1
-;   bras %r1, 0x1a
-;   .byte 0x80, 0x80
-;   .byte 0x80, 0x80
-;   .byte 0x80, 0x80
-;   .byte 0x80, 0x80
-;   .byte 0x80, 0x80
-;   .byte 0x80, 0x80
-;   .byte 0x80, 0x80
-;   .byte 0x80, 0x0f
-;   vl %v5, 0(%r1)
-;   vperm %v7, %v24, %v25, %v5
-;   vn %v24, %v3, %v7
-;   br %r14
-
 function %shuffle_vmrhg_xy(i8x16, i8x16) -> i8x16 wasmtime_system_v {
 block0(v0: i8x16, v1: i8x16):
     v2 = shuffle v0, v1, [24 25 26 27 28 29 30 31 8 9 10 11 12 13 14 15]

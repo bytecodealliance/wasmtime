@@ -339,7 +339,10 @@ fn insert_shuffle(
     let rhs = builder.use_var(fgen.get_variable_of_type(ctrl_type)?);
 
     let mask = {
-        let lanes = fgen.u.arbitrary::<[u8; 16]>()?;
+        let mut lanes = [0u8; 16];
+        for lane in lanes.iter_mut() {
+            *lane = fgen.u.int_in_range(0..=31)?;
+        }
         let lanes = ConstantData::from(lanes.as_ref());
         builder.func.dfg.immediates.push(lanes)
     };
