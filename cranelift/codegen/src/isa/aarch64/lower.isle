@@ -1289,19 +1289,13 @@
           (csel (Cond.Ne) lo_lshift maybe_hi)))))
 
 ;; Shift for vector types.
-(rule -4 (lower (has_type (ty_vec128 ty) (ishl x y)))
+(rule -3 (lower (has_type (ty_vec128 ty) (ishl x y)))
       (let ((size VectorSize (vector_size ty))
             (masked_shift_amt Reg (and_imm $I32 y (shift_mask ty)))
             (shift Reg (vec_dup masked_shift_amt size)))
         (sshl x shift size)))
-(rule -3 (lower (has_type (ty_vec128 ty) (ishl x (iconst (u64_from_imm64 n)))))
-        (ushl_vec_imm x (shift_masked_imm ty n) (vector_size ty)))
-
-;; If left-shifting by zero don't generate a shift instruction and return the
-;; original value
 (rule -2 (lower (has_type (ty_vec128 ty) (ishl x (iconst (u64_from_imm64 n)))))
-        (if-let 0 (shift_masked_imm ty n))
-        x)
+        (ushl_vec_imm x (shift_masked_imm ty n) (vector_size ty)))
 
 (decl pure shift_masked_imm (Type u64) u8)
 (extern constructor shift_masked_imm shift_masked_imm)
