@@ -702,6 +702,20 @@
 (type AMO (primitive AMO))
 (type VecMachLabel extern (enum))
 
+;; Converters
+
+(convert u8 i32 u8_as_i32)
+(decl u8_as_i32 (u8) i32)
+(extern constructor u8_as_i32 u8_as_i32)
+
+(convert u8 u64 u8_as_u64)
+
+(decl convert_valueregs_reg (ValueRegs) Reg)
+(rule (convert_valueregs_reg x)
+  (value_regs_get x 0))
+(convert ValueRegs Reg convert_valueregs_reg)
+
+
 ;; ISA Extension helpers
 
 (decl pure has_zbkb () bool)
@@ -718,14 +732,6 @@
 
 (decl pure has_zbs () bool)
 (extern constructor has_zbs has_zbs)
-
-;; Helper for creating the zero register.
-(decl zero_reg () Reg)
-(extern constructor zero_reg zero_reg)
-
-(decl value_regs_zero () ValueRegs)
-(rule (value_regs_zero)
-  (value_regs (imm $I64 0) (imm $I64 0)))
 
 (decl gen_float_round (FloatRoundOP Reg Type) Reg)
 (rule
@@ -759,18 +765,50 @@
 (decl imm (Type u64) Reg)
 (extern constructor imm imm)
 
+;; Imm12 Rules
+
+(decl pure imm12_zero () Imm12)
+(rule
+  (imm12_zero)
+  (imm12_const 0))
+
+(decl pure imm12_const (i32) Imm12)
+(extern constructor imm12_const imm12_const)
+
+(decl load_imm12 (i32) Reg)
+(rule
+  (load_imm12 x)
+  (alu_rr_imm12 (AluOPRRI.Addi) (zero_reg) (imm12_const x)))
+  
 ;; for load immediate
 (decl imm_from_bits (u64) Imm12)
 (extern constructor imm_from_bits imm_from_bits)
 
 (decl imm_from_neg_bits (i64) Imm12)
 (extern constructor imm_from_neg_bits imm_from_neg_bits)
-;;
+
+(decl imm12_const_add (i32 i32) Imm12)
+(extern constructor imm12_const_add imm12_const_add)
+
+(decl imm12_and (Imm12 i32) Imm12)
+(extern constructor imm12_and imm12_and)
+
+;; Helper for get negative of Imm12
+(decl neg_imm12 (Imm12) Imm12)
+(extern constructor neg_imm12 neg_imm12)
+
+;; Imm12 Extractors
+
+;; Helper to go directly from a `Value`, when it's an `iconst`, to an `Imm12`.
+(decl imm12_from_value (Imm12) Value)
+(extractor
+  (imm12_from_value n)
+  (def_inst (iconst (u64_from_imm64 (imm12_from_u64 n)))))
+
 (decl imm12_from_u64 (Imm12) u64)
 (extern extractor imm12_from_u64 imm12_from_u64)
 
-(decl writable_zero_reg () WritableReg)
-(extern constructor writable_zero_reg writable_zero_reg)
+;; Float Helpers
 
 (decl gen_default_frm () OptionFloatRoundingMode)
 (extern constructor gen_default_frm gen_default_frm)
@@ -853,16 +891,6 @@
             (_ Unit (emit (MInst.AluRRImm12 op dst src (imm12_zero)))))
         dst))
 
-;; Helper for get negative of Imm12
-(decl neg_imm12 (Imm12) Imm12)
-(extern constructor neg_imm12 neg_imm12)
-
-
-;; Helper to go directly from a `Value`, when it's an `iconst`, to an `Imm12`.
-(decl imm12_from_value (Imm12) Value)
-(extractor
-  (imm12_from_value n)
-  (def_inst (iconst (u64_from_imm64 (imm12_from_u64 n)))))
 
 (decl select_addi (Type) AluOPRRI)
 (rule 1 (select_addi (fits_in_32 ty)) (AluOPRRI.Addiw))
@@ -919,11 +947,6 @@
     (gen_brev8 tmp $I64)))
 
 
-(decl imm12_zero () Imm12)
-(rule
-  (imm12_zero)
-  (imm12_const 0))
-
 (decl lower_ctz (Type Reg) Reg)
 (rule
   (lower_ctz ty x)
@@ -967,11 +990,6 @@
       (result Reg (alu_add low high)))
     (value_regs result (load_u64_constant 0))))
 
-(convert u8 i32 u8_as_i32)
-(decl u8_as_i32 (u8) i32)
-(extern constructor u8_as_i32 u8_as_i32)
-
-(convert u8 u64 u8_as_u64)
 (decl lower_clz (Type Reg) Reg)
 (rule
   (lower_clz ty rs)
@@ -998,14 +1016,6 @@
       ;;make result
       (result Reg (alu_rr_imm12 (AluOPRRI.Addi) count (imm12_const_add (ty_bits ty) -64))))
     result))
-
-;; paramter is "intcc compare_a compare_b rs1 rs2".
-(decl gen_select_reg (IntCC Reg Reg Reg Reg) Reg)
-(extern constructor gen_select_reg gen_select_reg)
-
-;; load a constant into reg.
-(decl load_u64_constant (u64) Reg)
-(extern constructor load_u64_constant load_u64_constant)
 
 (decl lower_clz_i128 (ValueRegs) ValueRegs)
 (rule
@@ -1443,10 +1453,6 @@
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high low)
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high_replacement high))))
 
-(decl load_imm12 (i32) Reg)
-(rule
-  (load_imm12 x)
-  (alu_rr_imm12 (AluOPRRI.Addi) (zero_reg) (imm12_const x)))
 
 (decl lower_cls_i128 (ValueRegs) ValueRegs)
 (rule
@@ -1464,16 +1470,6 @@
       (count Reg (value_regs_get tmp 0))
       (result Reg (alu_rr_imm12 (AluOPRRI.Addi) count (imm12_const -1))))
     (value_regs result (load_u64_constant 0))))
-
-(decl imm12_const (i32) Imm12)
-(extern constructor imm12_const imm12_const)
-
-;;;;
-(decl imm12_const_add (i32 i32) Imm12)
-(extern constructor imm12_const_add imm12_const_add)
-
-(decl imm12_and (Imm12 i32) Imm12)
-(extern constructor imm12_and imm12_and)
 
 
 (decl gen_amode (Reg Offset32 Type) AMode)
@@ -1711,6 +1707,14 @@
       (reuslt VecWritableReg (vec_writable_clone dst))
       (_ Unit (emit (MInst.Select dst ty c x y))))
     (vec_writable_to_regs reuslt)))
+  
+;; Parameters are "intcc compare_a compare_b rs1 rs2".
+(decl gen_select_reg (IntCC Reg Reg Reg Reg) Reg)
+(extern constructor gen_select_reg gen_select_reg)
+
+;; load a constant into reg.
+(decl load_u64_constant (u64) Reg)
+(extern constructor load_u64_constant load_u64_constant)
 
 ;;; clone WritableReg
 ;;; if not rust compiler will complain about use moved value.
@@ -1828,12 +1832,6 @@
     ;; move back to float register.
     (move_x_to_f tmp2 ty)))
 
-
-(decl convert_valueregs_reg (ValueRegs) Reg)
-(rule
-  (convert_valueregs_reg x)
-  (value_regs_get x 0))
-(convert ValueRegs Reg convert_valueregs_reg)
 
 ;;; lower icmp
 (decl lower_icmp (IntCC ValueRegs ValueRegs Type) Reg)
@@ -2171,6 +2169,17 @@
 
 (decl sp_reg () PReg)
 (extern constructor sp_reg sp_reg)
+
+;; Helper for creating the zero register.
+(decl zero_reg () Reg)
+(extern constructor zero_reg zero_reg)
+
+(decl value_regs_zero () ValueRegs)
+(rule (value_regs_zero)
+  (value_regs (imm $I64 0) (imm $I64 0)))
+
+(decl writable_zero_reg () WritableReg)
+(extern constructor writable_zero_reg writable_zero_reg)
 
 
 ;;;; Helpers for floating point comparisons ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
