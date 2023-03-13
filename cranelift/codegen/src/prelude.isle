@@ -43,11 +43,6 @@
 (decl value_type (Type) Value)
 (extern extractor infallible value_type value_type)
 
-;; Pure/fallible constructor that tries to add two `u32`s, interpreted
-;; as signed values, and fails to match on overflow.
-(decl pure partial s32_add_fallible (u32 u32) u32)
-(extern constructor s32_add_fallible s32_add_fallible)
-
 ;; Extractor that matches a `u32` only if non-negative.
 (decl u32_nonnegative (u32) u32)
 (extern extractor u32_nonnegative u32_nonnegative)
@@ -104,6 +99,11 @@
 
 (decl pure u32_add (u32 u32) u32)
 (extern constructor u32_add u32_add)
+
+;; Pure/fallible constructor that tries to add two `u32`s, interpreted
+;; as signed values, and fails to match on overflow.
+(decl pure partial s32_add_fallible (u32 u32) u32)
+(extern constructor s32_add_fallible s32_add_fallible)
 
 (decl pure u64_add (u64 u64) u64)
 (extern constructor u64_add u64_add)
