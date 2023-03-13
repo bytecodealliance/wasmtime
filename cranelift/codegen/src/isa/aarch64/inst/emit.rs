@@ -3115,20 +3115,15 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_jump26(0b000101, not_taken.as_offset26_or_zero()));
             }
             &Inst::TrapIf { kind, trap_code } => {
+                let label = sink.defer_trap(trap_code, state.take_stack_map());
                 // condbr KIND, LABEL
                 let off = sink.cur_offset();
-                let label = sink.get_label();
                 sink.put4(enc_conditional_br(
                     BranchTarget::Label(label),
-                    kind.invert(),
+                    kind,
                     &mut allocs,
                 ));
                 sink.use_label_at_offset(off, label, LabelUse::Branch19);
-                // udf
-                let trap = Inst::Udf { trap_code };
-                trap.emit(&[], sink, emit_info, state);
-                // LABEL:
-                sink.bind_label(label);
             }
             &Inst::IndirectBr { rn, .. } => {
                 let rn = allocs.next(rn);
@@ -3142,15 +3137,11 @@ impl MachInstEmit for Inst {
                 sink.put4(0xd4200000);
             }
             &Inst::Udf { trap_code } => {
-                // "CLIF" in hex, to make the trap recognizable during
-                // debugging.
-                let encoding = 0xc11f;
-
                 sink.add_trap(trap_code);
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
-                sink.put4(encoding);
+                sink.put_data(Inst::TRAP_OPCODE);
             }
             &Inst::Adr { rd, off } => {
                 let rd = allocs.next_writable(rd);

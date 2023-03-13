@@ -7041,8 +7041,8 @@ fn test_s390x_binemit() {
             cond: Cond::from_mask(1),
             trap_code: TrapCode::StackOverflow,
         },
-        "A7E400030000",
-        "jno 6 ; trap",
+        "A71400020000",
+        "jo #trap",
     ));
 
     insns.push((

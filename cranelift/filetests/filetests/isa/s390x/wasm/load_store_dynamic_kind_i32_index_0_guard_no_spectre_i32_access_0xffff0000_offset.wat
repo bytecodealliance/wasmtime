@@ -58,7 +58,7 @@
 ;;   lgr %r5, %r2
 ;;   llilf %r2, 4294901764
 ;;   algfr %r2, %r5
-;;   jle 6 ; trap
+;;   jnle #trap
 ;;   lgr %r5, %r7
 ;;   lg %r7, 8(%r5)
 ;;   clgr %r2, %r7
@@ -82,7 +82,7 @@
 ;;   llgfr %r3, %r2
 ;;   llilf %r5, 4294901764
 ;;   algfr %r5, %r2
-;;   jle 6 ; trap
+;;   jnle #trap
 ;;   lg %r2, 8(%r4)
 ;;   clgr %r5, %r2
 ;;   jgh label3 ; jg label1

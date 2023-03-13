@@ -13,9 +13,9 @@
 ;;    b:	 48b80000000000000080 	
 ;; 				movabs	rax, 0x8000000000000000
 ;;   15:	 4883f900             	cmp	rcx, 0
-;;   19:	 0f8502000000         	jne	0x21
-;;   1f:	 0f0b                 	ud2	
-;;   21:	 4899                 	cqo	
-;;   23:	 48f7f9               	idiv	rcx
-;;   26:	 5d                   	pop	rbp
-;;   27:	 c3                   	ret	
+;;   19:	 0f8407000000         	je	0x26
+;;   1f:	 4899                 	cqo	
+;;   21:	 48f7f9               	idiv	rcx
+;;   24:	 5d                   	pop	rbp
+;;   25:	 c3                   	ret	
+;;   26:	 0f0b                 	ud2	

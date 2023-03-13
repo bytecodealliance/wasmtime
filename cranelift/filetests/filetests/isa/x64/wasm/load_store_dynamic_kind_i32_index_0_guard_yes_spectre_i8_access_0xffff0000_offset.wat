@@ -48,7 +48,7 @@
 ;;   movl    %edi, %r11d
 ;;   movq    %r11, %rax
 ;;   addq    %rax, const(0), %rax
-;;   jnb ; ud2 heap_oob ;
+;;   jb #trap=heap_oob
 ;;   movq    8(%rdx), %rcx
 ;;   addq    %r11, 0(%rdx), %r11
 ;;   movl    $-65536, %edx
@@ -72,7 +72,7 @@
 ;;   movl    %edi, %r11d
 ;;   movq    %r11, %rax
 ;;   addq    %rax, const(0), %rax
-;;   jnb ; ud2 heap_oob ;
+;;   jb #trap=heap_oob
 ;;   movq    8(%rsi), %rcx
 ;;   addq    %r11, 0(%rsi), %r11
 ;;   movl    $-65536, %edx

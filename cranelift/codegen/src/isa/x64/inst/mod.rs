@@ -472,6 +472,10 @@ impl Inst {
         Inst::Ud2 { trap_code }
     }
 
+    pub(crate) fn trap_if(cc: CC, trap_code: TrapCode) -> Inst {
+        Inst::TrapIf { cc, trap_code }
+    }
+
     pub(crate) fn cmove(size: OperandSize, cc: CC, src: RegMem, dst: Writable<Reg>) -> Inst {
         debug_assert!(size.is_one_of(&[
             OperandSize::Size16,
@@ -1675,7 +1679,7 @@ impl PrettyPrint for Inst {
             }
 
             Inst::TrapIf { cc, trap_code, .. } => {
-                format!("j{} ; ud2 {} ;", cc.invert().to_string(), trap_code)
+                format!("j{} #trap={}", cc.to_string(), trap_code)
             }
 
             Inst::TrapIfAnd {
@@ -2502,6 +2506,8 @@ impl MachInst for Inst {
     }
 
     type LabelUse = LabelUse;
+
+    const TRAP_OPCODE: &'static [u8] = &[0x0f, 0x0b];
 }
 
 /// State carried between emissions of a sequence of instructions.

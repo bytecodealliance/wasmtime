@@ -998,6 +998,7 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
 impl MachInst for Inst {
     type ABIMachineSpec = S390xMachineDeps;
     type LabelUse = LabelUse;
+    const TRAP_OPCODE: &'static [u8] = &[0, 0];
 
     fn get_operands<F: Fn(VReg) -> VReg>(&self, collector: &mut OperandCollector<'_, F>) {
         s390x_get_operands(self, collector);
@@ -3187,8 +3188,8 @@ impl Inst {
             &Inst::Debugtrap => "debugtrap".to_string(),
             &Inst::Trap { .. } => "trap".to_string(),
             &Inst::TrapIf { cond, .. } => {
-                let cond = cond.invert().pretty_print_default();
-                format!("j{} 6 ; trap", cond)
+                let cond = cond.pretty_print_default();
+                format!("j{} #trap", cond)
             }
             &Inst::JTSequence { ridx, ref targets } => {
                 let ridx = pretty_print_reg(ridx, allocs);

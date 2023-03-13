@@ -237,33 +237,33 @@ block0(v0: f32):
 ; VCode:
 ; block0:
 ;   fcmp s0, s0
-;   b.vc 8 ; udf
+;   b.vs #trap
 ;   fmov s4, #-1
 ;   fcmp s0, s4
-;   b.gt 8 ; udf
+;   b.le #trap
 ;   movz w8, #20352, LSL #16
 ;   fmov s18, w8
 ;   fcmp s0, s18
-;   b.lt 8 ; udf
+;   b.ge #trap
 ;   fcvtzu w0, s0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fcmp s0, s0
-;   b.vc #0xc
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
+;   b.vs #0x2c
 ;   fmov s4, #-1.00000000
 ;   fcmp s0, s4
-;   b.gt #0x1c
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   b.le #0x30
 ;   mov w8, #0x4f800000
 ;   fmov s18, w8
 ;   fcmp s0, s18
-;   b.lt #0x30
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   b.ge #0x34
 ;   fcvtzu w0, s0
 ;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
 
 function %f14(f32) -> i64 {
 block0(v0: f32):
@@ -274,33 +274,33 @@ block0(v0: f32):
 ; VCode:
 ; block0:
 ;   fcmp s0, s0
-;   b.vc 8 ; udf
+;   b.vs #trap
 ;   fmov s4, #-1
 ;   fcmp s0, s4
-;   b.gt 8 ; udf
+;   b.le #trap
 ;   movz w8, #24448, LSL #16
 ;   fmov s18, w8
 ;   fcmp s0, s18
-;   b.lt 8 ; udf
+;   b.ge #trap
 ;   fcvtzu x0, s0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fcmp s0, s0
-;   b.vc #0xc
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
+;   b.vs #0x2c
 ;   fmov s4, #-1.00000000
 ;   fcmp s0, s4
-;   b.gt #0x1c
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   b.le #0x30
 ;   mov w8, #0x5f800000
 ;   fmov s18, w8
 ;   fcmp s0, s18
-;   b.lt #0x30
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   b.ge #0x34
 ;   fcvtzu x0, s0
 ;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
 
 function %f15(f64) -> i32 {
 block0(v0: f64):
@@ -311,33 +311,33 @@ block0(v0: f64):
 ; VCode:
 ; block0:
 ;   fcmp d0, d0
-;   b.vc 8 ; udf
+;   b.vs #trap
 ;   fmov d4, #-1
 ;   fcmp d0, d4
-;   b.gt 8 ; udf
+;   b.le #trap
 ;   movz x8, #16880, LSL #48
 ;   fmov d18, x8
 ;   fcmp d0, d18
-;   b.lt 8 ; udf
+;   b.ge #trap
 ;   fcvtzu w0, d0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fcmp d0, d0
-;   b.vc #0xc
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
+;   b.vs #0x2c
 ;   fmov d4, #-1.00000000
 ;   fcmp d0, d4
-;   b.gt #0x1c
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   b.le #0x30
 ;   mov x8, #0x41f0000000000000
 ;   fmov d18, x8
 ;   fcmp d0, d18
-;   b.lt #0x30
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   b.ge #0x34
 ;   fcvtzu w0, d0
 ;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
 
 function %f16(f64) -> i64 {
 block0(v0: f64):
@@ -348,33 +348,33 @@ block0(v0: f64):
 ; VCode:
 ; block0:
 ;   fcmp d0, d0
-;   b.vc 8 ; udf
+;   b.vs #trap
 ;   fmov d4, #-1
 ;   fcmp d0, d4
-;   b.gt 8 ; udf
+;   b.le #trap
 ;   movz x8, #17392, LSL #48
 ;   fmov d18, x8
 ;   fcmp d0, d18
-;   b.lt 8 ; udf
+;   b.ge #trap
 ;   fcvtzu x0, d0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fcmp d0, d0
-;   b.vc #0xc
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
+;   b.vs #0x2c
 ;   fmov d4, #-1.00000000
 ;   fcmp d0, d4
-;   b.gt #0x1c
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   b.le #0x30
 ;   mov x8, #0x43f0000000000000
 ;   fmov d18, x8
 ;   fcmp d0, d18
-;   b.lt #0x30
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   b.ge #0x34
 ;   fcvtzu x0, d0
 ;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
 
 function %f17(f32) -> i32 {
 block0(v0: f32):
@@ -449,35 +449,35 @@ block0(v0: f32):
 ; VCode:
 ; block0:
 ;   fcmp s0, s0
-;   b.vc 8 ; udf
+;   b.vs #trap
 ;   movz w4, #52992, LSL #16
 ;   fmov s6, w4
 ;   fcmp s0, s6
-;   b.ge 8 ; udf
+;   b.lt #trap
 ;   movz w10, #20224, LSL #16
 ;   fmov s20, w10
 ;   fcmp s0, s20
-;   b.lt 8 ; udf
+;   b.ge #trap
 ;   fcvtzs w0, s0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fcmp s0, s0
-;   b.vc #0xc
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
+;   b.vs #0x30
 ;   mov w4, #-0x31000000
 ;   fmov s6, w4
 ;   fcmp s0, s6
-;   b.ge #0x20
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   b.lt #0x34
 ;   mov w10, #0x4f000000
 ;   fmov s20, w10
 ;   fcmp s0, s20
-;   b.lt #0x34
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   b.ge #0x38
 ;   fcvtzs w0, s0
 ;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
 
 function %f22(f32) -> i64 {
 block0(v0: f32):
@@ -488,35 +488,35 @@ block0(v0: f32):
 ; VCode:
 ; block0:
 ;   fcmp s0, s0
-;   b.vc 8 ; udf
+;   b.vs #trap
 ;   movz w4, #57088, LSL #16
 ;   fmov s6, w4
 ;   fcmp s0, s6
-;   b.ge 8 ; udf
+;   b.lt #trap
 ;   movz w10, #24320, LSL #16
 ;   fmov s20, w10
 ;   fcmp s0, s20
-;   b.lt 8 ; udf
+;   b.ge #trap
 ;   fcvtzs x0, s0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fcmp s0, s0
-;   b.vc #0xc
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
+;   b.vs #0x30
 ;   mov w4, #-0x21000000
 ;   fmov s6, w4
 ;   fcmp s0, s6
-;   b.ge #0x20
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   b.lt #0x34
 ;   mov w10, #0x5f000000
 ;   fmov s20, w10
 ;   fcmp s0, s20
-;   b.lt #0x34
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   b.ge #0x38
 ;   fcvtzs x0, s0
 ;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
 
 function %f23(f64) -> i32 {
 block0(v0: f64):
@@ -527,35 +527,36 @@ block0(v0: f64):
 ; VCode:
 ; block0:
 ;   fcmp d0, d0
-;   b.vc 8 ; udf
+;   b.vs #trap
 ;   ldr d4, [const(0)]
 ;   fcmp d0, d4
-;   b.gt 8 ; udf
+;   b.le #trap
 ;   movz x8, #16864, LSL #48
 ;   fmov d18, x8
 ;   fcmp d0, d18
-;   b.lt 8 ; udf
+;   b.ge #trap
 ;   fcvtzs w0, d0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fcmp d0, d0
-;   b.vc #0xc
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
-;   ldr d4, #0x38
+;   b.vs #0x38
+;   ldr d4, #0x30
 ;   fcmp d0, d4
-;   b.gt #0x1c
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   b.le #0x3c
 ;   mov x8, #0x41e0000000000000
 ;   fmov d18, x8
 ;   fcmp d0, d18
-;   b.lt #0x30
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   b.ge #0x40
 ;   fcvtzs w0, d0
 ;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
 ;   .byte 0x00, 0x00, 0x20, 0x00
 ;   .byte 0x00, 0x00, 0xe0, 0xc1
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
 
 function %f24(f64) -> i64 {
 block0(v0: f64):
@@ -566,35 +567,35 @@ block0(v0: f64):
 ; VCode:
 ; block0:
 ;   fcmp d0, d0
-;   b.vc 8 ; udf
+;   b.vs #trap
 ;   movz x4, #50144, LSL #48
 ;   fmov d6, x4
 ;   fcmp d0, d6
-;   b.ge 8 ; udf
+;   b.lt #trap
 ;   movz x10, #17376, LSL #48
 ;   fmov d20, x10
 ;   fcmp d0, d20
-;   b.lt 8 ; udf
+;   b.ge #trap
 ;   fcvtzs x0, d0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fcmp d0, d0
-;   b.vc #0xc
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
+;   b.vs #0x30
 ;   mov x4, #-0x3c20000000000000
 ;   fmov d6, x4
 ;   fcmp d0, d6
-;   b.ge #0x20
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   b.lt #0x34
 ;   mov x10, #0x43e0000000000000
 ;   fmov d20, x10
 ;   fcmp d0, d20
-;   b.lt #0x34
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   b.ge #0x38
 ;   fcvtzs x0, d0
 ;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
 
 function %f25(f32) -> i32 {
 block0(v0: f32):

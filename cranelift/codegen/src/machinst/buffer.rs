@@ -229,6 +229,8 @@ pub struct MachBuffer<I: VCodeInst> {
     label_aliases: SmallVec<[MachLabel; 16]>,
     /// Constants that must be emitted at some point.
     pending_constants: SmallVec<[MachLabelConstant; 16]>,
+    /// Traps that must be emitted at some point.
+    pending_traps: SmallVec<[MachLabelTrap; 16]>,
     /// Fixups that must be performed after all code is emitted.
     fixup_records: SmallVec<[MachLabelFixup<I>; 16]>,
     /// Current deadline at which all constants are flushed and all code labels
@@ -371,6 +373,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             label_offsets: SmallVec::new(),
             label_aliases: SmallVec::new(),
             pending_constants: SmallVec::new(),
+            pending_traps: SmallVec::new(),
             fixup_records: SmallVec::new(),
             island_deadline: UNKNOWN_LABEL_OFFSET,
             island_worst_case_size: 0,
@@ -1077,15 +1080,34 @@ impl<I: VCodeInst> MachBuffer<I> {
             align,
             label
         );
-        let deadline = self.cur_offset().saturating_add(max_distance);
-        self.island_worst_case_size += data.len() as CodeOffset;
-        self.island_worst_case_size =
-            (self.island_worst_case_size + I::LabelUse::ALIGN - 1) & !(I::LabelUse::ALIGN - 1);
+        self.update_deadline(data.len(), max_distance);
         self.pending_constants.push(MachLabelConstant {
             label,
             align,
             data: SmallVec::from(data),
         });
+    }
+
+    /// Emit a trap instruction at some point in the future, binding the given
+    /// label to its offset. The trap will be placed at most `max_distance`
+    /// from the current offset.
+    pub fn defer_trap(&mut self, code: TrapCode, stack_map: Option<StackMap>) -> MachLabel {
+        let label = self.get_label();
+        self.update_deadline(I::TRAP_OPCODE.len(), u32::MAX);
+        self.pending_traps.push(MachLabelTrap {
+            label,
+            code,
+            stack_map,
+        });
+        label
+    }
+
+    fn update_deadline(&mut self, len: usize, max_distance: CodeOffset) {
+        trace!("defer: eventually emit {} bytes", len);
+        let deadline = self.cur_offset().saturating_add(max_distance);
+        self.island_worst_case_size += len as CodeOffset;
+        self.island_worst_case_size =
+            (self.island_worst_case_size + I::LabelUse::ALIGN - 1) & !(I::LabelUse::ALIGN - 1);
         if deadline < self.island_deadline {
             self.island_deadline = deadline;
         }
@@ -1131,12 +1153,28 @@ impl<I: VCodeInst> MachBuffer<I> {
         self.island_deadline = UNKNOWN_LABEL_OFFSET;
         self.island_worst_case_size = 0;
 
-        // First flush out all constants so we have more labels in case fixups
-        // are applied against these labels.
+        // First flush out all traps/constants so we have more labels in case
+        // fixups are applied against these labels.
         for MachLabelConstant { label, align, data } in mem::take(&mut self.pending_constants) {
             self.align_to(align);
             self.bind_label(label);
             self.put_data(&data[..]);
+        }
+
+        for MachLabelTrap {
+            label,
+            code,
+            stack_map,
+        } in mem::take(&mut self.pending_traps)
+        {
+            self.align_to(I::LabelUse::ALIGN);
+            self.bind_label(label);
+            self.add_trap(code);
+            if let Some(map) = stack_map {
+                let extent = StackMapExtent::UpcomingBytes(I::TRAP_OPCODE.len() as u32);
+                self.add_stack_map(extent, map);
+            }
+            self.put_data(I::TRAP_OPCODE);
         }
 
         for fixup in mem::take(&mut self.fixup_records) {
@@ -1256,7 +1294,10 @@ impl<I: VCodeInst> MachBuffer<I> {
     }
 
     fn finish_emission_maybe_forcing_veneers(&mut self, force_veneers: bool) {
-        while !self.pending_constants.is_empty() || !self.fixup_records.is_empty() {
+        while !self.pending_constants.is_empty()
+            || !self.pending_traps.is_empty()
+            || !self.fixup_records.is_empty()
+        {
             // `emit_island()` will emit any pending veneers and constants, and
             // as a side-effect, will also take care of any fixups with resolved
             // labels eagerly.
@@ -1477,6 +1518,16 @@ struct MachLabelConstant {
     align: CodeOffset,
     /// This data will be emitted when able.
     data: SmallVec<[u8; 16]>,
+}
+
+/// A trap that is deferred to the next constant-pool opportunity.
+struct MachLabelTrap {
+    /// This label will refer to the trap's offset.
+    label: MachLabel,
+    /// The code associated with this trap.
+    code: TrapCode,
+    /// An optional stack map to associate with this trap.
+    stack_map: Option<StackMap>,
 }
 
 /// A fixup to perform on the buffer once code is emitted. Fixups always refer
@@ -1748,20 +1799,20 @@ mod test {
 
         buf.bind_label(label(0));
         let inst = Inst::CondBr {
-            kind: CondBrKind::NotZero(xreg(0)),
+            kind: CondBrKind::Zero(xreg(0)),
             taken: target(1),
             not_taken: target(2),
         };
         inst.emit(&[], &mut buf, &info, &mut state);
 
         buf.bind_label(label(1));
-        let inst = Inst::Udf {
-            trap_code: TrapCode::Interrupt,
-        };
+        let inst = Inst::Nop4;
         inst.emit(&[], &mut buf, &info, &mut state);
 
         buf.bind_label(label(2));
-        let inst = Inst::Nop4;
+        let inst = Inst::Udf {
+            trap_code: TrapCode::Interrupt,
+        };
         inst.emit(&[], &mut buf, &info, &mut state);
 
         buf.bind_label(label(3));

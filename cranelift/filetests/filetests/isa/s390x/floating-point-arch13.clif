@@ -10,13 +10,13 @@ block0(v0: f32):
 ; VCode:
 ; block0:
 ;   cebr %f0, %f0
-;   jno 6 ; trap
+;   jo #trap
 ;   bras %r1, 8 ; data.f32 256 ; le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jnhe 6 ; trap
+;   jhe #trap
 ;   bras %r1, 8 ; data.f32 -1 ; vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
-;   jnle 6 ; trap
+;   jle #trap
 ;   wclfeb %v20, %f0, 0, 5
 ;   vlgvf %r2, %v20, 0
 ;   br %r14
@@ -24,23 +24,23 @@ block0(v0: f32):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cebr %f0, %f0
-;   jno 0xa
-;   .byte 0x00, 0x00 ; trap: bad_toint
-;   bras %r1, 0x12
+;   jo 0x42
+;   bras %r1, 0x10
 ;   ic %r8, 0
 ;   le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jnhe 0x20
-;   .byte 0x00, 0x00 ; trap: int_ovf
-;   bras %r1, 0x28
+;   jhe 0x44
+;   bras %r1, 0x24
 ;   icm %r8, 0, 0
 ;   vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
-;   jnle 0x3a
-;   .byte 0x00, 0x00 ; trap: int_ovf
+;   jle 0x46
 ;   vclgd %v20, %v0, 2, 8, 5
 ;   vlgvf %r2, %v20, 0
 ;   br %r14
+;   .byte 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x00, 0x00 ; trap: int_ovf
 
 function %fcvt_to_sint_f32_i8(f32) -> i8 {
 block0(v0: f32):
@@ -51,13 +51,13 @@ block0(v0: f32):
 ; VCode:
 ; block0:
 ;   cebr %f0, %f0
-;   jno 6 ; trap
+;   jo #trap
 ;   bras %r1, 8 ; data.f32 128 ; le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jnhe 6 ; trap
+;   jhe #trap
 ;   bras %r1, 8 ; data.f32 -129 ; vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
-;   jnle 6 ; trap
+;   jle #trap
 ;   wcfeb %v20, %f0, 0, 5
 ;   vlgvf %r2, %v20, 0
 ;   br %r14
@@ -65,24 +65,24 @@ block0(v0: f32):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cebr %f0, %f0
-;   jno 0xa
-;   .byte 0x00, 0x00 ; trap: bad_toint
-;   bras %r1, 0x12
+;   jo 0x42
+;   bras %r1, 0x10
 ;   ic %r0, 0
 ;   le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jnhe 0x20
-;   .byte 0x00, 0x00 ; trap: int_ovf
-;   bras %r1, 0x28
+;   jhe 0x44
+;   bras %r1, 0x24
 ;   .byte 0xc3, 0x01
 ;   .byte 0x00, 0x00
 ;   vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
-;   jnle 0x3a
-;   .byte 0x00, 0x00 ; trap: int_ovf
+;   jle 0x46
 ;   vcgd %v20, %v0, 2, 8, 5
 ;   vlgvf %r2, %v20, 0
 ;   br %r14
+;   .byte 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x00, 0x00 ; trap: int_ovf
 
 function %fcvt_to_uint_f32_i16(f32) -> i16 {
 block0(v0: f32):
@@ -93,13 +93,13 @@ block0(v0: f32):
 ; VCode:
 ; block0:
 ;   cebr %f0, %f0
-;   jno 6 ; trap
+;   jo #trap
 ;   bras %r1, 8 ; data.f32 65536 ; le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jnhe 6 ; trap
+;   jhe #trap
 ;   bras %r1, 8 ; data.f32 -1 ; vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
-;   jnle 6 ; trap
+;   jle #trap
 ;   wclfeb %v20, %f0, 0, 5
 ;   vlgvf %r2, %v20, 0
 ;   br %r14
@@ -107,23 +107,23 @@ block0(v0: f32):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cebr %f0, %f0
-;   jno 0xa
-;   .byte 0x00, 0x00 ; trap: bad_toint
-;   bras %r1, 0x12
+;   jo 0x42
+;   bras %r1, 0x10
 ;   be 0
 ;   le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jnhe 0x20
-;   .byte 0x00, 0x00 ; trap: int_ovf
-;   bras %r1, 0x28
+;   jhe 0x44
+;   bras %r1, 0x24
 ;   icm %r8, 0, 0
 ;   vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
-;   jnle 0x3a
-;   .byte 0x00, 0x00 ; trap: int_ovf
+;   jle 0x46
 ;   vclgd %v20, %v0, 2, 8, 5
 ;   vlgvf %r2, %v20, 0
 ;   br %r14
+;   .byte 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x00, 0x00 ; trap: int_ovf
 
 function %fcvt_to_sint_f32_i16(f32) -> i16 {
 block0(v0: f32):
@@ -134,13 +134,13 @@ block0(v0: f32):
 ; VCode:
 ; block0:
 ;   cebr %f0, %f0
-;   jno 6 ; trap
+;   jo #trap
 ;   bras %r1, 8 ; data.f32 32768 ; le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jnhe 6 ; trap
+;   jhe #trap
 ;   bras %r1, 8 ; data.f32 -32769 ; vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
-;   jnle 6 ; trap
+;   jle #trap
 ;   wcfeb %v20, %f0, 0, 5
 ;   vlgvf %r2, %v20, 0
 ;   br %r14
@@ -148,24 +148,24 @@ block0(v0: f32):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cebr %f0, %f0
-;   jno 0xa
-;   .byte 0x00, 0x00 ; trap: bad_toint
-;   bras %r1, 0x12
+;   jo 0x42
+;   bras %r1, 0x10
 ;   bc 0, 0
 ;   le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jnhe 0x20
-;   .byte 0x00, 0x00 ; trap: int_ovf
-;   bras %r1, 0x28
-;   bpp 0, -0x31dc, 0x100
+;   jhe 0x44
+;   bras %r1, 0x24
+;   bpp 0, -0x31e0, 0x100
 ;   lpr %r0, %r0
 ;   .byte 0x08, 0x03
 ;   wfcsb %f0, %v16
-;   jnle 0x3a
-;   .byte 0x00, 0x00 ; trap: int_ovf
+;   jle 0x46
 ;   vcgd %v20, %v0, 2, 8, 5
 ;   vlgvf %r2, %v20, 0
 ;   br %r14
+;   .byte 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x00, 0x00 ; trap: int_ovf
 
 function %fcvt_to_uint_f32_i32(f32) -> i32 {
 block0(v0: f32):
@@ -176,13 +176,13 @@ block0(v0: f32):
 ; VCode:
 ; block0:
 ;   cebr %f0, %f0
-;   jno 6 ; trap
+;   jo #trap
 ;   bras %r1, 8 ; data.f32 4294967300 ; le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jnhe 6 ; trap
+;   jhe #trap
 ;   bras %r1, 8 ; data.f32 -1 ; vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
-;   jnle 6 ; trap
+;   jle #trap
 ;   wclfeb %v20, %f0, 0, 5
 ;   vlgvf %r2, %v20, 0
 ;   br %r14
@@ -190,23 +190,23 @@ block0(v0: f32):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cebr %f0, %f0
-;   jno 0xa
-;   .byte 0x00, 0x00 ; trap: bad_toint
-;   bras %r1, 0x12
+;   jo 0x42
+;   bras %r1, 0x10
 ;   cvb %r8, 0
 ;   le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jnhe 0x20
-;   .byte 0x00, 0x00 ; trap: int_ovf
-;   bras %r1, 0x28
+;   jhe 0x44
+;   bras %r1, 0x24
 ;   icm %r8, 0, 0
 ;   vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
-;   jnle 0x3a
-;   .byte 0x00, 0x00 ; trap: int_ovf
+;   jle 0x46
 ;   vclgd %v20, %v0, 2, 8, 5
 ;   vlgvf %r2, %v20, 0
 ;   br %r14
+;   .byte 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x00, 0x00 ; trap: int_ovf
 
 function %fcvt_to_sint_f32_i32(f32) -> i32 {
 block0(v0: f32):
@@ -217,13 +217,13 @@ block0(v0: f32):
 ; VCode:
 ; block0:
 ;   cebr %f0, %f0
-;   jno 6 ; trap
+;   jo #trap
 ;   bras %r1, 8 ; data.f32 2147483600 ; le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jnhe 6 ; trap
+;   jhe #trap
 ;   bras %r1, 8 ; data.f32 -2147484000 ; vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
-;   jnle 6 ; trap
+;   jle #trap
 ;   wcfeb %v20, %f0, 0, 5
 ;   vlgvf %r2, %v20, 0
 ;   br %r14
@@ -231,24 +231,24 @@ block0(v0: f32):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cebr %f0, %f0
-;   jno 0xa
-;   .byte 0x00, 0x00 ; trap: bad_toint
-;   bras %r1, 0x12
+;   jo 0x42
+;   bras %r1, 0x10
 ;   cvb %r0, 0
 ;   le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jnhe 0x20
-;   .byte 0x00, 0x00 ; trap: int_ovf
-;   bras %r1, 0x28
+;   jhe 0x44
+;   bras %r1, 0x24
 ;   .byte 0xcf, 0x00
 ;   .byte 0x00, 0x01
 ;   vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
-;   jnle 0x3a
-;   .byte 0x00, 0x00 ; trap: int_ovf
+;   jle 0x46
 ;   vcgd %v20, %v0, 2, 8, 5
 ;   vlgvf %r2, %v20, 0
 ;   br %r14
+;   .byte 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x00, 0x00 ; trap: int_ovf
 
 function %fcvt_to_uint_f32_i64(f32) -> i64 {
 block0(v0: f32):
@@ -259,13 +259,13 @@ block0(v0: f32):
 ; VCode:
 ; block0:
 ;   cebr %f0, %f0
-;   jno 6 ; trap
+;   jo #trap
 ;   bras %r1, 8 ; data.f32 18446744000000000000 ; le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jnhe 6 ; trap
+;   jhe #trap
 ;   bras %r1, 8 ; data.f32 -1 ; vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
-;   jnle 6 ; trap
+;   jle #trap
 ;   wldeb %v20, %f0
 ;   wclgdb %v22, %v20, 0, 5
 ;   vlgvg %r2, %v22, 0
@@ -274,24 +274,24 @@ block0(v0: f32):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cebr %f0, %f0
-;   jno 0xa
-;   .byte 0x00, 0x00 ; trap: bad_toint
-;   bras %r1, 0x12
+;   jo 0x48
+;   bras %r1, 0x10
 ;   sl %r8, 0
 ;   le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jnhe 0x20
-;   .byte 0x00, 0x00 ; trap: int_ovf
-;   bras %r1, 0x28
+;   jhe 0x4a
+;   bras %r1, 0x24
 ;   icm %r8, 0, 0
 ;   vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
-;   jnle 0x3a
-;   .byte 0x00, 0x00 ; trap: int_ovf
+;   jle 0x4c
 ;   wldeb %v20, %f0
 ;   wclgdb %v22, %v20, 0, 5
 ;   vlgvg %r2, %v22, 0
 ;   br %r14
+;   .byte 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x00, 0x00 ; trap: int_ovf
 
 function %fcvt_to_sint_f32_i64(f32) -> i64 {
 block0(v0: f32):
@@ -302,13 +302,13 @@ block0(v0: f32):
 ; VCode:
 ; block0:
 ;   cebr %f0, %f0
-;   jno 6 ; trap
+;   jo #trap
 ;   bras %r1, 8 ; data.f32 9223372000000000000 ; le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jnhe 6 ; trap
+;   jhe #trap
 ;   bras %r1, 8 ; data.f32 -9223373000000000000 ; vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
-;   jnle 6 ; trap
+;   jle #trap
 ;   wldeb %v20, %f0
 ;   wcgdb %v22, %v20, 0, 5
 ;   vlgvg %r2, %v22, 0
@@ -317,25 +317,25 @@ block0(v0: f32):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cebr %f0, %f0
-;   jno 0xa
-;   .byte 0x00, 0x00 ; trap: bad_toint
-;   bras %r1, 0x12
+;   jo 0x48
+;   bras %r1, 0x10
 ;   sl %r0, 0
 ;   le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jnhe 0x20
-;   .byte 0x00, 0x00 ; trap: int_ovf
-;   bras %r1, 0x28
+;   jhe 0x4a
+;   bras %r1, 0x24
 ;   edmk 1(1), 0x700(%r14)
 ;   lpr %r0, %r0
 ;   .byte 0x08, 0x03
 ;   wfcsb %f0, %v16
-;   jnle 0x3a
-;   .byte 0x00, 0x00 ; trap: int_ovf
+;   jle 0x4c
 ;   wldeb %v20, %f0
 ;   wcgdb %v22, %v20, 0, 5
 ;   vlgvg %r2, %v22, 0
 ;   br %r14
+;   .byte 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x00, 0x00 ; trap: int_ovf
 
 function %fcvt_to_uint_f64_i8(f64) -> i8 {
 block0(v0: f64):
@@ -346,13 +346,13 @@ block0(v0: f64):
 ; VCode:
 ; block0:
 ;   cdbr %f0, %f0
-;   jno 6 ; trap
+;   jo #trap
 ;   bras %r1, 12 ; data.f64 256 ; ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
-;   jnhe 6 ; trap
+;   jhe #trap
 ;   bras %r1, 12 ; data.f64 -1 ; vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
-;   jnle 6 ; trap
+;   jle #trap
 ;   wclgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
@@ -360,27 +360,27 @@ block0(v0: f64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cdbr %f0, %f0
-;   jno 0xa
-;   .byte 0x00, 0x00 ; trap: bad_toint
-;   bras %r1, 0x16
+;   jo 0x4a
+;   bras %r1, 0x14
 ;   sth %r7, 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
-;   jnhe 0x24
-;   .byte 0x00, 0x00 ; trap: int_ovf
-;   bras %r1, 0x30
+;   jhe 0x4c
+;   bras %r1, 0x2c
 ;   icm %r15, 0, 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
-;   jnle 0x42
-;   .byte 0x00, 0x00 ; trap: int_ovf
+;   jle 0x4e
 ;   wclgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
+;   .byte 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x00, 0x00 ; trap: int_ovf
 
 function %fcvt_to_sint_f64_i8(f64) -> i8 {
 block0(v0: f64):
@@ -391,13 +391,13 @@ block0(v0: f64):
 ; VCode:
 ; block0:
 ;   cdbr %f0, %f0
-;   jno 6 ; trap
+;   jo #trap
 ;   bras %r1, 12 ; data.f64 128 ; ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
-;   jnhe 6 ; trap
+;   jhe #trap
 ;   bras %r1, 12 ; data.f64 -129 ; vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
-;   jnle 6 ; trap
+;   jle #trap
 ;   wcgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
@@ -405,26 +405,26 @@ block0(v0: f64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cdbr %f0, %f0
-;   jno 0xa
-;   .byte 0x00, 0x00 ; trap: bad_toint
-;   bras %r1, 0x16
+;   jo 0x4a
+;   bras %r1, 0x14
 ;   sth %r6, 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
-;   jnhe 0x24
-;   .byte 0x00, 0x00 ; trap: int_ovf
-;   bras %r1, 0x30
-;   larl %r6, 0x40000028
+;   jhe 0x4c
+;   bras %r1, 0x2c
+;   larl %r6, 0x40000024
 ;   .byte 0x00, 0x00
 ;   vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
-;   jnle 0x42
-;   .byte 0x00, 0x00 ; trap: int_ovf
+;   jle 0x4e
 ;   wcgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
+;   .byte 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x00, 0x00 ; trap: int_ovf
 
 function %fcvt_to_uint_f64_i16(f64) -> i16 {
 block0(v0: f64):
@@ -435,13 +435,13 @@ block0(v0: f64):
 ; VCode:
 ; block0:
 ;   cdbr %f0, %f0
-;   jno 6 ; trap
+;   jo #trap
 ;   bras %r1, 12 ; data.f64 65536 ; ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
-;   jnhe 6 ; trap
+;   jhe #trap
 ;   bras %r1, 12 ; data.f64 -1 ; vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
-;   jnle 6 ; trap
+;   jle #trap
 ;   wclgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
@@ -449,27 +449,27 @@ block0(v0: f64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cdbr %f0, %f0
-;   jno 0xa
-;   .byte 0x00, 0x00 ; trap: bad_toint
-;   bras %r1, 0x16
+;   jo 0x4a
+;   bras %r1, 0x14
 ;   sth %r15, 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
-;   jnhe 0x24
-;   .byte 0x00, 0x00 ; trap: int_ovf
-;   bras %r1, 0x30
+;   jhe 0x4c
+;   bras %r1, 0x2c
 ;   icm %r15, 0, 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
-;   jnle 0x42
-;   .byte 0x00, 0x00 ; trap: int_ovf
+;   jle 0x4e
 ;   wclgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
+;   .byte 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x00, 0x00 ; trap: int_ovf
 
 function %fcvt_to_sint_f64_i16(f64) -> i16 {
 block0(v0: f64):
@@ -480,13 +480,13 @@ block0(v0: f64):
 ; VCode:
 ; block0:
 ;   cdbr %f0, %f0
-;   jno 6 ; trap
+;   jo #trap
 ;   bras %r1, 12 ; data.f64 32768 ; ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
-;   jnhe 6 ; trap
+;   jhe #trap
 ;   bras %r1, 12 ; data.f64 -32769 ; vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
-;   jnle 6 ; trap
+;   jle #trap
 ;   wcgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
@@ -494,26 +494,26 @@ block0(v0: f64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cdbr %f0, %f0
-;   jno 0xa
-;   .byte 0x00, 0x00 ; trap: bad_toint
-;   bras %r1, 0x16
+;   jo 0x4a
+;   bras %r1, 0x14
 ;   sth %r14, 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
-;   jnhe 0x24
-;   .byte 0x00, 0x00 ; trap: int_ovf
-;   bras %r1, 0x30
-;   larl %r14, 0x400028
+;   jhe 0x4c
+;   bras %r1, 0x2c
+;   larl %r14, 0x400024
 ;   .byte 0x00, 0x00
 ;   vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
-;   jnle 0x42
-;   .byte 0x00, 0x00 ; trap: int_ovf
+;   jle 0x4e
 ;   wcgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
+;   .byte 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x00, 0x00 ; trap: int_ovf
 
 function %fcvt_to_uint_f64_i32(f64) -> i32 {
 block0(v0: f64):
@@ -524,13 +524,13 @@ block0(v0: f64):
 ; VCode:
 ; block0:
 ;   cdbr %f0, %f0
-;   jno 6 ; trap
+;   jo #trap
 ;   bras %r1, 12 ; data.f64 4294967296 ; ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
-;   jnhe 6 ; trap
+;   jhe #trap
 ;   bras %r1, 12 ; data.f64 -1 ; vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
-;   jnle 6 ; trap
+;   jle #trap
 ;   wclgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
@@ -538,27 +538,27 @@ block0(v0: f64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cdbr %f0, %f0
-;   jno 0xa
-;   .byte 0x00, 0x00 ; trap: bad_toint
-;   bras %r1, 0x16
+;   jo 0x4a
+;   bras %r1, 0x14
 ;   la %r15, 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
-;   jnhe 0x24
-;   .byte 0x00, 0x00 ; trap: int_ovf
-;   bras %r1, 0x30
+;   jhe 0x4c
+;   bras %r1, 0x2c
 ;   icm %r15, 0, 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
-;   jnle 0x42
-;   .byte 0x00, 0x00 ; trap: int_ovf
+;   jle 0x4e
 ;   wclgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
+;   .byte 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x00, 0x00 ; trap: int_ovf
 
 function %fcvt_to_sint_f64_i32(f64) -> i32 {
 block0(v0: f64):
@@ -569,13 +569,13 @@ block0(v0: f64):
 ; VCode:
 ; block0:
 ;   cdbr %f0, %f0
-;   jno 6 ; trap
+;   jo #trap
 ;   bras %r1, 12 ; data.f64 2147483648 ; ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
-;   jnhe 6 ; trap
+;   jhe #trap
 ;   bras %r1, 12 ; data.f64 -2147483649 ; vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
-;   jnle 6 ; trap
+;   jle #trap
 ;   wcgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
@@ -583,28 +583,28 @@ block0(v0: f64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cdbr %f0, %f0
-;   jno 0xa
-;   .byte 0x00, 0x00 ; trap: bad_toint
-;   bras %r1, 0x16
+;   jo 0x4a
+;   bras %r1, 0x14
 ;   la %r14, 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
-;   jnhe 0x24
-;   .byte 0x00, 0x00 ; trap: int_ovf
-;   bras %r1, 0x30
+;   jhe 0x4c
+;   bras %r1, 0x2c
 ;   .byte 0xc1, 0xe0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x20
 ;   .byte 0x00, 0x00
 ;   vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
-;   jnle 0x42
-;   .byte 0x00, 0x00 ; trap: int_ovf
+;   jle 0x4e
 ;   wcgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
+;   .byte 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x00, 0x00 ; trap: int_ovf
 
 function %fcvt_to_uint_f64_i64(f64) -> i64 {
 block0(v0: f64):
@@ -615,13 +615,13 @@ block0(v0: f64):
 ; VCode:
 ; block0:
 ;   cdbr %f0, %f0
-;   jno 6 ; trap
+;   jo #trap
 ;   bras %r1, 12 ; data.f64 18446744073709552000 ; ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
-;   jnhe 6 ; trap
+;   jhe #trap
 ;   bras %r1, 12 ; data.f64 -1 ; vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
-;   jnle 6 ; trap
+;   jle #trap
 ;   wclgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
@@ -629,27 +629,27 @@ block0(v0: f64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cdbr %f0, %f0
-;   jno 0xa
-;   .byte 0x00, 0x00 ; trap: bad_toint
-;   bras %r1, 0x16
+;   jo 0x4a
+;   bras %r1, 0x14
 ;   ic %r15, 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
-;   jnhe 0x24
-;   .byte 0x00, 0x00 ; trap: int_ovf
-;   bras %r1, 0x30
+;   jhe 0x4c
+;   bras %r1, 0x2c
 ;   icm %r15, 0, 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
-;   jnle 0x42
-;   .byte 0x00, 0x00 ; trap: int_ovf
+;   jle 0x4e
 ;   wclgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
+;   .byte 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x00, 0x00 ; trap: int_ovf
 
 function %fcvt_to_sint_f64_i64(f64) -> i64 {
 block0(v0: f64):
@@ -660,13 +660,13 @@ block0(v0: f64):
 ; VCode:
 ; block0:
 ;   cdbr %f0, %f0
-;   jno 6 ; trap
+;   jo #trap
 ;   bras %r1, 12 ; data.f64 9223372036854776000 ; ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
-;   jnhe 6 ; trap
+;   jhe #trap
 ;   bras %r1, 12 ; data.f64 -9223372036854778000 ; vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
-;   jnle 6 ; trap
+;   jle #trap
 ;   wcgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
@@ -674,28 +674,28 @@ block0(v0: f64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cdbr %f0, %f0
-;   jno 0xa
-;   .byte 0x00, 0x00 ; trap: bad_toint
-;   bras %r1, 0x16
+;   jo 0x4a
+;   bras %r1, 0x14
 ;   ic %r14, 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
-;   jnhe 0x24
-;   .byte 0x00, 0x00 ; trap: int_ovf
-;   bras %r1, 0x30
+;   jhe 0x4c
+;   bras %r1, 0x2c
 ;   .byte 0xc3, 0xe0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x01
 ;   vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
-;   jnle 0x42
-;   .byte 0x00, 0x00 ; trap: int_ovf
+;   jle 0x4e
 ;   wcgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
+;   .byte 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x00, 0x00 ; trap: int_ovf
 
 function %fcvt_from_uint_i8_f32(i8) -> f32 {
 block0(v0: i8):

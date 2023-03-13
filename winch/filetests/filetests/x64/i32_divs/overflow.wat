@@ -12,9 +12,9 @@
 ;;    4:	 b9ffffffff           	mov	ecx, 0xffffffff
 ;;    9:	 b800000080           	mov	eax, 0x80000000
 ;;    e:	 83f900               	cmp	ecx, 0
-;;   11:	 0f8502000000         	jne	0x19
-;;   17:	 0f0b                 	ud2	
-;;   19:	 99                   	cdq	
-;;   1a:	 f7f9                 	idiv	ecx
-;;   1c:	 5d                   	pop	rbp
-;;   1d:	 c3                   	ret	
+;;   11:	 0f8405000000         	je	0x1c
+;;   17:	 99                   	cdq	
+;;   18:	 f7f9                 	idiv	ecx
+;;   1a:	 5d                   	pop	rbp
+;;   1b:	 c3                   	ret	
+;;   1c:	 0f0b                 	ud2	

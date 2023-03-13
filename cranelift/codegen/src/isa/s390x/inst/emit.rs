@@ -3590,14 +3590,14 @@ impl Inst {
                 put_with_trap(sink, &enc_e(0x0000), trap_code);
             }
             &Inst::TrapIf { cond, trap_code } => {
+                let label = sink.defer_trap(trap_code, state.take_stack_map());
+
+                let off = sink.cur_offset();
+                sink.use_label_at_offset(off, label, LabelUse::BranchRI);
+
                 // Branch over trap if condition is false.
                 let opcode = 0xa74; // BCR
-                put(sink, &enc_ri_c(opcode, cond.invert().bits(), 4 + 2));
-                // Now emit the actual trap.
-                if let Some(s) = state.take_stack_map() {
-                    sink.add_stack_map(StackMapExtent::UpcomingBytes(2), s);
-                }
-                put_with_trap(sink, &enc_e(0x0000), trap_code);
+                put(sink, &enc_ri_c(opcode, cond.bits(), 2));
             }
             &Inst::JTSequence { ridx, ref targets } => {
                 let ridx = allocs.next(ridx);
