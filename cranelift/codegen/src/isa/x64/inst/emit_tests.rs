@@ -1809,7 +1809,7 @@ fn test_x64_emit() {
             WritableGpr::from_reg(Gpr::new(regs::rdx()).unwrap()),
         ),
         "F6F0",
-        "div     %al, (none), %al, %al, (none)",
+        "div     %al, %al, %al",
     ));
     insns.push((
         Inst::div(
@@ -1822,7 +1822,7 @@ fn test_x64_emit() {
             WritableGpr::from_reg(Gpr::new(regs::rdx()).unwrap()),
         ),
         "40F6F6",
-        "div     %al, (none), %sil, %al, (none)",
+        "div     %al, %sil, %al",
     ));
 
     // ========================================================

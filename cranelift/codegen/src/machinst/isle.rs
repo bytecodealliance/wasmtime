@@ -633,6 +633,20 @@ macro_rules! isle_lower_prelude_methods {
                 shuffle_imm_as_le_lane_idx(2, &bytes[14..16])?,
             ))
         }
+
+        fn safe_divisor_from_imm64(&mut self, ty: Type, val: Imm64) -> Option<u64> {
+            let minus_one = if ty.bytes() == 8 {
+                -1
+            } else {
+                (1 << (ty.bytes() * 8)) - 1
+            };
+            let bits = val.bits() & minus_one;
+            if bits == 0 || bits == minus_one {
+                None
+            } else {
+                Some(bits as u64)
+            }
+        }
     };
 }
 

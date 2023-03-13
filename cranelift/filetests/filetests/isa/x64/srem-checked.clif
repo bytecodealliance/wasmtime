@@ -170,9 +170,9 @@ block0(v0: i8):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   movl    $17, %ecx
-;   xorl    %edx, %edx, %edx
-;   srem_seq %al, %dl, %cl, %al, %dl, tmp=(none)
+;   cbw %al, %al
+;   movl    $17, %edx
+;   idiv    %al, %dl, %al
 ;   shrq    $8, %rax, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -184,17 +184,9 @@ block0(v0: i8):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movq %rdi, %rax
-;   movl $0x11, %ecx
-;   xorl %edx, %edx
-;   cmpb $0, %cl
-;   jne 0x19
-;   ud2 ; trap: int_divz
-;   cmpb $0xff, %cl
-;   jne 0x2c
-;   movl $0, %eax
-;   jmp 0x30
 ;   cbtw
-;   idivb %cl ; trap: int_divz
+;   movl $0x11, %edx
+;   idivb %dl ; trap: int_divz
 ;   shrq $8, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp

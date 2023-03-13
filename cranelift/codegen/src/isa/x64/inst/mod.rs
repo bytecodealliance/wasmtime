@@ -72,6 +72,8 @@ impl Inst {
             | Inst::CallKnown { .. }
             | Inst::CallUnknown { .. }
             | Inst::CheckedDivOrRemSeq { .. }
+            | Inst::ValidateSdivDivisor { .. }
+            | Inst::ValidateSdivDivisor64 { .. }
             | Inst::Cmove { .. }
             | Inst::CmpRmiR { .. }
             | Inst::CvtFloatToSintSeq { .. }
@@ -900,6 +902,27 @@ impl PrettyPrint for Inst {
                     dst_remainder,
                     tmp,
                 )
+            }
+
+            Inst::ValidateSdivDivisor {
+                dividend,
+                divisor,
+                size,
+            } => {
+                let dividend = pretty_print_reg(dividend.to_reg(), size.to_bytes(), allocs);
+                let divisor = pretty_print_reg(divisor.to_reg(), size.to_bytes(), allocs);
+                format!("validate_sdiv_divisor {dividend}, {divisor}")
+            }
+
+            Inst::ValidateSdivDivisor64 {
+                dividend,
+                divisor,
+                tmp,
+            } => {
+                let dividend = pretty_print_reg(dividend.to_reg(), 8, allocs);
+                let divisor = pretty_print_reg(divisor.to_reg(), 8, allocs);
+                let tmp = pretty_print_reg(tmp.to_reg().to_reg(), 8, allocs);
+                format!("validate_sdiv_divisor {dividend}, {divisor} {tmp}")
             }
 
             Inst::SignExtendData { size, src, dst } => {
@@ -1934,6 +1957,21 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
                 // conflict with inputs or outputs.
                 collector.reg_early_def(tmp.to_writable_reg());
             }
+        }
+        Inst::ValidateSdivDivisor {
+            dividend, divisor, ..
+        } => {
+            collector.reg_use(divisor.to_reg());
+            collector.reg_use(dividend.to_reg());
+        }
+        Inst::ValidateSdivDivisor64 {
+            dividend,
+            divisor,
+            tmp,
+        } => {
+            collector.reg_use(divisor.to_reg());
+            collector.reg_use(dividend.to_reg());
+            collector.reg_early_def(tmp.to_writable_reg());
         }
         Inst::SignExtendData { size, src, dst } => {
             match size {

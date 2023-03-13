@@ -13,8 +13,9 @@ block0(v0: i8, v1: i8):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   xorl    %edx, %edx, %edx
-;   sdiv_seq %al, %dl, %sil, %al, %dl, tmp=(none)
+;   cbw %al, %al
+;   validate_sdiv_divisor %sil, %al
+;   idiv    %al, %sil, %al
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -25,16 +26,15 @@ block0(v0: i8, v1: i8):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movq %rdi, %rax
-;   xorl %edx, %edx
+;   cbtw
 ;   cmpb $0, %sil
 ;   jne 0x15
 ;   ud2 ; trap: int_divz
 ;   cmpb $0xff, %sil
 ;   jne 0x2a
-;   cmpb $0, %al
+;   cmpb $0x80, %al
 ;   jne 0x2a
 ;   ud2 ; trap: int_ovf
-;   cbtw
 ;   idivb %sil ; trap: int_divz
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -50,9 +50,10 @@ block0(v0: i16, v1: i16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
+;   validate_sdiv_divisor %si, %di
 ;   movq    %rdi, %rax
-;   xorl    %edx, %edx, %edx
-;   sdiv_seq %ax, %dx, %si, %ax, %dx, tmp=(none)
+;   cwd %ax, %dx
+;   idiv    %ax, %dx, %si, %ax, %dx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -62,16 +63,15 @@ block0(v0: i16, v1: i16):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   xorl %edx, %edx
 ;   cmpw $0, %si
-;   jne 0x15
+;   jne 0x10
 ;   ud2 ; trap: int_divz
 ;   cmpw $-1, %si
-;   jne 0x2c
-;   cmpw $0, %ax
-;   jne 0x2c
+;   jne 0x27
+;   cmpw $0x8000, %di
+;   jne 0x27
 ;   ud2 ; trap: int_ovf
+;   movq %rdi, %rax
 ;   cwtd
 ;   idivw %si ; trap: int_divz
 ;   movq %rbp, %rsp
@@ -88,9 +88,10 @@ block0(v0: i32, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
+;   validate_sdiv_divisor %esi, %edi
 ;   movq    %rdi, %rax
-;   xorl    %edx, %edx, %edx
-;   sdiv_seq %eax, %edx, %esi, %eax, %edx, tmp=(none)
+;   cdq %eax, %edx
+;   idiv    %eax, %edx, %esi, %eax, %edx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -100,16 +101,15 @@ block0(v0: i32, v1: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   xorl %edx, %edx
 ;   cmpl $0, %esi
-;   jne 0x14
+;   jne 0xf
 ;   ud2 ; trap: int_divz
 ;   cmpl $-1, %esi
-;   jne 0x2b
-;   cmpl $0x80000000, %eax
-;   jne 0x2b
+;   jne 0x26
+;   cmpl $0x80000000, %edi
+;   jne 0x26
 ;   ud2 ; trap: int_ovf
+;   movq %rdi, %rax
 ;   cltd
 ;   idivl %esi ; trap: int_divz
 ;   movq %rbp, %rsp
@@ -126,9 +126,10 @@ block0(v0: i64, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
+;   validate_sdiv_divisor %rsi, %rdi %rcx
 ;   movq    %rdi, %rax
-;   xorl    %edx, %edx, %edx
-;   sdiv_seq %rax, %rdx, %rsi, %rax, %rdx, tmp=%r10
+;   cqo %rax, %rdx
+;   idiv    %rax, %rdx, %rsi, %rax, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -138,17 +139,16 @@ block0(v0: i64, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   xorl %edx, %edx
 ;   cmpq $0, %rsi
-;   jne 0x15
+;   jne 0x10
 ;   ud2 ; trap: int_divz
 ;   cmpq $-1, %rsi
-;   jne 0x34
-;   movabsq $9223372036854775808, %r10
-;   cmpq %r10, %rax
-;   jne 0x34
+;   jne 0x2f
+;   movabsq $9223372036854775808, %rcx
+;   cmpq %rcx, %rdi
+;   jne 0x2f
 ;   ud2 ; trap: int_ovf
+;   movq %rdi, %rax
 ;   cqto
 ;   idivq %rsi ; trap: int_divz
 ;   movq %rbp, %rsp
@@ -167,9 +167,9 @@ block0(v0: i8):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   movl    $17, %ecx
-;   xorl    %edx, %edx, %edx
-;   sdiv_seq %al, %dl, %cl, %al, %dl, tmp=(none)
+;   cbw %al, %al
+;   movl    $17, %edx
+;   idiv    %al, %dl, %al
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -180,18 +180,9 @@ block0(v0: i8):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movq %rdi, %rax
-;   movl $0x11, %ecx
-;   xorl %edx, %edx
-;   cmpb $0, %cl
-;   jne 0x19
-;   ud2 ; trap: int_divz
-;   cmpb $0xff, %cl
-;   jne 0x2d
-;   cmpb $0, %al
-;   jne 0x2d
-;   ud2 ; trap: int_ovf
 ;   cbtw
-;   idivb %cl ; trap: int_divz
+;   movl $0x11, %edx
+;   idivb %dl ; trap: int_divz
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -207,10 +198,10 @@ block0(v0: i16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    %rdi, %rax
 ;   movl    $17, %ecx
-;   xorl    %edx, %edx, %edx
-;   sdiv_seq %ax, %dx, %cx, %ax, %dx, tmp=(none)
+;   movq    %rdi, %rax
+;   cwd %ax, %dx
+;   idiv    %ax, %dx, %cx, %ax, %dx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -220,17 +211,8 @@ block0(v0: i16):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
 ;   movl $0x11, %ecx
-;   xorl %edx, %edx
-;   cmpw $0, %cx
-;   jne 0x1a
-;   ud2 ; trap: int_divz
-;   cmpw $-1, %cx
-;   jne 0x31
-;   cmpw $0, %ax
-;   jne 0x31
-;   ud2 ; trap: int_ovf
+;   movq %rdi, %rax
 ;   cwtd
 ;   idivw %cx ; trap: int_divz
 ;   movq %rbp, %rsp
@@ -248,10 +230,10 @@ block0(v0: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    %rdi, %rax
 ;   movl    $17, %ecx
-;   xorl    %edx, %edx, %edx
-;   sdiv_seq %eax, %edx, %ecx, %eax, %edx, tmp=(none)
+;   movq    %rdi, %rax
+;   cdq %eax, %edx
+;   idiv    %eax, %edx, %ecx, %eax, %edx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -261,17 +243,8 @@ block0(v0: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
 ;   movl $0x11, %ecx
-;   xorl %edx, %edx
-;   cmpl $0, %ecx
-;   jne 0x19
-;   ud2 ; trap: int_divz
-;   cmpl $-1, %ecx
-;   jne 0x30
-;   cmpl $0x80000000, %eax
-;   jne 0x30
-;   ud2 ; trap: int_ovf
+;   movq %rdi, %rax
 ;   cltd
 ;   idivl %ecx ; trap: int_divz
 ;   movq %rbp, %rsp
@@ -289,10 +262,10 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    %rdi, %rax
 ;   movl    $17, %ecx
-;   xorl    %edx, %edx, %edx
-;   sdiv_seq %rax, %rdx, %rcx, %rax, %rdx, tmp=%r11
+;   movq    %rdi, %rax
+;   cqo %rax, %rdx
+;   idiv    %rax, %rdx, %rcx, %rax, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -302,18 +275,8 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
 ;   movl $0x11, %ecx
-;   xorl %edx, %edx
-;   cmpq $0, %rcx
-;   jne 0x1a
-;   ud2 ; trap: int_divz
-;   cmpq $-1, %rcx
-;   jne 0x39
-;   movabsq $9223372036854775808, %r11
-;   cmpq %r11, %rax
-;   jne 0x39
-;   ud2 ; trap: int_ovf
+;   movq %rdi, %rax
 ;   cqto
 ;   idivq %rcx ; trap: int_divz
 ;   movq %rbp, %rsp

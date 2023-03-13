@@ -722,6 +722,10 @@
 (decl gen_return (ValueSlice) Unit)
 (extern constructor gen_return gen_return)
 
+;; Helper for extracting an immediate that's not 0 and not -1 from an imm64.
+(decl pure partial safe_divisor_from_imm64 (Type Imm64) u64)
+(extern constructor safe_divisor_from_imm64 safe_divisor_from_imm64)
+
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (convert Inst Value def_inst)
