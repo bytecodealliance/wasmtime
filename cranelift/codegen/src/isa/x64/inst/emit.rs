@@ -400,37 +400,40 @@ pub(crate) fn emit(
         }
 
         Inst::Div {
-            signed,
-            dividend_lo: dividend,
-            divisor,
-            dst_quotient: dst,
-            ..
+            signed, divisor, ..
         }
         | Inst::Div8 {
-            signed,
-            dividend,
-            divisor,
-            dst,
+            signed, divisor, ..
         } => {
-            let dividend = allocs.next(dividend.to_reg());
-            let dst = allocs.next(dst.to_reg().to_reg());
-            debug_assert_eq!(dividend, regs::rax());
-            debug_assert_eq!(dst, regs::rax());
+            let divisor = divisor.clone().to_reg_mem().with_allocs(allocs);
             let size = match inst {
-                Inst::Div { size, .. } => *size,
-                _ => OperandSize::Size8,
+                Inst::Div {
+                    size,
+                    dividend_lo,
+                    dividend_hi,
+                    dst_quotient,
+                    dst_remainder,
+                    ..
+                } => {
+                    let dividend_lo = allocs.next(dividend_lo.to_reg());
+                    let dividend_hi = allocs.next(dividend_hi.to_reg());
+                    let dst_quotient = allocs.next(dst_quotient.to_reg().to_reg());
+                    let dst_remainder = allocs.next(dst_remainder.to_reg().to_reg());
+                    debug_assert_eq!(dividend_lo, regs::rax());
+                    debug_assert_eq!(dividend_hi, regs::rdx());
+                    debug_assert_eq!(dst_quotient, regs::rax());
+                    debug_assert_eq!(dst_remainder, regs::rdx());
+                    *size
+                }
+                Inst::Div8 { dividend, dst, .. } => {
+                    let dividend = allocs.next(dividend.to_reg());
+                    let dst = allocs.next(dst.to_reg().to_reg());
+                    debug_assert_eq!(dividend, regs::rax());
+                    debug_assert_eq!(dst, regs::rax());
+                    OperandSize::Size8
+                }
+                _ => unreachable!(),
             };
-            if let Inst::Div {
-                dividend_hi,
-                dst_remainder,
-                ..
-            } = inst
-            {
-                let dst_remainder = allocs.next(dst_remainder.to_reg().to_reg());
-                debug_assert_eq!(dst_remainder, regs::rdx());
-                let dividend_hi = allocs.next(dividend_hi.to_reg());
-                debug_assert_eq!(dividend_hi, regs::rdx());
-            }
 
             let (opcode, prefix) = match size {
                 OperandSize::Size8 => (0xF6, LegacyPrefixes::None),
@@ -442,9 +445,8 @@ pub(crate) fn emit(
             sink.add_trap(TrapCode::IntegerDivisionByZero);
 
             let subopcode = if *signed { 7 } else { 6 };
-            match divisor.clone().to_reg_mem() {
+            match divisor {
                 RegMem::Reg { reg } => {
-                    let reg = allocs.next(reg);
                     let src = int_reg_enc(reg);
                     emit_std_enc_enc(
                         sink,
@@ -457,7 +459,7 @@ pub(crate) fn emit(
                     )
                 }
                 RegMem::Mem { addr: src } => {
-                    let amode = src.finalize(state, sink).with_allocs(allocs);
+                    let amode = src.finalize(state, sink);
                     emit_std_enc_mem(
                         sink,
                         prefix,

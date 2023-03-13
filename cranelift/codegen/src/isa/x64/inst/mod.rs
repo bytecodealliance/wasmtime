@@ -771,13 +771,13 @@ impl PrettyPrint for Inst {
                 dst_quotient,
                 dst_remainder,
             } => {
+                let divisor = divisor.pretty_print(size.to_bytes(), allocs);
                 let dividend_lo = pretty_print_reg(dividend_lo.to_reg(), size.to_bytes(), allocs);
+                let dividend_hi = pretty_print_reg(dividend_hi.to_reg(), size.to_bytes(), allocs);
                 let dst_quotient =
                     pretty_print_reg(dst_quotient.to_reg().to_reg(), size.to_bytes(), allocs);
                 let dst_remainder =
                     pretty_print_reg(dst_remainder.to_reg().to_reg(), size.to_bytes(), allocs);
-                let dividend_hi = pretty_print_reg(dividend_hi.to_reg(), size.to_bytes(), allocs);
-                let divisor = divisor.pretty_print(size.to_bytes(), allocs);
                 format!(
                     "{} {}, {}, {}, {}, {}",
                     ljustify(if *signed {
@@ -799,9 +799,9 @@ impl PrettyPrint for Inst {
                 dividend,
                 dst,
             } => {
+                let divisor = divisor.pretty_print(1, allocs);
                 let dividend = pretty_print_reg(dividend.to_reg(), 1, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 1, allocs);
-                let divisor = divisor.pretty_print(1, allocs);
                 format!(
                     "{} {dividend}, {divisor}, {dst}",
                     ljustify(if *signed {
@@ -1869,28 +1869,37 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_reuse_def(dst.to_writable_reg(), 0);
         }
         Inst::Div {
-            divisor,
+            dividend_lo,
+            dividend_hi,
+            dst_quotient,
+            dst_remainder,
+            ..
+        }
+        | Inst::CheckedSRemSeq {
             dividend_lo,
             dividend_hi,
             dst_quotient,
             dst_remainder,
             ..
         } => {
+            match inst {
+                Inst::Div { divisor, .. } => divisor.get_operands(collector),
+                Inst::CheckedSRemSeq { divisor, .. } => collector.reg_use(divisor.to_reg()),
+                _ => {}
+            }
             collector.reg_fixed_use(dividend_lo.to_reg(), regs::rax());
+            collector.reg_fixed_use(dividend_hi.to_reg(), regs::rdx());
             collector.reg_fixed_def(dst_quotient.to_writable_reg(), regs::rax());
             collector.reg_fixed_def(dst_remainder.to_writable_reg(), regs::rdx());
-            collector.reg_fixed_use(dividend_hi.to_reg(), regs::rdx());
-            divisor.get_operands(collector);
         }
-        Inst::Div8 {
-            divisor,
-            dividend,
-            dst,
-            ..
-        } => {
+        Inst::Div8 { dividend, dst, .. } | Inst::CheckedSRemSeq8 { dividend, dst, .. } => {
+            match inst {
+                Inst::Div8 { divisor, .. } => divisor.get_operands(collector),
+                Inst::CheckedSRemSeq8 { divisor, .. } => collector.reg_use(divisor.to_reg()),
+                _ => {}
+            }
             collector.reg_fixed_use(dividend.to_reg(), regs::rax());
             collector.reg_fixed_def(dst.to_writable_reg(), regs::rax());
-            divisor.get_operands(collector);
         }
         Inst::MulHi {
             src1,
@@ -1903,30 +1912,6 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_fixed_def(dst_lo.to_writable_reg(), regs::rax());
             collector.reg_fixed_def(dst_hi.to_writable_reg(), regs::rdx());
             src2.get_operands(collector);
-        }
-        Inst::CheckedSRemSeq8 {
-            divisor,
-            dividend,
-            dst,
-            ..
-        } => {
-            collector.reg_use(divisor.to_reg());
-            collector.reg_fixed_use(dividend.to_reg(), regs::rax());
-            collector.reg_fixed_def(dst.to_writable_reg(), regs::rax());
-        }
-        Inst::CheckedSRemSeq {
-            divisor,
-            dividend_lo,
-            dividend_hi,
-            dst_quotient,
-            dst_remainder,
-            ..
-        } => {
-            collector.reg_use(divisor.to_reg());
-            collector.reg_fixed_use(dividend_lo.to_reg(), regs::rax());
-            collector.reg_fixed_use(dividend_hi.to_reg(), regs::rdx());
-            collector.reg_fixed_def(dst_quotient.to_writable_reg(), regs::rax());
-            collector.reg_fixed_def(dst_remainder.to_writable_reg(), regs::rdx());
         }
         Inst::ValidateSdivDivisor {
             dividend, divisor, ..

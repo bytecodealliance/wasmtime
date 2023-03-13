@@ -1799,27 +1799,21 @@ fn test_x64_emit() {
         "div     %rax, %rdx, %rdi, %rax, %rdx",
     ));
     insns.push((
-        Inst::div(
-            OperandSize::Size8,
+        Inst::div8(
             false,
             RegMem::reg(regs::rax()),
             Gpr::new(regs::rax()).unwrap(),
-            Gpr::new(regs::rdx()).unwrap(),
             WritableGpr::from_reg(Gpr::new(regs::rax()).unwrap()),
-            WritableGpr::from_reg(Gpr::new(regs::rdx()).unwrap()),
         ),
         "F6F0",
         "div     %al, %al, %al",
     ));
     insns.push((
-        Inst::div(
-            OperandSize::Size8,
+        Inst::div8(
             false,
             RegMem::reg(regs::rsi()),
             Gpr::new(regs::rax()).unwrap(),
-            Gpr::new(regs::rdx()).unwrap(),
             WritableGpr::from_reg(Gpr::new(regs::rax()).unwrap()),
-            WritableGpr::from_reg(Gpr::new(regs::rdx()).unwrap()),
         ),
         "40F6F6",
         "div     %al, %sil, %al",
@@ -1862,48 +1856,6 @@ fn test_x64_emit() {
         ),
         "48F7E7",
         "mul     %rax, %rdi, %rax, %rdx",
-    ));
-
-    // ========================================================
-    // cbw
-    insns.push((
-        Inst::sign_extend_data(
-            OperandSize::Size8,
-            Gpr::new(regs::rax()).unwrap(),
-            WritableGpr::from_reg(Gpr::new(regs::rax()).unwrap()),
-        ),
-        "6698",
-        "cbw %al, %al",
-    ));
-
-    // ========================================================
-    // cdq family: SignExtendRaxRdx
-    insns.push((
-        Inst::sign_extend_data(
-            OperandSize::Size16,
-            Gpr::new(regs::rax()).unwrap(),
-            WritableGpr::from_reg(Gpr::new(regs::rdx()).unwrap()),
-        ),
-        "6699",
-        "cwd %ax, %dx",
-    ));
-    insns.push((
-        Inst::sign_extend_data(
-            OperandSize::Size32,
-            Gpr::new(regs::rax()).unwrap(),
-            WritableGpr::from_reg(Gpr::new(regs::rdx()).unwrap()),
-        ),
-        "99",
-        "cdq %eax, %edx",
-    ));
-    insns.push((
-        Inst::sign_extend_data(
-            OperandSize::Size64,
-            Gpr::new(regs::rax()).unwrap(),
-            WritableGpr::from_reg(Gpr::new(regs::rdx()).unwrap()),
-        ),
-        "4899",
-        "cqo %rax, %rdx",
     ));
 
     // ========================================================
