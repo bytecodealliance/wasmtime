@@ -1499,16 +1499,6 @@ impl<'a> Verifier<'a> {
                                 ),
                             ));
                         }
-                        if arg_type.lane_bits() >= ctrl_type.lane_bits() {
-                            return errors.nonfatal((
-                                inst,
-                                self.context(inst),
-                                format!(
-                                    "input {} must be smaller than output {}",
-                                    arg_type, ctrl_type,
-                                ),
-                            ));
-                        }
                     }
                     Opcode::Ireduce | Opcode::Fdemote => {
                         if arg_type.lane_count() != ctrl_type.lane_count() {
@@ -1517,16 +1507,6 @@ impl<'a> Verifier<'a> {
                                 self.context(inst),
                                 format!(
                                     "input {} and output {} must have same number of lanes",
-                                    arg_type, ctrl_type,
-                                ),
-                            ));
-                        }
-                        if arg_type.lane_bits() <= ctrl_type.lane_bits() {
-                            return errors.nonfatal((
-                                inst,
-                                self.context(inst),
-                                format!(
-                                    "input {} must be larger than output {}",
                                     arg_type, ctrl_type,
                                 ),
                             ));

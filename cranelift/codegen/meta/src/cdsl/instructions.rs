@@ -376,9 +376,11 @@ fn verify_polymorphic(
                 || tv.singleton_type().is_some()
             {
                 match is_ctrl_typevar_candidate(tv, &operands_in, &operands_out) {
-                    Ok(_other_typevars) => {
+                    Ok((refines_output, _other_typevars)) => {
+                        // We still must introduce a typevar operand if the use of controlling type
+                        // variable is a refinement.
                         return Some(PolymorphicInfo {
-                            use_typevar_operand: true,
+                            use_typevar_operand: !refines_output,
                             ctrl_typevar: tv.clone(),
                         });
                     }
@@ -431,7 +433,8 @@ fn is_ctrl_typevar_candidate(
     ctrl_typevar: &TypeVar,
     operands_in: &[Operand],
     operands_out: &[Operand],
-) -> Result<Vec<TypeVar>, String> {
+) -> Result<(bool, Vec<TypeVar>), String> {
+    let mut refines_output = false;
     let mut other_typevars = Vec::new();
 
     // Check value inputs.
@@ -482,13 +485,20 @@ fn is_ctrl_typevar_candidate(
         let typ = result.type_var().unwrap();
         let free_typevar = typ.free_typevar();
 
-        // Non-polymorphic or derived from ctrl_typevar is OK.
-        if free_typevar.is_none() || &free_typevar.unwrap() == ctrl_typevar {
+        if let Some(tv) = free_typevar {
+            // Variables derived from the control variable are ok, but we remember if they refine
+            // the control variable, as that still requires another type to instantiate.
+            if &tv == ctrl_typevar {
+                refines_output = typ.refines_parent();
+                continue;
+            }
+        } else {
+            // Non-polymorphic is OK.
             continue;
         }
 
         return Err("type variable in output not derived from ctrl_typevar".into());
     }
 
-    Ok(other_typevars)
+    Ok((refines_output, other_typevars))
 }

@@ -124,6 +124,14 @@ impl TypeVar {
         &self.type_set
     }
 
+    /// Returns true if this type variable refines but doesn't fully determine its value from the
+    /// parent type variable.
+    pub fn refines_parent(&self) -> bool {
+        self.base
+            .as_ref()
+            .map_or(false, |base| !base.derived_func.is_singleton())
+    }
+
     /// If the associated typeset has a single type return it. Otherwise return None.
     pub fn singleton_type(&self) -> Option<ValueType> {
         let type_set = self.get_typeset();
@@ -202,6 +210,32 @@ impl TypeVar {
                     "can't halve a scalar type"
                 );
             }
+            DerivedFunc::Narrower => {
+                assert_eq!(
+                    *ts.lanes.iter().max().unwrap(),
+                    1,
+                    "The `narrower` constraint does not apply to vectors"
+                );
+                assert!(
+                    (!ts.ints.is_empty() || !ts.floats.is_empty())
+                        && ts.refs.is_empty()
+                        && ts.dynamic_lanes.is_empty(),
+                    "The `narrower` constraint only applies to scalar ints"
+                );
+            }
+            DerivedFunc::Wider => {
+                assert_eq!(
+                    *ts.lanes.iter().max().unwrap(),
+                    1,
+                    "The `wider` constraint does not apply to vectors"
+                );
+                assert!(
+                    (!ts.ints.is_empty() || !ts.floats.is_empty())
+                        && ts.refs.is_empty()
+                        && ts.dynamic_lanes.is_empty(),
+                    "The `wider` constraint only applies to scalar ints"
+                );
+            }
             DerivedFunc::LaneOf | DerivedFunc::AsBool | DerivedFunc::DynamicToVector => {
                 /* no particular assertions */
             }
@@ -240,6 +274,16 @@ impl TypeVar {
     }
     pub fn dynamic_to_vector(&self) -> TypeVar {
         self.derived(DerivedFunc::DynamicToVector)
+    }
+
+    /// Make a new [TypeVar] that includes all types narrower than self.
+    pub fn narrower(&self) -> TypeVar {
+        self.derived(DerivedFunc::Narrower)
+    }
+
+    /// Make a new [TypeVar] that includes all types wider than self.
+    pub fn wider(&self) -> TypeVar {
+        self.derived(DerivedFunc::Wider)
     }
 }
 
@@ -302,6 +346,8 @@ pub(crate) enum DerivedFunc {
     SplitLanes,
     MergeLanes,
     DynamicToVector,
+    Narrower,
+    Wider,
 }
 
 impl DerivedFunc {
@@ -314,6 +360,23 @@ impl DerivedFunc {
             DerivedFunc::SplitLanes => "split_lanes",
             DerivedFunc::MergeLanes => "merge_lanes",
             DerivedFunc::DynamicToVector => "dynamic_to_vector",
+            DerivedFunc::Narrower => "narrower",
+            DerivedFunc::Wider => "wider",
+        }
+    }
+
+    /// Returns `true` when this derived function will fully determine a resulting type, and
+    /// `false` if it determines a set of types.
+    pub fn is_singleton(self) -> bool {
+        match self {
+            DerivedFunc::LaneOf
+            | DerivedFunc::AsBool
+            | DerivedFunc::HalfWidth
+            | DerivedFunc::DoubleWidth
+            | DerivedFunc::SplitLanes
+            | DerivedFunc::MergeLanes
+            | DerivedFunc::DynamicToVector => true,
+            DerivedFunc::Narrower | DerivedFunc::Wider => false,
         }
     }
 }
@@ -391,6 +454,8 @@ impl TypeSet {
             DerivedFunc::SplitLanes => self.half_width().double_vector(),
             DerivedFunc::MergeLanes => self.double_width().half_vector(),
             DerivedFunc::DynamicToVector => self.dynamic_to_vector(),
+            DerivedFunc::Narrower => self.clone(),
+            DerivedFunc::Wider => self.clone(),
         }
     }
 
