@@ -894,10 +894,10 @@
                              (swiden_high (and (value_type (multi_lane 8 16))
                                                y)))))
       (let ((x1 Xmm x)
-            (x2 Xmm (x64_palignr x1 x1 8 (OperandSize.Size32)))
+            (x2 Xmm (x64_palignr x1 x1 8))
             (x3 Xmm (x64_pmovsxbw x2))
             (y1 Xmm y)
-            (y2 Xmm (x64_palignr y1 y1 8 (OperandSize.Size32)))
+            (y2 Xmm (x64_palignr y1 y1 8))
             (y3 Xmm (x64_pmovsxbw y2)))
         (x64_pmullw x3 y3)))
 
@@ -962,10 +962,10 @@
                              (uwiden_high (and (value_type (multi_lane 8 16))
                                                y)))))
       (let ((x1 Xmm x)
-            (x2 Xmm (x64_palignr x1 x1 8 (OperandSize.Size32)))
+            (x2 Xmm (x64_palignr x1 x1 8))
             (x3 Xmm (x64_pmovzxbw x2))
             (y1 Xmm y)
-            (y2 Xmm (x64_palignr y1 y1 8 (OperandSize.Size32)))
+            (y2 Xmm (x64_palignr y1 y1 8))
             (y3 Xmm (x64_pmovzxbw y2)))
         (x64_pmullw x3 y3)))
 
@@ -3284,11 +3284,11 @@
 
 (rule (lower (has_type $I16X8 (swiden_high val @ (value_type $I8X16))))
       (let ((x Xmm val))
-        (x64_pmovsxbw (x64_palignr x x 8 (OperandSize.Size32)))))
+        (x64_pmovsxbw (x64_palignr x x 8))))
 
 (rule (lower (has_type $I32X4 (swiden_high val @ (value_type $I16X8))))
       (let ((x Xmm val))
-        (x64_pmovsxwd (x64_palignr x x 8 (OperandSize.Size32)))))
+        (x64_pmovsxwd (x64_palignr x x 8))))
 
 (rule (lower (has_type $I64X2 (swiden_high val @ (value_type $I32X4))))
       (x64_pmovsxdq (x64_pshufd val 0xEE)))
@@ -3308,11 +3308,11 @@
 
 (rule (lower (has_type $I16X8 (uwiden_high val @ (value_type $I8X16))))
       (let ((x Xmm val))
-        (x64_pmovzxbw (x64_palignr x x 8 (OperandSize.Size32)))))
+        (x64_pmovzxbw (x64_palignr x x 8))))
 
 (rule (lower (has_type $I32X4 (uwiden_high val @ (value_type $I16X8))))
       (let ((x Xmm val))
-        (x64_pmovzxwd (x64_palignr x x 8 (OperandSize.Size32)))))
+        (x64_pmovzxwd (x64_palignr x x 8))))
 
 (rule (lower (has_type $I64X2 (uwiden_high val @ (value_type $I32X4))))
       (x64_pmovzxdq (x64_pshufd val 0xEE)))
@@ -3560,6 +3560,16 @@
       (x64_xmm_load_const ty (const_to_vconst const)))
 
 ;; Rules for `shuffle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; When the shuffle looks like "concatenate `a` and `b` and shift right by n*8
+;; bytes", that's a `palignr` instruction. Note that the order of operands are
+;; swapped in the instruction here. The `palignr` instruction uses the second
+;; operand as the low-order bytes and the first operand as high-order bytes,
+;; so put `a` second.
+(rule 13 (lower (shuffle a b (palignr_imm_from_immediate n)))
+         (x64_palignr b a n))
+(decl palignr_imm_from_immediate (u8) Immediate)
+(extern extractor palignr_imm_from_immediate palignr_imm_from_immediate)
 
 ;; Special case the `pshuf{l,h}w` instruction which shuffles four 16-bit
 ;; integers within one value, preserving the other four 16-bit integers in that
