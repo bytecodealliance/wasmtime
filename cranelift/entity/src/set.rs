@@ -5,6 +5,9 @@ use crate::EntityRef;
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 
+// How many bits are used to represent a single element in `EntitySet`.
+const BITS: usize = core::mem::size_of::<usize>() * 8;
+
 /// A set of `K` for densely indexed entity references.
 ///
 /// The `EntitySet` data structure uses the dense index space to implement a set with a bitvector.
@@ -14,7 +17,7 @@ pub struct EntitySet<K>
 where
     K: EntityRef,
 {
-    elems: Vec<u8>,
+    elems: Vec<usize>,
     len: usize,
     unused: PhantomData<K>,
 }
@@ -42,7 +45,7 @@ where
     /// Creates a new empty set with the specified capacity.
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            elems: Vec::with_capacity((capacity + 7) / 8),
+            elems: Vec::with_capacity((capacity + (BITS - 1)) / BITS),
             ..Self::new()
         }
     }
@@ -51,7 +54,7 @@ where
     pub fn contains(&self, k: K) -> bool {
         let index = k.index();
         if index < self.len {
-            (self.elems[index / 8] & (1 << (index % 8))) != 0
+            (self.elems[index / BITS] & (1 << (index % BITS))) != 0
         } else {
             false
         }
@@ -71,11 +74,11 @@ where
     /// `clear`ed or created with `new`.
     pub fn cardinality(&self) -> usize {
         let mut n: usize = 0;
-        for byte_ix in 0..self.len / 8 {
-            n += self.elems[byte_ix].count_ones() as usize;
+        for idx in 0..self.len / BITS {
+            n += self.elems[idx].count_ones() as usize;
         }
-        for bit_ix in (self.len / 8) * 8..self.len {
-            if (self.elems[bit_ix / 8] & (1 << (bit_ix % 8))) != 0 {
+        for bit_ix in (self.len / BITS) * BITS..self.len {
+            if (self.elems[bit_ix / BITS] & (1 << (bit_ix % BITS))) != 0 {
                 n += 1;
             }
         }
@@ -95,7 +98,7 @@ where
 
     /// Resize the set to have `n` entries by adding default entries as needed.
     pub fn resize(&mut self, n: usize) {
-        self.elems.resize((n + 7) / 8, 0);
+        self.elems.resize((n + (BITS - 1)) / BITS, 0);
         self.len = n
     }
 
@@ -106,7 +109,7 @@ where
             self.resize(index + 1)
         }
         let result = !self.contains(k);
-        self.elems[index / 8] |= 1 << (index % 8);
+        self.elems[index / BITS] |= 1 << (index % BITS);
         result
     }
 
@@ -118,7 +121,7 @@ where
 
         // Clear the last known entity in the list.
         let last_index = self.len - 1;
-        self.elems[last_index / 8] &= !(1 << (last_index % 8));
+        self.elems[last_index / BITS] &= !(1 << (last_index % BITS));
 
         // Set the length to the next last stored entity or zero if we pop'ed
         // the last entity.
@@ -127,12 +130,14 @@ where
             .iter()
             .enumerate()
             .rev()
-            .find(|(_, &byte)| byte != 0)
-            // Map `i` from byte index to bit level index.
-            // `(i + 1) * 8` = Last bit in byte.
-            // `last - byte.leading_zeros()` = last set bit in byte.
+            .find(|(_, &elem)| elem != 0)
+            // Map `i` from `elem` index to bit level index.
+            // `(i + 1) * BITS` = Last bit in `elem`.
+            // `last - elem.leading_zeros()` = last set bit in `elem`.
             // `as usize` won't ever truncate as the potential range is `0..=8`.
-            .map_or(0, |(i, byte)| ((i + 1) * 8) - byte.leading_zeros() as usize);
+            .map_or(0, |(i, elem)| {
+                ((i + 1) * BITS) - elem.leading_zeros() as usize
+            });
 
         Some(K::new(last_index))
     }
