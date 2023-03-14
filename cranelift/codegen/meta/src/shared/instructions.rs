@@ -3320,13 +3320,16 @@ pub(crate) fn define(
         );
     }
 
-    let FloatTo = &TypeVar::new(
-        "FloatTo",
-        "A scalar or vector floating point number",
-        TypeSetBuilder::new()
-            .floats(Interval::All)
-            .simd_lanes(Interval::All)
-            .build(),
+    let FloatScalar = &TypeVar::new(
+        "FloatScalar",
+        "A scalar only floating point number",
+        TypeSetBuilder::new().floats(Interval::All).build(),
+    );
+
+    let FloatScalarTo = &TypeVar::new(
+        "FloatScalarTo",
+        "A scalar only floating point number",
+        TypeSetBuilder::new().floats(Interval::All).build(),
     );
 
     ig.push(
@@ -3346,8 +3349,8 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![Operand::new("x", Float)])
-        .operands_out(vec![Operand::new("a", FloatTo)]),
+        .operands_in(vec![Operand::new("x", FloatScalar)])
+        .operands_out(vec![Operand::new("a", FloatScalarTo)]),
     );
 
     ig.push(
@@ -3367,8 +3370,8 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![Operand::new("x", Float)])
-        .operands_out(vec![Operand::new("a", FloatTo)]),
+        .operands_in(vec![Operand::new("x", FloatScalar)])
+        .operands_out(vec![Operand::new("a", FloatScalarTo)]),
     );
 
     let F64x2 = &TypeVar::new(
@@ -3431,11 +3434,6 @@ pub(crate) fn define(
         .operands_out(vec![Operand::new("x", F64x2)]),
     );
 
-    let FloatScalar = &TypeVar::new(
-        "FloatScalar",
-        "A scalar only floating point number",
-        TypeSetBuilder::new().floats(Interval::All).build(),
-    );
     let IntTo = &TypeVar::new(
         "IntTo",
         "An scalar only integer type",
@@ -3535,6 +3533,15 @@ pub(crate) fn define(
         "A scalar or vector integer type",
         TypeSetBuilder::new()
             .ints(Interval::All)
+            .simd_lanes(Interval::All)
+            .build(),
+    );
+
+    let FloatTo = &TypeVar::new(
+        "FloatTo",
+        "A scalar or vector floating point number",
+        TypeSetBuilder::new()
+            .floats(Interval::All)
             .simd_lanes(Interval::All)
             .build(),
     );
