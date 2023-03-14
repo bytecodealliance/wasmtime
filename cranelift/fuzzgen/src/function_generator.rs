@@ -414,70 +414,36 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
     match triple.architecture {
         Architecture::X86_64 => {
             exceptions!(
-                (Opcode::IaddCout, &[I8, I8]),
-                (Opcode::IaddCout, &[I16, I16]),
-                (Opcode::IaddCout, &[I128, I128]),
+                (Opcode::IaddCout, &([I8, I8] | [I16, I16] | [I128, I128])),
                 // https://github.com/bytecodealliance/wasmtime/issues/5468
-                (Opcode::Smulhi, &[I8, I8]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5468
-                (Opcode::Umulhi, &[I8, I8]),
+                (Opcode::Smulhi | Opcode::Umulhi, &[I8, I8]),
                 // https://github.com/bytecodealliance/wasmtime/issues/4756
-                (Opcode::Udiv, &[I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4770
-                (Opcode::Sdiv, &[I128, I128]),
+                (Opcode::Udiv | Opcode::Sdiv, &[I128, I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/5474
-                (Opcode::Urem, &[I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5474
-                (Opcode::Srem, &[I128, I128]),
+                (Opcode::Urem | Opcode::Srem, &[I128, I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/5466
                 (Opcode::Iabs, &[I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/3370
-                (Opcode::Smin, &[I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/3370
-                (Opcode::Umin, &[I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/3370
-                (Opcode::Smax, &[I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/3370
-                (Opcode::Umax, &[I128, I128]),
+                (
+                    Opcode::Smin | Opcode::Umin | Opcode::Smax | Opcode::Umax,
+                    &[I128, I128]
+                ),
                 // https://github.com/bytecodealliance/wasmtime/issues/4870
-                (Opcode::Band, &[F32, F32]),
-                (Opcode::Band, &[F64, F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4870
-                (Opcode::Bor, &[F32, F32]),
-                (Opcode::Bor, &[F64, F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4870
-                (Opcode::Bxor, &[F32, F32]),
-                (Opcode::Bxor, &[F64, F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4870
-                (Opcode::Bnot, &[F32, F32]),
-                (Opcode::Bnot, &[F64, F64]),
+                (
+                    Opcode::Band
+                        | Opcode::Bor
+                        | Opcode::Bxor
+                        | Opcode::Bnot
+                        | Opcode::BandNot
+                        | Opcode::BorNot
+                        | Opcode::BxorNot,
+                    &([F32, F32] | [F64, F64])
+                ),
                 // https://github.com/bytecodealliance/wasmtime/issues/5041
-                (Opcode::BandNot, &[I8, I8]),
-                (Opcode::BandNot, &[I16, I16]),
-                (Opcode::BandNot, &[I32, I32]),
-                (Opcode::BandNot, &[I64, I64]),
-                (Opcode::BandNot, &[I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4870
-                (Opcode::BandNot, &[F32, F32]),
-                (Opcode::BandNot, &[F64, F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5041
-                (Opcode::BorNot, &[I8, I8]),
-                (Opcode::BorNot, &[I16, I16]),
-                (Opcode::BorNot, &[I32, I32]),
-                (Opcode::BorNot, &[I64, I64]),
-                (Opcode::BorNot, &[I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4870
-                (Opcode::BorNot, &[F32, F32]),
-                (Opcode::BorNot, &[F64, F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5041
-                (Opcode::BxorNot, &[I8, I8]),
-                (Opcode::BxorNot, &[I16, I16]),
-                (Opcode::BxorNot, &[I32, I32]),
-                (Opcode::BxorNot, &[I64, I64]),
-                (Opcode::BxorNot, &[I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4870
-                (Opcode::BxorNot, &[F32, F32]),
-                (Opcode::BxorNot, &[F64, F64]),
+                (
+                    Opcode::BandNot | Opcode::BorNot | Opcode::BxorNot,
+                    &([I8, I8] | [I16, I16] | [I32, I32] | [I64, I64] | [I128, I128])
+                ),
                 // https://github.com/bytecodealliance/wasmtime/issues/5107
                 (Opcode::Cls, &[I8], &[I8]),
                 (Opcode::Cls, &[I16], &[I16]),
@@ -485,93 +451,59 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (Opcode::Cls, &[I64], &[I64]),
                 (Opcode::Cls, &[I128], &[I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/5197
-                (Opcode::Bitselect, &[I8, I8, I8]),
-                (Opcode::Bitselect, &[I16, I16, I16]),
-                (Opcode::Bitselect, &[I32, I32, I32]),
-                (Opcode::Bitselect, &[I64, I64, I64]),
-                (Opcode::Bitselect, &[I128, I128, I128]),
+                (
+                    Opcode::Bitselect,
+                    &([I8, I8, I8]
+                        | [I16, I16, I16]
+                        | [I32, I32, I32]
+                        | [I64, I64, I64]
+                        | [I128, I128, I128])
+                ),
                 // https://github.com/bytecodealliance/wasmtime/issues/4897
                 // https://github.com/bytecodealliance/wasmtime/issues/4899
-                (Opcode::FcvtToUint, &[F32], &[I8]),
-                (Opcode::FcvtToUint, &[F32], &[I16]),
-                (Opcode::FcvtToUint, &[F32], &[I128]),
-                (Opcode::FcvtToUint, &[F64], &[I8]),
-                (Opcode::FcvtToUint, &[F64], &[I16]),
-                (Opcode::FcvtToUint, &[F64], &[I128]),
-                (Opcode::FcvtToUint, &[F32X4], &[I32X4]),
-                (Opcode::FcvtToUint, &[F64X2], &[I64X2]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4897
-                // https://github.com/bytecodealliance/wasmtime/issues/4899
-                (Opcode::FcvtToUintSat, &[F32], &[I8]),
-                (Opcode::FcvtToUintSat, &[F32], &[I16]),
-                (Opcode::FcvtToUintSat, &[F32], &[I128]),
-                (Opcode::FcvtToUintSat, &[F64], &[I8]),
-                (Opcode::FcvtToUintSat, &[F64], &[I16]),
-                (Opcode::FcvtToUintSat, &[F64], &[I128]),
-                (Opcode::FcvtToUintSat, &[F64X2], &[I64X2]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4897
-                // https://github.com/bytecodealliance/wasmtime/issues/4899
-                (Opcode::FcvtToSint, &[F32], &[I8]),
-                (Opcode::FcvtToSint, &[F32], &[I16]),
-                (Opcode::FcvtToSint, &[F32], &[I128]),
-                (Opcode::FcvtToSint, &[F64], &[I8]),
-                (Opcode::FcvtToSint, &[F64], &[I16]),
-                (Opcode::FcvtToSint, &[F64], &[I128]),
-                (Opcode::FcvtToSint, &[F32X4], &[I32X4]),
-                (Opcode::FcvtToSint, &[F64X2], &[I64X2]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4897
-                // https://github.com/bytecodealliance/wasmtime/issues/4899
-                (Opcode::FcvtToSintSat, &[F32], &[I8]),
-                (Opcode::FcvtToSintSat, &[F32], &[I16]),
-                (Opcode::FcvtToSintSat, &[F32], &[I128]),
-                (Opcode::FcvtToSintSat, &[F64], &[I8]),
-                (Opcode::FcvtToSintSat, &[F64], &[I16]),
-                (Opcode::FcvtToSintSat, &[F64], &[I128]),
-                (Opcode::FcvtToSintSat, &[F64X2], &[I64X2]),
+                (
+                    Opcode::FcvtToUint
+                        | Opcode::FcvtToUintSat
+                        | Opcode::FcvtToSint
+                        | Opcode::FcvtToSintSat,
+                    &[F32 | F64],
+                    &[I8 | I16 | I128]
+                ),
+                (Opcode::FcvtToUint | Opcode::FcvtToSint, &[F32X4], &[I32X4]),
+                (
+                    Opcode::FcvtToUint
+                        | Opcode::FcvtToUintSat
+                        | Opcode::FcvtToSint
+                        | Opcode::FcvtToSintSat,
+                    &[F64X2],
+                    &[I64X2]
+                ),
                 // https://github.com/bytecodealliance/wasmtime/issues/4900
-                (Opcode::FcvtFromUint, &[I128], &[F32]),
-                (Opcode::FcvtFromUint, &[I128], &[F64]),
+                (Opcode::FcvtFromUint, &[I128], &[F32 | F64]),
                 // This has a lowering, but only when preceded by `uwiden_low`.
                 (Opcode::FcvtFromUint, &[I64X2], &[F64X2]),
                 // https://github.com/bytecodealliance/wasmtime/issues/4900
-                (Opcode::FcvtFromSint, &[I128], &[F32]),
-                (Opcode::FcvtFromSint, &[I128], &[F64]),
+                (Opcode::FcvtFromSint, &[I128], &[F32 | F64]),
                 (Opcode::FcvtFromSint, &[I64X2], &[F64X2]),
-                (Opcode::Bmask, &[I8X16]),
-                (Opcode::Bmask, &[I16X8]),
-                (Opcode::Bmask, &[I32X4]),
-                (Opcode::Bmask, &[I64X2]),
-                (Opcode::Umulhi, &[I8X16, I8X16]),
-                (Opcode::Umulhi, &[I16X8, I16X8]),
-                (Opcode::Umulhi, &[I32X4, I32X4]),
-                (Opcode::Umulhi, &[I64X2, I64X2]),
-                (Opcode::Smulhi, &[I8X16, I8X16]),
-                (Opcode::Smulhi, &[I16X8, I16X8]),
-                (Opcode::Smulhi, &[I32X4, I32X4]),
-                (Opcode::Smulhi, &[I64X2, I64X2]),
-                (Opcode::UaddSat, &[I32X4, I32X4]),
-                (Opcode::UaddSat, &[I64X2, I64X2]),
-                (Opcode::SaddSat, &[I32X4, I32X4]),
-                (Opcode::SaddSat, &[I64X2, I64X2]),
-                (Opcode::UsubSat, &[I32X4, I32X4]),
-                (Opcode::UsubSat, &[I64X2, I64X2]),
-                (Opcode::SsubSat, &[I32X4, I32X4]),
-                (Opcode::SsubSat, &[I64X2, I64X2]),
-                (Opcode::Fcopysign, &[F32X4, F32X4]),
-                (Opcode::Fcopysign, &[F64X2, F64X2]),
-                (Opcode::Popcnt, &[I8X16]),
-                (Opcode::Popcnt, &[I16X8]),
-                (Opcode::Popcnt, &[I32X4]),
-                (Opcode::Popcnt, &[I64X2]),
-                (Opcode::Umax, &[I64X2, I64X2]),
-                (Opcode::Smax, &[I64X2, I64X2]),
-                (Opcode::Umin, &[I64X2, I64X2]),
-                (Opcode::Smin, &[I64X2, I64X2]),
+                (Opcode::Bmask, &[I8X16 | I16X8 | I32X4 | I64X2]),
+                (
+                    Opcode::Umulhi | Opcode::Smulhi,
+                    &([I8X16, I8X16] | [I16X8, I16X8] | [I32X4, I32X4] | [I64X2, I64X2])
+                ),
+                (
+                    Opcode::UaddSat | Opcode::SaddSat | Opcode::UsubSat | Opcode::SsubSat,
+                    &([I32X4, I32X4] | [I64X2, I64X2])
+                ),
+                (Opcode::Fcopysign, &([F32X4, F32X4] | [F64X2, F64X2])),
+                (Opcode::Popcnt, &([I8X16] | [I16X8] | [I32X4] | [I64X2])),
+                (
+                    Opcode::Umax | Opcode::Smax | Opcode::Umin | Opcode::Smin,
+                    &[I64X2, I64X2]
+                ),
                 (Opcode::Bitcast, &[I128], &[_]),
                 (Opcode::Bitcast, &[_], &[I128]),
                 (Opcode::Uunarrow),
-                (Opcode::Snarrow, &[I64X2, I64X2]),
-                (Opcode::Unarrow, &[I64X2, I64X2]),
+                (Opcode::Snarrow | Opcode::Unarrow, &[I64X2, I64X2]),
                 (Opcode::SqmulRoundSat, &[I32X4, I32X4]),
                 // This Icmp is not implemented: #5529
                 (Opcode::Icmp, &[I64X2, I64X2]),
@@ -582,18 +514,15 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (Opcode::Select, &[_, I128, I128]),
                 // These stack accesses can cause segfaults if they are merged into an SSE instruction.
                 // See: #5922
-                (Opcode::StackStore, &[I8X16], &[]),
-                (Opcode::StackStore, &[I16X8], &[]),
-                (Opcode::StackStore, &[I32X4], &[]),
-                (Opcode::StackStore, &[I64X2], &[]),
-                (Opcode::StackStore, &[F32X4], &[]),
-                (Opcode::StackStore, &[F64X2], &[]),
-                (Opcode::StackLoad, &[], &[I8X16]),
-                (Opcode::StackLoad, &[], &[I16X8]),
-                (Opcode::StackLoad, &[], &[I32X4]),
-                (Opcode::StackLoad, &[], &[I64X2]),
-                (Opcode::StackLoad, &[], &[F32X4]),
-                (Opcode::StackLoad, &[], &[F64X2]),
+                (
+                    Opcode::StackStore,
+                    &[I8X16 | I16X8 | I32X4 | I64X2 | F32X4 | F64X2]
+                ),
+                (
+                    Opcode::StackLoad,
+                    &[],
+                    &[I8X16 | I16X8 | I32X4 | I64X2 | F32X4 | F64X2]
+                ),
             )
         }
 
@@ -601,79 +530,49 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
             exceptions!(
                 (Opcode::IaddCout, &[I128, I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/4864
-                (Opcode::Udiv, &[I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4864
-                (Opcode::Sdiv, &[I128, I128]),
+                (Opcode::Udiv | Opcode::Sdiv, &[I128, I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/5472
-                (Opcode::Urem, &[I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5472
-                (Opcode::Srem, &[I128, I128]),
+                (Opcode::Urem | Opcode::Srem, &[I128, I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/5467
                 (Opcode::Iabs, &[I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/4313
-                (Opcode::Smin, &[I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4313
-                (Opcode::Umin, &[I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4313
-                (Opcode::Smax, &[I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4313
-                (Opcode::Umax, &[I128, I128]),
+                (
+                    Opcode::Smin | Opcode::Umin | Opcode::Smax | Opcode::Umax,
+                    &[I128, I128]
+                ),
                 // https://github.com/bytecodealliance/wasmtime/issues/4870
-                (Opcode::Band, &[F32, F32]),
-                (Opcode::Band, &[F64, F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4870
-                (Opcode::Bor, &[F32, F32]),
-                (Opcode::Bor, &[F64, F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4870
-                (Opcode::Bxor, &[F32, F32]),
-                (Opcode::Bxor, &[F64, F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4870
-                (Opcode::Bnot, &[F32, F32]),
-                (Opcode::Bnot, &[F64, F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4870
-                (Opcode::BandNot, &[F32, F32]),
-                (Opcode::BandNot, &[F64, F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4870
-                (Opcode::BorNot, &[F32, F32]),
-                (Opcode::BorNot, &[F64, F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4870
-                (Opcode::BxorNot, &[F32, F32]),
-                (Opcode::BxorNot, &[F64, F64]),
+                (
+                    Opcode::Band
+                        | Opcode::Bor
+                        | Opcode::Bxor
+                        | Opcode::Bnot
+                        | Opcode::BandNot
+                        | Opcode::BorNot
+                        | Opcode::BxorNot,
+                    &([F32, F32] | [F64, F64])
+                ),
                 // https://github.com/bytecodealliance/wasmtime/issues/5198
                 (Opcode::Bitselect, &[I128, I128, I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/4934
-                (Opcode::FcvtToUint, &[F32]),
-                (Opcode::FcvtToUint, &[F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4934
-                (Opcode::FcvtToUintSat, &[F32]),
-                (Opcode::FcvtToUintSat, &[F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4934
-                (Opcode::FcvtToSint, &[F32]),
-                (Opcode::FcvtToSint, &[F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4934
-                (Opcode::FcvtToSintSat, &[F32]),
-                (Opcode::FcvtToSintSat, &[F64]),
+                (
+                    Opcode::FcvtToUint
+                        | Opcode::FcvtToUintSat
+                        | Opcode::FcvtToSint
+                        | Opcode::FcvtToSintSat,
+                    &[F32 | F64]
+                ),
                 // https://github.com/bytecodealliance/wasmtime/issues/4933
-                (Opcode::FcvtFromUint, &[I128], &[F32]),
-                (Opcode::FcvtFromUint, &[I128], &[F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4933
-                (Opcode::FcvtFromSint, &[I128], &[F32]),
-                (Opcode::FcvtFromSint, &[I128], &[F64]),
-                (Opcode::Bmask, &[I8X16]),
-                (Opcode::Bmask, &[I16X8]),
-                (Opcode::Bmask, &[I32X4]),
-                (Opcode::Bmask, &[I64X2]),
-                (Opcode::Umulhi, &[I8X16, I8X16]),
-                (Opcode::Umulhi, &[I16X8, I16X8]),
-                (Opcode::Umulhi, &[I32X4, I32X4]),
-                (Opcode::Umulhi, &[I64X2, I64X2]),
-                (Opcode::Smulhi, &[I8X16, I8X16]),
-                (Opcode::Smulhi, &[I16X8, I16X8]),
-                (Opcode::Smulhi, &[I32X4, I32X4]),
-                (Opcode::Smulhi, &[I64X2, I64X2]),
-                (Opcode::Popcnt, &[I16X8]),
-                (Opcode::Popcnt, &[I32X4]),
-                (Opcode::Popcnt, &[I64X2]),
+                (
+                    Opcode::FcvtFromUint | Opcode::FcvtFromSint,
+                    &[I128],
+                    &[F32 | F64]
+                ),
+                (Opcode::Bmask, &[I8X16 | I16X8 | I32X4 | I64X2]),
+                (
+                    Opcode::Umulhi | Opcode::Smulhi,
+                    &([I8X16, I8X16] | [I16X8, I16X8] | [I32X4, I32X4] | [I64X2, I64X2])
+                ),
+                (Opcode::Popcnt, &[I16X8 | I32X4 | I64X2]),
                 // Nothing wrong with this select. But we have an isle rule that can optimize it
                 // into a `min`/`max` instructions, which we don't have implemented yet.
                 (Opcode::Select, &[I8, I128, I128]),
@@ -683,42 +582,35 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
         Architecture::S390x => {
             exceptions!(
                 (Opcode::IaddCout),
-                (Opcode::Udiv, &[I128, I128]),
-                (Opcode::Sdiv, &[I128, I128]),
-                (Opcode::Urem, &[I128, I128]),
-                (Opcode::Srem, &[I128, I128]),
-                (Opcode::Band, &[F32, F32]),
-                (Opcode::Band, &[F64, F64]),
-                (Opcode::Bor, &[F32, F32]),
-                (Opcode::Bor, &[F64, F64]),
-                (Opcode::Bxor, &[F32, F32]),
-                (Opcode::Bxor, &[F64, F64]),
-                (Opcode::Bnot, &[F32, F32]),
-                (Opcode::Bnot, &[F64, F64]),
-                (Opcode::BandNot, &[F32, F32]),
-                (Opcode::BandNot, &[F64, F64]),
-                (Opcode::BorNot, &[F32, F32]),
-                (Opcode::BorNot, &[F64, F64]),
-                (Opcode::BxorNot, &[F32, F32]),
-                (Opcode::BxorNot, &[F64, F64]),
-                (Opcode::FcvtToUint, &[F32], &[I128]),
-                (Opcode::FcvtToUint, &[F64], &[I128]),
-                (Opcode::FcvtToUintSat, &[F32], &[I128]),
-                (Opcode::FcvtToUintSat, &[F64], &[I128]),
-                (Opcode::FcvtToSint, &[F32], &[I128]),
-                (Opcode::FcvtToSint, &[F64], &[I128]),
-                (Opcode::FcvtToSintSat, &[F32], &[I128]),
-                (Opcode::FcvtToSintSat, &[F64], &[I128]),
-                (Opcode::FcvtFromUint, &[I128], &[F32]),
-                (Opcode::FcvtFromUint, &[I128], &[F64]),
-                (Opcode::FcvtFromSint, &[I128], &[F32]),
-                (Opcode::FcvtFromSint, &[I128], &[F64]),
-                (Opcode::Bmask, &[I8X16]),
-                (Opcode::Bmask, &[I16X8]),
-                (Opcode::Bmask, &[I32X4]),
-                (Opcode::Bmask, &[I64X2]),
-                (Opcode::SsubSat, &[I64X2, I64X2]),
-                (Opcode::SaddSat, &[I64X2, I64X2]),
+                (
+                    Opcode::Udiv | Opcode::Sdiv | Opcode::Urem | Opcode::Srem,
+                    &[I128, I128]
+                ),
+                (
+                    Opcode::Band
+                        | Opcode::Bor
+                        | Opcode::Bxor
+                        | Opcode::Bnot
+                        | Opcode::BandNot
+                        | Opcode::BorNot
+                        | Opcode::BxorNot,
+                    &([F32, F32] | [F64, F64])
+                ),
+                (
+                    Opcode::FcvtToUint
+                        | Opcode::FcvtToUintSat
+                        | Opcode::FcvtToSint
+                        | Opcode::FcvtToSintSat,
+                    &[F32 | F64],
+                    &[I128]
+                ),
+                (
+                    Opcode::FcvtFromUint | Opcode::FcvtFromSint,
+                    &[I128],
+                    &[F32 | F64]
+                ),
+                (Opcode::Bmask, &[I8X16 | I16X8 | I32X4 | I64X2]),
+                (Opcode::SsubSat | Opcode::SaddSat, &[I64X2, I64X2]),
             )
         }
 
@@ -733,13 +625,10 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 // TODO
                 (Opcode::IaddCout),
                 // TODO
-                (Opcode::Udiv, &[I128, I128]),
-                // TODO
-                (Opcode::Sdiv, &[I128, I128]),
-                // TODO
-                (Opcode::Urem, &[I128, I128]),
-                // TODO
-                (Opcode::Srem, &[I128, I128]),
+                (
+                    Opcode::Udiv | Opcode::Sdiv | Opcode::Urem | Opcode::Srem,
+                    &[I128, I128]
+                ),
                 // TODO
                 (Opcode::Iabs, &[I128]),
                 // TODO
@@ -747,70 +636,25 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 // TODO
                 (Opcode::Bswap),
                 // https://github.com/bytecodealliance/wasmtime/issues/5528
-                (Opcode::FcvtToUint, &[F32], &[I8]),
-                (Opcode::FcvtToUint, &[F32], &[I16]),
-                // TODO
-                (Opcode::FcvtToUint, &[F32], &[I128]),
+                (
+                    Opcode::FcvtToUint
+                        | Opcode::FcvtToUintSat
+                        | Opcode::FcvtToSint
+                        | Opcode::FcvtToSintSat,
+                    &[F32 | F64],
+                    &[I8 | I16 | I128]
+                ),
                 // https://github.com/bytecodealliance/wasmtime/issues/5528
-                (Opcode::FcvtToUint, &[F64], &[I8]),
-                (Opcode::FcvtToUint, &[F64], &[I16]),
+                (
+                    Opcode::FcvtFromUint | Opcode::FcvtFromSint,
+                    &[I8 | I16 | I128],
+                    &[F32 | F64]
+                ),
                 // TODO
-                (Opcode::FcvtToUint, &[F64], &[I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5528
-                (Opcode::FcvtToUintSat, &[F32], &[I8]),
-                (Opcode::FcvtToUintSat, &[F32], &[I16]),
-                // TODO
-                (Opcode::FcvtToUintSat, &[F32], &[I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5528
-                (Opcode::FcvtToUintSat, &[F64], &[I8]),
-                (Opcode::FcvtToUintSat, &[F64], &[I16]),
-                // TODO
-                (Opcode::FcvtToUintSat, &[F64], &[I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5528
-                (Opcode::FcvtToSint, &[F32], &[I8]),
-                (Opcode::FcvtToSint, &[F32], &[I16]),
-                // TODO
-                (Opcode::FcvtToSint, &[F32], &[I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5528
-                (Opcode::FcvtToSint, &[F64], &[I8]),
-                (Opcode::FcvtToSint, &[F64], &[I16]),
-                // TODO
-                (Opcode::FcvtToSint, &[F64], &[I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5528
-                (Opcode::FcvtToSintSat, &[F32], &[I8]),
-                (Opcode::FcvtToSintSat, &[F32], &[I16]),
-                // TODO
-                (Opcode::FcvtToSintSat, &[F32], &[I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5528
-                (Opcode::FcvtToSintSat, &[F64], &[I8]),
-                (Opcode::FcvtToSintSat, &[F64], &[I16]),
-                // TODO
-                (Opcode::FcvtToSintSat, &[F64], &[I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5528
-                (Opcode::FcvtFromUint, &[I8], &[F32]),
-                (Opcode::FcvtFromUint, &[I8], &[F64]),
-                (Opcode::FcvtFromUint, &[I16], &[F32]),
-                (Opcode::FcvtFromUint, &[I16], &[F64]),
-                // TODO
-                (Opcode::FcvtFromUint, &[I128], &[F32]),
-                (Opcode::FcvtFromUint, &[I128], &[F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5528
-                (Opcode::FcvtFromSint, &[I8], &[F32]),
-                (Opcode::FcvtFromSint, &[I8], &[F64]),
-                (Opcode::FcvtFromSint, &[I16], &[F32]),
-                (Opcode::FcvtFromSint, &[I16], &[F64]),
-                // TODO
-                (Opcode::FcvtFromSint, &[I128], &[F32]),
-                (Opcode::FcvtFromSint, &[I128], &[F64]),
-                // TODO
-                (Opcode::BandNot, &[F32, F32]),
-                (Opcode::BandNot, &[F64, F64]),
-                // TODO
-                (Opcode::BorNot, &[F32, F32]),
-                (Opcode::BorNot, &[F64, F64]),
-                // TODO
-                (Opcode::BxorNot, &[F32, F32]),
-                (Opcode::BxorNot, &[F64, F64]),
+                (
+                    Opcode::BandNot | Opcode::BorNot | Opcode::BxorNot,
+                    &([F32, F32] | [F64, F64])
+                ),
                 // https://github.com/bytecodealliance/wasmtime/issues/5884
                 (Opcode::AtomicRmw),
             )
