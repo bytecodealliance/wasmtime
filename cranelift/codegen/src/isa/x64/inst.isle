@@ -1858,6 +1858,11 @@
 (rule 1 (extend_to_gpr src @ (has_type $I32 (uload32 _ _ _)) $I64 (ExtendKind.Zero))
         src)
 
+;; The `pextr{b,w}` instruction automatically zero the upper bits of the
+;; destination register so the `uextend` in these cases can be elided.
+(rule 1 (extend_to_gpr src @ (has_type (fits_in_16 _) (extractlane _ _)) $I32 (ExtendKind.Zero))
+        src)
+
 (rule (extend_to_gpr (and val (value_type from_ty))
                      to_ty
                      kind)
