@@ -124,14 +124,6 @@ impl TypeVar {
         &self.type_set
     }
 
-    /// Returns true if this type variable refines but doesn't fully determine its value from the
-    /// parent type variable.
-    pub fn refines_parent(&self) -> bool {
-        self.base
-            .as_ref()
-            .map_or(false, |base| !base.derived_func.is_singleton())
-    }
-
     /// If the associated typeset has a single type return it. Otherwise return None.
     pub fn singleton_type(&self) -> Option<ValueType> {
         let type_set = self.get_typeset();
@@ -362,21 +354,6 @@ impl DerivedFunc {
             DerivedFunc::DynamicToVector => "dynamic_to_vector",
             DerivedFunc::Narrower => "narrower",
             DerivedFunc::Wider => "wider",
-        }
-    }
-
-    /// Returns `true` when this derived function will fully determine a resulting type, and
-    /// `false` if it determines a set of types.
-    pub fn is_singleton(self) -> bool {
-        match self {
-            DerivedFunc::LaneOf
-            | DerivedFunc::AsBool
-            | DerivedFunc::HalfWidth
-            | DerivedFunc::DoubleWidth
-            | DerivedFunc::SplitLanes
-            | DerivedFunc::MergeLanes
-            | DerivedFunc::DynamicToVector => true,
-            DerivedFunc::Narrower | DerivedFunc::Wider => false,
         }
     }
 }
