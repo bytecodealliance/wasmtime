@@ -1798,7 +1798,7 @@
   (let
     ((result WritableReg (temp_writable_reg out_type))
       (tmp WritableReg (temp_writable_reg $F64))
-      (rs2 Reg(normalize_fcvt_from_float in_type out_type rs is_signed))
+      (rs2 Reg (normalize_fcvt_from_float in_type out_type rs is_signed))
       (_ Unit (emit (MInst.FcvtToInt is_sat result tmp rs2 is_signed in_type out_type))))
     result))
 

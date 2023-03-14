@@ -762,7 +762,7 @@ block0(v0: f32):
 ;   fle.s a0, ft3, fa0
 ;   beqz a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   fcvt.wu.s a0, fa0, rne
+;   fcvt.wu.s a0, fa0, rtz
 ;   j 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
 ;   ret
@@ -795,7 +795,7 @@ block0(v0: f32):
 ;   fle.s a0, ft3, fa0
 ;   beqz a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   fcvt.w.s a0, fa0, rne
+;   fcvt.w.s a0, fa0, rtz
 ;   j 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
 ;   ret
@@ -828,7 +828,7 @@ block0(v0: f32):
 ;   fle.s a0, ft3, fa0
 ;   beqz a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   fcvt.lu.s a0, fa0, rne
+;   fcvt.lu.s a0, fa0, rtz
 ;   j 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
 ;   ret
@@ -861,7 +861,7 @@ block0(v0: f32):
 ;   fle.s a0, ft3, fa0
 ;   beqz a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   fcvt.l.s a0, fa0, rne
+;   fcvt.l.s a0, fa0, rtz
 ;   j 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
 ;   ret
@@ -899,7 +899,7 @@ block0(v0: f64):
 ;   fle.d a0, ft3, fa0
 ;   beqz a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   fcvt.wu.d a0, fa0, rne
+;   fcvt.wu.d a0, fa0, rtz
 ;   j 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
 ;   ret
@@ -937,7 +937,7 @@ block0(v0: f64):
 ;   fle.d a0, ft3, fa0
 ;   beqz a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   fcvt.w.d a0, fa0, rne
+;   fcvt.w.d a0, fa0, rtz
 ;   j 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
 ;   ret
@@ -975,7 +975,7 @@ block0(v0: f64):
 ;   fle.d a0, ft3, fa0
 ;   beqz a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   fcvt.lu.d a0, fa0, rne
+;   fcvt.lu.d a0, fa0, rtz
 ;   j 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
 ;   ret
@@ -1013,7 +1013,7 @@ block0(v0: f64):
 ;   fle.d a0, ft3, fa0
 ;   beqz a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   fcvt.l.d a0, fa0, rne
+;   fcvt.l.d a0, fa0, rtz
 ;   j 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
 ;   ret
@@ -1161,7 +1161,7 @@ block0(v0: f32):
 ; block0: ; offset 0x0
 ;   feq.s a0, fa0, fa0
 ;   beqz a0, 0xc
-;   fcvt.wu.s a0, fa0, rne
+;   fcvt.wu.s a0, fa0, rtz
 ;   j 8
 ;   mv a0, zero
 ;   ret
@@ -1181,7 +1181,7 @@ block0(v0: f32):
 ; block0: ; offset 0x0
 ;   feq.s a0, fa0, fa0
 ;   beqz a0, 0xc
-;   fcvt.w.s a0, fa0, rne
+;   fcvt.w.s a0, fa0, rtz
 ;   j 8
 ;   mv a0, zero
 ;   ret
@@ -1201,7 +1201,7 @@ block0(v0: f32):
 ; block0: ; offset 0x0
 ;   feq.s a0, fa0, fa0
 ;   beqz a0, 0xc
-;   fcvt.lu.s a0, fa0, rne
+;   fcvt.lu.s a0, fa0, rtz
 ;   j 8
 ;   mv a0, zero
 ;   ret
@@ -1221,7 +1221,7 @@ block0(v0: f32):
 ; block0: ; offset 0x0
 ;   feq.s a0, fa0, fa0
 ;   beqz a0, 0xc
-;   fcvt.l.s a0, fa0, rne
+;   fcvt.l.s a0, fa0, rtz
 ;   j 8
 ;   mv a0, zero
 ;   ret
@@ -1241,7 +1241,7 @@ block0(v0: f64):
 ; block0: ; offset 0x0
 ;   feq.d a0, fa0, fa0
 ;   beqz a0, 0xc
-;   fcvt.wu.d a0, fa0, rne
+;   fcvt.wu.d a0, fa0, rtz
 ;   j 8
 ;   mv a0, zero
 ;   ret
@@ -1261,7 +1261,7 @@ block0(v0: f64):
 ; block0: ; offset 0x0
 ;   feq.d a0, fa0, fa0
 ;   beqz a0, 0xc
-;   fcvt.w.d a0, fa0, rne
+;   fcvt.w.d a0, fa0, rtz
 ;   j 8
 ;   mv a0, zero
 ;   ret
@@ -1281,7 +1281,7 @@ block0(v0: f64):
 ; block0: ; offset 0x0
 ;   feq.d a0, fa0, fa0
 ;   beqz a0, 0xc
-;   fcvt.lu.d a0, fa0, rne
+;   fcvt.lu.d a0, fa0, rtz
 ;   j 8
 ;   mv a0, zero
 ;   ret
@@ -1301,7 +1301,7 @@ block0(v0: f64):
 ; block0: ; offset 0x0
 ;   feq.d a0, fa0, fa0
 ;   beqz a0, 0xc
-;   fcvt.l.d a0, fa0, rne
+;   fcvt.l.d a0, fa0, rtz
 ;   j 8
 ;   mv a0, zero
 ;   ret
