@@ -188,21 +188,15 @@ unsafe fn get_pc_and_fp(cx: *mut libc::c_void, _signum: libc::c_int) -> (*const 
             // On s390x, SIGILL and SIGFPE are delivered with the PSW address
             // pointing *after* the faulting instruction, while SIGSEGV and
             // SIGBUS are delivered with the PSW address pointing *to* the
-            // faulting instruction.
-            //
-            // SIGILL is currently always generated with a 2-byte opcode of
-            // 0x0000, so for SIGILL the program counter is moved back 2 bytes.
-            //
-            // For SIGFPE the code generator registers traps on the last byte
-            // of the instruction, meaning we need to decrement the reported
-            // PSW address by one in the case of a "late" signal here to ensure
-            // we always correctly find the associated trap handler.
-            //
-            // For all other signals traps are registered with the first byte of
-            // the instruction so no extra handling is necessary.
+            // faulting instruction.  To handle this, the code generator registers
+            // any trap that results in one of "late" signals on the last byte
+            // of the instruction, and any trap that results in one of the "early"
+            // signals on the first byte of the instruction (as usual).  This
+            // means we simply need to decrement the reported PSW address by
+            // one in the case of a "late" signal here to ensure we always
+            // correctly find the associated trap handler.
             let trap_offset = match _signum {
-                libc::SIGILL => 2,
-                libc::SIGFPE => 1,
+                libc::SIGILL | libc::SIGFPE => 1,
                 _ => 0,
             };
             let cx = &*(cx as *const libc::ucontext_t);
