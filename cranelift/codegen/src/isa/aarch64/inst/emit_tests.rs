@@ -5874,7 +5874,7 @@ fn test_aarch64_binemit() {
             kind: CondBrKind::NotZero(xreg(8)),
         },
         "280000B51FC10000",
-        "cbnz x8, #trap",
+        "cbnz x8, #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
@@ -5882,7 +5882,7 @@ fn test_aarch64_binemit() {
             kind: CondBrKind::Zero(xreg(8)),
         },
         "280000B41FC10000",
-        "cbz x8, #trap",
+        "cbz x8, #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
@@ -5890,7 +5890,7 @@ fn test_aarch64_binemit() {
             kind: CondBrKind::Cond(Cond::Ne),
         },
         "210000541FC10000",
-        "b.ne #trap",
+        "b.ne #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
@@ -5898,7 +5898,7 @@ fn test_aarch64_binemit() {
             kind: CondBrKind::Cond(Cond::Eq),
         },
         "200000541FC10000",
-        "b.eq #trap",
+        "b.eq #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
@@ -5906,7 +5906,7 @@ fn test_aarch64_binemit() {
             kind: CondBrKind::Cond(Cond::Lo),
         },
         "230000541FC10000",
-        "b.lo #trap",
+        "b.lo #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
@@ -5914,7 +5914,7 @@ fn test_aarch64_binemit() {
             kind: CondBrKind::Cond(Cond::Hs),
         },
         "220000541FC10000",
-        "b.hs #trap",
+        "b.hs #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
@@ -5922,7 +5922,7 @@ fn test_aarch64_binemit() {
             kind: CondBrKind::Cond(Cond::Pl),
         },
         "250000541FC10000",
-        "b.pl #trap",
+        "b.pl #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
@@ -5930,7 +5930,7 @@ fn test_aarch64_binemit() {
             kind: CondBrKind::Cond(Cond::Mi),
         },
         "240000541FC10000",
-        "b.mi #trap",
+        "b.mi #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
@@ -5938,7 +5938,7 @@ fn test_aarch64_binemit() {
             kind: CondBrKind::Cond(Cond::Vc),
         },
         "270000541FC10000",
-        "b.vc #trap",
+        "b.vc #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
@@ -5946,7 +5946,7 @@ fn test_aarch64_binemit() {
             kind: CondBrKind::Cond(Cond::Vs),
         },
         "260000541FC10000",
-        "b.vs #trap",
+        "b.vs #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
@@ -5954,7 +5954,7 @@ fn test_aarch64_binemit() {
             kind: CondBrKind::Cond(Cond::Ls),
         },
         "290000541FC10000",
-        "b.ls #trap",
+        "b.ls #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
@@ -5962,7 +5962,7 @@ fn test_aarch64_binemit() {
             kind: CondBrKind::Cond(Cond::Hi),
         },
         "280000541FC10000",
-        "b.hi #trap",
+        "b.hi #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
@@ -5970,7 +5970,7 @@ fn test_aarch64_binemit() {
             kind: CondBrKind::Cond(Cond::Lt),
         },
         "2B0000541FC10000",
-        "b.lt #trap",
+        "b.lt #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
@@ -5978,7 +5978,7 @@ fn test_aarch64_binemit() {
             kind: CondBrKind::Cond(Cond::Ge),
         },
         "2A0000541FC10000",
-        "b.ge #trap",
+        "b.ge #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
@@ -5986,7 +5986,7 @@ fn test_aarch64_binemit() {
             kind: CondBrKind::Cond(Cond::Le),
         },
         "2D0000541FC10000",
-        "b.le #trap",
+        "b.le #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
@@ -5994,7 +5994,7 @@ fn test_aarch64_binemit() {
             kind: CondBrKind::Cond(Cond::Gt),
         },
         "2C0000541FC10000",
-        "b.gt #trap",
+        "b.gt #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
@@ -6002,7 +6002,7 @@ fn test_aarch64_binemit() {
             kind: CondBrKind::Cond(Cond::Nv),
         },
         "2F0000541FC10000",
-        "b.nv #trap",
+        "b.nv #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
@@ -6010,7 +6010,7 @@ fn test_aarch64_binemit() {
             kind: CondBrKind::Cond(Cond::Al),
         },
         "2E0000541FC10000",
-        "b.al #trap",
+        "b.al #trap=interrupt",
     ));
 
     insns.push((

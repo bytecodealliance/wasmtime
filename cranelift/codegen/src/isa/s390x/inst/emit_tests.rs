@@ -7042,7 +7042,7 @@ fn test_s390x_binemit() {
             trap_code: TrapCode::StackOverflow,
         },
         "A71400020000",
-        "jo #trap",
+        "jo #trap=stk_ovf",
     ));
 
     insns.push((
