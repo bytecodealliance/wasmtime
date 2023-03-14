@@ -76,6 +76,78 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
             | SignedLessThanOrEqual => ExtendOp::Signed,
         }
     }
+    fn normalize_fcvt_from_float(
+        &mut self,
+        in_type: Type,
+        out_ty: Type,
+        rs: Reg,
+        is_signed: bool,
+    ) -> Reg {
+        if out_ty.bits() >= 32 {
+            return rs;
+        }
+        macro_rules! normalize {
+            ($ty : ty ,$to_bits:ident ,$max_op:expr ,$min_op:expr , $load_name:ident) => {{
+                let (min, max) = if is_signed == false {
+                    if out_ty.bits() == 8 {
+                        (u8::MIN as $ty, u8::MAX as $ty)
+                    } else {
+                        (u16::MIN as $ty, u16::MAX as $ty)
+                    }
+                } else {
+                    if out_ty.bits() == 8 {
+                        (i8::MIN as $ty, i8::MAX as $ty)
+                    } else {
+                        (i16::MIN as $ty, i16::MAX as $ty)
+                    }
+                };
+                let min_reg = self.temp_writable_reg(F64);
+                let insts =
+                    MInst::$load_name(min_reg, $to_bits(min), |ty| self.temp_writable_reg(ty));
+                self.emit_list(&insts);
+                let tmp = self.temp_writable_reg(F64);
+                //
+                self.emit(&MInst::FpuRRR {
+                    alu_op: $max_op,
+                    frm: None,
+                    rd: tmp,
+                    rs1: rs,
+                    rs2: min_reg.to_reg(),
+                });
+                let max_reg = self.temp_writable_reg(F64);
+                let insts =
+                    MInst::$load_name(max_reg, $to_bits(max), |ty| self.temp_writable_reg(ty));
+                self.emit_list(&insts);
+                let rd = self.temp_writable_reg(F64);
+                self.emit(&MInst::FpuRRR {
+                    alu_op: $min_op,
+                    frm: None,
+                    rd: rd,
+                    rs1: tmp.to_reg(),
+                    rs2: max_reg.to_reg(),
+                });
+                rd.to_reg()
+            }};
+        }
+        if in_type.bits() == 32 {
+            normalize!(
+                f32,
+                f32_bits,
+                FpuOPRRR::FmaxS,
+                FpuOPRRR::FminS,
+                load_fp_constant32
+            )
+        } else {
+            normalize!(
+                f64,
+                f64_bits,
+                FpuOPRRR::FmaxD,
+                FpuOPRRR::FminD,
+                load_fp_constant64
+            )
+        }
+    }
+
     fn lower_cond_br(
         &mut self,
         cc: &IntCC,
