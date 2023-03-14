@@ -1798,7 +1798,7 @@
   (let
     ((result WritableReg (temp_writable_reg out_type))
       (tmp WritableReg (temp_writable_reg $F64))
-      (rs2 Reg (normalize_fcvt_from_float in_type out_type rs is_signed))
+      (rs2 Reg (clamp_fcvt_from_float in_type out_type rs is_signed))
       (_ Unit (emit (MInst.FcvtToInt is_sat result tmp rs2 is_signed in_type out_type))))
     result))
 
@@ -1916,8 +1916,8 @@
 
 
 ;; parameters are in_ty out_ty input is_signed  
-(decl normalize_fcvt_from_float (Type Type Reg bool) Reg)
-(extern constructor normalize_fcvt_from_float normalize_fcvt_from_float)
+(decl clamp_fcvt_from_float (Type Type Reg bool) Reg)
+(extern constructor clamp_fcvt_from_float clamp_fcvt_from_float)
 
 ;; Normalize a value for comparision.
 ;;

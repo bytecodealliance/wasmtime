@@ -76,7 +76,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
             | SignedLessThanOrEqual => ExtendOp::Signed,
         }
     }
-    fn normalize_fcvt_from_float(
+    fn clamp_fcvt_from_float(
         &mut self,
         in_type: Type,
         out_ty: Type,
