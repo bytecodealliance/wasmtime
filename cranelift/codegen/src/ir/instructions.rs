@@ -801,7 +801,8 @@ impl OperandConstraint {
                     // The largest integer type we can represent in `BitSet8` is I128, which is
                     // represented by bit 7 in the bit set. Adding one to exclude I128 from the
                     // lower bound would overflow as 2^8 doesn't fit in a u8, but this would
-                    // already describe the empty set so instead we skip initializing it at all.
+                    // already describe the empty set so instead we leave `ints` in its default
+                    // empty state.
                     if lower_bound < BitSet8::bits() as u8 {
                         // The interval should include all types wider than `ctrl_type`, so we use
                         // `2^8` as the upper bound, and add one to the bits of `ctrl_type` to define
