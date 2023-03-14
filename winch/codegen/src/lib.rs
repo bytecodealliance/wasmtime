@@ -8,6 +8,7 @@
 
 mod abi;
 mod codegen;
+pub use codegen::{Callee, FuncEnv};
 mod frame;
 pub mod isa;
 pub use isa::*;

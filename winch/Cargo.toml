@@ -13,6 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 winch-codegen = { workspace = true }
+winch-environ = { workspace = true }
 winch-filetests = { workspace = true }
 winch-test-macros = { workspace = true }
 wasmtime-environ = { workspace = true }

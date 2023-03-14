@@ -7,6 +7,8 @@ use wasmparser::{BinaryReader, FuncValidator, ValType, ValidatorResources, Visit
 
 mod context;
 pub(crate) use context::*;
+mod env;
+pub use env::*;
 
 /// The code generation abstraction.
 pub(crate) struct CodeGen<'a, M>
