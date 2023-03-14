@@ -3587,7 +3587,8 @@ impl Inst {
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(2), s);
                 }
-                put_with_trap(sink, &enc_e(0x0000), trap_code);
+                sink.add_trap(trap_code);
+                sink.put_data(&Inst::TRAP_OPCODE);
             }
             &Inst::TrapIf { cond, trap_code } => {
                 let label = sink.defer_trap(trap_code, state.take_stack_map());
