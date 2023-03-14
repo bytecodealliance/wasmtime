@@ -8,8 +8,8 @@ use cranelift_codegen::{
     ir::TrapCode,
     isa::x64::{
         args::{
-            self, AluRmiROpcode, Amode, CmpOpcode, ExtMode, FromWritableReg, Gpr, GprMem,
-            GprMemImm, RegMem, RegMemImm, SyntheticAmode, WritableGpr, CC,
+            self, AluRmiROpcode, Amode, CmpOpcode, DivSignedness, ExtMode, FromWritableReg, Gpr,
+            GprMem, GprMemImm, RegMem, RegMemImm, SyntheticAmode, WritableGpr, CC,
         },
         settings as x64_settings, EmitInfo, EmitState, Inst,
     },
@@ -61,6 +61,15 @@ impl From<OperandSize> for args::OperandSize {
         match size {
             OperandSize::S32 => Self::Size32,
             OperandSize::S64 => Self::Size64,
+        }
+    }
+}
+
+impl From<DivKind> for DivSignedness {
+    fn from(kind: DivKind) -> DivSignedness {
+        match kind {
+            DivKind::Signed => DivSignedness::Signed,
+            DivKind::Unsigned => DivSignedness::Unsigned,
         }
     }
 }
@@ -321,10 +330,7 @@ impl Assembler {
             }
         }
         self.emit(Inst::Div {
-            signed: match kind {
-                DivKind::Signed => true,
-                DivKind::Unsigned => false,
-            },
+            sign: kind.into(),
             size: size.into(),
             divisor: GprMem::new(RegMem::reg(divisor.into())).unwrap(),
             dividend_lo: dst.0.into(),
@@ -384,7 +390,7 @@ impl Assembler {
                     dst: dst.1.into(),
                 });
                 self.emit(Inst::Div {
-                    signed: false,
+                    sign: DivSignedness::Unsigned,
                     size: size.into(),
                     divisor: GprMem::new(RegMem::reg(divisor.into())).unwrap(),
                     dividend_lo: dst.0.into(),

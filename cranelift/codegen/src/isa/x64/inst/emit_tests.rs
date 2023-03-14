@@ -1749,7 +1749,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::div(
             OperandSize::Size32,
-            true, /*signed*/
+            DivSignedness::Signed,
             RegMem::reg(regs::rsi()),
             Gpr::new(regs::rax()).unwrap(),
             Gpr::new(regs::rdx()).unwrap(),
@@ -1762,7 +1762,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::div(
             OperandSize::Size64,
-            true, /*signed*/
+            DivSignedness::Signed,
             RegMem::reg(regs::r15()),
             Gpr::new(regs::rax()).unwrap(),
             Gpr::new(regs::rdx()).unwrap(),
@@ -1775,7 +1775,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::div(
             OperandSize::Size32,
-            false, /*signed*/
+            DivSignedness::Unsigned,
             RegMem::reg(regs::r14()),
             Gpr::new(regs::rax()).unwrap(),
             Gpr::new(regs::rdx()).unwrap(),
@@ -1788,7 +1788,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::div(
             OperandSize::Size64,
-            false, /*signed*/
+            DivSignedness::Signed,
             RegMem::reg(regs::rdi()),
             Gpr::new(regs::rax()).unwrap(),
             Gpr::new(regs::rdx()).unwrap(),
@@ -1800,7 +1800,7 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::div8(
-            false,
+            DivSignedness::Unsigned,
             RegMem::reg(regs::rax()),
             Gpr::new(regs::rax()).unwrap(),
             WritableGpr::from_reg(Gpr::new(regs::rax()).unwrap()),
@@ -1810,7 +1810,7 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::div8(
-            false,
+            DivSignedness::Unsigned,
             RegMem::reg(regs::rsi()),
             Gpr::new(regs::rax()).unwrap(),
             WritableGpr::from_reg(Gpr::new(regs::rax()).unwrap()),
