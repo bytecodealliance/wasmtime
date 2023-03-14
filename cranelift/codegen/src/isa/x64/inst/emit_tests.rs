@@ -1788,7 +1788,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::div(
             OperandSize::Size64,
-            DivSignedness::Signed,
+            DivSignedness::Unsigned,
             RegMem::reg(regs::rdi()),
             Gpr::new(regs::rax()).unwrap(),
             Gpr::new(regs::rdx()).unwrap(),
