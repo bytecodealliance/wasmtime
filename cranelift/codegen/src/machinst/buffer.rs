@@ -1161,12 +1161,10 @@ impl<I: VCodeInst> MachBuffer<I> {
 
         // First flush out all traps/constants so we have more labels in case
         // fixups are applied against these labels.
-        for MachLabelConstant { label, align, data } in mem::take(&mut self.pending_constants) {
-            self.align_to(align);
-            self.bind_label(label);
-            self.put_data(&data[..]);
-        }
-
+        //
+        // Note that traps are placed first since this typically happens at the
+        // end of the function and for disassemblers we try to keep all the code
+        // contiguously together.
         for MachLabelTrap {
             label,
             code,
@@ -1181,6 +1179,12 @@ impl<I: VCodeInst> MachBuffer<I> {
                 self.add_stack_map(extent, map);
             }
             self.put_data(I::TRAP_OPCODE);
+        }
+
+        for MachLabelConstant { label, align, data } in mem::take(&mut self.pending_constants) {
+            self.align_to(align);
+            self.bind_label(label);
+            self.put_data(&data[..]);
         }
 
         for fixup in mem::take(&mut self.fixup_records) {
