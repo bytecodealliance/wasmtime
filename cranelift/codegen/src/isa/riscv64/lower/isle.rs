@@ -87,7 +87,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
             return rs;
         }
         macro_rules! normalize {
-            ($ty : ty ,$to_bits:ident ,$max_op:expr ,$min_op:expr , $load_name:ident) => {{
+            ($ty: ty, $to_bits: ident, $max_op: expr, $min_op: expr, $load_name: ident) => {{
                 let (min, max) = if is_signed == false {
                     if out_ty.bits() == 8 {
                         (u8::MIN as $ty, u8::MAX as $ty)
