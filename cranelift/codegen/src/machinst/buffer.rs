@@ -1104,6 +1104,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             label,
             code,
             stack_map,
+            loc: self.cur_srcloc.map(|(_start, loc)| loc),
         });
         label
     }
@@ -1159,6 +1160,17 @@ impl<I: VCodeInst> MachBuffer<I> {
         self.island_deadline = UNKNOWN_LABEL_OFFSET;
         self.island_worst_case_size = 0;
 
+        // End the current location tracking since anything emitted during this
+        // function shouldn't be attributed to whatever the current source
+        // location is.
+        //
+        // Note that the current source location, if it's set right now, will be
+        // restored at the end of this island emission.
+        let cur_loc = self.cur_srcloc.map(|(_, loc)| loc);
+        if cur_loc.is_some() {
+            self.end_srcloc();
+        }
+
         // First flush out all traps/constants so we have more labels in case
         // fixups are applied against these labels.
         //
@@ -1169,8 +1181,14 @@ impl<I: VCodeInst> MachBuffer<I> {
             label,
             code,
             stack_map,
+            loc,
         } in mem::take(&mut self.pending_traps)
         {
+            // If this trap has source information associated with it then
+            // emit this information for the trap instruction going out now too.
+            if let Some(loc) = loc {
+                self.start_srcloc(loc);
+            }
             self.align_to(I::LabelUse::ALIGN);
             self.bind_label(label);
             self.add_trap(code);
@@ -1179,6 +1197,9 @@ impl<I: VCodeInst> MachBuffer<I> {
                 self.add_stack_map(extent, map);
             }
             self.put_data(I::TRAP_OPCODE);
+            if loc.is_some() {
+                self.end_srcloc();
+            }
         }
 
         for MachLabelConstant { label, align, data } in mem::take(&mut self.pending_constants) {
@@ -1256,6 +1277,10 @@ impl<I: VCodeInst> MachBuffer<I> {
                     self.use_label_at_offset(offset, label, kind);
                 }
             }
+        }
+
+        if let Some(loc) = cur_loc {
+            self.start_srcloc(loc);
         }
     }
 
@@ -1539,6 +1564,8 @@ struct MachLabelTrap {
     code: TrapCode,
     /// An optional stack map to associate with this trap.
     stack_map: Option<StackMap>,
+    /// An optional source location to assign for this trap.
+    loc: Option<RelSourceLoc>,
 }
 
 /// A fixup to perform on the buffer once code is emitted. Fixups always refer
