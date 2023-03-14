@@ -12,6 +12,8 @@ use smallvec::{smallvec, SmallVec};
 use std::fmt;
 use std::string::String;
 
+pub use crate::isa::x64::lower::isle::generated_code::DivSignedness;
+
 /// An extenstion trait for converting `Writable{Xmm,Gpr}` to `Writable<Reg>`.
 pub trait ToWritableReg {
     /// Convert `Writable{Xmm,Gpr}` to `Writable<Reg>`.
@@ -1875,35 +1877,6 @@ impl fmt::Debug for ShiftKind {
 impl fmt::Display for ShiftKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Debug::fmt(self, f)
-    }
-}
-
-/// What kind of division or remainder instruction this is?
-#[derive(Clone, Eq, PartialEq)]
-pub enum DivOrRemKind {
-    /// Signed division.
-    SignedDiv,
-    /// Unsigned division.
-    UnsignedDiv,
-    /// Signed remainder.
-    SignedRem,
-    /// Unsigned remainder.
-    UnsignedRem,
-}
-
-impl DivOrRemKind {
-    pub(crate) fn is_signed(&self) -> bool {
-        match self {
-            DivOrRemKind::SignedDiv | DivOrRemKind::SignedRem => true,
-            _ => false,
-        }
-    }
-
-    pub(crate) fn is_div(&self) -> bool {
-        match self {
-            DivOrRemKind::SignedDiv | DivOrRemKind::UnsignedDiv => true,
-            _ => false,
-        }
     }
 }
 

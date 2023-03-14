@@ -530,8 +530,8 @@
 
 ;;;; Helpers for accessing compilation flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl avoid_div_traps () Type)
-(extern extractor avoid_div_traps avoid_div_traps)
+(decl pure avoid_div_traps () bool)
+(extern constructor avoid_div_traps avoid_div_traps)
 
 ;; This definition should be kept up to date with the values defined in
 ;; cranelift/codegen/meta/src/shared/settings.rs
@@ -721,6 +721,10 @@
 
 (decl gen_return (ValueSlice) Unit)
 (extern constructor gen_return gen_return)
+
+;; Helper for extracting an immediate that's not 0 and not -1 from an imm64.
+(decl pure partial safe_divisor_from_imm64 (Type Imm64) u64)
+(extern constructor safe_divisor_from_imm64 safe_divisor_from_imm64)
 
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

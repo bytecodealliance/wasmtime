@@ -17,11 +17,11 @@
 ;;   16:	 83f900               	cmp	ecx, 0
 ;;   19:	 0f8502000000         	jne	0x21
 ;;   1f:	 0f0b                 	ud2	
-;;   21:	 83f9ff               	cmp	ecx, -1
-;;   24:	 0f850a000000         	jne	0x34
-;;   2a:	 b800000000           	mov	eax, 0
-;;   2f:	 e903000000           	jmp	0x37
-;;   34:	 99                   	cdq	
+;;   21:	 99                   	cdq	
+;;   22:	 83f9ff               	cmp	ecx, -1
+;;   25:	 0f850a000000         	jne	0x35
+;;   2b:	 ba00000000           	mov	edx, 0
+;;   30:	 e902000000           	jmp	0x37
 ;;   35:	 f7f9                 	idiv	ecx
 ;;   37:	 4889d0               	mov	rax, rdx
 ;;   3a:	 4883c408             	add	rsp, 8

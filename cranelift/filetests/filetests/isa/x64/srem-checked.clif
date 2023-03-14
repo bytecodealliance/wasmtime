@@ -1,4 +1,5 @@
 test compile precise-output
+set avoid_div_traps=true
 target x86_64
 
 function %f1(i8, i8) -> i8 {
@@ -13,6 +14,8 @@ block0(v0: i8, v1: i8):
 ; block0:
 ;   movq    %rdi, %rax
 ;   cbw %al, %al
+;   testb   %sil, %sil
+;   jnz ; ud2 int_divz ;
 ;   checked_srem_seq %al, %sil, %al
 ;   shrq    $8, %rax, %rax
 ;   movq    %rbp, %rsp
@@ -26,10 +29,13 @@ block0(v0: i8, v1: i8):
 ; block1: ; offset 0x4
 ;   movq %rdi, %rax
 ;   cbtw
+;   testb %sil, %sil
+;   jne 0x14
+;   ud2 ; trap: int_divz
 ;   cmpb $0xff, %sil
-;   jne 0x1d
+;   jne 0x28
 ;   movl $0, %eax
-;   jmp 0x20
+;   jmp 0x2b
 ;   idivb %sil ; trap: int_divz
 ;   shrq $8, %rax
 ;   movq %rbp, %rsp
@@ -46,6 +52,8 @@ block0(v0: i16, v1: i16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
+;   testw   %si, %si
+;   jnz ; ud2 int_divz ;
 ;   movq    %rdi, %rax
 ;   cwd %ax, %dx
 ;   checked_srem_seq %ax, %dx, %si, %ax, %dx
@@ -59,12 +67,15 @@ block0(v0: i16, v1: i16):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
+;   testw %si, %si
+;   jne 0xf
+;   ud2 ; trap: int_divz
 ;   movq %rdi, %rax
 ;   cwtd
 ;   cmpw $-1, %si
-;   jne 0x1d
+;   jne 0x28
 ;   movl $0, %edx
-;   jmp 0x20
+;   jmp 0x2b
 ;   idivw %si ; trap: int_divz
 ;   movq %rdx, %rax
 ;   movq %rbp, %rsp
@@ -81,6 +92,8 @@ block0(v0: i32, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
+;   testl   %esi, %esi
+;   jnz ; ud2 int_divz ;
 ;   movq    %rdi, %rax
 ;   cdq %eax, %edx
 ;   checked_srem_seq %eax, %edx, %esi, %eax, %edx
@@ -94,12 +107,15 @@ block0(v0: i32, v1: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
+;   testl %esi, %esi
+;   jne 0xe
+;   ud2 ; trap: int_divz
 ;   movq %rdi, %rax
 ;   cltd
 ;   cmpl $-1, %esi
-;   jne 0x1b
+;   jne 0x25
 ;   movl $0, %edx
-;   jmp 0x1d
+;   jmp 0x27
 ;   idivl %esi ; trap: int_divz
 ;   movq %rdx, %rax
 ;   movq %rbp, %rsp
@@ -116,6 +132,8 @@ block0(v0: i64, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
+;   testq   %rsi, %rsi
+;   jnz ; ud2 int_divz ;
 ;   movq    %rdi, %rax
 ;   cqo %rax, %rdx
 ;   checked_srem_seq %rax, %rdx, %rsi, %rax, %rdx
@@ -129,12 +147,15 @@ block0(v0: i64, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
+;   testq %rsi, %rsi
+;   jne 0xf
+;   ud2 ; trap: int_divz
 ;   movq %rdi, %rax
 ;   cqto
 ;   cmpq $-1, %rsi
-;   jne 0x1d
+;   jne 0x28
 ;   movl $0, %edx
-;   jmp 0x20
+;   jmp 0x2b
 ;   idivq %rsi ; trap: int_divz
 ;   movq %rdx, %rax
 ;   movq %rbp, %rsp

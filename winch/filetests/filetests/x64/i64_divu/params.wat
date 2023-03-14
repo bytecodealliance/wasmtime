@@ -17,8 +17,8 @@
 ;;   1a:	 4883f900             	cmp	rcx, 0
 ;;   1e:	 0f8502000000         	jne	0x26
 ;;   24:	 0f0b                 	ud2	
-;;   26:	 ba00000000           	mov	edx, 0
-;;   2b:	 48f7f1               	div	rcx
-;;   2e:	 4883c410             	add	rsp, 0x10
-;;   32:	 5d                   	pop	rbp
-;;   33:	 c3                   	ret	
+;;   26:	 4831d2               	xor	rdx, rdx
+;;   29:	 48f7f1               	div	rcx
+;;   2c:	 4883c410             	add	rsp, 0x10
+;;   30:	 5d                   	pop	rbp
+;;   31:	 c3                   	ret	

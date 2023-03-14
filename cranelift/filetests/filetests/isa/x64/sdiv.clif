@@ -13,7 +13,7 @@ block0(v0: i8, v1: i8):
 ; block0:
 ;   movq    %rdi, %rax
 ;   cbw %al, %al
-;   idiv    %al, (none), %sil, %al, (none)
+;   idiv    %al, %sil, %al
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

@@ -957,13 +957,10 @@
             (result Reg (a64_sdiv $I64 valid_x64 y64)))
         result))
 
-;; Helper for extracting an immediate that's not 0 and not -1 from an imm64.
-(decl safe_divisor_from_imm64 (u64) Imm64)
-(extern extractor safe_divisor_from_imm64 safe_divisor_from_imm64)
-
 ;; Special case for `sdiv` where no checks are needed due to division by a
 ;; constant meaning the checks are always passed.
-(rule 1 (lower (has_type (fits_in_64 ty) (sdiv x (iconst (safe_divisor_from_imm64 y)))))
+(rule 1 (lower (has_type (fits_in_64 ty) (sdiv x (iconst imm))))
+      (if-let y (safe_divisor_from_imm64 ty imm))
       (a64_sdiv $I64 (put_in_reg_sext64 x) (imm ty (ImmExtend.Sign) y)))
 
 ;; Helper for placing a `Value` into a `Reg` and validating that it's nonzero.

@@ -3491,23 +3491,154 @@
 
 ;; Rules for `udiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (udiv a @ (value_type ty) b))
-      (div_or_rem (DivOrRemKind.UnsignedDiv) a b))
+;; The inputs to the `div` instruction are different for 8-bit division so
+;; it needs a special case here since the instruction being crafted has a
+;; different shape.
+(rule 2 (lower (udiv a @ (value_type $I8) b))
+        (x64_div8 (extend_to_gpr a $I32 (ExtendKind.Zero))
+                  (nonzero_divisor $I8 b)
+                  (DivSignedness.Unsigned)))
+
+;; 16-to-64-bit division is all done with a similar instruction and the only
+;; tricky requirement here is that when div traps are disallowed the divisor
+;; must not be zero.
+(rule 1 (lower (udiv a @ (value_type (fits_in_64 ty)) b))
+        (x64_div_quotient a
+                          (imm $I64 0)
+                          (nonzero_divisor ty b)
+                          (raw_operand_size_of_type ty)
+                          (DivSignedness.Unsigned)))
+
+;; Helper to place `Value` into a `Gpr` while possibly trapping if it's zero.
+;;
+;; If the `avoid_div_traps=true` codegen setting is specified then the value
+;; is checked for zero and a trap happens before the value is returned as a
+;; register here.
+(decl nonzero_divisor (Type Value) Gpr)
+
+;; As a special-case if the divisor is a constant number which is nonzero then
+;; no matter what there's no checks necessary.
+(rule 2 (nonzero_divisor ty (iconst (u64_from_imm64 (u64_nonzero n))))
+        (imm ty n))
+
+;; No checks necessary when `avoid_div_traps=false`
+(rule 1 (nonzero_divisor ty val)
+        (if-let $false (avoid_div_traps))
+        val)
+
+;; Base case traps if `val` is zero by using a `test` + `trap_if` combo
+(rule (nonzero_divisor ty val)
+      (let (
+          (val Reg val)
+          (_ InstOutput (side_effect (with_flags_side_effect
+            (x64_test (raw_operand_size_of_type ty) val val)
+            (trap_if (CC.Z) (TrapCode.IntegerDivisionByZero)))))
+        )
+        val))
 
 ;; Rules for `sdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (sdiv a @ (value_type ty) b))
-      (div_or_rem (DivOrRemKind.SignedDiv) a b))
+(rule 2 (lower (sdiv a @ (value_type $I8) b))
+        (let (
+            (a Gpr (x64_sign_extend_data a (OperandSize.Size8)))
+          )
+          (x64_div8 a (safe_sdiv_divisor $I8 a b) (DivSignedness.Signed))))
+
+(rule 1 (lower (sdiv a @ (value_type (fits_in_64 ty)) b))
+        (let (
+            (a Gpr a)
+            (size OperandSize (raw_operand_size_of_type ty))
+            (b Gpr (safe_sdiv_divisor ty a b))
+          )
+          (x64_div_quotient a (x64_sign_extend_data a size) b size (DivSignedness.Signed))))
+
+;; Similar to `nonzero_divisor` except this checks to make sure that the divisor
+;; provided as a `Value` is safe to divide into the dividend `Gpr` provided.
+(decl safe_sdiv_divisor (Type Gpr Value) Reg)
+
+;; If the divisor is a constant that isn't 0 or -1, then it's always safe so
+;; materialize it into a register.
+(rule 3 (safe_sdiv_divisor ty a (iconst imm))
+        (if-let n (safe_divisor_from_imm64 ty imm))
+        (imm ty n))
+
+;; With `avoid_div_traps=false` the divisor can be plumbed through.
+;;
+;; Note that CLIF semantics dictate that division-by-zero and INT_MIN/-1 both
+;; trap, but this matches the hardware semantics of `idiv` on x64 so they're
+;; fine to get plumbed through as-is.
+(rule 2 (safe_sdiv_divisor ty a b)
+        (if-let $false (avoid_div_traps))
+        b)
+
+;; The base cases here rely on some pseudo-instructions to do the checks to
+;; jump around with labels and such.
+(rule 1 (safe_sdiv_divisor $I64 a b) (validate_sdiv_divisor64 a b))
+(rule 0 (safe_sdiv_divisor ty a b) (validate_sdiv_divisor (raw_operand_size_of_type ty) a b))
 
 ;; Rules for `urem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (urem a @ (value_type ty) b))
-      (div_or_rem (DivOrRemKind.UnsignedRem) a b))
+;; The remainder is in AH, so take the result of the division and right-shift
+;; by 8.
+(rule 2 (lower (urem a @ (value_type $I8) b))
+        (let (
+            (a Gpr (extend_to_gpr a $I32 (ExtendKind.Zero)))
+            (b Gpr (nonzero_divisor $I8 b))
+            (result Gpr (x64_div8 a b (DivSignedness.Unsigned)))
+          )
+          (x64_shr $I64 result (Imm8Reg.Imm8 8))))
+
+(rule 1 (lower (urem a @ (value_type (fits_in_64 ty)) b))
+        (x64_div_remainder a
+                           (imm $I64 0)
+                           (nonzero_divisor ty b)
+                           (raw_operand_size_of_type ty)
+                           (DivSignedness.Unsigned)))
 
 ;; Rules for `srem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Special-cases first for constant `srem` where the checks for 0 and -1 aren't
+;; applicable.
+;;
+;; Note that like `urem` for i8 types the result is in AH so to get the result
+;; it's right-shifted down.
+(rule 3 (lower (srem a @ (value_type $I8) (iconst imm)))
+        (if-let n (safe_divisor_from_imm64 $I8 imm))
+        (let (
+            (a Gpr (x64_sign_extend_data a (OperandSize.Size8)))
+            (result Gpr (x64_div8 a (imm $I8 n) (DivSignedness.Signed)))
+          )
+          (x64_shr $I64 result (Imm8Reg.Imm8 8))))
+
+;; Same as the above rule but for 16-to-64 bit types.
+(rule 2 (lower (srem a @ (value_type ty) (iconst imm)))
+        (if-let n (safe_divisor_from_imm64 ty imm))
+        (let (
+            (a Gpr a)
+            (size OperandSize (raw_operand_size_of_type ty))
+          )
+          (x64_div_remainder a
+                             (x64_sign_extend_data a size)
+                             (imm ty n)
+                             size
+                             (DivSignedness.Signed))))
+
+(rule 1 (lower (srem a @ (value_type $I8) b))
+        (let (
+            (a Gpr (x64_sign_extend_data a (OperandSize.Size8)))
+            (b Gpr (nonzero_divisor $I8 b))
+          )
+          (x64_shr $I64 (x64_checked_srem_seq8 a b) (Imm8Reg.Imm8 8))))
+
 (rule (lower (srem a @ (value_type ty) b))
-      (div_or_rem (DivOrRemKind.SignedRem) a b))
+      (let (
+          (a Gpr a)
+          (b Gpr (nonzero_divisor ty b))
+          (size OperandSize (raw_operand_size_of_type ty))
+          (hi Gpr (x64_sign_extend_data a size))
+          (tmp ValueRegs (x64_checked_srem_seq size a hi b))
+        )
+        (value_regs_get tmp 1)))
 
 ;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -392,13 +392,6 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         writable_zero_reg()
     }
 
-    fn safe_divisor_from_imm64(&mut self, val: Imm64) -> Option<u64> {
-        match val.bits() {
-            0 | -1 => None,
-            n => Some(n as u64),
-        }
-    }
-
     fn shift_mask(&mut self, ty: Type) -> ImmLogic {
         debug_assert!(ty.lane_bits().is_power_of_two());
 

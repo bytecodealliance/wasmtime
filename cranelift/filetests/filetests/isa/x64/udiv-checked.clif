@@ -1,9 +1,10 @@
 test compile precise-output
+set avoid_div_traps=true
 target x86_64
 
 function %f1(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
-  v2 = srem v0, v1
+  v2 = udiv v0, v1
   return v2
 }
 
@@ -11,10 +12,10 @@ block0(v0: i8, v1: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    %rdi, %rax
-;   cbw %al, %al
-;   checked_srem_seq %al, %sil, %al
-;   shrq    $8, %rax, %rax
+;   movzbl  %dil, %eax
+;   testb   %sil, %sil
+;   jnz ; ud2 int_divz ;
+;   div     %al, %sil, %al
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -24,21 +25,18 @@ block0(v0: i8, v1: i8):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   cbtw
-;   cmpb $0xff, %sil
-;   jne 0x1d
-;   movl $0, %eax
-;   jmp 0x20
-;   idivb %sil ; trap: int_divz
-;   shrq $8, %rax
+;   movzbl %dil, %eax
+;   testb %sil, %sil
+;   jne 0x13
+;   ud2 ; trap: int_divz
+;   divb %sil ; trap: int_divz
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
 
 function %f2(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
-  v2 = srem v0, v1
+  v2 = udiv v0, v1
   return v2
 }
 
@@ -47,9 +45,10 @@ block0(v0: i16, v1: i16):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   cwd %ax, %dx
-;   checked_srem_seq %ax, %dx, %si, %ax, %dx
-;   movq    %rdx, %rax
+;   xorq    %rdx, %rdx, %rdx
+;   testw   %si, %si
+;   jnz ; ud2 int_divz ;
+;   div     %ax, %dx, %si, %ax, %dx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -60,20 +59,18 @@ block0(v0: i16, v1: i16):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movq %rdi, %rax
-;   cwtd
-;   cmpw $-1, %si
-;   jne 0x1d
-;   movl $0, %edx
-;   jmp 0x20
-;   idivw %si ; trap: int_divz
-;   movq %rdx, %rax
+;   xorq %rdx, %rdx
+;   testw %si, %si
+;   jne 0x15
+;   ud2 ; trap: int_divz
+;   divw %si ; trap: int_divz
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
 
 function %f3(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
-  v2 = srem v0, v1
+  v2 = udiv v0, v1
   return v2
 }
 
@@ -82,9 +79,10 @@ block0(v0: i32, v1: i32):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   cdq %eax, %edx
-;   checked_srem_seq %eax, %edx, %esi, %eax, %edx
-;   movq    %rdx, %rax
+;   xorq    %rdx, %rdx, %rdx
+;   testl   %esi, %esi
+;   jnz ; ud2 int_divz ;
+;   div     %eax, %edx, %esi, %eax, %edx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -95,20 +93,18 @@ block0(v0: i32, v1: i32):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movq %rdi, %rax
-;   cltd
-;   cmpl $-1, %esi
-;   jne 0x1b
-;   movl $0, %edx
-;   jmp 0x1d
-;   idivl %esi ; trap: int_divz
-;   movq %rdx, %rax
+;   xorq %rdx, %rdx
+;   testl %esi, %esi
+;   jne 0x14
+;   ud2 ; trap: int_divz
+;   divl %esi ; trap: int_divz
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
 
 function %f4(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-  v2 = srem v0, v1
+  v2 = udiv v0, v1
   return v2
 }
 
@@ -117,9 +113,10 @@ block0(v0: i64, v1: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   cqo %rax, %rdx
-;   checked_srem_seq %rax, %rdx, %rsi, %rax, %rdx
-;   movq    %rdx, %rax
+;   xorq    %rdx, %rdx, %rdx
+;   testq   %rsi, %rsi
+;   jnz ; ud2 int_divz ;
+;   div     %rax, %rdx, %rsi, %rax, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -130,13 +127,11 @@ block0(v0: i64, v1: i64):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movq %rdi, %rax
-;   cqto
-;   cmpq $-1, %rsi
-;   jne 0x1d
-;   movl $0, %edx
-;   jmp 0x20
-;   idivq %rsi ; trap: int_divz
-;   movq %rdx, %rax
+;   xorq %rdx, %rdx
+;   testq %rsi, %rsi
+;   jne 0x15
+;   ud2 ; trap: int_divz
+;   divq %rsi ; trap: int_divz
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -144,7 +139,7 @@ block0(v0: i64, v1: i64):
 function %i8_imm(i8) -> i8 {
 block0(v0: i8):
   v1 = iconst.i8 17
-  v2 = srem v0, v1
+  v2 = udiv v0, v1
   return v2
 }
 
@@ -152,11 +147,9 @@ block0(v0: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    %rdi, %rax
-;   cbw %al, %al
+;   movzbl  %dil, %eax
 ;   movl    $17, %edx
-;   idiv    %al, %dl, %al
-;   shrq    $8, %rax, %rax
+;   div     %al, %dl, %al
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -166,11 +159,9 @@ block0(v0: i8):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   cbtw
+;   movzbl %dil, %eax
 ;   movl $0x11, %edx
-;   idivb %dl ; trap: int_divz
-;   shrq $8, %rax
+;   divb %dl ; trap: int_divz
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -178,7 +169,7 @@ block0(v0: i8):
 function %i16_imm(i16) -> i16 {
 block0(v0: i16):
   v1 = iconst.i16 17
-  v2 = srem v0, v1
+  v2 = udiv v0, v1
   return v2
 }
 
@@ -187,10 +178,9 @@ block0(v0: i16):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   cwd %ax, %dx
+;   xorq    %rdx, %rdx, %rdx
 ;   movl    $17, %r8d
-;   idiv    %ax, %dx, %r8w, %ax, %dx
-;   movq    %rdx, %rax
+;   div     %ax, %dx, %r8w, %ax, %dx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -201,10 +191,9 @@ block0(v0: i16):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movq %rdi, %rax
-;   cwtd
+;   xorq %rdx, %rdx
 ;   movl $0x11, %r8d
-;   idivw %r8w ; trap: int_divz
-;   movq %rdx, %rax
+;   divw %r8w ; trap: int_divz
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -212,7 +201,7 @@ block0(v0: i16):
 function %i32_imm(i32) -> i32 {
 block0(v0: i32):
   v1 = iconst.i32 17
-  v2 = srem v0, v1
+  v2 = udiv v0, v1
   return v2
 }
 
@@ -221,10 +210,9 @@ block0(v0: i32):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   cdq %eax, %edx
+;   xorq    %rdx, %rdx, %rdx
 ;   movl    $17, %r8d
-;   idiv    %eax, %edx, %r8d, %eax, %edx
-;   movq    %rdx, %rax
+;   div     %eax, %edx, %r8d, %eax, %edx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -235,10 +223,9 @@ block0(v0: i32):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movq %rdi, %rax
-;   cltd
+;   xorq %rdx, %rdx
 ;   movl $0x11, %r8d
-;   idivl %r8d ; trap: int_divz
-;   movq %rdx, %rax
+;   divl %r8d ; trap: int_divz
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -246,7 +233,7 @@ block0(v0: i32):
 function %i64_imm(i64) -> i64 {
 block0(v0: i64):
   v1 = iconst.i64 17
-  v2 = srem v0, v1
+  v2 = udiv v0, v1
   return v2
 }
 
@@ -255,10 +242,9 @@ block0(v0: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   cqo %rax, %rdx
+;   xorq    %rdx, %rdx, %rdx
 ;   movl    $17, %r8d
-;   idiv    %rax, %rdx, %r8, %rax, %rdx
-;   movq    %rdx, %rax
+;   div     %rax, %rdx, %r8, %rax, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -269,10 +255,9 @@ block0(v0: i64):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movq %rdi, %rax
-;   cqto
+;   xorq %rdx, %rdx
 ;   movl $0x11, %r8d
-;   idivq %r8 ; trap: int_divz
-;   movq %rdx, %rax
+;   divq %r8 ; trap: int_divz
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
