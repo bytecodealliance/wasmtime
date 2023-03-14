@@ -592,14 +592,15 @@ pub(crate) fn emit(
             inst.emit(&[], sink, info, state);
             one_way_jmp(sink, CC::NZ, do_op);
 
-            // ... otherwise the divisor is -1 and the result is always 0, so
-            // write the result of the remainder, which depends on the op, and
-            // then jump to the end.
-
-            // Here, divisor == -1.
-            // x % -1 = 0; put the result into the destination, $rdx or $rax,
-            // depending on the operand size, and ignore rax for 16-to-64 bits
-            // since as a lowering for srem the quotient will not be used.
+            // ... otherwise the divisor is -1 and the result is always 0. This
+            // is written to the destination register which will be %rax for
+            // 8-bit srem and %rdx otherwise.
+            //
+            // Note that for 16-to-64-bit srem operations this leaves the
+            // second destination, %rax, unchanged. This isn't semantically
+            // correct if a lowering actually tries to use the `dst_quotient`
+            // output but for srem only the `dst_remainder` output is used for
+            // now.
             let inst = Inst::imm(OperandSize::Size64, 0, Writable::from_reg(dst));
             inst.emit(&[], sink, info, state);
             let inst = Inst::jmp_known(done_label);
