@@ -1745,7 +1745,7 @@ impl MachInstEmit for Inst {
                 }
                 // convert to int normally.
                 Inst::FpuRR {
-                    frm: Some(FRM::RNE),
+                    frm: Some(FRM::RTZ),
                     alu_op: FpuOPRR::float_convert_2_int_op(in_type, is_signed, out_type),
                     rd,
                     rs,
