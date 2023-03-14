@@ -485,19 +485,15 @@ fn is_ctrl_typevar_candidate(
         let typ = result.type_var().unwrap();
         let free_typevar = typ.free_typevar();
 
-        if let Some(tv) = free_typevar {
+        if let Some(tv) = typ.free_typevar() {
+            if &tv != ctrl_typevar {
+                return Err("type variable in output not derived from ctrl_typevar".into());
+            }
+
             // Variables derived from the control variable are ok, but we remember if they refine
             // the control variable, as that still requires another type to instantiate.
-            if &tv == ctrl_typevar {
-                refines_output = typ.refines_parent();
-                continue;
-            }
-        } else {
-            // Non-polymorphic is OK.
-            continue;
+            refines_output = typ.refines_parent();
         }
-
-        return Err("type variable in output not derived from ctrl_typevar".into());
     }
 
     Ok((refines_output, other_typevars))
