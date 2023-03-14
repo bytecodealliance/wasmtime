@@ -3075,7 +3075,8 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![Operand::new("x", &Int.wider())])
+        .operands_in(vec![Operand::new("x", &Int.wider())
+            .with_doc("A scalar integer type, wider than the controlling type")])
         .operands_out(vec![Operand::new("a", Int)]),
     );
 
@@ -3282,7 +3283,9 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![Operand::new("x", &Int.narrower())])
+        .operands_in(vec![Operand::new("x", &Int.narrower()).with_doc(
+            "A scalar integer type, narrower than the controlling type",
+        )])
         .operands_out(vec![Operand::new("a", Int)]),
     );
 
@@ -3302,7 +3305,9 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![Operand::new("x", &Int.narrower())])
+        .operands_in(vec![Operand::new("x", &Int.narrower()).with_doc(
+            "A scalar integer type, narrower than the controlling type",
+        )])
         .operands_out(vec![Operand::new("a", Int)]),
     );
 
@@ -3329,7 +3334,9 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![Operand::new("x", &FloatScalar.narrower())])
+        .operands_in(vec![Operand::new("x", &FloatScalar.narrower()).with_doc(
+            "A scalar only floating point number, narrower than the controlling type",
+        )])
         .operands_out(vec![Operand::new("a", FloatScalar)]),
     );
 
@@ -3350,7 +3357,9 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![Operand::new("x", &FloatScalar.wider())])
+        .operands_in(vec![Operand::new("x", &FloatScalar.wider()).with_doc(
+            "A scalar only floating point number, wider than the controlling type",
+        )])
         .operands_out(vec![Operand::new("a", FloatScalar)]),
     );
 
