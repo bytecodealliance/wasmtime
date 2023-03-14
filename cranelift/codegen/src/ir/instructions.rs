@@ -777,13 +777,13 @@ impl OperandConstraint {
                 tys.lanes = BitSet::from_range(0, 1);
 
                 if ctrl_type.is_int() {
-                    // The upper bound in from_range is exclusive, so add one here get the closed
-                    // interval of [I8, ctrl_type].
-                    tys.ints = BitSet::from_range(3, ctrl_type_bits as u8 + 1);
+                    // The upper bound in from_range is exclusive, and we want to exclude the
+                    // control type to construct the interval of [I8, ctrl_type).
+                    tys.ints = BitSet::from_range(3, ctrl_type_bits as u8);
                 } else if ctrl_type.is_float() {
-                    // The upper bound in from_range is exclusive, so add one here get the closed
-                    // interval of [F32, ctrl_type].
-                    tys.floats = BitSet::from_range(5, ctrl_type_bits as u8 + 1);
+                    // The upper bound in from_range is exclusive, and we want to exclude the
+                    // control type to construct the interval of [F32, ctrl_type).
+                    tys.floats = BitSet::from_range(5, ctrl_type_bits as u8);
                 } else {
                     panic!("The Narrower constraint only operates on floats or ints");
                 }
@@ -797,13 +797,15 @@ impl OperandConstraint {
                 tys.lanes = BitSet::from_range(0, 1);
 
                 if ctrl_type.is_int() {
-                    // The upper bound should include all types wider than `ctrl_type`, so we use
-                    // `2^8` as the upper bound to define the closed range `[ctrl_type, I128]`.
-                    tys.ints = BitSet::from_range(ctrl_type_bits as u8, 8);
+                    // The interval should include all types wider than `ctrl_type`, so we use
+                    // `2^8` as the upper bound, and add one to the bits of `ctrl_type` to define
+                    // the interval `(ctrl_type, I128]`.
+                    tys.ints = BitSet::from_range(ctrl_type_bits as u8 + 1, 8);
                 } else if ctrl_type.is_float() {
-                    // The upper bound should include all float types wider than `ctrl_type`, so we
-                    // use `2^7` as the upper bound to define the closed range `[ctrl_type, F64]`.
-                    tys.floats = BitSet::from_range(ctrl_type_bits as u8, 7);
+                    // The interval should include all float types wider than `ctrl_type`, so we
+                    // use `2^7` as the upper bound, and add one to the bits of `ctrl_type` to
+                    // define the interval `(ctrl_type, F64]`.
+                    tys.floats = BitSet::from_range(ctrl_type_bits as u8 + 1, 7);
                 } else {
                     panic!("The Wider constraint only operates on floats or ints");
                 }
