@@ -799,7 +799,7 @@ impl OperandConstraint {
                 if ctrl_type.is_int() {
                     // The upper bound should include all types wider than `ctrl_type`, so we use
                     // `2^8` as the upper bound to define the closed range `[ctrl_type, I128]`.
-                    tys.ints = BitSet::from_range(ctrl_type_bits as u8, BitSet8::bits() as u8);
+                    tys.ints = BitSet::from_range(ctrl_type_bits as u8, 8);
                 } else if ctrl_type.is_float() {
                     // The upper bound should include all float types wider than `ctrl_type`, so we
                     // use `2^7` as the upper bound to define the closed range `[ctrl_type, F64]`.
