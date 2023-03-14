@@ -86,7 +86,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         if out_ty.bits() >= 32 {
             return rs;
         }
-        macro_rules! normalize {
+        macro_rules! clamp {
             ($ty: ty, $to_bits: ident, $max_op: expr, $min_op: expr, $load_name: ident) => {{
                 let (min, max) = if is_signed == false {
                     if out_ty.bits() == 8 {
@@ -130,7 +130,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
             }};
         }
         if in_type.bits() == 32 {
-            normalize!(
+            clamp!(
                 f32,
                 f32_bits,
                 FpuOPRRR::FmaxS,
@@ -138,7 +138,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
                 load_fp_constant32
             )
         } else {
-            normalize!(
+            clamp!(
                 f64,
                 f64_bits,
                 FpuOPRRR::FmaxD,
