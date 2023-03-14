@@ -220,7 +220,7 @@ impl TypeVar {
                     (!ts.ints.is_empty() || !ts.floats.is_empty())
                         && ts.refs.is_empty()
                         && ts.dynamic_lanes.is_empty(),
-                    "The `narrower` constraint only applies to scalar ints"
+                    "The `narrower` constraint only applies to scalar ints or floats"
                 );
             }
             DerivedFunc::Wider => {
@@ -233,7 +233,7 @@ impl TypeVar {
                     (!ts.ints.is_empty() || !ts.floats.is_empty())
                         && ts.refs.is_empty()
                         && ts.dynamic_lanes.is_empty(),
-                    "The `wider` constraint only applies to scalar ints"
+                    "The `wider` constraint only applies to scalar ints or floats"
                 );
             }
             DerivedFunc::LaneOf | DerivedFunc::AsBool | DerivedFunc::DynamicToVector => {
