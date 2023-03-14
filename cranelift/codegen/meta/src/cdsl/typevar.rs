@@ -202,6 +202,32 @@ impl TypeVar {
                     "can't halve a scalar type"
                 );
             }
+            DerivedFunc::Narrower => {
+                assert_eq!(
+                    *ts.lanes.iter().max().unwrap(),
+                    1,
+                    "The `narrower` constraint does not apply to vectors"
+                );
+                assert!(
+                    (!ts.ints.is_empty() || !ts.floats.is_empty())
+                        && ts.refs.is_empty()
+                        && ts.dynamic_lanes.is_empty(),
+                    "The `narrower` constraint only applies to scalar ints or floats"
+                );
+            }
+            DerivedFunc::Wider => {
+                assert_eq!(
+                    *ts.lanes.iter().max().unwrap(),
+                    1,
+                    "The `wider` constraint does not apply to vectors"
+                );
+                assert!(
+                    (!ts.ints.is_empty() || !ts.floats.is_empty())
+                        && ts.refs.is_empty()
+                        && ts.dynamic_lanes.is_empty(),
+                    "The `wider` constraint only applies to scalar ints or floats"
+                );
+            }
             DerivedFunc::LaneOf | DerivedFunc::AsBool | DerivedFunc::DynamicToVector => {
                 /* no particular assertions */
             }
@@ -240,6 +266,16 @@ impl TypeVar {
     }
     pub fn dynamic_to_vector(&self) -> TypeVar {
         self.derived(DerivedFunc::DynamicToVector)
+    }
+
+    /// Make a new [TypeVar] that includes all types narrower than self.
+    pub fn narrower(&self) -> TypeVar {
+        self.derived(DerivedFunc::Narrower)
+    }
+
+    /// Make a new [TypeVar] that includes all types wider than self.
+    pub fn wider(&self) -> TypeVar {
+        self.derived(DerivedFunc::Wider)
     }
 }
 
@@ -302,6 +338,8 @@ pub(crate) enum DerivedFunc {
     SplitLanes,
     MergeLanes,
     DynamicToVector,
+    Narrower,
+    Wider,
 }
 
 impl DerivedFunc {
@@ -314,6 +352,8 @@ impl DerivedFunc {
             DerivedFunc::SplitLanes => "split_lanes",
             DerivedFunc::MergeLanes => "merge_lanes",
             DerivedFunc::DynamicToVector => "dynamic_to_vector",
+            DerivedFunc::Narrower => "narrower",
+            DerivedFunc::Wider => "wider",
         }
     }
 }
@@ -391,6 +431,8 @@ impl TypeSet {
             DerivedFunc::SplitLanes => self.half_width().double_vector(),
             DerivedFunc::MergeLanes => self.double_width().half_vector(),
             DerivedFunc::DynamicToVector => self.dynamic_to_vector(),
+            DerivedFunc::Narrower => self.clone(),
+            DerivedFunc::Wider => self.clone(),
         }
     }
 

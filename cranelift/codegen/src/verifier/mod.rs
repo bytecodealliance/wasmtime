@@ -1191,7 +1191,7 @@ impl<'a> Verifier<'a> {
         let _ = self.typecheck_fixed_args(inst, ctrl_type, errors);
         let _ = self.typecheck_variable_args(inst, errors);
         let _ = self.typecheck_return(inst, errors);
-        let _ = self.typecheck_special(inst, ctrl_type, errors);
+        let _ = self.typecheck_special(inst, errors);
 
         Ok(())
     }
@@ -1478,63 +1478,8 @@ impl<'a> Verifier<'a> {
 
     // Check special-purpose type constraints that can't be expressed in the normal opcode
     // constraints.
-    fn typecheck_special(
-        &self,
-        inst: Inst,
-        ctrl_type: Type,
-        errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
+    fn typecheck_special(&self, inst: Inst, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         match self.func.dfg.insts[inst] {
-            ir::InstructionData::Unary { opcode, arg } => {
-                let arg_type = self.func.dfg.value_type(arg);
-                match opcode {
-                    Opcode::Uextend | Opcode::Sextend | Opcode::Fpromote => {
-                        if arg_type.lane_count() != ctrl_type.lane_count() {
-                            return errors.nonfatal((
-                                inst,
-                                self.context(inst),
-                                format!(
-                                    "input {} and output {} must have same number of lanes",
-                                    arg_type, ctrl_type,
-                                ),
-                            ));
-                        }
-                        if arg_type.lane_bits() >= ctrl_type.lane_bits() {
-                            return errors.nonfatal((
-                                inst,
-                                self.context(inst),
-                                format!(
-                                    "input {} must be smaller than output {}",
-                                    arg_type, ctrl_type,
-                                ),
-                            ));
-                        }
-                    }
-                    Opcode::Ireduce | Opcode::Fdemote => {
-                        if arg_type.lane_count() != ctrl_type.lane_count() {
-                            return errors.nonfatal((
-                                inst,
-                                self.context(inst),
-                                format!(
-                                    "input {} and output {} must have same number of lanes",
-                                    arg_type, ctrl_type,
-                                ),
-                            ));
-                        }
-                        if arg_type.lane_bits() <= ctrl_type.lane_bits() {
-                            return errors.nonfatal((
-                                inst,
-                                self.context(inst),
-                                format!(
-                                    "input {} must be larger than output {}",
-                                    arg_type, ctrl_type,
-                                ),
-                            ));
-                        }
-                    }
-                    _ => {}
-                }
-            }
             ir::InstructionData::TableAddr { table, arg, .. } => {
                 let index_type = self.func.dfg.value_type(arg);
                 let table_index_type = self.func.tables[table].index_type;

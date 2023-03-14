@@ -3064,12 +3064,6 @@ pub(crate) fn define(
         TypeSetBuilder::new().ints(Interval::All).build(),
     );
 
-    let IntTo = &TypeVar::new(
-        "IntTo",
-        "A smaller integer type",
-        TypeSetBuilder::new().ints(Interval::All).build(),
-    );
-
     ig.push(
         Inst::new(
             "ireduce",
@@ -3081,8 +3075,9 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![Operand::new("x", Int)])
-        .operands_out(vec![Operand::new("a", IntTo)]),
+        .operands_in(vec![Operand::new("x", &Int.wider())
+            .with_doc("A scalar integer type, wider than the controlling type")])
+        .operands_out(vec![Operand::new("a", Int)]),
     );
 
     let I16or32or64xN = &TypeVar::new(
@@ -3272,17 +3267,10 @@ pub(crate) fn define(
         .operands_out(vec![Operand::new("a", I16x8)]),
     );
 
-    {
-        let IntTo = &TypeVar::new(
-            "IntTo",
-            "A larger integer type with the same number of lanes",
-            TypeSetBuilder::new().ints(Interval::All).build(),
-        );
-
-        ig.push(
-            Inst::new(
-                "uextend",
-                r#"
+    ig.push(
+        Inst::new(
+            "uextend",
+            r#"
         Convert `x` to a larger integer type by zero-extending.
 
         Each lane in `x` is converted to a larger integer type by adding
@@ -3293,16 +3281,18 @@ pub(crate) fn define(
         and each lane must not have fewer bits that the input lanes. If the
         input and output types are the same, this is a no-op.
         "#,
-                &formats.unary,
-            )
-            .operands_in(vec![Operand::new("x", Int)])
-            .operands_out(vec![Operand::new("a", IntTo)]),
-        );
+            &formats.unary,
+        )
+        .operands_in(vec![Operand::new("x", &Int.narrower()).with_doc(
+            "A scalar integer type, narrower than the controlling type",
+        )])
+        .operands_out(vec![Operand::new("a", Int)]),
+    );
 
-        ig.push(
-            Inst::new(
-                "sextend",
-                r#"
+    ig.push(
+        Inst::new(
+            "sextend",
+            r#"
         Convert `x` to a larger integer type by sign-extending.
 
         Each lane in `x` is converted to a larger integer type by replicating
@@ -3313,21 +3303,16 @@ pub(crate) fn define(
         and each lane must not have fewer bits that the input lanes. If the
         input and output types are the same, this is a no-op.
         "#,
-                &formats.unary,
-            )
-            .operands_in(vec![Operand::new("x", Int)])
-            .operands_out(vec![Operand::new("a", IntTo)]),
-        );
-    }
+            &formats.unary,
+        )
+        .operands_in(vec![Operand::new("x", &Int.narrower()).with_doc(
+            "A scalar integer type, narrower than the controlling type",
+        )])
+        .operands_out(vec![Operand::new("a", Int)]),
+    );
 
     let FloatScalar = &TypeVar::new(
         "FloatScalar",
-        "A scalar only floating point number",
-        TypeSetBuilder::new().floats(Interval::All).build(),
-    );
-
-    let FloatScalarTo = &TypeVar::new(
-        "FloatScalarTo",
         "A scalar only floating point number",
         TypeSetBuilder::new().floats(Interval::All).build(),
     );
@@ -3349,8 +3334,10 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![Operand::new("x", FloatScalar)])
-        .operands_out(vec![Operand::new("a", FloatScalarTo)]),
+        .operands_in(vec![Operand::new("x", &FloatScalar.narrower()).with_doc(
+            "A scalar only floating point number, narrower than the controlling type",
+        )])
+        .operands_out(vec![Operand::new("a", FloatScalar)]),
     );
 
     ig.push(
@@ -3370,8 +3357,10 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![Operand::new("x", FloatScalar)])
-        .operands_out(vec![Operand::new("a", FloatScalarTo)]),
+        .operands_in(vec![Operand::new("x", &FloatScalar.wider()).with_doc(
+            "A scalar only floating point number, wider than the controlling type",
+        )])
+        .operands_out(vec![Operand::new("a", FloatScalar)]),
     );
 
     let F64x2 = &TypeVar::new(

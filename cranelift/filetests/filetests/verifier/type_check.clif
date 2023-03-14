@@ -113,14 +113,28 @@ block2(v3: f32, v4: i8):
 function %bad_extend() {
 block0:
     v0 = iconst.i32 10
-    v1 = uextend.i16 v0 ; error: input i32 must be smaller than output i16
+    v1 = uextend.i16 v0 ; error: arg 0 (v0) with type i32 failed to satisfy type set
     return
 }
 
 function %bad_reduce() {
 block0:
     v0 = iconst.i32 10
-    v1 = ireduce.i64 v0 ; error: input i32 must be larger than output i64
+    v1 = ireduce.i64 v0 ; error: arg 0 (v0) with type i32 failed to satisfy type set
+    return
+}
+
+function %bad_fdemote() {
+block0:
+    v0 = f32const 0xf.f
+    v1 = fdemote.f64 v0 ; error: arg 0 (v0) with type f32 failed to satisfy type set
+    return
+}
+
+function %bad_fpromote() {
+block0:
+    v0 = f64const 0xf.f
+    v1 = fpromote.f32 v0 ; error: arg 0 (v0) with type f64 failed to satisfy type set
     return
 }
 
