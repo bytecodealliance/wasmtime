@@ -1825,11 +1825,38 @@
 (decl extend_to_gpr (Value Type ExtendKind) Gpr)
 
 ;; If the value is already of the requested type, no extending is necessary.
+(rule 2 (extend_to_gpr (and val (value_type ty)) ty _kind)
+      val)
+
+;; I32 -> I64 with op that produces a zero-extended value in a register.
 ;;
-;; Priority 1 because the equality constraint doesn't prove that this rule
-;; doesn't overlap with the one below.
-(rule 1 (extend_to_gpr (and val (value_type ty)) ty _kind)
-      (put_in_gpr val))
+;; As a particular x64 extra-pattern matching opportunity, all the ALU
+;; opcodes on 32-bits will zero-extend the upper 32-bits, so we can
+;; even not generate a zero-extended move in this case.
+;;
+;; (Note that we unfortunately can't factor out the
+;; insts-that-zero-upper-32 pattern into a separate extractor until we
+;; can write internal extractors with multiple rules; and we'd rather
+;; keep these here than write an external extractor containing bits of
+;; the instruction patterns.)
+(rule 1 (extend_to_gpr src @ (has_type $I32 (iadd _ _)) $I64 (ExtendKind.Zero))
+        src)
+(rule 1 (extend_to_gpr src @ (has_type $I32 (isub _ _)) $I64 (ExtendKind.Zero))
+        src)
+(rule 1 (extend_to_gpr src @ (has_type $I32 (imul _ _)) $I64 (ExtendKind.Zero))
+        src)
+(rule 1 (extend_to_gpr src @ (has_type $I32 (band _ _)) $I64 (ExtendKind.Zero))
+        src)
+(rule 1 (extend_to_gpr src @ (has_type $I32 (bor _ _)) $I64 (ExtendKind.Zero))
+        src)
+(rule 1 (extend_to_gpr src @ (has_type $I32 (bxor _ _)) $I64 (ExtendKind.Zero))
+        src)
+(rule 1 (extend_to_gpr src @ (has_type $I32 (ishl _ _)) $I64 (ExtendKind.Zero))
+        src)
+(rule 1 (extend_to_gpr src @ (has_type $I32 (ushr _ _)) $I64 (ExtendKind.Zero))
+        src)
+(rule 1 (extend_to_gpr src @ (has_type $I32 (uload32 _ _ _)) $I64 (ExtendKind.Zero))
+        src)
 
 (rule (extend_to_gpr (and val (value_type from_ty))
                      to_ty
