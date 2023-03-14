@@ -483,8 +483,6 @@ fn is_ctrl_typevar_candidate(
         }
 
         let typ = result.type_var().unwrap();
-        let free_typevar = typ.free_typevar();
-
         if let Some(tv) = typ.free_typevar() {
             if &tv != ctrl_typevar {
                 return Err("type variable in output not derived from ctrl_typevar".into());
