@@ -11,7 +11,7 @@ block0(v0: i32):
 ; VCode:
 ; block0:
 ;   alfi %r2, 127
-;   jnle #trap
+;   jnle #trap=user0
 ;   br %r14
 ; 
 ; Disassembled:
@@ -31,7 +31,7 @@ block0(v0: i32):
 ; VCode:
 ; block0:
 ;   alfi %r2, 127
-;   jnle #trap
+;   jnle #trap=user0
 ;   br %r14
 ; 
 ; Disassembled:
@@ -50,7 +50,7 @@ block0(v0: i32, v1: i32):
 ; VCode:
 ; block0:
 ;   alr %r2, %r3
-;   jnle #trap
+;   jnle #trap=user0
 ;   br %r14
 ; 
 ; Disassembled:
@@ -70,7 +70,7 @@ block0(v0: i64):
 ; VCode:
 ; block0:
 ;   algfi %r2, 127
-;   jnle #trap
+;   jnle #trap=user0
 ;   br %r14
 ; 
 ; Disassembled:
@@ -90,7 +90,7 @@ block0(v0: i64):
 ; VCode:
 ; block0:
 ;   algfi %r2, 127
-;   jnle #trap
+;   jnle #trap=user0
 ;   br %r14
 ; 
 ; Disassembled:
@@ -109,7 +109,7 @@ block0(v0: i64, v1: i64):
 ; VCode:
 ; block0:
 ;   algr %r2, %r3
-;   jnle #trap
+;   jnle #trap=user0
 ;   br %r14
 ; 
 ; Disassembled:
@@ -129,7 +129,7 @@ block0(v0: i64, v1: i32):
 ; VCode:
 ; block0:
 ;   algfr %r2, %r3
-;   jnle #trap
+;   jnle #trap=user0
 ;   br %r14
 ; 
 ; Disassembled:

@@ -23,7 +23,7 @@ block0(v0: i64, v1: i64):
 ; VCode:
 ; block0:
 ;   adds x3, x0, x1
-;   b.hs #trap
+;   b.hs #trap=user0
 ;   ret
 ; 
 ; Disassembled:

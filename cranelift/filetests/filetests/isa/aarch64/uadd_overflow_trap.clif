@@ -12,7 +12,7 @@ block0(v0: i32):
 ; block0:
 ;   movz w2, #127
 ;   adds w0, w0, w2
-;   b.hs #trap
+;   b.hs #trap=user0
 ;   ret
 ; 
 ; Disassembled:
@@ -34,7 +34,7 @@ block0(v0: i32):
 ; block0:
 ;   movz w2, #127
 ;   adds w0, w2, w0
-;   b.hs #trap
+;   b.hs #trap=user0
 ;   ret
 ; 
 ; Disassembled:
@@ -54,7 +54,7 @@ block0(v0: i32, v1: i32):
 ; VCode:
 ; block0:
 ;   adds w0, w0, w1
-;   b.hs #trap
+;   b.hs #trap=user0
 ;   ret
 ; 
 ; Disassembled:
@@ -75,7 +75,7 @@ block0(v0: i64):
 ; block0:
 ;   movz x2, #127
 ;   adds x0, x0, x2
-;   b.hs #trap
+;   b.hs #trap=user0
 ;   ret
 ; 
 ; Disassembled:
@@ -97,7 +97,7 @@ block0(v0: i64):
 ; block0:
 ;   movz x2, #127
 ;   adds x0, x2, x0
-;   b.hs #trap
+;   b.hs #trap=user0
 ;   ret
 ; 
 ; Disassembled:
@@ -117,7 +117,7 @@ block0(v0: i64, v1: i64):
 ; VCode:
 ; block0:
 ;   adds x0, x0, x1
-;   b.hs #trap
+;   b.hs #trap=user0
 ;   ret
 ; 
 ; Disassembled:

@@ -44,7 +44,7 @@
 ;;   mov w10, w0
 ;;   movn w9, #65534
 ;;   adds x11, x10, x9
-;;   b.hs #trap
+;;   b.hs #trap=heap_oob
 ;;   ldr x12, [x2, #8]
 ;;   subs xzr, x11, x12
 ;;   b.hi label3 ; b label1
@@ -64,7 +64,7 @@
 ;;   mov w10, w0
 ;;   movn w9, #65534
 ;;   adds x11, x10, x9
-;;   b.hs #trap
+;;   b.hs #trap=heap_oob
 ;;   ldr x12, [x1, #8]
 ;;   subs xzr, x11, x12
 ;;   b.hi label3 ; b label1

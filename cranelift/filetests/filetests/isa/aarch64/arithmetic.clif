@@ -90,10 +90,10 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   cbz x1, #trap
+;   cbz x1, #trap=int_divz
 ;   adds xzr, x1, #1
 ;   ccmp x0, #1, #nzcv, eq
-;   b.vs #trap
+;   b.vs #trap=int_ovf
 ;   sdiv x0, x0, x1
 ;   ret
 ; 
@@ -135,7 +135,7 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   cbz x1, #trap
+;   cbz x1, #trap=int_divz
 ;   udiv x0, x0, x1
 ;   ret
 ; 
@@ -173,7 +173,7 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   cbz x1, #trap
+;   cbz x1, #trap=int_divz
 ;   sdiv x4, x0, x1
 ;   msub x0, x4, x1, x0
 ;   ret
@@ -194,7 +194,7 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   cbz x1, #trap
+;   cbz x1, #trap=int_divz
 ;   udiv x4, x0, x1
 ;   msub x0, x4, x1, x0
 ;   ret
@@ -217,10 +217,10 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   sxtw x3, w0
 ;   sxtw x5, w1
-;   cbz x5, #trap
+;   cbz x5, #trap=int_divz
 ;   adds wzr, w5, #1
 ;   ccmp w3, #1, #nzcv, eq
-;   b.vs #trap
+;   b.vs #trap=int_ovf
 ;   sdiv x0, x3, x5
 ;   ret
 ; 
@@ -268,7 +268,7 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   mov w3, w0
 ;   mov w5, w1
-;   cbz x5, #trap
+;   cbz x5, #trap=int_divz
 ;   udiv x0, x3, x5
 ;   ret
 ; 
@@ -312,7 +312,7 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   sxtw x3, w0
 ;   sxtw x5, w1
-;   cbz x5, #trap
+;   cbz x5, #trap=int_divz
 ;   sdiv x8, x3, x5
 ;   msub x0, x8, x5, x3
 ;   ret
@@ -337,7 +337,7 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   mov w3, w0
 ;   mov w5, w1
-;   cbz x5, #trap
+;   cbz x5, #trap=int_divz
 ;   udiv x8, x3, x5
 ;   msub x0, x8, x5, x3
 ;   ret
@@ -787,7 +787,7 @@ block0(v0: i64):
 ;   movn x2, #0
 ;   adds xzr, x2, #1
 ;   ccmp x0, #1, #nzcv, eq
-;   b.vs #trap
+;   b.vs #trap=int_ovf
 ;   sdiv x0, x0, x2
 ;   ret
 ; 

@@ -56,7 +56,7 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ;   subs xzr, sp, x0, UXTX
-;   b.lo #trap
+;   b.lo #trap=stk_ovf
 ; block0:
 ;   load_ext_name x2, TestCase(%foo)+0
 ;   blr x2
@@ -96,7 +96,7 @@ block0(v0: i64):
 ;   ldr x16, [x0]
 ;   ldr x16, [x16, #4]
 ;   subs xzr, sp, x16, UXTX
-;   b.lo #trap
+;   b.lo #trap=stk_ovf
 ; block0:
 ;   load_ext_name x2, TestCase(%foo)+0
 ;   blr x2
@@ -132,7 +132,7 @@ block0(v0: i64):
 ;   mov fp, sp
 ;   add x16, x0, #176
 ;   subs xzr, sp, x16, UXTX
-;   b.lo #trap
+;   b.lo #trap=stk_ovf
 ;   sub sp, sp, #176
 ; block0:
 ;   add sp, sp, #176
@@ -163,12 +163,12 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ;   subs xzr, sp, x0, UXTX
-;   b.lo #trap
+;   b.lo #trap=stk_ovf
 ;   movz w17, #6784
 ;   movk w17, w17, #6, LSL #16
 ;   add x16, x0, x17, UXTX
 ;   subs xzr, sp, x16, UXTX
-;   b.lo #trap
+;   b.lo #trap=stk_ovf
 ;   movz w16, #6784
 ;   movk w16, w16, #6, LSL #16
 ;   sub sp, sp, x16, UXTX
@@ -219,7 +219,7 @@ block0(v0: i64):
 ;   ldr x16, [x16, #4]
 ;   add x16, x16, #32
 ;   subs xzr, sp, x16, UXTX
-;   b.lo #trap
+;   b.lo #trap=stk_ovf
 ;   sub sp, sp, #32
 ; block0:
 ;   add sp, sp, #32
@@ -258,12 +258,12 @@ block0(v0: i64):
 ;   ldr x16, [x0]
 ;   ldr x16, [x16, #4]
 ;   subs xzr, sp, x16, UXTX
-;   b.lo #trap
+;   b.lo #trap=stk_ovf
 ;   movz w17, #6784
 ;   movk w17, w17, #6, LSL #16
 ;   add x16, x16, x17, UXTX
 ;   subs xzr, sp, x16, UXTX
-;   b.lo #trap
+;   b.lo #trap=stk_ovf
 ;   movz w16, #6784
 ;   movk w16, w16, #6, LSL #16
 ;   sub sp, sp, x16, UXTX
@@ -314,7 +314,7 @@ block0(v0: i64):
 ;   movz w16, #6784 ; movk w16, w16, #6, LSL #16 ; ldr x16, [x0, x16, SXTX]
 ;   add x16, x16, #32
 ;   subs xzr, sp, x16, UXTX
-;   b.lo #trap
+;   b.lo #trap=stk_ovf
 ;   sub sp, sp, #32
 ; block0:
 ;   add sp, sp, #32

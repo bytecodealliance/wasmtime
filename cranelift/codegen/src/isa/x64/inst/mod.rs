@@ -1679,7 +1679,7 @@ impl PrettyPrint for Inst {
             }
 
             Inst::TrapIf { cc, trap_code, .. } => {
-                format!("j{} #trap={}", cc.to_string(), trap_code)
+                format!("j{cc} #trap={trap_code}")
             }
 
             Inst::TrapIfAnd {

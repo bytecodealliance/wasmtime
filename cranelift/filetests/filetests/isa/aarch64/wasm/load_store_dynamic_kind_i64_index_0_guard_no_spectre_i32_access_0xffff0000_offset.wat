@@ -43,7 +43,7 @@
 ;; block0:
 ;;   movn w8, #65531
 ;;   adds x10, x0, x8
-;;   b.hs #trap
+;;   b.hs #trap=heap_oob
 ;;   ldr x11, [x2, #8]
 ;;   subs xzr, x10, x11
 ;;   b.hi label3 ; b label1
@@ -62,7 +62,7 @@
 ;; block0:
 ;;   movn w8, #65531
 ;;   adds x10, x0, x8
-;;   b.hs #trap
+;;   b.hs #trap=heap_oob
 ;;   ldr x11, [x1, #8]
 ;;   subs xzr, x10, x11
 ;;   b.hi label3 ; b label1

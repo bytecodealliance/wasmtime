@@ -683,13 +683,13 @@ block0(v0: f32):
 ; VCode:
 ; block0:
 ;   cebr %f0, %f0
-;   jo #trap
+;   jo #trap=bad_toint
 ;   bras %r1, 8 ; data.f32 256 ; le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jhe #trap
+;   jhe #trap=int_ovf
 ;   bras %r1, 8 ; data.f32 -1 ; vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
-;   jle #trap
+;   jle #trap=int_ovf
 ;   wldeb %v20, %f0
 ;   wclgdb %v22, %v20, 0, 5
 ;   vlgvg %r2, %v22, 0
@@ -726,13 +726,13 @@ block0(v0: f32):
 ; VCode:
 ; block0:
 ;   cebr %f0, %f0
-;   jo #trap
+;   jo #trap=bad_toint
 ;   bras %r1, 8 ; data.f32 128 ; le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jhe #trap
+;   jhe #trap=int_ovf
 ;   bras %r1, 8 ; data.f32 -129 ; vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
-;   jle #trap
+;   jle #trap=int_ovf
 ;   wldeb %v20, %f0
 ;   wcgdb %v22, %v20, 0, 5
 ;   vlgvg %r2, %v22, 0
@@ -770,13 +770,13 @@ block0(v0: f32):
 ; VCode:
 ; block0:
 ;   cebr %f0, %f0
-;   jo #trap
+;   jo #trap=bad_toint
 ;   bras %r1, 8 ; data.f32 65536 ; le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jhe #trap
+;   jhe #trap=int_ovf
 ;   bras %r1, 8 ; data.f32 -1 ; vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
-;   jle #trap
+;   jle #trap=int_ovf
 ;   wldeb %v20, %f0
 ;   wclgdb %v22, %v20, 0, 5
 ;   vlgvg %r2, %v22, 0
@@ -813,13 +813,13 @@ block0(v0: f32):
 ; VCode:
 ; block0:
 ;   cebr %f0, %f0
-;   jo #trap
+;   jo #trap=bad_toint
 ;   bras %r1, 8 ; data.f32 32768 ; le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jhe #trap
+;   jhe #trap=int_ovf
 ;   bras %r1, 8 ; data.f32 -32769 ; vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
-;   jle #trap
+;   jle #trap=int_ovf
 ;   wldeb %v20, %f0
 ;   wcgdb %v22, %v20, 0, 5
 ;   vlgvg %r2, %v22, 0
@@ -857,13 +857,13 @@ block0(v0: f32):
 ; VCode:
 ; block0:
 ;   cebr %f0, %f0
-;   jo #trap
+;   jo #trap=bad_toint
 ;   bras %r1, 8 ; data.f32 4294967300 ; le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jhe #trap
+;   jhe #trap=int_ovf
 ;   bras %r1, 8 ; data.f32 -1 ; vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
-;   jle #trap
+;   jle #trap=int_ovf
 ;   wldeb %v20, %f0
 ;   wclgdb %v22, %v20, 0, 5
 ;   vlgvg %r2, %v22, 0
@@ -900,13 +900,13 @@ block0(v0: f32):
 ; VCode:
 ; block0:
 ;   cebr %f0, %f0
-;   jo #trap
+;   jo #trap=bad_toint
 ;   bras %r1, 8 ; data.f32 2147483600 ; le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jhe #trap
+;   jhe #trap=int_ovf
 ;   bras %r1, 8 ; data.f32 -2147484000 ; vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
-;   jle #trap
+;   jle #trap=int_ovf
 ;   wldeb %v20, %f0
 ;   wcgdb %v22, %v20, 0, 5
 ;   vlgvg %r2, %v22, 0
@@ -944,13 +944,13 @@ block0(v0: f32):
 ; VCode:
 ; block0:
 ;   cebr %f0, %f0
-;   jo #trap
+;   jo #trap=bad_toint
 ;   bras %r1, 8 ; data.f32 18446744000000000000 ; le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jhe #trap
+;   jhe #trap=int_ovf
 ;   bras %r1, 8 ; data.f32 -1 ; vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
-;   jle #trap
+;   jle #trap=int_ovf
 ;   wldeb %v20, %f0
 ;   wclgdb %v22, %v20, 0, 5
 ;   vlgvg %r2, %v22, 0
@@ -987,13 +987,13 @@ block0(v0: f32):
 ; VCode:
 ; block0:
 ;   cebr %f0, %f0
-;   jo #trap
+;   jo #trap=bad_toint
 ;   bras %r1, 8 ; data.f32 9223372000000000000 ; le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jhe #trap
+;   jhe #trap=int_ovf
 ;   bras %r1, 8 ; data.f32 -9223373000000000000 ; vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
-;   jle #trap
+;   jle #trap=int_ovf
 ;   wldeb %v20, %f0
 ;   wcgdb %v22, %v20, 0, 5
 ;   vlgvg %r2, %v22, 0
@@ -1031,13 +1031,13 @@ block0(v0: f64):
 ; VCode:
 ; block0:
 ;   cdbr %f0, %f0
-;   jo #trap
+;   jo #trap=bad_toint
 ;   bras %r1, 12 ; data.f64 256 ; ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
-;   jhe #trap
+;   jhe #trap=int_ovf
 ;   bras %r1, 12 ; data.f64 -1 ; vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
-;   jle #trap
+;   jle #trap=int_ovf
 ;   wclgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
@@ -1076,13 +1076,13 @@ block0(v0: f64):
 ; VCode:
 ; block0:
 ;   cdbr %f0, %f0
-;   jo #trap
+;   jo #trap=bad_toint
 ;   bras %r1, 12 ; data.f64 128 ; ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
-;   jhe #trap
+;   jhe #trap=int_ovf
 ;   bras %r1, 12 ; data.f64 -129 ; vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
-;   jle #trap
+;   jle #trap=int_ovf
 ;   wcgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
@@ -1120,13 +1120,13 @@ block0(v0: f64):
 ; VCode:
 ; block0:
 ;   cdbr %f0, %f0
-;   jo #trap
+;   jo #trap=bad_toint
 ;   bras %r1, 12 ; data.f64 65536 ; ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
-;   jhe #trap
+;   jhe #trap=int_ovf
 ;   bras %r1, 12 ; data.f64 -1 ; vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
-;   jle #trap
+;   jle #trap=int_ovf
 ;   wclgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
@@ -1165,13 +1165,13 @@ block0(v0: f64):
 ; VCode:
 ; block0:
 ;   cdbr %f0, %f0
-;   jo #trap
+;   jo #trap=bad_toint
 ;   bras %r1, 12 ; data.f64 32768 ; ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
-;   jhe #trap
+;   jhe #trap=int_ovf
 ;   bras %r1, 12 ; data.f64 -32769 ; vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
-;   jle #trap
+;   jle #trap=int_ovf
 ;   wcgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
@@ -1209,13 +1209,13 @@ block0(v0: f64):
 ; VCode:
 ; block0:
 ;   cdbr %f0, %f0
-;   jo #trap
+;   jo #trap=bad_toint
 ;   bras %r1, 12 ; data.f64 4294967296 ; ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
-;   jhe #trap
+;   jhe #trap=int_ovf
 ;   bras %r1, 12 ; data.f64 -1 ; vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
-;   jle #trap
+;   jle #trap=int_ovf
 ;   wclgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
@@ -1254,13 +1254,13 @@ block0(v0: f64):
 ; VCode:
 ; block0:
 ;   cdbr %f0, %f0
-;   jo #trap
+;   jo #trap=bad_toint
 ;   bras %r1, 12 ; data.f64 2147483648 ; ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
-;   jhe #trap
+;   jhe #trap=int_ovf
 ;   bras %r1, 12 ; data.f64 -2147483649 ; vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
-;   jle #trap
+;   jle #trap=int_ovf
 ;   wcgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
@@ -1300,13 +1300,13 @@ block0(v0: f64):
 ; VCode:
 ; block0:
 ;   cdbr %f0, %f0
-;   jo #trap
+;   jo #trap=bad_toint
 ;   bras %r1, 12 ; data.f64 18446744073709552000 ; ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
-;   jhe #trap
+;   jhe #trap=int_ovf
 ;   bras %r1, 12 ; data.f64 -1 ; vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
-;   jle #trap
+;   jle #trap=int_ovf
 ;   wclgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
@@ -1345,13 +1345,13 @@ block0(v0: f64):
 ; VCode:
 ; block0:
 ;   cdbr %f0, %f0
-;   jo #trap
+;   jo #trap=bad_toint
 ;   bras %r1, 12 ; data.f64 9223372036854776000 ; ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
-;   jhe #trap
+;   jhe #trap=int_ovf
 ;   bras %r1, 12 ; data.f64 -9223372036854778000 ; vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
-;   jle #trap
+;   jle #trap=int_ovf
 ;   wcgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14

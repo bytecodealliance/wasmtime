@@ -3595,7 +3595,7 @@ impl Inst {
                 let off = sink.cur_offset();
                 sink.use_label_at_offset(off, label, LabelUse::BranchRI);
 
-                // Branch over trap if condition is false.
+                // Branch to the trap if condition is true.
                 let opcode = 0xa74; // BCR
                 put(sink, &enc_ri_c(opcode, cond.bits(), 2));
             }

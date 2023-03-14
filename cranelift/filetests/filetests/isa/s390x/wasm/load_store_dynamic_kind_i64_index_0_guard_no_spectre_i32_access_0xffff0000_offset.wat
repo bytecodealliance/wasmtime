@@ -48,7 +48,7 @@
 ;; block0:
 ;;   lgr %r5, %r2
 ;;   algfi %r5, 4294901764
-;;   jnle #trap
+;;   jnle #trap=heap_oob
 ;;   lg %r14, 8(%r4)
 ;;   clgr %r5, %r14
 ;;   jgh label3 ; jg label1
@@ -70,7 +70,7 @@
 ;; block0:
 ;;   lgr %r5, %r2
 ;;   algfi %r5, 4294901764
-;;   jnle #trap
+;;   jnle #trap=heap_oob
 ;;   lg %r4, 8(%r3)
 ;;   clgr %r5, %r4
 ;;   jgh label3 ; jg label1

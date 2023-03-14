@@ -1088,9 +1088,15 @@ impl<I: VCodeInst> MachBuffer<I> {
         });
     }
 
-    /// Emit a trap instruction at some point in the future, binding the given
-    /// label to its offset. The trap will be placed at most `max_distance`
-    /// from the current offset.
+    /// Emit a trap at some point in the future with the specified code and
+    /// stack map.
+    ///
+    /// This function returns a [`MachLabel`] which will be the future address
+    /// of the trap. Jumps should refer to this label, likely by using the
+    /// [`MachBuffer::use_label_at_offset`] method, to get a relocation
+    /// patched in once the address of the trap is known.
+    ///
+    /// This will batch all traps into the end of the function.
     pub fn defer_trap(&mut self, code: TrapCode, stack_map: Option<StackMap>) -> MachLabel {
         let label = self.get_label();
         self.update_deadline(I::TRAP_OPCODE.len(), u32::MAX);
@@ -1520,7 +1526,8 @@ struct MachLabelConstant {
     data: SmallVec<[u8; 16]>,
 }
 
-/// A trap that is deferred to the next constant-pool opportunity.
+/// A trap that is deferred to the next time an island is emitted for either
+/// traps, constants, or fixups.
 struct MachLabelTrap {
     /// This label will refer to the trap's offset.
     label: MachLabel,

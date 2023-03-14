@@ -83,14 +83,14 @@ block0(v0: f32):
 ; VCode:
 ; block0:
 ;   fcmp s0, s0
-;   b.vs #trap
+;   b.vs #trap=bad_toint
 ;   fmov s4, #-1
 ;   fcmp s0, s4
-;   b.le #trap
+;   b.le #trap=int_ovf
 ;   movz w8, #17280, LSL #16
 ;   fmov s18, w8
 ;   fcmp s0, s18
-;   b.ge #trap
+;   b.ge #trap=int_ovf
 ;   fcvtzu w0, s0
 ;   ret
 ; 
@@ -120,14 +120,14 @@ block0(v0: f64):
 ; VCode:
 ; block0:
 ;   fcmp d0, d0
-;   b.vs #trap
+;   b.vs #trap=bad_toint
 ;   fmov d4, #-1
 ;   fcmp d0, d4
-;   b.le #trap
+;   b.le #trap=int_ovf
 ;   movz x8, #16496, LSL #48
 ;   fmov d18, x8
 ;   fcmp d0, d18
-;   b.ge #trap
+;   b.ge #trap=int_ovf
 ;   fcvtzu w0, d0
 ;   ret
 ; 
@@ -157,14 +157,14 @@ block0(v0: f32):
 ; VCode:
 ; block0:
 ;   fcmp s0, s0
-;   b.vs #trap
+;   b.vs #trap=bad_toint
 ;   fmov s4, #-1
 ;   fcmp s0, s4
-;   b.le #trap
+;   b.le #trap=int_ovf
 ;   movz w8, #18304, LSL #16
 ;   fmov s18, w8
 ;   fcmp s0, s18
-;   b.ge #trap
+;   b.ge #trap=int_ovf
 ;   fcvtzu w0, s0
 ;   ret
 ; 
@@ -194,14 +194,14 @@ block0(v0: f64):
 ; VCode:
 ; block0:
 ;   fcmp d0, d0
-;   b.vs #trap
+;   b.vs #trap=bad_toint
 ;   fmov d4, #-1
 ;   fcmp d0, d4
-;   b.le #trap
+;   b.le #trap=int_ovf
 ;   movz x8, #16624, LSL #48
 ;   fmov d18, x8
 ;   fcmp d0, d18
-;   b.ge #trap
+;   b.ge #trap=int_ovf
 ;   fcvtzu w0, d0
 ;   ret
 ; 

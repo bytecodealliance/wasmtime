@@ -1694,7 +1694,7 @@ pub(crate) fn emit(
             let else_label = sink.get_label();
 
             // Jump to the end if the first condition isn't true, and then if
-            // the second condition is true go to the grap.
+            // the second condition is true go to the trap.
             one_way_jmp(sink, cc1.invert(), else_label);
             one_way_jmp(sink, *cc2, trap_label);
 
@@ -1708,7 +1708,7 @@ pub(crate) fn emit(
         } => {
             let trap_label = sink.defer_trap(*trap_code, state.take_stack_map());
 
-            // trap immediately if cc1 is set, otherwise jump over the trap if cc2 is not.
+            // Emit two jumps to the same trap if either condition code is true.
             one_way_jmp(sink, *cc1, trap_label);
             one_way_jmp(sink, *cc2, trap_label);
         }

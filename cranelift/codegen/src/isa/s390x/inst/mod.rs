@@ -3187,9 +3187,9 @@ impl Inst {
             }
             &Inst::Debugtrap => "debugtrap".to_string(),
             &Inst::Trap { .. } => "trap".to_string(),
-            &Inst::TrapIf { cond, .. } => {
+            &Inst::TrapIf { cond, trap_code } => {
                 let cond = cond.pretty_print_default();
-                format!("j{} #trap", cond)
+                format!("j{cond} #trap={trap_code}")
             }
             &Inst::JTSequence { ridx, ref targets } => {
                 let ridx = pretty_print_reg(ridx, allocs);
