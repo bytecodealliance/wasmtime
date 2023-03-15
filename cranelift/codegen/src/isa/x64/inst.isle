@@ -1825,7 +1825,7 @@
 (decl extend_to_gpr (Value Type ExtendKind) Gpr)
 
 ;; If the value is already of the requested type, no extending is necessary.
-(rule 2 (extend_to_gpr (and val (value_type ty)) ty _kind)
+(rule 2 (extend_to_gpr val @ (value_type ty) ty _kind)
       val)
 
 ;; I32 -> I64 with op that produces a zero-extended value in a register.
