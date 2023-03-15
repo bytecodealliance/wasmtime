@@ -682,8 +682,7 @@
     (None)
     (Tso)
 ))
-(type f32 (primitive f32))
-(type f64 (primitive f64))
+
 (type VecBranchTarget (primitive VecBranchTarget))
 (type BoxCallInfo (primitive BoxCallInfo))
 (type BoxCallIndInfo (primitive BoxCallIndInfo))

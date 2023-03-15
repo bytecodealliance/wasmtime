@@ -88,7 +88,7 @@ block0(v0: f32):
 ; block0:
 ;   li a2,0
 ;   fmv.w.x ft5,a2
-;   fmax.s fa0,fa0,ft5
+;   fmax.s fa0,ft5,fa0
 ;   lui t3,276464
 ;   fmv.w.x fa3,t3
 ;   fmin.s fa6,fa0,fa3
@@ -99,7 +99,7 @@ block0(v0: f32):
 ; block0: ; offset 0x0
 ;   mv a2, zero
 ;   fmv.w.x ft5, a2
-;   fmax.s fa0, fa0, ft5
+;   fmax.s fa0, ft5, fa0
 ;   lui t3, 0x437f0
 ;   fmv.w.x fa3, t3
 ;   fmin.s fa6, fa0, fa3
@@ -133,7 +133,7 @@ block0(v0: f64):
 ; block0:
 ;   li a2,0
 ;   fmv.d.x ft5,a2
-;   fmax.d fa0,fa0,ft5
+;   fmax.d fa0,ft5,fa0
 ;   auipc t3,0; ld t3,12(t3); j 12; .8byte 0x406fe00000000000
 ;   fmv.d.x fa3,t3
 ;   fmin.d fa6,fa0,fa3
@@ -144,7 +144,7 @@ block0(v0: f64):
 ; block0: ; offset 0x0
 ;   mv a2, zero
 ;   fmv.d.x ft5, a2
-;   fmax.d fa0, fa0, ft5
+;   fmax.d fa0, ft5, fa0
 ;   auipc t3, 0
 ;   ld t3, 0xc(t3)
 ;   j 0xc
@@ -187,7 +187,7 @@ block0(v0: f32):
 ; block0:
 ;   li a2,0
 ;   fmv.w.x ft5,a2
-;   fmax.s fa0,fa0,ft5
+;   fmax.s fa0,ft5,fa0
 ;   lui t4,292864
 ;   addi t4,t4,3840
 ;   fmv.w.x fa4,t4
@@ -199,7 +199,7 @@ block0(v0: f32):
 ; block0: ; offset 0x0
 ;   mv a2, zero
 ;   fmv.w.x ft5, a2
-;   fmax.s fa0, fa0, ft5
+;   fmax.s fa0, ft5, fa0
 ;   lui t4, 0x47800
 ;   addi t4, t4, -0x100
 ;   fmv.w.x fa4, t4
@@ -234,7 +234,7 @@ block0(v0: f64):
 ; block0:
 ;   li a2,0
 ;   fmv.d.x ft5,a2
-;   fmax.d fa0,fa0,ft5
+;   fmax.d fa0,ft5,fa0
 ;   auipc t3,0; ld t3,12(t3); j 12; .8byte 0x40efffe000000000
 ;   fmv.d.x fa3,t3
 ;   fmin.d fa6,fa0,fa3
@@ -245,7 +245,7 @@ block0(v0: f64):
 ; block0: ; offset 0x0
 ;   mv a2, zero
 ;   fmv.d.x ft5, a2
-;   fmax.d fa0, fa0, ft5
+;   fmax.d fa0, ft5, fa0
 ;   auipc t3, 0
 ;   ld t3, 0xc(t3)
 ;   j 0xc
