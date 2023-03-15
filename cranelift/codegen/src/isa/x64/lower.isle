@@ -3491,12 +3491,18 @@
 
 ;; Rules for `udiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; NB: a `RegMem` divisor, while allowed in the instruction encoding, isn't
+;; used right now to prevent a possibly-trapping load getting folded into the
+;; `div` instruction. Ideally non-trapping loads would get folded, however, or
+;; alternatively Wasmtime/Cranelift would grow support for multiple traps on
+;; a single opcode and the signal kind would differentiate at runtime.
+
 ;; The inputs to the `div` instruction are different for 8-bit division so
 ;; it needs a special case here since the instruction being crafted has a
 ;; different shape.
 (rule 2 (lower (udiv a @ (value_type $I8) b))
         (x64_div8 (extend_to_gpr a $I32 (ExtendKind.Zero))
-                  b
+                  (put_in_gpr b)
                   (DivSignedness.Unsigned)
                   (TrapCode.IntegerDivisionByZero)))
 
@@ -3506,7 +3512,7 @@
 (rule 1 (lower (udiv a @ (value_type (fits_in_64 ty)) b))
         (x64_div_quotient a
                           (imm $I64 0)
-                          b
+                          (put_in_gpr b)
                           (raw_operand_size_of_type ty)
                           (DivSignedness.Unsigned)
                           (TrapCode.IntegerDivisionByZero)))
@@ -3555,7 +3561,7 @@
 (rule 2 (lower (urem a @ (value_type $I8) b))
         (let (
             (result Gpr (x64_div8 (extend_to_gpr a $I32 (ExtendKind.Zero))
-                                  b
+                                  (put_in_gpr b) ;; see `udiv` for why not `gpr_mem`
                                   (DivSignedness.Unsigned)
                                   (TrapCode.IntegerDivisionByZero)))
           )
@@ -3564,7 +3570,7 @@
 (rule 1 (lower (urem a @ (value_type (fits_in_64 ty)) b))
         (x64_div_remainder a
                            (imm $I64 0)
-                           b
+                           (put_in_gpr b) ;; see `udiv` for why not `gpr_mem`
                            (raw_operand_size_of_type ty)
                            (DivSignedness.Unsigned)
                            (TrapCode.IntegerDivisionByZero)))
