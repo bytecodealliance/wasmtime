@@ -918,6 +918,7 @@
             Punpcklqdq
             Pshuflw
             Pshufhw
+            Pblendw
           ))
 
 (type CmpOpcode extern
@@ -1290,6 +1291,7 @@
             Vpextrw
             Vpextrd
             Vpextrq
+            Vpblendw
           ))
 
 (type Avx512Opcode extern
@@ -2966,6 +2968,14 @@
 (rule 1 (x64_pblendvb src1 src2 mask)
       (if-let $true (has_avx))
       (xmm_rmr_blend_vex (AvxOpcode.Vpblendvb) src1 src2 mask))
+
+;; Helper for creating `pblendw` instructions.
+(decl x64_pblendw (Xmm XmmMem u8) Xmm)
+(rule 0 (x64_pblendw src1 src2 imm)
+      (xmm_rm_r_imm (SseOpcode.Pblendw) src1 src2 imm (OperandSize.Size32)))
+(rule 1 (x64_pblendw src1 src2 imm)
+      (if-let $true (has_avx))
+      (xmm_rmr_imm_vex (AvxOpcode.Vpblendw) src1 src2 imm))
 
 ;; Helper for creating a `movsd` instruction which creates a new vector
 ;; register where the upper 64-bits are from the first operand and the low

@@ -3704,6 +3704,15 @@
 
 ;; Rules for `shuffle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Special case for `pblendw` which takes an 8-bit immediate where each bit
+;; indicates which lane of the two operands is chosen for the output. A bit of
+;; 0 chooses the corresponding 16-it lane from `a` and a bit of 1 chooses the
+;; corresponding 16-bit lane from `b`.
+(rule 14 (lower (shuffle a b (pblendw_imm n)))
+         (x64_pblendw a b n))
+(decl pblendw_imm (u8) Immediate)
+(extern extractor pblendw_imm pblendw_imm)
+
 ;; When the shuffle looks like "concatenate `a` and `b` and shift right by n*8
 ;; bytes", that's a `palignr` instruction. Note that the order of operands are
 ;; swapped in the instruction here. The `palignr` instruction uses the second

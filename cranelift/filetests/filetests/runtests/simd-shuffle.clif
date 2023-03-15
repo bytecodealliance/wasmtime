@@ -553,3 +553,13 @@ block0(v0: i64x2, v1: i64x2):
     return v5
 }
 ; run: %aarch64_rev64_words([0x0102030405060708 0x0807060504030201], [0 0]) == [0x0506070801020304 0x0403020108070605]
+
+function %pblendw_0b10011001(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+    v2 = bitcast.i8x16 little v0
+    v3 = bitcast.i8x16 little v1
+    v4 = shuffle v2, v3, [16 17 2 3 4 5 22 23 24 25 10 11 12 13 30 31]
+    v5 = bitcast.i16x8 little v4
+    return v5
+}
+; run: %pblendw_0b10011001([1 2 3 4 5 6 7 8], [9 10 11 12 13 14 15 16]) == [9 2 3 12 13 6 7 16]
