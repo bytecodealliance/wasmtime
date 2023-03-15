@@ -919,6 +919,7 @@
             Pshuflw
             Pshufhw
             Pblendw
+            Movddup
           ))
 
 (type CmpOpcode extern
@@ -1292,6 +1293,11 @@
             Vpextrd
             Vpextrq
             Vpblendw
+            Vmovddup
+            Vpbroadcastb
+            Vpbroadcastw
+            Vpbroadcastd
+            Vbroadcastss
           ))
 
 (type Avx512Opcode extern
@@ -1622,6 +1628,9 @@
 (decl pure has_avx () bool)
 (extern constructor has_avx has_avx)
 
+(decl pure has_avx2 () bool)
+(extern constructor has_avx2 has_avx2)
+
 ;;;; Helpers for Merging and Sinking Immediates/Loads  ;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Extract a constant `Imm8Reg.Imm8` from a value operand.
@@ -1656,8 +1665,20 @@
 
 ;; Extract a `SinkableLoad` that works with `RegMemImm.Mem` from a value
 ;; operand.
+;;
+;; Note that this will only work for 32-bit-types-or-larger since this is
+;; pervasively used with operations that load a minimum of 32-bits. For
+;; instructions which load exactly the type width necessary use
+;; `sinkable_load_exact`.
 (decl sinkable_load (SinkableLoad) Value)
 (extern extractor sinkable_load sinkable_load)
+
+;; Same as `sinkable_load` except that all type widths of loads are supported.
+;;
+;; Only use this when the instruction which performs the load is guaranteed to
+;; load the precisely correct size.
+(decl sinkable_load_exact (SinkableLoad) Value)
+(extern extractor sinkable_load_exact sinkable_load_exact)
 
 ;; Sink a `SinkableLoad` into a `SyntheticAmode`.
 ;;
@@ -1677,6 +1698,9 @@
 
 (decl sink_load_to_reg_mem (SinkableLoad) RegMem)
 (rule (sink_load_to_reg_mem load) (RegMem.Mem load))
+
+(decl sink_load_to_gpr_mem (SinkableLoad) GprMem)
+(rule (sink_load_to_gpr_mem load) (RegMem.Mem load))
 
 (decl sink_load_to_reg_mem_imm (SinkableLoad) RegMemImm)
 (rule (sink_load_to_reg_mem_imm load) (RegMemImm.Mem load))
@@ -4103,6 +4127,34 @@
 (rule (trap_if_fcmp (FcmpCondResult.OrCondition producer cc1 cc2) tc)
       (with_flags_side_effect producer (trap_if_or cc1 cc2 tc)))
 
+;; Helper for creating `movddup` instructions
+(decl x64_movddup (XmmMem) Xmm)
+(rule (x64_movddup src)
+      (xmm_unary_rm_r_unaligned (SseOpcode.Movddup) src))
+(rule 1 (x64_movddup src)
+        (if-let $true (has_avx))
+        (xmm_unary_rm_r_vex (AvxOpcode.Vmovddup) src))
+
+;; Helper for creating `vpbroadcastb` instructions
+(decl x64_vpbroadcastb (XmmMem) Xmm)
+(rule (x64_vpbroadcastb src)
+      (xmm_unary_rm_r_vex (AvxOpcode.Vpbroadcastb) src))
+
+;; Helper for creating `vpbroadcastw` instructions
+(decl x64_vpbroadcastw (XmmMem) Xmm)
+(rule (x64_vpbroadcastw src)
+      (xmm_unary_rm_r_vex (AvxOpcode.Vpbroadcastw) src))
+
+;; Helper for creating `vpbroadcastd` instructions
+(decl x64_vpbroadcastd (XmmMem) Xmm)
+(rule (x64_vpbroadcastd src)
+      (xmm_unary_rm_r_vex (AvxOpcode.Vpbroadcastd) src))
+
+;; Helper for creating `vbroadcastss` instructions
+(decl x64_vbroadcastss (XmmMem) Xmm)
+(rule (x64_vbroadcastss src)
+      (xmm_unary_rm_r_vex (AvxOpcode.Vbroadcastss) src))
+
 ;;;; Jumps ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Unconditional jump.
@@ -4664,6 +4716,7 @@
 (convert AtomicRmwOp MachAtomicRmwOp atomic_rmw_op_to_mach_atomic_rmw_op)
 
 (convert SinkableLoad RegMem sink_load_to_reg_mem)
+(convert SinkableLoad GprMem sink_load_to_gpr_mem)
 (convert SinkableLoad RegMemImm sink_load_to_reg_mem_imm)
 (convert SinkableLoad GprMemImm sink_load_to_gpr_mem_imm)
 (convert SinkableLoad XmmMem sink_load_to_xmm_mem)

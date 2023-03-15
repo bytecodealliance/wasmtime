@@ -70,26 +70,42 @@ fn put_input_in_reg(ctx: &mut Lower<Inst>, spec: InsnInput) -> Reg {
         .expect("Multi-register value not expected")
 }
 
+enum MergeableLoadSize {
+    /// The load size performed by a sinkable load merging operation is
+    /// precisely the size necessary for the type in question.
+    Exact,
+
+    /// Narrower-than-32-bit values are handled by ALU insts that are at least
+    /// 32 bits wide, which is normally OK as we ignore upper buts; but, if we
+    /// generate, e.g., a direct-from-memory 32-bit add for a byte value and
+    /// the byte is the last byte in a page, the extra data that we load is
+    /// incorrectly accessed. So we only allow loads to merge for
+    /// 32-bit-and-above widths.
+    Min32,
+}
+
 /// Determines whether a load operation (indicated by `src_insn`) can be merged
 /// into the current lowering point. If so, returns the address-base source (as
 /// an `InsnInput`) and an offset from that address from which to perform the
 /// load.
-fn is_mergeable_load(ctx: &mut Lower<Inst>, src_insn: IRInst) -> Option<(InsnInput, i32)> {
+fn is_mergeable_load(
+    ctx: &mut Lower<Inst>,
+    src_insn: IRInst,
+    size: MergeableLoadSize,
+) -> Option<(InsnInput, i32)> {
     let insn_data = ctx.data(src_insn);
     let inputs = ctx.num_inputs(src_insn);
     if inputs != 1 {
         return None;
     }
 
+    // If this type is too small to get a merged load, don't merge the load.
     let load_ty = ctx.output_ty(src_insn, 0);
     if ty_bits(load_ty) < 32 {
-        // Narrower values are handled by ALU insts that are at least 32 bits
-        // wide, which is normally OK as we ignore upper buts; but, if we
-        // generate, e.g., a direct-from-memory 32-bit add for a byte value and
-        // the byte is the last byte in a page, the extra data that we load is
-        // incorrectly accessed. So we only allow loads to merge for
-        // 32-bit-and-above widths.
-        return None;
+        match size {
+            MergeableLoadSize::Exact => {}
+            MergeableLoadSize::Min32 => return None,
+        }
     }
 
     // Just testing the opcode is enough, because the width will always match if

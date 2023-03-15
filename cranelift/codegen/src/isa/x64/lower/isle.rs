@@ -11,7 +11,7 @@ use crate::{isle_common_prelude_methods, isle_lower_prelude_methods};
 use generated_code::{Context, MInst, RegisterClass};
 
 // Types that the generated ISLE code uses via `use super::*`.
-use super::{is_int_or_ref_ty, is_mergeable_load, lower_to_amode};
+use super::{is_int_or_ref_ty, is_mergeable_load, lower_to_amode, MergeableLoadSize};
 use crate::ir::LibCall;
 use crate::isa::x64::lower::emit_vm_call;
 use crate::isa::x64::X64Backend;
@@ -175,6 +175,11 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
+    fn has_avx2(&mut self) -> bool {
+        self.backend.x64_flags.has_avx2()
+    }
+
+    #[inline]
     fn avx512vl_enabled(&mut self, _: Type) -> bool {
         self.backend.x64_flags.use_avx512vl_simd()
     }
@@ -268,7 +273,25 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     fn sinkable_load(&mut self, val: Value) -> Option<SinkableLoad> {
         let input = self.lower_ctx.get_value_as_source_or_const(val);
         if let InputSourceInst::UniqueUse(inst, 0) = input.inst {
-            if let Some((addr_input, offset)) = is_mergeable_load(self.lower_ctx, inst) {
+            if let Some((addr_input, offset)) =
+                is_mergeable_load(self.lower_ctx, inst, MergeableLoadSize::Min32)
+            {
+                return Some(SinkableLoad {
+                    inst,
+                    addr_input,
+                    offset,
+                });
+            }
+        }
+        None
+    }
+
+    fn sinkable_load_exact(&mut self, val: Value) -> Option<SinkableLoad> {
+        let input = self.lower_ctx.get_value_as_source_or_const(val);
+        if let InputSourceInst::UniqueUse(inst, 0) = input.inst {
+            if let Some((addr_input, offset)) =
+                is_mergeable_load(self.lower_ctx, inst, MergeableLoadSize::Exact)
+            {
                 return Some(SinkableLoad {
                     inst,
                     addr_input,

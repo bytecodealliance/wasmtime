@@ -3915,47 +3915,89 @@
 
 ;; Rules for `splat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (multi_lane 8 16) (splat src)))
-      (let ((vec Xmm (vec_insert_lane $I8X16 (xmm_uninit_value) src 0))
-            (zeros Xmm (xmm_zero $I8X16)))
-        ;; Shuffle the lowest byte lane to all other lanes.
-        (x64_pshufb vec zeros)))
+;; For all the splat rules below one of the goals is that splatting a value
+;; doesn't end up accidentally depending on the previous value in a register.
+;; This means that instructions are chosen to avoid false dependencies where
+;; new values are created fresh or otherwise overwrite previous register
+;; contents where possible.
+;;
+;; Additionally splats are specialized to special-case load-and-splat which
+;; has a number of micro-optimizations available.
 
-(rule (lower (has_type (multi_lane 16 8) (splat src)))
-      (let (;; Force the input into a register so that we don't create a
-            ;; VCodeConstant.
-            (src RegMem (RegMem.Reg src))
-            (vec Xmm (vec_insert_lane $I16X8 (xmm_uninit_value) src 0))
-            (vec Xmm (vec_insert_lane $I16X8 vec src 1)))
-        ;; Shuffle the lowest two lanes to all other lanes.
-        (x64_pshufd vec 0)))
+;; i8x16 splats: use `vpbroadcastb` on AVX2 and otherwise `pshufb` broadcasts
+;; with a mask of zero which is calculated with an xor-against-itself register.
+(rule 0 (lower (has_type $I8X16 (splat src)))
+        (x64_pshufb (bitcast_gpr_to_xmm $I32 src) (xmm_zero $I8X16)))
+(rule 1 (lower (has_type $I8X16 (splat src)))
+        (if-let $true (has_avx2))
+        (x64_vpbroadcastb (bitcast_gpr_to_xmm $I32 src)))
+(rule 2 (lower (has_type $I8X16 (splat (sinkable_load_exact addr))))
+        (x64_pshufb (x64_pinsrb (xmm_uninit_value) addr 0) (xmm_zero $I8X16)))
+(rule 3 (lower (has_type $I8X16 (splat (sinkable_load_exact addr))))
+        (if-let $true (has_avx2))
+        (x64_vpbroadcastb addr))
 
-(rule 1 (lower (has_type (multi_lane 32 4) (splat src @ (value_type (ty_scalar_float _)))))
-      (lower_splat_32x4 $F32X4 src))
+;; i16x8 splats: use `vpbroadcastw` on AVX2 and otherwise a 16-bit value is
+;; loaded into an xmm register, `pshuflw` broadcasts the low 16-bit lane
+;; to the low four lanes, and `pshufd` broadcasts the low 32-bit lane (which
+;; at that point is two of the 16-bit values we want to broadcast) to all the
+;; lanes.
+(rule 0 (lower (has_type $I16X8 (splat src)))
+        (x64_pshufd (x64_pshuflw (bitcast_gpr_to_xmm $I32 src) 0) 0))
+(rule 1 (lower (has_type $I16X8 (splat src)))
+        (if-let $true (has_avx2))
+        (x64_vpbroadcastw (bitcast_gpr_to_xmm $I32 src)))
+(rule 2 (lower (has_type $I16X8 (splat (sinkable_load_exact addr))))
+        (x64_pshufd (x64_pshuflw (x64_pinsrw (xmm_uninit_value) addr 0) 0) 0))
+(rule 3 (lower (has_type $I16X8 (splat (sinkable_load_exact addr))))
+        (if-let $true (has_avx2))
+        (x64_vpbroadcastw addr))
 
-(rule (lower (has_type (multi_lane 32 4) (splat src)))
-      (lower_splat_32x4 $I32X4 src))
+;; i32x4.splat - use `vpbroadcastd` on AVX2 and otherwise `pshufd` can be
+;; used to broadcast the low lane to all other lanes.
+;;
+;; Note that sinkable-load cases come later
+(rule 0 (lower (has_type $I32X4 (splat src)))
+        (x64_pshufd (bitcast_gpr_to_xmm $I32 src) 0))
+(rule 1 (lower (has_type $I32X4 (splat src)))
+        (if-let $true (has_avx2))
+        (x64_vpbroadcastd (bitcast_gpr_to_xmm $I32 src)))
 
-(decl lower_splat_32x4 (Type Value) Xmm)
-(rule (lower_splat_32x4 ty src)
-      (let ((src RegMem src)
-            (vec Xmm (vec_insert_lane ty (xmm_uninit_value) src 0)))
-        ;; Shuffle the lowest lane to all other lanes.
-        (x64_pshufd vec 0)))
+;; f32x4.splat - the source is already in an xmm register so `shufps` is all
+;; that's necessary to complete the splat. This is specialized to `vbroadcastss`
+;; on AVX2 to leverage that specific instruction for this operation.
+(rule 0 (lower (has_type $F32X4 (splat src)))
+        (let ((tmp Xmm src))
+          (x64_shufps src src 0)))
+(rule 1 (lower (has_type $F32X4 (splat src)))
+        (if-let $true (has_avx2))
+        (x64_vbroadcastss src))
 
-(rule 1 (lower (has_type (multi_lane 64 2) (splat src @ (value_type (ty_scalar_float _)))))
-      (lower_splat_64x2 $F64X2 src))
+;; t32x4.splat of a load - use a `movss` to load into an xmm register and then
+;; `shufps` broadcasts to the other lanes. Note that this is used for both i32
+;; and f32 splats.
+;;
+;; With AVX the `vbroadcastss` instruction suits this purpose precisely. Note
+;; that the memory-operand encoding of `vbroadcastss` is usable with AVX, but
+;; the register-based encoding is only available with AVX2. With the
+;; `sinkable_load` extractor this should be guaranteed to use the memory-based
+;; encoding hence the `has_avx` test.
+(rule 4 (lower (has_type (multi_lane 32 4) (splat (sinkable_load addr))))
+        (let ((tmp Xmm (x64_movss_load addr)))
+          (x64_shufps tmp tmp 0)))
+(rule 5 (lower (has_type (multi_lane 32 4) (splat (sinkable_load addr))))
+        (if-let $true (has_avx))
+        (x64_vbroadcastss addr))
 
-(rule (lower (has_type (multi_lane 64 2) (splat src)))
-      (lower_splat_64x2 $I64X2 src))
-
-(decl lower_splat_64x2 (Type Value) Xmm)
-(rule (lower_splat_64x2 ty src)
-      (let (;; Force the input into a register so that we don't create a
-            ;; VCodeConstant.
-            (src RegMem (RegMem.Reg src))
-            (vec Xmm (vec_insert_lane ty (xmm_uninit_value) src 0)))
-        (vec_insert_lane ty vec src 1)))
+;; t64x2.splat - use `movddup` which is exactly what we want and there's a
+;; minor specialization for sinkable loads to avoid going through a gpr for i64
+;; splats
+(rule 0 (lower (has_type $I64X2 (splat src)))
+        (x64_movddup (bitcast_gpr_to_xmm $I64 src)))
+(rule 0 (lower (has_type $F64X2 (splat src)))
+        (x64_movddup src))
+(rule 5 (lower (has_type (multi_lane 64 2) (splat (sinkable_load addr))))
+        (x64_movddup addr))
 
 ;; Rules for `vany_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
