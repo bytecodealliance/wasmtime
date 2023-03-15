@@ -530,9 +530,6 @@
 
 ;;;; Helpers for accessing compilation flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl pure avoid_div_traps () bool)
-(extern constructor avoid_div_traps avoid_div_traps)
-
 ;; This definition should be kept up to date with the values defined in
 ;; cranelift/codegen/meta/src/shared/settings.rs
 (type TlsModel extern (enum (None) (ElfGd) (Macho) (Coff)))

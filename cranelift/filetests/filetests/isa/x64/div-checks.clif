@@ -1,10 +1,8 @@
 test compile precise-output
-set avoid_div_traps=false
 target x86_64
 
-;; We should get the checked-div/rem sequence (`srem` pseudoinst below) even
-;; when `avoid_div_traps` above is false (i.e. even when the host is normally
-;; willing to accept SIGFPEs as Wasm traps). The machine will SIGFPE in some
+;; We should get the checked-div/rem sequence (`srem` pseudoinst below).
+;; The machine will SIGFPE in some
 ;; cases when `srem` is valid (specifically -INT_MIN % -1).
 
 function %i8(i8, i8) -> i8 {

@@ -1446,10 +1446,6 @@
 (decl vxrs_ext2_disabled () Type)
 (extern extractor vxrs_ext2_disabled vxrs_ext2_disabled)
 
-(decl allow_div_traps () Type)
-(extern extractor allow_div_traps allow_div_traps)
-
-
 ;; Helpers for SIMD lane number operations ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; There are two ways to map vector types onto the SIMD vector registers

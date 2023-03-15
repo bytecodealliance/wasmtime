@@ -454,16 +454,14 @@ pub(crate) fn emit(
             // the listed trap here is divide-by-zero. This means that only the
             // actual CLIF `sdiv` instruction ends up triggering the integer
             // overflow case.
-            if !info.flags.avoid_div_traps() {
-                sink.add_trap(if state.div_trap_is_divide_by_zero {
-                    TrapCode::IntegerDivisionByZero
-                } else {
-                    match sign {
-                        DivSignedness::Signed => TrapCode::IntegerOverflow,
-                        DivSignedness::Unsigned => TrapCode::IntegerDivisionByZero,
-                    }
-                });
-            }
+            sink.add_trap(if state.div_trap_is_divide_by_zero {
+                TrapCode::IntegerDivisionByZero
+            } else {
+                match sign {
+                    DivSignedness::Signed => TrapCode::IntegerOverflow,
+                    DivSignedness::Unsigned => TrapCode::IntegerDivisionByZero,
+                }
+            });
 
             let subopcode = match sign {
                 DivSignedness::Signed => 7,

@@ -3496,7 +3496,7 @@
 ;; different shape.
 (rule 2 (lower (udiv a @ (value_type $I8) b))
         (x64_div8 (extend_to_gpr a $I32 (ExtendKind.Zero))
-                  (validate_udiv_divisor $I8 b)
+                  b
                   (DivSignedness.Unsigned)))
 
 ;; 16-to-64-bit division is all done with a similar instruction and the only
@@ -3505,31 +3505,9 @@
 (rule 1 (lower (udiv a @ (value_type (fits_in_64 ty)) b))
         (x64_div_quotient a
                           (imm $I64 0)
-                          (validate_udiv_divisor ty b)
+                          b
                           (raw_operand_size_of_type ty)
                           (DivSignedness.Unsigned)))
-
-;; Small helper which does nothing if `avoid_div_traps=false` because udiv
-;; is allowed to trap and only has one trapping condition. Otherwise defers
-;; to `nonzero_divisor` to perform an explicit check.
-(decl validate_udiv_divisor (Type Value) Gpr)
-(rule 1 (validate_udiv_divisor ty val)
-        (if-let $false (avoid_div_traps))
-        val)
-(rule (validate_udiv_divisor ty val) (nonzero_divisor ty val))
-
-;; Helper to place `Value` into a `Gpr` while possibly trapping if it's zero.
-(decl nonzero_divisor (Type Value) Gpr)
-(rule 1 (nonzero_divisor ty (iconst (u64_from_imm64 (u64_nonzero n))))
-        (imm ty n))
-(rule (nonzero_divisor ty val)
-      (let (
-          (val Reg val)
-          (_ InstOutput (side_effect (with_flags_side_effect
-            (x64_test (raw_operand_size_of_type ty) val val)
-            (trap_if (CC.Z) (TrapCode.IntegerDivisionByZero)))))
-        )
-        val))
 
 ;; Rules for `sdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3557,20 +3535,14 @@
         (if-let n (safe_divisor_from_imm64 ty imm))
         (imm ty n))
 
-;; With `avoid_div_traps=false` then the div instruction is allowed to trap but
-;; lowering still needs to differentiate each case. The divide-by-zero case
-;; is explicitly checked here and then if div traps it's due to overflow.
-;;
-;; Note that check-for-zero happens here explicitly since it's a bit smaller to
-;; codegen than to check for integer overflow (checking one reg vs two).
 (rule 2 (safe_sdiv_divisor ty a b)
-        (if-let $false (avoid_div_traps))
-        (nonzero_divisor ty b))
-
-;; The base cases here rely on some pseudo-instructions to do the checks to
-;; jump around with labels and such.
-(rule 1 (safe_sdiv_divisor $I64 a b) (validate_sdiv_divisor64 a b))
-(rule 0 (safe_sdiv_divisor ty a b) (validate_sdiv_divisor (raw_operand_size_of_type ty) a b))
+      (let (
+          (val Reg b)
+          (_ InstOutput (side_effect (with_flags_side_effect
+            (x64_test (raw_operand_size_of_type ty) val val)
+            (trap_if (CC.Z) (TrapCode.IntegerDivisionByZero)))))
+        )
+        val))
 
 ;; Rules for `urem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3579,7 +3551,6 @@
 (rule 2 (lower (urem a @ (value_type $I8) b))
         (let (
             (a Gpr (extend_to_gpr a $I32 (ExtendKind.Zero)))
-            (b Gpr (validate_udiv_divisor $I8 b))
             (result Gpr (x64_div8 a b (DivSignedness.Unsigned)))
           )
           (x64_shr $I64 result (Imm8Reg.Imm8 8))))
@@ -3587,7 +3558,7 @@
 (rule 1 (lower (urem a @ (value_type (fits_in_64 ty)) b))
         (x64_div_remainder a
                            (imm $I64 0)
-                           (validate_udiv_divisor ty b)
+                           b
                            (raw_operand_size_of_type ty)
                            (DivSignedness.Unsigned)))
 
@@ -3619,28 +3590,15 @@
                              size
                              (DivSignedness.Signed))))
 
-;; Note the usage of `validate_udiv_divisor` here and below which conditionally
-;; checks for 0 depending on `avoid_div_traps`. If `div` can trap then despite
-;; signed division having two trap conditions the srem sequence handles the
-;; integer overflow case manually so the only trapping condition for this
-;; instruction is divide-by-zero. This means that when `avoid_div_traps=true`
-;; this must explicitly check for 0, and when `avoid_div_traps=false` the check
-;; for 0 can be elided.
-;;
-;; No matter what the value is of `avoid_div_traps`, though, the divisor must
-;; always be checked for -1. This happens inside of the `x64_checked_srem_seq*`
-;; pseudo-instruction.
 (rule 1 (lower (srem a @ (value_type $I8) b))
         (let (
             (a Gpr (x64_sign_extend_data a (OperandSize.Size8)))
-            (b Gpr (validate_udiv_divisor $I8 b))
           )
           (x64_shr $I64 (x64_checked_srem_seq8 a b) (Imm8Reg.Imm8 8))))
 
 (rule (lower (srem a @ (value_type ty) b))
       (let (
           (a Gpr a)
-          (b Gpr (validate_udiv_divisor ty b))
           (size OperandSize (raw_operand_size_of_type ty))
           (hi Gpr (x64_sign_extend_data a size))
           (tmp ValueRegs (x64_checked_srem_seq size a hi b))

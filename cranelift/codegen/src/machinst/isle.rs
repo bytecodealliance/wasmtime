@@ -285,10 +285,6 @@ macro_rules! isle_lower_prelude_methods {
             }
         }
 
-        fn avoid_div_traps(&mut self) -> bool {
-            self.backend.flags().avoid_div_traps()
-        }
-
         #[inline]
         fn tls_model(&mut self, _: Type) -> TlsModel {
             self.backend.flags().tls_model()
