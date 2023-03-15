@@ -76,77 +76,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
             | SignedLessThanOrEqual => ExtendOp::Signed,
         }
     }
-    fn clamp_fcvt_from_float(
-        &mut self,
-        in_type: Type,
-        out_ty: Type,
-        rs: Reg,
-        is_signed: bool,
-    ) -> Reg {
-        if out_ty.bits() >= 32 {
-            return rs;
-        }
-        macro_rules! clamp {
-            ($ty: ty, $to_bits: ident, $max_op: expr, $min_op: expr, $load_name: ident) => {{
-                let (min, max) = if is_signed == false {
-                    if out_ty.bits() == 8 {
-                        (u8::MIN as $ty, u8::MAX as $ty)
-                    } else {
-                        (u16::MIN as $ty, u16::MAX as $ty)
-                    }
-                } else {
-                    if out_ty.bits() == 8 {
-                        (i8::MIN as $ty, i8::MAX as $ty)
-                    } else {
-                        (i16::MIN as $ty, i16::MAX as $ty)
-                    }
-                };
-                let min_reg = self.temp_writable_reg(F64);
-                let insts =
-                    MInst::$load_name(min_reg, $to_bits(min), |ty| self.temp_writable_reg(ty));
-                self.emit_list(&insts);
-                let tmp = self.temp_writable_reg(F64);
-                //
-                self.emit(&MInst::FpuRRR {
-                    alu_op: $max_op,
-                    frm: None,
-                    rd: tmp,
-                    rs1: rs,
-                    rs2: min_reg.to_reg(),
-                });
-                let max_reg = self.temp_writable_reg(F64);
-                let insts =
-                    MInst::$load_name(max_reg, $to_bits(max), |ty| self.temp_writable_reg(ty));
-                self.emit_list(&insts);
-                let rd = self.temp_writable_reg(F64);
-                self.emit(&MInst::FpuRRR {
-                    alu_op: $min_op,
-                    frm: None,
-                    rd: rd,
-                    rs1: tmp.to_reg(),
-                    rs2: max_reg.to_reg(),
-                });
-                rd.to_reg()
-            }};
-        }
-        if in_type.bits() == 32 {
-            clamp!(
-                f32,
-                f32_bits,
-                FpuOPRRR::FmaxS,
-                FpuOPRRR::FminS,
-                load_fp_constant32
-            )
-        } else {
-            clamp!(
-                f64,
-                f64_bits,
-                FpuOPRRR::FmaxD,
-                FpuOPRRR::FminD,
-                load_fp_constant64
-            )
-        }
-    }
 
     fn lower_cond_br(
         &mut self,
@@ -316,6 +245,43 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         x as i32
     }
 
+    fn i32_2_float_bits(&mut self, value: i32, ty: Type) -> u64 {
+        if ty.bits() == 32 {
+            f32_bits(value as f32) as u64
+        } else {
+            f64_bits(value as f64)
+        }
+    }
+    fn i8_i16_max_value(&mut self, ty: Type, is_signed: bool) -> i32 {
+        if ty.bits() == 8 {
+            if is_signed {
+                i8::MAX as i32
+            } else {
+                u8::MAX as i32
+            }
+        } else {
+            if is_signed {
+                i16::MAX as i32
+            } else {
+                u16::MAX as i32
+            }
+        }
+    }
+    fn i8_i16_min_value(&mut self, ty: Type, is_signed: bool) -> i32 {
+        if ty.bits() == 8 {
+            if is_signed {
+                i8::MIN as i32
+            } else {
+                u8::MIN as i32
+            }
+        } else {
+            if is_signed {
+                i16::MIN as i32
+            } else {
+                u16::MIN as i32
+            }
+        }
+    }
     fn imm12_const(&mut self, val: i32) -> Imm12 {
         if let Some(res) = Imm12::maybe_from_u64(val as u64) {
             res
