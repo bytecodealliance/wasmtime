@@ -1837,9 +1837,11 @@
         (if-let $true (value32_zeros_upper32 src))
         src)
 
-;; The `pextr{b,w}` instruction automatically zero the upper bits of the
+;; The `extractlane` instruction, extended to `$I32`, means that either an
+;; i8x16 or an i16x8 is being extracted. These are implemenetd with
+;; the `pextr{b,w}` instruction which automatically zero the upper bits of the
 ;; destination register so the `uextend` in these cases can be elided.
-(rule 1 (extend_to_gpr src @ (has_type (fits_in_16 _) (extractlane _ _)) $I32 (ExtendKind.Zero))
+(rule 1 (extend_to_gpr src @ (extractlane _ _) $I32 (ExtendKind.Zero))
         src)
 
 (rule (extend_to_gpr (and val (value_type from_ty))
