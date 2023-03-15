@@ -865,7 +865,7 @@ where
                         V::bool(
                             fcmp(inst.fp_cond_code().unwrap(), &x, &y).unwrap(),
                             ctrl_ty.is_vector(),
-                            ctrl_ty.lane_type().as_bool(),
+                            ctrl_ty.lane_type().as_truthy(),
                         )
                     })
                     .collect::<ValueResult<SimdVec<V>>>()?),
@@ -985,7 +985,7 @@ where
         }
         Opcode::Bmask => assign({
             let bool = arg(0)?;
-            let bool_ty = ctrl_ty.as_bool_pedantic();
+            let bool_ty = ctrl_ty.as_truthy_pedantic();
             let lanes = extractlanes(&bool, bool_ty)?
                 .into_iter()
                 .map(|lane| lane.convert(ValueConversionKind::Mask(ctrl_ty.lane_type())))
@@ -1467,7 +1467,7 @@ where
         )?)
     };
 
-    let dst_ty = ctrl_ty.as_bool();
+    let dst_ty = ctrl_ty.as_truthy();
     let left = extractlanes(left, ctrl_ty)?;
     let right = extractlanes(right, ctrl_ty)?;
 

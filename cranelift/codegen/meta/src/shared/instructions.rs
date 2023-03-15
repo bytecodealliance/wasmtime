@@ -1627,7 +1627,7 @@ pub(crate) fn define(
             Operand::new("x", Int),
             Operand::new("y", Int),
         ])
-        .operands_out(vec![Operand::new("a", &Int.as_bool())]),
+        .operands_out(vec![Operand::new("a", &Int.as_truthy())]),
     );
 
     ig.push(
@@ -2684,7 +2684,7 @@ pub(crate) fn define(
             Operand::new("x", Float),
             Operand::new("y", Float),
         ])
-        .operands_out(vec![Operand::new("a", &Float.as_bool())]),
+        .operands_out(vec![Operand::new("a", &Float.as_truthy())]),
     );
 
     ig.push(
