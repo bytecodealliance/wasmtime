@@ -928,6 +928,7 @@ pub(crate) enum InstructionSet {
     BMI2,
     FMA,
     AVX,
+    AVX2,
     AVX512BITALG,
     AVX512DQ,
     AVX512F,
@@ -1126,6 +1127,7 @@ pub enum SseOpcode {
     Pshuflw,
     Pshufhw,
     Pblendw,
+    Movddup,
 }
 
 impl SseOpcode {
@@ -1280,7 +1282,8 @@ impl SseOpcode {
             | SseOpcode::Pmulhrsw
             | SseOpcode::Pshufb
             | SseOpcode::Phaddw
-            | SseOpcode::Phaddd => SSSE3,
+            | SseOpcode::Phaddd
+            | SseOpcode::Movddup => SSSE3,
 
             SseOpcode::Blendvpd
             | SseOpcode::Blendvps
@@ -1524,6 +1527,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Pshuflw => "pshuflw",
             SseOpcode::Pshufhw => "pshufhw",
             SseOpcode::Pblendw => "pblendw",
+            SseOpcode::Movddup => "movddup",
         };
         write!(fmt, "{}", name)
     }
@@ -1709,8 +1713,14 @@ impl AvxOpcode {
             | AvxOpcode::Vpextrw
             | AvxOpcode::Vpextrd
             | AvxOpcode::Vpextrq
-            | AvxOpcode::Vpblendw => {
+            | AvxOpcode::Vpblendw
+            | AvxOpcode::Vmovddup
+            | AvxOpcode::Vbroadcastss => {
                 smallvec![InstructionSet::AVX]
+            }
+
+            AvxOpcode::Vpbroadcastb | AvxOpcode::Vpbroadcastw | AvxOpcode::Vpbroadcastd => {
+                smallvec![InstructionSet::AVX2]
             }
         }
     }

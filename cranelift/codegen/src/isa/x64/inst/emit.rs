@@ -122,6 +122,7 @@ pub(crate) fn emit(
             InstructionSet::BMI2 => info.isa_flags.has_bmi2(),
             InstructionSet::FMA => info.isa_flags.has_fma(),
             InstructionSet::AVX => info.isa_flags.has_avx(),
+            InstructionSet::AVX2 => info.isa_flags.has_avx2(),
             InstructionSet::AVX512BITALG => info.isa_flags.has_avx512bitalg(),
             InstructionSet::AVX512DQ => info.isa_flags.has_avx512dq(),
             InstructionSet::AVX512F => info.isa_flags.has_avx512f(),
@@ -1826,6 +1827,7 @@ pub(crate) fn emit(
                 SseOpcode::Sqrtpd => (LegacyPrefixes::_66, 0x0F51, 2),
                 SseOpcode::Sqrtss => (LegacyPrefixes::_F3, 0x0F51, 2),
                 SseOpcode::Sqrtsd => (LegacyPrefixes::_F2, 0x0F51, 2),
+                SseOpcode::Movddup => (LegacyPrefixes::_F2, 0x0F12, 2),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
 
@@ -2450,6 +2452,13 @@ pub(crate) fn emit(
                     RegisterOrAmode::Amode(_) => (LegacyPrefixes::_F2, OpcodeMap::_0F, 0x10),
                     _ => unreachable!(),
                 },
+
+                AvxOpcode::Vpbroadcastb => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x78),
+                AvxOpcode::Vpbroadcastw => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x79),
+                AvxOpcode::Vpbroadcastd => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x58),
+                AvxOpcode::Vbroadcastss => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x18),
+                AvxOpcode::Vmovddup => (LegacyPrefixes::_F2, OpcodeMap::_0F, 0x12),
+
                 _ => panic!("unexpected rmr_imm_vex opcode {op:?}"),
             };
 
